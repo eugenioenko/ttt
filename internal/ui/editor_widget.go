@@ -54,6 +54,7 @@ type EditorPaneWidget struct {
 	cachedVisibleLines []int
 	searchByLine       map[int][]int
 	diagByLine         map[int][]int
+	Bookmarks          map[int]bool
 }
 
 func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewport) *EditorPaneWidget {
@@ -252,6 +253,9 @@ func (e *EditorPaneWidget) Render(surface *RenderSurface) {
 						surface.SetCell(chevronCol, y, term.Cell{Ch: expandedCh, Style: gutterStyle})
 					}
 				}
+			}
+			if lineIdx < totalLines && e.Bookmarks != nil && e.Bookmarks[lineIdx] {
+				surface.SetCell(0, y, term.Cell{Ch: '●', Style: term.StyleBookmark})
 			}
 		}
 
@@ -2177,7 +2181,6 @@ func (e *EditorPaneWidget) SplitSelectionToLines() {
 	e.scrollViewport()
 }
 
-
 // transformSelection replaces the selected text with the result of applying fn.
 // It preserves the selection after transformation.
 func (e *EditorPaneWidget) transformSelection(fn func(string) string) {
@@ -2267,4 +2270,80 @@ func (e *EditorPaneWidget) TitleCase() {
 		}
 		return string(runes)
 	})
+}
+
+func (e *EditorPaneWidget) ToggleBookmark() {
+	if e.Bookmarks == nil {
+		e.Bookmarks = make(map[int]bool)
+	}
+	line := e.Cursor.Line
+	if e.Bookmarks[line] {
+		delete(e.Bookmarks, line)
+	} else {
+		e.Bookmarks[line] = true
+	}
+}
+
+func (e *EditorPaneWidget) sortedBookmarks() []int {
+	if len(e.Bookmarks) == 0 {
+		return nil
+	}
+	lines := make([]int, 0, len(e.Bookmarks))
+	for line := range e.Bookmarks {
+		lines = append(lines, line)
+	}
+	sort.Ints(lines)
+	return lines
+}
+
+func (e *EditorPaneWidget) NextBookmark() {
+	sorted := e.sortedBookmarks()
+	if len(sorted) == 0 {
+		return
+	}
+	cur := e.Cursor.Line
+	for _, line := range sorted {
+		if line > cur {
+			e.Cursor.Line = line
+			e.Cursor.Col = 0
+			e.clampCursor()
+			e.scrollViewport()
+			return
+		}
+	}
+	// Wrap around to first bookmark
+	e.Cursor.Line = sorted[0]
+	e.Cursor.Col = 0
+	e.clampCursor()
+	e.scrollViewport()
+}
+
+func (e *EditorPaneWidget) PrevBookmark() {
+	sorted := e.sortedBookmarks()
+	if len(sorted) == 0 {
+		return
+	}
+	cur := e.Cursor.Line
+	for i := len(sorted) - 1; i >= 0; i-- {
+		if sorted[i] < cur {
+			e.Cursor.Line = sorted[i]
+			e.Cursor.Col = 0
+			e.clampCursor()
+			e.scrollViewport()
+			return
+		}
+	}
+	// Wrap around to last bookmark
+	e.Cursor.Line = sorted[len(sorted)-1]
+	e.Cursor.Col = 0
+	e.clampCursor()
+	e.scrollViewport()
+}
+
+func (e *EditorPaneWidget) ClearBookmarks() {
+	e.Bookmarks = nil
+}
+
+func (e *EditorPaneWidget) HasBookmarks() bool {
+	return len(e.Bookmarks) > 0
 }

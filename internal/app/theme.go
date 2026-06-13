@@ -37,6 +37,7 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	applyStyleDef(&m, term.StyleSearchMatch, theme.Editor.SearchMatch)
 	applyStyleDef(&m, term.StyleSearchActive, theme.Editor.SearchActive)
 	applyStyleDef(&m, term.StyleBracketMatch, theme.Editor.BracketMatch)
+	applyStyleDef(&m, term.StyleBookmark, theme.Editor.Bookmark)
 	applyStyleDef(&m, term.StyleDiffAdded, theme.Diff.Added)
 	applyStyleDef(&m, term.StyleDiffDeleted, theme.Diff.Deleted)
 	applyStyleDef(&m, term.StyleDiffModified, theme.Diff.Modified)

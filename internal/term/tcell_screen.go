@@ -4,7 +4,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-const StyleCount = 48
+const StyleCount = 49
 
 type StyleMap [StyleCount]tcell.Style
 
@@ -120,7 +120,7 @@ func (t *TcellScreen) HideCursor() {
 
 var cursorStyleMap = map[CursorStyle]tcell.CursorStyle{
 	CursorStyleBlinkingBar:       tcell.CursorStyleBlinkingBar,
-	CursorStyleSteadyBar:        tcell.CursorStyleSteadyBar,
+	CursorStyleSteadyBar:         tcell.CursorStyleSteadyBar,
 	CursorStyleBlinkingBlock:     tcell.CursorStyleBlinkingBlock,
 	CursorStyleSteadyBlock:       tcell.CursorStyleSteadyBlock,
 	CursorStyleBlinkingUnderline: tcell.CursorStyleBlinkingUnderline,

@@ -484,6 +484,23 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "bookmark.toggle", Title: "Toggle Bookmark",
+		Handler: func() { app.EditorGroup.ToggleBookmark() },
+	})
+	reg.Register(command.Command{
+		ID: "bookmark.next", Title: "Next Bookmark",
+		Handler: func() { app.EditorGroup.NextBookmark() },
+	})
+	reg.Register(command.Command{
+		ID: "bookmark.prev", Title: "Previous Bookmark",
+		Handler: func() { app.EditorGroup.PrevBookmark() },
+	})
+	reg.Register(command.Command{
+		ID: "bookmark.clearAll", Title: "Clear All Bookmarks",
+		Handler: func() { app.EditorGroup.ClearBookmarks() },
+	})
+
+	reg.Register(command.Command{
 		ID: "editor.quit", Title: "Quit",
 		Handler: app.Quit,
 	})

@@ -54,6 +54,7 @@ type editorTab struct {
 	TabSize     int
 	Content     Widget
 	Pinned      bool
+	Bookmarks   map[int]bool
 }
 
 type EditorGroupWidget struct {
@@ -384,6 +385,7 @@ func (g *EditorGroupWidget) SwitchTab(idx int) {
 func (g *EditorGroupWidget) saveMultiState() {
 	if t := g.activeTab(); t != nil && t.Content == nil {
 		t.Multi = g.Editor.Multi
+		t.Bookmarks = g.Editor.Bookmarks
 	}
 }
 
@@ -842,6 +844,32 @@ func (g *EditorGroupWidget) TitleCase() {
 	}
 }
 
+func (g *EditorGroupWidget) ToggleBookmark() {
+	if g.IsEditorActive() {
+		g.Editor.ToggleBookmark()
+		g.saveMultiState()
+	}
+}
+
+func (g *EditorGroupWidget) NextBookmark() {
+	if g.IsEditorActive() {
+		g.Editor.NextBookmark()
+	}
+}
+
+func (g *EditorGroupWidget) PrevBookmark() {
+	if g.IsEditorActive() {
+		g.Editor.PrevBookmark()
+	}
+}
+
+func (g *EditorGroupWidget) ClearBookmarks() {
+	if g.IsEditorActive() {
+		g.Editor.ClearBookmarks()
+		g.saveMultiState()
+	}
+}
+
 func (g *EditorGroupWidget) IsMultiCursorActive() bool {
 	return g.IsEditorActive() && g.Editor.isMultiActive()
 }
@@ -914,6 +942,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Highlighter = t.Highlighter
 		g.Editor.Diagnostics = t.Diagnostics
 		g.Editor.Folds = t.Folds
+		g.Editor.Bookmarks = t.Bookmarks
 		g.Editor.buildDiagIndex()
 		g.Editor.InvalidateMaxLineWidth()
 		if t.TabSize > 0 {

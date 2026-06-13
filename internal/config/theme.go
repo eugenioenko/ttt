@@ -62,6 +62,7 @@ type EditorStyles struct {
 	SearchMatch  StyleDef         `json:"searchMatch"`
 	SearchActive StyleDef         `json:"searchActive"`
 	BracketMatch StyleDef         `json:"bracketMatch"`
+	Bookmark     StyleDef         `json:"bookmark"`
 	Diagnostics  DiagnosticStyles `json:"diagnostics"`
 }
 
@@ -144,37 +145,37 @@ type HoverStyles struct {
 }
 
 type ThemeConfig struct {
-	Default StyleDef `json:"default"`
-	Muted   StyleDef `json:"muted"`
-	Success StyleDef `json:"success"`
-	Danger  StyleDef `json:"danger"`
-	Warning StyleDef `json:"warning"`
-	StatusBar       StyleDef    `json:"statusBar"`
-	Tabs            TabStyles   `json:"tabs"`
-	Sidebar         SidebarStyles `json:"sidebar"`
-	Dialog          DialogStyles  `json:"dialog"`
-	Editor          EditorStyles `json:"editor"`
-	Menu            MenuStyles  `json:"menu"`
-	Input           InputStyles `json:"input"`
-	Hover           HoverStyles `json:"hover"`
-	Border          StyleDef    `json:"border"`
-	Diff            DiffStyles  `json:"diff"`
-	Scrollbar       StyleDef    `json:"scrollbar"`
-	Syntax          SyntaxStyles `json:"syntax"`
-	Borders         BorderChars `json:"borders"`
-	Terminal        TerminalColors `json:"terminal,omitempty"`
+	Default   StyleDef       `json:"default"`
+	Muted     StyleDef       `json:"muted"`
+	Success   StyleDef       `json:"success"`
+	Danger    StyleDef       `json:"danger"`
+	Warning   StyleDef       `json:"warning"`
+	StatusBar StyleDef       `json:"statusBar"`
+	Tabs      TabStyles      `json:"tabs"`
+	Sidebar   SidebarStyles  `json:"sidebar"`
+	Dialog    DialogStyles   `json:"dialog"`
+	Editor    EditorStyles   `json:"editor"`
+	Menu      MenuStyles     `json:"menu"`
+	Input     InputStyles    `json:"input"`
+	Hover     HoverStyles    `json:"hover"`
+	Border    StyleDef       `json:"border"`
+	Diff      DiffStyles     `json:"diff"`
+	Scrollbar StyleDef       `json:"scrollbar"`
+	Syntax    SyntaxStyles   `json:"syntax"`
+	Borders   BorderChars    `json:"borders"`
+	Terminal  TerminalColors `json:"terminal,omitempty"`
 }
 
 func DefaultTheme() ThemeConfig {
 	t := ThemeConfig{
 		Terminal: DefaultTerminalColors(),
-		Default: StyleDef{Fg: "#fafafa", Bg: "#1f1f1f"},
-		Muted:   StyleDef{Fg: "#888888"},
+		Default:  StyleDef{Fg: "#fafafa", Bg: "#1f1f1f"},
+		Muted:    StyleDef{Fg: "#888888"},
 
 		Menu: MenuStyles{
 			Active: StyleDef{Fg: "#ffffff", Bg: "#505050", Bold: true},
 		},
-		StatusBar:     StyleDef{},
+		StatusBar: StyleDef{},
 
 		Tabs: TabStyles{
 			Active:   StyleDef{Fg: "#ffffff", Bold: true},
@@ -254,6 +255,7 @@ func (t *ThemeConfig) ResolveColors() {
 	}
 	fillFg(&t.Hover.Bold, t.Default.Fg)
 	fillFg(&t.Hover.Code, t.Syntax.String.Fg)
+	fillFg(&t.Editor.Bookmark, "#d7ba7d")
 }
 
 func fillFg(s *StyleDef, color string) {
