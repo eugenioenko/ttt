@@ -202,5 +202,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "alt+s", Command: "menu.selection"},
 		{Key: "alt+v", Command: "menu.view"},
 		{Key: "alt+h", Command: "menu.help"},
+		{Key: "alt+left", Command: "navigate.back"},
+		{Key: "alt+right", Command: "navigate.forward"},
 	}
 }

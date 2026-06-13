@@ -33,7 +33,6 @@ type DiagnosticsResult struct {
 	Diagnostics []ui.Diagnostic
 }
 
-
 type SignatureHelpResult struct {
 	Label      string
 	ParamStart int

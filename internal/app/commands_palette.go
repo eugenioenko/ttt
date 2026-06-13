@@ -28,6 +28,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		a.EditorGroup.OpenFile(absPath)
 	}
 	palette.OnGoToLine = func(line int) {
+		a.PushNavHistory()
 		a.DismissDialog()
 		a.EditorGroup.GoToLine(line)
 	}

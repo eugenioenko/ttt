@@ -199,22 +199,34 @@ func registerEditorCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID: "editor.goToDefinition", Title: "Go to Definition",
-		Handler: func() { app.withEditorLSP(app.RequestDefinition) },
+		Handler: func() {
+			app.PushNavHistory()
+			app.withEditorLSP(app.RequestDefinition)
+		},
 	})
 
 	reg.Register(command.Command{
 		ID: "editor.goToImplementation", Title: "Go to Implementation",
-		Handler: func() { app.withEditorLSP(app.RequestImplementation) },
+		Handler: func() {
+			app.PushNavHistory()
+			app.withEditorLSP(app.RequestImplementation)
+		},
 	})
 
 	reg.Register(command.Command{
 		ID: "editor.goToTypeDefinition", Title: "Go to Type Definition",
-		Handler: func() { app.withEditorLSP(app.RequestTypeDefinition) },
+		Handler: func() {
+			app.PushNavHistory()
+			app.withEditorLSP(app.RequestTypeDefinition)
+		},
 	})
 
 	reg.Register(command.Command{
 		ID: "editor.findReferences", Title: "Find All References",
-		Handler: func() { app.withEditorLSP(app.RequestReferences) },
+		Handler: func() {
+			app.PushNavHistory()
+			app.withEditorLSP(app.RequestReferences)
+		},
 	})
 
 	reg.Register(command.Command{
@@ -481,6 +493,16 @@ func registerEditorCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "editor.titleCase", Title: "Transform to Titlecase",
 		Handler: func() { app.EditorGroup.TitleCase() },
+	})
+
+	reg.Register(command.Command{
+		ID: "navigate.back", Title: "Navigate Back",
+		Handler: app.NavigateBack,
+	})
+
+	reg.Register(command.Command{
+		ID: "navigate.forward", Title: "Navigate Forward",
+		Handler: app.NavigateForward,
 	})
 
 	reg.Register(command.Command{

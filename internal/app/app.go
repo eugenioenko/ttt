@@ -11,6 +11,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/navhistory"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -67,6 +68,7 @@ type App struct {
 	AllDiagnostics     map[string][]ui.Diagnostic
 	Keybindings        []config.KeyBinding
 	LspNotified        map[string]bool
+	NavHistory         *navhistory.NavHistory
 	Reg                *command.Registry
 	Running            *bool
 	quitPending        bool
@@ -380,11 +382,13 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		}
 	}
 	a.Problems.OnNavigate = func(file string, line, col int) {
+		a.PushNavHistory()
 		a.EditorGroup.OpenFile(file)
 		a.EditorGroup.GoToLine(line + 1)
 		a.Root.SetFocus(a.EditorGroup)
 	}
 	a.References.OnNavigate = func(file string, line, col int) {
+		a.PushNavHistory()
 		a.EditorGroup.OpenFile(file)
 		a.EditorGroup.GoToLine(line + 1)
 		a.Root.SetFocus(a.EditorGroup)
@@ -422,6 +426,71 @@ func (a *App) statusMessage(msg string, level view.NotifyLevel) {
 func (a *App) StatusNotify(msg string) { a.statusMessage(msg, view.NotifyInfo) }
 func (a *App) StatusWarn(msg string)   { a.statusMessage(msg, view.NotifyWarning) }
 func (a *App) StatusError(msg string)  { a.statusMessage(msg, view.NotifyError) }
+
+// PushNavHistory records the current cursor position onto the navigation
+// history stack. Call this before performing a navigation jump.
+func (a *App) PushNavHistory() {
+	if a.NavHistory == nil {
+		return
+	}
+	path := a.EditorGroup.ActiveFilePath()
+	if path == "" {
+		return
+	}
+	line, col := a.EditorGroup.ActiveCursor()
+	a.NavHistory.Push(navhistory.NavEntry{
+		FilePath: path,
+		Line:     line,
+		Col:      col,
+	})
+}
+
+// NavigateBack goes to the previous position in navigation history.
+func (a *App) NavigateBack() {
+	if a.NavHistory == nil || a.NavHistory.Len() == 0 {
+		return
+	}
+	// Record current position so we can come back with Forward.
+	path := a.EditorGroup.ActiveFilePath()
+	line, col := a.EditorGroup.ActiveCursor()
+	cur := a.NavHistory.Current()
+	if cur == nil || cur.FilePath != path || cur.Line != line {
+		a.NavHistory.Push(navhistory.NavEntry{
+			FilePath: path,
+			Line:     line,
+			Col:      col,
+		})
+	}
+	e := a.NavHistory.Back()
+	if e == nil {
+		return
+	}
+	a.navigateToEntry(e)
+}
+
+// NavigateForward goes to the next position in navigation history.
+func (a *App) NavigateForward() {
+	if a.NavHistory == nil || !a.NavHistory.CanGoForward() {
+		return
+	}
+	e := a.NavHistory.Forward()
+	if e == nil {
+		return
+	}
+	a.navigateToEntry(e)
+}
+
+func (a *App) navigateToEntry(e *navhistory.NavEntry) {
+	currentPath := a.EditorGroup.ActiveFilePath()
+	if e.FilePath != currentPath {
+		a.EditorGroup.OpenFile(e.FilePath)
+	}
+	a.EditorGroup.GoToLine(e.Line + 1) // GoToLine is 1-based
+	if a.EditorGroup.Editor != nil {
+		a.EditorGroup.Editor.Cursor.Col = e.Col
+	}
+	a.Root.SetFocus(a.EditorGroup)
+}
 
 func OpenURL(url string) {
 	var cmd *exec.Cmd

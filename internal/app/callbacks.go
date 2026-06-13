@@ -75,6 +75,7 @@ func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 }
 
 func (a *App) NavigateToSearchMatch(path string, line, col int) {
+	a.PushNavHistory()
 	if strings.HasSuffix(path, " (diff)") {
 		if !a.EditorGroup.SwitchToTabByPath(path) {
 			filePath := strings.TrimSuffix(path, " (diff)")

@@ -63,6 +63,9 @@ var menuBarMenus = [][]ui.ContextMenuItem{
 		{Label: "Toggle Terminal", Command: "terminal.toggle"},
 		{Label: "New Terminal", Command: "terminal.new"},
 		ui.MenuSep(),
+		{Label: "Navigate Back", Command: "navigate.back"},
+		{Label: "Navigate Forward", Command: "navigate.forward"},
+		ui.MenuSep(),
 		{Label: "Switch Theme", Command: "theme.switch"},
 		ui.MenuSep(),
 		{Label: "Keyboard Tester", Command: "view.keyboardTester"},
@@ -95,6 +98,9 @@ var editorContextMenu = []ui.ContextMenuItem{
 	{Label: "Find", Command: "search.find"},
 	{Label: "Replace", Command: "search.replace"},
 	{Label: "Go to Line", Command: "editor.goToLine"},
+	ui.MenuSep(),
+	{Label: "Navigate Back", Command: "navigate.back"},
+	{Label: "Navigate Forward", Command: "navigate.forward"},
 }
 
 var diffContextMenu = []ui.ContextMenuItem{

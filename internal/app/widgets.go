@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/navhistory"
 	"github.com/eugenioenko/ttt/internal/github"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -146,27 +148,28 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	root.SetFocus(editorGroup)
 
 	return &App{
-		Root:              root,
-		EditorGroup:       editorGroup,
-		Sidebar:           sidebar,
-		SplitPanel:        splitPanel,
-		ContentSplit:      contentSplit,
-		BottomPanel:       bottomPanel,
-		Explorer:          explorer,
-		Search:            search,
-		Changes:           changes,
-		MenuBar:           menuBar,
-		StatusBar:         statusBar,
-		Status:            status,
-		Borders:           borders,
-		Settings:          &cfg.Settings,
-		Workspace:         ws,
-		Palette:           BuildTerminalPalettePtr(cfg.Theme),
-		TerminalPanel:     terminalPanel,
-		Problems:          problems,
-		References:        references,
-		DocVersions:       make(map[string]int),
-		AllDiagnostics:    make(map[string][]ui.Diagnostic),
-		LspNotified:       make(map[string]bool),
+		Root:           root,
+		EditorGroup:    editorGroup,
+		Sidebar:        sidebar,
+		SplitPanel:     splitPanel,
+		ContentSplit:   contentSplit,
+		BottomPanel:    bottomPanel,
+		Explorer:       explorer,
+		Search:         search,
+		Changes:        changes,
+		MenuBar:        menuBar,
+		StatusBar:      statusBar,
+		Status:         status,
+		Borders:        borders,
+		Settings:       &cfg.Settings,
+		Workspace:      ws,
+		Palette:        BuildTerminalPalettePtr(cfg.Theme),
+		TerminalPanel:  terminalPanel,
+		Problems:       problems,
+		References:     references,
+		DocVersions:    make(map[string]int),
+		AllDiagnostics: make(map[string][]ui.Diagnostic),
+		LspNotified:    make(map[string]bool),
+		NavHistory:     navhistory.New(100),
 	}
 }
