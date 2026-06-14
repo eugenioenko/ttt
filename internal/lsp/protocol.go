@@ -66,9 +66,15 @@ type InitializeResult struct {
 
 type ServerCapabilities struct {
 	CompletionProvider              *CompletionOptions       `json:"completionProvider,omitempty"`
+	SignatureHelpProvider           *SignatureHelpOptions    `json:"signatureHelpProvider,omitempty"`
 	TextDocumentSync                *TextDocumentSyncOptions `json:"textDocumentSync,omitempty"`
 	DocumentFormattingProvider      BoolOrObject `json:"documentFormattingProvider,omitempty"`
 	DocumentRangeFormattingProvider BoolOrObject `json:"documentRangeFormattingProvider,omitempty"`
+}
+
+type SignatureHelpOptions struct {
+	TriggerCharacters   []string `json:"triggerCharacters,omitempty"`
+	RetriggerCharacters []string `json:"retriggerCharacters,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -189,9 +195,23 @@ type CodeAction struct {
 	Diagnostics []Diagnostic   `json:"diagnostics,omitempty"`
 }
 
+type CompletionTriggerKind int
+
+const (
+	CompletionTriggerInvoked                         CompletionTriggerKind = 1
+	CompletionTriggerTriggerCharacter                CompletionTriggerKind = 2
+	CompletionTriggerTriggerForIncompleteCompletions CompletionTriggerKind = 3
+)
+
+type CompletionContext struct {
+	TriggerKind      CompletionTriggerKind `json:"triggerKind"`
+	TriggerCharacter string                `json:"triggerCharacter,omitempty"`
+}
+
 type CompletionParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 	Position     Position               `json:"position"`
+	Context      *CompletionContext     `json:"context,omitempty"`
 }
 
 type CompletionItemKind int

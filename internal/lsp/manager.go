@@ -68,6 +68,18 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 }
 
 
+func (m *Manager) SignatureHelpTriggerCharacters(serverKey string) []string {
+	m.mu.Lock()
+	client, ok := m.servers[serverKey]
+	m.mu.Unlock()
+	if ok {
+		if chars := client.SignatureHelpTriggerCharacters(); len(chars) > 0 {
+			return chars
+		}
+	}
+	return []string{"(", ","}
+}
+
 func (m *Manager) ResolveLanguage(filePath, chromaLang string) (serverKey, languageID string, ok bool) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	for name, cfg := range m.config.Servers {

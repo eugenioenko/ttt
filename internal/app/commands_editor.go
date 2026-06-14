@@ -40,7 +40,7 @@ func (a *App) TriggerAutocomplete() {
 		a.StatusWarn(lang + " language server is not configured. Add it to settings.json under lsp.servers")
 	} else {
 		line, col := a.EditorGroup.ActiveCursor()
-		a.RequestCompletions(path, lang, line, col)
+		a.RequestCompletions(path, lang, line, col, "")
 	}
 }
 

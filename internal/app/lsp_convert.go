@@ -26,7 +26,9 @@ type HoverResult struct {
 	Gen     uint64
 }
 
-type AutocompleteTrigger struct{}
+type AutocompleteTrigger struct {
+	TriggerChar string
+}
 
 type DiagnosticsResult struct {
 	Path        string

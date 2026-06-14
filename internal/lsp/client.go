@@ -17,6 +17,10 @@ type Client struct {
 	mu      sync.Mutex
 	done    chan struct{}
 
+	completionTriggers   []string
+	signatureTriggers    []string
+	signatureRetriggers  []string
+
 	OnDiagnostics func(params PublishDiagnosticsParams)
 }
 
@@ -155,6 +159,15 @@ func (c *Client) Initialize(rootURI string) error {
 	}
 	slog.Debug("lsp initialized", "capabilities", initResult.Capabilities)
 
+	caps := initResult.Capabilities
+	if caps.CompletionProvider != nil {
+		c.completionTriggers = caps.CompletionProvider.TriggerCharacters
+	}
+	if caps.SignatureHelpProvider != nil {
+		c.signatureTriggers = caps.SignatureHelpProvider.TriggerCharacters
+		c.signatureRetriggers = caps.SignatureHelpProvider.RetriggerCharacters
+	}
+
 	return c.notify("initialized", struct{}{})
 }
 
@@ -192,10 +205,23 @@ func (c *Client) DidClose(uri string) error {
 	})
 }
 
-func (c *Client) Completion(uri string, line, col int) ([]CompletionItem, error) {
+func (c *Client) CompletionTriggerCharacters() []string {
+	return c.completionTriggers
+}
+
+func (c *Client) SignatureHelpTriggerCharacters() []string {
+	return c.signatureTriggers
+}
+
+func (c *Client) SignatureHelpRetriggerCharacters() []string {
+	return c.signatureRetriggers
+}
+
+func (c *Client) Completion(uri string, line, col int, ctx *CompletionContext) ([]CompletionItem, error) {
 	result, err := c.call("textDocument/completion", CompletionParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Position:     Position{Line: line, Character: col},
+		Context:      ctx,
 	})
 	if err != nil {
 		return nil, err

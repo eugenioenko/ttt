@@ -196,14 +196,14 @@ func RunEventLoop(
 			case *AutocompleteTrigger:
 				if !app.IsAutocompleteActive() {
 					prefix := app.currentPrefix()
-					if len(prefix) >= 1 {
+					if len(prefix) >= 1 || v.TriggerChar != "" {
 						path := app.EditorGroup.ActiveFilePath()
 						lang := ""
 						if app.EditorGroup.Editor != nil && app.EditorGroup.Editor.Highlighter != nil {
 							lang = app.EditorGroup.Editor.Highlighter.Language()
 						}
 						line, col := app.EditorGroup.ActiveCursor()
-						app.RequestCompletions(path, lang, line, col)
+						app.RequestCompletions(path, lang, line, col, v.TriggerChar)
 					}
 				}
 			case *SignatureHelpResult:
