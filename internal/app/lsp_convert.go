@@ -11,8 +11,9 @@ import (
 )
 
 type CompletionResult struct {
-	Items    []ui.CompletionItem
-	LspItems []lsp.CompletionItem
+	Items        []ui.CompletionItem
+	LspItems     []lsp.CompletionItem
+	TriggerChars []string
 }
 
 type LocationResult struct {

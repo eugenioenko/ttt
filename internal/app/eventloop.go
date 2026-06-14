@@ -150,6 +150,10 @@ func RunEventLoop(
 			slog.Debug("key", "key", tev.Key(), "rune", string(tev.Rune()), "mod", tev.Modifiers())
 			app.Root.HandleEvent(tev)
 			app.RefreshAutocomplete()
+			if app.BufferChanged {
+				app.BufferChanged = false
+				app.CheckSignatureHelpTrigger()
+			}
 			syncStatus()
 			redraw()
 
@@ -194,16 +198,21 @@ func RunEventLoop(
 			case *GitGutterTrigger:
 				app.RequestGitGutterForActiveFile()
 			case *AutocompleteTrigger:
+				triggerChar := app.charBeforeCursor()
+				isTrigger := triggerChar != "" && (len(app.CompletionTriggers) == 0 || app.isCompletionTrigger(triggerChar))
+				if isTrigger && app.IsAutocompleteActive() {
+					app.DismissAutocomplete()
+				}
 				if !app.IsAutocompleteActive() {
 					prefix := app.currentPrefix()
-					if len(prefix) >= 1 || v.TriggerChar != "" {
+					if len(prefix) >= 1 || isTrigger {
 						path := app.EditorGroup.ActiveFilePath()
 						lang := ""
 						if app.EditorGroup.Editor != nil && app.EditorGroup.Editor.Highlighter != nil {
 							lang = app.EditorGroup.Editor.Highlighter.Language()
 						}
 						line, col := app.EditorGroup.ActiveCursor()
-						app.RequestCompletions(path, lang, line, col, v.TriggerChar)
+						app.RequestCompletions(path, lang, line, col, triggerChar)
 					}
 				}
 			case *SignatureHelpResult:
@@ -212,6 +221,7 @@ func RunEventLoop(
 				}
 			case *CompletionResult:
 				if len(v.Items) > 0 {
+					app.CompletionTriggers = v.TriggerChars
 					app.ShowAutocomplete(v.Items, v.LspItems)
 				}
 			case *HoverResult:

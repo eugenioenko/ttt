@@ -42,7 +42,9 @@ func (a *App) RefreshAutocomplete() {
 	}
 	prefix := a.currentPrefix()
 	if prefix == "" {
-		a.DismissAutocomplete()
+		if !a.isCompletionTrigger(a.charBeforeCursor()) {
+			a.DismissAutocomplete()
+		}
 		return
 	}
 	filtered := ui.FilterCompletions(a.CompletionItems, prefix)
@@ -51,6 +53,15 @@ func (a *App) RefreshAutocomplete() {
 		return
 	}
 	a.EditorGroup.Autocomplete.SetItems(filtered)
+}
+
+func (a *App) isCompletionTrigger(ch string) bool {
+	for _, tc := range a.CompletionTriggers {
+		if ch == tc {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) identStart() (line, start, col int) {
@@ -199,10 +210,9 @@ func (a *App) ScheduleAutocomplete() {
 	if a.AutocompleteTimer != nil {
 		a.AutocompleteTimer.Stop()
 	}
-	lastChar := a.charBeforeCursor()
 	delay := time.Duration(a.Settings.Autocomplete.Debounce) * time.Millisecond
 	a.AutocompleteTimer = time.AfterFunc(delay, func() {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&AutocompleteTrigger{TriggerChar: lastChar}))
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&AutocompleteTrigger{}))
 	})
 }
 
@@ -672,7 +682,11 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 		slog.Debug("lsp completion response", "count", len(items))
 		uiItems := LspToUICompletions(items)
 		if len(uiItems) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&CompletionResult{Items: uiItems, LspItems: items}))
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&CompletionResult{
+				Items:        uiItems,
+				LspItems:     items,
+				TriggerChars: client.CompletionTriggerCharacters(),
+			}))
 		}
 	}()
 }
