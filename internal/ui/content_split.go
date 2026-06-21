@@ -8,18 +8,18 @@ import (
 
 type ContentSplitWidget struct {
 	BaseWidget
-	Top                Widget
-	Bottom             Widget
-	ShowBottom         bool
-	BottomH            int
-	Borders            *term.BorderSet
-	OnResize           func(height int)
-	OnBottomClick      func()
-	OnTopClick         func()
-	RightBorderStartY  *int
-	dragging           bool
-	wasPressed         bool
-	capturedChild      Widget
+	Top               Widget
+	Bottom            Widget
+	ShowBottom        bool
+	BottomH           int
+	Borders           *term.BorderSet
+	OnResize          func(height int)
+	OnBottomClick     func()
+	OnTopClick        func()
+	RightBorderStartY *int
+	dragging          bool
+	wasPressed        bool
+	capturedChild     Widget
 }
 
 func NewContentSplitWidget() *ContentSplitWidget {

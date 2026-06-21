@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"log/slog"
 	"github.com/eugenioenko/ttt/internal/term"
+	"log/slog"
 
 	"github.com/gdamore/tcell/v2"
 )

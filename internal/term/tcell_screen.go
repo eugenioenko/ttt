@@ -4,7 +4,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-const StyleCount = 55
+const StyleCount = 57
 
 type StyleMap [StyleCount]tcell.Style
 

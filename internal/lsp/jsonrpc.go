@@ -11,10 +11,10 @@ import (
 )
 
 type Request struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      *int        `json:"id,omitempty"`
-	Method  string      `json:"method"`
-	Params  any `json:"params,omitempty"`
+	JSONRPC string `json:"jsonrpc"`
+	ID      *int   `json:"id,omitempty"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
 }
 
 type Response struct {

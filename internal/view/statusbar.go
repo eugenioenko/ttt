@@ -26,21 +26,21 @@ func (l NotifyLevel) Style() term.Style {
 }
 
 type StatusBar struct {
-	FileName     string
-	Line         int
-	Col          int
-	Dirty        bool
-	Branch       string
-	Blame        string
-	Language     string
-	LSP          bool
-	TabSize      int
-	UseTabs      bool
-	LineEnding   string
-	CursorCount  int
-	Notification string
-	NotifyLevel  NotifyLevel
-	NotifyExpiry time.Time
+	FileName        string
+	Line            int
+	Col             int
+	Dirty           bool
+	Branch          string
+	Blame           string
+	Language        string
+	LSP             bool
+	TabSize         int
+	UseTabs         bool
+	LineEnding      string
+	CursorCount     int
+	Notification    string
+	NotifyLevel     NotifyLevel
+	NotifyExpiry    time.Time
 	NotifyAction    func()
 	ActionLabel     string
 	SecondaryAction func()

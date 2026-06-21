@@ -45,6 +45,8 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	applyStyleDef(&m, term.StyleGutterAdded, theme.Diff.GutterAdded)
 	applyStyleDef(&m, term.StyleGutterDeleted, theme.Diff.GutterDeleted)
 	applyStyleDef(&m, term.StyleGutterModified, theme.Diff.GutterModified)
+	applyStyleDef(&m, term.StyleCommentBg, theme.Diff.CommentBg)
+	applyStyleDef(&m, term.StyleCommentAuthor, theme.Diff.CommentAuthor)
 	applyStyleDef(&m, term.StyleActiveLine, theme.Editor.ActiveLine)
 	applyStyleDef(&m, term.StyleScrollbar, config.StyleDef{Fg: theme.Scrollbar.Bg})
 	applyStyleDef(&m, term.StyleScrollbarThumb, config.StyleDef{Fg: theme.Scrollbar.Fg})

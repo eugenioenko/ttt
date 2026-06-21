@@ -288,14 +288,45 @@ func RunEventLoop(
 						})
 					}
 					groupName := fmt.Sprintf("PR #%d: %s", v.Info.Number, v.Info.Title)
-					app.Changes.AddPRGroup(groupName, v.URL, v.Info.Owner, v.Info.Repo, v.Info.BaseSHA, v.Info.HeadSHA, files, v.Diffs)
+					app.Changes.AddPRGroup(groupName, v.URL, v.Info.Owner, v.Info.Repo, v.Info.BaseSHA, v.Info.HeadSHA, v.Info.Number, files, v.Diffs)
+					if len(v.Comments) > 0 {
+						app.Changes.SetPRComments(groupName, v.Comments)
+					}
 					app.Sidebar.SetActivePanel("changes")
 					if !app.Sidebar.Visible {
 						app.ShowSidebar()
 					}
 					app.Root.SetFocus(app.Changes)
 					app.Sidebar.SetPanelDirty("changes", app.Changes.TotalChanges() > 0)
-					app.StatusNotify(fmt.Sprintf("Opened PR #%d: %s (%d files)", v.Info.Number, v.Info.Title, len(v.Info.Files)))
+					commentInfo := ""
+					if len(v.Comments) > 0 {
+						commentInfo = fmt.Sprintf(", %d comments", len(v.Comments))
+					}
+					app.StatusNotify(fmt.Sprintf("Opened PR #%d: %s (%d files%s)", v.Info.Number, v.Info.Title, len(v.Info.Files), commentInfo))
+				}
+			case *PrCommentAddResult:
+				if v.Err != nil {
+					app.StatusError("Failed to add comment: " + v.Err.Error())
+				} else {
+					app.StatusNotify("Comment added")
+					// Clear the comment input and refresh comments
+					for i := range app.Changes.Groups {
+						if app.Changes.Groups[i].Name == v.GroupName {
+							if app.Changes.Groups[i].CommentInput != nil {
+								app.Changes.Groups[i].CommentInput.Clear()
+							}
+							app.RefreshPRComments(&app.Changes.Groups[i])
+							break
+						}
+					}
+				}
+			case *PrCommentsRefreshResult:
+				if v.Err != nil {
+					app.StatusError("Failed to refresh comments: " + v.Err.Error())
+				} else {
+					app.Changes.SetPRComments(v.GroupName, v.Comments)
+					// Also update any open diff tabs with new comments
+					app.updateDiffComments(v.GroupName, v.Comments)
 				}
 			}
 			redraw()

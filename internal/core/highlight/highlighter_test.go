@@ -1,8 +1,8 @@
 package highlight
 
 import (
-	"testing"
 	"github.com/eugenioenko/ttt/internal/term"
+	"testing"
 )
 
 func TestHighlightGo_Comment(t *testing.T) {

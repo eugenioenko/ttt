@@ -9,14 +9,14 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/eugenioenko/vt10x"
+	"github.com/gdamore/tcell/v2"
 )
 
 type TerminalColorPalette struct {
-	Fg      term.DirectColor
-	Bg      term.DirectColor
-	ANSI    [16]term.DirectColor
+	Fg       term.DirectColor
+	Bg       term.DirectColor
+	ANSI     [16]term.DirectColor
 	Color256 [256]term.DirectColor
 }
 

@@ -8,12 +8,12 @@ import (
 
 type SignatureHelpWidget struct {
 	BaseWidget
-	Label           string
+	Label            string
 	ActiveParamStart int
 	ActiveParamEnd   int
-	AnchorX         int
-	AnchorY         int
-	Borders         *term.BorderSet
+	AnchorX          int
+	AnchorY          int
+	Borders          *term.BorderSet
 }
 
 func NewSignatureHelpWidget(label string, paramStart, paramEnd int) *SignatureHelpWidget {

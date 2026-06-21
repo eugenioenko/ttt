@@ -9,10 +9,10 @@ import (
 type SidebarWidget struct {
 	BaseWidget
 	TabbedPanel
-	Visible        bool
-	MoreButton     *MoreButtonWidget
-	OnSwitch       func(id string)
-	OnTabOverflow  func(hiddenIDs []string, hiddenTitles []string, screenX, screenY int)
+	Visible       bool
+	MoreButton    *MoreButtonWidget
+	OnSwitch      func(id string)
+	OnTabOverflow func(hiddenIDs []string, hiddenTitles []string, screenX, screenY int)
 }
 
 func NewSidebarWidget() *SidebarWidget {

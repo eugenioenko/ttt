@@ -252,6 +252,11 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 		dv.OnFetchExtended = func(dv *ui.DiffViewWidget) {
 			a.fetchPRFileContent(dv, group.PROwner, group.PRRepo, group.PRBaseSHA, group.PRHeadSHA, status.Path)
 		}
+		// Set inline comments for this file
+		fileComments := github.CommentsForFile(group.Comments, status.Path)
+		if len(fileComments) > 0 {
+			dv.SetComments(fileComments)
+		}
 	}
 	a.FocusEditorIfEnabled()
 }
@@ -369,6 +374,24 @@ func (a *App) ConfirmDiscard(message string, onConfirm func()) {
 			},
 		},
 	)
+}
+
+// updateDiffComments updates inline comments on any open diff tabs belonging to a PR group.
+func (a *App) updateDiffComments(groupName string, comments []github.PRComment) {
+	// Find the PR group to get the file list
+	for _, g := range a.Changes.Groups {
+		if !g.IsPR || g.Name != groupName {
+			continue
+		}
+		for _, f := range g.Unstaged {
+			tabName := f.Path + " (diff)"
+			if dv := a.EditorGroup.DiffWidgetByTab(tabName); dv != nil {
+				fileComments := github.CommentsForFile(comments, f.Path)
+				dv.SetComments(fileComments)
+			}
+		}
+		break
+	}
 }
 
 func registerWidgetCallbacks(app *App) {
@@ -512,6 +535,13 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnGroupMenu = app.ShowGroupMenu
 	app.Changes.OnCommit = app.CommitChanges
 	app.Changes.OnConfirmDiscard = app.ConfirmDiscard
+	app.Changes.OnAddComment = func(group *ui.ChangesGroup, body string) {
+		app.AddPRComment(group, body)
+	}
+	app.Changes.OnViewComment = func(comment github.PRComment) {
+		firstLine := strings.SplitN(comment.Body, "\n", 2)[0]
+		app.StatusNotify(fmt.Sprintf("@%s: %s", comment.User, firstLine))
+	}
 
 	app.ContentSplit.OnResize = func(height int) {
 		if height <= 0 {

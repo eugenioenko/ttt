@@ -1,9 +1,9 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/term"
 	"log/slog"
 	"path/filepath"
-	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -23,9 +23,9 @@ type Tab struct {
 
 type TabBarWidget struct {
 	BaseWidget
-	Tabs         []Tab
-	Borders      *term.BorderSet
-	ScrollOffset int
+	Tabs            []Tab
+	Borders         *term.BorderSet
+	ScrollOffset    int
 	MoreButton      *MoreButtonWidget
 	OnTabClick      func(index int)
 	OnTabClose      func(index int)

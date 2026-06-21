@@ -14,14 +14,14 @@ type statusBarSpan struct {
 
 type StatusBarWidget struct {
 	BaseWidget
-	Status         *view.StatusBar
-	OnIndentClick  func()
-	OnEolClick     func()
-	indentSpan     statusBarSpan
-	eolSpan        statusBarSpan
-	okSpan         statusBarSpan
-	actionSpan     statusBarSpan
-	secondarySpan  statusBarSpan
+	Status        *view.StatusBar
+	OnIndentClick func()
+	OnEolClick    func()
+	indentSpan    statusBarSpan
+	eolSpan       statusBarSpan
+	okSpan        statusBarSpan
+	actionSpan    statusBarSpan
+	secondarySpan statusBarSpan
 }
 
 func NewStatusBarWidget(status *view.StatusBar) *StatusBarWidget {

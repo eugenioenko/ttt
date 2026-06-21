@@ -11,8 +11,8 @@ type State struct {
 	ranges    []Range
 	collapsed map[int]bool
 
-	dirty         bool
-	cachedVisible []int
+	dirty          bool
+	cachedVisible  []int
 	cachedBufToVis map[int]int
 }
 

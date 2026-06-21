@@ -9,7 +9,7 @@ type Rect struct {
 type EventResult int
 
 const (
-	EventIgnored   EventResult = iota
+	EventIgnored EventResult = iota
 	EventConsumed
 	EventDismissed
 	EventCaptured
@@ -18,7 +18,7 @@ const (
 type ConstraintType int
 
 const (
-	Fixed  ConstraintType = iota
+	Fixed ConstraintType = iota
 	Flex
 	Hidden
 )

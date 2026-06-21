@@ -73,15 +73,15 @@ func DefaultLSPSettings() LSPSettings {
 }
 
 type EditorSettings struct {
-	TabSize                int    `json:"tabSize"`
-	InsertSpaces           bool   `json:"insertSpaces"`
-	WordWrap               bool   `json:"wordWrap"`
-	LineNumbers            bool   `json:"lineNumbers"`
-	CursorStyle            string `json:"cursorStyle,omitempty"`
-	FormatOnSave           bool   `json:"formatOnSave"`
-	InsertFinalNewline     bool   `json:"insertFinalNewline"`
-	TrimTrailingWhitespace bool `json:"trimTrailingWhitespace"`
-	FocusOnOpen            bool `json:"focusOnOpen"`
+	TabSize                 int    `json:"tabSize"`
+	InsertSpaces            bool   `json:"insertSpaces"`
+	WordWrap                bool   `json:"wordWrap"`
+	LineNumbers             bool   `json:"lineNumbers"`
+	CursorStyle             string `json:"cursorStyle,omitempty"`
+	FormatOnSave            bool   `json:"formatOnSave"`
+	InsertFinalNewline      bool   `json:"insertFinalNewline"`
+	TrimTrailingWhitespace  bool   `json:"trimTrailingWhitespace"`
+	FocusOnOpen             bool   `json:"focusOnOpen"`
 	GitGutter               *bool  `json:"gitGutter,omitempty"`
 	GutterStyle             string `json:"gutterStyle,omitempty"`
 	BracketPairColorization bool   `json:"bracketPairColorization"`
@@ -95,10 +95,10 @@ func (e EditorSettings) IsGitGutterEnabled() bool {
 
 func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
-		TabSize:            4,
-		InsertSpaces:       true,
-		LineNumbers:        true,
-		InsertFinalNewline: true,
+		TabSize:                 4,
+		InsertSpaces:            true,
+		LineNumbers:             true,
+		InsertFinalNewline:      true,
 		GutterStyle:             "compact",
 		BracketPairColorization: false,
 	}
@@ -167,7 +167,6 @@ func LoadSettings() Settings {
 	normalizeSettings(&s)
 	return s
 }
-
 
 func SaveSettings(s Settings) error {
 	path := ConfigFilePath("settings.json")

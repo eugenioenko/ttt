@@ -45,7 +45,7 @@ func TestParseCursorStyle(t *testing.T) {
 		{"blinkingUnderline", CursorStyleBlinkingUnderline},
 		{"steadyUnderline", CursorStyleSteadyUnderline},
 		{"unknown", CursorStyleBlinkingBar},
-		{"BLOCK", CursorStyleBlinkingBar},    // case sensitive, falls through to default
+		{"BLOCK", CursorStyleBlinkingBar}, // case sensitive, falls through to default
 		{"invalid", CursorStyleBlinkingBar},
 	}
 	for _, tt := range tests {

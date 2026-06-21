@@ -113,12 +113,12 @@ func (s *Scrollbar) posToTopItem(thumbTop int) int {
 }
 
 type HScrollbar struct {
-	X         int
-	Y         int
-	Width     int
-	TotalCols int
-	LeftCol   int
-	dragging  bool
+	X          int
+	Y          int
+	Width      int
+	TotalCols  int
+	LeftCol    int
+	dragging   bool
 	dragOffset int
 }
 

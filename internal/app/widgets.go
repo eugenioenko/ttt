@@ -1,15 +1,15 @@
 package app
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/github"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/workspace"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 func isPRURL(arg string) bool {
@@ -177,27 +177,27 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	root.SetFocus(editorGroup)
 
 	return &App{
-		Root:              root,
-		EditorGroup:       editorGroup,
-		Sidebar:           sidebar,
-		SplitPanel:        splitPanel,
-		ContentSplit:      contentSplit,
-		BottomPanel:       bottomPanel,
-		Explorer:          explorer,
-		Search:            search,
-		Changes:           changes,
-		MenuBar:           menuBar,
-		StatusBar:         statusBar,
-		Status:            status,
-		Borders:           borders,
-		Settings:          &cfg.Settings,
-		Workspace:         ws,
-		Palette:           BuildTerminalPalettePtr(cfg.Theme),
-		TerminalPanel:     terminalPanel,
-		Problems:          problems,
-		References:        references,
-		DocVersions:       make(map[string]int),
-		AllDiagnostics:    make(map[string][]ui.Diagnostic),
-		LspNotified:       make(map[string]bool),
+		Root:           root,
+		EditorGroup:    editorGroup,
+		Sidebar:        sidebar,
+		SplitPanel:     splitPanel,
+		ContentSplit:   contentSplit,
+		BottomPanel:    bottomPanel,
+		Explorer:       explorer,
+		Search:         search,
+		Changes:        changes,
+		MenuBar:        menuBar,
+		StatusBar:      statusBar,
+		Status:         status,
+		Borders:        borders,
+		Settings:       &cfg.Settings,
+		Workspace:      ws,
+		Palette:        BuildTerminalPalettePtr(cfg.Theme),
+		TerminalPanel:  terminalPanel,
+		Problems:       problems,
+		References:     references,
+		DocVersions:    make(map[string]int),
+		AllDiagnostics: make(map[string][]ui.Diagnostic),
+		LspNotified:    make(map[string]bool),
 	}
 }

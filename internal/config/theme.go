@@ -73,6 +73,8 @@ type DiffStyles struct {
 	GutterAdded    StyleDef `json:"gutterAdded,omitempty"`
 	GutterDeleted  StyleDef `json:"gutterDeleted,omitempty"`
 	GutterModified StyleDef `json:"gutterModified,omitempty"`
+	CommentBg      StyleDef `json:"commentBg,omitempty"`
+	CommentAuthor  StyleDef `json:"commentAuthor,omitempty"`
 }
 
 type SyntaxStyles struct {
@@ -235,11 +237,11 @@ func DefaultTheme() ThemeConfig {
 		Border: StyleDef{Fg: "#555555"},
 
 		Editor: EditorStyles{
-			ActiveLine:   StyleDef{Bg: "#282828"},
-			Selection:    StyleDef{Bg: "#282828"},
-			LineNumber:   StyleDef{Fg: "#999999"},
-			SearchMatch:  StyleDef{Bg: "#623800"},
-			SearchActive: StyleDef{Bg: "#9e6a03"},
+			ActiveLine:    StyleDef{Bg: "#282828"},
+			Selection:     StyleDef{Bg: "#282828"},
+			LineNumber:    StyleDef{Fg: "#999999"},
+			SearchMatch:   StyleDef{Bg: "#623800"},
+			SearchActive:  StyleDef{Bg: "#9e6a03"},
 			BracketMatch:  StyleDef{Bg: "#3a3a3a"},
 			BracketColors: []string{"yellow", "magenta", "blue"},
 		},
@@ -288,6 +290,12 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Diff.GutterAdded, "#73c991")
 	fillFg(&t.Diff.GutterDeleted, "#f14c4c")
 	fillFg(&t.Diff.GutterModified, "#e2c08d")
+	fillBg(&t.Diff.CommentBg, "#2d2d30")
+	fillFg(&t.Diff.CommentBg, t.Default.Fg)
+	fillFg(&t.Diff.CommentAuthor, "#569cd6")
+	if !t.Diff.CommentAuthor.Bold {
+		t.Diff.CommentAuthor.Bold = true
+	}
 	fillFg(&t.Success, "#73c991")
 	fillFg(&t.Danger, "#f14c4c")
 	fillFg(&t.Warning, "#e2c08d")

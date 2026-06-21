@@ -2,7 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/github"
 	"github.com/eugenioenko/ttt/internal/term"
 	"path/filepath"
 
@@ -25,6 +28,11 @@ type ChangesGroup struct {
 	PRRepo          string
 	PRBaseSHA       string
 	PRHeadSHA       string
+	PRNumber        int
+	Comments        []github.PRComment
+	ConvoExpanded   bool
+	CommentInput    *InputWidget
+	CommentCounts   map[string]int // file path -> inline comment count
 }
 
 type changesItemKind int
@@ -36,13 +44,17 @@ const (
 	itemBorder
 	itemSection
 	itemSpacer
+	itemConvoSection
+	itemComment
+	itemCommentInput
 )
 
 type changesItem struct {
-	kind       changesItemKind
-	groupIndex int
-	fileIndex  int
-	staged     bool
+	kind         changesItemKind
+	groupIndex   int
+	fileIndex    int
+	commentIndex int
+	staged       bool
 }
 
 type ChangesWidget struct {
@@ -63,6 +75,8 @@ type ChangesWidget struct {
 	OnPRGroupMenu    func(group *ChangesGroup, screenX, screenY int)
 	OnRefreshPR      func(url string)
 	OnConfirmDiscard func(message string, onConfirm func())
+	OnAddComment     func(group *ChangesGroup, body string)
+	OnViewComment    func(comment github.PRComment)
 }
 
 func NewChangesWidget(dirs ...string) *ChangesWidget {
@@ -155,6 +169,24 @@ func (c *ChangesWidget) buildItems() {
 			if showHeader {
 				c.items = append(c.items, changesItem{kind: itemBorder, groupIndex: gi})
 			}
+
+			// Conversation section for PR groups with comments
+			if g.IsPR && len(g.Comments) > 0 {
+				generalComments := github.GeneralComments(g.Comments)
+				if len(generalComments) > 0 || g.CommentInput != nil {
+					c.items = append(c.items, changesItem{kind: itemConvoSection, groupIndex: gi})
+					if g.ConvoExpanded {
+						for ci, comment := range g.Comments {
+							if !comment.IsInline {
+								c.items = append(c.items, changesItem{kind: itemComment, groupIndex: gi, commentIndex: ci})
+							}
+						}
+						c.items = append(c.items, changesItem{kind: itemCommentInput, groupIndex: gi})
+					}
+					c.items = append(c.items, changesItem{kind: itemBorder, groupIndex: gi})
+				}
+			}
+
 			if !g.IsPR {
 				c.items = append(c.items, changesItem{kind: itemInput, groupIndex: gi})
 				c.items = append(c.items, changesItem{kind: itemBorder, groupIndex: gi})
@@ -293,6 +325,15 @@ func (c *ChangesWidget) Render(surface *RenderSurface) {
 			c.renderSectionHeader(surface, y, w, style, item)
 		case itemFile:
 			c.renderFile(surface, y, w, style, idx == c.Selected && !c.inputFocused, item)
+		case itemConvoSection:
+			c.renderConvoSection(surface, y, w, style, item)
+		case itemComment:
+			c.renderComment(surface, y, w, style, item)
+		case itemCommentInput:
+			g := c.Groups[item.groupIndex]
+			if g.CommentInput != nil {
+				g.CommentInput.Render(surface, indent, y, w-indent)
+			}
 		}
 	}
 }
@@ -398,10 +439,22 @@ func (c *ChangesWidget) renderFile(surface *RenderSurface, y, w int, style term.
 		x++
 	}
 
-	isPR := c.Groups[item.groupIndex].IsPR
+	g2 := c.Groups[item.groupIndex]
+	isPR := g2.IsPR
+
+	// Reserve space for comment count badge on PR files
+	commentCount := 0
+	if isPR && g2.CommentCounts != nil {
+		commentCount = g2.CommentCounts[f.Path]
+	}
+	badgeSuffix := ""
+	if commentCount > 0 {
+		badgeSuffix = fmt.Sprintf(" (%d)", commentCount)
+	}
+
 	maxPathX := w - 4
 	if isPR {
-		maxPathX = w - 1
+		maxPathX = w - 1 - len([]rune(badgeSuffix))
 	}
 	for _, ch := range f.Path {
 		if x >= maxPathX {
@@ -409,6 +462,20 @@ func (c *ChangesWidget) renderFile(surface *RenderSurface, y, w int, style term.
 		}
 		surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
 		x++
+	}
+
+	// Render comment count badge
+	if commentCount > 0 {
+		badgeStyle := term.StyleMuted
+		if selected {
+			badgeStyle = style
+		}
+		for _, ch := range badgeSuffix {
+			if x < w {
+				surface.SetCell(x, y, term.Cell{Ch: ch, Style: badgeStyle})
+				x++
+			}
+		}
 	}
 
 	if !isPR {
@@ -421,6 +488,82 @@ func (c *ChangesWidget) renderFile(surface *RenderSurface, y, w int, style term.
 				surface.SetCell(w-2, y, term.Cell{Ch: '+', Style: style})
 			}
 		}
+	}
+}
+
+func (c *ChangesWidget) renderConvoSection(surface *RenderSurface, y, w int, style term.Style, item changesItem) {
+	g := c.Groups[item.groupIndex]
+	generalCount := len(github.GeneralComments(g.Comments))
+
+	x := 1
+	chevron := '▶'
+	if g.ConvoExpanded {
+		chevron = '▼'
+	}
+	labelStyle := term.StyleMuted
+	if style == term.StyleSidebarSelected {
+		labelStyle = style
+	}
+
+	if x < w {
+		surface.SetCell(x, y, term.Cell{Ch: chevron, Style: labelStyle})
+		x += 2
+	}
+
+	label := fmt.Sprintf("Conversation (%d)", generalCount)
+	for _, rch := range label {
+		if x >= w {
+			break
+		}
+		surface.SetCell(x, y, term.Cell{Ch: rch, Style: labelStyle})
+		x++
+	}
+}
+
+func (c *ChangesWidget) renderComment(surface *RenderSurface, y, w int, style term.Style, item changesItem) {
+	g := c.Groups[item.groupIndex]
+	if item.commentIndex < 0 || item.commentIndex >= len(g.Comments) {
+		return
+	}
+	comment := g.Comments[item.commentIndex]
+
+	x := 2
+
+	// Render @user prefix
+	user := "@" + comment.User
+	userStyle := term.StyleCommentAuthor
+	if style == term.StyleSidebarSelected {
+		userStyle = style
+	}
+	for _, ch := range user {
+		if x >= w-1 {
+			break
+		}
+		surface.SetCell(x, y, term.Cell{Ch: ch, Style: userStyle})
+		x++
+	}
+
+	if x < w-1 {
+		surface.SetCell(x, y, term.Cell{Ch: ':', Style: style})
+		x++
+	}
+	if x < w-1 {
+		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
+		x++
+	}
+
+	// Show first line of comment body, truncated
+	bodyLine := strings.SplitN(comment.Body, "\n", 2)[0]
+	bodyStyle := term.StyleMuted
+	if style == term.StyleSidebarSelected {
+		bodyStyle = style
+	}
+	for _, ch := range bodyLine {
+		if x >= w-1 {
+			break
+		}
+		surface.SetCell(x, y, term.Cell{Ch: ch, Style: bodyStyle})
+		x++
 	}
 }
 
@@ -460,10 +603,19 @@ func (c *ChangesWidget) CursorPosition() (int, int, bool) {
 	}
 	r := c.GetRect()
 	for i, item := range c.items {
-		if item.kind == itemInput && i == c.Selected {
-			inp := c.Groups[item.groupIndex].Input
-			y := r.Y + i - c.ScrollTop
-			return inp.CursorX(r.X), y, true
+		if i == c.Selected {
+			if item.kind == itemInput {
+				inp := c.Groups[item.groupIndex].Input
+				y := r.Y + i - c.ScrollTop
+				return inp.CursorX(r.X), y, true
+			}
+			if item.kind == itemCommentInput {
+				inp := c.Groups[item.groupIndex].CommentInput
+				if inp != nil {
+					y := r.Y + i - c.ScrollTop
+					return inp.CursorX(r.X), y, true
+				}
+			}
 		}
 	}
 	return 0, 0, false
@@ -478,6 +630,9 @@ func (c *ChangesWidget) FocusedInput() *InputWidget {
 		if item.kind == itemInput {
 			return c.Groups[item.groupIndex].Input
 		}
+		if item.kind == itemCommentInput {
+			return c.Groups[item.groupIndex].CommentInput
+		}
 	}
 	return nil
 }
@@ -491,7 +646,11 @@ func (c *ChangesWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventConsumed
 			case tcell.KeyEnter:
 				item := c.items[c.Selected]
-				c.commitGroup(item.groupIndex)
+				if item.kind == itemCommentInput {
+					c.submitComment(item.groupIndex)
+				} else {
+					c.commitGroup(item.groupIndex)
+				}
 				return EventConsumed
 			case tcell.KeyUp:
 				c.inputFocused = false
@@ -507,7 +666,14 @@ func (c *ChangesWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventConsumed
 			default:
 				item := c.items[c.Selected]
-				c.Groups[item.groupIndex].Input.HandleEvent(ev)
+				if item.kind == itemCommentInput {
+					g := c.Groups[item.groupIndex]
+					if g.CommentInput != nil {
+						g.CommentInput.HandleEvent(ev)
+					}
+				} else {
+					c.Groups[item.groupIndex].Input.HandleEvent(ev)
+				}
 				return EventConsumed
 			}
 		}
@@ -552,6 +718,15 @@ func (c *ChangesWidget) HandleEvent(ev tcell.Event) EventResult {
 					c.Selected = idx
 					c.inputFocused = true
 					c.Groups[item.groupIndex].Input.HandleClick(mx, my)
+					return EventConsumed
+				}
+				if item.kind == itemCommentInput {
+					c.Selected = idx
+					c.inputFocused = true
+					g := c.Groups[item.groupIndex]
+					if g.CommentInput != nil {
+						g.CommentInput.HandleClick(mx, my)
+					}
 					return EventConsumed
 				}
 				if item.kind == itemFile && mx >= r.X+r.W-3 {
@@ -709,6 +884,19 @@ func (c *ChangesWidget) activateSelected() {
 		c.buildItems()
 	case itemInput:
 		c.inputFocused = true
+	case itemCommentInput:
+		c.inputFocused = true
+	case itemConvoSection:
+		g := &c.Groups[item.groupIndex]
+		g.ConvoExpanded = !g.ConvoExpanded
+		c.buildItems()
+	case itemComment:
+		g := c.Groups[item.groupIndex]
+		if item.commentIndex >= 0 && item.commentIndex < len(g.Comments) {
+			if c.OnViewComment != nil {
+				c.OnViewComment(g.Comments[item.commentIndex])
+			}
+		}
 	case itemSection:
 		g := &c.Groups[item.groupIndex]
 		if item.staged {
@@ -801,6 +989,19 @@ func (c *ChangesWidget) confirmDiscardAll(gi int) {
 	})
 }
 
+func (c *ChangesWidget) submitComment(gi int) {
+	if gi < 0 || gi >= len(c.Groups) {
+		return
+	}
+	g := &c.Groups[gi]
+	if g.CommentInput == nil || g.CommentInput.Text == "" {
+		return
+	}
+	if c.OnAddComment != nil {
+		c.OnAddComment(g, g.CommentInput.Text)
+	}
+}
+
 func (c *ChangesWidget) selectedInPR() bool {
 	if c.Selected < 0 || c.Selected >= len(c.items) {
 		return false
@@ -808,7 +1009,9 @@ func (c *ChangesWidget) selectedInPR() bool {
 	return c.Groups[c.items[c.Selected].groupIndex].IsPR
 }
 
-func (c *ChangesWidget) AddPRGroup(name, url, owner, repo, baseSHA, headSHA string, files []git.FileStatus, diffs map[string]string) {
+func (c *ChangesWidget) AddPRGroup(name, url, owner, repo, baseSHA, headSHA string, number int, files []git.FileStatus, diffs map[string]string) {
+	commentInput := NewInputWidget()
+	commentInput.Placeholder = "Add comment..."
 	c.Groups = append(c.Groups, ChangesGroup{
 		Dir:             "pr://" + name,
 		Name:            name,
@@ -822,8 +1025,24 @@ func (c *ChangesWidget) AddPRGroup(name, url, owner, repo, baseSHA, headSHA stri
 		PRRepo:          repo,
 		PRBaseSHA:       baseSHA,
 		PRHeadSHA:       headSHA,
+		PRNumber:        number,
+		ConvoExpanded:   true,
+		CommentInput:    commentInput,
 	})
 	c.multiRoot = len(c.Groups) > 1
+	c.buildItems()
+	c.ClampSelected(len(c.items))
+}
+
+// SetPRComments updates comments for a PR group and rebuilds the item list.
+func (c *ChangesWidget) SetPRComments(name string, comments []github.PRComment) {
+	for i := range c.Groups {
+		if c.Groups[i].IsPR && c.Groups[i].Name == name {
+			c.Groups[i].Comments = comments
+			c.Groups[i].CommentCounts = github.FileCommentCounts(comments)
+			break
+		}
+	}
 	c.buildItems()
 	c.ClampSelected(len(c.items))
 }

@@ -70,8 +70,8 @@ func DetectIndent(lines []string) IndentInfo {
 
 // Buffer represents a text buffer with line-based storage.
 type Buffer struct {
-	Lines              []string
-	Dirty              bool
+	Lines                  []string
+	Dirty                  bool
 	InsertFinalNewline     bool
 	TrimTrailingWhitespace bool
 	LineEnding             string // "\n" (LF) or "\r\n" (CRLF); defaults to "\n"

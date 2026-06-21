@@ -29,8 +29,8 @@ type TextDocumentPositionParams struct {
 }
 
 type InitializeParams struct {
-	ProcessID int    `json:"processId"`
-	RootURI   string `json:"rootUri"`
+	ProcessID    int                `json:"processId"`
+	RootURI      string             `json:"rootUri"`
 	Capabilities ClientCapabilities `json:"capabilities"`
 }
 
@@ -39,7 +39,7 @@ type ClientCapabilities struct {
 }
 
 type TextDocumentClientCapabilities struct {
-	Completion        *CompletionClientCapabilities        `json:"completion,omitempty"`
+	Completion         *CompletionClientCapabilities         `json:"completion,omitempty"`
 	PublishDiagnostics *PublishDiagnosticsClientCapabilities `json:"publishDiagnostics,omitempty"`
 }
 
@@ -52,8 +52,8 @@ type CompletionClientCapabilities struct {
 }
 
 type CompletionItemClientCapabilities struct {
-	SnippetSupport bool                              `json:"snippetSupport"`
-	ResolveSupport *CompletionItemResolveSupport      `json:"resolveSupport,omitempty"`
+	SnippetSupport bool                          `json:"snippetSupport"`
+	ResolveSupport *CompletionItemResolveSupport `json:"resolveSupport,omitempty"`
 }
 
 type CompletionItemResolveSupport struct {
@@ -68,8 +68,8 @@ type ServerCapabilities struct {
 	CompletionProvider              *CompletionOptions       `json:"completionProvider,omitempty"`
 	SignatureHelpProvider           *SignatureHelpOptions    `json:"signatureHelpProvider,omitempty"`
 	TextDocumentSync                *TextDocumentSyncOptions `json:"textDocumentSync,omitempty"`
-	DocumentFormattingProvider      BoolOrObject `json:"documentFormattingProvider,omitempty"`
-	DocumentRangeFormattingProvider BoolOrObject `json:"documentRangeFormattingProvider,omitempty"`
+	DocumentFormattingProvider      BoolOrObject             `json:"documentFormattingProvider,omitempty"`
+	DocumentRangeFormattingProvider BoolOrObject             `json:"documentRangeFormattingProvider,omitempty"`
 }
 
 type SignatureHelpOptions struct {
@@ -164,7 +164,7 @@ type ReferenceContext struct {
 type ReferenceParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 	Position     Position               `json:"position"`
-	Context      ReferenceContext        `json:"context"`
+	Context      ReferenceContext       `json:"context"`
 }
 
 type RenameParams struct {

@@ -26,10 +26,10 @@ type TreeNode struct {
 type ExplorerWidget struct {
 	BaseWidget
 	SelectableList
-	Roots      []*TreeNode
-	FlatList   []*TreeNode
-	ActiveFile string
-	Settings   config.ExplorerSettings
+	Roots        []*TreeNode
+	FlatList     []*TreeNode
+	ActiveFile   string
+	Settings     config.ExplorerSettings
 	OnOpenFile   func(path string)
 	OnRightClick func(node *TreeNode, screenX, screenY int)
 }
@@ -284,7 +284,6 @@ func (e *ExplorerWidget) ActivateSelected() {
 		e.OnOpenFile(node.Path)
 	}
 }
-
 
 func (e *ExplorerWidget) collapseSelected() {
 	if e.Selected < 0 || e.Selected >= len(e.FlatList) {

@@ -27,9 +27,9 @@ type KeybindingsWidget struct {
 	selected     int
 	scrollOffset int
 
-	recording    bool
-	recordCombo  string
-	recordChord  string
+	recording     bool
+	recordCombo   string
+	recordChord   string
 	focusedAction int // -1 = input/list, 0..4 = footer buttons
 
 	boxX, boxY, boxW, boxH int

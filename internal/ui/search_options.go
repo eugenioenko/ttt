@@ -45,7 +45,7 @@ func findPlain(lines []string, query string, opts SearchOptions) []FindMatch {
 			}
 			bytePos := offset + idx
 			col := len([]rune(searchLine[:bytePos]))
-	matches = append(matches, FindMatch{Line: lineIdx, Col: col, Len: queryLen})
+			matches = append(matches, FindMatch{Line: lineIdx, Col: col, Len: queryLen})
 			offset = bytePos + len(searchQuery)
 		}
 	}
@@ -73,7 +73,6 @@ func findRegex(lines []string, query string, opts SearchOptions) ([]FindMatch, e
 	}
 	return matches, nil
 }
-
 
 type searchMatchByPos []SearchMatch
 

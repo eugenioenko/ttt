@@ -9,14 +9,15 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/highlight"
+	"github.com/eugenioenko/ttt/internal/github"
 	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v2"
 )
 
 type diffMergedRef struct {
-	isRight  bool
-	sideIdx  int
+	isRight bool
+	sideIdx int
 }
 
 type diffSelPos struct {
@@ -34,41 +35,60 @@ type DiffViewWidget struct {
 	maxLineW    int
 	viewH       int
 	contentW    int
-	scrollbar    Scrollbar
-	hscrollbar   HScrollbar
-	rhscrollbar  HScrollbar
+	scrollbar   Scrollbar
+	hscrollbar  HScrollbar
+	rhscrollbar HScrollbar
 
 	// layout cache for mouse hit-testing
-	layoutDividerX  int
-	layoutLeftStart int
-	layoutLeftW     int
+	layoutDividerX   int
+	layoutLeftStart  int
+	layoutLeftW      int
 	layoutRightStart int
-	layoutRightW    int
-	layoutGutterW   int
+	layoutRightW     int
+	layoutGutterW    int
 
 	// selection state
-	selecting    bool
-	hasSelection bool
-	selRight     bool
-	selAnchor    diffSelPos
-	selCurrent   diffSelPos
+	selecting     bool
+	hasSelection  bool
+	selRight      bool
+	selAnchor     diffSelPos
+	selCurrent    diffSelPos
 	lastClickTime time.Time
 	lastClickPos  diffSelPos
 
-	SearchMatchesLeft  []FindMatch
-	SearchMatchesRight []FindMatch
-	searchMergedRefs   []diffMergedRef
-	searchActiveRight  bool
+	SearchMatchesLeft   []FindMatch
+	SearchMatchesRight  []FindMatch
+	searchMergedRefs    []diffMergedRef
+	searchActiveRight   bool
 	searchActiveSideIdx int
 
 	// extended diff mode
-	extended  bool
-	fileDiff  diff.FileDiff
-	oldLines  []string
-	newLines  []string
+	extended bool
+	fileDiff diff.FileDiff
+	oldLines []string
+	newLines []string
 
 	OnFetchExtended func(dv *DiffViewWidget)
 	Loading         bool
+
+	// PR inline comments
+	Comments    []github.PRComment
+	displayRows []diffDisplayRow // flattened: diff lines interleaved with comment rows
+}
+
+type diffRowKind int
+
+const (
+	diffRowLine    diffRowKind = iota // a normal diff line
+	diffRowComment                    // a comment block row
+)
+
+type diffDisplayRow struct {
+	kind        diffRowKind
+	lineIdx     int // index into d.Lines for diffRowLine
+	comment     *github.PRComment
+	commentLine int    // which line of the wrapped comment text this row represents
+	commentText string // pre-computed text for this row
 }
 
 func NewDiffViewWidget(filePath string, fd diff.FileDiff, oldLines, newLines []string, extended bool) *DiffViewWidget {
@@ -137,6 +157,66 @@ func (d *DiffViewWidget) rebuildLines() {
 		}
 	}
 	d.maxLineW = maxW
+	d.buildDisplayRows()
+}
+
+// SetComments sets the inline comments for this diff view and rebuilds display rows.
+func (d *DiffViewWidget) SetComments(comments []github.PRComment) {
+	d.Comments = comments
+	d.buildDisplayRows()
+}
+
+// buildDisplayRows creates a flat list of display rows interleaving diff lines with comment blocks.
+// Comments are placed after the diff line matching their line number on the right side.
+func (d *DiffViewWidget) buildDisplayRows() {
+	d.displayRows = nil
+	if len(d.Comments) == 0 {
+		// No comments - just add all diff lines directly
+		for i := range d.Lines {
+			d.displayRows = append(d.displayRows, diffDisplayRow{kind: diffRowLine, lineIdx: i})
+		}
+		return
+	}
+
+	// Build a map: right-side line number -> list of comments
+	commentsByLine := make(map[int][]github.PRComment)
+	for _, c := range d.Comments {
+		if c.Line > 0 {
+			commentsByLine[c.Line] = append(commentsByLine[c.Line], c)
+		}
+	}
+
+	for i, dl := range d.Lines {
+		d.displayRows = append(d.displayRows, diffDisplayRow{kind: diffRowLine, lineIdx: i})
+
+		// Check if there are comments for this line (by right-side line number)
+		rightNum := dl.Right.Num
+		if comments, ok := commentsByLine[rightNum]; ok && rightNum > 0 {
+			for ci := range comments {
+				comment := &comments[ci]
+				// Header row: @user - date
+				header := fmt.Sprintf("  @%s  %s", comment.User, github.FormatCommentTime(comment.CreatedAt))
+				d.displayRows = append(d.displayRows, diffDisplayRow{
+					kind:        diffRowComment,
+					lineIdx:     i,
+					comment:     comment,
+					commentLine: 0,
+					commentText: header,
+				})
+				// Body rows: wrap comment body
+				bodyLines := strings.Split(comment.Body, "\n")
+				for li, bl := range bodyLines {
+					d.displayRows = append(d.displayRows, diffDisplayRow{
+						kind:        diffRowComment,
+						lineIdx:     i,
+						comment:     comment,
+						commentLine: li + 1,
+						commentText: "  " + bl,
+					})
+				}
+			}
+		}
+	}
 }
 
 func (d *DiffViewWidget) Focusable() bool { return true }
@@ -179,16 +259,27 @@ func (d *DiffViewWidget) ApplySearchHighlight(query string, opts SearchOptions) 
 }
 
 func (d *DiffViewWidget) ScrollToLine(line int) {
+	// Map line index to display row index
+	rowIdx := line
+	if len(d.displayRows) > 0 {
+		for i, row := range d.displayRows {
+			if row.kind == diffRowLine && row.lineIdx >= line {
+				rowIdx = i
+				break
+			}
+		}
+	}
+
 	if d.viewH <= 0 {
-		d.TopLine = line
+		d.TopLine = rowIdx
 		return
 	}
-	if line < d.TopLine || line >= d.TopLine+d.viewH {
-		d.TopLine = line - d.viewH/2
+	if rowIdx < d.TopLine || rowIdx >= d.TopLine+d.viewH {
+		d.TopLine = rowIdx - d.viewH/2
 		if d.TopLine < 0 {
 			d.TopLine = 0
 		}
-		max := len(d.Lines) - d.viewH
+		max := len(d.displayRows) - d.viewH
 		if max < 0 {
 			max = 0
 		}
@@ -285,8 +376,9 @@ func (d *DiffViewWidget) Render(surface *RenderSurface) {
 
 	gutterW := d.gutterWidth()
 
-	showVScroll := len(d.Lines) > h
-	contentW := (w - 1) / 2 - gutterW
+	totalRows := len(d.displayRows)
+	showVScroll := totalRows > h
+	contentW := (w-1)/2 - gutterW
 	showHScroll := d.maxLineW > contentW
 
 	if showHScroll {
@@ -317,16 +409,28 @@ func (d *DiffViewWidget) Render(surface *RenderSurface) {
 	}
 
 	for y := 0; y < h; y++ {
-		idx := d.TopLine + y
+		rowIdx := d.TopLine + y
 		surface.SetCell(dividerX, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 
-		if idx >= len(d.Lines) {
+		if rowIdx >= totalRows {
 			for x := 0; x < dividerX; x++ {
 				surface.SetCell(x, y, term.Cell{Ch: ' '})
 			}
 			for x := dividerX + 1; x < w; x++ {
 				surface.SetCell(x, y, term.Cell{Ch: ' '})
 			}
+			continue
+		}
+
+		row := d.displayRows[rowIdx]
+
+		if row.kind == diffRowComment {
+			d.renderCommentRow(surface, y, w, dividerX, gutterW, row)
+			continue
+		}
+
+		idx := row.lineIdx
+		if idx >= len(d.Lines) {
 			continue
 		}
 
@@ -363,7 +467,7 @@ func (d *DiffViewWidget) Render(surface *RenderSurface) {
 		d.scrollbar.X = r.X + w
 		d.scrollbar.Y = r.Y
 		d.scrollbar.Height = h
-		d.scrollbar.TotalItems = len(d.Lines)
+		d.scrollbar.TotalItems = totalRows
 		d.scrollbar.TopItem = d.TopLine
 		d.scrollbar.Render(surface, w, 0)
 	}
@@ -404,6 +508,43 @@ func (d *DiffViewWidget) renderGutter(surface *RenderSurface, x, y, w int, sl di
 			break
 		}
 		surface.SetCell(x+i, y, term.Cell{Ch: ch, Style: term.StyleLineNumber})
+	}
+}
+
+func (d *DiffViewWidget) renderCommentRow(surface *RenderSurface, y, totalW, dividerX, gutterW int, row diffDisplayRow) {
+	// Fill background with comment style across the full width
+	bgStyle := term.StyleCommentBg
+	for x := 0; x < totalW; x++ {
+		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: bgStyle})
+	}
+
+	// Render comment text spanning the full width (no gutter/divider for comment rows)
+	text := row.commentText
+	textStyle := bgStyle
+	if row.commentLine == 0 {
+		// Header row: use author style
+		textStyle = term.StyleCommentAuthor
+	}
+
+	runes := []rune(text)
+	for i, ch := range runes {
+		if i >= totalW {
+			break
+		}
+		style := textStyle
+		if row.commentLine == 0 && i >= 2 {
+			// After the initial "  @user" part, switch to muted style for the date
+			userEnd := 2 // "  "
+			user := "@" + row.comment.User
+			userEnd += len([]rune(user))
+			if i >= userEnd {
+				style = term.StyleMuted
+				// Override bg to match comment bg
+				surface.SetCell(i, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle})
+				continue
+			}
+		}
+		surface.SetCell(i, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle})
 	}
 }
 
@@ -485,7 +626,18 @@ func (d *DiffViewWidget) screenToSel(mx, my int) (pos diffSelPos, right bool, ok
 	r := d.GetRect()
 	localX := mx - r.X
 	localY := my - r.Y
-	line := d.TopLine + localY
+	rowIdx := d.TopLine + localY
+
+	// Check if this row is a comment row (not selectable)
+	if rowIdx >= 0 && rowIdx < len(d.displayRows) && d.displayRows[rowIdx].kind == diffRowComment {
+		return diffSelPos{}, false, false
+	}
+
+	// Map display row index back to diff line index
+	line := rowIdx
+	if rowIdx >= 0 && rowIdx < len(d.displayRows) {
+		line = d.displayRows[rowIdx].lineIdx
+	}
 
 	if localX >= d.layoutLeftStart && localX < d.layoutLeftStart+d.layoutLeftW {
 		col := d.LeftCol + (localX - d.layoutLeftStart)
@@ -628,7 +780,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 			return EventConsumed
 		case tcell.KeyDown:
-			max := len(d.Lines) - d.viewH
+			max := len(d.displayRows) - d.viewH
 			if max < 0 {
 				max = 0
 			}
@@ -652,7 +804,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 			return EventConsumed
 		case tcell.KeyPgDn:
-			max := len(d.Lines) - d.viewH
+			max := len(d.displayRows) - d.viewH
 			if max < 0 {
 				max = 0
 			}
@@ -666,7 +818,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			d.LeftCol = 0
 			return EventConsumed
 		case tcell.KeyEnd:
-			max := len(d.Lines) - d.viewH
+			max := len(d.displayRows) - d.viewH
 			if max < 0 {
 				max = 0
 			}
@@ -695,7 +847,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 				d.LeftCol += 4
 				d.clampLeftCol()
 			} else {
-				max := len(d.Lines) - d.viewH
+				max := len(d.displayRows) - d.viewH
 				if max < 0 {
 					max = 0
 				}

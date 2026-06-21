@@ -498,7 +498,6 @@ func (inp *InputWidget) Clear() {
 	inp.notify()
 }
 
-
 func (inp *InputWidget) notify() {
 	if inp.OnChange != nil {
 		inp.OnChange(inp.Text)

@@ -17,9 +17,9 @@ type Client struct {
 	mu      sync.Mutex
 	done    chan struct{}
 
-	completionTriggers   []string
-	signatureTriggers    []string
-	signatureRetriggers  []string
+	completionTriggers  []string
+	signatureTriggers   []string
+	signatureRetriggers []string
 
 	OnDiagnostics func(params PublishDiagnosticsParams)
 }

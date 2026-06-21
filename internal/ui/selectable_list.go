@@ -5,9 +5,9 @@ import "github.com/gdamore/tcell/v2"
 type ListAction int
 
 const (
-	ListActionNone    ListAction = iota
-	ListActionActivate           // click or Enter
-	ListActionContext            // right-click
+	ListActionNone     ListAction = iota
+	ListActionActivate            // click or Enter
+	ListActionContext             // right-click
 )
 
 type ListEventResult struct {

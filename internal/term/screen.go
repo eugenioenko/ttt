@@ -58,6 +58,8 @@ const (
 	StyleGutterAdded
 	StyleGutterModified
 	StyleGutterDeleted
+	StyleCommentBg
+	StyleCommentAuthor
 )
 
 // DirectColor holds an RGBA color for terminal emulator output.

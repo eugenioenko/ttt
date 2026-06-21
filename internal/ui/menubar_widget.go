@@ -12,9 +12,9 @@ type MenuItem struct {
 
 type MenuBarWidget struct {
 	BaseWidget
-	Items    []MenuItem
-	Selected int
-	OnSelect func(index int)
+	Items     []MenuItem
+	Selected  int
+	OnSelect  func(index int)
 	itemSpans []struct{ start, end int }
 }
 

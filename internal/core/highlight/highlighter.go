@@ -1,8 +1,8 @@
 package highlight
 
 import (
-	"strings"
 	"github.com/eugenioenko/ttt/internal/term"
+	"strings"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"

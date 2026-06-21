@@ -8,7 +8,7 @@ import (
 type LineKind int
 
 const (
-	Blank   LineKind = iota
+	Blank LineKind = iota
 	Context
 	Added
 	Deleted

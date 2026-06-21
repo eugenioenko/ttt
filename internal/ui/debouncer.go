@@ -6,11 +6,11 @@ import (
 )
 
 type Debouncer struct {
-	DelayMs   int
-	OnFinish  func()
-	timer     *time.Timer
-	mu        sync.Mutex
-	gen       uint64
+	DelayMs  int
+	OnFinish func()
+	timer    *time.Timer
+	mu       sync.Mutex
+	gen      uint64
 }
 
 func (d *Debouncer) Schedule(fn func()) {

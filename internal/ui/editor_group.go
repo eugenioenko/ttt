@@ -60,27 +60,27 @@ type editorTab struct {
 
 type EditorGroupWidget struct {
 	BaseWidget
-	TabBar                 *TabBarWidget
-	Editor                 *EditorPaneWidget
-	Autocomplete           *AutocompleteWidget
-	Hover                  *HoverWidget
-	SignatureHelp          *SignatureHelpWidget
-	tabs                   []editorTab
-	active                 int
-	TabSize                int
-	InsertSpaces           bool
-	LineNumbers            bool
+	TabBar                  *TabBarWidget
+	Editor                  *EditorPaneWidget
+	Autocomplete            *AutocompleteWidget
+	Hover                   *HoverWidget
+	SignatureHelp           *SignatureHelpWidget
+	tabs                    []editorTab
+	active                  int
+	TabSize                 int
+	InsertSpaces            bool
+	LineNumbers             bool
 	GutterStyle             string
 	WordWrap                bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
 	InsertFinalNewline      bool
-	TrimTrailingWhitespace bool
-	Borders                *term.BorderSet
-	OnFileOpen             func(path, lang, text string)
-	OnFileChange           func(path, lang, text string)
-	OnFileClose            func(path, lang string)
-	OnError                func(msg string)
+	TrimTrailingWhitespace  bool
+	Borders                 *term.BorderSet
+	OnFileOpen              func(path, lang, text string)
+	OnFileChange            func(path, lang, text string)
+	OnFileClose             func(path, lang string)
+	OnError                 func(msg string)
 }
 
 func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool, gutterStyle string) *EditorGroupWidget {

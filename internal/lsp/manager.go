@@ -67,7 +67,6 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	return client, nil
 }
 
-
 func (m *Manager) SignatureHelpTriggerCharacters(serverKey string) []string {
 	m.mu.Lock()
 	client, ok := m.servers[serverKey]
