@@ -275,6 +275,40 @@ func RunEventLoop(
 						dv.FinishLoading()
 					}
 				}
+			case *PRCommentsResult:
+				if v.Err != nil {
+					app.StatusError("Failed to fetch PR comments: " + v.Err.Error())
+					if app.CommentPanel != nil {
+						app.CommentPanel.Loading = false
+					}
+				} else {
+					if app.CommentPanel != nil {
+						var items []ui.CommentItem
+						for _, c := range v.Comments {
+							items = append(items, ui.CommentItem{
+								ID:        c.ID,
+								Author:    c.User,
+								Timestamp: c.CreatedAt,
+								Body:      c.Body,
+								FilePath:  c.Path,
+								Line:      c.Line,
+								IsInline:  c.IsInline,
+								InReplyTo: c.InReplyTo,
+							})
+						}
+						app.CommentPanel.SetComments(items)
+						count := len(items)
+						app.StatusNotify(fmt.Sprintf("Loaded %d comment(s)", count))
+					}
+				}
+			case *PRCommentSubmitResult:
+				if v.Err != nil {
+					app.StatusError("Failed to submit comment: " + v.Err.Error())
+				} else {
+					app.StatusNotify("Comment submitted")
+					// Refresh comments
+					app.FetchPRComments(v.Owner, v.Repo, v.Number, v.Title)
+				}
 			case *PrFetchResult:
 				app.Changes.Loading = false
 				if v.Err != nil {

@@ -341,4 +341,9 @@ func registerPRCommands(app *App) {
 		Keywords: []string{"git", "pull request", "github"},
 		Handler:  func() { app.Changes.RemovePRGroups() },
 	})
+	reg.Register(command.Command{
+		ID: "pr.showComments", Title: "Git: Show PR Comments",
+		Keywords: []string{"git", "pull request", "github", "comments", "review"},
+		Handler:  app.ShowPRCommentsDialog,
+	})
 }

@@ -68,6 +68,7 @@ type App struct {
 	AllDiagnostics     map[string][]ui.Diagnostic
 	Keybindings        []config.KeyBinding
 	LspNotified        map[string]bool
+	CommentPanel       *ui.CommentPanelWidget
 	Reg                *command.Registry
 	Running            *bool
 	quitPending        bool

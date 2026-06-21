@@ -133,6 +133,117 @@ func FetchFileContent(owner, repo, path, ref string) (string, error) {
 	return string(out), nil
 }
 
+// PRComment represents a single comment on a pull request.
+type PRComment struct {
+	ID        int
+	Body      string
+	User      string
+	CreatedAt string
+	Path      string // non-empty for inline/review comments
+	Line      int    // line number for inline comments
+	IsInline  bool
+	InReplyTo int // ID of parent comment for threaded replies
+}
+
+// FetchPRComments fetches both review (inline) comments and general issue
+// comments for a pull request and returns them merged chronologically.
+func FetchPRComments(owner, repo string, number int) ([]PRComment, error) {
+	var comments []PRComment
+
+	// Fetch inline/review comments
+	endpoint := fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint, "--paginate",
+		"--jq", `[.[] | {id: .id, body: .body, user: .user.login, created_at: .created_at, path: .path, line: (.line // .original_line // 0), in_reply_to_id: (.in_reply_to_id // 0)}]`)
+	out, err := cmd.Output()
+	if err == nil && len(out) > 0 {
+		var items []struct {
+			ID          int    `json:"id"`
+			Body        string `json:"body"`
+			User        string `json:"user"`
+			CreatedAt   string `json:"created_at"`
+			Path        string `json:"path"`
+			Line        int    `json:"line"`
+			InReplyToID int    `json:"in_reply_to_id"`
+		}
+		if err := json.Unmarshal(out, &items); err == nil {
+			for _, item := range items {
+				comments = append(comments, PRComment{
+					ID:        item.ID,
+					Body:      item.Body,
+					User:      item.User,
+					CreatedAt: item.CreatedAt,
+					Path:      item.Path,
+					Line:      item.Line,
+					IsInline:  true,
+					InReplyTo: item.InReplyToID,
+				})
+			}
+		}
+	}
+
+	// Fetch general issue comments
+	endpoint = fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number)
+	cmd = exec.Command("gh", "api", endpoint, "--paginate",
+		"--jq", `[.[] | {id: .id, body: .body, user: .user.login, created_at: .created_at}]`)
+	out, err = cmd.Output()
+	if err == nil && len(out) > 0 {
+		var items []struct {
+			ID        int    `json:"id"`
+			Body      string `json:"body"`
+			User      string `json:"user"`
+			CreatedAt string `json:"created_at"`
+		}
+		if err := json.Unmarshal(out, &items); err == nil {
+			for _, item := range items {
+				comments = append(comments, PRComment{
+					ID:        item.ID,
+					Body:      item.Body,
+					User:      item.User,
+					CreatedAt: item.CreatedAt,
+					IsInline:  false,
+				})
+			}
+		}
+	}
+
+	// Sort by creation time
+	sortCommentsByTime(comments)
+	return comments, nil
+}
+
+func sortCommentsByTime(comments []PRComment) {
+	for i := 1; i < len(comments); i++ {
+		for j := i; j > 0 && comments[j].CreatedAt < comments[j-1].CreatedAt; j-- {
+			comments[j], comments[j-1] = comments[j-1], comments[j]
+		}
+	}
+}
+
+// AddPRComment adds a general comment to a pull request.
+func AddPRComment(owner, repo string, number int, body string) error {
+	endpoint := fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint, "-X", "POST", "-f", "body="+body)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("add comment failed: %s", string(out))
+	}
+	return nil
+}
+
+// AddPRReviewComment adds an inline review comment to a pull request.
+func AddPRReviewComment(owner, repo string, number int, body, path string, line int, commitSHA string) error {
+	endpoint := fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint, "-X", "POST",
+		"-f", "body="+body,
+		"-f", "path="+path,
+		"-F", fmt.Sprintf("line=%d", line),
+		"-f", "commit_id="+commitSHA,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("add review comment failed: %s", string(out))
+	}
+	return nil
+}
+
 func SplitMultiFileDiff(unified string) map[string]string {
 	result := make(map[string]string)
 	lines := strings.Split(unified, "\n")
