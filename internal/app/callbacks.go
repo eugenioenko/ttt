@@ -486,6 +486,9 @@ func registerWidgetCallbacks(app *App) {
 			{Label: "Rename", Command: "explorer.rename"},
 			{Label: "Delete", Command: "explorer.delete"},
 		}
+		if strings.HasSuffix(node.Path, ".md") {
+			items = append(items, ui.MenuSep(), ui.ContextMenuItem{Label: "Preview", Command: "editor.openPreview"})
+		}
 		openContextMenu(app, items, sx, sy)
 	}
 

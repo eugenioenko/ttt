@@ -250,6 +250,24 @@ func (g *EditorGroupWidget) OpenDiff(path string, fd diff.FileDiff, oldLines, ne
 	g.SwitchTab(len(g.tabs) - 1)
 }
 
+func (g *EditorGroupWidget) OpenPreview(path string, content string) {
+	tabName := "Preview: " + filepath.Base(path)
+	for i, t := range g.tabs {
+		if t.FilePath == tabName {
+			t.Content = NewMarkdownPreviewWidget(path, content)
+			g.tabs[i] = t
+			g.SwitchTab(i)
+			return
+		}
+	}
+	widget := NewMarkdownPreviewWidget(path, content)
+	g.tabs = append(g.tabs, editorTab{
+		FilePath: tabName,
+		Content:  widget,
+	})
+	g.SwitchTab(len(g.tabs) - 1)
+}
+
 func (g *EditorGroupWidget) ReloadFile(path string) {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path && g.tabs[i].Buf != nil {
@@ -504,6 +522,15 @@ func (g *EditorGroupWidget) ActiveFilePath() string {
 		return t.FilePath
 	}
 	return ""
+}
+
+// TabNames returns the file path (display name) of all open tabs.
+func (g *EditorGroupWidget) TabNames() []string {
+	names := make([]string, len(g.tabs))
+	for i, t := range g.tabs {
+		names[i] = t.FilePath
+	}
+	return names
 }
 
 // ActiveBuffer returns the buffer backing the active tab, or nil if the active
