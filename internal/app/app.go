@@ -63,6 +63,7 @@ type App struct {
 	HoverGen           uint64
 	LastHoverLine      int
 	LastHoverCol       int
+	ReviewInbox        *ui.ReviewInboxWidget
 	Problems           *ui.ProblemsWidget
 	References         *ui.ReferencesWidget
 	AllDiagnostics     map[string][]ui.Diagnostic

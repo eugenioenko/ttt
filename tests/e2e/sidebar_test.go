@@ -123,19 +123,19 @@ func TestSidebarTabOverflow(t *testing.T) {
 		t.Error("expected at least one hidden tab due to overflow")
 	}
 
-	h.app.SplitPanel.DividerPos = 30
+	h.app.SplitPanel.DividerPos = 40
 	h.app.Root.SetSize(80, 24)
 	h.redraw()
 
 	row = h.screenRow(sidebarY)
-	t.Logf("sidebar row (w=30): %q", row)
+	t.Logf("sidebar row (w=40): %q", row)
 
 	if strings.Contains(row, "»") {
-		t.Errorf("expected no overflow with default sidebar, got: %s", row)
+		t.Errorf("expected no overflow with wide sidebar, got: %s", row)
 	}
 
 	if len(h.app.Sidebar.TabBar.HiddenTabs) != 0 {
-		t.Errorf("expected 0 hidden tabs with default sidebar, got %d", len(h.app.Sidebar.TabBar.HiddenTabs))
+		t.Errorf("expected 0 hidden tabs with wide sidebar, got %d", len(h.app.Sidebar.TabBar.HiddenTabs))
 	}
 }
 

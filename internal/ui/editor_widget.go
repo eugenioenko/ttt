@@ -62,6 +62,7 @@ type EditorPaneWidget struct {
 	searchByLine            map[int][]int
 	diagByLine              map[int][]int
 	LineChanges             []diff.LineChangeKind
+	CommentMarkers          map[int]CommentMarkerInfo
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
 	wrapMap                 []wrapEntry
@@ -336,9 +337,11 @@ func (e *EditorPaneWidget) Render(surface *RenderSurface) {
 					}
 				}
 			}
+			hasGutterChange := false
 			if lineIdx < totalLines && lineIdx < len(e.LineChanges) && !isWrapContinuation {
 				change := e.LineChanges[lineIdx]
 				if change != diff.LineUnchanged {
+					hasGutterChange = true
 					var ch rune
 					var style term.Style
 					switch change {
@@ -353,6 +356,11 @@ func (e *EditorPaneWidget) Render(surface *RenderSurface) {
 						style = term.StyleGutterDeleted
 					}
 					surface.SetCell(0, y, term.Cell{Ch: ch, Style: style})
+				}
+			}
+			if !hasGutterChange && lineIdx < totalLines && !isWrapContinuation && len(e.CommentMarkers) > 0 {
+				if _, ok := e.CommentMarkers[lineIdx]; ok {
+					surface.SetCell(0, y, term.Cell{Ch: '◆', Style: term.StyleGutterComment})
 				}
 			}
 		}

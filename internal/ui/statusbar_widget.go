@@ -14,14 +14,14 @@ type statusBarSpan struct {
 
 type StatusBarWidget struct {
 	BaseWidget
-	Status         *view.StatusBar
-	OnIndentClick  func()
-	OnEolClick     func()
-	indentSpan     statusBarSpan
-	eolSpan        statusBarSpan
-	okSpan         statusBarSpan
-	actionSpan     statusBarSpan
-	secondarySpan  statusBarSpan
+	Status        *view.StatusBar
+	OnIndentClick func()
+	OnEolClick    func()
+	indentSpan    statusBarSpan
+	eolSpan       statusBarSpan
+	okSpan        statusBarSpan
+	actionSpan    statusBarSpan
+	secondarySpan statusBarSpan
 }
 
 func NewStatusBarWidget(status *view.StatusBar) *StatusBarWidget {
@@ -53,6 +53,13 @@ func (s *StatusBarWidget) Render(surface *RenderSurface) {
 
 	if st.Blame != "" {
 		x += s.drawText(surface, x, st.Blame, term.StyleStatusBar)
+	}
+
+	if st.ReviewProgress != "" {
+		if x > 1 {
+			x += s.drawText(surface, x, "  ", term.StyleStatusBar)
+		}
+		x += s.drawText(surface, x, st.ReviewProgress, term.StyleSuccess)
 	}
 
 	type segment struct {

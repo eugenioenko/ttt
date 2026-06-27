@@ -227,6 +227,7 @@ func TestStyleConstants(t *testing.T) {
 		"StyleGutterAdded":    StyleGutterAdded,
 		"StyleGutterModified": StyleGutterModified,
 		"StyleGutterDeleted":  StyleGutterDeleted,
+		"StyleGutterComment":  StyleGutterComment,
 	}
 
 	seen := make(map[Style]string)

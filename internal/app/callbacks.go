@@ -51,6 +51,13 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			ui.MenuSep(),
 			{Label: "Help", Command: "changes.help"},
 		}
+	case "inbox":
+		items = []ui.ContextMenuItem{
+			{Label: "Refresh", Command: "review.refresh"},
+			ui.MenuSep(),
+			{Label: "Next Unresolved", Command: "review.nextUnresolved"},
+			{Label: "Previous Unresolved", Command: "review.prevUnresolved"},
+		}
 	}
 	if len(items) > 0 {
 		openContextMenu(a, items, sx, sy)
@@ -530,6 +537,57 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnGroupMenu = app.ShowGroupMenu
 	app.Changes.OnCommit = app.CommitChanges
 	app.Changes.OnConfirmDiscard = app.ConfirmDiscard
+
+	// Review Inbox callbacks
+	app.ReviewInbox.OnOpenFile = func(path string, line int) {
+		absPath := app.resolveCommentPath(path)
+		app.EditorGroup.OpenFile(absPath)
+		if line > 0 {
+			app.EditorGroup.GoToLine(line)
+		}
+		app.FocusEditorIfEnabled()
+	}
+
+	app.ReviewInbox.OnMarkVerified = func(commentID int) {
+		app.setCommentState(commentID, github.StateVerified)
+	}
+
+	app.ReviewInbox.OnMarkDismissed = func(commentID int) {
+		app.setCommentState(commentID, github.StateDismissed)
+	}
+
+	app.ReviewInbox.OnReopen = func(commentID int) {
+		app.setCommentState(commentID, github.StateOpen)
+	}
+
+	app.ReviewInbox.OnAddReply = func(comment github.PRComment) {
+		if app.ReviewInbox.PRNumber == 0 {
+			return
+		}
+		app.ShowInputDialog(
+			fmt.Sprintf("Reply to @%s", comment.User),
+			"Enter your reply...",
+			"",
+			func(body string) {
+				if body == "" {
+					return
+				}
+				go func() {
+					err := github.AddPRComment(
+						app.ReviewInbox.PROwner,
+						app.ReviewInbox.PRRepo,
+						app.ReviewInbox.PRNumber,
+						body,
+					)
+					app.Screen.PostEvent(tcell.NewEventInterrupt(&reviewCommentPostResult{err: err}))
+				}()
+			},
+		)
+	}
+
+	app.ReviewInbox.OnRefresh = func() {
+		app.ReviewRefreshComments()
+	}
 
 	app.ContentSplit.OnResize = func(height int) {
 		if height <= 0 {

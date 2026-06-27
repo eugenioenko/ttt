@@ -17,6 +17,7 @@ func RegisterCommands(app *App) {
 	registerGitCommands(app)
 	registerWorkspaceCommands(app)
 	registerPRCommands(app)
+	registerReviewCommands(app)
 	registerHelpCommands(app)
 	registerOptionsCommands(app)
 	registerSettingsCommands(app)

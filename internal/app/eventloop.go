@@ -97,7 +97,11 @@ func RunEventLoop(
 		if filePath != lastGutterFile {
 			lastGutterFile = filePath
 			app.RequestGitGutterForActiveFile()
+			app.updateCommentMarkers()
 		}
+
+		// Update review progress in status bar
+		app.Status.ReviewProgress = app.ReviewStatusText()
 
 		if filePath != lastBlameFile || line != lastBlameLine {
 			lastBlameFile = filePath
@@ -320,7 +324,13 @@ func RunEventLoop(
 					app.Root.SetFocus(app.Changes)
 					app.Sidebar.SetPanelDirty("changes", app.Changes.TotalChanges() > 0)
 					app.StatusNotify(fmt.Sprintf("Opened PR #%d: %s (%d files)", v.Info.Number, v.Info.Title, len(v.Info.Files)))
+					// Auto-load review comments when PR is opened
+					app.LoadReviewCommentsForPR(v.Info.Owner, v.Info.Repo, v.Info.Number)
 				}
+			case *ReviewCommentsFetchResult:
+				app.HandleReviewCommentsFetched(v)
+			case *reviewCommentPostResult:
+				app.HandleReviewCommentPosted(v)
 			}
 			redraw()
 		}

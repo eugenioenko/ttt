@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -164,4 +165,141 @@ func SplitMultiFileDiff(unified string) map[string]string {
 	}
 	flush()
 	return result
+}
+
+type PRComment struct {
+	ID        int
+	Body      string
+	User      string
+	CreatedAt string
+	UpdatedAt string
+	Path      string // empty for general comments
+	Line      int    // 0 for general comments
+	IsInline  bool
+	InReplyTo int // 0 if not a reply
+}
+
+func parseReviewComments(data []byte) ([]PRComment, error) {
+	var raw []struct {
+		ID   int    `json:"id"`
+		Body string `json:"body"`
+		User struct {
+			Login string `json:"login"`
+		} `json:"user"`
+		CreatedAt    string `json:"created_at"`
+		UpdatedAt    string `json:"updated_at"`
+		Path         string `json:"path"`
+		Line         *int   `json:"line"`
+		OriginalLine *int   `json:"original_line"`
+		InReplyToID  int    `json:"in_reply_to_id"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse review comments: %w", err)
+	}
+	var comments []PRComment
+	for _, r := range raw {
+		line := 0
+		if r.Line != nil {
+			line = *r.Line
+		} else if r.OriginalLine != nil {
+			line = *r.OriginalLine
+		}
+		comments = append(comments, PRComment{
+			ID:        r.ID,
+			Body:      r.Body,
+			User:      r.User.Login,
+			CreatedAt: r.CreatedAt,
+			UpdatedAt: r.UpdatedAt,
+			Path:      r.Path,
+			Line:      line,
+			IsInline:  true,
+			InReplyTo: r.InReplyToID,
+		})
+	}
+	return comments, nil
+}
+
+func parseIssueComments(data []byte) ([]PRComment, error) {
+	var raw []struct {
+		ID   int    `json:"id"`
+		Body string `json:"body"`
+		User struct {
+			Login string `json:"login"`
+		} `json:"user"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse issue comments: %w", err)
+	}
+	var comments []PRComment
+	for _, r := range raw {
+		comments = append(comments, PRComment{
+			ID:        r.ID,
+			Body:      r.Body,
+			User:      r.User.Login,
+			CreatedAt: r.CreatedAt,
+			UpdatedAt: r.UpdatedAt,
+			IsInline:  false,
+		})
+	}
+	return comments, nil
+}
+
+func FetchPRComments(owner, repo string, number int) ([]PRComment, error) {
+	// Fetch inline review comments
+	reviewCmd := exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number),
+		"--paginate")
+	reviewOut, err := reviewCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("gh api pull comments failed: %w", err)
+	}
+	reviewComments, err := parseReviewComments(reviewOut)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch general issue comments
+	issueCmd := exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number),
+		"--paginate")
+	issueOut, err := issueCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("gh api issue comments failed: %w", err)
+	}
+	issueComments, err := parseIssueComments(issueOut)
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine and sort by ID
+	all := append(reviewComments, issueComments...)
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].ID < all[j].ID
+	})
+	return all, nil
+}
+
+func AddPRComment(owner, repo string, number int, body string) error {
+	cmd := exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number),
+		"-f", "body="+body)
+	if _, err := cmd.Output(); err != nil {
+		return fmt.Errorf("gh api add comment failed: %w", err)
+	}
+	return nil
+}
+
+func AddPRInlineComment(owner, repo string, number int, body, path string, line int, commitID string) error {
+	cmd := exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number),
+		"-f", "body="+body,
+		"-f", "path="+path,
+		"-F", "line="+strconv.Itoa(line),
+		"-f", "commit_id="+commitID)
+	if _, err := cmd.Output(); err != nil {
+		return fmt.Errorf("gh api add inline comment failed: %w", err)
+	}
+	return nil
 }
