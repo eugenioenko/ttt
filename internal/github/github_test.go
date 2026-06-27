@@ -38,6 +38,42 @@ func TestParsePRURL(t *testing.T) {
 	}
 }
 
+func TestPRCommentType(t *testing.T) {
+	// Verify PRComment fields can be set for both inline and general comments
+	inline := PRComment{
+		ID:        1,
+		Body:      "Needs a nil check here",
+		User:      "reviewer",
+		CreatedAt: "2024-01-15T10:30:00Z",
+		Path:      "internal/app/app.go",
+		Line:      42,
+		IsInline:  true,
+	}
+	if !inline.IsInline {
+		t.Error("expected inline comment")
+	}
+	if inline.Path != "internal/app/app.go" {
+		t.Errorf("expected path internal/app/app.go, got %s", inline.Path)
+	}
+	if inline.Line != 42 {
+		t.Errorf("expected line 42, got %d", inline.Line)
+	}
+
+	general := PRComment{
+		ID:        2,
+		Body:      "LGTM",
+		User:      "approver",
+		CreatedAt: "2024-01-15T11:00:00Z",
+		IsInline:  false,
+	}
+	if general.IsInline {
+		t.Error("expected general comment")
+	}
+	if general.Path != "" {
+		t.Errorf("expected empty path for general comment, got %s", general.Path)
+	}
+}
+
 func TestSplitMultiFileDiff(t *testing.T) {
 	unified := `diff --git a/file1.go b/file1.go
 --- a/file1.go

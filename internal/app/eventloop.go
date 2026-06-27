@@ -320,6 +320,29 @@ func RunEventLoop(
 					app.Root.SetFocus(app.Changes)
 					app.Sidebar.SetPanelDirty("changes", app.Changes.TotalChanges() > 0)
 					app.StatusNotify(fmt.Sprintf("Opened PR #%d: %s (%d files)", v.Info.Number, v.Info.Title, len(v.Info.Files)))
+					// Also fetch PR comments
+					app.FetchPRComments(v.Info.Owner, v.Info.Repo, v.Info.Number)
+				}
+			case *PRCommentsResult:
+				if v.Err != nil {
+					app.StatusError("Failed to fetch PR comments: " + v.Err.Error())
+				} else {
+					app.PRComments.Owner = v.Owner
+					app.PRComments.Repo = v.Repo
+					app.PRComments.Number = v.Number
+					app.PRComments.SetComments(v.Comments)
+					count := len(v.Comments)
+					if count > 0 {
+						app.BottomPanel.SetPanelDirty("comments", true)
+					}
+					app.StatusNotify(fmt.Sprintf("Loaded %d PR comments", count))
+				}
+			case *PRCommentAddResult:
+				if v.Err != nil {
+					app.StatusError("Failed to add comment: " + v.Err.Error())
+				} else {
+					app.StatusNotify("Comment posted")
+					app.FetchPRComments(v.Owner, v.Repo, v.Number)
 				}
 			}
 			redraw()

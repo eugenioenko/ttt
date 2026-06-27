@@ -20,12 +20,12 @@ func TestBottomPanelTabClick(t *testing.T) {
 	panelY := h.app.BottomPanel.GetRect().Y
 	panelX := h.app.BottomPanel.GetRect().X
 
-	h.click(panelX+39, panelY)
+	h.click(panelX+49, panelY)
 	if h.app.BottomPanel.ActivePanel != "test-b" {
 		t.Errorf("expected active panel 'test-b' after click, got %q", h.app.BottomPanel.ActivePanel)
 	}
 
-	h.click(panelX+32, panelY)
+	h.click(panelX+42, panelY)
 	if h.app.BottomPanel.ActivePanel != "test-a" {
 		t.Errorf("expected active panel 'test-a' after click, got %q", h.app.BottomPanel.ActivePanel)
 	}
@@ -40,13 +40,13 @@ func TestTabbedPanelRemovePanel(t *testing.T) {
 	h.app.BottomPanel.AddPanel("p3", "Three", newEmptyWidget())
 	h.app.BottomPanel.SetActivePanel("p2")
 
-	if h.app.BottomPanel.PanelCount() != 6 {
-		t.Fatalf("expected 6 panels, got %d", h.app.BottomPanel.PanelCount())
+	if h.app.BottomPanel.PanelCount() != 7 {
+		t.Fatalf("expected 7 panels, got %d", h.app.BottomPanel.PanelCount())
 	}
 
 	h.app.BottomPanel.RemovePanel("p2")
-	if h.app.BottomPanel.PanelCount() != 5 {
-		t.Fatalf("expected 5 panels, got %d", h.app.BottomPanel.PanelCount())
+	if h.app.BottomPanel.PanelCount() != 6 {
+		t.Fatalf("expected 6 panels, got %d", h.app.BottomPanel.PanelCount())
 	}
 	if h.app.BottomPanel.ActivePanel == "p2" {
 		t.Error("active panel should have changed after removing it")
@@ -54,8 +54,8 @@ func TestTabbedPanelRemovePanel(t *testing.T) {
 
 	h.app.BottomPanel.RemovePanel("p1")
 	h.app.BottomPanel.RemovePanel("p3")
-	if h.app.BottomPanel.PanelCount() != 3 {
-		t.Fatalf("expected 3 panels (terminal+problems+references), got %d", h.app.BottomPanel.PanelCount())
+	if h.app.BottomPanel.PanelCount() != 4 {
+		t.Fatalf("expected 4 panels (terminal+problems+references+comments), got %d", h.app.BottomPanel.PanelCount())
 	}
 }
 

@@ -65,6 +65,7 @@ type App struct {
 	LastHoverCol       int
 	Problems           *ui.ProblemsWidget
 	References         *ui.ReferencesWidget
+	PRComments         *ui.PRCommentsWidget
 	AllDiagnostics     map[string][]ui.Diagnostic
 	Keybindings        []config.KeyBinding
 	LspNotified        map[string]bool
@@ -397,6 +398,20 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.EditorGroup.OpenFile(file)
 		a.EditorGroup.GoToLine(line + 1)
 		a.Root.SetFocus(a.EditorGroup)
+	}
+	a.PRComments.OnOpenFile = func(path string, line int) {
+		a.EditorGroup.OpenFile(path)
+		if line > 0 {
+			a.EditorGroup.GoToLine(line)
+		}
+		a.Root.SetFocus(a.EditorGroup)
+	}
+	a.PRComments.OnSubmitComment = func(body string) {
+		if a.PRComments.Owner == "" || a.PRComments.Number == 0 {
+			a.StatusWarn("No PR loaded")
+			return
+		}
+		a.AddPRCommentAsync(a.PRComments.Owner, a.PRComments.Repo, a.PRComments.Number, body)
 	}
 	a.EditorGroup.Editor.OnChange = func() {
 		path := a.EditorGroup.ActiveFilePath()
