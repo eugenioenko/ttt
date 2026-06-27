@@ -28,3 +28,7 @@ docs-web/dist/
 *.log
 docs-web/.astro/
 chaos-output/
+
+# Nix
+result
+result-*

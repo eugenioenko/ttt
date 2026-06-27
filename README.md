@@ -31,6 +31,24 @@ yay -S ttt
 ```
 
 
+### NixOS
+
+> **Note:** Always install from a tagged release. The `main` branch is unstable and may contain work-in-progress features.
+
+Try it without installing:
+```sh
+nix run github:eugenioenko/ttt/v0.3.5
+```
+
+Add to your `flake.nix` inputs:
+```nix
+{
+  inputs.ttt.url = "github:eugenioenko/ttt/v0.3.5";
+}
+```
+
+Then add `inputs.ttt.packages.${system}.default` to your `environment.systemPackages` or home-manager packages.
+
 ### Go Install
 
 Requires [Go](https://go.dev/) 1.18 or newer:
