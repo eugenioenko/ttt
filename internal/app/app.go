@@ -41,6 +41,7 @@ type App struct {
 	Explorer           *ui.ExplorerWidget
 	Search             *ui.SearchWidget
 	Changes            *ui.ChangesWidget
+	Reviews            *ui.ReviewsWidget
 	MenuBar            *ui.MenuBarWidget
 	StatusBar          *ui.StatusBarWidget
 	Status             *view.StatusBar

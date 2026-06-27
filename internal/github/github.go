@@ -133,6 +133,126 @@ func FetchFileContent(owner, repo, path, ref string) (string, error) {
 	return string(out), nil
 }
 
+// PRComment represents a single comment on a pull request.
+type PRComment struct {
+	ID        int
+	Body      string
+	User      string
+	CreatedAt string
+	Path      string
+	Line      int
+	IsInline  bool
+}
+
+// FetchPRComments fetches both inline review comments and general issue comments
+// for the given pull request.
+func FetchPRComments(owner, repo string, number int) ([]PRComment, error) {
+	var comments []PRComment
+
+	// Fetch inline/review comments
+	endpoint := fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint, "--paginate")
+	out, err := cmd.Output()
+	if err == nil && len(out) > 0 {
+		var reviewComments []struct {
+			ID   int    `json:"id"`
+			Body string `json:"body"`
+			User struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			CreatedAt string `json:"created_at"`
+			Path      string `json:"path"`
+			Line      *int   `json:"line"`
+		}
+		if err := json.Unmarshal(out, &reviewComments); err == nil {
+			for _, rc := range reviewComments {
+				line := 0
+				if rc.Line != nil {
+					line = *rc.Line
+				}
+				comments = append(comments, PRComment{
+					ID:        rc.ID,
+					Body:      rc.Body,
+					User:      rc.User.Login,
+					CreatedAt: rc.CreatedAt,
+					Path:      rc.Path,
+					Line:      line,
+					IsInline:  true,
+				})
+			}
+		}
+	}
+
+	// Fetch general issue comments
+	endpoint = fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number)
+	cmd = exec.Command("gh", "api", endpoint, "--paginate")
+	out, err = cmd.Output()
+	if err == nil && len(out) > 0 {
+		var issueComments []struct {
+			ID   int    `json:"id"`
+			Body string `json:"body"`
+			User struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			CreatedAt string `json:"created_at"`
+		}
+		if err := json.Unmarshal(out, &issueComments); err == nil {
+			for _, ic := range issueComments {
+				comments = append(comments, PRComment{
+					ID:        ic.ID,
+					Body:      ic.Body,
+					User:      ic.User.Login,
+					CreatedAt: ic.CreatedAt,
+					IsInline:  false,
+				})
+			}
+		}
+	}
+
+	return comments, nil
+}
+
+// AddPRComment adds a general comment to a pull request.
+func AddPRComment(owner, repo string, number int, body string) error {
+	endpoint := fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint, "-f", "body="+body, "--method", "POST")
+	if _, err := cmd.Output(); err != nil {
+		return fmt.Errorf("gh api comment failed: %w", err)
+	}
+	return nil
+}
+
+// AddPRInlineComment adds an inline review comment to a pull request.
+func AddPRInlineComment(owner, repo string, number int, body, path string, line int) error {
+	headSHA, err := fetchPRHeadSHA(owner, repo, number)
+	if err != nil {
+		return fmt.Errorf("fetch head SHA: %w", err)
+	}
+	endpoint := fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint,
+		"-f", "body="+body,
+		"-f", "path="+path,
+		"-F", fmt.Sprintf("line=%d", line),
+		"-f", "commit_id="+headSHA,
+		"--method", "POST")
+	if _, err := cmd.Output(); err != nil {
+		return fmt.Errorf("gh api inline comment failed: %w", err)
+	}
+	return nil
+}
+
+func fetchPRHeadSHA(owner, repo string, number int) (string, error) {
+	query := fmt.Sprintf(`query { repository(owner: %q, name: %q) { pullRequest(number: %d) { headRefOid } } }`,
+		owner, repo, number)
+	cmd := exec.Command("gh", "api", "graphql", "-f", "query="+query,
+		"--jq", ".data.repository.pullRequest.headRefOid")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("gh graphql failed: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 func SplitMultiFileDiff(unified string) map[string]string {
 	result := make(map[string]string)
 	lines := strings.Split(unified, "\n")

@@ -51,6 +51,10 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			ui.MenuSep(),
 			{Label: "Help", Command: "changes.help"},
 		}
+	case "reviews":
+		items = []ui.ContextMenuItem{
+			{Label: "Refresh", Command: "reviews.refresh"},
+		}
 	}
 	if len(items) > 0 {
 		openContextMenu(a, items, sx, sy)
@@ -530,6 +534,33 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnGroupMenu = app.ShowGroupMenu
 	app.Changes.OnCommit = app.CommitChanges
 	app.Changes.OnConfirmDiscard = app.ConfirmDiscard
+
+	app.Reviews.OnOpenFile = func(path string, line int) {
+		app.EditorGroup.OpenFile(path)
+		if line > 0 {
+			app.EditorGroup.GoToLine(line)
+		}
+		app.Root.SetFocus(app.EditorGroup)
+	}
+	app.Reviews.OnAddComment = func(body string) {
+		owner := app.Reviews.Owner
+		repo := app.Reviews.Repo
+		number := app.Reviews.Number
+		if owner == "" || number == 0 {
+			app.StatusWarn("No PR loaded for comments")
+			return
+		}
+		go func() {
+			err := github.AddPRComment(owner, repo, number, body)
+			app.Screen.PostEvent(tcell.NewEventInterrupt(&PRCommentAddResult{
+				Owner:  owner,
+				Repo:   repo,
+				Number: number,
+				Err:    err,
+			}))
+		}()
+		app.StatusNotify("Posting comment...")
+	}
 
 	app.ContentSplit.OnResize = func(height int) {
 		if height <= 0 {

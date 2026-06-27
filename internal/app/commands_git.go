@@ -217,6 +217,12 @@ func registerGitCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "reviews.refresh", Title: "PR: Refresh Comments",
+		Keywords: []string{"pr", "reviews", "comments", "reload"},
+		Handler:  func() { app.RefreshPRComments() },
+	})
+
+	reg.Register(command.Command{
 		ID: "changes.stage", Title: "Git: Stage File",
 		Keywords: []string{"git", "changes", "add"},
 		Handler: func() {
