@@ -45,6 +45,7 @@ type Root struct {
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
+	CmdAsCtrl        bool
 }
 
 func NewRoot(main Widget) *Root {
@@ -97,6 +98,14 @@ func matchKeyChord(kev *tcell.EventKey, gk GlobalKeyBinding) bool {
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
+	if isKey && r.CmdAsCtrl {
+		mod := kev.Modifiers()
+		if mod&tcell.ModMeta != 0 {
+			mod = (mod &^ tcell.ModMeta) | tcell.ModCtrl
+			ev = tcell.NewEventKey(kev.Key(), kev.Rune(), mod)
+			kev = ev.(*tcell.EventKey)
+		}
+	}
 	if isKey {
 		for _, gk := range r.ForceKeys {
 			if matchKey(kev, gk) {

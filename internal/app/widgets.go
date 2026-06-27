@@ -175,6 +175,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	rootBox := widgets.NewVStackWidget(menuBar, splitPanel, statusBar)
 
 	root := ui.NewRoot(rootBox)
+	root.CmdAsCtrl = cfg.Settings.Experimental.CmdAsCtrl
 	root.SetFocus(editorGroup)
 
 	return &App{

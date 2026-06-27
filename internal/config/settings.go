@@ -131,6 +131,10 @@ func DefaultExplorerSettings() ExplorerSettings {
 	}
 }
 
+type ExperimentalSettings struct {
+	CmdAsCtrl bool `json:"cmdAsCtrl"`
+}
+
 type Settings struct {
 	Version      int                  `json:"version"`
 	Theme        string               `json:"theme,omitempty"`
@@ -141,6 +145,7 @@ type Settings struct {
 	Terminal     TerminalSettings     `json:"terminal,omitzero"`
 	LSP          LSPSettings          `json:"lsp,omitzero"`
 	Autocomplete AutocompleteSettings `json:"autocomplete,omitzero"`
+	Experimental ExperimentalSettings `json:"experimental,omitzero"`
 }
 
 func DefaultSettings() Settings {
