@@ -133,6 +133,106 @@ func FetchFileContent(owner, repo, path, ref string) (string, error) {
 	return string(out), nil
 }
 
+// PRComment represents a comment on a pull request.
+// IsInline distinguishes inline (review) comments from general (issue) comments.
+type PRComment struct {
+	ID        int
+	Body      string
+	User      string
+	CreatedAt string
+	Path      string // file path (empty for general comments)
+	Line      int    // line number (0 for general comments)
+	IsInline  bool
+}
+
+// FetchPRComments retrieves both inline review comments and general issue
+// comments for the given pull request. Inline comments come from the
+// pulls/comments endpoint; general comments come from issues/comments.
+func FetchPRComments(owner, repo string, number int) ([]PRComment, error) {
+	var comments []PRComment
+
+	// Fetch inline review comments
+	endpoint := fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint, "--paginate",
+		"--jq", `[.[] | {id: .id, body: .body, user: .user.login, created_at: .created_at, path: .path, line: (.line // .original_line // 0)}]`)
+	out, err := cmd.Output()
+	if err == nil && len(out) > 0 {
+		var inline []struct {
+			ID        int    `json:"id"`
+			Body      string `json:"body"`
+			User      string `json:"user"`
+			CreatedAt string `json:"created_at"`
+			Path      string `json:"path"`
+			Line      int    `json:"line"`
+		}
+		if err := json.Unmarshal(out, &inline); err == nil {
+			for _, c := range inline {
+				comments = append(comments, PRComment{
+					ID:        c.ID,
+					Body:      c.Body,
+					User:      c.User,
+					CreatedAt: c.CreatedAt,
+					Path:      c.Path,
+					Line:      c.Line,
+					IsInline:  true,
+				})
+			}
+		}
+	}
+
+	// Fetch general issue comments
+	endpoint = fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number)
+	cmd = exec.Command("gh", "api", endpoint, "--paginate",
+		"--jq", `[.[] | {id: .id, body: .body, user: .user.login, created_at: .created_at}]`)
+	out, err = cmd.Output()
+	if err == nil && len(out) > 0 {
+		var general []struct {
+			ID        int    `json:"id"`
+			Body      string `json:"body"`
+			User      string `json:"user"`
+			CreatedAt string `json:"created_at"`
+		}
+		if err := json.Unmarshal(out, &general); err == nil {
+			for _, c := range general {
+				comments = append(comments, PRComment{
+					ID:        c.ID,
+					Body:      c.Body,
+					User:      c.User,
+					CreatedAt: c.CreatedAt,
+					IsInline:  false,
+				})
+			}
+		}
+	}
+
+	return comments, nil
+}
+
+// AddPRComment adds a general comment to a pull request.
+func AddPRComment(owner, repo string, number int, body string) error {
+	endpoint := fmt.Sprintf("repos/%s/%s/issues/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint, "-f", "body="+body)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("add comment failed: %s", string(out))
+	}
+	return nil
+}
+
+// AddPRInlineComment adds an inline review comment to a specific file and line.
+func AddPRInlineComment(owner, repo string, number int, body, path string, line int, commitSHA string) error {
+	endpoint := fmt.Sprintf("repos/%s/%s/pulls/%d/comments", owner, repo, number)
+	cmd := exec.Command("gh", "api", endpoint,
+		"-f", "body="+body,
+		"-f", "path="+path,
+		"-F", fmt.Sprintf("line=%d", line),
+		"-f", "commit_id="+commitSHA,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("add inline comment failed: %s", string(out))
+	}
+	return nil
+}
+
 func SplitMultiFileDiff(unified string) map[string]string {
 	result := make(map[string]string)
 	lines := strings.Split(unified, "\n")

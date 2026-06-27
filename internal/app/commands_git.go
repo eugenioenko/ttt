@@ -341,4 +341,41 @@ func registerPRCommands(app *App) {
 		Keywords: []string{"git", "pull request", "github"},
 		Handler:  func() { app.Changes.RemovePRGroups() },
 	})
+
+	reg.Register(command.Command{
+		ID: "pr.comments", Title: "Git: PR Comments",
+		Keywords: []string{"git", "pull request", "github", "review", "comments"},
+		Handler: func() {
+			if app.Root.HasOverlay() {
+				return
+			}
+			if app.CurrentPR == nil {
+				app.StatusWarn("No active PR. Use 'Git: Review PR' first.")
+				return
+			}
+			app.FetchPRComments(
+				app.CurrentPR.Owner,
+				app.CurrentPR.Repo,
+				app.CurrentPR.Number,
+				app.CurrentPR.Title,
+				app.CurrentPR.HeadSHA,
+			)
+		},
+	})
+
+	reg.Register(command.Command{
+		ID: "pr.addComment", Title: "Git: Add PR Comment",
+		Keywords: []string{"git", "pull request", "github", "comment", "review"},
+		Handler: func() {
+			if app.CurrentPR == nil {
+				app.StatusWarn("No active PR. Use 'Git: Review PR' first.")
+				return
+			}
+			app.ShowInputDialog("Add PR Comment", "Type your comment...", "", func(body string) {
+				if body != "" {
+					app.AddPRGeneralComment(app.CurrentPR, body)
+				}
+			})
+		},
+	})
 }

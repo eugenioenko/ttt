@@ -76,6 +76,7 @@ type App struct {
 	GitGutterGen       int
 	GitGutterTimer     *time.Timer
 	Version            string
+	CurrentPR          *ActivePR
 }
 
 func (a *App) KeyFor(cmd string) string {

@@ -299,11 +299,41 @@ func RunEventLoop(
 						dv.FinishLoading()
 					}
 				}
+			case *PrCommentsFetchResult:
+				if v.Err != nil {
+					app.StatusError("Failed to fetch PR comments: " + v.Err.Error())
+				} else {
+					app.CurrentPR = &ActivePR{
+						Owner:   v.Owner,
+						Repo:    v.Repo,
+						Number:  v.Number,
+						Title:   v.Title,
+						HeadSHA: v.HeadSHA,
+					}
+					app.ShowReviewHub(v.Comments, v.Title, v.Number)
+				}
+			case *PrAddCommentResult:
+				if v.Err != nil {
+					app.StatusError("Failed to post comment: " + v.Err.Error())
+				} else {
+					app.StatusNotify("Comment posted successfully")
+					// Refetch comments to show the new one
+					if app.CurrentPR != nil {
+						app.FetchPRComments(v.Owner, v.Repo, v.Number, v.Title, app.CurrentPR.HeadSHA)
+					}
+				}
 			case *PrFetchResult:
 				app.Changes.Loading = false
 				if v.Err != nil {
 					app.StatusError("PR fetch failed: " + v.Err.Error())
 				} else {
+					app.CurrentPR = &ActivePR{
+						Owner:   v.Info.Owner,
+						Repo:    v.Info.Repo,
+						Number:  v.Info.Number,
+						Title:   v.Info.Title,
+						HeadSHA: v.Info.HeadSHA,
+					}
 					var files []git.FileStatus
 					for _, f := range v.Info.Files {
 						files = append(files, git.FileStatus{

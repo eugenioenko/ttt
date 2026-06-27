@@ -69,6 +69,10 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	applyStyleDef(&m, term.StyleSuccess, theme.Success)
 	applyStyleDef(&m, term.StyleDanger, theme.Danger)
 	applyStyleDef(&m, term.StyleWarning, theme.Warning)
+	applyStyleDef(&m, term.StyleCommentMarker, theme.Comment.Marker)
+	applyStyleDef(&m, term.StyleCommentUser, theme.Comment.User)
+	applyStyleDef(&m, term.StyleCommentBody, theme.Comment.Body)
+	applyStyleDef(&m, term.StyleCommentFile, theme.Comment.File)
 
 	applyDiagStyle(&m, term.StyleDiagError, theme.Editor.Diagnostics.Error)
 	applyDiagStyle(&m, term.StyleDiagWarning, theme.Editor.Diagnostics.Warning)

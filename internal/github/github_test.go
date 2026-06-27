@@ -38,6 +38,39 @@ func TestParsePRURL(t *testing.T) {
 	}
 }
 
+func TestPRCommentType(t *testing.T) {
+	c := PRComment{
+		ID:       1,
+		Body:     "looks good",
+		User:     "reviewer",
+		Path:     "main.go",
+		Line:     42,
+		IsInline: true,
+	}
+	if c.ID != 1 {
+		t.Errorf("expected ID 1, got %d", c.ID)
+	}
+	if c.Path != "main.go" {
+		t.Errorf("expected path main.go, got %q", c.Path)
+	}
+	if !c.IsInline {
+		t.Error("expected IsInline to be true")
+	}
+
+	general := PRComment{
+		ID:       2,
+		Body:     "general comment",
+		User:     "user",
+		IsInline: false,
+	}
+	if general.IsInline {
+		t.Error("expected IsInline to be false for general comment")
+	}
+	if general.Path != "" {
+		t.Errorf("expected empty path for general comment, got %q", general.Path)
+	}
+}
+
 func TestSplitMultiFileDiff(t *testing.T) {
 	unified := `diff --git a/file1.go b/file1.go
 --- a/file1.go

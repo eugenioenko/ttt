@@ -185,6 +185,13 @@ type HoverStyles struct {
 	Code StyleDef `json:"code"`
 }
 
+type CommentStyles struct {
+	Marker StyleDef `json:"marker"`
+	User   StyleDef `json:"user"`
+	Body   StyleDef `json:"body"`
+	File   StyleDef `json:"file"`
+}
+
 type ThemeConfig struct {
 	Default   StyleDef       `json:"default"`
 	Muted     StyleDef       `json:"muted"`
@@ -200,6 +207,7 @@ type ThemeConfig struct {
 	Input     InputStyles    `json:"input"`
 	Hover     HoverStyles    `json:"hover"`
 	Border    StyleDef       `json:"border"`
+	Comment   CommentStyles  `json:"comment,omitempty"`
 	Diff      DiffStyles     `json:"diff"`
 	Scrollbar StyleDef       `json:"scrollbar"`
 	Syntax    SyntaxStyles   `json:"syntax"`
@@ -235,11 +243,11 @@ func DefaultTheme() ThemeConfig {
 		Border: StyleDef{Fg: "#555555"},
 
 		Editor: EditorStyles{
-			ActiveLine:   StyleDef{Bg: "#282828"},
-			Selection:    StyleDef{Bg: "#282828"},
-			LineNumber:   StyleDef{Fg: "#999999"},
-			SearchMatch:  StyleDef{Bg: "#623800"},
-			SearchActive: StyleDef{Bg: "#9e6a03"},
+			ActiveLine:    StyleDef{Bg: "#282828"},
+			Selection:     StyleDef{Bg: "#282828"},
+			LineNumber:    StyleDef{Fg: "#999999"},
+			SearchMatch:   StyleDef{Bg: "#623800"},
+			SearchActive:  StyleDef{Bg: "#9e6a03"},
 			BracketMatch:  StyleDef{Bg: "#3a3a3a"},
 			BracketColors: []string{"yellow", "magenta", "blue"},
 		},
@@ -300,6 +308,10 @@ func (t *ThemeConfig) ResolveColors() {
 	}
 	fillFg(&t.Hover.Bold, t.Default.Fg)
 	fillFg(&t.Hover.Code, t.Syntax.String.Fg)
+	fillFg(&t.Comment.Marker, "#569cd6")
+	fillFg(&t.Comment.User, "#dcdcaa")
+	fillFg(&t.Comment.Body, t.Default.Fg)
+	fillFg(&t.Comment.File, "#569cd6")
 }
 
 func fillFg(s *StyleDef, color string) {

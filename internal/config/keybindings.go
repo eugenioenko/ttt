@@ -340,6 +340,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+k b", Command: "panel.toggle"},
 		{Key: "ctrl+k j", Command: "editor.joinLines"},
 		{Key: "ctrl+k y", Command: "view.keybindings"},
+		{Key: "ctrl+k g", Command: "pr.comments"},
 		{Key: "ctrl+t", Command: "terminal.toggle"},
 		{Key: "alt+t", Command: "terminal.fullscreen"},
 		{Key: "f10", Command: "menu.file"},
