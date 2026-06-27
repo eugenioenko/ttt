@@ -470,6 +470,88 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 	}()
 }
 
+type CodeActionsResult struct {
+	Actions []lsp.CodeAction
+}
+
+func (a *App) RequestCodeActionsAtCursor(path, lang string, line, col int) {
+	serverKey, _, ok := a.lspResolve(path, lang)
+	if !ok {
+		a.StatusNotify("No code actions available")
+		return
+	}
+	workDir := a.lspWorkDir(path)
+
+	sel := a.EditorGroup.Editor.Selection
+	var r lsp.Range
+	if sel != nil && sel.Active {
+		start, end := sel.Range(line, col)
+		r = lsp.Range{
+			Start: lsp.Position{Line: start.Line, Character: start.Col},
+			End:   lsp.Position{Line: end.Line, Character: end.Col},
+		}
+	} else {
+		r = lsp.Range{
+			Start: lsp.Position{Line: line, Character: col},
+			End:   lsp.Position{Line: line, Character: col},
+		}
+	}
+
+	go func() {
+		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
+		if err != nil {
+			slog.Error("lsp client", "err", err)
+			return
+		}
+		actions, err := client.CodeAction(FileURI(path), r, nil)
+		if err != nil {
+			slog.Error("lsp codeAction", "err", err)
+			return
+		}
+		if len(actions) > 0 {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{Actions: actions}))
+		} else {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{}))
+		}
+	}()
+}
+
+func (a *App) ShowCodeActionsMenu(actions []lsp.CodeAction) {
+	if len(actions) == 0 {
+		a.StatusNotify("No code actions available")
+		return
+	}
+	path := a.EditorGroup.ActiveFilePath()
+	var items []ui.ContextMenuItem
+	for _, action := range actions {
+		items = append(items, ui.ContextMenuItem{Label: action.Title, Command: action.Title})
+	}
+	x := a.EditorGroup.Editor.CursorX
+	y := a.EditorGroup.Editor.CursorY + 1
+	menu := ui.NewContextMenuWidget(items, x, y)
+	menu.Borders = a.Borders
+	menu.OnExec = func(cmd string) {
+		a.Root.PopOverlay()
+		for _, action := range actions {
+			if action.Title == cmd {
+				if action.Edit != nil && len(action.Edit.Changes) > 0 {
+					for uri, edits := range action.Edit.Changes {
+						if URIToPath(uri) == path {
+							a.ApplyTextEdits(edits)
+						}
+					}
+				}
+				break
+			}
+		}
+	}
+	menu.OnDismiss = func() {
+		a.Root.PopOverlay()
+	}
+	a.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
+	a.Root.SetFocus(menu)
+}
+
 func (a *App) FormatOnSave(path, lang string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {

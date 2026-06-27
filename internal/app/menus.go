@@ -80,6 +80,7 @@ var editorContextMenu = []ui.ContextMenuItem{
 	{Label: "Find All References", Command: "editor.findReferences"},
 	{Label: "Rename Symbol", Command: "editor.rename"},
 	ui.MenuSep(),
+	{Label: "Code Action", Command: "editor.codeAction"},
 	{Label: "Format Document", Command: "editor.formatDocument"},
 	{Label: "Format Selection", Command: "editor.formatSelection"},
 	ui.MenuSep(),

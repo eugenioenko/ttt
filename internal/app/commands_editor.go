@@ -231,6 +231,16 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "editor.codeAction", Title: "Code Action",
+		Keywords: []string{"editor", "quickfix", "refactor", "source", "action"},
+		Handler: func() {
+			path, lang := app.editorPathLang()
+			line, col := app.EditorGroup.ActiveCursor()
+			app.RequestCodeActionsAtCursor(path, lang, line, col)
+		},
+	})
+
+	reg.Register(command.Command{
 		ID: "editor.organizeImports", Title: "Source Action: Organize Imports",
 		Keywords: []string{"editor", "source", "cleanup"},
 		Handler: func() {
