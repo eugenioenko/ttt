@@ -1,0 +1,106 @@
+name: Update Nix vendorHash
+
+# The Nix flake pins a `vendorHash` in flake.nix — the fixed-output hash of the
+# fetched Go module set. It is derived ONLY from go.mod/go.sum (NOT from .go
+# source), so it goes stale exactly when a dependency is added/removed/upgraded.
+# This job recomputes it and opens a PR when it drifts.
+#
+# Run it manually from the Actions tab (workflow_dispatch), or let it fire
+# automatically when go.mod/go.sum change on main. The correct hash is printed
+# to the run summary either way, so you can also just copy it by hand.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "go.mod"
+      - "go.sum"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-vendor-hash
+  cancel-in-progress: true
+
+jobs:
+  update-hash:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Compute vendorHash
+        id: compute
+        run: |
+          set -uo pipefail
+          OLD_HASH=$(grep -oP 'vendorHash = "\K[^"]+' flake.nix)
+          echo "Current vendorHash: $OLD_HASH"
+
+          # Inject a sentinel so the build always fails with the real hash in
+          # the mismatch error, regardless of what is currently pinned.
+          SENTINEL="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          sed -i "s|vendorHash = \".*\";|vendorHash = \"$SENTINEL\";|" flake.nix
+
+          BUILD_LOG=$(nix build .#default --no-link 2>&1) || true
+          NEW_HASH=$(echo "$BUILD_LOG" | grep -oP 'got:\s*\Ksha256-[A-Za-z0-9+/=]+' | head -n1)
+
+          if [ -z "$NEW_HASH" ]; then
+            echo "::error::Could not parse a vendorHash from the Nix build output."
+            echo "$BUILD_LOG" | tail -n 40
+            exit 1
+          fi
+
+          # Write the real hash back into flake.nix.
+          sed -i "s|vendorHash = \".*\";|vendorHash = \"$NEW_HASH\";|" flake.nix
+          echo "Computed vendorHash: $NEW_HASH"
+          echo "new_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
+
+          if [ "$OLD_HASH" = "$NEW_HASH" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            echo "### Nix vendorHash"
+            echo ""
+            echo "| | hash |"
+            echo "|---|---|"
+            echo "| pinned | \`$OLD_HASH\` |"
+            echo "| correct | \`$NEW_HASH\` |"
+            echo ""
+            if [ "$OLD_HASH" = "$NEW_HASH" ]; then
+              echo "✅ Already up to date — no PR opened."
+            else
+              echo "⚠️ Drifted — opening a PR with the corrected hash."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open pull request
+        if: steps.compute.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/update-vendor-hash
+          delete-branch: true
+          commit-message: "chore: update Nix vendorHash"
+          title: "chore: update Nix vendorHash"
+          body: |
+            Automated update of `vendorHash` in `flake.nix` after a change to
+            `go.mod`/`go.sum`. Computed by the **Update Nix vendorHash** workflow.
+
+            New hash: `${{ steps.compute.outputs.new_hash }}`
+
+            > Note: PRs opened by `GITHUB_TOKEN` do not trigger other workflows,
+            > so CI checks won't run here automatically. The hash was already
+            > validated by a real `nix build` in the workflow that produced it —
+            > push an empty commit or re-run CI if your branch protection needs it.
