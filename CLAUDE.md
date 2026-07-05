@@ -47,6 +47,8 @@ The codebase follows a strict layered architecture: **core → view → render �
 
 - **`internal/workspace/`** — Multi-folder workspace management. `Folder` and `Workspace` types track one or more project roots, with `IsRepo` git-detection, `FolderForFile` lookup (longest-prefix match), and JSON-based workspace file loading/saving (`.ttt` files). The editor falls back to `cwd` when no folders are explicitly provided.
 
+- **`internal/spell/`** — Spell checking via the `aspell` binary (ispell pipe protocol). Prose filetypes only (`ModeForLanguage` maps highlighter language → aspell filter mode; code files are skipped). Misspellings render as curly underlines through the same `UlStyle` cell channel as LSP diagnostics (diagnostics take precedence). Async flow mirrors the git gutter: `ScheduleSpellCheck` (debounced, `spell.debounce`) → `RequestSpellCheck` (generation counter, line copy, goroutine) → `SpellResult` via `EventInterrupt`. Corrections apply as a single-undo `BatchCommand` after verifying the span is not stale. Off by default (`spell.enabled`); toggled from the Options menu. Suggestions surface via `spell.suggest` (autocomplete popup) and the editor right-click menu.
+
 - **`cmd/ttt/main.go`** — Entry point with event loop. Wires all components together, handles key dispatch, viewport scrolling, and redraw. Accepts a `--workspace <file>` flag to open a saved workspace, or folder/file paths as positional arguments.
 
 ### Design Principles
@@ -174,6 +176,7 @@ cat /tmp/state.json   # see full widget tree, focus, selection, panels
 
 Supported commands:
 - `click X Y` — simulate mouse click at coordinates
+- `rclick X Y` — simulate right click at coordinates
 - `hover X Y` — simulate mouse hover (move) at coordinates
 - `key COMBO` — simulate key press (e.g. `key ctrl+p`, `key enter`, `key ctrl+k x`)
 - `type TEXT` — type a string of text

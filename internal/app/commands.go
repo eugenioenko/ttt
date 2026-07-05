@@ -19,6 +19,7 @@ func RegisterCommands(app *App) {
 	registerPRCommands(app)
 	registerHelpCommands(app)
 	registerOptionsCommands(app)
+	registerSpellCommands(app)
 	registerSettingsCommands(app)
 	registerPluginCommands(app)
 	registerDebugCommands(app)

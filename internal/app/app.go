@@ -78,6 +78,9 @@ type App struct {
 	Watcher                *watcher.Watcher
 	GitGutterGen           int
 	GitGutterTimer         *time.Timer
+	SpellGen               int
+	SpellTimer             *time.Timer
+	spellErrShown          bool
 	Version                string
 	PluginManager          *plugin.Manager
 	PendingPluginApprovals []*plugin.Plugin
@@ -436,6 +439,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.ScheduleAutocomplete()
 		a.CheckSignatureHelpTrigger()
 		a.ScheduleGitGutter()
+		a.ScheduleSpellCheck()
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("editor.change", path)
 		}

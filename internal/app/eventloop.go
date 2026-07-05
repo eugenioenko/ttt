@@ -101,6 +101,7 @@ func RunEventLoop(
 		if filePath != lastGutterFile {
 			lastGutterFile = filePath
 			app.RequestGitGutterForActiveFile()
+			app.RequestSpellCheck()
 		}
 
 		if filePath != lastCursorFile || line != lastCursorLine || col != lastCursorCol {
@@ -235,6 +236,10 @@ func RunEventLoop(
 				}
 			case *GitGutterTrigger:
 				app.RequestGitGutterForActiveFile()
+			case *SpellResult:
+				app.HandleSpellResult(v)
+			case *SpellTrigger:
+				app.RequestSpellCheck()
 			case *AutocompleteTrigger:
 				triggerChar := app.charBeforeCursor()
 				isTrigger := triggerChar != "" && (len(app.CompletionTriggers) == 0 || app.isCompletionTrigger(triggerChar))

@@ -21,6 +21,7 @@ type DebugState struct {
 	ActiveTab   int              `json:"active_tab"`
 	Overlay     *DebugOverlay    `json:"overlay"`
 	Selection   DebugSelection   `json:"selection"`
+	Misspelled  []DebugSpell     `json:"misspelled,omitempty"`
 	Output      []string         `json:"output"`
 	WidgetTree  *DebugWidgetNode `json:"widget_tree"`
 }
@@ -66,6 +67,12 @@ type DebugSelection struct {
 type DebugPos struct {
 	Line int `json:"line"`
 	Col  int `json:"col"`
+}
+
+type DebugSpell struct {
+	Line int    `json:"line"`
+	Col  int    `json:"col"`
+	Word string `json:"word"`
 }
 
 type DebugWidgetNode struct {
@@ -133,6 +140,12 @@ func (a *App) BuildDebugState() *DebugState {
 			Active: true,
 			Start:  &DebugPos{Line: sl, Col: sc},
 			End:    &DebugPos{Line: el, Col: ec},
+		}
+	}
+
+	if a.EditorGroup.Editor != nil {
+		for _, m := range a.EditorGroup.Editor.Misspellings {
+			state.Misspelled = append(state.Misspelled, DebugSpell{Line: m.Line, Col: m.Col, Word: m.Word})
 		}
 	}
 

@@ -1,6 +1,9 @@
 package app
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/ui"
 
@@ -135,12 +138,15 @@ func resolveShortcuts(reg *command.Registry, items []ui.ContextMenuItem) []ui.Co
 }
 
 func openContextMenu(app *App, items []ui.ContextMenuItem, x, y int) {
-	reg := app.Reg
-	menu := ui.NewContextMenuWidget(resolveShortcuts(reg, items), x, y)
+	openContextMenuWith(app, items, x, y, func(cmd string) { app.Reg.Execute(cmd) })
+}
+
+func openContextMenuWith(app *App, items []ui.ContextMenuItem, x, y int, exec func(cmd string)) {
+	menu := ui.NewContextMenuWidget(resolveShortcuts(app.Reg, items), x, y)
 	menu.Borders = app.Borders
 	menu.OnExec = func(cmd string) {
 		app.Root.PopOverlay()
-		reg.Execute(cmd)
+		exec(cmd)
 	}
 	menu.OnDismiss = func() {
 		app.Root.PopOverlay()
@@ -231,6 +237,52 @@ func handleRightClick(app *App, mx, my int) {
 	if app.EditorGroup.ActiveDiffWidget() != nil {
 		openContextMenu(app, diffContextMenu, mx, my)
 	} else {
-		openContextMenu(app, editorContextMenu, mx, my)
+		openEditorContextMenu(app, mx, my)
 	}
+}
+
+const maxSpellMenuSuggestions = 5
+
+// openEditorContextMenu opens the editor context menu, prepending correction
+// items when the click landed on a misspelled word.
+func openEditorContextMenu(app *App, mx, my int) {
+	var fix *ui.SpellSpan
+	if editor := app.EditorGroup.Editor; editor != nil {
+		if line, col, ok := editor.MouseToBufferPos(mx, my); ok {
+			fix = editor.MisspellingAt(line, col)
+		}
+	}
+	if fix == nil {
+		openContextMenu(app, editorContextMenu, mx, my)
+		return
+	}
+
+	span := *fix
+	var items []ui.ContextMenuItem
+	for i, s := range span.Suggestions {
+		if i >= maxSpellMenuSuggestions {
+			break
+		}
+		items = append(items, ui.ContextMenuItem{
+			Label:   "Correct to \"" + s + "\"",
+			Command: "spell.apply." + strconv.Itoa(i),
+		})
+	}
+	items = append(items,
+		ui.ContextMenuItem{Label: "Add \"" + span.Word + "\" to Dictionary", Command: "spell.add"},
+		ui.MenuSep())
+	items = append(items, editorContextMenu...)
+
+	openContextMenuWith(app, items, mx, my, func(cmd string) {
+		switch {
+		case strings.HasPrefix(cmd, "spell.apply."):
+			if i, err := strconv.Atoi(strings.TrimPrefix(cmd, "spell.apply.")); err == nil && i < len(span.Suggestions) {
+				app.ApplySpellFix(span, span.Suggestions[i])
+			}
+		case cmd == "spell.add":
+			app.AddSpellWord(span.Word)
+		default:
+			app.Reg.Execute(cmd)
+		}
+	})
 }

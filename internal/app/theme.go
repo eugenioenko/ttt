@@ -83,6 +83,7 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	applyDiagStyle(&m, term.StyleDiagWarning, theme.Editor.Diagnostics.Warning)
 	applyDiagStyle(&m, term.StyleDiagInfo, theme.Editor.Diagnostics.Info)
 	applyDiagStyle(&m, term.StyleDiagHint, theme.Editor.Diagnostics.Hint)
+	applyDiagStyle(&m, term.StyleSpellError, theme.Editor.SpellError)
 
 	applyBracketColors(&m, theme.Editor.BracketColors, theme.Terminal)
 

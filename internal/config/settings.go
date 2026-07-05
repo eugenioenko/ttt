@@ -103,6 +103,22 @@ func DefaultEditorSettings() EditorSettings {
 	}
 }
 
+type SpellSettings struct {
+	Enabled  *bool  `json:"enabled,omitempty"`
+	Lang     string `json:"lang,omitempty"`
+	Debounce int    `json:"debounce"`
+}
+
+func (s SpellSettings) IsEnabled() bool {
+	return s.Enabled != nil && *s.Enabled
+}
+
+func DefaultSpellSettings() SpellSettings {
+	return SpellSettings{
+		Debounce: 500,
+	}
+}
+
 type SearchSettings struct {
 	Debounce int `json:"debounce"`
 }
@@ -155,6 +171,7 @@ type Settings struct {
 	Autocomplete AutocompleteSettings `json:"autocomplete,omitzero"`
 	Plugins      PluginSettings       `json:"plugins,omitzero"`
 	Markdown     MarkdownSettings     `json:"markdown,omitzero"`
+	Spell        SpellSettings        `json:"spell,omitzero"`
 	Formatters   map[string]string    `json:"formatters,omitempty"`
 }
 
@@ -168,6 +185,7 @@ func DefaultSettings() Settings {
 		LSP:          DefaultLSPSettings(),
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),
+		Spell:        DefaultSpellSettings(),
 	}
 }
 

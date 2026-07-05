@@ -42,24 +42,34 @@ type Diagnostic struct {
 	Source    string
 }
 
+// SpellSpan marks a misspelled word in the buffer, with rune-based columns.
+type SpellSpan struct {
+	Line        int
+	Col         int
+	Len         int
+	Word        string
+	Suggestions []string
+}
+
 type editorTab struct {
-	FilePath    string
-	Title       string
-	Buf         *buffer.Buffer
-	Cur         *cursor.Cursor
-	Vp          *view.Viewport
-	Undo        *undo.UndoStack
-	Sel         *selection.Selection
-	Multi       *multicursor.MultiCursor
-	Highlighter *highlight.Highlighter
-	Diagnostics []Diagnostic
-	Folds       *fold.State
-	TabSize     int
-	UseTabs     bool
-	Content     Widget
-	Pinned      bool
-	Virtual     bool
-	LineChanges []diff.LineChangeKind
+	FilePath     string
+	Title        string
+	Buf          *buffer.Buffer
+	Cur          *cursor.Cursor
+	Vp           *view.Viewport
+	Undo         *undo.UndoStack
+	Sel          *selection.Selection
+	Multi        *multicursor.MultiCursor
+	Highlighter  *highlight.Highlighter
+	Diagnostics  []Diagnostic
+	Misspellings []SpellSpan
+	Folds        *fold.State
+	TabSize      int
+	UseTabs      bool
+	Content      Widget
+	Pinned       bool
+	Virtual      bool
+	LineChanges  []diff.LineChangeKind
 }
 
 type EditorGroupWidget struct {
@@ -924,6 +934,29 @@ func (g *EditorGroupWidget) SetDiagnostics(path string, diags []Diagnostic) {
 	}
 }
 
+func (g *EditorGroupWidget) SetMisspellings(path string, spans []SpellSpan) {
+	for i := range g.tabs {
+		if g.tabs[i].FilePath == path {
+			g.tabs[i].Misspellings = spans
+			if i == g.active {
+				g.Editor.Misspellings = spans
+				g.Editor.buildSpellIndex()
+			}
+			return
+		}
+	}
+}
+
+func (g *EditorGroupWidget) ClearAllMisspellings() {
+	for i := range g.tabs {
+		g.tabs[i].Misspellings = nil
+	}
+	if g.Editor != nil {
+		g.Editor.Misspellings = nil
+		g.Editor.spellByLine = nil
+	}
+}
+
 // SetLineChanges updates the git gutter indicators for the tab with the given path.
 func (g *EditorGroupWidget) SetLineChanges(path string, changes []diff.LineChangeKind) {
 	for i := range g.tabs {
@@ -1236,9 +1269,11 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Multi = t.Multi
 		g.Editor.Highlighter = t.Highlighter
 		g.Editor.Diagnostics = t.Diagnostics
+		g.Editor.Misspellings = t.Misspellings
 		g.Editor.Folds = t.Folds
 		g.Editor.LineChanges = t.LineChanges
 		g.Editor.buildDiagIndex()
+		g.Editor.buildSpellIndex()
 		g.Editor.InvalidateBracketColors()
 		if t.TabSize > 0 {
 			g.Editor.TabSize = t.TabSize

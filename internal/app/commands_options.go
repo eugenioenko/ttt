@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/spell"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -58,6 +59,22 @@ func (a *App) ToggleGitGutter() {
 	} else if a.EditorGroup.Editor != nil {
 		a.EditorGroup.Editor.LineChanges = nil
 	}
+}
+
+func (a *App) ToggleSpellCheck() {
+	enabled := !a.Settings.Spell.IsEnabled()
+	a.Settings.Spell.Enabled = &enabled
+	config.SaveSettings(*a.Settings)
+	if !enabled {
+		a.EditorGroup.ClearAllMisspellings()
+		return
+	}
+	if !spell.Available() {
+		a.StatusWarn("aspell not found in PATH — install aspell to enable spell check")
+		return
+	}
+	a.spellErrShown = false
+	a.RequestSpellCheck()
 }
 
 func (a *App) SetGutterStyle(style string) {
@@ -147,6 +164,11 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		gitGutterChecked = ui.MenuChecked
 	}
 
+	spellChecked := ui.MenuUnchecked
+	if a.Settings.Spell.IsEnabled() {
+		spellChecked = ui.MenuChecked
+	}
+
 	syntaxChecked := ui.MenuUnchecked
 	if a.Settings.Editor.IsSyntaxHighlightEnabled() {
 		syntaxChecked = ui.MenuChecked
@@ -159,6 +181,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Bracket Colors", Command: "options.toggleBracketColors", Checked: bracketColorChecked},
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
+		{Label: "Spell Check", Command: "options.toggleSpellCheck", Checked: spellChecked},
 		ui.MenuSep(),
 		{Label: "Gutter Style", Command: "options.gutterStyle"},
 		{Label: "Border Style", Command: "options.borderStyle"},
@@ -207,6 +230,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleGitGutter", Title: "Toggle Git Gutter",
 		Keywords: []string{"preferences", "settings", "editor", "view", "git"},
 		Handler:  app.ToggleGitGutter,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleSpellCheck", Title: "Toggle Spell Check",
+		Keywords: []string{"preferences", "settings", "editor", "spelling", "aspell", "typo"},
+		Handler:  app.ToggleSpellCheck,
 	})
 
 	reg.Register(command.Command{
