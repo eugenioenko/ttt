@@ -50,6 +50,7 @@ type EditorPaneWidget struct {
 	scrollbar               Scrollbar
 	hscrollbar              HScrollbar
 	Diagnostics             []Diagnostic
+	Misspellings            []SpellSpan
 	Folds                   *fold.State
 	OnChange                func()
 	bufferDirty             bool
@@ -62,6 +63,7 @@ type EditorPaneWidget struct {
 	cachedVisibleLines      []int
 	searchByLine            map[int][]int
 	diagByLine              map[int][]int
+	spellByLine             map[int][]int
 	LineChanges             []diff.LineChangeKind
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
@@ -153,6 +155,13 @@ func (e *EditorPaneWidget) buildDiagIndex() {
 		for line := d.StartLine; line <= d.EndLine; line++ {
 			e.diagByLine[line] = append(e.diagByLine[line], i)
 		}
+	}
+}
+
+func (e *EditorPaneWidget) buildSpellIndex() {
+	e.spellByLine = make(map[int][]int, len(e.Misspellings))
+	for i, m := range e.Misspellings {
+		e.spellByLine[m.Line] = append(e.spellByLine[m.Line], i)
 	}
 }
 
@@ -453,6 +462,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					}
 				}
 				ulStyle := e.diagStyleAt(lineIdx, colIdx)
+				if ulStyle == 0 && e.MisspellingAt(lineIdx, colIdx) != nil {
+					ulStyle = term.StyleSpellError
+				}
 				surface.SetCell(gutterW+x, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle, UlStyle: ulStyle})
 			}
 		} else {
@@ -541,6 +553,27 @@ func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
 		return d
 	}
 	return nil
+}
+
+func (e *EditorPaneWidget) MisspellingAt(line, col int) *SpellSpan {
+	for _, i := range e.spellByLine[line] {
+		m := &e.Misspellings[i]
+		if col >= m.Col && col < m.Col+m.Len {
+			return m
+		}
+	}
+	return nil
+}
+
+// MouseToBufferPos converts screen coordinates to a buffer position,
+// accounting for the gutter, scrolling and word wrap.
+func (e *EditorPaneWidget) MouseToBufferPos(mx, my int) (line, col int, ok bool) {
+	r := e.GetRect()
+	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+		return 0, 0, false
+	}
+	line, col = e.mouseToPos(r, mx, my)
+	return line, col, true
 }
 
 func (e *EditorPaneWidget) diagStyleAt(line, col int) term.Style {

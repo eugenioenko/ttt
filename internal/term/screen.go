@@ -45,6 +45,7 @@ const (
 	StyleDiagWarning
 	StyleDiagInfo
 	StyleDiagHint
+	StyleSpellError
 	StyleInput
 	StyleInputPlaceholder
 	StyleInputAction

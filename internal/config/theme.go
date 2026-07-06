@@ -71,6 +71,7 @@ type EditorStyles struct {
 	BracketMatch  StyleDef         `json:"bracketMatch"`
 	BracketColors []string         `json:"bracketColors,omitempty"`
 	Diagnostics   DiagnosticStyles `json:"diagnostics"`
+	SpellError    StyleDef         `json:"spellError"`
 }
 
 type DiffStyles struct {
@@ -310,6 +311,7 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Editor.Diagnostics.Warning, t.Warning.Fg)
 	fillFg(&t.Editor.Diagnostics.Info, t.Default.Fg)
 	fillFg(&t.Editor.Diagnostics.Hint, t.Default.Fg)
+	fillFg(&t.Editor.SpellError, t.Warning.Fg)
 	if !t.Hover.Bold.Bold {
 		t.Hover.Bold.Bold = true
 	}

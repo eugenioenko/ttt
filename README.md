@@ -104,6 +104,7 @@ cp bin/ttt ~/.local/bin/
 - **Auto-completion** — LSP-powered completions with live filtering, debounce, and auto-import support
 - **Signature help** — parameter hints shown automatically on `(` and `,`
 - **Diagnostics** — inline curly underline squiggles, problems panel, hover popup, and status bar counts
+- **Spell checking** — prose files (markdown, HTML, XML, TeX, plain text) checked via [aspell](http://aspell.net) with curly-underline squiggles; corrections from the right-click menu or command palette, personal dictionary support; toggle in the Options menu (off by default, requires `aspell` in PATH)
 - **Document formatting** — format document, format selection, and format-on-save via LSP (command palette)
 - **Git blame** — inline blame info for the current line shown in the status bar (author, relative time, summary)
 - **Line numbers** with current-line highlighting

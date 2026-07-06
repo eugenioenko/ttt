@@ -36,5 +36,8 @@
   },
   "markdown": {
     "wrapWidth": 80
+  },
+  "spell": {
+    "debounce": 500
   }
 }

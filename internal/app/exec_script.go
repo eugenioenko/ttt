@@ -29,6 +29,8 @@ func RunExecScript(a *App, script string) {
 		switch action {
 		case "click":
 			execClick(a, args)
+		case "rclick":
+			execRightClick(a, args)
 		case "hover":
 			execHover(a, args)
 		case "drag":
@@ -90,6 +92,28 @@ func execClick(a *App, args string) {
 	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
 	time.Sleep(50 * time.Millisecond)
 	// Release
+	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+}
+
+func execRightClick(a *App, args string) {
+	parts := strings.Fields(args)
+	if len(parts) < 2 {
+		slog.Error("exec_script: rclick requires X Y", "args", args)
+		return
+	}
+	x, err := strconv.Atoi(parts[0])
+	if err != nil {
+		slog.Error("exec_script: invalid rclick X", "value", parts[0], "error", err)
+		return
+	}
+	y, err := strconv.Atoi(parts[1])
+	if err != nil {
+		slog.Error("exec_script: invalid rclick Y", "value", parts[1], "error", err)
+		return
+	}
+
+	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.Button2, tcell.ModNone))
+	time.Sleep(50 * time.Millisecond)
 	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
 }
 
