@@ -78,6 +78,20 @@ Keybindings are defined in `internal/config/keybindings.go` (`DefaultKeybindings
 
 **Keymap source of truth:** `DefaultKeybindings()` in `internal/config/keybindings.go` is canonical. `config/keybindings.json` is a generated mirror of it (for docs and as a user reference) — when changing defaults, update both, plus the README and docs-web keybinding tables.
 
+### Settings
+
+`Settings` and `DefaultSettings()` in `internal/config/settings.go` are canonical. Adding a setting means touching five places, and skipping any of them fails silently rather than loudly:
+
+1. The struct field and its default in `DefaultSettings()`.
+2. `config/settings.json` — a generated mirror. `TestReferenceSettingsMatchesDefaults` (`internal/config/settings_test.go`) asserts byte equality against `DefaultSettings()` with `Theme` set to `"default-dark"`, so regenerate it that way — it is not a plain dump.
+3. `settingsCategories()` in `internal/app/settings_view.go`, or the setting never appears in the settings editor. Each `settingField` needs the accessor pair for its `Kind`: `GetBool`/`SetBool` for `settingBool`, `GetInt`/`SetInt` for `settingInt`, `GetString`/`SetString` for `settingString` and `settingEnum` (plus `Options`). `Restart: true` appends "(restart)" to the row label and means the value is only read at startup. Enum options come from exported slices in `config` (`GutterStyles`, `BorderStyles`) so the picker and `normalizeSettings` cannot drift. LSP servers and `formatters` are deliberately absent — structured config that a form handles badly, JSON-only by design.
+4. `ApplySettings()` in `internal/app/commands_settings.go`, if it can take effect without a restart.
+5. The README and `docs-web/src/content/docs/reference/settings.md` tables.
+
+**JSON tag traps.** A section whose defaults are non-zero must not use `omitzero`: an all-false/all-zero section would be omitted on save and silently revert to the defaults on the next load. `Plugins` keeps `omitzero` only because its single field is a tri-state `*bool` where nil means "default". Likewise a field tagged `omitempty` cannot store a legitimate zero, so any `settingInt` on such a field must set `Min >= 1` in its descriptor — `Min` is the lower bound the settings editor validates numeric input against on Apply.
+
+**Live-apply is one path.** `ApplySettings` is where settings take effect; the Options toggles and the settings editor reach it via `SaveAndApplySettings()` (`internal/app/commands_options.go`), and `settings.reload` calls it directly. Never apply a setting inline in a toggle handler — the other callers would not see it. Because it runs on every toggle, expensive side effects (git gutter refetch, bracket color rebuild) are keyed off `App.appliedSettings` — the last applied value — and not `*a.Settings`, which callers have usually already mutated before calling in.
+
 ### LSP Integration
 
 Language server support lives in `internal/lsp/`. Servers are configured per-language in `~/.config/ttt/extensions.json`. The LSP client uses JSON-RPC 2.0 over stdio with Content-Length framing — no external dependencies.
