@@ -43,6 +43,7 @@ type EditorPaneWidget struct {
 	SearchQuery             string
 	SearchMatches           []FindMatch
 	SearchActive            int
+	SearchPinned            bool
 	lastClickTime           int64
 	lastClickLine           int
 	lastClickCol            int

@@ -23,9 +23,11 @@ type DebugState struct {
 	Overlay     *DebugOverlay      `json:"overlay"`
 	Selection   DebugSelection     `json:"selection"`
 	MultiCursor []DebugMultiCursor `json:"multi_cursor,omitempty"`
-	Diagnostics []DebugDiagnostic  `json:"diagnostics"`
-	Output      []string           `json:"output"`
-	WidgetTree  *DebugWidgetNode   `json:"widget_tree"`
+	Diagnostics      []DebugDiagnostic  `json:"diagnostics"`
+	Output           []string           `json:"output"`
+	SearchQuery      string             `json:"search_query,omitempty"`
+	SearchMatchCount int                `json:"search_match_count,omitempty"`
+	WidgetTree       *DebugWidgetNode   `json:"widget_tree"`
 }
 
 // DebugDiagnostic reports one diagnostic on the active editor (LSP or plugin),
@@ -164,6 +166,8 @@ func (a *App) BuildDebugState() *DebugState {
 				Message: d.Message, Styled: d.Style != 0,
 			})
 		}
+		state.SearchQuery = ed.SearchQuery
+		state.SearchMatchCount = len(ed.SearchMatches)
 	}
 
 	state.Focus = a.describeFocus()

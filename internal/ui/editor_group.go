@@ -864,6 +864,7 @@ func (g *EditorGroupWidget) SetSearch(query string, matches []FindMatch) {
 	if !g.IsEditorActive() {
 		return
 	}
+	g.Editor.SearchPinned = false
 	g.Editor.SearchQuery = query
 	g.Editor.SearchMatches = matches
 	g.Editor.SearchActive = 0
@@ -920,6 +921,20 @@ func (g *EditorGroupWidget) ClearSearch() {
 	if !g.IsEditorActive() {
 		return
 	}
+	if g.Editor.SearchPinned {
+		return
+	}
+	g.Editor.SearchQuery = ""
+	g.Editor.SearchMatches = nil
+	g.Editor.SearchActive = 0
+	g.Editor.searchByLine = nil
+}
+
+func (g *EditorGroupWidget) ForceClearSearch() {
+	if !g.IsEditorActive() {
+		return
+	}
+	g.Editor.SearchPinned = false
 	g.Editor.SearchQuery = ""
 	g.Editor.SearchMatches = nil
 	g.Editor.SearchActive = 0

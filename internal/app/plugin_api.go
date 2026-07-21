@@ -309,10 +309,11 @@ func (e *PluginEditorAPI) SetSearch(pattern string, useRegex bool) {
 	opts := ui.SearchOptions{UseRegex: useRegex, CaseSensitive: true}
 	matches, _ := ui.FindInLines(buf.Lines, pattern, opts)
 	e.eg.SetSearch(pattern, matches)
+	e.eg.Editor.SearchPinned = true
 }
 
 func (e *PluginEditorAPI) ClearSearch() {
-	e.eg.ClearSearch()
+	e.eg.ForceClearSearch()
 }
 
 // PluginFilesystemAPI implements plugin.FilesystemAPI with path restrictions.
