@@ -167,7 +167,7 @@ func cursorAfterUndo(cmd EditCommand) *CursorPos {
 	case *JoinNextLineCommand:
 		return &CursorPos{c.Line, c.JoinCol}
 	case *DeleteSelectionCommand:
-		return &CursorPos{c.EndLine, c.EndCol}
+		return &CursorPos{c.StartLine, c.StartCol}
 	case *PasteCommand:
 		return &CursorPos{c.Line, c.Col}
 	case *BatchCommand:

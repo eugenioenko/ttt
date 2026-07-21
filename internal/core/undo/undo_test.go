@@ -807,3 +807,18 @@ func TestEndTransactionWithoutBegin(t *testing.T) {
 	s := &UndoStack{}
 	s.EndTransaction()
 }
+
+func TestDeleteSelectionCursorAfterUndoReturnsStart(t *testing.T) {
+	cmd := &DeleteSelectionCommand{
+		StartLine: 0, StartCol: 3,
+		EndLine: 0, EndCol: 8,
+		Deleted: "hello",
+	}
+	pos := cursorAfterUndo(cmd)
+	if pos == nil {
+		t.Fatal("expected non-nil cursor position")
+	}
+	if pos.Line != 0 || pos.Col != 3 {
+		t.Errorf("expected cursor at (0, 3), got (%d, %d)", pos.Line, pos.Col)
+	}
+}
