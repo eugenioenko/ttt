@@ -108,6 +108,15 @@
     "tags": ["vim", "keybindings", "modal", "editor"]
   },
   {
+    "name": "emacs",
+    "displayName": "Emacs Mode",
+    "author": "eugenioenko",
+    "description": "Emacs compatibility layer: prefix keymaps, kill ring, mark and region, incremental search, universal argument and keyboard macros",
+    "repo": "https://github.com/eugenioenko/ttt-emacs",
+    "version": "0.1.0",
+    "tags": ["emacs", "keybindings", "editor"]
+  },
+  {
     "name": "formatter-gofmt",
     "displayName": "gofmt Formatter",
     "author": "eugenioenko",
