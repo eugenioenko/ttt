@@ -26,6 +26,15 @@ func (pp *PanelProxy) wrapSimpleCallback(fn *lua.LFunction) func() {
 	}
 }
 
+func (pp *PanelProxy) wrapBoolCallback(fn *lua.LFunction) func(bool) {
+	p := pp.plugin
+	return func(b bool) {
+		if p.State != nil {
+			p.CallLuaFunc(fn, lua.LBool(b))
+		}
+	}
+}
+
 func (pp *PanelProxy) wrapStringCallback(fn *lua.LFunction) func(string) {
 	p := pp.plugin
 	return func(s string) {
@@ -98,6 +107,7 @@ func RegisterPanelType(L *lua.LState) {
 		"divider":    panelDividerWidget,
 		"progress":   panelProgressWidget,
 		"table":      panelTableWidget,
+		"checkbox":   panelCheckboxWidget,
 		"redraw":     panelRedraw,
 		"markdown":   panelMarkdownWidget,
 	}))
@@ -413,6 +423,33 @@ func panelButtonWidget(L *lua.LState) int {
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetButton, desc)
+	return 0
+}
+
+func panelCheckboxWidget(L *lua.LState) int {
+	proxy := checkPanelProxy(L)
+	if proxy == nil {
+		return 0
+	}
+
+	tbl := L.CheckTable(2)
+	desc := WidgetDesc{}
+
+	if v := L.GetField(tbl, "label"); v != lua.LNil {
+		desc.Label = v.String()
+	}
+	if v := L.GetField(tbl, "checked"); v != lua.LNil {
+		desc.Checked = lua.LVAsBool(v)
+	}
+	if v := L.GetField(tbl, "style"); v != lua.LNil {
+		desc.StyleName = v.String()
+	}
+	if fn, ok := L.GetField(tbl, "on_change").(*lua.LFunction); ok {
+		desc.OnChangeBool = proxy.wrapBoolCallback(fn)
+	}
+
+	parseBoxModel(L, tbl, &desc)
+	proxy.appendDesc(WidgetCheckbox, desc)
 	return 0
 }
 

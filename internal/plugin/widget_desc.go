@@ -23,6 +23,7 @@ const (
 	WidgetProgress
 	WidgetTable
 	WidgetMarkdown
+	WidgetCheckbox
 )
 
 func (k WidgetKind) String() string {
@@ -59,6 +60,8 @@ func (k WidgetKind) String() string {
 		return "table"
 	case WidgetMarkdown:
 		return "markdown"
+	case WidgetCheckbox:
+		return "checkbox"
 	}
 	return "unknown"
 }
@@ -92,8 +95,10 @@ type WidgetDesc struct {
 	NodeMenu      []widgets.MenuEntry
 	KeyCommands   map[rune]string
 
-	Label   string
-	OnClick func()
+	Label        string
+	OnClick      func()
+	Checked      bool
+	OnChangeBool func(bool)
 
 	Placeholder   string
 	Prefix        string

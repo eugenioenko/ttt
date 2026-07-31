@@ -81,6 +81,8 @@ func createWidget(desc WidgetDesc, p *Plugin) widgets.Widget {
 		return createTableWidget(desc, p)
 	case WidgetMarkdown:
 		return createMarkdownWidget(desc, p)
+	case WidgetCheckbox:
+		return createCheckboxWidget(desc, p)
 	}
 	return widgets.NewLabelWidget(widgets.LabelConfig{Text: "unknown widget"})
 }
@@ -207,6 +209,16 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 				md.SetContent(desc.MarkdownContent)
 			}
 		}
+	case WidgetCheckbox:
+		if cw, ok := w.(*widgets.CheckboxWidget); ok {
+			cw.Config.Label = desc.Label
+			cw.Config.Checked = desc.Checked
+			wireCheckboxCallback(cw, desc, p)
+			if desc.StyleName != "" {
+				cw.Config.Style = resolveStyleName(desc.StyleName)
+			}
+			applyBoxModel(&cw.Box, desc)
+		}
 	}
 }
 
@@ -256,6 +268,9 @@ func widgetMatchesKind(w widgets.Widget, kind WidgetKind) bool {
 		return ok
 	case WidgetMarkdown:
 		_, ok := w.(*widgets.ScrollViewWidget)
+		return ok
+	case WidgetCheckbox:
+		_, ok := w.(*widgets.CheckboxWidget)
 		return ok
 	}
 	return false
@@ -505,6 +520,25 @@ func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 func wireButtonCallback(bw *widgets.ButtonWidget, desc WidgetDesc, _ *Plugin) {
 	if desc.OnClick != nil {
 		bw.Config.OnClick = desc.OnClick
+	}
+}
+
+func createCheckboxWidget(desc WidgetDesc, p *Plugin) *widgets.CheckboxWidget {
+	cw := widgets.NewCheckboxWidget(widgets.CheckboxConfig{
+		Label:   desc.Label,
+		Checked: desc.Checked,
+	})
+	if desc.StyleName != "" {
+		cw.Config.Style = resolveStyleName(desc.StyleName)
+	}
+	wireCheckboxCallback(cw, desc, p)
+	applyBoxModel(&cw.Box, desc)
+	return cw
+}
+
+func wireCheckboxCallback(cw *widgets.CheckboxWidget, desc WidgetDesc, _ *Plugin) {
+	if desc.OnChangeBool != nil {
+		cw.Config.OnChange = desc.OnChangeBool
 	}
 }
 

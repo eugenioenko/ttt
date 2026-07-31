@@ -104,6 +104,7 @@ Lua plugins render UI in sidebar panels, bottom-panel tabs, drawers, and editor 
 | `p:tree({...})` | `items`, `indent` (default 2), `on_select`, `on_expand`, `on_command`, `node_menu`, `key_commands`, `truncate_left` | Expandable tree view. Items are `{id, label, icon, badge, muted, expandable, expanded, children}` tables. `key_commands` maps single chars to commands via `on_command`. `truncate_left` truncates overflowing labels from the left (`…tail`) so the end stays visible. |
 | `p:list({...})` | `items`, `on_select`, `on_command`, `node_menu`, `key_commands`, `truncate_left` | Flat list (backed by TreeWidget, no indentation). `truncate_left` keeps label tails visible on overflow. |
 | `p:button({...})` | `label`, `on_click` | Clickable button. Label is immutable after creation (accelerator parsing). |
+| `p:checkbox({...})` | `label`, `checked`, `style`, `on_change(checked)` | Boolean toggle. Renders `[x]`/`[ ]` with focus styling on brackets. Supports box model. |
 | `p:input({...})` | `placeholder`, `prefix`, `clear_on_submit`, `on_change(text)`, `on_submit(text)` | Text input field. `clear_on_submit` (bool) clears text after submit. |
 | `p:vstack({...})` | `render(child_panel)`, `gap` | Vertical stack container. The `render` function receives a child panel proxy to emit nested widgets. |
 | `p:keyvalue({{key,value}, ...})` | array of `{key, value}` tables | Key-value list. The argument table IS the entries array (not an `entries` field); box model fields go on the same table. |

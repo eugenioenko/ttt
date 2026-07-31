@@ -824,6 +824,30 @@ panel:button({
 | `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
 
+### Checkbox
+
+Boolean toggle that renders `[x]` / `[ ]` with focus styling on the brackets. Responds to Enter, Space, and mouse click.
+
+```lua
+panel:checkbox({
+  label = "Word wrap",
+  checked = true,
+  style = "muted",
+  on_change = function(checked)
+    -- called with the new boolean value
+  end,
+})
+```
+
+**Checkbox config fields:**
+
+| Field       | Type     | Default | Description                                    |
+|-------------|----------|---------|------------------------------------------------|
+| `label`     | string   | `""`    | Text displayed next to the checkbox.           |
+| `checked`   | boolean  | `false` | Whether the checkbox is checked.               |
+| `style`     | string   | default | Named style (e.g. `"muted"`, `"bold"`).        |
+| `on_change` | function | nil     | Called when toggled. Receives the new checked state (boolean). |
+
 ### Input
 
 Single-line text input with placeholder text and optional prefix.
@@ -1318,7 +1342,7 @@ The widget system uses a **reconciliation** algorithm to preserve interactive st
 
 The plugin panel manages its own focus system. When the plugin panel is focused:
 
-- **Tab** / **Shift+Tab** cycles focus between focusable widgets (trees, lists, tables, inputs, buttons, dropdowns).
+- **Tab** / **Shift+Tab** cycles focus between focusable widgets (trees, lists, tables, inputs, buttons, checkboxes, dropdowns).
 - **Arrow keys** navigate within the focused widget (e.g., up/down in a tree).
 - **Enter** / **Space** activate the focused widget (select tree node, press button, submit input).
 - **Shift+Enter** opens the context menu on the selected tree/list node (if `node_menu` is defined).
