@@ -18,6 +18,23 @@ func eventToLua(L *lua.LState, ev tcell.Event) *lua.LTable {
 	return nil
 }
 
+// tcell.KeyNames has no entry for the two control characters foldCtrlEvent
+// canonicalises onto, so both would reach plugins as "unknown" and be
+// indistinguishable. Names match the ttt keybinding spelling (ctrl+space,
+// ctrl+/) so a plugin keymap round-trips.
+func keyName(k tcell.Key) string {
+	if name := tcell.KeyNames[k]; name != "" {
+		return name
+	}
+	switch k {
+	case tcell.KeyNUL:
+		return "Ctrl-Space"
+	case tcell.KeyUS:
+		return "Ctrl-/"
+	}
+	return "unknown"
+}
+
 func keyEventToLua(L *lua.LState, e *tcell.EventKey) *lua.LTable {
 	tbl := L.NewTable()
 	L.SetField(tbl, "type", lua.LString("key"))
@@ -26,11 +43,7 @@ func keyEventToLua(L *lua.LState, e *tcell.EventKey) *lua.LTable {
 		L.SetField(tbl, "key", lua.LString(string(term.KeyRune(e))))
 		L.SetField(tbl, "rune", lua.LString(string(term.KeyRune(e))))
 	} else {
-		name := tcell.KeyNames[e.Key()]
-		if name == "" {
-			name = "unknown"
-		}
-		L.SetField(tbl, "key", lua.LString(name))
+		L.SetField(tbl, "key", lua.LString(keyName(e.Key())))
 	}
 
 	var mods []string
