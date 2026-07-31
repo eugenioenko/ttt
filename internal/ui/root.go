@@ -141,9 +141,19 @@ func matchKeyChord(kev *tcell.EventKey, gk GlobalKeyBinding) bool {
 		kev.Modifiers() == gk.Mod
 }
 
+func (r *Root) rawKeysFocused() bool {
+	rk, ok := r.Focused.(RawKeyConsumer)
+	return ok && rk.WantsRawKeys()
+}
+
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
-	if isKey {
+	// ForceKeys punch through two things that would otherwise swallow them: a
+	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
+	// unsaved-changes dialog). With neither present nothing is swallowing keys,
+	// so they are left to handleGlobalKeys below like any other binding --
+	// which is what lets a key interceptor claim them while editing.
+	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
 		for _, gk := range r.ForceKeys {
 			if matchKey(kev, gk) {
 				gk.Handler()
@@ -165,9 +175,8 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	// Plugin key interceptors run before Escape handling and chords so modal
-	// plugins (e.g. Vim mode) can own the keyboard. ForceKeys and overlays stay
-	// above: a plugin must never be able to swallow the terminal-toggle escape
-	// hatch or steal keys from a modal dialog.
+	// plugins (e.g. Vim mode) can own the keyboard. Overlays stay above: a
+	// plugin must never steal keys from a modal dialog.
 	//
 	// A chord already in flight also outranks the interceptor: its continuation
 	// keys are plain runes (the `s` of `ctrl+k s`), which a modal plugin would
@@ -197,10 +206,8 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		return EventConsumed
 	}
 
-	if r.Focused != nil {
-		if rk, ok := r.Focused.(RawKeyConsumer); ok && rk.WantsRawKeys() {
-			return r.handleRawKeyConsumer(kev)
-		}
+	if r.rawKeysFocused() {
+		return r.handleRawKeyConsumer(kev)
 	}
 
 	if r.Focused != nil {
