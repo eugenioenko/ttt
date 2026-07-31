@@ -132,8 +132,7 @@ func TestKeyInterceptorDoesNotBreakChords(t *testing.T) {
 	}
 }
 
-// rawKeyWidget stands in for the integrated terminal: a focused widget that
-// swallows every key event it is given.
+// rawKeyWidget stands in for the integrated terminal.
 type rawKeyWidget struct {
 	widgets.BaseWidget
 	wants bool
@@ -147,16 +146,15 @@ func (w *rawKeyWidget) HandleEvent(_ tcell.Event) widgets.EventResult {
 	return widgets.EventConsumed
 }
 
-// registerForceKey mirrors what BindKeys does for a ForceKeyCommand: the
-// binding is registered globally *and* as a force key.
+// registerForceKey mirrors BindKeys: globally *and* as a force key.
 func registerForceKey(h *testHarness, key tcell.Key, fired *bool) {
 	handler := func() { *fired = true }
 	h.app.Root.AddGlobalKey(key, tcell.ModCtrl, 0, handler)
 	h.app.Root.AddForceKey(key, tcell.ModCtrl, 0, handler)
 }
 
-// A keybinding plugin (Vim/Emacs mode) must be able to claim keys like ctrl+t
-// while the editor has focus -- there is no raw key consumer to escape from.
+// With the editor focused there is no raw consumer to escape from, so a
+// keybinding plugin gets first refusal on ctrl+t.
 func TestForceKeyReachesInterceptorWhenEditorFocused(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
@@ -185,8 +183,7 @@ func TestForceKeyReachesInterceptorWhenEditorFocused(t *testing.T) {
 	}
 }
 
-// The invariant the escape hatch exists for: while the terminal is consuming
-// raw keys, a plugin can never swallow the toggle that gets you back out.
+// The invariant: a plugin can never swallow the toggle out of the terminal.
 func TestForceKeyBypassesInterceptorWhenRawConsumerFocused(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
@@ -213,8 +210,7 @@ func TestForceKeyBypassesInterceptorWhenRawConsumerFocused(t *testing.T) {
 	}
 }
 
-// Backwards compatibility: with no interceptor installed, a force-key binding
-// still fires from the editor -- it is reached through handleGlobalKeys.
+// Without an interceptor the binding still fires, via handleGlobalKeys.
 func TestForceKeyStillFiresWithoutInterceptor(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()

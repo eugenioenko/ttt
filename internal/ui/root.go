@@ -141,9 +141,6 @@ func matchKeyChord(kev *tcell.EventKey, gk GlobalKeyBinding) bool {
 		kev.Modifiers() == gk.Mod
 }
 
-// rawKeysFocused reports whether the focused widget is currently swallowing
-// every key event (the integrated terminal). A nil or non-consumer Focused
-// fails the type assertion and returns false.
 func (r *Root) rawKeysFocused() bool {
 	rk, ok := r.Focused.(RawKeyConsumer)
 	return ok && rk.WantsRawKeys()
@@ -151,13 +148,9 @@ func (r *Root) rawKeysFocused() bool {
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
-	// ForceKeys exist for one reason: a raw key consumer must never be able to
-	// trap the keyboard, so the terminal-toggle escape hatch is checked before
-	// the focused widget sees anything. When no raw consumer has focus there is
-	// nothing to escape from, and these same bindings are still reachable via
-	// handleGlobalKeys below -- so gating the check here leaves behaviour
-	// unchanged without a key interceptor, while letting a keybinding plugin
-	// (Vim/Emacs mode) claim keys like ctrl+t that it otherwise never sees.
+	// ForceKeys are the escape hatch out of a raw key consumer, so they only
+	// outrank everything while one has focus. Otherwise they are reached below
+	// through handleGlobalKeys like any other binding.
 	if isKey && r.rawKeysFocused() {
 		for _, gk := range r.ForceKeys {
 			if matchKey(kev, gk) {
@@ -181,9 +174,7 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 
 	// Plugin key interceptors run before Escape handling and chords so modal
 	// plugins (e.g. Vim mode) can own the keyboard. Overlays stay above: a
-	// plugin must never steal keys from a modal dialog. ForceKeys outrank the
-	// interceptor only while a raw key consumer has focus, which is the case
-	// the escape hatch exists for.
+	// plugin must never steal keys from a modal dialog.
 	//
 	// A chord already in flight also outranks the interceptor: its continuation
 	// keys are plain runes (the `s` of `ctrl+k s`), which a modal plugin would
