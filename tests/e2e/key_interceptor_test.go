@@ -6,6 +6,7 @@ import (
 	"github.com/gdamore/tcell/v3"
 
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func TestKeyInterceptorBlocksRune(t *testing.T) {
@@ -128,6 +129,124 @@ func TestKeyInterceptorDoesNotBreakChords(t *testing.T) {
 
 	if !fired {
 		t.Fatal("expected chord to fire despite an interceptor that consumes runes")
+	}
+}
+
+// rawKeyWidget stands in for the integrated terminal: a focused widget that
+// swallows every key event it is given.
+type rawKeyWidget struct {
+	widgets.BaseWidget
+	wants bool
+}
+
+func (w *rawKeyWidget) Height() int              { return 1 }
+func (w *rawKeyWidget) Width() int               { return 1 }
+func (w *rawKeyWidget) Render(_ widgets.Surface) {}
+func (w *rawKeyWidget) WantsRawKeys() bool       { return w.wants }
+func (w *rawKeyWidget) HandleEvent(_ tcell.Event) widgets.EventResult {
+	return widgets.EventConsumed
+}
+
+// registerForceKey mirrors what BindKeys does for a ForceKeyCommand: the
+// binding is registered globally *and* as a force key.
+func registerForceKey(h *testHarness, key tcell.Key, fired *bool) {
+	handler := func() { *fired = true }
+	h.app.Root.AddGlobalKey(key, tcell.ModCtrl, 0, handler)
+	h.app.Root.AddForceKey(key, tcell.ModCtrl, 0, handler)
+}
+
+// A keybinding plugin (Vim/Emacs mode) must be able to claim keys like ctrl+t
+// while the editor has focus -- there is no raw key consumer to escape from.
+func TestForceKeyReachesInterceptorWhenEditorFocused(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.exec("file.new")
+
+	forceFired := false
+	registerForceKey(h, tcell.KeyCtrlT, &forceFired)
+
+	intercepted := false
+	h.app.Root.KeyInterceptor = func(ev *tcell.EventKey) bool {
+		if ev.Key() == tcell.KeyCtrlT {
+			intercepted = true
+			return true
+		}
+		return false
+	}
+
+	h.pressCtrl(tcell.KeyCtrlT)
+
+	if !intercepted {
+		t.Fatal("expected interceptor to receive ctrl+t when the editor has focus")
+	}
+	if forceFired {
+		t.Fatal("expected the interceptor to preempt the force key")
+	}
+}
+
+// The invariant the escape hatch exists for: while the terminal is consuming
+// raw keys, a plugin can never swallow the toggle that gets you back out.
+func TestForceKeyBypassesInterceptorWhenRawConsumerFocused(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.exec("file.new")
+
+	forceFired := false
+	registerForceKey(h, tcell.KeyCtrlE, &forceFired)
+
+	intercepted := false
+	h.app.Root.KeyInterceptor = func(_ *tcell.EventKey) bool {
+		intercepted = true
+		return true
+	}
+
+	h.app.Root.Focused = &rawKeyWidget{wants: true}
+	h.pressCtrl(tcell.KeyCtrlE)
+
+	if !forceFired {
+		t.Fatal("expected the force key to fire while a raw key consumer has focus")
+	}
+	if intercepted {
+		t.Fatal("expected the force key to preempt the interceptor")
+	}
+}
+
+// Backwards compatibility: with no interceptor installed, a force-key binding
+// still fires from the editor -- it is reached through handleGlobalKeys.
+func TestForceKeyStillFiresWithoutInterceptor(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.exec("file.new")
+
+	forceFired := false
+	registerForceKey(h, tcell.KeyCtrlE, &forceFired)
+
+	h.pressCtrl(tcell.KeyCtrlE)
+
+	if !forceFired {
+		t.Fatal("expected ctrl+e to fire via the global binding with no interceptor")
+	}
+}
+
+// An interceptor that declines must not stop the binding from firing.
+func TestForceKeyFiresWhenInterceptorDeclines(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.exec("file.new")
+
+	forceFired := false
+	registerForceKey(h, tcell.KeyCtrlE, &forceFired)
+
+	h.app.Root.KeyInterceptor = func(_ *tcell.EventKey) bool { return false }
+
+	h.pressCtrl(tcell.KeyCtrlE)
+
+	if !forceFired {
+		t.Fatal("expected ctrl+e to fire when the interceptor declines it")
 	}
 }
 
