@@ -148,10 +148,12 @@ func (r *Root) rawKeysFocused() bool {
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
-	// ForceKeys are the escape hatch out of a raw key consumer, so they only
-	// outrank everything while one has focus. Otherwise they are reached below
-	// through handleGlobalKeys like any other binding.
-	if isKey && r.rawKeysFocused() {
+	// ForceKeys punch through two things that would otherwise swallow them: a
+	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
+	// unsaved-changes dialog). With neither present nothing is swallowing keys,
+	// so they are left to handleGlobalKeys below like any other binding --
+	// which is what lets a key interceptor claim them while editing.
+	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
 		for _, gk := range r.ForceKeys {
 			if matchKey(kev, gk) {
 				gk.Handler()

@@ -210,6 +210,29 @@ func TestForceKeyBypassesInterceptorWhenRawConsumerFocused(t *testing.T) {
 	}
 }
 
+// Force keys must also punch through an overlay: a second ctrl+q force-quits
+// past the unsaved-changes dialog (tests/functional/quit-confirm.test.js).
+func TestForceKeyFiresThroughOverlay(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.exec("file.new")
+
+	forceFired := false
+	registerForceKey(h, tcell.KeyCtrlE, &forceFired)
+
+	h.exec("command.palette")
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("expected an overlay to be open")
+	}
+
+	h.pressCtrl(tcell.KeyCtrlE)
+
+	if !forceFired {
+		t.Fatal("expected the force key to fire while an overlay is open")
+	}
+}
+
 // Without an interceptor the binding still fires, via handleGlobalKeys.
 func TestForceKeyStillFiresWithoutInterceptor(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
