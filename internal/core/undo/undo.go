@@ -22,6 +22,10 @@ type UndoStack struct {
 	savePoint      int
 	inTransaction  bool
 	transactionIdx int
+	// DeleteCursorStart controls where the cursor lands after undoing a
+	// DeleteSelectionCommand. When true, cursor goes to the start of the
+	// restored text (Emacs convention); when false, to the end (default).
+	DeleteCursorStart bool
 }
 
 func (s *UndoStack) BeginTransaction() {
@@ -136,7 +140,7 @@ func (s *UndoStack) Undo(b *buffer.Buffer) *CursorPos {
 	s.undo = s.undo[:len(s.undo)-1]
 	cmd.Undo(b)
 	s.redo = append(s.redo, cmd)
-	return cursorAfterUndo(cmd)
+	return s.cursorAfterUndo(cmd)
 }
 
 // Redo re-applies the last undone command and returns where the cursor should be placed.
@@ -152,7 +156,7 @@ func (s *UndoStack) Redo(b *buffer.Buffer) *CursorPos {
 	return cursorAfterRedo(cmd)
 }
 
-func cursorAfterUndo(cmd EditCommand) *CursorPos {
+func (s *UndoStack) cursorAfterUndo(cmd EditCommand) *CursorPos {
 	switch c := cmd.(type) {
 	case *InsertRuneCommand:
 		return &CursorPos{c.Line, c.Col}
@@ -167,12 +171,15 @@ func cursorAfterUndo(cmd EditCommand) *CursorPos {
 	case *JoinNextLineCommand:
 		return &CursorPos{c.Line, c.JoinCol}
 	case *DeleteSelectionCommand:
+		if s.DeleteCursorStart {
+			return &CursorPos{c.StartLine, c.StartCol}
+		}
 		return &CursorPos{c.EndLine, c.EndCol}
 	case *PasteCommand:
 		return &CursorPos{c.Line, c.Col}
 	case *BatchCommand:
 		if len(c.Commands) > 0 {
-			return cursorAfterUndo(c.Commands[0])
+			return s.cursorAfterUndo(c.Commands[0])
 		}
 	}
 	return nil

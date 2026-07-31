@@ -76,6 +76,24 @@ func TestDeleteSelectionCommand(t *testing.T) {
 	}
 }
 
+func TestDeleteSelectionUndoCursorPosition(t *testing.T) {
+	cmd := &DeleteSelectionCommand{StartLine: 0, StartCol: 3, EndLine: 1, EndCol: 2}
+
+	// Default: cursor at end of restored text
+	s := &UndoStack{}
+	pos := s.cursorAfterUndo(cmd)
+	if pos.Line != 1 || pos.Col != 2 {
+		t.Errorf("default: want {1,2}, got {%d,%d}", pos.Line, pos.Col)
+	}
+
+	// DeleteCursorStart: cursor at start of restored text
+	s.DeleteCursorStart = true
+	pos = s.cursorAfterUndo(cmd)
+	if pos.Line != 0 || pos.Col != 3 {
+		t.Errorf("DeleteCursorStart: want {0,3}, got {%d,%d}", pos.Line, pos.Col)
+	}
+}
+
 func TestBatchCommand(t *testing.T) {
 	b := &buffer.Buffer{Lines: []string{"abc"}}
 	batch := &BatchCommand{
@@ -267,7 +285,7 @@ func TestDeleteRuneCommandLastChar(t *testing.T) {
 }
 
 func TestDeleteRuneCommandCursorPositions(t *testing.T) {
-	undoPos := cursorAfterUndo(&DeleteRuneCommand{Line: 2, Col: 5})
+	undoPos := (&UndoStack{}).cursorAfterUndo(&DeleteRuneCommand{Line: 2, Col: 5})
 	if undoPos == nil || undoPos.Line != 2 || undoPos.Col != 6 {
 		t.Errorf("expected undo cursor {2, 6}, got %+v", undoPos)
 	}
@@ -344,7 +362,7 @@ func TestSplitLineCommandMiddleOfBuffer(t *testing.T) {
 }
 
 func TestSplitLineCommandCursorPositions(t *testing.T) {
-	undoPos := cursorAfterUndo(&SplitLineCommand{Line: 3, Col: 7})
+	undoPos := (&UndoStack{}).cursorAfterUndo(&SplitLineCommand{Line: 3, Col: 7})
 	if undoPos == nil || undoPos.Line != 3 || undoPos.Col != 7 {
 		t.Errorf("expected undo cursor {3, 7}, got %+v", undoPos)
 	}
@@ -407,7 +425,7 @@ func TestJoinLineCommandEmptyFirstLine(t *testing.T) {
 func TestJoinLineCommandCursorPositions(t *testing.T) {
 	cmd := &JoinLineCommand{Line: 2, PrevLen: 5}
 	cmd.PrevLen = 5 // simulate what Apply would set
-	undoPos := cursorAfterUndo(cmd)
+	undoPos := (&UndoStack{}).cursorAfterUndo(cmd)
 	if undoPos == nil || undoPos.Line != 1 || undoPos.Col != 5 {
 		t.Errorf("expected undo cursor {1, 5}, got %+v", undoPos)
 	}
@@ -495,7 +513,7 @@ func TestJoinNextLineCommandWhitespaceOnlyNextLine(t *testing.T) {
 
 func TestJoinNextLineCommandCursorPositions(t *testing.T) {
 	cmd := &JoinNextLineCommand{Line: 3, JoinCol: 10}
-	undoPos := cursorAfterUndo(cmd)
+	undoPos := (&UndoStack{}).cursorAfterUndo(cmd)
 	if undoPos == nil || undoPos.Line != 3 || undoPos.Col != 10 {
 		t.Errorf("expected undo cursor {3, 10}, got %+v", undoPos)
 	}
@@ -648,7 +666,7 @@ func TestInsertStringCommandTabSpaces(t *testing.T) {
 }
 
 func TestInsertStringCommandCursorPositions(t *testing.T) {
-	undoPos := cursorAfterUndo(&InsertStringCommand{Line: 1, Col: 3, Text: "abc"})
+	undoPos := (&UndoStack{}).cursorAfterUndo(&InsertStringCommand{Line: 1, Col: 3, Text: "abc"})
 	if undoPos == nil || undoPos.Line != 1 || undoPos.Col != 3 {
 		t.Errorf("expected undo cursor {1, 3}, got %+v", undoPos)
 	}
