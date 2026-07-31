@@ -1,8 +1,24 @@
 package plugin
 
 import (
+	"github.com/gdamore/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
 )
+
+// CommandLineOptions is what a plugin asked the command line to be. Grouped
+// rather than passed positionally because the set grows: on_key was added for
+// incremental search, and completion candidates are the obvious next one.
+type CommandLineOptions struct {
+	Prefix   string
+	Text     string
+	OnChange func(text string)
+	OnSubmit func(text string)
+	OnCancel func()
+
+	// OnKey is offered every key before the input handles it, so a plugin can
+	// drive the prompt live. Returning true consumes the key.
+	OnKey func(ev *tcell.EventKey) bool
+}
 
 // newCommandLineModule builds the `ttt.command_line` table.
 //
@@ -40,8 +56,38 @@ func newCommandLineModule(L *lua.LState, p *Plugin) *lua.LTable {
 			}
 		}
 
+		var onKey func(*tcell.EventKey) bool
+		if fn, ok := L.GetField(opts, "on_key").(*lua.LFunction); ok {
+			onKey = func(ev *tcell.EventKey) bool {
+				if p.State == nil {
+					return false
+				}
+				// Same event shape as the key.press listener, so a plugin's
+				// existing key normalisation works unchanged here.
+				err := p.State.CallByParam(lua.P{
+					Fn:      fn,
+					NRet:    1,
+					Protect: true,
+				}, keyEventToLua(p.State, ev))
+				if err != nil {
+					p.logError("command_line.on_key", err)
+					return false
+				}
+				ret := p.State.Get(-1)
+				p.State.Pop(1)
+				return lua.LVAsBool(ret)
+			}
+		}
+
 		if p.ShowCommandLine != nil {
-			p.ShowCommandLine(prefix, text, onChange, onSubmit, onCancel)
+			p.ShowCommandLine(CommandLineOptions{
+				Prefix:   prefix,
+				Text:     text,
+				OnChange: onChange,
+				OnSubmit: onSubmit,
+				OnCancel: onCancel,
+				OnKey:    onKey,
+			})
 		}
 		return 0
 	}))

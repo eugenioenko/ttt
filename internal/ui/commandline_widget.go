@@ -29,6 +29,10 @@ type CommandLineWidget struct {
 	OnSubmit func(text string)
 	OnCancel func()
 
+	// OnKey, when set, is offered every key before the widget handles it.
+	// Returning true consumes the key.
+	OnKey func(ev *tcell.EventKey) bool
+
 	input *widgets.InputWidget
 
 	// Layout computed by Render and reused by event handlers, so clicks and the
@@ -125,6 +129,13 @@ func (c *CommandLineWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (c *CommandLineWidget) handleKey(kev *tcell.EventKey) EventResult {
+	// OnKey sees every key first, including Enter and Escape, so a caller can
+	// drive the prompt itself -- an incremental search needs the keystrokes as
+	// they arrive, not just the final text. Declining falls through to the
+	// normal handling below.
+	if c.OnKey != nil && c.OnKey(kev) {
+		return EventConsumed
+	}
 	switch kev.Key() {
 	case tcell.KeyEnter:
 		// The overlay sits above Root's Escape handling, so submit/cancel are
