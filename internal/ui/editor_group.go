@@ -84,6 +84,7 @@ type EditorGroupWidget struct {
 	InsertFinalNewline      bool
 	ShowTrailingNewline     bool
 	TrimTrailingWhitespace  bool
+	UndoDeleteCursorStart   bool
 	Borders                 *term.BorderSet
 	OnFileOpen              func(path, lang, text string)
 	OnFileChange            func(path, lang, text string)
@@ -129,7 +130,7 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	tabBar.OnNextTab = func() { g.NextTab() }
 	tabBar.OnPrevTab = func() { g.PrevTab() }
 	tabBar.OnDoubleClick = func() { g.NewFile() }
-	undoStack := &undo.UndoStack{}
+	undoStack := g.newUndoStack()
 	sel := &selection.Selection{}
 	editor.Undo = undoStack
 	editor.Selection = sel
@@ -144,6 +145,18 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	}}
 	g.syncTabs()
 	return g
+}
+
+func (g *EditorGroupWidget) newUndoStack() *undo.UndoStack {
+	return &undo.UndoStack{DeleteCursorStart: g.UndoDeleteCursorStart}
+}
+
+func (g *EditorGroupWidget) ApplyUndoDeleteCursorStart(v bool) {
+	for i := range g.tabs {
+		if g.tabs[i].Undo != nil {
+			g.tabs[i].Undo.DeleteCursorStart = v
+		}
+	}
 }
 
 func (g *EditorGroupWidget) Focusable() bool { return true }
@@ -244,7 +257,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 		Buf:      newBuf,
 		Cur:      &cursor.Cursor{},
 		Vp:       &view.Viewport{},
-		Undo:     &undo.UndoStack{},
+		Undo:     g.newUndoStack(),
 		Sel:      &selection.Selection{},
 		Folds:    folds,
 		TabSize:  tabSize,
@@ -272,7 +285,7 @@ func (g *EditorGroupWidget) NewFile() {
 		Buf:      &buffer.Buffer{Lines: []string{""}},
 		Cur:      &cursor.Cursor{},
 		Vp:       &view.Viewport{},
-		Undo:     &undo.UndoStack{},
+		Undo:     g.newUndoStack(),
 		Sel:      &selection.Selection{},
 		Virtual:  true,
 	})
@@ -354,7 +367,7 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 					Buf:      &buffer.Buffer{Lines: []string{""}},
 					Cur:      &cursor.Cursor{},
 					Vp:       &view.Viewport{},
-					Undo:     &undo.UndoStack{},
+					Undo:     g.newUndoStack(),
 					Sel:      &selection.Selection{},
 					Virtual:  true,
 				}}
@@ -373,7 +386,7 @@ func (g *EditorGroupWidget) ReloadFile(path string) {
 		if g.tabs[i].FilePath == path && g.tabs[i].Buf != nil {
 			g.tabs[i].Buf.LoadFile(path)
 			g.tabs[i].Buf.Dirty = false
-			g.tabs[i].Undo = &undo.UndoStack{}
+			g.tabs[i].Undo = g.newUndoStack()
 			if g.tabs[i].Folds != nil {
 				g.tabs[i].Folds.SetRanges(fold.ComputeIndentRanges(g.tabs[i].Buf.Lines))
 			}
@@ -577,7 +590,7 @@ func (g *EditorGroupWidget) CloseTab() {
 			Buf:      &buffer.Buffer{Lines: []string{""}},
 			Cur:      &cursor.Cursor{},
 			Vp:       &view.Viewport{},
-			Undo:     &undo.UndoStack{},
+			Undo:     g.newUndoStack(),
 			Sel:      &selection.Selection{},
 			Virtual:  true,
 		}}
@@ -646,7 +659,7 @@ func (g *EditorGroupWidget) CloseAllTabs() {
 		Buf:      &buffer.Buffer{Lines: []string{""}},
 		Cur:      &cursor.Cursor{},
 		Vp:       &view.Viewport{},
-		Undo:     &undo.UndoStack{},
+		Undo:     g.newUndoStack(),
 		Sel:      &selection.Selection{},
 		Virtual:  true,
 	}}

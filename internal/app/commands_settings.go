@@ -34,6 +34,8 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
+	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
+	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)
 
 	if a.EditorGroup.Editor != nil {
 		a.EditorGroup.Editor.TabSize = s.Editor.TabSize

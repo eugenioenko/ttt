@@ -91,6 +91,7 @@ type EditorSettings struct {
 	BorderStyle             string `json:"borderStyle,omitempty"`
 	BracketPairColorization bool   `json:"bracketPairColorization"`
 	ShowTrailingNewline     *bool  `json:"showTrailingNewline,omitempty"`
+	UndoDeleteCursorStart  bool   `json:"undoDeleteCursorStart,omitempty"`
 }
 
 func (e EditorSettings) IsShowTrailingNewlineEnabled() bool {
