@@ -88,7 +88,7 @@ type Plugin struct {
 	PublishDiagnostics func(path string, items []DiagnosticItem)
 	ClearDiagnostics   func(path string)
 
-	ShowCommandLine    func(prefix, text string, onChange, onSubmit func(string), onCancel func())
+	ShowCommandLine    func(CommandLineOptions)
 	HideCommandLine    func()
 	SetCommandLineText func(text string)
 	CommandLineActive  func() bool

@@ -3,6 +3,8 @@ package plugin
 import (
 	"strings"
 	"testing"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 type commandLineRecorder struct {
@@ -14,19 +16,21 @@ type commandLineRecorder struct {
 	onChange func(string)
 	onSubmit func(string)
 	onCancel func()
+	onKey    func(*tcell.EventKey) bool
 }
 
 func setupCommandLinePlugin(t *testing.T, perms PermissionSet) (*Plugin, *commandLineRecorder, func()) {
 	t.Helper()
 	p, cleanup := newTestPluginBase(perms)
 	rec := &commandLineRecorder{}
-	p.ShowCommandLine = func(prefix, text string, onChange, onSubmit func(string), onCancel func()) {
+	p.ShowCommandLine = func(opts CommandLineOptions) {
 		rec.shown = true
-		rec.prefix = prefix
-		rec.text = text
-		rec.onChange = onChange
-		rec.onSubmit = onSubmit
-		rec.onCancel = onCancel
+		rec.prefix = opts.Prefix
+		rec.text = opts.Text
+		rec.onChange = opts.OnChange
+		rec.onSubmit = opts.OnSubmit
+		rec.onCancel = opts.OnCancel
+		rec.onKey = opts.OnKey
 		rec.active = true
 	}
 	p.HideCommandLine = func() {
@@ -202,5 +206,72 @@ func TestCommandLinePermissionDenied(t *testing.T) {
 			t.Errorf("%s: host callback must not run without permission", snippet)
 		}
 		cleanup()
+	}
+}
+
+// on_key is what makes an incremental search possible: the plugin has to see
+// C-s, C-g and DEL as they arrive, not just the final text on submit.
+func TestCommandLineOnKeyConsumes(t *testing.T) {
+	p, rec, cleanup := setupCommandLinePlugin(t, PermissionSet{Keybindings: true})
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		seen = {}
+		ttt.command_line.show({ on_key = function(ev)
+			seen[#seen + 1] = ev.key .. "/" .. tostring(ev.mod)
+			return ev.key == "Ctrl-S"
+		end })
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if rec.onKey == nil {
+		t.Fatal("expected on_key to be wired through")
+	}
+
+	if got := rec.onKey(tcell.NewEventKey(tcell.KeyCtrlS, "", tcell.ModCtrl)); !got {
+		t.Error("expected ctrl+s to be consumed")
+	}
+	if got := rec.onKey(tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModNone)); got {
+		t.Error("expected a declined key to fall through")
+	}
+
+	// The event shape must match key.press so a plugin's key normalisation works
+	// unchanged in both places.
+	if err := p.State.DoString(`
+		assert(seen[1] == "Ctrl-S/ctrl", "got " .. tostring(seen[1]))
+		assert(seen[2] == "a/nil", "got " .. tostring(seen[2]))
+	`); err != nil {
+		t.Fatalf("event shape: %v", err)
+	}
+}
+
+func TestCommandLineOnKeyAbsentIsNil(t *testing.T) {
+	p, rec, cleanup := setupCommandLinePlugin(t, PermissionSet{Keybindings: true})
+	defer cleanup()
+
+	if err := p.State.DoString(`require("ttt").command_line.show({})`); err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if rec.onKey != nil {
+		t.Fatal("expected on_key to stay nil when not supplied")
+	}
+}
+
+func TestCommandLineOnKeyErrorDeclines(t *testing.T) {
+	p, rec, cleanup := setupCommandLinePlugin(t, PermissionSet{Keybindings: true})
+	defer cleanup()
+
+	err := p.State.DoString(`
+		require("ttt").command_line.show({ on_key = function() error("boom") end })
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	// A throwing hook must not consume the key, or a broken plugin would wedge
+	// the prompt with no way to type or cancel.
+	if rec.onKey(tcell.NewEventKey(tcell.KeyRune, "x", tcell.ModNone)) {
+		t.Error("expected a failing on_key to decline the key")
 	}
 }

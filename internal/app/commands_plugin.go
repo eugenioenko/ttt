@@ -389,10 +389,14 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.ExecCommand = func(id string) bool {
 		return a.Reg.Execute(id)
 	}
-	p.ShowCommandLine = func(prefix, text string, onChange, onSubmit func(string), onCancel func()) {
-		w := a.ShowCommandLine(prefix, onChange, onSubmit, onCancel)
-		if w != nil && text != "" {
-			w.SetText(text)
+	p.ShowCommandLine = func(opts plugin.CommandLineOptions) {
+		w := a.ShowCommandLine(opts.Prefix, opts.OnChange, opts.OnSubmit, opts.OnCancel)
+		if w == nil {
+			return
+		}
+		w.OnKey = opts.OnKey
+		if opts.Text != "" {
+			w.SetText(opts.Text)
 		}
 	}
 	p.HideCommandLine = func() {

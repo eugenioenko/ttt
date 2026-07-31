@@ -190,3 +190,62 @@ func TestCommandLineDefaultPrefix(t *testing.T) {
 		t.Fatalf("expected default prefix %q, got %q", ":", c.Prefix)
 	}
 }
+
+// OnKey must see Enter and Escape too. An incremental search binds RET to
+// "exit at the match" and C-g to "abort to origin", so a hook that only got
+// ordinary keys could not implement either.
+func TestCommandLineOnKeyPreemptsSubmitAndCancel(t *testing.T) {
+	w := NewCommandLineWidget("/")
+
+	submitted, cancelled := 0, 0
+	w.OnSubmit = func(string) { submitted++ }
+	w.OnCancel = func() { cancelled++ }
+
+	var seen []tcell.Key
+	w.OnKey = func(ev *tcell.EventKey) bool {
+		seen = append(seen, ev.Key())
+		return true
+	}
+
+	w.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	w.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone))
+
+	if len(seen) != 2 {
+		t.Fatalf("expected OnKey to see both keys, got %d", len(seen))
+	}
+	if submitted != 0 || cancelled != 0 {
+		t.Fatalf("expected OnKey to preempt submit/cancel, got %d/%d", submitted, cancelled)
+	}
+}
+
+func TestCommandLineOnKeyDeclineFallsThrough(t *testing.T) {
+	w := NewCommandLineWidget("/")
+
+	submitted := 0
+	w.OnSubmit = func(string) { submitted++ }
+	w.OnKey = func(*tcell.EventKey) bool { return false }
+
+	w.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModNone))
+	w.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+
+	if submitted != 1 {
+		t.Fatalf("expected declined keys to fall through to normal handling, got %d submits", submitted)
+	}
+	if got := w.Text(); got != "a" {
+		t.Fatalf("expected the declined rune to reach the input, got %q", got)
+	}
+}
+
+func TestCommandLineWithoutOnKeyIsUnchanged(t *testing.T) {
+	w := NewCommandLineWidget("/")
+
+	submitted := 0
+	w.OnSubmit = func(string) { submitted++ }
+
+	w.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "x", tcell.ModNone))
+	w.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+
+	if submitted != 1 || w.Text() != "x" {
+		t.Fatalf("expected unchanged behaviour with no hook, got %d submits and %q", submitted, w.Text())
+	}
+}
