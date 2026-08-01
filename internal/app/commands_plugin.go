@@ -386,6 +386,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.RemoveStatusItem = func(id string) {
 		a.Status.RemoveSegment(id)
 	}
+	p.SetEcho = func(text string) {
+		a.Status.EchoText = text
+	}
 	p.ExecCommand = func(id string) bool {
 		return a.Reg.Execute(id)
 	}

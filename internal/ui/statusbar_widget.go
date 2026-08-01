@@ -35,6 +35,13 @@ func (s *StatusBarWidget) Render(surface Surface) {
 		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: term.StyleStatusBar})
 	}
 
+	// EchoText takes over the entire status bar — used by plugins for
+	// prompts (isearch, query-replace) that need the full row.
+	if st.EchoText != "" {
+		s.drawText(surface, 1, st.EchoText, term.StyleStatusBar)
+		return
+	}
+
 	if st.IsNotificationActive() {
 		s.renderNotification(surface, w)
 		return
