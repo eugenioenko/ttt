@@ -78,5 +78,6 @@
   { "key": "alt+s", "command": "menu.selection" },
   { "key": "alt+v", "command": "menu.view" },
   { "key": "alt+o", "command": "menu.options" },
-  { "key": "alt+h", "command": "menu.help" }
+  { "key": "alt+h", "command": "menu.help" },
+  { "key": "alt+shift+m", "command": "menubar.toggle" }
 ]

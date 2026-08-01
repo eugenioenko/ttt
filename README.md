@@ -631,6 +631,7 @@ All keybindings are customizable via [`keybindings.json`](config/keybindings.jso
 | | **View** |
 | Ctrl+B | Toggle sidebar |
 | Ctrl+K B | Toggle bottom panel |
+| Alt+Shift+M | Show/hide the menu bar |
 | Ctrl+K E | Show file explorer |
 | Ctrl+K F | Search across files |
 | Ctrl+K R | Search and replace in files |
@@ -664,6 +665,7 @@ All keybindings are customizable via [`keybindings.json`](config/keybindings.jso
 | | **Menu Bar** |
 | F10 / Alt+F | File menu |
 | Alt+E / S / V / O / H | Edit / Selection / View / Options / Help |
+| Alt+Shift+M | Show/hide the menu bar |
 
 ## Testing
 

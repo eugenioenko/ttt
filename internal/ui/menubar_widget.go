@@ -12,9 +12,13 @@ type MenuItem struct {
 
 type MenuBarWidget struct {
 	BaseWidget
-	Items      []MenuItem
-	Selected   int
-	OnSelect   func(index int)
+	Items    []MenuItem
+	Selected int
+	OnSelect func(index int)
+	// Visible reflects whether the bar is part of the layout. The root stack
+	// drops the widget entirely when hidden, so this is only the state flag —
+	// see App.applyMenuBarVisibility.
+	Visible    bool
 	itemSpans  []MenuItemSpan
 	wasPressed bool
 }
@@ -23,6 +27,7 @@ func NewMenuBarWidget(items []MenuItem) *MenuBarWidget {
 	return &MenuBarWidget{
 		Items:    items,
 		Selected: -1,
+		Visible:  true,
 	}
 }
 
@@ -30,7 +35,12 @@ type MenuItemSpan struct {
 	Start, End int
 }
 
-func (m *MenuBarWidget) ItemSpans() []MenuItemSpan { return m.itemSpans }
+func (m *MenuBarWidget) ItemSpans() []MenuItemSpan {
+	if len(m.itemSpans) != len(m.Items) {
+		m.itemSpans = m.computeSpans()
+	}
+	return m.itemSpans
+}
 
 func (m *MenuBarWidget) Height() int     { return 1 }
 func (m *MenuBarWidget) Focusable() bool { return true }
@@ -42,15 +52,14 @@ func (m *MenuBarWidget) Render(surface Surface) {
 		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: term.StyleMenuBar})
 	}
 
-	m.itemSpans = make([]MenuItemSpan, len(m.Items))
-	x := 1
+	m.itemSpans = m.computeSpans()
 	for i, item := range m.Items {
 		style := term.StyleMenuBar
 		if i == m.Selected {
 			style = term.StyleMenuBarActive
 		}
 
-		startX := x
+		x := m.itemSpans[i].Start
 		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 		x++
 		for _, ch := range item.Name {
@@ -60,17 +69,31 @@ func (m *MenuBarWidget) Render(surface Surface) {
 			}
 		}
 		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
-		x++
-		m.itemSpans[i] = MenuItemSpan{startX, x}
-		x++
 	}
 }
 
-func (m *MenuBarWidget) ItemAnchorX(index int) int {
-	if index >= 0 && index < len(m.itemSpans) {
-		return m.itemSpans[index].Start
+// computeSpans lays out the item positions independently of drawing, so anchors
+// are available even when the bar is hidden and has never been rendered.
+func (m *MenuBarWidget) computeSpans() []MenuItemSpan {
+	spans := make([]MenuItemSpan, len(m.Items))
+	x := 1
+	for i, item := range m.Items {
+		start := x
+		x += len([]rune(item.Name)) + 2
+		spans[i] = MenuItemSpan{start, x}
+		x++
 	}
-	return 0
+	return spans
+}
+
+func (m *MenuBarWidget) ItemAnchorX(index int) int {
+	if index < 0 || index >= len(m.Items) {
+		return 0
+	}
+	if len(m.itemSpans) != len(m.Items) {
+		m.itemSpans = m.computeSpans()
+	}
+	return m.itemSpans[index].Start
 }
 
 func (m *MenuBarWidget) HandleEvent(ev tcell.Event) EventResult {

@@ -91,6 +91,7 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 |----------|--------|
 | Ctrl+B | Toggle sidebar |
 | Ctrl+K B | Toggle bottom panel |
+| Alt+Shift+M | Show/hide the menu bar |
 | Ctrl+K E | Show file explorer |
 | Ctrl+K F | Search across files |
 | Ctrl+K R | Search and replace across files |
@@ -155,6 +156,9 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 | Alt+V | View menu |
 | Alt+O | Options menu |
 | Alt+H | Help menu |
+| Alt+Shift+M | Show/hide the menu bar |
+
+The menu shortcuts above keep working while the menu bar is hidden — the dropdown opens on its own from the top edge.
 
 ## Customizing Keybindings
 

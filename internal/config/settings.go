@@ -91,11 +91,16 @@ type EditorSettings struct {
 	BorderStyle             string `json:"borderStyle,omitempty"`
 	BracketPairColorization bool   `json:"bracketPairColorization"`
 	ShowTrailingNewline     *bool  `json:"showTrailingNewline,omitempty"`
-	UndoDeleteCursorStart  bool   `json:"undoDeleteCursorStart,omitempty"`
+	MenuBar                 *bool  `json:"menuBar,omitempty"`
+	UndoDeleteCursorStart   bool   `json:"undoDeleteCursorStart,omitempty"`
 }
 
 func (e EditorSettings) IsShowTrailingNewlineEnabled() bool {
 	return e.ShowTrailingNewline == nil || *e.ShowTrailingNewline
+}
+
+func (e EditorSettings) IsMenuBarVisible() bool {
+	return e.MenuBar == nil || *e.MenuBar
 }
 
 func (e EditorSettings) IsSyntaxHighlightEnabled() bool {

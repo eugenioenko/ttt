@@ -279,6 +279,12 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: menuBarToggleCommand, Title: "View: Toggle Menu Bar",
+		Keywords: []string{"view", "menu", "toolbar", "show", "hide"},
+		Handler:  app.ToggleMenuBar,
+	})
+
+	reg.Register(command.Command{
 		ID: "sidebar.explorer", Title: "Show Explorer",
 		Keywords: []string{"view", "file", "tree", "browser"},
 		Handler: func() {

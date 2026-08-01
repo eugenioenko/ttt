@@ -45,6 +45,7 @@ All editor settings are nested under the `editor` key.
 | `editor.focusOnOpen` | bool | `false` | Focus the editor when opening a file |
 | `editor.syntaxHighlight` | bool | `true` | Enable syntax highlighting |
 | `editor.gitGutter` | bool | `true` | Show git change indicators in the gutter |
+| `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
@@ -148,6 +149,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "focusOnOpen": false,
     "syntaxHighlight": true,
     "gitGutter": true,
+    "menuBar": true,
     "gutterStyle": "compact",
     "borderStyle": "default",
     "bracketPairColorization": false
