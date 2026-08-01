@@ -83,6 +83,7 @@ type Plugin struct {
 	Notify             func(message, level string)
 	SetStatusItem      func(side, id, text string, priority int, onClick func())
 	RemoveStatusItem   func(id string)
+	SetEcho            func(text string) // status bar shows only this text when non-empty
 	ExecCommand        func(id string) bool
 	ListCommands       func() []CommandInfo
 	PublishDiagnostics func(path string, items []DiagnosticItem)
@@ -254,6 +255,7 @@ func (p *Plugin) Destroy() {
 	p.Notify = nil
 	p.SetStatusItem = nil
 	p.RemoveStatusItem = nil
+	p.SetEcho = nil
 	p.ExecCommand = nil
 	p.ListCommands = nil
 	p.PublishDiagnostics = nil

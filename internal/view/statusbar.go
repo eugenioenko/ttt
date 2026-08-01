@@ -47,6 +47,10 @@ type StatusBar struct {
 	ActionLabel     string
 	SecondaryAction func()
 	SecondaryLabel  string
+	// EchoText, when non-empty, is rendered as the sole content of the status
+	// bar. Used by plugins to display prompts (isearch, query-replace) without
+	// competing with core mode-line segments for space.
+	EchoText string
 }
 
 func NewStatusBar() *StatusBar {

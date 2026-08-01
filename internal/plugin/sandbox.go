@@ -294,6 +294,21 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			return 0
 		}))
 
+		L.SetField(mod, "set_echo", L.NewFunction(func(L *lua.LState) int {
+			text := L.CheckString(1)
+			if p.SetEcho != nil {
+				p.SetEcho(text)
+			}
+			return 0
+		}))
+
+		L.SetField(mod, "clear_echo", L.NewFunction(func(L *lua.LState) int {
+			if p.SetEcho != nil {
+				p.SetEcho("")
+			}
+			return 0
+		}))
+
 		L.SetField(mod, "exec_command", L.NewFunction(func(L *lua.LState) int {
 			if err := p.Granted.Check("commands"); err != nil {
 				L.ArgError(1, "commands permission not granted")
