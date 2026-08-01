@@ -207,6 +207,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 
 	app := &App{
 		Root:                root,
+		RootBox:             rootBox,
 		EditorGroup:         editorGroup,
 		Sidebar:             sidebar,
 		SplitPanel:          splitPanel,
@@ -231,6 +232,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	app.applyMenuBarVisibility(cfg.Settings.Editor.IsMenuBarVisible())
 	// Rebuild the Diagnostics panel whenever any source (LSP or a plugin)
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems

@@ -44,6 +44,11 @@ export function click(x, y) {
   commands.push(`click ${x} ${y}`);
 }
 
+// Simulate a right-click (opens context menus) at screen coordinates.
+export function rclick(x, y) {
+  commands.push(`rclick ${x} ${y}`);
+}
+
 export function type(text) {
   let start = 0;
   while (start < text.length && text[start] === " ") {

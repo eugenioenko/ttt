@@ -50,6 +50,8 @@ func (a *App) ApplySettings(s config.Settings) {
 		}
 	}
 
+	a.applyMenuBarVisibility(s.Editor.IsMenuBarVisible())
+
 	// Apply cursor style
 	if a.Screen != nil {
 		a.Screen.SetCursorStyle(term.ParseCursorStyle(s.Editor.CursorStyle))

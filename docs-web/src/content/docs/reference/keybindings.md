@@ -96,6 +96,7 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 |----------|---------|-------------|
 | Ctrl+B | `sidebar.toggle` | Toggle sidebar |
 | Ctrl+K B | `panel.toggle` | Toggle bottom panel |
+| Alt+Shift+M | `menubar.toggle` | Show/hide the menu bar |
 | Ctrl+K E | `sidebar.explorer` | Show file explorer |
 | Ctrl+K F | `sidebar.search` | Search across files |
 | Ctrl+K R | `sidebar.searchReplace` | Search and replace in files |
@@ -152,3 +153,6 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Alt+V | `menu.view` | View menu |
 | Alt+O | `menu.options` | Options menu |
 | Alt+H | `menu.help` | Help menu |
+| Alt+Shift+M | `menubar.toggle` | Show/hide the menu bar |
+
+The menu shortcuts above keep working while the menu bar is hidden — the dropdown opens on its own from the top edge.

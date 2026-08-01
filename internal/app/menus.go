@@ -138,16 +138,42 @@ func resolveShortcuts(reg *command.Registry, items []ui.ContextMenuItem) []ui.Co
 	return resolved
 }
 
+// Menus take focus while they are open, so closing one has to hand focus back —
+// otherwise key input goes to a menu widget that is no longer on screen.
+// captureMenuFocus is a no-op when a menu is already focused: navigating from
+// one dropdown to the next re-enters here, and the original target must survive.
+func (a *App) captureMenuFocus() {
+	if _, inMenu := a.Root.Focused.(*ui.ContextMenuWidget); inMenu {
+		return
+	}
+	a.menuReturnFocus = a.Root.Focused
+}
+
+// restoreMenuFocus runs before a selected command, so a command that focuses
+// something itself (e.g. "Show Explorer") still wins.
+func (a *App) restoreMenuFocus() {
+	target := a.menuReturnFocus
+	a.menuReturnFocus = nil
+	if target == nil {
+		a.FocusEditor()
+		return
+	}
+	a.Root.SetFocus(target)
+}
+
 func openContextMenu(app *App, items []ui.ContextMenuItem, x, y int) {
 	reg := app.Reg
+	app.captureMenuFocus()
 	menu := ui.NewContextMenuWidget(resolveShortcuts(reg, items), x, y)
 	menu.Borders = app.Borders
 	menu.OnExec = func(cmd string) {
 		app.Root.PopOverlay()
+		app.restoreMenuFocus()
 		reg.Execute(cmd)
 	}
 	menu.OnDismiss = func() {
 		app.Root.PopOverlay()
+		app.restoreMenuFocus()
 	}
 	app.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
 	app.Root.SetFocus(menu)
@@ -160,22 +186,31 @@ func openMenuBarDropdown(app *App, index int) {
 		return
 	}
 	reg := app.Reg
+	app.captureMenuFocus()
 	app.MenuBar.Selected = index
 	anchorX := app.MenuBar.ItemAnchorX(index)
+	// The menu.* shortcuts stay live while the bar is hidden; with no bar to
+	// hang under, the dropdown floats from the top edge instead.
+	anchorY := 1
+	if !app.MenuBar.Visible {
+		anchorY = 0
+	}
 	items := menuBarMenus[index]
 	if index == menuOptionsIndex {
 		items = app.BuildOptionsMenu()
 	}
-	menu := ui.NewContextMenuWidget(resolveShortcuts(reg, items), anchorX, 1)
+	menu := ui.NewContextMenuWidget(resolveShortcuts(reg, items), anchorX, anchorY)
 	menu.Borders = app.Borders
 	menu.OnExec = func(cmd string) {
 		app.Root.PopOverlay()
 		app.MenuBar.Selected = -1
+		app.restoreMenuFocus()
 		reg.Execute(cmd)
 	}
 	menu.OnDismiss = func() {
 		app.Root.PopOverlay()
 		app.MenuBar.Selected = -1
+		app.restoreMenuFocus()
 	}
 	menu.OnNavigate = func(dir int) {
 		app.Root.PopOverlay()
@@ -250,7 +285,7 @@ func openEditorContextMenu(app *App, mx, my int) {
 	copy(items, editorContextMenu)
 
 	callbacks := map[string]func(){}
-	if ok {
+	if ok && app.PluginManager != nil {
 		for _, p := range app.PluginManager.Plugins() {
 			if !p.Enabled {
 				continue
@@ -273,10 +308,12 @@ func openEditorContextMenu(app *App, mx, my int) {
 	}
 
 	reg := app.Reg
+	app.captureMenuFocus()
 	menu := ui.NewContextMenuWidget(resolveShortcuts(reg, items), mx, my)
 	menu.Borders = app.Borders
 	menu.OnExec = func(cmd string) {
 		app.Root.PopOverlay()
+		app.restoreMenuFocus()
 		if cb, ok := callbacks[cmd]; ok {
 			if cb != nil {
 				cb()
@@ -287,6 +324,7 @@ func openEditorContextMenu(app *App, mx, my int) {
 	}
 	menu.OnDismiss = func() {
 		app.Root.PopOverlay()
+		app.restoreMenuFocus()
 	}
 	app.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
 	app.Root.SetFocus(menu)

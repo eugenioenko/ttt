@@ -196,6 +196,11 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		syntaxChecked = ui.MenuChecked
 	}
 
+	menuBarChecked := ui.MenuUnchecked
+	if a.Settings.Editor.IsMenuBarVisible() {
+		menuBarChecked = ui.MenuChecked
+	}
+
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
@@ -205,6 +210,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Bracket Colors", Command: "options.toggleBracketColors", Checked: bracketColorChecked},
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
+		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
 		ui.MenuSep(),
 		{Label: "Gutter Style", Command: "options.gutterStyle"},
 		{Label: "Border Style", Command: "options.borderStyle"},

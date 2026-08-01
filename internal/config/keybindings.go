@@ -355,5 +355,6 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "alt+v", Command: "menu.view"},
 		{Key: "alt+o", Command: "menu.options"},
 		{Key: "alt+h", Command: "menu.help"},
+		{Key: "alt+shift+m", Command: "menubar.toggle"},
 	}
 }

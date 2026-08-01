@@ -43,6 +43,7 @@ type App struct {
 	BottomPanel            *ui.BottomPanelWidget
 	Search                 *ui.SearchWidget
 	MenuBar                *ui.MenuBarWidget
+	RootBox                *widgets.VStackWidget
 	StatusBar              *ui.StatusBarWidget
 	Status                 *view.StatusBar
 	Borders                *term.BorderSet
@@ -75,6 +76,7 @@ type App struct {
 	Reg                    *command.Registry
 	Running                *bool
 	quitPending            bool
+	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
 	GitGutterGen           int
 	GitGutterTimer         *time.Timer

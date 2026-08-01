@@ -138,6 +138,16 @@ func (h *testHarness) click(x, y int) {
 	h.redraw()
 }
 
+func (h *testHarness) rightClick(x, y int) {
+	h.t.Helper()
+	down := tcell.NewEventMouse(x, y, tcell.Button2, tcell.ModNone)
+	h.app.Root.HandleEvent(down)
+	up := tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone)
+	h.app.Root.HandleEvent(up)
+	h.flushOnChange()
+	h.redraw()
+}
+
 func (h *testHarness) exec(cmdID string) {
 	h.t.Helper()
 	h.reg.Execute(cmdID)
