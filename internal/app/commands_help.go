@@ -13,6 +13,7 @@ var explorerHelpEntries = []widgets.KeyValueEntry{
 	{Key: "Space", Value: "Open file or toggle folder"},
 	{Key: "Shift+Enter", Value: "Open context menu"},
 	{Key: "Menu*", Value: "Open context menu (terminal-dependent)"},
+	{Key: "r", Value: "Refresh explorer"},
 	{Key: "Up / k", Value: "Move up"},
 	{Key: "Down / j", Value: "Move down"},
 	{Key: "Left / h", Value: "Collapse folder"},
