@@ -77,6 +77,7 @@ func (a *App) FileOpRename(path string, reload func()) {
 			a.StatusError("Error: " + err.Error())
 			return
 		}
+		a.EditorGroup.RenamePath(path, newPath)
 		reload()
 	})
 }

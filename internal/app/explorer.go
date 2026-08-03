@@ -6,8 +6,11 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 type NavigationPanel struct {
@@ -48,6 +51,14 @@ func NewNavigationPanel(settings config.ExplorerSettings, paths ...string) *Navi
 			if cmd == "activate" && n.OnOpenFile != nil {
 				n.OnOpenFile(node.ID)
 			}
+		},
+		OnKey: func(ev *tcell.EventKey, _ *widgets.TreeNode) bool {
+			switch term.KeyRune(ev) {
+			case 'r', 'R':
+				n.Reload()
+				return true
+			}
+			return false
 		},
 		OnMenu: func(_ []widgets.MenuEntry, node *widgets.TreeNode, sx, sy int) {
 			if n.isRoot(node) {

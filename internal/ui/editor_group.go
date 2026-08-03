@@ -734,6 +734,55 @@ func (g *EditorGroupWidget) SaveAs(path string) {
 	g.syncTabs()
 }
 
+// RenamePath repoints open tabs after a path is renamed on disk. oldPath may be
+// a file, matched exactly, or a folder, in which case every tab beneath it moves
+// with it. Without this a renamed file's tab keeps pointing at the path it no
+// longer occupies, so the next save writes the old name back out as a duplicate.
+//
+// Buffer, cursor, selection and undo history are deliberately preserved: the
+// document did not change, only its name. Path-derived state (the syntax
+// highlighter, and the language server's notion of which document this is) is
+// rebuilt, since a rename can change the extension.
+func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
+	if oldPath == "" || newPath == "" || oldPath == newPath {
+		return false
+	}
+	prefix := oldPath + string(filepath.Separator)
+	renamed := false
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if t.Virtual || t.Content != nil || t.Buf == nil {
+			continue
+		}
+		var updated string
+		switch {
+		case t.FilePath == oldPath:
+			updated = newPath
+		case strings.HasPrefix(t.FilePath, prefix):
+			updated = filepath.Join(newPath, strings.TrimPrefix(t.FilePath, prefix))
+		default:
+			continue
+		}
+		if g.OnFileClose != nil && t.Highlighter != nil {
+			g.OnFileClose(t.FilePath, t.Highlighter.Language())
+		}
+		t.FilePath = updated
+		if g.SyntaxHighlight {
+			t.Highlighter = highlight.New(updated)
+		} else {
+			t.Highlighter = nil
+		}
+		if g.OnFileOpen != nil && t.Highlighter != nil {
+			g.OnFileOpen(updated, t.Highlighter.Language(), strings.Join(t.Buf.Lines, "\n"))
+		}
+		renamed = true
+	}
+	if renamed {
+		g.syncTabs()
+	}
+	return renamed
+}
+
 func (g *EditorGroupWidget) ActiveFilePath() string {
 	if t := g.activeTab(); t != nil {
 		return t.FilePath
