@@ -7,6 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -80,26 +81,34 @@ func (inp *InputWidget) deleteSelection() {
 
 func (inp *InputWidget) Render(surface Surface, x, y, w int) {
 	actionsW := inp.actionsWidth()
-	prefixRunes := []rune(inp.Prefix)
-	prefixW := len(prefixRunes)
+	prefixW := textwidth.String(inp.Prefix)
 	textW := w - actionsW - prefixW
 
 	ox, oy := surface.Origin()
 	inp.renderX = ox + x + prefixW
 	inp.renderY = oy + y
-	for i, ch := range prefixRunes {
-		surface.SetCell(x+i, y, term.Cell{Ch: ch, Style: inp.Style})
+	px := x
+	for _, ch := range inp.Prefix {
+		surface.SetCell(px, y, term.Cell{Ch: ch, Style: inp.Style})
+		px += textwidth.Rune(ch)
 	}
 
 	if textW > 0 {
 		textRunes := []rune(inp.Text)
 		showPlaceholder := len(textRunes) == 0 && inp.Placeholder != ""
 
+		// The visible window is textW columns wide, which holds fewer fullwidth
+		// runes than narrow ones — scroll by column, not by rune index.
 		if inp.CursorPos < inp.scrollOffset {
 			inp.scrollOffset = inp.CursorPos
 		}
-		if inp.CursorPos >= inp.scrollOffset+textW {
-			inp.scrollOffset = inp.CursorPos - textW + 1
+		// Walk the runes once to find the new offset rather than re-measuring
+		// the whole visible range per step — pasted text can be long.
+		if over := inp.visualOffset(textRunes, inp.CursorPos) - textW + 1; over > 0 {
+			for i := inp.scrollOffset; i < inp.CursorPos && over > 0; i++ {
+				over -= textwidth.Rune(textRunes[i])
+				inp.scrollOffset = i + 1
+			}
 		}
 
 		selLo, selHi := -1, -1
@@ -108,27 +117,16 @@ func (inp *InputWidget) Render(surface Surface, x, y, w int) {
 		}
 
 		if showPlaceholder {
-			phRunes := []rune(inp.Placeholder)
-			for i := 0; i < textW; i++ {
-				ch := ' '
-				if i < len(phRunes) {
-					ch = phRunes[i]
-				}
-				surface.SetCell(x+prefixW+i, y, term.Cell{Ch: ch, Style: term.StyleInputPlaceholder})
-			}
+			drawInputRunes(surface, x+prefixW, y, textW, []rune(inp.Placeholder), 0, func(int) term.Style {
+				return term.StyleInputPlaceholder
+			})
 		} else {
-			for i := 0; i < textW; i++ {
-				ch := ' '
-				ri := inp.scrollOffset + i
-				if ri < len(textRunes) {
-					ch = textRunes[ri]
-				}
-				style := inp.Style
+			drawInputRunes(surface, x+prefixW, y, textW, textRunes, inp.scrollOffset, func(ri int) term.Style {
 				if selLo >= 0 && ri >= selLo && ri < selHi {
-					style = term.StyleSelection
+					return term.StyleSelection
 				}
-				surface.SetCell(x+prefixW+i, y, term.Cell{Ch: ch, Style: style})
-			}
+				return inp.Style
+			})
 		}
 	}
 
@@ -139,12 +137,13 @@ func (inp *InputWidget) Render(surface Surface, x, y, w int) {
 		if action.Active {
 			style = term.StyleDefault
 		}
-		labelW := len([]rune(action.Label))
+		labelW := textwidth.String(action.Label)
 		inp.ActionHits = append(inp.ActionHits, HitRegion{X: ox + ax, Y: inp.renderY, W: labelW})
 		for _, ch := range action.Label {
-			if ax < x+w {
+			cw := textwidth.Rune(ch)
+			if ax+cw <= x+w {
 				surface.SetCell(ax, y, term.Cell{Ch: ch, Style: style})
-				ax++
+				ax += cw
 			}
 		}
 		if ax < x+w {
@@ -154,19 +153,74 @@ func (inp *InputWidget) Render(surface Surface, x, y, w int) {
 	}
 }
 
+// drawInputRunes fills textW columns starting at x with runes from index
+// `from`, advancing by display width and padding the rest with spaces so the
+// field keeps a solid background. A fullwidth rune that does not fit in the
+// remaining columns is dropped rather than drawn half outside the field.
+func drawInputRunes(surface Surface, x, y, textW int, runes []rune, from int, styleAt func(ri int) term.Style) {
+	col := 0
+	ri := from
+	for col < textW {
+		ch := ' '
+		style := styleAt(ri)
+		w := 1
+		if ri >= 0 && ri < len(runes) {
+			ch = runes[ri]
+			w = textwidth.Rune(ch)
+			if col+w > textW {
+				ch, w = ' ', 1
+				ri = len(runes)
+			}
+		}
+		surface.SetCell(x+col, y, term.Cell{Ch: ch, Style: style})
+		if w > 1 {
+			// The terminal covers this column with the rune itself; the cell
+			// only needs to carry the matching background.
+			surface.SetCell(x+col+1, y, term.Cell{Ch: ' ', Style: style})
+		}
+		col += w
+		ri++
+	}
+}
+
+// visualOffset returns how many columns the rune at index pos sits to the right
+// of the first visible rune. Fullwidth runes count as two.
+func (inp *InputWidget) visualOffset(runes []rune, pos int) int {
+	lo := max(min(inp.scrollOffset, len(runes)), 0)
+	hi := max(min(pos, len(runes)), lo)
+	return textwidth.Runes(runes[lo:hi])
+}
+
+// posAtColumn maps a column offset from the start of the visible text to a rune
+// index. A click on the second column of a fullwidth rune selects that rune.
+func (inp *InputWidget) posAtColumn(runes []rune, col int) int {
+	if col <= 0 {
+		return max(min(inp.scrollOffset, len(runes)), 0)
+	}
+	used := 0
+	for i := max(inp.scrollOffset, 0); i < len(runes); i++ {
+		w := textwidth.Rune(runes[i])
+		if col < used+w {
+			return i
+		}
+		used += w
+	}
+	return len(runes)
+}
+
 func (inp *InputWidget) actionsWidth() int {
 	if len(inp.Actions) == 0 {
 		return 0
 	}
 	w := 0
 	for _, a := range inp.Actions {
-		w += len([]rune(a.Label)) + 1
+		w += textwidth.String(a.Label) + 1
 	}
 	return w
 }
 
 func (inp *InputWidget) CursorX(x int) int {
-	return x + len([]rune(inp.Prefix)) + inp.CursorPos - inp.scrollOffset
+	return x + textwidth.String(inp.Prefix) + inp.visualOffset([]rune(inp.Text), inp.CursorPos)
 }
 
 func (inp *InputWidget) ResetScroll() {
@@ -428,14 +482,8 @@ func (inp *InputWidget) HandleClick(screenX, screenY int) bool {
 		return false
 	}
 
-	pos := inp.scrollOffset + (screenX - inp.renderX)
 	runes := []rune(inp.Text)
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > len(runes) {
-		pos = len(runes)
-	}
+	pos := inp.posAtColumn(runes, screenX-inp.renderX)
 
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < DoubleClickMs && pos == inp.lastClickPos {

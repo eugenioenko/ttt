@@ -7,6 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -69,9 +70,17 @@ func (inp *InputWidget) CursorPosition() (int, int, bool) {
 		textX += 2
 		textY += 1
 	} else {
-		textX += len([]rune(inp.Config.Prefix))
+		textX += textwidth.String(inp.Config.Prefix)
 	}
-	return textX + inp.cursorPos - inp.scrollOffset, textY, true
+	return textX + inp.visualOffset([]rune(inp.text), inp.cursorPos), textY, true
+}
+
+// visualOffset returns how many columns the rune at index pos sits to the right
+// of the first visible rune. Fullwidth runes count as two.
+func (inp *InputWidget) visualOffset(runes []rune, pos int) int {
+	lo := max(min(inp.scrollOffset, len(runes)), 0)
+	hi := max(min(pos, len(runes)), lo)
+	return textwidth.Runes(runes[lo:hi])
 }
 
 func (inp *InputWidget) Text() string { return inp.text }
@@ -147,17 +156,19 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 	}
 
 	prefixRunes := []rune(inp.Config.Prefix)
-	prefixW := len(prefixRunes)
+	prefixW := textwidth.Runes(prefixRunes)
 
 	prefixStyle := term.StyleBorder
 	if inp.focused {
 		prefixStyle = term.StyleBorderActive
 	}
 
-	for i, ch := range prefixRunes {
-		if i < w {
-			inner.SetCell(i, 0, term.Cell{Ch: ch, Style: prefixStyle})
+	px := 0
+	for _, ch := range prefixRunes {
+		if px < w {
+			inner.SetCell(px, 0, term.Cell{Ch: ch, Style: prefixStyle})
 		}
+		px += textwidth.Rune(ch)
 	}
 
 	inp.renderText(inner, prefixW, 0, w-prefixW)
@@ -175,29 +186,27 @@ func (inp *InputWidget) renderText(surface Surface, x, y, textW int) {
 
 	textRunes := []rune(inp.text)
 
-	maxOffset := len(textRunes) - textW
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
-	if inp.scrollOffset > maxOffset {
+	// Scrolling is measured in columns, not runes: a window of textW columns
+	// holds fewer fullwidth runes than narrow ones.
+	if maxOffset := lastOffsetFitting(textRunes, textW); inp.scrollOffset > maxOffset {
 		inp.scrollOffset = maxOffset
 	}
 	if inp.cursorPos < inp.scrollOffset {
 		inp.scrollOffset = inp.cursorPos
 	}
-	if inp.cursorPos >= inp.scrollOffset+textW {
-		inp.scrollOffset = inp.cursorPos - textW + 1
+	// Walk the runes once to find the new offset rather than re-measuring the
+	// whole visible range per step — pasted text can be long.
+	if over := inp.visualOffset(textRunes, inp.cursorPos) - textW + 1; over > 0 {
+		for i := inp.scrollOffset; i < inp.cursorPos && over > 0; i++ {
+			over -= textwidth.Rune(textRunes[i])
+			inp.scrollOffset = i + 1
+		}
 	}
 
 	if len(textRunes) == 0 && inp.Config.Placeholder != "" {
-		phRunes := []rune(inp.Config.Placeholder)
-		for i := range textW {
-			ch := ' '
-			if i < len(phRunes) {
-				ch = phRunes[i]
-			}
-			surface.SetCell(x+i, y, term.Cell{Ch: ch, Style: term.StyleInputPlaceholder})
-		}
+		inp.drawRunes(surface, x, y, textW, []rune(inp.Config.Placeholder), 0, func(int) term.Style {
+			return term.StyleInputPlaceholder
+		})
 		return
 	}
 
@@ -206,18 +215,78 @@ func (inp *InputWidget) renderText(surface Surface, x, y, textW int) {
 		selLo, selHi = inp.selRange()
 	}
 
-	for i := range textW {
-		ch := ' '
-		ri := inp.scrollOffset + i
-		if ri < len(textRunes) {
-			ch = textRunes[ri]
-		}
-		s := style
+	inp.drawRunes(surface, x, y, textW, textRunes, inp.scrollOffset, func(ri int) term.Style {
 		if selLo >= 0 && ri >= selLo && ri < selHi {
-			s = term.StyleSelection
+			return term.StyleSelection
 		}
-		surface.SetCell(x+i, y, term.Cell{Ch: ch, Style: s})
+		return style
+	})
+}
+
+// drawRunes fills textW columns starting at x with runes from index `from`,
+// advancing by display width and padding the remainder with spaces so the input
+// keeps a solid background. A fullwidth rune that would not fit in the
+// remaining columns is dropped rather than drawn half-outside the field.
+func (inp *InputWidget) drawRunes(surface Surface, x, y, textW int, runes []rune, from int, styleAt func(ri int) term.Style) {
+	col := 0
+	ri := from
+	for col < textW {
+		ch := ' '
+		s := styleAt(ri)
+		w := 1
+		if ri < len(runes) {
+			ch = runes[ri]
+			w = textwidth.Rune(ch)
+			if col+w > textW {
+				ch, w = ' ', 1
+				ri = len(runes)
+			}
+		}
+		surface.SetCell(x+col, y, term.Cell{Ch: ch, Style: s})
+		if w > 1 {
+			// The terminal covers this column with the rune itself; the cell
+			// only needs to carry the matching background.
+			surface.SetCell(x+col+1, y, term.Cell{Ch: ' ', Style: s})
+		}
+		col += w
+		ri++
 	}
+}
+
+// posAtColumn maps a column offset from the start of the visible text to a rune
+// index. A click on the second column of a fullwidth rune selects that rune.
+func (inp *InputWidget) posAtColumn(runes []rune, col int) int {
+	if col <= 0 {
+		return max(min(inp.scrollOffset, len(runes)), 0)
+	}
+	used := 0
+	for i := inp.scrollOffset; i < len(runes); i++ {
+		if i < 0 {
+			continue
+		}
+		w := textwidth.Rune(runes[i])
+		if col < used+w {
+			return i
+		}
+		used += w
+	}
+	return len(runes)
+}
+
+// lastOffsetFitting returns the largest starting rune index whose tail still
+// fills a window of w columns, so the field never scrolls past its own text.
+func lastOffsetFitting(runes []rune, w int) int {
+	used := 0
+	i := len(runes)
+	for i > 0 {
+		rw := textwidth.Rune(runes[i-1])
+		if used+rw > w {
+			break
+		}
+		used += rw
+		i--
+	}
+	return i
 }
 
 func (inp *InputWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -367,18 +436,12 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		return EventIgnored
 	}
 
-	textX := r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + len([]rune(inp.Config.Prefix))
+	textX := r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + textwidth.String(inp.Config.Prefix)
 	if inp.Config.Bordered {
 		textX = r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + 2
 	}
-	pos := inp.scrollOffset + (mx - textX)
 	runes := []rune(inp.text)
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > len(runes) {
-		pos = len(runes)
-	}
+	pos := inp.posAtColumn(runes, mx-textX)
 
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < 400 && pos == inp.lastClickPos {

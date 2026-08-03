@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/workspace"
 
@@ -159,31 +160,30 @@ func (h *testHarness) screenText() string {
 	cells, w, ht := h.screen.GetContents()
 	var lines []string
 	for y := 0; y < ht; y++ {
-		var line strings.Builder
-		for x := 0; x < w; x++ {
-			sc := cells[y*w+x]
-			if sc.Str != "" {
-				line.WriteString(sc.Str)
-			} else {
-				// wide-rune continuation cell or blank
-				line.WriteRune(' ')
-			}
-		}
-		lines = append(lines, line.String())
+		lines = append(lines, rowString(cells[y*w:(y+1)*w]))
 	}
 	return strings.Join(lines, "\n")
 }
 
 func (h *testHarness) screenRow(y int) string {
 	cells, w, _ := h.screen.GetContents()
+	return rowString(cells[y*w : (y+1)*w])
+}
+
+// rowString reassembles a row the way the terminal displays it. A wide rune
+// already accounts for the column it covers, so the continuation cell that
+// follows it contributes nothing; every other empty cell is a blank column.
+func rowString(cells []term.SimCell) string {
 	var line strings.Builder
-	for x := 0; x < w; x++ {
-		sc := cells[y*w+x]
-		if sc.Str != "" {
-			line.WriteString(sc.Str)
-		} else {
-			// wide-rune continuation cell or blank
+	for x := 0; x < len(cells); x++ {
+		sc := cells[x]
+		if sc.Str == "" {
 			line.WriteRune(' ')
+			continue
+		}
+		line.WriteString(sc.Str)
+		if textwidth.String(sc.Str) > 1 {
+			x++
 		}
 	}
 	return line.String()

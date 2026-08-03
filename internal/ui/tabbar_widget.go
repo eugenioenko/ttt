@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -68,6 +69,23 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 	return label
 }
 
+// drawTabLabel draws a tab label from x, advancing by each rune's display width
+// and clipping to the scrollable inner zone. The dirty marker keeps its own
+// style so it stays visible against the tab background.
+func drawTabLabel(surface Surface, x, innerLeft, innerRight int, label string, dirty bool, style term.Style) {
+	for _, ch := range label {
+		chStyle := style
+		if dirty && ch == '●' {
+			chStyle = term.StyleWarning
+		}
+		w := textwidth.Rune(ch)
+		if x >= innerLeft && x+w <= innerRight {
+			surface.SetCell(x, 1, term.Cell{Ch: ch, Style: chStyle})
+		}
+		x += w
+	}
+}
+
 func (t *TabBarWidget) Render(surface Surface) {
 	w, _ := surface.Size()
 
@@ -83,7 +101,7 @@ func (t *TabBarWidget) Render(surface Surface) {
 	activeIdx := -1
 	for i, tab := range t.Tabs {
 		label := t.tabLabel(tab)
-		labelW := len([]rune(label))
+		labelW := textwidth.String(label)
 		spanW := labelW
 		if tab.Active {
 			spanW += 2
@@ -173,30 +191,12 @@ func (t *TabBarWidget) Render(surface Surface) {
 			if sx >= innerLeft && sx < innerRight {
 				surface.SetCell(sx, 1, term.Cell{Ch: b.Vertical, Style: bs})
 			}
-			for ci, ch := range []rune(s.label) {
-				style := term.StyleActiveTab
-				if dirty && ch == '●' {
-					style = term.StyleWarning
-				}
-				x := sx + 1 + ci
-				if x >= innerLeft && x < innerRight {
-					surface.SetCell(x, 1, term.Cell{Ch: ch, Style: style})
-				}
-			}
+			drawTabLabel(surface, sx+1, innerLeft, innerRight, s.label, dirty, term.StyleActiveTab)
 			if ex-1 >= innerLeft && ex-1 < innerRight {
 				surface.SetCell(ex-1, 1, term.Cell{Ch: b.Vertical, Style: bs})
 			}
 		} else {
-			for ci, ch := range []rune(s.label) {
-				style := term.StyleInactiveTab
-				if dirty && ch == '●' {
-					style = term.StyleWarning
-				}
-				x := sx + ci
-				if x >= innerLeft && x < innerRight {
-					surface.SetCell(x, 1, term.Cell{Ch: ch, Style: style})
-				}
-			}
+			drawTabLabel(surface, sx, innerLeft, innerRight, s.label, dirty, term.StyleInactiveTab)
 		}
 	}
 

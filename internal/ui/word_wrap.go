@@ -1,5 +1,9 @@
 package ui
 
+import (
+	"github.com/eugenioenko/ttt/internal/textwidth"
+)
+
 type wrapEntry struct {
 	bufLine  int
 	startCol int
@@ -56,7 +60,7 @@ func wrapLineSegments(runes []rune, width, tabW int) []int {
 		if ch == '\t' {
 			advance = ((visCol/tabW)+1)*tabW - visCol
 		} else {
-			advance = 1
+			advance = textwidth.Rune(ch)
 		}
 		if visCol+advance > width && visCol > 0 {
 			segments = append(segments, i)
@@ -117,7 +121,7 @@ func bufferPosToWrapScreenPos(lines []string, line, col, width, tabW int) (visua
 		if runes[i] == '\t' {
 			screenCol = ((screenCol / tabW) + 1) * tabW
 		} else {
-			screenCol++
+			screenCol += textwidth.Rune(runes[i])
 		}
 	}
 

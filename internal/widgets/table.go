@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -236,46 +237,28 @@ func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, 
 		return
 	}
 
-	if len(runes) > colW {
-		// Truncate with ellipsis
-		for i := 0; i < colW-1 && x+i < t.contentW; i++ {
-			surface.SetCell(x+i, y, term.Cell{Ch: runes[i], Style: style})
-		}
-		if x+colW-1 < t.contentW {
-			surface.SetCell(x+colW-1, y, term.Cell{Ch: '…', Style: style})
-		}
+	maxX := min(x+colW, t.contentW)
+	textW := textwidth.Runes(runes)
+	if textW > colW {
+		drawRunesClipped(surface, x, y, maxX, runes, style)
 		return
 	}
 
-	padding := colW - len(runes)
+	padding := colW - textW
 	switch col.Align {
 	case "right":
 		for i := 0; i < padding && x+i < t.contentW; i++ {
 			surface.SetCell(x+i, y, term.Cell{Ch: ' ', Style: style})
 		}
-		for i, ch := range runes {
-			px := x + padding + i
-			if px < t.contentW {
-				surface.SetCell(px, y, term.Cell{Ch: ch, Style: style})
-			}
-		}
+		drawRunesClipped(surface, x+padding, y, maxX, runes, style)
 	case "center":
 		leftPad := padding / 2
 		for i := 0; i < leftPad && x+i < t.contentW; i++ {
 			surface.SetCell(x+i, y, term.Cell{Ch: ' ', Style: style})
 		}
-		for i, ch := range runes {
-			px := x + leftPad + i
-			if px < t.contentW {
-				surface.SetCell(px, y, term.Cell{Ch: ch, Style: style})
-			}
-		}
+		drawRunesClipped(surface, x+leftPad, y, maxX, runes, style)
 	default: // left
-		for i, ch := range runes {
-			if x+i < t.contentW {
-				surface.SetCell(x+i, y, term.Cell{Ch: ch, Style: style})
-			}
-		}
+		drawRunesClipped(surface, x, y, maxX, runes, style)
 	}
 }
 

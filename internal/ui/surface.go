@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -48,13 +49,28 @@ func (s *RenderSurface) Fill(c term.Cell) {
 	}
 }
 
+// DrawText draws text starting at x, advancing by each rune's display width.
+// maxW is an absolute column limit (0 means "the surface edge"). A fullwidth
+// rune that would straddle the limit is replaced by a space: the terminal paints
+// such a rune across two columns regardless of clipping, so drawing it would
+// bleed into whatever is rendered to the right.
 func (s *RenderSurface) DrawText(x, y int, text string, maxW int, style term.Style) int {
+	limit := s.clip.W
+	if maxW > 0 && maxW < limit {
+		limit = maxW
+	}
 	for _, ch := range text {
-		if maxW > 0 && x >= maxW {
+		if x >= limit {
+			break
+		}
+		w := textwidth.Rune(ch)
+		if x+w > limit {
+			s.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
+			x++
 			break
 		}
 		s.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-		x++
+		x += w
 	}
 	return x
 }
