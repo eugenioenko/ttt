@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/view"
 
 	"github.com/gdamore/tcell/v3"
@@ -62,11 +63,13 @@ func (s *StatusBarWidget) Render(surface Surface) {
 		if style == 0 {
 			style = term.StyleStatusBar
 		}
-		textLen := len([]rune(seg.Text))
-		if seg.OnClick != nil {
-			s.spans = append(s.spans, statusBarSpan{r.X + x, r.X + x + textLen, seg.OnClick})
-		}
+		start := x
 		x += s.drawText(surface, x, seg.Text, style)
+		if seg.OnClick != nil {
+			// The span comes from what was drawn, not a second measurement, so
+			// a clipped segment can never claim columns it does not occupy.
+			s.spans = append(s.spans, statusBarSpan{r.X + start, r.X + x, seg.OnClick})
+		}
 		x += s.drawText(surface, x, "  ", term.StyleStatusBar)
 	}
 
@@ -80,7 +83,7 @@ func (s *StatusBarWidget) Render(surface Surface) {
 	}
 	rightStr += " "
 
-	rx := w - len([]rune(rightStr))
+	rx := w - textwidth.String(rightStr)
 	if rx > x {
 		pos := rx
 		for i, seg := range rightSegs {
@@ -92,12 +95,11 @@ func (s *StatusBarWidget) Render(surface Surface) {
 			if style == 0 {
 				style = term.StyleStatusBar
 			}
-			segLen := len([]rune(seg.Text))
+			start := pos
+			pos += s.drawText(surface, pos, seg.Text, style)
 			if seg.OnClick != nil {
-				s.spans = append(s.spans, statusBarSpan{r.X + pos, r.X + pos + segLen, seg.OnClick})
+				s.spans = append(s.spans, statusBarSpan{r.X + start, r.X + pos, seg.OnClick})
 			}
-			s.drawText(surface, pos, seg.Text, style)
-			pos += segLen
 		}
 	}
 }
@@ -121,32 +123,29 @@ func (s *StatusBarWidget) renderNotification(surface Surface, w int) {
 
 	if s.Status.ActionLabel != "" && s.Status.NotifyAction != nil {
 		actionLabel := " [" + s.Status.ActionLabel + "] "
-		actionX := rightX - len([]rune(actionLabel))
+		actionW := textwidth.String(actionLabel)
+		actionX := rightX - actionW
 		if actionX > x+2 {
-			s.actionSpan = statusBarSpan{r.X + actionX, r.X + actionX + len([]rune(actionLabel)), nil}
-			for i, ch := range actionLabel {
-				surface.SetCell(actionX+i, 0, term.Cell{Ch: ch, Style: style})
-			}
+			s.actionSpan = statusBarSpan{r.X + actionX, r.X + actionX + actionW, nil}
+			s.drawText(surface, actionX, actionLabel, style)
 			rightX = actionX
 		}
 		if s.Status.SecondaryLabel != "" && s.Status.SecondaryAction != nil {
 			secLabel := " [" + s.Status.SecondaryLabel + "] "
-			secX := rightX - len([]rune(secLabel))
+			secW := textwidth.String(secLabel)
+			secX := rightX - secW
 			if secX > x+2 {
-				s.secondarySpan = statusBarSpan{r.X + secX, r.X + secX + len([]rune(secLabel)), nil}
-				for i, ch := range secLabel {
-					surface.SetCell(secX+i, 0, term.Cell{Ch: ch, Style: style})
-				}
+				s.secondarySpan = statusBarSpan{r.X + secX, r.X + secX + secW, nil}
+				s.drawText(surface, secX, secLabel, style)
 			}
 		}
 	} else {
 		okLabel := " [OK] "
-		okX := rightX - len([]rune(okLabel))
+		okW := textwidth.String(okLabel)
+		okX := rightX - okW
 		if okX > x+2 {
-			s.okSpan = statusBarSpan{r.X + okX, r.X + okX + len([]rune(okLabel)), nil}
-			for i, ch := range okLabel {
-				surface.SetCell(okX+i, 0, term.Cell{Ch: ch, Style: style})
-			}
+			s.okSpan = statusBarSpan{r.X + okX, r.X + okX + okW, nil}
+			s.drawText(surface, okX, okLabel, style)
 		}
 	}
 }
@@ -194,15 +193,18 @@ func (s *StatusBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	return EventIgnored
 }
 
+// drawText draws text at x and returns the number of columns consumed, which is
+// more than the rune count when the text contains fullwidth characters.
 func (s *StatusBarWidget) drawText(surface Surface, x int, text string, style term.Style) int {
 	w, _ := surface.Size()
 	n := 0
 	for _, ch := range text {
-		if x+n >= w {
+		cw := textwidth.Rune(ch)
+		if x+n+cw > w {
 			break
 		}
 		surface.SetCell(x+n, 0, term.Cell{Ch: ch, Style: style})
-		n++
+		n += cw
 	}
 	return n
 }

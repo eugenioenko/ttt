@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -295,7 +296,7 @@ func (t *TreeWidget) menuIconWidth() int {
 func (t *TreeWidget) rightSideWidth(node *TreeNode) int {
 	rw := t.menuIconWidth()
 	for i, action := range node.Actions {
-		rw += len([]rune(action.Icon))
+		rw += textwidth.String(action.Icon)
 		if i > 0 {
 			rw++
 		}
@@ -348,20 +349,7 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		if idx == t.selected {
 			iconStyle = style
 		}
-		iconRunes := []rune(node.Icon)
-		iconFits := x+len(iconRunes) <= maxX
-		for i, ch := range iconRunes {
-			if x >= maxX {
-				break
-			}
-			if !iconFits && x == maxX-1 && i < len(iconRunes)-1 {
-				surface.SetCell(x, y, term.Cell{Ch: '…', Style: iconStyle})
-				x++
-				break
-			}
-			surface.SetCell(x, y, term.Cell{Ch: ch, Style: iconStyle})
-			x++
-		}
+		x = drawRunesClipped(surface, x, y, maxX, []rune(node.Icon), iconStyle)
 		if x < maxX {
 			surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 			x++
@@ -374,25 +362,9 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	}
 	labelRunes := []rune(node.Label)
 	if t.Config.TruncateLeft {
-		if avail := maxX - x; avail > 0 && len(labelRunes) > avail {
-			// Keep the tail visible: leading … then the last avail-1 runes.
-			tail := labelRunes[len(labelRunes)-(avail-1):]
-			labelRunes = append([]rune{'…'}, tail...)
-		}
+		labelRunes = truncateRunesLeft(labelRunes, maxX-x)
 	}
-	labelFits := x+len(labelRunes) <= maxX
-	for i, ch := range labelRunes {
-		if x >= maxX {
-			break
-		}
-		if !labelFits && x == maxX-1 && i < len(labelRunes)-1 {
-			surface.SetCell(x, y, term.Cell{Ch: '…', Style: labelStyle})
-			x++
-			break
-		}
-		surface.SetCell(x, y, term.Cell{Ch: ch, Style: labelStyle})
-		x++
-	}
+	x = drawRunesClipped(surface, x, y, maxX, labelRunes, labelStyle)
 
 	if node.Badge != "" {
 		badgeStyle := node.BadgeStyle
@@ -403,20 +375,7 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 			badgeStyle = style
 		}
 		x++
-		badgeRunes := []rune(node.Badge)
-		badgeFits := x+len(badgeRunes) <= maxX
-		for i, ch := range badgeRunes {
-			if x >= maxX {
-				break
-			}
-			if !badgeFits && x == maxX-1 && i < len(badgeRunes)-1 {
-				surface.SetCell(x, y, term.Cell{Ch: '…', Style: badgeStyle})
-				x++
-				break
-			}
-			surface.SetCell(x, y, term.Cell{Ch: ch, Style: badgeStyle})
-			x++
-		}
+		drawRunesClipped(surface, x, y, maxX, []rune(node.Badge), badgeStyle)
 	}
 
 	rightX := w - 2
@@ -459,10 +418,14 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		action := node.Actions[i]
 		iconRunes := []rune(action.Icon)
 		for j := len(iconRunes) - 1; j >= 0; j-- {
-			if rightX >= 0 && rightX < w {
-				surface.SetCell(rightX, y, term.Cell{Ch: iconRunes[j], Style: actionStyle})
+			cw := textwidth.Rune(iconRunes[j])
+			// Icons are laid out right to left, so a fullwidth rune starts one
+			// column further left than the cursor.
+			startX := rightX - cw + 1
+			if startX >= 0 && startX < w {
+				surface.SetCell(startX, y, term.Cell{Ch: iconRunes[j], Style: actionStyle})
 			}
-			rightX--
+			rightX -= cw
 		}
 		if i > 0 {
 			if rightX >= 0 && rightX < w {
@@ -553,7 +516,7 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		rightX := t.contentX + t.contentW - 2 - t.menuIconWidth()
 		for i := len(node.Actions) - 1; i >= 0; i-- {
 			action := node.Actions[i]
-			iconW := len([]rune(action.Icon))
+			iconW := textwidth.String(action.Icon)
 			actionX := rightX - iconW + 1
 			if mx >= actionX && mx <= rightX {
 				if t.Config.OnCommand != nil {

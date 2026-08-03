@@ -1,6 +1,10 @@
 package ui
 
-import "unicode"
+import (
+	"unicode"
+
+	"github.com/eugenioenko/ttt/internal/textwidth"
+)
 
 // wordAt returns the maximal run of word characters (letters, digits, or '_')
 // surrounding col in lineText, or "" if col is not on a word character.
@@ -49,6 +53,8 @@ func leadingWhitespace(s string) string {
 	return s
 }
 
+// bufColToVisualCol converts a rune index into the terminal column it starts
+// at, accounting for tab stops and for fullwidth runes that occupy two columns.
 func bufColToVisualCol(line string, bufCol, tabW int) int {
 	visCol := 0
 	ri := 0
@@ -59,13 +65,17 @@ func bufColToVisualCol(line string, bufCol, tabW int) int {
 		if ch == '\t' {
 			visCol = ((visCol / tabW) + 1) * tabW
 		} else {
-			visCol++
+			visCol += textwidth.Rune(ch)
 		}
 		ri++
 	}
 	return visCol
 }
 
+// visualColToBufCol converts a terminal column into a rune index. A column
+// inside a multi-column rune (a tab's whitespace or the second half of a
+// fullwidth rune) resolves to that rune's index, matching how a click lands on
+// the character the user pointed at.
 func visualColToBufCol(line string, targetVisCol, tabW int) int {
 	visCol := 0
 	ri := 0
@@ -80,7 +90,11 @@ func visualColToBufCol(line string, targetVisCol, tabW int) int {
 			}
 			visCol = nextStop
 		} else {
-			visCol++
+			w := textwidth.Rune(ch)
+			if targetVisCol < visCol+w {
+				return ri
+			}
+			visCol += w
 		}
 		ri++
 	}

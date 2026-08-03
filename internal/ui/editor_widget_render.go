@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/highlight"
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
 func (e *EditorPaneWidget) Render(surface Surface) {
@@ -413,11 +414,21 @@ func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Spa
 				visCol++
 			}
 		} else {
+			cw := textwidth.Rune(ch)
 			sx := visCol - leftCol
 			if sx >= 0 && sx < width {
-				cells[sx] = screenCell{ch: ch, style: style, bufCol: bufCol}
+				if cw > 1 && sx == width-1 {
+					// The rune's second column falls outside the pane; drawing
+					// it would bleed over the scrollbar or border, so pad.
+					cells[sx] = screenCell{ch: ' ', style: style, bufCol: bufCol}
+				} else {
+					cells[sx] = screenCell{ch: ch, style: style, bufCol: bufCol}
+				}
 			}
-			visCol++
+			// A fullwidth rune's second column keeps the blank the cell array
+			// was initialised with. The terminal never draws that cell — the
+			// rune itself covers it — so it needs no content of its own.
+			visCol += cw
 		}
 		if visCol-leftCol >= width {
 			break

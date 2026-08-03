@@ -29,14 +29,7 @@ func (v *virtualSurface) SetCell(x, y int, c term.Cell) {
 }
 
 func (v *virtualSurface) DrawText(x, y int, text string, maxW int, style term.Style) int {
-	for _, ch := range text {
-		if maxW > 0 && x >= maxW {
-			break
-		}
-		v.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-		x++
-	}
-	return x
+	return drawTextWidthAware(v, x, y, text, maxW, v.w, style)
 }
 
 func (v *virtualSurface) DrawBorder(x, y, w, h int, b term.BorderSet, style term.Style) {
@@ -95,14 +88,7 @@ func (s *subVirtualSurface) SetCell(x, y int, c term.Cell) {
 }
 
 func (s *subVirtualSurface) DrawText(x, y int, text string, maxW int, style term.Style) int {
-	for _, ch := range text {
-		if maxW > 0 && x >= maxW {
-			break
-		}
-		s.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-		x++
-	}
-	return x
+	return drawTextWidthAware(s, x, y, text, maxW, s.w, style)
 }
 
 func (s *subVirtualSurface) DrawBorder(x, y, w, h int, b term.BorderSet, style term.Style) {
