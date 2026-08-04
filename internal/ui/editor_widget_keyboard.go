@@ -166,6 +166,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			e.Cursor.Col = lineLen
 		}
 	case tcell.KeyEnter:
+		if e.ReadOnly {
+			return EventConsumed
+		}
 		e.expandFoldAtCursor()
 		if multi {
 			e.multiExecEnter()
@@ -173,6 +176,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			e.execEnter()
 		}
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
+		if e.ReadOnly {
+			return EventConsumed
+		}
 		e.expandFoldAtCursor()
 		if multi {
 			e.multiExecBackspace()
@@ -180,6 +186,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			e.execBackspace()
 		}
 	case tcell.KeyDelete:
+		if e.ReadOnly {
+			return EventConsumed
+		}
 		e.expandFoldAtCursor()
 		if multi {
 			e.multiExecDelete()
@@ -190,6 +199,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 		if kev.Modifiers() != 0 {
 			return EventIgnored
 		}
+		if e.ReadOnly {
+			return EventConsumed
+		}
 		e.expandFoldAtCursor()
 		if r := term.KeyRune(kev); r != 0 {
 			if multi {
@@ -199,6 +211,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 		}
 	case tcell.KeyBacktab:
+		if e.ReadOnly {
+			return EventConsumed
+		}
 		if multi {
 			// Outdent under multiple cursors is a no-op (see #371); backspace
 			// covers per-cursor de-indentation.
@@ -236,6 +251,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 		}
 	case tcell.KeyTab:
+		if e.ReadOnly {
+			return EventConsumed
+		}
 		if multi {
 			e.multiExecTab()
 			break

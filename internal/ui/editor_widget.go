@@ -64,6 +64,7 @@ type EditorPaneWidget struct {
 	searchByLine            map[int][]int
 	diagByLine              map[int][]int
 	LineChanges             []diff.LineChangeKind
+	ReadOnly                bool
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
 	wrapMap                 []wrapEntry

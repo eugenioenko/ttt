@@ -8,6 +8,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -352,17 +353,31 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
-	p.OpenFile = func(path string, line int) {
+	p.OpenFile = func(path string, line int, readonly bool) {
 		absPath := path
 		if !filepath.IsAbs(path) {
 			if cwd, err := os.Getwd(); err == nil {
 				absPath = filepath.Join(cwd, path)
 			}
 		}
-		a.EditorGroup.OpenFile(absPath)
+		if readonly {
+			a.EditorGroup.OpenFileReadOnly(absPath, "")
+		} else {
+			a.EditorGroup.OpenFile(absPath)
+		}
 		if line > 0 {
 			a.EditorGroup.GoToLine(line)
 		}
+	}
+	p.OpenDiff = func(title string, oldLines, newLines []string, filePath string) {
+		path := filePath
+		if path == "" {
+			path = title
+		}
+		a.EditorGroup.OpenDiff(path, diff.FileDiff{}, oldLines, newLines, true)
+	}
+	p.OpenReadOnly = func(title, filePath string, lines []string) {
+		a.EditorGroup.OpenBufferReadOnly(title, filePath, lines)
 	}
 	p.Notify = func(message, level string) {
 		switch level {
