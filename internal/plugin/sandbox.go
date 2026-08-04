@@ -524,10 +524,6 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		}))
 
 		L.SetField(mod, "open_diff", L.NewFunction(func(L *lua.LState) int {
-			if err := p.Granted.Check("panel.editor"); err != nil {
-				L.ArgError(1, "panel.editor permission not granted")
-				return 0
-			}
 			title := L.CheckString(1)
 			oldTbl := L.CheckTable(2)
 			newTbl := L.CheckTable(3)
@@ -541,10 +537,6 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		}))
 
 		L.SetField(mod, "open_readonly", L.NewFunction(func(L *lua.LState) int {
-			if err := p.Granted.Check("panel.editor"); err != nil {
-				L.ArgError(1, "panel.editor permission not granted")
-				return 0
-			}
 			title := L.CheckString(1)
 			linesTbl := L.CheckTable(2)
 			filePath := L.OptString(3, "")

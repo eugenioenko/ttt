@@ -30,7 +30,6 @@ describe("ttt.open_diff plugin API", () => {
             end
           }
         },
-        permissions = { ["panel.editor"] = true }
       })
     `);
 
@@ -58,7 +57,6 @@ describe("ttt.open_readonly plugin API", () => {
             end
           }
         },
-        permissions = { ["panel.editor"] = true }
       })
     `);
 
@@ -85,7 +83,6 @@ describe("ttt.open_readonly plugin API", () => {
             end
           }
         },
-        permissions = { ["panel.editor"] = true }
       })
     `);
 
