@@ -185,7 +185,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			line := []rune(e.Buf.Lines[lineIdx])
 			var syntaxSpans []highlight.Span
 			if e.Highlighter != nil {
-				syntaxSpans = e.Highlighter.HighlightLine(e.Buf.Lines[lineIdx])
+				syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
 			}
 
 			isCollapsedLine := e.Folds != nil && e.Folds.IsCollapsed(lineIdx)
