@@ -103,6 +103,13 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.wrapMap = nil
 	}
 
+	var inBlockComment bool
+	var lastHighlightLine int = -1
+	var cachedSpans []highlight.Span
+	if e.Highlighter != nil {
+		inBlockComment = highlight.ScanBlockCommentState(e.Buf.Lines, e.Viewport.TopLine)
+	}
+
 	for y := 0; y < h; y++ {
 		var lineIdx int
 		var segStartCol int
@@ -185,7 +192,13 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			line := []rune(e.Buf.Lines[lineIdx])
 			var syntaxSpans []highlight.Span
 			if e.Highlighter != nil {
-				syntaxSpans = e.Highlighter.HighlightLine(e.Buf.Lines[lineIdx])
+				if lineIdx != lastHighlightLine {
+					syntaxSpans, inBlockComment = e.Highlighter.HighlightLineWithState(e.Buf.Lines[lineIdx], inBlockComment)
+					cachedSpans = syntaxSpans
+					lastHighlightLine = lineIdx
+				} else {
+					syntaxSpans = cachedSpans
+				}
 			}
 
 			isCollapsedLine := e.Folds != nil && e.Folds.IsCollapsed(lineIdx)
