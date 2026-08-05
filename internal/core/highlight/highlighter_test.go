@@ -280,3 +280,73 @@ func TestCacheNotAliasedAcrossStates(t *testing.T) {
 		t.Error("cached spans were mutated in place")
 	}
 }
+
+func TestInvalidationEditAboveViewport(t *testing.T) {
+	lines := []string{"const a = 1;", "const b = 2;", "const c = 3;", "const d = 4;"}
+	h := New("test.js")
+	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxKeyword {
+		t.Fatal("precondition: last line should be code")
+	}
+	// Edit line 0 to open a comment; everything below must become comment.
+	lines[0] = "/* now open"
+	h.ClearCache()
+	allComment(t, h.HighlightLineAt(lines, 3), lines[3], "after opening edit")
+
+	// Close it again; the tail must go back to code.
+	lines[0] = "const a = 1;"
+	h.ClearCache()
+	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxKeyword {
+		t.Error("closing the comment again should restore code styling")
+	}
+}
+
+// A whole-buffer rewrite (format, sort, replace-all) touches lines far from the
+// cursor. Content-based invalidation must still catch it.
+func TestInvalidationWholeBufferRewrite(t *testing.T) {
+	lines := []string{"const a = 1;", "const b = 2;", "const c = 3;"}
+	h := New("test.js")
+	h.HighlightLineAt(lines, 2)
+
+	rewritten := []string{"/* header", "   rewritten", "*/"}
+	copy(lines, rewritten)
+	h.ClearCache()
+	for i := range lines {
+		allComment(t, h.HighlightLineAt(lines, i), lines[i], "whole-buffer rewrite")
+	}
+}
+
+func TestInvalidationBufferShrinks(t *testing.T) {
+	lines := []string{"/* open", "inside", "*/", "const a = 1;"}
+	h := New("test.js")
+	h.HighlightLineAt(lines, 3)
+
+	// Delete the closer line.
+	lines = []string{"/* open", "inside", "const a = 1;"}
+	h.ClearCache()
+	allComment(t, h.HighlightLineAt(lines, 2), lines[2], "after shrink")
+}
+
+func TestInvalidationBufferGrows(t *testing.T) {
+	lines := []string{"const a = 1;", "const b = 2;"}
+	h := New("test.js")
+	h.HighlightLineAt(lines, 1)
+
+	lines = append(lines, "/* open", "inside")
+	h.ClearCache()
+	allComment(t, h.HighlightLineAt(lines, 3), lines[3], "after growth")
+}
+
+func TestInvalidationUnchangedBufferKeepsTable(t *testing.T) {
+	lines := []string{"/* open", "inside", "*/", "const a = 1;"}
+	h := New("test.js")
+	h.HighlightLineAt(lines, 3)
+	before := len(h.stateSrc)
+	h.ClearCache()
+	h.HighlightLineAt(lines, 3)
+	if len(h.stateSrc) != before {
+		t.Errorf("unchanged buffer should keep the state table: %d -> %d", before, len(h.stateSrc))
+	}
+	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxKeyword {
+		t.Error("styling changed after a no-op edit")
+	}
+}

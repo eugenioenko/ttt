@@ -34,6 +34,11 @@ type Highlighter struct {
 
 	// states[i] reports whether line i starts inside a block comment.
 	states []bool
+	// stateSrc[i] is the text of line i that produced states[i+1], so an edit
+	// can be located by comparison instead of discarding the whole table.
+	stateSrc []string
+	// Set by ClearCache; the table is revalidated on the next lookup.
+	statesDirty bool
 }
 
 func New(filename string) *Highlighter {
@@ -67,7 +72,7 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 
 func (h *Highlighter) ClearCache() {
 	h.cache = make(map[spanKey][]Span)
-	h.states = nil
+	h.statesDirty = true
 }
 
 func (h *Highlighter) highlight(line string, inBlock bool) []Span {
@@ -151,17 +156,39 @@ func (h *Highlighter) stateAt(lines []string, idx int) bool {
 	if h.blockOpen == "" || idx <= 0 {
 		return false
 	}
+	if h.statesDirty {
+		h.statesDirty = false
+		h.truncateToEdit(lines)
+	}
 	if len(h.states) == 0 {
 		h.states = append(h.states, false)
 	}
 	for len(h.states) <= idx && len(h.states) <= len(lines) {
 		i := len(h.states) - 1
 		h.states = append(h.states, h.nextState(lines[i], h.states[i]))
+		h.stateSrc = append(h.stateSrc, lines[i])
 	}
 	if idx < len(h.states) {
 		return h.states[idx]
 	}
 	return false
+}
+
+// truncateToEdit drops the state table from the first line whose text changed,
+// keeping everything above it. Comparing strings that were never rewritten hits
+// Go's identical-pointer fast path, so unchanged lines cost no scanning.
+func (h *Highlighter) truncateToEdit(lines []string) {
+	keep := min(len(h.stateSrc), len(lines))
+	for i := 0; i < keep; i++ {
+		if h.stateSrc[i] != lines[i] {
+			keep = i
+			break
+		}
+	}
+	h.stateSrc = h.stateSrc[:keep]
+	if len(h.states) > keep+1 {
+		h.states = h.states[:keep+1]
+	}
 }
 
 // nextState advances block comment state across one line.
