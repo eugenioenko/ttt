@@ -15,8 +15,9 @@ type Span struct {
 }
 
 type Highlighter struct {
-	lexer chroma.Lexer
-	cache map[string][]Span
+	lexer     chroma.Lexer
+	cache     map[string][]Span
+	lineSpans [][]Span
 }
 
 func New(filename string) *Highlighter {
@@ -30,6 +31,70 @@ func New(filename string) *Highlighter {
 
 func (h *Highlighter) Language() string {
 	return h.lexer.Config().Name
+}
+
+// HighlightAll tokenizes all lines at once so that multiline constructs
+// (block comments, heredocs, etc.) are correctly recognized. The result is
+// cached and reused until ClearCache is called.
+func (h *Highlighter) HighlightAll(lines []string) [][]Span {
+	if h.lineSpans != nil && len(h.lineSpans) == len(lines) {
+		return h.lineSpans
+	}
+
+	text := strings.Join(lines, "\n") + "\n"
+	iter, err := h.lexer.Tokenise(nil, text)
+	if err != nil {
+		return nil
+	}
+
+	h.lineSpans = make([][]Span, len(lines))
+	lineIdx := 0
+	col := 0
+
+	for tok := iter(); tok != chroma.EOF; tok = iter() {
+		value := tok.Value
+		for {
+			nlIdx := strings.Index(value, "\n")
+			if nlIdx < 0 {
+				part := value
+				runeLen := len([]rune(part))
+				if runeLen > 0 {
+					style := mapTokenType(tok.Type)
+					if style != term.StyleDefault {
+						h.lineSpans[lineIdx] = append(h.lineSpans[lineIdx], Span{
+							Start: col,
+							End:   col + runeLen,
+							Style: style,
+						})
+					}
+				}
+				col += runeLen
+				break
+			}
+
+			part := value[:nlIdx]
+			runeLen := len([]rune(part))
+			if runeLen > 0 {
+				style := mapTokenType(tok.Type)
+				if style != term.StyleDefault {
+					h.lineSpans[lineIdx] = append(h.lineSpans[lineIdx], Span{
+						Start: col,
+						End:   col + runeLen,
+						Style: style,
+					})
+				}
+			}
+
+			lineIdx++
+			if lineIdx >= len(lines) {
+				return h.lineSpans
+			}
+			col = 0
+			value = value[nlIdx+1:]
+		}
+	}
+
+	return h.lineSpans
 }
 
 func (h *Highlighter) HighlightLine(line string) []Span {
@@ -69,6 +134,7 @@ func (h *Highlighter) HighlightLine(line string) []Span {
 
 func (h *Highlighter) ClearCache() {
 	h.cache = make(map[string][]Span)
+	h.lineSpans = nil
 }
 
 func mapTokenType(t chroma.TokenType) term.Style {

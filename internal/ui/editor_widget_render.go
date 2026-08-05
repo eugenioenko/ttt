@@ -103,6 +103,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.wrapMap = nil
 	}
 
+	var allSpans [][]highlight.Span
+	if e.Highlighter != nil {
+		allSpans = e.Highlighter.HighlightAll(e.Buf.Lines)
+	}
+
 	for y := 0; y < h; y++ {
 		var lineIdx int
 		var segStartCol int
@@ -184,8 +189,8 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		if lineIdx < totalLines {
 			line := []rune(e.Buf.Lines[lineIdx])
 			var syntaxSpans []highlight.Span
-			if e.Highlighter != nil {
-				syntaxSpans = e.Highlighter.HighlightLine(e.Buf.Lines[lineIdx])
+			if allSpans != nil && lineIdx < len(allSpans) {
+				syntaxSpans = allSpans[lineIdx]
 			}
 
 			isCollapsedLine := e.Folds != nil && e.Folds.IsCollapsed(lineIdx)
