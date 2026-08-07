@@ -46,14 +46,21 @@ func LoadDirEntries(dirPath string, settings config.ExplorerSettings) []DirEntry
 			continue
 		}
 
+		isDir := entry.IsDir()
+		if entry.Type()&os.ModeSymlink != 0 {
+			if info, err := os.Stat(childPath); err == nil {
+				isDir = info.IsDir()
+			}
+		}
+
 		de := DirEntry{
 			Name:       name,
 			Path:       childPath,
-			IsDir:      entry.IsDir(),
+			IsDir:      isDir,
 			GitIgnored: isIgnored,
 		}
 
-		if entry.IsDir() {
+		if isDir {
 			dirs = append(dirs, de)
 		} else {
 			files = append(files, de)
