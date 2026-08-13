@@ -66,6 +66,8 @@ type EditorPaneWidget struct {
 	LineChanges             []diff.LineChangeKind
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
+	bracketMatchCache       bracketMatch
+	bracketGen              int
 	wrapMap                 []wrapEntry
 	wrapTopOffset           int
 }
@@ -83,6 +85,7 @@ func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewpo
 
 func (e *EditorPaneWidget) InvalidateBracketColors() {
 	e.bracketColorDirty = true
+	e.bracketGen++
 }
 
 func (e *EditorPaneWidget) Focusable() bool { return true }
@@ -226,6 +229,7 @@ func (e *EditorPaneWidget) FlushOnChange() {
 		e.bufferDirty = false
 		e.maxWidthSeen = 0
 		e.bracketColorDirty = true
+		e.bracketGen++
 		if e.Highlighter != nil {
 			e.Highlighter.ClearCache()
 		}
