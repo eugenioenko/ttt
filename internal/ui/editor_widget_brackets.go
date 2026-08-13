@@ -12,7 +12,40 @@ var closingBrackets = map[rune]bool{')': true, ']': true, '}': true}
 
 var indentOpeners = map[rune]bool{'{': true, '(': true, '[': true, ':': true}
 
+// bracketMatch caches one matching-bracket scan, keyed on the cursor position
+// and the buffer generation that produced it.
+type bracketMatch struct {
+	valid     bool
+	keyLine   int
+	keyCol    int
+	keyGen    int
+	line, col int
+	ok        bool
+}
+
+// findMatchingBracket returns the position of the bracket paired with the one
+// under the cursor. The render path calls this every frame, but the scan only
+// runs when the cursor or the buffer actually changed — a cursor parked on a
+// brace in a bracket-dense file would otherwise rescan the buffer per frame.
 func (e *EditorPaneWidget) findMatchingBracket() (int, int, bool) {
+	c := &e.bracketMatchCache
+	if c.valid && c.keyLine == e.Cursor.Line && c.keyCol == e.Cursor.Col && c.keyGen == e.bracketGen {
+		return c.line, c.col, c.ok
+	}
+	line, col, ok := e.scanMatchingBracket()
+	*c = bracketMatch{
+		valid:   true,
+		keyLine: e.Cursor.Line,
+		keyCol:  e.Cursor.Col,
+		keyGen:  e.bracketGen,
+		line:    line,
+		col:     col,
+		ok:      ok,
+	}
+	return line, col, ok
+}
+
+func (e *EditorPaneWidget) scanMatchingBracket() (int, int, bool) {
 	if e.Cursor.Line < 0 || e.Cursor.Line >= len(e.Buf.Lines) {
 		return 0, 0, false
 	}
@@ -31,9 +64,11 @@ func (e *EditorPaneWidget) findMatchingBracket() (int, int, bool) {
 	}
 	depth := 1
 	line, col := e.Cursor.Line, e.Cursor.Col
+	// lr always holds the runes of `line`; decoding it per stepped character
+	// instead of per line makes the scan quadratic in line length.
+	lr := runes
 	for {
 		col += dir
-		lr := []rune(e.Buf.Lines[line])
 		if col < 0 {
 			line--
 			if line < 0 {
