@@ -21,6 +21,7 @@ func RegisterCommands(app *App) {
 	registerOptionsCommands(app)
 	registerSettingsCommands(app)
 	registerPluginCommands(app)
+	registerOutputCommands(app)
 	registerDebugCommands(app)
 	registerWidgetCallbacks(app)
 	RegisterEscapeDismissers(app)

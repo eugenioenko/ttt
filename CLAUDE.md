@@ -71,6 +71,7 @@ The codebase follows a strict layered architecture: **core → view → render �
 - The diff view layers syntax highlighting on top of diff background colors using `BgStyle` layering.
 - **RawKeyConsumer interface**: when the integrated terminal is focused, all key events are routed directly to the PTY. Only force-keys (Ctrl+`) bypass this to allow toggling the terminal panel.
 - Async PTY output wakes the event loop via `PostEvent`/`EventInterrupt`.
+- **Output panel** (`internal/app/output.go`) is a core surface, not a plugin console. Producers are plugin `ttt.log`, language servers (`lsp:<server>`), and every status bar notification (`notice`). Append via `App.LogOutput` on the main thread, or `App.LogOutputAsync` from a background goroutine — it routes through `OutputLineResult` on the event loop, because widget state must not be mutated off the main thread. `LogOutput` also mirrors to `slog`, so `ttt.log` (debug builds) stays a superset of the panel. The panel is capped at `outputMaxLines` and trims in chunks; append with `TreeWidget.AppendItem`, never by rebuilding the slice for `SetItems`.
 - **Global search** (`search_widget.go`) shells out to `rg` (ripgrep) with debounced input (`search.debounce` in settings.json, default 350ms). Uses a generation counter and mutex to prevent concurrent searches from racing. Editor search highlights are tied to the search panel lifecycle — cleared when switching away, re-applied from existing results when switching back.
 
 ### Keybinding System & tcell Key Mapping

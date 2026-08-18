@@ -83,12 +83,6 @@ func registerPluginCommands(app *App) {
 		Handler:  func() { app.pluginReloadAll() },
 	})
 
-	reg.Register(command.Command{
-		ID:       "plugin.clearOutput",
-		Title:    "Plugins: Clear Output",
-		Keywords: []string{"plugin", "output", "clear", "log"},
-		Handler:  func() { app.Output.Clear() },
-	})
 }
 
 func (a *App) showPluginList() {

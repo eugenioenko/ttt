@@ -345,6 +345,8 @@ func RunEventLoop(
 				// SetDiagnostics routes through the "lsp" source and fires
 				// OnDiagnosticsChanged, which rebuilds the Diagnostics panel.
 				app.EditorGroup.SetDiagnostics(v.Path, v.Diagnostics)
+			case *OutputLineResult:
+				app.LogOutput(v.Level, v.Source, v.Message)
 			case *FileChangedResult:
 				app.HandleFileChanged(v.Path)
 			case *ui.SearchBatch:
