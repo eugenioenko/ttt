@@ -86,17 +86,7 @@ func (b *Buffer) DiskChanged(filename string) bool {
 // or complete new content, never a truncated partial write. The target's
 // permissions are preserved; symlinks are followed so the link is kept intact.
 func (b *Buffer) SaveFile(filename string) error {
-	if b.TrimTrailingWhitespace {
-		for i, line := range b.Lines {
-			b.Lines[i] = strings.TrimRight(line, " \t")
-		}
-	}
-	if b.InsertFinalNewline && (len(b.Lines) == 0 || b.Lines[len(b.Lines)-1] != "") {
-		b.Lines = append(b.Lines, "")
-	}
-	if !b.InsertFinalNewline && b.ShowTrailingNewline && len(b.Lines) > 1 && b.Lines[len(b.Lines)-1] == "" {
-		b.Lines = b.Lines[:len(b.Lines)-1]
-	}
+	lines := b.CleanedLines()
 
 	// Resolve symlinks so we write through to the real file rather than
 	// replacing the link itself with a regular file on rename.
@@ -120,7 +110,7 @@ func (b *Buffer) SaveFile(filename string) error {
 	defer os.Remove(tmpName)
 
 	w := bufio.NewWriter(tmp)
-	if err := b.writeLines(w); err != nil {
+	if err := b.writeLines(w, lines); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -149,16 +139,37 @@ func (b *Buffer) SaveFile(filename string) error {
 	return nil
 }
 
-func (b *Buffer) writeLines(w io.Writer) error {
+// CleanedLines returns Lines with the configured save-time cleanups applied.
+// It never mutates the buffer: callers that want the editor to reflect the
+// cleanup must apply it through an undo command, so a save stays undoable.
+func (b *Buffer) CleanedLines() []string {
+	lines := make([]string, len(b.Lines))
+	copy(lines, b.Lines)
+
+	if b.TrimTrailingWhitespace {
+		for i, line := range lines {
+			lines[i] = strings.TrimRight(line, " \t")
+		}
+	}
+	if b.InsertFinalNewline && (len(lines) == 0 || lines[len(lines)-1] != "") {
+		lines = append(lines, "")
+	}
+	if !b.InsertFinalNewline && b.ShowTrailingNewline && len(lines) > 1 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+func (b *Buffer) writeLines(w io.Writer, lines []string) error {
 	eol := b.LineEnding
 	if eol == "" {
 		eol = "\n"
 	}
-	for i, line := range b.Lines {
+	for i, line := range lines {
 		if _, err := io.WriteString(w, line); err != nil {
 			return err
 		}
-		if i < len(b.Lines)-1 {
+		if i < len(lines)-1 {
 			if _, err := io.WriteString(w, eol); err != nil {
 				return err
 			}
