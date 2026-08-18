@@ -281,27 +281,21 @@ func registerGitCommands(app *App) {
 		Handler:  app.DiscardSelected,
 	})
 
-	registerGitCmd := func(id, title string, keywords []string, ops []func(string) error, verb string) {
+	registerGitCmd := func(id, title string, keywords []string, ops []RepoOp, progress, done string) {
 		reg.Register(command.Command{
 			ID: id, Title: title,
 			Keywords: keywords,
 			Handler: func() {
-				for _, dir := range app.Changes.Dirs {
-					for _, op := range ops {
-						if err := op(dir); err != nil {
-							app.StatusError(fmt.Sprintf("%s failed: %v", verb, err))
-							return
-						}
-					}
-				}
-				app.StatusNotify(verb + " successfully")
-				app.Changes.Refresh()
+				app.RunRepoTask(RepoTask{
+					Progress: progress, Done: done,
+					Dirs: app.Changes.Dirs, Ops: ops,
+				})
 			},
 		})
 	}
-	registerGitCmd("git.pull", "Git: Pull", []string{"git", "fetch", "download"}, []func(string) error{git.Pull}, "Pulled")
-	registerGitCmd("git.push", "Git: Push", []string{"git", "upload", "publish"}, []func(string) error{git.Push}, "Pushed")
-	registerGitCmd("git.sync", "Git: Sync", []string{"git", "fetch", "upload"}, []func(string) error{git.Pull, git.Push}, "Synced")
+	registerGitCmd("git.pull", "Git: Pull", []string{"git", "fetch", "download"}, []RepoOp{OpPull}, "Pulling", "Pulled successfully")
+	registerGitCmd("git.push", "Git: Push", []string{"git", "upload", "publish"}, []RepoOp{OpPush}, "Pushing", "Pushed successfully")
+	registerGitCmd("git.sync", "Git: Sync", []string{"git", "fetch", "upload"}, []RepoOp{OpPull, OpPush}, "Syncing", "Synced successfully")
 
 	reg.Register(command.Command{
 		ID: "git.copyPermalink", Title: "Git: Copy GitHub Permalink",

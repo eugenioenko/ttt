@@ -331,6 +331,8 @@ func RunEventLoop(
 				app.LogOutput(v.Level, v.Source, v.Message)
 			case *LSPStateChanged:
 				app.SyncLanguageSegment()
+			case *RepoOpResult:
+				app.HandleRepoOpResult(v)
 			case *FileChangedResult:
 				app.HandleFileChanged(v.Path)
 			case *ui.SearchBatch:
