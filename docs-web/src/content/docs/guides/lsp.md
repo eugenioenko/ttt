@@ -254,6 +254,19 @@ The optional `languages` field is for servers that handle multiple file types re
 
 The server is started lazily on first use and shut down when the editor exits.
 
+## Server Status
+
+The language segment on the right of the status bar shows the state of the server for the current file:
+
+| Indicator | Meaning |
+|-----------|---------|
+| `Go ◉` | Connected and initialized |
+| `Go ◌` | Starting, or not launched yet — servers start on first use |
+| `Go ⚠` | Failed to start, exited, or the binary is not installed |
+| `Go` | No server configured for this language |
+
+Click the segment to open the OUTPUT panel, where each server logs its startup command, its own stderr, initialization failures and unexpected exits under the `lsp:<server>` prefix. That is the place to look when a feature silently does nothing.
+
 ## Supported Features
 
 | Feature | Keybinding | Description |

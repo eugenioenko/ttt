@@ -466,6 +466,12 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.LogOutputAsync(level, "lsp:"+server, message)
 	}
 
+	// A server can die at any time; waking the loop redraws the status bar so
+	// the indicator does not keep claiming the server is up.
+	lspManager.OnStateChange = func() {
+		screen.PostEvent(tcell.NewEventInterrupt(&LSPStateChanged{}))
+	}
+
 	lspManager.OnDiagnostics = func(params lsp.PublishDiagnosticsParams) {
 		path := URIToPath(params.URI)
 		diags := LspToUIDiagnostics(params.Diagnostics)

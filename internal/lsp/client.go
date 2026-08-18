@@ -28,12 +28,23 @@ type Client struct {
 	signatureTriggers   []string
 	signatureRetriggers []string
 
-	onLog func(level, message string)
+	hooks ClientHooks
 
 	OnDiagnostics func(params PublishDiagnosticsParams)
 }
 
-func NewClient(command []string, workDir string, onLog func(level, message string)) (*Client, error) {
+// ClientHooks are passed to NewClient rather than assigned afterwards: the
+// stderr and read-loop goroutines start inside NewClient, and a server that
+// dies immediately would otherwise report its exit before the caller had a
+// chance to install the handler.
+type ClientHooks struct {
+	// OnLog receives server-reported messages.
+	OnLog func(level, message string)
+	// OnExit fires when the server goes away without ttt asking it to.
+	OnExit func()
+}
+
+func NewClient(command []string, workDir string, hooks ClientHooks) (*Client, error) {
 	if len(command) == 0 {
 		return nil, fmt.Errorf("empty command")
 	}
@@ -63,7 +74,7 @@ func NewClient(command []string, workDir string, onLog func(level, message strin
 		nextID:  1,
 		pending: make(map[int]chan Response),
 		done:    make(chan struct{}),
-		onLog:   onLog,
+		hooks:   hooks,
 	}
 	go c.drainStderr(stderr)
 	go c.readLoop()
@@ -71,8 +82,8 @@ func NewClient(command []string, workDir string, onLog func(level, message strin
 }
 
 func (c *Client) log(level, message string) {
-	if c.onLog != nil {
-		c.onLog(level, message)
+	if c.hooks.OnLog != nil {
+		c.hooks.OnLog(level, message)
 	}
 }
 
@@ -97,15 +108,24 @@ func (c *Client) readLoop() {
 		resp, err := c.codec.Receive()
 		if err != nil {
 			slog.Debug("lsp read loop exit", "err", err)
-			if !c.closing.Load() {
-				c.log("error", "server exited unexpectedly: "+err.Error())
-			}
+
+			// Release in-flight callers before notifying. OnExit may block on a
+			// lock held by whoever is waiting on this server — Initialize, for
+			// one — and that caller cannot make progress until its request is
+			// released here.
 			c.mu.Lock()
 			for _, ch := range c.pending {
 				close(ch)
 			}
 			c.pending = make(map[int]chan Response)
 			c.mu.Unlock()
+
+			if !c.closing.Load() {
+				c.log("error", "server exited unexpectedly: "+err.Error())
+				if c.hooks.OnExit != nil {
+					c.hooks.OnExit()
+				}
+			}
 			return
 		}
 		if resp.IsNotification() {
@@ -157,6 +177,14 @@ func (c *Client) call(method string, params any) (json.RawMessage, error) {
 	var ok bool
 	select {
 	case resp, ok = <-ch:
+	case <-c.done:
+		// The read loop empties the pending map when it exits, so a request
+		// registered after that point would otherwise wait out the full
+		// timeout for a reply that can never arrive.
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
+		return nil, fmt.Errorf("connection closed")
 	case <-time.After(10 * time.Second):
 		c.mu.Lock()
 		delete(c.pending, id)

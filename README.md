@@ -262,6 +262,10 @@ You can also add custom servers manually in `~/.config/ttt/settings.json`. See t
 
 To disable LSP entirely: `"lsp": { "enabled": false }` in settings.
 
+#### Server Status
+
+The language segment in the status bar shows the state of the server for the current file: `◉` connected, `◌` starting or not yet launched, `⚠` failed to start or exited, and no indicator when no server is configured. Click it to open the OUTPUT panel, where each server logs its startup command, stderr and any failures under `lsp:<server>`.
+
 #### Supported Features
 
 | Feature | Keybinding | Description |
