@@ -80,6 +80,7 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	}
 
 	m.servers[key] = client
+	m.log(key, "info", "ready")
 	return client, nil
 }
 
