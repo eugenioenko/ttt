@@ -139,9 +139,8 @@ func (b *Buffer) SaveFile(filename string) error {
 	return nil
 }
 
-// CleanedLines returns Lines with the configured save-time cleanups applied.
-// It never mutates the buffer: callers that want the editor to reflect the
-// cleanup must apply it through an undo command, so a save stays undoable.
+// CleanedLines returns a copy of Lines with the save-time cleanups applied.
+// It never mutates the buffer — callers apply it through an undo command.
 func (b *Buffer) CleanedLines() []string {
 	lines := make([]string, len(b.Lines))
 	copy(lines, b.Lines)
