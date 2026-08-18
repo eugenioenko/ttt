@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/term"
 )
 
 func addLines(o *OutputWidget, n int) {
@@ -106,6 +107,40 @@ func TestOutputRenderFullwidthMessage(t *testing.T) {
 	}
 	if grid[0][msgX+2].Ch != 'b' {
 		t.Errorf("grid[0][%d] = %q, want 'b' two columns after the fullwidth rune", msgX+2, grid[0][msgX+2].Ch)
+	}
+}
+
+// A style carries its own background, so a selected row that kept the muted
+// prefix or the level color would show gaps in the selection bar.
+func TestOutputSelectedRowUsesOneStyle(t *testing.T) {
+	o := NewOutputWidget()
+	o.AddLine(OutputLine{Time: "12:00:00", PluginName: "p", Level: "error", Message: "boom"})
+
+	grid := makeGrid(40, 1)
+	s := NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 40, H: 1})
+	o.renderItem(s, 0, 0, 40, true)
+
+	for x := 0; x < 40; x++ {
+		if got := grid[0][x].Style; got != term.StyleSidebarSelected {
+			t.Fatalf("column %d has style %d, want StyleSidebarSelected", x, got)
+		}
+	}
+}
+
+func TestOutputUnselectedRowKeepsLevelColor(t *testing.T) {
+	o := NewOutputWidget()
+	o.AddLine(OutputLine{Time: "12:00:00", PluginName: "p", Level: "error", Message: "boom"})
+
+	grid := makeGrid(40, 1)
+	s := NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 40, H: 1})
+	o.renderItem(s, 0, 0, 40, false)
+
+	if got := grid[0][1].Style; got != term.StyleMuted {
+		t.Errorf("prefix style = %d, want StyleMuted", got)
+	}
+	// 1 (left pad) + len("12:00:00 [p]") + 1 (gap) = 14
+	if got := grid[0][14].Style; got != term.StyleDanger {
+		t.Errorf("message style = %d, want StyleDanger", got)
 	}
 }
 

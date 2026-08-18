@@ -127,15 +127,21 @@ func (o *OutputWidget) renderItem(surface widgets.Surface, idx, y, w int, select
 		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 	}
 
-	levelStyle := style
-	switch line.Level {
-	case "error":
-		levelStyle = term.StyleDanger
-	case "warn":
-		levelStyle = term.StyleWarning
+	// Selection owns the whole row: a style carries its own background, so
+	// keeping the muted prefix or the level color on a selected line would
+	// punch holes in the selection bar.
+	prefixStyle, levelStyle := style, style
+	if !selected {
+		prefixStyle = term.StyleMuted
+		switch line.Level {
+		case "error":
+			levelStyle = term.StyleDanger
+		case "warn":
+			levelStyle = term.StyleWarning
+		}
 	}
 
 	prefix := fmt.Sprintf("%s [%s]", line.Time, line.PluginName)
-	x := surface.DrawText(1, y, prefix, w, term.StyleMuted)
+	x := surface.DrawText(1, y, prefix, w, prefixStyle)
 	surface.DrawText(x+1, y, line.Message, w, levelStyle)
 }
