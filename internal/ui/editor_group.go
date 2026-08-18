@@ -695,12 +695,10 @@ func (g *EditorGroupWidget) HasDirtyTabs() bool {
 	return false
 }
 
-// applySaveCleanups applies trailing-whitespace trimming and final-newline
-// handling to the buffer through the undo stack, so a save is undoable the way
-// it is in VS Code (#312). SaveFile applies the same cleanups to the bytes it
-// writes, so skipping this only means the editor and the file disagree.
+// applySaveCleanups puts the save-time trim and final-newline handling on the
+// undo stack, so Ctrl+Z reaches them (#312).
 func (g *EditorGroupWidget) applySaveCleanups(t *editorTab) {
-	if t.Buf == nil {
+	if t.Buf == nil || g.Editor == nil {
 		return
 	}
 	cleaned := t.Buf.CleanedLines()
@@ -708,24 +706,16 @@ func (g *EditorGroupWidget) applySaveCleanups(t *editorTab) {
 		return
 	}
 
-	cmd := &undo.ReplaceLinesCommand{
+	g.Editor.ExecCommand(&undo.ReplaceLinesCommand{
 		Start:    0,
 		OldLines: append([]string(nil), t.Buf.Lines...),
 		NewLines: cleaned,
-	}
-	if g.Editor != nil && g.Editor.Buf == t.Buf {
-		g.Editor.ExecCommand(cmd)
-		g.Editor.clampCursor()
-		if line := g.Editor.Cursor.Line; line < len(t.Buf.Lines) {
-			if n := len([]rune(t.Buf.Lines[line])); g.Editor.Cursor.Col > n {
-				g.Editor.Cursor.Col = n
-			}
-		}
-		return
-	}
-	cmd.Apply(t.Buf)
-	if t.Undo != nil {
-		t.Undo.Push(cmd)
+	})
+
+	// Trimming can shorten the line the cursor sits on.
+	g.Editor.clampCursor()
+	if n := len([]rune(t.Buf.Lines[g.Editor.Cursor.Line])); g.Editor.Cursor.Col > n {
+		g.Editor.Cursor.Col = n
 	}
 }
 
