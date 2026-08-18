@@ -1472,3 +1472,38 @@ func TestTreeRenderItemCallback(t *testing.T) {
 		t.Errorf("RenderItem should be called for each visible item, got %v", rendered)
 	}
 }
+
+func TestTreeAppendItem(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{Items: makeTreeItems("a", "b")})
+
+	tree.AppendItem(&TreeNode{ID: "c", Label: "c"})
+
+	if got := tree.ItemCount(); got != 3 {
+		t.Fatalf("ItemCount = %d, want 3", got)
+	}
+	flat := tree.FlatList()
+	if flat[2].ID != "c" {
+		t.Errorf("appended node at index 2 = %q, want %q", flat[2].ID, "c")
+	}
+	// The appended node must be reachable through Config.Items too, so a later
+	// SetItems/flatten round-trip does not lose it.
+	if len(tree.Config.Items) != 3 || tree.Config.Items[2].ID != "c" {
+		t.Error("appended node missing from Config.Items")
+	}
+}
+
+func TestTreeAppendItemFlattensChildren(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{Items: makeTreeItems("a")})
+
+	tree.AppendItem(&TreeNode{
+		ID: "b", Label: "b", Expanded: true,
+		Children: []*TreeNode{{ID: "b1", Label: "b1"}},
+	})
+
+	if got := tree.ItemCount(); got != 3 {
+		t.Fatalf("ItemCount = %d, want 3 (a, b, b1)", got)
+	}
+	if got := tree.FlatList()[2].ID; got != "b1" {
+		t.Errorf("child at index 2 = %q, want %q", got, "b1")
+	}
+}
