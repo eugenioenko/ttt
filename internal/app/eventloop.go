@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"log/slog"
-	"os/exec"
 
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -85,24 +84,7 @@ func RunEventLoop(
 		}
 		app.Status.SetSegment(view.StatusSegment{ID: "indent", Side: "right", Priority: 200, Text: fmt.Sprintf("%s: %d", indentLabel, tabSize)})
 
-		if app.EditorGroup.Editor != nil && app.EditorGroup.Editor.Highlighter != nil {
-			lang := app.EditorGroup.Editor.Highlighter.Language()
-			serverKey, _, lspOk := app.lspResolve(filePath, lang)
-			if lspOk {
-				serverCfg := app.LspManager.ServerConfig(serverKey)
-				if len(serverCfg.Command) > 0 {
-					_, err := exec.LookPath(serverCfg.Command[0])
-					lspOk = err == nil
-				}
-			}
-			langText := lang
-			if lspOk {
-				langText += " ⊕"
-			}
-			app.Status.SetSegment(view.StatusSegment{ID: "language", Side: "right", Priority: 500, Text: langText})
-		} else {
-			app.Status.SetSegment(view.StatusSegment{ID: "language", Side: "right", Priority: 500, Text: ""})
-		}
+		app.SyncLanguageSegment()
 
 		repoDir := ""
 		if filePath != "" && !app.EditorGroup.IsActiveVirtual() {
@@ -347,6 +329,8 @@ func RunEventLoop(
 				app.EditorGroup.SetDiagnostics(v.Path, v.Diagnostics)
 			case *OutputLineResult:
 				app.LogOutput(v.Level, v.Source, v.Message)
+			case *LSPStateChanged:
+				app.SyncLanguageSegment()
 			case *FileChangedResult:
 				app.HandleFileChanged(v.Path)
 			case *ui.SearchBatch:
