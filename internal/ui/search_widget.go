@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ type SearchBatch struct {
 	Gen    uint64
 	Groups []SearchFileGroup
 	Done   bool
+	Error  string
 }
 
 type SearchMatch struct {
@@ -219,6 +221,7 @@ func (s *SearchWidget) scheduleSearch() {
 	s.FlatList = nil
 	s.Selected = 0
 	s.ScrollTop = 0
+	s.Error = ""
 	s.stopSearch()
 	s.searchGen++
 	gen := s.searchGen
@@ -234,6 +237,7 @@ func (s *SearchWidget) scheduleSearch() {
 
 func (s *SearchWidget) runSearchSync() {
 	s.cancelSearch()
+	s.Error = ""
 	if s.Input.Text == "" {
 		s.Groups = nil
 		s.FlatList = nil
@@ -250,6 +254,14 @@ func (s *SearchWidget) runSearchSync() {
 }
 
 func (s *SearchWidget) streamSearch(ctx context.Context, gen uint64) {
+	// streamSearch runs on its own goroutine, where an unrecovered panic would
+	// take down the editor rather than just the search.
+	defer func() {
+		if r := recover(); r != nil {
+			s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: fmt.Sprintf("search failed: %v", r)})
+		}
+	}()
+
 	var groups []SearchFileGroup
 
 	if s.DiffSources != nil {
@@ -301,12 +313,13 @@ func (s *SearchWidget) ApplyBatch(batch *SearchBatch) {
 	s.flatten()
 	if batch.Done {
 		s.Searching = false
+		s.Error = batch.Error
 	}
 }
 
 func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]SearchFileGroup) {
 	if _, err := exec.LookPath("rg"); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "ripgrep (rg) not found"})
 		return
 	}
 
@@ -338,11 +351,11 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	cmd := exec.CommandContext(ctx, "rg", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "search failed: " + err.Error()})
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "search failed: " + err.Error()})
 		return
 	}
 
@@ -427,14 +440,27 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	if scanner.Err() != nil {
 		cmd.Process.Kill()
 	}
-	cmd.Wait()
+	waitErr := cmd.Wait()
 	if ctx.Err() != nil {
 		return
 	}
 
 	snapshot := make([]SearchFileGroup, len(*groups))
 	copy(snapshot, *groups)
-	s.sendBatch(&SearchBatch{Gen: gen, Groups: snapshot, Done: true})
+	s.sendBatch(&SearchBatch{Gen: gen, Groups: snapshot, Done: true, Error: rgFailure(waitErr)})
+}
+
+// rgFailure reports a message for a ripgrep run that failed. Exit code 1 means
+// "no matches", which is a normal empty result, not a failure.
+func rgFailure(err error) string {
+	if err == nil {
+		return ""
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return ""
+	}
+	return "search failed: " + err.Error()
 }
 
 type rgMessage struct {
