@@ -2,12 +2,9 @@ package app
 
 import (
 	"log/slog"
-	"os/exec"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
-	"github.com/eugenioenko/ttt/internal/lsp"
-	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
@@ -35,67 +32,6 @@ func registerOutputCommands(app *App) {
 	})
 }
 
-// SyncLanguageSegment refreshes the language status bar segment. It is separate
-// from syncStatus so a language server changing state asynchronously can update
-// the indicator without the full status sync, which the event loop runs only on
-// user input.
-func (a *App) SyncLanguageSegment() {
-	if a.EditorGroup.Editor == nil || a.EditorGroup.Editor.Highlighter == nil {
-		a.Status.SetSegment(view.StatusSegment{ID: "language", Side: "right", Priority: 500, Text: ""})
-		return
-	}
-
-	lang := a.EditorGroup.Editor.Highlighter.Language()
-	icon, iconStyle := a.lspStatusIcon(a.EditorGroup.ActiveFilePath(), lang)
-	text := lang
-	if icon != "" {
-		text += " " + icon
-	}
-	a.Status.SetSegment(view.StatusSegment{
-		ID: "language", Side: "right", Priority: 500,
-		Text:    text,
-		Style:   iconStyle,
-		OnClick: a.ShowOutputPanel,
-	})
-}
-
-// lspStatusIcon reports the language server indicator for the status bar.
-//
-// The icons are all single-width under both normal and East Asian width rules,
-// so the segment does not shift as the state changes. ⊕, ● and ○ are ambiguous
-// width and would.
-func (a *App) lspStatusIcon(filePath, lang string) (string, term.Style) {
-	serverKey, _, configured := a.lspResolve(filePath, lang)
-	if !configured {
-		return "", 0
-	}
-
-	binaryOK := true
-	if cfg := a.LspManager.ServerConfig(serverKey); len(cfg.Command) > 0 {
-		_, err := exec.LookPath(cfg.Command[0])
-		binaryOK = err == nil
-	}
-	return lspIcon(a.LspManager.State(serverKey), binaryOK)
-}
-
-func lspIcon(state lsp.ServerState, binaryOK bool) (string, term.Style) {
-	switch state {
-	case lsp.ServerReady:
-		return "◉", 0
-	case lsp.ServerStarting:
-		return "◌", 0
-	case lsp.ServerFailed:
-		return "⚠", term.StyleDanger
-	}
-
-	// Not started — servers launch lazily on the first request. A missing
-	// binary is the one failure knowable before then, and ttt never even tries.
-	if !binaryOK {
-		return "⚠", term.StyleDanger
-	}
-	return "◌", 0
-}
-
 // ShowOutputPanel reveals the bottom panel on the Output tab and focuses it.
 func (a *App) ShowOutputPanel() {
 	a.BottomPanel.SetActivePanel("output")
@@ -110,9 +46,6 @@ func (a *App) OutputCopyLine() {
 	}
 	a.StatusNotify("Output line copied to clipboard")
 }
-
-// LSPStateChanged tells the event loop a language server changed state.
-type LSPStateChanged struct{}
 
 // OutputLineResult carries a log line from a background goroutine to the event
 // loop. Widget state must only be mutated on the main thread.
