@@ -33,6 +33,7 @@ type ChangesPanel struct {
 	OnPRGroupMenu    func(group *ui.ChangesGroup, screenX, screenY int)
 	OnRefreshPR      func(url string)
 	OnConfirmDiscard func(message string, onConfirm func())
+	OnError          func(message string)
 
 	PRGroups []prGroup
 }
@@ -109,6 +110,36 @@ func (cp *ChangesPanel) SetDirs(dirs []string) {
 	cp.Dirs = dirs
 	cp.multiRoot = len(dirs) > 1
 	cp.Refresh()
+}
+
+// applied reports a git failure and refreshes either way, so the panel never
+// silently redraws unchanged after an operation that did not happen.
+func (cp *ChangesPanel) applied(err error) {
+	if err != nil && cp.OnError != nil {
+		cp.OnError(err.Error())
+	}
+	cp.Refresh()
+}
+
+// paths splits a file list into the untracked ones, which are deleted outright,
+// and the rest, which are checked out from HEAD.
+func discardPaths(files []git.FileStatus) (untracked, tracked []string) {
+	for _, f := range files {
+		if f.Status == "?" {
+			untracked = append(untracked, f.Path)
+		} else {
+			tracked = append(tracked, f.Path)
+		}
+	}
+	return untracked, tracked
+}
+
+func filePaths(files []git.FileStatus) []string {
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.Path
+	}
+	return paths
 }
 
 func (cp *ChangesPanel) Refresh() {
@@ -392,13 +423,11 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 		}
 	case "stage":
 		if ok && !staged {
-			git.Stage(dir, status.Path)
-			cp.Refresh()
+			cp.applied(git.Stage(dir, status.Path))
 		}
 	case "unstage":
 		if ok && staged {
-			git.Unstage(dir, status.Path)
-			cp.Refresh()
+			cp.applied(git.Unstage(dir, status.Path))
 		}
 	case "stageAll":
 		gi := cp.groupIndexFromNode(node)
@@ -624,21 +653,23 @@ func (cp *ChangesPanel) groupIndexFromNode(node *widgets.TreeNode) int {
 }
 
 func (cp *ChangesPanel) stageAll() {
+	var err error
 	for _, g := range cp.groups {
-		for _, f := range g.Unstaged {
-			git.Stage(g.Dir, f.Path)
+		if e := git.Stage(g.Dir, filePaths(g.Unstaged)...); e != nil && err == nil {
+			err = e
 		}
 	}
-	cp.Refresh()
+	cp.applied(err)
 }
 
 func (cp *ChangesPanel) unstageAll() {
+	var err error
 	for _, g := range cp.groups {
-		for _, f := range g.Staged {
-			git.Unstage(g.Dir, f.Path)
+		if e := git.Unstage(g.Dir, filePaths(g.Staged)...); e != nil && err == nil {
+			err = e
 		}
 	}
-	cp.Refresh()
+	cp.applied(err)
 }
 
 func (cp *ChangesPanel) stageAllInGroup(gi int) {
@@ -646,10 +677,7 @@ func (cp *ChangesPanel) stageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	for _, f := range g.Unstaged {
-		git.Stage(g.Dir, f.Path)
-	}
-	cp.Refresh()
+	cp.applied(git.Stage(g.Dir, filePaths(g.Unstaged)...))
 }
 
 func (cp *ChangesPanel) unstageAllInGroup(gi int) {
@@ -657,10 +685,7 @@ func (cp *ChangesPanel) unstageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	for _, f := range g.Staged {
-		git.Unstage(g.Dir, f.Path)
-	}
-	cp.Refresh()
+	cp.applied(git.Unstage(g.Dir, filePaths(g.Staged)...))
 }
 
 func (cp *ChangesPanel) confirmDiscard(dir string, f git.FileStatus) {
@@ -673,11 +698,10 @@ func (cp *ChangesPanel) confirmDiscard(dir string, f git.FileStatus) {
 	}
 	cp.OnConfirmDiscard(msg, func() {
 		if f.Status == "?" {
-			git.DiscardUntracked(dir, f.Path)
+			cp.applied(git.DiscardUntracked(dir, f.Path))
 		} else {
-			git.Discard(dir, f.Path)
+			cp.applied(git.Discard(dir, f.Path))
 		}
-		cp.Refresh()
 	})
 }
 
@@ -688,14 +712,12 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 	g := cp.groups[gi]
 	msg := fmt.Sprintf("Discard all %d changes? This is irreversible.", len(g.Unstaged))
 	cp.OnConfirmDiscard(msg, func() {
-		for _, f := range g.Unstaged {
-			if f.Status == "?" {
-				git.DiscardUntracked(g.Dir, f.Path)
-			} else {
-				git.Discard(g.Dir, f.Path)
-			}
+		untracked, tracked := discardPaths(g.Unstaged)
+		err := git.DiscardUntracked(g.Dir, untracked...)
+		if e := git.Discard(g.Dir, tracked...); e != nil && err == nil {
+			err = e
 		}
-		cp.Refresh()
+		cp.applied(err)
 	})
 }
 
@@ -815,11 +837,10 @@ func (cp *ChangesPanel) ToggleStageSelected() {
 		return
 	}
 	if staged {
-		git.Unstage(dir, status.Path)
+		cp.applied(git.Unstage(dir, status.Path))
 	} else {
-		git.Stage(dir, status.Path)
+		cp.applied(git.Stage(dir, status.Path))
 	}
-	cp.Refresh()
 }
 
 func (cp *ChangesPanel) OpenSelectedDiff(extended bool) {

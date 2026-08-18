@@ -66,33 +66,42 @@ func StatusFiles(dir string) ([]FileStatus, error) {
 	return files, nil
 }
 
-func Stage(dir, path string) error {
-	cmd := exec.Command("git", "-C", dir, "add", "--", path)
+// Stage, Unstage and Discard take any number of paths so bulk actions spawn one
+// git process instead of one per file.
+func Stage(dir string, paths ...string) error {
+	return runPaths(dir, []string{"add", "--"}, paths)
+}
+
+func Unstage(dir string, paths ...string) error {
+	return runPaths(dir, []string{"reset", "HEAD", "--"}, paths)
+}
+
+func Discard(dir string, paths ...string) error {
+	return runPaths(dir, []string{"checkout", "--"}, paths)
+}
+
+func DiscardUntracked(dir string, paths ...string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	args := []string{"-f"}
+	for _, p := range paths {
+		args = append(args, filepath.Join(dir, p))
+	}
+	cmd := exec.Command("rm", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
-func Unstage(dir, path string) error {
-	cmd := exec.Command("git", "-C", dir, "reset", "HEAD", "--", path)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
+func runPaths(dir string, gitArgs, paths []string) error {
+	if len(paths) == 0 {
+		return nil
 	}
-	return nil
-}
-
-func Discard(dir, path string) error {
-	cmd := exec.Command("git", "-C", dir, "checkout", "--", path)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-func DiscardUntracked(dir, path string) error {
-	absPath := filepath.Join(dir, path)
-	cmd := exec.Command("rm", "-f", absPath)
+	args := append([]string{"-C", dir}, gitArgs...)
+	args = append(args, paths...)
+	cmd := exec.Command("git", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
 	}

@@ -585,6 +585,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnGroupMenu = app.ShowGroupMenu
 	app.Changes.OnCommit = app.CommitChanges
 	app.Changes.OnConfirmDiscard = app.ConfirmDiscard
+	app.Changes.OnError = app.StatusError
 
 	app.ContentSplit.OnResize = func(height int) {
 		if height <= 0 {

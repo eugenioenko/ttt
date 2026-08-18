@@ -31,11 +31,10 @@ func (a *App) DiscardSelected() {
 			func() {
 				a.DismissDialog()
 				if status.Status == "?" {
-					git.DiscardUntracked(dir, status.Path)
+					a.Changes.applied(git.DiscardUntracked(dir, status.Path))
 				} else {
-					git.Discard(dir, status.Path)
+					a.Changes.applied(git.Discard(dir, status.Path))
 				}
-				a.Changes.Refresh()
 			},
 		},
 	)
@@ -257,8 +256,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && !status.Staged {
-				git.Stage(dir, status.Path)
-				app.Changes.Refresh()
+				app.Changes.applied(git.Stage(dir, status.Path))
 			}
 		},
 	})
@@ -269,8 +267,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && status.Staged {
-				git.Unstage(dir, status.Path)
-				app.Changes.Refresh()
+				app.Changes.applied(git.Unstage(dir, status.Path))
 			}
 		},
 	})
