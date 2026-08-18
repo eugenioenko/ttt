@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/gdamore/tcell/v3"
@@ -694,6 +695,30 @@ func (g *EditorGroupWidget) HasDirtyTabs() bool {
 	return false
 }
 
+// applySaveCleanups puts the save-time trim and final-newline handling on the
+// undo stack, so Ctrl+Z reaches them (#312).
+func (g *EditorGroupWidget) applySaveCleanups(t *editorTab) {
+	if t.Buf == nil || g.Editor == nil {
+		return
+	}
+	cleaned := t.Buf.CleanedLines()
+	if slices.Equal(cleaned, t.Buf.Lines) {
+		return
+	}
+
+	g.Editor.ExecCommand(&undo.ReplaceLinesCommand{
+		Start:    0,
+		OldLines: append([]string(nil), t.Buf.Lines...),
+		NewLines: cleaned,
+	})
+
+	// Trimming can shorten the line the cursor sits on.
+	g.Editor.clampCursor()
+	if n := len([]rune(t.Buf.Lines[g.Editor.Cursor.Line])); g.Editor.Cursor.Col > n {
+		g.Editor.Cursor.Col = n
+	}
+}
+
 func (g *EditorGroupWidget) Save() bool {
 	t := g.activeTab()
 	if t == nil || t.Content != nil {
@@ -702,6 +727,7 @@ func (g *EditorGroupWidget) Save() bool {
 	if t.Virtual {
 		return false
 	}
+	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(t.FilePath); err != nil {
 		g.reportError(fmt.Sprintf("Failed to save %s: %v", t.FilePath, err))
 		return false
@@ -717,6 +743,7 @@ func (g *EditorGroupWidget) SaveAs(path string) {
 	if t == nil || t.Content != nil {
 		return
 	}
+	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
 		g.reportError(fmt.Sprintf("Failed to save %s: %v", path, err))
 		return

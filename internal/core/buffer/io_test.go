@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 )
@@ -284,5 +285,48 @@ func TestSaveDoesNotLeaveTempFiles(t *testing.T) {
 			names = append(names, e.Name())
 		}
 		t.Errorf("expected only file.txt, got %v", names)
+	}
+}
+
+func TestCleanedLinesDoesNotMutate(t *testing.T) {
+	b := &Buffer{Lines: []string{"a  ", "b\t"}, TrimTrailingWhitespace: true}
+	cleaned := b.CleanedLines()
+
+	if b.Lines[0] != "a  " || b.Lines[1] != "b\t" {
+		t.Errorf("CleanedLines mutated the buffer: %q", b.Lines)
+	}
+	if cleaned[0] != "a" || cleaned[1] != "b" {
+		t.Errorf("cleaned = %q, want trailing whitespace removed", cleaned)
+	}
+}
+
+func TestCleanedLines(t *testing.T) {
+	tests := []struct {
+		name                            string
+		lines                           []string
+		trim, insertFinal, showTrailing bool
+		want                            []string
+	}{
+		{"trim only", []string{"a  ", "b"}, true, false, false, []string{"a", "b"}},
+		{"trim disabled", []string{"a  "}, false, false, false, []string{"a  "}},
+		{"append final newline", []string{"a"}, false, true, false, []string{"a", ""}},
+		{"final newline already present", []string{"a", ""}, false, true, false, []string{"a", ""}},
+		{"strip trailing blank when final newline off", []string{"a", ""}, false, false, true, []string{"a"}},
+		{"nothing to do", []string{"a", ""}, true, true, true, []string{"a", ""}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &Buffer{
+				Lines:                  append([]string(nil), tt.lines...),
+				TrimTrailingWhitespace: tt.trim,
+				InsertFinalNewline:     tt.insertFinal,
+				ShowTrailingNewline:    tt.showTrailing,
+			}
+			got := b.CleanedLines()
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("CleanedLines() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
