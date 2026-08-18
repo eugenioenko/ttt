@@ -31,11 +31,10 @@ func (a *App) DiscardSelected() {
 			func() {
 				a.DismissDialog()
 				if status.Status == "?" {
-					git.DiscardUntracked(dir, status.Path)
+					a.Changes.applied(git.DiscardUntracked(dir, status.Path))
 				} else {
-					git.Discard(dir, status.Path)
+					a.Changes.applied(git.Discard(dir, status.Path))
 				}
-				a.Changes.Refresh()
 			},
 		},
 	)
@@ -257,8 +256,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && !status.Staged {
-				git.Stage(dir, status.Path)
-				app.Changes.Refresh()
+				app.Changes.applied(git.Stage(dir, status.Path))
 			}
 		},
 	})
@@ -269,8 +267,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && status.Staged {
-				git.Unstage(dir, status.Path)
-				app.Changes.Refresh()
+				app.Changes.applied(git.Unstage(dir, status.Path))
 			}
 		},
 	})
@@ -281,27 +278,21 @@ func registerGitCommands(app *App) {
 		Handler:  app.DiscardSelected,
 	})
 
-	registerGitCmd := func(id, title string, keywords []string, ops []func(string) error, verb string) {
+	registerGitCmd := func(id, title string, keywords []string, ops []RepoOp, progress, done string) {
 		reg.Register(command.Command{
 			ID: id, Title: title,
 			Keywords: keywords,
 			Handler: func() {
-				for _, dir := range app.Changes.Dirs {
-					for _, op := range ops {
-						if err := op(dir); err != nil {
-							app.StatusError(fmt.Sprintf("%s failed: %v", verb, err))
-							return
-						}
-					}
-				}
-				app.StatusNotify(verb + " successfully")
-				app.Changes.Refresh()
+				app.RunRepoTask(RepoTask{
+					Progress: progress, Done: done,
+					Dirs: app.Changes.Dirs, Ops: ops,
+				})
 			},
 		})
 	}
-	registerGitCmd("git.pull", "Git: Pull", []string{"git", "fetch", "download"}, []func(string) error{git.Pull}, "Pulled")
-	registerGitCmd("git.push", "Git: Push", []string{"git", "upload", "publish"}, []func(string) error{git.Push}, "Pushed")
-	registerGitCmd("git.sync", "Git: Sync", []string{"git", "fetch", "upload"}, []func(string) error{git.Pull, git.Push}, "Synced")
+	registerGitCmd("git.pull", "Git: Pull", []string{"git", "fetch", "download"}, []RepoOp{OpPull}, "Pulling", "Pulled successfully")
+	registerGitCmd("git.push", "Git: Push", []string{"git", "upload", "publish"}, []RepoOp{OpPush}, "Pushing", "Pushed successfully")
+	registerGitCmd("git.sync", "Git: Sync", []string{"git", "fetch", "upload"}, []RepoOp{OpPull, OpPush}, "Syncing", "Synced successfully")
 
 	reg.Register(command.Command{
 		ID: "git.copyPermalink", Title: "Git: Copy GitHub Permalink",

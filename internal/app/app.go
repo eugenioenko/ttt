@@ -85,11 +85,13 @@ type App struct {
 	PendingPluginApprovals []*plugin.Plugin
 	PluginsPanel           *PluginsPanel
 	Output                 *ui.OutputWidget
-	pluginDetailWidgets    map[string]*pluginDetailState
-	pluginDrawer           ui.Widget
-	commandLine            *ui.CommandLineWidget
-	commandLinePrevFocus   ui.Widget
-	settingsView           *settingsView
+	// runningRepoOp is the progress label of the in-flight task, empty when idle.
+	runningRepoOp        string
+	pluginDetailWidgets  map[string]*pluginDetailState
+	pluginDrawer         ui.Widget
+	commandLine          *ui.CommandLineWidget
+	commandLinePrevFocus ui.Widget
+	settingsView         *settingsView
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
 	appliedSettings config.Settings

@@ -671,3 +671,122 @@ func TestRemoteToHTTPS(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Batched stage / unstage / discard
+// ---------------------------------------------------------------------------
+
+func stagedPaths(t *testing.T, dir string) map[string]bool {
+	t.Helper()
+	files, err := StatusFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]bool{}
+	for _, f := range files {
+		if f.Staged {
+			out[f.Path] = true
+		}
+	}
+	return out
+}
+
+func TestStageMultiplePaths(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "a.txt", "a")
+	writeFile(t, dir, "b.txt", "b")
+	writeFile(t, dir, "c.txt", "c")
+
+	if err := Stage(dir, "a.txt", "b.txt", "c.txt"); err != nil {
+		t.Fatalf("Stage: %v", err)
+	}
+
+	staged := stagedPaths(t, dir)
+	for _, p := range []string{"a.txt", "b.txt", "c.txt"} {
+		if !staged[p] {
+			t.Errorf("%s was not staged", p)
+		}
+	}
+}
+
+func TestUnstageMultiplePaths(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "a.txt", "a")
+	writeFile(t, dir, "b.txt", "b")
+	gitRun(t, dir, "-C", dir, "add", ".")
+
+	if err := Unstage(dir, "a.txt", "b.txt"); err != nil {
+		t.Fatalf("Unstage: %v", err)
+	}
+	if staged := stagedPaths(t, dir); len(staged) != 0 {
+		t.Errorf("expected nothing staged, got %v", staged)
+	}
+}
+
+func TestDiscardMultiplePaths(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "a.txt", "original")
+	writeFile(t, dir, "b.txt", "original")
+	gitRun(t, dir, "-C", dir, "add", ".")
+	gitRun(t, dir, "-C", dir, "commit", "-m", "init")
+
+	writeFile(t, dir, "a.txt", "changed")
+	writeFile(t, dir, "b.txt", "changed")
+
+	if err := Discard(dir, "a.txt", "b.txt"); err != nil {
+		t.Fatalf("Discard: %v", err)
+	}
+	for _, name := range []string{"a.txt", "b.txt"} {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != "original" {
+			t.Errorf("%s = %q, want the committed content back", name, data)
+		}
+	}
+}
+
+func TestDiscardUntrackedMultiplePaths(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "a.txt", "a")
+	writeFile(t, dir, "b.txt", "b")
+
+	if err := DiscardUntracked(dir, "a.txt", "b.txt"); err != nil {
+		t.Fatalf("DiscardUntracked: %v", err)
+	}
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s still exists", name)
+		}
+	}
+}
+
+// No paths must be a no-op, not a bare "git add --" that stages the whole tree.
+func TestBatchOpsWithNoPathsDoNothing(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "a.txt", "a")
+
+	if err := Stage(dir); err != nil {
+		t.Fatalf("Stage with no paths: %v", err)
+	}
+	if staged := stagedPaths(t, dir); len(staged) != 0 {
+		t.Errorf("Stage with no paths staged %v", staged)
+	}
+	if err := Unstage(dir); err != nil {
+		t.Errorf("Unstage with no paths: %v", err)
+	}
+	if err := Discard(dir); err != nil {
+		t.Errorf("Discard with no paths: %v", err)
+	}
+	if err := DiscardUntracked(dir); err != nil {
+		t.Errorf("DiscardUntracked with no paths: %v", err)
+	}
+}
+
+func TestStageReportsError(t *testing.T) {
+	dir := setupTestRepo(t)
+	if err := Stage(dir, "does-not-exist.txt"); err == nil {
+		t.Error("expected an error staging a missing path")
+	}
+}

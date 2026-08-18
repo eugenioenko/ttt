@@ -360,35 +360,31 @@ func (a *App) ShowGroupMenu(dir string, sx, sy int) {
 		{Label: "Push", Command: "git.push." + dir},
 		{Label: "Sync", Command: "git.sync." + dir},
 	}
-	registerDirGitCmd := func(id, title string, ops []func(string) error, verb string) {
+	registerDirGitCmd := func(id, title string, ops []RepoOp, progress, done string) {
 		reg.Register(command.Command{
 			ID: id, Title: title,
 			Handler: func() {
-				for _, op := range ops {
-					if err := op(dir); err != nil {
-						a.StatusError(fmt.Sprintf("%s failed: %v", verb, err))
-						return
-					}
-				}
-				a.StatusNotify(verb + " successfully")
-				a.Changes.Refresh()
+				a.RunRepoTask(RepoTask{
+					Progress: progress, Done: done,
+					Dirs: []string{dir}, Ops: ops,
+				})
 			},
 		})
 	}
-	registerDirGitCmd("git.pull."+dir, "Pull", []func(string) error{git.Pull}, "Pulled")
-	registerDirGitCmd("git.push."+dir, "Push", []func(string) error{git.Push}, "Pushed")
-	registerDirGitCmd("git.sync."+dir, "Sync", []func(string) error{git.Pull, git.Push}, "Synced")
+	registerDirGitCmd("git.pull."+dir, "Pull", []RepoOp{OpPull}, "Pulling", "Pulled successfully")
+	registerDirGitCmd("git.push."+dir, "Push", []RepoOp{OpPush}, "Pushing", "Pushed successfully")
+	registerDirGitCmd("git.sync."+dir, "Sync", []RepoOp{OpPull, OpPush}, "Syncing", "Synced successfully")
 	openContextMenu(a, items, sx, sy)
 }
 
 func (a *App) CommitChanges(dir string, message string) {
-	if err := git.Commit(dir, message); err != nil {
-		a.StatusError("Commit failed: " + err.Error())
-	} else {
-		a.StatusNotify("Committed: " + message)
-		a.Changes.ClearInput(dir)
-		a.Changes.Refresh()
-	}
+	a.RunRepoTask(RepoTask{
+		Progress: "Committing",
+		Done:     "Committed: " + message,
+		Dirs:     []string{dir},
+		Ops:      []RepoOp{OpCommit(message)},
+		OnDone:   func() { a.Changes.ClearInput(dir) },
+	})
 }
 
 func (a *App) ConfirmDiscard(message string, onConfirm func()) {
@@ -589,6 +585,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnGroupMenu = app.ShowGroupMenu
 	app.Changes.OnCommit = app.CommitChanges
 	app.Changes.OnConfirmDiscard = app.ConfirmDiscard
+	app.Changes.OnError = app.StatusError
 
 	app.ContentSplit.OnResize = func(height int) {
 		if height <= 0 {
