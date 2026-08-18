@@ -462,6 +462,10 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		}
 	}
 
+	lspManager.OnLog = func(server, level, message string) {
+		a.LogOutputAsync(level, "lsp:"+server, message)
+	}
+
 	lspManager.OnDiagnostics = func(params lsp.PublishDiagnosticsParams) {
 		path := URIToPath(params.URI)
 		diags := LspToUIDiagnostics(params.Diagnostics)
@@ -475,6 +479,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 
 func (a *App) statusMessage(msg string, level view.NotifyLevel) {
 	a.Status.SetNotification(msg, level, 5*time.Second)
+	a.LogOutput(outputLevelForNotify(level), "notice", msg)
 	time.AfterFunc(5*time.Second, func() {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	})

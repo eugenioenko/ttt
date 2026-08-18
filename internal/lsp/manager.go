@@ -16,12 +16,22 @@ type Manager struct {
 	config        *config.LSPSettings
 	mu            sync.Mutex
 	OnDiagnostics func(params PublishDiagnosticsParams)
+
+	// OnLog receives server-reported messages. Called from the client's stderr
+	// and read-loop goroutines, so the handler must be goroutine-safe.
+	OnLog func(server, level, message string)
 }
 
 func NewManager(cfg *config.LSPSettings) *Manager {
 	return &Manager{
 		servers: make(map[string]*Client),
 		config:  cfg,
+	}
+}
+
+func (m *Manager) log(server, level, message string) {
+	if m.OnLog != nil {
+		m.OnLog(server, level, message)
 	}
 }
 
@@ -51,8 +61,13 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	}
 
 	slog.Info("lsp starting server", "language", lang, "command", serverCfg.Command)
-	client, err := NewClient(serverCfg.Command, workDir)
+	m.log(key, "info", "starting "+strings.Join(serverCfg.Command, " "))
+
+	client, err := NewClient(serverCfg.Command, workDir, func(level, message string) {
+		m.log(key, level, message)
+	})
 	if err != nil {
+		m.log(key, "error", err.Error())
 		return nil, fmt.Errorf("start LSP for %s: %w", lang, err)
 	}
 	client.OnDiagnostics = m.OnDiagnostics
@@ -60,10 +75,12 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	rootURI := "file://" + workDir
 	if err := client.Initialize(rootURI); err != nil {
 		client.Close()
+		m.log(key, "error", "initialize failed: "+err.Error())
 		return nil, fmt.Errorf("initialize LSP for %s: %w", lang, err)
 	}
 
 	m.servers[key] = client
+	m.log(key, "info", "ready")
 	return client, nil
 }
 

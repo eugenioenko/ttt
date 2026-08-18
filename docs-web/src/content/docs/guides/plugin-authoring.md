@@ -2072,11 +2072,13 @@ ttt.log("error", "failed to connect to service")
 | `warn`  | Warning color (yellow)           |
 | `error` | Danger color (red)               |
 
-Messages appear in the OUTPUT panel with a timestamp and plugin name prefix: `15:04:05 [my-plugin] message`. Open the OUTPUT panel via the bottom panel tabs.
+Messages appear in the OUTPUT panel with a timestamp and source prefix: `15:04:05 [my-plugin] message`. Open the OUTPUT panel via the bottom panel tabs or **Output: Show Panel** from the command palette.
+
+The OUTPUT panel is shared with the editor itself, so your plugin's lines are interleaved with core sources — language servers log as `[lsp:<server>]` and status bar notifications as `[notice]`.
 
 Plugin errors (init failures, render crashes, callback errors) are automatically routed to the OUTPUT panel as error-level messages, so you don't need to wrap everything in `pcall` for visibility.
 
-Use **Plugins: Clear Output** from the command palette to clear the OUTPUT panel.
+Use **Output: Clear** from the command palette to clear the OUTPUT panel, and **Output: Copy Selected Line** (or `Ctrl+C` while the panel is focused) to copy a line.
 
 ## Error Handling and Debugging
 

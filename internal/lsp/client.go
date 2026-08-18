@@ -1,13 +1,17 @@
 package lsp
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,15 +22,18 @@ type Client struct {
 	pending map[int]chan Response
 	mu      sync.Mutex
 	done    chan struct{}
+	closing atomic.Bool
 
 	completionTriggers  []string
 	signatureTriggers   []string
 	signatureRetriggers []string
 
+	onLog func(level, message string)
+
 	OnDiagnostics func(params PublishDiagnosticsParams)
 }
 
-func NewClient(command []string, workDir string) (*Client, error) {
+func NewClient(command []string, workDir string, onLog func(level, message string)) (*Client, error) {
 	if len(command) == 0 {
 		return nil, fmt.Errorf("empty command")
 	}
@@ -41,6 +48,10 @@ func NewClient(command []string, workDir string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stderr pipe: %w", err)
+	}
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", command[0], err)
@@ -52,9 +63,32 @@ func NewClient(command []string, workDir string) (*Client, error) {
 		nextID:  1,
 		pending: make(map[int]chan Response),
 		done:    make(chan struct{}),
+		onLog:   onLog,
 	}
+	go c.drainStderr(stderr)
 	go c.readLoop()
 	return c, nil
+}
+
+func (c *Client) log(level, message string) {
+	if c.onLog != nil {
+		c.onLog(level, message)
+	}
+}
+
+// drainStderr surfaces what a server reports about itself. A server that fails
+// to start, crashes, or rejects its config explains why on stderr and nowhere
+// else, so without this the user sees only silent absence of LSP features.
+// Level is "info" because servers vary in how much routine chatter they emit
+// here; genuine failures are reported by the exit path in readLoop.
+func (c *Client) drainStderr(r io.ReadCloser) {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		if line := strings.TrimSpace(scanner.Text()); line != "" {
+			c.log("info", line)
+		}
+	}
 }
 
 func (c *Client) readLoop() {
@@ -63,6 +97,9 @@ func (c *Client) readLoop() {
 		resp, err := c.codec.Receive()
 		if err != nil {
 			slog.Debug("lsp read loop exit", "err", err)
+			if !c.closing.Load() {
+				c.log("error", "server exited unexpectedly: "+err.Error())
+			}
 			c.mu.Lock()
 			for _, ch := range c.pending {
 				close(ch)
@@ -486,6 +523,7 @@ func (c *Client) RangeFormatting(uri string, r Range, tabSize int, insertSpaces 
 }
 
 func (c *Client) Shutdown() error {
+	c.closing.Store(true)
 	_, err := c.call("shutdown", nil)
 	if err != nil {
 		return err
@@ -496,6 +534,7 @@ func (c *Client) Shutdown() error {
 }
 
 func (c *Client) Close() {
+	c.closing.Store(true)
 	c.cmd.Process.Kill()
 	c.cmd.Wait()
 }

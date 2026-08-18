@@ -112,6 +112,15 @@ func (t *TreeWidget) SetItems(items []*TreeNode) {
 	t.clampSelected()
 }
 
+// AppendItem adds a root node and flattens only that node. Callers appending to
+// a long list must use this instead of rebuilding the slice for SetItems, which
+// re-flattens every item and turns an append loop into O(n²).
+func (t *TreeWidget) AppendItem(item *TreeNode) {
+	t.Config.Items = append(t.Config.Items, item)
+	t.flattenNode(item, 0)
+	t.clampSelected()
+}
+
 func (t *TreeWidget) SetActiveID(id string) {
 	t.Config.ActiveID = id
 }

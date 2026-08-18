@@ -3,9 +3,18 @@ package ui
 import (
 	"fmt"
 
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
+)
+
+// A chatty producer (an LSP server dumping stderr) would otherwise grow the log
+// without bound. Lines are dropped in chunks so the O(n) rebuild that a trim
+// forces is amortised across outputTrimChunk appends.
+const (
+	outputMaxLines  = 5000
+	outputTrimChunk = 500
 )
 
 type OutputLine struct {
@@ -17,6 +26,8 @@ type OutputLine struct {
 
 type OutputWidget struct {
 	Lines      []OutputLine
+	nodes      []*widgets.TreeNode
+	seq        int
 	autoScroll bool
 	tree       *widgets.TreeWidget
 }
@@ -43,6 +54,12 @@ func (o *OutputWidget) SetBoxModel(bm widgets.BoxModel) { o.tree.SetBoxModel(bm)
 func (o *OutputWidget) Render(surface Surface)          { o.tree.Render(surface) }
 
 func (o *OutputWidget) HandleEvent(ev tcell.Event) EventResult {
+	if kev, ok := ev.(*tcell.EventKey); ok && kev.Key() == tcell.KeyCtrlC {
+		if o.CopySelected() {
+			return EventConsumed
+		}
+	}
+
 	prevSel := o.tree.SelectedIndex()
 	result := EventResult(o.tree.HandleEvent(ev))
 	if result != EventIgnored && o.tree.SelectedIndex() != prevSel {
@@ -55,16 +72,34 @@ func (o *OutputWidget) HandleEvent(ev tcell.Event) EventResult {
 	return result
 }
 
+// CopySelected puts the selected line on the clipboard as it reads on screen.
+func (o *OutputWidget) CopySelected() bool {
+	idx := o.tree.SelectedIndex()
+	if idx < 0 || idx >= len(o.Lines) {
+		return false
+	}
+	line := o.Lines[idx]
+	clipboard.Set(fmt.Sprintf("%s [%s] %s", line.Time, line.PluginName, line.Message))
+	return true
+}
+
 func (o *OutputWidget) AddLine(line OutputLine) {
 	o.Lines = append(o.Lines, line)
-	nodes := make([]*widgets.TreeNode, len(o.Lines))
-	for i, l := range o.Lines {
-		nodes[i] = &widgets.TreeNode{
-			ID:    fmt.Sprintf("output-%d", i),
-			Label: l.Message,
-		}
+	o.nodes = append(o.nodes, &widgets.TreeNode{
+		ID:    fmt.Sprintf("output-%d", o.seq),
+		Label: line.Message,
+	})
+	o.seq++
+
+	if len(o.Lines) > outputMaxLines {
+		drop := len(o.Lines) - (outputMaxLines - outputTrimChunk)
+		o.Lines = append([]OutputLine(nil), o.Lines[drop:]...)
+		o.nodes = append([]*widgets.TreeNode(nil), o.nodes[drop:]...)
+		o.tree.SetItems(o.nodes)
+	} else {
+		o.tree.AppendItem(o.nodes[len(o.nodes)-1])
 	}
-	o.tree.SetItems(nodes)
+
 	if o.autoScroll {
 		o.tree.SetSelectedIndex(len(o.Lines) - 1)
 	}
@@ -72,6 +107,7 @@ func (o *OutputWidget) AddLine(line OutputLine) {
 
 func (o *OutputWidget) Clear() {
 	o.Lines = nil
+	o.nodes = nil
 	o.tree.SetItems(nil)
 	o.autoScroll = true
 }
@@ -91,31 +127,21 @@ func (o *OutputWidget) renderItem(surface widgets.Surface, idx, y, w int, select
 		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 	}
 
-	x := 1
-
-	levelStyle := style
-	switch line.Level {
-	case "error":
-		levelStyle = term.StyleDanger
-	case "warn":
-		levelStyle = term.StyleWarning
+	// Selection owns the whole row: a style carries its own background, so
+	// keeping the muted prefix or the level color on a selected line would
+	// punch holes in the selection bar.
+	prefixStyle, levelStyle := style, style
+	if !selected {
+		prefixStyle = term.StyleMuted
+		switch line.Level {
+		case "error":
+			levelStyle = term.StyleDanger
+		case "warn":
+			levelStyle = term.StyleWarning
+		}
 	}
 
 	prefix := fmt.Sprintf("%s [%s]", line.Time, line.PluginName)
-	for _, ch := range prefix {
-		if x >= w {
-			break
-		}
-		surface.SetCell(x, y, term.Cell{Ch: ch, Style: term.StyleMuted})
-		x++
-	}
-	x++
-
-	for _, ch := range line.Message {
-		if x >= w {
-			break
-		}
-		surface.SetCell(x, y, term.Cell{Ch: ch, Style: levelStyle})
-		x++
-	}
+	x := surface.DrawText(1, y, prefix, w, prefixStyle)
+	surface.DrawText(x+1, y, line.Message, w, levelStyle)
 }
