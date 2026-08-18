@@ -231,6 +231,14 @@ Docs: https://tttedit.dev
 	defer pluginManager.Shutdown()
 
 	if cfg.Settings.Plugins.IsEnabled() {
+		// Before LoadAll, so a plugin that fails to load can say why.
+		pluginManager.SetLogFactory(func(pluginName string) func(string, string) {
+			return func(level, message string) {
+				editor.LogOutput(level, pluginName, message)
+				screen.PostEvent(tcell.NewEventInterrupt(nil))
+			}
+		})
+
 		pendingApprovals := pluginManager.LoadAll()
 
 		for _, reg := range pluginManager.SidebarPanels {
@@ -259,18 +267,6 @@ Docs: https://tttedit.dev
 				screen.PostEvent(tcell.NewEventInterrupt(result))
 			}
 		}
-		pluginManager.SetLogFactory(func(pluginName string) func(string, string) {
-			return func(level, message string) {
-				editor.Output.AddLine(ui.OutputLine{
-					Time:       time.Now().Format("15:04:05"),
-					PluginName: pluginName,
-					Level:      level,
-					Message:    message,
-				})
-				screen.PostEvent(tcell.NewEventInterrupt(nil))
-			}
-		})
-
 		editor.RegisterStartupPluginCommands()
 
 		pluginsPanel := app.NewPluginsPanel(pluginManager)

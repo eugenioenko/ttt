@@ -110,6 +110,13 @@ func (m *Manager) LoadAll() []*Plugin {
 			}
 
 			p.Granted = regEntry.Permissions
+
+			// Wire the log sink before Init, not after: a plugin that fails to
+			// compile reports it from inside Init, and a plugin that fails is
+			// never added to m.plugins for a later backfill to reach.
+			if m.logFactory != nil {
+				p.Log = m.logFactory(p.Name)
+			}
 			if err := p.Init(); err != nil {
 				continue
 			}
