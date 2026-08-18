@@ -110,6 +110,11 @@ func (m *Manager) LoadAll() []*Plugin {
 			}
 
 			p.Granted = regEntry.Permissions
+
+			// Init reports compile failures through p.Log, so wire it first.
+			if m.logFactory != nil {
+				p.Log = m.logFactory(p.Name)
+			}
 			if err := p.Init(); err != nil {
 				continue
 			}
