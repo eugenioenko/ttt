@@ -495,14 +495,15 @@ Close a plugin editor tab by its ID (string). Requires `panel.editor` permission
 ttt.close_tab("my-tab-id")
 ```
 
-### `ttt.open_file(path, [line])`
+### `ttt.open_file(path, [line], [readonly])`
 
-Open a file in the editor, optionally jumping to a specific line.
+Open a file in the editor, optionally jumping to a specific line and/or opening it in readonly mode.
 
-| Parameter | Type   | Required | Description                                    |
-|-----------|--------|----------|------------------------------------------------|
-| `path`    | string | yes      | File path (absolute or relative to the workspace root). |
-| `line`    | number | no       | 1-based line number to jump to after opening.  |
+| Parameter  | Type    | Required | Description                                    |
+|------------|---------|----------|------------------------------------------------|
+| `path`     | string  | yes      | File path (absolute or relative to the workspace root). |
+| `line`     | number  | no       | 1-based line number to jump to after opening.  |
+| `readonly` | boolean | no       | When `true`, the file opens in readonly mode -- typing, deleting, and saving are blocked. |
 
 ```lua
 -- Open a file
@@ -510,9 +511,54 @@ ttt.open_file("src/main.go")
 
 -- Open a file and jump to line 42
 ttt.open_file("src/main.go", 42)
+
+-- Open a file in readonly mode
+ttt.open_file("src/main.go", 0, true)
 ```
 
 No special permission is required — any plugin can open files.
+
+### `ttt.open_diff(title, old_lines, new_lines, [file_path])`
+
+Open a native styled diff tab showing side-by-side differences between two sets of lines. Uses the same diff rendering as the Changes panel (added/deleted/modified backgrounds with syntax highlighting).
+
+| Parameter   | Type   | Required | Description                                    |
+|-------------|--------|----------|------------------------------------------------|
+| `title`     | string | yes      | Tab title displayed in the editor tab bar.     |
+| `old_lines` | table  | yes      | Array of strings representing the old content. |
+| `new_lines` | table  | yes      | Array of strings representing the new content. |
+| `file_path` | string | no       | File path used for syntax highlighting (matched by extension). |
+
+```lua
+-- Show what a git commit changed
+local old = {"line 1", "line 2", "line 3"}
+local new = {"line 1", "line 2 modified", "line 3", "line 4"}
+ttt.open_diff("commit abc123", old, new, "main.go")
+```
+
+No special permission is required — any plugin can open diff tabs.
+
+### `ttt.open_readonly(title, lines, [file_path])`
+
+Open a readonly buffer tab with content provided directly. The tab is not backed by a file on disk -- it displays the provided lines with syntax highlighting based on the file path extension.
+
+| Parameter   | Type   | Required | Description                                    |
+|-------------|--------|----------|------------------------------------------------|
+| `title`     | string | yes      | Tab title displayed in the editor tab bar.     |
+| `lines`     | table  | yes      | Array of strings to display.                   |
+| `file_path` | string | no       | File path used for syntax highlighting (matched by extension). |
+
+```lua
+-- View a file at a specific git commit
+local result = sys.exec("git", {"show", sha .. ":" .. file})
+local lines = {}
+for line in result.stdout:gmatch("[^\n]+") do
+  table.insert(lines, line)
+end
+ttt.open_readonly("main.go @ abc123", lines, file)
+```
+
+No special permission is required — any plugin can open readonly tabs.
 
 ### `ttt.plugin_dir()`
 
