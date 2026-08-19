@@ -8,6 +8,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -363,12 +364,16 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			a.EditorGroup.GoToLine(line)
 		}
 	}
-	p.OpenDiff = func(title string, oldLines, newLines []string, filePath string) {
+	p.OpenDiff = func(title string, oldLines, newLines []string, filePath string, extended bool, diffText string) {
 		path := filePath
 		if path == "" {
 			path = title
 		}
-		a.EditorGroup.OpenDiff(path, diff.FileDiff{}, oldLines, newLines, true)
+		fd := diff.FileDiff{}
+		if diffText != "" {
+			fd = diff.Parse(diffText)
+		}
+		a.EditorGroup.OpenDiff(path, fd, oldLines, newLines, extended)
 	}
 	p.OpenReadOnly = func(title, filePath string, lines []string) {
 		a.EditorGroup.OpenBufferReadOnly(title, filePath, lines)
@@ -394,6 +399,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	}
 	p.RemoveStatusItem = func(id string) {
 		a.Status.RemoveSegment(id)
+	}
+	p.ClipboardWrite = func(text string) {
+		clipboard.Set(text)
 	}
 	p.SetEcho = func(text string) {
 		a.Status.EchoText = text

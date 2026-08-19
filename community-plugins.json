@@ -30,6 +30,16 @@
     "tags": ["docker", "containers", "devops", "infrastructure"]
   },
   {
+    "name": "git-history",
+    "displayName": "Git History",
+    "author": "eugenioenko",
+    "description": "Per-file commit history with inline diffs, compare with HEAD, and file-at-commit viewer",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "git-history",
+    "version": "0.1.0",
+    "tags": ["git", "history", "diff", "vcs"]
+  },
+  {
     "name": "go-test-runner",
     "displayName": "Go Test Runner",
     "author": "eugenioenko",

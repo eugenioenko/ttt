@@ -343,6 +343,18 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			return 1
 		}))
 
+		L.SetField(mod, "clipboard_write", L.NewFunction(func(L *lua.LState) int {
+			if err := p.Granted.Check("commands"); err != nil {
+				L.ArgError(1, "commands permission not granted")
+				return 0
+			}
+			text := L.CheckString(1)
+			if p.ClipboardWrite != nil {
+				p.ClipboardWrite(text)
+			}
+			return 0
+		}))
+
 		L.SetField(mod, "show_info", L.NewFunction(func(L *lua.LState) int {
 			title := L.CheckString(1)
 			tbl := L.CheckTable(2)
@@ -528,10 +540,18 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			oldTbl := L.CheckTable(2)
 			newTbl := L.CheckTable(3)
 			filePath := L.OptString(4, "")
+			extended := true
+			if L.GetTop() >= 5 {
+				extended = L.ToBool(5)
+			}
+			diffText := ""
+			if L.GetTop() >= 6 {
+				diffText = L.OptString(6, "")
+			}
 			oldLines := luaTableToStrings(L, oldTbl)
 			newLines := luaTableToStrings(L, newTbl)
 			if p.OpenDiff != nil {
-				p.OpenDiff(title, oldLines, newLines, filePath)
+				p.OpenDiff(title, oldLines, newLines, filePath, extended, diffText)
 			}
 			return 0
 		}))
