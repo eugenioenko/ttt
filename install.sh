@@ -2,7 +2,6 @@
 set -e
 
 REPO="eugenioenko/ttt"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -14,9 +13,17 @@ case "$ARCH" in
 esac
 
 case "$OS" in
-  linux)  BINARY="ttt-linux-${ARCH}" ;;
-  darwin) BINARY="ttt-darwin-${ARCH}" ;;
-  *)      echo "Unsupported OS: $OS"; exit 1 ;;
+  linux)
+    BINARY="ttt-linux-${ARCH}"
+    INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+    ;;
+  darwin)
+    BINARY="ttt-darwin-${ARCH}"
+    INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+    ;;
+  *)
+    echo "Unsupported OS: $OS"; exit 1
+    ;;
 esac
 
 if [ -n "$1" ]; then
@@ -32,16 +39,43 @@ fi
 
 URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
 
-echo "Downloading ttt ${VERSION} for ${OS}/${ARCH}..."
-curl -sSfL "$URL" -o ttt
+STAGING=$(mktemp -d)
+trap 'rm -rf "$STAGING"' EXIT
 
-chmod +x ttt
+echo "Downloading ttt ${VERSION} for ${OS}/${ARCH}..."
+curl -sSfL "$URL" -o "$STAGING/ttt"
+
+chmod +x "$STAGING/ttt"
+
+if [ "$OS" = "darwin" ]; then
+  xattr -d com.apple.quarantine "$STAGING/ttt" 2>/dev/null || true
+fi
+
+mkdir -p "$INSTALL_DIR"
 
 if [ -w "$INSTALL_DIR" ]; then
-  mv ttt "${INSTALL_DIR}/ttt"
+  mv "$STAGING/ttt" "${INSTALL_DIR}/ttt"
 else
   echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-  sudo mv ttt "${INSTALL_DIR}/ttt"
+  sudo mv "$STAGING/ttt" "${INSTALL_DIR}/ttt"
 fi
 
 echo "ttt ${VERSION} installed to ${INSTALL_DIR}/ttt"
+
+case ":$PATH:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *)
+    SHELL_NAME=$(basename "${SHELL:-/bin/sh}")
+    case "$SHELL_NAME" in
+      zsh)  RC_FILE="~/.zshrc" ;;
+      bash) RC_FILE="~/.bashrc" ;;
+      fish) RC_FILE="~/.config/fish/config.fish" ;;
+      *)    RC_FILE="~/.profile" ;;
+    esac
+    echo ""
+    echo "To add ttt to your PATH, add this to ${RC_FILE}:"
+    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+    echo ""
+    echo "Then restart your terminal."
+    ;;
+esac
