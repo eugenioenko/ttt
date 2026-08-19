@@ -63,6 +63,7 @@ type editorTab struct {
 	Pinned      bool
 	Virtual     bool
 	LineChanges []diff.LineChangeKind
+	ReadOnly    bool
 }
 
 type EditorGroupWidget struct {
@@ -724,7 +725,7 @@ func (g *EditorGroupWidget) Save() bool {
 	if t == nil || t.Content != nil {
 		return false
 	}
-	if t.Virtual {
+	if t.Virtual || t.ReadOnly {
 		return false
 	}
 	g.applySaveCleanups(t)
@@ -822,6 +823,97 @@ func (g *EditorGroupWidget) IsActiveVirtual() bool {
 		return t.Virtual
 	}
 	return true
+}
+
+func (g *EditorGroupWidget) IsActiveReadOnly() bool {
+	if t := g.activeTab(); t != nil {
+		return t.ReadOnly
+	}
+	return false
+}
+
+func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
+	for i := range g.tabs {
+		if g.tabs[i].FilePath == path && g.tabs[i].ReadOnly {
+			g.SwitchTab(i)
+			return
+		}
+	}
+	newBuf := &buffer.Buffer{Lines: []string{""}}
+	if err := newBuf.LoadFile(path); err != nil {
+		g.reportError(fmt.Sprintf("Failed to open %s: %v", path, err))
+		return
+	}
+	tabSize := g.TabSize
+	detected := buffer.DetectIndent(newBuf.Lines)
+	if detected.Size > 0 && !detected.UseTabs {
+		tabSize = detected.Size
+	}
+	folds := fold.NewState()
+	folds.SetRanges(fold.ComputeIndentRanges(newBuf.Lines))
+	tabTitle := title
+	if tabTitle == "" {
+		tabTitle = filepath.Base(path) + " (readonly)"
+	}
+	newTab := editorTab{
+		FilePath: path,
+		Title:    tabTitle,
+		Buf:      newBuf,
+		Cur:      &cursor.Cursor{},
+		Vp:       &view.Viewport{},
+		Undo:     g.newUndoStack(),
+		Sel:      &selection.Selection{},
+		Folds:    folds,
+		TabSize:  tabSize,
+		UseTabs:  detected.UseTabs,
+		ReadOnly: true,
+		Pinned:   true,
+	}
+	if g.SyntaxHighlight {
+		newTab.Highlighter = highlight.New(path)
+	}
+	g.tabs = append(g.tabs, newTab)
+	g.SwitchTab(len(g.tabs) - 1)
+}
+
+func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []string) {
+	for i := range g.tabs {
+		if g.tabs[i].Title == title && g.tabs[i].ReadOnly {
+			g.tabs[i].Buf.Lines = lines
+			g.SwitchTab(i)
+			return
+		}
+	}
+	newBuf := &buffer.Buffer{Lines: lines}
+	if len(lines) == 0 {
+		newBuf.Lines = []string{""}
+	}
+	tabSize := g.TabSize
+	detected := buffer.DetectIndent(newBuf.Lines)
+	if detected.Size > 0 && !detected.UseTabs {
+		tabSize = detected.Size
+	}
+	folds := fold.NewState()
+	folds.SetRanges(fold.ComputeIndentRanges(newBuf.Lines))
+	newTab := editorTab{
+		FilePath: filePath,
+		Title:    title,
+		Buf:      newBuf,
+		Cur:      &cursor.Cursor{},
+		Vp:       &view.Viewport{},
+		Undo:     g.newUndoStack(),
+		Sel:      &selection.Selection{},
+		Folds:    folds,
+		TabSize:  tabSize,
+		UseTabs:  detected.UseTabs,
+		ReadOnly: true,
+		Pinned:   true,
+	}
+	if g.SyntaxHighlight && filePath != "" {
+		newTab.Highlighter = highlight.New(filePath)
+	}
+	g.tabs = append(g.tabs, newTab)
+	g.SwitchTab(len(g.tabs) - 1)
 }
 
 // ActiveBuffer returns the buffer backing the active tab, or nil if the active
@@ -1486,6 +1578,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			g.Editor.TabSize = t.TabSize
 		}
 		g.Editor.UseTabs = t.UseTabs
+		g.Editor.ReadOnly = t.ReadOnly
 	}
 	var uiTabs []Tab
 	for i, ts := range g.tabs {

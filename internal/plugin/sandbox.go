@@ -513,8 +513,36 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		L.SetField(mod, "open_file", L.NewFunction(func(L *lua.LState) int {
 			path := L.CheckString(1)
 			line := L.OptInt(2, 0)
+			readonly := false
+			if L.Get(3) == lua.LTrue {
+				readonly = true
+			}
 			if p.OpenFile != nil {
-				p.OpenFile(path, line)
+				p.OpenFile(path, line, readonly)
+			}
+			return 0
+		}))
+
+		L.SetField(mod, "open_diff", L.NewFunction(func(L *lua.LState) int {
+			title := L.CheckString(1)
+			oldTbl := L.CheckTable(2)
+			newTbl := L.CheckTable(3)
+			filePath := L.OptString(4, "")
+			oldLines := luaTableToStrings(L, oldTbl)
+			newLines := luaTableToStrings(L, newTbl)
+			if p.OpenDiff != nil {
+				p.OpenDiff(title, oldLines, newLines, filePath)
+			}
+			return 0
+		}))
+
+		L.SetField(mod, "open_readonly", L.NewFunction(func(L *lua.LState) int {
+			title := L.CheckString(1)
+			linesTbl := L.CheckTable(2)
+			filePath := L.OptString(3, "")
+			lines := luaTableToStrings(L, linesTbl)
+			if p.OpenReadOnly != nil {
+				p.OpenReadOnly(title, filePath, lines)
 			}
 			return 0
 		}))
@@ -611,4 +639,14 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		L.Call(1, 1)
 		return 1
 	}))
+}
+
+func luaTableToStrings(_ *lua.LState, tbl *lua.LTable) []string {
+	var result []string
+	tbl.ForEach(func(k, v lua.LValue) {
+		if _, ok := k.(lua.LNumber); ok {
+			result = append(result, v.String())
+		}
+	})
+	return result
 }

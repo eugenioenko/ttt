@@ -79,7 +79,9 @@ type Plugin struct {
 	ScreenshotToFile   func(path string) error
 	DebugDumpToFile    func(path string) error
 	QuitApp            func()
-	OpenFile           func(path string, line int)
+	OpenFile           func(path string, line int, readonly bool)
+	OpenDiff           func(title string, oldLines, newLines []string, filePath string)
+	OpenReadOnly       func(title, filePath string, lines []string)
 	Notify             func(message, level string)
 	SetStatusItem      func(side, id, text string, priority int, onClick func())
 	RemoveStatusItem   func(id string)
@@ -253,6 +255,8 @@ func (p *Plugin) Destroy() {
 	p.DebugDumpToFile = nil
 	p.QuitApp = nil
 	p.Notify = nil
+	p.OpenDiff = nil
+	p.OpenReadOnly = nil
 	p.SetStatusItem = nil
 	p.RemoveStatusItem = nil
 	p.SetEcho = nil
