@@ -439,6 +439,12 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "tab.pin", Title: "View: Toggle Pin Tab",
+		Keywords: []string{"tab", "pin", "unpin"},
+		Handler:  func() { app.EditorGroup.TogglePinTab() },
+	})
+
+	reg.Register(command.Command{
 		ID: "diff.extendedView", Title: "Git: Extended Diff",
 		Keywords: []string{"git", "changes", "compare"},
 		Handler: func() {

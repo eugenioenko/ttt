@@ -59,9 +59,9 @@ type editorTab struct {
 	Folds       *fold.State
 	TabSize     int
 	UseTabs     bool
-	Content     Widget
-	Pinned      bool
-	Virtual     bool
+	Content Widget
+	Preview bool
+	Virtual bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
 }
@@ -75,6 +75,7 @@ type EditorGroupWidget struct {
 	SignatureHelp           *SignatureHelpWidget
 	tabs                    []editorTab
 	active                  int
+	pinnedCount             int
 	TabSize                 int
 	InsertSpaces            bool
 	LineNumbers             bool
@@ -205,16 +206,42 @@ func (g *EditorGroupWidget) FlushNotifications() {
 	g.pendingNotify = nil
 }
 
-func (g *EditorGroupWidget) PinActiveTab() {
+func (g *EditorGroupWidget) CommitActiveTab() {
 	if t := g.activeTab(); t != nil {
-		t.Pinned = true
+		t.Preview = false
 	}
+}
+
+func (g *EditorGroupWidget) TogglePinTab() {
+	if len(g.tabs) == 0 {
+		return
+	}
+	idx := g.active
+	if idx < g.pinnedCount {
+		tab := g.tabs[idx]
+		g.tabs = append(g.tabs[:idx], g.tabs[idx+1:]...)
+		g.pinnedCount--
+		g.tabs = slices.Insert(g.tabs, g.pinnedCount, tab)
+		g.active = g.pinnedCount
+	} else {
+		tab := g.tabs[idx]
+		tab.Preview = false
+		g.tabs = append(g.tabs[:idx], g.tabs[idx+1:]...)
+		g.tabs = slices.Insert(g.tabs, g.pinnedCount, tab)
+		g.active = g.pinnedCount
+		g.pinnedCount++
+	}
+	g.syncTabs()
+}
+
+func (g *EditorGroupWidget) IsActiveTabPinned() bool {
+	return g.active < g.pinnedCount
 }
 
 func (g *EditorGroupWidget) OpenFile(path string) {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path {
-			g.tabs[i].Pinned = true
+			g.tabs[i].Preview = false
 			if g.tabs[i].Buf != nil && !g.tabs[i].Buf.Dirty {
 				g.tabs[i].Buf.LoadFile(path)
 			}
@@ -264,11 +291,12 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 		Folds:    folds,
 		TabSize:  tabSize,
 		UseTabs:  useTabs,
+		Preview:  true,
 	}
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.New(path)
 	}
-	if t := g.activeTab(); t != nil && !t.Pinned && t.Content == nil && t.Buf != nil && !t.Buf.Dirty {
+	if t := g.activeTab(); t != nil && t.Preview && t.Content == nil && t.Buf != nil && !t.Buf.Dirty {
 		g.tabs[g.active] = newTab
 		g.syncTabs()
 	} else {
@@ -351,7 +379,6 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 		FilePath: id,
 		Title:    title,
 		Content:  content,
-		Pinned:   true,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -361,6 +388,9 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 		if t.FilePath == id {
 			if t.Content != nil && g.OnContentTabClose != nil {
 				g.OnContentTabClose(t.FilePath)
+			}
+			if i < g.pinnedCount {
+				g.pinnedCount--
 			}
 			g.tabs = append(g.tabs[:i], g.tabs[i+1:]...)
 			if len(g.tabs) == 0 {
@@ -585,6 +615,9 @@ func (g *EditorGroupWidget) CloseTab() {
 	if closing.Content != nil && g.OnContentTabClose != nil {
 		g.OnContentTabClose(closing.FilePath)
 	}
+	if g.active < g.pinnedCount {
+		g.pinnedCount--
+	}
 	g.tabs = append(g.tabs[:g.active], g.tabs[g.active+1:]...)
 	if len(g.tabs) == 0 {
 		g.tabs = []editorTab{{
@@ -608,15 +641,24 @@ func (g *EditorGroupWidget) CloseOtherTabs() {
 	if t == nil || len(g.tabs) <= 1 {
 		return
 	}
-	if g.OnContentTabClose != nil {
-		for i, tab := range g.tabs {
-			if i != g.active && tab.Content != nil {
-				g.OnContentTabClose(tab.FilePath)
-			}
+	activeFile := t.FilePath
+	var kept []editorTab
+	for i, tab := range g.tabs {
+		if i == g.active || i < g.pinnedCount {
+			kept = append(kept, tab)
+			continue
+		}
+		if g.OnContentTabClose != nil && tab.Content != nil {
+			g.OnContentTabClose(tab.FilePath)
 		}
 	}
-	g.tabs = []editorTab{*t}
-	g.active = 0
+	g.tabs = kept
+	for i, tab := range g.tabs {
+		if tab.FilePath == activeFile {
+			g.active = i
+			break
+		}
+	}
 	g.syncTabs()
 }
 
@@ -625,9 +667,11 @@ func (g *EditorGroupWidget) CloseOtherSaved() {
 	if t == nil || len(g.tabs) <= 1 {
 		return
 	}
-	kept := []editorTab{*t}
+	activeFile := t.FilePath
+	var kept []editorTab
 	for i := range g.tabs {
-		if i == g.active {
+		if i == g.active || i < g.pinnedCount {
+			kept = append(kept, g.tabs[i])
 			continue
 		}
 		if g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty {
@@ -639,7 +683,12 @@ func (g *EditorGroupWidget) CloseOtherSaved() {
 		}
 	}
 	g.tabs = kept
-	g.active = 0
+	for i, tab := range g.tabs {
+		if tab.FilePath == activeFile {
+			g.active = i
+			break
+		}
+	}
 	g.syncTabs()
 }
 
@@ -656,15 +705,20 @@ func (g *EditorGroupWidget) HasDirtyOtherTabs() bool {
 }
 
 func (g *EditorGroupWidget) CloseAllTabs() {
-	g.tabs = []editorTab{{
-		FilePath: "untitled",
-		Buf:      &buffer.Buffer{Lines: []string{""}},
-		Cur:      &cursor.Cursor{},
-		Vp:       &view.Viewport{},
-		Undo:     g.newUndoStack(),
-		Sel:      &selection.Selection{},
-		Virtual:  true,
-	}}
+	kept := slices.Clone(g.tabs[:g.pinnedCount])
+	if len(kept) == 0 {
+		kept = []editorTab{{
+			FilePath: "untitled",
+			Buf:      &buffer.Buffer{Lines: []string{""}},
+			Cur:      &cursor.Cursor{},
+			Vp:       &view.Viewport{},
+			Undo:     g.newUndoStack(),
+			Sel:      &selection.Selection{},
+			Virtual:  true,
+		}}
+		g.pinnedCount = 0
+	}
+	g.tabs = kept
 	g.active = 0
 	g.syncTabs()
 }
@@ -672,7 +726,7 @@ func (g *EditorGroupWidget) CloseAllTabs() {
 func (g *EditorGroupWidget) CloseAllSaved() {
 	var kept []editorTab
 	for i := range g.tabs {
-		if g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty {
+		if i < g.pinnedCount || (g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty) {
 			kept = append(kept, g.tabs[i])
 		}
 	}
@@ -867,7 +921,6 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 		TabSize:  tabSize,
 		UseTabs:  detected.UseTabs,
 		ReadOnly: true,
-		Pinned:   true,
 	}
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.New(path)
@@ -907,7 +960,6 @@ func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []s
 		TabSize:  tabSize,
 		UseTabs:  detected.UseTabs,
 		ReadOnly: true,
-		Pinned:   true,
 	}
 	if g.SyntaxHighlight && filePath != "" {
 		newTab.Highlighter = highlight.New(filePath)
@@ -1598,6 +1650,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			Active:   i == g.active,
 			Dirty:    dirty,
 			Closable: closable,
+			Pinned:   i < g.pinnedCount,
 		})
 	}
 	g.TabBar.SetTabs(uiTabs)
