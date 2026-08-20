@@ -21,6 +21,7 @@ type Tab struct {
 	Dirty    bool
 	Active   bool
 	Closable bool
+	Pinned   bool
 }
 
 type TabBarWidget struct {
@@ -31,6 +32,7 @@ type TabBarWidget struct {
 	MoreButton       *MoreButtonWidget
 	OnTabClick       func(index int)
 	OnTabClose       func(index int)
+	OnTabUnpin       func(index int)
 	OnTabRightClick  func(index, screenX, screenY int)
 	OnPrevTab        func()
 	OnNextTab        func()
@@ -63,7 +65,11 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 	}
 	label += name
 	if tab.Active && tab.Closable {
-		label += " x"
+		if tab.Pinned {
+			label += " ♦"
+		} else {
+			label += " x"
+		}
 	}
 	label += " "
 	return label
@@ -72,11 +78,14 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 // drawTabLabel draws a tab label from x, advancing by each rune's display width
 // and clipping to the scrollable inner zone. The dirty marker keeps its own
 // style so it stays visible against the tab background.
-func drawTabLabel(surface Surface, x, innerLeft, innerRight int, label string, dirty bool, style term.Style) {
+func drawTabLabel(surface Surface, x, innerLeft, innerRight int, label string, dirty bool, pinned bool, style term.Style) {
 	for _, ch := range label {
 		chStyle := style
 		if dirty && ch == '●' {
 			chStyle = term.StyleWarning
+		}
+		if pinned && ch == '♦' {
+			chStyle = term.StyleMuted
 		}
 		w := textwidth.Rune(ch)
 		if x >= innerLeft && x+w <= innerRight {
@@ -187,16 +196,17 @@ func (t *TabBarWidget) Render(surface Surface) {
 		sx := s.start - t.ScrollOffset + innerLeft
 		ex := s.end - t.ScrollOffset + innerLeft
 		dirty := t.Tabs[i].Dirty
+		pinned := t.Tabs[i].Pinned
 		if s.active {
 			if sx >= innerLeft && sx < innerRight {
 				surface.SetCell(sx, 1, term.Cell{Ch: b.Vertical, Style: bs})
 			}
-			drawTabLabel(surface, sx+1, innerLeft, innerRight, s.label, dirty, term.StyleActiveTab)
+			drawTabLabel(surface, sx+1, innerLeft, innerRight, s.label, dirty, pinned, term.StyleActiveTab)
 			if ex-1 >= innerLeft && ex-1 < innerRight {
 				surface.SetCell(ex-1, 1, term.Cell{Ch: b.Vertical, Style: bs})
 			}
 		} else {
-			drawTabLabel(surface, sx, innerLeft, innerRight, s.label, dirty, term.StyleInactiveTab)
+			drawTabLabel(surface, sx, innerLeft, innerRight, s.label, dirty, pinned, term.StyleInactiveTab)
 		}
 	}
 
@@ -289,8 +299,12 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 			t.closeDownX = -1
 			localX := mx - r.X - arrowW + t.ScrollOffset
 			for i, s := range t.tabSpans {
-				if s.active && localX == s.end-3 && t.OnTabClose != nil {
-					t.OnTabClose(i)
+				if s.active && localX == s.end-3 {
+					if t.Tabs[i].Pinned && t.OnTabUnpin != nil {
+						t.OnTabUnpin(i)
+					} else if t.OnTabClose != nil {
+						t.OnTabClose(i)
+					}
 					return EventConsumed
 				}
 			}
@@ -332,7 +346,7 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	localX := mx - r.X - arrowW + t.ScrollOffset
 	for i, s := range t.tabSpans {
 		if localX >= s.start && localX < s.end {
-			if s.active && t.OnTabClose != nil {
+			if s.active && (t.OnTabClose != nil || t.OnTabUnpin != nil) {
 				closeX := s.end - 3
 				if localX == closeX {
 					t.closeDownX = mx

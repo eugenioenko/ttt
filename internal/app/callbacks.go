@@ -483,6 +483,11 @@ func registerWidgetCallbacks(app *App) {
 		reg.Execute("tab.close")
 	}
 
+	app.EditorGroup.TabBar.OnTabUnpin = func(index int) {
+		app.EditorGroup.SwitchTab(index)
+		app.EditorGroup.TogglePinTab()
+	}
+
 	app.EditorGroup.TabBar.MoreButton.OnClick = func(sx, sy int) {
 		moreMenu := []ui.ContextMenuItem{
 			{Label: "Close All", Command: "tab.closeAll"},
@@ -493,7 +498,13 @@ func registerWidgetCallbacks(app *App) {
 
 	app.EditorGroup.TabBar.OnTabRightClick = func(index, sx, sy int) {
 		app.EditorGroup.SwitchTab(index)
+		pinLabel := "Pin Tab"
+		if app.EditorGroup.IsActiveTabPinned() {
+			pinLabel = "Unpin Tab"
+		}
 		tabContextMenu := []ui.ContextMenuItem{
+			{Label: pinLabel, Shortcut: app.KeyFor("tab.pin"), Command: "tab.pin"},
+			ui.MenuSep(),
 			{Label: "Close", Shortcut: app.KeyFor("tab.close"), Command: "tab.close"},
 			{Label: "Close Others", Shortcut: "", Command: "tab.closeOthers"},
 			{Label: "Close All", Shortcut: "", Command: "tab.closeAll"},

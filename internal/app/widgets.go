@@ -142,7 +142,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.Editor.BracketColorStyles = bracketStyles
 	for _, f := range openFiles {
 		editorGroup.OpenFile(f)
-		editorGroup.PinActiveTab()
+		editorGroup.CommitActiveTab()
 	}
 
 	terminalPanel := ui.NewTerminalPanelWidget()

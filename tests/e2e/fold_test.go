@@ -311,7 +311,7 @@ func TestFoldStatePreservedAcrossTabs(t *testing.T) {
 	os.WriteFile(file2, []byte("package b\n"), 0644)
 
 	h.app.EditorGroup.OpenFile(file1)
-	h.app.EditorGroup.PinActiveTab()
+	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 2
