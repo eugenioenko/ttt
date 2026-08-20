@@ -559,6 +559,12 @@ func (a *App) PasteText(text string) {
 			return
 		}
 	}
+	if adapter, ok := a.Root.Focused.(*ui.WidgetAdapter); ok {
+		if inp, ok := adapter.FocusedWidget().(*widgets.InputWidget); ok {
+			inp.PasteText(text)
+			return
+		}
+	}
 	a.EditorGroup.PasteText(text)
 }
 

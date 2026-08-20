@@ -75,6 +75,8 @@ func (a *WidgetAdapter) wireTabbedCallbacks(w widgets.Widget) {
 
 func (a *WidgetAdapter) Inner() widgets.Widget { return a.W }
 
+func (a *WidgetAdapter) FocusedWidget() widgets.Widget { return a.focus.Focused() }
+
 func (a *WidgetAdapter) Focusable() bool { return true }
 
 func (a *WidgetAdapter) SetFocused(focused bool) {

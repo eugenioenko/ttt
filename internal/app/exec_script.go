@@ -61,6 +61,10 @@ func RunExecScriptSep(a *App, script, sep string) {
 			execDebug(a, args)
 		case "wait":
 			execWait(args)
+		case "paste":
+			execPaste(a, args)
+		case "copy":
+			a.Copy()
 		case "panel":
 			execPanel(a, args)
 		case "quit":
@@ -211,6 +215,19 @@ func execType(a *App, args string) {
 	}
 }
 
+func execPaste(a *App, args string) {
+	text := stripQuotes(args)
+	if text == "" {
+		slog.Error("exec_script: paste requires text")
+		return
+	}
+	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	time.Sleep(50 * time.Millisecond)
+	a.PasteText(text)
+	a.FlushEditorOnChange()
+	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+}
+
 func execCommand(a *App, args string) {
 	title := stripQuotes(strings.TrimSpace(args))
 	if title == "" {
@@ -316,6 +333,8 @@ Supported commands:
   click X Y          Simulate mouse click at coordinates
   key COMBO          Simulate key press (e.g., key ctrl+p, key enter)
   type TEXT           Type a string of text
+  paste TEXT          Simulate bracketed paste (terminal paste)
+  copy                Copy selection to clipboard
   exec "Command"     Run a command palette command by title
   screenshot PATH    Save screen text to file
   debug PATH         Save debug state JSON to file

@@ -82,6 +82,14 @@ export function exec(command) {
   commands.push(`exec "${command}"`);
 }
 
+export function paste(text) {
+  commands.push(`paste ${text}`);
+}
+
+export function copy() {
+  commands.push("copy");
+}
+
 export function panel(id) {
   commands.push(`panel ${id}`);
 }
