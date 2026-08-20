@@ -21,6 +21,11 @@ import (
 
 const maxBracketColorLines = 10_000
 
+type Bookmark struct {
+	Icon  rune
+	Style term.Style
+}
+
 type EditorPaneWidget struct {
 	BaseWidget
 	Buf                     *buffer.Buffer
@@ -64,6 +69,8 @@ type EditorPaneWidget struct {
 	searchByLine            map[int][]int
 	diagByLine              map[int][]int
 	LineChanges             []diff.LineChangeKind
+	Bookmarks               map[int]Bookmark
+	OnBookmarkChange        func(line int, action string, b Bookmark)
 	ReadOnly                bool
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
@@ -109,6 +116,45 @@ func (e *EditorPaneWidget) GutterWidth() int {
 		return digits + 5
 	default:
 		return digits + 3
+	}
+}
+
+func (e *EditorPaneWidget) SetBookmark(line int, icon rune, style term.Style) {
+	if e.Bookmarks == nil {
+		e.Bookmarks = make(map[int]Bookmark)
+	}
+	b := Bookmark{Icon: icon, Style: style}
+	e.Bookmarks[line] = b
+	e.fireBookmarkChange(line, "set", b)
+}
+
+func (e *EditorPaneWidget) GetBookmark(line int) (Bookmark, bool) {
+	b, ok := e.Bookmarks[line]
+	return b, ok
+}
+
+func (e *EditorPaneWidget) RemoveBookmark(line int) {
+	delete(e.Bookmarks, line)
+	e.fireBookmarkChange(line, "remove", Bookmark{})
+}
+
+func (e *EditorPaneWidget) SetAllBookmarks(items map[int]Bookmark) {
+	e.Bookmarks = items
+	e.fireBookmarkChange(-1, "set_all", Bookmark{})
+}
+
+func (e *EditorPaneWidget) GetAllBookmarks() map[int]Bookmark {
+	return e.Bookmarks
+}
+
+func (e *EditorPaneWidget) ClearBookmarks() {
+	e.Bookmarks = nil
+	e.fireBookmarkChange(-1, "clear", Bookmark{})
+}
+
+func (e *EditorPaneWidget) fireBookmarkChange(line int, action string, b Bookmark) {
+	if e.OnBookmarkChange != nil {
+		e.OnBookmarkChange(line, action, b)
 	}
 }
 

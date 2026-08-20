@@ -1619,6 +1619,88 @@ uninstalled.
 Clears this plugin's diagnostics. With a `path`, clears just that file; with no
 argument, clears every file.
 
+## Bookmarks
+
+Plugins can manage gutter **bookmarks** — a per-line icon a user can also
+toggle by clicking the left half of the gutter — through the `ttt.bookmarks`
+module. Storage is the plugin's responsibility: ttt only holds bookmarks for
+the current session, so a plugin that wants them to survive a restart must
+persist them itself (e.g. to a file), using `get_all`/`set_all` to save and
+restore, and the `bookmark.change` event to notice when the user adds or
+removes one by clicking. Requires the `editor.bookmarks` permission.
+
+All functions operate on the **currently active file** — there's no `path`
+argument, unlike `ttt.diagnostics` (which can target files that aren't even
+open).
+
+```lua
+local bookmarks = require("ttt.bookmarks")
+
+bookmarks.set(42, "★", "success")   -- 1-based line, icon, named style
+bookmarks.remove(42)
+
+local b = bookmarks.get(42)
+if b then
+  ttt.notify(b.icon .. " at line 42, style " .. b.style)
+end
+
+-- Bulk sync, e.g. right after opening a file, restoring from your own storage:
+bookmarks.set_all({
+  { line = 3, icon = "★", style = "success" },
+  { line = 10, icon = "★", style = "success" },
+})
+
+local all = bookmarks.get_all()   -- {{line=3, icon="★", style="success"}, ...}
+
+bookmarks.clear()   -- remove every bookmark in the current file
+```
+
+### `bookmarks.set(line, icon, style)`
+
+Sets (or replaces) the bookmark on `line` (1-based). `icon` is a single
+character; `style` is a named style (see [Styles](#styles)).
+
+### `bookmarks.get(line)`
+
+Returns `{icon, style}` for `line`, or `nil` if there's no bookmark there.
+
+### `bookmarks.remove(line)`
+
+Removes the bookmark on `line`, if any.
+
+### `bookmarks.set_all(items)`
+
+Replaces **all** bookmarks in the current file with `items` — a list of
+`{line, icon, style}` tables. Use this instead of calling `set` in a loop when
+restoring many bookmarks at once (e.g. on file open); it's one call instead of
+N.
+
+### `bookmarks.get_all()`
+
+Returns every bookmark in the current file as a list of `{line, icon, style}`
+tables.
+
+### `bookmarks.clear()`
+
+Removes every bookmark in the current file.
+
+### The `bookmark.change` event
+
+Fires via `ttt.events` whenever a bookmark is added or removed — whether from
+a user click or from this plugin's own `set`/`remove`/`set_all`/`clear`
+calls. This is how a storage-owning plugin finds out about a click without
+polling:
+
+```lua
+local events = require("ttt.events")
+
+events.on("bookmark.change", function(path, line, action, icon, style)
+  -- action is "set", "remove", "set_all", or "clear"
+  -- for "set_all"/"clear", line/icon/style carry no meaningful value —
+  -- re-read with get_all() if you need the resulting full state
+end)
+```
+
 ## Editor Context Menu
 
 A plugin can contribute items to the editor's activation / right-click menu —
@@ -2160,6 +2242,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `editor.read`    | boolean  | Read the contents of editor buffers (`ttt.editor` read functions). |
 | `editor.write`   | boolean  | Modify editor buffers (`ttt.editor` write functions). |
 | `editor.diagnostics` | boolean | Publish editor diagnostics/squiggles via `ttt.diagnostics`. |
+| `editor.bookmarks` | boolean | Manage gutter bookmarks via `ttt.bookmarks` and the `bookmark.change` event. |
 | `fs.read`        | boolean  | Read files and list directories (`ttt.fs` read functions). |
 | `fs.write`       | boolean  | Write files to the file system (`ttt.fs.write`).  |
 | `system.exec`    | string[] | Execute specific system commands. List each allowed binary name. |
@@ -2242,6 +2325,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.editor`   | Editor buffer read/write       |
 | `ttt.diagnostics` | Publish editor diagnostics (squiggles) |
+| `ttt.bookmarks` | Manage gutter bookmarks        |
 | `ttt.fs`       | Filesystem access              |
 | `ttt.system`   | Command execution, env vars    |
 | `ttt.net`      | HTTP requests                  |

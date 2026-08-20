@@ -60,6 +60,7 @@ const (
 	StyleGutterAdded
 	StyleGutterModified
 	StyleGutterDeleted
+	StyleGutterBookmark
 	StyleButton
 	StyleButtonFocused
 	StyleSelectedTab

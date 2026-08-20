@@ -69,6 +69,7 @@ type PermissionSet struct {
 	EditorRead        bool        `json:"editor.read,omitempty"`
 	EditorWrite       bool        `json:"editor.write,omitempty"`
 	EditorDiagnostics bool        `json:"editor.diagnostics,omitempty"`
+	EditorBookmarks   bool        `json:"editor.bookmarks,omitempty"`
 	FsRead            bool        `json:"fs.read,omitempty"`
 	FsWrite           bool        `json:"fs.write,omitempty"`
 	SystemExec        []string    `json:"system.exec,omitempty"`
@@ -107,6 +108,7 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	check("editor.read", granted.EditorRead, requested.EditorRead)
 	check("editor.write", granted.EditorWrite, requested.EditorWrite)
 	check("editor.diagnostics", granted.EditorDiagnostics, requested.EditorDiagnostics)
+	check("editor.bookmarks", granted.EditorBookmarks, requested.EditorBookmarks)
 	check("fs.read", granted.FsRead, requested.FsRead)
 	check("fs.write", granted.FsWrite, requested.FsWrite)
 	check("system.env", granted.SystemEnv, requested.SystemEnv)
@@ -172,6 +174,8 @@ func (ps PermissionSet) Check(perm string) error {
 		allowed = ps.EditorWrite
 	case "editor.diagnostics":
 		allowed = ps.EditorDiagnostics
+	case "editor.bookmarks":
+		allowed = ps.EditorBookmarks
 	case "fs.read":
 		allowed = ps.FsRead
 	case "fs.write":
@@ -246,6 +250,7 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 	add("Read editor", ps.EditorRead)
 	add("Write editor", ps.EditorWrite)
 	add("Editor diagnostics", ps.EditorDiagnostics)
+	add("Editor bookmarks", ps.EditorBookmarks)
 	add("Read files", ps.FsRead)
 	add("Write files", ps.FsWrite)
 	add("Environment", ps.SystemEnv)

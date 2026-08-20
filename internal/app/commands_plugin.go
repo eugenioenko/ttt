@@ -12,6 +12,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -463,6 +464,38 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		} else {
 			a.EditorGroup.SetDiagnosticsSource(diagSource, path, nil)
 		}
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+	p.SetBookmark = func(line int, icon rune, style term.Style) {
+		a.EditorGroup.Editor.SetBookmark(line, icon, style)
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+	p.GetBookmark = func(line int) (rune, term.Style, bool) {
+		b, ok := a.EditorGroup.Editor.GetBookmark(line)
+		return b.Icon, b.Style, ok
+	}
+	p.RemoveBookmark = func(line int) {
+		a.EditorGroup.Editor.RemoveBookmark(line)
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+	p.SetAllBookmarks = func(items []plugin.BookmarkItem) {
+		m := make(map[int]ui.Bookmark, len(items))
+		for _, it := range items {
+			m[it.Line] = ui.Bookmark{Icon: it.Icon, Style: it.Style}
+		}
+		a.EditorGroup.Editor.SetAllBookmarks(m)
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+	p.GetAllBookmarks = func() []plugin.BookmarkItem {
+		all := a.EditorGroup.Editor.GetAllBookmarks()
+		items := make([]plugin.BookmarkItem, 0, len(all))
+		for line, b := range all {
+			items = append(items, plugin.BookmarkItem{Line: line, Icon: b.Icon, Style: b.Style})
+		}
+		return items
+	}
+	p.ClearBookmarks = func() {
+		a.EditorGroup.Editor.ClearBookmarks()
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.RenderMarkdown = func(text string) []plugin.MarkdownLine {
