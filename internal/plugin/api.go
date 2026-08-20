@@ -17,6 +17,13 @@ type DiagnosticItem struct {
 	Source    string
 }
 
+// BookmarkItem is one entry of a bulk bookmarks.set_all() call.
+type BookmarkItem struct {
+	Line  int
+	Icon  rune
+	Style term.Style
+}
+
 // ContextMenuEntry is one item contributed by a plugin to the editor's
 // right-click context menu. A Separator entry renders as a divider; otherwise
 // OnSelect is invoked (on the main thread) when the item is chosen.

@@ -28,6 +28,9 @@ type SplitPanelWidget struct {
 	OnLeftClick               func()
 	OnRightClick              func()
 	dragging                  bool
+	pendingResize             bool
+	pendingResizeX            int
+	pendingResizeY            int
 	wasPressed                bool
 	capturedChild             Widget
 	pointerCaptureInvalidated func()
@@ -222,6 +225,48 @@ func (s *SplitPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventIgnored
 	}
 
+	// divX+1 is both the resize grab zone and the right panel's first column;
+	// wait for movement (drag) or release (click, replayed to the right panel).
+	if s.pendingResize {
+		moved := mx != s.pendingResizeX || my != s.pendingResizeY
+		if pressed {
+			if moved {
+				s.pendingResize = false
+				s.dragging = true
+				if mx != s.pendingResizeX && s.OnResize != nil {
+					s.OnResize(mx - r.X - 1)
+				}
+			}
+			return EventCaptured
+		}
+		s.pendingResize = false
+		if moved {
+			s.dragging = true
+			if mx != s.pendingResizeX && s.OnResize != nil {
+				s.OnResize(mx - r.X - 1)
+			}
+			s.endDrag()
+			return EventCaptured
+		}
+		if s.Right != nil {
+			down := tcell.NewEventMouse(s.pendingResizeX, s.pendingResizeY, tcell.Button1, mev.Modifiers())
+			s.Right.HandleEvent(down)
+			result := s.Right.HandleEvent(ev)
+			if result == EventCaptured {
+				s.capturedChild = s.Right
+				if s.OnRightClick != nil {
+					s.OnRightClick()
+				}
+				return EventCaptured
+			}
+			if result == EventConsumed && s.OnRightClick != nil {
+				s.OnRightClick()
+			}
+			return result
+		}
+		return EventIgnored
+	}
+
 	if s.capturedChild != nil {
 		if btn == tcell.ButtonNone {
 			s.capturedChild.HandleEvent(ev)
@@ -244,9 +289,14 @@ func (s *SplitPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 	if s.ShowLeft {
 		divX := s.DividerScreenX()
 		slog.Debug("splitPanel", "action", "route", "mx", mx, "divX", divX, "showLeft", true)
-		// divX to divX+1: grab zone extends right only to avoid overlapping the scrollbar
-		if freshClick && mx >= divX && mx <= divX+1 && s.OnResize != nil {
+		if freshClick && mx == divX && s.OnResize != nil {
 			s.dragging = true
+			return EventCaptured
+		}
+		if freshClick && mx == divX+1 && s.OnResize != nil {
+			s.pendingResize = true
+			s.pendingResizeX = mx
+			s.pendingResizeY = my
 			return EventCaptured
 		}
 		if mx < divX {
@@ -350,7 +400,8 @@ func (s *SplitPanelWidget) endDrag() {
 }
 
 func (s *SplitPanelWidget) CancelPointerCapture() bool {
-	canceled := s.dragging || s.capturedChild != nil
+	canceled := s.dragging || s.pendingResize || s.capturedChild != nil
+	s.pendingResize = false
 	s.endDrag()
 	s.wasPressed = false
 	s.capturedChild = nil
@@ -369,7 +420,8 @@ func (s *SplitPanelWidget) CancelPointerCapture() bool {
 }
 
 func (s *SplitPanelWidget) InvalidatePointerInteraction() bool {
-	invalidated := s.dragging || s.capturedChild != nil
+	invalidated := s.dragging || s.pendingResize || s.capturedChild != nil
+	s.pendingResize = false
 	s.endDrag()
 	s.wasPressed = false
 	s.capturedChild = nil
@@ -401,7 +453,7 @@ func (s *SplitPanelWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (s *SplitPanelWidget) OwnsPointerCapture() bool {
-	if s.dragging {
+	if s.dragging || s.pendingResize {
 		return true
 	}
 	if s.capturedChild != nil {
