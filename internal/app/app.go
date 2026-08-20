@@ -83,8 +83,12 @@ type App struct {
 	Version                string
 	PluginManager          *plugin.Manager
 	PendingPluginApprovals []*plugin.Plugin
-	PluginsPanel           *PluginsPanel
-	Output                 *ui.OutputWidget
+	// PendingFileTargets holds cursor positions parsed from `path:line[:col]`
+	// arguments. They are applied after the first render, once the viewport
+	// has a real height to scroll against.
+	PendingFileTargets []FileTarget
+	PluginsPanel       *PluginsPanel
+	Output             *ui.OutputWidget
 	// runningRepoOp is the progress label of the in-flight task, empty when idle.
 	runningRepoOp        string
 	pluginDetailWidgets  map[string]*pluginDetailState

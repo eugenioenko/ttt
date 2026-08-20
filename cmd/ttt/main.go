@@ -137,6 +137,7 @@ Usage: ttt [options] [files/folders/URLs...]
 
 Arguments:
   files               Open one or more files
+  file:line[:col]     Open a file with the cursor on that line (and column)
   folders             Open directories as workspace roots
   .                   Open the current directory
   PR URL              Open a GitHub pull request for review
@@ -153,6 +154,7 @@ Options:
 Examples:
   ttt                                           Open current directory
   ttt main.go utils.go                          Open specific files
+  ttt internal/app/widgets.go:42:8              Open at line 42, column 8
   ttt ~/projectA ~/projectB                     Multi-root workspace
   ttt . https://github.com/o/r/pull/123         Review a PR with repo tree
 
@@ -211,7 +213,7 @@ Docs: https://tttedit.dev
 	cmdRegistry := command.NewRegistry()
 	borders := app.BuildBorderSet(cfg.Theme.Borders)
 
-	editor, prURLs := app.BuildApp(&cfg, &borders)
+	editor, prURLs, fileTargets := app.BuildApp(&cfg, &borders)
 	editor.ApplyBorderStyle()
 	editor.Init(screen, renderer, lspManager)
 
@@ -333,6 +335,8 @@ Docs: https://tttedit.dev
 		w, h = flags.sizeW, flags.sizeH
 	}
 	editor.Root.SetSize(w, h)
+
+	editor.PendingFileTargets = fileTargets
 
 	if flags.pluginFile != "" {
 		app.LoadPluginFromFile(editor, flags.pluginFile)
