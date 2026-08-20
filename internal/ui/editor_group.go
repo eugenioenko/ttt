@@ -1110,9 +1110,14 @@ func (g *EditorGroupWidget) SetSearchActive(idx int) {
 	g.Editor.SearchActive = idx
 }
 
-func (g *EditorGroupWidget) GoToLine(line int) {
+// PlaceCursor moves the cursor to a 1-based line and column, clamping both to
+// the buffer and expanding any fold hiding the line. It reports whether an
+// editor was active. Unlike GoToLineCol it never touches the viewport, so it is
+// safe before the first render: a scroll computed against a zero-height
+// viewport leaves the tab mis-framed for as long as it stays open.
+func (g *EditorGroupWidget) PlaceCursor(line, col int) bool {
 	if !g.IsEditorActive() {
-		return
+		return false
 	}
 	if line < 1 {
 		line = 1
@@ -1124,6 +1129,22 @@ func (g *EditorGroupWidget) GoToLine(line int) {
 	g.Editor.ExpandFoldContaining(bufLine)
 	g.Editor.Cursor.Line = bufLine
 	g.Editor.Cursor.Col = 0
+	if col > 1 {
+		lineLen := len([]rune(g.Editor.Buf.Lines[bufLine]))
+		c := col - 1
+		if c > lineLen {
+			c = lineLen
+		}
+		g.Editor.Cursor.Col = c
+	}
+	return true
+}
+
+func (g *EditorGroupWidget) GoToLine(line int) {
+	if !g.PlaceCursor(line, 0) {
+		return
+	}
+	bufLine := g.Editor.Cursor.Line
 	h := g.Editor.Viewport.Height
 	if h <= 0 {
 		r := g.GetRect()

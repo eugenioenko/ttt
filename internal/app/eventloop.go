@@ -176,6 +176,16 @@ func RunEventLoop(
 	syncStatus()
 	redraw()
 
+	// Cursor positions from `path:line[:col]` arguments are applied here rather
+	// than at build time: GoToLineCol centres the target against the viewport
+	// height, which is only real once the first render has laid the widgets out.
+	if len(app.PendingFileTargets) > 0 {
+		app.ApplyFileTargets(app.PendingFileTargets)
+		app.PendingFileTargets = nil
+		syncStatus()
+		redraw()
+	}
+
 	app.ShowPendingPluginApprovals()
 
 	for *running {
