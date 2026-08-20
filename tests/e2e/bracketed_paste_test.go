@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -67,6 +68,31 @@ func TestBracketedPasteMultiLine(t *testing.T) {
 	}
 	if buf.Lines[2] != "line3" {
 		t.Errorf("line 2: expected 'line3', got %q", buf.Lines[2])
+	}
+}
+
+func TestBracketedPasteIntoDialog(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	h.exec("file.new")
+
+	// Open Save As dialog (new file has no path, so file.save opens Save As)
+	h.exec("file.save")
+	h.redraw()
+
+	// Paste a path into the dialog via bracketed paste
+	h.app.PasteText("/tmp/dialog-paste-test.txt")
+	h.redraw()
+
+	text := h.screenText()
+	if !strings.Contains(text, "dialog-paste-test.txt") {
+		t.Errorf("pasted text not visible in dialog; screen:\n%s", text)
+	}
+
+	// Editor buffer should be untouched
+	buf := h.app.EditorGroup.ActiveBuffer()
+	if buf != nil && len(buf.Lines) > 0 && buf.Lines[0] != "" {
+		t.Errorf("paste leaked into editor: %q", buf.Lines[0])
 	}
 }
 
