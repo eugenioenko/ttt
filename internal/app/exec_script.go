@@ -240,7 +240,18 @@ func execCommand(a *App, args string) {
 		slog.Error("exec_script: command not found", "title", title)
 		return
 	}
-	a.Reg.Execute(cmd.ID)
+	// Hand the command to the event loop instead of running it here. `key` and
+	// `click` already post real events, so they get the status bar sync that
+	// follows real input; running a command straight from the script goroutine
+	// skipped that sync and mutated widget state off the main thread.
+	a.Screen.PostEvent(tcell.NewEventInterrupt(&ExecCommandRequest{ID: cmd.ID}))
+}
+
+// ExecCommandRequest is posted as an EventInterrupt so a command named by an
+// --exec script runs on the main thread, on the same path as key and mouse
+// input.
+type ExecCommandRequest struct {
+	ID string
 }
 
 func execScreenshot(a *App, args string) {

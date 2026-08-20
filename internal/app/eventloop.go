@@ -262,6 +262,10 @@ func RunEventLoop(
 				}
 			case *GitGutterTrigger:
 				app.RequestGitGutterForActiveFile()
+			case *ExecCommandRequest:
+				app.Reg.Execute(v.ID)
+				app.FlushEditorOnChange()
+				syncStatus()
 			case *AutocompleteTrigger:
 				triggerChar := app.charBeforeCursor()
 				isTrigger := triggerChar != "" && (len(app.CompletionTriggers) == 0 || app.isCompletionTrigger(triggerChar))
