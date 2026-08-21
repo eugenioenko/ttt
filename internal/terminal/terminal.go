@@ -25,6 +25,7 @@ type Terminal struct {
 	cmd        *pty.Cmd
 	cols, rows int
 	done       chan struct{}
+	started    bool
 	closed     bool
 	exited     bool
 	OnUpdate   func()
@@ -89,6 +90,9 @@ func defaultShell() string {
 }
 
 func (t *Terminal) Run() {
+	t.mu.Lock()
+	t.started = true
+	t.mu.Unlock()
 	go t.readLoop()
 }
 
@@ -156,6 +160,7 @@ func (t *Terminal) Close() {
 		return
 	}
 	t.closed = true
+	started := t.started
 	t.mu.Unlock()
 
 	t.pt.Close()
@@ -163,7 +168,9 @@ func (t *Terminal) Close() {
 		t.cmd.Process.Kill()
 		t.cmd.Wait()
 	}
-	<-t.done
+	if started {
+		<-t.done
+	}
 }
 
 func (t *Terminal) ScrollbackLen() int {
