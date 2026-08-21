@@ -606,8 +606,6 @@ func registerWidgetCallbacks(app *App) {
 			app.ContentSplit.BottomH = height
 			if len(app.Terminals) == 0 {
 				app.SpawnTerminal()
-			} else {
-				resizeTerminals(app)
 			}
 		}
 	}
