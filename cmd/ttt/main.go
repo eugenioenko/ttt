@@ -349,11 +349,16 @@ Docs: https://tttedit.dev
 		app.LoadPluginFromFile(editor, flags.pluginFile)
 	}
 
+	if cfg.Settings.DebugMode {
+		editor.LogOutput("info", "ttt", "Debug mode enabled")
+	}
+
 	if flags.exec != "" {
 		go app.RunExecScriptSep(editor, flags.exec, flags.execSplitOn)
 	}
 
 	if flags.listen {
+		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddr+" (POST /exec)")
 		go app.StartListenServer(editor)
 	}
 
