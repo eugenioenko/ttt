@@ -11,7 +11,7 @@ Settings are stored in `~/.config/ttt/settings.json`. A complete example is avai
 
 There are two ways to change settings:
 
-- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into **Editor**, **Appearance**, **Completion** and **Advanced** (explorer, terminal, search and plugin options live under Advanced). Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
+- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into **Editor**, **Appearance**, **Completion** and **Advanced** (Git, explorer, terminal, search and plugin options live under Advanced). Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
 - **Raw JSON** — **Settings: Open settings.json** opens the file itself. Needed for the `lsp` settings and `formatters`, neither of which is exposed in the form.
 
 Closing the settings tab with unapplied edits discards them.
@@ -59,6 +59,12 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
+
+## Git
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `git.fileView` | string | `"tree"` | Show working-tree and expanded commit files as a compact `"tree"` or a full-path `"list"` |
 
 ## Terminal
 
@@ -164,6 +170,9 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   "explorer": {
     "showHidden": true,
     "showGitIgnored": true
+  },
+  "git": {
+    "fileView": "tree"
   },
   "terminal": {
     "shell": "/bin/zsh",

@@ -11,11 +11,14 @@ var (
 	GutterStyles = []string{"minimal", "compact", "extended"}
 	BorderStyles = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
 	DiffModes    = []string{"split", "unified"}
+	GitFileViews = []string{"tree", "list"}
 )
 
 const (
 	DiffModeSplit   = "split"
 	DiffModeUnified = "unified"
+	GitFileViewTree = "tree"
+	GitFileViewList = "list"
 )
 
 type TerminalSettings struct {
@@ -156,6 +159,14 @@ type ExplorerSettings struct {
 	ShowGitIgnored bool `json:"showGitIgnored"`
 }
 
+type GitSettings struct {
+	FileView string `json:"fileView"`
+}
+
+func DefaultGitSettings() GitSettings {
+	return GitSettings{FileView: GitFileViewTree}
+}
+
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
@@ -191,6 +202,7 @@ type Settings struct {
 	Editor       EditorSettings       `json:"editor"`
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
+	Git          GitSettings          `json:"git"`
 	Terminal     TerminalSettings     `json:"terminal"`
 	LSP          LSPSettings          `json:"lsp"`
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
@@ -210,7 +222,7 @@ type Settings struct {
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "editor": true,
-	"search": true, "explorer": true, "terminal": true, "lsp": true,
+	"search": true, "explorer": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "plugins": true, "formatters": true,
 }
 
@@ -264,6 +276,7 @@ func DefaultSettings() Settings {
 		Editor:       DefaultEditorSettings(),
 		Search:       DefaultSearchSettings(),
 		Explorer:     DefaultExplorerSettings(),
+		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
 		LSP:          DefaultLSPSettings(),
 		Autocomplete: DefaultAutocompleteSettings(),
@@ -287,6 +300,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
+	}
+	if !slices.Contains(GitFileViews, s.Git.FileView) {
+		s.Git.FileView = GitFileViewTree
 	}
 }
 

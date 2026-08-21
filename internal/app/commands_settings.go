@@ -82,6 +82,9 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.Explorer.Settings = s.Explorer
 		a.Explorer.Reload()
 	}
+	if a.Changes != nil {
+		a.Changes.SetFileView(s.Git.FileView)
+	}
 
 	// LoadTheme also accepts the empty built-in-default ID used by both theme
 	// pickers, so every surfaced theme follows one resolve-and-apply path.

@@ -24,6 +24,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Editor.DiffMode = DiffModeUnified
 	s.Editor.DiffWordWrap = true
 	s.Editor.DiffHighContrast = true
+	s.Git.FileView = GitFileViewList
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Terminal.Shell = "/bin/zsh"
@@ -47,6 +48,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if !got.Editor.DiffHighContrast {
 		t.Error("diffHighContrast did not round-trip")
+	}
+	if got.Git.FileView != GitFileViewList {
+		t.Errorf("git.fileView = %q, want %q", got.Git.FileView, GitFileViewList)
 	}
 	if got.Editor.IsSyntaxHighlightEnabled() {
 		t.Error("syntaxHighlight=false did not round-trip; tri-state pointer lost")
@@ -104,6 +108,7 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	s := DefaultSettings()
 	s.Editor.GutterStyle = "bogus"
 	s.Editor.BorderStyle = "bogus"
+	s.Git.FileView = "bogus"
 	normalizeSettings(&s)
 
 	if s.Editor.GutterStyle != "compact" {
@@ -111,6 +116,9 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	}
 	if s.Editor.BorderStyle != "default" {
 		t.Errorf("borderStyle = %q, want default", s.Editor.BorderStyle)
+	}
+	if s.Git.FileView != GitFileViewTree {
+		t.Errorf("git.fileView = %q, want tree", s.Git.FileView)
 	}
 
 	for _, v := range GutterStyles {
@@ -125,6 +133,13 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 		normalizeSettings(&s)
 		if s.Editor.BorderStyle != v {
 			t.Errorf("normalize rejected valid border style %q", v)
+		}
+	}
+	for _, v := range GitFileViews {
+		s.Git.FileView = v
+		normalizeSettings(&s)
+		if s.Git.FileView != v {
+			t.Errorf("normalize rejected valid git file view %q", v)
 		}
 	}
 }

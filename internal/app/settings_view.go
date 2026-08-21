@@ -143,10 +143,13 @@ func settingsCategories() []settingsCategory {
 				GetInt: func(s *config.Settings) int { return s.Autocomplete.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Autocomplete.Debounce = v }},
 		}},
-		// Explorer, terminal, search and plugin settings are a handful of fields
+		// Git, explorer, terminal, search and plugin settings are a handful of fields
 		// each; separate tabs for them left the strip mostly empty. Labels here
 		// name their area, since the tab title no longer does.
 		{Title: "Advanced", Fields: []settingField{
+			{Label: "Git: file view", Kind: settingEnum, Options: gitFileViewItems,
+				GetString: func(s *config.Settings) string { return s.Git.FileView },
+				SetString: func(s *config.Settings, v string) { s.Git.FileView = v }},
 			{Label: "Explorer: hidden files", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.ShowHidden },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.ShowHidden = v }},
@@ -176,6 +179,13 @@ func diffModeItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
 		{ID: config.DiffModeSplit, Label: "Split"},
 		{ID: config.DiffModeUnified, Label: "Unified"},
+	}
+}
+
+func gitFileViewItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.GitFileViewTree, Label: "Tree"},
+		{ID: config.GitFileViewList, Label: "List"},
 	}
 }
 

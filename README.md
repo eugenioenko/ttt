@@ -170,6 +170,10 @@ Sidebar search panel (Ctrl+K F) powered by [ripgrep](https://github.com/BurntSus
 
 Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 
+Changed files and files inside expanded commits use a compact directory tree by
+default. Consecutive single-child folders share one row; switch between **Tree**
+and full-path **List** views from the Options menu, command palette, or Settings.
+
 **Staging:**
 - **Spacebar** — toggle stage/unstage on the selected file
 - **`a`** — stage all unstaged files
@@ -524,7 +528,7 @@ Config files are loaded from `<exe-dir>/config/` (bundled defaults) or `~/.confi
 | [`keybindings.json`](config/keybindings.json) | Custom keybindings (VS Code key format) |
 | `themes/*.json` | Custom color themes |
 
-Most settings can be edited from a form instead of by hand: **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). The form is grouped into **Editor**, **Appearance**, **Completion** and **Advanced** (explorer, terminal, search and plugin options live under Advanced). Changes are held until you press **Apply** (also **Settings: Apply Changes**), which writes `settings.json` and applies everything that does not need a restart; **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Settings marked *(restart)* take effect on next launch. LSP settings and external formatters are not exposed in the form — those stay JSON-only.
+Most settings can be edited from a form instead of by hand: **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). The form is grouped into **Editor**, **Appearance**, **Completion** and **Advanced** (Git, explorer, terminal, search and plugin options live under Advanced). Changes are held until you press **Apply** (also **Settings: Apply Changes**), which writes `settings.json` and applies everything that does not need a restart; **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Settings marked *(restart)* take effect on next launch. LSP settings and external formatters are not exposed in the form — those stay JSON-only.
 
 To edit the raw files, use **Settings: Open settings.json** and **Settings: Open keybindings.json**.
 
@@ -552,6 +556,7 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `search.debounce` | int | `350` | Milliseconds to debounce global search input |
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
+| `git.fileView` | string | `"tree"` | Show changed and historical commit files as a compact `"tree"` or full-path `"list"` |
 | `terminal.shell` | string | `""` | Shell command for the integrated terminal (empty = system default) |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain in the terminal |
 | `lsp.saveOnRename` | bool | `false` | Auto-save all files affected by a rename operation |
@@ -583,6 +588,9 @@ Example `~/.config/ttt/settings.json` (also available at [`config/settings.json`
   "explorer": {
     "showHidden": true,
     "showGitIgnored": true
+  },
+  "git": {
+    "fileView": "tree"
   },
   "terminal": {
     "shell": "",

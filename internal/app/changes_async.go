@@ -230,13 +230,7 @@ func commitFileParent(id string) (parentID, ref string, ok bool) {
 
 // selectLogNode selects a node by ID, reporting whether it was there to select.
 func (cp *ChangesPanel) selectLogNode(id string) bool {
-	for i, node := range cp.CommitLog.FlatList() {
-		if node.ID == id {
-			cp.CommitLog.SetSelectedIndex(i)
-			return true
-		}
-	}
-	return false
+	return revealTreeSelection(cp.CommitLog, id)
 }
 
 func readCommitFiles(dir, ref, short, nodeID string) *CommitFilesResult {

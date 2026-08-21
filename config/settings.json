@@ -23,6 +23,9 @@
     "showHidden": true,
     "showGitIgnored": true
   },
+  "git": {
+    "fileView": "tree"
+  },
   "terminal": {
     "scrollback": 1000
   },

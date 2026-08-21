@@ -38,6 +38,16 @@ func (a *App) ToggleDiffWordWrapDefault() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) UseTreeGitFileView() {
+	a.Settings.Git.FileView = config.GitFileViewTree
+	a.SaveAndApplySettings()
+}
+
+func (a *App) UseListGitFileView() {
+	a.Settings.Git.FileView = config.GitFileViewList
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleAutoDedent() {
 	enabled := !a.Settings.Editor.IsAutoDedentEnabled()
 	a.Settings.Editor.AutoDedent = &enabled
@@ -194,6 +204,14 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		diffWordWrapChecked = ui.MenuChecked
 	}
 
+	treeGitFilesChecked := ui.MenuUnchecked
+	listGitFilesChecked := ui.MenuUnchecked
+	if a.Settings.Git.FileView == config.GitFileViewList {
+		listGitFilesChecked = ui.MenuChecked
+	} else {
+		treeGitFilesChecked = ui.MenuChecked
+	}
+
 	bracketColorChecked := ui.MenuUnchecked
 	if a.Settings.Editor.BracketPairColorization {
 		bracketColorChecked = ui.MenuChecked
@@ -235,6 +253,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Split Diff", Command: "options.useSplitDiff", Checked: splitDiffChecked},
 		{Label: "Unified Diff", Command: "options.useUnifiedDiff", Checked: unifiedDiffChecked},
 		{Label: "Diff Word Wrap", Command: "options.toggleDiffWordWrap", Checked: diffWordWrapChecked},
+		{Label: "Git Files: Tree", Command: "options.useGitFileTree", Checked: treeGitFilesChecked},
+		{Label: "Git Files: List", Command: "options.useGitFileList", Checked: listGitFilesChecked},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
@@ -291,6 +311,18 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleDiffWordWrap", Title: "Toggle Diff Word Wrap Default",
 		Keywords: []string{"preferences", "settings", "git", "diff", "wrap", "default"},
 		Handler:  app.ToggleDiffWordWrapDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useGitFileTree", Title: "View Git Files as Tree",
+		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "tree"},
+		Handler:  app.UseTreeGitFileView,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useGitFileList", Title: "View Git Files as List",
+		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "flat", "list"},
+		Handler:  app.UseListGitFileView,
 	})
 
 	reg.Register(command.Command{

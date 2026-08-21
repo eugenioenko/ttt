@@ -177,6 +177,25 @@ func TestSettingsHighContrastDiffsLiveApply(t *testing.T) {
 	}
 }
 
+func TestSettingsGitFileViewLiveApply(t *testing.T) {
+	h := openSettings(t)
+	clickRowControl(t, h, "Advanced", "Advanced")
+
+	if !rowHas(h, "Git: file view", "Tree") {
+		t.Fatalf("git file view should default to Tree:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Git: file view", "Tree")
+	clickRowControl(t, h, "List", "List")
+	if h.app.Settings.Git.FileView != "tree" || h.app.Changes.FileView() != "tree" {
+		t.Fatal("git file view applied before Apply")
+	}
+
+	h.exec("settings.apply")
+	if h.app.Settings.Git.FileView != "list" || h.app.Changes.FileView() != "list" {
+		t.Fatalf("git file view was not live-applied: settings=%q panel=%q", h.app.Settings.Git.FileView, h.app.Changes.FileView())
+	}
+}
+
 // runeIndex returns the screen column of sub within line. strings.Index would
 // give a byte offset, which is wrong on rows containing box-drawing characters.
 func runeIndex(line, sub string) int {
