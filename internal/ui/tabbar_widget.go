@@ -7,6 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -42,6 +43,7 @@ type TabBarWidget struct {
 	OnTabClick       func(index int)
 	OnTabClose       func(index int)
 	OnTabUnpin       func(index int)
+	OnTabReorder     func(from, to int)
 	OnTabRightClick  func(index, screenX, screenY int)
 	OnPrevTab        func()
 	OnNextTab        func()
@@ -58,6 +60,7 @@ type TabBarWidget struct {
 	closeDownY       int
 	wasPressed       bool
 	lastClickTime    int64
+	drag             widgets.TabDragState
 }
 
 func NewTabBarWidget() *TabBarWidget {
@@ -172,7 +175,7 @@ func (t *TabBarWidget) Render(surface Surface) {
 	}
 
 	// Scroll to keep active tab visible within the inner zone
-	if activeIdx >= 0 {
+	if activeIdx >= 0 && !t.drag.Active() {
 		s := spans[activeIdx]
 		if s.end-t.ScrollOffset > innerW {
 			t.ScrollOffset = s.end - innerW
@@ -291,6 +294,12 @@ func (t *TabBarWidget) Render(surface Surface) {
 		moreSurface := surface.Sub(Rect{X: w - 4, Y: 1, W: 3, H: 1})
 		t.MoreButton.Render(moreSurface)
 	}
+
+	if x := t.dropIndicatorX(); x >= innerLeft && x < innerRight {
+		for y := 0; y < 3; y++ {
+			surface.SetCell(x, y, term.Cell{Ch: '│', Style: term.StyleBorderActive})
+		}
+	}
 }
 
 func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -303,6 +312,22 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	btn := mev.Buttons()
 
 	slog.Debug("tabBar", "mx", mx, "my", my, "btn", btn, "rect", r, "hasMore", t.MoreButton != nil)
+
+	if btn == tcell.ButtonNone && t.drag.Active() {
+		t.wasPressed = false
+		from, to, dragged := t.drag.End()
+		if dragged && from != to && t.OnTabReorder != nil {
+			t.OnTabReorder(from, to)
+		}
+		return EventConsumed
+	}
+	if t.drag.Active() && btn&tcell.Button1 != 0 {
+		t.autoScrollDrag(mx)
+		if t.drag.Update(mx, t.dropTargetAt(mx)) {
+			t.closeDownX = -1
+		}
+		return EventCaptured
+	}
 
 	if t.MoreButton != nil {
 		if t.MoreButton.HandleEvent(ev) == EventConsumed {
@@ -415,6 +440,10 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 			if t.OnTabClick != nil {
 				t.OnTabClick(i)
 			}
+			if t.OnTabReorder != nil {
+				t.drag.Begin(i, mx)
+				return EventCaptured
+			}
 			return EventConsumed
 		}
 	}
@@ -427,4 +456,56 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 		t.lastClickTime = now
 	}
 	return EventConsumed
+}
+
+func (t *TabBarWidget) dropTargetAt(screenX int) int {
+	localX := screenX - t.GetRect().X - t.renderArrowW + t.ScrollOffset
+	last := -1
+	for i, span := range t.tabSpans {
+		last = i
+		if localX < span.start+(span.end-span.start)/2 {
+			return i
+		}
+	}
+	return last
+}
+
+func (t *TabBarWidget) dropIndicatorX() int {
+	if !t.drag.Dragging() || t.drag.From() == t.drag.Target() {
+		return -1
+	}
+	target := t.drag.Target()
+	if target < 0 || target >= len(t.tabSpans) {
+		return -1
+	}
+	span := t.tabSpans[target]
+	logicalX := span.end - 1
+	if target < t.drag.From() {
+		logicalX = span.start
+	}
+	return logicalX - t.ScrollOffset + t.renderArrowW
+}
+
+func (t *TabBarWidget) autoScrollDrag(screenX int) {
+	if t.renderArrowW == 0 {
+		return
+	}
+	r := t.GetRect()
+	innerW := t.renderInnerRight - t.renderArrowW
+	if innerW < 1 {
+		return
+	}
+	const scrollStep = 3
+	if screenX <= r.X+t.renderArrowW {
+		t.ScrollOffset -= scrollStep
+	} else if screenX >= r.X+t.renderInnerRight-1 {
+		t.ScrollOffset += scrollStep
+	}
+	maxScroll := t.totalTabWidth - innerW
+	if t.ScrollOffset > maxScroll {
+		t.ScrollOffset = maxScroll
+	}
+	if t.ScrollOffset < 0 {
+		t.ScrollOffset = 0
+	}
 }

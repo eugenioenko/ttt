@@ -571,15 +571,23 @@ func registerWidgetCallbacks(app *App) {
 		}
 		tabContextMenu := []ui.ContextMenuItem{
 			{Label: pinLabel, Shortcut: app.KeyFor("tab.pin"), Command: "tab.pin"},
-			ui.MenuSep(),
-			{Label: "Close", Shortcut: app.KeyFor("tab.close"), Command: "tab.close"},
-			{Label: "Close Others", Shortcut: "", Command: "tab.closeOthers"},
-			{Label: "Close All", Shortcut: "", Command: "tab.closeAll"},
-			{Label: "Close All Saved", Shortcut: "", Command: "tab.closeAllSaved"},
-			ui.MenuSep(),
-			{Label: "Copy Absolute Path", Command: "file.copyAbsolutePath"},
-			{Label: "Copy Relative Path", Command: "file.copyRelativePath"},
 		}
+		if app.EditorGroup.CanMoveActiveTab(-1) {
+			tabContextMenu = append(tabContextMenu, ui.ContextMenuItem{Label: "Move Tab Left", Command: "tab.moveLeft"})
+		}
+		if app.EditorGroup.CanMoveActiveTab(1) {
+			tabContextMenu = append(tabContextMenu, ui.ContextMenuItem{Label: "Move Tab Right", Command: "tab.moveRight"})
+		}
+		tabContextMenu = append(tabContextMenu,
+			ui.MenuSep(),
+			ui.ContextMenuItem{Label: "Close", Shortcut: app.KeyFor("tab.close"), Command: "tab.close"},
+			ui.ContextMenuItem{Label: "Close Others", Shortcut: "", Command: "tab.closeOthers"},
+			ui.ContextMenuItem{Label: "Close All", Shortcut: "", Command: "tab.closeAll"},
+			ui.ContextMenuItem{Label: "Close All Saved", Shortcut: "", Command: "tab.closeAllSaved"},
+			ui.MenuSep(),
+			ui.ContextMenuItem{Label: "Copy Absolute Path", Command: "file.copyAbsolutePath"},
+			ui.ContextMenuItem{Label: "Copy Relative Path", Command: "file.copyRelativePath"},
+		)
 		if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
 			cmd := "diff.extendedView"
 			label := "Extended Diff"

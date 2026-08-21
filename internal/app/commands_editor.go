@@ -518,6 +518,18 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "tab.moveLeft", Title: "View: Move Tab Left",
+		Keywords: []string{"tab", "reorder", "move", "left"},
+		Handler:  func() { app.EditorGroup.MoveActiveTab(-1) },
+	})
+
+	reg.Register(command.Command{
+		ID: "tab.moveRight", Title: "View: Move Tab Right",
+		Keywords: []string{"tab", "reorder", "move", "right"},
+		Handler:  func() { app.EditorGroup.MoveActiveTab(1) },
+	})
+
+	reg.Register(command.Command{
 		ID: "diff.extendedView", Title: "Git: Extended Diff",
 		Keywords: []string{"git", "changes", "compare"},
 		Handler: func() {
