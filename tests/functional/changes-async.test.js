@@ -82,7 +82,7 @@ describe("changes panel does not wait for git", () => {
     tui.waitStable(300);
     tui.pressChord("ctrl+k", "c");
     tui.waitStable(600);
-    tui.click(1, 32);
+    tui.click(1, 23);
     tui.waitStable(400);
     const loading = tui.snapshot();
     tui.waitStable(6000);
@@ -105,7 +105,7 @@ describe("changes panel does not wait for git", () => {
     tui.waitStable(600);
     // The label activates commit detail; unlike the chevron at x=1, it must
     // not wait for the message, file list, and file diffs before returning.
-    tui.click(5, 32);
+    tui.click(5, 23);
     tui.waitStable(400);
     const loading = tui.snapshot();
     tui.waitStable(9000);

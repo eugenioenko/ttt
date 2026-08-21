@@ -39,16 +39,13 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 }
 
 func (a *App) ShowThemePicker() {
-	names := config.ListThemes()
-	if len(names) == 0 {
+	items := themeItems()
+	if len(items) == 0 {
 		return
-	}
-	items := make([]widgets.SelectItem, len(names))
-	for i, name := range names {
-		items[i] = widgets.SelectItem{ID: name, Label: name}
 	}
 	originalStyleMap := a.Screen.GetStyleMap()
 	originalPalette := *a.Palette
+	originalBorders := *a.Borders
 	applyTheme := func(theme config.ThemeConfig) {
 		a.Screen.SetStyleMap(BuildStyleMap(theme))
 		*a.Palette = BuildTerminalPalette(theme)
@@ -80,6 +77,7 @@ func (a *App) ShowThemePicker() {
 			a.DismissDialog()
 			a.Screen.SetStyleMap(originalStyleMap)
 			*a.Palette = originalPalette
+			*a.Borders = originalBorders
 			a.Renderer.Clear()
 		},
 	})

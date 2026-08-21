@@ -109,6 +109,10 @@ func ListThemes() []string {
 
 func LoadTheme(name string) (ThemeConfig, error) {
 	theme := DefaultTheme()
+	if name == "" {
+		theme.ResolveColors()
+		return theme, nil
+	}
 	themeFile := name + ".json"
 
 	if data, err := readFirstTheme(configPaths(), themeFile); err == nil {

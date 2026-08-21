@@ -128,7 +128,7 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Appearance", "Appearance")
 
-	// The theme select shows "Default" until it is opened.
+	// The fallback theme has an explicit label until the select is opened.
 	if strings.Contains(h.screenText(), "default-dark") {
 		t.Fatal("theme list visible before the select was opened")
 	}
@@ -156,6 +156,24 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	h.exec("settings.apply")
 	if h.app.Settings.Theme != "default-dark" {
 		t.Errorf("theme = %q, want default-dark", h.app.Settings.Theme)
+	}
+}
+
+func TestSettingsHighContrastDiffsLiveApply(t *testing.T) {
+	h := openSettings(t)
+	clickRowControl(t, h, "Appearance", "Appearance")
+
+	if !rowHas(h, "High contrast diffs", uncheckedBox) {
+		t.Fatalf("high contrast diff setting should start unchecked:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "High contrast diffs", uncheckedBox)
+	if h.app.Settings.Editor.DiffHighContrast || h.app.EditorGroup.DiffHighContrast {
+		t.Fatal("high contrast diff setting applied before Apply")
+	}
+
+	h.exec("settings.apply")
+	if !h.app.Settings.Editor.DiffHighContrast || !h.app.EditorGroup.DiffHighContrast {
+		t.Fatalf("high contrast diff setting was not live-applied: settings=%v group=%v", h.app.Settings.Editor.DiffHighContrast, h.app.EditorGroup.DiffHighContrast)
 	}
 }
 

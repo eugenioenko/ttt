@@ -327,6 +327,7 @@ func TestOpenCommitDetailUsesDiffDefaults(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.Editor.DiffMode = config.DiffModeUnified
 	settings.Editor.DiffWordWrap = true
+	settings.Editor.DiffHighContrast = true
 	a := buildTestApp(t, settings)
 	a.OpenCommitDetail(dir, ref, short)
 
@@ -337,6 +338,9 @@ func TestOpenCommitDetailUsesDiffDefaults(t *testing.T) {
 	if detail.Mode() != ui.DiffModeUnified || detail.WrapMode() != ui.DiffWrapOn {
 		t.Fatalf("commit detail defaults = mode %v wrap %v, want unified/on",
 			detail.Mode(), detail.WrapMode())
+	}
+	if !detail.DiffHighContrast() {
+		t.Fatal("commit detail did not inherit the high-contrast diff setting")
 	}
 }
 

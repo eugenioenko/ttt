@@ -83,6 +83,7 @@ type EditorGroupWidget struct {
 	WordWrap                bool
 	DiffMode                DiffMode
 	DiffWordWrap            bool
+	DiffHighContrast        bool
 	SyntaxHighlight         bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
@@ -406,6 +407,7 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 		wrapMode = DiffWrapOn
 	}
 	surface.ApplyDefaultWrapMode(wrapMode)
+	surface.SetDiffHighContrast(g.DiffHighContrast)
 }
 
 // SetDiffDefaults updates the defaults used by future diff surfaces and
@@ -416,6 +418,15 @@ func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, wordWrap bool) {
 	for _, tab := range g.tabs {
 		if surface, ok := tab.Content.(DiffModeSurface); ok {
 			g.ApplyDiffDefaults(surface)
+		}
+	}
+}
+
+func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {
+	g.DiffHighContrast = enabled
+	for _, tab := range g.tabs {
+		if surface, ok := tab.Content.(DiffModeSurface); ok {
+			surface.SetDiffHighContrast(enabled)
 		}
 	}
 }

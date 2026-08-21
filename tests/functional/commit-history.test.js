@@ -9,11 +9,11 @@ afterEach(() => {
   if (dir) cleanupDir(dir);
 });
 
-// The resizable commit log starts at the former 7-row height, pinned to the
-// bottom of the changes panel. At 120x40 the branch header is row 31 and the
-// newest commit row 32 until the reader drags the divider.
-const BRANCH_ROW = 31;
-const FIRST_COMMIT_ROW = 32;
+// The resizable commit log starts at half the changes-panel height. At 120x40
+// the branch header is row 22 and the newest commit is row 23 until the reader
+// drags the divider.
+const BRANCH_ROW = 22;
+const FIRST_COMMIT_ROW = 23;
 
 function repoWithTwoCommits() {
   const d = createGitRepo(createTempDir());
@@ -98,33 +98,27 @@ describe("commit history", () => {
     tui.waitStable(400);
 
     const initial = tui.snapshot();
-    // Grow history from its default divider row. The whole log now fits.
-    tui.drag(5, 29, 5, 20);
-    tui.waitStable(300);
-    const grown = tui.snapshot();
-
-    // Shrink past the minimum. The divider clamps at row 33, leaving the title
+    // Shrink past the minimum. The divider clamps near the bottom, leaving the title
     // and three log rows. Keyboard navigation must still scroll TreeWidget to
     // the oldest row.
     tui.drag(5, 20, 5, 38);
     tui.waitStable(300);
     const clampedHistory = tui.snapshot();
-    tui.click(5, 35); // branch header inside the clamped history tree
+    tui.click(5, 36); // branch header inside the clamped history tree
     for (let i = 0; i < 10; i++) tui.press("down");
     tui.waitStable(300);
     const scrolled = tui.snapshot();
 
     // Grow history past the opposite limit. The input, divider, and three rows
     // of working-tree changes remain above it.
-    tui.drag(5, 33, 5, 2);
+    tui.drag(5, 34, 5, 2);
     tui.waitStable(300);
     const clampedTree = tui.snapshot();
 
     const { snapshots } = tui.run();
-    // The history query is capped at ten entries; history 03 is the oldest
-    // loaded row and starts below the default viewport.
-    expect(snapshots[initial]).not.toContain("history 03");
-    expect(snapshots[grown]).toContain("history 03");
+    // The history query is capped at ten entries; a half-height default fits
+    // the complete query at this geometry.
+    expect(snapshots[initial]).toContain("history 03");
     expect(snapshots[clampedHistory]).toContain("Commit History");
     expect(snapshots[scrolled]).toContain("history 03");
     expect(snapshots[clampedTree]).toContain("❯ Commit to");

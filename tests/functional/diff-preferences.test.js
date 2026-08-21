@@ -57,6 +57,17 @@ function savedSettings(configDir) {
 }
 
 describe("diff reading preferences", () => {
+  it("marks removed and added line numbers in the shared diff gutter", () => {
+    const fixture = diffFixture();
+    startWithConfig(fixture);
+    tui.exec("Test Preference Diff");
+    tui.waitStable();
+    const diff = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[diff]).toMatch(/1 -.*1 \+/);
+  });
+
   it("shows persistent diff defaults in Options even without an open diff", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);

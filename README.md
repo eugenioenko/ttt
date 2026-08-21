@@ -349,18 +349,26 @@ TTT supports fully customizable themes via JSON files. You can change every colo
 
 #### Built-in Themes
 
-10 themes ship in [`internal/config/themes/`](internal/config/themes/):
+18 themes ship in [`internal/config/themes/`](internal/config/themes/):
 
 - Aurora
 - Bubblegum
 - Default Dark
 - Default Light
+- Dracula
+- High Contrast Dark
+- High Contrast Light
 - Hotline
 - Monokai
+- Nord
 - One Dark
+- Rainy Day
+- Rainy Day Dark
 - Solarized Dark
 - Solarized Light
+- Turbo Vision
 - Virtru Dark
+- Zenith
 
 <details>
 <summary>Default Dark theme (click to expand)</summary>
@@ -527,6 +535,9 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `tabSize` | int | `4` | Number of spaces per indentation level |
 | `insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
 | `wordWrap` | bool | `false` | Wrap long lines at the editor width |
+| `diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
+| `diffWordWrap` | bool | `false` | Wrap long lines in diff views by default |
+| `diffHighContrast` | bool | `false` | Use semantic green/red foregrounds for changed diff text |
 | `autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
 | `autoDedent` | bool | `true` | Dedent one level when typing a closing `} ) ]` on a blank line |
 | `lineNumbers` | bool | `true` | Show line numbers in the gutter |

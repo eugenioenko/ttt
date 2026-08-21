@@ -24,6 +24,22 @@ func TestDefaultTheme(t *testing.T) {
 	}
 }
 
+func TestLoadThemeAcceptsAndResolvesBuiltInDefault(t *testing.T) {
+	th, err := LoadTheme("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if th.Syntax.Keyword.Fg == "" {
+		t.Fatal("built-in default lost its syntax palette")
+	}
+	if th.Diff.Added.Bg == "" || th.Diff.Deleted.Bg == "" {
+		t.Fatalf("built-in default diff colors were not resolved: added=%q deleted=%q", th.Diff.Added.Bg, th.Diff.Deleted.Bg)
+	}
+	if th.Diff.GutterAdded.Fg == "" || th.Diff.GutterDeleted.Fg == "" {
+		t.Fatalf("built-in default gutter colors were not resolved: added=%q deleted=%q", th.Diff.GutterAdded.Fg, th.Diff.GutterDeleted.Fg)
+	}
+}
+
 func TestThemePartialJSON(t *testing.T) {
 	th := DefaultTheme()
 	json.Unmarshal([]byte(`{"statusBar": {"fg": "yellow", "bg": "#ff0000"}}`), &th)

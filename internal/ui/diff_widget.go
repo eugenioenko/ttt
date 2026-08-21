@@ -61,6 +61,7 @@ type DiffViewWidget struct {
 	wrapExplicit bool
 	mode         DiffMode
 	modeExplicit bool
+	highContrast bool
 	fileDiff     diff.FileDiff
 	oldLines     []string
 	newLines     []string
@@ -69,6 +70,10 @@ type DiffViewWidget struct {
 	OnFetchExtended func(dv *DiffViewWidget)
 	Loading         bool
 }
+
+func (d *DiffViewWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
+
+func (d *DiffViewWidget) DiffHighContrast() bool { return d.highContrast }
 
 func NewDiffViewWidget(filePath string, fd diff.FileDiff, oldLines, newLines []string, extended bool) *DiffViewWidget {
 	dv := &DiffViewWidget{
@@ -530,8 +535,8 @@ func (d *DiffViewWidget) Render(surface Surface) {
 		if d.IsWrapped() {
 			leftScroll, rightScroll = 0, 0
 		}
-		d.renderSide(surface, leftStart, y, leftW, dl.Left.Text, leftStyle, leftSpans, idx, idx, d.SearchMatchesLeft, leftActive, !d.selRight, leftSegment, leftScroll)
-		d.renderSide(surface, rightStart, y, rightW, dl.Right.Text, rightStyle, rightSpans, idx, idx, d.SearchMatchesRight, rightActive, d.selRight, rightSegment, rightScroll)
+		d.renderSide(surface, leftStart, y, leftW, dl.Left.Text, leftStyle, diffKindForeground(dl.Left.Kind, d.highContrast), leftSpans, idx, idx, d.SearchMatchesLeft, leftActive, !d.selRight, leftSegment, leftScroll)
+		d.renderSide(surface, rightStart, y, rightW, dl.Right.Text, rightStyle, diffKindForeground(dl.Right.Kind, d.highContrast), rightSpans, idx, idx, d.SearchMatchesRight, rightActive, d.selRight, rightSegment, rightScroll)
 	}
 
 	if showVScroll {
@@ -612,11 +617,11 @@ func (d *DiffViewWidget) renderUnifiedRow(surface Surface, y, w, gutterW, conten
 	if d.IsWrapped() {
 		leftScroll = 0
 	}
-	d.renderSide(surface, contentStart, y, contentW, line.side.Text, baseStyle, spans, line.sourceLine, displayIndex, matches, active, true, segmentStart, leftScroll)
+	d.renderSide(surface, contentStart, y, contentW, line.side.Text, baseStyle, diffKindForeground(line.side.Kind, d.highContrast), spans, line.sourceLine, displayIndex, matches, active, true, segmentStart, leftScroll)
 }
 
-func (d *DiffViewWidget) renderSide(surface Surface, x, y, w int, text string, baseStyle term.Style, spans []highlight.Span, matchLineIdx, selectionLineIdx int, matches []FindMatch, activeIdx int, selSide bool, segmentStart, leftVisualCol int) {
-	renderDiffText(surface, x, y, w, text, baseStyle, spans, segmentStart, leftVisualCol, func(colIdx int, cell term.Cell) term.Cell {
+func (d *DiffViewWidget) renderSide(surface Surface, x, y, w int, text string, baseStyle, foregroundStyle term.Style, spans []highlight.Span, matchLineIdx, selectionLineIdx int, matches []FindMatch, activeIdx int, selSide bool, segmentStart, leftVisualCol int) {
+	renderDiffText(surface, x, y, w, text, baseStyle, foregroundStyle, spans, segmentStart, leftVisualCol, func(colIdx int, cell term.Cell) term.Cell {
 		for mi, m := range matches {
 			if m.Line == matchLineIdx && colIdx >= m.Col && colIdx < m.Col+m.Len {
 				if mi == activeIdx {

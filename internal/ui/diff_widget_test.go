@@ -356,3 +356,52 @@ func TestDiffWidgetCollapsedSeparatorUsesDedicatedStyle(t *testing.T) {
 		t.Fatalf("collapsed separator gutter style = %v, want StyleDiffCollapsed", gutterCell.Style)
 	}
 }
+
+func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
+	grid := makeGrid(10, 2)
+	surface := NewRenderSurface(grid, Rect{W: 10, H: 2})
+	renderDiffGutter(surface, 0, 0, 5, diff.SideLine{Num: 12, Kind: diff.Deleted}, term.StyleDiffDeleted)
+	renderDiffGutter(surface, 0, 1, 5, diff.SideLine{Num: 13, Kind: diff.Added}, term.StyleDiffAdded)
+
+	if got := commitDetailGridText(grid); !strings.Contains(got, "12 -") || !strings.Contains(got, "13 +") {
+		t.Fatalf("changed gutters do not show line markers:\n%s", got)
+	}
+	for column := 0; column < 5; column++ {
+		if grid[0][column].Style != term.StyleGutterDeleted {
+			t.Fatalf("deleted gutter column %d style = %v, want StyleGutterDeleted", column, grid[0][column].Style)
+		}
+		if grid[1][column].Style != term.StyleGutterAdded {
+			t.Fatalf("added gutter column %d style = %v, want StyleGutterAdded", column, grid[1][column].Style)
+		}
+	}
+}
+
+func TestDiffWidgetHighContrastUsesSemanticChangeForegrounds(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-var oldValue = 1\n+var newValue = 2\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+
+	const width, height = 60, 2
+	standard := makeGrid(width, height)
+	dv.SetRect(Rect{W: width, H: height})
+	dv.Render(NewRenderSurface(standard, Rect{W: width, H: height}))
+	if got := standard[0][dv.layoutLeftStart].Style; got != term.StyleSyntaxKeyword {
+		t.Fatalf("standard diff text style = %v, want syntax keyword", got)
+	}
+
+	dv.SetDiffHighContrast(true)
+	grid := makeGrid(width, height)
+	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+
+	if got := grid[0][dv.layoutLeftStart].Style; got != term.StyleGutterDeleted {
+		t.Fatalf("deleted text style = %v, want semantic deleted foreground", got)
+	}
+	if got := grid[0][dv.layoutRightStart].Style; got != term.StyleGutterAdded {
+		t.Fatalf("added text style = %v, want semantic added foreground", got)
+	}
+	if got := grid[0][dv.layoutLeftStart].BgStyle; got != term.StyleDiffDeleted {
+		t.Fatalf("deleted text background = %v, want StyleDiffDeleted", got)
+	}
+	if got := grid[0][dv.layoutRightStart].BgStyle; got != term.StyleDiffAdded {
+		t.Fatalf("added text background = %v, want StyleDiffAdded", got)
+	}
+}

@@ -32,6 +32,8 @@ TTT ships with a collection of built-in themes:
 
 Use **View > Switch Theme** from the menu bar, or search for **Switch Theme** in the command palette (**Ctrl+P**), to open the theme picker. The picker shows a live preview of each theme as you navigate the list, so you can try them out before committing to one.
 
+**Built-in Default** is the code-defined fallback used when `theme` is omitted. It includes the default syntax palette and now appears in both the settings selector and live theme picker. The separate **Default Dark** entry is a regular bundled JSON theme.
+
 ## Customizing
 
 To create a custom theme, copy one of the built-in theme files to your themes directory and edit it:

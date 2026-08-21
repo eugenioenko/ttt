@@ -80,6 +80,7 @@ type CommitDetailWidget struct {
 	wrapExplicit    bool
 	mode            DiffMode
 	modeExplicit    bool
+	highContrast    bool
 	collapsedFiles  []bool
 
 	rows            []commitDetailRow
@@ -126,6 +127,10 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 }
 
 func (d *CommitDetailWidget) Focusable() bool { return true }
+
+func (d *CommitDetailWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
+
+func (d *CommitDetailWidget) DiffHighContrast() bool { return d.highContrast }
 
 func (d *CommitDetailWidget) IsWrapped() bool { return d.wrapMode == DiffWrapOn }
 
@@ -638,8 +643,10 @@ func (d *CommitDetailWidget) renderDiffRow(surface Surface, rowIndex int, row co
 	if d.IsWrapped() {
 		leftScroll = 0
 	}
-	renderDiffText(surface, leftStart, y, leftW, line.Left.Text, leftStyle, leftSpans, visual.leftStart, leftScroll, d.selectionDecorator(rowIndex, false))
-	renderDiffText(surface, rightStart, y, rightW, line.Right.Text, rightStyle, rightSpans, visual.rightStart, leftScroll, d.selectionDecorator(rowIndex, true))
+	leftForeground := diffKindForeground(line.Left.Kind, d.highContrast)
+	rightForeground := diffKindForeground(line.Right.Kind, d.highContrast)
+	renderDiffText(surface, leftStart, y, leftW, line.Left.Text, leftStyle, leftForeground, leftSpans, visual.leftStart, leftScroll, d.selectionDecorator(rowIndex, false))
+	renderDiffText(surface, rightStart, y, rightW, line.Right.Text, rightStyle, rightForeground, rightSpans, visual.rightStart, leftScroll, d.selectionDecorator(rowIndex, true))
 }
 
 func (d *CommitDetailWidget) renderUnifiedDiffRow(surface Surface, rowIndex int, file *CommitDetailFile, lineIndex int, visual commitDetailVisualRow, y, viewW int) {
@@ -665,7 +672,8 @@ func (d *CommitDetailWidget) renderUnifiedDiffRow(surface Surface, rowIndex int,
 	if d.IsWrapped() {
 		leftScroll = 0
 	}
-	renderDiffText(surface, contentStart, y, contentW, line.Text, style, spans, visual.leftStart, leftScroll, d.selectionDecorator(rowIndex, false))
+	foreground := diffKindForeground(line.Kind, d.highContrast)
+	renderDiffText(surface, contentStart, y, contentW, line.Text, style, foreground, spans, visual.leftStart, leftScroll, d.selectionDecorator(rowIndex, false))
 }
 
 func (d *CommitDetailWidget) drawText(surface Surface, x, y, width int, text string, style, bg term.Style, bold bool, segmentStart int) {

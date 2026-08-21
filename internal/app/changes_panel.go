@@ -82,7 +82,6 @@ const (
 	changesWorkingTree changesCommandContext = iota
 	changesCommitLog
 
-	changesHistoryDefaultHeight = 8 // title plus the log's former seven rows
 	changesHistoryMinHeight     = 4 // title plus three usable log rows
 	changesWorkingTreeMinHeight = 5 // input, divider, and three tree rows
 )
@@ -201,7 +200,8 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	cp.Split.Top = top
 	cp.Split.Bottom = bottom
 	cp.Split.ShowBottom = true
-	cp.Split.BottomH = changesHistoryDefaultHeight
+	cp.Split.BottomH = 0
+	cp.Split.BottomRatio = 0.5
 	cp.Split.MinBottomH = changesHistoryMinHeight
 	cp.Split.MinTopH = changesWorkingTreeMinHeight
 	cp.Split.OnResize = func(height int) {

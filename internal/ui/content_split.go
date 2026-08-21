@@ -8,10 +8,13 @@ import (
 
 type ContentSplitWidget struct {
 	BaseWidget
-	Top               Widget
-	Bottom            Widget
-	ShowBottom        bool
-	BottomH           int
+	Top        Widget
+	Bottom     Widget
+	ShowBottom bool
+	BottomH    int
+	// BottomRatio supplies a responsive height while BottomH is unset. A manual
+	// divider drag clears the ratio and records an explicit BottomH instead.
+	BottomRatio       float64
 	MinTopH           int
 	MinBottomH        int
 	Borders           *term.BorderSet
@@ -60,6 +63,13 @@ func (cs *ContentSplitWidget) constrainedBottomHeight(totalH, requested int) int
 	return min(max(requested, minBottom), maxBottom)
 }
 
+func (cs *ContentSplitWidget) requestedBottomHeight(totalH int) int {
+	if cs.BottomH <= 0 && cs.BottomRatio > 0 {
+		return int(float64(totalH) * cs.BottomRatio)
+	}
+	return cs.BottomH
+}
+
 func (cs *ContentSplitWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := cs.GetRect()
@@ -85,7 +95,7 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	bs := term.StyleBorder
 
 	// One row belongs to the divider; the rest is divided between the children.
-	bottomH := cs.constrainedBottomHeight(h, cs.BottomH)
+	bottomH := cs.constrainedBottomHeight(h, cs.requestedBottomHeight(h))
 	divY := h - bottomH - 1
 	topH := divY
 
@@ -131,6 +141,7 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 		if pressed {
 			newH := r.Y + r.H - my - 1
 			newH = cs.constrainedBottomHeight(r.H, newH)
+			cs.BottomRatio = 0
 			if cs.OnResize != nil {
 				cs.OnResize(newH)
 			}
@@ -154,7 +165,7 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	if cs.ShowBottom {
-		bottomH := cs.constrainedBottomHeight(r.H, cs.BottomH)
+		bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
 		divY := r.Y + r.H - bottomH - 1
 
 		// r.W-1: exclude last column to avoid colliding with editor scrollbar
@@ -219,6 +230,6 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 		return -1
 	}
 	r := cs.GetRect()
-	bottomH := cs.constrainedBottomHeight(r.H, cs.BottomH)
+	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
 	return r.Y + r.H - bottomH - 1
 }

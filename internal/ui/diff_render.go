@@ -44,8 +44,8 @@ func (m DiffWrapMode) Toggle() DiffWrapMode {
 }
 
 // DiffModeSurface is implemented by every diff-reading surface so commands,
-// menus, and the tab control all inspect and update the same presentation
-// state. SetMode and SetWrapMode are reader overrides; ApplyDefaultMode and
+// menus, settings, and the tab control update the same presentation state.
+// SetMode and SetWrapMode are reader overrides; ApplyDefaultMode and
 // ApplyDefaultWrapMode only update properties that still inherit Options.
 type DiffModeSurface interface {
 	Mode() DiffMode
@@ -54,6 +54,7 @@ type DiffModeSurface interface {
 	WrapMode() DiffWrapMode
 	SetWrapMode(DiffWrapMode)
 	ApplyDefaultWrapMode(DiffWrapMode)
+	SetDiffHighContrast(bool)
 }
 
 // diffUnifiedLine points back to its source split row so search and selection
@@ -114,6 +115,20 @@ func diffKindStyle(kind diff.LineKind) term.Style {
 	}
 }
 
+func diffKindForeground(kind diff.LineKind, highContrast bool) term.Style {
+	if !highContrast {
+		return term.StyleDefault
+	}
+	switch kind {
+	case diff.Added:
+		return term.StyleGutterAdded
+	case diff.Deleted:
+		return term.StyleGutterDeleted
+	default:
+		return term.StyleDefault
+	}
+}
+
 func diffLineVisualWidth(text string) int {
 	width := 0
 	for _, ch := range text {
@@ -135,11 +150,19 @@ func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine, base
 	if line.Num > 0 {
 		number = fmt.Sprintf("%d", line.Num)
 	}
-	text := " " + fmt.Sprintf("%*s", width-3, number) + "  "
+	marker := ' '
 	style := term.StyleLineNumber
-	if baseStyle == term.StyleDiffCollapsed {
+	switch line.Kind {
+	case diff.Added:
+		marker = '+'
+		style = term.StyleGutterAdded
+	case diff.Deleted:
+		marker = '-'
+		style = term.StyleGutterDeleted
+	case diff.Collapsed:
 		style = baseStyle
 	}
+	text := fmt.Sprintf("%*s %c", width-2, number, marker)
 	for column, ch := range []rune(text) {
 		if column >= width {
 			break
@@ -148,7 +171,10 @@ func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine, base
 	}
 }
 
-func renderDiffText(surface Surface, x, y, width int, text string, baseStyle term.Style, spans []highlight.Span, segmentStart, leftVisualCol int, decorate diffCellDecorator) {
+func renderDiffText(surface Surface, x, y, width int, text string, baseStyle, foregroundStyle term.Style, spans []highlight.Span, segmentStart, leftVisualCol int, decorate diffCellDecorator) {
+	if foregroundStyle != term.StyleDefault {
+		spans = nil
+	}
 	fullBaseStyle := baseStyle == term.StyleDiffCollapsed
 	blank := term.Cell{Ch: ' '}
 	if fullBaseStyle {
@@ -158,7 +184,7 @@ func renderDiffText(surface Surface, x, y, width int, text string, baseStyle ter
 	}
 
 	drawTextSegment(surface, x, y, width, text, segmentStart, leftVisualCol, blank, func(runeIndex int, ch rune) term.Cell {
-		style := term.StyleDefault
+		style := foregroundStyle
 		if fullBaseStyle {
 			style = baseStyle
 		}

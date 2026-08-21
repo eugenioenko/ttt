@@ -1,6 +1,4 @@
-// Repro test for confirmed bug from audit/2026-07-12-ux-bug-audit.md (branch audit/bug-hunt).
-// Asserts the CORRECT behavior with `it.fails` — passes while the bug
-// exists, goes red when fixed. Remove `.fails` + audit entry when fixing.
+// Regression for BUG-041 from audit/2026-07-12-ux-bug-audit.md.
 import { describe, it, expect, afterEach } from "vitest";
 import * as tui from "./tui.js";
 import { createTempDir, createTempFile, cleanupDir } from "./helpers.js";
@@ -13,7 +11,7 @@ afterEach(() => {
 });
 
 describe("BUG-041: theme picker cancel leaves border charset stuck on the preview", () => {
-  it.fails("Escape reverts border glyphs to the pre-picker theme", () => {
+  it("Escape reverts border glyphs to the pre-picker theme", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "th.txt", "sample content\nline two\n");
 
@@ -27,9 +25,8 @@ describe("BUG-041: theme picker cancel leaves border charset stuck on the previe
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
-    // The default theme uses rounded borders (╭). Buggy: OnDismiss reverts
-    // the style map and palette but never resets *a.Borders, so the
-    // double-line preview glyph (╔) stays until another theme is applied.
+    // The default theme uses rounded borders (╭); the cancelled Turbo Vision
+    // preview must not leave its double-line glyph (╔) behind.
     expect(snapshots[s]).toContain("╭");
     expect(snapshots[s]).not.toContain("╔");
   });

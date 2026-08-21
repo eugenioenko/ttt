@@ -42,6 +42,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
 	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), s.Editor.DiffWordWrap)
+	a.EditorGroup.SetDiffHighContrast(s.Editor.DiffHighContrast)
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
 	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
 	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)
@@ -82,16 +83,11 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.Explorer.Reload()
 	}
 
-	// An empty theme name means the built-in default, and must still be applied —
-	// otherwise switching back to it leaves the previous theme's colors on screen.
+	// LoadTheme also accepts the empty built-in-default ID used by both theme
+	// pickers, so every surfaced theme follows one resolve-and-apply path.
 	var themeBorders *term.BorderSet
 	if a.Screen != nil {
-		theme, ok := config.DefaultTheme(), s.Theme == ""
-		if !ok {
-			loaded, err := config.LoadTheme(s.Theme)
-			theme, ok = loaded, err == nil
-		}
-		if ok {
+		if theme, err := config.LoadTheme(s.Theme); err == nil {
 			a.Screen.SetStyleMap(BuildStyleMap(theme))
 			*a.Palette = BuildTerminalPalette(theme)
 			borders := BuildBorderSet(theme.Borders)

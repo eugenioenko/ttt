@@ -101,6 +101,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Theme", Kind: settingEnum, Options: themeItems,
 				GetString: func(s *config.Settings) string { return s.Theme },
 				SetString: func(s *config.Settings, v string) { s.Theme = v }},
+			{Label: "High contrast diffs", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.DiffHighContrast },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffHighContrast = v }},
 			{Label: "Border style", Kind: settingEnum, Options: borderStyleItems,
 				GetString: func(s *config.Settings) string { return s.Editor.BorderStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.BorderStyle = v }},
@@ -179,7 +182,7 @@ func diffModeItems() []widgets.SelectItem {
 func themeItems() []widgets.SelectItem {
 	names := config.ListThemes()
 	items := make([]widgets.SelectItem, 0, len(names)+1)
-	items = append(items, widgets.SelectItem{ID: "", Label: "Default"})
+	items = append(items, widgets.SelectItem{ID: "", Label: "Built-in Default"})
 	for _, n := range names {
 		items = append(items, widgets.SelectItem{ID: n, Label: n})
 	}

@@ -193,6 +193,9 @@ func TestThemeSwitchDialog(t *testing.T) {
 
 	h.exec("theme.switch")
 	if len(h.app.Root.Overlays) == 1 {
+		if !strings.Contains(h.screenText(), "Built-in Default") {
+			t.Fatalf("theme switcher omitted the built-in default:\n%s", h.screenText())
+		}
 		h.pressKey(tcell.KeyEscape, tcell.ModNone)
 		if len(h.app.Root.Overlays) != 0 {
 			t.Fatalf("expected 0 overlays after Escape, got %d", len(h.app.Root.Overlays))

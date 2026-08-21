@@ -85,6 +85,7 @@ type EditorSettings struct {
 	WordWrap                bool   `json:"wordWrap"`
 	DiffMode                string `json:"diffMode"`
 	DiffWordWrap            bool   `json:"diffWordWrap"`
+	DiffHighContrast        bool   `json:"diffHighContrast,omitempty"`
 	LineNumbers             bool   `json:"lineNumbers"`
 	CursorStyle             string `json:"cursorStyle,omitempty"`
 	FormatOnSave            bool   `json:"formatOnSave"`
