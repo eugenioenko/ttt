@@ -33,13 +33,13 @@ The codebase follows a strict layered architecture: **core → view → render �
   - `buffer/` — Line-based text storage (`[]string`), rune-level insert/delete, file I/O (load/save)
   - `cursor/` — Visual column cursor with goal-column preservation for vertical movement
   - `undo/` — Command-pattern undo/redo via `EditCommand` interface (InsertRune, DeleteRange, InsertLine)
-  - `highlight/` — Regex-based per-line syntax highlighting (`Highlighter` interface with `Span` output)
+  - `highlight/` — Per-line syntax highlighting via `chroma/v2` lexers (`Highlighter` interface with `Span` output). Full-buffer re-lexing is a known perf trap (~95µs/line) — avoid it.
 
 - **`internal/view/`** — Viewport (scrolling, cursor-to-screen mapping) and status bar rendering
 
 - **`internal/render/`** — Diff-based renderer: compares prev/curr cell grids and emits minimal updates
 
-- **`internal/terminal/`** — Integrated terminal emulator. Wraps `hinshun/vt10x` for VT escape sequence parsing and `creack/pty` for PTY lifecycle management. Provides the backing state for terminal tabs.
+- **`internal/terminal/`** — Integrated terminal emulator. Wraps `eugenioenko/vt10x` (a fork of `hinshun/vt10x`) for VT escape sequence parsing and `aymanbagabas/go-pty` for PTY lifecycle management. Provides the backing state for terminal tabs.
 
 - **`internal/term/`** — Terminal abstraction via `Screen` interface. `TcellScreen` is the real implementation; `MockScreen` is used in tests. Only this package imports `tcell`. Also defines `DirectColor` and `CellAttr` types for direct RGB color rendering (used by the terminal emulator to bypass the style map for 256-color support).
 
@@ -49,11 +49,17 @@ The codebase follows a strict layered architecture: **core → view → render �
 
 - **`internal/workspace/`** — Multi-folder workspace management. `Folder` and `Workspace` types track one or more project roots, with `IsRepo` git-detection, `FolderForFile` lookup (longest-prefix match), and JSON-based workspace file loading/saving (`.ttt` files). The editor falls back to `cwd` when no folders are explicitly provided.
 
+- **`internal/app/`** — Application orchestration layer; the largest package in the codebase. `App` (`app.go`) owns wiring between all other layers. `commands*.go` files implement command handlers by domain (editor, explorer, git, search, settings, view, palette, debug, plugin, options, help). `eventloop.go` and `keys.go` handle the main event loop and key dispatch. Other notable files: `explorer.go`/`changes_panel.go` (file tree and git changes panel), `gitgutter.go`/`repo_ops.go`/`pr.go` (git integration), `output.go` (output panel, see Key Design Constraints), `plugin_api.go`/`plugins_panel.go`/`plugin_detail.go` (plugin host UI), `menubar.go`/`menus.go`, `formatter.go`, `symbols_go.go`/`symbols_panel.go` (LSP document symbols).
+
+- **`internal/plugin/`** — Lua plugin engine (gopher-lua based). `manager.go`/`registry.go`/`registry_remote.go` handle plugin discovery, loading, and the remote community registry. `permissions.go`/`sandbox.go` enforce the plugin permission model. `lua_*.go` files bind Go functionality into the `ttt` Lua module by domain (editor, fs, net, events, commandline, diagnostics, settings, system, json, callbacks). `panel_widget.go`/`widget_builder.go`/`widget_desc.go` implement the Plugin Widget API (see below); `styles.go` maps named styles to `term.Style*`. User-facing plugin authoring docs live in `docs-web/src/content/docs/guides/plugin-authoring.md` (also `plugins.md`, `plugin-testing.md`) — check there before re-deriving plugin API usage from source.
+
+- **`internal/widgets/`** — Reusable UI widget primitives that back both the Plugin Widget API and core app panels: `tree.go`, `table.go`, `list_widget.go`, `input.go`, `dialog.go`, `dropdown.go`, `tabs.go`/`tabbed.go`, `hstack.go`/`vstack.go`, `scrollview.go`/`scrollbar.go`, `label.go`/`title.go`/`text.go`, `button.go`/`checkbox.go`, `progress.go`, `markdown.go`, `box.go`/`divider.go`. `surface.go`/`virtual_surface.go` provide the drawing surface abstraction; `focus.go` handles focus traversal; `builder.go` is shared construction plumbing.
+
 - **`cmd/ttt/main.go`** — Entry point with event loop. Wires all components together, handles key dispatch, viewport scrolling, and redraw. Accepts a `--workspace <file>` flag to open a saved workspace, or folder/file paths as positional arguments.
 
 ### Design Principles
 
-1. **UX comes first.** Implement the UI feel and look first, then the functionality. When making design decisions, prioritize user experience over implementation simplicity. If a feature needs good navigation, discoverability, or interaction patterns, invest in that rather than taking shortcuts.
+1. **UX comes first.** Implement the UI feel and look first, then the functionality — prioritize navigation, discoverability, and interaction patterns over implementation shortcuts.
 2. **Single source of truth for layout.** When Render computes layout values (positions, offsets), store them on the struct so event handlers reuse them directly instead of recalculating — divergent calculations cause click offset bugs.
 
 ### Key Design Constraints
@@ -154,7 +160,7 @@ These callbacks are only available after `WirePlugin` — call them from command
 
 ### Testing
 
-The project has three levels of testing:
+The project has four levels of testing:
 
 **Unit tests** (`internal/*/`) — Standard Go tests for individual packages. The core layer is fully testable without any terminal dependency. Run with `go test ./internal/core/buffer/` or `make test` for all.
 
@@ -186,7 +192,7 @@ Functional tests are the highest-value tests. Use `tui.exec("Command Name")` for
 
 ### Debug harness (`--exec`, `--plugin`, `--size`, `--debug`)
 
-**USE THIS FOR DEBUGGING AND TESTING.** The editor has a built-in scripted interaction system that is faster than TUI tests and gives you direct access to internal state. Before investigating UI bugs manually, use `--exec` to reproduce and inspect them programmatically.
+**USE THIS FOR DEBUGGING AND TESTING.** The editor has a built-in scripted interaction system that is faster than TUI tests and gives you direct access to internal state — reach for it before investigating UI bugs manually.
 
 **`--exec "commands"`** — Execute semicolon-separated commands after startup. Run the real binary, interact with it, capture state, and exit — all in one command:
 
@@ -197,14 +203,19 @@ cat /tmp/state.json   # see full widget tree, focus, selection, panels
 ```
 
 Supported commands:
-- `click X Y` — simulate mouse click at coordinates
+- `click X Y` — simulate left mouse click (press + release) at coordinates
+- `rclick X Y` — simulate right mouse click at coordinates
 - `hover X Y` — simulate mouse hover (move) at coordinates
+- `drag X1 Y1 X2 Y2` — simulate a mouse drag between two points (interpolated over 10 steps)
 - `key COMBO` — simulate key press (e.g. `key ctrl+p`, `key enter`, `key ctrl+k x`)
 - `type TEXT` — type a string of text
+- `paste TEXT` — simulate a bracketed paste (terminal paste)
+- `copy` — copy the current selection to the clipboard
 - `exec "Command Name"` — run a command by title (same as command palette)
 - `screenshot PATH` — save screen text to file
 - `debug PATH` — save debug state JSON (screen, cursor, buffer, focus, panels, tabs, selection, output log, full widget tree with rect/focus/props per node)
 - `wait MS` — wait milliseconds
+- `panel ID` — show and focus a bottom panel by ID
 - `quit` — exit the editor
 
 **`--size WxH`** — Force screen dimensions for deterministic layout (e.g. `--size 120x40`). Essential for reproducible screenshots and coordinate-based click tests.
@@ -227,6 +238,7 @@ Supported commands:
 - **Keybindings**: `ctrl+shift` combos are unreliable in terminals — avoid them. Use `ctrl+k <key>` chords for new commands. Check `DefaultKeybindings()` in `internal/config/keybindings.go` before assigning to avoid collisions. If no obvious binding exists, leave the command as command palette only — not every command needs a keybinding.
 - **Overlay stacking**: commands that open overlays via keybindings must guard against being called twice with `if a.Root.HasOverlay() { return }`. `ShowDialog`/`ShowConfirmDialog` themselves have no guard so legitimate stacking (e.g. quit confirm) still works.
 - **Command handlers**: define handlers as named methods on `App` (e.g. `app.ExplorerRename`) and reference them in `reg.Register(...)`. Do not use inline closures for non-trivial handlers.
+- **Comments**: do not add comments to code unless they are critical — e.g. a non-obvious architectural constraint that would cause bugs or misuse if missed (see the `textwidth`/fullwidth-rune notes above for the bar to clear). Do not explain WHAT the code does; well-named identifiers already do that.
 
 ### Post-implementation review
 
@@ -237,5 +249,10 @@ After a feature is implemented and tests pass, review all changes for cleanup: d
 Key external dependencies beyond the Go standard library:
 
 - `github.com/gdamore/tcell/v3` — terminal rendering
-- `github.com/creack/pty` — PTY management for the integrated terminal
-- `github.com/hinshun/vt10x` — VT escape sequence parsing for the integrated terminal
+- `github.com/aymanbagabas/go-pty` — PTY management for the integrated terminal
+- `github.com/eugenioenko/vt10x` — VT escape sequence parsing for the integrated terminal (fork of `hinshun/vt10x`)
+- `github.com/alecthomas/chroma/v2` — syntax highlighting lexers
+- `github.com/yuin/gopher-lua` — Lua plugin engine
+- `github.com/yuin/goldmark` — Markdown rendering
+- `github.com/fsnotify/fsnotify` — file watching
+- `github.com/clipperhouse/displaywidth` — terminal column width measurement
