@@ -25,6 +25,9 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			{Label: "Add Folder", Command: "workspace.addFolder"},
 			{Label: "Refresh", Command: "explorer.refresh"},
 			ui.MenuSep(),
+			{Label: "Expand All", Command: "explorer.expandAll"},
+			{Label: "Collapse All", Command: "explorer.collapseAll"},
+			ui.MenuSep(),
 			{Label: "Help", Command: "explorer.help"},
 		}
 	case "search":
@@ -82,6 +85,10 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
 		{Label: "Refresh", Command: "changes.refresh"},
+		ui.MenuSep(),
+		{Label: "Expand All", Command: "changes.expandAll"},
+		{Label: "Collapse All", Command: "changes.collapseAll"},
+		ui.MenuSep(),
 		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
 		{Label: "Diff View", Submenu: a.BuildDiffViewOptions()},
 		ui.MenuSep(),
@@ -93,6 +100,24 @@ func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Help", Command: "changes.help"},
 	}
+}
+
+// BuildChangesContextMenu keeps the structural and presentation actions close
+// to the tree while leaving network and PR operations in the panel menu.
+func (a *App) BuildChangesContextMenu() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Refresh", Command: "changes.refresh"},
+		ui.MenuSep(),
+		{Label: "Expand All", Command: "changes.expandAll"},
+		{Label: "Collapse All", Command: "changes.collapseAll"},
+		ui.MenuSep(),
+		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
+		{Label: "Diff View", Submenu: a.BuildDiffViewOptions()},
+	}
+}
+
+func (a *App) ShowChangesContextMenu(sx, sy int) {
+	openContextMenu(a, a.BuildChangesContextMenu(), sx, sy)
 }
 
 func (a *App) DiffSearchSources() []ui.DiffSearchSource {
@@ -409,9 +434,11 @@ func (a *App) ShowPRGroupMenu(group *ui.ChangesGroup, sx, sy int) {
 		},
 	})
 	items := []ui.ContextMenuItem{
-		{Label: "Refresh", Command: refreshID},
+		{Label: "Refresh PR", Command: refreshID},
 		{Label: "Close", Command: closeID},
 	}
+	items = append(items, ui.MenuSep())
+	items = append(items, a.BuildChangesContextMenu()...)
 	openContextMenu(a, items, sx, sy)
 }
 
@@ -422,6 +449,8 @@ func (a *App) ShowGroupMenu(dir string, sx, sy int) {
 		{Label: "Push", Command: "git.push." + dir},
 		{Label: "Sync", Command: "git.sync." + dir},
 	}
+	items = append(items, ui.MenuSep())
+	items = append(items, a.BuildChangesContextMenu()...)
 	registerDirGitCmd := func(id, title string, ops []RepoOp, progress, done string) {
 		reg.Register(command.Command{
 			ID: id, Title: title,
@@ -649,12 +678,17 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.OnReplaceAll = app.ApplySearchReplaceAll
 
 	app.Changes.OnRightClick = func(dir string, status git.FileStatus, sx, sy int) {
+		var items []ui.ContextMenuItem
 		if status.Staged {
-			openContextMenu(app, changesContextMenuStaged, sx, sy)
+			items = append(items, changesContextMenuStaged...)
 		} else {
-			openContextMenu(app, changesContextMenuUnstaged, sx, sy)
+			items = append(items, changesContextMenuUnstaged...)
 		}
+		items = append(items, ui.MenuSep())
+		items = append(items, app.BuildChangesContextMenu()...)
+		openContextMenu(app, items, sx, sy)
 	}
+	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
 	app.Changes.OnOpenFile = func(path string) {
 		app.EditorGroup.OpenFile(path)

@@ -144,6 +144,84 @@ func (t *TreeWidget) SetActiveID(id string) {
 	t.Config.ActiveID = id
 }
 
+// CollapseAll closes every materialized branch while preserving the selected
+// node when it remains visible. A selection hidden inside a collapsed branch
+// falls back to the first visible row instead of drifting to an unrelated row
+// at the same numeric index.
+func (t *TreeWidget) CollapseAll() {
+	selectedID := t.selectedID()
+	setTreeExpanded(t.Config.Items, false)
+	t.flatten()
+	t.restoreVisibleSelection(selectedID)
+}
+
+// ExpandAll opens every branch currently represented in the model. Lazy trees
+// load one newly revealed level, but deliberately do not recurse into those new
+// children in the same event; doing so could synchronously traverse an entire
+// filesystem from one menu click.
+func (t *TreeWidget) ExpandAll() {
+	t.ExpandAllWhere(func(*TreeNode) bool { return true })
+}
+
+// ExpandAllWhere is the filtered form used by trees that expose branches
+// which are valid to open manually but unsuitable for bulk traversal (for
+// example hidden or gitignored directories in Explorer).
+func (t *TreeWidget) ExpandAllWhere(include func(*TreeNode) bool) {
+	selectedID := t.selectedID()
+	nodes := materializedTreeNodes(t.Config.Items)
+	for _, node := range nodes {
+		if !node.isExpandable() || !include(node) {
+			continue
+		}
+		node.Expanded = true
+		if len(node.Children) == 0 && t.Config.OnExpand != nil {
+			t.Config.OnExpand(node)
+		}
+	}
+	t.flatten()
+	t.restoreVisibleSelection(selectedID)
+}
+
+func (t *TreeWidget) selectedID() string {
+	if node := t.Selected(); node != nil {
+		return node.ID
+	}
+	return ""
+}
+
+func (t *TreeWidget) restoreVisibleSelection(id string) {
+	t.selected = 0
+	if id == "" {
+		t.clampSelected()
+		return
+	}
+	for i, node := range t.flatList {
+		if node.ID == id {
+			t.selected = i
+			return
+		}
+	}
+	t.clampSelected()
+}
+
+func setTreeExpanded(nodes []*TreeNode, expanded bool) {
+	for _, node := range nodes {
+		if node.isExpandable() {
+			node.Expanded = expanded
+		}
+		setTreeExpanded(node.Children, expanded)
+	}
+}
+
+func materializedTreeNodes(nodes []*TreeNode) []*TreeNode {
+	var result []*TreeNode
+	for _, node := range nodes {
+		result = append(result, node)
+		result = append(result, materializedTreeNodes(node.Children)...)
+	}
+	return result
+}
+
 func (t *TreeWidget) Reload() {
 	expanded := map[string]bool{}
 	t.CollectExpanded(expanded)

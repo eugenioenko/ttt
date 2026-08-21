@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
@@ -142,6 +143,91 @@ func TestCommitFilesUseTreeAndFolderLabelsToggle(t *testing.T) {
 	cp.SetFileView(config.GitFileViewTree)
 	if got := cp.CommitLog.Selected(); got == nil || got.ID != oneID || got.Label != "one.go" {
 		t.Fatalf("commit file selection did not survive the switch back to tree: %+v", got)
+	}
+}
+
+func TestChangesExpandCollapseAllCoversWorkingAndLoadedCommitFileTrees(t *testing.T) {
+	cp := NewChangesPanel("/repo")
+	cp.groups = []changesGroup{{
+		Dir:      "/repo",
+		Name:     "repo",
+		Unstaged: []git.FileStatus{{Status: "M", Path: "internal/app/file.go"}},
+	}}
+	cp.buildTree()
+	workingFolder := nodeWithLabel(cp.Tree.Config.Items, "internal/app")
+	if workingFolder == nil {
+		t.Fatal("missing working-tree folder")
+	}
+
+	const ref = "0123456789012345678901234567890123456789"
+	commitID := "commit:" + ref
+	cp.logCommits[commitID] = commitFileRef{Dir: "/repo", Ref: ref, Short: ref[:7]}
+	commit := &widgets.TreeNode{
+		ID:       commitID,
+		Label:    "nested files",
+		Expanded: true,
+		Children: cp.commitFileNodes("/repo", ref, ref[:7], commitID, []git.FileStatus{{Status: "M", Path: "pkg/history/one.go"}}),
+	}
+	cp.CommitLog.SetItems([]*widgets.TreeNode{commit})
+	commitFolder := nodeWithLabel(commit.Children, "pkg/history")
+
+	cp.CollapseAll()
+	if cp.Tree.Config.Items[0].Expanded || workingFolder.Expanded || commitFolder.Expanded {
+		t.Fatalf("CollapseAll left file-tree branches open: section=%v work=%v history=%v",
+			cp.Tree.Config.Items[0].Expanded, workingFolder.Expanded, commitFolder.Expanded)
+	}
+	if !commit.Expanded {
+		t.Fatal("CollapseAll should not collapse commit rows and trigger history-wide behavior")
+	}
+	cp.buildTree()
+	workingFolder = nodeWithLabel(cp.Tree.Config.Items, "internal/app")
+	if workingFolder == nil || workingFolder.Expanded {
+		t.Fatal("collapsed folder state did not survive a working-tree rebuild")
+	}
+
+	cp.ExpandAll()
+	if !cp.Tree.Config.Items[0].Expanded || !workingFolder.Expanded || !commitFolder.Expanded {
+		t.Fatalf("ExpandAll left file-tree branches closed: section=%v work=%v history=%v",
+			cp.Tree.Config.Items[0].Expanded, workingFolder.Expanded, commitFolder.Expanded)
+	}
+}
+
+func TestChangesFolderAndHistoryRightClickUsePanelMenu(t *testing.T) {
+	cp := NewChangesPanel("/repo")
+	called := 0
+	cp.OnPanelMenu = func(x, y int) {
+		if x != 12 || y != 7 {
+			t.Fatalf("panel menu position = %d,%d, want 12,7", x, y)
+		}
+		called++
+	}
+	folder := &widgets.TreeNode{ID: "folder:work:src", Label: "src", Expandable: true}
+	cp.handleMenu(folder, 12, 7)
+	cp.CommitLog.Config.OnMenu(nil, &widgets.TreeNode{ID: "commit:abc"}, 12, 7)
+	if called != 2 {
+		t.Fatalf("panel menu calls = %d, want working folder and history row", called)
+	}
+}
+
+func TestChangesMenusExposeTreeActionsAndPresentationSubmenus(t *testing.T) {
+	settings := config.DefaultSettings()
+	a := &App{Settings: &settings}
+	for name, items := range map[string][]ui.ContextMenuItem{
+		"panel":   a.BuildChangesPanelMenu(),
+		"context": a.BuildChangesContextMenu(),
+	} {
+		commands := map[string]bool{}
+		labels := map[string]bool{}
+		for _, item := range items {
+			commands[item.Command] = true
+			labels[item.Label] = true
+		}
+		if !commands["changes.expandAll"] || !commands["changes.collapseAll"] {
+			t.Errorf("%s menu missing tree actions: %+v", name, items)
+		}
+		if !labels["Git Files"] || !labels["Diff View"] {
+			t.Errorf("%s menu missing presentation submenus: %+v", name, items)
+		}
 	}
 }
 

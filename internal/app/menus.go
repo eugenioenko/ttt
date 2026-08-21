@@ -289,7 +289,10 @@ func handleRightClick(app *App, mx, my int) {
 			if my > sidebarR.Y+1 {
 				ev := tcell.NewEventMouse(mx, my, tcell.Button2, 0)
 				if w := app.Sidebar.ActiveWidget(); w != nil {
-					w.HandleEvent(ev)
+					result := w.HandleEvent(ev)
+					if result == ui.EventIgnored && app.Sidebar.ActivePanel == "changes" {
+						app.ShowChangesContextMenu(mx, my)
+					}
 				}
 			}
 			return

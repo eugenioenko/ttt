@@ -70,6 +70,7 @@ type ChangesPanel struct {
 	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
 	OnOpenFile       func(path string)
 	OnRightClick     func(dir string, status git.FileStatus, screenX, screenY int)
+	OnPanelMenu      func(screenX, screenY int)
 	OnCommit         func(dir string, message string)
 	OnGroupMenu      func(dir string, screenX, screenY int)
 	OnPRGroupMenu    func(group *ui.ChangesGroup, screenX, screenY int)
@@ -192,6 +193,9 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 				}
 				cp.openCommitLogNode(node)
 			}
+		},
+		OnMenu: func(_ []widgets.MenuEntry, _ *widgets.TreeNode, sx, sy int) {
+			cp.showPanelMenu(sx, sy)
 		},
 		OnKey: func(ev *tcell.EventKey, node *widgets.TreeNode) bool {
 			return cp.handleCommitLogKey(ev, node)
@@ -491,11 +495,46 @@ func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.Tre
 }
 
 func (cp *ChangesPanel) saveExpanded() {
-	for _, node := range cp.Tree.FlatList() {
-		if node.Expandable || len(node.Children) > 0 {
-			cp.expanded[node.ID] = node.Expanded
+	var visit func([]*widgets.TreeNode)
+	visit = func(nodes []*widgets.TreeNode) {
+		for _, node := range nodes {
+			if node.Expandable || len(node.Children) > 0 {
+				cp.expanded[node.ID] = node.Expanded
+			}
+			visit(node.Children)
 		}
 	}
+	visit(cp.Tree.Config.Items)
+}
+
+// ExpandAll opens the working-tree hierarchy and every already-loaded folder
+// in commit file trees. Commit rows themselves remain untouched: expanding all
+// of them would launch a Git read for every visible commit at once.
+func (cp *ChangesPanel) ExpandAll() {
+	cp.Tree.ExpandAll()
+	cp.setCommitFoldersExpanded(true)
+	cp.saveExpanded()
+}
+
+func (cp *ChangesPanel) CollapseAll() {
+	cp.Tree.CollapseAll()
+	cp.setCommitFoldersExpanded(false)
+	cp.saveExpanded()
+}
+
+func (cp *ChangesPanel) setCommitFoldersExpanded(expanded bool) {
+	var visit func([]*widgets.TreeNode)
+	visit = func(nodes []*widgets.TreeNode) {
+		for _, node := range nodes {
+			if isCommitFolderNode(node) {
+				node.Expanded = expanded
+				cp.logFolderExpanded[node.ID] = expanded
+			}
+			visit(node.Children)
+		}
+	}
+	visit(cp.CommitLog.Config.Items)
+	cp.CommitLog.SetItems(cp.CommitLog.Config.Items)
 }
 
 func (cp *ChangesPanel) restoreExpanded(node *widgets.TreeNode) {
@@ -842,6 +881,13 @@ func (cp *ChangesPanel) handleMenu(node *widgets.TreeNode, sx, sy int) {
 			}
 			return
 		}
+	}
+	cp.showPanelMenu(sx, sy)
+}
+
+func (cp *ChangesPanel) showPanelMenu(sx, sy int) {
+	if cp.OnPanelMenu != nil {
+		cp.OnPanelMenu(sx, sy)
 	}
 }
 

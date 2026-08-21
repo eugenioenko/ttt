@@ -1262,6 +1262,61 @@ func TestTreeCollectRestoreExpanded(t *testing.T) {
 	}
 }
 
+func TestTreeExpandAndCollapseAllPreserveVisibleSelection(t *testing.T) {
+	root := &TreeNode{
+		ID:         "root",
+		Label:      "Root",
+		Expandable: true,
+		Expanded:   true,
+		Children: []*TreeNode{{
+			ID:         "child",
+			Label:      "Child",
+			Expandable: true,
+			Children:   []*TreeNode{{ID: "leaf", Label: "Leaf"}},
+		}},
+	}
+	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{root}})
+	tree.SelectByID("root")
+	tree.ExpandAll()
+	if !root.Expanded || !root.Children[0].Expanded {
+		t.Fatalf("ExpandAll did not open materialized branches: root=%v child=%v", root.Expanded, root.Children[0].Expanded)
+	}
+	if tree.Selected() == nil || tree.Selected().ID != "root" {
+		t.Fatalf("selection after expand = %v, want root", tree.Selected())
+	}
+
+	tree.SelectByID("leaf")
+	tree.CollapseAll()
+	if root.Expanded || root.Children[0].Expanded {
+		t.Fatalf("CollapseAll left a branch open: root=%v child=%v", root.Expanded, root.Children[0].Expanded)
+	}
+	if tree.Selected() == nil || tree.Selected().ID != "root" {
+		t.Fatalf("hidden selection should fall back to first visible row, got %v", tree.Selected())
+	}
+}
+
+func TestTreeExpandAllLoadsOnlyOneNewLazyLevel(t *testing.T) {
+	root := &TreeNode{ID: "root", Label: "Root", Expandable: true}
+	loaded := []string{}
+	tree := NewTreeWidget(TreeConfig{
+		Items: []*TreeNode{root},
+		OnExpand: func(node *TreeNode) {
+			loaded = append(loaded, node.ID)
+			node.Children = []*TreeNode{{ID: node.ID + "/child", Label: "Child", Expandable: true}}
+		},
+	})
+	tree.ExpandAll()
+	if !root.Expanded || len(root.Children) != 1 {
+		t.Fatalf("lazy root was not expanded and loaded: %+v", root)
+	}
+	if root.Children[0].Expanded {
+		t.Fatal("newly loaded child should wait for a later expand action")
+	}
+	if len(loaded) != 1 || loaded[0] != "root" {
+		t.Fatalf("loaded nodes = %v, want only root", loaded)
+	}
+}
+
 // --- Shortcut key tests ---
 
 func TestTreeShortcutKey(t *testing.T) {

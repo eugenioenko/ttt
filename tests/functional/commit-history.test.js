@@ -340,7 +340,8 @@ describe("commit history", () => {
     tui.waitStable(300);
     const sticky = tui.snapshot();
     tui.exec("View: Focus Editor");
-    tui.click(33, 4);
+    // The full sticky title row is a disclosure target, not only its chevron.
+    tui.click(50, 4);
     tui.waitStable(300);
     const oneCollapsed = tui.snapshot();
 

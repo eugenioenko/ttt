@@ -407,10 +407,19 @@ func TestCommitDetailHeadingControlCollapsesOnlyItsFile(t *testing.T) {
 		t.Fatalf("rendered controls = %v, want one per heading", detail.fileControls)
 	}
 	control := detail.fileControls[0]
-	detail.HandleEvent(tcell.NewEventMouse(control.rect.X, control.rect.Y, tcell.Button1, tcell.ModNone))
+	if control.rect.W != detail.layoutViewW {
+		t.Fatalf("heading hit target width = %d, want full row %d", control.rect.W, detail.layoutViewW)
+	}
+	titleX := control.rect.X + 6
+	detail.HandleEvent(tcell.NewEventMouse(titleX, control.rect.Y, tcell.Button1, tcell.ModNone))
 	if !detail.collapsedFiles[0] || detail.collapsedFiles[1] {
 		t.Fatalf("per-file collapse state = %v, want [true false]", detail.collapsedFiles)
 	}
+	detail.HandleEvent(tcell.NewEventMouse(titleX+3, control.rect.Y, tcell.Button1, tcell.ModNone))
+	if !detail.collapsedFiles[0] {
+		t.Fatal("held movement across a heading toggled disclosure a second time")
+	}
+	detail.HandleEvent(tcell.NewEventMouse(titleX+3, control.rect.Y, tcell.ButtonNone, tcell.ModNone))
 }
 
 func TestCommitDetailTopControlCollapsesAndExpandsAllFiles(t *testing.T) {
@@ -424,12 +433,14 @@ func TestCommitDetailTopControlCollapsesAndExpandsAllFiles(t *testing.T) {
 		t.Fatal("commit header did not expose collapse-all control")
 	}
 	detail.HandleEvent(tcell.NewEventMouse(detail.topControl.X, detail.topControl.Y, tcell.Button1, tcell.ModNone))
+	detail.HandleEvent(tcell.NewEventMouse(detail.topControl.X, detail.topControl.Y, tcell.ButtonNone, tcell.ModNone))
 	if !detail.allFilesCollapsed() {
 		t.Fatalf("top control did not collapse all files: %v", detail.collapsedFiles)
 	}
 
 	detail.Render(NewRenderSurface(makeGrid(width, height), Rect{W: width, H: height}))
 	detail.HandleEvent(tcell.NewEventMouse(detail.topControl.X, detail.topControl.Y, tcell.Button1, tcell.ModNone))
+	detail.HandleEvent(tcell.NewEventMouse(detail.topControl.X, detail.topControl.Y, tcell.ButtonNone, tcell.ModNone))
 	if detail.allFilesCollapsed() {
 		t.Fatalf("top control did not expand all files: %v", detail.collapsedFiles)
 	}
@@ -509,11 +520,23 @@ func TestCommitDetailStickyHeadingIsSelectionInertButControlRemainsClickable(t *
 			if pos, _, ok := detail.screenToSelection(selectionX, 0); ok {
 				t.Fatalf("sticky row exposed covered diff position %+v", pos)
 			}
-			if result := detail.HandleEvent(tcell.NewEventMouse(selectionX, 0, tcell.Button1, tcell.ModNone)); result != EventIgnored {
-				t.Fatalf("sticky text press result = %v, want ignored", result)
+			if result := detail.HandleEvent(tcell.NewEventMouse(selectionX, 0, tcell.Button1, tcell.ModNone)); result != EventConsumed {
+				t.Fatalf("sticky title press result = %v, want consumed", result)
 			}
+			if !detail.collapsedFiles[0] {
+				t.Fatal("sticky title press did not collapse its file")
+			}
+			detail.HandleEvent(tcell.NewEventMouse(selectionX, 0, tcell.ButtonNone, tcell.ModNone))
+			detail.HandleEvent(tcell.NewEventMouse(selectionX, 0, tcell.Button1, tcell.ModNone))
+			if detail.collapsedFiles[0] {
+				t.Fatal("second sticky title press did not expand its file")
+			}
+			detail.HandleEvent(tcell.NewEventMouse(selectionX, 0, tcell.ButtonNone, tcell.ModNone))
+			detail.TopLine = firstDiffVisual
+			cells = makeGrid(width, height)
+			detail.Render(NewRenderSurface(cells, Rect{W: width, H: height}))
 			if detail.hasSelection || detail.selecting {
-				t.Fatal("sticky text press started a selection")
+				t.Fatal("sticky title press started a selection")
 			}
 
 			start, _, ok := detail.screenToSelection(selectionX, 1)

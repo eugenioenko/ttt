@@ -108,12 +108,14 @@ type CommitDetailWidget struct {
 	stickyControl    commitDetailControl
 
 	// Selection positions point into logical rows and original, unwrapped text.
-	selecting     bool
-	hasSelection  bool
-	selRight      bool
-	selection     diffTextSelection
-	lastClickTime time.Time
-	lastClickPos  diffSelPos
+	selecting         bool
+	hasSelection      bool
+	selRight          bool
+	selection         diffTextSelection
+	lastClickTime     time.Time
+	lastClickPos      diffSelPos
+	primaryPressed    bool
+	disclosurePressed bool
 }
 
 func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *CommitDetailWidget {
@@ -589,12 +591,12 @@ func (d *CommitDetailWidget) renderHeading(surface Surface, rowIndex int, row co
 			chevron = '▶'
 		}
 		surface.SetCell(1, y, term.Cell{Ch: chevron, Style: term.StyleDefault, Bold: true})
-		r := d.GetRect()
-		d.fileControls = append(d.fileControls, commitDetailControl{
-			rect:      Rect{X: r.X + 1, Y: r.Y + y, W: 1, H: 1},
-			fileIndex: row.fileIndex,
-		})
 	}
+	r := d.GetRect()
+	d.fileControls = append(d.fileControls, commitDetailControl{
+		rect:      Rect{X: r.X, Y: r.Y + y, W: viewW, H: 1},
+		fileIndex: row.fileIndex,
+	})
 	d.drawTextRow(surface, 3, y, viewW-3, row.text, term.StyleDefault, term.StyleDefault, row.bold, visual.leftStart, rowIndex)
 }
 
@@ -864,7 +866,7 @@ func (d *CommitDetailWidget) renderStickyHeading(surface Surface, viewW int) {
 	r := d.GetRect()
 	d.stickyRect = Rect{X: r.X, Y: r.Y, W: viewW, H: 1}
 	d.stickyControl = commitDetailControl{
-		rect:      Rect{X: r.X + 1, Y: r.Y, W: 1, H: 1},
+		rect:      d.stickyRect,
 		fileIndex: row.fileIndex,
 	}
 }
@@ -1014,23 +1016,44 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 			d.LeftCol += 4
 		default:
 			mx, my := event.Position()
-			if buttons&tcell.Button1 != 0 {
-				if pointInCommitDetailRect(mx, my, d.topControl) {
-					if d.allFilesCollapsed() {
-						d.ExpandAllFiles()
-					} else {
-						d.CollapseAllFiles()
-					}
+			primaryPressed := buttons&tcell.Button1 != 0
+			freshPrimaryPress := primaryPressed && !d.primaryPressed
+			if buttons == tcell.ButtonNone {
+				d.primaryPressed = false
+				if d.disclosurePressed {
+					d.disclosurePressed = false
 					return EventConsumed
 				}
-				if pointInCommitDetailRect(mx, my, d.stickyControl.rect) {
-					d.toggleFile(d.stickyControl.fileIndex)
+			}
+			if primaryPressed {
+				d.primaryPressed = true
+				if d.disclosurePressed {
 					return EventConsumed
 				}
-				for _, control := range d.fileControls {
-					if pointInCommitDetailRect(mx, my, control.rect) {
-						d.toggleFile(control.fileIndex)
+				// A selection drag may cross a heading. Only a fresh press owns the
+				// row-wide disclosure target; otherwise the file would collapse while
+				// the reader was selecting adjacent diff text.
+				if freshPrimaryPress && !d.selecting {
+					if pointInCommitDetailRect(mx, my, d.topControl) {
+						if d.allFilesCollapsed() {
+							d.ExpandAllFiles()
+						} else {
+							d.CollapseAllFiles()
+						}
+						d.disclosurePressed = true
 						return EventConsumed
+					}
+					if pointInCommitDetailRect(mx, my, d.stickyControl.rect) {
+						d.toggleFile(d.stickyControl.fileIndex)
+						d.disclosurePressed = true
+						return EventConsumed
+					}
+					for _, control := range d.fileControls {
+						if pointInCommitDetailRect(mx, my, control.rect) {
+							d.toggleFile(control.fileIndex)
+							d.disclosurePressed = true
+							return EventConsumed
+						}
 					}
 				}
 				pos, right, ok := d.screenToSelection(mx, my)

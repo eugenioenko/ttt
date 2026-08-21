@@ -95,6 +95,16 @@ func (n *NavigationPanel) Reload() {
 	n.Tree.Reload()
 }
 
+func (n *NavigationPanel) ExpandAll() {
+	n.Tree.ExpandAllWhere(func(node *widgets.TreeNode) bool {
+		return !node.Muted
+	})
+}
+
+func (n *NavigationPanel) CollapseAll() {
+	n.Tree.CollapseAll()
+}
+
 func (n *NavigationPanel) SetRoots(paths []string) {
 	expanded := map[string]bool{}
 	n.Tree.CollectExpanded(expanded)
