@@ -13,17 +13,20 @@ func TestDiffWidgetDefaultsRemainInheritedUntilViewOverride(t *testing.T) {
 	dv := NewDiffViewWidget("test.go", diff.FileDiff{}, nil, nil, false)
 
 	dv.ApplyDefaultMode(DiffModeUnified)
+	dv.ApplyDefaultContextMode(DiffContextFullFile)
 	dv.ApplyDefaultWrapMode(DiffWrapOn)
-	if dv.Mode() != DiffModeUnified || dv.WrapMode() != DiffWrapOn {
-		t.Fatalf("inherited defaults = mode %v wrap %v, want unified/on", dv.Mode(), dv.WrapMode())
+	if dv.Mode() != DiffModeUnified || dv.ContextMode() != DiffContextFullFile || dv.WrapMode() != DiffWrapOn {
+		t.Fatalf("inherited defaults = mode %v context %v wrap %v, want unified/full/on", dv.Mode(), dv.ContextMode(), dv.WrapMode())
 	}
 
 	dv.SetMode(DiffModeSplit)
+	dv.SetContextMode(DiffContextChangesOnly)
 	dv.SetWrapMode(DiffWrapOff)
 	dv.ApplyDefaultMode(DiffModeUnified)
+	dv.ApplyDefaultContextMode(DiffContextFullFile)
 	dv.ApplyDefaultWrapMode(DiffWrapOn)
-	if dv.Mode() != DiffModeSplit || dv.WrapMode() != DiffWrapOff {
-		t.Fatalf("defaults replaced View overrides: mode %v wrap %v", dv.Mode(), dv.WrapMode())
+	if dv.Mode() != DiffModeSplit || dv.ContextMode() != DiffContextChangesOnly || dv.WrapMode() != DiffWrapOff {
+		t.Fatalf("defaults replaced View overrides: mode %v context %v wrap %v", dv.Mode(), dv.ContextMode(), dv.WrapMode())
 	}
 }
 
@@ -317,6 +320,31 @@ func TestDiffWidgetCollapsedSeparatorUsesSingularLine(t *testing.T) {
 
 	if got := dv.Lines[1].Left.Text; got != "⋯ 1 line ⋯" {
 		t.Fatalf("separator = %q, want singular distance", got)
+	}
+}
+
+func TestDiffWidgetCollapsedSeparatorClickExpandsOnlyThatGap(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -8,1 +8,1 @@\n eighth\n")
+	oldLines := []string{"first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"}
+	newLines := append([]string(nil), oldLines...)
+	dv := NewDiffViewWidget("test.go", fd, oldLines, newLines, false)
+
+	const width, height = 60, 8
+	grid := makeGrid(width, height)
+	dv.SetRect(Rect{W: width, H: height})
+	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+	if got := dv.Lines[1].Left.Text; got != "⋯ 6 lines ⋯" {
+		t.Fatalf("precondition separator = %q", got)
+	}
+
+	if result := dv.HandleEvent(tcell.NewEventMouse(width-2, 1, tcell.Button1, 0)); result != EventConsumed {
+		t.Fatalf("collapsed row click result = %v", result)
+	}
+	if len(dv.Lines) < 8 || dv.Lines[1].Left.Text != "second" || dv.Lines[6].Right.Text != "seventh" {
+		t.Fatalf("expanded gap lines = %+v", dv.Lines)
+	}
+	if dv.ContextMode() != DiffContextChangesOnly {
+		t.Fatalf("one expanded gap changed global context mode to %v", dv.ContextMode())
 	}
 }
 

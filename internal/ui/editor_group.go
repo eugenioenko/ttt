@@ -82,6 +82,7 @@ type EditorGroupWidget struct {
 	GutterStyle             string
 	WordWrap                bool
 	DiffMode                DiffMode
+	DiffContext             DiffContextMode
 	DiffWordWrap            bool
 	DiffHighContrast        bool
 	SyntaxHighlight         bool
@@ -455,6 +456,9 @@ func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.Fil
 // in View.
 func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	surface.ApplyDefaultMode(g.DiffMode)
+	if contextSurface, ok := surface.(DiffContextSurface); ok {
+		contextSurface.ApplyDefaultContextMode(g.DiffContext)
+	}
 	wrapMode := DiffWrapOff
 	if g.DiffWordWrap {
 		wrapMode = DiffWrapOn
@@ -465,14 +469,26 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 
 // SetDiffDefaults updates the defaults used by future diff surfaces and
 // refreshes every open surface that still inherits either property.
-func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, wordWrap bool) {
+func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffContextMode, wordWrap bool) {
 	g.DiffMode = mode
+	g.DiffContext = contextMode
 	g.DiffWordWrap = wordWrap
 	for _, tab := range g.tabs {
 		if surface, ok := tab.Content.(DiffModeSurface); ok {
 			g.ApplyDiffDefaults(surface)
 		}
 	}
+}
+
+func (g *EditorGroupWidget) ActiveDiffContextSurface() DiffContextSurface {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	if surface, ok := t.Content.(DiffContextSurface); ok {
+		return surface
+	}
+	return nil
 }
 
 func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {

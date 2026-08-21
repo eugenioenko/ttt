@@ -56,16 +56,23 @@ type DiffViewWidget struct {
 	searchActiveSideIdx int
 
 	// diff view modes and their projected rows
-	extended     bool
-	wrapMode     DiffWrapMode
-	wrapExplicit bool
-	mode         DiffMode
-	modeExplicit bool
-	highContrast bool
-	fileDiff     diff.FileDiff
-	oldLines     []string
-	newLines     []string
-	unifiedLines []diffUnifiedLine
+	extended        bool
+	wrapMode        DiffWrapMode
+	wrapExplicit    bool
+	mode            DiffMode
+	modeExplicit    bool
+	contextMode     DiffContextMode
+	contextExplicit bool
+	contextLoaded   bool
+	expandedGaps    map[int]bool
+	gapByLine       map[int]int
+	pendingGap      int
+	primaryPressed  bool
+	highContrast    bool
+	fileDiff        diff.FileDiff
+	oldLines        []string
+	newLines        []string
+	unifiedLines    []diffUnifiedLine
 
 	OnFetchExtended func(dv *DiffViewWidget)
 	Loading         bool
@@ -84,6 +91,14 @@ func NewDiffViewWidget(filePath string, fd diff.FileDiff, oldLines, newLines []s
 		oldLines:            oldLines,
 		newLines:            newLines,
 		extended:            extended,
+		contextMode:         DiffContextChangesOnly,
+		contextExplicit:     extended,
+		contextLoaded:       oldLines != nil || newLines != nil,
+		expandedGaps:        make(map[int]bool),
+		pendingGap:          -1,
+	}
+	if extended {
+		dv.contextMode = DiffContextFullFile
 	}
 	dv.rebuildLines()
 	return dv
@@ -98,7 +113,25 @@ func (d *DiffViewWidget) SetNewLines(lines []string) {
 }
 
 func (d *DiffViewWidget) IsExtended() bool {
-	return d.extended
+	return d.contextMode == DiffContextFullFile
+}
+
+func (d *DiffViewWidget) ContextMode() DiffContextMode { return d.contextMode }
+
+func (d *DiffViewWidget) SetContextMode(mode DiffContextMode) {
+	d.contextExplicit = true
+	d.applyContextMode(mode)
+}
+
+func (d *DiffViewWidget) ApplyDefaultContextMode(mode DiffContextMode) {
+	if d.contextExplicit {
+		return
+	}
+	d.applyContextMode(mode)
+}
+
+func (d *DiffViewWidget) applyContextMode(mode DiffContextMode) {
+	d.applyExtended(mode == DiffContextFullFile)
 }
 
 func (d *DiffViewWidget) IsWrapped() bool {
@@ -179,13 +212,26 @@ func (d *DiffViewWidget) applyMode(mode DiffMode) {
 }
 
 func (d *DiffViewWidget) SetExtended(extended bool) {
-	if extended && len(d.oldLines) == 0 && d.OnFetchExtended != nil {
+	d.contextExplicit = true
+	d.applyExtended(extended)
+}
+
+func (d *DiffViewWidget) applyExtended(extended bool) {
+	if extended && !d.contextLoaded && d.OnFetchExtended != nil {
 		d.Loading = true
 		d.extended = true
+		d.contextMode = DiffContextFullFile
 		d.OnFetchExtended(d)
 		return
 	}
 	d.extended = extended
+	if extended {
+		d.contextMode = DiffContextFullFile
+	} else {
+		d.contextMode = DiffContextChangesOnly
+		d.pendingGap = -1
+		clear(d.expandedGaps)
+	}
 	d.rebuildLines()
 	d.TopLine = 0
 	d.wrapTopOffset = 0
@@ -196,6 +242,13 @@ func (d *DiffViewWidget) SetExtended(extended bool) {
 
 func (d *DiffViewWidget) FinishLoading() {
 	d.Loading = false
+	d.contextLoaded = true
+	if d.pendingGap >= 0 {
+		d.expandedGaps[d.pendingGap] = true
+		d.pendingGap = -1
+		d.extended = false
+		d.contextMode = DiffContextChangesOnly
+	}
 	d.rebuildLines()
 	d.TopLine = 0
 	d.wrapTopOffset = 0
@@ -205,10 +258,11 @@ func (d *DiffViewWidget) FinishLoading() {
 }
 
 func (d *DiffViewWidget) rebuildLines() {
-	if d.extended && len(d.oldLines) > 0 {
+	if d.extended && d.contextLoaded {
 		d.Lines = diff.FullDiffLines(d.oldLines, d.newLines)
+		d.gapByLine = nil
 	} else {
-		d.Lines = compactDiffLines(d.fileDiff)
+		d.Lines, d.gapByLine = compactDiffLinesWithContext(d.fileDiff, d.oldLines, d.newLines, d.expandedGaps)
 	}
 	d.unifiedLines = buildUnifiedDiffLines(d.Lines)
 	maxW := 0
@@ -221,6 +275,47 @@ func (d *DiffViewWidget) rebuildLines() {
 		}
 	}
 	d.maxLineW = maxW
+}
+
+func (d *DiffViewWidget) expandContextGap(gap int) {
+	if gap < 0 || d.expandedGaps[gap] {
+		return
+	}
+	if !d.contextLoaded && d.OnFetchExtended != nil {
+		d.pendingGap = gap
+		d.Loading = true
+		d.OnFetchExtended(d)
+		return
+	}
+	if !d.contextLoaded {
+		return
+	}
+	d.expandedGaps[gap] = true
+	d.rebuildLines()
+	d.ClearSearch()
+	d.ClearSelection()
+}
+
+func (d *DiffViewWidget) screenSourceLine(my int) int {
+	r := d.GetRect()
+	localY := my - r.Y
+	if localY < 0 || localY >= d.viewH {
+		return -1
+	}
+	line := d.TopLine + localY
+	if d.IsWrapped() {
+		if localY >= len(d.wrapMap) {
+			return -1
+		}
+		line = d.wrapMap[localY].line
+	}
+	if d.IsUnified() {
+		if line < 0 || line >= len(d.unifiedLines) {
+			return -1
+		}
+		return d.unifiedLines[line].sourceLine
+	}
+	return line
 }
 
 func (d *DiffViewWidget) Focusable() bool { return true }
@@ -851,7 +946,18 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 		mx, my := tev.Position()
+		if btn == tcell.ButtonNone {
+			d.primaryPressed = false
+		}
 		if btn&tcell.Button1 != 0 {
+			freshPress := !d.primaryPressed
+			d.primaryPressed = true
+			if freshPress {
+				if gap, ok := d.gapByLine[d.screenSourceLine(my)]; ok {
+					d.expandContextGap(gap)
+					return EventConsumed
+				}
+			}
 			pos, right, ok := d.screenToSel(mx, my)
 			if ok {
 				if !d.selecting {

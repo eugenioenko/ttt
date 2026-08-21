@@ -80,6 +80,7 @@ func (a *App) OpenCurrentChanges() {
 	created := detail == nil
 	if detail == nil {
 		detail = ui.NewCurrentChangesWidget(dir, a.EditorGroup.SyntaxHighlight)
+		a.wireCommitDetailContext(tabID, detail)
 		a.EditorGroup.ApplyDiffDefaults(detail)
 		a.EditorGroup.OpenPluginTab(tabID, currentChangesTitle(dir, len(a.Changes.groups) > 1), detail)
 	} else {

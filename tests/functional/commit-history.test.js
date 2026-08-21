@@ -35,6 +35,15 @@ function repoWithLongHistory() {
   return d;
 }
 
+function repoWithPagedHistory() {
+  const d = createGitRepo(createTempDir());
+  for (let i = 1; i <= 51; i++) {
+    git(d, "commit", "--allow-empty", "-qm", `paged ${String(i).padStart(2, "0")}`);
+  }
+  createTempFile(d, "history.txt", "working tree change\n");
+  return d;
+}
+
 function repoWithDetailedCommit() {
   const d = createGitRepo(createTempDir());
   const lines = (prefix) => Array.from({ length: 24 }, (_, i) => `${prefix} line ${i + 1}`).join("\n") + "\n";
@@ -63,6 +72,20 @@ function repoWithLongDetailLines() {
   createTempFile(d, "tracked.txt", `right-prefix-${"R".repeat(70)}-RIGHT-SUFFIX\n`);
   git(d, "add", "-A");
   git(d, "commit", "-qm", "wrapped detail");
+  return d;
+}
+
+function repoWithContextGaps() {
+  const d = createGitRepo(createTempDir());
+  const lines = Array.from({ length: 30 }, (_, i) => `unchanged line ${i + 1}`);
+  createTempFile(d, "context.txt", `${lines.join("\n")}\n`);
+  git(d, "add", "-A");
+  git(d, "commit", "-qm", "context base");
+  lines[1] = "changed near top";
+  lines[28] = "changed near bottom";
+  createTempFile(d, "context.txt", `${lines.join("\n")}\n`);
+  git(d, "add", "-A");
+  git(d, "commit", "-qm", "two distant edits");
   return d;
 }
 
@@ -116,8 +139,8 @@ describe("commit history", () => {
     const clampedTree = tui.snapshot();
 
     const { snapshots } = tui.run();
-    // The history query is capped at ten entries; a half-height default fits
-    // the complete query at this geometry.
+    // The initial history page includes this full fixture; a half-height
+    // viewport scrolls through it without changing the panel split.
     expect(snapshots[initial]).toContain("history 03");
     expect(snapshots[clampedHistory]).toContain("Commit History");
     expect(snapshots[scrolled]).toContain("history 03");
@@ -125,6 +148,27 @@ describe("commit history", () => {
     expect(snapshots[clampedTree]).toContain("Changes (1)");
     expect(snapshots[clampedTree]).toContain("history.txt");
     expect(snapshots[clampedTree]).toContain("Commit History");
+  });
+
+  it("should append older history from an explicit final row", () => {
+    dir = repoWithPagedHistory();
+
+    tui.start(dir);
+    tui.waitFor("Changes");
+    tui.pressChord("ctrl+k", "c");
+    tui.waitStable(500);
+    tui.click(5, BRANCH_ROW);
+    for (let i = 0; i < 51; i++) tui.press("down");
+    tui.waitStable(300);
+    const loadRow = tui.snapshot();
+    tui.press("enter");
+    tui.waitStable(800);
+    const appended = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[loadRow]).toContain("Load older commits…");
+    expect(snapshots[appended]).toContain("paged 01");
+    expect(snapshots[appended]).not.toContain("Load older commits…");
   });
 
   it("should list a commit's files when the commit is expanded", () => {
@@ -258,12 +302,38 @@ describe("commit history", () => {
     const { snapshots } = tui.run();
     expect(snapshots[top]).toMatch(/Commit [0-9a-f]{7}/);
     expect(snapshots[top]).toContain("detail subject");
+    expect(snapshots[top]).toMatch(/Authored [A-Z][a-z]{2} \d{1,2}, \d{4} at \d{1,2}:\d{2} [AP]M [+-]\d{4}/);
     expect(snapshots[top]).toContain("Full commit body paragraph.");
     expect(snapshots[top]).toContain("first-detail.txt");
     expect(snapshots[top]).toContain("first line 1");
     expect(snapshots[top]).not.toContain("second line 24");
     expect(snapshots[bottom]).toContain("second-detail.txt");
     expect(snapshots[bottom]).toContain("second line 24");
+  });
+
+  it("should switch an aggregate commit diff between changes only and the full file", () => {
+    dir = repoWithContextGaps();
+
+    tui.start(dir);
+    tui.waitFor("Changes");
+    tui.pressChord("ctrl+k", "c");
+    tui.waitStable(400);
+    tui.click(5, FIRST_COMMIT_ROW);
+    tui.waitStable(800);
+    const compact = tui.snapshot();
+
+    tui.exec("Git: Show Full File");
+    tui.waitStable(800);
+    const full = tui.snapshot();
+    tui.exec("Menu: View");
+    tui.waitStable(200);
+    const viewMenu = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[compact]).toContain("changed near top");
+    expect(snapshots[compact]).not.toContain("unchanged line 15");
+    expect(snapshots[full]).toContain("unchanged line 15");
+    expect(snapshots[viewMenu]).toContain("✓ Diff: Full File");
   });
 
   it("should wrap and unwrap the active commit detail through the shared diff command", () => {
@@ -371,7 +441,9 @@ describe("commit history", () => {
 
     // Select left-side text from the first visual segment through the last.
     // Copy must join those visual segments back into the original source line.
-    tui.drag(38, 8, 58, 10);
+    // Commit metadata adds one row between the header and message, so the
+    // wrapped diff segments begin one row lower than the message-only layout.
+    tui.drag(38, 9, 58, 11);
     tui.copy();
     tui.exec("New File");
     tui.press("ctrl+v");

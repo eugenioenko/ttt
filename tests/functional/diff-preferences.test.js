@@ -88,12 +88,28 @@ describe("diff reading preferences", () => {
     expect(snapshots[options]).toContain("Git Files");
     expect(snapshots[diffOptions]).toContain("Split");
     expect(snapshots[diffOptions]).toContain("Unified");
+    expect(snapshots[diffOptions]).toContain("Changes Only");
+    expect(snapshots[diffOptions]).toContain("Full File");
     expect(snapshots[diffOptions]).toContain("Wrap Lines");
     expect(snapshots[diffOptions]).toContain("High Contrast");
 
     const saved = savedSettings(fixture.configDir);
     expect(saved.editor.diffMode).toBe("unified");
     expect(saved.editor.diffWordWrap).toBe(true);
+  });
+
+  it("persists the default diff context independently of layout and wrapping", () => {
+    const fixture = diffFixture();
+    startWithConfig(fixture);
+    tui.exec("Show Full File Diff by Default");
+    tui.waitStable();
+
+    const { snapshots } = tui.run();
+    expect(snapshots).toBeDefined();
+    const saved = savedSettings(fixture.configDir);
+    expect(saved.editor.diffContext).toBe("full");
+    expect(saved.editor.diffMode).toBe("split");
+    expect(saved.editor.diffWordWrap).toBe(false);
   });
 
   it("updates an already-open diff when its Options defaults change", () => {

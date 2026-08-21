@@ -157,6 +157,23 @@ func TestCommitDetailKeepsTouchedFilesWithoutLineHunks(t *testing.T) {
 	}
 }
 
+func TestCommitDetailRendersAuthoredMetadataBelowHeader(t *testing.T) {
+	detail := NewCommitDetailWidget("/repo", "full-hash", "abc1234", false)
+	detail.Metadata = "Authored Aug 21, 2026 at 5:42 PM -0400"
+	detail.SetDetail("Subject", nil, "")
+	if len(detail.rows) < 3 || detail.rows[1].kind != commitDetailMetadataRow || detail.rows[1].text != detail.Metadata {
+		t.Fatalf("metadata row = %+v", detail.rows)
+	}
+
+	const width, height = 60, 5
+	cells := makeGrid(width, height)
+	detail.SetRect(Rect{W: width, H: height})
+	detail.Render(NewRenderSurface(cells, Rect{W: width, H: height}))
+	if text := commitDetailGridText(cells); !strings.Contains(text, detail.Metadata) {
+		t.Fatalf("rendered detail missing metadata:\n%s", text)
+	}
+}
+
 func TestCommitDetailDoesNotDrawWideRuneAcrossClipEdge(t *testing.T) {
 	detail := NewCommitDetailWidget("/repo", "full-hash", "abc1234", false)
 	cells := makeGrid(3, 1)
@@ -196,6 +213,51 @@ func TestCommitDetailCollapsedSeparatorUsesSharedStyle(t *testing.T) {
 	}
 	if got := cells[separatorRow][detail.gutterW].Style; got != term.StyleDiffCollapsed {
 		t.Fatalf("collapsed text style = %v, want StyleDiffCollapsed", got)
+	}
+}
+
+func TestCommitDetailCollapsedSeparatorClickLoadsAndExpandsOnlyThatGap(t *testing.T) {
+	fileDiff := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n line 1\n@@ -20,1 +20,1 @@\n line 20\n")
+	detail := NewCommitDetailWidget("/repo", "full-hash", "abc1234", false)
+	requested := -1
+	detail.OnFetchContext = func(fileIndex int, _ CommitDetailFile) { requested = fileIndex }
+	detail.SetDetail("Subject", []CommitDetailFile{{Path: "test.go", Diff: fileDiff}}, "")
+
+	separatorRow := -1
+	for rowIndex, row := range detail.rows {
+		if row.kind == commitDetailDiffRow && detail.Files[row.fileIndex].lines[row.lineIndex].Left.Kind == diff.Collapsed {
+			separatorRow = rowIndex
+			break
+		}
+	}
+	if separatorRow < 0 {
+		t.Fatal("commit detail has no context gap")
+	}
+	const width, height = 60, 12
+	detail.SetRect(Rect{W: width, H: height})
+	detail.Render(NewRenderSurface(makeGrid(width, height), Rect{W: width, H: height}))
+	if got := detail.HandleEvent(tcell.NewEventMouse(width-2, separatorRow, tcell.Button1, tcell.ModNone)); got != EventConsumed {
+		t.Fatalf("context gap click = %v", got)
+	}
+	if requested != 0 || detail.Files[0].pendingGap != 0 {
+		t.Fatalf("context request = file %d gap %d", requested, detail.Files[0].pendingGap)
+	}
+
+	lines := make([]string, 20)
+	for i := range lines {
+		lines[i] = "line " + strconv.Itoa(i+1)
+	}
+	key := CommitDetailContextKey(detail.Files[0])
+	if !detail.ApplyFileContext(0, key, lines, lines) {
+		t.Fatal("matching file context was rejected")
+	}
+	if !detail.Files[0].expandedGaps[0] || len(detail.Files[0].lines) <= 2 {
+		t.Fatalf("gap was not expanded: expanded=%v lines=%d", detail.Files[0].expandedGaps, len(detail.Files[0].lines))
+	}
+	for _, line := range detail.Files[0].lines {
+		if line.Left.Kind == diff.Collapsed || line.Right.Kind == diff.Collapsed {
+			t.Fatal("expanded gap retained a collapsed separator")
+		}
 	}
 }
 

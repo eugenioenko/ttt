@@ -43,6 +43,23 @@ func (m DiffWrapMode) Toggle() DiffWrapMode {
 	return DiffWrapOn
 }
 
+// DiffContextMode controls how much unchanged file content a diff surface
+// shows. ChangesOnly keeps Git's compact hunks; FullFile includes every line.
+type DiffContextMode uint8
+
+const (
+	DiffContextChangesOnly DiffContextMode = iota
+	DiffContextFullFile
+)
+
+// DiffContextSurface is separate from DiffModeSurface because some diff
+// readers can project split/unified and wrapping without owning full blobs.
+type DiffContextSurface interface {
+	ContextMode() DiffContextMode
+	SetContextMode(DiffContextMode)
+	ApplyDefaultContextMode(DiffContextMode)
+}
+
 // DiffModeSurface is implemented by every diff-reading surface so commands,
 // menus, settings, and the tab control update the same presentation state.
 // SetMode and SetWrapMode are reader overrides; ApplyDefaultMode and

@@ -207,12 +207,25 @@ func (a *App) BuildViewMenu() []ui.ContextMenuItem {
 	if surface.WrapMode() == ui.DiffWrapOn {
 		wrapChecked = ui.MenuChecked
 	}
-	return append(items,
+	items = append(items,
 		ui.MenuSep(),
 		ui.ContextMenuItem{Label: "Diff: Split", Command: "diff.splitView", Checked: splitChecked},
 		ui.ContextMenuItem{Label: "Diff: Unified", Command: "diff.unifiedView", Checked: unifiedChecked},
-		ui.ContextMenuItem{Label: "Diff: Wrap Lines", Command: "diff.toggleWrap", Checked: wrapChecked},
 	)
+	if contextSurface := a.EditorGroup.ActiveDiffContextSurface(); contextSurface != nil {
+		changesChecked := ui.MenuUnchecked
+		fullChecked := ui.MenuUnchecked
+		if contextSurface.ContextMode() == ui.DiffContextFullFile {
+			fullChecked = ui.MenuChecked
+		} else {
+			changesChecked = ui.MenuChecked
+		}
+		items = append(items,
+			ui.ContextMenuItem{Label: "Diff: Changes Only", Command: "diff.changesOnlyView", Checked: changesChecked},
+			ui.ContextMenuItem{Label: "Diff: Full File", Command: "diff.fullFileView", Checked: fullChecked},
+		)
+	}
+	return append(items, ui.ContextMenuItem{Label: "Diff: Wrap Lines", Command: "diff.toggleWrap", Checked: wrapChecked})
 }
 
 func openMenuBarDropdown(app *App, index int) {

@@ -69,6 +69,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Diff mode", Kind: settingEnum, Options: diffModeItems,
 				GetString: func(s *config.Settings) string { return s.Editor.DiffMode },
 				SetString: func(s *config.Settings, v string) { s.Editor.DiffMode = v }},
+			{Label: "Diff context", Kind: settingEnum, Options: diffContextItems,
+				GetString: func(s *config.Settings) string { return s.Editor.DiffContext },
+				SetString: func(s *config.Settings, v string) { s.Editor.DiffContext = v }},
 			{Label: "Diff word wrap", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffWordWrap },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffWordWrap = v }},
@@ -179,6 +182,13 @@ func diffModeItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
 		{ID: config.DiffModeSplit, Label: "Split"},
 		{ID: config.DiffModeUnified, Label: "Unified"},
+	}
+}
+
+func diffContextItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.DiffContextChanges, Label: "Changes Only"},
+		{ID: config.DiffContextFull, Label: "Full File"},
 	}
 }
 

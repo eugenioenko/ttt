@@ -23,6 +23,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Editor.TabSize = 7
 	s.Editor.WordWrap = true
 	s.Editor.DiffMode = DiffModeUnified
+	s.Editor.DiffContext = DiffContextFull
 	s.Editor.DiffWordWrap = true
 	s.Editor.DiffHighContrast = true
 	s.Git.FileView = GitFileViewList
@@ -44,6 +45,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Editor.DiffMode != DiffModeUnified {
 		t.Errorf("diffMode = %q, want %q", got.Editor.DiffMode, DiffModeUnified)
+	}
+	if got.Editor.DiffContext != DiffContextFull {
+		t.Errorf("diffContext = %q, want %q", got.Editor.DiffContext, DiffContextFull)
 	}
 	if !got.Editor.DiffWordWrap {
 		t.Error("diffWordWrap did not round-trip")

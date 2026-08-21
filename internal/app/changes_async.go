@@ -32,10 +32,13 @@ type eventPoster interface {
 	PostEvent(tcell.Event) error
 }
 
-// commitLogLimit is how many commits the log shows.
+// Commit history starts with a useful window and grows only when requested.
+// The tree already renders just its visible rows, so paging bounds Git and
+// memory work without adding a second navigation model to the sidebar.
 const (
-	commitLogLimit   = 10
-	commitLogTimeout = 10 * time.Second
+	commitLogPageSize  = 50
+	commitLogTimeout   = 10 * time.Second
+	historyLoadOlderID = "history:load-older"
 )
 
 // ChangesStatusResult carries a finished working-tree scan.
@@ -49,6 +52,10 @@ type CommitLogResult struct {
 	Gen     int
 	Dir     string
 	Branch  string
+	Anchor  string
+	Offset  int
+	Append  bool
+	HasMore bool
 	Entries []git.LogEntry
 	Err     error
 }
@@ -68,12 +75,13 @@ type CommitFilesResult struct {
 // one immutable commit. Dir and Ref are the result identity; ApplyCommitDetail
 // only installs it into the loading tab created for that exact pair.
 type CommitDetailResult struct {
-	Dir     string
-	Ref     string
-	Short   string
-	Message string
-	Files   []ui.CommitDetailFile
-	Err     string
+	Dir        string
+	Ref        string
+	Short      string
+	Message    string
+	AuthoredAt time.Time
+	Files      []ui.CommitDetailFile
+	Err        string
 }
 
 func readChangesGroups(dirs []string) []changesGroup {
@@ -118,17 +126,26 @@ func readCommitLog(dir string, gen int) *CommitLogResult {
 }
 
 func readCommitLogContext(ctx context.Context, dir string, gen int) *CommitLogResult {
-	entries, err := git.LogWithErrorContext(ctx, dir, commitLogLimit)
+	anchor, err := git.HeadSHAContext(ctx, dir)
+	page := git.LogPage{}
+	if err == nil {
+		page, err = git.LogPageContext(ctx, dir, anchor, 0, commitLogPageSize)
+	}
 	branch, branchErr := git.BranchNameContext(ctx, dir)
-	if err == nil && branchErr != nil && len(entries) > 0 {
+	if err == nil && branchErr != nil && len(page.Entries) > 0 {
 		err = branchErr
 	}
 	return &CommitLogResult{
-		Gen:     gen,
-		Dir:     dir,
-		Branch:  branch,
-		Entries: entries,
-		Err:     err,
+		Gen: gen, Dir: dir, Branch: branch, Anchor: anchor,
+		HasMore: page.HasMore, Entries: page.Entries, Err: err,
+	}
+}
+
+func readCommitLogPageContext(ctx context.Context, dir, anchor string, offset, gen int) *CommitLogResult {
+	page, err := git.LogPageContext(ctx, dir, anchor, offset, commitLogPageSize)
+	return &CommitLogResult{
+		Gen: gen, Dir: dir, Anchor: anchor, Offset: offset, Append: true,
+		HasMore: page.HasMore, Entries: page.Entries, Err: err,
 	}
 }
 
@@ -140,6 +157,10 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		return
 	}
 	cp.logCancel = nil
+	if r.Append {
+		cp.applyCommitLogPage(r)
+		return
+	}
 	if r.Err != nil {
 		// Preserve the rendered history and make the selected root retryable on
 		// the next repository observation.
@@ -164,6 +185,10 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	// of — and so does switching to another root and back.
 	cp.saveCommitLogState()
 	cp.logDir = r.Dir
+	cp.logAnchor = r.Anchor
+	cp.logLoaded = len(r.Entries)
+	cp.logHasMore = r.HasMore
+	cp.logPagePending = false
 	selected := cp.logSelected[r.Dir]
 	cp.logCommits = make(map[string]commitFileRef)
 	cp.logFiles = make(map[string]commitFileRef)
@@ -172,7 +197,7 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	if r.Branch != "" {
 		branchLabel = fmt.Sprintf("%s · %s", name, r.Branch)
 	}
-	nodes := make([]*widgets.TreeNode, 0, len(r.Entries)+1)
+	nodes := make([]*widgets.TreeNode, 0, len(r.Entries)+2)
 	nodes = append(nodes, &widgets.TreeNode{
 		ID:    "branch",
 		Label: branchLabel,
@@ -180,23 +205,10 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		Muted: true,
 	})
 	for _, e := range r.Entries {
-		// Keyed on the full hash: the abbreviation git prints can change length
-		// as the repo grows, which would silently orphan both the expansion
-		// state below and the file cache.
-		id := "commit:" + e.Ref
-		cp.logCommits[id] = commitFileRef{Dir: r.Dir, Ref: e.Ref, Short: e.Hash}
-		node := &widgets.TreeNode{
-			ID:         id,
-			Label:      e.Message,
-			Icon:       "●",
-			Badge:      e.Hash,
-			Expandable: true,
-		}
-		if cp.logExpanded[id] {
-			node.Expanded = true
-			node.Children = cp.commitChildren(r.Dir, e.Ref, e.Hash, id)
-		}
-		nodes = append(nodes, node)
+		nodes = append(nodes, cp.commitLogNode(r.Dir, e))
+	}
+	if r.HasMore {
+		nodes = append(nodes, historyLoadOlderNode(false))
 	}
 	cp.CommitLog.SetItems(nodes)
 	if cp.OnHistoryResult != nil {
@@ -229,6 +241,66 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	}
 	delete(cp.logSelected, r.Dir)
 	cp.CommitLog.SetSelectedIndex(0)
+}
+
+func (cp *ChangesPanel) commitLogNode(dir string, e git.LogEntry) *widgets.TreeNode {
+	// Keyed on the full hash: the abbreviation git prints can change length as
+	// the repo grows, which would silently orphan expansion state and caches.
+	id := "commit:" + e.Ref
+	cp.logCommits[id] = commitFileRef{Dir: dir, Ref: e.Ref, Short: e.Hash}
+	node := &widgets.TreeNode{
+		ID: id, Label: e.Message, Icon: "●", Badge: e.Hash, Expandable: true,
+	}
+	if cp.logExpanded[id] {
+		node.Expanded = true
+		node.Children = cp.commitChildren(dir, e.Ref, e.Hash, id)
+	}
+	return node
+}
+
+func historyLoadOlderNode(loading bool) *widgets.TreeNode {
+	label := "Load older commits…"
+	if loading {
+		label = "Loading older commits…"
+	}
+	return &widgets.TreeNode{ID: historyLoadOlderID, Label: label, Icon: "↓", Muted: true}
+}
+
+func (cp *ChangesPanel) applyCommitLogPage(r *CommitLogResult) {
+	cp.logPagePending = false
+	if r.Anchor != cp.logAnchor || r.Offset != cp.logLoaded {
+		return
+	}
+	if r.Err != nil {
+		cp.replaceHistoryLoadNode(false)
+		if cp.OnError != nil {
+			cp.OnError("Could not load older commits: " + r.Err.Error())
+		}
+		return
+	}
+
+	nodes := cp.CommitLog.Config.Items
+	if len(nodes) > 0 && nodes[len(nodes)-1].ID == historyLoadOlderID {
+		nodes = nodes[:len(nodes)-1]
+	}
+	for _, e := range r.Entries {
+		nodes = append(nodes, cp.commitLogNode(r.Dir, e))
+	}
+	cp.logLoaded += len(r.Entries)
+	cp.logHasMore = r.HasMore
+	if r.HasMore {
+		nodes = append(nodes, historyLoadOlderNode(false))
+	}
+	cp.CommitLog.SetItems(nodes)
+}
+
+func (cp *ChangesPanel) replaceHistoryLoadNode(loading bool) {
+	nodes := cp.CommitLog.Config.Items
+	if len(nodes) == 0 || nodes[len(nodes)-1].ID != historyLoadOlderID {
+		return
+	}
+	nodes[len(nodes)-1] = historyLoadOlderNode(loading)
+	cp.CommitLog.SetItems(nodes)
 }
 
 // commitFileParent extracts only the stable parent identity from a commit-file
@@ -347,6 +419,9 @@ func readCommitDetail(dir, ref, short string) *CommitDetailResult {
 		return result
 	}
 	result.Message = message
+	// The diff is still useful if metadata alone cannot be read, so timestamp
+	// failure degrades gracefully instead of replacing the whole document.
+	result.AuthoredAt, _ = git.CommitAuthoredAt(dir, ref)
 
 	files, err := git.CommitFiles(dir, ref)
 	if err != nil {
@@ -380,6 +455,7 @@ func (a *App) OpenCommitDetail(dir, ref, short string) {
 	}
 
 	detail := ui.NewCommitDetailWidget(dir, ref, short, a.EditorGroup.SyntaxHighlight)
+	a.wireCommitDetailContext(tabID, detail)
 	a.EditorGroup.ApplyDiffDefaults(detail)
 	a.EditorGroup.OpenPluginTab(tabID, "Commit "+short, detail)
 	a.FocusEditorIfEnabled()
@@ -399,6 +475,9 @@ func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 	detail := a.EditorGroup.CommitDetailWidgetByTab(commitDetailTabID(result.Ref))
 	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref {
 		return
+	}
+	if !result.AuthoredAt.IsZero() {
+		detail.Metadata = "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04 PM -0700")
 	}
 	detail.SetDetail(result.Message, result.Files, result.Err)
 }

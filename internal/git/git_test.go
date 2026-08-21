@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -187,6 +188,39 @@ func TestLogWithErrorDistinguishesEmptyRepoFromFailure(t *testing.T) {
 	}
 	if _, err := LogWithError(t.TempDir(), 10); err == nil {
 		t.Fatal("non-repository log failure was reported as an empty success")
+	}
+}
+
+func TestLogPageStaysAnchoredWhenHeadAdvances(t *testing.T) {
+	dir := setupTestRepo(t)
+	for i := 1; i <= 4; i++ {
+		writeFile(t, dir, "history.txt", fmt.Sprintf("%d\n", i))
+		gitRun(t, dir, "add", "history.txt")
+		gitRun(t, dir, "commit", "-qm", fmt.Sprintf("commit %d", i))
+	}
+
+	anchor, err := HeadSHAContext(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := LogPageContext(context.Background(), dir, anchor, 0, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.HasMore || len(first.Entries) != 2 || first.Entries[0].Message != "commit 4" || first.Entries[1].Message != "commit 3" {
+		t.Fatalf("first page = %+v", first)
+	}
+	// Advance live HEAD after page one. Page two must continue from the saved
+	// anchor, not reinterpret --skip against the now-shifted branch.
+	writeFile(t, dir, "history.txt", "5\n")
+	gitRun(t, dir, "add", "history.txt")
+	gitRun(t, dir, "commit", "-qm", "commit 5")
+	second, err := LogPageContext(context.Background(), dir, anchor, 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.HasMore || len(second.Entries) != 2 || second.Entries[0].Message != "commit 2" || second.Entries[1].Message != "commit 1" {
+		t.Fatalf("anchored second page = %+v", second)
 	}
 }
 

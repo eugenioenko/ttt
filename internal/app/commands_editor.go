@@ -319,6 +319,18 @@ func (a *App) DiffUseUnifiedMode() {
 	}
 }
 
+func (a *App) DiffUseChangesOnlyContext() {
+	if surface := a.EditorGroup.ActiveDiffContextSurface(); surface != nil {
+		surface.SetContextMode(ui.DiffContextChangesOnly)
+	}
+}
+
+func (a *App) DiffUseFullFileContext() {
+	if surface := a.EditorGroup.ActiveDiffContextSurface(); surface != nil {
+		surface.SetContextMode(ui.DiffContextFullFile)
+	}
+}
+
 func (a *App) CommitDetailCollapseAll() {
 	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
 		detail.CollapseAllFiles()
@@ -368,6 +380,18 @@ func registerEditorCommands(app *App) {
 		ID: "diff.unifiedView", Title: "Git: Unified Diff",
 		Keywords: []string{"git", "diff", "unified", "stack", "mode"},
 		Handler:  app.DiffUseUnifiedMode,
+	})
+
+	reg.Register(command.Command{
+		ID: "diff.changesOnlyView", Title: "Git: Show Changes Only",
+		Keywords: []string{"git", "diff", "compact", "collapsed", "context", "hunks"},
+		Handler:  app.DiffUseChangesOnlyContext,
+	})
+
+	reg.Register(command.Command{
+		ID: "diff.fullFileView", Title: "Git: Show Full File",
+		Keywords: []string{"git", "diff", "extended", "context", "complete", "file"},
+		Handler:  app.DiffUseFullFileContext,
 	})
 
 	reg.Register(command.Command{
@@ -539,9 +563,7 @@ func registerEditorCommands(app *App) {
 		ID: "diff.extendedView", Title: "Git: Extended Diff",
 		Keywords: []string{"git", "changes", "compare"},
 		Handler: func() {
-			if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
-				dv.SetExtended(true)
-			}
+			app.DiffUseFullFileContext()
 		},
 	})
 
@@ -549,9 +571,7 @@ func registerEditorCommands(app *App) {
 		ID: "diff.compactView", Title: "Git: Compact Diff",
 		Keywords: []string{"git", "changes", "compare"},
 		Handler: func() {
-			if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
-				dv.SetExtended(false)
-			}
+			app.DiffUseChangesOnlyContext()
 		},
 	})
 

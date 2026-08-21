@@ -24,15 +24,23 @@ type CommitDetailFile struct {
 	Diff         diff.FileDiff
 	Error        string
 
-	highlighter *highlight.Highlighter
-	lines       []diff.DiffLine
-	unified     []diffUnifiedLine
+	highlighter    *highlight.Highlighter
+	lines          []diff.DiffLine
+	unified        []diffUnifiedLine
+	oldLines       []string
+	newLines       []string
+	contextLoaded  bool
+	contextLoading bool
+	expandedGaps   map[int]bool
+	gapByLine      map[int]int
+	pendingGap     int
 }
 
 type commitDetailRowKind uint8
 
 const (
 	commitDetailMessageHeaderRow commitDetailRowKind = iota
+	commitDetailMetadataRow
 	commitDetailMessageRow
 	commitDetailSpacerRow
 	commitDetailHeadingRow
@@ -78,8 +86,9 @@ type CommitDetailWidget struct {
 	HideEmptyNotice bool
 	LoadGen         uint64
 
-	Message string
-	Files   []CommitDetailFile
+	Message  string
+	Metadata string
+	Files    []CommitDetailFile
 
 	SyntaxHighlight bool
 	TopLine         int
@@ -88,6 +97,8 @@ type CommitDetailWidget struct {
 	wrapExplicit    bool
 	mode            DiffMode
 	modeExplicit    bool
+	contextMode     DiffContextMode
+	contextExplicit bool
 	highContrast    bool
 	collapsedFiles  []bool
 
@@ -124,6 +135,8 @@ type CommitDetailWidget struct {
 	lastClickPos      diffSelPos
 	primaryPressed    bool
 	disclosurePressed bool
+
+	OnFetchContext func(fileIndex int, file CommitDetailFile)
 }
 
 func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *CommitDetailWidget {
@@ -158,6 +171,42 @@ func (d *CommitDetailWidget) Focusable() bool { return true }
 func (d *CommitDetailWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
 
 func (d *CommitDetailWidget) DiffHighContrast() bool { return d.highContrast }
+
+func (d *CommitDetailWidget) ContextMode() DiffContextMode { return d.contextMode }
+
+func (d *CommitDetailWidget) SetContextMode(mode DiffContextMode) {
+	d.contextExplicit = true
+	d.applyContextMode(mode)
+}
+
+func (d *CommitDetailWidget) ApplyDefaultContextMode(mode DiffContextMode) {
+	if d.contextExplicit {
+		return
+	}
+	d.applyContextMode(mode)
+}
+
+func (d *CommitDetailWidget) applyContextMode(mode DiffContextMode) {
+	if d.contextMode == mode {
+		return
+	}
+	d.contextMode = mode
+	if mode == DiffContextChangesOnly {
+		for i := range d.Files {
+			clear(d.Files[i].expandedGaps)
+			d.Files[i].pendingGap = -1
+		}
+	}
+	d.TopLine = 0
+	d.LeftCol = 0
+	d.ClearSelection()
+	d.rebuildRows()
+	if mode == DiffContextFullFile {
+		for i := range d.Files {
+			d.requestFileContext(i, -1)
+		}
+	}
+}
 
 func (d *CommitDetailWidget) IsWrapped() bool { return d.wrapMode == DiffWrapOn }
 
@@ -236,6 +285,8 @@ func (d *CommitDetailWidget) SetDetail(message string, files []CommitDetailFile,
 	d.Files = files
 	d.collapsedFiles = make([]bool, len(files))
 	for i := range d.Files {
+		d.Files[i].expandedGaps = make(map[int]bool)
+		d.Files[i].pendingGap = -1
 		d.collapsedFiles[i] = collapsed[commitDetailFileKey(d.Files[i])]
 		if d.SyntaxHighlight && d.Files[i].Path != "" {
 			d.Files[i].highlighter = highlight.New(d.Files[i].Path)
@@ -245,7 +296,55 @@ func (d *CommitDetailWidget) SetDetail(message string, files []CommitDetailFile,
 	d.LeftCol = 0
 	d.ClearSelection()
 	d.rebuildRows()
+	if d.contextMode == DiffContextFullFile {
+		for i := range d.Files {
+			d.requestFileContext(i, -1)
+		}
+	}
 }
+
+func (d *CommitDetailWidget) requestFileContext(fileIndex, gap int) {
+	if fileIndex < 0 || fileIndex >= len(d.Files) {
+		return
+	}
+	file := &d.Files[fileIndex]
+	if file.contextLoaded {
+		if gap >= 0 {
+			file.expandedGaps[gap] = true
+			d.rebuildRows()
+			d.ClearSelection()
+		}
+		return
+	}
+	if gap >= 0 {
+		file.pendingGap = gap
+	}
+	if file.contextLoading || d.OnFetchContext == nil {
+		return
+	}
+	file.contextLoading = true
+	d.OnFetchContext(fileIndex, *file)
+}
+
+func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLines, newLines []string) bool {
+	if fileIndex < 0 || fileIndex >= len(d.Files) || commitDetailFileKey(d.Files[fileIndex]) != key {
+		return false
+	}
+	file := &d.Files[fileIndex]
+	file.oldLines = oldLines
+	file.newLines = newLines
+	file.contextLoaded = true
+	file.contextLoading = false
+	if file.pendingGap >= 0 {
+		file.expandedGaps[file.pendingGap] = true
+		file.pendingGap = -1
+	}
+	d.rebuildRows()
+	d.ClearSelection()
+	return true
+}
+
+func CommitDetailContextKey(file CommitDetailFile) string { return commitDetailFileKey(file) }
 
 func (d *CommitDetailWidget) allFilesCollapsed() bool {
 	if len(d.Files) == 0 {
@@ -309,6 +408,10 @@ func (d *CommitDetailWidget) rebuildRows() {
 		header = "Commit message"
 	}
 	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: header, bold: true})
+	if d.Metadata != "" {
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMetadataRow, text: d.Metadata})
+		d.recordWidth(d.Metadata)
+	}
 	message := strings.TrimRight(d.Message, "\r\n")
 	if message == "" {
 		message = "(No commit message)"
@@ -325,7 +428,12 @@ func (d *CommitDetailWidget) rebuildRows() {
 	maxLine := 0
 	for fileIndex := range d.Files {
 		file := &d.Files[fileIndex]
-		file.lines = compactDiffLines(file.Diff)
+		if d.contextMode == DiffContextFullFile && file.contextLoaded {
+			file.lines = diff.FullDiffLines(file.oldLines, file.newLines)
+			file.gapByLine = nil
+		} else {
+			file.lines, file.gapByLine = compactDiffLinesWithContext(file.Diff, file.oldLines, file.newLines, file.expandedGaps)
+		}
 		file.unified = buildUnifiedDiffLines(file.lines)
 		if fileIndex > 0 {
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
@@ -601,6 +709,8 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 	switch row.kind {
 	case commitDetailMessageHeaderRow:
 		d.renderMessageHeader(surface, y, viewW)
+	case commitDetailMetadataRow:
+		d.drawTextRow(surface, 0, y, viewW, row.text, term.StyleMuted, term.StyleCommitMessage, false, visual.leftStart, rowIndex)
 	case commitDetailSpacerRow:
 		return
 	case commitDetailMessageRow:
@@ -1124,6 +1234,11 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 							return EventConsumed
 						}
 					}
+					if fileIndex, gap, ok := d.contextGapAtScreenY(my); ok {
+						d.requestFileContext(fileIndex, gap)
+						d.disclosurePressed = true
+						return EventConsumed
+					}
 				}
 				pos, right, ok := d.screenToSelection(mx, my)
 				if ok {
@@ -1164,6 +1279,39 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventConsumed
 	}
 	return EventIgnored
+}
+
+func (d *CommitDetailWidget) contextGapAtScreenY(screenY int) (fileIndex, gap int, ok bool) {
+	r := d.GetRect()
+	localY := screenY - r.Y
+	if localY < 0 || localY >= d.viewH {
+		return 0, 0, false
+	}
+	visualRow := d.TopLine + localY
+	rowIndex := visualRow
+	if d.IsWrapped() {
+		if visualRow >= len(d.visualRows) {
+			return 0, 0, false
+		}
+		rowIndex = d.visualRows[visualRow].row
+	}
+	if rowIndex < 0 || rowIndex >= len(d.rows) {
+		return 0, 0, false
+	}
+	row := d.rows[rowIndex]
+	if row.kind != commitDetailDiffRow || row.fileIndex < 0 || row.fileIndex >= len(d.Files) {
+		return 0, 0, false
+	}
+	lineIndex := row.lineIndex
+	file := &d.Files[row.fileIndex]
+	if d.mode == DiffModeUnified {
+		if lineIndex < 0 || lineIndex >= len(file.unified) {
+			return 0, 0, false
+		}
+		lineIndex = file.unified[lineIndex].sourceLine
+	}
+	gap, ok = file.gapByLine[lineIndex]
+	return row.fileIndex, gap, ok
 }
 
 func pointInCommitDetailRect(x, y int, rect Rect) bool {

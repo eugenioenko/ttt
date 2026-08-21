@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -154,6 +155,51 @@ func TestCommitHistoryRefreshKeyUsesCoordinatorCallback(t *testing.T) {
 	}
 }
 
+func TestCommitHistoryLoadsOlderCommitsOnDemand(t *testing.T) {
+	dir := commitLogRepo(t)
+	for i := 0; i < 51; i++ {
+		cmd := exec.Command("git", "commit", "--allow-empty", "-qm", fmt.Sprintf("older page %02d", i))
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("create history commit %d: %v\n%s", i, err, out)
+		}
+	}
+	cp, poster := asyncPanel(t, dir)
+	cp.Refresh()
+	cp.ApplyStatus(poster.await(t).(*ChangesStatusResult))
+	cp.ApplyCommitLog(poster.await(t).(*CommitLogResult))
+	items := cp.CommitLog.Config.Items
+	if cp.logLoaded != commitLogPageSize || !cp.logHasMore {
+		t.Fatalf("initial page state = loaded %d hasMore %v", cp.logLoaded, cp.logHasMore)
+	}
+	if len(items) != commitLogPageSize+2 || items[len(items)-1].ID != historyLoadOlderID {
+		t.Fatalf("initial history rows = %d, tail=%+v", len(items), items[len(items)-1])
+	}
+
+	cp.openCommitLogNode(items[len(items)-1])
+	if tail := cp.CommitLog.Config.Items[len(items)-1]; tail.Label != "Loading older commits…" {
+		t.Fatalf("loading sentinel = %q", tail.Label)
+	}
+	// A repeated activation while the page is in flight is idempotent.
+	cp.openCommitLogNode(cp.CommitLog.Config.Items[len(items)-1])
+	cp.ApplyCommitLog(poster.await(t).(*CommitLogResult))
+	items = cp.CommitLog.Config.Items
+	if cp.logLoaded != 52 || cp.logHasMore {
+		t.Fatalf("completed page state = loaded %d hasMore %v", cp.logLoaded, cp.logHasMore)
+	}
+	if len(items) != 53 { // branch header plus all 52 commits
+		t.Fatalf("completed history rows = %d, want 53", len(items))
+	}
+	if items[len(items)-1].ID == historyLoadOlderID {
+		t.Fatal("load-older sentinel remained after the final page")
+	}
+	select {
+	case duplicate := <-poster.events:
+		t.Fatalf("repeated sentinel activation started another page: %#v", duplicate)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 // Expanding a commit shows a placeholder immediately rather than waiting for
 // git, and the placeholder is replaced when the read lands.
 func TestExpandingACommitPostsInsteadOfBlocking(t *testing.T) {
@@ -266,6 +312,9 @@ func TestReadCommitDetailIncludesBodyAndEveryFileInGitOrder(t *testing.T) {
 	if result.Message != wantMessage {
 		t.Fatalf("message = %q, want %q", result.Message, wantMessage)
 	}
+	if result.AuthoredAt.IsZero() {
+		t.Fatal("commit detail omitted the authored timestamp")
+	}
 	statuses, err := git.CommitFiles(dir, ref)
 	if err != nil {
 		t.Fatal(err)
@@ -299,9 +348,15 @@ func TestApplyCommitDetailUsesOpenTabRepositoryAndHashIdentity(t *testing.T) {
 	if !detail.Loading {
 		t.Fatal("a result from another repository filled the loading tab")
 	}
-	a.ApplyCommitDetail(&CommitDetailResult{Dir: dir, Ref: ref, Short: short, Message: "subject\n\nbody"})
+	authoredAt := time.Date(2026, time.August, 21, 17, 42, 0, 0, time.FixedZone("EDT", -4*60*60))
+	a.ApplyCommitDetail(&CommitDetailResult{
+		Dir: dir, Ref: ref, Short: short, Message: "subject\n\nbody", AuthoredAt: authoredAt,
+	})
 	if detail.Loading || detail.Message != "subject\n\nbody" {
 		t.Fatalf("matching result was not applied: loading=%v message=%q", detail.Loading, detail.Message)
+	}
+	if detail.Metadata != "Authored Aug 21, 2026 at 5:42 PM -0400" {
+		t.Fatalf("commit metadata = %q", detail.Metadata)
 	}
 
 	a.EditorGroup.ClosePluginTab(tabID)

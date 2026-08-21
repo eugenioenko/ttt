@@ -394,6 +394,8 @@ func RunEventLoop(
 				app.Changes.ApplyCommitFiles(v)
 			case *CommitDetailResult:
 				app.ApplyCommitDetail(v)
+			case *CommitDetailContextResult:
+				app.ApplyCommitDetailContext(v)
 			case *CurrentChangesResult:
 				app.ApplyCurrentChanges(v)
 			case *DiffOpenResult:

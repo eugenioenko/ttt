@@ -211,6 +211,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
 	editorGroup.Editor.WordWrap = cfg.Settings.Editor.WordWrap
 	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
+	editorGroup.DiffContext = configuredDiffContext(cfg.Settings.Editor.DiffContext)
 	editorGroup.DiffWordWrap = cfg.Settings.Editor.DiffWordWrap
 	editorGroup.DiffHighContrast = cfg.Settings.Editor.DiffHighContrast
 	editorGroup.Editor.AutoDedent = cfg.Settings.Editor.IsAutoDedentEnabled()

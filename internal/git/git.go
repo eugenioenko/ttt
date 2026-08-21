@@ -181,6 +181,13 @@ type LogEntry struct {
 	Message string
 }
 
+// LogPage is one stable window into a commit history. HasMore is determined by
+// reading one extra entry, so callers never need a separate count query.
+type LogPage struct {
+	Entries []LogEntry
+	HasMore bool
+}
+
 func Log(dir string, n int) []LogEntry {
 	entries, _ := LogWithError(dir, n)
 	return entries
@@ -193,31 +200,76 @@ func LogWithError(dir string, n int) ([]LogEntry, error) {
 }
 
 func LogWithErrorContext(ctx context.Context, dir string, n int) ([]LogEntry, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%H %h %s")
+	anchor, err := HeadSHAContext(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	page, err := LogPageContext(ctx, dir, anchor, 0, n)
+	return page.Entries, err
+}
+
+// HeadSHAContext resolves HEAD once so subsequent pages can stay anchored to
+// the same history even if new commits arrive while the reader is browsing.
+func HeadSHAContext(ctx context.Context, dir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--verify", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return "", ctx.Err()
 		}
-		head := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--verify", "HEAD")
-		if head.Run() != nil && IsRepoContext(ctx, dir) {
-			return nil, nil
+		if IsRepoContext(ctx, dir) {
+			return "", nil
 		}
-		return nil, err
+		return "", err
 	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// LogPageContext reads a page from an immutable anchor. The NUL-delimited
+// format preserves subjects containing spaces.
+func LogPageContext(ctx context.Context, dir, anchor string, skip, limit int) (LogPage, error) {
+	if anchor == "" || limit <= 0 {
+		return LogPage{}, nil
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "log",
+		"-z",
+		fmt.Sprintf("--skip=%d", skip),
+		fmt.Sprintf("--max-count=%d", limit+1),
+		"--format=%H%x00%h%x00%s",
+		anchor,
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return LogPage{}, ctx.Err()
+		}
+		return LogPage{}, err
+	}
+	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
 	var entries []LogEntry
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
-			continue
-		}
-		ref, rest, ok := strings.Cut(line, " ")
-		if !ok {
-			continue
-		}
-		hash, msg, _ := strings.Cut(rest, " ")
-		entries = append(entries, LogEntry{Hash: hash, Ref: ref, Message: msg})
+	for len(fields) >= 3 {
+		ref := fields[0]
+		hash := fields[1]
+		entries = append(entries, LogEntry{
+			Ref: ref, Hash: hash, Message: fields[2],
+		})
+		fields = fields[3:]
 	}
-	return entries, nil
+	hasMore := len(entries) > limit
+	if hasMore {
+		entries = entries[:limit]
+	}
+	return LogPage{Entries: entries, HasMore: hasMore}, nil
+}
+
+// CommitAuthoredAt returns the authored timestamp Git recorded for a commit.
+func CommitAuthoredAt(dir, ref string) (time.Time, error) {
+	cmd := exec.Command("git", "-C", dir, "show", "-s", "--format=%aI", ref)
+	out, err := cmd.Output()
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339, strings.TrimSpace(string(out)))
 }
 
 // CommitFiles lists the files a commit touched.
@@ -479,8 +531,12 @@ func IgnoredFiles(dir string, paths []string) map[string]bool {
 }
 
 func ShowFile(dir, path, ref string) (string, error) {
+	return ShowFileContext(context.Background(), dir, path, ref)
+}
+
+func ShowFileContext(ctx context.Context, dir, path, ref string) (string, error) {
 	spec := ref + ":" + path
-	cmd := exec.Command("git", "-C", dir, "show", spec)
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "show", spec)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err

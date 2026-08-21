@@ -625,15 +625,17 @@ func registerWidgetCallbacks(app *App) {
 			ui.ContextMenuItem{Label: "Copy Relative Path", Command: "file.copyRelativePath"},
 		)
 		if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
-			cmd := "diff.extendedView"
-			label := "Extended Diff"
-			if dv.IsExtended() {
-				cmd = "diff.compactView"
-				label = "Compact Diff"
+			changesChecked := ui.MenuUnchecked
+			fullChecked := ui.MenuUnchecked
+			if dv.ContextMode() == ui.DiffContextFullFile {
+				fullChecked = ui.MenuChecked
+			} else {
+				changesChecked = ui.MenuChecked
 			}
 			tabContextMenu = append(tabContextMenu,
 				ui.MenuSep(),
-				ui.ContextMenuItem{Label: label, Command: cmd},
+				ui.ContextMenuItem{Label: "Changes Only", Command: "diff.changesOnlyView", Checked: changesChecked},
+				ui.ContextMenuItem{Label: "Full File", Command: "diff.fullFileView", Checked: fullChecked},
 			)
 		}
 		openContextMenu(app, tabContextMenu, sx, sy)

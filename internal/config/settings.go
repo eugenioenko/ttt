@@ -11,14 +11,17 @@ var (
 	GutterStyles = []string{"minimal", "compact", "extended"}
 	BorderStyles = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
 	DiffModes    = []string{"split", "unified"}
+	DiffContexts = []string{"changes", "full"}
 	GitFileViews = []string{"tree", "list"}
 )
 
 const (
-	DiffModeSplit   = "split"
-	DiffModeUnified = "unified"
-	GitFileViewTree = "tree"
-	GitFileViewList = "list"
+	DiffModeSplit      = "split"
+	DiffModeUnified    = "unified"
+	DiffContextChanges = "changes"
+	DiffContextFull    = "full"
+	GitFileViewTree    = "tree"
+	GitFileViewList    = "list"
 )
 
 type TerminalSettings struct {
@@ -87,6 +90,7 @@ type EditorSettings struct {
 	InsertSpaces            bool   `json:"insertSpaces"`
 	WordWrap                bool   `json:"wordWrap"`
 	DiffMode                string `json:"diffMode"`
+	DiffContext             string `json:"diffContext"`
 	DiffWordWrap            bool   `json:"diffWordWrap"`
 	DiffHighContrast        bool   `json:"diffHighContrast,omitempty"`
 	LineNumbers             bool   `json:"lineNumbers"`
@@ -136,6 +140,7 @@ func DefaultEditorSettings() EditorSettings {
 		TabSize:                 4,
 		InsertSpaces:            true,
 		DiffMode:                DiffModeSplit,
+		DiffContext:             DiffContextChanges,
 		LineNumbers:             true,
 		InsertFinalNewline:      true,
 		GutterStyle:             "compact",
@@ -306,6 +311,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
+	}
+	if !slices.Contains(DiffContexts, s.Editor.DiffContext) {
+		s.Editor.DiffContext = DiffContextChanges
 	}
 	if !slices.Contains(GitFileViews, s.Git.FileView) {
 		s.Git.FileView = GitFileViewTree

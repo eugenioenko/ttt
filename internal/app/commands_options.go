@@ -33,6 +33,16 @@ func (a *App) UseUnifiedDiffByDefault() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) UseChangesOnlyDiffByDefault() {
+	a.Settings.Editor.DiffContext = config.DiffContextChanges
+	a.SaveAndApplySettings()
+}
+
+func (a *App) UseFullFileDiffByDefault() {
+	a.Settings.Editor.DiffContext = config.DiffContextFull
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleDiffWordWrapDefault() {
 	a.Settings.Editor.DiffWordWrap = !a.Settings.Editor.DiffWordWrap
 	a.SaveAndApplySettings()
@@ -268,6 +278,10 @@ func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
 		{Label: "Split", Command: "options.useSplitDiff", Checked: menuChecked(a.Settings.Editor.DiffMode != config.DiffModeUnified)},
 		{Label: "Unified", Command: "options.useUnifiedDiff", Checked: menuChecked(a.Settings.Editor.DiffMode == config.DiffModeUnified)},
+		ui.MenuSep(),
+		{Label: "Changes Only", Command: "options.useChangesOnlyDiff", Checked: menuChecked(a.Settings.Editor.DiffContext != config.DiffContextFull)},
+		{Label: "Full File", Command: "options.useFullFileDiff", Checked: menuChecked(a.Settings.Editor.DiffContext == config.DiffContextFull)},
+		ui.MenuSep(),
 		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
 		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
 	}
@@ -313,6 +327,18 @@ func registerOptionsCommands(app *App) {
 		ID: "options.useUnifiedDiff", Title: "Use Unified Diff by Default",
 		Keywords: []string{"preferences", "settings", "git", "diff", "unified", "default"},
 		Handler:  app.UseUnifiedDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useChangesOnlyDiff", Title: "Show Changes Only by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "compact", "context", "default"},
+		Handler:  app.UseChangesOnlyDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useFullFileDiff", Title: "Show Full File Diff by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "extended", "context", "default"},
+		Handler:  app.UseFullFileDiffByDefault,
 	})
 
 	reg.Register(command.Command{

@@ -20,6 +20,9 @@ func TestDefaultSettings(t *testing.T) {
 	if s.Editor.DiffMode != DiffModeSplit {
 		t.Fatalf("expected DiffMode %q, got %q", DiffModeSplit, s.Editor.DiffMode)
 	}
+	if s.Editor.DiffContext != DiffContextChanges {
+		t.Fatalf("expected DiffContext %q, got %q", DiffContextChanges, s.Editor.DiffContext)
+	}
 	if s.Editor.DiffWordWrap {
 		t.Fatal("expected DiffWordWrap false")
 	}
@@ -100,6 +103,23 @@ func TestNormalizeSettingsDiffMode(t *testing.T) {
 	normalizeSettings(&s)
 	if s.Editor.DiffMode != DiffModeSplit {
 		t.Errorf("invalid diffMode normalized to %q, want %q", s.Editor.DiffMode, DiffModeSplit)
+	}
+}
+
+func TestNormalizeSettingsDiffContext(t *testing.T) {
+	for _, contextMode := range DiffContexts {
+		s := DefaultSettings()
+		s.Editor.DiffContext = contextMode
+		normalizeSettings(&s)
+		if s.Editor.DiffContext != contextMode {
+			t.Errorf("valid diffContext %q normalized to %q", contextMode, s.Editor.DiffContext)
+		}
+	}
+	s := DefaultSettings()
+	s.Editor.DiffContext = "everything"
+	normalizeSettings(&s)
+	if s.Editor.DiffContext != DiffContextChanges {
+		t.Errorf("invalid diffContext normalized to %q, want %q", s.Editor.DiffContext, DiffContextChanges)
 	}
 }
 

@@ -6,6 +6,7 @@
     "insertSpaces": true,
     "wordWrap": false,
     "diffMode": "split",
+    "diffContext": "changes",
     "diffWordWrap": false,
     "lineNumbers": true,
     "formatOnSave": false,

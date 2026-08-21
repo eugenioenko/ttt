@@ -540,6 +540,7 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
 | `wordWrap` | bool | `false` | Wrap long lines at the editor width |
 | `diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
+| `diffContext` | string | `"changes"` | Default diff context: `"changes"` or the complete `"full"` file |
 | `diffWordWrap` | bool | `false` | Wrap long lines in diff views by default |
 | `diffHighContrast` | bool | `false` | Use semantic green/red foregrounds for changed diff text |
 | `autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
