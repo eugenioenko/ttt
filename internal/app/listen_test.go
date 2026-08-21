@@ -32,8 +32,6 @@ func newListenTestApp(t *testing.T) *App {
 	return a
 }
 
-// execHandlerRequest posts body to the /exec endpoint served by NewExecHandler
-// and returns the response.
 func execHandlerRequest(t *testing.T, a *App, method, path, body string) *http.Response {
 	t.Helper()
 	srv := httptest.NewServer(NewExecHandler(a))
@@ -87,6 +85,16 @@ func TestExecHandlerRejectsEmptyBody(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestExecHandlerRejectsOversizedBody(t *testing.T) {
+	a := newListenTestApp(t)
+
+	resp := execHandlerRequest(t, a, http.MethodPost, "/exec", strings.Repeat("a", maxExecBodySize+1))
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", resp.StatusCode)
 	}
 }
 

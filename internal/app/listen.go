@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -13,9 +14,11 @@ import (
 // running editor, so this must never be reachable off the local machine.
 const ListenAddr = "127.0.0.1:4242"
 
-// NewExecHandler returns the http.Handler backing the --listen server's
-// POST /exec endpoint. Split out from StartListenServer so tests can drive
-// it through httptest.Server without binding a real socket.
+const maxExecBodySize = 1 << 20 // 1MB
+
+// NewExecHandler is split out from StartListenServer so tests can drive it
+// through httptest.Server. Concurrent /exec requests are not synchronized:
+// --listen is a single-operator debug tool, not a public API.
 func NewExecHandler(a *App) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/exec", func(w http.ResponseWriter, r *http.Request) {
@@ -23,8 +26,14 @@ func NewExecHandler(a *App) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxExecBodySize)
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return
 		}

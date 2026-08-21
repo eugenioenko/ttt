@@ -218,3 +218,20 @@ func TestRawTailCapsAtMaxAndKeepsMostRecent(t *testing.T) {
 		t.Error("expected most recent bytes ('e') to be present")
 	}
 }
+
+func TestRawTailSingleWriteLargerThanMax(t *testing.T) {
+	term := &Terminal{}
+
+	big := append(bytes.Repeat([]byte{'x'}, rawTailMax), bytes.Repeat([]byte{'y'}, 10)...)
+	term.mu.Lock()
+	term.appendRawTail(big)
+	term.mu.Unlock()
+
+	got := term.RawTail()
+	if len(got) != rawTailMax {
+		t.Fatalf("RawTail() len = %d, want %d", len(got), rawTailMax)
+	}
+	if !bytes.HasSuffix(got, bytes.Repeat([]byte{'y'}, 10)) {
+		t.Error("expected the tail to keep the end of an oversized single write")
+	}
+}

@@ -30,9 +30,8 @@ type DebugState struct {
 	WidgetTree  *DebugWidgetNode   `json:"widget_tree"`
 }
 
-// DebugTerminal reports one integrated-terminal tab's raw PTY byte tail, so
-// a terminal-emulation bug can be diagnosed from what the child process
-// actually sent rather than from ttt's parsed/rendered state.
+// DebugTerminal reports one integrated-terminal tab's raw, unparsed PTY byte
+// tail, so a terminal-emulation bug can be diagnosed from ground truth.
 type DebugTerminal struct {
 	ID      string `json:"id"`
 	Cols    int    `json:"cols"`
