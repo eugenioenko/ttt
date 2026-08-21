@@ -150,6 +150,8 @@ Options:
   --exec "commands"   Execute semicolon-separated commands after startup
   --exec-split-on <s> Split --exec on <s> instead of ";" (for scripts that
                       need to send a literal semicolon)
+  --plugin <file>     Load a Lua plugin file on startup with full permissions
+  --debug             Enable debug mode regardless of config setting
 
 Examples:
   ttt                                           Open current directory

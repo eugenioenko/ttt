@@ -341,7 +341,10 @@ func ExecScriptUsage() string {
 	return fmt.Sprintf(`--exec "commands"  Execute semicolon-separated commands after startup
 
 Supported commands:
-  click X Y          Simulate mouse click at coordinates
+  click X Y          Simulate left mouse click at coordinates
+  rclick X Y         Simulate right mouse click at coordinates
+  hover X Y          Simulate mouse hover (move) at coordinates
+  drag X1 Y1 X2 Y2   Simulate a mouse drag between two points
   key COMBO          Simulate key press (e.g., key ctrl+p, key enter)
   type TEXT           Type a string of text
   paste TEXT          Simulate bracketed paste (terminal paste)
@@ -350,6 +353,7 @@ Supported commands:
   screenshot PATH    Save screen text to file
   debug PATH         Save debug state JSON to file
   wait MS            Wait milliseconds
+  panel ID           Show and focus a bottom panel by ID
   quit               Exit the editor
 
 Example:
