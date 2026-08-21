@@ -26,6 +26,8 @@ type SplitPanelWidget struct {
 	OnLeftClick       func()
 	OnRightClick      func()
 	dragging          bool
+	pendingResize     bool
+	pendingResizeX    int
 	wasPressed        bool
 	capturedChild     Widget
 }
@@ -198,6 +200,45 @@ func (s *SplitPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventIgnored
 	}
 
+	// divX+1 is both the resize grab zone and the right panel's first column;
+	// wait for movement (drag) or release (click, replayed to the right panel).
+	if s.pendingResize {
+		if pressed {
+			if mx != s.pendingResizeX {
+				s.pendingResize = false
+				s.dragging = true
+				if s.OnResize != nil {
+					s.OnResize(mx - r.X - 1)
+				}
+			}
+			return EventCaptured
+		}
+		s.pendingResize = false
+		if mx != s.pendingResizeX {
+			if s.OnResize != nil {
+				s.OnResize(mx - r.X - 1)
+			}
+			return EventCaptured
+		}
+		if s.Right != nil {
+			down := tcell.NewEventMouse(s.pendingResizeX, my, tcell.Button1, mev.Modifiers())
+			s.Right.HandleEvent(down)
+			result := s.Right.HandleEvent(ev)
+			if result == EventCaptured {
+				s.capturedChild = s.Right
+				if s.OnRightClick != nil {
+					s.OnRightClick()
+				}
+				return EventCaptured
+			}
+			if result == EventConsumed && s.OnRightClick != nil {
+				s.OnRightClick()
+			}
+			return result
+		}
+		return EventIgnored
+	}
+
 	if s.capturedChild != nil {
 		if btn == tcell.ButtonNone {
 			s.capturedChild.HandleEvent(ev)
@@ -220,9 +261,13 @@ func (s *SplitPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 	if s.ShowLeft {
 		divX := s.DividerScreenX()
 		slog.Debug("splitPanel", "action", "route", "mx", mx, "divX", divX, "showLeft", true)
-		// divX to divX+1: grab zone extends right only to avoid overlapping the scrollbar
-		if freshClick && mx >= divX && mx <= divX+1 && s.OnResize != nil {
+		if freshClick && mx == divX && s.OnResize != nil {
 			s.dragging = true
+			return EventCaptured
+		}
+		if freshClick && mx == divX+1 && s.OnResize != nil {
+			s.pendingResize = true
+			s.pendingResizeX = mx
 			return EventCaptured
 		}
 		if mx < divX {

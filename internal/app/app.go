@@ -467,6 +467,11 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			a.PluginManager.DispatchEvent("editor.change", path)
 		}
 	}
+	a.EditorGroup.OnBookmarkChanged = func(path string, line int, action string, icon rune, style term.Style) {
+		if a.PluginManager != nil {
+			a.PluginManager.DispatchEvent("bookmark.change", path, line+1, action, string(icon), plugin.NameByStyle(style))
+		}
+	}
 
 	lspManager.OnLog = func(server, level, message string) {
 		a.LogOutputAsync(level, "lsp:"+server, message)

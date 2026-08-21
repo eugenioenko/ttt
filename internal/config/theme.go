@@ -80,6 +80,7 @@ type DiffStyles struct {
 	GutterAdded    StyleDef `json:"gutterAdded,omitempty"`
 	GutterDeleted  StyleDef `json:"gutterDeleted,omitempty"`
 	GutterModified StyleDef `json:"gutterModified,omitempty"`
+	GutterBookmark StyleDef `json:"gutterBookmark,omitempty"`
 }
 
 type SyntaxStyles struct {
@@ -303,6 +304,7 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Diff.GutterAdded, "#73c991")
 	fillFg(&t.Diff.GutterDeleted, "#f14c4c")
 	fillFg(&t.Diff.GutterModified, "#e2c08d")
+	fillFg(&t.Diff.GutterBookmark, "#3794ff")
 	fillFg(&t.Success, "#73c991")
 	fillFg(&t.Danger, "#f14c4c")
 	fillFg(&t.Warning, "#e2c08d")

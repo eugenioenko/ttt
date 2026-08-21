@@ -59,9 +59,9 @@ type editorTab struct {
 	Folds       *fold.State
 	TabSize     int
 	UseTabs     bool
-	Content Widget
-	Preview bool
-	Virtual bool
+	Content     Widget
+	Preview     bool
+	Virtual     bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
 }
@@ -100,6 +100,11 @@ type EditorGroupWidget struct {
 	// diagSources holds diagnostics keyed by source ("lsp", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
+	// bookmarksByPath holds bookmarks keyed by file path so they survive a
+	// preview tab being replaced (its editorTab struct is discarded entirely).
+	bookmarksByPath   map[string]map[int]Bookmark
+	bookmarkSyncPath  string
+	OnBookmarkChanged func(path string, line int, action string, icon rune, style term.Style)
 	// OnDiagnosticsChanged fires whenever any source's diagnostics change, so
 	// the Diagnostics panel can rebuild from DiagnosticsByPath().
 	OnDiagnosticsChanged func()
@@ -133,6 +138,11 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	tabBar.OnNextTab = func() { g.NextTab() }
 	tabBar.OnPrevTab = func() { g.PrevTab() }
 	tabBar.OnDoubleClick = func() { g.NewFile() }
+	editor.OnBookmarkChange = func(line int, action string, b Bookmark) {
+		if g.OnBookmarkChanged != nil {
+			g.OnBookmarkChanged(g.ActiveFilePath(), line, action, b.Icon, b.Style)
+		}
+	}
 	undoStack := g.newUndoStack()
 	sel := &selection.Selection{}
 	editor.Undo = undoStack
@@ -1634,6 +1644,14 @@ func (g *EditorGroupWidget) syncTabs() {
 			if g.Editor.BracketPairColorization && len(t.Buf.Lines) > maxBracketColorLines {
 				g.notify("Bracket pair colorization disabled for large file")
 			}
+			if g.bookmarkSyncPath != "" {
+				if g.bookmarksByPath == nil {
+					g.bookmarksByPath = make(map[string]map[int]Bookmark)
+				}
+				g.bookmarksByPath[g.bookmarkSyncPath] = g.Editor.Bookmarks
+			}
+			g.Editor.Bookmarks = g.bookmarksByPath[t.FilePath]
+			g.bookmarkSyncPath = t.FilePath
 		}
 		g.Editor.Buf = t.Buf
 		g.Editor.Cursor = t.Cur

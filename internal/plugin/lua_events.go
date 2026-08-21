@@ -22,6 +22,10 @@ var keyEvents = map[string]bool{
 	"key.press": true,
 }
 
+var bookmarkEvents = map[string]bool{
+	"bookmark.change": true,
+}
+
 func setupEventsModule(L *lua.LState, p *Plugin) {
 	loader := func(L *lua.LState) int {
 		mod := L.NewTable()
@@ -52,6 +56,11 @@ func eventsOn(p *Plugin) lua.LGFunction {
 			}
 		} else if keyEvents[eventName] {
 			if err := p.Granted.Check("keybindings"); err != nil {
+				L.ArgError(1, err.Error())
+				return 0
+			}
+		} else if bookmarkEvents[eventName] {
+			if err := p.Granted.Check("editor.bookmarks"); err != nil {
 				L.ArgError(1, err.Error())
 				return 0
 			}

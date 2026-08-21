@@ -92,6 +92,13 @@ type Plugin struct {
 	PublishDiagnostics func(path string, items []DiagnosticItem)
 	ClearDiagnostics   func(path string)
 
+	SetBookmark     func(line int, icon rune, style term.Style)
+	GetBookmark     func(line int) (icon rune, style term.Style, ok bool)
+	RemoveBookmark  func(line int)
+	SetAllBookmarks func(items []BookmarkItem)
+	GetAllBookmarks func() []BookmarkItem
+	ClearBookmarks  func()
+
 	ShowCommandLine    func(CommandLineOptions)
 	HideCommandLine    func()
 	SetCommandLineText func(text string)
@@ -141,6 +148,7 @@ func (p *Plugin) Init() error {
 	setupTTTModule(p.State, p)
 	setupEditorModule(p.State, p)
 	setupDiagnosticsModule(p.State, p)
+	setupBookmarksModule(p.State, p)
 	setupFsModule(p.State, p)
 	setupSystemModule(p.State, p)
 	setupNetModule(p.State, p)
@@ -179,6 +187,7 @@ func (p *Plugin) InitFromSource(source string) error {
 	setupTTTModule(p.State, p)
 	setupEditorModule(p.State, p)
 	setupDiagnosticsModule(p.State, p)
+	setupBookmarksModule(p.State, p)
 	setupFsModule(p.State, p)
 	setupSystemModule(p.State, p)
 	setupNetModule(p.State, p)
@@ -265,6 +274,12 @@ func (p *Plugin) Destroy() {
 	p.ListCommands = nil
 	p.PublishDiagnostics = nil
 	p.ClearDiagnostics = nil
+	p.SetBookmark = nil
+	p.GetBookmark = nil
+	p.RemoveBookmark = nil
+	p.SetAllBookmarks = nil
+	p.GetAllBookmarks = nil
+	p.ClearBookmarks = nil
 	p.ShowCommandLine = nil
 	p.HideCommandLine = nil
 	p.SetCommandLineText = nil
