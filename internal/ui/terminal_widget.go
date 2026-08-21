@@ -293,7 +293,18 @@ func (tw *TerminalWidget) Render(surface Surface) {
 	tw.Term.Snapshot(func(view vt10x.View) {
 		cols, rows := view.Size()
 		sbLen := view.ScrollbackLen()
-		totalLines := sbLen + rows
+
+		// Rows outside the app's active scroll region (DECSTBM) never scroll
+		// into history -- a full-screen app commonly pins a status/input bar
+		// there -- so below, they always render live regardless of
+		// scrollOffset. A malformed region (or none set) falls back to
+		// treating the whole screen as scrollable, matching prior behavior.
+		top, bottom := view.ScrollRegion()
+		if top < 0 || bottom >= rows || bottom < top {
+			top, bottom = 0, rows-1
+		}
+		regionRows := bottom - top + 1
+		totalRegionLines := sbLen + regionRows
 
 		if tw.scrollOffset > sbLen {
 			tw.scrollOffset = sbLen
@@ -311,84 +322,76 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			tw.linkCache = nil
 		}
 
-		if tw.scrollOffset == 0 {
-			for y := 0; y < h && y < rows; y++ {
-				unifiedLine := sbLen + y
-				if tw.ctrlHeld {
-					lineText := extractLineText(view, unifiedLine, contentW)
-					tw.linkCache[unifiedLine] = tw.linksForLine(lineText)
-				}
-
-				for x := 0; x < contentW && x < cols; x++ {
-					c := tw.glyphToCell(view.Cell(x, y))
-					if tw.isCellSelected(unifiedLine, x) {
-						c.Fg, c.Bg = c.Bg, c.Fg
-						if !c.Fg.Set {
-							c.Fg = tw.Palette.Bg
-						}
-						if !c.Bg.Set {
-							c.Bg = tw.Palette.Fg
-						}
-					} else if tw.linkAt(unifiedLine, x) != nil {
-						c.Attrs |= term.CellAttrUnderline
-					}
-					surface.SetCell(x, y, c)
-				}
+		drawLive := func(screenY, unifiedLine, vtRow int) {
+			if tw.ctrlHeld {
+				lineText := extractLineText(view, unifiedLine, contentW)
+				tw.linkCache[unifiedLine] = tw.linksForLine(lineText)
 			}
-		} else {
-			startLine := totalLines - tw.scrollOffset - h
-			if startLine < 0 {
-				startLine = 0
-			}
-
-			for screenY := 0; screenY < h; screenY++ {
-				srcLine := startLine + screenY
-				if tw.ctrlHeld {
-					lineText := extractLineText(view, srcLine, contentW)
-					tw.linkCache[srcLine] = tw.linksForLine(lineText)
-				}
-
-				if srcLine < sbLen {
-					sl := view.ScrollbackLine(srcLine)
-					for x := 0; x < contentW; x++ {
-						var c term.Cell
-						if sl != nil && x < len(sl) {
-							c = tw.glyphToCell(sl[x])
-						} else {
-							c = term.Cell{Ch: ' ', Direct: true, Bg: tw.Palette.Bg}
-						}
-						if tw.isCellSelected(srcLine, x) {
-							c.Fg, c.Bg = c.Bg, c.Fg
-							if !c.Fg.Set {
-								c.Fg = tw.Palette.Bg
-							}
-							if !c.Bg.Set {
-								c.Bg = tw.Palette.Fg
-							}
-						} else if tw.linkAt(srcLine, x) != nil {
-							c.Attrs |= term.CellAttrUnderline
-						}
-						surface.SetCell(x, screenY, c)
+			for x := 0; x < contentW && x < cols; x++ {
+				c := tw.glyphToCell(view.Cell(x, vtRow))
+				if tw.isCellSelected(unifiedLine, x) {
+					c.Fg, c.Bg = c.Bg, c.Fg
+					if !c.Fg.Set {
+						c.Fg = tw.Palette.Bg
 					}
+					if !c.Bg.Set {
+						c.Bg = tw.Palette.Fg
+					}
+				} else if tw.linkAt(unifiedLine, x) != nil {
+					c.Attrs |= term.CellAttrUnderline
+				}
+				surface.SetCell(x, screenY, c)
+			}
+		}
+
+		drawScrollback := func(screenY, srcLine int) {
+			if tw.ctrlHeld {
+				lineText := extractLineText(view, srcLine, contentW)
+				tw.linkCache[srcLine] = tw.linksForLine(lineText)
+			}
+			sl := view.ScrollbackLine(srcLine)
+			for x := 0; x < contentW; x++ {
+				var c term.Cell
+				if sl != nil && x < len(sl) {
+					c = tw.glyphToCell(sl[x])
 				} else {
-					liveRow := srcLine - sbLen
-					if liveRow >= 0 && liveRow < rows {
-						for x := 0; x < contentW && x < cols; x++ {
-							c := tw.glyphToCell(view.Cell(x, liveRow))
-							if tw.isCellSelected(srcLine, x) {
-								c.Fg, c.Bg = c.Bg, c.Fg
-								if !c.Fg.Set {
-									c.Fg = tw.Palette.Bg
-								}
-								if !c.Bg.Set {
-									c.Bg = tw.Palette.Fg
-								}
-							} else if tw.linkAt(srcLine, x) != nil {
-								c.Attrs |= term.CellAttrUnderline
-							}
-							surface.SetCell(x, screenY, c)
-						}
+					c = term.Cell{Ch: ' ', Direct: true, Bg: tw.Palette.Bg}
+				}
+				if tw.isCellSelected(srcLine, x) {
+					c.Fg, c.Bg = c.Bg, c.Fg
+					if !c.Fg.Set {
+						c.Fg = tw.Palette.Bg
 					}
+					if !c.Bg.Set {
+						c.Bg = tw.Palette.Fg
+					}
+				} else if tw.linkAt(srcLine, x) != nil {
+					c.Attrs |= term.CellAttrUnderline
+				}
+				surface.SetCell(x, screenY, c)
+			}
+		}
+
+		// regionStart is where, in the region's own scrollback+live sequence,
+		// the currently visible window begins; it's sbLen when scrollOffset
+		// is 0 (fully live), matching the un-scrolled formula below.
+		regionStart := sbLen - tw.scrollOffset
+
+		for screenY := 0; screenY < h; screenY++ {
+			if screenY < top || screenY > bottom {
+				if screenY < rows {
+					drawLive(screenY, sbLen+screenY, screenY)
+				}
+				continue
+			}
+
+			regionSrc := regionStart + (screenY - top)
+			if regionSrc < sbLen {
+				drawScrollback(screenY, regionSrc)
+			} else {
+				vtRow := top + (regionSrc - sbLen)
+				if vtRow >= top && vtRow <= bottom {
+					drawLive(screenY, sbLen+vtRow, vtRow)
 				}
 			}
 		}
@@ -401,7 +404,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			tw.scrollbar.X = r.X + w - 1
 			tw.scrollbar.Y = r.Y
 			tw.scrollbar.Height = h
-			tw.scrollbar.TotalItems = totalLines
+			tw.scrollbar.TotalItems = totalRegionLines
 			tw.scrollbar.TopItem = topItem
 			tw.scrollbar.Render(surface, w-1, 0)
 		}
@@ -605,16 +608,24 @@ func (tw *TerminalWidget) screenToLine(mx, my int) termSelPos {
 	tw.Term.Snapshot(func(view vt10x.View) {
 		_, rows := view.Size()
 		sbLen := view.ScrollbackLen()
-		totalLines := sbLen + rows
 
-		if tw.scrollOffset == 0 {
+		top, bottom := view.ScrollRegion()
+		if top < 0 || bottom >= rows || bottom < top {
+			top, bottom = 0, rows-1
+		}
+
+		if screenY < top || screenY > bottom {
+			// Outside the region: pinned, same row numbering as when live.
 			unifiedLine = sbLen + screenY
+			return
+		}
+
+		regionStart := sbLen - tw.scrollOffset
+		regionSrc := regionStart + (screenY - top)
+		if regionSrc < sbLen {
+			unifiedLine = regionSrc
 		} else {
-			startLine := totalLines - tw.scrollOffset - r.H
-			if startLine < 0 {
-				startLine = 0
-			}
-			unifiedLine = startLine + screenY
+			unifiedLine = sbLen + top + (regionSrc - sbLen)
 		}
 	})
 	return termSelPos{Line: unifiedLine, Col: col}
