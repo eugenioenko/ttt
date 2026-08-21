@@ -118,6 +118,9 @@ func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile 
 		if args[i] == "--debug" {
 			continue
 		}
+		if args[i] == "--listen" {
+			continue
+		}
 		if isPRURL(args[i]) {
 			if _, _, _, err := github.ParsePRURL(args[i]); err == nil {
 				prURLs = append(prURLs, args[i])
