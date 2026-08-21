@@ -538,6 +538,9 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 			tw.scrollDown(3)
 			return EventConsumed
 		}
+		if btn&(tcell.WheelLeft|tcell.WheelRight) != 0 {
+			return EventConsumed
+		}
 		if btn&tcell.Button1 != 0 {
 			if tw.ctrlHeld {
 				pos := tw.screenToLine(mx, my)

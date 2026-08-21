@@ -222,7 +222,11 @@ func (a *App) ToggleBottomPanel() {
 func (a *App) SpawnTerminal() {
 	r := a.ContentSplit.GetRect()
 	cols := r.W - terminalStripWidth
-	rows := r.H - 3
+	bottomH := a.ContentSplit.BottomH
+	if bottomH <= 1 {
+		bottomH = min(r.H/2, r.H-4)
+	}
+	rows := bottomH - 2
 	if cols <= 0 {
 		cols = 80
 	}
