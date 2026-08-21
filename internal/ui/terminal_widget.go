@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -65,12 +66,19 @@ type TerminalWidget struct {
 	ctrlHeld   bool
 	linkCache  map[int][]linkSpan
 	linkMemo   map[string][]linkSpan
+
+	// mouseButtonHeld is the SGR button code (0/1/2) of a press currently being
+	// forwarded to the PTY, or -1 when none is held. Needed to encode the
+	// matching release and to distinguish a drag (button held) from bare
+	// hover motion, which use different vt10x mouse-tracking modes.
+	mouseButtonHeld int
 }
 
 func NewTerminalWidget(t *terminal.Terminal, palette *TerminalColorPalette) *TerminalWidget {
 	return &TerminalWidget{
-		Term:    t,
-		Palette: palette,
+		Term:            t,
+		Palette:         palette,
+		mouseButtonHeld: -1,
 	}
 }
 
@@ -535,30 +543,71 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		btn := tev.Buttons()
 		mx, my := tev.Position()
-		if btn&tcell.WheelUp != 0 {
-			tw.scrollUp(3)
+		mouseReporting := tw.Term.Mode()&vt10x.ModeMouseMask != 0
+
+		if btn&(tcell.WheelUp|tcell.WheelDown|tcell.WheelLeft|tcell.WheelRight) != 0 {
+			if mouseReporting {
+				if code, ok := sgrWheelCode(btn); ok {
+					col, row := tw.mousePTYCoords(mx, my)
+					tw.Term.WriteString(encodeSGRMouse(code|sgrModifiers(tev.Modifiers()), col, row, false))
+				}
+				return EventConsumed
+			}
+			switch {
+			case btn&tcell.WheelUp != 0:
+				tw.scrollUp(3)
+			case btn&tcell.WheelDown != 0:
+				tw.scrollDown(3)
+			}
 			return EventConsumed
 		}
-		if btn&tcell.WheelDown != 0 {
-			tw.scrollDown(3)
-			return EventConsumed
+
+		if btn&tcell.Button1 != 0 && tw.ctrlHeld {
+			pos := tw.screenToLine(mx, my)
+			if link := tw.linkAt(pos.Line, pos.Col); link != nil {
+				if link.IsFile && tw.OnOpenFile != nil {
+					tw.OnOpenFile(link.FilePath, link.Line, link.Col)
+				} else if !link.IsFile && tw.OnOpenURL != nil {
+					tw.OnOpenURL(link.URL)
+				}
+				return EventConsumed
+			}
+			// ctrl+click with no link underneath: fall through to local
+			// selection below, even if the app wants mouse reporting —
+			// ctrl+click is a ttt-level affordance, not something to forward.
 		}
-		if btn&(tcell.WheelLeft|tcell.WheelRight) != 0 {
-			return EventConsumed
-		}
-		if btn&tcell.Button1 != 0 {
-			if tw.ctrlHeld {
-				pos := tw.screenToLine(mx, my)
-				if link := tw.linkAt(pos.Line, pos.Col); link != nil {
-					if link.IsFile && tw.OnOpenFile != nil {
-						tw.OnOpenFile(link.FilePath, link.Line, link.Col)
-					} else if !link.IsFile && tw.OnOpenURL != nil {
-						tw.OnOpenURL(link.URL)
+
+		if mouseReporting && !tw.ctrlHeld {
+			if code, ok := sgrButtonCode(btn); ok {
+				held := tw.mouseButtonHeld == code
+				if !held || tw.Term.Mode()&(vt10x.ModeMouseMotion|vt10x.ModeMouseMany) != 0 {
+					sgrCode := code
+					if held {
+						sgrCode |= sgrMotionFlag
 					}
+					col, row := tw.mousePTYCoords(mx, my)
+					tw.Term.WriteString(encodeSGRMouse(sgrCode|sgrModifiers(tev.Modifiers()), col, row, false))
+				}
+				tw.mouseButtonHeld = code
+				return EventCaptured
+			}
+			if btn == tcell.ButtonNone {
+				if tw.mouseButtonHeld >= 0 {
+					col, row := tw.mousePTYCoords(mx, my)
+					tw.Term.WriteString(encodeSGRMouse(tw.mouseButtonHeld|sgrModifiers(tev.Modifiers()), col, row, true))
+					tw.mouseButtonHeld = -1
 					return EventConsumed
 				}
+				if tw.Term.Mode()&vt10x.ModeMouseMany != 0 {
+					col, row := tw.mousePTYCoords(mx, my)
+					tw.Term.WriteString(encodeSGRMouse(sgrButtonNone|sgrMotionFlag|sgrModifiers(tev.Modifiers()), col, row, false))
+					return EventConsumed
+				}
+				return EventIgnored
 			}
+		}
 
+		if btn&tcell.Button1 != 0 {
 			pos := tw.screenToLine(mx, my)
 			if !tw.selecting {
 				tw.selecting = true
@@ -581,6 +630,96 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	return EventIgnored
+}
+
+// SGR extended mouse mode (\x1b[<Cb;Cx;CyM/m, DECSET 1006) encoding. This is
+// the modern mouse-reporting encoding virtually every full-screen TUI that
+// asks for mouse input expects; legacy X10 encoding (byte-limited to 223
+// columns/rows) is intentionally not supported.
+const (
+	sgrButtonLeft   = 0
+	sgrButtonMiddle = 1
+	sgrButtonRight  = 2
+	sgrButtonNone   = 3 // "no button" motion code, used only with the motion flag
+	sgrWheelUp      = 64
+	sgrWheelDown    = 65
+	sgrWheelLeft    = 66
+	sgrWheelRight   = 67
+	sgrMotionFlag   = 32
+	sgrShiftMod     = 4
+	sgrAltMod       = 8
+	sgrCtrlMod      = 16
+)
+
+func sgrModifiers(mod tcell.ModMask) int {
+	m := 0
+	if mod&tcell.ModShift != 0 {
+		m |= sgrShiftMod
+	}
+	if mod&tcell.ModAlt != 0 {
+		m |= sgrAltMod
+	}
+	if mod&tcell.ModCtrl != 0 {
+		m |= sgrCtrlMod
+	}
+	return m
+}
+
+func sgrButtonCode(btn tcell.ButtonMask) (code int, ok bool) {
+	switch {
+	case btn&tcell.Button1 != 0:
+		return sgrButtonLeft, true
+	case btn&tcell.Button2 != 0:
+		return sgrButtonMiddle, true
+	case btn&tcell.Button3 != 0:
+		return sgrButtonRight, true
+	}
+	return 0, false
+}
+
+func sgrWheelCode(btn tcell.ButtonMask) (code int, ok bool) {
+	switch {
+	case btn&tcell.WheelUp != 0:
+		return sgrWheelUp, true
+	case btn&tcell.WheelDown != 0:
+		return sgrWheelDown, true
+	case btn&tcell.WheelLeft != 0:
+		return sgrWheelLeft, true
+	case btn&tcell.WheelRight != 0:
+		return sgrWheelRight, true
+	}
+	return 0, false
+}
+
+func encodeSGRMouse(code, col, row int, release bool) string {
+	suffix := byte('M')
+	if release {
+		suffix = 'm'
+	}
+	return fmt.Sprintf("\x1b[<%d;%d;%d%c", code, col, row, suffix)
+}
+
+// mousePTYCoords maps a screen position to 1-based coordinates within the
+// terminal's own column/row grid, clamped to its bounds.
+func (tw *TerminalWidget) mousePTYCoords(mx, my int) (col, row int) {
+	r := tw.GetRect()
+	col = mx - r.X + 1
+	row = my - r.Y + 1
+	if col < 1 {
+		col = 1
+	}
+	if row < 1 {
+		row = 1
+	}
+	if cols, rows := tw.Term.Size(); cols > 0 && rows > 0 {
+		if col > cols {
+			col = cols
+		}
+		if row > rows {
+			row = rows
+		}
+	}
+	return col, row
 }
 
 func (tw *TerminalWidget) ClearSelection() {
