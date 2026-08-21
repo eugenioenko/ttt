@@ -518,10 +518,15 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 		tw.ctrlHeld = tev.Modifiers()&tcell.ModCtrl != 0
 
 		if newTop, consumed := tw.scrollbar.HandleEvent(ev); consumed {
-			sbLen := tw.Term.ScrollbackLen()
-			tw.scrollOffset = sbLen - newTop
-			if tw.scrollOffset < 0 {
+			if newTop >= tw.scrollbar.TotalItems-tw.scrollbar.Height {
+				// Track end: go live instead of using TotalItems, stale vs a streaming PTY.
 				tw.scrollOffset = 0
+			} else {
+				sbLen := tw.Term.ScrollbackLen()
+				tw.scrollOffset = sbLen - newTop
+				if tw.scrollOffset < 0 {
+					tw.scrollOffset = 0
+				}
 			}
 			if tw.scrollbar.IsDragging() {
 				return EventCaptured
