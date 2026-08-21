@@ -5,10 +5,11 @@ description: Drive plugins headlessly with --plugin and --exec to test them like
 
 TTT ships a scripted-interaction harness that lets you load a plugin, click and type through it, and read back both the rendered screen and the editor's internal state — all headless, in a single command, no real terminal required. It's the fastest way to develop and regression-test a plugin, and it's how the built-in plugins are tested.
 
-## The two flags
+## The flags
 
 - **`--plugin FILE`** loads a single Lua file as a plugin on startup, granted **all permissions** (no approval dialog). Use it to iterate on a plugin without installing it. `ttt.plugin_dir()` resolves to the file's directory.
 - **`--exec "commands"`** runs a semicolon-separated script after startup, then the editor exits. Combine with `--size WxH` for deterministic layout.
+- **`--listen`** starts an HTTP server on `127.0.0.1:4242` instead — `POST /exec` accepts the same script format, run synchronously against an **already-running** editor. Useful when a bug only reproduces from live, organic interaction and you want to capture a screenshot or debug dump at the moment it happens instead of scripting the repro in advance. See [Driving a running editor with `--listen`](#driving-a-running-editor-with---listen) below.
 
 ```sh
 bin/ttt --size 100x30 --plugin ./my-plugin/init.lua README.md \
@@ -31,7 +32,19 @@ The plugin's name (used for its panel id, `plugin.<name>`) is the Lua file's bas
 | `exec "Command Name"` | Run a command by its palette title |
 | `screenshot PATH` | Write the current screen (plain text) to a file |
 | `debug PATH` | Write the editor's full state as JSON to a file |
-| `quit` | Exit |
+| `quit` / `shutdown` | Exit |
+
+## Driving a running editor with `--listen`
+
+`--exec` only runs its script once, at startup, then exits. `--listen` keeps the editor running and lets you POST the same commands to it at any point:
+
+```sh
+bin/ttt --listen &
+curl -X POST --data "type hi; wait 100; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
+curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
+```
+
+This is for bugs that only show up during real, organic interaction (typing, clicking, a live child process in the integrated terminal) — you drive the editor by hand until the bug happens, then fire a `debug`/`screenshot` command over `--listen` to capture it, instead of trying to script the repro blind. The server binds to `127.0.0.1` only. Pass `?sep=` to use a separator other than `;`, mirroring `--exec-split-on`.
 
 ## Reading results: screen vs. state
 
