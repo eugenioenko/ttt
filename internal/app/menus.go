@@ -129,6 +129,9 @@ func resolveShortcuts(reg *command.Registry, items []ui.ContextMenuItem) []ui.Co
 	resolved := make([]ui.ContextMenuItem, len(items))
 	for i, item := range items {
 		resolved[i] = item
+		if len(item.Submenu) > 0 {
+			resolved[i].Submenu = resolveShortcuts(reg, item.Submenu)
+		}
 		if item.Command != "" {
 			if cmd, ok := reg.Get(item.Command); ok && cmd.Shortcut != "" {
 				resolved[i].Shortcut = cmd.Shortcut

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -12,6 +13,7 @@ type ContextMenuItem struct {
 	Command  string
 	IsSep    bool
 	Checked  int // 0 = no indicator, 1 = unchecked, 2 = checked
+	Submenu  []ContextMenuItem
 }
 
 const (
@@ -34,6 +36,9 @@ type ContextMenuWidget struct {
 	OnDismiss      func()
 	OnNavigate     func(dir int)
 	OnMouseOutside func(ev tcell.Event)
+	Submenu        *ContextMenuWidget
+	parent         *ContextMenuWidget
+	submenuIndex   int
 	firstEvent     bool
 }
 
@@ -65,6 +70,15 @@ func (c *ContextMenuWidget) hasCheckedItems() bool {
 	return false
 }
 
+func (c *ContextMenuWidget) hasSubmenus() bool {
+	for _, it := range c.Items {
+		if len(it.Submenu) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *ContextMenuWidget) menuWidth() int {
 	maxLabel := 0
 	maxShort := 0
@@ -72,11 +86,11 @@ func (c *ContextMenuWidget) menuWidth() int {
 		if it.IsSep {
 			continue
 		}
-		lr := len([]rune(it.Label))
+		lr := textwidth.String(it.Label)
 		if lr > maxLabel {
 			maxLabel = lr
 		}
-		sr := len([]rune(it.Shortcut))
+		sr := textwidth.String(it.Shortcut)
 		if sr > maxShort {
 			maxShort = sr
 		}
@@ -87,6 +101,9 @@ func (c *ContextMenuWidget) menuWidth() int {
 	}
 	if maxShort > 0 {
 		w += maxShort + 2
+	}
+	if c.hasSubmenus() {
+		w += 2
 	}
 	if w < 15 {
 		w = 15
@@ -114,6 +131,13 @@ func (c *ContextMenuWidget) Render(surface Surface) {
 	if y < 0 {
 		y = 0
 	}
+
+	c.renderAt(surface, x, y, sw, sh)
+}
+
+func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
+	menuW := c.menuWidth()
+	menuH := len(c.Items) + 2
 
 	b := term.SingleBorderSet()
 	if c.Borders != nil {
@@ -151,13 +175,36 @@ func (c *ContextMenuWidget) Render(surface Surface) {
 			if i == c.Selected {
 				shortStyle = style
 			}
-			shortRunes := []rune(it.Shortcut)
-			sx := x + menuW - 2 - len(shortRunes)
+			sx := x + menuW - 2 - textwidth.String(it.Shortcut)
 			surface.DrawText(sx, row, it.Shortcut, x+menuW-1, shortStyle)
+		}
+		if len(it.Submenu) > 0 {
+			surface.SetCell(x+menuW-2, row, term.Cell{Ch: '›', Style: style})
 		}
 	}
 
 	c.storeRect(x, y, menuW, menuH)
+
+	if c.Submenu == nil {
+		return
+	}
+	childW := c.Submenu.menuWidth()
+	childH := len(c.Submenu.Items) + 2
+	childX := x + menuW - 1
+	if childX+childW > sw {
+		childX = x - childW + 1
+	}
+	if childX < 0 {
+		childX = 0
+	}
+	childY := y + 1 + c.submenuIndex
+	if childY+childH > sh {
+		childY = sh - childH
+	}
+	if childY < 0 {
+		childY = 0
+	}
+	c.Submenu.renderAt(surface, childX, childY, sw, sh)
 }
 
 func (c *ContextMenuWidget) storeRect(x, y, w, h int) {
@@ -167,6 +214,7 @@ func (c *ContextMenuWidget) storeRect(x, y, w, h int) {
 func (c *ContextMenuWidget) HandleEvent(ev tcell.Event) EventResult {
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
+		active := c.activeMenu()
 		switch tev.Key() {
 		case tcell.KeyEscape:
 			if c.OnDismiss != nil {
@@ -174,25 +222,33 @@ func (c *ContextMenuWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 			return EventConsumed
 		case tcell.KeyUp:
-			c.moveSelection(-1)
+			active.moveSelection(-1)
 			return EventConsumed
 		case tcell.KeyDown:
-			c.moveSelection(1)
+			active.moveSelection(1)
 			return EventConsumed
 		case tcell.KeyLeft:
-			if c.OnNavigate != nil {
+			if active.parent != nil {
+				active.parent.Submenu = nil
+			} else if c.OnNavigate != nil {
 				c.OnNavigate(-1)
 			}
 			return EventConsumed
 		case tcell.KeyRight:
-			if c.OnNavigate != nil {
+			if active.openSelectedSubmenu() {
+				return EventConsumed
+			}
+			if active.parent == nil && c.OnNavigate != nil {
 				c.OnNavigate(1)
 			}
 			return EventConsumed
 		case tcell.KeyEnter:
-			if c.Selected >= 0 && c.Selected < len(c.Items) && !c.Items[c.Selected].IsSep {
-				if c.OnExec != nil {
-					c.OnExec(c.Items[c.Selected].Command)
+			if active.Selected >= 0 && active.Selected < len(active.Items) && !active.Items[active.Selected].IsSep {
+				if active.openSelectedSubmenu() {
+					return EventConsumed
+				}
+				if c.OnExec != nil && active.Items[active.Selected].Command != "" {
+					c.OnExec(active.Items[active.Selected].Command)
 				}
 			}
 			return EventConsumed
@@ -200,46 +256,97 @@ func (c *ContextMenuWidget) HandleEvent(ev tcell.Event) EventResult {
 	case *tcell.EventMouse:
 		btn := tev.Buttons()
 		mx, my := tev.Position()
-		r := c.GetRect()
 
 		if c.firstEvent {
 			c.firstEvent = false
 			return EventConsumed
 		}
 
+		menu := c.menuAt(mx, my)
 		if btn&tcell.Button1 != 0 {
-			if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+			if menu == nil {
 				if c.OnDismiss != nil {
 					c.OnDismiss()
 				}
 				return EventConsumed
 			}
-			itemIdx := my - r.Y - 1
-			if itemIdx >= 0 && itemIdx < len(c.Items) && !c.Items[itemIdx].IsSep {
-				c.Selected = itemIdx
-				if c.OnExec != nil {
-					c.OnExec(c.Items[c.Selected].Command)
+			itemIdx := my - menu.GetRect().Y - 1
+			if itemIdx >= 0 && itemIdx < len(menu.Items) && !menu.Items[itemIdx].IsSep {
+				menu.selectItem(itemIdx)
+				if menu.openSelectedSubmenu() {
+					return EventConsumed
+				}
+				if c.OnExec != nil && menu.Items[menu.Selected].Command != "" {
+					c.OnExec(menu.Items[menu.Selected].Command)
 				}
 			}
 			return EventConsumed
 		}
 
 		if btn == tcell.ButtonNone {
-			if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+			if menu == nil {
 				c.Selected = -1
 				if c.OnMouseOutside != nil {
 					c.OnMouseOutside(ev)
 				}
 				return EventConsumed
 			}
-			itemIdx := my - r.Y - 1
-			if itemIdx >= 0 && itemIdx < len(c.Items) && !c.Items[itemIdx].IsSep {
-				c.Selected = itemIdx
+			itemIdx := my - menu.GetRect().Y - 1
+			if itemIdx >= 0 && itemIdx < len(menu.Items) && !menu.Items[itemIdx].IsSep {
+				menu.selectItem(itemIdx)
+				menu.openSelectedSubmenu()
 			}
 			return EventConsumed
 		}
 	}
 	return EventConsumed
+}
+
+func (c *ContextMenuWidget) activeMenu() *ContextMenuWidget {
+	if c.Submenu != nil {
+		return c.Submenu.activeMenu()
+	}
+	return c
+}
+
+func (c *ContextMenuWidget) menuAt(x, y int) *ContextMenuWidget {
+	if c.Submenu != nil {
+		if menu := c.Submenu.menuAt(x, y); menu != nil {
+			return menu
+		}
+	}
+	r := c.GetRect()
+	if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+		return c
+	}
+	return nil
+}
+
+func (c *ContextMenuWidget) selectItem(index int) {
+	if c.Selected != index {
+		c.Selected = index
+		c.Submenu = nil
+	}
+}
+
+func (c *ContextMenuWidget) openSelectedSubmenu() bool {
+	if c.Selected < 0 || c.Selected >= len(c.Items) {
+		return false
+	}
+	items := c.Items[c.Selected].Submenu
+	if len(items) == 0 {
+		return false
+	}
+	if c.Submenu != nil && c.submenuIndex == c.Selected {
+		return true
+	}
+	child := NewContextMenuWidget(items, 0, 0)
+	child.Borders = c.Borders
+	child.parent = c
+	child.firstEvent = false
+	c.Submenu = child
+	c.submenuIndex = c.Selected
+	return true
 }
 
 func (c *ContextMenuWidget) moveSelection(dir int) {
@@ -252,6 +359,7 @@ func (c *ContextMenuWidget) moveSelection(dir int) {
 		next = (next + dir + n) % n
 		if !c.Items[next].IsSep {
 			c.Selected = next
+			c.Submenu = nil
 			return
 		}
 	}

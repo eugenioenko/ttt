@@ -11,6 +11,18 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
+func findMenuCommand(items []ui.ContextMenuItem, command string) (ui.ContextMenuItem, bool) {
+	for _, item := range items {
+		if item.Command == command {
+			return item, true
+		}
+		if found, ok := findMenuCommand(item.Submenu, command); ok {
+			return found, true
+		}
+	}
+	return ui.ContextMenuItem{}, false
+}
+
 func TestOptionsMenuToggleLineNumbers(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
@@ -77,10 +89,8 @@ func TestOptionsMenuDiffDefaultsPersistAndUpdateInheritedSurface(t *testing.T) {
 
 	checked := func(command string) int {
 		t.Helper()
-		for _, item := range h.app.BuildOptionsMenu() {
-			if item.Command == command {
-				return item.Checked
-			}
+		if item, ok := findMenuCommand(h.app.BuildOptionsMenu(), command); ok {
+			return item.Checked
 		}
 		t.Fatalf("Options menu missing %s", command)
 		return 0
@@ -122,6 +132,59 @@ func TestOptionsMenuDiffDefaultsPersistAndUpdateInheritedSurface(t *testing.T) {
 	if saved.Editor.DiffMode != config.DiffModeUnified || !saved.Editor.DiffWordWrap {
 		t.Fatalf("saved defaults = mode %q wrap %v, want unified/true",
 			saved.Editor.DiffMode, saved.Editor.DiffWordWrap)
+	}
+}
+
+func TestOptionsAndChangesMenusSharePresentationGroups(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	for _, menu := range [][]ui.ContextMenuItem{h.app.BuildOptionsMenu(), h.app.BuildChangesPanelMenu()} {
+		for _, command := range []string{
+			"options.useGitFileTree",
+			"options.useGitFileList",
+			"options.useSplitDiff",
+			"options.useUnifiedDiff",
+			"options.toggleDiffWordWrap",
+			"options.toggleDiffHighContrast",
+		} {
+			if _, ok := findMenuCommand(menu, command); !ok {
+				t.Errorf("menu missing shared presentation command %s", command)
+			}
+		}
+	}
+}
+
+func TestOptionsToggleDiffHighContrastPersistsAndApplies(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.app.EditorGroup.OpenDiff("contrast.go", diff.FileDiff{}, []string{"old"}, []string{"new"}, true)
+	dv := h.app.EditorGroup.ActiveDiffWidget()
+	if dv == nil {
+		t.Fatal("expected active diff")
+	}
+
+	h.exec("options.toggleDiffHighContrast")
+	if !h.app.Settings.Editor.DiffHighContrast || !h.app.EditorGroup.DiffHighContrast || !dv.DiffHighContrast() {
+		t.Fatalf("high contrast was not live-applied: settings=%v group=%v surface=%v",
+			h.app.Settings.Editor.DiffHighContrast, h.app.EditorGroup.DiffHighContrast, dv.DiffHighContrast())
+	}
+	item, ok := findMenuCommand(h.app.BuildChangesPanelMenu(), "options.toggleDiffHighContrast")
+	if !ok || item.Checked != ui.MenuChecked {
+		t.Fatalf("Changes menu high contrast state = %+v, found=%v", item, ok)
+	}
+
+	data, err := os.ReadFile(filepath.Join(h.dir, "config", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved config.Settings
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if !saved.Editor.DiffHighContrast {
+		t.Fatal("diffHighContrast was not persisted")
 	}
 }
 
@@ -262,12 +325,10 @@ func TestOptionsMenuDynamicChecked(t *testing.T) {
 	// Build the options menu and verify line numbers is checked
 	items := h.app.BuildOptionsMenu()
 	found := false
-	for _, item := range items {
-		if item.Command == "options.toggleLineNumbers" {
-			found = true
-			if item.Checked != 2 { // MenuChecked
-				t.Errorf("expected line numbers checked (2), got %d", item.Checked)
-			}
+	if item, ok := findMenuCommand(items, "options.toggleLineNumbers"); ok {
+		found = true
+		if item.Checked != 2 { // MenuChecked
+			t.Errorf("expected line numbers checked (2), got %d", item.Checked)
 		}
 	}
 	if !found {
@@ -279,11 +340,9 @@ func TestOptionsMenuDynamicChecked(t *testing.T) {
 
 	// Rebuild and verify unchecked
 	items = h.app.BuildOptionsMenu()
-	for _, item := range items {
-		if item.Command == "options.toggleLineNumbers" {
-			if item.Checked != 1 { // MenuUnchecked
-				t.Errorf("expected line numbers unchecked (1), got %d", item.Checked)
-			}
+	if item, ok := findMenuCommand(items, "options.toggleLineNumbers"); ok {
+		if item.Checked != 1 { // MenuUnchecked
+			t.Errorf("expected line numbers unchecked (1), got %d", item.Checked)
 		}
 	}
 }

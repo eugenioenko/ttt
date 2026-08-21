@@ -43,17 +43,7 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			{Label: "Help", Command: "search.help"},
 		}
 	case "changes":
-		items = []ui.ContextMenuItem{
-			{Label: "Refresh", Command: "changes.refresh"},
-			ui.MenuSep(),
-			{Label: "Pull", Command: "git.pull"},
-			{Label: "Push", Command: "git.push"},
-			{Label: "Sync", Command: "git.sync"},
-			ui.MenuSep(),
-			{Label: "Open PR Diff", Command: "pr.openDiff"},
-			ui.MenuSep(),
-			{Label: "Help", Command: "changes.help"},
-		}
+		items = a.BuildChangesPanelMenu()
 	case "outline":
 		items = []ui.ContextMenuItem{
 			{Label: "Refresh", Command: "sidebar.outline"},
@@ -79,6 +69,22 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	}
 	if len(items) > 0 {
 		openContextMenu(a, items, sx, sy)
+	}
+}
+
+func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Refresh", Command: "changes.refresh"},
+		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
+		{Label: "Diff View", Submenu: a.BuildDiffViewOptions()},
+		ui.MenuSep(),
+		{Label: "Pull", Command: "git.pull"},
+		{Label: "Push", Command: "git.push"},
+		{Label: "Sync", Command: "git.sync"},
+		ui.MenuSep(),
+		{Label: "Open PR Diff", Command: "pr.openDiff"},
+		ui.MenuSep(),
+		{Label: "Help", Command: "changes.help"},
 	}
 }
 

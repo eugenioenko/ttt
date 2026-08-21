@@ -75,13 +75,21 @@ describe("diff reading preferences", () => {
     tui.exec("Menu: Options");
     tui.waitStable();
     const options = tui.snapshot();
+    tui.press("down");
+    tui.press("down");
+    tui.press("right");
+    tui.waitStable();
+    const diffOptions = tui.snapshot();
     tui.press("escape");
     enableUnifiedWrappedDefaults();
 
     const { snapshots } = tui.run();
-    expect(snapshots[options]).toContain("Split Diff");
-    expect(snapshots[options]).toContain("Unified Diff");
-    expect(snapshots[options]).toContain("Diff Word Wrap");
+    expect(snapshots[options]).toContain("Diff View");
+    expect(snapshots[options]).toContain("Git Files");
+    expect(snapshots[diffOptions]).toContain("Split");
+    expect(snapshots[diffOptions]).toContain("Unified");
+    expect(snapshots[diffOptions]).toContain("Wrap Lines");
+    expect(snapshots[diffOptions]).toContain("High Contrast");
 
     const saved = savedSettings(fixture.configDir);
     expect(saved.editor.diffMode).toBe("unified");

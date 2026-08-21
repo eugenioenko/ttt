@@ -37,7 +37,17 @@ describe("git file tree", () => {
     tui.waitStable(400);
     const tree = tui.snapshot();
 
-    tui.exec("View Git Files as List");
+    // Open the Changes panel's contextual three-dot menu, then use its nested
+    // Git Files group to switch to List view.
+    tui.click(29, 2);
+    tui.waitStable();
+    const panelMenu = tui.snapshot();
+    tui.press("down");
+    tui.press("right");
+    tui.waitStable();
+    const gitFilesMenu = tui.snapshot();
+    tui.press("down");
+    tui.press("enter");
     tui.waitStable(300);
     const list = tui.snapshot();
 
@@ -48,6 +58,11 @@ describe("git file tree", () => {
     expect(snapshots[tree]).toContain("committed.go");
     expect(snapshots[tree]).not.toContain("src/work/changed.go");
     expect(snapshots[tree]).not.toContain("pkg/history/committed.go");
+
+    expect(snapshots[panelMenu]).toContain("Git Files");
+    expect(snapshots[panelMenu]).toContain("Diff View");
+    expect(snapshots[gitFilesMenu]).toContain("Tree");
+    expect(snapshots[gitFilesMenu]).toContain("List");
 
     expect(snapshots[list]).toContain("src/work/changed.go");
     expect(snapshots[list]).toContain("pkg/history/committed.go");

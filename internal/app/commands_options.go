@@ -38,6 +38,11 @@ func (a *App) ToggleDiffWordWrapDefault() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleDiffHighContrast() {
+	a.Settings.Editor.DiffHighContrast = !a.Settings.Editor.DiffHighContrast
+	a.SaveAndApplySettings()
+}
+
 func (a *App) UseTreeGitFileView() {
 	a.Settings.Git.FileView = config.GitFileViewTree
 	a.SaveAndApplySettings()
@@ -191,27 +196,6 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		wordWrapChecked = ui.MenuChecked
 	}
 
-	splitDiffChecked := ui.MenuUnchecked
-	unifiedDiffChecked := ui.MenuUnchecked
-	if a.Settings.Editor.DiffMode == config.DiffModeUnified {
-		unifiedDiffChecked = ui.MenuChecked
-	} else {
-		splitDiffChecked = ui.MenuChecked
-	}
-
-	diffWordWrapChecked := ui.MenuUnchecked
-	if a.Settings.Editor.DiffWordWrap {
-		diffWordWrapChecked = ui.MenuChecked
-	}
-
-	treeGitFilesChecked := ui.MenuUnchecked
-	listGitFilesChecked := ui.MenuUnchecked
-	if a.Settings.Git.FileView == config.GitFileViewList {
-		listGitFilesChecked = ui.MenuChecked
-	} else {
-		treeGitFilesChecked = ui.MenuChecked
-	}
-
 	bracketColorChecked := ui.MenuUnchecked
 	if a.Settings.Editor.BracketPairColorization {
 		bracketColorChecked = ui.MenuChecked
@@ -250,11 +234,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
-		{Label: "Split Diff", Command: "options.useSplitDiff", Checked: splitDiffChecked},
-		{Label: "Unified Diff", Command: "options.useUnifiedDiff", Checked: unifiedDiffChecked},
-		{Label: "Diff Word Wrap", Command: "options.toggleDiffWordWrap", Checked: diffWordWrapChecked},
-		{Label: "Git Files: Tree", Command: "options.useGitFileTree", Checked: treeGitFilesChecked},
-		{Label: "Git Files: List", Command: "options.useGitFileList", Checked: listGitFilesChecked},
+		{Label: "Diff View", Submenu: a.BuildDiffViewOptions()},
+		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
@@ -272,6 +253,33 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Open Settings", Command: "settings.openUI"},
 	}
 	return items
+}
+
+func menuChecked(checked bool) int {
+	if checked {
+		return ui.MenuChecked
+	}
+	return ui.MenuUnchecked
+}
+
+// BuildDiffViewOptions is shared by the global Options menu and the Changes
+// panel menu so both surfaces expose identical defaults and checked state.
+func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Split", Command: "options.useSplitDiff", Checked: menuChecked(a.Settings.Editor.DiffMode != config.DiffModeUnified)},
+		{Label: "Unified", Command: "options.useUnifiedDiff", Checked: menuChecked(a.Settings.Editor.DiffMode == config.DiffModeUnified)},
+		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
+		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+	}
+}
+
+// BuildGitFileOptions keeps the Tree/List choice consistent everywhere the
+// Changes panel can be configured.
+func (a *App) BuildGitFileOptions() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Tree", Command: "options.useGitFileTree", Checked: menuChecked(a.Settings.Git.FileView != config.GitFileViewList)},
+		{Label: "List", Command: "options.useGitFileList", Checked: menuChecked(a.Settings.Git.FileView == config.GitFileViewList)},
+	}
 }
 
 func registerOptionsCommands(app *App) {
@@ -311,6 +319,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleDiffWordWrap", Title: "Toggle Diff Word Wrap Default",
 		Keywords: []string{"preferences", "settings", "git", "diff", "wrap", "default"},
 		Handler:  app.ToggleDiffWordWrapDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffHighContrast", Title: "Toggle High Contrast Diffs",
+		Keywords: []string{"preferences", "settings", "git", "diff", "contrast", "color", "accessibility"},
+		Handler:  app.ToggleDiffHighContrast,
 	})
 
 	reg.Register(command.Command{
