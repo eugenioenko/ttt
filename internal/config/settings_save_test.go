@@ -21,6 +21,8 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s := DefaultSettings()
 	s.Editor.TabSize = 7
 	s.Editor.WordWrap = true
+	s.Editor.DiffMode = DiffModeUnified
+	s.Editor.DiffWordWrap = true
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Terminal.Shell = "/bin/zsh"
@@ -35,6 +37,12 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if !got.Editor.WordWrap {
 		t.Error("wordWrap did not round-trip")
+	}
+	if got.Editor.DiffMode != DiffModeUnified {
+		t.Errorf("diffMode = %q, want %q", got.Editor.DiffMode, DiffModeUnified)
+	}
+	if !got.Editor.DiffWordWrap {
+		t.Error("diffWordWrap did not round-trip")
 	}
 	if got.Editor.IsSyntaxHighlightEnabled() {
 		t.Error("syntaxHighlight=false did not round-trip; tri-state pointer lost")

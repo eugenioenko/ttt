@@ -35,6 +35,8 @@ describe("settings editor", () => {
       "Advanced",
       "Tab size",
       "Word wrap",
+      "Diff mode",
+      "Diff word wrap",
       "Apply",
     ]) {
       expect(snapshots[s0]).toContain(want);

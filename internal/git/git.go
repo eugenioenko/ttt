@@ -154,12 +154,16 @@ func BranchName(dir string) string {
 }
 
 type LogEntry struct {
+	// Hash is the abbreviated hash, for display only. Its length depends on
+	// core.abbrev and on how many objects the repo holds, so it is not stable
+	// enough to key anything on — use Ref for that.
 	Hash    string
+	Ref     string
 	Message string
 }
 
 func Log(dir string, n int) []LogEntry {
-	cmd := exec.Command("git", "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%h %s")
+	cmd := exec.Command("git", "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%H %h %s")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -169,10 +173,96 @@ func Log(dir string, n int) []LogEntry {
 		if line == "" {
 			continue
 		}
-		hash, msg, _ := strings.Cut(line, " ")
-		entries = append(entries, LogEntry{Hash: hash, Message: msg})
+		ref, rest, ok := strings.Cut(line, " ")
+		if !ok {
+			continue
+		}
+		hash, msg, _ := strings.Cut(rest, " ")
+		entries = append(entries, LogEntry{Hash: hash, Ref: ref, Message: msg})
 	}
 	return entries
+}
+
+// CommitFiles lists the files a commit touched.
+//
+// --diff-merges=first-parent is not cosmetic: `git show --name-status` prints
+// nothing at all for a merge commit, so without it every merge in the log would
+// expand to an empty file list.
+//
+// -M asks for rename detection only. Copies need -C, which finds only copies of
+// files the same commit also modified, or --find-copies-harder, which compares
+// against the whole tree and is far too slow to run from a panel.
+// parseNameStatusZ still handles the copy record, because the format allows one
+// and mis-reading it would shift every record after it.
+func CommitFiles(dir, hash string) ([]FileStatus, error) {
+	cmd := exec.Command("git", "-C", dir, "show", "--name-status",
+		"--diff-merges=first-parent", "-M", "--format=", "-z", hash)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	return parseNameStatusZ(out), nil
+}
+
+// parseNameStatusZ reads `--name-status -z` output. -z drops git's path
+// quoting, so a record is exactly "status<NUL>path<NUL>" — or, for a rename or
+// a copy, "Rxxx<NUL>old<NUL>new<NUL>", where xxx is a similarity score the rest
+// of the app does not want.
+func parseNameStatusZ(out []byte) []FileStatus {
+	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	var files []FileStatus
+	for i := 0; i < len(fields); {
+		code := fields[i]
+		if code == "" {
+			i++
+			continue
+		}
+		st := code[:1]
+		if st == "R" || st == "C" {
+			// A truncated three-field record is dropped rather than read as a
+			// two-field one, which would misalign every record after it.
+			if i+2 >= len(fields) {
+				break
+			}
+			files = append(files, FileStatus{Status: st, OldPath: fields[i+1], Path: fields[i+2]})
+			i += 3
+			continue
+		}
+		if i+1 >= len(fields) {
+			break
+		}
+		files = append(files, FileStatus{Status: st, Path: fields[i+1]})
+		i += 2
+	}
+	return files
+}
+
+// CommitFileDiff returns the diff a single commit applied to one file.
+func CommitFileDiff(dir, hash string, f FileStatus) (string, error) {
+	// -- ends option parsing, but pathspec magic still applies after it. Disable
+	// that separately so legal names such as "*.txt" and ":(exclude)*" select
+	// the one committed path the reader asked for.
+	args := []string{"-C", dir, "--literal-pathspecs", "show", "--diff-merges=first-parent", "-M", "--format=", hash, "--"}
+	if f.OldPath != "" {
+		args = append(args, f.OldPath)
+	}
+	args = append(args, f.Path)
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// CommitMessage returns the complete message for one commit, including its
+// subject and body. The trailing newline Git prints is presentation framing,
+// not part of the message shown in the detail view.
+func CommitMessage(dir, hash string) (string, error) {
+	out, err := exec.Command("git", "-C", dir, "show", "-s", "--format=%B", hash).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(string(out), "\r\n"), nil
 }
 
 type BlameInfo struct {

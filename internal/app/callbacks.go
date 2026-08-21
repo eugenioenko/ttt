@@ -70,11 +70,7 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			for _, p := range a.PluginManager.Plugins() {
 				if a.Sidebar.ActivePanel == "plugin."+p.Name && len(p.SidebarMenuEntries) > 0 {
 					for _, e := range p.SidebarMenuEntries {
-						items = append(items, ui.ContextMenuItem{
-							Label:   e.Label,
-							Command: e.Command,
-							IsSep:   e.Separator,
-						})
+						items = append(items, contextMenuItemFromWidgetEntry(e))
 					}
 					break
 				}
@@ -207,32 +203,31 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 }
 
 func (a *App) openSelectedDiff(extended bool) {
-	g := a.Changes.SelectedGroup()
-	if g != nil {
-	} else {
-	}
-	if g != nil && g.IsPR {
-		_, status, ok := a.Changes.SelectedFile()
-		if ok && a.Changes.OnOpenPRDiff != nil {
-			a.Changes.OnOpenPRDiff(g, status, extended)
-		} else {
-		}
-	} else {
-		dir, status, ok := a.Changes.SelectedFile()
-		if ok && a.Changes.OnOpenDiff != nil {
-			a.Changes.OnOpenDiff(dir, status, extended)
-		} else {
-		}
-	}
+	a.Changes.OpenSelectedDiff(extended)
 }
 
+// OpenChangeDiff shows a working-tree file's changes against HEAD. The reads
+// run in the background: git diff on a large file is slow enough that doing it
+// from the click handler freezes the editor.
 func (a *App) OpenChangeDiff(dir string, status git.FileStatus, extended bool) {
 	fullPath := filepath.Join(dir, status.Path)
 	if status.Status == "?" {
+		// Untracked: nothing to diff against, and no git to wait for.
 		a.EditorGroup.OpenFile(fullPath)
 		a.FocusEditorIfEnabled()
 		return
 	}
+	a.startDiffOpen(func() *DiffOpenResult {
+		return readChangeDiff(dir, status, fullPath, extended)
+	})
+}
+
+func readChangeDiff(dir string, status git.FileStatus, fullPath string, extended bool) *DiffOpenResult {
+	// Falling back to the plain file is what this path has always done when
+	// there is no usable diff — an unreadable one, an empty one, or one git
+	// produced with no hunks in it.
+	fallback := &DiffOpenResult{OpenPath: fullPath}
+
 	var diffText string
 	var err error
 	if status.Status == "R" && status.OldPath != "" {
@@ -241,33 +236,87 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, extended bool) {
 		diffText, err = git.DiffFile(dir, status.Path)
 	}
 	if err != nil || diffText == "" {
-		a.EditorGroup.OpenFile(fullPath)
-		a.FocusEditorIfEnabled()
-		return
+		return fallback
 	}
 	parsed := diff.Parse(diffText)
 	if len(parsed.Hunks) == 0 {
-		a.EditorGroup.OpenFile(fullPath)
-		a.FocusEditorIfEnabled()
-		return
+		return fallback
 	}
-	var oldLines, newLines []string
-	oldContent, err := git.ShowFile(dir, status.Path, "HEAD")
-	if err == nil {
-		oldLines = strings.Split(oldContent, "\n")
-		if len(oldLines) > 0 && oldLines[len(oldLines)-1] == "" {
-			oldLines = oldLines[:len(oldLines)-1]
-		}
+
+	var newLines []string
+	if newData, err := os.ReadFile(fullPath); err == nil {
+		newLines = splitFileLines(string(newData))
 	}
-	newData, err := os.ReadFile(fullPath)
-	if err == nil {
-		newLines = strings.Split(string(newData), "\n")
-		if len(newLines) > 0 && newLines[len(newLines)-1] == "" {
-			newLines = newLines[:len(newLines)-1]
-		}
+	return &DiffOpenResult{
+		TabName:  status.Path + " (diff)",
+		Path:     status.Path,
+		Diff:     parsed,
+		OldLines: gitFileLines(dir, status.Path, "HEAD"),
+		NewLines: newLines,
+		Extended: extended,
 	}
-	a.EditorGroup.OpenDiff(status.Path, parsed, oldLines, newLines, extended)
-	a.FocusEditorIfEnabled()
+}
+
+// OpenCommitDiff shows what one commit did to one file. Unlike OpenChangeDiff
+// neither side comes from the worktree: both are read out of git at the commit
+// and its first parent.
+func (a *App) OpenCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) {
+	a.startDiffOpen(func() *DiffOpenResult {
+		return readCommitDiff(dir, ref, short, status, extended)
+	})
+}
+
+func readCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) *DiffOpenResult {
+	diffText, err := git.CommitFileDiff(dir, ref, status)
+	if err != nil {
+		return &DiffOpenResult{Warn: fmt.Sprintf("Could not read %s at %s", status.Path, short)}
+	}
+	parsed := diff.Parse(diffText)
+	if len(parsed.Hunks) == 0 {
+		// A pure rename or a mode change carries no hunks at all.
+		return &DiffOpenResult{Warn: fmt.Sprintf("No line changes for %s in %s", status.Path, short)}
+	}
+
+	// Both reads are allowed to fail: an added file has no parent blob, a
+	// deleted one has no blob at the commit, and a root commit has no parent at
+	// all. OpenDiffTab renders the hunks alone in that case, exactly as PR
+	// diffs do.
+	oldPath := status.Path
+	if status.OldPath != "" {
+		oldPath = status.OldPath
+	}
+	return &DiffOpenResult{
+		// The key uses the full hash so it stays put as the abbreviation grows;
+		// the label uses the short one because that is what the panel shows.
+		TabName:  fmt.Sprintf("%s:%s (diff)", ref, status.Path),
+		Title:    fmt.Sprintf("%s @ %s", filepath.Base(status.Path), short),
+		Path:     status.Path,
+		Diff:     parsed,
+		OldLines: gitFileLines(dir, oldPath, ref+"^"),
+		NewLines: gitFileLines(dir, status.Path, ref),
+		Extended: extended,
+	}
+}
+
+func splitFileLines(content string) []string {
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// gitFileLines reads a blob at a ref, returning nil when it does not exist.
+func gitFileLines(dir, path, ref string) []string {
+	content, err := git.ShowFile(dir, path, ref)
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
@@ -402,6 +451,10 @@ func (a *App) ConfirmDiscard(message string, onConfirm func()) {
 
 func registerWidgetCallbacks(app *App) {
 	reg := app.Reg
+	// Any foreground navigation supersedes a diff read that has not landed yet.
+	// Put invalidation on the editor group's active-content boundary so direct
+	// callers such as plugins cannot bypass it.
+	app.EditorGroup.OnActiveContentChange = app.cancelPendingDiff
 
 	for i := range menuBarMenus {
 		idx := i
@@ -591,6 +644,8 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnOpenPRDiff = func(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
 		app.OpenPRDiff(group, status, extended)
 	}
+	app.Changes.OnOpenCommitDiff = app.OpenCommitDiff
+	app.Changes.OnOpenCommit = app.OpenCommitDetail
 	app.Changes.OnPRGroupMenu = app.ShowPRGroupMenu
 	app.Changes.OnRefreshPR = app.FetchAndOpenPR
 	app.Changes.OnGroupMenu = app.ShowGroupMenu

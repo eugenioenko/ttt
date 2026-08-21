@@ -176,7 +176,7 @@ func TestTitleWidgetLuaFields(t *testing.T) {
 						icon = "+",
 						padded = true,
 						menu = {
-							{ label = "Refresh", command = "refresh" },
+							{ label = "Refresh", command = "refresh", checked = true },
 						},
 						on_menu = function(cmd) end,
 					})
@@ -215,6 +215,9 @@ func TestTitleWidgetLuaFields(t *testing.T) {
 	}
 	if len(desc.Entries) != 1 || desc.Entries[0].Label != "Refresh" || desc.Entries[0].Command != "refresh" {
 		t.Errorf("expected menu entry Refresh/refresh, got %+v", desc.Entries)
+	}
+	if desc.Entries[0].Checked == nil || !*desc.Entries[0].Checked {
+		t.Errorf("expected checked menu entry, got %+v", desc.Entries[0])
 	}
 	if desc.OnMenu == nil {
 		t.Error("expected on_menu callback to be wired")

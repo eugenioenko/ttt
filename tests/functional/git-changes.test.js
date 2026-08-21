@@ -17,6 +17,9 @@ afterEach(() => {
 function openChanges() {
   tui.exec("Show Changes");
   tui.waitStable();
+  // The commit input is the first action in both visual and focus order. Most
+  // tests below exercise working-tree commands, so move to the tree once.
+  tui.press("tab");
 }
 
 describe("git changes panel", () => {
@@ -79,7 +82,9 @@ describe("git changes panel", () => {
 
     tui.press("a");
     tui.waitStable();
-    // Tab moves focus from the file tree to the commit message input.
+    // The history tree follows the working tree in focus order, then the cycle
+    // returns to the commit message at the top.
+    tui.press("tab");
     tui.press("tab");
     tui.type("a commit from the editor");
     tui.press("enter");
@@ -104,6 +109,7 @@ describe("git changes panel", () => {
 
     tui.press("a");
     tui.waitStable();
+    tui.press("tab");
     tui.press("tab");
     tui.type("logged commit");
     tui.press("enter");
@@ -259,6 +265,7 @@ describe("git changes panel", () => {
 
     tui.press("a");
     tui.waitStable();
+    tui.press("tab");
     tui.press("tab");
     tui.type("first message");
     tui.press("enter");

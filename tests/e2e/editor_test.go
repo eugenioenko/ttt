@@ -72,6 +72,40 @@ func TestCommandPaletteDoesNotStack(t *testing.T) {
 	}
 }
 
+func TestCommandPaletteHelpOrientsThenNavigates(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.pressCtrl(tcell.KeyCtrlP)
+	h.pressRune('?')
+
+	// Empty help is an orientation surface, not a command shortlist. The first
+	// topic explains the workspace model in the dedicated detail row.
+	h.assertContains("Workspace map")
+	h.assertContains("folders, tabs, and editor groups")
+	h.assertNotContains("Open Folder")
+
+	// Search spans the registered command list, and its displayed shortcut is
+	// the one already derived from the configured keybindings by BindKeys.
+	for _, r := range "Open Folder" {
+		h.pressRune(r)
+	}
+	h.assertContains("Open Folder")
+	cmd, ok := h.reg.Get("workspace.openFolder")
+	if !ok {
+		t.Fatal("workspace.openFolder command is not registered")
+	}
+	if cmd.Shortcut == "" {
+		t.Fatal("workspace.openFolder should have a derived shortcut")
+	}
+	h.assertContains(cmd.Shortcut)
+
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	if len(h.app.Root.Overlays) == 0 {
+		t.Fatal("executing Open Folder from help should open its dialog")
+	}
+}
+
 func TestGoToLineDialog(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()

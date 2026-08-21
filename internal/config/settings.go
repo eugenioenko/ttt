@@ -10,6 +10,12 @@ import (
 var (
 	GutterStyles = []string{"minimal", "compact", "extended"}
 	BorderStyles = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
+	DiffModes    = []string{"split", "unified"}
+)
+
+const (
+	DiffModeSplit   = "split"
+	DiffModeUnified = "unified"
 )
 
 type TerminalSettings struct {
@@ -77,6 +83,8 @@ type EditorSettings struct {
 	TabSize                 int    `json:"tabSize"`
 	InsertSpaces            bool   `json:"insertSpaces"`
 	WordWrap                bool   `json:"wordWrap"`
+	DiffMode                string `json:"diffMode"`
+	DiffWordWrap            bool   `json:"diffWordWrap"`
 	LineNumbers             bool   `json:"lineNumbers"`
 	CursorStyle             string `json:"cursorStyle,omitempty"`
 	FormatOnSave            bool   `json:"formatOnSave"`
@@ -123,6 +131,7 @@ func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
 		TabSize:                 4,
 		InsertSpaces:            true,
+		DiffMode:                DiffModeSplit,
 		LineNumbers:             true,
 		InsertFinalNewline:      true,
 		GutterStyle:             "compact",
@@ -274,6 +283,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(BorderStyles, s.Editor.BorderStyle) {
 		s.Editor.BorderStyle = "default"
+	}
+	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
+		s.Editor.DiffMode = DiffModeSplit
 	}
 }
 

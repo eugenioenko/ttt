@@ -7,6 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/ui"
 )
 
 func (a *App) editorPathLang() (string, string) {
@@ -288,6 +289,42 @@ func (a *App) DiffPrevHunk() {
 	a.EditorGroup.GoToLine(target + 1) // GoToLine is 1-based
 }
 
+func (a *App) DiffToggleWrap() {
+	if surface := a.EditorGroup.ActiveDiffModeSurface(); surface != nil {
+		surface.SetWrapMode(surface.WrapMode().Toggle())
+	}
+}
+
+func (a *App) DiffToggleUnified() {
+	if surface := a.EditorGroup.ActiveDiffModeSurface(); surface != nil {
+		surface.SetMode(surface.Mode().Toggle())
+	}
+}
+
+func (a *App) DiffUseSplitMode() {
+	if surface := a.EditorGroup.ActiveDiffModeSurface(); surface != nil {
+		surface.SetMode(ui.DiffModeSplit)
+	}
+}
+
+func (a *App) DiffUseUnifiedMode() {
+	if surface := a.EditorGroup.ActiveDiffModeSurface(); surface != nil {
+		surface.SetMode(ui.DiffModeUnified)
+	}
+}
+
+func (a *App) CommitDetailCollapseAll() {
+	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+		detail.CollapseAllFiles()
+	}
+}
+
+func (a *App) CommitDetailExpandAll() {
+	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+		detail.ExpandAllFiles()
+	}
+}
+
 func registerEditorCommands(app *App) {
 	reg := app.Reg
 
@@ -301,6 +338,42 @@ func registerEditorCommands(app *App) {
 		ID: "diff.prevHunk", Title: "Git: Previous Changed Hunk",
 		Keywords: []string{"git", "diff", "hunk", "change", "navigate"},
 		Handler:  app.DiffPrevHunk,
+	})
+
+	reg.Register(command.Command{
+		ID: "diff.toggleWrap", Title: "Git: Toggle Diff Wrap",
+		Keywords: []string{"git", "diff", "wrap", "line"},
+		Handler:  app.DiffToggleWrap,
+	})
+
+	reg.Register(command.Command{
+		ID: "diff.toggleUnified", Title: "Git: Toggle Unified Diff",
+		Keywords: []string{"git", "diff", "unified", "split", "stack"},
+		Handler:  app.DiffToggleUnified,
+	})
+
+	reg.Register(command.Command{
+		ID: "diff.splitView", Title: "Git: Split Diff",
+		Keywords: []string{"git", "diff", "split", "side by side", "mode"},
+		Handler:  app.DiffUseSplitMode,
+	})
+
+	reg.Register(command.Command{
+		ID: "diff.unifiedView", Title: "Git: Unified Diff",
+		Keywords: []string{"git", "diff", "unified", "stack", "mode"},
+		Handler:  app.DiffUseUnifiedMode,
+	})
+
+	reg.Register(command.Command{
+		ID: "commitDetail.collapseAll", Title: "Git: Collapse All Commit Files",
+		Keywords: []string{"git", "commit", "detail", "collapse", "files"},
+		Handler:  app.CommitDetailCollapseAll,
+	})
+
+	reg.Register(command.Command{
+		ID: "commitDetail.expandAll", Title: "Git: Expand All Commit Files",
+		Keywords: []string{"git", "commit", "detail", "expand", "files"},
+		Handler:  app.CommitDetailExpandAll,
 	})
 
 	reg.Register(command.Command{

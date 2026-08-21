@@ -24,6 +24,15 @@ type Tab struct {
 	Pinned   bool
 }
 
+// TabBarControl is a compact, directly clickable mode choice rendered beside
+// the tabs. The marker is textual as well as styled so the active choice stays
+// inspectable in monochrome terminals and screenshots.
+type TabBarControl struct {
+	Label   string
+	Active  bool
+	OnClick func()
+}
+
 type TabBarWidget struct {
 	BaseWidget
 	Tabs             []Tab
@@ -37,7 +46,9 @@ type TabBarWidget struct {
 	OnPrevTab        func()
 	OnNextTab        func()
 	OnDoubleClick    func()
+	Controls         []TabBarControl
 	tabSpans         []tabSpan
+	controlSpans     []MenuItemSpan
 	renderArrowW     int // arrow-gutter width from the last Render, reused by HandleEvent
 	renderInnerRight int // right edge of the tab zone from the last Render, reused by HandleEvent
 	hasOverflowLeft  bool
@@ -73,6 +84,15 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 	}
 	label += " "
 	return label
+}
+
+func (t *TabBarWidget) controlsWidth() int {
+	width := 0
+	for _, control := range t.Controls {
+		// Surrounding spaces plus the radio marker and its following space.
+		width += textwidth.String(control.Label) + 4
+	}
+	return width
 }
 
 // drawTabLabel draws a tab label from x, advancing by each rune's display width
@@ -131,14 +151,20 @@ func (t *TabBarWidget) Render(surface Surface) {
 	if t.MoreButton != nil && w >= 5 {
 		moreW = 4
 	}
-	hasOverflow := pos > w-moreW
+	controlsW := t.controlsWidth()
+	// On narrow tab bars, keep the tab usable rather than squeezing it behind
+	// the mode control. The View menu and keyboard command remain available.
+	if controlsW > 0 && w-moreW-controlsW < 12 {
+		controlsW = 0
+	}
+	hasOverflow := pos > w-moreW-controlsW
 	arrowW := 0
 	if hasOverflow {
 		arrowW = 3 // " ◀ " or " ▶ "
 	}
 	innerLeft := arrowW
 	t.renderArrowW = arrowW
-	innerRight := w - moreW - arrowW
+	innerRight := w - moreW - controlsW - arrowW
 	t.renderInnerRight = innerRight
 	innerW := innerRight - innerLeft
 	if innerW < 1 {
@@ -239,6 +265,26 @@ func (t *TabBarWidget) Render(surface Surface) {
 		surface.SetCell(innerRight+1, 1, term.Cell{Ch: '▶', Style: term.StyleMuted})
 	}
 
+	t.controlSpans = nil
+	if controlsW > 0 {
+		x := w - moreW - controlsW
+		for _, control := range t.Controls {
+			start := x
+			style := term.StyleInactiveTab
+			marker := '○'
+			if control.Active {
+				style = term.StyleActiveTab
+				marker = '●'
+			}
+			label := " " + string(marker) + " " + control.Label + " "
+			for _, ch := range label {
+				surface.SetCell(x, 1, term.Cell{Ch: ch, Style: style})
+				x += textwidth.Rune(ch)
+			}
+			t.controlSpans = append(t.controlSpans, MenuItemSpan{Start: start, End: x})
+		}
+	}
+
 	if t.MoreButton != nil && w >= 5 {
 		r := t.GetRect()
 		t.MoreButton.SetRect(Rect{X: r.X + w - 4, Y: r.Y + 1, W: 3, H: 1})
@@ -321,6 +367,18 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	t.wasPressed = true
 	if !freshClick {
 		return EventConsumed
+	}
+
+	if my == r.Y+1 {
+		localX := mx - r.X
+		for i, span := range t.controlSpans {
+			if localX >= span.Start && localX < span.End {
+				if i < len(t.Controls) && t.Controls[i].OnClick != nil {
+					t.Controls[i].OnClick()
+				}
+				return EventConsumed
+			}
+		}
 	}
 
 	// Clicks in the reserved ◀/▶ arrow columns are consumed here so they never

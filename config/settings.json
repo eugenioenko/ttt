@@ -5,6 +5,8 @@
     "tabSize": 4,
     "insertSpaces": true,
     "wordWrap": false,
+    "diffMode": "split",
+    "diffWordWrap": false,
     "lineNumbers": true,
     "formatOnSave": false,
     "insertFinalNewline": true,

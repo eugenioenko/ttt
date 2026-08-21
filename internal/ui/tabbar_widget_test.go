@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -37,6 +38,36 @@ func TestTabBarRender(t *testing.T) {
 	// Row 2: baseline with gap
 	if grid[2][0].Ch != '┘' {
 		t.Fatalf("expected BottomRight at row 2 col 0, got '%c'", grid[2][0].Ch)
+	}
+}
+
+func TestTabBarModeControlsExposeAndSetCurrentChoice(t *testing.T) {
+	selected := ""
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{{Name: "change.diff", Active: true}})
+	tb.Controls = []TabBarControl{
+		{Label: "Split", Active: true, OnClick: func() { selected = "split" }},
+		{Label: "Unified", OnClick: func() { selected = "unified" }},
+	}
+	tb.SetRect(Rect{X: 0, Y: 0, W: 60, H: 3})
+	grid := makeGrid(60, 3)
+	tb.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 60, H: 3}))
+
+	var row strings.Builder
+	for _, cell := range grid[1] {
+		row.WriteRune(cell.Ch)
+	}
+	if !strings.Contains(row.String(), "● Split") || !strings.Contains(row.String(), "○ Unified") {
+		t.Fatalf("mode control does not expose active choice: %q", row.String())
+	}
+	if len(tb.controlSpans) != 2 {
+		t.Fatalf("mode control spans = %v, want two", tb.controlSpans)
+	}
+	span := tb.controlSpans[1]
+	x := span.Start + (span.End-span.Start)/2
+	tb.HandleEvent(tcell.NewEventMouse(x, 1, tcell.Button1, tcell.ModNone))
+	if selected != "unified" {
+		t.Fatalf("click selected %q, want unified", selected)
 	}
 }
 

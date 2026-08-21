@@ -67,18 +67,116 @@ func (fm *FocusManager) FocusNext() {
 	if len(fm.items) == 0 {
 		return
 	}
-	fm.setFocus((fm.focused + 1) % len(fm.items))
+	if next := fm.adjacentRendered(1); next >= 0 && next != fm.focused {
+		fm.setFocus(next)
+	}
 }
 
 func (fm *FocusManager) FocusPrev() {
 	if len(fm.items) == 0 {
 		return
 	}
-	next := fm.focused - 1
-	if next < 0 {
-		next = len(fm.items) - 1
+	if next := fm.adjacentRendered(-1); next >= 0 && next != fm.focused {
+		fm.setFocus(next)
 	}
-	fm.setFocus(next)
+}
+
+// hasRenderedGeometry uses layout rects rather than widget existence or a
+// visibility flag. Before the root has been laid out there is no geometry to
+// judge, so structural focus collection keeps its existing initialization
+// behavior. Once rendered, a zero-area child or one fully clipped by a layout
+// ancestor does not participate in keyboard traversal. Scroll-view clipping is
+// intentionally excluded so offscreen content remains eligible for
+// ScrollIntoView.
+func (fm *FocusManager) hasRenderedGeometry(item FocusableWidget) bool {
+	if fm.root == nil {
+		return true
+	}
+	rootRect := fm.root.GetRect()
+	if rootRect.W <= 0 || rootRect.H <= 0 {
+		return true
+	}
+	path := make([]Widget, 0, 4)
+	if !collectWidgetPath(fm.root, item, &path) {
+		return false
+	}
+	for _, widget := range path {
+		r := widget.GetRect()
+		if r.W <= 0 || r.H <= 0 {
+			return false
+		}
+	}
+	visible := item.GetRect()
+	for i := len(path) - 2; i >= 0; i-- {
+		if _, scrolls := path[i].(*ScrollViewWidget); scrolls {
+			// Content outside this viewport can become visible by scrolling;
+			// continue clipping from the viewport itself so an outer layout can
+			// still exclude the entire scroll view.
+			visible = path[i].GetRect()
+			continue
+		}
+		visible = intersectRects(visible, path[i].GetRect())
+		if visible.W <= 0 || visible.H <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func collectWidgetPath(widget, target Widget, path *[]Widget) bool {
+	*path = append(*path, widget)
+	if widget == target {
+		return true
+	}
+	if container, ok := widget.(ContainerWidget); ok {
+		for _, child := range container.WidgetChildren() {
+			if collectWidgetPath(child, target, path) {
+				return true
+			}
+		}
+	}
+	*path = (*path)[:len(*path)-1]
+	return false
+}
+
+func (fm *FocusManager) renderedItemCount() int {
+	count := 0
+	for _, item := range fm.items {
+		if fm.hasRenderedGeometry(item) {
+			count++
+		}
+	}
+	return count
+}
+
+func (fm *FocusManager) adjacentRendered(step int) int {
+	if len(fm.items) == 0 {
+		return -1
+	}
+	index := fm.focused
+	if index < 0 || index >= len(fm.items) {
+		if step > 0 {
+			index = -1
+		} else {
+			index = 0
+		}
+	}
+	for range len(fm.items) {
+		index = (index + step + len(fm.items)) % len(fm.items)
+		if fm.hasRenderedGeometry(fm.items[index]) {
+			return index
+		}
+	}
+	return -1
+}
+
+func (fm *FocusManager) ensureFocusedRendered() {
+	if fm.focused >= 0 && fm.focused < len(fm.items) && fm.hasRenderedGeometry(fm.items[fm.focused]) {
+		return
+	}
+	if next := fm.adjacentRendered(1); next >= 0 {
+		fm.setFocus(next)
+	}
 }
 
 // Items are collected pre-order, so a click inside a focusable container (a
@@ -209,14 +307,15 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 	}
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
-		if tev.Key() == tcell.KeyTab && len(fm.items) > 1 {
+		if tev.Key() == tcell.KeyTab && fm.renderedItemCount() > 1 {
 			fm.FocusNext()
 			return EventConsumed
 		}
-		if tev.Key() == tcell.KeyBacktab && len(fm.items) > 1 {
+		if tev.Key() == tcell.KeyBacktab && fm.renderedItemCount() > 1 {
 			fm.FocusPrev()
 			return EventConsumed
 		}
+		fm.ensureFocusedRendered()
 		if fw := fm.Focused(); fw != nil {
 			return fw.HandleEvent(ev)
 		}

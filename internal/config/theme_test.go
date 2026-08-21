@@ -2,6 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config/themes"
@@ -67,12 +71,102 @@ func TestBundledThemesLoad(t *testing.T) {
 			}
 			th.ResolveColors()
 
+			var explicit ThemeConfig
+			if err := json.Unmarshal(data, &explicit); err != nil {
+				t.Fatalf("failed to inspect %s: %v", name, err)
+			}
+			if explicit.Diff.Collapsed.Fg == "" || explicit.Diff.Collapsed.Bg == "" {
+				t.Errorf("%s: diff.collapsed must define both fg and bg", name)
+			}
+			if !explicit.Diff.Collapsed.Bold {
+				t.Errorf("%s: diff.collapsed must deliberately enable bold", name)
+			}
+			if explicit.CommitMessage.Fg == "" || explicit.CommitMessage.Bg == "" {
+				t.Errorf("%s: commitMessage must define both fg and bg", name)
+			}
+			if strings.HasPrefix(name, "high-contrast-") && !explicit.CommitMessage.Bold {
+				t.Errorf("%s: high-contrast commitMessage must use a strong bold treatment", name)
+			}
+
 			// After resolving, verify critical fields are non-empty
 			if th.Default.Fg == "" {
 				t.Errorf("%s: Default.Fg is empty after resolve", name)
 			}
 		})
 	}
+}
+
+func TestBundledDiffFamilyTextContrast(t *testing.T) {
+	const minimumContrast = 4.5
+	entries, err := themes.FS.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read bundled themes: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		data, err := themes.FS.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		var theme ThemeConfig
+		if err := json.Unmarshal(data, &theme); err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		styles := []struct {
+			name  string
+			style StyleDef
+		}{
+			{name: "commitMessage", style: theme.CommitMessage},
+			{name: "diff.collapsed", style: theme.Diff.Collapsed},
+		}
+		for _, candidate := range styles {
+			styleName, style := candidate.name, candidate.style
+			t.Run(name+"/"+styleName, func(t *testing.T) {
+				ratio, err := styleContrastRatio(style)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("%s %s contrast: %.2f:1", name, styleName, ratio)
+				if ratio < minimumContrast {
+					t.Errorf("contrast %.2f:1 is below %.1f:1 (fg %s, bg %s)", ratio, minimumContrast, style.Fg, style.Bg)
+				}
+			})
+		}
+	}
+}
+
+func styleContrastRatio(style StyleDef) (float64, error) {
+	foreground, err := relativeLuminance(style.Fg)
+	if err != nil {
+		return 0, fmt.Errorf("foreground %q: %w", style.Fg, err)
+	}
+	background, err := relativeLuminance(style.Bg)
+	if err != nil {
+		return 0, fmt.Errorf("background %q: %w", style.Bg, err)
+	}
+	lighter, darker := max(foreground, background), min(foreground, background)
+	return (lighter + 0.05) / (darker + 0.05), nil
+}
+
+func relativeLuminance(color string) (float64, error) {
+	if len(color) != 7 || color[0] != '#' {
+		return 0, fmt.Errorf("want #RRGGBB")
+	}
+	value, err := strconv.ParseUint(color[1:], 16, 24)
+	if err != nil {
+		return 0, fmt.Errorf("want #RRGGBB: %w", err)
+	}
+	linear := func(channel uint64) float64 {
+		srgb := float64(channel) / 255
+		if srgb <= 0.04045 {
+			return srgb / 12.92
+		}
+		return math.Pow((srgb+0.055)/1.055, 2.4)
+	}
+	red := linear((value >> 16) & 0xff)
+	green := linear((value >> 8) & 0xff)
+	blue := linear(value & 0xff)
+	return 0.2126*red + 0.7152*green + 0.0722*blue, nil
 }
 
 func TestResolveColors(t *testing.T) {

@@ -1209,10 +1209,11 @@ Used in `actions` (sidebar header menu), `node_menu` (tree/list context menu), a
 | `label`     | string  | yes*     | Display text of the menu item.          |
 | `command`   | string  | yes*     | Command identifier passed to the callback. |
 | `separator` | boolean | no       | If `true`, renders as a separator line instead of an item. When `true`, `label` and `command` are ignored. |
+| `checked`   | boolean | no       | If provided, reserves a check indicator: `true` shows a checkmark and `false` shows an empty slot. Omit it to keep the indicator and its spacing hidden. |
 
 ```lua
 {
-  { label = "Start", command = "start" },
+  { label = "Start", command = "start", checked = true },
   { label = "Stop", command = "stop" },
   { separator = true },
   { label = "Remove", command = "remove" },

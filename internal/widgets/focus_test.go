@@ -80,6 +80,52 @@ func TestFocusManagerTabCycle(t *testing.T) {
 	}
 }
 
+func TestFocusManagerSkipsFocusableChildWithNoRenderedGeometry(t *testing.T) {
+	first := NewButtonWidget(ButtonConfig{Label: "First"})
+	second := NewButtonWidget(ButtonConfig{Label: "Second"})
+	clipped := NewButtonWidget(ButtonConfig{Label: "Clipped"})
+	stack := NewVStackWidget(first, second, clipped)
+
+	fm := NewFocusManager()
+	fm.SetActive(true)
+	fm.Collect(stack)
+	renderWidget(stack, 0, 0, 20, 3)
+	renderWidget(stack, 0, 0, 20, 2)
+	if r := clipped.GetRect(); r.W <= 0 || r.H <= 0 || r.Y < stack.GetRect().H {
+		t.Fatalf("clipped child rect = %+v, want stale positive geometry outside shrunken stack %+v", r, stack.GetRect())
+	}
+
+	fm.HandleEvent(tabEvent())
+	if fm.Focused() != Widget(second) {
+		t.Fatalf("first Tab focus = %T, want second visible button", fm.Focused())
+	}
+	fm.HandleEvent(tabEvent())
+	if fm.Focused() != Widget(first) {
+		t.Fatalf("second Tab focus = %T, want wrap past clipped button", fm.Focused())
+	}
+}
+
+func TestFocusManagerKeepsOffscreenScrollContentEligible(t *testing.T) {
+	first := NewButtonWidget(ButtonConfig{Label: "First"})
+	second := NewButtonWidget(ButtonConfig{Label: "Second"})
+	content := NewVStackWidget(first, second)
+	scroll := NewScrollViewWidget(content)
+
+	fm := NewFocusManager()
+	fm.SetActive(true)
+	fm.Collect(scroll)
+	renderWidget(scroll, 0, 0, 20, 1)
+	if VisibleRect(scroll, second) != (Rect{}) {
+		t.Fatalf("second button should begin outside the scroll viewport, got %+v", VisibleRect(scroll, second))
+	}
+
+	fm.HandleEvent(tabEvent())
+	fm.HandleEvent(tabEvent())
+	if fm.Focused() != Widget(second) {
+		t.Fatalf("focus = %T, want offscreen button retained for scroll-into-view", fm.Focused())
+	}
+}
+
 func TestFocusManagerShiftTab(t *testing.T) {
 	b1 := NewButtonWidget(ButtonConfig{Label: "&Run"})
 	b2 := NewButtonWidget(ButtonConfig{Label: "&Stop"})

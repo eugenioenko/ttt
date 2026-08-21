@@ -80,6 +80,10 @@ Below is a complete theme file showing every configurable section. All color val
     "fg": "#75715e"
   },
   "statusBar": {},
+  "commitMessage": {
+    "fg": "#f8f8f2",
+    "bg": "#34352d"
+  },
   "tabs": {
     "active": {
       "fg": "#f8f8f2",
@@ -149,6 +153,11 @@ Below is a complete theme file showing every configurable section. All color val
     },
     "modified": {
       "bg": "#2e2e1a"
+    },
+    "collapsed": {
+      "fg": "#272822",
+      "bg": "#66d9ef",
+      "bold": true
     }
   },
   "scrollbar": {
@@ -234,12 +243,13 @@ Below is a complete theme file showing every configurable section. All color val
 | `success`, `danger`, `warning` | Semantic colors used for status indicators and messages |
 | `border` | Color for UI borders and dividers |
 | `statusBar` | Status bar at the bottom of the editor |
+| `commitMessage` | Commit message block in the commit detail view |
 | `tabs` | Active and inactive editor tab colors |
 | `sidebar` | File explorer sidebar: section headers, items, and selected item |
 | `dialog` | Command palette and dialog boxes: input field, items, selection, muted text |
 | `editor` | Editor pane: line numbers, active line highlight, selection, search matches, and bracket pair colors. `bracketColors` accepts terminal color names (`yellow`, `magenta`, `cyan`, `red`, `green`, `blue`, `black`, `white`, `brightRed`, `brightGreen`, `brightYellow`, `brightBlue`, `brightMagenta`, `brightCyan`, `brightBlack`, `brightWhite`), syntax style names (`keyword`, `function`, `type`, `comment`, `string`, `number`, `operator`, `builtin`, `variable`, `punctuation`, `tag`, `attribute`), or hex colors (`#rrggbb`). Up to 6 colors cycle by nesting depth. |
 | `menu` | Menu bar dropdown items and active/hovered item |
-| `diff` | Diff view background colors for added, deleted, and modified lines |
+| `diff` | Diff view colors for added, deleted, and modified lines, plus `collapsed` region separators |
 | `scrollbar` | Scrollbar thumb (`fg`) and track (`bg`) colors |
 | `syntax` | Syntax highlighting colors for language tokens |
 | `terminal` | ANSI color palette for the integrated terminal (16 colors) |

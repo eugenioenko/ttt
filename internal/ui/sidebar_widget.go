@@ -9,8 +9,9 @@ import (
 type SidebarWidget struct {
 	BaseWidget
 	TabbedPanel
-	Visible bool
-	Borders *term.BorderSet
+	Visible       bool
+	Borders       *term.BorderSet
+	capturedChild Widget
 }
 
 func NewSidebarWidget() *SidebarWidget {
@@ -46,6 +47,14 @@ func (s *SidebarWidget) Render(surface Surface) {
 }
 
 func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
+	if s.capturedChild != nil {
+		result := s.capturedChild.HandleEvent(ev)
+		if tev, ok := ev.(*tcell.EventMouse); ok && tev.Buttons() == tcell.ButtonNone {
+			s.capturedChild = nil
+		}
+		return result
+	}
+
 	if tev, ok := ev.(*tcell.EventMouse); ok {
 		_, my := tev.Position()
 		r := s.GetRect()
@@ -58,7 +67,11 @@ func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 	active := s.ActiveWidget()
 	if active != nil {
-		return active.HandleEvent(ev)
+		result := active.HandleEvent(ev)
+		if result == EventCaptured {
+			s.capturedChild = active
+		}
+		return result
 	}
 	return EventIgnored
 }

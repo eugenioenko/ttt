@@ -4,7 +4,15 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
 )
+
+func configuredDiffMode(mode string) ui.DiffMode {
+	if mode == config.DiffModeUnified {
+		return ui.DiffModeUnified
+	}
+	return ui.DiffModeSplit
+}
 
 func (a *App) ReloadSettings() {
 	s := config.LoadSettings()
@@ -33,6 +41,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
+	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), s.Editor.DiffWordWrap)
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
 	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
 	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)

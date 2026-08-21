@@ -77,6 +77,7 @@ type DiffStyles struct {
 	Added          StyleDef `json:"added"`
 	Deleted        StyleDef `json:"deleted"`
 	Modified       StyleDef `json:"modified"`
+	Collapsed      StyleDef `json:"collapsed"`
 	GutterAdded    StyleDef `json:"gutterAdded,omitempty"`
 	GutterDeleted  StyleDef `json:"gutterDeleted,omitempty"`
 	GutterModified StyleDef `json:"gutterModified,omitempty"`
@@ -194,27 +195,28 @@ type HoverStyles struct {
 }
 
 type ThemeConfig struct {
-	Default      StyleDef       `json:"default"`
-	Muted        StyleDef       `json:"muted"`
-	Success      StyleDef       `json:"success"`
-	Danger       StyleDef       `json:"danger"`
-	Warning      StyleDef       `json:"warning"`
-	StatusBar    StyleDef       `json:"statusBar"`
-	Tabs         TabStyles      `json:"tabs"`
-	Sidebar      SidebarStyles  `json:"sidebar"`
-	Dialog       DialogStyles   `json:"dialog"`
-	Editor       EditorStyles   `json:"editor"`
-	Menu         MenuStyles     `json:"menu"`
-	Input        InputStyles    `json:"input"`
-	Button       ButtonStyles   `json:"button"`
-	Hover        HoverStyles    `json:"hover"`
-	Border       StyleDef       `json:"border"`
-	BorderActive StyleDef       `json:"borderActive"`
-	Diff         DiffStyles     `json:"diff"`
-	Scrollbar    StyleDef       `json:"scrollbar"`
-	Syntax       SyntaxStyles   `json:"syntax"`
-	Borders      BorderChars    `json:"borders"`
-	Terminal     TerminalColors `json:"terminal,omitempty"`
+	Default       StyleDef       `json:"default"`
+	Muted         StyleDef       `json:"muted"`
+	Success       StyleDef       `json:"success"`
+	Danger        StyleDef       `json:"danger"`
+	Warning       StyleDef       `json:"warning"`
+	StatusBar     StyleDef       `json:"statusBar"`
+	CommitMessage StyleDef       `json:"commitMessage"`
+	Tabs          TabStyles      `json:"tabs"`
+	Sidebar       SidebarStyles  `json:"sidebar"`
+	Dialog        DialogStyles   `json:"dialog"`
+	Editor        EditorStyles   `json:"editor"`
+	Menu          MenuStyles     `json:"menu"`
+	Input         InputStyles    `json:"input"`
+	Button        ButtonStyles   `json:"button"`
+	Hover         HoverStyles    `json:"hover"`
+	Border        StyleDef       `json:"border"`
+	BorderActive  StyleDef       `json:"borderActive"`
+	Diff          DiffStyles     `json:"diff"`
+	Scrollbar     StyleDef       `json:"scrollbar"`
+	Syntax        SyntaxStyles   `json:"syntax"`
+	Borders       BorderChars    `json:"borders"`
+	Terminal      TerminalColors `json:"terminal,omitempty"`
 }
 
 func DefaultTheme() ThemeConfig {
@@ -226,7 +228,8 @@ func DefaultTheme() ThemeConfig {
 		Menu: MenuStyles{
 			Active: StyleDef{Fg: "#ffffff", Bg: "#505050", Bold: true},
 		},
-		StatusBar: StyleDef{},
+		StatusBar:     StyleDef{},
+		CommitMessage: StyleDef{Fg: "#fafafa", Bg: "#2a2f3a"},
 
 		Tabs: TabStyles{
 			Active:   StyleDef{Fg: "#ffffff", Bold: true},
@@ -243,6 +246,9 @@ func DefaultTheme() ThemeConfig {
 		},
 
 		Border: StyleDef{Fg: "#555555"},
+		Diff: DiffStyles{
+			Collapsed: StyleDef{Fg: "#1f1f1f", Bg: "#8ab4d8", Bold: true},
+		},
 
 		Editor: EditorStyles{
 			ActiveLine:    StyleDef{Bg: "#282828"},

@@ -16,6 +16,12 @@ func TestDefaultSettings(t *testing.T) {
 	if !s.Editor.InsertSpaces {
 		t.Fatal("expected InsertSpaces true")
 	}
+	if s.Editor.DiffMode != DiffModeSplit {
+		t.Fatalf("expected DiffMode %q, got %q", DiffModeSplit, s.Editor.DiffMode)
+	}
+	if s.Editor.DiffWordWrap {
+		t.Fatal("expected DiffWordWrap false")
+	}
 }
 
 func TestSettingsPartialJSON(t *testing.T) {
@@ -65,6 +71,24 @@ func TestNormalizeSettingsEmptyGutterStyle(t *testing.T) {
 	normalizeSettings(&s)
 	if s.Editor.GutterStyle != "compact" {
 		t.Errorf("expected empty GutterStyle to become 'compact', got %q", s.Editor.GutterStyle)
+	}
+}
+
+func TestNormalizeSettingsDiffMode(t *testing.T) {
+	for _, mode := range DiffModes {
+		s := DefaultSettings()
+		s.Editor.DiffMode = mode
+		normalizeSettings(&s)
+		if s.Editor.DiffMode != mode {
+			t.Errorf("valid diffMode %q normalized to %q", mode, s.Editor.DiffMode)
+		}
+	}
+
+	s := DefaultSettings()
+	s.Editor.DiffMode = "sideways"
+	normalizeSettings(&s)
+	if s.Editor.DiffMode != DiffModeSplit {
+		t.Errorf("invalid diffMode normalized to %q, want %q", s.Editor.DiffMode, DiffModeSplit)
 	}
 }
 

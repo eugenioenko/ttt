@@ -22,6 +22,7 @@ let args = [];
 let snapCount = 0;
 let tmpDir = "";
 let size = "120x40";
+let extraEnv = {};
 
 export function start(...startArgs) {
   commands = [];
@@ -29,9 +30,17 @@ export function start(...startArgs) {
   size = "120x40";
   tmpDir = mkdtempSync(join(tmpdir(), "ttt-bb-"));
   args = [];
+  extraEnv = {};
   for (const a of startArgs) {
     args.push(a);
   }
+}
+
+// Add environment variables for this run. Reset by start(). Used to put a
+// wrapper ahead of a real binary on PATH, so a test can watch what the editor
+// does while a slow subprocess is still running.
+export function setEnv(vars) {
+  extraEnv = { ...extraEnv, ...vars };
 }
 
 // Override the terminal size for this run (default 120x40). Reset by start().
@@ -42,6 +51,11 @@ export function setSize(w, h) {
 // Simulate a mouse click at screen coordinates (col x, row y).
 export function click(x, y) {
   commands.push(`click ${x} ${y}`);
+}
+
+// Drag from one screen coordinate to another while holding the primary button.
+export function drag(x1, y1, x2, y2) {
+  commands.push(`drag ${x1} ${y1} ${x2} ${y2}`);
 }
 
 // Simulate a right-click (opens context menus) at screen coordinates.
@@ -128,7 +142,7 @@ export function run(timeout = 15000) {
       timeout,
       stdio: "pipe",
       // Isolate from the real ~/.config/ttt — settings toggles persist and race across test files.
-      env: { ...process.env, TTT_CONFIG_DIR: join(tmpDir, "config") },
+      env: { ...process.env, TTT_CONFIG_DIR: join(tmpDir, "config"), ...extraEnv },
     });
   } catch (err) {
     if (err.status !== null && err.status !== 0 && err.status !== undefined) {

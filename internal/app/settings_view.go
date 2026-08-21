@@ -66,6 +66,12 @@ func settingsCategories() []settingsCategory {
 			{Label: "Word wrap", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.WordWrap },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.WordWrap = v }},
+			{Label: "Diff mode", Kind: settingEnum, Options: diffModeItems,
+				GetString: func(s *config.Settings) string { return s.Editor.DiffMode },
+				SetString: func(s *config.Settings, v string) { s.Editor.DiffMode = v }},
+			{Label: "Diff word wrap", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.DiffWordWrap },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffWordWrap = v }},
 			{Label: "Line numbers", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.LineNumbers },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.LineNumbers = v }},
@@ -160,6 +166,13 @@ func settingsCategories() []settingsCategory {
 				GetBool: func(s *config.Settings) bool { return s.DebugMode },
 				SetBool: func(s *config.Settings, v bool) { s.DebugMode = v }},
 		}},
+	}
+}
+
+func diffModeItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.DiffModeSplit, Label: "Split"},
+		{ID: config.DiffModeUnified, Label: "Unified"},
 	}
 }
 

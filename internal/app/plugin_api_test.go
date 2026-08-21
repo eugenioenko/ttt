@@ -5,7 +5,31 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
+
+func TestContextMenuItemFromWidgetEntryPreservesOptionalCheckedState(t *testing.T) {
+	checked, unchecked := true, false
+	tests := []struct {
+		name    string
+		checked *bool
+		want    int
+	}{
+		{name: "omitted", want: 0},
+		{name: "unchecked", checked: &unchecked, want: ui.MenuUnchecked},
+		{name: "checked", checked: &checked, want: ui.MenuChecked},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			item := contextMenuItemFromWidgetEntry(widgets.MenuEntry{Label: "Mode", Command: "mode", Checked: test.checked})
+			if item.Checked != test.want {
+				t.Fatalf("checked indicator = %d, want %d", item.Checked, test.want)
+			}
+		})
+	}
+}
 
 func TestSetPathNilDeletesKey(t *testing.T) {
 	m := map[string]any{

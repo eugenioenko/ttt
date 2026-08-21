@@ -22,6 +22,10 @@
     "fg": "#abb2bf",
     "bg": "#1e2227"
   },
+  "commitMessage": {
+    "fg": "#c8ccd4",
+    "bg": "#2e3440"
+  },
   "tabs": {
     "active": {
       "fg": "#e2e6ed",
@@ -139,6 +143,11 @@
     },
     "modified": {
       "bg": "#2e2e1e"
+    },
+    "collapsed": {
+      "fg": "#23272e",
+      "bg": "#7ab0df",
+      "bold": true
     }
   },
   "scrollbar": {

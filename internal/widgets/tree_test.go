@@ -187,6 +187,44 @@ func TestTreeRenderExpandableNoChildren(t *testing.T) {
 	}
 }
 
+func TestTreeActivateExpandableSeparatesChevronFromActivation(t *testing.T) {
+	var expanded, activated int
+	node := &TreeNode{ID: "commit", Label: "Commit subject", Expandable: true}
+	tree := NewTreeWidget(TreeConfig{
+		Items:              []*TreeNode{node},
+		ActivateExpandable: true,
+		OnExpand: func(*TreeNode) {
+			expanded++
+		},
+		OnCommand: func(command string, got *TreeNode) {
+			if command == "activate" && got == node {
+				activated++
+			}
+		},
+	})
+	tree.SetRect(Rect{X: 4, Y: 3, W: 30, H: 4})
+	tree.Render(newTestSurface(30, 4))
+
+	// The disclosure control owns expansion and uses the screen position stored
+	// during Render, including the tree's non-zero origin.
+	tree.HandleEvent(mouseClick(4, 3))
+	if !node.Expanded || expanded != 1 || activated != 0 {
+		t.Fatalf("chevron click: expanded=%v onExpand=%d activated=%d", node.Expanded, expanded, activated)
+	}
+	tree.HandleEvent(mouseClick(4, 3))
+	if node.Expanded || expanded != 1 || activated != 0 {
+		t.Fatalf("second chevron click: expanded=%v onExpand=%d activated=%d", node.Expanded, expanded, activated)
+	}
+
+	// The label and Enter activate the same expandable row without changing its
+	// disclosure state.
+	tree.HandleEvent(mouseClick(8, 3))
+	tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if node.Expanded || expanded != 1 || activated != 2 {
+		t.Fatalf("activation: expanded=%v onExpand=%d activated=%d", node.Expanded, expanded, activated)
+	}
+}
+
 func TestTreeRenderEllipsisTruncation(t *testing.T) {
 	tree := NewTreeWidget(TreeConfig{
 		Items: []*TreeNode{

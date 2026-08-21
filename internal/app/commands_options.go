@@ -23,6 +23,21 @@ func (a *App) ToggleWordWrap() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) UseSplitDiffByDefault() {
+	a.Settings.Editor.DiffMode = config.DiffModeSplit
+	a.SaveAndApplySettings()
+}
+
+func (a *App) UseUnifiedDiffByDefault() {
+	a.Settings.Editor.DiffMode = config.DiffModeUnified
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleDiffWordWrapDefault() {
+	a.Settings.Editor.DiffWordWrap = !a.Settings.Editor.DiffWordWrap
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleAutoDedent() {
 	enabled := !a.Settings.Editor.IsAutoDedentEnabled()
 	a.Settings.Editor.AutoDedent = &enabled
@@ -166,6 +181,19 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		wordWrapChecked = ui.MenuChecked
 	}
 
+	splitDiffChecked := ui.MenuUnchecked
+	unifiedDiffChecked := ui.MenuUnchecked
+	if a.Settings.Editor.DiffMode == config.DiffModeUnified {
+		unifiedDiffChecked = ui.MenuChecked
+	} else {
+		splitDiffChecked = ui.MenuChecked
+	}
+
+	diffWordWrapChecked := ui.MenuUnchecked
+	if a.Settings.Editor.DiffWordWrap {
+		diffWordWrapChecked = ui.MenuChecked
+	}
+
 	bracketColorChecked := ui.MenuUnchecked
 	if a.Settings.Editor.BracketPairColorization {
 		bracketColorChecked = ui.MenuChecked
@@ -204,6 +232,9 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
+		{Label: "Split Diff", Command: "options.useSplitDiff", Checked: splitDiffChecked},
+		{Label: "Unified Diff", Command: "options.useUnifiedDiff", Checked: unifiedDiffChecked},
+		{Label: "Diff Word Wrap", Command: "options.toggleDiffWordWrap", Checked: diffWordWrapChecked},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
@@ -242,6 +273,24 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleWordWrap", Title: "Toggle Word Wrap",
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleWordWrap,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useSplitDiff", Title: "Use Split Diff by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "split", "default"},
+		Handler:  app.UseSplitDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useUnifiedDiff", Title: "Use Unified Diff by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "unified", "default"},
+		Handler:  app.UseUnifiedDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffWordWrap", Title: "Toggle Diff Word Wrap Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "wrap", "default"},
+		Handler:  app.ToggleDiffWordWrapDefault,
 	})
 
 	reg.Register(command.Command{

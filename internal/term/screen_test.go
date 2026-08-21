@@ -209,6 +209,7 @@ func TestStyleConstants(t *testing.T) {
 	styles := map[string]Style{
 		"StyleDefault":        StyleDefault,
 		"StyleStatusBar":      StyleStatusBar,
+		"StyleCommitMessage":  StyleCommitMessage,
 		"StyleActiveTab":      StyleActiveTab,
 		"StyleInactiveTab":    StyleInactiveTab,
 		"StyleSelection":      StyleSelection,
@@ -218,6 +219,7 @@ func TestStyleConstants(t *testing.T) {
 		"StyleDiffAdded":      StyleDiffAdded,
 		"StyleDiffDeleted":    StyleDiffDeleted,
 		"StyleDiffModified":   StyleDiffModified,
+		"StyleDiffCollapsed":  StyleDiffCollapsed,
 		"StyleSyntaxComment":  StyleSyntaxComment,
 		"StyleSyntaxString":   StyleSyntaxString,
 		"StyleSyntaxKeyword":  StyleSyntaxKeyword,

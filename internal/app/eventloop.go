@@ -14,6 +14,12 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+// BranchNameResult carries a finished `git rev-parse` for the status bar.
+type BranchNameResult struct {
+	Gen  int
+	Name string
+}
+
 type BlameResult struct {
 	Gen  int
 	Info *git.BlameInfo
@@ -41,7 +47,26 @@ func RunEventLoop(
 	lastCursorFile := ""
 	lastBranchDir := app.Workspace.Primary()
 	blameGen := 0
-	app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: git.BranchName(lastBranchDir)})
+	branchGen := 0
+
+	// git rev-parse is a subprocess like any other, so reading the branch name
+	// from here would block the loop that is about to draw the status bar.
+	setBranch := func(dir string) {
+		// Bump the generation first, so that clearing the segment — which is a
+		// desired state like any other — also invalidates a lookup still
+		// running. Returning early without it left a stale branch name landing
+		// on a file that belongs to no repository at all.
+		branchGen++
+		gen := branchGen
+		app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: ""})
+		if dir == "" {
+			return
+		}
+		go func() {
+			screen.PostEvent(tcell.NewEventInterrupt(&BranchNameResult{Gen: gen, Name: git.BranchName(dir)}))
+		}()
+	}
+	setBranch(lastBranchDir)
 
 	syncStatus := func() {
 		line, col := app.EditorGroup.ActiveCursor()
@@ -95,11 +120,7 @@ func RunEventLoop(
 
 		if repoDir != lastBranchDir {
 			lastBranchDir = repoDir
-			if repoDir != "" {
-				app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: git.BranchName(repoDir)})
-			} else {
-				app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: ""})
-			}
+			setBranch(repoDir)
 		}
 
 		// Trigger git gutter computation when switching to a new file
@@ -261,6 +282,10 @@ func RunEventLoop(
 				if v != "" {
 					closeTerminal(v)
 				}
+			case *BranchNameResult:
+				if v.Gen == branchGen {
+					app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: v.Name})
+				}
 			case *BlameResult:
 				if v.Gen == blameGen && v.Info != nil {
 					app.Status.SetSegment(view.StatusSegment{ID: "blame", Side: "left", Priority: 200, Text: fmt.Sprintf("%s, %s",
@@ -347,6 +372,16 @@ func RunEventLoop(
 				app.SyncLanguageSegment()
 			case *RepoOpResult:
 				app.HandleRepoOpResult(v)
+			case *ChangesStatusResult:
+				app.Changes.ApplyStatus(v)
+			case *CommitLogResult:
+				app.Changes.ApplyCommitLog(v)
+			case *CommitFilesResult:
+				app.Changes.ApplyCommitFiles(v)
+			case *CommitDetailResult:
+				app.ApplyCommitDetail(v)
+			case *DiffOpenResult:
+				app.ApplyDiffOpen(v)
 			case *FileChangedResult:
 				app.HandleFileChanged(v.Path)
 			case *ui.SearchBatch:

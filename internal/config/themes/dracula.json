@@ -21,6 +21,10 @@
   "statusBar": {
     "fg": "#f8f8f2"
   },
+  "commitMessage": {
+    "fg": "#f8f8f2",
+    "bg": "#343746"
+  },
   "tabs": {
     "active": {
       "fg": "#f8f8f2",
@@ -120,6 +124,11 @@
     },
     "modified": {
       "bg": "#3a3a1e"
+    },
+    "collapsed": {
+      "fg": "#f8f8f2",
+      "bg": "#555972",
+      "bold": true
     }
   },
   "scrollbar": {

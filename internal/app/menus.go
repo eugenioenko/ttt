@@ -179,7 +179,38 @@ func openContextMenu(app *App, items []ui.ContextMenuItem, x, y int) {
 	app.Root.SetFocus(menu)
 }
 
-const menuOptionsIndex = 4
+const (
+	menuViewIndex    = 3
+	menuOptionsIndex = 4
+)
+
+// BuildViewMenu adds per-surface presentation overrides only while a diff is
+// active. Options holds the persisted defaults used by newly opened diffs;
+// these View controls never rewrite those settings.
+func (a *App) BuildViewMenu() []ui.ContextMenuItem {
+	items := append([]ui.ContextMenuItem(nil), menuBarMenus[menuViewIndex]...)
+	surface := a.EditorGroup.ActiveDiffModeSurface()
+	if surface == nil {
+		return items
+	}
+	splitChecked := ui.MenuUnchecked
+	unifiedChecked := ui.MenuUnchecked
+	if surface.Mode() == ui.DiffModeUnified {
+		unifiedChecked = ui.MenuChecked
+	} else {
+		splitChecked = ui.MenuChecked
+	}
+	wrapChecked := ui.MenuUnchecked
+	if surface.WrapMode() == ui.DiffWrapOn {
+		wrapChecked = ui.MenuChecked
+	}
+	return append(items,
+		ui.MenuSep(),
+		ui.ContextMenuItem{Label: "Diff: Split", Command: "diff.splitView", Checked: splitChecked},
+		ui.ContextMenuItem{Label: "Diff: Unified", Command: "diff.unifiedView", Checked: unifiedChecked},
+		ui.ContextMenuItem{Label: "Diff: Wrap Lines", Command: "diff.toggleWrap", Checked: wrapChecked},
+	)
+}
 
 func openMenuBarDropdown(app *App, index int) {
 	if index < 0 || index >= len(menuBarMenus) {
@@ -196,7 +227,9 @@ func openMenuBarDropdown(app *App, index int) {
 		anchorY = 0
 	}
 	items := menuBarMenus[index]
-	if index == menuOptionsIndex {
+	if index == menuViewIndex {
+		items = app.BuildViewMenu()
+	} else if index == menuOptionsIndex {
 		items = app.BuildOptionsMenu()
 	}
 	menu := ui.NewContextMenuWidget(resolveShortcuts(reg, items), anchorX, anchorY)

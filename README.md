@@ -178,8 +178,13 @@ Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 - **`-` button** on the "Staged" section header — unstage all files in that section
 
 **Committing:**
-- Inline commit message input below the file list (Tab from the tree to focus it)
+- Inline commit message input above the file list (Tab from the tree to focus it)
 - Type a message and press Enter to commit all staged files
+
+**Commit history:**
+- Expand a commit to browse the files it changed; select a file to open its diff
+- Select the commit label to open its full message and all file diffs in a detail view
+- Collapse individual files or all files in the commit detail view
 
 **Remote operations:**
 - **Pull**, **Push**, **Sync** (pull then push) from the sidebar actions button
@@ -187,6 +192,7 @@ Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 
 **Diff view:**
 - Select a changed file to open a diff with syntax highlighting layered on diff backgrounds
+- Switch between unified and split modes, with optional line wrapping
 - Untracked files open directly in the editor
 
 **Multi-root:**
@@ -200,6 +206,7 @@ Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 - **Ctrl+K P** — opens quick file open (searches all files across workspace folders)
 - Type `>` in quick-open mode to switch to command mode
 - Delete the `>` in command mode to switch to file mode
+- Type `?` to browse searchable help for panels, navigation, and key chords
 - Menu shortcuts resolve dynamically from your keybindings
 
 ### Bottom Panel
@@ -366,6 +373,7 @@ TTT supports fully customizable themes via JSON files. You can change every colo
   "warning": { "fg": "#e2c08d" },
   "border":  { "fg": "#555555" },
   "statusBar": {},
+  "commitMessage": { "fg": "#fafafa", "bg": "#2a2f3a" },
   "tabs": {
     "active":   { "fg": "#ffffff", "bold": true },
     "inactive": { "fg": "#999999" }
@@ -395,7 +403,8 @@ TTT supports fully customizable themes via JSON files. You can change every colo
   "diff": {
     "added":    { "bg": "#1e2e1e" },
     "deleted":  { "bg": "#2e1e1e" },
-    "modified": { "bg": "#2e2e1e" }
+    "modified": { "bg": "#2e2e1e" },
+    "collapsed": { "fg": "#1f1f1f", "bg": "#8ab4d8", "bold": true }
   },
   "scrollbar": { "fg": "#999999", "bg": "#555555" },
   "syntax": {

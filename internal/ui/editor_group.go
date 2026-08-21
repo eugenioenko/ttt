@@ -59,9 +59,9 @@ type editorTab struct {
 	Folds       *fold.State
 	TabSize     int
 	UseTabs     bool
-	Content Widget
-	Preview bool
-	Virtual bool
+	Content     Widget
+	Preview     bool
+	Virtual     bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
 }
@@ -81,6 +81,8 @@ type EditorGroupWidget struct {
 	LineNumbers             bool
 	GutterStyle             string
 	WordWrap                bool
+	DiffMode                DiffMode
+	DiffWordWrap            bool
 	SyntaxHighlight         bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
@@ -93,10 +95,13 @@ type EditorGroupWidget struct {
 	OnFileChange            func(path, lang, text string)
 	OnFileClose             func(path, lang string)
 	OnContentTabClose       func(id string)
-	OnError                 func(msg string)
-	OnNotify                func(msg string)
-	pendingNotify           []string
-	focused                 bool
+	// OnActiveContentChange fires after a tab switch or an in-place replacement
+	// changes what the editor group is showing.
+	OnActiveContentChange func()
+	OnError               func(msg string)
+	OnNotify              func(msg string)
+	pendingNotify         []string
+	focused               bool
 	// diagSources holds diagnostics keyed by source ("lsp", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
@@ -196,6 +201,12 @@ func (g *EditorGroupWidget) notify(msg string) {
 	}
 }
 
+func (g *EditorGroupWidget) activeContentChanged() {
+	if g.OnActiveContentChange != nil {
+		g.OnActiveContentChange()
+	}
+}
+
 func (g *EditorGroupWidget) FlushNotifications() {
 	if g.OnNotify == nil {
 		return
@@ -241,11 +252,15 @@ func (g *EditorGroupWidget) IsActiveTabPinned() bool {
 func (g *EditorGroupWidget) OpenFile(path string) {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path {
+			wasActive := i == g.active
 			g.tabs[i].Preview = false
 			if g.tabs[i].Buf != nil && !g.tabs[i].Buf.Dirty {
 				g.tabs[i].Buf.LoadFile(path)
 			}
 			g.SwitchTab(i)
+			if wasActive {
+				g.activeContentChanged()
+			}
 			return
 		}
 	}
@@ -299,6 +314,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if t := g.activeTab(); t != nil && t.Preview && t.Content == nil && t.Buf != nil && !t.Buf.Dirty {
 		g.tabs[g.active] = newTab
 		g.syncTabs()
+		g.activeContentChanged()
 	} else {
 		g.tabs = append(g.tabs, newTab)
 		g.SwitchTab(len(g.tabs) - 1)
@@ -341,37 +357,80 @@ func (g *EditorGroupWidget) nextUntitledName() string {
 }
 
 func (g *EditorGroupWidget) OpenDiff(path string, fd diff.FileDiff, oldLines, newLines []string, extended bool) {
-	tabName := path + " (diff)"
+	g.OpenDiffTab(path+" (diff)", "", path, fd, oldLines, newLines, extended)
+}
+
+// OpenDiffTab opens a diff under an explicit tab key and label. Callers that can
+// produce several diffs of the same file — one per commit, say — need their own
+// key, or the second one would replace the first under an identical label.
+// path is still the real file path so the highlighter picks the right language.
+func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.FileDiff, oldLines, newLines []string, extended bool) {
 	for i, t := range g.tabs {
 		if t.FilePath == tabName {
+			wasActive := i == g.active
 			dw := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
+			g.ApplyDiffDefaults(dw)
 			if !g.SyntaxHighlight {
 				dw.Highlighter = nil
 			}
 			t.Content = dw
+			t.Title = title
 			g.tabs[i] = t
 			g.SwitchTab(i)
+			if wasActive {
+				g.activeContentChanged()
+			}
 			return
 		}
 	}
 	widget := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
+	g.ApplyDiffDefaults(widget)
 	if !g.SyntaxHighlight {
 		widget.Highlighter = nil
 	}
 	g.tabs = append(g.tabs, editorTab{
 		FilePath: tabName,
+		Title:    title,
 		Content:  widget,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
 }
 
+// ApplyDiffDefaults initializes or refreshes a reading surface. Each property
+// follows the current Options default until the reader overrides that property
+// in View.
+func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
+	surface.ApplyDefaultMode(g.DiffMode)
+	wrapMode := DiffWrapOff
+	if g.DiffWordWrap {
+		wrapMode = DiffWrapOn
+	}
+	surface.ApplyDefaultWrapMode(wrapMode)
+}
+
+// SetDiffDefaults updates the defaults used by future diff surfaces and
+// refreshes every open surface that still inherits either property.
+func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, wordWrap bool) {
+	g.DiffMode = mode
+	g.DiffWordWrap = wordWrap
+	for _, tab := range g.tabs {
+		if surface, ok := tab.Content.(DiffModeSurface); ok {
+			g.ApplyDiffDefaults(surface)
+		}
+	}
+}
+
 func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 	for i, t := range g.tabs {
 		if t.FilePath == id {
+			wasActive := i == g.active
 			t.Content = content
 			t.Title = title
 			g.tabs[i] = t
 			g.SwitchTab(i)
+			if wasActive {
+				g.activeContentChanged()
+			}
 			return
 		}
 	}
@@ -386,6 +445,7 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 func (g *EditorGroupWidget) ClosePluginTab(id string) {
 	for i, t := range g.tabs {
 		if t.FilePath == id {
+			wasActive := i == g.active
 			if t.Content != nil && g.OnContentTabClose != nil {
 				g.OnContentTabClose(t.FilePath)
 			}
@@ -408,6 +468,9 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 				g.active = len(g.tabs) - 1
 			}
 			g.syncTabs()
+			if wasActive {
+				g.activeContentChanged()
+			}
 			return
 		}
 	}
@@ -504,11 +567,47 @@ func (g *EditorGroupWidget) ActiveDiffWidget() *DiffViewWidget {
 	return nil
 }
 
+func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		return detail
+	}
+	return nil
+}
+
+func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
+	if diffView := g.ActiveDiffWidget(); diffView != nil {
+		return diffView
+	}
+	if detail := g.ActiveCommitDetailWidget(); detail != nil {
+		return detail
+	}
+	return nil
+}
+
 func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffViewWidget {
 	for _, t := range g.tabs {
 		if t.FilePath == tabName {
 			if dv, ok := t.Content.(*DiffViewWidget); ok {
 				return dv
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+// CommitDetailWidgetByTab returns a still-open commit detail tab. Async detail
+// results use this as their identity check: if the reader closed the loading
+// tab before Git finished, the result is dropped instead of reopening it.
+func (g *EditorGroupWidget) CommitDetailWidgetByTab(tabName string) *CommitDetailWidget {
+	for _, t := range g.tabs {
+		if t.FilePath == tabName {
+			if detail, ok := t.Content.(*CommitDetailWidget); ok {
+				return detail
 			}
 			return nil
 		}
@@ -568,6 +667,7 @@ func (g *EditorGroupWidget) SetUseTabs(useTabs bool) {
 
 func (g *EditorGroupWidget) SwitchTab(idx int) {
 	if idx >= 0 && idx < len(g.tabs) {
+		changed := idx != g.active
 		if t := g.activeTab(); t != nil && t.Content != nil {
 			if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
 				setter.SetFocused(false)
@@ -582,6 +682,9 @@ func (g *EditorGroupWidget) SwitchTab(idx int) {
 					setter.SetFocused(true)
 				}
 			}
+		}
+		if changed {
+			g.activeContentChanged()
 		}
 	}
 }
@@ -634,6 +737,7 @@ func (g *EditorGroupWidget) CloseTab() {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	g.activeContentChanged()
 }
 
 func (g *EditorGroupWidget) CloseOtherTabs() {
@@ -705,6 +809,7 @@ func (g *EditorGroupWidget) HasDirtyOtherTabs() bool {
 }
 
 func (g *EditorGroupWidget) CloseAllTabs() {
+	activeChanged := g.pinnedCount == 0 || g.active != 0
 	kept := slices.Clone(g.tabs[:g.pinnedCount])
 	if len(kept) == 0 {
 		kept = []editorTab{{
@@ -721,9 +826,13 @@ func (g *EditorGroupWidget) CloseAllTabs() {
 	g.tabs = kept
 	g.active = 0
 	g.syncTabs()
+	if activeChanged {
+		g.activeContentChanged()
+	}
 }
 
 func (g *EditorGroupWidget) CloseAllSaved() {
+	activeFile := g.ActiveFilePath()
 	var kept []editorTab
 	for i := range g.tabs {
 		if i < g.pinnedCount || (g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty) {
@@ -739,6 +848,9 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	if g.ActiveFilePath() != activeFile {
+		g.activeContentChanged()
+	}
 }
 
 func (g *EditorGroupWidget) HasDirtyTabs() bool {
@@ -932,8 +1044,12 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []string) {
 	for i := range g.tabs {
 		if g.tabs[i].Title == title && g.tabs[i].ReadOnly {
+			wasActive := i == g.active
 			g.tabs[i].Buf.Lines = lines
 			g.SwitchTab(i)
+			if wasActive {
+				g.activeContentChanged()
+			}
 			return
 		}
 	}
@@ -1567,6 +1683,12 @@ func (g *EditorGroupWidget) Copy() {
 		}
 		return
 	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		if text := detail.CopySelection(); text != "" {
+			clipboard.Set(text)
+		}
+		return
+	}
 	if t.Content != nil {
 		// Non-editor tab (settings UI, plugin panel, ...): no buffer to copy from.
 		return
@@ -1675,6 +1797,25 @@ func (g *EditorGroupWidget) syncTabs() {
 		})
 	}
 	g.TabBar.SetTabs(uiTabs)
+	g.TabBar.Controls = nil
+	if surface := g.ActiveDiffModeSurface(); surface != nil {
+		g.TabBar.Controls = []TabBarControl{
+			{
+				Label:  "Split",
+				Active: surface.Mode() == DiffModeSplit,
+				OnClick: func() {
+					surface.SetMode(DiffModeSplit)
+				},
+			},
+			{
+				Label:  "Unified",
+				Active: surface.Mode() == DiffModeUnified,
+				OnClick: func() {
+					surface.SetMode(DiffModeUnified)
+				},
+			},
+		}
+	}
 }
 
 func (g *EditorGroupWidget) Render(surface Surface) {
