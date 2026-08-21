@@ -67,7 +67,7 @@ func RunExecScriptSep(a *App, script, sep string) {
 			a.Copy()
 		case "panel":
 			execPanel(a, args)
-		case "quit":
+		case "quit", "shutdown":
 			execQuit(a)
 		default:
 			slog.Error("exec_script: unknown command", "action", action)
@@ -355,6 +355,12 @@ Supported commands:
   wait MS            Wait milliseconds
   panel ID           Show and focus a bottom panel by ID
   quit               Exit the editor
+  shutdown           Alias for quit, for use over --listen
+
+--listen starts an HTTP command server on 127.0.0.1:4242 that accepts the
+same script format over POST /exec, so a running editor can be driven
+interactively instead of scripted in advance:
+  curl -X POST --data "type hi; screenshot /tmp/s1.txt" http://127.0.0.1:4242/exec
 
 Example:
   %s --exec "wait 200; screenshot /tmp/s1.txt; quit"`, os.Args[0])

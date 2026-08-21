@@ -742,6 +742,7 @@ TTT includes a built-in scripted interaction system designed for AI agent intera
 | Flag | Description |
 |------|-------------|
 | `--exec "commands"` | Execute semicolon-separated commands after startup |
+| `--listen` | Start an HTTP command server on `127.0.0.1:4242` (`POST /exec` accepts the same script format as `--exec`, against an already-running editor) |
 | `--plugin FILE` | Load a Lua plugin file on startup with full permissions |
 | `--size WxH` | Force screen dimensions (e.g. `120x40`) for deterministic layout |
 | `--debug` | Enable debug mode regardless of config |
@@ -761,12 +762,20 @@ The `--exec` flag accepts a semicolon-separated string of commands that run sequ
 | `screenshot PATH` | Save the current screen text to a file |
 | `debug PATH` | Save the editor's debug state as JSON to a file |
 | `wait MS` | Wait for the given number of milliseconds |
-| `quit` | Exit the editor |
+| `quit` / `shutdown` | Exit the editor |
 
 Example — capture a screenshot and debug state, then quit:
 
 ```sh
 ttt --size 120x40 --exec "wait 200; screenshot /tmp/screen.txt; debug /tmp/state.json; quit"
+```
+
+Example — drive an already-running editor over `--listen` instead of scripting in advance:
+
+```sh
+ttt --listen &
+curl -X POST --data "type hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
+curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 ```
 
 ## Architecture

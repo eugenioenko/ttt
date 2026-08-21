@@ -190,7 +190,7 @@ Every new feature or bug fix should include tests at multiple levels:
 
 Functional tests are the highest-value tests. Use `tui.exec("Command Name")` for command palette, `tui.pressChord("ctrl+k", "x")` for keybindings, and `tui.snapshot()` to verify results.
 
-### Debug harness (`--exec`, `--plugin`, `--size`, `--debug`)
+### Debug harness (`--exec`, `--plugin`, `--size`, `--debug`, `--listen`)
 
 **USE THIS FOR DEBUGGING AND TESTING.** The editor has a built-in scripted interaction system that is faster than TUI tests and gives you direct access to internal state — reach for it before investigating UI bugs manually.
 
@@ -213,10 +213,20 @@ Supported commands:
 - `copy` — copy the current selection to the clipboard
 - `exec "Command Name"` — run a command by title (same as command palette)
 - `screenshot PATH` — save screen text to file
-- `debug PATH` — save debug state JSON (screen, cursor, buffer, focus, panels, tabs, selection, output log, full widget tree with rect/focus/props per node)
+- `debug PATH` — save debug state JSON (screen, cursor, buffer, focus, panels, tabs, selection, output log, integrated-terminal raw PTY byte tails, full widget tree with rect/focus/props per node)
 - `wait MS` — wait milliseconds
 - `panel ID` — show and focus a bottom panel by ID
-- `quit` — exit the editor
+- `quit` / `shutdown` — exit the editor
+
+**`--listen`** — Start an HTTP command server on `127.0.0.1:4242` (loopback-only — never exposed off the local machine). `POST /exec` runs the same script format as `--exec`, synchronously, against an **already-running** editor — for capturing a repro at the exact moment it happens instead of scripting it in advance:
+
+```bash
+bin/ttt --listen &
+curl -X POST --data "type hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
+curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
+```
+
+Pass `?sep=` to use a different command separator, mirroring `--exec-split-on`.
 
 **`--size WxH`** — Force screen dimensions for deterministic layout (e.g. `--size 120x40`). Essential for reproducible screenshots and coordinate-based click tests.
 

@@ -18,6 +18,10 @@ const (
 	AttrBlink     int16 = 32
 )
 
+// rawTailMax bounds the raw PTY byte tail kept for debugging — enough to
+// capture recent terminal-emulation bugs without growing unbounded.
+const rawTailMax = 64 * 1024
+
 type Terminal struct {
 	mu         sync.Mutex
 	vt         vt10x.Terminal
@@ -28,6 +32,7 @@ type Terminal struct {
 	started    bool
 	closed     bool
 	exited     bool
+	rawTail    []byte
 	OnUpdate   func()
 	OnExit     func()
 }
@@ -104,6 +109,7 @@ func (t *Terminal) readLoop() {
 		if n > 0 {
 			t.mu.Lock()
 			t.vt.Write(buf[:n])
+			t.appendRawTail(buf[:n])
 			t.mu.Unlock()
 			if t.OnUpdate != nil {
 				t.OnUpdate()
@@ -183,4 +189,23 @@ func (t *Terminal) Mode() vt10x.ModeFlag {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.vt.Mode()
+}
+
+// appendRawTail must be called with t.mu held.
+func (t *Terminal) appendRawTail(b []byte) {
+	t.rawTail = append(t.rawTail, b...)
+	if excess := len(t.rawTail) - rawTailMax; excess > 0 {
+		t.rawTail = append([]byte(nil), t.rawTail[excess:]...)
+	}
+}
+
+// RawTail returns the most recent bytes read from the PTY, independent of
+// how vt10x parsed and rendered them — ground truth for diagnosing
+// terminal-emulation bugs.
+func (t *Terminal) RawTail() []byte {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]byte, len(t.rawTail))
+	copy(out, t.rawTail)
+	return out
 }

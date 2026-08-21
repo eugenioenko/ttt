@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -25,7 +26,18 @@ type DebugState struct {
 	MultiCursor []DebugMultiCursor `json:"multi_cursor,omitempty"`
 	Diagnostics []DebugDiagnostic  `json:"diagnostics"`
 	Output      []string           `json:"output"`
+	Terminals   []DebugTerminal    `json:"terminals,omitempty"`
 	WidgetTree  *DebugWidgetNode   `json:"widget_tree"`
+}
+
+// DebugTerminal reports one integrated-terminal tab's raw PTY byte tail, so
+// a terminal-emulation bug can be diagnosed from what the child process
+// actually sent rather than from ttt's parsed/rendered state.
+type DebugTerminal struct {
+	ID      string `json:"id"`
+	Cols    int    `json:"cols"`
+	Rows    int    `json:"rows"`
+	RawTail string `json:"raw_tail"`
 }
 
 // DebugDiagnostic reports one diagnostic on the active editor (LSP or plugin),
@@ -217,6 +229,16 @@ func (a *App) BuildDebugState() *DebugState {
 		for _, line := range a.Output.Lines {
 			state.Output = append(state.Output, line.Time+" ["+line.PluginName+"] "+line.Message)
 		}
+	}
+
+	for _, tt := range a.Terminals {
+		cols, rows := tt.Term.Size()
+		state.Terminals = append(state.Terminals, DebugTerminal{
+			ID:      tt.ID,
+			Cols:    cols,
+			Rows:    rows,
+			RawTail: strconv.Quote(string(tt.Term.RawTail())),
+		})
 	}
 
 	state.WidgetTree = walkWidget(a.Root.Main)

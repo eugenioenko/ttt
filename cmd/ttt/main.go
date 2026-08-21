@@ -70,6 +70,7 @@ type cliFlags struct {
 	execSplitOn  string
 	sizeW, sizeH int
 	debug        bool
+	listen       bool
 }
 
 func parseFlags() cliFlags {
@@ -104,6 +105,8 @@ func parseFlags() cliFlags {
 			}
 		case "--debug":
 			f.debug = true
+		case "--listen":
+			f.listen = true
 		}
 	}
 	return f
@@ -152,6 +155,8 @@ Options:
                       need to send a literal semicolon)
   --plugin <file>     Load a Lua plugin file on startup with full permissions
   --debug             Enable debug mode regardless of config setting
+  --listen            Start an HTTP command server on 127.0.0.1:4242
+                      (POST /exec accepts the same script format as --exec)
 
 Examples:
   ttt                                           Open current directory
@@ -346,6 +351,10 @@ Docs: https://tttedit.dev
 
 	if flags.exec != "" {
 		go app.RunExecScriptSep(editor, flags.exec, flags.execSplitOn)
+	}
+
+	if flags.listen {
+		go app.StartListenServer(editor)
 	}
 
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal)
