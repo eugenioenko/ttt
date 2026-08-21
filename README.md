@@ -742,7 +742,6 @@ Tests that require live PTY interaction — scenarios where something external h
 ```sh
 cd tests/integration
 pnpm install
-npm install -g tui-use
 pnpm test
 ```
 
