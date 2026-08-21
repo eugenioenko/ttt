@@ -161,7 +161,6 @@ func RunEventLoop(
 			cells[y] = make([]term.Cell, app.Root.Width)
 		}
 		app.Root.Render(cells)
-		resizeTerminals(app)
 		renderer.SetCurrent(cells)
 		if cx, cy, visible := app.Root.CursorPosition(); visible {
 			screen.ShowCursor(cx, cy)
@@ -169,6 +168,8 @@ func RunEventLoop(
 			screen.HideCursor()
 		}
 		renderer.Render(screen)
+		// Must run after Render/CursorPosition, else content and cursor read different Term states mid-frame.
+		resizeTerminals(app)
 	}
 
 	// Populate the status bar and register file watches for any files opened at

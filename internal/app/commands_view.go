@@ -15,6 +15,7 @@ func (a *App) ToggleTerminal() {
 			a.ContentSplit.BottomH = min(r.H/2, maxH)
 		}
 		a.showTerminalPanel()
+		resizeTerminals(a)
 	} else {
 		a.HideBottomPanel()
 	}
@@ -28,6 +29,7 @@ func (a *App) ToggleTerminalFullscreen() {
 	} else {
 		a.ContentSplit.BottomH = fullH
 		a.showTerminalPanel()
+		resizeTerminals(a)
 	}
 }
 
