@@ -1,0 +1,35 @@
+# CodeRabbit configuration — https://docs.coderabbit.ai/reference/configuration
+language: en-US
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!bin/**"
+    - "!node_modules/**"
+    - "!docs-web/node_modules/**"
+    - "!docs-web/dist/**"
+    - "!chaos-output/**"
+    - "!go.sum"
+    - "!flake.lock"
+    - "!config/keybindings.json"
+  path_instructions:
+    - path: "internal/core/**"
+      instructions: >
+        This is the UI-agnostic editor engine and must never import terminal
+        or rendering packages. Flag any import of tcell, term, view, or render
+        packages here.
+    - path: "**/*_test.go"
+      instructions: >
+        Check that new features touching cursor, buffer, selection, or
+        commands have coverage per the project's test-level expectations
+        (unit, e2e, functional).
+
+chat:
+  auto_reply: true
