@@ -79,6 +79,9 @@ func (a *App) RunRepoTask(task RepoTask) {
 func (a *App) HandleRepoOpResult(r *RepoOpResult) {
 	a.runningRepoOp = ""
 	a.setRepoOpSegment("")
+	// Pulls, commits, hooks, and even failed operations can partially mutate the
+	// worktree, index, or HEAD. Observe both resources before reporting outcome.
+	a.invalidateAllRepositories(RepositoryStatus | RepositoryHistory)
 
 	if r.Err != nil {
 		a.StatusError(fmt.Sprintf("%s failed: %v", r.Task.Progress, r.Err))
@@ -88,7 +91,6 @@ func (a *App) HandleRepoOpResult(r *RepoOpResult) {
 		r.Task.OnDone()
 	}
 	a.StatusNotify(r.Task.Done)
-	a.Changes.Refresh()
 }
 
 func (a *App) setRepoOpSegment(text string) {

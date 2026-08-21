@@ -32,6 +32,7 @@ func (a *App) FileOpNewFile(path string, reload func()) {
 			a.StatusError("Error: " + err.Error())
 			return
 		}
+		a.invalidateRepositoryPath(newPath, RepositoryStatus)
 		reload()
 		a.EditorGroup.OpenFile(newPath)
 		a.FocusEditor()
@@ -77,6 +78,8 @@ func (a *App) FileOpRename(path string, reload func()) {
 			a.StatusError("Error: " + err.Error())
 			return
 		}
+		a.invalidateRepositoryPath(path, RepositoryStatus)
+		a.invalidateRepositoryPath(newPath, RepositoryStatus)
 		a.EditorGroup.RenamePath(path, newPath)
 		reload()
 	})
@@ -97,6 +100,7 @@ func (a *App) FileOpDelete(path string, reload func()) {
 					a.StatusError("Error: " + err.Error())
 					return
 				}
+				a.invalidateRepositoryPath(path, RepositoryStatus)
 				reload()
 			},
 		},

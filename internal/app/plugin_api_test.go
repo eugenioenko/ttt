@@ -283,6 +283,8 @@ func TestPluginSystemAPI_ExecStdin(t *testing.T) {
 		t.Skip("cat not available")
 	}
 	api := NewPluginSystemAPI()
+	execCount := 0
+	api.onExec = func() { execCount++ }
 
 	stdout, _, code, err := api.Exec("cat", nil, "hello from stdin\n")
 	if err != nil || code != 0 {
@@ -300,5 +302,8 @@ func TestPluginSystemAPI_ExecStdin(t *testing.T) {
 	}
 	if stdout != "" {
 		t.Errorf("expected empty stdout, got %q", stdout)
+	}
+	if execCount != 2 {
+		t.Fatalf("system command completions invalidated repository %d times, want 2", execCount)
 	}
 }

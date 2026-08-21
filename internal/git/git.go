@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +18,11 @@ type FileStatus struct {
 }
 
 func RepoRoot(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel")
+	return RepoRootContext(context.Background(), dir)
+}
+
+func RepoRootContext(ctx context.Context, dir string) string {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -26,13 +31,21 @@ func RepoRoot(dir string) string {
 }
 
 func IsRepo(dir string) bool {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree")
+	return IsRepoContext(context.Background(), dir)
+}
+
+func IsRepoContext(ctx context.Context, dir string) bool {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--is-inside-work-tree")
 	out, err := cmd.Output()
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
 func StatusFiles(dir string) ([]FileStatus, error) {
-	cmd := exec.Command("git", "-C", dir, "status", "--porcelain", "-u")
+	return StatusFilesContext(context.Background(), dir)
+}
+
+func StatusFilesContext(ctx context.Context, dir string) ([]FileStatus, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "status", "--porcelain", "-u")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -145,12 +158,17 @@ func Push(dir string) error {
 }
 
 func BranchName(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
+	name, _ := BranchNameContext(context.Background(), dir)
+	return name
+}
+
+func BranchNameContext(ctx context.Context, dir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(string(out)), nil
 }
 
 type LogEntry struct {
@@ -163,10 +181,28 @@ type LogEntry struct {
 }
 
 func Log(dir string, n int) []LogEntry {
-	cmd := exec.Command("git", "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%H %h %s")
+	entries, _ := LogWithError(dir, n)
+	return entries
+}
+
+// LogWithError distinguishes a legitimate repository with no commits from a
+// transient read failure, so callers can preserve the last good history.
+func LogWithError(dir string, n int) ([]LogEntry, error) {
+	return LogWithErrorContext(context.Background(), dir, n)
+}
+
+func LogWithErrorContext(ctx context.Context, dir string, n int) ([]LogEntry, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%H %h %s")
 	out, err := cmd.Output()
 	if err != nil {
-		return nil
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		head := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--verify", "HEAD")
+		if head.Run() != nil && IsRepoContext(ctx, dir) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	var entries []LogEntry
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
@@ -180,7 +216,7 @@ func Log(dir string, n int) []LogEntry {
 		hash, msg, _ := strings.Cut(rest, " ")
 		entries = append(entries, LogEntry{Hash: hash, Ref: ref, Message: msg})
 	}
-	return entries
+	return entries, nil
 }
 
 // CommitFiles lists the files a commit touched.
@@ -346,6 +382,38 @@ func HeadSHA(dir string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// RevisionIdentity is a cheap fingerprint for the history surface. Including
+// the branch name catches switching between two branches that currently point
+// at the same commit, while the full object ID catches commits, pulls, resets,
+// and detached-HEAD movement.
+func RevisionIdentity(dir string) string {
+	identity, _ := RevisionIdentityContext(context.Background(), dir)
+	return identity
+}
+
+// RevisionIdentityContext returns a fingerprint that changes for either a new
+// HEAD commit or a branch switch. An unborn repository is a known empty
+// identity rather than a read failure.
+func RevisionIdentityContext(ctx context.Context, dir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "HEAD", "--abbrev-ref", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		head := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--verify", "HEAD")
+		if head.Run() != nil && IsRepoContext(ctx, dir) {
+			return "", nil
+		}
+		return "", err
+	}
+	parts := strings.Fields(string(out))
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unexpected revision identity output")
+	}
+	return parts[0] + "\x00" + parts[1], nil
 }
 
 func RemoteURL(dir string) string {

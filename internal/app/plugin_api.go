@@ -318,6 +318,7 @@ func (e *PluginEditorAPI) ClearSearch() {
 // PluginFilesystemAPI implements plugin.FilesystemAPI with path restrictions.
 type PluginFilesystemAPI struct {
 	allowedRoots []string
+	onWrite      func(path string)
 }
 
 func NewPluginFilesystemAPI(allowedRoots ...string) *PluginFilesystemAPI {
@@ -364,7 +365,13 @@ func (f *PluginFilesystemAPI) WriteFile(path, content string) error {
 	if err := f.validatePath(path); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return err
+	}
+	if f.onWrite != nil {
+		f.onWrite(path)
+	}
+	return nil
 }
 
 func (f *PluginFilesystemAPI) FileExists(path string) bool {
@@ -391,7 +398,9 @@ func (f *PluginFilesystemAPI) ListDir(path string) ([]plugin.FileEntry, error) {
 }
 
 // PluginSystemAPI implements plugin.SystemAPI.
-type PluginSystemAPI struct{}
+type PluginSystemAPI struct {
+	onExec func()
+}
 
 func NewPluginSystemAPI() *PluginSystemAPI {
 	return &PluginSystemAPI{}
@@ -437,6 +446,10 @@ func (s *PluginSystemAPI) Exec(binary string, args []string, stdin string) (stri
 		cmd.Stdin = strings.NewReader(stdin)
 	}
 	err := cmd.Run()
+	if s.onExec != nil {
+		// A failing command may still have partially mutated the repository.
+		s.onExec()
+	}
 	exitCode := 0
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

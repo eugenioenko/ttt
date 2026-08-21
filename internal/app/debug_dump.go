@@ -472,9 +472,17 @@ func (a *App) DumpDebugState(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return err
+	}
+	a.postRepositoryInvalidation(path, RepositoryStatus)
+	return nil
 }
 
 func (a *App) DumpScreenshot(path string) error {
-	return os.WriteFile(path, []byte(a.Screenshot()), 0644)
+	if err := os.WriteFile(path, []byte(a.Screenshot()), 0644); err != nil {
+		return err
+	}
+	a.postRepositoryInvalidation(path, RepositoryStatus)
+	return nil
 }

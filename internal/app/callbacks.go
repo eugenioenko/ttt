@@ -203,6 +203,7 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 		a.StatusWarn("Cannot write file: " + err.Error())
 		return
 	}
+	a.invalidateRepositoryPath(filePath, RepositoryStatus)
 	a.EditorGroup.ReloadFile(filePath)
 	a.Search.Refresh()
 	a.StatusNotify(fmt.Sprintf("Replaced %d matches in %s", len(matches), filepath.Base(filePath)))
@@ -232,6 +233,7 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 				if err := os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")+"\n"), 0644); err != nil {
 					continue
 				}
+				a.invalidateRepositoryPath(filePath, RepositoryStatus)
 				a.EditorGroup.ReloadFile(filePath)
 			}
 			a.Search.Refresh()
@@ -548,9 +550,7 @@ func registerWidgetCallbacks(app *App) {
 		} else {
 			app.EditorGroup.ClearSearch()
 		}
-		if id == "changes" {
-			app.Changes.Refresh()
-		}
+		app.syncRepositoryObservation()
 		if id == "outline" {
 			app.RefreshSymbols()
 		}
@@ -708,6 +708,21 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnCommit = app.CommitChanges
 	app.Changes.OnConfirmDiscard = app.ConfirmDiscard
 	app.Changes.OnError = app.StatusError
+	app.Changes.OnRefresh = func() {
+		if app.Repository != nil {
+			app.Repository.RefreshNow(RepositoryStatus | RepositoryHistory)
+		} else {
+			app.Changes.Refresh()
+		}
+	}
+	app.Changes.OnStatusChanged = func() {
+		app.invalidateAllRepositories(RepositoryStatus)
+	}
+	app.Changes.OnHistoryResult = func(err error) {
+		if app.Repository != nil {
+			app.Repository.HandleHistory(err)
+		}
+	}
 
 	app.ContentSplit.OnResize = func(height int) {
 		if height <= 0 {

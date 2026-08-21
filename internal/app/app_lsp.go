@@ -534,11 +534,9 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 		a.ApplyTextEdits(edits)
 
 		if a.Settings.LSP.SaveOnRename {
-			a.EditorGroup.Save()
-			if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {
-				lang := a.EditorGroup.Editor.Highlighter.Language()
-				text := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
-				a.NotifyLSPSave(path, lang, text)
+			if a.EditorGroup.Save() {
+				_, lang := a.editorPathLang()
+				a.afterFileSave(path, lang)
 			}
 		}
 	}

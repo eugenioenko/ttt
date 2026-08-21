@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -96,6 +97,60 @@ func TestApplyStatusDropsASupersededScan(t *testing.T) {
 	cp.ApplyStatus(fresh)
 	if cp.TotalChanges() == 0 {
 		t.Error("the current scan was dropped")
+	}
+}
+
+func TestCommitLogFailurePreservesHistoryAndRemainsRetryable(t *testing.T) {
+	cp := NewChangesPanel("/repo")
+	cp.lastLogDir = "/repo"
+	cp.logDir = "/repo"
+	cp.logGen = 4
+	existing := &widgets.TreeNode{ID: "commit:good", Label: "last good commit"}
+	cp.CommitLog.SetItems([]*widgets.TreeNode{existing})
+	var callbackErr error
+	cp.OnHistoryResult = func(err error) { callbackErr = err }
+
+	cp.ApplyCommitLog(&CommitLogResult{
+		Gen: 4, Dir: "/repo", Err: errors.New("temporary log failure"),
+	})
+	if len(cp.CommitLog.Config.Items) != 1 || cp.CommitLog.Config.Items[0] != existing {
+		t.Fatalf("history failure replaced last good items: %+v", cp.CommitLog.Config.Items)
+	}
+	if cp.lastLogDir != "" {
+		t.Fatalf("failed history read left retry guard at %q", cp.lastLogDir)
+	}
+	if callbackErr == nil {
+		t.Fatal("history failure was not reported to the freshness coordinator")
+	}
+}
+
+func TestCancelHistoryReadCancelsContextAndSupersedesResult(t *testing.T) {
+	cp := NewChangesPanel("/repo")
+	ctx, cancel := context.WithCancel(context.Background())
+	cp.logCancel = cancel
+	cp.logGen = 7
+
+	cp.CancelHistoryRead()
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("CancelHistoryRead did not cancel the active history context")
+	}
+	if cp.logGen != 8 {
+		t.Fatalf("history generation = %d, want 8", cp.logGen)
+	}
+}
+
+func TestCommitHistoryRefreshKeyUsesCoordinatorCallback(t *testing.T) {
+	cp := NewChangesPanel("/repo")
+	called := 0
+	cp.OnRefresh = func() { called++ }
+
+	if !cp.handleCommitLogKey(tcell.NewEventKey(tcell.KeyRune, "r", tcell.ModNone), nil) {
+		t.Fatal("commit-history refresh key was not handled")
+	}
+	if called != 1 {
+		t.Fatalf("coordinator refresh callback called %d times, want 1", called)
 	}
 }
 

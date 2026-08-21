@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,7 @@ type ChangesPanel struct {
 	multiRoot  bool
 	expanded   map[string]bool
 	lastLogDir string
+	logCancel  context.CancelFunc
 	// commandContext remembers which tree the reader last acted in. Modal
 	// widgets temporarily take focus before running a command, so live widget
 	// focus cannot reliably identify the selection the command should use.
@@ -78,6 +80,9 @@ type ChangesPanel struct {
 	OnConfirmDiscard func(message string, onConfirm func())
 	OnError          func(message string)
 	OnRefreshed      func()
+	OnRefresh        func()
+	OnStatusChanged  func()
+	OnHistoryResult  func(error)
 
 	PRGroups []prGroup
 }
@@ -246,7 +251,11 @@ func (cp *ChangesPanel) applied(err error) {
 	if err != nil && cp.OnError != nil {
 		cp.OnError(err.Error())
 	}
-	cp.Refresh()
+	if cp.OnStatusChanged != nil {
+		cp.OnStatusChanged()
+	} else {
+		cp.Refresh()
+	}
 }
 
 // paths splits a file list into the untracked ones, which are deleted outright,
@@ -297,6 +306,10 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		// read still running — otherwise that read arrives and resurrects the
 		// repository that was just cleared.
 		cp.logGen++
+		if cp.logCancel != nil {
+			cp.logCancel()
+			cp.logCancel = nil
+		}
 		cp.saveCommitLogState()
 		cp.lastLogDir = ""
 		cp.logDir = ""
@@ -306,17 +319,42 @@ func (cp *ChangesPanel) refreshCommitLog() {
 	if dir == cp.lastLogDir {
 		return
 	}
+	if cp.logCancel != nil {
+		cp.logCancel()
+	}
 	cp.lastLogDir = dir
 	cp.logGen++
 	gen := cp.logGen
+	ctx, cancel := context.WithTimeout(context.Background(), commitLogTimeout)
+	cp.logCancel = cancel
 	if cp.Screen == nil {
-		cp.ApplyCommitLog(readCommitLog(dir, gen))
+		result := readCommitLogContext(ctx, dir, gen)
+		cancel()
+		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(readCommitLog(dir, gen)))
+		result := readCommitLogContext(ctx, dir, gen)
+		cancel()
+		screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
+}
+
+// RefreshHistory forces a fresh read of the selected repository's branch and
+// recent commits. Working-tree invalidations deliberately do not call this:
+// saving a file changes status, not immutable history.
+func (cp *ChangesPanel) RefreshHistory() {
+	cp.lastLogDir = ""
+	cp.refreshCommitLog()
+}
+
+func (cp *ChangesPanel) CancelHistoryRead() {
+	if cp.logCancel != nil {
+		cp.logCancel()
+		cp.logCancel = nil
+	}
+	cp.logGen++
 }
 
 // saveCommitLogState records the currently rendered log's expansion and
@@ -482,7 +520,11 @@ func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.Tre
 	}
 	switch term.KeyRune(ev) {
 	case 'r', 'R':
-		cp.Refresh()
+		if cp.OnRefresh != nil {
+			cp.OnRefresh()
+		} else {
+			cp.Refresh()
+		}
 		return true
 	case 'c', 'o', 'v':
 		cp.openCommitFile(node, false)
@@ -783,6 +825,8 @@ func (cp *ChangesPanel) handleKey(ev *tcell.EventKey) bool {
 	case 'r', 'R':
 		if inPR {
 			cp.refreshSelectedPR()
+		} else if cp.OnRefresh != nil {
+			cp.OnRefresh()
 		} else {
 			cp.Refresh()
 		}

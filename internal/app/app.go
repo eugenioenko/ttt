@@ -73,6 +73,7 @@ type App struct {
 	Explorer               *NavigationPanel
 	ExplorerContextNode    *widgets.TreeNode
 	Changes                *ChangesPanel
+	Repository             *RepositoryState
 	Symbols                *SymbolsPanel
 	Reg                    *command.Registry
 	Running                *bool
@@ -132,12 +133,14 @@ func (a *App) ShowSidebar() {
 		a.SplitPanel.DividerPos = ui.DefaultSidebarWidth
 	}
 	a.applySearchHighlights()
+	a.syncRepositoryObservation()
 }
 
 func (a *App) HideSidebar() {
 	a.Sidebar.Visible = false
 	a.SplitPanel.ShowLeft = false
 	a.EditorGroup.ClearSearch()
+	a.syncRepositoryObservation()
 }
 
 func (a *App) applySearchHighlights() {
@@ -310,7 +313,11 @@ func (a *App) refreshWorkspaceWidgets() {
 	a.Explorer.SetRoots(paths)
 
 	a.Search.SetWorkDirs(paths)
-	a.Changes.SetDirs(paths)
+	if a.Repository != nil {
+		a.Repository.SetDirs(paths)
+	} else {
+		a.Changes.SetDirs(paths)
+	}
 }
 
 func (a *App) refreshProblems() {
@@ -412,15 +419,18 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.LspManager = lspManager
 	a.StartWatcher()
 
-	// Handing the panel the screen is what moves its git reads off the event
-	// path; until now it has been reading inline. Refresh once so the first
-	// scan goes through the same path everything after it will.
+	// Repository state owns Git observation and returns completed reads through
+	// the same event-loop boundary as the rest of the asynchronous application.
 	if a.Changes != nil {
 		a.Changes.Screen = screen
 		a.Changes.OnRefreshed = func() {
 			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
 		}
-		a.Changes.Refresh()
+	}
+	if a.Repository != nil {
+		a.Repository.SetPoster(screen)
+		a.Repository.Start()
+		a.syncRepositoryObservation()
 	}
 
 	a.EditorGroup.OnError = func(msg string) {

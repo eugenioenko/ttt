@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
@@ -31,7 +33,10 @@ type eventPoster interface {
 }
 
 // commitLogLimit is how many commits the log shows.
-const commitLogLimit = 10
+const (
+	commitLogLimit   = 10
+	commitLogTimeout = 10 * time.Second
+)
 
 // ChangesStatusResult carries a finished working-tree scan.
 type ChangesStatusResult struct {
@@ -45,6 +50,7 @@ type CommitLogResult struct {
 	Dir     string
 	Branch  string
 	Entries []git.LogEntry
+	Err     error
 }
 
 // CommitFilesResult carries the file list of a single commit back to the node
@@ -71,34 +77,12 @@ type CommitDetailResult struct {
 }
 
 func readChangesGroups(dirs []string) []changesGroup {
-	var groups []changesGroup
-	seen := make(map[string]bool)
-	for _, dir := range dirs {
-		if root := git.RepoRoot(dir); root != "" {
-			dir = root
-		}
-		if seen[dir] {
-			continue
-		}
-		seen[dir] = true
-		files, err := git.StatusFiles(dir)
-		if err != nil {
-			files = nil
-		}
-		var staged, unstaged []git.FileStatus
-		for _, f := range files {
-			if f.Staged {
-				staged = append(staged, f)
-			} else {
-				unstaged = append(unstaged, f)
-			}
-		}
-		groups = append(groups, changesGroup{
-			Dir:      dir,
-			Name:     filepath.Base(dir),
-			Staged:   staged,
-			Unstaged: unstaged,
-		})
+	ctx, cancel := context.WithTimeout(context.Background(), repositoryStatusTimeout)
+	defer cancel()
+	entries := scanRepositoryStatus(ctx, dirs)
+	groups := make([]changesGroup, 0, len(entries))
+	for _, entry := range entries {
+		groups = append(groups, entry.Group)
 	}
 	return groups
 }
@@ -110,23 +94,41 @@ func (cp *ChangesPanel) ApplyStatus(r *ChangesStatusResult) {
 	if r.Gen != cp.statusGen {
 		return
 	}
+	cp.applyWorkingTree(r.Groups)
+	cp.RefreshHistory()
+}
+
+// applyWorkingTree installs only disk/index status. It preserves the currently
+// rendered commit log unless the selected repository itself changed. The App's
+// repository-state coordinator owns history invalidation for HEAD changes.
+func (cp *ChangesPanel) applyWorkingTree(groups []changesGroup) {
 	cp.saveExpanded()
-	cp.groups = r.Groups
+	cp.groups = groups
 	cp.multiRoot = len(cp.groups)+len(cp.PRGroups) > 1
 	cp.buildTree()
-	cp.lastLogDir = ""
-	cp.refreshCommitLog()
 	if cp.OnRefreshed != nil {
 		cp.OnRefreshed()
 	}
 }
 
 func readCommitLog(dir string, gen int) *CommitLogResult {
+	ctx, cancel := context.WithTimeout(context.Background(), commitLogTimeout)
+	defer cancel()
+	return readCommitLogContext(ctx, dir, gen)
+}
+
+func readCommitLogContext(ctx context.Context, dir string, gen int) *CommitLogResult {
+	entries, err := git.LogWithErrorContext(ctx, dir, commitLogLimit)
+	branch, branchErr := git.BranchNameContext(ctx, dir)
+	if err == nil && branchErr != nil && len(entries) > 0 {
+		err = branchErr
+	}
 	return &CommitLogResult{
 		Gen:     gen,
 		Dir:     dir,
-		Branch:  git.BranchName(dir),
-		Entries: git.Log(dir, commitLogLimit),
+		Branch:  branch,
+		Entries: entries,
+		Err:     err,
 	}
 }
 
@@ -135,6 +137,19 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	// Both checks, not one: the counter catches a superseded read, and the
 	// directory catches a counter that agrees for some reason it should not.
 	if r.Gen != cp.logGen || r.Dir != cp.lastLogDir {
+		return
+	}
+	cp.logCancel = nil
+	if r.Err != nil {
+		// Preserve the rendered history and make the selected root retryable on
+		// the next repository observation.
+		cp.lastLogDir = ""
+		if cp.OnError != nil {
+			cp.OnError("Could not refresh commit history: " + r.Err.Error())
+		}
+		if cp.OnHistoryResult != nil {
+			cp.OnHistoryResult(r.Err)
+		}
 		return
 	}
 	name := filepath.Base(r.Dir)
@@ -184,6 +199,9 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		nodes = append(nodes, node)
 	}
 	cp.CommitLog.SetItems(nodes)
+	if cp.OnHistoryResult != nil {
+		cp.OnHistoryResult(nil)
+	}
 
 	// Restore by identity, never by the index SetItems happened to preserve.
 	// Committing prepends rows, and rewriting history can remove them entirely;

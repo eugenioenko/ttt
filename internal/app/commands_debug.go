@@ -167,30 +167,44 @@ func (a *App) debugRunPlugin() {
 
 func (a *App) debugScreenshot() {
 	a.DismissDialog()
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		path := "screenshot.txt"
-		if err := a.DumpScreenshot(path); err != nil {
-			a.Status.SetNotification("Screenshot error: "+err.Error(), view.NotifyError, 3*time.Second)
-		} else {
-			a.Status.SetNotification("Screenshot saved: "+path, view.NotifyInfo, 3*time.Second)
-		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	}()
+	time.AfterFunc(50*time.Millisecond, func() {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "screenshot", Path: "screenshot.txt"}))
+	})
 }
 
 func (a *App) debugDumpState() {
 	a.DismissDialog()
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		path := "debug-state.json"
-		if err := a.DumpDebugState(path); err != nil {
+	time.AfterFunc(50*time.Millisecond, func() {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "state", Path: "debug-state.json"}))
+	})
+}
+
+// DebugWriteRequest returns delayed debug capture work to the main event loop.
+// Both Screenshot and BuildDebugState read widget state and must not race the
+// renderer from a timer goroutine.
+type DebugWriteRequest struct {
+	Kind string
+	Path string
+}
+
+func (a *App) HandleDebugWriteRequest(request *DebugWriteRequest) {
+	var err error
+	switch request.Kind {
+	case "screenshot":
+		err = a.DumpScreenshot(request.Path)
+		if err != nil {
+			a.Status.SetNotification("Screenshot error: "+err.Error(), view.NotifyError, 3*time.Second)
+		} else {
+			a.Status.SetNotification("Screenshot saved: "+request.Path, view.NotifyInfo, 3*time.Second)
+		}
+	case "state":
+		err = a.DumpDebugState(request.Path)
+		if err != nil {
 			a.Status.SetNotification("Dump error: "+err.Error(), view.NotifyError, 3*time.Second)
 		} else {
-			a.Status.SetNotification("State saved: "+path, view.NotifyInfo, 3*time.Second)
+			a.Status.SetNotification("State saved: "+request.Path, view.NotifyInfo, 3*time.Second)
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	}()
+	}
 }
 
 func (a *App) debugKeyboardTester() {

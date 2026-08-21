@@ -1,9 +1,11 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -137,6 +139,62 @@ func TestStatusFilesEmpty(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Errorf("expected no files, got %d: %+v", len(files), files)
+	}
+}
+
+func TestRevisionIdentityTracksHeadAndBranch(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "initial.txt", "hello\n")
+	gitRun(t, dir, "add", "initial.txt")
+	gitRun(t, dir, "commit", "-m", "init")
+
+	initial := RevisionIdentity(dir)
+	if initial == "" {
+		t.Fatal("RevisionIdentity returned an empty identity for a committed repository")
+	}
+
+	gitRun(t, dir, "switch", "-c", "same-head")
+	branched := RevisionIdentity(dir)
+	if branched == initial {
+		t.Fatal("RevisionIdentity did not change when the branch changed at the same commit")
+	}
+	if !strings.HasSuffix(branched, "\x00same-head") {
+		t.Fatalf("RevisionIdentity branch suffix = %q, want same-head", branched)
+	}
+
+	writeFile(t, dir, "initial.txt", "changed\n")
+	gitRun(t, dir, "add", "initial.txt")
+	gitRun(t, dir, "commit", "-m", "change")
+	if committed := RevisionIdentity(dir); committed == branched {
+		t.Fatal("RevisionIdentity did not change when HEAD advanced")
+	}
+}
+
+func TestRevisionIdentityAllowsUnbornRepository(t *testing.T) {
+	dir := setupTestRepo(t)
+	identity, err := RevisionIdentityContext(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("unborn repository identity returned an error: %v", err)
+	}
+	if identity != "" {
+		t.Fatalf("unborn repository identity = %q, want empty", identity)
+	}
+}
+
+func TestLogWithErrorDistinguishesEmptyRepoFromFailure(t *testing.T) {
+	if entries, err := LogWithError(setupTestRepo(t), 10); err != nil || len(entries) != 0 {
+		t.Fatalf("empty repository log = (%+v, %v), want empty success", entries, err)
+	}
+	if _, err := LogWithError(t.TempDir(), 10); err == nil {
+		t.Fatal("non-repository log failure was reported as an empty success")
+	}
+}
+
+func TestStatusFilesContextHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := StatusFilesContext(ctx, setupTestRepo(t)); err == nil {
+		t.Fatal("canceled status context returned success")
 	}
 }
 

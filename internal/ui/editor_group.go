@@ -969,15 +969,15 @@ func (g *EditorGroupWidget) Save() bool {
 	return true
 }
 
-func (g *EditorGroupWidget) SaveAs(path string) {
+func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t := g.activeTab()
 	if t == nil || t.Content != nil {
-		return
+		return false
 	}
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
 		g.reportError(fmt.Sprintf("Failed to save %s: %v", path, err))
-		return
+		return false
 	}
 	if t.Undo != nil {
 		t.Undo.MarkSaved()
@@ -990,6 +990,7 @@ func (g *EditorGroupWidget) SaveAs(path string) {
 		t.Highlighter = nil
 	}
 	g.syncTabs()
+	return true
 }
 
 // RenamePath repoints open tabs after a path is renamed on disk. oldPath may be

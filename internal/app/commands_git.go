@@ -131,6 +131,7 @@ func (a *App) SaveWorkspace() {
 			a.StatusError("Error: " + err.Error())
 		} else {
 			a.Workspace.FilePath = abs
+			a.invalidateRepositoryPath(abs, RepositoryStatus)
 			a.StatusNotify("Workspace saved: " + abs)
 		}
 	})
@@ -246,7 +247,11 @@ func registerGitCommands(app *App) {
 		ID: "changes.refresh", Title: "Git: Refresh Changes",
 		Keywords: []string{"git", "changes", "reload"},
 		Handler: func() {
-			app.Changes.Refresh()
+			if app.Repository != nil {
+				app.Repository.RefreshNow(RepositoryStatus | RepositoryHistory)
+			} else {
+				app.Changes.Refresh()
+			}
 		},
 	})
 
