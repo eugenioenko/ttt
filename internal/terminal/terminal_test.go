@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"bytes"
 	"strings"
 	"sync"
 	"testing"
@@ -165,5 +166,72 @@ func TestWriteStringAndReadLoopUpdatesView(t *testing.T) {
 		case <-deadline:
 			t.Fatal("timed out waiting for shell output to appear in view")
 		}
+	}
+}
+
+func TestRawTailCapturesWrittenBytes(t *testing.T) {
+	term := newTestTerminal(t)
+	defer term.Close()
+
+	updated := make(chan struct{}, 100)
+	term.OnUpdate = func() {
+		select {
+		case updated <- struct{}{}:
+		default:
+		}
+	}
+	term.Run()
+
+	term.WriteString("echo raw_tail_marker\n")
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case <-updated:
+			if strings.Contains(string(term.RawTail()), "raw_tail_marker") {
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for raw tail to capture shell output")
+		}
+	}
+}
+
+func TestRawTailCapsAtMaxAndKeepsMostRecent(t *testing.T) {
+	term := &Terminal{}
+
+	chunkSize := rawTailMax / 4
+	for _, b := range []byte("abcde") {
+		term.mu.Lock()
+		term.appendRawTail(bytes.Repeat([]byte{b}, chunkSize))
+		term.mu.Unlock()
+	}
+
+	got := term.RawTail()
+	if len(got) != rawTailMax {
+		t.Fatalf("RawTail() len = %d, want %d", len(got), rawTailMax)
+	}
+	if bytes.Contains(got, []byte{'a'}) {
+		t.Error("expected oldest bytes ('a') to have been trimmed")
+	}
+	if !bytes.Contains(got, []byte{'e'}) {
+		t.Error("expected most recent bytes ('e') to be present")
+	}
+}
+
+func TestRawTailSingleWriteLargerThanMax(t *testing.T) {
+	term := &Terminal{}
+
+	big := append(bytes.Repeat([]byte{'x'}, rawTailMax), bytes.Repeat([]byte{'y'}, 10)...)
+	term.mu.Lock()
+	term.appendRawTail(big)
+	term.mu.Unlock()
+
+	got := term.RawTail()
+	if len(got) != rawTailMax {
+		t.Fatalf("RawTail() len = %d, want %d", len(got), rawTailMax)
+	}
+	if !bytes.HasSuffix(got, bytes.Repeat([]byte{'y'}, 10)) {
+		t.Error("expected the tail to keep the end of an oversized single write")
 	}
 }

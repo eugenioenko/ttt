@@ -97,3 +97,14 @@ func TestResolveArgsFileLineCol(t *testing.T) {
 		t.Errorf("missing file keeps its literal name: got %+v", openFiles[2])
 	}
 }
+
+func TestResolveArgsIgnoresListenFlag(t *testing.T) {
+	saved := os.Args
+	defer func() { os.Args = saved }()
+	os.Args = []string{"ttt", "--listen"}
+
+	_, openFiles, _, _ := resolveArgs()
+	if len(openFiles) != 0 {
+		t.Errorf("--listen was treated as a file to open: %+v", openFiles)
+	}
+}

@@ -18,6 +18,8 @@ const (
 	AttrBlink     int16 = 32
 )
 
+const rawTailMax = 64 * 1024
+
 type Terminal struct {
 	mu         sync.Mutex
 	vt         vt10x.Terminal
@@ -28,6 +30,7 @@ type Terminal struct {
 	started    bool
 	closed     bool
 	exited     bool
+	rawTail    []byte
 	OnUpdate   func()
 	OnExit     func()
 }
@@ -104,6 +107,7 @@ func (t *Terminal) readLoop() {
 		if n > 0 {
 			t.mu.Lock()
 			t.vt.Write(buf[:n])
+			t.appendRawTail(buf[:n])
 			t.mu.Unlock()
 			if t.OnUpdate != nil {
 				t.OnUpdate()
@@ -183,4 +187,26 @@ func (t *Terminal) Mode() vt10x.ModeFlag {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.vt.Mode()
+}
+
+// appendRawTail must be called with t.mu held.
+func (t *Terminal) appendRawTail(b []byte) {
+	if len(b) >= rawTailMax {
+		t.rawTail = append(t.rawTail[:0], b[len(b)-rawTailMax:]...)
+		return
+	}
+	if excess := len(t.rawTail) + len(b) - rawTailMax; excess > 0 {
+		copy(t.rawTail, t.rawTail[excess:])
+		t.rawTail = t.rawTail[:len(t.rawTail)-excess]
+	}
+	t.rawTail = append(t.rawTail, b...)
+}
+
+// RawTail returns the most recent bytes read from the PTY, unparsed by vt10x.
+func (t *Terminal) RawTail() []byte {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]byte, len(t.rawTail))
+	copy(out, t.rawTail)
+	return out
 }
