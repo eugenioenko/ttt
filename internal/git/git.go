@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -531,4 +532,49 @@ func DiffRename(dir, oldPath, newPath string) (string, error) {
 		}
 	}
 	return string(out), nil
+}
+
+// DiffWorkingTreeFileContext returns the final working-tree state relative to HEAD,
+// combining staged and unstaged edits into one document. Untracked files are
+// compared with /dev/null so callers can render them as ordinary additions.
+func DiffWorkingTreeFileContext(ctx context.Context, dir string, status FileStatus) (string, error) {
+	path := filepath.Join(dir, status.Path)
+	if status.Status == "?" {
+		return diffFileFromEmptyContext(ctx, dir, path)
+	}
+
+	paths := []string{"--", path}
+	if status.OldPath != "" && status.OldPath != status.Path {
+		paths = []string{"--", filepath.Join(dir, status.OldPath), path}
+	}
+	args := append([]string{"-C", dir, "--literal-pathspecs", "diff", "HEAD"}, paths...)
+	cmd := exec.CommandContext(ctx, "git", args...)
+	out, err := cmd.Output()
+	if err == nil {
+		return string(out), nil
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	// HEAD is absent in an unborn repository. Compare the final worktree file,
+	// not merely its staged snapshot, with the empty tree.
+	head := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--verify", "HEAD")
+	if head.Run() != nil && IsRepoContext(ctx, dir) {
+		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+			return "", nil
+		} else if statErr != nil {
+			return "", statErr
+		}
+		return diffFileFromEmptyContext(ctx, dir, path)
+	}
+	return "", err
+}
+
+func diffFileFromEmptyContext(ctx context.Context, dir, path string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "diff", "--no-index", "--", "/dev/null", path)
+	out, err := cmd.Output()
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return string(out), nil
+	}
+	return string(out), err
 }

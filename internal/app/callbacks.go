@@ -84,6 +84,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 
 func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
+		{Label: "View All Changes", Command: "changes.viewAll"},
+		ui.MenuSep(),
 		{Label: "Refresh", Command: "changes.refresh"},
 		ui.MenuSep(),
 		{Label: "Expand All", Command: "changes.expandAll"},
@@ -106,6 +108,8 @@ func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 // to the tree while leaving network and PR operations in the panel menu.
 func (a *App) BuildChangesContextMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
+		{Label: "View All Changes", Command: "changes.viewAll"},
+		ui.MenuSep(),
 		{Label: "Refresh", Command: "changes.refresh"},
 		ui.MenuSep(),
 		{Label: "Expand All", Command: "changes.expandAll"},
@@ -498,7 +502,10 @@ func registerWidgetCallbacks(app *App) {
 	// Any foreground navigation supersedes a diff read that has not landed yet.
 	// Put invalidation on the editor group's active-content boundary so direct
 	// callers such as plugins cannot bypass it.
-	app.EditorGroup.OnActiveContentChange = app.cancelPendingDiff
+	app.EditorGroup.OnActiveContentChange = func() {
+		app.cancelPendingDiff()
+		app.syncRepositoryObservation()
+	}
 
 	for i := range menuBarMenus {
 		idx := i

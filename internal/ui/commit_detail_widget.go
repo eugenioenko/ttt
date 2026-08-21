@@ -17,10 +17,12 @@ import (
 // the order Git reports them; a failed or hunk-less diff still gets a heading
 // and an explanatory row so a touched path never silently disappears.
 type CommitDetailFile struct {
-	Path    string
-	OldPath string
-	Diff    diff.FileDiff
-	Error   string
+	Path         string
+	OldPath      string
+	Heading      string
+	HeadingStyle term.Style
+	Diff         diff.FileDiff
+	Error        string
 
 	highlighter *highlight.Highlighter
 	lines       []diff.DiffLine
@@ -64,11 +66,17 @@ type commitDetailControl struct {
 // full-screen cell grid for every changed line on every redraw.
 type CommitDetailWidget struct {
 	BaseWidget
-	Dir     string
-	Ref     string
-	Short   string
-	Loading bool
-	Error   string
+	Dir             string
+	Ref             string
+	Short           string
+	Loading         bool
+	Error           string
+	Header          string
+	EmptyText       string
+	LoadingText     string
+	CurrentChanges  bool
+	HideEmptyNotice bool
+	LoadGen         uint64
 
 	Message string
 	Files   []CommitDetailFile
@@ -124,6 +132,23 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 		Ref:             ref,
 		Short:           short,
 		Loading:         true,
+		Header:          "Commit message",
+		EmptyText:       "No files",
+		LoadingText:     fmt.Sprintf("Loading commit %s…", short),
+		SyntaxHighlight: syntaxHighlight,
+	}
+}
+
+func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidget {
+	return &CommitDetailWidget{
+		Dir:             dir,
+		Ref:             "working-tree",
+		Loading:         true,
+		Header:          "Current changes",
+		EmptyText:       "No changes",
+		LoadingText:     "Loading current changes…",
+		CurrentChanges:  true,
+		HideEmptyNotice: true,
 		SyntaxHighlight: syntaxHighlight,
 	}
 }
@@ -195,17 +220,28 @@ func (d *CommitDetailWidget) applyMode(mode DiffMode) {
 }
 
 func (d *CommitDetailWidget) SetDetail(message string, files []CommitDetailFile, errText string) {
+	collapsed := make(map[string]bool)
+	topLine := 0
+	if d.CurrentChanges {
+		topLine = d.TopLine
+		for i, file := range d.Files {
+			if i < len(d.collapsedFiles) && d.collapsedFiles[i] {
+				collapsed[commitDetailFileKey(file)] = true
+			}
+		}
+	}
 	d.Loading = false
 	d.Error = errText
 	d.Message = message
 	d.Files = files
 	d.collapsedFiles = make([]bool, len(files))
 	for i := range d.Files {
+		d.collapsedFiles[i] = collapsed[commitDetailFileKey(d.Files[i])]
 		if d.SyntaxHighlight && d.Files[i].Path != "" {
 			d.Files[i].highlighter = highlight.New(d.Files[i].Path)
 		}
 	}
-	d.TopLine = 0
+	d.TopLine = topLine
 	d.LeftCol = 0
 	d.ClearSelection()
 	d.rebuildRows()
@@ -268,10 +304,17 @@ func (d *CommitDetailWidget) rebuildRows() {
 		return
 	}
 
-	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: "Commit message", bold: true})
+	header := d.Header
+	if header == "" {
+		header = "Commit message"
+	}
+	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: header, bold: true})
 	message := strings.TrimRight(d.Message, "\r\n")
 	if message == "" {
 		message = "(No commit message)"
+		if d.CurrentChanges {
+			message = "Working tree clean"
+		}
 	}
 	for i, line := range strings.Split(message, "\n") {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageRow, text: line, bold: i == 0})
@@ -331,10 +374,13 @@ func (d *CommitDetailWidget) rebuildRows() {
 			}
 		}
 	}
-	if len(d.Files) == 0 {
-		const noFiles = "No files"
-		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noFiles})
-		d.recordWidth(noFiles)
+	if len(d.Files) == 0 && !d.HideEmptyNotice {
+		emptyText := d.EmptyText
+		if emptyText == "" {
+			emptyText = "No files"
+		}
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: emptyText})
+		d.recordWidth(emptyText)
 	}
 	if maxLine > 0 {
 		d.gutterW = textwidth.String(strconv.Itoa(maxLine)) + 3
@@ -349,10 +395,17 @@ func (d *CommitDetailWidget) recordWidth(text string) {
 }
 
 func commitDetailFileHeading(file CommitDetailFile) string {
+	if file.Heading != "" {
+		return file.Heading
+	}
 	if file.OldPath != "" && file.OldPath != file.Path {
 		return fmt.Sprintf("%s → %s", file.OldPath, file.Path)
 	}
 	return file.Path
+}
+
+func commitDetailFileKey(file CommitDetailFile) string {
+	return file.OldPath + "\x00" + file.Path
 }
 
 func (d *CommitDetailWidget) Render(surface Surface) {
@@ -364,7 +417,11 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	surface.Fill(term.Cell{Ch: ' ', Style: term.StyleDefault})
 
 	if d.Loading {
-		surface.DrawText(0, 0, fmt.Sprintf("Loading commit %s…", d.Short), w, term.StyleMuted)
+		loadingText := d.LoadingText
+		if loadingText == "" {
+			loadingText = fmt.Sprintf("Loading commit %s…", d.Short)
+		}
+		surface.DrawText(0, 0, loadingText, w, term.StyleMuted)
 		return
 	}
 	if d.Error != "" {
@@ -565,7 +622,11 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 	for column := 0; column < viewW; column++ {
 		surface.SetCell(column, y, term.Cell{Ch: ' ', Style: term.StyleCommitMessage})
 	}
-	d.drawStaticText(surface, 0, y, viewW, "Commit message", term.StyleCommitMessage, term.StyleCommitMessage, true)
+	header := d.Header
+	if header == "" {
+		header = "Commit message"
+	}
+	d.drawStaticText(surface, 0, y, viewW, header, term.StyleCommitMessage, term.StyleCommitMessage, true)
 	if len(d.Files) == 0 {
 		return
 	}
@@ -575,7 +636,7 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 	}
 	controlW := textwidth.String(label)
 	controlX := viewW - controlW
-	if controlX <= textwidth.String("Commit message") {
+	if controlX <= textwidth.String(header) {
 		return
 	}
 	d.drawStaticText(surface, controlX, y, controlW, label, term.StyleCommitMessage, term.StyleCommitMessage, true)
@@ -584,20 +645,24 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 }
 
 func (d *CommitDetailWidget) renderHeading(surface Surface, rowIndex int, row commitDetailRow, visual commitDetailVisualRow, y, viewW int) {
+	headingStyle := term.StyleDefault
+	if row.fileIndex >= 0 && row.fileIndex < len(d.Files) && d.Files[row.fileIndex].HeadingStyle != 0 {
+		headingStyle = d.Files[row.fileIndex].HeadingStyle
+	}
 	collapsed := row.fileIndex >= 0 && row.fileIndex < len(d.collapsedFiles) && d.collapsedFiles[row.fileIndex]
 	if !visual.continuation {
 		chevron := '▼'
 		if collapsed {
 			chevron = '▶'
 		}
-		surface.SetCell(1, y, term.Cell{Ch: chevron, Style: term.StyleDefault, Bold: true})
+		surface.SetCell(1, y, term.Cell{Ch: chevron, Style: headingStyle, Bold: true})
 	}
 	r := d.GetRect()
 	d.fileControls = append(d.fileControls, commitDetailControl{
 		rect:      Rect{X: r.X, Y: r.Y + y, W: viewW, H: 1},
 		fileIndex: row.fileIndex,
 	})
-	d.drawTextRow(surface, 3, y, viewW-3, row.text, term.StyleDefault, term.StyleDefault, row.bold, visual.leftStart, rowIndex)
+	d.drawTextRow(surface, 3, y, viewW-3, row.text, headingStyle, term.StyleDefault, row.bold, visual.leftStart, rowIndex)
 }
 
 func (d *CommitDetailWidget) renderDiffRow(surface Surface, rowIndex int, row commitDetailRow, visual commitDetailVisualRow, y, viewW int) {
@@ -858,10 +923,14 @@ func (d *CommitDetailWidget) renderStickyHeading(surface Surface, viewW int) {
 	for column := 0; column < viewW; column++ {
 		surface.SetCell(column, 0, term.Cell{Ch: ' ', Style: term.StyleDefault})
 	}
-	surface.SetCell(1, 0, term.Cell{Ch: '▼', Style: term.StyleDefault, Bold: true})
+	headingStyle := d.Files[row.fileIndex].HeadingStyle
+	if headingStyle == 0 {
+		headingStyle = term.StyleDefault
+	}
+	surface.SetCell(1, 0, term.Cell{Ch: '▼', Style: headingStyle, Bold: true})
 	path := truncateCommitDetailPath(commitDetailFileHeading(d.Files[row.fileIndex]), viewW-3)
 	drawTextSegment(surface, 3, 0, viewW-3, path, 0, 0, term.Cell{Ch: ' '}, func(_ int, ch rune) term.Cell {
-		return term.Cell{Ch: ch, Style: term.StyleDefault, Bold: true}
+		return term.Cell{Ch: ch, Style: headingStyle, Bold: true}
 	})
 	r := d.GetRect()
 	d.stickyRect = Rect{X: r.X, Y: r.Y, W: viewW, H: 1}

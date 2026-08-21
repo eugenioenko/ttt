@@ -321,6 +321,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		DocVersions:         make(map[string]int),
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
+		currentChangesLoads: make(map[string]*currentChangesLoadState),
 	}
 	app.Repository = NewRepositoryState(changes, ws.Paths())
 	app.applyMenuBarVisibility(cfg.Settings.Editor.IsMenuBarVisible())

@@ -848,3 +848,21 @@ func TestStageReportsError(t *testing.T) {
 		t.Error("expected an error staging a missing path")
 	}
 }
+
+func TestDiffWorkingTreeFileContextUsesFinalContentInUnbornRepository(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "new.txt", "staged version\n")
+	gitRun(t, dir, "-C", dir, "add", "new.txt")
+	writeFile(t, dir, "new.txt", "final working version\n")
+
+	got, err := DiffWorkingTreeFileContext(context.Background(), dir, FileStatus{Status: "M", Path: "new.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "+final working version") {
+		t.Fatalf("diff omitted final working content:\n%s", got)
+	}
+	if strings.Contains(got, "+staged version") {
+		t.Fatalf("diff stopped at staged snapshot:\n%s", got)
+	}
+}

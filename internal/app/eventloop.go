@@ -38,6 +38,7 @@ func RunEventLoop(
 	if app.Repository != nil {
 		defer app.Repository.Close()
 	}
+	defer app.closeCurrentChanges()
 
 	lastBlameLine := -1
 	lastBlameFile := ""
@@ -393,6 +394,8 @@ func RunEventLoop(
 				app.Changes.ApplyCommitFiles(v)
 			case *CommitDetailResult:
 				app.ApplyCommitDetail(v)
+			case *CurrentChangesResult:
+				app.ApplyCurrentChanges(v)
 			case *DiffOpenResult:
 				app.ApplyDiffOpen(v)
 			case *FileChangedResult:

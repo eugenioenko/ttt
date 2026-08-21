@@ -459,6 +459,7 @@ func (a *App) syncRepositoryObservation() {
 		return
 	}
 	visible := a.Sidebar.Visible && a.SplitPanel.ShowLeft && a.Sidebar.ActivePanel == "changes"
+	visible = visible || a.EditorGroup.ActiveCurrentChangesWidget() != nil
 	a.Repository.SetVisible(visible)
 }
 

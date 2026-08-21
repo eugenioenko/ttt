@@ -98,6 +98,7 @@ type App struct {
 	commandLine          *ui.CommandLineWidget
 	commandLinePrevFocus ui.Widget
 	settingsView         *settingsView
+	currentChangesLoads  map[string]*currentChangesLoadState
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
 	appliedSettings config.Settings
@@ -425,6 +426,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.Changes.Screen = screen
 		a.Changes.OnRefreshed = func() {
 			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
+			a.refreshActiveCurrentChanges()
 		}
 	}
 	if a.Repository != nil {
@@ -456,6 +458,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.EditorGroup.OnContentTabClose = func(id string) {
 		a.cleanupPluginDetailTab(id)
 		a.cleanupSettingsTab(id)
+		a.cleanupCurrentChangesTab(id)
 	}
 	if path := a.EditorGroup.ActiveFilePath(); path != "" {
 		if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {

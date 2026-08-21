@@ -45,4 +45,21 @@ describe("reactive git polling", () => {
     expect(screen).toContain("Changes (1)");
     expect(screen).toContain("tracked.txt");
   });
+
+  it("keeps an active current-changes document live", () => {
+    createRepository();
+
+    tui.start(dir);
+    tui.waitFor("Explore");
+    tui.exec("Git: View All Current Changes");
+    tui.waitFor("Working tree clean");
+
+    writeFileSync(join(dir, "tracked.txt"), "live external version\n", "utf8");
+    tui.waitFor("live external version");
+
+    const screen = tui.snapshot();
+    expect(screen).toContain("Current changes");
+    expect(screen).toContain("M  tracked.txt · unstaged");
+    expect(screen).toContain("live external version");
+  });
 });

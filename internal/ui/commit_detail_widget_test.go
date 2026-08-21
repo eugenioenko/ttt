@@ -29,6 +29,40 @@ func TestCommitDetailDefaultsRemainInheritedUntilViewOverride(t *testing.T) {
 	}
 }
 
+func TestCurrentChangesUsesNativeHeaderAndPreservesCollapseOnRefresh(t *testing.T) {
+	detail := NewCurrentChangesWidget("/repo", false)
+	first := CommitDetailFile{Path: "first.go", Heading: "M  first.go · unstaged"}
+	second := CommitDetailFile{Path: "second.go", Heading: "A  second.go · staged"}
+	detail.SetDetail("2 files · +1 −1", []CommitDetailFile{first, second}, "")
+	detail.toggleFile(1)
+	detail.TopLine = 3
+
+	detail.SetDetail("2 files · +2 −1", []CommitDetailFile{second, first}, "")
+	if detail.Header != "Current changes" || !detail.CurrentChanges {
+		t.Fatalf("current change-set identity = (%q, %v)", detail.Header, detail.CurrentChanges)
+	}
+	if !detail.collapsedFiles[0] || detail.collapsedFiles[1] {
+		t.Fatalf("collapse state did not follow file identity: %v", detail.collapsedFiles)
+	}
+	if detail.TopLine != 3 {
+		t.Fatalf("refresh reset scroll to %d", detail.TopLine)
+	}
+	if got := detail.rows[0].text; got != "Current changes" {
+		t.Fatalf("document header = %q", got)
+	}
+}
+
+func TestCurrentChangesCleanStateHasOneMessage(t *testing.T) {
+	detail := NewCurrentChangesWidget("/repo", false)
+	detail.SetDetail("Working tree clean", nil, "")
+	if len(detail.rows) != 3 {
+		t.Fatalf("clean current changes rendered redundant rows: %+v", detail.rows)
+	}
+	if detail.rows[1].text != "Working tree clean" {
+		t.Fatalf("clean state message = %q", detail.rows[1].text)
+	}
+}
+
 func TestCommitDetailModeAndWrapDefaultsAreIndependent(t *testing.T) {
 	detail := NewCommitDetailWidget("/repo", "full-hash", "abc1234", false)
 	detail.SetWrapMode(DiffWrapOn)

@@ -42,7 +42,9 @@ describe("git file tree", () => {
     tui.click(29, 2);
     tui.waitStable();
     const panelMenu = tui.snapshot();
-    // Skip the new Expand All and Collapse All actions to reach Git Files.
+    // Move past View All Changes, Refresh, Expand All, and Collapse All to
+    // reach Git Files.
+    tui.press("down");
     tui.press("down");
     tui.press("down");
     tui.press("down");

@@ -225,6 +225,9 @@ func TestChangesMenusExposeTreeActionsAndPresentationSubmenus(t *testing.T) {
 		if !commands["changes.expandAll"] || !commands["changes.collapseAll"] {
 			t.Errorf("%s menu missing tree actions: %+v", name, items)
 		}
+		if !commands["changes.viewAll"] {
+			t.Errorf("%s menu missing combined change-set action: %+v", name, items)
+		}
 		if !labels["Git Files"] || !labels["Diff View"] {
 			t.Errorf("%s menu missing presentation submenus: %+v", name, items)
 		}
