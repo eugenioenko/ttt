@@ -167,6 +167,10 @@ func DefaultGitSettings() GitSettings {
 	return GitSettings{FileView: GitFileViewTree}
 }
 
+type SidebarSettings struct {
+	PanelOrder []string `json:"panelOrder,omitempty"`
+}
+
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
@@ -207,6 +211,7 @@ type Settings struct {
 	LSP          LSPSettings          `json:"lsp"`
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
 	Markdown     MarkdownSettings     `json:"markdown"`
+	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
 	// Plugins is safe: its only field is a tri-state *bool where nil means the
 	// default, so the zero value and "unset" mean the same thing.
 	Plugins    PluginSettings    `json:"plugins,omitzero"`
@@ -224,6 +229,7 @@ var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "editor": true,
 	"search": true, "explorer": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "plugins": true, "formatters": true,
+	"sidebar": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {
@@ -304,6 +310,16 @@ func normalizeSettings(s *Settings) {
 	if !slices.Contains(GitFileViews, s.Git.FileView) {
 		s.Git.FileView = GitFileViewTree
 	}
+	seenPanels := make(map[string]bool)
+	panelOrder := s.Sidebar.PanelOrder[:0]
+	for _, id := range s.Sidebar.PanelOrder {
+		if id == "" || seenPanels[id] {
+			continue
+		}
+		seenPanels[id] = true
+		panelOrder = append(panelOrder, id)
+	}
+	s.Sidebar.PanelOrder = panelOrder
 }
 
 func LoadSettings() Settings {

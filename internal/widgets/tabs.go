@@ -18,12 +18,14 @@ type TabAction struct {
 }
 
 type TabsConfig struct {
-	Items      []TabItem   `json:"items"`
-	Actions    []TabAction `json:"-"`
-	Style      term.Style  `json:"-"`
-	Align      string      `json:"align,omitempty"`
-	OnTabClick func(index int)
-	OnOverflow func(screenX, screenY int)
+	Items       []TabItem   `json:"items"`
+	Actions     []TabAction `json:"-"`
+	Style       term.Style  `json:"-"`
+	Align       string      `json:"align,omitempty"`
+	Reorderable bool        `json:"-"`
+	OnTabClick  func(index int)
+	OnOverflow  func(screenX, screenY int)
+	OnReorder   func(from, to int)
 }
 
 type TabsWidget struct {
@@ -36,6 +38,7 @@ type TabsWidget struct {
 	wasPressed  bool
 	focused     bool
 	selected    int
+	drag        TabDragState
 }
 
 func NewTabsWidget(config TabsConfig) *TabsWidget {
@@ -247,6 +250,10 @@ func (t *TabsWidget) Render(surface Surface) {
 		ax++
 		t.actionSpans = append(t.actionSpans, [2]int{startX, startX + aw})
 	}
+
+	if x := t.dropIndicatorX(); x >= 0 && x < w {
+		inner.SetCell(x, 0, term.Cell{Ch: '│', Style: term.StyleBorderActive})
+	}
 }
 
 func (t *TabsWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -318,17 +325,34 @@ func (t *TabsWidget) handleKey(ev *tcell.EventKey) EventResult {
 
 func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	pressed := mev.Buttons()&tcell.Button1 != 0
+	mx, my := mev.Position()
+	r := t.GetRect()
+	lx := mx - r.X - t.Box.MarginLeft - t.Box.PaddingLeft
+
+	if mev.Buttons() == tcell.ButtonNone {
+		t.wasPressed = false
+		if t.drag.Active() {
+			from, to, dragged := t.drag.End()
+			if dragged && from != to && t.Config.OnReorder != nil {
+				t.Config.OnReorder(from, to)
+			}
+			return EventConsumed
+		}
+		return EventIgnored
+	}
+	if t.drag.Active() && pressed {
+		t.drag.Update(mx, t.dropTargetAt(lx))
+		return EventCaptured
+	}
+
 	freshClick := pressed && !t.wasPressed
 	t.wasPressed = pressed
 	if !freshClick {
 		return EventIgnored
 	}
-	mx, my := mev.Position()
-	r := t.GetRect()
 	if my < r.Y || my >= r.Y+r.H || mx < r.X || mx >= r.X+r.W {
 		return EventIgnored
 	}
-	lx := mx - r.X - t.Box.MarginLeft - t.Box.PaddingLeft
 
 	for i, span := range t.actionSpans {
 		if lx >= span[0] && lx < span[1] {
@@ -350,8 +374,44 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 			if t.Config.OnTabClick != nil {
 				t.Config.OnTabClick(i)
 			}
+			if t.Config.Reorderable && t.Config.OnReorder != nil {
+				t.drag.Begin(i, mx)
+				return EventCaptured
+			}
 			return EventConsumed
 		}
 	}
 	return EventIgnored
+}
+
+func (t *TabsWidget) dropTargetAt(localX int) int {
+	last := -1
+	for i, span := range t.tabSpans {
+		if span[1] <= span[0] {
+			continue
+		}
+		last = i
+		if localX < span[0]+(span[1]-span[0])/2 {
+			return i
+		}
+	}
+	return last
+}
+
+func (t *TabsWidget) dropIndicatorX() int {
+	if !t.drag.Dragging() || t.drag.From() == t.drag.Target() {
+		return -1
+	}
+	target := t.drag.Target()
+	if target < 0 || target >= len(t.tabSpans) {
+		return -1
+	}
+	span := t.tabSpans[target]
+	if span[1] <= span[0] {
+		return -1
+	}
+	if target < t.drag.From() {
+		return span[0]
+	}
+	return span[1] - 1
 }

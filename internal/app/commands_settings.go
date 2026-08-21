@@ -85,6 +85,9 @@ func (a *App) ApplySettings(s config.Settings) {
 	if a.Changes != nil {
 		a.Changes.SetFileView(s.Git.FileView)
 	}
+	if a.Sidebar != nil {
+		a.Sidebar.SetPanelOrder(s.Sidebar.PanelOrder)
+	}
 
 	// LoadTheme also accepts the empty built-in-default ID used by both theme
 	// pickers, so every surfaced theme follows one resolve-and-apply path.

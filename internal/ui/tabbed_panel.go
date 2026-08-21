@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"slices"
+	"sort"
+
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -12,11 +15,13 @@ type panelEntry struct {
 }
 
 type TabbedPanel struct {
-	ActivePanel   string
-	Tabs          *widgets.TabsWidget
-	OnPanelChange func(id string)
+	ActivePanel    string
+	Tabs           *widgets.TabsWidget
+	OnPanelChange  func(id string)
+	OnPanelReorder func(ids []string)
 
-	panels []panelEntry
+	panels         []panelEntry
+	preferredOrder []string
 }
 
 func NewTabbedPanel() TabbedPanel {
@@ -31,6 +36,9 @@ func (tp *TabbedPanel) InitTabClick() {
 			tp.SetActivePanel(tp.panels[index].ID)
 		}
 	}
+	tp.Tabs.Config.OnReorder = func(from, to int) {
+		tp.MovePanel(from, to)
+	}
 }
 
 func (tp *TabbedPanel) AddPanel(id, title string, w Widget) {
@@ -38,7 +46,77 @@ func (tp *TabbedPanel) AddPanel(id, title string, w Widget) {
 	if tp.ActivePanel == "" {
 		tp.ActivePanel = id
 	}
+	tp.applyPreferredOrder()
 	tp.syncTabs()
+}
+
+func (tp *TabbedPanel) SetPanelOrder(order []string) {
+	tp.preferredOrder = slices.Clone(order)
+	tp.applyPreferredOrder()
+	tp.syncTabs()
+}
+
+func (tp *TabbedPanel) applyPreferredOrder() {
+	if len(tp.preferredOrder) == 0 || len(tp.panels) < 2 {
+		return
+	}
+	rank := make(map[string]int, len(tp.preferredOrder))
+	for i, id := range tp.preferredOrder {
+		if _, exists := rank[id]; !exists {
+			rank[id] = i
+		}
+	}
+	sort.SliceStable(tp.panels, func(i, j int) bool {
+		ri, iKnown := rank[tp.panels[i].ID]
+		rj, jKnown := rank[tp.panels[j].ID]
+		switch {
+		case iKnown && jKnown:
+			return ri < rj
+		case iKnown:
+			return true
+		case jKnown:
+			return false
+		default:
+			return false
+		}
+	})
+}
+
+func (tp *TabbedPanel) MovePanel(from, to int) bool {
+	if from < 0 || from >= len(tp.panels) || to < 0 || to >= len(tp.panels) || from == to {
+		return false
+	}
+	panel := tp.panels[from]
+	tp.panels = append(tp.panels[:from], tp.panels[from+1:]...)
+	tp.panels = slices.Insert(tp.panels, to, panel)
+	tp.preferredOrder = tp.PanelIDs()
+	tp.syncTabs()
+	if tp.OnPanelReorder != nil {
+		tp.OnPanelReorder(tp.PanelIDs())
+	}
+	return true
+}
+
+func (tp *TabbedPanel) ActivePanelIndex() int {
+	for i, panel := range tp.panels {
+		if panel.ID == tp.ActivePanel {
+			return i
+		}
+	}
+	return -1
+}
+
+func (tp *TabbedPanel) CanMoveActivePanel(dir int) bool {
+	idx := tp.ActivePanelIndex()
+	return idx >= 0 && idx+dir >= 0 && idx+dir < len(tp.panels)
+}
+
+func (tp *TabbedPanel) MoveActivePanel(dir int) bool {
+	idx := tp.ActivePanelIndex()
+	if idx < 0 {
+		return false
+	}
+	return tp.MovePanel(idx, idx+dir)
 }
 
 func (tp *TabbedPanel) RemovePanel(id string) {

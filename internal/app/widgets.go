@@ -275,6 +275,8 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	sidebar.AddPanel("search", "Find", search)
 	sidebar.AddPanel("changes", "Changes", changes.Adapter)
 	sidebar.AddPanel("outline", "Outline", symbols.Adapter)
+	sidebar.SetPanelOrder(cfg.Settings.Sidebar.PanelOrder)
+	sidebar.Tabs.Config.Reorderable = true
 	hasFolders := len(ws.Paths()) > 0
 	sidebar.Visible = hasFolders
 	sidebar.Borders = borders

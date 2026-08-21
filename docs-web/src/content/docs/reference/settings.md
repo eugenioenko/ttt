@@ -66,6 +66,12 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `git.fileView` | string | `"tree"` | Show working-tree and expanded commit files as a compact `"tree"` or a full-path `"list"` |
 
+## Sidebar
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `sidebar.panelOrder` | string[] | built-in order | Preferred sidebar panel-header order. Dragging a header or using **Move Panel Left/Right** updates it automatically. Unknown plugin panel IDs are retained for when that plugin loads. |
+
 ## Terminal
 
 | Key | Type | Default | Description |
@@ -173,6 +179,9 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   },
   "git": {
     "fileView": "tree"
+  },
+  "sidebar": {
+    "panelOrder": ["explorer", "search", "changes", "outline"]
   },
   "terminal": {
     "shell": "/bin/zsh",

@@ -67,6 +67,13 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			}
 		}
 	}
+	moveItems := a.sidebarMoveMenuItems()
+	if len(moveItems) > 0 {
+		if len(items) > 0 && !items[len(items)-1].IsSep {
+			items = append(items, ui.MenuSep())
+		}
+		items = append(items, moveItems...)
+	}
 	if len(items) > 0 {
 		openContextMenu(a, items, sx, sy)
 	}
@@ -489,6 +496,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Sidebar.Tabs.Config.Actions = []widgets.TabAction{
 		{Icon: "⋮", OnClick: app.ShowSidebarMoreMenu},
 	}
+	app.Sidebar.OnPanelReorder = app.persistSidebarPanelOrder
 
 	app.Sidebar.Tabs.Config.OnOverflow = func(sx, sy int) {
 		ids, titles := app.Sidebar.HiddenTabs()

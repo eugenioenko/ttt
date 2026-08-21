@@ -557,6 +557,7 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
 | `git.fileView` | string | `"tree"` | Show changed and historical commit files as a compact `"tree"` or full-path `"list"` |
+| `sidebar.panelOrder` | string[] | built-in order | Sidebar panel IDs in preferred header order; updated when headers are dragged |
 | `terminal.shell` | string | `""` | Shell command for the integrated terminal (empty = system default) |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain in the terminal |
 | `lsp.saveOnRename` | bool | `false` | Auto-save all files affected by a rename operation |
@@ -591,6 +592,9 @@ Example `~/.config/ttt/settings.json` (also available at [`config/settings.json`
   },
   "git": {
     "fileView": "tree"
+  },
+  "sidebar": {
+    "panelOrder": ["explorer", "search", "changes", "outline"]
   },
   "terminal": {
     "shell": "",
