@@ -308,6 +308,99 @@ func TestRepositoryRootFailurePreservesCanonicalMultiRootOrderAndRecovers(t *tes
 	}
 }
 
+func TestRepositoryRootFailureDeduplicatesCanonicalRepositoryAndRecovers(t *testing.T) {
+	repo := t.TempDir()
+	sourceA := filepath.Join(repo, "workspace-a")
+	sourceB := filepath.Join(repo, "workspace-b")
+	for _, source := range []string{sourceA, sourceB} {
+		if err := os.Mkdir(source, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previous := changesGroup{Dir: repo, Name: filepath.Base(repo), Unstaged: []git.FileStatus{{Status: "M", Path: "kept.txt"}}}
+	cp := NewChangesPanel(sourceA, sourceB)
+	s := NewRepositoryState(cp, []string{sourceA, sourceB})
+
+	s.requested = 1
+	s.inFlight = true
+	s.dirty = RepositoryWorktree
+	s.HandleStatus(&RepositoryStatusResult{Seq: 1, Entries: []repositoryStatusEntry{{SourceDir: sourceA, Group: previous, Revision: "old"}}})
+
+	failure := func(source string) repositoryStatusEntry {
+		return repositoryStatusEntry{
+			SourceDir: source,
+			Group:     changesGroup{Dir: source, Name: filepath.Base(source)},
+			RootErr:   errors.New("root unavailable"), StatusErr: errors.New("status unavailable"), RevisionErr: errors.New("revision unavailable"),
+		}
+	}
+	assertLastGood := func(stage string) {
+		t.Helper()
+		if len(cp.groups) != 1 || cp.groups[0].Dir != repo || len(cp.groups[0].Unstaged) != 1 || cp.groups[0].Unstaged[0].Path != "kept.txt" {
+			t.Fatalf("%s groups = %+v, want one canonical last-good group", stage, cp.groups)
+		}
+		if s.dirty&RepositoryWorktree == 0 {
+			t.Fatalf("%s failure was marked fresh", stage)
+		}
+	}
+
+	s.requested = 2
+	s.inFlight = true
+	s.dirty = RepositoryWorktree
+	s.HandleStatus(&RepositoryStatusResult{Seq: 2, Entries: []repositoryStatusEntry{
+		{SourceDir: sourceA, Group: previous, Revision: "old"},
+		failure(sourceB),
+	}})
+	assertLastGood("partial")
+
+	s.requested = 3
+	s.inFlight = true
+	s.HandleStatus(&RepositoryStatusResult{Seq: 3, Entries: []repositoryStatusEntry{failure(sourceB), failure(sourceA)}})
+	assertLastGood("all-sources")
+
+	fresh := changesGroup{Dir: repo, Name: filepath.Base(repo), Unstaged: []git.FileStatus{{Status: "M", Path: "fresh.txt"}}}
+	s.requested = 4
+	s.inFlight = true
+	s.HandleStatus(&RepositoryStatusResult{Seq: 4, Entries: []repositoryStatusEntry{{SourceDir: sourceB, Group: fresh, Revision: "new"}}})
+	if len(cp.groups) != 1 || cp.groups[0].Dir != repo || cp.groups[0].Unstaged[0].Path != "fresh.txt" {
+		t.Fatalf("recovery groups = %+v, want one fresh canonical group", cp.groups)
+	}
+	if s.dirty&RepositoryWorktree != 0 {
+		t.Fatal("successful recovery did not mark working tree fresh")
+	}
+}
+
+func TestRepositoryRootFailureKeepsDistinctNestedRepositories(t *testing.T) {
+	outer := t.TempDir()
+	inner := filepath.Join(outer, "nested")
+	outerSource := filepath.Join(outer, "outer-work")
+	innerSource := filepath.Join(inner, "inner-work")
+	for _, dir := range []string{inner, outerSource, innerSource} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cp := NewChangesPanel(outerSource, innerSource)
+	s := NewRepositoryState(cp, []string{outerSource, innerSource})
+	s.requested = 1
+	s.inFlight = true
+	s.dirty = RepositoryWorktree
+	s.HandleStatus(&RepositoryStatusResult{Seq: 1, Entries: []repositoryStatusEntry{
+		{SourceDir: outerSource, Group: changesGroup{Dir: outer, Name: filepath.Base(outer)}, Revision: "outer"},
+		{SourceDir: innerSource, Group: changesGroup{Dir: inner, Name: filepath.Base(inner)}, Revision: "inner"},
+	}})
+
+	s.requested = 2
+	s.inFlight = true
+	s.dirty = RepositoryWorktree
+	s.HandleStatus(&RepositoryStatusResult{Seq: 2, Entries: []repositoryStatusEntry{
+		{SourceDir: outerSource, Group: changesGroup{Dir: outerSource}, RootErr: errors.New("root"), StatusErr: errors.New("status"), RevisionErr: errors.New("revision")},
+		{SourceDir: innerSource, Group: changesGroup{Dir: innerSource}, RootErr: errors.New("root"), StatusErr: errors.New("status"), RevisionErr: errors.New("revision")},
+	}})
+	if len(cp.groups) != 2 || cp.groups[0].Dir != outer || cp.groups[1].Dir != inner {
+		t.Fatalf("nested groups merged or reordered: %+v", cp.groups)
+	}
+}
+
 func TestRepositoryScanCarriesSourceIdentityAndRootFailure(t *testing.T) {
 	bin := t.TempDir()
 	script := "#!/bin/sh\nexit 91\n"
@@ -345,6 +438,11 @@ func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePosit
 		path func(t *testing.T) string
 		want bool
 	}{
+		{
+			name: "missing internal target",
+			path: func(t *testing.T) string { return filepath.Join(repo, "missing.txt") },
+			want: true,
+		},
 		{
 			name: "existing target through outside alias",
 			path: func(t *testing.T) string { return filepath.Join(alias, "existing.txt") },
@@ -391,6 +489,32 @@ func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePosit
 				return filepath.Join(alias, "restricted", "new.txt")
 			},
 			want: true,
+		},
+		{
+			name: "broken in-repository symlink",
+			path: func(t *testing.T) string {
+				link := filepath.Join(repo, "broken-internal")
+				if err := os.Symlink(filepath.Join(external, "missing"), link); err != nil {
+					t.Fatal(err)
+				}
+				return filepath.Join(link, "new.txt")
+			},
+			want: false,
+		},
+		{
+			name: "in-repository symlink loop",
+			path: func(t *testing.T) string {
+				first := filepath.Join(repo, "loop-a")
+				second := filepath.Join(repo, "loop-b")
+				if err := os.Symlink(second, first); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(first, second); err != nil {
+					t.Fatal(err)
+				}
+				return filepath.Join(first, "new.txt")
+			},
+			want: false,
 		},
 		{
 			name: "external target through in-repository symlink",
@@ -457,6 +581,33 @@ func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePosit
 				t.Fatalf("invalidated = %v, want %v (requested=%d dirty=%b)", got, test.want, s.requested, s.dirty)
 			}
 		})
+	}
+}
+
+func TestRepositoryInvalidationUsesCurrentSymlinkTargetAfterRetarget(t *testing.T) {
+	repo := t.TempDir()
+	external := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "retargeted")
+	if err := os.Symlink(repo, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	internal, _, _ := testRepositoryState(nil, repo)
+	internal.InvalidatePath(filepath.Join(alias, "new.txt"), RepositoryWorktree)
+	if internal.requested != 1 || internal.dirty&RepositoryWorktree == 0 {
+		t.Fatalf("internal alias did not invalidate: requested=%d dirty=%b", internal.requested, internal.dirty)
+	}
+
+	if err := os.Remove(alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, alias); err != nil {
+		t.Fatal(err)
+	}
+	externalState, _, _ := testRepositoryState(nil, repo)
+	externalState.InvalidatePath(filepath.Join(alias, "new.txt"), RepositoryWorktree)
+	if externalState.requested != 0 || externalState.dirty != 0 {
+		t.Fatalf("retargeted external alias invalidated: requested=%d dirty=%b", externalState.requested, externalState.dirty)
 	}
 }
 

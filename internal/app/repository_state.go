@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -279,6 +281,7 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 	groups := make([]changesGroup, 0, len(result.Entries))
 	nextGroups := make(map[string]changesGroup, len(result.Entries))
 	nextRevisions := make(map[string]string, len(result.Entries))
+	seenGroups := make(map[string]bool, len(result.Entries))
 	revisionChanged := false
 	hadError := false
 	for _, entry := range result.Entries {
@@ -303,14 +306,18 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 				group = previous
 			}
 		}
-		groups = append(groups, group)
-		nextGroups[group.Dir] = group
 
 		revision := entry.Revision
 		if entry.RevisionErr != nil {
 			hadError = true
 			revision = s.lastRevisions[group.Dir]
 		}
+		if seenGroups[group.Dir] {
+			continue
+		}
+		seenGroups[group.Dir] = true
+		groups = append(groups, group)
+		nextGroups[group.Dir] = group
 		if previous, ok := s.lastRevisions[group.Dir]; ok && group.Dir == selectedDir && previous != revision {
 			revisionChanged = true
 		}
@@ -525,23 +532,71 @@ func resolveRepositoryPathIdentity(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	current := filepath.Clean(abs)
+	abs = filepath.Clean(abs)
+	resolved, resolveErr := stableSymlinkIdentity(abs)
+	if resolveErr == nil {
+		return resolved, nil
+	}
+	if _, lstatErr := os.Lstat(abs); lstatErr == nil {
+		return "", resolveErr
+	} else if errors.Is(lstatErr, os.ErrPermission) {
+		return resolveRepositoryPathFromAccessibleAncestor(abs)
+	} else if !errors.Is(lstatErr, os.ErrNotExist) {
+		return "", resolveErr
+	}
+	parent := filepath.Dir(abs)
+	resolvedParent, parentErr := stableSymlinkIdentity(parent)
+	if parentErr != nil {
+		return "", resolveErr
+	}
+	if _, lstatErr := os.Lstat(abs); lstatErr == nil {
+		return stableSymlinkIdentity(abs)
+	} else if !errors.Is(lstatErr, os.ErrNotExist) {
+		return "", lstatErr
+	}
+	confirmedParent, err := stableSymlinkIdentity(parent)
+	if err != nil || confirmedParent != resolvedParent {
+		return "", errors.New("repository path parent changed while resolving")
+	}
+	return filepath.Join(resolvedParent, filepath.Base(abs)), nil
+}
+
+func resolveRepositoryPathFromAccessibleAncestor(path string) (string, error) {
+	current := path
 	remaining := make([]string, 0, 4)
 	for {
-		resolved, resolveErr := filepath.EvalSymlinks(current)
-		if resolveErr == nil {
-			for i := len(remaining) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, remaining[i])
-			}
-			return filepath.Clean(resolved), nil
-		}
 		parent := filepath.Dir(current)
 		if parent == current {
-			return "", resolveErr
+			return "", os.ErrPermission
 		}
 		remaining = append(remaining, filepath.Base(current))
 		current = parent
+		resolved, err := stableSymlinkIdentity(current)
+		if err != nil {
+			continue
+		}
+		for i := len(remaining) - 1; i >= 0; i-- {
+			resolved = filepath.Join(resolved, remaining[i])
+		}
+		return filepath.Clean(resolved), nil
 	}
+}
+
+func stableSymlinkIdentity(path string) (string, error) {
+	first, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	second, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	first = filepath.Clean(first)
+	second = filepath.Clean(second)
+	if first != second {
+		return "", errors.New("repository path changed while resolving")
+	}
+	return first, nil
 }
 
 func cleanAbsolutePath(path string) string {
