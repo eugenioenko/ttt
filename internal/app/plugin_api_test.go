@@ -5,7 +5,68 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
+
+func TestContextMenuItemFromWidgetEntryPreservesMenuContract(t *testing.T) {
+	checked, unchecked := true, false
+	tests := []struct {
+		name      string
+		checked   *bool
+		separator bool
+		want      int
+	}{
+		{name: "omitted", want: 0},
+		{name: "unchecked", checked: &unchecked, want: ui.MenuUnchecked},
+		{name: "checked", checked: &checked, want: ui.MenuChecked},
+		{name: "separator", separator: true, want: 0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			entry := widgets.MenuEntry{
+				Label:     "Mode",
+				Command:   "mode",
+				Separator: test.separator,
+				Checked:   test.checked,
+			}
+			item := contextMenuItemFromWidgetEntry(entry)
+
+			if item.Label != entry.Label || item.Command != entry.Command || item.IsSep != entry.Separator {
+				t.Fatalf("menu fields changed during conversion: got %+v, entry %+v", item, entry)
+			}
+			if item.Checked != test.want {
+				t.Fatalf("checked indicator = %d, want %d", item.Checked, test.want)
+			}
+		})
+	}
+}
+
+func TestContextMenuItemsFromWidgetEntriesPreservesMixedRows(t *testing.T) {
+	checked, unchecked := true, false
+	entries := []widgets.MenuEntry{
+		{Label: "Omitted", Command: "omitted"},
+		{Label: "Unchecked", Command: "unchecked", Checked: &unchecked},
+		{Separator: true, Checked: &checked},
+		{Label: "Checked", Command: "checked", Checked: &checked},
+	}
+
+	items := contextMenuItemsFromWidgetEntries(entries)
+	if len(items) != len(entries) {
+		t.Fatalf("items = %d, want %d", len(items), len(entries))
+	}
+	wantChecked := []int{0, ui.MenuUnchecked, 0, ui.MenuChecked}
+	for i := range items {
+		if items[i].Label != entries[i].Label || items[i].Command != entries[i].Command || items[i].IsSep != entries[i].Separator {
+			t.Errorf("row %d changed during conversion: got %+v, entry %+v", i, items[i], entries[i])
+		}
+		if items[i].Checked != wantChecked[i] {
+			t.Errorf("row %d checked = %d, want %d", i, items[i].Checked, wantChecked[i])
+		}
+	}
+}
 
 func TestSetPathNilDeletesKey(t *testing.T) {
 	m := map[string]any{

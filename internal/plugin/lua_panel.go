@@ -551,6 +551,10 @@ func parseLuaMenuEntries(L *lua.LState, tbl *lua.LTable) []widgets.MenuEntry {
 		if sep := L.GetField(entry, "separator"); sep != lua.LNil {
 			me.Separator = lua.LVAsBool(sep)
 		}
+		if checked := L.GetField(entry, "checked"); checked != lua.LNil {
+			value := lua.LVAsBool(checked)
+			me.Checked = &value
+		}
 		entries = append(entries, me)
 	})
 	return entries

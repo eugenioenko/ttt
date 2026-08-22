@@ -23,7 +23,13 @@ type TitleWidget struct {
 }
 
 func NewTitleWidget(config TitleConfig) *TitleWidget {
-	t := &TitleWidget{Config: config}
+	t := &TitleWidget{}
+	t.UpdateConfig(config)
+	return t
+}
+
+func (t *TitleWidget) UpdateConfig(config TitleConfig) {
+	t.Config = config
 	if len(config.Menu) > 0 {
 		label := config.Icon
 		if label == "" {
@@ -35,15 +41,21 @@ func NewTitleWidget(config TitleConfig) *TitleWidget {
 		} else {
 			box = &BoxModel{PaddingLeft: 0, PaddingRight: 0}
 		}
-		t.dropdown = NewDropdownWidget(DropdownConfig{
+		dropdownConfig := DropdownConfig{
 			Label:   label,
 			Entries: config.Menu,
 			Style:   config.Style,
 			Box:     box,
 			OnMenu:  config.OnMenu,
-		})
+		}
+		if t.dropdown == nil {
+			t.dropdown = NewDropdownWidget(dropdownConfig)
+		} else {
+			t.dropdown.UpdateConfig(dropdownConfig)
+		}
+	} else {
+		t.dropdown = nil
 	}
-	return t
 }
 
 func (t *TitleWidget) Height() int { return 1 + t.BoxOverheadH() }

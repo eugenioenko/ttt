@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -72,11 +73,11 @@ func (c *ContextMenuWidget) menuWidth() int {
 		if it.IsSep {
 			continue
 		}
-		lr := len([]rune(it.Label))
+		lr := textwidth.String(it.Label)
 		if lr > maxLabel {
 			maxLabel = lr
 		}
-		sr := len([]rune(it.Shortcut))
+		sr := textwidth.String(it.Shortcut)
 		if sr > maxShort {
 			maxShort = sr
 		}
@@ -96,9 +97,19 @@ func (c *ContextMenuWidget) menuWidth() int {
 
 func (c *ContextMenuWidget) Render(surface Surface) {
 	sw, sh := surface.Size()
+	if sw <= 0 || sh <= 0 {
+		c.storeRect(0, 0, 0, 0)
+		return
+	}
 
 	menuW := c.menuWidth()
 	menuH := len(c.Items) + 2
+	if menuW > sw {
+		menuW = sw
+	}
+	if menuH > sh {
+		menuH = sh
+	}
 
 	x := c.AnchorX
 	y := c.AnchorY
@@ -114,6 +125,10 @@ func (c *ContextMenuWidget) Render(surface Surface) {
 	if y < 0 {
 		y = 0
 	}
+	c.storeRect(x, y, menuW, menuH)
+	if menuW < 2 || menuH < 2 {
+		return
+	}
 
 	b := term.SingleBorderSet()
 	if c.Borders != nil {
@@ -124,6 +139,9 @@ func (c *ContextMenuWidget) Render(surface Surface) {
 
 	for i, it := range c.Items {
 		row := y + 1 + i
+		if row >= y+menuH-1 {
+			break
+		}
 		if it.IsSep {
 			for bx := x + 1; bx < x+menuW-1; bx++ {
 				surface.SetCell(bx, row, term.Cell{Ch: b.Horizontal, Style: bs})
@@ -138,7 +156,7 @@ func (c *ContextMenuWidget) Render(surface Surface) {
 
 		surface.ClearRect(x+1, row, menuW-2, 1, style)
 		labelX := x + 2
-		if c.hasCheckedItems() {
+		if it.Checked != 0 {
 			if it.Checked == MenuChecked {
 				surface.SetCell(x+1, row, term.Cell{Ch: '✓', Style: style})
 			}
@@ -151,13 +169,10 @@ func (c *ContextMenuWidget) Render(surface Surface) {
 			if i == c.Selected {
 				shortStyle = style
 			}
-			shortRunes := []rune(it.Shortcut)
-			sx := x + menuW - 2 - len(shortRunes)
+			sx := x + menuW - 2 - textwidth.String(it.Shortcut)
 			surface.DrawText(sx, row, it.Shortcut, x+menuW-1, shortStyle)
 		}
 	}
-
-	c.storeRect(x, y, menuW, menuH)
 }
 
 func (c *ContextMenuWidget) storeRect(x, y, w, h int) {

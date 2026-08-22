@@ -501,14 +501,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		})
 	}
 	p.ShowContextMenu = func(entries []widgets.MenuEntry, x, y int, onCommand func(string)) {
-		items := make([]ui.ContextMenuItem, len(entries))
-		for i, e := range entries {
-			items[i] = ui.ContextMenuItem{
-				Label:   e.Label,
-				Command: e.Command,
-				IsSep:   e.Separator,
-			}
-		}
+		items := contextMenuItemsFromWidgetEntries(entries)
 		a.captureMenuFocus()
 		menu := ui.NewContextMenuWidget(items, x, y)
 		menu.Borders = a.Borders
@@ -769,14 +762,7 @@ func (a *App) handleRemoteRegistryResult(result *RemoteRegistryResult) {
 }
 
 func (a *App) ShowPluginDropdownMenu(entries []widgets.MenuEntry, x, y int) {
-	items := make([]ui.ContextMenuItem, len(entries))
-	for i, e := range entries {
-		items[i] = ui.ContextMenuItem{
-			Label:   e.Label,
-			Command: e.Command,
-			IsSep:   e.Separator,
-		}
-	}
+	items := contextMenuItemsFromWidgetEntries(entries)
 	a.captureMenuFocus()
 	menu := ui.NewContextMenuWidget(items, x, y)
 	menu.Borders = a.Borders
@@ -791,6 +777,29 @@ func (a *App) ShowPluginDropdownMenu(entries []widgets.MenuEntry, x, y int) {
 	}
 	a.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
 	a.Root.SetFocus(menu)
+}
+
+func contextMenuItemFromWidgetEntry(entry widgets.MenuEntry) ui.ContextMenuItem {
+	item := ui.ContextMenuItem{
+		Label:   entry.Label,
+		Command: entry.Command,
+		IsSep:   entry.Separator,
+	}
+	if !entry.Separator && entry.Checked != nil {
+		item.Checked = ui.MenuUnchecked
+		if *entry.Checked {
+			item.Checked = ui.MenuChecked
+		}
+	}
+	return item
+}
+
+func contextMenuItemsFromWidgetEntries(entries []widgets.MenuEntry) []ui.ContextMenuItem {
+	items := make([]ui.ContextMenuItem, len(entries))
+	for i, entry := range entries {
+		items[i] = contextMenuItemFromWidgetEntry(entry)
+	}
+	return items
 }
 
 func (a *App) handlePluginDropdownCommand(cmd string) {

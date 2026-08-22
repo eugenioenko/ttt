@@ -34,6 +34,19 @@ func NewDropdownWidget(config DropdownConfig) *DropdownWidget {
 	return &DropdownWidget{Config: config, button: btn}
 }
 
+func (d *DropdownWidget) UpdateConfig(config DropdownConfig) {
+	if config.Label == "" {
+		config.Label = "⋮"
+	}
+	d.Config = config
+	d.button.Config.Label = config.Label
+	d.button.Config.Style = config.Style
+	d.button.SetLabel(config.Label)
+	if config.Box != nil {
+		d.button.Box = *config.Box
+	}
+}
+
 func (d *DropdownWidget) Height() int { return d.button.Height() }
 func (d *DropdownWidget) Width() int  { return d.button.Width() }
 

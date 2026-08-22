@@ -1202,18 +1202,20 @@ Used in `items` arrays for both `tree` and `list` widgets.
 
 ### Menu Entry Format
 
-Used in `actions` (sidebar header menu), `node_menu` (tree/list context menu), and `entries` (dropdown).
+Used in `actions` (sidebar header menu), `menu` (title menu), `node_menu` (tree/list/table context menu), and `entries` (dropdown).
 
 | Field       | Type    | Required | Description                             |
 |-------------|---------|----------|-----------------------------------------|
 | `label`     | string  | yes*     | Display text of the menu item.          |
 | `command`   | string  | yes*     | Command identifier passed to the callback. |
 | `separator` | boolean | no       | If `true`, renders as a separator line instead of an item. When `true`, `label` and `command` are ignored. |
+| `checked`   | boolean | no       | If provided, reserves a check indicator: `true` shows a checkmark and `false` shows an empty slot. Omit it to keep the menu indicator-free with its existing spacing. |
 
 ```lua
 {
-  { label = "Start", command = "start" },
-  { label = "Stop", command = "stop" },
+  { label = "Active", command = "active", checked = true },
+  { label = "Available", command = "available", checked = false },
+  { label = "Legacy action", command = "legacy" },
   { separator = true },
   { label = "Remove", command = "remove" },
 }
