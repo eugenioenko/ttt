@@ -8,14 +8,23 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-func TestBuildStyleMapIncludesCollapsedDiffStyle(t *testing.T) {
+func TestBuildStyleMapIncludesCollapsedHoverStyle(t *testing.T) {
 	theme := config.DefaultTheme()
-	theme.Diff.Collapsed = config.StyleDef{Fg: "#123456", Bg: "#654321", Bold: true}
+	theme.Diff.CollapsedHover = config.StyleDef{Fg: "#123456", Bg: "#654321", Bold: true}
 	styles := BuildStyleMap(theme)
-	style := styles[term.StyleDiffCollapsed]
+	style := styles[term.StyleDiffCollapsedHover]
 	fg, bg, attrs := style.GetForeground(), style.GetBackground(), style.GetAttributes()
 	if fg != tcell.GetColor("#123456") || bg != tcell.GetColor("#654321") || attrs&tcell.AttrBold == 0 {
-		t.Fatalf("collapsed diff style = fg %v bg %v attrs %v", fg, bg, attrs)
+		t.Fatalf("collapsed hover style = fg %v bg %v attrs %v", fg, bg, attrs)
+	}
+}
+
+func TestBuildStyleMapDefaultsCollapsedHoverToActiveLine(t *testing.T) {
+	theme := config.DefaultTheme()
+	theme.Editor.ActiveLine.Bg = "#123456"
+	styles := BuildStyleMap(theme)
+	if got := styles[term.StyleDiffCollapsedHover].GetBackground(); got != tcell.GetColor("#123456") {
+		t.Fatalf("collapsed hover background = %v, want active-line background", got)
 	}
 }
 

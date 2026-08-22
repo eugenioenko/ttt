@@ -48,7 +48,11 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	applyStyleDef(&m, term.StyleDiffAdded, theme.Diff.Added)
 	applyStyleDef(&m, term.StyleDiffDeleted, theme.Diff.Deleted)
 	applyStyleDef(&m, term.StyleDiffModified, theme.Diff.Modified)
-	applyStyleDef(&m, term.StyleDiffCollapsed, theme.Diff.Collapsed)
+	collapsedHover := theme.Diff.CollapsedHover
+	if collapsedHover.Bg == "" {
+		collapsedHover.Bg = theme.Editor.ActiveLine.Bg
+	}
+	applyStyleDef(&m, term.StyleDiffCollapsedHover, collapsedHover)
 	applyStyleDef(&m, term.StyleGutterAdded, theme.Diff.GutterAdded)
 	applyStyleDef(&m, term.StyleGutterDeleted, theme.Diff.GutterDeleted)
 	applyStyleDef(&m, term.StyleGutterModified, theme.Diff.GutterModified)

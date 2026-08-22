@@ -402,8 +402,8 @@ func TestDiffWidgetCollapsedSeparatorIsQuietUntilHovered(t *testing.T) {
 		t.Fatalf("collapsed separator hover result = %v, want EventConsumed for redraw", result)
 	}
 	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
-	if got := grid[separatorRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsed {
-		t.Fatalf("hovered separator style = %v, want StyleDiffCollapsed", got)
+	if got := grid[separatorRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsedHover {
+		t.Fatalf("hovered separator style = %v, want StyleDiffCollapsedHover", got)
 	}
 	if got := grid[separatorRow][dv.layoutGutterW-1]; got.Ch != '▶' || got.Style != term.StyleLineNumber {
 		t.Fatalf("hovered separator gutter cell = %+v, want stable line-number disclosure triangle", got)
@@ -678,6 +678,41 @@ func TestDiffWidgetLoadingCannotRefetchCollapsedGap(t *testing.T) {
 	}
 	if got := dv.HandleEvent(tcell.NewEventMouse(formerGapX, formerGapY, tcell.Button1, tcell.ModNone)); got != EventIgnored {
 		t.Fatalf("loading mouse event = %v, want ignored", got)
+	}
+}
+
+func TestDiffWidgetFullFileRequestSupersedesInflightGapExpansion(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -4,1 +4,1 @@\n fourth\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+	fetches := 0
+	dv.SetExtendedFetcher(func(*DiffViewWidget) { fetches++ })
+
+	dv.expandContextGap(0)
+	if fetches != 1 || dv.pendingGap != 0 || !dv.Loading {
+		t.Fatalf("gap fetch state = fetches %d pending %d loading %v", fetches, dv.pendingGap, dv.Loading)
+	}
+	dv.SetContextMode(DiffContextFullFile)
+	dv.SetOldLines([]string{"first", "old-two", "old-three", "fourth"})
+	dv.SetNewLines([]string{"first", "new-two", "new-three", "fourth"})
+	dv.FinishLoading()
+
+	if fetches != 1 || dv.ContextMode() != DiffContextFullFile || !dv.IsExtended() || len(dv.Lines) != 4 {
+		t.Fatalf("full-file completion = fetches %d context %v extended %v lines %d", fetches, dv.ContextMode(), dv.IsExtended(), len(dv.Lines))
+	}
+}
+
+func TestDiffWidgetGapFetchCompletionRemainsChangesOnly(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -4,1 +4,1 @@\n fourth\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+	dv.SetExtendedFetcher(func(*DiffViewWidget) {})
+
+	dv.expandContextGap(0)
+	dv.SetOldLines([]string{"first", "old-two", "old-three", "fourth"})
+	dv.SetNewLines([]string{"first", "new-two", "new-three", "fourth"})
+	dv.FinishLoading()
+
+	if dv.ContextMode() != DiffContextChangesOnly || dv.IsExtended() || !dv.expandedGaps[0] {
+		t.Fatalf("gap completion = context %v extended %v expanded %v", dv.ContextMode(), dv.IsExtended(), dv.expandedGaps)
 	}
 }
 

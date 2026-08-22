@@ -91,14 +91,25 @@ func TestBundledThemesLoad(t *testing.T) {
 			if err := json.Unmarshal(data, &th); err != nil {
 				t.Fatalf("failed to parse %s: %v", name, err)
 			}
+			var source ThemeConfig
+			if err := json.Unmarshal(data, &source); err != nil {
+				t.Fatalf("failed to inspect %s: %v", name, err)
+			}
 			th.ResolveColors()
 
 			// After resolving, verify critical fields are non-empty
 			if th.Default.Fg == "" {
 				t.Errorf("%s: Default.Fg is empty after resolve", name)
 			}
-			if th.Diff.Collapsed.Fg == "" || th.Diff.Collapsed.Bg == "" {
-				t.Errorf("%s: collapsed diff style did not inherit defaults: %+v", name, th.Diff.Collapsed)
+			expectedHoverBg := source.Diff.CollapsedHover.Bg
+			if source.Diff.CollapsedHover == (StyleDef{}) && source.Diff.Collapsed != (StyleDef{}) {
+				expectedHoverBg = source.Diff.Collapsed.Bg
+			}
+			if expectedHoverBg == "" {
+				expectedHoverBg = th.Editor.ActiveLine.Bg
+			}
+			if th.Diff.CollapsedHover.Bg != expectedHoverBg {
+				t.Errorf("%s: collapsed hover background = %q, want %q from explicit or inherited source", name, th.Diff.CollapsedHover.Bg, expectedHoverBg)
 			}
 		})
 	}
@@ -159,8 +170,7 @@ func TestResolveColors(t *testing.T) {
 	th.Diff.Added.Bg = ""
 	th.Diff.Deleted.Bg = ""
 	th.Diff.Modified.Bg = ""
-	th.Diff.Collapsed.Fg = ""
-	th.Diff.Collapsed.Bg = ""
+	th.Diff.CollapsedHover.Bg = ""
 	th.Success.Fg = ""
 	th.Danger.Fg = ""
 	th.Warning.Fg = ""
@@ -179,8 +189,8 @@ func TestResolveColors(t *testing.T) {
 	if th.Diff.Modified.Bg == "" {
 		t.Error("expected Diff.Modified.Bg to be filled by ResolveColors")
 	}
-	if th.Diff.Collapsed.Fg == "" || th.Diff.Collapsed.Bg == "" {
-		t.Errorf("expected Diff.Collapsed colors to be filled by ResolveColors, got %+v", th.Diff.Collapsed)
+	if th.Diff.CollapsedHover.Bg != th.Editor.ActiveLine.Bg {
+		t.Errorf("expected Diff.CollapsedHover background to inherit Editor.ActiveLine, got %+v", th.Diff.CollapsedHover)
 	}
 	if th.Success.Fg == "" {
 		t.Error("expected Success.Fg to be filled by ResolveColors")
@@ -210,7 +220,7 @@ func TestResolveColorsPreservesExisting(t *testing.T) {
 	th.Success.Fg = "#custom"
 	th.Danger.Fg = "#custom2"
 	th.Diff.Added.Bg = "#custom3"
-	th.Diff.Collapsed = StyleDef{Fg: "#custom4", Bg: "#custom5", Bold: true}
+	th.Diff.CollapsedHover = StyleDef{Fg: "#custom4", Bg: "#custom5", Bold: true}
 
 	th.ResolveColors()
 
@@ -223,8 +233,30 @@ func TestResolveColorsPreservesExisting(t *testing.T) {
 	if th.Diff.Added.Bg != "#custom3" {
 		t.Errorf("expected Diff.Added.Bg to remain '#custom3', got %q", th.Diff.Added.Bg)
 	}
-	if th.Diff.Collapsed.Fg != "#custom4" || th.Diff.Collapsed.Bg != "#custom5" || !th.Diff.Collapsed.Bold {
-		t.Errorf("expected explicit Diff.Collapsed to remain unchanged, got %+v", th.Diff.Collapsed)
+	if th.Diff.CollapsedHover.Fg != "#custom4" || th.Diff.CollapsedHover.Bg != "#custom5" || !th.Diff.CollapsedHover.Bold {
+		t.Errorf("expected explicit Diff.CollapsedHover to remain unchanged, got %+v", th.Diff.CollapsedHover)
+	}
+}
+
+func TestResolveColorsMigratesLegacyCollapsedStyle(t *testing.T) {
+	theme := DefaultTheme()
+	if err := json.Unmarshal([]byte(`{"diff":{"collapsed":{"fg":"#123456","bg":"#654321","bold":true}}}`), &theme); err != nil {
+		t.Fatal(err)
+	}
+	theme.ResolveColors()
+	if got := theme.Diff.CollapsedHover; got != (StyleDef{Fg: "#123456", Bg: "#654321", Bold: true}) {
+		t.Fatalf("migrated collapsed hover style = %+v", got)
+	}
+}
+
+func TestResolveColorsPrefersExplicitCollapsedHover(t *testing.T) {
+	theme := DefaultTheme()
+	if err := json.Unmarshal([]byte(`{"diff":{"collapsed":{"bg":"#legacy"},"collapsedHover":{"bg":"#current"}}}`), &theme); err != nil {
+		t.Fatal(err)
+	}
+	theme.ResolveColors()
+	if got := theme.Diff.CollapsedHover.Bg; got != "#current" {
+		t.Fatalf("collapsed hover background = %q, want explicit current value", got)
 	}
 }
 

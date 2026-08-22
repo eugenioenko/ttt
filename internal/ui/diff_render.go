@@ -198,7 +198,7 @@ func renderDiffText(surface Surface, x, y, width int, text string, baseStyle, fo
 	if foregroundStyle != term.StyleDefault {
 		spans = nil
 	}
-	fullBaseStyle := baseStyle == term.StyleDiffCollapsed
+	fullBaseStyle := baseStyle == term.StyleDiffCollapsedHover
 	blank := term.Cell{Ch: ' '}
 	if fullBaseStyle {
 		blank.Style = baseStyle
