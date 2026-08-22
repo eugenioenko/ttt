@@ -42,6 +42,9 @@ func (tp *TabbedPanel) InitTabClick() {
 }
 
 func (tp *TabbedPanel) AddPanel(id, title string, w Widget) {
+	if tp.HasPanel(id) {
+		return
+	}
 	tp.panels = append(tp.panels, panelEntry{ID: id, Title: title, W: w})
 	if tp.ActivePanel == "" {
 		tp.ActivePanel = id

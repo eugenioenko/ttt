@@ -46,6 +46,7 @@ type Diagnostic struct {
 }
 
 type editorTab struct {
+	ID          string
 	FilePath    string
 	Title       string
 	Buf         *buffer.Buffer
@@ -74,6 +75,7 @@ type EditorGroupWidget struct {
 	Hover                   *HoverWidget
 	SignatureHelp           *SignatureHelpWidget
 	tabs                    []editorTab
+	nextTabIdentity         uint64
 	active                  int
 	pinnedCount             int
 	TabSize                 int
@@ -1683,6 +1685,7 @@ func (g *EditorGroupWidget) PasteText(text string) {
 }
 
 func (g *EditorGroupWidget) syncTabs() {
+	g.ensureTabIdentities()
 	t := g.activeTab()
 	if t == nil {
 		g.TabBar.SetTabs(nil)
@@ -1727,7 +1730,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			name = ts.Title
 		}
 		uiTabs = append(uiTabs, Tab{
-			ID:       ts.FilePath,
+			ID:       ts.ID,
 			Name:     name,
 			Active:   i == g.active,
 			Dirty:    dirty,
@@ -1736,6 +1739,26 @@ func (g *EditorGroupWidget) syncTabs() {
 		})
 	}
 	g.TabBar.SetTabs(uiTabs)
+}
+
+func (g *EditorGroupWidget) ensureTabIdentities() {
+	seen := make(map[string]bool, len(g.tabs))
+	for i := range g.tabs {
+		id := g.tabs[i].ID
+		if id != "" && !seen[id] {
+			seen[id] = true
+			continue
+		}
+		for {
+			g.nextTabIdentity++
+			id = fmt.Sprintf("editor-tab-%d", g.nextTabIdentity)
+			if !seen[id] {
+				break
+			}
+		}
+		g.tabs[i].ID = id
+		seen[id] = true
+	}
 }
 
 func (g *EditorGroupWidget) Render(surface Surface) {

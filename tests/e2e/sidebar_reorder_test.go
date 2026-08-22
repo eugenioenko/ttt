@@ -143,3 +143,53 @@ func TestSidebarPendingTabDragOwnsCrossDividerRelease(t *testing.T) {
 		t.Fatalf("ordinary Explore click reordered panels: got %v, want %v", got, afterRelease)
 	}
 }
+
+func TestSidebarDuplicatePluginAddDuringDragCannotRetargetRelease(t *testing.T) {
+	h := newTestHarness(t, 100, 24)
+	defer h.stop()
+	original := newEmptyWidget()
+	replacement := newEmptyWidget()
+	h.app.Sidebar.SetPanelOrder([]string{"changes", "plugin.late", "explorer", "search", "outline"})
+	h.app.Sidebar.AddPanel("plugin.late", "Late", original)
+	h.app.Sidebar.SetActivePanel("plugin.late")
+	h.redraw()
+
+	tabsY := h.app.Sidebar.Tabs.GetRect().Y
+	lateX := displayColumnOf(h.screenRow(tabsY), "Late")
+	if lateX < 0 {
+		t.Fatal("late plugin tab is not visible")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(lateX+2, tabsY, tcell.Button1, 0))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(lateX+8, tabsY, tcell.Button1, 0))
+	if !h.app.Root.PointerCaptureActive() || !h.app.Sidebar.Tabs.PointerGestureActive() {
+		t.Fatal("test setup did not establish a captured plugin tab drag")
+	}
+	h.app.Sidebar.AddPanel("plugin.late", "Replacement", replacement)
+
+	wantWithPlugin := []string{"changes", "plugin.late", "explorer", "search", "outline"}
+	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, wantWithPlugin) {
+		t.Fatalf("duplicate add panel order = %v, want %v", got, wantWithPlugin)
+	}
+	if h.app.Sidebar.ActivePanel != "plugin.late" || h.app.Sidebar.ActiveWidget() != original {
+		t.Fatal("duplicate add replaced the active plugin surface")
+	}
+
+	h.app.Sidebar.RemovePanel("plugin.late")
+	afterRemoval := slices.Clone(h.app.Sidebar.PanelIDs())
+	if h.app.Root.PointerCaptureActive() || h.app.Sidebar.Tabs.PointerGestureActive() {
+		t.Fatal("removing duplicate-add source retained pointer capture")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(lateX+15, tabsY, tcell.ButtonNone, 0))
+	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, afterRemoval) {
+		t.Fatalf("release retargeted surviving panel: got %v, want %v", got, afterRemoval)
+	}
+
+	h.app.Sidebar.AddPanel("plugin.late", "Reloaded", replacement)
+	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, wantWithPlugin) {
+		t.Fatalf("reloaded plugin order = %v, want %v", got, wantWithPlugin)
+	}
+	h.app.Sidebar.SetActivePanel("plugin.late")
+	if h.app.Sidebar.ActiveWidget() != replacement {
+		t.Fatal("remove and re-add did not wire the reloaded plugin surface")
+	}
+}

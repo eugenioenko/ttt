@@ -112,3 +112,20 @@ func TestEditorGroupEffectivePinnedTargetControlsPreviewCommit(t *testing.T) {
 		t.Fatal("effective move should insert at the boundary and commit its preview")
 	}
 }
+
+func TestEditorGroupConstructorsAssignUniqueTabIdentities(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, true, "relative")
+	g.OpenBufferReadOnly("First", "shared.txt", []string{"first"})
+	g.OpenBufferReadOnly("Second", "shared.txt", []string{"second"})
+
+	seen := make(map[string]bool, len(g.TabBar.Tabs))
+	for _, tab := range g.TabBar.Tabs {
+		if tab.ID == "" {
+			t.Fatal("constructor assigned an empty tab identity")
+		}
+		if seen[tab.ID] {
+			t.Fatalf("constructor assigned duplicate tab identity %q", tab.ID)
+		}
+		seen[tab.ID] = true
+	}
+}
