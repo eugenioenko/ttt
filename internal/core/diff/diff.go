@@ -103,6 +103,91 @@ func FullDiffLines(oldLines, newLines []string) []DiffLine {
 	return lines
 }
 
+// FullDiffLinesFromHunks expands a parsed hunk projection in linear time. It
+// returns false unless every parsed row and omitted interval agrees with the
+// supplied snapshots, allowing callers to preserve the LCS fallback for input
+// that did not originate from those exact snapshots.
+func FullDiffLinesFromHunks(fileDiff FileDiff, oldLines, newLines []string) ([]DiffLine, bool) {
+	capacity := len(oldLines)
+	if len(newLines) > capacity {
+		capacity = len(newLines)
+	}
+	lines := make([]DiffLine, 0, capacity)
+	oldNext, newNext := 1, 1
+
+	appendContextUntil := func(oldTarget, newTarget int) bool {
+		if oldTarget < oldNext || newTarget < newNext || oldTarget-oldNext != newTarget-newNext {
+			return false
+		}
+		for oldNext < oldTarget {
+			if oldNext > len(oldLines) || newNext > len(newLines) || oldLines[oldNext-1] != newLines[newNext-1] {
+				return false
+			}
+			lines = append(lines, DiffLine{
+				Left:  SideLine{Num: oldNext, Text: oldLines[oldNext-1], Kind: Context},
+				Right: SideLine{Num: newNext, Text: newLines[newNext-1], Kind: Context},
+			})
+			oldNext++
+			newNext++
+		}
+		return true
+	}
+
+	for hunkIndex, hunk := range fileDiff.Hunks {
+		for lineIndex, line := range hunk.Lines {
+			if hunkIndex == len(fileDiff.Hunks)-1 && lineIndex == len(hunk.Lines)-1 &&
+				line.Left.Kind == Context && line.Right.Kind == Context &&
+				line.Left.Num == len(oldLines)+1 && line.Right.Num == len(newLines)+1 &&
+				line.Left.Text == "" && line.Right.Text == "" {
+				continue
+			}
+			oldTarget, newTarget := oldNext, newNext
+			if line.Left.Num > 0 {
+				oldTarget = line.Left.Num
+			}
+			if line.Right.Num > 0 {
+				newTarget = line.Right.Num
+			}
+			if !appendContextUntil(oldTarget, newTarget) ||
+				!parsedSideMatches(line.Left, oldLines, oldNext, Context, Deleted) ||
+				!parsedSideMatches(line.Right, newLines, newNext, Context, Added) {
+				return nil, false
+			}
+			if line.Left.Kind == Context || line.Right.Kind == Context {
+				if line.Left.Kind != Context || line.Right.Kind != Context || line.Left.Text != line.Right.Text {
+					return nil, false
+				}
+			}
+			lines = append(lines, line)
+			if line.Left.Num > 0 {
+				oldNext++
+			}
+			if line.Right.Num > 0 {
+				newNext++
+			}
+		}
+	}
+	if !appendContextUntil(len(oldLines)+1, len(newLines)+1) {
+		return nil, false
+	}
+	return lines, true
+}
+
+func parsedSideMatches(side SideLine, snapshot []string, next int, allowed ...LineKind) bool {
+	if side.Num == 0 {
+		return side.Kind == Blank && side.Text == ""
+	}
+	if side.Num != next || side.Num > len(snapshot) || side.Text != snapshot[side.Num-1] {
+		return false
+	}
+	for _, kind := range allowed {
+		if side.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
 func Parse(unified string) FileDiff {
 	var fd FileDiff
 	lines := strings.Split(unified, "\n")

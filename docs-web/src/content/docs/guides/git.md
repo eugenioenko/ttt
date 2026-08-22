@@ -45,6 +45,8 @@ The shared diff reader has two independent presentation choices:
 
 Set global defaults for layout, context, line wrapping, and high contrast from the **Diff Views** submenu under **Options**. The adjacent **Git Files** submenu chooses a persisted full-path List (the default) or compact Tree and exposes bulk expansion controls. The Changes panel menu exposes the same choices contextually. Commands applied directly to an open diff override that surface without changing the saved defaults.
 
+Commit History initially shows the recent viewport-sized window. Activate **Load older commits…** to append the next bounded page; selecting or scrolling to that row does not load anything by itself.
+
 Untracked files open directly in the editor instead of showing a diff.
 
 ## Multi-Root Support

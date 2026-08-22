@@ -6,6 +6,13 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 )
 
+func fullFileDiffLines(fileDiff diff.FileDiff, oldLines, newLines []string) []diff.DiffLine {
+	if lines, ok := diff.FullDiffLinesFromHunks(fileDiff, oldLines, newLines); ok {
+		return lines
+	}
+	return diff.FullDiffLines(oldLines, newLines)
+}
+
 // compactDiffLinesWithContext keeps Git's hunk projection but can replace an
 // individual collapsed separator with the omitted unchanged rows. The map
 // identifies which rendered rows remain expandable.

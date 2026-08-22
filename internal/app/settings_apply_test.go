@@ -58,6 +58,20 @@ func TestCommitToCoversEveryField(t *testing.T) {
 	}
 }
 
+func TestDiffContextSettingLivesInAppearance(t *testing.T) {
+	found := ""
+	for _, category := range settingsCategories() {
+		for _, field := range category.Fields {
+			if field.Label == "Diff context" {
+				found = category.Title
+			}
+		}
+	}
+	if found != "Appearance" {
+		t.Fatalf("Diff context category = %q, want Appearance", found)
+	}
+}
+
 func TestShowSettingsReopenPreservesPendingWorkingView(t *testing.T) {
 	a := buildTestApp(t, config.DefaultSettings())
 	a.EditorGroup.OnContentTabClose = func(id string) {

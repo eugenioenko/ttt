@@ -300,11 +300,11 @@ func (d *CommitDetailWidget) requestFileContext(fileIndex, gap int) {
 		}
 		return
 	}
-	if gap >= 0 {
-		file.pendingGap = gap
-	}
 	if file.FullFileState == CommitDetailFullFileLoading || d.OnFetchContext == nil {
 		return
+	}
+	if gap >= 0 {
+		file.pendingGap = gap
 	}
 	file.FullFileState = CommitDetailFullFileLoading
 	file.FullFileErr = ""
@@ -313,19 +313,24 @@ func (d *CommitDetailWidget) requestFileContext(fileIndex, gap int) {
 }
 
 func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLines, newLines []string, contextErr ...string) bool {
-	if fileIndex < 0 || fileIndex >= len(d.Files) || commitDetailFileKey(d.Files[fileIndex]) != key {
-		return false
-	}
-	file := &d.Files[fileIndex]
 	errText := ""
 	if len(contextErr) > 0 {
 		errText = contextErr[0]
 	} else if oldLines == nil && newLines == nil {
 		errText = "Could not load full file"
 	}
+	return d.ApplyFileContextContent(fileIndex, key, oldLines, newLines, CommitDetailContentText, errText)
+}
+
+func (d *CommitDetailWidget) ApplyFileContextContent(fileIndex int, key string, oldLines, newLines []string, contentKind CommitDetailContentKind, errText string) bool {
+	if fileIndex < 0 || fileIndex >= len(d.Files) || commitDetailFileKey(d.Files[fileIndex]) != key {
+		return false
+	}
+	file := &d.Files[fileIndex]
 	if errText == "" {
 		file.oldLines = oldLines
 		file.newLines = newLines
+		file.ContentKind = contentKind
 		file.FullFileState = CommitDetailFullFileLoaded
 		file.FullFileErr = ""
 	} else {
@@ -626,7 +631,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 	for fileIndex := range d.Files {
 		file := &d.Files[fileIndex]
 		if d.contextMode == DiffContextFullFile && file.FullFileState == CommitDetailFullFileLoaded {
-			file.lines = diff.FullDiffLines(file.oldLines, file.newLines)
+			file.lines = fullFileDiffLines(file.Diff, file.oldLines, file.newLines)
 			file.gapByLine = nil
 		} else {
 			file.lines, file.gapByLine = compactDiffLinesWithContext(file.Diff, file.oldLines, file.newLines, file.expandedGaps)
@@ -1149,15 +1154,18 @@ func (d *CommitDetailWidget) rowText(rowIndex int, right bool) (string, bool) {
 			if row.lineIndex >= len(file.unified) {
 				return "", false
 			}
-			return file.unified[row.lineIndex].side.Text, true
+			line := file.unified[row.lineIndex].side
+			return line.Text, line.Kind != diff.Collapsed
 		}
 		if row.lineIndex >= len(file.lines) {
 			return "", false
 		}
 		if right {
-			return file.lines[row.lineIndex].Right.Text, true
+			line := file.lines[row.lineIndex].Right
+			return line.Text, line.Kind != diff.Collapsed
 		}
-		return file.lines[row.lineIndex].Left.Text, true
+		line := file.lines[row.lineIndex].Left
+		return line.Text, line.Kind != diff.Collapsed
 	default:
 		return "", false
 	}

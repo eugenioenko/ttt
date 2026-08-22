@@ -3,6 +3,8 @@ package diff
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -283,5 +285,81 @@ func TestFullDiffLinesDeletion(t *testing.T) {
 	}
 	if lines[1].Right.Kind != Blank {
 		t.Errorf("line 1 right: expected blank, got %v", lines[1].Right.Kind)
+	}
+}
+
+func TestFullDiffLinesFromHunksMatchesLCSProjection(t *testing.T) {
+	separatedOld := make([]string, 30)
+	separatedNew := make([]string, 30)
+	for i := range separatedOld {
+		separatedOld[i] = fmt.Sprintf("line %d", i)
+		separatedNew[i] = separatedOld[i]
+	}
+	separatedNew[1] = "changed near top"
+	separatedNew[28] = "changed near bottom"
+
+	tests := []struct {
+		name     string
+		oldLines []string
+		newLines []string
+	}{
+		{name: "identical", oldLines: []string{"same", "tail"}, newLines: []string{"same", "tail"}},
+		{name: "replacement", oldLines: []string{"a", "old", "z"}, newLines: []string{"a", "new", "z"}},
+		{name: "addition", oldLines: []string{"a", "z"}, newLines: []string{"a", "added", "z"}},
+		{name: "deletion", oldLines: []string{"a", "deleted", "z"}, newLines: []string{"a", "z"}},
+		{name: "added file", newLines: []string{"first", "second"}},
+		{name: "deleted file", oldLines: []string{"first", "second"}},
+		{name: "repeated lines", oldLines: []string{"same", "old", "same", "tail"}, newLines: []string{"same", "new", "same", "tail"}},
+		{name: "separated hunks", oldLines: separatedOld, newLines: separatedNew},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fileDiff := Parse(Generate(test.oldLines, test.newLines, "file.txt"))
+			got, ok := FullDiffLinesFromHunks(fileDiff, test.oldLines, test.newLines)
+			if !ok {
+				t.Fatal("validated hunk expansion rejected matching snapshots")
+			}
+			want := FullDiffLines(test.oldLines, test.newLines)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("linear projection differs from LCS projection:\ngot  %#v\nwant %#v", got, want)
+			}
+		})
+	}
+}
+
+func TestFullDiffLinesFromHunksRejectsMismatchedSnapshots(t *testing.T) {
+	fileDiff := Parse(Generate([]string{"before", "old", "after"}, []string{"before", "new", "after"}, "file.txt"))
+	if _, ok := FullDiffLinesFromHunks(fileDiff, []string{"before", "different", "after"}, []string{"before", "new", "after"}); ok {
+		t.Fatal("hunk expansion accepted snapshots that do not match parsed rows")
+	}
+	if _, ok := FullDiffLinesFromHunks(FileDiff{}, []string{"old"}, []string{"new"}); ok {
+		t.Fatal("hunk-less differing snapshots were treated as a valid projection")
+	}
+}
+
+var benchmarkFullDiffLines []DiffLine
+
+func BenchmarkFullDiffLinesFromHunksUnrelated3500(b *testing.B) {
+	const count = 3500
+	oldLines := make([]string, count)
+	newLines := make([]string, count)
+	hunk := Hunk{Lines: make([]DiffLine, count)}
+	for i := range count {
+		oldLines[i] = fmt.Sprintf("old unrelated line %d", i)
+		newLines[i] = fmt.Sprintf("new unrelated line %d", i)
+		hunk.Lines[i] = DiffLine{
+			Left:  SideLine{Num: i + 1, Text: oldLines[i], Kind: Deleted},
+			Right: SideLine{Num: i + 1, Text: newLines[i], Kind: Added},
+		}
+	}
+	fileDiff := FileDiff{Hunks: []Hunk{hunk}}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		lines, ok := FullDiffLinesFromHunks(fileDiff, oldLines, newLines)
+		if !ok {
+			b.Fatal("matching hunk projection was rejected")
+		}
+		benchmarkFullDiffLines = lines
 	}
 }

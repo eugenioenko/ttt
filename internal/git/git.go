@@ -225,6 +225,13 @@ type LogEntry struct {
 	Message string
 }
 
+type ObjectID string
+
+type LogPage struct {
+	Entries []LogEntry
+	HasMore bool
+}
+
 func Log(dir string, n int) []LogEntry {
 	entries, _ := LogWithError(dir, n)
 	return entries
@@ -235,34 +242,51 @@ func LogWithError(dir string, n int) ([]LogEntry, error) {
 }
 
 func LogWithErrorContext(ctx context.Context, dir string, n int) ([]LogEntry, error) {
-	revision, err := RevisionIdentityContext(ctx, dir)
+	revision, err := RevisionObjectIDContext(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	if revision == "" {
-		return nil, nil
+	page, err := LogPageContext(ctx, dir, revision, 0, n)
+	return page.Entries, err
+}
+
+// LogPageContext reads one bounded page from an immutable commit snapshot.
+// anchor must be the full object ID returned by RevisionObjectIDContext.
+func LogPageContext(ctx context.Context, dir string, anchor ObjectID, offset, limit int) (LogPage, error) {
+	if anchor == "" || limit <= 0 {
+		return LogPage{}, nil
 	}
-	cmd := gitCommandContext(ctx, "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%H %h %s")
+	if !isFullObjectID(string(anchor)) {
+		return LogPage{}, fmt.Errorf("invalid full object ID %q", anchor)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	cmd := gitCommandContext(ctx, "-C", dir, "log",
+		fmt.Sprintf("--skip=%d", offset), fmt.Sprintf("-%d", limit+1),
+		"-z", "--pretty=format:%H%x00%h%x00%s", string(anchor))
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return LogPage{}, ctx.Err()
 		}
-		return nil, err
+		return LogPage{}, err
 	}
-	var entries []LogEntry
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
+	fields := bytes.Split(bytes.TrimSuffix(out, []byte{0}), []byte{0})
+	entries := make([]LogEntry, 0, len(fields)/3)
+	for index := 0; index+2 < len(fields); index += 3 {
+		ref, hash := string(fields[index]), string(fields[index+1])
+		if ref == "" || hash == "" {
 			continue
 		}
-		ref, rest, ok := strings.Cut(line, " ")
-		if !ok {
-			continue
-		}
-		hash, msg, _ := strings.Cut(rest, " ")
-		entries = append(entries, LogEntry{Hash: hash, Ref: ref, Message: msg})
+		entries = append(entries, LogEntry{Hash: hash, Ref: ref, Message: string(fields[index+2])})
 	}
-	return entries, nil
+	page := LogPage{HasMore: len(entries) > limit}
+	if page.HasMore {
+		entries = entries[:limit]
+	}
+	page.Entries = entries
+	return page, nil
 }
 
 func CommitAuthoredAt(dir, ref string) (time.Time, error) {
@@ -286,7 +310,7 @@ func CommitFiles(dir, hash string) ([]FileStatus, error) {
 
 func CommitFilesContext(ctx context.Context, dir, hash string) ([]FileStatus, error) {
 	out, err := gitCommandContext(ctx, "-C", dir, "show", "--name-status",
-		"--diff-merges=first-parent", "-M", "--format=", "-z", hash).Output()
+		"--diff-merges=first-parent", "-M", "-C", "--find-copies-harder", "--format=", "-z", hash).Output()
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -328,7 +352,7 @@ func CommitFileDiff(dir, hash string, file FileStatus) (string, error) {
 }
 
 func CommitFileDiffContext(ctx context.Context, dir, hash string, file FileStatus) (string, error) {
-	args := []string{"-C", dir, "--literal-pathspecs", "show", "--diff-merges=first-parent", "-M", "--format=", hash, "--"}
+	args := []string{"-C", dir, "--literal-pathspecs", "show", "--diff-merges=first-parent", "-M", "-C", "--find-copies-harder", "--format=", hash, "--"}
 	if file.OldPath != "" {
 		args = append(args, file.OldPath)
 	}
@@ -464,6 +488,21 @@ func RevisionIdentityContext(ctx context.Context, dir string) (string, error) {
 		return "", nil
 	}
 	return "", err
+}
+
+func RevisionObjectIDContext(ctx context.Context, dir string) (ObjectID, error) {
+	identity, err := RevisionIdentityContext(ctx, dir)
+	if err != nil || identity == "" {
+		return ObjectID(identity), err
+	}
+	if !isFullObjectID(identity) {
+		return "", fmt.Errorf("git returned an invalid full object ID %q", identity)
+	}
+	return ObjectID(identity), nil
+}
+
+func isFullObjectID(identity string) bool {
+	return (len(identity) == 40 || len(identity) == 64) && strings.Trim(identity, "0123456789abcdef") == ""
 }
 
 func verifyUnbornHEADContext(ctx context.Context, dir string) (bool, error) {

@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -212,6 +213,57 @@ exit 99
 	}
 	if entries, err := LogWithErrorContext(context.Background(), "/repo", 10); err == nil {
 		t.Fatalf("failed HEAD read returned successful empty log: entries=%v", entries)
+	}
+}
+
+func TestLogPageUsesExactHeadSnapshotWithoutOverlap(t *testing.T) {
+	dir := setupTestRepo(t)
+	for index := 0; index < 13; index++ {
+		gitRun(t, dir, "commit", "--allow-empty", "-m", fmt.Sprintf("history %02d", index))
+	}
+	anchor, err := RevisionObjectIDContext(context.Background(), dir)
+	if err != nil || anchor == "" {
+		t.Fatalf("history anchor = %q, err=%v", anchor, err)
+	}
+	first, err := LogPageContext(context.Background(), dir, anchor, 0, 5)
+	if err != nil || len(first.Entries) != 5 || !first.HasMore {
+		t.Fatalf("first page = %+v, err=%v", first, err)
+	}
+
+	gitRun(t, dir, "commit", "--allow-empty", "-m", "new moving head")
+	second, err := LogPageContext(context.Background(), dir, anchor, 5, 5)
+	if err != nil || len(second.Entries) != 5 || !second.HasMore {
+		t.Fatalf("second anchored page = %+v, err=%v", second, err)
+	}
+	seen := make(map[string]bool)
+	for _, entry := range append(append([]LogEntry(nil), first.Entries...), second.Entries...) {
+		if seen[entry.Ref] {
+			t.Fatalf("duplicate paged commit %s", entry.Ref)
+		}
+		seen[entry.Ref] = true
+		if entry.Message == "new moving head" {
+			t.Fatal("page anchored to the old HEAD included the new HEAD commit")
+		}
+		if (len(entry.Ref) != 40 && len(entry.Ref) != 64) || strings.Trim(entry.Ref, "0123456789abcdef") != "" {
+			t.Fatalf("paged ref is not a full object ID: %q", entry.Ref)
+		}
+	}
+
+	last, err := LogPageContext(context.Background(), dir, anchor, 10, 5)
+	if err != nil || len(last.Entries) != 3 || last.HasMore {
+		t.Fatalf("last page = %+v, err=%v", last, err)
+	}
+	empty, err := LogPageContext(context.Background(), dir, anchor, 13, 5)
+	if err != nil || len(empty.Entries) != 0 || empty.HasMore {
+		t.Fatalf("empty terminal page = %+v, err=%v", empty, err)
+	}
+}
+
+func TestLogPageRejectsSymbolicOrAbbreviatedAnchors(t *testing.T) {
+	for _, anchor := range []ObjectID{"HEAD", "abc1234", ObjectID(strings.Repeat("g", 40))} {
+		if _, err := LogPageContext(context.Background(), t.TempDir(), anchor, 0, 5); err == nil {
+			t.Fatalf("LogPageContext accepted non-full anchor %q", anchor)
+		}
 	}
 }
 

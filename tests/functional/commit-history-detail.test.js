@@ -34,6 +34,34 @@ describe("commit history detail", () => {
     expect(snapshots[opened]).toContain("selected commit content");
   });
 
+  it("appends bounded history pages only from the explicit sentinel", () => {
+    dir = createGitRepo(createTempDir());
+    for (let index = 1; index <= 60; index++) {
+      git(dir, "commit", "--allow-empty", "-qm", `paged ${String(index).padStart(2, "0")}`);
+    }
+
+    tui.start(dir);
+    tui.pressChord("ctrl+k", "c");
+    tui.waitStable(500);
+    tui.press("tab");
+    tui.press("tab");
+    for (let index = 0; index < 11; index++) tui.press("down");
+    const sentinel = tui.snapshot();
+    tui.press("enter");
+    tui.waitStable(900);
+    const firstPage = tui.snapshot();
+    for (let index = 0; index < 50; index++) tui.press("down");
+    tui.press("enter");
+    tui.waitStable(900);
+    const lastPage = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[sentinel]).toContain("Load older commits…");
+    expect(snapshots[firstPage]).toContain("paged 50");
+    expect(snapshots[lastPage]).toContain("initial commit");
+    expect(snapshots[lastPage]).not.toContain("Load older commits…");
+  });
+
   it("opens one read-only document with metadata and every changed file", () => {
     dir = createGitRepo(createTempDir());
     createTempFile(dir, "first-detail.txt", "first old\n");
@@ -62,7 +90,37 @@ describe("commit history detail", () => {
     expect(snapshots[detail]).toContain("first old");
     expect(snapshots[detail]).toContain("second-detail.txt");
     expect(snapshots[detail]).toContain("second old");
-  });
+	});
+
+	it("loads the whole typed file snapshot for Full File context", () => {
+		dir = createGitRepo(createTempDir());
+		const lines = Array.from({ length: 30 }, (_, index) => `unchanged line ${index + 1}`);
+		createTempFile(dir, "context.txt", `${lines.join("\n")}\n`);
+		git(dir, "add", "-A");
+		git(dir, "commit", "-qm", "context base");
+		lines[1] = "changed near top";
+		lines[28] = "changed near bottom";
+		createTempFile(dir, "context.txt", `${lines.join("\n")}\n`);
+		git(dir, "add", "-A");
+		git(dir, "commit", "-qm", "two distant edits");
+
+		tui.start(dir);
+		tui.pressChord("ctrl+k", "c");
+		tui.waitStable(500);
+		tui.press("tab");
+		tui.press("tab");
+		tui.press("down");
+		tui.press("enter");
+		tui.waitStable(900);
+		const changesOnly = tui.snapshot();
+		tui.exec("Git: Show Full File");
+		tui.waitStable(900);
+		const fullFile = tui.snapshot();
+
+		const { snapshots } = tui.run();
+		expect(snapshots[changesOnly]).not.toContain("unchanged line 15");
+		expect(snapshots[fullFile]).toContain("unchanged line 15");
+	});
 
   it("uses shared Git bulk commands for commit-detail file groupings", () => {
     dir = createGitRepo(createTempDir());
