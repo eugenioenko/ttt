@@ -145,6 +145,63 @@ func TestWorkingTreeSelectionAndFolderStateSurviveStageMove(t *testing.T) {
 	}
 }
 
+func TestWorkingFileSelectionNeverCrossesIntoPRFileOnStageMove(t *testing.T) {
+	for _, view := range []string{config.GitFileViewList, config.GitFileViewTree} {
+		t.Run(view, func(t *testing.T) {
+			cp := NewChangesPanel("/repo")
+			cp.fileView = view
+			file := git.FileStatus{Status: "M", Path: "same/path.go"}
+
+			for i := 0; i < 128; i++ {
+				file.Staged = false
+				cp.PRGroups = nil
+				cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Unstaged: []git.FileStatus{file}}}
+				cp.buildTree()
+				workingID := workingNodeID(workNodeFile, "/repo", file.Path, false)
+				if !revealTreeSelection(cp.Tree, workingID) {
+					t.Fatalf("iteration %d: working file is not selectable", i)
+				}
+
+				file.Staged = true
+				cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Staged: []git.FileStatus{file}}}
+				cp.PRGroups = []prGroup{{Dir: "/repo", Name: "pull request", Files: []git.FileStatus{file}}}
+				cp.buildTree()
+				wantID := workingNodeID(workNodeFile, "/repo", file.Path, true)
+				if got := cp.Tree.Selected(); got == nil || got.ID != wantID {
+					t.Fatalf("iteration %d: selection = %+v, want %q", i, got, wantID)
+				}
+				otherView := config.GitFileViewTree
+				if view == config.GitFileViewTree {
+					otherView = config.GitFileViewList
+				}
+				cp.SetFileView(otherView)
+				cp.SetFileView(view)
+				if got := cp.Tree.Selected(); got == nil || got.ID != wantID {
+					t.Fatalf("iteration %d: selection after mode rebuild = %+v, want %q", i, got, wantID)
+				}
+				if cp.selectedInPR() {
+					t.Fatalf("iteration %d: working selection acquired PR context", i)
+				}
+				dir, status, ok := cp.SelectedFile()
+				if !ok || dir != "/repo" || status.Path != file.Path || !status.Staged {
+					t.Fatalf("iteration %d: selected file = dir %q status %+v ok %v", i, dir, status, ok)
+				}
+				group := cp.SelectedGroup()
+				if group == nil || group.IsPR || group.Dir != "/repo" {
+					t.Fatalf("iteration %d: selected group = %+v, want working repo", i, group)
+				}
+				var commitDir string
+				cp.OnCommit = func(dir, _ string) { commitDir = dir }
+				cp.Input.SetText("working commit")
+				cp.commitFocusedGroup()
+				if commitDir != "/repo" {
+					t.Fatalf("iteration %d: commit targeted %q, want /repo", i, commitDir)
+				}
+			}
+		})
+	}
+}
+
 func TestFolderNodesNeverResolveAsFilesOrExecuteFileActions(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.SetFileView(config.GitFileViewTree)
@@ -189,16 +246,12 @@ func TestWorkingFileIdentitySeparatesColonAmbiguousRoots(t *testing.T) {
 
 	cp := NewChangesPanel(repoA, repoB)
 	cp.Refresh()
+	cp.PRGroups = []prGroup{{Dir: repoA, Name: "pull request", Files: []git.FileStatus{{Status: "M", Path: "b:c"}}}}
+	cp.multiRoot = true
+	cp.buildTree()
 	fileA := nodeWithLabel(cp.Tree.Config.Items, "b:c")
 	if fileA == nil || !revealTreeSelection(cp.Tree, fileA.ID) {
 		t.Fatal("repo A file is not selectable")
-	}
-	var commitDir string
-	cp.OnCommit = func(dir, _ string) { commitDir = dir }
-	cp.Input.SetText("repo A commit")
-	cp.commitFocusedGroup()
-	if commitDir != repoA {
-		t.Fatalf("repo A selection committed to %q", commitDir)
 	}
 
 	cp.ToggleStageSelected()
@@ -207,6 +260,17 @@ func TestWorkingFileIdentitySeparatesColonAmbiguousRoots(t *testing.T) {
 	}
 	if got := runTreeGit(t, repoB, "diff", "--cached", "--name-only", "-z"); got != "" {
 		t.Fatalf("repo B was staged by repo A selection: %q", got)
+	}
+	wantID := workingNodeID(workNodeFile, repoA, "b:c", true)
+	if got := cp.Tree.Selected(); got == nil || got.ID != wantID || cp.selectedInPR() {
+		t.Fatalf("staged working selection = %+v, want %q outside PR context", got, wantID)
+	}
+	var commitDir string
+	cp.OnCommit = func(dir, _ string) { commitDir = dir }
+	cp.Input.SetText("repo A commit")
+	cp.commitFocusedGroup()
+	if commitDir != repoA {
+		t.Fatalf("repo A selection committed to %q", commitDir)
 	}
 }
 

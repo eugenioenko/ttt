@@ -105,6 +105,7 @@ type workFileRef struct {
 	Dir    string
 	Status git.FileStatus
 	Staged bool
+	Kind   workNodeKind
 }
 
 type workNodeRef struct {
@@ -718,12 +719,8 @@ func (cp *ChangesPanel) buildTree() {
 	if revealTreeSelection(cp.Tree, selected) || !selectedWasFile {
 		return
 	}
-	for id, ref := range cp.workFiles {
-		if ref.Dir == selectedFile.Dir && ref.Status.Path == selectedFile.Status.Path {
-			revealTreeSelection(cp.Tree, id)
-			return
-		}
-	}
+	fallbackID := workingNodeID(selectedFile.Kind, selectedFile.Dir, selectedFile.Status.Path, !selectedFile.Staged)
+	revealTreeSelection(cp.Tree, fallbackID)
 }
 
 func clearTreeActions(nodes []*widgets.TreeNode) {
@@ -743,7 +740,7 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 		actionCmd = "unstage"
 	}
 	id := workingNodeID(kind, dir, f.Path, staged)
-	cp.workFiles[id] = workFileRef{Dir: dir, Status: f, Staged: staged}
+	cp.workFiles[id] = workFileRef{Dir: dir, Status: f, Staged: staged, Kind: kind}
 	cp.workNodes[id] = workNodeRef{Dir: dir, Path: f.Path, Staged: staged, Kind: kind, Group: group, PR: pr}
 	return &widgets.TreeNode{
 		ID:        id,

@@ -63,13 +63,17 @@ func parseStatusPorcelainZ(out []byte) []FileStatus {
 		path := string(record[3:])
 
 		var oldPath string
-		if x == 'R' || x == 'C' || y == 'R' || y == 'C' {
+		renameOrCopy := x == 'R' || x == 'C' || y == 'R' || y == 'C'
+		if renameOrCopy {
 			oldEnd := bytes.IndexByte(out, 0)
 			if oldEnd < 0 {
 				break
 			}
 			oldPath = string(out[:oldEnd])
 			out = out[oldEnd+1:]
+		}
+		if path == "" || renameOrCopy && oldPath == "" {
+			continue
 		}
 
 		if x != ' ' && x != '?' {

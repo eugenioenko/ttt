@@ -427,6 +427,30 @@ func TestParseStatusPorcelainZUsesDestinationThenSourceForRenameAndCopy(t *testi
 	}
 }
 
+func TestParseStatusPorcelainZRejectsEmptyPaths(t *testing.T) {
+	valid := "?? valid\n界.txt\x00"
+	tests := []struct {
+		name string
+		tail string
+	}{
+		{name: "ordinary destination", tail: " M \x00"},
+		{name: "rename destination", tail: "R  \x00old.txt\x00"},
+		{name: "rename source", tail: "R  new.txt\x00\x00"},
+		{name: "staged copy destination", tail: "C  \x00old.txt\x00"},
+		{name: "staged copy source", tail: "C  new.txt\x00\x00"},
+		{name: "unstaged copy destination", tail: " C \x00old.txt\x00"},
+		{name: "unstaged copy source", tail: " C new.txt\x00\x00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := parseStatusPorcelainZ([]byte(valid + tt.tail))
+			if len(files) != 1 || files[0].Path != "valid\n界.txt" || files[0].Status != "?" || files[0].Staged {
+				t.Fatalf("statuses = %+v, want only valid prefix", files)
+			}
+		})
+	}
+}
+
 func TestStatusFilesMultiple(t *testing.T) {
 	dir := setupTestRepo(t)
 	writeFile(t, dir, "tracked.txt", "tracked\n")
