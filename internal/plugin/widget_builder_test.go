@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -207,5 +208,123 @@ func TestReconcileUpdatesLabelWidth(t *testing.T) {
 	lw2 := ws.items[0].(*widgets.LabelWidget)
 	if lw2.FixedWidth != 20 {
 		t.Errorf("expected width updated to 20 on reconcile, got %d", lw2.FixedWidth)
+	}
+}
+
+func TestReconcileUpdatesReusableDropdownStateAndCallback(t *testing.T) {
+	ws := NewWidgetState()
+	p := &Plugin{Name: "test", State: lua.NewState()}
+	defer p.State.Close()
+
+	var shown []widgets.MenuEntry
+	var commands []string
+	p.ShowContextMenu = func(entries []widgets.MenuEntry, _, _ int, onCommand func(string)) {
+		shown = entries
+		onCommand(entries[0].Command)
+	}
+
+	checked, unchecked := true, false
+	states := []struct {
+		name    string
+		label   string
+		checked *bool
+	}{
+		{name: "checked", label: "Checked", checked: &checked},
+		{name: "unchecked", label: "Unchecked", checked: &unchecked},
+		{name: "omitted", label: "Omitted"},
+		{name: "checked-again", label: "Checked again", checked: &checked},
+	}
+
+	var original *widgets.DropdownWidget
+	for i, state := range states {
+		desc := WidgetDesc{
+			Kind:  WidgetDropdown,
+			Key:   "dropdown:0",
+			Label: state.label,
+			Entries: []widgets.MenuEntry{{
+				Label:   "界 Mode",
+				Command: state.name,
+				Checked: state.checked,
+			}},
+			OnMenu: func(command string) { commands = append(commands, command) },
+		}
+		ws.Reconcile([]WidgetDesc{desc}, p)
+
+		dd := ws.items[0].(*widgets.DropdownWidget)
+		if i == 0 {
+			original = dd
+		} else if dd != original {
+			t.Fatalf("%s reconcile replaced reusable dropdown", state.name)
+		}
+		if dd.Config.Label != state.label {
+			t.Errorf("%s label = %q, want %q", state.name, dd.Config.Label, state.label)
+		}
+		if dd.Config.OnMenu == nil {
+			t.Fatalf("%s callback was not wired", state.name)
+		}
+		dd.Config.OnMenu(dd.Config.Entries, 0, 0)
+		assertMenuEntryChecked(t, state.name, shown[0], state.checked)
+		if got := commands[len(commands)-1]; got != state.name {
+			t.Errorf("%s callback command = %q, want %q", state.name, got, state.name)
+		}
+	}
+}
+
+func TestReconcileUpdatesReusableTitleAndNodeMenus(t *testing.T) {
+	ws := NewWidgetState()
+	p := &Plugin{Name: "test", State: lua.NewState()}
+	defer p.State.Close()
+
+	var shown []widgets.MenuEntry
+	p.ShowContextMenu = func(entries []widgets.MenuEntry, _, _ int, _ func(string)) {
+		shown = entries
+	}
+
+	checked, unchecked := true, false
+	initial := []WidgetDesc{
+		{Kind: WidgetTitle, Key: "title:0", Text: "Modes", Entries: []widgets.MenuEntry{{Label: "Mode", Checked: &checked}}},
+		{Kind: WidgetTree, Key: "tree:0", Items: []*widgets.TreeNode{{ID: "node", Label: "Node"}}, NodeMenu: []widgets.MenuEntry{{Label: "Mode", Checked: &checked}}},
+		{Kind: WidgetList, Key: "list:0", Items: []*widgets.TreeNode{{ID: "node", Label: "Node"}}, NodeMenu: []widgets.MenuEntry{{Label: "Mode", Checked: &checked}}},
+		{Kind: WidgetTable, Key: "table:0", Rows: [][]string{{"Row"}}, NodeMenu: []widgets.MenuEntry{{Label: "Mode", Checked: &checked}}},
+	}
+	ws.Reconcile(initial, p)
+
+	updated := []WidgetDesc{
+		{Kind: WidgetTitle, Key: "title:0", Text: "Modes", Entries: []widgets.MenuEntry{{Label: "Mode", Checked: &unchecked}}},
+		{Kind: WidgetTree, Key: "tree:0", Items: []*widgets.TreeNode{{ID: "node", Label: "Node"}}},
+		{Kind: WidgetList, Key: "list:0", Items: []*widgets.TreeNode{{ID: "node", Label: "Node"}}, NodeMenu: []widgets.MenuEntry{{Label: "Mode"}}},
+		{Kind: WidgetTable, Key: "table:0", Rows: [][]string{{"Row"}}, NodeMenu: []widgets.MenuEntry{{Label: "Mode", Checked: &unchecked}}},
+	}
+	ws.Reconcile(updated, p)
+
+	title := ws.items[0].(*widgets.TitleWidget)
+	title.SetRect(widgets.Rect{X: 0, Y: 0, W: 30, H: 1})
+	title.Render(newMockSurface(30, 1))
+	title.HandleEvent(tcell.NewEventMouse(29, 0, tcell.Button1, tcell.ModNone))
+	if len(shown) != 1 {
+		t.Fatalf("title menu entries = %d, want 1", len(shown))
+	}
+	assertMenuEntryChecked(t, "title", shown[0], &unchecked)
+
+	tree := ws.items[1].(*widgets.TreeWidget)
+	if len(tree.Config.NodeMenu) != 0 || tree.Config.OnMenu != nil {
+		t.Errorf("tree retained removed node menu: entries=%v callback=%v", tree.Config.NodeMenu, tree.Config.OnMenu != nil)
+	}
+	list := ws.items[2].(*widgets.TreeWidget)
+	assertMenuEntryChecked(t, "list", list.Config.NodeMenu[0], nil)
+	table := ws.items[3].(*widgets.TableWidget)
+	assertMenuEntryChecked(t, "table", table.Config.NodeMenu[0], &unchecked)
+}
+
+func assertMenuEntryChecked(t *testing.T, surface string, entry widgets.MenuEntry, want *bool) {
+	t.Helper()
+	if want == nil {
+		if entry.Checked != nil {
+			t.Errorf("%s checked = %v, want omitted", surface, *entry.Checked)
+		}
+		return
+	}
+	if entry.Checked == nil || *entry.Checked != *want {
+		t.Errorf("%s checked = %v, want %v", surface, entry.Checked, *want)
 	}
 }

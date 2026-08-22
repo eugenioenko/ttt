@@ -44,6 +44,30 @@ func TestContextMenuItemFromWidgetEntryPreservesMenuContract(t *testing.T) {
 	}
 }
 
+func TestContextMenuItemsFromWidgetEntriesPreservesMixedRows(t *testing.T) {
+	checked, unchecked := true, false
+	entries := []widgets.MenuEntry{
+		{Label: "Omitted", Command: "omitted"},
+		{Label: "Unchecked", Command: "unchecked", Checked: &unchecked},
+		{Separator: true, Checked: &checked},
+		{Label: "Checked", Command: "checked", Checked: &checked},
+	}
+
+	items := contextMenuItemsFromWidgetEntries(entries)
+	if len(items) != len(entries) {
+		t.Fatalf("items = %d, want %d", len(items), len(entries))
+	}
+	wantChecked := []int{0, ui.MenuUnchecked, 0, ui.MenuChecked}
+	for i := range items {
+		if items[i].Label != entries[i].Label || items[i].Command != entries[i].Command || items[i].IsSep != entries[i].Separator {
+			t.Errorf("row %d changed during conversion: got %+v, entry %+v", i, items[i], entries[i])
+		}
+		if items[i].Checked != wantChecked[i] {
+			t.Errorf("row %d checked = %d, want %d", i, items[i].Checked, wantChecked[i])
+		}
+	}
+}
+
 func TestSetPathNilDeletesKey(t *testing.T) {
 	m := map[string]any{
 		"lsp": map[string]any{

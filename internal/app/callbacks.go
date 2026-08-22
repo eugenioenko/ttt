@@ -69,13 +69,7 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 		if a.PluginManager != nil {
 			for _, p := range a.PluginManager.Plugins() {
 				if a.Sidebar.ActivePanel == "plugin."+p.Name && len(p.SidebarMenuEntries) > 0 {
-					for _, e := range p.SidebarMenuEntries {
-						items = append(items, ui.ContextMenuItem{
-							Label:   e.Label,
-							Command: e.Command,
-							IsSep:   e.Separator,
-						})
-					}
+					items = contextMenuItemsFromWidgetEntries(p.SidebarMenuEntries)
 					break
 				}
 			}

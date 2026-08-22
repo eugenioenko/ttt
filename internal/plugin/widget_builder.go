@@ -102,12 +102,15 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		}
 	case WidgetTitle:
 		if tw, ok := w.(*widgets.TitleWidget); ok {
-			tw.Config.Title = desc.Text
-			tw.Config.Badge = desc.Badge
-			tw.Config.Menu = desc.Entries
-			tw.Config.Icon = desc.Icon
-			tw.Config.Padded = desc.Padded
-			wireTitleMenu(&tw.Config, desc, p)
+			config := widgets.TitleConfig{
+				Title:  desc.Text,
+				Badge:  desc.Badge,
+				Menu:   desc.Entries,
+				Icon:   desc.Icon,
+				Padded: desc.Padded,
+			}
+			wireTitleMenu(&config, desc, p)
+			tw.UpdateConfig(config)
 			applyBoxModel(&tw.Box, desc)
 		}
 	case WidgetKeyValue:
@@ -160,6 +163,16 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		}
 	case WidgetDivider:
 		// nothing to update
+	case WidgetDropdown:
+		if dd, ok := w.(*widgets.DropdownWidget); ok {
+			dd.UpdateConfig(widgets.DropdownConfig{
+				Label:   desc.Label,
+				Entries: desc.Entries,
+				Box:     &widgets.BoxModel{PaddingLeft: 1, PaddingRight: 1},
+			})
+			wireDropdownCallback(dd, desc, p)
+			applyBoxModel(&dd.Box, desc)
+		}
 	case WidgetScrollView:
 		if sv, ok := w.(*widgets.ScrollViewWidget); ok {
 			if vs, ok := sv.Child.(*widgets.VStackWidget); ok {
@@ -461,7 +474,8 @@ func createDropdownWidget(desc WidgetDesc, p *Plugin) *widgets.DropdownWidget {
 }
 
 func wireDropdownCallback(dd *widgets.DropdownWidget, desc WidgetDesc, p *Plugin) {
-	if p.ShowContextMenu != nil && len(desc.Entries) > 0 {
+	dd.Config.OnMenu = nil
+	if p != nil && p.ShowContextMenu != nil && len(desc.Entries) > 0 {
 		dd.Config.OnMenu = func(entries []widgets.MenuEntry, screenX, screenY int) {
 			p.ShowContextMenu(entries, screenX, screenY, func(cmd string) {
 				if desc.OnMenu != nil {
@@ -473,18 +487,13 @@ func wireDropdownCallback(dd *widgets.DropdownWidget, desc WidgetDesc, p *Plugin
 }
 
 func wireTreeCallbacks(tw *widgets.TreeWidget, desc WidgetDesc, p *Plugin) {
-	if desc.OnSelect != nil {
-		tw.Config.OnSelect = desc.OnSelect
-	}
-	if desc.OnExpand != nil {
-		tw.Config.OnExpand = desc.OnExpand
-	}
-	if desc.OnCommand != nil {
-		tw.Config.OnCommand = desc.OnCommand
-	}
+	tw.Config.OnSelect = desc.OnSelect
+	tw.Config.OnExpand = desc.OnExpand
+	tw.Config.OnCommand = desc.OnCommand
+	tw.Config.NodeMenu = desc.NodeMenu
+	tw.Config.OnMenu = nil
 	if len(desc.NodeMenu) > 0 {
-		tw.Config.NodeMenu = desc.NodeMenu
-		if p.ShowContextMenu != nil {
+		if p != nil && p.ShowContextMenu != nil {
 			tw.Config.OnMenu = func(entries []widgets.MenuEntry, node *widgets.TreeNode, sx, sy int) {
 				p.ShowContextMenu(entries, sx, sy, func(cmd string) {
 					if tw.Config.OnCommand != nil {
@@ -494,6 +503,7 @@ func wireTreeCallbacks(tw *widgets.TreeWidget, desc WidgetDesc, p *Plugin) {
 			}
 		}
 	}
+	tw.Config.OnKey = nil
 	if len(desc.KeyCommands) > 0 {
 		kc := desc.KeyCommands
 		tw.Config.OnKey = func(ev *tcell.EventKey, node *widgets.TreeNode) bool {
@@ -610,6 +620,7 @@ func createTableWidget(desc WidgetDesc, p *Plugin) *widgets.TableWidget {
 }
 
 func wireTableMenu(tw *widgets.TableWidget, p *Plugin) {
+	tw.Config.OnMenu = nil
 	if p == nil || p.ShowContextMenu == nil {
 		return
 	}
