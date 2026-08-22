@@ -77,3 +77,28 @@ func TestTogglePanel(t *testing.T) {
 		t.Error("bottom panel should be hidden after second toggle")
 	}
 }
+
+// Guards against sizing the PTY from full editor+panel height (issue #465).
+func TestSpawnTerminalSizedToBottomPanel(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+
+	h.app.Settings.Terminal.Shell = "/bin/cat"
+	h.exec("terminal.toggle")
+	if len(h.app.Terminals) != 1 {
+		t.Fatalf("expected 1 terminal after toggle, got %d", len(h.app.Terminals))
+	}
+	term := h.app.Terminals[0].Term
+	defer term.Close()
+
+	fullH := h.app.ContentSplit.GetRect().H
+	if h.app.ContentSplit.BottomH >= fullH-3 {
+		t.Fatalf("test setup invalid: bottom panel height %d not smaller than full content split height %d", h.app.ContentSplit.BottomH, fullH)
+	}
+
+	wantRows := h.app.ContentSplit.BottomH - 2
+	_, gotRows := term.Size()
+	if gotRows != wantRows {
+		t.Errorf("terminal rows = %d, want %d (bottom panel height %d, full content split height %d)", gotRows, wantRows, h.app.ContentSplit.BottomH, fullH)
+	}
+}
