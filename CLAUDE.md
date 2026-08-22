@@ -114,7 +114,7 @@ Lua plugins render UI in sidebar panels, bottom-panel tabs, drawers, and editor 
 | Method | Lua fields | Description |
 |---|---|---|
 | `p:label(text)` or `p:label({...})` | `text`, `style`, `badge`, `width`, borders | Static text line. `style` is a named style (see below). `border`/`border_top`/`border_bottom`/`border_left`/`border_right` draw borders. Supports box model. |
-| `p:title(text)` or `p:title({...})` | `text`, `badge`, `menu`, `on_menu(command)`, `icon`, `padded` | Bold section heading with optional right-aligned badge and dropdown menu. `menu` is `{label, command, separator}` tables; `icon` overrides the dropdown button (default `⋮`). Supports box model. |
+| `p:title(text)` or `p:title({...})` | `text`, `badge`, `menu`, `on_menu(command)`, `icon`, `padded` | Bold section heading with optional right-aligned badge and dropdown menu. `menu` is `{label, command, separator, checked}` tables; optional boolean `checked` reserves and controls a check indicator. `icon` overrides the dropdown button (default `⋮`). Supports box model. |
 | `p:tree({...})` | `items`, `indent` (default 2), `on_select`, `on_expand`, `on_command`, `node_menu`, `key_commands`, `truncate_left` | Expandable tree view. Items are `{id, label, icon, badge, muted, expandable, expanded, children}` tables. `key_commands` maps single chars to commands via `on_command`. `truncate_left` truncates overflowing labels from the left (`…tail`) so the end stays visible. |
 | `p:list({...})` | `items`, `on_select`, `on_command`, `node_menu`, `key_commands`, `truncate_left` | Flat list (backed by TreeWidget, no indentation). `truncate_left` keeps label tails visible on overflow. |
 | `p:button({...})` | `label`, `on_click` | Clickable button. Label is immutable after creation (accelerator parsing). |
@@ -126,10 +126,12 @@ Lua plugins render UI in sidebar panels, bottom-panel tabs, drawers, and editor 
 | `p:scrollview({...})` | `render(child_panel)` | Scrollable container. Wraps children with mouse wheel scrolling and scrollbar when content overflows. |
 | `p:box({...})` | `render(child_panel)`, `border` (+ per-side), `height` | Container with optional border and fixed height. Children via `render` callback. |
 | `p:divider()` | (none) | Horizontal divider line. Single-line separator, no configuration. |
-| `p:dropdown({...})` | `label`, `entries`, `on_menu(command)` | Dropdown menu button. `entries` are `{label, command, separator}` tables. |
+| `p:dropdown({...})` | `label`, `entries`, `on_menu(command)` | Dropdown menu button. `entries` are `{label, command, separator, checked}` tables; optional boolean `checked` reserves and controls a check indicator. |
 | `p:progress({...})` | `value` (0–1), `style`, `char` (default `▄`) | Horizontal progress bar. |
 | `p:table({...})` | `columns` (`{label, width, align}`), `rows` (arrays of strings), `on_select(row_idx)`, `on_command(cmd, row_idx)`, `node_menu`, `key_commands` | Data table with headers and row selection. Row indices are 1-based. |
 | `p:markdown(text)` or `p:markdown({...})` | `text` | Rendered markdown with selection/copy, auto-wrapped in a scrollview. Wraps at `markdown.wrapWidth` (default 80). |
+
+All menu-entry tables (`actions`, `menu`, `entries`, and `node_menu`) accept `label`, `command`, `separator`, and optional boolean `checked`. Omitting `checked` keeps the menu indicator-free; `false` shows an unchecked slot and `true` shows a check.
 
 **Raw cell API** (low-level drawing; can be mixed with widgets — raw cells draw directly on the surface, widgets stack from the top over it):
 

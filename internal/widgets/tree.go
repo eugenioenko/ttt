@@ -32,6 +32,8 @@ type MenuEntry struct {
 	Label     string `json:"label"`
 	Command   string `json:"command"`
 	Separator bool   `json:"separator,omitempty"`
+	// Checked is nil for indicator-free entries; non-nil reserves a check slot.
+	Checked *bool `json:"checked,omitempty"`
 }
 
 type TreeConfig struct {

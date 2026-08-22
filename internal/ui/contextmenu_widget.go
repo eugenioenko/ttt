@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -72,11 +73,11 @@ func (c *ContextMenuWidget) menuWidth() int {
 		if it.IsSep {
 			continue
 		}
-		lr := len([]rune(it.Label))
+		lr := textwidth.String(it.Label)
 		if lr > maxLabel {
 			maxLabel = lr
 		}
-		sr := len([]rune(it.Shortcut))
+		sr := textwidth.String(it.Shortcut)
 		if sr > maxShort {
 			maxShort = sr
 		}
@@ -151,8 +152,7 @@ func (c *ContextMenuWidget) Render(surface Surface) {
 			if i == c.Selected {
 				shortStyle = style
 			}
-			shortRunes := []rune(it.Shortcut)
-			sx := x + menuW - 2 - len(shortRunes)
+			sx := x + menuW - 2 - textwidth.String(it.Shortcut)
 			surface.DrawText(sx, row, it.Shortcut, x+menuW-1, shortStyle)
 		}
 	}

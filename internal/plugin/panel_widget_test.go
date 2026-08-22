@@ -220,3 +220,80 @@ func TestTitleWidgetLuaFields(t *testing.T) {
 		t.Error("expected on_menu callback to be wired")
 	}
 }
+
+func TestPluginWidgetMenusParseOptionalCheckedState(t *testing.T) {
+	p := &Plugin{
+		Name:    "checked-menu-test",
+		Granted: PermissionSet{PanelSidebar: true},
+	}
+	p.State = NewSandbox()
+	defer p.State.Close()
+	setupTTTModule(p.State, p)
+
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		local function menu_entries()
+			return {
+				{ label = "Omitted", command = "omitted" },
+				{ label = "Unchecked", command = "unchecked", checked = false },
+				{ separator = true },
+				{ label = "Checked", command = "checked", checked = true },
+			}
+		end
+		ttt.register({
+			sidebar = {
+				title = "Checked menus",
+				render = function(panel)
+					panel:title({ text = "Title", menu = menu_entries() })
+					panel:dropdown({ label = "Dropdown", entries = menu_entries() })
+					panel:tree({ items = {{ id = "tree", label = "Tree" }}, node_menu = menu_entries() })
+					panel:list({ items = {{ id = "list", label = "List" }}, node_menu = menu_entries() })
+					panel:table({
+						columns = {{ label = "Column" }},
+						rows = {{ "Row" }},
+						node_menu = menu_entries(),
+					})
+				end,
+			},
+		})
+	`)
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	proxy := NewPanelProxy(newMockSurface(80, 20), p)
+	if err := p.CallRenderWith(p.RenderFunc, proxy); err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+
+	descs := proxy.Descriptors()
+	if len(descs) != 5 {
+		t.Fatalf("descriptors = %d, want title, dropdown, tree, list, and table", len(descs))
+	}
+	for _, desc := range descs {
+		entries := desc.Entries
+		if desc.Kind == WidgetTree || desc.Kind == WidgetList || desc.Kind == WidgetTable {
+			entries = desc.NodeMenu
+		}
+		assertOptionalCheckedEntries(t, desc.Kind.String(), entries)
+	}
+}
+
+func assertOptionalCheckedEntries(t *testing.T, surface string, entries []widgets.MenuEntry) {
+	t.Helper()
+	if len(entries) != 4 {
+		t.Fatalf("%s entries = %d, want 4", surface, len(entries))
+	}
+	if entries[0].Checked != nil {
+		t.Errorf("%s omitted checked = %v, want nil", surface, *entries[0].Checked)
+	}
+	if entries[1].Checked == nil || *entries[1].Checked {
+		t.Errorf("%s unchecked entry = %+v, want non-nil false", surface, entries[1])
+	}
+	if !entries[2].Separator {
+		t.Errorf("%s separator entry lost separator state", surface)
+	}
+	if entries[3].Checked == nil || !*entries[3].Checked {
+		t.Errorf("%s checked entry = %+v, want non-nil true", surface, entries[3])
+	}
+}
