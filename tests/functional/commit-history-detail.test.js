@@ -25,7 +25,7 @@ describe("commit history detail", () => {
     tui.press("right");
     tui.waitStable(500);
     tui.press("down");
-    tui.exec("Git: Open Compact Diff");
+    tui.exec("Git: Open Changes Only");
     tui.waitFor("selected-detail.txt @");
     const opened = tui.snapshot();
 
