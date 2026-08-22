@@ -94,3 +94,45 @@ func TestCurrentChangesBinaryAndEmptyFilesRemainVisibleInFullFileMode(t *testing
 		}
 	}
 }
+
+func TestCurrentChangesSamePathBoundariesPreserveIndependentCollapseAndSelection(t *testing.T) {
+	detail := NewCurrentChangesWidget("/repo", false)
+	staged := currentChangesTestFile("file.txt", CommitDetailStageStaged, []string{"head"}, []string{"index"})
+	staged.Boundary = CommitDetailBoundaryHeadToIndex
+	unstaged := currentChangesTestFile("file.txt", CommitDetailStageUnstaged, []string{"index"}, []string{"worktree"})
+	unstaged.Boundary = CommitDetailBoundaryIndexToWorktree
+	detail.SetCurrentChanges("1 file", []CommitDetailFile{staged, unstaged}, "")
+	detail.collapsedFiles[0] = true
+	detail.rebuildRows()
+	selectedRow := -1
+	for i, row := range detail.rows {
+		if row.kind == commitDetailDiffRow && row.fileIndex == 1 {
+			selectedRow = i
+			break
+		}
+	}
+	if selectedRow < 0 {
+		t.Fatal("unstaged boundary has no selectable diff row")
+	}
+	detail.hasSelection = true
+	detail.selRight = true
+	detail.selection.Anchor = diffSelPos{Line: selectedRow, Col: 0}
+	detail.selection.Current = diffSelPos{Line: selectedRow, Col: 4}
+
+	refreshedStaged := currentChangesTestFile("file.txt", CommitDetailStageStaged, []string{"head"}, []string{"index"})
+	refreshedStaged.Boundary = CommitDetailBoundaryHeadToIndex
+	refreshedUnstaged := currentChangesTestFile("file.txt", CommitDetailStageUnstaged, []string{"index"}, []string{"worktree latest"})
+	refreshedUnstaged.Boundary = CommitDetailBoundaryIndexToWorktree
+	detail.SetCurrentChanges("1 file", []CommitDetailFile{refreshedStaged, refreshedUnstaged}, "")
+
+	if !detail.collapsedFiles[0] || detail.collapsedFiles[1] {
+		t.Fatalf("independent collapse state = %v", detail.collapsedFiles)
+	}
+	if !detail.hasSelection {
+		t.Fatal("unstaged selection was lost when the same-path staged boundary refreshed")
+	}
+	row := detail.rows[detail.selection.Anchor.Line]
+	if row.fileIndex != 1 || detail.Files[row.fileIndex].Boundary != CommitDetailBoundaryIndexToWorktree {
+		t.Fatalf("selection moved across boundary: row=%+v files=%+v", row, detail.Files)
+	}
+}

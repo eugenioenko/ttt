@@ -56,35 +56,44 @@ func TestReadCurrentChangesUsesRawStatusIdentityForWorkingTreeShapes(t *testing.
 		t.Fatal(result.Err)
 	}
 	files := make(map[string]int)
+	boundaries := make(map[string]map[ui.CommitDetailStage]int)
 	for i := range result.Files {
 		files[result.Files[i].Path] = i
+		if boundaries[result.Files[i].Path] == nil {
+			boundaries[result.Files[i].Path] = make(map[ui.CommitDetailStage]int)
+		}
+		boundaries[result.Files[i].Path][result.Files[i].Stage] = i
 	}
 	for _, path := range []string{"initial.txt", "delete.txt", "renamed:界.txt", "blob.bin", "empty.txt", rawPath} {
 		if _, ok := files[path]; !ok {
 			t.Fatalf("typed current changes omitted %q: %+v", path, result.Files)
 		}
 	}
-	mixed := result.Files[files["initial.txt"]]
-	if mixed.Stage != ui.CommitDetailStageMixed {
-		t.Fatalf("mixed stage = %v", mixed.Stage)
+	stagedFile := result.Files[boundaries["initial.txt"][ui.CommitDetailStageStaged]]
+	unstagedFile := result.Files[boundaries["initial.txt"][ui.CommitDetailStageUnstaged]]
+	if stagedFile.Boundary != ui.CommitDetailBoundaryHeadToIndex || unstagedFile.Boundary != ui.CommitDetailBoundaryIndexToWorktree {
+		t.Fatalf("mixed boundaries = staged:%v unstaged:%v", stagedFile.Boundary, unstagedFile.Boundary)
 	}
-	foundFinal := false
-	for _, line := range mixed.Diff.AllLines() {
+	foundStaged := false
+	for _, line := range stagedFile.Diff.AllLines() {
+		foundStaged = foundStaged || line.Right.Text == "staged version"
+	}
+	foundIndexBoundary, foundFinal := false, false
+	for _, line := range unstagedFile.Diff.AllLines() {
+		foundIndexBoundary = foundIndexBoundary || line.Left.Text == "staged version"
 		foundFinal = foundFinal || line.Right.Text == "final working version"
-		if line.Right.Text == "staged version" {
-			t.Fatal("current changes stopped at the staged snapshot")
-		}
 	}
-	if !foundFinal {
-		t.Fatalf("mixed diff omitted final working content: %+v", mixed.Diff.AllLines())
+	if !foundStaged || !foundIndexBoundary || !foundFinal {
+		t.Fatalf("mixed boundaries omitted content: staged=%+v unstaged=%+v", stagedFile.Diff.AllLines(), unstagedFile.Diff.AllLines())
 	}
 	deleted := result.Files[files["delete.txt"]]
 	if deleted.Status != "D" || len(deleted.Diff.Hunks) == 0 {
 		t.Fatalf("deleted file = %+v", deleted)
 	}
-	renamed := result.Files[files["renamed:界.txt"]]
-	if renamed.Status != "R" || renamed.OldPath != "old name.txt" {
-		t.Fatalf("renamed file identity = %+v", renamed)
+	renamed := result.Files[boundaries["renamed:界.txt"][ui.CommitDetailStageStaged]]
+	renamedWorktree := result.Files[boundaries["renamed:界.txt"][ui.CommitDetailStageUnstaged]]
+	if renamed.Status != "R" || renamed.OldPath != "old name.txt" || renamedWorktree.Status != "M" || renamedWorktree.OldPath != "" {
+		t.Fatalf("renamed boundaries = staged:%+v unstaged:%+v", renamed, renamedWorktree)
 	}
 	if result.Files[files["blob.bin"]].ContentKind != ui.CommitDetailContentBinary {
 		t.Fatalf("binary file kind = %v", result.Files[files["blob.bin"]].ContentKind)
@@ -92,7 +101,7 @@ func TestReadCurrentChangesUsesRawStatusIdentityForWorkingTreeShapes(t *testing.
 	if result.Files[files["empty.txt"]].ContentKind != ui.CommitDetailContentEmpty {
 		t.Fatalf("empty file kind = %v", result.Files[files["empty.txt"]].ContentKind)
 	}
-	if !strings.Contains(result.Summary, "mixed") || result.Fingerprint == "" {
+	if !strings.Contains(result.Summary, "staged") || !strings.Contains(result.Summary, "unstaged") || result.Fingerprint == "" {
 		t.Fatalf("summary=%q fingerprint=%q", result.Summary, result.Fingerprint)
 	}
 }
@@ -121,19 +130,45 @@ func TestReadCurrentChangesHandlesAddedFilesWithFurtherWorkingTreeChanges(t *tes
 	}
 
 	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
-	if result.Err != nil || len(result.Files) != 1 {
+	if result.Err != nil || len(result.Files) != 2 {
 		t.Fatalf("added mixed result=%+v", result)
 	}
-	file := result.Files[0]
-	if file.Status != "A" || file.Stage != ui.CommitDetailStageMixed {
-		t.Fatalf("added mixed identity=%+v", file)
+	stagedFile, unstagedFile := result.Files[0], result.Files[1]
+	if stagedFile.Status != "A" || stagedFile.Stage != ui.CommitDetailStageStaged || unstagedFile.Status != "M" || unstagedFile.Stage != ui.CommitDetailStageUnstaged {
+		t.Fatalf("added mixed identities=%+v", result.Files)
 	}
-	foundFinal := false
-	for _, line := range file.Diff.AllLines() {
+	foundIndex, foundFinal := false, false
+	for _, line := range unstagedFile.Diff.AllLines() {
+		foundIndex = foundIndex || line.Left.Text == "staged"
 		foundFinal = foundFinal || line.Right.Text == "final"
 	}
-	if !foundFinal {
-		t.Fatalf("added mixed diff omitted final content: %+v", file.Diff.AllLines())
+	if !foundIndex || !foundFinal {
+		t.Fatalf("added mixed diff omitted index boundary: %+v", unstagedFile.Diff.AllLines())
+	}
+}
+
+func TestReadCurrentChangesIntentToAddUsesEmptyIndexBoundary(t *testing.T) {
+	dir := testAppRepository(t)
+	path := filepath.Join(dir, "intent.txt")
+	if err := os.WriteFile(path, []byte("intent content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testAppGit(t, dir, "add", "-N", "--", "intent.txt")
+
+	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	if result.Err != nil || len(result.Files) != 1 {
+		t.Fatalf("intent-to-add result=%+v", result)
+	}
+	file := result.Files[0]
+	if file.Status != "A" || file.Stage != ui.CommitDetailStageUnstaged || file.Boundary != ui.CommitDetailBoundaryIndexToWorktree {
+		t.Fatalf("intent-to-add identity=%+v", file)
+	}
+	found := false
+	for _, line := range file.Diff.AllLines() {
+		found = found || line.Right.Text == "intent content"
+	}
+	if !found {
+		t.Fatalf("intent-to-add content=%+v", file.Diff.AllLines())
 	}
 }
 

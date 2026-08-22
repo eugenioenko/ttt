@@ -22,6 +22,8 @@ type CommitDetailFile struct {
 	Path        string
 	OldPath     string
 	Stage       CommitDetailStage
+	Boundary    CommitDetailBoundary
+	IndexStages []byte
 	ContentKind CommitDetailContentKind
 	Diff        diff.FileDiff
 	Error       string
@@ -38,6 +40,14 @@ type CommitDetailFile struct {
 	gapByLine    map[int]int
 	pendingGap   int
 }
+
+type CommitDetailBoundary uint8
+
+const (
+	CommitDetailBoundaryNone CommitDetailBoundary = iota
+	CommitDetailBoundaryHeadToIndex
+	CommitDetailBoundaryIndexToWorktree
+)
 
 type CommitDetailStage uint8
 
@@ -96,6 +106,18 @@ type commitDetailVisualRow struct {
 type commitDetailControl struct {
 	rect      Rect
 	fileIndex int
+}
+
+type commitDetailSelectionPoint struct {
+	key       string
+	lineIndex int
+	col       int
+}
+
+type commitDetailPreservedSelection struct {
+	anchor  commitDetailSelectionPoint
+	current commitDetailSelectionPoint
+	right   bool
 }
 
 // CommitDetailWidget renders an entire commit as one virtualized scrollable
@@ -317,7 +339,7 @@ func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLine
 func CommitDetailContextKey(file CommitDetailFile) string { return commitDetailFileKey(file) }
 
 func commitDetailFileKey(file CommitDetailFile) string {
-	return file.OldPath + "\x00" + file.Path
+	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + string(file.IndexStages)
 }
 
 func (d *CommitDetailWidget) IsWrapped() bool { return d.wrapMode == DiffWrapOn }
@@ -430,6 +452,7 @@ func (d *CommitDetailWidget) SetCurrentChanges(message string, files []CommitDet
 		collapsed    bool
 		expandedGaps map[int]bool
 	}
+	preservedSelection, hasPreservedSelection := d.captureCurrentChangesSelection()
 	preserved := make(map[string]preservedFileState, len(d.Files))
 	for i, file := range d.Files {
 		state := preservedFileState{expandedGaps: make(map[int]bool)}
@@ -462,9 +485,52 @@ func (d *CommitDetailWidget) SetCurrentChanges(message string, files []CommitDet
 	}
 	d.hasDetail = true
 	d.TopLine = topLine
-	d.ClearSelection()
 	d.rebuildRows()
+	if !hasPreservedSelection || !d.restoreCurrentChangesSelection(preservedSelection) {
+		d.ClearSelection()
+	}
 	d.clampScroll()
+}
+
+func (d *CommitDetailWidget) captureCurrentChangesSelection() (commitDetailPreservedSelection, bool) {
+	if !d.hasSelection {
+		return commitDetailPreservedSelection{}, false
+	}
+	capture := func(pos diffSelPos) (commitDetailSelectionPoint, bool) {
+		if pos.Line < 0 || pos.Line >= len(d.rows) {
+			return commitDetailSelectionPoint{}, false
+		}
+		row := d.rows[pos.Line]
+		if row.kind != commitDetailDiffRow || row.fileIndex < 0 || row.fileIndex >= len(d.Files) {
+			return commitDetailSelectionPoint{}, false
+		}
+		return commitDetailSelectionPoint{key: commitDetailFileKey(d.Files[row.fileIndex]), lineIndex: row.lineIndex, col: pos.Col}, true
+	}
+	anchor, anchorOK := capture(d.selection.Anchor)
+	current, currentOK := capture(d.selection.Current)
+	return commitDetailPreservedSelection{anchor: anchor, current: current, right: d.selRight}, anchorOK && currentOK
+}
+
+func (d *CommitDetailWidget) restoreCurrentChangesSelection(selection commitDetailPreservedSelection) bool {
+	restore := func(point commitDetailSelectionPoint) (diffSelPos, bool) {
+		for rowIndex, row := range d.rows {
+			if row.kind == commitDetailDiffRow && row.lineIndex == point.lineIndex && row.fileIndex >= 0 && row.fileIndex < len(d.Files) && commitDetailFileKey(d.Files[row.fileIndex]) == point.key {
+				return diffSelPos{Line: rowIndex, Col: point.col}, true
+			}
+		}
+		return diffSelPos{}, false
+	}
+	anchor, anchorOK := restore(selection.anchor)
+	current, currentOK := restore(selection.current)
+	if !anchorOK || !currentOK {
+		return false
+	}
+	d.selection.Anchor = anchor
+	d.selection.Current = current
+	d.selRight = selection.right
+	d.hasSelection = true
+	d.selecting = false
+	return true
 }
 
 func (d *CommitDetailWidget) allFilesCollapsed() bool {

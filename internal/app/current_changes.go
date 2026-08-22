@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -29,11 +28,10 @@ type CurrentChangesResult struct {
 	Canceled    bool
 }
 
-type currentFileState struct {
-	status   git.FileStatus
-	staged   bool
-	unstaged bool
-	added    bool
+type currentFileEndpoint struct {
+	content []byte
+	exists  bool
+	gitlink bool
 }
 
 func currentChangesTabID(dir string) string {
@@ -109,10 +107,10 @@ func currentChangesErrorText(err error) string {
 
 func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
 	result := &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request}
-	states := mergeCurrentFileStates(statuses)
-	result.Files = make([]ui.CommitDetailFile, 0, len(states))
-	staged, unstaged, mixed := 0, 0, 0
+	result.Files = make([]ui.CommitDetailFile, 0, len(statuses))
+	staged, unstaged := 0, 0
 	additions, deletions := 0, 0
+	paths := make(map[string]struct{}, len(statuses))
 	fingerprint := sha256.New()
 	writeFingerprint := func(value []byte) {
 		var size [8]byte
@@ -123,76 +121,70 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 	writeFingerprint([]byte(dir))
 	writeFingerprint([]byte(revision))
 
-	for _, state := range states {
+	for _, status := range statuses {
 		if err := ctx.Err(); err != nil {
 			result.Err = err
 			result.Canceled = errors.Is(err, context.Canceled)
 			return result
 		}
+		paths[status.Path] = struct{}{}
 		stage := ui.CommitDetailStageUnstaged
-		switch {
-		case state.staged && state.unstaged:
-			stage = ui.CommitDetailStageMixed
-			mixed++
-		case state.staged:
+		boundary := ui.CommitDetailBoundaryIndexToWorktree
+		if status.Staged {
 			stage = ui.CommitDetailStageStaged
+			boundary = ui.CommitDetailBoundaryHeadToIndex
 			staged++
-		default:
+		} else {
 			unstaged++
 		}
-		status := combinedCurrentStatus(state)
-		oldPath := state.status.Path
-		if state.status.OldPath != "" {
-			oldPath = state.status.OldPath
+
+		oldEndpoint, newEndpoint, indexStages, err := readCurrentFileEndpoints(ctx, dir, revision, status)
+		if err != nil {
+			result.Err = fmt.Errorf("read %s boundary for %q: %w", currentBoundaryName(boundary), status.Path, err)
+			result.Canceled = errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)
+			return result
 		}
-		var oldContent []byte
-		oldExists := revision != "" && (!state.added || state.status.OldPath != "")
-		if oldExists {
-			var err error
-			oldContent, err = git.ShowFileBytesContext(ctx, dir, oldPath, revision)
+		oldLines := splitCurrentChangesLines(oldEndpoint.content)
+		newLines := splitCurrentChangesLines(newEndpoint.content)
+		var fileDiff diff.FileDiff
+		var patch string
+		if oldEndpoint.gitlink || newEndpoint.gitlink {
+			patch, err = git.DiffCurrentFileContext(ctx, dir, revision, status)
 			if err != nil {
-				result.Err = fmt.Errorf("read HEAD content for %q: %w", state.status.Path, err)
+				result.Err = fmt.Errorf("read %s gitlink diff for %q: %w", currentBoundaryName(boundary), status.Path, err)
 				result.Canceled = errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)
 				return result
 			}
+			fileDiff = diff.Parse(patch)
+		} else if !bytes.Equal(oldEndpoint.content, newEndpoint.content) || oldEndpoint.exists != newEndpoint.exists {
+			fileDiff = diff.Parse(diff.Generate(oldLines, newLines, status.Path))
 		}
-		newContent, newExists, err := readWorkingTreeContent(filepath.Join(dir, state.status.Path))
-		if err != nil {
-			result.Err = fmt.Errorf("read working tree content for %q: %w", state.status.Path, err)
-			return result
-		}
-		if !newExists && status != "D" {
-			result.Err = fmt.Errorf("working tree path %q disappeared during refresh", state.status.Path)
-			return result
-		}
+		presentedStatus := currentPresentedStatus(status.Status)
+		presentedOldPath := currentPresentedOldPath(status)
 
-		writeFingerprint([]byte(status))
+		writeFingerprint([]byte(presentedStatus))
 		writeFingerprint([]byte{byte(stage)})
-		writeFingerprint([]byte(state.status.OldPath))
-		writeFingerprint([]byte(state.status.Path))
-		writeFingerprint(oldContent)
-		writeFingerprint(newContent)
+		writeFingerprint([]byte{byte(boundary)})
+		writeFingerprint([]byte(presentedOldPath))
+		writeFingerprint([]byte(status.Path))
+		writeFingerprint(indexStages)
+		writeFingerprint(oldEndpoint.content)
+		writeFingerprint(newEndpoint.content)
+		writeFingerprint([]byte(patch))
 
 		file := ui.CommitDetailFile{
-			Status: status, Path: state.status.Path, OldPath: state.status.OldPath, Stage: stage,
+			Status: presentedStatus, Path: status.Path, OldPath: presentedOldPath, Stage: stage, Boundary: boundary,
+			IndexStages: append([]byte(nil), indexStages...),
 		}
 		switch {
-		case isBinaryContent(oldContent) || isBinaryContent(newContent):
+		case isBinaryContent(oldEndpoint.content) || isBinaryContent(newEndpoint.content):
 			file.ContentKind = ui.CommitDetailContentBinary
 			file.FullFileState = ui.CommitDetailFullFileLoaded
-		case len(oldContent) == 0 && len(newContent) == 0 && (oldExists || newExists):
+		case len(oldEndpoint.content) == 0 && len(newEndpoint.content) == 0 && (oldEndpoint.exists || newEndpoint.exists) && !oldEndpoint.gitlink && !newEndpoint.gitlink:
 			file.ContentKind = ui.CommitDetailContentEmpty
 			file.FullFileState = ui.CommitDetailFullFileLoaded
 		default:
-			oldLines := splitCurrentChangesLines(oldContent)
-			newLines := splitCurrentChangesLines(newContent)
-			patch, err := git.DiffWorkingTreeFileContext(ctx, dir, revision, state.status)
-			if err != nil {
-				result.Err = fmt.Errorf("read diff for %q: %w", state.status.Path, err)
-				result.Canceled = errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)
-				return result
-			}
-			file.Diff = diff.Parse(patch)
+			file.Diff = fileDiff
 			file = ui.CommitDetailFileWithContent(file, oldLines, newLines)
 			added, deleted := currentDiffStats(file.Diff)
 			additions += added
@@ -201,27 +193,130 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 		result.Files = append(result.Files, file)
 	}
 	result.Fingerprint = fmt.Sprintf("%x", fingerprint.Sum(nil))
-	result.Summary = currentChangesSummary(len(states), additions, deletions, staged, unstaged, mixed)
+	result.Summary = currentChangesSummary(len(paths), additions, deletions, staged, unstaged, 0)
 	return result
 }
 
-func readWorkingTreeContent(path string) ([]byte, bool, error) {
-	info, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return nil, false, nil
+func readCurrentFileEndpoints(ctx context.Context, dir, revision string, status git.FileStatus) (currentFileEndpoint, currentFileEndpoint, []byte, error) {
+	indexPath := status.Path
+	if !status.Staged && (status.Status == "R" || status.Status == "C") && status.OldPath != "" {
+		indexPath = status.OldPath
 	}
+	entries, err := git.IndexEntriesContext(ctx, dir, indexPath)
 	if err != nil {
-		return nil, false, err
+		return currentFileEndpoint{}, currentFileEndpoint{}, nil, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(path)
-		return []byte(target), true, err
+	indexStages := make([]byte, 0, len(entries))
+	for _, entry := range entries {
+		indexStages = append(indexStages, byte(entry.Stage))
 	}
-	if info.IsDir() {
-		return []byte{0}, true, nil
+
+	if status.Staged {
+		oldEndpoint, err := readTreeEndpoint(ctx, dir, revision, currentOldPath(status))
+		if err != nil {
+			return currentFileEndpoint{}, currentFileEndpoint{}, nil, err
+		}
+		newEndpoint, err := readIndexEndpoint(ctx, dir, indexPath, entries)
+		return oldEndpoint, newEndpoint, indexStages, err
 	}
-	content, err := os.ReadFile(path)
-	return content, true, err
+
+	oldEndpoint := currentFileEndpoint{}
+	if status.Status != "?" {
+		oldEndpoint, err = readIndexEndpoint(ctx, dir, indexPath, entries)
+		if err != nil {
+			return currentFileEndpoint{}, currentFileEndpoint{}, nil, err
+		}
+	}
+	if status.Status == "D" {
+		return oldEndpoint, currentFileEndpoint{}, indexStages, nil
+	}
+	working, err := readWorkingTreeFileContext(ctx, dir, status.Path)
+	if err != nil {
+		var pathErr *workingTreePathError
+		if errors.As(err, &pathErr) && pathErr.Kind == workingTreePathDirectory && (oldEndpoint.gitlink || hasGitlinkEntry(entries)) {
+			return oldEndpoint, currentFileEndpoint{exists: true, gitlink: true}, indexStages, nil
+		}
+		return currentFileEndpoint{}, currentFileEndpoint{}, nil, err
+	}
+	if !working.Exists {
+		return currentFileEndpoint{}, currentFileEndpoint{}, nil, fmt.Errorf("working tree path disappeared")
+	}
+	return oldEndpoint, currentFileEndpoint{content: working.Content, exists: true}, indexStages, nil
+}
+
+func readTreeEndpoint(ctx context.Context, dir, revision, path string) (currentFileEndpoint, error) {
+	if revision == "" || path == "" {
+		return currentFileEndpoint{}, nil
+	}
+	entry, exists, err := git.TreeEntryContext(ctx, dir, revision, path)
+	if err != nil || !exists {
+		return currentFileEndpoint{}, err
+	}
+	if entry.Mode == "160000" {
+		return currentFileEndpoint{content: []byte("Subproject commit " + entry.Object + "\n"), exists: true, gitlink: true}, nil
+	}
+	content, err := git.ShowFileBytesContext(ctx, dir, path, revision)
+	return currentFileEndpoint{content: content, exists: err == nil}, err
+}
+
+func readIndexEndpoint(ctx context.Context, dir, path string, entries []git.IndexEntry) (currentFileEndpoint, error) {
+	if len(entries) == 0 {
+		return currentFileEndpoint{}, nil
+	}
+	entry := entries[0]
+	for _, candidate := range entries {
+		if candidate.Stage == 0 || candidate.Stage == 2 {
+			entry = candidate
+			if candidate.Stage == 0 {
+				break
+			}
+		}
+	}
+	if entry.Mode == "160000" {
+		return currentFileEndpoint{content: []byte("Subproject commit " + entry.Object + "\n"), exists: true, gitlink: true}, nil
+	}
+	content, err := git.ShowIndexFileBytesContext(ctx, dir, path, entry.Stage)
+	return currentFileEndpoint{content: content, exists: err == nil}, err
+}
+
+func hasGitlinkEntry(entries []git.IndexEntry) bool {
+	for _, entry := range entries {
+		if entry.Mode == "160000" {
+			return true
+		}
+	}
+	return false
+}
+
+func currentOldPath(status git.FileStatus) string {
+	if status.OldPath != "" {
+		return status.OldPath
+	}
+	return status.Path
+}
+
+func currentPresentedOldPath(status git.FileStatus) string {
+	if status.Status == "R" || status.Status == "C" {
+		return status.OldPath
+	}
+	return ""
+}
+
+func currentPresentedStatus(status string) string {
+	if status == "?" {
+		return "A"
+	}
+	if status == "" {
+		return "M"
+	}
+	return status
+}
+
+func currentBoundaryName(boundary ui.CommitDetailBoundary) string {
+	if boundary == ui.CommitDetailBoundaryHeadToIndex {
+		return "HEAD-to-index"
+	}
+	return "index-to-worktree"
 }
 
 func isBinaryContent(content []byte) bool {
@@ -237,48 +332,6 @@ func splitCurrentChangesLines(content []byte) []string {
 		lines = lines[:len(lines)-1]
 	}
 	return lines
-}
-
-func mergeCurrentFileStates(statuses []git.FileStatus) []currentFileState {
-	states := make([]currentFileState, 0, len(statuses))
-	index := make(map[string]int, len(statuses))
-	for _, status := range statuses {
-		i, ok := index[status.Path]
-		if !ok {
-			i = len(states)
-			index[status.Path] = i
-			states = append(states, currentFileState{status: status})
-		}
-		state := &states[i]
-		if status.OldPath != "" {
-			state.status.OldPath = status.OldPath
-		}
-		if status.Staged {
-			state.staged = true
-			if status.Status == "A" {
-				state.added = true
-			}
-			if state.status.Status == "M" || state.status.Status == "" {
-				state.status.Status = status.Status
-			}
-		} else {
-			state.unstaged = true
-			if status.Status == "?" {
-				state.added = true
-			}
-			if status.Status == "?" || status.Status == "D" {
-				state.status.Status = status.Status
-			}
-		}
-	}
-	return states
-}
-
-func combinedCurrentStatus(state currentFileState) string {
-	if state.status.Status == "" {
-		return "M"
-	}
-	return state.status.Status
 }
 
 func currentDiffStats(file diff.FileDiff) (added, deleted int) {

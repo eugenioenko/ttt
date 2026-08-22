@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe("current changes document", () => {
-  it("shows the final mixed working tree in one stable shared diff tab", () => {
+  it("shows both mixed index boundaries in one stable shared diff tab", () => {
     dir = createGitRepo(createTempDir());
     const tracked = join(dir, "tracked.txt");
     writeFileSync(tracked, "staged version\n", "utf8");
@@ -31,9 +31,10 @@ describe("current changes document", () => {
 
     for (const screen of [snapshots[first], snapshots[reopened]]) {
       expect(screen).toContain("Current changes");
-      expect(screen).toContain("M  tracked.txt · mixed");
+      expect(screen).toContain("M  tracked.txt · staged");
+      expect(screen).toContain("M  tracked.txt · unstaged");
+      expect(screen).toContain("staged version");
       expect(screen).toContain("final working version 界");
-      expect(screen).not.toContain("staged version");
       expect(screen.match(/Current Changes x/g)).toHaveLength(1);
     }
   });
