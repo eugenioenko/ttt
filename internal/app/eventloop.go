@@ -26,6 +26,8 @@ func RunEventLoop(
 	running *bool,
 	closeTerminal func(panelID string),
 ) {
+	app.eventLoopDoneSignal()
+	defer app.closeEventLoopDone()
 	if app.Watcher != nil {
 		defer app.Watcher.Close()
 	}

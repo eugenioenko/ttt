@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -438,7 +439,7 @@ func parseWaitForArgs(args string) (string, time.Duration, error) {
 			return "", 0, invalidExec("wait-for has an unterminated quoted string")
 		}
 		quoted := args[:end]
-		unquoted, err := strconv.Unquote(quoted)
+		unquoted, err := unquoteExecString(quoted)
 		if err != nil {
 			return "", 0, invalidExec("invalid wait-for text: %v", err)
 		}
@@ -469,6 +470,14 @@ func parseWaitForArgs(args string) (string, time.Duration, error) {
 		timeout = parsed
 	}
 	return text, timeout, nil
+}
+
+func unquoteExecString(quoted string) (string, error) {
+	var value string
+	if err := json.Unmarshal([]byte(quoted), &value); err == nil {
+		return value, nil
+	}
+	return strconv.Unquote(quoted)
 }
 
 func parseExecMilliseconds(value string, allowZero bool) (time.Duration, error) {
@@ -560,15 +569,37 @@ func awaitExecRequest(lifecycle *execRequestLifecycle, timeout time.Duration) er
 }
 
 func StopExecLoop(a *App) error {
+	eventLoopDone := a.eventLoopDoneSignal()
+	select {
+	case <-eventLoopDone:
+		return nil
+	default:
+	}
+
 	lifecycle := newExecRequestLifecycle()
 	request := &execMainRequest{Run: func() error {
 		*a.Running = false
 		return nil
 	}, Lifecycle: lifecycle}
 	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
+		select {
+		case <-eventLoopDone:
+			return nil
+		default:
+		}
 		return failedExec("failed to post shutdown request: %v", err)
 	}
-	return <-lifecycle.done
+	select {
+	case err := <-lifecycle.done:
+		return err
+	case <-eventLoopDone:
+		select {
+		case err := <-lifecycle.done:
+			return err
+		default:
+			return nil
+		}
+	}
 }
 
 func stripQuotes(s string) string {

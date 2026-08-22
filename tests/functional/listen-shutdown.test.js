@@ -286,13 +286,21 @@ ttt.register({
     });
   }, 15000);
 
-  it("honors HTTP shutdown queued behind a claimed timer callback", async () => {
+  it("honors concurrent HTTP and CLI shutdown queued behind a claimed timer callback", async () => {
     dir = createTempDir();
     const port = await allocatePort();
     const { plugin, startedPath } = writeBlockingTimerPlugin(dir);
     child = spawn(
       BINARY,
-      ["--size", "40x12", "--plugin", plugin, "--listen", "--exec", "wait 0"],
+      [
+        "--size",
+        "40x12",
+        "--plugin",
+        plugin,
+        "--listen",
+        "--exec",
+        "wait 200;quit",
+      ],
       {
         cwd: dir,
         env: {

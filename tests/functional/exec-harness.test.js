@@ -11,6 +11,7 @@ let dir;
 afterEach(() => {
   tui.kill();
   if (dir) cleanupDir(dir);
+  dir = undefined;
 });
 
 describe("exec harness reliability", () => {
@@ -39,6 +40,7 @@ end)
     dir = createTempDir();
     const result = spawnSync(BINARY, ["--size", "80x24", "--exec", "not-an-action"], {
       encoding: "utf8",
+      timeout: 15000,
       env: { ...process.env, TTT_CONFIG_DIR: join(dir, "config") },
     });
 
@@ -54,6 +56,7 @@ end)
       ["--size", "80x24", "--exec", `wait-for "NEVER VISIBLE" timeout=40`],
       {
         encoding: "utf8",
+        timeout: 15000,
         env: { ...process.env, TTT_CONFIG_DIR: join(dir, "config") },
       }
     );
@@ -69,6 +72,7 @@ end)
       ["--size", "40x12", "--exec", "wait-for x timeout=9223372036854775807"],
       {
         encoding: "utf8",
+        timeout: 15000,
         env: { ...process.env, TTT_CONFIG_DIR: join(dir, "config") },
       }
     );

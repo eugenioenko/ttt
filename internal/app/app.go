@@ -98,7 +98,24 @@ type App struct {
 	settingsView         *settingsView
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
-	appliedSettings config.Settings
+	appliedSettings    config.Settings
+	eventLoopDoneOnce  sync.Once
+	eventLoopCloseOnce sync.Once
+	eventLoopDone      chan struct{}
+}
+
+func (a *App) eventLoopDoneSignal() chan struct{} {
+	a.eventLoopDoneOnce.Do(func() {
+		a.eventLoopDone = make(chan struct{})
+	})
+	return a.eventLoopDone
+}
+
+func (a *App) closeEventLoopDone() {
+	done := a.eventLoopDoneSignal()
+	a.eventLoopCloseOnce.Do(func() {
+		close(done)
+	})
 }
 
 func (a *App) KeyFor(cmd string) string {

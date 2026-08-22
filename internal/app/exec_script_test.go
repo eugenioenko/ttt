@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -52,6 +53,8 @@ func TestParseWaitForArgs(t *testing.T) {
 		{name: "numeric suffix is text", args: "build 123", wantText: "build 123", wantTimeout: defaultWaitForTimeout},
 		{name: "explicit timeout", args: "ready now timeout=125", wantText: "ready now", wantTimeout: 125 * time.Millisecond},
 		{name: "quoted escapes", args: `"  ready \"now\"  " timeout=250`, wantText: `  ready "now"  `, wantTimeout: 250 * time.Millisecond},
+		{name: "JSON lone surrogate", args: `"\ud800"`, wantText: "\ufffd", wantTimeout: defaultWaitForTimeout},
+		{name: "Go hex escape compatibility", args: `"ready\x20now"`, wantText: "ready now", wantTimeout: defaultWaitForTimeout},
 	}
 
 	for _, tc := range tests {
@@ -249,6 +252,83 @@ func TestExecRequestWaitsForClaimedActionPastTimeout(t *testing.T) {
 	}
 	if got := runs.Load(); got != 1 {
 		t.Fatalf("slow action ran %d times, want once", got)
+	}
+}
+
+func TestStopExecLoopWaitsForEventLoopStarting(t *testing.T) {
+	a := prepareListenTestApp(t)
+	done := make(chan error, 1)
+	go func() {
+		done <- StopExecLoop(a)
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("StopExecLoop returned before event loop started: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+
+	startListenTestEventLoop(t, a)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("StopExecLoop did not drain after event loop started")
+	}
+}
+
+func TestStopExecLoopReturnsAfterEventLoopStopped(t *testing.T) {
+	a := newListenTestApp(t)
+	if err := StopExecLoop(a); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- StopExecLoop(a)
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("repeated StopExecLoop blocked after event loop stopped")
+	}
+}
+
+func TestConcurrentStopExecLoopReturnsForEveryCaller(t *testing.T) {
+	a := newListenTestApp(t)
+	release, blockerDone := holdExecEventLoop(t, a)
+
+	const callers = 8
+	results := make(chan error, callers)
+	var started sync.WaitGroup
+	started.Add(callers)
+	for range callers {
+		go func() {
+			started.Done()
+			results <- StopExecLoop(a)
+		}()
+	}
+	started.Wait()
+	time.Sleep(25 * time.Millisecond)
+	close(release)
+	if err := <-blockerDone; err != nil {
+		t.Fatalf("blocking action failed: %v", err)
+	}
+
+	for range callers {
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("concurrent StopExecLoop caller did not return")
+		}
 	}
 }
 

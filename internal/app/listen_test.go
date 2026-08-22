@@ -16,6 +16,13 @@ import (
 
 func newListenTestApp(t *testing.T) *App {
 	t.Helper()
+	a := prepareListenTestApp(t)
+	startListenTestEventLoop(t, a)
+	return a
+}
+
+func prepareListenTestApp(t *testing.T) *App {
+	t.Helper()
 	a := buildTestApp(t, config.DefaultSettings())
 
 	sim := term.NewSimScreen()
@@ -30,6 +37,11 @@ func newListenTestApp(t *testing.T) *App {
 	a.Running = &running
 	RegisterCommands(a)
 	a.Root.SetSize(80, 24)
+	return a
+}
+
+func startListenTestEventLoop(t *testing.T, a *App) {
+	t.Helper()
 	loopDone := make(chan struct{})
 	go func() {
 		RunEventLoop(a.Screen, a.Renderer, a, a.Running, a.CloseTerminal)
@@ -48,8 +60,6 @@ func newListenTestApp(t *testing.T) *App {
 			t.Error("event loop did not stop")
 		}
 	})
-
-	return a
 }
 
 func execHandlerRequest(t *testing.T, a *App, method, path, body string) *http.Response {
@@ -103,6 +113,31 @@ func TestExecHandlerShutdownAliasesQuit(t *testing.T) {
 	}
 	if *a.Running {
 		t.Error("handler returned before applying shutdown")
+	}
+}
+
+func TestExecHandlerRepeatedShutdownReturnsAfterLoopStopped(t *testing.T) {
+	a := newListenTestApp(t)
+	first := execHandlerDirect(t, a, "/exec", "shutdown")
+	if first.Code != http.StatusOK || first.Body.String() != "ok" {
+		t.Fatalf("first response = status %d body %q, want 200 ok", first.Code, first.Body.String())
+	}
+
+	done := make(chan *httptest.ResponseRecorder, 1)
+	handler := NewExecHandler(a)
+	go func() {
+		request := httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader("shutdown"))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		done <- response
+	}()
+	select {
+	case second := <-done:
+		if second.Code != http.StatusOK || second.Body.String() != "ok" {
+			t.Fatalf("second response = status %d body %q, want 200 ok", second.Code, second.Body.String())
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("repeated HTTP shutdown blocked after event loop stopped")
 	}
 }
 
@@ -174,7 +209,14 @@ func TestExecHandlerWaitsForAcknowledgedVisibleInput(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
 	}
-	if !strings.Contains(a.Screenshot(), "hello") {
+	var screen string
+	if err := runExecMain(a, func() error {
+		screen = a.Screenshot()
+		return nil
+	}); err != nil {
+		t.Fatalf("capturing screen: %v", err)
+	}
+	if !strings.Contains(screen, "hello") {
 		t.Fatal("handler returned before typed text was visible")
 	}
 }
