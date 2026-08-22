@@ -80,7 +80,9 @@ type changesCommandContext uint8
 const (
 	changesWorkingTree changesCommandContext = iota
 	changesCommitLog
+)
 
+const (
 	changesHistoryMinHeight     = 4 // title plus three usable log rows
 	changesWorkingTreeMinHeight = 5 // input, divider, and three tree rows
 )
@@ -300,13 +302,16 @@ func (cp *ChangesPanel) refreshCommitLog() {
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		cp.ApplyCommitLog(readCommitLog(ctx, dir, gen))
+		result := readCommitLog(ctx, dir, gen)
 		cancel()
+		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(readCommitLog(ctx, dir, gen)))
+		result := readCommitLog(ctx, dir, gen)
+		cancel()
+		screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
 }
 
@@ -492,10 +497,14 @@ func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.Tre
 		cp.Refresh()
 		return true
 	case 'c', 'o', 'v':
-		cp.openCommitFile(node, false)
+		cp.openCommitLogNode(node)
 		return true
 	case 'e':
-		cp.openCommitFile(node, true)
+		if _, isCommit := cp.logCommits[node.ID]; isCommit {
+			cp.openCommitLogNode(node)
+		} else {
+			cp.openCommitFile(node, true)
+		}
 		return true
 	}
 	return false
