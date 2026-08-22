@@ -73,6 +73,11 @@ type cliFlags struct {
 	listen       bool
 }
 
+type cliExecOutcome struct {
+	result app.ExecResult
+	err    error
+}
+
 func parseFlags() cliFlags {
 	var f cliFlags
 	args := os.Args[1:]
@@ -131,6 +136,13 @@ func initSimulationScreen(w, h int) *term.TcellScreen {
 }
 
 func main() {
+	exitCode := 0
+	defer func() {
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+	}()
+
 	for _, arg := range os.Args[1:] {
 		switch arg {
 		case "--help", "-h":
@@ -151,6 +163,8 @@ Options:
   --workspace <file>  Open a saved workspace (.ttt file)
   --config <file>     Use a custom config file
   --exec "commands"   Execute semicolon-separated commands after startup
+                      (wait-for TEXT [timeout=MS] waits for visible text;
+                      invalid or failed actions exit nonzero)
   --exec-split-on <s> Split --exec on <s> instead of ";" (for scripts that
                       need to send a literal semicolon)
   --plugin <file>     Load a Lua plugin file on startup with full permissions
@@ -198,6 +212,7 @@ Docs: https://tttedit.dev
 
 	var screen *term.TcellScreen
 	if flags.exec != "" {
+		clipboard.DisableSystem()
 		screen = initSimulationScreen(flags.sizeW, flags.sizeH)
 	} else {
 		screen = initTerminalScreen()
@@ -353,14 +368,32 @@ Docs: https://tttedit.dev
 		editor.LogOutput("info", "ttt", "Debug mode enabled")
 	}
 
+	var execOutcome chan cliExecOutcome
 	if flags.exec != "" {
-		go app.RunExecScriptSep(editor, flags.exec, flags.execSplitOn)
+		execOutcome = make(chan cliExecOutcome, 1)
+		go func() {
+			result, err := app.RunExecScriptSep(editor, flags.exec, flags.execSplitOn)
+			execOutcome <- cliExecOutcome{result: result, err: err}
+			if err != nil || result.ShutdownRequested {
+				_ = app.StopExecLoop(editor)
+			}
+		}()
 	}
 
 	if flags.listen {
-		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddr+" (POST /exec)")
+		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddress()+" (POST /exec)")
 		go app.StartListenServer(editor)
 	}
 
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal)
+	if execOutcome != nil {
+		select {
+		case outcome := <-execOutcome:
+			if outcome.err != nil {
+				fmt.Fprintf(os.Stderr, "ttt: --exec failed after %d action(s): %v\n", outcome.result.Completed, outcome.err)
+				exitCode = 1
+			}
+		default:
+		}
+	}
 }

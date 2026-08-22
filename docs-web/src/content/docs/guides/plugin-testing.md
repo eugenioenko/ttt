@@ -23,6 +23,7 @@ The plugin's name (used for its panel id, `plugin.<name>`) is the Lua file's bas
 | Command | Description |
 |---------|-------------|
 | `wait MS` | Pause (let timers, async callbacks, and renders settle) |
+| `wait-for TEXT [timeout=MS]` | Wait until text is visible on screen (default timeout: 5000ms) |
 | `panel ID` | Open a bottom-panel tab by id (e.g. `panel output`, `panel plugin.init`) |
 | `key COMBO` | Press a key or chord (`key enter`, `key ctrl+k p`, `key tab`) |
 | `type TEXT` | Type a string |
@@ -34,13 +35,15 @@ The plugin's name (used for its panel id, `plugin.<name>`) is the Lua file's bas
 | `debug PATH` | Write the editor's full state as JSON to a file |
 | `quit` / `shutdown` | Exit |
 
+Prefer `wait-for` when a visible state has a reliable text marker. Quote text that contains whitespace or escapes: `wait-for "Indexing complete" timeout=10000`. Scripted input and commands are acknowledged after the main event loop handles and redraws them, so the condition checks the rendered screen rather than whether an event was merely posted. Invalid actions and timeouts stop the script; CLI `--exec` exits nonzero with stderr and `POST /exec` returns a non-2xx response with the error.
+
 ## Driving a running editor with `--listen`
 
 `--exec` only runs its script once, at startup, then exits. `--listen` keeps the editor running and lets you POST the same commands to it at any point:
 
 ```sh
 bin/ttt --listen &
-curl -X POST --data "type hi; wait 100; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
+curl -X POST --data "type hi; wait-for hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
 curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 ```
 
@@ -75,6 +78,8 @@ TTT_CONFIG_DIR=/tmp/ttt-test bin/ttt --plugin ./init.lua --exec "..."
 ```
 
 Always do this in any automated test — a scripted run of a settings-toggling command will otherwise persist into your real config.
+
+Headless `--exec` sessions use a process-local clipboard, so parallel scripts cannot overwrite the desktop clipboard or each other's copied text. Interactive sessions, including `--listen`, continue to use the system clipboard.
 
 ## Testing a scoped plugin (with a manifest)
 

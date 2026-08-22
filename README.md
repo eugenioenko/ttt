@@ -746,7 +746,7 @@ TTT includes a built-in scripted interaction system designed for AI agent intera
 | `--size WxH` | Force screen dimensions (e.g. `120x40`) for deterministic layout |
 | `--debug` | Enable debug mode regardless of config |
 
-The `TTT_CONFIG_DIR` environment variable overrides the config directory (`~/.config/ttt`) entirely — settings, keybindings, themes, and plugins are read from and written to that directory instead. Use it to run scripted sessions isolated from your real configuration.
+The `TTT_CONFIG_DIR` environment variable overrides the config directory (`~/.config/ttt`) entirely — settings, keybindings, themes, and plugins are read from and written to that directory instead. Use it to run scripted sessions isolated from your real configuration. Headless `--exec` sessions also use a process-local clipboard so concurrent automation cannot overwrite the desktop clipboard; interactive sessions, including `--listen`, keep the system clipboard.
 
 ### `--exec` Commands
 
@@ -761,19 +761,22 @@ The `--exec` flag accepts a semicolon-separated string of commands that run sequ
 | `screenshot PATH` | Save the current screen text to a file |
 | `debug PATH` | Save the editor's debug state as JSON to a file |
 | `wait MS` | Wait for the given number of milliseconds |
+| `wait-for TEXT [timeout=MS]` | Wait until text appears on the visible screen (default timeout: 5000ms) |
 | `quit` / `shutdown` | Exit the editor |
+
+Quote `wait-for` text when it contains leading/trailing whitespace or escapes, for example `wait-for "Indexing complete" timeout=10000`. Scripted input and commands are acknowledged only after the main event loop handles and redraws them, so a following `wait-for`, `screenshot`, or `debug` observes their completed visible state. Invalid actions, missing commands/panels, capture failures, and wait timeouts stop the script: CLI `--exec` writes the error to stderr and exits nonzero; `POST /exec` returns a non-2xx response with the same detail.
 
 Example — capture a screenshot and debug state, then quit:
 
 ```sh
-ttt --size 120x40 --exec "wait 200; screenshot /tmp/screen.txt; debug /tmp/state.json; quit"
+ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debug /tmp/state.json; quit"
 ```
 
 Example — drive an already-running editor over `--listen` instead of scripting in advance:
 
 ```sh
 ttt --listen &
-curl -X POST --data "type hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
+curl -X POST --data "type hi; wait-for hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
 curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 ```
 
