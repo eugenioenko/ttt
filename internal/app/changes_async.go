@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
@@ -32,6 +33,7 @@ const (
 	commitHistoryTimeout = 15 * time.Second
 	commitFilesTimeout   = 15 * time.Second
 	commitDetailTimeout  = 30 * time.Second
+	diffOpenTimeout      = 15 * time.Second
 )
 
 type commitFilesRequest struct {
@@ -444,6 +446,7 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 // performs every Git read off the event loop. Reopening an immutable commit
 // reuses its full-hash tab and never starts a duplicate read.
 func (a *App) OpenCommitDetail(dir, ref, short string) {
+	a.cancelPendingDiff()
 	tabID := commitDetailTabID(dir, ref)
 	if a.EditorGroup.CommitDetailWidgetByTab(tabID) != nil {
 		a.EditorGroup.SwitchToTabByPath(tabID)
@@ -504,6 +507,7 @@ func (a *App) cancelCommitDetailRequest(tabID string, incarnation uint64) {
 }
 
 func (a *App) ShutdownGitReads() {
+	a.cancelPendingDiff()
 	a.commitDetailMu.Lock()
 	requests := a.commitDetailRequests
 	a.commitDetailRequests = nil
@@ -532,4 +536,75 @@ func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 		detail.Metadata = "Authored date unavailable"
 	}
 	detail.SetDetail(result.Message, result.Files, result.Err)
+}
+
+type DiffOpenResult struct {
+	Gen      int
+	Origin   string
+	Canceled bool
+	Warn     string
+	TabName  string
+	Title    string
+	Path     string
+	Diff     diff.FileDiff
+	OldLines []string
+	NewLines []string
+	Extended bool
+}
+
+func (a *App) cancelPendingDiff() {
+	a.diffOpenGen++
+	if a.diffOpenCancel != nil {
+		a.diffOpenCancel()
+		a.diffOpenCancel = nil
+	}
+	if a.Status != nil {
+		a.setDiffOpenSegment("")
+	}
+}
+
+func (a *App) startDiffOpen(read func(context.Context) *DiffOpenResult) {
+	a.cancelPendingDiff()
+	gen := a.diffOpenGen
+	origin := a.EditorGroup.ActiveFilePath()
+	ctx, cancel := context.WithTimeout(context.Background(), diffOpenTimeout)
+	a.diffOpenCancel = cancel
+	if a.Screen == nil {
+		result := read(ctx)
+		cancel()
+		result.Gen = gen
+		result.Origin = origin
+		a.ApplyDiffOpen(result)
+		return
+	}
+	a.setDiffOpenSegment("Opening diff…")
+	screen := a.Screen
+	go func() {
+		result := read(ctx)
+		cancel()
+		result.Gen = gen
+		result.Origin = origin
+		screen.PostEvent(tcell.NewEventInterrupt(result))
+	}()
+}
+
+func (a *App) setDiffOpenSegment(text string) {
+	a.Status.SetSegment(view.StatusSegment{ID: "diffopen", Side: "left", Priority: 160, Text: text})
+}
+
+func (a *App) ApplyDiffOpen(result *DiffOpenResult) {
+	if result == nil || result.Gen != a.diffOpenGen {
+		return
+	}
+	a.diffOpenCancel = nil
+	a.setDiffOpenSegment("")
+	if result.Canceled || a.EditorGroup.ActiveFilePath() != result.Origin {
+		return
+	}
+	if result.Warn != "" {
+		a.StatusWarn(result.Warn)
+		return
+	}
+	a.EditorGroup.OpenDiffTab(result.TabName, result.Title, result.Path, result.Diff, result.OldLines, result.NewLines, result.Extended)
+	a.FocusEditorIfEnabled()
 }

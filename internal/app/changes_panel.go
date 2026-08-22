@@ -66,6 +66,7 @@ type ChangesPanel struct {
 	fileView           string
 
 	OnOpenDiff       func(dir string, status git.FileStatus, extended bool)
+	OnOpenCommitDiff func(dir, ref, short string, status git.FileStatus, extended bool)
 	OnOpenCommit     func(dir, ref, short string)
 	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
 	OnOpenFile       func(path string)
@@ -132,8 +133,9 @@ type commitFileRef struct {
 	Dir string
 	// Ref is the full hash, which is what git is asked with and what the tab
 	// key is built from. Short is only ever shown to the reader.
-	Ref   string
-	Short string
+	Ref    string
+	Short  string
+	Status git.FileStatus
 }
 
 type prGroup struct {
@@ -520,7 +522,7 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 	}
 	makeLeaf := func(f git.FileStatus) *widgets.TreeNode {
 		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
-		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short}
+		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short, Status: f}
 		return &widgets.TreeNode{
 			ID:           id,
 			Label:        f.Path,
@@ -539,17 +541,15 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 	return compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded)
 }
 
-func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, _ bool) {
-	if node == nil {
+func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, extended bool) {
+	if node == nil || cp.OnOpenCommitDiff == nil {
 		return
 	}
 	ref, ok := cp.logFiles[node.ID]
 	if !ok {
 		return
 	}
-	if cp.OnOpenCommit != nil {
-		cp.OnOpenCommit(ref.Dir, ref.Ref, ref.Short)
-	}
+	cp.OnOpenCommitDiff(ref.Dir, ref.Ref, ref.Short, ref.Status, extended)
 }
 
 func (cp *ChangesPanel) openCommitLogNode(node *widgets.TreeNode) {

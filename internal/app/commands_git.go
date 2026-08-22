@@ -204,6 +204,14 @@ func (a *App) ChangesNextFile() { a.changesNavFile(1) }
 // wrapping around at the start of the list.
 func (a *App) ChangesPrevFile() { a.changesNavFile(-1) }
 
+func (a *App) RefreshChanges() {
+	if a.Repository != nil {
+		a.Repository.RefreshNow(RepositoryWorktree | RepositoryHistory)
+		return
+	}
+	a.Changes.Refresh()
+}
+
 func registerGitCommands(app *App) {
 	reg := app.Reg
 
@@ -253,13 +261,7 @@ func registerGitCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "changes.refresh", Title: "Git: Refresh Changes",
 		Keywords: []string{"git", "changes", "reload"},
-		Handler: func() {
-			if app.Repository != nil {
-				app.Repository.RefreshNow(RepositoryWorktree | RepositoryHistory | RepositoryCurrentChanges)
-			} else {
-				app.Changes.Refresh()
-			}
-		},
+		Handler:  app.RefreshChanges,
 	})
 
 	reg.Register(command.Command{

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -63,6 +64,8 @@ type App struct {
 	AutocompleteTimer      *time.Timer
 	HoverTimer             *time.Timer
 	HoverGen               uint64
+	diffOpenGen            int
+	diffOpenCancel         context.CancelFunc
 	LastHoverLine          int
 	LastHoverCol           int
 	Problems               *ui.ProblemsWidget

@@ -10,6 +10,30 @@ afterEach(() => {
 });
 
 describe("commit history detail", () => {
+  it("opens a selected commit file as its own diff", () => {
+    dir = createGitRepo(createTempDir());
+    createTempFile(dir, "selected-detail.txt", "selected commit content\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "selected detail");
+
+    tui.start(dir);
+    tui.pressChord("ctrl+k", "c");
+    tui.waitStable(500);
+    tui.press("tab");
+    tui.press("tab");
+    tui.press("down");
+    tui.press("right");
+    tui.waitStable(500);
+    tui.press("down");
+    tui.exec("Git: Open Compact Diff");
+    tui.waitFor("selected-detail.txt @");
+    const opened = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[opened]).toMatch(/selected-detail\.txt @ [0-9a-f]{7,}/);
+    expect(snapshots[opened]).toContain("selected commit content");
+  });
+
   it("opens one read-only document with metadata and every changed file", () => {
     dir = createGitRepo(createTempDir());
     createTempFile(dir, "first-detail.txt", "first old\n");

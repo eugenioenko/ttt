@@ -402,6 +402,8 @@ func RunEventLoop(
 				app.ApplyCommitDetail(v)
 			case *CommitDetailContextResult:
 				app.ApplyCommitDetailContext(v)
+			case *DiffOpenResult:
+				app.ApplyDiffOpen(v)
 			case *FileChangedResult:
 				app.HandleFileChanged(v.Path)
 			case *ui.SearchBatch:
