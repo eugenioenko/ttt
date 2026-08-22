@@ -240,7 +240,9 @@ func (v *settingsView) closeSelectsExcept(keep *widgets.SelectWidget) {
 func (a *App) ShowSettings() {
 	// Reopening while the tab is already open must not discard pending edits.
 	if v := a.settingsView; v != nil {
-		a.EditorGroup.OpenPluginTab(settingsTabID, "Settings", v.adapter)
+		if !a.EditorGroup.SwitchToTabByPath(settingsTabID) {
+			a.EditorGroup.OpenPluginTab(settingsTabID, "Settings", v.adapter)
+		}
 		a.FocusEditor()
 		v.adapter.SetFocused(true)
 		return
