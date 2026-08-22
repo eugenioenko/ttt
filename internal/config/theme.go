@@ -85,6 +85,9 @@ type DiffStyles struct {
 	Deleted        StyleDef `json:"deleted"`
 	Modified       StyleDef `json:"modified"`
 	CollapsedHover StyleDef `json:"collapsedHover,omitempty"`
+	// Collapsed is retained for themes created against the original collapsed-gap contract.
+	// Deprecated: use CollapsedHover.
+	Collapsed      StyleDef `json:"collapsed,omitempty"`
 	GutterAdded    StyleDef `json:"gutterAdded,omitempty"`
 	GutterDeleted  StyleDef `json:"gutterDeleted,omitempty"`
 	GutterModified StyleDef `json:"gutterModified,omitempty"`
@@ -308,6 +311,9 @@ func (t *ThemeConfig) ResolveColors() {
 	fillBg(&t.Diff.Added, "#1e2e1e")
 	fillBg(&t.Diff.Deleted, "#2e1e1e")
 	fillBg(&t.Diff.Modified, "#2e2e1e")
+	if t.Diff.CollapsedHover == (StyleDef{}) && t.Diff.Collapsed != (StyleDef{}) {
+		t.Diff.CollapsedHover = t.Diff.Collapsed
+	}
 	fillBg(&t.Diff.CollapsedHover, t.Editor.ActiveLine.Bg)
 	fillFg(&t.Diff.GutterAdded, "#73c991")
 	fillFg(&t.Diff.GutterDeleted, "#f14c4c")

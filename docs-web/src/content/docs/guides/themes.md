@@ -59,7 +59,7 @@ Theme files are stored as `<name>.json` in the `themes/` subdirectory of your co
 
 ## Full Theme Reference
 
-Below is a complete theme file showing every configurable section. All color values are hex strings (`"#rrggbb"`). Optional `"bold"` and `"italic"` flags are supported where noted. Any field left empty (`{}`) inherits from the `default` colors.
+Below is a complete theme file showing every configurable section. All color values are hex strings (`"#rrggbb"`). Optional `"bold"` and `"italic"` flags are supported where noted. Any field left empty (`{}`) inherits from the `default` colors, except `diff.collapsedHover.bg`, which inherits from `editor.activeLine.bg`.
 
 ```json
 {
@@ -242,7 +242,7 @@ Below is a complete theme file showing every configurable section. All color val
 | `dialog` | Command palette and dialog boxes: input field, items, selection, muted text |
 | `editor` | Editor pane: line numbers, active line highlight, selection, search matches, and bracket pair colors. `bracketColors` accepts terminal color names (`yellow`, `magenta`, `cyan`, `red`, `green`, `blue`, `black`, `white`, `brightRed`, `brightGreen`, `brightYellow`, `brightBlue`, `brightMagenta`, `brightCyan`, `brightBlack`, `brightWhite`), syntax style names (`keyword`, `function`, `type`, `comment`, `string`, `number`, `operator`, `builtin`, `variable`, `punctuation`, `tag`, `attribute`), or hex colors (`#rrggbb`). Up to 6 colors cycle by nesting depth. |
 | `menu` | Menu bar dropdown items and active/hovered item |
-| `diff` | Diff presentation styles: `added`, `deleted`, and `modified` backgrounds; `gutterAdded`, `gutterDeleted`, and `gutterModified` semantic foregrounds; and the `collapsedHover` accent. An omitted `collapsedHover` background inherits the editor active-line background. |
+| `diff` | Diff presentation styles: `added`, `deleted`, and `modified` backgrounds; `gutterAdded`, `gutterDeleted`, and `gutterModified` semantic foregrounds; and the `collapsedHover` accent. An omitted `collapsedHover` background inherits the editor active-line background. The legacy `collapsed` field remains accepted, but new themes should use `collapsedHover`. |
 | `scrollbar` | Scrollbar thumb (`fg`) and track (`bg`) colors |
 | `syntax` | Syntax highlighting colors for language tokens |
 | `terminal` | ANSI color palette for the integrated terminal (16 colors) |

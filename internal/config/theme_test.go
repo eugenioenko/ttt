@@ -91,14 +91,25 @@ func TestBundledThemesLoad(t *testing.T) {
 			if err := json.Unmarshal(data, &th); err != nil {
 				t.Fatalf("failed to parse %s: %v", name, err)
 			}
+			var source ThemeConfig
+			if err := json.Unmarshal(data, &source); err != nil {
+				t.Fatalf("failed to inspect %s: %v", name, err)
+			}
 			th.ResolveColors()
 
 			// After resolving, verify critical fields are non-empty
 			if th.Default.Fg == "" {
 				t.Errorf("%s: Default.Fg is empty after resolve", name)
 			}
-			if th.Diff.CollapsedHover.Bg != th.Editor.ActiveLine.Bg {
-				t.Errorf("%s: collapsed hover background %q did not inherit active-line background %q", name, th.Diff.CollapsedHover.Bg, th.Editor.ActiveLine.Bg)
+			expectedHoverBg := source.Diff.CollapsedHover.Bg
+			if source.Diff.CollapsedHover == (StyleDef{}) && source.Diff.Collapsed != (StyleDef{}) {
+				expectedHoverBg = source.Diff.Collapsed.Bg
+			}
+			if expectedHoverBg == "" {
+				expectedHoverBg = th.Editor.ActiveLine.Bg
+			}
+			if th.Diff.CollapsedHover.Bg != expectedHoverBg {
+				t.Errorf("%s: collapsed hover background = %q, want %q from explicit or inherited source", name, th.Diff.CollapsedHover.Bg, expectedHoverBg)
 			}
 		})
 	}
@@ -224,6 +235,28 @@ func TestResolveColorsPreservesExisting(t *testing.T) {
 	}
 	if th.Diff.CollapsedHover.Fg != "#custom4" || th.Diff.CollapsedHover.Bg != "#custom5" || !th.Diff.CollapsedHover.Bold {
 		t.Errorf("expected explicit Diff.CollapsedHover to remain unchanged, got %+v", th.Diff.CollapsedHover)
+	}
+}
+
+func TestResolveColorsMigratesLegacyCollapsedStyle(t *testing.T) {
+	theme := DefaultTheme()
+	if err := json.Unmarshal([]byte(`{"diff":{"collapsed":{"fg":"#123456","bg":"#654321","bold":true}}}`), &theme); err != nil {
+		t.Fatal(err)
+	}
+	theme.ResolveColors()
+	if got := theme.Diff.CollapsedHover; got != (StyleDef{Fg: "#123456", Bg: "#654321", Bold: true}) {
+		t.Fatalf("migrated collapsed hover style = %+v", got)
+	}
+}
+
+func TestResolveColorsPrefersExplicitCollapsedHover(t *testing.T) {
+	theme := DefaultTheme()
+	if err := json.Unmarshal([]byte(`{"diff":{"collapsed":{"bg":"#legacy"},"collapsedHover":{"bg":"#current"}}}`), &theme); err != nil {
+		t.Fatal(err)
+	}
+	theme.ResolveColors()
+	if got := theme.Diff.CollapsedHover.Bg; got != "#current" {
+		t.Fatalf("collapsed hover background = %q, want explicit current value", got)
 	}
 }
 
