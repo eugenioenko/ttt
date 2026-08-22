@@ -174,6 +174,12 @@ func (fm *FocusManager) ensureFocusedRendered() {
 // scroll view, say) matches the container before the control the user aimed at.
 // The last match is the innermost one.
 func (fm *FocusManager) FocusByClick(mx, my int) {
+	if hit := fm.innermostVisibleHit(mx, my); hit >= 0 {
+		fm.setFocus(hit)
+	}
+}
+
+func (fm *FocusManager) innermostVisibleHit(mx, my int) int {
 	hit := -1
 	for i, fw := range fm.items {
 		r := VisibleRect(fm.root, fw)
@@ -181,9 +187,7 @@ func (fm *FocusManager) FocusByClick(mx, my int) {
 			hit = i
 		}
 	}
-	if hit >= 0 {
-		fm.setFocus(hit)
-	}
+	return hit
 }
 
 func (fm *FocusManager) setFocus(idx int) {
@@ -315,16 +319,14 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 			return fw.HandleEvent(ev)
 		}
 	case *tcell.EventMouse:
-		if tev.Buttons()&tcell.Button1 != 0 {
-			fm.FocusByClick(tev.Position())
-		}
 		mx, my := tev.Position()
-		for _, fw := range fm.items {
-			r := VisibleRect(fm.root, fw)
-			if mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H {
-				fm.lastEventTarget = fw
-				return fw.HandleEvent(ev)
-			}
+		hit := fm.innermostVisibleHit(mx, my)
+		if tev.Buttons()&tcell.Button1 != 0 && hit >= 0 {
+			fm.setFocus(hit)
+		}
+		if hit >= 0 {
+			fm.lastEventTarget = fm.items[hit]
+			return fm.items[hit].HandleEvent(ev)
 		}
 		if fw := fm.Focused(); fw != nil {
 			fm.lastEventTarget = fw

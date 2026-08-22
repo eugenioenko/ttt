@@ -26,6 +26,16 @@ type adapterRootCaptureProbe struct {
 	heldEvents int
 }
 
+type adapterScrollableCaptureProbe struct {
+	adapterCaptureProbe
+	contentW int
+	contentH int
+}
+
+func (p *adapterScrollableCaptureProbe) ScrollSize() (int, int) {
+	return p.contentW, p.contentH
+}
+
 func (p *adapterRootCaptureProbe) Height() int            { return 0 }
 func (p *adapterRootCaptureProbe) Width() int             { return 0 }
 func (p *adapterRootCaptureProbe) Render(widgets.Surface) {}
@@ -180,4 +190,39 @@ func TestWidgetAdapterPreservesDirectRootCapture(t *testing.T) {
 	if root.capturing || adapter.capturedWidget != nil {
 		t.Fatal("root release retained capture")
 	}
+}
+
+func TestWidgetAdapterTargetsFocusableChildInsideScrollView(t *testing.T) {
+	child := &adapterScrollableCaptureProbe{
+		adapterCaptureProbe: adapterCaptureProbe{},
+		contentW:            9,
+		contentH:            12,
+	}
+	scroll := widgets.NewScrollViewWidget(child)
+	adapter := NewWidgetAdapter(scroll)
+	adapter.SetRect(Rect{X: 0, Y: 0, W: 10, H: 4})
+	adapter.Render(NewRenderSurface(makeGrid(10, 4), Rect{X: 0, Y: 0, W: 10, H: 4}))
+
+	if got := adapter.HandleEvent(tcell.NewEventMouse(1, 1, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("child press result = %v, want captured", got)
+	}
+	if adapter.capturedWidget != child {
+		t.Fatalf("captured owner = %T, want focusable child", adapter.capturedWidget)
+	}
+	adapter.HandleEvent(tcell.NewEventMouse(9, 3, tcell.Button1, 0))
+	if child.heldEvents != 1 {
+		t.Fatalf("child held events = %d, want 1", child.heldEvents)
+	}
+	adapter.HandleEvent(tcell.NewEventMouse(9, 3, tcell.ButtonNone, 0))
+	if child.capturing || adapter.capturedWidget != nil {
+		t.Fatal("child release retained capture")
+	}
+
+	if got := adapter.HandleEvent(tcell.NewEventMouse(9, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("outer scrollbar press result = %v, want captured", got)
+	}
+	if adapter.capturedWidget != scroll {
+		t.Fatalf("scrollbar captured owner = %T, want ScrollViewWidget", adapter.capturedWidget)
+	}
+	adapter.HandleEvent(tcell.NewEventMouse(9, 0, tcell.ButtonNone, 0))
 }
