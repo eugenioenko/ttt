@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -31,7 +32,8 @@ const (
 )
 
 type ExecResult struct {
-	Completed int
+	Completed         int
+	ShutdownRequested bool
 }
 
 type ExecError struct {
@@ -76,13 +78,45 @@ func timeoutExec(format string, args ...any) error {
 }
 
 type execInputRequest struct {
-	Event tcell.Event
-	Done  chan error
+	Event     tcell.Event
+	Lifecycle *execRequestLifecycle
 }
 
 type execMainRequest struct {
-	Run  func() error
-	Done chan error
+	Run       func() error
+	Lifecycle *execRequestLifecycle
+}
+
+type execRequestState uint32
+
+const (
+	execRequestPending execRequestState = iota
+	execRequestClaimed
+	execRequestCanceled
+)
+
+type execRequestLifecycle struct {
+	state atomic.Uint32
+	done  chan error
+}
+
+func newExecRequestLifecycle() *execRequestLifecycle {
+	return &execRequestLifecycle{done: make(chan error, 1)}
+}
+
+func (r *execRequestLifecycle) claim() bool {
+	return r.state.CompareAndSwap(uint32(execRequestPending), uint32(execRequestClaimed))
+}
+
+func (r *execRequestLifecycle) cancel() bool {
+	return r.state.CompareAndSwap(uint32(execRequestPending), uint32(execRequestCanceled))
+}
+
+func (r *execRequestLifecycle) complete(err error) {
+	select {
+	case r.done <- err:
+	default:
+	}
 }
 
 func RunExecScript(a *App, script string) (ExecResult, error) {
@@ -120,6 +154,7 @@ func RunExecScriptSep(a *App, script, sep string) (ExecResult, error) {
 		}
 		result.Completed++
 		if action == "quit" || action == "shutdown" {
+			result.ShutdownRequested = true
 			return result, nil
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -167,7 +202,7 @@ func runExecAction(a *App, action, args string) error {
 		if strings.TrimSpace(args) != "" {
 			return invalidExec("%s does not accept arguments", action)
 		}
-		return StopExecLoop(a)
+		return nil
 	default:
 		return invalidExec("unknown action %q", action)
 	}
@@ -487,11 +522,15 @@ func execPanel(a *App, args string) error {
 }
 
 func postExecInput(a *App, event tcell.Event) error {
-	done := make(chan error, 1)
-	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(&execInputRequest{Event: event, Done: done})); err != nil {
+	return postExecInputTimeout(a, event, execRequestTimeout)
+}
+
+func postExecInputTimeout(a *App, event tcell.Event, timeout time.Duration) error {
+	lifecycle := newExecRequestLifecycle()
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(&execInputRequest{Event: event, Lifecycle: lifecycle})); err != nil {
 		return failedExec("failed to post input event: %v", err)
 	}
-	return awaitExecRequest(done, execRequestTimeout)
+	return awaitExecRequest(lifecycle, timeout)
 }
 
 func runExecMain(a *App, run func() error) error {
@@ -499,21 +538,24 @@ func runExecMain(a *App, run func() error) error {
 }
 
 func runExecMainTimeout(a *App, run func() error, timeout time.Duration) error {
-	done := make(chan error, 1)
-	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(&execMainRequest{Run: run, Done: done})); err != nil {
+	lifecycle := newExecRequestLifecycle()
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(&execMainRequest{Run: run, Lifecycle: lifecycle})); err != nil {
 		return failedExec("failed to post main-thread action: %v", err)
 	}
-	return awaitExecRequest(done, timeout)
+	return awaitExecRequest(lifecycle, timeout)
 }
 
-func awaitExecRequest(done <-chan error, timeout time.Duration) error {
+func awaitExecRequest(lifecycle *execRequestLifecycle, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
-	case err := <-done:
+	case err := <-lifecycle.done:
 		return err
 	case <-timer.C:
-		return timeoutExec("event loop did not acknowledge action within %s", timeout)
+		if lifecycle.cancel() {
+			return timeoutExec("event loop did not acknowledge action within %s", timeout)
+		}
+		return <-lifecycle.done
 	}
 }
 

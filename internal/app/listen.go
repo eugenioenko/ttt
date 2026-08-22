@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +17,15 @@ import (
 const ListenAddr = "127.0.0.1:4242"
 
 const maxExecBodySize = 1 << 20 // 1MB
+
+func ListenAddress() string {
+	port := os.Getenv("TTT_LISTEN_PORT")
+	value, err := strconv.ParseUint(port, 10, 16)
+	if port == "" || err != nil || value == 0 {
+		return ListenAddr
+	}
+	return net.JoinHostPort("127.0.0.1", port)
+}
 
 // NewExecHandler is split out from StartListenServer so tests can drive it
 // through httptest.Server. Concurrent /exec requests are not synchronized:
@@ -46,7 +57,8 @@ func NewExecHandler(a *App) http.Handler {
 		if sep == "" {
 			sep = DefaultExecSeparator
 		}
-		if _, err := RunExecScriptSep(a, script, sep); err != nil {
+		result, err := RunExecScriptSep(a, script, sep)
+		if err != nil {
 			status := http.StatusUnprocessableEntity
 			var execErr *ExecError
 			if errors.As(err, &execErr) {
@@ -60,8 +72,21 @@ func NewExecHandler(a *App) http.Handler {
 			http.Error(w, err.Error(), status)
 			return
 		}
+		w.Header().Set("Content-Length", "2")
 		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, "ok")
+		written, err := io.WriteString(w, "ok")
+		if err != nil || written != 2 {
+			slog.Error("listen: failed to write exec response", "written", written, "error", err)
+			return
+		}
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		if result.ShutdownRequested {
+			if err := StopExecLoop(a); err != nil {
+				slog.Error("listen: failed to apply exec shutdown", "error", err)
+			}
+		}
 	})
 	return mux
 }
@@ -69,12 +94,13 @@ func NewExecHandler(a *App) http.Handler {
 // StartListenServer starts the --listen HTTP command server. Blocks until
 // the listener fails, so callers run it in a goroutine.
 func StartListenServer(a *App) {
-	ln, err := net.Listen("tcp", ListenAddr)
+	addr := ListenAddress()
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		slog.Error("listen: failed to bind", "addr", ListenAddr, "error", err)
+		slog.Error("listen: failed to bind", "addr", addr, "error", err)
 		return
 	}
-	slog.Info("listen: HTTP command server started", "addr", ListenAddr)
+	slog.Info("listen: HTTP command server started", "addr", addr)
 	if err := http.Serve(ln, NewExecHandler(a)); err != nil {
 		slog.Error("listen: server stopped", "error", err)
 	}

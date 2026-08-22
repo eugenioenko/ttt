@@ -374,14 +374,14 @@ Docs: https://tttedit.dev
 		go func() {
 			result, err := app.RunExecScriptSep(editor, flags.exec, flags.execSplitOn)
 			execOutcome <- cliExecOutcome{result: result, err: err}
-			if err != nil {
+			if err != nil || result.ShutdownRequested {
 				_ = app.StopExecLoop(editor)
 			}
 		}()
 	}
 
 	if flags.listen {
-		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddr+" (POST /exec)")
+		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddress()+" (POST /exec)")
 		go app.StartListenServer(editor)
 	}
 

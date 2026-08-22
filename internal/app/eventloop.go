@@ -265,7 +265,7 @@ func RunEventLoop(
 			redraw()
 
 		case *tcell.EventInterrupt:
-			var execDone chan error
+			var execRequest *execRequestLifecycle
 			var execErr error
 			switch v := tev.Data().(type) {
 			case string:
@@ -284,19 +284,23 @@ func RunEventLoop(
 			case *GitGutterTrigger:
 				app.RequestGitGutterForActiveFile()
 			case *execInputRequest:
-				switch event := v.Event.(type) {
-				case *tcell.EventKey:
-					handleKey(event)
-				case *tcell.EventMouse:
-					handleMouse(event)
-				default:
-					execErr = failedExec("unsupported input event %T", v.Event)
+				if v.Lifecycle.claim() {
+					switch event := v.Event.(type) {
+					case *tcell.EventKey:
+						handleKey(event)
+					case *tcell.EventMouse:
+						handleMouse(event)
+					default:
+						execErr = failedExec("unsupported input event %T", v.Event)
+					}
+					execRequest = v.Lifecycle
 				}
-				execDone = v.Done
 			case *execMainRequest:
-				execErr = v.Run()
-				syncStatus()
-				execDone = v.Done
+				if v.Lifecycle.claim() {
+					execErr = v.Run()
+					syncStatus()
+					execRequest = v.Lifecycle
+				}
 			case *AutocompleteTrigger:
 				triggerChar := app.charBeforeCursor()
 				isTrigger := triggerChar != "" && (len(app.CompletionTriggers) == 0 || app.isCompletionTrigger(triggerChar))
@@ -421,8 +425,8 @@ func RunEventLoop(
 				}
 			}
 			redraw()
-			if execDone != nil {
-				execDone <- execErr
+			if execRequest != nil {
+				execRequest.complete(execErr)
 			}
 		}
 	}

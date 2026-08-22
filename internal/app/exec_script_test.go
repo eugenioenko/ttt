@@ -3,11 +3,42 @@ package app
 import (
 	"errors"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/view"
+
+	"github.com/gdamore/tcell/v3"
 )
+
+func holdExecEventLoop(t *testing.T, a *App) (chan struct{}, <-chan error) {
+	t.Helper()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	done := make(chan error, 1)
+	go func() {
+		done <- runExecMain(a, func() error {
+			close(started)
+			<-release
+			return nil
+		})
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("event loop did not claim blocking action")
+	}
+	return release, done
+}
 
 func TestParseWaitForArgs(t *testing.T) {
 	tests := []struct {
@@ -117,6 +148,107 @@ func TestRunExecScriptReturnsTypedPartialResult(t *testing.T) {
 	}
 	if execErr.Kind != ExecErrorInvalid || execErr.Index != 2 || execErr.Action != "click" {
 		t.Fatalf("exec error = %+v, want invalid click at command 2", execErr)
+	}
+}
+
+func TestRunExecScriptReturnsShutdownIntentWithoutStoppingLoop(t *testing.T) {
+	for _, action := range []string{"quit", "shutdown"} {
+		t.Run(action, func(t *testing.T) {
+			a := newListenTestApp(t)
+
+			result, err := RunExecScript(a, "wait 0; "+action+"; type skipped")
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Completed != 2 || !result.ShutdownRequested {
+				t.Fatalf("result = %+v, want two completed actions and shutdown request", result)
+			}
+			if !*a.Running {
+				t.Fatal("script applied shutdown instead of returning caller-owned intent")
+			}
+		})
+	}
+}
+
+func TestExecRequestTimeoutCancelsQueuedMainAction(t *testing.T) {
+	a := newListenTestApp(t)
+	release, blockerDone := holdExecEventLoop(t, a)
+	var ran atomic.Bool
+
+	err := runExecMainTimeout(a, func() error {
+		ran.Store(true)
+		return nil
+	}, 25*time.Millisecond)
+
+	var actionErr *execActionError
+	if !errors.As(err, &actionErr) || actionErr.kind != ExecErrorTimeout {
+		t.Fatalf("error = %T %v, want timeout", err, err)
+	}
+	close(release)
+	if err := <-blockerDone; err != nil {
+		t.Fatalf("blocking action failed: %v", err)
+	}
+	if err := runExecMain(a, func() error { return nil }); err != nil {
+		t.Fatalf("draining event loop: %v", err)
+	}
+	if ran.Load() {
+		t.Fatal("canceled queued main action ran after timeout")
+	}
+}
+
+func TestExecRequestTimeoutCancelsQueuedInput(t *testing.T) {
+	a := newListenTestApp(t)
+	a.Root.SetFocus(a.EditorGroup)
+	before := strings.Join(a.EditorGroup.ActiveBuffer().Lines, "\n")
+	release, blockerDone := holdExecEventLoop(t, a)
+
+	err := postExecInputTimeout(a, tcell.NewEventKey(tcell.KeyRune, "X", tcell.ModNone), 25*time.Millisecond)
+
+	var actionErr *execActionError
+	if !errors.As(err, &actionErr) || actionErr.kind != ExecErrorTimeout {
+		t.Fatalf("error = %T %v, want timeout", err, err)
+	}
+	close(release)
+	if err := <-blockerDone; err != nil {
+		t.Fatalf("blocking action failed: %v", err)
+	}
+	if err := runExecMain(a, func() error { return nil }); err != nil {
+		t.Fatalf("draining event loop: %v", err)
+	}
+	if after := strings.Join(a.EditorGroup.ActiveBuffer().Lines, "\n"); after != before {
+		t.Fatalf("canceled queued input mutated buffer: before %q after %q", before, after)
+	}
+}
+
+func TestExecRequestWaitsForClaimedActionPastTimeout(t *testing.T) {
+	a := newListenTestApp(t)
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	var runs atomic.Int32
+	begin := time.Now()
+	go func() {
+		done <- runExecMain(a, func() error {
+			runs.Add(1)
+			close(started)
+			time.Sleep(execRequestTimeout + 100*time.Millisecond)
+			return nil
+		})
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("event loop did not claim slow action")
+	}
+
+	if err := <-done; err != nil {
+		t.Fatalf("claimed action returned false timeout: %v", err)
+	}
+	if elapsed := time.Since(begin); elapsed < execRequestTimeout {
+		t.Fatalf("claimed action returned after %s, want at least %s", elapsed, execRequestTimeout)
+	}
+	if got := runs.Load(); got != 1 {
+		t.Fatalf("slow action ran %d times, want once", got)
 	}
 }
 

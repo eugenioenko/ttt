@@ -69,30 +69,56 @@ func execHandlerRequest(t *testing.T, a *App, method, path, body string) *http.R
 	return resp
 }
 
-func TestExecHandlerRunsScriptSynchronously(t *testing.T) {
+func execHandlerDirect(t *testing.T, a *App, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	response := httptest.NewRecorder()
+	NewExecHandler(a).ServeHTTP(response, req)
+	return response
+}
+
+func TestExecHandlerAppliesQuitAfterWritingResponse(t *testing.T) {
 	a := newListenTestApp(t)
 
-	resp := execHandlerRequest(t, a, http.MethodPost, "/exec", "quit")
+	response := execHandlerDirect(t, a, "/exec", "quit")
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	if response.Code != http.StatusOK || response.Body.String() != "ok" || !response.Flushed {
+		t.Fatalf("response = status %d body %q flushed %v", response.Code, response.Body.String(), response.Flushed)
 	}
-	// The handler returns only after the event loop has acknowledged quit.
 	if *a.Running {
-		t.Error("expected quit script to have set Running to false")
+		t.Error("handler returned before applying quit")
 	}
 }
 
 func TestExecHandlerShutdownAliasesQuit(t *testing.T) {
 	a := newListenTestApp(t)
 
-	resp := execHandlerRequest(t, a, http.MethodPost, "/exec", "shutdown")
+	response := execHandlerDirect(t, a, "/exec", "shutdown")
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	if response.Body.String() != "ok" || response.Header().Get("Content-Length") != "2" || !response.Flushed {
+		t.Fatalf("response = %q length %q flushed %v, want flushed two-byte success", response.Body.String(), response.Header().Get("Content-Length"), response.Flushed)
 	}
 	if *a.Running {
-		t.Error("expected shutdown script to have set Running to false")
+		t.Error("handler returned before applying shutdown")
+	}
+}
+
+func TestListenAddressUsesLoopbackPortOverride(t *testing.T) {
+	t.Setenv("TTT_LISTEN_PORT", "54321")
+	if got := ListenAddress(); got != "127.0.0.1:54321" {
+		t.Fatalf("ListenAddress() = %q, want loopback override", got)
+	}
+
+	for _, invalid := range []string{"", "0", "65536", "not-a-port"} {
+		t.Run(invalid, func(t *testing.T) {
+			t.Setenv("TTT_LISTEN_PORT", invalid)
+			if got := ListenAddress(); got != ListenAddr {
+				t.Fatalf("ListenAddress() = %q, want default %q", got, ListenAddr)
+			}
+		})
 	}
 }
 
@@ -129,10 +155,10 @@ func TestExecHandlerRejectsNonPost(t *testing.T) {
 func TestExecHandlerRespectsSepQueryParam(t *testing.T) {
 	a := newListenTestApp(t)
 
-	resp := execHandlerRequest(t, a, http.MethodPost, "/exec?sep=,", "wait 10,quit")
+	response := execHandlerDirect(t, a, "/exec?sep=,", "wait 10,quit")
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	if response.Code != http.StatusOK || response.Body.String() != "ok" {
+		t.Fatalf("response = status %d body %q, want 200 ok", response.Code, response.Body.String())
 	}
 	if *a.Running {
 		t.Error("expected script split on custom separator to run both commands, including quit")
