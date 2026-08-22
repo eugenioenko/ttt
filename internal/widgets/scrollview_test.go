@@ -82,6 +82,40 @@ func TestScrollViewContentTallerThanViewport(t *testing.T) {
 	}
 }
 
+func TestScrollViewScrollbarCaptureLifecycle(t *testing.T) {
+	sv := NewScrollViewWidget(newScrollTestChild(15, 30))
+	renderWidget(sv, 0, 0, 20, 10)
+	invalidations := 0
+	sv.SetPointerCaptureInvalidated(func() { invalidations++ })
+
+	if got := sv.HandleEvent(tcell.NewEventMouse(19, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("scrollbar press result = %v, want captured", got)
+	}
+	if !sv.OwnsPointerCapture() {
+		t.Fatal("scroll view did not report scrollbar capture")
+	}
+	sv.HandleEvent(tcell.NewEventMouse(30, 30, tcell.ButtonNone, 0))
+	if sv.OwnsPointerCapture() || invalidations != 0 {
+		t.Fatalf("normal release retained capture or notified: invalidations=%d", invalidations)
+	}
+
+	sv.HandleEvent(tcell.NewEventMouse(19, 0, tcell.Button1, 0))
+	if !sv.CancelPointerCapture() || sv.OwnsPointerCapture() {
+		t.Fatal("scroll view did not cancel scrollbar capture")
+	}
+	if invalidations != 1 {
+		t.Fatalf("capture invalidations = %d, want 1", invalidations)
+	}
+
+	sv.HandleEvent(tcell.NewEventMouse(19, 0, tcell.Button1, 0))
+	if !sv.InvalidatePointerInteraction() || sv.OwnsPointerCapture() {
+		t.Fatal("scroll view did not invalidate scrollbar capture")
+	}
+	if invalidations != 2 {
+		t.Fatalf("capture invalidations = %d, want 2", invalidations)
+	}
+}
+
 func TestScrollViewWheelDown(t *testing.T) {
 	child := newScrollTestChild(15, 30)
 	sv := NewScrollViewWidget(child)

@@ -30,6 +30,7 @@ type SplitPanelWidget struct {
 	wasPressed                bool
 	capturedChild             Widget
 	pointerCaptureInvalidated func()
+	cancelingPointerCapture   bool
 }
 
 func NewSplitPanelWidget() *SplitPanelWidget {
@@ -303,12 +304,14 @@ func (s *SplitPanelWidget) CancelPointerCapture() bool {
 	s.dragging = false
 	s.wasPressed = false
 	s.capturedChild = nil
+	s.cancelingPointerCapture = true
 	for _, child := range []Widget{s.Left, s.Right} {
 		if child == nil {
 			continue
 		}
 		canceled = widgets.CancelPointerCapture(child) || canceled
 	}
+	s.cancelingPointerCapture = false
 	if canceled && s.pointerCaptureInvalidated != nil {
 		s.pointerCaptureInvalidated()
 	}
@@ -320,8 +323,10 @@ func (s *SplitPanelWidget) InvalidatePointerInteraction() bool {
 	s.dragging = false
 	s.wasPressed = false
 	s.capturedChild = nil
+	s.cancelingPointerCapture = true
 	invalidated = widgets.InvalidatePointerInteraction(s.Left) || invalidated
 	invalidated = widgets.InvalidatePointerInteraction(s.Right) || invalidated
+	s.cancelingPointerCapture = false
 	if invalidated && s.pointerCaptureInvalidated != nil {
 		s.pointerCaptureInvalidated()
 	}
@@ -333,11 +338,12 @@ func (s *SplitPanelWidget) SetPointerCaptureInvalidated(invalidated func()) {
 	for _, child := range []Widget{s.Left, s.Right} {
 		capturedChild := child
 		widgets.SetPointerCaptureInvalidated(child, func() {
-			if s.capturedChild == capturedChild {
-				s.capturedChild = nil
+			if s.capturedChild != capturedChild {
+				return
 			}
+			s.capturedChild = nil
 			s.wasPressed = false
-			if s.pointerCaptureInvalidated != nil {
+			if !s.cancelingPointerCapture && s.pointerCaptureInvalidated != nil {
 				s.pointerCaptureInvalidated()
 			}
 		})

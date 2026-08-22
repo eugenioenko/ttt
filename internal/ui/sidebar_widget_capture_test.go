@@ -21,7 +21,7 @@ func TestSidebarCancelStopsTreeScrollbarDrag(t *testing.T) {
 		items[i] = &widgets.TreeNode{ID: string(rune('a' + i)), Label: "item"}
 	}
 	tree := widgets.NewTreeWidget(widgets.TreeConfig{Items: items})
-	adapter := NewWidgetAdapter(tree)
+	adapter := NewWidgetAdapter(&widgets.BoxWidget{Child: tree})
 	sidebar := NewSidebarWidget()
 	sidebar.AddPanel("tree", "Tree", adapter)
 	split := NewSplitPanelWidget()

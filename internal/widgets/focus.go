@@ -5,10 +5,11 @@ import (
 )
 
 type FocusManager struct {
-	items   []FocusableWidget
-	focused int
-	active  bool
-	root    Widget
+	items           []FocusableWidget
+	focused         int
+	active          bool
+	root            Widget
+	lastEventTarget Widget
 	// OnFocusChange is called after focus moves (e.g. to scroll the widget into view).
 	OnFocusChange func(w FocusableWidget)
 }
@@ -291,7 +292,10 @@ func (fm *FocusManager) Focused() Widget {
 	return nil
 }
 
+func (fm *FocusManager) LastEventTarget() Widget { return fm.lastEventTarget }
+
 func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
+	fm.lastEventTarget = nil
 	if len(fm.items) == 0 {
 		return EventIgnored
 	}
@@ -307,6 +311,7 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 		}
 		fm.ensureFocusedRendered()
 		if fw := fm.Focused(); fw != nil {
+			fm.lastEventTarget = fw
 			return fw.HandleEvent(ev)
 		}
 	case *tcell.EventMouse:
@@ -317,10 +322,12 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 		for _, fw := range fm.items {
 			r := VisibleRect(fm.root, fw)
 			if mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H {
+				fm.lastEventTarget = fw
 				return fw.HandleEvent(ev)
 			}
 		}
 		if fw := fm.Focused(); fw != nil {
+			fm.lastEventTarget = fw
 			return fw.HandleEvent(ev)
 		}
 	}
