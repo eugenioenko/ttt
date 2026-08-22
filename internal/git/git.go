@@ -557,16 +557,21 @@ func ShowFile(dir, path, ref string) (string, error) {
 }
 
 func ShowFileContext(ctx context.Context, dir, path, ref string) (string, error) {
+	out, err := ShowFileBytesContext(ctx, dir, path, ref)
+	return string(out), err
+}
+
+func ShowFileBytesContext(ctx context.Context, dir, path, ref string) ([]byte, error) {
 	spec := ref + ":" + path
 	cmd := gitCommandContext(ctx, "-C", dir, "show", spec)
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		}
-		return "", err
+		return nil, err
 	}
-	return string(out), nil
+	return out, nil
 }
 
 func DiffFile(dir, path string) (string, error) {
@@ -613,4 +618,34 @@ func DiffRename(dir, oldPath, newPath string) (string, error) {
 		}
 	}
 	return string(out), nil
+}
+
+func DiffWorkingTreeFileContext(ctx context.Context, dir, revision string, status FileStatus) (string, error) {
+	path := filepath.Join(dir, status.Path)
+	if revision == "" || status.Status == "?" {
+		return diffFileFromEmptyContext(ctx, dir, path)
+	}
+	paths := []string{status.Path}
+	if status.OldPath != "" && status.OldPath != status.Path {
+		paths = []string{status.OldPath, status.Path}
+	}
+	args := []string{"-C", dir, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", revision, "--"}
+	args = append(args, paths...)
+	out, err := gitCommandContext(ctx, args...).Output()
+	if err != nil && ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return string(out), err
+}
+
+func diffFileFromEmptyContext(ctx context.Context, dir, path string) (string, error) {
+	cmd := gitCommandContext(ctx, "-C", dir, "diff", "--no-ext-diff", "--no-textconv", "--no-index", "--", "/dev/null", path)
+	out, err := cmd.Output()
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return string(out), nil
+	}
+	if err != nil && ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return string(out), err
 }

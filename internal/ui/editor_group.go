@@ -622,6 +622,14 @@ func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
 	return detail
 }
 
+func (g *EditorGroupWidget) ActiveCurrentChangesWidget() *CommitDetailWidget {
+	detail := g.ActiveCommitDetailWidget()
+	if detail != nil && detail.CurrentChanges {
+		return detail
+	}
+	return nil
+}
+
 func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
@@ -658,6 +666,14 @@ func (g *EditorGroupWidget) CommitDetailWidgetByTab(tabName string) *CommitDetai
 			detail, _ := t.Content.(*CommitDetailWidget)
 			return detail
 		}
+	}
+	return nil
+}
+
+func (g *EditorGroupWidget) CurrentChangesWidgetByTab(tabName string) *CommitDetailWidget {
+	detail := g.CommitDetailWidgetByTab(tabName)
+	if detail != nil && detail.CurrentChanges {
+		return detail
 	}
 	return nil
 }

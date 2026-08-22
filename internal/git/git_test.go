@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -952,5 +953,32 @@ func TestStageReportsError(t *testing.T) {
 	dir := setupTestRepo(t)
 	if err := Stage(dir, "does-not-exist.txt"); err == nil {
 		t.Error("expected an error staging a missing path")
+	}
+}
+
+func TestDiffWorkingTreeFileContextUsesExplicitRevisionAndRawPath(t *testing.T) {
+	dir := setupTestRepo(t)
+	rawPath := "raw\n\t界.txt"
+	writeFile(t, dir, rawPath, "original\n")
+	gitRun(t, dir, "add", rawPath)
+	gitRun(t, dir, "commit", "-m", "initial")
+	revision := RevisionIdentity(dir)
+	writeFile(t, dir, rawPath, "staged\n")
+	gitRun(t, dir, "add", rawPath)
+	writeFile(t, dir, rawPath, "final working tree\n")
+
+	patch, err := DiffWorkingTreeFileContext(context.Background(), dir, revision, FileStatus{Status: "M", Path: rawPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(patch, "+final working tree") || strings.Contains(patch, "+staged") {
+		t.Fatalf("explicit-revision diff did not use final raw-path content:\n%s", patch)
+	}
+
+	unborn := setupTestRepo(t)
+	writeFile(t, unborn, rawPath, "untracked\n")
+	patch, err = DiffWorkingTreeFileContext(context.Background(), unborn, "", FileStatus{Status: "?", Path: rawPath})
+	if err != nil || !strings.Contains(patch, "+untracked") {
+		t.Fatalf("unborn raw-path diff err=%v:\n%s", err, patch)
 	}
 }

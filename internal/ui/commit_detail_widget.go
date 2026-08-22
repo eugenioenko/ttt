@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/highlight"
@@ -17,11 +18,13 @@ import (
 // the order Git reports them; a failed or hunk-less diff still gets a heading
 // and an explanatory row so a touched path never silently disappears.
 type CommitDetailFile struct {
-	Status  string
-	Path    string
-	OldPath string
-	Diff    diff.FileDiff
-	Error   string
+	Status      string
+	Path        string
+	OldPath     string
+	Stage       CommitDetailStage
+	ContentKind CommitDetailContentKind
+	Diff        diff.FileDiff
+	Error       string
 
 	FullFileState CommitDetailFullFileState
 	FullFileErr   string
@@ -35,6 +38,23 @@ type CommitDetailFile struct {
 	gapByLine    map[int]int
 	pendingGap   int
 }
+
+type CommitDetailStage uint8
+
+const (
+	CommitDetailStageNone CommitDetailStage = iota
+	CommitDetailStageStaged
+	CommitDetailStageUnstaged
+	CommitDetailStageMixed
+)
+
+type CommitDetailContentKind uint8
+
+const (
+	CommitDetailContentText CommitDetailContentKind = iota
+	CommitDetailContentBinary
+	CommitDetailContentEmpty
+)
 
 type CommitDetailFullFileState uint8
 
@@ -84,12 +104,17 @@ type commitDetailControl struct {
 // full-screen cell grid for every changed line on every redraw.
 type CommitDetailWidget struct {
 	BaseWidget
-	Dir         string
-	Ref         string
-	Short       string
-	Incarnation uint64
-	Loading     bool
-	Error       string
+	Dir            string
+	Ref            string
+	Short          string
+	Incarnation    uint64
+	Loading        bool
+	Error          string
+	Header         string
+	LoadingText    string
+	CurrentChanges bool
+	RefreshError   string
+	hasDetail      bool
 
 	Message  string
 	Metadata string
@@ -151,8 +176,29 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 		Ref:             ref,
 		Short:           short,
 		Loading:         true,
+		Header:          "Commit message",
+		LoadingText:     fmt.Sprintf("Loading commit %s…", short),
 		SyntaxHighlight: syntaxHighlight,
 	}
+}
+
+func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidget {
+	return &CommitDetailWidget{
+		Dir:             dir,
+		Ref:             "working-tree",
+		Loading:         true,
+		Header:          "Current changes",
+		LoadingText:     "Loading current changes…",
+		CurrentChanges:  true,
+		SyntaxHighlight: syntaxHighlight,
+	}
+}
+
+func CommitDetailFileWithContent(file CommitDetailFile, oldLines, newLines []string) CommitDetailFile {
+	file.oldLines = append([]string(nil), oldLines...)
+	file.newLines = append([]string(nil), newLines...)
+	file.FullFileState = CommitDetailFullFileLoaded
+	return file
 }
 
 func (d *CommitDetailWidget) Focusable() bool { return true }
@@ -363,6 +409,64 @@ func (d *CommitDetailWidget) SetDetail(message string, files []CommitDetailFile,
 	}
 }
 
+func (d *CommitDetailWidget) SetCurrentChanges(message string, files []CommitDetailFile, errText string) {
+	if !d.CurrentChanges {
+		return
+	}
+	d.Loading = false
+	if errText != "" {
+		if d.hasDetail {
+			d.Error = ""
+			d.RefreshError = errText
+			d.rebuildRows()
+			return
+		}
+		d.Error = errText
+		d.RefreshError = ""
+		return
+	}
+
+	type preservedFileState struct {
+		collapsed    bool
+		expandedGaps map[int]bool
+	}
+	preserved := make(map[string]preservedFileState, len(d.Files))
+	for i, file := range d.Files {
+		state := preservedFileState{expandedGaps: make(map[int]bool)}
+		if i < len(d.collapsedFiles) {
+			state.collapsed = d.collapsedFiles[i]
+		}
+		for gap, expanded := range file.expandedGaps {
+			state.expandedGaps[gap] = expanded
+		}
+		preserved[commitDetailFileKey(file)] = state
+	}
+	topLine := d.TopLine
+	d.Error = ""
+	d.RefreshError = ""
+	d.Message = message
+	d.Files = files
+	d.collapsedFiles = make([]bool, len(files))
+	for i := range d.Files {
+		d.Files[i].pendingGap = -1
+		state, ok := preserved[commitDetailFileKey(d.Files[i])]
+		if ok {
+			d.collapsedFiles[i] = state.collapsed
+			d.Files[i].expandedGaps = state.expandedGaps
+		} else {
+			d.Files[i].expandedGaps = make(map[int]bool)
+		}
+		if d.SyntaxHighlight && d.Files[i].Path != "" && d.Files[i].ContentKind == CommitDetailContentText {
+			d.Files[i].highlighter = highlight.New(d.Files[i].Path)
+		}
+	}
+	d.hasDetail = true
+	d.TopLine = topLine
+	d.ClearSelection()
+	d.rebuildRows()
+	d.clampScroll()
+}
+
 func (d *CommitDetailWidget) allFilesCollapsed() bool {
 	if len(d.Files) == 0 {
 		return false
@@ -420,18 +524,30 @@ func (d *CommitDetailWidget) rebuildRows() {
 		return
 	}
 
-	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: "Commit message", bold: true})
+	header := d.Header
+	if header == "" {
+		header = "Commit message"
+	}
+	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: header, bold: true})
 	if d.Metadata != "" {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMetadataRow, text: d.Metadata})
 		d.recordWidth(d.Metadata)
 	}
 	message := strings.TrimRight(d.Message, "\r\n")
 	if message == "" {
-		message = "(No commit message)"
+		if d.CurrentChanges {
+			message = "Working tree clean"
+		} else {
+			message = "(No commit message)"
+		}
 	}
 	for i, line := range strings.Split(message, "\n") {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageRow, text: line, bold: i == 0})
 		d.recordWidth(line)
+	}
+	if d.RefreshError != "" {
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: d.RefreshError, danger: true})
+		d.recordWidth(d.RefreshError)
 	}
 	d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
 
@@ -479,6 +595,20 @@ func (d *CommitDetailWidget) rebuildRows() {
 		case file.Error != "":
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: file.Error, fileIndex: fileIndex})
 			d.recordWidth(file.Error)
+		case file.ContentKind == CommitDetailContentBinary:
+			const binary = "Binary file changed"
+			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: binary, fileIndex: fileIndex})
+			d.recordWidth(binary)
+		case file.ContentKind == CommitDetailContentEmpty:
+			empty := "Empty file changed"
+			switch file.Status {
+			case "A", "?":
+				empty = "Empty file added"
+			case "D":
+				empty = "Empty file deleted"
+			}
+			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: empty, fileIndex: fileIndex})
+			d.recordWidth(empty)
 		default:
 			if len(file.lines) == 0 {
 				const noChanges = "No line changes"
@@ -512,7 +642,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 			}
 		}
 	}
-	if len(d.Files) == 0 {
+	if len(d.Files) == 0 && !d.CurrentChanges {
 		const noFiles = "No files"
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noFiles})
 		d.recordWidth(noFiles)
@@ -530,10 +660,30 @@ func (d *CommitDetailWidget) recordWidth(text string) {
 }
 
 func commitDetailFileHeading(file CommitDetailFile) string {
+	path := displayCommitDetailPath(file.Path)
 	if file.OldPath != "" && file.OldPath != file.Path {
-		return fmt.Sprintf("%s → %s", file.OldPath, file.Path)
+		path = fmt.Sprintf("%s → %s", displayCommitDetailPath(file.OldPath), path)
 	}
-	return file.Path
+	if file.Stage == CommitDetailStageNone {
+		return path
+	}
+	stage := "unstaged"
+	switch file.Stage {
+	case CommitDetailStageStaged:
+		stage = "staged"
+	case CommitDetailStageMixed:
+		stage = "mixed"
+	}
+	return fmt.Sprintf("%s  %s · %s", StatusBadge(file.Status), path, stage)
+}
+
+func displayCommitDetailPath(path string) string {
+	for _, r := range path {
+		if !unicode.IsGraphic(r) {
+			return strconv.QuoteToGraphic(path)
+		}
+	}
+	return path
 }
 
 func (d *CommitDetailWidget) Render(surface Surface) {
@@ -545,7 +695,11 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	surface.Fill(term.Cell{Ch: ' ', Style: term.StyleDefault})
 
 	if d.Loading {
-		surface.DrawText(0, 0, fmt.Sprintf("Loading commit %s…", d.Short), w, term.StyleMuted)
+		loadingText := d.LoadingText
+		if loadingText == "" {
+			loadingText = fmt.Sprintf("Loading commit %s…", d.Short)
+		}
+		surface.DrawText(0, 0, loadingText, w, term.StyleMuted)
 		return
 	}
 	if d.Error != "" {
@@ -748,7 +902,11 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 	for column := 0; column < viewW; column++ {
 		surface.SetCell(column, y, term.Cell{Ch: ' ', Style: term.StyleCommitMessage})
 	}
-	d.drawStaticText(surface, 0, y, viewW, "Commit message", term.StyleCommitMessage, term.StyleCommitMessage, true)
+	header := d.Header
+	if header == "" {
+		header = "Commit message"
+	}
+	d.drawStaticText(surface, 0, y, viewW, header, term.StyleCommitMessage, term.StyleCommitMessage, true)
 	if len(d.Files) == 0 {
 		return
 	}
@@ -758,7 +916,7 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 	}
 	controlW := textwidth.String(label)
 	controlX := viewW - controlW
-	if controlX <= textwidth.String("Commit message") {
+	if controlX <= textwidth.String(header) {
 		return
 	}
 	d.drawStaticText(surface, controlX, y, controlW, label, term.StyleCommitMessage, term.StyleCommitMessage, true)
@@ -767,20 +925,24 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 }
 
 func (d *CommitDetailWidget) renderHeading(surface Surface, rowIndex int, row commitDetailRow, visual commitDetailVisualRow, y, viewW int) {
+	headingStyle := term.StyleDefault
+	if row.fileIndex >= 0 && row.fileIndex < len(d.Files) && d.Files[row.fileIndex].Stage != CommitDetailStageNone {
+		headingStyle = StatusStyle(d.Files[row.fileIndex].Status)
+	}
 	collapsed := row.fileIndex >= 0 && row.fileIndex < len(d.collapsedFiles) && d.collapsedFiles[row.fileIndex]
 	if !visual.continuation {
 		chevron := '▼'
 		if collapsed {
 			chevron = '▶'
 		}
-		surface.SetCell(1, y, term.Cell{Ch: chevron, Style: term.StyleDefault, Bold: true})
+		surface.SetCell(1, y, term.Cell{Ch: chevron, Style: headingStyle, Bold: true})
 	}
 	r := d.GetRect()
 	d.fileControls = append(d.fileControls, commitDetailControl{
 		rect:      Rect{X: r.X, Y: r.Y + y, W: viewW, H: 1},
 		fileIndex: row.fileIndex,
 	})
-	d.drawTextRow(surface, 3, y, viewW-3, row.text, term.StyleDefault, term.StyleDefault, row.bold, visual.leftStart, rowIndex)
+	d.drawTextRow(surface, 3, y, viewW-3, row.text, headingStyle, term.StyleDefault, row.bold, visual.leftStart, rowIndex)
 }
 
 func (d *CommitDetailWidget) renderDiffRow(surface Surface, rowIndex int, row commitDetailRow, visual commitDetailVisualRow, y, viewW int) {
@@ -1038,10 +1200,14 @@ func (d *CommitDetailWidget) renderStickyHeading(surface Surface, viewW int) {
 	for column := 0; column < viewW; column++ {
 		surface.SetCell(column, 0, term.Cell{Ch: ' ', Style: term.StyleDefault})
 	}
-	surface.SetCell(1, 0, term.Cell{Ch: '▼', Style: term.StyleDefault, Bold: true})
+	headingStyle := term.StyleDefault
+	if d.Files[row.fileIndex].Stage != CommitDetailStageNone {
+		headingStyle = StatusStyle(d.Files[row.fileIndex].Status)
+	}
+	surface.SetCell(1, 0, term.Cell{Ch: '▼', Style: headingStyle, Bold: true})
 	path := truncateCommitDetailPath(commitDetailFileHeading(d.Files[row.fileIndex]), viewW-3)
 	drawTextSegment(surface, 3, 0, viewW-3, path, 0, 0, term.Cell{Ch: ' '}, func(_ int, ch rune) term.Cell {
-		return term.Cell{Ch: ch, Style: term.StyleDefault, Bold: true}
+		return term.Cell{Ch: ch, Style: headingStyle, Bold: true}
 	})
 	r := d.GetRect()
 	d.stickyRect = Rect{X: r.X, Y: r.Y, W: viewW, H: 1}

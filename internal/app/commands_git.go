@@ -244,11 +244,18 @@ func registerGitCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID:       "changes.viewAll",
+		Title:    "Git: Open Current Changes",
+		Keywords: []string{"git", "changes", "diff", "all", "working tree"},
+		Handler:  app.OpenCurrentChanges,
+	})
+
+	reg.Register(command.Command{
 		ID: "changes.refresh", Title: "Git: Refresh Changes",
 		Keywords: []string{"git", "changes", "reload"},
 		Handler: func() {
 			if app.Repository != nil {
-				app.Repository.RefreshNow(RepositoryWorktree | RepositoryHistory)
+				app.Repository.RefreshNow(RepositoryWorktree | RepositoryHistory | RepositoryCurrentChanges)
 			} else {
 				app.Changes.Refresh()
 			}

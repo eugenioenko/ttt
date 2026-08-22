@@ -51,6 +51,7 @@ func RunEventLoop(
 	app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: git.BranchName(lastBranchDir)})
 
 	syncStatus := func() {
+		app.syncRepositoryObservation()
 		line, col := app.EditorGroup.ActiveCursor()
 		filePath := app.EditorGroup.ActiveFilePath()
 		cursorCount := app.EditorGroup.MultiCursorCount()
@@ -383,6 +384,8 @@ func RunEventLoop(
 				app.HandleRepoOpResult(v)
 			case *RepositoryStatusResult:
 				app.Repository.HandleStatus(v)
+			case *CurrentChangesResult:
+				app.Repository.HandleCurrentChanges(v)
 			case *RepositoryInvalidationRequest:
 				app.handleRepositoryInvalidation(v)
 			case *DebugWriteRequest:
