@@ -67,10 +67,7 @@ type TerminalWidget struct {
 	linkCache  map[int][]linkSpan
 	linkMemo   map[string][]linkSpan
 
-	// mouseButtonHeld is the SGR button code (0/1/2) of a press currently being
-	// forwarded to the PTY, or -1 when none is held. Needed to encode the
-	// matching release and to distinguish a drag (button held) from bare
-	// hover motion, which use different vt10x mouse-tracking modes.
+	// SGR button code of a held press being forwarded, or -1 when none.
 	mouseButtonHeld int
 }
 
@@ -572,9 +569,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 				}
 				return EventConsumed
 			}
-			// ctrl+click with no link underneath: fall through to local
-			// selection below, even if the app wants mouse reporting —
-			// ctrl+click is a ttt-level affordance, not something to forward.
+			// No link: ctrl+click is a ttt-level affordance, not forwarded.
 		}
 
 		if mouseReporting && !tw.ctrlHeld {
@@ -632,10 +627,8 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 	return EventIgnored
 }
 
-// SGR extended mouse mode (\x1b[<Cb;Cx;CyM/m, DECSET 1006) encoding. This is
-// the modern mouse-reporting encoding virtually every full-screen TUI that
-// asks for mouse input expects; legacy X10 encoding (byte-limited to 223
-// columns/rows) is intentionally not supported.
+// SGR mouse encoding (\x1b[<Cb;Cx;CyM/m, DECSET 1006). Legacy X10 encoding is
+// not supported.
 const (
 	sgrButtonLeft   = 0
 	sgrButtonMiddle = 1
@@ -699,8 +692,6 @@ func encodeSGRMouse(code, col, row int, release bool) string {
 	return fmt.Sprintf("\x1b[<%d;%d;%d%c", code, col, row, suffix)
 }
 
-// mousePTYCoords maps a screen position to 1-based coordinates within the
-// terminal's own column/row grid, clamped to its bounds.
 func (tw *TerminalWidget) mousePTYCoords(mx, my int) (col, row int) {
 	r := tw.GetRect()
 	col = mx - r.X + 1

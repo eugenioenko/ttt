@@ -39,16 +39,8 @@ func waitFor(t *testing.T, updated chan struct{}, cond func() bool) {
 	}
 }
 
-// newRawMouseLoopbackTerminal spawns the default shell, then drives it into
-// raw mode ("stty raw -echo") and execs cat in its place. A real full-screen
-// TUI always puts its PTY into raw/cbreak mode as one of the first things it
-// does — plain cat never does, so the PTY's line discipline would otherwise
-// stay in canonical (cooked) mode and buffer every write until a newline,
-// which would silently swallow the newline-less escape sequences this test
-// needs to round-trip (both the DECSET mode-enabling sequence and the SGR
-// mouse bytes TerminalWidget forwards). Once raw, cat echoes stdin to stdout
-// byte-for-byte and unbuffered, so anything TerminalWidget writes to the PTY
-// comes straight back through the read loop into RawTail() unmodified.
+// Raw mode disables cooked-mode line buffering, which would otherwise eat the
+// newline-less escape sequences this test round-trips through cat.
 func newRawMouseLoopbackTerminal(t *testing.T) (*terminal.Terminal, chan struct{}) {
 	t.Helper()
 	term, err := terminal.New("", 80, 24, 0, nil, "")

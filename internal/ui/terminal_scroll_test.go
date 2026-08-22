@@ -8,12 +8,8 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-// TestScrollbarDragToBottomGoesLiveDespiteStaleTotalItems guards against a
-// regression where dragging the terminal scrollbar to the end of the track
-// left scrollOffset slightly above zero whenever content streamed in after
-// the widget's last Render() call — the drag math resolved against a
-// TotalItems snapshot that was already behind the live PTY, so the user
-// could never precisely reach the bottom while output kept arriving.
+// Guards against dragging to the bottom resolving against a stale TotalItems
+// snapshot instead of going live against the streaming PTY.
 func TestScrollbarDragToBottomGoesLiveDespiteStaleTotalItems(t *testing.T) {
 	term, err := terminal.New("/bin/cat", 20, 5, 1000, nil, "")
 	if err != nil {
@@ -36,8 +32,7 @@ func TestScrollbarDragToBottomGoesLiveDespiteStaleTotalItems(t *testing.T) {
 	tw := NewTerminalWidget(term, nil)
 	tw.SetRect(Rect{X: 0, Y: 0, W: 20, H: 5})
 
-	// Simulate a stale Render() snapshot from before the lines above arrived:
-	// only 3 lines of scrollback existed then, vs. the live count checked above.
+	// Stale snapshot: only 3 lines of scrollback existed at last Render().
 	tw.scrollbar.X = 19
 	tw.scrollbar.Y = 0
 	tw.scrollbar.Height = 5

@@ -78,9 +78,7 @@ func TestTogglePanel(t *testing.T) {
 	}
 }
 
-// TestSpawnTerminalSizedToBottomPanel guards against regressing to sizing the
-// PTY from the full editor+panel height (issue #465): on a tall window, a
-// short bottom panel must still spawn a terminal matching its own height.
+// Guards against sizing the PTY from full editor+panel height (issue #465).
 func TestSpawnTerminalSizedToBottomPanel(t *testing.T) {
 	h := newTestHarness(t, 120, 40)
 	defer h.stop()
