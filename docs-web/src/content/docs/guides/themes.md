@@ -59,7 +59,7 @@ Theme files are stored as `<name>.json` in the `themes/` subdirectory of your co
 
 ## Full Theme Reference
 
-Below is a complete theme file showing every configurable section. All color values are hex strings (`"#rrggbb"`). Optional `"bold"` and `"italic"` flags are supported where noted. Any field left empty (`{}`) inherits from the `default` colors, except `diff.collapsedHover.bg`, which inherits from `editor.activeLine.bg`.
+Below is a complete theme file showing every configurable section. Ordinary color values are hex strings (`"#rrggbb"`); `editor.bracketColors` also accepts the named terminal colors documented below. Optional `"bold"` and `"italic"` flags are supported where noted. Any field left empty (`{}`) inherits from the `default` colors, except `diff.collapsedHover.bg`, which inherits from `editor.activeLine.bg`.
 
 ```json
 {
