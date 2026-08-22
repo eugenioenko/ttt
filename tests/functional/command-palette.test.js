@@ -4,6 +4,12 @@ import { createTempDir, createTempFile, cleanupDir } from "./helpers.js";
 
 let dir;
 
+function paletteWidth(snapshot) {
+  const borderRow = snapshot.split("\n")[2] || "";
+  const matches = borderRow.matchAll(/(?:╭─+╮|╔═+╗|┌─+┐)/g);
+  return Math.max(0, ...[...matches].map((match) => [...match[0]].length));
+}
+
 afterEach(() => {
   tui.kill();
   if (dir) cleanupDir(dir);
@@ -56,6 +62,48 @@ describe("command palette", () => {
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
     expect(snapshots[s0]).toContain("Dismiss test");
+  });
+
+  it("should keep ordinary modes narrow while help responds and transitions cleanly", () => {
+    dir = createTempDir();
+    createTempFile(dir, "wide.txt", "Wide palette test");
+
+    tui.start(dir);
+    tui.setSize(200, 50);
+    tui.waitFor("wide.txt");
+    tui.press("ctrl+p");
+    const command = tui.snapshot();
+
+    tui.type("?");
+    const help = tui.snapshot();
+
+    tui.press("backspace");
+    tui.type(">");
+    const commandAgain = tui.snapshot();
+
+    tui.press("backspace");
+    const files = tui.snapshot();
+
+    tui.click(50, 3);
+    const dismissed = tui.snapshot();
+
+    tui.press("ctrl+p");
+    const reopened = tui.snapshot();
+    tui.press("escape");
+    tui.pressChord("ctrl+k", "p");
+    const fileBinding = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(paletteWidth(snapshots[command])).toBe(60);
+    expect(paletteWidth(snapshots[help])).toBe(120);
+    expect(paletteWidth(snapshots[commandAgain])).toBe(60);
+    expect(paletteWidth(snapshots[files])).toBe(60);
+    expect(paletteWidth(snapshots[dismissed])).toBe(0);
+    expect(paletteWidth(snapshots[reopened])).toBe(60);
+    expect(paletteWidth(snapshots[fileBinding])).toBe(60);
+    expect(snapshots[command]).toContain(">");
+    expect(snapshots[files]).toContain("wide.txt");
+    expect(snapshots[fileBinding]).toContain("wide.txt");
   });
 
   it("should orient a new user before listing commands in help mode", () => {

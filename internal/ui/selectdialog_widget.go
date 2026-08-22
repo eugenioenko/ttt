@@ -24,6 +24,16 @@ const (
 	paletteHelpMode
 )
 
+const ordinaryPaletteMaxWidth = 60
+
+type selectDialogLayout struct {
+	boxX         int
+	boxY         int
+	boxW         int
+	boxH         int
+	visibleItems int
+}
+
 type PaletteItem struct {
 	Label       string
 	Detail      string
@@ -123,10 +133,11 @@ func (p *SelectDialogWidget) CursorPosition() (int, int, bool) {
 	return p.Input.CursorX(p.inputX), p.inputY, true
 }
 
-func (p *SelectDialogWidget) Render(surface Surface) {
-	sw, sh := surface.Size()
-
+func (p *SelectDialogWidget) calculateLayout(sw, sh int) selectDialogLayout {
 	boxW := sw * 6 / 10 // 60% of terminal width
+	if p.mode != paletteHelpMode && boxW > ordinaryPaletteMaxWidth {
+		boxW = ordinaryPaletteMaxWidth
+	}
 	if boxW < 40 {
 		boxW = 40
 	}
@@ -156,8 +167,30 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 		boxH = sh - 2
 	}
 
-	boxX := (sw - boxW) / 2
-	boxY := 2
+	visibleItems := 0
+	if p.mode != paletteGoToLineMode {
+		visibleItems = boxH - 4
+		if p.mode == paletteHelpMode {
+			visibleItems -= 2
+		}
+	}
+
+	return selectDialogLayout{
+		boxX:         (sw - boxW) / 2,
+		boxY:         2,
+		boxW:         boxW,
+		boxH:         boxH,
+		visibleItems: visibleItems,
+	}
+}
+
+func (p *SelectDialogWidget) Render(surface Surface) {
+	sw, sh := surface.Size()
+	layout := p.calculateLayout(sw, sh)
+	boxX := layout.boxX
+	boxY := layout.boxY
+	boxW := layout.boxW
+	boxH := layout.boxH
 
 	p.boxX = boxX
 	p.boxY = boxY
@@ -177,7 +210,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 	p.Input.Render(surface, p.inputX, p.inputY, boxW-2)
 
 	if p.mode == paletteGoToLineMode {
-		p.visibleItems = 0
+		p.visibleItems = layout.visibleItems
 		p.showScroll = false
 		return
 	}
@@ -186,10 +219,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 		surface.SetCell(x, boxY+2, term.Cell{Ch: b.Horizontal, Style: term.StyleBorder})
 	}
 
-	visibleItems := boxH - 4
-	if p.mode == paletteHelpMode {
-		visibleItems -= 2
-	}
+	visibleItems := layout.visibleItems
 	p.visibleItems = visibleItems
 	p.ensureVisible(visibleItems)
 	showScroll := len(p.Items) > visibleItems

@@ -72,6 +72,93 @@ func TestCommandPaletteDoesNotStack(t *testing.T) {
 	}
 }
 
+func paletteBorderWidth(row string) int {
+	runes := []rune(row)
+	for _, border := range [][2]rune{{'╭', '╮'}, {'╔', '╗'}, {'┌', '┐'}} {
+		start := -1
+		for i, r := range runes {
+			if r == border[0] {
+				start = i
+				break
+			}
+		}
+		if start < 0 {
+			continue
+		}
+		for i := start + 1; i < len(runes); i++ {
+			if runes[i] == border[1] {
+				return i - start + 1
+			}
+		}
+	}
+	return 0
+}
+
+func TestCommandPaletteWideGeometryBindingsAndTransitions(t *testing.T) {
+	h := newTestHarness(t, 200, 50)
+	defer h.stop()
+
+	h.pressCtrl(tcell.KeyCtrlP)
+	palette, ok := h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+	if !ok {
+		t.Fatalf("Ctrl+P opened %T, want command palette", h.app.Root.TopOverlayWidget())
+	}
+	if palette.Input.Text != ">" || len(palette.Items) != len(h.reg.List()) {
+		t.Fatalf("Ctrl+P input=%q items=%d, want > and complete registry of %d", palette.Input.Text, len(palette.Items), len(h.reg.List()))
+	}
+	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
+		t.Fatalf("Ctrl+P command palette width=%d, want 60; row=%q", got, h.screenRow(2))
+	}
+
+	h.pressRune('?')
+	if got := paletteBorderWidth(h.screenRow(2)); got != 120 {
+		t.Fatalf("help palette width=%d, want responsive width 120", got)
+	}
+	palette.Selected = 3
+
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	h.pressRune('>')
+	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
+		t.Fatalf("help-to-command palette width=%d, want 60", got)
+	}
+	if palette.Selected != 0 {
+		t.Fatalf("help-to-command selected=%d, want 0", palette.Selected)
+	}
+
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	if palette.Input.Text != "" {
+		t.Fatalf("file-mode input=%q, want empty", palette.Input.Text)
+	}
+	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
+		t.Fatalf("file palette width=%d, want 60", got)
+	}
+	h.assertContains("alpha.txt")
+
+	h.click(50, 3)
+	if h.app.Root.HasOverlay() {
+		t.Fatal("file palette retained the wider help hit target")
+	}
+
+	h.pressCtrl(tcell.KeyCtrlP)
+	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
+		t.Fatalf("reopened command palette width=%d, want 60", got)
+	}
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+
+	h.pressCtrl(tcell.KeyCtrlK)
+	h.pressRune('p')
+	palette, ok = h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+	if !ok {
+		t.Fatalf("Ctrl+K P opened %T, want file search", h.app.Root.TopOverlayWidget())
+	}
+	if palette.Input.Text != "" {
+		t.Fatalf("Ctrl+K P input=%q, want empty file search", palette.Input.Text)
+	}
+	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
+		t.Fatalf("Ctrl+K P file palette width=%d, want 60", got)
+	}
+}
+
 func TestCommandPaletteHelpOrientsThenNavigates(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()

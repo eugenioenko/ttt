@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -375,6 +376,76 @@ func TestPaletteTitleMatchRanksAboveKeywordOnly(t *testing.T) {
 	}
 	if p.Items[0].ID != "settings" {
 		t.Fatalf("expected title match 'Preferences: Open Settings' (id=settings) to rank first, got id=%s (%s)", p.Items[0].ID, p.Items[0].Label)
+	}
+}
+
+func renderPaletteAt(p *SelectDialogWidget, width, height int) [][]term.Cell {
+	cells := makeGrid(width, height)
+	p.Render(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: width, H: height}))
+	return cells
+}
+
+func TestPaletteWideGeometryTransitionsAndReopen(t *testing.T) {
+	p := NewSelectDialogWidget(helpTestCommands())
+	p.files = []paletteFile{{Rel: "alpha.txt", Abs: "/workspace/alpha.txt"}}
+
+	commandCells := renderPaletteAt(p, 200, 50)
+	if p.boxX != 70 || p.boxW != 60 {
+		t.Fatalf("command geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
+	}
+	if commandCells[p.boxY][70].Ch != '╔' || commandCells[p.boxY][129].Ch != '╗' {
+		t.Fatal("command border does not match its 60-column layout")
+	}
+
+	p.Input.SetText("?")
+	p.Selected = 2
+	helpCells := renderPaletteAt(p, 200, 50)
+	if p.boxX != 40 || p.boxW != 120 {
+		t.Fatalf("help geometry = x:%d width:%d, want x:40 width:120", p.boxX, p.boxW)
+	}
+	if helpCells[p.boxY][40].Ch != '╔' || helpCells[p.boxY][159].Ch != '╗' {
+		t.Fatal("help border does not match its responsive layout")
+	}
+
+	p.Input.SetText(">")
+	commandCells = renderPaletteAt(p, 200, 50)
+	if p.Selected != 0 || p.scrollOffset != 0 {
+		t.Fatalf("command transition retained selection state: selected=%d scroll=%d", p.Selected, p.scrollOffset)
+	}
+	if p.boxX != 70 || p.boxW != 60 {
+		t.Fatalf("command transition geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
+	}
+	if commandCells[p.boxY][40].Ch != '.' {
+		t.Fatal("command render retained the old help border")
+	}
+
+	p.Input.Clear()
+	fileCells := renderPaletteAt(p, 200, 50)
+	if p.boxX != 70 || p.boxW != 60 {
+		t.Fatalf("file geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
+	}
+	if fileCells[p.boxY][70].Ch != '╔' || fileCells[p.boxY][129].Ch != '╗' {
+		t.Fatal("file border does not match its 60-column layout")
+	}
+
+	dismissed := false
+	p.OnDismiss = func() { dismissed = true }
+	p.HandleEvent(tcell.NewEventMouse(50, p.inputY, tcell.Button1, tcell.ModNone))
+	if !dismissed {
+		t.Fatal("file mode retained the wider help hit target")
+	}
+
+	opened := ""
+	p.OnOpenFile = func(path string) { opened = path }
+	p.HandleEvent(tcell.NewEventMouse(p.boxX+2, p.boxY+3, tcell.Button1, tcell.ModNone))
+	if opened != "/workspace/alpha.txt" {
+		t.Fatalf("file row hit target opened %q", opened)
+	}
+
+	reopened := NewSelectDialogWidget(helpTestCommands())
+	renderPaletteAt(reopened, 200, 50)
+	if reopened.Input.Text != ">" || reopened.boxX != 70 || reopened.boxW != 60 {
+		t.Fatalf("reopened command palette = input:%q x:%d width:%d", reopened.Input.Text, reopened.boxX, reopened.boxW)
 	}
 }
 
