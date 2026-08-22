@@ -146,9 +146,6 @@ func settingsCategories() []settingsCategory {
 				GetInt: func(s *config.Settings) int { return s.Autocomplete.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Autocomplete.Debounce = v }},
 		}},
-		// Git, explorer, terminal, search and plugin settings are a handful of fields
-		// each; separate tabs for them left the strip mostly empty. Labels here
-		// name their area, since the tab title no longer does.
 		{Title: "Advanced", Fields: []settingField{
 			{Label: "Git: file view", Kind: settingEnum, Options: gitFileViewItems,
 				GetString: func(s *config.Settings) string { return s.Git.FileView },

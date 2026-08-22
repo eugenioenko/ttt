@@ -1254,6 +1254,28 @@ func TestTreeExpandAllLoadsOnlyOneLazyLevel(t *testing.T) {
 	}
 }
 
+func TestTreeExpandAllWhereFiltersBranchesAndLazyLoads(t *testing.T) {
+	included := &TreeNode{ID: "included", Label: "Included", Expandable: true}
+	excluded := &TreeNode{ID: "excluded", Label: "Excluded", Expandable: true}
+	loaded := []string{}
+	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{included, excluded}, OnExpand: func(node *TreeNode) {
+		loaded = append(loaded, node.ID)
+		node.Children = []*TreeNode{{ID: node.ID + "/child", Label: "Child"}}
+	}})
+
+	tree.ExpandAllWhere(func(node *TreeNode) bool { return node.ID == included.ID })
+
+	if !included.Expanded || len(included.Children) != 1 {
+		t.Fatalf("included branch was not expanded and loaded: %+v", included)
+	}
+	if excluded.Expanded || len(excluded.Children) != 0 {
+		t.Fatalf("excluded branch changed: %+v", excluded)
+	}
+	if len(loaded) != 1 || loaded[0] != included.ID {
+		t.Fatalf("lazy loads = %v, want only %q", loaded, included.ID)
+	}
+}
+
 // --- Shortcut key tests ---
 
 func TestTreeShortcutKey(t *testing.T) {

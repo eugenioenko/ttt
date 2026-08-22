@@ -108,6 +108,18 @@ func (a *App) ShowChangesContextMenu(sx, sy int) {
 	openContextMenu(a, a.BuildChangesContextMenu(), sx, sy)
 }
 
+func (a *App) ShowChangesFileContextMenu(_ string, status git.FileStatus, sx, sy int) {
+	var items []ui.ContextMenuItem
+	if status.Staged {
+		items = append(items, changesContextMenuStaged...)
+	} else {
+		items = append(items, changesContextMenuUnstaged...)
+	}
+	items = append(items, ui.MenuSep())
+	items = append(items, a.BuildChangesContextMenu()...)
+	openContextMenu(a, items, sx, sy)
+}
+
 func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 	seen := map[string]bool{}
 	sources := a.EditorGroup.DiffTabSources()
@@ -605,17 +617,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.OnReplace = app.ApplySearchReplace
 	app.Search.OnReplaceAll = app.ApplySearchReplaceAll
 
-	app.Changes.OnRightClick = func(dir string, status git.FileStatus, sx, sy int) {
-		var items []ui.ContextMenuItem
-		if status.Staged {
-			items = append(items, changesContextMenuStaged...)
-		} else {
-			items = append(items, changesContextMenuUnstaged...)
-		}
-		items = append(items, ui.MenuSep())
-		items = append(items, app.BuildChangesContextMenu()...)
-		openContextMenu(app, items, sx, sy)
-	}
+	app.Changes.OnRightClick = app.ShowChangesFileContextMenu
 	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
 	app.Changes.OnOpenFile = func(path string) {
