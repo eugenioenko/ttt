@@ -1,11 +1,37 @@
 package config
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config/themes"
 )
+
+func testColorLuminance(color string) float64 {
+	b, err := hex.DecodeString(strings.TrimPrefix(color, "#"))
+	if err != nil || len(b) != 3 {
+		return -1
+	}
+	channel := func(v byte) float64 {
+		x := float64(v) / 255
+		if x <= 0.04045 {
+			return x / 12.92
+		}
+		return math.Pow((x+0.055)/1.055, 2.4)
+	}
+	return 0.2126*channel(b[0]) + 0.7152*channel(b[1]) + 0.0722*channel(b[2])
+}
+
+func testColorContrast(fg, bg string) float64 {
+	a, b := testColorLuminance(fg), testColorLuminance(bg)
+	if a < b {
+		a, b = b, a
+	}
+	return (a + 0.05) / (b + 0.05)
+}
 
 func TestDefaultTheme(t *testing.T) {
 	th := DefaultTheme()
@@ -73,6 +99,55 @@ func TestBundledThemesLoad(t *testing.T) {
 			}
 			if th.Diff.Collapsed.Fg == "" || th.Diff.Collapsed.Bg == "" {
 				t.Errorf("%s: collapsed diff style did not inherit defaults: %+v", name, th.Diff.Collapsed)
+			}
+		})
+	}
+}
+
+func TestBundledThemeSemanticDiffForegroundsMeetNormalTextContrast(t *testing.T) {
+	entries, err := themes.FS.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		data, err := themes.FS.ReadFile(entry.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		theme := DefaultTheme()
+		if err := json.Unmarshal(data, &theme); err != nil {
+			t.Fatal(err)
+		}
+		theme.ResolveColors()
+		for _, pair := range []struct{ name, fg, bg string }{
+			{"added", theme.Diff.GutterAdded.Fg, theme.Diff.Added.Bg},
+			{"deleted", theme.Diff.GutterDeleted.Fg, theme.Diff.Deleted.Bg},
+		} {
+			if ratio := testColorContrast(pair.fg, pair.bg); ratio < 4.5 {
+				t.Errorf("%s %s contrast %.2f:1 (%s on %s), want >=4.5:1", entry.Name(), pair.name, ratio, pair.fg, pair.bg)
+			}
+		}
+	}
+}
+
+func TestContrastSafeForegroundPreservesSemanticChannel(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		foreground string
+		background string
+		semantic   func(themeRGB) bool
+	}{
+		{"added", "#73c991", "#e8f5e8", func(color themeRGB) bool { return color.g > color.r && color.g > color.b }},
+		{"deleted", "#f14c4c", "#f5e8e8", func(color themeRGB) bool { return color.r > color.g && color.r > color.b }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			resolved := contrastSafeForeground(test.foreground, test.background, "#000000")
+			if ratio := testColorContrast(resolved, test.background); ratio < 4.5 {
+				t.Fatalf("resolved contrast = %.2f:1 (%s on %s)", ratio, resolved, test.background)
+			}
+			color, ok := parseThemeRGB(resolved)
+			if !ok || !test.semantic(color) {
+				t.Fatalf("resolved color %s lost %s semantic channel", resolved, test.name)
 			}
 		})
 	}

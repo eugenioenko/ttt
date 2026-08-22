@@ -40,6 +40,9 @@ type DiffViewWidget struct {
 	layoutGutterW    int
 	wrapMap          []diffWrapEntry
 	wrapTopOffset    int
+	layoutMode       DiffMode
+	layoutWrapMode   DiffWrapMode
+	layoutReady      bool
 
 	// selection state
 	selecting     bool
@@ -76,8 +79,9 @@ type DiffViewWidget struct {
 	newLines        []string
 	unifiedLines    []diffUnifiedLine
 
-	OnFetchExtended func(dv *DiffViewWidget)
-	Loading         bool
+	OnFetchExtended  func(dv *DiffViewWidget)
+	Loading          bool
+	extendedFetching bool
 }
 
 func (d *DiffViewWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
@@ -175,7 +179,6 @@ func (d *DiffViewWidget) applyWrapMode(mode DiffWrapMode) {
 		return
 	}
 	d.wrapMode = mode
-	d.TopLine = 0
 	d.wrapTopOffset = 0
 	d.LeftCol = 0
 	d.ClearSelection()
@@ -211,8 +214,9 @@ func (d *DiffViewWidget) applyMode(mode DiffMode) {
 	if mode == d.mode {
 		return
 	}
+	topSourceLine := d.topSourceLine()
 	d.mode = mode
-	d.TopLine = 0
+	d.TopLine = d.displayLineForSourceLine(topSourceLine)
 	d.wrapTopOffset = 0
 	d.LeftCol = 0
 	d.ClearSelection()
@@ -227,19 +231,13 @@ func (d *DiffViewWidget) SetExtended(extended bool) {
 }
 
 func (d *DiffViewWidget) applyExtended(extended bool) {
-	if extended && !d.contextLoaded && d.OnFetchExtended != nil {
-		if d.Loading {
-			return
-		}
-		d.Loading = true
-		d.extended = true
-		d.contextMode = DiffContextFullFile
-		d.OnFetchExtended(d)
-		return
-	}
 	d.extended = extended
 	if extended {
 		d.contextMode = DiffContextFullFile
+		if !d.contextLoaded && d.OnFetchExtended != nil {
+			d.startExtendedFetch(-1)
+			return
+		}
 	} else {
 		d.contextMode = DiffContextChangesOnly
 		d.pendingGap = -1
@@ -255,6 +253,7 @@ func (d *DiffViewWidget) applyExtended(extended bool) {
 
 func (d *DiffViewWidget) FinishLoading() {
 	d.Loading = false
+	d.extendedFetching = false
 	d.contextLoaded = true
 	if d.pendingGap >= 0 {
 		d.expandedGaps[d.pendingGap] = true
@@ -262,6 +261,20 @@ func (d *DiffViewWidget) FinishLoading() {
 		d.extended = false
 		d.contextMode = DiffContextChangesOnly
 	}
+	d.rebuildLines()
+	d.TopLine = 0
+	d.wrapTopOffset = 0
+	d.LeftCol = 0
+	d.ClearSearch()
+	d.ClearSelection()
+}
+
+func (d *DiffViewWidget) FailLoading() {
+	d.Loading = false
+	d.extendedFetching = false
+	d.extended = false
+	d.contextMode = DiffContextChangesOnly
+	d.pendingGap = -1
 	d.rebuildLines()
 	d.TopLine = 0
 	d.wrapTopOffset = 0
@@ -292,13 +305,11 @@ func (d *DiffViewWidget) rebuildLines() {
 
 func (d *DiffViewWidget) expandContextGap(gap int) {
 	d.hasHoveredGap = false
-	if gap < 0 || d.expandedGaps[gap] {
+	if gap < 0 || d.expandedGaps[gap] || d.extendedFetching {
 		return
 	}
 	if !d.contextLoaded && d.OnFetchExtended != nil {
-		d.pendingGap = gap
-		d.Loading = true
-		d.OnFetchExtended(d)
+		d.startExtendedFetch(gap)
 		return
 	}
 	if !d.contextLoaded {
@@ -308,6 +319,20 @@ func (d *DiffViewWidget) expandContextGap(gap int) {
 	d.rebuildLines()
 	d.ClearSearch()
 	d.ClearSelection()
+}
+
+func (d *DiffViewWidget) startExtendedFetch(gap int) bool {
+	if d.extendedFetching || d.contextLoaded || d.OnFetchExtended == nil {
+		return false
+	}
+	d.extendedFetching = true
+	d.Loading = true
+	d.pendingGap = gap
+	d.hasHoveredGap = false
+	d.primaryPressed = false
+	d.clearLayout()
+	d.OnFetchExtended(d)
+	return true
 }
 
 func (d *DiffViewWidget) screenSourceLine(my int) int {
@@ -508,6 +533,7 @@ func (d *DiffViewWidget) clearLayout() {
 	d.scrollbar = Scrollbar{}
 	d.hscrollbar = HScrollbar{}
 	d.rhscrollbar = HScrollbar{}
+	d.layoutReady = false
 }
 
 func (d *DiffViewWidget) Render(surface Surface) {
@@ -516,6 +542,7 @@ func (d *DiffViewWidget) Render(surface Surface) {
 	r := d.GetRect()
 
 	if d.Loading {
+		d.clearLayout()
 		msg := "Loading..."
 		for i, ch := range msg {
 			if i < w {
@@ -524,6 +551,12 @@ func (d *DiffViewWidget) Render(surface Surface) {
 		}
 		return
 	}
+	topSourceLine := d.topSourceLine()
+	previousLeftW := d.layoutLeftW
+	previousRightW := d.layoutRightW
+	previousMode := d.layoutMode
+	previousWrapMode := d.layoutWrapMode
+	previousLayoutReady := d.layoutReady
 
 	gutterW := d.gutterWidth()
 
@@ -581,6 +614,14 @@ func (d *DiffViewWidget) Render(surface Surface) {
 	d.layoutRightStart = rightStart
 	d.layoutRightW = rightW
 	d.layoutGutterW = gutterW
+	geometryChanged := previousLayoutReady && (previousLeftW != leftW || previousRightW != rightW || previousMode != d.mode || previousWrapMode != d.wrapMode)
+	if geometryChanged {
+		d.TopLine = d.displayLineForSourceLine(topSourceLine)
+		d.wrapTopOffset = 0
+	}
+	d.layoutMode = d.mode
+	d.layoutWrapMode = d.wrapMode
+	d.layoutReady = true
 
 	if d.IsWrapped() {
 		d.setTopVisualRow(d.topVisualRow())
@@ -863,12 +904,15 @@ func (d *DiffViewWidget) selectionTextAt(line int) (string, bool) {
 		return "", false
 	}
 	if d.IsUnified() {
-		return d.unifiedLines[line].side.Text, true
+		selected := d.unifiedLines[line].side
+		return selected.Text, selected.Kind != diff.Collapsed
 	}
 	if d.selRight {
-		return d.Lines[line].Right.Text, true
+		selected := d.Lines[line].Right
+		return selected.Text, selected.Kind != diff.Collapsed
 	}
-	return d.Lines[line].Left.Text, true
+	selected := d.Lines[line].Left
+	return selected.Text, selected.Kind != diff.Collapsed
 }
 
 func (d *DiffViewWidget) clampLeftCol() {
@@ -889,6 +933,9 @@ func (d *DiffViewWidget) clampLeftCol() {
 }
 
 func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
+	if d.extendedFetching || d.Loading {
+		return EventIgnored
+	}
 	if newTop, consumed := d.scrollbar.HandleEvent(ev); consumed {
 		d.setTopVisualRow(newTop)
 		if d.scrollbar.IsDragging() {

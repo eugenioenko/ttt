@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -422,8 +423,14 @@ func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
 		if grid[0][column].Style != term.StyleGutterDeleted {
 			t.Fatalf("deleted gutter column %d style = %v, want StyleGutterDeleted", column, grid[0][column].Style)
 		}
+		if grid[0][column].BgStyle != term.StyleDiffDeleted {
+			t.Fatalf("deleted gutter column %d background = %v, want StyleDiffDeleted", column, grid[0][column].BgStyle)
+		}
 		if grid[1][column].Style != term.StyleGutterAdded {
 			t.Fatalf("added gutter column %d style = %v, want StyleGutterAdded", column, grid[1][column].Style)
+		}
+		if grid[1][column].BgStyle != term.StyleDiffAdded {
+			t.Fatalf("added gutter column %d background = %v, want StyleDiffAdded", column, grid[1][column].BgStyle)
 		}
 	}
 }
@@ -460,6 +467,15 @@ func TestDiffWidgetHighContrastUsesSemanticChangeForegrounds(t *testing.T) {
 	dv.Render(NewRenderSurface(standard, Rect{W: width, H: height}))
 	if got := standard[0][dv.layoutLeftStart].Style; got != term.StyleSyntaxKeyword {
 		t.Fatalf("standard diff text style = %v, want syntax keyword", got)
+	}
+	if got := standard[0][dv.layoutRightStart].Style; got != term.StyleSyntaxKeyword {
+		t.Fatalf("standard added text style = %v, want syntax keyword", got)
+	}
+	if got := standard[0][dv.layoutLeftStart].BgStyle; got != term.StyleDiffDeleted {
+		t.Fatalf("standard deleted syntax background = %v, want StyleDiffDeleted", got)
+	}
+	if got := standard[0][dv.layoutRightStart].BgStyle; got != term.StyleDiffAdded {
+		t.Fatalf("standard added syntax background = %v, want StyleDiffAdded", got)
 	}
 
 	dv.SetDiffHighContrast(true)
@@ -540,5 +556,204 @@ func TestDiffWidgetFullwidthMouseCoordinatesUseTerminalColumns(t *testing.T) {
 	got, right, ok := dv.screenToSel(rightX+2, dv.GetRect().Y)
 	if !ok || !right || got.Col != 1 {
 		t.Fatalf("right visual column 2 = pos %+v right=%v ok=%v, want rune 1 on right", got, right, ok)
+	}
+}
+
+func TestDiffWidgetResizeKeepsWrappedLogicalTop(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,8 +1,8 @@\n-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\n+ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz9876543210\n+ context-2\n+ context-3\n+ context-4\n+ context-5\n+ context-6\n+ context-7\n+ context-8\n")
+	for _, unified := range []bool{false, true} {
+		name := "split"
+		if unified {
+			name = "unified"
+		}
+		t.Run(name, func(t *testing.T) {
+			dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+			dv.SetUnified(unified)
+			dv.SetWrapped(true)
+			dv.SetRect(Rect{W: 20, H: 3})
+			dv.Render(NewRenderSurface(makeGrid(20, 3), Rect{W: 20, H: 3}))
+			dv.setTopVisualRow(3)
+			if dv.TopLine != 0 || dv.wrapTopOffset == 0 {
+				t.Fatalf("narrow precondition top=%d offset=%d", dv.TopLine, dv.wrapTopOffset)
+			}
+
+			dv.SetRect(Rect{W: 70, H: 3})
+			dv.Render(NewRenderSurface(makeGrid(70, 3), Rect{W: 70, H: 3}))
+			if dv.TopLine != 0 {
+				t.Fatalf("resize moved logical top from line 0 to line %d (offset %d)", dv.TopLine, dv.wrapTopOffset)
+			}
+		})
+	}
+}
+
+func TestDiffWidgetGeometryChangesKeepScrolledLogicalTop(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,10 +1,10 @@\n context-1-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-2-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-3-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-5-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-6-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-7-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-8-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-9-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-10-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n")
+	for _, unified := range []bool{false, true} {
+		for _, widths := range [][2]int{{24, 80}, {80, 24}} {
+			name := fmt.Sprintf("unified=%v/%d-to-%d", unified, widths[0], widths[1])
+			t.Run(name, func(t *testing.T) {
+				dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+				dv.SetUnified(unified)
+				dv.SetWrapped(true)
+				dv.SetRect(Rect{W: widths[0], H: 3})
+				dv.Render(NewRenderSurface(makeGrid(widths[0], 3), Rect{W: widths[0], H: 3}))
+				dv.TopLine = dv.displayLineForSourceLine(3)
+				dv.wrapTopOffset = 0
+
+				dv.SetRect(Rect{W: widths[1], H: 3})
+				dv.Render(NewRenderSurface(makeGrid(widths[1], 3), Rect{W: widths[1], H: 3}))
+				if got := dv.topSourceLine(); got != 3 {
+					t.Fatalf("logical top after resize = %d, want source row 3", got)
+				}
+			})
+		}
+	}
+}
+
+func TestDiffWidgetModeAndWrapChangesKeepLogicalTop(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,8 +1,8 @@\n context-1-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n-old-2-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n+new-2-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-3-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-5-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-6-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-7-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-8-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+	dv.SetWrapped(true)
+	dv.SetRect(Rect{W: 40, H: 3})
+	dv.Render(NewRenderSurface(makeGrid(40, 3), Rect{W: 40, H: 3}))
+	dv.TopLine = 3
+	dv.wrapTopOffset = 1
+
+	dv.SetUnified(true)
+	dv.Render(NewRenderSurface(makeGrid(40, 3), Rect{W: 40, H: 3}))
+	if got := dv.topSourceLine(); got != 3 {
+		t.Fatalf("unified mode top source row = %d, want 3", got)
+	}
+	dv.SetWrapped(false)
+	dv.Render(NewRenderSurface(makeGrid(40, 3), Rect{W: 40, H: 3}))
+	if got := dv.topSourceLine(); got != 3 {
+		t.Fatalf("unwrapped top source row = %d, want 3", got)
+	}
+	dv.SetUnified(false)
+	dv.SetWrapped(true)
+	dv.Render(NewRenderSurface(makeGrid(40, 3), Rect{W: 40, H: 3}))
+	if got := dv.topSourceLine(); got != 3 {
+		t.Fatalf("restored split/wrapped top source row = %d, want 3", got)
+	}
+}
+
+func TestDiffWidgetResizeClampsLogicalTopAtEnd(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,4 +1,4 @@\n context-1-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-2-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-3-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n context-4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+	dv.SetUnified(true)
+	dv.SetWrapped(true)
+	dv.SetRect(Rect{W: 20, H: 3})
+	dv.Render(NewRenderSurface(makeGrid(20, 3), Rect{W: 20, H: 3}))
+	dv.setTopVisualRow(dv.totalVisualRows)
+
+	dv.SetRect(Rect{W: 100, H: 3})
+	dv.Render(NewRenderSurface(makeGrid(100, 3), Rect{W: 100, H: 3}))
+	wantTop := max(dv.totalVisualRows-dv.viewH, 0)
+	if got := dv.topVisualRow(); got != wantTop {
+		t.Fatalf("clamped visual top = %d, want %d", got, wantTop)
+	}
+}
+
+func TestDiffWidgetLoadingCannotRefetchCollapsedGap(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -20,1 +20,1 @@\n twentieth\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+	dv.SetRect(Rect{W: 50, H: 5})
+	dv.Render(NewRenderSurface(makeGrid(50, 5), Rect{W: 50, H: 5}))
+
+	fetches := 0
+	dv.SetExtendedFetcher(func(*DiffViewWidget) { fetches++ })
+	formerGapX, formerGapY := dv.layoutLeftStart, 1
+	dv.SetContextMode(DiffContextFullFile)
+	if fetches != 1 || !dv.Loading {
+		t.Fatalf("load precondition fetches=%d loading=%v", fetches, dv.Loading)
+	}
+	if dv.viewH != 0 || dv.layoutLeftW != 0 || dv.scrollbar.Visible() {
+		t.Fatalf("loading retained interactive layout: viewH=%d leftW=%d scrollbar=%+v", dv.viewH, dv.layoutLeftW, dv.scrollbar)
+	}
+	dv.SetContextMode(DiffContextFullFile)
+	dv.SetExtended(true)
+	dv.HandleEvent(tcell.NewEventMouse(formerGapX, formerGapY, tcell.Button1, tcell.ModNone))
+	if fetches != 1 {
+		t.Fatalf("loading surface launched %d fetches after stale collapsed-row click, want one", fetches)
+	}
+	if got := dv.HandleEvent(tcell.NewEventMouse(formerGapX, formerGapY, tcell.Button1, tcell.ModNone)); got != EventIgnored {
+		t.Fatalf("loading mouse event = %v, want ignored", got)
+	}
+}
+
+func TestDiffWidgetExtendedFetchErrorRetryAndCompletionLifecycle(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -4,1 +4,1 @@\n fourth\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+	fetches := 0
+	dv.SetExtendedFetcher(func(*DiffViewWidget) { fetches++ })
+
+	dv.SetContextMode(DiffContextFullFile)
+	if fetches != 1 || !dv.Loading || !dv.extendedFetching {
+		t.Fatalf("first fetch state = fetches %d loading %v inFlight %v", fetches, dv.Loading, dv.extendedFetching)
+	}
+	dv.FailLoading()
+	if dv.Loading || dv.extendedFetching || dv.ContextMode() != DiffContextChangesOnly {
+		t.Fatalf("failed fetch state = loading %v inFlight %v context %v", dv.Loading, dv.extendedFetching, dv.ContextMode())
+	}
+
+	dv.SetContextMode(DiffContextFullFile)
+	if fetches != 2 || !dv.Loading || !dv.extendedFetching {
+		t.Fatalf("retry state = fetches %d loading %v inFlight %v", fetches, dv.Loading, dv.extendedFetching)
+	}
+	dv.SetOldLines([]string{"first", "hidden-old-2", "hidden-old-3", "fourth"})
+	dv.SetNewLines([]string{"first", "hidden-new-2", "hidden-new-3", "fourth"})
+	dv.FinishLoading()
+	if dv.Loading || dv.extendedFetching || dv.ContextMode() != DiffContextFullFile || len(dv.Lines) != 4 {
+		t.Fatalf("completed fetch state = loading %v inFlight %v context %v lines %d", dv.Loading, dv.extendedFetching, dv.ContextMode(), len(dv.Lines))
+	}
+	dv.SetContextMode(DiffContextFullFile)
+	if fetches != 2 {
+		t.Fatalf("loaded full context refetched: %d fetches", fetches)
+	}
+}
+
+func TestDiffWidgetCollapsedPseudoRowIsNotCopied(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -20,1 +20,1 @@\n twentieth\n")
+	oldLines := make([]string, 20)
+	newLines := make([]string, 20)
+	for line := range oldLines {
+		oldLines[line] = fmt.Sprintf("hidden-old-%d", line+1)
+		newLines[line] = fmt.Sprintf("hidden-new-%d", line+1)
+	}
+	oldLines[0], oldLines[19] = "first", "twentieth"
+	newLines[0], newLines[19] = "first", "twentieth"
+	for _, unified := range []bool{false, true} {
+		for _, right := range []bool{false, true} {
+			if unified && right {
+				continue
+			}
+			name := fmt.Sprintf("unified=%v/right=%v", unified, right)
+			t.Run(name, func(t *testing.T) {
+				dv := NewDiffViewWidget("test.go", fd, oldLines, newLines, false)
+				dv.SetUnified(unified)
+				dv.selRight = right
+				collapsedLine := -1
+				for line := 0; line < dv.selectionLineCount(); line++ {
+					if _, selectable := dv.selectionTextAt(line); !selectable {
+						collapsedLine = line
+						break
+					}
+				}
+				if collapsedLine < 1 || collapsedLine+1 >= dv.selectionLineCount() {
+					t.Fatalf("collapsed row index = %d", collapsedLine)
+				}
+				dv.hasSelection = true
+				dv.selection.Anchor = diffSelPos{Line: collapsedLine - 1, Col: 0}
+				lastLine := collapsedLine + 1
+				lastText, _ := dv.selectionTextAt(lastLine)
+				dv.selection.Current = diffSelPos{Line: lastLine, Col: len([]rune(lastText))}
+				if !dv.selection.Contains(collapsedLine, 0) {
+					t.Fatal("selection does not cross collapsed pseudo row")
+				}
+				if got := dv.CopySelection(); got != "first\ntwentieth" {
+					t.Fatalf("copy across collapsed row = %q, want only visible source lines", got)
+				}
+			})
+		}
 	}
 }

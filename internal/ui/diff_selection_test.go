@@ -120,8 +120,8 @@ func TestDiffTextSelectionMechanics(t *testing.T) {
 	}{{"zero", true}, {"hidden", false}, {"twofold", true}}
 	if got := selection.Text(len(lines), func(line int) (string, bool) {
 		return lines[line].text, lines[line].selectable
-	}); got != "ero\n\ntwo" {
-		t.Fatalf("text = %q, want selected source text with an intermediate blank row", got)
+	}); got != "ero\ntwo" {
+		t.Fatalf("text = %q, want only selected source text", got)
 	}
 
 	if !selection.SelectWord(4, 5, "alpha_beta + gamma") {

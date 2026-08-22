@@ -172,13 +172,16 @@ func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine) {
 	}
 	marker := ' '
 	style := term.StyleLineNumber
+	bgStyle := term.StyleDefault
 	switch line.Kind {
 	case diff.Added:
 		marker = '+'
 		style = term.StyleGutterAdded
+		bgStyle = term.StyleDiffAdded
 	case diff.Deleted:
 		marker = '−'
 		style = term.StyleGutterDeleted
+		bgStyle = term.StyleDiffDeleted
 	case diff.Collapsed:
 		marker = '▶'
 	}
@@ -187,7 +190,7 @@ func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine) {
 		if column >= width {
 			break
 		}
-		surface.SetCell(x+column, y, term.Cell{Ch: ch, Style: style})
+		surface.SetCell(x+column, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle})
 	}
 }
 

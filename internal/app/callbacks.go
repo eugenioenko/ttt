@@ -301,7 +301,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 
 func (a *App) fetchPRFileContent(dv *ui.DiffViewWidget, owner, repo, baseSHA, headSHA, path string) {
 	if owner == "" || baseSHA == "" {
-		dv.Loading = false
+		dv.FailLoading()
 		return
 	}
 	tabName := path + " (diff)"

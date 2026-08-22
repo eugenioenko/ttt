@@ -56,9 +56,6 @@ func (s diffTextSelection) Text(lineCount int, textAt diffSelectionTextAt) strin
 	for line := firstLine; line <= lastLine; line++ {
 		text, selectable := textAt(line)
 		if !selectable {
-			if line != start.Line && line != end.Line {
-				lines = append(lines, "")
-			}
 			continue
 		}
 		runes := []rune(text)

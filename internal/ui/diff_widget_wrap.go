@@ -115,6 +115,29 @@ func (d *DiffViewWidget) topVisualRow() int {
 	return diffLineToVisualRow(d.Lines, d.TopLine, d.layoutLeftW, d.layoutRightW) + d.wrapTopOffset
 }
 
+func (d *DiffViewWidget) topSourceLine() int {
+	if !d.IsUnified() {
+		return d.TopLine
+	}
+	if len(d.unifiedLines) == 0 {
+		return 0
+	}
+	line := min(max(d.TopLine, 0), len(d.unifiedLines)-1)
+	return d.unifiedLines[line].sourceLine
+}
+
+func (d *DiffViewWidget) displayLineForSourceLine(sourceLine int) int {
+	if !d.IsUnified() {
+		return min(max(sourceLine, 0), max(len(d.Lines)-1, 0))
+	}
+	for line, unified := range d.unifiedLines {
+		if unified.sourceLine >= sourceLine {
+			return line
+		}
+	}
+	return max(len(d.unifiedLines)-1, 0)
+}
+
 func (d *DiffViewWidget) setTopVisualRow(row int) {
 	maxTop := d.totalVisualRows - d.viewH
 	if maxTop < 0 {
