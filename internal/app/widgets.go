@@ -330,6 +330,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	app.Repository = NewRepositoryState(changes, ws.Paths())
 	app.applyMenuBarVisibility(cfg.Settings.Editor.IsMenuBarVisible())
 	// Rebuild the Diagnostics panel whenever any source (LSP or a plugin)
 	// changes its diagnostics.

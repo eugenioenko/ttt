@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -137,6 +138,65 @@ func TestStatusFilesEmpty(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Errorf("expected no files, got %d: %+v", len(files), files)
+	}
+}
+
+func TestStatusFilesContextHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := StatusFilesContext(ctx, setupTestRepo(t)); err == nil {
+		t.Fatal("canceled status context returned success")
+	}
+}
+
+func TestRevisionIdentityTracksHead(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "initial.txt", "hello\n")
+	gitRun(t, dir, "add", "initial.txt")
+	gitRun(t, dir, "commit", "-m", "init")
+	initial := RevisionIdentity(dir)
+	if initial == "" {
+		t.Fatal("committed repository has an empty revision identity")
+	}
+	writeFile(t, dir, "next.txt", "next\n")
+	gitRun(t, dir, "add", "next.txt")
+	gitRun(t, dir, "commit", "-m", "next")
+	if next := RevisionIdentity(dir); next == initial || next == "" {
+		t.Fatalf("revision identity after commit = %q, initial = %q", next, initial)
+	}
+}
+
+func TestRevisionIdentityAllowsUnbornRepository(t *testing.T) {
+	dir := setupTestRepo(t)
+	identity, err := RevisionIdentityContext(context.Background(), dir)
+	if err != nil || identity != "" {
+		t.Fatalf("unborn repository identity = (%q, %v), want empty success", identity, err)
+	}
+	if branch, err := BranchNameContext(context.Background(), dir); err != nil || branch == "" {
+		t.Fatalf("unborn repository branch = (%q, %v), want symbolic branch", branch, err)
+	}
+}
+
+func TestRevisionIdentityRequiresVerifiedUnbornHead(t *testing.T) {
+	bin := t.TempDir()
+	script := `#!/bin/sh
+case "$*" in
+  *"rev-parse --verify HEAD"*) exit 73 ;;
+  *"symbolic-ref -q HEAD"*) printf 'refs/heads/main\n'; exit 0 ;;
+  *"show-ref --verify --quiet refs/heads/main"*) exit 0 ;;
+esac
+exit 99
+`
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	if identity, err := RevisionIdentityContext(context.Background(), "/repo"); err == nil {
+		t.Fatalf("failed HEAD read returned empty success: identity=%q", identity)
+	}
+	if entries, err := LogWithErrorContext(context.Background(), "/repo", 10); err == nil {
+		t.Fatalf("failed HEAD read returned successful empty log: entries=%v", entries)
 	}
 }
 

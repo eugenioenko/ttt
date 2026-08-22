@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -9,6 +10,23 @@ import (
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
+
+func TestReadCommitLogAllowsOnlyVerifiedUnbornEmptyHistory(t *testing.T) {
+	dir := t.TempDir()
+	testAppGit(t, dir, "init", "-q", "-b", "main")
+	result := readCommitLog(context.Background(), dir, 1)
+	if result.Err != nil || result.Canceled || result.Branch != "main" || len(result.Entries) != 0 {
+		t.Fatalf("unborn history result = %+v, want empty successful main history", result)
+	}
+}
+
+func TestReadCommitLogMarksNonRepositoryUnavailable(t *testing.T) {
+	dir := t.TempDir()
+	result := readCommitLog(context.Background(), dir, 7)
+	if result.Gen != 7 || result.Dir != dir || !result.Unavailable || result.Err != nil || result.Canceled {
+		t.Fatalf("non-repository history result = %+v, want unavailable", result)
+	}
+}
 
 func TestCommitLogRestoresSelectionByFullHashAfterAsyncRebuild(t *testing.T) {
 	cp := NewChangesPanel()

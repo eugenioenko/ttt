@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -19,12 +20,30 @@ type FileStatus struct {
 }
 
 func RepoRoot(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel")
+	return RepoRootContext(context.Background(), dir)
+}
+
+func RepoRootContext(ctx context.Context, dir string) string {
+	root, _ := RepoRootWithErrorContext(ctx, dir)
+	return root
+}
+
+// RepoRootWithErrorContext preserves discovery failures for callers that must
+// retain a previously verified repository identity and retry.
+func RepoRootWithErrorContext(ctx context.Context, dir string) (string, error) {
+	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
 	}
-	return strings.TrimSpace(string(out))
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return "", fmt.Errorf("git returned an empty repository root")
+	}
+	return root, nil
 }
 
 func IsRepo(dir string) bool {
@@ -38,7 +57,11 @@ func IsRepoContext(ctx context.Context, dir string) bool {
 }
 
 func StatusFiles(dir string) ([]FileStatus, error) {
-	cmd := exec.Command("git", "-C", dir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	return StatusFilesContext(context.Background(), dir)
+}
+
+func StatusFilesContext(ctx context.Context, dir string) ([]FileStatus, error) {
+	cmd := gitCommandContext(ctx, "-C", dir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -169,16 +192,30 @@ func Push(dir string) error {
 }
 
 func BranchName(dir string) string {
-	return BranchNameContext(context.Background(), dir)
+	name, _ := BranchNameContext(context.Background(), dir)
+	return name
 }
 
-func BranchNameContext(ctx context.Context, dir string) string {
+func BranchNameContext(ctx context.Context, dir string) (string, error) {
 	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		revision, revisionErr := RevisionIdentityContext(ctx, dir)
+		if revisionErr != nil || revision != "" {
+			return "", err
+		}
+		out, err = gitCommandContext(ctx, "-C", dir, "symbolic-ref", "--short", "-q", "HEAD").Output()
+		if err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			return "", err
+		}
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(string(out)), nil
 }
 
 type LogEntry struct {
@@ -198,14 +235,12 @@ func LogWithError(dir string, n int) ([]LogEntry, error) {
 }
 
 func LogWithErrorContext(ctx context.Context, dir string, n int) ([]LogEntry, error) {
-	if err := gitCommandContext(ctx, "-C", dir, "rev-parse", "--verify", "HEAD").Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		if IsRepoContext(ctx, dir) {
-			return nil, nil
-		}
+	revision, err := RevisionIdentityContext(ctx, dir)
+	if err != nil {
 		return nil, err
+	}
+	if revision == "" {
+		return nil, nil
 	}
 	cmd := gitCommandContext(ctx, "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%H %h %s")
 	out, err := cmd.Output()
@@ -404,6 +439,56 @@ func HeadSHA(dir string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func RevisionIdentity(dir string) string {
+	identity, _ := RevisionIdentityContext(context.Background(), dir)
+	return identity
+}
+
+// RevisionIdentityContext returns empty success only when Git verifies that
+// HEAD names an unborn branch whose ref does not yet exist.
+func RevisionIdentityContext(ctx context.Context, dir string) (string, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "rev-parse", "--verify", "HEAD").Output()
+	if err == nil {
+		return strings.TrimSpace(string(out)), nil
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	unborn, verifyErr := verifyUnbornHEADContext(ctx, dir)
+	if verifyErr != nil {
+		return "", errors.Join(err, fmt.Errorf("verify unborn HEAD: %w", verifyErr))
+	}
+	if unborn {
+		return "", nil
+	}
+	return "", err
+}
+
+func verifyUnbornHEADContext(ctx context.Context, dir string) (bool, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "symbolic-ref", "-q", "HEAD").Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		return false, err
+	}
+	ref := strings.TrimSpace(string(out))
+	if ref == "" {
+		return false, fmt.Errorf("symbolic HEAD has no ref")
+	}
+	err = gitCommandContext(ctx, "-C", dir, "show-ref", "--verify", "--quiet", ref).Run()
+	if err == nil {
+		return false, nil
+	}
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return true, nil
+	}
+	return false, err
 }
 
 func RemoteURL(dir string) string {

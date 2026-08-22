@@ -78,6 +78,9 @@ type ChangesPanel struct {
 	OnConfirmDiscard func(message string, onConfirm func())
 	OnError          func(message string)
 	OnRefreshed      func()
+	OnRefresh        func()
+	OnStatusChanged  func()
+	OnHistoryResult  func(error)
 
 	PRGroups []prGroup
 }
@@ -269,7 +272,11 @@ func (cp *ChangesPanel) applied(err error) {
 	if err != nil && cp.OnError != nil {
 		cp.OnError(err.Error())
 	}
-	cp.Refresh()
+	if cp.OnStatusChanged != nil {
+		cp.OnStatusChanged()
+	} else {
+		cp.Refresh()
+	}
 }
 
 // paths splits a file list into the untracked ones, which are deleted outright,
@@ -296,12 +303,16 @@ func filePaths(files []git.FileStatus) []string {
 func (cp *ChangesPanel) Refresh() {
 	cp.cancelHistoryReads()
 	dirs := append([]string(nil), cp.Dirs...)
-	cp.saveExpanded()
-	cp.groups = readChangesGroups(dirs)
-	cp.multiRoot = len(cp.groups)+len(cp.PRGroups) > 1
-	cp.buildTree()
+	cp.applyWorkingTree(readChangesGroups(dirs))
 	cp.lastLogDir = ""
 	cp.refreshCommitLog()
+}
+
+func (cp *ChangesPanel) applyWorkingTree(groups []changesGroup) {
+	cp.saveExpanded()
+	cp.groups = groups
+	cp.multiRoot = len(cp.groups)+len(cp.PRGroups) > 1
+	cp.buildTree()
 	if cp.OnRefreshed != nil {
 		cp.OnRefreshed()
 	}
@@ -372,6 +383,16 @@ func (cp *ChangesPanel) cancelCommitFileReads() {
 func (cp *ChangesPanel) cancelHistoryReads() {
 	cp.cancelLogRead()
 	cp.cancelCommitFileReads()
+}
+
+func (cp *ChangesPanel) RefreshHistory() {
+	cp.lastLogDir = ""
+	cp.refreshCommitLog()
+}
+
+func (cp *ChangesPanel) CancelHistoryRead() {
+	cp.cancelHistoryReads()
+	cp.logGen++
 }
 
 func (cp *ChangesPanel) Shutdown() {
@@ -550,7 +571,11 @@ func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.Tre
 	}
 	switch term.KeyRune(ev) {
 	case 'r', 'R':
-		cp.Refresh()
+		if cp.OnRefresh != nil {
+			cp.OnRefresh()
+		} else {
+			cp.Refresh()
+		}
 		return true
 	case 'c', 'o', 'v':
 		cp.openCommitLogNode(node)
@@ -853,6 +878,8 @@ func (cp *ChangesPanel) handleKey(ev *tcell.EventKey) bool {
 	case 'r', 'R':
 		if inPR {
 			cp.refreshSelectedPR()
+		} else if cp.OnRefresh != nil {
+			cp.OnRefresh()
 		} else {
 			cp.Refresh()
 		}

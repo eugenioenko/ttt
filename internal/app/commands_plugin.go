@@ -483,7 +483,17 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		fsRoots = append(fsRoots, p.Dir)
 	}
 	p.Filesystem = NewPluginFilesystemAPI(fsRoots...)
+	if fs, ok := p.Filesystem.(*PluginFilesystemAPI); ok {
+		fs.onWrite = func(path string) {
+			a.postRepositoryInvalidation(path, RepositoryWorktree)
+		}
+	}
 	p.System = NewPluginSystemAPI()
+	if system, ok := p.System.(*PluginSystemAPI); ok {
+		system.onExec = func() {
+			a.postRepositoryInvalidation("", RepositoryWorktree|RepositoryHistory)
+		}
+	}
 	p.Network = NewPluginNetworkAPI()
 	a.wirePluginLog(p)
 	p.Markdown = a.Settings.Markdown
