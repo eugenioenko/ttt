@@ -36,6 +36,9 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
 	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
 	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)
+	if a.Sidebar != nil {
+		a.Sidebar.SetPanelOrder(s.Sidebar.PanelOrder)
+	}
 
 	if a.EditorGroup.Editor != nil {
 		a.EditorGroup.Editor.TabSize = s.Editor.TabSize

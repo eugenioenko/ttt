@@ -3,6 +3,9 @@ package widgets
 import (
 	"strings"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/gdamore/tcell/v3"
 )
 
 func tabsRowText(s *testSurface, y int) string {
@@ -18,6 +21,84 @@ func tabsRowText(s *testSurface, y int) string {
 		}
 	}
 	return string(runes)
+}
+
+func TestTabsDragCapturesOnlyAfterThreshold(t *testing.T) {
+	var from, to = -1, -1
+	tw := NewTabsWidget(TabsConfig{
+		Items: []TabItem{
+			{ID: "explorer", Label: "Explore", Active: true},
+			{ID: "search", Label: "Find"},
+			{ID: "changes", Label: "Changes"},
+		},
+		Reorderable: true,
+		OnReorder: func(f, target int) {
+			from, to = f, target
+		},
+	})
+	s := renderWidget(tw, 0, 0, 40, 1)
+	start := tw.tabSpans[0][0] + 2
+	end := tw.tabSpans[2][0] + 2
+	if got := tw.HandleEvent(tcell.NewEventMouse(start, 0, tcell.Button1, 0)); got != EventConsumed {
+		t.Fatalf("mouse down result = %v, want EventConsumed", got)
+	}
+	if got := tw.HandleEvent(tcell.NewEventMouse(start+1, 0, tcell.Button1, 0)); got != EventConsumed {
+		t.Fatalf("jitter result = %v, want EventConsumed", got)
+	}
+	if got := tw.HandleEvent(tcell.NewEventMouse(end, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("drag result = %v, want EventCaptured", got)
+	}
+	tw.Render(s)
+	foundIndicator := false
+	for _, cell := range s.cells[0] {
+		if cell.Ch == '│' && cell.Style == term.StyleBorderActive {
+			foundIndicator = true
+		}
+	}
+	if !foundIndicator {
+		t.Fatal("drag should render a themed drop indicator")
+	}
+	tw.HandleEvent(tcell.NewEventMouse(end, 0, tcell.ButtonNone, 0))
+	if from != 0 || to != 2 {
+		t.Fatalf("reorder = %d -> %d, want 0 -> 2", from, to)
+	}
+}
+
+func TestTabsClickJitterActivatesWithoutReorder(t *testing.T) {
+	clicked, reordered := -1, false
+	tw := NewTabsWidget(TabsConfig{
+		Items:       []TabItem{{ID: "a", Label: "Alpha"}, {ID: "b", Label: "Beta"}},
+		Reorderable: true,
+		OnTabClick:  func(i int) { clicked = i },
+		OnReorder:   func(_, _ int) { reordered = true },
+	})
+	renderWidget(tw, 0, 0, 30, 1)
+	x := tw.tabSpans[0][0] + 2
+	tw.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1, 0))
+	tw.HandleEvent(tcell.NewEventMouse(x+1, 0, tcell.Button1, 0))
+	tw.HandleEvent(tcell.NewEventMouse(x+1, 0, tcell.ButtonNone, 0))
+	if clicked != 0 {
+		t.Fatalf("clicked = %d, want 0", clicked)
+	}
+	if reordered {
+		t.Fatal("one-column jitter reordered a tab")
+	}
+}
+
+func TestTabsWideLabelsStoreDisplayColumnSpans(t *testing.T) {
+	clicked := -1
+	tw := NewTabsWidget(TabsConfig{
+		Items:      []TabItem{{ID: "search", Label: "検索"}, {ID: "changes", Label: "Changes"}},
+		OnTabClick: func(i int) { clicked = i },
+	})
+	renderWidget(tw, 0, 0, 30, 1)
+	if got := tw.tabSpans[1][0]; got != 6 {
+		t.Fatalf("second tab starts at column %d, want 6 after two fullwidth runes", got)
+	}
+	tw.HandleEvent(tcell.NewEventMouse(7, 0, tcell.Button1, 0))
+	if clicked != 1 {
+		t.Fatalf("wide-label hit test activated %d, want 1", clicked)
+	}
 }
 
 func TestTabsAllFit(t *testing.T) {

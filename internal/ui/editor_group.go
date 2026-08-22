@@ -59,9 +59,9 @@ type editorTab struct {
 	Folds       *fold.State
 	TabSize     int
 	UseTabs     bool
-	Content Widget
-	Preview bool
-	Virtual bool
+	Content     Widget
+	Preview     bool
+	Virtual     bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
 }
@@ -129,6 +129,9 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	}
 	tabBar.OnTabClick = func(index int) {
 		g.SwitchTab(index)
+	}
+	tabBar.OnTabReorder = func(from, to int) {
+		g.MoveTab(from, to)
 	}
 	tabBar.OnNextTab = func() { g.NextTab() }
 	tabBar.OnPrevTab = func() { g.PrevTab() }
@@ -236,6 +239,53 @@ func (g *EditorGroupWidget) TogglePinTab() {
 
 func (g *EditorGroupWidget) IsActiveTabPinned() bool {
 	return g.active < g.pinnedCount
+}
+
+func (g *EditorGroupWidget) MoveTab(from, to int) bool {
+	if from < 0 || from >= len(g.tabs) || to < 0 || to >= len(g.tabs) {
+		return false
+	}
+	if from < g.pinnedCount {
+		to = min(to, g.pinnedCount-1)
+	} else {
+		to = max(to, g.pinnedCount)
+	}
+	if from == to {
+		return false
+	}
+
+	tab := g.tabs[from]
+	tab.Preview = false
+	g.tabs = append(g.tabs[:from], g.tabs[from+1:]...)
+	g.tabs = slices.Insert(g.tabs, to, tab)
+	switch {
+	case g.active == from:
+		g.active = to
+	case from < g.active && to >= g.active:
+		g.active--
+	case from > g.active && to <= g.active:
+		g.active++
+	}
+	g.syncTabs()
+	return true
+}
+
+func (g *EditorGroupWidget) CanMoveActiveTab(direction int) bool {
+	to := g.active + direction
+	if direction == 0 || to < 0 || to >= len(g.tabs) {
+		return false
+	}
+	if g.active < g.pinnedCount {
+		return to < g.pinnedCount
+	}
+	return to >= g.pinnedCount
+}
+
+func (g *EditorGroupWidget) MoveActiveTab(direction int) bool {
+	if !g.CanMoveActiveTab(direction) {
+		return false
+	}
+	return g.MoveTab(g.active, g.active+direction)
 }
 
 func (g *EditorGroupWidget) OpenFile(path string) {
@@ -1753,8 +1803,8 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 	result := g.TabBar.HandleEvent(ev)
 	slog.Debug("editorGroup", "tabBarResult", result)
-	if result == EventConsumed {
-		return EventConsumed
+	if result != EventIgnored {
+		return result
 	}
 	t := g.activeTab()
 	if t == nil {

@@ -49,11 +49,8 @@ func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
 	if tev, ok := ev.(*tcell.EventMouse); ok {
 		_, my := tev.Position()
 		r := s.GetRect()
-		if my == r.Y {
-			if s.Tabs.HandleEvent(ev) == EventConsumed {
-				return EventConsumed
-			}
-			return EventIgnored
+		if my == r.Y || s.Tabs.PointerGestureActive() {
+			return s.Tabs.HandleEvent(ev)
 		}
 	}
 	active := s.ActiveWidget()

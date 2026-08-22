@@ -351,6 +351,18 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "sidebar.movePanelLeft", Title: "View: Move Sidebar Panel Left",
+		Keywords: []string{"view", "sidebar", "panel", "tab", "reorder", "left"},
+		Handler:  func() { app.MoveActiveSidebarPanel(-1) },
+	})
+
+	reg.Register(command.Command{
+		ID: "sidebar.movePanelRight", Title: "View: Move Sidebar Panel Right",
+		Keywords: []string{"view", "sidebar", "panel", "tab", "reorder", "right"},
+		Handler:  func() { app.MoveActiveSidebarPanel(1) },
+	})
+
+	reg.Register(command.Command{
 		ID: "panel.toggle", Title: "View: Toggle Panel",
 		Keywords: []string{"view", "bottom", "show", "hide"},
 		Handler:  app.ToggleBottomPanel,

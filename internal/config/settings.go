@@ -146,6 +146,10 @@ type ExplorerSettings struct {
 	ShowGitIgnored bool `json:"showGitIgnored"`
 }
 
+type SidebarSettings struct {
+	PanelOrder []string `json:"panelOrder,omitempty"`
+}
+
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
@@ -181,6 +185,7 @@ type Settings struct {
 	Editor       EditorSettings       `json:"editor"`
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
+	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
 	Terminal     TerminalSettings     `json:"terminal"`
 	LSP          LSPSettings          `json:"lsp"`
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
@@ -200,7 +205,7 @@ type Settings struct {
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "editor": true,
-	"search": true, "explorer": true, "terminal": true, "lsp": true,
+	"search": true, "explorer": true, "sidebar": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "plugins": true, "formatters": true,
 }
 
@@ -275,6 +280,16 @@ func normalizeSettings(s *Settings) {
 	if !slices.Contains(BorderStyles, s.Editor.BorderStyle) {
 		s.Editor.BorderStyle = "default"
 	}
+	seenPanels := make(map[string]bool)
+	panelOrder := s.Sidebar.PanelOrder[:0]
+	for _, id := range s.Sidebar.PanelOrder {
+		if id == "" || seenPanels[id] {
+			continue
+		}
+		seenPanels[id] = true
+		panelOrder = append(panelOrder, id)
+	}
+	s.Sidebar.PanelOrder = panelOrder
 }
 
 func LoadSettings() Settings {

@@ -92,6 +92,65 @@ func TestTabBarOverflowScrollLeft(t *testing.T) {
 	}
 }
 
+func TestTabBarDragCapturesAfterThresholdWithThemedIndicator(t *testing.T) {
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{
+		{Name: "one.go", Active: true},
+		{Name: "two.go"},
+		{Name: "three.go"},
+	})
+	tb.SetRect(Rect{X: 4, Y: 2, W: 50, H: 3})
+	grid := makeGrid(50, 3)
+	tb.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 50, H: 3}))
+
+	fromX := tb.GetRect().X + tb.tabSpans[0].start + 2
+	toX := tb.GetRect().X + tb.tabSpans[2].end - 2
+	var gotFrom, gotTo = -1, -1
+	tb.OnTabReorder = func(from, to int) { gotFrom, gotTo = from, to }
+
+	if got := tb.HandleEvent(tcell.NewEventMouse(fromX, 3, tcell.Button1, 0)); got != EventConsumed {
+		t.Fatalf("mouse down = %v, want consumed", got)
+	}
+	if got := tb.HandleEvent(tcell.NewEventMouse(fromX+1, 3, tcell.Button1, 0)); got != EventConsumed {
+		t.Fatalf("jitter = %v, want consumed", got)
+	}
+	if got := tb.HandleEvent(tcell.NewEventMouse(toX, 3, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("drag = %v, want captured", got)
+	}
+	tb.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 50, H: 3}))
+	indicatorX := tb.dropIndicatorX()
+	if indicatorX < 0 || grid[1][indicatorX].Ch != '│' || grid[1][indicatorX].Style != term.StyleBorderActive {
+		t.Fatal("drag should render a themed drop indicator")
+	}
+	tb.HandleEvent(tcell.NewEventMouse(toX, 3, tcell.ButtonNone, 0))
+	if gotFrom != 0 || gotTo != 2 {
+		t.Fatalf("reorder = %d -> %d, want 0 -> 2", gotFrom, gotTo)
+	}
+}
+
+func TestTabBarDragAutoScrollsOverflow(t *testing.T) {
+	tb := NewTabBarWidget()
+	tabs := make([]Tab, 10)
+	for i := range tabs {
+		tabs[i] = Tab{Name: fmt.Sprintf("file-%d.go", i), Active: i == 0}
+	}
+	tb.SetTabs(tabs)
+	tb.SetRect(Rect{X: 0, Y: 0, W: 30, H: 3})
+	grid := makeGrid(30, 3)
+	tb.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 3}))
+	tb.OnTabReorder = func(_, _ int) {}
+
+	startX := tb.renderArrowW + 2
+	tb.HandleEvent(tcell.NewEventMouse(startX, 1, tcell.Button1, 0))
+	for range 3 {
+		tb.HandleEvent(tcell.NewEventMouse(tb.renderInnerRight-1, 1, tcell.Button1, 0))
+		tb.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 3}))
+	}
+	if tb.ScrollOffset == 0 {
+		t.Fatal("dragging at the right edge should scroll hidden tabs into view")
+	}
+}
+
 // renderInMoreButtonWindow sizes the bar to exactly the total tab width with a
 // MoreButton present, so tabs overflow the inner zone but not the full width —
 // the #354 window. Returns the rendered grid and the bar width.

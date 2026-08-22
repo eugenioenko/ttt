@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 )
 
@@ -36,6 +37,16 @@ func TestSettingsEmptyJSON(t *testing.T) {
 
 	if s.Editor.TabSize != 4 {
 		t.Fatalf("expected TabSize 4, got %d", s.Editor.TabSize)
+	}
+}
+
+func TestNormalizeSidebarPanelOrder(t *testing.T) {
+	s := DefaultSettings()
+	s.Sidebar.PanelOrder = []string{"changes", "", "explorer", "changes", "plugin.todo"}
+	normalizeSettings(&s)
+	want := []string{"changes", "explorer", "plugin.todo"}
+	if !slices.Equal(s.Sidebar.PanelOrder, want) {
+		t.Fatalf("panelOrder = %v, want %v", s.Sidebar.PanelOrder, want)
 	}
 }
 
