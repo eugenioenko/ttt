@@ -117,15 +117,9 @@ func TestCommitDetailUsesSharedContextProjectionAndHighContrastPainter(t *testin
 	}
 }
 
-func TestFullFileHunkExpansionIsSharedByHistoricalAndCurrentChanges(t *testing.T) {
-	oldLines := make([]string, 30)
-	newLines := make([]string, 30)
-	for i := range oldLines {
-		oldLines[i] = fmt.Sprintf("line %d", i)
-		newLines[i] = oldLines[i]
-	}
-	newLines[1] = "changed near top"
-	newLines[28] = "changed near bottom"
+func TestFullFileLCSProjectionIsSharedByHistoricalAndCurrentChanges(t *testing.T) {
+	oldLines := []string{"", "a", "c", "same"}
+	newLines := []string{"same", "a", "b", "b", "c", "c"}
 	fileDiff := diff.Parse(diff.Generate(oldLines, newLines, "file.txt"))
 	want := diff.FullDiffLines(oldLines, newLines)
 
@@ -155,7 +149,7 @@ func TestFullFileHunkExpansionIsSharedByHistoricalAndCurrentChanges(t *testing.T
 			test.apply(test.detail, file)
 			test.detail.SetContextMode(DiffContextFullFile)
 			if !reflect.DeepEqual(test.detail.Files[0].lines, want) {
-				t.Fatal("Full File surface did not preserve the parsed hunk projection")
+				t.Fatal("Full File surface did not preserve the established LCS projection")
 			}
 		})
 	}

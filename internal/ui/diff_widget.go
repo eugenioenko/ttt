@@ -291,7 +291,7 @@ func (d *DiffViewWidget) FailLoading() {
 
 func (d *DiffViewWidget) rebuildLines() {
 	if d.extended && d.contextLoaded {
-		d.Lines = fullFileDiffLines(d.fileDiff, d.oldLines, d.newLines)
+		d.Lines = diff.FullDiffLines(d.oldLines, d.newLines)
 		d.gapByLine = nil
 	} else {
 		d.Lines, d.gapByLine = compactDiffLinesWithContext(d.fileDiff, d.oldLines, d.newLines, d.expandedGaps)

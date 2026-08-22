@@ -631,7 +631,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 	for fileIndex := range d.Files {
 		file := &d.Files[fileIndex]
 		if d.contextMode == DiffContextFullFile && file.FullFileState == CommitDetailFullFileLoaded {
-			file.lines = fullFileDiffLines(file.Diff, file.oldLines, file.newLines)
+			file.lines = diff.FullDiffLines(file.oldLines, file.newLines)
 			file.gapByLine = nil
 		} else {
 			file.lines, file.gapByLine = compactDiffLinesWithContext(file.Diff, file.oldLines, file.newLines, file.expandedGaps)
