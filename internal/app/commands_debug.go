@@ -167,30 +167,41 @@ func (a *App) debugRunPlugin() {
 
 func (a *App) debugScreenshot() {
 	a.DismissDialog()
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		path := "screenshot.txt"
-		if err := a.DumpScreenshot(path); err != nil {
-			a.Status.SetNotification("Screenshot error: "+err.Error(), view.NotifyError, 3*time.Second)
-		} else {
-			a.Status.SetNotification("Screenshot saved: "+path, view.NotifyInfo, 3*time.Second)
-		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	}()
+	time.AfterFunc(50*time.Millisecond, func() {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "screenshot", Path: "screenshot.txt"}))
+	})
 }
 
 func (a *App) debugDumpState() {
 	a.DismissDialog()
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		path := "debug-state.json"
-		if err := a.DumpDebugState(path); err != nil {
+	time.AfterFunc(50*time.Millisecond, func() {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "state", Path: "debug-state.json"}))
+	})
+}
+
+type DebugWriteRequest struct {
+	Kind string
+	Path string
+}
+
+func (a *App) HandleDebugWriteRequest(request *DebugWriteRequest) {
+	if request == nil {
+		return
+	}
+	switch request.Kind {
+	case "screenshot":
+		if err := a.DumpScreenshot(request.Path); err != nil {
+			a.Status.SetNotification("Screenshot error: "+err.Error(), view.NotifyError, 3*time.Second)
+		} else {
+			a.Status.SetNotification("Screenshot saved: "+request.Path, view.NotifyInfo, 3*time.Second)
+		}
+	case "state":
+		if err := a.DumpDebugState(request.Path); err != nil {
 			a.Status.SetNotification("Dump error: "+err.Error(), view.NotifyError, 3*time.Second)
 		} else {
-			a.Status.SetNotification("State saved: "+path, view.NotifyInfo, 3*time.Second)
+			a.Status.SetNotification("State saved: "+request.Path, view.NotifyInfo, 3*time.Second)
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	}()
+	}
 }
 
 func (a *App) debugKeyboardTester() {

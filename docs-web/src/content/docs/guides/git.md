@@ -5,6 +5,8 @@ description: Source control features built into TTT.
 
 The changes panel in the sidebar (**Ctrl+K C**) provides a full staging workflow.
 
+TTT refreshes repository status after editor and source-control mutations. While the Changes panel is visible, it also polls the working tree and `HEAD`, so changes made by external tools appear without a manual refresh. Status-only polls reload commit history when `HEAD` changes; a manual refresh forces both.
+
 ## Staging & Unstaging
 
 - **Spacebar** toggles stage/unstage on the selected file

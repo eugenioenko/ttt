@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestContextMenuItemFromWidgetEntryPreservesMenuContract(t *testing.T) {
@@ -320,6 +322,8 @@ func TestPluginSystemAPI_ExecStdin(t *testing.T) {
 		t.Skip("cat not available")
 	}
 	api := NewPluginSystemAPI()
+	execCount := 0
+	api.onExec = func() { execCount++ }
 
 	stdout, _, code, err := api.Exec("cat", nil, "hello from stdin\n")
 	if err != nil || code != 0 {
@@ -337,5 +341,52 @@ func TestPluginSystemAPI_ExecStdin(t *testing.T) {
 	}
 	if stdout != "" {
 		t.Errorf("expected empty stdout, got %q", stdout)
+	}
+	if execCount != 2 {
+		t.Fatalf("system command completions invalidated repository %d times, want 2", execCount)
+	}
+}
+
+func TestPluginSystemExecCompletionPostsMainThreadRepositoryRequest(t *testing.T) {
+	if _, err := exec.LookPath("true"); err != nil {
+		t.Skip("true not available")
+	}
+	sim := term.NewSimScreen()
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sim.Fini)
+	screen := term.NewTcellScreenFrom(sim)
+	repository := NewRepositoryState(nil, []string{"/repo"})
+	repository.poster = newTestEventPoster()
+	a := &App{Screen: screen, Repository: repository}
+	api := NewPluginSystemAPI()
+	api.onExec = func() {
+		a.postRepositoryInvalidation("", RepositoryWorktree|RepositoryHistory)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, _, _, err := api.Exec("true", nil, "")
+		done <- err
+	}()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if repository.dirty != 0 {
+		t.Fatal("system.exec completion mutated coordinator state off the event loop")
+	}
+	event := screen.PollEvent()
+	interrupt, ok := event.(*tcell.EventInterrupt)
+	if !ok {
+		t.Fatalf("completion event = %T, want interrupt", event)
+	}
+	request, ok := interrupt.Data().(*RepositoryInvalidationRequest)
+	if !ok {
+		t.Fatalf("interrupt data = %T, want repository invalidation", interrupt.Data())
+	}
+	a.handleRepositoryInvalidation(request)
+	if repository.dirty != RepositoryWorktree|RepositoryHistory {
+		t.Fatalf("main-thread invalidation resources = %b", repository.dirty)
 	}
 }

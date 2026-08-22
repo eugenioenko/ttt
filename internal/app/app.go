@@ -72,6 +72,7 @@ type App struct {
 	Explorer               *NavigationPanel
 	ExplorerContextNode    *widgets.TreeNode
 	Changes                *ChangesPanel
+	Repository             *RepositoryState
 	Symbols                *SymbolsPanel
 	Reg                    *command.Registry
 	Running                *bool
@@ -151,6 +152,7 @@ func (a *App) ShowSidebar() {
 		a.SplitPanel.DividerPos = ui.DefaultSidebarWidth
 	}
 	a.applySearchHighlights()
+	a.syncRepositoryObservation()
 }
 
 func (a *App) HideSidebar() {
@@ -158,6 +160,7 @@ func (a *App) HideSidebar() {
 	a.Sidebar.Visible = false
 	a.SplitPanel.ShowLeft = false
 	a.EditorGroup.ClearSearch()
+	a.syncRepositoryObservation()
 }
 
 func (a *App) applySearchHighlights() {
@@ -334,7 +337,11 @@ func (a *App) refreshWorkspaceWidgets() {
 	a.Explorer.SetRoots(paths)
 
 	a.Search.SetWorkDirs(paths)
-	a.Changes.SetDirs(paths)
+	if a.Repository != nil {
+		a.Repository.SetDirs(paths)
+	} else {
+		a.Changes.SetDirs(paths)
+	}
 }
 
 func (a *App) refreshProblems() {
@@ -444,7 +451,11 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.Changes.OnRefreshed = func() {
 			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
 		}
-		a.Changes.Refresh()
+	}
+	if a.Repository != nil {
+		a.Repository.SetPoster(screen)
+		a.Repository.Start()
+		a.syncRepositoryObservation()
 	}
 
 	a.EditorGroup.OnError = func(msg string) {

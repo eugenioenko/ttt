@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -137,6 +138,38 @@ func TestStatusFilesEmpty(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Errorf("expected no files, got %d: %+v", len(files), files)
+	}
+}
+
+func TestStatusFilesContextHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := StatusFilesContext(ctx, setupTestRepo(t)); err == nil {
+		t.Fatal("canceled status context returned success")
+	}
+}
+
+func TestRevisionIdentityTracksHead(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "initial.txt", "hello\n")
+	gitRun(t, dir, "add", "initial.txt")
+	gitRun(t, dir, "commit", "-m", "init")
+	initial := RevisionIdentity(dir)
+	if initial == "" {
+		t.Fatal("committed repository has an empty revision identity")
+	}
+	writeFile(t, dir, "next.txt", "next\n")
+	gitRun(t, dir, "add", "next.txt")
+	gitRun(t, dir, "commit", "-m", "next")
+	if next := RevisionIdentity(dir); next == initial || next == "" {
+		t.Fatalf("revision identity after commit = %q, initial = %q", next, initial)
+	}
+}
+
+func TestRevisionIdentityAllowsUnbornRepository(t *testing.T) {
+	identity, err := RevisionIdentityContext(context.Background(), setupTestRepo(t))
+	if err != nil || identity != "" {
+		t.Fatalf("unborn repository identity = (%q, %v), want empty success", identity, err)
 	}
 }
 

@@ -79,6 +79,7 @@ func (a *App) RunRepoTask(task RepoTask) {
 func (a *App) HandleRepoOpResult(r *RepoOpResult) {
 	a.runningRepoOp = ""
 	a.setRepoOpSegment("")
+	a.invalidateAllRepositories(repositoryResourcesForTask(r.Task))
 
 	if r.Err != nil {
 		a.StatusError(fmt.Sprintf("%s failed: %v", r.Task.Progress, r.Err))
@@ -88,7 +89,16 @@ func (a *App) HandleRepoOpResult(r *RepoOpResult) {
 		r.Task.OnDone()
 	}
 	a.StatusNotify(r.Task.Done)
-	a.Changes.Refresh()
+}
+
+func repositoryResourcesForTask(task RepoTask) RepositoryResource {
+	resources := RepositoryWorktree
+	for _, op := range task.Ops {
+		if op.Name == "commit" || op.Name == "pull" {
+			resources |= RepositoryHistory
+		}
+	}
+	return resources
 }
 
 func (a *App) setRepoOpSegment(text string) {

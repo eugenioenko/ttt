@@ -46,6 +46,7 @@ func (a *App) SyncWatched() {
 // warned. The recorded disk state of a dirty buffer is deliberately not
 // updated, so the save-time conflict check keeps working.
 func (a *App) HandleFileChanged(path string) {
+	a.invalidateRepositoryPath(path, RepositoryWorktree)
 	buf := a.EditorGroup.BufferForPath(path)
 	if buf == nil {
 		return

@@ -153,8 +153,9 @@ func (a *App) SaveFileAs() {
 		initial = current
 	}
 	a.ShowInputDialog("Save As", "Filename", initial, func(path string) {
-		if path != "" {
-			a.EditorGroup.SaveAs(path)
+		if path != "" && a.EditorGroup.SaveAs(path) {
+			path, lang := a.editorPathLang()
+			a.afterFileSave(path, lang)
 		}
 	})
 }
@@ -191,6 +192,10 @@ func (a *App) doSaveFile() {
 		return
 	}
 	path, lang = a.editorPathLang()
+	a.afterFileSave(path, lang)
+}
+
+func (a *App) afterFileSave(path, lang string) {
 	if lang != "" {
 		text := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
 		a.NotifyLSPSave(path, lang, text)
@@ -200,6 +205,7 @@ func (a *App) doSaveFile() {
 	if a.PluginManager != nil && path != "" {
 		a.PluginManager.DispatchEvent("file.save", path)
 	}
+	a.invalidateRepositoryPath(path, RepositoryWorktree)
 }
 
 func (a *App) forceQuit() {

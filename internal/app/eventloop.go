@@ -33,6 +33,9 @@ func RunEventLoop(
 	if app.Watcher != nil {
 		defer app.Watcher.Close()
 	}
+	if app.Repository != nil {
+		defer app.Repository.Close()
+	}
 
 	lastBlameLine := -1
 	lastBlameFile := ""
@@ -378,6 +381,16 @@ func RunEventLoop(
 				app.SyncLanguageSegment()
 			case *RepoOpResult:
 				app.HandleRepoOpResult(v)
+			case *RepositoryStatusResult:
+				app.Repository.HandleStatus(v)
+			case *RepositoryInvalidationRequest:
+				app.handleRepositoryInvalidation(v)
+			case *DebugWriteRequest:
+				app.HandleDebugWriteRequest(v)
+			case *repositoryDebounceTick:
+				app.Repository.HandleDebounce(v)
+			case *repositoryPollTick:
+				app.Repository.HandlePoll(v)
 			case *CommitLogResult:
 				app.Changes.ApplyCommitLog(v)
 			case *CommitFilesResult:

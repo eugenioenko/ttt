@@ -132,9 +132,12 @@ func readCommitLog(ctx context.Context, dir string, gen int) *CommitLogResult {
 	if err != nil {
 		return &CommitLogResult{Gen: gen, Dir: dir, Err: err}
 	}
-	branch := git.BranchNameContext(ctx, dir)
+	branch, branchErr := git.BranchNameContext(ctx, dir)
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return &CommitLogResult{Gen: gen, Dir: dir, Err: ctxErr, Canceled: errors.Is(ctxErr, context.Canceled)}
+	}
+	if branchErr != nil {
+		return &CommitLogResult{Gen: gen, Dir: dir, Err: branchErr}
 	}
 	return &CommitLogResult{
 		Gen:     gen,
@@ -163,6 +166,9 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		cp.logCommits = make(map[string]commitFileRef)
 		cp.logFiles = make(map[string]commitFileRef)
 		cp.CommitLog.SetItems(nil)
+		if cp.OnHistoryResult != nil {
+			cp.OnHistoryResult(nil)
+		}
 		return
 	}
 	if r.Err != nil {
@@ -172,6 +178,9 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		}
 		if cp.OnError != nil {
 			cp.OnError("Could not refresh commit history: " + r.Err.Error())
+		}
+		if cp.OnHistoryResult != nil {
+			cp.OnHistoryResult(r.Err)
 		}
 		return
 	}
@@ -225,6 +234,9 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		nodes = append(nodes, &widgets.TreeNode{ID: "history:empty", Label: "No commits", Muted: true})
 	}
 	cp.CommitLog.SetItems(nodes)
+	if cp.OnHistoryResult != nil {
+		cp.OnHistoryResult(nil)
+	}
 
 	// Restore by identity, never by the index SetItems happened to preserve.
 	// Committing prepends rows, and rewriting history can remove them entirely;

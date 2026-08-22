@@ -19,7 +19,11 @@ type FileStatus struct {
 }
 
 func RepoRoot(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel")
+	return RepoRootContext(context.Background(), dir)
+}
+
+func RepoRootContext(ctx context.Context, dir string) string {
+	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -38,7 +42,11 @@ func IsRepoContext(ctx context.Context, dir string) bool {
 }
 
 func StatusFiles(dir string) ([]FileStatus, error) {
-	cmd := exec.Command("git", "-C", dir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	return StatusFilesContext(context.Background(), dir)
+}
+
+func StatusFilesContext(ctx context.Context, dir string) ([]FileStatus, error) {
+	cmd := gitCommandContext(ctx, "-C", dir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -169,16 +177,20 @@ func Push(dir string) error {
 }
 
 func BranchName(dir string) string {
-	return BranchNameContext(context.Background(), dir)
+	name, _ := BranchNameContext(context.Background(), dir)
+	return name
 }
 
-func BranchNameContext(ctx context.Context, dir string) string {
+func BranchNameContext(ctx context.Context, dir string) (string, error) {
 	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(string(out)), nil
 }
 
 type LogEntry struct {
@@ -404,6 +416,25 @@ func HeadSHA(dir string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func RevisionIdentity(dir string) string {
+	identity, _ := RevisionIdentityContext(context.Background(), dir)
+	return identity
+}
+
+func RevisionIdentityContext(ctx context.Context, dir string) (string, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "rev-parse", "--verify", "HEAD").Output()
+	if err == nil {
+		return strings.TrimSpace(string(out)), nil
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if IsRepoContext(ctx, dir) {
+		return "", nil
+	}
+	return "", err
 }
 
 func RemoteURL(dir string) string {
