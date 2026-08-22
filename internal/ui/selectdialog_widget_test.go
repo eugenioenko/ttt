@@ -1,11 +1,41 @@
 package ui
 
 import (
-	"github.com/eugenioenko/ttt/internal/command"
+	"strings"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/config"
 
 	"github.com/gdamore/tcell/v3"
 )
+
+func defaultShortcut(commandID string) string {
+	for _, binding := range config.DefaultKeybindings() {
+		if binding.Command == commandID {
+			return binding.Key
+		}
+	}
+	return ""
+}
+
+func helpTestCommands() []command.Command {
+	return []command.Command{
+		{
+			ID:       "file.quickOpen",
+			Title:    "Open Anything From the Workspace",
+			Shortcut: defaultShortcut("file.quickOpen"),
+			Keywords: []string{"file", "navigate", "open"},
+		},
+		{
+			ID:       "sidebar.search",
+			Title:    "Search Everywhere",
+			Shortcut: defaultShortcut("sidebar.search"),
+			Keywords: []string{"sidebar", "search", "workspace"},
+		},
+		{ID: "tab.closeAllSaved", Title: "Close All Saved Tabs"},
+	}
+}
 
 func testCommands() []command.Command {
 	return []command.Command{
@@ -345,5 +375,144 @@ func TestPaletteTitleMatchRanksAboveKeywordOnly(t *testing.T) {
 	}
 	if p.Items[0].ID != "settings" {
 		t.Fatalf("expected title match 'Preferences: Open Settings' (id=settings) to rank first, got id=%s (%s)", p.Items[0].ID, p.Items[0].Label)
+	}
+}
+
+func TestPaletteHelpStartsWithOrientationTopics(t *testing.T) {
+	p := NewSelectDialogWidget(helpTestCommands())
+	p.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "?", tcell.ModNone))
+
+	if p.mode != paletteHelpMode || p.Input.Text != "?" {
+		t.Fatalf("expected question-mark help mode, got mode=%d input=%q", p.mode, p.Input.Text)
+	}
+	if len(p.Items) == 0 {
+		t.Fatal("expected orientation topics")
+	}
+	for _, item := range p.Items {
+		if item.kind != paletteHelpTopicItem {
+			t.Fatalf("empty help should show topics, not %q", item.ID)
+		}
+	}
+	if p.Items[0].Description == "" {
+		t.Fatal("expected the selected topic to have orientation detail")
+	}
+}
+
+func TestPaletteHelpSearchDerivesCommandsAndShortcuts(t *testing.T) {
+	p := NewSelectDialogWidget(helpTestCommands())
+	p.Input.SetText("?Open Anything")
+
+	if len(p.Items) == 0 {
+		t.Fatal("expected command search result")
+	}
+	got := p.Items[0]
+	if got.ID != "file.quickOpen" {
+		t.Fatalf("expected derived command ID, got %q", got.ID)
+	}
+	if got.Label != "Open Anything From the Workspace" {
+		t.Fatalf("expected registered title, got %q", got.Label)
+	}
+	if got.Detail != defaultShortcut("file.quickOpen") {
+		t.Fatalf("expected shortcut derived from DefaultKeybindings, got %q", got.Detail)
+	}
+}
+
+func TestPaletteHelpTopicKeyboardAndMouseNavigation(t *testing.T) {
+	p := NewSelectDialogWidget(helpTestCommands())
+	p.Input.SetText("?")
+	p.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+
+	if p.activeHelpTopic != "workspace" {
+		t.Fatalf("expected workspace topic after Enter, got %q", p.activeHelpTopic)
+	}
+	if len(p.Items) == 0 || p.Items[0].kind != paletteCommandItem {
+		t.Fatal("expected topic to drill into commands")
+	}
+
+	p.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone))
+	if p.activeHelpTopic != "" || len(p.Items) != len(paletteHelpTopics) {
+		t.Fatal("expected Escape to return to help topics")
+	}
+
+	p.Render(NewRenderSurface(makeGrid(80, 24), Rect{X: 0, Y: 0, W: 80, H: 24}))
+	p.HandleEvent(tcell.NewEventMouse(p.boxX+2, p.boxY+4, tcell.Button1, tcell.ModNone))
+	if p.activeHelpTopic != "panels" {
+		t.Fatalf("expected second topic click to open panels help, got %q", p.activeHelpTopic)
+	}
+
+	dismissed := false
+	p.OnDismiss = func() { dismissed = true }
+	p.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone))
+	if dismissed {
+		t.Fatal("first Escape from a topic should not dismiss the palette")
+	}
+	p.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone))
+	if !dismissed {
+		t.Fatal("second Escape should dismiss help")
+	}
+}
+
+func TestPaletteHelpRelevanceFloorRejectsFuzzyNoise(t *testing.T) {
+	commands := []command.Command{
+		{ID: "editor.undo", Title: "Undo", Shortcut: defaultShortcut("editor.undo")},
+		{ID: "multicursor.undoCursor", Title: "Undo Last Cursor", Shortcut: defaultShortcut("multicursor.undoCursor")},
+		{ID: "changes.discard", Title: "Git: Discard Changes", Keywords: []string{"git", "changes", "revert", "restore", "undo"}},
+		{ID: "sourceAction.formatDocument", Title: "Source Action: Format Document"},
+		{ID: "about", Title: "About TTT Editor"},
+		{ID: "multicursor.selectNext", Title: "Add Next Occurrence"},
+		{ID: "editor.indentation", Title: "Change Indentation"},
+	}
+	p := NewSelectDialogWidget(commands)
+	p.Input.SetText("?undo")
+
+	if len(p.Items) != 2 {
+		labels := make([]string, len(p.Items))
+		for i, item := range p.Items {
+			labels[i] = item.Label
+		}
+		t.Fatalf("expected only two relevant undo matches, got %d: %v", len(p.Items), labels)
+	}
+	if p.Items[0].ID != "editor.undo" || p.Items[1].ID != "multicursor.undoCursor" {
+		t.Fatalf("unexpected undo result order: %q, %q", p.Items[0].ID, p.Items[1].ID)
+	}
+
+	p.Input.SetText("?revert")
+	if len(p.Items) != 1 || p.Items[0].ID != "changes.discard" {
+		t.Fatalf("expected exact keyword-only match, got %#v", p.Items)
+	}
+}
+
+func TestPaletteHelpNoMatchesRendersGuidance(t *testing.T) {
+	p := NewSelectDialogWidget(helpTestCommands())
+	p.Input.SetText("?qxzvjk")
+	if len(p.Items) != 0 {
+		t.Fatalf("expected no matches, got %d", len(p.Items))
+	}
+
+	cells := makeGrid(80, 24)
+	p.Render(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: 80, H: 24}))
+	var rendered strings.Builder
+	for _, row := range cells {
+		for _, cell := range row {
+			if cell.Ch == 0 {
+				rendered.WriteByte(' ')
+			} else {
+				rendered.WriteRune(cell.Ch)
+			}
+		}
+		rendered.WriteByte('\n')
+	}
+	text := rendered.String()
+	if !strings.Contains(text, `No help entries match "qxzvjk"`) {
+		t.Fatalf("missing no-results message:\n%s", text)
+	}
+	if !strings.Contains(text, "Try > for all commands") {
+		t.Fatalf("missing command-mode hint:\n%s", text)
+	}
+}
+
+func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
+	if got := truncatePaletteDetail("prefix界界", 4); got != "…界" {
+		t.Fatalf("expected width-safe tail, got %q", got)
 	}
 }

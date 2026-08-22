@@ -45,7 +45,7 @@ ttt https://github.com/owner/repo/pull/123  # review a PR
 
 ## Command Palette
 
-Press **Ctrl+P** to open the command palette. By default it searches files. Type a `>` prefix to switch to command mode, which lists all available editor commands.
+Press **Ctrl+P** to open the command palette. By default it searches files. Type a `>` prefix to switch to command mode, which lists all available editor commands. Type `?` to browse orientation topics for the workspace, panels, navigation, changes, terminal, and keybinding chords; continue typing to search the help entries, or use `>` when you want the complete command list.
 
 ## Configuration
 

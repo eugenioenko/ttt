@@ -72,6 +72,59 @@ func TestCommandPaletteDoesNotStack(t *testing.T) {
 	}
 }
 
+func TestCommandPaletteHelpOrientsThenNavigates(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.pressCtrl(tcell.KeyCtrlP)
+	h.pressRune('?')
+
+	h.assertContains("Workspace map")
+	h.assertContains("folders, tabs, and editor groups")
+	h.assertNotContains("Open Folder")
+
+	for _, r := range "Open Folder" {
+		h.pressRune(r)
+	}
+	h.assertContains("Open Folder")
+	cmd, ok := h.reg.Get("workspace.openFolder")
+	if !ok {
+		t.Fatal("workspace.openFolder command is not registered")
+	}
+	if cmd.Shortcut == "" {
+		t.Fatal("workspace.openFolder should have a derived shortcut")
+	}
+	h.assertContains(cmd.Shortcut)
+
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	if len(h.app.Root.Overlays) == 0 {
+		t.Fatal("executing Open Folder from help should open its dialog")
+	}
+}
+
+func TestCommandPaletteHelpNoMatchAndEscape(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.pressCtrl(tcell.KeyCtrlP)
+	h.pressRune('?')
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	h.assertContains("Open Folder")
+
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	h.assertContains("Workspace map")
+	for _, r := range "qxzvjk" {
+		h.pressRune(r)
+	}
+	h.assertContains(`No help entries match "qxzvjk"`)
+	h.assertContains("Try > for all commands")
+
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	if len(h.app.Root.Overlays) != 0 {
+		t.Fatalf("expected help palette to dismiss, got %d overlays", len(h.app.Root.Overlays))
+	}
+}
+
 func TestGoToLineDialog(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
