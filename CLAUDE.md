@@ -199,7 +199,7 @@ Functional tests are the highest-value tests. Use `tui.exec("Command Name")` for
 **`--exec "commands"`** — Execute semicolon-separated commands after startup. Run the real binary, interact with it, capture state, and exit — all in one command:
 
 ```bash
-bin/ttt --size 120x40 --exec "wait 200; screenshot /tmp/screen.txt; debug /tmp/state.json; quit"
+bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debug /tmp/state.json; quit"
 cat /tmp/screen.txt   # see what's rendered
 cat /tmp/state.json   # see full widget tree, focus, selection, panels
 ```
@@ -217,14 +217,17 @@ Supported commands:
 - `screenshot PATH` — save screen text to file
 - `debug PATH` — save debug state JSON (screen, cursor, buffer, focus, panels, tabs, selection, output log, integrated-terminal raw PTY byte tails, full widget tree with rect/focus/props per node)
 - `wait MS` — wait milliseconds
+- `wait-for TEXT [timeout=MS]` — wait until text appears on the actual visible screen; defaults to a bounded 5000ms timeout. Quote text to preserve surrounding whitespace or escapes.
 - `panel ID` — show and focus a bottom panel by ID
 - `quit` / `shutdown` — exit the editor
+
+Every scripted input or main-thread action is acknowledged only after the event loop handles it and redraws. A following `wait-for`, `screenshot`, or `debug` therefore observes that completed visible state, not merely a posted event. Invalid/failed actions stop the script: CLI `--exec` exits nonzero with stderr, while `POST /exec` returns a non-2xx response and error body.
 
 **`--listen`** — Start an HTTP command server on `127.0.0.1:4242` (loopback-only — never exposed off the local machine). `POST /exec` runs the same script format as `--exec`, synchronously, against an **already-running** editor — for capturing a repro at the exact moment it happens instead of scripting it in advance:
 
 ```bash
 bin/ttt --listen &
-curl -X POST --data "type hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
+curl -X POST --data "type hi; wait-for hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
 curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 ```
 
@@ -237,6 +240,8 @@ Pass `?sep=` to use a different command separator, mirroring `--exec-split-on`.
 **`--debug`** — Enable debug mode regardless of config setting.
 
 **`TTT_CONFIG_DIR` env var** — overrides the config directory entirely (settings, keybindings, themes, plugins, plugin registry). Always set this when running scripted `--exec` sessions that touch settings or plugins, so the developer's real `~/.config/ttt` is not read or mutated. The functional test harness (`tests/functional/tui.js`) sets it automatically.
+
+Headless `--exec` sessions use the process-local clipboard so parallel scripts cannot overwrite each other's or the developer's desktop clipboard. Interactive sessions, including `--listen`, retain system clipboard behavior.
 
 **Lua API equivalents** — Plugins can also call `ttt.screenshot(path)`, `ttt.debug(path)`, `ttt.click(x, y)`, and `ttt.quit()` directly.
 

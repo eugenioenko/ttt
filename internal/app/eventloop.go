@@ -213,6 +213,39 @@ func RunEventLoop(
 
 	app.ShowPendingPluginApprovals()
 
+	handleKey := func(tev *tcell.EventKey) {
+		app.cancelHoverTimer()
+		if app.EditorGroup.SignatureHelp != nil {
+			switch tev.Key() {
+			case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyRight,
+				tcell.KeyHome, tcell.KeyEnd, tcell.KeyPgUp, tcell.KeyPgDn:
+				app.DismissSignatureHelp()
+			}
+		}
+		slog.Debug("key", "key", tev.Key(), "rune", string(term.KeyRune(tev)), "mod", tev.Modifiers())
+		app.Root.HandleEvent(tev)
+		app.FlushEditorOnChange()
+		app.RefreshAutocomplete()
+		syncStatus()
+	}
+
+	handleMouse := func(tev *tcell.EventMouse) {
+		mx, my := tev.Position()
+		btn := tev.Buttons()
+		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
+		app.DismissSignatureHelp()
+		if app.EditorGroup.Hover == nil {
+			if btn == 0 {
+				app.checkMouseHover(mx, my)
+			}
+		} else if !app.isMouseOverHover(mx, my) && !app.EditorGroup.Hover.IsDragging() {
+			app.DismissHover()
+		}
+		app.Root.HandleEvent(tev)
+		app.FlushEditorOnChange()
+		syncStatus()
+	}
+
 	for *running {
 		ev := screen.PollEvent()
 		switch tev := ev.(type) {
@@ -241,36 +274,11 @@ func RunEventLoop(
 			}
 
 		case *tcell.EventKey:
-			app.cancelHoverTimer()
-			if app.EditorGroup.SignatureHelp != nil {
-				switch tev.Key() {
-				case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyRight,
-					tcell.KeyHome, tcell.KeyEnd, tcell.KeyPgUp, tcell.KeyPgDn:
-					app.DismissSignatureHelp()
-				}
-			}
-			slog.Debug("key", "key", tev.Key(), "rune", string(term.KeyRune(tev)), "mod", tev.Modifiers())
-			app.Root.HandleEvent(tev)
-			app.FlushEditorOnChange()
-			app.RefreshAutocomplete()
-			syncStatus()
+			handleKey(tev)
 			redraw()
 
 		case *tcell.EventMouse:
-			mx, my := tev.Position()
-			btn := tev.Buttons()
-			slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
-			app.DismissSignatureHelp()
-			if app.EditorGroup.Hover == nil {
-				if btn == 0 {
-					app.checkMouseHover(mx, my)
-				}
-			} else if !app.isMouseOverHover(mx, my) && !app.EditorGroup.Hover.IsDragging() {
-				app.DismissHover()
-			}
-			app.Root.HandleEvent(tev)
-			app.FlushEditorOnChange()
-			syncStatus()
+			handleMouse(tev)
 			redraw()
 
 		case *tcell.EventResize:
@@ -281,6 +289,8 @@ func RunEventLoop(
 			redraw()
 
 		case *tcell.EventInterrupt:
+			var execDone chan error
+			var execErr error
 			switch v := tev.Data().(type) {
 			case string:
 				if v != "" {
@@ -301,10 +311,20 @@ func RunEventLoop(
 				}
 			case *GitGutterTrigger:
 				app.RequestGitGutterForActiveFile()
-			case *ExecCommandRequest:
-				app.Reg.Execute(v.ID)
-				app.FlushEditorOnChange()
+			case *execInputRequest:
+				switch event := v.Event.(type) {
+				case *tcell.EventKey:
+					handleKey(event)
+				case *tcell.EventMouse:
+					handleMouse(event)
+				default:
+					execErr = failedExec("unsupported input event %T", v.Event)
+				}
+				execDone = v.Done
+			case *execMainRequest:
+				execErr = v.Run()
 				syncStatus()
+				execDone = v.Done
 			case *AutocompleteTrigger:
 				triggerChar := app.charBeforeCursor()
 				isTrigger := triggerChar != "" && (len(app.CompletionTriggers) == 0 || app.isCompletionTrigger(triggerChar))
@@ -453,6 +473,9 @@ func RunEventLoop(
 				}
 			}
 			redraw()
+			if execDone != nil {
+				execDone <- execErr
+			}
 		}
 	}
 }

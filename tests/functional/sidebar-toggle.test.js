@@ -40,7 +40,7 @@ describe("sidebar toggle", () => {
 
     // Narrow sidebar to near-zero width using the command palette
     for (let i = 0; i < 25; i++) {
-      tui.exec("Decrease Sidebar Width");
+      tui.exec("View: Decrease Sidebar Width");
       tui.waitStable(50);
     }
 

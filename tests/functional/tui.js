@@ -112,8 +112,8 @@ export function wait(ms = 200) {
   commands.push(`wait ${ms}`);
 }
 
-export function waitFor(_text) {
-  commands.push("wait 200");
+export function waitFor(text) {
+  commands.push(`wait-for ${JSON.stringify(String(text))}`);
 }
 
 export function waitStable(ms = 200) {
@@ -136,6 +136,8 @@ export function run(timeout = 15000) {
   commands.push("quit");
   const script = commands.join(SEP);
 
+  let runError;
+
   try {
     execFileSync(BINARY, ["--size", size, "--exec-split-on", SEP, "--exec", script, ...args], {
       encoding: "utf8",
@@ -145,9 +147,7 @@ export function run(timeout = 15000) {
       env: { ...process.env, TTT_CONFIG_DIR: join(tmpDir, "config"), ...extraEnv },
     });
   } catch (err) {
-    if (err.status !== null && err.status !== 0 && err.status !== undefined) {
-      // non-zero exit is ok for quit-confirm tests etc.
-    }
+    runError = err;
   }
 
   const snapshots = [];
@@ -160,6 +160,7 @@ export function run(timeout = 15000) {
   }
 
   cleanup();
+  if (runError) throw runError;
   return { snapshots };
 }
 

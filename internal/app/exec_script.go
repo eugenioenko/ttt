@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,75 +14,166 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-// DefaultExecSeparator splits exec scripts when no override is given.
-const DefaultExecSeparator = ";"
+const (
+	DefaultExecSeparator  = ";"
+	defaultWaitForTimeout = 5 * time.Second
+	execRequestTimeout    = 5 * time.Second
+	waitForPollInterval   = 25 * time.Millisecond
+	maxExecMilliseconds   = int64((1<<63 - 1) / int64(time.Millisecond))
+)
 
-// RunExecScript parses a separator-delimited script string and executes each
-// command sequentially. Intended to be run in a goroutine after the event loop
-// starts.
-func RunExecScript(a *App, script string) {
-	RunExecScriptSep(a, script, DefaultExecSeparator)
+type ExecErrorKind string
+
+const (
+	ExecErrorInvalid ExecErrorKind = "invalid"
+	ExecErrorFailed  ExecErrorKind = "failed"
+	ExecErrorTimeout ExecErrorKind = "timeout"
+)
+
+type ExecResult struct {
+	Completed int
 }
 
-// RunExecScriptSep is RunExecScript with a caller-chosen separator. Semicolons
-// are unusable when the script must type or send one -- `;` is a Vim motion,
-// for instance -- so callers can pick a delimiter that cannot collide with
-// their payload.
-func RunExecScriptSep(a *App, script, sep string) {
+type ExecError struct {
+	Kind    ExecErrorKind
+	Index   int
+	Command string
+	Action  string
+	Err     error
+}
+
+func (e *ExecError) Error() string {
+	return fmt.Sprintf("command %d %q: %v", e.Index, e.Command, e.Err)
+}
+
+func (e *ExecError) Unwrap() error {
+	return e.Err
+}
+
+type execActionError struct {
+	kind ExecErrorKind
+	err  error
+}
+
+func (e *execActionError) Error() string {
+	return e.err.Error()
+}
+
+func (e *execActionError) Unwrap() error {
+	return e.err
+}
+
+func invalidExec(format string, args ...any) error {
+	return &execActionError{kind: ExecErrorInvalid, err: fmt.Errorf(format, args...)}
+}
+
+func failedExec(format string, args ...any) error {
+	return &execActionError{kind: ExecErrorFailed, err: fmt.Errorf(format, args...)}
+}
+
+func timeoutExec(format string, args ...any) error {
+	return &execActionError{kind: ExecErrorTimeout, err: fmt.Errorf(format, args...)}
+}
+
+type execInputRequest struct {
+	Event tcell.Event
+	Done  chan error
+}
+
+type execMainRequest struct {
+	Run  func() error
+	Done chan error
+}
+
+func RunExecScript(a *App, script string) (ExecResult, error) {
+	return RunExecScriptSep(a, script, DefaultExecSeparator)
+}
+
+func RunExecScriptSep(a *App, script, sep string) (ExecResult, error) {
 	if sep == "" {
 		sep = DefaultExecSeparator
 	}
-	commands := strings.Split(script, sep)
-	for _, raw := range commands {
+	var result ExecResult
+	commandIndex := 0
+	for _, raw := range strings.Split(script, sep) {
 		cmd := strings.TrimSpace(raw)
 		if cmd == "" {
 			continue
 		}
+		commandIndex++
 		action, args := parseExecCommand(cmd)
 		slog.Debug("exec_script", "action", action, "args", args)
 
-		switch action {
-		case "click":
-			execClick(a, args)
-		case "rclick":
-			execRClick(a, args)
-		case "hover":
-			execHover(a, args)
-		case "drag":
-			execDrag(a, args)
-		case "key":
-			execKey(a, args)
-		case "type":
-			execType(a, args)
-		case "exec":
-			execCommand(a, args)
-		case "screenshot":
-			execScreenshot(a, args)
-		case "debug":
-			execDebug(a, args)
-		case "wait":
-			execWait(args)
-		case "paste":
-			execPaste(a, args)
-		case "copy":
-			a.Copy()
-		case "panel":
-			execPanel(a, args)
-		case "quit", "shutdown":
-			execQuit(a)
-		default:
-			slog.Error("exec_script: unknown command", "action", action)
+		if err := runExecAction(a, action, args); err != nil {
+			kind := ExecErrorFailed
+			var actionErr *execActionError
+			if errors.As(err, &actionErr) {
+				kind = actionErr.kind
+			}
+			return result, &ExecError{
+				Kind:    kind,
+				Index:   commandIndex,
+				Command: cmd,
+				Action:  action,
+				Err:     err,
+			}
 		}
-
-		// Small implicit delay between commands to let the event loop process
+		result.Completed++
+		if action == "quit" || action == "shutdown" {
+			return result, nil
+		}
 		time.Sleep(50 * time.Millisecond)
+	}
+	return result, nil
+}
+
+func runExecAction(a *App, action, args string) error {
+	switch action {
+	case "click":
+		return execClick(a, args)
+	case "rclick":
+		return execRClick(a, args)
+	case "hover":
+		return execHover(a, args)
+	case "drag":
+		return execDrag(a, args)
+	case "key":
+		return execKey(a, args)
+	case "type":
+		return execType(a, args)
+	case "exec":
+		return execCommand(a, args)
+	case "screenshot":
+		return execScreenshot(a, args)
+	case "debug":
+		return execDebug(a, args)
+	case "wait":
+		return execWait(args)
+	case "wait-for":
+		return execWaitFor(a, args)
+	case "paste":
+		return execPaste(a, args)
+	case "copy":
+		if strings.TrimSpace(args) != "" {
+			return invalidExec("copy does not accept arguments")
+		}
+		return runExecMain(a, func() error {
+			a.Copy()
+			return nil
+		})
+	case "panel":
+		return execPanel(a, args)
+	case "quit", "shutdown":
+		if strings.TrimSpace(args) != "" {
+			return invalidExec("%s does not accept arguments", action)
+		}
+		return StopExecLoop(a)
+	default:
+		return invalidExec("unknown action %q", action)
 	}
 }
 
-// parseExecCommand splits a command string into action and arguments.
-// Handles quoted strings for the exec command (e.g., exec "Command Name").
 func parseExecCommand(cmd string) (string, string) {
-	// Find the first space to split action from args
 	idx := strings.IndexByte(cmd, ' ')
 	if idx < 0 {
 		return cmd, ""
@@ -89,246 +181,349 @@ func parseExecCommand(cmd string) (string, string) {
 	return cmd[:idx], strings.TrimSpace(cmd[idx+1:])
 }
 
-func execClick(a *App, args string) {
-	parts := strings.Fields(args)
-	if len(parts) < 2 {
-		slog.Error("exec_script: click requires X Y", "args", args)
-		return
-	}
-	x, err := strconv.Atoi(parts[0])
+func execClick(a *App, args string) error {
+	x, y, err := parseCoordinates("click", args, 2)
 	if err != nil {
-		slog.Error("exec_script: invalid click X", "value", parts[0], "error", err)
-		return
+		return err
 	}
-	y, err := strconv.Atoi(parts[1])
-	if err != nil {
-		slog.Error("exec_script: invalid click Y", "value", parts[1], "error", err)
-		return
+	if err := postExecInput(a, tcell.NewEventMouse(x[0], y[0], tcell.Button1, tcell.ModNone)); err != nil {
+		return err
 	}
-
-	// Press
-	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
 	time.Sleep(50 * time.Millisecond)
-	// Release
-	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+	return postExecInput(a, tcell.NewEventMouse(x[0], y[0], tcell.ButtonNone, tcell.ModNone))
 }
 
-// execRClick simulates a secondary (right) mouse click, which opens context
-// menus. Right-click is tcell.Button2 (see menus.go).
-func execRClick(a *App, args string) {
-	parts := strings.Fields(args)
-	if len(parts) < 2 {
-		slog.Error("exec_script: rclick requires X Y", "args", args)
-		return
-	}
-	x, err := strconv.Atoi(parts[0])
+func execRClick(a *App, args string) error {
+	x, y, err := parseCoordinates("rclick", args, 2)
 	if err != nil {
-		slog.Error("exec_script: invalid rclick X", "value", parts[0], "error", err)
-		return
+		return err
 	}
-	y, err := strconv.Atoi(parts[1])
-	if err != nil {
-		slog.Error("exec_script: invalid rclick Y", "value", parts[1], "error", err)
-		return
+	if err := postExecInput(a, tcell.NewEventMouse(x[0], y[0], tcell.Button2, tcell.ModNone)); err != nil {
+		return err
 	}
-
-	// Press
-	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.Button2, tcell.ModNone))
 	time.Sleep(50 * time.Millisecond)
-	// Release
-	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+	return postExecInput(a, tcell.NewEventMouse(x[0], y[0], tcell.ButtonNone, tcell.ModNone))
 }
 
-func execHover(a *App, args string) {
-	parts := strings.Fields(args)
-	if len(parts) < 2 {
-		slog.Error("exec_script: hover requires X Y", "args", args)
-		return
-	}
-	x, err := strconv.Atoi(parts[0])
+func execHover(a *App, args string) error {
+	x, y, err := parseCoordinates("hover", args, 2)
 	if err != nil {
-		slog.Error("exec_script: invalid hover X", "value", parts[0], "error", err)
-		return
+		return err
 	}
-	y, err := strconv.Atoi(parts[1])
-	if err != nil {
-		slog.Error("exec_script: invalid hover Y", "value", parts[1], "error", err)
-		return
-	}
-	a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+	return postExecInput(a, tcell.NewEventMouse(x[0], y[0], tcell.ButtonNone, tcell.ModNone))
 }
 
-func execDrag(a *App, args string) {
-	parts := strings.Fields(args)
-	if len(parts) < 4 {
-		slog.Error("exec_script: drag requires X1 Y1 X2 Y2", "args", args)
-		return
+func execDrag(a *App, args string) error {
+	x, y, err := parseCoordinates("drag", args, 4)
+	if err != nil {
+		return err
 	}
-	x1, err1 := strconv.Atoi(parts[0])
-	y1, err2 := strconv.Atoi(parts[1])
-	x2, err3 := strconv.Atoi(parts[2])
-	y2, err4 := strconv.Atoi(parts[3])
-	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		slog.Error("exec_script: invalid drag coordinates", "args", args)
-		return
+	if err := postExecInput(a, tcell.NewEventMouse(x[0], y[0], tcell.Button1, tcell.ModNone)); err != nil {
+		return err
 	}
-
-	a.Screen.PostEvent(tcell.NewEventMouse(x1, y1, tcell.Button1, tcell.ModNone))
 	time.Sleep(30 * time.Millisecond)
 
-	steps := 10
+	const steps = 10
 	for i := 1; i <= steps; i++ {
-		mx := x1 + (x2-x1)*i/steps
-		my := y1 + (y2-y1)*i/steps
-		a.Screen.PostEvent(tcell.NewEventMouse(mx, my, tcell.Button1, tcell.ModNone))
+		mx := x[0] + (x[1]-x[0])*i/steps
+		my := y[0] + (y[1]-y[0])*i/steps
+		if err := postExecInput(a, tcell.NewEventMouse(mx, my, tcell.Button1, tcell.ModNone)); err != nil {
+			return err
+		}
 		time.Sleep(15 * time.Millisecond)
 	}
 
-	a.Screen.PostEvent(tcell.NewEventMouse(x2, y2, tcell.ButtonNone, tcell.ModNone))
+	return postExecInput(a, tcell.NewEventMouse(x[1], y[1], tcell.ButtonNone, tcell.ModNone))
 }
 
-func execKey(a *App, args string) {
+func parseCoordinates(action, args string, count int) ([2]int, [2]int, error) {
+	var xs, ys [2]int
+	parts := strings.Fields(args)
+	if len(parts) != count {
+		return xs, ys, invalidExec("%s requires %d coordinates", action, count)
+	}
+	values := make([]int, count)
+	for i, part := range parts {
+		value, err := strconv.Atoi(part)
+		if err != nil {
+			return xs, ys, invalidExec("invalid %s coordinate %q: %v", action, part, err)
+		}
+		values[i] = value
+	}
+	xs[0], ys[0] = values[0], values[1]
+	if count == 4 {
+		xs[1], ys[1] = values[2], values[3]
+	}
+	return xs, ys, nil
+}
+
+func execKey(a *App, args string) error {
 	combo := strings.TrimSpace(args)
 	if combo == "" {
-		slog.Error("exec_script: key requires a key combo")
-		return
+		return invalidExec("key requires a key combo")
 	}
 
 	steps, err := config.ParseKeyString(combo)
 	if err != nil {
-		slog.Error("exec_script: invalid key combo", "combo", combo, "error", err)
-		return
+		return invalidExec("invalid key combo %q: %v", combo, err)
 	}
 
 	for _, step := range steps {
 		key, mod, ch := comboToTcell(step)
-		a.Screen.PostEvent(tcell.NewEventKey(key, keyEventStr(ch), mod))
+		if err := postExecInput(a, tcell.NewEventKey(key, keyEventStr(ch), mod)); err != nil {
+			return err
+		}
 		time.Sleep(30 * time.Millisecond)
 	}
+	return nil
 }
 
-func execType(a *App, args string) {
+func execType(a *App, args string) error {
 	text := stripQuotes(args)
 	for _, r := range text {
-		a.Screen.PostEvent(tcell.NewEventKey(tcell.KeyRune, string(r), tcell.ModNone))
+		if err := postExecInput(a, tcell.NewEventKey(tcell.KeyRune, string(r), tcell.ModNone)); err != nil {
+			return err
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	return nil
 }
 
-func execPaste(a *App, args string) {
+func execPaste(a *App, args string) error {
 	text := stripQuotes(args)
 	if text == "" {
-		slog.Error("exec_script: paste requires text")
-		return
+		return invalidExec("paste requires text")
 	}
-	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	time.Sleep(50 * time.Millisecond)
-	a.PasteText(text)
-	a.FlushEditorOnChange()
-	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	return runExecMain(a, func() error {
+		a.PasteText(text)
+		a.FlushEditorOnChange()
+		return nil
+	})
 }
 
-func execCommand(a *App, args string) {
+func execCommand(a *App, args string) error {
 	title := stripQuotes(strings.TrimSpace(args))
 	if title == "" {
-		slog.Error("exec_script: exec requires a command title")
-		return
+		return invalidExec("exec requires a command title")
 	}
 
-	cmd, ok := a.Reg.FindByTitle(title)
-	if !ok {
-		slog.Error("exec_script: command not found", "title", title)
-		return
-	}
-	// Hand the command to the event loop instead of running it here. `key` and
-	// `click` already post real events, so they get the status bar sync that
-	// follows real input; running a command straight from the script goroutine
-	// skipped that sync and mutated widget state off the main thread.
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&ExecCommandRequest{ID: cmd.ID}))
+	return runExecMain(a, func() error {
+		cmd, ok := a.Reg.FindByTitle(title)
+		if !ok {
+			return invalidExec("command %q not found", title)
+		}
+		if !a.Reg.Execute(cmd.ID) {
+			return failedExec("command %q disappeared before execution", title)
+		}
+		a.FlushEditorOnChange()
+		return nil
+	})
 }
 
-// ExecCommandRequest is posted as an EventInterrupt so a command named by an
-// --exec script runs on the main thread, on the same path as key and mouse
-// input.
-type ExecCommandRequest struct {
-	ID string
-}
-
-func execScreenshot(a *App, args string) {
+func execScreenshot(a *App, args string) error {
 	path := stripQuotes(strings.TrimSpace(args))
 	if path == "" {
-		slog.Error("exec_script: screenshot requires a file path")
-		return
+		return invalidExec("screenshot requires a file path")
 	}
-	// Trigger a redraw so the screen is up-to-date
-	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	time.Sleep(50 * time.Millisecond)
-
-	if err := a.DumpScreenshot(path); err != nil {
-		slog.Error("exec_script: screenshot failed", "path", path, "error", err)
-	}
+	return runExecMain(a, func() error {
+		if err := a.DumpScreenshot(path); err != nil {
+			return failedExec("screenshot %q failed: %v", path, err)
+		}
+		return nil
+	})
 }
 
-func execDebug(a *App, args string) {
+func execDebug(a *App, args string) error {
 	path := stripQuotes(strings.TrimSpace(args))
 	if path == "" {
-		slog.Error("exec_script: debug requires a file path")
-		return
+		return invalidExec("debug requires a file path")
 	}
-	// Trigger a redraw so state is current
-	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	time.Sleep(50 * time.Millisecond)
-
-	if err := a.DumpDebugState(path); err != nil {
-		slog.Error("exec_script: debug dump failed", "path", path, "error", err)
-	}
+	return runExecMain(a, func() error {
+		if err := a.DumpDebugState(path); err != nil {
+			return failedExec("debug dump %q failed: %v", path, err)
+		}
+		return nil
+	})
 }
 
-func execWait(args string) {
+func execWait(args string) error {
 	ms := strings.TrimSpace(args)
 	if ms == "" {
-		slog.Error("exec_script: wait requires milliseconds")
-		return
+		return invalidExec("wait requires milliseconds")
 	}
-	n, err := strconv.Atoi(ms)
+	duration, err := parseExecMilliseconds(ms, true)
 	if err != nil {
-		slog.Error("exec_script: invalid wait duration", "value", ms, "error", err)
-		return
+		return invalidExec("invalid wait duration %q", ms)
 	}
-	time.Sleep(time.Duration(n) * time.Millisecond)
+	time.Sleep(duration)
+	return nil
 }
 
-func execPanel(a *App, args string) {
+func execWaitFor(a *App, args string) error {
+	text, timeout, err := parseWaitForArgs(args)
+	if err != nil {
+		return err
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		var visible bool
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return timeoutExec("screen text %q not visible after %s", text, timeout)
+		}
+		requestTimeout := min(remaining, execRequestTimeout)
+		if err := runExecMainTimeout(a, func() error {
+			visible = strings.Contains(a.Screenshot(), text)
+			return nil
+		}, requestTimeout); err != nil {
+			return err
+		}
+		if visible {
+			return nil
+		}
+		remaining = time.Until(deadline)
+		if remaining <= 0 {
+			return timeoutExec("screen text %q not visible after %s", text, timeout)
+		}
+		time.Sleep(min(waitForPollInterval, remaining))
+	}
+}
+
+func parseWaitForArgs(args string) (string, time.Duration, error) {
+	args = strings.TrimSpace(args)
+	if args == "" {
+		return "", 0, invalidExec("wait-for requires screen text")
+	}
+
+	text := args
+	option := ""
+	if strings.HasPrefix(args, "\"") {
+		end := quotedStringEnd(args)
+		if end < 0 {
+			return "", 0, invalidExec("wait-for has an unterminated quoted string")
+		}
+		quoted := args[:end]
+		unquoted, err := strconv.Unquote(quoted)
+		if err != nil {
+			return "", 0, invalidExec("invalid wait-for text: %v", err)
+		}
+		text = unquoted
+		option = strings.TrimSpace(args[end:])
+	} else {
+		fields := strings.Fields(args)
+		last := fields[len(fields)-1]
+		if strings.HasPrefix(last, "timeout=") {
+			option = last
+			text = strings.TrimSpace(strings.TrimSuffix(args, last))
+		}
+	}
+
+	if text == "" {
+		return "", 0, invalidExec("wait-for requires non-empty screen text")
+	}
+	timeout := defaultWaitForTimeout
+	if option != "" {
+		if strings.ContainsAny(option, " \t\r\n") || !strings.HasPrefix(option, "timeout=") {
+			return "", 0, invalidExec("wait-for expects optional timeout=MS after the text")
+		}
+		ms := strings.TrimPrefix(option, "timeout=")
+		parsed, err := parseExecMilliseconds(ms, false)
+		if err != nil {
+			return "", 0, invalidExec("invalid wait-for timeout %q", ms)
+		}
+		timeout = parsed
+	}
+	return text, timeout, nil
+}
+
+func parseExecMilliseconds(value string, allowZero bool) (time.Duration, error) {
+	milliseconds, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || milliseconds < 0 || (!allowZero && milliseconds == 0) || milliseconds > maxExecMilliseconds {
+		return 0, fmt.Errorf("milliseconds out of range")
+	}
+	return time.Duration(milliseconds) * time.Millisecond, nil
+}
+
+func quotedStringEnd(s string) int {
+	escaped := false
+	for i := 1; i < len(s); i++ {
+		if escaped {
+			escaped = false
+			continue
+		}
+		switch s[i] {
+		case '\\':
+			escaped = true
+		case '"':
+			return i + 1
+		}
+	}
+	return -1
+}
+
+func execPanel(a *App, args string) error {
 	id := stripQuotes(strings.TrimSpace(args))
 	if id == "" {
-		slog.Error("exec_script: panel requires a panel ID")
-		return
+		return invalidExec("panel requires a panel ID")
 	}
-	if !a.BottomPanel.HasPanel(id) {
-		slog.Error("exec_script: panel not found", "id", id)
-		return
-	}
-	a.BottomPanel.SetActivePanel(id)
-	if !a.ContentSplit.ShowBottom {
-		r := a.ContentSplit.GetRect()
-		maxH := r.H - 4
-		if a.ContentSplit.BottomH <= 1 || a.ContentSplit.BottomH > maxH {
-			a.ContentSplit.BottomH = min(r.H/2, maxH)
+	return runExecMain(a, func() error {
+		if !a.BottomPanel.HasPanel(id) {
+			return invalidExec("panel %q not found", id)
 		}
-		a.ContentSplit.ShowBottom = true
-	}
-	if w := a.BottomPanel.ActiveWidget(); w != nil {
-		a.Root.SetFocus(w)
-	}
-	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		a.BottomPanel.SetActivePanel(id)
+		if !a.ContentSplit.ShowBottom {
+			r := a.ContentSplit.GetRect()
+			maxH := r.H - 4
+			if a.ContentSplit.BottomH <= 1 || a.ContentSplit.BottomH > maxH {
+				a.ContentSplit.BottomH = min(r.H/2, maxH)
+			}
+			a.ContentSplit.ShowBottom = true
+		}
+		if w := a.BottomPanel.ActiveWidget(); w != nil {
+			a.Root.SetFocus(w)
+		}
+		return nil
+	})
 }
 
-func execQuit(a *App) {
-	*a.Running = false
-	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+func postExecInput(a *App, event tcell.Event) error {
+	done := make(chan error, 1)
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(&execInputRequest{Event: event, Done: done})); err != nil {
+		return failedExec("failed to post input event: %v", err)
+	}
+	return awaitExecRequest(done, execRequestTimeout)
 }
 
-// stripQuotes removes surrounding double quotes from a string if present.
+func runExecMain(a *App, run func() error) error {
+	return runExecMainTimeout(a, run, execRequestTimeout)
+}
+
+func runExecMainTimeout(a *App, run func() error, timeout time.Duration) error {
+	done := make(chan error, 1)
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(&execMainRequest{Run: run, Done: done})); err != nil {
+		return failedExec("failed to post main-thread action: %v", err)
+	}
+	return awaitExecRequest(done, timeout)
+}
+
+func awaitExecRequest(done <-chan error, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return timeoutExec("event loop did not acknowledge action within %s", timeout)
+	}
+}
+
+func StopExecLoop(a *App) error {
+	return runExecMain(a, func() error {
+		*a.Running = false
+		return nil
+	})
+}
+
 func stripQuotes(s string) string {
 	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
 		return s[1 : len(s)-1]
@@ -336,7 +531,6 @@ func stripQuotes(s string) string {
 	return s
 }
 
-// ExecScriptUsage returns the usage text for the --exec flag.
 func ExecScriptUsage() string {
 	return fmt.Sprintf(`--exec "commands"  Execute semicolon-separated commands after startup
 
@@ -353,15 +547,20 @@ Supported commands:
   screenshot PATH    Save screen text to file
   debug PATH         Save debug state JSON to file
   wait MS            Wait milliseconds
+  wait-for TEXT [timeout=MS]
+                     Wait until visible screen text appears (default 5000ms)
   panel ID           Show and focus a bottom panel by ID
   quit               Exit the editor
   shutdown           Alias for quit, for use over --listen
 
+Invalid actions fail --exec with a nonzero exit and POST /exec with a non-2xx
+response. Quote wait-for text to preserve surrounding whitespace or escapes.
+
 --listen starts an HTTP command server on 127.0.0.1:4242 that accepts the
 same script format over POST /exec, so a running editor can be driven
 interactively instead of scripted in advance:
-  curl -X POST --data "type hi; screenshot /tmp/s1.txt" http://127.0.0.1:4242/exec
+  curl -X POST --data "type hi; wait-for hi; screenshot /tmp/s1.txt" http://127.0.0.1:4242/exec
 
 Example:
-  %s --exec "wait 200; screenshot /tmp/s1.txt; quit"`, os.Args[0])
+  %s --exec "wait-for Explore; screenshot /tmp/s1.txt; quit"`, os.Args[0])
 }

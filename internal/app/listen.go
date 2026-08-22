@@ -46,7 +46,20 @@ func NewExecHandler(a *App) http.Handler {
 		if sep == "" {
 			sep = DefaultExecSeparator
 		}
-		RunExecScriptSep(a, script, sep)
+		if _, err := RunExecScriptSep(a, script, sep); err != nil {
+			status := http.StatusUnprocessableEntity
+			var execErr *ExecError
+			if errors.As(err, &execErr) {
+				switch execErr.Kind {
+				case ExecErrorInvalid:
+					status = http.StatusBadRequest
+				case ExecErrorTimeout:
+					status = http.StatusRequestTimeout
+				}
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		io.WriteString(w, "ok")
 	})
