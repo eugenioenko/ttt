@@ -167,3 +167,21 @@ func (v *VStackWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 	return EventIgnored
 }
+
+func (v *VStackWidget) CancelPointerCapture() bool {
+	for _, child := range v.Children {
+		if canceler, ok := child.(PointerCaptureCanceler); ok && canceler.CancelPointerCapture() {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *VStackWidget) OwnsPointerCapture() bool {
+	for _, child := range v.Children {
+		if owner, ok := child.(PointerCaptureOwner); ok && owner.OwnsPointerCapture() {
+			return true
+		}
+	}
+	return false
+}

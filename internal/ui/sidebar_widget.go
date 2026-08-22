@@ -30,6 +30,7 @@ func (s *SidebarWidget) Render(surface Surface) {
 
 	tabH := 2
 	if h <= tabH {
+		s.Tabs.ClearRenderedGeometry()
 		return
 	}
 
@@ -43,6 +44,14 @@ func (s *SidebarWidget) Render(surface Surface) {
 		sub := surface.Sub(Rect{X: 0, Y: tabH, W: w, H: contentH})
 		active.Render(sub)
 	}
+}
+
+func (s *SidebarWidget) CancelPointerCapture() bool {
+	return s.Tabs.CancelPointerCapture()
+}
+
+func (s *SidebarWidget) OwnsPointerCapture() bool {
+	return s.Tabs.OwnsPointerCapture()
 }
 
 func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {

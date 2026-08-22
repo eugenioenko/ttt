@@ -133,6 +133,7 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	tabBar.OnTabReorder = func(from, to int) {
 		g.MoveTab(from, to)
 	}
+	tabBar.NormalizeDropTarget = g.NormalizeTabMoveTarget
 	tabBar.OnNextTab = func() { g.NextTab() }
 	tabBar.OnPrevTab = func() { g.PrevTab() }
 	tabBar.OnDoubleClick = func() { g.NewFile() }
@@ -241,14 +242,20 @@ func (g *EditorGroupWidget) IsActiveTabPinned() bool {
 	return g.active < g.pinnedCount
 }
 
-func (g *EditorGroupWidget) MoveTab(from, to int) bool {
+func (g *EditorGroupWidget) NormalizeTabMoveTarget(from, to int) int {
 	if from < 0 || from >= len(g.tabs) || to < 0 || to >= len(g.tabs) {
-		return false
+		return -1
 	}
 	if from < g.pinnedCount {
-		to = min(to, g.pinnedCount-1)
-	} else {
-		to = max(to, g.pinnedCount)
+		return min(to, g.pinnedCount-1)
+	}
+	return max(to, g.pinnedCount)
+}
+
+func (g *EditorGroupWidget) MoveTab(from, to int) bool {
+	to = g.NormalizeTabMoveTarget(from, to)
+	if to < 0 {
+		return false
 	}
 	if from == to {
 		return false
@@ -1734,6 +1741,7 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 
 	const tabBarH = 3
 	if h <= tabBarH {
+		g.TabBar.ClearRenderedGeometry()
 		return
 	}
 
@@ -1777,6 +1785,14 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 		g.Hover.Borders = g.Borders
 		g.Hover.Render(surface)
 	}
+}
+
+func (g *EditorGroupWidget) CancelPointerCapture() bool {
+	return g.TabBar.CancelPointerCapture()
+}
+
+func (g *EditorGroupWidget) OwnsPointerCapture() bool {
+	return g.TabBar.OwnsPointerCapture()
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {

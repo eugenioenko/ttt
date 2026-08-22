@@ -84,3 +84,31 @@ func TestEditorGroupMoveTabKeepsPinnedBoundary(t *testing.T) {
 			g.active, g.CanMoveActiveTab(-1), g.CanMoveActiveTab(1))
 	}
 }
+
+func TestEditorGroupEffectivePinnedTargetControlsPreviewCommit(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, true, "relative")
+	g.tabs = []editorTab{
+		reorderTestTab("pin-one.go", false),
+		reorderTestTab("pin-two.go", false),
+		reorderTestTab("preview.go", true),
+		reorderTestTab("later.go", true),
+	}
+	g.pinnedCount = 2
+	g.active = 2
+
+	if g.MoveTab(2, 0) {
+		t.Fatal("first unpinned tab should be an effective no-op at the boundary")
+	}
+	if !g.tabs[2].Preview {
+		t.Fatal("an effective no-op should not commit a preview tab")
+	}
+	if got := g.NormalizeTabMoveTarget(3, 0); got != 2 {
+		t.Fatalf("effective target = %d, want pinned boundary 2", got)
+	}
+	if !g.MoveTab(3, 0) {
+		t.Fatal("a later unpinned tab should move to the pinned boundary")
+	}
+	if g.tabs[2].FilePath != "later.go" || g.tabs[2].Preview {
+		t.Fatal("effective move should insert at the boundary and commit its preview")
+	}
+}

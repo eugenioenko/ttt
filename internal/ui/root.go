@@ -5,6 +5,7 @@ import (
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -53,9 +54,33 @@ func NewRoot(main Widget) *Root {
 }
 
 func (r *Root) SetSize(w, h int) {
+	if w != r.Width || h != r.Height {
+		r.CancelPointerCapture()
+	}
 	r.Width = w
 	r.Height = h
 	r.Main.SetRect(Rect{X: 0, Y: 0, W: w, H: h})
+}
+
+func (r *Root) CancelPointerCapture() bool {
+	canceler, ok := r.Main.(widgets.PointerCaptureCanceler)
+	if ok && canceler.CancelPointerCapture() {
+		r.capturedWidget = nil
+		return true
+	}
+	return r.reconcilePointerCapture()
+}
+
+func (r *Root) reconcilePointerCapture() bool {
+	if r.capturedWidget == nil {
+		return false
+	}
+	owner, ok := r.capturedWidget.(widgets.PointerCaptureOwner)
+	if !ok || owner.OwnsPointerCapture() {
+		return false
+	}
+	r.capturedWidget = nil
+	return true
 }
 
 func (r *Root) AddGlobalKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
@@ -247,6 +272,10 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 	btn := mev.Buttons()
 
 	if r.capturedWidget != nil {
+		r.reconcilePointerCapture()
+	}
+
+	if r.capturedWidget != nil {
 		if btn == tcell.ButtonNone {
 			r.capturedWidget.HandleEvent(ev)
 			r.capturedWidget = nil
@@ -334,6 +363,7 @@ func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
 func (r *Root) Render(cells [][]term.Cell) {
 	surface := NewRenderSurface(cells, Rect{X: 0, Y: 0, W: r.Width, H: r.Height})
 	r.Main.Render(surface)
+	r.reconcilePointerCapture()
 
 	for _, overlay := range r.Overlays {
 		overlay.Widget.SetRect(Rect{X: 0, Y: 0, W: r.Width, H: r.Height})

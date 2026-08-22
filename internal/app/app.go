@@ -430,6 +430,9 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.Screen = screen
 	a.Renderer = renderer
 	a.LspManager = lspManager
+	a.EditorGroup.TabBar.PostDragAutoScrollTick = func(generation uint64) {
+		screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Generation: generation}))
+	}
 	a.StartWatcher()
 
 	a.EditorGroup.OnError = func(msg string) {

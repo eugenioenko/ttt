@@ -23,7 +23,7 @@ func tabsRowText(s *testSurface, y int) string {
 	return string(runes)
 }
 
-func TestTabsDragCapturesOnlyAfterThreshold(t *testing.T) {
+func TestTabsDragCapturesPendingPressBeforeThreshold(t *testing.T) {
 	var from, to = -1, -1
 	tw := NewTabsWidget(TabsConfig{
 		Items: []TabItem{
@@ -39,8 +39,8 @@ func TestTabsDragCapturesOnlyAfterThreshold(t *testing.T) {
 	s := renderWidget(tw, 0, 0, 40, 1)
 	start := tw.tabSpans[0][0] + 2
 	end := tw.tabSpans[2][0] + 2
-	if got := tw.HandleEvent(tcell.NewEventMouse(start, 0, tcell.Button1, 0)); got != EventConsumed {
-		t.Fatalf("mouse down result = %v, want EventConsumed", got)
+	if got := tw.HandleEvent(tcell.NewEventMouse(start, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("mouse down result = %v, want EventCaptured", got)
 	}
 	if got := tw.HandleEvent(tcell.NewEventMouse(start+1, 0, tcell.Button1, 0)); got != EventConsumed {
 		t.Fatalf("jitter result = %v, want EventConsumed", got)
@@ -74,7 +74,9 @@ func TestTabsClickJitterActivatesWithoutReorder(t *testing.T) {
 	})
 	renderWidget(tw, 0, 0, 30, 1)
 	x := tw.tabSpans[0][0] + 2
-	tw.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1, 0))
+	if got := tw.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("mouse down result = %v, want EventCaptured", got)
+	}
 	tw.HandleEvent(tcell.NewEventMouse(x+1, 0, tcell.Button1, 0))
 	tw.HandleEvent(tcell.NewEventMouse(x+1, 0, tcell.ButtonNone, 0))
 	if clicked != 0 {
@@ -82,6 +84,30 @@ func TestTabsClickJitterActivatesWithoutReorder(t *testing.T) {
 	}
 	if reordered {
 		t.Fatal("one-column jitter reordered a tab")
+	}
+	if tw.PointerGestureActive() {
+		t.Fatal("click release left a pending tab gesture")
+	}
+}
+
+func TestTabsNonRenderableResizeClearsGestureAndGeometry(t *testing.T) {
+	tw := NewTabsWidget(TabsConfig{
+		Items:       []TabItem{{ID: "a", Label: "Alpha"}, {ID: "b", Label: "Beta"}},
+		Reorderable: true,
+		OnReorder:   func(_, _ int) {},
+	})
+	renderWidget(tw, 0, 0, 30, 1)
+	x := tw.tabSpans[0][0] + 2
+	if got := tw.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("mouse down = %v, want captured", got)
+	}
+
+	renderWidget(tw, 0, 0, 0, 1)
+	if tw.PointerGestureActive() {
+		t.Fatal("non-renderable tabs retained a pending gesture")
+	}
+	if len(tw.tabSpans) != 0 || len(tw.actionSpans) != 0 || tw.overSpan != [2]int{} {
+		t.Fatal("non-renderable tabs retained old hit geometry")
 	}
 }
 

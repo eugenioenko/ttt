@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -203,4 +204,39 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 		needed = r.H
 	}
 	return r.Y + r.H - needed
+}
+
+func (cs *ContentSplitWidget) CancelPointerCapture() bool {
+	children := []Widget{cs.capturedChild, cs.Top, cs.Bottom}
+	for _, child := range children {
+		if child == nil {
+			continue
+		}
+		if canceler, ok := child.(widgets.PointerCaptureCanceler); ok && canceler.CancelPointerCapture() {
+			cs.capturedChild = nil
+			cs.wasPressed = false
+			return true
+		}
+	}
+	return false
+}
+
+func (cs *ContentSplitWidget) OwnsPointerCapture() bool {
+	if cs.dragging {
+		return true
+	}
+	if cs.capturedChild != nil {
+		owner, ok := cs.capturedChild.(widgets.PointerCaptureOwner)
+		if !ok || owner.OwnsPointerCapture() {
+			return true
+		}
+		cs.capturedChild = nil
+		cs.wasPressed = false
+	}
+	for _, child := range []Widget{cs.Top, cs.Bottom} {
+		if owner, ok := child.(widgets.PointerCaptureOwner); ok && owner.OwnsPointerCapture() {
+			return true
+		}
+	}
+	return false
 }

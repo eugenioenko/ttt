@@ -43,6 +43,14 @@ type CursorPositioner interface {
 	CursorPosition() (x, y int, visible bool)
 }
 
+type PointerCaptureCanceler interface {
+	CancelPointerCapture() bool
+}
+
+type PointerCaptureOwner interface {
+	OwnsPointerCapture() bool
+}
+
 func hasFocusedChild(w Widget) bool {
 	if fw, ok := w.(FocusableWidget); ok && fw.IsFocused() {
 		return true

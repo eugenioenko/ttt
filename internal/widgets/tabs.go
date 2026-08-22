@@ -83,9 +83,13 @@ func (t *TabsWidget) ActiveID() string {
 }
 
 func (t *TabsWidget) Render(surface Surface) {
+	if t.drag.Active() && t.drag.From() >= len(t.Config.Items) {
+		t.CancelPointerCapture()
+	}
 	inner := t.RenderBox(surface)
 	w, _ := inner.Size()
 	if w <= 0 {
+		t.ClearRenderedGeometry()
 		return
 	}
 
@@ -115,6 +119,10 @@ func (t *TabsWidget) Render(surface Surface) {
 	tabAreaW := w - actionsW
 	if hasOverflow {
 		tabAreaW -= overflowW
+	}
+	if tabAreaW <= 0 {
+		t.ClearRenderedGeometry()
+		return
 	}
 
 	t.tabSpans = make([][2]int, len(t.Config.Items))
@@ -364,6 +372,7 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 			}
 			if t.Config.Reorderable && t.Config.OnReorder != nil {
 				t.drag.Begin(i, mx)
+				return EventCaptured
 			}
 			return EventConsumed
 		}
@@ -373,6 +382,27 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 
 func (t *TabsWidget) PointerGestureActive() bool {
 	return t.drag.Active()
+}
+
+func (t *TabsWidget) OwnsPointerCapture() bool {
+	return t.drag.Active()
+}
+
+func (t *TabsWidget) CancelPointerCapture() bool {
+	if !t.drag.Active() {
+		return false
+	}
+	t.drag.Cancel()
+	t.wasPressed = false
+	return true
+}
+
+func (t *TabsWidget) ClearRenderedGeometry() {
+	t.tabSpans = nil
+	t.overSpan = [2]int{}
+	t.actionSpans = nil
+	t.hiddenTabs = nil
+	t.CancelPointerCapture()
 }
 
 func (t *TabsWidget) dropTargetAt(localX int) int {

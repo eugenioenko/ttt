@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"log/slog"
 
 	"github.com/gdamore/tcell/v3"
@@ -285,4 +286,39 @@ func (s *SplitPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 func (s *SplitPanelWidget) DividerScreenX() int {
 	r := s.GetRect()
 	return r.X + s.DividerPos + 1
+}
+
+func (s *SplitPanelWidget) CancelPointerCapture() bool {
+	children := []Widget{s.capturedChild, s.Left, s.Right}
+	for _, child := range children {
+		if child == nil {
+			continue
+		}
+		if canceler, ok := child.(widgets.PointerCaptureCanceler); ok && canceler.CancelPointerCapture() {
+			s.capturedChild = nil
+			s.wasPressed = false
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SplitPanelWidget) OwnsPointerCapture() bool {
+	if s.dragging {
+		return true
+	}
+	if s.capturedChild != nil {
+		owner, ok := s.capturedChild.(widgets.PointerCaptureOwner)
+		if !ok || owner.OwnsPointerCapture() {
+			return true
+		}
+		s.capturedChild = nil
+		s.wasPressed = false
+	}
+	for _, child := range []Widget{s.Left, s.Right} {
+		if owner, ok := child.(widgets.PointerCaptureOwner); ok && owner.OwnsPointerCapture() {
+			return true
+		}
+	}
+	return false
 }

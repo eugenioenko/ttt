@@ -28,6 +28,7 @@ func RunEventLoop(
 ) {
 	app.eventLoopDoneSignal()
 	defer app.closeEventLoopDone()
+	defer app.Root.CancelPointerCapture()
 	if app.Watcher != nil {
 		defer app.Watcher.Close()
 	}
@@ -279,6 +280,8 @@ func RunEventLoop(
 					app.Status.SetSegment(view.StatusSegment{ID: "blame", Side: "left", Priority: 200, Text: fmt.Sprintf("%s, %s",
 						v.Info.Author, git.FormatRelativeTime(v.Info.Time))})
 				}
+			case *ui.TabDragAutoScrollTick:
+				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
 			case *GitGutterResult:
 				if v.Gen == app.GitGutterGen {
 					app.EditorGroup.SetLineChanges(v.Path, v.Changes)
