@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -56,14 +57,20 @@ type ChangesPanel struct {
 	pendingLogSelection string
 	// logExpanded and logSelected outlive any one repo's log, so switching
 	// between roots in a workspace and back returns to what was open.
-	logExpanded map[string]bool
-	logSelected map[string]string
+	logExpanded        map[string]bool
+	logSelected        map[string]string
+	logFolderExpanded  map[string]bool
+	workFolderExpanded map[workFolderStateKey]bool
+	workNodes          map[string]workNodeRef
+	workFiles          map[string]workFileRef
+	fileView           string
 
 	OnOpenDiff       func(dir string, status git.FileStatus, extended bool)
 	OnOpenCommit     func(dir, ref, short string)
 	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
 	OnOpenFile       func(path string)
 	OnRightClick     func(dir string, status git.FileStatus, screenX, screenY int)
+	OnPanelMenu      func(screenX, screenY int)
 	OnCommit         func(dir string, message string)
 	OnGroupMenu      func(dir string, screenX, screenY int)
 	OnPRGroupMenu    func(group *ui.ChangesGroup, screenX, screenY int)
@@ -80,7 +87,9 @@ type changesCommandContext uint8
 const (
 	changesWorkingTree changesCommandContext = iota
 	changesCommitLog
+)
 
+const (
 	changesHistoryMinHeight     = 4 // title plus three usable log rows
 	changesWorkingTreeMinHeight = 5 // input, divider, and three tree rows
 )
@@ -92,10 +101,30 @@ type changesGroup struct {
 	Unstaged []git.FileStatus
 }
 
-// commitFileRef ties a commit-log node back to the file it stands for. The
-// panel keeps a map rather than encoding dir, hash and path into the node ID:
-// all three can contain a colon, and parseFileNode's reverse scan is already at
-// its limit with two fields.
+type workFileRef struct {
+	Dir    string
+	Status git.FileStatus
+	Staged bool
+	Kind   workNodeKind
+}
+
+type workNodeRef struct {
+	Dir    string
+	Path   string
+	Staged bool
+	Kind   workNodeKind
+	Group  int
+	PR     bool
+}
+
+type workFolderStateKey struct {
+	Dir  string
+	Path string
+	PR   bool
+}
+
+// commitFileRef ties a commit-log node back to the immutable commit it belongs
+// to without parsing path content out of the node ID.
 type commitFileRef struct {
 	Dir string
 	// Ref is the full hash, which is what git is asked with and what the tab
@@ -118,14 +147,19 @@ type prGroup struct {
 
 func NewChangesPanel(dirs ...string) *ChangesPanel {
 	cp := &ChangesPanel{
-		Dirs:        dirs,
-		multiRoot:   len(dirs) > 1,
-		expanded:    make(map[string]bool),
-		commitFiles: make(map[string][]git.FileStatus),
-		logCommits:  make(map[string]commitFileRef),
-		logFiles:    make(map[string]commitFileRef),
-		logExpanded: make(map[string]bool),
-		logSelected: make(map[string]string),
+		Dirs:               dirs,
+		multiRoot:          len(dirs) > 1,
+		expanded:           make(map[string]bool),
+		commitFiles:        make(map[string][]git.FileStatus),
+		logCommits:         make(map[string]commitFileRef),
+		logFiles:           make(map[string]commitFileRef),
+		logExpanded:        make(map[string]bool),
+		logSelected:        make(map[string]string),
+		logFolderExpanded:  make(map[string]bool),
+		workFolderExpanded: make(map[workFolderStateKey]bool),
+		workNodes:          make(map[string]workNodeRef),
+		workFiles:          make(map[string]workFileRef),
+		fileView:           config.GitFileViewList,
 
 		commitFilesPending: make(map[string]commitFilesRequest),
 	}
@@ -176,8 +210,16 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 		},
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			if cmd == "activate" {
+				if isCommitFolderNode(node) {
+					node.Expanded = !node.Expanded
+					cp.CommitLog.SetItems(cp.CommitLog.Config.Items)
+					return
+				}
 				cp.openCommitLogNode(node)
 			}
+		},
+		OnMenu: func(_ []widgets.MenuEntry, _ *widgets.TreeNode, sx, sy int) {
+			cp.showPanelMenu(sx, sy)
 		},
 		OnKey: func(ev *tcell.EventKey, node *widgets.TreeNode) bool {
 			return cp.handleCommitLogKey(ev, node)
@@ -300,13 +342,16 @@ func (cp *ChangesPanel) refreshCommitLog() {
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		cp.ApplyCommitLog(readCommitLog(ctx, dir, gen))
+		result := readCommitLog(ctx, dir, gen)
 		cancel()
+		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(readCommitLog(ctx, dir, gen)))
+		result := readCommitLog(ctx, dir, gen)
+		cancel()
+		screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
 }
 
@@ -351,6 +396,7 @@ func (cp *ChangesPanel) saveCommitLogState() {
 		} else {
 			delete(cp.logExpanded, key)
 		}
+		cp.saveCommitFolderState(node.Children)
 	}
 	if cp.pendingLogSelection != "" {
 		// A second rebuild can land while the selected child's read is still in
@@ -359,6 +405,15 @@ func (cp *ChangesPanel) saveCommitLogState() {
 		cp.logSelected[cp.logDir] = cp.pendingLogSelection
 	} else if node := cp.CommitLog.Selected(); node != nil {
 		cp.logSelected[cp.logDir] = node.ID
+	}
+}
+
+func (cp *ChangesPanel) saveCommitFolderState(nodes []*widgets.TreeNode) {
+	for _, node := range nodes {
+		if isCommitFolderNode(node) {
+			cp.logFolderExpanded[node.ID] = node.Expanded
+		}
+		cp.saveCommitFolderState(node.Children)
 	}
 }
 
@@ -442,19 +497,25 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 		// that changed nothing against its first parent is the usual cause.
 		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: "No files", Muted: true}}
 	}
-	nodes := make([]*widgets.TreeNode, 0, len(files))
-	for _, f := range files {
+	makeLeaf := func(f git.FileStatus) *widgets.TreeNode {
 		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
 		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short}
-		nodes = append(nodes, &widgets.TreeNode{
+		return &widgets.TreeNode{
 			ID:           id,
 			Label:        f.Path,
 			Icon:         ui.StatusBadge(f.Status),
 			IconStyle:    ui.StatusStyle(f.Status),
 			TruncateLeft: true,
-		})
+		}
 	}
-	return nodes
+	if cp.fileView == config.GitFileViewList {
+		nodes := make([]*widgets.TreeNode, 0, len(files))
+		for _, f := range files {
+			nodes = append(nodes, makeLeaf(f))
+		}
+		return nodes
+	}
+	return compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded)
 }
 
 func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, _ bool) {
@@ -492,25 +553,71 @@ func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.Tre
 		cp.Refresh()
 		return true
 	case 'c', 'o', 'v':
-		cp.openCommitFile(node, false)
+		cp.openCommitLogNode(node)
 		return true
 	case 'e':
-		cp.openCommitFile(node, true)
+		if _, isCommit := cp.logCommits[node.ID]; isCommit {
+			cp.openCommitLogNode(node)
+		} else {
+			cp.openCommitFile(node, true)
+		}
 		return true
 	}
 	return false
 }
 
 func (cp *ChangesPanel) saveExpanded() {
-	for _, node := range cp.Tree.FlatList() {
-		if node.Expandable || len(node.Children) > 0 {
-			cp.expanded[node.ID] = node.Expanded
+	var visit func([]*widgets.TreeNode)
+	visit = func(nodes []*widgets.TreeNode) {
+		for _, node := range nodes {
+			if node.Expandable || len(node.Children) > 0 {
+				cp.expanded[node.ID] = node.Expanded
+			}
+			if ref, ok := cp.workNodes[node.ID]; ok && (ref.Kind == workNodeFolder || ref.Kind == workNodePRFolder) {
+				cp.workFolderExpanded[workFolderStateKey{Dir: ref.Dir, Path: ref.Path, PR: ref.PR}] = node.Expanded
+			}
+			visit(node.Children)
 		}
 	}
+	visit(cp.Tree.Config.Items)
+}
+
+// ExpandAll opens the working-tree hierarchy and every already-loaded folder
+// in commit file trees. Commit rows remain untouched so this never starts a
+// history-wide burst of Git reads.
+func (cp *ChangesPanel) ExpandAll() {
+	cp.Tree.ExpandAll()
+	cp.setCommitFoldersExpanded(true)
+	cp.saveExpanded()
+}
+
+func (cp *ChangesPanel) CollapseAll() {
+	cp.Tree.CollapseAll()
+	cp.setCommitFoldersExpanded(false)
+	cp.saveExpanded()
+}
+
+func (cp *ChangesPanel) setCommitFoldersExpanded(expanded bool) {
+	var visit func([]*widgets.TreeNode)
+	visit = func(nodes []*widgets.TreeNode) {
+		for _, node := range nodes {
+			if isCommitFolderNode(node) {
+				node.Expanded = expanded
+				cp.logFolderExpanded[node.ID] = expanded
+			}
+			visit(node.Children)
+		}
+	}
+	visit(cp.CommitLog.Config.Items)
+	cp.CommitLog.SetItems(cp.CommitLog.Config.Items)
 }
 
 func (cp *ChangesPanel) restoreExpanded(node *widgets.TreeNode) {
-	if exp, ok := cp.expanded[node.ID]; ok {
+	if ref, ok := cp.workNodes[node.ID]; ok && (ref.Kind == workNodeFolder || ref.Kind == workNodePRFolder) {
+		if exp, ok := cp.workFolderExpanded[workFolderStateKey{Dir: ref.Dir, Path: ref.Path, PR: ref.PR}]; ok {
+			node.Expanded = exp
+		}
+	} else if exp, ok := cp.expanded[node.ID]; ok {
 		node.Expanded = exp
 	}
 	for _, child := range node.Children {
@@ -519,14 +626,25 @@ func (cp *ChangesPanel) restoreExpanded(node *widgets.TreeNode) {
 }
 
 func (cp *ChangesPanel) buildTree() {
+	selected := ""
+	var selectedFile workFileRef
+	selectedWasFile := false
+	if node := cp.Tree.Selected(); node != nil {
+		selected = node.ID
+		selectedFile, selectedWasFile = cp.workFiles[node.ID]
+	}
+	cp.workNodes = make(map[string]workNodeRef)
+	cp.workFiles = make(map[string]workFileRef)
 	var roots []*widgets.TreeNode
 
 	for gi, g := range cp.groups {
 		var sectionNodes []*widgets.TreeNode
 
 		if len(g.Staged) > 0 {
+			id := workingNodeID(workNodeSection, g.Dir, "", true)
+			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Staged: true, Kind: workNodeSection, Group: gi}
 			stagedNode := &widgets.TreeNode{
-				ID:         fmt.Sprintf("staged:%d", gi),
+				ID:         id,
 				Label:      fmt.Sprintf("Staged (%d)", len(g.Staged)),
 				Expandable: true,
 				Expanded:   true,
@@ -535,16 +653,15 @@ func (cp *ChangesPanel) buildTree() {
 					{Icon: "−", Command: "unstageAll"},
 				},
 			}
-			for _, f := range g.Staged {
-				child := cp.fileNode(g.Dir, f, true)
-				stagedNode.Children = append(stagedNode.Children, child)
-			}
+			stagedNode.Children = cp.fileNodes(g.Dir, g.Staged, true, gi, false)
 			sectionNodes = append(sectionNodes, stagedNode)
 		}
 
 		if len(g.Unstaged) > 0 {
+			id := workingNodeID(workNodeSection, g.Dir, "", false)
+			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Kind: workNodeSection, Group: gi}
 			changesNode := &widgets.TreeNode{
-				ID:         fmt.Sprintf("changes:%d", gi),
+				ID:         id,
 				Label:      fmt.Sprintf("Changes (%d)", len(g.Unstaged)),
 				Expandable: true,
 				Expanded:   true,
@@ -554,16 +671,15 @@ func (cp *ChangesPanel) buildTree() {
 					{Icon: "+", Command: "stageAll"},
 				},
 			}
-			for _, f := range g.Unstaged {
-				child := cp.fileNode(g.Dir, f, false)
-				changesNode.Children = append(changesNode.Children, child)
-			}
+			changesNode.Children = cp.fileNodes(g.Dir, g.Unstaged, false, gi, false)
 			sectionNodes = append(sectionNodes, changesNode)
 		}
 
 		if cp.multiRoot {
+			id := workingNodeID(workNodeRoot, g.Dir, "", false)
+			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Kind: workNodeRoot, Group: gi}
 			root := &widgets.TreeNode{
-				ID:         fmt.Sprintf("root:%d", gi),
+				ID:         id,
 				Label:      g.Name,
 				Expandable: true,
 				Expanded:   true,
@@ -579,8 +695,10 @@ func (cp *ChangesPanel) buildTree() {
 	}
 
 	for pi, pg := range cp.PRGroups {
+		id := workingNodeID(workNodePRRoot, pg.Dir, pg.Name, false)
+		cp.workNodes[id] = workNodeRef{Dir: pg.Dir, Path: pg.Name, Kind: workNodePRRoot, Group: pi, PR: true}
 		prRoot := &widgets.TreeNode{
-			ID:         fmt.Sprintf("pr:%d", pi),
+			ID:         id,
 			Label:      pg.Name,
 			Expandable: true,
 			Expanded:   true,
@@ -588,11 +706,8 @@ func (cp *ChangesPanel) buildTree() {
 				{Icon: "⋮", Command: "prGroupMenu"},
 			},
 		}
-		for _, f := range pg.Files {
-			child := cp.fileNode(pg.Dir, f, false)
-			child.Actions = nil
-			prRoot.Children = append(prRoot.Children, child)
-		}
+		prRoot.Children = cp.fileNodes(pg.Dir, pg.Files, false, pi, true)
+		clearTreeActions(prRoot.Children)
 		roots = append(roots, prRoot)
 	}
 
@@ -601,9 +716,21 @@ func (cp *ChangesPanel) buildTree() {
 	}
 
 	cp.Tree.SetItems(roots)
+	if revealTreeSelection(cp.Tree, selected) || !selectedWasFile {
+		return
+	}
+	fallbackID := workingNodeID(selectedFile.Kind, selectedFile.Dir, selectedFile.Status.Path, !selectedFile.Staged)
+	revealTreeSelection(cp.Tree, fallbackID)
 }
 
-func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool) *widgets.TreeNode {
+func clearTreeActions(nodes []*widgets.TreeNode) {
+	for _, node := range nodes {
+		node.Actions = nil
+		clearTreeActions(node.Children)
+	}
+}
+
+func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind workNodeKind, group int, pr bool) *widgets.TreeNode {
 	icon := ui.StatusBadge(f.Status)
 	iconStyle := ui.StatusStyle(f.Status)
 	actionIcon := "+"
@@ -612,8 +739,11 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool) *wid
 		actionIcon = "−"
 		actionCmd = "unstage"
 	}
+	id := workingNodeID(kind, dir, f.Path, staged)
+	cp.workFiles[id] = workFileRef{Dir: dir, Status: f, Staged: staged, Kind: kind}
+	cp.workNodes[id] = workNodeRef{Dir: dir, Path: f.Path, Staged: staged, Kind: kind, Group: group, PR: pr}
 	return &widgets.TreeNode{
-		ID:        fmt.Sprintf("file:%s:%s:%v", dir, f.Path, staged),
+		ID:        id,
 		Label:     f.Path,
 		Icon:      icon,
 		IconStyle: iconStyle,
@@ -660,15 +790,8 @@ func (cp *ChangesPanel) selectedGroupDir() string {
 	if ok {
 		return dir
 	}
-	gi := cp.groupIndexFromNode(node)
-	if gi >= 0 && gi < len(cp.groups) {
-		return cp.groups[gi].Dir
-	}
-	if strings.HasPrefix(node.ID, "root:") {
-		var idx int
-		if _, err := fmt.Sscanf(node.ID, "root:%d", &idx); err == nil && idx < len(cp.groups) {
-			return cp.groups[idx].Dir
-		}
+	if ref, found := cp.workNodes[node.ID]; found && !ref.PR {
+		return ref.Dir
 	}
 	return ""
 }
@@ -678,16 +801,8 @@ func (cp *ChangesPanel) selectedInPR() bool {
 	if node == nil {
 		return false
 	}
-	dir, _, _, ok := cp.parseFileNode(node)
-	if ok {
-		for _, pg := range cp.PRGroups {
-			if pg.Dir == dir {
-				return true
-			}
-		}
-		return false
-	}
-	return strings.HasPrefix(node.ID, "pr:")
+	ref, found := cp.workNodes[node.ID]
+	return found && ref.PR
 }
 
 func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
@@ -820,22 +935,25 @@ func (cp *ChangesPanel) handleMenu(node *widgets.TreeNode, sx, sy int) {
 		cp.OnRightClick(dir, status, sx, sy)
 		return
 	}
-	for _, pg := range cp.PRGroups {
-		if node.Label == pg.Name {
-			if cp.OnPRGroupMenu != nil {
-				uiGroup := cp.toUIChangesGroup(&pg)
-				cp.OnPRGroupMenu(uiGroup, sx, sy)
-			}
-			return
+	if ref, found := cp.workNodes[node.ID]; found && ref.Kind == workNodePRRoot && ref.Group >= 0 && ref.Group < len(cp.PRGroups) {
+		if cp.OnPRGroupMenu != nil {
+			uiGroup := cp.toUIChangesGroup(&cp.PRGroups[ref.Group])
+			cp.OnPRGroupMenu(uiGroup, sx, sy)
 		}
+		return
 	}
-	for gi, g := range cp.groups {
-		if node.ID == fmt.Sprintf("root:%d", gi) {
-			if cp.OnGroupMenu != nil {
-				cp.OnGroupMenu(g.Dir, sx, sy)
-			}
-			return
+	if ref, found := cp.workNodes[node.ID]; found && ref.Kind == workNodeRoot {
+		if cp.OnGroupMenu != nil {
+			cp.OnGroupMenu(ref.Dir, sx, sy)
 		}
+		return
+	}
+	cp.showPanelMenu(sx, sy)
+}
+
+func (cp *ChangesPanel) showPanelMenu(sx, sy int) {
+	if cp.OnPanelMenu != nil {
+		cp.OnPanelMenu(sx, sy)
 	}
 }
 
@@ -858,72 +976,18 @@ func (cp *ChangesPanel) parseFileNode(node *widgets.TreeNode) (dir string, statu
 	if node == nil {
 		return
 	}
-	id := node.ID
-	if len(id) < 6 || id[:5] != "file:" {
-		return
+	ref, found := cp.workFiles[node.ID]
+	if !found {
+		return "", git.FileStatus{}, false, false
 	}
-	rest := id[5:]
-	lastColon := -1
-	for i := len(rest) - 1; i >= 0; i-- {
-		if rest[i] == ':' {
-			lastColon = i
-			break
-		}
-	}
-	if lastColon < 0 {
-		return
-	}
-	s := rest[lastColon+1:] == "true"
-	rest = rest[:lastColon]
-
-	secondLastColon := -1
-	for i := len(rest) - 1; i >= 0; i-- {
-		if rest[i] == ':' {
-			secondLastColon = i
-			break
-		}
-	}
-	if secondLastColon < 0 {
-		return
-	}
-	d := rest[:secondLastColon]
-	path := rest[secondLastColon+1:]
-
-	for _, g := range cp.groups {
-		if g.Dir == d {
-			files := g.Unstaged
-			if s {
-				files = g.Staged
-			}
-			for _, f := range files {
-				if f.Path == path {
-					return d, f, s, true
-				}
-			}
-		}
-	}
-	for _, pg := range cp.PRGroups {
-		if pg.Dir == d {
-			for _, f := range pg.Files {
-				if f.Path == path {
-					return d, f, false, true
-				}
-			}
-		}
-	}
-	return
+	return ref.Dir, ref.Status, ref.Staged, true
 }
 
 func (cp *ChangesPanel) groupIndexFromNode(node *widgets.TreeNode) int {
-	var gi int
-	if _, err := fmt.Sscanf(node.ID, "changes:%d", &gi); err == nil {
-		return gi
-	}
-	if _, err := fmt.Sscanf(node.ID, "staged:%d", &gi); err == nil {
-		return gi
-	}
-	if _, err := fmt.Sscanf(node.ID, "root:%d", &gi); err == nil {
-		return gi
+	if node != nil {
+		if ref, ok := cp.workNodes[node.ID]; ok && !ref.PR {
+			return ref.Group
+		}
 	}
 	return -1
 }

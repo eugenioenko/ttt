@@ -77,7 +77,7 @@ func TestOptionsMenuToggleWordWrap(t *testing.T) {
 	}
 }
 
-func TestOptionsOwnDiffDefaultsAndChangesKeepsContextualAccess(t *testing.T) {
+func TestOptionsAndChangesShareCheckedPresentationSubmenus(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 	h.app.EditorGroup.OpenDiff("existing.go", diff.FileDiff{}, []string{"old"}, []string{"new"}, true)
@@ -87,19 +87,23 @@ func TestOptionsOwnDiffDefaultsAndChangesKeepsContextualAccess(t *testing.T) {
 	}
 
 	options := h.app.BuildOptionsMenu()
-	for _, command := range []string{"options.diffViewMode", "options.diffContext", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast"} {
+	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast", "options.useGitFileTree", "options.useGitFileList", "changes.expandAll", "changes.collapseAll"} {
 		if _, ok := findMenuCommand(options, command); !ok {
 			t.Errorf("Options menu missing %s", command)
 		}
 	}
-	if _, ok := findMenuCommand(options, "options.useSplitDiff"); ok {
-		t.Fatal("Options should use the consolidated Diff View Mode picker")
-	}
 	changes := h.app.BuildChangesPanelMenu()
-	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast"} {
+	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast", "options.useGitFileTree", "options.useGitFileList", "changes.expandAllWorkingTree", "changes.collapseAllWorkingTree"} {
 		if _, ok := findMenuCommand(changes, command); !ok {
 			t.Errorf("Changes menu missing contextual command %s", command)
 		}
+	}
+	if item, ok := findMenuCommand(options, "options.useGitFileList"); !ok || item.Checked != ui.MenuChecked {
+		t.Fatalf("List should be the checked default: item=%+v found=%v", item, ok)
+	}
+	h.exec("options.useGitFileTree")
+	if item, ok := findMenuCommand(h.app.BuildChangesContextMenu(), "options.useGitFileTree"); !ok || item.Checked != ui.MenuChecked {
+		t.Fatalf("Changes context did not share checked Tree state: item=%+v found=%v", item, ok)
 	}
 
 	h.exec("options.useUnifiedDiff")

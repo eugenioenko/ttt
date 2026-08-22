@@ -9,12 +9,14 @@ type ScrollViewWidget struct {
 	BaseWidget
 	Child ScrollableWidget
 
-	scrollX      int
-	scrollY      int
-	vbar         scrollbar
-	focused      bool
-	lastContentH int
-	lastViewH    int
+	scrollX                   int
+	scrollY                   int
+	vbar                      scrollbar
+	focused                   bool
+	lastContentH              int
+	lastViewH                 int
+	pointerCaptureInvalidated func()
+	cancelingPointerCapture   bool
 }
 
 func (s *ScrollViewWidget) WidgetChildren() []Widget {
@@ -96,6 +98,7 @@ func (sv *ScrollViewWidget) Render(surface Surface) {
 	surface = sv.RenderBox(surface)
 	w, h := surface.Size()
 	if w <= 0 || h <= 0 || sv.Child == nil {
+		sv.InvalidatePointerInteraction()
 		return
 	}
 
@@ -231,6 +234,53 @@ func (sv *ScrollViewWidget) HandleEvent(ev tcell.Event) EventResult {
 		return sv.Child.HandleEvent(ev)
 	}
 	return EventIgnored
+}
+
+func (sv *ScrollViewWidget) CancelPointerCapture() bool {
+	canceled := sv.vbar.isDragging()
+	sv.vbar.dragging = false
+	sv.cancelingPointerCapture = true
+	if sv.Child != nil {
+		canceled = CancelPointerCapture(sv.Child) || canceled
+	}
+	sv.cancelingPointerCapture = false
+	if canceled && sv.pointerCaptureInvalidated != nil {
+		sv.pointerCaptureInvalidated()
+	}
+	return canceled
+}
+
+func (sv *ScrollViewWidget) OwnsPointerCapture() bool {
+	if sv.vbar.isDragging() {
+		return true
+	}
+	owner, ok := sv.Child.(PointerCaptureOwner)
+	return ok && owner.OwnsPointerCapture()
+}
+
+func (sv *ScrollViewWidget) InvalidatePointerInteraction() bool {
+	invalidated := sv.vbar.isDragging()
+	sv.vbar.dragging = false
+	sv.cancelingPointerCapture = true
+	if sv.Child != nil {
+		invalidated = InvalidatePointerInteraction(sv.Child) || invalidated
+	}
+	sv.cancelingPointerCapture = false
+	if invalidated && sv.pointerCaptureInvalidated != nil {
+		sv.pointerCaptureInvalidated()
+	}
+	return invalidated
+}
+
+func (sv *ScrollViewWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	sv.pointerCaptureInvalidated = invalidated
+	if sv.Child != nil {
+		SetPointerCaptureInvalidated(sv.Child, func() {
+			if !sv.cancelingPointerCapture && sv.pointerCaptureInvalidated != nil {
+				sv.pointerCaptureInvalidated()
+			}
+		})
+	}
 }
 
 func (sv *ScrollViewWidget) viewportContains(mx, my int) bool {

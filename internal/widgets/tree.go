@@ -69,10 +69,11 @@ type TreeWidget struct {
 	lastSel   int
 	focused   bool
 
-	scrollbar scrollbar
-	contentX  int
-	contentY  int
-	contentW  int
+	scrollbar                 scrollbar
+	contentX                  int
+	contentY                  int
+	contentW                  int
+	pointerCaptureInvalidated func()
 }
 
 func NewTreeWidget(cfg TreeConfig) *TreeWidget {
@@ -134,6 +135,78 @@ func (t *TreeWidget) AppendItem(item *TreeNode) {
 
 func (t *TreeWidget) SetActiveID(id string) {
 	t.Config.ActiveID = id
+}
+
+// CollapseAll closes every materialized branch while preserving the selected
+// node when it remains visible. A selection hidden inside a collapsed branch
+// falls back to the first visible row instead of drifting by numeric index.
+func (t *TreeWidget) CollapseAll() {
+	selectedID := t.selectedID()
+	setTreeExpanded(t.Config.Items, false)
+	t.flatten()
+	t.restoreVisibleSelection(selectedID)
+}
+
+// ExpandAll opens every branch currently represented in the model. Lazy trees
+// load one newly revealed level without recursively walking newly loaded nodes.
+func (t *TreeWidget) ExpandAll() {
+	t.ExpandAllWhere(func(*TreeNode) bool { return true })
+}
+
+func (t *TreeWidget) ExpandAllWhere(include func(*TreeNode) bool) {
+	selectedID := t.selectedID()
+	nodes := materializedTreeNodes(t.Config.Items)
+	for _, node := range nodes {
+		if !node.isExpandable() || !include(node) {
+			continue
+		}
+		node.Expanded = true
+		if len(node.Children) == 0 && t.Config.OnExpand != nil {
+			t.Config.OnExpand(node)
+		}
+	}
+	t.flatten()
+	t.restoreVisibleSelection(selectedID)
+}
+
+func (t *TreeWidget) selectedID() string {
+	if node := t.Selected(); node != nil {
+		return node.ID
+	}
+	return ""
+}
+
+func (t *TreeWidget) restoreVisibleSelection(id string) {
+	t.selected = 0
+	if id == "" {
+		t.clampSelected()
+		return
+	}
+	for i, node := range t.flatList {
+		if node.ID == id {
+			t.selected = i
+			return
+		}
+	}
+	t.clampSelected()
+}
+
+func setTreeExpanded(nodes []*TreeNode, expanded bool) {
+	for _, node := range nodes {
+		if node.isExpandable() {
+			node.Expanded = expanded
+		}
+		setTreeExpanded(node.Children, expanded)
+	}
+}
+
+func materializedTreeNodes(nodes []*TreeNode) []*TreeNode {
+	var result []*TreeNode
+	for _, node := range nodes {
+		result = append(result, node)
+		result = append(result, materializedTreeNodes(node.Children)...)
+	}
+	return result
 }
 
 func (t *TreeWidget) Reload() {
@@ -481,6 +554,27 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 		t.Config.OnSelect(t.Selected())
 	}
 	return result
+}
+
+func (t *TreeWidget) CancelPointerCapture() bool {
+	canceled := t.scrollbar.isDragging()
+	t.scrollbar.dragging = false
+	if canceled && t.pointerCaptureInvalidated != nil {
+		t.pointerCaptureInvalidated()
+	}
+	return canceled
+}
+
+func (t *TreeWidget) OwnsPointerCapture() bool {
+	return t.scrollbar.isDragging()
+}
+
+func (t *TreeWidget) InvalidatePointerInteraction() bool {
+	return t.CancelPointerCapture()
+}
+
+func (t *TreeWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	t.pointerCaptureInvalidated = invalidated
 }
 
 func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {

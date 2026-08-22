@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -37,24 +38,42 @@ func IsRepoContext(ctx context.Context, dir string) bool {
 }
 
 func StatusFiles(dir string) ([]FileStatus, error) {
-	cmd := exec.Command("git", "-C", dir, "status", "--porcelain", "-u")
+	cmd := exec.Command("git", "-C", dir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
+	return parseStatusPorcelainZ(out), nil
+}
+
+func parseStatusPorcelainZ(out []byte) []FileStatus {
 	var files []FileStatus
-	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
-		if len(line) < 4 {
+	for len(out) > 0 {
+		end := bytes.IndexByte(out, 0)
+		if end < 0 {
+			break
+		}
+		record := out[:end]
+		out = out[end+1:]
+		if len(record) < 3 || record[2] != ' ' {
 			continue
 		}
-		x := line[0] // index (staged) status
-		y := line[1] // worktree (unstaged) status
-		path := strings.TrimSpace(line[3:])
+		x := record[0]
+		y := record[1]
+		path := string(record[3:])
 
 		var oldPath string
-		if parts := strings.SplitN(path, " -> ", 2); len(parts) == 2 {
-			oldPath = parts[0]
-			path = parts[1]
+		renameOrCopy := x == 'R' || x == 'C' || y == 'R' || y == 'C'
+		if renameOrCopy {
+			oldEnd := bytes.IndexByte(out, 0)
+			if oldEnd < 0 {
+				break
+			}
+			oldPath = string(out[:oldEnd])
+			out = out[oldEnd+1:]
+		}
+		if path == "" || renameOrCopy && oldPath == "" {
+			continue
 		}
 
 		if x != ' ' && x != '?' {
@@ -68,7 +87,7 @@ func StatusFiles(dir string) ([]FileStatus, error) {
 			files = append(files, FileStatus{Status: st, Path: path, OldPath: oldPath, Staged: false})
 		}
 	}
-	return files, nil
+	return files
 }
 
 // Stage, Unstage and Discard take any number of paths so bulk actions spawn one

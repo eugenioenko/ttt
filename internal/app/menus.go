@@ -108,6 +108,13 @@ var diffContextMenu = []ui.ContextMenuItem{
 	{Label: "Find", Command: "search.find"},
 }
 
+var commitDetailContextMenu = []ui.ContextMenuItem{
+	{Label: "Copy", Command: "editor.copy"},
+	ui.MenuSep(),
+	{Label: "Expand All Files", Command: "changes.expandAllCommitDetail"},
+	{Label: "Collapse All Files", Command: "changes.collapseAllCommitDetail"},
+}
+
 var changesContextMenuStaged = []ui.ContextMenuItem{
 	{Label: "Open Compact Diff", Command: "changes.openDiff"},
 	{Label: "Open Extended Diff", Command: "changes.openExtendedDiff"},
@@ -256,7 +263,10 @@ func handleRightClick(app *App, mx, my int) {
 			if my > sidebarR.Y+1 {
 				ev := tcell.NewEventMouse(mx, my, tcell.Button2, 0)
 				if w := app.Sidebar.ActiveWidget(); w != nil {
-					w.HandleEvent(ev)
+					result := w.HandleEvent(ev)
+					if result == ui.EventIgnored && app.Sidebar.ActivePanel == "changes" {
+						app.ShowChangesContextMenu(mx, my)
+					}
 				}
 			}
 			return
@@ -270,7 +280,9 @@ func handleRightClick(app *App, mx, my int) {
 		return
 	}
 
-	if app.EditorGroup.ActiveDiffWidget() != nil {
+	if app.EditorGroup.ActiveCommitDetailWidget() != nil {
+		openContextMenu(app, commitDetailContextMenu, mx, my)
+	} else if app.EditorGroup.ActiveDiffWidget() != nil {
 		openContextMenu(app, diffContextMenu, mx, my)
 	} else {
 		openEditorContextMenu(app, mx, my)

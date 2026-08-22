@@ -27,6 +27,9 @@ func TestContentSplitRatioTracksLayoutUntilDragged(t *testing.T) {
 	if got := bottom.GetRect().H; got != 10 {
 		t.Fatalf("20-row ratio height = %d, want 10", got)
 	}
+	if got := split.TopContentHeight(); got != top.GetRect().H {
+		t.Fatalf("20-row ratio top height = %d, rendered %d", got, top.GetRect().H)
+	}
 	render(30)
 	if got := bottom.GetRect().H; got != 15 {
 		t.Fatalf("30-row ratio height = %d, want 15", got)

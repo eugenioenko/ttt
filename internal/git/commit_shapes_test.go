@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func commitShapeGit(t *testing.T, dir string, args ...string) string {
@@ -103,8 +102,5 @@ func TestCommitLogUnbornAndNonRepo(t *testing.T) {
 	}
 	if _, err := LogWithError(t.TempDir(), 10); err == nil {
 		t.Fatal("non-repository log unexpectedly succeeded")
-	}
-	if got, err := time.Parse(time.RFC3339, "2026-08-22T03:14:15-04:00"); err != nil || got.Second() != 15 {
-		t.Fatal("test timestamp invalid")
 	}
 }

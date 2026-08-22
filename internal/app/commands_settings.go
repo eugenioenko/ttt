@@ -92,6 +92,9 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.Explorer.Settings = s.Explorer
 		a.Explorer.Reload()
 	}
+	if a.Changes != nil {
+		a.Changes.SetFileView(s.Git.FileView)
+	}
 
 	// An empty theme name means the built-in default, and must still be applied —
 	// otherwise switching back to it leaves the previous theme's colors on screen.

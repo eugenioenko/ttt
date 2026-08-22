@@ -122,6 +122,18 @@ func registerExplorerCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "explorer.expandAll", Title: "Explorer: Expand All",
+		Keywords: []string{"view", "file", "tree", "folder", "expand"},
+		Handler:  app.Explorer.ExpandAll,
+	})
+
+	reg.Register(command.Command{
+		ID: "explorer.collapseAll", Title: "Explorer: Collapse All",
+		Keywords: []string{"view", "file", "tree", "folder", "collapse"},
+		Handler:  app.Explorer.CollapseAll,
+	})
+
+	reg.Register(command.Command{
 		ID: "explorer.open", Title: "Explorer: Toggle Node",
 		Keywords: []string{"view", "file"},
 		Handler:  func() { app.Explorer.Tree.ActivateSelected() },

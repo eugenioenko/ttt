@@ -39,4 +39,34 @@ describe("commit history detail", () => {
     expect(snapshots[detail]).toContain("second-detail.txt");
     expect(snapshots[detail]).toContain("second old");
   });
+
+  it("uses shared Git bulk commands for commit-detail file groupings", () => {
+    dir = createGitRepo(createTempDir());
+    createTempFile(dir, "bulk-detail.txt", "visible detail line\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "bulk detail");
+
+    tui.start(dir);
+    tui.pressChord("ctrl+k", "c");
+    tui.waitStable(500);
+    tui.press("tab");
+    tui.press("tab");
+    tui.press("down");
+    tui.press("enter");
+    tui.waitStable(900);
+    const expanded = tui.snapshot();
+    tui.exec("Git: Collapse All File Trees");
+    const collapsed = tui.snapshot();
+    tui.exec("Git: Expand All File Trees");
+    const restored = tui.snapshot();
+    tui.rclick(40, 12);
+    const context = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[expanded]).toContain("visible detail line");
+    expect(snapshots[collapsed]).not.toContain("visible detail line");
+    expect(snapshots[restored]).toContain("visible detail line");
+    expect(snapshots[context]).toContain("Expand All Files");
+    expect(snapshots[context]).toContain("Collapse All Files");
+  });
 });

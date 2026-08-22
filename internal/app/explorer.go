@@ -1,6 +1,7 @@
 package app
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -93,6 +94,50 @@ func (n *NavigationPanel) SetActiveFile(path string) {
 
 func (n *NavigationPanel) Reload() {
 	n.Tree.Reload()
+}
+
+func (n *NavigationPanel) ExpandAll() {
+	selectedID := ""
+	if selected := n.Tree.Selected(); selected != nil {
+		selectedID = selected.ID
+	}
+	var expand func(*widgets.TreeNode, map[string]bool)
+	expand = func(node *widgets.TreeNode, ancestors map[string]bool) {
+		if node == nil || !node.Expandable {
+			return
+		}
+		info, err := os.Lstat(node.ID)
+		if err == nil && (info.Mode()&os.ModeSymlink != 0 || info.IsDir() && filepath.Base(node.ID) == ".git") {
+			return
+		}
+		node.Expanded = true
+		canonical, err := filepath.EvalSymlinks(node.ID)
+		if err != nil {
+			canonical = filepath.Clean(node.ID)
+		}
+		if ancestors[canonical] {
+			return
+		}
+		if len(node.Children) == 0 {
+			n.loadChildren(node)
+		}
+		ancestors[canonical] = true
+		for _, child := range node.Children {
+			expand(child, ancestors)
+		}
+		delete(ancestors, canonical)
+	}
+	for _, root := range n.Tree.Config.Items {
+		expand(root, make(map[string]bool))
+	}
+	n.Tree.SetItems(n.Tree.Config.Items)
+	if selectedID != "" {
+		n.Tree.SelectByID(selectedID)
+	}
+}
+
+func (n *NavigationPanel) CollapseAll() {
+	n.Tree.CollapseAll()
 }
 
 func (n *NavigationPanel) SetRoots(paths []string) {

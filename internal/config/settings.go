@@ -12,6 +12,7 @@ var (
 	BorderStyles = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
 	DiffModes    = []string{"split", "unified"}
 	DiffContexts = []string{"changes", "full"}
+	GitFileViews = []string{"tree", "list"}
 )
 
 const (
@@ -19,6 +20,8 @@ const (
 	DiffModeUnified    = "unified"
 	DiffContextChanges = "changes"
 	DiffContextFull    = "full"
+	GitFileViewTree    = "tree"
+	GitFileViewList    = "list"
 )
 
 type TerminalSettings struct {
@@ -165,6 +168,14 @@ type SidebarSettings struct {
 	PanelOrder []string `json:"panelOrder,omitempty"`
 }
 
+type GitSettings struct {
+	FileView string `json:"fileView"`
+}
+
+func DefaultGitSettings() GitSettings {
+	return GitSettings{FileView: GitFileViewList}
+}
+
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
@@ -201,6 +212,7 @@ type Settings struct {
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
 	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
+	Git          GitSettings          `json:"git"`
 	Terminal     TerminalSettings     `json:"terminal"`
 	LSP          LSPSettings          `json:"lsp"`
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
@@ -220,7 +232,7 @@ type Settings struct {
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "editor": true,
-	"search": true, "explorer": true, "sidebar": true, "terminal": true, "lsp": true,
+	"search": true, "explorer": true, "sidebar": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "plugins": true, "formatters": true,
 }
 
@@ -274,6 +286,7 @@ func DefaultSettings() Settings {
 		Editor:       DefaultEditorSettings(),
 		Search:       DefaultSearchSettings(),
 		Explorer:     DefaultExplorerSettings(),
+		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
 		LSP:          DefaultLSPSettings(),
 		Autocomplete: DefaultAutocompleteSettings(),
@@ -310,6 +323,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(DiffContexts, s.Editor.DiffContext) {
 		s.Editor.DiffContext = DiffContextChanges
+	}
+	if !slices.Contains(GitFileViews, s.Git.FileView) {
+		s.Git.FileView = GitFileViewList
 	}
 }
 

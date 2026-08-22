@@ -266,6 +266,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	search.SetWorkDirs(ws.Paths())
 	search.Debounce.DelayMs = cfg.Settings.Search.Debounce
 	changes := NewChangesPanel(ws.Paths()...)
+	changes.SetFileView(cfg.Settings.Git.FileView)
 	symbols := NewSymbolsPanel()
 
 	explorer := NewNavigationPanel(cfg.Settings.Explorer, ws.Paths()...)

@@ -325,7 +325,6 @@ func TestStatusFilesWithSpaces(t *testing.T) {
 	gitRun(t, dir, "commit", "-m", "init")
 
 	// Create a file with spaces in the name.
-	// Git --porcelain wraps such names in double quotes.
 	writeFile(t, dir, "file with spaces.txt", "content\n")
 
 	files, err := StatusFiles(dir)
@@ -335,15 +334,120 @@ func TestStatusFilesWithSpaces(t *testing.T) {
 
 	found := false
 	for _, f := range files {
-		// git status --porcelain quotes paths with spaces:
-		// ?? "file with spaces.txt"
-		// The parser takes line[3:] and trims whitespace, leaving the quoted form.
-		if f.Path == `"file with spaces.txt"` && f.Status == "?" {
+		if f.Path == "file with spaces.txt" && f.Status == "?" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected untracked file with spaces (possibly quoted), got %+v", files)
+		t.Errorf("expected raw untracked file with spaces, got %+v", files)
+	}
+}
+
+func TestStatusFilesReturnsRawPathIdentity(t *testing.T) {
+	dir := setupTestRepo(t)
+	tracked := map[string]string{
+		"ordinary.txt":        "ordinary\n",
+		"界-wide.txt":          "wide\n",
+		"delete-staged.txt":   "delete staged\n",
+		"delete-unstaged.txt": "delete unstaged\n",
+		"rename-old.txt":      "rename\n",
+	}
+	for path, content := range tracked {
+		writeFile(t, dir, path, content)
+	}
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "commit", "-m", "raw paths")
+
+	writeFile(t, dir, "ordinary.txt", "staged\n")
+	gitRun(t, dir, "add", "--", "ordinary.txt")
+	writeFile(t, dir, "ordinary.txt", "staged and unstaged\n")
+	writeFile(t, dir, "界-wide.txt", "changed\n")
+	if err := os.Remove(filepath.Join(dir, "delete-staged.txt")); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, dir, "add", "--", "delete-staged.txt")
+	if err := os.Remove(filepath.Join(dir, "delete-unstaged.txt")); err != nil {
+		t.Fatal(err)
+	}
+	renamePath := "rename -> new\n界.txt"
+	gitRun(t, dir, "mv", "rename-old.txt", renamePath)
+
+	untracked := []string{
+		"quote\"name.txt",
+		"line\nbreak.txt",
+		`back\slash.txt`,
+		"colon:name.txt",
+		"-leading.txt",
+		"新規/深い/同名.go",
+	}
+	for _, path := range untracked {
+		fullPath := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fullPath, []byte(path), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, err := StatusFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertStatus := func(path, oldPath, status string, staged bool) {
+		t.Helper()
+		for _, file := range files {
+			if file.Path == path && file.OldPath == oldPath && file.Status == status && file.Staged == staged {
+				return
+			}
+		}
+		t.Errorf("missing raw status path=%q old=%q status=%q staged=%v in %+v", path, oldPath, status, staged, files)
+	}
+	assertStatus("ordinary.txt", "", "M", true)
+	assertStatus("ordinary.txt", "", "M", false)
+	assertStatus("界-wide.txt", "", "M", false)
+	assertStatus("delete-staged.txt", "", "D", true)
+	assertStatus("delete-unstaged.txt", "", "D", false)
+	assertStatus(renamePath, "rename-old.txt", "R", true)
+	for _, path := range untracked {
+		assertStatus(path, "", "?", false)
+	}
+}
+
+func TestParseStatusPorcelainZUsesDestinationThenSourceForRenameAndCopy(t *testing.T) {
+	files := parseStatusPorcelainZ([]byte("R  renamed\n界.txt\x00old:name.txt\x00 C copied\\name.txt\x00source\"name.txt\x00"))
+	if len(files) != 2 {
+		t.Fatalf("rename/copy statuses = %+v", files)
+	}
+	if got := files[0]; got.Status != "R" || !got.Staged || got.Path != "renamed\n界.txt" || got.OldPath != "old:name.txt" {
+		t.Fatalf("rename order = %+v", got)
+	}
+	if got := files[1]; got.Status != "C" || got.Staged || got.Path != `copied\name.txt` || got.OldPath != `source"name.txt` {
+		t.Fatalf("copy order = %+v", got)
+	}
+}
+
+func TestParseStatusPorcelainZRejectsEmptyPaths(t *testing.T) {
+	valid := "?? valid\n界.txt\x00"
+	tests := []struct {
+		name string
+		tail string
+	}{
+		{name: "ordinary destination", tail: " M \x00"},
+		{name: "rename destination", tail: "R  \x00old.txt\x00"},
+		{name: "rename source", tail: "R  new.txt\x00\x00"},
+		{name: "staged copy destination", tail: "C  \x00old.txt\x00"},
+		{name: "staged copy source", tail: "C  new.txt\x00\x00"},
+		{name: "unstaged copy destination", tail: " C \x00old.txt\x00"},
+		{name: "unstaged copy source", tail: " C new.txt\x00\x00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := parseStatusPorcelainZ([]byte(valid + tt.tail))
+			if len(files) != 1 || files[0].Path != "valid\n界.txt" || files[0].Status != "?" || files[0].Staged {
+				t.Fatalf("statuses = %+v, want only valid prefix", files)
+			}
+		})
 	}
 }
 

@@ -94,6 +94,8 @@ func (b *BoxWidget) Render(surface Surface) {
 		}
 		b.Child.SetRect(Rect{X: r.X + ox, Y: r.Y + oy, W: iw, H: ih})
 		b.Child.Render(inner)
+	} else if b.Child != nil {
+		InvalidatePointerInteraction(b.Child)
 	}
 }
 
@@ -102,4 +104,21 @@ func (b *BoxWidget) HandleEvent(ev tcell.Event) EventResult {
 		return b.Child.HandleEvent(ev)
 	}
 	return EventIgnored
+}
+
+func (b *BoxWidget) CancelPointerCapture() bool {
+	return CancelPointerCapture(b.Child)
+}
+
+func (b *BoxWidget) OwnsPointerCapture() bool {
+	owner, ok := b.Child.(PointerCaptureOwner)
+	return ok && owner.OwnsPointerCapture()
+}
+
+func (b *BoxWidget) InvalidatePointerInteraction() bool {
+	return InvalidatePointerInteraction(b.Child)
+}
+
+func (b *BoxWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	SetPointerCaptureInvalidated(b.Child, invalidated)
 }

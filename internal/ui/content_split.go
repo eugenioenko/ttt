@@ -25,6 +25,7 @@ type ContentSplitWidget struct {
 	wasPressed                bool
 	capturedChild             Widget
 	pointerCaptureInvalidated func()
+	cancelingPointerCapture   bool
 }
 
 func (cs *ContentSplitWidget) WidgetChildren() []Widget {
@@ -251,8 +252,8 @@ func (cs *ContentSplitWidget) TopContentHeight() int {
 	if !cs.ShowBottom || cs.Bottom == nil {
 		return r.H
 	}
-	needed := min(cs.BottomH+1, r.H)
-	return max(r.H-needed, 0)
+	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
+	return max(r.H-bottomH-1, 0)
 }
 
 func (cs *ContentSplitWidget) CancelPointerCapture() bool {
@@ -260,12 +261,14 @@ func (cs *ContentSplitWidget) CancelPointerCapture() bool {
 	cs.dragging = false
 	cs.wasPressed = false
 	cs.capturedChild = nil
+	cs.cancelingPointerCapture = true
 	for _, child := range []Widget{cs.Top, cs.Bottom} {
 		if child == nil {
 			continue
 		}
 		canceled = widgets.CancelPointerCapture(child) || canceled
 	}
+	cs.cancelingPointerCapture = false
 	if canceled && cs.pointerCaptureInvalidated != nil {
 		cs.pointerCaptureInvalidated()
 	}
@@ -277,8 +280,10 @@ func (cs *ContentSplitWidget) InvalidatePointerInteraction() bool {
 	cs.dragging = false
 	cs.wasPressed = false
 	cs.capturedChild = nil
+	cs.cancelingPointerCapture = true
 	invalidated = widgets.InvalidatePointerInteraction(cs.Top) || invalidated
 	invalidated = widgets.InvalidatePointerInteraction(cs.Bottom) || invalidated
+	cs.cancelingPointerCapture = false
 	if invalidated && cs.pointerCaptureInvalidated != nil {
 		cs.pointerCaptureInvalidated()
 	}
@@ -290,11 +295,12 @@ func (cs *ContentSplitWidget) SetPointerCaptureInvalidated(invalidated func()) {
 	for _, child := range []Widget{cs.Top, cs.Bottom} {
 		capturedChild := child
 		widgets.SetPointerCaptureInvalidated(child, func() {
-			if cs.capturedChild == capturedChild {
-				cs.capturedChild = nil
+			if cs.capturedChild != capturedChild {
+				return
 			}
+			cs.capturedChild = nil
 			cs.wasPressed = false
-			if cs.pointerCaptureInvalidated != nil {
+			if !cs.cancelingPointerCapture && cs.pointerCaptureInvalidated != nil {
 				cs.pointerCaptureInvalidated()
 			}
 		})

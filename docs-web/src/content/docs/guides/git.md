@@ -41,7 +41,7 @@ The shared diff reader has two independent presentation choices:
 - **Split** places old and new content side by side; **Unified** stacks removals before additions.
 - **Changes Only** shows changed hunks and surrounding context; quiet disclosure rows expand omitted context in place. **Full File** shows the complete file with changes highlighted inline.
 
-Set global defaults for layout, context, line wrapping, and high contrast from **Options**. The Changes panel menu exposes the same choices contextually. Commands applied directly to an open diff override that surface without changing the saved defaults.
+Set global defaults for layout, context, line wrapping, and high contrast from the **Diff Views** submenu under **Options**. The adjacent **Git Files** submenu chooses a persisted full-path List (the default) or compact Tree and exposes bulk expansion controls. The Changes panel menu exposes the same choices contextually. Commands applied directly to an open diff override that surface without changing the saved defaults.
 
 Untracked files open directly in the editor instead of showing a diff.
 

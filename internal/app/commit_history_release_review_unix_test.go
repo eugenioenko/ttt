@@ -57,10 +57,7 @@ func TestClosingCommitDetailCancelsItsGitProcess(t *testing.T) {
 	defer syscall.Kill(pid, syscall.SIGKILL)
 
 	group.ClosePluginTab(tabID)
-	time.Sleep(50 * time.Millisecond)
-	if err := syscall.Kill(pid, 0); err == nil {
-		t.Fatalf("git process %d is still alive after its detail tab closed", pid)
-	}
+	waitReviewProcessExit(t, pid)
 }
 
 func TestSupersededCommitHistoryCancelsItsGitProcess(t *testing.T) {

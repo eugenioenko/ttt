@@ -73,15 +73,16 @@ type CommitFilesResult struct {
 // one immutable commit. Incarnation distinguishes repeated openings of the same
 // repository and ref so a closed request can never target its replacement.
 type CommitDetailResult struct {
-	Incarnation uint64
-	Dir         string
-	Ref         string
-	Short       string
-	Message     string
-	AuthoredAt  time.Time
-	Files       []ui.CommitDetailFile
-	Err         string
-	Canceled    bool
+	Incarnation           uint64
+	Dir                   string
+	Ref                   string
+	Short                 string
+	Message               string
+	AuthoredAt            time.Time
+	AuthoredAtUnavailable bool
+	Files                 []ui.CommitDetailFile
+	Err                   string
+	Canceled              bool
 }
 
 func readChangesGroups(dirs []string) []changesGroup {
@@ -145,12 +146,16 @@ func readCommitLog(ctx context.Context, dir string, gen int) *CommitLogResult {
 
 // ApplyCommitLog rebuilds the commit log from a finished read.
 func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
-	if r == nil || r.Canceled {
+	if r == nil {
 		return
 	}
 	// Both checks, not one: the counter catches a superseded read, and the
 	// directory catches a counter that agrees for some reason it should not.
 	if r.Gen != cp.logGen || r.Dir != cp.lastLogDir {
+		return
+	}
+	cp.cancelLogRead()
+	if r.Canceled {
 		return
 	}
 	if r.Unavailable {
@@ -266,13 +271,7 @@ func commitFileParent(id string) (parentID, ref string, ok bool) {
 
 // selectLogNode selects a node by ID, reporting whether it was there to select.
 func (cp *ChangesPanel) selectLogNode(id string) bool {
-	for i, node := range cp.CommitLog.FlatList() {
-		if node.ID == id {
-			cp.CommitLog.SetSelectedIndex(i)
-			return true
-		}
-	}
-	return false
+	return revealTreeSelection(cp.CommitLog, id)
 }
 
 func readCommitFiles(ctx context.Context, request uint64, dir, ref, short, nodeID string) *CommitFilesResult {
@@ -296,6 +295,7 @@ func (cp *ChangesPanel) recordCommitFiles(r *CommitFilesResult) bool {
 		if !ok || request.ID != r.Request {
 			return false
 		}
+		request.Cancel()
 		delete(cp.commitFilesPending, key)
 	}
 	if r.Err == nil {
@@ -325,7 +325,9 @@ func (cp *ChangesPanel) fetchCommitFiles(dir, ref, short, nodeID string) {
 	cp.commitFilesPending[key] = commitFilesRequest{ID: requestID, Cancel: cancel}
 	screen := cp.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(readCommitFiles(ctx, requestID, dir, ref, short, nodeID)))
+		result := readCommitFiles(ctx, requestID, dir, ref, short, nodeID)
+		cancel()
+		screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
 }
 
@@ -394,6 +396,9 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 	if errors.Is(err, context.Canceled) {
 		result.Canceled = true
 		return result
+	}
+	if err != nil {
+		result.AuthoredAtUnavailable = true
 	}
 
 	files, err := git.CommitFilesContext(ctx, dir, ref)
@@ -511,6 +516,8 @@ func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 	}
 	if !result.AuthoredAt.IsZero() {
 		detail.Metadata = "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04:05 PM -0700")
+	} else if result.AuthoredAtUnavailable {
+		detail.Metadata = "Authored date unavailable"
 	}
 	detail.SetDetail(result.Message, result.Files, result.Err)
 }
