@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -31,13 +32,24 @@ func (s *testSurface) SetCell(x, y int, c term.Cell) {
 	}
 }
 func (s *testSurface) DrawText(x, y int, text string, maxW int, style term.Style) int {
-	for i, ch := range []rune(text) {
-		if i >= maxW {
+	limit := s.w
+	if maxW > 0 && maxW < limit {
+		limit = maxW
+	}
+	for _, ch := range text {
+		if x >= limit {
 			break
 		}
-		s.SetCell(x+i, y, term.Cell{Ch: ch, Style: style})
+		width := textwidth.Rune(ch)
+		if x+width > limit {
+			s.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
+			x++
+			break
+		}
+		s.SetCell(x, y, term.Cell{Ch: ch, Style: style})
+		x += width
 	}
-	return len([]rune(text))
+	return x
 }
 func (s *testSurface) DrawBorder(x, y, w, h int, b term.BorderSet, style term.Style) {
 	for i := x + 1; i < x+w-1; i++ {

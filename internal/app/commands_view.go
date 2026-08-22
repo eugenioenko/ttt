@@ -27,6 +27,7 @@ func (a *App) ToggleTerminalFullscreen() {
 	if a.ContentSplit.ShowBottom && a.ContentSplit.BottomH >= fullH {
 		a.HideBottomPanel()
 	} else {
+		a.EditorGroup.InvalidatePointerInteraction()
 		a.ContentSplit.BottomH = fullH
 		a.showTerminalPanel()
 		resizeTerminals(a)
@@ -348,6 +349,18 @@ func registerViewCommands(app *App) {
 		ID: "sidebar.focus", Title: "View: Focus Sidebar",
 		Keywords: []string{"view"},
 		Handler:  app.FocusSidebar,
+	})
+
+	reg.Register(command.Command{
+		ID: "sidebar.movePanelLeft", Title: "View: Move Sidebar Panel Left",
+		Keywords: []string{"view", "sidebar", "panel", "tab", "reorder", "left"},
+		Handler:  func() { app.MoveActiveSidebarPanel(-1) },
+	})
+
+	reg.Register(command.Command{
+		ID: "sidebar.movePanelRight", Title: "View: Move Sidebar Panel Right",
+		Keywords: []string{"view", "sidebar", "panel", "tab", "reorder", "right"},
+		Handler:  func() { app.MoveActiveSidebarPanel(1) },
 	})
 
 	reg.Register(command.Command{

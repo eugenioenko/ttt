@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -18,28 +19,38 @@ type TabAction struct {
 }
 
 type TabsConfig struct {
-	Items      []TabItem   `json:"items"`
-	Actions    []TabAction `json:"-"`
-	Style      term.Style  `json:"-"`
-	Align      string      `json:"align,omitempty"`
-	OnTabClick func(index int)
-	OnOverflow func(screenX, screenY int)
+	Items                   []TabItem   `json:"items"`
+	Actions                 []TabAction `json:"-"`
+	Style                   term.Style  `json:"-"`
+	Align                   string      `json:"align,omitempty"`
+	Reorderable             bool        `json:"-"`
+	PointerInteractionValid func() bool `json:"-"`
+	OnTabClick              func(index int)
+	OnOverflow              func(screenX, screenY int)
+	OnReorder               func(from, to int)
 }
 
 type TabsWidget struct {
 	BaseWidget
-	Config      TabsConfig
-	tabSpans    [][2]int
-	overSpan    [2]int
-	actionSpans [][2]int
-	hiddenTabs  []int
-	wasPressed  bool
-	focused     bool
-	selected    int
+	Config                    TabsConfig
+	tabSpans                  [][2]int
+	overSpan                  [2]int
+	actionSpans               [][2]int
+	hiddenTabs                []int
+	wasPressed                bool
+	focused                   bool
+	selected                  int
+	drag                      TabDragState
+	pointerCaptureInvalidated func()
 }
 
 func NewTabsWidget(config TabsConfig) *TabsWidget {
 	return &TabsWidget{Config: config}
+}
+
+func (t *TabsWidget) SetItems(items []TabItem) {
+	t.Config.Items = items
+	t.validateGestureSource()
 }
 
 func (t *TabsWidget) Height() int { return 1 + t.BoxOverheadH() }
@@ -79,9 +90,11 @@ func (t *TabsWidget) ActiveID() string {
 }
 
 func (t *TabsWidget) Render(surface Surface) {
+	t.validateGestureSource()
 	inner := t.RenderBox(surface)
 	w, _ := inner.Size()
 	if w <= 0 {
+		t.ClearRenderedGeometry()
 		return
 	}
 
@@ -91,7 +104,7 @@ func (t *TabsWidget) Render(surface Surface) {
 
 	actionsW := 0
 	for _, a := range t.Config.Actions {
-		actionsW += len([]rune(a.Icon)) + 2
+		actionsW += textwidth.String(a.Icon) + 2
 	}
 
 	overflowW := 3
@@ -99,7 +112,7 @@ func (t *TabsWidget) Render(surface Surface) {
 	tabWidths := make([]int, len(t.Config.Items))
 	total := 0
 	for i, item := range t.Config.Items {
-		tw := len([]rune(item.Label)) + 2
+		tw := textwidth.String(item.Label) + 2
 		if item.Dirty {
 			tw += 2
 		}
@@ -111,6 +124,10 @@ func (t *TabsWidget) Render(surface Surface) {
 	tabAreaW := w - actionsW
 	if hasOverflow {
 		tabAreaW -= overflowW
+	}
+	if tabAreaW <= 0 {
+		t.ClearRenderedGeometry()
+		return
 	}
 
 	t.tabSpans = make([][2]int, len(t.Config.Items))
@@ -166,13 +183,7 @@ func (t *TabsWidget) Render(surface Surface) {
 				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
 			}
-			for _, ch := range item.Label {
-				if x >= tabAreaW {
-					break
-				}
-				inner.SetCell(x, 0, term.Cell{Ch: ch, Style: style})
-				x++
-			}
+			x = inner.DrawText(x, 0, item.Label, tabAreaW, style)
 			if x < tabAreaW {
 				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
@@ -203,13 +214,7 @@ func (t *TabsWidget) Render(surface Surface) {
 				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
 			}
-			for _, ch := range item.Label {
-				if x >= tabAreaW {
-					break
-				}
-				inner.SetCell(x, 0, term.Cell{Ch: ch, Style: style})
-				x++
-			}
+			x = inner.DrawText(x, 0, item.Label, tabAreaW, style)
 			if x < tabAreaW {
 				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
@@ -234,18 +239,17 @@ func (t *TabsWidget) Render(surface Surface) {
 	t.actionSpans = t.actionSpans[:0]
 	ax := w - actionsW
 	for _, action := range t.Config.Actions {
-		iconRunes := []rune(action.Icon)
-		aw := len(iconRunes) + 2
 		startX := ax
 		inner.SetCell(ax, 0, term.Cell{Ch: ' ', Style: term.StyleInactiveTab})
 		ax++
-		for _, ch := range iconRunes {
-			inner.SetCell(ax, 0, term.Cell{Ch: ch, Style: term.StyleInactiveTab})
-			ax++
-		}
+		ax = inner.DrawText(ax, 0, action.Icon, w, term.StyleInactiveTab)
 		inner.SetCell(ax, 0, term.Cell{Ch: ' ', Style: term.StyleInactiveTab})
 		ax++
-		t.actionSpans = append(t.actionSpans, [2]int{startX, startX + aw})
+		t.actionSpans = append(t.actionSpans, [2]int{startX, ax})
+	}
+
+	if x := t.dropIndicatorX(); x >= 0 && x < w {
+		inner.SetCell(x, 0, term.Cell{Ch: '│', Style: term.StyleBorderActive})
 	}
 }
 
@@ -318,17 +322,44 @@ func (t *TabsWidget) handleKey(ev *tcell.EventKey) EventResult {
 
 func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	pressed := mev.Buttons()&tcell.Button1 != 0
+	mx, my := mev.Position()
+	r := t.GetRect()
+	lx := mx - r.X - t.Box.MarginLeft - t.Box.PaddingLeft
+
+	if mev.Buttons() == tcell.ButtonNone {
+		t.wasPressed = false
+		if t.drag.Active() {
+			if !t.validateGestureSource() {
+				return EventIgnored
+			}
+			from, to, dragged := t.drag.End()
+			if dragged && from != to && t.Config.OnReorder != nil {
+				t.Config.OnReorder(from, to)
+			}
+			if dragged {
+				return EventConsumed
+			}
+		}
+		return EventIgnored
+	}
+	if t.drag.Active() && pressed {
+		if !t.validateGestureSource() {
+			return EventIgnored
+		}
+		if t.drag.Update(mx, t.dropTargetAt(lx)) {
+			return EventCaptured
+		}
+		return EventConsumed
+	}
+
 	freshClick := pressed && !t.wasPressed
 	t.wasPressed = pressed
 	if !freshClick {
 		return EventIgnored
 	}
-	mx, my := mev.Position()
-	r := t.GetRect()
 	if my < r.Y || my >= r.Y+r.H || mx < r.X || mx >= r.X+r.W {
 		return EventIgnored
 	}
-	lx := mx - r.X - t.Box.MarginLeft - t.Box.PaddingLeft
 
 	for i, span := range t.actionSpans {
 		if lx >= span[0] && lx < span[1] {
@@ -350,8 +381,108 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 			if t.Config.OnTabClick != nil {
 				t.Config.OnTabClick(i)
 			}
+			if t.Config.Reorderable && t.Config.OnReorder != nil {
+				t.drag.Begin(i, tabItemIdentity(t.Config.Items[i]), mx)
+				return EventCaptured
+			}
 			return EventConsumed
 		}
 	}
 	return EventIgnored
+}
+
+func (t *TabsWidget) PointerGestureActive() bool {
+	return t.validateGestureSource()
+}
+
+func (t *TabsWidget) OwnsPointerCapture() bool {
+	return t.validateGestureSource()
+}
+
+func (t *TabsWidget) CancelPointerCapture() bool {
+	active := t.drag.Active()
+	if active {
+		t.drag.Cancel()
+	}
+	t.wasPressed = false
+	if active && t.pointerCaptureInvalidated != nil {
+		t.pointerCaptureInvalidated()
+	}
+	return active
+}
+
+func (t *TabsWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	t.pointerCaptureInvalidated = invalidated
+}
+
+func (t *TabsWidget) ClearRenderedGeometry() {
+	t.tabSpans = nil
+	t.overSpan = [2]int{}
+	t.actionSpans = nil
+	t.hiddenTabs = nil
+	t.CancelPointerCapture()
+}
+
+func (t *TabsWidget) InvalidatePointerInteraction() bool {
+	active := t.drag.Active()
+	t.ClearRenderedGeometry()
+	return active
+}
+
+func (t *TabsWidget) validateGestureSource() bool {
+	if !t.drag.Active() {
+		return false
+	}
+	if t.Config.PointerInteractionValid != nil && !t.Config.PointerInteractionValid() {
+		t.CancelPointerCapture()
+		return false
+	}
+	sourceID := t.drag.SourceID()
+	for i := range t.Config.Items {
+		if tabItemIdentity(t.Config.Items[i]) == sourceID {
+			t.drag.SetSourceIndex(i)
+			return true
+		}
+	}
+	t.CancelPointerCapture()
+	return false
+}
+
+func tabItemIdentity(item TabItem) string {
+	if item.ID != "" {
+		return item.ID
+	}
+	return item.Label
+}
+
+func (t *TabsWidget) dropTargetAt(localX int) int {
+	last := -1
+	for i, span := range t.tabSpans {
+		if span[1] <= span[0] {
+			continue
+		}
+		last = i
+		if localX < span[0]+(span[1]-span[0])/2 {
+			return i
+		}
+	}
+	return last
+}
+
+func (t *TabsWidget) dropIndicatorX() int {
+	if !t.drag.Dragging() || t.drag.From() == t.drag.Target() {
+		return -1
+	}
+	target := t.drag.Target()
+	if target < 0 || target >= len(t.tabSpans) {
+		return -1
+	}
+	span := t.tabSpans[target]
+	if span[1] <= span[0] {
+		return -1
+	}
+	if target < t.drag.From() {
+		return span[0]
+	}
+	return span[1] - 1
 }

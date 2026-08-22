@@ -29,7 +29,8 @@ func (s *SidebarWidget) Render(surface Surface) {
 	r := s.GetRect()
 
 	tabH := 2
-	if h <= tabH {
+	if !s.Visible || w <= 0 || h <= tabH {
+		s.Tabs.InvalidatePointerInteraction()
 		return
 	}
 
@@ -45,15 +46,28 @@ func (s *SidebarWidget) Render(surface Surface) {
 	}
 }
 
+func (s *SidebarWidget) CancelPointerCapture() bool {
+	return s.Tabs.CancelPointerCapture()
+}
+
+func (s *SidebarWidget) OwnsPointerCapture() bool {
+	return s.Tabs.OwnsPointerCapture()
+}
+
+func (s *SidebarWidget) InvalidatePointerInteraction() bool {
+	return s.Tabs.InvalidatePointerInteraction()
+}
+
+func (s *SidebarWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	s.Tabs.SetPointerCaptureInvalidated(invalidated)
+}
+
 func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
 	if tev, ok := ev.(*tcell.EventMouse); ok {
 		_, my := tev.Position()
 		r := s.GetRect()
-		if my == r.Y {
-			if s.Tabs.HandleEvent(ev) == EventConsumed {
-				return EventConsumed
-			}
-			return EventIgnored
+		if my == r.Y || s.Tabs.PointerGestureActive() {
+			return s.Tabs.HandleEvent(ev)
 		}
 	}
 	active := s.ActiveWidget()

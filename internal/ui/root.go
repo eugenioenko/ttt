@@ -5,6 +5,7 @@ import (
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -49,13 +50,47 @@ type Root struct {
 }
 
 func NewRoot(main Widget) *Root {
-	return &Root{Main: main}
+	r := &Root{Main: main}
+	widgets.SetPointerCaptureInvalidated(main, func() {
+		r.capturedWidget = nil
+	})
+	return r
 }
 
 func (r *Root) SetSize(w, h int) {
+	if w != r.Width || h != r.Height {
+		widgets.InvalidatePointerInteraction(r.Main)
+		r.capturedWidget = nil
+	}
 	r.Width = w
 	r.Height = h
 	r.Main.SetRect(Rect{X: 0, Y: 0, W: w, H: h})
+}
+
+func (r *Root) CancelPointerCapture() bool {
+	canceled := widgets.CancelPointerCapture(r.Main)
+	if r.capturedWidget != nil {
+		canceled = true
+		r.capturedWidget = nil
+	}
+	return canceled
+}
+
+func (r *Root) reconcilePointerCapture() bool {
+	if r.capturedWidget == nil {
+		return false
+	}
+	owner, ok := r.capturedWidget.(widgets.PointerCaptureOwner)
+	if !ok || owner.OwnsPointerCapture() {
+		return false
+	}
+	r.capturedWidget = nil
+	return true
+}
+
+func (r *Root) PointerCaptureActive() bool {
+	r.reconcilePointerCapture()
+	return r.capturedWidget != nil
 }
 
 func (r *Root) AddGlobalKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
@@ -247,6 +282,10 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 	btn := mev.Buttons()
 
 	if r.capturedWidget != nil {
+		r.reconcilePointerCapture()
+	}
+
+	if r.capturedWidget != nil {
 		if btn == tcell.ButtonNone {
 			r.capturedWidget.HandleEvent(ev)
 			r.capturedWidget = nil
@@ -334,6 +373,7 @@ func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
 func (r *Root) Render(cells [][]term.Cell) {
 	surface := NewRenderSurface(cells, Rect{X: 0, Y: 0, W: r.Width, H: r.Height})
 	r.Main.Render(surface)
+	r.reconcilePointerCapture()
 
 	for _, overlay := range r.Overlays {
 		overlay.Widget.SetRect(Rect{X: 0, Y: 0, W: r.Width, H: r.Height})
@@ -362,6 +402,7 @@ func (r *Root) TopOverlayWidget() Widget {
 }
 
 func (r *Root) PushOverlay(o Overlay) {
+	r.CancelPointerCapture()
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
 }
@@ -390,6 +431,9 @@ func (r *Root) RemoveOverlay(w Widget) {
 func (r *Root) SetFocus(w Widget) {
 	if r.Focused == w {
 		return
+	}
+	if r.capturedWidget != nil {
+		r.CancelPointerCapture()
 	}
 	if r.Focused != nil {
 		if setter, ok := r.Focused.(interface{ SetFocused(bool) }); ok {

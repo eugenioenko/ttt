@@ -83,6 +83,7 @@ func (v *VStackWidget) Render(surface Surface) {
 	inner := v.RenderBox(surface)
 	w, h := inner.Size()
 	if len(v.Children) == 0 || w <= 0 || h <= 0 {
+		v.InvalidatePointerInteraction()
 		return
 	}
 
@@ -144,6 +145,7 @@ func (v *VStackWidget) Render(surface Surface) {
 			growIndex++
 		}
 		if ch <= 0 || y >= h {
+			InvalidatePointerInteraction(child)
 			continue
 		}
 		if y+ch > h {
@@ -166,4 +168,35 @@ func (v *VStackWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 	}
 	return EventIgnored
+}
+
+func (v *VStackWidget) CancelPointerCapture() bool {
+	canceled := false
+	for _, child := range v.Children {
+		canceled = CancelPointerCapture(child) || canceled
+	}
+	return canceled
+}
+
+func (v *VStackWidget) InvalidatePointerInteraction() bool {
+	invalidated := false
+	for _, child := range v.Children {
+		invalidated = InvalidatePointerInteraction(child) || invalidated
+	}
+	return invalidated
+}
+
+func (v *VStackWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	for _, child := range v.Children {
+		SetPointerCaptureInvalidated(child, invalidated)
+	}
+}
+
+func (v *VStackWidget) OwnsPointerCapture() bool {
+	for _, child := range v.Children {
+		if owner, ok := child.(PointerCaptureOwner); ok && owner.OwnsPointerCapture() {
+			return true
+		}
+	}
+	return false
 }

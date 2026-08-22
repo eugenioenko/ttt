@@ -57,6 +57,12 @@ All editor settings are nested under the `editor` key.
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
 
+## Sidebar
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `sidebar.panelOrder` | string[] | built-in order | Preferred sidebar panel-header order. Dragging a header or using **Move Panel Left/Right** updates it automatically. Unknown plugin panel IDs are retained until that plugin loads. |
+
 ## Terminal
 
 | Key | Type | Default | Description |
@@ -160,6 +166,9 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   "explorer": {
     "showHidden": true,
     "showGitIgnored": true
+  },
+  "sidebar": {
+    "panelOrder": ["explorer", "search", "changes", "outline"]
   },
   "terminal": {
     "shell": "/bin/zsh",

@@ -533,6 +533,7 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `search.debounce` | int | `350` | Milliseconds to debounce global search input |
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
+| `sidebar.panelOrder` | string[] | built-in order | Preferred sidebar panel IDs; updated when headers are dragged or moved with commands |
 | `terminal.shell` | string | `""` | Shell command for the integrated terminal (empty = system default) |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain in the terminal |
 | `lsp.saveOnRename` | bool | `false` | Auto-save all files affected by a rename operation |
@@ -564,6 +565,9 @@ Example `~/.config/ttt/settings.json` (also available at [`config/settings.json`
   "explorer": {
     "showHidden": true,
     "showGitIgnored": true
+  },
+  "sidebar": {
+    "panelOrder": ["explorer", "search", "changes", "outline"]
   },
   "terminal": {
     "shell": "",

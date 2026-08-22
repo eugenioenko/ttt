@@ -46,6 +46,7 @@ type Diagnostic struct {
 }
 
 type editorTab struct {
+	ID          string
 	FilePath    string
 	Title       string
 	Buf         *buffer.Buffer
@@ -59,9 +60,9 @@ type editorTab struct {
 	Folds       *fold.State
 	TabSize     int
 	UseTabs     bool
-	Content Widget
-	Preview bool
-	Virtual bool
+	Content     Widget
+	Preview     bool
+	Virtual     bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
 }
@@ -74,6 +75,7 @@ type EditorGroupWidget struct {
 	Hover                   *HoverWidget
 	SignatureHelp           *SignatureHelpWidget
 	tabs                    []editorTab
+	nextTabIdentity         uint64
 	active                  int
 	pinnedCount             int
 	TabSize                 int
@@ -130,6 +132,10 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	tabBar.OnTabClick = func(index int) {
 		g.SwitchTab(index)
 	}
+	tabBar.OnTabReorder = func(from, to int) {
+		g.MoveTab(from, to)
+	}
+	tabBar.NormalizeDropTarget = g.NormalizeTabMoveTarget
 	tabBar.OnNextTab = func() { g.NextTab() }
 	tabBar.OnPrevTab = func() { g.PrevTab() }
 	tabBar.OnDoubleClick = func() { g.NewFile() }
@@ -236,6 +242,59 @@ func (g *EditorGroupWidget) TogglePinTab() {
 
 func (g *EditorGroupWidget) IsActiveTabPinned() bool {
 	return g.active < g.pinnedCount
+}
+
+func (g *EditorGroupWidget) NormalizeTabMoveTarget(from, to int) int {
+	if from < 0 || from >= len(g.tabs) || to < 0 || to >= len(g.tabs) {
+		return -1
+	}
+	if from < g.pinnedCount {
+		return min(to, g.pinnedCount-1)
+	}
+	return max(to, g.pinnedCount)
+}
+
+func (g *EditorGroupWidget) MoveTab(from, to int) bool {
+	to = g.NormalizeTabMoveTarget(from, to)
+	if to < 0 {
+		return false
+	}
+	if from == to {
+		return false
+	}
+
+	tab := g.tabs[from]
+	tab.Preview = false
+	g.tabs = append(g.tabs[:from], g.tabs[from+1:]...)
+	g.tabs = slices.Insert(g.tabs, to, tab)
+	switch {
+	case g.active == from:
+		g.active = to
+	case from < g.active && to >= g.active:
+		g.active--
+	case from > g.active && to <= g.active:
+		g.active++
+	}
+	g.syncTabs()
+	return true
+}
+
+func (g *EditorGroupWidget) CanMoveActiveTab(direction int) bool {
+	to := g.active + direction
+	if direction == 0 || to < 0 || to >= len(g.tabs) {
+		return false
+	}
+	if g.active < g.pinnedCount {
+		return to < g.pinnedCount
+	}
+	return to >= g.pinnedCount
+}
+
+func (g *EditorGroupWidget) MoveActiveTab(direction int) bool {
+	if !g.CanMoveActiveTab(direction) {
+		return false
+	}
+	return g.MoveTab(g.active, g.active+direction)
 }
 
 func (g *EditorGroupWidget) OpenFile(path string) {
@@ -568,6 +627,9 @@ func (g *EditorGroupWidget) SetUseTabs(useTabs bool) {
 
 func (g *EditorGroupWidget) SwitchTab(idx int) {
 	if idx >= 0 && idx < len(g.tabs) {
+		if idx != g.active && g.TabBar.OwnsPointerCapture() {
+			g.TabBar.CancelPointerCapture()
+		}
 		if t := g.activeTab(); t != nil && t.Content != nil {
 			if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
 				setter.SetFocused(false)
@@ -1623,6 +1685,7 @@ func (g *EditorGroupWidget) PasteText(text string) {
 }
 
 func (g *EditorGroupWidget) syncTabs() {
+	g.ensureTabIdentities()
 	t := g.activeTab()
 	if t == nil {
 		g.TabBar.SetTabs(nil)
@@ -1667,6 +1730,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			name = ts.Title
 		}
 		uiTabs = append(uiTabs, Tab{
+			ID:       ts.ID,
 			Name:     name,
 			Active:   i == g.active,
 			Dirty:    dirty,
@@ -1677,13 +1741,34 @@ func (g *EditorGroupWidget) syncTabs() {
 	g.TabBar.SetTabs(uiTabs)
 }
 
+func (g *EditorGroupWidget) ensureTabIdentities() {
+	seen := make(map[string]bool, len(g.tabs))
+	for i := range g.tabs {
+		id := g.tabs[i].ID
+		if id != "" && !seen[id] {
+			seen[id] = true
+			continue
+		}
+		for {
+			g.nextTabIdentity++
+			id = fmt.Sprintf("editor-tab-%d", g.nextTabIdentity)
+			if !seen[id] {
+				break
+			}
+		}
+		g.tabs[i].ID = id
+		seen[id] = true
+	}
+}
+
 func (g *EditorGroupWidget) Render(surface Surface) {
 	g.syncTabs()
 	w, h := surface.Size()
 	r := g.GetRect()
 
 	const tabBarH = 3
-	if h <= tabBarH {
+	if w <= 0 || h <= tabBarH {
+		g.TabBar.InvalidatePointerInteraction()
 		return
 	}
 
@@ -1729,6 +1814,22 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	}
 }
 
+func (g *EditorGroupWidget) CancelPointerCapture() bool {
+	return g.TabBar.CancelPointerCapture()
+}
+
+func (g *EditorGroupWidget) OwnsPointerCapture() bool {
+	return g.TabBar.OwnsPointerCapture()
+}
+
+func (g *EditorGroupWidget) InvalidatePointerInteraction() bool {
+	return g.TabBar.InvalidatePointerInteraction()
+}
+
+func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	g.TabBar.SetPointerCaptureInvalidated(invalidated)
+}
+
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 	if g.Hover != nil {
 		result := g.Hover.HandleEvent(ev)
@@ -1753,8 +1854,8 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 	result := g.TabBar.HandleEvent(ev)
 	slog.Debug("editorGroup", "tabBarResult", result)
-	if result == EventConsumed {
-		return EventConsumed
+	if result != EventIgnored {
+		return result
 	}
 	t := g.activeTab()
 	if t == nil {

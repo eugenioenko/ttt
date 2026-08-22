@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -21,6 +22,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s := DefaultSettings()
 	s.Editor.TabSize = 7
 	s.Editor.WordWrap = true
+	s.Sidebar.PanelOrder = []string{"changes", "plugin.todo", "explorer"}
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Terminal.Shell = "/bin/zsh"
@@ -35,6 +37,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if !got.Editor.WordWrap {
 		t.Error("wordWrap did not round-trip")
+	}
+	if !slices.Equal(got.Sidebar.PanelOrder, []string{"changes", "plugin.todo", "explorer"}) {
+		t.Errorf("sidebar.panelOrder = %v", got.Sidebar.PanelOrder)
 	}
 	if got.Editor.IsSyntaxHighlightEnabled() {
 		t.Error("syntaxHighlight=false did not round-trip; tri-state pointer lost")
