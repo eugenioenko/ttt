@@ -712,6 +712,156 @@ func TestDiffWidgetExtendedFetchErrorRetryAndCompletionLifecycle(t *testing.T) {
 	}
 }
 
+func diffWidgetTopText(dv *DiffViewWidget) string {
+	if dv.IsUnified() {
+		if dv.TopLine < 0 || dv.TopLine >= len(dv.unifiedLines) {
+			return ""
+		}
+		return dv.unifiedLines[dv.TopLine].side.Text
+	}
+	if dv.TopLine < 0 || dv.TopLine >= len(dv.Lines) {
+		return ""
+	}
+	return dv.Lines[dv.TopLine].Left.Text
+}
+
+func diffWidgetFindTop(dv *DiffViewWidget, text string) int {
+	if dv.IsUnified() {
+		for i, line := range dv.unifiedLines {
+			if line.side.Text == text {
+				return i
+			}
+		}
+		return -1
+	}
+	for i, line := range dv.Lines {
+		if line.Left.Text == text {
+			return i
+		}
+	}
+	return -1
+}
+
+func diffWidgetContextFixture() (diff.FileDiff, []string) {
+	patch := "--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n line-01\n@@ -10,1 +10,1 @@\n line-10\n@@ -30,1 +30,1 @@\n line-30\n"
+	lines := make([]string, 30)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line-%02d", i+1)
+	}
+	return diff.Parse(patch), lines
+}
+
+func TestDiffWidgetContextTransitionsPreserveLogicalTop(t *testing.T) {
+	fd, lines := diffWidgetContextFixture()
+	for _, unified := range []bool{false, true} {
+		for _, transition := range []struct {
+			name string
+			from DiffContextMode
+			to   DiffContextMode
+		}{
+			{"changes-to-full", DiffContextChangesOnly, DiffContextFullFile},
+			{"full-to-changes", DiffContextFullFile, DiffContextChangesOnly},
+		} {
+			t.Run(fmt.Sprintf("unified=%v/%s", unified, transition.name), func(t *testing.T) {
+				dv := NewDiffViewWidget("test.go", fd, lines, lines, false)
+				dv.SetUnified(unified)
+				dv.SetContextMode(transition.from)
+				dv.TopLine = diffWidgetFindTop(dv, "line-10")
+				if dv.TopLine < 0 || diffWidgetTopText(dv) != "line-10" {
+					t.Fatalf("precondition top=%d text=%q", dv.TopLine, diffWidgetTopText(dv))
+				}
+				dv.SetContextMode(transition.to)
+				if got := diffWidgetTopText(dv); got != "line-10" {
+					t.Fatalf("logical top after %s = %q at display row %d, want line-10", transition.name, got, dv.TopLine)
+				}
+			})
+		}
+	}
+}
+
+func TestDiffWidgetContextTransitionChoosesNearestVisibleLogicalTop(t *testing.T) {
+	fd, lines := diffWidgetContextFixture()
+	for _, unified := range []bool{false, true} {
+		for _, test := range []struct {
+			anchor string
+			want   string
+		}{
+			{"line-20", "line-10"},
+			{"line-29", "line-30"},
+		} {
+			t.Run(fmt.Sprintf("unified=%v/%s", unified, test.anchor), func(t *testing.T) {
+				dv := NewDiffViewWidget("test.go", fd, lines, lines, true)
+				dv.SetUnified(unified)
+				dv.SetWrapped(true)
+				dv.TopLine = diffWidgetFindTop(dv, test.anchor)
+				dv.wrapTopOffset = 2
+				if dv.TopLine < 0 {
+					t.Fatalf("missing full-file anchor %q", test.anchor)
+				}
+
+				dv.SetContextMode(DiffContextChangesOnly)
+				if got := diffWidgetTopText(dv); got != test.want {
+					t.Fatalf("nearest logical top for %s = %q at display row %d, want %s", test.anchor, got, dv.TopLine, test.want)
+				}
+				if dv.wrapTopOffset != 0 {
+					t.Fatalf("context transition retained obsolete wrap offset %d", dv.wrapTopOffset)
+				}
+			})
+		}
+	}
+}
+
+func TestDiffWidgetContextTransitionClampsAtEnd(t *testing.T) {
+	fd, lines := diffWidgetContextFixture()
+	for _, unified := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unified=%v", unified), func(t *testing.T) {
+			dv := NewDiffViewWidget("test.go", fd, lines, lines, true)
+			dv.SetUnified(unified)
+			dv.SetRect(Rect{W: 60, H: 3})
+			dv.Render(NewRenderSurface(makeGrid(60, 3), Rect{W: 60, H: 3}))
+			dv.TopLine = diffWidgetFindTop(dv, "line-30")
+
+			dv.SetContextMode(DiffContextChangesOnly)
+			dv.Render(NewRenderSurface(makeGrid(60, 3), Rect{W: 60, H: 3}))
+			wantTop := max(dv.totalVisualRows-dv.viewH, 0)
+			if got := dv.topVisualRow(); got != wantTop {
+				t.Fatalf("clamped context top = %d, want %d", got, wantTop)
+			}
+			if last := diffWidgetFindTop(dv, "line-30"); last < dv.TopLine || last >= dv.TopLine+dv.viewH {
+				t.Fatalf("end anchor line-30 at %d is outside visible rows [%d,%d)", last, dv.TopLine, dv.TopLine+dv.viewH)
+			}
+		})
+	}
+}
+
+func TestDiffWidgetAsyncFullContextCompletionPreservesLogicalTop(t *testing.T) {
+	fd, lines := diffWidgetContextFixture()
+	for _, unified := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unified=%v", unified), func(t *testing.T) {
+			dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+			dv.SetUnified(unified)
+			dv.TopLine = diffWidgetFindTop(dv, "line-10")
+			dv.wrapTopOffset = 2
+			fetches := 0
+			dv.SetExtendedFetcher(func(*DiffViewWidget) { fetches++ })
+
+			dv.SetContextMode(DiffContextFullFile)
+			if fetches != 1 || !dv.Loading || !dv.extendedFetching {
+				t.Fatalf("fetch state = fetches %d loading %v inFlight %v", fetches, dv.Loading, dv.extendedFetching)
+			}
+			dv.SetOldLines(lines)
+			dv.SetNewLines(lines)
+			dv.FinishLoading()
+			if got := diffWidgetTopText(dv); got != "line-10" {
+				t.Fatalf("logical top after async completion = %q at display row %d, want line-10", got, dv.TopLine)
+			}
+			if dv.wrapTopOffset != 0 {
+				t.Fatalf("async completion retained obsolete wrap offset %d", dv.wrapTopOffset)
+			}
+		})
+	}
+}
+
 func TestDiffWidgetCollapsedPseudoRowIsNotCopied(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -20,1 +20,1 @@\n twentieth\n")
 	oldLines := make([]string, 20)

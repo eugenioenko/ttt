@@ -11,6 +11,12 @@ type diffWrapEntry struct {
 	continuation bool
 }
 
+type diffLogicalAnchor struct {
+	lineNum    int
+	right      bool
+	sourceLine int
+}
+
 func diffLineVisualRows(line diff.DiffLine, leftW, rightW int) int {
 	leftRows := len(diffWrapStarts(line.Left.Text, leftW))
 	rightRows := len(diffWrapStarts(line.Right.Text, rightW))
@@ -136,6 +142,81 @@ func (d *DiffViewWidget) displayLineForSourceLine(sourceLine int) int {
 		}
 	}
 	return max(len(d.unifiedLines)-1, 0)
+}
+
+func (d *DiffViewWidget) logicalTopAnchor() diffLogicalAnchor {
+	sourceLine := d.topSourceLine()
+	right := false
+	if d.IsUnified() && d.TopLine >= 0 && d.TopLine < len(d.unifiedLines) {
+		right = d.unifiedLines[d.TopLine].right
+	}
+	anchor := diffLogicalAnchor{right: right, sourceLine: sourceLine}
+	for distance := 0; distance < len(d.Lines); distance++ {
+		indexes := []int{sourceLine - distance}
+		if distance > 0 {
+			indexes = append(indexes, sourceLine+distance)
+		}
+		for _, index := range indexes {
+			if index < 0 || index >= len(d.Lines) {
+				continue
+			}
+			line := d.Lines[index]
+			if line.Left.Num == 0 && line.Right.Num == 0 {
+				continue
+			}
+			if (anchor.right && line.Right.Num > 0) || line.Left.Num == 0 {
+				anchor.lineNum = line.Right.Num
+				anchor.right = true
+			} else {
+				anchor.lineNum = line.Left.Num
+				anchor.right = false
+			}
+			return anchor
+		}
+	}
+	return anchor
+}
+
+func (d *DiffViewWidget) displayLineForLogicalAnchor(anchor diffLogicalAnchor) int {
+	sourceLine := -1
+	bestDistance := -1
+	for index, line := range d.Lines {
+		lineNum := line.Left.Num
+		if anchor.right {
+			lineNum = line.Right.Num
+		}
+		if lineNum == 0 {
+			continue
+		}
+		distance := diffLineNumberDistance(anchor.lineNum, lineNum)
+		if bestDistance >= 0 && distance >= bestDistance {
+			continue
+		}
+		sourceLine = index
+		bestDistance = distance
+	}
+	if sourceLine < 0 {
+		sourceLine = min(max(anchor.sourceLine, 0), max(len(d.Lines)-1, 0))
+	}
+	if !d.IsUnified() {
+		return sourceLine
+	}
+	if line := d.unifiedIndexForSource(sourceLine, anchor.right); line >= 0 {
+		return line
+	}
+	for line, unified := range d.unifiedLines {
+		if unified.sourceLine == sourceLine {
+			return line
+		}
+	}
+	return max(len(d.unifiedLines)-1, 0)
+}
+
+func diffLineNumberDistance(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
 }
 
 func (d *DiffViewWidget) setTopVisualRow(row int) {

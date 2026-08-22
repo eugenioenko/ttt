@@ -231,6 +231,7 @@ func (d *DiffViewWidget) SetExtended(extended bool) {
 }
 
 func (d *DiffViewWidget) applyExtended(extended bool) {
+	top := d.logicalTopAnchor()
 	d.extended = extended
 	if extended {
 		d.contextMode = DiffContextFullFile
@@ -244,7 +245,7 @@ func (d *DiffViewWidget) applyExtended(extended bool) {
 		clear(d.expandedGaps)
 	}
 	d.rebuildLines()
-	d.TopLine = 0
+	d.TopLine = d.displayLineForLogicalAnchor(top)
 	d.wrapTopOffset = 0
 	d.LeftCol = 0
 	d.ClearSearch()
@@ -252,6 +253,7 @@ func (d *DiffViewWidget) applyExtended(extended bool) {
 }
 
 func (d *DiffViewWidget) FinishLoading() {
+	top := d.logicalTopAnchor()
 	d.Loading = false
 	d.extendedFetching = false
 	d.contextLoaded = true
@@ -262,7 +264,7 @@ func (d *DiffViewWidget) FinishLoading() {
 		d.contextMode = DiffContextChangesOnly
 	}
 	d.rebuildLines()
-	d.TopLine = 0
+	d.TopLine = d.displayLineForLogicalAnchor(top)
 	d.wrapTopOffset = 0
 	d.LeftCol = 0
 	d.ClearSearch()
@@ -270,13 +272,14 @@ func (d *DiffViewWidget) FinishLoading() {
 }
 
 func (d *DiffViewWidget) FailLoading() {
+	top := d.logicalTopAnchor()
 	d.Loading = false
 	d.extendedFetching = false
 	d.extended = false
 	d.contextMode = DiffContextChangesOnly
 	d.pendingGap = -1
 	d.rebuildLines()
-	d.TopLine = 0
+	d.TopLine = d.displayLineForLogicalAnchor(top)
 	d.wrapTopOffset = 0
 	d.LeftCol = 0
 	d.ClearSearch()
