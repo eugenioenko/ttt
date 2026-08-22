@@ -69,10 +69,11 @@ type TreeWidget struct {
 	lastSel   int
 	focused   bool
 
-	scrollbar scrollbar
-	contentX  int
-	contentY  int
-	contentW  int
+	scrollbar                 scrollbar
+	contentX                  int
+	contentY                  int
+	contentW                  int
+	pointerCaptureInvalidated func()
 }
 
 func NewTreeWidget(cfg TreeConfig) *TreeWidget {
@@ -481,6 +482,27 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 		t.Config.OnSelect(t.Selected())
 	}
 	return result
+}
+
+func (t *TreeWidget) CancelPointerCapture() bool {
+	canceled := t.scrollbar.isDragging()
+	t.scrollbar.dragging = false
+	if canceled && t.pointerCaptureInvalidated != nil {
+		t.pointerCaptureInvalidated()
+	}
+	return canceled
+}
+
+func (t *TreeWidget) OwnsPointerCapture() bool {
+	return t.scrollbar.isDragging()
+}
+
+func (t *TreeWidget) InvalidatePointerInteraction() bool {
+	return t.CancelPointerCapture()
+}
+
+func (t *TreeWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	t.pointerCaptureInvalidated = invalidated
 }
 
 func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {

@@ -4,14 +4,17 @@ import (
 	"github.com/gdamore/tcell/v3"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 type SidebarWidget struct {
 	BaseWidget
 	TabbedPanel
-	Visible       bool
-	Borders       *term.BorderSet
-	capturedChild Widget
+	Visible                   bool
+	Borders                   *term.BorderSet
+	capturedChild             Widget
+	pointerCaptureInvalidated func()
+	cancelingPointerCapture   bool
 }
 
 func NewSidebarWidget() *SidebarWidget {
@@ -31,7 +34,7 @@ func (s *SidebarWidget) Render(surface Surface) {
 
 	tabH := 2
 	if !s.Visible || w <= 0 || h <= tabH {
-		s.Tabs.InvalidatePointerInteraction()
+		s.InvalidatePointerInteraction()
 		return
 	}
 
@@ -48,19 +51,68 @@ func (s *SidebarWidget) Render(surface Surface) {
 }
 
 func (s *SidebarWidget) CancelPointerCapture() bool {
-	return s.Tabs.CancelPointerCapture()
+	captured := s.capturedChild
+	canceled := captured != nil
+	s.capturedChild = nil
+	s.cancelingPointerCapture = true
+	if captured != nil {
+		canceled = widgets.CancelPointerCapture(captured) || canceled
+	}
+	canceled = s.Tabs.CancelPointerCapture() || canceled
+	s.cancelingPointerCapture = false
+	if canceled && s.pointerCaptureInvalidated != nil {
+		s.pointerCaptureInvalidated()
+	}
+	return canceled
 }
 
 func (s *SidebarWidget) OwnsPointerCapture() bool {
+	if s.capturedChild != nil {
+		owner, ok := s.capturedChild.(widgets.PointerCaptureOwner)
+		if !ok || owner.OwnsPointerCapture() {
+			return true
+		}
+		s.capturedChild = nil
+	}
 	return s.Tabs.OwnsPointerCapture()
 }
 
 func (s *SidebarWidget) InvalidatePointerInteraction() bool {
-	return s.Tabs.InvalidatePointerInteraction()
+	captured := s.capturedChild
+	invalidated := captured != nil
+	s.capturedChild = nil
+	s.cancelingPointerCapture = true
+	if captured != nil {
+		invalidated = widgets.InvalidatePointerInteraction(captured) || invalidated
+	}
+	invalidated = s.Tabs.InvalidatePointerInteraction() || invalidated
+	s.cancelingPointerCapture = false
+	if invalidated && s.pointerCaptureInvalidated != nil {
+		s.pointerCaptureInvalidated()
+	}
+	return invalidated
 }
 
 func (s *SidebarWidget) SetPointerCaptureInvalidated(invalidated func()) {
-	s.Tabs.SetPointerCaptureInvalidated(invalidated)
+	s.pointerCaptureInvalidated = invalidated
+	s.Tabs.SetPointerCaptureInvalidated(func() {
+		if !s.cancelingPointerCapture && s.pointerCaptureInvalidated != nil {
+			s.pointerCaptureInvalidated()
+		}
+	})
+}
+
+func (s *SidebarWidget) captureChild(child Widget) {
+	s.capturedChild = child
+	widgets.SetPointerCaptureInvalidated(child, func() {
+		if s.capturedChild != child {
+			return
+		}
+		s.capturedChild = nil
+		if !s.cancelingPointerCapture && s.pointerCaptureInvalidated != nil {
+			s.pointerCaptureInvalidated()
+		}
+	})
 }
 
 func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -82,7 +134,7 @@ func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
 	if active != nil {
 		result := active.HandleEvent(ev)
 		if result == EventCaptured {
-			s.capturedChild = active
+			s.captureChild(active)
 		}
 		return result
 	}

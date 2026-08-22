@@ -7,10 +7,12 @@ import (
 
 type WidgetAdapter struct {
 	BaseWidget
-	W            widgets.Widget
-	focus        *widgets.FocusManager
-	popups       []widgets.PopupRenderer
-	rootCaptured bool
+	W                         widgets.Widget
+	focus                     *widgets.FocusManager
+	popups                    []widgets.PopupRenderer
+	rootCaptured              bool
+	pointerCaptureInvalidated func()
+	cancelingPointerCapture   bool
 }
 
 func NewWidgetAdapter(w widgets.Widget) *WidgetAdapter {
@@ -166,6 +168,9 @@ func (a *WidgetAdapter) HandleEvent(ev tcell.Event) EventResult {
 		}
 	}
 	if result := a.focus.HandleEvent(ev); result != EventIgnored {
+		if result == EventCaptured {
+			a.rootCaptured = true
+		}
 		return result
 	}
 	result := a.W.HandleEvent(ev)
@@ -173,4 +178,49 @@ func (a *WidgetAdapter) HandleEvent(ev tcell.Event) EventResult {
 		a.rootCaptured = true
 	}
 	return result
+}
+
+func (a *WidgetAdapter) CancelPointerCapture() bool {
+	canceled := a.rootCaptured
+	a.rootCaptured = false
+	a.cancelingPointerCapture = true
+	canceled = widgets.CancelPointerCapture(a.W) || canceled
+	a.cancelingPointerCapture = false
+	if canceled && a.pointerCaptureInvalidated != nil {
+		a.pointerCaptureInvalidated()
+	}
+	return canceled
+}
+
+func (a *WidgetAdapter) OwnsPointerCapture() bool {
+	if a.rootCaptured {
+		return true
+	}
+	owner, ok := a.W.(widgets.PointerCaptureOwner)
+	return ok && owner.OwnsPointerCapture()
+}
+
+func (a *WidgetAdapter) InvalidatePointerInteraction() bool {
+	invalidated := a.rootCaptured
+	a.rootCaptured = false
+	a.cancelingPointerCapture = true
+	invalidated = widgets.InvalidatePointerInteraction(a.W) || invalidated
+	a.cancelingPointerCapture = false
+	if invalidated && a.pointerCaptureInvalidated != nil {
+		a.pointerCaptureInvalidated()
+	}
+	return invalidated
+}
+
+func (a *WidgetAdapter) SetPointerCaptureInvalidated(invalidated func()) {
+	a.pointerCaptureInvalidated = invalidated
+	widgets.SetPointerCaptureInvalidated(a.W, func() {
+		if !a.rootCaptured || a.cancelingPointerCapture {
+			return
+		}
+		a.rootCaptured = false
+		if a.pointerCaptureInvalidated != nil {
+			a.pointerCaptureInvalidated()
+		}
+	})
 }

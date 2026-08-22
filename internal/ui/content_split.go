@@ -251,8 +251,8 @@ func (cs *ContentSplitWidget) TopContentHeight() int {
 	if !cs.ShowBottom || cs.Bottom == nil {
 		return r.H
 	}
-	needed := min(cs.BottomH+1, r.H)
-	return max(r.H-needed, 0)
+	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
+	return max(r.H-bottomH-1, 0)
 }
 
 func (cs *ContentSplitWidget) CancelPointerCapture() bool {
