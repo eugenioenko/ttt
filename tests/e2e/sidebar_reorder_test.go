@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -17,14 +16,17 @@ func TestSidebarHeaderDragReordersAndPersists(t *testing.T) {
 
 	tabsY := h.app.Sidebar.Tabs.GetRect().Y
 	row := h.screenRow(tabsY)
-	changesX := strings.Index(row, "Changes")
-	explorerX := strings.Index(row, "Explore")
+	changesX := displayColumnOf(row, "Changes")
+	explorerX := displayColumnOf(row, "Explore")
 	if changesX < 0 || explorerX < 0 {
 		t.Fatalf("tab labels not visible in %q", row)
 	}
 
 	if got := h.app.Root.HandleEvent(tcell.NewEventMouse(changesX+2, tabsY, tcell.Button1, 0)); got != ui.EventConsumed {
 		t.Fatalf("mouse down result = %v, want EventConsumed", got)
+	}
+	if got := h.app.Sidebar.ActivePanel; got != "changes" {
+		t.Fatalf("pressed source = %q, want changes", got)
 	}
 	dropX := h.app.Sidebar.Tabs.GetRect().X
 	h.app.Root.HandleEvent(tcell.NewEventMouse(dropX, tabsY, tcell.Button1, 0))
@@ -49,6 +51,62 @@ func TestSidebarHeaderDragReordersAndPersists(t *testing.T) {
 	}
 }
 
+func TestSidebarRemovedDragSourceDoesNotRetargetSameIndex(t *testing.T) {
+	h := newTestHarness(t, 100, 24)
+	defer h.stop()
+	h.redraw()
+
+	tabsY := h.app.Sidebar.Tabs.GetRect().Y
+	searchX := displayColumnOf(h.screenRow(tabsY), "Find")
+	if searchX < 0 {
+		t.Fatal("Find panel tab is not visible")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(searchX+2, tabsY, tcell.Button1, 0))
+	if got := h.app.Sidebar.ActivePanel; got != "search" {
+		t.Fatalf("pressed source = %q, want search", got)
+	}
+
+	h.app.Sidebar.RemovePanel("search")
+	postRemoval := slices.Clone(h.app.Sidebar.PanelIDs())
+	if slices.Contains(postRemoval, "search") || len(postRemoval) < 2 || postRemoval[1] != "changes" {
+		t.Fatalf("test setup did not replace numeric index 1 with changes: %v", postRemoval)
+	}
+	if h.app.Root.PointerCaptureActive() || h.app.Sidebar.Tabs.PointerGestureActive() {
+		t.Fatal("removing search retained pointer capture")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(searchX+15, tabsY, tcell.ButtonNone, 0))
+	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, postRemoval) {
+		t.Fatalf("release reordered search's replacement: got %v, want %v", got, postRemoval)
+	}
+}
+
+func TestHiddenSidebarCancelsGestureAndReleaseIsNoOp(t *testing.T) {
+	h := newTestHarness(t, 100, 24)
+	defer h.stop()
+	h.redraw()
+
+	tabsY := h.app.Sidebar.Tabs.GetRect().Y
+	changesX := displayColumnOf(h.screenRow(tabsY), "Changes")
+	if changesX < 0 {
+		t.Fatal("Changes panel tab is not visible")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(changesX+2, tabsY, tcell.Button1, 0))
+	if got := h.app.Sidebar.ActivePanel; got != "changes" {
+		t.Fatalf("pressed source = %q, want changes", got)
+	}
+	before := slices.Clone(h.app.Sidebar.PanelIDs())
+
+	h.app.HideSidebar()
+	h.redraw()
+	if h.app.Root.PointerCaptureActive() || h.app.Sidebar.Tabs.PointerGestureActive() {
+		t.Fatal("hidden sidebar retained pointer capture")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(changesX+15, tabsY, tcell.ButtonNone, 0))
+	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, before) {
+		t.Fatalf("release after hide reordered panels: got %v, want %v", got, before)
+	}
+}
+
 func TestSidebarPendingTabDragOwnsCrossDividerRelease(t *testing.T) {
 	h := newTestHarness(t, 100, 24)
 	defer h.stop()
@@ -56,7 +114,7 @@ func TestSidebarPendingTabDragOwnsCrossDividerRelease(t *testing.T) {
 
 	tabsY := h.app.Sidebar.Tabs.GetRect().Y
 	row := h.screenRow(tabsY)
-	changesX := strings.Index(row, "Changes")
+	changesX := displayColumnOf(row, "Changes")
 	if changesX < 0 {
 		t.Fatalf("Changes tab not visible in %q", row)
 	}
@@ -72,7 +130,7 @@ func TestSidebarPendingTabDragOwnsCrossDividerRelease(t *testing.T) {
 	}
 	afterRelease := slices.Clone(h.app.Sidebar.PanelIDs())
 	row = h.screenRow(tabsY)
-	explorerX := strings.Index(row, "Explore")
+	explorerX := displayColumnOf(row, "Explore")
 	if explorerX < 0 {
 		t.Fatalf("Explore tab not visible after release in %q", row)
 	}

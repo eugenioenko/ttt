@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -21,6 +22,14 @@ func tabsRowText(s *testSurface, y int) string {
 		}
 	}
 	return string(runes)
+}
+
+func tabsTextColumn(row, label string) int {
+	byteOffset := strings.Index(row, label)
+	if byteOffset < 0 {
+		return -1
+	}
+	return textwidth.String(row[:byteOffset])
 }
 
 func TestTabsDragCapturesPendingPressBeforeThreshold(t *testing.T) {
@@ -111,6 +120,32 @@ func TestTabsNonRenderableResizeClearsGestureAndGeometry(t *testing.T) {
 	}
 }
 
+func TestTabsRemovedSourceDoesNotRetargetReplacementAtSameIndex(t *testing.T) {
+	tw := NewTabsWidget(TabsConfig{
+		Items:       []TabItem{{ID: "a", Label: "A"}, {ID: "b", Label: "B"}, {ID: "c", Label: "C"}},
+		Reorderable: true,
+	})
+	var moves [][2]int
+	tw.Config.OnReorder = func(from, to int) { moves = append(moves, [2]int{from, to}) }
+	renderWidget(tw, 0, 0, 30, 1)
+	pressX := tw.tabSpans[1][0] + 1
+	if got := tw.HandleEvent(tcell.NewEventMouse(pressX, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("b mouse down = %v, want captured", got)
+	}
+	if got := tw.drag.SourceID(); got != "b" {
+		t.Fatalf("pressed source = %q, want b", got)
+	}
+
+	tw.SetItems([]TabItem{{ID: "a", Label: "A"}, {ID: "c", Label: "C"}, {ID: "d", Label: "D"}})
+	if tw.OwnsPointerCapture() {
+		t.Fatal("removed b retained capture when c occupied index 1")
+	}
+	tw.HandleEvent(tcell.NewEventMouse(tw.tabSpans[2][0]+1, 0, tcell.ButtonNone, 0))
+	if len(moves) != 0 {
+		t.Fatalf("release after source removal reordered replacement: %v", moves)
+	}
+}
+
 func TestTabsWideLabelsStoreDisplayColumnSpans(t *testing.T) {
 	clicked := -1
 	tw := NewTabsWidget(TabsConfig{
@@ -180,8 +215,8 @@ func TestTabsOverflowPreservesOrder(t *testing.T) {
 		t.Fatalf("active tab should be visible, got: %q", row)
 	}
 	// Visible tabs should maintain their original order
-	explorerPos := strings.Index(row, "Explorer")
-	changesPos := strings.Index(row, "Changes")
+	explorerPos := tabsTextColumn(row, "Explorer")
+	changesPos := tabsTextColumn(row, "Changes")
 	if explorerPos >= 0 && changesPos >= 0 && explorerPos > changesPos {
 		t.Fatalf("visible tabs should maintain original order, got: %q", row)
 	}

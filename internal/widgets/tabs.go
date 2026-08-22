@@ -19,31 +19,38 @@ type TabAction struct {
 }
 
 type TabsConfig struct {
-	Items       []TabItem   `json:"items"`
-	Actions     []TabAction `json:"-"`
-	Style       term.Style  `json:"-"`
-	Align       string      `json:"align,omitempty"`
-	Reorderable bool        `json:"-"`
-	OnTabClick  func(index int)
-	OnOverflow  func(screenX, screenY int)
-	OnReorder   func(from, to int)
+	Items                   []TabItem   `json:"items"`
+	Actions                 []TabAction `json:"-"`
+	Style                   term.Style  `json:"-"`
+	Align                   string      `json:"align,omitempty"`
+	Reorderable             bool        `json:"-"`
+	PointerInteractionValid func() bool `json:"-"`
+	OnTabClick              func(index int)
+	OnOverflow              func(screenX, screenY int)
+	OnReorder               func(from, to int)
 }
 
 type TabsWidget struct {
 	BaseWidget
-	Config      TabsConfig
-	tabSpans    [][2]int
-	overSpan    [2]int
-	actionSpans [][2]int
-	hiddenTabs  []int
-	wasPressed  bool
-	focused     bool
-	selected    int
-	drag        TabDragState
+	Config                    TabsConfig
+	tabSpans                  [][2]int
+	overSpan                  [2]int
+	actionSpans               [][2]int
+	hiddenTabs                []int
+	wasPressed                bool
+	focused                   bool
+	selected                  int
+	drag                      TabDragState
+	pointerCaptureInvalidated func()
 }
 
 func NewTabsWidget(config TabsConfig) *TabsWidget {
 	return &TabsWidget{Config: config}
+}
+
+func (t *TabsWidget) SetItems(items []TabItem) {
+	t.Config.Items = items
+	t.validateGestureSource()
 }
 
 func (t *TabsWidget) Height() int { return 1 + t.BoxOverheadH() }
@@ -83,9 +90,7 @@ func (t *TabsWidget) ActiveID() string {
 }
 
 func (t *TabsWidget) Render(surface Surface) {
-	if t.drag.Active() && t.drag.From() >= len(t.Config.Items) {
-		t.CancelPointerCapture()
-	}
+	t.validateGestureSource()
 	inner := t.RenderBox(surface)
 	w, _ := inner.Size()
 	if w <= 0 {
@@ -324,6 +329,9 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	if mev.Buttons() == tcell.ButtonNone {
 		t.wasPressed = false
 		if t.drag.Active() {
+			if !t.validateGestureSource() {
+				return EventIgnored
+			}
 			from, to, dragged := t.drag.End()
 			if dragged && from != to && t.Config.OnReorder != nil {
 				t.Config.OnReorder(from, to)
@@ -335,6 +343,9 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		return EventIgnored
 	}
 	if t.drag.Active() && pressed {
+		if !t.validateGestureSource() {
+			return EventIgnored
+		}
 		if t.drag.Update(mx, t.dropTargetAt(lx)) {
 			return EventCaptured
 		}
@@ -371,7 +382,7 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 				t.Config.OnTabClick(i)
 			}
 			if t.Config.Reorderable && t.Config.OnReorder != nil {
-				t.drag.Begin(i, mx)
+				t.drag.Begin(i, tabItemIdentity(t.Config.Items[i]), mx)
 				return EventCaptured
 			}
 			return EventConsumed
@@ -381,20 +392,27 @@ func (t *TabsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 }
 
 func (t *TabsWidget) PointerGestureActive() bool {
-	return t.drag.Active()
+	return t.validateGestureSource()
 }
 
 func (t *TabsWidget) OwnsPointerCapture() bool {
-	return t.drag.Active()
+	return t.validateGestureSource()
 }
 
 func (t *TabsWidget) CancelPointerCapture() bool {
-	if !t.drag.Active() {
-		return false
+	active := t.drag.Active()
+	if active {
+		t.drag.Cancel()
 	}
-	t.drag.Cancel()
 	t.wasPressed = false
-	return true
+	if active && t.pointerCaptureInvalidated != nil {
+		t.pointerCaptureInvalidated()
+	}
+	return active
+}
+
+func (t *TabsWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	t.pointerCaptureInvalidated = invalidated
 }
 
 func (t *TabsWidget) ClearRenderedGeometry() {
@@ -403,6 +421,38 @@ func (t *TabsWidget) ClearRenderedGeometry() {
 	t.actionSpans = nil
 	t.hiddenTabs = nil
 	t.CancelPointerCapture()
+}
+
+func (t *TabsWidget) InvalidatePointerInteraction() bool {
+	active := t.drag.Active()
+	t.ClearRenderedGeometry()
+	return active
+}
+
+func (t *TabsWidget) validateGestureSource() bool {
+	if !t.drag.Active() {
+		return false
+	}
+	if t.Config.PointerInteractionValid != nil && !t.Config.PointerInteractionValid() {
+		t.CancelPointerCapture()
+		return false
+	}
+	sourceID := t.drag.SourceID()
+	for i := range t.Config.Items {
+		if tabItemIdentity(t.Config.Items[i]) == sourceID {
+			t.drag.SetSourceIndex(i)
+			return true
+		}
+	}
+	t.CancelPointerCapture()
+	return false
+}
+
+func tabItemIdentity(item TabItem) string {
+	if item.ID != "" {
+		return item.ID
+	}
+	return item.Label
 }
 
 func (t *TabsWidget) dropTargetAt(localX int) int {

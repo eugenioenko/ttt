@@ -151,6 +151,7 @@ func (a *App) ShowSidebar() {
 }
 
 func (a *App) HideSidebar() {
+	a.Sidebar.InvalidatePointerInteraction()
 	a.Sidebar.Visible = false
 	a.SplitPanel.ShowLeft = false
 	a.EditorGroup.ClearSearch()

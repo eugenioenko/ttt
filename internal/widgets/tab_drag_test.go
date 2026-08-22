@@ -4,7 +4,10 @@ import "testing"
 
 func TestTabDragStateRequiresIntentionalMovement(t *testing.T) {
 	var drag TabDragState
-	drag.Begin(1, 10)
+	drag.Begin(1, "b", 10)
+	if drag.SourceID() != "b" {
+		t.Fatalf("source ID = %q, want b", drag.SourceID())
+	}
 	if drag.Update(11, 2) {
 		t.Fatal("one-column jitter should not start a drag")
 	}

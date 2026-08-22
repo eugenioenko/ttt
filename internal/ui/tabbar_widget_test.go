@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -362,6 +363,84 @@ func TestTabBarInvalidatedSourceDoesNotCaptureNextClick(t *testing.T) {
 
 	if clicked != 0 {
 		t.Fatalf("first click after invalidation activated %d, want 0", clicked)
+	}
+}
+
+func TestTabBarRemovedSourceDoesNotRetargetReplacementAtSameIndex(t *testing.T) {
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{
+		{ID: "a", Name: "a.go"},
+		{ID: "b", Name: "b.go", Active: true},
+		{ID: "c", Name: "c.go"},
+	})
+	root := NewRoot(tb)
+	root.SetSize(40, 3)
+	tb.Render(NewRenderSurface(makeGrid(40, 3), Rect{X: 0, Y: 0, W: 40, H: 3}))
+	var moves [][2]int
+	tb.OnTabReorder = func(from, to int) { moves = append(moves, [2]int{from, to}) }
+
+	pressX := tb.tabSpans[1].start + 2
+	if got := root.HandleEvent(tcell.NewEventMouse(pressX, 1, tcell.Button1, 0)); got != EventConsumed {
+		t.Fatalf("b mouse down = %v, want consumed by Root", got)
+	}
+	if got := tb.drag.SourceID(); got != "b" {
+		t.Fatalf("pressed source = %q, want b", got)
+	}
+
+	tb.SetTabs([]Tab{{ID: "a", Name: "a.go"}, {ID: "c", Name: "c.go"}, {ID: "d", Name: "d.go"}})
+	if root.capturedWidget != nil {
+		t.Fatal("removed b did not synchronously clear Root capture")
+	}
+	if tb.OwnsPointerCapture() {
+		t.Fatal("removed b retained capture when c occupied index 1")
+	}
+	tb.HandleEvent(tcell.NewEventMouse(tb.tabSpans[2].start+2, 1, tcell.ButtonNone, 0))
+	if len(moves) != 0 {
+		t.Fatalf("release after source removal reordered replacement: %v", moves)
+	}
+}
+
+func TestTabBarRapidRemoveReopenDoesNotReviveGesture(t *testing.T) {
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{{ID: "a", Name: "a.go"}, {ID: "b", Name: "b.go"}})
+	tb.SetRect(Rect{X: 0, Y: 0, W: 30, H: 3})
+	tb.Render(NewRenderSurface(makeGrid(30, 3), Rect{X: 0, Y: 0, W: 30, H: 3}))
+	reordered := false
+	tb.OnTabReorder = func(_, _ int) { reordered = true }
+	tb.HandleEvent(tcell.NewEventMouse(tb.tabSpans[1].start+2, 1, tcell.Button1, 0))
+
+	tb.SetTabs([]Tab{{ID: "a", Name: "a.go"}})
+	tb.SetTabs([]Tab{{ID: "a", Name: "a.go"}, {ID: "b", Name: "b.go"}})
+	tb.HandleEvent(tcell.NewEventMouse(0, 1, tcell.ButtonNone, 0))
+	if tb.OwnsPointerCapture() || reordered {
+		t.Fatal("remove/reopen revived the canceled b gesture")
+	}
+}
+
+func TestTabBarSourceRemovalSynchronouslyClearsNestedCaptureChain(t *testing.T) {
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{{ID: "a", Name: "a.go"}, {ID: "b", Name: "b.go"}, {ID: "c", Name: "c.go"}})
+	tb.OnTabReorder = func(_, _ int) {}
+	content := NewContentSplitWidget()
+	content.Top = tb
+	split := NewSplitPanelWidget()
+	split.ShowLeft = false
+	split.Right = content
+	main := widgets.NewVStackWidget(split)
+	root := NewRoot(main)
+	root.SetSize(50, 6)
+	root.Render(makeGrid(50, 6))
+
+	pressX := tb.GetRect().X + tb.tabSpans[1].start + 2
+	pressY := tb.GetRect().Y + 1
+	root.HandleEvent(tcell.NewEventMouse(pressX, pressY, tcell.Button1, 0))
+	if root.capturedWidget == nil || split.capturedChild == nil || content.capturedChild == nil {
+		t.Fatal("test setup did not establish the nested capture chain")
+	}
+
+	tb.SetTabs([]Tab{{ID: "a", Name: "a.go"}, {ID: "c", Name: "c.go"}, {ID: "d", Name: "d.go"}})
+	if root.capturedWidget != nil || split.capturedChild != nil || content.capturedChild != nil {
+		t.Fatal("source removal did not synchronously clear every capture layer")
 	}
 }
 

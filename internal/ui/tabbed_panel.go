@@ -176,6 +176,9 @@ func (tp *TabbedPanel) RemovePanel(id string) {
 func (tp *TabbedPanel) SetActivePanel(id string) {
 	for _, p := range tp.panels {
 		if p.ID == id {
+			if id != tp.ActivePanel && tp.Tabs.OwnsPointerCapture() {
+				tp.Tabs.CancelPointerCapture()
+			}
 			tp.ActivePanel = id
 			tp.syncTabs()
 			if tp.OnPanelChange != nil {
@@ -289,7 +292,7 @@ func (tp *TabbedPanel) syncTabs() {
 			Dirty:  dirty[p.ID],
 		}
 	}
-	tp.Tabs.Config.Items = items
+	tp.Tabs.SetItems(items)
 }
 
 func (tp *TabbedPanel) RenderTabs(surface Surface, r Rect) {

@@ -9,18 +9,19 @@ import (
 
 type ContentSplitWidget struct {
 	BaseWidget
-	Top               Widget
-	Bottom            Widget
-	ShowBottom        bool
-	BottomH           int
-	Borders           *term.BorderSet
-	OnResize          func(height int)
-	OnBottomClick     func()
-	OnTopClick        func()
-	RightBorderStartY *int
-	dragging          bool
-	wasPressed        bool
-	capturedChild     Widget
+	Top                       Widget
+	Bottom                    Widget
+	ShowBottom                bool
+	BottomH                   int
+	Borders                   *term.BorderSet
+	OnResize                  func(height int)
+	OnBottomClick             func()
+	OnTopClick                func()
+	RightBorderStartY         *int
+	dragging                  bool
+	wasPressed                bool
+	capturedChild             Widget
+	pointerCaptureInvalidated func()
 }
 
 func NewContentSplitWidget() *ContentSplitWidget {
@@ -35,14 +36,24 @@ func (cs *ContentSplitWidget) Focusable() bool { return false }
 func (cs *ContentSplitWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := cs.GetRect()
+	if w <= 0 || h <= 0 {
+		cs.InvalidatePointerInteraction()
+		return
+	}
 
 	if !cs.ShowBottom || cs.Bottom == nil {
+		widgets.InvalidatePointerInteraction(cs.Bottom)
+		if cs.capturedChild == cs.Bottom {
+			cs.capturedChild = nil
+		}
 		if cs.RightBorderStartY != nil {
 			*cs.RightBorderStartY = 2
 		}
 		if cs.Top != nil && w > 0 && h > 0 {
 			cs.Top.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: r.H})
 			cs.Top.Render(surface)
+		} else {
+			widgets.InvalidatePointerInteraction(cs.Top)
 		}
 		return
 	}
@@ -73,6 +84,11 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 		cs.Top.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: topH})
 		topSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: topH})
 		cs.Top.Render(topSurface)
+	} else {
+		widgets.InvalidatePointerInteraction(cs.Top)
+		if cs.capturedChild == cs.Top {
+			cs.capturedChild = nil
+		}
 	}
 
 	// Horizontal divider
@@ -86,6 +102,11 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 		cs.Bottom.SetRect(Rect{X: r.X, Y: r.Y + divY + 1, W: r.W, H: bottomContentH})
 		bottomSurface := surface.Sub(Rect{X: 0, Y: divY + 1, W: w, H: bottomContentH})
 		cs.Bottom.Render(bottomSurface)
+	} else {
+		widgets.InvalidatePointerInteraction(cs.Bottom)
+		if cs.capturedChild == cs.Bottom {
+			cs.capturedChild = nil
+		}
 	}
 }
 
@@ -206,19 +227,62 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 	return r.Y + r.H - needed
 }
 
+func (cs *ContentSplitWidget) TopContentHeight() int {
+	r := cs.GetRect()
+	if r.W <= 0 || r.H <= 0 {
+		return 0
+	}
+	if !cs.ShowBottom || cs.Bottom == nil {
+		return r.H
+	}
+	needed := min(cs.BottomH+1, r.H)
+	return max(r.H-needed, 0)
+}
+
 func (cs *ContentSplitWidget) CancelPointerCapture() bool {
-	children := []Widget{cs.capturedChild, cs.Top, cs.Bottom}
-	for _, child := range children {
+	canceled := cs.dragging || cs.capturedChild != nil
+	cs.dragging = false
+	cs.wasPressed = false
+	cs.capturedChild = nil
+	for _, child := range []Widget{cs.Top, cs.Bottom} {
 		if child == nil {
 			continue
 		}
-		if canceler, ok := child.(widgets.PointerCaptureCanceler); ok && canceler.CancelPointerCapture() {
-			cs.capturedChild = nil
-			cs.wasPressed = false
-			return true
-		}
+		canceled = widgets.CancelPointerCapture(child) || canceled
 	}
-	return false
+	if canceled && cs.pointerCaptureInvalidated != nil {
+		cs.pointerCaptureInvalidated()
+	}
+	return canceled
+}
+
+func (cs *ContentSplitWidget) InvalidatePointerInteraction() bool {
+	invalidated := cs.dragging || cs.capturedChild != nil
+	cs.dragging = false
+	cs.wasPressed = false
+	cs.capturedChild = nil
+	invalidated = widgets.InvalidatePointerInteraction(cs.Top) || invalidated
+	invalidated = widgets.InvalidatePointerInteraction(cs.Bottom) || invalidated
+	if invalidated && cs.pointerCaptureInvalidated != nil {
+		cs.pointerCaptureInvalidated()
+	}
+	return invalidated
+}
+
+func (cs *ContentSplitWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	cs.pointerCaptureInvalidated = invalidated
+	for _, child := range []Widget{cs.Top, cs.Bottom} {
+		capturedChild := child
+		widgets.SetPointerCaptureInvalidated(child, func() {
+			if cs.capturedChild == capturedChild {
+				cs.capturedChild = nil
+			}
+			cs.wasPressed = false
+			if cs.pointerCaptureInvalidated != nil {
+				cs.pointerCaptureInvalidated()
+			}
+		})
+	}
 }
 
 func (cs *ContentSplitWidget) OwnsPointerCapture() bool {

@@ -27,6 +27,7 @@ func (a *App) ToggleTerminalFullscreen() {
 	if a.ContentSplit.ShowBottom && a.ContentSplit.BottomH >= fullH {
 		a.HideBottomPanel()
 	} else {
+		a.EditorGroup.InvalidatePointerInteraction()
 		a.ContentSplit.BottomH = fullH
 		a.showTerminalPanel()
 		resizeTerminals(a)

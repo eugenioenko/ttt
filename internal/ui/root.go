@@ -50,12 +50,17 @@ type Root struct {
 }
 
 func NewRoot(main Widget) *Root {
-	return &Root{Main: main}
+	r := &Root{Main: main}
+	widgets.SetPointerCaptureInvalidated(main, func() {
+		r.capturedWidget = nil
+	})
+	return r
 }
 
 func (r *Root) SetSize(w, h int) {
 	if w != r.Width || h != r.Height {
-		r.CancelPointerCapture()
+		widgets.InvalidatePointerInteraction(r.Main)
+		r.capturedWidget = nil
 	}
 	r.Width = w
 	r.Height = h
@@ -63,12 +68,12 @@ func (r *Root) SetSize(w, h int) {
 }
 
 func (r *Root) CancelPointerCapture() bool {
-	canceler, ok := r.Main.(widgets.PointerCaptureCanceler)
-	if ok && canceler.CancelPointerCapture() {
+	canceled := widgets.CancelPointerCapture(r.Main)
+	if r.capturedWidget != nil {
+		canceled = true
 		r.capturedWidget = nil
-		return true
 	}
-	return r.reconcilePointerCapture()
+	return canceled
 }
 
 func (r *Root) reconcilePointerCapture() bool {
@@ -81,6 +86,11 @@ func (r *Root) reconcilePointerCapture() bool {
 	}
 	r.capturedWidget = nil
 	return true
+}
+
+func (r *Root) PointerCaptureActive() bool {
+	r.reconcilePointerCapture()
+	return r.capturedWidget != nil
 }
 
 func (r *Root) AddGlobalKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
@@ -392,6 +402,7 @@ func (r *Root) TopOverlayWidget() Widget {
 }
 
 func (r *Root) PushOverlay(o Overlay) {
+	r.CancelPointerCapture()
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
 }
@@ -420,6 +431,9 @@ func (r *Root) RemoveOverlay(w Widget) {
 func (r *Root) SetFocus(w Widget) {
 	if r.Focused == w {
 		return
+	}
+	if r.capturedWidget != nil {
+		r.CancelPointerCapture()
 	}
 	if r.Focused != nil {
 		if setter, ok := r.Focused.(interface{ SetFocused(bool) }); ok {

@@ -29,8 +29,8 @@ func (s *SidebarWidget) Render(surface Surface) {
 	r := s.GetRect()
 
 	tabH := 2
-	if h <= tabH {
-		s.Tabs.ClearRenderedGeometry()
+	if !s.Visible || w <= 0 || h <= tabH {
+		s.Tabs.InvalidatePointerInteraction()
 		return
 	}
 
@@ -52,6 +52,14 @@ func (s *SidebarWidget) CancelPointerCapture() bool {
 
 func (s *SidebarWidget) OwnsPointerCapture() bool {
 	return s.Tabs.OwnsPointerCapture()
+}
+
+func (s *SidebarWidget) InvalidatePointerInteraction() bool {
+	return s.Tabs.InvalidatePointerInteraction()
+}
+
+func (s *SidebarWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	s.Tabs.SetPointerCaptureInvalidated(invalidated)
 }
 
 func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {

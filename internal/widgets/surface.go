@@ -51,6 +51,34 @@ type PointerCaptureOwner interface {
 	OwnsPointerCapture() bool
 }
 
+type PointerInteractionInvalidator interface {
+	InvalidatePointerInteraction() bool
+}
+
+type PointerCaptureInvalidationSetter interface {
+	SetPointerCaptureInvalidated(func())
+}
+
+func CancelPointerCapture(w Widget) bool {
+	if canceler, ok := w.(PointerCaptureCanceler); ok {
+		return canceler.CancelPointerCapture()
+	}
+	return false
+}
+
+func InvalidatePointerInteraction(w Widget) bool {
+	if invalidator, ok := w.(PointerInteractionInvalidator); ok {
+		return invalidator.InvalidatePointerInteraction()
+	}
+	return CancelPointerCapture(w)
+}
+
+func SetPointerCaptureInvalidated(w Widget, invalidated func()) {
+	if setter, ok := w.(PointerCaptureInvalidationSetter); ok {
+		setter.SetPointerCaptureInvalidated(invalidated)
+	}
+}
+
 func hasFocusedChild(w Widget) bool {
 	if fw, ok := w.(FocusableWidget); ok && fw.IsFocused() {
 		return true

@@ -28,6 +28,14 @@ type testHarness struct {
 	dir      string
 }
 
+func displayColumnOf(row, label string) int {
+	byteOffset := strings.Index(row, label)
+	if byteOffset < 0 {
+		return -1
+	}
+	return textwidth.String(row[:byteOffset])
+}
+
 func newTestHarness(t *testing.T, w, h int) *testHarness {
 	t.Helper()
 

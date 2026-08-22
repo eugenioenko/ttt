@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"testing"
 
 	"github.com/gdamore/tcell/v3"
@@ -64,6 +65,30 @@ func TestRootRoutesToFocused(t *testing.T) {
 	}
 	if main.eventCount != 0 {
 		t.Fatal("event incorrectly routed to main widget")
+	}
+}
+
+func TestRootSetSizeClearsBothDividerCaptures(t *testing.T) {
+	content := NewContentSplitWidget()
+	content.Top = &mockWidget{}
+	content.Bottom = &mockWidget{}
+	content.dragging = true
+	split := NewSplitPanelWidget()
+	split.Left = &mockWidget{}
+	split.Right = content
+	split.dragging = true
+	main := widgets.NewVStackWidget(split)
+	root := NewRoot(main)
+	root.Width = 80
+	root.Height = 24
+	root.capturedWidget = main
+
+	root.SetSize(100, 30)
+	if split.dragging || content.dragging {
+		t.Fatalf("resize retained divider capture: split=%v content=%v", split.dragging, content.dragging)
+	}
+	if root.PointerCaptureActive() {
+		t.Fatal("resize retained Root capture")
 	}
 }
 

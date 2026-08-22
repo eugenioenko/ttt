@@ -625,6 +625,9 @@ func (g *EditorGroupWidget) SetUseTabs(useTabs bool) {
 
 func (g *EditorGroupWidget) SwitchTab(idx int) {
 	if idx >= 0 && idx < len(g.tabs) {
+		if idx != g.active && g.TabBar.OwnsPointerCapture() {
+			g.TabBar.CancelPointerCapture()
+		}
 		if t := g.activeTab(); t != nil && t.Content != nil {
 			if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
 				setter.SetFocused(false)
@@ -1724,6 +1727,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			name = ts.Title
 		}
 		uiTabs = append(uiTabs, Tab{
+			ID:       ts.FilePath,
 			Name:     name,
 			Active:   i == g.active,
 			Dirty:    dirty,
@@ -1740,8 +1744,8 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	r := g.GetRect()
 
 	const tabBarH = 3
-	if h <= tabBarH {
-		g.TabBar.ClearRenderedGeometry()
+	if w <= 0 || h <= tabBarH {
+		g.TabBar.InvalidatePointerInteraction()
 		return
 	}
 
@@ -1793,6 +1797,14 @@ func (g *EditorGroupWidget) CancelPointerCapture() bool {
 
 func (g *EditorGroupWidget) OwnsPointerCapture() bool {
 	return g.TabBar.OwnsPointerCapture()
+}
+
+func (g *EditorGroupWidget) InvalidatePointerInteraction() bool {
+	return g.TabBar.InvalidatePointerInteraction()
+}
+
+func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	g.TabBar.SetPointerCaptureInvalidated(invalidated)
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
