@@ -476,21 +476,6 @@ func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePosit
 			want: true,
 		},
 		{
-			name: "permission failure below resolved repository alias",
-			path: func(t *testing.T) string {
-				restricted := filepath.Join(repo, "restricted")
-				if err := os.Mkdir(restricted, 0o700); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(restricted, 0); err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() { _ = os.Chmod(restricted, 0o700) })
-				return filepath.Join(alias, "restricted", "new.txt")
-			},
-			want: true,
-		},
-		{
 			name: "broken in-repository symlink",
 			path: func(t *testing.T) string {
 				link := filepath.Join(repo, "broken-internal")
@@ -539,24 +524,6 @@ func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePosit
 			want: false,
 		},
 		{
-			name: "permission failure outside repository",
-			path: func(t *testing.T) string {
-				denied := filepath.Join(outside, "denied")
-				if err := os.Mkdir(denied, 0o700); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Symlink(repo, filepath.Join(denied, "hidden-alias")); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(denied, 0); err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() { _ = os.Chmod(denied, 0o700) })
-				return filepath.Join(denied, "hidden-alias", "new.txt")
-			},
-			want: false,
-		},
-		{
 			name: "outside symlink loop",
 			path: func(t *testing.T) string {
 				first := filepath.Join(outside, "loop-a")
@@ -581,6 +548,85 @@ func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePosit
 				t.Fatalf("invalidated = %v, want %v (requested=%d dirty=%b)", got, test.want, s.requested, s.dirty)
 			}
 		})
+	}
+}
+
+func TestRepositoryInvalidationRejectsUnprovablePermissionAncestors(t *testing.T) {
+	repo := t.TempDir()
+	external := t.TempDir()
+	restricted := filepath.Join(repo, "restricted")
+	plain := filepath.Join(repo, "plain")
+	for _, dir := range []string{restricted, plain} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(external, filepath.Join(restricted, "escape")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if resolved, err := filepath.EvalSymlinks(filepath.Join(restricted, "escape")); err != nil || resolved != external {
+		t.Fatalf("external symlink parent identity=%q err=%v, want %q", resolved, err, external)
+	}
+	for _, dir := range []string{restricted, plain} {
+		if err := os.Chmod(dir, 0); err != nil {
+			t.Fatal(err)
+		}
+		dir := dir
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	}
+
+	tests := []struct {
+		name   string
+		denied string
+		path   string
+	}{
+		{
+			name:   "permission-hidden external symlink",
+			denied: restricted,
+			path:   filepath.Join(restricted, "escape", "missing.txt"),
+		},
+		{
+			name:   "plain permission-denied internal directory",
+			denied: plain,
+			path:   filepath.Join(plain, "missing.txt"),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s, _, _ := testRepositoryState(nil, repo)
+			s.pathIdentity = permissionDeniedRepositoryPathResolver(test.denied)
+			if resolved, err := s.resolvePathIdentity(test.path); resolved != "" || !errors.Is(err, os.ErrPermission) {
+				t.Fatalf("permission seam resolved=%q err=%v, want os.ErrPermission", resolved, err)
+			}
+			s.InvalidatePath(test.path, RepositoryWorktree)
+			if s.requested != 0 || s.dirty != 0 {
+				t.Fatalf("unprovable path invalidated: requested=%d dirty=%b", s.requested, s.dirty)
+			}
+		})
+	}
+}
+
+func permissionDeniedRepositoryPathResolver(denied string) func(string) (string, error) {
+	permissionError := func(op, path string) error {
+		return &os.PathError{Op: op, Path: path, Err: os.ErrPermission}
+	}
+	deniedDescendant := func(path string) bool {
+		return filepath.Clean(path) != filepath.Clean(denied) && pathWithin(denied, path)
+	}
+	lstat := func(path string) (os.FileInfo, error) {
+		if deniedDescendant(path) {
+			return nil, permissionError("lstat", path)
+		}
+		return os.Lstat(path)
+	}
+	evalSymlinks := func(path string) (string, error) {
+		if deniedDescendant(path) {
+			return "", permissionError("evalsymlinks", path)
+		}
+		return filepath.EvalSymlinks(path)
+	}
+	return func(path string) (string, error) {
+		return resolveRepositoryPathIdentityWith(path, lstat, evalSymlinks)
 	}
 }
 

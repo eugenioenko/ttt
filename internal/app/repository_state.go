@@ -68,6 +68,7 @@ type RepositoryState struct {
 
 	scheduler    repositoryScheduler
 	readStatus   func(context.Context, []string, uint64) *RepositoryStatusResult
+	pathIdentity func(string) (string, error)
 	debounceWait time.Duration
 	pollWait     time.Duration
 	statusWait   time.Duration
@@ -199,7 +200,7 @@ func (s *RepositoryState) InvalidatePath(path string, resources RepositoryResour
 	if s == nil || s.closed || path == "" || resources == 0 {
 		return
 	}
-	identity, err := resolveRepositoryPathIdentity(path)
+	identity, err := s.resolvePathIdentity(path)
 	if err != nil {
 		return
 	}
@@ -508,7 +509,7 @@ func (s *RepositoryState) repositoryIdentityRoots() []string {
 	roots := make([]string, 0, len(s.lastGroups)+len(s.dirs))
 	seen := make(map[string]bool)
 	add := func(path string) {
-		identity, err := resolveRepositoryPathIdentity(path)
+		identity, err := s.resolvePathIdentity(path)
 		if err != nil || identity == "" || seen[identity] {
 			return
 		}
@@ -527,67 +528,59 @@ func (s *RepositoryState) repositoryIdentityRoots() []string {
 	return roots
 }
 
+func (s *RepositoryState) resolvePathIdentity(path string) (string, error) {
+	if s.pathIdentity != nil {
+		return s.pathIdentity(path)
+	}
+	return resolveRepositoryPathIdentity(path)
+}
+
 func resolveRepositoryPathIdentity(path string) (string, error) {
+	return resolveRepositoryPathIdentityWith(path, os.Lstat, filepath.EvalSymlinks)
+}
+
+func resolveRepositoryPathIdentityWith(
+	path string,
+	lstat func(string) (os.FileInfo, error),
+	evalSymlinks func(string) (string, error),
+) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
 	abs = filepath.Clean(abs)
-	resolved, resolveErr := stableSymlinkIdentity(abs)
+	resolved, resolveErr := stableSymlinkIdentityWith(abs, evalSymlinks)
 	if resolveErr == nil {
 		return resolved, nil
 	}
-	if _, lstatErr := os.Lstat(abs); lstatErr == nil {
+	if _, lstatErr := lstat(abs); lstatErr == nil {
 		return "", resolveErr
-	} else if errors.Is(lstatErr, os.ErrPermission) {
-		return resolveRepositoryPathFromAccessibleAncestor(abs)
-	} else if !errors.Is(lstatErr, os.ErrNotExist) {
-		return "", resolveErr
-	}
-	parent := filepath.Dir(abs)
-	resolvedParent, parentErr := stableSymlinkIdentity(parent)
-	if parentErr != nil {
-		return "", resolveErr
-	}
-	if _, lstatErr := os.Lstat(abs); lstatErr == nil {
-		return stableSymlinkIdentity(abs)
 	} else if !errors.Is(lstatErr, os.ErrNotExist) {
 		return "", lstatErr
 	}
-	confirmedParent, err := stableSymlinkIdentity(parent)
+	parent := filepath.Dir(abs)
+	resolvedParent, parentErr := stableSymlinkIdentityWith(parent, evalSymlinks)
+	if parentErr != nil {
+		return "", resolveErr
+	}
+	if _, lstatErr := lstat(abs); lstatErr == nil {
+		return stableSymlinkIdentityWith(abs, evalSymlinks)
+	} else if !errors.Is(lstatErr, os.ErrNotExist) {
+		return "", lstatErr
+	}
+	confirmedParent, err := stableSymlinkIdentityWith(parent, evalSymlinks)
 	if err != nil || confirmedParent != resolvedParent {
 		return "", errors.New("repository path parent changed while resolving")
 	}
 	return filepath.Join(resolvedParent, filepath.Base(abs)), nil
 }
 
-func resolveRepositoryPathFromAccessibleAncestor(path string) (string, error) {
-	current := path
-	remaining := make([]string, 0, 4)
-	for {
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", os.ErrPermission
-		}
-		remaining = append(remaining, filepath.Base(current))
-		current = parent
-		resolved, err := stableSymlinkIdentity(current)
-		if err != nil {
-			continue
-		}
-		for i := len(remaining) - 1; i >= 0; i-- {
-			resolved = filepath.Join(resolved, remaining[i])
-		}
-		return filepath.Clean(resolved), nil
-	}
-}
-
-func stableSymlinkIdentity(path string) (string, error) {
-	first, err := filepath.EvalSymlinks(path)
+func stableSymlinkIdentityWith(path string, evalSymlinks func(string) (string, error)) (string, error) {
+	first, err := evalSymlinks(path)
 	if err != nil {
 		return "", err
 	}
-	second, err := filepath.EvalSymlinks(path)
+	second, err := evalSymlinks(path)
 	if err != nil {
 		return "", err
 	}
