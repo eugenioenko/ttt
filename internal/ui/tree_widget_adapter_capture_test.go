@@ -226,3 +226,29 @@ func TestWidgetAdapterTargetsFocusableChildInsideScrollView(t *testing.T) {
 	}
 	adapter.HandleEvent(tcell.NewEventMouse(9, 0, tcell.ButtonNone, 0))
 }
+
+func TestWidgetAdapterLetsScrollViewHandleWheelOverMeasuredTree(t *testing.T) {
+	items := make([]*widgets.TreeNode, 12)
+	for i := range items {
+		items[i] = &widgets.TreeNode{ID: string(rune('a' + i)), Label: "item"}
+	}
+	tree := widgets.NewTreeWidget(widgets.TreeConfig{Items: items})
+	stack := widgets.NewVStackWidget(tree)
+	stack.MeasureGrow = true
+	scroll := widgets.NewScrollViewWidget(stack)
+	adapter := NewWidgetAdapter(scroll)
+	adapter.SetRect(Rect{X: 0, Y: 0, W: 10, H: 4})
+	render := func() {
+		adapter.Render(NewRenderSurface(makeGrid(10, 4), Rect{X: 0, Y: 0, W: 10, H: 4}))
+	}
+	render()
+	beforeY := tree.GetRect().Y
+
+	if got := adapter.HandleEvent(tcell.NewEventMouse(1, 1, tcell.WheelDown, 0)); got != EventConsumed {
+		t.Fatalf("wheel result = %v, want consumed", got)
+	}
+	render()
+	if got := tree.GetRect().Y; got != beforeY-3 {
+		t.Fatalf("tree Y after outer wheel = %d, want %d", got, beforeY-3)
+	}
+}

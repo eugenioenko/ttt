@@ -190,6 +190,16 @@ func (fm *FocusManager) innermostVisibleHit(mx, my int) int {
 	return hit
 }
 
+func (fm *FocusManager) firstVisibleHit(mx, my int) int {
+	for i, fw := range fm.items {
+		r := VisibleRect(fm.root, fw)
+		if mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H {
+			return i
+		}
+	}
+	return -1
+}
+
 func (fm *FocusManager) setFocus(idx int) {
 	if fm.focused >= 0 && fm.focused < len(fm.items) {
 		fm.items[fm.focused].SetFocused(false)
@@ -320,9 +330,14 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 		}
 	case *tcell.EventMouse:
 		mx, my := tev.Position()
-		hit := fm.innermostVisibleHit(mx, my)
-		if tev.Buttons()&tcell.Button1 != 0 && hit >= 0 {
-			fm.setFocus(hit)
+		hit := -1
+		if tev.Buttons()&tcell.Button1 != 0 {
+			hit = fm.innermostVisibleHit(mx, my)
+			if hit >= 0 {
+				fm.setFocus(hit)
+			}
+		} else {
+			hit = fm.firstVisibleHit(mx, my)
 		}
 		if hit >= 0 {
 			fm.lastEventTarget = fm.items[hit]
