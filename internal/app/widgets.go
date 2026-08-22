@@ -209,6 +209,10 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
 	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
 	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
+	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
+	editorGroup.DiffContext = configuredDiffContext(cfg.Settings.Editor.DiffContext)
+	editorGroup.DiffWordWrap = cfg.Settings.Editor.DiffWordWrap
+	editorGroup.DiffHighContrast = cfg.Settings.Editor.DiffHighContrast
 	editorGroup.Editor.WordWrap = cfg.Settings.Editor.WordWrap
 	editorGroup.Editor.AutoDedent = cfg.Settings.Editor.IsAutoDedentEnabled()
 	editorGroup.Editor.AutoIndent = cfg.Settings.Editor.IsAutoIndentEnabled()

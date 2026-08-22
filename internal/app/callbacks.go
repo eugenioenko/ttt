@@ -43,17 +43,7 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			{Label: "Help", Command: "search.help"},
 		}
 	case "changes":
-		items = []ui.ContextMenuItem{
-			{Label: "Refresh", Command: "changes.refresh"},
-			ui.MenuSep(),
-			{Label: "Pull", Command: "git.pull"},
-			{Label: "Push", Command: "git.push"},
-			{Label: "Sync", Command: "git.sync"},
-			ui.MenuSep(),
-			{Label: "Open PR Diff", Command: "pr.openDiff"},
-			ui.MenuSep(),
-			{Label: "Help", Command: "changes.help"},
-		}
+		items = a.BuildChangesPanelMenu()
 	case "outline":
 		items = []ui.ContextMenuItem{
 			{Label: "Refresh", Command: "sidebar.outline"},
@@ -84,6 +74,21 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	}
 	if len(items) > 0 {
 		openContextMenu(a, items, sx, sy)
+	}
+}
+
+func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Refresh", Command: "changes.refresh"},
+		{Label: "Diff View", Submenu: a.BuildDiffViewOptions()},
+		ui.MenuSep(),
+		{Label: "Pull", Command: "git.pull"},
+		{Label: "Push", Command: "git.push"},
+		{Label: "Sync", Command: "git.sync"},
+		ui.MenuSep(),
+		{Label: "Open PR Diff", Command: "pr.openDiff"},
+		ui.MenuSep(),
+		{Label: "Help", Command: "changes.help"},
 	}
 }
 
@@ -284,9 +289,9 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 	}
 	a.EditorGroup.OpenDiff(status.Path, parsed, nil, nil, false)
 	if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
-		dv.OnFetchExtended = func(dv *ui.DiffViewWidget) {
+		dv.SetExtendedFetcher(func(dv *ui.DiffViewWidget) {
 			a.fetchPRFileContent(dv, group.PROwner, group.PRRepo, group.PRBaseSHA, group.PRHeadSHA, status.Path)
-		}
+		})
 		if extended {
 			dv.SetExtended(true)
 		}
@@ -296,7 +301,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 
 func (a *App) fetchPRFileContent(dv *ui.DiffViewWidget, owner, repo, baseSHA, headSHA, path string) {
 	if owner == "" || baseSHA == "" {
-		dv.Loading = false
+		dv.FailLoading()
 		return
 	}
 	tabName := path + " (diff)"
@@ -524,15 +529,10 @@ func registerWidgetCallbacks(app *App) {
 			ui.ContextMenuItem{Label: "Copy Relative Path", Command: "file.copyRelativePath"},
 		)
 		if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
-			cmd := "diff.extendedView"
-			label := "Extended Diff"
-			if dv.IsExtended() {
-				cmd = "diff.compactView"
-				label = "Compact Diff"
-			}
 			tabContextMenu = append(tabContextMenu,
 				ui.MenuSep(),
-				ui.ContextMenuItem{Label: label, Command: cmd},
+				ui.ContextMenuItem{Label: "Changes Only", Command: "diff.changesOnlyView", Checked: menuChecked(dv.ContextMode() == ui.DiffContextChangesOnly)},
+				ui.ContextMenuItem{Label: "Full File", Command: "diff.fullFileView", Checked: menuChecked(dv.ContextMode() == ui.DiffContextFullFile)},
 			)
 		}
 		openContextMenu(app, tabContextMenu, sx, sy)

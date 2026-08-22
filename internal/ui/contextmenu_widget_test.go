@@ -128,3 +128,71 @@ func TestContextMenuRenderClampsToZeroAndNarrowBounds(t *testing.T) {
 		})
 	}
 }
+
+func TestContextMenuKeyboardNavigatesSubmenu(t *testing.T) {
+	var executed string
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label: "Diff View",
+		Submenu: []ContextMenuItem{
+			{Label: "Split", Command: "split", Checked: MenuChecked},
+			{Label: "Unified", Command: "unified", Checked: MenuUnchecked},
+		},
+	}}, 2, 1)
+	menu.OnExec = func(command string) { executed = command }
+	renderContextMenu(menu, 50, 15)
+
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyRight, "", tcell.ModNone))
+	if menu.Submenu == nil {
+		t.Fatal("Right should open the selected submenu")
+	}
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModNone))
+	if menu.Submenu.Selected != 1 {
+		t.Fatalf("submenu selection = %d, want 1", menu.Submenu.Selected)
+	}
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyLeft, "", tcell.ModNone))
+	if menu.Submenu != nil {
+		t.Fatal("Left should return to the parent menu")
+	}
+
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if executed != "unified" {
+		t.Fatalf("executed %q, want unified", executed)
+	}
+}
+
+func TestContextMenuFullwidthSubmenuFlipsAndKeepsMouseBounds(t *testing.T) {
+	var executed string
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label: "Diff 界 View",
+		Submenu: []ContextMenuItem{
+			{Label: "Split 界", Command: "split", Checked: MenuUnchecked},
+			{Label: "Unified", Command: "unified", Checked: MenuChecked},
+		},
+	}}, 31, 1)
+	menu.OnExec = func(command string) { executed = command }
+	menu.firstEvent = false
+	cells := makeGrid(36, 15)
+	surface := NewRenderSurface(cells, Rect{W: 36, H: 15})
+	menu.Render(surface)
+
+	parent := menu.GetRect()
+	menu.HandleEvent(tcell.NewEventMouse(parent.X+2, parent.Y+1, tcell.ButtonNone, tcell.ModNone))
+	menu.Render(surface)
+	if menu.Submenu == nil {
+		t.Fatal("hover should open a submenu")
+	}
+	child := menu.Submenu.GetRect()
+	if child.X >= parent.X {
+		t.Fatalf("submenu x = %d, parent x = %d; expected it to flip left", child.X, parent.X)
+	}
+	if child.X < 0 || child.X+child.W > 36 {
+		t.Fatalf("submenu bounds %+v escape surface", child)
+	}
+
+	menu.HandleEvent(tcell.NewEventMouse(child.X+child.W-1, child.Y+2, tcell.Button1, tcell.ModNone))
+	if executed != "unified" {
+		t.Fatalf("right-edge submenu command = %q, want unified", executed)
+	}
+}

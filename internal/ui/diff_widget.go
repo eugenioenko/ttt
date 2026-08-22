@@ -1,11 +1,8 @@
 package ui
 
 import (
-	"fmt"
 	"sort"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/highlight"
@@ -19,24 +16,20 @@ type diffMergedRef struct {
 	sideIdx int
 }
 
-type diffSelPos struct {
-	Line int
-	Col  int
-}
-
 type DiffViewWidget struct {
 	BaseWidget
-	FilePath    string
-	Lines       []diff.DiffLine
-	Highlighter *highlight.Highlighter
-	TopLine     int
-	LeftCol     int
-	maxLineW    int
-	viewH       int
-	contentW    int
-	scrollbar   Scrollbar
-	hscrollbar  HScrollbar
-	rhscrollbar HScrollbar
+	FilePath        string
+	Lines           []diff.DiffLine
+	Highlighter     *highlight.Highlighter
+	TopLine         int
+	LeftCol         int
+	maxLineW        int
+	viewH           int
+	contentW        int
+	totalVisualRows int
+	scrollbar       Scrollbar
+	hscrollbar      HScrollbar
+	rhscrollbar     HScrollbar
 
 	// layout cache for mouse hit-testing
 	layoutDividerX   int
@@ -45,13 +38,17 @@ type DiffViewWidget struct {
 	layoutRightStart int
 	layoutRightW     int
 	layoutGutterW    int
+	wrapMap          []diffWrapEntry
+	wrapTopOffset    int
+	layoutMode       DiffMode
+	layoutWrapMode   DiffWrapMode
+	layoutReady      bool
 
 	// selection state
 	selecting     bool
 	hasSelection  bool
 	selRight      bool
-	selAnchor     diffSelPos
-	selCurrent    diffSelPos
+	selection     diffTextSelection
 	lastClickTime time.Time
 	lastClickPos  diffSelPos
 
@@ -61,14 +58,41 @@ type DiffViewWidget struct {
 	searchActiveRight   bool
 	searchActiveSideIdx int
 
-	// extended diff mode
-	extended bool
-	fileDiff diff.FileDiff
-	oldLines []string
-	newLines []string
+	// diff view modes and their projected rows
+	extended        bool
+	wrapMode        DiffWrapMode
+	wrapExplicit    bool
+	mode            DiffMode
+	modeExplicit    bool
+	contextMode     DiffContextMode
+	contextExplicit bool
+	contextLoaded   bool
+	expandedGaps    map[int]bool
+	gapByLine       map[int]int
+	pendingGap      int
+	hoveredGap      int
+	hasHoveredGap   bool
+	primaryPressed  bool
+	highContrast    bool
+	fileDiff        diff.FileDiff
+	oldLines        []string
+	newLines        []string
+	unifiedLines    []diffUnifiedLine
 
-	OnFetchExtended func(dv *DiffViewWidget)
-	Loading         bool
+	OnFetchExtended  func(dv *DiffViewWidget)
+	Loading          bool
+	extendedFetching bool
+}
+
+func (d *DiffViewWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
+
+func (d *DiffViewWidget) DiffHighContrast() bool { return d.highContrast }
+
+func (d *DiffViewWidget) SetExtendedFetcher(fetch func(dv *DiffViewWidget)) {
+	d.OnFetchExtended = fetch
+	if d.contextMode == DiffContextFullFile && !d.contextLoaded {
+		d.applyExtended(true)
+	}
 }
 
 func NewDiffViewWidget(filePath string, fd diff.FileDiff, oldLines, newLines []string, extended bool) *DiffViewWidget {
@@ -80,6 +104,15 @@ func NewDiffViewWidget(filePath string, fd diff.FileDiff, oldLines, newLines []s
 		oldLines:            oldLines,
 		newLines:            newLines,
 		extended:            extended,
+		contextMode:         DiffContextChangesOnly,
+		contextExplicit:     extended,
+		contextLoaded:       oldLines != nil || newLines != nil,
+		expandedGaps:        make(map[int]bool),
+		pendingGap:          -1,
+		hoveredGap:          -1,
+	}
+	if extended {
+		dv.contextMode = DiffContextFullFile
 	}
 	dv.rebuildLines()
 	return dv
@@ -94,49 +127,237 @@ func (d *DiffViewWidget) SetNewLines(lines []string) {
 }
 
 func (d *DiffViewWidget) IsExtended() bool {
-	return d.extended
+	return d.contextMode == DiffContextFullFile
+}
+
+func (d *DiffViewWidget) ContextMode() DiffContextMode { return d.contextMode }
+
+func (d *DiffViewWidget) SetContextMode(mode DiffContextMode) {
+	d.contextExplicit = true
+	d.applyContextMode(mode)
+}
+
+func (d *DiffViewWidget) ApplyDefaultContextMode(mode DiffContextMode) {
+	if d.contextExplicit {
+		return
+	}
+	d.applyContextMode(mode)
+}
+
+func (d *DiffViewWidget) applyContextMode(mode DiffContextMode) {
+	d.applyExtended(mode == DiffContextFullFile)
+}
+
+func (d *DiffViewWidget) IsWrapped() bool {
+	return d.wrapMode == DiffWrapOn
+}
+
+func (d *DiffViewWidget) SetWrapped(wrapped bool) {
+	mode := DiffWrapOff
+	if wrapped {
+		mode = DiffWrapOn
+	}
+	d.SetWrapMode(mode)
+}
+
+func (d *DiffViewWidget) WrapMode() DiffWrapMode { return d.wrapMode }
+
+func (d *DiffViewWidget) SetWrapMode(mode DiffWrapMode) {
+	d.wrapExplicit = true
+	d.applyWrapMode(mode)
+}
+
+func (d *DiffViewWidget) ApplyDefaultWrapMode(mode DiffWrapMode) {
+	if d.wrapExplicit {
+		return
+	}
+	d.applyWrapMode(mode)
+}
+
+func (d *DiffViewWidget) applyWrapMode(mode DiffWrapMode) {
+	if mode == d.wrapMode {
+		return
+	}
+	d.wrapMode = mode
+	d.wrapTopOffset = 0
+	d.LeftCol = 0
+	d.ClearSelection()
+}
+
+func (d *DiffViewWidget) IsUnified() bool {
+	return d.mode == DiffModeUnified
+}
+
+func (d *DiffViewWidget) SetUnified(unified bool) {
+	mode := DiffModeSplit
+	if unified {
+		mode = DiffModeUnified
+	}
+	d.SetMode(mode)
+}
+
+func (d *DiffViewWidget) Mode() DiffMode { return d.mode }
+
+func (d *DiffViewWidget) SetMode(mode DiffMode) {
+	d.modeExplicit = true
+	d.applyMode(mode)
+}
+
+func (d *DiffViewWidget) ApplyDefaultMode(mode DiffMode) {
+	if d.modeExplicit {
+		return
+	}
+	d.applyMode(mode)
+}
+
+func (d *DiffViewWidget) applyMode(mode DiffMode) {
+	if mode == d.mode {
+		return
+	}
+	topSourceLine := d.topSourceLine()
+	d.mode = mode
+	d.TopLine = d.displayLineForSourceLine(topSourceLine)
+	d.wrapTopOffset = 0
+	d.LeftCol = 0
+	d.ClearSelection()
+	if len(d.SearchMatchesLeft) > 0 || len(d.SearchMatchesRight) > 0 {
+		d.SetSearchMatches(d.SearchMatchesLeft, d.SearchMatchesRight)
+	}
 }
 
 func (d *DiffViewWidget) SetExtended(extended bool) {
-	if extended && len(d.oldLines) == 0 && d.OnFetchExtended != nil {
-		d.Loading = true
-		d.extended = true
-		d.OnFetchExtended(d)
-		return
-	}
+	d.contextExplicit = true
+	d.applyExtended(extended)
+}
+
+func (d *DiffViewWidget) applyExtended(extended bool) {
+	top := d.logicalTopAnchor()
 	d.extended = extended
+	if extended {
+		d.contextMode = DiffContextFullFile
+		if !d.contextLoaded && d.OnFetchExtended != nil {
+			d.startExtendedFetch(-1)
+			return
+		}
+	} else {
+		d.contextMode = DiffContextChangesOnly
+		d.pendingGap = -1
+		clear(d.expandedGaps)
+	}
 	d.rebuildLines()
-	d.TopLine = 0
+	d.TopLine = d.displayLineForLogicalAnchor(top)
+	d.wrapTopOffset = 0
 	d.LeftCol = 0
 	d.ClearSearch()
 	d.ClearSelection()
 }
 
 func (d *DiffViewWidget) FinishLoading() {
+	top := d.logicalTopAnchor()
 	d.Loading = false
+	d.extendedFetching = false
+	d.contextLoaded = true
+	if d.pendingGap >= 0 {
+		d.expandedGaps[d.pendingGap] = true
+		d.pendingGap = -1
+		d.extended = false
+		d.contextMode = DiffContextChangesOnly
+	}
 	d.rebuildLines()
-	d.TopLine = 0
+	d.TopLine = d.displayLineForLogicalAnchor(top)
+	d.wrapTopOffset = 0
+	d.LeftCol = 0
+	d.ClearSearch()
+	d.ClearSelection()
+}
+
+func (d *DiffViewWidget) FailLoading() {
+	top := d.logicalTopAnchor()
+	d.Loading = false
+	d.extendedFetching = false
+	d.extended = false
+	d.contextMode = DiffContextChangesOnly
+	d.pendingGap = -1
+	d.rebuildLines()
+	d.TopLine = d.displayLineForLogicalAnchor(top)
+	d.wrapTopOffset = 0
 	d.LeftCol = 0
 	d.ClearSearch()
 	d.ClearSelection()
 }
 
 func (d *DiffViewWidget) rebuildLines() {
-	if d.extended && len(d.oldLines) > 0 {
+	if d.extended && d.contextLoaded {
 		d.Lines = diff.FullDiffLines(d.oldLines, d.newLines)
+		d.gapByLine = nil
 	} else {
-		d.Lines = d.fileDiff.AllLines()
+		d.Lines, d.gapByLine = compactDiffLinesWithContext(d.fileDiff, d.oldLines, d.newLines, d.expandedGaps)
 	}
+	d.unifiedLines = buildUnifiedDiffLines(d.Lines)
 	maxW := 0
 	for _, dl := range d.Lines {
-		if lw := len([]rune(dl.Left.Text)); lw > maxW {
+		if lw := diffLineVisualWidth(dl.Left.Text); lw > maxW {
 			maxW = lw
 		}
-		if rw := len([]rune(dl.Right.Text)); rw > maxW {
+		if rw := diffLineVisualWidth(dl.Right.Text); rw > maxW {
 			maxW = rw
 		}
 	}
 	d.maxLineW = maxW
+}
+
+func (d *DiffViewWidget) expandContextGap(gap int) {
+	d.hasHoveredGap = false
+	if gap < 0 || d.expandedGaps[gap] || d.extendedFetching {
+		return
+	}
+	if !d.contextLoaded && d.OnFetchExtended != nil {
+		d.startExtendedFetch(gap)
+		return
+	}
+	if !d.contextLoaded {
+		return
+	}
+	d.expandedGaps[gap] = true
+	d.rebuildLines()
+	d.ClearSearch()
+	d.ClearSelection()
+}
+
+func (d *DiffViewWidget) startExtendedFetch(gap int) bool {
+	if d.extendedFetching || d.contextLoaded || d.OnFetchExtended == nil {
+		return false
+	}
+	d.extendedFetching = true
+	d.Loading = true
+	d.pendingGap = gap
+	d.hasHoveredGap = false
+	d.primaryPressed = false
+	d.clearLayout()
+	d.OnFetchExtended(d)
+	return true
+}
+
+func (d *DiffViewWidget) screenSourceLine(my int) int {
+	r := d.GetRect()
+	localY := my - r.Y
+	if localY < 0 || localY >= d.viewH {
+		return -1
+	}
+	line := d.TopLine + localY
+	if d.IsWrapped() {
+		if localY >= len(d.wrapMap) {
+			return -1
+		}
+		line = d.wrapMap[localY].line
+	}
+	if d.IsUnified() {
+		if line < 0 || line >= len(d.unifiedLines) {
+			return -1
+		}
+		return d.unifiedLines[line].sourceLine
+	}
+	return line
 }
 
 func (d *DiffViewWidget) Focusable() bool { return true }
@@ -179,6 +400,22 @@ func (d *DiffViewWidget) ApplySearchHighlight(query string, opts SearchOptions) 
 }
 
 func (d *DiffViewWidget) ScrollToLine(line int) {
+	if d.IsUnified() {
+		line = d.unifiedIndexForSearchLine(line)
+	}
+	if d.IsWrapped() && d.viewH > 0 {
+		target := 0
+		if d.IsUnified() {
+			target = unifiedLineToVisualRow(d.unifiedLines, line, d.layoutLeftW)
+		} else {
+			target = diffLineToVisualRow(d.Lines, line, d.layoutLeftW, d.layoutRightW)
+		}
+		top := d.topVisualRow()
+		if target < top || target >= top+d.viewH {
+			d.setTopVisualRow(target - d.viewH/2)
+		}
+		return
+	}
 	if d.viewH <= 0 {
 		d.TopLine = line
 		return
@@ -188,7 +425,11 @@ func (d *DiffViewWidget) ScrollToLine(line int) {
 		if d.TopLine < 0 {
 			d.TopLine = 0
 		}
-		max := len(d.Lines) - d.viewH
+		lineCount := len(d.Lines)
+		if d.IsUnified() {
+			lineCount = len(d.unifiedLines)
+		}
+		max := lineCount - d.viewH
 		if max < 0 {
 			max = 0
 		}
@@ -217,12 +458,24 @@ func (d *DiffViewWidget) SetSearchMatches(left, right []FindMatch) []FindMatch {
 	}
 	var entries []entry
 	for i, m := range left {
-		entries = append(entries, entry{m, false, i})
+		if !d.IsUnified() || d.unifiedIndexForSource(m.Line, false) >= 0 {
+			entries = append(entries, entry{m, false, i})
+		}
 	}
 	for i, m := range right {
-		entries = append(entries, entry{m, true, i})
+		if !d.IsUnified() || d.unifiedIndexForSource(m.Line, true) >= 0 {
+			entries = append(entries, entry{m, true, i})
+		}
 	}
 	sort.Slice(entries, func(i, j int) bool {
+		if d.IsUnified() {
+			leftIndex := d.unifiedIndexForSource(entries[i].match.Line, entries[i].isRight)
+			rightIndex := d.unifiedIndexForSource(entries[j].match.Line, entries[j].isRight)
+			if leftIndex != rightIndex {
+				return leftIndex < rightIndex
+			}
+			return entries[i].match.Col < entries[j].match.Col
+		}
 		if entries[i].match.Line != entries[j].match.Line {
 			return entries[i].match.Line < entries[j].match.Line
 		}
@@ -269,11 +522,30 @@ func (d *DiffViewWidget) gutterWidth() int {
 	return digits + 3
 }
 
+func (d *DiffViewWidget) clearLayout() {
+	d.viewH = 0
+	d.contentW = 0
+	d.totalVisualRows = 0
+	d.layoutDividerX = -1
+	d.layoutLeftStart = 0
+	d.layoutLeftW = 0
+	d.layoutRightStart = 0
+	d.layoutRightW = 0
+	d.layoutGutterW = 0
+	d.wrapMap = nil
+	d.scrollbar = Scrollbar{}
+	d.hscrollbar = HScrollbar{}
+	d.rhscrollbar = HScrollbar{}
+	d.layoutReady = false
+}
+
 func (d *DiffViewWidget) Render(surface Surface) {
-	w, h := surface.Size()
+	originalW, originalH := surface.Size()
+	w, h := originalW, originalH
 	r := d.GetRect()
 
 	if d.Loading {
+		d.clearLayout()
 		msg := "Loading..."
 		for i, ch := range msg {
 			if i < w {
@@ -282,27 +554,61 @@ func (d *DiffViewWidget) Render(surface Surface) {
 		}
 		return
 	}
+	topSourceLine := d.topSourceLine()
+	previousLeftW := d.layoutLeftW
+	previousRightW := d.layoutRightW
+	previousMode := d.layoutMode
+	previousWrapMode := d.layoutWrapMode
+	previousLayoutReady := d.layoutReady
 
 	gutterW := d.gutterWidth()
 
-	showVScroll := len(d.Lines) > h
-	contentW := (w-1)/2 - gutterW
-	showHScroll := d.maxLineW > contentW
-
-	if showHScroll {
-		h--
-	}
-	if showVScroll {
-		w--
+	showVScroll, showHScroll := false, false
+	var dividerX, leftStart, leftW, rightStart, rightW int
+	for range 3 {
+		w, h = originalW, originalH
+		if showVScroll {
+			w--
+		}
+		leftStart = gutterW
+		if d.IsUnified() {
+			dividerX = -1
+			leftW = w - gutterW
+			rightStart, rightW = 0, 0
+		} else {
+			dividerX = (w - 1) / 2
+			leftW = dividerX - gutterW
+			rightStart = dividerX + 1 + gutterW
+			rightW = w - rightStart
+		}
+		if leftW < 1 || (!d.IsUnified() && rightW < 1) {
+			d.clearLayout()
+			return
+		}
+		showHScroll = !d.IsWrapped() && d.maxLineW > leftW
+		if showHScroll {
+			h--
+		}
+		totalRows := len(d.Lines)
+		if d.IsUnified() {
+			totalRows = len(d.unifiedLines)
+		}
+		if d.IsWrapped() {
+			if d.IsUnified() {
+				totalRows = totalUnifiedVisualRows(d.unifiedLines, leftW)
+			} else {
+				totalRows = totalDiffVisualRows(d.Lines, leftW, rightW)
+			}
+		}
+		newShowVScroll := totalRows > h
+		if newShowVScroll == showVScroll {
+			d.totalVisualRows = totalRows
+			break
+		}
+		showVScroll = newShowVScroll
 	}
 
 	d.viewH = h
-
-	dividerX := (w - 1) / 2
-	leftStart := gutterW
-	leftW := dividerX - gutterW
-	rightStart := dividerX + 1 + gutterW
-	rightW := w - rightStart
 	d.contentW = leftW
 
 	d.layoutDividerX = dividerX
@@ -311,13 +617,48 @@ func (d *DiffViewWidget) Render(surface Surface) {
 	d.layoutRightStart = rightStart
 	d.layoutRightW = rightW
 	d.layoutGutterW = gutterW
+	geometryChanged := previousLayoutReady && (previousLeftW != leftW || previousRightW != rightW || previousMode != d.mode || previousWrapMode != d.wrapMode)
+	if geometryChanged {
+		d.TopLine = d.displayLineForSourceLine(topSourceLine)
+		d.wrapTopOffset = 0
+	}
+	d.layoutMode = d.mode
+	d.layoutWrapMode = d.wrapMode
+	d.layoutReady = true
 
-	if leftW < 1 || rightW < 1 {
-		return
+	if d.IsWrapped() {
+		d.setTopVisualRow(d.topVisualRow())
+		if d.IsUnified() {
+			d.wrapMap = buildUnifiedWrapMap(d.unifiedLines, d.TopLine, d.wrapTopOffset, h, leftW)
+		} else {
+			d.wrapMap = buildDiffWrapMap(d.Lines, d.TopLine, d.wrapTopOffset, h, leftW, rightW)
+		}
+	} else {
+		d.wrapMap = nil
+		d.wrapTopOffset = 0
+		if d.IsUnified() {
+			d.totalVisualRows = len(d.unifiedLines)
+		} else {
+			d.totalVisualRows = len(d.Lines)
+		}
+		d.setTopVisualRow(d.TopLine)
 	}
 
 	for y := 0; y < h; y++ {
+		if d.IsUnified() {
+			d.renderUnifiedRow(surface, y, w, gutterW, leftStart, leftW)
+			continue
+		}
 		idx := d.TopLine + y
+		leftSegment, rightSegment := 0, 0
+		continuation := false
+		if d.IsWrapped() {
+			entry := d.wrapMap[y]
+			idx = entry.line
+			leftSegment = entry.leftStart
+			rightSegment = entry.rightStart
+			continuation = entry.continuation
+		}
 		surface.SetCell(dividerX, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 
 		if idx >= len(d.Lines) {
@@ -332,18 +673,27 @@ func (d *DiffViewWidget) Render(surface Surface) {
 
 		dl := d.Lines[idx]
 
-		leftStyle := kindToStyle(dl.Left.Kind)
-		rightStyle := kindToStyle(dl.Right.Kind)
+		leftStyle := diffKindStyle(dl.Left.Kind)
+		rightStyle := diffKindStyle(dl.Right.Kind)
+		if gap, ok := d.gapByLine[idx]; ok && d.hasHoveredGap && gap == d.hoveredGap {
+			leftStyle = term.StyleDiffCollapsed
+			rightStyle = term.StyleDiffCollapsed
+		}
 
-		d.renderGutter(surface, 0, y, gutterW, dl.Left, leftStyle)
-		d.renderGutter(surface, dividerX+1, y, gutterW, dl.Right, rightStyle)
+		if continuation {
+			renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{})
+			renderDiffGutter(surface, dividerX+1, y, gutterW, diff.SideLine{})
+		} else {
+			renderDiffGutter(surface, 0, y, gutterW, dl.Left)
+			renderDiffGutter(surface, dividerX+1, y, gutterW, dl.Right)
+		}
 
 		var leftSpans, rightSpans []highlight.Span
 		if d.Highlighter != nil {
-			if dl.Left.Text != "" {
+			if dl.Left.Text != "" && dl.Left.Kind != diff.Collapsed {
 				leftSpans = d.Highlighter.HighlightLine(dl.Left.Text)
 			}
-			if dl.Right.Text != "" {
+			if dl.Right.Text != "" && dl.Right.Kind != diff.Collapsed {
 				rightSpans = d.Highlighter.HighlightLine(dl.Right.Text)
 			}
 		}
@@ -355,16 +705,20 @@ func (d *DiffViewWidget) Render(surface Surface) {
 		if d.searchActiveRight {
 			rightActive = d.searchActiveSideIdx
 		}
-		d.renderSide(surface, leftStart, y, leftW, dl.Left.Text, leftStyle, leftSpans, idx, d.SearchMatchesLeft, leftActive, !d.selRight)
-		d.renderSide(surface, rightStart, y, rightW, dl.Right.Text, rightStyle, rightSpans, idx, d.SearchMatchesRight, rightActive, d.selRight)
+		leftScroll, rightScroll := d.LeftCol, d.LeftCol
+		if d.IsWrapped() {
+			leftScroll, rightScroll = 0, 0
+		}
+		d.renderSide(surface, leftStart, y, leftW, dl.Left.Text, leftStyle, diffKindForeground(dl.Left.Kind, d.highContrast), leftSpans, idx, idx, d.SearchMatchesLeft, leftActive, !d.selRight, leftSegment, leftScroll)
+		d.renderSide(surface, rightStart, y, rightW, dl.Right.Text, rightStyle, diffKindForeground(dl.Right.Kind, d.highContrast), rightSpans, idx, idx, d.SearchMatchesRight, rightActive, d.selRight, rightSegment, rightScroll)
 	}
 
 	if showVScroll {
 		d.scrollbar.X = r.X + w
 		d.scrollbar.Y = r.Y
 		d.scrollbar.Height = h
-		d.scrollbar.TotalItems = len(d.Lines)
-		d.scrollbar.TopItem = d.TopLine
+		d.scrollbar.TotalItems = d.totalVisualRows
+		d.scrollbar.TopItem = d.topVisualRow()
 		d.scrollbar.Render(surface, w, 0)
 	}
 
@@ -379,127 +733,157 @@ func (d *DiffViewWidget) Render(surface Surface) {
 		for x := 0; x < gutterW; x++ {
 			surface.SetCell(x, h, term.Cell{Ch: ' '})
 		}
-		surface.SetCell(dividerX, h, term.Cell{Ch: '│', Style: term.StyleBorder})
-		for x := dividerX + 1; x < rightStart; x++ {
-			surface.SetCell(x, h, term.Cell{Ch: ' '})
-		}
-
-		d.rhscrollbar.X = r.X + rightStart
-		d.rhscrollbar.Y = r.Y + h
-		d.rhscrollbar.Width = rightW
-		d.rhscrollbar.TotalCols = d.maxLineW
-		d.rhscrollbar.LeftCol = d.LeftCol
-		d.rhscrollbar.Render(surface, rightStart, h)
-	}
-}
-
-func (d *DiffViewWidget) renderGutter(surface Surface, x, y, w int, sl diff.SideLine, style term.Style) {
-	num := ""
-	if sl.Num > 0 {
-		num = fmt.Sprintf("%d", sl.Num)
-	}
-	padded := " " + fmt.Sprintf("%*s", w-3, num) + "  "
-	for i, ch := range []rune(padded) {
-		if i >= w {
-			break
-		}
-		surface.SetCell(x+i, y, term.Cell{Ch: ch, Style: term.StyleLineNumber})
-	}
-}
-
-func (d *DiffViewWidget) renderSide(surface Surface, x, y, w int, text string, baseStyle term.Style, spans []highlight.Span, lineIdx int, matches []FindMatch, activeIdx int, selSide bool) {
-	runes := []rune(text)
-	for i := 0; i < w; i++ {
-		colIdx := d.LeftCol + i
-		ch := ' '
-		if colIdx < len(runes) {
-			ch = runes[colIdx]
-		}
-		style := term.StyleDefault
-		for _, sp := range spans {
-			if colIdx >= sp.Start && colIdx < sp.End {
-				style = sp.Style
-				break
+		if !d.IsUnified() {
+			surface.SetCell(dividerX, h, term.Cell{Ch: '│', Style: term.StyleBorder})
+			for x := dividerX + 1; x < rightStart; x++ {
+				surface.SetCell(x, h, term.Cell{Ch: ' '})
 			}
+
+			d.rhscrollbar.X = r.X + rightStart
+			d.rhscrollbar.Y = r.Y + h
+			d.rhscrollbar.Width = rightW
+			d.rhscrollbar.TotalCols = d.maxLineW
+			d.rhscrollbar.LeftCol = d.LeftCol
+			d.rhscrollbar.Render(surface, rightStart, h)
 		}
+	}
+}
+
+func (d *DiffViewWidget) renderUnifiedRow(surface Surface, y, w, gutterW, contentStart, contentW int) {
+	displayIndex := d.TopLine + y
+	segmentStart := 0
+	continuation := false
+	if d.IsWrapped() {
+		entry := d.wrapMap[y]
+		displayIndex = entry.line
+		segmentStart = entry.leftStart
+		continuation = entry.continuation
+	}
+	if displayIndex >= len(d.unifiedLines) {
+		for x := 0; x < w; x++ {
+			surface.SetCell(x, y, term.Cell{Ch: ' '})
+		}
+		return
+	}
+
+	line := d.unifiedLines[displayIndex]
+	baseStyle := diffKindStyle(line.side.Kind)
+	if gap, ok := d.gapByLine[line.sourceLine]; ok && d.hasHoveredGap && gap == d.hoveredGap {
+		baseStyle = term.StyleDiffCollapsed
+	}
+	if continuation {
+		renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{})
+	} else {
+		renderDiffGutter(surface, 0, y, gutterW, line.side)
+	}
+
+	var spans []highlight.Span
+	if d.Highlighter != nil && line.side.Text != "" && line.side.Kind != diff.Collapsed {
+		spans = d.Highlighter.HighlightLine(line.side.Text)
+	}
+	matches, active := d.SearchMatchesLeft, -1
+	if line.right {
+		matches = d.SearchMatchesRight
+		if d.searchActiveRight {
+			active = d.searchActiveSideIdx
+		}
+	} else if !d.searchActiveRight {
+		active = d.searchActiveSideIdx
+	}
+	leftScroll := d.LeftCol
+	if d.IsWrapped() {
+		leftScroll = 0
+	}
+	d.renderSide(surface, contentStart, y, contentW, line.side.Text, baseStyle, diffKindForeground(line.side.Kind, d.highContrast), spans, line.sourceLine, displayIndex, matches, active, true, segmentStart, leftScroll)
+}
+
+func (d *DiffViewWidget) renderSide(surface Surface, x, y, w int, text string, baseStyle, foregroundStyle term.Style, spans []highlight.Span, matchLineIdx, selectionLineIdx int, matches []FindMatch, activeIdx int, selSide bool, segmentStart, leftVisualCol int) {
+	renderDiffText(surface, x, y, w, text, baseStyle, foregroundStyle, spans, segmentStart, leftVisualCol, func(colIdx int, cell term.Cell) term.Cell {
 		for mi, m := range matches {
-			if m.Line == lineIdx && colIdx >= m.Col && colIdx < m.Col+m.Len {
+			if m.Line == matchLineIdx && colIdx >= m.Col && colIdx < m.Col+m.Len {
 				if mi == activeIdx {
-					style = term.StyleSearchActive
+					cell.Style = term.StyleSearchActive
 				} else {
-					style = term.StyleSearchMatch
+					cell.Style = term.StyleSearchMatch
 				}
+				cell.BgStyle = 0
 				break
 			}
 		}
-		cell := term.Cell{Ch: ch, Style: style}
-		if selSide && d.isCellSelected(lineIdx, colIdx) {
+		if selSide && d.hasSelection && d.selection.Contains(selectionLineIdx, colIdx) {
 			cell.BgStyle = term.StyleSelection
-		} else if style != term.StyleSearchMatch && style != term.StyleSearchActive && baseStyle != term.StyleDefault {
-			cell.BgStyle = baseStyle
 		}
-		surface.SetCell(x+i, y, cell)
-	}
-}
-
-func kindToStyle(k diff.LineKind) term.Style {
-	switch k {
-	case diff.Added:
-		return term.StyleDiffAdded
-	case diff.Deleted:
-		return term.StyleDiffDeleted
-	default:
-		return term.StyleDefault
-	}
-}
-
-func (d *DiffViewWidget) selectionRange() (start, end diffSelPos) {
-	a, b := d.selAnchor, d.selCurrent
-	if a.Line < b.Line || (a.Line == b.Line && a.Col <= b.Col) {
-		return a, b
-	}
-	return b, a
-}
-
-func (d *DiffViewWidget) isCellSelected(line, col int) bool {
-	if !d.hasSelection {
-		return false
-	}
-	start, end := d.selectionRange()
-	if line < start.Line || line > end.Line {
-		return false
-	}
-	if start.Line == end.Line {
-		return col >= start.Col && col < end.Col
-	}
-	if line == start.Line {
-		return col >= start.Col
-	}
-	if line == end.Line {
-		return col < end.Col
-	}
-	return true
+		return cell
+	})
 }
 
 func (d *DiffViewWidget) screenToSel(mx, my int) (pos diffSelPos, right bool, ok bool) {
 	r := d.GetRect()
 	localX := mx - r.X
 	localY := my - r.Y
+	if localY < 0 || localY >= d.viewH {
+		return diffSelPos{}, false, false
+	}
 	line := d.TopLine + localY
+	leftStart, rightStart := 0, 0
+	if d.IsWrapped() {
+		if localY >= len(d.wrapMap) {
+			return diffSelPos{}, false, false
+		}
+		entry := d.wrapMap[localY]
+		line = entry.line
+		leftStart = entry.leftStart
+		rightStart = entry.rightStart
+	}
+	if d.IsUnified() {
+		if line < 0 || line >= len(d.unifiedLines) {
+			return diffSelPos{}, false, false
+		}
+		if localX < d.layoutLeftStart || localX >= d.layoutLeftStart+d.layoutLeftW || leftStart < 0 {
+			return diffSelPos{}, false, false
+		}
+		displayLine := d.unifiedLines[line]
+		visualCol := localX - d.layoutLeftStart
+		if !d.IsWrapped() {
+			visualCol += d.LeftCol
+		}
+		col := diffSegmentVisualColToRune(displayLine.side.Text, leftStart, visualCol)
+		return diffSelPos{Line: line, Col: col}, displayLine.right, true
+	}
+	if line < 0 || line >= len(d.Lines) {
+		return diffSelPos{}, false, false
+	}
 
 	if localX >= d.layoutLeftStart && localX < d.layoutLeftStart+d.layoutLeftW {
-		col := d.LeftCol + (localX - d.layoutLeftStart)
+		if leftStart < 0 {
+			return diffSelPos{}, false, false
+		}
+		visualCol := localX - d.layoutLeftStart
+		if !d.IsWrapped() {
+			visualCol += d.LeftCol
+		}
+		col := diffSegmentVisualColToRune(d.Lines[line].Left.Text, leftStart, visualCol)
 		return diffSelPos{Line: line, Col: col}, false, true
 	}
 	if localX >= d.layoutRightStart && localX < d.layoutRightStart+d.layoutRightW {
-		col := d.LeftCol + (localX - d.layoutRightStart)
+		if rightStart < 0 {
+			return diffSelPos{}, false, false
+		}
+		visualCol := localX - d.layoutRightStart
+		if !d.IsWrapped() {
+			visualCol += d.LeftCol
+		}
+		col := diffSegmentVisualColToRune(d.Lines[line].Right.Text, rightStart, visualCol)
 		return diffSelPos{Line: line, Col: col}, true, true
 	}
 	return diffSelPos{}, false, false
 }
 
 func (d *DiffViewWidget) CopySelection() string {
-	text := d.selectedText()
+	if !d.hasSelection {
+		return ""
+	}
+	text := d.selection.Text(d.selectionLineCount(), d.selectionTextAt)
 	if text != "" {
 		d.ClearSelection()
 	}
@@ -511,79 +895,34 @@ func (d *DiffViewWidget) ClearSelection() {
 	d.selecting = false
 }
 
-func (d *DiffViewWidget) selectedText() string {
-	if !d.hasSelection {
-		return ""
+func (d *DiffViewWidget) selectionLineCount() int {
+	if d.IsUnified() {
+		return len(d.unifiedLines)
 	}
-	start, end := d.selectionRange()
-	var lines []string
-	for i := start.Line; i <= end.Line && i < len(d.Lines); i++ {
-		var text string
-		if d.selRight {
-			text = d.Lines[i].Right.Text
-		} else {
-			text = d.Lines[i].Left.Text
-		}
-		runes := []rune(text)
-		startCol := 0
-		endCol := len(runes)
-		if i == start.Line {
-			startCol = start.Col
-		}
-		if i == end.Line {
-			endCol = end.Col
-		}
-		if startCol > len(runes) {
-			startCol = len(runes)
-		}
-		if endCol > len(runes) {
-			endCol = len(runes)
-		}
-		if startCol < endCol {
-			lines = append(lines, string(runes[startCol:endCol]))
-		} else {
-			lines = append(lines, "")
-		}
-	}
-	return strings.Join(lines, "\n")
+	return len(d.Lines)
 }
 
-func (d *DiffViewWidget) selectWord(line, col int) {
-	if line < 0 || line >= len(d.Lines) {
-		return
+func (d *DiffViewWidget) selectionTextAt(line int) (string, bool) {
+	if line < 0 || line >= d.selectionLineCount() {
+		return "", false
 	}
-	var text string
+	if d.IsUnified() {
+		selected := d.unifiedLines[line].side
+		return selected.Text, selected.Kind != diff.Collapsed
+	}
 	if d.selRight {
-		text = d.Lines[line].Right.Text
-	} else {
-		text = d.Lines[line].Left.Text
+		selected := d.Lines[line].Right
+		return selected.Text, selected.Kind != diff.Collapsed
 	}
-	runes := []rune(text)
-	if len(runes) == 0 {
-		return
-	}
-	if col >= len(runes) {
-		col = len(runes) - 1
-	}
-	isWord := func(r rune) bool {
-		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
-	}
-	start, end := col, col
-	if isWord(runes[col]) {
-		for start > 0 && isWord(runes[start-1]) {
-			start--
-		}
-		for end < len(runes)-1 && isWord(runes[end+1]) {
-			end++
-		}
-	}
-	end++
-	d.hasSelection = true
-	d.selAnchor = diffSelPos{Line: line, Col: start}
-	d.selCurrent = diffSelPos{Line: line, Col: end}
+	selected := d.Lines[line].Left
+	return selected.Text, selected.Kind != diff.Collapsed
 }
 
 func (d *DiffViewWidget) clampLeftCol() {
+	if d.IsWrapped() {
+		d.LeftCol = 0
+		return
+	}
 	max := d.maxLineW - d.contentW
 	if max < 0 {
 		max = 0
@@ -597,44 +936,44 @@ func (d *DiffViewWidget) clampLeftCol() {
 }
 
 func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
+	if d.extendedFetching || d.Loading {
+		return EventIgnored
+	}
 	if newTop, consumed := d.scrollbar.HandleEvent(ev); consumed {
-		d.TopLine = newTop
+		d.setTopVisualRow(newTop)
 		if d.scrollbar.IsDragging() {
 			return EventCaptured
 		}
 		return EventConsumed
 	}
-	if newLeft, consumed := d.hscrollbar.HandleEvent(ev); consumed {
-		d.LeftCol = newLeft
-		if d.hscrollbar.IsDragging() {
-			return EventCaptured
+	if !d.IsWrapped() {
+		if newLeft, consumed := d.hscrollbar.HandleEvent(ev); consumed {
+			d.LeftCol = newLeft
+			if d.hscrollbar.IsDragging() {
+				return EventCaptured
+			}
+			return EventConsumed
 		}
-		return EventConsumed
-	}
-	if newLeft, consumed := d.rhscrollbar.HandleEvent(ev); consumed {
-		d.LeftCol = newLeft
-		if d.rhscrollbar.IsDragging() {
-			return EventCaptured
+		if !d.IsUnified() {
+			if newLeft, consumed := d.rhscrollbar.HandleEvent(ev); consumed {
+				d.LeftCol = newLeft
+				if d.rhscrollbar.IsDragging() {
+					return EventCaptured
+				}
+				return EventConsumed
+			}
 		}
-		return EventConsumed
 	}
 
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
+		d.hasHoveredGap = false
 		switch tev.Key() {
 		case tcell.KeyUp:
-			if d.TopLine > 0 {
-				d.TopLine--
-			}
+			d.scrollVertical(-1)
 			return EventConsumed
 		case tcell.KeyDown:
-			max := len(d.Lines) - d.viewH
-			if max < 0 {
-				max = 0
-			}
-			if d.TopLine < max {
-				d.TopLine++
-			}
+			d.scrollVertical(1)
 			return EventConsumed
 		case tcell.KeyLeft:
 			if d.LeftCol > 0 {
@@ -646,67 +985,47 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			d.clampLeftCol()
 			return EventConsumed
 		case tcell.KeyPgUp:
-			d.TopLine -= d.viewH
-			if d.TopLine < 0 {
-				d.TopLine = 0
-			}
+			d.scrollVertical(-d.viewH)
 			return EventConsumed
 		case tcell.KeyPgDn:
-			max := len(d.Lines) - d.viewH
-			if max < 0 {
-				max = 0
-			}
-			d.TopLine += d.viewH
-			if d.TopLine > max {
-				d.TopLine = max
-			}
+			d.scrollVertical(d.viewH)
 			return EventConsumed
 		case tcell.KeyHome:
 			d.TopLine = 0
+			d.wrapTopOffset = 0
 			d.LeftCol = 0
 			return EventConsumed
 		case tcell.KeyEnd:
-			max := len(d.Lines) - d.viewH
-			if max < 0 {
-				max = 0
-			}
-			d.TopLine = max
+			d.setTopVisualRow(d.totalVisualRows)
 			return EventConsumed
 		}
 	case *tcell.EventMouse:
 		btn := tev.Buttons()
 		mod := tev.Modifiers()
 		if btn&tcell.WheelUp != 0 {
+			d.hasHoveredGap = false
 			if mod&tcell.ModShift != 0 {
 				d.LeftCol -= 4
 				if d.LeftCol < 0 {
 					d.LeftCol = 0
 				}
 			} else {
-				d.TopLine -= 3
-				if d.TopLine < 0 {
-					d.TopLine = 0
-				}
+				d.scrollVertical(-3)
 			}
 			return EventConsumed
 		}
 		if btn&tcell.WheelDown != 0 {
+			d.hasHoveredGap = false
 			if mod&tcell.ModShift != 0 {
 				d.LeftCol += 4
 				d.clampLeftCol()
 			} else {
-				max := len(d.Lines) - d.viewH
-				if max < 0 {
-					max = 0
-				}
-				d.TopLine += 3
-				if d.TopLine > max {
-					d.TopLine = max
-				}
+				d.scrollVertical(3)
 			}
 			return EventConsumed
 		}
 		if btn&tcell.WheelLeft != 0 {
+			d.hasHoveredGap = false
 			d.LeftCol -= 4
 			if d.LeftCol < 0 {
 				d.LeftCol = 0
@@ -714,12 +1033,30 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 		if btn&tcell.WheelRight != 0 {
+			d.hasHoveredGap = false
 			d.LeftCol += 4
 			d.clampLeftCol()
 			return EventConsumed
 		}
 		mx, my := tev.Position()
+		hoveredGap, overGap := d.gapByLine[d.screenSourceLine(my)]
+		hoverChanged := overGap != d.hasHoveredGap || (overGap && hoveredGap != d.hoveredGap)
+		d.hasHoveredGap = overGap
+		if overGap {
+			d.hoveredGap = hoveredGap
+		}
+		if btn == tcell.ButtonNone {
+			d.primaryPressed = false
+		}
 		if btn&tcell.Button1 != 0 {
+			freshPress := !d.primaryPressed
+			d.primaryPressed = true
+			if freshPress {
+				if gap, ok := d.gapByLine[d.screenSourceLine(my)]; ok {
+					d.expandContextGap(gap)
+					return EventConsumed
+				}
+			}
 			pos, right, ok := d.screenToSel(mx, my)
 			if ok {
 				if !d.selecting {
@@ -730,25 +1067,32 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 					d.lastClickPos = pos
 					d.selRight = right
 					if isDoubleClick {
-						d.selectWord(pos.Line, pos.Col)
+						if text, selectable := d.selectionTextAt(pos.Line); selectable {
+							if d.selection.SelectWord(pos.Line, pos.Col, text) {
+								d.hasSelection = true
+							}
+						}
 						return EventConsumed
 					}
 					d.selecting = true
 					d.hasSelection = true
-					d.selAnchor = pos
-					d.selCurrent = pos
+					d.selection.Anchor = pos
+					d.selection.Current = pos
 				} else {
-					d.selCurrent = pos
+					d.selection.Current = pos
 				}
 				return EventCaptured
 			}
 		}
 		if d.selecting && btn == tcell.ButtonNone {
 			d.selecting = false
-			start, end := d.selectionRange()
+			start, end := d.selection.Range()
 			if start.Line == end.Line && start.Col == end.Col {
 				d.hasSelection = false
 			}
+		}
+		if hoverChanged {
+			return EventConsumed
 		}
 	}
 	return EventIgnored

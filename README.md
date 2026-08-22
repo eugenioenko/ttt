@@ -186,7 +186,9 @@ Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 - Per-repo actions via the group header menu button in multi-root workspaces
 
 **Diff view:**
-- Select a changed file to open a diff with syntax highlighting layered on diff backgrounds
+- Select a changed file to open a split or unified diff with syntax highlighting layered on diff backgrounds
+- Set the global view mode, context, wrapping, and high-contrast presentation under **Options**; the Changes panel menu provides the same contextual controls
+- Changes-only views show quiet collapsed-context rows that can be expanded in place; full-file context remains available globally or per diff
 - Untracked files open directly in the editor
 
 **Multi-root:**
@@ -519,6 +521,10 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `tabSize` | int | `4` | Number of spaces per indentation level |
 | `insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
 | `wordWrap` | bool | `false` | Wrap long lines at the editor width |
+| `diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
+| `diffContext` | string | `"changes"` | Default diff context: `"changes"` or `"full"` |
+| `diffWordWrap` | bool | `false` | Wrap long lines in diff views |
+| `diffHighContrast` | bool | `false` | Use semantic red/green foregrounds as well as diff backgrounds |
 | `autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
 | `autoDedent` | bool | `true` | Dedent one level when typing a closing `} ) ]` on a blank line |
 | `lineNumbers` | bool | `true` | Show line numbers in the gutter |
@@ -551,6 +557,9 @@ Example `~/.config/ttt/settings.json` (also available at [`config/settings.json`
   "tabSize": 4,
   "insertSpaces": true,
   "wordWrap": false,
+  "diffMode": "split",
+  "diffContext": "changes",
+  "diffWordWrap": false,
   "autoIndent": true,
   "autoDedent": true,
   "lineNumbers": true,

@@ -23,6 +23,36 @@ func (a *App) ToggleWordWrap() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) UseSplitDiffByDefault() {
+	a.Settings.Editor.DiffMode = config.DiffModeSplit
+	a.SaveAndApplySettings()
+}
+
+func (a *App) UseUnifiedDiffByDefault() {
+	a.Settings.Editor.DiffMode = config.DiffModeUnified
+	a.SaveAndApplySettings()
+}
+
+func (a *App) UseChangesOnlyDiffByDefault() {
+	a.Settings.Editor.DiffContext = config.DiffContextChanges
+	a.SaveAndApplySettings()
+}
+
+func (a *App) UseFullFileDiffByDefault() {
+	a.Settings.Editor.DiffContext = config.DiffContextFull
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleDiffWordWrapDefault() {
+	a.Settings.Editor.DiffWordWrap = !a.Settings.Editor.DiffWordWrap
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleDiffHighContrast() {
+	a.Settings.Editor.DiffHighContrast = !a.Settings.Editor.DiffHighContrast
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleAutoDedent() {
 	enabled := !a.Settings.Editor.IsAutoDedentEnabled()
 	a.Settings.Editor.AutoDedent = &enabled
@@ -105,6 +135,20 @@ func borderStyleItems() []widgets.SelectItem {
 	return items
 }
 
+func diffModeItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.DiffModeSplit, Label: "Split"},
+		{ID: config.DiffModeUnified, Label: "Unified"},
+	}
+}
+
+func diffContextItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.DiffContextChanges, Label: "Changes Only"},
+		{ID: config.DiffContextFull, Label: "Full File"},
+	}
+}
+
 func (a *App) ShowGutterStylePicker() {
 	a.ShowSelectDialog("Gutter Style", gutterStyleItems(), func(id string) {
 		a.SetGutterStyle(id)
@@ -152,6 +196,26 @@ func (a *App) applyBorderStyle(themeBorders *term.BorderSet) {
 func (a *App) ShowBorderStylePicker() {
 	a.ShowSelectDialog("Border Style", borderStyleItems(), func(id string) {
 		a.SetBorderStyle(id)
+	}, nil)
+}
+
+func (a *App) ShowDiffViewModePicker() {
+	a.ShowSelectDialog("Diff View Mode", diffModeItems(), func(id string) {
+		if id == config.DiffModeUnified {
+			a.UseUnifiedDiffByDefault()
+			return
+		}
+		a.UseSplitDiffByDefault()
+	}, nil)
+}
+
+func (a *App) ShowDiffContextPicker() {
+	a.ShowSelectDialog("Diff Context", diffContextItems(), func(id string) {
+		if id == config.DiffContextFull {
+			a.UseFullFileDiffByDefault()
+			return
+		}
+		a.UseChangesOnlyDiffByDefault()
 	}, nil)
 }
 
@@ -204,6 +268,10 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
+		{Label: "Diff View Mode", Command: "options.diffViewMode"},
+		{Label: "Diff Context", Command: "options.diffContext"},
+		{Label: "Wrap Diff Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
+		{Label: "High Contrast Diffs", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
@@ -221,6 +289,26 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Open Settings", Command: "settings.openUI"},
 	}
 	return items
+}
+
+func menuChecked(checked bool) int {
+	if checked {
+		return ui.MenuChecked
+	}
+	return ui.MenuUnchecked
+}
+
+func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Split", Command: "options.useSplitDiff", Checked: menuChecked(a.Settings.Editor.DiffMode != config.DiffModeUnified)},
+		{Label: "Unified", Command: "options.useUnifiedDiff", Checked: menuChecked(a.Settings.Editor.DiffMode == config.DiffModeUnified)},
+		ui.MenuSep(),
+		{Label: "Changes Only", Command: "options.useChangesOnlyDiff", Checked: menuChecked(a.Settings.Editor.DiffContext != config.DiffContextFull)},
+		{Label: "Full File", Command: "options.useFullFileDiff", Checked: menuChecked(a.Settings.Editor.DiffContext == config.DiffContextFull)},
+		ui.MenuSep(),
+		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
+		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+	}
 }
 
 func registerOptionsCommands(app *App) {
@@ -242,6 +330,54 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleWordWrap", Title: "Toggle Word Wrap",
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleWordWrap,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.diffViewMode", Title: "Change Diff View Mode",
+		Keywords: []string{"preferences", "settings", "git", "diff", "split", "unified", "mode"},
+		Handler:  app.ShowDiffViewModePicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.diffContext", Title: "Change Diff Context",
+		Keywords: []string{"preferences", "settings", "git", "diff", "changes", "full", "context"},
+		Handler:  app.ShowDiffContextPicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useSplitDiff", Title: "Use Split Diff by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "split", "default"},
+		Handler:  app.UseSplitDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useUnifiedDiff", Title: "Use Unified Diff by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "unified", "default"},
+		Handler:  app.UseUnifiedDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useChangesOnlyDiff", Title: "Show Changes Only by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "compact", "context", "default"},
+		Handler:  app.UseChangesOnlyDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useFullFileDiff", Title: "Show Full File Diff by Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "extended", "context", "default"},
+		Handler:  app.UseFullFileDiffByDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffWordWrap", Title: "Toggle Diff Word Wrap Default",
+		Keywords: []string{"preferences", "settings", "git", "diff", "wrap", "default"},
+		Handler:  app.ToggleDiffWordWrapDefault,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffHighContrast", Title: "Toggle High Contrast Diffs",
+		Keywords: []string{"preferences", "settings", "git", "diff", "contrast", "color", "accessibility"},
+		Handler:  app.ToggleDiffHighContrast,
 	})
 
 	reg.Register(command.Command{

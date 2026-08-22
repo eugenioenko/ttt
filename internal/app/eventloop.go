@@ -385,8 +385,7 @@ func RunEventLoop(
 				if v.Err != nil {
 					app.StatusError("Failed to fetch file content: " + v.Err.Error())
 					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
-						dv.Loading = false
-						dv.SetExtended(false)
+						dv.FailLoading()
 					}
 				} else {
 					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {

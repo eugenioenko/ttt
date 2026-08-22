@@ -520,7 +520,7 @@ No special permission is required — any plugin can open files.
 
 ### `ttt.open_diff(title, old_lines, new_lines, [file_path])`
 
-Open a native styled diff tab showing side-by-side differences between two sets of lines. Uses the same diff rendering as the Changes panel (added/deleted/modified backgrounds with syntax highlighting).
+Open a native styled diff tab showing differences between two sets of lines. It uses the shared diff presentation model and the user's saved split/unified, context, wrapping, and high-contrast preferences, with syntax highlighting layered on diff backgrounds.
 
 | Parameter   | Type   | Required | Description                                    |
 |-------------|--------|----------|------------------------------------------------|

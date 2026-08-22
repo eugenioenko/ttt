@@ -161,8 +161,53 @@ func TestDefaultEditorSettings(t *testing.T) {
 	if e.BracketPairColorization {
 		t.Error("expected BracketPairColorization false by default")
 	}
+	if e.DiffMode != DiffModeSplit || e.DiffContext != DiffContextChanges || e.DiffWordWrap || e.DiffHighContrast {
+		t.Errorf("legacy diff defaults = mode %q context %q wrap=%v contrast=%v, want split/changes/false/false", e.DiffMode, e.DiffContext, e.DiffWordWrap, e.DiffHighContrast)
+	}
 	if !e.IsShowTrailingNewlineEnabled() {
 		t.Error("expected ShowTrailingNewline true by default (nil)")
+	}
+}
+
+func TestLegacySettingsJSONKeepsDiffDefaults(t *testing.T) {
+	s := DefaultSettings()
+	if err := json.Unmarshal([]byte(`{"editor":{"tabSize":2}}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	normalizeSettings(&s)
+	if s.Editor.DiffMode != DiffModeSplit || s.Editor.DiffContext != DiffContextChanges || s.Editor.DiffWordWrap || s.Editor.DiffHighContrast {
+		t.Fatalf("legacy settings diff presentation = %+v", s.Editor)
+	}
+}
+
+func TestNormalizeSettingsInvalidDiffPresentation(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.DiffMode = "sideways"
+	s.Editor.DiffContext = "summary"
+	normalizeSettings(&s)
+	if s.Editor.DiffMode != DiffModeSplit || s.Editor.DiffContext != DiffContextChanges {
+		t.Fatalf("normalized diff presentation = mode %q context %q", s.Editor.DiffMode, s.Editor.DiffContext)
+	}
+}
+
+func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.DiffMode = DiffModeUnified
+	s.Editor.DiffContext = DiffContextFull
+	s.Editor.DiffWordWrap = true
+	s.Editor.DiffHighContrast = true
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := DefaultSettings()
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	normalizeSettings(&loaded)
+	if loaded.Editor.DiffMode != DiffModeUnified || loaded.Editor.DiffContext != DiffContextFull || !loaded.Editor.DiffWordWrap || !loaded.Editor.DiffHighContrast {
+		t.Fatalf("round-tripped diff presentation = %+v", loaded.Editor)
 	}
 }
 

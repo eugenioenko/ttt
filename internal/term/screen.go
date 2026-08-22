@@ -21,6 +21,7 @@ const (
 	StyleDiffAdded
 	StyleDiffDeleted
 	StyleDiffModified
+	StyleDiffCollapsed
 	StyleScrollbar
 	StyleScrollbarThumb
 	StyleActiveLine

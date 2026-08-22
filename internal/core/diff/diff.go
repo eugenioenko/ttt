@@ -12,6 +12,7 @@ const (
 	Context
 	Added
 	Deleted
+	Collapsed
 )
 
 type SideLine struct {

@@ -83,6 +83,10 @@ type EditorGroupWidget struct {
 	LineNumbers             bool
 	GutterStyle             string
 	WordWrap                bool
+	DiffMode                DiffMode
+	DiffContext             DiffContextMode
+	DiffWordWrap            bool
+	DiffHighContrast        bool
 	SyntaxHighlight         bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
@@ -404,6 +408,7 @@ func (g *EditorGroupWidget) OpenDiff(path string, fd diff.FileDiff, oldLines, ne
 	for i, t := range g.tabs {
 		if t.FilePath == tabName {
 			dw := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
+			g.ApplyDiffDefaults(dw)
 			if !g.SyntaxHighlight {
 				dw.Highlighter = nil
 			}
@@ -414,6 +419,7 @@ func (g *EditorGroupWidget) OpenDiff(path string, fd diff.FileDiff, oldLines, ne
 		}
 	}
 	widget := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
+	g.ApplyDiffDefaults(widget)
 	if !g.SyntaxHighlight {
 		widget.Highlighter = nil
 	}
@@ -422,6 +428,39 @@ func (g *EditorGroupWidget) OpenDiff(path string, fd diff.FileDiff, oldLines, ne
 		Content:  widget,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
+}
+
+func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
+	surface.ApplyDefaultMode(g.DiffMode)
+	if contextSurface, ok := surface.(DiffContextSurface); ok {
+		contextSurface.ApplyDefaultContextMode(g.DiffContext)
+	}
+	wrapMode := DiffWrapOff
+	if g.DiffWordWrap {
+		wrapMode = DiffWrapOn
+	}
+	surface.ApplyDefaultWrapMode(wrapMode)
+	surface.SetDiffHighContrast(g.DiffHighContrast)
+}
+
+func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffContextMode, wordWrap bool) {
+	g.DiffMode = mode
+	g.DiffContext = contextMode
+	g.DiffWordWrap = wordWrap
+	for _, tab := range g.tabs {
+		if surface, ok := tab.Content.(DiffModeSurface); ok {
+			g.ApplyDiffDefaults(surface)
+		}
+	}
+}
+
+func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {
+	g.DiffHighContrast = enabled
+	for _, tab := range g.tabs {
+		if surface, ok := tab.Content.(DiffModeSurface); ok {
+			surface.SetDiffHighContrast(enabled)
+		}
+	}
 }
 
 func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
@@ -561,6 +600,24 @@ func (g *EditorGroupWidget) ActiveDiffWidget() *DiffViewWidget {
 		return dv
 	}
 	return nil
+}
+
+func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	surface, _ := t.Content.(DiffModeSurface)
+	return surface
+}
+
+func (g *EditorGroupWidget) ActiveDiffContextSurface() DiffContextSurface {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	surface, _ := t.Content.(DiffContextSurface)
+	return surface
 }
 
 func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffViewWidget {

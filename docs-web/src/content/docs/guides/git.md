@@ -34,14 +34,14 @@ The changes panel in the sidebar (**Ctrl+K C**) provides a full staging workflow
 
 ## Diff View
 
-Select a changed file in the changes panel to open a side-by-side diff. Syntax highlighting is layered on top of diff background colors so you can read the code naturally while seeing what changed.
+Select a changed file in the changes panel to open a diff. Syntax highlighting is layered on top of diff background colors so you can read the code naturally while seeing what changed. Added and removed line numbers use `+` and `−` markers with semantic green and red styling.
 
-TTT offers two diff modes:
+The shared diff reader has two independent presentation choices:
 
-- **Partial diff view** shows only the changed hunks with surrounding context lines, letting you focus on what actually changed.
-- **Full-file diff view** shows the complete file with changes highlighted inline.
+- **Split** places old and new content side by side; **Unified** stacks removals before additions.
+- **Changes Only** shows changed hunks and surrounding context; quiet disclosure rows expand omitted context in place. **Full File** shows the complete file with changes highlighted inline.
 
-You can toggle between partial and full-file diff views to get the level of detail you need.
+Set global defaults for layout, context, line wrapping, and high contrast from **Options**. The Changes panel menu exposes the same choices contextually. Commands applied directly to an open diff override that surface without changing the saved defaults.
 
 Untracked files open directly in the editor instead of showing a diff.
 

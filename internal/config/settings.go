@@ -10,6 +10,15 @@ import (
 var (
 	GutterStyles = []string{"minimal", "compact", "extended"}
 	BorderStyles = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
+	DiffModes    = []string{"split", "unified"}
+	DiffContexts = []string{"changes", "full"}
+)
+
+const (
+	DiffModeSplit      = "split"
+	DiffModeUnified    = "unified"
+	DiffContextChanges = "changes"
+	DiffContextFull    = "full"
 )
 
 type TerminalSettings struct {
@@ -77,6 +86,10 @@ type EditorSettings struct {
 	TabSize                 int    `json:"tabSize"`
 	InsertSpaces            bool   `json:"insertSpaces"`
 	WordWrap                bool   `json:"wordWrap"`
+	DiffMode                string `json:"diffMode"`
+	DiffContext             string `json:"diffContext"`
+	DiffWordWrap            bool   `json:"diffWordWrap"`
+	DiffHighContrast        bool   `json:"diffHighContrast,omitempty"`
 	LineNumbers             bool   `json:"lineNumbers"`
 	CursorStyle             string `json:"cursorStyle,omitempty"`
 	FormatOnSave            bool   `json:"formatOnSave"`
@@ -123,6 +136,8 @@ func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
 		TabSize:                 4,
 		InsertSpaces:            true,
+		DiffMode:                DiffModeSplit,
+		DiffContext:             DiffContextChanges,
 		LineNumbers:             true,
 		InsertFinalNewline:      true,
 		GutterStyle:             "compact",
@@ -290,6 +305,12 @@ func normalizeSettings(s *Settings) {
 		panelOrder = append(panelOrder, id)
 	}
 	s.Sidebar.PanelOrder = panelOrder
+	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
+		s.Editor.DiffMode = DiffModeSplit
+	}
+	if !slices.Contains(DiffContexts, s.Editor.DiffContext) {
+		s.Editor.DiffContext = DiffContextChanges
+	}
 }
 
 func LoadSettings() Settings {
