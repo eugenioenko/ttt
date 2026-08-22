@@ -20,6 +20,14 @@ func TestReadCommitLogAllowsOnlyVerifiedUnbornEmptyHistory(t *testing.T) {
 	}
 }
 
+func TestReadCommitLogMarksNonRepositoryUnavailable(t *testing.T) {
+	dir := t.TempDir()
+	result := readCommitLog(context.Background(), dir, 7)
+	if result.Gen != 7 || result.Dir != dir || !result.Unavailable || result.Err != nil || result.Canceled {
+		t.Fatalf("non-repository history result = %+v, want unavailable", result)
+	}
+}
+
 func TestCommitLogRestoresSelectionByFullHashAfterAsyncRebuild(t *testing.T) {
 	cp := NewChangesPanel()
 	dir := "/repo"
