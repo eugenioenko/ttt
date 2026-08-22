@@ -77,6 +77,7 @@ type DiffStyles struct {
 	Added          StyleDef `json:"added"`
 	Deleted        StyleDef `json:"deleted"`
 	Modified       StyleDef `json:"modified"`
+	Collapsed      StyleDef `json:"collapsed,omitempty"`
 	GutterAdded    StyleDef `json:"gutterAdded,omitempty"`
 	GutterDeleted  StyleDef `json:"gutterDeleted,omitempty"`
 	GutterModified StyleDef `json:"gutterModified,omitempty"`
@@ -243,6 +244,9 @@ func DefaultTheme() ThemeConfig {
 		},
 
 		Border: StyleDef{Fg: "#555555"},
+		Diff: DiffStyles{
+			Collapsed: StyleDef{Fg: "#1f1f1f", Bg: "#8ab4d8", Bold: true},
+		},
 
 		Editor: EditorStyles{
 			ActiveLine:    StyleDef{Bg: "#282828"},
@@ -300,6 +304,8 @@ func (t *ThemeConfig) ResolveColors() {
 	fillBg(&t.Diff.Added, "#1e2e1e")
 	fillBg(&t.Diff.Deleted, "#2e1e1e")
 	fillBg(&t.Diff.Modified, "#2e2e1e")
+	fillFg(&t.Diff.Collapsed, t.Default.Bg)
+	fillBg(&t.Diff.Collapsed, "#8ab4d8")
 	fillFg(&t.Diff.GutterAdded, "#73c991")
 	fillFg(&t.Diff.GutterDeleted, "#f14c4c")
 	fillFg(&t.Diff.GutterModified, "#e2c08d")

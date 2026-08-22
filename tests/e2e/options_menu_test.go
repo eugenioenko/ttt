@@ -1,8 +1,27 @@
 package e2e
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/ui"
 )
+
+func findMenuCommand(items []ui.ContextMenuItem, command string) (ui.ContextMenuItem, bool) {
+	for _, item := range items {
+		if item.Command == command {
+			return item, true
+		}
+		if found, ok := findMenuCommand(item.Submenu, command); ok {
+			return found, true
+		}
+	}
+	return ui.ContextMenuItem{}, false
+}
 
 func TestOptionsMenuToggleLineNumbers(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
@@ -55,6 +74,77 @@ func TestOptionsMenuToggleWordWrap(t *testing.T) {
 
 	if h.app.Settings.Editor.WordWrap {
 		t.Error("word wrap should be disabled after second toggle")
+	}
+}
+
+func TestOptionsOwnDiffDefaultsAndChangesKeepsContextualAccess(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	h.app.EditorGroup.OpenDiff("existing.go", diff.FileDiff{}, []string{"old"}, []string{"new"}, true)
+	dv := h.app.EditorGroup.ActiveDiffWidget()
+	if dv == nil {
+		t.Fatal("expected active diff")
+	}
+
+	options := h.app.BuildOptionsMenu()
+	for _, command := range []string{"options.diffViewMode", "options.diffContext", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast"} {
+		if _, ok := findMenuCommand(options, command); !ok {
+			t.Errorf("Options menu missing %s", command)
+		}
+	}
+	if _, ok := findMenuCommand(options, "options.useSplitDiff"); ok {
+		t.Fatal("Options should use the consolidated Diff View Mode picker")
+	}
+	changes := h.app.BuildChangesPanelMenu()
+	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast"} {
+		if _, ok := findMenuCommand(changes, command); !ok {
+			t.Errorf("Changes menu missing contextual command %s", command)
+		}
+	}
+
+	h.exec("options.useUnifiedDiff")
+	h.exec("options.useFullFileDiff")
+	h.exec("options.toggleDiffWordWrap")
+	h.exec("options.toggleDiffHighContrast")
+	if dv.Mode() != ui.DiffModeUnified || dv.ContextMode() != ui.DiffContextFullFile || dv.WrapMode() != ui.DiffWrapOn || !dv.DiffHighContrast() {
+		t.Fatalf("live inherited diff = mode %v context %v wrap %v contrast %v", dv.Mode(), dv.ContextMode(), dv.WrapMode(), dv.DiffHighContrast())
+	}
+	if h.app.Settings.Editor.DiffMode != config.DiffModeUnified || h.app.Settings.Editor.DiffContext != config.DiffContextFull || !h.app.Settings.Editor.DiffWordWrap || !h.app.Settings.Editor.DiffHighContrast {
+		t.Fatalf("in-memory settings = %+v", h.app.Settings.Editor)
+	}
+
+	data, err := os.ReadFile(filepath.Join(h.dir, "config", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved config.Settings
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.Editor.DiffMode != config.DiffModeUnified || saved.Editor.DiffContext != config.DiffContextFull || !saved.Editor.DiffWordWrap || !saved.Editor.DiffHighContrast {
+		t.Fatalf("saved diff settings = %+v", saved.Editor)
+	}
+}
+
+func TestOptionsDiffDefaultsRespectPerPropertyOverrides(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	h.app.EditorGroup.OpenDiff("first.go", diff.FileDiff{}, []string{"old"}, []string{"new"}, true)
+	first := h.app.EditorGroup.ActiveDiffWidget()
+	first.SetMode(ui.DiffModeUnified)
+	h.app.EditorGroup.OpenDiff("second.go", diff.FileDiff{}, []string{"old"}, []string{"new"}, true)
+	second := h.app.EditorGroup.ActiveDiffWidget()
+	second.SetWrapMode(ui.DiffWrapOn)
+
+	h.exec("options.useUnifiedDiff")
+	h.exec("options.toggleDiffWordWrap")
+	h.exec("options.useSplitDiff")
+	h.exec("options.toggleDiffWordWrap")
+	if first.Mode() != ui.DiffModeUnified || first.WrapMode() != ui.DiffWrapOff {
+		t.Fatalf("first override/inheritance = mode %v wrap %v", first.Mode(), first.WrapMode())
+	}
+	if second.Mode() != ui.DiffModeSplit || second.WrapMode() != ui.DiffWrapOn {
+		t.Fatalf("second override/inheritance = mode %v wrap %v", second.Mode(), second.WrapMode())
 	}
 }
 

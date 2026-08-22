@@ -35,6 +35,10 @@ All editor settings are nested under the `editor` key.
 | `editor.tabSize` | int | `4` | Number of spaces per indentation level |
 | `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
 | `editor.wordWrap` | bool | `false` | Wrap long lines at the editor width |
+| `editor.diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
+| `editor.diffContext` | string | `"changes"` | Default diff context: `"changes"` or `"full"` |
+| `editor.diffWordWrap` | bool | `false` | Wrap long lines in diff views |
+| `editor.diffHighContrast` | bool | `false` | Strengthen changed-line visibility with semantic red/green foregrounds |
 | `editor.autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
 | `editor.autoDedent` | bool | `true` | Dedent one level when typing a closing `} ) ]` on a blank line |
 | `editor.lineNumbers` | bool | `true` | Show line numbers in the gutter |
@@ -145,6 +149,9 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "tabSize": 4,
     "insertSpaces": true,
     "wordWrap": false,
+    "diffMode": "split",
+    "diffContext": "changes",
+    "diffWordWrap": false,
     "autoIndent": true,
     "autoDedent": true,
     "lineNumbers": true,

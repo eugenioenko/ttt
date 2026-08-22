@@ -48,6 +48,7 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	applyStyleDef(&m, term.StyleDiffAdded, theme.Diff.Added)
 	applyStyleDef(&m, term.StyleDiffDeleted, theme.Diff.Deleted)
 	applyStyleDef(&m, term.StyleDiffModified, theme.Diff.Modified)
+	applyStyleDef(&m, term.StyleDiffCollapsed, theme.Diff.Collapsed)
 	applyStyleDef(&m, term.StyleGutterAdded, theme.Diff.GutterAdded)
 	applyStyleDef(&m, term.StyleGutterDeleted, theme.Diff.GutterDeleted)
 	applyStyleDef(&m, term.StyleGutterModified, theme.Diff.GutterModified)
