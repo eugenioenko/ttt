@@ -177,7 +177,7 @@ const { snapshots } = tui.run();
 expect(snapshots[s0]).toContain("hello");
 ```
 
-**Integration tests** (`tests/integration/`) — JavaScript tests using vitest + `tui-use` CLI that drive the binary via a real PTY. Used for tests that need live PTY interaction: LSP, external file changes, settings roundtrip, bracketed paste. Run with `cd tests/integration && pnpm test`. Requires `npm install -g tui-use`.
+**Integration tests** (`tests/integration/`) — JavaScript tests using vitest + the locally pinned `tui-use` CLI to drive the binary via a real PTY. Used for tests that need live PTY interaction: LSP, external file changes, settings roundtrip, bracketed paste. Run with `cd tests/integration && pnpm install && pnpm test`.
 
 ### Test expectations for new features
 
