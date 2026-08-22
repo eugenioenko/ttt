@@ -97,8 +97,8 @@ func TestBundledThemesLoad(t *testing.T) {
 			if th.Default.Fg == "" {
 				t.Errorf("%s: Default.Fg is empty after resolve", name)
 			}
-			if th.Diff.Collapsed.Fg == "" || th.Diff.Collapsed.Bg == "" {
-				t.Errorf("%s: collapsed diff style did not inherit defaults: %+v", name, th.Diff.Collapsed)
+			if th.Diff.CollapsedHover.Bg != th.Editor.ActiveLine.Bg {
+				t.Errorf("%s: collapsed hover background %q did not inherit active-line background %q", name, th.Diff.CollapsedHover.Bg, th.Editor.ActiveLine.Bg)
 			}
 		})
 	}
@@ -159,8 +159,7 @@ func TestResolveColors(t *testing.T) {
 	th.Diff.Added.Bg = ""
 	th.Diff.Deleted.Bg = ""
 	th.Diff.Modified.Bg = ""
-	th.Diff.Collapsed.Fg = ""
-	th.Diff.Collapsed.Bg = ""
+	th.Diff.CollapsedHover.Bg = ""
 	th.Success.Fg = ""
 	th.Danger.Fg = ""
 	th.Warning.Fg = ""
@@ -179,8 +178,8 @@ func TestResolveColors(t *testing.T) {
 	if th.Diff.Modified.Bg == "" {
 		t.Error("expected Diff.Modified.Bg to be filled by ResolveColors")
 	}
-	if th.Diff.Collapsed.Fg == "" || th.Diff.Collapsed.Bg == "" {
-		t.Errorf("expected Diff.Collapsed colors to be filled by ResolveColors, got %+v", th.Diff.Collapsed)
+	if th.Diff.CollapsedHover.Bg != th.Editor.ActiveLine.Bg {
+		t.Errorf("expected Diff.CollapsedHover background to inherit Editor.ActiveLine, got %+v", th.Diff.CollapsedHover)
 	}
 	if th.Success.Fg == "" {
 		t.Error("expected Success.Fg to be filled by ResolveColors")
@@ -210,7 +209,7 @@ func TestResolveColorsPreservesExisting(t *testing.T) {
 	th.Success.Fg = "#custom"
 	th.Danger.Fg = "#custom2"
 	th.Diff.Added.Bg = "#custom3"
-	th.Diff.Collapsed = StyleDef{Fg: "#custom4", Bg: "#custom5", Bold: true}
+	th.Diff.CollapsedHover = StyleDef{Fg: "#custom4", Bg: "#custom5", Bold: true}
 
 	th.ResolveColors()
 
@@ -223,8 +222,8 @@ func TestResolveColorsPreservesExisting(t *testing.T) {
 	if th.Diff.Added.Bg != "#custom3" {
 		t.Errorf("expected Diff.Added.Bg to remain '#custom3', got %q", th.Diff.Added.Bg)
 	}
-	if th.Diff.Collapsed.Fg != "#custom4" || th.Diff.Collapsed.Bg != "#custom5" || !th.Diff.Collapsed.Bold {
-		t.Errorf("expected explicit Diff.Collapsed to remain unchanged, got %+v", th.Diff.Collapsed)
+	if th.Diff.CollapsedHover.Fg != "#custom4" || th.Diff.CollapsedHover.Bg != "#custom5" || !th.Diff.CollapsedHover.Bold {
+		t.Errorf("expected explicit Diff.CollapsedHover to remain unchanged, got %+v", th.Diff.CollapsedHover)
 	}
 }
 

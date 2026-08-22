@@ -257,11 +257,14 @@ func (d *DiffViewWidget) FinishLoading() {
 	d.Loading = false
 	d.extendedFetching = false
 	d.contextLoaded = true
-	if d.pendingGap >= 0 {
+	if d.pendingGap >= 0 && d.contextMode != DiffContextFullFile {
 		d.expandedGaps[d.pendingGap] = true
 		d.pendingGap = -1
 		d.extended = false
 		d.contextMode = DiffContextChangesOnly
+	} else if d.contextMode == DiffContextFullFile {
+		d.pendingGap = -1
+		d.extended = true
 	}
 	d.rebuildLines()
 	d.TopLine = d.displayLineForLogicalAnchor(top)
@@ -676,8 +679,8 @@ func (d *DiffViewWidget) Render(surface Surface) {
 		leftStyle := diffKindStyle(dl.Left.Kind)
 		rightStyle := diffKindStyle(dl.Right.Kind)
 		if gap, ok := d.gapByLine[idx]; ok && d.hasHoveredGap && gap == d.hoveredGap {
-			leftStyle = term.StyleDiffCollapsed
-			rightStyle = term.StyleDiffCollapsed
+			leftStyle = term.StyleDiffCollapsedHover
+			rightStyle = term.StyleDiffCollapsedHover
 		}
 
 		if continuation {
@@ -769,7 +772,7 @@ func (d *DiffViewWidget) renderUnifiedRow(surface Surface, y, w, gutterW, conten
 	line := d.unifiedLines[displayIndex]
 	baseStyle := diffKindStyle(line.side.Kind)
 	if gap, ok := d.gapByLine[line.sourceLine]; ok && d.hasHoveredGap && gap == d.hoveredGap {
-		baseStyle = term.StyleDiffCollapsed
+		baseStyle = term.StyleDiffCollapsedHover
 	}
 	if continuation {
 		renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{})

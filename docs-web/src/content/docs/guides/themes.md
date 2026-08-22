@@ -150,10 +150,8 @@ Below is a complete theme file showing every configurable section. All color val
     "modified": {
       "bg": "#2e2e1a"
     },
-    "collapsed": {
-      "fg": "#1f1f1f",
-      "bg": "#8ab4d8",
-      "bold": true
+    "collapsedHover": {
+      "bg": "#282828"
     }
   },
   "scrollbar": {
@@ -244,7 +242,7 @@ Below is a complete theme file showing every configurable section. All color val
 | `dialog` | Command palette and dialog boxes: input field, items, selection, muted text |
 | `editor` | Editor pane: line numbers, active line highlight, selection, search matches, and bracket pair colors. `bracketColors` accepts terminal color names (`yellow`, `magenta`, `cyan`, `red`, `green`, `blue`, `black`, `white`, `brightRed`, `brightGreen`, `brightYellow`, `brightBlue`, `brightMagenta`, `brightCyan`, `brightBlack`, `brightWhite`), syntax style names (`keyword`, `function`, `type`, `comment`, `string`, `number`, `operator`, `builtin`, `variable`, `punctuation`, `tag`, `attribute`), or hex colors (`#rrggbb`). Up to 6 colors cycle by nesting depth. |
 | `menu` | Menu bar dropdown items and active/hovered item |
-| `diff` | Diff presentation styles: `added`, `deleted`, and `modified` backgrounds; `gutterAdded`, `gutterDeleted`, and `gutterModified` semantic foregrounds; and the `collapsed` hover/focus accent. Omitted `collapsed` values inherit the built-in defaults. |
+| `diff` | Diff presentation styles: `added`, `deleted`, and `modified` backgrounds; `gutterAdded`, `gutterDeleted`, and `gutterModified` semantic foregrounds; and the `collapsedHover` accent. An omitted `collapsedHover` background inherits the editor active-line background. |
 | `scrollbar` | Scrollbar thumb (`fg`) and track (`bg`) colors |
 | `syntax` | Syntax highlighting colors for language tokens |
 | `terminal` | ANSI color palette for the integrated terminal (16 colors) |
