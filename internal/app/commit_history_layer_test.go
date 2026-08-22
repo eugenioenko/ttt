@@ -90,7 +90,7 @@ func TestApplyCommitDetailUsesRepositoryHashIdentityAndPreciseTimestamp(t *testi
 	app.ApplyCommitDetail(&CommitDetailResult{
 		Dir: "/repo", Ref: ref, Message: "subject", AuthoredAt: authored,
 	})
-	if detail.Loading || detail.Metadata != "Authored Aug 22, 2026 at 3:14 AM -0400" {
+	if detail.Loading || detail.Metadata != "Authored Aug 22, 2026 at 3:14:15 AM -0400" {
 		t.Fatalf("applied detail loading=%v metadata=%q", detail.Loading, detail.Metadata)
 	}
 }

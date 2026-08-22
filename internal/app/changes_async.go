@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -26,6 +28,23 @@ type eventPoster interface {
 // commitLogLimit is how many commits the log shows.
 const commitLogLimit = 10
 
+const (
+	commitHistoryTimeout = 15 * time.Second
+	commitFilesTimeout   = 15 * time.Second
+	commitDetailTimeout  = 30 * time.Second
+)
+
+type commitFilesRequest struct {
+	ID     uint64
+	Cancel context.CancelFunc
+}
+
+type commitDetailRequest struct {
+	Incarnation uint64
+	Context     context.Context
+	Cancel      context.CancelFunc
+}
+
 // CommitLogResult carries a finished read of one repository's recent commits.
 type CommitLogResult struct {
 	Gen         int
@@ -34,30 +53,35 @@ type CommitLogResult struct {
 	Entries     []git.LogEntry
 	Err         error
 	Unavailable bool
+	Canceled    bool
 }
 
 // CommitFilesResult carries the file list of a single commit back to the node
 // that asked for it.
 type CommitFilesResult struct {
-	Dir    string
-	Ref    string
-	Short  string
-	NodeID string
-	Files  []git.FileStatus
-	Err    error
+	Request  uint64
+	Dir      string
+	Ref      string
+	Short    string
+	NodeID   string
+	Files    []git.FileStatus
+	Err      error
+	Canceled bool
 }
 
 // CommitDetailResult carries the complete message and every per-file diff for
-// one immutable commit. Dir and Ref are the result identity; ApplyCommitDetail
-// only installs it into the loading tab created for that exact pair.
+// one immutable commit. Incarnation distinguishes repeated openings of the same
+// repository and ref so a closed request can never target its replacement.
 type CommitDetailResult struct {
-	Dir        string
-	Ref        string
-	Short      string
-	Message    string
-	AuthoredAt time.Time
-	Files      []ui.CommitDetailFile
-	Err        string
+	Incarnation uint64
+	Dir         string
+	Ref         string
+	Short       string
+	Message     string
+	AuthoredAt  time.Time
+	Files       []ui.CommitDetailFile
+	Err         string
+	Canceled    bool
 }
 
 func readChangesGroups(dirs []string) []changesGroup {
@@ -93,22 +117,37 @@ func readChangesGroups(dirs []string) []changesGroup {
 	return groups
 }
 
-func readCommitLog(dir string, gen int) *CommitLogResult {
-	if !git.IsRepo(dir) {
+func readCommitLog(ctx context.Context, dir string, gen int) *CommitLogResult {
+	if !git.IsRepoContext(ctx, dir) {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return &CommitLogResult{Gen: gen, Dir: dir, Err: ctxErr, Canceled: errors.Is(ctxErr, context.Canceled)}
+		}
 		return &CommitLogResult{Gen: gen, Dir: dir, Unavailable: true}
 	}
-	entries, err := git.LogWithError(dir, commitLogLimit)
+	entries, err := git.LogWithErrorContext(ctx, dir, commitLogLimit)
+	if errors.Is(err, context.Canceled) {
+		return &CommitLogResult{Gen: gen, Dir: dir, Canceled: true}
+	}
+	if err != nil {
+		return &CommitLogResult{Gen: gen, Dir: dir, Err: err}
+	}
+	branch := git.BranchNameContext(ctx, dir)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return &CommitLogResult{Gen: gen, Dir: dir, Err: ctxErr, Canceled: errors.Is(ctxErr, context.Canceled)}
+	}
 	return &CommitLogResult{
 		Gen:     gen,
 		Dir:     dir,
-		Branch:  git.BranchName(dir),
+		Branch:  branch,
 		Entries: entries,
-		Err:     err,
 	}
 }
 
 // ApplyCommitLog rebuilds the commit log from a finished read.
 func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
+	if r == nil || r.Canceled {
+		return
+	}
 	// Both checks, not one: the counter catches a superseded read, and the
 	// directory catches a counter that agrees for some reason it should not.
 	if r.Gen != cp.logGen || r.Dir != cp.lastLogDir {
@@ -200,7 +239,7 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	// gone from this log, so the inert branch header is the safe resting place.
 	if parentID, ref, isCommitFile := commitFileParent(selected); isCommitFile {
 		key := r.Dir + "\x00" + ref
-		if cp.commitNode(parentID) != nil && cp.commitFilesPending[key] {
+		if _, pending := cp.commitFilesPending[key]; cp.commitNode(parentID) != nil && pending {
 			cp.selectLogNode(parentID)
 			cp.pendingLogSelection = selected
 			return
@@ -236,9 +275,12 @@ func (cp *ChangesPanel) selectLogNode(id string) bool {
 	return false
 }
 
-func readCommitFiles(dir, ref, short, nodeID string) *CommitFilesResult {
-	files, err := git.CommitFiles(dir, ref)
-	return &CommitFilesResult{Dir: dir, Ref: ref, Short: short, NodeID: nodeID, Files: files, Err: err}
+func readCommitFiles(ctx context.Context, request uint64, dir, ref, short, nodeID string) *CommitFilesResult {
+	files, err := git.CommitFilesContext(ctx, dir, ref)
+	return &CommitFilesResult{
+		Request: request, Dir: dir, Ref: ref, Short: short, NodeID: nodeID, Files: files, Err: err,
+		Canceled: errors.Is(err, context.Canceled),
+	}
 }
 
 // recordCommitFiles caches a finished read and clears its in-flight mark.
@@ -247,12 +289,19 @@ func readCommitFiles(dir, ref, short, nodeID string) *CommitFilesResult {
 // which is what makes the cache safe — but a failure is not a fact about the
 // commit, it is a fact about the moment, and index.lock or a mid-rebase repo
 // clears on its own. Caching one would leave that commit permanently empty.
-func (cp *ChangesPanel) recordCommitFiles(r *CommitFilesResult) {
+func (cp *ChangesPanel) recordCommitFiles(r *CommitFilesResult) bool {
 	key := r.Dir + "\x00" + r.Ref
-	delete(cp.commitFilesPending, key)
+	if r.Request != 0 {
+		request, ok := cp.commitFilesPending[key]
+		if !ok || request.ID != r.Request {
+			return false
+		}
+		delete(cp.commitFilesPending, key)
+	}
 	if r.Err == nil {
 		cp.cacheCommitFiles(key, r.Files)
 	}
+	return true
 }
 
 func (cp *ChangesPanel) childrenFor(r *CommitFilesResult) []*widgets.TreeNode {
@@ -267,13 +316,16 @@ func (cp *ChangesPanel) childrenFor(r *CommitFilesResult) []*widgets.TreeNode {
 // key cannot start a run of identical git processes.
 func (cp *ChangesPanel) fetchCommitFiles(dir, ref, short, nodeID string) {
 	key := dir + "\x00" + ref
-	if cp.commitFilesPending[key] {
+	if _, pending := cp.commitFilesPending[key]; pending {
 		return
 	}
-	cp.commitFilesPending[key] = true
+	cp.commitFilesNext++
+	requestID := cp.commitFilesNext
+	ctx, cancel := context.WithTimeout(context.Background(), commitFilesTimeout)
+	cp.commitFilesPending[key] = commitFilesRequest{ID: requestID, Cancel: cancel}
 	screen := cp.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(readCommitFiles(dir, ref, short, nodeID)))
+		screen.PostEvent(tcell.NewEventInterrupt(readCommitFiles(ctx, requestID, dir, ref, short, nodeID)))
 	}()
 }
 
@@ -281,7 +333,9 @@ func (cp *ChangesPanel) fetchCommitFiles(dir, ref, short, nodeID string) {
 // it. The node is looked up by ID rather than held as a pointer: the log may
 // have been rebuilt, or moved to another repository, while git was running.
 func (cp *ChangesPanel) ApplyCommitFiles(r *CommitFilesResult) {
-	cp.recordCommitFiles(r)
+	if r == nil || r.Canceled || !cp.recordCommitFiles(r) {
+		return
+	}
 	if r.Dir != cp.logDir {
 		return
 	}
@@ -324,26 +378,42 @@ func commitDetailTabID(dir, ref string) string {
 	return "commit:" + dir + "\x00" + ref
 }
 
-func readCommitDetail(dir, ref, short string) *CommitDetailResult {
-	result := &CommitDetailResult{Dir: dir, Ref: ref, Short: short}
-	message, err := git.CommitMessage(dir, ref)
+func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short string) *CommitDetailResult {
+	result := &CommitDetailResult{Incarnation: incarnation, Dir: dir, Ref: ref, Short: short}
+	message, err := git.CommitMessageContext(ctx, dir, ref)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			result.Canceled = true
+			return result
+		}
 		result.Err = fmt.Sprintf("Could not read commit %s", short)
 		return result
 	}
 	result.Message = message
-	result.AuthoredAt, _ = git.CommitAuthoredAt(dir, ref)
+	result.AuthoredAt, err = git.CommitAuthoredAtContext(ctx, dir, ref)
+	if errors.Is(err, context.Canceled) {
+		result.Canceled = true
+		return result
+	}
 
-	files, err := git.CommitFiles(dir, ref)
+	files, err := git.CommitFilesContext(ctx, dir, ref)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			result.Canceled = true
+			return result
+		}
 		result.Err = fmt.Sprintf("Could not read files for commit %s", short)
 		return result
 	}
 	result.Files = make([]ui.CommitDetailFile, 0, len(files))
 	for _, file := range files {
-		detail := ui.CommitDetailFile{Path: file.Path, OldPath: file.OldPath}
-		diffText, err := git.CommitFileDiff(dir, ref, file)
+		detail := ui.CommitDetailFile{Status: file.Status, Path: file.Path, OldPath: file.OldPath}
+		diffText, err := git.CommitFileDiffContext(ctx, dir, ref, file)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				result.Canceled = true
+				return result
+			}
 			detail.Error = fmt.Sprintf("Could not read diff for %s", file.Path)
 		} else {
 			detail.Diff = diff.Parse(diffText)
@@ -364,30 +434,83 @@ func (a *App) OpenCommitDetail(dir, ref, short string) {
 		return
 	}
 
+	request := a.beginCommitDetailRequest(tabID)
 	detail := ui.NewCommitDetailWidget(dir, ref, short, a.EditorGroup.SyntaxHighlight)
-	a.wireCommitDetailContext(tabID, detail)
+	detail.Incarnation = request.Incarnation
+	detail.OnClose = func() {
+		a.cancelCommitDetailRequest(tabID, request.Incarnation)
+	}
+	a.wireCommitDetailContext(tabID, detail, request)
 	a.EditorGroup.ApplyDiffDefaults(detail)
 	a.EditorGroup.OpenPluginTab(tabID, "Commit "+short, detail)
 	a.FocusEditorIfEnabled()
+	read := func() *CommitDetailResult {
+		ctx, cancel := context.WithTimeout(request.Context, commitDetailTimeout)
+		defer cancel()
+		return readCommitDetail(ctx, request.Incarnation, dir, ref, short)
+	}
 	if a.Screen == nil {
-		a.ApplyCommitDetail(readCommitDetail(dir, ref, short))
+		a.ApplyCommitDetail(read())
 		return
 	}
 	screen := a.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(readCommitDetail(dir, ref, short)))
+		screen.PostEvent(tcell.NewEventInterrupt(read()))
 	}()
 }
 
-// ApplyCommitDetail fills only the still-open tab whose repository and full
-// hash match the result. Closing the tab while Git runs supersedes the request.
+func (a *App) beginCommitDetailRequest(tabID string) commitDetailRequest {
+	a.commitDetailMu.Lock()
+	defer a.commitDetailMu.Unlock()
+	if a.commitDetailRequests == nil {
+		a.commitDetailRequests = make(map[string]commitDetailRequest)
+	}
+	if previous, ok := a.commitDetailRequests[tabID]; ok {
+		previous.Cancel()
+	}
+	a.commitDetailNext++
+	ctx, cancel := context.WithCancel(context.Background())
+	request := commitDetailRequest{Incarnation: a.commitDetailNext, Context: ctx, Cancel: cancel}
+	a.commitDetailRequests[tabID] = request
+	return request
+}
+
+func (a *App) cancelCommitDetailRequest(tabID string, incarnation uint64) {
+	a.commitDetailMu.Lock()
+	defer a.commitDetailMu.Unlock()
+	request, ok := a.commitDetailRequests[tabID]
+	if !ok || request.Incarnation != incarnation {
+		return
+	}
+	delete(a.commitDetailRequests, tabID)
+	request.Cancel()
+}
+
+func (a *App) ShutdownGitReads() {
+	a.commitDetailMu.Lock()
+	requests := a.commitDetailRequests
+	a.commitDetailRequests = nil
+	a.commitDetailMu.Unlock()
+	for _, request := range requests {
+		request.Cancel()
+	}
+	if a.Changes != nil {
+		a.Changes.Shutdown()
+	}
+}
+
+// ApplyCommitDetail fills only the still-open incarnation whose repository and
+// full hash match the result. Closing the tab while Git runs supersedes it.
 func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
+	if result == nil || result.Canceled {
+		return
+	}
 	detail := a.EditorGroup.CommitDetailWidgetByTab(commitDetailTabID(result.Dir, result.Ref))
-	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref {
+	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref || detail.Incarnation != result.Incarnation {
 		return
 	}
 	if !result.AuthoredAt.IsZero() {
-		detail.Metadata = "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04 PM -0700")
+		detail.Metadata = "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04:05 PM -0700")
 	}
 	detail.SetDetail(result.Message, result.Files, result.Err)
 }

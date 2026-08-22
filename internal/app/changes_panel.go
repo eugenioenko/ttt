@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -42,7 +43,9 @@ type ChangesPanel struct {
 	commitFilesOrder []string
 	// commitFilesPending marks reads already in flight, so repeated expands of
 	// one commit do not each start their own git process.
-	commitFilesPending map[string]bool
+	commitFilesPending map[string]commitFilesRequest
+	commitFilesNext    uint64
+	logCancel          context.CancelFunc
 	logCommits         map[string]commitFileRef
 	logFiles           map[string]commitFileRef
 	// logGen lets a finished read tell whether a newer one has superseded it.
@@ -124,7 +127,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 		logExpanded: make(map[string]bool),
 		logSelected: make(map[string]string),
 
-		commitFilesPending: make(map[string]bool),
+		commitFilesPending: make(map[string]commitFilesRequest),
 	}
 
 	cp.Input = widgets.NewInputWidget(widgets.InputConfig{
@@ -249,6 +252,7 @@ func filePaths(files []git.FileStatus) []string {
 }
 
 func (cp *ChangesPanel) Refresh() {
+	cp.cancelHistoryReads()
 	dirs := append([]string(nil), cp.Dirs...)
 	cp.saveExpanded()
 	cp.groups = readChangesGroups(dirs)
@@ -270,6 +274,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		// Emptying the log is a desired state too, so it has to invalidate a
 		// read still running — otherwise that read arrives and resurrects the
 		// repository that was just cleared.
+		cp.cancelHistoryReads()
 		cp.logGen++
 		cp.saveCommitLogState()
 		cp.lastLogDir = ""
@@ -281,6 +286,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		return
 	}
 	if dir != cp.logDir {
+		cp.cancelCommitFileReads()
 		cp.saveCommitLogState()
 		cp.logDir = ""
 		cp.logCommits = make(map[string]commitFileRef)
@@ -290,14 +296,41 @@ func (cp *ChangesPanel) refreshCommitLog() {
 	cp.lastLogDir = dir
 	cp.logGen++
 	gen := cp.logGen
+	cp.cancelLogRead()
+	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
+	cp.logCancel = cancel
 	if cp.Screen == nil {
-		cp.ApplyCommitLog(readCommitLog(dir, gen))
+		cp.ApplyCommitLog(readCommitLog(ctx, dir, gen))
+		cancel()
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(readCommitLog(dir, gen)))
+		screen.PostEvent(tcell.NewEventInterrupt(readCommitLog(ctx, dir, gen)))
 	}()
+}
+
+func (cp *ChangesPanel) cancelLogRead() {
+	if cp.logCancel != nil {
+		cp.logCancel()
+		cp.logCancel = nil
+	}
+}
+
+func (cp *ChangesPanel) cancelCommitFileReads() {
+	for _, request := range cp.commitFilesPending {
+		request.Cancel()
+	}
+	cp.commitFilesPending = make(map[string]commitFilesRequest)
+}
+
+func (cp *ChangesPanel) cancelHistoryReads() {
+	cp.cancelLogRead()
+	cp.cancelCommitFileReads()
+}
+
+func (cp *ChangesPanel) Shutdown() {
+	cp.cancelHistoryReads()
 }
 
 // saveCommitLogState records the currently rendered log's expansion and
@@ -379,7 +412,9 @@ func (cp *ChangesPanel) commitChildren(dir, ref, short, parentID string) []*widg
 		return cp.commitFileNodes(dir, ref, short, parentID, files)
 	}
 	if cp.Screen == nil {
-		r := readCommitFiles(dir, ref, short, parentID)
+		ctx, cancel := context.WithTimeout(context.Background(), commitFilesTimeout)
+		defer cancel()
+		r := readCommitFiles(ctx, 0, dir, ref, short, parentID)
 		cp.recordCommitFiles(r)
 		return cp.childrenFor(r)
 	}

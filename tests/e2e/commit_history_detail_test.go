@@ -106,7 +106,7 @@ func TestCommitHistoryOpensMetadataDetailAndWholeHeaderRowCollapses(t *testing.T
 	rowY := log.GetRect().Y + commitIndex - log.ScrollTop()
 	h.click(log.GetRect().X+4, rowY)
 	result := h.awaitCommitHistoryDetail()
-	metadata := "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04 PM -0700")
+	metadata := "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04:05 PM -0700")
 	for _, text := range []string{metadata, "Detail subject", "Detail body.", "alpha.txt", "alpha changed", "beta.txt", "beta changed"} {
 		h.assertContains(text)
 	}

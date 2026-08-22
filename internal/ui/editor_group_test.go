@@ -6,6 +6,18 @@ import (
 	"testing"
 )
 
+func TestOpenPluginTabReplacementClosesPreviousContent(t *testing.T) {
+	group := NewEditorGroupWidget(nil, 4, true, "relative")
+	closed := false
+	first := NewCommitDetailWidget("/repo", "ref", "abcdef0", false)
+	first.OnClose = func() { closed = true }
+	group.OpenPluginTab("commit", "Commit", first)
+	group.OpenPluginTab("commit", "Replacement", NewCommitDetailWidget("/repo", "other", "1234567", false))
+	if !closed {
+		t.Fatal("replacing a content tab did not close its previous incarnation")
+	}
+}
+
 func TestInitialTabIsVirtual(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	if !g.tabs[0].Virtual {

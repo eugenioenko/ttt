@@ -33,7 +33,7 @@ describe("commit history detail", () => {
     expect(snapshots[detail]).toMatch(/Commit [0-9a-f]{7,}/);
     expect(snapshots[detail]).toContain("detail subject");
     expect(snapshots[detail]).toContain("Full detail body.");
-    expect(snapshots[detail]).toMatch(/Authored [A-Z][a-z]{2} \d{1,2}, \d{4} at \d{1,2}:\d{2} [AP]M [+-]\d{4}/);
+    expect(snapshots[detail]).toMatch(/Authored [A-Z][a-z]{2} \d{1,2}, \d{4} at \d{1,2}:\d{2}:\d{2} [AP]M [+-]\d{4}/);
     expect(snapshots[detail]).toContain("first-detail.txt");
     expect(snapshots[detail]).toContain("first old");
     expect(snapshots[detail]).toContain("second-detail.txt");

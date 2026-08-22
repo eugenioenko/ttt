@@ -17,22 +17,33 @@ import (
 // the order Git reports them; a failed or hunk-less diff still gets a heading
 // and an explanatory row so a touched path never silently disappears.
 type CommitDetailFile struct {
+	Status  string
 	Path    string
 	OldPath string
 	Diff    diff.FileDiff
 	Error   string
 
-	highlighter    *highlight.Highlighter
-	lines          []diff.DiffLine
-	unified        []diffUnifiedLine
-	oldLines       []string
-	newLines       []string
-	contextLoaded  bool
-	contextLoading bool
-	expandedGaps   map[int]bool
-	gapByLine      map[int]int
-	pendingGap     int
+	FullFileState CommitDetailFullFileState
+	FullFileErr   string
+
+	highlighter  *highlight.Highlighter
+	lines        []diff.DiffLine
+	unified      []diffUnifiedLine
+	oldLines     []string
+	newLines     []string
+	expandedGaps map[int]bool
+	gapByLine    map[int]int
+	pendingGap   int
 }
+
+type CommitDetailFullFileState uint8
+
+const (
+	CommitDetailFullFileIdle CommitDetailFullFileState = iota
+	CommitDetailFullFileLoading
+	CommitDetailFullFileLoaded
+	CommitDetailFullFileFailed
+)
 
 type commitDetailRowKind uint8
 
@@ -50,6 +61,7 @@ type commitDetailRow struct {
 	kind      commitDetailRowKind
 	text      string
 	bold      bool
+	danger    bool
 	fileIndex int
 	lineIndex int
 }
@@ -72,11 +84,12 @@ type commitDetailControl struct {
 // full-screen cell grid for every changed line on every redraw.
 type CommitDetailWidget struct {
 	BaseWidget
-	Dir     string
-	Ref     string
-	Short   string
-	Loading bool
-	Error   string
+	Dir         string
+	Ref         string
+	Short       string
+	Incarnation uint64
+	Loading     bool
+	Error       string
 
 	Message  string
 	Metadata string
@@ -129,6 +142,7 @@ type CommitDetailWidget struct {
 	disclosurePressed bool
 
 	OnFetchContext func(fileIndex int, file CommitDetailFile)
+	OnClose        func()
 }
 
 func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *CommitDetailWidget {
@@ -143,6 +157,15 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 
 func (d *CommitDetailWidget) Focusable() bool { return true }
 
+func (d *CommitDetailWidget) Close() {
+	if d.OnClose == nil {
+		return
+	}
+	onClose := d.OnClose
+	d.OnClose = nil
+	onClose()
+}
+
 func (d *CommitDetailWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
 
 func (d *CommitDetailWidget) DiffHighContrast() bool { return d.highContrast }
@@ -151,6 +174,14 @@ func (d *CommitDetailWidget) ContextMode() DiffContextMode { return d.contextMod
 
 func (d *CommitDetailWidget) SetContextMode(mode DiffContextMode) {
 	d.contextExplicit = true
+	if d.contextMode == mode {
+		if mode == DiffContextFullFile {
+			for i := range d.Files {
+				d.requestFileContext(i, -1)
+			}
+		}
+		return
+	}
 	d.applyContextMode(mode)
 }
 
@@ -188,7 +219,7 @@ func (d *CommitDetailWidget) requestFileContext(fileIndex, gap int) {
 		return
 	}
 	file := &d.Files[fileIndex]
-	if file.contextLoaded {
+	if file.FullFileState == CommitDetailFullFileLoaded {
 		if gap >= 0 {
 			file.expandedGaps[gap] = true
 			d.rebuildRows()
@@ -199,23 +230,36 @@ func (d *CommitDetailWidget) requestFileContext(fileIndex, gap int) {
 	if gap >= 0 {
 		file.pendingGap = gap
 	}
-	if file.contextLoading || d.OnFetchContext == nil {
+	if file.FullFileState == CommitDetailFullFileLoading || d.OnFetchContext == nil {
 		return
 	}
-	file.contextLoading = true
+	file.FullFileState = CommitDetailFullFileLoading
+	file.FullFileErr = ""
+	d.rebuildRows()
 	d.OnFetchContext(fileIndex, *file)
 }
 
-func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLines, newLines []string) bool {
+func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLines, newLines []string, contextErr ...string) bool {
 	if fileIndex < 0 || fileIndex >= len(d.Files) || commitDetailFileKey(d.Files[fileIndex]) != key {
 		return false
 	}
 	file := &d.Files[fileIndex]
-	file.oldLines = oldLines
-	file.newLines = newLines
-	file.contextLoaded = oldLines != nil || newLines != nil
-	file.contextLoading = false
-	if file.contextLoaded && file.pendingGap >= 0 {
+	errText := ""
+	if len(contextErr) > 0 {
+		errText = contextErr[0]
+	} else if oldLines == nil && newLines == nil {
+		errText = "Could not load full file"
+	}
+	if errText == "" {
+		file.oldLines = oldLines
+		file.newLines = newLines
+		file.FullFileState = CommitDetailFullFileLoaded
+		file.FullFileErr = ""
+	} else {
+		file.FullFileState = CommitDetailFullFileFailed
+		file.FullFileErr = errText
+	}
+	if file.FullFileState == CommitDetailFullFileLoaded && file.pendingGap >= 0 {
 		file.expandedGaps[file.pendingGap] = true
 	}
 	file.pendingGap = -1
@@ -394,7 +438,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 	maxLine := 0
 	for fileIndex := range d.Files {
 		file := &d.Files[fileIndex]
-		if d.contextMode == DiffContextFullFile && file.contextLoaded {
+		if d.contextMode == DiffContextFullFile && file.FullFileState == CommitDetailFullFileLoaded {
 			file.lines = diff.FullDiffLines(file.oldLines, file.newLines)
 			file.gapByLine = nil
 		} else {
@@ -409,6 +453,26 @@ func (d *CommitDetailWidget) rebuildRows() {
 		d.recordWidth(heading)
 		if fileIndex < len(d.collapsedFiles) && d.collapsedFiles[fileIndex] {
 			continue
+		}
+		if d.contextMode == DiffContextFullFile {
+			var notice string
+			var danger bool
+			switch file.FullFileState {
+			case CommitDetailFullFileIdle:
+				notice = "Full file not loaded"
+			case CommitDetailFullFileLoading:
+				notice = "Loading full file…"
+			case CommitDetailFullFileFailed:
+				notice = file.FullFileErr
+				if notice == "" {
+					notice = "Could not load full file"
+				}
+				danger = true
+			}
+			if notice != "" {
+				d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: notice, danger: danger, fileIndex: fileIndex})
+				d.recordWidth(notice)
+			}
 		}
 
 		switch {
@@ -671,7 +735,7 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 		d.renderHeading(surface, rowIndex, row, visual, y, viewW)
 	case commitDetailNoticeRow:
 		style := term.StyleMuted
-		if row.fileIndex >= 0 && row.fileIndex < len(d.Files) && d.Files[row.fileIndex].Error != "" {
+		if row.danger || row.fileIndex >= 0 && row.fileIndex < len(d.Files) && d.Files[row.fileIndex].Error != "" {
 			style = term.StyleDanger
 		}
 		d.drawTextRow(surface, 0, y, viewW, row.text, style, term.StyleDefault, false, visual.leftStart, rowIndex)

@@ -29,6 +29,7 @@ func RunEventLoop(
 	app.eventLoopDoneSignal()
 	defer app.closeEventLoopDone()
 	defer app.Root.CancelPointerCapture()
+	defer app.ShutdownGitReads()
 	if app.Watcher != nil {
 		defer app.Watcher.Close()
 	}

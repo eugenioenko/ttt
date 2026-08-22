@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,22 +15,25 @@ import (
 const commitDetailContextTimeout = 15 * time.Second
 
 type CommitDetailContextResult struct {
-	TabID     string
-	Dir       string
-	Ref       string
-	FileIndex int
-	FileKey   string
-	OldLines  []string
-	NewLines  []string
+	Incarnation uint64
+	TabID       string
+	Dir         string
+	Ref         string
+	FileIndex   int
+	FileKey     string
+	OldLines    []string
+	NewLines    []string
+	Err         string
+	Canceled    bool
 }
 
-func (a *App) wireCommitDetailContext(tabID string, detail *ui.CommitDetailWidget) {
+func (a *App) wireCommitDetailContext(tabID string, detail *ui.CommitDetailWidget, request commitDetailRequest) {
 	detail.OnFetchContext = func(fileIndex int, file ui.CommitDetailFile) {
 		dir, ref := detail.Dir, detail.Ref
 		read := func() *CommitDetailContextResult {
-			ctx, cancel := context.WithTimeout(context.Background(), commitDetailContextTimeout)
+			ctx, cancel := context.WithTimeout(request.Context, commitDetailContextTimeout)
 			defer cancel()
-			return readCommitDetailContext(ctx, tabID, dir, ref, fileIndex, file)
+			return readCommitDetailContext(ctx, request.Incarnation, tabID, dir, ref, fileIndex, file)
 		}
 		if a.Screen == nil {
 			a.ApplyCommitDetailContext(read())
@@ -41,20 +46,38 @@ func (a *App) wireCommitDetailContext(tabID string, detail *ui.CommitDetailWidge
 	}
 }
 
-func readCommitDetailContext(ctx context.Context, tabID, dir, ref string, fileIndex int, file ui.CommitDetailFile) *CommitDetailContextResult {
+func readCommitDetailContext(ctx context.Context, incarnation uint64, tabID, dir, ref string, fileIndex int, file ui.CommitDetailFile) *CommitDetailContextResult {
 	result := &CommitDetailContextResult{
-		TabID: tabID, Dir: dir, Ref: ref, FileIndex: fileIndex,
+		Incarnation: incarnation, TabID: tabID, Dir: dir, Ref: ref, FileIndex: fileIndex,
 		FileKey: ui.CommitDetailContextKey(file),
 	}
 	oldPath := file.Path
 	if file.OldPath != "" {
 		oldPath = file.OldPath
 	}
-	if content, err := git.ShowFileContext(ctx, dir, oldPath, ref+"^"); err == nil {
-		result.OldLines = splitCommitDetailLines(content)
+	if file.Status != "A" {
+		content, err := git.ShowFileContext(ctx, dir, oldPath, ref+"^")
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				result.Canceled = true
+				return result
+			}
+			result.Err = fmt.Sprintf("Could not load full file for %s", file.Path)
+		} else {
+			result.OldLines = splitCommitDetailLines(content)
+		}
 	}
-	if content, err := git.ShowFileContext(ctx, dir, file.Path, ref); err == nil {
-		result.NewLines = splitCommitDetailLines(content)
+	if file.Status != "D" {
+		content, err := git.ShowFileContext(ctx, dir, file.Path, ref)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				result.Canceled = true
+				return result
+			}
+			result.Err = fmt.Sprintf("Could not load full file for %s", file.Path)
+		} else {
+			result.NewLines = splitCommitDetailLines(content)
+		}
 	}
 	return result
 }
@@ -68,9 +91,12 @@ func splitCommitDetailLines(content string) []string {
 }
 
 func (a *App) ApplyCommitDetailContext(result *CommitDetailContextResult) {
-	detail := a.EditorGroup.CommitDetailWidgetByTab(result.TabID)
-	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref {
+	if result == nil || result.Canceled {
 		return
 	}
-	detail.ApplyFileContext(result.FileIndex, result.FileKey, result.OldLines, result.NewLines)
+	detail := a.EditorGroup.CommitDetailWidgetByTab(result.TabID)
+	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref || detail.Incarnation != result.Incarnation {
+		return
+	}
+	detail.ApplyFileContext(result.FileIndex, result.FileKey, result.OldLines, result.NewLines, result.Err)
 }
