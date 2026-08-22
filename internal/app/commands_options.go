@@ -195,6 +195,26 @@ func (a *App) ShowBorderStylePicker() {
 	}, nil)
 }
 
+func (a *App) ShowDiffViewModePicker() {
+	a.ShowSelectDialog("Diff View Mode", diffModeItems(), func(id string) {
+		if id == config.DiffModeUnified {
+			a.UseUnifiedDiffByDefault()
+			return
+		}
+		a.UseSplitDiffByDefault()
+	}, nil)
+}
+
+func (a *App) ShowDiffContextPicker() {
+	a.ShowSelectDialog("Diff Context", diffContextItems(), func(id string) {
+		if id == config.DiffContextFull {
+			a.UseFullFileDiffByDefault()
+			return
+		}
+		a.UseChangesOnlyDiffByDefault()
+	}, nil)
+}
+
 func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	lineNumbersChecked := ui.MenuUnchecked
 	if a.Settings.Editor.LineNumbers {
@@ -244,7 +264,10 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
-		{Label: "Diff View", Submenu: a.BuildDiffViewOptions()},
+		{Label: "Diff View Mode", Command: "options.diffViewMode"},
+		{Label: "Diff Context", Command: "options.diffContext"},
+		{Label: "Wrap Diff Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
+		{Label: "High Contrast Diffs", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
 		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
@@ -272,8 +295,8 @@ func menuChecked(checked bool) int {
 	return ui.MenuUnchecked
 }
 
-// BuildDiffViewOptions is shared by the global Options menu and the Changes
-// panel menu so both surfaces expose identical defaults and checked state.
+// BuildDiffViewOptions keeps the Changes panel's contextual presentation menu
+// tied to the same persisted defaults exposed in Options.
 func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
 		{Label: "Split", Command: "options.useSplitDiff", Checked: menuChecked(a.Settings.Editor.DiffMode != config.DiffModeUnified)},
@@ -315,6 +338,18 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleWordWrap", Title: "Toggle Word Wrap",
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleWordWrap,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.diffViewMode", Title: "Change Diff View Mode",
+		Keywords: []string{"preferences", "settings", "git", "diff", "split", "unified", "mode"},
+		Handler:  app.ShowDiffViewModePicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.diffContext", Title: "Change Diff Context",
+		Keywords: []string{"preferences", "settings", "git", "diff", "changes", "full", "context"},
+		Handler:  app.ShowDiffContextPicker,
 	})
 
 	reg.Register(command.Command{

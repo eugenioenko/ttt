@@ -126,13 +126,16 @@ func diffKindStyle(kind diff.LineKind) term.Style {
 	case diff.Deleted:
 		return term.StyleDiffDeleted
 	case diff.Collapsed:
-		return term.StyleDiffCollapsed
+		return term.StyleDefault
 	default:
 		return term.StyleDefault
 	}
 }
 
 func diffKindForeground(kind diff.LineKind, highContrast bool) term.Style {
+	if kind == diff.Collapsed {
+		return term.StyleMuted
+	}
 	if !highContrast {
 		return term.StyleDefault
 	}
@@ -162,7 +165,7 @@ func diffWrapStarts(text string, width int) []int {
 	return wrapLineSegments([]rune(text), width, diffTabWidth)
 }
 
-func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine, baseStyle term.Style) {
+func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine) {
 	number := ""
 	if line.Num > 0 {
 		number = fmt.Sprintf("%d", line.Num)
@@ -177,7 +180,7 @@ func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine, base
 		marker = '-'
 		style = term.StyleGutterDeleted
 	case diff.Collapsed:
-		style = baseStyle
+		marker = '▶'
 	}
 	text := fmt.Sprintf("%*s %c", width-2, number, marker)
 	for column, ch := range []rune(text) {

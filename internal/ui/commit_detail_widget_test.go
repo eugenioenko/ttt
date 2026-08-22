@@ -185,7 +185,7 @@ func TestCommitDetailDoesNotDrawWideRuneAcrossClipEdge(t *testing.T) {
 	}
 }
 
-func TestCommitDetailCollapsedSeparatorUsesSharedStyle(t *testing.T) {
+func TestCommitDetailCollapsedSeparatorUsesSharedQuietAndHoverStyles(t *testing.T) {
 	fileDiff := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -20,1 +20,1 @@\n twentieth\n")
 	detail := NewCommitDetailWidget("/repo", "full-hash", "abc1234", false)
 	detail.SetDetail("Subject", []CommitDetailFile{{Path: "test.go", Diff: fileDiff}}, "")
@@ -208,11 +208,19 @@ func TestCommitDetailCollapsedSeparatorUsesSharedStyle(t *testing.T) {
 	cells := makeGrid(width, height)
 	detail.SetRect(Rect{W: width, H: height})
 	detail.Render(NewRenderSurface(cells, Rect{W: width, H: height}))
-	if got := cells[separatorRow][0].Style; got != term.StyleDiffCollapsed {
-		t.Fatalf("collapsed gutter style = %v, want StyleDiffCollapsed", got)
+	if got := cells[separatorRow][detail.gutterW-1]; got.Ch != '▶' || got.Style != term.StyleLineNumber {
+		t.Fatalf("collapsed gutter cell = %+v, want line-number disclosure triangle", got)
 	}
+	if got := cells[separatorRow][detail.gutterW]; got.Style != term.StyleMuted || got.BgStyle != 0 {
+		t.Fatalf("collapsed text cell = %+v, want muted text on inherited background", got)
+	}
+
+	if result := detail.HandleEvent(tcell.NewEventMouse(detail.gutterW, separatorRow, tcell.ButtonNone, tcell.ModNone)); result != EventConsumed {
+		t.Fatalf("collapsed separator hover result = %v, want EventConsumed for redraw", result)
+	}
+	detail.Render(NewRenderSurface(cells, Rect{W: width, H: height}))
 	if got := cells[separatorRow][detail.gutterW].Style; got != term.StyleDiffCollapsed {
-		t.Fatalf("collapsed text style = %v, want StyleDiffCollapsed", got)
+		t.Fatalf("hovered collapsed text style = %v, want StyleDiffCollapsed", got)
 	}
 }
 

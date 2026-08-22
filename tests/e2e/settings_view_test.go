@@ -181,17 +181,17 @@ func TestSettingsGitFileViewLiveApply(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Advanced", "Advanced")
 
-	if !rowHas(h, "Git: file view", "Tree") {
-		t.Fatalf("git file view should default to Tree:\n%s", h.screenText())
+	if !rowHas(h, "Git: file view", "List") {
+		t.Fatalf("git file view should default to List:\n%s", h.screenText())
 	}
-	clickRowControl(t, h, "Git: file view", "Tree")
-	clickRowControl(t, h, "List", "List")
-	if h.app.Settings.Git.FileView != "tree" || h.app.Changes.FileView() != "tree" {
+	clickRowControl(t, h, "Git: file view", "List")
+	clickRowControl(t, h, "Tree", "Tree")
+	if h.app.Settings.Git.FileView != "list" || h.app.Changes.FileView() != "list" {
 		t.Fatal("git file view applied before Apply")
 	}
 
 	h.exec("settings.apply")
-	if h.app.Settings.Git.FileView != "list" || h.app.Changes.FileView() != "list" {
+	if h.app.Settings.Git.FileView != "tree" || h.app.Changes.FileView() != "tree" {
 		t.Fatalf("git file view was not live-applied: settings=%q panel=%q", h.app.Settings.Git.FileView, h.app.Changes.FileView())
 	}
 }

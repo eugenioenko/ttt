@@ -169,7 +169,7 @@ type GitSettings struct {
 }
 
 func DefaultGitSettings() GitSettings {
-	return GitSettings{FileView: GitFileViewTree}
+	return GitSettings{FileView: GitFileViewList}
 }
 
 type SidebarSettings struct {
@@ -316,7 +316,7 @@ func normalizeSettings(s *Settings) {
 		s.Editor.DiffContext = DiffContextChanges
 	}
 	if !slices.Contains(GitFileViews, s.Git.FileView) {
-		s.Git.FileView = GitFileViewTree
+		s.Git.FileView = GitFileViewList
 	}
 	seenPanels := make(map[string]bool)
 	panelOrder := s.Sidebar.PanelOrder[:0]

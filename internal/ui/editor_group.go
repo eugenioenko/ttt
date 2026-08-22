@@ -1894,25 +1894,6 @@ func (g *EditorGroupWidget) syncTabs() {
 		})
 	}
 	g.TabBar.SetTabs(uiTabs)
-	g.TabBar.Controls = nil
-	if surface := g.ActiveDiffModeSurface(); surface != nil {
-		g.TabBar.Controls = []TabBarControl{
-			{
-				Label:  "Split",
-				Active: surface.Mode() == DiffModeSplit,
-				OnClick: func() {
-					surface.SetMode(DiffModeSplit)
-				},
-			},
-			{
-				Label:  "Unified",
-				Active: surface.Mode() == DiffModeUnified,
-				OnClick: func() {
-					surface.SetMode(DiffModeUnified)
-				},
-			},
-		}
-	}
 }
 
 func (g *EditorGroupWidget) Render(surface Surface) {

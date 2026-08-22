@@ -33,6 +33,7 @@ func nodeWithID(nodes []*widgets.TreeNode, id string) *widgets.TreeNode {
 
 func TestChangesTreeCompactsPathsAndKeepsFileIdentity(t *testing.T) {
 	cp := NewChangesPanel("/repo")
+	cp.SetFileView(config.GitFileViewTree)
 	cp.groups = []changesGroup{{
 		Dir:  "/repo",
 		Name: "repo",
@@ -66,6 +67,7 @@ func TestChangesTreeCompactsPathsAndKeepsFileIdentity(t *testing.T) {
 
 func TestGitFileViewSwitchPreservesSelectionAndRevealsAncestors(t *testing.T) {
 	cp := NewChangesPanel("/repo")
+	cp.SetFileView(config.GitFileViewTree)
 	cp.groups = []changesGroup{{
 		Dir:      "/repo",
 		Name:     "repo",
@@ -102,6 +104,7 @@ func TestGitFileViewSwitchPreservesSelectionAndRevealsAncestors(t *testing.T) {
 
 func TestCommitFilesUseTreeAndFolderLabelsToggle(t *testing.T) {
 	cp := NewChangesPanel("/repo")
+	cp.SetFileView(config.GitFileViewTree)
 	const ref = "0123456789012345678901234567890123456789"
 	commitID := "commit:" + ref
 	files := []git.FileStatus{
@@ -148,6 +151,7 @@ func TestCommitFilesUseTreeAndFolderLabelsToggle(t *testing.T) {
 
 func TestChangesExpandCollapseAllCoversWorkingAndLoadedCommitFileTrees(t *testing.T) {
 	cp := NewChangesPanel("/repo")
+	cp.SetFileView(config.GitFileViewTree)
 	cp.groups = []changesGroup{{
 		Dir:      "/repo",
 		Name:     "repo",
@@ -245,6 +249,7 @@ func TestCompactFileTreeTreatsColonAsPathContent(t *testing.T) {
 
 func TestWorkingFolderSelectionKeepsItsRepositoryContext(t *testing.T) {
 	cp := NewChangesPanel("/one", "/two")
+	cp.SetFileView(config.GitFileViewTree)
 	cp.groups = []changesGroup{
 		{Dir: "/one", Name: "one", Unstaged: []git.FileStatus{{Status: "M", Path: "one.go"}}},
 		{Dir: "/two", Name: "two", Unstaged: []git.FileStatus{{Status: "M", Path: "nested/two.go"}}},

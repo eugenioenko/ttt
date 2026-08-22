@@ -24,7 +24,7 @@ function repoWithNestedGitFiles() {
 }
 
 describe("git file tree", () => {
-  it("groups working and commit files and can switch back to full-path lists", () => {
+  it("defaults to full-path lists and can explicitly switch to tree view", () => {
     dir = repoWithNestedGitFiles();
 
     tui.start(dir);
@@ -35,10 +35,10 @@ describe("git file tree", () => {
     // the branch header at 22 and the newest commit at 23 at this geometry.
     tui.click(1, 23);
     tui.waitStable(400);
-    const tree = tui.snapshot();
+    const list = tui.snapshot();
 
     // Open the Changes panel's contextual three-dot menu, then use its nested
-    // Git Files group to switch to List view.
+    // Git Files group to switch to Tree view.
     tui.click(29, 2);
     tui.waitStable();
     const panelMenu = tui.snapshot();
@@ -51,25 +51,24 @@ describe("git file tree", () => {
     tui.press("right");
     tui.waitStable();
     const gitFilesMenu = tui.snapshot();
-    tui.press("down");
     tui.press("enter");
     tui.waitStable(300);
-    const list = tui.snapshot();
+    const tree = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(snapshots[tree]).toContain("src/work");
-    expect(snapshots[tree]).toContain("changed.go");
-    expect(snapshots[tree]).toContain("pkg/history");
-    expect(snapshots[tree]).toContain("committed.go");
-    expect(snapshots[tree]).not.toContain("src/work/changed.go");
-    expect(snapshots[tree]).not.toContain("pkg/history/committed.go");
+    expect(snapshots[list]).toContain("src/work/changed.go");
+    expect(snapshots[list]).toContain("pkg/history/committed.go");
 
     expect(snapshots[panelMenu]).toContain("Git Files");
     expect(snapshots[panelMenu]).toContain("Diff View");
     expect(snapshots[gitFilesMenu]).toContain("Tree");
     expect(snapshots[gitFilesMenu]).toContain("List");
 
-    expect(snapshots[list]).toContain("src/work/changed.go");
-    expect(snapshots[list]).toContain("pkg/history/committed.go");
+    expect(snapshots[tree]).toContain("src/work");
+    expect(snapshots[tree]).toContain("changed.go");
+    expect(snapshots[tree]).toContain("pkg/history");
+    expect(snapshots[tree]).toContain("committed.go");
+    expect(snapshots[tree]).not.toContain("src/work/changed.go");
+    expect(snapshots[tree]).not.toContain("pkg/history/committed.go");
   });
 });

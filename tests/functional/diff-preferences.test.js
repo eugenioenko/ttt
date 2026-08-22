@@ -56,6 +56,10 @@ function savedSettings(configDir) {
   return JSON.parse(readFileSync(join(configDir, "settings.json"), "utf8"));
 }
 
+function diffRow(screen, text) {
+  return screen.split("\n").findIndex((row) => row.includes(text));
+}
+
 describe("diff reading preferences", () => {
   it("marks removed and added line numbers in the shared diff gutter", () => {
     const fixture = diffFixture();
@@ -77,21 +81,20 @@ describe("diff reading preferences", () => {
     const options = tui.snapshot();
     tui.press("down");
     tui.press("down");
-    tui.press("right");
+    tui.press("enter");
     tui.waitStable();
     const diffOptions = tui.snapshot();
     tui.press("escape");
     enableUnifiedWrappedDefaults();
 
     const { snapshots } = tui.run();
-    expect(snapshots[options]).toContain("Diff View");
+    expect(snapshots[options]).toContain("Diff View Mode");
+    expect(snapshots[options]).toContain("Diff Context");
+    expect(snapshots[options]).toContain("Wrap Diff Lines");
+    expect(snapshots[options]).toContain("High Contrast Diffs");
     expect(snapshots[options]).toContain("Git Files");
     expect(snapshots[diffOptions]).toContain("Split");
     expect(snapshots[diffOptions]).toContain("Unified");
-    expect(snapshots[diffOptions]).toContain("Changes Only");
-    expect(snapshots[diffOptions]).toContain("Full File");
-    expect(snapshots[diffOptions]).toContain("Wrap Lines");
-    expect(snapshots[diffOptions]).toContain("High Contrast");
 
     const saved = savedSettings(fixture.configDir);
     expect(saved.editor.diffMode).toBe("unified");
@@ -123,13 +126,18 @@ describe("diff reading preferences", () => {
     const after = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(snapshots[before]).toContain("● Split");
+    expect(diffRow(snapshots[before], "left-prefix")).toBeGreaterThanOrEqual(0);
+    expect(diffRow(snapshots[before], "left-prefix")).toBe(
+      diffRow(snapshots[before], "right-prefix"),
+    );
     expect(snapshots[before]).not.toContain("SUFFIX");
-    expect(snapshots[after]).toContain("● Unified");
+    expect(diffRow(snapshots[after], "left-prefix")).toBeLessThan(
+      diffRow(snapshots[after], "right-prefix"),
+    );
     expect(snapshots[after]).toContain("SUFFIX");
   });
 
-  it("keeps View overrides when Options defaults later change", () => {
+  it("keeps explicit surface overrides when Options defaults later change", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);
     tui.exec("Test Preference Diff");
@@ -144,8 +152,9 @@ describe("diff reading preferences", () => {
     const overridden = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(snapshots[overridden]).toContain("○ Split");
-    expect(snapshots[overridden]).toContain("● Unified");
+    expect(diffRow(snapshots[overridden], "left-prefix")).toBeLessThan(
+      diffRow(snapshots[overridden], "right-prefix"),
+    );
     expect(snapshots[overridden]).toContain("SUFFIX");
 
     const saved = savedSettings(fixture.configDir);
@@ -169,11 +178,17 @@ describe("diff reading preferences", () => {
     const untouchedAfter = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(snapshots[overriddenBefore]).toContain("● Unified");
+    expect(diffRow(snapshots[overriddenBefore], "left-prefix")).toBeLessThan(
+      diffRow(snapshots[overriddenBefore], "right-prefix"),
+    );
     expect(snapshots[overriddenBefore]).toContain("SUFFIX");
-    expect(snapshots[overriddenAfter]).toContain("● Unified");
+    expect(diffRow(snapshots[overriddenAfter], "left-prefix")).toBeLessThan(
+      diffRow(snapshots[overriddenAfter], "right-prefix"),
+    );
     expect(snapshots[overriddenAfter]).toContain("SUFFIX");
-    expect(snapshots[untouchedAfter]).toContain("● Unified");
+    expect(diffRow(snapshots[untouchedAfter], "left-prefix")).toBeLessThan(
+      diffRow(snapshots[untouchedAfter], "right-prefix"),
+    );
     expect(snapshots[untouchedAfter]).toContain("SUFFIX");
   });
 
@@ -189,8 +204,9 @@ describe("diff reading preferences", () => {
     const reopened = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(snapshots[reopened]).toContain("○ Split");
-    expect(snapshots[reopened]).toContain("● Unified");
+    expect(diffRow(snapshots[reopened], "left-prefix")).toBeLessThan(
+      diffRow(snapshots[reopened], "right-prefix"),
+    );
     expect(snapshots[reopened]).toContain("SUFFIX");
   });
 });

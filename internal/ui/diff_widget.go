@@ -67,6 +67,8 @@ type DiffViewWidget struct {
 	expandedGaps    map[int]bool
 	gapByLine       map[int]int
 	pendingGap      int
+	hoveredGap      int
+	hasHoveredGap   bool
 	primaryPressed  bool
 	highContrast    bool
 	fileDiff        diff.FileDiff
@@ -96,6 +98,7 @@ func NewDiffViewWidget(filePath string, fd diff.FileDiff, oldLines, newLines []s
 		contextLoaded:       oldLines != nil || newLines != nil,
 		expandedGaps:        make(map[int]bool),
 		pendingGap:          -1,
+		hoveredGap:          -1,
 	}
 	if extended {
 		dv.contextMode = DiffContextFullFile
@@ -278,6 +281,7 @@ func (d *DiffViewWidget) rebuildLines() {
 }
 
 func (d *DiffViewWidget) expandContextGap(gap int) {
+	d.hasHoveredGap = false
 	if gap < 0 || d.expandedGaps[gap] {
 		return
 	}
@@ -600,13 +604,17 @@ func (d *DiffViewWidget) Render(surface Surface) {
 
 		leftStyle := diffKindStyle(dl.Left.Kind)
 		rightStyle := diffKindStyle(dl.Right.Kind)
+		if gap, ok := d.gapByLine[idx]; ok && d.hasHoveredGap && gap == d.hoveredGap {
+			leftStyle = term.StyleDiffCollapsed
+			rightStyle = term.StyleDiffCollapsed
+		}
 
 		if continuation {
-			renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{}, leftStyle)
-			renderDiffGutter(surface, dividerX+1, y, gutterW, diff.SideLine{}, rightStyle)
+			renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{})
+			renderDiffGutter(surface, dividerX+1, y, gutterW, diff.SideLine{})
 		} else {
-			renderDiffGutter(surface, 0, y, gutterW, dl.Left, leftStyle)
-			renderDiffGutter(surface, dividerX+1, y, gutterW, dl.Right, rightStyle)
+			renderDiffGutter(surface, 0, y, gutterW, dl.Left)
+			renderDiffGutter(surface, dividerX+1, y, gutterW, dl.Right)
 		}
 
 		var leftSpans, rightSpans []highlight.Span
@@ -689,10 +697,13 @@ func (d *DiffViewWidget) renderUnifiedRow(surface Surface, y, w, gutterW, conten
 
 	line := d.unifiedLines[displayIndex]
 	baseStyle := diffKindStyle(line.side.Kind)
+	if gap, ok := d.gapByLine[line.sourceLine]; ok && d.hasHoveredGap && gap == d.hoveredGap {
+		baseStyle = term.StyleDiffCollapsed
+	}
 	if continuation {
-		renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{}, baseStyle)
+		renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{})
 	} else {
-		renderDiffGutter(surface, 0, y, gutterW, line.side, baseStyle)
+		renderDiffGutter(surface, 0, y, gutterW, line.side)
 	}
 
 	var spans []highlight.Span
@@ -879,6 +890,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
+		d.hasHoveredGap = false
 		switch tev.Key() {
 		case tcell.KeyUp:
 			d.scrollVertical(-1)
@@ -914,6 +926,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 		btn := tev.Buttons()
 		mod := tev.Modifiers()
 		if btn&tcell.WheelUp != 0 {
+			d.hasHoveredGap = false
 			if mod&tcell.ModShift != 0 {
 				d.LeftCol -= 4
 				if d.LeftCol < 0 {
@@ -925,6 +938,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 		if btn&tcell.WheelDown != 0 {
+			d.hasHoveredGap = false
 			if mod&tcell.ModShift != 0 {
 				d.LeftCol += 4
 				d.clampLeftCol()
@@ -934,6 +948,7 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 		if btn&tcell.WheelLeft != 0 {
+			d.hasHoveredGap = false
 			d.LeftCol -= 4
 			if d.LeftCol < 0 {
 				d.LeftCol = 0
@@ -941,11 +956,18 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 		if btn&tcell.WheelRight != 0 {
+			d.hasHoveredGap = false
 			d.LeftCol += 4
 			d.clampLeftCol()
 			return EventConsumed
 		}
 		mx, my := tev.Position()
+		hoveredGap, overGap := d.gapByLine[d.screenSourceLine(my)]
+		hoverChanged := overGap != d.hasHoveredGap || (overGap && hoveredGap != d.hoveredGap)
+		d.hasHoveredGap = overGap
+		if overGap {
+			d.hoveredGap = hoveredGap
+		}
 		if btn == tcell.ButtonNone {
 			d.primaryPressed = false
 		}
@@ -991,6 +1013,9 @@ func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			if start.Line == end.Line && start.Col == end.Col {
 				d.hasSelection = false
 			}
+		}
+		if hoverChanged {
+			return EventConsumed
 		}
 	}
 	return EventIgnored

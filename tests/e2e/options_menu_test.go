@@ -87,17 +87,23 @@ func TestOptionsMenuDiffDefaultsPersistAndUpdateInheritedSurface(t *testing.T) {
 		t.Fatal("expected active diff")
 	}
 
-	checked := func(command string) int {
+	checked := func(items []ui.ContextMenuItem, command string) int {
 		t.Helper()
-		if item, ok := findMenuCommand(h.app.BuildOptionsMenu(), command); ok {
+		if item, ok := findMenuCommand(items, command); ok {
 			return item.Checked
 		}
-		t.Fatalf("Options menu missing %s", command)
+		t.Fatalf("menu missing %s", command)
 		return 0
 	}
-	if checked("options.useSplitDiff") != ui.MenuChecked ||
-		checked("options.useUnifiedDiff") != ui.MenuUnchecked ||
-		checked("options.toggleDiffWordWrap") != ui.MenuUnchecked {
+	if _, ok := findMenuCommand(h.app.BuildOptionsMenu(), "options.diffViewMode"); !ok {
+		t.Fatal("Options menu missing Diff View Mode picker")
+	}
+	if _, ok := findMenuCommand(h.app.BuildOptionsMenu(), "options.diffContext"); !ok {
+		t.Fatal("Options menu missing Diff Context picker")
+	}
+	if checked(h.app.BuildChangesPanelMenu(), "options.useSplitDiff") != ui.MenuChecked ||
+		checked(h.app.BuildChangesPanelMenu(), "options.useUnifiedDiff") != ui.MenuUnchecked ||
+		checked(h.app.BuildOptionsMenu(), "options.toggleDiffWordWrap") != ui.MenuUnchecked {
 		t.Fatalf("default diff options state is wrong: %+v", h.app.BuildOptionsMenu())
 	}
 
@@ -115,9 +121,9 @@ func TestOptionsMenuDiffDefaultsPersistAndUpdateInheritedSurface(t *testing.T) {
 	if dv.Mode() != ui.DiffModeUnified || dv.WrapMode() != ui.DiffWrapOn {
 		t.Fatalf("open inherited surface = mode %v wrap %v, want unified/on", dv.Mode(), dv.WrapMode())
 	}
-	if checked("options.useSplitDiff") != ui.MenuUnchecked ||
-		checked("options.useUnifiedDiff") != ui.MenuChecked ||
-		checked("options.toggleDiffWordWrap") != ui.MenuChecked {
+	if checked(h.app.BuildChangesPanelMenu(), "options.useSplitDiff") != ui.MenuUnchecked ||
+		checked(h.app.BuildChangesPanelMenu(), "options.useUnifiedDiff") != ui.MenuChecked ||
+		checked(h.app.BuildOptionsMenu(), "options.toggleDiffWordWrap") != ui.MenuChecked {
 		t.Fatalf("updated diff options state is wrong: %+v", h.app.BuildOptionsMenu())
 	}
 
@@ -135,22 +141,24 @@ func TestOptionsMenuDiffDefaultsPersistAndUpdateInheritedSurface(t *testing.T) {
 	}
 }
 
-func TestOptionsAndChangesMenusSharePresentationGroups(t *testing.T) {
+func TestOptionsAndChangesMenusExposePresentationControlsWithoutDuplicateModeSubmenu(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
-	for _, menu := range [][]ui.ContextMenuItem{h.app.BuildOptionsMenu(), h.app.BuildChangesPanelMenu()} {
-		for _, command := range []string{
-			"options.useGitFileTree",
-			"options.useGitFileList",
-			"options.useSplitDiff",
-			"options.useUnifiedDiff",
-			"options.toggleDiffWordWrap",
-			"options.toggleDiffHighContrast",
-		} {
-			if _, ok := findMenuCommand(menu, command); !ok {
-				t.Errorf("menu missing shared presentation command %s", command)
-			}
+	options := h.app.BuildOptionsMenu()
+	for _, command := range []string{"options.diffViewMode", "options.diffContext", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast"} {
+		if _, ok := findMenuCommand(options, command); !ok {
+			t.Errorf("Options menu missing presentation command %s", command)
+		}
+	}
+	if _, ok := findMenuCommand(options, "options.useSplitDiff"); ok {
+		t.Fatal("Options menu should open a compact mode picker instead of duplicating mode actions")
+	}
+
+	changes := h.app.BuildChangesPanelMenu()
+	for _, command := range []string{"options.useGitFileTree", "options.useGitFileList", "options.useSplitDiff", "options.useUnifiedDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast"} {
+		if _, ok := findMenuCommand(changes, command); !ok {
+			t.Errorf("Changes menu missing contextual presentation command %s", command)
 		}
 	}
 }

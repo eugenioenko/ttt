@@ -187,45 +187,8 @@ const (
 	menuOptionsIndex = 4
 )
 
-// BuildViewMenu adds per-surface presentation overrides only while a diff is
-// active. Options holds the persisted defaults used by newly opened diffs;
-// these View controls never rewrite those settings.
 func (a *App) BuildViewMenu() []ui.ContextMenuItem {
-	items := append([]ui.ContextMenuItem(nil), menuBarMenus[menuViewIndex]...)
-	surface := a.EditorGroup.ActiveDiffModeSurface()
-	if surface == nil {
-		return items
-	}
-	splitChecked := ui.MenuUnchecked
-	unifiedChecked := ui.MenuUnchecked
-	if surface.Mode() == ui.DiffModeUnified {
-		unifiedChecked = ui.MenuChecked
-	} else {
-		splitChecked = ui.MenuChecked
-	}
-	wrapChecked := ui.MenuUnchecked
-	if surface.WrapMode() == ui.DiffWrapOn {
-		wrapChecked = ui.MenuChecked
-	}
-	items = append(items,
-		ui.MenuSep(),
-		ui.ContextMenuItem{Label: "Diff: Split", Command: "diff.splitView", Checked: splitChecked},
-		ui.ContextMenuItem{Label: "Diff: Unified", Command: "diff.unifiedView", Checked: unifiedChecked},
-	)
-	if contextSurface := a.EditorGroup.ActiveDiffContextSurface(); contextSurface != nil {
-		changesChecked := ui.MenuUnchecked
-		fullChecked := ui.MenuUnchecked
-		if contextSurface.ContextMode() == ui.DiffContextFullFile {
-			fullChecked = ui.MenuChecked
-		} else {
-			changesChecked = ui.MenuChecked
-		}
-		items = append(items,
-			ui.ContextMenuItem{Label: "Diff: Changes Only", Command: "diff.changesOnlyView", Checked: changesChecked},
-			ui.ContextMenuItem{Label: "Diff: Full File", Command: "diff.fullFileView", Checked: fullChecked},
-		)
-	}
-	return append(items, ui.ContextMenuItem{Label: "Diff: Wrap Lines", Command: "diff.toggleWrap", Checked: wrapChecked})
+	return append([]ui.ContextMenuItem(nil), menuBarMenus[menuViewIndex]...)
 }
 
 func openMenuBarDropdown(app *App, index int) {

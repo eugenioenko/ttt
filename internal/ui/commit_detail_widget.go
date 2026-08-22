@@ -135,6 +135,9 @@ type CommitDetailWidget struct {
 	lastClickPos      diffSelPos
 	primaryPressed    bool
 	disclosurePressed bool
+	hoveredGapFile    int
+	hoveredGap        int
+	hasHoveredGap     bool
 
 	OnFetchContext func(fileIndex int, file CommitDetailFile)
 }
@@ -149,6 +152,8 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 		EmptyText:       "No files",
 		LoadingText:     fmt.Sprintf("Loading commit %s…", short),
 		SyntaxHighlight: syntaxHighlight,
+		hoveredGapFile:  -1,
+		hoveredGap:      -1,
 	}
 }
 
@@ -158,6 +163,8 @@ func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidg
 		Ref:             "working-tree",
 		Loading:         true,
 		Header:          "Current changes",
+		hoveredGapFile:  -1,
+		hoveredGap:      -1,
 		EmptyText:       "No changes",
 		LoadingText:     "Loading current changes…",
 		CurrentChanges:  true,
@@ -784,7 +791,7 @@ func (d *CommitDetailWidget) renderDiffRow(surface Surface, rowIndex int, row co
 		return
 	}
 	if d.mode == DiffModeUnified {
-		d.renderUnifiedDiffRow(surface, rowIndex, file, row.lineIndex, visual, y, viewW)
+		d.renderUnifiedDiffRow(surface, rowIndex, row.fileIndex, file, row.lineIndex, visual, y, viewW)
 		return
 	}
 	if row.lineIndex >= len(file.lines) {
@@ -799,12 +806,16 @@ func (d *CommitDetailWidget) renderDiffRow(surface Surface, rowIndex int, row co
 	surface.SetCell(dividerX, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 	leftStyle := diffKindStyle(line.Left.Kind)
 	rightStyle := diffKindStyle(line.Right.Kind)
+	if gap, ok := file.gapByLine[row.lineIndex]; ok && d.hasHoveredGap && d.hoveredGapFile == row.fileIndex && d.hoveredGap == gap {
+		leftStyle = term.StyleDiffCollapsed
+		rightStyle = term.StyleDiffCollapsed
+	}
 	if visual.continuation {
-		renderDiffGutter(surface, 0, y, d.gutterW, diff.SideLine{}, leftStyle)
-		renderDiffGutter(surface, dividerX+1, y, d.gutterW, diff.SideLine{}, rightStyle)
+		renderDiffGutter(surface, 0, y, d.gutterW, diff.SideLine{})
+		renderDiffGutter(surface, dividerX+1, y, d.gutterW, diff.SideLine{})
 	} else {
-		renderDiffGutter(surface, 0, y, d.gutterW, line.Left, leftStyle)
-		renderDiffGutter(surface, dividerX+1, y, d.gutterW, line.Right, rightStyle)
+		renderDiffGutter(surface, 0, y, d.gutterW, line.Left)
+		renderDiffGutter(surface, dividerX+1, y, d.gutterW, line.Right)
 	}
 
 	var leftSpans, rightSpans []highlight.Span
@@ -826,7 +837,7 @@ func (d *CommitDetailWidget) renderDiffRow(surface Surface, rowIndex int, row co
 	renderDiffText(surface, rightStart, y, rightW, line.Right.Text, rightStyle, rightForeground, rightSpans, visual.rightStart, leftScroll, d.selectionDecorator(rowIndex, true))
 }
 
-func (d *CommitDetailWidget) renderUnifiedDiffRow(surface Surface, rowIndex int, file *CommitDetailFile, lineIndex int, visual commitDetailVisualRow, y, viewW int) {
+func (d *CommitDetailWidget) renderUnifiedDiffRow(surface Surface, rowIndex, fileIndex int, file *CommitDetailFile, lineIndex int, visual commitDetailVisualRow, y, viewW int) {
 	if lineIndex >= len(file.unified) {
 		return
 	}
@@ -836,10 +847,14 @@ func (d *CommitDetailWidget) renderUnifiedDiffRow(surface Surface, rowIndex int,
 		return
 	}
 	style := diffKindStyle(line.Kind)
+	sourceLine := file.unified[lineIndex].sourceLine
+	if gap, ok := file.gapByLine[sourceLine]; ok && d.hasHoveredGap && d.hoveredGapFile == fileIndex && d.hoveredGap == gap {
+		style = term.StyleDiffCollapsed
+	}
 	if visual.continuation {
-		renderDiffGutter(surface, 0, y, d.gutterW, diff.SideLine{}, style)
+		renderDiffGutter(surface, 0, y, d.gutterW, diff.SideLine{})
 	} else {
-		renderDiffGutter(surface, 0, y, d.gutterW, line, style)
+		renderDiffGutter(surface, 0, y, d.gutterW, line)
 	}
 	var spans []highlight.Span
 	if file.highlighter != nil && line.Text != "" && line.Kind != diff.Collapsed {
@@ -1154,6 +1169,7 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	switch event := ev.(type) {
 	case *tcell.EventKey:
+		d.hasHoveredGap = false
 		switch event.Key() {
 		case tcell.KeyUp:
 			d.TopLine--
@@ -1182,19 +1198,32 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		modifiers := event.Modifiers()
 		switch {
 		case buttons&tcell.WheelUp != 0 && modifiers&tcell.ModShift != 0:
+			d.hasHoveredGap = false
 			d.LeftCol -= 4
 		case buttons&tcell.WheelDown != 0 && modifiers&tcell.ModShift != 0:
+			d.hasHoveredGap = false
 			d.LeftCol += 4
 		case buttons&tcell.WheelUp != 0:
+			d.hasHoveredGap = false
 			d.TopLine -= 3
 		case buttons&tcell.WheelDown != 0:
+			d.hasHoveredGap = false
 			d.TopLine += 3
 		case buttons&tcell.WheelLeft != 0:
+			d.hasHoveredGap = false
 			d.LeftCol -= 4
 		case buttons&tcell.WheelRight != 0:
+			d.hasHoveredGap = false
 			d.LeftCol += 4
 		default:
 			mx, my := event.Position()
+			hoveredFile, hoveredGap, overGap := d.contextGapAtScreenY(my)
+			hoverChanged := overGap != d.hasHoveredGap || (overGap && (hoveredFile != d.hoveredGapFile || hoveredGap != d.hoveredGap))
+			d.hasHoveredGap = overGap
+			if overGap {
+				d.hoveredGapFile = hoveredFile
+				d.hoveredGap = hoveredGap
+			}
 			primaryPressed := buttons&tcell.Button1 != 0
 			freshPrimaryPress := primaryPressed && !d.primaryPressed
 			if buttons == tcell.ButtonNone {
@@ -1235,6 +1264,7 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 						}
 					}
 					if fileIndex, gap, ok := d.contextGapAtScreenY(my); ok {
+						d.hasHoveredGap = false
 						d.requestFileContext(fileIndex, gap)
 						d.disclosurePressed = true
 						return EventConsumed
@@ -1271,6 +1301,9 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 				if start.Line == end.Line && start.Col == end.Col {
 					d.hasSelection = false
 				}
+				return EventConsumed
+			}
+			if hoverChanged {
 				return EventConsumed
 			}
 			return EventIgnored

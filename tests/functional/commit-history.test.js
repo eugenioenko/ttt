@@ -333,7 +333,7 @@ describe("commit history", () => {
     expect(snapshots[compact]).toContain("changed near top");
     expect(snapshots[compact]).not.toContain("unchanged line 15");
     expect(snapshots[full]).toContain("unchanged line 15");
-    expect(snapshots[viewMenu]).toContain("✓ Diff: Full File");
+    expect(snapshots[viewMenu]).not.toContain("Diff: Full File");
   });
 
   it("should wrap and unwrap the active commit detail through the shared diff command", () => {
@@ -378,8 +378,6 @@ describe("commit history", () => {
     const unified = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(snapshots[unified]).toContain("○ Split");
-    expect(snapshots[unified]).toContain("● Unified");
     const rows = snapshots[unified].split("\n");
     const removed = rows.findIndex((row) => row.includes("left-prefix"));
     const added = rows.findIndex((row) => row.includes("right-prefix"));

@@ -146,7 +146,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 		logExpanded:       make(map[string]bool),
 		logSelected:       make(map[string]string),
 		logFolderExpanded: make(map[string]bool),
-		fileView:          config.GitFileViewTree,
+		fileView:          config.GitFileViewList,
 
 		commitFilesPending: make(map[string]bool),
 	}

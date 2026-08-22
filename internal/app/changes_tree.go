@@ -161,8 +161,8 @@ func expandPathToID(nodes []*widgets.TreeNode, id string) bool {
 func (cp *ChangesPanel) FileView() string { return cp.fileView }
 
 func (cp *ChangesPanel) SetFileView(view string) {
-	if view != config.GitFileViewList {
-		view = config.GitFileViewTree
+	if view != config.GitFileViewTree {
+		view = config.GitFileViewList
 	}
 	if cp.fileView == view {
 		return

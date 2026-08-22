@@ -170,9 +170,12 @@ Sidebar search panel (Ctrl+K F) powered by [ripgrep](https://github.com/BurntSus
 
 Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 
-Changed files and files inside expanded commits use a compact directory tree by
-default. Consecutive single-child folders share one row; switch between **Tree**
-and full-path **List** views from the Options menu, command palette, or Settings.
+Changed files and files inside expanded commits use a full-path **List** by
+default. Switch to the compact **Tree** from the Options menu, command palette,
+or Settings; explicit tree selections remain persisted.
+
+Diff layout, context, wrapping, and contrast defaults live in Options. The
+Changes panel three-dot menu keeps contextual access to the same settings.
 
 **Staging:**
 - **Spacebar** — toggle stage/unstage on the selected file
@@ -557,7 +560,7 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `search.debounce` | int | `350` | Milliseconds to debounce global search input |
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
-| `git.fileView` | string | `"tree"` | Show changed and historical commit files as a compact `"tree"` or full-path `"list"` |
+| `git.fileView` | string | `"list"` | Show changed and historical commit files as a compact `"tree"` or full-path `"list"` |
 | `sidebar.panelOrder` | string[] | built-in order | Sidebar panel IDs in preferred header order; updated when headers are dragged |
 | `terminal.shell` | string | `""` | Shell command for the integrated terminal (empty = system default) |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain in the terminal |
@@ -592,7 +595,7 @@ Example `~/.config/ttt/settings.json` (also available at [`config/settings.json`
     "showGitIgnored": true
   },
   "git": {
-    "fileView": "tree"
+    "fileView": "list"
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]

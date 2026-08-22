@@ -9,7 +9,6 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/core/diff"
-	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -130,7 +129,7 @@ func TestDiffToggleUnifiedCommand(t *testing.T) {
 	}
 }
 
-func TestDiffExplicitModesAndViewMenuState(t *testing.T) {
+func TestDiffExplicitModesAreNotDuplicatedInViewMenu(t *testing.T) {
 	h := newTestHarness(t, 100, 14)
 	defer h.stop()
 
@@ -144,18 +143,10 @@ func TestDiffExplicitModesAndViewMenuState(t *testing.T) {
 		t.Fatalf("default presentation = mode %v wrap %v, want split/off", dv.Mode(), dv.WrapMode())
 	}
 
-	checked := func(command string) int {
-		t.Helper()
-		for _, item := range h.app.BuildViewMenu() {
-			if item.Command == command {
-				return item.Checked
-			}
+	for _, item := range h.app.BuildViewMenu() {
+		if strings.HasPrefix(item.Command, "diff.") {
+			t.Fatalf("View menu duplicated diff presentation command: %+v", item)
 		}
-		t.Fatalf("View menu missing %s", command)
-		return 0
-	}
-	if checked("diff.splitView") != ui.MenuChecked || checked("diff.unifiedView") != ui.MenuUnchecked || checked("diff.toggleWrap") != ui.MenuUnchecked {
-		t.Fatalf("default View menu did not expose split/off state: %+v", h.app.BuildViewMenu())
 	}
 
 	h.exec("diff.unifiedView")
@@ -163,12 +154,9 @@ func TestDiffExplicitModesAndViewMenuState(t *testing.T) {
 	if dv.Mode() != ui.DiffModeUnified || dv.WrapMode() != ui.DiffWrapOn {
 		t.Fatalf("explicit commands left mode %v wrap %v, want unified/on", dv.Mode(), dv.WrapMode())
 	}
-	if checked("diff.splitView") != ui.MenuUnchecked || checked("diff.unifiedView") != ui.MenuChecked || checked("diff.toggleWrap") != ui.MenuChecked {
-		t.Fatalf("updated View menu did not expose unified/on state: %+v", h.app.BuildViewMenu())
-	}
 }
 
-func TestViewDiffOverridesDoNotPersistAndNextDiffUsesDefaults(t *testing.T) {
+func TestExplicitDiffOverridesDoNotPersistAndNextDiffUsesDefaults(t *testing.T) {
 	h := newTestHarness(t, 100, 14)
 	defer h.stop()
 
@@ -183,15 +171,15 @@ func TestViewDiffOverridesDoNotPersistAndNextDiffUsesDefaults(t *testing.T) {
 	h.exec("diff.splitView")
 	h.exec("diff.toggleWrap")
 	if first.Mode() != ui.DiffModeSplit || first.WrapMode() != ui.DiffWrapOff {
-		t.Fatalf("View override = mode %v wrap %v, want split/off", first.Mode(), first.WrapMode())
+		t.Fatalf("explicit override = mode %v wrap %v, want split/off", first.Mode(), first.WrapMode())
 	}
 	if h.app.Settings.Editor.DiffMode != config.DiffModeUnified || !h.app.Settings.Editor.DiffWordWrap {
-		t.Fatalf("View override rewrote in-memory defaults: mode %q wrap %v",
+		t.Fatalf("explicit override rewrote in-memory defaults: mode %q wrap %v",
 			h.app.Settings.Editor.DiffMode, h.app.Settings.Editor.DiffWordWrap)
 	}
 	saved := config.LoadSettings()
 	if saved.Editor.DiffMode != config.DiffModeUnified || !saved.Editor.DiffWordWrap {
-		t.Fatalf("View override rewrote saved defaults: mode %q wrap %v",
+		t.Fatalf("explicit override rewrote saved defaults: mode %q wrap %v",
 			saved.Editor.DiffMode, saved.Editor.DiffWordWrap)
 	}
 
@@ -202,31 +190,14 @@ func TestViewDiffOverridesDoNotPersistAndNextDiffUsesDefaults(t *testing.T) {
 	}
 }
 
-func TestDiffTabModeControlSwitchesProjection(t *testing.T) {
+func TestDiffTabBarDoesNotDuplicateModeControls(t *testing.T) {
 	h := newTestHarness(t, 100, 14)
 	defer h.stop()
 	h.app.EditorGroup.OpenDiff("control.go", diff.FileDiff{}, []string{"old one", "old two"}, []string{"new one", "new two"}, true)
 	h.redraw()
 
-	lines := strings.Split(h.screenText(), "\n")
-	controlX, controlY := -1, -1
-	for y, line := range lines {
-		if byteIndex := strings.Index(line, "Unified"); byteIndex >= 0 && strings.Contains(line, "● Split") {
-			controlX = textwidth.String(line[:byteIndex]) + 1
-			controlY = y
-			break
-		}
-	}
-	if controlX < 0 {
-		t.Fatalf("visible diff mode control not found:\n%s", h.screenText())
-	}
-	h.click(controlX, controlY)
-	dv := h.app.EditorGroup.ActiveDiffWidget()
-	if dv == nil || dv.Mode() != ui.DiffModeUnified {
-		t.Fatalf("clicking Unified left active mode at %v", dv)
-	}
-	if !strings.Contains(h.screenText(), "● Unified") || !strings.Contains(h.screenText(), "○ Split") {
-		t.Fatalf("mode control did not update its visible current value:\n%s", h.screenText())
+	if strings.Contains(h.screenText(), "● Split") || strings.Contains(h.screenText(), "○ Unified") {
+		t.Fatalf("diff tab bar duplicated the Options mode control:\n%s", h.screenText())
 	}
 }
 

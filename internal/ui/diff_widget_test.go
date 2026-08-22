@@ -360,7 +360,7 @@ func TestDiffWidgetCollapsedSeparatorOmitsAdjacentLines(t *testing.T) {
 	}
 }
 
-func TestDiffWidgetCollapsedSeparatorUsesDedicatedStyle(t *testing.T) {
+func TestDiffWidgetCollapsedSeparatorIsQuietUntilHovered(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -20,1 +20,1 @@\n twentieth\n")
 	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
 
@@ -371,25 +371,31 @@ func TestDiffWidgetCollapsedSeparatorUsesDedicatedStyle(t *testing.T) {
 
 	separatorRow := 1
 	contentCell := grid[separatorRow][dv.layoutLeftStart]
-	if contentCell.Style != term.StyleDiffCollapsed {
-		t.Fatalf("collapsed separator style = %v, want StyleDiffCollapsed", contentCell.Style)
+	if contentCell.Style != term.StyleMuted || contentCell.BgStyle != 0 {
+		t.Fatalf("collapsed separator cell = %+v, want muted text on inherited background", contentCell)
 	}
-	if contentCell.Style == term.StyleDefault {
-		t.Fatal("collapsed separator must not resolve to StyleDefault")
+	gutterCell := grid[separatorRow][dv.layoutGutterW-1]
+	if gutterCell.Ch != '▶' || gutterCell.Style != term.StyleLineNumber {
+		t.Fatalf("collapsed separator gutter cell = %+v, want line-number disclosure triangle", gutterCell)
 	}
-	if contentCell.BgStyle != 0 {
-		t.Fatalf("collapsed separator should use its full style, got BgStyle %v", contentCell.BgStyle)
+
+	if result := dv.HandleEvent(tcell.NewEventMouse(dv.layoutLeftStart, separatorRow, tcell.ButtonNone, tcell.ModNone)); result != EventConsumed {
+		t.Fatalf("collapsed separator hover result = %v, want EventConsumed for redraw", result)
 	}
-	if gutterCell := grid[separatorRow][0]; gutterCell.Style != term.StyleDiffCollapsed {
-		t.Fatalf("collapsed separator gutter style = %v, want StyleDiffCollapsed", gutterCell.Style)
+	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+	if got := grid[separatorRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsed {
+		t.Fatalf("hovered separator style = %v, want StyleDiffCollapsed", got)
+	}
+	if got := grid[separatorRow][dv.layoutGutterW-1]; got.Ch != '▶' || got.Style != term.StyleLineNumber {
+		t.Fatalf("hovered separator gutter cell = %+v, want stable line-number disclosure triangle", got)
 	}
 }
 
 func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
 	grid := makeGrid(10, 2)
 	surface := NewRenderSurface(grid, Rect{W: 10, H: 2})
-	renderDiffGutter(surface, 0, 0, 5, diff.SideLine{Num: 12, Kind: diff.Deleted}, term.StyleDiffDeleted)
-	renderDiffGutter(surface, 0, 1, 5, diff.SideLine{Num: 13, Kind: diff.Added}, term.StyleDiffAdded)
+	renderDiffGutter(surface, 0, 0, 5, diff.SideLine{Num: 12, Kind: diff.Deleted})
+	renderDiffGutter(surface, 0, 1, 5, diff.SideLine{Num: 13, Kind: diff.Added})
 
 	if got := commitDetailGridText(grid); !strings.Contains(got, "12 -") || !strings.Contains(got, "13 +") {
 		t.Fatalf("changed gutters do not show line markers:\n%s", got)

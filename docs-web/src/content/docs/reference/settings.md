@@ -65,7 +65,7 @@ All editor settings are nested under the `editor` key.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `git.fileView` | string | `"tree"` | Show working-tree and expanded commit files as a compact `"tree"` or a full-path `"list"` |
+| `git.fileView` | string | `"list"` | Show working-tree and expanded commit files as a compact `"tree"` or a full-path `"list"` |
 
 ## Sidebar
 
@@ -182,7 +182,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "showGitIgnored": true
   },
   "git": {
-    "fileView": "tree"
+    "fileView": "list"
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]

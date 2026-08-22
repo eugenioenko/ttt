@@ -163,7 +163,7 @@ describe("ttt.open_diff plugin API", () => {
     expect(snapshots[split]).toMatch(/old one.*│.*new one/);
   });
 
-  it("switches modes from the visible tab control and shows the current value", () => {
+  it("switches modes through the compact Options dialog", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "test.txt", "hello\n");
     const plugin = writePlugin(dir, "test.lua", `
@@ -183,16 +183,14 @@ describe("ttt.open_diff plugin API", () => {
     tui.waitStable(300);
     tui.exec("Test Diff");
     const split = tui.snapshot();
-    // The segmented control is right-aligned in the editor tab bar. At this
-    // deterministic width, Unified occupies columns 65..75 beside More.
-    tui.click(70, 2);
+    tui.exec("Change Diff View Mode");
+    tui.type("Unified");
+    tui.press("enter");
+    tui.waitStable();
     const unified = tui.snapshot();
     const { snapshots } = tui.run();
 
-    expect(snapshots[split]).toContain("● Split");
-    expect(snapshots[split]).toContain("○ Unified");
-    expect(snapshots[unified]).toContain("○ Split");
-    expect(snapshots[unified]).toContain("● Unified");
+    expect(snapshots[split]).toMatch(/old one.*│.*new one/);
     const rows = snapshots[unified].split("\n");
     expect(rows.findIndex((row) => row.includes("old two"))).toBeLessThan(
       rows.findIndex((row) => row.includes("new one")),
@@ -231,6 +229,7 @@ describe("ttt.open_diff plugin API", () => {
     const { snapshots } = tui.run();
 
     expect(snapshots[compact]).toContain("⋯ 331 lines ⋯");
+    expect(snapshots[compact]).toMatch(/▶⋯ 331 lines ⋯/);
     expect(snapshots[compact]).not.toContain("@@ -356,2 +356,2 @@");
   });
 

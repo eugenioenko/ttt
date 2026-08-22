@@ -126,8 +126,8 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	if s.Editor.BorderStyle != "default" {
 		t.Errorf("borderStyle = %q, want default", s.Editor.BorderStyle)
 	}
-	if s.Git.FileView != GitFileViewTree {
-		t.Errorf("git.fileView = %q, want tree", s.Git.FileView)
+	if s.Git.FileView != GitFileViewList {
+		t.Errorf("git.fileView = %q, want list", s.Git.FileView)
 	}
 
 	for _, v := range GutterStyles {

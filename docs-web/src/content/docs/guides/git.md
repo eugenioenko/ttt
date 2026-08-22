@@ -41,7 +41,7 @@ TTT offers two diff modes:
 - **Partial diff view** shows only the changed hunks with surrounding context lines, letting you focus on what actually changed.
 - **Full-file diff view** shows the complete file with changes highlighted inline.
 
-You can toggle between partial and full-file diff views to get the level of detail you need.
+Choose the default layout, context, and line wrapping from the Options menu. The Changes panel's three-dot menu keeps the same controls close to the files they affect. Collapsed context rows use a triangle in the line-number gutter; click one to reveal its omitted lines.
 
 Untracked files open directly in the editor instead of showing a diff.
 
