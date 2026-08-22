@@ -4,6 +4,12 @@ import { createTempDir, createTempFile, cleanupDir } from "./helpers.js";
 
 let dir;
 
+function paletteWidth(snapshot) {
+  const borderRow = snapshot.split("\n")[2] || "";
+  const matches = borderRow.matchAll(/(?:╭─+╮|╔═+╗|┌─+┐)/g);
+  return Math.max(0, ...[...matches].map((match) => [...match[0]].length));
+}
+
 afterEach(() => {
   tui.kill();
   if (dir) cleanupDir(dir);
@@ -56,5 +62,111 @@ describe("command palette", () => {
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
     expect(snapshots[s0]).toContain("Dismiss test");
+  });
+
+  it("should keep ordinary modes narrow while help responds and transitions cleanly", () => {
+    dir = createTempDir();
+    createTempFile(dir, "wide.txt", "Wide palette test");
+
+    tui.start(dir);
+    tui.setSize(200, 50);
+    tui.waitFor("wide.txt");
+    tui.press("ctrl+p");
+    const command = tui.snapshot();
+
+    tui.type("?");
+    const help = tui.snapshot();
+
+    tui.press("backspace");
+    tui.type(">");
+    const commandAgain = tui.snapshot();
+
+    tui.press("backspace");
+    const files = tui.snapshot();
+
+    tui.click(50, 3);
+    const dismissed = tui.snapshot();
+
+    tui.press("ctrl+p");
+    const reopened = tui.snapshot();
+    tui.press("escape");
+    tui.pressChord("ctrl+k", "p");
+    const fileBinding = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(paletteWidth(snapshots[command])).toBe(60);
+    expect(paletteWidth(snapshots[help])).toBe(120);
+    expect(paletteWidth(snapshots[commandAgain])).toBe(60);
+    expect(paletteWidth(snapshots[files])).toBe(60);
+    expect(paletteWidth(snapshots[dismissed])).toBe(0);
+    expect(paletteWidth(snapshots[reopened])).toBe(60);
+    expect(paletteWidth(snapshots[fileBinding])).toBe(60);
+    expect(snapshots[command]).toContain(">");
+    expect(snapshots[files]).toContain("wide.txt");
+    expect(snapshots[fileBinding]).toContain("wide.txt");
+  });
+
+  it("should orient a new user before listing commands in help mode", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "help.txt", "Help mode test");
+
+    tui.start(file);
+    tui.setSize(80, 24);
+    tui.waitFor("help.txt");
+    tui.press("ctrl+p");
+    tui.type("?");
+    tui.waitStable();
+
+    const topics = tui.snapshot();
+    tui.press("arrow_down");
+    const nextTopic = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[topics]).toContain("Workspace map");
+    expect(snapshots[topics]).toContain("folders, tabs, and editor groups");
+    expect(snapshots[topics]).not.toContain("Open Folder");
+    expect(snapshots[nextTopic]).toContain("Explorer, Search, Changes, and Output");
+  });
+
+  it("should search commands outside the curated help topics", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "help-search.txt", "Help search test");
+
+    tui.start(file);
+    tui.waitFor("help-search.txt");
+    tui.press("ctrl+p");
+    tui.type("?saved tabs");
+    tui.waitStable();
+
+    const result = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[result]).toContain("Close All Saved Tabs");
+  });
+
+  it("should prefer precise help matches and explain an empty result", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "help-precision.txt", "Help precision test");
+
+    tui.start(file);
+    tui.setSize(80, 24);
+    tui.waitFor("help-precision.txt");
+    tui.press("ctrl+p");
+    tui.type("?undo");
+    tui.waitStable();
+    const precise = tui.snapshot();
+
+    for (let i = 0; i < 4; i++) tui.press("backspace");
+    tui.type("qxzvjk");
+    tui.waitStable();
+    const empty = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[precise]).toContain("Undo");
+    expect(snapshots[precise]).toContain("Undo Last Cursor");
+    expect(snapshots[precise]).not.toContain("Git: Discard Changes");
+    expect(snapshots[precise]).not.toContain("Add Next Occurrence");
+    expect(snapshots[empty]).toContain('No help entries match "qxzvjk"');
+    expect(snapshots[empty]).toContain("Try > for all commands");
   });
 });

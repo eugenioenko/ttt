@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -19,12 +21,27 @@ const (
 	paletteCommandMode paletteMode = iota
 	paletteFileMode
 	paletteGoToLineMode
+	paletteHelpMode
 )
 
+const ordinaryPaletteMaxWidth = 60
+
+type selectDialogLayout struct {
+	boxX         int
+	boxY         int
+	boxW         int
+	boxH         int
+	visibleItems int
+}
+
 type PaletteItem struct {
-	Label  string
-	Detail string
-	ID     string
+	Label       string
+	Detail      string
+	ID          string
+	Description string
+	kind        paletteItemKind
+	topicID     string
+	searchText  []string
 }
 
 type paletteFile struct {
@@ -43,6 +60,10 @@ type SelectDialogWidget struct {
 	inputY            int
 	mode              paletteMode
 	files             []paletteFile
+	helpTopics        []PaletteItem
+	helpCommands      []PaletteItem
+	activeHelpTopic   string
+	helpQuery         string
 	OnExecute         func(id string)
 	OnOpenFile        func(path string)
 	OnGoToLine        func(line int)
@@ -63,6 +84,7 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 	p := &SelectDialogWidget{
 		Commands: commands,
 	}
+	p.helpTopics, p.helpCommands = buildPaletteHelpItems(commands)
 	p.Input = NewInputWidget()
 	p.Input.Prefix = " "
 	p.Input.SetText(">")
@@ -111,12 +133,10 @@ func (p *SelectDialogWidget) CursorPosition() (int, int, bool) {
 	return p.Input.CursorX(p.inputX), p.inputY, true
 }
 
-func (p *SelectDialogWidget) Render(surface Surface) {
-	sw, sh := surface.Size()
-
+func (p *SelectDialogWidget) calculateLayout(sw, sh int) selectDialogLayout {
 	boxW := sw * 6 / 10 // 60% of terminal width
-	if boxW > 60 {
-		boxW = 60
+	if p.mode != paletteHelpMode && boxW > ordinaryPaletteMaxWidth {
+		boxW = ordinaryPaletteMaxWidth
 	}
 	if boxW < 40 {
 		boxW = 40
@@ -129,17 +149,48 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 		boxH = 3
 	} else {
 		maxItems := 10
-		boxH = 4 + len(p.Items)
-		if boxH > maxItems+4 {
-			boxH = maxItems + 4
+		chromeRows := 4
+		if p.mode == paletteHelpMode {
+			// Help reserves one divider and one detail row beneath the list.
+			chromeRows += 2
+		}
+		itemRows := len(p.Items)
+		if p.mode == paletteHelpMode && p.helpQuery != "" && itemRows == 0 {
+			itemRows = 1
+		}
+		boxH = chromeRows + itemRows
+		if boxH > maxItems+chromeRows {
+			boxH = maxItems + chromeRows
 		}
 	}
 	if boxH > sh-2 {
 		boxH = sh - 2
 	}
 
-	boxX := (sw - boxW) / 2
-	boxY := 2
+	visibleItems := 0
+	if p.mode != paletteGoToLineMode {
+		visibleItems = boxH - 4
+		if p.mode == paletteHelpMode {
+			visibleItems -= 2
+		}
+	}
+
+	return selectDialogLayout{
+		boxX:         (sw - boxW) / 2,
+		boxY:         2,
+		boxW:         boxW,
+		boxH:         boxH,
+		visibleItems: visibleItems,
+	}
+}
+
+func (p *SelectDialogWidget) Render(surface Surface) {
+	sw, sh := surface.Size()
+	layout := p.calculateLayout(sw, sh)
+	boxX := layout.boxX
+	boxY := layout.boxY
+	boxW := layout.boxW
+	boxH := layout.boxH
 
 	p.boxX = boxX
 	p.boxY = boxY
@@ -159,7 +210,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 	p.Input.Render(surface, p.inputX, p.inputY, boxW-2)
 
 	if p.mode == paletteGoToLineMode {
-		p.visibleItems = 0
+		p.visibleItems = layout.visibleItems
 		p.showScroll = false
 		return
 	}
@@ -168,7 +219,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 		surface.SetCell(x, boxY+2, term.Cell{Ch: b.Horizontal, Style: term.StyleBorder})
 	}
 
-	visibleItems := boxH - 4
+	visibleItems := layout.visibleItems
 	p.visibleItems = visibleItems
 	p.ensureVisible(visibleItems)
 	showScroll := len(p.Items) > visibleItems
@@ -197,32 +248,84 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 		}
 
 		surface.ClearRect(boxX+1, y, contentRight-boxX-1, 1, style)
-		surface.DrawText(boxX+2, y, item.Label, contentRight-1, style)
-
-		if item.Detail != "" {
-			detailStyle := term.StyleMuted
-			if idx == p.Selected {
-				detailStyle = style
-			}
-			labelEnd := boxX + 2 + len([]rune(item.Label))
-			minGap := 3
-			availStart := labelEnd + minGap
-			availW := contentRight - 1 - availStart
-			if availW > 0 {
-				detail := item.Detail
-				detailRunes := []rune(detail)
-				if len(detailRunes) > availW {
-					detail = "…" + string(detailRunes[len(detailRunes)-availW+1:])
-				}
-				sx := contentRight - 1 - len([]rune(detail))
-				surface.DrawText(sx, y, detail, contentRight-1, detailStyle)
-			}
-		}
+		p.renderItemRow(surface, y, contentRight, item, style, idx == p.Selected)
+	}
+	if p.mode == paletteHelpMode && p.helpQuery != "" && len(p.Items) == 0 && visibleItems > 0 {
+		y := boxY + 3
+		message := fmt.Sprintf("No help entries match %q", p.helpQuery)
+		surface.DrawText(boxX+2, y, message, contentRight-1, term.StyleMuted)
 	}
 
 	if showScroll {
 		p.scrollbar.Render(surface, p.scrollbar.X, p.scrollbar.Y)
 	}
+
+	if p.mode == paletteHelpMode {
+		dividerY := boxY + boxH - 3
+		for x := boxX + 1; x < boxX+boxW-1; x++ {
+			surface.SetCell(x, dividerY, term.Cell{Ch: b.Horizontal, Style: term.StyleBorder})
+		}
+		detailY := boxY + boxH - 2
+		surface.ClearRect(boxX+1, detailY, boxW-2, 1, term.StyleDefault)
+		if p.Selected >= 0 && p.Selected < len(p.Items) {
+			description := p.Items[p.Selected].Description
+			surface.DrawText(boxX+2, detailY, description, boxX+boxW-2, term.StyleMuted)
+		} else if p.helpQuery != "" {
+			surface.DrawText(boxX+2, detailY, "Try > for all commands", boxX+boxW-2, term.StyleMuted)
+		}
+	}
+}
+
+func (p *SelectDialogWidget) renderItemRow(surface Surface, y, contentRight int, item PaletteItem, style term.Style, selected bool) {
+	detail := item.Detail
+	detailStyle := term.StyleMuted
+	if selected {
+		detailStyle = style
+	}
+
+	// Help commands reserve room for their derived shortcut. Other modes keep
+	// their existing preference for the complete label and add detail only if it
+	// fits after the columns DrawText actually consumed.
+	if p.mode == paletteHelpMode && item.kind == paletteCommandItem && detail != "" {
+		detailW := textwidth.String(detail)
+		detailX := contentRight - 1 - detailW
+		if detailX > p.boxX+4 {
+			surface.DrawText(p.boxX+2, y, item.Label, detailX-2, style)
+			surface.DrawText(detailX, y, detail, contentRight-1, detailStyle)
+			return
+		}
+	}
+
+	labelEnd := surface.DrawText(p.boxX+2, y, item.Label, contentRight-1, style)
+	if detail == "" {
+		return
+	}
+	availStart := labelEnd + 3
+	availW := contentRight - 1 - availStart
+	if availW <= 0 {
+		return
+	}
+	detail = truncatePaletteDetail(detail, availW)
+	detailX := contentRight - 1 - textwidth.String(detail)
+	surface.DrawText(detailX, y, detail, contentRight-1, detailStyle)
+}
+
+func truncatePaletteDetail(detail string, availW int) string {
+	if textwidth.String(detail) <= availW {
+		return detail
+	}
+	runes := []rune(detail)
+	tailW := 0
+	i := len(runes)
+	for i > 0 {
+		width := textwidth.Rune(runes[i-1])
+		if tailW+width > availW-1 {
+			break
+		}
+		tailW += width
+		i--
+	}
+	return "…" + string(runes[i:])
 }
 
 func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -287,16 +390,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 				clickedIdx := p.scrollOffset + (my - itemsStartY)
 				if clickedIdx >= 0 && clickedIdx < len(p.Items) {
 					p.Selected = clickedIdx
-					item := p.Items[p.Selected]
-					if p.mode == paletteCommandMode {
-						if p.OnExecute != nil {
-							p.OnExecute(item.ID)
-						}
-					} else {
-						if p.OnOpenFile != nil {
-							p.OnOpenFile(item.ID)
-						}
-					}
+					p.activateItem(p.Items[p.Selected])
 				}
 			}
 		}
@@ -311,6 +405,11 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	switch kev.Key() {
 	case tcell.KeyEscape:
+		if p.mode == paletteHelpMode && p.activeHelpTopic != "" {
+			p.activeHelpTopic = ""
+			p.Input.SetText("?")
+			return EventConsumed
+		}
 		if p.OnDismiss != nil {
 			p.OnDismiss()
 		}
@@ -326,16 +425,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 				}
 			}
 		} else if p.Selected >= 0 && p.Selected < len(p.Items) {
-			item := p.Items[p.Selected]
-			if p.mode == paletteCommandMode {
-				if p.OnExecute != nil {
-					p.OnExecute(item.ID)
-				}
-			} else {
-				if p.OnOpenFile != nil {
-					p.OnOpenFile(item.ID)
-				}
-			}
+			p.activateItem(p.Items[p.Selected])
 		}
 	case tcell.KeyUp:
 		if p.Selected > 0 {
@@ -352,10 +442,37 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		p.notifySelectionChange()
 	default:
+		if kev.Key() == tcell.KeyRune && kev.Str() == "?" && p.mode == paletteCommandMode && p.Input.Text == ">" {
+			p.Input.SetText("?")
+			return EventConsumed
+		}
 		p.Input.HandleEvent(ev)
 	}
 
 	return EventConsumed
+}
+
+func (p *SelectDialogWidget) activateItem(item PaletteItem) {
+	if p.mode == paletteHelpMode {
+		if item.kind == paletteHelpTopicItem {
+			p.activeHelpTopic = item.topicID
+			p.Input.SetText("?")
+			return
+		}
+		if p.OnExecute != nil {
+			p.OnExecute(item.ID)
+		}
+		return
+	}
+	if p.mode == paletteCommandMode {
+		if p.OnExecute != nil {
+			p.OnExecute(item.ID)
+		}
+		return
+	}
+	if p.OnOpenFile != nil {
+		p.OnOpenFile(item.ID)
+	}
 }
 
 func (p *SelectDialogWidget) ensureVisible(visibleItems int) {
@@ -380,18 +497,91 @@ func (p *SelectDialogWidget) filter() {
 	text := p.Input.Text
 	if strings.HasPrefix(text, ">") {
 		p.mode = paletteCommandMode
+		p.activeHelpTopic = ""
 		query := strings.TrimLeft(text[1:], " ")
 		p.filterCommands(query)
 	} else if strings.HasPrefix(text, ":") {
 		p.mode = paletteGoToLineMode
+		p.activeHelpTopic = ""
 		p.Items = nil
 		p.Selected = 0
 		p.scrollOffset = 0
+	} else if strings.HasPrefix(text, "?") {
+		p.mode = paletteHelpMode
+		query := strings.TrimSpace(text[1:])
+		p.filterHelp(query)
 	} else {
 		p.mode = paletteFileMode
+		p.activeHelpTopic = ""
 		p.filterFiles(text)
 	}
 	p.notifySelectionChange()
+}
+
+func (p *SelectDialogWidget) filterHelp(query string) {
+	p.helpQuery = query
+	if p.activeHelpTopic != "" {
+		topic, ok := paletteHelpTopicByID(p.activeHelpTopic)
+		if !ok {
+			p.activeHelpTopic = ""
+		} else {
+			candidates := make([]PaletteItem, 0, len(p.helpCommands))
+			for _, item := range p.helpCommands {
+				if paletteTopicMatchesCommand(topic, item) {
+					candidates = append(candidates, item)
+				}
+			}
+			p.Items = filterPaletteHelpCandidates(query, candidates)
+			p.Selected = 0
+			p.scrollOffset = 0
+			return
+		}
+	}
+
+	if query == "" {
+		p.Items = append(p.Items[:0], p.helpTopics...)
+	} else {
+		candidates := make([]PaletteItem, 0, len(p.helpTopics)+len(p.helpCommands))
+		candidates = append(candidates, p.helpTopics...)
+		candidates = append(candidates, p.helpCommands...)
+		p.Items = filterPaletteHelpCandidates(query, candidates)
+	}
+	p.Selected = 0
+	p.scrollOffset = 0
+}
+
+func filterPaletteHelpCandidates(query string, candidates []PaletteItem) []PaletteItem {
+	if query == "" {
+		return append([]PaletteItem(nil), candidates...)
+	}
+	type scored struct {
+		item  PaletteItem
+		score int
+	}
+	matches := make([]scored, 0, len(candidates))
+	bestScore := 0
+	for _, item := range candidates {
+		if ok, score := scorePaletteHelpItem(query, item); ok {
+			matches = append(matches, scored{item: item, score: score})
+			if score > bestScore {
+				bestScore = score
+			}
+		}
+	}
+	relevanceFloor := bestScore * paletteHelpRelativeNumerator / paletteHelpRelativeDenominator
+	if relevanceFloor < paletteHelpScoreFloor {
+		relevanceFloor = paletteHelpScoreFloor
+	}
+	sort.SliceStable(matches, func(i, j int) bool {
+		return matches[i].score > matches[j].score
+	})
+	items := make([]PaletteItem, 0, len(matches))
+	for _, match := range matches {
+		if match.score >= relevanceFloor {
+			items = append(items, match.item)
+		}
+	}
+	return items
 }
 
 func (p *SelectDialogWidget) filterCommands(query string) {

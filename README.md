@@ -200,6 +200,7 @@ Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 - **Ctrl+K P** — opens quick file open (searches all files across workspace folders)
 - Type `>` in quick-open mode to switch to command mode
 - Delete the `>` in command mode to switch to file mode
+- Type `?` to browse searchable help for panels, navigation, and key chords
 - Menu shortcuts resolve dynamically from your keybindings
 
 ### Bottom Panel
