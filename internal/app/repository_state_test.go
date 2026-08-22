@@ -257,6 +257,209 @@ func TestRepositoryStatusFailurePreservesLastGoodAndRetries(t *testing.T) {
 	}
 }
 
+func TestRepositoryRootFailurePreservesCanonicalMultiRootOrderAndRecovers(t *testing.T) {
+	rootA := filepath.Join(t.TempDir(), "repo-a")
+	rootB := filepath.Join(t.TempDir(), "repo-b")
+	sourceA := filepath.Join(rootA, "workspace")
+	sourceB := filepath.Join(rootB, "workspace")
+	goodA := changesGroup{Dir: rootA, Name: "repo-a", Unstaged: []git.FileStatus{{Status: "M", Path: "kept-a.txt"}}}
+	goodB := changesGroup{Dir: rootB, Name: "repo-b", Unstaged: []git.FileStatus{{Status: "M", Path: "kept-b.txt"}}}
+	cp := NewChangesPanel(sourceB, sourceA)
+	s := NewRepositoryState(cp, []string{sourceB, sourceA})
+
+	s.requested = 1
+	s.inFlight = true
+	s.dirty = RepositoryWorktree
+	s.HandleStatus(&RepositoryStatusResult{Seq: 1, Entries: []repositoryStatusEntry{
+		{SourceDir: sourceB, Group: goodB, Revision: "head-b"},
+		{SourceDir: sourceA, Group: goodA, Revision: "head-a"},
+	}})
+
+	s.requested = 2
+	s.inFlight = true
+	s.dirty = RepositoryWorktree
+	s.HandleStatus(&RepositoryStatusResult{Seq: 2, Entries: []repositoryStatusEntry{
+		{SourceDir: sourceB, Group: changesGroup{Dir: sourceB, Name: "workspace"}, RootErr: errors.New("temporary root failure"), StatusErr: errors.New("temporary status failure"), RevisionErr: errors.New("temporary revision failure")},
+		{SourceDir: sourceA, Group: changesGroup{Dir: sourceA, Name: "workspace"}, RootErr: errors.New("temporary root failure"), StatusErr: errors.New("temporary status failure"), RevisionErr: errors.New("temporary revision failure")},
+	}})
+	if len(cp.groups) != 2 || cp.groups[0].Dir != rootB || cp.groups[1].Dir != rootA {
+		t.Fatalf("root failure changed canonical ordering: %+v", cp.groups)
+	}
+	if cp.groups[0].Unstaged[0].Path != "kept-b.txt" || cp.groups[1].Unstaged[0].Path != "kept-a.txt" {
+		t.Fatalf("root failure replaced last-good groups: %+v", cp.groups)
+	}
+	if s.dirty&RepositoryWorktree == 0 {
+		t.Fatal("root failure was marked fresh")
+	}
+
+	freshA := changesGroup{Dir: rootA, Name: "repo-a", Unstaged: []git.FileStatus{{Status: "M", Path: "fresh-a.txt"}}}
+	freshB := changesGroup{Dir: rootB, Name: "repo-b", Unstaged: []git.FileStatus{{Status: "M", Path: "fresh-b.txt"}}}
+	s.requested = 3
+	s.inFlight = true
+	s.HandleStatus(&RepositoryStatusResult{Seq: 3, Entries: []repositoryStatusEntry{
+		{SourceDir: sourceB, Group: freshB, Revision: "head-b"},
+		{SourceDir: sourceA, Group: freshA, Revision: "head-a"},
+	}})
+	if len(cp.groups) != 2 || cp.groups[0].Dir != rootB || cp.groups[0].Unstaged[0].Path != "fresh-b.txt" || cp.groups[1].Dir != rootA || cp.groups[1].Unstaged[0].Path != "fresh-a.txt" {
+		t.Fatalf("successful retry did not recover canonical groups: %+v", cp.groups)
+	}
+	if s.dirty&RepositoryWorktree != 0 {
+		t.Fatal("successful retry did not mark working tree fresh")
+	}
+}
+
+func TestRepositoryScanCarriesSourceIdentityAndRootFailure(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\nexit 91\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	source := filepath.Join(t.TempDir(), "repo", "workspace")
+
+	entries := scanRepositoryStatus(context.Background(), []string{source})
+	if len(entries) != 1 {
+		t.Fatalf("scan entries = %d, want 1", len(entries))
+	}
+	entry := entries[0]
+	if entry.SourceDir != source || entry.Group.Dir != source || entry.RootErr == nil || entry.StatusErr == nil || entry.RevisionErr == nil {
+		t.Fatalf("failed root scan lost source/error identity: %+v", entry)
+	}
+}
+
+func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePositives(t *testing.T) {
+	repo := t.TempDir()
+	outside := t.TempDir()
+	external := t.TempDir()
+	alias := filepath.Join(outside, "repo-alias")
+	if err := os.Symlink(repo, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	existing := filepath.Join(repo, "existing.txt")
+	if err := os.WriteFile(existing, []byte("existing\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		path func(t *testing.T) string
+		want bool
+	}{
+		{
+			name: "existing target through outside alias",
+			path: func(t *testing.T) string { return filepath.Join(alias, "existing.txt") },
+			want: true,
+		},
+		{
+			name: "new target through outside alias",
+			path: func(t *testing.T) string { return filepath.Join(alias, "new.txt") },
+			want: true,
+		},
+		{
+			name: "newly created target through outside alias",
+			path: func(t *testing.T) string {
+				path := filepath.Join(alias, "created.txt")
+				if err := os.WriteFile(path, []byte("created\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return path
+			},
+			want: true,
+		},
+		{
+			name: "chain of symlinked parents",
+			path: func(t *testing.T) string {
+				chain := filepath.Join(outside, "chain")
+				if err := os.Symlink(alias, chain); err != nil {
+					t.Fatal(err)
+				}
+				return filepath.Join(chain, "new.txt")
+			},
+			want: true,
+		},
+		{
+			name: "permission failure below resolved repository alias",
+			path: func(t *testing.T) string {
+				restricted := filepath.Join(repo, "restricted")
+				if err := os.Mkdir(restricted, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(restricted, 0); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(restricted, 0o700) })
+				return filepath.Join(alias, "restricted", "new.txt")
+			},
+			want: true,
+		},
+		{
+			name: "external target through in-repository symlink",
+			path: func(t *testing.T) string {
+				link := filepath.Join(repo, "external")
+				if err := os.Symlink(external, link); err != nil {
+					t.Fatal(err)
+				}
+				return filepath.Join(link, "new.txt")
+			},
+			want: false,
+		},
+		{
+			name: "broken outside symlink",
+			path: func(t *testing.T) string {
+				link := filepath.Join(outside, "broken")
+				if err := os.Symlink(filepath.Join(outside, "missing"), link); err != nil {
+					t.Fatal(err)
+				}
+				return filepath.Join(link, "new.txt")
+			},
+			want: false,
+		},
+		{
+			name: "permission failure outside repository",
+			path: func(t *testing.T) string {
+				denied := filepath.Join(outside, "denied")
+				if err := os.Mkdir(denied, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(repo, filepath.Join(denied, "hidden-alias")); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(denied, 0); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(denied, 0o700) })
+				return filepath.Join(denied, "hidden-alias", "new.txt")
+			},
+			want: false,
+		},
+		{
+			name: "outside symlink loop",
+			path: func(t *testing.T) string {
+				first := filepath.Join(outside, "loop-a")
+				second := filepath.Join(outside, "loop-b")
+				if err := os.Symlink(second, first); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(first, second); err != nil {
+					t.Fatal(err)
+				}
+				return filepath.Join(first, "new.txt")
+			},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s, _, _ := testRepositoryState(nil, repo)
+			s.InvalidatePath(test.path(t), RepositoryWorktree)
+			if got := s.requested == 1 && s.dirty&RepositoryWorktree != 0; got != test.want {
+				t.Fatalf("invalidated = %v, want %v (requested=%d dirty=%b)", got, test.want, s.requested, s.dirty)
+			}
+		})
+	}
+}
+
 func TestRepositoryUnchangedHeadDoesNotReloadHistoryChangedHeadDoes(t *testing.T) {
 	dir := testAppRepository(t)
 	cp := NewChangesPanel(dir)

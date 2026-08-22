@@ -167,9 +167,36 @@ func TestRevisionIdentityTracksHead(t *testing.T) {
 }
 
 func TestRevisionIdentityAllowsUnbornRepository(t *testing.T) {
-	identity, err := RevisionIdentityContext(context.Background(), setupTestRepo(t))
+	dir := setupTestRepo(t)
+	identity, err := RevisionIdentityContext(context.Background(), dir)
 	if err != nil || identity != "" {
 		t.Fatalf("unborn repository identity = (%q, %v), want empty success", identity, err)
+	}
+	if branch, err := BranchNameContext(context.Background(), dir); err != nil || branch == "" {
+		t.Fatalf("unborn repository branch = (%q, %v), want symbolic branch", branch, err)
+	}
+}
+
+func TestRevisionIdentityRequiresVerifiedUnbornHead(t *testing.T) {
+	bin := t.TempDir()
+	script := `#!/bin/sh
+case "$*" in
+  *"rev-parse --verify HEAD"*) exit 73 ;;
+  *"symbolic-ref -q HEAD"*) printf 'refs/heads/main\n'; exit 0 ;;
+  *"show-ref --verify --quiet refs/heads/main"*) exit 0 ;;
+esac
+exit 99
+`
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	if identity, err := RevisionIdentityContext(context.Background(), "/repo"); err == nil {
+		t.Fatalf("failed HEAD read returned empty success: identity=%q", identity)
+	}
+	if entries, err := LogWithErrorContext(context.Background(), "/repo", 10); err == nil {
+		t.Fatalf("failed HEAD read returned successful empty log: entries=%v", entries)
 	}
 }
 

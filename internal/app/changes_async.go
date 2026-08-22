@@ -47,13 +47,12 @@ type commitDetailRequest struct {
 
 // CommitLogResult carries a finished read of one repository's recent commits.
 type CommitLogResult struct {
-	Gen         int
-	Dir         string
-	Branch      string
-	Entries     []git.LogEntry
-	Err         error
-	Unavailable bool
-	Canceled    bool
+	Gen      int
+	Dir      string
+	Branch   string
+	Entries  []git.LogEntry
+	Err      error
+	Canceled bool
 }
 
 // CommitFilesResult carries the file list of a single commit back to the node
@@ -119,12 +118,6 @@ func readChangesGroups(dirs []string) []changesGroup {
 }
 
 func readCommitLog(ctx context.Context, dir string, gen int) *CommitLogResult {
-	if !git.IsRepoContext(ctx, dir) {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return &CommitLogResult{Gen: gen, Dir: dir, Err: ctxErr, Canceled: errors.Is(ctxErr, context.Canceled)}
-		}
-		return &CommitLogResult{Gen: gen, Dir: dir, Unavailable: true}
-	}
 	entries, err := git.LogWithErrorContext(ctx, dir, commitLogLimit)
 	if errors.Is(err, context.Canceled) {
 		return &CommitLogResult{Gen: gen, Dir: dir, Canceled: true}

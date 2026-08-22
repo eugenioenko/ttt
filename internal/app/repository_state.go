@@ -24,8 +24,10 @@ const (
 )
 
 type repositoryStatusEntry struct {
+	SourceDir   string
 	Group       changesGroup
 	Revision    string
+	RootErr     error
 	StatusErr   error
 	RevisionErr error
 }
@@ -85,6 +87,7 @@ type RepositoryState struct {
 
 	lastGroups    map[string]changesGroup
 	lastRevisions map[string]string
+	lastRoots     map[string]string
 }
 
 func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
@@ -98,6 +101,7 @@ func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
 		statusWait:    repositoryStatusTimeout,
 		lastGroups:    make(map[string]changesGroup),
 		lastRevisions: make(map[string]string),
+		lastRoots:     make(map[string]string),
 	}
 }
 
@@ -131,6 +135,7 @@ func (s *RepositoryState) SetDirs(dirs []string) {
 	}
 	s.lastGroups = make(map[string]changesGroup)
 	s.lastRevisions = make(map[string]string)
+	s.lastRoots = make(map[string]string)
 	s.dirty |= RepositoryWorktree | RepositoryHistory
 	s.stopDebounce()
 	s.stopPoll()
@@ -192,18 +197,12 @@ func (s *RepositoryState) InvalidatePath(path string, resources RepositoryResour
 	if s == nil || s.closed || path == "" || resources == 0 {
 		return
 	}
-	abs, err := filepath.Abs(path)
+	identity, err := resolveRepositoryPathIdentity(path)
 	if err != nil {
 		return
 	}
-	abs = filepath.Clean(abs)
-	for _, dir := range s.dirs {
-		root, err := filepath.Abs(dir)
-		if err != nil {
-			continue
-		}
-		rel, err := filepath.Rel(filepath.Clean(root), abs)
-		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	for _, root := range s.repositoryIdentityRoots() {
+		if pathWithin(root, identity) {
 			s.InvalidateAll(resources)
 			return
 		}
@@ -284,6 +283,20 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 	hadError := false
 	for _, entry := range result.Entries {
 		group := entry.Group
+		sourceDir := cleanAbsolutePath(entry.SourceDir)
+		if sourceDir == "" {
+			sourceDir = cleanAbsolutePath(group.Dir)
+		}
+		if entry.RootErr != nil {
+			hadError = true
+			if previousRoot := s.previousRootForSource(sourceDir); previousRoot != "" {
+				group.Dir = previousRoot
+				group.Name = filepath.Base(previousRoot)
+			}
+		}
+		if sourceDir != "" && entry.RootErr == nil {
+			s.lastRoots[sourceDir] = group.Dir
+		}
 		if entry.StatusErr != nil {
 			hadError = true
 			if previous, ok := s.lastGroups[group.Dir]; ok {
@@ -428,9 +441,12 @@ func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatus
 	entries := make([]repositoryStatusEntry, 0, len(dirs))
 	seen := make(map[string]bool)
 	for _, dir := range dirs {
-		if root := git.RepoRootContext(ctx, dir); root != "" {
+		sourceDir := cleanAbsolutePath(dir)
+		root, rootErr := git.RepoRootWithErrorContext(ctx, dir)
+		if rootErr == nil && root != "" {
 			dir = root
 		}
+		dir = cleanAbsolutePath(dir)
 		if seen[dir] {
 			continue
 		}
@@ -448,6 +464,7 @@ func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatus
 		}
 		revision, revisionErr := git.RevisionIdentityContext(ctx, dir)
 		entries = append(entries, repositoryStatusEntry{
+			SourceDir: sourceDir,
 			Group: changesGroup{
 				Dir:      dir,
 				Name:     filepath.Base(dir),
@@ -455,11 +472,97 @@ func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatus
 				Unstaged: unstaged,
 			},
 			Revision:    revision,
+			RootErr:     rootErr,
 			StatusErr:   statusErr,
 			RevisionErr: revisionErr,
 		})
 	}
 	return entries
+}
+
+func (s *RepositoryState) previousRootForSource(source string) string {
+	if root := s.lastRoots[source]; root != "" {
+		return root
+	}
+	resolved, err := resolveRepositoryPathIdentity(source)
+	if err != nil {
+		resolved = source
+	}
+	best := ""
+	for root := range s.lastGroups {
+		if pathWithin(root, resolved) && len(root) > len(best) {
+			best = root
+		}
+	}
+	return best
+}
+
+func (s *RepositoryState) repositoryIdentityRoots() []string {
+	roots := make([]string, 0, len(s.lastGroups)+len(s.dirs))
+	seen := make(map[string]bool)
+	add := func(path string) {
+		identity, err := resolveRepositoryPathIdentity(path)
+		if err != nil || identity == "" || seen[identity] {
+			return
+		}
+		seen[identity] = true
+		roots = append(roots, identity)
+	}
+	for root := range s.lastGroups {
+		add(root)
+	}
+	for _, root := range s.lastRoots {
+		add(root)
+	}
+	for _, dir := range s.dirs {
+		add(dir)
+	}
+	return roots
+}
+
+func resolveRepositoryPathIdentity(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	current := filepath.Clean(abs)
+	remaining := make([]string, 0, 4)
+	for {
+		resolved, resolveErr := filepath.EvalSymlinks(current)
+		if resolveErr == nil {
+			for i := len(remaining) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, remaining[i])
+			}
+			return filepath.Clean(resolved), nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", resolveErr
+		}
+		remaining = append(remaining, filepath.Base(current))
+		current = parent
+	}
+}
+
+func cleanAbsolutePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	return filepath.Clean(abs)
+}
+
+func pathWithin(root, path string) bool {
+	root = cleanAbsolutePath(root)
+	path = cleanAbsolutePath(path)
+	if root == "" || path == "" {
+		return false
+	}
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func (a *App) syncRepositoryObservation() {
