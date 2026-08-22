@@ -36,6 +36,16 @@ func TestNewSpawnsShellWithSize(t *testing.T) {
 	}
 }
 
+func TestNewReturnsErrorAndClosesPtyForInvalidShell(t *testing.T) {
+	term, err := New("/nonexistent/shell/path", 80, 24, 0, nil, "")
+	if err == nil {
+		t.Fatalf("expected New() to return an error, got terminal %+v", term)
+	}
+	if term != nil {
+		t.Fatalf("expected New() to return a nil terminal on error, got %+v", term)
+	}
+}
+
 func TestNewDefaultsScrollback(t *testing.T) {
 	term, err := New("/bin/sh", 80, 24, -5, nil, "")
 	if err != nil {

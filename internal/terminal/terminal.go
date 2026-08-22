@@ -67,7 +67,10 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string) 
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
-	pt.Resize(cols, rows)
+	if err := pt.Resize(cols, rows); err != nil {
+		pt.Close()
+		return nil, err
+	}
 
 	if err := cmd.Start(); err != nil {
 		pt.Close()

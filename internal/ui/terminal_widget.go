@@ -543,7 +543,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		btn := tev.Buttons()
 		mx, my := tev.Position()
-		mouseReporting := tw.Term.Mode()&vt10x.ModeMouseMask != 0
+		mouseReporting := tw.Term.Mode()&vt10x.ModeMouseMask != 0 && tw.Term.Mode()&vt10x.ModeMouseSgr != 0
 
 		if btn&(tcell.WheelUp|tcell.WheelDown|tcell.WheelLeft|tcell.WheelRight) != 0 {
 			if mouseReporting {

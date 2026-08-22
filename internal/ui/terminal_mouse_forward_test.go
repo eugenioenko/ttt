@@ -145,6 +145,39 @@ func TestTerminalWidget_CtrlClickStaysLocalEvenWithMouseReporting(t *testing.T) 
 	}
 }
 
+func TestTerminalWidget_TrackingWithoutSGRStaysLocal(t *testing.T) {
+	term, updated := newRawMouseLoopbackTerminal(t)
+	defer term.Close()
+
+	term.WriteString("\x1b[?1000h")
+	waitFor(t, updated, func() bool {
+		return term.Mode()&vt10x.ModeMouseButton != 0
+	})
+	if term.Mode()&vt10x.ModeMouseSgr != 0 {
+		t.Fatal("setup: expected ModeMouseSgr to be unset")
+	}
+
+	tw := NewTerminalWidget(term, &TerminalColorPalette{})
+	tw.SetRect(Rect{X: 0, Y: 0, W: 80, H: 24})
+
+	press := tcell.NewEventMouse(5, 3, tcell.Button1, tcell.ModNone)
+	if result := tw.HandleEvent(press); result != EventCaptured {
+		t.Fatalf("HandleEvent(press) = %v, want EventCaptured", result)
+	}
+	if !tw.hasSelection {
+		t.Error("expected local selection to start when the app enabled tracking without SGR")
+	}
+
+	wheel := tcell.NewEventMouse(10, 10, tcell.WheelUp, tcell.ModNone)
+	if result := tw.HandleEvent(wheel); result != EventConsumed {
+		t.Fatalf("HandleEvent(wheel) = %v, want EventConsumed", result)
+	}
+
+	if strings.Contains(string(term.RawTail()), "\x1b[<") {
+		t.Error("expected no SGR mouse sequence to be forwarded to an app that never enabled SGR mode")
+	}
+}
+
 func TestTerminalWidget_WheelScrollsLocallyWithoutMouseReporting(t *testing.T) {
 	term, err := terminal.New("/bin/cat", 20, 5, 1000, nil, "")
 	if err != nil {
