@@ -1,0 +1,143 @@
+package ui
+
+import (
+	"github.com/eugenioenko/ttt/internal/core/diff"
+)
+
+type diffWrapEntry struct {
+	line         int
+	leftStart    int
+	rightStart   int
+	continuation bool
+}
+
+func diffLineVisualRows(line diff.DiffLine, leftW, rightW int) int {
+	leftRows := len(diffWrapStarts(line.Left.Text, leftW))
+	rightRows := len(diffWrapStarts(line.Right.Text, rightW))
+	if rightRows > leftRows {
+		return rightRows
+	}
+	return leftRows
+}
+
+func totalDiffVisualRows(lines []diff.DiffLine, leftW, rightW int) int {
+	total := 0
+	for _, line := range lines {
+		total += diffLineVisualRows(line, leftW, rightW)
+	}
+	return total
+}
+
+func diffLineToVisualRow(lines []diff.DiffLine, line, leftW, rightW int) int {
+	row := 0
+	for i := 0; i < line && i < len(lines); i++ {
+		row += diffLineVisualRows(lines[i], leftW, rightW)
+	}
+	return row
+}
+
+func diffVisualRowToTop(lines []diff.DiffLine, target, leftW, rightW int) (line, offset int) {
+	if target <= 0 {
+		return 0, 0
+	}
+	row := 0
+	for i, dl := range lines {
+		rows := diffLineVisualRows(dl, leftW, rightW)
+		if row+rows > target {
+			return i, target - row
+		}
+		row += rows
+	}
+	if len(lines) == 0 {
+		return 0, 0
+	}
+	return len(lines) - 1, diffLineVisualRows(lines[len(lines)-1], leftW, rightW) - 1
+}
+
+func buildDiffWrapMap(lines []diff.DiffLine, topLine, topOffset, height, leftW, rightW int) []diffWrapEntry {
+	entries := make([]diffWrapEntry, 0, height)
+	line := topLine
+	for len(entries) < height {
+		if line >= len(lines) {
+			entries = append(entries, diffWrapEntry{line: line, leftStart: -1, rightStart: -1})
+			line++
+			continue
+		}
+
+		leftStarts := diffWrapStarts(lines[line].Left.Text, leftW)
+		rightStarts := diffWrapStarts(lines[line].Right.Text, rightW)
+		rows := len(leftStarts)
+		if len(rightStarts) > rows {
+			rows = len(rightStarts)
+		}
+		startRow := 0
+		if line == topLine && topOffset < rows {
+			startRow = topOffset
+		}
+		for row := startRow; row < rows && len(entries) < height; row++ {
+			leftStart, rightStart := -1, -1
+			if row < len(leftStarts) {
+				leftStart = leftStarts[row]
+			}
+			if row < len(rightStarts) {
+				rightStart = rightStarts[row]
+			}
+			entries = append(entries, diffWrapEntry{
+				line:         line,
+				leftStart:    leftStart,
+				rightStart:   rightStart,
+				continuation: row > 0,
+			})
+		}
+		line++
+	}
+	return entries
+}
+
+func diffSegmentVisualColToRune(text string, startCol, visualCol int) int {
+	if startCol < 0 {
+		return 0
+	}
+	runes := []rune(text)
+	if startCol >= len(runes) {
+		return len(runes)
+	}
+	return startCol + visualColToBufCol(string(runes[startCol:]), visualCol, diffTabWidth)
+}
+
+func (d *DiffViewWidget) topVisualRow() int {
+	if !d.IsWrapped() {
+		return d.TopLine
+	}
+	if d.IsUnified() {
+		return unifiedLineToVisualRow(d.unifiedLines, d.TopLine, d.layoutLeftW) + d.wrapTopOffset
+	}
+	return diffLineToVisualRow(d.Lines, d.TopLine, d.layoutLeftW, d.layoutRightW) + d.wrapTopOffset
+}
+
+func (d *DiffViewWidget) setTopVisualRow(row int) {
+	maxTop := d.totalVisualRows - d.viewH
+	if maxTop < 0 {
+		maxTop = 0
+	}
+	if row < 0 {
+		row = 0
+	}
+	if row > maxTop {
+		row = maxTop
+	}
+	if d.IsWrapped() {
+		if d.IsUnified() {
+			d.TopLine, d.wrapTopOffset = unifiedVisualRowToTop(d.unifiedLines, row, d.layoutLeftW)
+		} else {
+			d.TopLine, d.wrapTopOffset = diffVisualRowToTop(d.Lines, row, d.layoutLeftW, d.layoutRightW)
+		}
+	} else {
+		d.TopLine = row
+		d.wrapTopOffset = 0
+	}
+}
+
+func (d *DiffViewWidget) scrollVertical(rows int) {
+	d.setTopVisualRow(d.topVisualRow() + rows)
+}
