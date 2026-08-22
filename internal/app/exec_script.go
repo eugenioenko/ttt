@@ -560,10 +560,15 @@ func awaitExecRequest(lifecycle *execRequestLifecycle, timeout time.Duration) er
 }
 
 func StopExecLoop(a *App) error {
-	return runExecMain(a, func() error {
+	lifecycle := newExecRequestLifecycle()
+	request := &execMainRequest{Run: func() error {
 		*a.Running = false
 		return nil
-	})
+	}, Lifecycle: lifecycle}
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
+		return failedExec("failed to post shutdown request: %v", err)
+	}
+	return <-lifecycle.done
 }
 
 func stripQuotes(s string) string {
