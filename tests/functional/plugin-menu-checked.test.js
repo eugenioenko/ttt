@@ -107,13 +107,11 @@ ttt.register({
     tui.click(29, 5);
     tui.waitStable();
     tui.click(29, 2);
-    tui.click(29, 2);
     tui.waitStable();
     const mixed = tui.snapshot();
     tui.press("arrow_down");
     tui.press("enter");
     const uncheckedCallback = tui.snapshot();
-    tui.click(29, 2);
     tui.click(29, 2);
     tui.press("arrow_down");
     tui.press("arrow_down");
