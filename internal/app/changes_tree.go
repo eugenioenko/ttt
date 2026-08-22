@@ -11,6 +11,26 @@ import (
 
 const commitFolderPrefix = "folder:history:"
 
+type workNodeKind string
+
+const (
+	workNodeRoot     workNodeKind = "root"
+	workNodeSection  workNodeKind = "section"
+	workNodeFolder   workNodeKind = "folder"
+	workNodeFile     workNodeKind = "file"
+	workNodePRRoot   workNodeKind = "pr-root"
+	workNodePRFolder workNodeKind = "pr-folder"
+	workNodePRFile   workNodeKind = "pr-file"
+)
+
+func workingNodeID(kind workNodeKind, dir, path string, staged bool) string {
+	stage := "unstaged"
+	if staged {
+		stage = "staged"
+	}
+	return strings.Join([]string{"working", string(kind), stage, dir, path}, "\x00")
+}
+
 type filePathDir struct {
 	name  string
 	path  string
@@ -26,6 +46,12 @@ func newFilePathDir(name, path string) *filePathDir {
 // Consecutive directories with no files or siblings render as one row, which
 // preserves the hierarchy without spending most of a short sidebar on folders.
 func compactFileTree(scope string, files []git.FileStatus, makeLeaf func(git.FileStatus) *widgets.TreeNode, expanded map[string]bool) []*widgets.TreeNode {
+	return compactFileTreeWithFolderID(files, makeLeaf, func(path string) string {
+		return "folder:" + scope + ":" + path
+	}, expanded)
+}
+
+func compactFileTreeWithFolderID(files []git.FileStatus, makeLeaf func(git.FileStatus) *widgets.TreeNode, folderID func(string) string, expanded map[string]bool) []*widgets.TreeNode {
 	root := newFilePathDir("", "")
 	for _, file := range files {
 		parts := strings.Split(file.Path, "/")
@@ -49,10 +75,10 @@ func compactFileTree(scope string, files []git.FileStatus, makeLeaf func(git.Fil
 		dir.files = append(dir.files, file)
 	}
 
-	return compactPathChildren(scope, root, makeLeaf, expanded)
+	return compactPathChildren(root, makeLeaf, folderID, expanded)
 }
 
-func compactPathChildren(scope string, dir *filePathDir, makeLeaf func(git.FileStatus) *widgets.TreeNode, expanded map[string]bool) []*widgets.TreeNode {
+func compactPathChildren(dir *filePathDir, makeLeaf func(git.FileStatus) *widgets.TreeNode, folderID func(string) string, expanded map[string]bool) []*widgets.TreeNode {
 	dirNames := make([]string, 0, len(dir.dirs))
 	for name := range dir.dirs {
 		dirNames = append(dirNames, name)
@@ -71,7 +97,7 @@ func compactPathChildren(scope string, dir *filePathDir, makeLeaf func(git.FileS
 			}
 		}
 
-		id := "folder:" + scope + ":" + start.path
+		id := folderID(start.path)
 		isExpanded := true
 		if saved, ok := expanded[id]; ok {
 			isExpanded = saved
@@ -81,7 +107,7 @@ func compactPathChildren(scope string, dir *filePathDir, makeLeaf func(git.FileS
 			Label:      strings.Join(labels, "/"),
 			Expandable: true,
 			Expanded:   isExpanded,
-			Children:   compactPathChildren(scope, current, makeLeaf, expanded),
+			Children:   compactPathChildren(current, makeLeaf, folderID, expanded),
 		})
 	}
 
@@ -108,25 +134,29 @@ func isCommitFolderNode(node *widgets.TreeNode) bool {
 	return node != nil && strings.HasPrefix(node.ID, commitFolderPrefix)
 }
 
-func selectedViewTargetID(tree *widgets.TreeWidget) string {
+func (cp *ChangesPanel) selectedViewTargetID(tree *widgets.TreeWidget) string {
 	if tree == nil || tree.Selected() == nil {
 		return ""
 	}
 	node := tree.Selected()
-	if strings.HasPrefix(node.ID, "folder:") {
-		if leaf := firstFileDescendant(node.Children); leaf != nil {
+	ref, working := cp.workNodes[node.ID]
+	if isCommitFolderNode(node) || working && (ref.Kind == workNodeFolder || ref.Kind == workNodePRFolder) {
+		if leaf := cp.firstFileDescendant(node.Children); leaf != nil {
 			return leaf.ID
 		}
 	}
 	return node.ID
 }
 
-func firstFileDescendant(nodes []*widgets.TreeNode) *widgets.TreeNode {
+func (cp *ChangesPanel) firstFileDescendant(nodes []*widgets.TreeNode) *widgets.TreeNode {
 	for _, node := range nodes {
-		if strings.HasPrefix(node.ID, "file:") || strings.HasPrefix(node.ID, "cfile:") {
+		if _, ok := cp.workFiles[node.ID]; ok {
 			return node
 		}
-		if leaf := firstFileDescendant(node.Children); leaf != nil {
+		if _, ok := cp.logFiles[node.ID]; ok {
+			return node
+		}
+		if leaf := cp.firstFileDescendant(node.Children); leaf != nil {
 			return leaf
 		}
 	}
@@ -168,8 +198,8 @@ func (cp *ChangesPanel) SetFileView(view string) {
 		return
 	}
 
-	workingSelection := selectedViewTargetID(cp.Tree)
-	logSelection := selectedViewTargetID(cp.CommitLog)
+	workingSelection := cp.selectedViewTargetID(cp.Tree)
+	logSelection := cp.selectedViewTargetID(cp.CommitLog)
 	cp.saveExpanded()
 	cp.saveCommitLogState()
 	cp.fileView = view
@@ -194,9 +224,15 @@ func (cp *ChangesPanel) rebuildCommitFileNodes() {
 	cp.CommitLog.SetItems(cp.CommitLog.Config.Items)
 }
 
-func (cp *ChangesPanel) fileNodes(scope, dir string, files []git.FileStatus, staged bool) []*widgets.TreeNode {
+func (cp *ChangesPanel) fileNodes(dir string, files []git.FileStatus, staged bool, group int, pr bool) []*widgets.TreeNode {
+	fileKind := workNodeFile
+	folderKind := workNodeFolder
+	if pr {
+		fileKind = workNodePRFile
+		folderKind = workNodePRFolder
+	}
 	makeLeaf := func(file git.FileStatus) *widgets.TreeNode {
-		return cp.fileNode(dir, file, staged)
+		return cp.fileNode(dir, file, staged, fileKind, group, pr)
 	}
 	if cp.fileView == config.GitFileViewList {
 		nodes := make([]*widgets.TreeNode, 0, len(files))
@@ -205,22 +241,9 @@ func (cp *ChangesPanel) fileNodes(scope, dir string, files []git.FileStatus, sta
 		}
 		return nodes
 	}
-	nodes := compactFileTree(scope, files, makeLeaf, cp.expanded)
-	if strings.HasPrefix(scope, "work:") {
-		cp.registerWorkingFolders(nodes, "folder:"+scope+":", dir)
-	}
-	return nodes
-}
-
-func (cp *ChangesPanel) registerWorkingFolders(nodes []*widgets.TreeNode, prefix, dir string) {
-	for _, node := range nodes {
-		if strings.HasPrefix(node.ID, prefix) {
-			key := dir + "\x00" + strings.TrimPrefix(node.ID, prefix)
-			cp.workFolderKeys[node.ID] = key
-			if expanded, ok := cp.workFolderExpanded[key]; ok {
-				node.Expanded = expanded
-			}
-		}
-		cp.registerWorkingFolders(node.Children, prefix, dir)
-	}
+	return compactFileTreeWithFolderID(files, makeLeaf, func(path string) string {
+		id := workingNodeID(folderKind, dir, path, staged)
+		cp.workNodes[id] = workNodeRef{Dir: dir, Path: path, Staged: staged, Kind: folderKind, Group: group, PR: pr}
+		return id
+	}, cp.expanded)
 }

@@ -93,7 +93,7 @@ func TestOptionsAndChangesShareCheckedPresentationSubmenus(t *testing.T) {
 		}
 	}
 	changes := h.app.BuildChangesPanelMenu()
-	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast", "options.useGitFileTree", "options.useGitFileList", "changes.expandAll", "changes.collapseAll"} {
+	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast", "options.useGitFileTree", "options.useGitFileList", "changes.expandAllWorkingTree", "changes.collapseAllWorkingTree"} {
 		if _, ok := findMenuCommand(changes, command); !ok {
 			t.Errorf("Changes menu missing contextual command %s", command)
 		}

@@ -83,6 +83,30 @@ func (a *App) CollapseAllGitFiles() {
 	}
 }
 
+func (a *App) ExpandAllChangesFiles() {
+	if a.Changes != nil {
+		a.Changes.ExpandAll()
+	}
+}
+
+func (a *App) CollapseAllChangesFiles() {
+	if a.Changes != nil {
+		a.Changes.CollapseAll()
+	}
+}
+
+func (a *App) ExpandAllCommitDetailFiles() {
+	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+		detail.ExpandAllFiles()
+	}
+}
+
+func (a *App) CollapseAllCommitDetailFiles() {
+	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+		detail.CollapseAllFiles()
+	}
+}
+
 func (a *App) ToggleAutoDedent() {
 	enabled := !a.Settings.Editor.IsAutoDedentEnabled()
 	a.Settings.Editor.AutoDedent = &enabled
@@ -340,12 +364,20 @@ func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 }
 
 func (a *App) BuildGitFileOptions() []ui.ContextMenuItem {
+	return a.buildGitFileOptions("changes.expandAll", "changes.collapseAll")
+}
+
+func (a *App) BuildChangesGitFileOptions() []ui.ContextMenuItem {
+	return a.buildGitFileOptions("changes.expandAllWorkingTree", "changes.collapseAllWorkingTree")
+}
+
+func (a *App) buildGitFileOptions(expandCommand, collapseCommand string) []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
 		{Label: "Tree", Command: "options.useGitFileTree", Checked: menuChecked(a.Settings.Git.FileView == config.GitFileViewTree)},
 		{Label: "List", Command: "options.useGitFileList", Checked: menuChecked(a.Settings.Git.FileView != config.GitFileViewTree)},
 		ui.MenuSep(),
-		{Label: "Expand All", Command: "changes.expandAll"},
-		{Label: "Collapse All", Command: "changes.collapseAll"},
+		{Label: "Expand All", Command: expandCommand},
+		{Label: "Collapse All", Command: collapseCommand},
 	}
 }
 

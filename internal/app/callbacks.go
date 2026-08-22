@@ -83,7 +83,7 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
 		{Label: "Refresh", Command: "changes.refresh"},
-		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
+		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 		ui.MenuSep(),
 		{Label: "Pull", Command: "git.pull"},
@@ -99,7 +99,7 @@ func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 func (a *App) BuildChangesContextMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
 		{Label: "Refresh", Command: "changes.refresh"},
-		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
+		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 	}
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as tui from "./tui.js";
-import { createTempDir, cleanupDir, createGitRepo, gitStatus, gitLog, readFile } from "./helpers.js";
+import { createTempDir, cleanupDir, createGitRepo, git, gitStatus, gitLog, readFile } from "./helpers.js";
 
 let dir;
 
@@ -20,6 +20,32 @@ function openChanges() {
 }
 
 describe("git changes panel", () => {
+  it("renders raw Unicode Git paths and stages the selected nested basename exactly", () => {
+    dir = createTempDir();
+    createGitRepo(dir);
+    writeFileSync(join(dir, "界-wide.txt"), "wide\n", "utf8");
+    git(dir, "add", "--", "界-wide.txt");
+    git(dir, "commit", "-qm", "wide path");
+    writeFileSync(join(dir, "界-wide.txt"), "changed\n", "utf8");
+    mkdirSync(join(dir, "新規", "深い"), { recursive: true });
+    writeFileSync(join(dir, "新規", "深い", "同名.go"), "package exact\n", "utf8");
+
+    tui.start(dir);
+    openChanges();
+    tui.exec("View Git Files as Tree");
+    const rendered = tui.snapshot();
+    tui.press("down");
+    tui.press("down");
+    tui.exec("Git: Stage File");
+    tui.waitStable();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[rendered]).toContain("界-wide.txt");
+    expect(snapshots[rendered]).toContain("新規/深い");
+    expect(snapshots[rendered]).toContain("同名.go");
+    expect(git(dir, "diff", "--cached", "--name-only", "-z")).toBe("新規/深い/同名.go\0");
+  });
+
   it("should stage every file in one action", () => {
     dir = createTempDir();
     createGitRepo(dir);

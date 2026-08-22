@@ -1,6 +1,9 @@
 package app
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -8,6 +11,16 @@ import (
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
+
+func runTreeGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
 
 func findTreeNode(nodes []*widgets.TreeNode, match func(*widgets.TreeNode) bool) *widgets.TreeNode {
 	for _, node := range nodes {
@@ -53,6 +66,27 @@ func TestCompactFileTreeHandlesEmptySingleDeepAndDuplicateBasenames(t *testing.T
 	}
 }
 
+func TestWorkingNodeIdentityIsInjectiveAndStable(t *testing.T) {
+	repoA := "/workspace/a"
+	repoB := "/workspace/a:b"
+	ids := []string{
+		workingNodeID(workNodeFile, repoA, "b:c", false),
+		workingNodeID(workNodeFile, repoB, "c", false),
+		workingNodeID(workNodeFile, repoA, "b:c", true),
+		workingNodeID(workNodeFolder, repoA, "b:c", false),
+	}
+	seen := make(map[string]bool)
+	for _, id := range ids {
+		if seen[id] {
+			t.Fatalf("working identity collision in %q", ids)
+		}
+		seen[id] = true
+	}
+	if got := workingNodeID(workNodeFile, repoA, "b:c", false); got != ids[0] {
+		t.Fatalf("working identity is unstable: %q != %q", got, ids[0])
+	}
+}
+
 func TestGitFileViewSwitchPreservesFileSelection(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.groups = []changesGroup{{
@@ -61,7 +95,7 @@ func TestGitFileViewSwitchPreservesFileSelection(t *testing.T) {
 		Unstaged: []git.FileStatus{{Status: "M", Path: "deep/nested/file.go"}},
 	}}
 	cp.SetFileView(config.GitFileViewTree)
-	fileID := "file:/repo:deep/nested/file.go:false"
+	fileID := workingNodeID(workNodeFile, "/repo", "deep/nested/file.go", false)
 	if !revealTreeSelection(cp.Tree, fileID) {
 		t.Fatal("tree did not contain nested file")
 	}
@@ -133,6 +167,46 @@ func TestFolderNodesNeverResolveAsFilesOrExecuteFileActions(t *testing.T) {
 	cp.handleCommand("activate", folder)
 	if opened {
 		t.Fatal("folder activation executed a file action")
+	}
+}
+
+func TestWorkingFileIdentitySeparatesColonAmbiguousRoots(t *testing.T) {
+	base := t.TempDir()
+	repoA := filepath.Join(base, "a")
+	repoB := filepath.Join(base, "a:b")
+	for _, dir := range []string{repoA, repoB} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runTreeGit(t, dir, "init", "-q")
+	}
+	if err := os.WriteFile(filepath.Join(repoA, "b:c"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoB, "c"), []byte("b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cp := NewChangesPanel(repoA, repoB)
+	cp.Refresh()
+	fileA := nodeWithLabel(cp.Tree.Config.Items, "b:c")
+	if fileA == nil || !revealTreeSelection(cp.Tree, fileA.ID) {
+		t.Fatal("repo A file is not selectable")
+	}
+	var commitDir string
+	cp.OnCommit = func(dir, _ string) { commitDir = dir }
+	cp.Input.SetText("repo A commit")
+	cp.commitFocusedGroup()
+	if commitDir != repoA {
+		t.Fatalf("repo A selection committed to %q", commitDir)
+	}
+
+	cp.ToggleStageSelected()
+	if got := runTreeGit(t, repoA, "diff", "--cached", "--name-only", "-z"); got != "b:c\x00" {
+		t.Fatalf("repo A staged paths = %q", got)
+	}
+	if got := runTreeGit(t, repoB, "diff", "--cached", "--name-only", "-z"); got != "" {
+		t.Fatalf("repo B was staged by repo A selection: %q", got)
 	}
 }
 

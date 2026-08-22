@@ -111,8 +111,8 @@ var diffContextMenu = []ui.ContextMenuItem{
 var commitDetailContextMenu = []ui.ContextMenuItem{
 	{Label: "Copy", Command: "editor.copy"},
 	ui.MenuSep(),
-	{Label: "Expand All Files", Command: "changes.expandAll"},
-	{Label: "Collapse All Files", Command: "changes.collapseAll"},
+	{Label: "Expand All Files", Command: "changes.expandAllCommitDetail"},
+	{Label: "Collapse All Files", Command: "changes.collapseAllCommitDetail"},
 }
 
 var changesContextMenuStaged = []ui.ContextMenuItem{
