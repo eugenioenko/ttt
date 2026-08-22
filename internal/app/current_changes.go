@@ -34,6 +34,11 @@ type currentFileEndpoint struct {
 	gitlink bool
 }
 
+type currentChangeStatus struct {
+	status       git.FileStatus
+	conflictCode string
+}
+
 func currentChangesTabID(dir string) string {
 	return "current-changes:\x00" + filepath.Clean(dir)
 }
@@ -108,7 +113,7 @@ func currentChangesErrorText(err error) string {
 func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
 	result := &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request}
 	result.Files = make([]ui.CommitDetailFile, 0, len(statuses))
-	staged, unstaged := 0, 0
+	staged, unstaged, conflicts := 0, 0, 0
 	additions, deletions := 0, 0
 	paths := make(map[string]struct{}, len(statuses))
 	fingerprint := sha256.New()
@@ -121,7 +126,8 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 	writeFingerprint([]byte(dir))
 	writeFingerprint([]byte(revision))
 
-	for _, status := range statuses {
+	for _, change := range normalizeCurrentChangeStatuses(statuses) {
+		status := change.status
 		if err := ctx.Err(); err != nil {
 			result.Err = err
 			result.Canceled = errors.Is(err, context.Canceled)
@@ -130,7 +136,11 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 		paths[status.Path] = struct{}{}
 		stage := ui.CommitDetailStageUnstaged
 		boundary := ui.CommitDetailBoundaryIndexToWorktree
-		if status.Staged {
+		if change.conflictCode != "" {
+			stage = ui.CommitDetailStageConflict
+			boundary = ui.CommitDetailBoundaryConflictToWorktree
+			conflicts++
+		} else if status.Staged {
 			stage = ui.CommitDetailStageStaged
 			boundary = ui.CommitDetailBoundaryHeadToIndex
 			staged++
@@ -138,7 +148,14 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 			unstaged++
 		}
 
-		oldEndpoint, newEndpoint, indexStages, err := readCurrentFileEndpoints(ctx, dir, revision, status)
+		var oldEndpoint, newEndpoint currentFileEndpoint
+		var indexStages []byte
+		var err error
+		if change.conflictCode != "" {
+			oldEndpoint, newEndpoint, indexStages, err = readCurrentConflictEndpoints(ctx, dir, status.Path)
+		} else {
+			oldEndpoint, newEndpoint, indexStages, err = readCurrentFileEndpoints(ctx, dir, revision, status)
+		}
 		if err != nil {
 			result.Err = fmt.Errorf("read %s boundary for %q: %w", currentBoundaryName(boundary), status.Path, err)
 			result.Canceled = errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)
@@ -148,7 +165,7 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 		newLines := splitCurrentChangesLines(newEndpoint.content)
 		var fileDiff diff.FileDiff
 		var patch string
-		if oldEndpoint.gitlink || newEndpoint.gitlink {
+		if change.conflictCode == "" && (oldEndpoint.gitlink || newEndpoint.gitlink) {
 			patch, err = git.DiffCurrentFileContext(ctx, dir, revision, status)
 			if err != nil {
 				result.Err = fmt.Errorf("read %s gitlink diff for %q: %w", currentBoundaryName(boundary), status.Path, err)
@@ -157,7 +174,14 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 			}
 			fileDiff = diff.Parse(patch)
 		} else if !bytes.Equal(oldEndpoint.content, newEndpoint.content) || oldEndpoint.exists != newEndpoint.exists {
-			fileDiff = diff.Parse(diff.Generate(oldLines, newLines, status.Path))
+			generated, generateErr := diff.GenerateContext(ctx, oldLines, newLines, status.Path)
+			err = generateErr
+			if err != nil {
+				result.Err = fmt.Errorf("generate %s diff for %q: %w", currentBoundaryName(boundary), status.Path, err)
+				result.Canceled = errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)
+				return result
+			}
+			fileDiff = diff.Parse(generated)
 		}
 		presentedStatus := currentPresentedStatus(status.Status)
 		presentedOldPath := currentPresentedOldPath(status)
@@ -168,13 +192,14 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 		writeFingerprint([]byte(presentedOldPath))
 		writeFingerprint([]byte(status.Path))
 		writeFingerprint(indexStages)
+		writeFingerprint([]byte(change.conflictCode))
 		writeFingerprint(oldEndpoint.content)
 		writeFingerprint(newEndpoint.content)
 		writeFingerprint([]byte(patch))
 
 		file := ui.CommitDetailFile{
 			Status: presentedStatus, Path: status.Path, OldPath: presentedOldPath, Stage: stage, Boundary: boundary,
-			IndexStages: append([]byte(nil), indexStages...),
+			IndexStages: append([]byte(nil), indexStages...), ConflictCode: change.conflictCode,
 		}
 		switch {
 		case isBinaryContent(oldEndpoint.content) || isBinaryContent(newEndpoint.content):
@@ -193,8 +218,115 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 		result.Files = append(result.Files, file)
 	}
 	result.Fingerprint = fmt.Sprintf("%x", fingerprint.Sum(nil))
-	result.Summary = currentChangesSummary(len(paths), additions, deletions, staged, unstaged, 0)
+	result.Summary = currentChangesSummary(len(paths), additions, deletions, staged, unstaged, conflicts)
 	return result
+}
+
+func normalizeCurrentChangeStatuses(statuses []git.FileStatus) []currentChangeStatus {
+	type pathStatuses struct {
+		count            int
+		staged, unstaged int
+	}
+	pairs := make(map[string]pathStatuses, len(statuses))
+	for i, status := range statuses {
+		pair := pairs[status.Path]
+		if pair.count == 0 {
+			pair.staged = -1
+			pair.unstaged = -1
+		}
+		pair.count++
+		if status.Staged {
+			pair.staged = i
+		} else {
+			pair.unstaged = i
+		}
+		pairs[status.Path] = pair
+	}
+
+	conflicts := make(map[int]string)
+	skip := make(map[int]struct{})
+	for _, pair := range pairs {
+		if pair.count != 2 || pair.staged < 0 || pair.unstaged < 0 {
+			continue
+		}
+		code, ok := currentConflictCode(statuses[pair.staged].Status, statuses[pair.unstaged].Status)
+		if !ok {
+			continue
+		}
+		first, second := pair.staged, pair.unstaged
+		if second < first {
+			first, second = second, first
+		}
+		conflicts[first] = code
+		skip[second] = struct{}{}
+	}
+
+	normalized := make([]currentChangeStatus, 0, len(statuses)-len(skip))
+	for i, status := range statuses {
+		if _, omitted := skip[i]; omitted {
+			continue
+		}
+		code := conflicts[i]
+		if code != "" {
+			status.Status = "U"
+			status.OldPath = ""
+			status.Staged = false
+		}
+		normalized = append(normalized, currentChangeStatus{status: status, conflictCode: code})
+	}
+	return normalized
+}
+
+func currentConflictCode(staged, unstaged string) (string, bool) {
+	code := staged + unstaged
+	switch code {
+	case "DD", "AU", "UD", "UA", "DU", "AA", "UU":
+		return code, true
+	default:
+		return "", false
+	}
+}
+
+func readCurrentConflictEndpoints(ctx context.Context, dir, path string) (currentFileEndpoint, currentFileEndpoint, []byte, error) {
+	entries, err := git.IndexEntriesContext(ctx, dir, path)
+	if err != nil {
+		return currentFileEndpoint{}, currentFileEndpoint{}, nil, err
+	}
+	indexStages := make([]byte, 0, len(entries))
+	for _, entry := range entries {
+		indexStages = append(indexStages, byte(entry.Stage))
+	}
+	entry, ok := preferredConflictEntry(entries)
+	if !ok {
+		return currentFileEndpoint{}, currentFileEndpoint{}, indexStages, fmt.Errorf("unmerged path has no stage 1, 2, or 3 endpoint")
+	}
+	oldEndpoint, err := readIndexEntryEndpoint(ctx, dir, path, entry)
+	if err != nil {
+		return currentFileEndpoint{}, currentFileEndpoint{}, indexStages, err
+	}
+	working, err := readWorkingTreeFileContext(ctx, dir, path)
+	if err != nil {
+		var pathErr *workingTreePathError
+		if errors.As(err, &pathErr) && pathErr.Kind == workingTreePathDirectory && oldEndpoint.gitlink {
+			return oldEndpoint, currentFileEndpoint{exists: true, gitlink: true}, indexStages, nil
+		}
+		return currentFileEndpoint{}, currentFileEndpoint{}, indexStages, err
+	}
+	if !working.Exists {
+		return oldEndpoint, currentFileEndpoint{}, indexStages, nil
+	}
+	return oldEndpoint, currentFileEndpoint{content: working.Content, exists: true}, indexStages, nil
+}
+
+func preferredConflictEntry(entries []git.IndexEntry) (git.IndexEntry, bool) {
+	for _, stage := range []int{2, 3, 1} {
+		for _, entry := range entries {
+			if entry.Stage == stage {
+				return entry, true
+			}
+		}
+	}
+	return git.IndexEntry{}, false
 }
 
 func readCurrentFileEndpoints(ctx context.Context, dir, revision string, status git.FileStatus) (currentFileEndpoint, currentFileEndpoint, []byte, error) {
@@ -272,6 +404,10 @@ func readIndexEndpoint(ctx context.Context, dir, path string, entries []git.Inde
 			}
 		}
 	}
+	return readIndexEntryEndpoint(ctx, dir, path, entry)
+}
+
+func readIndexEntryEndpoint(ctx context.Context, dir, path string, entry git.IndexEntry) (currentFileEndpoint, error) {
 	if entry.Mode == "160000" {
 		return currentFileEndpoint{content: []byte("Subproject commit " + entry.Object + "\n"), exists: true, gitlink: true}, nil
 	}
@@ -313,10 +449,14 @@ func currentPresentedStatus(status string) string {
 }
 
 func currentBoundaryName(boundary ui.CommitDetailBoundary) string {
-	if boundary == ui.CommitDetailBoundaryHeadToIndex {
+	switch boundary {
+	case ui.CommitDetailBoundaryHeadToIndex:
 		return "HEAD-to-index"
+	case ui.CommitDetailBoundaryConflictToWorktree:
+		return "conflict-to-worktree"
+	default:
+		return "index-to-worktree"
 	}
-	return "index-to-worktree"
 }
 
 func isBinaryContent(content []byte) bool {
@@ -346,7 +486,7 @@ func currentDiffStats(file diff.FileDiff) (added, deleted int) {
 	return added, deleted
 }
 
-func currentChangesSummary(files, additions, deletions, staged, unstaged, mixed int) string {
+func currentChangesSummary(files, additions, deletions, staged, unstaged, conflicts int) string {
 	if files == 0 {
 		return "Working tree clean"
 	}
@@ -361,8 +501,12 @@ func currentChangesSummary(files, additions, deletions, staged, unstaged, mixed 
 	if unstaged > 0 {
 		parts = append(parts, fmt.Sprintf("%d unstaged", unstaged))
 	}
-	if mixed > 0 {
-		parts = append(parts, fmt.Sprintf("%d mixed", mixed))
+	if conflicts > 0 {
+		label := "conflict"
+		if conflicts != 1 {
+			label = "conflicts"
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", conflicts, label))
 	}
 	return strings.Join(parts, " · ")
 }

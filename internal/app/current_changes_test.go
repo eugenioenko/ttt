@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -198,6 +200,149 @@ func TestReadCurrentChangesFingerprintIncludesStageIdentity(t *testing.T) {
 	}
 	if unstaged.Fingerprint == staged.Fingerprint {
 		t.Fatal("stage-only transition did not change the current changes fingerprint")
+	}
+}
+
+func TestReadCurrentChangesUnmergedModifyDeleteShapesUseOneSection(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		otherDelete bool
+		stages      []byte
+	}{
+		{name: "UD", otherDelete: true, stages: []byte{1, 2}},
+		{name: "DU", otherDelete: false, stages: []byte{1, 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := testAppRepository(t)
+			path := filepath.Join(dir, "initial.txt")
+			testAppGit(t, dir, "checkout", "-qb", "other")
+			if tc.otherDelete {
+				testAppGit(t, dir, "rm", "--", "initial.txt")
+				testAppGit(t, dir, "commit", "-m", "other deletes")
+			} else {
+				if err := os.WriteFile(path, []byte("other content\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				testAppGit(t, dir, "commit", "-am", "other modifies")
+			}
+			testAppGit(t, dir, "checkout", "-q", "main")
+			if tc.otherDelete {
+				if err := os.WriteFile(path, []byte("head content\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				testAppGit(t, dir, "commit", "-am", "head modifies")
+			} else {
+				testAppGit(t, dir, "rm", "--", "initial.txt")
+				testAppGit(t, dir, "commit", "-m", "head deletes")
+			}
+			if err := exec.Command("git", "-C", dir, "merge", "other").Run(); err == nil {
+				t.Fatal("merge unexpectedly succeeded")
+			}
+
+			result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+			if result.Err != nil {
+				t.Fatal(result.Err)
+			}
+			if len(result.Files) != 1 {
+				t.Fatalf("%s conflict files = %d, want one stable section: %+v", tc.name, len(result.Files), result.Files)
+			}
+			file := result.Files[0]
+			if file.Status != "U" || file.Stage != ui.CommitDetailStageConflict || file.Boundary != ui.CommitDetailBoundaryConflictToWorktree || file.ConflictCode != tc.name {
+				t.Fatalf("%s conflict identity = %+v", tc.name, file)
+			}
+			if string(file.IndexStages) != string(tc.stages) {
+				t.Fatalf("%s index stages = %v, want %v", tc.name, file.IndexStages, tc.stages)
+			}
+			if lines := file.Diff.AllLines(); len(lines) != 0 {
+				t.Fatalf("%s preferred conflict side differs from the worktree: %+v", tc.name, lines)
+			}
+			if !strings.Contains(result.Summary, "1 conflict") || strings.Contains(result.Summary, "staged") || strings.Contains(result.Summary, "unstaged") {
+				t.Fatalf("%s conflict summary = %q", tc.name, result.Summary)
+			}
+		})
+	}
+}
+
+func TestNormalizeCurrentChangeStatusesMapsEveryPorcelainConflictShape(t *testing.T) {
+	for _, code := range []string{"DD", "AU", "UD", "UA", "DU", "AA", "UU"} {
+		t.Run(code, func(t *testing.T) {
+			statuses := []git.FileStatus{
+				{Status: code[:1], Path: "conflict.txt", Staged: true},
+				{Status: code[1:], Path: "conflict.txt", Staged: false},
+			}
+			normalized := normalizeCurrentChangeStatuses(statuses)
+			if len(normalized) != 1 || normalized[0].conflictCode != code || normalized[0].status.Status != "U" || normalized[0].status.Staged {
+				t.Fatalf("normalize %s = %+v", code, normalized)
+			}
+		})
+	}
+
+	ordinary := normalizeCurrentChangeStatuses([]git.FileStatus{
+		{Status: "M", Path: "mixed.txt", Staged: true},
+		{Status: "M", Path: "mixed.txt", Staged: false},
+	})
+	if len(ordinary) != 2 || ordinary[0].conflictCode != "" || ordinary[1].conflictCode != "" || !ordinary[0].status.Staged || ordinary[1].status.Staged {
+		t.Fatalf("ordinary mixed path was normalized as a conflict: %+v", ordinary)
+	}
+}
+
+func TestPreferredConflictEntryUsesOursThenTheirsThenBase(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stages []int
+		want   int
+	}{
+		{name: "ours", stages: []int{1, 3, 2}, want: 2},
+		{name: "theirs", stages: []int{1, 3}, want: 3},
+		{name: "base", stages: []int{1}, want: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := make([]git.IndexEntry, len(tc.stages))
+			for i, stage := range tc.stages {
+				entries[i].Stage = stage
+			}
+			entry, ok := preferredConflictEntry(entries)
+			if !ok || entry.Stage != tc.want {
+				t.Fatalf("preferred stage for %v = %d, %v; want %d", tc.stages, entry.Stage, ok, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadCurrentChangesCancelsDuringDiffGeneration(t *testing.T) {
+	dir := testAppRepository(t)
+	const lines = 8000
+	var oldText, newText strings.Builder
+	for i := 0; i < lines; i++ {
+		fmt.Fprintf(&oldText, "old-%05d\n", i)
+		fmt.Fprintf(&newText, "new-%05d\n", i)
+	}
+	path := filepath.Join(dir, "large.txt")
+	if err := os.WriteFile(path, []byte(oldText.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testAppGit(t, dir, "add", "--", "large.txt")
+	testAppGit(t, dir, "commit", "-m", "large baseline")
+	if err := os.WriteFile(path, []byte(newText.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	resultCh := make(chan *CurrentChangesResult, 1)
+	statuses := currentChangesStatuses(t, dir)
+	revision := git.RevisionIdentity(dir)
+	go func() {
+		resultCh <- readCurrentChanges(ctx, dir, revision, currentChangesTabID(dir), 1, 1, statuses)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case result := <-resultCh:
+		if !result.Canceled || !errors.Is(result.Err, context.Canceled) {
+			t.Fatalf("diff generation cancellation result = %+v", result)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("diff generation did not stop within 500ms of cancellation")
 	}
 }
 

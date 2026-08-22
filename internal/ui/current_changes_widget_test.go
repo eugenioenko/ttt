@@ -136,3 +136,73 @@ func TestCurrentChangesSamePathBoundariesPreserveIndependentCollapseAndSelection
 		t.Fatalf("selection moved across boundary: row=%+v files=%+v", row, detail.Files)
 	}
 }
+
+func currentChangesConflictTestFile(path, code string, stages []byte, oldLines, newLines []string) CommitDetailFile {
+	file := CommitDetailFile{
+		Status: "U", Path: path, Stage: CommitDetailStageConflict, Boundary: CommitDetailBoundaryConflictToWorktree,
+		ConflictCode: code, IndexStages: append([]byte(nil), stages...), Diff: diff.Parse(diff.Generate(oldLines, newLines, path)),
+	}
+	return CommitDetailFileWithContent(file, oldLines, newLines)
+}
+
+func TestCurrentChangesConflictHeadingContentAndIdentity(t *testing.T) {
+	detail := NewCurrentChangesWidget("/repo", false)
+	file := currentChangesConflictTestFile("conflict.txt", "UD", []byte{1, 2}, []string{"ours"}, []string{"ours"})
+	detail.SetCurrentChanges("1 conflict", []CommitDetailFile{file}, "")
+	detail.SetRect(Rect{W: 80, H: 8})
+	cells := makeGrid(80, 8)
+	detail.Render(NewRenderSurface(cells, Rect{W: 80, H: 8}))
+	text := detailTestText(cells)
+	for _, want := range []string{"U  conflict.txt - conflict (UD)", "No line changes"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("conflict view omitted %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "staged") || strings.Contains(text, "index") {
+		t.Fatalf("conflict view claimed an unavailable index boundary:\n%s", text)
+	}
+
+	theirs := file
+	theirs.ConflictCode = "DU"
+	theirs.IndexStages = []byte{1, 3}
+	if CommitDetailContextKey(file) == CommitDetailContextKey(theirs) {
+		t.Fatal("conflict XY and index-stage identity collapsed to one context key")
+	}
+}
+
+func TestCurrentChangesConflictRefreshPreservesCollapseAndSelection(t *testing.T) {
+	detail := NewCurrentChangesWidget("/repo", false)
+	collapsed := currentChangesConflictTestFile("collapsed.txt", "UD", []byte{1, 2}, []string{"ours"}, []string{"resolved"})
+	selected := currentChangesConflictTestFile("selected.txt", "DU", []byte{1, 3}, []string{"theirs"}, []string{"working"})
+	detail.SetCurrentChanges("2 conflicts", []CommitDetailFile{collapsed, selected}, "")
+	detail.collapsedFiles[0] = true
+	detail.rebuildRows()
+	selectedRow := -1
+	for i, row := range detail.rows {
+		if row.kind == commitDetailDiffRow && row.fileIndex == 1 {
+			selectedRow = i
+			break
+		}
+	}
+	if selectedRow < 0 {
+		t.Fatal("selected conflict has no diff row")
+	}
+	detail.hasSelection = true
+	detail.selRight = true
+	detail.selection.Anchor = diffSelPos{Line: selectedRow, Col: 0}
+	detail.selection.Current = diffSelPos{Line: selectedRow, Col: 4}
+
+	refreshedCollapsed := currentChangesConflictTestFile("collapsed.txt", "UD", []byte{1, 2}, []string{"ours"}, []string{"resolved latest"})
+	refreshedSelected := currentChangesConflictTestFile("selected.txt", "DU", []byte{1, 3}, []string{"theirs"}, []string{"working latest"})
+	detail.SetCurrentChanges("2 conflicts", []CommitDetailFile{refreshedCollapsed, refreshedSelected}, "")
+	if !detail.collapsedFiles[0] || detail.collapsedFiles[1] {
+		t.Fatalf("conflict collapse state = %v", detail.collapsedFiles)
+	}
+	if !detail.hasSelection {
+		t.Fatal("conflict selection was lost across a same-identity refresh")
+	}
+	row := detail.rows[detail.selection.Anchor.Line]
+	if row.fileIndex != 1 || detail.Files[row.fileIndex].ConflictCode != "DU" {
+		t.Fatalf("conflict selection moved across identity: row=%+v files=%+v", row, detail.Files)
+	}
+}

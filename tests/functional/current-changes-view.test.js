@@ -38,4 +38,30 @@ describe("current changes document", () => {
       expect(screen.match(/Current Changes x/g)).toHaveLength(1);
     }
   });
+
+  it("shows a UD merge conflict as one explicit two-way resolution section", () => {
+    dir = createGitRepo(createTempDir());
+    const tracked = join(dir, "tracked.txt");
+    execFileSync("git", ["-C", dir, "checkout", "-qb", "other"]);
+    execFileSync("git", ["-C", dir, "rm", "--", "tracked.txt"]);
+    execFileSync("git", ["-C", dir, "commit", "-m", "other deletes"]);
+    execFileSync("git", ["-C", dir, "checkout", "-q", "main"]);
+    writeFileSync(tracked, "main content\n", "utf8");
+    execFileSync("git", ["-C", dir, "commit", "-am", "main modifies"]);
+    try {
+      execFileSync("git", ["-C", dir, "merge", "other"], { stdio: "pipe" });
+    } catch {}
+
+    tui.start(dir);
+    tui.exec("Git: Open Current Changes");
+    tui.waitStable(500);
+    const conflict = tui.snapshot();
+    const { snapshots } = tui.run();
+    const screen = snapshots[conflict];
+
+    expect(screen).toContain("U  tracked.txt - conflict (UD)");
+    expect(screen).toContain("No line changes");
+    expect(screen).not.toContain("tracked.txt · staged");
+    expect(screen).not.toContain("tracked.txt · unstaged");
+  });
 });

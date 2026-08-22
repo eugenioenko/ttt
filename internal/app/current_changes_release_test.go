@@ -133,12 +133,14 @@ func TestReadCurrentChangesPreservesUnmergedIndexStages(t *testing.T) {
 	}
 
 	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
-	if result.Err != nil || len(result.Files) != 2 {
+	if result.Err != nil || len(result.Files) != 1 {
 		t.Fatalf("conflict result=%+v", result)
 	}
-	for _, file := range result.Files {
-		if string(file.IndexStages) != string([]byte{1, 2, 3}) {
-			t.Fatalf("conflict stages for %v = %v", file.Boundary, file.IndexStages)
-		}
+	file := result.Files[0]
+	if file.Status != "U" || file.Stage != ui.CommitDetailStageConflict || file.Boundary != ui.CommitDetailBoundaryConflictToWorktree || file.ConflictCode != "UU" {
+		t.Fatalf("conflict identity=%+v", file)
+	}
+	if string(file.IndexStages) != string([]byte{1, 2, 3}) {
+		t.Fatalf("conflict stages = %v", file.IndexStages)
 	}
 }

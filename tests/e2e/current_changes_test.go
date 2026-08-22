@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,4 +59,37 @@ func TestOpenCurrentChangesReusesOneLiveSharedDiffDocument(t *testing.T) {
 	}
 	h.click(headingX, headingY)
 	h.assertContains("second external version")
+}
+
+func TestOpenCurrentChangesShowsOneExplicitUDConflictSection(t *testing.T) {
+	h := newTestHarness(t, 100, 24)
+	defer h.stop()
+	initializeHarnessRepository(t, h.dir)
+	path := filepath.Join(h.dir, "alpha.txt")
+	runHistoryGit(t, h.dir, "checkout", "-qb", "other")
+	runHistoryGit(t, h.dir, "rm", "--", "alpha.txt")
+	runHistoryGit(t, h.dir, "commit", "-m", "other deletes")
+	runHistoryGit(t, h.dir, "checkout", "-q", "main")
+	if err := os.WriteFile(path, []byte("main content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runHistoryGit(t, h.dir, "commit", "-am", "main modifies")
+	if err := exec.Command("git", "-C", h.dir, "merge", "other").Run(); err == nil {
+		t.Fatal("merge unexpectedly succeeded")
+	}
+
+	h.app.Repository.RefreshNow(app.RepositoryWorktree)
+	h.exec("changes.viewAll")
+	screen := h.screenText()
+	if strings.Count(screen, "U  alpha.txt - conflict (UD)") != 1 {
+		t.Fatalf("UD conflict did not render as one section:\n%s", screen)
+	}
+	for _, want := range []string{"Current changes", "No line changes"} {
+		if !strings.Contains(screen, want) {
+			t.Fatalf("UD conflict omitted %q:\n%s", want, screen)
+		}
+	}
+	if strings.Contains(screen, "alpha.txt · staged") || strings.Contains(screen, "alpha.txt · unstaged") {
+		t.Fatalf("UD conflict was coerced into staged or unstaged claims:\n%s", screen)
+	}
 }

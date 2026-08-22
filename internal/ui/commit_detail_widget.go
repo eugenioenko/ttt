@@ -24,9 +24,12 @@ type CommitDetailFile struct {
 	Stage       CommitDetailStage
 	Boundary    CommitDetailBoundary
 	IndexStages []byte
-	ContentKind CommitDetailContentKind
-	Diff        diff.FileDiff
-	Error       string
+	// ConflictCode marks a two-way resolution view between the preferred
+	// available conflict stage and the worktree, not a full three-way merge view.
+	ConflictCode string
+	ContentKind  CommitDetailContentKind
+	Diff         diff.FileDiff
+	Error        string
 
 	FullFileState CommitDetailFullFileState
 	FullFileErr   string
@@ -47,6 +50,7 @@ const (
 	CommitDetailBoundaryNone CommitDetailBoundary = iota
 	CommitDetailBoundaryHeadToIndex
 	CommitDetailBoundaryIndexToWorktree
+	CommitDetailBoundaryConflictToWorktree
 )
 
 type CommitDetailStage uint8
@@ -56,6 +60,7 @@ const (
 	CommitDetailStageStaged
 	CommitDetailStageUnstaged
 	CommitDetailStageMixed
+	CommitDetailStageConflict
 )
 
 type CommitDetailContentKind uint8
@@ -339,7 +344,7 @@ func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLine
 func CommitDetailContextKey(file CommitDetailFile) string { return commitDetailFileKey(file) }
 
 func commitDetailFileKey(file CommitDetailFile) string {
-	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + string(file.IndexStages)
+	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + file.ConflictCode + "\x00" + string(file.IndexStages)
 }
 
 func (d *CommitDetailWidget) IsWrapped() bool { return d.wrapMode == DiffWrapOn }
@@ -732,6 +737,9 @@ func commitDetailFileHeading(file CommitDetailFile) string {
 	}
 	if file.Stage == CommitDetailStageNone {
 		return path
+	}
+	if file.Stage == CommitDetailStageConflict {
+		return fmt.Sprintf("%s  %s - conflict (%s)", StatusBadge(file.Status), path, file.ConflictCode)
 	}
 	stage := "unstaged"
 	switch file.Stage {

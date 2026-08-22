@@ -1,9 +1,12 @@
 package diff
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
+
+const cancellationCheckInterval = 1024
 
 type LineKind int
 
@@ -186,13 +189,32 @@ func Parse(unified string) FileDiff {
 }
 
 func Generate(oldLines, newLines []string, fileName string) string {
-	lcs := computeLCS(oldLines, newLines)
+	generated, _ := GenerateContext(context.Background(), oldLines, newLines, fileName)
+	return generated
+}
+
+func GenerateContext(ctx context.Context, oldLines, newLines []string, fileName string) (string, error) {
+	lcs, err := computeLCSContext(ctx, oldLines, newLines)
+	if err != nil {
+		return "", err
+	}
 
 	var hunks []string
 	oi, ni, li := 0, 0, 0
 	contextLines := 3
+	work := 0
+	checkCanceled := func() error {
+		work++
+		if work%cancellationCheckInterval != 0 {
+			return nil
+		}
+		return ctx.Err()
+	}
 
 	for oi < len(oldLines) || ni < len(newLines) {
+		if err := checkCanceled(); err != nil {
+			return "", err
+		}
 		if li < len(lcs) && oi < len(oldLines) && ni < len(newLines) && oldLines[oi] == lcs[li] && newLines[ni] == lcs[li] {
 			oi++
 			ni++
@@ -210,10 +232,16 @@ func Generate(oldLines, newLines []string, fileName string) string {
 
 		var hunkLines []string
 		for i := ctxStart; i < hunkOldStart; i++ {
+			if err := checkCanceled(); err != nil {
+				return "", err
+			}
 			hunkLines = append(hunkLines, " "+oldLines[i])
 		}
 
 		for oi < len(oldLines) || ni < len(newLines) {
+			if err := checkCanceled(); err != nil {
+				return "", err
+			}
 			if li < len(lcs) && oi < len(oldLines) && ni < len(newLines) && oldLines[oi] == lcs[li] && newLines[ni] == lcs[li] {
 				peekEnd := 0
 				for peekEnd < contextLines*2 && oi+peekEnd < len(oldLines) && li+peekEnd < len(lcs) && oldLines[oi+peekEnd] == lcs[li+peekEnd] {
@@ -254,6 +282,9 @@ func Generate(oldLines, newLines []string, fileName string) string {
 		oldCount := 0
 		newCount := 0
 		for _, l := range hunkLines {
+			if err := checkCanceled(); err != nil {
+				return "", err
+			}
 			if len(l) > 0 {
 				switch l[0] {
 				case '-':
@@ -273,26 +304,50 @@ func Generate(oldLines, newLines []string, fileName string) string {
 	}
 
 	if len(hunks) == 0 {
-		return ""
+		return "", ctx.Err()
 	}
 
 	var sb strings.Builder
 	sb.WriteString("--- a/" + fileName + "\n")
 	sb.WriteString("+++ b/" + fileName + "\n")
 	for _, line := range hunks {
+		if err := checkCanceled(); err != nil {
+			return "", err
+		}
 		sb.WriteString(line + "\n")
 	}
-	return sb.String()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return sb.String(), nil
 }
 
 func computeLCS(a, b []string) []string {
+	lcs, _ := computeLCSContext(context.Background(), a, b)
+	return lcs
+}
+
+func computeLCSContext(ctx context.Context, a, b []string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	m, n := len(a), len(b)
 	dp := make([][]int, m+1)
 	for i := range dp {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		dp[i] = make([]int, n+1)
 	}
+	work := 0
 	for i := 1; i <= m; i++ {
 		for j := 1; j <= n; j++ {
+			work++
+			if work%cancellationCheckInterval == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			if a[i-1] == b[j-1] {
 				dp[i][j] = dp[i-1][j-1] + 1
 			} else if dp[i-1][j] > dp[i][j-1] {
@@ -305,7 +360,14 @@ func computeLCS(a, b []string) []string {
 
 	lcs := make([]string, 0, dp[m][n])
 	i, j := m, n
+	work = 0
 	for i > 0 && j > 0 {
+		work++
+		if work%cancellationCheckInterval == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if a[i-1] == b[j-1] {
 			lcs = append(lcs, a[i-1])
 			i--
@@ -317,9 +379,18 @@ func computeLCS(a, b []string) []string {
 		}
 	}
 	for l, r := 0, len(lcs)-1; l < r; l, r = l+1, r-1 {
+		work++
+		if work%cancellationCheckInterval == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		lcs[l], lcs[r] = lcs[r], lcs[l]
 	}
-	return lcs
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return lcs, nil
 }
 
 func parseHunkHeader(header string) (oldStart, newStart int) {
