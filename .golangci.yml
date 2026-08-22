@@ -1,0 +1,21 @@
+linters:
+  enable:
+    - staticcheck
+    - govet
+    - errcheck
+    - ineffassign
+    - gosimple
+    - unused
+  disable-all: true
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Fprint
+      - (io.Closer).Close
+
+issues:
+  exclude-dirs:
+    - vendor
