@@ -26,6 +26,7 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	m[term.StyleSelection] = base.Reverse(true)
 
 	applyStyleDef(&m, term.StyleStatusBar, theme.StatusBar)
+	applyStyleDef(&m, term.StyleCommitMessage, theme.CommitMessage)
 	applyStyleDef(&m, term.StyleActiveTab, theme.Tabs.Active)
 	applyStyleDef(&m, term.StyleInactiveTab, theme.Tabs.Inactive)
 	selectedTab := theme.Tabs.Selected

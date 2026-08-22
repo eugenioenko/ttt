@@ -602,6 +602,15 @@ func (g *EditorGroupWidget) ActiveDiffWidget() *DiffViewWidget {
 	return nil
 }
 
+func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	detail, _ := t.Content.(*CommitDetailWidget)
+	return detail
+}
+
 func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
@@ -627,6 +636,16 @@ func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffViewWidget {
 				return dv
 			}
 			return nil
+		}
+	}
+	return nil
+}
+
+func (g *EditorGroupWidget) CommitDetailWidgetByTab(tabName string) *CommitDetailWidget {
+	for _, t := range g.tabs {
+		if t.FilePath == tabName {
+			detail, _ := t.Content.(*CommitDetailWidget)
+			return detail
 		}
 	}
 	return nil
@@ -1682,6 +1701,12 @@ func (g *EditorGroupWidget) Copy() {
 	}
 	if dv, ok := t.Content.(*DiffViewWidget); ok {
 		if text := dv.CopySelection(); text != "" {
+			clipboard.Set(text)
+		}
+		return
+	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		if text := detail.CopySelection(); text != "" {
 			clipboard.Set(text)
 		}
 		return

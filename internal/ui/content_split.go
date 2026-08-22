@@ -13,6 +13,9 @@ type ContentSplitWidget struct {
 	Bottom                    Widget
 	ShowBottom                bool
 	BottomH                   int
+	BottomRatio               float64
+	MinTopH                   int
+	MinBottomH                int
 	Borders                   *term.BorderSet
 	OnResize                  func(height int)
 	OnBottomClick             func()
@@ -24,6 +27,17 @@ type ContentSplitWidget struct {
 	pointerCaptureInvalidated func()
 }
 
+func (cs *ContentSplitWidget) WidgetChildren() []Widget {
+	children := make([]Widget, 0, 2)
+	if cs.Top != nil {
+		children = append(children, cs.Top)
+	}
+	if cs.Bottom != nil {
+		children = append(children, cs.Bottom)
+	}
+	return children
+}
+
 func NewContentSplitWidget() *ContentSplitWidget {
 	return &ContentSplitWidget{
 		ShowBottom: false,
@@ -32,6 +46,22 @@ func NewContentSplitWidget() *ContentSplitWidget {
 }
 
 func (cs *ContentSplitWidget) Focusable() bool { return false }
+
+func (cs *ContentSplitWidget) constrainedBottomHeight(totalH, requested int) int {
+	if totalH <= 1 {
+		return 0
+	}
+	maxBottom := max(totalH-1-max(cs.MinTopH, 0), 0)
+	minBottom := min(max(cs.MinBottomH, 0), maxBottom)
+	return min(max(requested, minBottom), maxBottom)
+}
+
+func (cs *ContentSplitWidget) requestedBottomHeight(totalH int) int {
+	if cs.BottomH <= 0 && cs.BottomRatio > 0 {
+		return int(float64(totalH) * cs.BottomRatio)
+	}
+	return cs.BottomH
+}
 
 func (cs *ContentSplitWidget) Render(surface Surface) {
 	w, h := surface.Size()
@@ -64,15 +94,8 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	}
 	bs := term.StyleBorder
 
-	// 1 row for divider + bottomH for content
-	needed := cs.BottomH + 1
-	if needed > h {
-		needed = h
-	}
-	divY := h - needed
-	if divY < 0 {
-		divY = 0
-	}
+	bottomH := cs.constrainedBottomHeight(h, cs.requestedBottomHeight(h))
+	divY := h - bottomH - 1
 	topH := divY
 
 	if cs.RightBorderStartY != nil {
@@ -97,7 +120,7 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	}
 
 	// Bottom content
-	bottomContentH := h - divY - 1
+	bottomContentH := bottomH
 	if cs.Bottom != nil && bottomContentH > 0 {
 		cs.Bottom.SetRect(Rect{X: r.X, Y: r.Y + divY + 1, W: r.W, H: bottomContentH})
 		bottomSurface := surface.Sub(Rect{X: 0, Y: divY + 1, W: w, H: bottomContentH})
@@ -126,6 +149,8 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	if cs.dragging {
 		if pressed {
 			newH := r.Y + r.H - my - 1
+			newH = cs.constrainedBottomHeight(r.H, newH)
+			cs.BottomRatio = 0
 			if cs.OnResize != nil {
 				cs.OnResize(newH)
 			}
@@ -149,14 +174,8 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	if cs.ShowBottom {
-		needed := cs.BottomH + 1
-		if needed > r.H {
-			needed = r.H
-		}
-		divY := r.Y + r.H - needed
-		if divY < r.Y {
-			divY = r.Y
-		}
+		bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
+		divY := r.Y + r.H - bottomH - 1
 
 		// r.W-1: exclude last column to avoid colliding with editor scrollbar
 		// For divY+1 (tab bar row), let the bottom panel handle clicks first
@@ -220,11 +239,8 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 		return -1
 	}
 	r := cs.GetRect()
-	needed := cs.BottomH + 1
-	if needed > r.H {
-		needed = r.H
-	}
-	return r.Y + r.H - needed
+	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
+	return r.Y + r.H - bottomH - 1
 }
 
 func (cs *ContentSplitWidget) TopContentHeight() int {

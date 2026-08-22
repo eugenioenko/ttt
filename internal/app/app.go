@@ -436,6 +436,14 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	}
 	a.StartWatcher()
 
+	if a.Changes != nil {
+		a.Changes.Screen = screen
+		a.Changes.OnRefreshed = func() {
+			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
+		}
+		a.Changes.Refresh()
+	}
+
 	a.EditorGroup.OnError = func(msg string) {
 		a.StatusError(msg)
 	}
