@@ -24,6 +24,9 @@
     "showHidden": true,
     "showGitIgnored": true
   },
+  "git": {
+    "fileView": "list"
+  },
   "terminal": {
     "scrollback": 1000
   },

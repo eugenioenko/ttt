@@ -1224,6 +1224,36 @@ func TestTreeCollectRestoreExpanded(t *testing.T) {
 	}
 }
 
+func TestTreeExpandAndCollapseAllPreserveIdentity(t *testing.T) {
+	root := &TreeNode{ID: "root", Label: "Root", Expandable: true, Expanded: true, Children: []*TreeNode{{
+		ID: "child", Label: "Child", Expandable: true, Children: []*TreeNode{{ID: "leaf", Label: "Leaf"}},
+	}}}
+	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{root}})
+	tree.SelectByID("root")
+	tree.ExpandAll()
+	if !root.Expanded || !root.Children[0].Expanded || tree.Selected().ID != "root" {
+		t.Fatalf("expand all lost state or selection: root=%+v selected=%+v", root, tree.Selected())
+	}
+	tree.SelectByID("leaf")
+	tree.CollapseAll()
+	if root.Expanded || root.Children[0].Expanded || tree.Selected().ID != "root" {
+		t.Fatalf("collapse all drifted hidden selection: root=%+v selected=%+v", root, tree.Selected())
+	}
+}
+
+func TestTreeExpandAllLoadsOnlyOneLazyLevel(t *testing.T) {
+	root := &TreeNode{ID: "root", Label: "Root", Expandable: true}
+	loaded := []string{}
+	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{root}, OnExpand: func(node *TreeNode) {
+		loaded = append(loaded, node.ID)
+		node.Children = []*TreeNode{{ID: node.ID + "/child", Label: "Child", Expandable: true}}
+	}})
+	tree.ExpandAll()
+	if !root.Expanded || len(root.Children) != 1 || root.Children[0].Expanded || len(loaded) != 1 {
+		t.Fatalf("lazy expand traversed beyond represented level: root=%+v loaded=%v", root, loaded)
+	}
+}
+
 // --- Shortcut key tests ---
 
 func TestTreeShortcutKey(t *testing.T) {

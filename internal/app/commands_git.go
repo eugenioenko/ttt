@@ -251,6 +251,18 @@ func registerGitCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "changes.expandAll", Title: "Git: Expand All File Trees",
+		Keywords: []string{"git", "changes", "history", "detail", "tree", "folder", "expand"},
+		Handler:  app.ExpandAllGitFiles,
+	})
+
+	reg.Register(command.Command{
+		ID: "changes.collapseAll", Title: "Git: Collapse All File Trees",
+		Keywords: []string{"git", "changes", "history", "detail", "tree", "folder", "collapse"},
+		Handler:  app.CollapseAllGitFiles,
+	})
+
+	reg.Register(command.Command{
 		ID: "changes.stage", Title: "Git: Stage File",
 		Keywords: []string{"git", "changes", "add"},
 		Handler: func() {

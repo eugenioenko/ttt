@@ -79,15 +79,24 @@ describe("diff reading preferences", () => {
     tui.exec("Menu: Options");
     tui.waitStable();
     const options = tui.snapshot();
+    tui.press("down");
+    tui.press("down");
+    tui.press("right");
+    const diffViews = tui.snapshot();
+    tui.press("escape");
     enableUnifiedWrappedDefaults();
     tui.exec("Show Full File Diff by Default");
     tui.exec("Toggle High Contrast Diffs");
 
     const { snapshots } = tui.run();
-    expect(snapshots[options]).toContain("Diff View Mode");
-    expect(snapshots[options]).toContain("Diff Context");
-    expect(snapshots[options]).toContain("Wrap Diff Lines");
-    expect(snapshots[options]).toContain("High Contrast Diffs");
+    expect(snapshots[options]).toContain("Diff Views");
+    expect(snapshots[options]).toContain("Git Files");
+    expect(snapshots[diffViews]).toContain("Split");
+    expect(snapshots[diffViews]).toContain("Unified");
+    expect(snapshots[diffViews]).toContain("Changes Only");
+    expect(snapshots[diffViews]).toContain("Full File");
+    expect(snapshots[diffViews]).toContain("Wrap Lines");
+    expect(snapshots[diffViews]).toContain("High Contrast");
 
     const saved = savedSettings(fixture.configDir);
     expect(saved.editor.diffMode).toBe("unified");

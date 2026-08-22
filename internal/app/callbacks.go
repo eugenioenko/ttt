@@ -25,6 +25,9 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			{Label: "Add Folder", Command: "workspace.addFolder"},
 			{Label: "Refresh", Command: "explorer.refresh"},
 			ui.MenuSep(),
+			{Label: "Expand All", Command: "explorer.expandAll"},
+			{Label: "Collapse All", Command: "explorer.collapseAll"},
+			ui.MenuSep(),
 			{Label: "Help", Command: "explorer.help"},
 		}
 	case "search":
@@ -80,7 +83,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
 		{Label: "Refresh", Command: "changes.refresh"},
-		{Label: "Diff View", Submenu: a.BuildDiffViewOptions()},
+		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
+		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 		ui.MenuSep(),
 		{Label: "Pull", Command: "git.pull"},
 		{Label: "Push", Command: "git.push"},
@@ -90,6 +94,18 @@ func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Help", Command: "changes.help"},
 	}
+}
+
+func (a *App) BuildChangesContextMenu() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Refresh", Command: "changes.refresh"},
+		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
+		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
+	}
+}
+
+func (a *App) ShowChangesContextMenu(sx, sy int) {
+	openContextMenu(a, a.BuildChangesContextMenu(), sx, sy)
 }
 
 func (a *App) DiffSearchSources() []ui.DiffSearchSource {
@@ -557,6 +573,9 @@ func registerWidgetCallbacks(app *App) {
 			ui.MenuSep(),
 			{Label: "Rename", Command: "explorer.rename"},
 			{Label: "Delete", Command: "explorer.delete"},
+			ui.MenuSep(),
+			{Label: "Expand All", Command: "explorer.expandAll"},
+			{Label: "Collapse All", Command: "explorer.collapseAll"},
 		}
 		openContextMenu(app, items, sx, sy)
 	}
@@ -567,6 +586,9 @@ func registerWidgetCallbacks(app *App) {
 			{Label: "Copy Path", Command: "explorer.copyAbsolutePath"},
 			ui.MenuSep(),
 			{Label: "Remove from Workspace", Command: "explorer.removeRoot"},
+			ui.MenuSep(),
+			{Label: "Expand All", Command: "explorer.expandAll"},
+			{Label: "Collapse All", Command: "explorer.collapseAll"},
 		}
 		openContextMenu(app, items, sx, sy)
 	}
@@ -584,12 +606,17 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.OnReplaceAll = app.ApplySearchReplaceAll
 
 	app.Changes.OnRightClick = func(dir string, status git.FileStatus, sx, sy int) {
+		var items []ui.ContextMenuItem
 		if status.Staged {
-			openContextMenu(app, changesContextMenuStaged, sx, sy)
+			items = append(items, changesContextMenuStaged...)
 		} else {
-			openContextMenu(app, changesContextMenuUnstaged, sx, sy)
+			items = append(items, changesContextMenuUnstaged...)
 		}
+		items = append(items, ui.MenuSep())
+		items = append(items, app.BuildChangesContextMenu()...)
+		openContextMenu(app, items, sx, sy)
 	}
+	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
 	app.Changes.OnOpenFile = func(path string) {
 		app.EditorGroup.OpenFile(path)

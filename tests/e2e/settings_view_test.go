@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -156,6 +157,23 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	h.exec("settings.apply")
 	if h.app.Settings.Theme != "default-dark" {
 		t.Errorf("theme = %q, want default-dark", h.app.Settings.Theme)
+	}
+}
+
+func TestSettingsGitFileViewLiveAppliesOnlyAfterApply(t *testing.T) {
+	h := openSettings(t)
+	clickRowControl(t, h, "Advanced", "Advanced")
+	if !rowHas(h, "Git: file view", "List") {
+		t.Fatalf("Git file view should default to List:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Git: file view", "List")
+	clickRowControl(t, h, "Tree", "Tree")
+	if h.app.Settings.Git.FileView != config.GitFileViewList || h.app.Changes.FileView() != config.GitFileViewList {
+		t.Fatal("Git file view applied before Apply")
+	}
+	h.exec("settings.apply")
+	if h.app.Settings.Git.FileView != config.GitFileViewTree || h.app.Changes.FileView() != config.GitFileViewTree {
+		t.Fatalf("Git file view did not live-apply: settings=%q panel=%q", h.app.Settings.Git.FileView, h.app.Changes.FileView())
 	}
 }
 

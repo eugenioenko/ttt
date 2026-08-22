@@ -53,6 +53,36 @@ func (a *App) ToggleDiffHighContrast() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) UseTreeGitFileView() {
+	a.Settings.Git.FileView = config.GitFileViewTree
+	a.SaveAndApplySettings()
+}
+
+func (a *App) UseListGitFileView() {
+	a.Settings.Git.FileView = config.GitFileViewList
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ExpandAllGitFiles() {
+	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+		detail.ExpandAllFiles()
+		return
+	}
+	if a.Sidebar.ActivePanel == "changes" {
+		a.Changes.ExpandAll()
+	}
+}
+
+func (a *App) CollapseAllGitFiles() {
+	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+		detail.CollapseAllFiles()
+		return
+	}
+	if a.Sidebar.ActivePanel == "changes" {
+		a.Changes.CollapseAll()
+	}
+}
+
 func (a *App) ToggleAutoDedent() {
 	enabled := !a.Settings.Editor.IsAutoDedentEnabled()
 	a.Settings.Editor.AutoDedent = &enabled
@@ -268,10 +298,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
-		{Label: "Diff View Mode", Command: "options.diffViewMode"},
-		{Label: "Diff Context", Command: "options.diffContext"},
-		{Label: "Wrap Diff Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
-		{Label: "High Contrast Diffs", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
+		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
@@ -308,6 +336,16 @@ func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
 		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+	}
+}
+
+func (a *App) BuildGitFileOptions() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: "Tree", Command: "options.useGitFileTree", Checked: menuChecked(a.Settings.Git.FileView == config.GitFileViewTree)},
+		{Label: "List", Command: "options.useGitFileList", Checked: menuChecked(a.Settings.Git.FileView != config.GitFileViewTree)},
+		ui.MenuSep(),
+		{Label: "Expand All", Command: "changes.expandAll"},
+		{Label: "Collapse All", Command: "changes.collapseAll"},
 	}
 }
 
@@ -378,6 +416,18 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleDiffHighContrast", Title: "Toggle High Contrast Diffs",
 		Keywords: []string{"preferences", "settings", "git", "diff", "contrast", "color", "accessibility"},
 		Handler:  app.ToggleDiffHighContrast,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useGitFileTree", Title: "View Git Files as Tree",
+		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "tree"},
+		Handler:  app.UseTreeGitFileView,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.useGitFileList", Title: "View Git Files as List",
+		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "flat", "list"},
+		Handler:  app.UseListGitFileView,
 	})
 
 	reg.Register(command.Command{
