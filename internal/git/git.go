@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,11 @@ func RepoRoot(dir string) string {
 }
 
 func IsRepo(dir string) bool {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree")
+	return IsRepoContext(context.Background(), dir)
+}
+
+func IsRepoContext(ctx context.Context, dir string) bool {
+	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--is-inside-work-tree")
 	out, err := cmd.Output()
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
@@ -145,7 +150,11 @@ func Push(dir string) error {
 }
 
 func BranchName(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
+	return BranchNameContext(context.Background(), dir)
+}
+
+func BranchNameContext(ctx context.Context, dir string) string {
+	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -154,25 +163,145 @@ func BranchName(dir string) string {
 }
 
 type LogEntry struct {
+	// Hash is presentation-only; Ref is the stable full object identity.
 	Hash    string
+	Ref     string
 	Message string
 }
 
 func Log(dir string, n int) []LogEntry {
-	cmd := exec.Command("git", "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%h %s")
+	entries, _ := LogWithError(dir, n)
+	return entries
+}
+
+func LogWithError(dir string, n int) ([]LogEntry, error) {
+	return LogWithErrorContext(context.Background(), dir, n)
+}
+
+func LogWithErrorContext(ctx context.Context, dir string, n int) ([]LogEntry, error) {
+	if err := gitCommandContext(ctx, "-C", dir, "rev-parse", "--verify", "HEAD").Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if IsRepoContext(ctx, dir) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	cmd := gitCommandContext(ctx, "-C", dir, "log", fmt.Sprintf("-%d", n), "--pretty=format:%H %h %s")
 	out, err := cmd.Output()
 	if err != nil {
-		return nil
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
 	}
 	var entries []LogEntry
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
 			continue
 		}
-		hash, msg, _ := strings.Cut(line, " ")
-		entries = append(entries, LogEntry{Hash: hash, Message: msg})
+		ref, rest, ok := strings.Cut(line, " ")
+		if !ok {
+			continue
+		}
+		hash, msg, _ := strings.Cut(rest, " ")
+		entries = append(entries, LogEntry{Hash: hash, Ref: ref, Message: msg})
 	}
-	return entries
+	return entries, nil
+}
+
+func CommitAuthoredAt(dir, ref string) (time.Time, error) {
+	return CommitAuthoredAtContext(context.Background(), dir, ref)
+}
+
+func CommitAuthoredAtContext(ctx context.Context, dir, ref string) (time.Time, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "show", "-s", "--format=%aI", ref).Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return time.Time{}, ctx.Err()
+		}
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339, strings.TrimSpace(string(out)))
+}
+
+func CommitFiles(dir, hash string) ([]FileStatus, error) {
+	return CommitFilesContext(context.Background(), dir, hash)
+}
+
+func CommitFilesContext(ctx context.Context, dir, hash string) ([]FileStatus, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "show", "--name-status",
+		"--diff-merges=first-parent", "-M", "--format=", "-z", hash).Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	return parseNameStatusZ(out), nil
+}
+
+func parseNameStatusZ(out []byte) []FileStatus {
+	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	var files []FileStatus
+	for i := 0; i < len(fields); {
+		code := fields[i]
+		if code == "" {
+			i++
+			continue
+		}
+		status := code[:1]
+		if status == "R" || status == "C" {
+			if i+2 >= len(fields) {
+				break
+			}
+			files = append(files, FileStatus{Status: status, OldPath: fields[i+1], Path: fields[i+2]})
+			i += 3
+			continue
+		}
+		if i+1 >= len(fields) {
+			break
+		}
+		files = append(files, FileStatus{Status: status, Path: fields[i+1]})
+		i += 2
+	}
+	return files
+}
+
+func CommitFileDiff(dir, hash string, file FileStatus) (string, error) {
+	return CommitFileDiffContext(context.Background(), dir, hash, file)
+}
+
+func CommitFileDiffContext(ctx context.Context, dir, hash string, file FileStatus) (string, error) {
+	args := []string{"-C", dir, "--literal-pathspecs", "show", "--diff-merges=first-parent", "-M", "--format=", hash, "--"}
+	if file.OldPath != "" {
+		args = append(args, file.OldPath)
+	}
+	args = append(args, file.Path)
+	out, err := gitCommandContext(ctx, args...).Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
+	}
+	return string(out), nil
+}
+
+func CommitMessage(dir, hash string) (string, error) {
+	return CommitMessageContext(context.Background(), dir, hash)
+}
+
+func CommitMessageContext(ctx context.Context, dir, hash string) (string, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "show", "-s", "--format=%B", hash).Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
+	}
+	return strings.TrimRight(string(out), "\r\n"), nil
 }
 
 type BlameInfo struct {
@@ -320,10 +449,17 @@ func IgnoredFiles(dir string, paths []string) map[string]bool {
 }
 
 func ShowFile(dir, path, ref string) (string, error) {
+	return ShowFileContext(context.Background(), dir, path, ref)
+}
+
+func ShowFileContext(ctx context.Context, dir, path, ref string) (string, error) {
 	spec := ref + ":" + path
-	cmd := exec.Command("git", "-C", dir, "show", spec)
+	cmd := gitCommandContext(ctx, "-C", dir, "show", spec)
 	out, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", err
 	}
 	return string(out), nil

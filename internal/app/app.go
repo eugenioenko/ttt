@@ -80,6 +80,9 @@ type App struct {
 	Watcher                *watcher.Watcher
 	GitGutterGen           int
 	GitGutterTimer         *time.Timer
+	commitDetailMu         sync.Mutex
+	commitDetailNext       uint64
+	commitDetailRequests   map[string]commitDetailRequest
 	Version                string
 	PluginManager          *plugin.Manager
 	PendingPluginApprovals []*plugin.Plugin
@@ -435,6 +438,14 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Generation: generation}))
 	}
 	a.StartWatcher()
+
+	if a.Changes != nil {
+		a.Changes.Screen = screen
+		a.Changes.OnRefreshed = func() {
+			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
+		}
+		a.Changes.Refresh()
+	}
 
 	a.EditorGroup.OnError = func(msg string) {
 		a.StatusError(msg)

@@ -7,9 +7,10 @@ import (
 
 type WidgetAdapter struct {
 	BaseWidget
-	W      widgets.Widget
-	focus  *widgets.FocusManager
-	popups []widgets.PopupRenderer
+	W            widgets.Widget
+	focus        *widgets.FocusManager
+	popups       []widgets.PopupRenderer
+	rootCaptured bool
 }
 
 func NewWidgetAdapter(w widgets.Widget) *WidgetAdapter {
@@ -69,6 +70,13 @@ func (a *WidgetAdapter) wireTabbedCallbacks(w widgets.Widget) {
 	case *widgets.ScrollViewWidget:
 		if v.Child != nil {
 			a.wireTabbedCallbacks(v.Child)
+		}
+	case *ContentSplitWidget:
+		if v.Top != nil {
+			a.wireTabbedCallbacks(v.Top)
+		}
+		if v.Bottom != nil {
+			a.wireTabbedCallbacks(v.Bottom)
 		}
 	}
 }
@@ -143,6 +151,13 @@ func (a *WidgetAdapter) CursorPosition() (int, int, bool) {
 }
 
 func (a *WidgetAdapter) HandleEvent(ev tcell.Event) EventResult {
+	if tev, ok := ev.(*tcell.EventMouse); ok && a.rootCaptured {
+		result := a.W.HandleEvent(ev)
+		if tev.Buttons() == tcell.ButtonNone {
+			a.rootCaptured = false
+		}
+		return result
+	}
 	// Popups are painted over the tree, so they must claim clicks over the rows
 	// they cover before those rows get a chance at them.
 	if tev, ok := ev.(*tcell.EventMouse); ok {
@@ -153,5 +168,9 @@ func (a *WidgetAdapter) HandleEvent(ev tcell.Event) EventResult {
 	if result := a.focus.HandleEvent(ev); result != EventIgnored {
 		return result
 	}
-	return a.W.HandleEvent(ev)
+	result := a.W.HandleEvent(ev)
+	if result == EventCaptured {
+		a.rootCaptured = true
+	}
+	return result
 }

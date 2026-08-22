@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -17,14 +18,49 @@ type ChangesPanel struct {
 	Input     *widgets.InputWidget
 	CommitLog *widgets.TreeWidget
 	Adapter   *ui.WidgetAdapter
+	Split     *ui.ContentSplitWidget
 	Dirs      []string
+	// Screen is how a finished background read gets back onto the event loop.
+	// With no screen the panel reads git inline instead — see changes_async.go.
+	Screen eventPoster
 
 	groups     []changesGroup
 	multiRoot  bool
 	expanded   map[string]bool
 	lastLogDir string
+	// commandContext remembers which tree the reader last acted in. Modal
+	// widgets temporarily take focus before running a command, so live widget
+	// focus cannot reliably identify the selection the command should use.
+	commandContext changesCommandContext
+
+	// logDir is the repo the commit log currently displays, as opposed to
+	// lastLogDir which only guards redundant rebuilds. They differ because
+	// Refresh clears the guard while the rendered log stays put.
+	logDir string
+	// commitFiles caches a commit's file list. A commit's contents never
+	// change, so an entry can never go stale — only numerous, hence the bound.
+	commitFiles      map[string][]git.FileStatus
+	commitFilesOrder []string
+	// commitFilesPending marks reads already in flight, so repeated expands of
+	// one commit do not each start their own git process.
+	commitFilesPending map[string]commitFilesRequest
+	commitFilesNext    uint64
+	logCancel          context.CancelFunc
+	logCommits         map[string]commitFileRef
+	logFiles           map[string]commitFileRef
+	// logGen lets a finished read tell whether a newer one has superseded it.
+	logGen int
+	// pendingLogSelection is a selection that could not be restored yet because
+	// the node it names is a commit's child and those children are still being
+	// read.
+	pendingLogSelection string
+	// logExpanded and logSelected outlive any one repo's log, so switching
+	// between roots in a workspace and back returns to what was open.
+	logExpanded map[string]bool
+	logSelected map[string]string
 
 	OnOpenDiff       func(dir string, status git.FileStatus, extended bool)
+	OnOpenCommit     func(dir, ref, short string)
 	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
 	OnOpenFile       func(path string)
 	OnRightClick     func(dir string, status git.FileStatus, screenX, screenY int)
@@ -34,15 +70,38 @@ type ChangesPanel struct {
 	OnRefreshPR      func(url string)
 	OnConfirmDiscard func(message string, onConfirm func())
 	OnError          func(message string)
+	OnRefreshed      func()
 
 	PRGroups []prGroup
 }
+
+type changesCommandContext uint8
+
+const (
+	changesWorkingTree changesCommandContext = iota
+	changesCommitLog
+
+	changesHistoryMinHeight     = 4 // title plus three usable log rows
+	changesWorkingTreeMinHeight = 5 // input, divider, and three tree rows
+)
 
 type changesGroup struct {
 	Dir      string
 	Name     string
 	Staged   []git.FileStatus
 	Unstaged []git.FileStatus
+}
+
+// commitFileRef ties a commit-log node back to the file it stands for. The
+// panel keeps a map rather than encoding dir, hash and path into the node ID:
+// all three can contain a colon, and parseFileNode's reverse scan is already at
+// its limit with two fields.
+type commitFileRef struct {
+	Dir string
+	// Ref is the full hash, which is what git is asked with and what the tab
+	// key is built from. Short is only ever shown to the reader.
+	Ref   string
+	Short string
 }
 
 type prGroup struct {
@@ -59,9 +118,16 @@ type prGroup struct {
 
 func NewChangesPanel(dirs ...string) *ChangesPanel {
 	cp := &ChangesPanel{
-		Dirs:      dirs,
-		multiRoot: len(dirs) > 1,
-		expanded:  make(map[string]bool),
+		Dirs:        dirs,
+		multiRoot:   len(dirs) > 1,
+		expanded:    make(map[string]bool),
+		commitFiles: make(map[string][]git.FileStatus),
+		logCommits:  make(map[string]commitFileRef),
+		logFiles:    make(map[string]commitFileRef),
+		logExpanded: make(map[string]bool),
+		logSelected: make(map[string]string),
+
+		commitFilesPending: make(map[string]commitFilesRequest),
 	}
 
 	cp.Input = widgets.NewInputWidget(widgets.InputConfig{
@@ -85,24 +151,67 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 		OnSelect: func(node *widgets.TreeNode) {
 			cp.refreshCommitLog()
 		},
+		OnFocus: func() {
+			cp.commandContext = changesWorkingTree
+		},
 		OnKey: func(ev *tcell.EventKey, node *widgets.TreeNode) bool {
 			return cp.handleKey(ev)
 		},
 	})
 
-	cp.CommitLog = widgets.NewListWidget(nil)
+	cp.CommitLog = widgets.NewTreeWidget(widgets.TreeConfig{
+		Indent:             1,
+		EmptyText:          "No commits",
+		ActivateExpandable: true,
+		OnSelect: func(_ *widgets.TreeNode) {
+			// A deferred restore belongs to the selection that existed before the
+			// rebuild. Once the reader moves, their newer choice owns the cursor.
+			cp.pendingLogSelection = ""
+		},
+		OnFocus: func() {
+			cp.commandContext = changesCommitLog
+		},
+		OnExpand: func(node *widgets.TreeNode) {
+			cp.loadCommitFiles(node)
+		},
+		OnCommand: func(cmd string, node *widgets.TreeNode) {
+			if cmd == "activate" {
+				cp.openCommitLogNode(node)
+			}
+		},
+		OnKey: func(ev *tcell.EventKey, node *widgets.TreeNode) bool {
+			return cp.handleCommitLogKey(ev, node)
+		},
+	})
 
-	logBox := &widgets.BoxWidget{FixedHeight: 7}
+	logTitle := widgets.NewTitleWidget(widgets.TitleConfig{Title: "Commit History"})
+
+	logBox := &widgets.BoxWidget{}
 	logBox.Child = cp.CommitLog
 
 	divTop := widgets.NewDividerWidget(widgets.DividerConfig{})
-	divBottom := widgets.NewDividerWidget(widgets.DividerConfig{})
 
-	vstack := widgets.NewVStackWidget(cp.Tree, divBottom, cp.Input, divTop, logBox)
+	top := widgets.NewVStackWidget(cp.Tree, divTop, cp.Input)
+	bottom := widgets.NewVStackWidget(logTitle, logBox)
 
-	cp.Adapter = ui.NewWidgetAdapter(vstack)
+	cp.Split = ui.NewContentSplitWidget()
+	cp.Split.Top = top
+	cp.Split.Bottom = bottom
+	cp.Split.ShowBottom = true
+	cp.Split.BottomH = 0
+	cp.Split.BottomRatio = 0.5
+	cp.Split.MinBottomH = changesHistoryMinHeight
+	cp.Split.MinTopH = changesWorkingTreeMinHeight
+	cp.Split.OnResize = func(height int) {
+		// Like the sidebar width, this value lives for the panel's lifetime but is
+		// not written to settings. The split itself applies both child minimums.
+		cp.Split.BottomH = height
+	}
 
-	cp.Refresh()
+	cp.Adapter = ui.NewWidgetAdapter(cp.Split)
+
+	// App.Init installs the event poster before the first refresh so history can
+	// load asynchronously. Tests without an event loop can call Refresh inline.
 	return cp
 }
 
@@ -143,40 +252,17 @@ func filePaths(files []git.FileStatus) []string {
 }
 
 func (cp *ChangesPanel) Refresh() {
-	cp.lastLogDir = ""
+	cp.cancelHistoryReads()
+	dirs := append([]string(nil), cp.Dirs...)
 	cp.saveExpanded()
-	cp.groups = nil
-	seen := make(map[string]bool)
-	for _, dir := range cp.Dirs {
-		if root := git.RepoRoot(dir); root != "" {
-			dir = root
-		}
-		if seen[dir] {
-			continue
-		}
-		seen[dir] = true
-		files, err := git.StatusFiles(dir)
-		if err != nil {
-			files = nil
-		}
-		var staged, unstaged []git.FileStatus
-		for _, f := range files {
-			if f.Staged {
-				staged = append(staged, f)
-			} else {
-				unstaged = append(unstaged, f)
-			}
-		}
-		cp.groups = append(cp.groups, changesGroup{
-			Dir:      dir,
-			Name:     filepath.Base(dir),
-			Staged:   staged,
-			Unstaged: unstaged,
-		})
-	}
+	cp.groups = readChangesGroups(dirs)
 	cp.multiRoot = len(cp.groups)+len(cp.PRGroups) > 1
 	cp.buildTree()
+	cp.lastLogDir = ""
 	cp.refreshCommitLog()
+	if cp.OnRefreshed != nil {
+		cp.OnRefreshed()
+	}
 }
 
 func (cp *ChangesPanel) refreshCommitLog() {
@@ -185,44 +271,234 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		dir = cp.groups[0].Dir
 	}
 	if dir == "" {
+		// Emptying the log is a desired state too, so it has to invalidate a
+		// read still running — otherwise that read arrives and resurrects the
+		// repository that was just cleared.
+		cp.cancelHistoryReads()
+		cp.logGen++
+		cp.saveCommitLogState()
 		cp.lastLogDir = ""
+		cp.logDir = ""
 		cp.CommitLog.SetItems(nil)
 		return
 	}
 	if dir == cp.lastLogDir {
 		return
 	}
+	if dir != cp.logDir {
+		cp.cancelCommitFileReads()
+		cp.saveCommitLogState()
+		cp.logDir = ""
+		cp.logCommits = make(map[string]commitFileRef)
+		cp.logFiles = make(map[string]commitFileRef)
+		cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:loading", Label: "Loading…", Muted: true}})
+	}
 	cp.lastLogDir = dir
-	branch := git.BranchName(dir)
-	name := filepath.Base(dir)
-
-	if branch != "" {
-		cp.Input.Config.Placeholder = fmt.Sprintf("Commit to %s (%s)", name, branch)
-	} else {
-		cp.Input.Config.Placeholder = fmt.Sprintf("Commit to %s", name)
+	cp.logGen++
+	gen := cp.logGen
+	cp.cancelLogRead()
+	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
+	cp.logCancel = cancel
+	if cp.Screen == nil {
+		cp.ApplyCommitLog(readCommitLog(ctx, dir, gen))
+		cancel()
+		return
 	}
+	screen := cp.Screen
+	go func() {
+		screen.PostEvent(tcell.NewEventInterrupt(readCommitLog(ctx, dir, gen)))
+	}()
+}
 
-	entries := git.Log(dir, 10)
-	nodes := make([]*widgets.TreeNode, 0, len(entries)+1)
-	branchLabel := name
-	if branch != "" {
-		branchLabel = fmt.Sprintf("%s · %s", name, branch)
+func (cp *ChangesPanel) cancelLogRead() {
+	if cp.logCancel != nil {
+		cp.logCancel()
+		cp.logCancel = nil
 	}
-	nodes = append(nodes, &widgets.TreeNode{
-		ID:    "branch",
-		Label: branchLabel,
-		Icon:  "⎇",
+}
+
+func (cp *ChangesPanel) cancelCommitFileReads() {
+	for _, request := range cp.commitFilesPending {
+		request.Cancel()
+	}
+	cp.commitFilesPending = make(map[string]commitFilesRequest)
+}
+
+func (cp *ChangesPanel) cancelHistoryReads() {
+	cp.cancelLogRead()
+	cp.cancelCommitFileReads()
+}
+
+func (cp *ChangesPanel) Shutdown() {
+	cp.cancelHistoryReads()
+}
+
+// saveCommitLogState records the currently rendered log's expansion and
+// selection before it is thrown away. Collapsed entries are dropped rather than
+// stored as false: absent already means collapsed, and that keeps the map the
+// size of what is open rather than of everything ever opened.
+func (cp *ChangesPanel) saveCommitLogState() {
+	if cp.logDir == "" {
+		return
+	}
+	for _, node := range cp.CommitLog.Config.Items {
+		if _, ok := cp.logCommits[node.ID]; !ok {
+			continue
+		}
+		key := commitLogStateKey(cp.logDir, node.ID)
+		if node.Expanded {
+			cp.logExpanded[key] = true
+		} else {
+			delete(cp.logExpanded, key)
+		}
+	}
+	if cp.pendingLogSelection != "" {
+		// A second rebuild can land while the selected child's read is still in
+		// flight. Preserve the identity that can still arrive, not the parent row
+		// where the cursor is resting temporarily.
+		cp.logSelected[cp.logDir] = cp.pendingLogSelection
+	} else if node := cp.CommitLog.Selected(); node != nil {
+		cp.logSelected[cp.logDir] = node.ID
+	}
+}
+
+func commitLogStateKey(dir, nodeID string) string {
+	return dir + "\x00" + nodeID
+}
+
+// commitFilesCacheMax bounds the file-list cache. Entries are small and never
+// go stale, so the only reason to evict is that a long session browsing history
+// would otherwise grow one entry per commit ever opened, without limit.
+const commitFilesCacheMax = 256
+
+func (cp *ChangesPanel) cacheCommitFiles(key string, files []git.FileStatus) {
+	if _, exists := cp.commitFiles[key]; !exists {
+		cp.commitFilesOrder = append(cp.commitFilesOrder, key)
+	}
+	cp.commitFiles[key] = files
+	for len(cp.commitFilesOrder) > commitFilesCacheMax {
+		oldest := cp.commitFilesOrder[0]
+		cp.commitFilesOrder = cp.commitFilesOrder[1:]
+		delete(cp.commitFiles, oldest)
+	}
+}
+
+// loadCommitFiles fills in a commit's children when it is expanded. TreeWidget
+// calls this before it re-flattens, so mutating Children here is enough — no
+// second SetItems.
+func (cp *ChangesPanel) loadCommitFiles(node *widgets.TreeNode) {
+	commit, ok := cp.logCommits[node.ID]
+	if !ok {
+		return
+	}
+	// A read still running keeps its placeholder; one that failed is retried,
+	// since the failure was never cached.
+	if len(node.Children) > 0 {
+		first := node.Children[0].ID
+		if first != node.ID+errorSuffix {
+			return
+		}
+	}
+	node.Children = cp.commitChildren(commit.Dir, commit.Ref, commit.Short, node.ID)
+}
+
+// commitChildren returns what to render under a commit. A cached list renders
+// straight away; anything else has to be read, and git must not run on the
+// event path — so the read is started and a placeholder stands in until it
+// lands. A panel with no screen has no event loop to come back through and
+// reads inline instead.
+func (cp *ChangesPanel) commitChildren(dir, ref, short, parentID string) []*widgets.TreeNode {
+	if files, cached := cp.commitFiles[dir+"\x00"+ref]; cached {
+		return cp.commitFileNodes(dir, ref, short, parentID, files)
+	}
+	if cp.Screen == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), commitFilesTimeout)
+		defer cancel()
+		r := readCommitFiles(ctx, 0, dir, ref, short, parentID)
+		cp.recordCommitFiles(r)
+		return cp.childrenFor(r)
+	}
+	cp.fetchCommitFiles(dir, ref, short, parentID)
+	return []*widgets.TreeNode{{
+		ID:    parentID + loadingSuffix,
+		Label: "Loading…",
 		Muted: true,
-	})
-	for _, e := range entries {
+	}}
+}
+
+const (
+	loadingSuffix = ":loading"
+	errorSuffix   = ":error"
+	emptySuffix   = ":empty"
+)
+
+func errorNode(parentID string) *widgets.TreeNode {
+	return &widgets.TreeNode{ID: parentID + errorSuffix, Label: "Could not read commit", Muted: true}
+}
+
+func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files []git.FileStatus) []*widgets.TreeNode {
+	if len(files) == 0 {
+		// An expandable node that opens onto nothing reads as broken. A merge
+		// that changed nothing against its first parent is the usual cause.
+		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: "No files", Muted: true}}
+	}
+	nodes := make([]*widgets.TreeNode, 0, len(files))
+	for _, f := range files {
+		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
+		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short}
 		nodes = append(nodes, &widgets.TreeNode{
-			ID:    e.Hash,
-			Label: e.Message,
-			Icon:  "●",
-			Badge: e.Hash,
+			ID:           id,
+			Label:        f.Path,
+			Icon:         ui.StatusBadge(f.Status),
+			IconStyle:    ui.StatusStyle(f.Status),
+			TruncateLeft: true,
 		})
 	}
-	cp.CommitLog.SetItems(nodes)
+	return nodes
+}
+
+func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, _ bool) {
+	if node == nil {
+		return
+	}
+	ref, ok := cp.logFiles[node.ID]
+	if !ok {
+		return
+	}
+	if cp.OnOpenCommit != nil {
+		cp.OnOpenCommit(ref.Dir, ref.Ref, ref.Short)
+	}
+}
+
+func (cp *ChangesPanel) openCommitLogNode(node *widgets.TreeNode) {
+	if node == nil {
+		return
+	}
+	if commit, ok := cp.logCommits[node.ID]; ok {
+		if cp.OnOpenCommit != nil {
+			cp.OnOpenCommit(commit.Dir, commit.Ref, commit.Short)
+		}
+		return
+	}
+	cp.openCommitFile(node, false)
+}
+
+func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.TreeNode) bool {
+	if ev.Key() != tcell.KeyRune {
+		return false
+	}
+	switch term.KeyRune(ev) {
+	case 'r', 'R':
+		cp.Refresh()
+		return true
+	case 'c', 'o', 'v':
+		cp.openCommitFile(node, false)
+		return true
+	case 'e':
+		cp.openCommitFile(node, true)
+		return true
+	}
+	return false
 }
 
 func (cp *ChangesPanel) saveExpanded() {
@@ -722,6 +998,9 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 }
 
 func (cp *ChangesPanel) SelectedFile() (dir string, status git.FileStatus, ok bool) {
+	if cp.commandContext != changesWorkingTree {
+		return
+	}
 	node := cp.Tree.Selected()
 	if node == nil {
 		return
@@ -820,6 +1099,9 @@ func (cp *ChangesPanel) RemovePRGroups() {
 }
 
 func (cp *ChangesPanel) DiscardSelected() {
+	if cp.commandContext != changesWorkingTree {
+		return
+	}
 	dir, status, _, ok := cp.parseFileNode(cp.Tree.Selected())
 	if !ok || status.Staged {
 		return
@@ -828,6 +1110,9 @@ func (cp *ChangesPanel) DiscardSelected() {
 }
 
 func (cp *ChangesPanel) ToggleStageSelected() {
+	if cp.commandContext != changesWorkingTree {
+		return
+	}
 	node := cp.Tree.Selected()
 	if node == nil {
 		return
@@ -844,6 +1129,10 @@ func (cp *ChangesPanel) ToggleStageSelected() {
 }
 
 func (cp *ChangesPanel) OpenSelectedDiff(extended bool) {
+	if cp.commandContext == changesCommitLog {
+		cp.openCommitFile(cp.CommitLog.Selected(), extended)
+		return
+	}
 	node := cp.Tree.Selected()
 	if node == nil {
 		return
@@ -856,6 +1145,10 @@ func (cp *ChangesPanel) OpenSelectedDiff(extended bool) {
 }
 
 func (cp *ChangesPanel) ActivateSelected() {
+	if cp.commandContext == changesCommitLog {
+		cp.openCommitLogNode(cp.CommitLog.Selected())
+		return
+	}
 	if cp.selectedInPR() {
 		cp.OpenSelectedDiff(false)
 	} else {

@@ -29,6 +29,7 @@ func RunEventLoop(
 	app.eventLoopDoneSignal()
 	defer app.closeEventLoopDone()
 	defer app.Root.CancelPointerCapture()
+	defer app.ShutdownGitReads()
 	if app.Watcher != nil {
 		defer app.Watcher.Close()
 	}
@@ -377,6 +378,14 @@ func RunEventLoop(
 				app.SyncLanguageSegment()
 			case *RepoOpResult:
 				app.HandleRepoOpResult(v)
+			case *CommitLogResult:
+				app.Changes.ApplyCommitLog(v)
+			case *CommitFilesResult:
+				app.Changes.ApplyCommitFiles(v)
+			case *CommitDetailResult:
+				app.ApplyCommitDetail(v)
+			case *CommitDetailContextResult:
+				app.ApplyCommitDetailContext(v)
 			case *FileChangedResult:
 				app.HandleFileChanged(v.Path)
 			case *ui.SearchBatch:

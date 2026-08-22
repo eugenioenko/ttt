@@ -57,3 +57,26 @@ func TestCommitToCoversEveryField(t *testing.T) {
 		}
 	}
 }
+
+func TestShowSettingsReopenPreservesPendingWorkingView(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	a.EditorGroup.OnContentTabClose = func(id string) {
+		a.cleanupPluginDetailTab(id)
+		a.cleanupSettingsTab(id)
+	}
+	a.ShowSettings()
+	first := a.settingsView
+	if first == nil {
+		t.Fatal("opening settings did not create a working view")
+	}
+	first.working.Editor.TabSize = 7
+
+	a.ShowSettings()
+
+	if a.settingsView != first {
+		t.Fatalf("reopening settings discarded working view: got %p, want %p", a.settingsView, first)
+	}
+	if got := a.settingsView.working.Editor.TabSize; got != 7 {
+		t.Fatalf("reopening settings discarded pending tab size: got %d, want 7", got)
+	}
+}

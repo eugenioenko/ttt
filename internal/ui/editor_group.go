@@ -466,6 +466,7 @@ func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {
 func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 	for i, t := range g.tabs {
 		if t.FilePath == id {
+			g.notifyContentTabClose(t)
 			t.Content = content
 			t.Title = title
 			g.tabs[i] = t
@@ -484,9 +485,7 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 func (g *EditorGroupWidget) ClosePluginTab(id string) {
 	for i, t := range g.tabs {
 		if t.FilePath == id {
-			if t.Content != nil && g.OnContentTabClose != nil {
-				g.OnContentTabClose(t.FilePath)
-			}
+			g.notifyContentTabClose(t)
 			if i < g.pinnedCount {
 				g.pinnedCount--
 			}
@@ -508,6 +507,18 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 			g.syncTabs()
 			return
 		}
+	}
+}
+
+func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
+	if tab.Content == nil {
+		return
+	}
+	if closer, ok := tab.Content.(interface{ Close() }); ok {
+		closer.Close()
+	}
+	if g.OnContentTabClose != nil {
+		g.OnContentTabClose(tab.FilePath)
 	}
 }
 
@@ -602,6 +613,15 @@ func (g *EditorGroupWidget) ActiveDiffWidget() *DiffViewWidget {
 	return nil
 }
 
+func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	detail, _ := t.Content.(*CommitDetailWidget)
+	return detail
+}
+
 func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
@@ -627,6 +647,16 @@ func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffViewWidget {
 				return dv
 			}
 			return nil
+		}
+	}
+	return nil
+}
+
+func (g *EditorGroupWidget) CommitDetailWidgetByTab(tabName string) *CommitDetailWidget {
+	for _, t := range g.tabs {
+		if t.FilePath == tabName {
+			detail, _ := t.Content.(*CommitDetailWidget)
+			return detail
 		}
 	}
 	return nil
@@ -731,9 +761,7 @@ func (g *EditorGroupWidget) CloseTab() {
 	if g.OnFileClose != nil && closing.Highlighter != nil && !closing.Virtual {
 		g.OnFileClose(closing.FilePath, closing.Highlighter.Language())
 	}
-	if closing.Content != nil && g.OnContentTabClose != nil {
-		g.OnContentTabClose(closing.FilePath)
-	}
+	g.notifyContentTabClose(closing)
 	if g.active < g.pinnedCount {
 		g.pinnedCount--
 	}
@@ -767,9 +795,7 @@ func (g *EditorGroupWidget) CloseOtherTabs() {
 			kept = append(kept, tab)
 			continue
 		}
-		if g.OnContentTabClose != nil && tab.Content != nil {
-			g.OnContentTabClose(tab.FilePath)
-		}
+		g.notifyContentTabClose(tab)
 	}
 	g.tabs = kept
 	for i, tab := range g.tabs {
@@ -797,9 +823,7 @@ func (g *EditorGroupWidget) CloseOtherSaved() {
 			kept = append(kept, g.tabs[i])
 			continue
 		}
-		if g.tabs[i].Content != nil && g.OnContentTabClose != nil {
-			g.OnContentTabClose(g.tabs[i].FilePath)
-		}
+		g.notifyContentTabClose(g.tabs[i])
 	}
 	g.tabs = kept
 	for i, tab := range g.tabs {
@@ -824,6 +848,9 @@ func (g *EditorGroupWidget) HasDirtyOtherTabs() bool {
 }
 
 func (g *EditorGroupWidget) CloseAllTabs() {
+	for i := g.pinnedCount; i < len(g.tabs); i++ {
+		g.notifyContentTabClose(g.tabs[i])
+	}
 	kept := slices.Clone(g.tabs[:g.pinnedCount])
 	if len(kept) == 0 {
 		kept = []editorTab{{
@@ -847,11 +874,21 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 	for i := range g.tabs {
 		if i < g.pinnedCount || (g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty) {
 			kept = append(kept, g.tabs[i])
+			continue
 		}
+		g.notifyContentTabClose(g.tabs[i])
 	}
 	if len(kept) == 0 {
-		g.CloseAllTabs()
-		return
+		kept = []editorTab{{
+			FilePath: "untitled",
+			Buf:      &buffer.Buffer{Lines: []string{""}},
+			Cur:      &cursor.Cursor{},
+			Vp:       &view.Viewport{},
+			Undo:     g.newUndoStack(),
+			Sel:      &selection.Selection{},
+			Virtual:  true,
+		}}
+		g.pinnedCount = 0
 	}
 	g.tabs = kept
 	if g.active >= len(g.tabs) {
@@ -1682,6 +1719,12 @@ func (g *EditorGroupWidget) Copy() {
 	}
 	if dv, ok := t.Content.(*DiffViewWidget); ok {
 		if text := dv.CopySelection(); text != "" {
+			clipboard.Set(text)
+		}
+		return
+	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		if text := detail.CopySelection(); text != "" {
 			clipboard.Set(text)
 		}
 		return
