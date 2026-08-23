@@ -1,0 +1,120 @@
+name: Pre-Release Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Number of test iterations"
+        required: false
+        default: "20"
+        type: string
+
+env:
+  GO_VERSION: "1.25"
+
+jobs:
+  test-repeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run tests x${{ inputs.iterations }}
+        run: |
+          for i in $(seq 1 ${{ inputs.iterations }}); do
+            echo "=== Iteration $i / ${{ inputs.iterations }} ==="
+            go test ./... || { echo "FAILED on iteration $i"; exit 1; }
+          done
+
+  test-race-repeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run race tests x${{ inputs.iterations }}
+        run: |
+          for i in $(seq 1 ${{ inputs.iterations }}); do
+            echo "=== Iteration $i / ${{ inputs.iterations }} ==="
+            go test -race ./... || { echo "FAILED on iteration $i"; exit 1; }
+          done
+
+  functional-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binary
+        run: make build
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: tests/functional/pnpm-lock.yaml
+
+      - name: Install test dependencies
+        working-directory: tests/functional
+        run: pnpm install
+
+      - name: Run functional tests
+        working-directory: tests/functional
+        run: pnpm exec vitest run --reporter=verbose
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binary
+        run: make build
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: tests/integration/pnpm-lock.yaml
+
+      - name: Install test dependencies
+        working-directory: tests/integration
+        run: pnpm install --frozen-lockfile
+
+      - name: Run integration tests
+        working-directory: tests/integration
+        run: pnpm exec vitest run --reporter=verbose --exclude='**/lsp*.test.js'
