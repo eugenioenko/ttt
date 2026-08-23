@@ -1,0 +1,201 @@
+{
+  "default": {
+    "fg": "#e8d5b7",
+    "bg": "#1e1610"
+  },
+  "muted": {
+    "fg": "#7a6652"
+  },
+  "success": {
+    "fg": "#8faa5b"
+  },
+  "danger": {
+    "fg": "#c75643"
+  },
+  "warning": {
+    "fg": "#e8a848"
+  },
+  "border": {
+    "fg": "#3d3028"
+  },
+  "statusBar": {
+    "fg": "#d4b896"
+  },
+  "tabs": {
+    "active": {
+      "fg": "#f2c464",
+      "bold": true
+    },
+    "inactive": {
+      "fg": "#7a6652"
+    }
+  },
+  "sidebar": {
+    "header": {
+      "fg": "#f2c464",
+      "bold": true
+    },
+    "item": {
+      "fg": "#d4b896"
+    },
+    "selected": {
+      "fg": "#f5e0c0",
+      "bg": "#2e2218"
+    }
+  },
+  "dialog": {
+    "input": {},
+    "item": {
+      "fg": "#e8d5b7"
+    },
+    "selected": {
+      "fg": "#f5e0c0",
+      "bg": "#2e2218"
+    },
+    "muted": {
+      "fg": "#7a6652"
+    }
+  },
+  "editor": {
+    "lineNumber": {
+      "fg": "#3d3028"
+    },
+    "activeLine": {
+      "bg": "#281e14"
+    },
+    "selection": {
+      "bg": "#3d3028"
+    },
+    "searchMatch": {
+      "fg": "#1e1610",
+      "bg": "#f2c464"
+    },
+    "searchActive": {
+      "fg": "#1e1610",
+      "bg": "#e8a848"
+    },
+    "bracketMatch": {
+      "bg": "#4a3828"
+    },
+    "diagnostics": {
+      "error": {
+        "fg": "#c75643"
+      },
+      "warning": {
+        "fg": "#e8a848"
+      },
+      "info": {
+        "fg": "#7ab0c4"
+      },
+      "hint": {
+        "fg": "#7a6652"
+      }
+    }
+  },
+  "menu": {
+    "item": {
+      "fg": "#e8d5b7"
+    },
+    "active": {
+      "fg": "#f5e0c0",
+      "bg": "#2e2218",
+      "bold": true
+    }
+  },
+  "hover": {
+    "bold": {
+      "fg": "#f5e0c0",
+      "bold": true
+    },
+    "code": {
+      "fg": "#7ab0c4"
+    }
+  },
+  "diff": {
+    "added": {
+      "bg": "#1e2c14"
+    },
+    "deleted": {
+      "bg": "#2e1610"
+    },
+    "modified": {
+      "bg": "#2e2810"
+    }
+  },
+  "scrollbar": {
+    "fg": "#8a6838",
+    "bg": "#281e14"
+  },
+  "syntax": {
+    "comment": {
+      "fg": "#7a6652"
+    },
+    "string": {
+      "fg": "#8faa5b"
+    },
+    "keyword": {
+      "fg": "#d07830",
+      "bold": true
+    },
+    "number": {
+      "fg": "#c9845e"
+    },
+    "operator": {
+      "fg": "#d4a058"
+    },
+    "function": {
+      "fg": "#e8a848"
+    },
+    "type": {
+      "fg": "#f2c464"
+    },
+    "builtin": {
+      "fg": "#c9a050"
+    },
+    "variable": {
+      "fg": "#e8d5b7"
+    },
+    "punctuation": {
+      "fg": "#d4b896"
+    },
+    "tag": {
+      "fg": "#d07830",
+      "bold": true
+    },
+    "attribute": {
+      "fg": "#c9a050"
+    }
+  },
+  "terminal": {
+    "foreground": "#e8d5b7",
+    "background": "#1e1610",
+    "black": "#281e14",
+    "red": "#c75643",
+    "green": "#8faa5b",
+    "yellow": "#e8a848",
+    "blue": "#7ab0c4",
+    "magenta": "#b07890",
+    "cyan": "#6a9e8a",
+    "white": "#d4b896",
+    "brightBlack": "#3d3028",
+    "brightRed": "#e06850",
+    "brightGreen": "#a4c068",
+    "brightYellow": "#f2c464",
+    "brightBlue": "#8ec0d4",
+    "brightMagenta": "#c890a8",
+    "brightCyan": "#80b8a0",
+    "brightWhite": "#f5e0c0"
+  },
+  "borders": {
+    "horizontal": "─",
+    "vertical": "│",
+    "topLeft": "┌",
+    "topRight": "┐",
+    "bottomLeft": "└",
+    "bottomRight": "┘",
+    "topTee": "┬",
+    "bottomTee": "┴",
+    "leftTee": "├",
+    "rightTee": "┤"
+  }
+}
