@@ -441,9 +441,9 @@ type DeleteSelectionCommand struct {
 	Deleted             string
 }
 
-func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
+func (c *DeleteSelectionCommand) ComputeDeleted(b *buffer.Buffer) string {
 	if c.StartLine >= len(b.Lines) {
-		return
+		return ""
 	}
 	if c.EndLine >= len(b.Lines) {
 		c.EndLine = len(b.Lines) - 1
@@ -451,47 +451,48 @@ func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
 	}
 
 	startRunes := []rune(b.Lines[c.StartLine])
-	sc := c.StartCol
-	if sc > len(startRunes) {
-		sc = len(startRunes)
+	if c.StartCol > len(startRunes) {
+		c.StartCol = len(startRunes)
 	}
 
 	if c.StartLine == c.EndLine {
 		endRunes := []rune(b.Lines[c.StartLine])
-		ec := c.EndCol
-		if ec > len(endRunes) {
-			ec = len(endRunes)
+		if c.EndCol > len(endRunes) {
+			c.EndCol = len(endRunes)
 		}
-		if sc > ec {
-			sc = ec
+		if c.StartCol > c.EndCol {
+			c.StartCol = c.EndCol
 		}
-		c.Deleted = string(endRunes[sc:ec])
-		b.Lines[c.StartLine] = string(startRunes[:sc]) + string(endRunes[ec:])
-		b.Dirty = true
-		return
+		c.Deleted = string(endRunes[c.StartCol:c.EndCol])
+		return c.Deleted
 	}
 
 	endRunes := []rune(b.Lines[c.EndLine])
-	ec := c.EndCol
-	if ec > len(endRunes) {
-		ec = len(endRunes)
+	if c.EndCol > len(endRunes) {
+		c.EndCol = len(endRunes)
 	}
 
-	// Build deleted text
 	var del []rune
-	del = append(del, startRunes[sc:]...)
+	del = append(del, startRunes[c.StartCol:]...)
 	del = append(del, '\n')
 	for l := c.StartLine + 1; l < c.EndLine; l++ {
 		del = append(del, []rune(b.Lines[l])...)
 		del = append(del, '\n')
 	}
-	del = append(del, endRunes[:ec]...)
+	del = append(del, endRunes[:c.EndCol]...)
 	c.Deleted = string(del)
+	return c.Deleted
+}
 
-	// Merge start prefix with end suffix
-	b.Lines[c.StartLine] = string(startRunes[:sc]) + string(endRunes[ec:])
+func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
+	if c.StartLine >= len(b.Lines) {
+		return
+	}
+	c.ComputeDeleted(b)
 
-	// Remove lines between
+	startRunes := []rune(b.Lines[c.StartLine])
+	endRunes := []rune(b.Lines[c.EndLine])
+	b.Lines[c.StartLine] = string(startRunes[:c.StartCol]) + string(endRunes[c.EndCol:])
 	if c.EndLine > c.StartLine {
 		b.Lines = append(b.Lines[:c.StartLine+1], b.Lines[c.EndLine+1:]...)
 	}
