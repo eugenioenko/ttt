@@ -12,6 +12,27 @@ afterEach(() => {
   if (dir) cleanupDir(dir);
 });
 
+function createExternalFileSymlinkFixture() {
+  dir = createTempDir();
+  const repo = join(dir, "repo");
+  mkdirSync(repo);
+  createGitRepo(repo);
+  git(repo, "branch", "-m", "filesymlinkbranch");
+
+  const nested = join(repo, "nested");
+  mkdirSync(nested);
+  const target = join(nested, "file.txt");
+  writeFileSync(target, "symlink target\n");
+  git(repo, "add", "nested/file.txt");
+  git(repo, "commit", "-qm", "add symlink target");
+
+  const plain = join(dir, "plain");
+  mkdirSync(plain);
+  const link = join(plain, "file-link.txt");
+  symlinkSync(target, link);
+  return { target, link };
+}
+
 describe("BUG-044: git branch indicator missing when the opened file is below the repo root", () => {
   it("status bar shows the branch for a file in a repo subdirectory", () => {
     dir = createTempDir();
@@ -65,31 +86,30 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
     expect(snapshots[plain]).not.toContain("linkedbranch");
   });
 
-  it("shows the target repository branch without false gutter markers through an external file symlink", () => {
-    dir = createTempDir();
-    const repo = join(dir, "repo");
-    mkdirSync(repo);
-    createGitRepo(repo);
-    git(repo, "branch", "-m", "filesymlinkbranch");
-
-    const nested = join(repo, "nested");
-    mkdirSync(nested);
-    const target = join(nested, "file.txt");
-    writeFileSync(target, "symlink target\n");
-    git(repo, "add", "nested/file.txt");
-    git(repo, "commit", "-qm", "add symlink target");
-
-    const plain = join(dir, "plain");
-    mkdirSync(plain);
-    const link = join(plain, "file-link.txt");
-    symlinkSync(target, link);
+  it("shows target repository branch and blame without false gutter markers through an external file symlink", () => {
+    const { link } = createExternalFileSymlinkFixture();
 
     tui.start(link);
     tui.waitFor("filesymlinkbranch");
+    tui.waitFor("Test User");
     tui.waitStable();
     const screen = tui.snapshot();
     const { snapshots } = tui.run();
     expect(snapshots[screen]).toContain("filesymlinkbranch");
+    expect(snapshots[screen]).toContain("Test User");
     expect(snapshots[screen]).not.toContain("│▎");
+  });
+
+  it("shows a modified tracked target gutter marker through an external file symlink", () => {
+    const { target, link } = createExternalFileSymlinkFixture();
+    writeFileSync(target, "modified target\n");
+
+    tui.start(link);
+    tui.waitFor("filesymlinkbranch");
+    tui.waitFor("│▎");
+    const screen = tui.snapshot();
+    const { snapshots } = tui.run();
+    expect(snapshots[screen]).toContain("modified target");
+    expect(snapshots[screen]).toContain("│▎");
   });
 });

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -36,16 +35,10 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		return
 	}
 
-	gitPath, err := a.Repository.resolvePathIdentity(filePath)
-	if err != nil || !pathWithin(repoDir, gitPath) {
+	relPath, ok := a.Repository.gitRelativePath(repoDir, filePath)
+	if !ok {
 		return
 	}
-	relPath, err := filepath.Rel(repoDir, gitPath)
-	if err != nil {
-		return
-	}
-	// Normalize to forward slashes for git
-	relPath = filepath.ToSlash(relPath)
 
 	a.GitGutterGen++
 	gen := a.GitGutterGen

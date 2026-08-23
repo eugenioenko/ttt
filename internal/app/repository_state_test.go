@@ -192,7 +192,7 @@ func TestActiveRepositoryIdentityIsCachedPerFileAndClearsOutsideGit(t *testing.T
 }
 
 func TestReadRepositoryIdentityUsesStableFileSymlinkIdentity(t *testing.T) {
-	repo := testAppRepository(t)
+	repo := canonicalTestPath(t, testAppRepository(t))
 	target := filepath.Join(repo, "nested", "file.txt")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
@@ -200,7 +200,7 @@ func TestReadRepositoryIdentityUsesStableFileSymlinkIdentity(t *testing.T) {
 	if err := os.WriteFile(target, []byte("content\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	external := t.TempDir()
+	external := canonicalTestPath(t, t.TempDir())
 	link := filepath.Join(external, "file-link.txt")
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
@@ -224,10 +224,54 @@ func TestReadRepositoryIdentityUsesStableFileSymlinkIdentity(t *testing.T) {
 	}
 }
 
+func TestGitRelativePathEnablesBlameForExternalFileSymlink(t *testing.T) {
+	repo := canonicalTestPath(t, testAppRepository(t))
+	target := filepath.Join(repo, "nested", "blamed.txt")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("blamed line\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testAppGit(t, repo, "add", "nested/blamed.txt")
+	testAppGit(t, repo, "commit", "-m", "add blamed file")
+
+	external := canonicalTestPath(t, t.TempDir())
+	link := filepath.Join(external, "blamed-link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if info := git.BlameLine(repo, link, 1); info != nil {
+		t.Fatalf("raw external blame = %+v, want nil", info)
+	}
+
+	state := NewRepositoryState(nil, nil)
+	blamePath, ok := state.gitRelativePath(repo, link)
+	if !ok || blamePath != "nested/blamed.txt" {
+		t.Fatalf("canonical blame path = (%q, %t), want nested/blamed.txt", blamePath, ok)
+	}
+	info := git.BlameLine(repo, blamePath, 1)
+	if info == nil || info.Author != "Test User" {
+		t.Fatalf("canonical blame = %+v, want Test User", info)
+	}
+
+	outsideTarget := filepath.Join(external, "outside.txt")
+	if err := os.WriteFile(outsideTarget, []byte("outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outsideLink := filepath.Join(canonicalTestPath(t, t.TempDir()), "outside-link.txt")
+	if err := os.Symlink(outsideTarget, outsideLink); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if path, ok := state.gitRelativePath(repo, outsideLink); ok {
+		t.Fatalf("outside blame path = %q, want containment rejection", path)
+	}
+}
+
 func TestRepositoryDiscoveryDirectoryHandlesSymlinksMissingPathsAndInvalidLinks(t *testing.T) {
-	repo := t.TempDir()
+	repo := canonicalTestPath(t, t.TempDir())
 	nested := filepath.Join(repo, "nested")
-	external := t.TempDir()
+	external := canonicalTestPath(t, t.TempDir())
 	if err := os.Mkdir(nested, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +329,7 @@ func TestRepositoryDiscoveryDirectoryHandlesSymlinksMissingPathsAndInvalidLinks(
 }
 
 func TestRepositoryForPathUsesStableFileIdentityAndLongestNestedRoot(t *testing.T) {
-	outer := t.TempDir()
+	outer := canonicalTestPath(t, t.TempDir())
 	inner := filepath.Join(outer, "nested")
 	if err := os.Mkdir(inner, 0o755); err != nil {
 		t.Fatal(err)
@@ -1124,6 +1168,15 @@ func testAppRepository(t *testing.T) string {
 	testAppGit(t, dir, "add", "initial.txt")
 	testAppGit(t, dir, "commit", "-m", "initial")
 	return dir
+}
+
+func canonicalTestPath(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved
 }
 
 func testAppGit(t *testing.T, dir string, args ...string) {
