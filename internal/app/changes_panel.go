@@ -623,6 +623,9 @@ func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.Tre
 		cp.openCommitLogNode(node)
 		return true
 	case 'e':
+		if node == nil {
+			return false
+		}
 		if _, isCommit := cp.logCommits[node.ID]; isCommit {
 			cp.openCommitLogNode(node)
 		} else {
