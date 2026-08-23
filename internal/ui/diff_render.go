@@ -72,6 +72,7 @@ type DiffModeSurface interface {
 	SetWrapMode(DiffWrapMode)
 	ApplyDefaultWrapMode(DiffWrapMode)
 	SetDiffHighContrast(bool)
+	SetDiffCollapsedEmphasis(bool)
 }
 
 // diffUnifiedLine points back to its source split row so search and selection
@@ -149,6 +150,26 @@ func diffKindForeground(kind diff.LineKind, highContrast bool) term.Style {
 	}
 }
 
+func collapsedDiffRowStyle(kind diff.LineKind, emphasized, hovered bool) term.Style {
+	if kind != diff.Collapsed {
+		return diffKindStyle(kind)
+	}
+	if hovered {
+		return term.StyleDiffCollapsedHover
+	}
+	if emphasized {
+		return term.StyleDiffCollapsedEmphasis
+	}
+	return term.StyleDefault
+}
+
+func collapsedDiffGutterStyle(kind diff.LineKind, emphasized, hovered bool) term.Style {
+	if kind != diff.Collapsed || !emphasized {
+		return term.StyleDefault
+	}
+	return collapsedDiffRowStyle(kind, true, hovered)
+}
+
 func diffLineVisualWidth(text string) int {
 	width := 0
 	for _, ch := range text {
@@ -166,6 +187,10 @@ func diffWrapStarts(text string, width int) []int {
 }
 
 func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine) {
+	renderDiffGutterWithCollapsedStyle(surface, x, y, width, line, term.StyleDefault)
+}
+
+func renderDiffGutterWithCollapsedStyle(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style) {
 	number := ""
 	if line.Num > 0 {
 		number = fmt.Sprintf("%d", line.Num)
@@ -184,6 +209,9 @@ func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine) {
 		bgStyle = term.StyleDiffDeleted
 	case diff.Collapsed:
 		marker = '▶'
+		if collapsedStyle != term.StyleDefault {
+			style = collapsedStyle
+		}
 	}
 	text := fmt.Sprintf("%*s %c", width-2, number, marker)
 	for column, ch := range []rune(text) {
@@ -198,7 +226,7 @@ func renderDiffText(surface Surface, x, y, width int, text string, baseStyle, fo
 	if foregroundStyle != term.StyleDefault {
 		spans = nil
 	}
-	fullBaseStyle := baseStyle == term.StyleDiffCollapsedHover
+	fullBaseStyle := baseStyle == term.StyleDiffCollapsedEmphasis || baseStyle == term.StyleDiffCollapsedHover
 	blank := term.Cell{Ch: ' '}
 	if fullBaseStyle {
 		blank.Style = baseStyle

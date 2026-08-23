@@ -81,10 +81,11 @@ type EditorStyles struct {
 }
 
 type DiffStyles struct {
-	Added          StyleDef `json:"added"`
-	Deleted        StyleDef `json:"deleted"`
-	Modified       StyleDef `json:"modified"`
-	CollapsedHover StyleDef `json:"collapsedHover,omitempty"`
+	Added             StyleDef `json:"added"`
+	Deleted           StyleDef `json:"deleted"`
+	Modified          StyleDef `json:"modified"`
+	CollapsedEmphasis StyleDef `json:"collapsedEmphasis,omitempty"`
+	CollapsedHover    StyleDef `json:"collapsedHover,omitempty"`
 	// Collapsed is retained for themes created against the original collapsed-gap contract.
 	// Deprecated: use CollapsedHover.
 	Collapsed      StyleDef `json:"collapsed,omitempty"`
@@ -267,6 +268,9 @@ func DefaultTheme() ThemeConfig {
 			BracketColors: []string{"yellow", "magenta", "blue"},
 		},
 		Scrollbar: StyleDef{Fg: "#999999", Bg: "#555555"},
+		Diff: DiffStyles{
+			CollapsedEmphasis: StyleDef{Bold: true},
+		},
 
 		Syntax: SyntaxStyles{
 			Comment:     StyleDef{Fg: "#6a9955"},
@@ -313,6 +317,12 @@ func (t *ThemeConfig) ResolveColors() {
 	fillBg(&t.Diff.Added, "#1e2e1e")
 	fillBg(&t.Diff.Deleted, "#2e1e1e")
 	fillBg(&t.Diff.Modified, "#2e2e1e")
+	fillFg(&t.Diff.CollapsedEmphasis, t.Default.Fg)
+	emphasisBg := t.Diff.CollapsedEmphasis.Bg
+	if emphasisBg == "" {
+		emphasisBg = t.Default.Bg
+	}
+	t.Diff.CollapsedEmphasis.Fg = contrastSafeForeground(t.Diff.CollapsedEmphasis.Fg, emphasisBg, t.Default.Fg)
 	if t.Diff.CollapsedHover == (StyleDef{}) && t.Diff.Collapsed != (StyleDef{}) {
 		t.Diff.CollapsedHover = t.Diff.Collapsed
 	}

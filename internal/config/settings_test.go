@@ -161,8 +161,8 @@ func TestDefaultEditorSettings(t *testing.T) {
 	if e.BracketPairColorization {
 		t.Error("expected BracketPairColorization false by default")
 	}
-	if e.DiffMode != DiffModeSplit || e.DiffContext != DiffContextChanges || e.DiffWordWrap || e.DiffHighContrast {
-		t.Errorf("legacy diff defaults = mode %q context %q wrap=%v contrast=%v, want split/changes/false/false", e.DiffMode, e.DiffContext, e.DiffWordWrap, e.DiffHighContrast)
+	if e.DiffMode != DiffModeSplit || e.DiffContext != DiffContextChanges || e.DiffWordWrap || e.DiffHighContrast || e.DiffCollapsedEmphasis {
+		t.Errorf("legacy diff defaults = mode %q context %q wrap=%v contrast=%v emphasis=%v, want split/changes/false/false/false", e.DiffMode, e.DiffContext, e.DiffWordWrap, e.DiffHighContrast, e.DiffCollapsedEmphasis)
 	}
 	if !e.IsShowTrailingNewlineEnabled() {
 		t.Error("expected ShowTrailingNewline true by default (nil)")
@@ -175,7 +175,7 @@ func TestLegacySettingsJSONKeepsDiffDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	normalizeSettings(&s)
-	if s.Editor.DiffMode != DiffModeSplit || s.Editor.DiffContext != DiffContextChanges || s.Editor.DiffWordWrap || s.Editor.DiffHighContrast {
+	if s.Editor.DiffMode != DiffModeSplit || s.Editor.DiffContext != DiffContextChanges || s.Editor.DiffWordWrap || s.Editor.DiffHighContrast || s.Editor.DiffCollapsedEmphasis {
 		t.Fatalf("legacy settings diff presentation = %+v", s.Editor)
 	}
 }
@@ -196,6 +196,7 @@ func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
 	s.Editor.DiffContext = DiffContextFull
 	s.Editor.DiffWordWrap = true
 	s.Editor.DiffHighContrast = true
+	s.Editor.DiffCollapsedEmphasis = true
 
 	data, err := json.Marshal(s)
 	if err != nil {
@@ -206,7 +207,7 @@ func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	normalizeSettings(&loaded)
-	if loaded.Editor.DiffMode != DiffModeUnified || loaded.Editor.DiffContext != DiffContextFull || !loaded.Editor.DiffWordWrap || !loaded.Editor.DiffHighContrast {
+	if loaded.Editor.DiffMode != DiffModeUnified || loaded.Editor.DiffContext != DiffContextFull || !loaded.Editor.DiffWordWrap || !loaded.Editor.DiffHighContrast || !loaded.Editor.DiffCollapsedEmphasis {
 		t.Fatalf("round-tripped diff presentation = %+v", loaded.Editor)
 	}
 }

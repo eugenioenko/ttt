@@ -218,6 +218,8 @@ func TestStyleConstants(t *testing.T) {
 		"StyleDiffAdded":      StyleDiffAdded,
 		"StyleDiffDeleted":    StyleDiffDeleted,
 		"StyleDiffModified":   StyleDiffModified,
+		"collapsedEmphasis":   StyleDiffCollapsedEmphasis,
+		"collapsedHover":      StyleDiffCollapsedHover,
 		"StyleSyntaxComment":  StyleSyntaxComment,
 		"StyleSyntaxString":   StyleSyntaxString,
 		"StyleSyntaxKeyword":  StyleSyntaxKeyword,

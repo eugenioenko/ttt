@@ -179,6 +179,24 @@ func TestSettingsAppearanceOwnsDiffContextControl(t *testing.T) {
 	}
 }
 
+func TestSettingsCollapsedDiffEmphasisLiveAppliesFromAppearance(t *testing.T) {
+	h := openSettings(t)
+	defer h.stop()
+	clickRowControl(t, h, "Editor", "Editor")
+	clickRowControl(t, h, "Appearance", "Appearance")
+	if !rowHas(h, "Emphasize collapsed diff rows", uncheckedBox) {
+		t.Fatalf("Appearance is missing the collapsed-row emphasis setting:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Emphasize collapsed diff rows", uncheckedBox)
+	if h.app.Settings.Editor.DiffCollapsedEmphasis || h.app.EditorGroup.DiffCollapsedEmphasis {
+		t.Fatal("collapsed-row emphasis applied before Apply")
+	}
+	h.exec("settings.apply")
+	if !h.app.Settings.Editor.DiffCollapsedEmphasis || !h.app.EditorGroup.DiffCollapsedEmphasis {
+		t.Fatalf("collapsed-row emphasis did not live-apply: settings=%v group=%v", h.app.Settings.Editor.DiffCollapsedEmphasis, h.app.EditorGroup.DiffCollapsedEmphasis)
+	}
+}
+
 func TestSettingsGitFileViewLiveAppliesOnlyAfterApply(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Advanced", "Advanced")

@@ -531,6 +531,7 @@ To edit the raw files, use **Settings: Open settings.json** and **Settings: Open
 | `diffContext` | string | `"changes"` | Default diff context: `"changes"` or `"full"` |
 | `diffWordWrap` | bool | `false` | Wrap long lines in diff views |
 | `diffHighContrast` | bool | `false` | Use semantic red/green foregrounds as well as diff backgrounds |
+| `diffEmphasizeCollapsedRows` | bool | `false` | Emphasize collapsed or omitted-line rows in diff views |
 | `autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
 | `autoDedent` | bool | `true` | Dedent one level when typing a closing `} ) ]` on a blank line |
 | `lineNumbers` | bool | `true` | Show line numbers in the gutter |
@@ -567,6 +568,7 @@ Example `~/.config/ttt/settings.json` (also available at [`config/settings.json`
   "diffMode": "split",
   "diffContext": "changes",
   "diffWordWrap": false,
+  "diffEmphasizeCollapsedRows": false,
   "autoIndent": true,
   "autoDedent": true,
   "lineNumbers": true,

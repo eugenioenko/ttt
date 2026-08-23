@@ -44,6 +44,9 @@ func TestDefaultTheme(t *testing.T) {
 	if th.Border.Fg != "#555555" {
 		t.Fatalf("expected Border.Fg '#555555', got '%s'", th.Border.Fg)
 	}
+	if !th.Diff.CollapsedEmphasis.Bold {
+		t.Fatal("expected collapsed diff emphasis to default to bold")
+	}
 }
 
 func TestThemePartialJSON(t *testing.T) {
@@ -110,6 +113,13 @@ func TestBundledThemesLoad(t *testing.T) {
 			}
 			if th.Diff.CollapsedHover.Bg != expectedHoverBg {
 				t.Errorf("%s: collapsed hover background = %q, want %q from explicit or inherited source", name, th.Diff.CollapsedHover.Bg, expectedHoverBg)
+			}
+			emphasisBg := th.Diff.CollapsedEmphasis.Bg
+			if emphasisBg == "" {
+				emphasisBg = th.Default.Bg
+			}
+			if ratio := testColorContrast(th.Diff.CollapsedEmphasis.Fg, emphasisBg); ratio < 4.5 {
+				t.Errorf("%s: collapsed emphasis contrast %.2f:1 (%s on %s), want >=4.5:1", name, ratio, th.Diff.CollapsedEmphasis.Fg, emphasisBg)
 			}
 		})
 	}
@@ -246,6 +256,21 @@ func TestResolveColorsMigratesLegacyCollapsedStyle(t *testing.T) {
 	theme.ResolveColors()
 	if got := theme.Diff.CollapsedHover; got != (StyleDef{Fg: "#123456", Bg: "#654321", Bold: true}) {
 		t.Fatalf("migrated collapsed hover style = %+v", got)
+	}
+	if got := theme.Diff.CollapsedEmphasis; got.Fg == "#123456" || got.Bg == "#654321" {
+		t.Fatalf("legacy collapsed field leaked into new emphasis contract: %+v", got)
+	}
+}
+
+func TestResolveColorsKeepsCollapsedEmphasisIndependentFromLegacyCollapsed(t *testing.T) {
+	theme := DefaultTheme()
+	if err := json.Unmarshal([]byte(`{"diff":{"collapsed":{"bg":"#111111"},"collapsedEmphasis":{"fg":"#ffffff","bg":"#222222","italic":true}}}`), &theme); err != nil {
+		t.Fatal(err)
+	}
+	theme.ResolveColors()
+	want := StyleDef{Fg: "#ffffff", Bg: "#222222", Bold: true, Italic: true}
+	if got := theme.Diff.CollapsedEmphasis; got != want {
+		t.Fatalf("collapsed emphasis = %+v, want %+v", got, want)
 	}
 }
 
