@@ -23,12 +23,10 @@ func (r *Renderer) Render(screen term.Screen) {
 		}
 	}
 	screen.Show()
-	// Swap buffers
-	r.prev = make([][]term.Cell, len(r.curr))
-	for i := range r.curr {
-		r.prev[i] = make([]term.Cell, len(r.curr[i]))
-		copy(r.prev[i], r.curr[i])
-	}
+	// No copy needed: callers always pass a freshly allocated grid to
+	// SetCurrent each frame, so retaining the reference is safe and avoids
+	// a full-grid alloc+copy on every render.
+	r.prev = r.curr
 }
 
 // Clear resets the renderer's buffers.
