@@ -8,4 +8,4 @@ linters:
     # - errcheck     # https://github.com/eugenioenko/ttt/issues/505
     # - staticcheck  # https://github.com/eugenioenko/ttt/issues/506
     # - ineffassign  # https://github.com/eugenioenko/ttt/issues/507
-    # - unused       # https://github.com/eugenioenko/ttt/issues/508
+    - unused

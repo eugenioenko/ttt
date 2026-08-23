@@ -1112,10 +1112,6 @@ func (d *CommitDetailWidget) renderUnifiedDiffRow(surface Surface, rowIndex int,
 	renderDiffText(surface, contentStart, y, contentW, line.Text, style, diffKindForeground(line.Kind, d.highContrast), spans, visual.leftStart, leftScroll, d.selectionDecorator(rowIndex, false))
 }
 
-func (d *CommitDetailWidget) drawText(surface Surface, x, y, width int, text string, style, bg term.Style, bold bool, segmentStart int) {
-	d.drawTextRow(surface, x, y, width, text, style, bg, bold, segmentStart, -1)
-}
-
 func (d *CommitDetailWidget) drawStaticText(surface Surface, x, y, width int, text string, style, bg term.Style, bold bool) {
 	blank := term.Cell{Ch: ' ', Style: style, BgStyle: bg}
 	drawTextSegment(surface, x, y, width, text, 0, 0, blank, func(_ int, ch rune) term.Cell {
