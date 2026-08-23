@@ -73,6 +73,22 @@ const languages = readdirSync(LSP_DIR, { withFileTypes: true })
   .filter((d) => existsSync(resolve(LSP_DIR, d.name, "spec.json")))
   .map((d) => d.name);
 
+function prepareFixture(fixtureDir) {
+  const dir = createTempDir();
+  cpSync(fixtureDir, dir, { recursive: true });
+  const files = readdirSync(dir).filter(
+    (file) => !["spec.json", "settings.json", "install.sh"].includes(file)
+  );
+  return {
+    configFile: resolve(fixtureDir, "settings.json"),
+    dir,
+    testFile: resolve(
+      dir,
+      files.find((file) => file.startsWith("test."))
+    ),
+  };
+}
+
 describe("lsp", { retry: 2 }, () => {
   let dir;
 
@@ -97,17 +113,9 @@ describe("lsp", { retry: 2 }, () => {
       const testFn = available ? it : it.skip;
 
       testFn("diagnostics", () => {
-        dir = createTempDir();
-        cpSync(fixtureDir, dir, { recursive: true });
-
-        const files = readdirSync(dir).filter(
-          (f) => !["spec.json", "settings.json", "install.sh"].includes(f)
-        );
-        const testFile = resolve(
-          dir,
-          files.find((f) => f.startsWith("test."))
-        );
-        const configFile = resolve(fixtureDir, "settings.json");
+        const prepared = prepareFixture(fixtureDir);
+        dir = prepared.dir;
+        const { configFile, testFile } = prepared;
 
         tui.start("--config", configFile, testFile);
         tui.waitFor(spec.waitFor);
@@ -122,17 +130,9 @@ describe("lsp", { retry: 2 }, () => {
 
       if (spec.hover) {
         testFn("hover", () => {
-          dir = createTempDir();
-          cpSync(fixtureDir, dir, { recursive: true });
-
-          const files = readdirSync(dir).filter(
-            (f) => !["spec.json", "settings.json", "install.sh"].includes(f)
-          );
-          const testFile = resolve(
-            dir,
-            files.find((f) => f.startsWith("test."))
-          );
-          const configFile = resolve(fixtureDir, "settings.json");
+          const prepared = prepareFixture(fixtureDir);
+          dir = prepared.dir;
+          const { configFile, testFile } = prepared;
 
           tui.start("--config", configFile, testFile);
           tui.waitFor(spec.waitFor);
@@ -152,17 +152,9 @@ describe("lsp", { retry: 2 }, () => {
 
       if (spec.completion) {
         testFn("completion", () => {
-          dir = createTempDir();
-          cpSync(fixtureDir, dir, { recursive: true });
-
-          const files = readdirSync(dir).filter(
-            (f) => !["spec.json", "settings.json", "install.sh"].includes(f)
-          );
-          const testFile = resolve(
-            dir,
-            files.find((f) => f.startsWith("test."))
-          );
-          const configFile = resolve(fixtureDir, "settings.json");
+          const prepared = prepareFixture(fixtureDir);
+          dir = prepared.dir;
+          const { configFile, testFile } = prepared;
 
           tui.start("--config", configFile, testFile);
           tui.waitFor(spec.waitFor);
@@ -186,17 +178,9 @@ describe("lsp", { retry: 2 }, () => {
 
       if (spec.signatureHelp) {
         testFn("signature help", () => {
-          dir = createTempDir();
-          cpSync(fixtureDir, dir, { recursive: true });
-
-          const files = readdirSync(dir).filter(
-            (f) => !["spec.json", "settings.json", "install.sh"].includes(f)
-          );
-          const testFile = resolve(
-            dir,
-            files.find((f) => f.startsWith("test."))
-          );
-          const configFile = resolve(fixtureDir, "settings.json");
+          const prepared = prepareFixture(fixtureDir);
+          dir = prepared.dir;
+          const { configFile, testFile } = prepared;
 
           tui.start("--config", configFile, testFile);
           tui.waitFor(spec.waitFor);

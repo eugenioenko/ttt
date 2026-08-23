@@ -87,13 +87,13 @@ function waitForLogAfter(pattern, afterBytes = 0, timeoutMs = 20000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (existsSync(LOG_FILE)) {
-      const tail = readFileSync(LOG_FILE, "utf8").substring(afterBytes);
+      const tail = readFileSync(LOG_FILE).subarray(afterBytes).toString("utf8");
       if (re.test(tail)) return tail;
     }
     sleep(200);
   }
   if (!existsSync(LOG_FILE)) return "";
-  return readFileSync(LOG_FILE, "utf8").substring(afterBytes);
+  return readFileSync(LOG_FILE).subarray(afterBytes).toString("utf8");
 }
 
 function navigateTo(pos) {
@@ -189,7 +189,14 @@ describe("pinned real-LSP compatibility", () => {
 
   for (const language of LANGUAGES) {
     const settings = resolve(LSP_DIR, language, "settings.json");
-    const testFn = serverAvailable(settings) ? it : it.skip;
+    const available = serverAvailable(settings);
+    if (!available && process.env.CI) {
+      it(`${language} has its pinned language server installed`, () => {
+        throw new Error(`missing language server for ${language}`);
+      });
+      continue;
+    }
+    const testFn = available ? it : it.skip;
 
     testFn(`${language} completes one server lifecycle`, async () => {
       const prepared = prepareCase(language);

@@ -46,11 +46,13 @@ jobs:
       - name: Install latest LSP servers
         run: |
           go install golang.org/x/tools/gopls@latest
+          # TypeScript 7's native rewrite does not expose tsserver.js yet.
           npm install -g typescript@5 typescript-language-server
           npm install -g vscode-langservers-extracted
           npm install -g yaml-language-server
           npm install -g svelte-language-server
           pip install pyright
+          sudo apt-get update
           sudo apt-get install -y clangd
 
       - name: Provide typescript to the TS fixture workspace

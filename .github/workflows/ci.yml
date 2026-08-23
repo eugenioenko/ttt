@@ -323,13 +323,14 @@ jobs:
 
       - name: Install LSP servers
         run: |
-          go install golang.org/x/tools/gopls@${GOPLS_VERSION}
-          npm install -g typescript@${TYPESCRIPT_VERSION} typescript-language-server@${TYPESCRIPT_LANGUAGE_SERVER_VERSION}
-          sudo apt-get install -y clangd-${CLANGD_VERSION}
-          sudo ln -sf /usr/bin/clangd-${CLANGD_VERSION} /usr/local/bin/clangd
+          go install "golang.org/x/tools/gopls@${GOPLS_VERSION}"
+          npm install -g "typescript@${TYPESCRIPT_VERSION}" "typescript-language-server@${TYPESCRIPT_LANGUAGE_SERVER_VERSION}"
+          sudo apt-get update
+          sudo apt-get install -y "clangd-${CLANGD_VERSION}"
+          sudo ln -sf "/usr/bin/clangd-${CLANGD_VERSION}" /usr/local/bin/clangd
 
       - name: Provide typescript to the TS fixture workspace
-        run: npm install --prefix tests/integration/lsp/typescript --no-save typescript@${TYPESCRIPT_VERSION}
+        run: npm install --prefix tests/integration/lsp/typescript --no-save "typescript@${TYPESCRIPT_VERSION}"
 
       - name: Install test dependencies
         working-directory: tests/integration
