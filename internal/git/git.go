@@ -19,6 +19,23 @@ type FileStatus struct {
 	Staged  bool
 }
 
+type RepositoryIdentity struct {
+	Root   string
+	Branch string
+}
+
+func ReadRepositoryIdentityContext(ctx context.Context, dir string) (RepositoryIdentity, error) {
+	root, err := RepoRootWithErrorContext(ctx, dir)
+	if err != nil {
+		return RepositoryIdentity{}, err
+	}
+	branch, err := BranchNameContext(ctx, root)
+	if err != nil {
+		return RepositoryIdentity{}, err
+	}
+	return RepositoryIdentity{Root: root, Branch: branch}, nil
+}
+
 func RepoRoot(dir string) string {
 	return RepoRootContext(context.Background(), dir)
 }

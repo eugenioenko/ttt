@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -27,6 +27,15 @@ export function createGitRepo(dir) {
   git(dir, "add", "tracked.txt");
   git(dir, "commit", "-qm", "initial commit");
   return dir;
+}
+
+export function createLinkedWorktree(dir, branch = "linkedbranch") {
+  const repo = join(dir, "primary");
+  const worktree = join(dir, "linked");
+  mkdirSync(repo);
+  createGitRepo(repo);
+  git(repo, "worktree", "add", "-q", "-b", branch, worktree);
+  return { repo, worktree };
 }
 
 // gitStatus returns porcelain status lines, e.g. ["M  tracked.txt"].

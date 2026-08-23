@@ -193,6 +193,32 @@ func TestRevisionIdentityAllowsUnbornRepository(t *testing.T) {
 	}
 }
 
+func TestReadRepositoryIdentityFindsLinkedWorktreeFromNestedDirectory(t *testing.T) {
+	repo := setupTestRepo(t)
+	writeFile(t, repo, "initial.txt", "initial\n")
+	gitRun(t, repo, "add", "initial.txt")
+	gitRun(t, repo, "commit", "-m", "initial")
+
+	linked := filepath.Join(t.TempDir(), "linked")
+	gitRun(t, repo, "worktree", "add", "-q", "-b", "linkedbranch", linked)
+	info, err := os.Stat(filepath.Join(linked, ".git"))
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("linked worktree .git = (%v, %v), want regular file", info, err)
+	}
+	nested := filepath.Join(linked, "nested", "deeper")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	identity, err := ReadRepositoryIdentityContext(context.Background(), nested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if identity.Root != linked || identity.Branch != "linkedbranch" {
+		t.Fatalf("linked identity = %+v, want root %q branch linkedbranch", identity, linked)
+	}
+}
+
 func TestRevisionIdentityRequiresVerifiedUnbornHead(t *testing.T) {
 	bin := t.TempDir()
 	script := `#!/bin/sh

@@ -133,6 +133,64 @@ func TestRepositoryInvalidationBurstCoalesces(t *testing.T) {
 	}
 }
 
+func TestActiveRepositoryIdentityIsCachedPerFileAndClearsOutsideGit(t *testing.T) {
+	repo := t.TempDir()
+	nested := filepath.Join(repo, "nested", "file.txt")
+	plain := filepath.Join(t.TempDir(), "plain.txt")
+	if err := os.MkdirAll(filepath.Dir(nested), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{nested, plain} {
+		if err := os.WriteFile(path, []byte("content\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s := NewRepositoryState(nil, nil)
+	reads := 0
+	branch := "feature"
+	fail := false
+	s.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		reads++
+		result := &RepositoryIdentityResult{Seq: seq, FilePath: path}
+		if path == nested && !fail {
+			result.Identity = git.RepositoryIdentity{Root: repo, Branch: branch}
+		} else {
+			result.Err = errors.New("not a repository")
+		}
+		return result
+	}
+
+	s.SetActiveFile(nested)
+	for range 10 {
+		s.SetActiveFile(nested)
+	}
+	if root, branch := s.ActiveRepository(); root != repo || branch != "feature" || reads != 1 {
+		t.Fatalf("cached active identity = (%q, %q), reads=%d", root, branch, reads)
+	}
+
+	fail = true
+	s.refreshActiveIdentity()
+	if root, branch := s.ActiveRepository(); root != repo || branch != "feature" || reads != 2 {
+		t.Fatalf("failed refresh replaced active identity = (%q, %q), reads=%d", root, branch, reads)
+	}
+	fail = false
+	branch = "updated"
+	s.refreshActiveIdentity()
+	if root, activeBranch := s.ActiveRepository(); root != repo || activeBranch != "updated" || reads != 3 {
+		t.Fatalf("successful refresh identity = (%q, %q), reads=%d", root, activeBranch, reads)
+	}
+
+	s.SetActiveFile(plain)
+	if root, branch := s.ActiveRepository(); root != "" || branch != "" || reads != 4 {
+		t.Fatalf("plain active identity = (%q, %q), reads=%d, want cleared", root, branch, reads)
+	}
+	s.SetActiveFile("")
+	if root, branch := s.ActiveRepository(); root != "" || branch != "" {
+		t.Fatalf("virtual active identity = (%q, %q), want cleared", root, branch)
+	}
+}
+
 func TestRepositoryInFlightInvalidationPublishesOnlyOneFollowUp(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	publications := 0

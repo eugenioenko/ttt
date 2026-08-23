@@ -400,14 +400,14 @@ Basic search, result counts, case/regex behavior, empty/whitespace/CJK queries, 
 - **Actual:** `resolveArgs()` (`internal/app/widgets.go:75-84`) ignores `LoadFile`'s error and falls through to cwd; the CLI and interactive paths handle the identical failure inconsistently
 - **Test:** none — the fix defines the error-feedback signal; ledger-only (mirrors BUG-042)
 
-### BUG-044: Git branch/gutter missing when the opened file is below the repo root (no walk-up)
+### BUG-044: Git branch/gutter missing when the opened file is below the repo root (resolved)
 - **Area:** Workspace × git
 - **Severity:** medium
-- **Status:** confirmed (agent-reported; orchestrator re-verified with a clean control)
+- **Status:** resolved by canonical active-file repository observation, including linked worktrees
 - **Repro:** open a file in a repo SUBDIR by absolute path → no branch in the status bar. Control that nails it: opening ttt's own `internal/ui/root.go` by absolute path shows NO branch, while opening the repo at its root (cwd) shows `audit/bug-hunt` — same repo, different result.
 - **Expected:** branch/gutter work for any file inside a git working tree (the Changes panel already does — it uses `git rev-parse --show-toplevel`)
-- **Actual:** `workspace.isGitRepo()` (`internal/workspace/workspace.go`) only `os.Stat`s `.git` directly in the folder — no walk-up — so the indicator shows only when the workspace root IS the repo root. `internal/git/git.go` even has a walk-up-aware `IsRepo()` that isn't used here.
-- **Test:** `tests/functional/audit-workspace-bugs.test.js` (`it.fails`, git-repo fixture)
+- **Actual:** repository membership and branch now come from the repository observer's cached canonical Git identity instead of `workspace.isGitRepo()`; active-file discovery is asynchronous and accepts both `.git` directories and linked-worktree `.git` files.
+- **Test:** `tests/functional/audit-workspace-bugs.test.js` (nested-repository and linked-worktree fixtures)
 
 ### BUG-045: `.ttt` workspace files accept a folder entry pointing at a regular file (no IsDir validation)
 - **Area:** Workspace

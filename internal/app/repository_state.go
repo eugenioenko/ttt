@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -40,6 +41,13 @@ type RepositoryStatusResult struct {
 	Entries []repositoryStatusEntry
 }
 
+type RepositoryIdentityResult struct {
+	Seq      uint64
+	FilePath string
+	Identity git.RepositoryIdentity
+	Err      error
+}
+
 type RepositoryInvalidationRequest struct {
 	Path      string
 	Resources RepositoryResource
@@ -69,6 +77,7 @@ type RepositoryState struct {
 
 	scheduler    repositoryScheduler
 	readStatus   func(context.Context, []string, uint64) *RepositoryStatusResult
+	readIdentity func(context.Context, string, uint64) *RepositoryIdentityResult
 	pathIdentity func(string) (string, error)
 	debounceWait time.Duration
 	pollWait     time.Duration
@@ -92,6 +101,13 @@ type RepositoryState struct {
 	lastGroups    map[string]changesGroup
 	lastRevisions map[string]string
 	lastRoots     map[string]string
+	identities    map[string]git.RepositoryIdentity
+
+	activeFile     string
+	activeRoot     string
+	activeBranch   string
+	identitySeq    uint64
+	identityCancel context.CancelFunc
 
 	currentRoot               string
 	currentTabID              string
@@ -116,12 +132,14 @@ func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
 		dirs:               append([]string(nil), dirs...),
 		scheduler:          realRepositoryScheduler{},
 		readStatus:         readRepositoryStatus,
+		readIdentity:       readRepositoryIdentity,
 		debounceWait:       repositoryRefreshDebounce,
 		pollWait:           repositoryPollInterval,
 		statusWait:         repositoryStatusTimeout,
 		lastGroups:         make(map[string]changesGroup),
 		lastRevisions:      make(map[string]string),
 		lastRoots:          make(map[string]string),
+		identities:         make(map[string]git.RepositoryIdentity),
 		currentInputs:      make(map[string]currentChangesInput),
 		readCurrentChanges: readCurrentChanges,
 	}
@@ -198,6 +216,9 @@ func (s *RepositoryState) InvalidateAll(resources RepositoryResource) {
 		return
 	}
 	s.dirty |= resources
+	if resources&RepositoryWorktree != 0 {
+		s.refreshActiveIdentity()
+	}
 	if resources&RepositoryWorktree != 0 && s.currentRoot != "" {
 		s.dirty |= RepositoryCurrentChanges
 		s.currentDirty = true
@@ -243,6 +264,9 @@ func (s *RepositoryState) RefreshNow(resources RepositoryResource) {
 		return
 	}
 	s.dirty |= resources
+	if resources&RepositoryWorktree != 0 {
+		s.refreshActiveIdentity()
+	}
 	if resources&RepositoryWorktree != 0 && s.currentRoot != "" {
 		s.dirty |= RepositoryCurrentChanges
 		s.currentDirty = true
@@ -340,7 +364,6 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 				group = previous
 			}
 		}
-
 		revision := entry.Revision
 		if entry.RevisionErr != nil {
 			hadError = true
@@ -490,6 +513,10 @@ func (s *RepositoryState) Close() {
 		s.statusCancel()
 		s.statusCancel = nil
 	}
+	if s.identityCancel != nil {
+		s.identityCancel()
+		s.identityCancel = nil
+	}
 	if s.changes != nil {
 		s.changes.CancelHistoryRead()
 	}
@@ -542,6 +569,115 @@ func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatus
 	return entries
 }
 
+func readRepositoryIdentity(ctx context.Context, filePath string, seq uint64) *RepositoryIdentityResult {
+	identity, err := git.ReadRepositoryIdentityContext(ctx, filepath.Dir(filePath))
+	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: identity, Err: err}
+}
+
+func (s *RepositoryState) SetActiveFile(filePath string) {
+	if s == nil || s.closed {
+		return
+	}
+	filePath = cleanAbsolutePath(filePath)
+	if filePath == s.activeFile {
+		return
+	}
+	if s.identityCancel != nil {
+		s.identityCancel()
+		s.identityCancel = nil
+	}
+	s.identitySeq++
+	s.activeFile = filePath
+	s.activeRoot = ""
+	s.activeBranch = ""
+	if filePath == "" {
+		return
+	}
+	if identity, ok := s.repositoryForPath(filePath); ok {
+		s.activeRoot = identity.Root
+		s.activeBranch = identity.Branch
+	}
+	s.refreshActiveIdentity()
+}
+
+func (s *RepositoryState) refreshActiveIdentity() {
+	if s == nil || s.closed || s.activeFile == "" {
+		return
+	}
+	if s.identityCancel != nil {
+		s.identityCancel()
+		s.identityCancel = nil
+	}
+	s.identitySeq++
+	seq := s.identitySeq
+	filePath := s.activeFile
+	read := s.readIdentity
+	ctx, cancel := context.WithTimeout(context.Background(), s.statusWait)
+	s.identityCancel = cancel
+	if s.poster == nil {
+		result := read(ctx, filePath, seq)
+		cancel()
+		s.HandleIdentity(result)
+		return
+	}
+	poster := s.poster
+	go func() {
+		result := read(ctx, filePath, seq)
+		cancel()
+		_ = poster.PostEvent(tcell.NewEventInterrupt(result))
+	}()
+}
+
+func (s *RepositoryState) HandleIdentity(result *RepositoryIdentityResult) {
+	if s == nil || result == nil || s.closed || result.Seq != s.identitySeq || result.FilePath != s.activeFile {
+		return
+	}
+	s.identityCancel = nil
+	if result.Err != nil {
+		return
+	}
+	identity := result.Identity
+	identity.Root = cleanAbsolutePath(identity.Root)
+	if identity.Root == "" {
+		return
+	}
+	s.identities[identity.Root] = identity
+	s.activeRoot = identity.Root
+	s.activeBranch = identity.Branch
+}
+
+func (s *RepositoryState) ActiveRepository() (string, string) {
+	if s == nil {
+		return "", ""
+	}
+	return s.activeRoot, s.activeBranch
+}
+
+func (s *RepositoryState) RepositoryForPath(path string) (string, string) {
+	identity, ok := s.repositoryForPath(path)
+	if !ok {
+		return "", ""
+	}
+	return identity.Root, identity.Branch
+}
+
+func (s *RepositoryState) repositoryForPath(path string) (git.RepositoryIdentity, bool) {
+	if s == nil || path == "" {
+		return git.RepositoryIdentity{}, false
+	}
+	identityPath, err := s.resolvePathIdentity(path)
+	if err != nil {
+		return git.RepositoryIdentity{}, false
+	}
+	best := git.RepositoryIdentity{}
+	for root, identity := range s.identities {
+		if pathWithin(root, identityPath) && len(root) > len(best.Root) {
+			best = identity
+		}
+	}
+	return best, best.Root != ""
+}
+
 func (s *RepositoryState) previousRootForSource(source string) string {
 	if root := s.lastRoots[source]; root != "" {
 		return root
@@ -578,6 +714,9 @@ func (s *RepositoryState) repositoryIdentityRoots() []string {
 	}
 	for _, dir := range s.dirs {
 		add(dir)
+	}
+	for root := range s.identities {
+		add(root)
 	}
 	return roots
 }
@@ -681,6 +820,20 @@ func (a *App) syncRepositoryObservation() {
 		a.Repository.SetCurrentChangesRoot("", "")
 	}
 	a.Repository.SetVisible(visible)
+}
+
+func (a *App) SyncRepositoryBranch() string {
+	if a == nil || a.Repository == nil || a.Status == nil || a.EditorGroup == nil {
+		return ""
+	}
+	filePath := a.EditorGroup.ActiveFilePath()
+	if a.EditorGroup.IsActiveVirtual() {
+		filePath = ""
+	}
+	a.Repository.SetActiveFile(filePath)
+	root, branch := a.Repository.ActiveRepository()
+	a.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: branch})
+	return root
 }
 
 func (a *App) invalidateRepositoryPath(path string, resources RepositoryResource) {

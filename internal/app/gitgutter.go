@@ -28,11 +28,13 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		return
 	}
 
-	folder := a.Workspace.FolderForFile(filePath)
-	if folder == nil || !folder.IsRepo {
+	if a.Repository == nil {
 		return
 	}
-	repoDir := folder.Path
+	repoDir, _ := a.Repository.RepositoryForPath(filePath)
+	if repoDir == "" {
+		return
+	}
 
 	relPath, err := filepath.Rel(repoDir, filePath)
 	if err != nil {

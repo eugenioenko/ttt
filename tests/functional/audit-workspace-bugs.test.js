@@ -1,12 +1,9 @@
-// Repro test for confirmed bug from audit/2026-07-12-ux-bug-audit.md (branch audit/bug-hunt).
-// Asserts the CORRECT behavior with `it.fails` — passes while the bug
-// exists, goes red when fixed. Remove `.fails` + audit entry when fixing.
 import { describe, it, expect, afterEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import * as tui from "./tui.js";
-import { createTempDir, cleanupDir } from "./helpers.js";
+import { createLinkedWorktree, createTempDir, cleanupDir } from "./helpers.js";
 
 let dir;
 
@@ -16,7 +13,7 @@ afterEach(() => {
 });
 
 describe("BUG-044: git branch indicator missing when the opened file is below the repo root", () => {
-  it.fails("status bar shows the branch for a file in a repo subdirectory", () => {
+  it("status bar shows the branch for a file in a repo subdirectory", () => {
     dir = createTempDir();
     // Make `dir` a git repo with a subdirectory and a distinctively-named
     // branch so the assertion can't match incidental "main" text elsewhere.
@@ -38,9 +35,33 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
-    // Correct: isGitRepo should walk up and find dir/.git (as the Changes
-    // panel does via `git rev-parse --show-toplevel`), so the branch shows.
-    // Buggy: no walk-up, so the status bar has no branch segment.
     expect(snapshots[s]).toContain("auditbranch");
+  });
+
+  it("uses linked-worktree identity and clears it on a non-repository tab", () => {
+    dir = createTempDir();
+    const { worktree } = createLinkedWorktree(dir, "linkedbranch");
+    expect(readFileSync(join(worktree, ".git"), "utf8")).toMatch(/^gitdir: /);
+
+    const nested = join(worktree, "nested");
+    mkdirSync(nested);
+    const linkedFile = join(nested, "linked.txt");
+    writeFileSync(linkedFile, "linked content\n");
+
+    const plainDir = join(dir, "plain");
+    mkdirSync(plainDir);
+    const plainFile = join(plainDir, "plain.txt");
+    writeFileSync(plainFile, "plain content\n");
+
+    tui.start(plainFile, linkedFile);
+    tui.waitFor("linkedbranch");
+    const linked = tui.snapshot();
+    tui.exec("View: Previous Tab");
+    tui.waitStable();
+    const plain = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[linked]).toContain("linkedbranch");
+    expect(snapshots[plain]).not.toContain("linkedbranch");
   });
 });
