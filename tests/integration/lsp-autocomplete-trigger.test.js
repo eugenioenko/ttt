@@ -83,7 +83,7 @@ describe("lsp autocomplete trigger characters", { retry: 2 }, () => {
 
     // Move to line 2 and type 'consol' — should trigger completion
     tui.press("ctrl+g");
-    tui.waitStable();
+    tui.waitStable(1000);
     tui.type("2");
     tui.press("enter");
     tui.waitStable();
@@ -112,26 +112,29 @@ describe("lsp autocomplete trigger characters", { retry: 2 }, () => {
     cpSync(LSP_DIR, dir, { recursive: true });
 
     const testFile = resolve(dir, "sighelp.js");
-    writeFileSync(testFile, "// sig\nconsole.log\n", "utf8");
+    writeFileSync(testFile, "console.log\n", "utf8");
     const configFile = resolve(LSP_DIR, "settings.json");
 
     tui.start("--config", configFile, testFile);
     tui.waitFor("console.log");
     waitForLogAfter("lsp initialized", 0);
+    tui.waitStable(2000);
 
-    // Move to end of line 2 (after "console.log")
-    tui.press("ctrl+g");
-    tui.waitStable();
-    tui.type("2");
-    tui.press("enter");
-    tui.waitStable();
+    // Cursor starts on line 1 — move to end of "console.log"
     tui.press("end");
+    tui.waitStable();
 
-    const mark = logSize();
-
-    // Type '(' — should trigger signature help
-    tui.type("(");
-    const log = waitForLogAfter("lsp signature help response.*label=", mark, 20000);
+    // Type '(' — should trigger signature help.
+    // Retry if the LSP server isn't ready yet (returns null).
+    let log = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const mark = logSize();
+      tui.type("(");
+      log = waitForLogAfter("lsp signature help response.*label=", mark, 5000);
+      if (/lsp signature help response.*label=/.test(log)) break;
+      tui.press("backspace");
+      tui.waitStable(1000);
+    }
     expect(log).toMatch(/lsp signature help response.*label=/);
 
     tui.press("escape");
@@ -154,7 +157,7 @@ describe("lsp autocomplete trigger characters", { retry: 2 }, () => {
     waitForLogAfter("lsp initialized", 0);
 
     tui.press("ctrl+g");
-    tui.waitStable();
+    tui.waitStable(1000);
     tui.type("2");
     tui.press("enter");
     tui.waitStable();
