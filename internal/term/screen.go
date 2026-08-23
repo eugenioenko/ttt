@@ -5,7 +5,7 @@ type Style int
 const (
 	StyleDefault Style = iota
 	StyleStatusBar
-	StyleCommitMessage
+	StyleCommitHeader
 	StyleActiveTab
 	StyleInactiveTab
 	StyleSidebarSelected

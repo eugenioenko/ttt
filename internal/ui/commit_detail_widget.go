@@ -84,6 +84,7 @@ type commitDetailRowKind uint8
 
 const (
 	commitDetailMessageHeaderRow commitDetailRowKind = iota
+	commitDetailHeaderDividerRow
 	commitDetailMetadataRow
 	commitDetailMessageRow
 	commitDetailSpacerRow
@@ -617,6 +618,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 	if d.Metadata != "" {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMetadataRow, text: d.Metadata})
 		d.recordWidth(d.Metadata)
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
 	}
 	message := strings.TrimRight(d.Message, "\r\n")
 	if message == "" {
@@ -634,6 +636,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: d.RefreshError, danger: true})
 		d.recordWidth(d.RefreshError)
 	}
+	d.rows = append(d.rows, commitDetailRow{kind: commitDetailHeaderDividerRow})
 	d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
 
 	maxLine := 0
@@ -904,10 +907,13 @@ func (d *CommitDetailWidget) buildVisualRows(viewW int) []commitDetailVisualRow 
 		leftStarts := []int{0}
 		rightStarts := []int{0}
 		switch row.kind {
-		case commitDetailMessageHeaderRow, commitDetailSpacerRow:
+		case commitDetailMessageHeaderRow, commitDetailHeaderDividerRow, commitDetailSpacerRow:
 			rightStarts = nil
 		case commitDetailHeadingRow:
 			leftStarts = diffWrapStarts(row.text, viewW-3)
+			rightStarts = nil
+		case commitDetailMetadataRow, commitDetailMessageRow:
+			leftStarts = diffWrapStarts(row.text, viewW-2)
 			rightStarts = nil
 		case commitDetailDiffRow:
 			if row.fileIndex >= 0 && row.fileIndex < len(d.Files) && row.lineIndex >= 0 && leftW > 0 {
@@ -967,12 +973,14 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 	switch row.kind {
 	case commitDetailMessageHeaderRow:
 		d.renderMessageHeader(surface, y, viewW)
+	case commitDetailHeaderDividerRow:
+		d.renderHeaderDivider(surface, y, viewW)
 	case commitDetailMetadataRow:
-		d.drawTextRow(surface, 0, y, viewW, row.text, term.StyleMuted, term.StyleCommitMessage, false, visual.leftStart, rowIndex)
+		d.drawTextRow(surface, 1, y, viewW-2, row.text, term.StyleMuted, term.StyleCommitHeader, false, visual.leftStart, rowIndex)
 	case commitDetailSpacerRow:
 		return
 	case commitDetailMessageRow:
-		d.drawTextRow(surface, 0, y, viewW, row.text, term.StyleCommitMessage, term.StyleCommitMessage, row.bold, visual.leftStart, rowIndex)
+		d.drawTextRow(surface, 1, y, viewW-2, row.text, term.StyleCommitHeader, term.StyleCommitHeader, row.bold, visual.leftStart, rowIndex)
 	case commitDetailHeadingRow:
 		d.renderHeading(surface, rowIndex, row, visual, y, viewW)
 	case commitDetailNoticeRow:
@@ -988,13 +996,13 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 
 func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) {
 	for column := 0; column < viewW; column++ {
-		surface.SetCell(column, y, term.Cell{Ch: ' ', Style: term.StyleCommitMessage})
+		surface.SetCell(column, y, term.Cell{Ch: ' ', Style: term.StyleCommitHeader})
 	}
 	header := d.Header
 	if header == "" {
 		header = "Commit message"
 	}
-	d.drawStaticText(surface, 0, y, viewW, header, term.StyleCommitMessage, term.StyleCommitMessage, true)
+	d.drawStaticText(surface, 1, y, viewW-2, header, term.StyleCommitHeader, term.StyleCommitHeader, true)
 	if len(d.Files) == 0 {
 		return
 	}
@@ -1003,13 +1011,19 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 		label = "Expand all"
 	}
 	controlW := textwidth.String(label)
-	controlX := viewW - controlW
-	if controlX <= textwidth.String(header) {
+	controlX := viewW - controlW - 1
+	if controlX <= 1+textwidth.String(header) {
 		return
 	}
-	d.drawStaticText(surface, controlX, y, controlW, label, term.StyleCommitMessage, term.StyleCommitMessage, true)
+	d.drawStaticText(surface, controlX, y, controlW, label, term.StyleCommitHeader, term.StyleCommitHeader, true)
 	r := d.GetRect()
 	d.topControl = Rect{X: r.X + controlX, Y: r.Y + y, W: controlW, H: 1}
+}
+
+func (d *CommitDetailWidget) renderHeaderDivider(surface Surface, y, viewW int) {
+	for column := 0; column < viewW; column++ {
+		surface.SetCell(column, y, term.Cell{Ch: '─', Style: term.StyleBorder})
+	}
 }
 
 func (d *CommitDetailWidget) renderHeading(surface Surface, rowIndex int, row commitDetailRow, visual commitDetailVisualRow, y, viewW int) {
@@ -1204,7 +1218,9 @@ func (d *CommitDetailWidget) screenToSelection(mx, my int) (pos diffSelPos, righ
 	row := d.rows[rowIndex]
 	textX, textW, segmentStart := 0, d.layoutViewW, visual.leftStart
 	switch row.kind {
-	case commitDetailMessageRow, commitDetailNoticeRow:
+	case commitDetailMessageRow:
+		textX, textW = 1, d.layoutViewW-2
+	case commitDetailNoticeRow:
 	case commitDetailHeadingRow:
 		textX, textW = 3, d.layoutViewW-3
 	case commitDetailDiffRow:

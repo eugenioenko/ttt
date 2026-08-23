@@ -206,28 +206,28 @@ type HoverStyles struct {
 }
 
 type ThemeConfig struct {
-	Default       StyleDef       `json:"default"`
-	Muted         StyleDef       `json:"muted"`
-	Success       StyleDef       `json:"success"`
-	Danger        StyleDef       `json:"danger"`
-	Warning       StyleDef       `json:"warning"`
-	StatusBar     StyleDef       `json:"statusBar"`
-	CommitMessage StyleDef       `json:"commitMessage"`
-	Tabs          TabStyles      `json:"tabs"`
-	Sidebar       SidebarStyles  `json:"sidebar"`
-	Dialog        DialogStyles   `json:"dialog"`
-	Editor        EditorStyles   `json:"editor"`
-	Menu          MenuStyles     `json:"menu"`
-	Input         InputStyles    `json:"input"`
-	Button        ButtonStyles   `json:"button"`
-	Hover         HoverStyles    `json:"hover"`
-	Border        StyleDef       `json:"border"`
-	BorderActive  StyleDef       `json:"borderActive"`
-	Diff          DiffStyles     `json:"diff"`
-	Scrollbar     StyleDef       `json:"scrollbar"`
-	Syntax        SyntaxStyles   `json:"syntax"`
-	Borders       BorderChars    `json:"borders"`
-	Terminal      TerminalColors `json:"terminal,omitempty"`
+	Default      StyleDef       `json:"default"`
+	Muted        StyleDef       `json:"muted"`
+	Success      StyleDef       `json:"success"`
+	Danger       StyleDef       `json:"danger"`
+	Warning      StyleDef       `json:"warning"`
+	StatusBar    StyleDef       `json:"statusBar"`
+	CommitHeader StyleDef       `json:"commitHeader"`
+	Tabs         TabStyles      `json:"tabs"`
+	Sidebar      SidebarStyles  `json:"sidebar"`
+	Dialog       DialogStyles   `json:"dialog"`
+	Editor       EditorStyles   `json:"editor"`
+	Menu         MenuStyles     `json:"menu"`
+	Input        InputStyles    `json:"input"`
+	Button       ButtonStyles   `json:"button"`
+	Hover        HoverStyles    `json:"hover"`
+	Border       StyleDef       `json:"border"`
+	BorderActive StyleDef       `json:"borderActive"`
+	Diff         DiffStyles     `json:"diff"`
+	Scrollbar    StyleDef       `json:"scrollbar"`
+	Syntax       SyntaxStyles   `json:"syntax"`
+	Borders      BorderChars    `json:"borders"`
+	Terminal     TerminalColors `json:"terminal,omitempty"`
 }
 
 func DefaultTheme() ThemeConfig {
@@ -239,8 +239,7 @@ func DefaultTheme() ThemeConfig {
 		Menu: MenuStyles{
 			Active: StyleDef{Fg: "#ffffff", Bg: "#505050", Bold: true},
 		},
-		StatusBar:     StyleDef{},
-		CommitMessage: StyleDef{Fg: "#fafafa", Bg: "#2a2f3a"},
+		StatusBar: StyleDef{},
 
 		Tabs: TabStyles{
 			Active:   StyleDef{Fg: "#ffffff", Bold: true},
@@ -304,6 +303,8 @@ func DefaultTheme() ThemeConfig {
 }
 
 func (t *ThemeConfig) ResolveColors() {
+	fillFg(&t.CommitHeader, t.Default.Fg)
+	fillBg(&t.CommitHeader, t.Default.Bg)
 	fillFg(&t.Dialog.Muted, t.Muted.Fg)
 	fillBg(&t.Input.Item, t.Default.Bg)
 	fillFg(&t.Input.Item, t.Default.Fg)
