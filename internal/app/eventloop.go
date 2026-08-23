@@ -388,6 +388,8 @@ func RunEventLoop(
 				app.HandleDebugWriteRequest(v)
 			case *repositoryDebounceTick:
 				app.Repository.HandleDebounce(v)
+			case *repositoryIdentityDebounceTick:
+				app.Repository.HandleIdentityDebounce(v)
 			case *repositoryPollTick:
 				app.Repository.HandlePoll(v)
 			case *CommitLogResult:
