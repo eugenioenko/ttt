@@ -66,8 +66,9 @@ var menuBarMenus = [][]ui.ContextMenuItem{
 		{Label: "Toggle Terminal", Command: "terminal.toggle"},
 		{Label: "New Terminal", Command: "terminal.new"},
 		ui.MenuSep(),
+		{Label: "Theme", Command: "theme.switch"},
+		{Label: "Keybindings", Command: "view.keybindings"},
 		{Label: "Settings", Command: "settings.openUI"},
-		{Label: "Keyboard Shortcuts", Command: "view.keybindings"},
 	},
 	// Options (placeholder — replaced dynamically by openMenuBarDropdown)
 	nil,

@@ -336,9 +336,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Border Style", Command: "options.borderStyle"},
 		{Label: "Indentation", Command: "options.indentation"},
 		ui.MenuSep(),
-		{Label: "Switch Theme", Command: "theme.switch"},
-		ui.MenuSep(),
-		{Label: "Open Settings", Command: "settings.openUI"},
+		{Label: "Settings", Command: "settings.openUI"},
 	}
 	return items
 }
