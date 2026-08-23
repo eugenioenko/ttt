@@ -39,6 +39,8 @@ type currentChangeStatus struct {
 	conflictCode string
 }
 
+const currentChangesMaxDiffCells = 4_000_000
+
 func currentChangesTabID(dir string) string {
 	return "current-changes:\x00" + filepath.Clean(dir)
 }
@@ -174,8 +176,17 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 			}
 			fileDiff = diff.Parse(patch)
 		} else if !bytes.Equal(oldEndpoint.content, newEndpoint.content) || oldEndpoint.exists != newEndpoint.exists {
-			generated, generateErr := diff.GenerateContext(ctx, oldLines, newLines, status.Path)
-			err = generateErr
+			generated := ""
+			if currentChangesDiffExceedsLimit(len(oldLines), len(newLines)) {
+				if change.conflictCode == "" {
+					generated, err = git.DiffCurrentFileContext(ctx, dir, revision, status)
+				} else {
+					generated, err = generateCurrentChangesReplacement(ctx, oldLines, newLines, status.Path)
+				}
+				patch = generated
+			} else {
+				generated, err = diff.GenerateContext(ctx, oldLines, newLines, status.Path)
+			}
 			if err != nil {
 				result.Err = fmt.Errorf("generate %s diff for %q: %w", currentBoundaryName(boundary), status.Path, err)
 				result.Canceled = errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)
@@ -220,6 +231,33 @@ func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch,
 	result.Fingerprint = fmt.Sprintf("%x", fingerprint.Sum(nil))
 	result.Summary = currentChangesSummary(len(paths), additions, deletions, staged, unstaged, conflicts)
 	return result
+}
+
+func currentChangesDiffExceedsLimit(oldLines, newLines int) bool {
+	rows, columns := oldLines+1, newLines+1
+	return rows > currentChangesMaxDiffCells/columns
+}
+
+func generateCurrentChangesReplacement(ctx context.Context, oldLines, newLines []string, path string) (string, error) {
+	var generated strings.Builder
+	fmt.Fprintf(&generated, "diff --git a/%s b/%s\n--- a/%s\n+++ b/%s\n@@ -1,%d +1,%d @@\n", path, path, path, path, len(oldLines), len(newLines))
+	for _, line := range oldLines {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		generated.WriteByte('-')
+		generated.WriteString(line)
+		generated.WriteByte('\n')
+	}
+	for _, line := range newLines {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		generated.WriteByte('+')
+		generated.WriteString(line)
+		generated.WriteByte('\n')
+	}
+	return generated.String(), nil
 }
 
 func normalizeCurrentChangeStatuses(statuses []git.FileStatus) []currentChangeStatus {

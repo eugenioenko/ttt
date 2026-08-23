@@ -13,8 +13,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const workingTreeReadChunk = 64 * 1024
-
 func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workingTreeFile, error) {
 	dirfd, err := openDirectoryPathNoFollow(ctx, root)
 	if err != nil {
@@ -46,6 +44,30 @@ func openDirectoryPathNoFollow(ctx context.Context, path string) (int, error) {
 	if err != nil {
 		return -1, &workingTreePathError{Path: path, Kind: workingTreePathUnverified, Err: err}
 	}
+	if abs == string(filepath.Separator) {
+		return unix.Open(abs, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(abs))
+	if err != nil {
+		return -1, &workingTreePathError{Path: path, Kind: workingTreePathUnverified, Err: err}
+	}
+	fd, err := openAbsoluteDirectoryNoFollow(ctx, parent, path)
+	if err != nil {
+		return -1, err
+	}
+	next, openErr := unix.Openat(fd, filepath.Base(abs), unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	closeErr := unix.Close(fd)
+	if openErr != nil {
+		return -1, classifyWorkingTreeOpenError(path, workingTreePathSymlinkComponent, openErr)
+	}
+	if closeErr != nil {
+		unix.Close(next)
+		return -1, closeErr
+	}
+	return next, nil
+}
+
+func openAbsoluteDirectoryNoFollow(ctx context.Context, abs, reportedPath string) (int, error) {
 	fd, err := unix.Open(string(filepath.Separator), unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return -1, err
@@ -61,7 +83,7 @@ func openDirectoryPathNoFollow(ctx context.Context, path string) (int, error) {
 		next, openErr := unix.Openat(fd, part, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 		if openErr != nil {
 			unix.Close(fd)
-			return -1, classifyWorkingTreeOpenError(path, workingTreePathSymlinkComponent, openErr)
+			return -1, classifyWorkingTreeOpenError(reportedPath, workingTreePathSymlinkComponent, openErr)
 		}
 		if closeErr := unix.Close(fd); closeErr != nil {
 			unix.Close(next)

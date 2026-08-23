@@ -111,6 +111,20 @@ func gitRun(t *testing.T, dir string, args ...string) {
 	}
 }
 
+func TestShowIndexFileBytesContextUsesExplicitStageZero(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "2:notes.txt", "stage zero\n")
+	gitRun(t, dir, "add", "--", "2:notes.txt")
+
+	got, err := ShowIndexFileBytesContext(context.Background(), dir, "2:notes.txt", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "stage zero\n" {
+		t.Fatalf("index content = %q", got)
+	}
+}
+
 func writeFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	path := filepath.Join(dir, name)

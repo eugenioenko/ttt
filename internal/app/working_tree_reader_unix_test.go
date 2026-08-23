@@ -231,6 +231,26 @@ func TestReadWorkingTreeFileRejectsSymlinkedRootAndReadsRegularIntermediateCompo
 	}
 }
 
+func TestReadWorkingTreeFileAllowsSymlinkedAncestorsAboveRoot(t *testing.T) {
+	parent := t.TempDir()
+	realParent := filepath.Join(parent, "real-parent")
+	realRoot := filepath.Join(realParent, "repo")
+	if err := os.MkdirAll(realRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realRoot, "file"), []byte("ordinary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	aliasParent := filepath.Join(parent, "alias-parent")
+	if err := os.Symlink(realParent, aliasParent); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	file, err := readWorkingTreeFileContext(context.Background(), filepath.Join(aliasParent, "repo"), "file")
+	if err != nil || string(file.Content) != "ordinary" {
+		t.Fatalf("symlinked ancestor read=%+v err=%v", file, err)
+	}
+}
+
 func TestReadWorkingTreeLargeRegularFileHonorsCancellation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "large")

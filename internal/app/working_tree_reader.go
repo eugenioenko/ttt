@@ -10,6 +10,8 @@ import (
 
 type workingTreeFileKind uint8
 
+const workingTreeReadChunk = 64 * 1024
+
 const (
 	workingTreeFileMissing workingTreeFileKind = iota
 	workingTreeFileRegular

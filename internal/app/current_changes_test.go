@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
@@ -309,9 +310,23 @@ func TestPreferredConflictEntryUsesOursThenTheirsThenBase(t *testing.T) {
 	}
 }
 
+type cancelAfterErrChecksContext struct {
+	context.Context
+	checks   int
+	cancelAt int
+}
+
+func (c *cancelAfterErrChecksContext) Err() error {
+	c.checks++
+	if c.checks >= c.cancelAt {
+		return context.Canceled
+	}
+	return nil
+}
+
 func TestReadCurrentChangesCancelsDuringDiffGeneration(t *testing.T) {
 	dir := testAppRepository(t)
-	const lines = 8000
+	const lines = 500
 	var oldText, newText strings.Builder
 	for i := 0; i < lines; i++ {
 		fmt.Fprintf(&oldText, "old-%05d\n", i)
@@ -327,22 +342,65 @@ func TestReadCurrentChangesCancelsDuringDiffGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	resultCh := make(chan *CurrentChangesResult, 1)
+	ctx := &cancelAfterErrChecksContext{Context: context.Background(), cancelAt: 50}
 	statuses := currentChangesStatuses(t, dir)
 	revision := git.RevisionIdentity(dir)
-	go func() {
-		resultCh <- readCurrentChanges(ctx, dir, revision, currentChangesTabID(dir), 1, 1, statuses)
-	}()
-	time.Sleep(100 * time.Millisecond)
+	result := readCurrentChanges(ctx, dir, revision, currentChangesTabID(dir), 1, 1, statuses)
+	if !result.Canceled || !errors.Is(result.Err, context.Canceled) {
+		t.Fatalf("diff generation cancellation result = %+v", result)
+	}
+}
+
+func TestCurrentChangesDiffLimitBoundsMatrixAllocation(t *testing.T) {
+	if currentChangesDiffExceedsLimit(1999, 1999) {
+		t.Fatal("diff at the configured matrix limit was rejected")
+	}
+	if !currentChangesDiffExceedsLimit(2000, 2000) {
+		t.Fatal("diff above the configured matrix limit was accepted")
+	}
+}
+
+func TestGenerateCurrentChangesReplacementPreservesEndpointsAndCancellation(t *testing.T) {
+	generated, err := generateCurrentChangesReplacement(context.Background(), []string{"old-a", "old-b"}, []string{"new-a", "new-b"}, "conflict.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	added, deleted := currentDiffStats(diff.Parse(generated))
+	if added != 2 || deleted != 2 {
+		t.Fatalf("replacement stats = +%d -%d", added, deleted)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	select {
-	case result := <-resultCh:
-		if !result.Canceled || !errors.Is(result.Err, context.Canceled) {
-			t.Fatalf("diff generation cancellation result = %+v", result)
-		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("diff generation did not stop within 500ms of cancellation")
+	if _, err := generateCurrentChangesReplacement(canceled, []string{"old"}, []string{"new"}, "conflict.txt"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("replacement cancellation error = %v", err)
+	}
+}
+
+func TestReadCurrentChangesFallsBackAboveDiffLimit(t *testing.T) {
+	dir := testAppRepository(t)
+	const lines = 2001
+	var oldText, newText strings.Builder
+	for i := 0; i < lines; i++ {
+		fmt.Fprintf(&oldText, "old-%05d\n", i)
+		fmt.Fprintf(&newText, "new-%05d\n", i)
+	}
+	path := filepath.Join(dir, "large.txt")
+	if err := os.WriteFile(path, []byte(oldText.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testAppGit(t, dir, "add", "--", "large.txt")
+	testAppGit(t, dir, "commit", "-m", "large baseline")
+	if err := os.WriteFile(path, []byte(newText.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	if result.Err != nil || len(result.Files) != 1 {
+		t.Fatalf("large fallback result=%+v", result)
+	}
+	added, deleted := currentDiffStats(result.Files[0].Diff)
+	if added != lines || deleted != lines {
+		t.Fatalf("large fallback stats = +%d -%d", added, deleted)
 	}
 }
 

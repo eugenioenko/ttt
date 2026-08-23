@@ -575,10 +575,7 @@ func ShowFileBytesContext(ctx context.Context, dir, path, ref string) ([]byte, e
 }
 
 func ShowIndexFileBytesContext(ctx context.Context, dir, path string, stage int) ([]byte, error) {
-	spec := ":" + path
-	if stage > 0 {
-		spec = fmt.Sprintf(":%d:%s", stage, path)
-	}
+	spec := fmt.Sprintf(":%d:%s", stage, path)
 	cmd := gitCommandContext(ctx, "-C", dir, "show", spec)
 	out, err := cmd.Output()
 	if err != nil {
