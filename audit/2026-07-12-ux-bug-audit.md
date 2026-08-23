@@ -403,11 +403,11 @@ Basic search, result counts, case/regex behavior, empty/whitespace/CJK queries, 
 ### BUG-044: Git branch/gutter missing when the opened file is below the repo root (resolved)
 - **Area:** Workspace × git
 - **Severity:** medium
-- **Status:** resolved by canonical active-file repository observation, including linked worktrees
+- **Status:** resolved for active files whose file identity or nearest existing parent can be stably resolved, including linked worktrees
 - **Repro:** open a file in a repo SUBDIR by absolute path → no branch in the status bar. Control that nails it: opening ttt's own `internal/ui/root.go` by absolute path shows NO branch, while opening the repo at its root (cwd) shows `audit/bug-hunt` — same repo, different result.
 - **Expected:** branch/gutter work for any file inside a git working tree (the Changes panel already does — it uses `git rev-parse --show-toplevel`)
-- **Actual:** repository membership and branch now come from the repository observer's cached canonical Git identity instead of `workspace.isGitRepo()`; active-file discovery is asynchronous and accepts both `.git` directories and linked-worktree `.git` files.
-- **Test:** `tests/functional/audit-workspace-bugs.test.js` (nested-repository and linked-worktree fixtures)
+- **Actual:** repository membership and branch now come from the repository observer's cached canonical Git identity instead of `workspace.isGitRepo()`; active-file discovery resolves existing file and directory symlinks before choosing the Git directory, uses the nearest stably resolvable existing parent for missing files, and declines broken links or cycles.
+- **Test:** `tests/functional/audit-workspace-bugs.test.js` (nested-repository, linked-worktree, and external file-symlink fixtures)
 
 ### BUG-045: `.ttt` workspace files accept a folder entry pointing at a regular file (no IsDir validation)
 - **Area:** Workspace

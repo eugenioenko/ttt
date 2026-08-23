@@ -570,8 +570,43 @@ func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatus
 }
 
 func readRepositoryIdentity(ctx context.Context, filePath string, seq uint64) *RepositoryIdentityResult {
-	identity, err := git.ReadRepositoryIdentityContext(ctx, filepath.Dir(filePath))
+	if err := ctx.Err(); err != nil {
+		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
+	}
+	dir, err := repositoryDiscoveryDirectory(filePath)
+	if err != nil {
+		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
+	}
+	if err := ctx.Err(); err != nil {
+		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
+	}
+	identity, err := git.ReadRepositoryIdentityContext(ctx, dir)
 	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: identity, Err: err}
+}
+
+func repositoryDiscoveryDirectory(filePath string) (string, error) {
+	identity, err := resolveRepositoryPathIdentity(filePath)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Dir(identity)
+	for {
+		info, statErr := os.Stat(dir)
+		if statErr == nil {
+			if !info.IsDir() {
+				return "", errors.New("repository discovery ancestor is not a directory")
+			}
+			return dir, nil
+		}
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", statErr
+		}
+		dir = parent
+	}
 }
 
 func (s *RepositoryState) SetActiveFile(filePath string) {
@@ -742,30 +777,56 @@ func resolveRepositoryPathIdentityWith(
 		return "", err
 	}
 	abs = filepath.Clean(abs)
-	resolved, resolveErr := stableSymlinkIdentityWith(abs, evalSymlinks)
-	if resolveErr == nil {
-		return resolved, nil
+
+resolve:
+	for {
+		resolved, resolveErr := stableSymlinkIdentityWith(abs, evalSymlinks)
+		if resolveErr == nil {
+			return resolved, nil
+		}
+		if _, lstatErr := lstat(abs); lstatErr == nil {
+			return "", resolveErr
+		} else if !errors.Is(lstatErr, os.ErrNotExist) {
+			return "", lstatErr
+		}
+		ancestor := filepath.Dir(abs)
+		for {
+			resolvedAncestor, ancestorErr := stableSymlinkIdentityWith(ancestor, evalSymlinks)
+			if ancestorErr == nil {
+				if _, lstatErr := lstat(abs); lstatErr == nil {
+					continue resolve
+				} else if !errors.Is(lstatErr, os.ErrNotExist) {
+					return "", lstatErr
+				}
+				for candidate := filepath.Dir(abs); candidate != ancestor; candidate = filepath.Dir(candidate) {
+					if _, lstatErr := lstat(candidate); lstatErr == nil {
+						continue resolve
+					} else if !errors.Is(lstatErr, os.ErrNotExist) {
+						return "", lstatErr
+					}
+				}
+				confirmedAncestor, err := stableSymlinkIdentityWith(ancestor, evalSymlinks)
+				if err != nil || confirmedAncestor != resolvedAncestor {
+					return "", errors.New("repository path ancestor changed while resolving")
+				}
+				rel, err := filepath.Rel(ancestor, abs)
+				if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+					return "", errors.New("repository path escaped its resolved ancestor")
+				}
+				return filepath.Join(resolvedAncestor, rel), nil
+			}
+			if _, lstatErr := lstat(ancestor); lstatErr == nil {
+				return "", ancestorErr
+			} else if !errors.Is(lstatErr, os.ErrNotExist) {
+				return "", lstatErr
+			}
+			parent := filepath.Dir(ancestor)
+			if parent == ancestor {
+				return "", ancestorErr
+			}
+			ancestor = parent
+		}
 	}
-	if _, lstatErr := lstat(abs); lstatErr == nil {
-		return "", resolveErr
-	} else if !errors.Is(lstatErr, os.ErrNotExist) {
-		return "", lstatErr
-	}
-	parent := filepath.Dir(abs)
-	resolvedParent, parentErr := stableSymlinkIdentityWith(parent, evalSymlinks)
-	if parentErr != nil {
-		return "", resolveErr
-	}
-	if _, lstatErr := lstat(abs); lstatErr == nil {
-		return stableSymlinkIdentityWith(abs, evalSymlinks)
-	} else if !errors.Is(lstatErr, os.ErrNotExist) {
-		return "", lstatErr
-	}
-	confirmedParent, err := stableSymlinkIdentityWith(parent, evalSymlinks)
-	if err != nil || confirmedParent != resolvedParent {
-		return "", errors.New("repository path parent changed while resolving")
-	}
-	return filepath.Join(resolvedParent, filepath.Base(abs)), nil
 }
 
 func stableSymlinkIdentityWith(path string, evalSymlinks func(string) (string, error)) (string, error) {

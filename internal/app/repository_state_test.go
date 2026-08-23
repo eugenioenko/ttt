@@ -191,6 +191,182 @@ func TestActiveRepositoryIdentityIsCachedPerFileAndClearsOutsideGit(t *testing.T
 	}
 }
 
+func TestReadRepositoryIdentityUsesStableFileSymlinkIdentity(t *testing.T) {
+	repo := testAppRepository(t)
+	target := filepath.Join(repo, "nested", "file.txt")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	external := t.TempDir()
+	link := filepath.Join(external, "file-link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	result := readRepositoryIdentity(context.Background(), link, 7)
+	if result.Err != nil {
+		t.Fatal(result.Err)
+	}
+	if result.Seq != 7 || result.FilePath != link {
+		t.Fatalf("result identity = seq %d path %q, want seq 7 presentation path %q", result.Seq, result.FilePath, link)
+	}
+	if result.Identity.Root != repo || result.Identity.Branch != "main" {
+		t.Fatalf("repository identity = %+v, want root %q branch main", result.Identity, repo)
+	}
+
+	missing := filepath.Join(repo, "missing", "deeper", "file.txt")
+	result = readRepositoryIdentity(context.Background(), missing, 8)
+	if result.Err != nil || result.FilePath != missing || result.Identity.Root != repo || result.Identity.Branch != "main" {
+		t.Fatalf("missing-file repository identity = %+v, want presentation path %q root %q branch main", result, missing, repo)
+	}
+}
+
+func TestRepositoryDiscoveryDirectoryHandlesSymlinksMissingPathsAndInvalidLinks(t *testing.T) {
+	repo := t.TempDir()
+	nested := filepath.Join(repo, "nested")
+	external := t.TempDir()
+	if err := os.Mkdir(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(nested, "file.txt")
+	if err := os.WriteFile(target, []byte("content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fileLink := filepath.Join(external, "file-link.txt")
+	dirLink := filepath.Join(external, "dir-link")
+	broken := filepath.Join(external, "broken")
+	cycleA := filepath.Join(external, "cycle-a")
+	cycleB := filepath.Join(external, "cycle-b")
+	links := [][2]string{
+		{target, fileLink},
+		{nested, dirLink},
+		{filepath.Join(external, "missing-target"), broken},
+		{cycleB, cycleA},
+		{cycleA, cycleB},
+	}
+	for _, link := range links {
+		if err := os.Symlink(link[0], link[1]); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+	}
+
+	tests := []struct {
+		name    string
+		path    string
+		wantDir string
+		wantErr bool
+	}{
+		{name: "file symlink", path: fileLink, wantDir: nested},
+		{name: "directory symlink", path: filepath.Join(dirLink, "file.txt"), wantDir: nested},
+		{name: "missing file", path: filepath.Join(nested, "missing.txt"), wantDir: nested},
+		{name: "deep missing path", path: filepath.Join(dirLink, "missing", "deeper", "file.txt"), wantDir: nested},
+		{name: "broken file symlink", path: broken, wantErr: true},
+		{name: "broken directory symlink", path: filepath.Join(broken, "file.txt"), wantErr: true},
+		{name: "file symlink cycle", path: cycleA, wantErr: true},
+		{name: "directory symlink cycle", path: filepath.Join(cycleA, "file.txt"), wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir, err := repositoryDiscoveryDirectory(test.path)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("discovery directory = %q, want error", dir)
+				}
+				return
+			}
+			if err != nil || dir != test.wantDir {
+				t.Fatalf("discovery directory = (%q, %v), want %q", dir, err, test.wantDir)
+			}
+		})
+	}
+}
+
+func TestRepositoryForPathUsesStableFileIdentityAndLongestNestedRoot(t *testing.T) {
+	outer := t.TempDir()
+	inner := filepath.Join(outer, "nested")
+	if err := os.Mkdir(inner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(inner, "file.txt")
+	if err := os.WriteFile(target, []byte("content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "file-link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	s := NewRepositoryState(nil, nil)
+	s.identities[outer] = git.RepositoryIdentity{Root: outer, Branch: "outer"}
+	s.identities[inner] = git.RepositoryIdentity{Root: inner, Branch: "inner"}
+	root, branch := s.RepositoryForPath(link)
+	if root != inner || branch != "inner" {
+		t.Fatalf("linked nested identity = (%q, %q), want (%q, inner)", root, branch, inner)
+	}
+}
+
+func TestActiveRepositoryIdentityCancelsSupersededReadAndDropsStaleGeneration(t *testing.T) {
+	first := filepath.Join(t.TempDir(), "first.txt")
+	second := filepath.Join(t.TempDir(), "second.txt")
+	for _, path := range []string{first, second} {
+		if err := os.WriteFile(path, []byte("content\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s, _, poster := testRepositoryState(nil, "")
+	s.statusWait = time.Hour
+	firstStarted := make(chan struct{})
+	firstCanceled := make(chan struct{})
+	s.readIdentity = func(ctx context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		if path == first {
+			close(firstStarted)
+			<-ctx.Done()
+			close(firstCanceled)
+			return &RepositoryIdentityResult{Seq: seq, FilePath: path, Err: ctx.Err()}
+		}
+		return &RepositoryIdentityResult{
+			Seq:      seq,
+			FilePath: path,
+			Identity: git.RepositoryIdentity{Root: filepath.Dir(path), Branch: "second"},
+		}
+	}
+
+	s.SetActiveFile(first)
+	<-firstStarted
+	firstSeq := s.identitySeq
+	s.SetActiveFile(second)
+	select {
+	case <-firstCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("superseded identity read was not canceled")
+	}
+	for range 2 {
+		data := poster.await(t)
+		result, ok := data.(*RepositoryIdentityResult)
+		if !ok {
+			t.Fatalf("identity event type = %T", data)
+		}
+		s.HandleIdentity(result)
+	}
+	if root, branch := s.ActiveRepository(); root != filepath.Dir(second) || branch != "second" {
+		t.Fatalf("active identity = (%q, %q), want second file identity", root, branch)
+	}
+
+	s.HandleIdentity(&RepositoryIdentityResult{
+		Seq:      firstSeq,
+		FilePath: first,
+		Identity: git.RepositoryIdentity{Root: filepath.Dir(first), Branch: "stale"},
+	})
+	if root, branch := s.ActiveRepository(); root != filepath.Dir(second) || branch != "second" {
+		t.Fatalf("stale generation replaced active identity = (%q, %q)", root, branch)
+	}
+	s.Close()
+}
+
 func TestRepositoryInFlightInvalidationPublishesOnlyOneFollowUp(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	publications := 0

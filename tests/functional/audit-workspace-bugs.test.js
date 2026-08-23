@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import * as tui from "./tui.js";
-import { createLinkedWorktree, createTempDir, cleanupDir } from "./helpers.js";
+import { createGitRepo, createLinkedWorktree, createTempDir, cleanupDir, git } from "./helpers.js";
 
 let dir;
 
@@ -63,5 +63,31 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
 
     expect(snapshots[linked]).toContain("linkedbranch");
     expect(snapshots[plain]).not.toContain("linkedbranch");
+  });
+
+  it("shows the target repository branch through an external file symlink", () => {
+    dir = createTempDir();
+    const repo = join(dir, "repo");
+    mkdirSync(repo);
+    createGitRepo(repo);
+    git(repo, "branch", "-m", "filesymlinkbranch");
+
+    const nested = join(repo, "nested");
+    mkdirSync(nested);
+    const target = join(nested, "file.txt");
+    writeFileSync(target, "symlink target\n");
+    git(repo, "add", "nested/file.txt");
+    git(repo, "commit", "-qm", "add symlink target");
+
+    const plain = join(dir, "plain");
+    mkdirSync(plain);
+    const link = join(plain, "file-link.txt");
+    symlinkSync(target, link);
+
+    tui.start(link);
+    tui.waitFor("filesymlinkbranch");
+    const screen = tui.snapshot();
+    const { snapshots } = tui.run();
+    expect(snapshots[screen]).toContain("filesymlinkbranch");
   });
 });
