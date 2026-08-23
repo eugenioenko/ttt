@@ -95,15 +95,7 @@ func (sv *ScrollViewWidget) viewportSize(w, h, contentW, contentH int) (int, int
 
 // viewportOrigin returns the screen position of the inner content area.
 func (sv *ScrollViewWidget) viewportOrigin() (int, int) {
-	ox := sv.rect.X + sv.Box.MarginLeft + sv.Box.PaddingLeft
-	oy := sv.rect.Y + sv.Box.MarginTop + sv.Box.PaddingTop
-	if sv.Box.BorderLeft {
-		ox++
-	}
-	if sv.Box.BorderTop {
-		oy++
-	}
-	return ox, oy
+	return sv.contentOrigin()
 }
 
 func (sv *ScrollViewWidget) Render(surface Surface) {

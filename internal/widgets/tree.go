@@ -305,16 +305,7 @@ func (t *TreeWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	surface.Fill(term.Cell{Ch: ' '})
 
-	ox := t.Box.MarginLeft + t.Box.PaddingLeft
-	oy := t.Box.MarginTop + t.Box.PaddingTop
-	if t.Box.BorderLeft {
-		ox++
-	}
-	if t.Box.BorderTop {
-		oy++
-	}
-	t.contentX = t.rect.X + ox
-	t.contentY = t.rect.Y + oy
+	t.contentX, t.contentY = t.contentOrigin()
 
 	if h <= 0 || w <= 0 {
 		_, invalidated := t.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(t.flatList), t.scrollTop))

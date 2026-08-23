@@ -168,6 +168,18 @@ func (b *BaseWidget) SetRect(r Rect)          { b.rect = r }
 func (b *BaseWidget) GetRect() Rect           { return b.rect }
 func (b *BaseWidget) SetBoxModel(bm BoxModel) { b.Box = bm }
 
+func (b *BaseWidget) contentOrigin() (int, int) {
+	x := b.rect.X + b.Box.MarginLeft + b.Box.PaddingLeft
+	y := b.rect.Y + b.Box.MarginTop + b.Box.PaddingTop
+	if b.Box.BorderLeft {
+		x++
+	}
+	if b.Box.BorderTop {
+		y++
+	}
+	return x, y
+}
+
 func (b *BaseWidget) BoxOverheadH() int {
 	h := b.Box.MarginTop + b.Box.MarginBottom + b.Box.PaddingTop + b.Box.PaddingBottom
 	if b.Box.BorderTop {

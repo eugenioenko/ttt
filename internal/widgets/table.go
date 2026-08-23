@@ -132,18 +132,6 @@ func (t *TableWidget) Render(surface Surface) {
 	t.notifyPointerCaptureInvalidated(invalidated)
 }
 
-func (t *TableWidget) contentOrigin() (int, int) {
-	ox := t.rect.X + t.Box.MarginLeft + t.Box.PaddingLeft
-	oy := t.rect.Y + t.Box.MarginTop + t.Box.PaddingTop
-	if t.Box.BorderLeft {
-		ox++
-	}
-	if t.Box.BorderTop {
-		oy++
-	}
-	return ox, oy
-}
-
 // effectiveWidths keeps fixed widths; auto columns split the remaining space (min 1 cell).
 func (t *TableWidget) effectiveWidths(w int) []int {
 	n := len(t.Config.Columns)
