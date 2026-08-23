@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -45,35 +46,36 @@ type DiffSearchSource struct {
 
 type SearchWidget struct {
 	BaseWidget
-	Input        *InputWidget
-	Include      *InputWidget
-	Exclude      *InputWidget
-	ReplaceInput *InputWidget
-	Options      SearchOptions
-	focusIdx     int
-	showFilters  bool
-	showReplace  bool
-	Groups       []SearchFileGroup
-	FlatList     []searchItem
-	Selected     int
-	lastSelected int
-	ScrollTop    int
-	scrollbar    Scrollbar
-	WorkDirs     []string
-	Searching    bool
-	Error        string
-	DiffSources  func() []DiffSearchSource
-	OnOpenMatch  func(path string, line, col int)
-	OnReplace    func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
-	OnReplaceAll func(allMatches map[string][]SearchMatch, replacement string, opts SearchOptions)
-	OnPreview    func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
-	OnClear      func()
-	PostBatch    func(batch *SearchBatch)
-	Debounce     Debouncer
-	debouncing   bool
-	searchGen    uint64
-	searchCancel context.CancelFunc
-	resultStartY int
+	Input            *InputWidget
+	Include          *InputWidget
+	Exclude          *InputWidget
+	ReplaceInput     *InputWidget
+	Options          SearchOptions
+	focusIdx         int
+	showFilters      bool
+	showReplace      bool
+	Groups           []SearchFileGroup
+	FlatList         []searchItem
+	Selected         int
+	lastSelected     int
+	ScrollTop        int
+	scrollbar        widgets.VerticalScrollbar
+	scrollbarCapture scrollbarCaptureState
+	WorkDirs         []string
+	Searching        bool
+	Error            string
+	DiffSources      func() []DiffSearchSource
+	OnOpenMatch      func(path string, line, col int)
+	OnReplace        func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
+	OnReplaceAll     func(allMatches map[string][]SearchMatch, replacement string, opts SearchOptions)
+	OnPreview        func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
+	OnClear          func()
+	PostBatch        func(batch *SearchBatch)
+	Debounce         Debouncer
+	debouncing       bool
+	searchGen        uint64
+	searchCancel     context.CancelFunc
+	resultStartY     int
 }
 
 type searchItem struct {
@@ -615,6 +617,8 @@ func (s *SearchWidget) Render(surface Surface) {
 	s.resultStartY = startY
 	visibleH := h - startY
 	if visibleH <= 0 {
+		_, invalidated := s.scrollbar.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(0, len(s.FlatList), s.ScrollTop))
+		s.scrollbarCapture.notify(invalidated)
 		return
 	}
 
@@ -629,11 +633,6 @@ func (s *SearchWidget) Render(surface Surface) {
 	}
 
 	r := s.GetRect()
-	s.scrollbar.X = r.X + w - 1
-	s.scrollbar.Y = r.Y + startY
-	s.scrollbar.Height = visibleH
-	s.scrollbar.TotalItems = len(s.FlatList)
-	s.scrollbar.TopItem = s.ScrollTop
 
 	for i := 0; i < visibleH; i++ {
 		idx := s.ScrollTop + i
@@ -727,7 +726,15 @@ func (s *SearchWidget) Render(surface Surface) {
 		}
 	}
 
-	s.scrollbar.Render(surface, w-1, startY)
+	_, invalidated := s.scrollbar.Render(
+		surface,
+		widgets.NewScrollbarGeometry(
+			Rect{X: w - 1, Y: startY, W: 1, H: visibleH},
+			Rect{X: r.X + w - 1, Y: r.Y + startY, W: 1, H: visibleH},
+		),
+		widgets.NewScrollRange(visibleH, len(s.FlatList), s.ScrollTop),
+	)
+	s.scrollbarCapture.notify(invalidated)
 }
 
 func (s *SearchWidget) toggleRow() int {
@@ -739,12 +746,9 @@ func (s *SearchWidget) toggleRow() int {
 }
 
 func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
-	if newTop, consumed := s.scrollbar.HandleEvent(ev); consumed {
+	if newTop, result := s.scrollbar.HandleEvent(ev); result != EventIgnored {
 		s.ScrollTop = newTop
-		if s.scrollbar.IsDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
+		return result
 	}
 	switch tev := ev.(type) {
 	case *tcell.EventMouse:
@@ -885,6 +889,22 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	return EventIgnored
+}
+
+func (s *SearchWidget) CancelPointerCapture() bool {
+	return s.scrollbarCapture.cancel(&s.scrollbar)
+}
+
+func (s *SearchWidget) InvalidatePointerInteraction() bool {
+	return s.CancelPointerCapture()
+}
+
+func (s *SearchWidget) OwnsPointerCapture() bool {
+	return s.scrollbarCapture.owns(&s.scrollbar)
+}
+
+func (s *SearchWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	s.scrollbarCapture.invalidated = invalidated
 }
 
 func (s *SearchWidget) replaceInFile(groupIdx int) {

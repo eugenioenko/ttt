@@ -69,41 +69,43 @@ type editorTab struct {
 
 type EditorGroupWidget struct {
 	BaseWidget
-	TabBar                  *TabBarWidget
-	Editor                  *EditorPaneWidget
-	Autocomplete            *AutocompleteWidget
-	Hover                   *HoverWidget
-	SignatureHelp           *SignatureHelpWidget
-	tabs                    []editorTab
-	nextTabIdentity         uint64
-	active                  int
-	pinnedCount             int
-	TabSize                 int
-	InsertSpaces            bool
-	LineNumbers             bool
-	GutterStyle             string
-	WordWrap                bool
-	DiffMode                DiffMode
-	DiffContext             DiffContextMode
-	DiffWordWrap            bool
-	DiffHighContrast        bool
-	DiffCollapsedEmphasis   bool
-	SyntaxHighlight         bool
-	BracketPairColorization bool
-	BracketColorStyles      []term.Style
-	InsertFinalNewline      bool
-	ShowTrailingNewline     bool
-	TrimTrailingWhitespace  bool
-	UndoDeleteCursorStart   bool
-	Borders                 *term.BorderSet
-	OnFileOpen              func(path, lang, text string)
-	OnFileChange            func(path, lang, text string)
-	OnFileClose             func(path, lang string)
-	OnContentTabClose       func(id string)
-	OnError                 func(msg string)
-	OnNotify                func(msg string)
-	pendingNotify           []string
-	focused                 bool
+	TabBar                    *TabBarWidget
+	Editor                    *EditorPaneWidget
+	Autocomplete              *AutocompleteWidget
+	Hover                     *HoverWidget
+	SignatureHelp             *SignatureHelpWidget
+	tabs                      []editorTab
+	nextTabIdentity           uint64
+	active                    int
+	pinnedCount               int
+	TabSize                   int
+	InsertSpaces              bool
+	LineNumbers               bool
+	GutterStyle               string
+	WordWrap                  bool
+	DiffMode                  DiffMode
+	DiffContext               DiffContextMode
+	DiffWordWrap              bool
+	DiffHighContrast          bool
+	DiffCollapsedEmphasis     bool
+	SyntaxHighlight           bool
+	BracketPairColorization   bool
+	BracketColorStyles        []term.Style
+	InsertFinalNewline        bool
+	ShowTrailingNewline       bool
+	TrimTrailingWhitespace    bool
+	UndoDeleteCursorStart     bool
+	Borders                   *term.BorderSet
+	OnFileOpen                func(path, lang, text string)
+	OnFileChange              func(path, lang, text string)
+	OnFileClose               func(path, lang string)
+	OnContentTabClose         func(id string)
+	OnError                   func(msg string)
+	OnNotify                  func(msg string)
+	pendingNotify             []string
+	pointerCaptureInvalidated func()
+	cancelingPointerCapture   bool
+	focused                   bool
 	// diagSources holds diagnostics keyed by source ("lsp", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
@@ -746,8 +748,8 @@ func (g *EditorGroupWidget) SetUseTabs(useTabs bool) {
 
 func (g *EditorGroupWidget) SwitchTab(idx int) {
 	if idx >= 0 && idx < len(g.tabs) {
-		if idx != g.active && g.TabBar.OwnsPointerCapture() {
-			g.TabBar.CancelPointerCapture()
+		if idx != g.active {
+			g.CancelPointerCapture()
 		}
 		if t := g.activeTab(); t != nil && t.Content != nil {
 			if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
@@ -1896,12 +1898,13 @@ func (g *EditorGroupWidget) ensureTabIdentities() {
 
 func (g *EditorGroupWidget) Render(surface Surface) {
 	g.syncTabs()
+	g.wirePointerCaptureChildren()
 	w, h := surface.Size()
 	r := g.GetRect()
 
 	const tabBarH = 3
 	if w <= 0 || h <= tabBarH {
-		g.TabBar.InvalidatePointerInteraction()
+		g.InvalidatePointerInteraction()
 		return
 	}
 
@@ -1948,19 +1951,57 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 }
 
 func (g *EditorGroupWidget) CancelPointerCapture() bool {
-	return g.TabBar.CancelPointerCapture()
+	g.cancelingPointerCapture = true
+	canceled := false
+	for _, child := range g.pointerCaptureChildren() {
+		canceled = widgets.CancelPointerCapture(child) || canceled
+	}
+	g.cancelingPointerCapture = false
+	if canceled && g.pointerCaptureInvalidated != nil {
+		g.pointerCaptureInvalidated()
+	}
+	return canceled
 }
 
 func (g *EditorGroupWidget) OwnsPointerCapture() bool {
-	return g.TabBar.OwnsPointerCapture()
+	for _, child := range g.pointerCaptureChildren() {
+		if owner, ok := child.(widgets.PointerCaptureOwner); ok && owner.OwnsPointerCapture() {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *EditorGroupWidget) InvalidatePointerInteraction() bool {
-	return g.TabBar.InvalidatePointerInteraction()
+	return g.CancelPointerCapture()
 }
 
 func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
-	g.TabBar.SetPointerCaptureInvalidated(invalidated)
+	g.pointerCaptureInvalidated = invalidated
+	g.wirePointerCaptureChildren()
+}
+
+func (g *EditorGroupWidget) pointerCaptureChildren() []Widget {
+	children := []Widget{g.TabBar}
+	if t := g.activeTab(); t != nil && t.Content != nil {
+		children = append(children, t.Content)
+	} else if g.Editor != nil {
+		children = append(children, g.Editor)
+	}
+	if g.Autocomplete != nil {
+		children = append(children, g.Autocomplete)
+	}
+	return children
+}
+
+func (g *EditorGroupWidget) wirePointerCaptureChildren() {
+	for _, child := range g.pointerCaptureChildren() {
+		widgets.SetPointerCaptureInvalidated(child, func() {
+			if !g.cancelingPointerCapture && g.pointerCaptureInvalidated != nil {
+				g.pointerCaptureInvalidated()
+			}
+		})
+	}
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -1981,8 +2022,8 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 	if g.Autocomplete != nil {
 		result := g.Autocomplete.HandleEvent(ev)
-		if result == EventConsumed {
-			return EventConsumed
+		if result != EventIgnored {
+			return result
 		}
 	}
 	result := g.TabBar.HandleEvent(ev)

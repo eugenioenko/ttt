@@ -248,9 +248,13 @@ func TestDiffWidgetFullwidthWrapAndHorizontalExtent(t *testing.T) {
 	grid := makeGrid(width, height)
 	dv.SetRect(Rect{W: width, H: height})
 	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
-	if dv.hscrollbar.TotalCols != 5 || dv.rhscrollbar.TotalCols != 5 {
-		t.Fatalf("horizontal extents = %d / %d, want 5 / 5", dv.hscrollbar.TotalCols, dv.rhscrollbar.TotalCols)
+	if got := dv.HandleEvent(tcell.NewEventMouse(dv.layoutLeftStart+dv.layoutLeftW-1, height-1, tcell.Button1, tcell.ModNone)); got != EventCaptured {
+		t.Fatalf("horizontal endpoint press = %v, want captured", got)
 	}
+	if dv.LeftCol != 2 {
+		t.Fatalf("horizontal endpoint = %d, want fullwidth max offset 2", dv.LeftCol)
+	}
+	dv.HandleEvent(tcell.NewEventMouse(0, 0, tcell.ButtonNone, tcell.ModNone))
 
 	// At three columns, only one double-width rune fits on each row. A
 	// rune-count implementation would keep all three runes on one row.
@@ -669,7 +673,7 @@ func TestDiffWidgetWrappedScrollbarUsesVisualRows(t *testing.T) {
 	grid := makeGrid(width, height)
 	dv.SetRect(Rect{W: width, H: height})
 	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
-	if !dv.scrollbar.Visible() {
+	if _, _, ok := findVerticalScrollbarThumb(grid); !ok {
 		t.Fatal("wrapped precondition: expected vertical scrollbar")
 	}
 
@@ -693,7 +697,7 @@ func TestDiffWidgetNarrowResizeClearsMouseLayout(t *testing.T) {
 
 	dv.SetRect(Rect{X: 4, Y: 2, W: 5, H: 4})
 	dv.Render(NewRenderSurface(makeGrid(5, 4), Rect{W: 5, H: 4}))
-	if dv.viewH != 0 || dv.layoutLeftW != 0 || dv.scrollbar.Visible() {
+	if dv.viewH != 0 || dv.layoutLeftW != 0 || dv.scrollbar.OwnsPointerCapture() {
 		t.Fatalf("narrow layout retained stale state: viewH=%d leftW=%d scrollbar=%+v", dv.viewH, dv.layoutLeftW, dv.scrollbar)
 	}
 	if got := dv.HandleEvent(tcell.NewEventMouse(8, 2, tcell.Button1, tcell.ModNone)); got != EventIgnored {
@@ -831,7 +835,7 @@ func TestDiffWidgetLoadingCannotRefetchCollapsedGap(t *testing.T) {
 	if fetches != 1 || !dv.Loading {
 		t.Fatalf("load precondition fetches=%d loading=%v", fetches, dv.Loading)
 	}
-	if dv.viewH != 0 || dv.layoutLeftW != 0 || dv.scrollbar.Visible() {
+	if dv.viewH != 0 || dv.layoutLeftW != 0 || dv.scrollbar.OwnsPointerCapture() {
 		t.Fatalf("loading retained interactive layout: viewH=%d leftW=%d scrollbar=%+v", dv.viewH, dv.layoutLeftW, dv.scrollbar)
 	}
 	dv.SetContextMode(DiffContextFullFile)

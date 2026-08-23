@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -161,17 +162,18 @@ type CommitDetailWidget struct {
 	emphasizeGaps   bool
 	collapsedFiles  []bool
 
-	rows            []commitDetailRow
-	visualRows      []commitDetailVisualRow
-	visualRowsW     int
-	totalVisualRows int
-	maxLineW        int
-	gutterW         int
-	viewH           int
-	contentW        int
-	scrollbar       Scrollbar
-	hscrollbar      HScrollbar
-	rhscroll        HScrollbar
+	rows             []commitDetailRow
+	visualRows       []commitDetailVisualRow
+	visualRowsW      int
+	totalVisualRows  int
+	maxLineW         int
+	gutterW          int
+	viewH            int
+	contentW         int
+	scrollbar        widgets.VerticalScrollbar
+	hscrollbar       widgets.HorizontalScrollbar
+	rhscroll         widgets.HorizontalScrollbar
+	scrollbarCapture scrollbarCaptureState
 
 	// Render owns these layout values. Mouse hit-testing and sticky-heading
 	// controls reuse them rather than trying to reconstruct the viewport.
@@ -781,11 +783,13 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := d.GetRect()
 	if w <= 0 || h <= 0 {
+		d.InvalidatePointerInteraction()
 		return
 	}
 	surface.Fill(term.Cell{Ch: ' ', Style: term.StyleDefault})
 
 	if d.Loading {
+		d.InvalidatePointerInteraction()
 		loadingText := d.LoadingText
 		if loadingText == "" {
 			loadingText = fmt.Sprintf("Loading commit %s…", d.Short)
@@ -794,6 +798,7 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 		return
 	}
 	if d.Error != "" {
+		d.InvalidatePointerInteraction()
 		surface.DrawText(0, 0, d.Error, w, term.StyleDanger)
 		return
 	}
@@ -832,22 +837,23 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	}
 	d.renderStickyHeading(surface, viewW)
 
+	vGeometry := widgets.ScrollbarGeometry{}
 	if showV {
-		d.scrollbar.X = r.X + viewW
-		d.scrollbar.Y = r.Y
-		d.scrollbar.Height = viewH
-		d.scrollbar.TotalItems = d.totalVisualRows
-		d.scrollbar.TopItem = d.TopLine
-		d.scrollbar.Render(surface, viewW, 0)
-	} else {
-		d.scrollbar.TotalItems = 0
+		vGeometry = widgets.NewScrollbarGeometry(
+			Rect{X: viewW, Y: 0, W: 1, H: viewH},
+			Rect{X: r.X + viewW, Y: r.Y, W: 1, H: viewH},
+		)
 	}
+	_, vInvalidated := d.scrollbar.Render(surface, vGeometry, widgets.NewScrollRange(viewH, d.totalVisualRows, d.TopLine))
+	hInvalidated := false
 	if showH && viewH < h {
-		d.renderHorizontalScrollbars(surface, r, viewW, viewH)
+		hInvalidated = d.renderHorizontalScrollbars(surface, r, viewW, viewH)
 	} else {
-		d.hscrollbar.TotalCols = 0
-		d.rhscroll.TotalCols = 0
+		_, leftInvalidated := d.hscrollbar.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(leftW, leftW, 0))
+		_, rightInvalidated := d.rhscroll.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(rightW, rightW, 0))
+		hInvalidated = leftInvalidated || rightInvalidated
 	}
+	d.scrollbarCapture.notify(vInvalidated || hInvalidated)
 }
 
 func (d *CommitDetailWidget) layout(w, h int) (viewW, viewH int, showV, showH bool) {
@@ -1345,34 +1351,39 @@ func truncateCommitDetailPath(text string, width int) string {
 	return "…" + string(runes[start:])
 }
 
-func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect, viewW, y int) {
+func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect, viewW, y int) bool {
 	leftStart, leftW, rightStart, rightW := d.sideGeometry(viewW)
-	d.hscrollbar.X = r.X + leftStart
-	d.hscrollbar.Y = r.Y + y
-	d.hscrollbar.Width = leftW
-	d.hscrollbar.TotalCols = d.maxLineW
-	d.hscrollbar.LeftCol = d.LeftCol
-	d.hscrollbar.Render(surface, leftStart, y)
+	_, leftInvalidated := d.hscrollbar.Render(
+		surface,
+		widgets.NewScrollbarGeometry(
+			Rect{X: leftStart, Y: y, W: leftW, H: 1},
+			Rect{X: r.X + leftStart, Y: r.Y + y, W: leftW, H: 1},
+		),
+		widgets.NewScrollRange(leftW, d.maxLineW, d.LeftCol),
+	)
 	for column := 0; column < d.gutterW; column++ {
 		surface.SetCell(column, y, term.Cell{Ch: ' '})
 	}
 	if d.mode == DiffModeUnified {
-		d.rhscroll.TotalCols = 0
-		return
+		_, rightInvalidated := d.rhscroll.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(rightW, rightW, 0))
+		return leftInvalidated || rightInvalidated
 	}
 
 	dividerX := (viewW - 1) / 2
-	d.rhscroll.X = r.X + rightStart
-	d.rhscroll.Y = r.Y + y
-	d.rhscroll.Width = rightW
-	d.rhscroll.TotalCols = d.maxLineW
-	d.rhscroll.LeftCol = d.LeftCol
-	d.rhscroll.Render(surface, rightStart, y)
+	_, rightInvalidated := d.rhscroll.Render(
+		surface,
+		widgets.NewScrollbarGeometry(
+			Rect{X: rightStart, Y: y, W: rightW, H: 1},
+			Rect{X: r.X + rightStart, Y: r.Y + y, W: rightW, H: 1},
+		),
+		widgets.NewScrollRange(rightW, d.maxLineW, d.LeftCol),
+	)
 
 	surface.SetCell(dividerX, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 	for column := dividerX + 1; column < rightStart; column++ {
 		surface.SetCell(column, y, term.Cell{Ch: ' '})
 	}
+	return leftInvalidated || rightInvalidated
 }
 
 func (d *CommitDetailWidget) clampScroll() {
@@ -1401,28 +1412,43 @@ func (d *CommitDetailWidget) clampScroll() {
 	}
 }
 
+func (d *CommitDetailWidget) CancelPointerCapture() bool {
+	canceled := d.selecting || d.primaryPressed || d.disclosurePressed
+	d.selecting = false
+	d.primaryPressed = false
+	d.disclosurePressed = false
+	canceled = d.scrollbar.CancelPointerCapture() || canceled
+	canceled = d.hscrollbar.CancelPointerCapture() || canceled
+	canceled = d.rhscroll.CancelPointerCapture() || canceled
+	d.scrollbarCapture.notify(canceled)
+	return canceled
+}
+
+func (d *CommitDetailWidget) InvalidatePointerInteraction() bool {
+	return d.CancelPointerCapture()
+}
+
+func (d *CommitDetailWidget) OwnsPointerCapture() bool {
+	return d.selecting || d.primaryPressed || d.disclosurePressed || d.scrollbarCapture.owns(&d.scrollbar, &d.hscrollbar, &d.rhscroll)
+}
+
+func (d *CommitDetailWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	d.scrollbarCapture.invalidated = invalidated
+}
+
 func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
-	if newTop, consumed := d.scrollbar.HandleEvent(ev); consumed {
+	if newTop, result := d.scrollbar.HandleEvent(ev); result != EventIgnored {
 		d.TopLine = newTop
-		if d.scrollbar.IsDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
+		return result
 	}
 	if !d.IsWrapped() {
-		if newLeft, consumed := d.hscrollbar.HandleEvent(ev); consumed {
+		if newLeft, result := d.hscrollbar.HandleEvent(ev); result != EventIgnored {
 			d.LeftCol = newLeft
-			if d.hscrollbar.IsDragging() {
-				return EventCaptured
-			}
-			return EventConsumed
+			return result
 		}
-		if newLeft, consumed := d.rhscroll.HandleEvent(ev); consumed {
+		if newLeft, result := d.rhscroll.HandleEvent(ev); result != EventIgnored {
 			d.LeftCol = newLeft
-			if d.rhscroll.IsDragging() {
-				return EventCaptured
-			}
-			return EventConsumed
+			return result
 		}
 	}
 

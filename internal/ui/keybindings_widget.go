@@ -7,6 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -36,7 +37,8 @@ type KeybindingsWidget struct {
 	inputX, inputY         int
 	visibleItems           int
 	showScroll             bool
-	scrollbar              Scrollbar
+	scrollbar              widgets.VerticalScrollbar
+	scrollbarCapture       scrollbarCaptureState
 	btnEdit                HitRegion
 	btnReset               HitRegion
 	btnClear               HitRegion
@@ -83,6 +85,7 @@ func (w *KeybindingsWidget) CursorPosition() (int, int, bool) {
 
 func (w *KeybindingsWidget) Render(surface Surface) {
 	sw, sh := surface.Size()
+	ox, oy := surface.Origin()
 
 	boxW := sw * 7 / 10
 	if boxW > 70 {
@@ -141,14 +144,6 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 		contentRight--
 	}
 
-	if showScroll {
-		w.scrollbar.Height = visibleItems
-		w.scrollbar.TotalItems = len(w.items)
-		w.scrollbar.TopItem = w.scrollOffset
-		w.scrollbar.X = boxX + boxW - 2
-		w.scrollbar.Y = boxY + 3
-	}
-
 	w.btnEdit = HitRegion{}
 	w.btnReset = HitRegion{}
 	w.btnClear = HitRegion{}
@@ -183,9 +178,19 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 		}
 	}
 
+	trackLength := 0
 	if showScroll {
-		w.scrollbar.Render(surface, w.scrollbar.X, w.scrollbar.Y)
+		trackLength = visibleItems
 	}
+	_, invalidated := w.scrollbar.Render(
+		surface,
+		widgets.NewScrollbarGeometry(
+			Rect{X: boxX + boxW - 2, Y: boxY + 3, W: 1, H: trackLength},
+			Rect{X: ox + boxX + boxW - 2, Y: oy + boxY + 3, W: 1, H: trackLength},
+		),
+		widgets.NewScrollRange(trackLength, len(w.items), w.scrollOffset),
+	)
+	w.scrollbarCapture.notify(invalidated)
 
 	dividerY := boxY + boxH - 3
 	for x := boxX + 1; x < boxX+boxW-1; x++ {
@@ -194,7 +199,6 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 
 	footerY := boxY + boxH - 2
 	surface.ClearRect(boxX+1, footerY, boxW-2, 1, term.StyleDefault)
-	ox, oy := surface.Origin()
 	if w.recording {
 		hint := "Press key combination, Enter to confirm"
 		surface.DrawText(boxX+2, footerY, hint, boxX+boxW-2, term.StyleMuted)
@@ -366,18 +370,10 @@ func (w *KeybindingsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	btn := mev.Buttons()
 	mx, my := mev.Position()
 
-	if w.showScroll {
-		if newTop, consumed := w.scrollbar.HandleEvent(mev); consumed {
-			w.scrollOffset = newTop
-			w.clampSelected()
-			if w.scrollbar.IsDragging() {
-				return EventCaptured
-			}
-			return EventConsumed
-		}
-		if w.scrollbar.IsDragging() {
-			return EventCaptured
-		}
+	if newTop, result := w.scrollbar.HandleEvent(mev); result != EventIgnored {
+		w.scrollOffset = newTop
+		w.clampSelected()
+		return result
 	}
 
 	if btn&tcell.WheelUp != 0 {
@@ -446,6 +442,22 @@ func (w *KeybindingsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	}
 
 	return EventConsumed
+}
+
+func (w *KeybindingsWidget) CancelPointerCapture() bool {
+	return w.scrollbarCapture.cancel(&w.scrollbar)
+}
+
+func (w *KeybindingsWidget) InvalidatePointerInteraction() bool {
+	return w.CancelPointerCapture()
+}
+
+func (w *KeybindingsWidget) OwnsPointerCapture() bool {
+	return w.scrollbarCapture.owns(&w.scrollbar)
+}
+
+func (w *KeybindingsWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	w.scrollbarCapture.invalidated = invalidated
 }
 
 func (w *KeybindingsWidget) handleRecordKey(kev *tcell.EventKey) EventResult {
