@@ -133,6 +133,45 @@ var changesContextMenuUnstaged = []ui.ContextMenuItem{
 	{Label: "Discard Changes", Command: "changes.discard"},
 }
 
+func (a *App) BuildActiveDiffViewMenu() []ui.ContextMenuItem {
+	var items []ui.ContextMenuItem
+	modeSurface := a.EditorGroup.ActiveDiffModeSurface()
+	contextSurface := a.EditorGroup.ActiveDiffContextSurface()
+	if modeSurface != nil {
+		items = append(items,
+			ui.ContextMenuItem{Label: "Split", Command: "diff.splitView", Checked: menuChecked(modeSurface.Mode() == ui.DiffModeSplit)},
+			ui.ContextMenuItem{Label: "Unified", Command: "diff.unifiedView", Checked: menuChecked(modeSurface.Mode() == ui.DiffModeUnified)},
+		)
+	}
+	if contextSurface != nil {
+		if len(items) > 0 {
+			items = append(items, ui.MenuSep())
+		}
+		items = append(items,
+			ui.ContextMenuItem{Label: "Changes Only", Command: "diff.changesOnlyView", Checked: menuChecked(contextSurface.ContextMode() == ui.DiffContextChangesOnly)},
+			ui.ContextMenuItem{Label: "Full File", Command: "diff.fullFileView", Checked: menuChecked(contextSurface.ContextMode() == ui.DiffContextFullFile)},
+		)
+	}
+	if modeSurface != nil {
+		if len(items) > 0 {
+			items = append(items, ui.MenuSep())
+		}
+		items = append(items, ui.ContextMenuItem{Label: "Wrap Lines", Command: "diff.toggleWrap", Checked: menuChecked(modeSurface.WrapMode() == ui.DiffWrapOn)})
+	}
+	return items
+}
+
+func (a *App) withActiveDiffViewMenu(items []ui.ContextMenuItem) []ui.ContextMenuItem {
+	controls := a.BuildActiveDiffViewMenu()
+	if len(controls) == 0 {
+		return items
+	}
+	combined := make([]ui.ContextMenuItem, 0, len(items)+1+len(controls))
+	combined = append(combined, items...)
+	combined = append(combined, ui.MenuSep())
+	return append(combined, controls...)
+}
+
 func resolveShortcuts(reg *command.Registry, items []ui.ContextMenuItem) []ui.ContextMenuItem {
 	resolved := make([]ui.ContextMenuItem, len(items))
 	for i, item := range items {
@@ -282,9 +321,9 @@ func handleRightClick(app *App, mx, my int) {
 	}
 
 	if app.EditorGroup.ActiveCommitDetailWidget() != nil {
-		openContextMenu(app, commitDetailContextMenu, mx, my)
-	} else if app.EditorGroup.ActiveDiffWidget() != nil {
-		openContextMenu(app, diffContextMenu, mx, my)
+		openContextMenu(app, app.withActiveDiffViewMenu(commitDetailContextMenu), mx, my)
+	} else if app.EditorGroup.ActiveDiffModeSurface() != nil || app.EditorGroup.ActiveDiffContextSurface() != nil {
+		openContextMenu(app, app.withActiveDiffViewMenu(diffContextMenu), mx, my)
 	} else {
 		openEditorContextMenu(app, mx, my)
 	}

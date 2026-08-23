@@ -598,13 +598,7 @@ func registerWidgetCallbacks(app *App) {
 			ui.ContextMenuItem{Label: "Copy Absolute Path", Command: "file.copyAbsolutePath"},
 			ui.ContextMenuItem{Label: "Copy Relative Path", Command: "file.copyRelativePath"},
 		)
-		if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
-			tabContextMenu = append(tabContextMenu,
-				ui.MenuSep(),
-				ui.ContextMenuItem{Label: "Changes Only", Command: "diff.changesOnlyView", Checked: menuChecked(dv.ContextMode() == ui.DiffContextChangesOnly)},
-				ui.ContextMenuItem{Label: "Full File", Command: "diff.fullFileView", Checked: menuChecked(dv.ContextMode() == ui.DiffContextFullFile)},
-			)
-		}
+		tabContextMenu = app.withActiveDiffViewMenu(tabContextMenu)
 		openContextMenu(app, tabContextMenu, sx, sy)
 	}
 

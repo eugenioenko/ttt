@@ -122,6 +122,39 @@ describe("commit history detail", () => {
 		expect(snapshots[fullFile]).toContain("unchanged line 15");
 	});
 
+	it("changes the active commit detail from its right-click menus", () => {
+		dir = createGitRepo(createTempDir());
+		createTempFile(dir, "menu-detail.txt", "old detail line\n");
+		git(dir, "add", "-A");
+		git(dir, "commit", "-qm", "menu base");
+		createTempFile(dir, "menu-detail.txt", "new detail line with a long wrapped suffix\n");
+		git(dir, "add", "-A");
+		git(dir, "commit", "-qm", "menu detail");
+
+		tui.start(dir);
+		tui.setSize(100, 30);
+		tui.pressChord("ctrl+k", "c");
+		tui.waitStable(500);
+		tui.press("tab");
+		tui.press("tab");
+		tui.press("down");
+		tui.press("enter");
+		tui.waitStable(900);
+		tui.rclick(60, 12);
+		const contentMenu = tui.snapshot();
+		for (let index = 0; index < 4; index++) tui.press("down");
+		tui.press("enter");
+		tui.rclick(50, 2);
+		const tabMenu = tui.snapshot();
+
+		const { snapshots } = tui.run();
+		for (const label of ["Split", "Unified", "Changes Only", "Full File", "Wrap Lines"]) {
+			expect(snapshots[contentMenu]).toContain(label);
+			expect(snapshots[tabMenu]).toContain(label);
+		}
+		expect(snapshots[tabMenu]).toContain("✓ Unified");
+	});
+
   it("uses shared Git bulk commands for commit-detail file groupings", () => {
     dir = createGitRepo(createTempDir());
     createTempFile(dir, "bulk-detail.txt", "visible detail line\n");
