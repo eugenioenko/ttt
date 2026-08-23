@@ -14,7 +14,6 @@ function openEditor() {
   const file = createTempFile(dir, "sample.txt", "alpha\nbeta\ngamma\n");
   tui.start(file);
   tui.waitFor("alpha");
-  tui.waitStable();
   return file;
 }
 
@@ -23,7 +22,6 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open Editor Settings");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -45,7 +43,6 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open Editor Settings");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -64,7 +61,6 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open Editor Settings");
-    tui.waitStable();
 
     // Tab onto Word wrap. The assertions name that row, so a traversal that
     // lands elsewhere fails loudly instead of passing on a no-op.
@@ -72,22 +68,17 @@ describe("settings editor", () => {
     tui.press("tab");
     tui.press("tab");
     tui.press("space");
-    tui.waitStable();
     const toggled = tui.snapshot();
 
     tui.exec("Settings: Apply Changes");
-    tui.waitStable();
     const applied = tui.snapshot();
 
     // Reload from disk, then close and reopen. Without the reload the form is
     // rebuilt from the in-memory settings ApplySettings already updated, and
     // would pass even if nothing ever reached settings.json.
     tui.exec("Reload Settings");
-    tui.waitStable();
     tui.exec("Settings: Discard Changes");
-    tui.waitStable();
     tui.exec("Settings: Open Editor Settings");
-    tui.waitStable();
     const reopened = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -100,9 +91,7 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open Editor Settings");
-    tui.waitStable();
     tui.exec("Settings: Open Editor Settings");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -119,12 +108,10 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open Editor Settings");
-    tui.waitStable();
     tui.press("ctrl+c");
     tui.press("ctrl+x");
     tui.press("ctrl+v");
     tui.press("ctrl+a");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -139,7 +126,6 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open settings.json");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();

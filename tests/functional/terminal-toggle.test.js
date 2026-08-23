@@ -18,8 +18,6 @@ describe("terminal toggle", () => {
     tui.waitFor("term.txt");
 
     tui.press("ctrl+t");
-    tui.waitStable();
-    tui.wait(500);
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -34,17 +32,12 @@ describe("terminal toggle", () => {
     tui.waitFor("toggle.txt");
 
     tui.press("ctrl+t");
-    tui.waitStable();
-    tui.wait(500);
 
     tui.press("ctrl+t");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+t");
-    tui.waitStable();
-    tui.wait(500);
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();

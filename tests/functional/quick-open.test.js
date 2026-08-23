@@ -19,7 +19,6 @@ describe("quick open (Go to File)", () => {
     tui.waitFor("Explore");
 
     tui.pressChord("ctrl+k", "p");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -38,10 +37,8 @@ describe("quick open (Go to File)", () => {
     tui.waitFor("Explore");
 
     tui.pressChord("ctrl+k", "p");
-    tui.waitStable();
 
     tui.type("ban");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -57,13 +54,10 @@ describe("quick open (Go to File)", () => {
     tui.waitFor("Explore");
 
     tui.pressChord("ctrl+k", "p");
-    tui.waitStable();
 
     tui.type("target");
-    tui.waitStable();
 
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -79,12 +73,10 @@ describe("quick open (Go to File)", () => {
     tui.waitFor("Explore");
 
     tui.pressChord("ctrl+k", "p");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("escape");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();

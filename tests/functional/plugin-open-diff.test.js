@@ -34,9 +34,7 @@ describe("ttt.open_diff plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test Diff");
-    tui.waitStable(300);
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -61,9 +59,7 @@ describe("ttt.open_readonly plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test ReadOnly");
-    tui.waitStable(300);
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -87,11 +83,8 @@ describe("ttt.open_readonly plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test ReadOnly");
-    tui.waitStable(300);
     tui.type("should not appear");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -118,11 +111,8 @@ describe("ttt.open_file readonly mode", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test OpenRO");
-    tui.waitStable(300);
     tui.type("nope");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

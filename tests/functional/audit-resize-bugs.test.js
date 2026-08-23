@@ -41,7 +41,6 @@ describe("BUG-039: Discard button vanishes from the quit-confirm dialog at narro
     tui.waitFor("hello");
     tui.type("X"); // make it dirty
     tui.press("ctrl+w"); // close tab -> unsaved-changes confirm dialog
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

@@ -18,10 +18,8 @@ describe("case transforms", () => {
     tui.waitFor("hello");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Transform to Uppercase");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -36,10 +34,8 @@ describe("case transforms", () => {
     tui.waitFor("HELLO");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Transform to Lowercase");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -54,10 +50,8 @@ describe("case transforms", () => {
     tui.waitFor("hello");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Transform to Titlecase");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -72,15 +66,12 @@ describe("case transforms", () => {
     tui.waitFor("hello");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Transform to Uppercase");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();

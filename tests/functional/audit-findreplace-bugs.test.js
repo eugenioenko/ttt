@@ -27,7 +27,6 @@ describe("BUG-010: search matches go stale after buffer edits", () => {
 
     tui.press("ctrl+f");
     tui.type("alpha");
-    tui.waitStable(300);
     // Click into the editor (find bar stays open but unfocused), then
     // insert a line above the matches so every match shifts down by one.
     tui.click(10, 4);
@@ -37,10 +36,8 @@ describe("BUG-010: search matches go stale after buffer edits", () => {
     tui.press("f3"); // find next — must land on a line still containing "alpha"
     tui.press("home");
     tui.type("Z"); // marker: reveals which line the cursor is on
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior: matches are never recomputed, f3 jumps to the stale
@@ -59,17 +56,13 @@ describe("BUG-011: Replace All ignores case-sensitive toggle", () => {
 
     tui.press("ctrl+r");
     tui.type("Foo");
-    tui.waitStable();
     tui.press("alt+c"); // case-sensitive on — bar shows 1/1
-    tui.waitStable();
     tui.press("tab");
     tui.type("X");
     tui.press("alt+r"); // replace all
-    tui.waitStable(300);
     tui.press("escape");
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Fixed: ReplaceAll now threads the bar's current Options (case/regex)
@@ -88,17 +81,13 @@ describe("BUG-012: Replace All is not a single undo step", () => {
 
     tui.press("ctrl+r");
     tui.type("cat");
-    tui.waitStable();
     tui.press("tab");
     tui.type("dog");
     tui.press("alt+r");
-    tui.waitStable(300);
     tui.press("escape");
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior: each of the 4 replacements pushes 2 ungrouped undo
@@ -124,17 +113,13 @@ describe("BUG-013: stale search follows tab switch", () => {
     tui.press("alt+,"); // to tabC
     tui.press("ctrl+f");
     tui.type("alpha");
-    tui.waitStable(300);
     tui.press("alt+."); // to tabD — no "alpha" anywhere in it
-    tui.waitStable(300);
     tui.press("f3"); // must be a no-op here
     tui.press("escape");
     tui.press("home");
     tui.type("Z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior: tabC's matches survive the switch, f3 clamps the
@@ -155,14 +140,11 @@ describe("BUG-014: replace bar swallows global keybindings", () => {
     tui.press("alt+,"); // to tabE
     tui.press("ctrl+r");
     tui.press("alt+."); // should switch to tabF (works with the FIND bar)
-    tui.waitStable();
     tui.press("escape");
     tui.press("home");
     tui.type("Z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior: ReplaceBarWidget.handleKey unconditionally returns
@@ -182,7 +164,6 @@ describe("BUG-015: find does not seed query from selection", () => {
     tui.press("end");
     tui.press("shift+ctrl+left"); // select "world"
     tui.press("ctrl+f");
-    tui.waitStable(300);
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

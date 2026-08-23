@@ -19,10 +19,8 @@ describe("unicode editing", () => {
 
     tui.press("end");
     tui.type(" über");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -39,10 +37,8 @@ describe("unicode editing", () => {
 
     tui.press("end");
     tui.type(" 你好世界");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -59,10 +55,8 @@ describe("unicode editing", () => {
 
     tui.press("end");
     tui.type(" 🎉🚀");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -79,10 +73,8 @@ describe("unicode editing", () => {
 
     tui.press("home");
     tui.type("→ ");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

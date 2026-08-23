@@ -44,13 +44,11 @@ function startWithConfig({ file, configDir, plugin }) {
   tui.start("--plugin", plugin, file);
   tui.setEnv({ TTT_CONFIG_DIR: configDir });
   tui.setSize(42, 14);
-  tui.waitStable(300);
 }
 
 function enableUnifiedWrappedDefaults() {
   tui.exec("Use Unified Diff by Default");
   tui.exec("Toggle Diff Word Wrap Default");
-  tui.waitStable();
 }
 
 function savedSettings(configDir) {
@@ -66,7 +64,6 @@ describe("diff reading preferences", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);
     tui.exec("Test Preference Diff");
-    tui.waitStable();
     const snapshot = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -77,7 +74,6 @@ describe("diff reading preferences", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);
     tui.exec("Menu: Options");
-    tui.waitStable();
     const options = tui.snapshot();
     for (let i = 0; i < 9; i++) tui.press("down");
     tui.press("right");
@@ -111,7 +107,6 @@ describe("diff reading preferences", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);
     tui.exec("Test Preference Diff");
-    tui.waitStable();
     const before = tui.snapshot();
     enableUnifiedWrappedDefaults();
     const after = tui.snapshot();
@@ -133,7 +128,6 @@ describe("diff reading preferences", () => {
     enableUnifiedWrappedDefaults();
     tui.exec("Use Split Diff by Default");
     tui.exec("Toggle Diff Word Wrap Default");
-    tui.waitStable();
     const overridden = tui.snapshot();
     tui.exec("View: Previous Tab");
     const inherited = tui.snapshot();
@@ -153,7 +147,6 @@ describe("diff reading preferences", () => {
 
     startWithConfig(fixture);
     tui.exec("Test Preference Diff");
-    tui.waitStable();
     const reopened = tui.snapshot();
     const { snapshots } = tui.run();
     expect(diffRow(snapshots[reopened], "left-prefix")).toBeLessThan(diffRow(snapshots[reopened], "right-prefix"));

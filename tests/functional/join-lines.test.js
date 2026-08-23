@@ -19,7 +19,6 @@ describe("join lines", () => {
 
     // Cursor starts on line 1
     tui.pressChord("ctrl+k", "j");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -34,7 +33,6 @@ describe("join lines", () => {
     tui.waitFor("only line");
 
     tui.pressChord("ctrl+k", "j");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -49,11 +47,9 @@ describe("join lines", () => {
     tui.waitFor("AAA");
 
     tui.pressChord("ctrl+k", "j");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -70,10 +66,8 @@ describe("join lines", () => {
     tui.waitFor("Line1");
 
     tui.pressChord("ctrl+k", "j");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

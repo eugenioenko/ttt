@@ -20,7 +20,6 @@ describe("undo/redo dirty flag tracking", () => {
     const s0 = tui.snapshot();
 
     tui.type("x");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -37,12 +36,10 @@ describe("undo/redo dirty flag tracking", () => {
     tui.waitFor("hello");
 
     tui.type("x");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -59,15 +56,12 @@ describe("undo/redo dirty flag tracking", () => {
     tui.waitFor("hello");
 
     tui.type("x");
-    tui.waitStable();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+y");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -84,12 +78,10 @@ describe("undo/redo dirty flag tracking", () => {
     tui.waitFor("hello");
 
     tui.type("x");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -107,19 +99,15 @@ describe("undo/redo dirty flag tracking", () => {
 
     tui.press("end");
     tui.type("abc");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.type("xyz");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Undo "xyz" — back to the saved state "helloabc"
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();

@@ -23,10 +23,8 @@ describe("close tabs commands", () => {
     tui.press("alt+,");
     tui.waitFor("content-b");
     tui.type("dirty");
-    tui.waitStable();
 
     tui.exec("View: Close All Saved Tabs");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -52,7 +50,6 @@ describe("close tabs commands", () => {
     tui.waitFor("content-b");
 
     tui.exec("View: Close Other Tabs");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -72,7 +69,6 @@ describe("close tabs commands", () => {
     tui.waitFor("b.txt");
 
     tui.exec("View: Close All Tabs");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -92,10 +88,8 @@ describe("close tabs commands", () => {
 
     // Make the file dirty
     tui.type("dirty");
-    tui.waitStable();
 
     tui.exec("View: Close All Tabs");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

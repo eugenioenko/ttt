@@ -19,10 +19,8 @@ describe("insert line", () => {
 
     tui.press("ctrl+enter");
     tui.type("NEW");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -38,15 +36,11 @@ describe("insert line", () => {
     tui.waitFor("AAA");
 
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.exec("Insert Line Above");
-    tui.waitStable();
     tui.type("NEW");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -63,14 +57,11 @@ describe("insert line", () => {
 
     tui.press("arrow_down");
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.press("ctrl+enter");
     tui.type("END");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -87,10 +78,8 @@ describe("insert line", () => {
 
     tui.press("ctrl+enter");
     tui.type("x");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -107,14 +96,11 @@ describe("insert line", () => {
 
     tui.press("ctrl+enter");
     tui.type("NEW");
-    tui.waitStable();
 
     tui.press("ctrl+z");
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

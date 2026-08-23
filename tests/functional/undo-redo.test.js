@@ -23,7 +23,6 @@ describe("undo and redo", () => {
 
     // " Added" is one group (space joins next word) → 1 undo
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -44,12 +43,10 @@ describe("undo and redo", () => {
 
     // " Extra" is one group → 1 undo
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+y");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -69,7 +66,6 @@ describe("undo and redo", () => {
     tui.waitFor("First Second");
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     // Verify screen shows "First Second" after save
     const s0 = tui.snapshot();
@@ -79,10 +75,8 @@ describe("undo and redo", () => {
 
     // " Third" is one group → 1 undo
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -99,20 +93,17 @@ describe("undo and redo", () => {
     const file = createTempFile(dir, "group.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     tui.type("hello world");
     tui.waitFor("hello world");
 
     // One undo removes " world" (space belongs with next word)
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Next undo removes "hello"
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -126,7 +117,6 @@ describe("undo and redo", () => {
     const file = createTempFile(dir, "cursor.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     tui.type("ab");
     tui.press("arrow_left");
@@ -136,7 +126,6 @@ describe("undo and redo", () => {
 
     // First undo removes "cd" (typed after cursor movement)
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

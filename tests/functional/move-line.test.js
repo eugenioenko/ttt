@@ -18,10 +18,8 @@ describe("move line", () => {
     tui.waitFor("AAA");
 
     tui.exec("Move Line Down");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -38,13 +36,10 @@ describe("move line", () => {
 
     tui.press("arrow_down");
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.exec("Move Line Up");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -60,10 +55,8 @@ describe("move line", () => {
     tui.waitFor("First");
 
     tui.exec("Move Line Up");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -79,13 +72,10 @@ describe("move line", () => {
     tui.waitFor("One");
 
     tui.exec("Move Line Down");
-    tui.waitStable();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

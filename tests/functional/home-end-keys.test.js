@@ -19,10 +19,8 @@ describe("home and end keys", () => {
 
     tui.press("end");
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -40,10 +38,8 @@ describe("home and end keys", () => {
     tui.press("end");
     tui.press("home");
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -61,10 +57,8 @@ describe("home and end keys", () => {
     tui.press("arrow_down");
     tui.press("end");
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -82,10 +76,8 @@ describe("home and end keys", () => {
     tui.press("end");
     tui.press("home");
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -106,10 +98,8 @@ describe("home and end keys", () => {
     tui.press("arrow_down");
     tui.press("end");
     tui.type("MIDDLE");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

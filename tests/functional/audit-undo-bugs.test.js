@@ -28,10 +28,8 @@ describe("BUG-020: undo of line commands does not restore the cursor", () => {
     tui.press("arrow_down"); // wander away
     tui.press("ctrl+z");
     tui.type("Z"); // marker: reveals where the cursor is after undo
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Correct: cursor returns to the restored line ("C"), like it does for
@@ -53,10 +51,8 @@ describe("BUG-021: multi-line indent is not one undo step", () => {
     tui.press("shift+down");
     tui.press("tab"); // indents all three lines (BUG-002 makes it three)
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy: each line's indent is a separate undo command (no
@@ -78,10 +74,8 @@ describe("BUG-022: Enter with auto-indent is not one undo step", () => {
     tui.press("end");
     tui.press("enter"); // split + auto-indent insert (2 undo commands)
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy: first undo removes only the auto-indent whitespace, leaving
@@ -107,7 +101,6 @@ describe("BUG-023: viewport does not follow an off-screen undo", () => {
     tui.type("1");
     tui.press("enter"); // back to the top
     tui.press("ctrl+z"); // undo the far-away edit
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -135,7 +128,6 @@ describe("BUG-024: undo on a folded header line silently unfolds it", () => {
     tui.pressChord("ctrl+k", "["); // fold
     tui.type("X");
     tui.press("ctrl+z"); // buffer now byte-identical to pre-edit
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

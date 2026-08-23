@@ -25,14 +25,10 @@ describe("BUG-028: command-palette Explorer: Delete lacks the isRoot guard the r
     writeFileSync(join(dir, "file.txt"), "hi\n");
 
     tui.start(dir);
-    tui.waitStable(300);
     tui.exec("Show Explorer");
-    tui.waitStable();
     tui.exec("Explorer: Delete");
-    tui.waitStable();
     tui.press("right"); // move to "Yes" in confirm dialog
     tui.press("enter");
-    tui.waitStable(300);
     tui.run();
 
     // Buggy: explorerNodePath() falls back to Tree.Selected()==0 (root),
@@ -48,22 +44,16 @@ describe("BUG-029: renaming an open file leaves the tab tracking the old path", 
     writeFileSync(join(dir, "root.txt"), "root file");
 
     tui.start(dir);
-    tui.waitStable(300);
     tui.exec("Show Explorer");
-    tui.waitStable();
     tui.press("arrow_down"); // select root.txt
     tui.press("enter"); // open it
-    tui.waitStable();
     tui.exec("Explorer: Rename");
-    tui.waitStable();
     tui.press("ctrl+a");
     tui.type("renamed.txt");
     tui.press("enter");
-    tui.waitStable();
     tui.press("end");
     tui.type("APPENDED");
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Correct: the edit lands in renamed.txt and no phantom root.txt is
@@ -82,14 +72,10 @@ describe("BUG-030: New File / Rename silently clobber an existing file", () => {
     writeFileSync(join(dir, "dup.txt"), "existing content - keep me");
 
     tui.start(dir);
-    tui.waitStable(300);
     tui.exec("Show Explorer");
-    tui.waitStable();
     tui.exec("Explorer: New File");
-    tui.waitStable();
     tui.type("dup.txt");
     tui.press("enter");
-    tui.waitStable();
     tui.run();
 
     // Fixed: FileOpNewFile now checks for an existing file before writing
@@ -105,16 +91,12 @@ describe("BUG-030: New File / Rename silently clobber an existing file", () => {
     writeFileSync(join(dir, "bbb.txt"), "bbb content - keep me");
 
     tui.start(dir);
-    tui.waitStable(300);
     tui.exec("Show Explorer");
-    tui.waitStable();
     tui.press("arrow_down"); // select aaa.txt (alphabetically first)
     tui.exec("Explorer: Rename");
-    tui.waitStable();
     tui.press("ctrl+a");
     tui.type("bbb.txt");
     tui.press("enter");
-    tui.waitStable();
     tui.run();
 
     // Fixed: FileOpRename now checks for an existing target before

@@ -33,20 +33,16 @@ describe("syntax highlighting consistency after fold/unfold", () => {
 
     // Go to the func main() line and fold it
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("5");
     tui.press("enter");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     // Content inside the fold should be hidden
     const s1 = tui.snapshot();
 
     // Unfold using toggle
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     // Content should be restored exactly
     const s2 = tui.snapshot();
@@ -75,11 +71,9 @@ describe("syntax highlighting consistency after fold/unfold", () => {
     const unfoldedSnaps = [];
     for (let i = 0; i < 3; i++) {
       tui.pressChord("ctrl+k", "0");
-      tui.waitStable();
       foldedSnaps.push(tui.snapshot());
 
       tui.pressChord("ctrl+k", "9");
-      tui.waitStable();
       unfoldedSnaps.push(tui.snapshot());
     }
 
@@ -111,52 +105,40 @@ describe("syntax highlighting consistency after fold/unfold", () => {
 
     // Go to the func main() line and fold
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("5");
     tui.press("enter");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Unfold to edit inside
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // Navigate to the "hello" line and add text
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("6");
     tui.press("enter");
-    tui.waitStable();
 
     // Go to end of line and add a comment
     tui.press("end");
-    tui.waitStable();
     tui.type(" // edited");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
 
     // Fold again
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("5");
     tui.press("enter");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     const s3 = tui.snapshot();
 
     // Unfold and verify the edit persisted
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     const s4 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -186,20 +168,16 @@ describe("syntax highlighting consistency after fold/unfold", () => {
 
     // Go to func main() line and fold
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("5");
     tui.press("enter");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     // Fold indicator should appear
     const s1 = tui.snapshot();
 
     // Unfold
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     // Fold indicator should disappear
     const s2 = tui.snapshot();

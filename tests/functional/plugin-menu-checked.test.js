@@ -50,9 +50,7 @@ ttt.register({
 
     tui.start("--plugin", plugin, file);
     tui.setSize(80, 20);
-    tui.waitStable(300);
     tui.panel("plugin.menu-indicators");
-    tui.waitStable();
 
     tui.click(35, 12);
     const checkedStates = tui.snapshot();
@@ -101,13 +99,9 @@ ttt.register({
 
     tui.start("--plugin", plugin, dir);
     tui.setSize(80, 20);
-    tui.waitStable(300);
     tui.click(27, 2);
-    tui.waitStable();
     tui.click(29, 5);
-    tui.waitStable();
     tui.click(29, 2);
-    tui.waitStable();
     const mixed = tui.snapshot();
     tui.press("arrow_down");
     tui.press("enter");
@@ -176,22 +170,17 @@ ttt.register({
 
     tui.start("--plugin", plugin, file);
     tui.setSize(80, 20);
-    tui.waitStable(300);
     tui.panel("plugin.dynamic-menu-indicators");
-    tui.waitStable();
 
     tui.click(35, 12);
     const checked = tui.snapshot();
     tui.press("enter");
-    tui.waitStable();
     tui.click(35, 12);
     const unchecked = tui.snapshot();
     tui.press("enter");
-    tui.waitStable();
     tui.click(35, 12);
     const omitted = tui.snapshot();
     tui.press("enter");
-    tui.waitStable();
     tui.click(35, 12);
     const checkedAgain = tui.snapshot();
     tui.press("arrow_down");

@@ -19,17 +19,12 @@ describe("multi-cursor", () => {
 
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
 
     tui.type("qux");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -46,16 +41,12 @@ describe("multi-cursor", () => {
 
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
 
     tui.exec("Select All Occurrences");
-    tui.waitStable();
 
     tui.type("pet");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -72,20 +63,14 @@ describe("multi-cursor", () => {
 
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
 
     tui.type("cc");
-    tui.waitStable();
 
     tui.press("ctrl+z");
-    tui.waitStable();
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -103,18 +88,13 @@ describe("multi-cursor", () => {
 
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
 
     tui.press("escape");
-    tui.waitStable();
 
     tui.type("Z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -133,16 +113,12 @@ describe("multi-cursor", () => {
 
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
 
     // Cursors have "ABC" selected at both positions, type to replace
     tui.press("delete");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -159,17 +135,12 @@ describe("multi-cursor", () => {
 
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
 
     tui.type("let");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -186,23 +157,16 @@ describe("multi-cursor", () => {
 
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
     tui.press("ctrl+d");
-    tui.waitStable();
 
     // All cursors have "test" selected; word-right x2: skip space, then jump to end of number word
     tui.exec("Move Word Right");
-    tui.waitStable();
     tui.exec("Move Word Right");
-    tui.waitStable();
 
     tui.type("!");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

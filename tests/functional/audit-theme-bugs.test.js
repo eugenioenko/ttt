@@ -23,7 +23,6 @@ describe("BUG-041: theme picker cancel leaves border charset stuck on the previe
     tui.exec("Switch Theme");
     tui.type("turbo"); // preview turbo-vision (double-line borders)
     tui.press("escape"); // cancel — should fully revert
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

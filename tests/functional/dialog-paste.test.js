@@ -16,21 +16,17 @@ describe("dialog paste", () => {
     const filePath = join(dir, "pasted.txt");
 
     tui.start();
-    tui.waitStable();
 
     // Open Save As dialog (new file has no path)
     tui.press("ctrl+s");
-    tui.waitStable();
 
     // Simulate bracketed paste into the dialog
     tui.paste(filePath);
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Confirm with Enter
     tui.press("enter");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

@@ -26,10 +26,8 @@ describe("BUG-009: cursor and backspace split ZWJ grapheme clusters", () => {
     tui.press("arrow_right");
     tui.press("arrow_right");
     tui.press("backspace");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior: the second right stops mid-cluster (rune col 2) and

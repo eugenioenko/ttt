@@ -18,13 +18,10 @@ describe("sort lines", () => {
     tui.waitFor("cherry");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Sort Lines Ascending");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -41,13 +38,10 @@ describe("sort lines", () => {
     tui.waitFor("apple");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Sort Lines Descending");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -64,13 +58,10 @@ describe("sort lines", () => {
     tui.waitFor("first");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Reverse Lines");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -91,13 +82,10 @@ describe("sort lines", () => {
     tui.waitFor("apple");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Unique Lines");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -114,13 +102,10 @@ describe("sort lines", () => {
     tui.waitFor("cherry");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "o");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -137,17 +122,13 @@ describe("sort lines", () => {
     tui.waitFor("cherry");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Sort Lines Ascending");
-    tui.waitStable();
 
     // Undo
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

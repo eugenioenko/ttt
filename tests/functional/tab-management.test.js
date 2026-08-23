@@ -16,7 +16,6 @@ describe("tab management", () => {
     const file2 = createTempFile(dir, "second.txt", "Second file");
 
     tui.start(file1, file2);
-    tui.waitStable();
     tui.waitFor("second.txt");
 
     const s0 = tui.snapshot();
@@ -33,7 +32,6 @@ describe("tab management", () => {
     tui.waitFor("Close this content");
 
     tui.press("ctrl+w");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -49,7 +47,6 @@ describe("tab management", () => {
     tui.waitFor("unsaved.txt");
 
     tui.type("dirty");
-    tui.waitStable();
 
     tui.press("ctrl+w");
     tui.waitFor("Save changes");
@@ -58,7 +55,6 @@ describe("tab management", () => {
 
     // Cancel the dialog
     tui.press("escape");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -75,13 +71,11 @@ describe("tab management", () => {
     tui.waitFor("Original content");
 
     tui.type("dirty");
-    tui.waitStable();
 
     tui.press("ctrl+w");
     tui.waitFor("Save changes");
 
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

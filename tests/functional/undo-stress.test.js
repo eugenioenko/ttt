@@ -23,48 +23,37 @@ describe("undo/redo stress", () => {
 
     // Edit 1-2: type " jumps"
     tui.type(" jumps");
-    tui.waitStable();
 
     // Edit 3: press Enter to create a new line
     tui.press("enter");
-    tui.waitStable();
 
     // Edit 4-5: type "over the"
     tui.type("over the");
-    tui.waitStable();
 
     // Edit 6: press Enter again
     tui.press("enter");
-    tui.waitStable();
 
     // Edit 7-8: type "lazy dog"
     tui.type("lazy dog");
-    tui.waitStable();
 
     // Edit 9: backspace to delete "g"
     tui.press("backspace");
-    tui.waitStable();
 
     // Edit 10: backspace to delete "o"
     tui.press("backspace");
-    tui.waitStable();
 
     // Edit 11-12: type "og!"
     tui.type("og!");
-    tui.waitStable();
 
     // Edit 13: go to beginning of "lazy" line and select the word
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
 
     // Edit 14: delete the selection ("lazy")
     tui.press("backspace");
-    tui.waitStable();
 
     // Edit 15: type replacement
     tui.type("LAZY");
-    tui.waitStable();
 
     // Snapshot after all edits
     const s0 = tui.snapshot();
@@ -73,7 +62,6 @@ describe("undo/redo stress", () => {
     for (let i = 0; i < 20; i++) {
       tui.press("ctrl+z");
     }
-    tui.waitStable();
 
     // Snapshot after full undo - should show original
     const s1 = tui.snapshot();
@@ -82,11 +70,9 @@ describe("undo/redo stress", () => {
     for (let i = 0; i < 20; i++) {
       tui.press("ctrl+y");
     }
-    tui.waitStable();
 
     // Save the final redo state
     tui.press("ctrl+s");
-    tui.waitStable();
 
     // Snapshot after full redo
     const s2 = tui.snapshot();
@@ -121,29 +107,23 @@ describe("undo/redo stress", () => {
 
     // Navigate to end of last line (line 3)
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("3");
     tui.press("enter");
-    tui.waitStable();
     tui.press("end");
     tui.press("enter");
     tui.type("line four");
     tui.press("enter");
     tui.type("line five");
-    tui.waitStable();
 
     // Select all and delete
     tui.press("ctrl+a");
-    tui.waitStable();
     tui.press("backspace");
-    tui.waitStable();
 
     // Verify the buffer is empty (no original lines visible)
     const s0 = tui.snapshot();
 
     // Undo the delete and the typed text to get back to original
     tui.press("ctrl+z");
-    tui.waitStable();
 
     // After undoing the delete, all content (including typed lines) should be restored
     const s1 = tui.snapshot();
@@ -152,11 +132,9 @@ describe("undo/redo stress", () => {
     for (let i = 0; i < 10; i++) {
       tui.press("ctrl+z");
     }
-    tui.waitStable();
 
     // Save and verify original content is restored
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -180,23 +158,18 @@ describe("undo/redo stress", () => {
 
     // Make 5 edits (each separated by cursor movement to force separate undo groups)
     tui.type(" one");
-    tui.waitStable();
     tui.press("arrow_left");
     tui.press("end");
     tui.type(" two");
-    tui.waitStable();
     tui.press("arrow_left");
     tui.press("end");
     tui.type(" three");
-    tui.waitStable();
     tui.press("arrow_left");
     tui.press("end");
     tui.type(" four");
-    tui.waitStable();
     tui.press("arrow_left");
     tui.press("end");
     tui.type(" five");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
@@ -204,17 +177,14 @@ describe("undo/redo stress", () => {
     tui.press("ctrl+z");
     tui.press("ctrl+z");
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // Make 2 new edits (this should discard the redo stack)
     tui.type(" alpha");
-    tui.waitStable();
     tui.press("arrow_left");
     tui.press("end");
     tui.type(" beta");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
 
@@ -222,11 +192,9 @@ describe("undo/redo stress", () => {
     tui.press("ctrl+y");
     tui.press("ctrl+y");
     tui.press("ctrl+y");
-    tui.waitStable();
 
     // Verify content is unchanged (redo did nothing)
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

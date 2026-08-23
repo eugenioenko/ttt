@@ -19,7 +19,6 @@ describe("line ending detection and preservation", () => {
 
     tui.start(file);
     tui.waitFor("line1");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -35,7 +34,6 @@ describe("line ending detection and preservation", () => {
 
     tui.start(file);
     tui.waitFor("line1");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -54,7 +52,6 @@ describe("line ending detection and preservation", () => {
     tui.type(" edited");
     tui.waitFor("hello edited");
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -72,21 +69,16 @@ describe("line ending detection and preservation", () => {
 
     tui.start(file);
     tui.waitFor("aaa");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.exec("Change Line Ending");
-    tui.waitStable();
     tui.type("CRLF");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -107,16 +99,12 @@ describe("line ending detection and preservation", () => {
     tui.waitFor("CRLF");
 
     tui.exec("Change Line Ending");
-    tui.waitStable();
     tui.type("LF");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -140,7 +128,6 @@ describe("line ending detection and preservation", () => {
     tui.type(" edited");
     tui.waitFor("hello edited");
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

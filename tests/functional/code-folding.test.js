@@ -30,18 +30,14 @@ describe("code folding", () => {
     tui.waitFor("hello");
 
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("3");
     tui.press("enter");
-    tui.waitStable();
 
     tui.exec("Toggle Fold");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.exec("Toggle Fold");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -59,12 +55,10 @@ describe("code folding", () => {
     tui.waitFor("hello");
 
     tui.pressChord("ctrl+k", "0");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.pressChord("ctrl+k", "9");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -83,13 +77,10 @@ describe("code folding", () => {
     tui.waitFor("hello");
 
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("3");
     tui.press("enter");
-    tui.waitStable();
 
     tui.exec("Toggle Fold");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -105,19 +96,14 @@ describe("code folding", () => {
 
     // Collapse all folds using keybinding
     tui.pressChord("ctrl+k", "0");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Search for text inside collapsed fold
     tui.press("ctrl+f");
-    tui.waitStable();
     tui.type("hello");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
     tui.press("escape");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -135,13 +121,10 @@ describe("code folding", () => {
     tui.waitFor("hello");
 
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("3");
     tui.press("enter");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "[");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

@@ -35,10 +35,8 @@ describe("key.press event", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.press("end");
     tui.type("j");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -59,10 +57,8 @@ describe("key.press event", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.press("end");
     tui.type("x");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

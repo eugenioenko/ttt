@@ -19,10 +19,8 @@ describe("large file scroll stability", () => {
 
     // Jump to the last line using go-to-line
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("500");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -40,18 +38,14 @@ describe("large file scroll stability", () => {
 
     // Jump to bottom first
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("500");
     tui.press("enter");
-    tui.waitStable();
     tui.waitFor("Line 500");
 
     // Now jump back to top
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("1");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -67,10 +61,8 @@ describe("large file scroll stability", () => {
     tui.waitFor("big3.txt");
 
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("250");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -90,22 +82,16 @@ describe("large file scroll stability", () => {
 
     // Press page down to scroll away from the top
     tui.press("page_down");
-    tui.waitStable(200);
     tui.press("page_down");
-    tui.waitStable(200);
     tui.press("page_down");
-    tui.waitStable(200);
 
     // Cursor should have moved past line 1
     const s1 = tui.snapshot();
 
     // Press page up the same number of times to return near the top
     tui.press("page_up");
-    tui.waitStable(200);
     tui.press("page_up");
-    tui.waitStable(200);
     tui.press("page_up");
-    tui.waitStable(200);
 
     // Should be back at line 1
     const s2 = tui.snapshot();

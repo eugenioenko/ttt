@@ -23,10 +23,8 @@ describe("BUG-017: ctrl+home/ctrl+end document navigation missing", () => {
 
     tui.press("ctrl+end");
     tui.type("Z"); // marker: reveals where the cursor actually is
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior: the KeyEnd handler ignores ModCtrl entirely — the

@@ -18,7 +18,6 @@ describe("quit confirmation dialog", () => {
     tui.waitFor("clean.txt");
 
     tui.press("ctrl+q");
-    tui.waitStable(500);
 
     // Editor should have quit; screenshot won't execute on exited process
     const s0 = tui.snapshot();
@@ -34,10 +33,8 @@ describe("quit confirmation dialog", () => {
     tui.waitFor("dirty.txt");
 
     tui.type("x");
-    tui.waitStable();
 
     tui.press("ctrl+q");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -54,13 +51,11 @@ describe("quit confirmation dialog", () => {
     tui.waitFor("cancel.txt");
 
     tui.type("x");
-    tui.waitStable();
 
     tui.press("ctrl+q");
     tui.waitFor("Unsaved changes");
 
     tui.type("c");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -76,13 +71,11 @@ describe("quit confirmation dialog", () => {
     tui.waitFor("quit-q.txt");
 
     tui.type("x");
-    tui.waitStable();
 
     tui.press("ctrl+q");
     tui.waitFor("Unsaved changes");
 
     tui.type("q");
-    tui.waitStable(500);
 
     // Editor should have quit; screenshot won't execute on exited process
     const s0 = tui.snapshot();
@@ -98,13 +91,11 @@ describe("quit confirmation dialog", () => {
     tui.waitFor("force.txt");
 
     tui.type("x");
-    tui.waitStable();
 
     tui.press("ctrl+q");
     tui.waitFor("Unsaved changes");
 
     tui.press("ctrl+q");
-    tui.waitStable(500);
 
     // Editor should have quit; screenshot won't execute on exited process
     const s0 = tui.snapshot();

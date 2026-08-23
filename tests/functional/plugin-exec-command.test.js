@@ -35,11 +35,8 @@ describe("ttt.exec_command plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.type("hello");
-    tui.waitStable();
     tui.exec("Test Run Exec");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -64,9 +61,7 @@ describe("ttt.exec_command plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test Run Bad");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -101,9 +96,7 @@ describe("ttt.list_commands plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test List");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

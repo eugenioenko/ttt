@@ -23,23 +23,19 @@ describe("find navigation (F3 / Shift+F3)", () => {
     tui.waitFor("cat here");
 
     tui.press("ctrl+f");
-    tui.waitStable();
 
     tui.type("cat");
-    tui.waitStable();
 
     // Initial match is on line 1
     const s0 = tui.snapshot();
 
     // F3 moves to next match (line 3)
     tui.press("f3");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // F3 moves to next match (line 5)
     tui.press("f3");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
 
@@ -62,23 +58,19 @@ describe("find navigation (F3 / Shift+F3)", () => {
     tui.waitFor("cat here");
 
     tui.press("ctrl+f");
-    tui.waitStable();
 
     tui.type("cat");
-    tui.waitStable();
 
     // Start at match 1 on line 1
     const s0 = tui.snapshot();
 
     // F3 advances to match 2 on line 3
     tui.press("f3");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // Shift+F3 goes back to match 1 on line 1
     tui.press("shift+f3");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
 
@@ -100,23 +92,19 @@ describe("find navigation (F3 / Shift+F3)", () => {
     tui.waitFor("cat start");
 
     tui.press("ctrl+f");
-    tui.waitStable();
 
     tui.type("cat");
-    tui.waitStable();
 
     // Start at match 1 on line 1
     const s0 = tui.snapshot();
 
     // F3 advances to match 2 on line 3
     tui.press("f3");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // F3 wraps around back to match 1 on line 1
     tui.press("f3");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
 
@@ -139,10 +127,8 @@ describe("find navigation (F3 / Shift+F3)", () => {
     tui.waitFor("cat here");
 
     tui.press("ctrl+f");
-    tui.waitStable();
 
     tui.type("zzzzz");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 

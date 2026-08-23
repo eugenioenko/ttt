@@ -33,20 +33,15 @@ describe("search interaction with code folding", () => {
 
     // Fold all functions
     tui.pressChord("ctrl+k", "0");
-    tui.waitStable();
 
     // Verify both folds are collapsed
     const s0 = tui.snapshot();
 
     // Search for text in the second fold
     tui.press("ctrl+f");
-    tui.waitStable();
     tui.type("secretBeta");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
     tui.press("escape");
-    tui.waitStable();
 
     // The second fold should have expanded to reveal the match
     const s1 = tui.snapshot();

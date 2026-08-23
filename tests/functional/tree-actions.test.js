@@ -26,7 +26,6 @@ describe("tree actions", () => {
     tui.start(dir);
     tui.setSize(100, 50);
     tui.pressChord("ctrl+k", "e");
-    tui.waitStable();
     tui.exec("Explorer: Collapse All");
     const collapsed = tui.snapshot();
     tui.exec("Explorer: Expand All");

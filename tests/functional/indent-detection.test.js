@@ -31,7 +31,6 @@ describe("indent detection", () => {
 
     tui.start("--config", configFile, file);
     tui.waitFor("astro.config.mjs");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -57,7 +56,6 @@ describe("indent detection", () => {
 
     tui.start("--config", configFile, file);
     tui.waitFor("main.go");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -80,7 +78,6 @@ describe("indent detection", () => {
 
     tui.start("--config", configFile, file);
     tui.waitFor("config.mjs");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -102,7 +99,6 @@ describe("indent detection", () => {
 
     tui.start("--config", configFile, file);
     tui.waitFor("app.py");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

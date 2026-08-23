@@ -31,10 +31,8 @@ describe("BUG-003: Duplicate/Delete Line ignore active multi-line selection", ()
     tui.press("shift+down");
     tui.press("shift+down");
     tui.exec("Duplicate Line");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior duplicates only the cursor's line (line3), which per
@@ -53,10 +51,8 @@ describe("BUG-003: Duplicate/Delete Line ignore active multi-line selection", ()
     tui.press("shift+down");
     tui.press("shift+down");
     tui.exec("Delete Line");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior deletes only the cursor's line (line3), leaving the
@@ -77,10 +73,8 @@ describe("BUG-002: Tab indent with selection ending at col 0", () => {
     tui.press("arrow_down");
     tui.press("shift+down");
     tui.press("tab");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior indents line2 as well.
@@ -102,10 +96,8 @@ describe("BUG-001: Move Line with selection ending at col 0", () => {
     tui.press("shift+down");
     tui.press("shift+down");
     tui.exec("Move Line Down");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Block line2+line3 swaps past line4. Buggy behavior instead swaps the

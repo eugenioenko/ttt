@@ -22,10 +22,9 @@ describe("current changes document", () => {
 
     tui.start(dir);
     tui.exec("Git: Open Current Changes");
-    tui.waitStable(500);
+    tui.waitFor("final working version 界");
     const first = tui.snapshot();
     tui.exec("Git: Open Current Changes");
-    tui.waitStable(300);
     const reopened = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -54,7 +53,7 @@ describe("current changes document", () => {
 
     tui.start(dir);
     tui.exec("Git: Open Current Changes");
-    tui.waitStable(500);
+    tui.waitFor("conflict (UD)");
     const conflict = tui.snapshot();
     const { snapshots } = tui.run();
     const screen = snapshots[conflict];

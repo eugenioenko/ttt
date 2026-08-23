@@ -180,7 +180,6 @@ describe("fullwidth CJK outside the editor", () => {
 
     tui.start(dir, file);
     tui.waitFor("한국어파일.txt");
-    tui.wait(400);
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -197,9 +196,7 @@ describe("fullwidth CJK outside the editor", () => {
     tui.start(file);
     tui.waitFor("search.txt");
     tui.press("ctrl+f");
-    tui.wait(200);
     tui.type("가나다");
-    tui.wait(300);
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -216,9 +213,7 @@ describe("fullwidth CJK outside the editor", () => {
     tui.start(file);
     tui.waitFor("palette.txt");
     tui.press("ctrl+p");
-    tui.wait(200);
     tui.type("한국");
-    tui.wait(300);
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

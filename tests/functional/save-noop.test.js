@@ -17,11 +17,9 @@ describe("save behavior edge cases", () => {
 
     tui.start(file);
     tui.waitFor("original content");
-    tui.waitStable();
 
     // Save without making any edits
     tui.press("ctrl+s");
-    tui.waitStable(500);
 
     const { snapshots } = tui.run();
 
@@ -44,7 +42,6 @@ describe("save behavior edge cases", () => {
     tui.waitFor("no newline here!");
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -61,13 +58,11 @@ describe("save behavior edge cases", () => {
 
     // Type something to make the buffer dirty
     tui.type("x");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Save the file
     tui.press("ctrl+s");
-    tui.waitStable(500);
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -81,19 +76,15 @@ describe("save behavior edge cases", () => {
     const newFilePath = join(dir, "created.txt");
 
     tui.start();
-    tui.waitStable();
 
     tui.type("new content here");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.type(newFilePath);
     tui.press("enter");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

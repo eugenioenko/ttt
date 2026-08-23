@@ -30,7 +30,6 @@ describe("BUG-051: goal column not preserved through a shorter line", () => {
     tui.press("arrow_down"); // line1 "short" — clamps to col 5
     tui.press("arrow_down"); // line2 (long) — goal should restore to col 12
     tui.type("Z"); // marker at the landing column
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

@@ -24,13 +24,10 @@ describe("BUG-016: tab-bar overflow chevron switches tabs instead of scrolling",
     tui.waitFor("content");
 
     tui.click(2, 2); // the "◀" overflow chevron
-    tui.waitStable();
     tui.press("home");
     tui.type("Z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Correct behavior: the chevron only scrolls the tab strip; tf5 (last

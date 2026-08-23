@@ -21,10 +21,8 @@ describe("toggle line comment", () => {
     tui.waitFor("package main");
 
     tui.exec("Toggle Line Comment");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -41,10 +39,8 @@ describe("toggle line comment", () => {
     tui.waitFor("// package main");
 
     tui.exec("Toggle Line Comment");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -62,13 +58,10 @@ describe("toggle line comment", () => {
     tui.waitFor("line1");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Toggle Line Comment");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -87,13 +80,10 @@ describe("toggle line comment", () => {
     tui.waitFor("// line1");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Toggle Line Comment");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -113,10 +103,8 @@ describe("toggle line comment", () => {
     tui.waitFor("print");
 
     tui.exec("Toggle Line Comment");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

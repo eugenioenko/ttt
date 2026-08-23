@@ -737,6 +737,8 @@ pnpm install
 pnpm test              # run all functional tests
 ```
 
+The harness acknowledges scripted input and commands after main-thread handling and redraw. Tests should wait only for genuine asynchronous work, using a unique visible post-transition state; raw elapsed waits belong only in tests whose invariant is timing or delayed lifecycle behavior.
+
 ### Integration Tests (vitest + tui-use)
 
 Tests that require live PTY interaction or a real external process boundary. Built with [vitest](https://vitest.dev/) and [tui-use](https://github.com/onesuper/tui-use), they cover real language servers, external file changes, settings roundtrips, and bracketed paste.
@@ -747,7 +749,7 @@ pnpm install
 pnpm test
 ```
 
-Use the smallest deterministic layer that proves a behavior. Broader tests should establish a distinct boundary rather than duplicate the same assertion. CI runs the broad regression lanes on pull requests.
+Use the smallest deterministic layer that proves an invariant. Functional tests are a compact real-binary contract, not a mandatory copy of lower-layer coverage. Add a broader test only when it establishes behavior unique to that boundary. CI runs the broad regression lanes on pull requests.
 
 ### Chaos Monkey (Fuzz Testing)
 

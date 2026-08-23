@@ -15,24 +15,18 @@ describe("unicode stress tests", () => {
     const file = createTempFile(dir, "symbols.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     // Use simple single-codepoint symbols that terminals handle reliably
     tui.type("ABC");
-    tui.waitStable();
 
     // Select all and delete
     tui.press("ctrl+a");
-    tui.waitStable();
     tui.press("backspace");
-    tui.waitStable();
 
     // Type new symbols
     tui.type("XYZ");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -54,10 +48,8 @@ describe("unicode stress tests", () => {
 
     // Type "X" — should insert between β and γ
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -76,10 +68,8 @@ describe("unicode stress tests", () => {
     tui.press("end");
     tui.press("backspace");
     tui.type("é");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     // Take snapshot to verify intermediate state (café on screen)
     const s0 = tui.snapshot();
@@ -89,10 +79,8 @@ describe("unicode stress tests", () => {
     tui.press("arrow_left");
     tui.press("arrow_left");
     tui.type("Z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

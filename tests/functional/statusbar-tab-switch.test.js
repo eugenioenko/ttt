@@ -18,19 +18,15 @@ describe("status bar after a scripted tab switch", () => {
     const second = createMultiLineFile(dir, "second.txt", 80);
 
     tui.start(first, second);
-    tui.waitStable();
 
     // second.txt is active; move it to line 20 so the two tabs differ.
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("20");
     tui.press("enter");
-    tui.waitStable();
 
     const onSecond = tui.snapshot();
 
     tui.exec("View: Previous Tab");
-    tui.waitStable();
     const onFirst = tui.snapshot();
 
     const { snapshots } = tui.run();

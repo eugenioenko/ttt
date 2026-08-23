@@ -78,7 +78,6 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
     tui.waitFor("linkedbranch");
     const linked = tui.snapshot();
     tui.exec("View: Previous Tab");
-    tui.waitStable();
     const plain = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -92,7 +91,6 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
     tui.start(link);
     tui.waitFor("filesymlinkbranch");
     tui.waitFor("Test User");
-    tui.waitStable();
     const screen = tui.snapshot();
     const { snapshots } = tui.run();
     expect(snapshots[screen]).toContain("filesymlinkbranch");
@@ -132,7 +130,9 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
     tui.setEnv({ PATH: `${binDir}${delimiter}${process.env.PATH}`, TTT_REAL_GIT: realGit });
     tui.waitFor("filesymlinkbranch");
     tui.exec("View: Previous Tab");
-    tui.wait(1300);
+    // Cross the wrapper's one-second blame delay so this specifically proves
+    // that the late result cannot overwrite the newly active plain-file tab.
+    tui.elapse(1300);
     const screen = tui.snapshot();
     const { snapshots } = tui.run();
     expect(snapshots[screen]).toContain("plain content");

@@ -18,13 +18,10 @@ describe("select all and overwrite", () => {
     tui.waitFor("old content");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.type("replaced");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -41,17 +38,14 @@ describe("select all and overwrite", () => {
     tui.waitFor("preserve");
 
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.type("x");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // undo the typed char, then undo the deletion
     tui.press("ctrl+z");
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();

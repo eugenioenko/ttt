@@ -19,10 +19,8 @@ describe("editor tab order", () => {
     tui.start(alpha, beta, gamma);
     const before = tui.snapshot();
     tui.drag(38, 2, 2, 2);
-    tui.waitStable();
     const dragged = tui.snapshot();
     tui.exec("View: Move Tab Right");
-    tui.waitStable();
     const moved = tui.snapshot();
 
     const { snapshots } = tui.run();

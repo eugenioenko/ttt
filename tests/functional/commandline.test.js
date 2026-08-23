@@ -49,14 +49,10 @@ describe("plugin command line", () => {
     const plugin = writePlugin(dir, "cmdline.lua", CMDLINE_PLUGIN);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.type(":");
-    tui.waitStable();
     tui.type("wq");
-    tui.waitStable();
     const open = tui.snapshot();
     tui.press("enter");
-    tui.waitStable();
     const after = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -77,16 +73,11 @@ describe("plugin command line", () => {
     const plugin = writePlugin(dir, "cmdline.lua", CMDLINE_PLUGIN);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.type(":");
-    tui.waitStable();
     tui.type("q");
-    tui.waitStable();
     tui.press("escape");
-    tui.waitStable();
     tui.press("end");
     tui.type("Z");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -120,13 +111,9 @@ describe("plugin command line", () => {
     );
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.type("a");
-    tui.waitStable();
     tui.type(":");
-    tui.waitStable();
     tui.type("bcd");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

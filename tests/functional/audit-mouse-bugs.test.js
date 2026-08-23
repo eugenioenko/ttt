@@ -22,9 +22,7 @@ describe("BUG-018: clicking another menu header closes instead of switching", ()
     tui.waitFor("hello");
 
     tui.click(4, 0); // open "File" menu
-    tui.waitStable();
     tui.click(30, 0); // click "View" header while File is open
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -42,14 +40,11 @@ describe("BUG-019: rightmost column of explorer tree rows is click-dead", () => 
     createTempFile(dir, "b.txt", "bbb\n");
 
     tui.start(dir);
-    tui.waitStable(300);
     tui.exec("Show Explorer");
-    tui.waitStable(300);
 
     // Tree widget rect is {x:1, w:30} → x=30 is the rightmost column of
     // the row rect; x=29 (control, verified) opens the file fine.
     tui.click(30, 6); // a.txt row
-    tui.waitStable(300);
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

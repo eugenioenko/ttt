@@ -23,16 +23,14 @@ describe("BUG-047: global-search navigation ignores the match column (lands at c
     );
 
     tui.start(dir);
-    tui.waitStable(300);
+    tui.waitFor("Explore");
     tui.pressChord("ctrl+k", "f"); // open global search
     tui.type("needle");
-    tui.waitStable(700); // debounce + rg
+    tui.waitFor("another needle line");
     tui.press("arrow_down");
     tui.press("arrow_down"); // to the "another needle line" match
     tui.press("enter"); // navigate
-    tui.waitStable();
     tui.type("Z"); // marker at the cursor's landing column
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

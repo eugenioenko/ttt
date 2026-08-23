@@ -17,12 +17,10 @@ describe("word wrap", () => {
 
     tui.start(file);
     tui.waitFor("VISIBLE_");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.exec("Toggle Word Wrap");
-    tui.wait(500);
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -39,13 +37,11 @@ describe("word wrap", () => {
 
     tui.start(file);
     tui.waitFor("HELLO");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Toggle word wrap
     tui.exec("Toggle Word Wrap");
-    tui.wait(500);
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -63,15 +59,12 @@ describe("word wrap", () => {
 
     tui.start(file);
     tui.waitFor("VISIBLE_");
-    tui.waitStable();
 
     tui.exec("Toggle Word Wrap");
-    tui.wait(500);
 
     const s0 = tui.snapshot();
 
     tui.exec("Toggle Word Wrap");
-    tui.wait(500);
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();

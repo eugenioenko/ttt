@@ -18,12 +18,12 @@ describe("commit history detail", () => {
 
     tui.start(dir);
     tui.pressChord("ctrl+k", "c");
-    tui.waitStable(500);
+    tui.waitFor("selected detail");
     tui.press("tab");
     tui.press("tab");
     tui.press("down");
     tui.press("right");
-    tui.waitStable(500);
+    tui.waitFor("selected-detail.txt");
     tui.press("down");
     tui.exec("Git: Open Changes Only");
     tui.waitFor("selected-detail.txt @");
@@ -42,17 +42,17 @@ describe("commit history detail", () => {
 
     tui.start(dir);
     tui.pressChord("ctrl+k", "c");
-    tui.waitStable(500);
+    tui.waitFor("paged 60");
     tui.press("tab");
     tui.press("tab");
     for (let index = 0; index < 11; index++) tui.press("down");
     const sentinel = tui.snapshot();
     tui.press("enter");
-    tui.waitStable(900);
+    tui.waitFor("paged 50");
     const firstPage = tui.snapshot();
     for (let index = 0; index < 50; index++) tui.press("down");
     tui.press("enter");
-    tui.waitStable(900);
+    tui.waitFor("initial commit");
     const lastPage = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -71,14 +71,14 @@ describe("commit history detail", () => {
 
     tui.start(dir);
     tui.pressChord("ctrl+k", "c");
-    tui.waitStable(500);
+    tui.waitFor("detail subject");
     // Changes focus starts in the working tree. The next two stops are the
     // commit input and the responsive Commit History tree.
     tui.press("tab");
     tui.press("tab");
     tui.press("down");
     tui.press("enter");
-    tui.waitStable(900);
+    tui.waitFor("Full detail body.");
     const detail = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -106,15 +106,15 @@ describe("commit history detail", () => {
 
 		tui.start(dir);
 		tui.pressChord("ctrl+k", "c");
-		tui.waitStable(500);
+		tui.waitFor("two distant edits");
 		tui.press("tab");
 		tui.press("tab");
 		tui.press("down");
 		tui.press("enter");
-		tui.waitStable(900);
+		tui.waitFor("changed near top");
 		const changesOnly = tui.snapshot();
 		tui.exec("Git: Show Full File");
-		tui.waitStable(900);
+		tui.waitFor("unchanged line 15");
 		const fullFile = tui.snapshot();
 
 		const { snapshots } = tui.run();
@@ -134,12 +134,12 @@ describe("commit history detail", () => {
 		tui.start(dir);
 		tui.setSize(70, 16);
 		tui.pressChord("ctrl+k", "c");
-		tui.waitStable(500);
+		tui.waitFor("menu detail");
 		tui.press("tab");
 		tui.press("tab");
 		tui.press("down");
 		tui.press("enter");
-		tui.waitStable(900);
+		tui.waitFor("Authored");
 		tui.rclick(60, 12);
 		const contentMenu = tui.snapshot();
 		for (let index = 0; index < 4; index++) tui.press("down");
@@ -167,12 +167,12 @@ describe("commit history detail", () => {
 
     tui.start(dir);
     tui.pressChord("ctrl+k", "c");
-    tui.waitStable(500);
+    tui.waitFor("bulk detail");
     tui.press("tab");
     tui.press("tab");
     tui.press("down");
     tui.press("enter");
-    tui.waitStable(900);
+    tui.waitFor("visible detail line");
     const expanded = tui.snapshot();
     tui.exec("Git: Collapse All File Trees");
     const collapsed = tui.snapshot();

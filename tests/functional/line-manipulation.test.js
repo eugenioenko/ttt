@@ -19,16 +19,13 @@ describe("line manipulation", () => {
 
     // Move to line 2
     tui.press("arrow_down");
-    tui.waitStable();
 
     // Delete line (ctrl+k k chord)
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -50,15 +47,12 @@ describe("line manipulation", () => {
     tui.waitFor("Alpha");
 
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
