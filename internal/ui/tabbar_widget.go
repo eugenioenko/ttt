@@ -56,6 +56,7 @@ type TabBarWidget struct {
 	closeDownX                int // screen X where mouse-down hit a close button, -1 if none
 	closeDownY                int
 	wasPressed                bool
+	lastSeenBtn               tcell.ButtonMask
 	lastClickTime             int64
 	drag                      widgets.TabDragState
 	dragPointerX              int
@@ -286,6 +287,9 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	mx, my := mev.Position()
 	btn := mev.Buttons()
 
+	prevBtn := t.lastSeenBtn
+	t.lastSeenBtn = btn
+
 	slog.Debug("tabBar", "mx", mx, "my", my, "btn", btn, "rect", r, "hasMore", t.MoreButton != nil)
 
 	if btn == tcell.ButtonNone && t.drag.Active() {
@@ -377,7 +381,7 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventIgnored
 	}
 
-	freshClick := !t.wasPressed
+	freshClick := !t.wasPressed && prevBtn&tcell.Button1 == 0
 	t.wasPressed = true
 	if !freshClick {
 		return EventConsumed
@@ -452,6 +456,7 @@ func (t *TabBarWidget) CancelPointerCapture() bool {
 		t.drag.Cancel()
 	}
 	t.wasPressed = false
+	t.lastSeenBtn = 0
 	t.closeDownX = -1
 	if active && t.pointerCaptureInvalidated != nil {
 		t.pointerCaptureInvalidated()

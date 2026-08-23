@@ -606,3 +606,34 @@ func TestTabBarNoOverflowWhenFits(t *testing.T) {
 		t.Fatal("should not have overflow when all tabs fit")
 	}
 }
+
+func TestTabBarDragDoesNotStartFromPressOutsideTabs(t *testing.T) {
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{{Name: "one.go", Active: true}, {Name: "two.go"}})
+	root := NewRoot(tb)
+	root.SetSize(30, 3)
+	tb.Render(NewRenderSurface(makeGrid(30, 3), Rect{X: 0, Y: 0, W: 30, H: 3}))
+	tb.OnTabClick = func(int) {}
+	tb.OnTabReorder = func(_, _ int) {}
+
+	tabX := tb.tabSpans[1].start + 2
+
+	// Press outside the tab bar (below it), then move onto a tab with button held.
+	root.HandleEvent(tcell.NewEventMouse(tabX, 5, tcell.Button1, 0))
+	root.HandleEvent(tcell.NewEventMouse(tabX, 1, tcell.Button1, 0))
+
+	if tb.drag.Active() {
+		t.Fatal("drag started from a press that originated outside the tab bar")
+	}
+	if root.capturedWidget != nil {
+		t.Fatal("root captured widget from a foreign press")
+	}
+
+	// Release and do a real click — should work normally.
+	root.HandleEvent(tcell.NewEventMouse(tabX, 1, tcell.ButtonNone, 0))
+	root.HandleEvent(tcell.NewEventMouse(tabX, 1, tcell.Button1, 0))
+
+	if !tb.drag.Active() {
+		t.Fatal("legitimate click after foreign press did not start drag")
+	}
+}
