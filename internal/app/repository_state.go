@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,10 +23,13 @@ const (
 
 	RepositoryStatus = RepositoryWorktree
 
-	repositoryRefreshDebounce = 150 * time.Millisecond
-	repositoryPollInterval    = 2 * time.Second
-	repositoryStatusTimeout   = 10 * time.Second
+	repositoryRefreshDebounce         = 150 * time.Millisecond
+	repositoryPollInterval            = 2 * time.Second
+	repositoryStatusTimeout           = 10 * time.Second
+	repositoryPathIdentityMaxAttempts = 8
 )
+
+var errRepositoryPathIdentityUnstable = errors.New("repository path identity is transiently unstable")
 
 type repositoryStatusEntry struct {
 	SourceDir   string
@@ -779,7 +783,7 @@ func resolveRepositoryPathIdentityWith(
 	abs = filepath.Clean(abs)
 
 resolve:
-	for {
+	for attempt := 0; attempt < repositoryPathIdentityMaxAttempts; attempt++ {
 		resolved, resolveErr := stableSymlinkIdentityWith(abs, evalSymlinks)
 		if resolveErr == nil {
 			return resolved, nil
@@ -827,6 +831,7 @@ resolve:
 			ancestor = parent
 		}
 	}
+	return "", fmt.Errorf("%w after %d attempts for %s", errRepositoryPathIdentityUnstable, repositoryPathIdentityMaxAttempts, abs)
 }
 
 func stableSymlinkIdentityWith(path string, evalSymlinks func(string) (string, error)) (string, error) {

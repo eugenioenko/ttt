@@ -298,17 +298,18 @@ func TestRepositoryDiscoveryDirectoryHandlesSymlinksMissingPathsAndInvalidLinks(
 	}
 
 	tests := []struct {
-		name    string
-		path    string
-		wantDir string
-		wantErr bool
+		name         string
+		path         string
+		wantDir      string
+		wantErr      bool
+		wantNotExist bool
 	}{
 		{name: "file symlink", path: fileLink, wantDir: nested},
 		{name: "directory symlink", path: filepath.Join(dirLink, "file.txt"), wantDir: nested},
 		{name: "missing file", path: filepath.Join(nested, "missing.txt"), wantDir: nested},
 		{name: "deep missing path", path: filepath.Join(dirLink, "missing", "deeper", "file.txt"), wantDir: nested},
-		{name: "broken file symlink", path: broken, wantErr: true},
-		{name: "broken directory symlink", path: filepath.Join(broken, "file.txt"), wantErr: true},
+		{name: "broken file symlink", path: broken, wantErr: true, wantNotExist: true},
+		{name: "broken directory symlink", path: filepath.Join(broken, "file.txt"), wantErr: true, wantNotExist: true},
 		{name: "file symlink cycle", path: cycleA, wantErr: true},
 		{name: "directory symlink cycle", path: filepath.Join(cycleA, "file.txt"), wantErr: true},
 	}
@@ -318,6 +319,12 @@ func TestRepositoryDiscoveryDirectoryHandlesSymlinksMissingPathsAndInvalidLinks(
 			if test.wantErr {
 				if err == nil {
 					t.Fatalf("discovery directory = %q, want error", dir)
+				}
+				if errors.Is(err, errRepositoryPathIdentityUnstable) {
+					t.Fatalf("permanent path error misclassified as transient instability: %v", err)
+				}
+				if test.wantNotExist && !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("broken link error = %v, want os.ErrNotExist", err)
 				}
 				return
 			}
@@ -698,6 +705,123 @@ func TestRepositoryScanCarriesSourceIdentityAndRootFailure(t *testing.T) {
 	}
 }
 
+func TestResolveRepositoryPathIdentityBoundsPersistentChurn(t *testing.T) {
+	if os.Getenv("TTT_TEST_REPOSITORY_PATH_CHURN") == "1" {
+		testResolveRepositoryPathIdentityPersistentChurn(t)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestResolveRepositoryPathIdentityBoundsPersistentChurn$")
+	cmd.Env = append(os.Environ(), "TTT_TEST_REPOSITORY_PATH_CHURN=1")
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("persistent churn resolution did not terminate within 3s: %v", ctx.Err())
+	}
+	if err != nil {
+		t.Fatalf("persistent churn subprocess failed: %v\n%s", err, output)
+	}
+}
+
+func testResolveRepositoryPathIdentityPersistentChurn(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "repo")
+	ancestor := filepath.Join(base, "missing")
+	target := filepath.Join(ancestor, "file.txt")
+	stableTarget := filepath.Join(base, "canonical.txt")
+	churning := true
+	succeedOnAttempt := 0
+	stableAttempt := false
+	attempts := 0
+	targetRestarts := 0
+	ancestorRestarts := 0
+	targetLstatCalls := 0
+	ancestorLstatCalls := 0
+	notExist := func(op, path string) error {
+		return &os.PathError{Op: op, Path: path, Err: os.ErrNotExist}
+	}
+
+	evalSymlinks := func(path string) (string, error) {
+		if !churning && path == target {
+			return stableTarget, nil
+		}
+		switch path {
+		case target:
+			if stableAttempt {
+				return stableTarget, nil
+			}
+			attempts++
+			targetLstatCalls = 0
+			ancestorLstatCalls = 0
+			if attempts == succeedOnAttempt {
+				stableAttempt = true
+				return stableTarget, nil
+			}
+			return "", notExist("evalsymlinks", path)
+		case ancestor:
+			if attempts%2 == 0 {
+				return "", notExist("evalsymlinks", path)
+			}
+			return path, nil
+		case base:
+			return path, nil
+		default:
+			t.Fatalf("unexpected EvalSymlinks path %q", path)
+			return "", nil
+		}
+	}
+	lstat := func(path string) (os.FileInfo, error) {
+		switch path {
+		case target:
+			targetLstatCalls++
+			if attempts%2 == 1 && targetLstatCalls == 2 {
+				targetRestarts++
+				return nil, nil
+			}
+			return nil, notExist("lstat", path)
+		case ancestor:
+			ancestorLstatCalls++
+			if attempts%2 == 0 && ancestorLstatCalls == 2 {
+				ancestorRestarts++
+				return nil, nil
+			}
+			return nil, notExist("lstat", path)
+		default:
+			t.Fatalf("unexpected lstat path %q", path)
+			return nil, nil
+		}
+	}
+
+	resolved, err := resolveRepositoryPathIdentityWith(target, lstat, evalSymlinks)
+	wantErr := "repository path identity is transiently unstable after 8 attempts for " + target
+	if resolved != "" || err == nil || err.Error() != wantErr || !errors.Is(err, errRepositoryPathIdentityUnstable) {
+		t.Fatalf("persistent churn resolved=%q err=%v, want classified error %q", resolved, err, wantErr)
+	}
+	if attempts != repositoryPathIdentityMaxAttempts || targetRestarts != 4 || ancestorRestarts != 4 {
+		t.Fatalf("persistent churn attempts=%d target restarts=%d ancestor restarts=%d, want 8, 4, 4", attempts, targetRestarts, ancestorRestarts)
+	}
+
+	churning = false
+	resolved, err = resolveRepositoryPathIdentityWith(target, lstat, evalSymlinks)
+	if err != nil || resolved != stableTarget {
+		t.Fatalf("later stable retry resolved=%q err=%v, want %q", resolved, err, stableTarget)
+	}
+
+	churning = true
+	succeedOnAttempt = repositoryPathIdentityMaxAttempts
+	stableAttempt = false
+	attempts = 0
+	targetRestarts = 0
+	ancestorRestarts = 0
+	resolved, err = resolveRepositoryPathIdentityWith(target, lstat, evalSymlinks)
+	if err != nil || resolved != stableTarget {
+		t.Fatalf("last-attempt recovery resolved=%q err=%v, want %q", resolved, err, stableTarget)
+	}
+	if attempts != repositoryPathIdentityMaxAttempts || targetRestarts != 4 || ancestorRestarts != 3 {
+		t.Fatalf("last-attempt recovery attempts=%d target restarts=%d ancestor restarts=%d, want 8, 4, 3", attempts, targetRestarts, ancestorRestarts)
+	}
+}
+
 func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePositives(t *testing.T) {
 	repo := t.TempDir()
 	outside := t.TempDir()
@@ -873,8 +997,12 @@ func TestRepositoryInvalidationRejectsUnprovablePermissionAncestors(t *testing.T
 		t.Run(test.name, func(t *testing.T) {
 			s, _, _ := testRepositoryState(nil, repo)
 			s.pathIdentity = permissionDeniedRepositoryPathResolver(test.denied)
-			if resolved, err := s.resolvePathIdentity(test.path); resolved != "" || !errors.Is(err, os.ErrPermission) {
+			resolved, err := s.resolvePathIdentity(test.path)
+			if resolved != "" || !errors.Is(err, os.ErrPermission) {
 				t.Fatalf("permission seam resolved=%q err=%v, want os.ErrPermission", resolved, err)
+			}
+			if errors.Is(err, errRepositoryPathIdentityUnstable) {
+				t.Fatalf("permission error misclassified as transient instability: %v", err)
 			}
 			s.InvalidatePath(test.path, RepositoryWorktree)
 			if s.requested != 0 || s.dirty != 0 {
