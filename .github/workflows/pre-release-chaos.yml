@@ -1,0 +1,44 @@
+name: Pre-Release Chaos Monkey
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Number of chaos iterations"
+        required: false
+        default: "2000"
+        type: string
+      events:
+        description: "Random events per iteration"
+        required: false
+        default: "500"
+        type: string
+
+jobs:
+  chaos-monkey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build chaos Docker image
+        run: docker build -t ttt-chaos -f tests/chaos/Dockerfile .
+
+      - name: Run chaos monkey (${{ inputs.iterations }} x ${{ inputs.events }} events)
+        run: |
+          mkdir -p chaos-output
+          docker run --rm \
+            -e CHAOS_ITERATIONS=${{ inputs.iterations }} \
+            -e CHAOS_EVENTS=${{ inputs.events }} \
+            -v "$(pwd)/chaos-output:/output" \
+            --entrypoint /chaos-test ttt-chaos \
+            -test.run TestChaosMonkey -test.v -test.timeout 0
+
+      - name: Upload crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-crash-reports
+          path: chaos-output/crash-*.json
+          if-no-files-found: ignore
