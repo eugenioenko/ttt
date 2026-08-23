@@ -1,4 +1,4 @@
-name: Pre-Release Chaos Monkey
+name: Chaos Monkey
 
 on:
   workflow_dispatch:
