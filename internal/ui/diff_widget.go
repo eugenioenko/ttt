@@ -295,6 +295,7 @@ func (d *DiffViewWidget) FailLoading() {
 }
 
 func (d *DiffViewWidget) rebuildLines() {
+	d.hasHoveredGap = false
 	if d.extended && d.contextLoaded {
 		d.Lines = diff.FullDiffLines(d.oldLines, d.newLines)
 		d.gapByLine = nil
