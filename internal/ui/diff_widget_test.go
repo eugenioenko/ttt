@@ -634,6 +634,32 @@ func TestDiffWidgetHighContrastUsesSemanticChangeForegrounds(t *testing.T) {
 	}
 }
 
+func TestDiffWidgetSyntaxSearchAndSelectionLayering(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-var oldValue = 1\n+var newValue = 2\n")
+	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+	dv.ApplySearchHighlight("var", SearchOptions{})
+
+	const width, height = 60, 2
+	dv.SetRect(Rect{W: width, H: height})
+	grid := makeGrid(width, height)
+	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+	cell := grid[0][dv.layoutLeftStart]
+	if cell.Style != term.StyleSearchMatch || cell.BgStyle != 0 {
+		t.Fatalf("searched diff syntax cell = %+v, want search style replacing diff background", cell)
+	}
+
+	dv.hasSelection = true
+	dv.selRight = false
+	dv.selection.Anchor = diffSelPos{Line: 0, Col: 0}
+	dv.selection.Current = diffSelPos{Line: 0, Col: 3}
+	grid = makeGrid(width, height)
+	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+	cell = grid[0][dv.layoutLeftStart]
+	if cell.Style != term.StyleSearchMatch || cell.BgStyle != term.StyleSelection {
+		t.Fatalf("selected searched diff syntax cell = %+v, want search style with selection background", cell)
+	}
+}
+
 func TestDiffWidgetWrappedScrollbarUsesVisualRows(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\n")
 	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
