@@ -3,6 +3,7 @@ package render
 import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"testing"
+	"unsafe"
 )
 
 func makeCells(rows ...string) [][]term.Cell {
@@ -36,6 +37,20 @@ func TestRenderer_RenderDiff(t *testing.T) {
 	c, ok := screen.Cells[[2]int{2, 0}]
 	if !ok || c.Ch != 'x' {
 		t.Errorf("expected cell (2,0) to be 'x'")
+	}
+}
+
+func TestRenderer_RenderNoCopy(t *testing.T) {
+	r := &Renderer{}
+	screen := term.NewMockScreen(5, 2)
+	cells := makeCells("abcde", "fghij")
+	r.SetCurrent(cells)
+	r.Render(screen)
+
+	for y := range cells {
+		if unsafe.SliceData(r.prev[y]) != unsafe.SliceData(cells[y]) {
+			t.Errorf("row %d: r.prev does not share cells' backing array; Render is copying instead of retaining the reference", y)
+		}
 	}
 }
 
