@@ -16,6 +16,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.25"
+  GOPLS_VERSION: "v0.21.1"
   NODE_VERSION: "24"
   PNPM_VERSION: "11"
 
@@ -320,7 +321,7 @@ jobs:
 
       - name: Install LSP servers
         run: |
-          go install golang.org/x/tools/gopls@latest
+          go install golang.org/x/tools/gopls@${GOPLS_VERSION}
           npm install -g typescript@5 typescript-language-server
           npm install -g vscode-langservers-extracted
           npm install -g yaml-language-server
