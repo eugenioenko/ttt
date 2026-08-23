@@ -399,7 +399,7 @@ func TestCalculatePaletteWidth(t *testing.T) {
 		{name: "smallest safety bound", screenWidth: 5, want: 1},
 		{name: "narrow safety bound", screenWidth: 30, want: 26},
 		{name: "typical responsive width", screenWidth: 80, want: 48},
-		{name: "wide maximum", screenWidth: 200, want: 90},
+		{name: "wide maximum", screenWidth: 200, want: 60},
 	}
 
 	for _, tt := range tests {
@@ -426,20 +426,20 @@ func TestPaletteSharedWidthAcrossModeTransitionsAndReopen(t *testing.T) {
 	p.files = []paletteFile{{Rel: "alpha.txt", Abs: "/workspace/alpha.txt"}}
 
 	commandCells := renderPaletteAt(p, 200, 50)
-	if p.boxX != 55 || p.boxW != 90 {
-		t.Fatalf("command geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
+	if p.boxX != 70 || p.boxW != 60 {
+		t.Fatalf("command geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
 	}
-	if commandCells[p.boxY][55].Ch != '╔' || commandCells[p.boxY][144].Ch != '╗' {
+	if commandCells[p.boxY][70].Ch != '╔' || commandCells[p.boxY][129].Ch != '╗' {
 		t.Fatal("command border does not match its shared layout")
 	}
 
 	p.Input.SetText("?")
 	p.Selected = 2
 	helpCells := renderPaletteAt(p, 200, 50)
-	if p.boxX != 55 || p.boxW != 90 {
-		t.Fatalf("help geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
+	if p.boxX != 70 || p.boxW != 60 {
+		t.Fatalf("help geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
 	}
-	if helpCells[p.boxY][55].Ch != '╔' || helpCells[p.boxY][144].Ch != '╗' {
+	if helpCells[p.boxY][70].Ch != '╔' || helpCells[p.boxY][129].Ch != '╗' {
 		t.Fatal("help border does not match its shared layout")
 	}
 
@@ -448,28 +448,28 @@ func TestPaletteSharedWidthAcrossModeTransitionsAndReopen(t *testing.T) {
 	if p.Selected != 0 || p.scrollOffset != 0 {
 		t.Fatalf("command transition retained selection state: selected=%d scroll=%d", p.Selected, p.scrollOffset)
 	}
-	if p.boxX != 55 || p.boxW != 90 {
-		t.Fatalf("command transition geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
+	if p.boxX != 70 || p.boxW != 60 {
+		t.Fatalf("command transition geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
 	}
-	if commandCells[p.boxY][55].Ch != '╔' || commandCells[p.boxY][144].Ch != '╗' {
+	if commandCells[p.boxY][70].Ch != '╔' || commandCells[p.boxY][129].Ch != '╗' {
 		t.Fatal("command transition border does not match its shared layout")
 	}
 
 	p.Input.Clear()
 	fileCells := renderPaletteAt(p, 200, 50)
-	if p.boxX != 55 || p.boxW != 90 {
-		t.Fatalf("file geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
+	if p.boxX != 70 || p.boxW != 60 {
+		t.Fatalf("file geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
 	}
-	if fileCells[p.boxY][55].Ch != '╔' || fileCells[p.boxY][144].Ch != '╗' {
+	if fileCells[p.boxY][70].Ch != '╔' || fileCells[p.boxY][129].Ch != '╗' {
 		t.Fatal("file border does not match its shared layout")
 	}
 
 	p.Input.SetText(":")
 	goToLineCells := renderPaletteAt(p, 200, 50)
-	if p.boxX != 55 || p.boxW != 90 || p.boxH != 3 {
-		t.Fatalf("go-to-line geometry = x:%d width:%d height:%d, want x:55 width:90 height:3", p.boxX, p.boxW, p.boxH)
+	if p.boxX != 70 || p.boxW != 60 || p.boxH != 3 {
+		t.Fatalf("go-to-line geometry = x:%d width:%d height:%d, want x:70 width:60 height:3", p.boxX, p.boxW, p.boxH)
 	}
-	if goToLineCells[p.boxY][55].Ch != '╔' || goToLineCells[p.boxY][144].Ch != '╗' {
+	if goToLineCells[p.boxY][70].Ch != '╔' || goToLineCells[p.boxY][129].Ch != '╗' {
 		t.Fatal("go-to-line border does not match its shared layout")
 	}
 
@@ -491,7 +491,7 @@ func TestPaletteSharedWidthAcrossModeTransitionsAndReopen(t *testing.T) {
 
 	reopened := NewSelectDialogWidget(helpTestCommands())
 	renderPaletteAt(reopened, 200, 50)
-	if reopened.Input.Text != ">" || reopened.boxX != 55 || reopened.boxW != 90 {
+	if reopened.Input.Text != ">" || reopened.boxX != 70 || reopened.boxW != 60 {
 		t.Fatalf("reopened command palette = input:%q x:%d width:%d", reopened.Input.Text, reopened.boxX, reopened.boxW)
 	}
 }
