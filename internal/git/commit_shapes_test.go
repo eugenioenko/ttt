@@ -77,6 +77,23 @@ func TestCommitShapesRootRenameMergeUnicodeAndBinary(t *testing.T) {
 		t.Fatalf("rename diff err=%v\n%s", err, text)
 	}
 
+	copyPath := "copied\nraw.txt"
+	content, err := os.ReadFile(filepath.Join(dir, "renamed:界.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitShapeWrite(t, filepath.Join(dir, copyPath), content)
+	commitShapeGit(t, dir, "add", "-A")
+	commitShapeGit(t, dir, "commit", "-qm", "copy")
+	copyRef := commitShapeGit(t, dir, "rev-parse", "HEAD")
+	copies, err := CommitFiles(dir, copyRef)
+	if err != nil || len(copies) != 1 || copies[0].Status != "C" || copies[0].OldPath != "renamed:界.txt" || copies[0].Path != copyPath {
+		t.Fatalf("copy files=%+v err=%v", copies, err)
+	}
+	if text, err := CommitFileDiff(dir, copyRef, copies[0]); err != nil || !strings.Contains(text, "similarity index 100%") {
+		t.Fatalf("copy diff err=%v\n%s", err, text)
+	}
+
 	commitShapeGit(t, dir, "checkout", "-qb", "topic")
 	commitShapeWrite(t, filepath.Join(dir, "topic.txt"), []byte("topic\n"))
 	commitShapeGit(t, dir, "add", "topic.txt")

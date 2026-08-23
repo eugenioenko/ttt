@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -115,6 +117,44 @@ func TestCommitDetailUsesSharedContextProjectionAndHighContrastPainter(t *testin
 	}
 }
 
+func TestFullFileLCSProjectionIsSharedByHistoricalAndCurrentChanges(t *testing.T) {
+	oldLines := []string{"", "a", "c", "same"}
+	newLines := []string{"same", "a", "b", "b", "c", "c"}
+	fileDiff := diff.Parse(diff.Generate(oldLines, newLines, "file.txt"))
+	want := diff.FullDiffLines(oldLines, newLines)
+
+	tests := []struct {
+		name   string
+		detail *CommitDetailWidget
+		apply  func(*CommitDetailWidget, CommitDetailFile)
+	}{
+		{
+			name:   "historical commit detail",
+			detail: NewCommitDetailWidget("/repo", "full", "abcdef0", false),
+			apply: func(detail *CommitDetailWidget, file CommitDetailFile) {
+				detail.SetDetail("subject", []CommitDetailFile{file}, "")
+			},
+		},
+		{
+			name:   "current changes",
+			detail: NewCurrentChangesWidget("/repo", false),
+			apply: func(detail *CommitDetailWidget, file CommitDetailFile) {
+				detail.SetCurrentChanges("one file", []CommitDetailFile{file}, "")
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			file := CommitDetailFileWithContent(CommitDetailFile{Status: "M", Path: "file.txt", Diff: fileDiff}, oldLines, newLines)
+			test.apply(test.detail, file)
+			test.detail.SetContextMode(DiffContextFullFile)
+			if !reflect.DeepEqual(test.detail.Files[0].lines, want) {
+				t.Fatal("Full File surface did not preserve the established LCS projection")
+			}
+		})
+	}
+}
+
 func TestCommitDetailCollapsedContextUsesSharedExpansionControl(t *testing.T) {
 	detail := NewCommitDetailWidget("/repo", "full", "abc1234", false)
 	detail.SetDetail("Subject", []CommitDetailFile{{
@@ -161,5 +201,56 @@ func TestCommitDetailCollapsedContextUsesSharedExpansionControl(t *testing.T) {
 	}
 	if !detail.Files[0].expandedGaps[gap] || len(detail.Files[0].gapByLine) != 0 {
 		t.Fatalf("shared context gap remained collapsed: expanded=%v gaps=%v", detail.Files[0].expandedGaps, detail.Files[0].gapByLine)
+	}
+}
+
+func TestCommitDetailWrappedCollapsedContextUsesFullRowHitTarget(t *testing.T) {
+	for _, mode := range []DiffMode{DiffModeSplit, DiffModeUnified} {
+		t.Run(fmt.Sprintf("mode-%d", mode), func(t *testing.T) {
+			fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n-old one\n+new one\n@@ -20,1 +20,1 @@\n-old twenty\n+new twenty\n")
+			oldLines := make([]string, 20)
+			newLines := make([]string, 20)
+			for index := range oldLines {
+				oldLines[index] = fmt.Sprintf("old line %d", index+1)
+				newLines[index] = fmt.Sprintf("new line %d", index+1)
+			}
+			file := CommitDetailFileWithContent(CommitDetailFile{Path: "test.go", Diff: fd}, oldLines, newLines)
+			detail := NewCommitDetailWidget("/repo", "full", "abc1234", false)
+			detail.SetDetail("Subject", []CommitDetailFile{file}, "")
+			detail.SetMode(mode)
+			detail.SetWrapMode(DiffWrapOn)
+			const width, height = 20, 16
+			rect := Rect{X: 3, Y: 2, W: width, H: height}
+			detail.SetRect(rect)
+			detail.Render(NewRenderSurface(makeGrid(width, height), rect))
+			gapRow := -1
+			for rowIndex, row := range detail.rows {
+				if row.kind == commitDetailDiffRow {
+					lineIndex := row.lineIndex
+					if mode == DiffModeUnified {
+						lineIndex = detail.Files[0].unified[lineIndex].sourceLine
+					}
+					if _, ok := detail.Files[0].gapByLine[lineIndex]; ok {
+						gapRow = rowIndex
+						break
+					}
+				}
+			}
+			clickY := -1
+			for visualIndex, visual := range detail.visualRows {
+				if visual.row == gapRow && visualIndex >= detail.TopLine && visualIndex < detail.TopLine+detail.viewH {
+					clickY = rect.Y + visualIndex - detail.TopLine
+				}
+			}
+			if clickY < 0 {
+				t.Fatalf("wrapped detail separator mapping missing: row=%d visual=%+v", gapRow, detail.visualRows)
+			}
+			if result := detail.HandleEvent(tcell.NewEventMouse(rect.X+rect.W-2, clickY, tcell.Button1, tcell.ModNone)); result != EventConsumed {
+				t.Fatalf("wrapped aggregate gap click result = %v", result)
+			}
+			if len(detail.Files[0].gapByLine) != 0 || detail.ContextMode() != DiffContextChangesOnly {
+				t.Fatalf("wrapped aggregate gap not locally expanded: gaps=%v mode=%v", detail.Files[0].gapByLine, detail.ContextMode())
+			}
+		})
 	}
 }

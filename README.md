@@ -185,6 +185,7 @@ and **Collapse All** actions in their relevant menus.
 **Committing:**
 - Inline commit message input below the file list (Tab from the tree to focus it)
 - Type a message and press Enter to commit all staged files
+- Commit History starts with the 10 most recent commits; activate **Load older commits…** to append bounded pages from the same HEAD snapshot
 
 **Remote operations:**
 - **Pull**, **Push**, **Sync** (pull then push) from the sidebar actions button

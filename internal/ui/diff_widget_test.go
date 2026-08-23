@@ -367,6 +367,46 @@ func TestDiffWidgetCollapsedSeparatorClickExpandsOnlyThatGap(t *testing.T) {
 	}
 }
 
+func TestDiffWidgetWrappedCollapsedSeparatorUsesFullRowHitTarget(t *testing.T) {
+	for _, mode := range []DiffMode{DiffModeSplit, DiffModeUnified} {
+		t.Run(fmt.Sprintf("mode-%d", mode), func(t *testing.T) {
+			fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -20,1 +20,1 @@\n twentieth\n")
+			lines := make([]string, 20)
+			for index := range lines {
+				lines[index] = fmt.Sprintf("line %d", index+1)
+			}
+			dv := NewDiffViewWidget("test.go", fd, lines, append([]string(nil), lines...), false)
+			dv.SetMode(mode)
+			dv.SetWrapMode(DiffWrapOn)
+			const width, height = 18, 12
+			dv.SetRect(Rect{W: width, H: height})
+			dv.Render(NewRenderSurface(makeGrid(width, height), Rect{W: width, H: height}))
+			separatorLine := -1
+			for line := range dv.Lines {
+				if _, ok := dv.gapByLine[line]; ok {
+					separatorLine = line
+					break
+				}
+			}
+			clickY := -1
+			for y, entry := range dv.wrapMap {
+				if entry.line == separatorLine {
+					clickY = y
+				}
+			}
+			if clickY < 0 {
+				t.Fatalf("wrapped separator mapping missing: line=%d map=%+v", separatorLine, dv.wrapMap)
+			}
+			if result := dv.HandleEvent(tcell.NewEventMouse(width-2, clickY, tcell.Button1, tcell.ModNone)); result != EventConsumed {
+				t.Fatalf("full-row wrapped click result = %v", result)
+			}
+			if len(dv.gapByLine) != 0 || dv.ContextMode() != DiffContextChangesOnly {
+				t.Fatalf("wrapped gap was not locally expanded: gaps=%v mode=%v", dv.gapByLine, dv.ContextMode())
+			}
+		})
+	}
+}
+
 func TestDiffWidgetCollapsedSeparatorOmitsAdjacentLines(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -24,1 +24,1 @@\n line 24\n@@ -25,1 +25,1 @@\n line 25\n")
 	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)

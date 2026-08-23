@@ -44,9 +44,14 @@ func TestList(t *testing.T) {
 	r := NewRegistry()
 	r.Register(Command{ID: "a", Title: "A", Handler: func() {}})
 	r.Register(Command{ID: "b", Title: "B", Handler: func() {}})
+	hiddenCalled := false
+	r.Register(Command{ID: "legacy", Title: "Legacy", Hidden: true, Handler: func() { hiddenCalled = true }})
 
 	cmds := r.List()
 	if len(cmds) != 2 {
 		t.Fatalf("expected 2 commands, got %d", len(cmds))
+	}
+	if !r.Execute("legacy") || !hiddenCalled {
+		t.Fatal("hidden compatibility command was not executable by ID")
 	}
 }

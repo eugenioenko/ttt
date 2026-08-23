@@ -38,6 +38,11 @@ type ChangesPanel struct {
 	// lastLogDir which only guards redundant rebuilds. They differ because
 	// Refresh clears the guard while the rendered log stays put.
 	logDir string
+	// Every appended page is tied to one immutable full HEAD snapshot.
+	logAnchor      git.ObjectID
+	logOffset      int
+	logHasMore     bool
+	logPagePending bool
 	// commitFiles caches a commit's file list. A commit's contents never
 	// change, so an entry can never go stale — only numerous, hence the bound.
 	commitFiles      map[string][]git.FileStatus
@@ -334,6 +339,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		cp.saveCommitLogState()
 		cp.lastLogDir = ""
 		cp.logDir = ""
+		cp.resetHistoryPaging()
 		cp.CommitLog.SetItems(nil)
 		return
 	}
@@ -344,6 +350,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		cp.cancelCommitFileReads()
 		cp.saveCommitLogState()
 		cp.logDir = ""
+		cp.resetHistoryPaging()
 		cp.logCommits = make(map[string]commitFileRef)
 		cp.logFiles = make(map[string]commitFileRef)
 		cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:loading", Label: "Loading…", Muted: true}})
@@ -364,7 +371,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 	go func() {
 		result := readCommitLog(ctx, dir, gen)
 		cancel()
-		screen.PostEvent(tcell.NewEventInterrupt(result))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
 }
 
@@ -387,6 +394,13 @@ func (cp *ChangesPanel) cancelHistoryReads() {
 	cp.cancelCommitFileReads()
 }
 
+func (cp *ChangesPanel) resetHistoryPaging() {
+	cp.logAnchor = ""
+	cp.logOffset = 0
+	cp.logHasMore = false
+	cp.logPagePending = false
+}
+
 func (cp *ChangesPanel) RefreshHistory() {
 	cp.lastLogDir = ""
 	cp.refreshCommitLog()
@@ -395,10 +409,34 @@ func (cp *ChangesPanel) RefreshHistory() {
 func (cp *ChangesPanel) CancelHistoryRead() {
 	cp.cancelHistoryReads()
 	cp.logGen++
+	cp.logPagePending = false
 }
 
 func (cp *ChangesPanel) Shutdown() {
-	cp.cancelHistoryReads()
+	cp.CancelHistoryRead()
+}
+
+func (cp *ChangesPanel) loadOlderHistory() {
+	if cp.logPagePending || cp.logCancel != nil || !cp.logHasMore || cp.logDir == "" || cp.logAnchor == "" {
+		return
+	}
+	cp.logPagePending = true
+	cp.replaceHistoryLoadNode(true, false)
+	dir, anchor, offset, gen := cp.logDir, cp.logAnchor, cp.logOffset, cp.logGen
+	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
+	cp.logCancel = cancel
+	if cp.Screen == nil {
+		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		cancel()
+		cp.ApplyCommitLog(result)
+		return
+	}
+	screen := cp.Screen
+	go func() {
+		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		cancel()
+		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
+	}()
 }
 
 // saveCommitLogState records the currently rendered log's expansion and
@@ -554,6 +592,10 @@ func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, extended bool) {
 
 func (cp *ChangesPanel) openCommitLogNode(node *widgets.TreeNode) {
 	if node == nil {
+		return
+	}
+	if node.ID == historyLoadOlderID {
+		cp.loadOlderHistory()
 		return
 	}
 	if commit, ok := cp.logCommits[node.ID]; ok {

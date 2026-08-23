@@ -536,23 +536,13 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.extendedView", Title: "Git: Extended Diff",
-		Keywords: []string{"git", "changes", "compare"},
-		Handler: func() {
-			if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
-				dv.SetExtended(true)
-			}
-		},
+		ID: "diff.extendedView", Title: "Git: Extended Diff", Hidden: true,
+		Handler: app.DiffUseFullFileContext,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.compactView", Title: "Git: Compact Diff",
-		Keywords: []string{"git", "changes", "compare"},
-		Handler: func() {
-			if dv := app.EditorGroup.ActiveDiffWidget(); dv != nil {
-				dv.SetExtended(false)
-			}
-		},
+		ID: "diff.compactView", Title: "Git: Compact Diff", Hidden: true,
+		Handler: app.DiffUseChangesOnlyContext,
 	})
 
 	reg.Register(command.Command{

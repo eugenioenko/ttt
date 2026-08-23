@@ -1,11 +1,15 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -23,6 +27,7 @@ type CommitDetailContextResult struct {
 	FileKey     string
 	OldLines    []string
 	NewLines    []string
+	ContentKind ui.CommitDetailContentKind
 	Err         string
 	Canceled    bool
 }
@@ -55,31 +60,62 @@ func readCommitDetailContext(ctx context.Context, incarnation uint64, tabID, dir
 	if file.OldPath != "" {
 		oldPath = file.OldPath
 	}
+	var oldContent, newContent []byte
 	if file.Status != "A" {
-		content, err := git.ShowFileContext(ctx, dir, oldPath, ref+"^")
+		content, err := git.ShowFileBytesContext(ctx, dir, oldPath, ref+"^")
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				result.Canceled = true
 				return result
 			}
-			result.Err = fmt.Sprintf("Could not load full file for %s", file.Path)
+			result.Err = fmt.Sprintf("Could not load full file for %s", commitContextDisplayPath(file.Path))
 		} else {
-			result.OldLines = splitCommitDetailLines(content)
+			oldContent = content
 		}
 	}
 	if file.Status != "D" {
-		content, err := git.ShowFileContext(ctx, dir, file.Path, ref)
+		content, err := git.ShowFileBytesContext(ctx, dir, file.Path, ref)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				result.Canceled = true
 				return result
 			}
-			result.Err = fmt.Sprintf("Could not load full file for %s", file.Path)
+			result.Err = fmt.Sprintf("Could not load full file for %s", commitContextDisplayPath(file.Path))
 		} else {
-			result.NewLines = splitCommitDetailLines(content)
+			newContent = content
 		}
 	}
+	if result.Err != "" {
+		return result
+	}
+	if isBinaryCommitContent(oldContent) || isBinaryCommitContent(newContent) {
+		result.ContentKind = ui.CommitDetailContentBinary
+		return result
+	}
+	if len(oldContent) == 0 && len(newContent) == 0 {
+		result.ContentKind = ui.CommitDetailContentEmpty
+		return result
+	}
+	if file.Status != "A" {
+		result.OldLines = splitCommitDetailLines(string(oldContent))
+	}
+	if file.Status != "D" {
+		result.NewLines = splitCommitDetailLines(string(newContent))
+	}
 	return result
+}
+
+func isBinaryCommitContent(content []byte) bool {
+	return bytes.IndexByte(content, 0) >= 0 || !utf8.Valid(content)
+}
+
+func commitContextDisplayPath(path string) string {
+	for _, r := range path {
+		if !unicode.IsGraphic(r) {
+			return strconv.QuoteToGraphic(path)
+		}
+	}
+	return path
 }
 
 func splitCommitDetailLines(content string) []string {
@@ -98,5 +134,8 @@ func (a *App) ApplyCommitDetailContext(result *CommitDetailContextResult) {
 	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref || detail.Incarnation != result.Incarnation {
 		return
 	}
-	detail.ApplyFileContext(result.FileIndex, result.FileKey, result.OldLines, result.NewLines, result.Err)
+	applied := detail.ApplyFileContextContent(result.FileIndex, result.FileKey, result.OldLines, result.NewLines, result.ContentKind, result.Err)
+	if applied && result.Err != "" && a.Status != nil && a.Screen != nil {
+		a.StatusError(result.Err)
+	}
 }

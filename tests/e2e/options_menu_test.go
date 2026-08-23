@@ -130,6 +130,26 @@ func TestOptionsAndChangesShareCheckedPresentationSubmenus(t *testing.T) {
 	}
 }
 
+func TestLegacyDiffContextCommandsAliasWithoutDuplicatePaletteRows(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	h.app.EditorGroup.OpenDiff("legacy.go", diff.FileDiff{}, []string{"old"}, []string{"new"}, false)
+	dv := h.app.EditorGroup.ActiveDiffWidget()
+	h.exec("diff.extendedView")
+	if dv.ContextMode() != ui.DiffContextFullFile {
+		t.Fatalf("legacy extended alias context = %v", dv.ContextMode())
+	}
+	h.exec("diff.compactView")
+	if dv.ContextMode() != ui.DiffContextChangesOnly {
+		t.Fatalf("legacy compact alias context = %v", dv.ContextMode())
+	}
+	for _, registered := range h.app.Reg.List() {
+		if registered.ID == "diff.extendedView" || registered.ID == "diff.compactView" {
+			t.Fatalf("legacy alias leaked into visible command UI: %+v", registered)
+		}
+	}
+}
+
 func TestOptionsDiffDefaultsRespectPerPropertyOverrides(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()

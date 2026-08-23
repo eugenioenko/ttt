@@ -160,6 +160,25 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	}
 }
 
+func TestSettingsAppearanceOwnsDiffContextControl(t *testing.T) {
+	h := openSettings(t)
+	defer h.stop()
+	clickRowControl(t, h, "Editor", "Editor")
+	if rowHas(h, "Diff context", "Changes Only") {
+		t.Fatalf("Editor still contains the Diff context control:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Appearance", "Appearance")
+	if !rowHas(h, "Diff context", "Changes Only") {
+		t.Fatalf("Appearance is missing the normalized Diff context control:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Diff context", "Changes Only")
+	clickRowControl(t, h, "Full File", "Full File")
+	h.exec("settings.apply")
+	if h.app.Settings.Editor.DiffContext != config.DiffContextFull {
+		t.Fatalf("Diff context = %q, want full", h.app.Settings.Editor.DiffContext)
+	}
+}
+
 func TestSettingsGitFileViewLiveAppliesOnlyAfterApply(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Advanced", "Advanced")

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,6 +69,44 @@ func TestChangesHistoryUsesResponsiveHalfLayoutAndKeyboardNavigation(t *testing.
 	cp.Adapter.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
 	if cp.Adapter.FocusedWidget() != cp.CommitLog {
 		t.Fatalf("keyboard focus = %T, want commit history", cp.Adapter.FocusedWidget())
+	}
+}
+
+func TestCommitHistoryLoadsOlderPagesOnlyFromExplicitSentinel(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	runHistoryGit(t, h.dir, "init", "-q", "-b", "main")
+	runHistoryGit(t, h.dir, "config", "user.email", "test@test.com")
+	runHistoryGit(t, h.dir, "config", "user.name", "Test User")
+	runHistoryGit(t, h.dir, "config", "commit.gpgsign", "false")
+	runHistoryGit(t, h.dir, "add", "-A")
+	runHistoryGit(t, h.dir, "commit", "-qm", "history 00")
+	for index := 1; index <= 60; index++ {
+		runHistoryGit(t, h.dir, "commit", "--allow-empty", "-qm", fmt.Sprintf("history %02d", index))
+	}
+
+	h.app.Changes.Screen = nil
+	h.app.Changes.Refresh()
+	h.exec("sidebar.changes")
+	log := h.app.Changes.CommitLog
+	if log.ItemCount() != 12 {
+		t.Fatalf("initial history rows = %d, want branch + 10 commits + sentinel", log.ItemCount())
+	}
+	log.SetSelectedIndex(log.ItemCount() - 1)
+	h.redraw()
+	if !strings.Contains(h.screenText(), "Load older commits…") || log.ItemCount() != 12 {
+		t.Fatal("selecting the sentinel unexpectedly loaded history")
+	}
+	log.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	h.redraw()
+	if log.ItemCount() != 62 || !strings.Contains(h.screenText(), "history 50") {
+		t.Fatalf("first append rows=%d screen:\n%s", log.ItemCount(), h.screenText())
+	}
+	log.SetSelectedIndex(log.ItemCount() - 1)
+	log.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	h.redraw()
+	if log.ItemCount() != 62 || strings.Contains(h.screenText(), "Load older commits…") {
+		t.Fatalf("terminal append rows=%d screen:\n%s", log.ItemCount(), h.screenText())
 	}
 }
 
