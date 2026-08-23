@@ -85,6 +85,12 @@ function messagesFor(trace, method) {
   return clientMessages(trace).filter((message) => message.method === method);
 }
 
+function traceEntriesFor(trace, direction, method) {
+  return trace.filter(
+    (entry) => entry.direction === direction && entry.message.method === method,
+  );
+}
+
 function expectedInitialize(root) {
   return {
     processId: expect.any(Number),
@@ -110,6 +116,44 @@ function expectedDocumentTexts(typed) {
     suffix += character;
     return `${INITIAL_TEXT}${suffix}`;
   });
+}
+
+function assertRequestAfterDocument(trace, request, text) {
+  const requestEntry = trace.find(
+    (entry) =>
+      entry.direction === "client->server" && entry.message.id === request.id,
+  );
+  const precedingChanges = traceEntriesFor(
+    trace.slice(0, requestEntry.sequence - 1),
+    "client->server",
+    "textDocument/didChange",
+  );
+
+  expect(precedingChanges.at(-1).message.params.contentChanges).toEqual([{ text }]);
+  expect(precedingChanges.at(-1).sequence).toBeLessThan(requestEntry.sequence);
+}
+
+function assertGracefulShutdown(trace) {
+  const suffix = trace.slice(-3);
+  const shutdownId = suffix[0].message.id;
+
+  expect(suffix).toEqual([
+    {
+      sequence: trace.length - 2,
+      direction: "client->server",
+      message: { jsonrpc: "2.0", id: shutdownId, method: "shutdown" },
+    },
+    {
+      sequence: trace.length - 1,
+      direction: "server->client",
+      message: { jsonrpc: "2.0", id: shutdownId, result: null },
+    },
+    {
+      sequence: trace.length,
+      direction: "client->server",
+      message: { jsonrpc: "2.0", method: "exit" },
+    },
+  ]);
 }
 
 function assertProtocol(trace, file, expectedTexts) {
@@ -158,6 +202,7 @@ function assertProtocol(trace, file, expectedTexts) {
   expect(changes.map((message) => message.params.contentChanges)).toEqual(
     expectedTexts.map((text) => [{ text }]),
   );
+  assertGracefulShutdown(trace);
 }
 
 describe("deterministic fake LSP protocol", () => {
@@ -200,6 +245,8 @@ describe("deterministic fake LSP protocol", () => {
         },
       },
     ]);
+    assertRequestAfterDocument(trace, completions[0], `${INITIAL_TEXT}consol`);
+    assertRequestAfterDocument(trace, completions[1], `${INITIAL_TEXT}consol.`);
   });
 
   it("sends signature help at the exact parenthesis position and renders its label", () => {
@@ -214,7 +261,8 @@ describe("deterministic fake LSP protocol", () => {
 
     expect(snapshots[visible]).toContain("fakeSignature(value: string)");
     assertProtocol(trace, file, expectedDocumentTexts("console.log("));
-    expect(messagesFor(trace, "textDocument/signatureHelp")).toEqual([
+    const signatures = messagesFor(trace, "textDocument/signatureHelp");
+    expect(signatures).toEqual([
       {
         jsonrpc: "2.0",
         id: expect.any(Number),
@@ -225,33 +273,50 @@ describe("deterministic fake LSP protocol", () => {
         },
       },
     ]);
+    assertRequestAfterDocument(trace, signatures[0], `${INITIAL_TEXT}console.log(`);
   });
 
-  it("uses dot-trigger context for a string literal completion", () => {
+  it("uses byte-length framing in both directions for a multibyte dot completion", () => {
     const { file, trace: tracePath } = startCase("string-dot-trigger");
-    const typed = '"hello world!".';
+    const typed = '"héllo界".';
 
     tui.type(typed);
-    tui.waitFor("toUpperCase");
+    tui.waitFor("toÜpper");
     const visible = tui.snapshot();
 
     const { snapshots } = tui.run();
     const trace = readTrace(tracePath);
+    const completions = messagesFor(trace, "textDocument/completion");
 
-    expect(snapshots[visible]).toContain("toUpperCase");
+    expect(snapshots[visible]).toContain("toÜpper");
     assertProtocol(trace, file, expectedDocumentTexts(typed));
-    expect(messagesFor(trace, "textDocument/completion")).toEqual([
+    expect(completions).toEqual([
       {
         jsonrpc: "2.0",
         id: expect.any(Number),
         method: "textDocument/completion",
         params: {
           textDocument: { uri: `file://${file}` },
-          position: { line: 1, character: 15 },
+          position: { line: 1, character: 9 },
           context: { triggerKind: 2, triggerCharacter: "." },
         },
       },
     ]);
+    assertRequestAfterDocument(trace, completions[0], `${INITIAL_TEXT}${typed}`);
+    expect(
+      trace.find(
+        (entry) =>
+          entry.direction === "server->client" &&
+          entry.message.id === completions[0].id,
+      ).message,
+    ).toEqual({
+      jsonrpc: "2.0",
+      id: completions[0].id,
+      result: {
+        isIncomplete: false,
+        items: [{ label: "toÜpper", kind: 2, insertText: "toÜpper" }],
+      },
+    });
   });
 
   it("accepts a dot completion without duplicating the trigger character", () => {
@@ -272,7 +337,8 @@ describe("deterministic fake LSP protocol", () => {
       ...expectedDocumentTexts("console."),
       `${INITIAL_TEXT}console.log`,
     ]);
-    expect(messagesFor(trace, "textDocument/completion")).toEqual([
+    const completions = messagesFor(trace, "textDocument/completion");
+    expect(completions).toEqual([
       {
         jsonrpc: "2.0",
         id: expect.any(Number),
@@ -294,6 +360,8 @@ describe("deterministic fake LSP protocol", () => {
         },
       },
     ]);
+    assertRequestAfterDocument(trace, completions[0], `${INITIAL_TEXT}console.`);
+    assertRequestAfterDocument(trace, completions[1], `${INITIAL_TEXT}console.log`);
     expect(messagesFor(trace, "completionItem/resolve")).toEqual([
       {
         jsonrpc: "2.0",

@@ -31,8 +31,8 @@ function respond(id, result) {
 }
 
 function completionItem() {
-  if (documentText.endsWith('"hello world!".')) {
-    return { label: "toUpperCase", kind: 2, insertText: "toUpperCase" };
+  if (documentText.includes("héllo界")) {
+    return { label: "toÜpper", kind: 2, insertText: "toÜpper" };
   }
   if (documentText.endsWith(".")) {
     return { label: "log", kind: 2, insertText: "log" };
