@@ -24,7 +24,10 @@ const (
 	paletteHelpMode
 )
 
-const ordinaryPaletteMaxWidth = 60
+const (
+	paletteMinWidth = 40
+	paletteMaxWidth = 90
+)
 
 type selectDialogLayout struct {
 	boxX         int
@@ -133,17 +136,15 @@ func (p *SelectDialogWidget) CursorPosition() (int, int, bool) {
 	return p.Input.CursorX(p.inputX), p.inputY, true
 }
 
+func calculatePaletteWidth(screenWidth int) int {
+	width := screenWidth * 6 / 10
+	width = max(width, paletteMinWidth)
+	width = min(width, paletteMaxWidth)
+	return min(width, max(screenWidth-4, 1))
+}
+
 func (p *SelectDialogWidget) calculateLayout(sw, sh int) selectDialogLayout {
-	boxW := sw * 6 / 10 // 60% of terminal width
-	if p.mode != paletteHelpMode && boxW > ordinaryPaletteMaxWidth {
-		boxW = ordinaryPaletteMaxWidth
-	}
-	if boxW < 40 {
-		boxW = 40
-	}
-	if boxW > sw-4 {
-		boxW = sw - 4
-	}
+	boxW := calculatePaletteWidth(sw)
 	var boxH int
 	if p.mode == paletteGoToLineMode {
 		boxH = 3

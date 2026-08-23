@@ -64,7 +64,25 @@ describe("command palette", () => {
     expect(snapshots[s0]).toContain("Dismiss test");
   });
 
-  it("should keep ordinary modes narrow while help responds and transitions cleanly", () => {
+  it.each([
+    { name: "narrow", width: 30, height: 24, expected: 26 },
+    { name: "typical", width: 80, height: 24, expected: 48 },
+    { name: "wide", width: 200, height: 50, expected: 90 },
+  ])("should use the responsive width at $name terminal sizes", ({ width, height, expected }) => {
+    dir = createTempDir();
+    createTempFile(dir, "responsive.txt", "Responsive palette test");
+
+    tui.start(dir);
+    tui.setSize(width, height);
+    tui.waitFor("responsive.txt");
+    tui.press("ctrl+p");
+    const palette = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(paletteWidth(snapshots[palette])).toBe(expected);
+  });
+
+  it("should keep one responsive width across modes and transitions", () => {
     dir = createTempDir();
     createTempFile(dir, "wide.txt", "Wide palette test");
 
@@ -84,7 +102,11 @@ describe("command palette", () => {
     tui.press("backspace");
     const files = tui.snapshot();
 
-    tui.click(50, 3);
+    tui.type(":");
+    const goToLine = tui.snapshot();
+
+    tui.press("backspace");
+    tui.click(54, 3);
     const dismissed = tui.snapshot();
 
     tui.press("ctrl+p");
@@ -94,13 +116,14 @@ describe("command palette", () => {
     const fileBinding = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(paletteWidth(snapshots[command])).toBe(60);
-    expect(paletteWidth(snapshots[help])).toBe(120);
-    expect(paletteWidth(snapshots[commandAgain])).toBe(60);
-    expect(paletteWidth(snapshots[files])).toBe(60);
+    expect(paletteWidth(snapshots[command])).toBe(90);
+    expect(paletteWidth(snapshots[help])).toBe(90);
+    expect(paletteWidth(snapshots[commandAgain])).toBe(90);
+    expect(paletteWidth(snapshots[files])).toBe(90);
+    expect(paletteWidth(snapshots[goToLine])).toBe(90);
     expect(paletteWidth(snapshots[dismissed])).toBe(0);
-    expect(paletteWidth(snapshots[reopened])).toBe(60);
-    expect(paletteWidth(snapshots[fileBinding])).toBe(60);
+    expect(paletteWidth(snapshots[reopened])).toBe(90);
+    expect(paletteWidth(snapshots[fileBinding])).toBe(90);
     expect(snapshots[command]).toContain(">");
     expect(snapshots[files]).toContain("wide.txt");
     expect(snapshots[fileBinding]).toContain("wide.txt");
