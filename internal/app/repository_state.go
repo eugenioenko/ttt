@@ -58,6 +58,7 @@ type RepositoryInvalidationRequest struct {
 }
 
 type repositoryDebounceTick struct{ Gen uint64 }
+type repositoryIdentityDebounceTick struct{ Gen uint64 }
 type repositoryPollTick struct{ Gen uint64 }
 
 type repositoryTimer interface {
@@ -97,10 +98,12 @@ type RepositoryState struct {
 	refreshAgain bool
 	statusCancel context.CancelFunc
 
-	debounceTimer repositoryTimer
-	debounceGen   uint64
-	pollTimer     repositoryTimer
-	pollGen       uint64
+	debounceTimer         repositoryTimer
+	debounceGen           uint64
+	identityDebounceTimer repositoryTimer
+	identityDebounceGen   uint64
+	pollTimer             repositoryTimer
+	pollGen               uint64
 
 	lastGroups    map[string]changesGroup
 	lastRevisions map[string]string
@@ -169,6 +172,8 @@ func (s *RepositoryState) SetDirs(dirs []string) {
 	if s == nil || s.closed {
 		return
 	}
+	identityDebouncePending := s.identityDebounceTimer != nil
+	s.stopIdentityDebounce()
 	s.dirs = append([]string(nil), dirs...)
 	s.stopCurrentChanges()
 	if s.changes != nil {
@@ -193,6 +198,9 @@ func (s *RepositoryState) SetDirs(dirs []string) {
 		}
 	} else if s.started {
 		s.startStatus()
+	}
+	if identityDebouncePending {
+		s.scheduleIdentityDebounce()
 	}
 }
 
@@ -221,7 +229,11 @@ func (s *RepositoryState) InvalidateAll(resources RepositoryResource) {
 	}
 	s.dirty |= resources
 	if resources&RepositoryWorktree != 0 {
-		s.refreshActiveIdentity()
+		if s.poster == nil {
+			s.refreshActiveIdentity()
+		} else {
+			s.scheduleIdentityDebounce()
+		}
 	}
 	if resources&RepositoryWorktree != 0 && s.currentRoot != "" {
 		s.dirty |= RepositoryCurrentChanges
@@ -269,6 +281,7 @@ func (s *RepositoryState) RefreshNow(resources RepositoryResource) {
 	}
 	s.dirty |= resources
 	if resources&RepositoryWorktree != 0 {
+		s.stopIdentityDebounce()
 		s.refreshActiveIdentity()
 	}
 	if resources&RepositoryWorktree != 0 && s.currentRoot != "" {
@@ -468,6 +481,29 @@ func (s *RepositoryState) HandleDebounce(tick *repositoryDebounceTick) {
 	}
 }
 
+func (s *RepositoryState) scheduleIdentityDebounce() {
+	if s.poster == nil || s.closed || s.activeFile == "" {
+		return
+	}
+	if s.identityDebounceTimer != nil {
+		s.identityDebounceTimer.Stop()
+	}
+	s.identityDebounceGen++
+	gen := s.identityDebounceGen
+	poster := s.poster
+	s.identityDebounceTimer = s.scheduler.AfterFunc(s.debounceWait, func() {
+		_ = poster.PostEvent(tcell.NewEventInterrupt(&repositoryIdentityDebounceTick{Gen: gen}))
+	})
+}
+
+func (s *RepositoryState) HandleIdentityDebounce(tick *repositoryIdentityDebounceTick) {
+	if s == nil || tick == nil || s.closed || tick.Gen != s.identityDebounceGen {
+		return
+	}
+	s.identityDebounceTimer = nil
+	s.refreshActiveIdentity()
+}
+
 func (s *RepositoryState) armPoll() {
 	if s.poster == nil || s.closed || !s.visible || s.pollTimer != nil {
 		return
@@ -496,6 +532,14 @@ func (s *RepositoryState) stopDebounce() {
 	s.debounceGen++
 }
 
+func (s *RepositoryState) stopIdentityDebounce() {
+	if s.identityDebounceTimer != nil {
+		s.identityDebounceTimer.Stop()
+		s.identityDebounceTimer = nil
+	}
+	s.identityDebounceGen++
+}
+
 func (s *RepositoryState) stopPoll() {
 	if s.pollTimer != nil {
 		s.pollTimer.Stop()
@@ -511,6 +555,7 @@ func (s *RepositoryState) Close() {
 	s.closed = true
 	s.stopCurrentChanges()
 	s.stopDebounce()
+	s.stopIdentityDebounce()
 	s.stopPoll()
 	s.requested++
 	if s.statusCancel != nil {
@@ -621,6 +666,7 @@ func (s *RepositoryState) SetActiveFile(filePath string) {
 	if filePath == s.activeFile {
 		return
 	}
+	s.stopIdentityDebounce()
 	if s.identityCancel != nil {
 		s.identityCancel()
 		s.identityCancel = nil

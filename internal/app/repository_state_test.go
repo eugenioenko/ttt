@@ -107,30 +107,139 @@ func testRepositoryState(changes *ChangesPanel, dir string) (*RepositoryState, *
 
 func TestRepositoryInvalidationBurstCoalesces(t *testing.T) {
 	s, scheduler, poster := testRepositoryState(nil, "/repo")
-	var reads atomic.Int32
+	s.activeFile = "/repo/file.txt"
+	var statusReads atomic.Int32
+	var identityReads atomic.Int32
 	s.readStatus = func(_ context.Context, _ []string, seq uint64) *RepositoryStatusResult {
-		reads.Add(1)
+		statusReads.Add(1)
 		return repositoryResult(seq, "/repo", "head")
 	}
-
-	s.InvalidateAll(RepositoryWorktree)
-	s.InvalidateAll(RepositoryWorktree)
-	s.InvalidateAll(RepositoryWorktree)
-	if len(scheduler.timers) != 3 {
-		t.Fatalf("scheduled timers = %d, want 3 trailing-edge generations", len(scheduler.timers))
-	}
-	for _, timer := range scheduler.timers[:2] {
-		if !timer.stopped {
-			t.Fatal("superseded debounce timer remained active")
+	s.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		identityReads.Add(1)
+		return &RepositoryIdentityResult{
+			Seq:      seq,
+			FilePath: path,
+			Identity: git.RepositoryIdentity{Root: "/repo", Branch: "latest"},
 		}
 	}
 
-	scheduler.latest(t).fire()
+	var statusTimers, identityTimers []*fakeRepositoryTimer
+	for range 3 {
+		s.InvalidateAll(RepositoryWorktree)
+		statusTimers = append(statusTimers, s.debounceTimer.(*fakeRepositoryTimer))
+		identityTimers = append(identityTimers, s.identityDebounceTimer.(*fakeRepositoryTimer))
+	}
+	if len(scheduler.timers) != 6 {
+		t.Fatalf("scheduled timers = %d, want 3 trailing-edge generations for status and identity", len(scheduler.timers))
+	}
+	for i := range 2 {
+		if !statusTimers[i].stopped || !identityTimers[i].stopped {
+			t.Fatal("superseded debounce generation remained active")
+		}
+	}
+	if statusReads.Load() != 0 || identityReads.Load() != 0 || s.identitySeq != 0 {
+		t.Fatalf("repository burst refreshed before the trailing edge: status=%d identity=%d seq=%d", statusReads.Load(), identityReads.Load(), s.identitySeq)
+	}
+	for _, timer := range identityTimers[:2] {
+		timer.fireLate()
+		s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	}
+	if identityReads.Load() != 0 || s.identitySeq != 0 {
+		t.Fatalf("obsolete identity ticks refreshed repository: reads=%d seq=%d", identityReads.Load(), s.identitySeq)
+	}
+
+	identityTimers[2].fire()
+	if identityReads.Load() != 0 || s.identitySeq != 0 {
+		t.Fatal("identity debounce callback read repository off the main thread")
+	}
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	s.HandleIdentity(poster.await(t).(*RepositoryIdentityResult))
+	statusTimers[2].fire()
 	s.HandleDebounce(poster.await(t).(*repositoryDebounceTick))
 	s.HandleStatus(poster.await(t).(*RepositoryStatusResult))
-	if got := reads.Load(); got != 1 {
+	if got := statusReads.Load(); got != 1 {
 		t.Fatalf("status reads = %d, want 1", got)
 	}
+	if got := identityReads.Load(); got != 1 {
+		t.Fatalf("identity reads = %d, want 1", got)
+	}
+	if s.identitySeq != 1 {
+		t.Fatalf("identity generation = %d, want 1 effective refresh", s.identitySeq)
+	}
+	if root, branch := s.ActiveRepository(); root != "/repo" || branch != "latest" {
+		t.Fatalf("active identity = (%q, %q), want final repository state", root, branch)
+	}
+}
+
+func TestRepositoryIdentityBurstDuringInFlightReadWaitsForTrailingEdgeAndDropsStaleResult(t *testing.T) {
+	s, _, poster := testRepositoryState(nil, "/repo")
+	s.activeFile = "/repo/file.txt"
+	s.activeRoot = "/repo"
+	s.activeBranch = "last-good"
+	s.statusWait = time.Hour
+	firstStarted := make(chan struct{})
+	firstCanceled := make(chan struct{})
+	var reads atomic.Int32
+	s.readIdentity = func(ctx context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		if reads.Add(1) == 1 {
+			close(firstStarted)
+			<-ctx.Done()
+			close(firstCanceled)
+			return &RepositoryIdentityResult{
+				Seq:      seq,
+				FilePath: path,
+				Identity: git.RepositoryIdentity{Root: "/repo", Branch: "stale"},
+			}
+		}
+		return &RepositoryIdentityResult{
+			Seq:      seq,
+			FilePath: path,
+			Identity: git.RepositoryIdentity{Root: "/repo", Branch: "current"},
+		}
+	}
+
+	s.InvalidateAll(RepositoryWorktree)
+	firstTimer := s.identityDebounceTimer.(*fakeRepositoryTimer)
+	firstTimer.fire()
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	<-firstStarted
+
+	var burstTimers []*fakeRepositoryTimer
+	for range 3 {
+		s.InvalidateAll(RepositoryWorktree)
+		burstTimers = append(burstTimers, s.identityDebounceTimer.(*fakeRepositoryTimer))
+	}
+	for _, timer := range burstTimers[:2] {
+		if !timer.stopped {
+			t.Fatal("superseded in-flight burst timer remained active")
+		}
+	}
+	select {
+	case <-firstCanceled:
+		t.Fatal("watcher burst canceled the in-flight identity read before its trailing edge")
+	default:
+	}
+	if got := reads.Load(); got != 1 {
+		t.Fatalf("identity reads before trailing edge = %d, want 1", got)
+	}
+
+	burstTimers[2].fire()
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	select {
+	case <-firstCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("trailing-edge refresh did not cancel the superseded identity read")
+	}
+	for range 2 {
+		s.HandleIdentity(poster.await(t).(*RepositoryIdentityResult))
+	}
+	if got := reads.Load(); got != 2 {
+		t.Fatalf("identity reads across two debounce windows = %d, want 2", got)
+	}
+	if root, branch := s.ActiveRepository(); root != "/repo" || branch != "current" {
+		t.Fatalf("active identity = (%q, %q), want final current result", root, branch)
+	}
+	s.Close()
 }
 
 func TestActiveRepositoryIdentityIsCachedPerFileAndClearsOutsideGit(t *testing.T) {
@@ -500,6 +609,169 @@ func TestRepositoryVisibilityPollRearmAndGenerationLifecycle(t *testing.T) {
 	if s.inFlight || !secondPoll.stopped {
 		t.Fatal("late poll survived repository close")
 	}
+}
+
+func TestRepositoryImmediateRefreshSupersedesWatcherIdentityDebounce(t *testing.T) {
+	tests := []struct {
+		name    string
+		trigger func(*RepositoryState)
+	}{
+		{name: "refresh now", trigger: func(s *RepositoryState) { s.RefreshNow(RepositoryWorktree) }},
+		{name: "poll", trigger: func(s *RepositoryState) {
+			s.visible = true
+			s.pollGen = 1
+			s.pollTimer = &fakeRepositoryTimer{}
+			s.HandlePoll(&repositoryPollTick{Gen: 1})
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s, _, poster := testRepositoryState(nil, "/repo")
+			s.activeFile = "/repo/file.txt"
+			var identityReads atomic.Int32
+			s.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
+				identityReads.Add(1)
+				return &RepositoryIdentityResult{
+					Seq:      seq,
+					FilePath: path,
+					Identity: git.RepositoryIdentity{Root: "/repo", Branch: "immediate"},
+				}
+			}
+			s.readStatus = func(_ context.Context, _ []string, seq uint64) *RepositoryStatusResult {
+				return repositoryResult(seq, "/repo", "head")
+			}
+
+			s.InvalidateAll(RepositoryWorktree)
+			identityDebounce := s.identityDebounceTimer.(*fakeRepositoryTimer)
+			statusDebounce := s.debounceTimer.(*fakeRepositoryTimer)
+			test.trigger(s)
+			if !identityDebounce.stopped || !statusDebounce.stopped {
+				t.Fatal("immediate refresh did not supersede pending watcher debounces")
+			}
+			for range 2 {
+				switch result := poster.await(t).(type) {
+				case *RepositoryIdentityResult:
+					s.HandleIdentity(result)
+				case *RepositoryStatusResult:
+					s.HandleStatus(result)
+				default:
+					t.Fatalf("immediate event type = %T", result)
+				}
+			}
+			if got := identityReads.Load(); got != 1 {
+				t.Fatalf("immediate identity reads = %d, want 1", got)
+			}
+			if root, branch := s.ActiveRepository(); root != "/repo" || branch != "immediate" {
+				t.Fatalf("active identity = (%q, %q)", root, branch)
+			}
+
+			identityDebounce.fireLate()
+			s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+			if got := identityReads.Load(); got != 1 {
+				t.Fatalf("late watcher debounce started identity read after immediate refresh: %d", got)
+			}
+			s.Close()
+		})
+	}
+}
+
+func TestRepositoryActiveFileSwitchSupersedesWatcherDebounceAndClearsImmediately(t *testing.T) {
+	s, _, poster := testRepositoryState(nil, "/repo")
+	s.activeFile = "/repo/file.txt"
+	s.activeRoot = "/repo"
+	s.activeBranch = "last-good"
+	var identityReads atomic.Int32
+	s.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		identityReads.Add(1)
+		return &RepositoryIdentityResult{Seq: seq, FilePath: path, Err: errors.New("not a repository")}
+	}
+
+	s.InvalidateAll(RepositoryWorktree)
+	transientTimer := s.identityDebounceTimer.(*fakeRepositoryTimer)
+	transientTimer.fire()
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	s.HandleIdentity(poster.await(t).(*RepositoryIdentityResult))
+	if root, branch := s.ActiveRepository(); root != "/repo" || branch != "last-good" || identityReads.Load() != 1 {
+		t.Fatalf("transient refresh identity = (%q, %q), reads=%d", root, branch, identityReads.Load())
+	}
+
+	s.InvalidateAll(RepositoryWorktree)
+	fileTimer := s.identityDebounceTimer.(*fakeRepositoryTimer)
+	s.SetActiveFile("/plain/file.txt")
+	if !fileTimer.stopped {
+		t.Fatal("active-file switch did not stop pending identity debounce")
+	}
+	if root, branch := s.ActiveRepository(); root != "" || branch != "" {
+		t.Fatalf("non-repository switch did not clear immediately: (%q, %q)", root, branch)
+	}
+	s.HandleIdentity(poster.await(t).(*RepositoryIdentityResult))
+	fileTimer.fireLate()
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	if got := identityReads.Load(); got != 2 {
+		t.Fatalf("late file-switch tick reread identity: reads=%d", got)
+	}
+
+	s.InvalidateAll(RepositoryWorktree)
+	virtualTimer := s.identityDebounceTimer.(*fakeRepositoryTimer)
+	s.SetActiveFile("")
+	if !virtualTimer.stopped {
+		t.Fatal("virtual-file switch did not stop pending identity debounce")
+	}
+	virtualTimer.fireLate()
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	if root, branch := s.ActiveRepository(); root != "" || branch != "" || identityReads.Load() != 2 {
+		t.Fatalf("virtual active identity = (%q, %q), reads=%d", root, branch, identityReads.Load())
+	}
+	s.Close()
+}
+
+func TestRepositorySetDirsRearmsPendingIdentityDebounce(t *testing.T) {
+	s, _, poster := testRepositoryState(nil, "/old")
+	s.activeFile = "/old/file.txt"
+	statusStarted := make(chan struct{})
+	releaseStatus := make(chan struct{})
+	s.readStatus = func(_ context.Context, dirs []string, seq uint64) *RepositoryStatusResult {
+		close(statusStarted)
+		<-releaseStatus
+		return repositoryResult(seq, dirs[0], "head")
+	}
+	var identityReads atomic.Int32
+	s.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		identityReads.Add(1)
+		return &RepositoryIdentityResult{
+			Seq:      seq,
+			FilePath: path,
+			Identity: git.RepositoryIdentity{Root: "/old", Branch: "current"},
+		}
+	}
+
+	s.InvalidateAll(RepositoryWorktree)
+	oldTimer := s.identityDebounceTimer.(*fakeRepositoryTimer)
+	s.SetDirs([]string{"/new"})
+	<-statusStarted
+	newTimer := s.identityDebounceTimer.(*fakeRepositoryTimer)
+	if oldTimer == newTimer || !oldTimer.stopped || newTimer.stopped {
+		t.Fatal("SetDirs did not generation-rearm pending identity work")
+	}
+
+	oldTimer.fireLate()
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	if identityReads.Load() != 0 || s.identitySeq != 0 {
+		t.Fatal("superseded pre-SetDirs identity tick started a read")
+	}
+	newTimer.fire()
+	if identityReads.Load() != 0 || s.identitySeq != 0 {
+		t.Fatal("rearmed SetDirs timer read identity off the main thread")
+	}
+	s.HandleIdentityDebounce(poster.await(t).(*repositoryIdentityDebounceTick))
+	s.HandleIdentity(poster.await(t).(*RepositoryIdentityResult))
+	if identityReads.Load() != 1 || s.identitySeq != 1 {
+		t.Fatalf("rearmed identity reads=%d seq=%d, want 1/1", identityReads.Load(), s.identitySeq)
+	}
+
+	close(releaseStatus)
+	s.HandleStatus(poster.await(t).(*RepositoryStatusResult))
+	s.Close()
 }
 
 func TestHiddenRepositoryMutationStillRefreshesWorkingTree(t *testing.T) {
@@ -1170,6 +1442,56 @@ func TestRepositoryCloseCancelsStatusAndLateDebounce(t *testing.T) {
 	s2.HandleDebounce(poster2.await(t).(*repositoryDebounceTick))
 	if reads.Load() != 0 || !debounce.stopped {
 		t.Fatal("late debounce survived repository close")
+	}
+}
+
+func TestRepositoryCloseCancelsIdentityDebounceAndInFlightRead(t *testing.T) {
+	pending, _, pendingPoster := testRepositoryState(nil, "/repo")
+	pending.activeFile = "/repo/file.txt"
+	var pendingReads atomic.Int32
+	pending.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		pendingReads.Add(1)
+		return &RepositoryIdentityResult{Seq: seq, FilePath: path}
+	}
+	pending.InvalidateAll(RepositoryWorktree)
+	pendingTimer := pending.identityDebounceTimer.(*fakeRepositoryTimer)
+	pending.Close()
+	pendingTimer.fireLate()
+	pending.HandleIdentityDebounce(pendingPoster.await(t).(*repositoryIdentityDebounceTick))
+	if !pendingTimer.stopped || pendingReads.Load() != 0 {
+		t.Fatal("late identity debounce survived repository close")
+	}
+
+	inFlight, _, inFlightPoster := testRepositoryState(nil, "/repo")
+	inFlight.activeFile = "/repo/file.txt"
+	inFlight.activeRoot = "/repo"
+	inFlight.activeBranch = "last-good"
+	inFlight.statusWait = time.Hour
+	started := make(chan struct{})
+	canceled := make(chan struct{})
+	inFlight.readIdentity = func(ctx context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		close(started)
+		<-ctx.Done()
+		close(canceled)
+		return &RepositoryIdentityResult{
+			Seq:      seq,
+			FilePath: path,
+			Identity: git.RepositoryIdentity{Root: "/repo", Branch: "late"},
+		}
+	}
+	inFlight.InvalidateAll(RepositoryWorktree)
+	inFlight.identityDebounceTimer.(*fakeRepositoryTimer).fire()
+	inFlight.HandleIdentityDebounce(inFlightPoster.await(t).(*repositoryIdentityDebounceTick))
+	<-started
+	inFlight.Close()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("Close did not cancel the in-flight identity read")
+	}
+	inFlight.HandleIdentity(inFlightPoster.await(t).(*RepositoryIdentityResult))
+	if root, branch := inFlight.ActiveRepository(); root != "/repo" || branch != "last-good" {
+		t.Fatalf("late close result replaced identity = (%q, %q)", root, branch)
 	}
 }
 
