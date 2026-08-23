@@ -5,13 +5,118 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   GO_VERSION: "1.25"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11"
 
 jobs:
-  vet:
+  classify:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      runtime: ${{ steps.changes.outputs.runtime }}
+      docs_web: ${{ steps.changes.outputs.docs_web }}
+      reason: ${{ steps.changes.outputs.reason }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FORCE_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+        run: |
+          set -euo pipefail
+
+          changed_files=$(mktemp)
+          runtime=false
+          docs_web=false
+          reason="documentation-only pull request"
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            git show --format= --no-renames --name-only -z HEAD > "$changed_files"
+            runtime=true
+            docs_web=true
+            reason="pushes to main run the full contract"
+          else
+            git diff --no-renames --name-only -z --diff-filter=ACMRD "$BASE_SHA...$HEAD_SHA" > "$changed_files"
+
+            if [[ "$FORCE_FULL" == "true" ]]; then
+              runtime=true
+              docs_web=true
+              reason="ci:full requests every lane"
+            elif [[ ! -s "$changed_files" ]]; then
+              runtime=true
+              reason="no changed files were detected, so CI failed closed"
+            else
+              while IFS= read -r -d '' path; do
+                case "$path" in
+                  docs-web/*)
+                    docs_web=true
+                    ;;
+                  README.md|CLAUDE.md|ARCHITECTURE.md|LICENSE|audit/*.md|workflows/*.md)
+                    ;;
+                  *)
+                    runtime=true
+                    ;;
+                esac
+              done < "$changed_files"
+
+              if [[ "$runtime" == "true" ]]; then
+                reason="at least one changed file can affect the runtime or its tests"
+              fi
+            fi
+          fi
+
+          {
+            echo "runtime=$runtime"
+            echo "docs_web=$docs_web"
+            echo "reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## CI classification"
+            echo
+            echo "| Lane | Selected | Contract |"
+            echo "| --- | --- | --- |"
+            echo "| classify | true | blocking |"
+            echo "| vet, lint, test | $runtime | blocking |"
+            echo "| docs | $docs_web | blocking when selected |"
+            echo "| test-race | $runtime | blocking when selected |"
+            echo "| functional-tests | $runtime | blocking when selected |"
+            echo "| integration-tests | $runtime | blocking when selected |"
+            echo "| lsp-tests | $runtime | advisory |"
+            echo "| fast-contract, ci-contract | true | blocking |"
+            echo
+            echo "Reason: $reason."
+            echo
+            echo "### Changed files"
+            echo
+            while IFS= read -r -d '' path; do
+              printf -- '- `%q`\n' "$path"
+            done < "$changed_files"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  vet:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,13 +124,16 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Vet
         run: go vet ./...
 
   lint:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,7 +141,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: ${{ env.GO_VERSION }}
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -41,7 +149,10 @@ jobs:
           version: latest
 
   test:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,26 +171,38 @@ jobs:
       - name: Test
         run: go test ./...
 
+  docs:
+    needs: classify
+    if: needs.classify.outputs.docs_web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
-          version: 11
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: docs-web/pnpm-lock.yaml
 
       - name: Install docs dependencies
         working-directory: docs-web
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build docs
         working-directory: docs-web
         run: pnpm build
 
   test-race:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,7 +210,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Download modules
         run: go mod download
@@ -96,7 +219,10 @@ jobs:
         run: go test -race ./...
 
   functional-tests:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -111,24 +237,27 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 11
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: tests/functional/pnpm-lock.yaml
 
       - name: Install test dependencies
         working-directory: tests/functional
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Run functional tests
         working-directory: tests/functional
         run: pnpm exec vitest run --reporter=verbose
 
   integration-tests:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -143,11 +272,11 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 11
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: tests/integration/pnpm-lock.yaml
 
@@ -160,8 +289,13 @@ jobs:
         run: pnpm exec vitest run --reporter=verbose --exclude='**/lsp*.test.js'
 
   lsp-tests:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     continue-on-error: true
+    outputs:
+      test_outcome: ${{ steps.lsp.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -176,11 +310,11 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 11
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: tests/integration/pnpm-lock.yaml
 
@@ -207,5 +341,126 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run LSP tests
+        id: lsp
         working-directory: tests/integration
         run: pnpm exec vitest run --reporter=verbose lsp
+
+  fast-contract:
+    needs: [classify, vet, lint, test, docs]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLASSIFY_RESULT: ${{ needs.classify.result }}
+      RUNTIME: ${{ needs.classify.outputs.runtime }}
+      DOCS_WEB: ${{ needs.classify.outputs.docs_web }}
+      VET_RESULT: ${{ needs.vet.result }}
+      LINT_RESULT: ${{ needs.lint.result }}
+      TEST_RESULT: ${{ needs.test.result }}
+      DOCS_RESULT: ${{ needs.docs.result }}
+    steps:
+      - name: Verify fast contract
+        run: |
+          set -euo pipefail
+
+          failed=false
+          require_result() {
+            local name=$1
+            local selected=$2
+            local result=$3
+            local expected=skipped
+            if [[ "$selected" == "true" ]]; then
+              expected=success
+            fi
+            if [[ "$result" != "$expected" ]]; then
+              echo "::error::$name finished as $result; expected $expected"
+              failed=true
+            fi
+          }
+
+          if [[ "$CLASSIFY_RESULT" != "success" ]]; then
+            echo "::error::classify finished as $CLASSIFY_RESULT"
+            failed=true
+          fi
+          require_result vet "$RUNTIME" "$VET_RESULT"
+          require_result lint "$RUNTIME" "$LINT_RESULT"
+          require_result test "$RUNTIME" "$TEST_RESULT"
+          require_result docs "$DOCS_WEB" "$DOCS_RESULT"
+
+          {
+            echo "## Fast contract"
+            echo
+            echo "| Lane | Result |"
+            echo "| --- | --- |"
+            echo "| classify | $CLASSIFY_RESULT |"
+            echo "| vet | $VET_RESULT |"
+            echo "| lint | $LINT_RESULT |"
+            echo "| test | $TEST_RESULT |"
+            echo "| docs | $DOCS_RESULT |"
+            echo
+            echo "This contract proves classification plus the selected deterministic build, test, lint, and docs checks. It does not replace the broad binary, PTY, race, or real-LSP lanes."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [[ "$failed" == "false" ]]
+
+  ci-contract:
+    needs: [classify, fast-contract, test-race, functional-tests, integration-tests, lsp-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLASSIFY_RESULT: ${{ needs.classify.result }}
+      RUNTIME: ${{ needs.classify.outputs.runtime }}
+      FAST_RESULT: ${{ needs.fast-contract.result }}
+      RACE_RESULT: ${{ needs.test-race.result }}
+      FUNCTIONAL_RESULT: ${{ needs.functional-tests.result }}
+      INTEGRATION_RESULT: ${{ needs.integration-tests.result }}
+      LSP_RESULT: ${{ needs.lsp-tests.result }}
+      LSP_TEST_OUTCOME: ${{ needs.lsp-tests.outputs.test_outcome || 'not-run' }}
+    steps:
+      - name: Verify selected CI lanes
+        run: |
+          set -euo pipefail
+
+          failed=false
+          require_result() {
+            local name=$1
+            local selected=$2
+            local result=$3
+            local expected=skipped
+            if [[ "$selected" == "true" ]]; then
+              expected=success
+            fi
+            if [[ "$result" != "$expected" ]]; then
+              echo "::error::$name finished as $result; expected $expected"
+              failed=true
+            fi
+          }
+
+          if [[ "$CLASSIFY_RESULT" != "success" ]]; then
+            echo "::error::classify finished as $CLASSIFY_RESULT"
+            failed=true
+          fi
+          if [[ "$FAST_RESULT" != "success" ]]; then
+            echo "::error::fast-contract finished as $FAST_RESULT"
+            failed=true
+          fi
+          require_result test-race "$RUNTIME" "$RACE_RESULT"
+          require_result functional-tests "$RUNTIME" "$FUNCTIONAL_RESULT"
+          require_result integration-tests "$RUNTIME" "$INTEGRATION_RESULT"
+
+          {
+            echo "## CI contract"
+            echo
+            echo "| Lane | Result | Blocking |"
+            echo "| --- | --- | --- |"
+            echo "| fast-contract | $FAST_RESULT | yes |"
+            echo "| test-race | $RACE_RESULT | yes when selected |"
+            echo "| functional-tests | $FUNCTIONAL_RESULT | yes when selected |"
+            echo "| integration-tests | $INTEGRATION_RESULT | yes when selected |"
+            echo "| lsp-tests | $LSP_RESULT ($LSP_TEST_OUTCOME) | advisory |"
+            echo
+            echo "The real-LSP lane remains advisory in this change; its result is reported but does not alter the existing merge contract."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [[ "$failed" == "false" ]]
