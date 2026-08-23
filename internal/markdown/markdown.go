@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eugenioenko/ttt/internal/core/highlight"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"

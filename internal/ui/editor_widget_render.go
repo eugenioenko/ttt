@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
-	"github.com/eugenioenko/ttt/internal/core/highlight"
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )

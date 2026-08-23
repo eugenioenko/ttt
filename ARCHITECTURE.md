@@ -22,7 +22,7 @@ cmd/ttt
 render -> term
 view   -> term
 widgets -> term, textwidth, markdown, core/clipboard, core/selection
-core/highlight -> term (known boundary violation)
+highlight -> term
 ```
 
 The main architectural pressure is concentrated in `internal/app`,
@@ -64,12 +64,6 @@ undo, folds, multicursors, and diff algorithms. Domain code must not start
 processes, access terminal state, render widgets, or coordinate application
 lifecycle.
 
-`internal/core/highlight` currently returns `term.Style`. This is a known,
-bounded violation, not an allowed dependency direction. New domain APIs must
-not introduce additional presentation dependencies. The planned correction
-will either expose semantic token kinds from the domain or reclassify
-highlighting outside `internal/core`.
-
 ### Services
 
 Packages: `internal/git`, `internal/github`, `internal/lsp`,
@@ -82,12 +76,14 @@ have explicit cancellation, identity, shutdown, and stale-result behavior.
 ### Presentation kernel
 
 Packages: `internal/term`, `internal/render`, `internal/view`,
-`internal/textwidth`, `internal/widgets`, and `internal/markdown`.
+`internal/textwidth`, `internal/widgets`, `internal/markdown`, and
+`internal/highlight`.
 
 Owns screen cells, styles, terminal-width measurement, rendering, layout,
-focus, scrolling, and reusable interaction primitives. `internal/widgets`
-contains primitives with more than one product or plugin consumer; it is not a
-destination for every visually reusable product surface.
+focus, scrolling, reusable interaction primitives, and syntax-to-style
+projection. `internal/widgets` contains primitives with more than one product
+or plugin consumer; it is not a destination for every visually reusable
+product surface.
 
 `tcell` is the accepted event and terminal implementation dependency for this
 zone. Replacing it with one-for-one local event wrappers would add indirection
@@ -143,7 +139,6 @@ cleanup lane, characterization evidence, and an exit condition.
 
 | Violation | Freeze rule | Cleanup lane | Exit condition |
 |---|---|---|---|
-| `internal/core/highlight` returns `term.Style` | Add no new domain-to-presentation dependencies | HL1 -> HL2 | Domain emits semantic highlighting or the package is reclassified outside `core` |
 | Product UI directly owns some search subprocess and filesystem discovery work | Add no new process or filesystem lifecycle to `internal/ui` | IO1 -> IO2 | UI receives typed results and emits intents through an application or service API |
 | App state and lifecycle are spread across the root `App` and feature files | Add new async state only behind an explicit owner or with a named follow-up owner | AL, AT, AP | Selected subsystems own their timers, cancellation, identities, mutation boundary, and shutdown |
 | Input, scrollbar, and diff projection behavior is duplicated | Fix shared invariants in every affected path until consolidation is complete | S1/S2, I1/I2/I3, D1-D4 | One canonical model remains for each shared contract and old paths are deleted |
@@ -164,6 +159,14 @@ Domain and service packages must not import `tcell`.
 This is the current decision for issue #495. A custom event abstraction should
 be reconsidered only if another backend, a deterministic boundary that tcell
 prevents, or measured migration value justifies it.
+
+### Highlight ownership
+
+`internal/highlight` owns Chroma language selection and tokenization,
+multi-line state detection, line caches, and projection from Chroma token types
+to `term.Style`. These responsibilities form one presentation concern and stay
+together behind the existing `Highlighter` and `Span` API. `internal/core`
+must not import highlighting or other presentation packages.
 
 ### Generic widgets and product surfaces
 
@@ -252,7 +255,7 @@ P2
 |-- [P3/P4] AT TerminalState owner
 |
 |-- [P3/P4] HL1 Highlight/style characterization
-|              `-- HL2 Semantic highlight boundary correction
+|              `-- HL2 Highlight package ownership correction
 |
 |-- [P3/P4] D1 Diff-surface characterization
 |              `-- D2 Pure shared projection/layout model

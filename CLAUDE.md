@@ -27,15 +27,16 @@ bin/ttt ~/projectA ~/projectB file.go
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and the architecture convergence plan. The codebase uses dependency zones rather than a strict linear layer chain: domain, services, presentation kernel, product presentation, application, plugin host, and platform.
 
-Known boundary violations and explicit boundary decisions are documented there. In particular, `core/highlight` still imports `term`; this dependency is frozen until its cleanup lane removes or reclassifies it. tcell events are intentionally used across `term`, `widgets`, `ui`, and narrow application/platform wiring. Do not create cosmetic wrappers or move files merely to satisfy the old layer diagram.
+Known boundary violations and explicit boundary decisions are documented there. Highlighting is presentation-owned at `internal/highlight`; Chroma lexing, lexer-state detection, caching, and `term.Style` mapping stay together there. tcell events are intentionally used across `term`, `widgets`, `ui`, and narrow application/platform wiring. Do not create cosmetic wrappers merely to satisfy the old layer diagram.
 
 ### Packages
 
-- **`internal/core/`** — UI-agnostic editor engine. New domain APIs must not introduce terminal or rendering dependencies; `core/highlight` is the tracked boundary violation scheduled for cleanup.
+- **`internal/core/`** — UI-agnostic editor engine. Domain APIs must not introduce terminal or rendering dependencies.
   - `buffer/` — Line-based text storage (`[]string`), rune-level insert/delete, file I/O (load/save)
   - `cursor/` — Visual column cursor with goal-column preservation for vertical movement
   - `undo/` — Command-pattern undo/redo via `EditCommand` interface (InsertRune, DeleteRange, InsertLine)
-  - `highlight/` — Per-line syntax highlighting via `chroma/v2` lexers (`Highlighter` interface with `Span` output). Full-buffer re-lexing is a known perf trap (~95µs/line) — avoid it.
+
+- **`internal/highlight/`** — Presentation-owned per-line syntax highlighting via `chroma/v2` lexers. Owns language selection, lexer-state detection, caching, and mapping Chroma token types to `term.Style`. Full-buffer re-lexing is a known performance trap — avoid it.
 
 - **`internal/view/`** — Viewport (scrolling, cursor-to-screen mapping) and status bar rendering
 
@@ -166,7 +167,7 @@ These callbacks are only available after `WirePlugin` — call them from command
 
 The project has four levels of testing:
 
-**Unit tests** (`internal/*/`) — Standard Go tests for individual packages. Most core algorithms are testable without a terminal dependency; `core/highlight` is the documented presentation-coupled violation scheduled for cleanup. Run with `go test ./internal/core/buffer/` or `make test` for all.
+**Unit tests** (`internal/*/`) — Standard Go tests for individual packages. Core algorithms are testable without presentation dependencies; syntax-highlighting characterization and performance tests live with `internal/highlight`. Run with `go test ./internal/core/buffer/` or `make test` for all.
 
 **E2E tests** (`tests/e2e/`) — Go tests that wire up the full `App` with a `term.SimScreen` (an in-memory `tcell.Screen`). The `testHarness` (`harness_test.go`) creates a temp directory with sample files, builds the complete app (config, commands, keybindings, renderer), and provides helpers: `pressKey()`, `pressRune()`, `click()`, `exec()`, `screenText()`, `assertContains()`. The watcher-aware `waitForFileChange()` helper blocks on `PollEvent` to receive real fsnotify events and dispatches them through the reconciliation path. These tests run single-threaded (no event loop goroutine) — the test drives events and redraws manually.
 

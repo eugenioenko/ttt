@@ -703,7 +703,7 @@ TTT uses deterministic tests at several boundaries, from core data structures to
 
 ### Unit Tests (Go)
 
-Core algorithms such as buffer operations, cursor math, and undo/redo have focused Go tests. Most core packages are terminal-independent; `core/highlight` is a known boundary violation scheduled for cleanup.
+Core algorithms such as buffer operations, cursor math, and undo/redo have focused Go tests. Core packages are presentation-independent; syntax highlighting lives in the presentation-owned `internal/highlight` package.
 
 ```sh
 make test                            # run all unit tests
