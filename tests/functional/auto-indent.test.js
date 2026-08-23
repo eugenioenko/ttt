@@ -15,12 +15,10 @@ describe("auto indent", () => {
     const file = createTempFile(dir, "test.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     tui.type("if x {");
     tui.press("enter");
     tui.type("return");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -33,14 +31,12 @@ describe("auto indent", () => {
     const file = createTempFile(dir, "test.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     tui.type("if x {");
     tui.press("enter");
     tui.type("return");
     tui.press("enter");
     tui.type("}");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

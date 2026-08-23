@@ -18,7 +18,6 @@ describe("sidebar toggle", () => {
     tui.waitFor("Explore");
 
     tui.press("ctrl+b");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
@@ -41,12 +40,10 @@ describe("sidebar toggle", () => {
     // Narrow sidebar to near-zero width using the command palette
     for (let i = 0; i < 25; i++) {
       tui.exec("View: Decrease Sidebar Width");
-      tui.waitStable(50);
     }
 
     // Toggle sidebar off
     tui.press("ctrl+b");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     // Toggle sidebar back on — should reset to usable default width

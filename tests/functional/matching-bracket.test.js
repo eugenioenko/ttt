@@ -22,15 +22,12 @@ describe("go to matching bracket", () => {
 
     // Go to end of line 1 where '{' is the last character
     tui.press("end");
-    tui.waitStable();
 
     // Move one left to land on '{'
     tui.press("arrow_left");
-    tui.waitStable();
 
     // Now jump to matching bracket
     tui.pressChord("ctrl+k", "m");
-    tui.waitStable();
 
     // The status bar should show we're on line 3 (the } line)
     const s0 = tui.snapshot();

@@ -31,17 +31,14 @@ describe("save-time trim is undoable", () => {
     const typed = tui.snapshot();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.press("end");
     const saved = tui.snapshot();
 
     tui.press("ctrl+z");
-    tui.waitStable();
     tui.press("end");
     const undoneOnce = tui.snapshot();
 
     tui.press("ctrl+z");
-    tui.waitStable();
     tui.press("end");
     const undoneTwice = tui.snapshot();
 
@@ -68,7 +65,6 @@ describe("save-time trim is undoable", () => {
     tui.press("home");
     tui.type("X");
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const saved = tui.snapshot();
     const { snapshots } = tui.run();
@@ -91,11 +87,9 @@ describe("save-time trim is undoable", () => {
     tui.press("home");
     tui.type("X");
     tui.press("ctrl+s");
-    tui.waitStable();
 
     // A single undo must reach the typing, not a no-op cleanup command.
     tui.press("ctrl+z");
-    tui.waitStable();
     tui.press("end");
     const undone = tui.snapshot();
 

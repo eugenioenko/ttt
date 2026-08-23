@@ -19,11 +19,9 @@ describe("menu bar toggle", () => {
     const s0 = tui.snapshot();
 
     tui.press("alt+shift+m");
-    tui.waitStable();
     const s1 = tui.snapshot();
 
     tui.press("alt+shift+m");
-    tui.waitStable();
     const s2 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -40,7 +38,6 @@ describe("menu bar toggle", () => {
     tui.waitFor("Options");
 
     tui.exec("View: Toggle Menu Bar");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -57,14 +54,11 @@ describe("menu bar toggle", () => {
     tui.waitFor("Options");
 
     tui.press("alt+shift+m");
-    tui.waitStable();
 
     tui.exec("Menu: View");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     tui.press("escape");
-    tui.waitStable();
     const s1 = tui.snapshot();
 
     const { snapshots } = tui.run();

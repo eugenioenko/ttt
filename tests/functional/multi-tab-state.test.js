@@ -70,10 +70,8 @@ describe("multi-tab state isolation", () => {
 
     // Move cursor to line 5 in file A
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("5");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
@@ -82,17 +80,14 @@ describe("multi-tab state isolation", () => {
     tui.waitFor("cursb.txt");
 
     tui.press("ctrl+g");
-    tui.waitStable();
     tui.type("3");
     tui.press("enter");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // Switch back to file A - cursor should still be on line 5
     switchToPrevTab();
     tui.waitFor("cursa.txt");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -160,7 +155,6 @@ describe("multi-tab state isolation", () => {
 
     // Edit file A to make it dirty
     tui.type("x");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 

@@ -24,7 +24,6 @@ describe("command palette", () => {
     tui.waitFor("palette.txt");
 
     tui.press("ctrl+p");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -39,7 +38,6 @@ describe("command palette", () => {
     tui.waitFor("Explore");
 
     tui.exec("View: Toggle Sidebar");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -54,10 +52,8 @@ describe("command palette", () => {
     tui.waitFor("dismiss.txt");
 
     tui.press("ctrl+p");
-    tui.waitStable();
 
     tui.press("escape");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -138,7 +134,6 @@ describe("command palette", () => {
     tui.waitFor("help.txt");
     tui.press("ctrl+p");
     tui.type("?");
-    tui.waitStable();
 
     const topics = tui.snapshot();
     tui.press("arrow_down");
@@ -159,7 +154,6 @@ describe("command palette", () => {
     tui.waitFor("help-search.txt");
     tui.press("ctrl+p");
     tui.type("?saved tabs");
-    tui.waitStable();
 
     const result = tui.snapshot();
     const { snapshots } = tui.run();
@@ -176,12 +170,10 @@ describe("command palette", () => {
     tui.waitFor("help-precision.txt");
     tui.press("ctrl+p");
     tui.type("?undo");
-    tui.waitStable();
     const precise = tui.snapshot();
 
     for (let i = 0; i < 4; i++) tui.press("backspace");
     tui.type("qxzvjk");
-    tui.waitStable();
     const empty = tui.snapshot();
 
     const { snapshots } = tui.run();

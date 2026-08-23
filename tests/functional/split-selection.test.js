@@ -19,17 +19,13 @@ describe("split selection into lines", () => {
 
     // Select all text (3 lines)
     tui.press("ctrl+a");
-    tui.waitStable();
 
     tui.exec("Split Selection into Lines");
-    tui.waitStable();
 
     // Type 'X' — should appear on each of the 3 lines with cursors
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -47,14 +43,11 @@ describe("split selection into lines", () => {
     tui.waitFor("hello");
 
     tui.exec("Split Selection into Lines");
-    tui.waitStable();
 
     // Type 'Z' — should only appear once (single cursor)
     tui.type("Z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

@@ -21,10 +21,8 @@ describe("sidebar tab order", () => {
     tui.start(file);
     tui.setEnv({ TTT_CONFIG_DIR: configDir });
     tui.pressChord("ctrl+k", "c");
-    tui.waitStable();
     const before = tui.snapshot();
     tui.drag(16, 2, 1, 2);
-    tui.waitStable();
     const after = tui.snapshot();
 
     const { snapshots } = tui.run();

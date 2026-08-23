@@ -18,10 +18,8 @@ describe("delete line", () => {
     tui.waitFor("AAA");
 
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -37,13 +35,10 @@ describe("delete line", () => {
     tui.waitFor("AAA");
 
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -59,15 +54,11 @@ describe("delete line", () => {
     tui.waitFor("AAA");
 
     tui.press("arrow_down");
-    tui.waitStable();
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -83,10 +74,8 @@ describe("delete line", () => {
     tui.waitFor("ONLY");
 
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -102,14 +91,10 @@ describe("delete line", () => {
     tui.waitFor("AAA");
 
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -125,13 +110,10 @@ describe("delete line", () => {
     tui.waitFor("AAA");
 
     tui.pressChord("ctrl+k", "k");
-    tui.waitStable();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

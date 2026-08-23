@@ -20,18 +20,15 @@ describe("options toggle", () => {
 
     tui.start(file);
     tui.waitFor("first line");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.exec("Toggle Line Numbers");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // Toggle back to restore original state
     tui.exec("Toggle Line Numbers");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -61,18 +58,15 @@ describe("options toggle", () => {
 
     tui.start(file);
     tui.waitFor("package main");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.exec("Toggle Syntax Highlight");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // Toggle back to restore
     tui.exec("Toggle Syntax Highlight");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -93,18 +87,15 @@ describe("options toggle", () => {
 
     tui.start(file);
     tui.waitFor("package main");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.exec("Toggle Bracket Pair Colorization");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
 
     // Toggle back to restore
     tui.exec("Toggle Bracket Pair Colorization");
-    tui.waitStable();
 
     const s2 = tui.snapshot();
     const { snapshots } = tui.run();

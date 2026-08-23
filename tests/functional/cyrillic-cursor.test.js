@@ -15,11 +15,9 @@ describe("cursor position with multi-byte UTF-8 characters", () => {
     const file = createTempFile(dir, "cyrillic.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     // Type 6 Cyrillic characters: привет
     tui.type("привет");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -34,11 +32,9 @@ describe("cursor position with multi-byte UTF-8 characters", () => {
     const file = createTempFile(dir, "mixed2.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     // Type: hiпривет (2 ASCII + 6 Cyrillic = 8 runes)
     tui.type("hiпривет");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -52,11 +48,9 @@ describe("cursor position with multi-byte UTF-8 characters", () => {
     const file = createTempFile(dir, "nav.txt", "привет\n");
 
     tui.start(file);
-    tui.waitStable();
 
     // Move to end of line
     tui.press("end");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -70,17 +64,14 @@ describe("cursor position with multi-byte UTF-8 characters", () => {
     const file = createTempFile(dir, "cyrline.txt", "привет\n");
 
     tui.start(file);
-    tui.waitStable();
 
     // Start at Col 1
     const s0 = tui.snapshot();
 
     tui.press("end");
-    tui.waitStable();
     const s1 = tui.snapshot();
 
     tui.press("home");
-    tui.waitStable();
     const s2 = tui.snapshot();
 
     const { snapshots } = tui.run();

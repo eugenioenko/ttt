@@ -15,11 +15,9 @@ describe("tab close button hit test (#354)", () => {
     tui.press("ctrl+n");
     tui.press("ctrl+n");
     tui.press("ctrl+n");
-    tui.waitStable();
     const before = tui.snapshot();
 
     tui.click(72, 2);
-    tui.waitStable();
     const after = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -37,9 +35,7 @@ describe("tab close button hit test (#354)", () => {
     tui.setSize(150, 30);
 
     for (let i = 0; i < 20; i++) tui.press("ctrl+n");
-    tui.waitStable();
     for (let i = 0; i < 11; i++) tui.press("ctrl+w");
-    tui.waitStable();
 
     const s = tui.snapshot();
     const { snapshots } = tui.run();

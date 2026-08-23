@@ -37,14 +37,12 @@ describe("explorer", () => {
     tui.waitFor("Explore");
 
     tui.press("ctrl+0");
-    tui.waitStable();
 
     // Navigate down to the file and open it
     tui.press("arrow_down");
     tui.press("arrow_down");
     tui.press("arrow_down");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -75,13 +73,11 @@ describe("explorer", () => {
     tui.waitFor("Explore");
 
     tui.press("ctrl+0");
-    tui.waitStable();
 
     // Navigate to subdir and expand it
     tui.press("arrow_down");
     tui.press("arrow_down");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -97,14 +93,11 @@ describe("explorer", () => {
     tui.waitFor("Explore");
 
     tui.press("ctrl+0");
-    tui.waitStable();
 
     tui.exec("Explorer: New File");
-    tui.waitStable();
 
     tui.type("newfile.txt");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

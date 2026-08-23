@@ -34,10 +34,8 @@ describe("open, edit, save", () => {
     tui.press("end");
     tui.press("space");
     tui.type("Modified");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -55,7 +53,6 @@ describe("open, edit, save", () => {
     tui.waitFor("dirty.txt");
 
     tui.type("x");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

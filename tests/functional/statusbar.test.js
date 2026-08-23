@@ -15,7 +15,6 @@ describe("status bar segments", () => {
     const file = createTempFile(dir, "hello.go", 'package main\n\nfunc main() {\n}\n');
 
     tui.start(file);
-    tui.waitStable(300);
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -31,13 +30,11 @@ describe("status bar segments", () => {
     const file = createTempFile(dir, "nav.txt", "hello world\nline two\nline three\n");
 
     tui.start(file);
-    tui.waitStable(300);
     tui.press("arrow_down");
     tui.press("arrow_down");
     tui.press("arrow_right");
     tui.press("arrow_right");
     tui.press("arrow_right");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -50,7 +47,6 @@ describe("status bar segments", () => {
     const file = createTempFile(dir, "spaces.js", "const x = 1;\n");
 
     tui.start(file);
-    tui.waitStable(300);
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -58,14 +54,14 @@ describe("status bar segments", () => {
     expect(lastLine).toContain("Spaces:");
   });
 
-  it("shows notification and dismisses after expiry", () => {
+  it("shows a notification from a delayed debug action", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "note.txt", "hello\n");
 
     tui.start(file);
-    tui.waitStable(300);
+    tui.waitFor("note.txt");
     tui.exec("Debug: Screenshot");
-    tui.waitStable();
+    tui.waitFor("Screenshot saved: screenshot.txt");
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

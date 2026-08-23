@@ -20,7 +20,6 @@ describe("insertFinalNewline", () => {
     tui.waitFor("no newline at end");
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -42,7 +41,6 @@ describe("insertFinalNewline", () => {
     tui.waitFor("no trailing newline!");
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -60,7 +58,6 @@ describe("insertFinalNewline", () => {
     tui.waitFor("AAA");
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -76,7 +73,6 @@ describe("insertFinalNewline", () => {
     tui.waitFor("line one");
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

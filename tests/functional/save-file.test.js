@@ -16,19 +16,15 @@ describe("save file", () => {
     const filePath = join(dir, "hello.txt");
 
     tui.start();
-    tui.waitStable();
 
     tui.type("Hello World");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.type(filePath);
     tui.press("enter");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

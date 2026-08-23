@@ -36,9 +36,7 @@ describe("editor.get_line plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test GetLine");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -66,9 +64,7 @@ describe("editor.line_count plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test Count");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -95,9 +91,7 @@ describe("editor.set_line plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test SetLine");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -127,9 +121,7 @@ describe("editor.viewport plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test Viewport");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -158,9 +150,7 @@ describe("editor.viewport plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test Scroll");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -191,13 +181,10 @@ describe("editor.begin_undo_group / end_undo_group plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test Group");
-    tui.waitStable();
     const s1 = tui.snapshot();
     // Single undo should revert all three changes
     tui.exec("Undo");
-    tui.waitStable();
     const s2 = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -233,9 +220,7 @@ describe("editor.add_cursor / get_cursors / clear_cursors plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test AddCursors");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -265,9 +250,7 @@ describe("editor.add_cursor / get_cursors / clear_cursors plugin API", () => {
     `);
 
     tui.start("--plugin", plugin, file);
-    tui.waitStable(300);
     tui.exec("Test ClearCursors");
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 

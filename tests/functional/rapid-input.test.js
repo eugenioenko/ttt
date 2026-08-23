@@ -22,14 +22,11 @@ describe("rapid input", () => {
     }
 
     tui.start(file);
-    tui.waitStable();
 
     tui.type(longString);
-    tui.waitStable();
 
     // Save and verify every character was captured
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -42,7 +39,6 @@ describe("rapid input", () => {
     const file = createTempFile(dir, "lines.txt", "");
 
     tui.start(file);
-    tui.waitStable();
 
     // Type 20 lines rapidly
     for (let i = 1; i <= 20; i++) {
@@ -51,14 +47,12 @@ describe("rapid input", () => {
         tui.press("enter");
       }
     }
-    tui.waitStable();
 
     // The status bar should show we are on line 20
     const s0 = tui.snapshot();
 
     // Save and verify all lines are present
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
     expect(snapshots[s0]).toContain("Ln 20");
@@ -79,11 +73,9 @@ describe("rapid input", () => {
       "How vexingly quick daft zebras jump.";
 
     tui.start(file);
-    tui.waitStable();
 
     tui.type(paragraph);
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

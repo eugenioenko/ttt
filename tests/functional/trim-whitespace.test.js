@@ -26,7 +26,6 @@ describe("trim trailing whitespace on save", () => {
     tui.start(file);
     tui.waitFor("hello");
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -44,7 +43,6 @@ describe("trim trailing whitespace on save", () => {
     tui.start("--config", configFile, file);
     tui.waitFor("foo");
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -60,7 +58,6 @@ describe("trim trailing whitespace on save", () => {
     tui.start(file);
     tui.waitFor("hello");
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

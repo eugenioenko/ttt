@@ -19,10 +19,8 @@ describe("find and replace", () => {
     tui.waitFor("foo bar foo baz foo");
 
     tui.press("ctrl+f");
-    tui.waitStable();
 
     tui.type("foo");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -37,15 +35,12 @@ describe("find and replace", () => {
     tui.waitFor("apple banana");
 
     tui.press("ctrl+f");
-    tui.waitStable();
 
     tui.type("apple");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     tui.press("enter");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -61,7 +56,6 @@ describe("find and replace", () => {
     tui.waitFor("hello world hello");
 
     tui.press("ctrl+r");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -76,25 +70,19 @@ describe("find and replace", () => {
     tui.waitFor("old value old again");
 
     tui.press("ctrl+r");
-    tui.waitStable();
 
     tui.type("old");
-    tui.waitStable();
 
     // Tab to replace input
     tui.press("tab");
     tui.type("new");
-    tui.waitStable();
 
     // Enter on replace row replaces current match
     tui.press("enter");
-    tui.waitStable();
 
     // Close replace bar and save
     tui.press("escape");
-    tui.waitStable();
     tui.press("ctrl+s");
-    tui.waitStable(500);
 
     tui.run();
 
@@ -112,31 +100,23 @@ describe("find and replace", () => {
     tui.waitFor("cat dog cat bird cat");
 
     tui.press("ctrl+r");
-    tui.waitStable();
 
     tui.type("cat");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Tab to replace input
     tui.press("tab");
     tui.type("fish");
-    tui.waitStable();
 
     // Replace each occurrence (3 matches)
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
 
     // Close replace bar and save
     tui.press("escape");
-    tui.waitStable();
     tui.press("ctrl+s");
-    tui.waitStable(500);
 
     const { snapshots } = tui.run();
     expect(snapshots[s0]).toContain("1/3");
@@ -158,28 +138,20 @@ describe("find and replace", () => {
     tui.waitFor("ZZ keep ZZ stay ZZ end");
 
     tui.press("ctrl+r");
-    tui.waitStable();
 
     tui.type("ZZ");
-    tui.waitStable();
 
     // Tab to replace field but leave it empty (empty replacement = deletion)
     tui.press("tab");
-    tui.waitStable();
 
     // Replace each occurrence (3 matches)
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
 
     // Close replace bar and save
     tui.press("escape");
-    tui.waitStable();
     tui.press("ctrl+s");
-    tui.waitStable(500);
 
     tui.run();
 
@@ -199,25 +171,19 @@ describe("find and replace", () => {
     tui.waitFor("alpha beta gamma");
 
     tui.press("ctrl+r");
-    tui.waitStable();
 
     tui.type("zzzznotfound");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Tab to replace, type replacement, try to replace
     tui.press("tab");
     tui.type("replaced");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
 
     // Close and save
     tui.press("escape");
-    tui.waitStable();
     tui.press("ctrl+s");
-    tui.waitStable(500);
 
     const { snapshots } = tui.run();
     expect(snapshots[s0]).toContain("0/0");
@@ -240,31 +206,23 @@ describe("find and replace", () => {
     tui.waitFor("line one");
 
     tui.press("ctrl+r");
-    tui.waitStable();
 
     tui.type("foo");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Tab to replace input
     tui.press("tab");
     tui.type("bar");
-    tui.waitStable();
 
     // Replace each occurrence (3 matches across lines)
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
 
     // Close replace bar and save
     tui.press("escape");
-    tui.waitStable();
     tui.press("ctrl+s");
-    tui.waitStable(500);
 
     const { snapshots } = tui.run();
     expect(snapshots[s0]).toContain("1/3");
@@ -285,30 +243,23 @@ describe("find and replace", () => {
     tui.waitFor("aaa bbb aaa ccc aaa");
 
     tui.press("ctrl+r");
-    tui.waitStable();
 
     tui.type("aaa");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
 
     // Tab to replace input
     tui.press("tab");
     tui.type("xxx");
-    tui.waitStable();
 
     // Replace all three
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
     tui.press("enter");
-    tui.waitStable();
 
     // After replacing all, match count should be 0/0
     // Tab back to search row to see match count
     tui.press("tab");
-    tui.waitStable();
 
     const s1 = tui.snapshot();
     const { snapshots } = tui.run();

@@ -15,7 +15,6 @@ describe("file:line:col command line arguments", () => {
     const file = createMultiLineFile(dir, "lines.txt", 80);
 
     tui.start(`${file}:42`);
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -28,7 +27,6 @@ describe("file:line:col command line arguments", () => {
     const file = createMultiLineFile(dir, "lines.txt", 80);
 
     tui.start(`${file}:42:6`);
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -41,7 +39,6 @@ describe("file:line:col command line arguments", () => {
     const file = createMultiLineFile(dir, "lines.txt", 80);
 
     tui.start(`${file}:42:`);
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -55,7 +52,6 @@ describe("file:line:col command line arguments", () => {
     const file = createTempFile(dir, "report:12", "alpha\nbeta\n");
 
     tui.start(file);
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -73,7 +69,6 @@ describe("file:line:col command line arguments", () => {
     const second = createMultiLineFile(dir, "second.txt", 80);
 
     tui.start(`${first}:10`, `${second}:20`);
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -86,7 +81,6 @@ describe("file:line:col command line arguments", () => {
     const file = createMultiLineFile(dir, "lines.txt", 80);
 
     tui.start(file);
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

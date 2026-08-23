@@ -32,10 +32,8 @@ describe("BUG-006: case transforms under multicursor only affect primary cursor"
 
     tui.pressChord("ctrl+k", "l");
     tui.exec("Transform to Uppercase");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior uppercases only the first occurrence while the
@@ -59,10 +57,8 @@ describe("BUG-007: paste under multicursor only replaces the primary selection",
     tui.press("home");
     tui.pressChord("ctrl+k", "l");
     tui.press("ctrl+v");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Buggy behavior replaces only the first "foo".
@@ -82,10 +78,8 @@ describe("BUG-008: undo after multicursor edit strands cursor and stale e.Multi"
     tui.type("X"); // replaces all 4 occurrences
     tui.press("ctrl+z"); // restores text, but leaves Multi.Cursors stale
     tui.type("Z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Correct behavior: undo restores text AND multicursor selections, so
@@ -107,10 +101,8 @@ describe("BUG-005: line commands under multicursor corrupt the buffer", () => {
     tui.pressChord("ctrl+k", "l"); // Select All Occurrences (4 cursors)
     tui.exec("Duplicate Line");
     tui.type("Y");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Minimal correct behavior: cursors shift with the inserted line and

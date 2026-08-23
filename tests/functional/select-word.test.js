@@ -18,16 +18,12 @@ describe("word-level cursor movement and selection", () => {
     tui.waitFor("hello");
 
     tui.press("home");
-    tui.waitStable();
 
     tui.press("ctrl+right");
-    tui.waitStable();
 
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -43,16 +39,12 @@ describe("word-level cursor movement and selection", () => {
     tui.waitFor("hello");
 
     tui.press("end");
-    tui.waitStable();
 
     tui.press("ctrl+left");
-    tui.waitStable();
 
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -68,20 +60,15 @@ describe("word-level cursor movement and selection", () => {
     tui.waitFor("hello");
 
     tui.press("home");
-    tui.waitStable();
 
     tui.press("ctrl+right");
-    tui.waitStable();
 
     tui.exec("Select Word Right");
     tui.exec("Select Word Right");
-    tui.waitStable();
 
     tui.press("backspace");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -97,16 +84,12 @@ describe("word-level cursor movement and selection", () => {
     tui.waitFor("hello");
 
     tui.press("home");
-    tui.waitStable();
 
     tui.exec("Select Word Right");
-    tui.waitStable();
 
     tui.type("HI");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -122,18 +105,14 @@ describe("word-level cursor movement and selection", () => {
     tui.waitFor("one");
 
     tui.press("home");
-    tui.waitStable();
 
     tui.press("ctrl+right");
     tui.press("ctrl+right");
     tui.press("ctrl+right");
-    tui.waitStable();
 
     tui.type("X");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

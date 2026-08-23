@@ -20,9 +20,7 @@ describe("focus after dismissing a menu", () => {
     tui.press("alt+v");
     tui.waitFor("Command Palette");
     tui.press("escape");
-    tui.waitStable();
     tui.type("ZZZ");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -39,9 +37,7 @@ describe("focus after dismissing a menu", () => {
     tui.rclick(30, 6);
     tui.waitFor("Go to Definition");
     tui.press("escape");
-    tui.waitStable();
     tui.type("QQQ");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

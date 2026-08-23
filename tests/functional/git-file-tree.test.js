@@ -27,16 +27,15 @@ describe("git file tree", () => {
     dir = nestedRepo();
     tui.start(dir);
     tui.pressChord("ctrl+k", "c");
-    tui.waitStable(500);
+    tui.waitFor("nested history");
     tui.press("tab");
     tui.press("tab");
     tui.press("down");
     tui.press("right");
-    tui.waitStable(500);
+    tui.waitFor("pkg/history/committed.go");
     const list = tui.snapshot();
 
     tui.exec("View Git Files as Tree");
-    tui.waitStable();
     const tree = tui.snapshot();
     tui.exec("Git: Collapse All File Trees");
     const collapsed = tui.snapshot();
@@ -44,14 +43,12 @@ describe("git file tree", () => {
     const expanded = tui.snapshot();
 
     tui.rclick(5, 5);
-    tui.waitStable();
     tui.press("down");
     tui.press("down");
     tui.press("right");
     const context = tui.snapshot();
     tui.press("escape");
     tui.click(29, 2);
-    tui.waitStable();
     tui.press("down");
     tui.press("down");
     tui.press("right");

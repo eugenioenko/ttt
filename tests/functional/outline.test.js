@@ -31,7 +31,6 @@ describe("outline panel", () => {
     tui.press("down");
     tui.press("enter");
     tui.type("JUMPED");
-    tui.waitStable();
     const s1 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -72,7 +71,6 @@ describe("outline panel", () => {
     tui.start(dir, file);
     tui.waitFor("Explore");
     tui.exec("Show Outline");
-    tui.waitStable();
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();

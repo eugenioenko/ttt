@@ -104,16 +104,12 @@ export function panel(id) {
   commands.push(`panel ${id}`);
 }
 
-export function wait(ms = 200) {
+export function elapse(ms) {
   commands.push(`wait ${ms}`);
 }
 
 export function waitFor(text) {
   commands.push(`wait-for ${JSON.stringify(String(text))}`);
-}
-
-export function waitStable(ms = 200) {
-  commands.push(`wait ${ms}`);
 }
 
 export function snapshot() {

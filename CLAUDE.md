@@ -172,6 +172,8 @@ The project has four levels of testing:
 
 **Functional tests** (`tests/functional/`) — JavaScript tests using vitest that drive the real compiled `bin/ttt` binary via the `--exec` debug harness. The `tui.js` wrapper accumulates commands (type, press, exec, snapshot) and runs them in a single batch via `execFileSync`. No external dependencies beyond vitest. Run with `cd tests/functional && pnpm test`. The binary must be built first (`make build`).
 
+Scripted key, mouse, and command actions are acknowledged after main-thread handling and redraw, so do not add sleeps between synchronous actions. For genuinely asynchronous work, wait for a unique post-transition screen state that proves the result was applied. Use raw elapsed waits only when timing or delayed lifecycle behavior is itself the invariant.
+
 The batch pattern: `tui.start(file)` resets state, commands accumulate, `tui.snapshot()` returns an index, `tui.run()` executes all commands and returns `{ snapshots: string[] }`. Assertions happen after `run()`:
 ```js
 tui.start(file);
@@ -192,7 +194,7 @@ Choose the smallest deterministic layer that proves the intended invariant, then
 3. **Functional tests** — real-binary behavior that depends on startup, command dispatch, file effects, or visible composition. Use `tui.exec("Command Name")`, `tui.pressChord("ctrl+k", "x")`, and `tui.snapshot()`.
 4. **Integration tests** — only behavior that genuinely requires a live PTY or external process boundary, such as terminal byte encoding, terminal modes, or real language-server compatibility.
 
-Do not duplicate the same assertion at every layer. During implementation, run focused tests for the affected contract. CI remains the broad regression gate before merge.
+The functional suite is a compact real-binary contract, not a mandatory duplicate of lower-layer coverage. An invariant proved at a lower deterministic boundary does not also require a functional test; add a higher-boundary test only for behavior unique to that boundary. During implementation, run focused tests for the affected contract. CI remains the broad regression gate before merge.
 
 ### Debug harness (`--exec`, `--plugin`, `--size`, `--debug`, `--listen`)
 

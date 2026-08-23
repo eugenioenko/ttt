@@ -18,13 +18,10 @@ describe("word delete", () => {
     tui.waitFor("hello");
 
     tui.press("end");
-    tui.waitStable();
 
     tui.exec("Delete Word Left");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -40,13 +37,10 @@ describe("word delete", () => {
     tui.waitFor("hello");
 
     tui.press("home");
-    tui.waitStable();
 
     tui.exec("Delete Word Right");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -62,16 +56,12 @@ describe("word delete", () => {
     tui.waitFor("keep");
 
     tui.press("end");
-    tui.waitStable();
 
     tui.exec("Delete Word Left");
-    tui.waitStable();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

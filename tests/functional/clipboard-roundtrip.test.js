@@ -20,19 +20,15 @@ describe("clipboard roundtrip", () => {
     // Select "hello" using ctrl+d (select word at cursor)
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
 
     // Copy
     tui.press("ctrl+c");
-    tui.waitStable();
 
     // Move to end of line and paste
     tui.press("end");
     tui.press("ctrl+v");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -50,11 +46,9 @@ describe("clipboard roundtrip", () => {
     // Select "REMOVE" using ctrl+d (select word at cursor)
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
 
     // Cut
     tui.press("ctrl+x");
-    tui.waitStable();
 
     // Verify "REMOVE" is gone from the visible text
     const s0 = tui.snapshot();
@@ -62,10 +56,8 @@ describe("clipboard roundtrip", () => {
     // Move to end and paste
     tui.press("end");
     tui.press("ctrl+v");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -85,16 +77,13 @@ describe("clipboard roundtrip", () => {
 
     // Cursor is on line 1, no selection — copy the whole line
     tui.press("ctrl+c");
-    tui.waitStable();
 
     // Move to line 2 and paste
     tui.press("arrow_down");
     tui.press("end");
     tui.press("ctrl+v");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -113,10 +102,8 @@ describe("clipboard roundtrip", () => {
     // Move to line 2 ("beta"), no selection — cut the whole line
     tui.press("arrow_down");
     tui.press("ctrl+x");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 
@@ -136,25 +123,19 @@ describe("clipboard roundtrip", () => {
     // Select word "abc" with ctrl+d
     tui.press("home");
     tui.press("ctrl+d");
-    tui.waitStable();
 
     // Copy
     tui.press("ctrl+c");
-    tui.waitStable();
 
     // Move to end of line
     tui.press("end");
 
     // Paste 3 times
     tui.press("ctrl+v");
-    tui.waitStable();
     tui.press("ctrl+v");
-    tui.waitStable();
     tui.press("ctrl+v");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     const { snapshots } = tui.run();
 

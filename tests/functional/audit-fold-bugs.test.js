@@ -33,7 +33,6 @@ describe("BUG-026: fold reattaches to an unrelated block after edits above", () 
     tui.press("enter");
     tui.press("home");
     tui.press("enter"); // insert a blank line at the top
-    tui.waitStable();
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
@@ -59,10 +58,8 @@ describe("BUG-027: Move Line on a folded header swaps in hidden content", () => 
     tui.press("enter");
     tui.pressChord("ctrl+k", "["); // fold the if-block
     tui.press("alt+down"); // move line down on the folded header
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
     tui.run();
 
     // Correct: the whole folded block moves as a unit (VS Code) or the

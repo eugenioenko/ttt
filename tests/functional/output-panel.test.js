@@ -19,10 +19,8 @@ describe("output panel", () => {
 
     // Any command that reports through the status bar should leave a trail.
     tui.exec("File: Copy Absolute Path");
-    tui.waitStable();
 
     tui.exec("Output: Show Panel");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -38,14 +36,11 @@ describe("output panel", () => {
     tui.waitFor("hello");
 
     tui.exec("File: Copy Absolute Path");
-    tui.waitStable();
     tui.exec("Output: Show Panel");
-    tui.waitStable();
 
     const before = tui.snapshot();
 
     tui.exec("Output: Clear");
-    tui.waitStable();
 
     const after = tui.snapshot();
     const { snapshots } = tui.run();
@@ -65,12 +60,9 @@ describe("output panel", () => {
     tui.waitFor("hello");
 
     tui.exec("File: Copy Absolute Path");
-    tui.waitStable();
     tui.exec("Output: Show Panel");
-    tui.waitStable();
 
     tui.exec("Output: Copy Selected Line");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

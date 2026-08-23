@@ -18,11 +18,9 @@ describe("go to line", () => {
     tui.waitFor("Line 1");
 
     tui.press("ctrl+g");
-    tui.waitStable();
 
     tui.type("25");
     tui.press("enter");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
@@ -37,10 +35,8 @@ describe("go to line", () => {
     tui.waitFor("Line 1");
 
     tui.press("ctrl+g");
-    tui.waitStable();
 
     tui.press("escape");
-    tui.waitStable();
 
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();

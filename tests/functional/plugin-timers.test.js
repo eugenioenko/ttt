@@ -36,9 +36,11 @@ ttt.clear_timeout(cancelled)
 
     tui.start("--plugin", pluginFile, file);
     tui.waitFor("hello timers");
-    tui.wait(550);
+    // These elapsed intervals are the subject of the test: cross the timer
+    // deadlines before and after opening the output panel.
+    tui.elapse(550);
     tui.panel("output");
-    tui.wait(150);
+    tui.elapse(150);
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
 

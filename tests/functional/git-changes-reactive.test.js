@@ -18,14 +18,14 @@ describe("reactive git changes", () => {
     tui.start(dir, tracked);
     tui.waitFor("Explore");
     tui.exec("Show Changes");
-    tui.waitStable(300);
+    tui.waitFor("No changes");
     const clean = tui.snapshot();
 
     tui.exec("View: Focus Editor");
     tui.press("end");
     tui.type("changed");
     tui.exec("Save File");
-    tui.waitStable(600);
+    tui.waitFor("Changes (1)");
     const updated = tui.snapshot();
 
     const { snapshots } = tui.run();

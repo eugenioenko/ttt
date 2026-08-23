@@ -18,13 +18,10 @@ describe("duplicate line", () => {
     tui.waitFor("AAA");
 
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.exec("Duplicate Line");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -40,13 +37,10 @@ describe("duplicate line", () => {
     tui.waitFor("First");
 
     tui.press("arrow_down");
-    tui.waitStable();
 
     tui.exec("Duplicate Line");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 
@@ -62,13 +56,10 @@ describe("duplicate line", () => {
     tui.waitFor("Only");
 
     tui.exec("Duplicate Line");
-    tui.waitStable();
 
     tui.press("ctrl+z");
-    tui.waitStable();
 
     tui.press("ctrl+s");
-    tui.waitStable();
 
     tui.run();
 

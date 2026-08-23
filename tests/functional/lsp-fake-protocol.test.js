@@ -59,10 +59,8 @@ function startCase(name) {
   tui.waitFor("FAKE_LSP_READY");
   tui.exec("View: Focus Editor");
   tui.press("ctrl+g");
-  tui.waitStable();
   tui.type("2");
   tui.press("enter");
-  tui.waitStable();
 
   return { file, trace };
 }
