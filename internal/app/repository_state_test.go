@@ -587,7 +587,7 @@ func TestRepositoryRootFailurePreservesCanonicalMultiRootOrderAndRecovers(t *tes
 }
 
 func TestRepositoryRootFailureDeduplicatesCanonicalRepositoryAndRecovers(t *testing.T) {
-	repo := t.TempDir()
+	repo := canonicalTestPath(t, t.TempDir())
 	sourceA := filepath.Join(repo, "workspace-a")
 	sourceB := filepath.Join(repo, "workspace-b")
 	for _, source := range []string{sourceA, sourceB} {
@@ -830,8 +830,8 @@ func TestRepositoryInvalidationResolvesSymlinkedParentsWithoutExternalFalsePosit
 }
 
 func TestRepositoryInvalidationRejectsUnprovablePermissionAncestors(t *testing.T) {
-	repo := t.TempDir()
-	external := t.TempDir()
+	repo := canonicalTestPath(t, t.TempDir())
+	external := canonicalTestPath(t, t.TempDir())
 	restricted := filepath.Join(repo, "restricted")
 	plain := filepath.Join(repo, "plain")
 	for _, dir := range []string{restricted, plain} {

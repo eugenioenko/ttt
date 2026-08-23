@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import * as tui from "./tui.js";
 import { createGitRepo, createLinkedWorktree, createTempDir, cleanupDir, git } from "./helpers.js";
 
@@ -111,5 +111,32 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
     const { snapshots } = tui.run();
     expect(snapshots[screen]).toContain("modified target");
     expect(snapshots[screen]).toContain("│▎");
+  });
+
+  it("drops delayed external-symlink blame after switching to a non-repository tab", () => {
+    const { link } = createExternalFileSymlinkFixture();
+    const plainFile = join(dir, "plain", "plain.txt");
+    writeFileSync(plainFile, "plain content\n");
+
+    const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+    const binDir = join(dir, "bin");
+    mkdirSync(binDir);
+    const gitWrapper = join(binDir, "git");
+    writeFileSync(
+      gitWrapper,
+      '#!/bin/sh\nif [ "$3" = "blame" ]; then sleep 1; fi\nexec "$TTT_REAL_GIT" "$@"\n',
+    );
+    chmodSync(gitWrapper, 0o755);
+
+    tui.start(plainFile, link);
+    tui.setEnv({ PATH: `${binDir}${delimiter}${process.env.PATH}`, TTT_REAL_GIT: realGit });
+    tui.waitFor("filesymlinkbranch");
+    tui.exec("View: Previous Tab");
+    tui.wait(1300);
+    const screen = tui.snapshot();
+    const { snapshots } = tui.run();
+    expect(snapshots[screen]).toContain("plain content");
+    expect(snapshots[screen]).not.toContain("filesymlinkbranch");
+    expect(snapshots[screen]).not.toContain("Test User");
   });
 });

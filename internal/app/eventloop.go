@@ -138,9 +138,9 @@ func RunEventLoop(
 			lastBlameFile = filePath
 			lastBlameLine = line
 			lastBlameRepo = repoDir
+			blameGen++
 			app.Status.SetSegment(view.StatusSegment{ID: "blame", Side: "left", Priority: 200, Text: ""})
 			if repoDir != "" {
-				blameGen++
 				gen := blameGen
 				blameLine := line + 1
 				blameFile, ok := app.Repository.gitRelativePath(repoDir, filePath)
