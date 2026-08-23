@@ -1,11 +1,13 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
 
 func focusedContextMenu(t *testing.T, h *testHarness) *ui.ContextMenuWidget {
@@ -90,4 +92,54 @@ func TestCommitDetailContentAndTabMenusControlOnlyActiveSurface(t *testing.T) {
 	tabRect := h.app.EditorGroup.TabBar.GetRect()
 	h.app.EditorGroup.TabBar.OnTabRightClick(h.app.EditorGroup.ActiveTabIndex(), tabRect.X+1, tabRect.Y)
 	assertSurfaceMenuState(t, focusedContextMenu(t, h), "diff.unifiedView", "diff.fullFileView", "diff.toggleWrap")
+}
+
+func TestCommitDetailTabMenuKeepsDiffControlsReachableAt70x16(t *testing.T) {
+	h := newTestHarness(t, 70, 16)
+	defer h.stop()
+
+	detail := ui.NewCommitDetailWidget(h.dir, "ref", "abcdef0", false)
+	detail.SetDetail("message", nil, "")
+	h.app.EditorGroup.ApplyDiffDefaults(detail)
+	h.app.EditorGroup.OpenPluginTab("commit-detail", "Commit abcdef0", detail)
+	h.redraw()
+
+	tabRect := h.app.EditorGroup.TabBar.GetRect()
+	h.app.EditorGroup.TabBar.OnTabRightClick(h.app.EditorGroup.ActiveTabIndex(), tabRect.X+1, tabRect.Y)
+	h.redraw()
+	menu := focusedContextMenu(t, h)
+	if !strings.Contains(h.screenText(), "Diff View") {
+		t.Fatalf("70x16 tab menu has no reachable Diff View entry:\n%s", h.screenText())
+	}
+	diffViewIndex := -1
+	for index, item := range menu.Items {
+		if item.Label == "Diff View" {
+			diffViewIndex = index
+			break
+		}
+	}
+	if diffViewIndex < 0 {
+		t.Fatal("tab menu has no Diff View submenu")
+	}
+	menu.Selected = diffViewIndex
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyRight, "", tcell.ModNone))
+	h.redraw()
+	for _, label := range []string{"Split", "Unified", "Changes Only", "Full File", "Wrap Lines"} {
+		if !strings.Contains(h.screenText(), label) {
+			t.Errorf("70x16 Diff View submenu does not expose %q:\n%s", label, h.screenText())
+		}
+	}
+	if menu.Submenu == nil {
+		t.Fatal("Diff View submenu did not open")
+	}
+	for index, item := range menu.Submenu.Items {
+		if item.Command == "diff.toggleWrap" {
+			menu.Submenu.Selected = index
+			break
+		}
+	}
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if detail.WrapMode() != ui.DiffWrapOn {
+		t.Fatal("Wrap Lines remained unreachable through the 70x16 tab submenu")
+	}
 }

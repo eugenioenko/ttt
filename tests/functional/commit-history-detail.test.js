@@ -132,7 +132,7 @@ describe("commit history detail", () => {
 		git(dir, "commit", "-qm", "menu detail");
 
 		tui.start(dir);
-		tui.setSize(100, 30);
+		tui.setSize(70, 16);
 		tui.pressChord("ctrl+k", "c");
 		tui.waitStable(500);
 		tui.press("tab");
@@ -145,9 +145,13 @@ describe("commit history detail", () => {
 		for (let index = 0; index < 4; index++) tui.press("down");
 		tui.press("enter");
 		tui.rclick(50, 2);
+		const compactTabMenu = tui.snapshot();
+		for (let index = 0; index < 8; index++) tui.press("down");
+		tui.press("right");
 		const tabMenu = tui.snapshot();
 
 		const { snapshots } = tui.run();
+		expect(snapshots[compactTabMenu]).toContain("Diff View");
 		for (const label of ["Split", "Unified", "Changes Only", "Full File", "Wrap Lines"]) {
 			expect(snapshots[contentMenu]).toContain(label);
 			expect(snapshots[tabMenu]).toContain(label);

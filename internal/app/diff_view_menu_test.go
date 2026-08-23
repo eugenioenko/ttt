@@ -67,3 +67,26 @@ func TestActiveDiffViewMenuTracksFileDiffAndCommitDetailState(t *testing.T) {
 		}
 	}
 }
+
+func TestActiveDiffViewMenuSupportsFlatContentAndCompactTabLayouts(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	detail := ui.NewCommitDetailWidget("/repo", "ref", "abcdef0", false)
+	detail.SetDetail("message", nil, "")
+	a.EditorGroup.ApplyDiffDefaults(detail)
+	a.EditorGroup.OpenPluginTab("commit-detail", "Commit abcdef0", detail)
+
+	base := []ui.ContextMenuItem{{Label: "Base", Command: "base"}}
+	flat := a.withActiveDiffViewMenu(base)
+	if len(flat) < 2 || flat[len(flat)-1].Command != "diff.toggleWrap" {
+		t.Fatalf("flat content menu does not expose direct controls: %+v", flat)
+	}
+	compact := a.withActiveDiffViewSubmenu(base)
+	last := compact[len(compact)-1]
+	if last.Label != "Diff View" || len(last.Submenu) == 0 {
+		t.Fatalf("compact tab menu does not expose Diff View submenu: %+v", compact)
+	}
+	assertActiveDiffViewMenu(t, last.Submenu, "diff.splitView", "diff.changesOnlyView")
+	if len(base) != 1 {
+		t.Fatalf("layout builders mutated their base menu: %+v", base)
+	}
+}

@@ -172,6 +172,17 @@ func (a *App) withActiveDiffViewMenu(items []ui.ContextMenuItem) []ui.ContextMen
 	return append(combined, controls...)
 }
 
+func (a *App) withActiveDiffViewSubmenu(items []ui.ContextMenuItem) []ui.ContextMenuItem {
+	controls := a.BuildActiveDiffViewMenu()
+	if len(controls) == 0 {
+		return items
+	}
+	combined := make([]ui.ContextMenuItem, 0, len(items)+2)
+	combined = append(combined, items...)
+	combined = append(combined, ui.MenuSep(), ui.ContextMenuItem{Label: "Diff View", Submenu: controls})
+	return combined
+}
+
 func resolveShortcuts(reg *command.Registry, items []ui.ContextMenuItem) []ui.ContextMenuItem {
 	resolved := make([]ui.ContextMenuItem, len(items))
 	for i, item := range items {
