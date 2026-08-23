@@ -608,7 +608,7 @@ func (cp *ChangesPanel) openCommitLogNode(node *widgets.TreeNode) {
 }
 
 func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.TreeNode) bool {
-	if ev.Key() != tcell.KeyRune || node == nil {
+	if ev.Key() != tcell.KeyRune {
 		return false
 	}
 	switch term.KeyRune(ev) {
@@ -623,6 +623,9 @@ func (cp *ChangesPanel) handleCommitLogKey(ev *tcell.EventKey, node *widgets.Tre
 		cp.openCommitLogNode(node)
 		return true
 	case 'e':
+		if node == nil {
+			return false
+		}
 		if _, isCommit := cp.logCommits[node.ID]; isCommit {
 			cp.openCommitLogNode(node)
 		} else {
