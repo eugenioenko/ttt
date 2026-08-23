@@ -36,3 +36,23 @@ func TestTreeScrollbarCaptureCanBeCanceled(t *testing.T) {
 		t.Fatalf("post-cancel out-of-bounds drag result = %v, want ignored", got)
 	}
 }
+
+func TestTreeScrollbarUsesStoredScreenGeometryOnVirtualSurface(t *testing.T) {
+	items := make([]*TreeNode, 10)
+	for i := range items {
+		items[i] = &TreeNode{ID: string(rune('a' + i)), Label: "item"}
+	}
+	tree := NewTreeWidget(TreeConfig{Items: items})
+	tree.SetRect(Rect{X: 20, Y: 30, W: 5, H: 3})
+	tree.Render(newVirtualSurface(5, 3))
+
+	if got := tree.HandleEvent(tcell.NewEventMouse(4, 0, tcell.Button1, 0)); got != EventIgnored {
+		t.Fatalf("render-local coordinate result = %v, want ignored", got)
+	}
+	if got := tree.HandleEvent(tcell.NewEventMouse(24, 30, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("stored screen coordinate result = %v, want captured", got)
+	}
+	if got := tree.HandleEvent(tcell.NewEventMouse(50, 50, tcell.ButtonNone, 0)); got != EventConsumed {
+		t.Fatalf("off-widget release result = %v, want consumed", got)
+	}
+}

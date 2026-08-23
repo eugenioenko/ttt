@@ -305,10 +305,6 @@ func (t *TreeWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	surface.Fill(term.Cell{Ch: ' '})
 
-	if h <= 0 || w <= 0 {
-		return
-	}
-
 	ox := t.Box.MarginLeft + t.Box.PaddingLeft
 	oy := t.Box.MarginTop + t.Box.PaddingTop
 	if t.Box.BorderLeft {
@@ -320,6 +316,12 @@ func (t *TreeWidget) Render(surface Surface) {
 	t.contentX = t.rect.X + ox
 	t.contentY = t.rect.Y + oy
 
+	if h <= 0 || w <= 0 {
+		_, invalidated := t.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(t.flatList), t.scrollTop))
+		t.notifyPointerCaptureInvalidated(invalidated)
+		return
+	}
+
 	if len(t.flatList) == 0 && t.Config.EmptyText != "" {
 		x := 1
 		for _, ch := range t.Config.EmptyText {
@@ -329,27 +331,17 @@ func (t *TreeWidget) Render(surface Surface) {
 			surface.SetCell(x, 0, term.Cell{Ch: ch, Style: term.StyleDefault})
 			x++
 		}
-		return
 	}
 
-	maxScroll := len(t.flatList) - h
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if t.scrollTop > maxScroll {
-		t.scrollTop = maxScroll
-	}
+	rangeModel := newScrollRange(h, len(t.flatList), t.scrollTop)
+	t.scrollTop = rangeModel.offset
 
 	t.ensureVisible(h)
-
-	t.scrollbar.X = t.contentX + w - 1
-	t.scrollbar.Y = t.contentY
-	t.scrollbar.Height = h
-	t.scrollbar.TotalItems = len(t.flatList)
-	t.scrollbar.TopItem = t.scrollTop
+	rangeModel = newScrollRange(h, len(t.flatList), t.scrollTop)
+	t.scrollTop = rangeModel.offset
 
 	t.contentW = w
-	if t.scrollbar.visible() {
+	if rangeModel.visible() {
 		t.contentW = w - 1
 	}
 	for i := range h {
@@ -361,7 +353,12 @@ func (t *TreeWidget) Render(surface Surface) {
 		t.renderNode(surface, node, idx, i, t.contentW)
 	}
 
-	t.scrollbar.Render(surface, w-1, 0)
+	geometry := scrollbarGeometry{
+		localTrack: Rect{X: w - 1, Y: 0, W: 1, H: h},
+		hitTrack:   Rect{X: t.contentX + w - 1, Y: t.contentY, W: 1, H: h},
+	}
+	_, invalidated := t.scrollbar.Render(surface, geometry, rangeModel)
+	t.notifyPointerCaptureInvalidated(invalidated)
 }
 
 func (t *TreeWidget) menuIconWidth() int {
@@ -532,12 +529,9 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 }
 
 func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
-	if newTop, consumed := t.scrollbar.HandleEvent(ev); consumed {
+	if newTop, result := t.scrollbar.HandleEvent(ev); result != EventIgnored {
 		t.scrollTop = newTop
-		if t.scrollbar.isDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
+		return result
 	}
 
 	prev := t.selected
@@ -557,8 +551,7 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (t *TreeWidget) CancelPointerCapture() bool {
-	canceled := t.scrollbar.isDragging()
-	t.scrollbar.dragging = false
+	canceled := t.scrollbar.cancel()
 	if canceled && t.pointerCaptureInvalidated != nil {
 		t.pointerCaptureInvalidated()
 	}
@@ -575,6 +568,12 @@ func (t *TreeWidget) InvalidatePointerInteraction() bool {
 
 func (t *TreeWidget) SetPointerCaptureInvalidated(invalidated func()) {
 	t.pointerCaptureInvalidated = invalidated
+}
+
+func (t *TreeWidget) notifyPointerCaptureInvalidated(invalidated bool) {
+	if invalidated && t.pointerCaptureInvalidated != nil {
+		t.pointerCaptureInvalidated()
+	}
 }
 
 func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
