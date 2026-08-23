@@ -347,7 +347,7 @@ jobs:
 
   fast-contract:
     needs: [classify, vet, lint, test, docs]
-    if: always()
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -405,7 +405,7 @@ jobs:
 
   ci-contract:
     needs: [classify, fast-contract, test-race, functional-tests, integration-tests, lsp-tests]
-    if: always()
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
