@@ -3,13 +3,60 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/view"
 )
+
+func TestReadCommitDiffBuildsAnImmutableFileView(t *testing.T) {
+	dir := testAppRepository(t)
+	path := filepath.Join(dir, "tracked.txt")
+	if err := os.WriteFile(path, []byte("new content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testAppGit(t, dir, "add", "tracked.txt")
+	testAppGit(t, dir, "commit", "-qm", "change tracked")
+	ref := git.HeadSHA(dir)
+	files, err := git.CommitFiles(dir, ref)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("commit files = %+v, err = %v", files, err)
+	}
+
+	result := readCommitDiff(context.Background(), dir, ref, ref[:7], files[0], false)
+	if result.Canceled || result.Warn != "" || len(result.Diff.Hunks) == 0 {
+		t.Fatalf("commit diff result = %+v", result)
+	}
+	if result.Title != "tracked.txt @ "+ref[:7] || result.TabName != ref+":tracked.txt (diff)" {
+		t.Fatalf("commit diff identity = title %q tab %q", result.Title, result.TabName)
+	}
+	if strings.Join(result.NewLines, "\n") != "new content" {
+		t.Fatalf("new lines = %q", result.NewLines)
+	}
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if result := readCommitDiff(canceled, dir, ref, ref[:7], files[0], false); !result.Canceled {
+		t.Fatalf("canceled commit diff result = %+v", result)
+	}
+}
+
+func TestApplyDiffOpenDoesNotStealFocusAfterNavigation(t *testing.T) {
+	group := ui.NewEditorGroupWidget(nil, 4, true, "relative")
+	origin := group.ActiveFilePath()
+	group.NewFile()
+	app := &App{EditorGroup: group, Status: view.NewStatusBar(), diffOpenGen: 3}
+
+	app.ApplyDiffOpen(&DiffOpenResult{Gen: 3, Origin: origin, TabName: "late (diff)", Path: "late.txt"})
+	if group.DiffWidgetByTab("late (diff)") != nil {
+		t.Fatal("late diff opened after foreground navigation")
+	}
+}
 
 func TestReadCommitLogAllowsOnlyVerifiedUnbornEmptyHistory(t *testing.T) {
 	dir := t.TempDir()

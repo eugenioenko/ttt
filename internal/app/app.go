@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -63,6 +64,8 @@ type App struct {
 	AutocompleteTimer      *time.Timer
 	HoverTimer             *time.Timer
 	HoverGen               uint64
+	diffOpenGen            int
+	diffOpenCancel         context.CancelFunc
 	LastHoverLine          int
 	LastHoverCol           int
 	Problems               *ui.ProblemsWidget
@@ -94,12 +97,13 @@ type App struct {
 	PluginsPanel       *PluginsPanel
 	Output             *ui.OutputWidget
 	// runningRepoOp is the progress label of the in-flight task, empty when idle.
-	runningRepoOp        string
-	pluginDetailWidgets  map[string]*pluginDetailState
-	pluginDrawer         ui.Widget
-	commandLine          *ui.CommandLineWidget
-	commandLinePrevFocus ui.Widget
-	settingsView         *settingsView
+	runningRepoOp             string
+	pluginDetailWidgets       map[string]*pluginDetailState
+	pluginDrawer              ui.Widget
+	commandLine               *ui.CommandLineWidget
+	commandLinePrevFocus      ui.Widget
+	settingsView              *settingsView
+	pendingCurrentChangesOpen bool
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
 	appliedSettings    config.Settings
@@ -450,6 +454,10 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.Changes.Screen = screen
 		a.Changes.OnRefreshed = func() {
 			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
+			if a.pendingCurrentChangesOpen && a.selectedChangesDir() != "" {
+				a.pendingCurrentChangesOpen = false
+				a.OpenCurrentChanges()
+			}
 		}
 	}
 	if a.Repository != nil {

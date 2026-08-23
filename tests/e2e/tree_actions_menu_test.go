@@ -43,6 +43,7 @@ func TestChangesAndExplorerThreeDotMenusExposeBulkActions(t *testing.T) {
 	h.redraw()
 	h.assertContains("Git Files")
 	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
 	h.pressKey(tcell.KeyRight, tcell.ModNone)
 	h.assertContains("Expand All")
 	h.assertContains("Collapse All")

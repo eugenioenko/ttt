@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -82,6 +84,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 
 func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
+		{Label: "Open Current Changes", Command: "changes.viewAll"},
+		ui.MenuSep(),
 		{Label: "Refresh", Command: "changes.refresh"},
 		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
@@ -98,6 +102,8 @@ func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 
 func (a *App) BuildChangesContextMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
+		{Label: "Open Current Changes", Command: "changes.viewAll"},
+		ui.MenuSep(),
 		{Label: "Refresh", Command: "changes.refresh"},
 		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
@@ -220,6 +226,7 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 		func() { a.DismissDialog() },
 		func() {
 			a.DismissDialog()
+			invalidatePath := ""
 			for filePath, matches := range allMatches {
 				data, err := os.ReadFile(filePath)
 				if err != nil {
@@ -233,34 +240,19 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 				if err := os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")+"\n"), 0644); err != nil {
 					continue
 				}
-				a.invalidateRepositoryPath(filePath, RepositoryWorktree)
+				if invalidatePath == "" {
+					invalidatePath = filePath
+				}
 				a.EditorGroup.ReloadFile(filePath)
 			}
+			a.invalidateRepositoryPath(invalidatePath, RepositoryWorktree)
 			a.Search.Refresh()
 			a.StatusNotify(fmt.Sprintf("Replaced %d matches across %d files", totalMatches, totalFiles))
 		},
 	})
 }
 
-func (a *App) openSelectedDiff(extended bool) {
-	g := a.Changes.SelectedGroup()
-	if g != nil {
-	} else {
-	}
-	if g != nil && g.IsPR {
-		_, status, ok := a.Changes.SelectedFile()
-		if ok && a.Changes.OnOpenPRDiff != nil {
-			a.Changes.OnOpenPRDiff(g, status, extended)
-		} else {
-		}
-	} else {
-		dir, status, ok := a.Changes.SelectedFile()
-		if ok && a.Changes.OnOpenDiff != nil {
-			a.Changes.OnOpenDiff(dir, status, extended)
-		} else {
-		}
-	}
-}
+func (a *App) openSelectedDiff(extended bool) { a.Changes.OpenSelectedDiff(extended) }
 
 func (a *App) OpenChangeDiff(dir string, status git.FileStatus, extended bool) {
 	fullPath := filepath.Join(dir, status.Path)
@@ -304,6 +296,56 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, extended bool) {
 	}
 	a.EditorGroup.OpenDiff(status.Path, parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
+}
+
+func (a *App) OpenCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) {
+	a.startDiffOpen(func(ctx context.Context) *DiffOpenResult {
+		return readCommitDiff(ctx, dir, ref, short, status, extended)
+	})
+}
+
+func readCommitDiff(ctx context.Context, dir, ref, short string, status git.FileStatus, extended bool) *DiffOpenResult {
+	diffText, err := git.CommitFileDiffContext(ctx, dir, ref, status)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return &DiffOpenResult{Canceled: true}
+		}
+		return &DiffOpenResult{Warn: fmt.Sprintf("Could not read %s at %s", status.Path, short)}
+	}
+	parsed := diff.Parse(diffText)
+	if len(parsed.Hunks) == 0 {
+		return &DiffOpenResult{Warn: fmt.Sprintf("No line changes for %s in %s", status.Path, short)}
+	}
+	oldPath := status.Path
+	if status.OldPath != "" {
+		oldPath = status.OldPath
+	}
+	oldLines := gitFileLines(ctx, dir, oldPath, ref+"^")
+	newLines := gitFileLines(ctx, dir, status.Path, ref)
+	if ctx.Err() != nil {
+		return &DiffOpenResult{Canceled: true}
+	}
+	return &DiffOpenResult{
+		TabName:  fmt.Sprintf("%s:%s (diff)", ref, status.Path),
+		Title:    fmt.Sprintf("%s @ %s", filepath.Base(status.Path), short),
+		Path:     status.Path,
+		Diff:     parsed,
+		OldLines: oldLines,
+		NewLines: newLines,
+		Extended: extended,
+	}
+}
+
+func gitFileLines(ctx context.Context, dir, path, ref string) []string {
+	content, err := git.ShowFileContext(ctx, dir, path, ref)
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
@@ -627,6 +669,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnOpenDiff = func(dir string, status git.FileStatus, extended bool) {
 		app.OpenChangeDiff(dir, status, extended)
 	}
+	app.Changes.OnOpenCommitDiff = app.OpenCommitDiff
 	app.Changes.OnOpenCommit = app.OpenCommitDetail
 	app.Changes.OnOpenPRDiff = func(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
 		app.OpenPRDiff(group, status, extended)
@@ -637,13 +680,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnCommit = app.CommitChanges
 	app.Changes.OnConfirmDiscard = app.ConfirmDiscard
 	app.Changes.OnError = app.StatusError
-	app.Changes.OnRefresh = func() {
-		if app.Repository != nil {
-			app.Repository.RefreshNow(RepositoryWorktree | RepositoryHistory)
-		} else {
-			app.Changes.Refresh()
-		}
-	}
+	app.Changes.OnRefresh = app.RefreshChanges
 	app.Changes.OnStatusChanged = func() {
 		app.invalidateAllRepositories(RepositoryWorktree)
 	}

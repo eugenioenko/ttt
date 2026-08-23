@@ -23,7 +23,7 @@ func StatusStyle(status string) term.Style {
 	switch status {
 	case "M":
 		return term.StyleWarning
-	case "A", "?", "R":
+	case "A", "?", "R", "C":
 		return term.StyleSuccess
 	case "D":
 		return term.StyleDanger
@@ -42,6 +42,8 @@ func StatusBadge(status string) string {
 		return "D"
 	case "R":
 		return "R"
+	case "C":
+		return "C"
 	case "?":
 		return "U"
 	default:

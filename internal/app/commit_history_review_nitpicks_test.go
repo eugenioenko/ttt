@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -144,7 +145,8 @@ func TestStaleCommitFilesCompletionDoesNotCancelNewerRead(t *testing.T) {
 func TestCommitHistoryFileKeysActivateCommitAndFileRows(t *testing.T) {
 	cp := NewChangesPanel()
 	ref := strings.Repeat("c", 40)
-	commit := commitFileRef{Dir: "/repo", Ref: ref, Short: "ccccccc"}
+	status := git.FileStatus{Status: "M", Path: "file.go"}
+	commit := commitFileRef{Dir: "/repo", Ref: ref, Short: "ccccccc", Status: status}
 	commitNode := &widgets.TreeNode{ID: "commit:" + ref}
 	fileNode := &widgets.TreeNode{ID: "cfile:commit:" + ref + ":file.go"}
 	cp.logCommits[commitNode.ID] = commit
@@ -154,6 +156,13 @@ func TestCommitHistoryFileKeysActivateCommitAndFileRows(t *testing.T) {
 	cp.OnOpenCommit = func(dir, gotRef, short string) {
 		calls = append(calls, commitFileRef{Dir: dir, Ref: gotRef, Short: short})
 	}
+	var diffCalls []bool
+	cp.OnOpenCommitDiff = func(dir, gotRef, short string, gotStatus git.FileStatus, extended bool) {
+		if dir != commit.Dir || gotRef != commit.Ref || short != commit.Short || gotStatus != status {
+			t.Fatalf("diff call = %q %q %q %#v", dir, gotRef, short, gotStatus)
+		}
+		diffCalls = append(diffCalls, extended)
+	}
 	for _, node := range []*widgets.TreeNode{commitNode, fileNode} {
 		for _, key := range []rune{'c', 'o', 'v', 'e'} {
 			if !cp.handleCommitLogKey(tcell.NewEventKey(tcell.KeyRune, string(key), tcell.ModNone), node) {
@@ -162,12 +171,17 @@ func TestCommitHistoryFileKeysActivateCommitAndFileRows(t *testing.T) {
 		}
 	}
 
-	if len(calls) != 8 {
-		t.Fatalf("open calls = %d, want 8", len(calls))
+	if len(calls) != 4 {
+		t.Fatalf("commit open calls = %d, want 4", len(calls))
 	}
+	commitOnly := commit
+	commitOnly.Status = git.FileStatus{}
 	for i, call := range calls {
-		if call != commit {
-			t.Fatalf("open call %d = %#v, want %#v", i, call, commit)
+		if call != commitOnly {
+			t.Fatalf("open call %d = %#v, want %#v", i, call, commitOnly)
 		}
+	}
+	if len(diffCalls) != 4 || diffCalls[0] || diffCalls[1] || diffCalls[2] || !diffCalls[3] {
+		t.Fatalf("file diff calls = %v, want compact, compact, compact, extended", diffCalls)
 	}
 }

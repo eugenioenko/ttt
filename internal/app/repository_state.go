@@ -17,6 +17,7 @@ type RepositoryResource uint8
 const (
 	RepositoryWorktree RepositoryResource = 1 << iota
 	RepositoryHistory
+	RepositoryCurrentChanges
 
 	RepositoryStatus = RepositoryWorktree
 
@@ -91,20 +92,38 @@ type RepositoryState struct {
 	lastGroups    map[string]changesGroup
 	lastRevisions map[string]string
 	lastRoots     map[string]string
+
+	currentRoot               string
+	currentTabID              string
+	currentEpoch              uint64
+	currentRequest            uint64
+	currentInFlightRequest    uint64
+	currentInFlightIdentity   [32]byte
+	currentInFlight           bool
+	currentRefreshAgain       bool
+	currentDirty              bool
+	currentCancel             context.CancelFunc
+	currentAppliedFingerprint string
+	currentInputs             map[string]currentChangesInput
+	currentInputReady         bool
+	readCurrentChanges        func(context.Context, string, string, string, uint64, uint64, []git.FileStatus) *CurrentChangesResult
+	currentChangesHandler     func(*CurrentChangesResult)
 }
 
 func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
 	return &RepositoryState{
-		changes:       changes,
-		dirs:          append([]string(nil), dirs...),
-		scheduler:     realRepositoryScheduler{},
-		readStatus:    readRepositoryStatus,
-		debounceWait:  repositoryRefreshDebounce,
-		pollWait:      repositoryPollInterval,
-		statusWait:    repositoryStatusTimeout,
-		lastGroups:    make(map[string]changesGroup),
-		lastRevisions: make(map[string]string),
-		lastRoots:     make(map[string]string),
+		changes:            changes,
+		dirs:               append([]string(nil), dirs...),
+		scheduler:          realRepositoryScheduler{},
+		readStatus:         readRepositoryStatus,
+		debounceWait:       repositoryRefreshDebounce,
+		pollWait:           repositoryPollInterval,
+		statusWait:         repositoryStatusTimeout,
+		lastGroups:         make(map[string]changesGroup),
+		lastRevisions:      make(map[string]string),
+		lastRoots:          make(map[string]string),
+		currentInputs:      make(map[string]currentChangesInput),
+		readCurrentChanges: readCurrentChanges,
 	}
 }
 
@@ -129,6 +148,7 @@ func (s *RepositoryState) SetDirs(dirs []string) {
 		return
 	}
 	s.dirs = append([]string(nil), dirs...)
+	s.stopCurrentChanges()
 	if s.changes != nil {
 		s.changes.Dirs = append([]string(nil), dirs...)
 		s.changes.multiRoot = len(dirs) > 1
@@ -139,7 +159,8 @@ func (s *RepositoryState) SetDirs(dirs []string) {
 	s.lastGroups = make(map[string]changesGroup)
 	s.lastRevisions = make(map[string]string)
 	s.lastRoots = make(map[string]string)
-	s.dirty |= RepositoryWorktree | RepositoryHistory
+	s.currentInputs = make(map[string]currentChangesInput)
+	s.dirty |= RepositoryWorktree | RepositoryHistory | RepositoryCurrentChanges
 	s.stopDebounce()
 	s.stopPoll()
 	s.requested++
@@ -177,6 +198,11 @@ func (s *RepositoryState) InvalidateAll(resources RepositoryResource) {
 		return
 	}
 	s.dirty |= resources
+	if resources&RepositoryWorktree != 0 && s.currentRoot != "" {
+		s.dirty |= RepositoryCurrentChanges
+		s.currentDirty = true
+		s.currentInputReady = false
+	}
 	if resources&RepositoryHistory != 0 && s.visible {
 		s.refreshHistory()
 	}
@@ -217,6 +243,11 @@ func (s *RepositoryState) RefreshNow(resources RepositoryResource) {
 		return
 	}
 	s.dirty |= resources
+	if resources&RepositoryWorktree != 0 && s.currentRoot != "" {
+		s.dirty |= RepositoryCurrentChanges
+		s.currentDirty = true
+		s.currentInputReady = false
+	}
 	if resources&RepositoryHistory != 0 && s.visible {
 		s.refreshHistory()
 	}
@@ -285,6 +316,8 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 	seenGroups := make(map[string]bool, len(result.Entries))
 	revisionChanged := false
 	hadError := false
+	currentStatusFresh := false
+	currentStatusErrors := make(map[string]error)
 	for _, entry := range result.Entries {
 		group := entry.Group
 		sourceDir := cleanAbsolutePath(entry.SourceDir)
@@ -323,6 +356,20 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 			revisionChanged = true
 		}
 		nextRevisions[group.Dir] = revision
+		entryErr := errors.Join(entry.RootErr, entry.StatusErr, entry.RevisionErr)
+		if entryErr != nil {
+			currentStatusErrors[group.Dir] = entryErr
+		}
+		if group.Dir == s.currentRoot && entryErr == nil {
+			s.currentInputReady = true
+			currentStatusFresh = true
+		}
+		if entryErr == nil {
+			statuses := make([]git.FileStatus, 0, len(group.Staged)+len(group.Unstaged))
+			statuses = append(statuses, group.Staged...)
+			statuses = append(statuses, group.Unstaged...)
+			s.currentInputs[group.Dir] = newCurrentChangesInput(revision, statuses)
+		}
 	}
 	s.lastGroups = nextGroups
 	s.lastRevisions = nextRevisions
@@ -332,6 +379,12 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 	}
 	if !hadError {
 		s.dirty &^= RepositoryWorktree
+	}
+	if currentErr := currentStatusErrors[s.currentRoot]; currentErr != nil {
+		s.reportCurrentChangesStatusError(currentErr)
+	}
+	if currentStatusFresh {
+		s.requestCurrentChanges()
 	}
 	if revisionChanged {
 		s.dirty |= RepositoryHistory
@@ -429,6 +482,7 @@ func (s *RepositoryState) Close() {
 		return
 	}
 	s.closed = true
+	s.stopCurrentChanges()
 	s.stopDebounce()
 	s.stopPoll()
 	s.requested++
@@ -618,6 +672,14 @@ func (a *App) syncRepositoryObservation() {
 		return
 	}
 	visible := a.Sidebar.Visible && a.SplitPanel.ShowLeft && a.Sidebar.ActivePanel == "changes"
+	if detail := a.EditorGroup.ActiveCurrentChangesWidget(); detail != nil {
+		tabID := currentChangesTabID(detail.Dir)
+		detail.Incarnation = a.Repository.SetCurrentChangesRoot(detail.Dir, tabID)
+		a.Repository.EnsureCurrentChanges()
+		visible = true
+	} else {
+		a.Repository.SetCurrentChangesRoot("", "")
+	}
 	a.Repository.SetVisible(visible)
 }
 

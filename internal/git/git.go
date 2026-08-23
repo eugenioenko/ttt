@@ -557,16 +557,105 @@ func ShowFile(dir, path, ref string) (string, error) {
 }
 
 func ShowFileContext(ctx context.Context, dir, path, ref string) (string, error) {
+	out, err := ShowFileBytesContext(ctx, dir, path, ref)
+	return string(out), err
+}
+
+func ShowFileBytesContext(ctx context.Context, dir, path, ref string) ([]byte, error) {
 	spec := ref + ":" + path
 	cmd := gitCommandContext(ctx, "-C", dir, "show", spec)
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		}
-		return "", err
+		return nil, err
 	}
-	return string(out), nil
+	return out, nil
+}
+
+func ShowIndexFileBytesContext(ctx context.Context, dir, path string, stage int) ([]byte, error) {
+	spec := fmt.Sprintf(":%d:%s", stage, path)
+	cmd := gitCommandContext(ctx, "-C", dir, "show", spec)
+	out, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+type IndexEntry struct {
+	Mode   string
+	Object string
+	Stage  int
+}
+
+func IndexEntriesContext(ctx context.Context, dir, path string) ([]IndexEntry, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "--literal-pathspecs", "ls-files", "--stage", "-z", "--", path).Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	entries := make([]IndexEntry, 0, 3)
+	for len(out) > 0 {
+		end := bytes.IndexByte(out, 0)
+		if end < 0 {
+			break
+		}
+		record := out[:end]
+		out = out[end+1:]
+		tab := bytes.IndexByte(record, '\t')
+		if tab < 0 || string(record[tab+1:]) != path {
+			continue
+		}
+		fields := strings.Fields(string(record[:tab]))
+		if len(fields) != 3 {
+			continue
+		}
+		stage, parseErr := strconv.Atoi(fields[2])
+		if parseErr != nil {
+			continue
+		}
+		entries = append(entries, IndexEntry{Mode: fields[0], Object: fields[1], Stage: stage})
+	}
+	return entries, nil
+}
+
+type TreeEntry struct {
+	Mode   string
+	Object string
+}
+
+func TreeEntryContext(ctx context.Context, dir, revision, path string) (TreeEntry, bool, error) {
+	if revision == "" {
+		return TreeEntry{}, false, nil
+	}
+	out, err := gitCommandContext(ctx, "-C", dir, "--literal-pathspecs", "ls-tree", "-z", revision, "--", path).Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return TreeEntry{}, false, ctx.Err()
+		}
+		return TreeEntry{}, false, err
+	}
+	end := bytes.IndexByte(out, 0)
+	if end < 0 {
+		end = len(out)
+	}
+	record := out[:end]
+	tab := bytes.IndexByte(record, '\t')
+	if tab < 0 || string(record[tab+1:]) != path {
+		return TreeEntry{}, false, nil
+	}
+	fields := strings.Fields(string(record[:tab]))
+	if len(fields) != 3 {
+		return TreeEntry{}, false, nil
+	}
+	return TreeEntry{Mode: fields[0], Object: fields[2]}, true, nil
 }
 
 func DiffFile(dir, path string) (string, error) {
@@ -613,4 +702,59 @@ func DiffRename(dir, oldPath, newPath string) (string, error) {
 		}
 	}
 	return string(out), nil
+}
+
+func DiffWorkingTreeFileContext(ctx context.Context, dir, revision string, status FileStatus) (string, error) {
+	path := filepath.Join(dir, status.Path)
+	if revision == "" || status.Status == "?" {
+		return diffFileFromEmptyContext(ctx, dir, path)
+	}
+	paths := []string{status.Path}
+	if status.OldPath != "" && status.OldPath != status.Path {
+		paths = []string{status.OldPath, status.Path}
+	}
+	args := []string{"-C", dir, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", revision, "--"}
+	args = append(args, paths...)
+	out, err := gitCommandContext(ctx, args...).Output()
+	if err != nil && ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return string(out), err
+}
+
+func DiffCurrentFileContext(ctx context.Context, dir, revision string, status FileStatus) (string, error) {
+	path := filepath.Join(dir, status.Path)
+	if !status.Staged && status.Status == "?" {
+		return diffFileFromEmptyContext(ctx, dir, path)
+	}
+	paths := []string{status.Path}
+	if status.OldPath != "" && status.OldPath != status.Path {
+		paths = []string{status.OldPath, status.Path}
+	}
+	args := []string{"-C", dir, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--submodule=short"}
+	if status.Staged {
+		args = append(args, "--cached")
+		if revision != "" {
+			args = append(args, revision)
+		}
+	}
+	args = append(args, "--")
+	args = append(args, paths...)
+	out, err := gitCommandContext(ctx, args...).Output()
+	if err != nil && ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return string(out), err
+}
+
+func diffFileFromEmptyContext(ctx context.Context, dir, path string) (string, error) {
+	cmd := gitCommandContext(ctx, "-C", dir, "diff", "--no-ext-diff", "--no-textconv", "--no-index", "--", "/dev/null", path)
+	out, err := cmd.Output()
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return string(out), nil
+	}
+	if err != nil && ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return string(out), err
 }

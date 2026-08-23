@@ -46,11 +46,13 @@ describe("git file tree", () => {
     tui.rclick(5, 5);
     tui.waitStable();
     tui.press("down");
+    tui.press("down");
     tui.press("right");
     const context = tui.snapshot();
     tui.press("escape");
     tui.click(29, 2);
     tui.waitStable();
+    tui.press("down");
     tui.press("down");
     tui.press("right");
     const threeDot = tui.snapshot();
@@ -65,6 +67,7 @@ describe("git file tree", () => {
     expect(snapshots[collapsed]).not.toContain("changed.go");
     expect(snapshots[expanded]).toContain("changed.go");
     for (const menu of [snapshots[context], snapshots[threeDot]]) {
+      expect(menu).toContain("Open Current Changes");
       expect(menu).toContain("Git Files");
       expect(menu).toContain("Tree");
       expect(menu).toContain("List");

@@ -43,4 +43,29 @@ describe("reactive git polling", () => {
     expect(screen).toContain("Changes (1)");
     expect(screen).toContain("tracked.txt");
   });
+
+  it("keeps Current Changes live across same-status edits and close/reopen", () => {
+    createRepository();
+
+    tui.start(dir);
+    tui.waitFor("Explore");
+    tui.exec("Git: Open Current Changes");
+    tui.waitFor("Working tree clean");
+
+    writeFileSync(join(dir, "tracked.txt"), "external-one\n", "utf8");
+    tui.waitFor("external-one");
+    writeFileSync(join(dir, "tracked.txt"), "external-two\n", "utf8");
+    tui.waitFor("external-two");
+
+    tui.press("ctrl+w");
+    tui.waitFor("untitled");
+    writeFileSync(join(dir, "tracked.txt"), "while-closed\n", "utf8");
+    tui.exec("Git: Open Current Changes");
+    tui.waitFor("while-closed");
+
+    const screen = tui.snapshot();
+    expect(screen).toContain("Current changes");
+    expect(screen).toContain("M  tracked.txt · unstaged");
+    expect(screen).toContain("while-closed");
+  });
 });
