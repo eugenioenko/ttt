@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ttt is a terminal text editor written in Go, using tcell for terminal rendering. The Go module name is `ttt` (in go.mod).
+ttt is a terminal text editor written in Go, using tcell for terminal rendering. The Go module is `github.com/eugenioenko/ttt`.
 
 ## Build & Test Commands
 
@@ -13,7 +13,7 @@ make build        # builds to bin/ttt
 make run          # build + run
 make test         # go test ./...
 make fmt          # gofmt -w .
-make lint         # golint ./...
+make lint         # golangci-lint run
 go test ./internal/core/buffer/   # run tests for a single package
 
 # Open a multi-folder workspace
@@ -25,11 +25,13 @@ bin/ttt ~/projectA ~/projectB file.go
 
 ## Architecture
 
-The codebase follows a strict layered architecture: **core → view → render → term → ui**, with `workspace` sitting alongside as an independent support layer. The core layer has zero terminal dependencies and is fully unit-testable in isolation.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and the architecture convergence plan. The codebase uses dependency zones rather than a strict linear layer chain: domain, services, presentation kernel, product presentation, application, plugin host, and platform.
 
-### Layers
+Known boundary violations and explicit boundary decisions are documented there. In particular, `core/highlight` still imports `term`; this dependency is frozen until its cleanup lane removes or reclassifies it. tcell events are intentionally used across `term`, `widgets`, `ui`, and narrow application/platform wiring. Do not create cosmetic wrappers or move files merely to satisfy the old layer diagram.
 
-- **`internal/core/`** — UI-agnostic editor engine. Must never import terminal or rendering packages.
+### Packages
+
+- **`internal/core/`** — UI-agnostic editor engine. New domain APIs must not introduce terminal or rendering dependencies; `core/highlight` is the tracked boundary violation scheduled for cleanup.
   - `buffer/` — Line-based text storage (`[]string`), rune-level insert/delete, file I/O (load/save)
   - `cursor/` — Visual column cursor with goal-column preservation for vertical movement
   - `undo/` — Command-pattern undo/redo via `EditCommand` interface (InsertRune, DeleteRange, InsertLine)
@@ -41,7 +43,7 @@ The codebase follows a strict layered architecture: **core → view → render �
 
 - **`internal/terminal/`** — Integrated terminal emulator. Wraps `eugenioenko/vt10x` (a fork of `hinshun/vt10x`) for VT escape sequence parsing and `aymanbagabas/go-pty` for PTY lifecycle management. Provides the backing state for terminal tabs.
 
-- **`internal/term/`** — Terminal abstraction via `Screen` interface. `TcellScreen` is the real implementation; `MockScreen` is used in tests. Only this package imports `tcell`. Also defines `DirectColor` and `CellAttr` types for direct RGB color rendering (used by the terminal emulator to bypass the style map for 256-color support).
+- **`internal/term/`** — Terminal abstraction via `Screen` interface. `TcellScreen` is the real implementation; `MockScreen` is used in tests. Also defines `DirectColor` and `CellAttr` types for direct RGB color rendering (used by the terminal emulator to bypass the style map for 256-color support).
 
 - **`internal/ui/`** — Window manager and pane system. `Window` binds a `Rect`, `Viewport`, and `Buffer` together. `WindowManager` tracks focus across windows. Also contains `terminal_widget.go` (renders vt10x grid as direct-color cells, handles key-to-VT translation), `root.go` (ForceKeys and RawKeyConsumer interface for terminal key routing), and `content_split.go` (OnTopClick/OnBottomClick for focus routing between editor and bottom panel).
 
@@ -59,7 +61,7 @@ The codebase follows a strict layered architecture: **core → view → render �
 
 ### Design Principles
 
-1. **UX comes first.** Implement the UI feel and look first, then the functionality — prioritize navigation, discoverability, and interaction patterns over implementation shortcuts.
+1. **UX comes first for user-facing work.** Implement the intended interaction and presentation before optimizing implementation shortcuts. Architecture refactors start with characterization tests and preserve existing UX unless the PR explicitly declares a behavior change.
 2. **Single source of truth for layout.** When Render computes layout values (positions, offsets), store them on the struct so event handlers reuse them directly instead of recalculating — divergent calculations cause click offset bugs.
 
 ### Key Design Constraints
@@ -71,7 +73,7 @@ The codebase follows a strict layered architecture: **core → view → render �
   - A widget that draws left to right should take its width from what `DrawText` returns rather than measuring the same string a second time.
 - A fullwidth rune must never be drawn in the last column of a clip region: the terminal paints it across two columns regardless of clipping, so it bleeds over the border or scrollbar to its right. `DrawText` substitutes a space in that case.
 - The renderer uses double-buffering (prev/curr cell grids) to minimize terminal writes.
-- `Screen` interface keeps tcell isolated — the rest of the codebase never imports tcell directly (except `cmd/ttt/main.go` for event types).
+- `Screen` isolates terminal drawing and screen lifecycle. tcell events remain the shared presentation event model in `term`, `widgets`, `ui`, and narrow application/platform routing. Domain and service packages must not import tcell.
 - **Never hardcode colors.** All colors must go through the theme system (`internal/config/theme.go` → `StyleDef` → `term.Style` constants → `buildStyleMap`). Add a new `StyleDef` field to `ThemeConfig`, a `term.Style` constant, and wire it in `buildStyleMap()`. Widgets reference `term.Style*` constants, never color values. The one exception is the integrated terminal, which uses direct RGB color rendering via `DirectColor`/`CellAttr` to support 256-color output.
 - **Terminal colors** are configured via the `terminal` field in `ThemeConfig` (`TerminalColors`), which holds 16 ANSI colors plus foreground/background defaults.
 - The diff view layers syntax highlighting on top of diff background colors using `BgStyle` layering.
@@ -164,7 +166,7 @@ These callbacks are only available after `WirePlugin` — call them from command
 
 The project has four levels of testing:
 
-**Unit tests** (`internal/*/`) — Standard Go tests for individual packages. The core layer is fully testable without any terminal dependency. Run with `go test ./internal/core/buffer/` or `make test` for all.
+**Unit tests** (`internal/*/`) — Standard Go tests for individual packages. Most core algorithms are testable without a terminal dependency; `core/highlight` is the documented presentation-coupled violation scheduled for cleanup. Run with `go test ./internal/core/buffer/` or `make test` for all.
 
 **E2E tests** (`tests/e2e/`) — Go tests that wire up the full `App` with a `term.SimScreen` (an in-memory `tcell.Screen`). The `testHarness` (`harness_test.go`) creates a temp directory with sample files, builds the complete app (config, commands, keybindings, renderer), and provides helpers: `pressKey()`, `pressRune()`, `click()`, `exec()`, `screenText()`, `assertContains()`. The watcher-aware `waitForFileChange()` helper blocks on `PollEvent` to receive real fsnotify events and dispatches them through the reconciliation path. These tests run single-threaded (no event loop goroutine) — the test drives events and redraws manually.
 
@@ -181,16 +183,16 @@ expect(snapshots[s0]).toContain("hello");
 
 **Integration tests** (`tests/integration/`) — JavaScript tests using vitest + the locally pinned `tui-use` CLI to drive the binary via a real PTY. Used for tests that need live PTY interaction: LSP, external file changes, settings roundtrip, bracketed paste. Run with `cd tests/integration && pnpm install && pnpm test`.
 
-### Test expectations for new features
+### Test expectations for changes
 
-Every new feature or bug fix should include tests at multiple levels:
+Choose the smallest deterministic layer that proves the intended invariant, then add broader coverage only when it proves a distinct boundary:
 
-1. **Unit tests** — for core logic that lives in `internal/core/` or has non-trivial algorithms.
-2. **E2E tests** — when the feature involves editor state (cursor, buffer, selection, commands). Use the `testHarness` to wire up the app and verify behavior programmatically.
-3. **Functional tests** — when possible. These catch the most bugs because they exercise the real binary end-to-end. Cover the happy path at minimum; add a negative/edge case if there's an obvious one (e.g., no-op on last line for join lines, no-op with no selection for case transforms).
-4. **Integration tests** — only when the feature requires live PTY interaction (LSP, external file watchers, bracketed paste).
+1. **Unit tests** — pure algorithms, state models, parsers, and lifecycle helpers.
+2. **E2E tests** — composed editor and App behavior on `term.SimScreen`.
+3. **Functional tests** — real-binary behavior that depends on startup, command dispatch, file effects, or visible composition. Use `tui.exec("Command Name")`, `tui.pressChord("ctrl+k", "x")`, and `tui.snapshot()`.
+4. **Integration tests** — only behavior that genuinely requires a live PTY or external process boundary, such as terminal byte encoding, terminal modes, or real language-server compatibility.
 
-Functional tests are the highest-value tests. Use `tui.exec("Command Name")` for command palette, `tui.pressChord("ctrl+k", "x")` for keybindings, and `tui.snapshot()` to verify results.
+Do not duplicate the same assertion at every layer. During implementation, run focused tests for the affected contract. CI remains the broad regression gate before merge.
 
 ### Debug harness (`--exec`, `--plugin`, `--size`, `--debug`, `--listen`)
 
