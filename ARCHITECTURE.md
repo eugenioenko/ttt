@@ -326,3 +326,25 @@ go list -deps ./...
 ```
 
 Treat zero file importers in a multi-file Go package as unknown, not safe.
+
+Regenerate the baseline table with the following definitions. Production Go
+files exclude `*_test.go`; LOC is physical `wc -l`; direct dependencies are
+unique imports below this module's `internal/` path; direct tcell importers are
+production files containing the tcell v3 import path.
+
+```sh
+module_path=$(go list -m)
+
+for package_path in internal/app internal/ui internal/widgets internal/plugin; do
+  production_files=$(rg --files "$package_path" -g '*.go' -g '!*_test.go')
+  file_count=$(printf '%s\n' "$production_files" | wc -l)
+  line_count=$(printf '%s\n' "$production_files" | xargs wc -l | tail -1 | awk '{print $1}')
+  dependency_count=$(go list -json "./$package_path" | jq --arg prefix "$module_path/internal/" '[.Imports[] | select(startswith($prefix))] | unique | length')
+  tcell_count=$(rg -l 'github.com/gdamore/tcell/v3' "$package_path" -g '*.go' -g '!*_test.go' | wc -l)
+  printf '%s files=%s loc=%s internal_deps=%s tcell_importers=%s\n' "$package_path" "$file_count" "$line_count" "$dependency_count" "$tcell_count"
+done
+
+app_ui_loc=$(for package_path in internal/app internal/ui; do rg --files "$package_path" -g '*.go' -g '!*_test.go'; done | xargs wc -l | tail -1 | awk '{print $1}')
+internal_loc=$(rg --files internal -g '*.go' -g '!*_test.go' | xargs wc -l | tail -1 | awk '{print $1}')
+awk -v numerator="$app_ui_loc" -v denominator="$internal_loc" 'BEGIN { printf "app_ui=%d internal=%d percent=%.1f\n", numerator, denominator, 100*numerator/denominator }'
+```
