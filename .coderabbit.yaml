@@ -22,14 +22,24 @@ reviews:
   path_instructions:
     - path: "internal/core/**"
       instructions: >
-        This is the UI-agnostic editor engine and must never import terminal
-        or rendering packages. Flag any import of tcell, term, view, or render
-        packages here.
+        This is the domain zone. New domain APIs must not introduce tcell,
+        term, view, render, widget, UI, process, or application-lifecycle
+        dependencies. core/highlight currently returning term.Style is a known
+        frozen boundary violation tracked by the architecture convergence plan;
+        flag any expansion of that dependency, but do not describe the existing
+        import as a newly introduced defect.
     - path: "**/*_test.go"
       instructions: >
-        Check that new features touching cursor, buffer, selection, or
-        commands have coverage per the project's test-level expectations
-        (unit, e2e, functional).
+        Require the smallest deterministic test boundary that proves the
+        intended invariant. Ask for broader E2E, functional, live-PTY, or real
+        LSP coverage only when it establishes a distinct boundary; do not
+        require the same assertion at every test level.
+    - path: "ARCHITECTURE.md"
+      instructions: >
+        Verify package, dependency, baseline, and test-boundary claims against
+        current repository evidence. Require exact reproducible commands for
+        measured baselines and distinguish accepted boundary decisions from
+        known violations scheduled for cleanup.
 
 chat:
   auto_reply: true

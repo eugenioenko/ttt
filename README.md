@@ -699,20 +699,28 @@ All keybindings are customizable via [`keybindings.json`](config/keybindings.jso
 
 ## Testing
 
-TTT is tested at three levels to catch bugs across the entire stack — from core data structures to end-to-end user workflows.
+TTT uses deterministic tests at several boundaries, from core data structures to real-binary and live-PTY workflows.
 
 ### Unit Tests (Go)
 
-The core editor engine (`internal/core/`) is fully unit-testable in isolation with zero terminal dependencies. Buffer operations, cursor math, undo/redo commands, and syntax highlighting all have dedicated Go tests.
+Core algorithms such as buffer operations, cursor math, and undo/redo have focused Go tests. Most core packages are terminal-independent; `core/highlight` is a known boundary violation scheduled for cleanup.
 
 ```sh
 make test                            # run all unit tests
 go test ./internal/core/buffer/      # test a single package
 ```
 
+### E2E Tests (Go + SimScreen)
+
+These wire the complete App to an in-memory `term.SimScreen` and exercise editor state, commands, event dispatch, and rendered output without starting a real terminal.
+
+```sh
+go test ./tests/e2e/
+```
+
 ### Functional Tests (vitest + --exec)
 
-The primary test suite. These launch the real `ttt` binary via the built-in `--exec` debug harness, run scripted commands in batch, and assert on screenshots and file contents. No external dependencies beyond [vitest](https://vitest.dev/). 142 tests across 39 files covering:
+These launch the real `ttt` binary via the built-in `--exec` debug harness, run scripted commands in batch, and assert on screenshots and file contents. No external dependencies beyond [vitest](https://vitest.dev/). Coverage includes:
 
 - **File operations** — open, edit, save, Save As, new file, dirty indicator
 - **Editing** — undo/redo, select all + overwrite, line delete/move/duplicate, word delete, sort, case transform
@@ -731,7 +739,7 @@ pnpm test              # run all functional tests
 
 ### Integration Tests (vitest + tui-use)
 
-Tests that require live PTY interaction — scenarios where something external happens while the editor is running. Built with [vitest](https://vitest.dev/) and [tui-use](https://github.com/onesuper/tui-use). 7 tests covering LSP completions, external file changes, settings roundtrip, and bracketed paste.
+Tests that require live PTY interaction or a real external process boundary. Built with [vitest](https://vitest.dev/) and [tui-use](https://github.com/onesuper/tui-use), they cover real language servers, external file changes, settings roundtrips, and bracketed paste.
 
 ```sh
 cd tests/integration
@@ -739,7 +747,7 @@ pnpm install
 pnpm test
 ```
 
-All test levels run in CI on every push and pull request.
+Use the smallest deterministic layer that proves a behavior. Broader tests should establish a distinct boundary rather than duplicate the same assertion. CI runs the broad regression lanes on pull requests.
 
 ### Chaos Monkey (Fuzz Testing)
 
@@ -808,18 +816,17 @@ curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 
 ## Architecture
 
-The codebase follows a strict layered architecture: **core -> view -> render -> term -> ui**.
+TTT uses dependency zones rather than a strict linear layer chain:
 
-- **`internal/core/`** — UI-agnostic editor engine (buffer, cursor, undo, syntax highlighting, multi-buffer management)
-- **`internal/view/`** — Viewport scrolling and status bar
-- **`internal/render/`** — Diff-based double-buffered renderer for minimal terminal writes
-- **`internal/terminal/`** — Integrated terminal emulator (vt10x + pty)
-- **`internal/term/`** — Terminal abstraction via `Screen` interface (only package that imports tcell)
-- **`internal/ui/`** — Window manager, pane system, and all widgets
-- **`internal/lsp/`** — Language Server Protocol client (JSON-RPC 2.0 over stdio, per-language server management)
-- **`internal/workspace/`** — Multi-folder workspace management with git detection
-- **`internal/git/`** — Git operations (status, stage, unstage, commit, pull, push, diff, blame)
-- **`internal/config/`** — Configuration loading (settings, themes, keybindings, editorconfig)
+- **Domain** — editor algorithms and state in `internal/core/*`
+- **Services** — Git, GitHub, LSP, terminal, watcher, and workspace integration
+- **Presentation kernel** — screen cells, rendering, width, layout, and reusable widgets
+- **Product presentation** — editor, diff, search, terminal, panel, and dialog surfaces in `internal/ui`
+- **Application** — commands, async lifecycle, cancellation, and service coordination in `internal/app`
+- **Plugin host** — Lua runtime, permissions, registry, and widget adapters in `internal/plugin`
+- **Platform** — process startup and concrete composition in `cmd/ttt`
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the current dependency graph, known violations, explicit boundary decisions, package ownership rules, verification strategy, and the incremental convergence plan.
 
 ## Contributors & Acknowledgments
 
