@@ -609,6 +609,35 @@ func TestTableHeightAndWidthZero(t *testing.T) {
 	}
 }
 
+func TestTableScrollbarOffWidgetCaptureLifecycle(t *testing.T) {
+	tbl := NewTableWidget(TableConfig{
+		Columns: []TableColumn{{Label: "Name"}},
+		Rows:    makeRows(20),
+	})
+	tbl.SetRect(Rect{X: 7, Y: 3, W: 6, H: 6})
+	tbl.Render(newVirtualSurface(6, 6))
+	invalidations := 0
+	tbl.SetPointerCaptureInvalidated(func() { invalidations++ })
+
+	if got := tbl.HandleEvent(tcell.NewEventMouse(12, 5, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("scrollbar press result = %v, want captured", got)
+	}
+	if got := tbl.HandleEvent(tcell.NewEventMouse(80, 80, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("off-widget drag result = %v, want captured", got)
+	}
+	if got := tbl.HandleEvent(tcell.NewEventMouse(80, 80, tcell.ButtonNone, 0)); got != EventConsumed {
+		t.Fatalf("off-widget release result = %v, want consumed", got)
+	}
+	if tbl.OwnsPointerCapture() || invalidations != 0 {
+		t.Fatalf("normal release retained or invalidated capture: invalidations=%d", invalidations)
+	}
+
+	tbl.HandleEvent(tcell.NewEventMouse(12, 5, tcell.Button1, 0))
+	if !tbl.InvalidatePointerInteraction() || tbl.OwnsPointerCapture() || invalidations != 1 {
+		t.Fatalf("explicit invalidation failed: owns=%v invalidations=%d", tbl.OwnsPointerCapture(), invalidations)
+	}
+}
+
 // --- helpers ---
 
 func makeRows(n int) [][]string {

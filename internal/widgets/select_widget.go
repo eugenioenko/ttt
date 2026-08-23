@@ -36,12 +36,13 @@ type SelectWidget struct {
 	selected   int
 	focused    bool
 
-	scrollTop   int
-	scrollbar   scrollbar
-	popupBounds Rect
-	open        bool
-	suppress    bool
-	currentID   string
+	scrollTop                 int
+	scrollbar                 scrollbar
+	popupBounds               Rect
+	open                      bool
+	suppress                  bool
+	currentID                 string
+	pointerCaptureInvalidated func()
 }
 
 func NewSelectWidget(config SelectConfig) *SelectWidget {
@@ -144,6 +145,7 @@ func (s *SelectWidget) setOpen(open bool) {
 	wasOpen := s.open
 	s.open = open
 	if !open {
+		s.notifyPointerCaptureInvalidated(s.scrollbar.cancel())
 		s.suppress = true
 		s.input.SetText("")
 		s.suppress = false
@@ -208,10 +210,14 @@ func (s *SelectWidget) RenderPopup(surface Surface) {
 	w, h := pr.W, pr.H
 	listH := h - 2
 	if w <= 2 || listH <= 0 {
+		_, invalidated := s.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(s.filtered), s.scrollTop))
+		s.notifyPointerCaptureInvalidated(invalidated)
 		return
 	}
 
 	s.ensureVisible(listH)
+	rangeModel := newScrollRange(listH, len(s.filtered), s.scrollTop)
+	s.scrollTop = rangeModel.offset
 
 	// Fill first so the popup is opaque over whatever it covers.
 	for y := range h {
@@ -220,12 +226,6 @@ func (s *SelectWidget) RenderPopup(surface Surface) {
 		}
 	}
 	surface.DrawBorder(0, 0, w, h, widgetBorders(s.Box), term.StyleBorder)
-
-	s.scrollbar.X = pr.X + w - 2
-	s.scrollbar.Y = pr.Y + 1
-	s.scrollbar.Height = listH
-	s.scrollbar.TotalItems = len(s.filtered)
-	s.scrollbar.TopItem = s.scrollTop
 
 	for i := range listH {
 		idx := s.scrollTop + i
@@ -243,7 +243,12 @@ func (s *SelectWidget) RenderPopup(surface Surface) {
 		surface.DrawText(2, i+1, item.Label, w-4, style)
 	}
 
-	s.scrollbar.Render(surface, w-2, 1)
+	geometry := scrollbarGeometry{
+		localTrack: Rect{X: w - 2, Y: 1, W: 1, H: listH},
+		hitTrack:   Rect{X: pr.X + w - 2, Y: pr.Y + 1, W: 1, H: listH},
+	}
+	_, invalidated := s.scrollbar.Render(surface, geometry, rangeModel)
+	s.notifyPointerCaptureInvalidated(invalidated)
 }
 func (s *SelectWidget) Width() int { return s.FixedWidth }
 
@@ -297,6 +302,8 @@ func (s *SelectWidget) ensureVisible(visibleH int) {
 func (s *SelectWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	if w <= 0 || h <= 0 {
+		_, invalidated := s.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(s.filtered), s.scrollTop))
+		s.notifyPointerCaptureInvalidated(invalidated)
 		return
 	}
 
@@ -322,6 +329,10 @@ func (s *SelectWidget) Render(surface Surface) {
 
 	// A collapsed select is just the one-line control; its list lives in a popup.
 	if s.Config.Collapsible {
+		if !s.open {
+			_, invalidated := s.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(s.filtered), s.scrollTop))
+			s.notifyPointerCaptureInvalidated(invalidated)
+		}
 		return
 	}
 
@@ -335,14 +346,13 @@ func (s *SelectWidget) Render(surface Surface) {
 	listStart := y
 	listH := h - listStart
 	if listH <= 0 {
+		_, invalidated := s.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(s.filtered), s.scrollTop))
+		s.notifyPointerCaptureInvalidated(invalidated)
 		return
 	}
 
-	s.scrollbar.X = s.rect.X + w - 1
-	s.scrollbar.Y = s.rect.Y + listStart
-	s.scrollbar.Height = listH
-	s.scrollbar.TotalItems = len(s.filtered)
-	s.scrollbar.TopItem = s.scrollTop
+	rangeModel := newScrollRange(listH, len(s.filtered), s.scrollTop)
+	s.scrollTop = rangeModel.offset
 
 	for i := range listH {
 		idx := s.scrollTop + i
@@ -361,13 +371,18 @@ func (s *SelectWidget) Render(surface Surface) {
 		surface.DrawText(1, ly, item.Label, w-1, style)
 	}
 
-	s.scrollbar.Render(surface, w-1, listStart)
+	geometry := scrollbarGeometry{
+		localTrack: Rect{X: w - 1, Y: listStart, W: 1, H: listH},
+		hitTrack:   Rect{X: s.rect.X + w - 1, Y: s.rect.Y + listStart, W: 1, H: listH},
+	}
+	_, invalidated := s.scrollbar.Render(surface, geometry, rangeModel)
+	s.notifyPointerCaptureInvalidated(invalidated)
 }
 
 func (s *SelectWidget) HandleEvent(ev tcell.Event) EventResult {
-	if newTop, consumed := s.scrollbar.HandleEvent(ev); consumed {
+	if newTop, result := s.scrollbar.HandleEvent(ev); result != EventIgnored {
 		s.scrollTop = newTop
-		return EventConsumed
+		return result
 	}
 
 	switch tev := ev.(type) {
@@ -377,6 +392,30 @@ func (s *SelectWidget) HandleEvent(ev tcell.Event) EventResult {
 		return s.handleMouse(tev)
 	}
 	return EventIgnored
+}
+
+func (s *SelectWidget) CancelPointerCapture() bool {
+	canceled := s.scrollbar.cancel()
+	s.notifyPointerCaptureInvalidated(canceled)
+	return canceled
+}
+
+func (s *SelectWidget) OwnsPointerCapture() bool {
+	return s.scrollbar.isDragging()
+}
+
+func (s *SelectWidget) InvalidatePointerInteraction() bool {
+	return s.CancelPointerCapture()
+}
+
+func (s *SelectWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	s.pointerCaptureInvalidated = invalidated
+}
+
+func (s *SelectWidget) notifyPointerCaptureInvalidated(invalidated bool) {
+	if invalidated && s.pointerCaptureInvalidated != nil {
+		s.pointerCaptureInvalidated()
+	}
 }
 
 func (s *SelectWidget) handleKey(ev *tcell.EventKey) EventResult {

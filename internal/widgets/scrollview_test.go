@@ -94,7 +94,9 @@ func TestScrollViewScrollbarCaptureLifecycle(t *testing.T) {
 	if !sv.OwnsPointerCapture() {
 		t.Fatal("scroll view did not report scrollbar capture")
 	}
-	sv.HandleEvent(tcell.NewEventMouse(30, 30, tcell.ButtonNone, 0))
+	if got := sv.HandleEvent(tcell.NewEventMouse(30, 30, tcell.ButtonNone, 0)); got != EventConsumed {
+		t.Fatalf("owned release result = %v, want consumed", got)
+	}
 	if sv.OwnsPointerCapture() || invalidations != 0 {
 		t.Fatalf("normal release retained capture or notified: invalidations=%d", invalidations)
 	}
@@ -391,11 +393,22 @@ func TestScrollViewHorizontalBarClick(t *testing.T) {
 	// hbar is at bottom row (y=9), click in the middle
 	ev := tcell.NewEventMouse(10, 9, tcell.Button1, tcell.ModNone)
 	result := sv.HandleEvent(ev)
-	if result != EventConsumed {
-		t.Error("click on horizontal scrollbar should be consumed")
+	if result != EventCaptured {
+		t.Error("click on horizontal scrollbar should capture")
 	}
 	if sv.scrollX == 0 {
 		t.Error("clicking in middle of hbar should scroll horizontally")
+	}
+}
+
+func TestReleaseHorizontalBarCreatedByVerticalBarCanBeClicked(t *testing.T) {
+	child := newScrollTestChild(20, 15)
+	sv := NewScrollViewWidget(child)
+	renderWidget(sv, 0, 0, 20, 10)
+
+	result := sv.HandleEvent(tcell.NewEventMouse(18, 9, tcell.Button1, tcell.ModNone))
+	if result != EventCaptured || sv.scrollX == 0 {
+		t.Fatalf("rendered horizontal bar was not interactive: result=%v scrollX=%d", result, sv.scrollX)
 	}
 }
 
@@ -415,5 +428,104 @@ func TestScrollViewHorizontalBarRendersHalfBlock(t *testing.T) {
 	}
 	if !foundHBar {
 		t.Error("expected horizontal scrollbar with '▄' character")
+	}
+}
+
+func TestScrollViewSimultaneousBarsRespectBoxAndScreenGeometry(t *testing.T) {
+	child := newScrollTestChild(8, 5)
+	sv := NewScrollViewWidget(child)
+	sv.SetBoxModel(BoxModel{
+		MarginTop: 1, MarginBottom: 1, MarginLeft: 1, MarginRight: 1,
+		BorderTop: true, BorderBottom: true, BorderLeft: true, BorderRight: true,
+		PaddingTop: 1, PaddingBottom: 1, PaddingLeft: 1, PaddingRight: 1,
+		Borders: term.RoundedBorderSet(),
+	})
+	surface := renderWidget(sv, 7, 4, 14, 10)
+
+	if sv.viewport != (Rect{X: 10, Y: 7, W: 7, H: 3}) {
+		t.Fatalf("viewport = %+v, want x=10 y=7 w=7 h=3", sv.viewport)
+	}
+	for y := 3; y < 6; y++ {
+		if surface.cells[y][10].Ch != '█' {
+			t.Fatalf("vertical bar missing at local (10,%d)", y)
+		}
+	}
+	for x := 3; x < 10; x++ {
+		if surface.cells[6][x].Ch != '▄' {
+			t.Fatalf("horizontal bar missing at local (%d,6)", x)
+		}
+	}
+	if surface.cells[6][10].Ch != ' ' {
+		t.Fatalf("bottom-right corner = %q, want blank", surface.cells[6][10].Ch)
+	}
+
+	if got := sv.HandleEvent(tcell.NewEventMouse(16, 10, tcell.Button1, 0)); got != EventCaptured || sv.scrollX != 1 {
+		t.Fatalf("induced horizontal endpoint press: result=%v scrollX=%d", got, sv.scrollX)
+	}
+	if got := sv.HandleEvent(tcell.NewEventMouse(40, 40, tcell.ButtonNone, 0)); got != EventConsumed {
+		t.Fatalf("boxed off-widget release result = %v, want consumed", got)
+	}
+	if got := sv.HandleEvent(tcell.NewEventMouse(9, 6, tcell.Button1, 0)); got != EventIgnored {
+		t.Fatalf("coordinate outside stored inner geometry = %v, want ignored", got)
+	}
+}
+
+func TestScrollViewOneCellTracksAndZeroViewport(t *testing.T) {
+	sv := NewScrollViewWidget(newScrollTestChild(3, 3))
+	surface := renderWidget(sv, 0, 0, 2, 2)
+	if sv.viewport.W != 1 || sv.viewport.H != 1 {
+		t.Fatalf("one-cell viewport = %+v, want 1x1", sv.viewport)
+	}
+	if surface.cells[0][1].Ch != '█' || surface.cells[1][0].Ch != '▄' || surface.cells[1][1].Ch != ' ' {
+		t.Fatalf("one-cell bar geometry = %q %q corner=%q", surface.cells[0][1].Ch, surface.cells[1][0].Ch, surface.cells[1][1].Ch)
+	}
+
+	zero := NewScrollViewWidget(newScrollTestChild(3, 3))
+	zeroSurface := renderWidget(zero, 0, 0, 1, 1)
+	if zero.viewport.W != 0 || zero.viewport.H != 0 || zeroSurface.cells[0][0].Ch != ' ' {
+		t.Fatalf("zero viewport geometry = %+v cell=%q", zero.viewport, zeroSurface.cells[0][0].Ch)
+	}
+}
+
+func TestScrollViewDragGrowthAndShrinkToFit(t *testing.T) {
+	child := newScrollTestChild(10, 30)
+	sv := NewScrollViewWidget(child)
+	renderWidget(sv, 0, 0, 20, 10)
+	invalidations := 0
+	sv.SetPointerCaptureInvalidated(func() { invalidations++ })
+
+	if got := sv.HandleEvent(tcell.NewEventMouse(19, 0, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("initial press result = %v, want captured", got)
+	}
+	child.contentH = 60
+	renderWidget(sv, 0, 0, 20, 10)
+	if !sv.OwnsPointerCapture() || invalidations != 0 {
+		t.Fatalf("growth changed capture: owns=%v invalidations=%d", sv.OwnsPointerCapture(), invalidations)
+	}
+
+	child.contentH = 5
+	renderWidget(sv, 0, 0, 20, 10)
+	if sv.OwnsPointerCapture() || invalidations != 1 {
+		t.Fatalf("shrink-to-fit failed to invalidate: owns=%v invalidations=%d", sv.OwnsPointerCapture(), invalidations)
+	}
+	if got := sv.HandleEvent(tcell.NewEventMouse(19, 0, tcell.Button1, 0)); got != EventIgnored {
+		t.Fatalf("stale hidden geometry result = %v, want ignored", got)
+	}
+}
+
+func TestScrollViewHorizontalDragReachesExactEnd(t *testing.T) {
+	sv := NewScrollViewWidget(newScrollTestChild(60, 15))
+	renderWidget(sv, 0, 0, 20, 10)
+	if got := sv.HandleEvent(tcell.NewEventMouse(0, 9, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("thumb press result = %v, want captured", got)
+	}
+	if got := sv.HandleEvent(tcell.NewEventMouse(200, 9, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("off-track drag result = %v, want captured", got)
+	}
+	if sv.scrollX != 41 {
+		t.Fatalf("horizontal end offset = %d, want 41", sv.scrollX)
+	}
+	if got := sv.HandleEvent(tcell.NewEventMouse(200, 9, tcell.ButtonNone, 0)); got != EventConsumed {
+		t.Fatalf("horizontal release result = %v, want consumed", got)
 	}
 }

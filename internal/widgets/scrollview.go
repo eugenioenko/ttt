@@ -12,9 +12,14 @@ type ScrollViewWidget struct {
 	scrollX                   int
 	scrollY                   int
 	vbar                      scrollbar
+	hbar                      horizontalScrollbar
 	focused                   bool
+	lastContentW              int
 	lastContentH              int
+	lastViewW                 int
 	lastViewH                 int
+	viewport                  Rect
+	layoutValid               bool
 	pointerCaptureInvalidated func()
 	cancelingPointerCapture   bool
 }
@@ -43,9 +48,12 @@ func (sv *ScrollViewWidget) ContentHeight() int {
 }
 
 func (sv *ScrollViewWidget) EnsureVisible(x, y int) {
+	if sv.Child == nil {
+		return
+	}
 	r := sv.rect
 	contentW, contentH := sv.Child.ScrollSize()
-	viewW, viewH := sv.viewportSize(r.W, r.H, contentW, contentH)
+	viewW, viewH := sv.viewportSize(r.W-sv.BoxOverheadW(), r.H-sv.BoxOverheadH(), contentW, contentH)
 
 	if y < sv.scrollY {
 		sv.scrollY = y
@@ -59,61 +67,62 @@ func (sv *ScrollViewWidget) EnsureVisible(x, y int) {
 	if x >= sv.scrollX+viewW {
 		sv.scrollX = x - viewW + 1
 	}
+	sv.clamp(contentW, contentH, viewW, viewH)
 }
 
 func (sv *ScrollViewWidget) viewportSize(w, h, contentW, contentH int) (int, int) {
+	w = max(w, 0)
+	h = max(h, 0)
 	vw, vh := w, h
-	if contentH > h {
-		vw--
-	}
-	if contentW > vw {
-		vh--
-	}
-	if contentH > vh && vw == w {
-		vw--
-	}
-	if vw < 0 {
-		vw = 0
-	}
-	if vh < 0 {
-		vh = 0
+	for {
+		nextW := w
+		nextH := h
+		if contentH > vh {
+			nextW--
+		}
+		if contentW > vw {
+			nextH--
+		}
+		nextW = max(nextW, 0)
+		nextH = max(nextH, 0)
+		if nextW == vw && nextH == vh {
+			break
+		}
+		vw, vh = nextW, nextH
 	}
 	return vw, vh
 }
 
 // viewportOrigin returns the screen position of the inner content area.
 func (sv *ScrollViewWidget) viewportOrigin() (int, int) {
-	ox := sv.rect.X + sv.Box.MarginLeft + sv.Box.PaddingLeft
-	oy := sv.rect.Y + sv.Box.MarginTop + sv.Box.PaddingTop
-	if sv.Box.BorderLeft {
-		ox++
-	}
-	if sv.Box.BorderTop {
-		oy++
-	}
-	return ox, oy
+	return sv.contentOrigin()
 }
 
 func (sv *ScrollViewWidget) Render(surface Surface) {
 	surface = sv.RenderBox(surface)
 	w, h := surface.Size()
+	surface.Fill(term.Cell{Ch: ' '})
 	if w <= 0 || h <= 0 || sv.Child == nil {
-		sv.InvalidatePointerInteraction()
+		sv.invalidateRenderState(surface)
 		return
 	}
 
 	contentW, contentH := sv.Child.ScrollSize()
+	contentW = max(contentW, 0)
+	contentH = max(contentH, 0)
 	viewW, viewH := sv.viewportSize(w, h, contentW, contentH)
-	hasVBar := contentH > viewH
-	hasHBar := contentW > viewW
 
+	sv.lastContentW = contentW
 	sv.lastContentH = contentH
+	sv.lastViewW = viewW
 	sv.lastViewH = viewH
 	sv.clamp(contentW, contentH, viewW, viewH)
 
 	virt := newVirtualSurface(contentW, contentH)
 	// Children keep screen-space rects: content origin = viewport origin minus scroll offset.
 	ox, oy := sv.viewportOrigin()
+	sv.viewport = Rect{X: ox, Y: oy, W: viewW, H: viewH}
+	sv.layoutValid = true
 	sv.Child.SetRect(Rect{X: ox - sv.scrollX, Y: oy - sv.scrollY, W: contentW, H: contentH})
 	sv.Child.Render(virt)
 
@@ -126,64 +135,41 @@ func (sv *ScrollViewWidget) Render(surface Surface) {
 		}
 	}
 
-	if hasVBar {
-		sv.vbar.X = sv.rect.X + sv.Box.MarginLeft + sv.Box.PaddingLeft + w - 1
-		sv.vbar.Y = sv.rect.Y + sv.Box.MarginTop + sv.Box.PaddingTop
-		sv.vbar.Height = viewH
-		sv.vbar.TotalItems = contentH
-		sv.vbar.TopItem = sv.scrollY
-		sv.vbar.Render(surface, w-1, 0)
+	vGeometry := scrollbarGeometry{
+		localTrack: Rect{X: viewW, Y: 0, W: 1, H: viewH},
+		hitTrack:   Rect{X: ox + viewW, Y: oy, W: 1, H: viewH},
 	}
-
-	if hasHBar {
-		sv.renderHBar(surface, viewW, h-1, contentW)
+	_, vInvalidated := sv.vbar.Render(surface, vGeometry, newScrollRange(viewH, contentH, sv.scrollY))
+	hGeometry := scrollbarGeometry{
+		localTrack: Rect{X: 0, Y: viewH, W: viewW, H: 1},
+		hitTrack:   Rect{X: ox, Y: oy + viewH, W: viewW, H: 1},
 	}
-}
-
-func (sv *ScrollViewWidget) renderHBar(surface Surface, barW, y, totalW int) {
-	if totalW <= barW || barW <= 0 {
-		return
+	_, hInvalidated := sv.hbar.Render(surface, hGeometry, newScrollRange(viewW, contentW, sv.scrollX))
+	if viewW < w && viewH < h {
+		surface.SetCell(viewW, viewH, term.Cell{Ch: ' '})
 	}
-	thumbH := barW * barW / totalW
-	if thumbH < 1 {
-		thumbH = 1
-	}
-	scrollable := totalW - barW
-	thumbPos := sv.scrollX * (barW - thumbH) / scrollable
-	if thumbPos+thumbH > barW {
-		thumbPos = barW - thumbH
-	}
-
-	for x := range barW {
-		style := term.StyleScrollbar
-		if x >= thumbPos && x < thumbPos+thumbH {
-			style = term.StyleScrollbarThumb
-		}
-		surface.SetCell(x, y, term.Cell{Ch: '▄', Style: style})
-	}
+	sv.notifyPointerCaptureInvalidated(vInvalidated || hInvalidated)
 }
 
 func (sv *ScrollViewWidget) HandleEvent(ev tcell.Event) EventResult {
-	if newTop, consumed := sv.vbar.HandleEvent(ev); consumed {
+	if newLeft, result := sv.hbar.HandleEvent(ev); result != EventIgnored {
+		sv.scrollX = newLeft
+		return result
+	}
+	if newTop, result := sv.vbar.HandleEvent(ev); result != EventIgnored {
 		sv.scrollY = newTop
-		if sv.vbar.isDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
+		return result
 	}
 
 	switch e := ev.(type) {
 	case *tcell.EventMouse:
 		btn := e.Buttons()
 		mx, my := e.Position()
-		r := sv.rect
 
 		mod := e.Modifiers()
 		if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && mod&tcell.ModShift != 0) {
-			sv.scrollX -= 3
-			if sv.scrollX < 0 {
-				sv.scrollX = 0
-			}
+			horizontal, _ := sv.currentScrollRanges()
+			sv.scrollX = horizontal.clampOffset(sv.scrollX - 3)
 			return EventConsumed
 		}
 		if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && mod&tcell.ModShift != 0) {
@@ -191,35 +177,14 @@ func (sv *ScrollViewWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 		if btn&tcell.WheelUp != 0 {
-			sv.scrollY -= 3
-			if sv.scrollY < 0 {
-				sv.scrollY = 0
-			}
+			_, vertical := sv.currentScrollRanges()
+			sv.scrollY = vertical.clampOffset(sv.scrollY - 3)
 			return EventConsumed
 		}
 		if btn&tcell.WheelDown != 0 {
-			sv.scrollY += 3
-			if sv.lastContentH > 0 {
-				maxY := sv.lastContentH - sv.lastViewH
-				if maxY < 0 {
-					maxY = 0
-				}
-				if sv.scrollY > maxY {
-					sv.scrollY = maxY
-				}
-			}
+			_, vertical := sv.currentScrollRanges()
+			sv.scrollY = vertical.clampOffset(sv.scrollY + 3)
 			return EventConsumed
-		}
-
-		if btn&tcell.Button1 != 0 && sv.Child != nil {
-			contentW, contentH := sv.Child.ScrollSize()
-			_, viewH := sv.viewportSize(r.W, r.H, contentW, contentH)
-			hasHBar := contentW > r.W
-			if hasHBar && my == r.Y+r.H-1 && mx >= r.X && mx < r.X+r.W {
-				sv.scrollHToClick(mx-r.X, r.W, contentW)
-				return EventConsumed
-			}
-			_ = viewH
 		}
 
 		// Scrolled-out widgets keep offscreen rects — don't let them catch stray clicks.
@@ -237,21 +202,23 @@ func (sv *ScrollViewWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (sv *ScrollViewWidget) CancelPointerCapture() bool {
-	canceled := sv.vbar.isDragging()
-	sv.vbar.dragging = false
+	canceled := sv.vbar.cancel()
+	if sv.hbar.cancel() {
+		canceled = true
+	}
 	sv.cancelingPointerCapture = true
 	if sv.Child != nil {
-		canceled = CancelPointerCapture(sv.Child) || canceled
+		if CancelPointerCapture(sv.Child) {
+			canceled = true
+		}
 	}
 	sv.cancelingPointerCapture = false
-	if canceled && sv.pointerCaptureInvalidated != nil {
-		sv.pointerCaptureInvalidated()
-	}
+	sv.notifyPointerCaptureInvalidated(canceled)
 	return canceled
 }
 
 func (sv *ScrollViewWidget) OwnsPointerCapture() bool {
-	if sv.vbar.isDragging() {
+	if sv.vbar.isDragging() || sv.hbar.isDragging() {
 		return true
 	}
 	owner, ok := sv.Child.(PointerCaptureOwner)
@@ -259,16 +226,18 @@ func (sv *ScrollViewWidget) OwnsPointerCapture() bool {
 }
 
 func (sv *ScrollViewWidget) InvalidatePointerInteraction() bool {
-	invalidated := sv.vbar.isDragging()
-	sv.vbar.dragging = false
+	invalidated := sv.vbar.cancel()
+	if sv.hbar.cancel() {
+		invalidated = true
+	}
 	sv.cancelingPointerCapture = true
 	if sv.Child != nil {
-		invalidated = InvalidatePointerInteraction(sv.Child) || invalidated
+		if InvalidatePointerInteraction(sv.Child) {
+			invalidated = true
+		}
 	}
 	sv.cancelingPointerCapture = false
-	if invalidated && sv.pointerCaptureInvalidated != nil {
-		sv.pointerCaptureInvalidated()
-	}
+	sv.notifyPointerCaptureInvalidated(invalidated)
 	return invalidated
 }
 
@@ -284,45 +253,16 @@ func (sv *ScrollViewWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (sv *ScrollViewWidget) viewportContains(mx, my int) bool {
-	if sv.Child == nil {
+	if !sv.layoutValid {
 		return false
 	}
-	ox, oy := sv.viewportOrigin()
-	contentW, contentH := sv.Child.ScrollSize()
-	innerW := sv.rect.W - sv.BoxOverheadW()
-	innerH := sv.rect.H - sv.BoxOverheadH()
-	viewW, viewH := sv.viewportSize(innerW, innerH, contentW, contentH)
-	return mx >= ox && mx < ox+viewW && my >= oy && my < oy+viewH
+	r := sv.viewport
+	return mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H
 }
 
 func (sv *ScrollViewWidget) scrollHRight(amount int) {
-	sv.scrollX += amount
-	if sv.Child != nil {
-		contentW, _ := sv.Child.ScrollSize()
-		r := sv.rect
-		maxX := contentW - r.W
-		if maxX < 0 {
-			maxX = 0
-		}
-		if sv.scrollX > maxX {
-			sv.scrollX = maxX
-		}
-	}
-}
-
-func (sv *ScrollViewWidget) scrollHToClick(clickX, barW, totalW int) {
-	if barW <= 0 || totalW <= barW {
-		return
-	}
-	ratio := float64(clickX) / float64(barW)
-	sv.scrollX = int(ratio * float64(totalW-barW))
-	if sv.scrollX < 0 {
-		sv.scrollX = 0
-	}
-	maxX := totalW - barW
-	if sv.scrollX > maxX {
-		sv.scrollX = maxX
-	}
+	horizontal, _ := sv.currentScrollRanges()
+	sv.scrollX = horizontal.clampOffset(sv.scrollX + amount)
 }
 
 func (sv *ScrollViewWidget) Focusable() bool         { return true }
@@ -330,25 +270,38 @@ func (sv *ScrollViewWidget) SetFocused(focused bool) { sv.focused = focused }
 func (sv *ScrollViewWidget) IsFocused() bool         { return sv.focused }
 
 func (sv *ScrollViewWidget) clamp(contentW, contentH, viewW, viewH int) {
-	maxY := contentH - viewH
-	if maxY < 0 {
-		maxY = 0
-	}
-	if sv.scrollY > maxY {
-		sv.scrollY = maxY
-	}
-	if sv.scrollY < 0 {
-		sv.scrollY = 0
-	}
+	sv.scrollY = newScrollRange(viewH, contentH, sv.scrollY).offset
+	sv.scrollX = newScrollRange(viewW, contentW, sv.scrollX).offset
+}
 
-	maxX := contentW - viewW
-	if maxX < 0 {
-		maxX = 0
+func (sv *ScrollViewWidget) currentScrollRanges() (horizontal, vertical scrollRange) {
+	if sv.layoutValid {
+		return newScrollRange(sv.lastViewW, sv.lastContentW, sv.scrollX), newScrollRange(sv.lastViewH, sv.lastContentH, sv.scrollY)
 	}
-	if sv.scrollX > maxX {
-		sv.scrollX = maxX
+	if sv.Child == nil {
+		return newScrollRange(0, 0, sv.scrollX), newScrollRange(0, 0, sv.scrollY)
 	}
-	if sv.scrollX < 0 {
-		sv.scrollX = 0
+	contentW, contentH := sv.Child.ScrollSize()
+	viewW, viewH := sv.viewportSize(sv.rect.W-sv.BoxOverheadW(), sv.rect.H-sv.BoxOverheadH(), contentW, contentH)
+	return newScrollRange(viewW, contentW, sv.scrollX), newScrollRange(viewH, contentH, sv.scrollY)
+}
+
+func (sv *ScrollViewWidget) invalidateRenderState(surface Surface) {
+	sv.layoutValid = false
+	sv.viewport = Rect{}
+	_, vInvalidated := sv.vbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, 0, sv.scrollY))
+	_, hInvalidated := sv.hbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, 0, sv.scrollX))
+	sv.cancelingPointerCapture = true
+	childInvalidated := false
+	if sv.Child != nil {
+		childInvalidated = InvalidatePointerInteraction(sv.Child)
+	}
+	sv.cancelingPointerCapture = false
+	sv.notifyPointerCaptureInvalidated(vInvalidated || hInvalidated || childInvalidated)
+}
+
+func (sv *ScrollViewWidget) notifyPointerCaptureInvalidated(invalidated bool) {
+	if invalidated && sv.pointerCaptureInvalidated != nil {
+		sv.pointerCaptureInvalidated()
 	}
 }

@@ -319,3 +319,39 @@ func TestSelectOnChangeOnFilter(t *testing.T) {
 		t.Errorf("expected OnChange with 'Banana' after filter, got '%s'", changedID)
 	}
 }
+
+func TestSelectPopupScrollbarOffWidgetCaptureLifecycle(t *testing.T) {
+	labels := make([]string, 20)
+	for i := range labels {
+		labels[i] = string(rune('a' + i))
+	}
+	sw := NewSelectWidget(SelectConfig{Items: makeSelectItems(labels...), Collapsible: true})
+	sw.SetRect(Rect{X: 10, Y: 5, W: 10, H: 1})
+	sw.setOpen(true)
+	sw.Render(newVirtualSurface(10, 1))
+	popup := sw.PopupRect()
+	sw.RenderPopup(newVirtualSurface(popup.W, popup.H))
+	invalidations := 0
+	sw.SetPointerCaptureInvalidated(func() { invalidations++ })
+
+	barX := popup.X + popup.W - 2
+	barY := popup.Y + 1
+	if got := sw.HandleEvent(tcell.NewEventMouse(barX, barY, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("popup scrollbar press result = %v, want captured", got)
+	}
+	if got := sw.HandleEvent(tcell.NewEventMouse(80, 80, tcell.Button1, 0)); got != EventCaptured {
+		t.Fatalf("off-popup drag result = %v, want captured", got)
+	}
+	if got := sw.HandleEvent(tcell.NewEventMouse(80, 80, tcell.ButtonNone, 0)); got != EventConsumed {
+		t.Fatalf("off-popup release result = %v, want consumed", got)
+	}
+	if sw.OwnsPointerCapture() || invalidations != 0 {
+		t.Fatalf("normal release retained or invalidated capture: invalidations=%d", invalidations)
+	}
+
+	sw.HandleEvent(tcell.NewEventMouse(barX, barY, tcell.Button1, 0))
+	sw.ClosePopup()
+	if sw.OwnsPointerCapture() || invalidations != 1 {
+		t.Fatalf("closing popup did not invalidate capture: owns=%v invalidations=%d", sw.OwnsPointerCapture(), invalidations)
+	}
+}

@@ -30,9 +30,10 @@ type TableWidget struct {
 	lastSel   int
 	focused   bool
 
-	scrollbar scrollbar
-	contentW  int
-	widths    []int
+	scrollbar                 scrollbar
+	contentW                  int
+	widths                    []int
+	pointerCaptureInvalidated func()
 }
 
 func NewTableWidget(cfg TableConfig) *TableWidget {
@@ -87,6 +88,8 @@ func (t *TableWidget) Render(surface Surface) {
 	surface.Fill(term.Cell{Ch: ' '})
 
 	if h <= 0 || w <= 0 || len(t.Config.Columns) == 0 {
+		_, invalidated := t.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(t.Config.Rows), t.scrollTop))
+		t.notifyPointerCaptureInvalidated(invalidated)
 		return
 	}
 
@@ -97,24 +100,15 @@ func (t *TableWidget) Render(surface Surface) {
 		dataH = 0
 	}
 
-	maxScroll := len(t.Config.Rows) - dataH
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if t.scrollTop > maxScroll {
-		t.scrollTop = maxScroll
-	}
+	rangeModel := newScrollRange(dataH, len(t.Config.Rows), t.scrollTop)
+	t.scrollTop = rangeModel.offset
 
 	t.ensureVisible(dataH)
-
-	t.scrollbar.X = t.rect.X + w - 1
-	t.scrollbar.Y = t.rect.Y + headerH
-	t.scrollbar.Height = dataH
-	t.scrollbar.TotalItems = len(t.Config.Rows)
-	t.scrollbar.TopItem = t.scrollTop
+	rangeModel = newScrollRange(dataH, len(t.Config.Rows), t.scrollTop)
+	t.scrollTop = rangeModel.offset
 
 	t.contentW = w
-	if t.scrollbar.visible() {
+	if rangeModel.visible() {
 		t.contentW = w - 1
 	}
 	t.widths = t.effectiveWidths(t.contentW)
@@ -129,7 +123,13 @@ func (t *TableWidget) Render(surface Surface) {
 		t.renderRow(surface, idx, headerH+i, t.contentW)
 	}
 
-	t.scrollbar.Render(surface, w-1, headerH)
+	ox, oy := t.contentOrigin()
+	geometry := scrollbarGeometry{
+		localTrack: Rect{X: w - 1, Y: headerH, W: 1, H: dataH},
+		hitTrack:   Rect{X: ox + w - 1, Y: oy + headerH, W: 1, H: dataH},
+	}
+	_, invalidated := t.scrollbar.Render(surface, geometry, rangeModel)
+	t.notifyPointerCaptureInvalidated(invalidated)
 }
 
 // effectiveWidths keeps fixed widths; auto columns split the remaining space (min 1 cell).
@@ -263,9 +263,9 @@ func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, 
 }
 
 func (t *TableWidget) HandleEvent(ev tcell.Event) EventResult {
-	if newTop, consumed := t.scrollbar.HandleEvent(ev); consumed {
+	if newTop, result := t.scrollbar.HandleEvent(ev); result != EventIgnored {
 		t.scrollTop = newTop
-		return EventConsumed
+		return result
 	}
 
 	switch tev := ev.(type) {
@@ -281,6 +281,30 @@ func (t *TableWidget) HandleEvent(ev tcell.Event) EventResult {
 		return result
 	}
 	return EventIgnored
+}
+
+func (t *TableWidget) CancelPointerCapture() bool {
+	canceled := t.scrollbar.cancel()
+	t.notifyPointerCaptureInvalidated(canceled)
+	return canceled
+}
+
+func (t *TableWidget) OwnsPointerCapture() bool {
+	return t.scrollbar.isDragging()
+}
+
+func (t *TableWidget) InvalidatePointerInteraction() bool {
+	return t.CancelPointerCapture()
+}
+
+func (t *TableWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	t.pointerCaptureInvalidated = invalidated
+}
+
+func (t *TableWidget) notifyPointerCaptureInvalidated(invalidated bool) {
+	if invalidated && t.pointerCaptureInvalidated != nil {
+		t.pointerCaptureInvalidated()
+	}
 }
 
 func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
