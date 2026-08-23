@@ -1,0 +1,67 @@
+name: LSP Latest Canary
+
+on:
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lsp-latest-canary
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11"
+
+jobs:
+  latest-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binary
+        run: make build
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: tests/integration/pnpm-lock.yaml
+
+      - name: Install latest LSP servers
+        run: |
+          go install golang.org/x/tools/gopls@latest
+          # TypeScript 7's native rewrite does not expose tsserver.js yet.
+          npm install -g typescript@5 typescript-language-server
+          npm install -g vscode-langservers-extracted
+          npm install -g yaml-language-server
+          npm install -g svelte-language-server
+          pip install pyright
+          sudo apt-get update
+          sudo apt-get install -y clangd
+
+      - name: Provide typescript to the TS fixture workspace
+        run: npm install --prefix tests/integration/lsp/typescript --no-save typescript@5
+
+      - name: Install test dependencies
+        working-directory: tests/integration
+        run: pnpm install --frozen-lockfile
+
+      - name: Run broad latest-server matrix
+        working-directory: tests/integration
+        run: pnpm exec vitest run --reporter=verbose lsp.test.js

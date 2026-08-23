@@ -17,8 +17,11 @@ concurrency:
 env:
   GO_VERSION: "1.25"
   GOPLS_VERSION: "v0.21.1"
+  CLANGD_VERSION: "18"
   NODE_VERSION: "24"
   PNPM_VERSION: "11"
+  TYPESCRIPT_VERSION: "5.9.3"
+  TYPESCRIPT_LANGUAGE_SERVER_VERSION: "6.0.0"
 
 jobs:
   classify:
@@ -101,7 +104,7 @@ jobs:
             echo "| test-race | $runtime | blocking when selected |"
             echo "| functional-tests | $runtime | blocking when selected |"
             echo "| integration-tests | $runtime | blocking when selected |"
-            echo "| lsp-tests | $runtime | advisory |"
+            echo "| lsp-tests | $runtime | blocking when selected |"
             echo "| fast-contract, ci-contract | true | blocking |"
             echo
             echo "Reason: $reason."
@@ -294,7 +297,6 @@ jobs:
     if: needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     outputs:
       test_outcome: ${{ steps.lsp.outcome }}
     steps:
@@ -321,21 +323,14 @@ jobs:
 
       - name: Install LSP servers
         run: |
-          go install golang.org/x/tools/gopls@${GOPLS_VERSION}
-          npm install -g typescript@5 typescript-language-server
-          npm install -g vscode-langservers-extracted
-          npm install -g yaml-language-server
-          npm install -g svelte-language-server
-          pip install pyright
-          sudo apt-get install -y clangd
+          go install "golang.org/x/tools/gopls@${GOPLS_VERSION}"
+          npm install -g "typescript@${TYPESCRIPT_VERSION}" "typescript-language-server@${TYPESCRIPT_LANGUAGE_SERVER_VERSION}"
+          sudo apt-get update
+          sudo apt-get install -y "clangd-${CLANGD_VERSION}"
+          sudo ln -sf "/usr/bin/clangd-${CLANGD_VERSION}" /usr/local/bin/clangd
 
-      # typescript-language-server needs classic TypeScript 5.x (with
-      # lib/tsserver.js); `typescript` latest is now the TS7 native rewrite,
-      # which lacks tsserver.js -> "Could not find a valid TypeScript
-      # installation". Install TS5 into the TS fixture so the harness copies it
-      # into each temp workspace, where the server resolves it.
       - name: Provide typescript to the TS fixture workspace
-        run: npm install --prefix tests/integration/lsp/typescript --no-save typescript@5
+        run: npm install --prefix tests/integration/lsp/typescript --no-save "typescript@${TYPESCRIPT_VERSION}"
 
       - name: Install test dependencies
         working-directory: tests/integration
@@ -344,7 +339,7 @@ jobs:
       - name: Run LSP tests
         id: lsp
         working-directory: tests/integration
-        run: pnpm exec vitest run --reporter=verbose lsp
+        run: pnpm exec vitest run --reporter=verbose lsp-compatibility.test.js
 
   fast-contract:
     needs: [classify, vet, lint, test, docs]
@@ -449,6 +444,7 @@ jobs:
           require_result test-race "$RUNTIME" "$RACE_RESULT"
           require_result functional-tests "$RUNTIME" "$FUNCTIONAL_RESULT"
           require_result integration-tests "$RUNTIME" "$INTEGRATION_RESULT"
+          require_result lsp-tests "$RUNTIME" "$LSP_RESULT"
 
           {
             echo "## CI contract"
@@ -459,9 +455,9 @@ jobs:
             echo "| test-race | $RACE_RESULT | yes when selected |"
             echo "| functional-tests | $FUNCTIONAL_RESULT | yes when selected |"
             echo "| integration-tests | $INTEGRATION_RESULT | yes when selected |"
-            echo "| lsp-tests | $LSP_RESULT ($LSP_TEST_OUTCOME) | advisory |"
+            echo "| lsp-tests | $LSP_RESULT ($LSP_TEST_OUTCOME) | yes when selected |"
             echo
-            echo "The real-LSP lane remains advisory in this change; its result is reported but does not alter the existing merge contract."
+            echo "The pinned real-LSP lane proves known C, Go, and TypeScript server compatibility. The scheduled canary owns latest-version ecosystem drift."
           } >> "$GITHUB_STEP_SUMMARY"
 
           [[ "$failed" == "false" ]]

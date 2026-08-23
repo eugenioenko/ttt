@@ -18,6 +18,11 @@ export function start(...args) {
   return session;
 }
 
+export function startWithEnv(env, ...args) {
+  const assignments = Object.entries(env).map(([key, value]) => `${key}=${value}`);
+  return run(["start", "--", "env", ...assignments, BINARY, ...args], 30000);
+}
+
 export function snapshot() {
   return run(["snapshot"]);
 }
