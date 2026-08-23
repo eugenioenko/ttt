@@ -40,15 +40,15 @@ func RunEventLoop(
 	lastBlameLine := -1
 	lastBlameFile := ""
 	lastGutterFile := ""
+	lastGutterRepo := ""
 	lastTabFile := ""
 	lastOutlineFile := ""
 	lastOutlineLine := -1
 	lastCursorLine := -1
 	lastCursorCol := -1
 	lastCursorFile := ""
-	lastBranchDir := app.Workspace.Primary()
+	lastBlameRepo := ""
 	blameGen := 0
-	app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: git.BranchName(lastBranchDir)})
 
 	syncStatus := func() {
 		app.syncRepositoryObservation()
@@ -94,25 +94,12 @@ func RunEventLoop(
 
 		app.SyncLanguageSegment()
 
-		repoDir := ""
-		if filePath != "" && !app.EditorGroup.IsActiveVirtual() {
-			if folder := app.Workspace.FolderForFile(filePath); folder != nil && folder.IsRepo {
-				repoDir = folder.Path
-			}
-		}
-
-		if repoDir != lastBranchDir {
-			lastBranchDir = repoDir
-			if repoDir != "" {
-				app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: git.BranchName(repoDir)})
-			} else {
-				app.Status.SetSegment(view.StatusSegment{ID: "branch", Side: "left", Priority: 100, Text: ""})
-			}
-		}
+		repoDir := app.SyncRepositoryBranch()
 
 		// Trigger git gutter computation when switching to a new file
-		if filePath != lastGutterFile {
+		if filePath != lastGutterFile || repoDir != lastGutterRepo {
 			lastGutterFile = filePath
+			lastGutterRepo = repoDir
 			app.RequestGitGutterForActiveFile()
 		}
 
@@ -147,9 +134,10 @@ func RunEventLoop(
 			}
 		}
 
-		if filePath != lastBlameFile || line != lastBlameLine {
+		if filePath != lastBlameFile || line != lastBlameLine || repoDir != lastBlameRepo {
 			lastBlameFile = filePath
 			lastBlameLine = line
+			lastBlameRepo = repoDir
 			app.Status.SetSegment(view.StatusSegment{ID: "blame", Side: "left", Priority: 200, Text: ""})
 			if repoDir != "" {
 				blameGen++
@@ -384,6 +372,10 @@ func RunEventLoop(
 				app.HandleRepoOpResult(v)
 			case *RepositoryStatusResult:
 				app.Repository.HandleStatus(v)
+				syncStatus()
+			case *RepositoryIdentityResult:
+				app.Repository.HandleIdentity(v)
+				syncStatus()
 			case *CurrentChangesResult:
 				app.Repository.HandleCurrentChanges(v)
 			case *RepositoryInvalidationRequest:
