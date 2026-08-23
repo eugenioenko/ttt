@@ -450,6 +450,104 @@ func TestDiffWidgetCollapsedSeparatorIsQuietUntilHovered(t *testing.T) {
 	}
 }
 
+func TestDiffWidgetCollapsedEmphasisCoversContentAndDisclosureUntilHovered(t *testing.T) {
+	for _, mode := range []DiffMode{DiffModeSplit, DiffModeUnified} {
+		t.Run(fmt.Sprintf("mode-%d", mode), func(t *testing.T) {
+			fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n first\n@@ -20,1 +20,1 @@\n twentieth\n")
+			dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
+			dv.SetMode(mode)
+			dv.SetDiffCollapsedEmphasis(true)
+
+			const width, height = 50, 5
+			grid := makeGrid(width, height)
+			dv.SetRect(Rect{W: width, H: height})
+			dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+
+			const separatorRow = 1
+			if got := grid[separatorRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsedEmphasis {
+				t.Fatalf("emphasized content style = %v", got)
+			}
+			if got := grid[separatorRow][dv.layoutGutterW-1]; got.Ch != '▶' || got.Style != term.StyleDiffCollapsedEmphasis {
+				t.Fatalf("emphasized disclosure gutter = %+v", got)
+			}
+
+			if result := dv.HandleEvent(tcell.NewEventMouse(dv.layoutLeftStart, separatorRow, tcell.ButtonNone, tcell.ModNone)); result != EventConsumed {
+				t.Fatalf("hover result = %v", result)
+			}
+			dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+			if got := grid[separatorRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsedHover {
+				t.Fatalf("hovered content style = %v", got)
+			}
+			if got := grid[separatorRow][dv.layoutGutterW-1].Style; got != term.StyleDiffCollapsedHover {
+				t.Fatalf("hovered disclosure style = %v", got)
+			}
+		})
+	}
+}
+
+func TestDiffWidgetContextRebuildClearsCollapsedHoverUntilFreshMovement(t *testing.T) {
+	for _, mode := range []DiffMode{DiffModeSplit, DiffModeUnified} {
+		t.Run(fmt.Sprintf("mode-%d", mode), func(t *testing.T) {
+			fd, lines := diffWidgetContextFixture()
+			dv := NewDiffViewWidget("test.go", fd, lines, lines, false)
+			dv.SetMode(mode)
+			dv.SetDiffCollapsedEmphasis(true)
+
+			const width, height = 60, 8
+			grid := makeGrid(width, height)
+			dv.SetRect(Rect{W: width, H: height})
+			dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+
+			gapRow := -1
+			if mode == DiffModeUnified {
+				for rowIndex, line := range dv.unifiedLines {
+					if _, ok := dv.gapByLine[line.sourceLine]; ok {
+						gapRow = rowIndex
+						break
+					}
+				}
+			} else {
+				for rowIndex := range dv.Lines {
+					if _, ok := dv.gapByLine[rowIndex]; ok {
+						gapRow = rowIndex
+						break
+					}
+				}
+			}
+			if gapRow < 0 {
+				t.Fatal("missing collapsed row")
+			}
+
+			pointer := tcell.NewEventMouse(dv.layoutLeftStart, gapRow, tcell.ButtonNone, tcell.ModNone)
+			if result := dv.HandleEvent(pointer); result != EventConsumed {
+				t.Fatalf("initial hover result = %v", result)
+			}
+			dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+			if got := grid[gapRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsedHover {
+				t.Fatalf("initial hovered style = %v", got)
+			}
+
+			dv.SetContextMode(DiffContextFullFile)
+			dv.SetContextMode(DiffContextChangesOnly)
+			dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+			if got := grid[gapRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsedEmphasis {
+				t.Fatalf("rebuilt idle style = %v, want emphasis", got)
+			}
+			if got := grid[gapRow][dv.layoutGutterW-1].Style; got != term.StyleDiffCollapsedEmphasis {
+				t.Fatalf("rebuilt disclosure style = %v, want emphasis", got)
+			}
+
+			if result := dv.HandleEvent(pointer); result != EventConsumed {
+				t.Fatalf("fresh hover result after rebuild = %v", result)
+			}
+			dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
+			if got := grid[gapRow][dv.layoutLeftStart].Style; got != term.StyleDiffCollapsedHover {
+				t.Fatalf("fresh hovered style after rebuild = %v", got)
+			}
+		})
+	}
+}
+
 func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
 	grid := makeGrid(10, 2)
 	surface := NewRenderSurface(grid, Rect{W: 10, H: 2})

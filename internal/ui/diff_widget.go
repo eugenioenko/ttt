@@ -74,6 +74,7 @@ type DiffViewWidget struct {
 	hasHoveredGap   bool
 	primaryPressed  bool
 	highContrast    bool
+	emphasizeGaps   bool
 	fileDiff        diff.FileDiff
 	oldLines        []string
 	newLines        []string
@@ -87,6 +88,10 @@ type DiffViewWidget struct {
 func (d *DiffViewWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
 
 func (d *DiffViewWidget) DiffHighContrast() bool { return d.highContrast }
+
+func (d *DiffViewWidget) SetDiffCollapsedEmphasis(enabled bool) { d.emphasizeGaps = enabled }
+
+func (d *DiffViewWidget) DiffCollapsedEmphasis() bool { return d.emphasizeGaps }
 
 func (d *DiffViewWidget) SetExtendedFetcher(fetch func(dv *DiffViewWidget)) {
 	d.OnFetchExtended = fetch
@@ -290,6 +295,7 @@ func (d *DiffViewWidget) FailLoading() {
 }
 
 func (d *DiffViewWidget) rebuildLines() {
+	d.hasHoveredGap = false
 	if d.extended && d.contextLoaded {
 		d.Lines = diff.FullDiffLines(d.oldLines, d.newLines)
 		d.gapByLine = nil
@@ -676,19 +682,17 @@ func (d *DiffViewWidget) Render(surface Surface) {
 
 		dl := d.Lines[idx]
 
-		leftStyle := diffKindStyle(dl.Left.Kind)
-		rightStyle := diffKindStyle(dl.Right.Kind)
-		if gap, ok := d.gapByLine[idx]; ok && d.hasHoveredGap && gap == d.hoveredGap {
-			leftStyle = term.StyleDiffCollapsedHover
-			rightStyle = term.StyleDiffCollapsedHover
-		}
+		gap, isGap := d.gapByLine[idx]
+		gapHovered := isGap && d.hasHoveredGap && gap == d.hoveredGap
+		leftStyle := collapsedDiffRowStyle(dl.Left.Kind, d.emphasizeGaps, gapHovered)
+		rightStyle := collapsedDiffRowStyle(dl.Right.Kind, d.emphasizeGaps, gapHovered)
 
 		if continuation {
 			renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{})
 			renderDiffGutter(surface, dividerX+1, y, gutterW, diff.SideLine{})
 		} else {
-			renderDiffGutter(surface, 0, y, gutterW, dl.Left)
-			renderDiffGutter(surface, dividerX+1, y, gutterW, dl.Right)
+			renderDiffGutterWithCollapsedStyle(surface, 0, y, gutterW, dl.Left, collapsedDiffGutterStyle(dl.Left.Kind, d.emphasizeGaps, gapHovered))
+			renderDiffGutterWithCollapsedStyle(surface, dividerX+1, y, gutterW, dl.Right, collapsedDiffGutterStyle(dl.Right.Kind, d.emphasizeGaps, gapHovered))
 		}
 
 		var leftSpans, rightSpans []highlight.Span
@@ -770,14 +774,12 @@ func (d *DiffViewWidget) renderUnifiedRow(surface Surface, y, w, gutterW, conten
 	}
 
 	line := d.unifiedLines[displayIndex]
-	baseStyle := diffKindStyle(line.side.Kind)
-	if gap, ok := d.gapByLine[line.sourceLine]; ok && d.hasHoveredGap && gap == d.hoveredGap {
-		baseStyle = term.StyleDiffCollapsedHover
-	}
+	gap, isGap := d.gapByLine[line.sourceLine]
+	baseStyle := collapsedDiffRowStyle(line.side.Kind, d.emphasizeGaps, isGap && d.hasHoveredGap && gap == d.hoveredGap)
 	if continuation {
 		renderDiffGutter(surface, 0, y, gutterW, diff.SideLine{})
 	} else {
-		renderDiffGutter(surface, 0, y, gutterW, line.side)
+		renderDiffGutterWithCollapsedStyle(surface, 0, y, gutterW, line.side, collapsedDiffGutterStyle(line.side.Kind, d.emphasizeGaps, isGap && d.hasHoveredGap && gap == d.hoveredGap))
 	}
 
 	var spans []highlight.Span

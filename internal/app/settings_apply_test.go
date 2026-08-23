@@ -74,6 +74,22 @@ func TestDiffContextSettingLivesInAppearance(t *testing.T) {
 	}
 }
 
+func TestCollapsedDiffEmphasisSettingLivesInAppearance(t *testing.T) {
+	found := ""
+	count := 0
+	for _, category := range settingsCategories() {
+		for _, field := range category.Fields {
+			if field.Label == "Emphasize collapsed diff rows" {
+				found = category.Title
+				count++
+			}
+		}
+	}
+	if count != 1 || found != "Appearance" {
+		t.Fatalf("collapsed diff emphasis count = %d, category = %q; want one under Appearance", count, found)
+	}
+}
+
 func TestShowSettingsReopenPreservesPendingWorkingView(t *testing.T) {
 	a := buildTestApp(t, config.DefaultSettings())
 	a.EditorGroup.OnContentTabClose = func(id string) {

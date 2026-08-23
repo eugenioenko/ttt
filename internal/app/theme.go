@@ -49,6 +49,7 @@ func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
 	applyStyleDef(&m, term.StyleDiffAdded, theme.Diff.Added)
 	applyStyleDef(&m, term.StyleDiffDeleted, theme.Diff.Deleted)
 	applyStyleDef(&m, term.StyleDiffModified, theme.Diff.Modified)
+	applyStyleDef(&m, term.StyleDiffCollapsedEmphasis, theme.Diff.CollapsedEmphasis)
 	collapsedHover := theme.Diff.CollapsedHover
 	if collapsedHover.Bg == "" {
 		collapsedHover.Bg = theme.Editor.ActiveLine.Bg

@@ -19,6 +19,17 @@ func TestBuildStyleMapIncludesCollapsedHoverStyle(t *testing.T) {
 	}
 }
 
+func TestBuildStyleMapIncludesCollapsedEmphasisStyle(t *testing.T) {
+	theme := config.DefaultTheme()
+	theme.Diff.CollapsedEmphasis = config.StyleDef{Fg: "#abcdef", Bg: "#123456", Bold: true}
+	styles := BuildStyleMap(theme)
+	style := styles[term.StyleDiffCollapsedEmphasis]
+	fg, bg, attrs := style.GetForeground(), style.GetBackground(), style.GetAttributes()
+	if fg != tcell.GetColor("#abcdef") || bg != tcell.GetColor("#123456") || attrs&tcell.AttrBold == 0 {
+		t.Fatalf("collapsed emphasis style = fg %v bg %v attrs %v", fg, bg, attrs)
+	}
+}
+
 func TestBuildStyleMapDefaultsCollapsedHoverToActiveLine(t *testing.T) {
 	theme := config.DefaultTheme()
 	theme.Editor.ActiveLine.Bg = "#123456"

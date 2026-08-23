@@ -93,6 +93,7 @@ type EditorSettings struct {
 	DiffContext             string `json:"diffContext"`
 	DiffWordWrap            bool   `json:"diffWordWrap"`
 	DiffHighContrast        bool   `json:"diffHighContrast,omitempty"`
+	DiffCollapsedEmphasis   bool   `json:"diffEmphasizeCollapsedRows,omitempty"`
 	LineNumbers             bool   `json:"lineNumbers"`
 	CursorStyle             string `json:"cursorStyle,omitempty"`
 	FormatOnSave            bool   `json:"formatOnSave"`

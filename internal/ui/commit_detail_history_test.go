@@ -34,8 +34,9 @@ func TestCommitDetailInheritsEverySharedPresentationPreference(t *testing.T) {
 	detail.ApplyDefaultContextMode(DiffContextFullFile)
 	detail.ApplyDefaultWrapMode(DiffWrapOn)
 	detail.SetDiffHighContrast(true)
-	if detail.Mode() != DiffModeUnified || detail.ContextMode() != DiffContextFullFile || detail.WrapMode() != DiffWrapOn || !detail.DiffHighContrast() {
-		t.Fatalf("inherited detail state = mode %v context %v wrap %v contrast %v", detail.Mode(), detail.ContextMode(), detail.WrapMode(), detail.DiffHighContrast())
+	detail.SetDiffCollapsedEmphasis(true)
+	if detail.Mode() != DiffModeUnified || detail.ContextMode() != DiffContextFullFile || detail.WrapMode() != DiffWrapOn || !detail.DiffHighContrast() || !detail.DiffCollapsedEmphasis() {
+		t.Fatalf("inherited detail state = mode %v context %v wrap %v contrast %v emphasis %v", detail.Mode(), detail.ContextMode(), detail.WrapMode(), detail.DiffHighContrast(), detail.DiffCollapsedEmphasis())
 	}
 	detail.SetMode(DiffModeSplit)
 	detail.SetContextMode(DiffContextChangesOnly)
@@ -45,6 +46,65 @@ func TestCommitDetailInheritsEverySharedPresentationPreference(t *testing.T) {
 	detail.ApplyDefaultWrapMode(DiffWrapOn)
 	if detail.Mode() != DiffModeSplit || detail.ContextMode() != DiffContextChangesOnly || detail.WrapMode() != DiffWrapOff {
 		t.Fatal("shared defaults replaced explicit detail choices")
+	}
+}
+
+func TestCommitDetailCollapsedEmphasisCoversContentAndDisclosureUntilHovered(t *testing.T) {
+	for _, mode := range []DiffMode{DiffModeSplit, DiffModeUnified} {
+		t.Run(fmt.Sprintf("mode-%d", mode), func(t *testing.T) {
+			detail := NewCommitDetailWidget("/repo", "full", "abc1234", false)
+			detail.SetDetail("Subject", []CommitDetailFile{{
+				Path: "test.go",
+				Diff: diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n-old one\n+new one\n@@ -10,1 +10,1 @@\n-old ten\n+new ten\n"),
+			}}, "")
+			detail.SetMode(mode)
+			detail.SetRect(Rect{W: 60, H: 15})
+			grid := makeGrid(60, 15)
+			detail.Render(NewRenderSurface(grid, Rect{W: 60, H: 15}))
+
+			gapRow := -1
+			for rowIndex, row := range detail.rows {
+				if row.kind == commitDetailDiffRow {
+					lineIndex := row.lineIndex
+					if mode == DiffModeUnified && lineIndex >= 0 && lineIndex < len(detail.Files[row.fileIndex].unified) {
+						lineIndex = detail.Files[row.fileIndex].unified[lineIndex].sourceLine
+					}
+					if _, ok := detail.Files[row.fileIndex].gapByLine[lineIndex]; ok {
+						gapRow = rowIndex
+						break
+					}
+				}
+			}
+			if gapRow < 0 {
+				t.Fatal("missing collapsed detail row")
+			}
+			if got := grid[gapRow][detail.layoutLeftStart]; got.Style != term.StyleMuted || got.BgStyle != term.StyleDefault {
+				t.Fatalf("default detail content style = %+v, want quiet muted row", got)
+			}
+			if got := grid[gapRow][detail.gutterW-1]; got.Ch != '▶' || got.Style != term.StyleLineNumber {
+				t.Fatalf("default detail disclosure = %+v", got)
+			}
+
+			detail.SetDiffCollapsedEmphasis(true)
+			detail.Render(NewRenderSurface(grid, Rect{W: 60, H: 15}))
+			if got := grid[gapRow][detail.layoutLeftStart].Style; got != term.StyleDiffCollapsedEmphasis {
+				t.Fatalf("emphasized detail content style = %v", got)
+			}
+			if got := grid[gapRow][detail.gutterW-1]; got.Ch != '▶' || got.Style != term.StyleDiffCollapsedEmphasis {
+				t.Fatalf("emphasized detail disclosure = %+v", got)
+			}
+
+			if result := detail.HandleEvent(tcell.NewEventMouse(detail.layoutLeftStart, gapRow, tcell.ButtonNone, tcell.ModNone)); result != EventConsumed {
+				t.Fatalf("detail hover result = %v", result)
+			}
+			detail.Render(NewRenderSurface(grid, Rect{W: 60, H: 15}))
+			if got := grid[gapRow][detail.layoutLeftStart].Style; got != term.StyleDiffCollapsedHover {
+				t.Fatalf("hovered detail content style = %v", got)
+			}
+			if got := grid[gapRow][detail.gutterW-1].Style; got != term.StyleDiffCollapsedHover {
+				t.Fatalf("hovered detail disclosure style = %v", got)
+			}
+		})
 	}
 }
 

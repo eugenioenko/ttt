@@ -53,6 +53,11 @@ func (a *App) ToggleDiffHighContrast() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleDiffCollapsedEmphasis() {
+	a.Settings.Editor.DiffCollapsedEmphasis = !a.Settings.Editor.DiffCollapsedEmphasis
+	a.SaveAndApplySettings()
+}
+
 func (a *App) UseTreeGitFileView() {
 	a.Settings.Git.FileView = config.GitFileViewTree
 	a.SaveAndApplySettings()
@@ -359,6 +364,7 @@ func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
 		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+		{Label: "Emphasize Collapsed Rows", Command: "options.toggleDiffCollapsedEmphasis", Checked: menuChecked(a.Settings.Editor.DiffCollapsedEmphasis)},
 	}
 }
 
@@ -447,6 +453,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleDiffHighContrast", Title: "Toggle High Contrast Diffs",
 		Keywords: []string{"preferences", "settings", "git", "diff", "contrast", "color", "accessibility"},
 		Handler:  app.ToggleDiffHighContrast,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffCollapsedEmphasis", Title: "Toggle Collapsed Diff Row Emphasis",
+		Keywords: []string{"preferences", "settings", "git", "diff", "collapsed", "omitted", "visibility"},
+		Handler:  app.ToggleDiffCollapsedEmphasis,
 	})
 
 	reg.Register(command.Command{

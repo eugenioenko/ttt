@@ -157,6 +157,7 @@ type CommitDetailWidget struct {
 	contextMode     DiffContextMode
 	contextExplicit bool
 	highContrast    bool
+	emphasizeGaps   bool
 	collapsedFiles  []bool
 
 	rows            []commitDetailRow
@@ -192,6 +193,9 @@ type CommitDetailWidget struct {
 	lastClickPos      diffSelPos
 	primaryPressed    bool
 	disclosurePressed bool
+	hasHoveredGap     bool
+	hoveredFile       int
+	hoveredGap        int
 
 	OnFetchContext func(fileIndex int, file CommitDetailFile)
 	OnClose        func()
@@ -242,6 +246,10 @@ func (d *CommitDetailWidget) Close() {
 func (d *CommitDetailWidget) SetDiffHighContrast(enabled bool) { d.highContrast = enabled }
 
 func (d *CommitDetailWidget) DiffHighContrast() bool { return d.highContrast }
+
+func (d *CommitDetailWidget) SetDiffCollapsedEmphasis(enabled bool) { d.emphasizeGaps = enabled }
+
+func (d *CommitDetailWidget) DiffCollapsedEmphasis() bool { return d.emphasizeGaps }
 
 func (d *CommitDetailWidget) ContextMode() DiffContextMode { return d.contextMode }
 
@@ -593,6 +601,7 @@ func (d *CommitDetailWidget) afterCollapseChange() {
 func (d *CommitDetailWidget) rebuildRows() {
 	d.rows = nil
 	d.visualRows = nil
+	d.hasHoveredGap = false
 	d.visualRowsW = -1
 	d.maxLineW = 0
 	d.gutterW = 4
@@ -1046,14 +1055,16 @@ func (d *CommitDetailWidget) renderDiffRow(surface Surface, rowIndex int, row co
 	}
 	dividerX := (viewW - 1) / 2
 	surface.SetCell(dividerX, y, term.Cell{Ch: '│', Style: term.StyleBorder})
-	leftStyle := diffKindStyle(line.Left.Kind)
-	rightStyle := diffKindStyle(line.Right.Kind)
+	gap, isGap := file.gapByLine[row.lineIndex]
+	gapHovered := isGap && d.hasHoveredGap && d.hoveredFile == row.fileIndex && d.hoveredGap == gap
+	leftStyle := collapsedDiffRowStyle(line.Left.Kind, d.emphasizeGaps, gapHovered)
+	rightStyle := collapsedDiffRowStyle(line.Right.Kind, d.emphasizeGaps, gapHovered)
 	if visual.continuation {
 		renderDiffGutter(surface, 0, y, d.gutterW, diff.SideLine{})
 		renderDiffGutter(surface, dividerX+1, y, d.gutterW, diff.SideLine{})
 	} else {
-		renderDiffGutter(surface, 0, y, d.gutterW, line.Left)
-		renderDiffGutter(surface, dividerX+1, y, d.gutterW, line.Right)
+		renderDiffGutterWithCollapsedStyle(surface, 0, y, d.gutterW, line.Left, collapsedDiffGutterStyle(line.Left.Kind, d.emphasizeGaps, gapHovered))
+		renderDiffGutterWithCollapsedStyle(surface, dividerX+1, y, d.gutterW, line.Right, collapsedDiffGutterStyle(line.Right.Kind, d.emphasizeGaps, gapHovered))
 	}
 
 	var leftSpans, rightSpans []highlight.Span
@@ -1078,15 +1089,17 @@ func (d *CommitDetailWidget) renderUnifiedDiffRow(surface Surface, rowIndex int,
 		return
 	}
 	line := file.unified[lineIndex].side
+	fileIndex := d.rows[rowIndex].fileIndex
 	contentStart, contentW, _, _ := d.sideGeometry(viewW)
 	if contentW <= 0 {
 		return
 	}
-	style := diffKindStyle(line.Kind)
+	gap, isGap := file.gapByLine[file.unified[lineIndex].sourceLine]
+	style := collapsedDiffRowStyle(line.Kind, d.emphasizeGaps, isGap && d.hasHoveredGap && d.hoveredFile == fileIndex && d.hoveredGap == gap)
 	if visual.continuation {
 		renderDiffGutter(surface, 0, y, d.gutterW, diff.SideLine{})
 	} else {
-		renderDiffGutter(surface, 0, y, d.gutterW, line)
+		renderDiffGutterWithCollapsedStyle(surface, 0, y, d.gutterW, line, collapsedDiffGutterStyle(line.Kind, d.emphasizeGaps, isGap && d.hasHoveredGap && d.hoveredFile == fileIndex && d.hoveredGap == gap))
 	}
 	var spans []highlight.Span
 	if file.highlighter != nil && line.Text != "" && line.Kind != diff.Collapsed {
@@ -1444,6 +1457,13 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 			d.LeftCol += 4
 		default:
 			mx, my := event.Position()
+			hoveredFile, hoveredGap, overGap := d.contextGapAtScreenY(my)
+			hoverChanged := overGap != d.hasHoveredGap || (overGap && (hoveredFile != d.hoveredFile || hoveredGap != d.hoveredGap))
+			d.hasHoveredGap = overGap
+			if overGap {
+				d.hoveredFile = hoveredFile
+				d.hoveredGap = hoveredGap
+			}
 			primaryPressed := buttons&tcell.Button1 != 0
 			freshPrimaryPress := primaryPressed && !d.primaryPressed
 			if buttons == tcell.ButtonNone {
@@ -1517,6 +1537,9 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 				if start.Line == end.Line && start.Col == end.Col {
 					d.hasSelection = false
 				}
+				return EventConsumed
+			}
+			if hoverChanged {
 				return EventConsumed
 			}
 			return EventIgnored
