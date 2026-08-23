@@ -15,6 +15,7 @@ type SidebarWidget struct {
 	capturedChild             Widget
 	pointerCaptureInvalidated func()
 	cancelingPointerCapture   bool
+	lastSeenBtn               tcell.ButtonMask
 }
 
 func NewSidebarWidget() *SidebarWidget {
@@ -59,6 +60,7 @@ func (s *SidebarWidget) CancelPointerCapture() bool {
 		canceled = widgets.CancelPointerCapture(captured) || canceled
 	}
 	canceled = s.Tabs.CancelPointerCapture() || canceled
+	s.lastSeenBtn = 0
 	s.cancelingPointerCapture = false
 	if canceled && s.pointerCaptureInvalidated != nil {
 		s.pointerCaptureInvalidated()
@@ -86,6 +88,7 @@ func (s *SidebarWidget) InvalidatePointerInteraction() bool {
 		invalidated = widgets.InvalidatePointerInteraction(captured) || invalidated
 	}
 	invalidated = s.Tabs.InvalidatePointerInteraction() || invalidated
+	s.lastSeenBtn = 0
 	s.cancelingPointerCapture = false
 	if invalidated && s.pointerCaptureInvalidated != nil {
 		s.pointerCaptureInvalidated()
@@ -120,13 +123,24 @@ func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
 		result := s.capturedChild.HandleEvent(ev)
 		if tev, ok := ev.(*tcell.EventMouse); ok && tev.Buttons() == tcell.ButtonNone {
 			s.capturedChild = nil
+			s.lastSeenBtn = tcell.ButtonNone
 		}
 		return result
 	}
 	if tev, ok := ev.(*tcell.EventMouse); ok {
 		_, my := tev.Position()
 		r := s.GetRect()
-		if my == r.Y || s.Tabs.PointerGestureActive() {
+		btn := tev.Buttons()
+		prevBtn := s.lastSeenBtn
+		s.lastSeenBtn = btn
+
+		if s.Tabs.PointerGestureActive() {
+			return s.Tabs.HandleEvent(ev)
+		}
+		if my == r.Y {
+			if btn&tcell.Button1 != 0 && prevBtn&tcell.Button1 != 0 {
+				return EventIgnored
+			}
 			return s.Tabs.HandleEvent(ev)
 		}
 	}

@@ -122,6 +122,60 @@ func TestSidebarTracksAndCancelsCapturedPanel(t *testing.T) {
 	}
 }
 
+func TestSidebarTabPressAfterCanceledCaptureReachesTabs(t *testing.T) {
+	sidebar := NewSidebarWidget()
+	sidebar.AddPanel("one", "one", &mockWidget{})
+	sidebar.Tabs.Config.Reorderable = true
+	sidebar.Tabs.Config.OnReorder = func(_, _ int) {}
+	root := NewRoot(sidebar)
+	root.SetSize(30, 3)
+	root.Render(makeGrid(30, 3))
+
+	press := func() {
+		t.Helper()
+		if got := root.HandleEvent(tcell.NewEventMouse(2, 0, tcell.Button1, 0)); got != EventConsumed {
+			t.Fatalf("tab press result = %v, want root-consumed", got)
+		}
+	}
+
+	press()
+	if !sidebar.Tabs.PointerGestureActive() {
+		t.Fatal("tab press did not start a gesture")
+	}
+
+	// PushOverlay cancels pointer capture across the whole tree; the sidebar's
+	// stale button state must not swallow the next press.
+	root.CancelPointerCapture()
+
+	press()
+	if !sidebar.Tabs.PointerGestureActive() {
+		t.Fatal("tab press after canceled capture never reached the tabs")
+	}
+}
+
+func TestSidebarTabPressAfterCapturedPanelReleaseReachesTabs(t *testing.T) {
+	panel := &sidebarCaptureProbe{}
+	sidebar := NewSidebarWidget()
+	sidebar.AddPanel("one", "one", panel)
+	sidebar.Tabs.Config.Reorderable = true
+	sidebar.Tabs.Config.OnReorder = func(_, _ int) {}
+	root := NewRoot(sidebar)
+	root.SetSize(30, 10)
+	root.Render(makeGrid(30, 10))
+
+	if got := root.HandleEvent(tcell.NewEventMouse(2, 3, tcell.Button1, 0)); got != EventConsumed {
+		t.Fatalf("panel press result = %v, want root-consumed capture", got)
+	}
+	root.HandleEvent(tcell.NewEventMouse(2, 3, tcell.ButtonNone, 0))
+
+	if got := root.HandleEvent(tcell.NewEventMouse(2, 0, tcell.Button1, 0)); got != EventConsumed {
+		t.Fatalf("tab press result = %v, want root-consumed", got)
+	}
+	if !sidebar.Tabs.PointerGestureActive() {
+		t.Fatal("tab press after captured panel release never reached the tabs")
+	}
+}
+
 func TestSidebarInvalidatesCapturedPanelAndPreservesNormalRelease(t *testing.T) {
 	panel := &sidebarCaptureProbe{}
 	sidebar := NewSidebarWidget()
