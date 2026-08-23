@@ -94,7 +94,32 @@ func paletteBorderWidth(row string) int {
 	return 0
 }
 
-func TestCommandPaletteWideGeometryBindingsAndTransitions(t *testing.T) {
+func TestCommandPaletteResponsiveWidths(t *testing.T) {
+	tests := []struct {
+		name   string
+		width  int
+		height int
+		want   int
+	}{
+		{name: "narrow", width: 30, height: 24, want: 26},
+		{name: "typical", width: 80, height: 24, want: 48},
+		{name: "wide", width: 200, height: 50, want: 90},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHarness(t, tt.width, tt.height)
+			defer h.stop()
+
+			h.pressCtrl(tcell.KeyCtrlP)
+			if got := paletteBorderWidth(h.screenRow(2)); got != tt.want {
+				t.Fatalf("command palette width=%d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCommandPaletteSharedWidthBindingsAndTransitions(t *testing.T) {
 	h := newTestHarness(t, 200, 50)
 	defer h.stop()
 
@@ -106,20 +131,20 @@ func TestCommandPaletteWideGeometryBindingsAndTransitions(t *testing.T) {
 	if palette.Input.Text != ">" || len(palette.Items) != len(h.reg.List()) {
 		t.Fatalf("Ctrl+P input=%q items=%d, want > and complete registry of %d", palette.Input.Text, len(palette.Items), len(h.reg.List()))
 	}
-	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
-		t.Fatalf("Ctrl+P command palette width=%d, want 60; row=%q", got, h.screenRow(2))
+	if got := paletteBorderWidth(h.screenRow(2)); got != 90 {
+		t.Fatalf("Ctrl+P command palette width=%d, want 90; row=%q", got, h.screenRow(2))
 	}
 
 	h.pressRune('?')
-	if got := paletteBorderWidth(h.screenRow(2)); got != 120 {
-		t.Fatalf("help palette width=%d, want responsive width 120", got)
+	if got := paletteBorderWidth(h.screenRow(2)); got != 90 {
+		t.Fatalf("help palette width=%d, want shared width 90", got)
 	}
 	palette.Selected = 3
 
 	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
 	h.pressRune('>')
-	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
-		t.Fatalf("help-to-command palette width=%d, want 60", got)
+	if got := paletteBorderWidth(h.screenRow(2)); got != 90 {
+		t.Fatalf("help-to-command palette width=%d, want 90", got)
 	}
 	if palette.Selected != 0 {
 		t.Fatalf("help-to-command selected=%d, want 0", palette.Selected)
@@ -129,19 +154,28 @@ func TestCommandPaletteWideGeometryBindingsAndTransitions(t *testing.T) {
 	if palette.Input.Text != "" {
 		t.Fatalf("file-mode input=%q, want empty", palette.Input.Text)
 	}
-	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
-		t.Fatalf("file palette width=%d, want 60", got)
+	if got := paletteBorderWidth(h.screenRow(2)); got != 90 {
+		t.Fatalf("file palette width=%d, want 90", got)
 	}
 	h.assertContains("alpha.txt")
 
-	h.click(50, 3)
+	h.pressRune(':')
+	if palette.Input.Text != ":" {
+		t.Fatalf("go-to-line input=%q, want colon prefix", palette.Input.Text)
+	}
+	if got := paletteBorderWidth(h.screenRow(2)); got != 90 {
+		t.Fatalf("go-to-line palette width=%d, want 90", got)
+	}
+
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	h.click(54, 3)
 	if h.app.Root.HasOverlay() {
-		t.Fatal("file palette retained the wider help hit target")
+		t.Fatal("outside click did not dismiss file palette")
 	}
 
 	h.pressCtrl(tcell.KeyCtrlP)
-	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
-		t.Fatalf("reopened command palette width=%d, want 60", got)
+	if got := paletteBorderWidth(h.screenRow(2)); got != 90 {
+		t.Fatalf("reopened command palette width=%d, want 90", got)
 	}
 	h.pressKey(tcell.KeyEscape, tcell.ModNone)
 
@@ -154,8 +188,8 @@ func TestCommandPaletteWideGeometryBindingsAndTransitions(t *testing.T) {
 	if palette.Input.Text != "" {
 		t.Fatalf("Ctrl+K P input=%q, want empty file search", palette.Input.Text)
 	}
-	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
-		t.Fatalf("Ctrl+K P file palette width=%d, want 60", got)
+	if got := paletteBorderWidth(h.screenRow(2)); got != 90 {
+		t.Fatalf("Ctrl+K P file palette width=%d, want 90", got)
 	}
 }
 

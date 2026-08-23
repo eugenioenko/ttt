@@ -385,26 +385,46 @@ func renderPaletteAt(p *SelectDialogWidget, width, height int) [][]term.Cell {
 	return cells
 }
 
-func TestPaletteWideGeometryTransitionsAndReopen(t *testing.T) {
+func TestCalculatePaletteWidth(t *testing.T) {
+	tests := []struct {
+		name        string
+		screenWidth int
+		want        int
+	}{
+		{name: "narrow safety bound", screenWidth: 30, want: 26},
+		{name: "typical responsive width", screenWidth: 80, want: 48},
+		{name: "wide maximum", screenWidth: 200, want: 90},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := calculatePaletteWidth(tt.screenWidth); got != tt.want {
+				t.Fatalf("calculatePaletteWidth(%d) = %d, want %d", tt.screenWidth, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPaletteSharedWidthAcrossModeTransitionsAndReopen(t *testing.T) {
 	p := NewSelectDialogWidget(helpTestCommands())
 	p.files = []paletteFile{{Rel: "alpha.txt", Abs: "/workspace/alpha.txt"}}
 
 	commandCells := renderPaletteAt(p, 200, 50)
-	if p.boxX != 70 || p.boxW != 60 {
-		t.Fatalf("command geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
+	if p.boxX != 55 || p.boxW != 90 {
+		t.Fatalf("command geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
 	}
-	if commandCells[p.boxY][70].Ch != '╔' || commandCells[p.boxY][129].Ch != '╗' {
-		t.Fatal("command border does not match its 60-column layout")
+	if commandCells[p.boxY][55].Ch != '╔' || commandCells[p.boxY][144].Ch != '╗' {
+		t.Fatal("command border does not match its shared layout")
 	}
 
 	p.Input.SetText("?")
 	p.Selected = 2
 	helpCells := renderPaletteAt(p, 200, 50)
-	if p.boxX != 40 || p.boxW != 120 {
-		t.Fatalf("help geometry = x:%d width:%d, want x:40 width:120", p.boxX, p.boxW)
+	if p.boxX != 55 || p.boxW != 90 {
+		t.Fatalf("help geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
 	}
-	if helpCells[p.boxY][40].Ch != '╔' || helpCells[p.boxY][159].Ch != '╗' {
-		t.Fatal("help border does not match its responsive layout")
+	if helpCells[p.boxY][55].Ch != '╔' || helpCells[p.boxY][144].Ch != '╗' {
+		t.Fatal("help border does not match its shared layout")
 	}
 
 	p.Input.SetText(">")
@@ -412,27 +432,38 @@ func TestPaletteWideGeometryTransitionsAndReopen(t *testing.T) {
 	if p.Selected != 0 || p.scrollOffset != 0 {
 		t.Fatalf("command transition retained selection state: selected=%d scroll=%d", p.Selected, p.scrollOffset)
 	}
-	if p.boxX != 70 || p.boxW != 60 {
-		t.Fatalf("command transition geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
+	if p.boxX != 55 || p.boxW != 90 {
+		t.Fatalf("command transition geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
 	}
-	if commandCells[p.boxY][40].Ch != '.' {
-		t.Fatal("command render retained the old help border")
+	if commandCells[p.boxY][55].Ch != '╔' || commandCells[p.boxY][144].Ch != '╗' {
+		t.Fatal("command transition border does not match its shared layout")
 	}
 
 	p.Input.Clear()
 	fileCells := renderPaletteAt(p, 200, 50)
-	if p.boxX != 70 || p.boxW != 60 {
-		t.Fatalf("file geometry = x:%d width:%d, want x:70 width:60", p.boxX, p.boxW)
+	if p.boxX != 55 || p.boxW != 90 {
+		t.Fatalf("file geometry = x:%d width:%d, want x:55 width:90", p.boxX, p.boxW)
 	}
-	if fileCells[p.boxY][70].Ch != '╔' || fileCells[p.boxY][129].Ch != '╗' {
-		t.Fatal("file border does not match its 60-column layout")
+	if fileCells[p.boxY][55].Ch != '╔' || fileCells[p.boxY][144].Ch != '╗' {
+		t.Fatal("file border does not match its shared layout")
 	}
 
+	p.Input.SetText(":")
+	goToLineCells := renderPaletteAt(p, 200, 50)
+	if p.boxX != 55 || p.boxW != 90 || p.boxH != 3 {
+		t.Fatalf("go-to-line geometry = x:%d width:%d height:%d, want x:55 width:90 height:3", p.boxX, p.boxW, p.boxH)
+	}
+	if goToLineCells[p.boxY][55].Ch != '╔' || goToLineCells[p.boxY][144].Ch != '╗' {
+		t.Fatal("go-to-line border does not match its shared layout")
+	}
+
+	p.Input.Clear()
+	renderPaletteAt(p, 200, 50)
 	dismissed := false
 	p.OnDismiss = func() { dismissed = true }
-	p.HandleEvent(tcell.NewEventMouse(50, p.inputY, tcell.Button1, tcell.ModNone))
+	p.HandleEvent(tcell.NewEventMouse(p.boxX-1, p.inputY, tcell.Button1, tcell.ModNone))
 	if !dismissed {
-		t.Fatal("file mode retained the wider help hit target")
+		t.Fatal("outside click did not dismiss file mode")
 	}
 
 	opened := ""
@@ -444,7 +475,7 @@ func TestPaletteWideGeometryTransitionsAndReopen(t *testing.T) {
 
 	reopened := NewSelectDialogWidget(helpTestCommands())
 	renderPaletteAt(reopened, 200, 50)
-	if reopened.Input.Text != ">" || reopened.boxX != 70 || reopened.boxW != 60 {
+	if reopened.Input.Text != ">" || reopened.boxX != 55 || reopened.boxW != 90 {
 		t.Fatalf("reopened command palette = input:%q x:%d width:%d", reopened.Input.Text, reopened.boxX, reopened.boxW)
 	}
 }
