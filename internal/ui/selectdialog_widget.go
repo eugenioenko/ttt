@@ -140,7 +140,7 @@ func calculatePaletteWidth(screenWidth int) int {
 	width := screenWidth * 6 / 10
 	width = max(width, paletteMinWidth)
 	width = min(width, paletteMaxWidth)
-	return min(width, screenWidth-4)
+	return min(width, max(screenWidth-4, 1))
 }
 
 func (p *SelectDialogWidget) calculateLayout(sw, sh int) selectDialogLayout {

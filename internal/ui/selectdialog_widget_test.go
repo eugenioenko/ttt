@@ -391,6 +391,12 @@ func TestCalculatePaletteWidth(t *testing.T) {
 		screenWidth int
 		want        int
 	}{
+		{name: "zero", screenWidth: 0, want: 1},
+		{name: "one", screenWidth: 1, want: 1},
+		{name: "two", screenWidth: 2, want: 1},
+		{name: "three", screenWidth: 3, want: 1},
+		{name: "four", screenWidth: 4, want: 1},
+		{name: "smallest safety bound", screenWidth: 5, want: 1},
 		{name: "narrow safety bound", screenWidth: 30, want: 26},
 		{name: "typical responsive width", screenWidth: 80, want: 48},
 		{name: "wide maximum", screenWidth: 200, want: 90},
@@ -400,6 +406,16 @@ func TestCalculatePaletteWidth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := calculatePaletteWidth(tt.screenWidth); got != tt.want {
 				t.Fatalf("calculatePaletteWidth(%d) = %d, want %d", tt.screenWidth, got, tt.want)
+			}
+
+			p := NewSelectDialogWidget(helpTestCommands())
+			layout := p.calculateLayout(tt.screenWidth, 24)
+			if layout.boxW != tt.want {
+				t.Fatalf("calculateLayout(%d, 24) width = %d, want %d", tt.screenWidth, layout.boxW, tt.want)
+			}
+			renderPaletteAt(p, tt.screenWidth, 24)
+			if p.boxW != tt.want {
+				t.Fatalf("rendered width at %d columns = %d, want %d", tt.screenWidth, p.boxW, tt.want)
 			}
 		})
 	}
