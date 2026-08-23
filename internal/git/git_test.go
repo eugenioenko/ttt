@@ -199,7 +199,8 @@ func TestReadRepositoryIdentityFindsLinkedWorktreeFromNestedDirectory(t *testing
 	gitRun(t, repo, "add", "initial.txt")
 	gitRun(t, repo, "commit", "-m", "initial")
 
-	linked := filepath.Join(t.TempDir(), "linked")
+	linkedBase := canonicalTestPath(t, t.TempDir())
+	linked := filepath.Join(linkedBase, "linked")
 	gitRun(t, repo, "worktree", "add", "-q", "-b", "linkedbranch", linked)
 	info, err := os.Stat(filepath.Join(linked, ".git"))
 	if err != nil || !info.Mode().IsRegular() {
@@ -217,6 +218,15 @@ func TestReadRepositoryIdentityFindsLinkedWorktreeFromNestedDirectory(t *testing
 	if identity.Root != linked || identity.Branch != "linkedbranch" {
 		t.Fatalf("linked identity = %+v, want root %q branch linkedbranch", identity, linked)
 	}
+}
+
+func canonicalTestPath(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved
 }
 
 func TestRevisionIdentityRequiresVerifiedUnbornHead(t *testing.T) {

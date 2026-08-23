@@ -867,6 +867,21 @@ func pathWithin(root, path string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+func (s *RepositoryState) gitRelativePath(root, path string) (string, bool) {
+	if s == nil || root == "" || path == "" {
+		return "", false
+	}
+	resolved, err := s.resolvePathIdentity(path)
+	if err != nil || !pathWithin(root, resolved) {
+		return "", false
+	}
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
+}
+
 func (a *App) syncRepositoryObservation() {
 	if a == nil || a.Repository == nil || a.Sidebar == nil || a.SplitPanel == nil {
 		return
