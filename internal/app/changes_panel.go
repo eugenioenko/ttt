@@ -339,10 +339,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		cp.saveCommitLogState()
 		cp.lastLogDir = ""
 		cp.logDir = ""
-		cp.logAnchor = ""
-		cp.logOffset = 0
-		cp.logHasMore = false
-		cp.logPagePending = false
+		cp.resetHistoryPaging()
 		cp.CommitLog.SetItems(nil)
 		return
 	}
@@ -353,10 +350,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		cp.cancelCommitFileReads()
 		cp.saveCommitLogState()
 		cp.logDir = ""
-		cp.logAnchor = ""
-		cp.logOffset = 0
-		cp.logHasMore = false
-		cp.logPagePending = false
+		cp.resetHistoryPaging()
 		cp.logCommits = make(map[string]commitFileRef)
 		cp.logFiles = make(map[string]commitFileRef)
 		cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:loading", Label: "Loading…", Muted: true}})
@@ -400,6 +394,13 @@ func (cp *ChangesPanel) cancelHistoryReads() {
 	cp.cancelCommitFileReads()
 }
 
+func (cp *ChangesPanel) resetHistoryPaging() {
+	cp.logAnchor = ""
+	cp.logOffset = 0
+	cp.logHasMore = false
+	cp.logPagePending = false
+}
+
 func (cp *ChangesPanel) RefreshHistory() {
 	cp.lastLogDir = ""
 	cp.refreshCommitLog()
@@ -412,13 +413,11 @@ func (cp *ChangesPanel) CancelHistoryRead() {
 }
 
 func (cp *ChangesPanel) Shutdown() {
-	cp.cancelHistoryReads()
-	cp.logGen++
-	cp.logPagePending = false
+	cp.CancelHistoryRead()
 }
 
 func (cp *ChangesPanel) loadOlderHistory() {
-	if cp.logPagePending || !cp.logHasMore || cp.logDir == "" || cp.logAnchor == "" {
+	if cp.logPagePending || cp.logCancel != nil || !cp.logHasMore || cp.logDir == "" || cp.logAnchor == "" {
 		return
 	}
 	cp.logPagePending = true

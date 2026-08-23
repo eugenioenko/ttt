@@ -184,10 +184,7 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	}
 	if r.Unavailable {
 		cp.logDir = ""
-		cp.logAnchor = ""
-		cp.logOffset = 0
-		cp.logHasMore = false
-		cp.logPagePending = false
+		cp.resetHistoryPaging()
 		cp.logCommits = make(map[string]commitFileRef)
 		cp.logFiles = make(map[string]commitFileRef)
 		cp.CommitLog.SetItems(nil)
@@ -313,16 +310,16 @@ func (cp *ChangesPanel) applyCommitLogPage(r *CommitLogResult) {
 	if r.Canceled {
 		return
 	}
-	selectedID := ""
-	if selected := cp.CommitLog.Selected(); selected != nil {
-		selectedID = selected.ID
-	}
 	if r.Err != nil {
 		cp.replaceHistoryLoadNode(false, true)
 		if cp.OnError != nil {
 			cp.OnError("Could not load older commits: " + r.Err.Error())
 		}
 		return
+	}
+	selectedID := ""
+	if selected := cp.CommitLog.Selected(); selected != nil {
+		selectedID = selected.ID
 	}
 
 	nodes := cp.CommitLog.Config.Items

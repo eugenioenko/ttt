@@ -163,6 +163,10 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 func TestSettingsAppearanceOwnsDiffContextControl(t *testing.T) {
 	h := openSettings(t)
 	defer h.stop()
+	clickRowControl(t, h, "Editor", "Editor")
+	if rowHas(h, "Diff context", "Changes Only") {
+		t.Fatalf("Editor still contains the Diff context control:\n%s", h.screenText())
+	}
 	clickRowControl(t, h, "Appearance", "Appearance")
 	if !rowHas(h, "Diff context", "Changes Only") {
 		t.Fatalf("Appearance is missing the normalized Diff context control:\n%s", h.screenText())

@@ -60,15 +60,17 @@ func TestCommitToCoversEveryField(t *testing.T) {
 
 func TestDiffContextSettingLivesInAppearance(t *testing.T) {
 	found := ""
+	count := 0
 	for _, category := range settingsCategories() {
 		for _, field := range category.Fields {
 			if field.Label == "Diff context" {
 				found = category.Title
+				count++
 			}
 		}
 	}
-	if found != "Appearance" {
-		t.Fatalf("Diff context category = %q, want Appearance", found)
+	if count != 1 || found != "Appearance" {
+		t.Fatalf("Diff context count = %d, category = %q; want one under Appearance", count, found)
 	}
 }
 

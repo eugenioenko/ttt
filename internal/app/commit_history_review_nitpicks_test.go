@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -90,6 +91,30 @@ func TestStaleCommitLogCompletionDoesNotCancelNewerRead(t *testing.T) {
 	}
 	if cp.logCancel == nil {
 		t.Fatal("stale history completion cleared the newer cancel function")
+	}
+}
+
+func TestLoadOlderHistoryDoesNotReplaceActiveRefreshCancellation(t *testing.T) {
+	cp := NewChangesPanel()
+	cp.Screen = term.NewTcellScreenFrom(term.NewSimScreen())
+	cp.logDir = "/repo"
+	cp.lastLogDir = "/repo"
+	cp.logAnchor = git.ObjectID(strings.Repeat("a", 40))
+	cp.logOffset = 10
+	cp.logHasMore = true
+	cp.logGen = 1
+	cp.CommitLog.SetItems([]*widgets.TreeNode{historyLoadOlderNode(false, false)})
+	refreshCtx, refreshCancel := context.WithCancel(context.Background())
+	defer refreshCancel()
+	cp.logCancel = refreshCancel
+
+	cp.loadOlderHistory()
+	cp.CancelHistoryRead()
+
+	select {
+	case <-refreshCtx.Done():
+	default:
+		t.Fatal("pagination replaced the active refresh cancellation handle")
 	}
 }
 
