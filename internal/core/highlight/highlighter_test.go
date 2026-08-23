@@ -1,8 +1,11 @@
 package highlight
 
 import (
-	"github.com/eugenioenko/ttt/internal/term"
+	"errors"
 	"testing"
+
+	"github.com/alecthomas/chroma/v2"
+	"github.com/eugenioenko/ttt/internal/term"
 )
 
 func TestHighlightGo_Comment(t *testing.T) {
@@ -349,4 +352,172 @@ func TestInvalidationUnchangedBufferKeepsTable(t *testing.T) {
 	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxKeyword {
 		t.Error("styling changed after a no-op edit")
 	}
+}
+
+func TestHighlightRuneIndexedHalfOpenSpans(t *testing.T) {
+	h := New("main.go")
+	if h == nil {
+		t.Fatal("expected Go highlighter")
+	}
+
+	for _, tc := range []struct {
+		name   string
+		prefix string
+	}{
+		{name: "multibyte", prefix: "é "},
+		{name: "fullwidth", prefix: "界 "},
+		{name: "combining", prefix: "e\u0301 "},
+		{name: "mixed", prefix: "é界e\u0301 "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			line := tc.prefix + "func main() {}"
+			start := len([]rune(tc.prefix))
+			want := Span{Start: start, End: start + len([]rune("func")), Style: term.StyleSyntaxKeyword}
+			spans := h.HighlightLine(line)
+			if !containsSpan(spans, want) {
+				t.Fatalf("spans for %q = %#v, want exact half-open rune span %#v", line, spans, want)
+			}
+			if styleAt(spans, want.End-1) != want.Style {
+				t.Fatalf("last rune inside %#v lost keyword style", want)
+			}
+			if styleAt(spans, want.End) == want.Style {
+				t.Fatalf("end rune %d must be outside half-open span %#v", want.End, want)
+			}
+		})
+	}
+}
+
+func TestHighlightStringSpanCountsUnicodeRunes(t *testing.T) {
+	h := New("main.go")
+	line := "x := \"é界e\u0301\""
+	want := Span{Start: 5, End: 11, Style: term.StyleSyntaxString}
+	spans := h.HighlightLine(line)
+	if !containsSpan(spans, want) {
+		t.Fatalf("spans for %q = %#v, want %#v", line, spans, want)
+	}
+}
+
+func TestHighlightEmptyInvalidAndDefaultGaps(t *testing.T) {
+	h := New("main.go")
+	if spans := h.HighlightLine(""); len(spans) != 0 {
+		t.Fatalf("empty line spans = %#v, want none", spans)
+	}
+	lines := []string{"package main"}
+	if spans := h.HighlightLineAt(lines, -1); spans != nil {
+		t.Fatalf("negative line spans = %#v, want nil", spans)
+	}
+	if spans := h.HighlightLineAt(lines, len(lines)); spans != nil {
+		t.Fatalf("past-end line spans = %#v, want nil", spans)
+	}
+
+	spans := h.HighlightLine(lines[0])
+	if got := styleAt(spans, 0); got != term.StyleSyntaxKeyword {
+		t.Fatalf("package style = %v, want keyword", got)
+	}
+	for _, span := range spans {
+		if span.Style == term.StyleDefault {
+			t.Fatalf("default token emitted as explicit span: %#v", span)
+		}
+	}
+	for _, col := range []int{7, 8, 11} {
+		if got := styleAt(spans, col); got != term.StyleDefault {
+			t.Fatalf("default gap at rune %d = %v, want default", col, got)
+		}
+	}
+}
+
+func TestHighlightFilenameSelectionAndFallback(t *testing.T) {
+	for _, tc := range []struct {
+		filename string
+		language string
+	}{
+		{filename: "main.go", language: "Go"},
+		{filename: "/tmp/project/main.go", language: "Go"},
+		{filename: "main.go.bak", language: "Go"},
+		{filename: "Dockerfile", language: "Docker"},
+		{filename: "Gemfile", language: "Ruby"},
+	} {
+		t.Run(tc.filename, func(t *testing.T) {
+			h := New(tc.filename)
+			if h == nil {
+				t.Fatalf("New(%q) = nil, want %s", tc.filename, tc.language)
+			}
+			if got := h.Language(); got != tc.language {
+				t.Fatalf("New(%q).Language() = %q, want %q", tc.filename, got, tc.language)
+			}
+		})
+	}
+	if h := New("file.unknown-ttt-language"); h != nil {
+		t.Fatalf("unknown filename selected %q, want nil fallback", h.Language())
+	}
+}
+
+func TestMapTokenTypePresentationContract(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		token chroma.TokenType
+		style term.Style
+	}{
+		{name: "keyword type", token: chroma.KeywordType, style: term.StyleSyntaxType},
+		{name: "keyword subcategory", token: chroma.KeywordConstant, style: term.StyleSyntaxKeyword},
+		{name: "comment subcategory", token: chroma.CommentSpecial, style: term.StyleSyntaxComment},
+		{name: "string subcategory", token: chroma.StringDouble, style: term.StyleSyntaxString},
+		{name: "number subcategory", token: chroma.NumberInteger, style: term.StyleSyntaxNumber},
+		{name: "operator subcategory", token: chroma.OperatorWord, style: term.StyleSyntaxOperator},
+		{name: "function", token: chroma.NameFunction, style: term.StyleSyntaxFunction},
+		{name: "function magic", token: chroma.NameFunctionMagic, style: term.StyleSyntaxFunction},
+		{name: "builtin", token: chroma.NameBuiltin, style: term.StyleSyntaxBuiltin},
+		{name: "builtin pseudo", token: chroma.NameBuiltinPseudo, style: term.StyleSyntaxBuiltin},
+		{name: "class", token: chroma.NameClass, style: term.StyleSyntaxType},
+		{name: "decorator", token: chroma.NameDecorator, style: term.StyleSyntaxType},
+		{name: "tag", token: chroma.NameTag, style: term.StyleSyntaxTag},
+		{name: "attribute", token: chroma.NameAttribute, style: term.StyleSyntaxAttribute},
+		{name: "variable subcategory", token: chroma.NameVariableGlobal, style: term.StyleSyntaxVariable},
+		{name: "heading", token: chroma.GenericHeading, style: term.StyleSyntaxKeyword},
+		{name: "subheading", token: chroma.GenericSubheading, style: term.StyleSyntaxKeyword},
+		{name: "strong", token: chroma.GenericStrong, style: term.StyleSyntaxType},
+		{name: "emphasis", token: chroma.GenericEmph, style: term.StyleSyntaxString},
+		{name: "inserted", token: chroma.GenericInserted, style: term.StyleDiffAdded},
+		{name: "deleted", token: chroma.GenericDeleted, style: term.StyleDiffDeleted},
+		{name: "punctuation", token: chroma.Punctuation, style: term.StyleSyntaxPunctuation},
+		{name: "unmapped text", token: chroma.Text, style: term.StyleDefault},
+		{name: "unmapped name", token: chroma.Name, style: term.StyleDefault},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := mapTokenType(tc.token); got != tc.style {
+				t.Fatalf("mapTokenType(%v) = %v, want %v", tc.token, got, tc.style)
+			}
+		})
+	}
+}
+
+type tokeniseErrorLexer struct {
+	chroma.Lexer
+}
+
+func (tokeniseErrorLexer) Tokenise(*chroma.TokeniseOptions, string) (chroma.Iterator, error) {
+	return nil, errors.New("tokenise failed")
+}
+
+func TestLexerErrorsProduceNoSpansOrBlockState(t *testing.T) {
+	lx := tokeniseErrorLexer{}
+	h := &Highlighter{lexer: lx, blockOpen: "/*", blockClose: "*/"}
+	if spans := h.lexLine("func main() {}"); spans != nil {
+		t.Fatalf("lexLine error spans = %#v, want nil", spans)
+	}
+	if got := h.computeOpensAt("/* open"); got != -1 {
+		t.Fatalf("computeOpensAt error = %d, want -1", got)
+	}
+	if open, close := detectBlockComment(lx); open != "" || close != "" {
+		t.Fatalf("detectBlockComment error = %q/%q, want no delimiters", open, close)
+	}
+}
+
+func containsSpan(spans []Span, want Span) bool {
+	for _, span := range spans {
+		if span == want {
+			return true
+		}
+	}
+	return false
 }

@@ -3,6 +3,7 @@ package ui
 import (
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/cursor"
+	"github.com/eugenioenko/ttt/internal/core/highlight"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -171,6 +172,37 @@ func TestEditorSelectionHighlight(t *testing.T) {
 	}
 	if grid[0][g+4].BgStyle == term.StyleSelection {
 		t.Error("col 4 should not be selected")
+	}
+}
+
+func TestEditorSyntaxSearchAndSelectionLayering(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"func main() {}"}},
+		&cursor.Cursor{Line: 0, Col: 0},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 10},
+	)
+	e.Highlighter = highlight.New("main.go")
+	e.Selection = &selection.Selection{Active: true, Anchor: selection.Position{Line: 0, Col: 0}}
+	e.Cursor.Line = 0
+	e.Cursor.Col = 4
+	e.SetRect(Rect{X: 0, Y: 0, W: 20, H: 4})
+
+	grid := makeGrid(20, 4)
+	e.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 20, H: 4}))
+	cell := grid[0][e.GutterWidth()]
+	if cell.Style != term.StyleSyntaxKeyword || cell.BgStyle != term.StyleSelection {
+		t.Fatalf("selected syntax cell = %+v, want keyword foreground with selection background", cell)
+	}
+
+	e.Selection.Active = false
+	e.SearchMatches = []FindMatch{{Line: 0, Col: 0, Len: 4}}
+	e.SearchActive = 0
+	e.buildSearchIndex()
+	grid = makeGrid(20, 4)
+	e.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 20, H: 4}))
+	cell = grid[0][e.GutterWidth()]
+	if cell.Style != term.StyleSearchActive || cell.BgStyle != 0 {
+		t.Fatalf("searched syntax cell = %+v, want active search style with no layered background", cell)
 	}
 }
 

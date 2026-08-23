@@ -76,6 +76,83 @@ func TestRenderCodeBlock(t *testing.T) {
 	}
 }
 
+func TestRenderCodeBlockHighlightAndFallbackStyles(t *testing.T) {
+	known := renderCodeBlock([]string{"func main() {}"}, "go")
+	if got := styleForText(known[0], "func"); got != term.StyleSyntaxKeyword {
+		t.Fatalf("known Go fence func style = %v, want syntax keyword", got)
+	}
+	if got := styleForText(known[0], "main"); got != term.StyleSyntaxFunction {
+		t.Fatalf("known Go fence main style = %v, want syntax function", got)
+	}
+	if got := styleForText(known[0], " "); got != term.StyleHoverCode {
+		t.Fatalf("known Go fence unmapped gap style = %v, want hover code fallback", got)
+	}
+	renderedKnown := lineForText(t, Render("```go\nfunc main() {}\n```"), "func main() {}")
+	if got := styleForText(renderedKnown, "func"); got != term.StyleSyntaxKeyword {
+		t.Fatalf("rendered Go fence func style = %v, want syntax keyword", got)
+	}
+	if got := styleForText(renderedKnown, "main"); got != term.StyleSyntaxFunction {
+		t.Fatalf("rendered Go fence main style = %v, want syntax function", got)
+	}
+
+	unknown := renderCodeBlock([]string{"plain text"}, "unknown-ttt-language")
+	if len(unknown[0].Spans) != 1 || unknown[0].Spans[0] != (Span{Text: "plain text", Style: term.StyleHoverCode}) {
+		t.Fatalf("unknown fence spans = %#v, want one hover-code fallback span", unknown[0].Spans)
+	}
+
+	empty := renderCodeBlock([]string{""}, "go")
+	if len(empty[0].Spans) != 1 || empty[0].Spans[0] != (Span{Text: "", Style: term.StyleHoverCode}) {
+		t.Fatalf("empty known fence spans = %#v, want empty hover-code fallback span", empty[0].Spans)
+	}
+}
+
+func TestRenderDiffFenceUsesDedicatedStyles(t *testing.T) {
+	lines := renderCodeBlock([]string{"+added line", "-deleted line"}, "diff")
+	if got := styleForText(lines[0], "+added line"); got != term.StyleDiffAdded {
+		t.Fatalf("added diff fence style = %v, want diff added", got)
+	}
+	if got := styleForText(lines[1], "-deleted line"); got != term.StyleDiffDeleted {
+		t.Fatalf("deleted diff fence style = %v, want diff deleted", got)
+	}
+	rendered := Render("```diff\n+added line\n-deleted line\n```")
+	if got := styleForText(lineForText(t, rendered, "+added line"), "+added line"); got != term.StyleDiffAdded {
+		t.Fatalf("rendered added diff fence style = %v, want diff added", got)
+	}
+	if got := styleForText(lineForText(t, rendered, "-deleted line"), "-deleted line"); got != term.StyleDiffDeleted {
+		t.Fatalf("rendered deleted diff fence style = %v, want diff deleted", got)
+	}
+}
+
+func TestRenderCodeBlockKeepsLineIsolatedLexerState(t *testing.T) {
+	lines := renderCodeBlock([]string{"/* open", "inside", "*/"}, "go")
+	if got := styleForText(lines[0], "/* open"); got != term.StyleSyntaxComment {
+		t.Fatalf("opener style = %v, want syntax comment", got)
+	}
+	if got := styleForText(lines[1], "inside"); got != term.StyleHoverCode {
+		t.Fatalf("isolated interior style = %v, want hover code fallback", got)
+	}
+}
+
+func styleForText(line Line, text string) term.Style {
+	for _, span := range line.Spans {
+		if span.Text == text || strings.Contains(span.Text, text) {
+			return span.Style
+		}
+	}
+	return term.StyleDefault
+}
+
+func lineForText(t *testing.T, lines []Line, text string) Line {
+	t.Helper()
+	for _, line := range lines {
+		if line.Text() == text {
+			return line
+		}
+	}
+	t.Fatalf("rendered lines do not contain %q: %v", text, textLines(lines))
+	return Line{}
+}
+
 func TestRenderDivider(t *testing.T) {
 	lines := Render("above\n\n---\n\nbelow")
 	foundDivider := false
