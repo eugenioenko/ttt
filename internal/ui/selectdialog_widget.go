@@ -26,7 +26,7 @@ const (
 
 const (
 	paletteMinWidth = 40
-	paletteMaxWidth = 90
+	paletteMaxWidth = 60
 )
 
 type selectDialogLayout struct {
