@@ -60,6 +60,7 @@ func (s *SidebarWidget) CancelPointerCapture() bool {
 		canceled = widgets.CancelPointerCapture(captured) || canceled
 	}
 	canceled = s.Tabs.CancelPointerCapture() || canceled
+	s.lastSeenBtn = 0
 	s.cancelingPointerCapture = false
 	if canceled && s.pointerCaptureInvalidated != nil {
 		s.pointerCaptureInvalidated()
@@ -87,6 +88,7 @@ func (s *SidebarWidget) InvalidatePointerInteraction() bool {
 		invalidated = widgets.InvalidatePointerInteraction(captured) || invalidated
 	}
 	invalidated = s.Tabs.InvalidatePointerInteraction() || invalidated
+	s.lastSeenBtn = 0
 	s.cancelingPointerCapture = false
 	if invalidated && s.pointerCaptureInvalidated != nil {
 		s.pointerCaptureInvalidated()
@@ -121,6 +123,7 @@ func (s *SidebarWidget) HandleEvent(ev tcell.Event) EventResult {
 		result := s.capturedChild.HandleEvent(ev)
 		if tev, ok := ev.(*tcell.EventMouse); ok && tev.Buttons() == tcell.ButtonNone {
 			s.capturedChild = nil
+			s.lastSeenBtn = tcell.ButtonNone
 		}
 		return result
 	}
