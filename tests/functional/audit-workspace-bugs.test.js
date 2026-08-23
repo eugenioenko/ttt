@@ -65,7 +65,7 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
     expect(snapshots[plain]).not.toContain("linkedbranch");
   });
 
-  it("shows the target repository branch through an external file symlink", () => {
+  it("shows the target repository branch without false gutter markers through an external file symlink", () => {
     dir = createTempDir();
     const repo = join(dir, "repo");
     mkdirSync(repo);
@@ -86,8 +86,10 @@ describe("BUG-044: git branch indicator missing when the opened file is below th
 
     tui.start(link);
     tui.waitFor("filesymlinkbranch");
+    tui.waitStable();
     const screen = tui.snapshot();
     const { snapshots } = tui.run();
     expect(snapshots[screen]).toContain("filesymlinkbranch");
+    expect(snapshots[screen]).not.toContain("│▎");
   });
 });

@@ -36,7 +36,11 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		return
 	}
 
-	relPath, err := filepath.Rel(repoDir, filePath)
+	gitPath, err := a.Repository.resolvePathIdentity(filePath)
+	if err != nil || !pathWithin(repoDir, gitPath) {
+		return
+	}
+	relPath, err := filepath.Rel(repoDir, gitPath)
 	if err != nil {
 		return
 	}
