@@ -79,8 +79,7 @@ describe("diff reading preferences", () => {
     tui.exec("Menu: Options");
     tui.waitStable();
     const options = tui.snapshot();
-    tui.press("down");
-    tui.press("down");
+    for (let i = 0; i < 9; i++) tui.press("down");
     tui.press("right");
     const diffViews = tui.snapshot();
     tui.press("escape");

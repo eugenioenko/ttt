@@ -322,8 +322,6 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
-		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
-		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
@@ -331,6 +329,9 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
+		ui.MenuSep(),
+		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
+		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
 		ui.MenuSep(),
 		{Label: "Gutter Style", Command: "options.gutterStyle"},
 		{Label: "Border Style", Command: "options.borderStyle"},

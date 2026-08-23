@@ -53,6 +53,35 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 	}
 }
 
+func TestOptionsMenuSeparatesPresentationSubmenusFromCheckboxes(t *testing.T) {
+	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
+	firstSeparator := -1
+	for i, item := range items {
+		if item.IsSep {
+			firstSeparator = i
+			break
+		}
+		if item.Checked == 0 {
+			t.Fatalf("checkbox group item %q has no checked indicator", item.Label)
+		}
+	}
+	if firstSeparator < 0 || firstSeparator+3 >= len(items) {
+		t.Fatalf("options menu has no presentation section: %+v", items)
+	}
+	if items[firstSeparator+1].Label != "Diff Views" || len(items[firstSeparator+1].Submenu) == 0 {
+		t.Fatalf("first presentation item = %+v", items[firstSeparator+1])
+	}
+	if items[firstSeparator+2].Label != "Git Files" || len(items[firstSeparator+2].Submenu) == 0 {
+		t.Fatalf("second presentation item = %+v", items[firstSeparator+2])
+	}
+	if !items[firstSeparator+3].IsSep {
+		t.Fatalf("presentation section is not followed by a separator: %+v", items[firstSeparator+3])
+	}
+	if items[firstSeparator+1].Checked != 0 || items[firstSeparator+2].Checked != 0 {
+		t.Fatal("presentation submenus should not reserve checkbox indicators")
+	}
+}
+
 // Anything remaining focused after being dropped from the tree would swallow
 // key events with nothing on screen to explain it.
 func TestHidingMenuBarMovesFocusAway(t *testing.T) {
