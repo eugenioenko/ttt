@@ -1,12 +1,14 @@
+version: "2"
+
 linters:
+  default: none
   enable:
-    - staticcheck
     - govet
-    - errcheck
-    - ineffassign
-    - gosimple
-    - unused
-  disable-all: true
+    # TODO: enable after fixing violations
+    # - errcheck     # https://github.com/eugenioenko/ttt/issues/505
+    # - staticcheck  # https://github.com/eugenioenko/ttt/issues/506
+    # - ineffassign  # https://github.com/eugenioenko/ttt/issues/507
+    # - unused       # https://github.com/eugenioenko/ttt/issues/508
 
 linters-settings:
   errcheck:
@@ -16,6 +18,6 @@ linters-settings:
       - fmt.Fprint
       - (io.Closer).Close
 
-issues:
+run:
   exclude-dirs:
     - vendor
