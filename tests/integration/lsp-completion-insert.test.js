@@ -54,7 +54,7 @@ const available = lspServerAvailable();
 
 // Retry: tsserver can be slow to respond in CI; each retry re-runs setup for a
 // fresh server attempt.
-describe("lsp completion insertion", { retry: 2 }, () => {
+describe("real TypeScript completion acceptance", { retry: 2 }, () => {
   let dir;
 
   beforeEach(() => {
@@ -69,17 +69,15 @@ describe("lsp completion insertion", { retry: 2 }, () => {
 
   const testFn = available ? it : it.skip;
 
-  testFn("accepting console. completion does not produce double dot", () => {
+  testFn("negotiates the dot trigger and inserts a vendor completion", () => {
     dir = createTempDir();
     cpSync(LSP_DIR, dir, { recursive: true });
+    const file = resolve(dir, "completion.js");
+    writeFileSync(file, "// TypeScript completion smoke\n\n", "utf8");
 
-    const testFile = resolve(dir, "insert_test.js");
-    writeFileSync(testFile, "// test\n\n", "utf8");
-    const configFile = resolve(LSP_DIR, "settings.json");
-
-    tui.start("--config", configFile, testFile);
-    tui.waitFor("// test");
-    waitForLogAfter("lsp initialized", 0);
+    tui.start("--config", resolve(LSP_DIR, "settings.json"), file);
+    tui.waitFor("TypeScript completion smoke");
+    waitForLogAfter("lsp initialized", 0, 20000);
 
     tui.press("ctrl+g");
     tui.waitStable();
@@ -87,22 +85,25 @@ describe("lsp completion insertion", { retry: 2 }, () => {
     tui.press("enter");
     tui.waitStable();
 
-    tui.type("console.");
     const mark = logSize();
-    const log = waitForLogAfter("lsp completion response.*count=[1-9]", mark);
-    expect(log).toMatch(/lsp completion response.*count=[1-9]/);
-
+    tui.type("console.");
+    const log = waitForLogAfter("lsp completion response.*count=[1-9]", mark, 20000);
     tui.waitStable();
+    const offered = tui.snapshot();
     tui.press("tab");
     tui.waitStable();
-
-    const snap = tui.snapshot();
-    expect(snap).not.toContain("console..");
-    expect(snap).toMatch(/console\.\w+/);
-
+    const inserted = tui.snapshot();
+    tui.press("escape");
     tui.press("ctrl+q");
     sleep(200);
     tui.press("arrow_right");
     tui.press("enter");
+
+    expect(log).toMatch(/lsp completion request.*triggerChar=\./);
+    expect(log).toMatch(/lsp completion response.*count=[1-9]/);
+    const selected = offered.match(/│ ■ ([A-Za-z]\w*)\b/);
+    expect(selected).not.toBeNull();
+    expect(inserted).toContain(`console.${selected[1]}`);
+    expect(inserted).not.toContain("console...");
   });
 });
