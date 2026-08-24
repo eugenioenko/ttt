@@ -259,7 +259,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	cp.Split.Bottom = bottom
 	cp.Split.ShowBottom = true
 	cp.Split.BottomH = 0
-	cp.Split.BottomRatio = 1.0 / 3.0
+	cp.Split.BottomRatio = 0.5
 	cp.Split.MinBottomH = changesHistoryMinHeight
 	cp.Split.MinTopH = changesWorkingTreeMinHeight
 	cp.Split.OnResize = func(height int) {
