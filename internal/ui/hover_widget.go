@@ -102,7 +102,6 @@ func (h *HoverWidget) Render(surface Surface) {
 			y = localY + 1
 			if y+menuH > sh {
 				menuH = sh - y
-				visLines = menuH - 2
 			}
 		} else {
 			y = 0

@@ -145,7 +145,7 @@ func main() {
 	colorizedFg := cells[parenRow*w+parenCol].Style.GetForeground()
 
 	h.exec("options.toggleBracketColors")
-	cells, _, _ = h.screen.GetContents()
+	_, _, _ = h.screen.GetContents()
 
 	if h.app.Settings.Editor.BracketPairColorization {
 		t.Error("expected BracketPairColorization to be false after toggle")

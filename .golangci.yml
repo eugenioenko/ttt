@@ -7,5 +7,5 @@ linters:
     # TODO: enable after fixing violations
     # - errcheck     # https://github.com/eugenioenko/ttt/issues/505
     # - staticcheck  # https://github.com/eugenioenko/ttt/issues/506
-    # - ineffassign  # https://github.com/eugenioenko/ttt/issues/507
+    - ineffassign
     - unused
