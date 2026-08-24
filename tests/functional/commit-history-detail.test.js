@@ -25,7 +25,7 @@ describe("commit history detail", () => {
     tui.press("right");
     tui.waitFor("selected-detail.txt");
     tui.press("down");
-    tui.exec("Git: Open Changes Only");
+    tui.exec("Git: Open Changes");
     tui.waitFor("selected-detail.txt @");
     const opened = tui.snapshot();
 

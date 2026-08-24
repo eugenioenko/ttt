@@ -228,7 +228,7 @@ func registerGitCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "changes.openDiff", Title: "Git: Open Changes Only",
+		ID: "changes.openDiff", Title: "Git: Open Changes",
 		Keywords: []string{"git", "changes", "diff", "compare"},
 		Handler: func() {
 			app.openSelectedDiff(false)
@@ -236,7 +236,7 @@ func registerGitCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "changes.openExtendedDiff", Title: "Git: Open Full File",
+		ID: "changes.openExtendedDiff", Title: "Git: Open Full Diff",
 		Keywords: []string{"git", "changes", "diff", "compare"},
 		Handler: func() {
 			app.openSelectedDiff(true)

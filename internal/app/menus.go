@@ -117,16 +117,16 @@ var commitDetailContextMenu = []ui.ContextMenuItem{
 }
 
 var changesContextMenuStaged = []ui.ContextMenuItem{
-	{Label: "Open Changes Only", Command: "changes.openDiff"},
-	{Label: "Open Full File", Command: "changes.openExtendedDiff"},
+	{Label: "Open Changes", Command: "changes.openDiff"},
+	{Label: "Open Full Diff", Command: "changes.openExtendedDiff"},
 	{Label: "Open File", Command: "changes.openFile"},
 	ui.MenuSep(),
 	{Label: "Unstage", Command: "changes.unstage"},
 }
 
 var changesContextMenuUnstaged = []ui.ContextMenuItem{
-	{Label: "Open Changes Only", Command: "changes.openDiff"},
-	{Label: "Open Full File", Command: "changes.openExtendedDiff"},
+	{Label: "Open Changes", Command: "changes.openDiff"},
+	{Label: "Open Full Diff", Command: "changes.openExtendedDiff"},
 	{Label: "Open File", Command: "changes.openFile"},
 	ui.MenuSep(),
 	{Label: "Stage", Command: "changes.stage"},
