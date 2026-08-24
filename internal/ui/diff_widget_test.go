@@ -328,7 +328,7 @@ func TestDiffWidgetCollapsedSeparatorShowsLineDistance(t *testing.T) {
 		t.Fatalf("expected two hunks and a separator, got %v", dv.Lines)
 	}
 	separator := dv.Lines[3]
-	if separator.Left.Text != "⋯ 331 lines ⋯" || separator.Right.Text != "⋯ 331 lines ⋯" {
+	if separator.Left.Text != " ⋯ 331 lines ⋯" || separator.Right.Text != " ⋯ 331 lines ⋯" {
 		t.Fatalf("separator = %q / %q, want collapsed distance", separator.Left.Text, separator.Right.Text)
 	}
 }
@@ -337,7 +337,7 @@ func TestDiffWidgetCollapsedSeparatorUsesSingularLine(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -24,1 +24,1 @@\n line 24\n@@ -26,1 +26,1 @@\n line 26\n")
 	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
 
-	if got := dv.Lines[1].Left.Text; got != "⋯ 1 line ⋯" {
+	if got := dv.Lines[1].Left.Text; got != " ⋯ 1 line ⋯" {
 		t.Fatalf("separator = %q, want singular distance", got)
 	}
 }
@@ -352,7 +352,7 @@ func TestDiffWidgetCollapsedSeparatorClickExpandsOnlyThatGap(t *testing.T) {
 	grid := makeGrid(width, height)
 	dv.SetRect(Rect{W: width, H: height})
 	dv.Render(NewRenderSurface(grid, Rect{W: width, H: height}))
-	if got := dv.Lines[1].Left.Text; got != "⋯ 6 lines ⋯" {
+	if got := dv.Lines[1].Left.Text; got != " ⋯ 6 lines ⋯" {
 		t.Fatalf("precondition separator = %q", got)
 	}
 

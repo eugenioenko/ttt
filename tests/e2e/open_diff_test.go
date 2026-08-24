@@ -97,7 +97,7 @@ func TestCompactDiffShowsQuietCollapsedDistance(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -22,3 +22,3 @@\n line 22\n line 23\n line 24\n@@ -356,2 +356,2 @@\n line 356\n line 357\n")
 	h.app.EditorGroup.OpenDiff("distance.go", fd, nil, nil, false)
 	h.redraw()
-	if !strings.Contains(h.screenText(), "▶⋯ 331 lines ⋯") {
+	if !strings.Contains(h.screenText(), "▶ ⋯ 331 lines ⋯") {
 		t.Fatalf("compact diff should show a gutter disclosure and collapsed distance:\n%s", h.screenText())
 	}
 }

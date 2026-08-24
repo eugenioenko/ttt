@@ -143,5 +143,5 @@ func collapsedDistanceLabel(distance int) string {
 	if distance == 1 {
 		unit = "line"
 	}
-	return fmt.Sprintf("⋯ %d %s ⋯", distance, unit)
+	return fmt.Sprintf(" ⋯ %d %s ⋯", distance, unit)
 }
