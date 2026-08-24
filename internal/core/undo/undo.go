@@ -262,6 +262,9 @@ func (c *SplitLineCommand) Apply(b *buffer.Buffer) {
 	}
 	line := []rune(b.Lines[c.Line])
 	col := c.Col
+	if col < 0 {
+		col = 0
+	}
 	if col > len(line) {
 		col = len(line)
 	}
