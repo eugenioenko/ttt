@@ -36,6 +36,9 @@ func (s *Selection) Contains(line, col, curLine, curCol int) bool {
 	if line < start.Line || line > end.Line {
 		return false
 	}
+	if col < 0 {
+		return line != end.Line
+	}
 	if line == start.Line && col < start.Col {
 		return false
 	}
