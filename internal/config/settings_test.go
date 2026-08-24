@@ -50,6 +50,19 @@ func TestNormalizeSidebarPanelOrder(t *testing.T) {
 	}
 }
 
+func TestNormalizeSidebarDimensionsRejectsNegative(t *testing.T) {
+	s := DefaultSettings()
+	s.Sidebar.Width = -5
+	s.Sidebar.CommitHistoryHeight = -5
+	normalizeSettings(&s)
+	if s.Sidebar.Width != 0 {
+		t.Errorf("sidebar.width = %d, want 0", s.Sidebar.Width)
+	}
+	if s.Sidebar.CommitHistoryHeight != 0 {
+		t.Errorf("sidebar.commitHistoryHeight = %d, want 0", s.Sidebar.CommitHistoryHeight)
+	}
+}
+
 func TestNormalizeSettingsValidGutterStyles(t *testing.T) {
 	for _, style := range []string{"minimal", "compact", "extended"} {
 		s := DefaultSettings()
