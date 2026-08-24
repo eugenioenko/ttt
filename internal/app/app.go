@@ -514,9 +514,9 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			lang = a.EditorGroup.Editor.Highlighter.Language()
 		}
 		text := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
-		a.NotifyLSPChange(path, lang, text)
+		changeDone := a.NotifyLSPChange(path, lang, text)
 		a.ScheduleAutocomplete()
-		a.CheckSignatureHelpTrigger()
+		a.CheckSignatureHelpTrigger(changeDone)
 		a.ScheduleGitGutter()
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("editor.change", path)

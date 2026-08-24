@@ -260,7 +260,13 @@ func (a *App) charBeforeCursor() string {
 	return string(runes[col-1])
 }
 
-func (a *App) CheckSignatureHelpTrigger() {
+// CheckSignatureHelpTrigger inspects the character just typed and, if it's a
+// signature-help trigger, requests signature help. changeDone must be the
+// channel returned by the NotifyLSPChange call for this same keystroke, so
+// the request is sent only after that change has reached the server —
+// otherwise the server could see the signatureHelp request before the
+// didChange that produced the triggering character.
+func (a *App) CheckSignatureHelpTrigger(changeDone <-chan struct{}) {
 	if !a.Settings.Autocomplete.Enabled || !a.Settings.Autocomplete.SignatureHelp {
 		return
 	}
@@ -294,19 +300,25 @@ func (a *App) CheckSignatureHelpTrigger() {
 	triggers := a.LspManager.SignatureHelpTriggerCharacters(serverKey)
 	for _, tc := range triggers {
 		if ch == tc {
-			a.RequestSignatureHelp(path, lang, line, col)
+			a.RequestSignatureHelp(path, lang, line, col, changeDone)
 			return
 		}
 	}
 }
 
-func (a *App) RequestSignatureHelp(path, lang string, line, col int) {
+// RequestSignatureHelp sends a textDocument/signatureHelp request. If
+// changeDone is non-nil, it waits for that channel to close first, so the
+// request is ordered after the didChange notification for the same edit.
+func (a *App) RequestSignatureHelp(path, lang string, line, col int, changeDone <-chan struct{}) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		return
 	}
 	workDir := a.lspWorkDir(path)
 	go func() {
+		if changeDone != nil {
+			<-changeDone
+		}
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			slog.Error("lsp client", "err", err)
@@ -977,10 +989,16 @@ func (a *App) NotifyLSPOpen(path, lang, text string) {
 	}()
 }
 
-func (a *App) NotifyLSPChange(path, lang, text string) {
+// NotifyLSPChange sends a textDocument/didChange notification and returns a
+// channel that closes once that notification has been sent, so callers that
+// must not race ahead of it (e.g. a signature-help request for the same
+// keystroke) can wait on it.
+func (a *App) NotifyLSPChange(path, lang, text string) <-chan struct{} {
+	done := make(chan struct{})
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
-		return
+		close(done)
+		return done
 	}
 	workDir := a.lspWorkDir(path)
 	a.DocVersionsMu.Lock()
@@ -988,12 +1006,14 @@ func (a *App) NotifyLSPChange(path, lang, text string) {
 	version := a.DocVersions[path]
 	a.DocVersionsMu.Unlock()
 	go func() {
+		defer close(done)
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			return
 		}
 		client.DidChange(FileURI(path), text, version)
 	}()
+	return done
 }
 
 func (a *App) NotifyLSPSave(path, lang, text string) {
