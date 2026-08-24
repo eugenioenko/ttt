@@ -498,6 +498,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	a.wirePluginLog(p)
 	p.Markdown = a.Settings.Markdown
 	p.Borders = a.Borders
+	p.AppVersion = a.Version
 	p.ShowInfoDialog = func(title string, entries []widgets.KeyValueEntry) {
 		a.ShowInfoDialog(title, entries)
 	}

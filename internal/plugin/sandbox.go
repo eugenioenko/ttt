@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -569,6 +570,21 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 
 		L.SetField(mod, "plugin_dir", L.NewFunction(func(L *lua.LState) int {
 			L.Push(lua.LString(p.Dir))
+			return 1
+		}))
+
+		L.SetField(mod, "platform", L.NewFunction(func(L *lua.LState) int {
+			L.Push(lua.LString(runtime.GOOS))
+			return 1
+		}))
+
+		L.SetField(mod, "arch", L.NewFunction(func(L *lua.LState) int {
+			L.Push(lua.LString(runtime.GOARCH))
+			return 1
+		}))
+
+		L.SetField(mod, "version", L.NewFunction(func(L *lua.LState) int {
+			L.Push(lua.LString(p.AppVersion))
 			return 1
 		}))
 

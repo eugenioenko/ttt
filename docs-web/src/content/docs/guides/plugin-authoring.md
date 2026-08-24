@@ -574,6 +574,26 @@ local ok, err = fs.write(state_file, json.encode(state))
 
 Note: the plugin directory is a git clone that `Plugins: Update` pulls into, and it is deleted on uninstall — keep only regenerable state there.
 
+### `ttt.platform()` / `ttt.arch()` / `ttt.version()`
+
+Return the host OS, CPU architecture, and running ttt version. No permission required.
+
+| Function          | Returns                                                                 |
+|-------------------|--------------------------------------------------------------------------|
+| `ttt.platform()`  | Go `GOOS` value: `"linux"`, `"darwin"`, or `"windows"`.                 |
+| `ttt.arch()`      | Go `GOARCH` value, e.g. `"amd64"`, `"arm64"`.                           |
+| `ttt.version()`   | ttt's version string, e.g. `"1.2.3"` (`"dev"` for unreleased builds).   |
+
+```lua
+local ttt = require("ttt")
+
+if ttt.platform() == "windows" then
+  sys.exec("tasklist", {})
+else
+  sys.exec("ps", {"-eo", "pid,comm"})
+end
+```
+
 ### `ttt.set_timeout(ms, callback)` / `ttt.set_interval(ms, callback)`
 
 Schedule a callback to run later on the editor's main loop. `set_timeout` fires once after `ms` milliseconds; `set_interval` fires every `ms` milliseconds until cleared. Both return a numeric timer id. No permission required.
@@ -2240,7 +2260,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 
 | Module         | Description                    |
 |----------------|--------------------------------|
-| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `open_tab`, `close_tab`, `open_file`, `plugin_dir`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
+| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `open_tab`, `close_tab`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.editor`   | Editor buffer read/write       |
 | `ttt.diagnostics` | Publish editor diagnostics (squiggles) |
