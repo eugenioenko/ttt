@@ -6,6 +6,46 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 )
 
+func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	settings.Sidebar.CommitHistoryHeight = 17
+	a := buildTestApp(t, settings)
+	if a.Changes.Split.BottomH != 17 || a.Changes.Split.BottomRatio != 0 {
+		t.Fatalf("restored split = height %d ratio %v, want height 17 ratio 0", a.Changes.Split.BottomH, a.Changes.Split.BottomRatio)
+	}
+
+	a.persistCommitHistoryHeight(12)
+	if got := a.Settings.Sidebar.CommitHistoryHeight; got != 12 {
+		t.Fatalf("commitHistoryHeight = %d, want 12", got)
+	}
+	if got := config.LoadSettings().Sidebar.CommitHistoryHeight; got != 12 {
+		t.Fatalf("persisted commitHistoryHeight = %d, want 12", got)
+	}
+}
+
+func TestSidebarWidthRestoresAndPersists(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	settings.Sidebar.Width = 22
+	a := buildTestApp(t, settings)
+	if a.SplitPanel.DividerPos != 22 {
+		t.Fatalf("restored sidebar width = %d, want 22", a.SplitPanel.DividerPos)
+	}
+
+	a.persistSidebarWidth(18)
+	if got := a.Settings.Sidebar.Width; got != 18 {
+		t.Fatalf("sidebar width = %d, want 18", got)
+	}
+	if got := config.LoadSettings().Sidebar.Width; got != 18 {
+		t.Fatalf("persisted sidebar width = %d, want 18", got)
+	}
+}
+
 // commitTo writes only the fields the form owns. Settings changed elsewhere
 // while the tab sat open — including ones the form never shows — must survive.
 // Assigning the whole working struct instead would roll them back.

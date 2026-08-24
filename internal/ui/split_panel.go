@@ -65,13 +65,7 @@ func (s *SplitPanelWidget) Render(surface Surface) {
 		return
 	}
 
-	divX := s.DividerPos + 1
-	if divX < 2 {
-		divX = 2
-	}
-	if divX >= w-2 {
-		divX = w - 3
-	}
+	divX := s.clampedDividerX(w)
 
 	// Top border — left side only: ┌───┐
 	surface.SetCell(0, 0, term.Cell{Ch: b.TopLeft, Style: bs})
@@ -294,9 +288,23 @@ func (s *SplitPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 	return EventIgnored
 }
 
+// clampedDividerX mirrors the divider clamp applied in Render, so hit
+// testing lines up with what's actually drawn when a restored DividerPos
+// exceeds the viewport.
+func (s *SplitPanelWidget) clampedDividerX(w int) int {
+	divX := s.DividerPos + 1
+	if divX < 2 {
+		divX = 2
+	}
+	if divX >= w-2 {
+		divX = w - 3
+	}
+	return divX
+}
+
 func (s *SplitPanelWidget) DividerScreenX() int {
 	r := s.GetRect()
-	return r.X + s.DividerPos + 1
+	return r.X + s.clampedDividerX(r.W)
 }
 
 func (s *SplitPanelWidget) CancelPointerCapture() bool {

@@ -155,6 +155,14 @@ type prGroup struct {
 	PRHeadSHA string
 }
 
+func (a *App) persistCommitHistoryHeight(height int) {
+	a.Changes.Split.BottomH = height
+	a.Settings.Sidebar.CommitHistoryHeight = height
+	if err := config.SaveSettings(*a.Settings); err != nil {
+		a.StatusError("Failed to save commit history height: " + err.Error())
+	}
+}
+
 func NewChangesPanel(dirs ...string) *ChangesPanel {
 	cp := &ChangesPanel{
 		Dirs:               dirs,
@@ -255,8 +263,8 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	cp.Split.MinBottomH = changesHistoryMinHeight
 	cp.Split.MinTopH = changesWorkingTreeMinHeight
 	cp.Split.OnResize = func(height int) {
-		// Like the sidebar width, this value lives for the panel's lifetime but is
-		// not written to settings. The split itself applies both child minimums.
+		// Default for standalone/test use; App wires this to persistCommitHistoryHeight
+		// (see registerWidgetCallbacks) once the panel is attached to Settings.
 		cp.Split.BottomH = height
 	}
 
