@@ -260,7 +260,9 @@ func (a *App) charBeforeCursor() string {
 	return string(runes[col-1])
 }
 
-func (a *App) CheckSignatureHelpTrigger() {
+// changeDone must be the NotifyLSPChange channel for this same keystroke, so
+// the server sees that didChange before the signatureHelp request it triggers.
+func (a *App) CheckSignatureHelpTrigger(changeDone <-chan struct{}) {
 	if !a.Settings.Autocomplete.Enabled || !a.Settings.Autocomplete.SignatureHelp {
 		return
 	}
@@ -294,19 +296,24 @@ func (a *App) CheckSignatureHelpTrigger() {
 	triggers := a.LspManager.SignatureHelpTriggerCharacters(serverKey)
 	for _, tc := range triggers {
 		if ch == tc {
-			a.RequestSignatureHelp(path, lang, line, col)
+			a.RequestSignatureHelp(path, lang, line, col, changeDone)
 			return
 		}
 	}
 }
 
-func (a *App) RequestSignatureHelp(path, lang string, line, col int) {
+// changeDone, if non-nil, is awaited first so the request lands after the
+// didChange notification for the same edit.
+func (a *App) RequestSignatureHelp(path, lang string, line, col int, changeDone <-chan struct{}) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		return
 	}
 	workDir := a.lspWorkDir(path)
 	go func() {
+		if changeDone != nil {
+			<-changeDone
+		}
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			slog.Error("lsp client", "err", err)
@@ -977,10 +984,15 @@ func (a *App) NotifyLSPOpen(path, lang, text string) {
 	}()
 }
 
-func (a *App) NotifyLSPChange(path, lang, text string) {
+// The returned channel closes once the didChange notification has been sent,
+// so callers that must not race ahead of it (e.g. a signature-help request
+// for the same keystroke) can wait on it.
+func (a *App) NotifyLSPChange(path, lang, text string) <-chan struct{} {
+	done := make(chan struct{})
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
-		return
+		close(done)
+		return done
 	}
 	workDir := a.lspWorkDir(path)
 	a.DocVersionsMu.Lock()
@@ -988,12 +1000,14 @@ func (a *App) NotifyLSPChange(path, lang, text string) {
 	version := a.DocVersions[path]
 	a.DocVersionsMu.Unlock()
 	go func() {
+		defer close(done)
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			return
 		}
 		client.DidChange(FileURI(path), text, version)
 	}()
+	return done
 }
 
 func (a *App) NotifyLSPSave(path, lang, text string) {
