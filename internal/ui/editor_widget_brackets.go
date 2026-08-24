@@ -186,8 +186,7 @@ func (e *EditorPaneWidget) computeBracketColors() bracketColorMap {
 			if ch == '"' || ch == '\'' || ch == '`' {
 				inString = true
 				stringChar = ch
-				if ch == '`' {
-					// backtick strings can span lines; handled by not resetting inString
+				if ch == '`' { //nolint:staticcheck // intentional empty branch: backtick strings span lines
 				}
 				continue
 			}
