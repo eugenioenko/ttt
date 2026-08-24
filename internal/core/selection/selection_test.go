@@ -35,6 +35,23 @@ func TestContains(t *testing.T) {
 	}
 }
 
+func TestContainsNegativeCol(t *testing.T) {
+	s := &Selection{Active: true, Anchor: Position{Line: 1, Col: 2}}
+
+	// col=-1 on the last line of selection should NOT be contained
+	if s.Contains(2, -1, 2, 5) {
+		t.Error("expected col=-1 on last line to NOT be in selection")
+	}
+	// col=-1 on a middle line should be contained
+	if !s.Contains(2, -1, 3, 5) {
+		t.Error("expected col=-1 on middle line to be in selection")
+	}
+	// col=-1 on the first line (multiline) should be contained
+	if !s.Contains(1, -1, 3, 5) {
+		t.Error("expected col=-1 on first line to be in selection")
+	}
+}
+
 func TestContainsInactive(t *testing.T) {
 	s := &Selection{Active: false, Anchor: Position{Line: 0, Col: 0}}
 	if s.Contains(0, 0, 1, 0) {
