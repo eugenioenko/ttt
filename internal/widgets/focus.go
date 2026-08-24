@@ -330,7 +330,7 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 		}
 	case *tcell.EventMouse:
 		mx, my := tev.Position()
-		hit := -1
+		var hit int
 		if tev.Buttons()&tcell.Button1 != 0 {
 			hit = fm.innermostVisibleHit(mx, my)
 			if hit >= 0 {
