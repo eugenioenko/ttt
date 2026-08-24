@@ -73,7 +73,7 @@ jobs:
                   docs-web/*)
                     docs_web=true
                     ;;
-                  README.md|CLAUDE.md|ARCHITECTURE.md|LICENSE|audit/*.md|workflows/*.md)
+                  README.md|AGENTS.md|ARCHITECTURE.md|LICENSE|audit/*.md|workflows/*.md)
                     ;;
                   *)
                     runtime=true
