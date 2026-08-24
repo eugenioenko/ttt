@@ -2,7 +2,7 @@
 
 This document describes ttt's current architecture, its intended dependency
 boundaries, and the incremental program for improving them. It is the source of
-truth for package ownership. `CLAUDE.md` summarizes the constraints agents most
+truth for package ownership. `AGENTS.md` summarizes the constraints agents most
 often need while working in the repository.
 
 ## Current shape
