@@ -260,12 +260,8 @@ func (a *App) charBeforeCursor() string {
 	return string(runes[col-1])
 }
 
-// CheckSignatureHelpTrigger inspects the character just typed and, if it's a
-// signature-help trigger, requests signature help. changeDone must be the
-// channel returned by the NotifyLSPChange call for this same keystroke, so
-// the request is sent only after that change has reached the server —
-// otherwise the server could see the signatureHelp request before the
-// didChange that produced the triggering character.
+// changeDone must be the NotifyLSPChange channel for this same keystroke, so
+// the server sees that didChange before the signatureHelp request it triggers.
 func (a *App) CheckSignatureHelpTrigger(changeDone <-chan struct{}) {
 	if !a.Settings.Autocomplete.Enabled || !a.Settings.Autocomplete.SignatureHelp {
 		return
@@ -306,9 +302,8 @@ func (a *App) CheckSignatureHelpTrigger(changeDone <-chan struct{}) {
 	}
 }
 
-// RequestSignatureHelp sends a textDocument/signatureHelp request. If
-// changeDone is non-nil, it waits for that channel to close first, so the
-// request is ordered after the didChange notification for the same edit.
+// changeDone, if non-nil, is awaited first so the request lands after the
+// didChange notification for the same edit.
 func (a *App) RequestSignatureHelp(path, lang string, line, col int, changeDone <-chan struct{}) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
@@ -989,10 +984,9 @@ func (a *App) NotifyLSPOpen(path, lang, text string) {
 	}()
 }
 
-// NotifyLSPChange sends a textDocument/didChange notification and returns a
-// channel that closes once that notification has been sent, so callers that
-// must not race ahead of it (e.g. a signature-help request for the same
-// keystroke) can wait on it.
+// The returned channel closes once the didChange notification has been sent,
+// so callers that must not race ahead of it (e.g. a signature-help request
+// for the same keystroke) can wait on it.
 func (a *App) NotifyLSPChange(path, lang, text string) <-chan struct{} {
 	done := make(chan struct{})
 	serverKey, _, ok := a.lspResolve(path, lang)
