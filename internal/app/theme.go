@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 
 	"github.com/gdamore/tcell/v3"
+	"github.com/gdamore/tcell/v3/color"
 )
 
 func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
@@ -174,11 +175,11 @@ func applyStyleDef(m *term.StyleMap, idx term.Style, def config.StyleDef) {
 }
 
 func applyDiagStyle(m *term.StyleMap, idx term.Style, def config.StyleDef) {
-	color := tcell.ColorRed
+	c := color.XTerm9
 	if def.Fg != "" {
-		color = tcell.GetColor(def.Fg)
+		c = tcell.GetColor(def.Fg)
 	}
-	m[idx] = tcell.StyleDefault.Underline(tcell.UnderlineStyleCurly, color)
+	m[idx] = tcell.StyleDefault.Underline(tcell.UnderlineStyleCurly, c)
 }
 
 func BuildTerminalPalettePtr(theme config.ThemeConfig) *ui.TerminalColorPalette {

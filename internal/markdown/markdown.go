@@ -160,7 +160,7 @@ func (r *renderer) renderBlock(n ast.Node) {
 	case *ast.FencedCodeBlock:
 		lang := ""
 		if n.Info != nil {
-			lang = strings.TrimSpace(string(n.Info.Text(r.src)))
+			lang = strings.TrimSpace(string(n.Info.Value(r.src)))
 		}
 		r.emitCodeBlock(r.collectBlockLines(n), lang)
 		r.emitBlank()
@@ -358,7 +358,7 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, spans *[]Span) {
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 		switch c := child.(type) {
 		case *ast.Text:
-			txt := string(c.Text(r.src))
+			txt := string(c.Value(r.src))
 			if txt != "" {
 				*spans = append(*spans, Span{Text: txt, Style: style})
 			}
@@ -371,7 +371,7 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, spans *[]Span) {
 				*spans = append(*spans, Span{Text: txt, Style: style})
 			}
 		case *ast.CodeSpan:
-			txt := string(c.Text(r.src))
+			txt := string(c.Text(r.src)) //nolint:staticcheck // Node.Text is deprecated but walkInline may differ for edge-case CodeSpan children
 			*spans = append(*spans, Span{Text: txt, Style: term.StyleHoverCode})
 		case *ast.Emphasis:
 			emphStyle := term.StyleHoverBold

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/gdamore/tcell/v3"
+	"github.com/gdamore/tcell/v3/color"
 )
 
 // A UlStyle whose style defines no underline of its own must still render a
@@ -19,7 +20,7 @@ func TestUlStyleForcesCurlyForPlainStyle(t *testing.T) {
 
 	// Override a style slot with a plain foreground colour (no underline).
 	sm := DefaultStyleMap()
-	sm[StyleSyntaxKeyword] = tcell.StyleDefault.Foreground(tcell.ColorRed)
+	sm[StyleSyntaxKeyword] = tcell.StyleDefault.Foreground(color.XTerm9)
 	ts.SetStyleMap(sm)
 
 	ts.SetCell(0, 0, Cell{Ch: 'x', UlStyle: StyleSyntaxKeyword})
@@ -30,7 +31,7 @@ func TestUlStyleForcesCurlyForPlainStyle(t *testing.T) {
 	if us := got.GetUnderlineStyle(); us != tcell.UnderlineStyleCurly {
 		t.Errorf("underline style = %v, want curly", us)
 	}
-	if uc := got.GetUnderlineColor(); uc != tcell.ColorRed {
+	if uc := got.GetUnderlineColor(); uc != color.XTerm9 {
 		t.Errorf("underline colour = %v, want red (from foreground)", uc)
 	}
 }
