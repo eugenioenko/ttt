@@ -268,6 +268,10 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	search.Debounce.DelayMs = cfg.Settings.Search.Debounce
 	changes := NewChangesPanel(ws.Paths()...)
 	changes.SetFileView(cfg.Settings.Git.FileView)
+	if cfg.Settings.Sidebar.CommitHistoryHeight > 0 {
+		changes.Split.BottomH = cfg.Settings.Sidebar.CommitHistoryHeight
+		changes.Split.BottomRatio = 0
+	}
 	symbols := NewSymbolsPanel()
 
 	explorer := NewNavigationPanel(cfg.Settings.Explorer, ws.Paths()...)
@@ -288,6 +292,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	splitPanel.Right = contentSplit
 	splitPanel.Borders = borders
 	splitPanel.DividerPos = ui.DefaultSidebarWidth
+	if cfg.Settings.Sidebar.Width > 0 {
+		splitPanel.DividerPos = cfg.Settings.Sidebar.Width
+	}
 	splitPanel.ShowLeft = sidebar.Visible
 	splitPanel.RightBorderStartY = 2
 	contentSplit.RightBorderStartY = &splitPanel.RightBorderStartY

@@ -201,6 +201,14 @@ func (a *App) SetSidebarWidth(w int) {
 	a.SplitPanel.DividerPos = w
 }
 
+func (a *App) persistSidebarWidth(w int) {
+	a.SetSidebarWidth(w)
+	a.Settings.Sidebar.Width = a.SplitPanel.DividerPos
+	if err := config.SaveSettings(*a.Settings); err != nil {
+		a.StatusError("Failed to save sidebar width: " + err.Error())
+	}
+}
+
 func (a *App) FocusEditor() {
 	a.Root.SetFocus(a.EditorGroup)
 }

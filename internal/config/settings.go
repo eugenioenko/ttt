@@ -166,7 +166,9 @@ type ExplorerSettings struct {
 }
 
 type SidebarSettings struct {
-	PanelOrder []string `json:"panelOrder,omitempty"`
+	PanelOrder          []string `json:"panelOrder,omitempty"`
+	Width               int      `json:"width,omitempty"`
+	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
 }
 
 type GitSettings struct {
@@ -319,6 +321,12 @@ func normalizeSettings(s *Settings) {
 		panelOrder = append(panelOrder, id)
 	}
 	s.Sidebar.PanelOrder = panelOrder
+	if s.Sidebar.Width < 0 {
+		s.Sidebar.Width = 0
+	}
+	if s.Sidebar.CommitHistoryHeight < 0 {
+		s.Sidebar.CommitHistoryHeight = 0
+	}
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
 	}
