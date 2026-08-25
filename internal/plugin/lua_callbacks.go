@@ -91,6 +91,23 @@ func luaTableToTreeNode(L *lua.LState, tbl *lua.LTable) *widgets.TreeNode {
 		}
 	}
 
+	if actions, ok := L.GetField(tbl, "actions").(*lua.LTable); ok {
+		actions.ForEach(func(_, v lua.LValue) {
+			at, ok := v.(*lua.LTable)
+			if !ok {
+				return
+			}
+			action := widgets.Action{}
+			if icon := L.GetField(at, "icon"); icon != lua.LNil {
+				action.Icon = icon.String()
+			}
+			if command := L.GetField(at, "command"); command != lua.LNil {
+				action.Command = command.String()
+			}
+			node.Actions = append(node.Actions, action)
+		})
+	}
+
 	if children, ok := L.GetField(tbl, "children").(*lua.LTable); ok {
 		node.Children = LuaTableToTreeNodes(L, children)
 		if len(node.Children) > 0 {

@@ -148,7 +148,11 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 	case WidgetInput:
 		if iw, ok := w.(*widgets.InputWidget); ok {
 			iw.Config.Placeholder = desc.Placeholder
-			iw.Config.Prefix = desc.Prefix
+			prefix := desc.Prefix
+			if !iw.Config.Bordered && prefix == "" {
+				prefix = widgets.DefaultPrefix
+			}
+			iw.Config.Prefix = prefix
 			wireInputCallbacks(iw, desc, p)
 		}
 	case WidgetVStack:

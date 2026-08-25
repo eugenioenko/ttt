@@ -103,3 +103,33 @@ func TestLuaTableToTreeNodes(t *testing.T) {
 		t.Error("expected node b to be muted")
 	}
 }
+
+func TestLuaTableToTreeNodesParsesActions(t *testing.T) {
+	L := lua.NewState()
+	defer L.Close()
+
+	err := L.DoString(`
+		items = {
+			{ id = "a", label = "Alpha", actions = {
+				{ icon = "✕", command = "kill" },
+			}},
+		}
+	`)
+	if err != nil {
+		t.Fatalf("lua error: %v", err)
+	}
+
+	tbl := L.GetGlobal("items").(*lua.LTable)
+	nodes := LuaTableToTreeNodes(L, tbl)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	if len(nodes[0].Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(nodes[0].Actions))
+	}
+	action := nodes[0].Actions[0]
+	if action.Icon != "✕" || action.Command != "kill" {
+		t.Errorf("got action %+v, want {Icon: ✕, Command: kill}", action)
+	}
+}
