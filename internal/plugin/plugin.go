@@ -74,6 +74,7 @@ type Plugin struct {
 	RenderMarkdown     func(text string) []MarkdownLine
 	Markdown           config.MarkdownSettings
 	Borders            *term.BorderSet
+	AppVersion         string
 	SimulateClick      func(x, y int)
 	SimulateDrag       func(x1, y1, x2, y2 int)
 	ScreenshotToFile   func(path string) error

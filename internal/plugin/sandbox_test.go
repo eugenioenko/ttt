@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -280,5 +281,32 @@ func TestPluginDirExposed(t *testing.T) {
 	got := p.State.GetGlobal("result").String()
 	if got != "/some/plugin/dir" {
 		t.Errorf("expected /some/plugin/dir, got %q", got)
+	}
+}
+
+func TestPlatformArchVersionExposed(t *testing.T) {
+	p := &Plugin{Name: "test", AppVersion: "1.2.3"}
+	p.State = NewSandbox()
+	defer p.State.Close()
+	setupTTTModule(p.State, p)
+
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		platform = ttt.platform()
+		arch = ttt.arch()
+		version = ttt.version()
+	`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := p.State.GetGlobal("platform").String(); got != runtime.GOOS {
+		t.Errorf("expected platform %q, got %q", runtime.GOOS, got)
+	}
+	if got := p.State.GetGlobal("arch").String(); got != runtime.GOARCH {
+		t.Errorf("expected arch %q, got %q", runtime.GOARCH, got)
+	}
+	if got := p.State.GetGlobal("version").String(); got != "1.2.3" {
+		t.Errorf("expected version %q, got %q", "1.2.3", got)
 	}
 }

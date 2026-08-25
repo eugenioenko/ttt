@@ -40,6 +40,7 @@ type Manager struct {
 	systemAPI   SystemAPI
 	fsFactory   func(pluginDir string) FilesystemAPI
 	logFactory  func(pluginName string) func(level, message string)
+	appVersion  string
 }
 
 func NewManager(pluginsDir, registryPath string, extraDirs ...string) *Manager {
@@ -115,6 +116,7 @@ func (m *Manager) LoadAll() []*Plugin {
 			if m.logFactory != nil {
 				p.Log = m.logFactory(p.Name)
 			}
+			p.AppVersion = m.appVersion
 			if err := p.Init(); err != nil {
 				continue
 			}
@@ -242,6 +244,13 @@ func (m *Manager) SetLogFactory(factory func(pluginName string) func(level, mess
 	m.logFactory = factory
 	for _, p := range m.plugins {
 		p.Log = factory(p.Name)
+	}
+}
+
+func (m *Manager) SetAppVersion(version string) {
+	m.appVersion = version
+	for _, p := range m.plugins {
+		p.AppVersion = version
 	}
 }
 

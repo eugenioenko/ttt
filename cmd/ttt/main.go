@@ -262,6 +262,8 @@ Docs: https://tttedit.dev
 				screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
 		})
+		// Before LoadAll, so ttt.version() is available during plugin init.
+		pluginManager.SetAppVersion(editor.Version)
 
 		pendingApprovals := pluginManager.LoadAll()
 
