@@ -586,6 +586,7 @@ Return the host OS, CPU architecture, and running ttt version. No permission req
 
 ```lua
 local ttt = require("ttt")
+local sys = require("ttt.system")
 
 if ttt.platform() == "windows" then
   sys.exec("tasklist", {})

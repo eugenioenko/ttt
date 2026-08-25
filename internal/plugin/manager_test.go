@@ -185,3 +185,32 @@ func TestLoadAllWiresLogForHealthyPlugin(t *testing.T) {
 		t.Errorf("logged = %v, want a single %q", logged, "hello from init")
 	}
 }
+
+// A plugin's AppVersion must be set before Init runs, so ttt.version() works
+// from the plugin's own init during startup LoadAll.
+func TestLoadAllWiresAppVersionForHealthyPlugin(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+
+	dir := writePluginDir(t, pluginsDir, "healthy")
+	entry := filepath.Join(dir, "main.ttt.lua")
+	if err := os.WriteFile(entry, []byte(`local ttt = require("ttt")`+"\n"+`ttt.log(ttt.version())`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reg := `[{"name":"healthy","version":"1.0.0","enabled":true,"permissions":{}}]`
+	if err := os.WriteFile(regPath, []byte(reg), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var logged []string
+	m := NewManager(pluginsDir, regPath)
+	m.SetLogFactory(func(name string) func(string, string) {
+		return func(level, message string) { logged = append(logged, message) }
+	})
+	m.SetAppVersion("9.9.9")
+	m.LoadAll()
+
+	if len(logged) != 1 || logged[0] != "9.9.9" {
+		t.Errorf("logged = %v, want a single %q", logged, "9.9.9")
+	}
+}
