@@ -109,6 +109,33 @@ func TestReconcilePreservesInputText(t *testing.T) {
 	}
 }
 
+// A plugin input with no explicit prefix must keep the default chevron across
+// reconciliation, not just on its first render. Reconcile used to overwrite
+// Config.Prefix with the zero-value desc.Prefix, wiping the chevron on the
+// very next redraw (#561 follow-up).
+func TestReconcilePreservesDefaultInputPrefix(t *testing.T) {
+	ws := NewWidgetState()
+	p := &Plugin{Name: "test", State: lua.NewState()}
+	defer p.State.Close()
+
+	descs := []WidgetDesc{
+		{Kind: WidgetInput, Key: "input:0", Placeholder: "Type..."},
+	}
+	ws.Reconcile(descs, p)
+
+	iw := ws.items[0].(*widgets.InputWidget)
+	if iw.Config.Prefix != widgets.DefaultPrefix {
+		t.Fatalf("expected default prefix %q after first render, got %q", widgets.DefaultPrefix, iw.Config.Prefix)
+	}
+
+	ws.Reconcile(descs, p)
+
+	iw2 := ws.items[0].(*widgets.InputWidget)
+	if iw2.Config.Prefix != widgets.DefaultPrefix {
+		t.Errorf("expected default prefix %q preserved after reconcile, got %q", widgets.DefaultPrefix, iw2.Config.Prefix)
+	}
+}
+
 func TestReconcileHandlesTypeChange(t *testing.T) {
 	ws := NewWidgetState()
 	p := &Plugin{Name: "test", State: lua.NewState()}

@@ -35,9 +35,13 @@ type InputWidget struct {
 	clickCount    int
 }
 
+// DefaultPrefix is the chevron shown on a borderless input when the caller
+// doesn't supply its own prefix.
+const DefaultPrefix = " ❯ "
+
 func NewInputWidget(config InputConfig) *InputWidget {
 	if !config.Bordered && config.Prefix == "" {
-		config.Prefix = " ❯ "
+		config.Prefix = DefaultPrefix
 	}
 	return &InputWidget{
 		Config:   config,
