@@ -1220,7 +1220,7 @@ Used in `items` arrays for both `tree` and `list` widgets.
 | `children`   | table   | `{}`    | Array of child node tables (recursive).      |
 | `actions`    | table   | `{}`    | Array of `{icon, command}` tables rendered as inline, always-visible icons on the right edge of the row — no submenu required. Clicking one triggers `on_command(command, node)`, same as `node_menu` and `key_commands`. Used by the Changes panel for its stage/unstage/discard icons. |
 
-**Callback argument:** `on_select` and `on_expand` callbacks receive a Lua table with the same fields as the node: `id`, `label`, `icon` (if non-empty), `badge` (if non-empty), `expanded`, `muted`, and `children` (if present). The `on_command` callback receives two arguments: `(command_string, node_table)`.
+**Callback argument:** `on_select` and `on_expand` callbacks receive a Lua table with the same fields as the node: `id`, `label`, `icon` (if non-empty), `badge` (if non-empty), `expanded`, `muted`, and `children` (if present). `expandable` and `actions` are not included — the node's `id` is enough to look the item back up, and `on_command`'s own `command_string` argument already tells you which action fired. The `on_command` callback receives two arguments: `(command_string, node_table)`, where `node_table` has the same shape.
 
 ### Menu Entry Format
 
