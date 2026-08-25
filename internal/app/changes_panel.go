@@ -70,23 +70,25 @@ type ChangesPanel struct {
 	workFiles          map[string]workFileRef
 	fileView           string
 
-	OnOpenDiff       func(dir string, status git.FileStatus, extended bool)
-	OnOpenCommitDiff func(dir, ref, short string, status git.FileStatus, extended bool)
-	OnOpenCommit     func(dir, ref, short string)
-	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
-	OnOpenFile       func(path string)
-	OnRightClick     func(dir string, status git.FileStatus, screenX, screenY int)
-	OnPanelMenu      func(screenX, screenY int)
-	OnCommit         func(dir string, message string)
-	OnGroupMenu      func(dir string, screenX, screenY int)
-	OnPRGroupMenu    func(group *ui.ChangesGroup, screenX, screenY int)
-	OnRefreshPR      func(url string)
-	OnConfirmDiscard func(message string, onConfirm func())
-	OnError          func(message string)
-	OnRefreshed      func()
-	OnRefresh        func()
-	OnStatusChanged  func()
-	OnHistoryResult  func(error)
+	OnOpenDiff           func(dir string, status git.FileStatus, extended bool)
+	OnOpenCommitDiff     func(dir, ref, short string, status git.FileStatus, extended bool)
+	OnOpenCommit         func(dir, ref, short string)
+	OnOpenCurrentChanges func()
+	OnOpenPRDiff         func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
+	OnOpenPRDetail       func(group *ui.ChangesGroup)
+	OnOpenFile           func(path string)
+	OnRightClick         func(dir string, status git.FileStatus, screenX, screenY int)
+	OnPanelMenu          func(screenX, screenY int)
+	OnCommit             func(dir string, message string)
+	OnGroupMenu          func(dir string, screenX, screenY int)
+	OnPRGroupMenu        func(group *ui.ChangesGroup, screenX, screenY int)
+	OnRefreshPR          func(url string)
+	OnConfirmDiscard     func(message string, onConfirm func())
+	OnError              func(message string)
+	OnRefreshed          func()
+	OnRefresh            func()
+	OnStatusChanged      func()
+	OnHistoryResult      func(error)
 
 	PRGroups []prGroup
 }
@@ -191,9 +193,10 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	})
 
 	cp.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
-		Indent:       1,
-		EmptyText:    "No changes",
-		TruncateLeft: true,
+		Indent:             1,
+		EmptyText:          "No changes",
+		TruncateLeft:       true,
+		ActivateExpandable: true,
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			cp.handleCommand(cmd, node)
 		},
@@ -889,6 +892,21 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 	case "activate":
 		if ok {
 			cp.openDiff(dir, status, staged, false)
+			return
+		}
+		ref, found := cp.workNodes[node.ID]
+		switch {
+		case found && (ref.Kind == workNodeRoot || ref.Kind == workNodeSection):
+			if cp.OnOpenCurrentChanges != nil {
+				cp.OnOpenCurrentChanges()
+			}
+		case found && ref.Kind == workNodePRRoot && ref.Group >= 0 && ref.Group < len(cp.PRGroups):
+			if cp.OnOpenPRDetail != nil {
+				cp.OnOpenPRDetail(cp.toUIChangesGroup(&cp.PRGroups[ref.Group]))
+			}
+		default:
+			node.Expanded = !node.Expanded
+			cp.Tree.SetItems(cp.Tree.Config.Items)
 		}
 	case "stage":
 		if ok && !staged {

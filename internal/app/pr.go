@@ -3,7 +3,9 @@ package app
 import (
 	"fmt"
 
+	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/ui"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -47,4 +49,36 @@ func (a *App) FetchAndOpenPR(url string) {
 		diffs := github.SplitMultiFileDiff(diffText)
 		a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Info: info, Diffs: diffs}))
 	}()
+}
+
+func prDetailTabID(url string) string {
+	return "pr-detail:" + url
+}
+
+// OpenPRDetail shows every changed file in a PR as one unified scrollable
+// view, the same shape as a commit's detail tab. PR diffs are already fully
+// fetched, so unlike OpenCommitDetail this needs no async read.
+func (a *App) OpenPRDetail(group *ui.ChangesGroup) {
+	tabID := prDetailTabID(group.PRURL)
+	if existing := a.EditorGroup.CommitDetailWidgetByTab(tabID); existing != nil {
+		a.EditorGroup.SwitchToTabByPath(tabID)
+		a.FocusEditorIfEnabled()
+		return
+	}
+	files := make([]ui.CommitDetailFile, 0, len(group.Unstaged))
+	for _, f := range group.Unstaged {
+		file := ui.CommitDetailFile{Status: f.Status, Path: f.Path, OldPath: f.OldPath}
+		if diffText, ok := group.PRDiffs[f.Path]; ok && diffText != "" {
+			file.Diff = diff.Parse(diffText)
+		} else {
+			file.Error = "No diff available for " + f.Path
+		}
+		files = append(files, file)
+	}
+	detail := ui.NewCommitDetailWidget(group.Dir, group.PRURL, "", a.EditorGroup.SyntaxHighlight)
+	detail.Header = "Pull request"
+	a.EditorGroup.ApplyDiffDefaults(detail)
+	detail.SetDetail(fmt.Sprintf("%s\n%d file(s) changed", group.Name, len(files)), files, "")
+	a.EditorGroup.OpenPluginTab(tabID, group.Name, detail)
+	a.FocusEditorIfEnabled()
 }
