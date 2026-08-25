@@ -90,16 +90,6 @@
     "tags": ["notes", "scratchpad", "productivity", "utility"]
   },
   {
-    "name": "port-finder",
-    "displayName": "Port Finder",
-    "author": "eugenioenko",
-    "description": "Find processes listening on TCP ports, filter by name or port, and kill them",
-    "repo": "https://github.com/eugenioenko/ttt-plugins",
-    "path": "port-finder",
-    "version": "0.1.0",
-    "tags": ["ports", "network", "process", "utility"]
-  },
-  {
     "name": "spell",
     "displayName": "Spell Check",
     "author": "eugenioenko",
