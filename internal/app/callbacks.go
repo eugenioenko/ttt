@@ -665,6 +665,7 @@ func registerWidgetCallbacks(app *App) {
 	}
 	app.Changes.OnOpenCommitDiff = app.OpenCommitDiff
 	app.Changes.OnOpenCommit = app.OpenCommitDetail
+	app.Changes.OnOpenPRDetail = app.OpenPRDetail
 	app.Changes.OnOpenPRDiff = func(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
 		app.OpenPRDiff(group, status, extended)
 	}

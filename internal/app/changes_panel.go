@@ -74,6 +74,7 @@ type ChangesPanel struct {
 	OnOpenCommitDiff func(dir, ref, short string, status git.FileStatus, extended bool)
 	OnOpenCommit     func(dir, ref, short string)
 	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
+	OnOpenPRDetail   func(group *ui.ChangesGroup)
 	OnOpenFile       func(path string)
 	OnRightClick     func(dir string, status git.FileStatus, screenX, screenY int)
 	OnPanelMenu      func(screenX, screenY int)
@@ -191,9 +192,10 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	})
 
 	cp.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
-		Indent:       1,
-		EmptyText:    "No changes",
-		TruncateLeft: true,
+		Indent:             1,
+		EmptyText:          "No changes",
+		TruncateLeft:       true,
+		ActivateExpandable: true,
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			cp.handleCommand(cmd, node)
 		},
@@ -889,7 +891,15 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 	case "activate":
 		if ok {
 			cp.openDiff(dir, status, staged, false)
+			return
 		}
+		ref, found := cp.workNodes[node.ID]
+		if found && ref.Kind == workNodePRRoot && ref.Group >= 0 && ref.Group < len(cp.PRGroups) && cp.OnOpenPRDetail != nil {
+			cp.OnOpenPRDetail(cp.toUIChangesGroup(&cp.PRGroups[ref.Group]))
+			return
+		}
+		node.Expanded = !node.Expanded
+		cp.Tree.SetItems(cp.Tree.Config.Items)
 	case "stage":
 		if ok && !staged {
 			cp.applied(git.Stage(dir, status.Path))
