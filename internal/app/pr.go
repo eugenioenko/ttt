@@ -69,7 +69,12 @@ func (a *App) OpenPRDetail(group *ui.ChangesGroup) {
 	for _, f := range group.Unstaged {
 		file := ui.CommitDetailFile{Status: f.Status, Path: f.Path, OldPath: f.OldPath}
 		if diffText, ok := group.PRDiffs[f.Path]; ok && diffText != "" {
-			file.Diff = diff.Parse(diffText)
+			parsed := diff.Parse(diffText)
+			if len(parsed.Hunks) == 0 {
+				file.Error = "Empty diff for " + f.Path
+			} else {
+				file.Diff = parsed
+			}
 		} else {
 			file.Error = "No diff available for " + f.Path
 		}

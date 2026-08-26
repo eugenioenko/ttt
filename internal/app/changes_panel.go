@@ -894,10 +894,8 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 			return
 		}
 		ref, found := cp.workNodes[node.ID]
-		if found && ref.Kind == workNodePRRoot && ref.Group >= 0 && ref.Group < len(cp.PRGroups) {
-			if cp.OnOpenPRDetail != nil {
-				cp.OnOpenPRDetail(cp.toUIChangesGroup(&cp.PRGroups[ref.Group]))
-			}
+		if found && ref.Kind == workNodePRRoot && ref.Group >= 0 && ref.Group < len(cp.PRGroups) && cp.OnOpenPRDetail != nil {
+			cp.OnOpenPRDetail(cp.toUIChangesGroup(&cp.PRGroups[ref.Group]))
 			return
 		}
 		node.Expanded = !node.Expanded
