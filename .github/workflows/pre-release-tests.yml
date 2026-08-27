@@ -31,7 +31,7 @@ jobs:
         run: |
           for i in $(seq 1 ${{ inputs.iterations }}); do
             echo "=== Iteration $i / ${{ inputs.iterations }} ==="
-            go test ./... || { echo "FAILED on iteration $i"; exit 1; }
+            go test -count=1 ./... || { echo "FAILED on iteration $i"; exit 1; }
           done
 
   test-race-repeat:
@@ -52,7 +52,7 @@ jobs:
         run: |
           for i in $(seq 1 ${{ inputs.iterations }}); do
             echo "=== Iteration $i / ${{ inputs.iterations }} ==="
-            go test -race ./... || { echo "FAILED on iteration $i"; exit 1; }
+            go test -race -count=1 ./... || { echo "FAILED on iteration $i"; exit 1; }
           done
 
   functional-tests:
