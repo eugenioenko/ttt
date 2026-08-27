@@ -125,6 +125,7 @@ ttt /path/to/repo/subdir        # opens that folder; git features (changes,
                                 # branch) use the enclosing git repo root
 ttt dir1 dir2                   # opens multiple folders as a multi-root workspace
 ttt --workspace project.ttt     # loads a saved workspace file
+ttt https://github.com/owner/repo/pull/123 # opens pull request review
 ```
 
 Workspace files use the `.ttt` extension and store a list of folders as relative paths:
@@ -204,6 +205,8 @@ ttt . https://github.com/owner/repo/pull/123    # review a PR with the repo tree
 ```
 
 Opens the PR as a review surface — commit-by-commit history detail, a live view of the current changes, and the same unified presentation controls as local diffs.
+
+Thanks to [@arimxyer](https://github.com/arimxyer) for contributing the diff & code review experience.
 
 See [Git Integration](docs-web/src/content/docs/guides/git.md).
 
