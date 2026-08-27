@@ -469,9 +469,10 @@ TTT is better because of the people who took the time to try it, report bugs, re
 
 **Bug reports & feature requests**
 
-- [@jetpax](https://github.com/jetpax) — surfacing the macOS / iTerm2 issues (mouse support, clipboard copy, large-list scrolling, workspace paths).
-- [@egorse](https://github.com/egorse) — the search-panel focus fix.
-- [@pirate-boop](https://github.com/pirate-boop) — the Cyrillic cursor-offset fix and a number of UX/packaging ideas.
+- [@jetpax](https://github.com/jetpax): surfacing the macOS / iTerm2 issues (mouse support, clipboard copy, large-list scrolling, workspace paths).
+- [@egorse](https://github.com/egorse): the search-panel focus fix.
+- [@pirate-boop](https://github.com/pirate-boop): the Cyrillic cursor-offset fix and a number of UX/packaging ideas.
+- [@forthrin](https://github.com/forthrin): great insight into emacs, keyboards and keyboard shortcuts :) 
 
 Want to help? Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR.
 
