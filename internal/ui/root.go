@@ -60,6 +60,9 @@ func NewRoot(main Widget) *Root {
 func (r *Root) SetSize(w, h int) {
 	if w != r.Width || h != r.Height {
 		widgets.InvalidatePointerInteraction(r.Main)
+		for _, overlay := range r.Overlays {
+			widgets.InvalidatePointerInteraction(overlay.Widget)
+		}
 		r.capturedWidget = nil
 	}
 	r.Width = w
@@ -68,11 +71,12 @@ func (r *Root) SetSize(w, h int) {
 }
 
 func (r *Root) CancelPointerCapture() bool {
-	canceled := widgets.CancelPointerCapture(r.Main)
-	if r.capturedWidget != nil {
-		canceled = true
-		r.capturedWidget = nil
+	target := r.capturedWidget
+	canceled := widgets.CancelPointerCapture(target)
+	if target != r.Main {
+		canceled = widgets.CancelPointerCapture(r.Main) || canceled
 	}
+	r.capturedWidget = nil
 	return canceled
 }
 
@@ -265,6 +269,10 @@ func (r *Root) handleOverlay(ev tcell.Event) EventResult {
 	top := r.Overlays[len(r.Overlays)-1]
 	slog.Debug("root", "action", "overlayIntercept", "modal", top.Modal, "count", len(r.Overlays))
 	result := top.Widget.HandleEvent(ev)
+	if result == EventCaptured {
+		r.capturedWidget = top.Widget
+		return EventConsumed
+	}
 	if top.Modal {
 		return EventConsumed
 	}
@@ -403,12 +411,22 @@ func (r *Root) TopOverlayWidget() Widget {
 
 func (r *Root) PushOverlay(o Overlay) {
 	r.CancelPointerCapture()
+	widgets.SetPointerCaptureInvalidated(o.Widget, func() {
+		if r.capturedWidget == o.Widget {
+			r.capturedWidget = nil
+		}
+	})
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
 }
 
 func (r *Root) PopOverlay() {
 	if len(r.Overlays) > 0 {
+		removed := r.Overlays[len(r.Overlays)-1].Widget
+		widgets.InvalidatePointerInteraction(removed)
+		if r.capturedWidget == removed {
+			r.capturedWidget = nil
+		}
 		r.Overlays = r.Overlays[:len(r.Overlays)-1]
 		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
 	}
@@ -418,6 +436,10 @@ func (r *Root) PopOverlay() {
 func (r *Root) RemoveOverlay(w Widget) {
 	for i, o := range r.Overlays {
 		if o.Widget == w {
+			widgets.InvalidatePointerInteraction(o.Widget)
+			if r.capturedWidget == o.Widget {
+				r.capturedWidget = nil
+			}
 			r.Overlays = append(r.Overlays[:i], r.Overlays[i+1:]...)
 			slog.Debug("root", "action", "removeOverlay", "count", len(r.Overlays))
 			return

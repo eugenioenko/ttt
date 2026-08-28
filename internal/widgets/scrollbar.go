@@ -5,36 +5,50 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-type scrollRange struct {
+type ScrollRange struct {
 	trackLength   int
 	contentLength int
 	offset        int
 }
 
-func newScrollRange(trackLength, contentLength, offset int) scrollRange {
+type scrollRange = ScrollRange
+
+func NewScrollRange(trackLength, contentLength, offset int) ScrollRange {
 	if trackLength < 0 {
 		trackLength = 0
 	}
 	if contentLength < 0 {
 		contentLength = 0
 	}
-	r := scrollRange{trackLength: trackLength, contentLength: contentLength}
+	r := ScrollRange{trackLength: trackLength, contentLength: contentLength}
 	r.offset = r.clampOffset(offset)
 	return r
 }
 
-func (r scrollRange) visible() bool {
+func newScrollRange(trackLength, contentLength, offset int) scrollRange {
+	return NewScrollRange(trackLength, contentLength, offset)
+}
+
+func (r ScrollRange) Offset() int { return r.offset }
+
+func (r ScrollRange) Visible() bool { return r.visible() }
+
+func (r ScrollRange) MaxOffset() int { return r.maxOffset() }
+
+func (r ScrollRange) ClampOffset(offset int) int { return r.clampOffset(offset) }
+
+func (r ScrollRange) visible() bool {
 	return r.trackLength > 0 && r.contentLength > r.trackLength
 }
 
-func (r scrollRange) maxOffset() int {
+func (r ScrollRange) maxOffset() int {
 	if r.trackLength <= 0 || r.contentLength <= r.trackLength {
 		return 0
 	}
 	return r.contentLength - r.trackLength
 }
 
-func (r scrollRange) clampOffset(offset int) int {
+func (r ScrollRange) clampOffset(offset int) int {
 	if offset < 0 {
 		return 0
 	}
@@ -44,7 +58,7 @@ func (r scrollRange) clampOffset(offset int) int {
 	return offset
 }
 
-func (r scrollRange) thumb() (start, length int) {
+func (r ScrollRange) thumb() (start, length int) {
 	if !r.visible() {
 		return 0, r.trackLength
 	}
@@ -60,7 +74,7 @@ func (r scrollRange) thumb() (start, length int) {
 	return r.offset * maxStart / maxOffset, length
 }
 
-func (r scrollRange) offsetForThumb(start int) int {
+func (r ScrollRange) offsetForThumb(start int) int {
 	_, length := r.thumb()
 	maxStart := r.trackLength - length
 	if start <= 0 {
@@ -75,14 +89,24 @@ func (r scrollRange) offsetForThumb(start int) int {
 	return start * r.maxOffset() / maxStart
 }
 
-func (r scrollRange) offsetForPointer(position, grabOffset int) int {
+func (r ScrollRange) offsetForPointer(position, grabOffset int) int {
 	return r.offsetForThumb(position - grabOffset)
 }
 
-type scrollbarGeometry struct {
+type ScrollbarGeometry struct {
 	localTrack Rect
 	hitTrack   Rect
 }
+
+type scrollbarGeometry = ScrollbarGeometry
+
+func NewScrollbarGeometry(localTrack, hitTrack Rect) ScrollbarGeometry {
+	return ScrollbarGeometry{localTrack: localTrack, hitTrack: hitTrack}
+}
+
+func (g ScrollbarGeometry) LocalTrack() Rect { return g.localTrack }
+
+func (g ScrollbarGeometry) HitTrack() Rect { return g.hitTrack }
 
 type scrollbarInteraction struct {
 	rangeModel scrollRange
@@ -147,11 +171,13 @@ func (s *scrollbarInteraction) cancel() bool {
 func (s *scrollbarInteraction) visible() bool    { return s.rangeModel.visible() }
 func (s *scrollbarInteraction) isDragging() bool { return s.dragging }
 
-type scrollbar struct {
+type VerticalScrollbar struct {
 	interaction scrollbarInteraction
 }
 
-func (s *scrollbar) Render(surface Surface, geometry scrollbarGeometry, r scrollRange) (int, bool) {
+type scrollbar = VerticalScrollbar
+
+func (s *VerticalScrollbar) Render(surface Surface, geometry ScrollbarGeometry, r ScrollRange) (int, bool) {
 	offset, invalidated := s.interaction.configure(r, geometry)
 	if !s.visible() {
 		return offset, invalidated
@@ -167,7 +193,7 @@ func (s *scrollbar) Render(surface Surface, geometry scrollbarGeometry, r scroll
 	return offset, invalidated
 }
 
-func (s *scrollbar) HandleEvent(ev tcell.Event) (int, EventResult) {
+func (s *VerticalScrollbar) HandleEvent(ev tcell.Event) (int, EventResult) {
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
 		return s.interaction.rangeModel.offset, EventIgnored
@@ -178,15 +204,19 @@ func (s *scrollbar) HandleEvent(ev tcell.Event) (int, EventResult) {
 	return s.interaction.handlePointer(my-hit.Y, inside, mev.Buttons())
 }
 
-func (s *scrollbar) visible() bool    { return s.interaction.visible() }
-func (s *scrollbar) isDragging() bool { return s.interaction.isDragging() }
-func (s *scrollbar) cancel() bool     { return s.interaction.cancel() }
+func (s *VerticalScrollbar) CancelPointerCapture() bool { return s.interaction.cancel() }
+func (s *VerticalScrollbar) OwnsPointerCapture() bool   { return s.interaction.isDragging() }
+func (s *VerticalScrollbar) visible() bool              { return s.interaction.visible() }
+func (s *VerticalScrollbar) isDragging() bool           { return s.OwnsPointerCapture() }
+func (s *VerticalScrollbar) cancel() bool               { return s.CancelPointerCapture() }
 
-type horizontalScrollbar struct {
+type HorizontalScrollbar struct {
 	interaction scrollbarInteraction
 }
 
-func (s *horizontalScrollbar) Render(surface Surface, geometry scrollbarGeometry, r scrollRange) (int, bool) {
+type horizontalScrollbar = HorizontalScrollbar
+
+func (s *HorizontalScrollbar) Render(surface Surface, geometry ScrollbarGeometry, r ScrollRange) (int, bool) {
 	offset, invalidated := s.interaction.configure(r, geometry)
 	if !s.visible() {
 		return offset, invalidated
@@ -202,7 +232,7 @@ func (s *horizontalScrollbar) Render(surface Surface, geometry scrollbarGeometry
 	return offset, invalidated
 }
 
-func (s *horizontalScrollbar) HandleEvent(ev tcell.Event) (int, EventResult) {
+func (s *HorizontalScrollbar) HandleEvent(ev tcell.Event) (int, EventResult) {
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
 		return s.interaction.rangeModel.offset, EventIgnored
@@ -213,6 +243,8 @@ func (s *horizontalScrollbar) HandleEvent(ev tcell.Event) (int, EventResult) {
 	return s.interaction.handlePointer(mx-hit.X, inside, mev.Buttons())
 }
 
-func (s *horizontalScrollbar) visible() bool    { return s.interaction.visible() }
-func (s *horizontalScrollbar) isDragging() bool { return s.interaction.isDragging() }
-func (s *horizontalScrollbar) cancel() bool     { return s.interaction.cancel() }
+func (s *HorizontalScrollbar) CancelPointerCapture() bool { return s.interaction.cancel() }
+func (s *HorizontalScrollbar) OwnsPointerCapture() bool   { return s.interaction.isDragging() }
+func (s *HorizontalScrollbar) visible() bool              { return s.interaction.visible() }
+func (s *HorizontalScrollbar) isDragging() bool           { return s.OwnsPointerCapture() }
+func (s *HorizontalScrollbar) cancel() bool               { return s.CancelPointerCapture() }

@@ -15,6 +15,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -48,8 +49,9 @@ type EditorPaneWidget struct {
 	lastClickCol            int
 	clickCount              int
 	mouseDown               bool
-	scrollbar               Scrollbar
-	hscrollbar              HScrollbar
+	scrollbar               widgets.VerticalScrollbar
+	hscrollbar              widgets.HorizontalScrollbar
+	scrollbarCapture        scrollbarCaptureState
 	Diagnostics             []Diagnostic
 	Folds                   *fold.State
 	OnChange                func()
@@ -90,6 +92,27 @@ func (e *EditorPaneWidget) InvalidateBracketColors() {
 }
 
 func (e *EditorPaneWidget) Focusable() bool { return true }
+
+func (e *EditorPaneWidget) CancelPointerCapture() bool {
+	canceled := e.mouseDown
+	e.mouseDown = false
+	canceled = e.scrollbar.CancelPointerCapture() || canceled
+	canceled = e.hscrollbar.CancelPointerCapture() || canceled
+	e.scrollbarCapture.notify(canceled)
+	return canceled
+}
+
+func (e *EditorPaneWidget) InvalidatePointerInteraction() bool {
+	return e.CancelPointerCapture()
+}
+
+func (e *EditorPaneWidget) OwnsPointerCapture() bool {
+	return e.mouseDown || e.scrollbarCapture.owns(&e.scrollbar, &e.hscrollbar)
+}
+
+func (e *EditorPaneWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	e.scrollbarCapture.invalidated = invalidated
+}
 
 func (e *EditorPaneWidget) GutterWidth() int {
 	if !e.LineNumbers {

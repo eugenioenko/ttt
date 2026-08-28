@@ -12,6 +12,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/eugenioenko/vt10x"
 	"github.com/gdamore/tcell/v3"
@@ -50,15 +51,17 @@ const linkMemoMax = 512
 
 type TerminalWidget struct {
 	BaseWidget
-	Term         *terminal.Terminal
-	Palette      *TerminalColorPalette
-	focused      bool
-	scrollOffset int
-	scrollbar    Scrollbar
-	selecting    bool
-	hasSelection bool
-	selAnchor    termSelPos
-	selCurrent   termSelPos
+	Term             *terminal.Terminal
+	Palette          *TerminalColorPalette
+	focused          bool
+	scrollOffset     int
+	scrollbar        widgets.VerticalScrollbar
+	scrollbarMaxTop  int
+	scrollbarCapture scrollbarCaptureState
+	selecting        bool
+	hasSelection     bool
+	selAnchor        termSelPos
+	selCurrent       termSelPos
 
 	OnOpenURL  func(url string)
 	OnOpenFile func(path string, line, col int)
@@ -82,6 +85,27 @@ func NewTerminalWidget(t *terminal.Terminal, palette *TerminalColorPalette) *Ter
 func (tw *TerminalWidget) Focusable() bool { return true }
 
 func (tw *TerminalWidget) SetFocused(f bool) { tw.focused = f }
+
+func (tw *TerminalWidget) CancelPointerCapture() bool {
+	canceled := tw.selecting || tw.mouseButtonHeld >= 0
+	tw.selecting = false
+	tw.mouseButtonHeld = -1
+	canceled = tw.scrollbar.CancelPointerCapture() || canceled
+	tw.scrollbarCapture.notify(canceled)
+	return canceled
+}
+
+func (tw *TerminalWidget) InvalidatePointerInteraction() bool {
+	return tw.CancelPointerCapture()
+}
+
+func (tw *TerminalWidget) OwnsPointerCapture() bool {
+	return tw.selecting || tw.mouseButtonHeld >= 0 || tw.scrollbar.OwnsPointerCapture()
+}
+
+func (tw *TerminalWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	tw.scrollbarCapture.invalidated = invalidated
+}
 
 func (tw *TerminalWidget) WantsRawKeys() bool { return tw.focused }
 
@@ -290,11 +314,13 @@ func (tw *TerminalWidget) IsScrolledUp() bool {
 
 func (tw *TerminalWidget) Render(surface Surface) {
 	if tw.Term == nil {
+		tw.InvalidatePointerInteraction()
 		return
 	}
 	w, h := surface.Size()
 	r := tw.GetRect()
 
+	scrollbarInvalidated := false
 	tw.Term.Snapshot(func(view vt10x.View) {
 		cols, rows := view.Size()
 		sbLen := view.ScrollbackLen()
@@ -398,19 +424,23 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			}
 		}
 
-		if showScrollbar {
-			topItem := sbLen - tw.scrollOffset
-			if topItem < 0 {
-				topItem = 0
-			}
-			tw.scrollbar.X = r.X + w - 1
-			tw.scrollbar.Y = r.Y
-			tw.scrollbar.Height = h
-			tw.scrollbar.TotalItems = totalLines
-			tw.scrollbar.TopItem = topItem
-			tw.scrollbar.Render(surface, w-1, 0)
+		topItem := sbLen - tw.scrollOffset
+		if topItem < 0 {
+			topItem = 0
 		}
+		geometry := widgets.ScrollbarGeometry{}
+		rangeModel := widgets.NewScrollRange(h, h, 0)
+		if showScrollbar {
+			geometry = widgets.NewScrollbarGeometry(
+				Rect{X: w - 1, Y: 0, W: 1, H: h},
+				Rect{X: r.X + w - 1, Y: r.Y, W: 1, H: h},
+			)
+			rangeModel = widgets.NewScrollRange(h, totalLines, topItem)
+		}
+		tw.scrollbarMaxTop = rangeModel.MaxOffset()
+		_, scrollbarInvalidated = tw.scrollbar.Render(surface, geometry, rangeModel)
 	})
+	tw.scrollbarCapture.notify(scrollbarInvalidated)
 }
 
 func (tw *TerminalWidget) glyphToCell(g vt10x.Glyph) term.Cell {
@@ -522,8 +552,8 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 	case *tcell.EventMouse:
 		tw.ctrlHeld = tev.Modifiers()&tcell.ModCtrl != 0
 
-		if newTop, consumed := tw.scrollbar.HandleEvent(ev); consumed {
-			if newTop >= tw.scrollbar.TotalItems-tw.scrollbar.Height {
+		if newTop, result := tw.scrollbar.HandleEvent(ev); result != EventIgnored {
+			if newTop >= tw.scrollbarMaxTop {
 				// Track end: go live instead of using TotalItems, stale vs a streaming PTY.
 				tw.scrollOffset = 0
 			} else {
@@ -533,10 +563,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 					tw.scrollOffset = 0
 				}
 			}
-			if tw.scrollbar.IsDragging() {
-				return EventCaptured
-			}
-			return EventConsumed
+			return result
 		}
 		btn := tev.Buttons()
 		mx, my := tev.Position()

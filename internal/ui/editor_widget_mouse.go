@@ -9,30 +9,18 @@ import (
 func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	btn := mev.Buttons()
 
-	if newTop, consumed := e.scrollbar.HandleEvent(mev); consumed {
+	if newTop, result := e.scrollbar.HandleEvent(mev); result != EventIgnored {
 		if e.Folds != nil && e.Folds.HasCollapsedFolds() {
 			e.Viewport.TopLine = e.Folds.VisibleToBuffer(newTop)
 		} else {
 			e.Viewport.TopLine = newTop
 		}
-		if e.scrollbar.IsDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
+		return result
 	}
-	if e.scrollbar.IsDragging() {
-		return EventCaptured
-	}
-	if newLeft, consumed := e.hscrollbar.HandleEvent(mev); consumed {
+	if newLeft, result := e.hscrollbar.HandleEvent(mev); result != EventIgnored {
 		e.Viewport.LeftCol = newLeft
 		e.clampLeftCol()
-		if e.hscrollbar.IsDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
-	}
-	if e.hscrollbar.IsDragging() {
-		return EventCaptured
+		return result
 	}
 
 	mod := mev.Modifiers()

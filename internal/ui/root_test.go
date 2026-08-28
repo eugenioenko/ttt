@@ -112,6 +112,24 @@ func TestRootModalOverlayCaptures(t *testing.T) {
 	}
 }
 
+func TestRootModalOverlayPropagatesPointerCapture(t *testing.T) {
+	main := &mockWidget{}
+	overlay := &notificationCaptureProbe{}
+	root := NewRoot(main)
+	root.SetSize(80, 24)
+	root.PushOverlay(Overlay{Widget: overlay, Modal: true})
+
+	root.HandleEvent(tcell.NewEventMouse(10, 10, tcell.Button1, 0))
+	if !root.PointerCaptureActive() || !overlay.OwnsPointerCapture() {
+		t.Fatal("modal overlay capture did not reach Root")
+	}
+
+	root.SetSize(100, 30)
+	if root.PointerCaptureActive() || overlay.OwnsPointerCapture() {
+		t.Fatal("resize retained modal overlay capture")
+	}
+}
+
 func TestRootGlobalKeysFire(t *testing.T) {
 	main := &mockWidget{}
 	focused := &passThroughWidget{}

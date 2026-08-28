@@ -7,6 +7,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -18,18 +19,19 @@ type diffMergedRef struct {
 
 type DiffViewWidget struct {
 	BaseWidget
-	FilePath        string
-	Lines           []diff.DiffLine
-	Highlighter     *highlight.Highlighter
-	TopLine         int
-	LeftCol         int
-	maxLineW        int
-	viewH           int
-	contentW        int
-	totalVisualRows int
-	scrollbar       Scrollbar
-	hscrollbar      HScrollbar
-	rhscrollbar     HScrollbar
+	FilePath         string
+	Lines            []diff.DiffLine
+	Highlighter      *highlight.Highlighter
+	TopLine          int
+	LeftCol          int
+	maxLineW         int
+	viewH            int
+	contentW         int
+	totalVisualRows  int
+	scrollbar        widgets.VerticalScrollbar
+	hscrollbar       widgets.HorizontalScrollbar
+	rhscrollbar      widgets.HorizontalScrollbar
+	scrollbarCapture scrollbarCaptureState
 
 	// layout cache for mouse hit-testing
 	layoutDividerX   int
@@ -532,6 +534,7 @@ func (d *DiffViewWidget) gutterWidth() int {
 }
 
 func (d *DiffViewWidget) clearLayout() {
+	d.InvalidatePointerInteraction()
 	d.viewH = 0
 	d.contentW = 0
 	d.totalVisualRows = 0
@@ -542,9 +545,6 @@ func (d *DiffViewWidget) clearLayout() {
 	d.layoutRightW = 0
 	d.layoutGutterW = 0
 	d.wrapMap = nil
-	d.scrollbar = Scrollbar{}
-	d.hscrollbar = HScrollbar{}
-	d.rhscrollbar = HScrollbar{}
 	d.layoutReady = false
 }
 
@@ -720,22 +720,25 @@ func (d *DiffViewWidget) Render(surface Surface) {
 		d.renderSide(surface, rightStart, y, rightW, dl.Right.Text, rightStyle, diffKindForeground(dl.Right.Kind, d.highContrast), rightSpans, idx, idx, d.SearchMatchesRight, rightActive, d.selRight, rightSegment, rightScroll)
 	}
 
+	vGeometry := widgets.ScrollbarGeometry{}
 	if showVScroll {
-		d.scrollbar.X = r.X + w
-		d.scrollbar.Y = r.Y
-		d.scrollbar.Height = h
-		d.scrollbar.TotalItems = d.totalVisualRows
-		d.scrollbar.TopItem = d.topVisualRow()
-		d.scrollbar.Render(surface, w, 0)
+		vGeometry = widgets.NewScrollbarGeometry(
+			Rect{X: w, Y: 0, W: 1, H: h},
+			Rect{X: r.X + w, Y: r.Y, W: 1, H: h},
+		)
 	}
+	_, vInvalidated := d.scrollbar.Render(surface, vGeometry, widgets.NewScrollRange(h, d.totalVisualRows, d.topVisualRow()))
 
+	hGeometry := widgets.ScrollbarGeometry{}
+	rhGeometry := widgets.ScrollbarGeometry{}
+	hRange := widgets.NewScrollRange(leftW, leftW, 0)
+	rhRange := widgets.NewScrollRange(rightW, rightW, 0)
 	if showHScroll {
-		d.hscrollbar.X = r.X + leftStart
-		d.hscrollbar.Y = r.Y + h
-		d.hscrollbar.Width = leftW
-		d.hscrollbar.TotalCols = d.maxLineW
-		d.hscrollbar.LeftCol = d.LeftCol
-		d.hscrollbar.Render(surface, leftStart, h)
+		hGeometry = widgets.NewScrollbarGeometry(
+			Rect{X: leftStart, Y: h, W: leftW, H: 1},
+			Rect{X: r.X + leftStart, Y: r.Y + h, W: leftW, H: 1},
+		)
+		hRange = widgets.NewScrollRange(leftW, d.maxLineW, d.LeftCol)
 
 		for x := 0; x < gutterW; x++ {
 			surface.SetCell(x, h, term.Cell{Ch: ' '})
@@ -746,14 +749,16 @@ func (d *DiffViewWidget) Render(surface Surface) {
 				surface.SetCell(x, h, term.Cell{Ch: ' '})
 			}
 
-			d.rhscrollbar.X = r.X + rightStart
-			d.rhscrollbar.Y = r.Y + h
-			d.rhscrollbar.Width = rightW
-			d.rhscrollbar.TotalCols = d.maxLineW
-			d.rhscrollbar.LeftCol = d.LeftCol
-			d.rhscrollbar.Render(surface, rightStart, h)
+			rhGeometry = widgets.NewScrollbarGeometry(
+				Rect{X: rightStart, Y: h, W: rightW, H: 1},
+				Rect{X: r.X + rightStart, Y: r.Y + h, W: rightW, H: 1},
+			)
+			rhRange = widgets.NewScrollRange(rightW, d.maxLineW, d.LeftCol)
 		}
 	}
+	_, hInvalidated := d.hscrollbar.Render(surface, hGeometry, hRange)
+	_, rhInvalidated := d.rhscrollbar.Render(surface, rhGeometry, rhRange)
+	d.scrollbarCapture.notify(vInvalidated || hInvalidated || rhInvalidated)
 }
 
 func (d *DiffViewWidget) renderUnifiedRow(surface Surface, y, w, gutterW, contentStart, contentW int) {
@@ -940,32 +945,46 @@ func (d *DiffViewWidget) clampLeftCol() {
 	}
 }
 
+func (d *DiffViewWidget) CancelPointerCapture() bool {
+	canceled := d.selecting || d.primaryPressed
+	d.selecting = false
+	d.primaryPressed = false
+	canceled = d.scrollbar.CancelPointerCapture() || canceled
+	canceled = d.hscrollbar.CancelPointerCapture() || canceled
+	canceled = d.rhscrollbar.CancelPointerCapture() || canceled
+	d.scrollbarCapture.notify(canceled)
+	return canceled
+}
+
+func (d *DiffViewWidget) InvalidatePointerInteraction() bool {
+	return d.CancelPointerCapture()
+}
+
+func (d *DiffViewWidget) OwnsPointerCapture() bool {
+	return d.selecting || d.primaryPressed || d.scrollbarCapture.owns(&d.scrollbar, &d.hscrollbar, &d.rhscrollbar)
+}
+
+func (d *DiffViewWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	d.scrollbarCapture.invalidated = invalidated
+}
+
 func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 	if d.extendedFetching || d.Loading {
 		return EventIgnored
 	}
-	if newTop, consumed := d.scrollbar.HandleEvent(ev); consumed {
+	if newTop, result := d.scrollbar.HandleEvent(ev); result != EventIgnored {
 		d.setTopVisualRow(newTop)
-		if d.scrollbar.IsDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
+		return result
 	}
 	if !d.IsWrapped() {
-		if newLeft, consumed := d.hscrollbar.HandleEvent(ev); consumed {
+		if newLeft, result := d.hscrollbar.HandleEvent(ev); result != EventIgnored {
 			d.LeftCol = newLeft
-			if d.hscrollbar.IsDragging() {
-				return EventCaptured
-			}
-			return EventConsumed
+			return result
 		}
 		if !d.IsUnified() {
-			if newLeft, consumed := d.rhscrollbar.HandleEvent(ev); consumed {
+			if newLeft, result := d.rhscrollbar.HandleEvent(ev); result != EventIgnored {
 				d.LeftCol = newLeft
-				if d.rhscrollbar.IsDragging() {
-					return EventCaptured
-				}
-				return EventConsumed
+				return result
 			}
 		}
 	}

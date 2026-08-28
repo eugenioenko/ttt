@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -74,13 +75,14 @@ type SelectDialogWidget struct {
 	OnSelectionChange func(id string)
 	Borders           *term.BorderSet
 
-	boxX         int
-	boxY         int
-	boxW         int
-	boxH         int
-	visibleItems int
-	showScroll   bool
-	scrollbar    Scrollbar
+	boxX             int
+	boxY             int
+	boxW             int
+	boxH             int
+	visibleItems     int
+	showScroll       bool
+	scrollbar        widgets.VerticalScrollbar
+	scrollbarCapture scrollbarCaptureState
 }
 
 func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
@@ -187,6 +189,7 @@ func (p *SelectDialogWidget) calculateLayout(sw, sh int) selectDialogLayout {
 
 func (p *SelectDialogWidget) Render(surface Surface) {
 	sw, sh := surface.Size()
+	ox, oy := surface.Origin()
 	layout := p.calculateLayout(sw, sh)
 	boxX := layout.boxX
 	boxY := layout.boxY
@@ -213,6 +216,8 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 	if p.mode == paletteGoToLineMode {
 		p.visibleItems = layout.visibleItems
 		p.showScroll = false
+		_, invalidated := p.scrollbar.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(0, 0, 0))
+		p.scrollbarCapture.notify(invalidated)
 		return
 	}
 
@@ -228,14 +233,6 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 	contentRight := boxX + boxW - 1
 	if showScroll {
 		contentRight--
-	}
-
-	if showScroll {
-		p.scrollbar.Height = visibleItems
-		p.scrollbar.TotalItems = len(p.Items)
-		p.scrollbar.TopItem = p.scrollOffset
-		p.scrollbar.X = boxX + boxW - 2
-		p.scrollbar.Y = boxY + 3
 	}
 
 	for i := 0; i < visibleItems && p.scrollOffset+i < len(p.Items); i++ {
@@ -257,9 +254,19 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 		surface.DrawText(boxX+2, y, message, contentRight-1, term.StyleMuted)
 	}
 
+	trackLength := 0
 	if showScroll {
-		p.scrollbar.Render(surface, p.scrollbar.X, p.scrollbar.Y)
+		trackLength = visibleItems
 	}
+	_, invalidated := p.scrollbar.Render(
+		surface,
+		widgets.NewScrollbarGeometry(
+			Rect{X: boxX + boxW - 2, Y: boxY + 3, W: 1, H: trackLength},
+			Rect{X: ox + boxX + boxW - 2, Y: oy + boxY + 3, W: 1, H: trackLength},
+		),
+		widgets.NewScrollRange(trackLength, len(p.Items), p.scrollOffset),
+	)
+	p.scrollbarCapture.notify(invalidated)
 
 	if p.mode == paletteHelpMode {
 		dividerY := boxY + boxH - 3
@@ -334,27 +341,19 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 		btn := mev.Buttons()
 		mx, my := mev.Position()
 
-		if p.showScroll {
-			if newTop, consumed := p.scrollbar.HandleEvent(ev); consumed {
-				p.scrollOffset = newTop
-				if p.Selected < p.scrollOffset {
-					p.Selected = p.scrollOffset
-					p.notifySelectionChange()
-				} else if p.visibleItems > 0 && p.Selected >= p.scrollOffset+p.visibleItems {
-					p.Selected = p.scrollOffset + p.visibleItems - 1
-					if p.Selected >= len(p.Items) {
-						p.Selected = len(p.Items) - 1
-					}
-					p.notifySelectionChange()
+		if newTop, result := p.scrollbar.HandleEvent(ev); result != EventIgnored {
+			p.scrollOffset = newTop
+			if p.Selected < p.scrollOffset {
+				p.Selected = p.scrollOffset
+				p.notifySelectionChange()
+			} else if p.visibleItems > 0 && p.Selected >= p.scrollOffset+p.visibleItems {
+				p.Selected = p.scrollOffset + p.visibleItems - 1
+				if p.Selected >= len(p.Items) {
+					p.Selected = len(p.Items) - 1
 				}
-				if p.scrollbar.IsDragging() {
-					return EventCaptured
-				}
-				return EventConsumed
+				p.notifySelectionChange()
 			}
-			if p.scrollbar.IsDragging() {
-				return EventCaptured
-			}
+			return result
 		}
 
 		if btn&tcell.WheelUp != 0 {
@@ -451,6 +450,22 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	return EventConsumed
+}
+
+func (p *SelectDialogWidget) CancelPointerCapture() bool {
+	return p.scrollbarCapture.cancel(&p.scrollbar)
+}
+
+func (p *SelectDialogWidget) InvalidatePointerInteraction() bool {
+	return p.CancelPointerCapture()
+}
+
+func (p *SelectDialogWidget) OwnsPointerCapture() bool {
+	return p.scrollbarCapture.owns(&p.scrollbar)
+}
+
+func (p *SelectDialogWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	p.scrollbarCapture.invalidated = invalidated
 }
 
 func (p *SelectDialogWidget) activateItem(item PaletteItem) {

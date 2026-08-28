@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -33,17 +34,40 @@ func TestScrollbarDragToBottomGoesLiveDespiteStaleTotalItems(t *testing.T) {
 	tw.SetRect(Rect{X: 0, Y: 0, W: 20, H: 5})
 
 	// Stale snapshot: only 3 lines of scrollback existed at last Render().
-	tw.scrollbar.X = 19
-	tw.scrollbar.Y = 0
-	tw.scrollbar.Height = 5
-	tw.scrollbar.TotalItems = 8 // sbLen(3) + rows(5)
-	tw.scrollbar.TopItem = 0
+	staleRange := widgets.NewScrollRange(5, 8, 0) // sbLen(3) + rows(5)
+	tw.scrollbarMaxTop = staleRange.MaxOffset()
+	tw.scrollbar.Render(
+		NewRenderSurface(makeGrid(20, 5), Rect{W: 20, H: 5}),
+		widgets.NewScrollbarGeometry(
+			Rect{X: 19, Y: 0, W: 1, H: 5},
+			Rect{X: 19, Y: 0, W: 1, H: 5},
+		),
+		staleRange,
+	)
 	tw.scrollOffset = 3
 
 	ev := tcell.NewEventMouse(19, 4, tcell.Button1, tcell.ModNone)
-	tw.HandleEvent(ev)
+	if got := tw.HandleEvent(ev); got != EventCaptured {
+		t.Fatalf("scrollbar press = %v, want captured", got)
+	}
 
 	if tw.scrollOffset != 0 {
 		t.Errorf("scrollOffset = %d, want 0 after dragging to the scrollbar's bottom", tw.scrollOffset)
+	}
+	if got := tw.HandleEvent(tcell.NewEventMouse(50, 50, tcell.ButtonNone, 0)); got != EventConsumed {
+		t.Fatalf("owned off-widget release = %v, want consumed", got)
+	}
+
+	tw.scrollOffset = 3
+	if got := tw.HandleEvent(ev); got != EventCaptured {
+		t.Fatalf("second scrollbar press = %v, want captured", got)
+	}
+	invalidations := 0
+	widgets.SetPointerCaptureInvalidated(tw, func() { invalidations++ })
+	if !widgets.InvalidatePointerInteraction(tw) {
+		t.Fatal("terminal did not invalidate scrollbar capture")
+	}
+	if invalidations != 1 {
+		t.Fatalf("terminal invalidations = %d, want 1", invalidations)
 	}
 }

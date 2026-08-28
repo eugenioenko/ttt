@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -99,17 +100,18 @@ func FilterCompletions(items []CompletionItem, prefix string) []CompletionItem {
 
 type AutocompleteWidget struct {
 	BaseWidget
-	Items      []CompletionItem
-	Selected   int
-	scrollTop  int
-	AnchorX    int
-	AnchorY    int
-	MaxVisible int
-	Borders    *term.BorderSet
-	OnSelect   func(item CompletionItem)
-	OnDismiss  func()
-	firstEvent bool
-	scrollbar  Scrollbar
+	Items            []CompletionItem
+	Selected         int
+	scrollTop        int
+	AnchorX          int
+	AnchorY          int
+	MaxVisible       int
+	Borders          *term.BorderSet
+	OnSelect         func(item CompletionItem)
+	OnDismiss        func()
+	firstEvent       bool
+	scrollbar        widgets.VerticalScrollbar
+	scrollbarCapture scrollbarCaptureState
 }
 
 const defaultMaxVisible = 10
@@ -177,6 +179,8 @@ func (a *AutocompleteWidget) ensureVisible() {
 
 func (a *AutocompleteWidget) Render(surface Surface) {
 	if len(a.Items) == 0 {
+		_, invalidated := a.scrollbar.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(0, 0, 0))
+		a.scrollbarCapture.notify(invalidated)
 		return
 	}
 	sw, sh := surface.Size()
@@ -263,14 +267,19 @@ func (a *AutocompleteWidget) Render(surface Surface) {
 	}
 
 	ox, oy := surface.Origin()
+	trackLength := 0
 	if hasScroll {
-		a.scrollbar.Height = vis
-		a.scrollbar.TotalItems = len(a.Items)
-		a.scrollbar.TopItem = a.scrollTop
-		a.scrollbar.X = ox + x + menuW - 2
-		a.scrollbar.Y = oy + y + 1
-		a.scrollbar.Render(surface, x+menuW-2, y+1)
+		trackLength = vis
 	}
+	_, invalidated := a.scrollbar.Render(
+		surface,
+		widgets.NewScrollbarGeometry(
+			Rect{X: x + menuW - 2, Y: y + 1, W: 1, H: trackLength},
+			Rect{X: ox + x + menuW - 2, Y: oy + y + 1, W: 1, H: trackLength},
+		),
+		widgets.NewScrollRange(trackLength, len(a.Items), a.scrollTop),
+	)
+	a.scrollbarCapture.notify(invalidated)
 
 	a.SetRect(Rect{X: ox + x, Y: oy + y, W: menuW, H: menuH})
 }
@@ -324,9 +333,9 @@ func (a *AutocompleteWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 
-		if newTop, consumed := a.scrollbar.HandleEvent(ev); consumed {
+		if newTop, result := a.scrollbar.HandleEvent(ev); result != EventIgnored {
 			a.scrollTop = newTop
-			return EventConsumed
+			return result
 		}
 
 		if btn&tcell.Button1 != 0 {
@@ -357,6 +366,22 @@ func (a *AutocompleteWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 	}
 	return EventIgnored
+}
+
+func (a *AutocompleteWidget) CancelPointerCapture() bool {
+	return a.scrollbarCapture.cancel(&a.scrollbar)
+}
+
+func (a *AutocompleteWidget) InvalidatePointerInteraction() bool {
+	return a.CancelPointerCapture()
+}
+
+func (a *AutocompleteWidget) OwnsPointerCapture() bool {
+	return a.scrollbarCapture.owns(&a.scrollbar)
+}
+
+func (a *AutocompleteWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	a.scrollbarCapture.invalidated = invalidated
 }
 
 func (a *AutocompleteWidget) moveSelection(dir int) {

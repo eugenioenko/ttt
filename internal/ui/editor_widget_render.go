@@ -9,6 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func (e *EditorPaneWidget) Render(surface Surface) {
@@ -287,43 +288,52 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 
 	scrollbarCol := w - 1
-	if showHScrollbar {
-		scrollbarCol = w - 1
-	}
+	var scrollbarInvalidated bool
 	if showScrollbar {
 		r := e.GetRect()
-		e.scrollbar.X = r.X + scrollbarCol
-		e.scrollbar.Y = r.Y
-		e.scrollbar.Height = h
+		totalItems := totalLines + h - 1
+		topItem := e.Viewport.TopLine
 		if e.WordWrap {
-			e.scrollbar.TotalItems = visibleCount + h - 1
+			totalItems = visibleCount + h - 1
 			curTopVisRow, _ := bufferPosToWrapScreenPos(e.Buf.Lines, e.Viewport.TopLine, 0, editorW, tabW)
 			curTopVisRow += e.wrapTopOffset
-			e.scrollbar.TopItem = curTopVisRow
+			topItem = curTopVisRow
 		} else if foldsActive {
-			e.scrollbar.TotalItems = visibleCount + h - 1
+			totalItems = visibleCount + h - 1
 			topVis := e.Folds.BufferToVisible(e.Viewport.TopLine)
 			if topVis < 0 {
 				topVis = 0
 			}
-			e.scrollbar.TopItem = topVis
-		} else {
-			e.scrollbar.TotalItems = totalLines + h - 1
-			e.scrollbar.TopItem = e.Viewport.TopLine
+			topItem = topVis
 		}
-		e.scrollbar.Render(surface, scrollbarCol, 0)
+		_, scrollbarInvalidated = e.scrollbar.Render(
+			surface,
+			widgets.NewScrollbarGeometry(
+				Rect{X: scrollbarCol, Y: 0, W: 1, H: h},
+				Rect{X: r.X + scrollbarCol, Y: r.Y, W: 1, H: h},
+			),
+			widgets.NewScrollRange(h, totalItems, topItem),
+		)
+	} else {
+		_, scrollbarInvalidated = e.scrollbar.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(h, visibleCount, 0))
 	}
 
+	var hscrollbarInvalidated bool
 	if showHScrollbar {
 		r := e.GetRect()
 		trackW := editorW
-		e.hscrollbar.X = r.X + gutterW
-		e.hscrollbar.Y = r.Y + h
-		e.hscrollbar.Width = trackW
-		e.hscrollbar.TotalCols = maxLineW
-		e.hscrollbar.LeftCol = e.Viewport.LeftCol
-		e.hscrollbar.Render(surface, gutterW, h)
+		_, hscrollbarInvalidated = e.hscrollbar.Render(
+			surface,
+			widgets.NewScrollbarGeometry(
+				Rect{X: gutterW, Y: h, W: trackW, H: 1},
+				Rect{X: r.X + gutterW, Y: r.Y + h, W: trackW, H: 1},
+			),
+			widgets.NewScrollRange(trackW, maxLineW, e.Viewport.LeftCol),
+		)
+	} else {
+		_, hscrollbarInvalidated = e.hscrollbar.Render(surface, widgets.ScrollbarGeometry{}, widgets.NewScrollRange(editorW, editorW, 0))
 	}
+	e.scrollbarCapture.notify(scrollbarInvalidated || hscrollbarInvalidated)
 
 	r := e.GetRect()
 	if e.WordWrap {
