@@ -137,4 +137,25 @@ func registerSearchCommands(app *App) {
 		Keywords: []string{"search"},
 		Handler:  app.ClearGlobalSearch,
 	})
+	reg.Register(command.Command{
+		ID: "search.useWordUnderCursor", Title: "Use Word Under Cursor for Search",
+		Keywords: []string{"search", "find", "cursor"},
+		Handler:  app.SearchUseWordUnderCursor,
+	})
+}
+
+func (a *App) SearchUseWordUnderCursor() {
+	if !a.EditorGroup.IsEditorActive() {
+		return
+	}
+	word := a.EditorGroup.WordAtCursor()
+	if word == "" {
+		return
+	}
+	matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, word, ui.SearchOptions{})
+	if err != nil {
+		a.StatusWarn("Invalid regex: " + err.Error())
+		return
+	}
+	a.EditorGroup.SetSearch(word, matches)
 }

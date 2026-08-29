@@ -1562,6 +1562,24 @@ func (g *EditorGroupWidget) FindPrev() {
 	g.Editor.scrollViewport()
 }
 
+func (g *EditorGroupWidget) WordAtCursor() string {
+	if !g.IsEditorActive() || g.Editor == nil || g.Editor.Buf == nil {
+		return ""
+	}
+	if g.Editor.Selection != nil && g.Editor.Selection.Active {
+		selText := g.Editor.Selection.Text(g.Editor.Buf.Lines, g.Editor.Cursor.Line, g.Editor.Cursor.Col)
+		if selText != "" && !strings.Contains(selText, "\n") {
+			return selText
+		}
+	}
+	line := g.Editor.Cursor.Line
+	col := g.Editor.Cursor.Col
+	if line < 0 || line >= len(g.Editor.Buf.Lines) {
+		return ""
+	}
+	return wordAt(g.Editor.Buf.Lines[line], col)
+}
+
 func (g *EditorGroupWidget) MoveLineUp() {
 	if g.IsEditorActive() {
 		g.Editor.MoveLineUp()
