@@ -52,6 +52,7 @@ type App struct {
 	Renderer               *render.Renderer
 	Settings               *config.Settings
 	Workspace              *workspace.Workspace
+	ExplicitFolders        bool
 	Palette                *ui.TerminalColorPalette
 	TerminalPanel          *ui.TerminalPanelWidget
 	Terminals              []TerminalTab

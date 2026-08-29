@@ -83,9 +83,9 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 	if c.BgStyle != 0 {
 		bg := t.styleMap[c.BgStyle].GetBackground()
 		s = tcell.StyleDefault. //nolint:staticcheck // Attributes is deprecated but individual calls don't replicate the exact reset-and-copy semantics
-			Foreground(s.GetForeground()).
-			Background(bg).
-			Attributes(s.GetAttributes())
+					Foreground(s.GetForeground()).
+					Background(bg).
+					Attributes(s.GetAttributes())
 	}
 	if c.UlStyle != 0 {
 		us := t.styleMap[c.UlStyle]
