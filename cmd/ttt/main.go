@@ -359,8 +359,13 @@ Docs: https://tttedit.dev
 		w, h = flags.sizeW, flags.sizeH
 	}
 	editor.Root.SetSize(w, h)
-
 	editor.PendingFileTargets = fileTargets
+
+	// If the user only opened files and didn't explicitly open a folder/workspace,
+	// hide the sidebar by default to maximize the editor space.
+	if !editor.ExplicitFolders && len(fileTargets) > 0 {
+		editor.HideSidebar()
+	}
 
 	if flags.pluginFile != "" {
 		app.LoadPluginFromFile(editor, flags.pluginFile)
