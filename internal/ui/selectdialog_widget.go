@@ -2,8 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,35 +97,7 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 }
 
 func (p *SelectDialogWidget) SetFiles(workDirs []string) {
-	p.files = nil
-	multiRoot := len(workDirs) > 1
-	for _, workDir := range workDirs {
-		prefix := ""
-		if multiRoot {
-			prefix = filepath.Base(workDir) + string(filepath.Separator)
-		}
-		filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			name := d.Name()
-			if d.IsDir() {
-				if name == ".git" || name == "node_modules" || name == ".cache" || name == "__pycache__" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			rel, err := filepath.Rel(workDir, path)
-			if err != nil {
-				return nil
-			}
-			p.files = append(p.files, paletteFile{Rel: prefix + rel, Abs: path})
-			if len(p.files) >= 10000 {
-				return filepath.SkipAll
-			}
-			return nil
-		})
-	}
+	p.files = listWorkspaceFiles(workDirs)
 }
 
 func (p *SelectDialogWidget) Focusable() bool { return true }
@@ -634,55 +604,8 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 	p.scrollOffset = 0
 }
 
-func fileDetail(f string) string {
-	dir := filepath.Dir(f)
-	if dir == "." {
-		return ""
-	}
-	return dir
-}
-
 func (p *SelectDialogWidget) filterFiles(query string) {
-	p.Items = nil
-	if query == "" {
-		for _, f := range p.files {
-			p.Items = append(p.Items, PaletteItem{
-				Label:  filepath.Base(f.Rel),
-				Detail: fileDetail(f.Rel),
-				ID:     f.Abs,
-			})
-			if len(p.Items) >= 100 {
-				break
-			}
-		}
-	} else {
-		type scored struct {
-			item  PaletteItem
-			score int
-		}
-		var matches []scored
-		for _, f := range p.files {
-			if ok, score := fuzzyMatch(query, f.Rel); ok {
-				matches = append(matches, scored{
-					item: PaletteItem{
-						Label:  filepath.Base(f.Rel),
-						Detail: fileDetail(f.Rel),
-						ID:     f.Abs,
-					},
-					score: score,
-				})
-			}
-		}
-		sort.Slice(matches, func(i, j int) bool {
-			return matches[i].score > matches[j].score
-		})
-		for _, m := range matches {
-			p.Items = append(p.Items, m.item)
-			if len(p.Items) >= 100 {
-				break
-			}
-		}
-	}
+	p.Items = fuzzyFilterFiles(p.files, query, 100)
 	p.Selected = 0
 	p.scrollOffset = 0
 }
