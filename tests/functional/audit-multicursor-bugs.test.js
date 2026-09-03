@@ -112,6 +112,24 @@ describe("BUG-005: line commands under multicursor no longer corrupt the buffer"
     expect(readFile(file)).toBe("aaa\nbbb\nY\nY\nY\n");
   });
 
+  it("one undo reverses the whole multicursor line move", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "moveundo.txt", "aaa\nfoo\nfoo\nfoo\nbbb\n");
+
+    tui.start(file);
+    tui.waitFor("aaa");
+
+    tui.press("down");
+    tui.pressChord("ctrl+k", "l");
+    tui.press("alt+down"); // three swaps, batched into one undo entry
+    tui.press("ctrl+z");
+
+    tui.press("ctrl+s");
+    tui.run();
+
+    expect(readFile(file)).toBe("aaa\nfoo\nfoo\nfoo\nbbb\n");
+  });
+
   it("Duplicate Line collapses multicursor instead of corrupting", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "dup.txt", FOO_LINES);

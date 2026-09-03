@@ -99,15 +99,26 @@ func (e *EditorPaneWidget) moveLinesMulti(delta int) {
 		return
 	}
 
+	// One BatchCommand so a single undo reverses the whole multicursor move,
+	// mirroring the multiExec* handlers.
+	var cmds []undo.EditCommand
 	if delta < 0 {
 		for _, l := range lines {
-			e.exec(&undo.SwapLineCommand{Line1: l, Line2: l - 1})
+			cmd := &undo.SwapLineCommand{Line1: l, Line2: l - 1}
+			cmd.Apply(e.Buf)
+			cmds = append(cmds, cmd)
 		}
 	} else {
 		for i := len(lines) - 1; i >= 0; i-- {
-			e.exec(&undo.SwapLineCommand{Line1: lines[i], Line2: lines[i] + 1})
+			cmd := &undo.SwapLineCommand{Line1: lines[i], Line2: lines[i] + 1}
+			cmd.Apply(e.Buf)
+			cmds = append(cmds, cmd)
 		}
 	}
+	if e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+	}
+	e.bufferDirty = true
 
 	for i := range e.Multi.Cursors {
 		cs := &e.Multi.Cursors[i]
