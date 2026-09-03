@@ -1952,7 +1952,7 @@ func (g *EditorGroupWidget) CancelPointerCapture() bool {
 }
 
 func (g *EditorGroupWidget) OwnsPointerCapture() bool {
-	return g.TabBar.OwnsPointerCapture()
+	return g.TabBar.OwnsPointerCapture() || (g.Editor != nil && g.Editor.OwnsPointerCapture())
 }
 
 func (g *EditorGroupWidget) InvalidatePointerInteraction() bool {
