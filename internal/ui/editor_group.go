@@ -1242,6 +1242,12 @@ func (g *EditorGroupWidget) Undo() {
 	if t == nil || t.Content != nil {
 		return
 	}
+	// Undo has no concept of e.Multi; collapsing first avoids stranding
+	// secondary cursors at stale offsets that corrupt on the next
+	// multicursor keystroke (BUG-008).
+	if g.IsEditorActive() && g.Editor.isMultiActive() {
+		g.Editor.collapseMulti()
+	}
 	if t.Undo != nil {
 		if pos := t.Undo.Undo(t.Buf); pos != nil {
 			g.Editor.Cursor.Line = pos.Line
@@ -1258,6 +1264,9 @@ func (g *EditorGroupWidget) Redo() {
 	t := g.activeTab()
 	if t == nil || t.Content != nil {
 		return
+	}
+	if g.IsEditorActive() && g.Editor.isMultiActive() {
+		g.Editor.collapseMulti()
 	}
 	if t.Undo != nil {
 		if pos := t.Undo.Redo(t.Buf); pos != nil {
