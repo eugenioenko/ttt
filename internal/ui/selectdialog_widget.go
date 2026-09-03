@@ -2,8 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -100,70 +98,7 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 }
 
 func (p *SelectDialogWidget) SetFiles(workDirs []string) {
-	p.files = nil
-	multiRoot := len(workDirs) > 1
-	_, hasRg := exec.LookPath("rg")
-	_, hasGit := exec.LookPath("git")
-	for _, workDir := range workDirs {
-		prefix := ""
-		if multiRoot {
-			prefix = filepath.Base(workDir) + string(filepath.Separator)
-		}
-		if hasRg == nil {
-			if p.setFilesCmdLines(workDir, prefix, "rg", "--files") {
-				continue
-			}
-		}
-		if hasGit == nil {
-			if p.setFilesCmdLines(workDir, prefix, "git", "ls-files", "--cached", "--others", "--exclude-standard") {
-				continue
-			}
-		}
-		p.setFilesWalkDir(workDir, prefix)
-	}
-}
-
-func (p *SelectDialogWidget) setFilesCmdLines(workDir, prefix string, name string, args ...string) bool {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = workDir
-	out, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	for rel := range strings.SplitSeq(string(out), "\n") {
-		if rel == "" {
-			continue
-		}
-		p.files = append(p.files, paletteFile{
-			Rel: prefix + rel,
-			Abs: filepath.Join(workDir, rel),
-		})
-	}
-	return true
-}
-
-func (p *SelectDialogWidget) setFilesWalkDir(workDir, prefix string) {
-	filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		name := d.Name()
-		if d.IsDir() {
-			if name == ".git" || name == "node_modules" || name == ".cache" || name == "__pycache__" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		rel, err := filepath.Rel(workDir, path)
-		if err != nil {
-			return nil
-		}
-		p.files = append(p.files, paletteFile{Rel: prefix + rel, Abs: path})
-		if len(p.files) >= 100000 {
-			return filepath.SkipAll
-		}
-		return nil
-	})
+	p.files = listWorkspaceFiles(workDirs)
 }
 
 func (p *SelectDialogWidget) Focusable() bool { return true }

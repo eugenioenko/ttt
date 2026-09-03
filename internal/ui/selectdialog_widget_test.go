@@ -682,16 +682,15 @@ func TestSetFilesWalkDirFallback(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".git", "config"), []byte(""), 0o644)
 
-	p := NewSelectDialogWidget(nil)
-	p.setFilesWalkDir(dir, "")
+	files := listFilesWalkDir(dir, "")
 
-	for _, f := range p.files {
+	for _, f := range files {
 		if strings.Contains(f.Rel, ".git") {
 			t.Fatalf("walkDir should skip .git, found %q", f.Rel)
 		}
 	}
-	if len(p.files) != 1 || p.files[0].Rel != "hello.txt" {
-		t.Fatalf("expected [hello.txt], got %v", p.files)
+	if len(files) != 1 || files[0].Rel != "hello.txt" {
+		t.Fatalf("expected [hello.txt], got %v", files)
 	}
 }
 
