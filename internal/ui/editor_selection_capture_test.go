@@ -45,3 +45,28 @@ func TestEditorSelectionDragDoesNotResizeSidebar(t *testing.T) {
 		t.Fatal("split panel latched into a divider drag")
 	}
 }
+
+type capturingContentProbe struct {
+	BaseWidget
+	capturing bool
+}
+
+func (p *capturingContentProbe) HandleEvent(tcell.Event) EventResult { return EventIgnored }
+func (p *capturingContentProbe) Render(Surface)                      {}
+func (p *capturingContentProbe) OwnsPointerCapture() bool            { return p.capturing }
+
+// A diff/commit-detail content tab that captures the pointer during a scrollbar
+// drag or selection must be reported by the group, same as the editor pane.
+func TestEditorGroupOwnsPointerCaptureFollowsContentTab(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	probe := &capturingContentProbe{}
+	g.activeTab().Content = probe
+
+	if g.OwnsPointerCapture() {
+		t.Fatal("group owns capture while the content tab is idle")
+	}
+	probe.capturing = true
+	if !g.OwnsPointerCapture() {
+		t.Fatal("group dropped capture while the content tab held it")
+	}
+}
