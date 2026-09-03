@@ -21,7 +21,18 @@ func waitForChange(t *testing.T, ch <-chan string, timeout time.Duration) (strin
 func newTestWatcher(t *testing.T) (*Watcher, <-chan string) {
 	t.Helper()
 	ch := make(chan string, 8)
-	w, err := New(func(path string) { ch <- path })
+	w, err := New(func(path string) { ch <- path }, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { w.Close() })
+	return w, ch
+}
+
+func newTestDirWatcher(t *testing.T) (*Watcher, <-chan string) {
+	t.Helper()
+	ch := make(chan string, 8)
+	w, err := New(nil, func(dir string) { ch <- dir })
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -91,6 +102,74 @@ func TestWatcherStopsAfterUntrack(t *testing.T) {
 	}
 	if got, ok := waitForChange(t, ch, 500*time.Millisecond); ok {
 		t.Errorf("expected no notification after untracking, got %q", got)
+	}
+}
+
+func TestWatcherDetectsDirEntryCreated(t *testing.T) {
+	dir := t.TempDir()
+
+	w, ch := newTestDirWatcher(t)
+	w.SyncDirs([]string{dir})
+
+	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := waitForChange(t, ch, 3*time.Second)
+	if !ok {
+		t.Fatal("expected a directory change notification, got none")
+	}
+	if got != dir {
+		t.Errorf("expected dir %q, got %q", dir, got)
+	}
+}
+
+func TestWatcherDetectsDirEntryRemoved(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "gone.txt")
+	if err := os.WriteFile(file, []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	w, ch := newTestDirWatcher(t)
+	w.SyncDirs([]string{dir})
+
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := waitForChange(t, ch, 3*time.Second); !ok {
+		t.Fatal("expected a directory change notification, got none")
+	}
+}
+
+func TestWatcherIgnoresUnwatchedDirs(t *testing.T) {
+	watched := t.TempDir()
+	other := t.TempDir()
+
+	w, ch := newTestDirWatcher(t)
+	w.SyncDirs([]string{watched})
+
+	if err := os.WriteFile(filepath.Join(other, "x.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := waitForChange(t, ch, 500*time.Millisecond); ok {
+		t.Errorf("expected no notification for unwatched dir, got %q", got)
+	}
+}
+
+func TestWatcherStopsAfterDirUntrack(t *testing.T) {
+	dir := t.TempDir()
+
+	w, ch := newTestDirWatcher(t)
+	w.SyncDirs([]string{dir})
+	w.SyncDirs(nil)
+
+	if err := os.WriteFile(filepath.Join(dir, "x.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := waitForChange(t, ch, 500*time.Millisecond); ok {
+		t.Errorf("expected no notification after untracking dir, got %q", got)
 	}
 }
 

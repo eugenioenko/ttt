@@ -15,29 +15,46 @@ type FileChangedResult struct {
 	Path string
 }
 
-// StartWatcher creates the file watcher. onChange runs on the watcher's
-// goroutine, so it only posts an event; the reconciliation happens on the main
-// loop in HandleFileChanged. a.Screen is read at call time so it is safe even
-// if the screen is wired up after Init.
+// ExplorerDirChangedResult is posted to the event loop when the contents of a
+// directory shown in the workspace explorer change on disk.
+type ExplorerDirChangedResult struct {
+	Dir string
+}
+
+// StartWatcher creates the file watcher. The callbacks run on the watcher's
+// goroutine, so they only post an event; the reconciliation happens on the main
+// loop in HandleFileChanged / HandleExplorerDirChanged. a.Screen is read at
+// call time so it is safe even if the screen is wired up after Init.
 func (a *App) StartWatcher() {
-	w, err := watcher.New(func(path string) {
-		if a.Screen != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FileChangedResult{Path: path}))
-		}
-	})
+	w, err := watcher.New(
+		func(path string) {
+			if a.Screen != nil {
+				a.Screen.PostEvent(tcell.NewEventInterrupt(&FileChangedResult{Path: path}))
+			}
+		},
+		func(dir string) {
+			if a.Screen != nil {
+				a.Screen.PostEvent(tcell.NewEventInterrupt(&ExplorerDirChangedResult{Dir: dir}))
+			}
+		},
+	)
 	if err != nil {
 		return
 	}
 	a.Watcher = w
 }
 
-// SyncWatched updates the watcher's tracked set to the currently open files.
-// It is cheap to call frequently — the watcher ignores paths it already tracks.
+// SyncWatched updates the watcher's tracked set to the currently open files and
+// the directories currently visible in the explorer. It is cheap to call
+// frequently — the watcher ignores paths it already tracks.
 func (a *App) SyncWatched() {
 	if a.Watcher == nil {
 		return
 	}
 	a.Watcher.Sync(a.EditorGroup.OpenFilePaths())
+	if a.Explorer != nil {
+		a.Watcher.SyncDirs(a.Explorer.WatchedDirs())
+	}
 }
 
 // HandleFileChanged reconciles an open buffer with a change detected on disk.
@@ -70,4 +87,13 @@ func (a *App) HandleFileChanged(path string) {
 	a.EditorGroup.ReloadFile(path)
 	a.RequestGitGutterForActiveFile()
 	a.RefreshSymbols()
+}
+
+// HandleExplorerDirChanged re-reads the explorer tree after its backing
+// filesystem changed. Reload preserves expansion state and selection.
+func (a *App) HandleExplorerDirChanged(dir string) {
+	a.invalidateRepositoryPath(dir, RepositoryWorktree)
+	if a.Explorer != nil {
+		a.Explorer.Reload()
+	}
 }
