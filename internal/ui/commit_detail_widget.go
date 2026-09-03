@@ -1401,6 +1401,10 @@ func (d *CommitDetailWidget) clampScroll() {
 	}
 }
 
+func (d *CommitDetailWidget) OwnsPointerCapture() bool {
+	return d.selecting || d.scrollbar.IsDragging() || d.hscrollbar.IsDragging() || d.rhscroll.IsDragging()
+}
+
 func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 	if newTop, consumed := d.scrollbar.HandleEvent(ev); consumed {
 		d.TopLine = newTop

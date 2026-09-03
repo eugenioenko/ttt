@@ -940,6 +940,10 @@ func (d *DiffViewWidget) clampLeftCol() {
 	}
 }
 
+func (d *DiffViewWidget) OwnsPointerCapture() bool {
+	return d.selecting || d.scrollbar.IsDragging() || d.hscrollbar.IsDragging() || d.rhscrollbar.IsDragging()
+}
+
 func (d *DiffViewWidget) HandleEvent(ev tcell.Event) EventResult {
 	if d.extendedFetching || d.Loading {
 		return EventIgnored
