@@ -1,6 +1,6 @@
 # TTT Editor: Terminal Text Tool
 
-The IDE that lives in your terminal. Not a simplified terminal editor — a real alternative to VS Code, Zed, and Sublime that happens to run in your terminal. Single Go binary, zero config.
+The IDE that lives in your terminal. A TUI that feels like GUI. A real alternative to VS Code, Zed, and Sublime that happens to run in your terminal. Single Go binary, zero config.
 
 ![TTT Demo](docs-web/public/demo/demo.gif)
 
