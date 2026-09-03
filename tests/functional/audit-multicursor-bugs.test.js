@@ -66,8 +66,8 @@ describe("BUG-007: paste under multicursor only replaces the primary selection",
   });
 });
 
-describe("BUG-008: undo after multicursor edit strands cursor and stale e.Multi", () => {
-  it.fails("typing after undo edits at consistent cursor positions", () => {
+describe("BUG-008: undo under multicursor collapses instead of corrupting", () => {
+  it("a keystroke after undo inserts exactly one character", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "undo.txt", FOO_LINES);
 
@@ -76,22 +76,61 @@ describe("BUG-008: undo after multicursor edit strands cursor and stale e.Multi"
 
     tui.pressChord("ctrl+k", "l");
     tui.type("X"); // replaces all 4 occurrences
-    tui.press("ctrl+z"); // restores text, but leaves Multi.Cursors stale
+    tui.press("ctrl+z"); // collapses multicursor, then undoes the edit
     tui.type("Z");
 
     tui.press("ctrl+s");
     tui.run();
 
-    // Correct behavior: undo restores text AND multicursor selections, so
-    // "Z" replaces each occurrence again. Buggy behavior today corrupts:
-    // "foo barZ foo baz\nfZoo qux\nbar fZoZo end" (two Z's on one line
-    // from a single keystroke).
-    expect(readFile(file)).toBe("Z bar Z baz\nZ qux\nbar Z end\n");
+    // Undo/redo has no concept of e.Multi, so it collapses to a single
+    // cursor first. Text is restored and exactly one "Z" is inserted —
+    // never the old "fZoZo end" double-write from stale secondary cursors.
+    const out = readFile(file);
+    expect(out.match(/Z/g).length).toBe(1);
+    expect(out).not.toMatch(/f[^o]oo|fo[^o]o/); // no Z spliced inside "foo"
+    expect(out).toContain("foo bar foo baz");
+    expect(out).toContain("foo qux");
   });
 });
 
-describe("BUG-005: line commands under multicursor corrupt the buffer", () => {
-  it.fails("typing after Duplicate Line edits at consistent cursor positions", () => {
+describe("BUG-005: line commands under multicursor no longer corrupt the buffer", () => {
+  it("Move Line Down carries every cursor with its line", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "move.txt", "aaa\nfoo\nfoo\nfoo\nbbb\n");
+
+    tui.start(file);
+    tui.waitFor("aaa");
+
+    tui.press("down"); // cursor onto the first "foo"
+    tui.pressChord("ctrl+k", "l"); // 3 cursors, one per "foo"
+    tui.press("alt+down"); // move the three "foo" lines down as a block
+    tui.type("Y"); // replaces each still-selected "foo"
+
+    tui.press("ctrl+s");
+    tui.run();
+
+    expect(readFile(file)).toBe("aaa\nbbb\nY\nY\nY\n");
+  });
+
+  it("one undo reverses the whole multicursor line move", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "moveundo.txt", "aaa\nfoo\nfoo\nfoo\nbbb\n");
+
+    tui.start(file);
+    tui.waitFor("aaa");
+
+    tui.press("down");
+    tui.pressChord("ctrl+k", "l");
+    tui.press("alt+down"); // three swaps, batched into one undo entry
+    tui.press("ctrl+z");
+
+    tui.press("ctrl+s");
+    tui.run();
+
+    expect(readFile(file)).toBe("aaa\nfoo\nfoo\nfoo\nbbb\n");
+  });
+
+  it("Duplicate Line collapses multicursor instead of corrupting", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "dup.txt", FOO_LINES);
 
@@ -105,13 +144,10 @@ describe("BUG-005: line commands under multicursor corrupt the buffer", () => {
     tui.press("ctrl+s");
     tui.run();
 
-    // Minimal correct behavior: cursors shift with the inserted line and
-    // typing replaces each selected occurrence. (A fix that instead
-    // collapses multicursor on line commands would need this expectation
-    // adjusted — the non-negotiable part is no corruption of text that
-    // no cursor touched.) Buggy behavior today: "Yar foo baz\nfoo Y\n...".
+    // Collapses to the primary cursor: line 0 is duplicated and a single
+    // "Y" is typed — no character lands in text no cursor covered.
     expect(readFile(file)).toBe(
-      "Y bar Y baz\nfoo bar foo baz\nY qux\nbar Y end\n",
+      "foo bar foo baz\nfooY bar foo baz\nfoo qux\nbar foo end\n",
     );
   });
 });
