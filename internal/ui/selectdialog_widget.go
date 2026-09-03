@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -101,33 +102,54 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 func (p *SelectDialogWidget) SetFiles(workDirs []string) {
 	p.files = nil
 	multiRoot := len(workDirs) > 1
+	_, rgErr := exec.LookPath("rg")
 	for _, workDir := range workDirs {
 		prefix := ""
 		if multiRoot {
 			prefix = filepath.Base(workDir) + string(filepath.Separator)
 		}
-		filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			name := d.Name()
-			if d.IsDir() {
-				if name == ".git" || name == "node_modules" || name == ".cache" || name == "__pycache__" {
-					return filepath.SkipDir
+		if rgErr == nil {
+			cmd := exec.Command("rg", "--files")
+			cmd.Dir = workDir
+			if out, err := cmd.Output(); err == nil {
+				for rel := range strings.SplitSeq(string(out), "\n") {
+					if rel == "" {
+						continue
+					}
+					p.files = append(p.files, paletteFile{
+						Rel: prefix + rel,
+						Abs: filepath.Join(workDir, rel),
+					})
 				}
-				return nil
+				continue
 			}
-			rel, err := filepath.Rel(workDir, path)
-			if err != nil {
-				return nil
-			}
-			p.files = append(p.files, paletteFile{Rel: prefix + rel, Abs: path})
-			if len(p.files) >= 10000 {
-				return filepath.SkipAll
+		}
+		p.setFilesWalkDir(workDir, prefix)
+	}
+}
+
+func (p *SelectDialogWidget) setFilesWalkDir(workDir, prefix string) {
+	filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if name == ".git" || name == "node_modules" || name == ".cache" || name == "__pycache__" {
+				return filepath.SkipDir
 			}
 			return nil
-		})
-	}
+		}
+		rel, err := filepath.Rel(workDir, path)
+		if err != nil {
+			return nil
+		}
+		p.files = append(p.files, paletteFile{Rel: prefix + rel, Abs: path})
+		if len(p.files) >= 10000 {
+			return filepath.SkipAll
+		}
+		return nil
+	})
 }
 
 func (p *SelectDialogWidget) Focusable() bool { return true }

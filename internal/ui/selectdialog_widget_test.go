@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -632,5 +635,87 @@ func TestPaletteHelpNoMatchesRendersGuidance(t *testing.T) {
 func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
 	if got := truncatePaletteDetail("prefix界界", 4); got != "…界" {
 		t.Fatalf("expected width-safe tail, got %q", got)
+	}
+}
+
+func TestSetFilesUsesRgWhenAvailable(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "src"), 0o755)
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644)
+	os.WriteFile(filepath.Join(dir, "src", "lib.go"), []byte("package src"), 0o644)
+
+	p := NewSelectDialogWidget(nil)
+	p.SetFiles([]string{dir})
+
+	rels := make([]string, len(p.files))
+	for i, f := range p.files {
+		rels[i] = f.Rel
+	}
+	sort.Strings(rels)
+
+	if len(rels) < 2 {
+		t.Fatalf("expected at least 2 files, got %d: %v", len(rels), rels)
+	}
+
+	found := map[string]bool{"main.go": false, filepath.Join("src", "lib.go"): false}
+	for _, r := range rels {
+		if _, ok := found[r]; ok {
+			found[r] = true
+		}
+	}
+	for name, ok := range found {
+		if !ok {
+			t.Fatalf("expected file %q in results, got %v", name, rels)
+		}
+	}
+
+	for _, f := range p.files {
+		if !filepath.IsAbs(f.Abs) {
+			t.Fatalf("expected absolute path, got %q", f.Abs)
+		}
+	}
+}
+
+func TestSetFilesWalkDirFallback(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("hi"), 0o644)
+	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".git", "config"), []byte(""), 0o644)
+
+	p := NewSelectDialogWidget(nil)
+	p.setFilesWalkDir(dir, "")
+
+	for _, f := range p.files {
+		if strings.Contains(f.Rel, ".git") {
+			t.Fatalf("walkDir should skip .git, found %q", f.Rel)
+		}
+	}
+	if len(p.files) != 1 || p.files[0].Rel != "hello.txt" {
+		t.Fatalf("expected [hello.txt], got %v", p.files)
+	}
+}
+
+func TestSetFilesMultiRoot(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+	os.WriteFile(filepath.Join(dir1, "a.txt"), []byte(""), 0o644)
+	os.WriteFile(filepath.Join(dir2, "b.txt"), []byte(""), 0o644)
+
+	p := NewSelectDialogWidget(nil)
+	p.SetFiles([]string{dir1, dir2})
+
+	if len(p.files) < 2 {
+		t.Fatalf("expected at least 2 files, got %d", len(p.files))
+	}
+
+	hasPrefix := false
+	for _, f := range p.files {
+		if strings.Contains(f.Rel, string(filepath.Separator)) || strings.HasPrefix(f.Rel, filepath.Base(dir1)) || strings.HasPrefix(f.Rel, filepath.Base(dir2)) {
+			hasPrefix = true
+			break
+		}
+	}
+	if !hasPrefix {
+		t.Fatalf("multi-root files should have workspace prefix, got %v", p.files)
 	}
 }
