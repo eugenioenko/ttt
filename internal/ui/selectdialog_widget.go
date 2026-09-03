@@ -102,30 +102,44 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 func (p *SelectDialogWidget) SetFiles(workDirs []string) {
 	p.files = nil
 	multiRoot := len(workDirs) > 1
-	_, rgErr := exec.LookPath("rg")
+	_, hasRg := exec.LookPath("rg")
+	_, hasGit := exec.LookPath("git")
 	for _, workDir := range workDirs {
 		prefix := ""
 		if multiRoot {
 			prefix = filepath.Base(workDir) + string(filepath.Separator)
 		}
-		if rgErr == nil {
-			cmd := exec.Command("rg", "--files")
-			cmd.Dir = workDir
-			if out, err := cmd.Output(); err == nil {
-				for rel := range strings.SplitSeq(string(out), "\n") {
-					if rel == "" {
-						continue
-					}
-					p.files = append(p.files, paletteFile{
-						Rel: prefix + rel,
-						Abs: filepath.Join(workDir, rel),
-					})
-				}
+		if hasRg == nil {
+			if p.setFilesCmdLines(workDir, prefix, "rg", "--files") {
+				continue
+			}
+		}
+		if hasGit == nil {
+			if p.setFilesCmdLines(workDir, prefix, "git", "ls-files", "--cached", "--others", "--exclude-standard") {
 				continue
 			}
 		}
 		p.setFilesWalkDir(workDir, prefix)
 	}
+}
+
+func (p *SelectDialogWidget) setFilesCmdLines(workDir, prefix string, name string, args ...string) bool {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = workDir
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	for rel := range strings.SplitSeq(string(out), "\n") {
+		if rel == "" {
+			continue
+		}
+		p.files = append(p.files, paletteFile{
+			Rel: prefix + rel,
+			Abs: filepath.Join(workDir, rel),
+		})
+	}
+	return true
 }
 
 func (p *SelectDialogWidget) setFilesWalkDir(workDir, prefix string) {
@@ -145,7 +159,7 @@ func (p *SelectDialogWidget) setFilesWalkDir(workDir, prefix string) {
 			return nil
 		}
 		p.files = append(p.files, paletteFile{Rel: prefix + rel, Abs: path})
-		if len(p.files) >= 10000 {
+		if len(p.files) >= 100000 {
 			return filepath.SkipAll
 		}
 		return nil
