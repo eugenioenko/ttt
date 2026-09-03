@@ -164,6 +164,37 @@ func (n *NavigationPanel) SetRoots(paths []string) {
 	n.Tree.RestoreExpanded(expanded)
 }
 
+// WatchedDirs returns every root plus every expanded folder: the directories
+// whose contents are currently materialized in the tree.
+func (n *NavigationPanel) WatchedDirs() []string {
+	if n.Tree == nil {
+		return nil
+	}
+	var dirs []string
+	seen := make(map[string]bool)
+	var walk func(node *widgets.TreeNode, isRoot bool)
+	walk = func(node *widgets.TreeNode, isRoot bool) {
+		if node == nil {
+			return
+		}
+		if (isRoot || node.Expanded) && !seen[node.ID] {
+			seen[node.ID] = true
+			dirs = append(dirs, node.ID)
+		}
+		if isRoot || node.Expanded {
+			for _, child := range node.Children {
+				if child.Expandable {
+					walk(child, false)
+				}
+			}
+		}
+	}
+	for _, root := range n.Tree.Config.Items {
+		walk(root, true)
+	}
+	return dirs
+}
+
 func (n *NavigationPanel) loadChildren(node *widgets.TreeNode) {
 	entries := ui.LoadDirEntries(node.ID, n.Settings)
 	node.Children = nil

@@ -535,6 +535,9 @@ func registerWidgetCallbacks(app *App) {
 		if id == "outline" {
 			app.RefreshSymbols()
 		}
+		if id == "explorer" {
+			app.Explorer.Reload()
+		}
 	}
 
 	revealSymbol := func(line, col int) {

@@ -291,7 +291,6 @@ func registerViewCommands(app *App) {
 		ID: "sidebar.explorer", Title: "Show Explorer",
 		Keywords: []string{"view", "file", "tree", "browser"},
 		Handler: func() {
-			app.Explorer.Reload()
 			app.ShowPanel("explorer", app.Explorer.Adapter)
 		},
 	})

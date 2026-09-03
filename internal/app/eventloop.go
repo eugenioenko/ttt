@@ -404,6 +404,8 @@ func RunEventLoop(
 				app.ApplyDiffOpen(v)
 			case *FileChangedResult:
 				app.HandleFileChanged(v.Path)
+			case *ExplorerDirChangedResult:
+				app.HandleExplorerDirChanged(v.Dir)
 			case *ui.SearchBatch:
 				app.Search.ApplyBatch(v)
 			case *DiffContentResult:
