@@ -15,16 +15,16 @@ type FileChangedResult struct {
 	Path string
 }
 
-// ExplorerDirChangedResult is posted to the event loop when the contents of a
-// directory shown in the workspace explorer change on disk.
+// ExplorerDirChangedResult is posted to the event loop when a directory shown
+// in the workspace explorer gains, loses or renames an entry on disk.
 type ExplorerDirChangedResult struct {
 	Dir string
 }
 
 // StartWatcher creates the file watcher. The callbacks run on the watcher's
-// goroutine, so they only post an event; the reconciliation happens on the main
-// loop in HandleFileChanged / HandleExplorerDirChanged. a.Screen is read at
-// call time so it is safe even if the screen is wired up after Init.
+// goroutine, so they only post an event; reconciliation happens on the main
+// loop. a.Screen is read at call time so it is safe even if the screen is
+// wired up after Init.
 func (a *App) StartWatcher() {
 	w, err := watcher.New(
 		func(path string) {
@@ -44,9 +44,8 @@ func (a *App) StartWatcher() {
 	a.Watcher = w
 }
 
-// SyncWatched updates the watcher's tracked set to the currently open files and
-// the directories currently visible in the explorer. It is cheap to call
-// frequently — the watcher ignores paths it already tracks.
+// SyncWatched points the watcher at the currently open files and the
+// directories currently shown in the explorer. Cheap to call frequently.
 func (a *App) SyncWatched() {
 	if a.Watcher == nil {
 		return
@@ -95,5 +94,6 @@ func (a *App) HandleExplorerDirChanged(dir string) {
 	a.invalidateRepositoryPath(dir, RepositoryWorktree)
 	if a.Explorer != nil {
 		a.Explorer.Reload()
+		a.SyncWatched()
 	}
 }

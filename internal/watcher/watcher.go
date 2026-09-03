@@ -1,9 +1,8 @@
 // Package watcher reports when files open in the editor are modified on disk
 // by another process. It wraps fsnotify, watching the parent directories of
 // tracked files (the portable, rename-safe pattern) and debouncing bursts of
-// events into a single notification per file. It also watches a separate set
-// of directories on behalf of the workspace explorer, reporting when their
-// contents change so the tree can re-render.
+// events into a single notification per file. SyncDirs additionally watches a
+// set of directories for the workspace explorer.
 package watcher
 
 import (
@@ -21,9 +20,8 @@ const defaultDebounce = 150 * time.Millisecond
 
 // Watcher tracks a set of files and invokes onChange when one of them changes
 // on disk. onChange is called from an internal goroutine with the same path
-// string that was passed to Sync, so callers can match it back to their own
-// bookkeeping. SyncDirs adds a parallel set of directories whose entry
-// creation/removal/rename fires onDirChange.
+// string that was passed to Sync. SyncDirs tracks a parallel set of directories
+// whose entry creation/removal/rename fires onDirChange.
 type Watcher struct {
 	fsw         *fsnotify.Watcher
 	onChange    func(path string)
@@ -31,16 +29,16 @@ type Watcher struct {
 	debounce    time.Duration
 
 	mu        sync.Mutex
-	files     map[string]string // cleaned-abs file path -> original path as tracked
-	watchDirs map[string]string // cleaned-abs explorer dir -> original path as tracked
-	dirRefs   map[string]int    // fsnotify-watched directory -> refcount (files' parents + watchDirs)
+	files     map[string]string // cleaned-abs path -> path as tracked
+	watchDirs map[string]string // cleaned-abs dir -> path as tracked
+	dirRefs   map[string]int    // fsnotify-watched dir -> refcount (file parents + watchDirs)
 	timers    map[string]*time.Timer
 	dirTimers map[string]*time.Timer
 	closed    bool
 }
 
-// New creates a Watcher and starts its event loop. onChange and onDirChange
-// must be safe to call from another goroutine; either may be nil.
+// New creates a Watcher and starts its event loop. The callbacks run on an
+// internal goroutine; either may be nil.
 func New(onChange func(path string), onDirChange func(dir string)) (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -91,9 +89,9 @@ func (w *Watcher) Sync(paths []string) {
 	}
 }
 
-// SyncDirs reconciles the tracked directory set with paths. A change to any
-// direct entry of one of these directories fires onDirChange with the path as
-// passed here. Like Sync, it is cheap to call frequently.
+// SyncDirs reconciles the tracked directory set with paths. onDirChange fires
+// with the path as passed here when an entry in one of them is added, removed
+// or renamed. Like Sync, it is cheap to call frequently.
 func (w *Watcher) SyncDirs(paths []string) {
 	want := make(map[string]string, len(paths))
 	for _, p := range paths {
@@ -128,8 +126,8 @@ func (w *Watcher) SyncDirs(paths []string) {
 	}
 }
 
-// retainDirLocked adds an fsnotify watch on dir (or bumps its refcount) and
-// reports whether the directory is now watched.
+// retainDirLocked bumps dir's fsnotify refcount, adding the watch on the first
+// reference and reporting whether the directory ended up watched.
 func (w *Watcher) retainDirLocked(dir string) bool {
 	if w.dirRefs[dir] == 0 {
 		if err := w.fsw.Add(dir); err != nil {
@@ -140,8 +138,6 @@ func (w *Watcher) retainDirLocked(dir string) bool {
 	return true
 }
 
-// releaseDirLocked drops one reference to an fsnotify watch, removing it when
-// the last reference goes away.
 func (w *Watcher) releaseDirLocked(dir string) {
 	if w.dirRefs[dir] > 0 {
 		w.dirRefs[dir]--
@@ -178,16 +174,12 @@ func (w *Watcher) run() {
 			if !ok {
 				return
 			}
-			// Only Chmod-only events are uninteresting; writes, creates,
-			// renames and removes can all change the file's contents.
 			if ev.Op == fsnotify.Chmod {
 				continue
 			}
 			key := filepath.Clean(ev.Name)
 			w.handle(key)
-			// A plain write to an existing file doesn't change a directory
-			// listing, so it can't affect the explorer tree — only
-			// create/remove/rename events can.
+			// A write to an existing file can't change a directory listing.
 			if ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) != 0 {
 				w.handleDir(key)
 			}
@@ -200,6 +192,9 @@ func (w *Watcher) run() {
 }
 
 func (w *Watcher) handle(key string) {
+	if w.onChange == nil {
+		return
+	}
 	w.mu.Lock()
 	orig, tracked := w.files[key]
 	if !tracked || w.closed {
@@ -222,9 +217,7 @@ func (w *Watcher) handle(key string) {
 	w.mu.Unlock()
 }
 
-// handleDir debounces events for an entry inside a watched explorer directory
-// (or for a watched directory itself being removed/renamed) into a single
-// onDirChange notification per directory.
+// handleDir debounces changes to a watched directory into one onDirChange call.
 func (w *Watcher) handleDir(key string) {
 	if w.onDirChange == nil {
 		return
@@ -234,8 +227,7 @@ func (w *Watcher) handleDir(key string) {
 	if w.closed {
 		return
 	}
-	// key is either a direct child of a watched dir (create/remove/rename of an
-	// entry) or a watched dir itself (that dir renamed/removed).
+	// key is either an entry of a watched dir or a watched dir itself (removed).
 	dirKey := filepath.Dir(key)
 	orig, ok := w.watchDirs[dirKey]
 	if !ok {
