@@ -576,7 +576,7 @@ func readRepositoryStatus(ctx context.Context, dirs []string, seq uint64) *Repos
 }
 
 func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatusEntry {
-	dirs = expandNonGitDirs(dirs)
+	dirs = expandNonGitDirsContext(ctx, dirs)
 	entries := make([]repositoryStatusEntry, 0, len(dirs))
 	seen := make(map[string]bool)
 	for _, dir := range dirs {
@@ -619,17 +619,24 @@ func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatus
 	return entries
 }
 
-// expandNonGitDirs replaces directories that are not git repositories with
-// any immediate child directories that are. Directories that are already
-// inside a git work tree are kept as-is.
 func expandNonGitDirs(dirs []string) []string {
+	return expandNonGitDirsContext(context.Background(), dirs)
+}
+
+// expandNonGitDirsContext replaces directories that are not git repositories
+// with any immediate child directories that are. Directories that are already
+// inside a git work tree are kept as-is.
+func expandNonGitDirsContext(ctx context.Context, dirs []string) []string {
 	expanded := make([]string, 0, len(dirs))
 	for _, dir := range dirs {
-		if git.IsRepo(dir) {
+		if ctx.Err() != nil {
+			return expanded
+		}
+		if git.IsRepoContext(ctx, dir) {
 			expanded = append(expanded, dir)
 			continue
 		}
-		children := git.DiscoverChildRepos(dir)
+		children := git.DiscoverChildReposContext(ctx, dir)
 		if len(children) > 0 {
 			expanded = append(expanded, children...)
 		} else {

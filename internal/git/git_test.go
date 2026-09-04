@@ -1122,7 +1122,7 @@ func TestDiscoverChildReposEmptyDir(t *testing.T) {
 }
 
 func TestDiscoverChildReposNonexistentDir(t *testing.T) {
-	repos := DiscoverChildRepos("/nonexistent/path/that/does/not/exist")
+	repos := DiscoverChildRepos(filepath.Join(t.TempDir(), "missing"))
 	if repos != nil {
 		t.Errorf("expected nil, got %v", repos)
 	}
