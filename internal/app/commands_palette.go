@@ -50,7 +50,7 @@ func (a *App) ShowThemePicker() {
 	originalStyleMap := a.Screen.GetStyleMap()
 	originalPalette := *a.Palette
 	applyTheme := func(theme config.ThemeConfig) {
-		a.Screen.SetStyleMap(BuildStyleMap(theme))
+		a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground)))
 		*a.Palette = BuildTerminalPalette(theme)
 		*a.Borders = BuildBorderSet(theme.Borders)
 		a.ApplyBorderStyle()

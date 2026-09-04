@@ -11,14 +11,29 @@ import (
 	"github.com/gdamore/tcell/v3/color"
 )
 
-func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
+type styleMapOptions struct {
+	transparentBg bool
+}
+
+type StyleMapOption func(*styleMapOptions)
+
+func WithTransparentBackground(v bool) StyleMapOption {
+	return func(o *styleMapOptions) { o.transparentBg = v }
+}
+
+func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleMap {
+	var o styleMapOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+
 	m := term.DefaultStyleMap()
 
 	base := tcell.StyleDefault
 	if theme.Default.Fg != "" {
 		base = base.Foreground(tcell.GetColor(theme.Default.Fg))
 	}
-	if theme.Default.Bg != "" {
+	if theme.Default.Bg != "" && !o.transparentBg {
 		base = base.Background(tcell.GetColor(theme.Default.Bg))
 	}
 	for i := range m {

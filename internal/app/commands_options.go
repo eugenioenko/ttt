@@ -142,6 +142,11 @@ func (a *App) ToggleBracketPairColorization() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleTransparentBackground() {
+	a.Settings.Editor.TransparentBackground = !a.Settings.Editor.TransparentBackground
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleLSP() {
 	enabled := !a.Settings.LSP.IsEnabled()
 	a.Settings.LSP.Enabled = &enabled
@@ -324,6 +329,11 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		menuBarChecked = ui.MenuChecked
 	}
 
+	transparentBgChecked := ui.MenuUnchecked
+	if a.Settings.Editor.TransparentBackground {
+		transparentBgChecked = ui.MenuChecked
+	}
+
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
@@ -334,6 +344,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
+		{Label: "Transparent BG", Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
 		ui.MenuSep(),
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
@@ -494,6 +505,12 @@ func registerOptionsCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "options.toggleBracketColors", Title: "Toggle Bracket Pair Colorization",
 		Handler: app.ToggleBracketPairColorization,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleTransparentBackground", Title: "Toggle Transparent Background",
+		Keywords: []string{"preferences", "settings", "editor", "view", "background", "transparent", "terminal"},
+		Handler:  app.ToggleTransparentBackground,
 	})
 
 	reg.Register(command.Command{
