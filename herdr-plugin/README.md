@@ -50,7 +50,7 @@ When opening, the plugin resolves the target directory in this order:
 
 ## Keybinding
 
-Bind the editor to a key in your Herdr `config.toml`:
+Add this to your Herdr `config.toml` to open TTT with `Ctrl+b e` (or your custom prefix key followed by `e`):
 
 ```toml
 [[keys.command]]
