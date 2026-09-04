@@ -1,6 +1,17 @@
 # TTT Editor — Herdr Plugin
 
-A [Herdr](https://herdr.dev) plugin for [TTT Editor](https://tttedit.dev), a full IDE that runs in your terminal. Opens TTT as a first-class pane inside your Herdr workspace.
+A [Herdr](https://herdr.dev) plugin for [TTT Editor](https://tttedit.dev). Opens TTT as a first-class pane inside your Herdr workspace.
+
+## About TTT
+
+TTT (Terminal Text Tool) is a real alternative to VS Code, Zed, and Sublime that runs entirely in your terminal. Single Go binary, zero config.
+
+- **GUI in your terminal** — menus, dialogs, mouse support, right-click context menus, and a file explorer
+- **LSP intelligence** — completions, diagnostics, hover info, rename, references, and formatting for 23+ languages
+- **Git built in** — stage, commit, push, inline diffs, blame, and GitHub PR review directly from the terminal
+- **Integrated terminal** — full terminal emulator with true color rendering and multiple tabs
+- **Multi-cursor and search** — Ctrl+D selections, Alt+Click, and ripgrep-powered workspace search
+- **Workspaces** — multi-folder projects, quick open, tabs, and saveable layouts
 
 ## Install
 
