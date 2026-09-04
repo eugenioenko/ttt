@@ -825,3 +825,55 @@ func TestEndTransactionWithoutBegin(t *testing.T) {
 	s := &UndoStack{}
 	s.EndTransaction()
 }
+
+func TestDeleteSelectionCommandComputeDeleted(t *testing.T) {
+	tests := []struct {
+		name  string
+		lines []string
+		cmd   DeleteSelectionCommand
+		want  string
+	}{
+		{
+			name:  "single line range",
+			lines: []string{"alpha beta"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: 0, EndCol: 5},
+			want:  "alpha",
+		},
+		{
+			name:  "cols clamp to line length",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: 0, EndCol: 99},
+			want:  "alpha",
+		},
+		{
+			name:  "multi line range joins with newlines",
+			lines: []string{"alpha", "beta", "gamma"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 2, EndLine: 2, EndCol: 3},
+			want:  "pha\nbeta\ngam",
+		},
+		{
+			name:  "end line clamps to last line",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: 5, EndCol: 0},
+			want:  "alpha",
+		},
+		{
+			name:  "invalid start line deletes nothing",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 1, StartCol: 0, EndLine: 1, EndCol: 0},
+			want:  "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b := &buffer.Buffer{Lines: test.lines}
+			if got := test.cmd.ComputeDeleted(b); got != test.want {
+				t.Errorf("ComputeDeleted = %q, want %q", got, test.want)
+			}
+			if len(b.Lines) != len(test.lines) {
+				t.Errorf("ComputeDeleted mutated the buffer: %v", b.Lines)
+			}
+		})
+	}
+}
