@@ -435,6 +435,16 @@ curl -X POST --data "type hi; wait-for hi; screenshot /tmp/screen.txt" http://12
 curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 ```
 
+## Herdr Integration
+
+TTT is available as a [Herdr](https://herdr.dev) plugin, so you can open it as a pane inside your Herdr terminal workspace.
+
+```sh
+herdr plugin install eugenioenko/ttt/herdr-plugin
+```
+
+Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active worktree with a single keystroke. See the [Herdr plugin README](herdr-plugin/README.md) for setup and configuration details.
+
 ## Architecture
 
 TTT uses dependency zones rather than a strict linear layer chain:
