@@ -13,7 +13,7 @@ platforms = ["linux", "macos"]
 id = "open"
 title = "Open TTT"
 contexts = ["workspace"]
-command = ["ttt", "."]
+command = ["sh", "scripts/open-worktree.sh"]
 
 [[actions]]
 id = "open-worktree"
@@ -21,19 +21,8 @@ title = "Open TTT in worktree"
 contexts = ["workspace"]
 command = ["sh", "scripts/open-worktree.sh"]
 
-[[actions]]
-id = "open-link"
-title = "Open file link in TTT"
-contexts = ["workspace"]
-command = ["sh", "scripts/open-link.sh"]
-
 [[panes]]
 id = "editor"
 title = "TTT Editor"
+placement = "tab"
 command = ["sh", "scripts/open-worktree.sh"]
-
-[[link_handlers]]
-id = "open-file"
-title = "Open in TTT"
-pattern = "^[A-Za-z0-9_./-]+\\.[a-zA-Z0-9]+(:[0-9]+(:[0-9]+)?)?$"
-action = "open-link"
