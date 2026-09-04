@@ -1058,6 +1058,76 @@ func TestStageReportsError(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// DiscoverChildRepos
+// ---------------------------------------------------------------------------
+
+func TestDiscoverChildReposFindsNestedGitRepos(t *testing.T) {
+	root := t.TempDir()
+	repoA := filepath.Join(root, "alpha")
+	repoB := filepath.Join(root, "beta")
+	notRepo := filepath.Join(root, "plain")
+	for _, d := range []string{repoA, repoB, notRepo} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, d := range []string{repoA, repoB} {
+		cmd := exec.Command("git", "init")
+		cmd.Dir = d
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git init in %s: %v\n%s", d, err, out)
+		}
+	}
+
+	repos := DiscoverChildRepos(root)
+	if len(repos) != 2 {
+		t.Fatalf("got %d repos, want 2: %v", len(repos), repos)
+	}
+	resolved := func(p string) string {
+		r, _ := filepath.EvalSymlinks(p)
+		return r
+	}
+	got0, _ := filepath.EvalSymlinks(repos[0])
+	got1, _ := filepath.EvalSymlinks(repos[1])
+	if got0 != resolved(repoA) || got1 != resolved(repoB) {
+		t.Errorf("repos = %v, want [%s %s]", repos, repoA, repoB)
+	}
+}
+
+func TestDiscoverChildReposSkipsDotDirs(t *testing.T) {
+	root := t.TempDir()
+	hidden := filepath.Join(root, ".hidden")
+	if err := os.MkdirAll(hidden, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "init")
+	cmd.Dir = hidden
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+
+	repos := DiscoverChildRepos(root)
+	if len(repos) != 0 {
+		t.Errorf("expected no repos (hidden dir), got %v", repos)
+	}
+}
+
+func TestDiscoverChildReposEmptyDir(t *testing.T) {
+	root := t.TempDir()
+	repos := DiscoverChildRepos(root)
+	if len(repos) != 0 {
+		t.Errorf("expected no repos, got %v", repos)
+	}
+}
+
+func TestDiscoverChildReposNonexistentDir(t *testing.T) {
+	repos := DiscoverChildRepos("/nonexistent/path/that/does/not/exist")
+	if repos != nil {
+		t.Errorf("expected nil, got %v", repos)
+	}
+}
+
 func TestDiffWorkingTreeFileContextUsesExplicitRevisionAndRawPath(t *testing.T) {
 	dir := setupTestRepo(t)
 	rawPath := "raw\n\t界.txt"

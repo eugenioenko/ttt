@@ -92,6 +92,7 @@ type CommitDetailResult struct {
 }
 
 func readChangesGroups(dirs []string) []changesGroup {
+	dirs = expandNonGitDirs(dirs)
 	var groups []changesGroup
 	seen := make(map[string]bool)
 	for _, dir := range dirs {
