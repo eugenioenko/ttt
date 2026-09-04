@@ -197,19 +197,24 @@ func applyDiagStyle(m *term.StyleMap, idx term.Style, def config.StyleDef) {
 	m[idx] = tcell.StyleDefault.Underline(tcell.UnderlineStyleCurly, c)
 }
 
-func BuildTerminalPalettePtr(theme config.ThemeConfig) *ui.TerminalColorPalette {
-	p := BuildTerminalPalette(theme)
+func BuildTerminalPalettePtr(theme config.ThemeConfig, opts ...StyleMapOption) *ui.TerminalColorPalette {
+	p := BuildTerminalPalette(theme, opts...)
 	return &p
 }
 
-func BuildTerminalPalette(theme config.ThemeConfig) ui.TerminalColorPalette {
+func BuildTerminalPalette(theme config.ThemeConfig, opts ...StyleMapOption) ui.TerminalColorPalette {
+	var o styleMapOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+
 	tc := theme.Terminal
 	fg := tc.Foreground
 	if fg == "" {
 		fg = theme.Default.Fg
 	}
 	bg := tc.Background
-	if bg == "" {
+	if bg == "" && !o.transparentBg {
 		bg = theme.Default.Bg
 	}
 	ansi := tc.ANSIPalette()

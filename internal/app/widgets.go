@@ -329,7 +329,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		Borders:             borders,
 		Settings:            &cfg.Settings,
 		Workspace:           ws,
-		Palette:             BuildTerminalPalettePtr(cfg.Theme),
+		Palette:             BuildTerminalPalettePtr(cfg.Theme, WithTransparentBackground(cfg.Settings.Editor.TransparentBackground)),
 		TerminalPanel:       terminalPanel,
 		Problems:            problems,
 		References:          references,

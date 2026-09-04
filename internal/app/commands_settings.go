@@ -108,7 +108,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		}
 		if ok {
 			a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(s.Editor.TransparentBackground)))
-			*a.Palette = BuildTerminalPalette(theme)
+			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground))
 			borders := BuildBorderSet(theme.Borders)
 			*a.Borders = borders
 			themeBorders = &borders
