@@ -43,7 +43,7 @@ function diffFixture() {
 function startWithConfig({ file, configDir, plugin }) {
   tui.start("--plugin", plugin, file);
   tui.setEnv({ TTT_CONFIG_DIR: configDir });
-  tui.setSize(42, 14);
+  tui.setSize(42, 15);
 }
 
 function enableUnifiedWrappedDefaults() {
