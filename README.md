@@ -88,6 +88,16 @@ This produces an optimized binary at `bin/ttt`. Add it to your `PATH` or copy it
 cp bin/ttt ~/.local/bin/
 ```
 
+### Herdr
+
+TTT is available as a [Herdr](https://herdr.dev) plugin, so you can open it as a pane inside your Herdr terminal workspace.
+
+```sh
+herdr plugin install eugenioenko/ttt/herdr-plugin
+```
+
+Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active worktree with a single keystroke. See the [Herdr plugin README](herdr-plugin/README.md) for setup and configuration details.
+
 ## Features
 
 ### Editor
