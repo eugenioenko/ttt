@@ -1,0 +1,28 @@
+id = "ttt.editor"
+name = "TTT Editor"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Terminal Text Tool — a full IDE in your terminal"
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["sh", "scripts/install.sh"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "open"
+title = "Open TTT"
+contexts = ["workspace"]
+command = ["sh", "scripts/open-worktree.sh"]
+
+[[actions]]
+id = "open-worktree"
+title = "Open TTT in worktree"
+contexts = ["workspace"]
+command = ["sh", "scripts/open-worktree.sh"]
+
+[[panes]]
+id = "editor"
+title = "TTT Editor"
+placement = "tab"
+command = ["sh", "scripts/open-worktree.sh"]
