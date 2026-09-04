@@ -91,6 +91,7 @@ Status values: `pending` → `in progress` → `swept (N findings)` / `swept (cl
 ### BUG-005: Line commands under multicursor leave `e.Multi` stale — next keystroke corrupts the buffer
 - **Area:** Multicursor interactions
 - **Severity:** high
+- **Status:** ✅ **FIXED** (`fix/multicursor-line-commands-stale-cursors`, 2026-09-02) — `MoveLineUp/Down` under multicursor now move every touched line by ±1 and carry all cursors with them (`moveLinesMulti`, no-op at buffer edges); `DuplicateLine`/`DeleteLine`/`JoinLines`/`SortLines*`/`ReverseLines`/`UniqueLines`/`ToggleLineComment` call `collapseMultiForLineOp()` to drop to the primary cursor first. Repro test flipped `it.fails`→`it` (2 cases: block move carries cursors, Duplicate collapses).
 - **Curation (2026-07-13, CONFIRMED, kept high):** code-confirmed — `grep Multi internal/ui/editor_widget_lines.go` returns nothing, so `DuplicateLine`/`DeleteLine`/`MoveLineUp/Down` never touch `e.Multi.Cursors`; secondary cursors keep stale offsets after the line shift and the next multicursor keystroke edits at those offsets → silent buffer corruption (runtime-verified during the hunt). Kept **high** (silent, destructive buffer corruption on a headline feature) with the honest caveat that the trigger is a compound sequence (multicursor active + a *line* command + keep typing). First of the multicursor cluster [[BUG-006]]/[[BUG-007]]/[[BUG-008]], shared root "primary-cursor-only ops ignore `e.Multi`." **Fix for line commands specifically: collapse multicursor to the primary before running them** (a line command under N cursors is ambiguous); 006/007/008 need the "apply to all cursors" treatment instead.
 - **Status:** confirmed (agent-reported, orchestrator re-verified)
 - **Repro:** file `foo bar foo baz\nfoo qux\nbar foo end\n`; `bin/ttt --size 120x40 --exec 'wait 200; key ctrl+k l; exec "Duplicate Line"; type Y; screenshot /tmp/s.txt; quit' foo.txt`
@@ -119,7 +120,8 @@ Status values: `pending` → `in progress` → `swept (N findings)` / `swept (cl
 ### BUG-008: Undo after a multicursor edit strands the cursor and leaves `e.Multi` stale — next keystroke corrupts
 - **Area:** Multicursor interactions
 - **Severity:** high
-- **Status:** confirmed (agent-reported, orchestrator re-verified)
+- **Status:** ✅ **FIXED** (`fix/multicursor-line-commands-stale-cursors`, 2026-09-02) — `EditorGroupWidget.Undo`/`Redo` collapse multicursor to a single cursor before reverting, so no stale secondary offsets survive into the reverted buffer. Repro test flipped `it.fails`→`it`. (Post-undo cursor lands at the last edit site, not the primary's pre-edit position — the pre-existing BUG-020 undo-cursor limitation, not corruption.)
+- ~~**Status:** confirmed (agent-reported, orchestrator re-verified)~~
 - **Repro:** same file; `bin/ttt --size 120x40 --exec 'wait 200; key ctrl+k l; type X; key ctrl+z; type Z; screenshot /tmp/s.txt; quit' foo.txt`
 - **Expected:** undo restores text and either restores consistent multicursor selections or collapses to single cursor at the primary's pre-edit position
 - **Actual:** text restores, but the cursor jumps to the last secondary cursor's stale post-edit position, "(4 cursors)" persists, and typing "Z" corrupts: `foo barZ foo baz` / `fZoo qux` / `bar fZoZo end` (two Z's from one keystroke). Root cause: undo (`internal/core/undo`) has no concept of `e.Multi`, so stale post-edit offsets survive into the reverted buffer.

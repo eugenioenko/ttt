@@ -1,6 +1,6 @@
 # TTT Editor: Terminal Text Tool
 
-The IDE that lives in your terminal. Not a simplified terminal editor — a real alternative to VS Code, Zed, and Sublime that happens to run in your terminal. Single Go binary, zero config.
+The IDE that lives in your terminal. A TUI that feels like GUI. A real alternative to VS Code, Zed, and Sublime that happens to run in your terminal. Single Go binary, zero config.
 
 ![TTT Demo](docs-web/public/demo/demo.gif)
 
@@ -87,6 +87,16 @@ This produces an optimized binary at `bin/ttt`. Add it to your `PATH` or copy it
 ```sh
 cp bin/ttt ~/.local/bin/
 ```
+
+### Herdr
+
+TTT is available as a [Herdr](https://herdr.dev) plugin, so you can open it as a pane inside your Herdr terminal workspace.
+
+```sh
+herdr plugin install eugenioenko/ttt/herdr-plugin
+```
+
+Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active worktree with a single keystroke. See the [Herdr plugin README](herdr-plugin/README.md) for setup and configuration details.
 
 ## Features
 

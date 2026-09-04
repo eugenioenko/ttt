@@ -8,6 +8,10 @@ import (
 )
 
 func (e *EditorPaneWidget) MoveLineUp() {
+	if e.isMultiActive() {
+		e.moveLinesMulti(-1)
+		return
+	}
 	if startLine, endLine, ok := e.selectedLineRange(); ok {
 		if startLine <= 0 {
 			return
@@ -29,6 +33,10 @@ func (e *EditorPaneWidget) MoveLineUp() {
 }
 
 func (e *EditorPaneWidget) MoveLineDown() {
+	if e.isMultiActive() {
+		e.moveLinesMulti(1)
+		return
+	}
 	if startLine, endLine, ok := e.selectedLineRange(); ok {
 		if endLine >= len(e.Buf.Lines)-1 {
 			return
@@ -49,7 +57,95 @@ func (e *EditorPaneWidget) MoveLineDown() {
 	e.scrollViewport()
 }
 
+// moveLinesMulti shifts every buffer line touched by a cursor (or its
+// selection) by delta (-1 or +1) and moves all cursors with it, so each
+// cursor stays on its own text. The whole move is a no-op if any touched
+// line would cross a buffer edge. Without this, line commands leave
+// e.Multi.Cursors at stale offsets and the next keystroke corrupts (BUG-005).
+func (e *EditorPaneWidget) moveLinesMulti(delta int) {
+	e.syncToMulti()
+
+	touched := make(map[int]bool)
+	for _, cs := range e.Multi.Cursors {
+		lo, hi := cs.Line, cs.Line
+		if cs.Sel.Active {
+			s, en := cs.Sel.Range(cs.Line, cs.Col)
+			lo, hi = s.Line, en.Line
+			if en.Col == 0 && hi > lo {
+				hi--
+			}
+		}
+		for l := lo; l <= hi; l++ {
+			touched[e.Buf.ClampLine(l)] = true
+		}
+	}
+	if len(touched) == 0 {
+		return
+	}
+	lines := make([]int, 0, len(touched))
+	for l := range touched {
+		lines = append(lines, l)
+	}
+	sort.Ints(lines)
+
+	lastReal := len(e.Buf.Lines) - 1
+	if lastReal > 0 && e.Buf.Lines[lastReal] == "" {
+		lastReal--
+	}
+	if delta < 0 && lines[0] <= 0 {
+		return
+	}
+	if delta > 0 && lines[len(lines)-1] >= lastReal {
+		return
+	}
+
+	// One BatchCommand so a single undo reverses the whole multicursor move,
+	// mirroring the multiExec* handlers.
+	var cmds []undo.EditCommand
+	if delta < 0 {
+		for _, l := range lines {
+			cmd := &undo.SwapLineCommand{Line1: l, Line2: l - 1}
+			cmd.Apply(e.Buf)
+			cmds = append(cmds, cmd)
+		}
+	} else {
+		for i := len(lines) - 1; i >= 0; i-- {
+			cmd := &undo.SwapLineCommand{Line1: lines[i], Line2: lines[i] + 1}
+			cmd.Apply(e.Buf)
+			cmds = append(cmds, cmd)
+		}
+	}
+	if e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+	}
+	e.bufferDirty = true
+
+	for i := range e.Multi.Cursors {
+		cs := &e.Multi.Cursors[i]
+		cs.Line = e.Buf.ClampLine(cs.Line + delta)
+		if cs.Sel.Active {
+			cs.Sel.Anchor.Line += delta
+		}
+	}
+	e.Multi.Deduplicate()
+	e.syncFromMulti()
+	e.clampCursor()
+	e.scrollViewport()
+}
+
+// collapseMultiForLineOp drops multi-cursor mode before a line command that
+// has no meaningful multi-cursor semantics (duplicate/delete/join/sort a
+// line at N cursors is ambiguous). Leaving e.Multi.Cursors in place while
+// such a command reshapes the buffer strands them at stale offsets and the
+// next keystroke corrupts (BUG-005).
+func (e *EditorPaneWidget) collapseMultiForLineOp() {
+	if e.isMultiActive() {
+		e.collapseMulti()
+	}
+}
+
 func (e *EditorPaneWidget) DuplicateLine() {
+	e.collapseMultiForLineOp()
 	startLine, endLine, hasSel := e.selectedLineRange()
 	if !hasSel {
 		startLine = e.Buf.ClampLine(e.Cursor.Line)
@@ -69,6 +165,7 @@ func (e *EditorPaneWidget) DuplicateLine() {
 }
 
 func (e *EditorPaneWidget) DeleteLine() {
+	e.collapseMultiForLineOp()
 	startLine, endLine, hasSel := e.selectedLineRange()
 	if !hasSel {
 		startLine = e.Buf.ClampLine(e.Cursor.Line)
@@ -94,6 +191,7 @@ func (e *EditorPaneWidget) DeleteLine() {
 }
 
 func (e *EditorPaneWidget) JoinLines() {
+	e.collapseMultiForLineOp()
 	if e.Undo != nil {
 		e.Undo.BreakGroup()
 	}
@@ -160,6 +258,7 @@ func (e *EditorPaneWidget) commentPrefix() string {
 }
 
 func (e *EditorPaneWidget) ToggleLineComment() {
+	e.collapseMultiForLineOp()
 	prefix := e.commentPrefix()
 
 	startLine, endLine := e.Cursor.Line, e.Cursor.Line
@@ -270,6 +369,7 @@ func (e *EditorPaneWidget) copyLines(start, end int) []string {
 }
 
 func (e *EditorPaneWidget) SortLinesAsc() {
+	e.collapseMultiForLineOp()
 	start, end := e.lineRange()
 	old := e.copyLines(start, end)
 	sorted := make([]string, len(old))
@@ -281,6 +381,7 @@ func (e *EditorPaneWidget) SortLinesAsc() {
 }
 
 func (e *EditorPaneWidget) SortLinesDesc() {
+	e.collapseMultiForLineOp()
 	start, end := e.lineRange()
 	old := e.copyLines(start, end)
 	sorted := make([]string, len(old))
@@ -292,6 +393,7 @@ func (e *EditorPaneWidget) SortLinesDesc() {
 }
 
 func (e *EditorPaneWidget) ReverseLines() {
+	e.collapseMultiForLineOp()
 	start, end := e.lineRange()
 	old := e.copyLines(start, end)
 	reversed := make([]string, len(old))
@@ -304,6 +406,7 @@ func (e *EditorPaneWidget) ReverseLines() {
 }
 
 func (e *EditorPaneWidget) UniqueLines() {
+	e.collapseMultiForLineOp()
 	start, end := e.lineRange()
 	old := e.copyLines(start, end)
 	seen := make(map[string]bool)

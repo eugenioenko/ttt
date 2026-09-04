@@ -6,6 +6,10 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func (e *EditorPaneWidget) OwnsPointerCapture() bool {
+	return e.mouseDown || e.scrollbar.IsDragging() || e.hscrollbar.IsDragging()
+}
+
 func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	btn := mev.Buttons()
 
