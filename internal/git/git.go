@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -71,6 +73,35 @@ func IsRepoContext(ctx context.Context, dir string) bool {
 	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--is-inside-work-tree")
 	out, err := cmd.Output()
 	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
+// DiscoverChildRepos returns immediate child directories of dir that are git
+// repositories. It is used when dir itself is not a git repo to find nested
+// repos whose changes should be shown.
+func DiscoverChildRepos(dir string) []string {
+	return DiscoverChildReposContext(context.Background(), dir)
+}
+
+func DiscoverChildReposContext(ctx context.Context, dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var repos []string
+	for _, e := range entries {
+		if ctx.Err() != nil {
+			return repos
+		}
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		child := filepath.Join(dir, e.Name())
+		if IsRepoContext(ctx, child) {
+			repos = append(repos, child)
+		}
+	}
+	sort.Strings(repos)
+	return repos
 }
 
 func StatusFiles(dir string) ([]FileStatus, error) {
