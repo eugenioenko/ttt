@@ -75,7 +75,7 @@ describe("diff reading preferences", () => {
     startWithConfig(fixture);
     tui.exec("Menu: Options");
     const options = tui.snapshot();
-    for (let i = 0; i < 9; i++) tui.press("down");
+    for (let i = 0; i < 10; i++) tui.press("down");
     tui.press("right");
     const diffViews = tui.snapshot();
     tui.press("escape");
