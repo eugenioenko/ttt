@@ -41,6 +41,15 @@ func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleM
 	}
 	m[term.StyleSelection] = base.Reverse(true)
 
+	if o.transparentBg {
+		if theme.CommitHeader.Bg == theme.Default.Bg {
+			theme.CommitHeader.Bg = ""
+		}
+		if theme.Input.Item.Bg == theme.Default.Bg {
+			theme.Input.Item.Bg = ""
+		}
+	}
+
 	applyStyleDef(&m, term.StyleStatusBar, theme.StatusBar)
 	applyStyleDef(&m, term.StyleCommitHeader, theme.CommitHeader)
 	applyStyleDef(&m, term.StyleActiveTab, theme.Tabs.Active)
