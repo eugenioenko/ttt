@@ -111,6 +111,8 @@ type EditorSettings struct {
 	MenuBar                 *bool  `json:"menuBar,omitempty"`
 	UndoDeleteCursorStart   bool   `json:"undoDeleteCursorStart,omitempty"`
 	TransparentBackground   bool   `json:"transparentBackground,omitempty"`
+	BackgroundImage         string `json:"backgroundImage,omitempty"`
+	BackgroundImageDim      int    `json:"backgroundImageDim,omitempty"`
 }
 
 func (e EditorSettings) IsShowTrailingNewlineEnabled() bool {
