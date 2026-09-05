@@ -11,14 +11,29 @@ import (
 	"github.com/gdamore/tcell/v3/color"
 )
 
-func BuildStyleMap(theme config.ThemeConfig) term.StyleMap {
+type styleMapOptions struct {
+	transparentBg bool
+}
+
+type StyleMapOption func(*styleMapOptions)
+
+func WithTransparentBackground(v bool) StyleMapOption {
+	return func(o *styleMapOptions) { o.transparentBg = v }
+}
+
+func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleMap {
+	var o styleMapOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+
 	m := term.DefaultStyleMap()
 
 	base := tcell.StyleDefault
 	if theme.Default.Fg != "" {
 		base = base.Foreground(tcell.GetColor(theme.Default.Fg))
 	}
-	if theme.Default.Bg != "" {
+	if theme.Default.Bg != "" && !o.transparentBg {
 		base = base.Background(tcell.GetColor(theme.Default.Bg))
 	}
 	for i := range m {
@@ -182,19 +197,24 @@ func applyDiagStyle(m *term.StyleMap, idx term.Style, def config.StyleDef) {
 	m[idx] = tcell.StyleDefault.Underline(tcell.UnderlineStyleCurly, c)
 }
 
-func BuildTerminalPalettePtr(theme config.ThemeConfig) *ui.TerminalColorPalette {
-	p := BuildTerminalPalette(theme)
+func BuildTerminalPalettePtr(theme config.ThemeConfig, opts ...StyleMapOption) *ui.TerminalColorPalette {
+	p := BuildTerminalPalette(theme, opts...)
 	return &p
 }
 
-func BuildTerminalPalette(theme config.ThemeConfig) ui.TerminalColorPalette {
+func BuildTerminalPalette(theme config.ThemeConfig, opts ...StyleMapOption) ui.TerminalColorPalette {
+	var o styleMapOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+
 	tc := theme.Terminal
 	fg := tc.Foreground
 	if fg == "" {
 		fg = theme.Default.Fg
 	}
 	bg := tc.Background
-	if bg == "" {
+	if bg == "" && !o.transparentBg {
 		bg = theme.Default.Bg
 	}
 	ansi := tc.ANSIPalette()

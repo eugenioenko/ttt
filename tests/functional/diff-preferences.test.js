@@ -43,7 +43,7 @@ function diffFixture() {
 function startWithConfig({ file, configDir, plugin }) {
   tui.start("--plugin", plugin, file);
   tui.setEnv({ TTT_CONFIG_DIR: configDir });
-  tui.setSize(42, 14);
+  tui.setSize(42, 15);
 }
 
 function enableUnifiedWrappedDefaults() {
@@ -75,7 +75,7 @@ describe("diff reading preferences", () => {
     startWithConfig(fixture);
     tui.exec("Menu: Options");
     const options = tui.snapshot();
-    for (let i = 0; i < 9; i++) tui.press("down");
+    for (let i = 0; i < 10; i++) tui.press("down");
     tui.press("right");
     const diffViews = tui.snapshot();
     tui.press("escape");
