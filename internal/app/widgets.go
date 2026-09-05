@@ -83,7 +83,7 @@ func resolveLineColArg(arg string) (FileTarget, bool) {
 	return FileTarget{Path: abs, Line: line, Col: col}, true
 }
 
-func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
+func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string, explicitFolders bool) {
 	var folders []string
 	var wsFile string
 
@@ -148,6 +148,7 @@ func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile 
 		}
 		if info.IsDir() {
 			folders = append(folders, absPath)
+			explicitFolders = true
 		} else {
 			openFiles = append(openFiles, FileTarget{Path: absPath})
 		}
@@ -160,12 +161,13 @@ func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile 
 			for _, f := range folders {
 				ws.AddFolder(f)
 			}
+			explicitFolders = true
 			return
 		}
 	}
 
 	// Opening only files intentionally creates no workspace — a folder must be passed explicitly.
-	if len(folders) == 0 && len(prURLs) == 0 && len(openFiles) == 0 {
+	if len(folders) == 0 && len(prURLs) == 0 {
 		cwd, _ := os.Getwd()
 		folders = append(folders, cwd)
 	}
@@ -174,8 +176,8 @@ func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile 
 }
 
 func BuildApp(cfg *config.AppConfig, borders *term.BorderSet) (*App, []string, []FileTarget) {
-	ws, openFiles, _, prURLs := resolveArgs()
-	return BuildAppFromConfig(cfg, borders, ws, openFiles), prURLs, openFiles
+	ws, openFiles, _, prURLs, explicitFolders := resolveArgs()
+	return BuildAppFromConfig(cfg, borders, ws, openFiles, explicitFolders), prURLs, openFiles
 }
 
 var bracketColorSlots = []term.Style{
@@ -198,7 +200,7 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 	return bracketColorSlots[:n]
 }
 
-func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget) *App {
+func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget, explicitFolders bool) *App {
 
 	bracketStyles := ResolveBracketColorStyles(cfg.Theme.Editor.BracketColors)
 
@@ -285,6 +287,11 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	sidebar.Tabs.Config.Reorderable = true
 	hasFolders := len(ws.Paths()) > 0
 	sidebar.Visible = hasFolders
+	// If the user only opened files and didn't explicitly open a folder/workspace,
+	// hide the sidebar by default to maximize the editor space.
+	if !explicitFolders && len(openFiles) > 0 {
+		sidebar.Visible = false
+	}
 	sidebar.Borders = borders
 
 	splitPanel := ui.NewSplitPanelWidget()
@@ -341,6 +348,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.Repository = NewRepositoryState(changes, ws.Paths())
 	app.Repository.SetCurrentChangesHandler(app.ApplyCurrentChanges)
 	app.applyMenuBarVisibility(cfg.Settings.Editor.IsMenuBarVisible())
+	app.ExplicitFolders = explicitFolders
 	// Rebuild the Diagnostics panel whenever any source (LSP or a plugin)
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
