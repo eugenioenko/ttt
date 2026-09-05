@@ -110,6 +110,7 @@ type App struct {
 	eventLoopDoneOnce  sync.Once
 	eventLoopCloseOnce sync.Once
 	eventLoopDone      chan struct{}
+	bgImage            backgroundImageState
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {

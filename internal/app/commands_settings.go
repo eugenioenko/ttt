@@ -97,6 +97,8 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.Changes.SetFileView(s.Git.FileView)
 	}
 
+	a.applyBackgroundImage(prev.Editor, s.Editor)
+
 	// An empty theme name means the built-in default, and must still be applied —
 	// otherwise switching back to it leaves the previous theme's colors on screen.
 	var themeBorders *term.BorderSet
@@ -107,8 +109,9 @@ func (a *App) ApplySettings(s config.Settings) {
 			theme, ok = loaded, err == nil
 		}
 		if ok {
-			a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(s.Editor.TransparentBackground)))
-			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground))
+			transparentBg := s.Editor.TransparentBackground || s.Editor.BackgroundImage != ""
+			a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(transparentBg)))
+			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(transparentBg))
 			borders := BuildBorderSet(theme.Borders)
 			*a.Borders = borders
 			themeBorders = &borders

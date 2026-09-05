@@ -54,6 +54,9 @@ All editor settings are nested under the `editor` key.
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
+| `editor.transparentBackground` | bool | `false` | Skip the theme's default background so the terminal's own background shows through |
+| `editor.backgroundImage` | string | `""` | Path to an image shown behind the editor via the Kitty terminal graphics protocol. Requires a compatible terminal (kitty, Ghostty, WezTerm); ignored elsewhere. Setting this implies `transparentBackground` |
+| `editor.backgroundImageDim` | int | `0` | Darkens `backgroundImage` toward black, 0-100 percent |
 
 ## Explorer
 

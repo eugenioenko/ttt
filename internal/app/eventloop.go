@@ -262,6 +262,7 @@ func RunEventLoop(
 			app.Root.SetSize(w, h)
 			resizeTerminals(app)
 			renderer.Clear()
+			app.reapplyBackgroundImagePlacement()
 			redraw()
 
 		case *tcell.EventInterrupt:
