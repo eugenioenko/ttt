@@ -58,7 +58,7 @@ func TestEncodePNG_JPEGInput(t *testing.T) {
 	path := filepath.Join(dir, "bg.jpg")
 	writeTestJPEG(t, path)
 
-	out, err := EncodePNG(path, 0)
+	out, err := EncodePNG(path, 0, 0, 0)
 	if err != nil {
 		t.Fatalf("EncodePNG: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestEncodePNG_Dim(t *testing.T) {
 	path := filepath.Join(dir, "bg.jpg")
 	writeTestJPEG(t, path)
 
-	full, err := EncodePNG(path, 1.0)
+	full, err := EncodePNG(path, 1.0, 0, 0)
 	if err != nil {
 		t.Fatalf("EncodePNG dim=1: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestEncodePNG_Dim(t *testing.T) {
 		t.Errorf("dim=1 should drive pixels to black, got r=%d g=%d b=%d", r, g, b)
 	}
 
-	none, err := EncodePNG(path, 0)
+	none, err := EncodePNG(path, 0, 0, 0)
 	if err != nil {
 		t.Fatalf("EncodePNG dim=0: %v", err)
 	}
@@ -96,6 +96,28 @@ func TestEncodePNG_Dim(t *testing.T) {
 	r2, g2, b2, _ := img2.At(0, 0).RGBA()
 	if r2 == 0 && g2 == 0 && b2 == 0 {
 		t.Errorf("dim=0 should leave pixels unchanged, got black")
+	}
+}
+
+func TestEncodePNG_Cover(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bg.jpg")
+	writeTestJPEG(t, path) // 4x4 square source
+
+	// A wide target: covering it means the 4x4 source is scaled up so its
+	// height fills 10px, then the width (also scaled to 20px) is cropped
+	// down to the target's 16px, centered.
+	out, err := EncodePNG(path, 0, 16, 10)
+	if err != nil {
+		t.Fatalf("EncodePNG: %v", err)
+	}
+	img, err := png.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := img.Bounds()
+	if b.Dx() != 16 || b.Dy() != 10 {
+		t.Errorf("cover-cropped size = %dx%d, want 16x10", b.Dx(), b.Dy())
 	}
 }
 
@@ -138,7 +160,7 @@ func TestPlace(t *testing.T) {
 	if err := Place(&buf, 7, 80, 24); err != nil {
 		t.Fatalf("Place: %v", err)
 	}
-	want := "\x1b_Ga=p,i=7,q=2,z=-1,c=80,r=24\x1b\\"
+	want := "\x1b7\x1b[1;1H\x1b_Ga=p,i=7,q=2,z=-1,C=1,c=80,r=24\x1b\\\x1b8"
 	if buf.String() != want {
 		t.Errorf("Place() = %q, want %q", buf.String(), want)
 	}
