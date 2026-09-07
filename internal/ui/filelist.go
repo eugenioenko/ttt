@@ -92,6 +92,7 @@ func fileDetail(f string) string {
 }
 
 func fuzzyFilterFiles(files []paletteFile, query string, maxResults int) []PaletteItem {
+	query = strings.Join(strings.Fields(query), "")
 	if query == "" {
 		items := make([]PaletteItem, 0, min(len(files), maxResults))
 		for _, f := range files {

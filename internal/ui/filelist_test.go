@@ -155,6 +155,16 @@ func TestFuzzyFilterFilesWithQuery(t *testing.T) {
 	}
 }
 
+func TestFuzzyFilterFilesIgnoresQueryWhitespace(t *testing.T) {
+	files := []paletteFile{{Rel: "src/user_profile.go", Abs: "/w/src/user_profile.go"}}
+
+	items := fuzzyFilterFiles(files, "user profile", 10)
+
+	if len(items) != 1 {
+		t.Fatalf("expected whitespace-separated query to match, got %v", items)
+	}
+}
+
 func TestFuzzyFilterFilesMaxResults(t *testing.T) {
 	var files []paletteFile
 	for i := 0; i < 200; i++ {
