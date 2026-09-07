@@ -15,7 +15,11 @@ import (
 // that needs any of these declares "api": 2; older builds (which only know v1)
 // already reject it via the check in LoadManifest, so it fails cleanly instead
 // of loading into a broken half-state.
-const SupportedAPIVersion = 2
+//
+// v3 (ttt 1.4.0) is the settings/editor-API surface used by vim-mode-style
+// plugins: editor.* settings in settings_keys and the plugin editor API
+// additions shipping with 1.4.0.
+const SupportedAPIVersion = 3
 
 type Manifest struct {
 	Name        string        `json:"name"`

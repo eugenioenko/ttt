@@ -206,6 +206,9 @@ func (e *PluginEditorAPI) Replace(startLine, startCol, endLine, endCol int, text
 		StartLine: startLine, StartCol: startCol,
 		EndLine: endLine, EndCol: endCol,
 	}
+	if delCmd.ComputeDeleted(ed.Buf) == text {
+		return
+	}
 	delCmd.Apply(ed.Buf)
 
 	if text == "" {
