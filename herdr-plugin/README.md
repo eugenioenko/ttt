@@ -50,6 +50,9 @@ Invoke an action from the CLI:
 herdr plugin action invoke ttt.editor.open
 ```
 
+Actions run headless, so they open the editor by delegating to the `editor`
+pane entrypoint rather than launching the TUI in the action process.
+
 ### Directory resolution
 
 When opening, the plugin resolves the target directory in this order:
