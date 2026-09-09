@@ -1,6 +1,6 @@
 id = "ttt.editor"
 name = "TTT Editor"
-version = "0.1.0"
+version = "0.1.1"
 min_herdr_version = "0.7.0"
 description = "Terminal Text Tool — a full IDE in your terminal"
 platforms = ["linux", "macos"]
