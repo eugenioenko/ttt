@@ -15,7 +15,8 @@
     "focusOnOpen": false,
     "gutterStyle": "compact",
     "borderStyle": "default",
-    "bracketPairColorization": false
+    "bracketPairColorization": false,
+    "transparentBackground": false
   },
   "search": {
     "debounce": 350
