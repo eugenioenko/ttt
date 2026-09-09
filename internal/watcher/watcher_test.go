@@ -40,6 +40,14 @@ func newTestDirWatcher(t *testing.T) (*Watcher, <-chan string) {
 	return w, ch
 }
 
+// setDebounce overrides the coalescing window so burst tests do not depend on
+// how fast the OS delivers a burst's individual events.
+func (w *Watcher) setDebounce(d time.Duration) {
+	w.mu.Lock()
+	w.debounce = d
+	w.mu.Unlock()
+}
+
 func TestWatcherDetectsChange(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "watched.txt")
@@ -181,6 +189,9 @@ func TestWatcherDebouncesBurst(t *testing.T) {
 	}
 
 	w, ch := newTestWatcher(t)
+	// Far wider than any plausible event-delivery gap, so the whole burst
+	// lands in one debounce window even under -race.
+	w.setDebounce(2 * time.Second)
 	w.Sync([]string{file})
 
 	// Several rapid writes should coalesce into a single notification.
@@ -190,11 +201,12 @@ func TestWatcherDebouncesBurst(t *testing.T) {
 		}
 	}
 
-	if _, ok := waitForChange(t, ch, 3*time.Second); !ok {
+	if _, ok := waitForChange(t, ch, 5*time.Second); !ok {
 		t.Fatal("expected at least one notification")
 	}
-	// No second notification should follow from the same burst.
-	if got, ok := waitForChange(t, ch, 500*time.Millisecond); ok {
+	// The burst produced exactly one notification: nothing more arrives within
+	// another full debounce window.
+	if got, ok := waitForChange(t, ch, 2*time.Second); ok {
 		t.Errorf("expected burst to be debounced, got extra notification %q", got)
 	}
 }
