@@ -23,7 +23,7 @@ func Load(settingsFile string) AppConfig {
 		Theme:       DefaultTheme(),
 	}
 
-	paths := configPaths()
+	paths := ConfigDirs()
 
 	if data, err := readFirst(paths, "keybindings.json"); err == nil {
 		if kb, err := LoadKeybindings(data); err == nil {
@@ -57,7 +57,10 @@ func Load(settingsFile string) AppConfig {
 
 var OverrideConfigDir string
 
-func configPaths() []string {
+// ConfigDirs lists the directories searched for user assets (settings,
+// themes, lexers), in precedence order: the binary's own config/ dir, then
+// ~/.config/ttt.
+func ConfigDirs() []string {
 	if OverrideConfigDir != "" {
 		return []string{OverrideConfigDir}
 	}
@@ -79,7 +82,7 @@ func ListThemes() []string {
 	seen := make(map[string]bool)
 	var names []string
 
-	for _, dir := range configPaths() {
+	for _, dir := range ConfigDirs() {
 		themesDir := filepath.Join(dir, "themes")
 		entries, err := os.ReadDir(themesDir)
 		if err != nil {
@@ -111,7 +114,7 @@ func LoadTheme(name string) (ThemeConfig, error) {
 	theme := DefaultTheme()
 	themeFile := name + ".json"
 
-	if data, err := readFirstTheme(configPaths(), themeFile); err == nil {
+	if data, err := readFirstTheme(ConfigDirs(), themeFile); err == nil {
 		if err := json.Unmarshal(data, &theme); err != nil {
 			return theme, err
 		}
@@ -138,7 +141,7 @@ func themeNameFromFile(filename string) string {
 }
 
 func ConfigFilePath(filename string) string {
-	paths := configPaths()
+	paths := ConfigDirs()
 	for _, dir := range paths {
 		path := filepath.Join(dir, filename)
 		if _, err := os.Stat(path); err == nil {

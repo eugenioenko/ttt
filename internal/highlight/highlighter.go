@@ -42,6 +42,7 @@ type Highlighter struct {
 }
 
 func New(filename string) *Highlighter {
+	externalOnce.Do(loadExternalLexers)
 	lexer := lexers.Match(filename)
 	if lexer == nil {
 		return nil
@@ -123,12 +124,18 @@ func (h *Highlighter) computeSpans(line string, inBlock bool) []Span {
 	return append(out, Span{Start: open, End: len([]rune(line)), Style: term.StyleSyntaxComment})
 }
 
-func (h *Highlighter) lexLine(line string) []Span {
+// A third-party lexer from a config lexers/ dir can panic mid-tokenise, so a
+// broken one costs colour on this line instead of the editor.
+func (h *Highlighter) lexLine(line string) (spans []Span) {
+	defer func() {
+		if recover() != nil {
+			spans = nil
+		}
+	}()
 	iter, err := h.lexer.Tokenise(nil, line+"\n")
 	if err != nil {
 		return nil
 	}
-	var spans []Span
 	pos := 0
 	for _, tok := range iter.Tokens() {
 		text := strings.TrimRight(tok.Value, "\n")

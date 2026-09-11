@@ -15,6 +15,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
@@ -235,6 +236,11 @@ Docs: https://tttedit.dev
 	cmdRegistry := command.NewRegistry()
 	borders := app.BuildBorderSet(cfg.Theme.Borders)
 
+	// Must run before BuildApp: it builds highlighters for the CLI file
+	// targets, and registration has to be complete before the first
+	// highlight.New.
+	lexerErrs := highlight.ExternalLexerErrors()
+
 	editor, prURLs, fileTargets := app.BuildApp(&cfg, &borders)
 	editor.ApplyBorderStyle()
 	editor.Init(screen, renderer, lspManager)
@@ -246,6 +252,12 @@ Docs: https://tttedit.dev
 	editor.Running = &running
 	app.RegisterCommands(editor)
 	app.BindKeys(editor.Root, cmdRegistry, cfg.Keybindings)
+
+	// A lexer dropped in ~/.config/ttt/lexers/ that chroma refuses is silent
+	// otherwise: the file simply keeps its default colors.
+	for _, err := range lexerErrs {
+		editor.LogOutput("error", "lexers", err.Error())
+	}
 
 	registryPath := config.ConfigFilePath("plugins.ttt.json")
 	pluginsDir := filepath.Join(filepath.Dir(registryPath), "plugins")

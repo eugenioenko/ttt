@@ -102,7 +102,7 @@ Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active w
 
 ### Editor
 
-- **Syntax highlighting** via [chroma](https://github.com/alecthomas/chroma) — hundreds of languages with automatic detection
+- **Syntax highlighting** via [chroma](https://github.com/alecthomas/chroma) — hundreds of languages with automatic detection, plus any extra language you drop into `~/.config/ttt/lexers/` as a chroma XML file
 - **Bracket matching** with highlighted pairs
 - **Find and Replace** — inline find bar (Ctrl+F) with match navigation, replace bar (Ctrl+R) with replace-one and replace-all
 - **Go to Line** (Ctrl+G)

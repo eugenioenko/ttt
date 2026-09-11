@@ -341,7 +341,7 @@ func normalizeSettings(s *Settings) {
 
 func LoadSettings() Settings {
 	s := DefaultSettings()
-	paths := configPaths()
+	paths := ConfigDirs()
 	if data, err := readFirst(paths, "settings.json"); err == nil {
 		json.Unmarshal(data, &s)
 	}
