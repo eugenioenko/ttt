@@ -141,7 +141,6 @@ func (s *RenderSurface) Sub(r Rect) widgets.Surface {
 	}
 }
 
-// The clipped delta maps back to source pixels so the terminal crops instead of re-encoding.
 func (s *RenderSurface) ImageReleaser() func(uint64) {
 	if s.layer == nil {
 		return nil
@@ -149,6 +148,7 @@ func (s *RenderSurface) ImageReleaser() func(uint64) {
 	return s.layer.Forget
 }
 
+// The clipped delta maps back to source pixels so the terminal crops instead of re-encoding.
 func (s *RenderSurface) PlaceImage(x, y, w, h int, src *tttimage.Source) {
 	if s.layer == nil || src == nil || src.Pix == nil {
 		return

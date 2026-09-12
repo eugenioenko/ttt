@@ -88,7 +88,14 @@ func (l *Layer) Commit(w io.Writer) error {
 		}
 	}
 
+	placed := make(map[uint64]bool, len(l.cur))
+	for _, p := range l.cur {
+		placed[p.SourceID] = true
+	}
 	for _, id := range l.forget {
+		if placed[id] {
+			continue
+		}
 		if l.transmitted[id] {
 			fail(DeleteImage(&out, id))
 		}
@@ -159,6 +166,7 @@ func (l *Layer) UnlockAll() {
 
 func (l *Layer) Close(w io.Writer) error {
 	l.ensureInit()
+	l.forget = nil
 	var firstErr error
 	for _, id := range l.prevOrder {
 		if err := DeletePlacement(w, l.prev[id].SourceID, id); err != nil && firstErr == nil {

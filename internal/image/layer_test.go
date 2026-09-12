@@ -158,3 +158,12 @@ func TestLayerForgetFreesImageOnNextCommit(t *testing.T) {
 		t.Errorf("re-placing a forgotten source must re-transmit, got %q", again)
 	}
 }
+
+func TestLayerForgetSkipsSourceStillPlaced(t *testing.T) {
+	l, s, p := layerFixture(t)
+	commit(t, l, p)
+	l.Forget(s.ID)
+	if out := commit(t, l, p); len(out) != 0 {
+		t.Errorf("forgetting a source that is still placed must be a no-op, got %q", out)
+	}
+}

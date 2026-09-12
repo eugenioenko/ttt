@@ -157,9 +157,7 @@ func (w *ImageViewWidget) placeGraphic(surface Surface, box Rect) bool {
 	if !ok {
 		return false
 	}
-	if r := placer.ImageReleaser(); r != nil {
-		w.release = r
-	}
+	w.release = placer.ImageReleaser()
 	if w.resolveProtocol() != tttimage.Kitty {
 		return false
 	}
