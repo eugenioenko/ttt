@@ -15,6 +15,7 @@ type Layer struct {
 	order       []uint32
 	autoID      uint32
 	invalidated bool
+	forget      []uint64
 	// Locks are re-asserted on every Commit: tcell drops them all on resize.
 	lock func(r Rect, locked bool)
 }
@@ -42,6 +43,11 @@ func (l *Layer) ensureInit() {
 func (l *Layer) AddSource(s *Source) {
 	l.ensureInit()
 	l.sources[s.ID] = s
+}
+
+// Forget frees a source's pixel data, in-process and in the terminal, on the next Commit.
+func (l *Layer) Forget(id uint64) {
+	l.forget = append(l.forget, id)
 }
 
 func (l *Layer) Begin() {
@@ -82,6 +88,14 @@ func (l *Layer) Commit(w io.Writer) error {
 		}
 	}
 
+	for _, id := range l.forget {
+		if l.transmitted[id] {
+			fail(DeleteImage(&out, id))
+		}
+		delete(l.transmitted, id)
+		delete(l.sources, id)
+	}
+	l.forget = nil
 	for _, id := range l.prevOrder {
 		if _, ok := l.cur[id]; !ok {
 			p := l.prev[id]

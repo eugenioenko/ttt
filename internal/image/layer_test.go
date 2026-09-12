@@ -141,3 +141,20 @@ func TestLayerUnknownSourcePlacesWithoutTransmit(t *testing.T) {
 		t.Errorf("unknown source should still be placed, got %q", out)
 	}
 }
+
+func TestLayerForgetFreesImageOnNextCommit(t *testing.T) {
+	l, s, p := layerFixture(t)
+	commit(t, l, p)
+	l.Forget(s.ID)
+	out := commit(t, l)
+	if !strings.Contains(out, "d=I") {
+		t.Errorf("forgotten source should be freed in the terminal, got %q", out)
+	}
+	if _, ok := l.sources[s.ID]; ok {
+		t.Error("forgotten source should be dropped in-process")
+	}
+	l.AddSource(s)
+	if again := commit(t, l, p); !strings.Contains(again, "a=t") {
+		t.Errorf("re-placing a forgotten source must re-transmit, got %q", again)
+	}
+}

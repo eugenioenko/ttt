@@ -349,3 +349,32 @@ func TestReopenImageTabAppliesCurrentPrefs(t *testing.T) {
 		t.Errorf("reopened tab should carry current prefs, got %+v", iv)
 	}
 }
+
+func TestImageWidgetCloseFreesTerminalImage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.png")
+	writeTestPNG(t, path, 16, 12)
+	w := NewImageViewWidget(path)
+	w.Protocol = "kitty"
+	w.CellW, w.CellH = 10, 20
+
+	layer := tttimage.NewLayer()
+	grid := makeGrid(60, 20)
+	surface := NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 60, H: 20})
+	surface.SetImageLayer(layer)
+	layer.Begin()
+	w.Render(surface)
+	var buf bytes.Buffer
+	if err := layer.Commit(&buf); err != nil {
+		t.Fatal(err)
+	}
+
+	w.Close()
+	layer.Begin()
+	buf.Reset()
+	if err := layer.Commit(&buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "d=I") {
+		t.Errorf("closing the tab should free the image, got %q", buf.String())
+	}
+}

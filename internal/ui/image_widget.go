@@ -31,6 +31,7 @@ type ImageViewWidget struct {
 	Protocol     string
 	CellW, CellH int
 	src          *tttimage.Source
+	release      func(uint64)
 	srcSize      int64
 	srcMod       time.Time
 }
@@ -49,7 +50,7 @@ func (w *ImageViewWidget) Refresh() {
 	w.Err = ""
 	fi, err := os.Stat(w.FilePath)
 	if err != nil {
-		w.src = nil
+		w.dropSource()
 		if os.IsNotExist(err) {
 			w.Err = "File not found."
 		} else {
@@ -59,7 +60,7 @@ func (w *ImageViewWidget) Refresh() {
 	}
 	w.Size = fi.Size()
 	if w.src != nil && (fi.Size() != w.srcSize || !fi.ModTime().Equal(w.srcMod)) {
-		w.src = nil
+		w.dropSource()
 	}
 	w.srcSize, w.srcMod = fi.Size(), fi.ModTime()
 	f, err := os.Open(w.FilePath)
@@ -78,6 +79,16 @@ func (w *ImageViewWidget) Refresh() {
 }
 
 func (w *ImageViewWidget) Focusable() bool { return true }
+
+// Close runs when the tab closes and frees the image in the terminal.
+func (w *ImageViewWidget) Close() { w.dropSource() }
+
+func (w *ImageViewWidget) dropSource() {
+	if w.src != nil && w.release != nil {
+		w.release(w.src.ID)
+	}
+	w.src = nil
+}
 
 // The cell box the graphics path drew into on the last Render.
 
@@ -145,6 +156,9 @@ func (w *ImageViewWidget) placeGraphic(surface Surface, box Rect) bool {
 	placer, ok := surface.(widgets.ImagePlacer)
 	if !ok {
 		return false
+	}
+	if r := placer.ImageReleaser(); r != nil {
+		w.release = r
 	}
 	if w.resolveProtocol() != tttimage.Kitty {
 		return false

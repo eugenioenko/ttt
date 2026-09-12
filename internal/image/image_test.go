@@ -133,6 +133,25 @@ func TestLoadMissing(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsHugeFileBeforeReading(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "huge.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Sparse: no bytes are written, so a read-first loader would allocate 64 MiB+.
+	if err := f.Truncate(maxImageFileBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = Load(path)
+	if err == nil || !strings.Contains(err.Error(), "exceeds maximum") {
+		t.Fatalf("expected size rejection, got %v", err)
+	}
+}
+
 func TestLoadRejectsOversized(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

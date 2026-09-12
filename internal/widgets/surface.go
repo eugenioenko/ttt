@@ -143,6 +143,8 @@ type Surface interface {
 // ImagePlacer stays out of Surface so virtualSurface and test doubles keep working.
 type ImagePlacer interface {
 	PlaceImage(x, y, w, h int, src *image.Source)
+	// ImageReleaser outlives the per-frame surface, so a widget can free its image on close.
+	ImageReleaser() func(id uint64)
 }
 
 type BoxModel struct {

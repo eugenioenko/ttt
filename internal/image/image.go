@@ -10,6 +10,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"os"
 	"sync/atomic"
 	"time"
@@ -20,6 +21,7 @@ import (
 const (
 	maxImageDimension = 16384
 	maxImagePixels    = 40_000_000
+	maxImageFileBytes = 64 << 20
 )
 
 type Source struct {
@@ -54,9 +56,17 @@ func nextSourceID() uint64 {
 }
 
 func Load(path string) (*Source, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("image: read %s: %w", path, err)
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxImageFileBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("image: read %s: %w", path, err)
+	}
+	if len(data) > maxImageFileBytes {
+		return nil, fmt.Errorf("image: %s exceeds maximum %d bytes", path, maxImageFileBytes)
 	}
 	return decode(data, path)
 }
