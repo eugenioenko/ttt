@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"image"
+
+	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -9,10 +12,16 @@ import (
 type RenderSurface struct {
 	cells [][]term.Cell
 	clip  Rect
+	layer *tttimage.Layer
 }
 
 func NewRenderSurface(cells [][]term.Cell, clip Rect) *RenderSurface {
 	return &RenderSurface{cells: cells, clip: clip}
+}
+
+// Sub propagates the layer to nested surfaces; a nil layer disables graphics.
+func (s *RenderSurface) SetImageLayer(l *tttimage.Layer) {
+	s.layer = l
 }
 
 func (s *RenderSurface) Size() (w, h int) {
@@ -128,5 +137,31 @@ func (s *RenderSurface) Sub(r Rect) widgets.Surface {
 	return &RenderSurface{
 		cells: s.cells,
 		clip:  Rect{X: newX, Y: newY, W: newW, H: newH},
+		layer: s.layer,
 	}
+}
+
+// The clipped delta maps back to source pixels so the terminal crops instead of re-encoding.
+func (s *RenderSurface) PlaceImage(x, y, w, h int, src *tttimage.Source) {
+	if s.layer == nil || src == nil || src.Pix == nil {
+		return
+	}
+	if w <= 0 || h <= 0 || src.W <= 0 || src.H <= 0 {
+		return
+	}
+	ax, ay := s.clip.X+x, s.clip.Y+y
+	ix, iy := max(ax, s.clip.X), max(ay, s.clip.Y)
+	ex, ey := min(ax+w, s.clip.X+s.clip.W), min(ay+h, s.clip.Y+s.clip.H)
+	if ex <= ix || ey <= iy {
+		return
+	}
+	s.layer.AddSource(src)
+	s.layer.Place(tttimage.Placement{
+		SourceID: src.ID,
+		Cell:     tttimage.Rect{X: ix, Y: iy, W: ex - ix, H: ey - iy},
+		Src: image.Rectangle{
+			Min: image.Point{X: (ix - ax) * src.W / w, Y: (iy - ay) * src.H / h},
+			Max: image.Point{X: (ex - ax) * src.W / w, Y: (ey - ay) * src.H / h},
+		},
+	})
 }

@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"net/http"
+	"unicode/utf8"
+
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
@@ -88,6 +92,9 @@ type EditorGroupWidget struct {
 	DiffWordWrap            bool
 	DiffHighContrast        bool
 	DiffCollapsedEmphasis   bool
+	ImageProtocol           string
+	ImageCellW              int
+	ImageCellH              int
 	SyntaxHighlight         bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
@@ -306,12 +313,28 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path {
 			g.tabs[i].Preview = false
+			if g.tabs[i].Content != nil {
+				g.applyImagePrefs(g.tabs[i].Content)
+				if refresher, ok := g.tabs[i].Content.(interface{ Refresh() }); ok {
+					refresher.Refresh()
+				}
+				g.SwitchTab(i)
+				return
+			}
 			if g.tabs[i].Buf != nil && !g.tabs[i].Buf.Dirty {
 				g.tabs[i].Buf.LoadFile(path)
 			}
 			g.SwitchTab(i)
 			return
 		}
+	}
+	switch sniffFileKind(path) {
+	case fileKindImage:
+		g.openContentFileTab(path, NewImageViewWidget(path))
+		return
+	case fileKindBinary:
+		g.openContentFileTab(path, NewBinaryFileWidget(path))
+		return
 	}
 	newBuf := &buffer.Buffer{Lines: []string{""}, InsertFinalNewline: g.InsertFinalNewline, ShowTrailingNewline: g.ShowTrailingNewline, TrimTrailingWhitespace: g.TrimTrailingWhitespace}
 	ec := config.LoadEditorConfig(path)
@@ -360,7 +383,8 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.New(path)
 	}
-	if t := g.activeTab(); t != nil && t.Preview && t.Content == nil && t.Buf != nil && !t.Buf.Dirty {
+	if t := g.activeTab(); t != nil && t.Preview && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
+		g.notifyContentTabClose(*t)
 		g.tabs[g.active] = newTab
 		g.syncTabs()
 	} else {
@@ -370,6 +394,85 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.OnFileOpen != nil && newTab.Highlighter != nil {
 		g.OnFileOpen(path, newTab.Highlighter.Language(), strings.Join(newBuf.Lines, "\n"))
 	}
+}
+
+func isFileViewerTab(t *editorTab) bool {
+	switch t.Content.(type) {
+	case *ImageViewWidget, *BinaryFileWidget:
+		return true
+	}
+	return false
+}
+
+func (g *EditorGroupWidget) applyImagePrefs(content Widget) {
+	if iv, ok := content.(*ImageViewWidget); ok {
+		iv.Protocol = g.ImageProtocol
+		iv.CellW, iv.CellH = g.ImageCellW, g.ImageCellH
+	}
+}
+
+type fileKind int
+
+const (
+	fileKindText fileKind = iota
+	fileKindImage
+	fileKindBinary
+)
+
+// The binary check mirrors isBinaryContent in internal/app/current_changes.go, which this package cannot import without a cycle.
+func sniffFileKind(path string) fileKind {
+	f, err := os.Open(path)
+	if err != nil {
+		return fileKindText
+	}
+	defer f.Close()
+	var head [512]byte
+	n, _ := f.Read(head[:])
+	sample := head[:n]
+	ct := http.DetectContentType(sample)
+	switch ct {
+	case "image/png", "image/jpeg", "image/gif":
+		return fileKindImage
+	}
+	if len(sample) == 0 {
+		return fileKindText
+	}
+	// A rune cut by the 512-byte window is not invalid UTF-8.
+	if n == len(head) {
+		for i := len(sample) - 1; i >= len(sample)-utf8.UTFMax && i >= 0; i-- {
+			if utf8.RuneStart(sample[i]) {
+				if !utf8.FullRune(sample[i:]) {
+					sample = sample[:i]
+				}
+				break
+			}
+		}
+	}
+	if bytes.IndexByte(sample, 0) >= 0 || !utf8.Valid(sample) {
+		return fileKindBinary
+	}
+	if !strings.HasPrefix(ct, "text/") {
+		return fileKindBinary
+	}
+	return fileKindText
+}
+
+// Content tabs carry no buffer.
+func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
+	g.applyImagePrefs(content)
+	newTab := editorTab{
+		FilePath: path,
+		Content:  content,
+		Preview:  true,
+	}
+	if t := g.activeTab(); t != nil && t.Preview && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
+		g.notifyContentTabClose(*t)
+		g.tabs[g.active] = newTab
+		g.syncTabs()
+		return
+	}
+	g.tabs = append(g.tabs, newTab)
+	g.SwitchTab(len(g.tabs) - 1)
 }
 
 func (g *EditorGroupWidget) NewFile() {
@@ -475,6 +578,26 @@ func (g *EditorGroupWidget) SetDiffCollapsedEmphasis(enabled bool) {
 	for _, tab := range g.tabs {
 		if surface, ok := tab.Content.(DiffModeSurface); ok {
 			surface.SetDiffCollapsedEmphasis(enabled)
+		}
+	}
+}
+
+// An empty protocol means auto-detection.
+func (g *EditorGroupWidget) SetImageProtocol(protocol string) {
+	g.ImageProtocol = protocol
+	for _, tab := range g.tabs {
+		if iv, ok := tab.Content.(*ImageViewWidget); ok {
+			iv.Protocol = protocol
+		}
+	}
+}
+
+// w and h are pixels per cell.
+func (g *EditorGroupWidget) SetImageCellSize(w, h int) {
+	g.ImageCellW, g.ImageCellH = w, h
+	for _, tab := range g.tabs {
+		if iv, ok := tab.Content.(*ImageViewWidget); ok {
+			iv.CellW, iv.CellH = w, h
 		}
 	}
 }

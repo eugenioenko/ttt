@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"unicode"
 
+	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 
@@ -41,6 +42,7 @@ type Root struct {
 	GlobalKeys       []GlobalKeyBinding
 	ForceKeys        []GlobalKeyBinding // checked even when focused widget wants raw keys
 	ChordKeys        []ChordKeyBinding
+	ImageLayer       *tttimage.Layer
 	chord            *chordState
 	KeyInterceptor   func(ev *tcell.EventKey) bool
 	OnRightClick     func(mx, my int)
@@ -372,6 +374,12 @@ func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
 
 func (r *Root) Render(cells [][]term.Cell) {
 	surface := NewRenderSurface(cells, Rect{X: 0, Y: 0, W: r.Width, H: r.Height})
+	// A modal overlay suppresses placements so images don't cover dialogs; unlocking first lets dialog text paint in the same frame.
+	if !r.HasOverlay() {
+		surface.SetImageLayer(r.ImageLayer)
+	} else if r.ImageLayer != nil {
+		r.ImageLayer.UnlockAll()
+	}
 	r.Main.Render(surface)
 	r.reconcilePointerCapture()
 

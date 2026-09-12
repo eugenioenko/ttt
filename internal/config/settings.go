@@ -205,6 +205,22 @@ func DefaultMarkdownSettings() MarkdownSettings {
 	}
 }
 
+const (
+	ImageProtocolAuto  = "auto"
+	ImageProtocolKitty = "kitty"
+	ImageProtocolNone  = "none"
+)
+
+type ImageSettings struct {
+	Protocol string `json:"protocol"`
+}
+
+func DefaultImageSettings() ImageSettings {
+	return ImageSettings{
+		Protocol: ImageProtocolAuto,
+	}
+}
+
 type Settings struct {
 	Version   int    `json:"version"`
 	Theme     string `json:"theme,omitempty"`
@@ -221,6 +237,7 @@ type Settings struct {
 	LSP          LSPSettings          `json:"lsp"`
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
 	Markdown     MarkdownSettings     `json:"markdown"`
+	Image        ImageSettings        `json:"image"`
 	// Plugins is safe: its only field is a tri-state *bool where nil means the
 	// default, so the zero value and "unset" mean the same thing.
 	Plugins    PluginSettings    `json:"plugins,omitzero"`
@@ -237,7 +254,7 @@ type Settings struct {
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "editor": true,
 	"search": true, "explorer": true, "sidebar": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "plugins": true, "formatters": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {
@@ -295,6 +312,7 @@ func DefaultSettings() Settings {
 		LSP:          DefaultLSPSettings(),
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),
+		Image:        DefaultImageSettings(),
 	}
 }
 
@@ -336,6 +354,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(GitFileViews, s.Git.FileView) {
 		s.Git.FileView = GitFileViewList
+	}
+	if !slices.Contains([]string{ImageProtocolAuto, ImageProtocolKitty, ImageProtocolNone}, s.Image.Protocol) {
+		s.Image.Protocol = ImageProtocolAuto
 	}
 }
 

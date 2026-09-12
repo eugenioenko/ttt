@@ -355,3 +355,27 @@ func TestSettingsEmptyExtraByteIdentical(t *testing.T) {
 		t.Errorf("empty-Extra MarshalJSON diverged from struct encoding:\n got: %s\nwant: %s", got, want)
 	}
 }
+
+func TestDefaultImageSettings(t *testing.T) {
+	s := DefaultSettings()
+	if s.Image.Protocol != ImageProtocolAuto {
+		t.Errorf("expected image protocol %q, got %q", ImageProtocolAuto, s.Image.Protocol)
+	}
+}
+
+func TestNormalizeImageProtocol(t *testing.T) {
+	for _, valid := range []string{ImageProtocolAuto, ImageProtocolKitty, ImageProtocolNone} {
+		s := DefaultSettings()
+		s.Image.Protocol = valid
+		normalizeSettings(&s)
+		if s.Image.Protocol != valid {
+			t.Errorf("valid protocol %q was rewritten to %q", valid, s.Image.Protocol)
+		}
+	}
+	s := DefaultSettings()
+	s.Image.Protocol = "sixel"
+	normalizeSettings(&s)
+	if s.Image.Protocol != ImageProtocolAuto {
+		t.Errorf("invalid protocol should reset to %q, got %q", ImageProtocolAuto, s.Image.Protocol)
+	}
+}

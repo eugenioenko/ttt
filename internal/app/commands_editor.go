@@ -178,6 +178,10 @@ func (a *App) SaveFile() {
 }
 
 func (a *App) doSaveFile() {
+	// Content tabs (image/binary viewers, diffs) hold no buffer: the format/code-action pipeline below must never run against their paths with a stale language.
+	if a.EditorGroup.ActiveBuffer() == nil {
+		return
+	}
 	path, lang := a.editorPathLang()
 	if lang != "" {
 		a.RunCodeActionsOnSave(path, lang)

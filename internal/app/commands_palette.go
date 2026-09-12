@@ -55,6 +55,7 @@ func (a *App) ShowThemePicker() {
 		*a.Borders = BuildBorderSet(theme.Borders)
 		a.ApplyBorderStyle()
 		a.Renderer.Clear()
+		a.invalidateImageLayer()
 	}
 	sel := widgets.NewSelectWidget(widgets.SelectConfig{
 		Items:       items,
@@ -81,6 +82,7 @@ func (a *App) ShowThemePicker() {
 			a.Screen.SetStyleMap(originalStyleMap)
 			*a.Palette = originalPalette
 			a.Renderer.Clear()
+			a.invalidateImageLayer()
 		},
 	})
 

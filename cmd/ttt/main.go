@@ -15,6 +15,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
@@ -232,12 +233,15 @@ Docs: https://tttedit.dev
 	defer lspManager.Shutdown()
 
 	renderer := &render.Renderer{}
+	imageLayer := image.NewLayer()
 	cmdRegistry := command.NewRegistry()
 	borders := app.BuildBorderSet(cfg.Theme.Borders)
 
 	editor, prURLs, fileTargets := app.BuildApp(&cfg, &borders)
 	editor.ApplyBorderStyle()
-	editor.Init(screen, renderer, lspManager)
+	editor.Init(screen, renderer, lspManager, imageLayer)
+	// Registered after handlePanic so it runs before it and before Fini: placements are deleted while the tty is still alive, on exit and crash.
+	defer func() { editor.CloseImageLayer() }()
 
 	editor.Version = version
 	editor.Keybindings = cfg.Keybindings

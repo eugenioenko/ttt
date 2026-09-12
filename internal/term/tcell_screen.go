@@ -83,9 +83,9 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 	if c.BgStyle != 0 {
 		bg := t.styleMap[c.BgStyle].GetBackground()
 		s = tcell.StyleDefault. //nolint:staticcheck // Attributes is deprecated but individual calls don't replicate the exact reset-and-copy semantics
-			Foreground(s.GetForeground()).
-			Background(bg).
-			Attributes(s.GetAttributes())
+					Foreground(s.GetForeground()).
+					Background(bg).
+					Attributes(s.GetAttributes())
 	}
 	if c.UlStyle != 0 {
 		us := t.styleMap[c.UlStyle]
@@ -186,4 +186,9 @@ func (t *TcellScreen) GetContent(x, y int) (string, tcell.Style, int) {
 
 func (t *TcellScreen) Tty() (tcell.Tty, bool) {
 	return t.scr.Tty()
+}
+
+// tcell drops all locks on resize, so the image layer re-asserts them every frame.
+func (t *TcellScreen) LockRegion(x, y, w, h int, lock bool) {
+	t.scr.LockRegion(x, y, w, h, lock)
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
@@ -50,6 +51,9 @@ type App struct {
 	Borders                *term.BorderSet
 	Screen                 *term.TcellScreen
 	Renderer               *render.Renderer
+	ImageLayer             *image.Layer
+	imageCellW             int
+	imageCellH             int
 	Settings               *config.Settings
 	Workspace              *workspace.Workspace
 	Palette                *ui.TerminalColorPalette
@@ -449,10 +453,22 @@ func (a *App) DismissHover() {
 	a.HoverGen++
 }
 
-func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManager *lsp.Manager) {
+func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManager *lsp.Manager, imageLayer *image.Layer) {
 	a.Screen = screen
 	a.Renderer = renderer
 	a.LspManager = lspManager
+	a.ImageLayer = imageLayer
+	if a.Root != nil {
+		a.Root.ImageLayer = imageLayer
+	}
+	if imageLayer != nil {
+		imageLayer.SetLockFunc(func(r image.Rect, locked bool) {
+			if a.Screen != nil {
+				a.Screen.LockRegion(r.X, r.Y, r.W, r.H, locked)
+			}
+		})
+	}
+	a.RefreshImageCellSize()
 	a.EditorGroup.TabBar.PostDragAutoScrollTick = func(generation uint64) {
 		screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Generation: generation}))
 	}

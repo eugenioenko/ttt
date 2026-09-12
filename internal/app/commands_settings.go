@@ -54,6 +54,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
 	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
 	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)
+	a.EditorGroup.SetImageProtocol(s.Image.Protocol)
 	if a.Sidebar != nil {
 		a.Sidebar.SetPanelOrder(s.Sidebar.PanelOrder)
 	}
@@ -113,6 +114,7 @@ func (a *App) ApplySettings(s config.Settings) {
 			*a.Borders = borders
 			themeBorders = &borders
 			a.Renderer.Clear()
+			a.invalidateImageLayer()
 		}
 	}
 
