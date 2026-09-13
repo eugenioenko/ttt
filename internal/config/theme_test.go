@@ -407,3 +407,43 @@ func TestDefaultThemeBorders(t *testing.T) {
 		t.Errorf("expected Borders.TopLeft '╭', got %q", th.Borders.TopLeft)
 	}
 }
+
+func TestResolveColorsDefaultsFileIconsToTerminalPalette(t *testing.T) {
+	var th ThemeConfig
+	if err := json.Unmarshal([]byte(`{
+		"terminal": {"red": "#110000", "yellow": "#111100", "green": "#001100", "cyan": "#001111", "blue": "#000011", "magenta": "#110011"},
+		"fileIcons": {"blue": {"fg": "#abcdef"}}
+	}`), &th); err != nil {
+		t.Fatal(err)
+	}
+	th.ResolveColors()
+
+	want := FileIconStyles{
+		Red:     StyleDef{Fg: "#110000"},
+		Yellow:  StyleDef{Fg: "#111100"},
+		Green:   StyleDef{Fg: "#001100"},
+		Cyan:    StyleDef{Fg: "#001111"},
+		Blue:    StyleDef{Fg: "#abcdef"},
+		Magenta: StyleDef{Fg: "#110011"},
+	}
+	if th.FileIcons != want {
+		t.Fatalf("file icon styles = %+v, want %+v (terminal palette with explicit blue override)", th.FileIcons, want)
+	}
+}
+
+func TestBundledThemesResolveEveryFileIconColor(t *testing.T) {
+	for _, name := range ListThemes() {
+		th, err := LoadTheme(name)
+		if err != nil {
+			t.Fatalf("load %s: %v", name, err)
+		}
+		for hue, style := range map[string]StyleDef{
+			"red": th.FileIcons.Red, "yellow": th.FileIcons.Yellow, "green": th.FileIcons.Green,
+			"cyan": th.FileIcons.Cyan, "blue": th.FileIcons.Blue, "magenta": th.FileIcons.Magenta,
+		} {
+			if style.Fg == "" {
+				t.Errorf("%s: fileIcons.%s has no foreground", name, hue)
+			}
+		}
+	}
+}
