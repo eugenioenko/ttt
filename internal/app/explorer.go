@@ -205,6 +205,13 @@ func (n *NavigationPanel) loadChildren(node *widgets.TreeNode) {
 			Expandable: de.IsDir,
 			Muted:      de.GitIgnored || strings.HasPrefix(de.Name, "."),
 		}
+		if n.Settings.Icons == config.IconsNerdFont {
+			if de.IsDir {
+				setFolderIcon(child)
+			} else {
+				setFileIcon(child)
+			}
+		}
 		node.Children = append(node.Children, child)
 	}
 }

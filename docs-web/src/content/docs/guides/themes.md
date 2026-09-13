@@ -199,6 +199,14 @@ Below is a complete theme file showing every configurable section. Ordinary colo
       "fg": "#a6e22e"
     }
   },
+  "fileIcons": {
+    "red": { "fg": "#f92672" },
+    "yellow": { "fg": "#e6db74" },
+    "green": { "fg": "#a6e22e" },
+    "cyan": { "fg": "#a1efe4" },
+    "blue": { "fg": "#66d9ef" },
+    "magenta": { "fg": "#ae81ff" }
+  },
   "terminal": {
     "black": "#272822",
     "red": "#f92672",
@@ -248,5 +256,6 @@ Below is a complete theme file showing every configurable section. Ordinary colo
 | `diff` | Diff presentation styles: `added`, `deleted`, and `modified` backgrounds; `gutterAdded`, `gutterDeleted`, and `gutterModified` semantic foregrounds; `collapsedEmphasis` for opt-in emphasized idle rows; and the `collapsedHover` accent. Emphasis defaults to contrast-safe normal theme colors with bold text, while an omitted `collapsedHover` background inherits the editor active-line background. The legacy `collapsed` field remains accepted only as a `collapsedHover` migration alias. |
 | `scrollbar` | Scrollbar thumb (`fg`) and track (`bg`) colors |
 | `syntax` | Syntax highlighting colors for language tokens |
+| `fileIcons` | File icon colors in the Explorer and Changes panel, by hue family (`red`, `yellow`, `green`, `cyan`, `blue`, `magenta`). Each entry defaults to the matching `terminal` color, so most themes need no `fileIcons` section. Neutral icons use the row's normal text color |
 | `terminal` | ANSI color palette for the integrated terminal (16 colors) |
 | `borders` | Unicode characters used for drawing box borders. Overridden when `borderStyle` in settings is set to a named preset (e.g. `"rounded"`, `"double"`). Use `"default"` or `"theme"` to respect the theme's borders. |

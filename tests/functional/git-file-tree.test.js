@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as tui from "./tui.js";
 import { cleanupDir, createGitRepo, createTempDir, createTempFile, git } from "./helpers.js";
 
 let dir;
+let configDir;
 
 afterEach(() => {
   tui.kill();
   if (dir) cleanupDir(dir);
+  if (configDir) cleanupDir(configDir);
 });
 
 function nestedRepo() {
@@ -25,7 +27,11 @@ function nestedRepo() {
 describe("git file tree", () => {
   it("defaults to lists and preserves working and history files across tree bulk controls", () => {
     dir = nestedRepo();
+    // File icons take two columns and would truncate the full paths this test reads.
+    configDir = createTempDir();
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ git: { icons: "none" } }));
     tui.start(dir);
+    tui.setEnv({ TTT_CONFIG_DIR: configDir });
     tui.pressChord("ctrl+k", "c");
     tui.waitFor("nested history");
     tui.press("tab");
