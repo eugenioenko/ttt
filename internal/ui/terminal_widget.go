@@ -100,6 +100,22 @@ func (tw *TerminalWidget) PasteText(text string) {
 	tw.scrollOffset = 0
 }
 
+func (tw *TerminalWidget) CopySelection() bool {
+	if !tw.hasSelection {
+		return false
+	}
+	text := tw.selectedText()
+	if text != "" {
+		clipboard.Set(text)
+	}
+	tw.ClearSelection()
+	return true
+}
+
+func (tw *TerminalWidget) HasSelection() bool {
+	return tw.hasSelection
+}
+
 func (tw *TerminalWidget) CursorPosition() (x, y int, visible bool) {
 	if tw.Term == nil {
 		return 0, 0, false
@@ -488,27 +504,23 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 		}
 
-		if tev.Key() == tcell.KeyCtrlC && tw.hasSelection {
-			text := tw.selectedText()
-			if text != "" {
-				clipboard.Set(text)
-			}
-			tw.ClearSelection()
+		r := term.KeyRune(tev)
+		isCopy := (tev.Key() == tcell.KeyCtrlC) ||
+			(tev.Key() == tcell.KeyRune && (r == 'c' || r == 'C') && tev.Modifiers()&tcell.ModCtrl != 0)
+		if isCopy && tw.hasSelection {
+			tw.CopySelection()
 			return EventConsumed
 		}
 
-		if tev.Key() == tcell.KeyCtrlV {
+		isPaste := (tev.Key() == tcell.KeyCtrlV) ||
+			(tev.Key() == tcell.KeyRune && (r == 'v' || r == 'V') && tev.Modifiers()&tcell.ModCtrl != 0)
+		if isPaste {
 			text := clipboard.Get()
 			if text != "" {
-				if tw.Term.Mode()&vt10x.ModeBracketedPaste != 0 {
-					tw.Term.WriteString("\x1b[200~")
-					tw.Term.WriteString(text)
-					tw.Term.WriteString("\x1b[201~")
-				} else {
-					tw.Term.WriteString(text)
-				}
+				tw.PasteText(text)
+			} else {
+				tw.ClearSelection()
 			}
-			tw.ClearSelection()
 			return EventConsumed
 		}
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -599,7 +600,25 @@ func (a *App) FlushEditorOnChange() {
 	}
 }
 
+func (a *App) focusedTerminalWidget() *ui.TerminalWidget {
+	if a.Root == nil {
+		return nil
+	}
+	if tp, ok := a.Root.Focused.(*ui.TerminalPanelWidget); ok {
+		if tw, ok := tp.ActiveWidget().(*ui.TerminalWidget); ok {
+			return tw
+		}
+	} else if tw, ok := a.Root.Focused.(*ui.TerminalWidget); ok {
+		return tw
+	}
+	return nil
+}
+
 func (a *App) Copy() {
+	if tw := a.focusedTerminalWidget(); tw != nil {
+		tw.CopySelection()
+		return
+	}
 	if holder, ok := a.Root.Focused.(ui.InputHolder); ok {
 		if inp := holder.FocusedInput(); inp != nil {
 			inp.CopySelection()
@@ -610,6 +629,10 @@ func (a *App) Copy() {
 }
 
 func (a *App) Cut() {
+	if tw := a.focusedTerminalWidget(); tw != nil {
+		tw.CopySelection()
+		return
+	}
 	if holder, ok := a.Root.Focused.(ui.InputHolder); ok {
 		if inp := holder.FocusedInput(); inp != nil {
 			inp.CutSelection()
@@ -620,6 +643,15 @@ func (a *App) Cut() {
 }
 
 func (a *App) Paste() {
+	if tw := a.focusedTerminalWidget(); tw != nil {
+		text := clipboard.Get()
+		if text != "" {
+			tw.PasteText(text)
+		} else {
+			tw.ClearSelection()
+		}
+		return
+	}
 	if holder, ok := a.Root.Focused.(ui.InputHolder); ok {
 		if inp := holder.FocusedInput(); inp != nil {
 			inp.PasteClipboard()
@@ -630,10 +662,8 @@ func (a *App) Paste() {
 }
 
 func (a *App) PasteText(text string) {
-	if tp, ok := a.Root.Focused.(*ui.TerminalPanelWidget); ok && tp.WantsRawKeys() {
-		if tw, ok := tp.ActiveWidget().(*ui.TerminalWidget); ok {
-			tw.PasteText(text)
-		}
+	if tw := a.focusedTerminalWidget(); tw != nil && tw.WantsRawKeys() {
+		tw.PasteText(text)
 		return
 	}
 	if holder, ok := a.Root.Focused.(ui.InputHolder); ok {
