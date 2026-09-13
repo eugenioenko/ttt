@@ -7,17 +7,20 @@ import (
 )
 
 type TreeNode struct {
-	ID           string      `json:"id"`
-	Label        string      `json:"label"`
-	Icon         string      `json:"icon,omitempty"`
-	IconStyle    term.Style  `json:"-"`
-	Badge        string      `json:"badge,omitempty"`
-	BadgeStyle   term.Style  `json:"-"`
-	Children     []*TreeNode `json:"children,omitempty"`
-	Actions      []Action    `json:"actions,omitempty"`
-	Muted        bool        `json:"-"`
-	Expandable   bool        `json:"-"`
-	TruncateLeft bool        `json:"-"`
+	ID             string      `json:"id"`
+	Label          string      `json:"label"`
+	Icon           string      `json:"icon,omitempty"`
+	IconStyle      term.Style  `json:"-"`
+	ExpandedIcon   string      `json:"-"`
+	LabelIcon      string      `json:"-"`
+	LabelIconStyle term.Style  `json:"-"`
+	Badge          string      `json:"badge,omitempty"`
+	BadgeStyle     term.Style  `json:"-"`
+	Children       []*TreeNode `json:"children,omitempty"`
+	Actions        []Action    `json:"actions,omitempty"`
+	Muted          bool        `json:"-"`
+	Expandable     bool        `json:"-"`
+	TruncateLeft   bool        `json:"-"`
 
 	Expanded bool `json:"-"`
 	depth    int
@@ -424,7 +427,11 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		x++
 	}
 
-	if node.Icon != "" {
+	icon := node.Icon
+	if icon != "" && node.Expanded && node.ExpandedIcon != "" {
+		icon = node.ExpandedIcon
+	}
+	if icon != "" {
 		iconStyle := node.IconStyle
 		if iconStyle == term.StyleDefault {
 			iconStyle = style
@@ -432,7 +439,19 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		if idx == t.selected {
 			iconStyle = style
 		}
-		x = drawRunesClipped(surface, x, y, maxX, []rune(node.Icon), iconStyle)
+		x = drawRunesClipped(surface, x, y, maxX, []rune(icon), iconStyle)
+		if x < maxX {
+			surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
+			x++
+		}
+	}
+
+	if node.LabelIcon != "" {
+		labelIconStyle := node.LabelIconStyle
+		if labelIconStyle == term.StyleDefault || idx == t.selected {
+			labelIconStyle = style
+		}
+		x = drawRunesClipped(surface, x, y, maxX, []rune(node.LabelIcon), labelIconStyle)
 		if x < maxX {
 			surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 			x++
