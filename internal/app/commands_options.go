@@ -351,7 +351,6 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
 		{Label: "Bracket Colors", Command: "options.toggleBracketColors", Checked: bracketColorChecked},
-		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
@@ -359,6 +358,10 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
+		// Last, not with the display toggles above: the menu viewport fits
+		// the rows above as-is, so appending here keeps existing navigation
+		// counts and snapshots stable.
+		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 		ui.MenuSep(),
 		{Label: "Gutter Style", Command: "options.gutterStyle"},
 		{Label: "Border Style", Command: "options.borderStyle"},
