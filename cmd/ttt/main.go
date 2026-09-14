@@ -218,34 +218,6 @@ Docs: https://tttedit.dev
 	cfg := config.Load(flags.configFile)
 	config.ParseKeyBindings(cfg.Keybindings)
 
-	// Auto theme resolves before the screen exists: the OSC 11 / 996 query
-	// must run before tcell.Init, which swallows the replies. Skipped for
-	// --exec sim sessions to keep them deterministic.
-	useAutoTheme := cfg.Settings.Theme == "auto" && flags.exec == ""
-	autoAppearance := appearance.Unknown
-	autoSource := "none"
-	if useAutoTheme {
-		autoAppearance, autoSource = appearance.DetectStartup(true)
-		// Total detection failure keeps the built-in default theme rather
-		// than forcing a guess. A missing or broken side theme falls back
-		// to the built-in for the detected appearance.
-		if autoAppearance != appearance.Unknown {
-			name := appearance.ResolveThemeName(autoAppearance, cfg.Settings.ThemeLight, cfg.Settings.ThemeDark)
-			if theme, err := config.LoadTheme(name); err == nil {
-				cfg.Theme = theme
-			} else if fallback := appearance.ResolveThemeName(autoAppearance, "", ""); fallback != name {
-				if theme, err := config.LoadTheme(fallback); err == nil {
-					cfg.Theme = theme
-					slog.Warn("auto theme: cannot load configured theme, using built-in fallback", "theme", name, "fallback", fallback)
-				} else {
-					slog.Warn("auto theme: cannot load resolved theme, keeping default", "theme", name)
-				}
-			} else {
-				slog.Warn("auto theme: cannot load resolved theme, keeping default", "theme", name)
-			}
-		}
-	}
-
 	if flags.debug {
 		cfg.Settings.DebugMode = true
 	}
@@ -254,6 +226,29 @@ Docs: https://tttedit.dev
 	if logFile != nil {
 		defer logFile.Close()
 	}
+
+	// Auto theme resolves before the screen exists: the OSC 11 / 996 query
+	// must run before tcell.Init, which swallows the replies. Skipped for
+	// --exec sim sessions to keep them deterministic. Logging is initialized
+	// above so resolution warnings land in ttt.log, not on stderr.
+	useAutoTheme := cfg.Settings.Theme == "auto" && flags.exec == ""
+	autoAppearance := appearance.Unknown
+	autoSource := "none"
+	loadedAutoTheme := ""
+	if useAutoTheme {
+		autoAppearance, autoSource = appearance.DetectStartup(true)
+		// Total detection failure keeps the built-in default theme rather
+		// than forcing a guess.
+		if autoAppearance != appearance.Unknown {
+			if theme, name, ok := app.ResolveAutoTheme(autoAppearance, cfg.Settings.ThemeLight, cfg.Settings.ThemeDark); ok {
+				cfg.Theme = theme
+				loadedAutoTheme = name
+			} else {
+				slog.Warn("auto theme: cannot load resolved theme, keeping default")
+			}
+		}
+	}
+
 	if useAutoTheme {
 		slog.Info("auto theme", "appearance", autoAppearance.String(), "source", autoSource)
 	}
@@ -295,7 +290,7 @@ Docs: https://tttedit.dev
 	editor.Init(screen, renderer, lspManager, imageLayer)
 	// Auto state is recorded after Init assigns the screen: the poll arm
 	// posts through it and no-ops on nil.
-	editor.SetAutoTheme(autoAppearance)
+	editor.SetAutoTheme(autoAppearance, loadedAutoTheme)
 	if useAutoTheme {
 		editor.StartAutoThemePoll()
 	}

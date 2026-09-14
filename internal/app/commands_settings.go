@@ -129,6 +129,11 @@ func (a *App) ApplySettings(s config.Settings) {
 		theme, ok := config.DefaultTheme(), s.Theme == ""
 		if !ok {
 			if s.Theme == "auto" {
+				// Side names changed: drop the loaded-theme history so the
+				// Unknown branch below cannot re-apply the stale choice.
+				if s.ThemeLight != prev.ThemeLight || s.ThemeDark != prev.ThemeDark {
+					a.lastAutoTheme = ""
+				}
 				// No tty query can run while tcell owns it, so live-apply
 				// resolves from the live signal (DetectLive, not the
 				// spawn-frozen COLORFGBG).

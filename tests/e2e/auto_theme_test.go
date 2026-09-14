@@ -24,7 +24,7 @@ func TestAutoThemeApplyAppearanceFlipsStyleMap(t *testing.T) {
 	h.app.Settings.Theme = "auto"
 	h.app.Settings.ThemeLight = "default-light"
 	h.app.Settings.ThemeDark = "default-dark"
-	h.app.SetAutoTheme(appearance.Dark)
+	h.app.SetAutoTheme(appearance.Dark, "default-dark")
 
 	before := h.app.Screen.GetStyleMap()
 	if !h.app.ApplyAppearance(appearance.Light) {
@@ -54,7 +54,7 @@ func TestAutoThemeInvalidSideThemeFallsBackToBuiltin(t *testing.T) {
 	h.app.Settings.Theme = "auto"
 	h.app.Settings.ThemeLight = "no-such-theme"
 	h.app.Settings.ThemeDark = "default-dark"
-	h.app.SetAutoTheme(appearance.Dark)
+	h.app.SetAutoTheme(appearance.Dark, "default-dark")
 
 	if !h.app.ApplyAppearance(appearance.Light) {
 		t.Fatal("ApplyAppearance(light) should fall back instead of stalling")

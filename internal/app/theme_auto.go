@@ -63,21 +63,20 @@ func (a *App) IsAutoTheme() bool {
 	return a.Settings != nil && a.Settings.Theme == "auto"
 }
 
-// SetAutoTheme records the startup appearance (and its resolved theme name,
-// backing the lastAutoTheme fallback) so the first live re-check is a no-op
-// when nothing changed.
-func (a *App) SetAutoTheme(ap appearance.Appearance) {
+// SetAutoTheme records the startup appearance and the actually-loaded theme
+// name backing the lastAutoTheme fallback. An empty name (detection or load
+// failure) clears the history.
+func (a *App) SetAutoTheme(ap appearance.Appearance, resolvedName string) {
 	a.autoAppearance = ap
-	if ap != appearance.Unknown && a.Settings != nil {
-		a.lastAutoTheme = appearance.ResolveThemeName(ap, a.Settings.ThemeLight, a.Settings.ThemeDark)
-	}
+	a.lastAutoTheme = resolvedName
 }
 
-// resolveAutoTheme maps an appearance to a loaded theme honoring the
+// ResolveAutoTheme maps an appearance to a loaded theme honoring the
 // configured light/dark names. A missing or broken side theme falls back to
 // the built-in for that appearance instead of keeping a mismatched theme.
-func (a *App) resolveAutoTheme(ap appearance.Appearance) (config.ThemeConfig, string, bool) {
-	name := appearance.ResolveThemeName(ap, a.Settings.ThemeLight, a.Settings.ThemeDark)
+// Shared with the pre-App startup path in cmd/ttt.
+func ResolveAutoTheme(ap appearance.Appearance, light, dark string) (config.ThemeConfig, string, bool) {
+	name := appearance.ResolveThemeName(ap, light, dark)
 	if theme, err := config.LoadTheme(name); err == nil {
 		return theme, name, true
 	} else {
@@ -87,9 +86,20 @@ func (a *App) resolveAutoTheme(ap appearance.Appearance) (config.ThemeConfig, st
 		if theme, err := config.LoadTheme(fallback); err == nil {
 			slog.Warn("auto theme: cannot load configured theme, using built-in fallback", "theme", name, "fallback", fallback)
 			return theme, fallback, true
+		} else {
+			slog.Warn("auto theme: configured and fallback themes unloadable", "theme", name, "fallback", fallback, "error", err)
 		}
 	}
 	return config.ThemeConfig{}, "", false
+}
+
+// resolveAutoTheme maps an appearance to a loaded theme honoring this App's
+// configured light/dark names.
+func (a *App) resolveAutoTheme(ap appearance.Appearance) (config.ThemeConfig, string, bool) {
+	if a.Settings == nil {
+		return config.ThemeConfig{}, "", false
+	}
+	return ResolveAutoTheme(ap, a.Settings.ThemeLight, a.Settings.ThemeDark)
 }
 
 // StartAutoThemePoll begins the backstop poll; call once when auto mode is
