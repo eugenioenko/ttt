@@ -237,7 +237,7 @@ func (a *App) applyBorderStyle(themeBorders *term.BorderSet) {
 		// from an explicit style back to "default" actually take effect.
 		if themeBorders != nil {
 			*a.Borders = *themeBorders
-		} else if a.Settings.Theme != "" {
+		} else if a.Settings.Theme != "" && a.Settings.Theme != "auto" {
 			if theme, err := config.LoadTheme(a.Settings.Theme); err == nil {
 				*a.Borders = BuildBorderSet(theme.Borders)
 			}

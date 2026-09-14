@@ -153,6 +153,23 @@ func (t *TcellScreen) SetCursorStyle(style CursorStyle) {
 	}
 }
 
+// EnableFocusReporting opts into terminal focus events (used to re-check an
+// "auto" theme when the window regains focus, herdr #2416 parity).
+func (t *TcellScreen) EnableFocusReporting() {
+	t.scr.EnableFocus()
+}
+
+// DisableFocusReporting opts back out; called when leaving auto theme mode.
+func (t *TcellScreen) DisableFocusReporting() {
+	t.scr.DisableFocus()
+}
+
+// KeyboardProtocol reports the negotiated keyboard protocol (auto-negotiated
+// Kitty keyboard is what delivers Super/cmd as ModMeta on Kitty/Ghostty).
+func (t *TcellScreen) KeyboardProtocol() tcell.KeyProtocol {
+	return t.scr.KeyboardProtocol()
+}
+
 // PostEvent injects an event into the screen's event queue (tcell v3 has no
 // PostEvent; the queue channel is written directly). The send is non-blocking:
 // PostEvent is occasionally called from the event-loop goroutine itself (e.g.

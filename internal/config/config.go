@@ -39,7 +39,7 @@ func Load(settingsFile string) AppConfig {
 		json.Unmarshal(data, &cfg.Settings)
 	}
 
-	if cfg.Settings.Theme != "" {
+	if cfg.Settings.Theme != "" && cfg.Settings.Theme != "auto" {
 		themeFile := cfg.Settings.Theme + ".json"
 		if data, err := readFirstTheme(paths, themeFile); err == nil {
 			json.Unmarshal(data, &cfg.Theme)
