@@ -137,7 +137,7 @@ clobber guard), BUG-044 (git branch below repo root).
 
 **Still reproducible but medium/low severity** (left in the main ledger, not escalated):
 BUG-004, BUG-006, BUG-009, BUG-012, BUG-014, BUG-015, BUG-016, BUG-017, BUG-018, BUG-019,
-BUG-023, BUG-024, BUG-025, BUG-033, BUG-036, BUG-037, BUG-038, BUG-039, BUG-040, BUG-041,
+BUG-023, BUG-024, BUG-025, BUG-033, BUG-036, BUG-037, BUG-038, BUG-039, BUG-040,
 BUG-042, BUG-043, BUG-045, BUG-046, BUG-049, BUG-050, BUG-051, BUG-053, BUG-054, BUG-055,
 BUG-056, BUG-058.
 
