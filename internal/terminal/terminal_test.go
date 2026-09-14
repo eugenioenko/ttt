@@ -245,3 +245,35 @@ func TestRawTailSingleWriteLargerThanMax(t *testing.T) {
 		t.Error("expected the tail to keep the end of an oversized single write")
 	}
 }
+
+func TestPrimaryDeviceAttributesResponse(t *testing.T) {
+	term, err := New("/bin/sh", 80, 24, 0, nil, "")
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	term.Run()
+	defer term.Close()
+
+	updated := make(chan struct{}, 100)
+	term.OnUpdate = func() {
+		select {
+		case updated <- struct{}{}:
+		default:
+		}
+	}
+
+	term.WriteString("stty raw -echo; printf '\\033[0c'; exec cat\n")
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case <-updated:
+			if strings.Contains(string(term.RawTail()), "\x1b[?6c") {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("timed out waiting for DA1 response, got rawtail: %q", string(term.RawTail()))
+		}
+	}
+}
+

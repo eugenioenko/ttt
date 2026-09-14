@@ -6,11 +6,12 @@ require (
 	github.com/alecthomas/chroma/v2 v2.24.1
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/clipperhouse/displaywidth v0.11.0
-	github.com/eugenioenko/vt10x v0.0.0-20260821213843-4d7cdc5e1dc1
+	github.com/eugenioenko/vt10x v0.0.0-20260917154457-9fb76a7b36f8
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gdamore/tcell/v3 v3.4.1
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/gopher-lua v1.1.2
+	golang.org/x/sys v0.47.0
 )
 
 require (
@@ -21,7 +22,6 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
 	golang.org/x/crypto v0.51.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 )

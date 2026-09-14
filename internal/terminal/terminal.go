@@ -49,12 +49,16 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string) 
 		done: make(chan struct{}),
 	}
 
-	t.vt = vt10x.New(vt10x.WithSize(cols, rows), vt10x.WithScrollback(scrollbackMax))
-
 	pt, err := pty.New()
 	if err != nil {
 		return nil, err
 	}
+
+	t.vt = vt10x.New(
+		vt10x.WithWriter(pt),
+		vt10x.WithSize(cols, rows),
+		vt10x.WithScrollback(scrollbackMax),
+	)
 
 	cmd := pt.Command(shell)
 	// Verify dir exists before setting it — chaos monkey and random commands can

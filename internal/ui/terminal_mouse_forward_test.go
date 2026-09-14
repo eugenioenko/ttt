@@ -43,7 +43,7 @@ func waitFor(t *testing.T, updated chan struct{}, cond func() bool) {
 // newline-less escape sequences this test round-trips through cat.
 func newRawMouseLoopbackTerminal(t *testing.T) (*terminal.Terminal, chan struct{}) {
 	t.Helper()
-	term, err := terminal.New("", 80, 24, 0, nil, "")
+	term, err := terminal.New("/bin/sh", 80, 24, 0, nil, "")
 	if err != nil {
 		t.Fatalf("terminal.New() error: %v", err)
 	}
