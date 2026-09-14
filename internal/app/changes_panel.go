@@ -69,6 +69,7 @@ type ChangesPanel struct {
 	workNodes          map[string]workNodeRef
 	workFiles          map[string]workFileRef
 	fileView           string
+	icons              string
 
 	OnOpenDiff       func(dir string, status git.FileStatus, extended bool)
 	OnOpenCommitDiff func(dir, ref, short string, status git.FileStatus, extended bool)
@@ -571,13 +572,15 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 	makeLeaf := func(f git.FileStatus) *widgets.TreeNode {
 		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
 		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short, Status: f}
-		return &widgets.TreeNode{
+		node := &widgets.TreeNode{
 			ID:           id,
 			Label:        f.Path,
 			Icon:         ui.StatusBadge(f.Status),
 			IconStyle:    ui.StatusStyle(f.Status),
 			TruncateLeft: true,
 		}
+		cp.decorateFileNode(node, f.Path)
+		return node
 	}
 	if cp.fileView == config.GitFileViewList {
 		nodes := make([]*widgets.TreeNode, 0, len(files))
@@ -586,7 +589,7 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 		}
 		return nodes
 	}
-	return compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded)
+	return cp.decorateFolderNodes(compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded))
 }
 
 func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, extended bool) {
@@ -822,7 +825,7 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 	id := workingNodeID(kind, dir, f.Path, staged)
 	cp.workFiles[id] = workFileRef{Dir: dir, Status: f, Staged: staged, Kind: kind}
 	cp.workNodes[id] = workNodeRef{Dir: dir, Path: f.Path, Staged: staged, Kind: kind, Group: group, PR: pr}
-	return &widgets.TreeNode{
+	node := &widgets.TreeNode{
 		ID:        id,
 		Label:     f.Path,
 		Icon:      icon,
@@ -831,6 +834,8 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 			{Icon: actionIcon, Command: actionCmd},
 		},
 	}
+	cp.decorateFileNode(node, f.Path)
+	return node
 }
 
 func (cp *ChangesPanel) TotalChanges() int {

@@ -23,10 +23,12 @@
   },
   "explorer": {
     "showHidden": true,
-    "showGitIgnored": true
+    "showGitIgnored": true,
+    "icons": "nerd-font"
   },
   "git": {
-    "fileView": "list"
+    "fileView": "list",
+    "icons": "nerd-font"
   },
   "terminal": {
     "scrollback": 1000

@@ -96,6 +96,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	if a.Changes != nil {
 		a.Changes.SetFileView(s.Git.FileView)
+		a.Changes.SetIcons(s.Git.Icons)
 	}
 
 	// An empty theme name means the built-in default, and must still be applied —

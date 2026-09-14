@@ -156,12 +156,18 @@ func settingsCategories() []settingsCategory {
 			{Label: "Git: file view", Kind: settingEnum, Options: gitFileViewItems,
 				GetString: func(s *config.Settings) string { return s.Git.FileView },
 				SetString: func(s *config.Settings, v string) { s.Git.FileView = v }},
+			{Label: "Git: file icons", Kind: settingEnum, Options: iconModeItems,
+				GetString: func(s *config.Settings) string { return s.Git.Icons },
+				SetString: func(s *config.Settings, v string) { s.Git.Icons = v }},
 			{Label: "Explorer: hidden files", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.ShowHidden },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.ShowHidden = v }},
 			{Label: "Explorer: git-ignored files", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.ShowGitIgnored },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.ShowGitIgnored = v }},
+			{Label: "Explorer: file icons", Kind: settingEnum, Options: iconModeItems,
+				GetString: func(s *config.Settings) string { return s.Explorer.Icons },
+				SetString: func(s *config.Settings, v string) { s.Explorer.Icons = v }},
 			{Label: "Terminal shell", Kind: settingString, Restart: true,
 				GetString: func(s *config.Settings) string { return s.Terminal.Shell },
 				SetString: func(s *config.Settings, v string) { s.Terminal.Shell = v }},
@@ -185,6 +191,13 @@ func gitFileViewItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
 		{ID: config.GitFileViewTree, Label: "Tree"},
 		{ID: config.GitFileViewList, Label: "List"},
+	}
+}
+
+func iconModeItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.IconsNerdFont, Label: "Nerd Font"},
+		{ID: config.IconsNone, Label: "None"},
 	}
 }
 

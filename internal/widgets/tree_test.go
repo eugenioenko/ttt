@@ -314,6 +314,44 @@ func TestTreeRenderIcon(t *testing.T) {
 	}
 }
 
+func TestTreeRenderExpandedIconFollowsExpansion(t *testing.T) {
+	folder := &TreeNode{ID: "dir", Label: "dir", Icon: "c", ExpandedIcon: "o", Expandable: true}
+	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{folder}})
+
+	s := renderWidget(tree, 0, 0, 20, 5)
+	if s.cells[0][2].Ch != 'c' {
+		t.Fatalf("collapsed node should draw Icon, got %c", s.cells[0][2].Ch)
+	}
+
+	folder.Expanded = true
+	tree.SetItems(tree.Config.Items)
+	s = renderWidget(tree, 0, 0, 20, 5)
+	if s.cells[0][2].Ch != 'o' {
+		t.Fatalf("expanded node should draw ExpandedIcon, got %c", s.cells[0][2].Ch)
+	}
+
+	leaf := &TreeNode{ID: "leaf", Label: "leaf", ExpandedIcon: "o", Expanded: true}
+	tree = NewTreeWidget(TreeConfig{Items: []*TreeNode{leaf}})
+	s = renderWidget(tree, 0, 0, 20, 5)
+	if row := surfaceRowText(s, 0); row[:4] != "leaf" {
+		t.Fatalf("ExpandedIcon without Icon must not reserve an icon column, got %q", row)
+	}
+}
+
+func TestTreeRenderLabelIconSitsBetweenIconAndLabel(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{
+		{ID: "a", Label: "a.go", Icon: "M", LabelIcon: "g"},
+		{ID: "b", Label: "b.go", LabelIcon: "g"},
+	}})
+	s := renderWidget(tree, 0, 0, 20, 5)
+	if row := surfaceRowText(s, 0); row[:6] != "M g a." {
+		t.Fatalf("row with Icon and LabelIcon = %q, want status, label icon, label", row)
+	}
+	if row := surfaceRowText(s, 1); row[:6] != "g b.go" {
+		t.Fatalf("row with only LabelIcon = %q", row)
+	}
+}
+
 // --- Keyboard Navigation tests ---
 
 func TestTreeKeyUpDown(t *testing.T) {

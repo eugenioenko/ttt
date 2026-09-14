@@ -61,3 +61,16 @@ func TestBuildStyleMapUsesResolvedSemanticDiffPairing(t *testing.T) {
 		t.Fatalf("rendered deleted background = %v, want resolved %v", got, want)
 	}
 }
+
+func TestBuildStyleMapIncludesFileIconStyles(t *testing.T) {
+	theme := config.DefaultTheme()
+	theme.FileIcons.Green = config.StyleDef{Fg: "#00aa00"}
+	theme.FileIcons.Magenta = config.StyleDef{Fg: "#aa00aa"}
+	styles := BuildStyleMap(theme)
+	if got := styles[term.StyleFileIconGreen].GetForeground(); got != tcell.GetColor("#00aa00") {
+		t.Fatalf("green file icon foreground = %v", got)
+	}
+	if got := styles[term.StyleFileIconMagenta].GetForeground(); got != tcell.GetColor("#aa00aa") {
+		t.Fatalf("magenta file icon foreground = %v", got)
+	}
+}

@@ -13,6 +13,7 @@ var (
 	DiffModes    = []string{"split", "unified"}
 	DiffContexts = []string{"changes", "full"}
 	GitFileViews = []string{"tree", "list"}
+	IconModes    = []string{IconsNerdFont, IconsNone}
 )
 
 const (
@@ -22,6 +23,8 @@ const (
 	DiffContextFull    = "full"
 	GitFileViewTree    = "tree"
 	GitFileViewList    = "list"
+	IconsNone          = "none"
+	IconsNerdFont      = "nerd-font"
 )
 
 type TerminalSettings struct {
@@ -162,8 +165,9 @@ func DefaultSearchSettings() SearchSettings {
 }
 
 type ExplorerSettings struct {
-	ShowHidden     bool `json:"showHidden"`
-	ShowGitIgnored bool `json:"showGitIgnored"`
+	ShowHidden     bool   `json:"showHidden"`
+	ShowGitIgnored bool   `json:"showGitIgnored"`
+	Icons          string `json:"icons"`
 }
 
 type SidebarSettings struct {
@@ -174,16 +178,18 @@ type SidebarSettings struct {
 
 type GitSettings struct {
 	FileView string `json:"fileView"`
+	Icons    string `json:"icons"`
 }
 
 func DefaultGitSettings() GitSettings {
-	return GitSettings{FileView: GitFileViewList}
+	return GitSettings{FileView: GitFileViewList, Icons: IconsNerdFont}
 }
 
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
 		ShowGitIgnored: true,
+		Icons:          IconsNerdFont,
 	}
 }
 
@@ -357,6 +363,12 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains([]string{ImageProtocolAuto, ImageProtocolKitty, ImageProtocolNone}, s.Image.Protocol) {
 		s.Image.Protocol = ImageProtocolAuto
+	}
+	if !slices.Contains(IconModes, s.Explorer.Icons) {
+		s.Explorer.Icons = IconsNerdFont
+	}
+	if !slices.Contains(IconModes, s.Git.Icons) {
+		s.Git.Icons = IconsNerdFont
 	}
 }
 

@@ -26,6 +26,8 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Sidebar.Width = 22
 	s.Sidebar.CommitHistoryHeight = 17
 	s.Git.FileView = GitFileViewTree
+	s.Explorer.Icons = IconsNone
+	s.Git.Icons = IconsNone
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Terminal.Shell = "/bin/zsh"
@@ -52,6 +54,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Git.FileView != GitFileViewTree {
 		t.Errorf("git.fileView = %q, want %q", got.Git.FileView, GitFileViewTree)
+	}
+	if got.Explorer.Icons != IconsNone || got.Git.Icons != IconsNone {
+		t.Errorf("icons = explorer %q, git %q; \"none\" did not round-trip", got.Explorer.Icons, got.Git.Icons)
 	}
 	if got.Editor.IsSyntaxHighlightEnabled() {
 		t.Error("syntaxHighlight=false did not round-trip; tri-state pointer lost")
@@ -110,6 +115,8 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	s.Editor.GutterStyle = "bogus"
 	s.Editor.BorderStyle = "bogus"
 	s.Git.FileView = "bogus"
+	s.Explorer.Icons = "bogus"
+	s.Git.Icons = "bogus"
 	normalizeSettings(&s)
 
 	if s.Editor.GutterStyle != "compact" {
@@ -120,6 +127,9 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	}
 	if s.Git.FileView != GitFileViewList {
 		t.Errorf("git.fileView = %q, want list", s.Git.FileView)
+	}
+	if s.Explorer.Icons != IconsNerdFont || s.Git.Icons != IconsNerdFont {
+		t.Errorf("explorer.icons = %q, git.icons = %q, want the nerd-font default", s.Explorer.Icons, s.Git.Icons)
 	}
 
 	for _, v := range GutterStyles {
@@ -142,5 +152,24 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 		if s.Git.FileView != v {
 			t.Errorf("normalize rejected valid Git file view %q", v)
 		}
+	}
+	for _, v := range IconModes {
+		s.Explorer.Icons = v
+		s.Git.Icons = v
+		normalizeSettings(&s)
+		if s.Explorer.Icons != v || s.Git.Icons != v {
+			t.Errorf("normalize rejected valid icon mode %q", v)
+		}
+	}
+}
+
+func TestIconsDefaultToNerdFontWhenUnset(t *testing.T) {
+	dir := withTempConfigDir(t)
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"explorer": {"showHidden": true}, "git": {"fileView": "tree"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := LoadSettings()
+	if got.Explorer.Icons != IconsNerdFont || got.Git.Icons != IconsNerdFont {
+		t.Fatalf("icons with no icons key = explorer %q, git %q, want nerd-font", got.Explorer.Icons, got.Git.Icons)
 	}
 }

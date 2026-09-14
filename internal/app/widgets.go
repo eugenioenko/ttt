@@ -269,6 +269,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	search.Debounce.DelayMs = cfg.Settings.Search.Debounce
 	changes := NewChangesPanel(ws.Paths()...)
 	changes.SetFileView(cfg.Settings.Git.FileView)
+	changes.SetIcons(cfg.Settings.Git.Icons)
 	if cfg.Settings.Sidebar.CommitHistoryHeight > 0 {
 		changes.Split.BottomH = cfg.Settings.Sidebar.CommitHistoryHeight
 		changes.Split.BottomRatio = 0

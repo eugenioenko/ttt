@@ -197,12 +197,22 @@ func (cp *ChangesPanel) SetFileView(view string) {
 	if cp.fileView == view {
 		return
 	}
+	cp.rebuildFileNodes(func() { cp.fileView = view })
+}
 
+func (cp *ChangesPanel) SetIcons(mode string) {
+	if cp.icons == mode {
+		return
+	}
+	cp.rebuildFileNodes(func() { cp.icons = mode })
+}
+
+func (cp *ChangesPanel) rebuildFileNodes(apply func()) {
 	workingSelection := cp.selectedViewTargetID(cp.Tree)
 	logSelection := cp.selectedViewTargetID(cp.CommitLog)
 	cp.saveExpanded()
 	cp.saveCommitLogState()
-	cp.fileView = view
+	apply()
 	cp.buildTree()
 	cp.rebuildCommitFileNodes()
 	revealTreeSelection(cp.Tree, workingSelection)
@@ -241,9 +251,22 @@ func (cp *ChangesPanel) fileNodes(dir string, files []git.FileStatus, staged boo
 		}
 		return nodes
 	}
-	return compactFileTreeWithFolderID(files, makeLeaf, func(path string) string {
+	return cp.decorateFolderNodes(compactFileTreeWithFolderID(files, makeLeaf, func(path string) string {
 		id := workingNodeID(folderKind, dir, path, staged)
 		cp.workNodes[id] = workNodeRef{Dir: dir, Path: path, Staged: staged, Kind: folderKind, Group: group, PR: pr}
 		return id
-	}, cp.expanded)
+	}, cp.expanded))
+}
+
+func (cp *ChangesPanel) decorateFileNode(node *widgets.TreeNode, path string) {
+	if cp.icons == config.IconsNerdFont {
+		setLabelIcon(node, gitPathBase(path))
+	}
+}
+
+func (cp *ChangesPanel) decorateFolderNodes(nodes []*widgets.TreeNode) []*widgets.TreeNode {
+	if cp.icons == config.IconsNerdFont {
+		setFolderIcons(nodes)
+	}
+	return nodes
 }

@@ -11,6 +11,7 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 - Expand/collapse with Enter or arrow keys
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
 - Sidebar actions button for **Refresh** and **New File**
+- File-type icons, which need a [Nerd Font](https://www.nerdfonts.com) in your terminal. Without one they render as boxes: set `"explorer": { "icons": "none" }`, or use **Options → Explorer Icons** or **Explorer: file icons** in the settings editor
 
 When multiple folders are open, each root is shown as a collapsible group.
 

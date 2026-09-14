@@ -61,6 +61,7 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
+| `explorer.icons` | string | `"nerd-font"` | File and folder icons in the file explorer: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one; set `"none"` in that case. Colors come from the theme's `fileIcons` section |
 
 ## Sidebar
 
@@ -73,6 +74,7 @@ All editor settings are nested under the `editor` key.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `git.fileView` | string | `"list"` | Show working-tree and expanded commit files as a compact `"tree"` or full-path `"list"` |
+| `git.icons` | string | `"nerd-font"` | File and folder icons in the Changes panel and commit history, between the status letter and the name: `"nerd-font"` or `"none"`. Needs a Nerd Font, like `explorer.icons` |
 
 ## Terminal
 
@@ -180,13 +182,15 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   },
   "explorer": {
     "showHidden": true,
-    "showGitIgnored": true
+    "showGitIgnored": true,
+    "icons": "nerd-font"
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]
   },
   "git": {
-    "fileView": "list"
+    "fileView": "list",
+    "icons": "nerd-font"
   },
   "terminal": {
     "shell": "/bin/zsh",

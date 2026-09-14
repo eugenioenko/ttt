@@ -109,6 +109,15 @@ type SyntaxStyles struct {
 	Attribute   StyleDef `json:"attribute"`
 }
 
+type FileIconStyles struct {
+	Red     StyleDef `json:"red"`
+	Yellow  StyleDef `json:"yellow"`
+	Green   StyleDef `json:"green"`
+	Cyan    StyleDef `json:"cyan"`
+	Blue    StyleDef `json:"blue"`
+	Magenta StyleDef `json:"magenta"`
+}
+
 type TerminalColors struct {
 	Foreground    string `json:"foreground,omitempty"`
 	Background    string `json:"background,omitempty"`
@@ -226,6 +235,7 @@ type ThemeConfig struct {
 	Diff         DiffStyles     `json:"diff"`
 	Scrollbar    StyleDef       `json:"scrollbar"`
 	Syntax       SyntaxStyles   `json:"syntax"`
+	FileIcons    FileIconStyles `json:"fileIcons"`
 	Borders      BorderChars    `json:"borders"`
 	Terminal     TerminalColors `json:"terminal,omitempty"`
 }
@@ -349,6 +359,12 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Hover.Bold, t.Default.Fg)
 	fillFg(&t.Hover.Italic, t.Default.Fg)
 	fillFg(&t.Hover.Code, t.Syntax.String.Fg)
+	fillFg(&t.FileIcons.Red, t.Terminal.Red)
+	fillFg(&t.FileIcons.Yellow, t.Terminal.Yellow)
+	fillFg(&t.FileIcons.Green, t.Terminal.Green)
+	fillFg(&t.FileIcons.Cyan, t.Terminal.Cyan)
+	fillFg(&t.FileIcons.Blue, t.Terminal.Blue)
+	fillFg(&t.FileIcons.Magenta, t.Terminal.Magenta)
 }
 
 func fillFg(s *StyleDef, color string) {

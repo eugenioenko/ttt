@@ -66,6 +66,12 @@ const (
 	StyleButton
 	StyleButtonFocused
 	StyleSelectedTab
+	StyleFileIconRed
+	StyleFileIconYellow
+	StyleFileIconGreen
+	StyleFileIconCyan
+	StyleFileIconBlue
+	StyleFileIconMagenta
 	styleCount
 )
 
