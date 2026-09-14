@@ -36,6 +36,8 @@ Use **View > Switch Theme** from the menu bar, or search for **Switch Theme** in
 
 Set `"theme": "auto"` in `settings.json` (or pick **Auto** in **Settings > Appearance**) and TTT follows your terminal's light/dark appearance: it queries the terminal at startup (Kitty, Ghostty, WezTerm and others answer), then keeps following via focus events and a periodic check. Picking any theme manually turns auto mode back off.
 
+Live following (focus events plus the periodic check) is currently macOS-only, where the system appearance is the signal tracking terminals follow. On other platforms auto resolves at startup and whenever Settings are applied.
+
 ```json
 {
   "theme": "auto",
