@@ -38,6 +38,7 @@ type EditorPaneWidget struct {
 	AutoDedent              bool
 	AutoIndent              bool
 	BracketPairColorization bool
+	IndentGuides            bool
 	BracketColorStyles      []term.Style
 	Highlighter             *highlight.Highlighter
 	SearchQuery             string

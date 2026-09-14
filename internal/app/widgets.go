@@ -220,6 +220,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.UndoDeleteCursorStart = cfg.Settings.Editor.UndoDeleteCursorStart
 	editorGroup.BracketPairColorization = cfg.Settings.Editor.BracketPairColorization
 	editorGroup.Editor.BracketPairColorization = cfg.Settings.Editor.BracketPairColorization
+	editorGroup.Editor.IndentGuides = cfg.Settings.Editor.IndentGuides
 	editorGroup.SetImageProtocol(cfg.Settings.Image.Protocol)
 	editorGroup.BracketColorStyles = bracketStyles
 	editorGroup.Editor.BracketColorStyles = bracketStyles

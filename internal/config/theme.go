@@ -76,6 +76,7 @@ type EditorStyles struct {
 	SearchMatch   StyleDef         `json:"searchMatch"`
 	SearchActive  StyleDef         `json:"searchActive"`
 	BracketMatch  StyleDef         `json:"bracketMatch"`
+	IndentGuide   StyleDef         `json:"indentGuide,omitempty"`
 	BracketColors []string         `json:"bracketColors,omitempty"`
 	Diagnostics   DiagnosticStyles `json:"diagnostics"`
 }
@@ -349,6 +350,9 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Hover.Bold, t.Default.Fg)
 	fillFg(&t.Hover.Italic, t.Default.Fg)
 	fillFg(&t.Hover.Code, t.Syntax.String.Fg)
+	if t.Editor.IndentGuide == (StyleDef{}) {
+		t.Editor.IndentGuide = t.Editor.LineNumber
+	}
 }
 
 func fillFg(s *StyleDef, color string) {

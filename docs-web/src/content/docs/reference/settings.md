@@ -56,6 +56,7 @@ All editor settings are nested under the `editor` key.
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
+| `editor.indentGuides` | bool | `false` | Show vertical indent guide lines in the editor |
 
 ## Explorer
 
@@ -175,7 +176,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "menuBar": true,
     "gutterStyle": "compact",
     "borderStyle": "default",
-    "bracketPairColorization": false
+    "bracketPairColorization": false,
+    "indentGuides": false
   },
   "search": {
     "debounce": 350

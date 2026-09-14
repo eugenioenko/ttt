@@ -68,6 +68,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.EditorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
 		a.EditorGroup.Editor.WordWrap = s.Editor.WordWrap
 		a.EditorGroup.Editor.BracketPairColorization = s.Editor.BracketPairColorization
+		a.EditorGroup.Editor.IndentGuides = s.Editor.IndentGuides
 		if s.Editor.BracketPairColorization != prev.Editor.BracketPairColorization {
 			a.EditorGroup.Editor.InvalidateBracketColors()
 		}

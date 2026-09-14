@@ -82,6 +82,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 
 	hasSearch := len(e.SearchMatches) > 0
 
+	var guideWidths []int
+	if e.IndentGuides {
+		guideWidths = indentGuideWidths(e.Buf.Lines, tabW)
+	}
+
 	matchLine, matchCol, hasMatch := e.findMatchingBracket()
 
 	if e.Viewport.TopLine < 0 {
@@ -209,6 +214,15 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				colIdx := screenCells[x].bufCol
 				ch := screenCells[x].ch
 				style := screenCells[x].style
+
+				// Guides use absolute visual columns, so wrap continuations
+				// stay aligned with the first segment.
+				if guideWidths != nil && ch == ' ' {
+					if visCol := leftCol + x; visCol < guideWidths[lineIdx] && visCol%tabW == 0 {
+						ch = '│'
+						style = term.StyleIndentGuide
+					}
+				}
 
 				for _, bc := range lineBrackets {
 					if bc.col == colIdx {

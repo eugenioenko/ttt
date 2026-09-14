@@ -142,6 +142,11 @@ func (a *App) ToggleBracketPairColorization() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleIndentGuides() {
+	a.Settings.Editor.IndentGuides = !a.Settings.Editor.IndentGuides
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleTransparentBackground() {
 	a.Settings.Editor.TransparentBackground = !a.Settings.Editor.TransparentBackground
 	a.SaveAndApplySettings()
@@ -299,6 +304,11 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		bracketColorChecked = ui.MenuChecked
 	}
 
+	indentGuidesChecked := ui.MenuUnchecked
+	if a.Settings.Editor.IndentGuides {
+		indentGuidesChecked = ui.MenuChecked
+	}
+
 	autoIndentChecked := ui.MenuUnchecked
 	if a.Settings.Editor.IsAutoIndentEnabled() {
 		autoIndentChecked = ui.MenuChecked
@@ -341,6 +351,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
 		{Label: "Bracket Colors", Command: "options.toggleBracketColors", Checked: bracketColorChecked},
+		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
@@ -505,6 +516,12 @@ func registerOptionsCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "options.toggleBracketColors", Title: "Toggle Bracket Pair Colorization",
 		Handler: app.ToggleBracketPairColorization,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleIndentGuides", Title: "Toggle Indent Guides",
+		Keywords: []string{"preferences", "settings", "editor", "indent", "guides"},
+		Handler:  app.ToggleIndentGuides,
 	})
 
 	reg.Register(command.Command{

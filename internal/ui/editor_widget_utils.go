@@ -53,8 +53,21 @@ func leadingWhitespace(s string) string {
 	return s
 }
 
-// bufColToVisualCol converts a rune index into the terminal column it starts
-// at, accounting for tab stops and for fullwidth runes that occupy two columns.
+// indentGuideWidths returns the leading-whitespace visual width per line for
+// indent guides. Blank lines inherit the previous non-blank line so blocks
+// stay visually connected across gaps.
+func indentGuideWidths(lines []string, tabW int) []int {
+	widths := make([]int, len(lines))
+	prev := 0
+	for i, ln := range lines {
+		if lead := leadingWhitespace(ln); len(lead) < len(ln) {
+			prev = bufColToVisualCol(ln, len([]rune(lead)), tabW)
+		}
+		widths[i] = prev
+	}
+	return widths
+}
+
 func bufColToVisualCol(line string, bufCol, tabW int) int {
 	visCol := 0
 	ri := 0

@@ -107,6 +107,7 @@ type EditorSettings struct {
 	GutterStyle             string `json:"gutterStyle,omitempty"`
 	BorderStyle             string `json:"borderStyle,omitempty"`
 	BracketPairColorization bool   `json:"bracketPairColorization"`
+	IndentGuides            bool   `json:"indentGuides"`
 	ShowTrailingNewline     *bool  `json:"showTrailingNewline,omitempty"`
 	MenuBar                 *bool  `json:"menuBar,omitempty"`
 	UndoDeleteCursorStart   bool   `json:"undoDeleteCursorStart,omitempty"`
@@ -148,6 +149,7 @@ func DefaultEditorSettings() EditorSettings {
 		GutterStyle:             "compact",
 		BorderStyle:             "default",
 		BracketPairColorization: false,
+		IndentGuides:            false,
 	}
 }
 
