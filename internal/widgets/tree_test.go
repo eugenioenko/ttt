@@ -318,7 +318,6 @@ func TestTreeRenderExpandedIconFollowsExpansion(t *testing.T) {
 	folder := &TreeNode{ID: "dir", Label: "dir", Icon: "c", ExpandedIcon: "o", Expandable: true}
 	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{folder}})
 
-	// Chevron at x=0, space at x=1, icon at x=2.
 	s := renderWidget(tree, 0, 0, 20, 5)
 	if s.cells[0][2].Ch != 'c' {
 		t.Fatalf("collapsed node should draw Icon, got %c", s.cells[0][2].Ch)

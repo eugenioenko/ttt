@@ -63,6 +63,10 @@ func TestChangesIconsNoneLeavesRowsUndecorated(t *testing.T) {
 			t.Errorf("icons none left %q decorated: %+v", node, got)
 		}
 	}
+	folder := nodeWithID(cp.Tree.Config.Items, workingNodeID(workNodeFolder, "/repo", "cmd", false))
+	if folder == nil || folder.Icon != "" {
+		t.Errorf("icons none left the closed folder icon: %+v", folder)
+	}
 }
 
 func TestChangesIconSwitchPreservesSelection(t *testing.T) {

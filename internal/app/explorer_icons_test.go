@@ -24,6 +24,24 @@ func explorerIconFixture(t *testing.T) string {
 	return rootPath
 }
 
+func TestExplorerIconsMuteGitIgnoredFiles(t *testing.T) {
+	rootPath := explorerIconFixture(t)
+	if err := os.WriteFile(filepath.Join(rootPath, ".gitignore"), []byte("*.log\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rootPath, "debug.log"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runTreeGit(t, rootPath, "init", "-q")
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), rootPath)
+	if log := nodeWithLabel(explorer.Tree.Config.Items, "debug.log"); log == nil || log.Icon == "" || log.IconStyle != term.StyleMuted {
+		t.Errorf("git-ignored debug.log icon = %+v, want a muted icon", log)
+	}
+	if mainGo := nodeWithLabel(explorer.Tree.Config.Items, "main.go"); mainGo == nil || mainGo.IconStyle == term.StyleMuted {
+		t.Errorf("tracked main.go icon was muted: %+v", mainGo)
+	}
+}
+
 func TestExplorerIconsNoneOmitsIcons(t *testing.T) {
 	settings := config.DefaultExplorerSettings()
 	settings.Icons = config.IconsNone
@@ -57,7 +75,6 @@ func TestExplorerIconsDefaultToNerdFontForFilesAndFolders(t *testing.T) {
 		t.Errorf("main.go icon = %q style %v, want %q style %v", mainGo.Icon, mainGo.IconStyle, want.Glyph, fileIconStyle(want.Color))
 	}
 
-	// Hidden and git-ignored rows are muted; their icons dim with the label.
 	if env := nodeWithLabel(items, ".env"); env.Icon == "" || env.IconStyle != term.StyleMuted {
 		t.Errorf(".env icon = %q style %v, want a muted icon", env.Icon, env.IconStyle)
 	}

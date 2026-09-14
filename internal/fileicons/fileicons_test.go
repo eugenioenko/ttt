@@ -3,7 +3,6 @@ package fileicons
 import "testing"
 
 func TestForFileMatchesExactFileNameBeforeExtension(t *testing.T) {
-	// go.mod has its own entry; a plain .mod file does not share it.
 	if got, want := ForFile("go.mod"), byFilename["go.mod"]; got != want {
 		t.Fatalf("go.mod = %+v, want filename entry %+v", got, want)
 	}

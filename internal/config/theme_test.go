@@ -432,11 +432,21 @@ func TestResolveColorsDefaultsFileIconsToTerminalPalette(t *testing.T) {
 }
 
 func TestBundledThemesResolveEveryFileIconColor(t *testing.T) {
-	for _, name := range ListThemes() {
-		th, err := LoadTheme(name)
+	entries, err := themes.FS.ReadDir(".")
+	if err != nil {
+		t.Fatalf("failed to read embedded themes: %v", err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		data, err := themes.FS.ReadFile(name)
 		if err != nil {
-			t.Fatalf("load %s: %v", name, err)
+			t.Fatalf("failed to read %s: %v", name, err)
 		}
+		th := DefaultTheme()
+		if err := json.Unmarshal(data, &th); err != nil {
+			t.Fatalf("failed to parse %s: %v", name, err)
+		}
+		th.ResolveColors()
 		for hue, style := range map[string]StyleDef{
 			"red": th.FileIcons.Red, "yellow": th.FileIcons.Yellow, "green": th.FileIcons.Green,
 			"cyan": th.FileIcons.Cyan, "blue": th.FileIcons.Blue, "magenta": th.FileIcons.Magenta,
