@@ -358,11 +358,12 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
-		// Last, not with the display toggles above: the menu viewport fits
-		// the rows above as-is, so appending here keeps existing navigation
-		// counts and snapshots stable.
-		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 		ui.MenuSep(),
+		// With the gutter/border/indentation group, not the checkbox toggles
+		// above: the presentation section must stay sep-enclosed, and the
+		// menu viewport above must keep its rows, so appending earlier shifts
+		// existing navigation counts and snapshots.
+		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 		{Label: "Gutter Style", Command: "options.gutterStyle"},
 		{Label: "Border Style", Command: "options.borderStyle"},
 		{Label: "Indentation", Command: "options.indentation"},
