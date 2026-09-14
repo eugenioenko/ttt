@@ -28,6 +28,7 @@ func RunEventLoop(
 ) {
 	app.eventLoopDoneSignal()
 	defer app.closeEventLoopDone()
+	defer app.DisarmAutoThemePoll()
 	defer app.Root.CancelPointerCapture()
 	defer app.ShutdownGitReads()
 	if app.Watcher != nil {
@@ -272,10 +273,40 @@ func RunEventLoop(
 			app.RefreshImageCellSize()
 			redraw()
 
+		case *tcell.EventFocus:
+			// The tty cannot be queried while tcell owns it (replies are
+			// swallowed), so this re-check is env/OS only. It still tracks
+			// terminals that follow the OS appearance, e.g. Ghostty auto.
+			// DetectLive (not FromEnv): COLORFGBG is frozen at spawn time.
+			// Guarded by mode first so manual-theme sessions never spawn
+			// the OS query. Resolution runs off-loop (`defaults` can take
+			// ~300ms); the result returns as autoThemeAppearance.
+			if tev.Focused && app.IsAutoTheme() && autoThemeLiveSupported() {
+				slog.Debug("auto theme focus", "focused", true)
+				app.requestAutoThemeCheck()
+			}
+
 		case *tcell.EventInterrupt:
 			var execRequest *execRequestLifecycle
 			var execErr error
 			switch v := tev.Data().(type) {
+			case *autoThemeTick:
+				// Backstop poll for hosts that swallow focus reports. The
+				// timer chain continues via arm; resolution runs off-loop
+				// and the result returns as autoThemeAppearance, so an
+				// unchanged reading costs no redraw (that case continues).
+				if v.Gen == app.autoThemeGen {
+					app.armAutoThemePoll()
+					app.requestAutoThemeCheck()
+				}
+				continue
+			case *autoThemeAppearance:
+				app.autoThemeCheckInflight = false
+				if app.ApplyAppearance(v.Ap) {
+					syncStatus()
+					break
+				}
+				continue
 			case string:
 				if v != "" {
 					closeTerminal(v)

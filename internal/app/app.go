@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/appearance"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
@@ -111,10 +112,15 @@ type App struct {
 	pendingCurrentChangesOpen bool
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
-	appliedSettings    config.Settings
-	eventLoopDoneOnce  sync.Once
-	eventLoopCloseOnce sync.Once
-	eventLoopDone      chan struct{}
+	appliedSettings        config.Settings
+	autoAppearance         appearance.Appearance
+	lastAutoTheme          string
+	autoThemeCheckInflight bool
+	autoThemeGen           uint64
+	autoThemeTimer         *time.Timer
+	eventLoopDoneOnce      sync.Once
+	eventLoopCloseOnce     sync.Once
+	eventLoopDone          chan struct{}
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {

@@ -1,6 +1,7 @@
 // Repro test for confirmed bug from audit/2026-07-12-ux-bug-audit.md (branch audit/bug-hunt).
-// Asserts the CORRECT behavior with `it.fails` — passes while the bug
-// exists, goes red when fixed. Remove `.fails` + audit entry when fixing.
+// BUG-041 was fixed by restoring *a.Borders in the theme picker OnDismiss
+// (auto-theme change); the `.fails` marker was removed accordingly.
+// Asserts the CORRECT behavior — goes red if the bug regresses.
 import { describe, it, expect, afterEach } from "vitest";
 import * as tui from "./tui.js";
 import { createTempDir, createTempFile, cleanupDir } from "./helpers.js";
@@ -13,7 +14,7 @@ afterEach(() => {
 });
 
 describe("BUG-041: theme picker cancel leaves border charset stuck on the preview", () => {
-  it.fails("Escape reverts border glyphs to the pre-picker theme", () => {
+  it("Escape reverts border glyphs to the pre-picker theme", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "th.txt", "sample content\nline two\n");
 

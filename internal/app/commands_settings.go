@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/appearance"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -100,12 +101,66 @@ func (a *App) ApplySettings(s config.Settings) {
 
 	// An empty theme name means the built-in default, and must still be applied —
 	// otherwise switching back to it leaves the previous theme's colors on screen.
+	// Poll and focus-subscription follow mode transitions only: re-arming on
+	// every apply would reset the 5s backstop under frequent toggles.
+	enteringAuto := s.Theme == "auto" && prev.Theme != "auto"
+	leavingAuto := s.Theme != "auto" && prev.Theme == "auto"
+	if enteringAuto {
+		a.StartAutoThemePoll()
+	} else if leavingAuto {
+		a.DisarmAutoThemePoll()
+	}
+	// Theme resolution runs only when a theme-relevant key changed: ApplySettings
+	// fires on every option toggle, and each would otherwise spawn a ~300ms
+	// `defaults` subprocess while in auto mode. (Switching back to "" is
+	// covered by the Theme comparison, preserving the must-still-apply rule.)
+	themeRelevant := s.Theme != prev.Theme ||
+		s.ThemeLight != prev.ThemeLight || s.ThemeDark != prev.ThemeDark ||
+		s.Editor.TransparentBackground != prev.Editor.TransparentBackground
 	var themeBorders *term.BorderSet
-	if a.Screen != nil {
+	if a.Screen != nil && themeRelevant {
+		// Focus reporting is a terminal mode, not a setting: entering auto at
+		// runtime must subscribe, leaving it must unsubscribe.
+		if enteringAuto {
+			a.Screen.EnableFocusReporting()
+		} else if leavingAuto {
+			a.Screen.DisableFocusReporting()
+		}
 		theme, ok := config.DefaultTheme(), s.Theme == ""
 		if !ok {
-			loaded, err := config.LoadTheme(s.Theme)
-			theme, ok = loaded, err == nil
+			if s.Theme == "auto" {
+				// Side names changed: drop the loaded-theme history so the
+				// Unknown branch below cannot re-apply the stale choice.
+				if s.ThemeLight != prev.ThemeLight || s.ThemeDark != prev.ThemeDark {
+					a.lastAutoTheme = ""
+				}
+				// No tty query can run while tcell owns it, so live-apply
+				// resolves from the live signal (DetectLive, not the
+				// spawn-frozen COLORFGBG).
+				if ap := appearance.DetectLive(); ap != appearance.Unknown {
+					var name string
+					theme, name, ok = a.resolveAutoTheme(ap)
+					if ok {
+						a.autoAppearance = ap
+						a.lastAutoTheme = name
+					}
+				} else if a.lastAutoTheme != "" {
+					// Detection failed but a previous auto theme is known:
+					// re-apply it so unrelated toggles (e.g. transparent
+					// background) still take effect instead of stalling.
+					loaded, err := config.LoadTheme(a.lastAutoTheme)
+					theme, ok = loaded, err == nil
+				} else {
+					// No signal and no history (first apply in an
+					// undetectable environment): fall back to the built-in
+					// default so the explicit apply still takes effect,
+					// matching the Unknown-keeps-default startup rule.
+					theme, ok = config.DefaultTheme(), true
+				}
+			} else {
+				loaded, err := config.LoadTheme(s.Theme)
+				theme, ok = loaded, err == nil
+			}
 		}
 		if ok {
 			a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(s.Editor.TransparentBackground)))
