@@ -48,8 +48,12 @@ func (a *App) requestAutoThemeCheck() {
 func (a *App) applyThemeConfig(theme config.ThemeConfig) {
 	a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground)))
 	*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground))
-	*a.Borders = BuildBorderSet(theme.Borders)
-	a.ApplyBorderStyle()
+	// Pass the just-built borders through: with a nil argument the default
+	// border style would reload them from Settings.Theme, which still names
+	// the previous theme during picker previews.
+	borders := BuildBorderSet(theme.Borders)
+	*a.Borders = borders
+	a.applyBorderStyle(&borders)
 	a.Renderer.Clear()
 	a.invalidateImageLayer()
 }
@@ -70,15 +74,22 @@ func (a *App) SetAutoTheme(ap appearance.Appearance) {
 }
 
 // resolveAutoTheme maps an appearance to a loaded theme honoring the
-// configured light/dark names.
+// configured light/dark names. A missing or broken side theme falls back to
+// the built-in for that appearance instead of keeping a mismatched theme.
 func (a *App) resolveAutoTheme(ap appearance.Appearance) (config.ThemeConfig, string, bool) {
 	name := appearance.ResolveThemeName(ap, a.Settings.ThemeLight, a.Settings.ThemeDark)
-	theme, err := config.LoadTheme(name)
-	if err != nil {
+	if theme, err := config.LoadTheme(name); err == nil {
+		return theme, name, true
+	} else {
 		slog.Debug("auto theme resolve", "appearance", ap.String(), "theme", name, "error", err)
-		return config.ThemeConfig{}, "", false
 	}
-	return theme, name, true
+	if fallback := appearance.ResolveThemeName(ap, "", ""); fallback != name {
+		if theme, err := config.LoadTheme(fallback); err == nil {
+			slog.Warn("auto theme: cannot load configured theme, using built-in fallback", "theme", name, "fallback", fallback)
+			return theme, fallback, true
+		}
+	}
+	return config.ThemeConfig{}, "", false
 }
 
 // StartAutoThemePoll begins the backstop poll; call once when auto mode is
