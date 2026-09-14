@@ -16,6 +16,7 @@
     "gutterStyle": "compact",
     "borderStyle": "default",
     "bracketPairColorization": false,
+    "indentGuides": false,
     "transparentBackground": false
   },
   "search": {

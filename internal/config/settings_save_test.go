@@ -61,6 +61,29 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 }
 
+func TestAutoThemeSettingsRoundTrip(t *testing.T) {
+	withTempConfigDir(t)
+
+	s := DefaultSettings()
+	s.Theme = "auto"
+	s.ThemeLight = "default-light"
+	s.ThemeDark = "solarized-dark"
+
+	if err := SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	got := LoadSettings()
+	if got.Theme != "auto" {
+		t.Errorf("theme = %q, want auto", got.Theme)
+	}
+	if got.ThemeLight != "default-light" {
+		t.Errorf("themeLight = %q, want default-light", got.ThemeLight)
+	}
+	if got.ThemeDark != "solarized-dark" {
+		t.Errorf("themeDark = %q, want solarized-dark", got.ThemeDark)
+	}
+}
+
 func TestSaveSettingsWritesValidJSON(t *testing.T) {
 	dir := withTempConfigDir(t)
 

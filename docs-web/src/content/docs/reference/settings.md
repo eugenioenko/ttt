@@ -23,7 +23,9 @@ Both write the same file, so you can move between them freely.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `version` | int | `1` | Settings file format version |
-| `theme` | string | `""` | Theme name (e.g. `"default-dark"`) |
+| `theme` | string | `""` | Theme name (e.g. `"default-dark"`), or `"auto"` to follow the terminal's light/dark appearance |
+| `themeLight` | string | `""` | Theme used for light appearance when `theme` is `"auto"` (`""` = automatic) |
+| `themeDark` | string | `""` | Theme used for dark appearance when `theme` is `"auto"` (`""` = automatic) |
 | `debugMode` | bool | `false` | Enable debug logging |
 
 ## Editor
@@ -54,6 +56,7 @@ All editor settings are nested under the `editor` key.
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
+| `editor.indentGuides` | bool | `false` | Show vertical indent guide lines in the editor |
 
 ## Explorer
 
@@ -173,7 +176,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "menuBar": true,
     "gutterStyle": "compact",
     "borderStyle": "default",
-    "bracketPairColorization": false
+    "bracketPairColorization": false,
+    "indentGuides": false
   },
   "search": {
     "debounce": 350

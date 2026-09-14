@@ -107,6 +107,7 @@ type EditorSettings struct {
 	GutterStyle             string `json:"gutterStyle,omitempty"`
 	BorderStyle             string `json:"borderStyle,omitempty"`
 	BracketPairColorization bool   `json:"bracketPairColorization"`
+	IndentGuides            bool   `json:"indentGuides"`
 	ShowTrailingNewline     *bool  `json:"showTrailingNewline,omitempty"`
 	MenuBar                 *bool  `json:"menuBar,omitempty"`
 	UndoDeleteCursorStart   bool   `json:"undoDeleteCursorStart,omitempty"`
@@ -148,6 +149,7 @@ func DefaultEditorSettings() EditorSettings {
 		GutterStyle:             "compact",
 		BorderStyle:             "default",
 		BracketPairColorization: false,
+		IndentGuides:            false,
 	}
 }
 
@@ -222,9 +224,12 @@ func DefaultImageSettings() ImageSettings {
 }
 
 type Settings struct {
-	Version   int    `json:"version"`
-	Theme     string `json:"theme,omitempty"`
-	DebugMode bool   `json:"debugMode,omitempty"`
+	Version int    `json:"version"`
+	Theme   string `json:"theme,omitempty"`
+	// ThemeLight and ThemeDark select the themes used when Theme is "auto".
+	ThemeLight string `json:"themeLight,omitempty"`
+	ThemeDark  string `json:"themeDark,omitempty"`
+	DebugMode  bool   `json:"debugMode,omitempty"`
 	// These sections must NOT use omitzero: their defaults are non-zero, so an
 	// all-false/all-zero section would be omitted on save and silently revert to
 	// the defaults on the next load.
@@ -252,7 +257,7 @@ type Settings struct {
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
-	"version": true, "theme": true, "debugMode": true, "editor": true,
+	"version": true, "theme": true, "themeLight": true, "themeDark": true, "debugMode": true, "editor": true,
 	"search": true, "explorer": true, "sidebar": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true,
 }

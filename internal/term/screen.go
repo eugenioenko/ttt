@@ -66,6 +66,7 @@ const (
 	StyleButton
 	StyleButtonFocused
 	StyleSelectedTab
+	StyleIndentGuide
 	styleCount
 )
 

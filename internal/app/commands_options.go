@@ -142,6 +142,11 @@ func (a *App) ToggleBracketPairColorization() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleIndentGuides() {
+	a.Settings.Editor.IndentGuides = !a.Settings.Editor.IndentGuides
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleTransparentBackground() {
 	a.Settings.Editor.TransparentBackground = !a.Settings.Editor.TransparentBackground
 	a.SaveAndApplySettings()
@@ -237,7 +242,7 @@ func (a *App) applyBorderStyle(themeBorders *term.BorderSet) {
 		// from an explicit style back to "default" actually take effect.
 		if themeBorders != nil {
 			*a.Borders = *themeBorders
-		} else if a.Settings.Theme != "" {
+		} else if a.Settings.Theme != "" && a.Settings.Theme != "auto" {
 			if theme, err := config.LoadTheme(a.Settings.Theme); err == nil {
 				*a.Borders = BuildBorderSet(theme.Borders)
 			}
@@ -299,6 +304,11 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		bracketColorChecked = ui.MenuChecked
 	}
 
+	indentGuidesChecked := ui.MenuUnchecked
+	if a.Settings.Editor.IndentGuides {
+		indentGuidesChecked = ui.MenuChecked
+	}
+
 	autoIndentChecked := ui.MenuUnchecked
 	if a.Settings.Editor.IsAutoIndentEnabled() {
 		autoIndentChecked = ui.MenuChecked
@@ -349,6 +359,11 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
 		ui.MenuSep(),
+		// With the gutter/border/indentation group, not the checkbox toggles
+		// above: the presentation section must stay sep-enclosed, and the
+		// menu viewport above must keep its rows, so appending earlier shifts
+		// existing navigation counts and snapshots.
+		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 		{Label: "Gutter Style", Command: "options.gutterStyle"},
 		{Label: "Border Style", Command: "options.borderStyle"},
 		{Label: "Indentation", Command: "options.indentation"},
@@ -505,6 +520,12 @@ func registerOptionsCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "options.toggleBracketColors", Title: "Toggle Bracket Pair Colorization",
 		Handler: app.ToggleBracketPairColorization,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleIndentGuides", Title: "Toggle Indent Guides",
+		Keywords: []string{"preferences", "settings", "editor", "indent", "guides"},
+		Handler:  app.ToggleIndentGuides,
 	})
 
 	reg.Register(command.Command{
