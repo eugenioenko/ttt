@@ -227,11 +227,19 @@ Docs: https://tttedit.dev
 	if useAutoTheme {
 		autoAppearance, autoSource = appearance.DetectStartup(true)
 		// Total detection failure keeps the built-in default theme rather
-		// than forcing a guess.
+		// than forcing a guess. A missing or broken side theme falls back
+		// to the built-in for the detected appearance.
 		if autoAppearance != appearance.Unknown {
 			name := appearance.ResolveThemeName(autoAppearance, cfg.Settings.ThemeLight, cfg.Settings.ThemeDark)
 			if theme, err := config.LoadTheme(name); err == nil {
 				cfg.Theme = theme
+			} else if fallback := appearance.ResolveThemeName(autoAppearance, "", ""); fallback != name {
+				if theme, err := config.LoadTheme(fallback); err == nil {
+					cfg.Theme = theme
+					slog.Warn("auto theme: cannot load configured theme, using built-in fallback", "theme", name, "fallback", fallback)
+				} else {
+					slog.Warn("auto theme: cannot load resolved theme, keeping default", "theme", name)
+				}
 			} else {
 				slog.Warn("auto theme: cannot load resolved theme, keeping default", "theme", name)
 			}

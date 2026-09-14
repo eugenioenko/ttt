@@ -49,6 +49,21 @@ func TestAutoThemeApplyAppearanceFlipsStyleMap(t *testing.T) {
 	}
 }
 
+func TestAutoThemeInvalidSideThemeFallsBackToBuiltin(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	h.app.Settings.Theme = "auto"
+	h.app.Settings.ThemeLight = "no-such-theme"
+	h.app.Settings.ThemeDark = "default-dark"
+	h.app.SetAutoTheme(appearance.Dark)
+
+	if !h.app.ApplyAppearance(appearance.Light) {
+		t.Fatal("ApplyAppearance(light) should fall back instead of stalling")
+	}
+	if want := app.BuildStyleMap(mustLoadTheme(t, "default-light")); !reflect.DeepEqual(h.app.Screen.GetStyleMap(), want) {
+		t.Error("broken light side theme did not fall back to default-light")
+	}
+}
+
 func TestAutoThemeSettingsViewAppliesLive(t *testing.T) {
 	h := newTestHarness(t, 120, 40)
 	h.exec("settings.openUI")
