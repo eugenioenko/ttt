@@ -85,9 +85,10 @@ func TestPinMultipleTabs(t *testing.T) {
 	// Pin gamma (last/active tab) — moves to front
 	h.exec("tab.pin")
 
-	// After pin: [gamma(pinned), untitled, alpha, beta]
-	// Switch to beta (index 3) and pin it
-	h.app.EditorGroup.SwitchTab(3)
+	// After pin: [gamma(pinned), alpha, beta] (the initial pristine tab is
+	// consumed by the first file open, not kept alongside)
+	// Switch to beta (index 2) and pin it
+	h.app.EditorGroup.SwitchTab(2)
 	h.redraw()
 	h.exec("tab.pin")
 
