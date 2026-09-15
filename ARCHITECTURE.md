@@ -163,10 +163,16 @@ prevents, or measured migration value justifies it.
 ### Highlight ownership
 
 `internal/highlight` owns Chroma language selection and tokenization,
-multi-line state detection, line caches, and projection from Chroma token types
+multi-line region state, line caches, and projection from Chroma token types
 to `term.Style`. These responsibilities form one presentation concern and stay
 together behind the existing `Highlighter` and `Span` API. `internal/core`
 must not import highlighting or other presentation packages.
+
+Tokenization is per line, so a construct that spans lines is tracked by
+`internal/highlight` rather than by the lexer: delimiter pairs are discovered
+by probing the lexer once, and a line that starts inside one is colored from
+the region's style to its closing delimiter. Chroma exposes no way to resume a
+lexer's state stack on the next line, which is what this replaces.
 
 ### Generic widgets and product surfaces
 

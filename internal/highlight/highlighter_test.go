@@ -229,8 +229,8 @@ func TestHTMLBlockComment(t *testing.T) {
 
 func TestNoBlockCommentLanguageUnaffected(t *testing.T) {
 	h := New("script.py")
-	if h.blockOpen != "" {
-		t.Errorf("python should have no block comment delimiters, got %q", h.blockOpen)
+	if got := commentRegion(h); got != nil {
+		t.Errorf("python should have no block comment region, got %q", got.open)
 	}
 	lines := []string{"x = 1", "y = 2"}
 	if styleAt(h.HighlightLineAt(lines, 1), 0) == term.StyleSyntaxComment {
@@ -254,10 +254,25 @@ func TestDetectBlockCommentDelimiters(t *testing.T) {
 		if h == nil {
 			t.Fatalf("no highlighter for %s", c.file)
 		}
-		if h.blockOpen != c.open || h.blockClose != c.close {
-			t.Errorf("%s: got %q/%q want %q/%q", c.file, h.blockOpen, h.blockClose, c.open, c.close)
+		var open, close string
+		if r := commentRegion(h); r != nil {
+			open, close = r.open, r.close
+		}
+		if open != c.open || close != c.close {
+			t.Errorf("%s: got %q/%q want %q/%q", c.file, open, close, c.open, c.close)
 		}
 	}
+}
+
+// commentRegion returns the language's block comment region, nil when it has
+// none. String regions are ignored: Go and JS have both.
+func commentRegion(h *Highlighter) *region {
+	for i := range h.regions {
+		if h.regions[i].style == term.StyleSyntaxComment {
+			return &h.regions[i]
+		}
+	}
+	return nil
 }
 
 func TestStateSurvivesClearCache(t *testing.T) {
@@ -499,17 +514,19 @@ func (tokeniseErrorLexer) Tokenise(*chroma.TokeniseOptions, string) (chroma.Iter
 	return nil, errors.New("tokenise failed")
 }
 
-func TestLexerErrorsProduceNoSpansOrBlockState(t *testing.T) {
+func TestLexerErrorsProduceNoSpansOrRegionState(t *testing.T) {
 	lx := tokeniseErrorLexer{}
-	h := &Highlighter{lexer: lx, blockOpen: "/*", blockClose: "*/"}
+	h := &Highlighter{lexer: lx, regions: []region{{
+		open: "/*", close: "*/", style: term.StyleSyntaxComment, tokenType: chroma.CommentMultiline,
+	}}}
 	if spans := h.lexLine("func main() {}"); spans != nil {
 		t.Fatalf("lexLine error spans = %#v, want nil", spans)
 	}
-	if got := h.computeOpensAt("/* open"); got != -1 {
-		t.Fatalf("computeOpensAt error = %d, want -1", got)
+	if got := h.computeOpensAt("/* open"); got != noOpen {
+		t.Fatalf("computeOpensAt error = %+v, want %+v", got, noOpen)
 	}
-	if open, close := detectBlockComment(lx); open != "" || close != "" {
-		t.Fatalf("detectBlockComment error = %q/%q, want no delimiters", open, close)
+	if got := detectRegions(lx); got != nil {
+		t.Fatalf("detectRegions error = %+v, want no regions", got)
 	}
 }
 
