@@ -18,7 +18,7 @@ describe("editor tab order", () => {
 
     tui.start(alpha, beta, gamma);
     const before = tui.snapshot();
-    tui.drag(38, 2, 2, 2);
+    tui.drag(29, 2, 2, 2);
     const dragged = tui.snapshot();
     tui.exec("View: Move Tab Right");
     const moved = tui.snapshot();
@@ -27,8 +27,11 @@ describe("editor tab order", () => {
     const beforeHeader = snapshots[before].split("\n")[2];
     const draggedHeader = snapshots[dragged].split("\n")[2];
     const movedHeader = snapshots[moved].split("\n")[2];
-    expect(beforeHeader.indexOf("gamma.txt")).toBeGreaterThan(beforeHeader.indexOf("untitled"));
-    expect(draggedHeader.indexOf("gamma.txt")).toBeLessThan(draggedHeader.indexOf("untitled"));
-    expect(movedHeader.indexOf("gamma.txt")).toBeGreaterThan(movedHeader.indexOf("untitled"));
+    // Opened files consume the pristine tab, so the strip holds only the
+    // three files (no untitled anchor to drag against anymore).
+    expect(beforeHeader).not.toContain("untitled");
+    expect(beforeHeader.indexOf("alpha.txt")).toBeLessThan(beforeHeader.indexOf("gamma.txt"));
+    expect(draggedHeader.indexOf("gamma.txt")).toBeLessThan(draggedHeader.indexOf("alpha.txt"));
+    expect(movedHeader.indexOf("gamma.txt")).toBeGreaterThan(movedHeader.indexOf("alpha.txt"));
   });
 });

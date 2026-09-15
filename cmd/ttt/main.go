@@ -244,6 +244,7 @@ Docs: https://tttedit.dev
 	defer func() { editor.CloseImageLayer() }()
 
 	editor.Version = version
+	editor.EditorGroup.WelcomeVersion = version
 	editor.Keybindings = cfg.Keybindings
 	editor.Reg = cmdRegistry
 	running := true

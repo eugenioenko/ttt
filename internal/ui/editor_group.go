@@ -103,14 +103,17 @@ type EditorGroupWidget struct {
 	TrimTrailingWhitespace  bool
 	UndoDeleteCursorStart   bool
 	Borders                 *term.BorderSet
-	OnFileOpen              func(path, lang, text string)
-	OnFileChange            func(path, lang, text string)
-	OnFileClose             func(path, lang string)
-	OnContentTabClose       func(id string)
-	OnError                 func(msg string)
-	OnNotify                func(msg string)
-	pendingNotify           []string
-	focused                 bool
+	// WelcomeVersion feeds the welcome placeholder title ("ttt" plus the
+	// version string main was built with). Empty omits the version.
+	WelcomeVersion    string
+	OnFileOpen        func(path, lang, text string)
+	OnFileChange      func(path, lang, text string)
+	OnFileClose       func(path, lang string)
+	OnContentTabClose func(id string)
+	OnError           func(msg string)
+	OnNotify          func(msg string)
+	pendingNotify     []string
+	focused           bool
 	// diagSources holds diagnostics keyed by source ("lsp", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
@@ -383,8 +386,13 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.New(path)
 	}
-	if t := g.activeTab(); t != nil && t.Preview && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
-		g.notifyContentTabClose(*t)
+	if t := g.activeTab(); t != nil && g.active >= g.pinnedCount && (isPristineUntitled(t) || t.Preview && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty))) {
+		// Opening a file consumes a pristine scratch tab (or a preview)
+		// instead of piling up next to it; a dirtied scratch buffer is
+		// user content and is always kept. Pinned slots are never consumed.
+		if !isPristineUntitled(t) {
+			g.notifyContentTabClose(*t)
+		}
 		g.tabs[g.active] = newTab
 		g.syncTabs()
 	} else {
@@ -845,6 +853,9 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 		}
 	}
 	if g.IsEditorActive() {
+		if g.showingWelcome() {
+			return 0, 0, false
+		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
@@ -1237,6 +1248,11 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.New(path)
 	}
+	if t := g.activeTab(); t != nil && g.active >= g.pinnedCount && isPristineUntitled(t) {
+		g.tabs[g.active] = newTab
+		g.syncTabs()
+		return
+	}
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -1275,6 +1291,11 @@ func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []s
 	}
 	if g.SyntaxHighlight && filePath != "" {
 		newTab.Highlighter = highlight.New(filePath)
+	}
+	if t := g.activeTab(); t != nil && g.active >= g.pinnedCount && isPristineUntitled(t) {
+		g.tabs[g.active] = newTab
+		g.syncTabs()
+		return
 	}
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
@@ -1523,6 +1544,11 @@ func (g *EditorGroupWidget) ClearSearch() {
 // active or the coordinates fall outside the editor content area.
 func (g *EditorGroupWidget) PositionAt(mx, my int) (line, col int, word string, ok bool) {
 	if !g.IsEditorActive() || g.Editor == nil || g.Editor.Buf == nil {
+		return 0, 0, "", false
+	}
+	if g.showingWelcome() {
+		// Clicks land on placeholder text, not the hidden buffer: report no
+		// position so context menus skip buffer-dependent plugin items.
 		return 0, 0, "", false
 	}
 	r := g.Editor.GetRect()
@@ -1987,9 +2013,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		if ts.Buf != nil {
 			dirty = ts.Buf.Dirty
 		}
-		isEmptyUntitledTab := ts.Virtual && ts.Buf != nil && !ts.Buf.Dirty &&
-			len(ts.Buf.Lines) <= 1 && (len(ts.Buf.Lines) == 0 || ts.Buf.Lines[0] == "")
-		closable := !(len(g.tabs) == 1 && isEmptyUntitledTab)
+		closable := !(len(g.tabs) == 1 && isPristineUntitled(&ts))
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title
@@ -2055,23 +2079,29 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	} else {
 		g.Editor.SetRect(contentRect)
 		g.Editor.Render(contentSurface)
+		// Overlay, not replacement: the editor stays laid out underneath
+		// (viewport dims feed scrollViewport), so the first keystroke into
+		// the pristine buffer cannot observe a zero-width viewport.
+		if g.showingWelcome() {
+			g.renderWelcome(contentSurface)
+		}
 	}
 
-	if g.SignatureHelp != nil && g.SignatureHelp.Label != "" {
+	if g.SignatureHelp != nil && g.SignatureHelp.Label != "" && !g.showingWelcome() {
 		g.SignatureHelp.AnchorX = g.Editor.CursorX - r.X
 		g.SignatureHelp.AnchorY = g.Editor.CursorY - r.Y
 		g.SignatureHelp.Borders = g.Borders
 		g.SignatureHelp.Render(surface)
 	}
 
-	if g.Autocomplete != nil && len(g.Autocomplete.Items) > 0 {
+	if g.Autocomplete != nil && len(g.Autocomplete.Items) > 0 && !g.showingWelcome() {
 		g.Autocomplete.AnchorX = g.Editor.CursorX - r.X
 		g.Autocomplete.AnchorY = g.Editor.CursorY - r.Y
 		g.Autocomplete.Borders = g.Borders
 		g.Autocomplete.Render(surface)
 	}
 
-	if g.Hover != nil && g.Hover.HasContent() {
+	if g.Hover != nil && g.Hover.HasContent() && !g.showingWelcome() {
 		g.Hover.OffsetX = r.X
 		g.Hover.OffsetY = r.Y
 		g.Hover.Borders = g.Borders
