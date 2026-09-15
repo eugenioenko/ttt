@@ -57,6 +57,25 @@ func Load(settingsFile string) AppConfig {
 
 var OverrideConfigDir string
 
+// ConfigDir resolves the active config directory without creating anything,
+// unlike ConfigFilePath. The first existing candidate wins; otherwise the
+// preferred writable location. Reads (like session loads) must use this so a
+// mere lookup never creates directories as a side effect.
+func ConfigDir() string {
+	for _, dir := range configPaths() {
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			return dir
+		}
+	}
+	if OverrideConfigDir != "" {
+		return OverrideConfigDir
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".config", "ttt")
+	}
+	return ".config"
+}
+
 func configPaths() []string {
 	if OverrideConfigDir != "" {
 		return []string{OverrideConfigDir}

@@ -123,6 +123,12 @@ All editor settings are nested under the `editor` key.
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |
 
+## Session
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `session.auto` | bool | `false` | Auto-save the open files per directory on quit and restore them on the next bare or single-folder launch |
+
 ## Formatters
 
 External code formatters configured per file extension. Each formatter receives the buffer content via stdin and must write the formatted output to stdout. Use `{file}` as a placeholder for the file path (needed by formatters like prettier for filetype detection).
@@ -215,6 +221,9 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   },
   "plugins": {
     "enabled": true
+  },
+  "session": {
+    "auto": false
   },
   "formatters": {
     "go": "gofmt",

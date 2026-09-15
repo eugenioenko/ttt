@@ -285,7 +285,7 @@ Docs: https://tttedit.dev
 	cmdRegistry := command.NewRegistry()
 	borders := app.BuildBorderSet(cfg.Theme.Borders)
 
-	editor, prURLs, fileTargets := app.BuildApp(&cfg, &borders)
+	editor, prURLs, fileTargets, wsFile := app.BuildApp(&cfg, &borders)
 	editor.ApplyBorderStyle()
 	editor.Init(screen, renderer, lspManager, imageLayer)
 	// Auto state is recorded after Init assigns the screen: the poll arm
@@ -420,6 +420,14 @@ Docs: https://tttedit.dev
 
 	editor.PendingFileTargets = fileTargets
 
+	// Auto sessions restore here, before the first render. Explicit file or
+	// PR targets, an explicit --workspace file (even one that failed to load),
+	// multi-folder launches, and scripted --exec runs all suppress the
+	// restore and start fresh.
+	if len(fileTargets) == 0 && len(prURLs) == 0 && wsFile == "" && len(editor.Workspace.Paths()) <= 1 && flags.exec == "" {
+		editor.RestoreSession()
+	}
+
 	if flags.pluginFile != "" {
 		app.LoadPluginFromFile(editor, flags.pluginFile)
 	}
@@ -446,6 +454,13 @@ Docs: https://tttedit.dev
 	}
 
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal)
+	// Single save point for every orderly exit path (quit, --exec/--listen
+	// shutdown). Crashes (handlePanic calls os.Exit) and kills intentionally
+	// preserve the last good session instead. Scripted --exec runs skip it
+	// so automation never mutates sessions.
+	if flags.exec == "" {
+		editor.SaveSession()
+	}
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

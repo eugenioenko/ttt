@@ -29,6 +29,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Terminal.Shell = "/bin/zsh"
+	s.Session.Auto = true
 
 	if err := SaveSettings(s); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
@@ -58,6 +59,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Terminal.Shell != "/bin/zsh" {
 		t.Errorf("shell = %q, want /bin/zsh", got.Terminal.Shell)
+	}
+	if !got.Session.Auto {
+		t.Error("session.auto did not round-trip")
 	}
 }
 

@@ -83,7 +83,7 @@ func TestResolveArgsFileLineCol(t *testing.T) {
 	defer func() { os.Args = saved }()
 	os.Args = []string{"ttt", file + ":42:8", colonName, filepath.Join(dir, "new.go:9")}
 
-	_, openFiles, _, _ := resolveArgs()
+	_, openFiles, _, _, _ := resolveArgs()
 	if len(openFiles) != 3 {
 		t.Fatalf("got %d targets, want 3: %+v", len(openFiles), openFiles)
 	}
@@ -103,7 +103,7 @@ func TestResolveArgsIgnoresListenFlag(t *testing.T) {
 	defer func() { os.Args = saved }()
 	os.Args = []string{"ttt", "--listen"}
 
-	_, openFiles, _, _ := resolveArgs()
+	_, openFiles, _, _, _ := resolveArgs()
 	if len(openFiles) != 0 {
 		t.Errorf("--listen was treated as a file to open: %+v", openFiles)
 	}

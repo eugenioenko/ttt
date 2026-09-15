@@ -47,5 +47,8 @@
   },
   "image": {
     "protocol": "auto"
+  },
+  "session": {
+    "auto": false
   }
 }

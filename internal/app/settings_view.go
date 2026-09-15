@@ -186,6 +186,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Debug mode", Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.DebugMode },
 				SetBool: func(s *config.Settings, v bool) { s.DebugMode = v }},
+			{Label: "Auto session", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Session.Auto },
+				SetBool: func(s *config.Settings, v bool) { s.Session.Auto = v }},
 		}},
 	}
 }

@@ -182,6 +182,10 @@ func DefaultGitSettings() GitSettings {
 	return GitSettings{FileView: GitFileViewList}
 }
 
+type SessionSettings struct {
+	Auto bool `json:"auto"`
+}
+
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
@@ -243,6 +247,7 @@ type Settings struct {
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
 	Markdown     MarkdownSettings     `json:"markdown"`
 	Image        ImageSettings        `json:"image"`
+	Session      SessionSettings      `json:"session"`
 	// Plugins is safe: its only field is a tri-state *bool where nil means the
 	// default, so the zero value and "unset" mean the same thing.
 	Plugins    PluginSettings    `json:"plugins,omitzero"`
@@ -259,7 +264,7 @@ type Settings struct {
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "themeLight": true, "themeDark": true, "debugMode": true, "editor": true,
 	"search": true, "explorer": true, "sidebar": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "session": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {

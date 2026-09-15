@@ -700,6 +700,22 @@ func (g *EditorGroupWidget) clampCursor(t *editorTab) {
 	if t.Cur.Col > lineLen {
 		t.Cur.Col = lineLen
 	}
+	if t.Cur.Col < 0 {
+		t.Cur.Col = 0
+	}
+}
+
+// isFileTab reports whether a tab is a restorable, on-disk text file:
+// no virtual, plugin, diff or viewer tabs, and no read-only viewers (which
+// must not reopen as editable).
+func isFileTab(t *editorTab) bool {
+	if t.Content != nil || t.Buf == nil {
+		return false
+	}
+	if t.FilePath == "" || t.Virtual || t.ReadOnly {
+		return false
+	}
+	return true
 }
 
 // OpenFilePaths returns the paths of all tabs backed by a real file on disk
@@ -708,16 +724,56 @@ func (g *EditorGroupWidget) clampCursor(t *editorTab) {
 func (g *EditorGroupWidget) OpenFilePaths() []string {
 	var paths []string
 	for i := range g.tabs {
-		t := &g.tabs[i]
-		if t.Content != nil || t.Buf == nil {
+		if !isFileTab(&g.tabs[i]) {
 			continue
 		}
-		if t.FilePath == "" || t.Virtual {
-			continue
-		}
-		paths = append(paths, t.FilePath)
+		paths = append(paths, g.tabs[i].FilePath)
 	}
 	return paths
+}
+
+// FileTabState is one restorable file tab: path plus 0-based cursor position.
+type FileTabState struct {
+	Path string
+	Line int
+	Col  int
+}
+
+// FileTabStates returns restorable file tabs in tab order plus the path of
+// the active tab ("" when the active tab is not a file tab). It uses the same
+// filter as OpenFilePaths: no virtual, plugin, diff or viewer tabs.
+func (g *EditorGroupWidget) FileTabStates() ([]FileTabState, string) {
+	var states []FileTabState
+	active := ""
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if !isFileTab(t) {
+			continue
+		}
+		line, col := 0, 0
+		if t.Cur != nil {
+			line, col = t.Cur.Line, t.Cur.Col
+		}
+		states = append(states, FileTabState{Path: t.FilePath, Line: line, Col: col})
+		if i == g.active {
+			active = t.FilePath
+		}
+	}
+	return states, active
+}
+
+// SetFileCursor restores a saved cursor on a background file tab without
+// switching to it, so restores leave every tab's viewport unscrolled.
+func (g *EditorGroupWidget) SetFileCursor(path string, line, col int) {
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if t.FilePath != path || t.Content != nil || t.Buf == nil || t.Cur == nil {
+			continue
+		}
+		t.Cur.Line, t.Cur.Col = line, col
+		g.clampCursor(t)
+		return
+	}
 }
 
 // BufferForPath returns the buffer of the tab with the given path, or nil.

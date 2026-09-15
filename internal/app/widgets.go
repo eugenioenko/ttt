@@ -83,9 +83,8 @@ func resolveLineColArg(arg string) (FileTarget, bool) {
 	return FileTarget{Path: abs, Line: line, Col: col}, true
 }
 
-func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
+func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string, wsFile string) {
 	var folders []string
-	var wsFile string
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
@@ -173,9 +172,9 @@ func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile 
 	return
 }
 
-func BuildApp(cfg *config.AppConfig, borders *term.BorderSet) (*App, []string, []FileTarget) {
-	ws, openFiles, _, prURLs := resolveArgs()
-	return BuildAppFromConfig(cfg, borders, ws, openFiles), prURLs, openFiles
+func BuildApp(cfg *config.AppConfig, borders *term.BorderSet) (*App, []string, []FileTarget, string) {
+	ws, openFiles, _, prURLs, wsFile := resolveArgs()
+	return BuildAppFromConfig(cfg, borders, ws, openFiles), prURLs, openFiles, wsFile
 }
 
 var bracketColorSlots = []term.Style{
