@@ -128,8 +128,8 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	if s.Git.FileView != GitFileViewList {
 		t.Errorf("git.fileView = %q, want list", s.Git.FileView)
 	}
-	if s.Explorer.Icons != IconsNerdFont || s.Git.Icons != IconsNerdFont {
-		t.Errorf("explorer.icons = %q, git.icons = %q, want the nerd-font default", s.Explorer.Icons, s.Git.Icons)
+	if s.Explorer.Icons != IconsNone || s.Git.Icons != IconsNone {
+		t.Errorf("explorer.icons = %q, git.icons = %q, want the none default", s.Explorer.Icons, s.Git.Icons)
 	}
 
 	for _, v := range GutterStyles {
@@ -163,13 +163,13 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	}
 }
 
-func TestIconsDefaultToNerdFontWhenUnset(t *testing.T) {
+func TestIconsDefaultToNoneWhenUnset(t *testing.T) {
 	dir := withTempConfigDir(t)
 	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"explorer": {"showHidden": true}, "git": {"fileView": "tree"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	got := LoadSettings()
-	if got.Explorer.Icons != IconsNerdFont || got.Git.Icons != IconsNerdFont {
-		t.Fatalf("icons with no icons key = explorer %q, git %q, want nerd-font", got.Explorer.Icons, got.Git.Icons)
+	if got.Explorer.Icons != IconsNone || got.Git.Icons != IconsNone {
+		t.Fatalf("icons with no icons key = explorer %q, git %q, want none", got.Explorer.Icons, got.Git.Icons)
 	}
 }

@@ -33,7 +33,9 @@ func TestExplorerIconsMuteGitIgnoredFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	runTreeGit(t, rootPath, "init", "-q")
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), rootPath)
+	settings := config.DefaultExplorerSettings()
+	settings.Icons = config.IconsNerdFont
+	explorer := NewNavigationPanel(settings, rootPath)
 	if log := nodeWithLabel(explorer.Tree.Config.Items, "debug.log"); log == nil || log.Icon == "" || log.IconStyle != term.StyleMuted {
 		t.Errorf("git-ignored debug.log icon = %+v, want a muted icon", log)
 	}
@@ -57,8 +59,10 @@ func TestExplorerIconsNoneOmitsIcons(t *testing.T) {
 	}
 }
 
-func TestExplorerIconsDefaultToNerdFontForFilesAndFolders(t *testing.T) {
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), explorerIconFixture(t))
+func TestExplorerIconsShowNerdFontForFilesAndFolders(t *testing.T) {
+	settings := config.DefaultExplorerSettings()
+	settings.Icons = config.IconsNerdFont
+	explorer := NewNavigationPanel(settings, explorerIconFixture(t))
 	items := explorer.Tree.Config.Items
 
 	if root := items[0]; root.Icon != "" {
@@ -87,7 +91,9 @@ func TestExplorerIconsDefaultToNerdFontForFilesAndFolders(t *testing.T) {
 }
 
 func TestExplorerIconSettingChangeAppliesOnReload(t *testing.T) {
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), explorerIconFixture(t))
+	settings := config.DefaultExplorerSettings()
+	settings.Icons = config.IconsNerdFont
+	explorer := NewNavigationPanel(settings, explorerIconFixture(t))
 	explorer.Settings.Icons = config.IconsNone
 	explorer.Reload()
 	if node := nodeWithLabel(explorer.Tree.Config.Items, "main.go"); node == nil || node.Icon != "" {

@@ -182,14 +182,14 @@ type GitSettings struct {
 }
 
 func DefaultGitSettings() GitSettings {
-	return GitSettings{FileView: GitFileViewList, Icons: IconsNerdFont}
+	return GitSettings{FileView: GitFileViewList, Icons: IconsNone}
 }
 
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
 		ShowGitIgnored: true,
-		Icons:          IconsNerdFont,
+		Icons:          IconsNone,
 	}
 }
 
@@ -365,10 +365,10 @@ func normalizeSettings(s *Settings) {
 		s.Image.Protocol = ImageProtocolAuto
 	}
 	if !slices.Contains(IconModes, s.Explorer.Icons) {
-		s.Explorer.Icons = IconsNerdFont
+		s.Explorer.Icons = IconsNone
 	}
 	if !slices.Contains(IconModes, s.Git.Icons) {
-		s.Git.Icons = IconsNerdFont
+		s.Git.Icons = IconsNone
 	}
 }
 

@@ -78,6 +78,16 @@ func (a *App) ToggleGitIcons() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleFileIcons() {
+	mode := config.IconsNerdFont
+	if a.Settings.Explorer.Icons == config.IconsNerdFont && a.Settings.Git.Icons == config.IconsNerdFont {
+		mode = config.IconsNone
+	}
+	a.Settings.Explorer.Icons = mode
+	a.Settings.Git.Icons = mode
+	a.SaveAndApplySettings()
+}
+
 func toggledIconMode(mode string) string {
 	if mode == config.IconsNone {
 		return config.IconsNerdFont
@@ -351,6 +361,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		transparentBgChecked = ui.MenuChecked
 	}
 
+	fontIconsChecked := menuChecked(a.Settings.Explorer.Icons == config.IconsNerdFont && a.Settings.Git.Icons == config.IconsNerdFont)
+
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
@@ -360,6 +372,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Bracket Colors", Command: "options.toggleBracketColors", Checked: bracketColorChecked},
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
+		{Label: "Font Icons", Command: "options.toggleFontIcons", Checked: fontIconsChecked},
 		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
 		{Label: "Transparent BG", Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
 		ui.MenuSep(),
@@ -512,6 +525,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleGitIcons", Title: "Toggle Git File Icons",
 		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "icons", "nerd font"},
 		Handler:  app.ToggleGitIcons,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleFontIcons", Title: "Toggle Font Icons",
+		Keywords: []string{"preferences", "settings", "explorer", "git", "files", "icons", "nerd font"},
+		Handler:  app.ToggleFileIcons,
 	})
 
 	reg.Register(command.Command{

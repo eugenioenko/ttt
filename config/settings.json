@@ -24,11 +24,11 @@
   "explorer": {
     "showHidden": true,
     "showGitIgnored": true,
-    "icons": "nerd-font"
+    "icons": "none"
   },
   "git": {
     "fileView": "list",
-    "icons": "nerd-font"
+    "icons": "none"
   },
   "terminal": {
     "scrollback": 1000

@@ -61,7 +61,7 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
-| `explorer.icons` | string | `"nerd-font"` | File and folder icons in the file explorer: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one; set `"none"` in that case. Colors come from the theme's `fileIcons` section |
+| `explorer.icons` | string | `"none"` | File and folder icons in the file explorer: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one, so this defaults off; turn it on here, in Settings > Advanced, or via **Options > Font Icons**. Colors come from the theme's `fileIcons` section |
 
 ## Sidebar
 
@@ -74,7 +74,7 @@ All editor settings are nested under the `editor` key.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `git.fileView` | string | `"list"` | Show working-tree and expanded commit files as a compact `"tree"` or full-path `"list"` |
-| `git.icons` | string | `"nerd-font"` | File and folder icons in the Changes panel and commit history, between the status letter and the name: `"nerd-font"` or `"none"`. Needs a Nerd Font, like `explorer.icons` |
+| `git.icons` | string | `"none"` | File and folder icons in the Changes panel and commit history, between the status letter and the name: `"nerd-font"` or `"none"`. Needs a Nerd Font, like `explorer.icons`, and defaults off for the same reason |
 
 ## Terminal
 
@@ -183,14 +183,14 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   "explorer": {
     "showHidden": true,
     "showGitIgnored": true,
-    "icons": "nerd-font"
+    "icons": "none"
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]
   },
   "git": {
     "fileView": "list",
-    "icons": "nerd-font"
+    "icons": "none"
   },
   "terminal": {
     "shell": "/bin/zsh",
