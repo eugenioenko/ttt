@@ -73,9 +73,10 @@ describe("diff reading preferences", () => {
   it("shows and persists global diff controls under Options", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);
+    tui.setSize(42, 16);
     tui.exec("Menu: Options");
     const options = tui.snapshot();
-    for (let i = 0; i < 10; i++) tui.press("down");
+    for (let i = 0; i < 11; i++) tui.press("down");
     tui.press("right");
     const diffViews = tui.snapshot();
     tui.press("escape");
