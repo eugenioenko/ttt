@@ -214,6 +214,25 @@ func (a *App) persistSidebarWidth(w int) {
 	}
 }
 
+// SetPanelPosition docks the bottom panel to a different edge and remembers it.
+// The terminals are resized against the panel's new rect, which only exists after
+// the next render, so the resize rides along with the caller's redraw.
+func (a *App) SetPanelPosition(pos ui.SplitPosition) {
+	if a.ContentSplit.Position == pos {
+		return
+	}
+	a.ContentSplit.Position = pos
+
+	name := "bottom"
+	if pos == ui.SplitRight {
+		name = "right"
+	}
+	a.Settings.Panel.Position = name
+	if err := config.SaveSettings(*a.Settings); err != nil {
+		a.StatusError("Failed to save panel position: " + err.Error())
+	}
+}
+
 func (a *App) FocusEditor() {
 	a.Root.SetFocus(a.EditorGroup)
 }
@@ -262,12 +281,22 @@ func (a *App) ToggleBottomPanel() {
 
 func (a *App) SpawnTerminal() {
 	r := a.ContentSplit.GetRect()
-	cols := r.W - terminalStripWidth
-	bottomH := a.ContentSplit.BottomH
-	if bottomH <= 1 {
-		bottomH = min(r.H/2, r.H-4)
+	var cols, rows int
+	if a.ContentSplit.Position == ui.SplitRight {
+		panelW := a.ContentSplit.RightW
+		if panelW <= 1 {
+			panelW = min(r.W/2, r.W-4)
+		}
+		cols = panelW - terminalStripWidth
+		rows = r.H - 2
+	} else {
+		panelH := a.ContentSplit.BottomH
+		if panelH <= 1 {
+			panelH = min(r.H/2, r.H-4)
+		}
+		cols = r.W - terminalStripWidth
+		rows = panelH - 2
 	}
-	rows := bottomH - 2
 	if cols <= 0 {
 		cols = 80
 	}

@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -377,5 +379,50 @@ func TestNormalizeImageProtocol(t *testing.T) {
 	normalizeSettings(&s)
 	if s.Image.Protocol != ImageProtocolAuto {
 		t.Errorf("invalid protocol should reset to %q, got %q", ImageProtocolAuto, s.Image.Protocol)
+	}
+}
+
+// Every core top-level key must be listed in knownSettingsKeys. A key that is
+// missing still unmarshals into its struct field, but it is *also* captured in
+// Extra, and MarshalJSON reinjects Extra over the struct encoding — so the first
+// save works and every later one silently rewrites the stale value.
+func TestCoreSettingsKeysAreAllKnown(t *testing.T) {
+	typ := reflect.TypeOf(Settings{})
+	for i := range typ.NumField() {
+		tag := typ.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		if !knownSettingsKeys[name] {
+			t.Errorf("settings key %q is not in knownSettingsKeys, so Extra will shadow it on save", name)
+		}
+	}
+}
+
+func TestPanelPositionSurvivesRoundTrip(t *testing.T) {
+	// Load-then-save is where the shadowing showed up: the first save wrote the
+	// new value, the next one put the loaded one back.
+	first, err := json.Marshal(Settings{Panel: PanelSettings{Position: "right"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var loaded Settings
+	if err := json.Unmarshal(first, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	loaded.Panel.Position = "bottom"
+
+	second, err := json.Marshal(loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var final Settings
+	if err := json.Unmarshal(second, &final); err != nil {
+		t.Fatal(err)
+	}
+	if final.Panel.Position != "bottom" {
+		t.Fatalf("panel.position = %q after round trip, want \"bottom\"\n%s", final.Panel.Position, second)
 	}
 }

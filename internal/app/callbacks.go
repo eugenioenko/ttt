@@ -689,12 +689,16 @@ func registerWidgetCallbacks(app *App) {
 	}
 	app.Changes.Split.OnResize = app.persistCommitHistoryHeight
 
-	app.ContentSplit.OnResize = func(height int) {
-		if height <= 0 {
+	app.ContentSplit.OnResize = func(size int) {
+		if size <= 0 {
 			app.ContentSplit.ShowBottom = false
 		} else {
 			app.ContentSplit.ShowBottom = true
-			app.ContentSplit.BottomH = height
+			if app.ContentSplit.Position == ui.SplitRight {
+				app.ContentSplit.RightW = size
+			} else {
+				app.ContentSplit.BottomH = size
+			}
 			if len(app.Terminals) == 0 {
 				app.SpawnTerminal()
 			} else {
