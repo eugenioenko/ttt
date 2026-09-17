@@ -1,6 +1,7 @@
 package term
 
 import (
+	"fmt"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -21,6 +22,10 @@ func DefaultStyleMap() StyleMap {
 type TcellScreen struct {
 	scr      tcell.Screen
 	styleMap StyleMap
+	// pointerShape is the shape last handed to the terminal. Hover handlers fire
+	// on every motion event, and re-emitting the same sequence each time would
+	// interleave writes with tcell's own output for no reason.
+	pointerShape string
 }
 
 func NewTcellScreen() (*TcellScreen, error) {
@@ -151,6 +156,21 @@ func (t *TcellScreen) SetCursorStyle(style CursorStyle) {
 	if cs, ok := cursorStyleMap[style]; ok {
 		t.scr.SetCursorStyle(cs)
 	}
+}
+
+// SetPointerShape emits OSC 22, the pointer-shape sequence kitty introduced and
+// other terminals have picked up. tcell has no API for it, so it goes straight to
+// the tty; terminals without support treat it as an unknown OSC and drop it.
+func (t *TcellScreen) SetPointerShape(shape string) {
+	if shape == t.pointerShape {
+		return
+	}
+	t.pointerShape = shape
+	tty, ok := t.scr.Tty()
+	if !ok {
+		return
+	}
+	fmt.Fprintf(tty, "\x1b]22;%s\x1b\\", shape)
 }
 
 // PostEvent injects an event into the screen's event queue (tcell v3 has no

@@ -9,17 +9,22 @@ import (
 
 type ContentSplitWidget struct {
 	BaseWidget
-	Top                       Widget
-	Bottom                    Widget
-	ShowBottom                bool
-	BottomH                   int
-	BottomRatio               float64
-	MinTopH                   int
-	MinBottomH                int
-	Borders                   *term.BorderSet
-	OnResize                  func(height int)
-	OnBottomClick             func()
-	OnTopClick                func()
+	Top           Widget
+	Bottom        Widget
+	ShowBottom    bool
+	BottomH       int
+	BottomRatio   float64
+	MinTopH       int
+	MinBottomH    int
+	Borders       *term.BorderSet
+	OnResize      func(height int)
+	OnBottomClick func()
+	OnTopClick    func()
+	// OnDividerHover fires when the pointer enters or leaves the divider, so the
+	// host can change the mouse pointer shape. Without it the divider is
+	// draggable but gives no sign that it is, which is the whole problem.
+	OnDividerHover            func(over bool)
+	hoveringDivider           bool
 	RightBorderStartY         *int
 	dragging                  bool
 	wasPressed                bool
@@ -147,6 +152,8 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	freshClick := pressed && !cs.wasPressed
 	cs.wasPressed = pressed
 
+	cs.reportDividerHover(cs.dragging || cs.overDivider(r, mx, my))
+
 	if cs.dragging {
 		if pressed {
 			newH := r.Y + r.H - my - 1
@@ -233,6 +240,25 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	return EventIgnored
+}
+
+// overDivider reports whether the pointer sits on the draggable divider.
+func (cs *ContentSplitWidget) overDivider(r Rect, mx, my int) bool {
+	if !cs.ShowBottom || cs.Bottom == nil {
+		return false
+	}
+	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
+	return my == r.Y+r.H-bottomH-1 && mx >= r.X && mx < r.X+r.W-1
+}
+
+func (cs *ContentSplitWidget) reportDividerHover(over bool) {
+	if over == cs.hoveringDivider {
+		return
+	}
+	cs.hoveringDivider = over
+	if cs.OnDividerHover != nil {
+		cs.OnDividerHover(over)
+	}
 }
 
 func (cs *ContentSplitWidget) DividerScreenY() int {

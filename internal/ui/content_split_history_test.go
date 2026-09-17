@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/gdamore/tcell/v3"
@@ -63,5 +64,34 @@ func TestContentSplitRatioRetainsUsableMinimums(t *testing.T) {
 	}
 	if got := split.constrainedBottomHeight(6, split.requestedBottomHeight(6)); got != 0 {
 		t.Fatalf("impossible layout bottom = %d, want primary surface minimum to win", got)
+	}
+}
+
+// The divider is draggable but looks inert; the hover callback is what lets the
+// host switch the mouse pointer, and it must fire on the edge, not on every
+// motion event.
+func TestDividerHoverFiresOnEdges(t *testing.T) {
+	cs := NewContentSplitWidget()
+	cs.Top = &BaseWidget{}
+	cs.Bottom = &BaseWidget{}
+	cs.ShowBottom = true
+	cs.BottomH = 20
+	cs.SetRect(Rect{X: 0, Y: 0, W: 100, H: 100})
+
+	var calls []bool
+	cs.OnDividerHover = func(over bool) { calls = append(calls, over) }
+
+	move := func(x, y int) {
+		cs.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+	}
+
+	divY := 100 - 20 - 1
+	move(5, divY)
+	move(5, divY) // staying put must not fire again
+	move(5, 0)
+
+	want := []bool{true, false}
+	if !slices.Equal(calls, want) {
+		t.Fatalf("hover calls = %v, want %v", calls, want)
 	}
 }
