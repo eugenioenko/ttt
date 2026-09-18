@@ -703,6 +703,17 @@ func registerWidgetCallbacks(app *App) {
 		}
 	}
 
+	// SetPointerShape lives on TcellScreen rather than the term.Screen interface:
+	// only a real terminal can change the mouse pointer, and widening the interface
+	// would force a no-op onto every mock and test double.
+	app.ContentSplit.OnDividerHover = func(over bool) {
+		if over {
+			app.Screen.SetPointerShape("ns-resize")
+		} else {
+			app.Screen.SetPointerShape("")
+		}
+	}
+
 	app.ContentSplit.OnTopClick = func() {
 		app.Root.SetFocus(app.EditorGroup)
 	}
