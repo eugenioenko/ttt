@@ -57,11 +57,6 @@ type TerminalWidget struct {
 	scrollbar    Scrollbar
 	selecting    bool
 	hasSelection bool
-	// Cursor state captured during Render, from the same emulator snapshot the
-	// cells come from. Reading it separately afterwards would pair this frame's
-	// content with a later cursor, which is what made TUIs running inside the
-	// terminal (Claude Code, for one) draw their cursor away from the box they
-	// had just painted, until an unrelated event forced another frame.
 	curX, curY int
 	curVisible bool
 	selAnchor  termSelPos
