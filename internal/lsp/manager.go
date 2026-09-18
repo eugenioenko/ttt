@@ -115,7 +115,7 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	}
 	client.OnDiagnostics = m.OnDiagnostics
 
-	rootURI := "file://" + workDir
+	rootURI := FileURI(workDir)
 	if err := client.Initialize(rootURI); err != nil {
 		client.Close()
 		m.log(key, "error", "initialize failed: "+err.Error())

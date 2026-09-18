@@ -75,13 +75,9 @@ func ReadLineFromFile(path string, line int) string {
 	return ""
 }
 
-func FileURI(path string) string {
-	return "file://" + path
-}
+func FileURI(path string) string { return lsp.FileURI(path) }
 
-func URIToPath(uri string) string {
-	return strings.TrimPrefix(uri, "file://")
-}
+func URIToPath(uri string) string { return lsp.URIToPath(uri) }
 
 func LspToUICompletions(items []lsp.CompletionItem) []ui.CompletionItem {
 	result := make([]ui.CompletionItem, 0, len(items))

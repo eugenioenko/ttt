@@ -139,7 +139,7 @@ func revealInFileManager(path string) error {
 	case "windows":
 		return exec.Command("explorer", "/select,"+path).Start()
 	default:
-		uri := "file://" + path
+		uri := FileURI(path)
 		dbus := exec.Command("dbus-send", "--session",
 			"--dest=org.freedesktop.FileManager1", "--type=method_call",
 			"/org/freedesktop/FileManager1",
