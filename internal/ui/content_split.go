@@ -7,15 +7,32 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+// SplitPosition says which edge the secondary pane is docked to. The zero value
+// is SplitBottom, so every existing ContentSplitWidget (the changes panel among
+// them) keeps the historical horizontal split without opting in.
+type SplitPosition int
+
+const (
+	SplitBottom SplitPosition = iota
+	SplitRight
+)
+
 type ContentSplitWidget struct {
 	BaseWidget
-	Top                       Widget
-	Bottom                    Widget
+	Top    Widget
+	Bottom Widget
+	// Position picks the edge; BottomH/MinBottomH size the pane when docked to
+	// the bottom, RightW/MinRightW when docked to the right. They are separate
+	// because a sensible height in rows is not a sensible width in columns, and
+	// toggling between edges should not carry one over to the other.
+	Position                  SplitPosition
 	ShowBottom                bool
 	BottomH                   int
+	RightW                    int
 	BottomRatio               float64
 	MinTopH                   int
 	MinBottomH                int
+	MinRightW                 int
 	Borders                   *term.BorderSet
 	OnResize                  func(height int)
 	OnBottomClick             func()
@@ -43,6 +60,7 @@ func NewContentSplitWidget() *ContentSplitWidget {
 	return &ContentSplitWidget{
 		ShowBottom: false,
 		BottomH:    15,
+		RightW:     60,
 	}
 }
 
@@ -55,6 +73,22 @@ func (cs *ContentSplitWidget) constrainedBottomHeight(totalH, requested int) int
 	maxBottom := max(totalH-1-max(cs.MinTopH, 0), 0)
 	minBottom := min(max(cs.MinBottomH, 0), maxBottom)
 	return min(max(requested, minBottom), maxBottom)
+}
+
+func (cs *ContentSplitWidget) constrainedRightWidth(totalW, requested int) int {
+	if totalW <= 1 {
+		return 0
+	}
+	maxRight := max(totalW-1-max(cs.MinTopH, 0), 0)
+	minRight := min(max(cs.MinRightW, 0), maxRight)
+	return min(max(requested, minRight), maxRight)
+}
+
+func (cs *ContentSplitWidget) requestedRightWidth(totalW int) int {
+	if cs.RightW <= 0 && cs.BottomRatio > 0 {
+		return int(float64(totalW) * cs.BottomRatio)
+	}
+	return cs.RightW
 }
 
 func (cs *ContentSplitWidget) requestedBottomHeight(totalH int) int {
@@ -95,6 +129,11 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	}
 	bs := term.StyleBorder
 
+	if cs.Position == SplitRight {
+		cs.renderRight(surface, r, w, h, b, bs)
+		return
+	}
+
 	bottomH := cs.constrainedBottomHeight(h, cs.requestedBottomHeight(h))
 	divY := h - bottomH - 1
 	topH := divY
@@ -134,6 +173,43 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	}
 }
 
+// renderRight lays the secondary pane down the right edge. The primary pane then
+// spans the full height, so the sidebar's right border starts where it does when
+// there is no secondary pane at all.
+func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b term.BorderSet, bs term.Style) {
+	rightW := cs.constrainedRightWidth(w, cs.requestedRightWidth(w))
+	divX := w - rightW - 1
+	topW := divX
+
+	if cs.RightBorderStartY != nil {
+		*cs.RightBorderStartY = 2
+	}
+
+	if cs.Top != nil && topW > 0 {
+		cs.Top.SetRect(Rect{X: r.X, Y: r.Y, W: topW, H: r.H})
+		cs.Top.Render(surface.Sub(Rect{X: 0, Y: 0, W: topW, H: h}))
+	} else {
+		widgets.InvalidatePointerInteraction(cs.Top)
+		if cs.capturedChild == cs.Top {
+			cs.capturedChild = nil
+		}
+	}
+
+	for y := 0; y < h; y++ {
+		surface.SetCell(divX, y, term.Cell{Ch: b.Vertical, Style: bs})
+	}
+
+	if cs.Bottom != nil && rightW > 0 {
+		cs.Bottom.SetRect(Rect{X: r.X + divX + 1, Y: r.Y, W: rightW, H: r.H})
+		cs.Bottom.Render(surface.Sub(Rect{X: divX + 1, Y: 0, W: rightW, H: h}))
+	} else {
+		widgets.InvalidatePointerInteraction(cs.Bottom)
+		if cs.capturedChild == cs.Bottom {
+			cs.capturedChild = nil
+		}
+	}
+}
+
 func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
@@ -149,11 +225,15 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	if cs.dragging {
 		if pressed {
-			newH := r.Y + r.H - my - 1
-			newH = cs.constrainedBottomHeight(r.H, newH)
+			var size int
+			if cs.Position == SplitRight {
+				size = cs.constrainedRightWidth(r.W, r.X+r.W-mx-1)
+			} else {
+				size = cs.constrainedBottomHeight(r.H, r.Y+r.H-my-1)
+			}
 			cs.BottomRatio = 0
 			if cs.OnResize != nil {
-				cs.OnResize(newH)
+				cs.OnResize(size)
 			}
 			return EventCaptured
 		}
@@ -174,7 +254,30 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventConsumed
 	}
 
-	if cs.ShowBottom {
+	if cs.ShowBottom && cs.Position == SplitRight {
+		rightW := cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W))
+		divX := r.X + r.W - rightW - 1
+
+		if freshClick && mx == divX {
+			cs.dragging = true
+			return EventCaptured
+		}
+
+		if mx > divX && cs.Bottom != nil {
+			result := cs.Bottom.HandleEvent(ev)
+			if result == EventCaptured {
+				cs.capturedChild = cs.Bottom
+				if cs.OnBottomClick != nil {
+					cs.OnBottomClick()
+				}
+				return EventCaptured
+			}
+			if result == EventConsumed && btn&tcell.Button1 != 0 && cs.OnBottomClick != nil {
+				cs.OnBottomClick()
+			}
+			return result
+		}
+	} else if cs.ShowBottom {
 		bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
 		divY := r.Y + r.H - bottomH - 1
 
@@ -236,7 +339,7 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (cs *ContentSplitWidget) DividerScreenY() int {
-	if !cs.ShowBottom || cs.Bottom == nil {
+	if !cs.ShowBottom || cs.Bottom == nil || cs.Position == SplitRight {
 		return -1
 	}
 	r := cs.GetRect()
@@ -249,7 +352,7 @@ func (cs *ContentSplitWidget) TopContentHeight() int {
 	if r.W <= 0 || r.H <= 0 {
 		return 0
 	}
-	if !cs.ShowBottom || cs.Bottom == nil {
+	if !cs.ShowBottom || cs.Bottom == nil || cs.Position == SplitRight {
 		return r.H
 	}
 	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))

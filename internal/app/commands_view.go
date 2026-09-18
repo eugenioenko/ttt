@@ -393,24 +393,49 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.taller", Title: "View: Increase Panel Height",
-		Keywords: []string{"view", "resize", "bottom"},
+		ID: "panel.taller", Title: "View: Increase Panel Size",
+		Keywords: []string{"view", "resize", "bottom", "right", "height", "width"},
 		Handler: func() {
 			if !app.ContentSplit.ShowBottom {
 				app.ShowBottomPanel()
 			}
-			app.ContentSplit.BottomH++
+			if app.ContentSplit.Position == ui.SplitRight {
+				app.ContentSplit.RightW++
+			} else {
+				app.ContentSplit.BottomH++
+			}
+			resizeTerminals(app)
 		},
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.shorter", Title: "View: Decrease Panel Height",
-		Keywords: []string{"view", "resize", "bottom"},
+		ID: "panel.shorter", Title: "View: Decrease Panel Size",
+		Keywords: []string{"view", "resize", "bottom", "right", "height", "width"},
 		Handler: func() {
-			if app.ContentSplit.ShowBottom && app.ContentSplit.BottomH > 1 {
+			if !app.ContentSplit.ShowBottom {
+				return
+			}
+			if app.ContentSplit.Position == ui.SplitRight {
+				if app.ContentSplit.RightW > 1 {
+					app.ContentSplit.RightW--
+				}
+			} else if app.ContentSplit.BottomH > 1 {
 				app.ContentSplit.BottomH--
 			}
+			resizeTerminals(app)
 		},
+	})
+
+	reg.Register(command.Command{
+		ID: "panel.moveRight", Title: "View: Move Panel Right",
+		Keywords: []string{"view", "panel", "terminal", "dock", "position", "side"},
+		Handler:  func() { app.SetPanelPosition(ui.SplitRight) },
+	})
+
+	reg.Register(command.Command{
+		ID: "panel.moveBottom", Title: "View: Move Panel Bottom",
+		Keywords: []string{"view", "panel", "terminal", "dock", "position", "down"},
+		Handler:  func() { app.SetPanelPosition(ui.SplitBottom) },
 	})
 
 	reg.Register(command.Command{

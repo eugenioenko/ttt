@@ -176,6 +176,13 @@ type SidebarSettings struct {
 	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
 }
 
+// PanelSettings persists where the bottom panel is docked. "bottom" (the zero
+// value and the default) keeps the historical layout; "right" docks it down the
+// right edge.
+type PanelSettings struct {
+	Position string `json:"position,omitempty"`
+}
+
 type GitSettings struct {
 	FileView string `json:"fileView"`
 	Icons    string `json:"icons"`
@@ -238,6 +245,7 @@ type Settings struct {
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
 	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
+	Panel        PanelSettings        `json:"panel,omitzero"`
 	Git          GitSettings          `json:"git"`
 	Terminal     TerminalSettings     `json:"terminal"`
 	LSP          LSPSettings          `json:"lsp"`
@@ -259,7 +267,7 @@ type Settings struct {
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "editor": true,
-	"search": true, "explorer": true, "sidebar": true, "git": true, "terminal": true, "lsp": true,
+	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true,
 }
 

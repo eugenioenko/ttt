@@ -297,6 +297,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	if cfg.Settings.Sidebar.Width > 0 {
 		splitPanel.DividerPos = cfg.Settings.Sidebar.Width
 	}
+	if cfg.Settings.Panel.Position == "right" {
+		contentSplit.Position = ui.SplitRight
+	}
 	splitPanel.ShowLeft = sidebar.Visible
 	splitPanel.RightBorderStartY = 2
 	contentSplit.RightBorderStartY = &splitPanel.RightBorderStartY

@@ -689,12 +689,16 @@ func registerWidgetCallbacks(app *App) {
 	}
 	app.Changes.Split.OnResize = app.persistCommitHistoryHeight
 
-	app.ContentSplit.OnResize = func(height int) {
-		if height <= 0 {
+	app.ContentSplit.OnResize = func(size int) {
+		if size <= 0 {
 			app.ContentSplit.ShowBottom = false
 		} else {
 			app.ContentSplit.ShowBottom = true
-			app.ContentSplit.BottomH = height
+			if app.ContentSplit.Position == ui.SplitRight {
+				app.ContentSplit.RightW = size
+			} else {
+				app.ContentSplit.BottomH = size
+			}
 			if len(app.Terminals) == 0 {
 				app.SpawnTerminal()
 			} else {
@@ -730,11 +734,18 @@ func registerWidgetCallbacks(app *App) {
 			reg.Execute("terminal.new")
 		}},
 		{Icon: "⋮", OnClick: func(sx, sy int) {
+			// Only the edge the panel is not on is worth offering; listing both
+			// makes one of them a no-op the reader has to work out.
+			move := ui.ContextMenuItem{Label: "Move to Right", Command: "panel.moveRight"}
+			if app.ContentSplit.Position == ui.SplitRight {
+				move = ui.ContextMenuItem{Label: "Move to Bottom", Command: "panel.moveBottom"}
+			}
 			items := []ui.ContextMenuItem{
 				{Label: "New Terminal", Command: "terminal.new"},
 				ui.MenuSep(),
 				{Label: "Close All Terminals", Command: "terminal.closeAll"},
 				ui.MenuSep(),
+				move,
 				{Label: "Close Panel", Command: "panel.toggle"},
 			}
 			openContextMenu(app, items, sx, sy)
