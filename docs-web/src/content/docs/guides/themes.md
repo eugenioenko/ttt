@@ -32,6 +32,22 @@ TTT ships with a collection of built-in themes:
 
 Use **View > Switch Theme** from the menu bar, or search for **Switch Theme** in the command palette (**Ctrl+P**), to open the theme picker. The picker shows a live preview of each theme as you navigate the list, so you can try them out before committing to one.
 
+## Automatic Light/Dark Switching
+
+Set `"theme": "auto"` in `settings.json` (or pick **Auto** in **Settings > Appearance**) and TTT follows your terminal's light/dark appearance: it queries the terminal at startup (Kitty, Ghostty, WezTerm and others answer), then keeps following via focus events and a periodic check. Picking any theme manually turns auto mode back off.
+
+Live following (focus events plus the periodic check) is currently macOS-only, where the system appearance is the signal tracking terminals follow. On other platforms auto resolves at startup and whenever Settings are applied.
+
+```json
+{
+  "theme": "auto",
+  "themeLight": "default-light",
+  "themeDark": "default-dark"
+}
+```
+
+`themeLight` and `themeDark` are optional. When omitted, TTT uses the matching built-in sibling of the other side when one exists (e.g. `solarized-dark` pairs with `solarized-light`), else the default light/dark theme. The same **Light theme** / **Dark theme** dropdowns live in **Settings > Appearance**.
+
 ## Customizing
 
 To create a custom theme, copy one of the built-in theme files to your themes directory and edit it:

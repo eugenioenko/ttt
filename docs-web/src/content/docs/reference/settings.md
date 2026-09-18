@@ -23,7 +23,9 @@ Both write the same file, so you can move between them freely.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `version` | int | `1` | Settings file format version |
-| `theme` | string | `""` | Theme name (e.g. `"default-dark"`) |
+| `theme` | string | `""` | Theme name (e.g. `"default-dark"`), or `"auto"` to follow the terminal's light/dark appearance |
+| `themeLight` | string | `""` | Theme used for light appearance when `theme` is `"auto"` (`""` = automatic) |
+| `themeDark` | string | `""` | Theme used for dark appearance when `theme` is `"auto"` (`""` = automatic) |
 | `debugMode` | bool | `false` | Enable debug logging |
 
 ## Editor

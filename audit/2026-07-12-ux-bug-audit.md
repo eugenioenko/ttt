@@ -438,7 +438,7 @@ Haiku mechanical sweep (26 cases) + orchestrator spot-check found no bugs. Verif
 ### BUG-041: Theme picker cancel reverts colors but leaves the border charset stuck on the preview
 - **Area:** Themes & rendering
 - **Severity:** medium
-- **Status:** confirmed (agent-reported, orchestrator re-verified)
+- **Status:** fixed — `ShowThemePicker` `OnDismiss` now restores `*a.Borders` alongside the style map and palette (auto-theme change); repro test un-`fails`ed and green
 - **Repro:** fresh config (default rounded borders); `exec "Switch Theme"`, type `turbo` (preview turbo-vision's double-line borders), `key escape` → border glyphs stay `╔═` instead of reverting to `╭─`
 - **Expected:** dismissing the picker after only previewing reverts everything — colors AND border glyphs — to the pre-picker theme
 - **Actual:** `ShowThemePicker` `OnDismiss` (`internal/app/commands_palette.go`) restores the style map and palette but never resets `*a.Borders` (which the preview's `applyTheme` set via `BuildBorderSet`), so preview borders persist until another theme is applied or restart

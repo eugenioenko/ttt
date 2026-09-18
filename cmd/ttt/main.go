@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/app"
+	"github.com/eugenioenko/ttt/internal/appearance"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
@@ -126,6 +127,22 @@ func initTerminalScreen() *term.TcellScreen {
 	return screen
 }
 
+// keyboardProtocolName maps tcell's protocol for logs. Kitty here means the
+// terminal negotiated Kitty keyboard, which is also what delivers Super/cmd
+// as ModMeta for future cmd keymaps.
+func keyboardProtocolName(p tcell.KeyProtocol) string {
+	switch p {
+	case tcell.KittyKeyboard:
+		return "kitty"
+	case tcell.Win32Keyboard:
+		return "win32"
+	case tcell.XTermKeyboard:
+		return "xterm"
+	default:
+		return "legacy"
+	}
+}
+
 func initSimulationScreen(w, h int) *term.TcellScreen {
 	if w <= 0 || h <= 0 {
 		w, h = 80, 25
@@ -209,6 +226,32 @@ Docs: https://tttedit.dev
 	if logFile != nil {
 		defer logFile.Close()
 	}
+
+	// Auto theme resolves before the screen exists: the OSC 11 / 996 query
+	// must run before tcell.Init, which swallows the replies. Skipped for
+	// --exec sim sessions to keep them deterministic. Logging is initialized
+	// above so resolution warnings land in ttt.log, not on stderr.
+	useAutoTheme := cfg.Settings.Theme == "auto" && flags.exec == ""
+	autoAppearance := appearance.Unknown
+	autoSource := "none"
+	loadedAutoTheme := ""
+	if useAutoTheme {
+		autoAppearance, autoSource = appearance.DetectStartup(true)
+		// Total detection failure keeps the built-in default theme rather
+		// than forcing a guess.
+		if autoAppearance != appearance.Unknown {
+			if theme, name, ok := app.ResolveAutoTheme(autoAppearance, cfg.Settings.ThemeLight, cfg.Settings.ThemeDark); ok {
+				cfg.Theme = theme
+				loadedAutoTheme = name
+			} else {
+				slog.Warn("auto theme: cannot load resolved theme, keeping default")
+			}
+		}
+	}
+
+	if useAutoTheme {
+		slog.Info("auto theme", "appearance", autoAppearance.String(), "source", autoSource)
+	}
 	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
 
 	var screen *term.TcellScreen
@@ -220,6 +263,11 @@ Docs: https://tttedit.dev
 	}
 	defer screen.Fini()
 	defer handlePanic(screen)
+
+	if useAutoTheme {
+		screen.EnableFocusReporting()
+	}
+	slog.Debug("keyboard", "protocol", keyboardProtocolName(screen.KeyboardProtocol()))
 
 	screen.SetStyleMap(app.BuildStyleMap(cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground)))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
@@ -240,6 +288,12 @@ Docs: https://tttedit.dev
 	editor, prURLs, fileTargets := app.BuildApp(&cfg, &borders)
 	editor.ApplyBorderStyle()
 	editor.Init(screen, renderer, lspManager, imageLayer)
+	// Auto state is recorded after Init assigns the screen: the poll arm
+	// posts through it and no-ops on nil.
+	editor.SetAutoTheme(autoAppearance, loadedAutoTheme)
+	if useAutoTheme {
+		editor.StartAutoThemePoll()
+	}
 	// Registered after handlePanic so it runs before it and before Fini: placements are deleted while the tty is still alive, on exit and crash.
 	defer func() { editor.CloseImageLayer() }()
 

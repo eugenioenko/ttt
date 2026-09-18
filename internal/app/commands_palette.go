@@ -49,13 +49,9 @@ func (a *App) ShowThemePicker() {
 	}
 	originalStyleMap := a.Screen.GetStyleMap()
 	originalPalette := *a.Palette
+	originalBorders := *a.Borders
 	applyTheme := func(theme config.ThemeConfig) {
-		a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground)))
-		*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground))
-		*a.Borders = BuildBorderSet(theme.Borders)
-		a.ApplyBorderStyle()
-		a.Renderer.Clear()
-		a.invalidateImageLayer()
+		a.applyThemeConfig(theme)
 	}
 	sel := widgets.NewSelectWidget(widgets.SelectConfig{
 		Items:       items,
@@ -68,19 +64,32 @@ func (a *App) ShowThemePicker() {
 			applyTheme(theme)
 		},
 		OnSelect: func(name string) {
-			a.DismissDialog()
 			theme, err := config.LoadTheme(name)
 			if err != nil {
+				// The list was built from disk; a file deleted since then
+				// must not leave the last preview applied as if chosen.
+				a.DismissDialog()
+				a.Screen.SetStyleMap(originalStyleMap)
+				*a.Palette = originalPalette
+				*a.Borders = originalBorders
+				a.Renderer.Clear()
+				a.invalidateImageLayer()
 				return
 			}
+			a.DismissDialog()
 			applyTheme(theme)
 			a.Settings.Theme = name
+			// A manual pick leaves auto mode by construction: stop the
+			// backstop poll and unsubscribe focus events.
+			a.DisarmAutoThemePoll()
+			a.Screen.DisableFocusReporting()
 			config.SaveSettings(*a.Settings)
 		},
 		OnDismiss: func() {
 			a.DismissDialog()
 			a.Screen.SetStyleMap(originalStyleMap)
 			*a.Palette = originalPalette
+			*a.Borders = originalBorders
 			a.Renderer.Clear()
 			a.invalidateImageLayer()
 		},

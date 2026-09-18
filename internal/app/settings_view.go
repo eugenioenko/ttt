@@ -101,6 +101,12 @@ func settingsCategories() []settingsCategory {
 			{Label: "Theme", Kind: settingEnum, Options: themeItems,
 				GetString: func(s *config.Settings) string { return s.Theme },
 				SetString: func(s *config.Settings, v string) { s.Theme = v }},
+			{Label: "Light theme", Kind: settingEnum, Options: themeSideItems,
+				GetString: func(s *config.Settings) string { return s.ThemeLight },
+				SetString: func(s *config.Settings, v string) { s.ThemeLight = v }},
+			{Label: "Dark theme", Kind: settingEnum, Options: themeSideItems,
+				GetString: func(s *config.Settings) string { return s.ThemeDark },
+				SetString: func(s *config.Settings, v string) { s.ThemeDark = v }},
 			{Label: "Diff context", Kind: settingEnum, Options: diffContextItems,
 				GetString: func(s *config.Settings) string { return s.Editor.DiffContext },
 				SetString: func(s *config.Settings, v string) { s.Editor.DiffContext = v }},
@@ -203,8 +209,21 @@ func iconModeItems() []widgets.SelectItem {
 
 func themeItems() []widgets.SelectItem {
 	names := config.ListThemes()
-	items := make([]widgets.SelectItem, 0, len(names)+1)
+	items := make([]widgets.SelectItem, 0, len(names)+2)
 	items = append(items, widgets.SelectItem{ID: "", Label: "Default"})
+	items = append(items, widgets.SelectItem{ID: "auto", Label: "Auto"})
+	for _, n := range names {
+		items = append(items, widgets.SelectItem{ID: n, Label: n})
+	}
+	return items
+}
+
+// themeSideItems feeds the Light/Dark theme rows. There is no nested Auto:
+// "" means automatic (sibling of the other side, else the built-in default).
+func themeSideItems() []widgets.SelectItem {
+	names := config.ListThemes()
+	items := make([]widgets.SelectItem, 0, len(names)+1)
+	items = append(items, widgets.SelectItem{ID: "", Label: "Automatic"})
 	for _, n := range names {
 		items = append(items, widgets.SelectItem{ID: n, Label: n})
 	}
