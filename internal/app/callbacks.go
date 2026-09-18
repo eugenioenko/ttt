@@ -734,11 +734,18 @@ func registerWidgetCallbacks(app *App) {
 			reg.Execute("terminal.new")
 		}},
 		{Icon: "⋮", OnClick: func(sx, sy int) {
+			// Only the edge the panel is not on is worth offering; listing both
+			// makes one of them a no-op the reader has to work out.
+			move := ui.ContextMenuItem{Label: "Move to Right", Command: "panel.moveRight"}
+			if app.ContentSplit.Position == ui.SplitRight {
+				move = ui.ContextMenuItem{Label: "Move to Bottom", Command: "panel.moveBottom"}
+			}
 			items := []ui.ContextMenuItem{
 				{Label: "New Terminal", Command: "terminal.new"},
 				ui.MenuSep(),
 				{Label: "Close All Terminals", Command: "terminal.closeAll"},
 				ui.MenuSep(),
+				move,
 				{Label: "Close Panel", Command: "panel.toggle"},
 			}
 			openContextMenu(app, items, sx, sy)
