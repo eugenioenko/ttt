@@ -70,6 +70,9 @@ func listFilesWalkDir(workDir, prefix string) []paletteFile {
 			}
 			return nil
 		}
+		if d.Type()&specialFileMask != 0 {
+			return nil
+		}
 		rel, err := filepath.Rel(workDir, path)
 		if err != nil {
 			return nil

@@ -310,6 +310,10 @@ func (g *EditorGroupWidget) MoveActiveTab(direction int) bool {
 }
 
 func (g *EditorGroupWidget) OpenFile(path string) {
+	if isSpecialFile(path) {
+		g.reportError("Cannot open " + path + ": not a regular file")
+		return
+	}
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path {
 			g.tabs[i].Preview = false
@@ -409,6 +413,14 @@ func (g *EditorGroupWidget) applyImagePrefs(content Widget) {
 		iv.Protocol = g.ImageProtocol
 		iv.CellW, iv.CellH = g.ImageCellW, g.ImageCellH
 	}
+}
+
+const specialFileMask = os.ModeNamedPipe | os.ModeSocket | os.ModeDevice | os.ModeCharDevice | os.ModeIrregular
+
+// Reading a pipe or device blocks until a peer shows up, which freezes the UI thread.
+func isSpecialFile(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Mode()&specialFileMask != 0
 }
 
 type fileKind int
