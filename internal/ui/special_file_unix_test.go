@@ -18,11 +18,20 @@ func TestListFilesWalkDirSkipsSpecialFiles(t *testing.T) {
 	if err := syscall.Mkfifo(filepath.Join(dir, "pipe"), 0o644); err != nil {
 		t.Skipf("mkfifo unavailable: %v", err)
 	}
+	if err := os.Symlink("a.txt", filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("pipe", filepath.Join(dir, "pipelink")); err != nil {
+		t.Fatal(err)
+	}
 
-	files := listFilesWalkDir(dir, "")
+	var got []string
+	for _, f := range listFilesWalkDir(dir, "") {
+		got = append(got, f.Rel)
+	}
 
-	if len(files) != 1 || files[0].Rel != "a.txt" {
-		t.Fatalf("got %+v, want only a.txt", files)
+	if len(got) != 2 || got[0] != "a.txt" || got[1] != "link" {
+		t.Fatalf("got %v, want [a.txt link]", got)
 	}
 }
 

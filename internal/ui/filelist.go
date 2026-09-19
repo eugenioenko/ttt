@@ -70,7 +70,7 @@ func listFilesWalkDir(workDir, prefix string) []paletteFile {
 			}
 			return nil
 		}
-		if d.Type()&specialFileMask != 0 {
+		if d.Type()&specialFileMask != 0 || d.Type()&os.ModeSymlink != 0 && isSpecialFile(path) {
 			return nil
 		}
 		rel, err := filepath.Rel(workDir, path)
