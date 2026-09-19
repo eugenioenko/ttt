@@ -269,9 +269,6 @@ func TestPrimaryDeviceAttributesResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	term.Run()
-	defer term.Close()
-
 	updated := make(chan struct{}, 100)
 	term.OnUpdate = func() {
 		select {
@@ -279,6 +276,9 @@ func TestPrimaryDeviceAttributesResponse(t *testing.T) {
 		default:
 		}
 	}
+
+	term.Run()
+	defer term.Close()
 
 	term.WriteString("stty raw -echo; printf '\\033[0c'; exec cat\n")
 

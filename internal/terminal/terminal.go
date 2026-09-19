@@ -166,8 +166,13 @@ func (t *Terminal) WriteString(s string) {
 }
 
 func (t *Terminal) Resize(cols, rows int) {
+	// xterm clamps below these itself; matching it here keeps t.cols/t.rows in
+	// step with the emulator, which trimForReflow relies on to size its estimate.
+	cols = max(cols, xterm.MinimumCols)
+	rows = max(rows, xterm.MinimumRows)
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	trimForReflow(t.term.NormalBuffer(), t.cols, t.rows, cols, rows)
 	t.cols = cols
 	t.rows = rows
 	t.term.Resize(cols, rows)
