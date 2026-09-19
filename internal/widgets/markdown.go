@@ -129,8 +129,17 @@ func (m *MarkdownWidget) Render(surface Surface) {
 	for y := 0; y < h && y < len(m.wrapped); y++ {
 		line := m.wrapped[y]
 		if line.Kind == markdown.KindDivider {
+			// The span carries the rule character: a heavier one under a level-1
+			// heading than under a level-2, which is what separates them.
+			ch := '─'
+			if len(line.Spans) > 0 {
+				for _, r := range line.Spans[0].Text {
+					ch = r
+					break
+				}
+			}
 			for x := 0; x < w; x++ {
-				surface.SetCell(x, y, term.Cell{Ch: '─', Style: term.StyleBorder})
+				surface.SetCell(x, y, term.Cell{Ch: ch, Style: term.StyleBorder})
 			}
 			continue
 		}

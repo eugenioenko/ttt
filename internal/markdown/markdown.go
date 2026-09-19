@@ -35,6 +35,10 @@ func (k LineKind) Wrappable() bool {
 	}
 }
 
+// headingRules maps a heading level to the character its underline is drawn
+// with. Levels absent from the map get no rule.
+var headingRules = map[int]string{1: "\u2550", 2: "\u2500"}
+
 type Span struct {
 	Text  string
 	Style term.Style
@@ -142,10 +146,15 @@ func (r *renderer) renderNode(n ast.Node) {
 func (r *renderer) renderBlock(n ast.Node) {
 	switch n := n.(type) {
 	case *ast.Heading:
+		// The hashes are markup, not content: keeping them means every level looks
+		// the same once the text is bold, which is no hierarchy at all. The top two
+		// levels get a rule underneath instead — the usual way a terminal shows
+		// weight without colour — and the rest stay bold.
 		spans := r.collectInlineSpans(n, term.StyleHoverBold)
-		prefix := strings.Repeat("#", n.Level) + " "
-		spans = append([]Span{{Text: prefix, Style: term.StyleHoverBold}}, spans...)
 		r.emit(Line{Kind: KindHeading, Spans: spans})
+		if rule, ok := headingRules[n.Level]; ok {
+			r.emit(Line{Kind: KindDivider, Spans: []Span{{Text: rule, Style: term.StyleBorder}}})
+		}
 		r.emitBlank()
 
 	case *ast.Paragraph:
@@ -170,7 +179,7 @@ func (r *renderer) renderBlock(n ast.Node) {
 		r.emitBlank()
 
 	case *ast.ThematicBreak:
-		r.emit(Line{Kind: KindDivider, Spans: []Span{{Text: "---", Style: term.StyleBorder}}})
+		r.emit(Line{Kind: KindDivider, Spans: []Span{{Text: "\u2500", Style: term.StyleBorder}}})
 		r.emitBlank()
 
 	case *ast.List:

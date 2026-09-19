@@ -157,12 +157,15 @@ func TestRenderDivider(t *testing.T) {
 	lines := Render("above\n\n---\n\nbelow")
 	foundDivider := false
 	for _, l := range lines {
-		if len(l.Spans) > 0 && l.Spans[0].Style == term.StyleBorder && l.Spans[0].Text == "---" {
+		// The span carries the character the rule is drawn with, not the markup
+		// that produced it: "---" here would paint three dashes repeated instead
+		// of a solid line.
+		if l.Kind == KindDivider && len(l.Spans) > 0 && l.Spans[0].Style == term.StyleBorder && l.Spans[0].Text == "\u2500" {
 			foundDivider = true
 		}
 	}
 	if !foundDivider {
-		t.Error("expected divider line with StyleBorder")
+		t.Error("expected a divider line drawn with a box-drawing rule")
 	}
 }
 
@@ -409,8 +412,8 @@ func TestRenderList(t *testing.T) {
 
 func TestRenderHeading(t *testing.T) {
 	lines := Render("# Hello World")
-	if lines[0].Text() != "# Hello World" {
-		t.Errorf("expected '# Hello World', got %q", lines[0].Text())
+	if lines[0].Text() != "Hello World" {
+		t.Errorf("expected 'Hello World', got %q", lines[0].Text())
 	}
 	found := false
 	for _, s := range lines[0].Spans {
@@ -457,5 +460,40 @@ func TestRenderBlockquote(t *testing.T) {
 	}
 	if !hasBorder {
 		t.Error("expected blockquote prefix with StyleBorder")
+	}
+}
+
+// The hashes are markup. Rendering them leaves every level looking identical
+// once the text is bold, which is the bug this replaced.
+func TestRenderHeadingDropsTheHashes(t *testing.T) {
+	for _, src := range []string{"# One", "## Two", "### Three", "###### Six"} {
+		for _, line := range Render(src) {
+			if strings.Contains(line.Text(), "#") {
+				t.Errorf("Render(%q) kept the hashes: %q", src, line.Text())
+			}
+		}
+	}
+}
+
+// Levels 1 and 2 are told apart by the rule under them, so the rule character
+// has to differ; deeper levels get none and stay bold.
+func TestRenderHeadingRules(t *testing.T) {
+	rule := func(src string) string {
+		for _, line := range Render(src) {
+			if line.Kind == KindDivider {
+				return line.Text()
+			}
+		}
+		return ""
+	}
+	one, two := rule("# One"), rule("## Two")
+	if one == "" || two == "" {
+		t.Fatalf("levels 1 and 2 must be underlined, got %q and %q", one, two)
+	}
+	if one == two {
+		t.Errorf("levels 1 and 2 use the same rule %q, so they read the same", one)
+	}
+	if got := rule("### Three"); got != "" {
+		t.Errorf("level 3 should have no rule, got %q", got)
 	}
 }
