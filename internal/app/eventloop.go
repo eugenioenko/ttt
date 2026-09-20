@@ -156,10 +156,7 @@ func RunEventLoop(
 	}
 
 	redraw := func() {
-		cells := make([][]term.Cell, app.Root.Height)
-		for y := range cells {
-			cells[y] = make([]term.Cell, app.Root.Width)
-		}
+		cells := app.nextFrameGrid()
 		if app.ImageLayer != nil {
 			app.ImageLayer.Begin()
 		}
@@ -469,6 +466,26 @@ func RunEventLoop(
 			}
 		}
 	}
+}
+
+// The renderer keeps the last grid as its previous frame, so frames alternate
+// between two grids instead of allocating a new one each time.
+func (a *App) nextFrameGrid() [][]term.Cell {
+	a.frameNext ^= 1
+	w, h := a.Root.Width, a.Root.Height
+	grid := a.frameGrids[a.frameNext]
+	if len(grid) != h || (h > 0 && len(grid[0]) != w) {
+		grid = make([][]term.Cell, h)
+		for y := range grid {
+			grid[y] = make([]term.Cell, w)
+		}
+		a.frameGrids[a.frameNext] = grid
+		return grid
+	}
+	for y := range grid {
+		clear(grid[y])
+	}
+	return grid
 }
 
 func resizeTerminals(app *App) {

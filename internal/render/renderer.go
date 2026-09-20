@@ -23,9 +23,8 @@ func (r *Renderer) Render(screen term.Screen) {
 		}
 	}
 	screen.Show()
-	// No copy needed: callers always pass a freshly allocated grid to
-	// SetCurrent each frame, so retaining the reference is safe and avoids
-	// a full-grid alloc+copy on every render.
+	// No copy needed: callers never pass the grid retained here as the previous
+	// frame back to SetCurrent, so keeping the reference avoids a full-grid copy.
 	r.prev = r.curr
 }
 

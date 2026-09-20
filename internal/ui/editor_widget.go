@@ -23,6 +23,7 @@ const maxBracketColorLines = 10_000
 
 type EditorPaneWidget struct {
 	BaseWidget
+	lineScratch             []screenCell
 	Buf                     *buffer.Buffer
 	Cursor                  *cursor.Cursor
 	Viewport                *view.Viewport

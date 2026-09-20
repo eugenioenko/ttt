@@ -391,8 +391,12 @@ type screenCell struct {
 	bufCol int
 }
 
+// The returned slice is reused by the next call.
 func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Span, collapsed bool, ann []rune, tabW, leftCol, width int) []screenCell {
-	cells := make([]screenCell, width)
+	if cap(e.lineScratch) < width {
+		e.lineScratch = make([]screenCell, width)
+	}
+	cells := e.lineScratch[:width]
 	for i := range cells {
 		cells[i] = screenCell{ch: ' ', style: term.StyleDefault, bufCol: -1}
 	}
