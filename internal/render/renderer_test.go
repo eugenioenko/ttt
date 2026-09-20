@@ -6,10 +6,9 @@ import (
 	"unsafe"
 )
 
-func makeCells(rows ...string) [][]term.Cell {
-	out := make([][]term.Cell, len(rows))
+func nextFrame(r *Renderer, rows ...string) [][]term.Cell {
+	out := r.NextFrame(len(rows[0]), len(rows))
 	for y, row := range rows {
-		out[y] = make([]term.Cell, len(row))
 		for x, ch := range row {
 			out[y][x] = term.Cell{Ch: ch}
 		}
@@ -20,7 +19,7 @@ func makeCells(rows ...string) [][]term.Cell {
 func TestRenderer_RenderDiff(t *testing.T) {
 	r := &Renderer{}
 	screen := term.NewMockScreen(5, 2)
-	r.SetCurrent(makeCells("abcde", "fghij"))
+	nextFrame(r, "abcde", "fghij")
 	r.Render(screen)
 	// All cells should be set
 	for y, row := range []string{"abcde", "fghij"} {
@@ -32,7 +31,7 @@ func TestRenderer_RenderDiff(t *testing.T) {
 		}
 	}
 	// Change one cell
-	r.SetCurrent(makeCells("abxde", "fghij"))
+	nextFrame(r, "abxde", "fghij")
 	r.Render(screen)
 	c, ok := screen.Cells[[2]int{2, 0}]
 	if !ok || c.Ch != 'x' {
@@ -43,8 +42,7 @@ func TestRenderer_RenderDiff(t *testing.T) {
 func TestRenderer_RenderNoCopy(t *testing.T) {
 	r := &Renderer{}
 	screen := term.NewMockScreen(5, 2)
-	cells := makeCells("abcde", "fghij")
-	r.SetCurrent(cells)
+	cells := nextFrame(r, "abcde", "fghij")
 	r.Render(screen)
 
 	for y := range cells {
@@ -54,9 +52,44 @@ func TestRenderer_RenderNoCopy(t *testing.T) {
 	}
 }
 
+func TestRenderer_NextFrameAlternatesTwoGrids(t *testing.T) {
+	r := &Renderer{}
+	screen := term.NewMockScreen(3, 1)
+
+	first := nextFrame(r, "abc")
+	r.Render(screen)
+	second := nextFrame(r, "abd")
+	if unsafe.SliceData(second[0]) == unsafe.SliceData(first[0]) {
+		t.Fatal("NextFrame handed out the grid held as the previous frame")
+	}
+	r.Render(screen)
+
+	third := r.NextFrame(3, 1)
+	if unsafe.SliceData(third[0]) != unsafe.SliceData(first[0]) {
+		t.Error("third frame should reuse the first frame's grid")
+	}
+	if third[0][0] != (term.Cell{}) || third[0][2] != (term.Cell{}) {
+		t.Error("reused grid was not cleared")
+	}
+}
+
+func TestRenderer_NextFrameReallocatesOnResize(t *testing.T) {
+	r := &Renderer{}
+	screen := term.NewMockScreen(6, 2)
+	nextFrame(r, "abc")
+	r.Render(screen)
+	nextFrame(r, "abc")
+	r.Render(screen)
+
+	grid := r.NextFrame(6, 2)
+	if len(grid) != 2 || len(grid[0]) != 6 {
+		t.Fatalf("grid is %dx%d, want 6x2", len(grid[0]), len(grid))
+	}
+}
+
 func TestRenderer_Clear(t *testing.T) {
 	r := &Renderer{}
-	r.SetCurrent(makeCells("abc"))
+	nextFrame(r, "abc")
 	r.Clear()
 	if r.prev != nil || r.curr != nil {
 		t.Error("expected buffers to be nil after Clear")

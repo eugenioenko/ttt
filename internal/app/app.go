@@ -38,8 +38,6 @@ type TerminalTab struct {
 }
 
 type App struct {
-	frameGrids             [2][][]term.Cell
-	frameNext              int
 	Root                   *ui.Root
 	EditorGroup            *ui.EditorGroupWidget
 	Sidebar                *ui.SidebarWidget

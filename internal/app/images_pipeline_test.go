@@ -130,7 +130,7 @@ func (d *imageFrameDriver) frame(cells [][]term.Cell, place func(*ui.RenderSurfa
 	if place != nil {
 		place(surface)
 	}
-	d.renderer.SetCurrent(cells)
+	loadFrame(d.renderer, cells)
 	d.renderer.Render(d.screen)
 	d.sim.show()
 	var buf bytes.Buffer
@@ -296,7 +296,7 @@ func (d *imageFrameDriver) frameRoot(r *ui.Root) {
 		cells[y] = make([]term.Cell, d.w)
 	}
 	r.Render(cells)
-	d.renderer.SetCurrent(cells)
+	loadFrame(d.renderer, cells)
 	d.renderer.Render(d.screen)
 	d.sim.show()
 	var buf bytes.Buffer
@@ -336,4 +336,15 @@ func TestImagePipelineModalShowsDialogTextSameFrame(t *testing.T) {
 	r.PopOverlay()
 	d.frameRoot(r)
 	assertVisibleExcept(t, d.sim, textGrid(40, 20, map[int]bool{5: true, 6: true}), rectSet(0, 5, 40, 2), "post-modal frame")
+}
+
+func loadFrame(r *render.Renderer, cells [][]term.Cell) {
+	w := 0
+	if len(cells) > 0 {
+		w = len(cells[0])
+	}
+	grid := r.NextFrame(w, len(cells))
+	for y := range cells {
+		copy(grid[y], cells[y])
+	}
 }

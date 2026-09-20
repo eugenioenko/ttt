@@ -101,12 +101,8 @@ func newTestHarness(t *testing.T, w, h int) *testHarness {
 
 func (h *testHarness) redraw() {
 	h.t.Helper()
-	cells := make([][]term.Cell, h.app.Root.Height)
-	for y := range cells {
-		cells[y] = make([]term.Cell, h.app.Root.Width)
-	}
+	cells := h.renderer.NextFrame(h.app.Root.Width, h.app.Root.Height)
 	h.app.Root.Render(cells)
-	h.renderer.SetCurrent(cells)
 	h.renderer.Render(h.app.Screen)
 }
 

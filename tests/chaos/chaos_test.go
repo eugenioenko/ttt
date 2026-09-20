@@ -104,12 +104,8 @@ func newChaosHarness(seed int64) *chaosHarness {
 	app.BindKeys(editor.Root, reg, cfg.Keybindings)
 	editor.Root.SetSize(w, h)
 
-	cells := make([][]term.Cell, h)
-	for y := range cells {
-		cells[y] = make([]term.Cell, w)
-	}
+	cells := editor.Renderer.NextFrame(w, h)
 	editor.Root.Render(cells)
-	editor.Renderer.SetCurrent(cells)
 	editor.Renderer.Render(screen)
 
 	var commandPool []command.Command
@@ -139,12 +135,8 @@ func (h *chaosHarness) cleanup() {
 }
 
 func (h *chaosHarness) redraw() {
-	cells := make([][]term.Cell, h.app.Root.Height)
-	for y := range cells {
-		cells[y] = make([]term.Cell, h.app.Root.Width)
-	}
+	cells := h.renderer.NextFrame(h.app.Root.Width, h.app.Root.Height)
 	h.app.Root.Render(cells)
-	h.renderer.SetCurrent(cells)
 	h.renderer.Render(h.app.Screen)
 }
 
