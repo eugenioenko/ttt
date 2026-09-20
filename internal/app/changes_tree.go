@@ -205,6 +205,28 @@ func (cp *ChangesPanel) SetIcons(mode string) {
 		return
 	}
 	cp.rebuildFileNodes(func() { cp.icons = mode })
+	for _, node := range cp.CommitLog.Config.Items {
+		switch {
+		case node.ID == "branch":
+			node.Icon = cp.branchIcon()
+		case strings.HasPrefix(node.ID, "commit:"):
+			node.Icon = cp.commitIcon()
+		}
+	}
+}
+
+func (cp *ChangesPanel) branchIcon() string {
+	if cp.icons == config.IconsNerdFont {
+		return "\uf418"
+	}
+	return "⎇"
+}
+
+func (cp *ChangesPanel) commitIcon() string {
+	if cp.icons == config.IconsNerdFont {
+		return "\uf417"
+	}
+	return "●"
 }
 
 func (cp *ChangesPanel) rebuildFileNodes(apply func()) {

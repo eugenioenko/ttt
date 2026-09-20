@@ -7,6 +7,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/fileicons"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func changesIconFixture(view string) *ChangesPanel {
@@ -80,5 +81,29 @@ func TestCommitFileNodesCarryFileIcons(t *testing.T) {
 	nodes := cp.commitFileNodes("/repo", "abc", "abc", "commit:abc", []git.FileStatus{{Status: "D", Path: "docs/guide.md"}})
 	if len(nodes) != 1 || nodes[0].Icon != "D" || nodes[0].LabelIcon != fileicons.ForFile("guide.md").Glyph {
 		t.Fatalf("commit file row = %+v, want status D with the markdown icon", nodes)
+	}
+}
+
+func TestCommitHistoryIconsFollowIconMode(t *testing.T) {
+	cp := NewChangesPanel("/repo")
+	cp.logCommits = make(map[string]commitFileRef)
+	cp.CommitLog.SetItems([]*widgets.TreeNode{
+		{ID: "branch", Icon: cp.branchIcon()},
+		cp.commitLogNode("/repo", git.LogEntry{Ref: "abc", Hash: "abc", Message: "msg"}),
+	})
+
+	cp.SetIcons(config.IconsNerdFont)
+	items := cp.CommitLog.Config.Items
+	if items[0].Icon != "" || items[1].Icon != "" {
+		t.Errorf("nerd font icons = %q, %q", items[0].Icon, items[1].Icon)
+	}
+	if got := cp.commitLogNode("/repo", git.LogEntry{Ref: "def", Hash: "def"}).Icon; got != "" {
+		t.Errorf("new commit row icon = %q, want nerd font glyph", got)
+	}
+
+	cp.SetIcons(config.IconsNone)
+	items = cp.CommitLog.Config.Items
+	if items[0].Icon != "⎇" || items[1].Icon != "●" {
+		t.Errorf("none icons = %q, %q", items[0].Icon, items[1].Icon)
 	}
 }
