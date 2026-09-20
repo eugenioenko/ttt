@@ -91,7 +91,7 @@ func TestRenderer_Clear(t *testing.T) {
 	r := &Renderer{}
 	nextFrame(r, "abc")
 	r.Clear()
-	if r.prev != nil || r.curr != nil {
+	if r.prev != nil || r.curr != nil || r.spare != nil {
 		t.Error("expected buffers to be nil after Clear")
 	}
 }
