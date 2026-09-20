@@ -745,6 +745,10 @@ func (tw *TerminalWidget) mousePTYCoords(mx, my int) (col, row int) {
 	return col, row
 }
 
+func (tw *TerminalWidget) OwnsPointerCapture() bool {
+	return tw.selecting || tw.mouseButtonHeld >= 0 || tw.scrollbar.IsDragging()
+}
+
 func (tw *TerminalWidget) ClearSelection() {
 	tw.hasSelection = false
 	tw.selecting = false

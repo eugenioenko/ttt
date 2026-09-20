@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -151,7 +152,7 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 
 func (tp *TerminalPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
-		if mev.Buttons()&tcell.Button1 != 0 {
+		if mev.Buttons()&tcell.Button1 != 0 && !tp.activeOwnsPointer() {
 			mx, _ := mev.Position()
 			r := tp.GetRect()
 			if mx-r.X < VerticalTabBarWidth {
@@ -164,4 +165,9 @@ func (tp *TerminalPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 		return w.HandleEvent(ev)
 	}
 	return EventIgnored
+}
+
+func (tp *TerminalPanelWidget) activeOwnsPointer() bool {
+	owner, ok := tp.ActiveWidget().(widgets.PointerCaptureOwner)
+	return ok && owner.OwnsPointerCapture()
 }
