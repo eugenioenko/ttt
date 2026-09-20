@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/aymanbagabas/go-pty"
 	"github.com/gitpod-io/xterm-go"
@@ -34,6 +35,8 @@ type Terminal struct {
 	rawTail    []byte
 	OnUpdate   func()
 	OnExit     func()
+
+	updatePending atomic.Bool
 }
 
 func New(shell string, cols, rows, scrollbackMax int, env []string, dir string) (*Terminal, error) {
@@ -148,7 +151,7 @@ func (t *Terminal) readLoop() {
 			t.term.Write(buf[:n])
 			t.appendRawTail(buf[:n])
 			t.mu.Unlock()
-			if t.OnUpdate != nil {
+			if t.OnUpdate != nil && t.updatePending.CompareAndSwap(false, true) {
 				t.OnUpdate()
 			}
 		}
@@ -177,6 +180,11 @@ func (t *Terminal) Resize(cols, rows int) {
 	t.rows = rows
 	t.term.Resize(cols, rows)
 	t.pt.Resize(cols, rows)
+}
+
+// AckUpdate must run before a frame reads the emulator so later output re-arms OnUpdate.
+func (t *Terminal) AckUpdate() {
+	t.updatePending.Store(false)
 }
 
 func (t *Terminal) Snapshot(fn func(term *xterm.Terminal)) {

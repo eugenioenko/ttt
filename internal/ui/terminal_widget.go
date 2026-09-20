@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -299,6 +300,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := tw.GetRect()
 
+	tw.Term.AckUpdate()
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
 		cols := xt.Cols()
@@ -343,8 +345,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 				for x := 0; x < contentW && x < cols; x++ {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
-						bl.LoadCell(x, cellData)
-						c = tw.cellDataToCell(cellData)
+						c = tw.lineCell(bl, x, cellData)
 					} else {
 						var bg term.DirectColor
 						if tw.Palette != nil {
@@ -381,8 +382,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 				for x := 0; x < contentW; x++ {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
-						bl.LoadCell(x, cellData)
-						c = tw.cellDataToCell(cellData)
+						c = tw.lineCell(bl, x, cellData)
 					} else {
 						var bg term.DirectColor
 						if tw.Palette != nil {
@@ -415,11 +415,21 @@ func (tw *TerminalWidget) Render(surface Surface) {
 	})
 }
 
-func (tw *TerminalWidget) cellDataToCell(cd *xterm.CellData) term.Cell {
-	chars := cd.GetChars()
-	var ch rune = ' '
-	if len(chars) > 0 {
-		ch = []rune(chars)[0]
+// Avoids BufferLine.LoadCell, which allocates an ExtendedAttrs per cell.
+func (tw *TerminalWidget) lineCell(bl *xterm.BufferLine, x int, cd *xterm.CellData) term.Cell {
+	cd.Fg = bl.GetFg(x)
+	cd.Bg = bl.GetBg(x)
+	if cd.Bg&xterm.BgFlagHasExtended != 0 {
+		cd.Extended = bl.GetExtended(x)
+	}
+
+	ch := ' '
+	if bl.IsCombined(x) != 0 {
+		if r, _ := utf8.DecodeRuneInString(bl.GetString(x)); r != utf8.RuneError {
+			ch = r
+		}
+	} else if cp := bl.GetCodePoint(x); cp != 0 {
+		ch = rune(cp)
 	}
 
 	cell := term.Cell{

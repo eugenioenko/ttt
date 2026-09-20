@@ -12,6 +12,7 @@ import (
 func newUpdateChan(term *terminal.Terminal) chan struct{} {
 	updated := make(chan struct{}, 100)
 	term.OnUpdate = func() {
+		term.AckUpdate()
 		select {
 		case updated <- struct{}{}:
 		default:

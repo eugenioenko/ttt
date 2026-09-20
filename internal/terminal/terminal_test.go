@@ -54,6 +54,7 @@ func TestNewDefaultsScrollback(t *testing.T) {
 	}
 	updated := make(chan struct{}, 100)
 	term.OnUpdate = func() {
+		term.AckUpdate()
 		select {
 		case updated <- struct{}{}:
 		default:
@@ -172,6 +173,7 @@ func TestWriteStringAndReadLoopUpdatesView(t *testing.T) {
 
 	updated := make(chan struct{}, 100)
 	term.OnUpdate = func() {
+		term.AckUpdate()
 		select {
 		case updated <- struct{}{}:
 		default:
@@ -203,6 +205,7 @@ func TestRawTailCapturesWrittenBytes(t *testing.T) {
 
 	updated := make(chan struct{}, 100)
 	term.OnUpdate = func() {
+		term.AckUpdate()
 		select {
 		case updated <- struct{}{}:
 		default:
@@ -271,6 +274,7 @@ func TestPrimaryDeviceAttributesResponse(t *testing.T) {
 	}
 	updated := make(chan struct{}, 100)
 	term.OnUpdate = func() {
+		term.AckUpdate()
 		select {
 		case updated <- struct{}{}:
 		default:
