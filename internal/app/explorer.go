@@ -18,6 +18,7 @@ type NavigationPanel struct {
 	Tree     *widgets.TreeWidget
 	Adapter  *ui.WidgetAdapter
 	Settings config.ExplorerSettings
+	Icons    string
 	Roots    []string
 
 	OnOpenFile   func(path string)
@@ -25,9 +26,10 @@ type NavigationPanel struct {
 	OnRootMenu   func(node *widgets.TreeNode, sx, sy int)
 }
 
-func NewNavigationPanel(settings config.ExplorerSettings, paths ...string) *NavigationPanel {
+func NewNavigationPanel(settings config.ExplorerSettings, icons string, paths ...string) *NavigationPanel {
 	n := &NavigationPanel{
 		Settings: settings,
+		Icons:    icons,
 		Roots:    paths,
 	}
 
@@ -205,7 +207,7 @@ func (n *NavigationPanel) loadChildren(node *widgets.TreeNode) {
 			Expandable: de.IsDir,
 			Muted:      de.GitIgnored || strings.HasPrefix(de.Name, "."),
 		}
-		if n.Settings.Icons == config.IconsNerdFont && !de.IsDir {
+		if n.Icons == config.IconsNerdFont && !de.IsDir {
 			setFileIcon(child)
 		}
 		node.Children = append(node.Children, child)

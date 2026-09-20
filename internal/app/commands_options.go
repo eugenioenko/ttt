@@ -68,23 +68,8 @@ func (a *App) UseListGitFileView() {
 	a.SaveAndApplySettings()
 }
 
-func (a *App) ToggleExplorerIcons() {
-	a.Settings.Explorer.Icons = toggledIconMode(a.Settings.Explorer.Icons)
-	a.SaveAndApplySettings()
-}
-
-func (a *App) ToggleGitIcons() {
-	a.Settings.Git.Icons = toggledIconMode(a.Settings.Git.Icons)
-	a.SaveAndApplySettings()
-}
-
 func (a *App) ToggleFileIcons() {
-	mode := config.IconsNerdFont
-	if a.Settings.Explorer.Icons == config.IconsNerdFont && a.Settings.Git.Icons == config.IconsNerdFont {
-		mode = config.IconsNone
-	}
-	a.Settings.Explorer.Icons = mode
-	a.Settings.Git.Icons = mode
+	a.Settings.Appearance.Icons = toggledIconMode(a.Settings.Appearance.Icons)
 	a.SaveAndApplySettings()
 }
 
@@ -361,7 +346,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		transparentBgChecked = ui.MenuChecked
 	}
 
-	fontIconsChecked := menuChecked(a.Settings.Explorer.Icons == config.IconsNerdFont && a.Settings.Git.Icons == config.IconsNerdFont)
+	fontIconsChecked := menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)
 
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
@@ -421,7 +406,7 @@ func (a *App) buildGitFileOptions(expandCommand, collapseCommand string) []ui.Co
 	return []ui.ContextMenuItem{
 		{Label: "Tree", Command: "options.useGitFileTree", Checked: menuChecked(a.Settings.Git.FileView == config.GitFileViewTree)},
 		{Label: "List", Command: "options.useGitFileList", Checked: menuChecked(a.Settings.Git.FileView != config.GitFileViewTree)},
-		{Label: "File Icons", Command: "options.toggleGitIcons", Checked: menuChecked(a.Settings.Git.Icons != config.IconsNone)},
+		{Label: "File Icons", Command: "options.toggleFontIcons", Checked: menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)},
 		ui.MenuSep(),
 		{Label: "Expand All", Command: expandCommand},
 		{Label: "Collapse All", Command: collapseCommand},
@@ -513,18 +498,6 @@ func registerOptionsCommands(app *App) {
 		ID: "options.useGitFileList", Title: "View Git Files as List",
 		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "flat", "list"},
 		Handler:  app.UseListGitFileView,
-	})
-
-	reg.Register(command.Command{
-		ID: "options.toggleExplorerIcons", Title: "Toggle Explorer File Icons",
-		Keywords: []string{"preferences", "settings", "explorer", "files", "icons", "nerd font"},
-		Handler:  app.ToggleExplorerIcons,
-	})
-
-	reg.Register(command.Command{
-		ID: "options.toggleGitIcons", Title: "Toggle Git File Icons",
-		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "icons", "nerd font"},
-		Handler:  app.ToggleGitIcons,
 	})
 
 	reg.Register(command.Command{

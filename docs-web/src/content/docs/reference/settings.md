@@ -26,6 +26,14 @@ Both write the same file, so you can move between them freely.
 | `theme` | string | `""` | Theme name (e.g. `"default-dark"`) |
 | `debugMode` | bool | `false` | Enable debug logging |
 
+## Appearance
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `appearance.icons` | string | `"none"` | Icons in the explorer, Changes panel, and commit history: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one, so this defaults off; turn it on here, in Settings > Advanced, or via **Options > Font Icons**. Colors come from the theme's `fileIcons` section |
+| `appearance.chevrons.collapsed` | string | `▶` | Glyph drawn beside a collapsed folder or group in trees, and on a collapsed foldable line in the editor gutter. Must be a single-width character, for example a Nerd Font chevron such as `\ueab6`; anything else falls back to the default. |
+| `appearance.chevrons.expanded` | string | `▼` | Glyph drawn beside an expanded folder or group, and on an expanded foldable line while hovering the gutter. Same rules as above. |
+
 ## Editor
 
 All editor settings are nested under the `editor` key.
@@ -53,8 +61,6 @@ All editor settings are nested under the `editor` key.
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
-| `editor.foldChevronCollapsed` | string | `▶` | Gutter glyph on a collapsed foldable line. Must be a single-width character, for example a Nerd Font chevron such as `\ueab6`; anything else falls back to the default. |
-| `editor.foldChevronExpanded` | string | `▼` | Gutter glyph on an expanded foldable line, shown while hovering the gutter. Same rules as above. |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
 
 ## Explorer
@@ -63,22 +69,18 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
-| `explorer.icons` | string | `"none"` | File and folder icons in the file explorer: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one, so this defaults off; turn it on here, in Settings > Advanced, or via **Options > Font Icons**. Colors come from the theme's `fileIcons` section |
 
 ## Sidebar
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `sidebar.panelOrder` | string[] | built-in order | Preferred sidebar panel-header order. Dragging a header or using **Move Panel Left/Right** updates it automatically. Unknown plugin panel IDs are retained until that plugin loads. |
-| `sidebar.treeChevronCollapsed` | string | `▶` | Glyph drawn beside a collapsed folder or group in sidebar trees. Must be a single-width character, for example a Nerd Font chevron such as `\ueab6`; anything else falls back to the default. |
-| `sidebar.treeChevronExpanded` | string | `▼` | Glyph drawn beside an expanded folder or group. Same rules as above. |
 
 ## Git
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `git.fileView` | string | `"list"` | Show working-tree and expanded commit files as a compact `"tree"` or full-path `"list"` |
-| `git.icons` | string | `"none"` | File and folder icons in the Changes panel and commit history, between the status letter and the name: `"nerd-font"` or `"none"`. Needs a Nerd Font, like `explorer.icons`, and defaults off for the same reason |
 
 ## Terminal
 
@@ -158,6 +160,13 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   "version": 1,
   "theme": "default-dark",
   "debugMode": false,
+  "appearance": {
+    "icons": "none",
+    "chevrons": {
+      "collapsed": "▶",
+      "expanded": "▼"
+    }
+  },
   "editor": {
     "tabSize": 4,
     "insertSpaces": true,
@@ -179,8 +188,6 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "menuBar": true,
     "gutterStyle": "compact",
     "borderStyle": "default",
-    "foldChevronCollapsed": "▶",
-    "foldChevronExpanded": "▼",
     "bracketPairColorization": false
   },
   "search": {
@@ -188,17 +195,13 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   },
   "explorer": {
     "showHidden": true,
-    "showGitIgnored": true,
-    "icons": "none"
+    "showGitIgnored": true
   },
   "sidebar": {
-    "panelOrder": ["explorer", "search", "changes", "outline"],
-    "treeChevronCollapsed": "▶",
-    "treeChevronExpanded": "▼"
+    "panelOrder": ["explorer", "search", "changes", "outline"]
   },
   "git": {
-    "fileView": "list",
-    "icons": "none"
+    "fileView": "list"
   },
   "terminal": {
     "shell": "/bin/zsh",

@@ -33,9 +33,7 @@ func TestExplorerIconsMuteGitIgnoredFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	runTreeGit(t, rootPath, "init", "-q")
-	settings := config.DefaultExplorerSettings()
-	settings.Icons = config.IconsNerdFont
-	explorer := NewNavigationPanel(settings, rootPath)
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNerdFont, rootPath)
 	if log := nodeWithLabel(explorer.Tree.Config.Items, "debug.log"); log == nil || log.Icon == "" || log.IconStyle != term.StyleMuted {
 		t.Errorf("git-ignored debug.log icon = %+v, want a muted icon", log)
 	}
@@ -45,9 +43,7 @@ func TestExplorerIconsMuteGitIgnoredFiles(t *testing.T) {
 }
 
 func TestExplorerIconsNoneOmitsIcons(t *testing.T) {
-	settings := config.DefaultExplorerSettings()
-	settings.Icons = config.IconsNone
-	explorer := NewNavigationPanel(settings, explorerIconFixture(t))
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, explorerIconFixture(t))
 	for _, label := range []string{"src", "main.go", ".env"} {
 		node := nodeWithLabel(explorer.Tree.Config.Items, label)
 		if node == nil {
@@ -60,9 +56,7 @@ func TestExplorerIconsNoneOmitsIcons(t *testing.T) {
 }
 
 func TestExplorerIconsShowNerdFontForFilesOnly(t *testing.T) {
-	settings := config.DefaultExplorerSettings()
-	settings.Icons = config.IconsNerdFont
-	explorer := NewNavigationPanel(settings, explorerIconFixture(t))
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNerdFont, explorerIconFixture(t))
 	items := explorer.Tree.Config.Items
 
 	if root := items[0]; root.Icon != "" {
@@ -91,10 +85,8 @@ func TestExplorerIconsShowNerdFontForFilesOnly(t *testing.T) {
 }
 
 func TestExplorerIconSettingChangeAppliesOnReload(t *testing.T) {
-	settings := config.DefaultExplorerSettings()
-	settings.Icons = config.IconsNerdFont
-	explorer := NewNavigationPanel(settings, explorerIconFixture(t))
-	explorer.Settings.Icons = config.IconsNone
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNerdFont, explorerIconFixture(t))
+	explorer.Icons = config.IconsNone
 	explorer.Reload()
 	if node := nodeWithLabel(explorer.Tree.Config.Items, "main.go"); node == nil || node.Icon != "" {
 		t.Fatalf("reload after disabling icons left main.go decorated: %+v", node)

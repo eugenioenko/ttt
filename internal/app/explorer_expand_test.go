@@ -35,7 +35,7 @@ func TestExplorerExpandAllReachesEveryVisibleDescendantAndCollapseAllClosesTree(
 			t.Fatal(err)
 		}
 	}
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), rootPath)
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, rootPath)
 	root := explorer.Tree.Config.Items[0]
 
 	explorer.ExpandAll()
@@ -62,7 +62,7 @@ func TestExplorerExpandAllReachesEveryVisibleDescendantAndCollapseAllClosesTree(
 func TestExplorerExpandAllLeavesGitMetadataManual(t *testing.T) {
 	rootPath := t.TempDir()
 	runTreeGit(t, rootPath, "init", "-q")
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), rootPath)
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, rootPath)
 	explorer.ExpandAll()
 	gitMetadata := nodeWithLabel(explorer.Tree.Config.Items, ".git")
 	if gitMetadata == nil || gitMetadata.Expanded || len(gitMetadata.Children) != 0 {
@@ -83,7 +83,7 @@ func TestExplorerExpandAllStopsAtSymlinkCycles(t *testing.T) {
 	if err := os.Symlink(rootPath, filepath.Join(rootPath, "deep", "one", "loop")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), rootPath)
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, rootPath)
 	explorer.ExpandAll()
 	loop := nodeWithLabel(explorer.Tree.Config.Items, "loop")
 	if loop == nil || loop.Expanded {
@@ -104,7 +104,7 @@ func TestExplorerExpandAllDoesNotTraverseExternalDirectorySymlink(t *testing.T) 
 	if err := os.Symlink(externalPath, linkPath); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), rootPath)
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, rootPath)
 	explorer.ExpandAll()
 	link := nodeWithLabel(explorer.Tree.Config.Items, "external-link")
 	if link == nil || link.Expanded || len(link.Children) != 0 {
