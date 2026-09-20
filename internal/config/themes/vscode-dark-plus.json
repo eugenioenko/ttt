@@ -31,8 +31,7 @@
       "bg": "#1e1e1e"
     },
     "inactive": {
-      "fg": "#969696",
-      "bg": "#2d2d2d"
+      "fg": "#969696"
     },
     "selected": {
       "fg": "#ffffff",
