@@ -379,3 +379,19 @@ func TestNormalizeImageProtocol(t *testing.T) {
 		t.Errorf("invalid protocol should reset to %q, got %q", ImageProtocolAuto, s.Image.Protocol)
 	}
 }
+
+func TestEveryTopLevelSettingsKeyIsKnown(t *testing.T) {
+	data, err := json.Marshal(DefaultSettings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	for key := range m {
+		if !knownSettingsKeys[key] {
+			t.Errorf("top-level key %q is missing from knownSettingsKeys and would be treated as a plugin key", key)
+		}
+	}
+}
