@@ -275,6 +275,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		changes.Split.BottomRatio = 0
 	}
 	symbols := NewSymbolsPanel()
+	symbols.SetIcons(cfg.Settings.Appearance.Icons)
 
 	explorer := NewNavigationPanel(cfg.Settings.Explorer, cfg.Settings.Appearance.Icons, ws.Paths()...)
 

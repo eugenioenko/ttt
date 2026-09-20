@@ -129,6 +129,9 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.Changes.SetFileView(s.Git.FileView)
 		a.Changes.SetIcons(s.Appearance.Icons)
 	}
+	if a.Symbols != nil {
+		a.Symbols.SetIcons(s.Appearance.Icons)
+	}
 
 	// An empty theme name means the built-in default, and must still be applied —
 	// otherwise switching back to it leaves the previous theme's colors on screen.

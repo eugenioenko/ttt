@@ -3,7 +3,9 @@ package app
 import (
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/lsp"
+	"github.com/eugenioenko/ttt/internal/term"
 )
 
 func TestMarkdownSymbolsNesting(t *testing.T) {
@@ -94,7 +96,7 @@ func TestSymbolNodesIDsAndExpansion(t *testing.T) {
 			},
 		},
 	}
-	nodes := symbolNodes(syms)
+	nodes := symbolNodes(config.IconsNone, syms, map[string]lsp.SymbolKind{})
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
@@ -126,5 +128,32 @@ func TestSelectNearest(t *testing.T) {
 		if sel == nil || sel.Label != tc.want {
 			t.Errorf("line %d: expected %q selected, got %+v", tc.line, tc.want, sel)
 		}
+	}
+}
+
+func TestSymbolIconsFollowIconMode(t *testing.T) {
+	sp := NewSymbolsPanel()
+	sp.SetSymbols([]lsp.DocumentSymbol{
+		{Name: "Parent", Kind: lsp.SKStruct, SelectionRange: lsp.Range{Start: lsp.Position{Line: 1}},
+			Children: []lsp.DocumentSymbol{
+				{Name: "run", Kind: lsp.SKMethod, SelectionRange: lsp.Range{Start: lsp.Position{Line: 2}}},
+			}},
+	})
+	parent := sp.Tree.Config.Items[0]
+	if parent.Icon != "◆" || parent.Children[0].Icon != "ƒ" {
+		t.Fatalf("plain icons = %q, %q", parent.Icon, parent.Children[0].Icon)
+	}
+
+	sp.SetIcons(config.IconsNerdFont)
+	if parent.Icon != "" || parent.Children[0].Icon != "" {
+		t.Errorf("nerd icons = %q, %q", parent.Icon, parent.Children[0].Icon)
+	}
+	if parent.IconStyle != term.StyleSyntaxType {
+		t.Errorf("icon style changed: %v", parent.IconStyle)
+	}
+
+	sp.SetIcons(config.IconsNone)
+	if parent.Icon != "◆" {
+		t.Errorf("icon after switching back = %q", parent.Icon)
 	}
 }

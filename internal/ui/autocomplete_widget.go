@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
@@ -23,7 +24,33 @@ const (
 	CompletionModule
 )
 
-func (k CompletionKind) Symbol() rune { return '■' }
+func (k CompletionKind) iconName() icons.Name {
+	switch k {
+	case CompletionFunction, CompletionMethod:
+		return icons.Function
+	case CompletionConstant:
+		return icons.Constant
+	case CompletionType:
+		return icons.Class
+	case CompletionField:
+		return icons.Field
+	case CompletionKeyword:
+		return icons.Keyword
+	case CompletionSnippet:
+		return icons.Snippet
+	case CompletionModule:
+		return icons.Module
+	default:
+		return icons.Variable
+	}
+}
+
+func (k CompletionKind) Symbol(mode string) rune {
+	if !icons.IsNerd(mode) {
+		return '■'
+	}
+	return []rune(icons.Get(mode, k.iconName()))[0]
+}
 
 func (k CompletionKind) Style() term.Style {
 	switch k {
@@ -106,6 +133,7 @@ type AutocompleteWidget struct {
 	AnchorY    int
 	MaxVisible int
 	Borders    *term.BorderSet
+	Icons      string
 	OnSelect   func(item CompletionItem)
 	OnDismiss  func()
 	firstEvent bool
@@ -233,7 +261,7 @@ func (a *AutocompleteWidget) Render(surface Surface) {
 		}
 
 		surface.ClearRect(x+1, row, menuW-2, 1, style)
-		iconCell := term.Cell{Ch: it.Kind.Symbol(), Style: it.Kind.Style()}
+		iconCell := term.Cell{Ch: it.Kind.Symbol(a.Icons), Style: it.Kind.Style()}
 		if idx == a.Selected {
 			iconCell.BgStyle = term.StylePaletteSelected
 		}

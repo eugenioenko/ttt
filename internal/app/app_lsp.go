@@ -27,6 +27,7 @@ func (a *App) ShowAutocomplete(items []ui.CompletionItem, lspItems []lsp.Complet
 		return
 	}
 	ac := ui.NewAutocompleteWidget(filtered, 0, 0)
+	ac.Icons = a.Settings.Appearance.Icons
 	ac.OnSelect = func(item ui.CompletionItem) {
 		a.resolveAndInsert(item)
 		a.DismissAutocomplete()

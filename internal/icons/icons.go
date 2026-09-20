@@ -8,6 +8,18 @@ type Name string
 const (
 	Branch Name = "branch"
 	Commit Name = "commit"
+
+	Function  Name = "function"
+	Class     Name = "class"
+	Interface Name = "interface"
+	Module    Name = "module"
+	Field     Name = "field"
+	Constant  Name = "constant"
+	Variable  Name = "variable"
+	String    Name = "string"
+	Keyword   Name = "keyword"
+	Snippet   Name = "snippet"
+	Symbol    Name = "symbol"
 )
 
 type glyphs struct {
@@ -17,7 +29,19 @@ type glyphs struct {
 
 var table = map[Name]glyphs{
 	Branch: {Plain: "⎇", Nerd: ""},
-	Commit: {Plain: "●", Nerd: ""},
+	Commit: {Plain: "●", Nerd: "\uf417"},
+
+	Function:  {Plain: "ƒ", Nerd: "\uea8c"},
+	Class:     {Plain: "◆", Nerd: "\ueb5b"},
+	Interface: {Plain: "◇", Nerd: "\ueb61"},
+	Module:    {Plain: "▤", Nerd: "\uea8b"},
+	Field:     {Plain: "▪", Nerd: "\ueb5f"},
+	Constant:  {Plain: "●", Nerd: "\ueb5d"},
+	Variable:  {Plain: "●", Nerd: "\uea88"},
+	String:    {Plain: "§", Nerd: "\ueb8d"},
+	Keyword:   {Plain: "■", Nerd: "\ueb62"},
+	Snippet:   {Plain: "■", Nerd: "\ueb66"},
+	Symbol:    {Plain: "•", Nerd: "\ueb63"},
 }
 
 func Get(mode string, name Name) string {
@@ -27,3 +51,5 @@ func Get(mode string, name Name) string {
 	}
 	return g.Plain
 }
+
+func IsNerd(mode string) bool { return mode == config.IconsNerdFont }

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -18,6 +19,9 @@ type SymbolsPanel struct {
 	// Path is the file the current outline content belongs to; used to
 	// clear stale content when the active file changes.
 	Path string
+
+	icons string
+	kinds map[string]lsp.SymbolKind
 
 	// OnReveal fires while navigating the tree (selection change); it moves
 	// the editor cursor without taking focus. OnJump fires on activate
@@ -48,7 +52,25 @@ func NewSymbolsPanel() *SymbolsPanel {
 
 func (sp *SymbolsPanel) SetSymbols(symbols []lsp.DocumentSymbol) {
 	sp.Tree.Config.EmptyText = "No symbols"
-	sp.Tree.SetItems(symbolNodes(symbols))
+	sp.kinds = make(map[string]lsp.SymbolKind)
+	sp.Tree.SetItems(symbolNodes(sp.icons, symbols, sp.kinds))
+}
+
+func (sp *SymbolsPanel) SetIcons(mode string) {
+	if sp.icons == mode {
+		return
+	}
+	sp.icons = mode
+	var restyle func(nodes []*widgets.TreeNode)
+	restyle = func(nodes []*widgets.TreeNode) {
+		for _, node := range nodes {
+			if kind, ok := sp.kinds[node.ID]; ok {
+				node.Icon, _ = symbolIcon(mode, kind)
+			}
+			restyle(node.Children)
+		}
+	}
+	restyle(sp.Tree.Config.Items)
 }
 
 // SetStatus clears the outline and shows a message in place of items,
@@ -107,16 +129,18 @@ func nodePos(id string) (line, col int, ok bool) {
 	return line, col, true
 }
 
-func symbolNodes(symbols []lsp.DocumentSymbol) []*widgets.TreeNode {
+func symbolNodes(mode string, symbols []lsp.DocumentSymbol, kinds map[string]lsp.SymbolKind) []*widgets.TreeNode {
 	nodes := make([]*widgets.TreeNode, 0, len(symbols))
 	for _, s := range symbols {
-		icon, style := symbolIcon(s.Kind)
+		icon, style := symbolIcon(mode, s.Kind)
+		id := fmt.Sprintf("%d:%d", s.SelectionRange.Start.Line, s.SelectionRange.Start.Character)
+		kinds[id] = s.Kind
 		node := &widgets.TreeNode{
-			ID:        fmt.Sprintf("%d:%d", s.SelectionRange.Start.Line, s.SelectionRange.Start.Character),
+			ID:        id,
 			Label:     s.Name,
 			Icon:      icon,
 			IconStyle: style,
-			Children:  symbolNodes(s.Children),
+			Children:  symbolNodes(mode, s.Children, kinds),
 		}
 		if len(node.Children) > 0 {
 			node.Expandable = true
@@ -127,28 +151,33 @@ func symbolNodes(symbols []lsp.DocumentSymbol) []*widgets.TreeNode {
 	return nodes
 }
 
-func symbolIcon(kind lsp.SymbolKind) (string, term.Style) {
+func symbolIcon(mode string, kind lsp.SymbolKind) (string, term.Style) {
+	name, style := symbolIconKind(kind)
+	return icons.Get(mode, name), style
+}
+
+func symbolIconKind(kind lsp.SymbolKind) (icons.Name, term.Style) {
 	switch kind {
 	case lsp.SKFunction, lsp.SKConstructor:
-		return "ƒ", term.StyleSyntaxFunction
+		return icons.Function, term.StyleSyntaxFunction
 	case lsp.SKMethod:
-		return "ƒ", term.StyleSyntaxBuiltin
+		return icons.Function, term.StyleSyntaxBuiltin
 	case lsp.SKClass, lsp.SKStruct, lsp.SKEnum:
-		return "◆", term.StyleSyntaxType
+		return icons.Class, term.StyleSyntaxType
 	case lsp.SKInterface:
-		return "◇", term.StyleSyntaxType
+		return icons.Interface, term.StyleSyntaxType
 	case lsp.SKModule, lsp.SKNamespace, lsp.SKPackage, lsp.SKFile:
-		return "▤", term.StyleSyntaxComment
+		return icons.Module, term.StyleSyntaxComment
 	case lsp.SKField, lsp.SKProperty, lsp.SKKey, lsp.SKEnumMember:
-		return "▪", term.StyleSyntaxTag
+		return icons.Field, term.StyleSyntaxTag
 	case lsp.SKConstant:
-		return "●", term.StyleSyntaxNumber
+		return icons.Constant, term.StyleSyntaxNumber
 	case lsp.SKVariable, lsp.SKObject:
-		return "●", term.StyleSyntaxVariable
+		return icons.Variable, term.StyleSyntaxVariable
 	case lsp.SKString:
-		return "§", term.StyleSyntaxKeyword
+		return icons.String, term.StyleSyntaxKeyword
 	default:
-		return "•", term.StyleSyntaxComment
+		return icons.Symbol, term.StyleSyntaxComment
 	}
 }
 
