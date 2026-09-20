@@ -1,4 +1,4 @@
-// Package fileicons maps file and folder names to Nerd Font glyphs. Icons carry
+// Package fileicons maps file names to Nerd Font glyphs. Icons carry
 // a hue family rather than a color, so callers resolve them through the theme.
 package fileicons
 
@@ -25,8 +25,6 @@ type Icon struct {
 
 var (
 	defaultFile = Icon{Glyph: "\uf4a5", Color: ColorDefault}
-	folder      = Icon{Glyph: "\ue5ff", Color: ColorBlue}
-	folderOpen  = Icon{Glyph: "\ue5fe", Color: ColorBlue}
 )
 
 // ForFile takes a base name. An exact name match wins over the longest dotted
@@ -47,11 +45,4 @@ func ForFile(name string) Icon {
 		}
 	}
 	return defaultFile
-}
-
-func ForFolder(expanded bool) Icon {
-	if expanded {
-		return folderOpen
-	}
-	return folder
 }

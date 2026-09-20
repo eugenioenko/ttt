@@ -53,13 +53,13 @@ func TestExplorerIconsNoneOmitsIcons(t *testing.T) {
 		if node == nil {
 			t.Fatalf("missing %q", label)
 		}
-		if node.Icon != "" || node.ExpandedIcon != "" {
+		if node.Icon != "" {
 			t.Errorf("%q has an icon with icons disabled: %+v", label, node)
 		}
 	}
 }
 
-func TestExplorerIconsShowNerdFontForFilesAndFolders(t *testing.T) {
+func TestExplorerIconsShowNerdFontForFilesOnly(t *testing.T) {
 	settings := config.DefaultExplorerSettings()
 	settings.Icons = config.IconsNerdFont
 	explorer := NewNavigationPanel(settings, explorerIconFixture(t))
@@ -70,8 +70,8 @@ func TestExplorerIconsShowNerdFontForFilesAndFolders(t *testing.T) {
 	}
 
 	src := nodeWithLabel(items, "src")
-	if src.Icon != fileicons.ForFolder(false).Glyph || src.ExpandedIcon != fileicons.ForFolder(true).Glyph {
-		t.Errorf("folder icons = %q/%q, want closed and open folder glyphs", src.Icon, src.ExpandedIcon)
+	if src.Icon != "" {
+		t.Errorf("folder icon = %q, want none", src.Icon)
 	}
 
 	mainGo := nodeWithLabel(items, "main.go")

@@ -314,30 +314,6 @@ func TestTreeRenderIcon(t *testing.T) {
 	}
 }
 
-func TestTreeRenderExpandedIconFollowsExpansion(t *testing.T) {
-	folder := &TreeNode{ID: "dir", Label: "dir", Icon: "c", ExpandedIcon: "o", Expandable: true}
-	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{folder}})
-
-	s := renderWidget(tree, 0, 0, 20, 5)
-	if s.cells[0][2].Ch != 'c' {
-		t.Fatalf("collapsed node should draw Icon, got %c", s.cells[0][2].Ch)
-	}
-
-	folder.Expanded = true
-	tree.SetItems(tree.Config.Items)
-	s = renderWidget(tree, 0, 0, 20, 5)
-	if s.cells[0][2].Ch != 'o' {
-		t.Fatalf("expanded node should draw ExpandedIcon, got %c", s.cells[0][2].Ch)
-	}
-
-	leaf := &TreeNode{ID: "leaf", Label: "leaf", ExpandedIcon: "o", Expanded: true}
-	tree = NewTreeWidget(TreeConfig{Items: []*TreeNode{leaf}})
-	s = renderWidget(tree, 0, 0, 20, 5)
-	if row := surfaceRowText(s, 0); row[:4] != "leaf" {
-		t.Fatalf("ExpandedIcon without Icon must not reserve an icon column, got %q", row)
-	}
-}
-
 func TestTreeRenderLabelIconSitsBetweenIconAndLabel(t *testing.T) {
 	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{
 		{ID: "a", Label: "a.go", Icon: "M", LabelIcon: "g"},

@@ -589,7 +589,7 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 		}
 		return nodes
 	}
-	return cp.decorateFolderNodes(compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded))
+	return compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded)
 }
 
 func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, extended bool) {

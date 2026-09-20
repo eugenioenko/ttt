@@ -6,12 +6,6 @@ import (
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
-func setFolderIcon(node *widgets.TreeNode) {
-	node.Icon = fileicons.ForFolder(false).Glyph
-	node.ExpandedIcon = fileicons.ForFolder(true).Glyph
-	node.IconStyle = mutedIconStyle(node, fileIconStyle(fileicons.ForFolder(false).Color))
-}
-
 func setFileIcon(node *widgets.TreeNode) {
 	icon := fileicons.ForFile(node.Label)
 	node.Icon = icon.Glyph
@@ -24,15 +18,6 @@ func setLabelIcon(node *widgets.TreeNode, name string) {
 	icon := fileicons.ForFile(name)
 	node.LabelIcon = icon.Glyph
 	node.LabelIconStyle = mutedIconStyle(node, fileIconStyle(icon.Color))
-}
-
-func setFolderIcons(nodes []*widgets.TreeNode) {
-	for _, node := range nodes {
-		if node.Expandable {
-			setFolderIcon(node)
-			setFolderIcons(node.Children)
-		}
-	}
 }
 
 func mutedIconStyle(node *widgets.TreeNode, style term.Style) term.Style {

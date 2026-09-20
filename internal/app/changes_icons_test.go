@@ -42,11 +42,8 @@ func TestChangesIconsKeepStatusLetterAndAddFileIcon(t *testing.T) {
 	cp := changesIconFixture(config.GitFileViewTree)
 	cp.SetIcons(config.IconsNerdFont)
 	folder := nodeWithID(cp.Tree.Config.Items, workingNodeID(workNodeFolder, "/repo", "cmd", false))
-	if folder == nil || folder.Icon != fileicons.ForFolder(false).Glyph || folder.ExpandedIcon != fileicons.ForFolder(true).Glyph {
-		t.Fatalf("tree view folder has no folder icon: %+v", folder)
-	}
-	if group := cp.Tree.Config.Items[0]; group.ExpandedIcon != "" {
-		t.Fatalf("group header was decorated as a folder: %+v", group)
+	if folder == nil || folder.Icon != "" || folder.LabelIcon != "" {
+		t.Fatalf("tree view folder should carry no icon: %+v", folder)
 	}
 }
 
@@ -59,13 +56,9 @@ func TestChangesIconsNoneLeavesRowsUndecorated(t *testing.T) {
 		workingNodeID(workNodeFolder, "/repo", "cmd", false),
 	} {
 		got := nodeWithID(cp.Tree.Config.Items, node)
-		if got == nil || got.LabelIcon != "" || got.ExpandedIcon != "" {
+		if got == nil || got.LabelIcon != "" {
 			t.Errorf("icons none left %q decorated: %+v", node, got)
 		}
-	}
-	folder := nodeWithID(cp.Tree.Config.Items, workingNodeID(workNodeFolder, "/repo", "cmd", false))
-	if folder == nil || folder.Icon != "" {
-		t.Errorf("icons none left the closed folder icon: %+v", folder)
 	}
 }
 

@@ -21,7 +21,7 @@ func TestFileIconsShowWhenEnabledInExplorerAndChanges(t *testing.T) {
 	txt := fileicons.ForFile("alpha.txt").Glyph
 	h.exec("sidebar.explorer")
 	h.assertContains(txt + " alpha.txt")
-	h.assertContains(fileicons.ForFolder(false).Glyph + " subdir")
+	h.assertContains("▶ subdir")
 
 	if err := os.WriteFile(filepath.Join(h.dir, "alpha.txt"), []byte("changed"), 0o644); err != nil {
 		t.Fatal(err)

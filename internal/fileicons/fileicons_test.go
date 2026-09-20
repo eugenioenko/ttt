@@ -34,15 +34,6 @@ func TestForFileFallsBackToGenericIcon(t *testing.T) {
 	}
 }
 
-func TestForFolderSwitchesOnExpansion(t *testing.T) {
-	if ForFolder(false) == ForFolder(true) {
-		t.Fatal("open and closed folders share a glyph")
-	}
-	if ForFolder(false).Glyph == "" || ForFolder(true).Glyph == "" {
-		t.Fatal("folder glyph is empty")
-	}
-}
-
 func TestGeneratedTablesAreWellFormed(t *testing.T) {
 	for name, table := range map[string]map[string]Icon{"byFilename": byFilename, "byExtension": byExtension} {
 		if len(table) < 100 {
