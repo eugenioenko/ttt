@@ -347,6 +347,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
 	app.applySidebarChevrons(cfg.Settings.Sidebar)
+	app.applyFoldChevrons(cfg.Settings.Editor)
 	return app
 }
 

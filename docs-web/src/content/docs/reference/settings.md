@@ -53,6 +53,8 @@ All editor settings are nested under the `editor` key.
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
+| `editor.foldChevronCollapsed` | string | `▶` | Gutter glyph on a collapsed foldable line. Must be a single-width character, for example a Nerd Font chevron such as `\ueab6`; anything else falls back to the default. |
+| `editor.foldChevronExpanded` | string | `▼` | Gutter glyph on an expanded foldable line, shown while hovering the gutter. Same rules as above. |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
 
 ## Explorer
@@ -177,6 +179,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "menuBar": true,
     "gutterStyle": "compact",
     "borderStyle": "default",
+    "foldChevronCollapsed": "▶",
+    "foldChevronExpanded": "▼",
     "bracketPairColorization": false
   },
   "search": {

@@ -146,12 +146,15 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.Folds != nil && !e.WordWrap && lineIdx < totalLines && !isWrapContinuation {
 				if fr := e.Folds.FoldAt(lineIdx); fr != nil {
 					chevronCol := gutterW - 2
-					collapsedCh := '▶'
-					expandedCh := '▼'
+					collapsedCh, expandedCh := e.FoldChevronCollapsed, e.FoldChevronExpanded
+					if collapsedCh == 0 {
+						collapsedCh = '▶'
+					}
+					if expandedCh == 0 {
+						expandedCh = '▼'
+					}
 					if e.GutterStyle == "minimal" {
 						chevronCol = gutterW - 1
-						collapsedCh = '▸'
-						expandedCh = '▾'
 					}
 					if e.Folds.IsCollapsed(lineIdx) {
 						surface.SetCell(chevronCol, y, term.Cell{Ch: collapsedCh, Style: gutterStyle})

@@ -34,6 +34,8 @@ type EditorPaneWidget struct {
 	UseTabs                 bool
 	LineNumbers             bool
 	GutterStyle             string
+	FoldChevronCollapsed    rune
+	FoldChevronExpanded     rune
 	WordWrap                bool
 	AutoDedent              bool
 	AutoIndent              bool

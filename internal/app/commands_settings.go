@@ -52,6 +52,12 @@ func (a *App) applySidebarChevrons(sb config.SidebarSettings) {
 	}
 }
 
+func (a *App) applyFoldChevrons(s config.EditorSettings) {
+	if a.EditorGroup != nil && a.EditorGroup.Editor != nil {
+		a.EditorGroup.Editor.FoldChevronCollapsed, a.EditorGroup.Editor.FoldChevronExpanded = s.FoldChevrons()
+	}
+}
+
 // ApplySettings is the single live-apply path: anything that can take effect
 // without a restart belongs here, so every caller produces identical results.
 func (a *App) ApplySettings(s config.Settings) {
@@ -116,6 +122,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 
 	a.applySidebarChevrons(s.Sidebar)
+	a.applyFoldChevrons(s.Editor)
 
 	if a.Explorer != nil && a.Explorer.Settings != s.Explorer {
 		a.Explorer.Settings = s.Explorer

@@ -326,3 +326,21 @@ func TestFoldStatePreservedAcrossTabs(t *testing.T) {
 
 	h.assertNotContains("x()")
 }
+
+func TestFoldChevronFollowsSetting(t *testing.T) {
+	h := newTestHarness(t, 80, 30)
+	defer h.stop()
+	goFile := filepath.Join(h.dir, "main.go")
+	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), 0644)
+
+	s := *h.app.Settings
+	s.Editor.FoldChevronCollapsed = "»"
+	h.app.ApplySettings(s)
+
+	h.app.EditorGroup.OpenFile(goFile)
+	h.redraw()
+	h.app.EditorGroup.Editor.Cursor.Line = 2
+	h.exec("fold.toggle")
+
+	h.assertContains("» func main()")
+}

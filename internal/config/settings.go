@@ -111,6 +111,8 @@ type EditorSettings struct {
 	AutoIndent              *bool  `json:"autoIndent,omitempty"`
 	GutterStyle             string `json:"gutterStyle,omitempty"`
 	BorderStyle             string `json:"borderStyle,omitempty"`
+	FoldChevronCollapsed    string `json:"foldChevronCollapsed"`
+	FoldChevronExpanded     string `json:"foldChevronExpanded"`
 	BracketPairColorization bool   `json:"bracketPairColorization"`
 	ShowTrailingNewline     *bool  `json:"showTrailingNewline,omitempty"`
 	MenuBar                 *bool  `json:"menuBar,omitempty"`
@@ -144,6 +146,8 @@ func (e EditorSettings) IsAutoIndentEnabled() bool {
 
 func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
+		FoldChevronCollapsed:    DefaultFoldChevronCollapsed,
+		FoldChevronExpanded:     DefaultFoldChevronExpanded,
 		TabSize:                 4,
 		InsertSpaces:            true,
 		DiffMode:                DiffModeSplit,
@@ -173,6 +177,11 @@ type ExplorerSettings struct {
 }
 
 const (
+	DefaultFoldChevronCollapsed = "▶"
+	DefaultFoldChevronExpanded  = "▼"
+)
+
+const (
 	DefaultTreeChevronCollapsed = "▶"
 	DefaultTreeChevronExpanded  = "▼"
 )
@@ -198,6 +207,13 @@ func DefaultSidebarSettings() SidebarSettings {
 func (s SidebarSettings) Chevrons() (collapsed, expanded rune) {
 	return chevronRune(s.TreeChevronCollapsed, DefaultTreeChevronCollapsed),
 		chevronRune(s.TreeChevronExpanded, DefaultTreeChevronExpanded)
+}
+
+// FoldChevrons applies the same one-single-width-rune rule as the sidebar
+// chevrons, since the gutter draws the glyph in a single cell.
+func (s EditorSettings) FoldChevrons() (collapsed, expanded rune) {
+	return chevronRune(s.FoldChevronCollapsed, DefaultFoldChevronCollapsed),
+		chevronRune(s.FoldChevronExpanded, DefaultFoldChevronExpanded)
 }
 
 func chevronRune(value, fallback string) rune {
@@ -387,6 +403,9 @@ func normalizeSettings(s *Settings) {
 	collapsed, expanded := s.Sidebar.Chevrons()
 	s.Sidebar.TreeChevronCollapsed = string(collapsed)
 	s.Sidebar.TreeChevronExpanded = string(expanded)
+	collapsed, expanded = s.Editor.FoldChevrons()
+	s.Editor.FoldChevronCollapsed = string(collapsed)
+	s.Editor.FoldChevronExpanded = string(expanded)
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
 	}

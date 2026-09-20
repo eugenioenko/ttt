@@ -198,3 +198,19 @@ func TestSidebarChevronsDefaultAndValidate(t *testing.T) {
 		t.Errorf("chevrons = %q/%q, want the configured glyphs", collapsed, expanded)
 	}
 }
+
+func TestFoldChevronsDefaultAndValidate(t *testing.T) {
+	d := DefaultSettings()
+	if d.Editor.FoldChevronCollapsed != "▶" || d.Editor.FoldChevronExpanded != "▼" {
+		t.Fatalf("defaults = %q/%q", d.Editor.FoldChevronCollapsed, d.Editor.FoldChevronExpanded)
+	}
+
+	s := DefaultSettings()
+	s.Editor.FoldChevronCollapsed = "ab"
+	s.Editor.FoldChevronExpanded = "\ueab4"
+	normalizeSettings(&s)
+	collapsed, expanded := s.Editor.FoldChevrons()
+	if collapsed != '▶' || expanded != '\ueab4' {
+		t.Errorf("chevrons = %q/%q, want the default and the configured glyph", collapsed, expanded)
+	}
+}
