@@ -68,6 +68,8 @@ All editor settings are nested under the `editor` key.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `sidebar.panelOrder` | string[] | built-in order | Preferred sidebar panel-header order. Dragging a header or using **Move Panel Left/Right** updates it automatically. Unknown plugin panel IDs are retained until that plugin loads. |
+| `sidebar.treeChevronCollapsed` | string | `▶` | Glyph drawn beside a collapsed folder or group in sidebar trees. Must be a single-width character, for example a Nerd Font chevron such as `\ueab6`; anything else falls back to the default. |
+| `sidebar.treeChevronExpanded` | string | `▼` | Glyph drawn beside an expanded folder or group. Same rules as above. |
 
 ## Git
 
@@ -186,7 +188,9 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "icons": "none"
   },
   "sidebar": {
-    "panelOrder": ["explorer", "search", "changes", "outline"]
+    "panelOrder": ["explorer", "search", "changes", "outline"],
+    "treeChevronCollapsed": "▶",
+    "treeChevronExpanded": "▼"
   },
   "git": {
     "fileView": "list",

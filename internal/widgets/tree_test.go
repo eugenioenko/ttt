@@ -1573,3 +1573,23 @@ func TestTreeAppendItemFlattensChildren(t *testing.T) {
 		t.Errorf("child at index 2 = %q, want %q", got, "b1")
 	}
 }
+
+func TestTreeRenderCustomChevrons(t *testing.T) {
+	open := &TreeNode{ID: "open", Label: "open", Expandable: true, Expanded: true, Children: []*TreeNode{{ID: "c", Label: "c"}}}
+	shut := &TreeNode{ID: "shut", Label: "shut", Expandable: true}
+	tree := NewTreeWidget(TreeConfig{Items: []*TreeNode{open, shut}, ChevronCollapsed: '>', ChevronExpanded: 'v'})
+
+	s := renderWidget(tree, 0, 0, 20, 5)
+	if got := s.cells[0][0].Ch; got != 'v' {
+		t.Errorf("expanded chevron = %c, want v", got)
+	}
+	if got := s.cells[2][0].Ch; got != '>' {
+		t.Errorf("collapsed chevron = %c, want >", got)
+	}
+
+	plain := NewTreeWidget(TreeConfig{Items: []*TreeNode{{ID: "d", Label: "d", Expandable: true}}})
+	s = renderWidget(plain, 0, 0, 20, 5)
+	if got := s.cells[0][0].Ch; got != '▶' {
+		t.Errorf("unset chevron = %c, want the default", got)
+	}
+}

@@ -46,10 +46,14 @@ type TreeConfig struct {
 	MenuIcon       string      `json:"menuIcon,omitempty"`
 	MenuIconPadded bool        `json:"menuIconPadded,omitempty"`
 	Indent         int         `json:"indent,omitempty"`
-	ActiveID       string      `json:"-"`
-	EmptyText      string      `json:"emptyText,omitempty"`
-	SelectOnClick  bool        `json:"-"`
-	TruncateLeft   bool        `json:"truncateLeft,omitempty"` // truncate labels from the left (…tail) so the end stays visible
+	// ChevronCollapsed and ChevronExpanded must each be one single-width rune;
+	// zero means the default triangle.
+	ChevronCollapsed rune   `json:"-"`
+	ChevronExpanded  rune   `json:"-"`
+	ActiveID         string `json:"-"`
+	EmptyText        string `json:"emptyText,omitempty"`
+	SelectOnClick    bool   `json:"-"`
+	TruncateLeft     bool   `json:"truncateLeft,omitempty"` // truncate labels from the left (…tail) so the end stays visible
 
 	OnCommand          func(command string, node *TreeNode)
 	OnMenu             func(entries []MenuEntry, node *TreeNode, screenX, screenY int)
@@ -411,9 +415,15 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 
 	hasChildren := len(node.Children) > 0 || node.Expandable
 	if hasChildren {
-		chevron := '▶'
+		chevron := t.Config.ChevronCollapsed
+		if chevron == 0 {
+			chevron = '▶'
+		}
 		if node.Expanded {
-			chevron = '▼'
+			chevron = t.Config.ChevronExpanded
+			if chevron == 0 {
+				chevron = '▼'
+			}
 		}
 		if x < w {
 			surface.SetCell(x, y, term.Cell{Ch: chevron, Style: style})

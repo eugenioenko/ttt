@@ -70,10 +70,14 @@ type SearchWidget struct {
 	OnClear      func()
 	PostBatch    func(batch *SearchBatch)
 	Debounce     Debouncer
-	debouncing   bool
-	searchGen    uint64
-	searchCancel context.CancelFunc
-	resultStartY int
+	// ChevronCollapsed and ChevronExpanded mirror TreeConfig; zero means the
+	// default triangle.
+	ChevronCollapsed rune
+	ChevronExpanded  rune
+	debouncing       bool
+	searchGen        uint64
+	searchCancel     context.CancelFunc
+	resultStartY     int
 }
 
 type searchItem struct {
@@ -654,9 +658,15 @@ func (s *SearchWidget) Render(surface Surface) {
 
 		if item.IsFile {
 			g := s.Groups[item.Group]
-			chevron := '▼'
+			chevron := s.ChevronExpanded
+			if chevron == 0 {
+				chevron = '▼'
+			}
 			if !g.Expanded {
-				chevron = '▶'
+				chevron = s.ChevronCollapsed
+				if chevron == 0 {
+					chevron = '▶'
+				}
 			}
 			x := 0
 			surface.SetCell(x, y, term.Cell{Ch: chevron, Style: style})

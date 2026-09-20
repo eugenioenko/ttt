@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+
+	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
 // Validated by normalizeSettings and used to populate the settings UI pickers.
@@ -170,10 +172,39 @@ type ExplorerSettings struct {
 	Icons          string `json:"icons"`
 }
 
+const (
+	DefaultTreeChevronCollapsed = "▶"
+	DefaultTreeChevronExpanded  = "▼"
+)
+
 type SidebarSettings struct {
-	PanelOrder          []string `json:"panelOrder,omitempty"`
-	Width               int      `json:"width,omitempty"`
-	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
+	PanelOrder           []string `json:"panelOrder,omitempty"`
+	Width                int      `json:"width,omitempty"`
+	CommitHistoryHeight  int      `json:"commitHistoryHeight,omitempty"`
+	TreeChevronCollapsed string   `json:"treeChevronCollapsed"`
+	TreeChevronExpanded  string   `json:"treeChevronExpanded"`
+}
+
+func DefaultSidebarSettings() SidebarSettings {
+	return SidebarSettings{
+		TreeChevronCollapsed: DefaultTreeChevronCollapsed,
+		TreeChevronExpanded:  DefaultTreeChevronExpanded,
+	}
+}
+
+// Chevrons falls back to the defaults for any value that is not exactly one
+// single-width rune, since the tree draws the chevron in one cell and reserves
+// exactly two columns for it.
+func (s SidebarSettings) Chevrons() (collapsed, expanded rune) {
+	return chevronRune(s.TreeChevronCollapsed, DefaultTreeChevronCollapsed),
+		chevronRune(s.TreeChevronExpanded, DefaultTreeChevronExpanded)
+}
+
+func chevronRune(value, fallback string) rune {
+	if r := []rune(value); len(r) == 1 && textwidth.Rune(r[0]) == 1 {
+		return r[0]
+	}
+	return []rune(fallback)[0]
 }
 
 type GitSettings struct {
@@ -313,6 +344,7 @@ func DefaultSettings() Settings {
 		Editor:       DefaultEditorSettings(),
 		Search:       DefaultSearchSettings(),
 		Explorer:     DefaultExplorerSettings(),
+		Sidebar:      DefaultSidebarSettings(),
 		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
 		LSP:          DefaultLSPSettings(),
@@ -352,6 +384,9 @@ func normalizeSettings(s *Settings) {
 	if s.Sidebar.CommitHistoryHeight < 0 {
 		s.Sidebar.CommitHistoryHeight = 0
 	}
+	collapsed, expanded := s.Sidebar.Chevrons()
+	s.Sidebar.TreeChevronCollapsed = string(collapsed)
+	s.Sidebar.TreeChevronExpanded = string(expanded)
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
 	}

@@ -346,6 +346,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	// Rebuild the Diagnostics panel whenever any source (LSP or a plugin)
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
+	app.applySidebarChevrons(cfg.Settings.Sidebar)
 	return app
 }
 

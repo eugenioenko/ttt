@@ -26,6 +26,10 @@
     "showGitIgnored": true,
     "icons": "none"
   },
+  "sidebar": {
+    "treeChevronCollapsed": "▶",
+    "treeChevronExpanded": "▼"
+  },
   "git": {
     "fileView": "list",
     "icons": "none"
