@@ -18,10 +18,13 @@ import (
 )
 
 type TerminalColorPalette struct {
-	Fg       term.DirectColor
-	Bg       term.DirectColor
-	ANSI     [16]term.DirectColor
-	Color256 [256]term.DirectColor
+	Fg term.DirectColor
+	Bg term.DirectColor
+	// SelectionBg is the theme's terminal selection background; unset means the
+	// theme defines none.
+	SelectionBg term.DirectColor
+	ANSI        [16]term.DirectColor
+	Color256    [256]term.DirectColor
 }
 
 type termSelPos struct {
@@ -350,13 +353,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 						c = term.Cell{Ch: ' ', Direct: true, Bg: bg}
 					}
 					if tw.isCellSelected(unifiedLine, x) {
-						c.Fg, c.Bg = c.Bg, c.Fg
-						if !c.Fg.Set && tw.Palette != nil {
-							c.Fg = tw.Palette.Bg
-						}
-						if !c.Bg.Set && tw.Palette != nil {
-							c.Bg = tw.Palette.Fg
-						}
+						tw.highlightSelected(&c)
 					} else if tw.linkAt(unifiedLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
@@ -394,13 +391,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 						c = term.Cell{Ch: ' ', Direct: true, Bg: bg}
 					}
 					if tw.isCellSelected(srcLine, x) {
-						c.Fg, c.Bg = c.Bg, c.Fg
-						if !c.Fg.Set && tw.Palette != nil {
-							c.Fg = tw.Palette.Bg
-						}
-						if !c.Bg.Set && tw.Palette != nil {
-							c.Bg = tw.Palette.Fg
-						}
+						tw.highlightSelected(&c)
 					} else if tw.linkAt(srcLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
@@ -779,6 +770,23 @@ func (tw *TerminalWidget) screenToLine(mx, my int) termSelPos {
 		}
 	})
 	return termSelPos{Line: unifiedLine, Col: col}
+}
+
+// highlightSelected matches the editor: the theme's terminal selection
+// background with the text color left alone. A theme with no selection color
+// falls back to swapping foreground and background.
+func (tw *TerminalWidget) highlightSelected(c *term.Cell) {
+	if tw.Palette != nil && tw.Palette.SelectionBg.Set {
+		c.Bg = tw.Palette.SelectionBg
+		return
+	}
+	c.Fg, c.Bg = c.Bg, c.Fg
+	if !c.Fg.Set && tw.Palette != nil {
+		c.Fg = tw.Palette.Bg
+	}
+	if !c.Bg.Set && tw.Palette != nil {
+		c.Bg = tw.Palette.Fg
+	}
 }
 
 func (tw *TerminalWidget) isCellSelected(unifiedLine, col int) bool {

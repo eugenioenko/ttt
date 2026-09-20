@@ -431,6 +431,26 @@ func TestResolveColorsDefaultsFileIconsToTerminalPalette(t *testing.T) {
 	}
 }
 
+func TestResolveColorsTerminalSelectionInheritsEditorSelection(t *testing.T) {
+	var inherited ThemeConfig
+	if err := json.Unmarshal([]byte(`{"editor": {"selection": {"bg": "#123456"}}}`), &inherited); err != nil {
+		t.Fatal(err)
+	}
+	inherited.ResolveColors()
+	if inherited.Terminal.Selection != "#123456" {
+		t.Errorf("terminal.selection = %q, want it inherited from editor.selection.bg", inherited.Terminal.Selection)
+	}
+
+	var explicit ThemeConfig
+	if err := json.Unmarshal([]byte(`{"editor": {"selection": {"bg": "#123456"}}, "terminal": {"selection": "#abcdef"}}`), &explicit); err != nil {
+		t.Fatal(err)
+	}
+	explicit.ResolveColors()
+	if explicit.Terminal.Selection != "#abcdef" {
+		t.Errorf("terminal.selection = %q, want the explicit value", explicit.Terminal.Selection)
+	}
+}
+
 func TestBundledThemesResolveEveryFileIconColor(t *testing.T) {
 	entries, err := themes.FS.ReadDir(".")
 	if err != nil {

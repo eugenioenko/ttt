@@ -234,9 +234,10 @@ func BuildTerminalPalette(theme config.ThemeConfig, opts ...StyleMapOption) ui.T
 	}
 	ansi := tc.ANSIPalette()
 	p := ui.TerminalColorPalette{
-		Fg:       ui.ParseHexColor(fg),
-		Bg:       ui.ParseHexColor(bg),
-		Color256: ui.Build256Palette(),
+		Fg:          ui.ParseHexColor(fg),
+		Bg:          ui.ParseHexColor(bg),
+		SelectionBg: ui.ParseHexColor(tc.Selection),
+		Color256:    ui.Build256Palette(),
 	}
 	for i, hex := range ansi {
 		p.ANSI[i] = ui.ParseHexColor(hex)

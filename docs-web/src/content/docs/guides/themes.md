@@ -223,7 +223,8 @@ Below is a complete theme file showing every configurable section. Ordinary colo
     "brightBlue": "#78dce8",
     "brightMagenta": "#c0a0ff",
     "brightCyan": "#a4f4e8",
-    "brightWhite": "#f9f8f5"
+    "brightWhite": "#f9f8f5",
+    "selection": "#49483e"
   },
   "borders": {
     "horizontal": "─",
@@ -257,5 +258,5 @@ Below is a complete theme file showing every configurable section. Ordinary colo
 | `scrollbar` | Scrollbar thumb (`fg`) and track (`bg`) colors |
 | `syntax` | Syntax highlighting colors for language tokens |
 | `fileIcons` | File icon colors in the Explorer and Changes panel, by hue family (`red`, `yellow`, `green`, `cyan`, `blue`, `magenta`). Each entry defaults to the matching `terminal` color, so most themes need no `fileIcons` section. Neutral icons use the row's normal text color |
-| `terminal` | ANSI color palette for the integrated terminal (16 colors) |
+| `terminal` | ANSI color palette for the integrated terminal (16 colors), plus `selection`, the highlight background for selected terminal text. `selection` inherits `editor.selection.bg` when omitted. |
 | `borders` | Unicode characters used for drawing box borders. Overridden when `borderStyle` in settings is set to a named preset (e.g. `"rounded"`, `"double"`). Use `"default"` or `"theme"` to respect the theme's borders. |

@@ -137,6 +137,9 @@ type TerminalColors struct {
 	BrightMagenta string `json:"brightMagenta,omitempty"`
 	BrightCyan    string `json:"brightCyan,omitempty"`
 	BrightWhite   string `json:"brightWhite,omitempty"`
+	// Selection is the highlight background for selected terminal text; it
+	// inherits editor.selection.bg when empty.
+	Selection string `json:"selection,omitempty"`
 }
 
 func DefaultTerminalColors() TerminalColors {
@@ -365,6 +368,9 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.FileIcons.Cyan, t.Terminal.Cyan)
 	fillFg(&t.FileIcons.Blue, t.Terminal.Blue)
 	fillFg(&t.FileIcons.Magenta, t.Terminal.Magenta)
+	if t.Terminal.Selection == "" {
+		t.Terminal.Selection = t.Editor.Selection.Bg
+	}
 }
 
 func fillFg(s *StyleDef, color string) {
