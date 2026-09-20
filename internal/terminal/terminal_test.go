@@ -338,3 +338,63 @@ func TestOnExitDoesNotFireOnClose(t *testing.T) {
 		t.Fatal("OnExit fired on an explicit Close()")
 	}
 }
+
+func TestOnUpdateCoalescesUntilAcknowledged(t *testing.T) {
+	term, err := New("/bin/cat", 80, 24, 0, nil, "")
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	defer term.Close()
+	updates := make(chan struct{}, 100)
+	term.OnUpdate = func() { updates <- struct{}{} }
+	term.Run()
+
+	// cat prints each line twice: the tty echo and cat's own output.
+	waitForLine := func(text string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			count := 0
+			term.Snapshot(func(xt *xterm.Terminal) {
+				b := xt.Buffer()
+				for y := 0; y < xt.Rows(); y++ {
+					if strings.Contains(b.TranslateBufferLineToString(b.YBase+y, true, 0, xt.Cols()), text) {
+						count++
+					}
+				}
+			})
+			if count == 2 {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("timed out waiting for %q", text)
+	}
+	drain := func() int {
+		time.Sleep(50 * time.Millisecond)
+		n := 0
+		for {
+			select {
+			case <-updates:
+				n++
+			default:
+				return n
+			}
+		}
+	}
+
+	term.WriteString("first\n")
+	waitForLine("first")
+	term.WriteString("second\n")
+	waitForLine("second")
+	if n := drain(); n != 1 {
+		t.Fatalf("got %d updates for several reads before AckUpdate, want 1", n)
+	}
+
+	term.AckUpdate()
+	term.WriteString("third\n")
+	waitForLine("third")
+	if n := drain(); n != 1 {
+		t.Fatalf("got %d updates after AckUpdate, want 1", n)
+	}
+}

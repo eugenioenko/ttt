@@ -425,7 +425,7 @@ func (tw *TerminalWidget) lineCell(bl *xterm.BufferLine, x int, cd *xterm.CellDa
 
 	ch := ' '
 	if bl.IsCombined(x) != 0 {
-		if r, _ := utf8.DecodeRuneInString(bl.GetString(x)); r != utf8.RuneError {
+		if r, size := utf8.DecodeRuneInString(bl.GetString(x)); size > 0 {
 			ch = r
 		}
 	} else if cp := bl.GetCodePoint(x); cp != 0 {

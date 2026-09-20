@@ -41,3 +41,19 @@ func BenchmarkTerminalRender(b *testing.B) {
 		})
 	}
 }
+
+func TestLineCellKeepsReplacementCharInCombinedCell(t *testing.T) {
+	xt := xterm.New(xterm.WithCols(10), xterm.WithRows(2))
+	xt.WriteString("�́a")
+	buf := xt.Buffer()
+	bl := buf.Lines.Get(buf.YBase)
+
+	tw := &TerminalWidget{Palette: &TerminalColorPalette{}}
+	cd := xterm.NewCellData()
+	if got := tw.lineCell(bl, 0, cd).Ch; got != '�' {
+		t.Errorf("combined cell rune = %U, want U+FFFD", got)
+	}
+	if got := tw.lineCell(bl, 1, cd).Ch; got != 'a' {
+		t.Errorf("next cell rune = %q, want 'a'", got)
+	}
+}
