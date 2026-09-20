@@ -26,8 +26,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Sidebar.Width = 22
 	s.Sidebar.CommitHistoryHeight = 17
 	s.Git.FileView = GitFileViewTree
-	s.Explorer.Icons = IconsNone
-	s.Git.Icons = IconsNone
+	s.Appearance.Icons = IconsNone
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Terminal.Shell = "/bin/zsh"
@@ -55,8 +54,8 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	if got.Git.FileView != GitFileViewTree {
 		t.Errorf("git.fileView = %q, want %q", got.Git.FileView, GitFileViewTree)
 	}
-	if got.Explorer.Icons != IconsNone || got.Git.Icons != IconsNone {
-		t.Errorf("icons = explorer %q, git %q; \"none\" did not round-trip", got.Explorer.Icons, got.Git.Icons)
+	if got.Appearance.Icons != IconsNone {
+		t.Errorf("appearance.icons = %q; \"none\" did not round-trip", got.Appearance.Icons)
 	}
 	if got.Editor.IsSyntaxHighlightEnabled() {
 		t.Error("syntaxHighlight=false did not round-trip; tri-state pointer lost")
@@ -115,8 +114,7 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	s.Editor.GutterStyle = "bogus"
 	s.Editor.BorderStyle = "bogus"
 	s.Git.FileView = "bogus"
-	s.Explorer.Icons = "bogus"
-	s.Git.Icons = "bogus"
+	s.Appearance.Icons = "bogus"
 	normalizeSettings(&s)
 
 	if s.Editor.GutterStyle != "compact" {
@@ -128,8 +126,8 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 	if s.Git.FileView != GitFileViewList {
 		t.Errorf("git.fileView = %q, want list", s.Git.FileView)
 	}
-	if s.Explorer.Icons != IconsNone || s.Git.Icons != IconsNone {
-		t.Errorf("explorer.icons = %q, git.icons = %q, want the none default", s.Explorer.Icons, s.Git.Icons)
+	if s.Appearance.Icons != IconsNone {
+		t.Errorf("appearance.icons = %q, want the none default", s.Appearance.Icons)
 	}
 
 	for _, v := range GutterStyles {
@@ -154,10 +152,9 @@ func TestNormalizeRejectsUnknownEnumValues(t *testing.T) {
 		}
 	}
 	for _, v := range IconModes {
-		s.Explorer.Icons = v
-		s.Git.Icons = v
+		s.Appearance.Icons = v
 		normalizeSettings(&s)
-		if s.Explorer.Icons != v || s.Git.Icons != v {
+		if s.Appearance.Icons != v {
 			t.Errorf("normalize rejected valid icon mode %q", v)
 		}
 	}
@@ -169,47 +166,30 @@ func TestIconsDefaultToNoneWhenUnset(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := LoadSettings()
-	if got.Explorer.Icons != IconsNone || got.Git.Icons != IconsNone {
-		t.Fatalf("icons with no icons key = explorer %q, git %q, want none", got.Explorer.Icons, got.Git.Icons)
+	if got.Appearance.Icons != IconsNone {
+		t.Fatalf("icons with no icons key = %q, want none", got.Appearance.Icons)
 	}
 }
 
-func TestSidebarChevronsDefaultAndValidate(t *testing.T) {
+func TestChevronsDefaultAndValidate(t *testing.T) {
 	d := DefaultSettings()
-	if d.Sidebar.TreeChevronCollapsed != "▶" || d.Sidebar.TreeChevronExpanded != "▼" {
-		t.Fatalf("defaults = %q/%q", d.Sidebar.TreeChevronCollapsed, d.Sidebar.TreeChevronExpanded)
+	if d.Appearance.Chevrons.Collapsed != "▶" || d.Appearance.Chevrons.Expanded != "▼" {
+		t.Fatalf("defaults = %+v", d.Appearance.Chevrons)
 	}
 
-	for name, value := range map[string]string{"empty": "", "two runes": "ab", "wide": "日", "grapheme": "é"} {
+	for name, value := range map[string]string{"empty": "", "two runes": "ab", "wide": "日", "grapheme": "e\u0301"} {
 		s := DefaultSettings()
-		s.Sidebar.TreeChevronCollapsed = value
+		s.Appearance.Chevrons.Collapsed = value
 		normalizeSettings(&s)
-		if s.Sidebar.TreeChevronCollapsed != "▶" {
-			t.Errorf("%s: collapsed = %q, want the default", name, s.Sidebar.TreeChevronCollapsed)
+		if s.Appearance.Chevrons.Collapsed != "▶" {
+			t.Errorf("%s: collapsed = %q, want the default", name, s.Appearance.Chevrons.Collapsed)
 		}
 	}
 
 	s := DefaultSettings()
-	s.Sidebar.TreeChevronCollapsed = ""
-	s.Sidebar.TreeChevronExpanded = ">"
+	s.Appearance.Chevrons = ChevronSettings{Collapsed: "ab", Expanded: "\ueab4"}
 	normalizeSettings(&s)
-	collapsed, expanded := s.Sidebar.Chevrons()
-	if collapsed != '' || expanded != '>' {
-		t.Errorf("chevrons = %q/%q, want the configured glyphs", collapsed, expanded)
-	}
-}
-
-func TestFoldChevronsDefaultAndValidate(t *testing.T) {
-	d := DefaultSettings()
-	if d.Editor.FoldChevronCollapsed != "▶" || d.Editor.FoldChevronExpanded != "▼" {
-		t.Fatalf("defaults = %q/%q", d.Editor.FoldChevronCollapsed, d.Editor.FoldChevronExpanded)
-	}
-
-	s := DefaultSettings()
-	s.Editor.FoldChevronCollapsed = "ab"
-	s.Editor.FoldChevronExpanded = "\ueab4"
-	normalizeSettings(&s)
-	collapsed, expanded := s.Editor.FoldChevrons()
+	collapsed, expanded := s.Appearance.ChevronRunes()
 	if collapsed != '▶' || expanded != '\ueab4' {
 		t.Errorf("chevrons = %q/%q, want the default and the configured glyph", collapsed, expanded)
 	}

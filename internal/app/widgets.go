@@ -269,14 +269,14 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	search.Debounce.DelayMs = cfg.Settings.Search.Debounce
 	changes := NewChangesPanel(ws.Paths()...)
 	changes.SetFileView(cfg.Settings.Git.FileView)
-	changes.SetIcons(cfg.Settings.Git.Icons)
+	changes.SetIcons(cfg.Settings.Appearance.Icons)
 	if cfg.Settings.Sidebar.CommitHistoryHeight > 0 {
 		changes.Split.BottomH = cfg.Settings.Sidebar.CommitHistoryHeight
 		changes.Split.BottomRatio = 0
 	}
 	symbols := NewSymbolsPanel()
 
-	explorer := NewNavigationPanel(cfg.Settings.Explorer, ws.Paths()...)
+	explorer := NewNavigationPanel(cfg.Settings.Explorer, cfg.Settings.Appearance.Icons, ws.Paths()...)
 
 	sidebar := ui.NewSidebarWidget()
 	sidebar.AddPanel("explorer", "Explore", explorer.Adapter)
@@ -346,8 +346,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	// Rebuild the Diagnostics panel whenever any source (LSP or a plugin)
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
-	app.applySidebarChevrons(cfg.Settings.Sidebar)
-	app.applyFoldChevrons(cfg.Settings.Editor)
+	app.applyChevrons(cfg.Settings.Appearance)
 	return app
 }
 

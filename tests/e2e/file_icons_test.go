@@ -36,23 +36,22 @@ func TestSettingsFileIconsTurnOnAfterApply(t *testing.T) {
 	defer h.stop()
 	initializeHarnessRepository(t, h.dir)
 	clickRowControl(t, h, "Advanced", "Advanced")
-	for _, label := range []string{"Explorer: file icons", "Git: file icons"} {
-		if !rowHas(h, label, "None") {
-			t.Fatalf("%s should default to None:\n%s", label, h.screenText())
-		}
-		clickRowControl(t, h, label, "None")
-		clickRowControl(t, h, "Nerd Font", "Nerd Font")
-		if !rowHas(h, label, "Nerd Font") {
-			t.Fatalf("%s did not switch to Nerd Font:\n%s", label, h.screenText())
-		}
+	label := "Icons"
+	if !rowHas(h, label, "None") {
+		t.Fatalf("%s should default to None:\n%s", label, h.screenText())
 	}
-	if h.app.Settings.Explorer.Icons != config.IconsNone || h.app.Settings.Git.Icons != config.IconsNone {
+	clickRowControl(t, h, label, "None")
+	clickRowControl(t, h, "Nerd Font", "Nerd Font")
+	if !rowHas(h, label, "Nerd Font") {
+		t.Fatalf("%s did not switch to Nerd Font:\n%s", label, h.screenText())
+	}
+	if h.app.Settings.Appearance.Icons != config.IconsNone {
 		t.Fatal("icon settings applied before Apply")
 	}
 
 	h.exec("settings.apply")
-	if h.app.Settings.Explorer.Icons != config.IconsNerdFont || h.app.Settings.Git.Icons != config.IconsNerdFont {
-		t.Fatalf("icon settings did not apply: explorer=%q git=%q", h.app.Settings.Explorer.Icons, h.app.Settings.Git.Icons)
+	if h.app.Settings.Appearance.Icons != config.IconsNerdFont {
+		t.Fatalf("icon settings did not apply: %q", h.app.Settings.Appearance.Icons)
 	}
 
 	h.exec("sidebar.explorer")
@@ -72,54 +71,19 @@ func TestOptionsMenuTogglesFileIcons(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
-	h.exec("options.toggleExplorerIcons")
-	if h.app.Settings.Explorer.Icons != config.IconsNerdFont {
-		t.Fatalf("explorer icons after toggle = %q, want nerd-font", h.app.Settings.Explorer.Icons)
-	}
-	h.exec("options.toggleExplorerIcons")
-	if h.app.Settings.Explorer.Icons != config.IconsNone {
-		t.Fatalf("explorer icons after second toggle = %q, want none", h.app.Settings.Explorer.Icons)
-	}
-
 	for _, menu := range [][]ui.ContextMenuItem{h.app.BuildOptionsMenu(), h.app.BuildChangesPanelMenu(), h.app.BuildChangesContextMenu()} {
-		if item, ok := findMenuCommand(menu, "options.toggleGitIcons"); !ok || item.Checked != ui.MenuUnchecked {
-			t.Fatalf("Git Files menus should carry an unchecked File Icons entry by default: item=%+v found=%v", item, ok)
+		if item, ok := findMenuCommand(menu, "options.toggleFontIcons"); !ok || item.Checked != ui.MenuUnchecked {
+			t.Fatalf("icon menus should carry an unchecked entry by default: item=%+v found=%v", item, ok)
 		}
 	}
-	h.exec("options.toggleGitIcons")
-	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleGitIcons"); h.app.Settings.Git.Icons != config.IconsNerdFont || item.Checked != ui.MenuChecked {
-		t.Fatalf("git icons after toggle = %q, menu checked %v", h.app.Settings.Git.Icons, item.Checked)
-	}
-}
 
-func TestOptionsMenuTogglesFontIconsForBothPanels(t *testing.T) {
-	h := newTestHarness(t, 80, 24)
-	defer h.stop()
-
-	if item, ok := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleFontIcons"); !ok || item.Checked != ui.MenuUnchecked {
-		t.Fatalf("Font Icons should start unchecked: item=%+v found=%v", item, ok)
+	h.exec("options.toggleFontIcons")
+	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleFontIcons"); h.app.Settings.Appearance.Icons != config.IconsNerdFont || item.Checked != ui.MenuChecked {
+		t.Fatalf("icons after toggle = %q, menu checked %v", h.app.Settings.Appearance.Icons, item.Checked)
 	}
 
 	h.exec("options.toggleFontIcons")
-	if h.app.Settings.Explorer.Icons != config.IconsNerdFont || h.app.Settings.Git.Icons != config.IconsNerdFont {
-		t.Fatalf("icons after toggle = explorer %q git %q, want both nerd-font", h.app.Settings.Explorer.Icons, h.app.Settings.Git.Icons)
-	}
-	if item, ok := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleFontIcons"); !ok || item.Checked != ui.MenuChecked {
-		t.Fatalf("Font Icons should be checked once both panels are on: item=%+v found=%v", item, ok)
-	}
-
-	h.exec("options.toggleExplorerIcons")
-	if item, ok := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleFontIcons"); !ok || item.Checked != ui.MenuUnchecked {
-		t.Fatalf("Font Icons should read unchecked once the panels disagree: item=%+v found=%v", item, ok)
-	}
-
-	h.exec("options.toggleFontIcons")
-	if h.app.Settings.Explorer.Icons != config.IconsNerdFont || h.app.Settings.Git.Icons != config.IconsNerdFont {
-		t.Fatalf("icons after toggling a mixed state = explorer %q git %q, want both nerd-font", h.app.Settings.Explorer.Icons, h.app.Settings.Git.Icons)
-	}
-
-	h.exec("options.toggleFontIcons")
-	if h.app.Settings.Explorer.Icons != config.IconsNone || h.app.Settings.Git.Icons != config.IconsNone {
-		t.Fatalf("icons after final toggle = explorer %q git %q, want both none", h.app.Settings.Explorer.Icons, h.app.Settings.Git.Icons)
+	if h.app.Settings.Appearance.Icons != config.IconsNone {
+		t.Fatalf("icons after second toggle = %q, want none", h.app.Settings.Appearance.Icons)
 	}
 }

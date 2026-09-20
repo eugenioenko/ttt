@@ -1,6 +1,13 @@
 {
   "version": 1,
   "theme": "default-dark",
+  "appearance": {
+    "icons": "none",
+    "chevrons": {
+      "collapsed": "▶",
+      "expanded": "▼"
+    }
+  },
   "editor": {
     "tabSize": 4,
     "insertSpaces": true,
@@ -15,8 +22,6 @@
     "focusOnOpen": false,
     "gutterStyle": "compact",
     "borderStyle": "default",
-    "foldChevronCollapsed": "▶",
-    "foldChevronExpanded": "▼",
     "bracketPairColorization": false,
     "transparentBackground": false
   },
@@ -25,16 +30,10 @@
   },
   "explorer": {
     "showHidden": true,
-    "showGitIgnored": true,
-    "icons": "none"
-  },
-  "sidebar": {
-    "treeChevronCollapsed": "▶",
-    "treeChevronExpanded": "▼"
+    "showGitIgnored": true
   },
   "git": {
-    "fileView": "list",
-    "icons": "none"
+    "fileView": "list"
   },
   "terminal": {
     "scrollback": 1000

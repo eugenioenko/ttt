@@ -334,7 +334,7 @@ func TestFoldChevronFollowsSetting(t *testing.T) {
 	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), 0644)
 
 	s := *h.app.Settings
-	s.Editor.FoldChevronCollapsed = "»"
+	s.Appearance.Chevrons.Collapsed = "»"
 	h.app.ApplySettings(s)
 
 	h.app.EditorGroup.OpenFile(goFile)

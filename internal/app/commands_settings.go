@@ -28,8 +28,8 @@ func (a *App) ReloadSettings() {
 	a.StatusNotify("Settings reloaded")
 }
 
-func (a *App) applySidebarChevrons(sb config.SidebarSettings) {
-	collapsed, expanded := sb.Chevrons()
+func (a *App) applyChevrons(ap config.AppearanceSettings) {
+	collapsed, expanded := ap.ChevronRunes()
 	var trees []*widgets.TreeWidget
 	if a.Explorer != nil {
 		trees = append(trees, a.Explorer.Tree)
@@ -50,11 +50,8 @@ func (a *App) applySidebarChevrons(sb config.SidebarSettings) {
 		a.Search.ChevronCollapsed = collapsed
 		a.Search.ChevronExpanded = expanded
 	}
-}
-
-func (a *App) applyFoldChevrons(s config.EditorSettings) {
 	if a.EditorGroup != nil && a.EditorGroup.Editor != nil {
-		a.EditorGroup.Editor.FoldChevronCollapsed, a.EditorGroup.Editor.FoldChevronExpanded = s.FoldChevrons()
+		a.EditorGroup.Editor.FoldChevronCollapsed, a.EditorGroup.Editor.FoldChevronExpanded = collapsed, expanded
 	}
 }
 
@@ -121,16 +118,16 @@ func (a *App) ApplySettings(s config.Settings) {
 		}
 	}
 
-	a.applySidebarChevrons(s.Sidebar)
-	a.applyFoldChevrons(s.Editor)
+	a.applyChevrons(s.Appearance)
 
-	if a.Explorer != nil && a.Explorer.Settings != s.Explorer {
+	if a.Explorer != nil && (a.Explorer.Settings != s.Explorer || a.Explorer.Icons != s.Appearance.Icons) {
 		a.Explorer.Settings = s.Explorer
+		a.Explorer.Icons = s.Appearance.Icons
 		a.Explorer.Reload()
 	}
 	if a.Changes != nil {
 		a.Changes.SetFileView(s.Git.FileView)
-		a.Changes.SetIcons(s.Git.Icons)
+		a.Changes.SetIcons(s.Appearance.Icons)
 	}
 
 	// An empty theme name means the built-in default, and must still be applied —

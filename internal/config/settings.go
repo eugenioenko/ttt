@@ -111,8 +111,6 @@ type EditorSettings struct {
 	AutoIndent              *bool  `json:"autoIndent,omitempty"`
 	GutterStyle             string `json:"gutterStyle,omitempty"`
 	BorderStyle             string `json:"borderStyle,omitempty"`
-	FoldChevronCollapsed    string `json:"foldChevronCollapsed"`
-	FoldChevronExpanded     string `json:"foldChevronExpanded"`
 	BracketPairColorization bool   `json:"bracketPairColorization"`
 	ShowTrailingNewline     *bool  `json:"showTrailingNewline,omitempty"`
 	MenuBar                 *bool  `json:"menuBar,omitempty"`
@@ -146,8 +144,6 @@ func (e EditorSettings) IsAutoIndentEnabled() bool {
 
 func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
-		FoldChevronCollapsed:    DefaultFoldChevronCollapsed,
-		FoldChevronExpanded:     DefaultFoldChevronExpanded,
 		TabSize:                 4,
 		InsertSpaces:            true,
 		DiffMode:                DiffModeSplit,
@@ -171,49 +167,41 @@ func DefaultSearchSettings() SearchSettings {
 }
 
 type ExplorerSettings struct {
-	ShowHidden     bool   `json:"showHidden"`
-	ShowGitIgnored bool   `json:"showGitIgnored"`
-	Icons          string `json:"icons"`
+	ShowHidden     bool `json:"showHidden"`
+	ShowGitIgnored bool `json:"showGitIgnored"`
 }
 
 const (
-	DefaultFoldChevronCollapsed = "▶"
-	DefaultFoldChevronExpanded  = "▼"
+	DefaultChevronCollapsed = "▶"
+	DefaultChevronExpanded  = "▼"
 )
 
-const (
-	DefaultTreeChevronCollapsed = "▶"
-	DefaultTreeChevronExpanded  = "▼"
-)
-
-type SidebarSettings struct {
-	PanelOrder           []string `json:"panelOrder,omitempty"`
-	Width                int      `json:"width,omitempty"`
-	CommitHistoryHeight  int      `json:"commitHistoryHeight,omitempty"`
-	TreeChevronCollapsed string   `json:"treeChevronCollapsed"`
-	TreeChevronExpanded  string   `json:"treeChevronExpanded"`
+type ChevronSettings struct {
+	Collapsed string `json:"collapsed"`
+	Expanded  string `json:"expanded"`
 }
 
-func DefaultSidebarSettings() SidebarSettings {
-	return SidebarSettings{
-		TreeChevronCollapsed: DefaultTreeChevronCollapsed,
-		TreeChevronExpanded:  DefaultTreeChevronExpanded,
+type AppearanceSettings struct {
+	Icons    string          `json:"icons"`
+	Chevrons ChevronSettings `json:"chevrons"`
+}
+
+func DefaultAppearanceSettings() AppearanceSettings {
+	return AppearanceSettings{
+		Icons: IconsNone,
+		Chevrons: ChevronSettings{
+			Collapsed: DefaultChevronCollapsed,
+			Expanded:  DefaultChevronExpanded,
+		},
 	}
 }
 
-// Chevrons falls back to the defaults for any value that is not exactly one
-// single-width rune, since the tree draws the chevron in one cell and reserves
-// exactly two columns for it.
-func (s SidebarSettings) Chevrons() (collapsed, expanded rune) {
-	return chevronRune(s.TreeChevronCollapsed, DefaultTreeChevronCollapsed),
-		chevronRune(s.TreeChevronExpanded, DefaultTreeChevronExpanded)
-}
-
-// FoldChevrons applies the same one-single-width-rune rule as the sidebar
-// chevrons, since the gutter draws the glyph in a single cell.
-func (s EditorSettings) FoldChevrons() (collapsed, expanded rune) {
-	return chevronRune(s.FoldChevronCollapsed, DefaultFoldChevronCollapsed),
-		chevronRune(s.FoldChevronExpanded, DefaultFoldChevronExpanded)
+// ChevronRunes falls back to the defaults for any value that is not exactly one
+// single-width rune, since trees and the fold gutter draw the chevron in one
+// cell and reserve exactly two columns for it.
+func (a AppearanceSettings) ChevronRunes() (collapsed, expanded rune) {
+	return chevronRune(a.Chevrons.Collapsed, DefaultChevronCollapsed),
+		chevronRune(a.Chevrons.Expanded, DefaultChevronExpanded)
 }
 
 func chevronRune(value, fallback string) rune {
@@ -223,20 +211,28 @@ func chevronRune(value, fallback string) rune {
 	return []rune(fallback)[0]
 }
 
+type SidebarSettings struct {
+	PanelOrder          []string `json:"panelOrder,omitempty"`
+	Width               int      `json:"width,omitempty"`
+	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
+}
+
+func DefaultSidebarSettings() SidebarSettings {
+	return SidebarSettings{}
+}
+
 type GitSettings struct {
 	FileView string `json:"fileView"`
-	Icons    string `json:"icons"`
 }
 
 func DefaultGitSettings() GitSettings {
-	return GitSettings{FileView: GitFileViewList, Icons: IconsNone}
+	return GitSettings{FileView: GitFileViewList}
 }
 
 func DefaultExplorerSettings() ExplorerSettings {
 	return ExplorerSettings{
 		ShowHidden:     true,
 		ShowGitIgnored: true,
-		Icons:          IconsNone,
 	}
 }
 
@@ -281,6 +277,7 @@ type Settings struct {
 	// These sections must NOT use omitzero: their defaults are non-zero, so an
 	// all-false/all-zero section would be omitted on save and silently revert to
 	// the defaults on the next load.
+	Appearance   AppearanceSettings   `json:"appearance"`
 	Editor       EditorSettings       `json:"editor"`
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
@@ -357,6 +354,7 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 func DefaultSettings() Settings {
 	return Settings{
 		Version:      1,
+		Appearance:   DefaultAppearanceSettings(),
 		Editor:       DefaultEditorSettings(),
 		Search:       DefaultSearchSettings(),
 		Explorer:     DefaultExplorerSettings(),
@@ -400,12 +398,8 @@ func normalizeSettings(s *Settings) {
 	if s.Sidebar.CommitHistoryHeight < 0 {
 		s.Sidebar.CommitHistoryHeight = 0
 	}
-	collapsed, expanded := s.Sidebar.Chevrons()
-	s.Sidebar.TreeChevronCollapsed = string(collapsed)
-	s.Sidebar.TreeChevronExpanded = string(expanded)
-	collapsed, expanded = s.Editor.FoldChevrons()
-	s.Editor.FoldChevronCollapsed = string(collapsed)
-	s.Editor.FoldChevronExpanded = string(expanded)
+	collapsed, expanded := s.Appearance.ChevronRunes()
+	s.Appearance.Chevrons = ChevronSettings{Collapsed: string(collapsed), Expanded: string(expanded)}
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
 	}
@@ -418,11 +412,8 @@ func normalizeSettings(s *Settings) {
 	if !slices.Contains([]string{ImageProtocolAuto, ImageProtocolKitty, ImageProtocolNone}, s.Image.Protocol) {
 		s.Image.Protocol = ImageProtocolAuto
 	}
-	if !slices.Contains(IconModes, s.Explorer.Icons) {
-		s.Explorer.Icons = IconsNone
-	}
-	if !slices.Contains(IconModes, s.Git.Icons) {
-		s.Git.Icons = IconsNone
+	if !slices.Contains(IconModes, s.Appearance.Icons) {
+		s.Appearance.Icons = IconsNone
 	}
 }
 
