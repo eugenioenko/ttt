@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -208,25 +209,11 @@ func (cp *ChangesPanel) SetIcons(mode string) {
 	for _, node := range cp.CommitLog.Config.Items {
 		switch {
 		case node.ID == "branch":
-			node.Icon = cp.branchIcon()
+			node.Icon = icons.Get(cp.icons, icons.Branch)
 		case strings.HasPrefix(node.ID, "commit:"):
-			node.Icon = cp.commitIcon()
+			node.Icon = icons.Get(cp.icons, icons.Commit)
 		}
 	}
-}
-
-func (cp *ChangesPanel) branchIcon() string {
-	if cp.icons == config.IconsNerdFont {
-		return "\uf418"
-	}
-	return "⎇"
-}
-
-func (cp *ChangesPanel) commitIcon() string {
-	if cp.icons == config.IconsNerdFont {
-		return "\uf417"
-	}
-	return "●"
 }
 
 func (cp *ChangesPanel) rebuildFileNodes(apply func()) {

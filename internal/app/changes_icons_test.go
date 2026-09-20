@@ -6,6 +6,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/fileicons"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -88,7 +89,7 @@ func TestCommitHistoryIconsFollowIconMode(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.logCommits = make(map[string]commitFileRef)
 	cp.CommitLog.SetItems([]*widgets.TreeNode{
-		{ID: "branch", Icon: cp.branchIcon()},
+		{ID: "branch", Icon: icons.Get(cp.icons, icons.Branch)},
 		cp.commitLogNode("/repo", git.LogEntry{Ref: "abc", Hash: "abc", Message: "msg"}),
 	})
 
