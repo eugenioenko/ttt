@@ -8,11 +8,9 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
-// explorerGitStyles maps every changed file, and each of its ancestor
-// directories up to the repository root, to the color the file explorer
-// sidebar should use. A directory takes the highest-priority status found
-// among its descendants, mirroring how VSCode and Zed tint folders that
-// contain changes.
+// explorerGitStyles also colors every ancestor directory up to the repo root
+// with the highest-priority status among its descendants, mirroring how
+// VSCode and Zed tint folders that contain changes.
 func explorerGitStyles(groups []changesGroup) map[string]term.Style {
 	styles := make(map[string]term.Style)
 	merge := func(path string, style term.Style) {
@@ -21,7 +19,7 @@ func explorerGitStyles(groups []changesGroup) map[string]term.Style {
 		}
 	}
 	apply := func(dir string, file git.FileStatus) {
-		style := ui.StatusStyle(file.Status)
+		style := ui.GitDecorationStyle(file.Status, file.Staged)
 		if style == term.StyleDefault {
 			return
 		}
@@ -48,17 +46,25 @@ func explorerGitStyles(groups []changesGroup) map[string]term.Style {
 	return styles
 }
 
-// gitStylePriority ranks statuses so a folder containing multiple kinds of
-// changes shows the most attention-worthy one.
+// gitStylePriority ranks a live status above its dimmed staged variant, so a
+// folder with both a staged and a pending change shows the pending one.
 func gitStylePriority(style term.Style) int {
 	switch style {
 	case term.StyleGitConflict:
-		return 4
+		return 8
+	case term.StyleGitConflictStaged:
+		return 7
 	case term.StyleWarning:
-		return 3
+		return 6
+	case term.StyleWarningStaged:
+		return 5
 	case term.StyleDanger:
-		return 2
+		return 4
+	case term.StyleDangerStaged:
+		return 3
 	case term.StyleSuccess:
+		return 2
+	case term.StyleSuccessStaged:
 		return 1
 	default:
 		return 0

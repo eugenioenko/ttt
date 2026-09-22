@@ -18,8 +18,7 @@ type TreeNode struct {
 	Children       []*TreeNode `json:"children,omitempty"`
 	Actions        []Action    `json:"actions,omitempty"`
 	Muted          bool        `json:"-"`
-	// LabelStyle overrides the label's color, e.g. for git-status decoration.
-	// Muted and selection both take precedence over it.
+	// LabelStyle overrides the label color; Muted and selection take precedence.
 	LabelStyle   term.Style `json:"-"`
 	Expandable   bool       `json:"-"`
 	TruncateLeft bool       `json:"-"`

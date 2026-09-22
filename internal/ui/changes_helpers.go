@@ -34,6 +34,26 @@ func StatusStyle(status string) term.Style {
 	}
 }
 
+// GitDecorationStyle is StatusStyle, dimmed to the staged variant when staged.
+func GitDecorationStyle(status string, staged bool) term.Style {
+	style := StatusStyle(status)
+	if !staged {
+		return style
+	}
+	switch style {
+	case term.StyleSuccess:
+		return term.StyleSuccessStaged
+	case term.StyleDanger:
+		return term.StyleDangerStaged
+	case term.StyleWarning:
+		return term.StyleWarningStaged
+	case term.StyleGitConflict:
+		return term.StyleGitConflictStaged
+	default:
+		return style
+	}
+}
+
 func StatusBadge(status string) string {
 	switch status {
 	case "M":

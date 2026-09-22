@@ -38,6 +38,52 @@ func TestExplorerGitStylesColorsFilesByStatus(t *testing.T) {
 	}
 }
 
+func TestExplorerGitStylesDimsStagedFiles(t *testing.T) {
+	dir := filepath.FromSlash("/repo")
+	groups := []changesGroup{
+		{
+			Dir: dir,
+			Staged: []git.FileStatus{
+				{Path: "staged.go", Status: "M", Staged: true},
+			},
+			Unstaged: []git.FileStatus{
+				{Path: "pending.go", Status: "M"},
+			},
+		},
+	}
+
+	styles := explorerGitStyles(groups)
+
+	if got := styles[filepath.Join(dir, "staged.go")]; got != term.StyleWarningStaged {
+		t.Errorf("staged.go = %v, want dimmed %v", got, term.StyleWarningStaged)
+	}
+	if got := styles[filepath.Join(dir, "pending.go")]; got != term.StyleWarning {
+		t.Errorf("pending.go = %v, want live %v", got, term.StyleWarning)
+	}
+}
+
+func TestExplorerGitStylesFolderPrefersLiveOverStagedInSameCategory(t *testing.T) {
+	dir := filepath.FromSlash("/repo")
+	groups := []changesGroup{
+		{
+			Dir: dir,
+			Staged: []git.FileStatus{
+				{Path: "src/staged.go", Status: "M", Staged: true},
+			},
+			Unstaged: []git.FileStatus{
+				{Path: "src/pending.go", Status: "M"},
+			},
+		},
+	}
+
+	styles := explorerGitStyles(groups)
+
+	folder := filepath.Join(dir, "src")
+	if got := styles[folder]; got != term.StyleWarning {
+		t.Errorf("styles[%q] = %v, want the live (non-dimmed) %v to win", folder, got, term.StyleWarning)
+	}
+}
+
 func TestExplorerGitStylesPropagatesToAncestorFolders(t *testing.T) {
 	dir := filepath.FromSlash("/repo")
 	groups := []changesGroup{
@@ -128,11 +174,17 @@ func TestNavigationPanelApplyGitStatusColorsLoadedNodes(t *testing.T) {
 }
 
 func TestGitStylePriority(t *testing.T) {
+	// Lowest to highest: default, then each category's staged (dimmed) variant
+	// just below its live one, categories ordered success < danger < warning < conflict.
 	order := []term.Style{
 		term.StyleDefault,
+		term.StyleSuccessStaged,
 		term.StyleSuccess,
+		term.StyleDangerStaged,
 		term.StyleDanger,
+		term.StyleWarningStaged,
 		term.StyleWarning,
+		term.StyleGitConflictStaged,
 		term.StyleGitConflict,
 	}
 	for i := 1; i < len(order); i++ {

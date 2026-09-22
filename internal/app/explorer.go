@@ -21,8 +21,6 @@ type NavigationPanel struct {
 	Icons    string
 	Roots    []string
 
-	// gitStyles maps absolute paths (files and their ancestor directories) to
-	// the label color reflecting their git status. Populated by ApplyGitStatus.
 	gitStyles map[string]term.Style
 
 	OnOpenFile   func(path string)
@@ -222,10 +220,8 @@ func (n *NavigationPanel) loadChildren(node *widgets.TreeNode) {
 	}
 }
 
-// ApplyGitStatus recolors the currently loaded tree nodes from a fresh
-// path -> status color map, without re-reading the filesystem. It is called
-// on every git status refresh, which can happen every couple of seconds, so
-// it must stay cheap.
+// ApplyGitStatus repaints already-loaded nodes in place instead of reloading
+// from disk, since it runs on every status poll (every couple of seconds).
 func (n *NavigationPanel) ApplyGitStatus(styles map[string]term.Style) {
 	n.gitStyles = styles
 	enabled := n.Settings.GitStatusColors

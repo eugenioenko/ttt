@@ -45,6 +45,11 @@ const (
 	StyleDanger
 	StyleWarning
 	StyleGitConflict
+	// Dimmed variants for staged git changes.
+	StyleSuccessStaged
+	StyleDangerStaged
+	StyleWarningStaged
+	StyleGitConflictStaged
 	StyleDiagError
 	StyleDiagWarning
 	StyleDiagInfo

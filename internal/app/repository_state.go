@@ -160,8 +160,6 @@ func (s *RepositoryState) SetPoster(poster eventPoster) {
 	s.poster = poster
 }
 
-// SetExplorer wires the file explorer sidebar so it is recolored on every
-// worktree status refresh, alongside the Changes panel.
 func (s *RepositoryState) SetExplorer(explorer *NavigationPanel) {
 	if s == nil {
 		return

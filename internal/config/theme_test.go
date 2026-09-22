@@ -229,6 +229,44 @@ func TestResolveColors(t *testing.T) {
 	}
 }
 
+func TestResolveColorsDerivesStagedVariants(t *testing.T) {
+	th := DefaultTheme()
+	th.ResolveColors()
+
+	cases := []struct {
+		name   string
+		live   StyleDef
+		staged StyleDef
+	}{
+		{"Success", th.Success, th.SuccessStaged},
+		{"Danger", th.Danger, th.DangerStaged},
+		{"Warning", th.Warning, th.WarningStaged},
+		{"Conflict", th.Conflict, th.ConflictStaged},
+	}
+	for _, c := range cases {
+		if c.staged.Fg == "" {
+			t.Errorf("%s: expected staged Fg to be derived, got empty", c.name)
+		}
+		if c.staged.Fg == c.live.Fg {
+			t.Errorf("%s: expected staged Fg to differ from the live color, both are %q", c.name, c.live.Fg)
+		}
+		liveLum := testColorLuminance(c.live.Fg)
+		stagedLum := testColorLuminance(c.staged.Fg)
+		bgLum := testColorLuminance(th.Default.Bg)
+		// The staged variant should sit strictly between the live color and the
+		// background on the luminance scale, i.e. actually faded toward it.
+		if bgLum > liveLum {
+			if !(stagedLum > liveLum && stagedLum < bgLum) {
+				t.Errorf("%s: staged luminance %v should be between live %v and background %v", c.name, stagedLum, liveLum, bgLum)
+			}
+		} else {
+			if !(stagedLum < liveLum && stagedLum > bgLum) {
+				t.Errorf("%s: staged luminance %v should be between live %v and background %v", c.name, stagedLum, liveLum, bgLum)
+			}
+		}
+	}
+}
+
 func TestResolveColorsPreservesExisting(t *testing.T) {
 	th := DefaultTheme()
 	th.Success.Fg = "#custom"
