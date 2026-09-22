@@ -6,6 +6,27 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
+func TestGitDecorationRankOrdersStagedBelowLive(t *testing.T) {
+	// Lowest to highest: unknown, then each category's staged variant just
+	// below its live one, categories ordered new < deleted < modified < conflict.
+	order := []term.Style{
+		term.StyleDefault,
+		term.StyleSuccessStaged,
+		term.StyleSuccess,
+		term.StyleDangerStaged,
+		term.StyleDanger,
+		term.StyleWarningStaged,
+		term.StyleWarning,
+		term.StyleGitConflictStaged,
+		term.StyleGitConflict,
+	}
+	for i := 1; i < len(order); i++ {
+		if GitDecorationRank(order[i]) <= GitDecorationRank(order[i-1]) {
+			t.Errorf("expected rank(%v) > rank(%v)", order[i], order[i-1])
+		}
+	}
+}
+
 func TestGitDecorationStyle(t *testing.T) {
 	cases := []struct {
 		status string

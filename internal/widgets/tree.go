@@ -466,11 +466,13 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	}
 
 	labelStyle := style
-	if node.LabelStyle != term.StyleDefault && idx != t.selected {
-		labelStyle = node.LabelStyle
-	}
-	if node.Muted && idx != t.selected {
-		labelStyle = term.StyleMuted
+	if idx != t.selected {
+		switch {
+		case node.Muted:
+			labelStyle = term.StyleMuted
+		case node.LabelStyle != term.StyleDefault:
+			labelStyle = node.LabelStyle
+		}
 	}
 	labelRunes := []rune(node.Label)
 	if t.Config.TruncateLeft || node.TruncateLeft {

@@ -30,10 +30,9 @@ type NavigationPanel struct {
 
 func NewNavigationPanel(settings config.ExplorerSettings, icons string, paths ...string) *NavigationPanel {
 	n := &NavigationPanel{
-		Settings:  settings,
-		Icons:     icons,
-		Roots:     paths,
-		gitStyles: make(map[string]term.Style),
+		Settings: settings,
+		Icons:    icons,
+		Roots:    paths,
 	}
 
 	items := make([]*widgets.TreeNode, len(paths))
@@ -210,9 +209,7 @@ func (n *NavigationPanel) loadChildren(node *widgets.TreeNode) {
 			Expandable: de.IsDir,
 			Muted:      de.GitIgnored || strings.HasPrefix(de.Name, "."),
 		}
-		if n.Settings.GitStatusColors {
-			child.LabelStyle = n.gitStyles[child.ID]
-		}
+		child.LabelStyle = n.gitStyleFor(child.ID)
 		if n.Icons == config.IconsNerdFont && !de.IsDir {
 			setFileIcon(child)
 		}
@@ -224,20 +221,22 @@ func (n *NavigationPanel) loadChildren(node *widgets.TreeNode) {
 // from disk, since it runs on every status poll (every couple of seconds).
 func (n *NavigationPanel) ApplyGitStatus(styles map[string]term.Style) {
 	n.gitStyles = styles
-	enabled := n.Settings.GitStatusColors
-	var apply func(*widgets.TreeNode)
-	apply = func(node *widgets.TreeNode) {
-		if enabled {
-			node.LabelStyle = styles[node.ID]
-		} else {
-			node.LabelStyle = term.StyleDefault
-		}
-		for _, child := range node.Children {
-			apply(child)
-		}
-	}
 	for _, root := range n.Tree.Config.Items {
-		apply(root)
+		n.applyGitStyles(root)
 	}
 	n.Tree.SetItems(n.Tree.Config.Items)
+}
+
+func (n *NavigationPanel) applyGitStyles(node *widgets.TreeNode) {
+	node.LabelStyle = n.gitStyleFor(node.ID)
+	for _, child := range node.Children {
+		n.applyGitStyles(child)
+	}
+}
+
+func (n *NavigationPanel) gitStyleFor(path string) term.Style {
+	if !n.Settings.GitStatusColors {
+		return term.StyleDefault
+	}
+	return n.gitStyles[path]
 }

@@ -173,23 +173,24 @@ func TestNavigationPanelApplyGitStatusColorsLoadedNodes(t *testing.T) {
 	}
 }
 
-func TestGitStylePriority(t *testing.T) {
-	// Lowest to highest: default, then each category's staged (dimmed) variant
-	// just below its live one, categories ordered success < danger < warning < conflict.
-	order := []term.Style{
-		term.StyleDefault,
-		term.StyleSuccessStaged,
-		term.StyleSuccess,
-		term.StyleDangerStaged,
-		term.StyleDanger,
-		term.StyleWarningStaged,
-		term.StyleWarning,
-		term.StyleGitConflictStaged,
-		term.StyleGitConflict,
+func TestExplorerGitStylesStopsAtRepositoryRoot(t *testing.T) {
+	dir := filepath.FromSlash("/repo/nested")
+	groups := []changesGroup{
+		{
+			Dir:      dir,
+			Unstaged: []git.FileStatus{{Path: "src/modified.go", Status: "M"}},
+		},
 	}
-	for i := 1; i < len(order); i++ {
-		if gitStylePriority(order[i]) <= gitStylePriority(order[i-1]) {
-			t.Errorf("expected priority(%v) > priority(%v)", order[i], order[i-1])
-		}
+
+	styles := explorerGitStyles(groups)
+
+	if _, ok := styles[filepath.FromSlash("/repo")]; ok {
+		t.Error("walked past the repository root into its parent")
+	}
+	if _, ok := styles[string(filepath.Separator)]; ok {
+		t.Error("walked all the way to the filesystem root")
+	}
+	if got := styles[dir]; got != term.StyleWarning {
+		t.Errorf("styles[%q] = %v, want the root itself colored %v", dir, got, term.StyleWarning)
 	}
 }
