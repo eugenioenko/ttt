@@ -57,6 +57,7 @@ type App struct {
 	imageCellH             int
 	Settings               *config.Settings
 	Workspace              *workspace.Workspace
+	ExplicitFolders        bool
 	Palette                *ui.TerminalColorPalette
 	TerminalPanel          *ui.TerminalPanelWidget
 	Terminals              []TerminalTab
