@@ -466,7 +466,9 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	}
 
 	labelStyle := style
-	if idx != t.selected {
+	// Keyed off the highlight actually drawn, not the selected index: an
+	// unfocused selection draws none, and should keep its own label color.
+	if style != term.StyleSidebarSelected {
 		switch {
 		case node.Muted:
 			labelStyle = term.StyleMuted

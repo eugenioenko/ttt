@@ -173,6 +173,42 @@ func TestNavigationPanelApplyGitStatusColorsLoadedNodes(t *testing.T) {
 	}
 }
 
+// A `git rm --cached` leaves the file on disk, reported as both a staged
+// delete and an untracked add, so the tree still has a row to color.
+func TestExplorerGitStylesRanksStagedDeleteOverUntrackedOnSamePath(t *testing.T) {
+	dir := filepath.FromSlash("/repo")
+	groups := []changesGroup{
+		{
+			Dir:      dir,
+			Staged:   []git.FileStatus{{Path: "cached.go", Status: "D", Staged: true}},
+			Unstaged: []git.FileStatus{{Path: "cached.go", Status: "?"}},
+		},
+	}
+
+	styles := explorerGitStyles(groups)
+
+	if got := styles[filepath.Join(dir, "cached.go")]; got != term.StyleDangerStaged {
+		t.Errorf("cached.go = %v, want %v", got, term.StyleDangerStaged)
+	}
+}
+
+func TestExplorerGitStylesColorsFolderOfDeletedFile(t *testing.T) {
+	dir := filepath.FromSlash("/repo")
+	groups := []changesGroup{
+		{
+			Dir:      dir,
+			Unstaged: []git.FileStatus{{Path: "src/gone.go", Status: "D"}},
+		},
+	}
+
+	styles := explorerGitStyles(groups)
+
+	// The file itself is off disk and has no row, but its folder still does.
+	if got := styles[filepath.Join(dir, "src")]; got != term.StyleDanger {
+		t.Errorf("src/ = %v, want %v", got, term.StyleDanger)
+	}
+}
+
 func TestExplorerGitStylesStopsAtRepositoryRoot(t *testing.T) {
 	dir := filepath.FromSlash("/repo/nested")
 	groups := []changesGroup{

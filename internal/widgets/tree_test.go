@@ -322,6 +322,35 @@ func TestTreeRenderLabelStyle(t *testing.T) {
 	}
 }
 
+func TestTreeRenderLabelStyleSurvivesUnfocusedSelection(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items: []*TreeNode{
+			{ID: "a", Label: "changed.go", LabelStyle: term.StyleWarning},
+		},
+	})
+	// "a" is selected, but an unfocused tree draws no selection highlight, so
+	// there is nothing for the selection to take precedence over.
+	tree.SetFocused(false)
+	s := renderWidget(tree, 0, 0, 20, 10)
+	if s.cells[0][0].Style != term.StyleWarning {
+		t.Errorf("unhighlighted selected row should keep its LabelStyle, got %v", s.cells[0][0].Style)
+	}
+}
+
+func TestTreeRenderActiveIDHighlightOverridesLabelStyle(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items: []*TreeNode{
+			{ID: "a", Label: "plain.go"},
+			{ID: "b", Label: "changed.go", LabelStyle: term.StyleWarning},
+		},
+	})
+	tree.SetActiveID("b")
+	s := renderWidget(tree, 0, 0, 20, 10)
+	if s.cells[1][0].Style != term.StyleSidebarSelected {
+		t.Errorf("active row highlight should win over LabelStyle, got %v", s.cells[1][0].Style)
+	}
+}
+
 func TestTreeRenderMutedOverridesLabelStyle(t *testing.T) {
 	tree := NewTreeWidget(TreeConfig{
 		Items: []*TreeNode{

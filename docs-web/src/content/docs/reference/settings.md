@@ -69,7 +69,7 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
-| `explorer.gitStatusColors` | bool | `true` | Color files and folders in the file explorer by their git status (modified, new, conflicted). Colors come from the theme's `warning`, `success`, `danger`, and `conflict` colors |
+| `explorer.gitStatusColors` | bool | `true` | Color files and folders in the file explorer by their git status (modified, new, deleted, conflicted). Colors come from the theme's `warning`, `success`, `danger`, and `conflict` colors |
 
 ## Sidebar
 

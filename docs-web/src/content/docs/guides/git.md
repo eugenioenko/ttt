@@ -40,7 +40,7 @@ Select a changed file in the changes panel to open a diff. Syntax highlighting i
 
 ## Explorer Git Status Colors
 
-The file explorer sidebar colors files and folders by their git status: modified files are colored with the theme's `warning` color, new/untracked files with `success`, and merge-conflicted files with `conflict`. Staged changes render in a dimmed version of their color, so a glance at the sidebar tells what's already staged apart from what's still pending. A folder takes the color of the most attention-worthy change among its descendants. This is on by default and can be turned off via `explorer.gitStatusColors` in Settings.
+The file explorer sidebar colors files and folders by their git status: modified files are colored with the theme's `warning` color, new/untracked files with `success`, deleted files with `danger`, and merge-conflicted files with `conflict`. Staged changes render in a dimmed version of their color, so a glance at the sidebar tells what's already staged apart from what's still pending. A folder takes the color of the most attention-worthy change among its descendants, which is how a deletion usually shows: the file itself is gone from disk and has no row, but its folder still carries the `danger` color. This is on by default and can be turned off via `explorer.gitStatusColors` in Settings.
 
 The shared diff reader has two independent presentation choices:
 
