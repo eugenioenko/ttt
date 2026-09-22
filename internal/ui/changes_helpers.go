@@ -21,6 +21,8 @@ type ChangesGroup struct {
 
 func StatusStyle(status string) term.Style {
 	switch status {
+	case "U":
+		return term.StyleGitConflict
 	case "M":
 		return term.StyleWarning
 	case "A", "?", "R", "C":

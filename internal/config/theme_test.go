@@ -184,6 +184,7 @@ func TestResolveColors(t *testing.T) {
 	th.Success.Fg = ""
 	th.Danger.Fg = ""
 	th.Warning.Fg = ""
+	th.Conflict.Fg = ""
 	th.Input.Item.Bg = ""
 	th.Input.Item.Fg = ""
 	th.Input.Placeholder.Fg = ""
@@ -211,6 +212,9 @@ func TestResolveColors(t *testing.T) {
 	if th.Warning.Fg == "" {
 		t.Error("expected Warning.Fg to be filled by ResolveColors")
 	}
+	if th.Conflict.Fg == "" {
+		t.Error("expected Conflict.Fg to be filled by ResolveColors")
+	}
 	if th.Input.Item.Bg == "" {
 		t.Error("expected Input.Item.Bg to be filled by ResolveColors")
 	}
@@ -229,6 +233,7 @@ func TestResolveColorsPreservesExisting(t *testing.T) {
 	th := DefaultTheme()
 	th.Success.Fg = "#custom"
 	th.Danger.Fg = "#custom2"
+	th.Conflict.Fg = "#custom6"
 	th.Diff.Added.Bg = "#custom3"
 	th.Diff.CollapsedHover = StyleDef{Fg: "#custom4", Bg: "#custom5", Bold: true}
 
@@ -239,6 +244,9 @@ func TestResolveColorsPreservesExisting(t *testing.T) {
 	}
 	if th.Danger.Fg != "#custom2" {
 		t.Errorf("expected Danger.Fg to remain '#custom2', got %q", th.Danger.Fg)
+	}
+	if th.Conflict.Fg != "#custom6" {
+		t.Errorf("expected Conflict.Fg to remain '#custom6', got %q", th.Conflict.Fg)
 	}
 	if th.Diff.Added.Bg != "#custom3" {
 		t.Errorf("expected Diff.Added.Bg to remain '#custom3', got %q", th.Diff.Added.Bg)

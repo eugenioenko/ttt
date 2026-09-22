@@ -223,6 +223,7 @@ type ThemeConfig struct {
 	Success      StyleDef       `json:"success"`
 	Danger       StyleDef       `json:"danger"`
 	Warning      StyleDef       `json:"warning"`
+	Conflict     StyleDef       `json:"conflict"`
 	StatusBar    StyleDef       `json:"statusBar"`
 	CommitHeader StyleDef       `json:"commitHeader"`
 	Tabs         TabStyles      `json:"tabs"`
@@ -349,6 +350,7 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Success, "#73c991")
 	fillFg(&t.Danger, "#f14c4c")
 	fillFg(&t.Warning, "#e2c08d")
+	fillFg(&t.Conflict, "#c586c0")
 	fillFg(&t.Editor.Diagnostics.Error, t.Danger.Fg)
 	fillFg(&t.Editor.Diagnostics.Warning, t.Warning.Fg)
 	fillFg(&t.Editor.Diagnostics.Info, t.Default.Fg)

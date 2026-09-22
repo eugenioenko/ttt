@@ -76,6 +76,9 @@ Below is a complete theme file showing every configurable section. Ordinary colo
   "warning": {
     "fg": "#e6db74"
   },
+  "conflict": {
+    "fg": "#c586c0"
+  },
   "border": {
     "fg": "#75715e"
   },
@@ -247,6 +250,7 @@ Below is a complete theme file showing every configurable section. Ordinary colo
 |---------|-------------|
 | `default` | Base foreground and background colors inherited by all other sections |
 | `success`, `danger`, `warning` | Semantic colors used for status indicators and messages |
+| `conflict` | Color for merge-conflicted files, e.g. in the explorer's git status decoration |
 | `border` | Color for UI borders and dividers |
 | `statusBar` | Status bar at the bottom of the editor |
 | `tabs` | Active and inactive editor tab colors |

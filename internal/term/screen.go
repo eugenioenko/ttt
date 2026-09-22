@@ -44,6 +44,7 @@ const (
 	StyleSuccess
 	StyleDanger
 	StyleWarning
+	StyleGitConflict
 	StyleDiagError
 	StyleDiagWarning
 	StyleDiagInfo

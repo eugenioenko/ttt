@@ -110,6 +110,7 @@ func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleM
 	applyStyleDef(&m, term.StyleSuccess, theme.Success)
 	applyStyleDef(&m, term.StyleDanger, theme.Danger)
 	applyStyleDef(&m, term.StyleWarning, theme.Warning)
+	applyStyleDef(&m, term.StyleGitConflict, theme.Conflict)
 	applyStyleDef(&m, term.StyleFileIconRed, theme.FileIcons.Red)
 	applyStyleDef(&m, term.StyleFileIconYellow, theme.FileIcons.Yellow)
 	applyStyleDef(&m, term.StyleFileIconGreen, theme.FileIcons.Green)

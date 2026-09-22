@@ -30,7 +30,8 @@
   },
   "explorer": {
     "showHidden": true,
-    "showGitIgnored": true
+    "showGitIgnored": true,
+    "gitStatusColors": true
   },
   "git": {
     "fileView": "list"

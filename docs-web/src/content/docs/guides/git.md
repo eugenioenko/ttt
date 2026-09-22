@@ -38,6 +38,10 @@ TTT refreshes repository status after editor and source-control mutations. While
 
 Select a changed file in the changes panel to open a diff. Syntax highlighting is layered on top of diff background colors so you can read the code naturally while seeing what changed. Added and removed line numbers use `+` and `−` markers with semantic green and red styling.
 
+## Explorer Git Status Colors
+
+The file explorer sidebar colors files and folders by their git status: modified files are colored with the theme's `warning` color, new/untracked files with `success`, and merge-conflicted files with `conflict`. A folder takes the color of the most attention-worthy change among its descendants. This is on by default and can be turned off via `explorer.gitStatusColors` in Settings.
+
 The shared diff reader has two independent presentation choices:
 
 - **Split** places old and new content side by side; **Unified** stacks removals before additions.

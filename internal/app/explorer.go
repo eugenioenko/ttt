@@ -21,6 +21,10 @@ type NavigationPanel struct {
 	Icons    string
 	Roots    []string
 
+	// gitStyles maps absolute paths (files and their ancestor directories) to
+	// the label color reflecting their git status. Populated by ApplyGitStatus.
+	gitStyles map[string]term.Style
+
 	OnOpenFile   func(path string)
 	OnRightClick func(node *widgets.TreeNode, sx, sy int)
 	OnRootMenu   func(node *widgets.TreeNode, sx, sy int)
@@ -28,9 +32,10 @@ type NavigationPanel struct {
 
 func NewNavigationPanel(settings config.ExplorerSettings, icons string, paths ...string) *NavigationPanel {
 	n := &NavigationPanel{
-		Settings: settings,
-		Icons:    icons,
-		Roots:    paths,
+		Settings:  settings,
+		Icons:     icons,
+		Roots:     paths,
+		gitStyles: make(map[string]term.Style),
 	}
 
 	items := make([]*widgets.TreeNode, len(paths))
@@ -207,9 +212,36 @@ func (n *NavigationPanel) loadChildren(node *widgets.TreeNode) {
 			Expandable: de.IsDir,
 			Muted:      de.GitIgnored || strings.HasPrefix(de.Name, "."),
 		}
+		if n.Settings.GitStatusColors {
+			child.LabelStyle = n.gitStyles[child.ID]
+		}
 		if n.Icons == config.IconsNerdFont && !de.IsDir {
 			setFileIcon(child)
 		}
 		node.Children = append(node.Children, child)
 	}
+}
+
+// ApplyGitStatus recolors the currently loaded tree nodes from a fresh
+// path -> status color map, without re-reading the filesystem. It is called
+// on every git status refresh, which can happen every couple of seconds, so
+// it must stay cheap.
+func (n *NavigationPanel) ApplyGitStatus(styles map[string]term.Style) {
+	n.gitStyles = styles
+	enabled := n.Settings.GitStatusColors
+	var apply func(*widgets.TreeNode)
+	apply = func(node *widgets.TreeNode) {
+		if enabled {
+			node.LabelStyle = styles[node.ID]
+		} else {
+			node.LabelStyle = term.StyleDefault
+		}
+		for _, child := range node.Children {
+			apply(child)
+		}
+	}
+	for _, root := range n.Tree.Config.Items {
+		apply(root)
+	}
+	n.Tree.SetItems(n.Tree.Config.Items)
 }

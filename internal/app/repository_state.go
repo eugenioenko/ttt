@@ -76,9 +76,10 @@ func (realRepositoryScheduler) AfterFunc(d time.Duration, f func()) repositoryTi
 }
 
 type RepositoryState struct {
-	changes *ChangesPanel
-	dirs    []string
-	poster  eventPoster
+	changes  *ChangesPanel
+	explorer *NavigationPanel
+	dirs     []string
+	poster   eventPoster
 
 	scheduler    repositoryScheduler
 	readStatus   func(context.Context, []string, uint64) *RepositoryStatusResult
@@ -157,6 +158,15 @@ func (s *RepositoryState) SetPoster(poster eventPoster) {
 		return
 	}
 	s.poster = poster
+}
+
+// SetExplorer wires the file explorer sidebar so it is recolored on every
+// worktree status refresh, alongside the Changes panel.
+func (s *RepositoryState) SetExplorer(explorer *NavigationPanel) {
+	if s == nil {
+		return
+	}
+	s.explorer = explorer
 }
 
 func (s *RepositoryState) Start() {
@@ -416,6 +426,9 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 
 	if s.changes != nil {
 		s.changes.applyWorkingTree(groups)
+	}
+	if s.explorer != nil {
+		s.explorer.ApplyGitStatus(explorerGitStyles(groups))
 	}
 	if !hadError {
 		s.dirty &^= RepositoryWorktree

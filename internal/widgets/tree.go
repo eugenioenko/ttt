@@ -18,8 +18,11 @@ type TreeNode struct {
 	Children       []*TreeNode `json:"children,omitempty"`
 	Actions        []Action    `json:"actions,omitempty"`
 	Muted          bool        `json:"-"`
-	Expandable     bool        `json:"-"`
-	TruncateLeft   bool        `json:"-"`
+	// LabelStyle overrides the label's color, e.g. for git-status decoration.
+	// Muted and selection both take precedence over it.
+	LabelStyle   term.Style `json:"-"`
+	Expandable   bool       `json:"-"`
+	TruncateLeft bool       `json:"-"`
 
 	Expanded bool `json:"-"`
 	depth    int
@@ -464,6 +467,9 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	}
 
 	labelStyle := style
+	if node.LabelStyle != term.StyleDefault && idx != t.selected {
+		labelStyle = node.LabelStyle
+	}
 	if node.Muted && idx != t.selected {
 		labelStyle = term.StyleMuted
 	}
