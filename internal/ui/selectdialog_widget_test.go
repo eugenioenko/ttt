@@ -634,4 +634,3 @@ func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
 		t.Fatalf("expected width-safe tail, got %q", got)
 	}
 }
-
