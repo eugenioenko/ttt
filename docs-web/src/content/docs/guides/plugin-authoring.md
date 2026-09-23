@@ -855,6 +855,7 @@ panel:tree({
 | `on_command`   | function | nil     | Callback when a context menu command or key command is selected. Receives `(command, node)`. |
 | `node_menu`    | table    | nil     | Array of [menu entries](#menu-entry-format) for right-click context menu on nodes. |
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
+| `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
 
 **Keyboard navigation:** When focused, Up/Down arrows move selection, Enter activates `on_select`, Left/Right collapse/expand nodes. Shift+Enter opens the context menu on the selected node.
 
@@ -893,6 +894,7 @@ panel:list({
 | `on_command`   | function | nil     | Callback when a context menu command or key command is selected. Receives `(command, node)`. |
 | `node_menu`    | table    | nil     | Array of [menu entries](#menu-entry-format) for the right-click context menu. |
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
+| `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
 
 ### Button
 

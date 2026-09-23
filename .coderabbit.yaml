@@ -24,10 +24,9 @@ reviews:
       instructions: >
         This is the domain zone. New domain APIs must not introduce tcell,
         term, view, render, widget, UI, process, or application-lifecycle
-        dependencies. core/highlight currently returning term.Style is a known
-        frozen boundary violation tracked by the architecture convergence plan;
-        flag any expansion of that dependency, but do not describe the existing
-        import as a newly introduced defect.
+        dependencies. Syntax highlighting is presentation-owned in
+        internal/highlight; flag any import of highlight or other presentation
+        packages from internal/core.
     - path: "**/*_test.go"
       instructions: >
         Require the smallest deterministic test boundary that proves the
