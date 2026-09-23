@@ -89,13 +89,13 @@ Platform:
 - A fullwidth rune must never be drawn in the last column of a clip region: the terminal paints it across two columns regardless of clipping, so it bleeds over the border or scrollbar to its right. `DrawText` substitutes a space in that case.
 - The renderer uses double-buffering (prev/curr cell grids) to minimize terminal writes.
 - `Screen` isolates terminal drawing and screen lifecycle. tcell events remain the shared presentation event model in `term`, `widgets`, `ui`, and narrow application/platform routing. Domain and service packages must not import tcell.
-- **Never hardcode colors.** All colors must go through the theme system (`internal/config/theme.go` → `StyleDef` → `term.Style` constants → `buildStyleMap`). Add a new `StyleDef` field to `ThemeConfig`, a `term.Style` constant, and wire it in `buildStyleMap()`. Widgets reference `term.Style*` constants, never color values. The one exception is the integrated terminal, which uses direct RGB color rendering via `DirectColor`/`CellAttr` to support 256-color output.
+- **Never hardcode colors.** All colors must go through the theme system (`internal/config/theme.go` → `StyleDef` → `term.Style` constants → `BuildStyleMap()` in `internal/app/theme.go`). Add a new `StyleDef` field to `ThemeConfig`, a `term.Style` constant, and wire it in `BuildStyleMap()`. Widgets reference `term.Style*` constants, never color values. The one exception is the integrated terminal, which uses direct RGB color rendering via `DirectColor`/`CellAttr` to support 256-color output.
 - **Terminal colors** are configured via the `terminal` field in `ThemeConfig` (`TerminalColors`), which holds 16 ANSI colors plus foreground/background defaults.
 - The diff view layers syntax highlighting on top of diff background colors using `BgStyle` layering.
 - **RawKeyConsumer interface**: when the integrated terminal is focused, all key events are routed directly to the PTY. Only force-keys (Ctrl+`) bypass this to allow toggling the terminal panel.
 - Async PTY output wakes the event loop via `PostEvent`/`EventInterrupt`.
 - **Output panel** (`internal/app/output.go`) is a core surface, not a plugin console. Producers are plugin `ttt.log`, language servers (`lsp:<server>`), and every status bar notification (`notice`). Append via `App.LogOutput` on the main thread, or `App.LogOutputAsync` from a background goroutine — it routes through `OutputLineResult` on the event loop, because widget state must not be mutated off the main thread. `LogOutput` also mirrors to `slog`, so `ttt.log` (debug builds) stays a superset of the panel. The panel is capped at `outputMaxLines` and trims in chunks; append with `TreeWidget.AppendItem`, never by rebuilding the slice for `SetItems`.
-- **Global search** (`search_widget.go`) shells out to `rg` (ripgrep) with debounced input (`search.debounce` in settings.json, default 350ms). Uses a generation counter and mutex to prevent concurrent searches from racing. Editor search highlights are tied to the search panel lifecycle — cleared when switching away, re-applied from existing results when switching back.
+- **Global search** (`search_widget.go`) shells out to `rg` (ripgrep) with debounced input (`search.debounce` setting). Uses a generation counter and mutex to prevent concurrent searches from racing. Editor search highlights are tied to the search panel lifecycle — cleared when switching away, re-applied from existing results when switching back.
 
 ### Keybinding System & tcell Key Mapping
 
@@ -103,7 +103,7 @@ Keybindings are defined in `internal/config/keybindings.go` (`DefaultKeybindings
 
 **Critical: tcell control key behavior.** For Ctrl+letter, tcell v3 (legacy mode, which ttt uses) delivers events with **both** the `KeyCtrlA..Z` constant **and** `ModCtrl` set. When registering control key bindings in `comboToTcell`, do NOT strip `ModCtrl` — the registered modifier must match what tcell delivers, otherwise `matchKey()` will fail silently. Ctrl+punctuation control chars (space, backtick, `/`, `\`, `]`, `^`, `_`) have no `KeyCtrl*` constant in v3 — they arrive as `KeyRune` + `ModCtrl` + a printable string (the exact string differs between legacy terminals and kitty-protocol terminals). `foldCtrlEvent()` in `internal/ui/root.go` folds both encodings to the canonical registered form: ctrl+space and ctrl+backtick → `KeyNUL`+`ModCtrl`, ctrl+/ → `KeyUS`+`ModCtrl`. New ctrl+punctuation bindings need a fold entry there.
 
-**Ctrl+Backtick (`` ctrl+` ``):** On legacy terminals Ctrl+` sends NUL (0x00), same as Ctrl+Space — they are indistinguishable, and both fold to `KeyNUL`+`ModCtrl`. Kitty-protocol terminals (Ghostty, Kitty, WezTerm) do report them distinctly under tcell v3, but ttt currently folds both to the same canonical key, so they remain one binding. `terminal.toggle` is bound to `ctrl+t` by default (with `alt+t` for `terminal.fullscreen`); `ctrl+backtick` is currently unbound.
+**Ctrl+Backtick (`` ctrl+` ``):** On legacy terminals Ctrl+` sends NUL (0x00), same as Ctrl+Space — they are indistinguishable, and both fold to `KeyNUL`+`ModCtrl`. Kitty-protocol terminals (Ghostty, Kitty, WezTerm) do report them distinctly under tcell v3, but ttt currently folds both to the same canonical key, so they remain one binding.
 
 **Force keys:** Bindings for commands in the `config.ForceKeyCommands` map (`internal/config/keybindings.go`, registered via `root.AddForceKey()` in `internal/app/commands.go`) are checked even when a `RawKeyConsumer` (like the integrated terminal) has focus. `terminal.toggle` must remain a force key.
 
@@ -111,16 +111,9 @@ Keybindings are defined in `internal/config/keybindings.go` (`DefaultKeybindings
 
 ### LSP Integration
 
-Language server support lives in `internal/lsp/`. Servers are configured per-language in `~/.config/ttt/extensions.json`. The LSP client uses JSON-RPC 2.0 over stdio with Content-Length framing — no external dependencies.
+Language server support lives in `internal/lsp/`: a JSON-RPC 2.0 client over stdio with Content-Length framing and no external dependencies, one client per language, lazy-started on first use. Servers are configured under `lsp.servers` in settings (`LSPSettings` in `internal/config/settings.go`); `internal/app/app_lsp.go` wires the client into the editor.
 
-- `jsonrpc.go` — codec (send/receive with Content-Length framing)
-- `protocol.go` — minimal LSP type definitions (initialize, document sync, completions, signature help)
-- `client.go` — LSP client with async read loop and request/response channel matching
-- `manager.go` — one client per language, lazy-started on first use
-- `extensions.go` — config loading from `extensions.json`
-- `internal/app/lsp_convert.go` — bridge converting `lsp.CompletionItem` → `ui.CompletionItem`
-
-Async completions and signature help use the same `PostEvent(EventInterrupt)` pattern as git blame. Document sync is full-document (not incremental). Auto-completion triggers on every text change with a configurable debounce timer (`autocomplete.debounce` in settings.json, default 150ms). Signature help triggers on `(` and `,` characters, dismissed on `)`.
+Async LSP results (completions, signature help, hover, and so on) wake the event loop with the same `PostEvent(EventInterrupt)` pattern as git blame. Document sync is full-document, not incremental.
 
 ### Plugin API
 
@@ -131,7 +124,7 @@ Implementation: Lua bindings in `internal/plugin/lua_panel.go`, descriptors in `
 Things the docs do not cover:
 
 - `ttt.*` callbacks (`notify`, `set_status_item`, `exec_command`, ...) only work after `WirePlugin`, which runs after `InitFromSource`. Call them from command handlers or event callbacks, not at plugin load time.
-- Status bar segments (`view.StatusBar`, `StatusSegment`) are shared by core and plugins. Core uses priorities 100 to 500 (left: branch=100, blame=200; right: position=100, indent=200, encoding=300, eol=400, language=500). Plugin segments default to 1000 and are ID-scoped as `pluginName:id`.
+- Status bar segments (`view.StatusBar`, `StatusSegment`) are shared by core and plugins. Lower priority sits closer to the edge. Core segments use priorities below 1000 (grep `StatusSegment{` for the current values); plugin segments default to 1000 and are ID-scoped as `pluginName:id`.
 
 ### Testing
 
@@ -139,7 +132,7 @@ The project has four levels of testing:
 
 **Unit tests** (`internal/*/`) — Standard Go tests for individual packages. Core algorithms are testable without presentation dependencies; syntax-highlighting characterization and performance tests live with `internal/highlight`. Run with `go test ./internal/core/buffer/` or `make test` for all.
 
-**E2E tests** (`tests/e2e/`) — Go tests that wire up the full `App` with a `term.SimScreen` (an in-memory `tcell.Screen`). The `testHarness` (`harness_test.go`) creates a temp directory with sample files, builds the complete app (config, commands, keybindings, renderer), and provides helpers: `pressKey()`, `pressRune()`, `click()`, `exec()`, `screenText()`, `assertContains()`. The watcher-aware `waitForFileChange()` helper blocks on `PollEvent` to receive real fsnotify events and dispatches them through the reconciliation path. These tests run single-threaded (no event loop goroutine) — the test drives events and redraws manually.
+**E2E tests** (`tests/e2e/`) — Go tests that wire up the full `App` with a `term.SimScreen` (an in-memory `tcell.Screen`). The `testHarness` (`harness_test.go`) creates a temp directory with sample files, builds the complete app (config, commands, keybindings, renderer), and provides helpers: `pressKey()`, `pressRune()`, `click()`, `exec()`, `screenText()`, `assertContains()`. These tests run single-threaded (no event loop goroutine) — the test drives events and redraws manually.
 
 **Functional tests** (`tests/functional/`) — JavaScript tests using vitest that drive the real compiled `bin/ttt` binary via the `--exec` debug harness. The `tui.js` wrapper accumulates commands (type, press, exec, snapshot) and runs them in a single batch via `execFileSync`. No external dependencies beyond vitest. Run with `cd tests/functional && pnpm test`. The binary must be built first (`make build`).
 
@@ -179,7 +172,7 @@ cat /tmp/screen.txt   # see what's rendered
 cat /tmp/state.json   # see full widget tree, focus, selection, panels
 ```
 
-Supported commands:
+Supported commands (the source of truth is `ExecScriptUsage()` in `internal/app/exec_script.go`; keep this list in sync with it):
 - `click X Y` — simulate left mouse click (press + release) at coordinates
 - `rclick X Y` — simulate right mouse click at coordinates
 - `hover X Y` — simulate mouse hover (move) at coordinates
@@ -192,7 +185,7 @@ Supported commands:
 - `screenshot PATH` — save screen text to file
 - `debug PATH` — save debug state JSON (screen, cursor, buffer, focus, panels, tabs, selection, output log, integrated-terminal raw PTY byte tails, full widget tree with rect/focus/props per node)
 - `wait MS` — wait milliseconds
-- `wait-for TEXT [timeout=MS]` — wait until text appears on the actual visible screen; defaults to a bounded 5000ms timeout. Quote text to preserve surrounding whitespace or escapes.
+- `wait-for TEXT [timeout=MS]` — wait until text appears on the actual visible screen; defaults to a bounded timeout. Quote text to preserve surrounding whitespace or escapes.
 - `panel ID` — show and focus a bottom panel by ID
 - `quit` / `shutdown` — exit the editor
 
@@ -244,16 +237,3 @@ After a feature is implemented and tests pass, review all changes for cleanup: d
 - **Body** explains why the change is needed, which test layer covers it and what that test proves, and, for visible changes, includes a screenshot captured with `--exec "...; screenshot PATH"`.
 - **Before opening:** `make test` and `make lint` pass, and the change has been exercised in the real binary.
 - **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
-
-### Dependencies
-
-Key external dependencies beyond the Go standard library:
-
-- `github.com/gdamore/tcell/v3` — terminal rendering
-- `github.com/aymanbagabas/go-pty` — PTY management for the integrated terminal
-- `github.com/gitpod-io/xterm-go` — VT escape sequence parsing and terminal emulation for the integrated terminal
-- `github.com/alecthomas/chroma/v2` — syntax highlighting lexers
-- `github.com/yuin/gopher-lua` — Lua plugin engine
-- `github.com/yuin/goldmark` — Markdown rendering
-- `github.com/fsnotify/fsnotify` — file watching
-- `github.com/clipperhouse/displaywidth` — terminal column width measurement
