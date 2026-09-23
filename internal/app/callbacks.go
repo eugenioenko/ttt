@@ -66,7 +66,9 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	}
 	moveItems := a.sidebarMoveMenuItems()
 	if len(moveItems) > 0 {
-		moveItems = append([]ui.ContextMenuItem{ui.MenuSep()}, moveItems...)
+		if len(items) > 0 {
+			items = append(items, ui.MenuSep())
+		}
 		items = append(items, moveItems...)
 	}
 	helpCmds := map[string]string{
