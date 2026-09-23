@@ -203,7 +203,7 @@ Supported commands (the source of truth is `ExecScriptUsage()` in `internal/app/
 
 Scripted input and main-thread commands are acknowledged after the event loop handles and redraws them, so following actions observe completed visible state. Invalid actions, missing commands/panels, capture failures, and wait timeouts stop the script: CLI `--exec` reports the error on stderr and exits nonzero; `POST /exec` returns a non-2xx response with the same detail.
 
-**`--listen`** — Start an HTTP command server on `127.0.0.1:4242` (loopback-only — never exposed off the local machine). `POST /exec` runs the same script format as `--exec`, synchronously, against an **already-running** editor — for capturing a repro at the exact moment it happens instead of scripting it in advance:
+**`--listen`** — Start an HTTP command server on `127.0.0.1:4242` (loopback-only — never exposed off the local machine). `POST /exec` runs the same script format as `--exec`, synchronously, against an **already-running** editor — for capturing a repro at the exact moment it happens instead of scripting it in advance. The editor must run in a real terminal (TTY); it is started by a person, and the agent drives it with `POST /exec`:
 
 ```bash
 bin/ttt --listen &
