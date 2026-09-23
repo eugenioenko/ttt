@@ -357,7 +357,8 @@ Robust where it counts: Lua syntax errors, errors thrown inside callbacks (vs re
 ### BUG-047: Global-search navigation ignores the match column — cursor always lands at col 0
 - **Area:** Global search
 - **Severity:** high
-- **Status:** confirmed (agent-reported, orchestrator re-verified — cursor col 0, real match col 8)
+- **Status:** ✅ **FIXED** (2026-09-23) — `NavigateToSearchMatch` converts rg's byte offset to a rune column and places the cursor there via `GoToLineCol`. Repro test flipped `it.fails`→`it`.
+- ~~**Status:** confirmed (agent-reported, orchestrator re-verified — cursor col 0, real match col 8)~~
 - **Repro:** search `needle`, activate the "another needle line" result → cursor at line 3 col 0 (should be col 8)
 - **Expected:** cursor lands at the match's exact column
 - **Actual:** `NavigateToSearchMatch` (`internal/app/callbacks.go:~131`) receives `col` but never uses it — `GoToLine` unconditionally sets `Cursor.Col=0` (`internal/ui/editor_group.go:885`) and col is never restored

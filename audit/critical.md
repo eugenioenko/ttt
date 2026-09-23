@@ -98,7 +98,7 @@ are listed here. Mediums/lows and already-fixed entries are summarised at the bo
 
 ## BUG-047 — Global-search navigation ignores the match column (cursor lands at col 0)
 - **Severity:** high
-- **Status:** REPRODUCED on main (`audit-global-search-bugs.test.js` BUG-047 still `it.fails`)
+- **Status:** ✅ FIXED (2026-09-23) — `audit-global-search-bugs.test.js` BUG-047 flipped to `it`
 - **Repro:** sidebar search a term that occurs mid-line, activate that result → cursor at line N col 0 instead of the match column.
 - **Actual:** `NavigateToSearchMatch` (`internal/app/callbacks.go`) receives `col` but never uses it; `GoToLine` unconditionally sets `Cursor.Col = 0` (`internal/ui/editor_group.go`).
 - **Expected:** cursor lands at the match's exact column.

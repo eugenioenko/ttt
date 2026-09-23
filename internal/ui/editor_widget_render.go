@@ -63,6 +63,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 
 	e.Viewport.Width = editorW
 	e.Viewport.Height = h
+	if e.hScrollPending {
+		e.hScrollPending = false
+		e.scrollViewport()
+	}
 
 	if e.WordWrap {
 		e.Viewport.LeftCol = 0

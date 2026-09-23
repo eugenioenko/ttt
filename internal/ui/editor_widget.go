@@ -27,6 +27,7 @@ type EditorPaneWidget struct {
 	Buf                     *buffer.Buffer
 	Cursor                  *cursor.Cursor
 	Viewport                *view.Viewport
+	hScrollPending          bool
 	Undo                    *undo.UndoStack
 	Selection               *selection.Selection
 	CursorX                 int
@@ -503,6 +504,10 @@ func (e *EditorPaneWidget) scrollViewport() {
 		}
 	}
 	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line)
+	if e.Viewport.Width <= 0 {
+		e.hScrollPending = true
+		return
+	}
 	visCol := bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, e.resolveTabSize())
 	if visCol < e.Viewport.LeftCol {
 		e.Viewport.LeftCol = visCol

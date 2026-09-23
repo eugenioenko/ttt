@@ -1,6 +1,4 @@
-// Repro test for confirmed bug from audit/2026-07-12-ux-bug-audit.md (branch audit/bug-hunt).
-// Asserts the CORRECT behavior with `it.fails` — passes while the bug
-// exists, goes red when fixed. Remove `.fails` + audit entry when fixing.
+// Regression tests for fixed bugs from audit/2026-07-12-ux-bug-audit.md.
 import { describe, it, expect, afterEach } from "vitest";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +13,7 @@ afterEach(() => {
 });
 
 describe("BUG-047: global-search navigation ignores the match column (lands at col 0)", () => {
-  it.fails("activating a result places the cursor at the match column", () => {
+  it("activating a result places the cursor at the match column", () => {
     dir = createTempDir();
     writeFileSync(
       join(dir, "alpha.txt"),
@@ -34,9 +32,24 @@ describe("BUG-047: global-search navigation ignores the match column (lands at c
     const s = tui.snapshot();
     const { snapshots } = tui.run();
 
-    // "another " is 8 chars, so the match column is 8. Correct: the marker
-    // lands at the match → "another Zneedle line". Buggy: NavigateToSearchMatch
-    // ignores col and GoToLine forces col 0 → "Zanother needle line".
     expect(snapshots[s]).toContain("another Zneedle line");
+  });
+
+  it("lands on the rune column when the line has multi-byte text before the match", () => {
+    dir = createTempDir();
+    writeFileSync(join(dir, "alpha.txt"), "héllo wörld needle\n");
+
+    tui.start(dir);
+    tui.waitFor("Explore");
+    tui.pressChord("ctrl+k", "f");
+    tui.type("needle");
+    tui.waitFor("1: héllo wörld needle");
+    tui.press("arrow_down");
+    tui.press("enter");
+    tui.type("Z");
+    const s = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[s]).toContain("héllo wörld Zneedle");
   });
 });

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/diff"
@@ -172,6 +173,11 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 	}
 	a.EditorGroup.OpenFile(path)
 	a.EditorGroup.GoToLine(line)
+	if a.EditorGroup.IsEditorActive() {
+		text := a.EditorGroup.Editor.Buf.Lines[a.EditorGroup.Editor.Cursor.Line]
+		runeCol := utf8.RuneCountInString(text[:min(col, len(text))])
+		a.EditorGroup.GoToLineCol(line, runeCol+1)
+	}
 	if a.Search.Input.Text != "" {
 		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
 		a.EditorGroup.SetSearch(a.Search.Input.Text, matches)
