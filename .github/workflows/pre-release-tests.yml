@@ -69,6 +69,9 @@ jobs:
       - name: Build binary
         run: make build
 
+      - name: Install prerequisites
+        run: ./scripts/install-prerequisites.sh
+
       - uses: pnpm/action-setup@v4
         with:
           version: 11

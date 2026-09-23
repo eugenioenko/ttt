@@ -239,6 +239,9 @@ jobs:
       - name: Build binary
         run: make build
 
+      - name: Install prerequisites
+        run: ./scripts/install-prerequisites.sh
+
       - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}

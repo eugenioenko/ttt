@@ -349,7 +349,7 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 			args = append(args, "--glob", "!"+g)
 		}
 	}
-	args = append(args, s.Input.Text)
+	args = append(args, "--", s.Input.Text)
 	args = append(args, dirs...)
 
 	cmd := exec.CommandContext(ctx, "rg", args...)
