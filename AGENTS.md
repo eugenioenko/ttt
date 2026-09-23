@@ -223,7 +223,7 @@ Headless `--exec` sessions use a process-local clipboard, so concurrent automati
 - **Keybindings**: `ctrl+shift` combos are unreliable in terminals — avoid them. Use `ctrl+k <key>` chords for new commands. Check `DefaultKeybindings()` in `internal/config/keybindings.go` before assigning to avoid collisions. If no obvious binding exists, leave the command as command palette only — not every command needs a keybinding.
 - **Overlay stacking**: commands that open overlays via keybindings must guard against being called twice with `if a.Root.HasOverlay() { return }`. `ShowDialog`/`ShowConfirmDialog` themselves have no guard so legitimate stacking (e.g. quit confirm) still works.
 - **Command handlers**: define handlers as named methods on `App` (e.g. `app.ExplorerRename`) and reference them in `reg.Register(...)`. Do not use inline closures for non-trivial handlers.
-- **Comments**: do not add comments to code unless they are critical — e.g. a non-obvious architectural constraint that would cause bugs or misuse if missed (see the `textwidth`/fullwidth-rune notes above for the bar to clear). Do not explain WHAT the code does; well-named identifiers already do that.
+- **Comments: only critical ones.** Add a comment only when missing it would cause a bug or misuse: a hidden constraint, a non-obvious invariant, or a workaround for a specific bug (the `textwidth`/fullwidth-rune notes above show the bar to clear). Never comment what the code does, restate an identifier, narrate the change, or add docstrings for coverage; well-named identifiers already do that.
 
 ### Post-implementation review
 
@@ -235,5 +235,6 @@ After a feature is implemented and tests pass, review all changes for cleanup: d
 - **One concern per PR.** Keep it under roughly 600 changed lines; split larger work into a sequence of PRs.
 - **Title** uses conventional commits: `type(scope): description`.
 - **Body** explains why the change is needed, which test layer covers it and what that test proves, and, for visible changes, includes a screenshot captured with `--exec "...; screenshot PATH"`.
+- **Comments:** only critical ones (see Implementation patterns). Remove comments that describe what the code does before opening.
 - **Before opening:** `make test` and `make lint` pass, and the change has been exercised in the real binary.
 - **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.

@@ -23,7 +23,7 @@ make lint    # golangci-lint run
 
 Run `make fmt` before committing. The linter (`make lint`) and `go vet` catch the rest.
 
-Minimize comments. Only add a comment when the *why* is non-obvious — a hidden constraint, a subtle invariant, a workaround for a specific bug. Don't comment what the code does; well-named identifiers handle that.
+**Only critical comments.** Add a comment only when missing it would cause a bug or misuse: a hidden constraint, a non-obvious invariant, or a workaround for a specific bug. Never comment what the code does, restate an identifier, narrate the change, or add docstrings for coverage; well-named identifiers already do that. AI-generated code tends to over-comment, so strip those comments before opening a PR.
 
 ## Testing
 
