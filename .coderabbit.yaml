@@ -24,9 +24,7 @@ reviews:
       instructions: >
         This is the domain zone. New domain APIs must not introduce tcell,
         term, view, render, widget, UI, process, or application-lifecycle
-        dependencies. Syntax highlighting is presentation-owned in
-        internal/highlight; flag any import of highlight or other presentation
-        packages from internal/core.
+        dependencies.
     - path: "**/*_test.go"
       instructions: >
         Require the smallest deterministic test boundary that proves the
