@@ -204,6 +204,13 @@ func runPaths(dir string, gitArgs, paths []string) error {
 }
 
 func Commit(dir, message string) error {
+	if err := exec.Command("git", "-C", dir, "diff", "--cached", "--quiet").Run(); err == nil {
+		// Nothing staged -- stage everything, like VS Code does.
+		add := exec.Command("git", "-C", dir, "add", "-A")
+		if out, e := add.CombinedOutput(); e != nil {
+			return fmt.Errorf("%s: %s", e, strings.TrimSpace(string(out)))
+		}
+	}
 	cmd := exec.Command("git", "-C", dir, "commit", "-m", message)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))

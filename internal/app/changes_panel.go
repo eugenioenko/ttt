@@ -854,7 +854,7 @@ func (cp *ChangesPanel) commitFocusedGroup() {
 	dir := cp.selectedGroupDir()
 	if dir == "" {
 		for _, g := range cp.groups {
-			if len(g.Staged) > 0 {
+			if len(g.Staged) > 0 || len(g.Unstaged) > 0 {
 				dir = g.Dir
 				break
 			}
