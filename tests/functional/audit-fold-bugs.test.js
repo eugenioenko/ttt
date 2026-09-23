@@ -46,7 +46,7 @@ describe("BUG-026: fold reattaches to an unrelated block after edits above", () 
 });
 
 describe("BUG-027: Move Line on a folded header swaps in hidden content", () => {
-  it.fails("alt+down on a folded header never reorders invisible code", () => {
+  it("alt+down on a folded header never reorders invisible code", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "swap.go", GO_SAMPLE);
 
@@ -62,11 +62,6 @@ describe("BUG-027: Move Line on a folded header swaps in hidden content", () => 
     tui.press("ctrl+s");
     tui.run();
 
-    // Correct: the whole folded block moves as a unit (VS Code) or the
-    // command is a no-op while folded — either way foo() stays inside
-    // its if-block. Buggy: the raw header line swaps with the HIDDEN
-    // foo() line, reordering code the user cannot see, while the stale
-    // fold marker keeps rendering.
     const content = readFile(file);
     expect(content.indexOf("if true {")).toBeLessThan(content.indexOf("foo()"));
   });

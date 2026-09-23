@@ -583,7 +583,8 @@ Nested-dir navigation, create-in-selected-dir, empty-dir handling, keyboard expa
 ### BUG-027: Move Line on a folded header swaps the header with a HIDDEN line — silent code reordering
 - **Area:** Folding × editing
 - **Severity:** high
-- **Status:** confirmed (agent-reported, orchestrator re-verified)
+- **Status:** ✅ **FIXED** (2026-09-23) — Move Line Up/Down moves a collapsed fold as a unit (header + hidden body) and steps over a collapsed neighbor whole, via one `ReplaceLinesCommand`; collapsed state follows the moved lines on apply and undo. Multicursor moves touching a collapsed fold are a no-op. Repro test flipped `it.fails`→`it`.
+- ~~**Status:** confirmed (agent-reported, orchestrator re-verified)~~
 - **Repro:** fold `if true {`, press `alt+down` → buffer becomes `func outer() { / \t\tfoo() / \tif true {` — `foo()` hoisted out of its block — while the fold marker still renders as if valid
 - **Expected:** move the whole folded region as a unit (VS Code) or no-op while folded; never reorder invisible code
 - **Actual:** `MoveLineDown`/`Up` issue a raw `SwapLineCommand` with no fold awareness; since line COUNT is unchanged, the `exec()` fold-recompute guard (`internal/ui/editor_widget.go:214-217`) never fires, so the stale marker keeps rendering over now-invalid structure

@@ -88,7 +88,7 @@ are listed here. Mediums/lows and already-fixed entries are summarised at the bo
 
 ## BUG-027 — Move Line on a folded header swaps in hidden content (silent code reordering)
 - **Severity:** high (silent code corruption)
-- **Status:** REPRODUCED on main (`--exec` confirmed live: buffer became `func outer() {` / `\t\tfoo()` / `\tif true {` / … — `foo()` hoisted out of its block, fold marker still rendered as valid)
+- **Status:** ✅ FIXED (2026-09-23) — `audit-fold-bugs.test.js` BUG-027 flipped to `it`
 - **Repro:** file with an inner `if true {` block containing `foo()`; fold it, cursor on the header, run `Move Line Down`.
   ```
   bin/ttt --size 100x30 --exec 'wait 250; key down; exec "Toggle Fold"; wait 100; exec "Move Line Down"; debug /tmp/d.json; quit' fold.go

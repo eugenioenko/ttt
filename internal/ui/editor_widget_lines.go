@@ -4,6 +4,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 )
 
@@ -12,24 +14,7 @@ func (e *EditorPaneWidget) MoveLineUp() {
 		e.moveLinesMulti(-1)
 		return
 	}
-	if startLine, endLine, ok := e.selectedLineRange(); ok {
-		if startLine <= 0 {
-			return
-		}
-		for line := startLine; line <= endLine; line++ {
-			e.exec(&undo.SwapLineCommand{Line1: line, Line2: line - 1})
-		}
-		e.Cursor.Line--
-		e.Selection.Anchor.Line--
-	} else {
-		if e.Cursor.Line <= 0 {
-			return
-		}
-		e.exec(&undo.SwapLineCommand{Line1: e.Cursor.Line, Line2: e.Cursor.Line - 1})
-		e.Cursor.Line--
-	}
-	e.clampCursor()
-	e.scrollViewport()
+	e.moveLineBlock(-1)
 }
 
 func (e *EditorPaneWidget) MoveLineDown() {
@@ -37,24 +22,120 @@ func (e *EditorPaneWidget) MoveLineDown() {
 		e.moveLinesMulti(1)
 		return
 	}
-	if startLine, endLine, ok := e.selectedLineRange(); ok {
-		if endLine >= len(e.Buf.Lines)-1 {
+	e.moveLineBlock(1)
+}
+
+// moveLineBlock moves the cursor's line (or selected lines) one visible line
+// up or down. Collapsed folds move as units: a folded header carries its
+// hidden body, and a folded neighbor is stepped over whole. Swapping raw lines
+// instead would reorder code hidden inside a fold (BUG-027).
+func (e *EditorPaneWidget) moveLineBlock(delta int) {
+	start, end, hasSel := e.selectedLineRange()
+	if !hasSel {
+		start, end = e.Cursor.Line, e.Cursor.Line
+	}
+	last := len(e.Buf.Lines) - 1
+	folded := e.hasFolds()
+	if folded {
+		for l := start; l <= end; l++ {
+			if r := e.Folds.FoldAt(l); r != nil && e.Folds.IsCollapsed(l) && r.EndLine > end {
+				end = min(r.EndLine, last)
+			}
+		}
+	}
+
+	var lo, hi int
+	if delta < 0 {
+		if start <= 0 {
 			return
 		}
-		for line := endLine; line >= startLine; line-- {
-			e.exec(&undo.SwapLineCommand{Line1: line, Line2: line + 1})
+		lo, hi = start-1, end
+		if folded {
+			for r := e.Folds.ContainingFold(lo); r != nil; r = e.Folds.ContainingFold(lo) {
+				lo = r.StartLine
+			}
 		}
-		e.Cursor.Line++
-		e.Selection.Anchor.Line++
 	} else {
-		if e.Cursor.Line >= len(e.Buf.Lines)-1 {
+		if end >= last {
 			return
 		}
-		e.exec(&undo.SwapLineCommand{Line1: e.Cursor.Line, Line2: e.Cursor.Line + 1})
-		e.Cursor.Line++
+		lo, hi = start, end+1
+		if folded && e.Folds.IsCollapsed(hi) {
+			if r := e.Folds.FoldAt(hi); r != nil {
+				hi = min(r.EndLine, last)
+			}
+		}
+	}
+
+	block := e.Buf.Lines[start : end+1]
+	var neighbor []string
+	if delta < 0 {
+		neighbor = e.Buf.Lines[lo:start]
+	} else {
+		neighbor = e.Buf.Lines[end+1 : hi+1]
+	}
+	old := append([]string(nil), e.Buf.Lines[lo:hi+1]...)
+	moved := make([]string, 0, len(old))
+	if delta < 0 {
+		moved = append(append(moved, block...), neighbor...)
+	} else {
+		moved = append(append(moved, neighbor...), block...)
+	}
+	blockShift := len(neighbor) * delta
+	e.exec(&moveLinesCommand{
+		replace:       undo.ReplaceLinesCommand{Start: lo, OldLines: old, NewLines: moved},
+		folds:         e.Folds,
+		start:         start,
+		end:           end,
+		hi:            hi,
+		blockShift:    blockShift,
+		neighborShift: -len(block) * delta,
+	})
+	if e.Folds != nil {
+		e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
+	}
+	e.Cursor.Line += blockShift
+	if hasSel {
+		e.Selection.Anchor.Line += blockShift
 	}
 	e.clampCursor()
 	e.scrollViewport()
+}
+
+// moveLinesCommand moves collapsed fold state along with the lines on apply
+// and back on undo; undo only recomputes fold ranges, so without this a
+// collapsed fold would land on whatever text now occupies its old line.
+type moveLinesCommand struct {
+	replace                   undo.ReplaceLinesCommand
+	folds                     *fold.State
+	start, end, hi            int
+	blockShift, neighborShift int
+}
+
+func (c *moveLinesCommand) Apply(b *buffer.Buffer) {
+	c.replace.Apply(b)
+	c.remapFolds(c.start, c.end, 1)
+}
+
+func (c *moveLinesCommand) Undo(b *buffer.Buffer) {
+	c.replace.Undo(b)
+	c.remapFolds(c.start+c.blockShift, c.end+c.blockShift, -1)
+}
+
+func (c *moveLinesCommand) remapFolds(blockStart, blockEnd, sign int) {
+	if c.folds == nil {
+		return
+	}
+	lo := c.replace.Start
+	c.folds.RemapCollapsed(func(l int) int {
+		switch {
+		case l >= blockStart && l <= blockEnd:
+			return l + sign*c.blockShift
+		case l >= lo && l <= c.hi:
+			return l + sign*c.neighborShift
+		}
+		return l
+	})
 }
 
 // moveLinesMulti shifts every buffer line touched by a cursor (or its
@@ -97,6 +178,15 @@ func (e *EditorPaneWidget) moveLinesMulti(delta int) {
 	}
 	if delta > 0 && lines[len(lines)-1] >= lastReal {
 		return
+	}
+	if e.hasFolds() {
+		for _, l := range lines {
+			for _, t := range []int{l, l + delta} {
+				if e.Folds.IsCollapsed(t) || e.Folds.ContainingFold(t) != nil {
+					return
+				}
+			}
+		}
 	}
 
 	// One BatchCommand so a single undo reverses the whole multicursor move,

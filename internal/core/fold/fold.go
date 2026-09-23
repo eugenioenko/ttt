@@ -78,6 +78,15 @@ func (s *State) ExpandAll() {
 	s.dirty = true
 }
 
+func (s *State) RemapCollapsed(fn func(line int) int) {
+	remapped := make(map[int]bool, len(s.collapsed))
+	for line := range s.collapsed {
+		remapped[fn(line)] = true
+	}
+	s.collapsed = remapped
+	s.dirty = true
+}
+
 func (s *State) IsCollapsed(startLine int) bool {
 	return s.collapsed[startLine]
 }
