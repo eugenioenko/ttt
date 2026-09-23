@@ -118,9 +118,12 @@ func parseFlags() cliFlags {
 	return f
 }
 
-func initTerminalScreen() *term.TcellScreen {
+func initTerminalScreen(listen bool) *term.TcellScreen {
 	screen, err := term.NewTcellScreen()
 	if err != nil {
+		if listen {
+			panic(fmt.Errorf("--listen needs a real terminal (TTY); for a headless session, combine it with --exec (for example --exec \"wait 600000\"): %w", err))
+		}
 		panic(err)
 	}
 	return screen
@@ -216,7 +219,7 @@ Docs: https://tttedit.dev
 		clipboard.DisableSystem()
 		screen = initSimulationScreen(flags.sizeW, flags.sizeH)
 	} else {
-		screen = initTerminalScreen()
+		screen = initTerminalScreen(flags.listen)
 	}
 	defer screen.Fini()
 	defer handlePanic(screen)
