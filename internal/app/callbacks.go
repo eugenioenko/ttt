@@ -29,8 +29,6 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			ui.MenuSep(),
 			{Label: "Expand All", Command: "explorer.expandAll"},
 			{Label: "Collapse All", Command: "explorer.collapseAll"},
-			ui.MenuSep(),
-			{Label: "Help", Command: "explorer.help"},
 		}
 	case "search":
 		replaceLabel := "Replace"
@@ -44,8 +42,6 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			{Label: "Collapse All", Command: "search.collapseAll"},
 			ui.MenuSep(),
 			{Label: "Clear Results", Command: "search.clear"},
-			ui.MenuSep(),
-			{Label: "Help", Command: "search.help"},
 		}
 	case "changes":
 		items = a.BuildChangesPanelMenu()
@@ -57,8 +53,6 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 		items = []ui.ContextMenuItem{
 			{Label: "Install from URL", Command: "plugin.install"},
 			{Label: "Refresh", Command: "plugin.refresh"},
-			ui.MenuSep(),
-			{Label: "Help", Command: "plugin.help"},
 		}
 	default:
 		if a.PluginManager != nil {
@@ -72,10 +66,19 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	}
 	moveItems := a.sidebarMoveMenuItems()
 	if len(moveItems) > 0 {
-		if len(items) > 0 && !items[len(items)-1].IsSep {
+		if len(items) > 0 {
 			items = append(items, ui.MenuSep())
 		}
 		items = append(items, moveItems...)
+	}
+	helpCmds := map[string]string{
+		"explorer": "explorer.help",
+		"search":   "search.help",
+		"changes":  "changes.help",
+		"plugins":  "plugin.help",
+	}
+	if cmd, ok := helpCmds[a.Sidebar.ActivePanel]; ok {
+		items = append(items, ui.MenuSep(), ui.ContextMenuItem{Label: "Help", Command: cmd})
 	}
 	if len(items) > 0 {
 		openContextMenu(a, items, sx, sy)
@@ -95,8 +98,6 @@ func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 		{Label: "Sync", Command: "git.sync"},
 		ui.MenuSep(),
 		{Label: "Open PR Diff", Command: "pr.openDiff"},
-		ui.MenuSep(),
-		{Label: "Help", Command: "changes.help"},
 	}
 }
 
