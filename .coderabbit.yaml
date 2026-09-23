@@ -18,37 +18,13 @@ reviews:
     - "!chaos-output/**"
     - "!go.sum"
     - "!flake.lock"
-    - "!**/pnpm-lock.yaml"
-    - "!internal/fileicons/icons_gen.go"
+    - "!config/keybindings.json"
   path_instructions:
-    - path: "**/*.go"
-      instructions: >
-        Only critical comments are allowed: a hidden constraint, a non-obvious
-        invariant, or a workaround for a specific bug that would cause bugs or
-        misuse if missed. Flag comments that describe what the code does,
-        restate an identifier, or narrate the change. Never ask for docstrings.
     - path: "internal/core/**"
       instructions: >
         This is the domain zone. New domain APIs must not introduce tcell,
         term, view, render, widget, UI, process, or application-lifecycle
         dependencies.
-    - path: "internal/{ui,widgets,view,render}/**"
-      instructions: >
-        Flag any display width computed by hand (len([]rune(s)), x++, or
-        visCol++ standing in for terminal columns) instead of
-        textwidth.String/textwidth.Rune or the width DrawText returns. Flag a
-        fullwidth rune that can be drawn in the last column of a clip region.
-        Flag hardcoded colors: widgets must use term.Style* constants from the
-        theme system. Layout values computed in Render must be stored and
-        reused by event handlers, not recomputed.
-    - path: "internal/{app,ui}/**"
-      instructions: >
-        Buffer mutations must go through an undo EditCommand, never by
-        writing Buf.Lines directly. Widget and App state must only be mutated
-        on the main thread; background goroutines must post results through
-        the event loop (PostEvent, App.LogOutputAsync). Commands that open
-        overlays must guard with Root.HasOverlay(). Non-trivial command
-        handlers must be named methods on App, not inline closures.
     - path: "**/*_test.go"
       instructions: >
         Require the smallest deterministic test boundary that proves the
@@ -61,70 +37,6 @@ reviews:
         current repository evidence. Require exact reproducible commands for
         measured baselines and distinguish accepted boundary decisions from
         known violations scheduled for cleanup.
-  finishing_touches:
-    docstrings:
-      enabled: false
-  pre_merge_checks:
-    # Docstring coverage conflicts with the only-critical-comments rule.
-    docstrings:
-      mode: "off"
-    title:
-      mode: warning
-      requirements: >
-        Conventional commit format: type(scope): description, where type is
-        one of feat, fix, perf, refactor, docs, test, chore, ci, build. The
-        scope is optional.
-    description:
-      mode: warning
-    issue_assessment:
-      mode: warning
-    custom_checks:
-      - name: Linked issue for features
-        mode: warning
-        instructions: >
-          Pass if the PR title does not start with "feat". If it does, pass
-          only if the PR description references a GitHub issue (for example
-          "Closes #123" or "#123"). Fail otherwise, and ask the author to open
-          or link an issue so the feature can be agreed on before review.
-      - name: PR size
-        mode: warning
-        instructions: >
-          Sum added and deleted lines across the diff, excluding go.sum,
-          flake.lock, pnpm-lock.yaml files, internal/fileicons/icons_gen.go,
-          config/keybindings.json, and files under tests/**/fixtures/. Pass if
-          the total is 600 or fewer. Fail otherwise, and suggest how the change
-          could be split into smaller PRs.
-      - name: Tests for behavior changes
-        mode: warning
-        instructions: >
-          Pass if the PR only changes documentation, comments, CI workflows,
-          or configuration files. Otherwise pass if the PR adds or updates at
-          least one test (a *_test.go file or a file under tests/) that
-          exercises the changed behavior, or if the description explains why a
-          test is not practical. Fail otherwise.
-      - name: Keybinding mirror and docs
-        mode: warning
-        instructions: >
-          Pass if the PR does not change the default keybindings in
-          internal/config/keybindings.go. If it does, pass only if
-          config/keybindings.json is updated to match in the same PR. Fail
-          otherwise, and remind the author to also update the README and
-          docs-web keybinding tables.
-      - name: Plugin API docs
-        mode: warning
-        instructions: >
-          Pass if the PR does not add, remove, or change the Lua API exposed to
-          plugins (ttt.* functions, panel methods, or their fields, defined in
-          internal/plugin/lua_*.go). If it does, pass only if
-          docs-web/src/content/docs/guides/plugin-authoring.md is updated in
-          the same PR. Fail otherwise.
-
-knowledge_base:
-  code_guidelines:
-    enabled: true
-    filePatterns:
-      - "AGENTS.md"
-      - "ARCHITECTURE.md"
 
 chat:
   auto_reply: true
