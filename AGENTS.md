@@ -31,7 +31,9 @@ Known boundary violations and explicit boundary decisions are documented there. 
 
 ### Packages
 
-Domain (`internal/core/`): UI-agnostic editor engine. Domain APIs must not introduce terminal or rendering dependencies.
+Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE.md), which is the source of truth for zone membership and dependency direction.
+
+**Domain** (`internal/core/`): UI-agnostic editor engine. Domain code must not start processes, access terminal state, render widgets, or coordinate application lifecycle.
 
 - **`core/buffer/`**: line-based text storage (`[]string`), rune-level insert/delete, file I/O (load/save).
 - **`core/cursor/`**: visual column cursor with goal-column preservation for vertical movement.
@@ -40,18 +42,18 @@ Domain (`internal/core/`): UI-agnostic editor engine. Domain APIs must not intro
 - **`core/multicursor/`**: multi-cursor state (add, dedupe, collapse).
 - **`core/fold/`**: indentation-based fold ranges and fold state.
 - **`core/diff/`**: line diffing, unified diff generation and parsing, and git gutter change kinds.
-- **`core/clipboard/`**: clipboard with system, OSC 52, and process-local backends.
+- **`core/clipboard/`**: clipboard with system, OSC 52, and process-local backends. It starts processes, which the Domain rules forbid; treat it as an existing exception, not a pattern for new domain code.
 
-Services:
+**Services**: external-process and external-state integration, exposing typed operations and results without owning widgets.
 
-- **`internal/command/`**: command `Registry` (register, look up, execute by ID).
-- **`internal/config/`**: settings, keybindings (`DefaultKeybindings()`), themes (`theme.go`), and `.editorconfig` support.
-- **`internal/git/`**: git CLI wrapper (status, staging, commit, repo discovery). **`internal/github/`**: `gh` CLI wrapper for pull requests.
+- **`internal/git/`**: git CLI wrapper (status, staging, commit, repo discovery).
+- **`internal/github/`**: `gh` CLI wrapper for pull requests.
 - **`internal/lsp/`**: language server client (see LSP Integration).
+- **`internal/terminal/`**: integrated terminal emulator. Wraps `gitpod-io/xterm-go` for VT parsing and `aymanbagabas/go-pty` for PTY lifecycle.
 - **`internal/watcher/`**: fsnotify-based reporting of on-disk changes to open files and watched directories.
 - **`internal/workspace/`**: multi-folder workspaces. `Folder` and `Workspace` track project roots, with `IsRepo` git detection, `FolderForFile` lookup (longest-prefix match), and JSON `.ttt` workspace files. Falls back to `cwd` when no folders are given.
 
-Presentation:
+**Presentation kernel**: screen cells, styles, width measurement, rendering, layout, and reusable interaction primitives.
 
 - **`internal/term/`**: `Screen` interface. `TcellScreen` is the real implementation; `MockScreen` supports unit-level `Screen` and renderer tests; `SimScreen` implements tcell's screen contract for composed E2E and chaos tests. Also defines `DirectColor` and `CellAttr` for direct RGB rendering (used by the integrated terminal to bypass the style map for 256-color output).
 - **`internal/render/`**: diff-based renderer that compares prev/curr cell grids and emits minimal updates.
@@ -59,20 +61,30 @@ Presentation:
 - **`internal/highlight/`**: presentation-owned per-line syntax highlighting via `chroma/v2`. Owns language selection, multi-line region state (block comments, docstrings, template and raw strings, each discovered by probing the lexer), caching, and mapping Chroma token types to `term.Style`. Full-buffer re-lexing is a known performance trap; avoid it.
 - **`internal/view/`**: viewport (scrolling, cursor-to-screen mapping) and the segment-based status bar.
 - **`internal/widgets/`**: reusable widget primitives backing both the Plugin Widget API and core panels (tree, table, list, input, dialog, dropdown, tabs, stacks, scrollview, markdown, and so on). `surface.go`/`virtual_surface.go` provide the drawing surface abstraction; `focus.go` handles focus traversal.
-- **`internal/ui/`**: editor and panel widgets: `EditorGroupWidget`/`EditorPaneWidget` (tabs and editing), sidebar, bottom panel, search, diff view, menus, dialogs. Notable files: `root.go` (`Root`, overlays, key matching, force keys, and the `RawKeyConsumer` interface), `terminal_widget.go` (renders the terminal grid as direct-color cells, translates keys to VT sequences), `content_split.go` (focus routing between editor and bottom panel).
-- **`internal/terminal/`**: integrated terminal emulator. Wraps `gitpod-io/xterm-go` for VT parsing and `aymanbagabas/go-pty` for PTY lifecycle.
 - **`internal/markdown/`**: goldmark-based markdown to styled lines.
-- **`internal/image/`**: image decoding and Kitty graphics protocol placement.
-- **`internal/icons/`**: named UI glyphs in Nerd Font or plain form. **`internal/fileicons/`**: file name to Nerd Font glyph mapping (generated from nvim-web-devicons).
 
-Application and plugin host:
+**Product presentation**:
+
+- **`internal/ui/`**: editor and panel widgets: `EditorGroupWidget`/`EditorPaneWidget` (tabs and editing), sidebar, bottom panel, search, diff view, menus, dialogs. Notable files: `root.go` (`Root`, overlays, key matching, force keys, and the `RawKeyConsumer` interface), `terminal_widget.go` (renders the terminal grid as direct-color cells, translates keys to VT sequences), `content_split.go` (focus routing between editor and bottom panel).
+
+**Application**:
 
 - **`internal/app/`**: application orchestration, the largest package. `App` (`app.go`) wires everything together. `commands*.go` implement command handlers by domain. `eventloop.go` and `keys.go` run the main event loop and key dispatch. Also: explorer and changes panel, git gutter and PR views, the output panel (`output.go`), plugin host UI, menus, formatter, LSP document symbols.
+- **`internal/command/`**: command `Registry` (register, look up, execute by ID).
+
+**Plugin host**:
+
 - **`internal/plugin/`**: Lua plugin engine (gopher-lua). `manager.go`/`registry*.go` handle discovery, loading, and the community registry; `permissions.go`/`sandbox.go` enforce the permission model; `lua_*.go` bind the `ttt` Lua module by domain.
 
-Platform:
+**Platform**:
 
 - **`cmd/ttt/main.go`**: entry point. Parses flags (`--workspace`, `--exec`, `--size`, and so on), sets up the screen, logging, and panic handling, constructs `App`, and wires the plugin host APIs.
+
+**Not yet assigned a zone in ARCHITECTURE.md**:
+
+- **`internal/config/`**: settings, keybindings (`DefaultKeybindings()`), themes (`theme.go`), and `.editorconfig` support.
+- **`internal/image/`**: image decoding and Kitty graphics protocol placement.
+- **`internal/icons/`**: named UI glyphs in Nerd Font or plain form. **`internal/fileicons/`**: file name to Nerd Font glyph mapping (generated from nvim-web-devicons).
 
 ### Design Principles
 
