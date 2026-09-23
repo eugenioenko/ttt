@@ -238,5 +238,8 @@ func (n *NavigationPanel) gitStyleFor(path string) term.Style {
 	if !n.Settings.GitStatusColors {
 		return term.StyleDefault
 	}
+	if !n.Settings.DimStagedGitColors {
+		return ui.GitDecorationLive(n.gitStyles[path])
+	}
 	return n.gitStyles[path]
 }

@@ -54,6 +54,18 @@ func GitDecorationStyle(status string, staged bool) term.Style {
 	return term.StyleDefault
 }
 
+// GitDecorationLive undoes the staged dimming, for callers that show staged and
+// pending changes in the same color. Category ordering does not depend on
+// staged-ness, so collapsing after a folder aggregation keeps its result.
+func GitDecorationLive(style term.Style) term.Style {
+	for _, decoration := range gitDecorations {
+		if style == decoration.staged {
+			return decoration.live
+		}
+	}
+	return style
+}
+
 // GitDecorationRank orders the statuses a folder can inherit from its children.
 // A live status outranks its dimmed staged variant, so a folder holding both a
 // staged and a pending change shows the pending one.

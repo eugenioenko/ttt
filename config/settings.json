@@ -31,7 +31,8 @@
   "explorer": {
     "showHidden": true,
     "showGitIgnored": true,
-    "gitStatusColors": true
+    "gitStatusColors": true,
+    "dimStagedGitColors": false
   },
   "git": {
     "fileView": "list"

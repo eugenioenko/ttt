@@ -6,6 +6,34 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
+func TestGitDecorationLiveCollapsesStagedVariants(t *testing.T) {
+	cases := map[term.Style]term.Style{
+		term.StyleSuccessStaged:     term.StyleSuccess,
+		term.StyleDangerStaged:      term.StyleDanger,
+		term.StyleWarningStaged:     term.StyleWarning,
+		term.StyleGitConflictStaged: term.StyleGitConflict,
+		term.StyleWarning:           term.StyleWarning,
+		term.StyleDefault:           term.StyleDefault,
+	}
+	for style, want := range cases {
+		if got := GitDecorationLive(style); got != want {
+			t.Errorf("GitDecorationLive(%v) = %v, want %v", style, got, want)
+		}
+	}
+}
+
+// Collapsing staged variants after a folder aggregation must not change which
+// category won, which holds only while category order dominates staged-ness.
+func TestGitDecorationRankCategoryDominatesStagedness(t *testing.T) {
+	for i, lower := range gitDecorations {
+		for _, higher := range gitDecorations[i+1:] {
+			if GitDecorationRank(higher.staged) <= GitDecorationRank(lower.live) {
+				t.Errorf("staged %v should outrank live %v of a lower category", higher.staged, lower.live)
+			}
+		}
+	}
+}
+
 func TestGitDecorationRankOrdersStagedBelowLive(t *testing.T) {
 	// Lowest to highest: unknown, then each category's staged variant just
 	// below its live one, categories ordered new < deleted < modified < conflict.

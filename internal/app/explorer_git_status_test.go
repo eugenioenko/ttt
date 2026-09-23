@@ -173,6 +173,35 @@ func TestNavigationPanelApplyGitStatusColorsLoadedNodes(t *testing.T) {
 	}
 }
 
+func TestNavigationPanelDimsStagedOnlyWhenOptedIn(t *testing.T) {
+	rootPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(rootPath, "staged.go"), []byte("package main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runTreeGit(t, rootPath, "init", "-q")
+
+	stagedFile := filepath.Join(rootPath, "staged.go")
+	styles := map[string]term.Style{stagedFile: term.StyleWarningStaged}
+
+	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, rootPath)
+	explorer.ExpandAll()
+	explorer.ApplyGitStatus(styles)
+
+	node := findTreeNode(explorer.Tree.Config.Items, func(n *widgets.TreeNode) bool { return n.ID == stagedFile })
+	if node == nil {
+		t.Fatal("staged.go missing from the tree")
+	}
+	if node.LabelStyle != term.StyleWarning {
+		t.Errorf("dimming off by default should show the live color, got %v", node.LabelStyle)
+	}
+
+	explorer.Settings.DimStagedGitColors = true
+	explorer.ApplyGitStatus(styles)
+	if node.LabelStyle != term.StyleWarningStaged {
+		t.Errorf("opting in should dim the staged color, got %v", node.LabelStyle)
+	}
+}
+
 // A `git rm --cached` leaves the file on disk, reported as both a staged
 // delete and an untracked add, so the tree still has a row to color.
 func TestExplorerGitStylesRanksStagedDeleteOverUntrackedOnSamePath(t *testing.T) {
