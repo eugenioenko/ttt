@@ -94,6 +94,27 @@ func (cs *ContentSplitWidget) requestedBottomHeight(totalH int) int {
 	return cs.BottomH
 }
 
+func (cs *ContentSplitWidget) ResizePanel(delta int) {
+	r := cs.GetRect()
+	if cs.Position == SplitRight {
+		size := cs.requestedRightWidth(r.W)
+		if r.W > 1 {
+			size = cs.constrainedRightWidth(r.W, cs.constrainedRightWidth(r.W, size)+delta)
+		} else {
+			size += delta
+		}
+		cs.RightW = max(size, 1)
+		return
+	}
+	size := cs.requestedBottomHeight(r.H)
+	if r.H > 1 {
+		size = cs.constrainedBottomHeight(r.H, cs.constrainedBottomHeight(r.H, size)+delta)
+	} else {
+		size += delta
+	}
+	cs.BottomH = max(size, 1)
+}
+
 func (cs *ContentSplitWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := cs.GetRect()

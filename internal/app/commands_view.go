@@ -399,11 +399,7 @@ func registerViewCommands(app *App) {
 			if !app.ContentSplit.ShowBottom {
 				app.ShowBottomPanel()
 			}
-			if app.ContentSplit.Position == ui.SplitRight {
-				app.ContentSplit.RightW++
-			} else {
-				app.ContentSplit.BottomH++
-			}
+			app.ContentSplit.ResizePanel(1)
 			resizeTerminals(app)
 		},
 	})
@@ -415,13 +411,7 @@ func registerViewCommands(app *App) {
 			if !app.ContentSplit.ShowBottom {
 				return
 			}
-			if app.ContentSplit.Position == ui.SplitRight {
-				if app.ContentSplit.RightW > 1 {
-					app.ContentSplit.RightW--
-				}
-			} else if app.ContentSplit.BottomH > 1 {
-				app.ContentSplit.BottomH--
-			}
+			app.ContentSplit.ResizePanel(-1)
 			resizeTerminals(app)
 		},
 	})
