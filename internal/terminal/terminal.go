@@ -33,8 +33,12 @@ type Terminal struct {
 	closed     bool
 	exited     bool
 	rawTail    []byte
-	OnUpdate   func()
-	OnExit     func()
+	// promptMarker tracks the row of the last OSC 133 prompt start while
+	// that prompt is still being edited; promptCol is the column it starts at.
+	promptMarker *xterm.Marker
+	promptCol    int
+	OnUpdate     func()
+	OnExit       func()
 
 	updatePending atomic.Bool
 }
@@ -64,6 +68,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string) 
 		xterm.WithRows(rows),
 		xterm.WithScrollback(scrollbackMax),
 	)
+	t.watchPromptMarks()
 	t.term.OnData(func(s string) {
 		io.WriteString(pt, s)
 	})
@@ -175,11 +180,27 @@ func (t *Terminal) Resize(cols, rows int) {
 	rows = max(rows, xterm.MinimumRows)
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.resizeEmulator(cols, rows) {
+		t.pt.Resize(cols, rows)
+	}
+}
+
+// resizeEmulator reports whether the size changed. An unchanged size must not
+// clear the prompt: the pty sends no SIGWINCH for it, so nothing redraws it.
+func (t *Terminal) resizeEmulator(cols, rows int) bool {
+	if cols == t.cols && rows == t.rows {
+		return false
+	}
+	// ConPTY repaints the screen itself on resize; the blanking is only for
+	// Unix ptys, where the shell's SIGWINCH redraw is what brings it back.
+	if runtime.GOOS != "windows" {
+		t.clearPromptForRedraw()
+	}
 	trimForReflow(t.term.NormalBuffer(), t.cols, t.rows, cols, rows)
 	t.cols = cols
 	t.rows = rows
 	t.term.Resize(cols, rows)
-	t.pt.Resize(cols, rows)
+	return true
 }
 
 // AckUpdate must run before a frame reads the emulator so later output re-arms OnUpdate.
