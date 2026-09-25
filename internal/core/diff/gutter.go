@@ -1,5 +1,7 @@
 package diff
 
+import "context"
+
 // LineChangeKind indicates how a buffer line differs from the HEAD version.
 type LineChangeKind int
 
@@ -21,13 +23,21 @@ const (
 //   - A left-side Deleted line with a Blank right side marks the next buffer
 //     line as having a deletion above it (LineDeleted indicator).
 func ComputeGutterChanges(oldLines, newLines []string) []LineChangeKind {
+	changes, _ := ComputeGutterChangesContext(context.Background(), oldLines, newLines)
+	return changes
+}
+
+func ComputeGutterChangesContext(ctx context.Context, oldLines, newLines []string) ([]LineChangeKind, error) {
 	if len(newLines) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	result := make([]LineChangeKind, len(newLines))
 
-	diffs := FullDiffLines(oldLines, newLines)
+	diffs, err := FullDiffLinesContext(ctx, oldLines, newLines)
+	if err != nil {
+		return nil, err
+	}
 
 	// pendingDelete tracks whether we saw deleted lines that haven't been
 	// paired with additions. When we encounter the next buffer line (context
@@ -78,5 +88,5 @@ func ComputeGutterChanges(oldLines, newLines []string) []LineChangeKind {
 		}
 	}
 
-	return result
+	return result, nil
 }
