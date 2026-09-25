@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -23,6 +24,8 @@ const (
 	settingInt
 	settingString
 	settingEnum
+	// settingSection is a heading row that groups the fields below it.
+	settingSection
 )
 
 type settingField struct {
@@ -52,93 +55,57 @@ type settingsCategory struct {
 
 func boolPtr(b bool) *bool { return &b }
 
+func section(title string) settingField { return settingField{Label: title, Kind: settingSection} }
+
 // LSP servers and the formatters map are deliberately absent: both are
 // structured config that a form handles badly, and stay JSON-only.
 func settingsCategories() []settingsCategory {
 	return []settingsCategory{
+		{Title: "General", Fields: []settingField{
+			section("Plugins"),
+			{Label: "Enable plugins", Kind: settingBool, Restart: true,
+				GetBool: func(s *config.Settings) bool { return s.Plugins.IsEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Plugins.Enabled = boolPtr(v) }},
+			section("Debugging"),
+			{Label: "Debug mode", Kind: settingBool, Restart: true,
+				GetBool: func(s *config.Settings) bool { return s.DebugMode },
+				SetBool: func(s *config.Settings, v bool) { s.DebugMode = v }},
+		}},
 		{Title: "Editor", Fields: []settingField{
+			section("Indentation"),
 			{Label: "Tab size", Kind: settingInt, Min: 1,
 				GetInt: func(s *config.Settings) int { return s.Editor.TabSize },
 				SetInt: func(s *config.Settings, v int) { s.Editor.TabSize = v }},
 			{Label: "Insert spaces", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.InsertSpaces },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.InsertSpaces = v }},
-			{Label: "Word wrap", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.WordWrap },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.WordWrap = v }},
-			{Label: "Diff mode", Kind: settingEnum, Options: diffModeItems,
-				GetString: func(s *config.Settings) string { return s.Editor.DiffMode },
-				SetString: func(s *config.Settings, v string) { s.Editor.DiffMode = v }},
-			{Label: "Diff word wrap", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.DiffWordWrap },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffWordWrap = v }},
-			{Label: "Line numbers", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.LineNumbers },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.LineNumbers = v }},
 			{Label: "Auto indent", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsAutoIndentEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.AutoIndent = boolPtr(v) }},
 			{Label: "Auto dedent", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsAutoDedentEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.AutoDedent = boolPtr(v) }},
-			{Label: "Insert final newline", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.InsertFinalNewline },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.InsertFinalNewline = v }},
+			section("Display"),
+			{Label: "Word wrap", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.WordWrap },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.WordWrap = v }},
+			{Label: "Line numbers", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.LineNumbers },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.LineNumbers = v }},
 			{Label: "Show trailing newline", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsShowTrailingNewlineEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.ShowTrailingNewline = boolPtr(v) }},
-			{Label: "Trim trailing whitespace", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.TrimTrailingWhitespace },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.TrimTrailingWhitespace = v }},
+			section("On save"),
 			{Label: "Format on save", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.FormatOnSave },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.FormatOnSave = v }},
-			{Label: "Focus editor on open", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.FocusOnOpen },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.FocusOnOpen = v }},
-		}},
-		{Title: "Appearance", Fields: []settingField{
-			{Label: "Theme", Kind: settingEnum, Options: themeItems,
-				GetString: func(s *config.Settings) string { return s.Theme },
-				SetString: func(s *config.Settings, v string) { s.Theme = v }},
-			{Label: "Diff context", Kind: settingEnum, Options: diffContextItems,
-				GetString: func(s *config.Settings) string { return s.Editor.DiffContext },
-				SetString: func(s *config.Settings, v string) { s.Editor.DiffContext = v }},
-			{Label: "High contrast diffs", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.DiffHighContrast },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffHighContrast = v }},
-			{Label: "Emphasize collapsed diff rows", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.DiffCollapsedEmphasis },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffCollapsedEmphasis = v }},
-			{Label: "Border style", Kind: settingEnum, Options: borderStyleItems,
-				GetString: func(s *config.Settings) string { return s.Editor.BorderStyle },
-				SetString: func(s *config.Settings, v string) { s.Editor.BorderStyle = v }},
-			{Label: "Gutter style", Kind: settingEnum, Options: gutterStyleItems,
-				GetString: func(s *config.Settings) string { return s.Editor.GutterStyle },
-				SetString: func(s *config.Settings, v string) { s.Editor.GutterStyle = v }},
-			{Label: "Cursor style", Kind: settingEnum, Options: cursorStyleItems,
-				GetString: func(s *config.Settings) string { return s.Editor.CursorStyle },
-				SetString: func(s *config.Settings, v string) { s.Editor.CursorStyle = v }},
-			{Label: "Syntax highlight", Kind: settingBool, Restart: true,
-				GetBool: func(s *config.Settings) bool { return s.Editor.IsSyntaxHighlightEnabled() },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.SyntaxHighlight = boolPtr(v) }},
-			{Label: "Bracket pair colors", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.BracketPairColorization },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.BracketPairColorization = v }},
-			{Label: "Menu bar", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.IsMenuBarVisible() },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.MenuBar = boolPtr(v) }},
-			{Label: "Git gutter", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.IsGitGutterEnabled() },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.GitGutter = boolPtr(v) }},
-			{Label: "Transparent background", Kind: settingBool,
-				GetBool: func(s *config.Settings) bool { return s.Editor.TransparentBackground },
-				SetBool: func(s *config.Settings, v bool) { s.Editor.TransparentBackground = v }},
-			{Label: "Markdown wrap width", Kind: settingInt, Min: 1,
-				GetInt: func(s *config.Settings) int { return s.Markdown.WrapWidth },
-				SetInt: func(s *config.Settings, v int) { s.Markdown.WrapWidth = v }},
-		}},
-		{Title: "Completion", Fields: []settingField{
+			{Label: "Insert final newline", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.InsertFinalNewline },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.InsertFinalNewline = v }},
+			{Label: "Trim trailing whitespace", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.TrimTrailingWhitespace },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.TrimTrailingWhitespace = v }},
+			section("Completion"),
 			{Label: "Enable completion", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Autocomplete.Enabled },
 				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.Enabled = v }},
@@ -151,21 +118,60 @@ func settingsCategories() []settingsCategory {
 			{Label: "Debounce (ms)", Kind: settingInt,
 				GetInt: func(s *config.Settings) int { return s.Autocomplete.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Autocomplete.Debounce = v }},
+			section("Behavior"),
+			{Label: "Focus editor on open", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.FocusOnOpen },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.FocusOnOpen = v }},
 		}},
-		{Title: "Advanced", Fields: []settingField{
-			{Label: "Git: file view", Kind: settingEnum, Options: gitFileViewItems,
-				GetString: func(s *config.Settings) string { return s.Git.FileView },
-				SetString: func(s *config.Settings, v string) { s.Git.FileView = v }},
-			{Label: "Explorer: hidden files", Kind: settingBool,
+		{Title: "Appearance", Fields: []settingField{
+			section("Theme"),
+			{Label: "Theme", Kind: settingEnum, Options: themeItems,
+				GetString: func(s *config.Settings) string { return s.Theme },
+				SetString: func(s *config.Settings, v string) { s.Theme = v }},
+			{Label: "Transparent background", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.TransparentBackground },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.TransparentBackground = v }},
+			section("Window"),
+			{Label: "Menu bar", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.IsMenuBarVisible() },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.MenuBar = boolPtr(v) }},
+			{Label: "Border style", Kind: settingEnum, Options: borderStyleItems,
+				GetString: func(s *config.Settings) string { return s.Editor.BorderStyle },
+				SetString: func(s *config.Settings, v string) { s.Editor.BorderStyle = v }},
+			section("Code"),
+			{Label: "Syntax highlight", Kind: settingBool, Restart: true,
+				GetBool: func(s *config.Settings) bool { return s.Editor.IsSyntaxHighlightEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.SyntaxHighlight = boolPtr(v) }},
+			{Label: "Bracket pair colors", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.BracketPairColorization },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.BracketPairColorization = v }},
+			{Label: "Cursor style", Kind: settingEnum, Options: cursorStyleItems,
+				GetString: func(s *config.Settings) string { return s.Editor.CursorStyle },
+				SetString: func(s *config.Settings, v string) { s.Editor.CursorStyle = v }},
+			{Label: "Gutter style", Kind: settingEnum, Options: gutterStyleItems,
+				GetString: func(s *config.Settings) string { return s.Editor.GutterStyle },
+				SetString: func(s *config.Settings, v string) { s.Editor.GutterStyle = v }},
+			{Label: "Git gutter", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.IsGitGutterEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.GitGutter = boolPtr(v) }},
+			section("Markdown"),
+			{Label: "Wrap width", Kind: settingInt, Min: 1,
+				GetInt: func(s *config.Settings) int { return s.Markdown.WrapWidth },
+				SetInt: func(s *config.Settings, v int) { s.Markdown.WrapWidth = v }},
+		}},
+		{Title: "Sidebar", Fields: []settingField{
+			section("Files"),
+			{Label: "Hidden files", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.ShowHidden },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.ShowHidden = v }},
-			{Label: "Explorer: git-ignored files", Kind: settingBool,
+			{Label: "Git-ignored files", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.ShowGitIgnored },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.ShowGitIgnored = v }},
-			{Label: "Explorer: git status colors", Kind: settingBool,
+			section("Look"),
+			{Label: "Git status colors", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.GitStatusColors },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.GitStatusColors = v }},
-			{Label: "Explorer: dim staged colors", Kind: settingBool,
+			{Label: "Dim staged colors", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.DimStagedGitColors },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.DimStagedGitColors = v }},
 			{Label: "Icons", Kind: settingEnum, Options: iconModeItems,
@@ -177,21 +183,39 @@ func settingsCategories() []settingsCategory {
 			{Label: "Chevron: expanded", Kind: settingString,
 				GetString: func(s *config.Settings) string { return s.Appearance.Chevrons.Expanded },
 				SetString: func(s *config.Settings, v string) { s.Appearance.Chevrons.Expanded = v }},
-			{Label: "Terminal shell", Kind: settingString, Restart: true,
-				GetString: func(s *config.Settings) string { return s.Terminal.Shell },
-				SetString: func(s *config.Settings, v string) { s.Terminal.Shell = v }},
-			{Label: "Terminal scrollback", Kind: settingInt, Restart: true, Min: 1,
-				GetInt: func(s *config.Settings) int { return s.Terminal.Scrollback },
-				SetInt: func(s *config.Settings, v int) { s.Terminal.Scrollback = v }},
-			{Label: "Search debounce (ms)", Kind: settingInt,
+			section("Source Control"),
+			{Label: "File view", Kind: settingEnum, Options: gitFileViewItems,
+				GetString: func(s *config.Settings) string { return s.Git.FileView },
+				SetString: func(s *config.Settings, v string) { s.Git.FileView = v }},
+			section("Search"),
+			{Label: "Debounce (ms)", Kind: settingInt,
 				GetInt: func(s *config.Settings) int { return s.Search.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Search.Debounce = v }},
-			{Label: "Enable plugins", Kind: settingBool, Restart: true,
-				GetBool: func(s *config.Settings) bool { return s.Plugins.IsEnabled() },
-				SetBool: func(s *config.Settings, v bool) { s.Plugins.Enabled = boolPtr(v) }},
-			{Label: "Debug mode", Kind: settingBool, Restart: true,
-				GetBool: func(s *config.Settings) bool { return s.DebugMode },
-				SetBool: func(s *config.Settings, v bool) { s.DebugMode = v }},
+		}},
+		{Title: "Terminal", Fields: []settingField{
+			{Label: "Shell", Kind: settingString, Restart: true,
+				GetString: func(s *config.Settings) string { return s.Terminal.Shell },
+				SetString: func(s *config.Settings, v string) { s.Terminal.Shell = v }},
+			{Label: "Scrollback", Kind: settingInt, Restart: true, Min: 1,
+				GetInt: func(s *config.Settings) int { return s.Terminal.Scrollback },
+				SetInt: func(s *config.Settings, v int) { s.Terminal.Scrollback = v }},
+		}},
+		{Title: "Diff", Fields: []settingField{
+			{Label: "Diff mode", Kind: settingEnum, Options: diffModeItems,
+				GetString: func(s *config.Settings) string { return s.Editor.DiffMode },
+				SetString: func(s *config.Settings, v string) { s.Editor.DiffMode = v }},
+			{Label: "Diff context", Kind: settingEnum, Options: diffContextItems,
+				GetString: func(s *config.Settings) string { return s.Editor.DiffContext },
+				SetString: func(s *config.Settings, v string) { s.Editor.DiffContext = v }},
+			{Label: "Diff word wrap", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.DiffWordWrap },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffWordWrap = v }},
+			{Label: "High contrast diffs", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.DiffHighContrast },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffHighContrast = v }},
+			{Label: "Emphasize collapsed diff rows", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.DiffCollapsedEmphasis },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffCollapsedEmphasis = v }},
 		}},
 	}
 }
@@ -253,6 +277,7 @@ func (v *settingsView) commitTo(s *config.Settings) {
 	for _, cat := range v.categories {
 		for _, f := range cat.Fields {
 			switch f.Kind {
+			case settingSection:
 			case settingBool:
 				f.SetBool(s, f.GetBool(&v.working))
 			case settingInt:
@@ -322,8 +347,19 @@ func (a *App) ShowSettings() {
 
 func (v *settingsView) buildPane(cat settingsCategory) widgets.Widget {
 	rows := make([]widgets.Widget, 0, len(cat.Fields))
-	for _, f := range cat.Fields {
-		rows = append(rows, v.buildRow(cat.Title, f))
+	indent := 0
+	for i, f := range cat.Fields {
+		if f.Kind == settingSection {
+			if i > 0 {
+				rows = append(rows, widgets.NewLabelWidget(widgets.LabelConfig{}))
+			}
+			rows = append(rows, sectionHeading(f.Label))
+			indent = 2
+			continue
+		}
+		row := v.buildRow(cat.Title, f)
+		row.Box.PaddingLeft = indent
+		rows = append(rows, row)
 	}
 	stack := widgets.NewVStackWidget(rows...)
 	stack.MeasureGrow = true
@@ -338,9 +374,20 @@ func (v *settingsView) buildPane(cat settingsCategory) widgets.Widget {
 	)
 }
 
+// sectionHeading draws a muted title followed by a rule to the pane's edge.
+func sectionHeading(title string) widgets.Widget {
+	name := widgets.NewLabelWidget(widgets.LabelConfig{Text: title, Style: term.StyleMuted})
+	name.FixedWidth = textwidth.String(title)
+	row := widgets.NewHStackWidget(name, widgets.NewDividerWidget(widgets.DividerConfig{}))
+	row.Gap = 1
+	row.FixedHeight = 1
+	row.Box.PaddingRight = 2
+	return row
+}
+
 // One row per setting: label in a fixed left column, control on the right.
 // Each control keeps its native shape, so its type is readable at a glance.
-func (v *settingsView) buildRow(category string, f settingField) widgets.Widget {
+func (v *settingsView) buildRow(category string, f settingField) *widgets.HStackWidget {
 	label := f.Label
 	if f.Restart {
 		label += " (restart)"

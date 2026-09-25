@@ -35,7 +35,7 @@ func TestSettingsFileIconsTurnOnAfterApply(t *testing.T) {
 	h := openSettings(t)
 	defer h.stop()
 	initializeHarnessRepository(t, h.dir)
-	clickRowControl(t, h, "Advanced", "Advanced")
+	clickRowControl(t, h, "Sidebar", "Sidebar")
 	label := "Icons"
 	if !rowHas(h, label, "None") {
 		t.Fatalf("%s should default to None:\n%s", label, h.screenText())

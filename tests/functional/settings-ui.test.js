@@ -27,12 +27,13 @@ describe("settings editor", () => {
     const { snapshots } = tui.run();
     for (const want of [
       "Settings",
+      "General",
       "Editor",
       "Appearance",
-      "Completion",
-      "Advanced",
-      "Tab size",
-      "Word wrap",
+      "Sidebar",
+      "Terminal",
+      "Diff",
+      "Enable plugins",
       "Apply",
     ]) {
       expect(snapshots[s0]).toContain(want);
@@ -43,6 +44,7 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open Editor Settings");
+    tui.click(12, 4); // the "Editor" tab; the form opens on General
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -61,12 +63,12 @@ describe("settings editor", () => {
     openEditor();
 
     tui.exec("Settings: Open Editor Settings");
+    tui.click(12, 4); // the "Editor" tab
 
-    // Tab onto Word wrap. The assertions name that row, so a traversal that
-    // lands elsewhere fails loudly instead of passing on a no-op.
-    tui.press("tab");
-    tui.press("tab");
-    tui.press("tab");
+    // Tab onto Word wrap: from the clicked tab strip, the walk passes the
+    // strip and the Indentation fields first. The assertions name that row, so
+    // a traversal that lands elsewhere fails loudly instead of passing on a no-op.
+    for (let i = 0; i < 8; i++) tui.press("tab");
     tui.press("space");
     const toggled = tui.snapshot();
 
@@ -79,6 +81,7 @@ describe("settings editor", () => {
     tui.exec("Reload Settings");
     tui.exec("Settings: Discard Changes");
     tui.exec("Settings: Open Editor Settings");
+    tui.click(12, 4); // the "Editor" tab
     const reopened = tui.snapshot();
 
     const { snapshots } = tui.run();
@@ -118,7 +121,7 @@ describe("settings editor", () => {
     // A crash would leave an empty/errored snapshot; the settings UI must
     // still be on screen and intact.
     expect(snapshots[s0]).toContain("Settings");
-    expect(snapshots[s0]).toContain("Word wrap");
+    expect(snapshots[s0]).toContain("Enable plugins");
     expect(snapshots[s0]).toContain("Apply");
   });
 

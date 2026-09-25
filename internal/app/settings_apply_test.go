@@ -81,6 +81,7 @@ func TestCommitToCoversEveryField(t *testing.T) {
 	for _, cat := range settingsCategories() {
 		for _, f := range cat.Fields {
 			switch f.Kind {
+			case settingSection:
 			case settingBool:
 				if f.GetBool == nil || f.SetBool == nil {
 					t.Errorf("%s → %s: bool field missing an accessor", cat.Title, f.Label)
@@ -98,7 +99,7 @@ func TestCommitToCoversEveryField(t *testing.T) {
 	}
 }
 
-func TestDiffContextSettingLivesInAppearance(t *testing.T) {
+func TestDiffContextSettingLivesInDiff(t *testing.T) {
 	found := ""
 	count := 0
 	for _, category := range settingsCategories() {
@@ -109,12 +110,12 @@ func TestDiffContextSettingLivesInAppearance(t *testing.T) {
 			}
 		}
 	}
-	if count != 1 || found != "Appearance" {
-		t.Fatalf("Diff context count = %d, category = %q; want one under Appearance", count, found)
+	if count != 1 || found != "Diff" {
+		t.Fatalf("Diff context count = %d, category = %q; want one under Diff", count, found)
 	}
 }
 
-func TestCollapsedDiffEmphasisSettingLivesInAppearance(t *testing.T) {
+func TestCollapsedDiffEmphasisSettingLivesInDiff(t *testing.T) {
 	found := ""
 	count := 0
 	for _, category := range settingsCategories() {
@@ -125,8 +126,8 @@ func TestCollapsedDiffEmphasisSettingLivesInAppearance(t *testing.T) {
 			}
 		}
 	}
-	if count != 1 || found != "Appearance" {
-		t.Fatalf("collapsed diff emphasis count = %d, category = %q; want one under Appearance", count, found)
+	if count != 1 || found != "Diff" {
+		t.Fatalf("collapsed diff emphasis count = %d, category = %q; want one under Diff", count, found)
 	}
 }
 
