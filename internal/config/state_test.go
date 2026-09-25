@@ -29,6 +29,18 @@ func TestLoadStateCorruptFileReturnsDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadStatePartialDecodeReturnsDefaults(t *testing.T) {
+	dir := t.TempDir()
+	OverrideConfigDir = dir
+	t.Cleanup(func() { OverrideConfigDir = "" })
+
+	os.WriteFile(filepath.Join(dir, "state.json"), []byte(`{"panelPosition":"right","sidebarWidth":"bad"}`), 0644)
+	s := LoadState()
+	if s.PanelPosition != "" || s.SidebarWidth != 0 {
+		t.Fatalf("partial decode returned non-zero state: %+v", s)
+	}
+}
+
 func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 	OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { OverrideConfigDir = "" })

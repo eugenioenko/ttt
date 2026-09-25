@@ -16,7 +16,9 @@ func LoadState() State {
 	var s State
 	paths := configPaths()
 	if data, err := readFirst(paths, "state.json"); err == nil {
-		json.Unmarshal(data, &s)
+		if json.Unmarshal(data, &s) != nil {
+			return State{}
+		}
 	}
 	return s
 }
