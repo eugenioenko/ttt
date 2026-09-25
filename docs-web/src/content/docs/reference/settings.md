@@ -76,13 +76,17 @@ All editor settings are nested under the `editor` key.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `sidebar.panelOrder` | string[] | built-in order | Preferred sidebar panel-header order. Dragging a header or using **Move Panel Left/Right** updates it automatically. Unknown plugin panel IDs are retained until that plugin loads. |
+| `sidebar.panelOrder` | string[] | built-in order | Initial sidebar panel-header order. Unknown plugin panel IDs are retained until that plugin loads. |
+| `sidebar.width` | int | `30` | Initial sidebar width in columns. |
+| `sidebar.commitHistoryHeight` | int | proportional | Initial height of the commit history in the Changes panel, in rows. |
+
+These are starting values. Once you drag a header, resize the sidebar, or resize the commit history, the new layout is saved to `state.json` next to `settings.json` and takes precedence. Delete `state.json` to return to these values.
 
 ## Panel
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `panel.position` | string | `"bottom"` | Where the panel (terminal, diagnostics, output) is docked: `"bottom"` or `"right"`. **Dock Panel Right/Bottom** updates it automatically. |
+| `panel.position` | string | `"bottom"` | Where the panel (terminal, diagnostics, output) is initially docked: `"bottom"` or `"right"`. **Dock Panel Right/Bottom** saves the choice to `state.json`, which takes precedence. |
 
 ## Welcome
 
