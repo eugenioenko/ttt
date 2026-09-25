@@ -911,6 +911,10 @@ func keyToVT(ev *tcell.EventKey) string {
 		return term.KeyStr(ev)
 	}
 
+	if seq := modifiedKeyToVT(ev); seq != "" {
+		return seq
+	}
+
 	switch ev.Key() {
 	case tcell.KeyEnter:
 		return "\r"
@@ -972,6 +976,68 @@ func keyToVT(ev *tcell.EventKey) string {
 		return string(rune(ev.Key() - tcell.KeyCtrlA + 1))
 	}
 
+	return ""
+}
+
+// vtModParam is xterm's modifier parameter: 1 plus shift(1), alt(2), ctrl(4).
+func vtModParam(mod tcell.ModMask) int {
+	p := 1
+	if mod&tcell.ModShift != 0 {
+		p += 1
+	}
+	if mod&tcell.ModAlt != 0 {
+		p += 2
+	}
+	if mod&tcell.ModCtrl != 0 {
+		p += 4
+	}
+	return p
+}
+
+// modifiedKeyToVT returns "" when the unmodified encoding applies.
+func modifiedKeyToVT(ev *tcell.EventKey) string {
+	mod := ev.Modifiers()
+	p := vtModParam(mod)
+	if p == 1 {
+		return ""
+	}
+
+	switch ev.Key() {
+	case tcell.KeyEnter:
+		// Legacy encoding has no modified Enter, and the kitty keyboard
+		// protocol is off because nothing here encodes keys as CSI u. ESC+CR
+		// is what VSCode, Alacritty and Zed send for shift+enter, and what
+		// readline reads as meta+enter.
+		if mod&(tcell.ModShift|tcell.ModAlt) != 0 {
+			return "\x1b\r"
+		}
+		return ""
+	case tcell.KeyBackspace, tcell.KeyBackspace2:
+		if mod&tcell.ModAlt != 0 {
+			return "\x1b\x7f"
+		}
+		return ""
+	case tcell.KeyUp:
+		return fmt.Sprintf("\x1b[1;%dA", p)
+	case tcell.KeyDown:
+		return fmt.Sprintf("\x1b[1;%dB", p)
+	case tcell.KeyRight:
+		return fmt.Sprintf("\x1b[1;%dC", p)
+	case tcell.KeyLeft:
+		return fmt.Sprintf("\x1b[1;%dD", p)
+	case tcell.KeyHome:
+		return fmt.Sprintf("\x1b[1;%dH", p)
+	case tcell.KeyEnd:
+		return fmt.Sprintf("\x1b[1;%dF", p)
+	case tcell.KeyInsert:
+		return fmt.Sprintf("\x1b[2;%d~", p)
+	case tcell.KeyDelete:
+		return fmt.Sprintf("\x1b[3;%d~", p)
+	case tcell.KeyPgUp:
+		return fmt.Sprintf("\x1b[5;%d~", p)
+	case tcell.KeyPgDn:
+		return fmt.Sprintf("\x1b[6;%d~", p)
+	}
 	return ""
 }
 
