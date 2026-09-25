@@ -6,6 +6,12 @@ import "context"
 // Myers' linear-space algorithm: O((N+M)D) time and O(N+M) memory, where D is
 // the number of differing lines. A full LCS table here costs N*M memory, which
 // reached gigabytes for large files with a single change (issue #672).
+//
+// E. W. Myers, "An O(ND) Difference Algorithm and Its Variations",
+// Algorithmica 1(2), 1986. solve and bisect are adapted from diff_main,
+// diff_bisect, and diff_bisectSplit in Google's diff-match-patch
+// (https://github.com/google/diff-match-patch), Copyright 2018 The
+// diff-match-patch Authors, Apache License 2.0.
 func computeLCSContext(ctx context.Context, a, b []string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -84,7 +90,9 @@ func (s *lcsSolver) solve(a0, a1, b0, b1 int) error {
 // bisect finds where the forward and reverse shortest edit paths of
 // a[a0:a1] and b[b0:b1] meet, returning the split point relative to a0/b0, or
 // x = -1 when the ranges share no line. Both ranges must be non-empty and
-// must differ in their first and last lines.
+// must differ in their first and last lines. Ported from diff-match-patch's
+// diff_bisect (see computeLCSContext); v1/v2 get two extra slots because,
+// unlike diff-match-patch, callers may pass single-line ranges.
 func (s *lcsSolver) bisect(a0, a1, b0, b1 int) (int, int, error) {
 	a, b := s.a[a0:a1], s.b[b0:b1]
 	n, m := len(a), len(b)
