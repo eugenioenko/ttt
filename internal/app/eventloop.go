@@ -155,6 +155,7 @@ func RunEventLoop(
 			app.ImageLayer.Begin()
 		}
 		app.Root.Render(cells)
+		app.renderPathDrag(cells)
 		if cx, cy, visible := app.Root.CursorPosition(); visible {
 			screen.ShowCursor(cx, cy)
 		} else {

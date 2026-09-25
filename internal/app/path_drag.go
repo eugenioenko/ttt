@@ -8,6 +8,8 @@ import (
 
 	"github.com/gdamore/tcell/v3"
 
+	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 )
@@ -20,6 +22,7 @@ type pathDrag struct {
 	pressed bool
 	path    string
 	active  bool
+	x, y    int // pointer, for the label that follows it
 }
 
 const pathDragSegment = "path-drag"
@@ -28,6 +31,7 @@ const pathDragSegment = "path-drag"
 func (a *App) handlePathDrag(ev *tcell.EventMouse) bool {
 	mx, my := ev.Position()
 	d := &a.pathDrag
+	d.x, d.y = mx, my
 	if ev.Buttons()&tcell.Button1 == 0 {
 		wasActive := d.active
 		if wasActive {
@@ -80,6 +84,23 @@ func (a *App) explorerPathAt(mx, my int) string {
 		return ""
 	}
 	return node.ID
+}
+
+// renderPathDrag draws the dragged entry's name next to the pointer, in the
+// accent color once it is over a place it can be dropped.
+func (a *App) renderPathDrag(cells [][]term.Cell) {
+	d := a.pathDrag
+	if !d.active {
+		return
+	}
+	label, style := " ⇢ "+filepath.Base(d.path)+" ", term.StyleStatusBar
+	if a.terminalAt(d.x, d.y) != nil {
+		label, style = " ⇢ "+filepath.Base(d.path)+"  drop to insert ", term.StylePaletteSelected
+	}
+	w := textwidth.String(label)
+	x := max(min(d.x+2, a.Root.Width-w), 0)
+	s := ui.NewRenderSurface(cells, ui.Rect{W: a.Root.Width, H: a.Root.Height})
+	s.DrawText(x, d.y, label, x+w, style)
 }
 
 // terminalAt is the terminal shown under the pointer, if any.
