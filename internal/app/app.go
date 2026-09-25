@@ -90,6 +90,7 @@ type App struct {
 	Watcher                *watcher.Watcher
 	GitGutterGen           int
 	GitGutterTimer         *time.Timer
+	gitGutterCancel        context.CancelFunc
 	commitDetailMu         sync.Mutex
 	commitDetailNext       uint64
 	commitDetailRequests   map[string]commitDetailRequest

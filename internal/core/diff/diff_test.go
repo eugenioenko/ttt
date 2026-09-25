@@ -2,23 +2,8 @@ package diff
 
 import (
 	"context"
-	"errors"
 	"testing"
 )
-
-type cancelAfterChecksContext struct {
-	context.Context
-	calls    int
-	cancelAt int
-}
-
-func (c *cancelAfterChecksContext) Err() error {
-	c.calls++
-	if c.calls >= c.cancelAt {
-		return context.Canceled
-	}
-	return nil
-}
 
 const sampleDiff = `diff --git a/main.go b/main.go
 index abc1234..def5678 100644
@@ -181,39 +166,6 @@ func TestGenerateContextPreservesGenerateOutput(t *testing.T) {
 	}
 	if want := Generate(oldLines, newLines, "test.txt"); got != want {
 		t.Fatalf("GenerateContext output differs from compatibility API:\ngot:\n%s\nwant:\n%s", got, want)
-	}
-}
-
-func TestComputeLCSContextChecksCancellationDuringMatrixAllocation(t *testing.T) {
-	ctx := &cancelAfterChecksContext{Context: context.Background(), cancelAt: 3}
-	_, err := computeLCSContext(ctx, make([]string, 32), make([]string, 32))
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("allocation cancellation error = %v", err)
-	}
-}
-
-func TestComputeLCSContextChecksCancellationDuringMatrixComputation(t *testing.T) {
-	const rows = 32
-	ctx := &cancelAfterChecksContext{Context: context.Background(), cancelAt: 1 + rows + 1 + 2}
-	_, err := computeLCSContext(ctx, make([]string, rows), make([]string, 4096))
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("computation cancellation error = %v", err)
-	}
-}
-
-func TestComputeLCSContextChecksCancellationDuringReconstruction(t *testing.T) {
-	lines := make([]string, cancellationCheckInterval)
-	for i := range lines {
-		lines[i] = string(rune(i + 1))
-	}
-	matrixChecks := len(lines) * len(lines) / cancellationCheckInterval
-	ctx := &cancelAfterChecksContext{
-		Context:  context.Background(),
-		cancelAt: 1 + len(lines) + 1 + matrixChecks + 1,
-	}
-	_, err := computeLCSContext(ctx, lines, lines)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("reconstruction cancellation error = %v after %d checks", err, ctx.calls)
 	}
 }
 

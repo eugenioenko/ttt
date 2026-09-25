@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -42,13 +43,24 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 
 	a.GitGutterGen++
 	gen := a.GitGutterGen
+	// Each edit starts a new diff; stale ones must stop, or pauses while typing
+	// in a large file stack concurrent diffs (issue #672).
+	if a.gitGutterCancel != nil {
+		a.gitGutterCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	a.gitGutterCancel = cancel
 
 	// Copy buffer lines to avoid races with the editor goroutine
 	linesCopy := make([]string, len(bufferLines))
 	copy(linesCopy, bufferLines)
 
 	go func() {
-		headContent, gitErr := git.ShowFile(repoDir, relPath, "HEAD")
+		defer cancel()
+		headContent, gitErr := git.ShowFileContext(ctx, repoDir, relPath, "HEAD")
+		if ctx.Err() != nil {
+			return
+		}
 		var changes []diff.LineChangeKind
 		if gitErr != nil {
 			// File is not tracked by git (new file) — mark all lines as added
@@ -58,7 +70,11 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 			}
 		} else {
 			oldLines := strings.Split(headContent, "\n")
-			changes = diff.ComputeGutterChanges(oldLines, linesCopy)
+			var err error
+			changes, err = diff.ComputeGutterChangesContext(ctx, oldLines, linesCopy)
+			if err != nil {
+				return
+			}
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(&GitGutterResult{
 			Gen:     gen,
