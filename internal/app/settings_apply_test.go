@@ -18,10 +18,10 @@ func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
 	}
 
 	a.persistCommitHistoryHeight(12)
-	if got := a.Settings.Sidebar.CommitHistoryHeight; got != 12 {
+	if got := a.State.CommitHistoryHeight; got != 12 {
 		t.Fatalf("commitHistoryHeight = %d, want 12", got)
 	}
-	if got := config.LoadSettings().Sidebar.CommitHistoryHeight; got != 12 {
+	if got := config.LoadState().CommitHistoryHeight; got != 12 {
 		t.Fatalf("persisted commitHistoryHeight = %d, want 12", got)
 	}
 }
@@ -38,10 +38,10 @@ func TestSidebarWidthRestoresAndPersists(t *testing.T) {
 	}
 
 	a.persistSidebarWidth(18)
-	if got := a.Settings.Sidebar.Width; got != 18 {
+	if got := a.State.SidebarWidth; got != 18 {
 		t.Fatalf("sidebar width = %d, want 18", got)
 	}
-	if got := config.LoadSettings().Sidebar.Width; got != 18 {
+	if got := config.LoadState().SidebarWidth; got != 18 {
 		t.Fatalf("persisted sidebar width = %d, want 18", got)
 	}
 }

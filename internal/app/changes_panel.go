@@ -159,8 +159,8 @@ type prGroup struct {
 
 func (a *App) persistCommitHistoryHeight(height int) {
 	a.Changes.Split.BottomH = height
-	a.Settings.Sidebar.CommitHistoryHeight = height
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	a.State.CommitHistoryHeight = height
+	if err := config.SaveState(a.State); err != nil {
 		a.StatusError("Failed to save commit history height: " + err.Error())
 	}
 }

@@ -279,8 +279,12 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	changes := NewChangesPanel(ws.Paths()...)
 	changes.SetFileView(cfg.Settings.Git.FileView)
 	changes.SetIcons(cfg.Settings.Appearance.Icons)
-	if cfg.Settings.Sidebar.CommitHistoryHeight > 0 {
-		changes.Split.BottomH = cfg.Settings.Sidebar.CommitHistoryHeight
+	state := config.LoadState()
+	if h := state.CommitHistoryHeight; h > 0 {
+		changes.Split.BottomH = h
+		changes.Split.BottomRatio = 0
+	} else if h := cfg.Settings.Sidebar.CommitHistoryHeight; h > 0 {
+		changes.Split.BottomH = h
 		changes.Split.BottomRatio = 0
 	}
 	symbols := NewSymbolsPanel()
@@ -293,7 +297,11 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	sidebar.AddPanel("search", "Find", search)
 	sidebar.AddPanel("changes", "Changes", changes.Adapter)
 	sidebar.AddPanel("outline", "Outline", symbols.Adapter)
-	sidebar.SetPanelOrder(cfg.Settings.Sidebar.PanelOrder)
+	if len(state.SidebarPanelOrder) > 0 {
+		sidebar.SetPanelOrder(state.SidebarPanelOrder)
+	} else {
+		sidebar.SetPanelOrder(cfg.Settings.Sidebar.PanelOrder)
+	}
 	sidebar.Tabs.Config.Reorderable = true
 	hasFolders := len(ws.Paths()) > 0
 	sidebar.Visible = hasFolders
@@ -304,10 +312,16 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	splitPanel.Right = contentSplit
 	splitPanel.Borders = borders
 	splitPanel.DividerPos = ui.DefaultSidebarWidth
-	if cfg.Settings.Sidebar.Width > 0 {
+	if state.SidebarWidth > 0 {
+		splitPanel.DividerPos = state.SidebarWidth
+	} else if cfg.Settings.Sidebar.Width > 0 {
 		splitPanel.DividerPos = cfg.Settings.Sidebar.Width
 	}
-	if cfg.Settings.Panel.Position == "right" {
+	panelPos := state.PanelPosition
+	if panelPos == "" {
+		panelPos = cfg.Settings.Panel.Position
+	}
+	if panelPos == "right" {
 		contentSplit.Position = ui.SplitRight
 	}
 	splitPanel.ShowLeft = sidebar.Visible
@@ -343,6 +357,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		Status:              status,
 		Borders:             borders,
 		Settings:            &cfg.Settings,
+		State:               state,
 		Workspace:           ws,
 		Palette:             BuildTerminalPalettePtr(cfg.Theme, WithTransparentBackground(cfg.Settings.Editor.TransparentBackground)),
 		TerminalPanel:       terminalPanel,
