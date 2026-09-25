@@ -22,7 +22,7 @@ type pathDrag struct {
 	pressed bool
 	path    string
 	active  bool
-	x, y    int // pointer, for the label that follows it
+	x, y    int // pointer, to tell whether it is over the terminal
 }
 
 const pathDragSegment = "path-drag"
@@ -86,21 +86,25 @@ func (a *App) explorerPathAt(mx, my int) string {
 	return node.ID
 }
 
-// renderPathDrag draws the dragged entry's name next to the pointer, in the
-// accent color once it is over a place it can be dropped.
+// renderPathDrag marks the terminal as the drop target while a drag hovers
+// it. The mark stays put on the terminal's top row: anything ttt draws next
+// to the pointer can only move a whole cell at a time, so following the
+// pointer is left to the terminal's own mouse pointer (see pointerShapeAt).
 func (a *App) renderPathDrag(cells [][]term.Cell) {
 	d := a.pathDrag
 	if !d.active {
 		return
 	}
-	label, style := " ⇢ "+filepath.Base(d.path)+" ", term.StyleStatusBar
-	if a.terminalAt(d.x, d.y) != nil {
-		label, style = " ⇢ "+filepath.Base(d.path)+"  drop to insert ", term.StylePaletteSelected
+	tw := a.terminalAt(d.x, d.y)
+	if tw == nil {
+		return
 	}
-	w := textwidth.String(label)
-	x := max(min(d.x+2, a.Root.Width-w), 0)
+	r := tw.GetRect()
+	label := " ⇣ drop to insert " + filepath.Base(d.path) + " "
+	w := min(textwidth.String(label), r.W)
+	x := r.X + r.W - w
 	s := ui.NewRenderSurface(cells, ui.Rect{W: a.Root.Width, H: a.Root.Height})
-	s.DrawText(x, d.y, label, x+w, style)
+	s.DrawText(x, r.Y, label, x+w, term.StylePaletteSelected)
 }
 
 // terminalAt is the terminal shown under the pointer, if any.
@@ -121,6 +125,16 @@ func (a *App) terminalAt(mx, my int) *ui.TerminalWidget {
 
 // InsertExplorerPathInTerminal is the keyboard path to the same result: the
 // selected (or right-clicked) Explorer entry goes into the active terminal.
+func (a *App) pointerShapeAt(mx, my int) string {
+	switch {
+	case a.pathDrag.active && a.terminalAt(mx, my) != nil:
+		return "copy"
+	case a.pathDrag.active:
+		return term.PointerGrabbing
+	}
+	return a.Root.PointerShapeAt(mx, my)
+}
+
 func (a *App) InsertExplorerPathInTerminal() {
 	path := a.explorerNodePath()
 	a.ExplorerContextNode = nil
