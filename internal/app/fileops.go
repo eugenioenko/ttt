@@ -175,10 +175,6 @@ func (a *App) FileOpRemoveRoot(path string) {
 	if path == "" {
 		return
 	}
-	if len(a.Workspace.Paths()) <= 1 {
-		a.StatusWarn("Cannot remove the last folder")
-		return
-	}
 	a.Workspace.RemoveFolder(path)
 	a.refreshWorkspaceWidgets()
 }

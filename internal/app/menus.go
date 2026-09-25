@@ -23,6 +23,7 @@ var menuBarMenus = [][]ui.ContextMenuItem{
 		ui.MenuSep(),
 		{Label: "Open Folder", Command: "workspace.openFolder"},
 		{Label: "Add Folder", Command: "workspace.addFolder"},
+		{Label: "Close Workspace", Command: "workspace.close"},
 		ui.MenuSep(),
 		{Label: "Open Workspace", Command: "workspace.open"},
 		{Label: "Save Workspace", Command: "workspace.save"},

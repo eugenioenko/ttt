@@ -630,7 +630,7 @@ func TestPaletteHelpNoMatchesRendersGuidance(t *testing.T) {
 }
 
 func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
-	if got := truncatePaletteDetail("prefix界界", 4); got != "…界" {
+	if got := TruncateLeft("prefix界界", 4); got != "…界" {
 		t.Fatalf("expected width-safe tail, got %q", got)
 	}
 }

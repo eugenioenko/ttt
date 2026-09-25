@@ -14,6 +14,7 @@ ttt /path/to/dir                # opens that directory as the workspace
 ttt /path/to/file.go            # opens the file
 ttt dir1 dir2                   # opens multiple folders
 ttt --workspace project.ttt     # loads a saved workspace file
+ttt --welcome                   # starts on the welcome page, no folder open
 ttt https://github.com/owner/repo/pull/123  # review a PR
 ```
 

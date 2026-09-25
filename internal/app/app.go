@@ -111,7 +111,16 @@ type App struct {
 	pendingCurrentChangesOpen bool
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
-	appliedSettings    config.Settings
+	appliedSettings config.Settings
+	// welcomeIsEmptyState is set while the welcome page stands in for an
+	// empty editor, as opposed to being opened from Help.
+	welcomeIsEmptyState bool
+	// welcomeWhenEmpty is set once the session reaches the welcome page with no
+	// folder, and cleared when a folder opens: only then does closing every tab
+	// bring the page back. Loose files opened from the command line still end
+	// on an untitled tab.
+	welcomeWhenEmpty   bool
+	welcomeView        *welcomeView
 	eventLoopDoneOnce  sync.Once
 	eventLoopCloseOnce sync.Once
 	eventLoopDone      chan struct{}
@@ -390,8 +399,20 @@ func (a *App) CloseAllTerminals() {
 
 func (a *App) refreshWorkspaceWidgets() {
 	paths := a.Workspace.Paths()
+	wasEmpty := len(a.Explorer.Roots) == 0
 
 	a.Explorer.SetRoots(paths)
+	switch {
+	case len(paths) == 0 && (a.editorIsBlank() || a.welcomeIsEmptyState):
+		a.ShowEmptyState()
+	case len(paths) == 0:
+		// Files are still open: the welcome page waits for them to close.
+		a.welcomeWhenEmpty = true
+	case wasEmpty:
+		a.welcomeWhenEmpty = false
+		a.closeWelcome()
+		a.ShowSidebar()
+	}
 
 	a.Search.SetWorkDirs(paths)
 	if a.Repository != nil {

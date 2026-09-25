@@ -153,6 +153,9 @@ func settingsCategories() []settingsCategory {
 				SetInt: func(s *config.Settings, v int) { s.Autocomplete.Debounce = v }},
 		}},
 		{Title: "Advanced", Fields: []settingField{
+			{Label: "Welcome page in home folder", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Welcome.ShowOnHome },
+				SetBool: func(s *config.Settings, v bool) { s.Welcome.ShowOnHome = v }},
 			{Label: "Git: file view", Kind: settingEnum, Options: gitFileViewItems,
 				GetString: func(s *config.Settings) string { return s.Git.FileView },
 				SetString: func(s *config.Settings, v string) { s.Git.FileView = v }},

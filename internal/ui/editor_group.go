@@ -107,10 +107,16 @@ type EditorGroupWidget struct {
 	OnFileChange            func(path, lang, text string)
 	OnFileClose             func(path, lang string)
 	OnContentTabClose       func(id string)
-	OnError                 func(msg string)
-	OnNotify                func(msg string)
-	pendingNotify           []string
-	focused                 bool
+	// OnEmpty fires after the last tab closes and the untitled placeholder
+	// takes its place.
+	OnEmpty func()
+	// EmptyStateID names a content tab that stands in for the placeholder:
+	// like it, it has no close button while it is the only tab.
+	EmptyStateID  string
+	OnError       func(msg string)
+	OnNotify      func(msg string)
+	pendingNotify []string
+	focused       bool
 	// diagSources holds diagnostics keyed by source ("lsp", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
@@ -633,6 +639,24 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 	g.SwitchTab(len(g.tabs) - 1)
 }
 
+func (g *EditorGroupWidget) placeholderTab() editorTab {
+	return editorTab{
+		FilePath: "untitled",
+		Buf:      &buffer.Buffer{Lines: []string{""}},
+		Cur:      &cursor.Cursor{},
+		Vp:       &view.Viewport{},
+		Undo:     g.newUndoStack(),
+		Sel:      &selection.Selection{},
+		Virtual:  true,
+	}
+}
+
+func (g *EditorGroupWidget) notifyEmpty() {
+	if g.OnEmpty != nil {
+		g.OnEmpty()
+	}
+}
+
 func (g *EditorGroupWidget) ClosePluginTab(id string) {
 	for i, t := range g.tabs {
 		if t.FilePath == id {
@@ -641,21 +665,17 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 				g.pinnedCount--
 			}
 			g.tabs = append(g.tabs[:i], g.tabs[i+1:]...)
-			if len(g.tabs) == 0 {
-				g.tabs = []editorTab{{
-					FilePath: "untitled",
-					Buf:      &buffer.Buffer{Lines: []string{""}},
-					Cur:      &cursor.Cursor{},
-					Vp:       &view.Viewport{},
-					Undo:     g.newUndoStack(),
-					Sel:      &selection.Selection{},
-					Virtual:  true,
-				}}
+			emptied := len(g.tabs) == 0
+			if emptied {
+				g.tabs = []editorTab{g.placeholderTab()}
 				g.active = 0
 			} else if g.active >= len(g.tabs) {
 				g.active = len(g.tabs) - 1
 			}
 			g.syncTabs()
+			if emptied {
+				g.notifyEmpty()
+			}
 			return
 		}
 	}
@@ -933,21 +953,17 @@ func (g *EditorGroupWidget) CloseTab() {
 		g.pinnedCount--
 	}
 	g.tabs = append(g.tabs[:g.active], g.tabs[g.active+1:]...)
-	if len(g.tabs) == 0 {
-		g.tabs = []editorTab{{
-			FilePath: "untitled",
-			Buf:      &buffer.Buffer{Lines: []string{""}},
-			Cur:      &cursor.Cursor{},
-			Vp:       &view.Viewport{},
-			Undo:     g.newUndoStack(),
-			Sel:      &selection.Selection{},
-			Virtual:  true,
-		}}
+	emptied := len(g.tabs) == 0
+	if emptied {
+		g.tabs = []editorTab{g.placeholderTab()}
 		g.active = 0
 	} else if g.active >= len(g.tabs) {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	if emptied {
+		g.notifyEmpty()
+	}
 }
 
 func (g *EditorGroupWidget) CloseOtherTabs() {
@@ -1019,21 +1035,17 @@ func (g *EditorGroupWidget) CloseAllTabs() {
 		g.notifyContentTabClose(g.tabs[i])
 	}
 	kept := slices.Clone(g.tabs[:g.pinnedCount])
-	if len(kept) == 0 {
-		kept = []editorTab{{
-			FilePath: "untitled",
-			Buf:      &buffer.Buffer{Lines: []string{""}},
-			Cur:      &cursor.Cursor{},
-			Vp:       &view.Viewport{},
-			Undo:     g.newUndoStack(),
-			Sel:      &selection.Selection{},
-			Virtual:  true,
-		}}
+	emptied := len(kept) == 0
+	if emptied {
+		kept = []editorTab{g.placeholderTab()}
 		g.pinnedCount = 0
 	}
 	g.tabs = kept
 	g.active = 0
 	g.syncTabs()
+	if emptied {
+		g.notifyEmpty()
+	}
 }
 
 func (g *EditorGroupWidget) CloseAllSaved() {
@@ -1045,16 +1057,9 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 		}
 		g.notifyContentTabClose(g.tabs[i])
 	}
-	if len(kept) == 0 {
-		kept = []editorTab{{
-			FilePath: "untitled",
-			Buf:      &buffer.Buffer{Lines: []string{""}},
-			Cur:      &cursor.Cursor{},
-			Vp:       &view.Viewport{},
-			Undo:     g.newUndoStack(),
-			Sel:      &selection.Selection{},
-			Virtual:  true,
-		}}
+	emptied := len(kept) == 0
+	if emptied {
+		kept = []editorTab{g.placeholderTab()}
 		g.pinnedCount = 0
 	}
 	g.tabs = kept
@@ -1062,6 +1067,9 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	if emptied {
+		g.notifyEmpty()
+	}
 }
 
 func (g *EditorGroupWidget) HasDirtyTabs() bool {
@@ -2001,7 +2009,8 @@ func (g *EditorGroupWidget) syncTabs() {
 		}
 		isEmptyUntitledTab := ts.Virtual && ts.Buf != nil && !ts.Buf.Dirty &&
 			len(ts.Buf.Lines) <= 1 && (len(ts.Buf.Lines) == 0 || ts.Buf.Lines[0] == "")
-		closable := !(len(g.tabs) == 1 && isEmptyUntitledTab)
+		isEmptyState := g.EmptyStateID != "" && ts.FilePath == g.EmptyStateID
+		closable := !(len(g.tabs) == 1 && (isEmptyUntitledTab || isEmptyState))
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title

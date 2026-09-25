@@ -165,6 +165,8 @@ Options:
   --help, -h          Show this help message
   --version, -v       Show version
   --workspace <file>  Open a saved workspace (.ttt file)
+  --welcome           Start on the welcome page instead of opening the
+                      current directory (for desktop launchers)
   --config <file>     Use a custom config file
   --exec "commands"   Execute semicolon-separated commands after startup
                       (wait-for TEXT [timeout=MS] waits for visible text;
@@ -368,6 +370,9 @@ Docs: https://tttedit.dev
 	editor.Root.SetSize(w, h)
 
 	editor.PendingFileTargets = fileTargets
+	if len(editor.Workspace.Paths()) == 0 && len(fileTargets) == 0 && len(prURLs) == 0 {
+		editor.ShowEmptyState()
+	}
 
 	if flags.pluginFile != "" {
 		app.LoadPluginFromFile(editor, flags.pluginFile)

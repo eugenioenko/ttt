@@ -84,6 +84,13 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `panel.position` | string | `"bottom"` | Where the panel (terminal, diagnostics, output) is docked: `"bottom"` or `"right"`. **Dock Panel Right/Bottom** updates it automatically. |
 
+## Welcome
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `welcome.showOnHome` | bool | `false` | Start on the welcome page instead of opening `$HOME` when ttt runs there with no arguments, as desktop launchers do. `ttt --welcome` does the same from anywhere. Also in **Settings > Advanced**. |
+| `welcome.favorites` | string[] | `[]` | Folders listed on the welcome page, opened with one click. `~` is expanded; missing folders are skipped. **Add to Favorites** / **Remove from Favorites** in an Explorer root's right-click menu (or **Welcome: Add/Remove Folder to/from Favorites** in the palette) update it automatically. |
+
 ## Git
 
 | Key | Type | Default | Description |

@@ -47,16 +47,20 @@ func (a *App) OpenFolder() {
 			a.StatusError("Error: " + err.Error())
 			return
 		}
-		info, err := os.Stat(abs)
-		if err != nil || !info.IsDir() {
-			a.StatusError("Not a directory: " + abs)
-			return
-		}
-		a.Workspace.Folders = nil
-		a.Workspace.FilePath = ""
-		a.Workspace.AddFolder(abs)
-		a.refreshWorkspaceWidgets()
+		a.openFolderPath(abs)
 	})
+}
+
+func (a *App) openFolderPath(abs string) {
+	info, err := os.Stat(abs)
+	if err != nil || !info.IsDir() {
+		a.StatusError("Not a directory: " + abs)
+		return
+	}
+	a.Workspace.Folders = nil
+	a.Workspace.FilePath = ""
+	a.Workspace.AddFolder(abs)
+	a.refreshWorkspaceWidgets()
 }
 
 func (a *App) AddWorkspaceFolder() {
@@ -81,8 +85,8 @@ func (a *App) AddWorkspaceFolder() {
 
 func (a *App) RemoveWorkspaceFolder() {
 	paths := a.Workspace.Paths()
-	if len(paths) <= 1 {
-		a.StatusWarn("Cannot remove the last folder")
+	if len(paths) == 0 {
+		a.StatusWarn("No folder open")
 		return
 	}
 	items := make([]widgets.SelectItem, len(paths))
@@ -93,6 +97,15 @@ func (a *App) RemoveWorkspaceFolder() {
 		a.Workspace.RemoveFolder(path)
 		a.refreshWorkspaceWidgets()
 	}, nil)
+}
+
+func (a *App) CloseWorkspace() {
+	if len(a.Workspace.Paths()) == 0 {
+		return
+	}
+	a.Workspace.Folders = nil
+	a.Workspace.FilePath = ""
+	a.refreshWorkspaceWidgets()
 }
 
 func (a *App) OpenWorkspace() {
@@ -389,6 +402,30 @@ func registerWorkspaceCommands(app *App) {
 		ID: "workspace.removeFolder", Title: "Remove Folder",
 		Keywords: []string{"file", "directory", "project"},
 		Handler:  app.RemoveWorkspaceFolder,
+	})
+
+	reg.Register(command.Command{
+		ID: "workspace.close", Title: "Close Workspace",
+		Keywords: []string{"workspace", "folder", "close", "project"},
+		Handler:  app.CloseWorkspace,
+	})
+
+	reg.Register(command.Command{
+		ID: "welcome.addFavorite", Title: "Welcome: Add Folder to Favorites",
+		Keywords: []string{"welcome", "favorite", "bookmark", "folder", "project"},
+		Handler:  app.AddFavorite,
+	})
+
+	reg.Register(command.Command{
+		ID: "welcome.removeFavorite", Title: "Welcome: Remove Folder from Favorites",
+		Keywords: []string{"welcome", "favorite", "bookmark", "folder", "project"},
+		Handler:  app.RemoveFavorite,
+	})
+
+	reg.Register(command.Command{
+		ID: "help.welcome", Title: "Help: Welcome",
+		Keywords: []string{"welcome", "start", "getting started", "home"},
+		Handler:  app.ShowWelcome,
 	})
 
 	reg.Register(command.Command{

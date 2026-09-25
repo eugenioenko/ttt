@@ -276,12 +276,13 @@ func (p *SelectDialogWidget) renderItemRow(surface Surface, y, contentRight int,
 	if availW <= 0 {
 		return
 	}
-	detail = truncatePaletteDetail(detail, availW)
+	detail = TruncateLeft(detail, availW)
 	detailX := contentRight - 1 - textwidth.String(detail)
 	surface.DrawText(detailX, y, detail, contentRight-1, detailStyle)
 }
 
-func truncatePaletteDetail(detail string, availW int) string {
+// TruncateLeft keeps the end of s within availW columns, marking the cut with "…".
+func TruncateLeft(detail string, availW int) string {
 	if textwidth.String(detail) <= availW {
 		return detail
 	}

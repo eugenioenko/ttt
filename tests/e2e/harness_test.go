@@ -101,6 +101,7 @@ func newTestHarness(t *testing.T, w, h int) *testHarness {
 
 func (h *testHarness) redraw() {
 	h.t.Helper()
+	h.app.SyncEmptyState()
 	cells := h.renderer.NextFrame(h.app.Root.Width, h.app.Root.Height)
 	h.app.Root.Render(cells)
 	h.renderer.Render(h.app.Screen)

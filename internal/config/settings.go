@@ -277,6 +277,14 @@ func DefaultImageSettings() ImageSettings {
 	}
 }
 
+type WelcomeSettings struct {
+	// ShowOnHome shows the welcome page instead of opening $HOME when ttt
+	// starts there with no arguments, as desktop launchers do.
+	ShowOnHome bool `json:"showOnHome,omitempty"`
+	// Favorites are folders listed on the welcome page to open in one step.
+	Favorites []string `json:"favorites,omitempty"`
+}
+
 type Settings struct {
 	Version   int    `json:"version"`
 	Theme     string `json:"theme,omitempty"`
@@ -299,6 +307,7 @@ type Settings struct {
 	// Plugins is safe: its only field is a tri-state *bool where nil means the
 	// default, so the zero value and "unset" mean the same thing.
 	Plugins    PluginSettings    `json:"plugins,omitzero"`
+	Welcome    WelcomeSettings   `json:"welcome,omitzero"`
 	Formatters map[string]string `json:"formatters,omitempty"`
 	// Extra holds top-level keys that are not part of the core schema — chiefly
 	// plugin-namespaced settings (e.g. "vim"). Without this, json.Unmarshal into
@@ -312,7 +321,7 @@ type Settings struct {
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "appearance": true, "editor": true,
 	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {

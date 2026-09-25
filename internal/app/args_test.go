@@ -83,7 +83,7 @@ func TestResolveArgsFileLineCol(t *testing.T) {
 	defer func() { os.Args = saved }()
 	os.Args = []string{"ttt", file + ":42:8", colonName, filepath.Join(dir, "new.go:9")}
 
-	_, openFiles, _, _ := resolveArgs()
+	_, openFiles, _, _ := resolveArgs(false)
 	if len(openFiles) != 3 {
 		t.Fatalf("got %d targets, want 3: %+v", len(openFiles), openFiles)
 	}
@@ -103,8 +103,36 @@ func TestResolveArgsIgnoresListenFlag(t *testing.T) {
 	defer func() { os.Args = saved }()
 	os.Args = []string{"ttt", "--listen"}
 
-	_, openFiles, _, _ := resolveArgs()
+	_, openFiles, _, _ := resolveArgs(false)
 	if len(openFiles) != 0 {
 		t.Errorf("--listen was treated as a file to open: %+v", openFiles)
+	}
+}
+
+func TestResolveArgsSkipsHomeAsWorkspace(t *testing.T) {
+	saved := os.Args
+	defer func() { os.Args = saved }()
+	os.Args = []string{"ttt"}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Chdir(home)
+	if ws, _, _, _ := resolveArgs(false); len(ws.Paths()) != 1 {
+		t.Fatalf("cwd == $HOME without welcome.showOnHome opened %v, want $HOME", ws.Paths())
+	}
+	if ws, _, _, _ := resolveArgs(true); len(ws.Paths()) != 0 {
+		t.Fatalf("cwd == $HOME with welcome.showOnHome opened %v, want no workspace", ws.Paths())
+	}
+
+	project := t.TempDir()
+	t.Chdir(project)
+	if ws, _, _, _ := resolveArgs(true); len(ws.Paths()) != 1 {
+		t.Fatalf("cwd elsewhere opened %v, want the cwd", ws.Paths())
+	}
+
+	os.Args = []string{"ttt", "--welcome"}
+	if ws, _, _, _ := resolveArgs(false); len(ws.Paths()) != 0 {
+		t.Fatalf("--welcome opened %v, want no workspace", ws.Paths())
 	}
 }

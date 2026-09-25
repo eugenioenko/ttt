@@ -24,6 +24,7 @@ type NavigationPanel struct {
 	gitStyles map[string]term.Style
 
 	OnOpenFile   func(path string)
+	OnAction     func(commandID string)
 	OnRightClick func(node *widgets.TreeNode, sx, sy int)
 	OnRootMenu   func(node *widgets.TreeNode, sx, sy int)
 }
@@ -53,7 +54,16 @@ func NewNavigationPanel(settings config.ExplorerSettings, icons string, paths ..
 			n.loadChildren(node)
 		},
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
-			if cmd == "activate" && n.OnOpenFile != nil {
+			if cmd != "activate" {
+				return
+			}
+			if id, ok := strings.CutPrefix(node.ID, explorerActionPrefix); ok {
+				if n.OnAction != nil {
+					n.OnAction(id)
+				}
+				return
+			}
+			if n.OnOpenFile != nil && node.ID != "" {
 				n.OnOpenFile(node.ID)
 			}
 		},
@@ -66,6 +76,9 @@ func NewNavigationPanel(settings config.ExplorerSettings, icons string, paths ..
 			return false
 		},
 		OnMenu: func(_ []widgets.MenuEntry, node *widgets.TreeNode, sx, sy int) {
+			if len(n.Roots) == 0 {
+				return
+			}
 			if n.isRoot(node) {
 				if n.OnRootMenu != nil {
 					n.OnRootMenu(node, sx, sy)
@@ -81,6 +94,9 @@ func NewNavigationPanel(settings config.ExplorerSettings, icons string, paths ..
 		if root.Expanded {
 			n.loadChildren(root)
 		}
+	}
+	if len(paths) == 0 {
+		items = emptyExplorerNodes()
 	}
 	tree.SetItems(items)
 
@@ -164,8 +180,20 @@ func (n *NavigationPanel) SetRoots(paths []string) {
 		}
 		items[i] = root
 	}
+	if len(paths) == 0 {
+		items = emptyExplorerNodes()
+	}
 	n.Tree.SetItems(items)
 	n.Tree.RestoreExpanded(expanded)
+}
+
+const explorerActionPrefix = "command:"
+
+func emptyExplorerNodes() []*widgets.TreeNode {
+	return []*widgets.TreeNode{
+		{Label: "No folder open", Muted: true},
+		{ID: explorerActionPrefix + "workspace.openFolder", Label: "Open Folder…"},
+	}
 }
 
 // WatchedDirs returns every root plus every expanded folder: the directories

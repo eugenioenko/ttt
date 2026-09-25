@@ -83,9 +83,10 @@ func resolveLineColArg(arg string) (FileTarget, bool) {
 	return FileTarget{Path: abs, Line: line, Col: col}, true
 }
 
-func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
+func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
 	var folders []string
 	var wsFile string
+	welcome := false
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
@@ -119,6 +120,10 @@ func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile 
 			continue
 		}
 		if args[i] == "--listen" {
+			continue
+		}
+		if args[i] == "--welcome" {
+			welcome = true
 			continue
 		}
 		if isPRURL(args[i]) {
@@ -165,16 +170,20 @@ func resolveArgs() (ws *workspace.Workspace, openFiles []FileTarget, configFile 
 	}
 
 	// Opening only files intentionally creates no workspace — a folder must be passed explicitly.
-	if len(folders) == 0 && len(prURLs) == 0 && len(openFiles) == 0 {
+	// --welcome, or starting in $HOME with welcome.showOnHome, opens no folder
+	// so the welcome page shows instead.
+	if len(folders) == 0 && len(prURLs) == 0 && len(openFiles) == 0 && !welcome {
 		cwd, _ := os.Getwd()
-		folders = append(folders, cwd)
+		if home, err := os.UserHomeDir(); !welcomeOnHome || err != nil || filepath.Clean(cwd) != filepath.Clean(home) {
+			folders = append(folders, cwd)
+		}
 	}
 	ws = workspace.New(folders)
 	return
 }
 
 func BuildApp(cfg *config.AppConfig, borders *term.BorderSet) (*App, []string, []FileTarget) {
-	ws, openFiles, _, prURLs := resolveArgs()
+	ws, openFiles, _, prURLs := resolveArgs(cfg.Settings.Welcome.ShowOnHome)
 	return BuildAppFromConfig(cfg, borders, ws, openFiles), prURLs, openFiles
 }
 
