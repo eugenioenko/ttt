@@ -103,14 +103,11 @@ func (a *App) terminalAt(mx, my int) *ui.TerminalWidget {
 }
 
 // The closed hand stays for the whole drag, drop target included: "copy" looks
-// like the plain arrow in most cursor themes. An open hand on the pressed row
-// says it can be dragged before it moves.
+// like the plain arrow in most cursor themes. A plain click leaves the pointer
+// to the widget under it; the hand only shows once the press moves.
 func (a *App) pointerShapeAt(mx, my int) string {
-	switch {
-	case a.pathDrag.active:
+	if a.pathDrag.active {
 		return term.PointerGrabbing
-	case a.pathDrag.pressed && a.pathDrag.path != "":
-		return "grab"
 	}
 	return a.Root.PointerShapeAt(mx, my)
 }

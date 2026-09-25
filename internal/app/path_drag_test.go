@@ -82,8 +82,9 @@ func TestPathDragFeedback(t *testing.T) {
 	overEditor := [2]int{overTerm[0], 5}
 
 	mouse(5, rowY, tcell.Button1)
-	if got := a.pointerShapeAt(5, rowY); got != "grab" {
-		t.Errorf("pointer on the pressed row = %q, want grab", got)
+	// A press alone is a click: the pointer must not flicker.
+	if got := a.pointerShapeAt(5, rowY); got == "grabbing" {
+		t.Errorf("pointer on the pressed row = %q before any motion", got)
 	}
 	// Moving within the Explorer already starts the drag.
 	if !mouse(5, rowY+1, tcell.Button1) {
