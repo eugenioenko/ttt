@@ -57,7 +57,10 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 
 	go func() {
 		defer cancel()
-		headContent, gitErr := git.ShowFile(repoDir, relPath, "HEAD")
+		headContent, gitErr := git.ShowFileContext(ctx, repoDir, relPath, "HEAD")
+		if ctx.Err() != nil {
+			return
+		}
 		var changes []diff.LineChangeKind
 		if gitErr != nil {
 			// File is not tracked by git (new file) — mark all lines as added

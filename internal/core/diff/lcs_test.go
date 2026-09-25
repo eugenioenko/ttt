@@ -127,6 +127,31 @@ func TestComputeLCSContextCancelsDuringSearch(t *testing.T) {
 	}
 }
 
+func TestComputeLCSContextCancelsWithoutAnyDifference(t *testing.T) {
+	lines := make([]string, 4096)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("row %d", i)
+	}
+	interned := 2 * len(lines) / cancellationCheckInterval
+	tests := []struct {
+		name     string
+		a, b     []string
+		cancelAt int
+	}{
+		// Only interning runs when one side is empty: cancel on its first check.
+		{"one side empty", lines, nil, 2},
+		// Identical inputs are consumed by the common-prefix scan: cancel on the
+		// first check after interning both sides.
+		{"identical", lines, lines, 1 + interned + 1},
+	}
+	for _, tt := range tests {
+		ctx := &cancelAfterChecksContext{Context: context.Background(), cancelAt: tt.cancelAt}
+		if _, err := computeLCSContext(ctx, tt.a, tt.b); !errors.Is(err, context.Canceled) {
+			t.Errorf("%s: cancellation error = %v", tt.name, err)
+		}
+	}
+}
+
 func TestComputeGutterChangesContextReturnsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

@@ -16,10 +16,14 @@ func computeLCSContext(ctx context.Context, a, b []string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	s := &lcsSolver{ctx: ctx}
 	ids := make(map[string]int, len(a))
-	intern := func(lines []string) []int {
+	intern := func(lines []string) ([]int, error) {
 		out := make([]int, len(lines))
 		for i, l := range lines {
+			if err := s.checkCanceled(); err != nil {
+				return nil, err
+			}
 			id, ok := ids[l]
 			if !ok {
 				id = len(ids)
@@ -27,9 +31,15 @@ func computeLCSContext(ctx context.Context, a, b []string) ([]string, error) {
 			}
 			out[i] = id
 		}
-		return out
+		return out, nil
 	}
-	s := &lcsSolver{ctx: ctx, a: intern(a), b: intern(b)}
+	var err error
+	if s.a, err = intern(a); err != nil {
+		return nil, err
+	}
+	if s.b, err = intern(b); err != nil {
+		return nil, err
+	}
 	if err := s.solve(0, len(a), 0, len(b)); err != nil {
 		return nil, err
 	}
@@ -57,12 +67,18 @@ func (s *lcsSolver) checkCanceled() error {
 
 func (s *lcsSolver) solve(a0, a1, b0, b1 int) error {
 	for a0 < a1 && b0 < b1 && s.a[a0] == s.b[b0] {
+		if err := s.checkCanceled(); err != nil {
+			return err
+		}
 		s.matched = append(s.matched, a0)
 		a0++
 		b0++
 	}
 	suffix := 0
 	for a0 < a1-suffix && b0 < b1-suffix && s.a[a1-suffix-1] == s.b[b1-suffix-1] {
+		if err := s.checkCanceled(); err != nil {
+			return err
+		}
 		suffix++
 	}
 	a1 -= suffix
