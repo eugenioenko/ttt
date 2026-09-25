@@ -8,8 +8,8 @@ import (
 )
 
 func (a *App) persistSidebarPanelOrder(ids []string) {
-	a.Settings.Sidebar.PanelOrder = slices.Clone(ids)
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	a.State.SidebarPanelOrder = slices.Clone(ids)
+	if err := config.SaveState(a.State); err != nil {
 		a.StatusError("Failed to save sidebar order: " + err.Error())
 	}
 }

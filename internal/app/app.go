@@ -56,6 +56,7 @@ type App struct {
 	imageCellW             int
 	imageCellH             int
 	Settings               *config.Settings
+	State                  config.State
 	Workspace              *workspace.Workspace
 	Palette                *ui.TerminalColorPalette
 	TerminalPanel          *ui.TerminalPanelWidget
@@ -217,8 +218,8 @@ func (a *App) SetSidebarWidth(w int) {
 
 func (a *App) persistSidebarWidth(w int) {
 	a.SetSidebarWidth(w)
-	a.Settings.Sidebar.Width = a.SplitPanel.DividerPos
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	a.State.SidebarWidth = a.SplitPanel.DividerPos
+	if err := config.SaveState(a.State); err != nil {
 		a.StatusError("Failed to save sidebar width: " + err.Error())
 	}
 }
@@ -235,8 +236,8 @@ func (a *App) SetPanelPosition(pos ui.SplitPosition) {
 	if pos == ui.SplitRight {
 		name = "right"
 	}
-	a.Settings.Panel.Position = name
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	a.State.PanelPosition = name
+	if err := config.SaveState(a.State); err != nil {
 		a.StatusError("Failed to save panel position: " + err.Error())
 	}
 }

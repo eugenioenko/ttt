@@ -31,7 +31,7 @@ describe("sidebar tab order", () => {
     expect(beforeHeader.indexOf("Changes")).toBeGreaterThan(beforeHeader.indexOf("Explore"));
     expect(afterHeader.indexOf("Changes")).toBeLessThan(afterHeader.indexOf("Explore"));
 
-    const saved = JSON.parse(readFileSync(join(configDir, "settings.json"), "utf8"));
-    expect(saved.sidebar.panelOrder.slice(0, 2)).toEqual(["changes", "explorer"]);
+    const saved = JSON.parse(readFileSync(join(configDir, "state.json"), "utf8"));
+    expect(saved.sidebarPanelOrder.slice(0, 2)).toEqual(["changes", "explorer"]);
   });
 });

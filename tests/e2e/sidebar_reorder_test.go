@@ -40,7 +40,7 @@ func TestSidebarHeaderDragReordersAndPersists(t *testing.T) {
 	if h.app.Sidebar.ActivePanel != "changes" {
 		t.Fatalf("active panel = %q, want changes", h.app.Sidebar.ActivePanel)
 	}
-	if got := config.LoadSettings().Sidebar.PanelOrder; !slices.Equal(got, want) {
+	if got := config.LoadState().SidebarPanelOrder; !slices.Equal(got, want) {
 		t.Fatalf("saved panel order = %v, want %v", got, want)
 	}
 
