@@ -473,6 +473,14 @@ TTT is better because of the people who took the time to try it, report bugs, re
 - [@tenox7](https://github.com/tenox7) — the **Outline** sidebar panel (LSP document symbols with a built-in Go/Markdown fallback) and **markdown syntax highlighting**.
 - [@pirate-boop](https://github.com/pirate-boop) — **NixOS support** end to end: the initial `flake.nix` and ongoing `vendorHash` upkeep.
 - [@arimxyer](https://github.com/arimxyer) — re-envisioned and re-designed the **diff & code review experience** (commit history detail, live current changes, unified presentation controls, hierarchical file trees), plus tab drag reordering, orientation help, checked plugin menu entries, deterministic exec automation, and CLI open-at-line support.
+- [@SimonOcampo1](https://github.com/SimonOcampo1) — the **welcome page**, the **folder picker**, the **right-docked panel**, LSP file URI fixes, and a run of integrated terminal fixes.
+- [@bet4it](https://github.com/bet4it) — migrated the **integrated terminal to xterm-go**, plus terminal copy/paste and device-attribute fixes.
+- [@sjdonado](https://github.com/sjdonado) — **inline image rendering** via the Kitty graphics protocol.
+- [@RonanCodes](https://github.com/RonanCodes) — **Nerd Font file icons** in the Explorer and Changes panel.
+- [@risixdzn](https://github.com/risixdzn) — **git status colors** in the Explorer.
+- [@austinm911](https://github.com/austinm911) — **multi-line string highlighting** across lines.
+- [@DBinK](https://github.com/DBinK) — the **VSCode Dark+ theme**.
+- [@vikas-0](https://github.com/vikas-0) — whitespace handling in **Quick Open**.
 
 **Packaging**
 
@@ -484,6 +492,10 @@ TTT is better because of the people who took the time to try it, report bugs, re
 - [@egorse](https://github.com/egorse): the search-panel focus fix.
 - [@pirate-boop](https://github.com/pirate-boop): the Cyrillic cursor-offset fix and a number of UX/packaging ideas.
 - [@forthrin](https://github.com/forthrin): great insight into emacs, keyboards and keyboard shortcuts :) 
+- [@lozzo](https://github.com/lozzo): the fullwidth CJK rendering report, tested through to the fix.
+- [@vikas-0](https://github.com/vikas-0): the Quick Open behavior report.
+- [@JohnWJ-co](https://github.com/JohnWJ-co) and [@hassanabdulqayyum](https://github.com/hassanabdulqayyum): the Herdr plugin crash reports.
+- [@SimonOcampo1](https://github.com/SimonOcampo1): the welcome page proposal and terminal drag-and-drop idea.
 
 Want to help? Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR.
 
