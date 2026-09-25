@@ -33,8 +33,8 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
-// While a path is dragged the pointer says so, and the terminal is marked as
-// the drop target only while the drag hovers it.
+// While a path is dragged the pointer stays a closed hand until release, and
+// the status bar says what letting go will do.
 func TestPathDragFeedback(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), nil, 0o644); err != nil {
@@ -55,7 +55,6 @@ func TestPathDragFeedback(t *testing.T) {
 			cells[y] = make([]term.Cell, 100)
 		}
 		a.Root.Render(cells)
-		a.renderPathDrag(cells)
 		var b strings.Builder
 		for _, row := range cells {
 			for _, c := range row {
@@ -89,22 +88,22 @@ func TestPathDragFeedback(t *testing.T) {
 	if got := a.pointerShapeAt(overEditor[0], overEditor[1]); got != "grabbing" {
 		t.Errorf("pointer over the editor = %q, want grabbing", got)
 	}
-	if strings.Contains(frame(), "drop to insert") {
-		t.Error("drop mark shown away from the terminal")
+	if !strings.Contains(frame(), "Dragging notes.txt") {
+		t.Errorf("status bar does not show the drag:\n%s", frame())
 	}
 
 	mouse(overTerm[0], overTerm[1], tcell.Button1)
-	if got := a.pointerShapeAt(overTerm[0], overTerm[1]); got != "copy" {
-		t.Errorf("pointer over the terminal = %q, want copy", got)
+	if got := a.pointerShapeAt(overTerm[0], overTerm[1]); got != "grabbing" {
+		t.Errorf("pointer over the terminal = %q, want grabbing", got)
 	}
-	if !strings.Contains(frame(), "drop to insert notes.txt") {
-		t.Errorf("terminal not marked as the drop target:\n%s", frame())
+	if !strings.Contains(frame(), "Release to insert notes.txt") {
+		t.Errorf("status bar does not say the drop target:\n%s", frame())
 	}
 
 	if !mouse(overTerm[0], overTerm[1], tcell.ButtonNone) {
 		t.Fatal("the release that ends a drag must be consumed")
 	}
-	if a.pointerShapeAt(overTerm[0], overTerm[1]) == "copy" || strings.Contains(frame(), "drop to insert") {
+	if a.pointerShapeAt(overTerm[0], overTerm[1]) == "grabbing" || strings.Contains(frame(), "notes.txt ·") || strings.Contains(frame(), "Release to insert") {
 		t.Error("drag feedback left behind after the drop")
 	}
 }

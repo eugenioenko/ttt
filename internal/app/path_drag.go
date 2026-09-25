@@ -9,7 +9,6 @@ import (
 	"github.com/gdamore/tcell/v3"
 
 	"github.com/eugenioenko/ttt/internal/term"
-	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 )
@@ -22,7 +21,6 @@ type pathDrag struct {
 	pressed bool
 	path    string
 	active  bool
-	x, y    int // pointer, to tell whether it is over the terminal
 }
 
 const pathDragSegment = "path-drag"
@@ -31,7 +29,6 @@ const pathDragSegment = "path-drag"
 func (a *App) handlePathDrag(ev *tcell.EventMouse) bool {
 	mx, my := ev.Position()
 	d := &a.pathDrag
-	d.x, d.y = mx, my
 	if ev.Buttons()&tcell.Button1 == 0 {
 		wasActive := d.active
 		if wasActive {
@@ -48,15 +45,24 @@ func (a *App) handlePathDrag(ev *tcell.EventMouse) bool {
 	case !d.pressed:
 		d.pressed = true
 		d.path = a.explorerPathAt(mx, my)
-	case d.active:
-		return true
-	case d.path != "" && !a.overExplorer(mx, my):
+	case d.active || d.path != "" && !a.overExplorer(mx, my):
 		d.active = true
-		a.Status.SetSegment(view.StatusSegment{ID: pathDragSegment, Side: "left", Priority: 300,
-			Text: "Drop " + filepath.Base(d.path) + " on the terminal to insert its path"})
+		a.showPathDragStatus(a.terminalAt(mx, my) != nil)
 		return true
 	}
 	return false
+}
+
+// showPathDragStatus keeps the drag in the status bar, in the accent color,
+// saying what letting go will do.
+func (a *App) showPathDragStatus(overTerminal bool) {
+	name := filepath.Base(a.pathDrag.path)
+	text := " ⇢ Dragging " + name + " · drop it on the terminal "
+	if overTerminal {
+		text = " ⇣ Release to insert " + name + " "
+	}
+	a.Status.SetSegment(view.StatusSegment{ID: pathDragSegment, Side: "left", Priority: 300,
+		Text: text, Style: term.StylePaletteSelected})
 }
 
 func (a *App) explorerVisible() bool {
@@ -86,27 +92,6 @@ func (a *App) explorerPathAt(mx, my int) string {
 	return node.ID
 }
 
-// renderPathDrag marks the terminal as the drop target while a drag hovers
-// it. The mark stays put on the terminal's top row: anything ttt draws next
-// to the pointer can only move a whole cell at a time, so following the
-// pointer is left to the terminal's own mouse pointer (see pointerShapeAt).
-func (a *App) renderPathDrag(cells [][]term.Cell) {
-	d := a.pathDrag
-	if !d.active {
-		return
-	}
-	tw := a.terminalAt(d.x, d.y)
-	if tw == nil {
-		return
-	}
-	r := tw.GetRect()
-	label := " ⇣ drop to insert " + filepath.Base(d.path) + " "
-	w := min(textwidth.String(label), r.W)
-	x := r.X + r.W - w
-	s := ui.NewRenderSurface(cells, ui.Rect{W: a.Root.Width, H: a.Root.Height})
-	s.DrawText(x, r.Y, label, x+w, term.StylePaletteSelected)
-}
-
 // terminalAt is the terminal shown under the pointer, if any.
 func (a *App) terminalAt(mx, my int) *ui.TerminalWidget {
 	if !a.ContentSplit.ShowBottom || a.BottomPanel.ActivePanel != "terminal" {
@@ -123,13 +108,10 @@ func (a *App) terminalAt(mx, my int) *ui.TerminalWidget {
 	return tw
 }
 
-// InsertExplorerPathInTerminal is the keyboard path to the same result: the
-// selected (or right-clicked) Explorer entry goes into the active terminal.
+// The closed hand stays for the whole drag, drop target included: "copy" looks
+// like the plain arrow in most cursor themes.
 func (a *App) pointerShapeAt(mx, my int) string {
-	switch {
-	case a.pathDrag.active && a.terminalAt(mx, my) != nil:
-		return "copy"
-	case a.pathDrag.active:
+	if a.pathDrag.active {
 		return term.PointerGrabbing
 	}
 	return a.Root.PointerShapeAt(mx, my)
