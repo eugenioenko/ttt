@@ -242,6 +242,12 @@ func registerExplorerCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "explorer.insertPathInTerminal", Title: i18n.Text("command.explorerInsertPathInTerminal"),
+		Keywords: []string{"explorer", "file", "path", "terminal", "insert", "paste", "drag", "drop"},
+		Handler:  app.InsertExplorerPathInTerminal,
+	})
+
+	reg.Register(command.Command{
 		ID: "explorer.removeRoot", Title: i18n.Text("command.explorerRemoveFolderFromWorkspace"),
 		Keywords: []string{"explorer", "workspace", "folder", "remove"},
 		Handler:  app.ExplorerRemoveRoot,

@@ -205,6 +205,10 @@ func RunEventLoop(
 	}
 
 	handleMouse := func(tev *tcell.EventMouse) {
+		if app.handlePathDrag(tev) {
+			syncStatus()
+			return
+		}
 		mx, my := tev.Position()
 		mouseX, mouseY = mx, my
 		btn := tev.Buttons()
