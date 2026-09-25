@@ -82,9 +82,17 @@ func TestPathDragFeedback(t *testing.T) {
 	overEditor := [2]int{overTerm[0], 5}
 
 	mouse(5, rowY, tcell.Button1)
-	if !mouse(overEditor[0], overEditor[1], tcell.Button1) {
-		t.Fatal("leaving the Explorer with the button held did not start the drag")
+	if got := a.pointerShapeAt(5, rowY); got != "grab" {
+		t.Errorf("pointer on the pressed row = %q, want grab", got)
 	}
+	// Moving within the Explorer already starts the drag.
+	if !mouse(5, rowY+1, tcell.Button1) {
+		t.Fatal("moving off the pressed row did not start the drag")
+	}
+	if got := a.pointerShapeAt(5, rowY+1); got != "grabbing" {
+		t.Errorf("pointer while dragging in the Explorer = %q, want grabbing", got)
+	}
+	mouse(overEditor[0], overEditor[1], tcell.Button1)
 	if got := a.pointerShapeAt(overEditor[0], overEditor[1]); got != "grabbing" {
 		t.Errorf("pointer over the editor = %q, want grabbing", got)
 	}
