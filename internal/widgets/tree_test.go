@@ -1662,3 +1662,40 @@ func TestTreeRenderCustomChevrons(t *testing.T) {
 		t.Errorf("unset chevron = %c, want the default", got)
 	}
 }
+
+// Holding the button on a row must activate it once, not on every report the
+// terminal sends while the button stays down and the pointer drifts: in the
+// Explorer that toggled a held folder over and over.
+func TestTreeHeldPressActivatesOnce(t *testing.T) {
+	activations := 0
+	tree := NewTreeWidget(TreeConfig{
+		ActivateExpandable: true,
+		OnCommand: func(cmd string, _ *TreeNode) {
+			if cmd == "activate" {
+				activations++
+			}
+		},
+	})
+	tree.SetItems([]*TreeNode{{ID: "dir", Label: "dir", Children: []*TreeNode{{ID: "dir/a", Label: "a"}}}})
+	renderWidget(tree, 0, 0, 20, 5)
+	y := tree.contentY
+
+	press := func(x int, btn tcell.ButtonMask) {
+		tree.HandleEvent(tcell.NewEventMouse(x, y, btn, tcell.ModNone))
+	}
+	press(4, tcell.Button1)
+	for x := 5; x < 10; x++ {
+		press(x, tcell.Button1)
+	}
+	if activations != 1 {
+		t.Fatalf("held press activated %d times, want 1", activations)
+	}
+
+	// A report without the button (the release, or the pointer coming back)
+	// arms the next press.
+	press(9, tcell.ButtonNone)
+	press(9, tcell.Button1)
+	if activations != 2 {
+		t.Fatalf("a new press after the release gave %d activations, want 2", activations)
+	}
+}

@@ -74,6 +74,9 @@ type TreeWidget struct {
 
 	selected  int
 	scrollTop int
+	leftHeld  bool // the left button was down on the last mouse report
+	pressX    int  // where that press started
+	pressY    int
 	lastSel   int
 	focused   bool
 
@@ -603,6 +606,14 @@ func (t *TreeWidget) notifyPointerCaptureInvalidated(invalidated bool) {
 func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	btn := ev.Buttons()
 	mx, my := ev.Position()
+	// Terminals keep reporting a held button as the pointer moves. Those
+	// reports come from a new position; acting on them toggled a held folder
+	// over and over and opened every row the pointer crossed.
+	moved := t.leftHeld && (mx != t.pressX || my != t.pressY)
+	t.leftHeld = btn&tcell.Button1 != 0
+	if t.leftHeld && !moved {
+		t.pressX, t.pressY = mx, my
+	}
 	r := t.rect
 	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
 		return EventIgnored
@@ -641,6 +652,9 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	}
 
 	if btn&tcell.Button1 != 0 {
+		if moved {
+			return EventConsumed
+		}
 		node := t.flatList[idx]
 		t.selected = idx
 
