@@ -244,6 +244,35 @@ Below is a complete theme file showing every configurable section. Ordinary colo
 }
 ```
 
+### Syntax styles
+
+The `syntax` section has twelve base styles: `comment`, `string`, `keyword`, `number`, `operator`, `function`, `type`, `builtin`, `variable`, `punctuation`, `tag`, and `attribute`.
+
+Highlighting comes from VS Code's TextMate grammars, which distinguish more than that. The finer styles below are optional: a style the theme leaves out uses the style in the last column, so a theme only sets the ones it wants to distinguish. A style the theme does set is used exactly as written.
+
+| Key | Colors | When unset |
+|-----|--------|------------|
+| `regexp` | Regular expression literals | `string` |
+| `heading` | Markdown headings | `keyword`, bold |
+| `bold` | Bold markup | default text, bold |
+| `italic` | Italic markup | default text, italic |
+| `quote` | Block quotes | `comment` |
+| `inserted` | Inserted lines in diffs | `diff.added` |
+| `deleted` | Deleted lines in diffs | `diff.deleted` |
+| `invalid` | Invalid or illegal code, as marked by the grammar | `danger` |
+| `control` | Control-flow keywords: `if`, `for`, `return` | `keyword` |
+| `storage` | Declaration keywords and modifiers: `const`, `class`, `public` | `keyword` |
+| `constant` | Language constants: `true`, `null` | `keyword` |
+| `escape` | Escape sequences in strings: `\n`, `\t` | `string` |
+| `parameter` | Function parameters | `variable` |
+| `property` | Object properties | `variable` |
+| `self` | `this`, `self` | `keyword` |
+| `namespace` | Namespaces and modules | `type` |
+| `decorator` | Decorators and annotations | `function` |
+| `link` | Links in markup | `string` |
+| `code` | Inline code in markup | `string` |
+| `interpolation` | Template interpolation delimiters: `${` `}` | `punctuation` |
+
 ### Section Reference
 
 | Section | Description |
@@ -256,11 +285,11 @@ Below is a complete theme file showing every configurable section. Ordinary colo
 | `tabs` | Active and inactive editor tab colors |
 | `sidebar` | File explorer sidebar: section headers, items, and selected item |
 | `dialog` | Command palette and dialog boxes: input field, items, selection, muted text |
-| `editor` | Editor pane: line numbers, active line highlight, selection, search matches, and bracket pair colors. `bracketColors` accepts terminal color names (`yellow`, `magenta`, `cyan`, `red`, `green`, `blue`, `black`, `white`, `brightRed`, `brightGreen`, `brightYellow`, `brightBlue`, `brightMagenta`, `brightCyan`, `brightBlack`, `brightWhite`), syntax style names (`keyword`, `function`, `type`, `comment`, `string`, `number`, `operator`, `builtin`, `variable`, `punctuation`, `tag`, `attribute`), or hex colors (`#rrggbb`). Up to 6 colors cycle by nesting depth. |
+| `editor` | Editor pane: line numbers, active line highlight, selection, search matches, and bracket pair colors. `bracketColors` accepts terminal color names (`yellow`, `magenta`, `cyan`, `red`, `green`, `blue`, `black`, `white`, `brightRed`, `brightGreen`, `brightYellow`, `brightBlue`, `brightMagenta`, `brightCyan`, `brightBlack`, `brightWhite`), syntax style names (any key of the `syntax` section, e.g. `keyword`, `function`, `type`, `string`), or hex colors (`#rrggbb`). Up to 6 colors cycle by nesting depth. |
 | `menu` | Menu bar dropdown items and active/hovered item |
 | `diff` | Diff presentation styles: `added`, `deleted`, and `modified` backgrounds; `gutterAdded`, `gutterDeleted`, and `gutterModified` semantic foregrounds; `collapsedEmphasis` for opt-in emphasized idle rows; and the `collapsedHover` accent. Emphasis defaults to contrast-safe normal theme colors with bold text, while an omitted `collapsedHover` background inherits the editor active-line background. The legacy `collapsed` field remains accepted only as a `collapsedHover` migration alias. |
 | `scrollbar` | Scrollbar thumb (`fg`) and track (`bg`) colors |
-| `syntax` | Syntax highlighting colors for language tokens |
+| `syntax` | Syntax highlighting colors for language tokens. See [Syntax styles](#syntax-styles). |
 | `fileIcons` | File icon colors in the Explorer and Changes panel, by hue family (`red`, `yellow`, `green`, `cyan`, `blue`, `magenta`). Each entry defaults to the matching `terminal` color, so most themes need no `fileIcons` section. Neutral icons use the row's normal text color |
 | `terminal` | ANSI color palette for the integrated terminal (16 colors), plus `selection`, the highlight background for selected terminal text. `selection` inherits `editor.selection.bg` when omitted. |
 | `borders` | Unicode characters used for drawing box borders. Overridden when `borderStyle` in settings is set to a named preset (e.g. `"rounded"`, `"double"`). Use `"default"` or `"theme"` to respect the theme's borders. |

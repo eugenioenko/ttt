@@ -3,9 +3,9 @@ module github.com/eugenioenko/ttt
 go 1.25.0
 
 require (
-	github.com/alecthomas/chroma/v2 v2.24.1
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/clipperhouse/displaywidth v0.11.0
+	github.com/eugenioenko/textmate-go v0.1.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gdamore/tcell/v3 v3.4.1
 	github.com/gitpod-io/xterm-go v0.0.0-20260907130418-dae5128cb6b3
@@ -17,7 +17,7 @@ require (
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
-	github.com/dlclark/regexp2 v1.12.0 // indirect
+	github.com/eugenioenko/regexp2/v2 v2.8.1 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect

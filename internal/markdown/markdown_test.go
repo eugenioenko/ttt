@@ -108,28 +108,27 @@ func TestRenderCodeBlockHighlightAndFallbackStyles(t *testing.T) {
 
 func TestRenderDiffFenceUsesDedicatedStyles(t *testing.T) {
 	lines := renderCodeBlock([]string{"+added line", "-deleted line"}, "diff")
-	if got := styleForText(lines[0], "+added line"); got != term.StyleDiffAdded {
-		t.Fatalf("added diff fence style = %v, want diff added", got)
+	if got := styleForText(lines[0], "+added line"); got != term.StyleSyntaxInserted {
+		t.Fatalf("added diff fence style = %v, want inserted", got)
 	}
-	if got := styleForText(lines[1], "-deleted line"); got != term.StyleDiffDeleted {
-		t.Fatalf("deleted diff fence style = %v, want diff deleted", got)
+	if got := styleForText(lines[1], "-deleted line"); got != term.StyleSyntaxDeleted {
+		t.Fatalf("deleted diff fence style = %v, want deleted", got)
 	}
 	rendered := Render("```diff\n+added line\n-deleted line\n```")
-	if got := styleForText(lineForText(t, rendered, "+added line"), "+added line"); got != term.StyleDiffAdded {
-		t.Fatalf("rendered added diff fence style = %v, want diff added", got)
+	if got := styleForText(lineForText(t, rendered, "+added line"), "+added line"); got != term.StyleSyntaxInserted {
+		t.Fatalf("rendered added diff fence style = %v, want inserted", got)
 	}
-	if got := styleForText(lineForText(t, rendered, "-deleted line"), "-deleted line"); got != term.StyleDiffDeleted {
-		t.Fatalf("rendered deleted diff fence style = %v, want diff deleted", got)
+	if got := styleForText(lineForText(t, rendered, "-deleted line"), "-deleted line"); got != term.StyleSyntaxDeleted {
+		t.Fatalf("rendered deleted diff fence style = %v, want deleted", got)
 	}
 }
 
-func TestRenderCodeBlockKeepsLineIsolatedLexerState(t *testing.T) {
+func TestRenderCodeBlockCarriesStateAcrossLines(t *testing.T) {
 	lines := renderCodeBlock([]string{"/* open", "inside", "*/"}, "go")
-	if got := styleForText(lines[0], "/* open"); got != term.StyleSyntaxComment {
-		t.Fatalf("opener style = %v, want syntax comment", got)
-	}
-	if got := styleForText(lines[1], "inside"); got != term.StyleHoverCode {
-		t.Fatalf("isolated interior style = %v, want hover code fallback", got)
+	for i, text := range []string{"/* open", "inside", "*/"} {
+		if got := styleForText(lines[i], text); got != term.StyleSyntaxComment {
+			t.Fatalf("line %d %q style = %v, want syntax comment", i, text, got)
+		}
 	}
 }
 

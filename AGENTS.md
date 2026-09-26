@@ -27,7 +27,7 @@ bin/ttt ~/projectA ~/projectB file.go
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and the architecture convergence plan. The codebase uses dependency zones rather than a strict linear layer chain: domain, services, presentation kernel, product presentation, application, plugin host, and platform.
 
-Known boundary violations and explicit boundary decisions are documented there. Highlighting is presentation-owned at `internal/highlight`; Chroma lexing, lexer-state detection, caching, and `term.Style` mapping stay together there. tcell events are intentionally used across `term`, `widgets`, `ui`, and narrow application/platform wiring. Do not create cosmetic wrappers merely to satisfy the old layer diagram.
+Known boundary violations and explicit boundary decisions are documented there. Highlighting is presentation-owned at `internal/highlight`; grammar selection, caching, and TextMate scope to `term.Style` mapping stay together there. tcell events are intentionally used across `term`, `widgets`, `ui`, and narrow application/platform wiring. Do not create cosmetic wrappers merely to satisfy the old layer diagram.
 
 ### Packages
 
@@ -58,7 +58,7 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 - **`internal/term/`**: `Screen` interface. `TcellScreen` is the real implementation; `MockScreen` supports unit-level `Screen` and renderer tests; `SimScreen` implements tcell's screen contract for composed E2E and chaos tests. Also defines `DirectColor` and `CellAttr` for direct RGB rendering (used by the integrated terminal to bypass the style map for 256-color output).
 - **`internal/render/`**: diff-based renderer that compares prev/curr cell grids and emits minimal updates.
 - **`internal/textwidth/`**: display-width measurement (`Rune`, `String`, `Runes`), the single source of truth for how many terminal columns text occupies. Wraps `clipperhouse/displaywidth` with the same options tcell v3 uses internally, including the `RUNEWIDTH_EASTASIAN` toggle, so layout always matches what tcell draws.
-- **`internal/highlight/`**: presentation-owned per-line syntax highlighting via `chroma/v2`. Owns language selection, multi-line region state (block comments, docstrings, template and raw strings, each discovered by probing the lexer), caching, and mapping Chroma token types to `term.Style`. Full-buffer re-lexing is a known performance trap; avoid it.
+- **`internal/highlight/`**: presentation-owned syntax highlighting via [textmate-go](https://github.com/eugenioenko/textmate-go) (VS Code's TextMate engine, 124 embedded grammars). Owns grammar selection, the incremental document, caching, and mapping TextMate scopes to `term.Style` (the engine's token category, refined by the token's innermost scope). Full-buffer re-tokenizing is a known performance trap; the engine's `Document` avoids it.
 - **`internal/view/`**: viewport (scrolling, cursor-to-screen mapping) and the segment-based status bar.
 - **`internal/widgets/`**: reusable widget primitives backing both the Plugin Widget API and core panels (tree, table, list, input, dialog, dropdown, tabs, stacks, scrollview, markdown, and so on). `surface.go`/`virtual_surface.go` provide the drawing surface abstraction; `focus.go` handles focus traversal.
 - **`internal/markdown/`**: goldmark-based markdown to styled lines.

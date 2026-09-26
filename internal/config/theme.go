@@ -107,6 +107,29 @@ type SyntaxStyles struct {
 	Punctuation StyleDef `json:"punctuation"`
 	Tag         StyleDef `json:"tag"`
 	Attribute   StyleDef `json:"attribute"`
+
+	// The finer slots below are optional. ResolveColors fills an unset slot
+	// from the broader style it refines, so older themes render unchanged.
+	Regexp        StyleDef `json:"regexp,omitempty"`
+	Heading       StyleDef `json:"heading,omitempty"`
+	Bold          StyleDef `json:"bold,omitempty"`
+	Italic        StyleDef `json:"italic,omitempty"`
+	Quote         StyleDef `json:"quote,omitempty"`
+	Inserted      StyleDef `json:"inserted,omitempty"`
+	Deleted       StyleDef `json:"deleted,omitempty"`
+	Invalid       StyleDef `json:"invalid,omitempty"`
+	Control       StyleDef `json:"control,omitempty"`
+	Storage       StyleDef `json:"storage,omitempty"`
+	Constant      StyleDef `json:"constant,omitempty"`
+	Escape        StyleDef `json:"escape,omitempty"`
+	Parameter     StyleDef `json:"parameter,omitempty"`
+	Property      StyleDef `json:"property,omitempty"`
+	Self          StyleDef `json:"self,omitempty"`
+	Namespace     StyleDef `json:"namespace,omitempty"`
+	Decorator     StyleDef `json:"decorator,omitempty"`
+	Link          StyleDef `json:"link,omitempty"`
+	Code          StyleDef `json:"code,omitempty"`
+	Interpolation StyleDef `json:"interpolation,omitempty"`
 }
 
 type FileIconStyles struct {
@@ -381,6 +404,42 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.FileIcons.Magenta, t.Terminal.Magenta)
 	if t.Terminal.Selection == "" {
 		t.Terminal.Selection = t.Editor.Selection.Bg
+	}
+	t.resolveSyntax()
+}
+
+func (t *ThemeConfig) resolveSyntax() {
+	s := &t.Syntax
+	inherit(&s.Regexp, s.String)
+	if s.Heading == (StyleDef{}) {
+		s.Heading = s.Keyword
+		s.Heading.Bold = true
+	}
+	inherit(&s.Bold, StyleDef{Fg: t.Default.Fg, Bold: true})
+	inherit(&s.Italic, StyleDef{Fg: t.Default.Fg, Italic: true})
+	inherit(&s.Quote, s.Comment)
+	inherit(&s.Inserted, t.Diff.Added)
+	inherit(&s.Deleted, t.Diff.Deleted)
+	inherit(&s.Invalid, StyleDef{Fg: t.Danger.Fg})
+	inherit(&s.Control, s.Keyword)
+	inherit(&s.Storage, s.Keyword)
+	inherit(&s.Constant, s.Keyword)
+	inherit(&s.Escape, s.String)
+	inherit(&s.Parameter, s.Variable)
+	inherit(&s.Property, s.Variable)
+	inherit(&s.Self, s.Keyword)
+	inherit(&s.Namespace, s.Type)
+	inherit(&s.Decorator, s.Function)
+	inherit(&s.Link, s.String)
+	inherit(&s.Code, s.String)
+	inherit(&s.Interpolation, s.Punctuation)
+}
+
+// inherit copies parent into an entirely unset style, so a theme that sets
+// only some fields of a slot keeps exactly what it chose.
+func inherit(s *StyleDef, parent StyleDef) {
+	if *s == (StyleDef{}) {
+		*s = parent
 	}
 }
 

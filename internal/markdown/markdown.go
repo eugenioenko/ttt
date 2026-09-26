@@ -393,12 +393,12 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, spans *[]Span) {
 func renderCodeBlock(block []string, lang string) []Line {
 	var h *highlight.Highlighter
 	if lang != "" {
-		h = highlight.New("file." + lang)
+		h = highlight.NewForLanguage(lang)
 	}
 	lines := make([]Line, len(block))
 	for i, text := range block {
 		if h != nil {
-			spans := h.HighlightLine(text)
+			spans := h.HighlightLineAt(block, i)
 			lines[i] = highlightToLine(text, spans)
 		} else {
 			lines[i] = Line{Spans: []Span{{Text: text, Style: term.StyleHoverCode}}}

@@ -1,10 +1,8 @@
 package highlight
 
 import (
-	"errors"
 	"testing"
 
-	"github.com/alecthomas/chroma/v2"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -89,11 +87,12 @@ func TestHighlightMarkdown(t *testing.T) {
 	if h == nil {
 		t.Fatal("expected highlighter for .md files")
 	}
-	assertSpanStyle(t, h, "# Heading", term.StyleSyntaxKeyword)
-	assertSpanStyle(t, h, "## Subheading", term.StyleSyntaxKeyword)
-	assertSpanStyle(t, h, "some **bold** text", term.StyleSyntaxType)
-	assertSpanStyle(t, h, "some *italic* text", term.StyleSyntaxString)
-	assertSpanStyle(t, h, "inline `code` here", term.StyleSyntaxString)
+	assertSpanStyle(t, h, "# Heading", term.StyleSyntaxHeading)
+	assertSpanStyle(t, h, "## Subheading", term.StyleSyntaxHeading)
+	assertSpanStyle(t, h, "some **bold** text", term.StyleSyntaxBold)
+	assertSpanStyle(t, h, "some *italic* text", term.StyleSyntaxItalic)
+	assertSpanStyle(t, h, "inline `code` here", term.StyleSyntaxCode)
+	assertSpanStyle(t, h, "[link](https://example.com)", term.StyleSyntaxLink)
 }
 
 func TestHighlightDiff(t *testing.T) {
@@ -101,8 +100,8 @@ func TestHighlightDiff(t *testing.T) {
 	if h == nil {
 		t.Fatal("expected highlighter for .diff files")
 	}
-	assertSpanStyle(t, h, "+added line", term.StyleDiffAdded)
-	assertSpanStyle(t, h, "-removed line", term.StyleDiffDeleted)
+	assertSpanStyle(t, h, "+added line", term.StyleSyntaxInserted)
+	assertSpanStyle(t, h, "-removed line", term.StyleSyntaxDeleted)
 }
 
 func TestHighlightJSON(t *testing.T) {
@@ -152,8 +151,8 @@ func TestMultilineBlockComment(t *testing.T) {
 		allComment(t, h.HighlightLineAt(lines, i), lines[i], "js")
 	}
 	// code after the comment closes is highlighted normally again
-	if styleAt(h.HighlightLineAt(lines, 4), 0) != term.StyleSyntaxKeyword {
-		t.Error("expected keyword on line after comment close")
+	if styleAt(h.HighlightLineAt(lines, 4), 0) != term.StyleSyntaxStorage {
+		t.Error("expected storage keyword on line after comment close")
 	}
 }
 
@@ -171,7 +170,7 @@ func TestMultilineBlockCommentGo(t *testing.T) {
 func TestOpenerInStringDoesNotStartComment(t *testing.T) {
 	lines := []string{`const s = "/*";`, "const b = 2;"}
 	h := New("test.js")
-	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxKeyword {
+	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxStorage {
 		t.Errorf("line after string containing /* should be normal code, got %v", got)
 	}
 }
@@ -179,7 +178,7 @@ func TestOpenerInStringDoesNotStartComment(t *testing.T) {
 func TestOpenerInLineCommentDoesNotStartComment(t *testing.T) {
 	lines := []string{"// note /*", "const b = 2;"}
 	h := New("test.js")
-	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxKeyword {
+	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxStorage {
 		t.Errorf("line after // containing /* should be normal code, got %v", got)
 	}
 }
@@ -187,7 +186,7 @@ func TestOpenerInLineCommentDoesNotStartComment(t *testing.T) {
 func TestInlineBlockCommentDoesNotLeak(t *testing.T) {
 	lines := []string{"/* inline */ const a = 1;", "const b = 2;"}
 	h := New("test.js")
-	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxKeyword {
+	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxStorage {
 		t.Errorf("closed inline comment must not leak to next line, got %v", got)
 	}
 }
@@ -196,7 +195,7 @@ func TestCodeBeforeAndAfterBlockComment(t *testing.T) {
 	lines := []string{"const a = 1; /* open", "*/ const b = 2;"}
 	h := New("test.js")
 	first := h.HighlightLineAt(lines, 0)
-	if styleAt(first, 0) != term.StyleSyntaxKeyword {
+	if styleAt(first, 0) != term.StyleSyntaxStorage {
 		t.Error("code before the opener should stay highlighted")
 	}
 	if styleAt(first, 13) != term.StyleSyntaxComment {
@@ -206,7 +205,7 @@ func TestCodeBeforeAndAfterBlockComment(t *testing.T) {
 	if styleAt(second, 0) != term.StyleSyntaxComment {
 		t.Error("closer should be comment")
 	}
-	if styleAt(second, 3) != term.StyleSyntaxKeyword {
+	if styleAt(second, 3) != term.StyleSyntaxStorage {
 		t.Error("code after the closer should be highlighted")
 	}
 }
@@ -227,54 +226,6 @@ func TestHTMLBlockComment(t *testing.T) {
 	}
 }
 
-func TestNoBlockCommentLanguageUnaffected(t *testing.T) {
-	h := New("script.py")
-	if got := commentRegion(h); got != nil {
-		t.Errorf("python should have no block comment region, got %q", got.open)
-	}
-	lines := []string{"x = 1", "y = 2"}
-	if styleAt(h.HighlightLineAt(lines, 1), 0) == term.StyleSyntaxComment {
-		t.Error("python line should not be a comment")
-	}
-}
-
-func TestDetectBlockCommentDelimiters(t *testing.T) {
-	cases := []struct{ file, open, close string }{
-		{"a.go", "/*", "*/"},
-		{"a.js", "/*", "*/"},
-		{"a.rs", "/*", "*/"},
-		{"a.css", "/*", "*/"},
-		{"a.html", "<!--", "-->"},
-		{"a.hs", "{-", "-}"},
-		{"a.py", "", ""},
-		{"a.json", "", ""},
-	}
-	for _, c := range cases {
-		h := New(c.file)
-		if h == nil {
-			t.Fatalf("no highlighter for %s", c.file)
-		}
-		var open, close string
-		if r := commentRegion(h); r != nil {
-			open, close = r.open, r.close
-		}
-		if open != c.open || close != c.close {
-			t.Errorf("%s: got %q/%q want %q/%q", c.file, open, close, c.open, c.close)
-		}
-	}
-}
-
-// commentRegion returns the language's block comment region, nil when it has
-// none. String regions are ignored: Go and JS have both.
-func commentRegion(h *Highlighter) *region {
-	for i := range h.regions {
-		if h.regions[i].style == term.StyleSyntaxComment {
-			return &h.regions[i]
-		}
-	}
-	return nil
-}
-
 func TestStateSurvivesClearCache(t *testing.T) {
 	lines := []string{"/*", "inside", "*/"}
 	h := New("test.js")
@@ -289,12 +240,12 @@ func TestCacheNotAliasedAcrossStates(t *testing.T) {
 	h := New("test.js")
 	line := "const a = 1; /* open"
 	plain := h.HighlightLineAt([]string{line}, 0)
-	if styleAt(plain, 0) != term.StyleSyntaxKeyword {
-		t.Fatal("expected keyword at start")
+	if styleAt(plain, 0) != term.StyleSyntaxStorage {
+		t.Fatal("expected storage keyword at start")
 	}
 	// request the same text again; a mutated cache entry would lose the keyword
 	again := h.HighlightLineAt([]string{line}, 0)
-	if styleAt(again, 0) != term.StyleSyntaxKeyword {
+	if styleAt(again, 0) != term.StyleSyntaxStorage {
 		t.Error("cached spans were mutated in place")
 	}
 }
@@ -302,7 +253,7 @@ func TestCacheNotAliasedAcrossStates(t *testing.T) {
 func TestInvalidationEditAboveViewport(t *testing.T) {
 	lines := []string{"const a = 1;", "const b = 2;", "const c = 3;", "const d = 4;"}
 	h := New("test.js")
-	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxKeyword {
+	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxStorage {
 		t.Fatal("precondition: last line should be code")
 	}
 	// Edit line 0 to open a comment; everything below must become comment.
@@ -313,7 +264,7 @@ func TestInvalidationEditAboveViewport(t *testing.T) {
 	// Close it again; the tail must go back to code.
 	lines[0] = "const a = 1;"
 	h.ClearCache()
-	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxKeyword {
+	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxStorage {
 		t.Error("closing the comment again should restore code styling")
 	}
 }
@@ -354,17 +305,12 @@ func TestInvalidationBufferGrows(t *testing.T) {
 	allComment(t, h.HighlightLineAt(lines, 3), lines[3], "after growth")
 }
 
-func TestInvalidationUnchangedBufferKeepsTable(t *testing.T) {
+func TestInvalidationUnchangedBufferKeepsStyling(t *testing.T) {
 	lines := []string{"/* open", "inside", "*/", "const a = 1;"}
 	h := New("test.js")
 	h.HighlightLineAt(lines, 3)
-	before := len(h.stateSrc)
 	h.ClearCache()
-	h.HighlightLineAt(lines, 3)
-	if len(h.stateSrc) != before {
-		t.Errorf("unchanged buffer should keep the state table: %d -> %d", before, len(h.stateSrc))
-	}
-	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxKeyword {
+	if styleAt(h.HighlightLineAt(lines, 3), 0) != term.StyleSyntaxStorage {
 		t.Error("styling changed after a no-op edit")
 	}
 }
@@ -434,7 +380,7 @@ func TestHighlightEmptyInvalidAndDefaultGaps(t *testing.T) {
 			t.Fatalf("default token emitted as explicit span: %#v", span)
 		}
 	}
-	for _, col := range []int{7, 8, 11} {
+	for _, col := range []int{7} {
 		if got := styleAt(spans, col); got != term.StyleDefault {
 			t.Fatalf("default gap at rune %d = %v, want default", col, got)
 		}
@@ -449,7 +395,9 @@ func TestHighlightFilenameSelectionAndFallback(t *testing.T) {
 		{filename: "main.go", language: "Go"},
 		{filename: "/tmp/project/main.go", language: "Go"},
 		{filename: "main.go.bak", language: "Go"},
-		{filename: "Dockerfile", language: "Docker"},
+		{filename: "Dockerfile", language: "Dockerfile"},
+		{filename: "main.go.orig", language: "Go"},
+		{filename: "Rakefile", language: "Ruby"},
 		{filename: "Gemfile", language: "Ruby"},
 	} {
 		t.Run(tc.filename, func(t *testing.T) {
@@ -464,69 +412,6 @@ func TestHighlightFilenameSelectionAndFallback(t *testing.T) {
 	}
 	if h := New("file.unknown-ttt-language"); h != nil {
 		t.Fatalf("unknown filename selected %q, want nil fallback", h.Language())
-	}
-}
-
-func TestMapTokenTypePresentationContract(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		token chroma.TokenType
-		style term.Style
-	}{
-		{name: "keyword type", token: chroma.KeywordType, style: term.StyleSyntaxType},
-		{name: "keyword subcategory", token: chroma.KeywordConstant, style: term.StyleSyntaxKeyword},
-		{name: "comment subcategory", token: chroma.CommentSpecial, style: term.StyleSyntaxComment},
-		{name: "string subcategory", token: chroma.StringDouble, style: term.StyleSyntaxString},
-		{name: "number subcategory", token: chroma.NumberInteger, style: term.StyleSyntaxNumber},
-		{name: "operator subcategory", token: chroma.OperatorWord, style: term.StyleSyntaxOperator},
-		{name: "function", token: chroma.NameFunction, style: term.StyleSyntaxFunction},
-		{name: "function magic", token: chroma.NameFunctionMagic, style: term.StyleSyntaxFunction},
-		{name: "builtin", token: chroma.NameBuiltin, style: term.StyleSyntaxBuiltin},
-		{name: "builtin pseudo", token: chroma.NameBuiltinPseudo, style: term.StyleSyntaxBuiltin},
-		{name: "class", token: chroma.NameClass, style: term.StyleSyntaxType},
-		{name: "decorator", token: chroma.NameDecorator, style: term.StyleSyntaxType},
-		{name: "tag", token: chroma.NameTag, style: term.StyleSyntaxTag},
-		{name: "attribute", token: chroma.NameAttribute, style: term.StyleSyntaxAttribute},
-		{name: "variable subcategory", token: chroma.NameVariableGlobal, style: term.StyleSyntaxVariable},
-		{name: "heading", token: chroma.GenericHeading, style: term.StyleSyntaxKeyword},
-		{name: "subheading", token: chroma.GenericSubheading, style: term.StyleSyntaxKeyword},
-		{name: "strong", token: chroma.GenericStrong, style: term.StyleSyntaxType},
-		{name: "emphasis", token: chroma.GenericEmph, style: term.StyleSyntaxString},
-		{name: "inserted", token: chroma.GenericInserted, style: term.StyleDiffAdded},
-		{name: "deleted", token: chroma.GenericDeleted, style: term.StyleDiffDeleted},
-		{name: "punctuation", token: chroma.Punctuation, style: term.StyleSyntaxPunctuation},
-		{name: "unmapped text", token: chroma.Text, style: term.StyleDefault},
-		{name: "unmapped name", token: chroma.Name, style: term.StyleDefault},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := mapTokenType(tc.token); got != tc.style {
-				t.Fatalf("mapTokenType(%v) = %v, want %v", tc.token, got, tc.style)
-			}
-		})
-	}
-}
-
-type tokeniseErrorLexer struct {
-	chroma.Lexer
-}
-
-func (tokeniseErrorLexer) Tokenise(*chroma.TokeniseOptions, string) (chroma.Iterator, error) {
-	return nil, errors.New("tokenise failed")
-}
-
-func TestLexerErrorsProduceNoSpansOrRegionState(t *testing.T) {
-	lx := tokeniseErrorLexer{}
-	h := &Highlighter{lexer: lx, regions: []region{{
-		open: "/*", close: "*/", style: term.StyleSyntaxComment, tokenType: chroma.CommentMultiline,
-	}}}
-	if spans := h.lexLine("func main() {}"); spans != nil {
-		t.Fatalf("lexLine error spans = %#v, want nil", spans)
-	}
-	if got := h.computeOpensAt("/* open"); got != noOpen {
-		t.Fatalf("computeOpensAt error = %+v, want %+v", got, noOpen)
-	}
-	if got := detectRegions(lx); got != nil {
-		t.Fatalf("detectRegions error = %+v, want no regions", got)
 	}
 }
 

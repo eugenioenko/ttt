@@ -98,6 +98,26 @@ func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleM
 	applyStyleDef(&m, term.StyleSyntaxPunctuation, theme.Syntax.Punctuation)
 	applyStyleDef(&m, term.StyleSyntaxTag, theme.Syntax.Tag)
 	applyStyleDef(&m, term.StyleSyntaxAttribute, theme.Syntax.Attribute)
+	applyStyleDef(&m, term.StyleSyntaxRegexp, theme.Syntax.Regexp)
+	applyStyleDef(&m, term.StyleSyntaxHeading, theme.Syntax.Heading)
+	applyStyleDef(&m, term.StyleSyntaxBold, theme.Syntax.Bold)
+	applyStyleDef(&m, term.StyleSyntaxItalic, theme.Syntax.Italic)
+	applyStyleDef(&m, term.StyleSyntaxQuote, theme.Syntax.Quote)
+	applyStyleDef(&m, term.StyleSyntaxInserted, theme.Syntax.Inserted)
+	applyStyleDef(&m, term.StyleSyntaxDeleted, theme.Syntax.Deleted)
+	applyStyleDef(&m, term.StyleSyntaxInvalid, theme.Syntax.Invalid)
+	applyStyleDef(&m, term.StyleSyntaxControl, theme.Syntax.Control)
+	applyStyleDef(&m, term.StyleSyntaxStorage, theme.Syntax.Storage)
+	applyStyleDef(&m, term.StyleSyntaxConstant, theme.Syntax.Constant)
+	applyStyleDef(&m, term.StyleSyntaxEscape, theme.Syntax.Escape)
+	applyStyleDef(&m, term.StyleSyntaxParameter, theme.Syntax.Parameter)
+	applyStyleDef(&m, term.StyleSyntaxProperty, theme.Syntax.Property)
+	applyStyleDef(&m, term.StyleSyntaxSelf, theme.Syntax.Self)
+	applyStyleDef(&m, term.StyleSyntaxNamespace, theme.Syntax.Namespace)
+	applyStyleDef(&m, term.StyleSyntaxDecorator, theme.Syntax.Decorator)
+	applyStyleDef(&m, term.StyleSyntaxLink, theme.Syntax.Link)
+	applyStyleDef(&m, term.StyleSyntaxCode, theme.Syntax.Code)
+	applyStyleDef(&m, term.StyleSyntaxInterpolation, theme.Syntax.Interpolation)
 	applyStyleDef(&m, term.StyleInput, theme.Input.Item)
 	applyStyleDef(&m, term.StyleInputPlaceholder, theme.Input.Placeholder)
 	applyStyleDef(&m, term.StyleInputAction, theme.Input.Action)
@@ -133,18 +153,38 @@ func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleM
 }
 
 var syntaxStyleNames = map[string]term.Style{
-	"comment":     term.StyleSyntaxComment,
-	"string":      term.StyleSyntaxString,
-	"keyword":     term.StyleSyntaxKeyword,
-	"number":      term.StyleSyntaxNumber,
-	"operator":    term.StyleSyntaxOperator,
-	"function":    term.StyleSyntaxFunction,
-	"type":        term.StyleSyntaxType,
-	"builtin":     term.StyleSyntaxBuiltin,
-	"variable":    term.StyleSyntaxVariable,
-	"punctuation": term.StyleSyntaxPunctuation,
-	"tag":         term.StyleSyntaxTag,
-	"attribute":   term.StyleSyntaxAttribute,
+	"comment":       term.StyleSyntaxComment,
+	"string":        term.StyleSyntaxString,
+	"keyword":       term.StyleSyntaxKeyword,
+	"number":        term.StyleSyntaxNumber,
+	"operator":      term.StyleSyntaxOperator,
+	"function":      term.StyleSyntaxFunction,
+	"type":          term.StyleSyntaxType,
+	"builtin":       term.StyleSyntaxBuiltin,
+	"variable":      term.StyleSyntaxVariable,
+	"punctuation":   term.StyleSyntaxPunctuation,
+	"tag":           term.StyleSyntaxTag,
+	"attribute":     term.StyleSyntaxAttribute,
+	"regexp":        term.StyleSyntaxRegexp,
+	"heading":       term.StyleSyntaxHeading,
+	"bold":          term.StyleSyntaxBold,
+	"italic":        term.StyleSyntaxItalic,
+	"quote":         term.StyleSyntaxQuote,
+	"inserted":      term.StyleSyntaxInserted,
+	"deleted":       term.StyleSyntaxDeleted,
+	"invalid":       term.StyleSyntaxInvalid,
+	"control":       term.StyleSyntaxControl,
+	"storage":       term.StyleSyntaxStorage,
+	"constant":      term.StyleSyntaxConstant,
+	"escape":        term.StyleSyntaxEscape,
+	"parameter":     term.StyleSyntaxParameter,
+	"property":      term.StyleSyntaxProperty,
+	"self":          term.StyleSyntaxSelf,
+	"namespace":     term.StyleSyntaxNamespace,
+	"decorator":     term.StyleSyntaxDecorator,
+	"link":          term.StyleSyntaxLink,
+	"code":          term.StyleSyntaxCode,
+	"interpolation": term.StyleSyntaxInterpolation,
 }
 
 func applyBracketColors(m *term.StyleMap, colors []string, tc config.TerminalColors) {

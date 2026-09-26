@@ -39,6 +39,26 @@ const (
 	StyleSyntaxPunctuation
 	StyleSyntaxTag
 	StyleSyntaxAttribute
+	StyleSyntaxRegexp
+	StyleSyntaxHeading
+	StyleSyntaxBold
+	StyleSyntaxItalic
+	StyleSyntaxQuote
+	StyleSyntaxInserted
+	StyleSyntaxDeleted
+	StyleSyntaxInvalid
+	StyleSyntaxControl
+	StyleSyntaxStorage
+	StyleSyntaxConstant
+	StyleSyntaxEscape
+	StyleSyntaxParameter
+	StyleSyntaxProperty
+	StyleSyntaxSelf
+	StyleSyntaxNamespace
+	StyleSyntaxDecorator
+	StyleSyntaxLink
+	StyleSyntaxCode
+	StyleSyntaxInterpolation
 	StyleMuted
 	StyleBracketMatch
 	StyleSuccess
