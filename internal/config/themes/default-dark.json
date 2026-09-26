@@ -128,15 +128,15 @@
       "bold": true
     },
     "bold": {
-      "fg": "#fafafa",
+      "fg": "#569cd6",
       "bold": true
     },
     "italic": {
-      "fg": "#fafafa",
+      "fg": "#d4d4d4",
       "italic": true
     },
     "quote": {
-      "fg": "#6a9955"
+      "fg": "#d4d4d4"
     },
     "inserted": {
       "fg": "#b5cea8"
@@ -148,7 +148,7 @@
       "fg": "#f44747"
     },
     "control": {
-      "fg": "#569cd6"
+      "fg": "#c586c0"
     },
     "storage": {
       "fg": "#569cd6"
@@ -172,10 +172,10 @@
       "fg": "#4ec9b0"
     },
     "decorator": {
-      "fg": "#dcdcaa"
+      "fg": "#d4d4d4"
     },
     "link": {
-      "fg": "#3794ff"
+      "fg": "#d4d4d4"
     },
     "code": {
       "fg": "#ce9178"

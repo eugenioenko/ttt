@@ -67,8 +67,12 @@ func TestFineSyntaxSlotSetByThemeIsKept(t *testing.T) {
 	}
 }
 
-func TestSampleThemesSetFineSyntaxSlots(t *testing.T) {
-	for _, name := range []string{"default-dark.json", "vscode-dark-plus.json"} {
+func TestVSCodeThemesSetFineSyntaxSlots(t *testing.T) {
+	// Themes ported from VS Code set every slot to the source theme's color.
+	for _, name := range []string{
+		"default-dark.json", "default-light.json", "vscode-dark-plus.json", "dracula.json",
+		"monokai.json", "nord.json", "one-dark.json", "solarized-dark.json", "solarized-light.json",
+	} {
 		data, err := themes.FS.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)

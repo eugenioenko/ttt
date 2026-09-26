@@ -125,6 +125,70 @@
     },
     "attribute": {
       "fg": "#b58900"
+    },
+    "regexp": {
+      "fg": "#dc322f"
+    },
+    "heading": {
+      "fg": "#268bd2",
+      "bold": true
+    },
+    "bold": {
+      "fg": "#839496",
+      "bold": true
+    },
+    "italic": {
+      "fg": "#839496",
+      "italic": true
+    },
+    "quote": {
+      "fg": "#859900"
+    },
+    "inserted": {
+      "fg": "#859900"
+    },
+    "deleted": {
+      "fg": "#dc322f"
+    },
+    "invalid": {
+      "fg": "#dc322f"
+    },
+    "control": {
+      "fg": "#859900"
+    },
+    "storage": {
+      "fg": "#93a1a1",
+      "bold": true
+    },
+    "constant": {
+      "fg": "#b58900"
+    },
+    "escape": {
+      "fg": "#cb4b16"
+    },
+    "parameter": {
+      "fg": "#839496"
+    },
+    "property": {
+      "fg": "#268bd2"
+    },
+    "self": {
+      "fg": "#268bd2"
+    },
+    "namespace": {
+      "fg": "#cb4b16"
+    },
+    "decorator": {
+      "fg": "#839496"
+    },
+    "link": {
+      "fg": "#839496"
+    },
+    "code": {
+      "fg": "#2aa198"
+    },
+    "interpolation": {
+      "fg": "#2aa198"
     }
   },
   "terminal": {

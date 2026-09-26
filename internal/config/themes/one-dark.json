@@ -125,6 +125,68 @@
     },
     "attribute": {
       "fg": "#d19a66"
+    },
+    "regexp": {
+      "fg": "#e06c75"
+    },
+    "heading": {
+      "fg": "#e06c75"
+    },
+    "bold": {
+      "fg": "#d19a66"
+    },
+    "italic": {
+      "fg": "#abb2bf",
+      "italic": true
+    },
+    "quote": {
+      "fg": "#5c6370"
+    },
+    "inserted": {
+      "fg": "#98c379"
+    },
+    "deleted": {
+      "fg": "#e06c75"
+    },
+    "invalid": {
+      "fg": "#ffffff"
+    },
+    "control": {
+      "fg": "#c678dd"
+    },
+    "storage": {
+      "fg": "#c678dd"
+    },
+    "constant": {
+      "fg": "#d19a66"
+    },
+    "escape": {
+      "fg": "#56b6c2"
+    },
+    "parameter": {
+      "fg": "#abb2bf",
+      "italic": true
+    },
+    "property": {
+      "fg": "#e06c75"
+    },
+    "self": {
+      "fg": "#e5c07b"
+    },
+    "namespace": {
+      "fg": "#e5c07b"
+    },
+    "decorator": {
+      "fg": "#abb2bf"
+    },
+    "link": {
+      "fg": "#c678dd"
+    },
+    "code": {
+      "fg": "#98c379"
+    },
+    "interpolation": {
+      "fg": "#c678dd"
     }
   },
   "borders": {

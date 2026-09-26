@@ -164,6 +164,68 @@
     },
     "attribute": {
       "fg": "#8fbcbb"
+    },
+    "regexp": {
+      "fg": "#ebcb8b"
+    },
+    "heading": {
+      "fg": "#88c0d0"
+    },
+    "bold": {
+      "fg": "#d8dee9",
+      "bold": true
+    },
+    "italic": {
+      "fg": "#d8dee9",
+      "italic": true
+    },
+    "quote": {
+      "fg": "#616e88"
+    },
+    "inserted": {
+      "fg": "#a3be8c"
+    },
+    "deleted": {
+      "fg": "#bf616a"
+    },
+    "invalid": {
+      "fg": "#d8dee9"
+    },
+    "control": {
+      "fg": "#81a1c1"
+    },
+    "storage": {
+      "fg": "#81a1c1"
+    },
+    "constant": {
+      "fg": "#81a1c1"
+    },
+    "escape": {
+      "fg": "#ebcb8b"
+    },
+    "parameter": {
+      "fg": "#d8dee9"
+    },
+    "property": {
+      "fg": "#d8dee9"
+    },
+    "self": {
+      "fg": "#81a1c1"
+    },
+    "namespace": {
+      "fg": "#d8dee9"
+    },
+    "decorator": {
+      "fg": "#d08770"
+    },
+    "link": {
+      "fg": "#d8dee9"
+    },
+    "code": {
+      "fg": "#8fbcbb"
+    },
+    "interpolation": {
+      "fg": "#eceff4"
     }
   },
   "terminal": {

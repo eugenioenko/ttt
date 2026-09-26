@@ -125,6 +125,72 @@
     },
     "attribute": {
       "fg": "#a6e22e"
+    },
+    "regexp": {
+      "fg": "#e6db74"
+    },
+    "heading": {
+      "fg": "#f8f8f2",
+      "bold": true
+    },
+    "bold": {
+      "fg": "#f8f8f2",
+      "bold": true
+    },
+    "italic": {
+      "fg": "#f8f8f2",
+      "italic": true
+    },
+    "quote": {
+      "fg": "#75715e",
+      "italic": true
+    },
+    "inserted": {
+      "fg": "#a6e22e"
+    },
+    "deleted": {
+      "fg": "#f92672"
+    },
+    "invalid": {
+      "fg": "#f44747"
+    },
+    "control": {
+      "fg": "#f92672"
+    },
+    "storage": {
+      "fg": "#66d9ef",
+      "italic": true
+    },
+    "constant": {
+      "fg": "#ae81ff"
+    },
+    "escape": {
+      "fg": "#ae81ff"
+    },
+    "parameter": {
+      "fg": "#fd971f",
+      "italic": true
+    },
+    "property": {
+      "fg": "#f8f8f2"
+    },
+    "self": {
+      "fg": "#fd971f"
+    },
+    "namespace": {
+      "fg": "#a6e22e"
+    },
+    "decorator": {
+      "fg": "#f8f8f2"
+    },
+    "link": {
+      "fg": "#e6db74"
+    },
+    "code": {
+      "fg": "#fd971f"
+    },
+    "interpolation": {
+      "fg": "#f92672"
     }
   },
   "terminal": {
