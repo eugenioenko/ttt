@@ -266,8 +266,8 @@ func (t *TabBarWidget) Render(surface Surface) {
 
 	if t.MoreButton != nil && w >= 5 {
 		r := t.GetRect()
-		t.MoreButton.SetRect(Rect{X: r.X + w - 4, Y: r.Y + 1, W: 3, H: 1})
-		moreSurface := surface.Sub(Rect{X: w - 4, Y: 1, W: 3, H: 1})
+		t.MoreButton.SetRect(Rect{X: r.X + w - 3, Y: r.Y + 1, W: 3, H: 1})
+		moreSurface := surface.Sub(Rect{X: w - 3, Y: 1, W: 3, H: 1})
 		t.MoreButton.Render(moreSurface)
 	}
 
