@@ -16,7 +16,8 @@ afterEach(() => {
 describe("BUG-036: status bar text invisible at width <= 50", () => {
   it.fails("status bar renders at width 50 (a realistic split-pane width)", () => {
     dir = createTempDir();
-    const file = createTempFile(dir, "sb.txt", "hello world\n");
+    // A language segment is needed to fill the bar; plain text has none.
+    const file = createTempFile(dir, "sb.ts", "hello world\n");
 
     tui.start(file);
     tui.setSize(50, 20);
