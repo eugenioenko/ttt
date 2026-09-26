@@ -113,6 +113,14 @@ func (tp *TerminalPanelWidget) Count() int {
 	return len(tp.widgets)
 }
 
+func (tp *TerminalPanelWidget) DividerScreenX() int {
+	r := tp.GetRect()
+	if len(tp.widgets) == 0 || r.W <= VerticalTabBarWidth {
+		return -1
+	}
+	return r.X + VerticalTabBarWidth - 2
+}
+
 func (tp *TerminalPanelWidget) syncTabBar() {
 	tp.TabBar.Count = len(tp.widgets)
 	tp.TabBar.Active = tp.active

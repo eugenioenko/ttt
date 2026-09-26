@@ -25,6 +25,23 @@ type CursorProvider interface {
 	CursorPosition() (x, y int, visible bool)
 }
 
+type dividerXProvider interface {
+	DividerScreenX() int
+}
+
+type dividerYProvider interface {
+	DividerScreenY() int
+}
+
+type borderJunctions struct {
+	BottomX [2]int
+	RightY  int
+}
+
+type borderJunctionProvider interface {
+	BorderJunctions() borderJunctions
+}
+
 // RawKeyConsumer indicates a widget that wants all key events
 // sent directly to it, bypassing global key bindings.
 // Used by the terminal widget.
