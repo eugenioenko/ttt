@@ -2112,6 +2112,28 @@ Named styles available for both widget and raw cell rendering. Actual colors dep
 | `syntax_variable`  | Syntax: variables      |
 | `syntax_tag`       | Syntax: HTML/XML tags  |
 | `syntax_attribute` | Syntax: HTML/XML attributes |
+| `syntax_regexp` | Syntax: regular expression literals |
+| `syntax_heading` | Syntax: markdown headings |
+| `syntax_bold` | Syntax: bold markup |
+| `syntax_italic` | Syntax: italic markup |
+| `syntax_quote` | Syntax: block quotes |
+| `syntax_inserted` | Syntax: inserted lines in diffs |
+| `syntax_deleted` | Syntax: deleted lines in diffs |
+| `syntax_invalid` | Syntax: invalid or illegal code, as marked by the grammar |
+| `syntax_control` | Syntax: control-flow keywords: `if`, `for`, `return` |
+| `syntax_storage` | Syntax: declaration keywords and modifiers: `const`, `class`, `public` |
+| `syntax_constant` | Syntax: language constants: `true`, `null` |
+| `syntax_escape` | Syntax: escape sequences in strings: `\n`, `\t` |
+| `syntax_parameter` | Syntax: function parameters |
+| `syntax_property` | Syntax: object properties |
+| `syntax_self` | Syntax: `this`, `self` |
+| `syntax_namespace` | Syntax: namespaces and modules |
+| `syntax_decorator` | Syntax: decorators and annotations |
+| `syntax_link` | Syntax: links in markup |
+| `syntax_code` | Syntax: inline code in markup |
+| `syntax_interpolation` | Syntax: template interpolation delimiters: `${` `}` |
+| `syntax_selector` | Syntax: CSS, SCSS, and LESS selectors |
+| `syntax_readonly_variable` | Syntax: constant and enum member names |
 
 Styles can be passed as a string or a table:
 

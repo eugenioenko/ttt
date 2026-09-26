@@ -150,14 +150,14 @@ func (m *Manager) SignatureHelpTriggerCharacters(serverKey string) []string {
 	return []string{"(", ","}
 }
 
-func (m *Manager) ResolveLanguage(filePath, chromaLang string) (serverKey, languageID string, ok bool) {
+func (m *Manager) ResolveLanguage(filePath, languageName string) (serverKey, languageID string, ok bool) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	for name, cfg := range m.config.Servers {
 		if langID, found := cfg.Languages[ext]; found {
 			return name, langID, true
 		}
 	}
-	key := strings.ToLower(chromaLang)
+	key := strings.ToLower(languageName)
 	if _, found := m.config.Servers[key]; found {
 		return key, key, true
 	}

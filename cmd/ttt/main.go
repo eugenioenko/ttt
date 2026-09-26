@@ -226,7 +226,7 @@ Docs: https://tttedit.dev
 	defer screen.Fini()
 	defer handlePanic(screen)
 
-	screen.SetStyleMap(app.BuildStyleMap(cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground)))
+	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
 
 	// Route OSC 52 clipboard writes through the tty, not raw stderr

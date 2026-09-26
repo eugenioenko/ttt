@@ -162,17 +162,17 @@ prevents, or measured migration value justifies it.
 
 ### Highlight ownership
 
-`internal/highlight` owns Chroma language selection and tokenization,
-multi-line region state, line caches, and projection from Chroma token types
-to `term.Style`. These responsibilities form one presentation concern and stay
-together behind the existing `Highlighter` and `Span` API. `internal/core`
-must not import highlighting or other presentation packages.
+`internal/highlight` owns grammar selection, line caches, and projection from
+TextMate scopes to `term.Style`. These responsibilities form one presentation
+concern and stay together behind the existing `Highlighter` and `Span` API.
+`internal/core` must not import highlighting or other presentation packages.
 
-Tokenization is per line, so a construct that spans lines is tracked by
-`internal/highlight` rather than by the lexer: delimiter pairs are discovered
-by probing the lexer once, and a line that starts inside one is colored from
-the region's style to its closing delimiter. Chroma exposes no way to resume a
-lexer's state stack on the next line, which is what this replaces.
+Tokenization uses [textmate-go](https://github.com/eugenioenko/textmate-go),
+a Go port of VS Code's TextMate engine with embedded grammars. The engine
+carries its rule stack from line to line, so constructs that span lines (block
+comments, template literals, docstrings, multi-line tags) need no
+highlight-specific handling. Its incremental `Document` keeps the states above
+an edit and reuses the unchanged tail once the state converges.
 
 ### Generic widgets and product surfaces
 

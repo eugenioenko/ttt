@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -107,6 +108,75 @@ type SyntaxStyles struct {
 	Punctuation StyleDef `json:"punctuation"`
 	Tag         StyleDef `json:"tag"`
 	Attribute   StyleDef `json:"attribute"`
+
+	// The finer slots below are optional. ResolveColors fills an unset slot
+	// from the broader style it refines, so older themes render unchanged.
+	Regexp        StyleDef `json:"regexp,omitempty"`
+	Heading       StyleDef `json:"heading,omitempty"`
+	Bold          StyleDef `json:"bold,omitempty"`
+	Italic        StyleDef `json:"italic,omitempty"`
+	Quote         StyleDef `json:"quote,omitempty"`
+	Inserted      StyleDef `json:"inserted,omitempty"`
+	Deleted       StyleDef `json:"deleted,omitempty"`
+	Invalid       StyleDef `json:"invalid,omitempty"`
+	Control       StyleDef `json:"control,omitempty"`
+	Storage       StyleDef `json:"storage,omitempty"`
+	Constant      StyleDef `json:"constant,omitempty"`
+	Escape        StyleDef `json:"escape,omitempty"`
+	Parameter     StyleDef `json:"parameter,omitempty"`
+	Property      StyleDef `json:"property,omitempty"`
+	Self          StyleDef `json:"self,omitempty"`
+	Namespace     StyleDef `json:"namespace,omitempty"`
+	Decorator     StyleDef `json:"decorator,omitempty"`
+	Link          StyleDef `json:"link,omitempty"`
+	Code          StyleDef `json:"code,omitempty"`
+	Interpolation StyleDef `json:"interpolation,omitempty"`
+	Selector      StyleDef `json:"selector,omitempty"`
+	// ReadonlyVariable is a const or enum member name, which VS Code themes
+	// color apart from ordinary variables.
+	ReadonlyVariable StyleDef `json:"readonlyVariable,omitempty"`
+}
+
+// TokenColor is one VS Code tokenColors entry, in VS Code's own shape so rules
+// can be copied from a VS Code theme unchanged.
+type TokenColor struct {
+	Name     string        `json:"name,omitempty"`
+	Scope    TokenScopes   `json:"scope"`
+	Settings TokenSettings `json:"settings"`
+}
+
+// TokenSettings leaves FontStyle nil when absent: an explicit "" resets an
+// inherited font style, while an absent one keeps it.
+type TokenSettings struct {
+	Foreground string  `json:"foreground,omitempty"`
+	FontStyle  *string `json:"fontStyle,omitempty"`
+}
+
+// TokenScopes accepts a selector string, possibly comma-separated, or a list.
+type TokenScopes []string
+
+func (s *TokenScopes) UnmarshalJSON(data []byte) error {
+	var one string
+	if err := json.Unmarshal(data, &one); err == nil {
+		*s = nil
+		for _, part := range strings.Split(one, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				*s = append(*s, part)
+			}
+		}
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(data, &many); err != nil {
+		return err
+	}
+	*s = nil
+	for _, part := range many {
+		if part = strings.TrimSpace(part); part != "" {
+			*s = append(*s, part)
+		}
+	}
+	return nil
 }
 
 type FileIconStyles struct {
@@ -225,28 +295,31 @@ type ThemeConfig struct {
 	Warning  StyleDef `json:"warning"`
 	Conflict StyleDef `json:"conflict"`
 	// Derived by ResolveColors, not theme-file settings.
-	SuccessStaged  StyleDef       `json:"-"`
-	DangerStaged   StyleDef       `json:"-"`
-	WarningStaged  StyleDef       `json:"-"`
-	ConflictStaged StyleDef       `json:"-"`
-	StatusBar      StyleDef       `json:"statusBar"`
-	CommitHeader   StyleDef       `json:"commitHeader"`
-	Tabs           TabStyles      `json:"tabs"`
-	Sidebar        SidebarStyles  `json:"sidebar"`
-	Dialog         DialogStyles   `json:"dialog"`
-	Editor         EditorStyles   `json:"editor"`
-	Menu           MenuStyles     `json:"menu"`
-	Input          InputStyles    `json:"input"`
-	Button         ButtonStyles   `json:"button"`
-	Hover          HoverStyles    `json:"hover"`
-	Border         StyleDef       `json:"border"`
-	BorderActive   StyleDef       `json:"borderActive"`
-	Diff           DiffStyles     `json:"diff"`
-	Scrollbar      StyleDef       `json:"scrollbar"`
-	Syntax         SyntaxStyles   `json:"syntax"`
-	FileIcons      FileIconStyles `json:"fileIcons"`
-	Borders        BorderChars    `json:"borders"`
-	Terminal       TerminalColors `json:"terminal,omitempty"`
+	SuccessStaged  StyleDef      `json:"-"`
+	DangerStaged   StyleDef      `json:"-"`
+	WarningStaged  StyleDef      `json:"-"`
+	ConflictStaged StyleDef      `json:"-"`
+	StatusBar      StyleDef      `json:"statusBar"`
+	CommitHeader   StyleDef      `json:"commitHeader"`
+	Tabs           TabStyles     `json:"tabs"`
+	Sidebar        SidebarStyles `json:"sidebar"`
+	Dialog         DialogStyles  `json:"dialog"`
+	Editor         EditorStyles  `json:"editor"`
+	Menu           MenuStyles    `json:"menu"`
+	Input          InputStyles   `json:"input"`
+	Button         ButtonStyles  `json:"button"`
+	Hover          HoverStyles   `json:"hover"`
+	Border         StyleDef      `json:"border"`
+	BorderActive   StyleDef      `json:"borderActive"`
+	Diff           DiffStyles    `json:"diff"`
+	Scrollbar      StyleDef      `json:"scrollbar"`
+	Syntax         SyntaxStyles  `json:"syntax"`
+	// TokenColors are VS Code theme rules, matched against TextMate scopes
+	// ahead of Syntax. Tokens no rule matches use Syntax.
+	TokenColors []TokenColor   `json:"tokenColors,omitempty"`
+	FileIcons   FileIconStyles `json:"fileIcons"`
+	Borders     BorderChars    `json:"borders"`
+	Terminal    TerminalColors `json:"terminal,omitempty"`
 }
 
 func DefaultTheme() ThemeConfig {
@@ -381,6 +454,44 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.FileIcons.Magenta, t.Terminal.Magenta)
 	if t.Terminal.Selection == "" {
 		t.Terminal.Selection = t.Editor.Selection.Bg
+	}
+	t.resolveSyntax()
+}
+
+func (t *ThemeConfig) resolveSyntax() {
+	s := &t.Syntax
+	inherit(&s.Regexp, s.String)
+	if s.Heading == (StyleDef{}) {
+		s.Heading = s.Keyword
+		s.Heading.Bold = true
+	}
+	inherit(&s.Bold, StyleDef{Fg: t.Default.Fg, Bold: true})
+	inherit(&s.Italic, StyleDef{Fg: t.Default.Fg, Italic: true})
+	inherit(&s.Quote, s.Comment)
+	inherit(&s.Inserted, t.Diff.Added)
+	inherit(&s.Deleted, t.Diff.Deleted)
+	inherit(&s.Invalid, StyleDef{Fg: t.Danger.Fg})
+	inherit(&s.Control, s.Keyword)
+	inherit(&s.Storage, s.Keyword)
+	inherit(&s.Constant, s.Keyword)
+	inherit(&s.Escape, s.String)
+	inherit(&s.Parameter, s.Variable)
+	inherit(&s.Property, s.Variable)
+	inherit(&s.Self, s.Keyword)
+	inherit(&s.Namespace, s.Type)
+	inherit(&s.Decorator, s.Function)
+	inherit(&s.Link, s.String)
+	inherit(&s.Code, s.String)
+	inherit(&s.Interpolation, s.Punctuation)
+	inherit(&s.Selector, s.Tag)
+	inherit(&s.ReadonlyVariable, s.Variable)
+}
+
+// inherit copies parent into an entirely unset style, so a theme that sets
+// only some fields of a slot keeps exactly what it chose.
+func inherit(s *StyleDef, parent StyleDef) {
+	if *s == (StyleDef{}) {
+		*s = parent
 	}
 }
 
