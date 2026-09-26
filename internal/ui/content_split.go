@@ -195,9 +195,8 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 	divX := w - rightW - 1
 	topW := divX
 
-	// The panel's tab strip is one row shorter than the editor's.
 	if cs.RightBorderStartY != nil {
-		*cs.RightBorderStartY = 1
+		*cs.RightBorderStartY = 0
 	}
 
 	if cs.Top != nil && topW > 0 {
@@ -210,13 +209,17 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 		}
 	}
 
-	for y := 0; y < h; y++ {
+	surface.SetCell(divX, 0, term.Cell{Ch: b.TopLeft, Style: bs})
+	for x := divX + 1; x < w; x++ {
+		surface.SetCell(x, 0, term.Cell{Ch: b.Horizontal, Style: bs})
+	}
+	for y := 1; y < h; y++ {
 		surface.SetCell(divX, y, term.Cell{Ch: b.Vertical, Style: bs})
 	}
 
-	if cs.Bottom != nil && rightW > 0 {
-		cs.Bottom.SetRect(Rect{X: r.X + divX + 1, Y: r.Y, W: rightW, H: r.H})
-		cs.Bottom.Render(surface.Sub(Rect{X: divX + 1, Y: 0, W: rightW, H: h}))
+	if cs.Bottom != nil && rightW > 0 && h > 1 {
+		cs.Bottom.SetRect(Rect{X: r.X + divX + 1, Y: r.Y + 1, W: rightW, H: r.H - 1})
+		cs.Bottom.Render(surface.Sub(Rect{X: divX + 1, Y: 1, W: rightW, H: h - 1}))
 	} else {
 		widgets.InvalidatePointerInteraction(cs.Bottom)
 		if cs.capturedChild == cs.Bottom {
