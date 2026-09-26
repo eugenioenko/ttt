@@ -131,6 +131,7 @@ func (s *SplitPanelWidget) Render(surface Surface) {
 	for y := rbStart; y < h-1; y++ {
 		surface.SetCell(w-1, y, term.Cell{Ch: b.Vertical, Style: bs})
 	}
+	s.renderRightBorderJunction(surface, r, w, h, b, bs)
 }
 
 func (s *SplitPanelWidget) renderSinglePanel(surface Surface, w, h int, b term.BorderSet, bs term.Style) {
@@ -168,14 +169,29 @@ func (s *SplitPanelWidget) renderSinglePanel(surface Surface, w, h int, b term.B
 		surface.SetCell(0, y, term.Cell{Ch: b.Vertical, Style: bs})
 		surface.SetCell(w-1, y, term.Cell{Ch: b.Vertical, Style: bs})
 	}
+	s.renderRightBorderJunction(surface, r, w, h, b, bs)
 }
 
 func (s *SplitPanelWidget) renderBottomJunction(surface Surface, screenX, w, h int, b term.BorderSet, bs term.Style) {
-	if split, ok := s.Right.(*ContentSplitWidget); ok {
-		x := split.DividerScreenX() - screenX
-		if x > 0 && x < w-1 {
-			surface.SetCell(x, h-1, term.Cell{Ch: b.BottomTee, Style: bs})
+	if provider, ok := s.Right.(borderJunctionProvider); ok {
+		junctions := provider.BorderJunctions()
+		for _, junctionX := range junctions.BottomX {
+			x := junctionX - screenX
+			if x > 0 && x < w-1 {
+				surface.SetCell(x, h-1, term.Cell{Ch: b.BottomTee, Style: bs})
+			}
 		}
+	}
+}
+
+func (s *SplitPanelWidget) renderRightBorderJunction(surface Surface, r Rect, w, h int, b term.BorderSet, bs term.Style) {
+	provider, ok := s.Right.(borderJunctionProvider)
+	if !ok {
+		return
+	}
+	y := provider.BorderJunctions().RightY - r.Y
+	if y >= 0 && y < h-1 {
+		surface.SetCell(w-1, y, term.Cell{Ch: b.RightTee, Style: bs})
 	}
 }
 

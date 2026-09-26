@@ -220,6 +220,12 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 	if cs.Bottom != nil && rightW > 0 && h > 1 {
 		cs.Bottom.SetRect(Rect{X: r.X + divX + 1, Y: r.Y + 1, W: rightW, H: r.H - 1})
 		cs.Bottom.Render(surface.Sub(Rect{X: divX + 1, Y: 1, W: rightW, H: h - 1}))
+		if divider, ok := cs.Bottom.(dividerYProvider); ok {
+			y := divider.DividerScreenY() - r.Y
+			if y >= 0 && y < h {
+				surface.SetCell(divX, y, term.Cell{Ch: b.LeftTee, Style: bs})
+			}
+		}
 	} else {
 		widgets.InvalidatePointerInteraction(cs.Bottom)
 		if cs.capturedChild == cs.Bottom {
@@ -394,6 +400,28 @@ func (cs *ContentSplitWidget) DividerScreenX() int {
 	}
 	r := cs.GetRect()
 	return r.X + r.W - cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W)) - 1
+}
+
+func (cs *ContentSplitWidget) BorderJunctions() borderJunctions {
+	junctions := borderJunctions{BottomX: [2]int{-1, -1}, RightY: -1}
+	if !cs.ShowBottom || cs.Bottom == nil {
+		return junctions
+	}
+	if cs.Position == SplitRight {
+		junctions.BottomX[0] = cs.DividerScreenX()
+		if divider, ok := cs.Bottom.(dividerYProvider); ok {
+			junctions.RightY = divider.DividerScreenY()
+		}
+	}
+	if divider, ok := cs.Bottom.(dividerXProvider); ok {
+		x := divider.DividerScreenX()
+		if junctions.BottomX[0] < 0 {
+			junctions.BottomX[0] = x
+		} else {
+			junctions.BottomX[1] = x
+		}
+	}
+	return junctions
 }
 
 func (cs *ContentSplitWidget) TopContentHeight() int {
