@@ -127,6 +127,7 @@ func (s *SplitPanelWidget) Render(surface Surface) {
 		s.Right.SetRect(Rect{X: r.X + rightX, Y: r.Y, W: rightW, H: rightH})
 		rightSurface := surface.Sub(Rect{X: rightX, Y: 0, W: rightW, H: rightH})
 		s.Right.Render(rightSurface)
+		s.renderBottomJunction(surface, r.X, w, h, b, bs)
 	} else {
 		widgets.InvalidatePointerInteraction(s.Right)
 	}
@@ -175,6 +176,16 @@ func (s *SplitPanelWidget) renderSinglePanel(surface Surface, w, h int, b term.B
 		s.Right.SetRect(Rect{X: r.X + 1, Y: r.Y, W: cw, H: ch})
 		sub := surface.Sub(Rect{X: 1, Y: 0, W: cw, H: ch})
 		s.Right.Render(sub)
+		s.renderBottomJunction(surface, r.X, w, h, b, bs)
+	}
+}
+
+func (s *SplitPanelWidget) renderBottomJunction(surface Surface, screenX, w, h int, b term.BorderSet, bs term.Style) {
+	if split, ok := s.Right.(*ContentSplitWidget); ok {
+		x := split.DividerScreenX() - screenX
+		if x > 0 && x < w-1 {
+			surface.SetCell(x, h-1, term.Cell{Ch: b.BottomTee, Style: bs})
+		}
 	}
 }
 

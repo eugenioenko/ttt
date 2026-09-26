@@ -385,6 +385,14 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 	return r.Y + r.H - bottomH - 1
 }
 
+func (cs *ContentSplitWidget) DividerScreenX() int {
+	if !cs.ShowBottom || cs.Bottom == nil || cs.Position != SplitRight {
+		return -1
+	}
+	r := cs.GetRect()
+	return r.X + r.W - cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W)) - 1
+}
+
 func (cs *ContentSplitWidget) TopContentHeight() int {
 	r := cs.GetRect()
 	if r.W <= 0 || r.H <= 0 {
