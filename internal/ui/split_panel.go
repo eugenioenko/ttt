@@ -302,6 +302,20 @@ func (s *SplitPanelWidget) clampedDividerX(w int) int {
 	return divX
 }
 
+func (s *SplitPanelWidget) OverDivider(mx, my int) bool {
+	r := s.GetRect()
+	if my < r.Y || my >= r.Y+r.H {
+		return false
+	}
+	if !s.ShowLeft {
+		return mx == r.X
+	}
+	divX := s.DividerScreenX()
+	return mx >= divX && mx <= divX+1
+}
+
+func (s *SplitPanelWidget) Dragging() bool { return s.dragging }
+
 func (s *SplitPanelWidget) DividerScreenX() int {
 	r := s.GetRect()
 	return r.X + s.clampedDividerX(r.W)

@@ -353,6 +353,29 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	return EventIgnored
 }
 
+// OverDivider reports whether the pointer is on the panel's divider: a row
+// when the panel is docked at the bottom, a column when it is docked right.
+func (cs *ContentSplitWidget) OverDivider(mx, my int) bool {
+	r := cs.GetRect()
+	if cs.Position == SplitRight {
+		if !cs.ShowBottom || cs.Bottom == nil || my < r.Y || my >= r.Y+r.H {
+			return false
+		}
+		return mx == r.X+r.W-cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W))-1
+	}
+	return my == cs.DividerScreenY() && mx >= r.X && mx < r.X+r.W-1
+}
+
+// ResizeShape is the pointer shape for dragging the divider.
+func (cs *ContentSplitWidget) ResizeShape() string {
+	if cs.Position == SplitRight {
+		return "ew-resize"
+	}
+	return "ns-resize"
+}
+
+func (cs *ContentSplitWidget) Dragging() bool { return cs.dragging }
+
 func (cs *ContentSplitWidget) DividerScreenY() int {
 	if !cs.ShowBottom || cs.Bottom == nil || cs.Position == SplitRight {
 		return -1

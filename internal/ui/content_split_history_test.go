@@ -65,3 +65,86 @@ func TestContentSplitRatioRetainsUsableMinimums(t *testing.T) {
 		t.Fatalf("impossible layout bottom = %d, want primary surface minimum to win", got)
 	}
 }
+
+func TestContentSplitOverDivider(t *testing.T) {
+	cs := NewContentSplitWidget()
+	cs.Top = &BaseWidget{}
+	cs.Bottom = &BaseWidget{}
+	cs.ShowBottom = true
+	cs.BottomH = 20
+	cs.SetRect(Rect{X: 10, Y: 0, W: 100, H: 100})
+
+	divY := 100 - 20 - 1
+	for _, tt := range []struct {
+		x, y int
+		want bool
+	}{
+		{15, divY, true},
+		{15, divY - 1, false},
+		{9, divY, false},
+		{109, divY, false},
+	} {
+		if got := cs.OverDivider(tt.x, tt.y); got != tt.want {
+			t.Errorf("OverDivider(%d, %d) = %v, want %v", tt.x, tt.y, got, tt.want)
+		}
+	}
+
+	cs.ShowBottom = false
+	if cs.OverDivider(15, divY) {
+		t.Error("hidden panel should have no divider")
+	}
+}
+
+func TestSplitPanelOverDivider(t *testing.T) {
+	s := NewSplitPanelWidget()
+	s.ShowLeft = true
+	s.SetRect(Rect{X: 0, Y: 0, W: 100, H: 30})
+	divX := s.DividerScreenX()
+
+	for _, tt := range []struct {
+		x, y int
+		want bool
+	}{
+		{divX, 5, true},
+		{divX + 1, 5, true},
+		{divX - 1, 5, false},
+		{divX, 30, false},
+	} {
+		if got := s.OverDivider(tt.x, tt.y); got != tt.want {
+			t.Errorf("OverDivider(%d, %d) = %v, want %v", tt.x, tt.y, got, tt.want)
+		}
+	}
+}
+
+// Docked right, the divider is a column and the pointer resizes sideways.
+func TestContentSplitOverDividerDockedRight(t *testing.T) {
+	cs := NewContentSplitWidget()
+	cs.Top = &BaseWidget{}
+	cs.Bottom = &BaseWidget{}
+	cs.ShowBottom = true
+	cs.Position = SplitRight
+	cs.SetRect(Rect{X: 10, Y: 0, W: 100, H: 40})
+
+	divX := 10 + 100 - cs.constrainedRightWidth(100, cs.requestedRightWidth(100)) - 1
+	for _, tt := range []struct {
+		x, y int
+		want bool
+	}{
+		{divX, 20, true},
+		{divX, 0, true},
+		{divX - 1, 20, false},
+		{divX + 1, 20, false},
+		{divX, 40, false},
+	} {
+		if got := cs.OverDivider(tt.x, tt.y); got != tt.want {
+			t.Errorf("OverDivider(%d, %d) = %v, want %v", tt.x, tt.y, got, tt.want)
+		}
+	}
+	if got := cs.ResizeShape(); got != "ew-resize" {
+		t.Errorf("ResizeShape() = %q docked right, want ew-resize", got)
+	}
+	cs.Position = SplitBottom
+	if got := cs.ResizeShape(); got != "ns-resize" {
+		t.Errorf("ResizeShape() = %q docked bottom, want ns-resize", got)
+	}
+}

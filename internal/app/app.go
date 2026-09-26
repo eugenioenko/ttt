@@ -907,3 +907,21 @@ func (a *App) ShowSelectDialog(title string, items []widgets.SelectItem, onSelec
 	adapter := ui.NewWidgetAdapter(dialog)
 	a.ShowDialog(adapter)
 }
+
+// pointerShapeAt runs after routing so a drag that just ended already reads as
+// ended, and it sees every motion event, which the dividers' own handlers do not.
+func (a *App) pointerShapeAt(mx, my int) string {
+	switch {
+	case a.ContentSplit.Dragging():
+		return a.ContentSplit.ResizeShape()
+	case a.SplitPanel.Dragging():
+		return "ew-resize"
+	case a.Root.HasOverlay():
+		return "default"
+	case a.ContentSplit.OverDivider(mx, my):
+		return a.ContentSplit.ResizeShape()
+	case a.SplitPanel.OverDivider(mx, my):
+		return "ew-resize"
+	}
+	return "default"
+}
