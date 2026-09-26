@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 
@@ -22,6 +23,35 @@ func WithTransparentBackground(v bool) StyleMapOption {
 }
 
 func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleMap {
+	m, _ := buildThemeStyles(theme, opts...)
+	return m
+}
+
+// ApplyThemeStyles installs theme's style map on screen together with the
+// token theme that indexes into it; installing one without the other would
+// point token style slots at another theme's colors.
+func ApplyThemeStyles(screen *term.TcellScreen, theme config.ThemeConfig, opts ...StyleMapOption) {
+	m, tokens := buildThemeStyles(theme, opts...)
+	screen.SetStyleMap(m)
+	highlight.SetTokenTheme(tokens)
+}
+
+// NewTokenTheme compiles theme's tokenColors, or returns nil when it has none.
+func NewTokenTheme(theme config.ThemeConfig) *highlight.TokenTheme {
+	var rules []highlight.TokenRule
+	for _, entry := range theme.TokenColors {
+		for _, selector := range entry.Scope {
+			rules = append(rules, highlight.TokenRule{
+				Selector:   selector,
+				Foreground: entry.Settings.Foreground,
+				FontStyle:  entry.Settings.FontStyle,
+			})
+		}
+	}
+	return highlight.NewTokenTheme(rules)
+}
+
+func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.StyleMap, *highlight.TokenTheme) {
 	var o styleMapOptions
 	for _, fn := range opts {
 		fn(&o)
@@ -151,7 +181,18 @@ func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleM
 
 	applyBracketColors(&m, theme.Editor.BracketColors, theme.Terminal)
 
-	return m
+	tokens := NewTokenTheme(theme)
+	if tokens != nil {
+		for i, style := range tokens.Styles {
+			fg := style.Fg
+			if fg == "" {
+				fg = theme.Default.Fg
+			}
+			applyStyleDef(&m, term.TokenStyle(i), config.StyleDef{Fg: fg, Bold: style.Bold, Italic: style.Italic})
+		}
+	}
+
+	return m, tokens
 }
 
 var syntaxStyleNames = map[string]term.Style{

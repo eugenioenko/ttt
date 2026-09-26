@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -48,9 +49,10 @@ func (a *App) ShowThemePicker() {
 		items[i] = widgets.SelectItem{ID: name, Label: name}
 	}
 	originalStyleMap := a.Screen.GetStyleMap()
+	originalTokenTheme := highlight.CurrentTokenTheme()
 	originalPalette := *a.Palette
 	applyTheme := func(theme config.ThemeConfig) {
-		a.Screen.SetStyleMap(BuildStyleMap(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground)))
+		ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground))
 		*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground))
 		*a.Borders = BuildBorderSet(theme.Borders)
 		a.ApplyBorderStyle()
@@ -80,6 +82,7 @@ func (a *App) ShowThemePicker() {
 		OnDismiss: func() {
 			a.DismissDialog()
 			a.Screen.SetStyleMap(originalStyleMap)
+			highlight.SetTokenTheme(originalTokenTheme)
 			*a.Palette = originalPalette
 			a.Renderer.Clear()
 			a.invalidateImageLayer()

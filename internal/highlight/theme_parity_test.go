@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -15,18 +16,20 @@ import (
 
 // TestThemeParityWithVSCode compares the color ttt draws for every token of
 // the samples below with the color the source VS Code theme gives the same
-// scope stack. It needs the VS Code theme files, for example Shiki's
-// tm-themes package, and is skipped unless TTT_VSCODE_THEMES_DIR points at
-// them. Semantic highlighting is outside TextMate and not compared.
+// scope stack. It needs the upstream theme files (for example VS Code's
+// extensions/theme-defaults/themes and theme-monokai/themes) in one folder,
+// and is skipped unless TTT_VSCODE_THEMES_DIR points at it. Bundled themes
+// without tokenColors are skipped. Semantic highlighting is not compared.
 func TestThemeParityWithVSCode(t *testing.T) {
 	dir := os.Getenv("TTT_VSCODE_THEMES_DIR")
 	if dir == "" {
 		t.Skip("set TTT_VSCODE_THEMES_DIR to a folder of VS Code theme JSON files")
 	}
 	themes := map[string]string{
-		"vscode-dark-plus": "dark-plus", "default-dark": "dark-plus", "default-light": "light-plus",
-		"dracula": "dracula", "monokai": "monokai", "nord": "nord", "one-dark": "one-dark-pro",
-		"solarized-dark": "solarized-dark", "solarized-light": "solarized-light",
+		"vscode-dark-plus": "dark_plus.json", "default-dark": "dark_modern.json",
+		"default-light": "light_modern.json", "monokai": "monokai-color-theme.json",
+		"solarized-dark": "solarized-dark-color-theme.json", "solarized-light": "solarized-light-color-theme.json",
+		"dracula": "dracula.json", "nord": "nord-color-theme.json", "one-dark": "OneDark-Pro.json",
 	}
 	names := make([]string, 0, len(themes))
 	for name := range themes {
@@ -39,7 +42,13 @@ func TestThemeParityWithVSCode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			vs := loadVSCodeTheme(t, filepath.Join(dir, themes[name]+".json"))
+			if len(ttt.TokenColors) == 0 {
+				t.Skip("theme has no tokenColors yet")
+			}
+			vs := loadVSCodeTheme(t, filepath.Join(dir, themes[name]))
+			tokens := tokenThemeFor(ttt)
+			SetTokenTheme(tokens)
+			defer SetTokenTheme(nil)
 			type key struct{ scope, want, got string }
 			mismatches := map[key]int{}
 			for file, source := range paritySamples {
@@ -47,6 +56,7 @@ func TestThemeParityWithVSCode(t *testing.T) {
 				if h == nil {
 					t.Fatalf("no grammar for %s", file)
 				}
+				h.syncTokenTheme()
 				lines := strings.Split(source, "\n")
 				h.doc.SetLines(lines)
 				for i, line := range lines {
@@ -56,7 +66,7 @@ func TestThemeParityWithVSCode(t *testing.T) {
 							continue
 						}
 						want, wantDefault := vs.resolve(tok.Scopes)
-						def := styleDef(ttt, h.styleFor(tok.ScopeStack))
+						def := styleDef(ttt, tokens, h.styleFor(tok.ScopeStack))
 						got := strings.ToLower(def.Fg)
 						gotDefault := got == "" || got == strings.ToLower(ttt.Default.Fg)
 						if (wantDefault && gotDefault) || want == got {
@@ -79,8 +89,26 @@ func TestThemeParityWithVSCode(t *testing.T) {
 	}
 }
 
+// tokenThemeFor mirrors app.NewTokenTheme, which highlight cannot import.
+func tokenThemeFor(theme config.ThemeConfig) *TokenTheme {
+	var rules []TokenRule
+	for _, entry := range theme.TokenColors {
+		for _, selector := range entry.Scope {
+			rules = append(rules, TokenRule{Selector: selector, Foreground: entry.Settings.Foreground, FontStyle: entry.Settings.FontStyle})
+		}
+	}
+	return NewTokenTheme(rules)
+}
+
 // Keep in sync with the syntax fields of config.SyntaxStyles.
-func styleDef(theme config.ThemeConfig, style term.Style) config.StyleDef {
+func styleDef(theme config.ThemeConfig, tokens *TokenTheme, style term.Style) config.StyleDef {
+	if tokens != nil && style >= term.TokenStyle(0) {
+		fg := tokens.Styles[style-term.TokenStyle(0)].Fg
+		if fg == "" {
+			fg = theme.Default.Fg
+		}
+		return config.StyleDef{Fg: fg}
+	}
 	s := theme.Syntax
 	switch style {
 	case term.StyleSyntaxComment:
@@ -174,6 +202,7 @@ func loadVSCodeTheme(t *testing.T, path string) vscodeTheme {
 		t.Fatal(err)
 	}
 	var raw struct {
+		Include     string            `json:"include"`
 		Colors      map[string]string `json:"colors"`
 		TokenColors []struct {
 			Scope    json.RawMessage `json:"scope"`
@@ -182,10 +211,19 @@ func loadVSCodeTheme(t *testing.T, path string) vscodeTheme {
 			} `json:"settings"`
 		} `json:"tokenColors"`
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(stripJSONC(data), &raw); err != nil {
 		t.Fatal(err)
 	}
 	theme := vscodeTheme{fallback: normalizeHex(raw.Colors["editor.foreground"])}
+	// An included theme's rules come first, so the including theme wins ties.
+	if raw.Include != "" {
+		base := loadVSCodeTheme(t, filepath.Join(filepath.Dir(path), raw.Include))
+		theme.rules = base.rules
+		if theme.fallback == "" {
+			theme.fallback = base.fallback
+		}
+	}
+	offset := len(theme.rules)
 	for order, tc := range raw.TokenColors {
 		var selectors []string
 		var one string
@@ -204,7 +242,7 @@ func loadVSCodeTheme(t *testing.T, path string) vscodeTheme {
 			}
 			theme.rules = append(theme.rules, vscodeRule{
 				scope: parts[len(parts)-1], parents: parts[:len(parts)-1],
-				fg: normalizeHex(tc.Settings.Foreground), order: order,
+				fg: normalizeHex(tc.Settings.Foreground), order: offset + order,
 			})
 		}
 	}
@@ -216,37 +254,25 @@ func loadVSCodeTheme(t *testing.T, path string) vscodeTheme {
 func (v vscodeTheme) resolve(scopes []string) (color string, isDefault bool) {
 	color, isDefault = v.fallback, true
 	for i := range scopes {
-		var best *vscodeRule
-		bestKey := [3]int{-1, -1, -1}
+		var matched []*vscodeRule
 		for r := range v.rules {
 			rule := &v.rules[r]
-			if !hasScopePrefix(scopes[i], rule.scope) || !parentsMatch(scopes[:i], rule.parents) {
-				continue
-			}
-			key := [3]int{strings.Count(rule.scope, ".") + 1, len(rule.parents), rule.order}
-			if key[0] > bestKey[0] || key[0] == bestKey[0] && (key[1] > bestKey[1] || key[1] == bestKey[1] && key[2] > bestKey[2]) {
-				best, bestKey = rule, key
+			if hasScopePrefix(scopes[i], rule.scope) && parentsMatch(scopes[:i], rule.parents) {
+				matched = append(matched, rule)
 			}
 		}
-		if best != nil && best.fg != "" {
-			color, isDefault = best.fg, best.fg == v.fallback
+		sort.SliceStable(matched, func(a, b int) bool {
+			ka := [3]int{strings.Count(matched[a].scope, ".") + 1, len(matched[a].parents), matched[a].order}
+			kb := [3]int{strings.Count(matched[b].scope, ".") + 1, len(matched[b].parents), matched[b].order}
+			return ka[0] < kb[0] || ka[0] == kb[0] && (ka[1] < kb[1] || ka[1] == kb[1] && ka[2] < kb[2])
+		})
+		for _, rule := range matched {
+			if rule.fg != "" {
+				color, isDefault = rule.fg, rule.fg == v.fallback
+			}
 		}
 	}
 	return color, isDefault
-}
-
-func parentsMatch(ancestors, parents []string) bool {
-	pos := len(ancestors)
-	for i := len(parents) - 1; i >= 0; i-- {
-		for pos > 0 && !hasScopePrefix(ancestors[pos-1], parents[i]) {
-			pos--
-		}
-		if pos == 0 {
-			return false
-		}
-		pos--
-	}
-	return true
 }
 
 func normalizeHex(color string) string {
@@ -357,3 +383,42 @@ for f in "$@"; do
   if [[ -f "$f" ]]; then echo "file: ${f##*/}"; fi
 done`,
 }
+
+// stripJSONC removes comments and trailing commas, which VS Code theme files
+// allow, while leaving string contents untouched.
+func stripJSONC(data []byte) []byte {
+	var out []byte
+	inString := false
+	for i := 0; i < len(data); i++ {
+		c := data[i]
+		switch {
+		case inString:
+			out = append(out, c)
+			if c == '\\' && i+1 < len(data) {
+				i++
+				out = append(out, data[i])
+			} else if c == '"' {
+				inString = false
+			}
+		case c == '"':
+			inString = true
+			out = append(out, c)
+		case c == '/' && i+1 < len(data) && data[i+1] == '/':
+			for i < len(data) && data[i] != '\n' {
+				i++
+			}
+			i--
+		case c == '/' && i+1 < len(data) && data[i+1] == '*':
+			i += 2
+			for i+1 < len(data) && !(data[i] == '*' && data[i+1] == '/') {
+				i++
+			}
+			i++
+		default:
+			out = append(out, c)
+		}
+	}
+	return trailingCommas.ReplaceAll(out, []byte("$1"))
+}
+
+var trailingCommas = regexp.MustCompile(`,(\s*[}\]])`)

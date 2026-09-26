@@ -100,8 +100,19 @@ const (
 	StyleFileIconCyan
 	StyleFileIconBlue
 	StyleFileIconMagenta
-	styleCount
+	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
+	// tokenColors fill; see TokenStyle.
+	styleTokenBase
+	styleCount = styleTokenBase + MaxTokenStyles
 )
+
+// MaxTokenStyles bounds the distinct token-color styles one theme can use.
+const MaxTokenStyles = 512
+
+// TokenStyle returns the style slot for a theme's i-th distinct token color.
+func TokenStyle(i int) Style {
+	return styleTokenBase + Style(i)
+}
 
 // DirectColor holds an RGBA color for terminal emulator output.
 // Zero value means "use default".

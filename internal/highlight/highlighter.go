@@ -46,6 +46,8 @@ type Highlighter struct {
 	dirty    bool
 	isolated map[string][]Span
 	styles   map[*textmate.ScopeStack]term.Style
+	// tokenTheme is the token theme the caches above were built with.
+	tokenTheme *TokenTheme
 }
 
 // Conventional extensionless names the grammar catalog does not declare.
@@ -121,6 +123,7 @@ func (h *Highlighter) Language() string {
 
 // HighlightLine highlights a line in isolation, as the first line of a file.
 func (h *Highlighter) HighlightLine(line string) []Span {
+	h.syncTokenTheme()
 	if spans, ok := h.isolated[line]; ok {
 		return spans
 	}
@@ -141,6 +144,7 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	if idx < 0 || idx >= len(lines) {
 		return nil
 	}
+	h.syncTokenTheme()
 	if h.dirty || h.doc.Len() != len(lines) {
 		h.dirty = false
 		h.doc.SetLines(lines)
@@ -185,12 +189,30 @@ func (h *Highlighter) styleFor(stack *textmate.ScopeStack) term.Style {
 	if style, ok := h.styles[stack]; ok {
 		return style
 	}
-	style := classifyScopes(stack.Names())
+	// A theme with tokenColors is authoritative, as in VS Code: a token no
+	// rule matches keeps the default foreground. Only themes without them
+	// use the syntax styles.
+	var style term.Style
+	if h.tokenTheme != nil {
+		style = h.tokenTheme.resolve(stack.Names())
+	} else {
+		style = classifyScopes(stack.Names())
+	}
 	if h.styles == nil || len(h.styles) >= maxIsolatedCache {
 		h.styles = make(map[*textmate.ScopeStack]term.Style)
 	}
 	h.styles[stack] = style
 	return style
+}
+
+// syncTokenTheme drops styles resolved under a previous theme: a token style
+// slot means a different color once another theme is installed.
+func (h *Highlighter) syncTokenTheme() {
+	if theme := CurrentTokenTheme(); theme != h.tokenTheme {
+		h.tokenTheme = theme
+		h.styles = nil
+		h.isolated = nil
+	}
 }
 
 func classifyScopes(names []string) term.Style {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -136,6 +137,48 @@ type SyntaxStyles struct {
 	ReadonlyVariable StyleDef `json:"readonlyVariable,omitempty"`
 }
 
+// TokenColor is one VS Code tokenColors entry, in VS Code's own shape so rules
+// can be copied from a VS Code theme unchanged.
+type TokenColor struct {
+	Name     string        `json:"name,omitempty"`
+	Scope    TokenScopes   `json:"scope"`
+	Settings TokenSettings `json:"settings"`
+}
+
+// TokenSettings leaves FontStyle nil when absent: an explicit "" resets an
+// inherited font style, while an absent one keeps it.
+type TokenSettings struct {
+	Foreground string  `json:"foreground,omitempty"`
+	FontStyle  *string `json:"fontStyle,omitempty"`
+}
+
+// TokenScopes accepts a selector string, possibly comma-separated, or a list.
+type TokenScopes []string
+
+func (s *TokenScopes) UnmarshalJSON(data []byte) error {
+	var one string
+	if err := json.Unmarshal(data, &one); err == nil {
+		*s = nil
+		for _, part := range strings.Split(one, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				*s = append(*s, part)
+			}
+		}
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(data, &many); err != nil {
+		return err
+	}
+	*s = nil
+	for _, part := range many {
+		if part = strings.TrimSpace(part); part != "" {
+			*s = append(*s, part)
+		}
+	}
+	return nil
+}
+
 type FileIconStyles struct {
 	Red     StyleDef `json:"red"`
 	Yellow  StyleDef `json:"yellow"`
@@ -252,28 +295,31 @@ type ThemeConfig struct {
 	Warning  StyleDef `json:"warning"`
 	Conflict StyleDef `json:"conflict"`
 	// Derived by ResolveColors, not theme-file settings.
-	SuccessStaged  StyleDef       `json:"-"`
-	DangerStaged   StyleDef       `json:"-"`
-	WarningStaged  StyleDef       `json:"-"`
-	ConflictStaged StyleDef       `json:"-"`
-	StatusBar      StyleDef       `json:"statusBar"`
-	CommitHeader   StyleDef       `json:"commitHeader"`
-	Tabs           TabStyles      `json:"tabs"`
-	Sidebar        SidebarStyles  `json:"sidebar"`
-	Dialog         DialogStyles   `json:"dialog"`
-	Editor         EditorStyles   `json:"editor"`
-	Menu           MenuStyles     `json:"menu"`
-	Input          InputStyles    `json:"input"`
-	Button         ButtonStyles   `json:"button"`
-	Hover          HoverStyles    `json:"hover"`
-	Border         StyleDef       `json:"border"`
-	BorderActive   StyleDef       `json:"borderActive"`
-	Diff           DiffStyles     `json:"diff"`
-	Scrollbar      StyleDef       `json:"scrollbar"`
-	Syntax         SyntaxStyles   `json:"syntax"`
-	FileIcons      FileIconStyles `json:"fileIcons"`
-	Borders        BorderChars    `json:"borders"`
-	Terminal       TerminalColors `json:"terminal,omitempty"`
+	SuccessStaged  StyleDef      `json:"-"`
+	DangerStaged   StyleDef      `json:"-"`
+	WarningStaged  StyleDef      `json:"-"`
+	ConflictStaged StyleDef      `json:"-"`
+	StatusBar      StyleDef      `json:"statusBar"`
+	CommitHeader   StyleDef      `json:"commitHeader"`
+	Tabs           TabStyles     `json:"tabs"`
+	Sidebar        SidebarStyles `json:"sidebar"`
+	Dialog         DialogStyles  `json:"dialog"`
+	Editor         EditorStyles  `json:"editor"`
+	Menu           MenuStyles    `json:"menu"`
+	Input          InputStyles   `json:"input"`
+	Button         ButtonStyles  `json:"button"`
+	Hover          HoverStyles   `json:"hover"`
+	Border         StyleDef      `json:"border"`
+	BorderActive   StyleDef      `json:"borderActive"`
+	Diff           DiffStyles    `json:"diff"`
+	Scrollbar      StyleDef      `json:"scrollbar"`
+	Syntax         SyntaxStyles  `json:"syntax"`
+	// TokenColors are VS Code theme rules, matched against TextMate scopes
+	// ahead of Syntax. Tokens no rule matches use Syntax.
+	TokenColors []TokenColor   `json:"tokenColors,omitempty"`
+	FileIcons   FileIconStyles `json:"fileIcons"`
+	Borders     BorderChars    `json:"borders"`
+	Terminal    TerminalColors `json:"terminal,omitempty"`
 }
 
 func DefaultTheme() ThemeConfig {

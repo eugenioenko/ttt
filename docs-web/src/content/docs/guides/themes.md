@@ -275,6 +275,22 @@ Highlighting comes from VS Code's TextMate grammars, which distinguish more than
 | `selector` | CSS, SCSS, and LESS selectors: `a`, `.card`, `#id`, `:hover`, `&` | `tag` |
 | `readonlyVariable` | Constant and enum member names: `const total` | `variable` |
 
+### VS Code token colors
+
+A theme can also carry VS Code's own `tokenColors` rules, in VS Code's format, so rules can be copied from any VS Code theme unchanged:
+
+```json
+"tokenColors": [
+  { "scope": "comment", "settings": { "foreground": "#6a9955" } },
+  { "scope": ["keyword.control", "keyword.operator.new"], "settings": { "foreground": "#c586c0" } },
+  { "scope": "markup.bold", "settings": { "fontStyle": "bold" } }
+]
+```
+
+When a theme has `tokenColors`, they decide every token's color the way VS Code does: the most specific matching scope wins, a rule that sets only a font style keeps the color of a broader one, and a token no rule matches uses the default foreground. The `syntax` styles are then used only by other parts of the UI that refer to them, such as bracket colors. Themes without `tokenColors` use the `syntax` styles.
+
+`vscode-dark-plus`, `default-dark` (VS Code's Dark Modern), and `monokai` ship with the rules of their VS Code originals, so they color code exactly as VS Code does without semantic highlighting.
+
 ### Section Reference
 
 | Section | Description |
@@ -292,6 +308,7 @@ Highlighting comes from VS Code's TextMate grammars, which distinguish more than
 | `diff` | Diff presentation styles: `added`, `deleted`, and `modified` backgrounds; `gutterAdded`, `gutterDeleted`, and `gutterModified` semantic foregrounds; `collapsedEmphasis` for opt-in emphasized idle rows; and the `collapsedHover` accent. Emphasis defaults to contrast-safe normal theme colors with bold text, while an omitted `collapsedHover` background inherits the editor active-line background. The legacy `collapsed` field remains accepted only as a `collapsedHover` migration alias. |
 | `scrollbar` | Scrollbar thumb (`fg`) and track (`bg`) colors |
 | `syntax` | Syntax highlighting colors for language tokens. See [Syntax styles](#syntax-styles). |
+| `tokenColors` | Optional VS Code token color rules. See [VS Code token colors](#vs-code-token-colors). |
 | `fileIcons` | File icon colors in the Explorer and Changes panel, by hue family (`red`, `yellow`, `green`, `cyan`, `blue`, `magenta`). Each entry defaults to the matching `terminal` color, so most themes need no `fileIcons` section. Neutral icons use the row's normal text color |
 | `terminal` | ANSI color palette for the integrated terminal (16 colors), plus `selection`, the highlight background for selected terminal text. `selection` inherits `editor.selection.bg` when omitted. |
 | `borders` | Unicode characters used for drawing box borders. Overridden when `borderStyle` in settings is set to a named preset (e.g. `"rounded"`, `"double"`). Use `"default"` or `"theme"` to respect the theme's borders. |

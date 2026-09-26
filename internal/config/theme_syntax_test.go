@@ -97,3 +97,27 @@ func TestVSCodeThemesSetFineSyntaxSlots(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenColorsAcceptVSCodeShapes(t *testing.T) {
+	var th ThemeConfig
+	err := json.Unmarshal([]byte(`{"tokenColors": [
+		{"name": "x", "scope": "comment, string.quoted", "settings": {"foreground": "#111111"}},
+		{"scope": ["keyword", "storage"], "settings": {"fontStyle": ""}},
+		{"scope": "markup.bold", "settings": {"fontStyle": "bold"}}
+	]}`), &th)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := th.TokenColors[0].Scope; len(got) != 2 || got[0] != "comment" || got[1] != "string.quoted" {
+		t.Errorf("comma-separated scope = %q", got)
+	}
+	if got := th.TokenColors[1].Scope; len(got) != 2 || got[1] != "storage" {
+		t.Errorf("scope list = %q", got)
+	}
+	if fs := th.TokenColors[1].Settings.FontStyle; fs == nil || *fs != "" {
+		t.Errorf("explicit empty fontStyle = %v, want pointer to empty", fs)
+	}
+	if th.TokenColors[0].Settings.FontStyle != nil {
+		t.Error("absent fontStyle should be nil")
+	}
+}
