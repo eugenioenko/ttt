@@ -2132,6 +2132,8 @@ Named styles available for both widget and raw cell rendering. Actual colors dep
 | `syntax_link` | Syntax: links in markup |
 | `syntax_code` | Syntax: inline code in markup |
 | `syntax_interpolation` | Syntax: template interpolation delimiters: `${` `}` |
+| `syntax_selector` | Syntax: CSS, SCSS, and LESS selectors |
+| `syntax_readonly_variable` | Syntax: constant and enum member names |
 
 Styles can be passed as a string or a table:
 

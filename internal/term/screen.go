@@ -59,6 +59,8 @@ const (
 	StyleSyntaxLink
 	StyleSyntaxCode
 	StyleSyntaxInterpolation
+	StyleSyntaxSelector
+	StyleSyntaxReadonlyVariable
 	StyleMuted
 	StyleBracketMatch
 	StyleSuccess

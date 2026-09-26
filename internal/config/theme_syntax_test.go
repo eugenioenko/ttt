@@ -19,32 +19,35 @@ func TestFineSyntaxSlotsInheritTheirParent(t *testing.T) {
 			Type:        StyleDef{Fg: "#000007"},
 			Variable:    StyleDef{Fg: "#000009"},
 			Punctuation: StyleDef{Fg: "#00000a"},
+			Tag:         StyleDef{Fg: "#00000b"},
 		},
 	}
 	th.ResolveColors()
 	s := th.Syntax
 
 	for name, tc := range map[string]struct{ got, want StyleDef }{
-		"regexp":        {s.Regexp, s.String},
-		"quote":         {s.Quote, s.Comment},
-		"control":       {s.Control, s.Keyword},
-		"storage":       {s.Storage, s.Keyword},
-		"constant":      {s.Constant, s.Keyword},
-		"self":          {s.Self, s.Keyword},
-		"escape":        {s.Escape, s.String},
-		"parameter":     {s.Parameter, s.Variable},
-		"property":      {s.Property, s.Variable},
-		"namespace":     {s.Namespace, s.Type},
-		"decorator":     {s.Decorator, s.Function},
-		"link":          {s.Link, s.String},
-		"code":          {s.Code, s.String},
-		"interpolation": {s.Interpolation, s.Punctuation},
-		"inserted":      {s.Inserted, th.Diff.Added},
-		"deleted":       {s.Deleted, th.Diff.Deleted},
-		"heading":       {s.Heading, StyleDef{Fg: "#000003", Italic: true, Bold: true}},
-		"bold":          {s.Bold, StyleDef{Fg: "#dddddd", Bold: true}},
-		"italic":        {s.Italic, StyleDef{Fg: "#dddddd", Italic: true}},
-		"invalid":       {s.Invalid, StyleDef{Fg: "#ff0000"}},
+		"regexp":           {s.Regexp, s.String},
+		"quote":            {s.Quote, s.Comment},
+		"control":          {s.Control, s.Keyword},
+		"storage":          {s.Storage, s.Keyword},
+		"constant":         {s.Constant, s.Keyword},
+		"self":             {s.Self, s.Keyword},
+		"escape":           {s.Escape, s.String},
+		"parameter":        {s.Parameter, s.Variable},
+		"property":         {s.Property, s.Variable},
+		"namespace":        {s.Namespace, s.Type},
+		"decorator":        {s.Decorator, s.Function},
+		"link":             {s.Link, s.String},
+		"code":             {s.Code, s.String},
+		"interpolation":    {s.Interpolation, s.Punctuation},
+		"selector":         {s.Selector, s.Tag},
+		"readonlyVariable": {s.ReadonlyVariable, s.Variable},
+		"inserted":         {s.Inserted, th.Diff.Added},
+		"deleted":          {s.Deleted, th.Diff.Deleted},
+		"heading":          {s.Heading, StyleDef{Fg: "#000003", Italic: true, Bold: true}},
+		"bold":             {s.Bold, StyleDef{Fg: "#dddddd", Bold: true}},
+		"italic":           {s.Italic, StyleDef{Fg: "#dddddd", Italic: true}},
+		"invalid":          {s.Invalid, StyleDef{Fg: "#ff0000"}},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %+v, want %+v", name, tc.got, tc.want)
@@ -86,7 +89,7 @@ func TestVSCodeThemesSetFineSyntaxSlots(t *testing.T) {
 		for _, key := range []string{
 			"regexp", "heading", "bold", "italic", "quote", "inserted", "deleted", "invalid",
 			"control", "storage", "constant", "escape", "parameter", "property", "self",
-			"namespace", "decorator", "link", "code", "interpolation",
+			"namespace", "decorator", "link", "code", "interpolation", "selector", "readonlyVariable",
 		} {
 			if raw.Syntax[key] == (StyleDef{}) {
 				t.Errorf("%s: syntax.%s is not set", name, key)

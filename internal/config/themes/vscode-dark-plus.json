@@ -124,7 +124,7 @@
       "fg": "#ce9178"
     },
     "keyword": {
-      "fg": "#c586c0"
+      "fg": "#569cd6"
     },
     "number": {
       "fg": "#b5cea8"
@@ -215,6 +215,12 @@
     },
     "interpolation": {
       "fg": "#569cd6"
+    },
+    "selector": {
+      "fg": "#d7ba7d"
+    },
+    "readonlyVariable": {
+      "fg": "#4fc1ff"
     }
   },
   "terminal": {

@@ -52,6 +52,8 @@ var pluginStyles = []styleEntry{
 	{"syntax_link", term.StyleSyntaxLink},
 	{"syntax_code", term.StyleSyntaxCode},
 	{"syntax_interpolation", term.StyleSyntaxInterpolation},
+	{"syntax_selector", term.StyleSyntaxSelector},
+	{"syntax_readonly_variable", term.StyleSyntaxReadonlyVariable},
 }
 
 var styleByName map[string]term.Style

@@ -130,6 +130,10 @@ type SyntaxStyles struct {
 	Link          StyleDef `json:"link,omitempty"`
 	Code          StyleDef `json:"code,omitempty"`
 	Interpolation StyleDef `json:"interpolation,omitempty"`
+	Selector      StyleDef `json:"selector,omitempty"`
+	// ReadonlyVariable is a const or enum member name, which VS Code themes
+	// color apart from ordinary variables.
+	ReadonlyVariable StyleDef `json:"readonlyVariable,omitempty"`
 }
 
 type FileIconStyles struct {
@@ -433,6 +437,8 @@ func (t *ThemeConfig) resolveSyntax() {
 	inherit(&s.Link, s.String)
 	inherit(&s.Code, s.String)
 	inherit(&s.Interpolation, s.Punctuation)
+	inherit(&s.Selector, s.Tag)
+	inherit(&s.ReadonlyVariable, s.Variable)
 }
 
 // inherit copies parent into an entirely unset style, so a theme that sets

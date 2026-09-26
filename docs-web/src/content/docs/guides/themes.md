@@ -272,6 +272,8 @@ Highlighting comes from VS Code's TextMate grammars, which distinguish more than
 | `link` | Links in markup | `string` |
 | `code` | Inline code in markup | `string` |
 | `interpolation` | Template interpolation delimiters: `${` `}` | `punctuation` |
+| `selector` | CSS, SCSS, and LESS selectors: `a`, `.card`, `#id`, `:hover`, `&` | `tag` |
+| `readonlyVariable` | Constant and enum member names: `const total` | `variable` |
 
 ### Section Reference
 

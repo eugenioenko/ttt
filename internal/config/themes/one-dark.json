@@ -187,6 +187,12 @@
     },
     "interpolation": {
       "fg": "#c678dd"
+    },
+    "selector": {
+      "fg": "#e06c75"
+    },
+    "readonlyVariable": {
+      "fg": "#e5c07b"
     }
   },
   "borders": {

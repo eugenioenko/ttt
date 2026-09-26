@@ -189,6 +189,12 @@
     },
     "interpolation": {
       "fg": "#2aa198"
+    },
+    "selector": {
+      "fg": "#268bd2"
+    },
+    "readonlyVariable": {
+      "fg": "#268bd2"
     }
   },
   "terminal": {

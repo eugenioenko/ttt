@@ -185,20 +185,90 @@ func (h *Highlighter) styleFor(stack *textmate.ScopeStack) term.Style {
 	if style, ok := h.styles[stack]; ok {
 		return style
 	}
-	style := categoryStyles[stack.Category()]
-	if innermost, ok := stack.At(stack.Len() - 1); ok {
-		for _, rule := range scopeStyles {
-			if hasScopePrefix(innermost, rule.prefix) {
-				style = rule.style
-				break
-			}
-		}
-	}
+	style := classifyScopes(stack.Names())
 	if h.styles == nil || len(h.styles) >= maxIsolatedCache {
 		h.styles = make(map[*textmate.ScopeStack]term.Style)
 	}
 	h.styles[stack] = style
 	return style
+}
+
+func classifyScopes(names []string) term.Style {
+	if len(names) == 0 {
+		return term.StyleDefault
+	}
+	innermost := names[len(names)-1]
+	// VS Code themes color only specific entity.name kinds; any other one,
+	// such as Go's entity.name.import inside an import string, takes the color
+	// of its enclosing scope. The engine's category maps every entity.name to a
+	// type, which split an import path from its own quotes.
+	if hasScopePrefix(innermost, "entity.name") && !isThemedEntityName(innermost) {
+		return classifyScopes(names[:len(names)-1])
+	}
+	if isCSSSelector(names, innermost) {
+		return term.StyleSyntaxSelector
+	}
+	for _, rule := range scopeStyles {
+		if hasScopePrefix(innermost, rule.prefix) {
+			return rule.style
+		}
+	}
+	return categoryStyles[textmate.ClassifyScopes(names)]
+}
+
+// CSS selectors reuse HTML-like scopes (entity.name.tag, attribute-name.class)
+// that themes color differently inside a stylesheet, so they are recognized
+// only under a source.css scope, which also covers SCSS, LESS, and <style>.
+func isCSSSelector(names []string, innermost string) bool {
+	// The ".", "#", and ":" of a selector take the selector's color.
+	if hasScopePrefix(innermost, "punctuation.definition.entity") && len(names) > 1 {
+		return isCSSSelector(names[:len(names)-1], names[len(names)-2])
+	}
+	if hasScopePrefix(innermost, "entity.name.tag.css") || hasScopePrefix(innermost, "entity.name.tag.less") {
+		return true
+	}
+	inCSS := false
+	for _, name := range names {
+		if hasScopePrefix(name, "source.css") {
+			inCSS = true
+			break
+		}
+	}
+	if !inCSS {
+		return false
+	}
+	for _, prefix := range cssSelectorScopes {
+		if hasScopePrefix(innermost, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+var cssSelectorScopes = []string{
+	"entity.other.attribute-name.class",
+	"entity.other.attribute-name.id",
+	"entity.other.attribute-name.pseudo-class",
+	"entity.other.attribute-name.pseudo-element",
+	"entity.other.attribute-name.parent-selector",
+	"entity.other.attribute-name.parent",
+	"entity.other.attribute-name.scss",
+}
+
+var themedEntityNames = []string{
+	"entity.name.class", "entity.name.function", "entity.name.label",
+	"entity.name.module", "entity.name.namespace", "entity.name.operator",
+	"entity.name.scope-resolution", "entity.name.section", "entity.name.selector",
+	"entity.name.tag", "entity.name.type", "entity.name.variable",
+}
+
+func isThemedEntityName(scope string) bool {
+	for _, prefix := range themedEntityNames {
+		if hasScopePrefix(scope, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasScopePrefix(scope, prefix string) bool {
@@ -216,6 +286,8 @@ var scopeStyles = []struct {
 	{"constant.language", term.StyleSyntaxConstant},
 	{"constant.character.escape", term.StyleSyntaxEscape},
 	{"variable.parameter", term.StyleSyntaxParameter},
+	{"variable.other.constant", term.StyleSyntaxReadonlyVariable},
+	{"variable.other.enummember", term.StyleSyntaxReadonlyVariable},
 	{"variable.other.property", term.StyleSyntaxProperty},
 	{"variable.other.object.property", term.StyleSyntaxProperty},
 	{"variable.language", term.StyleSyntaxSelf},

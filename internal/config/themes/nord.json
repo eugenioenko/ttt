@@ -226,6 +226,12 @@
     },
     "interpolation": {
       "fg": "#eceff4"
+    },
+    "selector": {
+      "fg": "#81a1c1"
+    },
+    "readonlyVariable": {
+      "fg": "#d8dee9"
     }
   },
   "terminal": {
