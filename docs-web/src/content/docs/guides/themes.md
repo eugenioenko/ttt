@@ -289,7 +289,7 @@ A theme can also carry VS Code's own `tokenColors` rules, in VS Code's format, s
 
 When a theme has `tokenColors`, they decide every token's color the way VS Code does: the most specific matching scope wins, a rule that sets only a font style keeps the color of a broader one, and a token no rule matches uses the default foreground. The `syntax` styles are then used only by other parts of the UI that refer to them, such as bracket colors. Themes without `tokenColors` use the `syntax` styles.
 
-`vscode-dark-plus`, `default-dark` (VS Code's Dark Modern), and `monokai` ship with the rules of their VS Code originals, so they color code exactly as VS Code does without semantic highlighting.
+`vscode-dark-plus`, `default-dark` (VS Code's Dark Modern), `default-light` (VS Code's Light Modern), `monokai`, `dracula`, `nord`, `one-dark`, `solarized-dark`, and `solarized-light` ship with the rules of their VS Code originals, so they color code exactly as VS Code does without semantic highlighting.
 
 ### Section Reference
 
