@@ -215,3 +215,44 @@ func TestSidebarClosedStateRestores(t *testing.T) {
 		t.Fatal("hiding the sidebar for the empty state must not persist")
 	}
 }
+
+func TestPanelSizeRestoresAndPersists(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	a := buildTestApp(t, config.DefaultSettings())
+	a.ContentSplit.BottomH = 12
+	a.ContentSplit.RightW = 45
+	a.persistPanelSize()
+
+	a.ContentSplit.BottomH = 2
+	a.ContentSplit.RightW = 10
+	a.persistPanelSize()
+	if got := config.LoadState(); got.PanelHeight != 12 || got.PanelWidth != 45 {
+		t.Fatalf("persisted panel size = %dx%d, want 12x45", got.PanelHeight, got.PanelWidth)
+	}
+
+	a = buildTestApp(t, config.DefaultSettings())
+	if a.ContentSplit.BottomH != 12 || a.ContentSplit.RightW != 45 {
+		t.Fatalf("restored panel size = %dx%d, want 12x45", a.ContentSplit.BottomH, a.ContentSplit.RightW)
+	}
+
+	if err := config.SaveState(config.State{PanelHeight: 2, PanelWidth: 10}); err != nil {
+		t.Fatal(err)
+	}
+	a = buildTestApp(t, config.DefaultSettings())
+	if a.ContentSplit.BottomH < ui.MinPanelHeight || a.ContentSplit.RightW < ui.MinPanelWidth {
+		t.Fatalf("restored tiny panel size = %dx%d", a.ContentSplit.BottomH, a.ContentSplit.RightW)
+	}
+}
+
+func TestReopeningTinyPanelResetsSize(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	a.ContentSplit.SetRect(ui.Rect{W: 100, H: 40})
+	a.ContentSplit.BottomH = 2
+	a.ContentSplit.RightW = 3
+	a.ensureUsablePanelSize()
+	if a.ContentSplit.BottomH != 20 || a.ContentSplit.RightW != ui.DefaultPanelWidth {
+		t.Fatalf("panel size = %dx%d, want 20x%d", a.ContentSplit.BottomH, a.ContentSplit.RightW, ui.DefaultPanelWidth)
+	}
+}

@@ -324,6 +324,12 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	if panelPos == "right" {
 		contentSplit.Position = ui.SplitRight
 	}
+	if state.PanelHeight >= ui.MinPanelHeight {
+		contentSplit.BottomH = state.PanelHeight
+	}
+	if state.PanelWidth >= ui.MinPanelWidth {
+		contentSplit.RightW = state.PanelWidth
+	}
 	splitPanel.ShowLeft = sidebar.Visible
 	splitPanel.RightBorderStartY = 2
 	contentSplit.RightBorderStartY = &splitPanel.RightBorderStartY

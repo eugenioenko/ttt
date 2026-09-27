@@ -121,11 +121,13 @@ type App struct {
 	// folder, and cleared when a folder opens: only then does closing every tab
 	// bring the page back. Loose files opened from the command line still end
 	// on an untitled tab.
-	welcomeWhenEmpty   bool
-	welcomeView        *welcomeView
-	eventLoopDoneOnce  sync.Once
-	eventLoopCloseOnce sync.Once
-	eventLoopDone      chan struct{}
+	welcomeWhenEmpty      bool
+	welcomeView           *welcomeView
+	panelResizing         bool
+	panelResizeFromClosed bool
+	eventLoopDoneOnce     sync.Once
+	eventLoopCloseOnce    sync.Once
+	eventLoopDone         chan struct{}
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
@@ -283,6 +285,64 @@ func (a *App) FocusSidebar() {
 	}
 	if w := a.Sidebar.ActiveWidget(); w != nil {
 		a.Root.SetFocus(w)
+	}
+}
+
+func (a *App) ensureUsablePanelSize() {
+	r := a.ContentSplit.GetRect()
+	maxH := r.H - 4
+	if a.ContentSplit.BottomH < ui.MinPanelHeight || a.ContentSplit.BottomH > maxH {
+		a.ContentSplit.BottomH = min(r.H/2, maxH)
+	}
+	if a.ContentSplit.RightW < ui.MinPanelWidth {
+		a.ContentSplit.RightW = ui.DefaultPanelWidth
+	}
+}
+
+func (a *App) resizePanel(size int) {
+	if !a.panelResizing {
+		a.panelResizing = true
+		a.panelResizeFromClosed = !a.ContentSplit.ShowBottom
+	}
+	if size <= 0 {
+		a.ContentSplit.ShowBottom = false
+		return
+	}
+	a.ContentSplit.ShowBottom = true
+	if a.ContentSplit.Position == ui.SplitRight {
+		a.ContentSplit.RightW = size
+	} else {
+		a.ContentSplit.BottomH = size
+	}
+	resizeTerminals(a)
+}
+
+// Spawning a terminal moves focus, and a focus change cancels the pointer
+// capture, so it must wait until the drag is over.
+func (a *App) finishPanelResize() {
+	fromClosed := a.panelResizeFromClosed
+	a.panelResizing = false
+	a.panelResizeFromClosed = false
+	if fromClosed && a.ContentSplit.ShowBottom && len(a.Terminals) == 0 {
+		a.SpawnTerminal()
+	}
+	a.persistPanelSize()
+}
+
+func (a *App) persistPanelSize() {
+	next := a.State
+	if h := a.ContentSplit.BottomH; h >= ui.MinPanelHeight {
+		next.PanelHeight = h
+	}
+	if w := a.ContentSplit.RightW; w >= ui.MinPanelWidth {
+		next.PanelWidth = w
+	}
+	if next.PanelHeight == a.State.PanelHeight && next.PanelWidth == a.State.PanelWidth {
+		return
+	}
+	a.State = next
+	if err := config.SaveState(a.State); err != nil {
+		a.StatusError("Failed to save panel size: " + err.Error())
 	}
 }
 

@@ -51,11 +51,21 @@ func (cs *ContentSplitWidget) WidgetChildren() []Widget {
 	return children
 }
 
+const DefaultPanelWidth = 60
+
+// Panel sizes below these are never saved or restored: the panel can be
+// dragged through them on its way closed, and reopening at one would leave
+// a sliver.
+const (
+	MinPanelHeight = 5
+	MinPanelWidth  = 30
+)
+
 func NewContentSplitWidget() *ContentSplitWidget {
 	return &ContentSplitWidget{
 		ShowBottom: false,
 		BottomH:    15,
-		RightW:     60,
+		RightW:     DefaultPanelWidth,
 	}
 }
 

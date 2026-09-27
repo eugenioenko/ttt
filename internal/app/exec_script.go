@@ -516,11 +516,7 @@ func execPanel(a *App, args string) error {
 		}
 		a.BottomPanel.SetActivePanel(id)
 		if !a.ContentSplit.ShowBottom {
-			r := a.ContentSplit.GetRect()
-			maxH := r.H - 4
-			if a.ContentSplit.BottomH <= 1 || a.ContentSplit.BottomH > maxH {
-				a.ContentSplit.BottomH = min(r.H/2, maxH)
-			}
+			a.ensureUsablePanelSize()
 			a.ContentSplit.ShowBottom = true
 		}
 		if w := a.BottomPanel.ActiveWidget(); w != nil {

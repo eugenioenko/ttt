@@ -80,7 +80,7 @@ All editor settings are nested under the `editor` key.
 | `sidebar.width` | int | `30` | Initial sidebar width in columns. |
 | `sidebar.commitHistoryHeight` | int | proportional | Initial height of the commit history in the Changes panel, in rows. |
 
-These are starting values. Once you drag a header, resize the sidebar, or resize the commit history, the new layout is saved to `state.json` next to `settings.json` and takes precedence. Delete `state.json` to return to these values.
+These are starting values. Once you drag a header, resize the sidebar, the commit history, or the panel, the new layout is saved to `state.json` next to `settings.json` and takes precedence. Delete `state.json` to return to these values.
 
 ## Panel
 

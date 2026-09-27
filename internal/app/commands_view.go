@@ -9,11 +9,7 @@ import (
 
 func (a *App) ToggleTerminal() {
 	if !a.ContentSplit.ShowBottom {
-		r := a.ContentSplit.GetRect()
-		maxH := r.H - 4
-		if a.ContentSplit.BottomH <= 1 || a.ContentSplit.BottomH > maxH {
-			a.ContentSplit.BottomH = min(r.H/2, maxH)
-		}
+		a.ensureUsablePanelSize()
 		a.showTerminalPanel()
 		resizeTerminals(a)
 	} else {
@@ -139,11 +135,7 @@ func (a *App) contextPrevTab() {
 
 func (a *App) focusTerminal() {
 	if !a.ContentSplit.ShowBottom {
-		r := a.ContentSplit.GetRect()
-		maxH := r.H - 4
-		if a.ContentSplit.BottomH <= 1 || a.ContentSplit.BottomH > maxH {
-			a.ContentSplit.BottomH = min(r.H/2, maxH)
-		}
+		a.ensureUsablePanelSize()
 		a.showTerminalPanel()
 	}
 	a.BottomPanel.SetActivePanel("terminal")
@@ -400,6 +392,7 @@ func registerViewCommands(app *App) {
 				app.ShowBottomPanel()
 			}
 			app.ContentSplit.ResizePanel(1)
+			app.persistPanelSize()
 			resizeTerminals(app)
 		},
 	})
@@ -412,6 +405,7 @@ func registerViewCommands(app *App) {
 				return
 			}
 			app.ContentSplit.ResizePanel(-1)
+			app.persistPanelSize()
 			resizeTerminals(app)
 		},
 	})

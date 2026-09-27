@@ -711,23 +711,8 @@ func registerWidgetCallbacks(app *App) {
 	}
 	app.Changes.Split.OnResizeEnd = app.persistCommitHistoryHeight
 
-	app.ContentSplit.OnResize = func(size int) {
-		if size <= 0 {
-			app.ContentSplit.ShowBottom = false
-		} else {
-			app.ContentSplit.ShowBottom = true
-			if app.ContentSplit.Position == ui.SplitRight {
-				app.ContentSplit.RightW = size
-			} else {
-				app.ContentSplit.BottomH = size
-			}
-			if len(app.Terminals) == 0 {
-				app.SpawnTerminal()
-			} else {
-				resizeTerminals(app)
-			}
-		}
-	}
+	app.ContentSplit.OnResize = app.resizePanel
+	app.ContentSplit.OnResizeEnd = app.finishPanelResize
 
 	app.ContentSplit.OnTopClick = func() {
 		if app.Root.HasOverlay() {

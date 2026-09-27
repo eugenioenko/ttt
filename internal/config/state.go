@@ -11,6 +11,8 @@ type State struct {
 	SidebarHidden       bool     `json:"sidebarHidden,omitempty"`
 	SidebarPanelOrder   []string `json:"sidebarPanelOrder,omitempty"`
 	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
+	PanelHeight         int      `json:"panelHeight,omitempty"`
+	PanelWidth          int      `json:"panelWidth,omitempty"`
 }
 
 func LoadState() State {
