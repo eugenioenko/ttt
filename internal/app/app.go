@@ -219,6 +219,9 @@ func (a *App) SetSidebarWidth(w int) {
 
 func (a *App) persistSidebarWidth(w int) {
 	a.SetSidebarWidth(w)
+	if a.SplitPanel.DividerPos < ui.MinSidebarWidth {
+		return
+	}
 	a.State.SidebarWidth = a.SplitPanel.DividerPos
 	if err := config.SaveState(a.State); err != nil {
 		a.StatusError("Failed to save sidebar width: " + err.Error())

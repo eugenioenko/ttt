@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/ui"
 )
 
 func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
@@ -43,6 +44,28 @@ func TestSidebarWidthRestoresAndPersists(t *testing.T) {
 	}
 	if got := config.LoadState().SidebarWidth; got != 18 {
 		t.Fatalf("persisted sidebar width = %d, want 18", got)
+	}
+}
+
+func TestSidebarDraggedClosedRestoresUsableWidth(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	a := buildTestApp(t, config.DefaultSettings())
+	a.persistSidebarWidth(18)
+	for w := 5; w >= 0; w-- {
+		a.persistSidebarWidth(w)
+	}
+	if got := config.LoadState().SidebarWidth; got != 18 {
+		t.Fatalf("persisted sidebar width = %d, want 18", got)
+	}
+
+	if err := config.SaveState(config.State{SidebarWidth: 2}); err != nil {
+		t.Fatal(err)
+	}
+	a = buildTestApp(t, config.DefaultSettings())
+	if a.SplitPanel.DividerPos != ui.DefaultSidebarWidth {
+		t.Fatalf("restored sidebar width = %d, want %d", a.SplitPanel.DividerPos, ui.DefaultSidebarWidth)
 	}
 }
 
