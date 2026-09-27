@@ -241,7 +241,6 @@
   },
   "terminal": {
     "foreground": "#f8f8f2",
-    "background": "#282a36",
     "black": "#21222c",
     "red": "#ff5555",
     "green": "#50fa7b",

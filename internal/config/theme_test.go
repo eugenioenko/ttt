@@ -98,6 +98,9 @@ func TestBundledThemesLoad(t *testing.T) {
 			if err := json.Unmarshal(data, &source); err != nil {
 				t.Fatalf("failed to inspect %s: %v", name, err)
 			}
+			if source.Terminal.Background != "" {
+				t.Errorf("%s: terminal.background = %q, want empty to preserve terminal transparency", name, source.Terminal.Background)
+			}
 			th.ResolveColors()
 
 			// After resolving, verify critical fields are non-empty

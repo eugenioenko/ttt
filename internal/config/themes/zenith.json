@@ -185,7 +185,6 @@
   },
   "terminal": {
     "foreground": "#c8ccd4",
-    "background": "#1e2227",
     "black": "#1e2227",
     "red": "#e06c75",
     "green": "#8ebd6b",
