@@ -173,9 +173,15 @@ func (a *App) ShowSidebar() {
 	}
 	a.applySearchHighlights()
 	a.syncRepositoryObservation()
+	a.persistSidebarHidden(false)
 }
 
 func (a *App) HideSidebar() {
+	a.hideSidebar()
+	a.persistSidebarHidden(true)
+}
+
+func (a *App) hideSidebar() {
 	a.Sidebar.InvalidatePointerInteraction()
 	a.Sidebar.Visible = false
 	a.SplitPanel.ShowLeft = false
@@ -215,6 +221,16 @@ func (a *App) SetSidebarWidth(w int) {
 		a.ShowSidebar()
 	}
 	a.SplitPanel.DividerPos = w
+}
+
+func (a *App) persistSidebarHidden(hidden bool) {
+	if a.State.SidebarHidden == hidden {
+		return
+	}
+	a.State.SidebarHidden = hidden
+	if err := config.SaveState(a.State); err != nil {
+		a.StatusError("Failed to save sidebar visibility: " + err.Error())
+	}
 }
 
 func (a *App) persistSidebarWidth(w int) {

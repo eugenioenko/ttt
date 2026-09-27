@@ -3,8 +3,10 @@ package app
 import (
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
@@ -173,5 +175,41 @@ func TestShowSettingsReopenPreservesPendingWorkingView(t *testing.T) {
 	}
 	if got := a.settingsView.working.Editor.TabSize; got != 7 {
 		t.Fatalf("reopening settings discarded pending tab size: got %d, want 7", got)
+	}
+}
+
+func TestSidebarClosedStateRestores(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	folder := t.TempDir()
+	build := func() *App {
+		cfg := config.AppConfig{
+			Keybindings: config.DefaultKeybindings(),
+			Settings:    config.DefaultSettings(),
+			Theme:       config.DefaultTheme(),
+		}
+		borders := BuildBorderSet(cfg.Theme.Borders)
+		return BuildAppFromConfig(&cfg, &borders, workspace.New([]string{folder}), nil)
+	}
+
+	a := build()
+	if !a.Sidebar.Visible {
+		t.Fatal("sidebar should start visible with a folder open")
+	}
+	a.ToggleSidebar()
+	if a = build(); a.Sidebar.Visible || a.SplitPanel.ShowLeft {
+		t.Fatal("sidebar closed in the previous session should stay closed")
+	}
+
+	a.ToggleSidebar()
+	if a = build(); !a.Sidebar.Visible {
+		t.Fatal("sidebar reopened in the previous session should start visible")
+	}
+
+	a.Reg = command.NewRegistry()
+	RegisterCommands(a)
+	a.ShowEmptyState()
+	if a = build(); !a.Sidebar.Visible {
+		t.Fatal("hiding the sidebar for the empty state must not persist")
 	}
 }

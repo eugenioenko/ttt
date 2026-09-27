@@ -304,7 +304,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	}
 	sidebar.Tabs.Config.Reorderable = true
 	hasFolders := len(ws.Paths()) > 0
-	sidebar.Visible = hasFolders
+	sidebar.Visible = hasFolders && !state.SidebarHidden
 	sidebar.Borders = borders
 
 	splitPanel := ui.NewSplitPanelWidget()

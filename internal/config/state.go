@@ -8,6 +8,7 @@ import (
 type State struct {
 	PanelPosition       string   `json:"panelPosition,omitempty"`
 	SidebarWidth        int      `json:"sidebarWidth,omitempty"`
+	SidebarHidden       bool     `json:"sidebarHidden,omitempty"`
 	SidebarPanelOrder   []string `json:"sidebarPanelOrder,omitempty"`
 	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
 }

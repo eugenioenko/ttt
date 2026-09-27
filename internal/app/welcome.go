@@ -110,7 +110,9 @@ func (a *App) ShowEmptyState() {
 	a.EditorGroup.EmptyStateID = welcomeTabID
 	a.welcomeIsEmptyState = true
 	a.welcomeWhenEmpty = true
-	a.HideSidebar()
+	// Having no folders is not a choice to hide the sidebar; persisting it
+	// would keep the sidebar hidden in the next session that has folders.
+	a.hideSidebar()
 }
 
 // SyncEmptyState steps the welcome page aside once something else opens.
