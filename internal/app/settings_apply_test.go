@@ -40,7 +40,7 @@ func TestSidebarWidthRestoresAndPersists(t *testing.T) {
 		t.Fatalf("restored sidebar width = %d, want 22", a.SplitPanel.DividerPos)
 	}
 
-	a.persistSidebarWidth(18)
+	a.SetSidebarWidth(18)
 	if got := a.State.SidebarWidth; got != 18 {
 		t.Fatalf("sidebar width = %d, want 18", got)
 	}
@@ -54,12 +54,13 @@ func TestSidebarDraggedClosedRestoresUsableWidth(t *testing.T) {
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
 
 	a := buildTestApp(t, config.DefaultSettings())
-	a.persistSidebarWidth(18)
+	a.SetSidebarWidth(18)
 	for w := 5; w >= 0; w-- {
-		a.persistSidebarWidth(w)
+		a.resizeSidebar(w)
 	}
-	if got := config.LoadState().SidebarWidth; got != 18 {
-		t.Fatalf("persisted sidebar width = %d, want 18", got)
+	a.persistSidebarLayout()
+	if got := config.LoadState(); got.SidebarWidth != 18 || !got.SidebarHidden {
+		t.Fatalf("persisted state = %+v, want width 18 and hidden", got)
 	}
 
 	if err := config.SaveState(config.State{SidebarWidth: 2}); err != nil {

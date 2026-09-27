@@ -745,7 +745,8 @@ func registerWidgetCallbacks(app *App) {
 		}
 	}
 
-	app.SplitPanel.OnResize = app.persistSidebarWidth
+	app.SplitPanel.OnResize = app.resizeSidebar
+	app.SplitPanel.OnResizeEnd = app.persistSidebarLayout
 
 	app.BottomPanel.Tabs.Config.OnTabClick = func(index int) {
 		panels := app.BottomPanel.PanelIDs()
