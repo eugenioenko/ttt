@@ -29,6 +29,7 @@ type ContentSplitWidget struct {
 	MinRightW                 int
 	Borders                   *term.BorderSet
 	OnResize                  func(height int)
+	OnResizeEnd               func()
 	OnBottomClick             func()
 	OnTopClick                func()
 	RightBorderStartY         *int
@@ -252,7 +253,7 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 			return EventCaptured
 		}
-		cs.dragging = false
+		cs.endDrag()
 		return EventIgnored
 	}
 
@@ -397,9 +398,19 @@ func (cs *ContentSplitWidget) TopContentHeight() int {
 	return max(r.H-bottomH-1, 0)
 }
 
+func (cs *ContentSplitWidget) endDrag() {
+	if !cs.dragging {
+		return
+	}
+	cs.dragging = false
+	if cs.OnResizeEnd != nil {
+		cs.OnResizeEnd()
+	}
+}
+
 func (cs *ContentSplitWidget) CancelPointerCapture() bool {
 	canceled := cs.dragging || cs.capturedChild != nil
-	cs.dragging = false
+	cs.endDrag()
 	cs.wasPressed = false
 	cs.capturedChild = nil
 	cs.cancelingPointerCapture = true
@@ -418,7 +429,7 @@ func (cs *ContentSplitWidget) CancelPointerCapture() bool {
 
 func (cs *ContentSplitWidget) InvalidatePointerInteraction() bool {
 	invalidated := cs.dragging || cs.capturedChild != nil
-	cs.dragging = false
+	cs.endDrag()
 	cs.wasPressed = false
 	cs.capturedChild = nil
 	cs.cancelingPointerCapture = true

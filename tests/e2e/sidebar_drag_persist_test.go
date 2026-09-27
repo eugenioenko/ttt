@@ -38,3 +38,31 @@ func TestSidebarDragPersistsOnlyOnRelease(t *testing.T) {
 		t.Fatalf("state after drag-open = %+v, want visible with width 19", got)
 	}
 }
+
+func TestCommitHistoryDragPersistsOnlyOnRelease(t *testing.T) {
+	h := newTestHarness(t, 80, 30)
+	defer h.stop()
+	h.exec("sidebar.changes")
+
+	split := h.app.Changes.Split
+	x := split.GetRect().X + 2
+	y := split.DividerScreenY()
+	if y < 0 {
+		t.Fatal("commit history divider is not shown")
+	}
+	mouse := func(y int, btn tcell.ButtonMask) {
+		h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, btn, tcell.ModNone))
+	}
+
+	mouse(y, tcell.Button1)
+	for _, dy := range []int{1, 2, 3} {
+		mouse(y-dy, tcell.Button1)
+		if got := config.LoadState().CommitHistoryHeight; got != 0 {
+			t.Fatalf("commit history height saved mid-drag: %d", got)
+		}
+	}
+	mouse(y-3, tcell.ButtonNone)
+	if got, want := config.LoadState().CommitHistoryHeight, split.BottomH; got != want || got == 0 {
+		t.Fatalf("saved commit history height = %d, want %d", got, want)
+	}
+}

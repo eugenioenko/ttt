@@ -20,7 +20,8 @@ func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
 		t.Fatalf("restored split = height %d ratio %v, want height 17 ratio 0", a.Changes.Split.BottomH, a.Changes.Split.BottomRatio)
 	}
 
-	a.persistCommitHistoryHeight(12)
+	a.Changes.Split.BottomH = 12
+	a.persistCommitHistoryHeight()
 	if got := a.State.CommitHistoryHeight; got != 12 {
 		t.Fatalf("commitHistoryHeight = %d, want 12", got)
 	}

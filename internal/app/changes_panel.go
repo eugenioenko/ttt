@@ -157,8 +157,11 @@ type prGroup struct {
 	PRHeadSHA string
 }
 
-func (a *App) persistCommitHistoryHeight(height int) {
-	a.Changes.Split.BottomH = height
+func (a *App) persistCommitHistoryHeight() {
+	height := a.Changes.Split.BottomH
+	if height == a.State.CommitHistoryHeight {
+		return
+	}
 	a.State.CommitHistoryHeight = height
 	if err := config.SaveState(a.State); err != nil {
 		a.StatusError("Failed to save commit history height: " + err.Error())
@@ -266,8 +269,6 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	cp.Split.MinBottomH = changesHistoryMinHeight
 	cp.Split.MinTopH = changesWorkingTreeMinHeight
 	cp.Split.OnResize = func(height int) {
-		// Default for standalone/test use; App wires this to persistCommitHistoryHeight
-		// (see registerWidgetCallbacks) once the panel is attached to Settings.
 		cp.Split.BottomH = height
 	}
 

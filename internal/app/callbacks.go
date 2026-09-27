@@ -709,7 +709,7 @@ func registerWidgetCallbacks(app *App) {
 			app.Repository.HandleHistory(err)
 		}
 	}
-	app.Changes.Split.OnResize = app.persistCommitHistoryHeight
+	app.Changes.Split.OnResizeEnd = app.persistCommitHistoryHeight
 
 	app.ContentSplit.OnResize = func(size int) {
 		if size <= 0 {
