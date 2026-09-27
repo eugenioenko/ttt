@@ -13,7 +13,7 @@ const DefaultSidebarWidth = 30
 // MinSidebarWidth is the minimum width below which the sidebar resets to
 // DefaultSidebarWidth when toggled back on. This prevents the sidebar from
 // reopening at an unusably small width after being dragged nearly closed.
-const MinSidebarWidth = 10
+const MinSidebarWidth = 15
 
 type SplitPanelWidget struct {
 	BaseWidget
