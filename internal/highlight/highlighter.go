@@ -18,10 +18,15 @@ type Span struct {
 	Style term.Style
 }
 
-// Minified files put a whole program on one line; past this limit a line is
+// A 100ms budget keeps synchronous highlighting within the threshold where UI
+// feedback still feels immediate while leaving headroom for a grammar's first
+// lazy regex compilation on slower machines.
+const tokenizeTimeLimit = 100 * time.Millisecond
+
+// Minified files put a whole program on one line; past these limits a line is
 // left uncoloured rather than stalling the render.
 var tokenizeOptions = textmate.TokenizeOptions{
-	TimeLimit:    50 * time.Millisecond,
+	TimeLimit:    tokenizeTimeLimit,
 	MaxLineRunes: 20_000,
 }
 
