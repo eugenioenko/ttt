@@ -79,6 +79,11 @@ func (s *RepositoryState) EnsureCurrentChanges() {
 		s.startCurrentChanges()
 		return
 	}
+	// Refreshing again would supersede the in-flight status read on every
+	// event, and the identity read it posts is another event: a redraw livelock.
+	if s.inFlight {
+		return
+	}
 	s.RefreshNow(RepositoryWorktree)
 }
 

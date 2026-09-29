@@ -467,6 +467,44 @@ func TestRepositoryCurrentChangesCoalescesDropsStaleAndRetriesErrors(t *testing.
 	}
 }
 
+func TestRepositoryCurrentChangesWaitsForInFlightStatus(t *testing.T) {
+	dir := "/repo"
+	s, _, poster := testRepositoryState(nil, dir)
+	s.activeFile = "/repo/file.txt"
+	var identityReads atomic.Int32
+	s.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
+		identityReads.Add(1)
+		return &RepositoryIdentityResult{Seq: seq, FilePath: path}
+	}
+	release := make(chan struct{})
+	s.readStatus = func(_ context.Context, _ []string, seq uint64) *RepositoryStatusResult {
+		<-release
+		return repositoryResult(seq, dir, "head", git.FileStatus{Status: "M", Path: "file.txt"})
+	}
+	s.readCurrentChanges = func(_ context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+		return &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request, Fingerprint: "fresh"}
+	}
+	var applied atomic.Int32
+	s.SetCurrentChangesHandler(func(*CurrentChangesResult) { applied.Add(1) })
+	s.SetCurrentChangesRoot(dir, currentChangesTabID(dir))
+
+	s.EnsureCurrentChanges()
+	s.HandleIdentity(poster.await(t).(*RepositoryIdentityResult))
+	requested := s.requested
+	for range 5 {
+		s.EnsureCurrentChanges()
+	}
+	if s.requested != requested || identityReads.Load() != 1 {
+		t.Fatalf("events during an in-flight status forced refreshes: requested %d -> %d, identity reads=%d", requested, s.requested, identityReads.Load())
+	}
+
+	close(release)
+	s.HandleStatus(poster.await(t).(*RepositoryStatusResult))
+	if !s.HandleCurrentChanges(poster.await(t).(*CurrentChangesResult)) || applied.Load() != 1 {
+		t.Fatalf("in-flight status did not lead to current changes: applied=%d", applied.Load())
+	}
+}
+
 func TestRepositoryCurrentChangesIdenticalPollCoalescesWithoutStarvation(t *testing.T) {
 	dir := "/repo"
 	s, _, poster := testRepositoryState(nil, dir)
