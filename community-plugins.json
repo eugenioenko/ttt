@@ -167,6 +167,16 @@
     "tags": ["formatter", "python", "black"]
   },
   {
+    "name": "formatter-ruff",
+    "displayName": "Ruff Formatter",
+    "author": "RhenCloud",
+    "description": "Auto-configure ruff as the Python formatter",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "formatter-ruff",
+    "version": "0.1.0",
+    "tags": ["formatter", "python", "ruff"]
+  },
+  {
     "name": "formatter-rustfmt",
     "displayName": "rustfmt Formatter",
     "author": "eugenioenko",
@@ -235,6 +245,16 @@
     "path": "lsp-python",
     "version": "0.1.0",
     "tags": ["lsp", "python", "pyright"]
+  },
+  {
+    "name": "lsp-ruff",
+    "displayName": "Ruff Language Server",
+    "author": "RhenCloud",
+    "description": "Auto-configure ruff as the Python language server",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lsp-ruff",
+    "version": "0.1.0",
+    "tags": ["lsp", "python", "ruff"]
   },
   {
     "name": "lsp-c",
