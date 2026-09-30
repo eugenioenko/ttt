@@ -16,6 +16,7 @@ Full documentation lives in [`docs-web/src/content/docs/`](docs-web/src/content/
 ### Quick Install MacOS (brew)
 ```sh
 brew tap eugenioenko/ttt
+brew trust eugenioenko/ttt
 brew install ttt
 ```
 
