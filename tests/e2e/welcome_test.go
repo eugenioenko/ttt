@@ -356,3 +356,49 @@ func TestWelcomeRecentFolders(t *testing.T) {
 	}
 	t.Fatalf("recent row not found:\n%s", h.screenText())
 }
+
+func TestWelcomeRecentFoldersOptOut(t *testing.T) {
+	h := newTestHarness(t, 100, 40)
+	defer h.stop()
+
+	recent := filepath.Join(t.TempDir(), "private-proj")
+	if err := os.Mkdir(recent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state := config.State{RecentFolders: []string{recent}, SidebarWidth: 22}
+	if err := config.SaveState(state); err != nil {
+		t.Fatal(err)
+	}
+	h.app.State = state
+	h.exec("help.welcome")
+	h.redraw()
+	h.assertContains("Recent")
+	h.assertContains("private-proj")
+
+	settings := *h.app.Settings
+	disabled := false
+	settings.Welcome.RecentFolders = &disabled
+	h.app.ApplySettings(settings)
+	h.redraw()
+	h.assertNotContains("Recent")
+	h.assertNotContains("private-proj")
+	if got := config.LoadState(); len(got.RecentFolders) != 0 || got.SidebarWidth != 22 {
+		t.Fatalf("state after disabling recent folders = %+v", got)
+	}
+
+	h.app.RememberRecentFolders()
+	if got := config.LoadState().RecentFolders; len(got) != 0 {
+		t.Fatalf("recent folders recorded while disabled: %v", got)
+	}
+
+	enabled := true
+	settings.Welcome.RecentFolders = &enabled
+	h.app.ApplySettings(settings)
+	if got := config.LoadState().RecentFolders; len(got) != 0 {
+		t.Fatalf("re-enabled history did not start empty: %v", got)
+	}
+	h.app.RememberRecentFolders()
+	if got := config.LoadState().RecentFolders; len(got) != 1 || got[0] != h.dir {
+		t.Fatalf("recent folders after re-enabling = %v, want [%s]", got, h.dir)
+	}
+}

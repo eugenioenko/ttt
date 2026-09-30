@@ -94,8 +94,9 @@ These are starting values. Once you drag a header, resize the sidebar, the commi
 |-----|------|---------|-------------|
 | `welcome.showOnHome` | bool | `false` | Start on the welcome page instead of opening `$HOME` when ttt runs there with no arguments, as desktop launchers do. `ttt --welcome` does the same from anywhere. Also in **Settings > Advanced**. |
 | `welcome.favorites` | string[] | `[]` | Folders listed on the welcome page, opened with one click. `~` is expanded; missing folders are skipped. **Add to Favorites** / **Remove from Favorites** in an Explorer root's right-click menu (or **Welcome: Add/Remove Folder to/from Favorites** in the palette) update it automatically. |
+| `welcome.recentFolders` | bool | `true` | Save opened folders in `state.json` and show them on the welcome page. Turning this off immediately removes the saved history. Also in **Settings > Advanced**. |
 
-Below the favorites, the welcome page lists the last 10 folders opened under **Recent**, most recent first. They are not a setting: ttt keeps them in `state.json`, so a `settings.json` in a dotfiles repo is not rewritten every time you open a folder. Favorites and folders that no longer exist are left out.
+Below the favorites, the welcome page lists the last 10 folders opened under **Recent**, most recent first. ttt keeps the history in `state.json`, so a `settings.json` in a dotfiles repo is not rewritten every time you open a folder. Favorites and folders that no longer exist are left out.
 
 ## Git
 

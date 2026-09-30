@@ -114,6 +114,25 @@ func TestLSPSettingsIsEnabled(t *testing.T) {
 	}
 }
 
+func TestWelcomeSettingsRecentFoldersEnabled(t *testing.T) {
+	s := WelcomeSettings{}
+	if !s.IsRecentFoldersEnabled() {
+		t.Error("recent folders should default to enabled")
+	}
+
+	enabled := true
+	s.RecentFolders = &enabled
+	if !s.IsRecentFoldersEnabled() {
+		t.Error("recent folders should be enabled when explicitly true")
+	}
+
+	disabled := false
+	s.RecentFolders = &disabled
+	if s.IsRecentFoldersEnabled() {
+		t.Error("recent folders should be disabled when explicitly false")
+	}
+}
+
 func TestLSPSettingsShouldNotifyAvailability(t *testing.T) {
 	// nil means default (true)
 	s := LSPSettings{}

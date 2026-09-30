@@ -66,6 +66,10 @@ func (a *App) ApplySettings(s config.Settings) {
 	prev := a.appliedSettings
 	a.appliedSettings = s
 	*a.Settings = s
+	if !s.Welcome.IsRecentFoldersEnabled() {
+		a.clearRecentFolders()
+	}
+	a.refreshWelcome()
 
 	// Apply editor settings to the editor group and active editor
 	a.EditorGroup.TabSize = s.Editor.TabSize

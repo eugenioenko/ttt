@@ -61,6 +61,9 @@ func (a *App) welcomeItems() []welcomeItem {
 		}
 		items = append(items, item)
 	}
+	if !a.Settings.Welcome.IsRecentFoldersEnabled() {
+		return items
+	}
 	first := true
 	for _, abs := range a.State.RecentFolders {
 		if a.favoriteIndex(abs) >= 0 {
@@ -273,6 +276,10 @@ func pushRecent(recent, paths []string) []string {
 // RememberRecentFolders records the open folders for the welcome page. It
 // merges into the list on disk, so another ttt window's folders are kept.
 func (a *App) RememberRecentFolders() {
+	if !a.Settings.Welcome.IsRecentFoldersEnabled() {
+		a.clearRecentFolders()
+		return
+	}
 	paths := a.Workspace.Paths()
 	if len(paths) == 0 {
 		return
@@ -286,5 +293,17 @@ func (a *App) RememberRecentFolders() {
 	disk.RecentFolders = recent
 	if err := config.SaveState(disk); err != nil {
 		a.StatusError("Failed to save recent folders: " + err.Error())
+	}
+}
+
+func (a *App) clearRecentFolders() {
+	a.State.RecentFolders = nil
+	disk := config.LoadState()
+	if len(disk.RecentFolders) == 0 {
+		return
+	}
+	disk.RecentFolders = nil
+	if err := config.SaveState(disk); err != nil {
+		a.StatusError("Failed to clear recent folders: " + err.Error())
 	}
 }

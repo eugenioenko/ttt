@@ -29,6 +29,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Appearance.Icons = IconsNone
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
+	s.Welcome.RecentFolders = &enabled
 	s.Terminal.Shell = "/bin/zsh"
 
 	if err := SaveSettings(s); err != nil {
@@ -59,6 +60,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Editor.IsSyntaxHighlightEnabled() {
 		t.Error("syntaxHighlight=false did not round-trip; tri-state pointer lost")
+	}
+	if got.Welcome.IsRecentFoldersEnabled() {
+		t.Error("welcome.recentFolders=false did not round-trip; tri-state pointer lost")
 	}
 	if got.Terminal.Shell != "/bin/zsh" {
 		t.Errorf("shell = %q, want /bin/zsh", got.Terminal.Shell)

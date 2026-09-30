@@ -282,7 +282,12 @@ type WelcomeSettings struct {
 	// starts there with no arguments, as desktop launchers do.
 	ShowOnHome bool `json:"showOnHome,omitempty"`
 	// Favorites are folders listed on the welcome page to open in one step.
-	Favorites []string `json:"favorites,omitempty"`
+	Favorites     []string `json:"favorites,omitempty"`
+	RecentFolders *bool    `json:"recentFolders,omitempty"`
+}
+
+func (w WelcomeSettings) IsRecentFoldersEnabled() bool {
+	return w.RecentFolders == nil || *w.RecentFolders
 }
 
 type Settings struct {
