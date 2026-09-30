@@ -116,7 +116,7 @@ func TestPanelDockedRightKeepsEditorAndCorner(t *testing.T) {
 	}
 
 	h.assertContains("untitled")
-	if row := []rune(h.screenRow(2)); row[len(row)-1] != '╮' {
-		t.Errorf("right edge of row 2 = %q, want '╮'\n%s", row[len(row)-1], h.screenText())
+	if row := []rune(h.screenRow(1)); row[len(row)-1] != '╮' {
+		t.Errorf("right edge of row 1 = %q, want '╮'\n%s", row[len(row)-1], h.screenText())
 	}
 }
