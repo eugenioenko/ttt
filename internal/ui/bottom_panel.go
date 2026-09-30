@@ -56,6 +56,9 @@ func (bp *BottomPanelWidget) Render(surface Surface) {
 }
 
 func (bp *BottomPanelWidget) DividerScreenX() int {
+	if bp.GetRect().H < 3 {
+		return -1
+	}
 	if divider, ok := bp.ActiveWidget().(dividerXProvider); ok {
 		return divider.DividerScreenX()
 	}
