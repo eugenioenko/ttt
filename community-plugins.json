@@ -445,5 +445,15 @@
     "path": "lsp-markdown",
     "version": "0.1.0",
     "tags": ["lsp", "markdown", "marksman"]
+  },
+  {
+    "name": "lsp-haskell",
+    "displayName": "Haskell Language Server",
+    "author": "eugenioenko",
+    "description": "Auto-configure haskell-language-server as the Haskell language server",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lsp-haskell",
+    "version": "0.1.0",
+    "tags": ["lsp", "haskell", "hls"]
   }
 ]

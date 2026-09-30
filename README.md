@@ -261,7 +261,7 @@ TTT has built-in LSP support for language-aware editing: autocomplete, signature
 
 Language servers are configured via plugins — install the LSP plugin for your language and the corresponding server binary from the Plugins panel or command palette. Available plugins:
 
-`lsp-go`, `lsp-typescript`, `lsp-python`, `lsp-c`, `lsp-rust`, `lsp-lua`, `lsp-zig`, `lsp-vue`, `lsp-svelte`, `lsp-css`, `lsp-html`, `lsp-json`, `lsp-yaml`, `lsp-bash`, `lsp-docker`, `lsp-tailwindcss`, `lsp-kotlin`, `lsp-java`, `lsp-ruby`, `lsp-dart`, `lsp-elixir`, `lsp-php`, `lsp-terraform`, `lsp-markdown`
+`lsp-go`, `lsp-typescript`, `lsp-python`, `lsp-c`, `lsp-rust`, `lsp-lua`, `lsp-zig`, `lsp-vue`, `lsp-svelte`, `lsp-css`, `lsp-html`, `lsp-json`, `lsp-yaml`, `lsp-bash`, `lsp-docker`, `lsp-tailwindcss`, `lsp-kotlin`, `lsp-java`, `lsp-ruby`, `lsp-dart`, `lsp-elixir`, `lsp-php`, `lsp-terraform`, `lsp-markdown`, `lsp-haskell`
 
 You can also add custom servers manually in `~/.config/ttt/settings.json`. To disable LSP entirely: `"lsp": { "enabled": false }`.
 

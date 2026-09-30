@@ -7,7 +7,7 @@ TTT has built-in LSP support for language-aware editing features. Language serve
 
 ## Built-in Language Support
 
-TTT ships with 24 built-in language server configurations. You just need to install the server binary and TTT will detect and use it automatically. If a server isn't installed, TTT shows a brief notification when you open a file of that language (disable this with `lsp.notifyAvailability: false`).
+TTT ships with 25 built-in language server configurations. You just need to install the server binary and TTT will detect and use it automatically. If a server isn't installed, TTT shows a brief notification when you open a file of that language (disable this with `lsp.notifyAvailability: false`).
 
 To disable LSP entirely, set `lsp.enabled` to `false` in your settings:
 
@@ -187,6 +187,15 @@ Handles `.tf` and `.tfvars` files.
 ```sh
 # See https://github.com/zigtools/zls
 ```
+
+### Haskell {#haskell}
+
+```sh
+ghcup install ghc --set recommended
+ghcup install hls --set recommended
+```
+
+Install [GHCup](https://www.haskell.org/ghcup/) first. HLS needs a matching GHC on your `PATH`.
 
 ## Custom Language Servers
 
@@ -369,4 +378,4 @@ All LSP settings are nested under `lsp.*` in `settings.json`. Autocomplete setti
 | `lsp.saveOnRename` | boolean | `false` | Auto-save files affected by a rename |
 | `lsp.codeActionsOnSave` | string[] | `[]` | Code actions to run before each save |
 | `lsp.notifyAvailability` | boolean | `true` | Show a notification when a language server is not installed |
-| `lsp.servers` | object | *(24 built-in)* | Custom or overridden language server configurations |
+| `lsp.servers` | object | *(25 built-in)* | Custom or overridden language server configurations |
