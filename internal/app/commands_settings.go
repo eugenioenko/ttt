@@ -124,6 +124,10 @@ func (a *App) ApplySettings(s config.Settings) {
 
 	a.applyChevrons(s.Appearance)
 
+	if s.Desktop.Launcher != prev.Desktop.Launcher {
+		a.applyDesktopLauncher(s.Desktop.Launcher)
+	}
+
 	if a.Explorer != nil && (a.Explorer.Settings != s.Explorer || a.Explorer.Icons != s.Appearance.Icons) {
 		a.Explorer.Settings = s.Explorer
 		a.Explorer.Icons = s.Appearance.Icons

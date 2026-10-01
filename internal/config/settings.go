@@ -227,6 +227,10 @@ type PanelSettings struct {
 	Position string `json:"position,omitempty"`
 }
 
+type DesktopSettings struct {
+	Launcher bool `json:"launcher,omitempty"`
+}
+
 type GitSettings struct {
 	FileView string `json:"fileView"`
 }
@@ -303,6 +307,7 @@ type Settings struct {
 	Explorer     ExplorerSettings     `json:"explorer"`
 	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
 	Panel        PanelSettings        `json:"panel,omitzero"`
+	Desktop      DesktopSettings      `json:"desktop,omitzero"`
 	Git          GitSettings          `json:"git"`
 	Terminal     TerminalSettings     `json:"terminal"`
 	LSP          LSPSettings          `json:"lsp"`
@@ -325,7 +330,7 @@ type Settings struct {
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "appearance": true, "editor": true,
-	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
+	"search": true, "explorer": true, "sidebar": true, "panel": true, "desktop": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }
 

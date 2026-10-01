@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,6 +23,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/eugenioenko/ttt/internal/workspace"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -398,6 +400,16 @@ Docs: https://tttedit.dev
 	if flags.listen {
 		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddress()+" (POST /exec)")
 		go app.StartListenServer(editor)
+	}
+
+	// A settings.json synced from another machine can turn the launcher on
+	// without the toggle ever running here.
+	if cfg.Settings.Desktop.Launcher {
+		if exe, err := os.Executable(); err == nil {
+			if _, err := workspace.InstallLauncher(exe); err != nil && !errors.Is(err, workspace.ErrLauncherUnmanaged) {
+				editor.LogOutput("warn", "ttt", "Desktop launcher: "+err.Error())
+			}
+		}
 	}
 
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal)

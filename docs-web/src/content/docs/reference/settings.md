@@ -98,6 +98,12 @@ These are starting values. Once you drag a header, resize the sidebar, the commi
 
 Below the favorites, the welcome page lists the last 10 folders opened under **Recent**, most recent first. ttt keeps the history in `state.json`, so a `settings.json` in a dotfiles repo is not rewritten every time you open a folder. Favorites and folders that no longer exist are left out.
 
+## Desktop
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `desktop.launcher` | bool | `false` | Adds ttt to the desktop's application launcher, with its icon; it starts on the welcome page (`ttt --welcome`). On Linux it writes `ttt.desktop` and `ttt.svg` under `$XDG_DATA_HOME` and opens in the terminal ttt was running in when enabled (kitty, WezTerm, Alacritty, Ghostty, foot, Konsole), falling back to `Terminal=true`. On Windows it adds a Windows Terminal profile. Turning it off removes only a launcher ttt created. Also **Toggle Desktop Launcher** in the command palette. |
+
 ## Git
 
 | Key | Type | Default | Description |
