@@ -163,6 +163,23 @@ func (a *App) SaveFileAs() {
 func (a *App) SaveFile() {
 	path := a.EditorGroup.ActiveFilePath()
 	buf := a.EditorGroup.ActiveBuffer()
+	if buf != nil && !a.EditorGroup.IsActiveVirtual() && buf.ReadOnlyOnDisk {
+		a.ShowConfirmDialog(
+			fmt.Sprintf("%s is read-only. Overwrite anyway?", filepath.Base(path)),
+			[]string{"Cancel", "Overwrite"},
+			[]func(){
+				func() { a.DismissDialog() },
+				func() { a.DismissDialog(); a.saveFileCheckingDisk() },
+			},
+		)
+		return
+	}
+	a.saveFileCheckingDisk()
+}
+
+func (a *App) saveFileCheckingDisk() {
+	path := a.EditorGroup.ActiveFilePath()
+	buf := a.EditorGroup.ActiveBuffer()
 	if buf != nil && !a.EditorGroup.IsActiveVirtual() && buf.DiskChanged(path) {
 		a.ShowConfirmDialog(
 			fmt.Sprintf("%s was modified on disk. Overwrite with your version?", filepath.Base(path)),

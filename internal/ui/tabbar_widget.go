@@ -24,6 +24,7 @@ type Tab struct {
 	Active   bool
 	Closable bool
 	Pinned   bool
+	ReadOnly bool
 }
 
 type TabDragAutoScrollTick struct {
@@ -83,6 +84,9 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 		label += "● "
 	}
 	label += name
+	if tab.ReadOnly {
+		label += " (readonly)"
+	}
 	if tab.Active && tab.Closable {
 		if tab.Pinned {
 			label += " ♦"

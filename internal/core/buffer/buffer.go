@@ -76,6 +76,9 @@ type Buffer struct {
 	ShowTrailingNewline    bool
 	TrimTrailingWhitespace bool
 	LineEnding             string // "\n" (LF) or "\r\n" (CRLF); defaults to "\n"
+	// ReadOnlyOnDisk must be checked before saving: SaveFile renames over the
+	// target, which succeeds on a read-only file in a writable directory.
+	ReadOnlyOnDisk bool
 
 	// diskModTime and diskSize record the state of the file on disk the last
 	// time we loaded or saved it, so we can detect external modifications

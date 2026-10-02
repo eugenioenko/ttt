@@ -99,6 +99,37 @@ func TestSavePreservesPermissions(t *testing.T) {
 	}
 }
 
+func TestReadOnlyOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	readOnly := filepath.Join(dir, "locked.txt")
+	if err := os.WriteFile(readOnly, []byte("locked\n"), 0444); err != nil {
+		t.Fatal(err)
+	}
+	writable := filepath.Join(dir, "open.txt")
+	if err := os.WriteFile(writable, []byte("open\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	b := &Buffer{}
+	if err := b.LoadFile(readOnly); err != nil {
+		t.Fatal(err)
+	}
+	if !b.ReadOnlyOnDisk {
+		t.Error("expected ReadOnlyOnDisk for a 0444 file")
+	}
+
+	if err := b.SaveFile(writable); err != nil {
+		t.Fatal(err)
+	}
+	if b.ReadOnlyOnDisk {
+		t.Error("expected ReadOnlyOnDisk to clear after saving to a writable file")
+	}
+
+	if (&Buffer{}).ReadOnlyOnDisk {
+		t.Error("expected a new buffer not to be read-only")
+	}
+}
+
 func TestSaveThroughSymlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink behavior differs on Windows")

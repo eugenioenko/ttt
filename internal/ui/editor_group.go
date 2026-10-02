@@ -2022,6 +2022,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			Dirty:    dirty,
 			Closable: closable,
 			Pinned:   i < g.pinnedCount,
+			ReadOnly: !ts.ReadOnly && ts.Buf != nil && ts.Buf.ReadOnlyOnDisk,
 		})
 	}
 	g.TabBar.SetTabs(uiTabs)

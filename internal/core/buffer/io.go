@@ -63,6 +63,7 @@ func (b *Buffer) recordDiskInfo(info os.FileInfo) {
 	b.diskModTime = info.ModTime()
 	b.diskSize = info.Size()
 	b.diskInfoSet = true
+	b.ReadOnlyOnDisk = info.Mode().Perm()&0222 == 0
 }
 
 // DiskChanged reports whether the file on disk has been modified since the

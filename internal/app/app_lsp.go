@@ -541,7 +541,7 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 		a.EditorGroup.OpenFile(path)
 		a.ApplyTextEdits(edits)
 
-		if a.Settings.LSP.SaveOnRename {
+		if buf := a.EditorGroup.ActiveBuffer(); a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
 			if a.EditorGroup.Save() {
 				_, lang := a.editorPathLang()
 				a.afterFileSave(path, lang)
