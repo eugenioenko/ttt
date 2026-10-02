@@ -785,6 +785,19 @@ func (n *TreeNode) isExpandable() bool {
 	return len(n.Children) > 0 || n.Expandable
 }
 
+// NodeAt returns the row under screen position (mx, my), or nil.
+func (t *TreeWidget) NodeAt(mx, my int) *TreeNode {
+	r := t.rect
+	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+		return nil
+	}
+	idx := t.scrollTop + (my - t.contentY)
+	if idx < 0 || idx >= len(t.flatList) {
+		return nil
+	}
+	return t.flatList[idx]
+}
+
 func (t *TreeWidget) FlatList() []*TreeNode  { return t.flatList }
 func (t *TreeWidget) SelectedIndex() int     { return t.selected }
 func (t *TreeWidget) SetSelectedIndex(i int) { t.selected = i; t.clampSelected() }
