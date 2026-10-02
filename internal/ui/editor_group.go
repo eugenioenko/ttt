@@ -2145,18 +2145,19 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 	}
-	result := g.TabBar.HandleEvent(ev)
-	slog.Debug("editorGroup", "tabBarResult", result)
-	if result != EventIgnored {
-		return result
+	if _, isMouse := ev.(*tcell.EventMouse); !isMouse || !g.Editor.mouseDown {
+		result := g.TabBar.HandleEvent(ev)
+		slog.Debug("editorGroup", "tabBarResult", result)
+		if result != EventIgnored {
+			return result
+		}
 	}
 	t := g.activeTab()
 	if t == nil {
 		return EventIgnored
 	}
 	if t.Content != nil {
-		result = t.Content.HandleEvent(ev)
-		if result != EventIgnored {
+		if result := t.Content.HandleEvent(ev); result != EventIgnored {
 			return result
 		}
 		if _, ok := ev.(*tcell.EventMouse); ok {
@@ -2164,7 +2165,7 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		return EventIgnored
 	}
-	result = g.Editor.HandleEvent(ev)
+	result := g.Editor.HandleEvent(ev)
 	g.saveMultiState()
 	return result
 }

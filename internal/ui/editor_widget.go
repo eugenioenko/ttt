@@ -3,6 +3,7 @@ package ui
 import (
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
@@ -63,6 +64,11 @@ type EditorPaneWidget struct {
 	gutterHover             bool
 	gutterHoverLine         int
 	mouseDownX, mouseDownY  int
+	PostDragAutoScrollTick  func(generation uint64)
+	dragPointerX            int
+	dragPointerY            int
+	autoScrollTimer         *time.Timer
+	autoScrollGeneration    uint64
 	maxWidthSeen            int
 	cachedVisibleLines      []int
 	searchByLine            map[int][]int

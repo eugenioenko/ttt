@@ -13,30 +13,10 @@ func (e *EditorPaneWidget) OwnsPointerCapture() bool {
 func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	btn := mev.Buttons()
 
-	if newTop, consumed := e.scrollbar.HandleEvent(mev); consumed {
-		if e.Folds != nil && e.Folds.HasCollapsedFolds() {
-			e.Viewport.TopLine = e.Folds.VisibleToBuffer(newTop)
-		} else {
-			e.Viewport.TopLine = newTop
+	if !e.mouseDown {
+		if result, handled := e.handleScrollbarMouse(mev); handled {
+			return result
 		}
-		if e.scrollbar.IsDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
-	}
-	if e.scrollbar.IsDragging() {
-		return EventCaptured
-	}
-	if newLeft, consumed := e.hscrollbar.HandleEvent(mev); consumed {
-		e.Viewport.LeftCol = newLeft
-		e.clampLeftCol()
-		if e.hscrollbar.IsDragging() {
-			return EventCaptured
-		}
-		return EventConsumed
-	}
-	if e.hscrollbar.IsDragging() {
-		return EventCaptured
 	}
 
 	mod := mev.Modifiers()
@@ -140,14 +120,15 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 				e.Cursor.Col = col
 			}
 		} else {
-			e.Cursor.Line = line
-			e.Cursor.Col = col
+			e.extendDragSelection(mx, my)
+			return EventCaptured
 		}
 		e.scrollViewport()
 		return EventCaptured
 	}
 	if btn == tcell.ButtonNone && e.mouseDown {
 		e.mouseDown = false
+		e.cancelDragAutoScroll()
 		if mx == e.mouseDownX && my == e.mouseDownY && inGutter {
 			bufLine := e.screenToBufferLine(my - r.Y)
 			if e.Folds != nil && e.Folds.FoldAt(bufLine) != nil {
@@ -162,6 +143,35 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		}
 	}
 	return EventIgnored
+}
+
+func (e *EditorPaneWidget) handleScrollbarMouse(mev *tcell.EventMouse) (EventResult, bool) {
+	if newTop, consumed := e.scrollbar.HandleEvent(mev); consumed {
+		if e.Folds != nil && e.Folds.HasCollapsedFolds() {
+			e.Viewport.TopLine = e.Folds.VisibleToBuffer(newTop)
+		} else {
+			e.Viewport.TopLine = newTop
+		}
+		if e.scrollbar.IsDragging() {
+			return EventCaptured, true
+		}
+		return EventConsumed, true
+	}
+	if e.scrollbar.IsDragging() {
+		return EventCaptured, true
+	}
+	if newLeft, consumed := e.hscrollbar.HandleEvent(mev); consumed {
+		e.Viewport.LeftCol = newLeft
+		e.clampLeftCol()
+		if e.hscrollbar.IsDragging() {
+			return EventCaptured, true
+		}
+		return EventConsumed, true
+	}
+	if e.hscrollbar.IsDragging() {
+		return EventCaptured, true
+	}
+	return EventIgnored, false
 }
 
 func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {

@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -68,5 +69,90 @@ func TestEditorGroupOwnsPointerCaptureFollowsContentTab(t *testing.T) {
 	probe.capturing = true
 	if !g.OwnsPointerCapture() {
 		t.Fatal("group dropped capture while the content tab held it")
+	}
+}
+
+func TestEditorSelectionDragOntoScrollbarsKeepsSelecting(t *testing.T) {
+	eg := NewEditorGroupWidget(nil, 4, false, "extended")
+	lines := make([]string, 200)
+	for i := range lines {
+		lines[i] = strings.Repeat("x", 300)
+	}
+	eg.Editor.Buf.Lines = lines
+
+	root := NewRoot(eg)
+	root.SetSize(80, 24)
+	root.Render(makeGrid(80, 24))
+	root.Render(makeGrid(80, 24))
+
+	e := eg.Editor
+	if !e.hscrollbar.Visible() || !e.scrollbar.Visible() {
+		t.Fatal("test setup expects both scrollbars visible")
+	}
+
+	r := e.GetRect()
+	startX := r.X + e.GutterWidth()
+	root.HandleEvent(tcell.NewEventMouse(startX, r.Y, tcell.Button1, 0))
+	for y := r.Y + 1; y <= e.hscrollbar.Y; y++ {
+		root.HandleEvent(tcell.NewEventMouse(startX, y, tcell.Button1, 0))
+		root.Render(makeGrid(80, 24))
+	}
+	root.HandleEvent(tcell.NewEventMouse(e.scrollbar.X, e.hscrollbar.Y, tcell.Button1, 0))
+	root.HandleEvent(tcell.NewEventMouse(e.scrollbar.X, e.hscrollbar.Y, tcell.ButtonNone, 0))
+
+	if e.hscrollbar.IsDragging() || e.scrollbar.IsDragging() {
+		t.Fatal("selection drag latched onto a scrollbar")
+	}
+	if e.Viewport.TopLine == 0 {
+		t.Fatal("dragging past the bottom did not scroll vertically")
+	}
+	if !e.Selection.Active {
+		t.Fatal("selection was lost")
+	}
+}
+
+func TestEditorSelectionDragHeldPastEdgeKeepsScrolling(t *testing.T) {
+	eg := NewEditorGroupWidget(nil, 4, false, "extended")
+	lines := make([]string, 200)
+	for i := range lines {
+		lines[i] = strings.Repeat("x", 300)
+	}
+	eg.Editor.Buf.Lines = lines
+	e := eg.Editor
+	ticks := make(chan uint64, 8)
+	e.PostDragAutoScrollTick = func(gen uint64) { ticks <- gen }
+
+	root := NewRoot(eg)
+	root.SetSize(80, 24)
+	root.Render(makeGrid(80, 24))
+	root.Render(makeGrid(80, 24))
+
+	r := e.GetRect()
+	x := r.X + e.GutterWidth()
+	root.HandleEvent(tcell.NewEventMouse(x, r.Y+2, tcell.Button1, 0))
+	root.HandleEvent(tcell.NewEventMouse(x, e.hscrollbar.Y, tcell.Button1, 0))
+
+	top := e.Viewport.TopLine
+	for i := 0; i < 3; i++ {
+		e.HandleDragAutoScrollTick(<-ticks)
+		if e.Viewport.TopLine != top+1 {
+			t.Fatalf("tick %d: TopLine = %d, want %d", i, e.Viewport.TopLine, top+1)
+		}
+		top = e.Viewport.TopLine
+	}
+
+	root.HandleEvent(tcell.NewEventMouse(x, r.Y-1, tcell.Button1, 0))
+	e.HandleDragAutoScrollTick(<-ticks)
+	if e.Viewport.TopLine >= top {
+		t.Fatalf("dragging above the editor did not scroll up: TopLine = %d", e.Viewport.TopLine)
+	}
+
+	root.HandleEvent(tcell.NewEventMouse(x, r.Y-1, tcell.ButtonNone, 0))
+	select {
+	case gen := <-ticks:
+		if e.HandleDragAutoScrollTick(gen) {
+			t.Fatal("auto-scroll continued after release")
+		}
+	case <-time.After(2 * editorDragAutoScrollDelay):
 	}
 }

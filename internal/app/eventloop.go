@@ -294,6 +294,8 @@ func RunEventLoop(
 				}
 			case *ui.TabDragAutoScrollTick:
 				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
+			case *ui.EditorDragAutoScrollTick:
+				app.EditorGroup.Editor.HandleDragAutoScrollTick(v.Generation)
 			case *GitGutterResult:
 				if v.Gen == app.GitGutterGen {
 					app.EditorGroup.SetLineChanges(v.Path, v.Changes)
