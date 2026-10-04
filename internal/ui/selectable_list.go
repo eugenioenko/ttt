@@ -99,6 +99,23 @@ func (sl *SelectableList) HandleListEvent(ev tcell.Event, rect Rect, itemCount i
 				sl.Selected++
 			}
 			return ListEventResult{Result: EventConsumed}
+		case tcell.KeyPgDn:
+			sl.Selected += rect.H
+			if sl.Selected >= itemCount {
+				sl.Selected = itemCount - 1
+			}
+			if sl.Selected < 0 {
+				sl.Selected = 0
+			}
+			sl.EnsureVisible(rect.H)
+			return ListEventResult{Result: EventConsumed}
+		case tcell.KeyPgUp:
+			sl.Selected -= rect.H
+			if sl.Selected < 0 {
+				sl.Selected = 0
+			}
+			sl.EnsureVisible(rect.H)
+			return ListEventResult{Result: EventConsumed}
 		case tcell.KeyEnter:
 			if tev.Modifiers() == 0 {
 				return ListEventResult{Result: EventConsumed, Action: ListActionActivate}
