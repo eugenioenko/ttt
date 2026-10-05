@@ -87,11 +87,10 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 		prefix += "● "
 	}
 	if tab.ReadOnly {
-		mark := icons.Get(t.Icons, icons.Lock)
-		if mark != "" && icons.IsNerd(t.Icons) {
-			prefix += mark + " "
+		if icons.IsNerd(t.Icons) {
+			prefix += icons.Get(t.Icons, icons.Lock) + " "
 		} else {
-			suffix = mark
+			suffix = " (readonly)"
 		}
 	}
 	label := prefix + name + suffix

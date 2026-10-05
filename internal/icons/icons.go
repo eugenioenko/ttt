@@ -31,7 +31,7 @@ type glyphs struct {
 var table = map[Name]glyphs{
 	Branch: {Plain: "⎇", Nerd: ""},
 	Commit: {Plain: "●", Nerd: "\uf417"},
-	Lock:   {Plain: " (readonly)", Nerd: "\uea75"},
+	Lock:   {Plain: "⚿", Nerd: "\uea75"},
 
 	Function:  {Plain: "ƒ", Nerd: "\uea8c"},
 	Class:     {Plain: "◆", Nerd: "\ueb5b"},
