@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/icons"
 )
 
 func openReadOnlyFile(t *testing.T, h *testHarness) string {
@@ -17,16 +20,31 @@ func openReadOnlyFile(t *testing.T, h *testHarness) string {
 	return path
 }
 
+func applyIconMode(h *testHarness, mode string) {
+	h.t.Helper()
+	s := *h.app.Settings
+	s.Appearance.Icons = mode
+	h.app.ApplySettings(s)
+	h.redraw()
+}
+
 func TestReadOnlyFileShowsIndicator(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
+	applyIconMode(h, config.IconsNone)
 	openReadOnlyFile(t, h)
 	h.assertContains("locked.txt (readonly)")
+
+	applyIconMode(h, config.IconsNerdFont)
+	lock := icons.Get(config.IconsNerdFont, icons.Lock)
+	h.assertContains(lock + " locked.txt")
+	h.assertNotContains("(readonly)")
 
 	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
 	h.redraw()
 	h.assertNotContains("alpha.txt (readonly)")
+	h.assertNotContains(lock + " alpha.txt")
 }
 
 func TestReadOnlyFileSavePromptsAndCancelKeepsFile(t *testing.T) {

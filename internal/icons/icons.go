@@ -8,6 +8,7 @@ type Name string
 const (
 	Branch Name = "branch"
 	Commit Name = "commit"
+	Lock   Name = "lock"
 
 	Function  Name = "function"
 	Class     Name = "class"
@@ -30,6 +31,7 @@ type glyphs struct {
 var table = map[Name]glyphs{
 	Branch: {Plain: "⎇", Nerd: ""},
 	Commit: {Plain: "●", Nerd: "\uf417"},
+	Lock:   {Plain: " (readonly)", Nerd: "\uea75"},
 
 	Function:  {Plain: "ƒ", Nerd: "\uea8c"},
 	Class:     {Plain: "◆", Nerd: "\ueb5b"},

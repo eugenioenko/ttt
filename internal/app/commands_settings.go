@@ -73,6 +73,7 @@ func (a *App) ApplySettings(s config.Settings) {
 
 	// Apply editor settings to the editor group and active editor
 	a.EditorGroup.TabSize = s.Editor.TabSize
+	a.EditorGroup.TabBar.Icons = s.Appearance.Icons
 	a.EditorGroup.InsertSpaces = s.Editor.InsertSpaces
 	a.EditorGroup.LineNumbers = s.Editor.LineNumbers
 	a.EditorGroup.GutterStyle = s.Editor.GutterStyle

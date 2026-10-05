@@ -1239,7 +1239,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 	folds.SetRanges(fold.ComputeIndentRanges(newBuf.Lines))
 	tabTitle := title
 	if tabTitle == "" {
-		tabTitle = filepath.Base(path) + " (readonly)"
+		tabTitle = filepath.Base(path)
 	}
 	newTab := editorTab{
 		FilePath: path,
@@ -2022,7 +2022,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			Dirty:    dirty,
 			Closable: closable,
 			Pinned:   i < g.pinnedCount,
-			ReadOnly: !ts.ReadOnly && ts.Buf != nil && ts.Buf.ReadOnlyOnDisk,
+			ReadOnly: ts.ReadOnly || (ts.Buf != nil && ts.Buf.ReadOnlyOnDisk),
 		})
 	}
 	g.TabBar.SetTabs(uiTabs)
