@@ -6,10 +6,10 @@ github.com/clipperhouse/uax29/v2 v2.7.0 h1:+gs4oBZ2gPfVrKPthwbMzWZDaAFPGYK72F0NJ
 github.com/clipperhouse/uax29/v2 v2.7.0/go.mod h1:EFJ2TJMRUaplDxHKj1qAEhCtQPW2tJSwu5BF98AuoVM=
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
-github.com/eugenioenko/regexp2/v2 v2.8.1 h1:8naQgY9JNrkRvzlQOGNey8a0GUHoolHJYW7qPqsqZ6k=
-github.com/eugenioenko/regexp2/v2 v2.8.1/go.mod h1:59/YhHVxgrxxHgjTuG4YFRRxynIz4E0bI+rqNBzwOrs=
-github.com/eugenioenko/textmate-go v0.1.0 h1:wCnSc10gAwHXL0PQYhJsEa+sq7sRQR7md+D1TEIAk/s=
-github.com/eugenioenko/textmate-go v0.1.0/go.mod h1:o58n3aial8dDTgQEkAo0u9ofs6eSG9GWitUR4Iv++nk=
+github.com/eugenioenko/regexp2/v2 v2.8.2 h1:FK5xiQNuz6TCgNeMXGGIUfH89ZJ2pxmu9n8qvT9v0XQ=
+github.com/eugenioenko/regexp2/v2 v2.8.2/go.mod h1:59/YhHVxgrxxHgjTuG4YFRRxynIz4E0bI+rqNBzwOrs=
+github.com/eugenioenko/textmate-go v0.2.0 h1:pw1tn82sQzwoxlpr58e+pevdVdtpWeiecNq2piqJHPI=
+github.com/eugenioenko/textmate-go v0.2.0/go.mod h1:cYY9RpILD0oRBWCBIW1Z9GMlv0GAGvSdvv/iRvnkiNM=
 github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=
 github.com/fsnotify/fsnotify v1.10.1/go.mod h1:TLheqan6HD6GBK6PrDWyDPBaEV8LspOxvPSjC+bVfgo=
 github.com/gdamore/encoding v1.0.1 h1:YzKZckdBL6jVt2Gc+5p82qhrGiqMdG/eNs6Wy0u3Uhw=
