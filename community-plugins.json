@@ -218,7 +218,7 @@
   },
   {
     "name": "lang-git",
-    "displayName": "Git Commit & Rebase",
+    "displayName": "Git Syntax Highlighting",
     "author": "eugenioenko",
     "description": "Syntax highlighting for git commit messages and interactive rebase todo lists",
     "repo": "https://github.com/eugenioenko/ttt-plugins",
@@ -228,7 +228,7 @@
   },
   {
     "name": "lang-astro",
-    "displayName": "Astro",
+    "displayName": "Astro Syntax Highlighting",
     "author": "eugenioenko",
     "description": "Syntax highlighting for Astro components (.astro)",
     "repo": "https://github.com/eugenioenko/ttt-plugins",
@@ -238,7 +238,7 @@
   },
   {
     "name": "lang-just",
-    "displayName": "Just",
+    "displayName": "Just Syntax Highlighting",
     "author": "eugenioenko",
     "description": "Syntax highlighting for just command runner files (justfile, .just)",
     "repo": "https://github.com/eugenioenko/ttt-plugins",
