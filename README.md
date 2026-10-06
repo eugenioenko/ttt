@@ -463,7 +463,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the current dependency graph, known
 
 ## Contributing
 
-Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR.
+Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening one.
 
 ## Contributors & Acknowledgments
 

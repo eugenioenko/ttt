@@ -4,7 +4,7 @@ Thanks for your interest in contributing! Read the [README](README.md) for an ov
 
 ## Getting started
 
-Prerequisites: [Go](https://go.dev/) 1.18+, [Git](https://git-scm.com/), [ripgrep](https://github.com/BurntSushi/ripgrep).
+Prerequisites: [Go](https://go.dev/) 1.25+, [Git](https://git-scm.com/), [ripgrep](https://github.com/BurntSushi/ripgrep).
 
 ```sh
 make build   # builds to bin/ttt
@@ -14,27 +14,18 @@ make lint    # golangci-lint run
 
 ## How to contribute
 
-1. Fork the repo and create a branch
-2. Make your changes
-3. Make sure `make test` and `make lint` pass
-4. Open a PR against `main`
+1. Features need an accepted issue first; bug fixes, docs, and small cleanups can go straight to a PR. Comment on the issue you are picking up so work is not duplicated.
+2. Make your change with tests, and run it in the real binary. `bin/ttt --exec "..."` scripts input and captures screenshots; `bin/ttt --listen` lets you drive a running editor.
+3. Make sure `make test` and `make lint` pass, then open a PR against `main`.
+
+[AGENTS.md](AGENTS.md) is the detailed guide for humans and AI agents alike: architecture constraints, test layers, the debug harness, and PR expectations. [ARCHITECTURE.md](ARCHITECTURE.md) covers package boundaries.
 
 ## Code style
 
-Run `make fmt` before committing. The linter (`make lint`) and `go vet` catch the rest.
-
-**Only critical comments.** Add a comment only when missing it would cause a bug or misuse: a hidden constraint, a non-obvious invariant, or a workaround for a specific bug. Never comment what the code does, restate an identifier, narrate the change, or add docstrings for coverage; well-named identifiers already do that. AI-generated code tends to over-comment, so strip those comments before opening a PR.
-
-## Testing
-
-`make test` must pass for all PRs. If your change touches an area with existing tests, update them. If you're adding new behavior, add tests for it.
-
-## Architecture
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for package boundaries and dependency zones. [AGENTS.md](AGENTS.md) summarizes constraints for AI-assisted contributors.
+Run `make fmt` before committing. Add a comment only when missing it would cause a bug or misuse. AI-generated code tends to over-comment, so strip those comments before opening a PR.
 
 ## What makes a good PR
 
-- Small and focused — one concern per PR
-- Clear title using conventional commits: `type(scope): description`
-- Explain the *why* in the PR body, not just the *what*
+- Small and focused, one concern per PR
+- Title using conventional commits: `type(scope): description`
+- The *why* in the PR body, plus a screenshot for visible changes

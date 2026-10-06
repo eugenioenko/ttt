@@ -135,6 +135,7 @@ Implementation: Lua bindings in `internal/plugin/lua_panel.go`, descriptors in `
 
 Things the docs do not cover:
 
+- Plugins must `local ttt = require("ttt")`; the module is preloaded, not global.
 - `ttt.*` callbacks (`notify`, `set_status_item`, `exec_command`, ...) only work after `WirePlugin`, which runs after `InitFromSource`. Call them from command handlers or event callbacks, not at plugin load time.
 - Status bar segments (`view.StatusBar`, `StatusSegment`) are shared by core and plugins. Lower priority sits closer to the edge. Core segments use priorities below 1000 (grep `StatusSegment{` for the current values); plugin segments default to 1000 and are ID-scoped as `pluginName:id`.
 
@@ -172,60 +173,20 @@ Choose the smallest deterministic layer that proves the intended invariant, then
 
 The functional suite is a compact real-binary contract, not a mandatory duplicate of lower-layer coverage. An invariant proved at a lower deterministic boundary does not also require a functional test; add a higher-boundary test only for behavior unique to that boundary. During implementation, run focused tests for the affected contract. CI remains the broad regression gate before merge.
 
-### Debug harness (`--exec`, `--plugin`, `--size`, `--debug`, `--listen`)
+### Debug harness (`--exec`, `--listen`, `--size`, `--plugin`)
 
-**USE THIS FOR DEBUGGING AND TESTING.** The editor has a built-in scripted interaction system that is faster than TUI tests and gives you direct access to internal state — reach for it before investigating UI bugs manually.
-
-**`--exec "commands"`** — Execute semicolon-separated commands after startup. Run the real binary, interact with it, capture state, and exit — all in one command:
+Use it to reproduce bugs, try out features, and verify changes in the real binary. It is faster than TUI tests and exposes internal state.
 
 ```bash
 bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debug /tmp/state.json; quit"
-cat /tmp/screen.txt   # see what's rendered
-cat /tmp/state.json   # see full widget tree, focus, selection, panels
 ```
 
-Supported commands (the source of truth is `ExecScriptUsage()` in `internal/app/exec_script.go`; keep this list in sync with it):
-- `click X Y` — simulate left mouse click (press + release) at coordinates
-- `rclick X Y` — simulate right mouse click at coordinates
-- `hover X Y` — simulate mouse hover (move) at coordinates
-- `drag X1 Y1 X2 Y2` — simulate a mouse drag between two points (interpolated over 10 steps)
-- `key COMBO` — simulate key press (e.g. `key ctrl+p`, `key enter`, `key ctrl+k x`)
-- `type TEXT` — type a string of text
-- `paste TEXT` — simulate a bracketed paste (terminal paste)
-- `copy` — copy the current selection to the clipboard
-- `exec "Command Name"` — run a command by title (same as command palette)
-- `screenshot PATH` — save screen text to file
-- `debug PATH` — save debug state JSON (screen, cursor, buffer, focus, panels, tabs, selection, output log, integrated-terminal raw PTY byte tails, full widget tree with rect/focus/props per node)
-- `wait MS` — wait milliseconds
-- `wait-for TEXT [timeout=MS]` — wait until text appears on the actual visible screen; defaults to a bounded timeout. Quote text to preserve surrounding whitespace or escapes.
-- `panel ID` — show and focus a bottom panel by ID
-- `quit` / `shutdown` — exit the editor
-
-Scripted input and main-thread commands are acknowledged after the event loop handles and redraws them, so following actions observe completed visible state. Invalid actions, missing commands/panels, capture failures, and wait timeouts stop the script: CLI `--exec` reports the error on stderr and exits nonzero; `POST /exec` returns a non-2xx response with the same detail.
-
-**`--listen`** — Start an HTTP command server on `127.0.0.1:4242` (loopback-only — never exposed off the local machine). `POST /exec` runs the same script format as `--exec`, synchronously, against an **already-running** editor — for capturing a repro at the exact moment it happens instead of scripting it in advance. The editor must run in a real terminal (TTY); it is started by a person, and the agent drives it with `POST /exec`:
-
-```bash
-bin/ttt --listen &
-curl -X POST --data "type hi; wait-for hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
-curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
-```
-
-Pass `?sep=` to use a different command separator, mirroring `--exec-split-on`.
-
-**`--size WxH`** — Force screen dimensions for deterministic layout (e.g. `--size 120x40`). Essential for reproducible screenshots and coordinate-based click tests.
-
-**`--plugin FILE`** — Load a Lua plugin file on startup with full permissions. For more complex test scenarios that need callbacks, state, or event handling. **Important:** Plugin files must `local ttt = require("ttt")` before using any `ttt.*` API — the module is preloaded, not global. Callbacks (e.g., `ttt.notify`, `ttt.set_status_item`) only work after `WirePlugin` runs, which happens after `InitFromSource`, so they must be called from command handlers or event callbacks, not at init time.
-
-**`--debug`** — Enable debug mode regardless of config setting.
-
-**`TTT_CONFIG_DIR` env var** — overrides the config directory entirely (settings, keybindings, themes, plugins, plugin registry). Always set this when running scripted `--exec` sessions that touch settings or plugins, so the developer's real `~/.config/ttt` is not read or mutated. The functional test harness (`tests/functional/tui.js`) sets it automatically.
-
-Headless `--exec` sessions use a process-local clipboard, so concurrent automation cannot overwrite the desktop clipboard or each other's copied text. Interactive sessions, including `--listen`, continue to use the system clipboard.
-
-**Lua API equivalents** — Plugins can also call `ttt.screenshot(path)`, `ttt.debug(path)`, `ttt.click(x, y)`, and `ttt.quit()` directly.
-
-**Command palette** — `Debug: Screenshot`, `Debug: Dump State`, `Debug: Simulate Click`, `Debug: Run Current File as Plugin` are available for interactive debugging.
+- **`--exec "commands"`** runs semicolon-separated actions after startup: `click`, `rclick`, `hover`, `drag`, `key`, `type`, `paste`, `copy`, `exec "Command Name"`, `screenshot`, `debug`, `wait`, `wait-for TEXT`, `panel ID`, `quit`. `bin/ttt --help` (`ExecScriptUsage()` in `internal/app/exec_script.go`) is the reference. Each action is acknowledged after the event loop handles and redraws it; any failure stops the script with a nonzero exit.
+- **`debug PATH`** dumps screen, cursor, buffer, focus, panels, tabs, selection, output log, terminal PTY tails, and the widget tree.
+- **`--listen`** accepts the same script over `POST http://127.0.0.1:4242/exec` (loopback only), to drive an editor a person started in a real terminal: `curl -X POST --data "type hi; screenshot /tmp/s.txt" http://127.0.0.1:4242/exec`.
+- **`--size WxH`** makes layout and click coordinates deterministic.
+- **`--plugin FILE`** loads a Lua plugin with full permissions (see the Plugin API caveats).
+- **`TTT_CONFIG_DIR`** overrides the config directory. Set it for scripted sessions so the real `~/.config/ttt` is not read or mutated. Headless `--exec` uses a process-local clipboard.
 
 ### Implementation patterns
 
@@ -237,16 +198,12 @@ Headless `--exec` sessions use a process-local clipboard, so concurrent automati
 - **Command handlers**: define handlers as named methods on `App` (e.g. `app.ExplorerRename`) and reference them in `reg.Register(...)`. Do not use inline closures for non-trivial handlers.
 - **Comments: only critical ones.** Add a comment only when missing it would cause a bug or misuse: a hidden constraint, a non-obvious invariant, or a workaround for a specific bug (the `textwidth`/fullwidth-rune notes above show the bar to clear). Never comment what the code does, restate an identifier, narrate the change, or add docstrings for coverage; well-named identifiers already do that.
 
-### Post-implementation review
-
-After a feature is implemented and tests pass, review all changes for cleanup: dead code, unnecessary complexity, naming inconsistencies, or missing edge cases. Fix anything related to the feature in the same PR. If you spot something unrelated that needs attention, create a GitHub issue for it instead of fixing it in the current PR.
-
 ### Opening a pull request
 
 - **Features need an accepted issue first.** Link it in the PR body (`Closes #123`). Bug fixes, docs, and small cleanups can go straight to a PR.
-- **One concern per PR.** Keep it under roughly 600 changed lines; split larger work into a sequence of PRs.
+- **Run it.** Reproduce a bug, or try a feature, in the real binary with `--exec` or `--listen` before and after the change.
+- **One concern per PR**, under roughly 600 changed lines. Note unrelated problems you find in the PR body instead of fixing them.
 - **Title** uses conventional commits: `type(scope): description`.
-- **Body** explains why the change is needed, which test layer covers it and what that test proves, and, for visible changes, includes a screenshot captured with `--exec "...; screenshot PATH"`.
-- **Comments:** only critical ones (see Implementation patterns). Remove comments that describe what the code does before opening.
-- **Before opening:** `make test` and `make lint` pass, and the change has been exercised in the real binary.
+- **Body** explains why, which test covers the change, and includes a `--exec` screenshot for visible changes.
+- **Before opening:** `make test` and `make lint` pass, and comments that describe what the code does are removed.
 - **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
