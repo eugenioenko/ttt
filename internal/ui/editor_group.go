@@ -1197,6 +1197,39 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 	return renamed
 }
 
+// RefreshHighlighters rebuilds every file tab's highlighter after the set of
+// available grammars changes.
+func (g *EditorGroupWidget) RefreshHighlighters() {
+	if !g.SyntaxHighlight {
+		return
+	}
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if t.Content != nil || t.Buf == nil || t.FilePath == "" {
+			continue
+		}
+		prevLang := ""
+		if t.Highlighter != nil {
+			prevLang = t.Highlighter.Language()
+		}
+		t.Highlighter = highlight.New(t.FilePath)
+		lang := ""
+		if t.Highlighter != nil {
+			lang = t.Highlighter.Language()
+		}
+		if lang == prevLang || t.Virtual {
+			continue
+		}
+		if g.OnFileClose != nil && prevLang != "" {
+			g.OnFileClose(t.FilePath, prevLang)
+		}
+		if g.OnFileOpen != nil && lang != "" {
+			g.OnFileOpen(t.FilePath, lang, strings.Join(t.Buf.Lines, "\n"))
+		}
+	}
+	g.syncTabs()
+}
+
 func (g *EditorGroupWidget) ActiveFilePath() string {
 	if t := g.activeTab(); t != nil {
 		return t.FilePath

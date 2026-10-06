@@ -26,6 +26,15 @@ type Manifest struct {
 	Entry       string        `json:"entry"`
 	API         int           `json:"api,omitempty"`
 	Permissions PermissionSet `json:"permissions"`
+	Grammars    []Grammar     `json:"grammars,omitempty"`
+}
+
+// Grammar is a TextMate grammar the plugin contributes. Path is relative to
+// the plugin directory.
+type Grammar struct {
+	Path      string   `json:"path"`
+	Language  string   `json:"language,omitempty"`
+	FileTypes []string `json:"fileTypes,omitempty"`
 }
 
 // Title is the human-facing plugin name shown in the UI: DisplayName when the
@@ -52,8 +61,16 @@ func LoadManifest(dir string) (Manifest, error) {
 	if m.Name == "" {
 		return Manifest{}, fmt.Errorf("manifest missing required field: name")
 	}
-	if m.Entry == "" {
+	if m.Entry == "" && len(m.Grammars) == 0 {
 		return Manifest{}, fmt.Errorf("manifest missing required field: entry")
+	}
+	for _, g := range m.Grammars {
+		if g.Path == "" {
+			return Manifest{}, fmt.Errorf("grammar missing required field: path")
+		}
+		if !withinDir(dir, filepath.Join(dir, g.Path)) {
+			return Manifest{}, fmt.Errorf("grammar path %q escapes plugin directory", g.Path)
+		}
 	}
 	if m.API == 0 {
 		m.API = 1

@@ -50,9 +50,10 @@ Every plugin requires a `plugin.ttt.json` manifest file at the root of its direc
 | `description` | string | no       | Shown in the plugin list dialog.                    |
 | `version`     | string | no       | Semver version string.                              |
 | `author`      | string | no       | Plugin author name.                                 |
-| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. |
+| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars`. |
 | `api`         | number | no       | Plugin API version the plugin targets. Defaults to `1` when omitted. The editor refuses to load plugins that target a newer API than it supports. |
 | `permissions` | object | no       | Object declaring required permissions (see [Permissions Reference](#permissions-reference)). |
+| `grammars`    | array  | no       | TextMate grammars the plugin contributes (see [Grammar plugins](#grammar-plugins)). |
 
 ### Minimal Example
 
@@ -80,6 +81,40 @@ ttt.register({
   },
 })
 ```
+
+### Grammar plugins
+
+A plugin can add syntax highlighting for a language by shipping a TextMate grammar in JSON format. A plugin that only contributes grammars needs no Lua code and no permissions:
+
+```
+ttt-lang-zig/
+├── plugin.ttt.json
+└── syntaxes/
+    └── zig.tmLanguage.json
+```
+
+```json
+{
+  "name": "ttt-lang-zig",
+  "displayName": "Zig",
+  "version": "1.0.0",
+  "grammars": [
+    { "path": "syntaxes/zig.tmLanguage.json", "language": "Zig", "fileTypes": ["zig", "zon"] }
+  ]
+}
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `path`      | string   | yes      | Grammar file, relative to the plugin directory. |
+| `language`  | string   | no       | Language name shown in the status bar. Defaults to the grammar's `name`. |
+| `fileTypes` | string[] | no       | File extensions or exact file names. Defaults to the grammar's `fileTypes`. |
+
+The grammar's `scopeName` comes from the file itself. Grammars from VS Code extensions (`contributes.grammars`) work as-is; convert XML (`.tmLanguage`) or YAML grammars to JSON first.
+
+The approval dialog lists each grammar. When the user allows the plugin, ttt copies its grammar files into `~/.config/ttt/grammars/` and adds them to the [`editor.grammars`](/reference/settings/#grammars) setting, and open files switch to the new highlighting right away. Updating or reloading the plugin copies the files again. Disabling it keeps its grammars; uninstalling removes the files and their settings entries.
+
+A grammar whose file types match a built-in language replaces it, and other grammars that include the replaced scope (for example, Markdown code fences) use the replacement.
 
 ## Plugin Lifecycle
 

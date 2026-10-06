@@ -149,6 +149,11 @@ func (p *Plugin) Init() error {
 	setupJSONModule(p.State)
 	setupSettingsModule(p.State, p)
 
+	if p.Manifest.Entry == "" {
+		p.Enabled = true
+		return nil
+	}
+
 	entry := filepath.Join(p.Dir, p.Manifest.Entry)
 	absEntry, err := filepath.Abs(entry)
 	if err != nil {

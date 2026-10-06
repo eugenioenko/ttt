@@ -124,6 +124,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 
 	a.applyChevrons(s.Appearance)
+	a.applyGrammarSettings(s.Editor.Grammars)
 
 	if a.Explorer != nil && (a.Explorer.Settings != s.Explorer || a.Explorer.Icons != s.Appearance.Icons) {
 		a.Explorer.Settings = s.Explorer

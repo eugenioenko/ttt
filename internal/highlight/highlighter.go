@@ -3,11 +3,9 @@ package highlight
 import (
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	textmate "github.com/eugenioenko/textmate-go"
-	"github.com/eugenioenko/textmate-go/grammars"
 
 	"github.com/eugenioenko/ttt/internal/term"
 )
@@ -31,18 +29,6 @@ var tokenizeOptions = textmate.TokenizeOptions{
 }
 
 const maxIsolatedCache = 4_096
-
-var (
-	registryOnce sync.Once
-	registry     *textmate.Registry
-)
-
-func sharedRegistry() *textmate.Registry {
-	registryOnce.Do(func() {
-		registry = textmate.NewRegistry(textmate.RegistryOptions{LoadGrammar: grammars.Load})
-	})
-	return registry
-}
 
 type Highlighter struct {
 	grammar  *textmate.Grammar
@@ -68,55 +54,35 @@ var extraFilenames = map[string]string{
 
 var backupSuffixes = []string{".bak", ".orig", ".old", "~"}
 
-// New returns nil when no embedded grammar matches the file name.
+// New returns nil when no grammar matches the file name.
 func New(filename string) *Highlighter {
-	info, ok := infoForFilename(filepath.Base(filename))
+	c := currentCatalog()
+	ref, ok := c.forFilename(filepath.Base(filename))
 	if !ok {
 		return nil
 	}
-	return newFromInfo(info)
-}
-
-func infoForFilename(name string) (grammars.GrammarInfo, bool) {
-	for {
-		if info, ok := grammars.InfoForFilename(name); ok {
-			return info, true
-		}
-		if id, ok := extraFilenames[strings.ToLower(name)]; ok {
-			return grammars.InfoForID(id)
-		}
-		trimmed := name
-		for _, suffix := range backupSuffixes {
-			trimmed = strings.TrimSuffix(trimmed, suffix)
-		}
-		if trimmed == name || trimmed == "" {
-			return grammars.GrammarInfo{}, false
-		}
-		name = trimmed
-	}
+	return c.newHighlighter(ref)
 }
 
 // NewForLanguage selects a grammar by language ID or alias, such as a Markdown
 // code-fence label.
 func NewForLanguage(lang string) *Highlighter {
-	info, ok := grammars.InfoForID(lang)
-	if !ok {
-		info, ok = grammars.InfoForAlias(lang)
-	}
+	c := currentCatalog()
+	ref, ok := c.forLanguage(lang)
 	if !ok {
 		return nil
 	}
-	return newFromInfo(info)
+	return c.newHighlighter(ref)
 }
 
-func newFromInfo(info grammars.GrammarInfo) *Highlighter {
-	g, err := sharedRegistry().LoadGrammar(info.ScopeName)
+func (c *grammarCatalog) newHighlighter(ref grammarRef) *Highlighter {
+	g, err := c.registry.LoadGrammar(ref.scopeName)
 	if err != nil || g == nil {
 		return nil
 	}
 	return &Highlighter{
 		grammar:  g,
-		language: info.DisplayName,
+		language: ref.language,
 		doc:      textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
 		dirty:    true,
 	}

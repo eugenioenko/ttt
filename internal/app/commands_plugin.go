@@ -187,6 +187,7 @@ func (a *App) doPluginUninstall(name string) {
 	if err := a.PluginManager.Uninstall(name); err != nil {
 		slog.Error("plugin uninstall", "error", err)
 	}
+	a.uninstallPluginGrammars(name)
 
 	a.resetPluginDetailButton(name)
 	if a.PluginsPanel != nil {
@@ -244,6 +245,7 @@ func (a *App) handlePluginUpdateResult(result *pluginUpdateResult) {
 	}
 	if !result.needsApproval && result.plugin != nil {
 		a.WirePlugin(result.plugin)
+		a.installPluginGrammars(result.plugin)
 	}
 	if a.PluginsPanel != nil {
 		a.PluginsPanel.Refresh()
@@ -258,6 +260,12 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 		kvEntries = append(kvEntries, widgets.KeyValueEntry{
 			Key:   e.Name,
 			Value: e.Value,
+		})
+	}
+	for _, g := range p.Manifest.Grammars {
+		kvEntries = append(kvEntries, widgets.KeyValueEntry{
+			Key:   "Grammar",
+			Value: grammarLabel(g),
 		})
 	}
 
@@ -277,6 +285,7 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 			a.DismissDialog()
 			if err := a.PluginManager.ApproveAndLoad(p); err == nil {
 				a.WirePlugin(p)
+				a.installPluginGrammars(p)
 			}
 			a.updatePluginDetailButtons()
 			if a.PluginsPanel != nil {
@@ -695,6 +704,7 @@ func (a *App) doPluginReload(name string) {
 	}
 
 	a.WirePlugin(p)
+	a.installPluginGrammars(p)
 
 	a.Output.AddLine(ui.OutputLine{
 		Time:       time.Now().Format("15:04:05"),

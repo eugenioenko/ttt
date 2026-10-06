@@ -62,6 +62,7 @@ All editor settings are nested under the `editor` key.
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
+| `editor.grammars` | array | `[]` | External TextMate grammars (see [Grammars](#grammars)) |
 
 ## Explorer
 
@@ -149,6 +150,31 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `autocomplete.autoSuggest` | bool | `true` | Show completions automatically as you type |
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |
+
+## Grammars
+
+ttt embeds TextMate grammars for over 120 languages. `editor.grammars` adds more, or replaces a built-in one, from TextMate grammar files in JSON format (`.tmLanguage.json`). Most VS Code language extensions ship one.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | yes | Grammar file, relative to the config directory (`~/.config/ttt/`) unless absolute. |
+| `language` | string | no | Language name shown in the status bar. Defaults to the grammar's `name`. |
+| `fileTypes` | string[] | no | File extensions or exact file names, such as `zig` or `Justfile`. Defaults to the grammar's `fileTypes`. |
+| `plugin` | string | no | Set by ttt on entries a plugin installed. Uninstalling that plugin removes the entry and its file. |
+
+```json
+{
+  "editor": {
+    "grammars": [
+      { "path": "grammars/zig.tmLanguage.json", "fileTypes": ["zig", "zon"] }
+    ]
+  }
+}
+```
+
+Entries earlier in the list take precedence over later ones, and all of them take precedence over the embedded grammars, so an entry whose file types match a built-in language replaces it. Grammars can include each other across sources: an embedded Markdown grammar highlights a fenced block with an external grammar, and an external grammar can include an embedded one. A grammar file that is missing or invalid is skipped and reported in the Output panel.
+
+Plugins can contribute grammars too. Installing one copies its grammar files into `~/.config/ttt/grammars/` and adds entries here (see [Grammar plugins](/guides/plugin-authoring/#grammar-plugins)).
 
 ## Formatters
 

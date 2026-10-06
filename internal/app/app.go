@@ -114,6 +114,7 @@ type App struct {
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
 	appliedSettings config.Settings
+	loadedGrammars  []config.GrammarSetting
 	// welcomeIsEmptyState is set while the welcome page stands in for an
 	// empty editor, as opposed to being opened from Help.
 	welcomeIsEmptyState bool

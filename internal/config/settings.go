@@ -91,31 +91,40 @@ func DefaultLSPSettings() LSPSettings {
 }
 
 type EditorSettings struct {
-	TabSize                 int    `json:"tabSize"`
-	InsertSpaces            bool   `json:"insertSpaces"`
-	WordWrap                bool   `json:"wordWrap"`
-	DiffMode                string `json:"diffMode"`
-	DiffContext             string `json:"diffContext"`
-	DiffWordWrap            bool   `json:"diffWordWrap"`
-	DiffHighContrast        bool   `json:"diffHighContrast,omitempty"`
-	DiffCollapsedEmphasis   bool   `json:"diffEmphasizeCollapsedRows,omitempty"`
-	LineNumbers             bool   `json:"lineNumbers"`
-	CursorStyle             string `json:"cursorStyle,omitempty"`
-	FormatOnSave            bool   `json:"formatOnSave"`
-	InsertFinalNewline      bool   `json:"insertFinalNewline"`
-	TrimTrailingWhitespace  bool   `json:"trimTrailingWhitespace"`
-	FocusOnOpen             bool   `json:"focusOnOpen"`
-	SyntaxHighlight         *bool  `json:"syntaxHighlight,omitempty"`
-	GitGutter               *bool  `json:"gitGutter,omitempty"`
-	AutoDedent              *bool  `json:"autoDedent,omitempty"`
-	AutoIndent              *bool  `json:"autoIndent,omitempty"`
-	GutterStyle             string `json:"gutterStyle,omitempty"`
-	BorderStyle             string `json:"borderStyle,omitempty"`
-	BracketPairColorization bool   `json:"bracketPairColorization"`
-	ShowTrailingNewline     *bool  `json:"showTrailingNewline,omitempty"`
-	MenuBar                 *bool  `json:"menuBar,omitempty"`
-	UndoDeleteCursorStart   bool   `json:"undoDeleteCursorStart,omitempty"`
-	TransparentBackground   bool   `json:"transparentBackground"`
+	TabSize                 int              `json:"tabSize"`
+	InsertSpaces            bool             `json:"insertSpaces"`
+	WordWrap                bool             `json:"wordWrap"`
+	DiffMode                string           `json:"diffMode"`
+	DiffContext             string           `json:"diffContext"`
+	DiffWordWrap            bool             `json:"diffWordWrap"`
+	DiffHighContrast        bool             `json:"diffHighContrast,omitempty"`
+	DiffCollapsedEmphasis   bool             `json:"diffEmphasizeCollapsedRows,omitempty"`
+	LineNumbers             bool             `json:"lineNumbers"`
+	CursorStyle             string           `json:"cursorStyle,omitempty"`
+	FormatOnSave            bool             `json:"formatOnSave"`
+	InsertFinalNewline      bool             `json:"insertFinalNewline"`
+	TrimTrailingWhitespace  bool             `json:"trimTrailingWhitespace"`
+	FocusOnOpen             bool             `json:"focusOnOpen"`
+	SyntaxHighlight         *bool            `json:"syntaxHighlight,omitempty"`
+	GitGutter               *bool            `json:"gitGutter,omitempty"`
+	AutoDedent              *bool            `json:"autoDedent,omitempty"`
+	AutoIndent              *bool            `json:"autoIndent,omitempty"`
+	GutterStyle             string           `json:"gutterStyle,omitempty"`
+	BorderStyle             string           `json:"borderStyle,omitempty"`
+	BracketPairColorization bool             `json:"bracketPairColorization"`
+	ShowTrailingNewline     *bool            `json:"showTrailingNewline,omitempty"`
+	MenuBar                 *bool            `json:"menuBar,omitempty"`
+	UndoDeleteCursorStart   bool             `json:"undoDeleteCursorStart,omitempty"`
+	TransparentBackground   bool             `json:"transparentBackground"`
+	Grammars                []GrammarSetting `json:"grammars,omitempty"`
+}
+
+// Path is relative to the config directory unless absolute.
+type GrammarSetting struct {
+	Path      string   `json:"path"`
+	Language  string   `json:"language,omitempty"`
+	FileTypes []string `json:"fileTypes,omitempty"`
+	Plugin    string   `json:"plugin,omitempty"`
 }
 
 func (e EditorSettings) IsShowTrailingNewlineEnabled() bool {

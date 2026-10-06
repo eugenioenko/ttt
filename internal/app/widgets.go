@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -233,6 +234,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.SetImageProtocol(cfg.Settings.Image.Protocol)
 	editorGroup.BracketColorStyles = bracketStyles
 	editorGroup.Editor.BracketColorStyles = bracketStyles
+	grammarErrs := loadGrammarSettings(cfg.Settings.Editor.Grammars)
 	for _, f := range openFiles {
 		editorGroup.OpenFile(f.Path)
 		editorGroup.CommitActiveTab()
@@ -383,6 +385,8 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
 	app.applyChevrons(cfg.Settings.Appearance)
+	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)
+	app.reportGrammarErrors(grammarErrs)
 	return app
 }
 

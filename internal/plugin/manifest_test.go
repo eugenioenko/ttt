@@ -186,3 +186,40 @@ func TestLoadManifestNetworkInvalid(t *testing.T) {
 		t.Fatal("expected error for non-bool/non-array network.http")
 	}
 }
+
+func TestLoadManifestGrammarOnly(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{
+		"name": "lang-zig",
+		"grammars": [{ "path": "syntaxes/zig.json", "language": "Zig", "fileTypes": ["zig"] }]
+	}`), 0644)
+
+	m, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(m.Grammars) != 1 || m.Grammars[0].Path != "syntaxes/zig.json" || m.Grammars[0].Language != "Zig" {
+		t.Errorf("grammars = %+v", m.Grammars)
+	}
+
+	p := &Plugin{Name: m.Name, Dir: dir, Manifest: m}
+	if err := p.Init(); err != nil {
+		t.Fatalf("Init grammar-only plugin: %v", err)
+	}
+	defer p.Destroy()
+	if !p.Enabled {
+		t.Error("grammar-only plugin not enabled after Init")
+	}
+}
+
+func TestLoadManifestRejectsBadGrammarPath(t *testing.T) {
+	for _, path := range []string{"", "../outside.json", "syntaxes/../../outside.json"} {
+		dir := t.TempDir()
+		os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(fmt.Sprintf(`{
+			"name": "bad", "grammars": [{ "path": %q }]
+		}`, path)), 0644)
+		if _, err := LoadManifest(dir); err == nil {
+			t.Errorf("path %q: expected error", path)
+		}
+	}
+}

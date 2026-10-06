@@ -217,6 +217,36 @@
     "tags": ["formatter", "shell", "bash", "shfmt"]
   },
   {
+    "name": "lang-git",
+    "displayName": "Git Commit & Rebase",
+    "author": "eugenioenko",
+    "description": "Syntax highlighting for git commit messages and interactive rebase todo lists",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lang-git",
+    "version": "0.1.0",
+    "tags": ["grammar", "git", "commit", "rebase"]
+  },
+  {
+    "name": "lang-astro",
+    "displayName": "Astro",
+    "author": "eugenioenko",
+    "description": "Syntax highlighting for Astro components (.astro)",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lang-astro",
+    "version": "0.1.0",
+    "tags": ["grammar", "astro", "web"]
+  },
+  {
+    "name": "lang-just",
+    "displayName": "Just",
+    "author": "eugenioenko",
+    "description": "Syntax highlighting for just command runner files (justfile, .just)",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lang-just",
+    "version": "0.1.0",
+    "tags": ["grammar", "just", "justfile"]
+  },
+  {
     "name": "lsp-go",
     "displayName": "Go Language Server",
     "author": "eugenioenko",
