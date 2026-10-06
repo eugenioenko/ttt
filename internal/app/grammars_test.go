@@ -143,13 +143,22 @@ func TestPluginGrammarsDoNotCollide(t *testing.T) {
 
 	first := newGrammarPlugin(t, "a")
 	first.Manifest.Grammars[0].Path = "b-x.json"
-	os.Rename(filepath.Join(first.Dir, "syntaxes", "foo.json"), filepath.Join(first.Dir, "b-x.json"))
+	if err := os.Rename(filepath.Join(first.Dir, "syntaxes", "foo.json"), filepath.Join(first.Dir, "b-x.json")); err != nil {
+		t.Fatal(err)
+	}
 	second := newGrammarPlugin(t, "a-b")
 	second.Manifest.Grammars[0].Path = "x.json"
-	os.Rename(filepath.Join(second.Dir, "syntaxes", "foo.json"), filepath.Join(second.Dir, "x.json"))
+	if err := os.Rename(filepath.Join(second.Dir, "syntaxes", "foo.json"), filepath.Join(second.Dir, "x.json")); err != nil {
+		t.Fatal(err)
+	}
 
 	a.installPluginGrammars(first)
 	a.installPluginGrammars(second)
+	for _, path := range []string{filepath.Join("a", "b-x.json"), filepath.Join("a-b", "x.json")} {
+		if _, err := os.Stat(filepath.Join(cfgDir, "grammars", path)); err != nil {
+			t.Fatalf("grammar %s not installed: %v", path, err)
+		}
+	}
 	a.uninstallPluginGrammars("a")
 
 	if _, err := os.Stat(filepath.Join(cfgDir, "grammars", "a-b", "x.json")); err != nil {
@@ -185,5 +194,28 @@ func TestPluginGrammarSymlinkOutsidePluginIsRejected(t *testing.T) {
 	}
 	if hasPluginGrammars(a.Settings.Editor.Grammars, "sneaky") {
 		t.Error("settings entry added for a rejected grammar")
+	}
+}
+
+func TestPluginNameCannotReachOutsideItsGrammarFolder(t *testing.T) {
+	cfgDir := t.TempDir()
+	config.OverrideConfigDir = cfgDir
+	t.Cleanup(func() {
+		config.OverrideConfigDir = ""
+		highlight.SetExternalGrammars(nil)
+	})
+	a := buildTestApp(t, config.DefaultSettings())
+	a.installPluginGrammars(newGrammarPlugin(t, "lang-foo"))
+	kept := filepath.Join(cfgDir, "grammars", "lang-foo", "syntaxes", "foo.json")
+
+	for _, name := range []string{".", "..", "a/b", ""} {
+		p := newGrammarPlugin(t, "bad")
+		p.Name = name
+		a.Settings.Editor.Grammars = append(a.Settings.Editor.Grammars, config.GrammarSetting{Path: "grammars/x.json", Plugin: name})
+		a.installPluginGrammars(p)
+		a.uninstallPluginGrammars(name)
+		if _, err := os.Stat(kept); err != nil {
+			t.Fatalf("plugin name %q removed another plugin's grammar: %v", name, err)
+		}
 	}
 }

@@ -116,9 +116,9 @@ func (a *App) dropPluginGrammars(name string) []config.GrammarSetting {
 var errInvalidPluginName = errors.New("plugin name is not a valid folder name")
 
 // isPlainName guards RemoveAll and copy targets against plugin names such as
-// ".." or "a/b", which would reach outside the grammars folder.
+// ".", ".." or "a/b", which would resolve to or outside the grammars folder.
 func isPlainName(name string) bool {
-	return filepath.IsLocal(name) && filepath.Base(name) == name
+	return name != "." && filepath.IsLocal(name) && filepath.Base(name) == name
 }
 
 func (a *App) saveGrammarSettings(entries []config.GrammarSetting) {
