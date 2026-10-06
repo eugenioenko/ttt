@@ -37,6 +37,23 @@ type Grammar struct {
 	FileTypes []string `json:"fileTypes,omitempty"`
 }
 
+// GrammarFile resolves symlinks so a grammar cannot point outside the plugin
+// directory, which the lexical check in LoadManifest does not catch.
+func (p *Plugin) GrammarFile(g Grammar) (string, error) {
+	root, err := filepath.EvalSymlinks(p.Dir)
+	if err != nil {
+		return "", err
+	}
+	path, err := filepath.EvalSymlinks(filepath.Join(p.Dir, g.Path))
+	if err != nil {
+		return "", err
+	}
+	if !withinDir(root, path) {
+		return "", fmt.Errorf("grammar path %q resolves outside plugin directory", g.Path)
+	}
+	return path, nil
+}
+
 // Title is the human-facing plugin name shown in the UI: DisplayName when the
 // author set one, otherwise the unique kebab-case Name identifier.
 func (m Manifest) Title() string {

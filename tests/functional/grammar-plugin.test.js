@@ -40,7 +40,7 @@ function setup() {
 describe("grammar plugins", () => {
   it("installs a grammar-only plugin and removes it on uninstall", () => {
     const { ws, file, configDir } = setup();
-    const copied = join(configDir, "grammars", "lang-foo-foo.tmLanguage.json");
+    const copied = join(configDir, "grammars", "lang-foo", "syntaxes", "foo.tmLanguage.json");
 
     tui.start(ws, file);
     tui.setEnv({ TTT_CONFIG_DIR: configDir });
@@ -52,7 +52,7 @@ describe("grammar plugins", () => {
     expect(existsSync(copied)).toBe(true);
     const settings = JSON.parse(readFileSync(join(configDir, "settings.json"), "utf8"));
     expect(settings.editor.grammars).toEqual([
-      { path: "grammars/lang-foo-foo.tmLanguage.json", language: "Foo", plugin: "lang-foo" },
+      { path: "grammars/lang-foo/syntaxes/foo.tmLanguage.json", language: "Foo", plugin: "lang-foo" },
     ]);
 
     tui.start(file);

@@ -68,11 +68,11 @@ func TestPluginGrammarInstallAndUninstall(t *testing.T) {
 
 	a.installPluginGrammars(newGrammarPlugin(t, "lang-foo"))
 
-	copied := filepath.Join(cfgDir, "grammars", "lang-foo-foo.json")
+	copied := filepath.Join(cfgDir, "grammars", "lang-foo", "syntaxes", "foo.json")
 	if _, err := os.Stat(copied); err != nil {
 		t.Fatalf("grammar not copied: %v", err)
 	}
-	want := []config.GrammarSetting{manual, {Path: filepath.Join("grammars", "lang-foo-foo.json"), Language: "Foo", Plugin: "lang-foo"}}
+	want := []config.GrammarSetting{manual, {Path: filepath.Join("grammars", "lang-foo", "syntaxes", "foo.json"), Language: "Foo", Plugin: "lang-foo"}}
 	saved := config.LoadSettings().Editor.Grammars
 	if len(saved) != 2 || saved[0].Path != want[0].Path || saved[1].Path != want[1].Path || saved[1].Plugin != "lang-foo" {
 		t.Fatalf("saved grammars = %+v, want %+v", saved, want)
@@ -129,5 +129,61 @@ func TestGrammarSettingsAppliedFromSettings(t *testing.T) {
 	}
 	if !reported {
 		t.Error("missing grammar file not reported in the Output panel")
+	}
+}
+
+func TestPluginGrammarsDoNotCollide(t *testing.T) {
+	cfgDir := t.TempDir()
+	config.OverrideConfigDir = cfgDir
+	t.Cleanup(func() {
+		config.OverrideConfigDir = ""
+		highlight.SetExternalGrammars(nil)
+	})
+	a := buildTestApp(t, config.DefaultSettings())
+
+	first := newGrammarPlugin(t, "a")
+	first.Manifest.Grammars[0].Path = "b-x.json"
+	os.Rename(filepath.Join(first.Dir, "syntaxes", "foo.json"), filepath.Join(first.Dir, "b-x.json"))
+	second := newGrammarPlugin(t, "a-b")
+	second.Manifest.Grammars[0].Path = "x.json"
+	os.Rename(filepath.Join(second.Dir, "syntaxes", "foo.json"), filepath.Join(second.Dir, "x.json"))
+
+	a.installPluginGrammars(first)
+	a.installPluginGrammars(second)
+	a.uninstallPluginGrammars("a")
+
+	if _, err := os.Stat(filepath.Join(cfgDir, "grammars", "a-b", "x.json")); err != nil {
+		t.Errorf("uninstalling plugin a removed a-b's grammar: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfgDir, "grammars", "a")); !os.IsNotExist(err) {
+		t.Errorf("plugin a's grammar folder still present: %v", err)
+	}
+}
+
+func TestPluginGrammarSymlinkOutsidePluginIsRejected(t *testing.T) {
+	cfgDir := t.TempDir()
+	config.OverrideConfigDir = cfgDir
+	t.Cleanup(func() {
+		config.OverrideConfigDir = ""
+		highlight.SetExternalGrammars(nil)
+	})
+	a := buildTestApp(t, config.DefaultSettings())
+
+	secret := filepath.Join(t.TempDir(), "secret.json")
+	os.WriteFile(secret, []byte(fooGrammarJSON), 0644)
+	p := newGrammarPlugin(t, "sneaky")
+	link := filepath.Join(p.Dir, "syntaxes", "foo.json")
+	os.Remove(link)
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	a.installPluginGrammars(p)
+
+	if _, err := os.Stat(filepath.Join(cfgDir, "grammars", "sneaky", "syntaxes", "foo.json")); !os.IsNotExist(err) {
+		t.Errorf("symlinked grammar outside the plugin was copied: %v", err)
+	}
+	if hasPluginGrammars(a.Settings.Editor.Grammars, "sneaky") {
+		t.Error("settings entry added for a rejected grammar")
 	}
 }

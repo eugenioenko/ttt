@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,8 +67,15 @@ func (a *App) installPluginGrammars(p *plugin.Plugin) {
 	}
 	entries := a.dropPluginGrammars(p.Name)
 	for _, g := range p.Manifest.Grammars {
-		rel := filepath.Join(grammarsDirName, p.Name+"-"+filepath.Base(g.Path))
-		if err := copyGrammarFile(filepath.Join(p.Dir, g.Path), resolveGrammarPath(rel)); err != nil {
+		rel := filepath.Join(grammarsDirName, p.Name, filepath.Clean(g.Path))
+		err := errInvalidPluginName
+		if isPlainName(p.Name) {
+			var src string
+			if src, err = p.GrammarFile(g); err == nil {
+				err = copyGrammarFile(src, resolveGrammarPath(rel))
+			}
+		}
+		if err != nil {
 			a.LogOutput("error", "grammars", fmt.Sprintf("install %s from %s: %v", g.Path, p.Name, err))
 			continue
 		}
@@ -88,20 +96,29 @@ func (a *App) uninstallPluginGrammars(name string) {
 	a.saveGrammarSettings(a.dropPluginGrammars(name))
 }
 
-// dropPluginGrammars deletes the plugin's copied grammar files and returns the
+// dropPluginGrammars deletes the plugin's grammar folder and returns the
 // settings entries that remain.
 func (a *App) dropPluginGrammars(name string) []config.GrammarSetting {
 	var kept []config.GrammarSetting
 	for _, g := range a.Settings.Editor.Grammars {
 		if g.Plugin != name {
 			kept = append(kept, g)
-			continue
 		}
-		if err := os.Remove(resolveGrammarPath(g.Path)); err != nil && !os.IsNotExist(err) {
-			a.LogOutput("error", "grammars", fmt.Sprintf("remove %s: %v", g.Path, err))
+	}
+	if isPlainName(name) {
+		if err := os.RemoveAll(resolveGrammarPath(filepath.Join(grammarsDirName, name))); err != nil {
+			a.LogOutput("error", "grammars", fmt.Sprintf("remove grammars of %s: %v", name, err))
 		}
 	}
 	return kept
+}
+
+var errInvalidPluginName = errors.New("plugin name is not a valid folder name")
+
+// isPlainName guards RemoveAll and copy targets against plugin names such as
+// ".." or "a/b", which would reach outside the grammars folder.
+func isPlainName(name string) bool {
+	return filepath.IsLocal(name) && filepath.Base(name) == name
 }
 
 func (a *App) saveGrammarSettings(entries []config.GrammarSetting) {
