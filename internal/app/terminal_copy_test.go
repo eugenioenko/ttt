@@ -58,6 +58,10 @@ func TestAppCopyAndPaste_TerminalFocused(t *testing.T) {
 }
 
 func TestHandleRightClick_FocusesTerminal(t *testing.T) {
+	originalConfigDir := config.OverrideConfigDir
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = originalConfigDir })
+
 	clipboard.DisableSystem()
 	a := buildTestApp(t, config.DefaultSettings())
 	a.Reg = command.NewRegistry()
