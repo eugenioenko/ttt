@@ -49,7 +49,7 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 - **`internal/git/`**: git CLI wrapper (status, staging, commit, repo discovery).
 - **`internal/github/`**: `gh` CLI wrapper for pull requests.
 - **`internal/lsp/`**: language server client (see LSP Integration).
-- **`internal/terminal/`**: integrated terminal emulator. Wraps `gitpod-io/xterm-go` for VT parsing and `aymanbagabas/go-pty` for PTY lifecycle.
+- **`internal/terminal/`**: integrated terminal emulator. Wraps `eugenioenko/xterm-go` for VT parsing and `aymanbagabas/go-pty` for PTY lifecycle.
 - **`internal/watcher/`**: fsnotify-based reporting of on-disk changes to open files and watched directories.
 - **`internal/workspace/`**: multi-folder workspaces. `Folder` and `Workspace` track project roots, with `IsRepo` git detection, `FolderForFile` lookup (longest-prefix match), and JSON `.ttt` workspace files. Falls back to `cwd` when no folders are given.
 

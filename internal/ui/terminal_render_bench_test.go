@@ -7,7 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
-	"github.com/gitpod-io/xterm-go"
+	"github.com/eugenioenko/xterm-go"
 )
 
 func BenchmarkTerminalRender(b *testing.B) {

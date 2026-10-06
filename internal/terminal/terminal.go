@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/aymanbagabas/go-pty"
-	"github.com/gitpod-io/xterm-go"
+	"github.com/eugenioenko/xterm-go"
 )
 
 const (
@@ -175,7 +175,7 @@ func (t *Terminal) WriteString(s string) {
 
 func (t *Terminal) Resize(cols, rows int) {
 	// xterm clamps below these itself; matching it here keeps t.cols/t.rows in
-	// step with the emulator, which trimForReflow relies on to size its estimate.
+	// step with the emulator.
 	cols = max(cols, xterm.MinimumCols)
 	rows = max(rows, xterm.MinimumRows)
 	t.mu.Lock()
@@ -196,7 +196,6 @@ func (t *Terminal) resizeEmulator(cols, rows int) bool {
 	if runtime.GOOS != "windows" {
 		t.clearPromptForRedraw()
 	}
-	trimForReflow(t.term.NormalBuffer(), t.cols, t.rows, cols, rows)
 	t.cols = cols
 	t.rows = rows
 	t.term.Resize(cols, rows)

@@ -15,7 +15,7 @@ TTT includes a built-in terminal emulator. Press **Ctrl+T** to toggle the termin
 
 ## Features
 
-- Full VT escape sequence support via `gitpod-io/xterm-go` and PTY management via `aymanbagabas/go-pty`
+- Full VT escape sequence support via `eugenioenko/xterm-go` and PTY management via `aymanbagabas/go-pty`
 - True color (24-bit) and 256-color rendering with direct RGB color support
 - When the terminal is focused, all keys go to the PTY except force keys: Ctrl+T, Alt+T, Ctrl+Q, Ctrl+P, Ctrl+K P, Ctrl+B
 - Scrollback buffer with mouse wheel scrolling (3 lines), Shift+PgUp/PgDn (half page), and a draggable scrollbar

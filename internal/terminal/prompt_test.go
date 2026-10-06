@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	xterm "github.com/gitpod-io/xterm-go"
+	xterm "github.com/eugenioenko/xterm-go"
 )
 
 const fishPrompt = "\x1b]133;A;click_events=1\x1b\\/home/user/a/rather/long/project/path\r\n❯ \x1b]133;B\x1b\\"

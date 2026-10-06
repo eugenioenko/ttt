@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitpod-io/xterm-go"
+	"github.com/eugenioenko/xterm-go"
 )
 
 func newTestTerminal(t *testing.T) *Terminal {

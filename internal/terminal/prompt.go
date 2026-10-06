@@ -3,7 +3,7 @@ package terminal
 import (
 	"strings"
 
-	xterm "github.com/gitpod-io/xterm-go"
+	xterm "github.com/eugenioenko/xterm-go"
 )
 
 // Shells that mark their prompt with OSC 133 (fish does natively) redraw it
