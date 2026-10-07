@@ -220,6 +220,10 @@ func RunEventLoop(
 	handleMouse := func(tev *tcell.EventMouse) {
 		mx, my := tev.Position()
 		mouseX, mouseY = mx, my
+		if app.handlePathDrag(tev) {
+			syncStatus()
+			return
+		}
 		btn := tev.Buttons()
 		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
 		app.DismissSignatureHelp()

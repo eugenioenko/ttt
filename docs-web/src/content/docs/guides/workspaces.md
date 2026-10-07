@@ -10,6 +10,7 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 - Directories are sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- Drag a file or folder onto the integrated terminal to insert its path, quoted for the shell when needed (also **Insert Path in Terminal** in the right-click menu and the command palette)
 - Sidebar actions button for **Refresh** and **New File**
 - File-type icons, which need a [Nerd Font](https://www.nerdfonts.com) in your terminal. They default off, since without one they'd render as boxes: turn them on with `"appearance": { "icons": "nerd-font" }`, **Options → Font Icons**, or **Icons** in the settings editor
 

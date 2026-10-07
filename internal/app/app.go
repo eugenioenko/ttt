@@ -124,6 +124,7 @@ type App struct {
 	// on an untitled tab.
 	welcomeWhenEmpty      bool
 	welcomeView           *welcomeView
+	pathDrag              pathDrag
 	panelResizing         bool
 	panelResizeFromClosed bool
 	eventLoopDoneOnce     sync.Once
@@ -1001,6 +1002,11 @@ func (a *App) ShowSelectDialog(title string, items []widgets.SelectItem, onSelec
 // ended, and it sees every motion event, which the dividers' own handlers do not.
 func (a *App) pointerShapeAt(mx, my int) string {
 	switch {
+	// The closed hand stays for the whole drag, drop target included: "copy"
+	// looks like the plain arrow in most cursor themes. A plain click leaves
+	// the pointer alone; the hand only shows once the press moves.
+	case a.pathDrag.active:
+		return "grabbing"
 	case a.ContentSplit.Dragging():
 		return a.ContentSplit.ResizeShape()
 	case a.SplitPanel.Dragging():

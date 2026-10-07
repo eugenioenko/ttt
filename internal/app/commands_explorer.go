@@ -194,6 +194,12 @@ func registerExplorerCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "explorer.insertPathInTerminal", Title: "Explorer: Insert Path in Terminal",
+		Keywords: []string{"explorer", "file", "path", "terminal", "insert", "paste", "drag", "drop"},
+		Handler:  app.InsertExplorerPathInTerminal,
+	})
+
+	reg.Register(command.Command{
 		ID: "explorer.removeRoot", Title: "Explorer: Remove Folder from Workspace",
 		Keywords: []string{"explorer", "workspace", "folder", "remove"},
 		Handler:  app.ExplorerRemoveRoot,
