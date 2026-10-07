@@ -56,7 +56,7 @@ func repeatToLines(src []byte, n int) []byte {
 
 func newBenchHarness(b *testing.B) *testHarness {
 	b.Helper()
-	h := newTestHarness(&testing.T{}, benchWidth, benchHeight)
+	h := newTestHarness(b, benchWidth, benchHeight)
 	b.Cleanup(h.stop)
 	return h
 }
@@ -157,7 +157,7 @@ func BenchmarkEditor(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					b.StopTimer()
-					h := newTestHarness(&testing.T{}, benchWidth, benchHeight)
+					h := newTestHarness(b, benchWidth, benchHeight)
 					b.StartTimer()
 					openBenchFile(b, h, lang.fixture, large)
 					b.StopTimer()
@@ -184,7 +184,7 @@ func BenchmarkEditor(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					b.StopTimer()
-					h := newTestHarness(&testing.T{}, benchWidth, benchHeight)
+					h := newTestHarness(b, benchWidth, benchHeight)
 					openBenchFile(b, h, lang.fixture, large)
 					b.StartTimer()
 					gotoLine(h, largeLines())

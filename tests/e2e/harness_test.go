@@ -19,7 +19,7 @@ import (
 )
 
 type testHarness struct {
-	t        *testing.T
+	t        testing.TB
 	app      *app.App
 	screen   *term.SimScreen
 	reg      *command.Registry
@@ -36,7 +36,7 @@ func displayColumnOf(row, label string) int {
 	return textwidth.String(row[:byteOffset])
 }
 
-func newTestHarness(t *testing.T, w, h int) *testHarness {
+func newTestHarness(t testing.TB, w, h int) *testHarness {
 	t.Helper()
 
 	dir := t.TempDir()
