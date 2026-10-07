@@ -14,6 +14,7 @@ make run          # build + run
 make test         # go test ./...
 make fmt          # gofmt -w .
 make lint         # golangci-lint run
+make bench-editor # editor benchmarks per language (BENCH_LANG=ts, BENCH_TIME=5s)
 go test ./internal/core/buffer/   # run tests for a single package
 
 # Open a multi-folder workspace
