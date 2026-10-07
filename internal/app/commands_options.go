@@ -1,11 +1,14 @@
 package app
 
 import (
+	"os"
+
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func (a *App) SaveAndApplySettings() {
@@ -157,6 +160,31 @@ func (a *App) ToggleBracketPairColorization() {
 func (a *App) ToggleTransparentBackground() {
 	a.Settings.Editor.TransparentBackground = !a.Settings.Editor.TransparentBackground
 	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleDesktopLauncher() {
+	a.Settings.Desktop.Launcher = !a.Settings.Desktop.Launcher
+	a.SaveAndApplySettings()
+}
+
+func (a *App) applyDesktopLauncher(enabled bool) {
+	if !enabled {
+		if err := workspace.RemoveLauncher(); err != nil {
+			a.StatusNotify("Desktop launcher: " + err.Error())
+			return
+		}
+		a.StatusNotify("Desktop launcher removed")
+		return
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		_, err = workspace.InstallLauncher(exe)
+	}
+	if err != nil {
+		a.StatusNotify("Desktop launcher: " + err.Error())
+		return
+	}
+	a.StatusNotify("Desktop launcher installed")
 }
 
 func (a *App) ToggleLSP() {
@@ -533,6 +561,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleTransparentBackground", Title: "Toggle Transparent Background",
 		Keywords: []string{"preferences", "settings", "editor", "view", "background", "transparent", "terminal"},
 		Handler:  app.ToggleTransparentBackground,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDesktopLauncher", Title: "Toggle Desktop Launcher",
+		Keywords: []string{"preferences", "settings", "desktop", "launcher", "shortcut", "menu", "icon"},
+		Handler:  app.ToggleDesktopLauncher,
 	})
 
 	reg.Register(command.Command{
