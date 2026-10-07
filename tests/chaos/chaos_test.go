@@ -349,7 +349,7 @@ func writeCrashReport(report CrashReport) string {
 func hangTimeout() time.Duration {
 	timeout := 60 * time.Second
 	if v := os.Getenv("CHAOS_HANG_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
 			timeout = d
 		}
 	}
