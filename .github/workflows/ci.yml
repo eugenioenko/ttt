@@ -105,7 +105,7 @@ jobs:
             echo "| functional-tests | $runtime | blocking when selected |"
             echo "| integration-tests | $runtime | blocking when selected |"
             echo "| lsp-tests | $runtime | blocking when selected |"
-            echo "| bench-editor | $runtime | informational |"
+            echo "| bench-editor (pull requests) | $runtime | informational |"
             echo "| fast-contract, ci-contract | true | blocking |"
             echo
             echo "Reason: $reason."
@@ -177,28 +177,55 @@ jobs:
         run: go test ./...
 
   bench-editor:
+    name: Base vs PR editor benchmarks
     needs: classify
-    if: needs.classify.outputs.runtime == 'true'
+    if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-      - name: Checkout
+      - name: Check out PR head
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check out exact base commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .bench-base
 
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Run editor benchmarks
+      - name: Compare base and PR
+        env:
+          BASE_DIR: ${{ github.workspace }}/.bench-base
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          COUNT: "3"
+          BENCH_TIME: 5x
+          REPORT_FILE: ${{ runner.temp }}/editor-bench.md
+        run: node scripts/bench-compare.mjs
+
+      - name: Create or update PR benchmark comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPORT_FILE: ${{ runner.temp }}/editor-bench.md
         run: |
-          make bench-editor BENCH_TIME=5x BENCH_FLAGS=-short | tee bench.txt
-          {
-            echo '## Editor benchmarks'
-            echo '```text'
-            grep -E '^(Benchmark|ok|FAIL)' bench.txt
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.type == "Bot" and (.body | contains("<!-- ttt-editor-benchmarks -->"))) | .id' | head -n 1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$REPORT_FILE" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$REPORT_FILE" >/dev/null
+          fi
 
   docs:
     needs: classify

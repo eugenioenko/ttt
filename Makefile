@@ -16,7 +16,8 @@ run: build
 	./bin/ttt
 
 # Editor benchmarks through the full app. BENCH_LANG picks one language
-# (go, ts, cpp, python); CI runs BENCH_TIME=5x BENCH_FLAGS=-short.
+# (go, ts, cpp, python). To compare against another checkout the way CI does
+# on pull requests: BASE_DIR=../ttt-main node scripts/bench-compare.mjs
 BENCH_TIME ?= 1s
 BENCH_LANG ?=
 BENCH_FLAGS ?=
