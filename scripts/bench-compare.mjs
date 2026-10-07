@@ -16,15 +16,18 @@ const count = Number(process.env.COUNT ?? 3);
 const benchTime = process.env.BENCH_TIME ?? '5x';
 const marker = '<!-- ttt-editor-benchmarks -->';
 const benchFile = 'tests/e2e/editor_bench_test.go';
+const harnessFile = 'tests/e2e/harness_test.go';
 const fixtures = 'tests/e2e/testdata/bench';
 
 if (!process.env.BASE_DIR) throw new Error('BASE_DIR must name the base checkout');
 if (!Number.isInteger(count) || count < 1) throw new Error(`COUNT must be a positive integer, got ${count}`);
 
-// A base that predates the benchmarks is measured with the PR's scenarios.
+// A base that predates the benchmarks is measured with the PR's scenarios and
+// the harness they were written against.
 const overlaid = !fs.existsSync(path.join(baseDir, benchFile));
 if (overlaid) {
   fs.copyFileSync(path.join(root, benchFile), path.join(baseDir, benchFile));
+  fs.copyFileSync(path.join(root, harnessFile), path.join(baseDir, harnessFile));
   fs.cpSync(path.join(root, fixtures), path.join(baseDir, fixtures), { recursive: true });
 }
 
