@@ -73,8 +73,16 @@ try {
 
   const names = Object.keys(sides.head.results).filter((name) => sides.base.results[name]);
   if (names.length === 0) throw new Error('no benchmark ran on both sides');
-  const ratios = names.map((name) => sides.head.results[name].ns / sides.base.results[name].ns);
-  const geomean = (Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length) - 1) * 100;
+  // Geometric mean of PR/base ratios: every benchmark weighs the same however
+  // long it runs. Zero on both sides is no change; zero on one side has no ratio.
+  const geomean = (field) => {
+    const ratios = names
+      .map((name) => [sides.base.results[name][field], sides.head.results[name][field]])
+      .filter(([before, after]) => (before > 0) === (after > 0))
+      .map(([before, after]) => (before > 0 ? after / before : 1));
+    const mean = Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length);
+    return `**${percent(mean, 1)}**`;
+  };
   const short = (sha, fallback) => (sha ? sha.slice(0, 12) : fallback);
 
   const lines = [
@@ -85,7 +93,7 @@ try {
       `fastest of ${count} alternating passes at ${benchTime} each, \`-short\` (2,000-line large file).` +
       (overlaid ? ' The base predates these benchmarks, so it was measured with the PR\'s scenarios.' : ''),
     '',
-    `Geometric-mean time change: **${geomean >= 0 ? '+' : ''}${geomean.toFixed(1)}%**.`,
+    `Geometric-mean change: time ${geomean('ns')}, memory (allocations) ${geomean('allocs')}.`,
     '',
     '<details>',
     '<summary>Click here to see benchmark details</summary>',
