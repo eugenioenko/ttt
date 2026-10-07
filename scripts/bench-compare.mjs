@@ -87,6 +87,9 @@ try {
     '',
     `Geometric-mean time change: **${geomean >= 0 ? '+' : ''}${geomean.toFixed(1)}%**.`,
     '',
+    '<details>',
+    '<summary>Click here to see benchmark details</summary>',
+    '',
     '| Benchmark | Base | PR | Time change | Base allocs | PR allocs | Allocation change |',
     '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
   ];
@@ -98,6 +101,7 @@ try {
         `${before.allocs} | ${after.allocs} | ${percent(after.allocs, before.allocs)} |`,
     );
   }
+  lines.push('', '</details>');
   const added = Object.keys(sides.head.results).filter((name) => !sides.base.results[name]);
   if (added.length) lines.push('', `New in this PR: ${added.map((name) => `\`${name}\``).join(', ')}.`);
   lines.push('', '_Timing changes are informational because shared CI runners are noisy; a benchmark error still fails the job._', '');
