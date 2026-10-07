@@ -14,7 +14,6 @@ concurrency:
 
 env:
   GO_VERSION: "1.26"
-  NODE_VERSION: "24"
   PNPM_VERSION: "11"
 
 jobs:
@@ -39,7 +38,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: tests/integration/pnpm-lock.yaml
 

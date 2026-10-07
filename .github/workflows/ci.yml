@@ -18,7 +18,6 @@ env:
   GO_VERSION: "1.25"
   GOPLS_VERSION: "v0.21.1"
   CLANGD_VERSION: "18"
-  NODE_VERSION: "24"
   PNPM_VERSION: "11"
   TYPESCRIPT_VERSION: "5.9.3"
   TYPESCRIPT_LANGUAGE_SERVER_VERSION: "6.0.0"
@@ -244,7 +243,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: docs-web/pnpm-lock.yaml
 
@@ -302,7 +301,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: tests/functional/pnpm-lock.yaml
 
@@ -337,7 +336,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: tests/integration/pnpm-lock.yaml
 
@@ -374,7 +373,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: tests/integration/pnpm-lock.yaml
 
