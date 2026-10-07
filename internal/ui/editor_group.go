@@ -67,6 +67,7 @@ type editorTab struct {
 	Content     Widget
 	Preview     bool
 	Virtual     bool
+	Placeholder bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
 }
@@ -176,13 +177,14 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	editor.Undo = undoStack
 	editor.Selection = sel
 	g.tabs = []editorTab{{
-		FilePath: "untitled",
-		Buf:      editor.Buf,
-		Cur:      editor.Cursor,
-		Vp:       editor.Viewport,
-		Undo:     undoStack,
-		Sel:      sel,
-		Virtual:  true,
+		FilePath:    "untitled",
+		Buf:         editor.Buf,
+		Cur:         editor.Cursor,
+		Vp:          editor.Viewport,
+		Undo:        undoStack,
+		Sel:         sel,
+		Virtual:     true,
+		Placeholder: true,
 	}}
 	g.syncTabs()
 	return g
@@ -407,7 +409,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.New(path)
 	}
-	if t := g.activeTab(); t != nil && t.Preview && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
+	if t := g.activeTab(); g.canReplaceTab(t) && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
 		g.tabs[g.active] = newTab
 		g.syncTabs()
@@ -497,7 +499,7 @@ func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
 		Content:  content,
 		Preview:  true,
 	}
-	if t := g.activeTab(); t != nil && t.Preview && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
+	if t := g.activeTab(); g.canReplaceTab(t) && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
 		g.tabs[g.active] = newTab
 		g.syncTabs()
@@ -505,6 +507,21 @@ func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
 	}
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
+}
+
+func (g *EditorGroupWidget) canReplaceTab(t *editorTab) bool {
+	if t == nil || g.IsActiveTabPinned() {
+		return false
+	}
+	if t.Preview {
+		return true
+	}
+	return len(g.tabs) == 1 && g.isUntouchedPlaceholder(t)
+}
+
+func (g *EditorGroupWidget) isUntouchedPlaceholder(t *editorTab) bool {
+	return t != nil && t.Placeholder && t.Buf != nil && !t.Buf.Dirty &&
+		len(t.Buf.Lines) <= 1 && (len(t.Buf.Lines) == 0 || t.Buf.Lines[0] == "")
 }
 
 func (g *EditorGroupWidget) NewFile() {
@@ -655,13 +672,14 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 
 func (g *EditorGroupWidget) placeholderTab() editorTab {
 	return editorTab{
-		FilePath: "untitled",
-		Buf:      &buffer.Buffer{Lines: []string{""}},
-		Cur:      &cursor.Cursor{},
-		Vp:       &view.Viewport{},
-		Undo:     g.newUndoStack(),
-		Sel:      &selection.Selection{},
-		Virtual:  true,
+		FilePath:    "untitled",
+		Buf:         &buffer.Buffer{Lines: []string{""}},
+		Cur:         &cursor.Cursor{},
+		Vp:          &view.Viewport{},
+		Undo:        g.newUndoStack(),
+		Sel:         &selection.Selection{},
+		Virtual:     true,
+		Placeholder: true,
 	}
 }
 
@@ -1176,6 +1194,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	g.moveBookmarks(t.FilePath, path)
 	t.FilePath = path
 	t.Virtual = false
+	t.Placeholder = false
 	if g.SyntaxHighlight {
 		t.Highlighter = highlight.New(path)
 	} else {
@@ -2118,10 +2137,8 @@ func (g *EditorGroupWidget) syncTabs() {
 		if ts.Buf != nil {
 			dirty = ts.Buf.Dirty
 		}
-		isEmptyUntitledTab := ts.Virtual && ts.Buf != nil && !ts.Buf.Dirty &&
-			len(ts.Buf.Lines) <= 1 && (len(ts.Buf.Lines) == 0 || ts.Buf.Lines[0] == "")
 		isEmptyState := g.EmptyStateID != "" && ts.FilePath == g.EmptyStateID
-		closable := !(len(g.tabs) == 1 && (isEmptyUntitledTab || isEmptyState))
+		closable := !(len(g.tabs) == 1 && (g.isUntouchedPlaceholder(&ts) || isEmptyState))
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title

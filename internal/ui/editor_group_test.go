@@ -123,8 +123,74 @@ func TestEditorGroupOpenFileSuccess(t *testing.T) {
 	if errMsg != "" {
 		t.Fatalf("unexpected error: %s", errMsg)
 	}
+	if len(g.tabs) != 1 {
+		t.Fatalf("expected 1 tab replacing untitled, got %d", len(g.tabs))
+	}
 	if g.tabs[g.active].FilePath != path {
 		t.Fatalf("expected active tab to be %s, got %s", path, g.tabs[g.active].FilePath)
+	}
+}
+
+func TestEditorGroupOpenFileKeepsTouchedUntitled(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "test.txt")
+	os.WriteFile(path, []byte("hello"), 0644)
+
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	g.tabs[0].Buf.Lines = []string{"typed text"}
+	g.tabs[0].Buf.Dirty = true
+
+	g.OpenFile(path)
+
+	if len(g.tabs) != 2 {
+		t.Fatalf("expected 2 tabs when untitled is dirty, got %d", len(g.tabs))
+	}
+	if g.tabs[0].FilePath != "untitled" || g.tabs[1].FilePath != path {
+		t.Fatalf("expected [untitled, %s], got [%s, %s]", path, g.tabs[0].FilePath, g.tabs[1].FilePath)
+	}
+}
+
+func TestEditorGroupOpenFileKeepsNewFileTab(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "test.txt")
+	os.WriteFile(path, []byte("hello"), 0644)
+
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	g.NewFile()
+	g.SwitchTab(0)
+	g.CloseTab()
+
+	g.OpenFile(path)
+
+	if len(g.tabs) != 2 {
+		t.Fatalf("expected 2 tabs when user created new file, got %d", len(g.tabs))
+	}
+	if g.tabs[0].FilePath != "untitled-2" || g.tabs[1].FilePath != path {
+		t.Fatalf("expected [untitled-2, %s], got [%s, %s]", path, g.tabs[0].FilePath, g.tabs[1].FilePath)
+	}
+}
+
+func TestEditorGroupOpenFileKeepsPinnedPlaceholder(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "test.txt")
+	os.WriteFile(path, []byte("hello"), 0644)
+
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	g.TogglePinTab()
+
+	g.OpenFile(path)
+
+	if len(g.tabs) != 2 {
+		t.Fatalf("expected 2 tabs when placeholder is pinned, got %d", len(g.tabs))
+	}
+	if g.tabs[0].FilePath != "untitled" || g.tabs[1].FilePath != path {
+		t.Fatalf("expected [untitled, %s], got [%s, %s]", path, g.tabs[0].FilePath, g.tabs[1].FilePath)
+	}
+	if g.pinnedCount != 1 {
+		t.Fatalf("expected pinnedCount to remain 1, got %d", g.pinnedCount)
+	}
+	if g.IsActiveTabPinned() {
+		t.Fatal("expected newly opened tab to not be pinned")
 	}
 }
 
