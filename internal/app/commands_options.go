@@ -165,6 +165,15 @@ func (a *App) ToggleLSP() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleLSPHover() {
+	enabled := !a.Settings.LSP.IsHoverEnabled()
+	a.Settings.LSP.Hover = &enabled
+	if !enabled {
+		a.DismissHover()
+	}
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleGitGutter() {
 	enabled := !a.Settings.Editor.IsGitGutterEnabled()
 	a.Settings.Editor.GitGutter = &enabled
@@ -356,6 +365,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
 		{Label: "Bracket Colors", Command: "options.toggleBracketColors", Checked: bracketColorChecked},
 		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
+		{Label: "LSP Hover", Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
 		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 		{Label: "Font Icons", Command: "options.toggleFontIcons", Checked: fontIconsChecked},
 		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
@@ -539,6 +549,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleLSP", Title: "Toggle LSP",
 		Keywords: []string{"preferences", "settings", "language", "server", "autocomplete"},
 		Handler:  app.ToggleLSP,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleLSPHover", Title: "Toggle LSP Hover",
+		Keywords: []string{"preferences", "settings", "language", "server", "hover", "mouse", "tooltip"},
+		Handler:  app.ToggleLSPHover,
 	})
 
 	reg.Register(command.Command{

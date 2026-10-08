@@ -270,3 +270,55 @@ func TestOptionsMenuDynamicChecked(t *testing.T) {
 		}
 	}
 }
+
+func TestOptionsMenuToggleLSPHover(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	items := h.app.BuildOptionsMenu()
+	lspIdx, hoverIdx := -1, -1
+	for i, item := range items {
+		switch item.Command {
+		case "options.toggleLSP":
+			lspIdx = i
+		case "options.toggleLSPHover":
+			hoverIdx = i
+		}
+	}
+	if lspIdx < 0 || hoverIdx != lspIdx+1 {
+		t.Fatalf("LSP Hover should follow LSP Code Assist: lsp=%d hover=%d", lspIdx, hoverIdx)
+	}
+	if items[hoverIdx].Label != "LSP Hover" || items[hoverIdx].Checked != ui.MenuChecked {
+		t.Fatalf("hover item = %+v, want checked LSP Hover", items[hoverIdx])
+	}
+
+	h.app.ShowHover("info", 5, 5)
+	h.exec("options.toggleLSPHover")
+
+	if h.app.Settings.LSP.IsHoverEnabled() {
+		t.Fatal("hover should be disabled after toggle")
+	}
+	if h.app.EditorGroup.Hover != nil {
+		t.Error("hover popup should be dismissed when hover is disabled")
+	}
+	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleLSPHover"); item.Checked != ui.MenuUnchecked {
+		t.Errorf("hover item should be unchecked, got %d", item.Checked)
+	}
+
+	data, err := os.ReadFile(filepath.Join(h.dir, "config", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved config.Settings
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.LSP.IsHoverEnabled() {
+		t.Error("saved settings should have lsp.hover disabled")
+	}
+
+	h.exec("options.toggleLSPHover")
+	if !h.app.Settings.LSP.IsHoverEnabled() {
+		t.Error("hover should be re-enabled after second toggle")
+	}
+}

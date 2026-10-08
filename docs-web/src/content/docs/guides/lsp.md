@@ -373,7 +373,7 @@ All LSP settings are nested under `lsp.*` in `settings.json`. Autocomplete setti
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `lsp.enabled` | boolean | `true` | Enable or disable LSP support entirely |
-| `lsp.hover` | boolean | `true` | Enable or disable hover information |
+| `lsp.hover` | boolean | `true` | Show hover information when the mouse rests over code (toggle from the Options menu, **LSP Hover**). Ctrl+K I works either way |
 | `lsp.hoverDelay` | number | `500` | Delay in milliseconds before showing hover info |
 | `lsp.saveOnRename` | boolean | `false` | Auto-save files affected by a rename |
 | `lsp.codeActionsOnSave` | string[] | `[]` | Code actions to run before each save |

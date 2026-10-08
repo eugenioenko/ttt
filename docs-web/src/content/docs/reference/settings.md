@@ -117,7 +117,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `lsp.enabled` | bool | `true` | Enable LSP support |
-| `lsp.hover` | bool | `true` | Show hover information from the language server |
+| `lsp.hover` | bool | `true` | Show hover information from the language server when the mouse rests over code. `editor.hover` (Ctrl+K I) works regardless |
 | `lsp.hoverDelay` | int | `500` | Milliseconds to wait before showing hover information |
 | `lsp.saveOnRename` | bool | `false` | Auto-save files affected by a rename operation |
 | `lsp.codeActionsOnSave` | string[] | `[]` | Code actions to run before save (e.g. `"source.organizeImports"`) |
