@@ -704,6 +704,13 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			a.PluginManager.DispatchEvent("bookmark.change", path, line+1, action, string(icon), plugin.NameByStyle(style))
 		}
 	}
+	a.EditorGroup.OnGutterClick = func(path string, line int) bool {
+		if a.PluginManager == nil || !a.PluginManager.HasEventListeners("gutter.click") {
+			return false
+		}
+		a.PluginManager.DispatchEvent("gutter.click", path, line+1)
+		return true
+	}
 
 	lspManager.OnLog = func(server, level, message string) {
 		a.LogOutputAsync(level, "lsp:"+server, message)

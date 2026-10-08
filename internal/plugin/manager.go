@@ -301,6 +301,15 @@ func (m *Manager) DispatchKeyEvent(ev *tcell.EventKey) bool {
 	return false
 }
 
+func (m *Manager) HasEventListeners(name string) bool {
+	for _, p := range m.plugins {
+		if p.State != nil && len(p.EventListeners[name]) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) DispatchEvent(name string, args ...interface{}) {
 	for _, p := range m.plugins {
 		if p.State == nil || len(p.EventListeners[name]) == 0 {

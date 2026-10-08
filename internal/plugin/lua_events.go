@@ -24,6 +24,7 @@ var keyEvents = map[string]bool{
 
 var bookmarkEvents = map[string]bool{
 	"bookmark.change": true,
+	"gutter.click":    true,
 }
 
 func setupEventsModule(L *lua.LState, p *Plugin) {

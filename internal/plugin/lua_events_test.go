@@ -238,3 +238,44 @@ func TestEventsMultipleListeners(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, p.State.GetGlobal("log").String())
 	}
 }
+
+func TestEventsGutterClick(t *testing.T) {
+	p, cleanup := setupTestPluginForEvents(PermissionSet{EditorBookmarks: true})
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local events = require("ttt.events")
+		events.on("gutter.click", function(path, line)
+			_G.clicked = path .. ":" .. line
+		end)
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	m := &Manager{plugins: []*Plugin{p}}
+	if !m.HasEventListeners("gutter.click") {
+		t.Fatal("HasEventListeners(gutter.click) = false, want true")
+	}
+	if m.HasEventListeners("bookmark.change") {
+		t.Fatal("HasEventListeners(bookmark.change) = true with no listener")
+	}
+
+	m.DispatchEvent("gutter.click", "/tmp/a.go", 3)
+	if got := p.State.GetGlobal("clicked").String(); got != "/tmp/a.go:3" {
+		t.Errorf("clicked = %q, want /tmp/a.go:3", got)
+	}
+}
+
+func TestEventsGutterClickWithoutPermission(t *testing.T) {
+	p, cleanup := setupTestPluginForEvents(PermissionSet{EventsEditor: true})
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local events = require("ttt.events")
+		events.on("gutter.click", function() end)
+	`)
+	if err == nil {
+		t.Fatal("expected error when editor.bookmarks not granted")
+	}
+}

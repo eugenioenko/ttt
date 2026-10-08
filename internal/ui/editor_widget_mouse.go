@@ -129,6 +129,14 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	if btn == tcell.ButtonNone && e.mouseDown {
 		e.mouseDown = false
 		e.cancelDragAutoScroll()
+		if mx == e.mouseDownX && my == e.mouseDownY && inGutter && mx-r.X <= e.bookmarkColumn() && e.OnGutterClick != nil {
+			if line, ok := e.gutterLineAt(my - r.Y); ok && e.OnGutterClick(line) {
+				if e.Selection != nil {
+					e.Selection.Clear()
+				}
+				return EventConsumed
+			}
+		}
 		if mx == e.mouseDownX && my == e.mouseDownY && inGutter {
 			bufLine := e.screenToBufferLine(my - r.Y)
 			if e.Folds != nil && e.Folds.FoldAt(bufLine) != nil {
@@ -172,6 +180,18 @@ func (e *EditorPaneWidget) handleScrollbarMouse(mev *tcell.EventMouse) (EventRes
 		return EventCaptured, true
 	}
 	return EventIgnored, false
+}
+
+func (e *EditorPaneWidget) gutterLineAt(screenY int) (int, bool) {
+	if e.WordWrap && e.wrapMap != nil {
+		if screenY < 0 || screenY >= len(e.wrapMap) {
+			return 0, false
+		}
+		entry := e.wrapMap[screenY]
+		return entry.bufLine, entry.startCol == 0 && entry.bufLine < len(e.Buf.Lines)
+	}
+	line := e.screenToBufferLine(screenY)
+	return line, line >= 0 && line < len(e.Buf.Lines)
 }
 
 func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {

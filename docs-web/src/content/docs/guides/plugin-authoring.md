@@ -1682,13 +1682,14 @@ argument, clears every file.
 
 ## Bookmarks
 
-Plugins can manage gutter **bookmarks** — a per-line icon a user can also
-toggle by clicking the left half of the gutter — through the `ttt.bookmarks`
-module. Storage is the plugin's responsibility: ttt only holds bookmarks for
+Plugins can manage gutter **bookmarks**, a per-line icon drawn left of the line
+number, through the `ttt.bookmarks` module. ttt never sets a bookmark on its
+own: a plugin listens for the `gutter.click` event and decides what a click
+does. Storage is the plugin's responsibility too: ttt only holds bookmarks for
 the current session, so a plugin that wants them to survive a restart must
-persist them itself (e.g. to a file), using `get_all`/`set_all` to save and
-restore, and the `bookmark.change` event to notice when the user adds or
-removes one by clicking. Requires the `editor.bookmarks` permission.
+persist them itself (for example with [`ttt.storage`](#tttstorage-module)),
+using `get_all`/`set_all` to save and restore. Requires the `editor.bookmarks`
+permission.
 
 All functions operate on the **currently active file** — there's no `path`
 argument, unlike `ttt.diagnostics` (which can target files that aren't even
@@ -1747,10 +1748,8 @@ Removes every bookmark in the current file.
 
 ### The `bookmark.change` event
 
-Fires via `ttt.events` whenever a bookmark is added or removed — whether from
-a user click or from this plugin's own `set`/`remove`/`set_all`/`clear`
-calls. This is how a storage-owning plugin finds out about a click without
-polling:
+Fires via `ttt.events` whenever a bookmark is added or removed through
+`set`/`remove`/`set_all`/`clear`, including calls made by other plugins:
 
 ```lua
 local events = require("ttt.events")
@@ -1761,6 +1760,28 @@ events.on("bookmark.change", function(path, line, action, icon, style)
   -- re-read with get_all() if you need the resulting full state
 end)
 ```
+
+### The `gutter.click` event
+
+Fires via `ttt.events` when the user clicks the bookmark column, the cell just
+left of the line number. The callback receives the active file's path and the
+clicked 1-based line. Toggle a bookmark there to give the click meaning:
+
+```lua
+local events = require("ttt.events")
+
+events.on("gutter.click", function(path, line)
+  if bookmarks.get(line) then
+    bookmarks.remove(line)
+  else
+    bookmarks.set(line, "◆", "bookmark")
+  end
+end)
+```
+
+While at least one plugin listens for `gutter.click`, a click in the bookmark
+column goes to the plugin instead of toggling a fold. Without a listener the
+click behaves as it always has.
 
 ## Editor Context Menu
 
@@ -2246,6 +2267,7 @@ Named styles available for both widget and raw cell rendering. Actual colors dep
 | `bold`     | Bold/emphasized text           |
 | `italic`   | Italic text                    |
 | `code`     | Code/monospace text            |
+| `bookmark` | Gutter bookmark icon           |
 | `syntax_comment`   | Syntax: comments       |
 | `syntax_string`    | Syntax: string literals |
 | `syntax_keyword`   | Syntax: keywords       |
@@ -2353,7 +2375,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `editor.read`    | boolean  | Read the contents of editor buffers (`ttt.editor` read functions). |
 | `editor.write`   | boolean  | Modify editor buffers (`ttt.editor` write functions). |
 | `editor.diagnostics` | boolean | Publish editor diagnostics/squiggles via `ttt.diagnostics`. |
-| `editor.bookmarks` | boolean | Manage gutter bookmarks via `ttt.bookmarks` and the `bookmark.change` event. |
+| `editor.bookmarks` | boolean | Manage gutter bookmarks via `ttt.bookmarks`, and listen for the `bookmark.change` and `gutter.click` events. |
 | `fs.read`        | boolean  | Read files and list directories (`ttt.fs` read functions). |
 | `fs.write`       | boolean  | Write files to the file system (`ttt.fs.write`).  |
 | `system.exec`    | string[] | Execute specific system commands. List each allowed binary name. |

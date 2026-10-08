@@ -125,6 +125,7 @@ type EditorGroupWidget struct {
 	bookmarksByPath   map[string]map[int]Bookmark
 	bookmarkSyncPath  string
 	OnBookmarkChanged func(path string, line int, action string, icon rune, style term.Style)
+	OnGutterClick     func(path string, line int) bool
 	// OnDiagnosticsChanged fires whenever any source's diagnostics change, so
 	// the Diagnostics panel can rebuild from DiagnosticsByPath().
 	OnDiagnosticsChanged func()
@@ -166,6 +167,9 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 		if g.OnBookmarkChanged != nil {
 			g.OnBookmarkChanged(g.ActiveFilePath(), line, action, b.Icon, b.Style)
 		}
+	}
+	editor.OnGutterClick = func(line int) bool {
+		return g.OnGutterClick != nil && g.OnGutterClick(g.ActiveFilePath(), line)
 	}
 	undoStack := g.newUndoStack()
 	sel := &selection.Selection{}

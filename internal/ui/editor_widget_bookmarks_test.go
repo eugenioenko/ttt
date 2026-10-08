@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestBookmarkRejectsOutOfRangeLines(t *testing.T) {
@@ -45,5 +46,50 @@ func TestSetAllBookmarksDropsOutOfRangeLines(t *testing.T) {
 	}
 	if _, ok := e.GetBookmark(2); !ok {
 		t.Fatal("line 2 bookmark missing")
+	}
+}
+
+func gutterClick(e *EditorPaneWidget, x, y int) EventResult {
+	e.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	return e.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+}
+
+func TestGutterClickOnBookmarkColumn(t *testing.T) {
+	for _, style := range []string{"compact", "extended"} {
+		e := newTestEditor()
+		e.LineNumbers = true
+		e.GutterStyle = style
+		e.SetRect(Rect{X: 0, Y: 0, W: 20, H: 10})
+		var clicked []int
+		e.OnGutterClick = func(line int) bool {
+			clicked = append(clicked, line)
+			return true
+		}
+
+		if got := gutterClick(e, e.bookmarkColumn(), 1); got != EventConsumed {
+			t.Fatalf("%s: bookmark column click = %v, want consumed", style, got)
+		}
+		gutterClick(e, e.bookmarkColumn()+1, 2)
+		gutterClick(e, e.bookmarkColumn(), 5)
+
+		if len(clicked) != 1 || clicked[0] != 1 {
+			t.Fatalf("%s: clicked lines = %v, want [1]", style, clicked)
+		}
+	}
+}
+
+func TestGutterClickFallsThroughWhenUnhandled(t *testing.T) {
+	e := newTestEditor()
+	e.LineNumbers = true
+	e.SetRect(Rect{X: 0, Y: 0, W: 20, H: 10})
+	e.OnGutterClick = func(int) bool { return false }
+
+	gutterClick(e, 0, 2)
+
+	if e.Cursor.Line != 2 {
+		t.Fatalf("cursor line = %d, want 2", e.Cursor.Line)
+	}
+	if e.Selection != nil && e.Selection.Active {
+		t.Fatal("unhandled gutter click left a selection")
 	}
 }

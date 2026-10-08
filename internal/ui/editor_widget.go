@@ -81,6 +81,7 @@ type EditorPaneWidget struct {
 	LineChanges             []diff.LineChangeKind
 	Bookmarks               map[int]Bookmark
 	OnBookmarkChange        func(line int, action string, b Bookmark)
+	OnGutterClick           func(line int) bool
 	ReadOnly                bool
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
@@ -127,6 +128,13 @@ func (e *EditorPaneWidget) GutterWidth() int {
 	default:
 		return digits + 3
 	}
+}
+
+func (e *EditorPaneWidget) bookmarkColumn() int {
+	if e.GutterStyle == "extended" {
+		return 1
+	}
+	return 0
 }
 
 func (e *EditorPaneWidget) validBookmarkLine(line int) bool {
