@@ -129,7 +129,14 @@ func (e *EditorPaneWidget) GutterWidth() int {
 	}
 }
 
+func (e *EditorPaneWidget) validBookmarkLine(line int) bool {
+	return e.Buf != nil && line >= 0 && line < len(e.Buf.Lines)
+}
+
 func (e *EditorPaneWidget) SetBookmark(line int, icon rune, style term.Style) {
+	if !e.validBookmarkLine(line) {
+		return
+	}
 	if e.Bookmarks == nil {
 		e.Bookmarks = make(map[int]Bookmark)
 	}
@@ -144,11 +151,19 @@ func (e *EditorPaneWidget) GetBookmark(line int) (Bookmark, bool) {
 }
 
 func (e *EditorPaneWidget) RemoveBookmark(line int) {
+	if _, ok := e.Bookmarks[line]; !ok {
+		return
+	}
 	delete(e.Bookmarks, line)
 	e.fireBookmarkChange(line, "remove", Bookmark{})
 }
 
 func (e *EditorPaneWidget) SetAllBookmarks(items map[int]Bookmark) {
+	for line := range items {
+		if !e.validBookmarkLine(line) {
+			delete(items, line)
+		}
+	}
 	e.Bookmarks = items
 	e.fireBookmarkChange(-1, "set_all", Bookmark{})
 }
