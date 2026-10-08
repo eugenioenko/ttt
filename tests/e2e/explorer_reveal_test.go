@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/core/diff"
 )
 
 func TestExplorerRevealActiveFileSelectsNestedFileAndKeepsEditorFocus(t *testing.T) {
@@ -68,5 +70,24 @@ func TestExplorerRevealActiveFileWithoutFileLeavesTree(t *testing.T) {
 
 	if h.app.Explorer.Tree.ItemCount() != before {
 		t.Errorf("tree changed without an active file: %d -> %d items", before, h.app.Explorer.Tree.ItemCount())
+	}
+}
+
+func TestExplorerRevealActiveFileIgnoresDiffTab(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	nested := filepath.Join(h.dir, "subdir", "nested.txt")
+	h.app.EditorGroup.OpenDiff(nested, diff.FileDiff{}, []string{"old"}, []string{"nested"}, true)
+	h.redraw()
+	before := h.app.Explorer.Tree.ItemCount()
+
+	h.exec("explorer.revealActiveFile")
+
+	if h.app.Explorer.Tree.ItemCount() != before {
+		t.Errorf("diff tab expanded the tree: %d -> %d items", before, h.app.Explorer.Tree.ItemCount())
+	}
+	if selected := h.app.Explorer.Tree.Selected(); selected != nil && selected.ID == nested {
+		t.Error("diff tab selected its file in the explorer")
 	}
 }

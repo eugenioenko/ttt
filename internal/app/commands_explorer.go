@@ -68,7 +68,7 @@ func (a *App) ExplorerReveal() {
 }
 
 func (a *App) ExplorerRevealActiveFile() {
-	path := a.activeFilePath()
+	path := a.revealableActiveFile()
 	if path == "" {
 		a.StatusWarn("No file open")
 		return
@@ -86,9 +86,16 @@ func (a *App) autoRevealActiveFile() {
 	if !a.Settings.Explorer.AutoReveal {
 		return
 	}
-	if path := a.activeFilePath(); path != "" {
+	if path := a.revealableActiveFile(); path != "" {
 		a.Explorer.RevealPath(path)
 	}
+}
+
+func (a *App) revealableActiveFile() string {
+	if a.EditorGroup.ActiveDiffWidget() != nil {
+		return ""
+	}
+	return a.activeFilePath()
 }
 
 func (a *App) ExplorerRemoveRoot() {
