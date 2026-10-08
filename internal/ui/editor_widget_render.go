@@ -186,7 +186,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					surface.SetCell(0, y, term.Cell{Ch: ch, Style: style})
 				}
 			}
-			if lineIdx < totalLines && !isWrapContinuation {
+			if len(e.Bookmarks) > 0 && lineIdx < totalLines && !isWrapContinuation {
 				if b, ok := e.Bookmarks[lineIdx]; ok {
 					bookmarkCol := 0
 					if e.GutterStyle == "extended" {
