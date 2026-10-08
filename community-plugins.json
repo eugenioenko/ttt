@@ -1,5 +1,15 @@
 [
   {
+    "name": "bookmarks",
+    "displayName": "Bookmarks",
+    "author": "eugenioenko",
+    "description": "Toggle line bookmarks from the gutter or context menu and browse them in the sidebar",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "bookmarks",
+    "version": "0.1.0",
+    "tags": ["bookmarks", "navigation", "productivity"]
+  },
+  {
     "name": "cheat-sheet",
     "displayName": "Cheat Sheet",
     "author": "eugenioenko",
