@@ -1,0 +1,46 @@
+# TTT Editor
+
+> TTT (`ttt`) is a terminal text editor written in Go, aiming to be a real alternative to VS Code, Zed, and Sublime Text inside the terminal. It has tabs, multi-cursor editing, code folding, project-wide search with ripgrep, Language Server Protocol support, git integration with diffs and staging, an integrated terminal, multi-folder workspaces, TextMate syntax highlighting, themes, and a sandboxed Lua plugin system.
+
+Key facts:
+
+- Install with Homebrew (`brew tap eugenioenko/ttt && brew install ttt`), the install script (`curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh`), or Go (`go install github.com/eugenioenko/ttt/cmd/ttt@latest`).
+- Open files or folders with `ttt path/to/file path/to/folder`, or a saved workspace with `ttt --workspace project.ttt`.
+- Configuration lives in `~/.config/ttt/` (`settings.json`, keybindings, themes, plugins). Set `TTT_CONFIG_DIR` to use another directory.
+- Language servers are configured under `lsp.servers` in `settings.json`. ttt bundles no server configs: install an `lsp-*` plugin (for example `lsp-go`), which adds the entry, or add one by hand. The server binary itself must be installed separately.
+- The command palette exposes every command; most features have no required keybinding.
+- `ttt --exec "..."` scripts the real editor headlessly (type, press keys, click, run commands, take screenshots, dump state as JSON). It is the recommended way for agents to drive or test ttt and plugins; run `ttt --help` for the action list.
+
+## Docs
+
+- [Introduction](https://tttedit.dev/getting-started/introduction/): what TTT is and how it compares to other editors
+- [Installation](https://tttedit.dev/getting-started/installation/): Homebrew, install script, Go, and building from source
+- [Quick Start](https://tttedit.dev/getting-started/quick-start/): opening files and folders, the command palette, and first steps
+- [Editor Basics](https://tttedit.dev/guides/editor/): editing, multi-cursor, selection, folding, and line and case transforms
+- [Keybindings](https://tttedit.dev/guides/keybindings/): how shortcuts and `ctrl+k` chords work and how to customize them
+- [Search](https://tttedit.dev/guides/search/): in-file find and replace, and project-wide search with ripgrep
+- [File Explorer & Workspaces](https://tttedit.dev/guides/workspaces/): the explorer, multi-root workspaces, and `.ttt` workspace files
+- [Git Integration](https://tttedit.dev/guides/git/): changes panel, staging, commits, diffs, gutter markers, blame, and pull request review
+- [LSP](https://tttedit.dev/guides/lsp/): configuring language servers and the code intelligence features they enable
+- [Integrated Terminal](https://tttedit.dev/guides/terminal/): the built-in terminal panel
+- [Themes](https://tttedit.dev/guides/themes/): choosing and customizing themes
+- [Extra Themes](https://tttedit.dev/guides/extra-themes/): additional installable themes
+
+## Reference
+
+- [Settings](https://tttedit.dev/reference/settings/): every `settings.json` key with its type, default, and meaning
+- [Default Keybindings](https://tttedit.dev/reference/keybindings/): the complete default shortcut list
+- [LSP Protocol Support](https://tttedit.dev/reference/lsp-features/): which Language Server Protocol methods ttt implements
+
+## Plugins
+
+- [Plugins](https://tttedit.dev/guides/plugins/): installing, enabling, updating, and removing plugins
+- [Plugin Authoring](https://tttedit.dev/guides/plugin-authoring/): the full Lua plugin API, including the manifest, permissions, widgets, editor, events, storage, and bookmarks
+- [Testing Plugins](https://tttedit.dev/guides/plugin-testing/): driving plugins headlessly with `--plugin` and `--exec`
+- [Community plugins](https://github.com/eugenioenko/ttt-plugins): source of the official plugins, including LSP and formatter presets
+
+## Optional
+
+- [Source code](https://github.com/eugenioenko/ttt): the Go repository
+- [AGENTS.md](https://github.com/eugenioenko/ttt/blob/main/AGENTS.md): architecture, conventions, and testing guidance for contributors and coding agents
+- [Plugin registry](https://github.com/eugenioenko/ttt/blob/main/community-plugins.json): the list of plugins shown in the in-editor plugin browser
