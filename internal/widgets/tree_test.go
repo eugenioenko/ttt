@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1697,5 +1698,30 @@ func TestTreeHeldPressActivatesOnce(t *testing.T) {
 	press(9, tcell.Button1)
 	if activations != 2 {
 		t.Fatalf("a new press after the release gave %d activations, want 2", activations)
+	}
+}
+
+func TestTreeRevealIDScrollsBackToUnchangedSelection(t *testing.T) {
+	ids := make([]string, 40)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("item-%02d", i)
+	}
+	tree := NewTreeWidget(TreeConfig{Items: makeTreeItems(ids...)})
+	tree.RevealID("item-30")
+	renderWidget(tree, 0, 0, 20, 5)
+	if tree.ScrollTop() == 0 {
+		t.Fatal("fixture expected the tree scrolled to item-30")
+	}
+	tree.scrollTop = 0
+	renderWidget(tree, 0, 0, 20, 5)
+
+	if !tree.RevealID("item-30") {
+		t.Fatal("RevealID returned false for a visible node")
+	}
+	if s := renderWidget(tree, 0, 0, 20, 5); !surfaceHasText(s, "item-30") {
+		t.Fatal("revealed row not on screen after scroll-away")
+	}
+	if tree.RevealID("missing") {
+		t.Error("RevealID returned true for an unknown id")
 	}
 }

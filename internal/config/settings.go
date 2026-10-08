@@ -180,6 +180,7 @@ type ExplorerSettings struct {
 	ShowGitIgnored     bool `json:"showGitIgnored"`
 	GitStatusColors    bool `json:"gitStatusColors"`
 	DimStagedGitColors bool `json:"dimStagedGitColors"`
+	AutoReveal         bool `json:"autoReveal"`
 }
 
 const (

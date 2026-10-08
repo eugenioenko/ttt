@@ -112,6 +112,56 @@ func (n *NavigationPanel) SetActiveFile(path string) {
 	n.Tree.SetActiveID(path)
 }
 
+func (n *NavigationPanel) RevealPath(path string) bool {
+	root := n.rootContaining(path)
+	if root == nil {
+		return false
+	}
+	rel, err := filepath.Rel(root.ID, path)
+	if err != nil || rel == "." {
+		return false
+	}
+	folders := []*widgets.TreeNode{root}
+	node := root
+	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
+		if !node.Expanded || len(node.Children) == 0 {
+			n.loadChildren(node)
+		}
+		node = childWithID(node.Children, filepath.Join(node.ID, part))
+		if node == nil {
+			return false
+		}
+		folders = append(folders, node)
+	}
+	for _, folder := range folders[:len(folders)-1] {
+		folder.Expanded = true
+	}
+	n.Tree.SetItems(n.Tree.Config.Items)
+	return n.Tree.RevealID(path)
+}
+
+func (n *NavigationPanel) rootContaining(path string) *widgets.TreeNode {
+	var best *widgets.TreeNode
+	for _, root := range n.Tree.Config.Items {
+		if !n.isRoot(root) || !strings.HasPrefix(path, root.ID+string(filepath.Separator)) {
+			continue
+		}
+		if best == nil || len(root.ID) > len(best.ID) {
+			best = root
+		}
+	}
+	return best
+}
+
+func childWithID(nodes []*widgets.TreeNode, id string) *widgets.TreeNode {
+	for _, node := range nodes {
+		if node.ID == id {
+			return node
+		}
+	}
+	return nil
+}
+
 func (n *NavigationPanel) Reload() {
 	n.Tree.Reload()
 }

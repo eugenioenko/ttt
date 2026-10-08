@@ -111,6 +111,7 @@ func RunEventLoop(
 			if app.PluginManager != nil && filePath != "" {
 				app.PluginManager.DispatchEvent("tab.change", filePath)
 			}
+			app.autoRevealActiveFile()
 		}
 
 		if filePath != lastOutlineFile {

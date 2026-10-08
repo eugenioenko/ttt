@@ -32,7 +32,8 @@
     "showHidden": true,
     "showGitIgnored": true,
     "gitStatusColors": true,
-    "dimStagedGitColors": false
+    "dimStagedGitColors": false,
+    "autoReveal": false
   },
   "git": {
     "fileView": "list"

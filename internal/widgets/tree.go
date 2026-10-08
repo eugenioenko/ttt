@@ -129,6 +129,17 @@ func (t *TreeWidget) SelectByID(id string) {
 	}
 }
 
+func (t *TreeWidget) RevealID(id string) bool {
+	for i, node := range t.flatList {
+		if node.ID == id {
+			t.selected = i
+			t.lastSel = -1
+			return true
+		}
+	}
+	return false
+}
+
 func (t *TreeWidget) SetItems(items []*TreeNode) {
 	t.Config.Items = items
 	t.flatten()

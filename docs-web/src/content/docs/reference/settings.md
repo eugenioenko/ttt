@@ -72,6 +72,7 @@ All editor settings are nested under the `editor` key.
 | `explorer.showGitIgnored` | bool | `true` | Show gitignored files in the file explorer |
 | `explorer.gitStatusColors` | bool | `true` | Color files and folders in the file explorer by their git status (modified, new, deleted, conflicted). Colors come from the theme's `warning`, `success`, `danger`, and `conflict` colors |
 | `explorer.dimStagedGitColors` | bool | `false` | Render staged changes in a dimmed version of their status color, telling them apart from pending ones. Off by default: the Changes panel already separates staged from unstaged, and the extra shades make the explorer busier. Needs `explorer.gitStatusColors` |
+| `explorer.autoReveal` | bool | `false` | Expand the file explorer to the active file and select it whenever the active file changes. **Explorer: Reveal Active File** does the same on demand |
 
 ## Sidebar
 
@@ -245,7 +246,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "showHidden": true,
     "showGitIgnored": true,
     "gitStatusColors": true,
-    "dimStagedGitColors": false
+    "dimStagedGitColors": false,
+    "autoReveal": false
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]
