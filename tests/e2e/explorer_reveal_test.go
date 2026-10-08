@@ -81,13 +81,14 @@ func TestExplorerRevealActiveFileIgnoresDiffTab(t *testing.T) {
 	h.app.EditorGroup.OpenDiff(nested, diff.FileDiff{}, []string{"old"}, []string{"nested"}, true)
 	h.redraw()
 	before := h.app.Explorer.Tree.ItemCount()
+	selectedBefore := h.app.Explorer.Tree.Selected()
 
 	h.exec("explorer.revealActiveFile")
 
 	if h.app.Explorer.Tree.ItemCount() != before {
 		t.Errorf("diff tab expanded the tree: %d -> %d items", before, h.app.Explorer.Tree.ItemCount())
 	}
-	if selected := h.app.Explorer.Tree.Selected(); selected != nil && selected.ID == nested {
-		t.Error("diff tab selected its file in the explorer")
+	if selected := h.app.Explorer.Tree.Selected(); selected != selectedBefore {
+		t.Errorf("diff tab moved the selection from %+v to %+v", selectedBefore, selected)
 	}
 }
