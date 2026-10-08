@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -501,6 +502,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		for line, b := range all {
 			items = append(items, plugin.BookmarkItem{Line: line, Icon: b.Icon, Style: b.Style})
 		}
+		slices.SortFunc(items, func(x, y plugin.BookmarkItem) int { return x.Line - y.Line })
 		return items
 	}
 	p.ClearBookmarks = func() {

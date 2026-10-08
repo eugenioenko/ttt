@@ -1147,6 +1147,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	if t.Undo != nil {
 		t.Undo.MarkSaved()
 	}
+	g.moveBookmarks(t.FilePath, path)
 	t.FilePath = path
 	t.Virtual = false
 	if g.SyntaxHighlight {
@@ -1156,6 +1157,32 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	}
 	g.syncTabs()
 	return true
+}
+
+func (g *EditorGroupWidget) moveBookmarks(oldPath, newPath string) {
+	prefix := oldPath + string(filepath.Separator)
+	remap := func(p string) (string, bool) {
+		switch {
+		case p == oldPath:
+			return newPath, true
+		case oldPath != "" && strings.HasPrefix(p, prefix):
+			return filepath.Join(newPath, strings.TrimPrefix(p, prefix)), true
+		}
+		return "", false
+	}
+	if p, ok := remap(g.bookmarkSyncPath); ok {
+		g.bookmarkSyncPath = p
+	}
+	moved := map[string]map[int]Bookmark{}
+	for p, b := range g.bookmarksByPath {
+		if np, ok := remap(p); ok {
+			delete(g.bookmarksByPath, p)
+			moved[np] = b
+		}
+	}
+	for p, b := range moved {
+		g.bookmarksByPath[p] = b
+	}
 }
 
 // RenamePath repoints open tabs after a path is renamed on disk. oldPath may be
@@ -1171,6 +1198,7 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 	if oldPath == "" || newPath == "" || oldPath == newPath {
 		return false
 	}
+	g.moveBookmarks(oldPath, newPath)
 	prefix := oldPath + string(filepath.Separator)
 	renamed := false
 	for i := range g.tabs {
