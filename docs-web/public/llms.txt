@@ -1,6 +1,6 @@
 # TTT Editor
 
-> TTT (`ttt`) is a terminal text editor written in Go, aiming to be a real alternative to VS Code, Zed, and Sublime Text inside the terminal. It has tabs, multi-cursor editing, code folding, project-wide search with ripgrep, Language Server Protocol support, git integration with diffs and staging, an integrated terminal, multi-folder workspaces, TextMate syntax highlighting, themes, and a sandboxed Lua plugin system.
+> A TUI that feels like a GUI. TTT (`ttt`) is a terminal text editor written in Go, aiming to be a real alternative to VS Code, Zed, and Sublime Text inside the terminal. It has tabs, multi-cursor editing, code folding, project-wide search with ripgrep, Language Server Protocol support, git integration with diffs and staging, an integrated terminal, multi-folder workspaces, TextMate syntax highlighting, themes, and a sandboxed Lua plugin system.
 
 Key facts:
 
