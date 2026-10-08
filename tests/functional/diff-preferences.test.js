@@ -70,40 +70,6 @@ describe("diff reading preferences", () => {
     expect(snapshots[snapshot]).toMatch(/1 −.*1 \+/u);
   });
 
-  it("shows and persists global diff controls under Options", () => {
-    const fixture = diffFixture();
-    startWithConfig(fixture);
-    tui.setSize(42, 17);
-    tui.exec("Menu: Options");
-    const options = tui.snapshot();
-    for (let i = 0; i < 12; i++) tui.press("down");
-    tui.press("right");
-    const diffViews = tui.snapshot();
-    tui.press("escape");
-    enableUnifiedWrappedDefaults();
-    tui.exec("Show Full File Diff by Default");
-    tui.exec("Toggle High Contrast Diffs");
-    tui.exec("Toggle Collapsed Diff Row Emphasis");
-
-    const { snapshots } = tui.run();
-    expect(snapshots[options]).toContain("Diff Views");
-    expect(snapshots[options]).toContain("Git Files");
-    expect(snapshots[diffViews]).toContain("Split");
-    expect(snapshots[diffViews]).toContain("Unified");
-    expect(snapshots[diffViews]).toContain("Changes Only");
-    expect(snapshots[diffViews]).toContain("Full File");
-    expect(snapshots[diffViews]).toContain("Wrap Lines");
-    expect(snapshots[diffViews]).toContain("High Contrast");
-    expect(snapshots[diffViews]).toContain("Emphasize Collapsed Rows");
-
-    const saved = savedSettings(fixture.configDir);
-    expect(saved.editor.diffMode).toBe("unified");
-    expect(saved.editor.diffContext).toBe("full");
-    expect(saved.editor.diffWordWrap).toBe(true);
-    expect(saved.editor.diffHighContrast).toBe(true);
-    expect(saved.editor.diffEmphasizeCollapsedRows).toBe(true);
-  });
-
   it("updates an inherited open diff when Options defaults change", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);

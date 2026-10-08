@@ -87,7 +87,7 @@ func TestOptionsAndChangesShareCheckedPresentationSubmenus(t *testing.T) {
 	}
 
 	options := h.app.BuildOptionsMenu()
-	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast", "options.useGitFileTree", "options.useGitFileList", "changes.expandAll", "changes.collapseAll"} {
+	for _, command := range []string{"options.useSplitDiff", "options.useUnifiedDiff", "options.useChangesOnlyDiff", "options.useFullFileDiff", "options.toggleDiffWordWrap", "options.toggleDiffHighContrast", "options.toggleDiffCollapsedEmphasis", "options.useGitFileTree", "options.useGitFileList", "changes.expandAll", "changes.collapseAll"} {
 		if _, ok := findMenuCommand(options, command); !ok {
 			t.Errorf("Options menu missing %s", command)
 		}
@@ -110,6 +110,7 @@ func TestOptionsAndChangesShareCheckedPresentationSubmenus(t *testing.T) {
 	h.exec("options.useFullFileDiff")
 	h.exec("options.toggleDiffWordWrap")
 	h.exec("options.toggleDiffHighContrast")
+	h.exec("options.toggleDiffCollapsedEmphasis")
 	if dv.Mode() != ui.DiffModeUnified || dv.ContextMode() != ui.DiffContextFullFile || dv.WrapMode() != ui.DiffWrapOn || !dv.DiffHighContrast() {
 		t.Fatalf("live inherited diff = mode %v context %v wrap %v contrast %v", dv.Mode(), dv.ContextMode(), dv.WrapMode(), dv.DiffHighContrast())
 	}
@@ -125,7 +126,7 @@ func TestOptionsAndChangesShareCheckedPresentationSubmenus(t *testing.T) {
 	if err := json.Unmarshal(data, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved.Editor.DiffMode != config.DiffModeUnified || saved.Editor.DiffContext != config.DiffContextFull || !saved.Editor.DiffWordWrap || !saved.Editor.DiffHighContrast {
+	if saved.Editor.DiffMode != config.DiffModeUnified || saved.Editor.DiffContext != config.DiffContextFull || !saved.Editor.DiffWordWrap || !saved.Editor.DiffHighContrast || !saved.Editor.DiffCollapsedEmphasis {
 		t.Fatalf("saved diff settings = %+v", saved.Editor)
 	}
 }
