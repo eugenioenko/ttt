@@ -51,3 +51,24 @@ func TestLspIconsAreSingleWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestLspStateLabel(t *testing.T) {
+	tests := []struct {
+		state    lsp.ServerState
+		binaryOK bool
+		want     string
+	}{
+		{lsp.ServerReady, true, "running"},
+		{lsp.ServerStarting, true, "starting"},
+		{lsp.ServerFailed, true, "failed"},
+		{lsp.ServerFailed, false, "failed"},
+		{lsp.ServerStopped, true, "not started"},
+		{lsp.ServerStopped, false, "not installed"},
+	}
+
+	for _, tt := range tests {
+		if got := lspStateLabel(tt.state, tt.binaryOK); got != tt.want {
+			t.Errorf("lspStateLabel(%v, %v) = %q, want %q", tt.state, tt.binaryOK, got, tt.want)
+		}
+	}
+}

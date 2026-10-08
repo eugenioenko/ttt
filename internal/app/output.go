@@ -25,6 +25,12 @@ func registerOutputCommands(app *App) {
 		Handler:  func() { app.ShowOutputPanel() },
 	})
 	reg.Register(command.Command{
+		ID:       "lsp.showServerLog",
+		Title:    "LSP: Show Server Log",
+		Keywords: []string{"lsp", "language server", "log", "output", "status"},
+		Handler:  app.ShowLSPServerLog,
+	})
+	reg.Register(command.Command{
 		ID:       "output.copyLine",
 		Title:    "Output: Copy Selected Line",
 		Keywords: []string{"output", "copy", "log", "line"},

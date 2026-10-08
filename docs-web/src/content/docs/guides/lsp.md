@@ -276,6 +276,8 @@ The language segment on the right of the status bar shows the state of the serve
 
 Click the segment to open the OUTPUT panel, where each server logs its startup command, its own stderr, initialization failures and unexpected exits under the `lsp:<server>` prefix. That is the place to look when a feature silently does nothing.
 
+You can also run **LSP: Show Server Log** from the command palette. It opens the OUTPUT panel and shows the state of the server for the current file in the status bar: `running`, `starting`, `failed`, `not started` or `not installed`. If no server is configured for the file, it says so and leaves the panel closed.
+
 ## Supported Features
 
 | Feature | Keybinding | Description |
@@ -293,6 +295,7 @@ Click the segment to open the OUTPUT panel, where each server logs its startup c
 | Organize Imports | Ctrl+L O | Organize imports via code action |
 | Fix All | Ctrl+L X | Apply all available fixes |
 | Server Restart | *(palette only)* | Restart the language server for the current file |
+| Show Server Log | *(palette only)* | Open the OUTPUT panel and show the server state for the current file |
 | Diagnostics | *(automatic)* | Error/warning squiggles, status bar summary, hover popup |
 
 ## Auto-Completion

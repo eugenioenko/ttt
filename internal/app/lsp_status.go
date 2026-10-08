@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os/exec"
 
 	"github.com/eugenioenko/ttt/internal/lsp"
@@ -39,17 +40,47 @@ func (a *App) lspStatusIcon(filePath, lang string) (string, term.Style) {
 		return "", 0
 	}
 
+	return lspIcon(a.lspServerState(serverKey))
+}
+
+func (a *App) lspServerState(serverKey string) (state lsp.ServerState, binaryOK bool) {
 	// The status bar syncs on every keystroke, so only stat the binary when its
 	// presence is what the icon actually turns on.
-	state := a.LspManager.State(serverKey)
-	binaryOK := true
+	state = a.LspManager.State(serverKey)
+	binaryOK = true
 	if state == lsp.ServerStopped {
 		if cfg := a.LspManager.ServerConfig(serverKey); len(cfg.Command) > 0 {
 			_, err := exec.LookPath(cfg.Command[0])
 			binaryOK = err == nil
 		}
 	}
-	return lspIcon(state, binaryOK)
+	return state, binaryOK
+}
+
+func (a *App) ShowLSPServerLog() {
+	path, lang := a.editorPathLang()
+	serverKey, _, ok := a.lspResolve(path, lang)
+	if path == "" || !ok {
+		a.StatusNotify("No language server for this file")
+		return
+	}
+	a.ShowOutputPanel()
+	a.StatusNotify(fmt.Sprintf("%s: %s", serverKey, lspStateLabel(a.lspServerState(serverKey))))
+}
+
+func lspStateLabel(state lsp.ServerState, binaryOK bool) string {
+	switch state {
+	case lsp.ServerReady:
+		return "running"
+	case lsp.ServerStarting:
+		return "starting"
+	case lsp.ServerFailed:
+		return "failed"
+	}
+	if !binaryOK {
+		return "not installed"
+	}
+	return "not started"
 }
 
 // lspIcon maps a server state to its indicator. Every icon is single-width
