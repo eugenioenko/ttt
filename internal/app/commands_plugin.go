@@ -560,7 +560,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		a.captureMenuFocus()
 		menu := ui.NewContextMenuWidget(items, x, y)
 		menu.Borders = a.Borders
-	menu.Icons = a.Settings.Appearance.Icons
+		menu.Icons = a.Settings.Appearance.Icons
 		menu.OnExec = func(cmd string) {
 			a.Root.PopOverlay()
 			a.restoreMenuFocus()

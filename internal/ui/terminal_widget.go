@@ -14,8 +14,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
 
-	"github.com/gdamore/tcell/v3"
 	"github.com/eugenioenko/xterm-go"
+	"github.com/gdamore/tcell/v3"
 )
 
 type TerminalColorPalette struct {
