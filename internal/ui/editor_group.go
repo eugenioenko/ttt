@@ -1883,6 +1883,12 @@ func (g *EditorGroupWidget) UniqueLines() {
 	}
 }
 
+func (g *EditorGroupWidget) TrimTrailingWhitespaceLines() {
+	if g.IsEditorActive() {
+		g.Editor.TrimTrailingWhitespaceLines()
+	}
+}
+
 func (g *EditorGroupWidget) MoveWordLeft(shift bool) {
 	if g.IsEditorActive() {
 		g.Editor.MoveWordLeft(shift)

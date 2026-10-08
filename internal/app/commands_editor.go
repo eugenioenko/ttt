@@ -781,6 +781,11 @@ func registerEditorCommands(app *App) {
 		Keywords: []string{"editor", "lines", "deduplicate", "distinct"},
 		Handler:  func() { app.EditorGroup.UniqueLines() },
 	})
+	reg.Register(command.Command{
+		ID: "editor.trimTrailingWhitespace", Title: "Trim Trailing Whitespace",
+		Keywords: []string{"editor", "lines", "whitespace", "trim", "spaces"},
+		Handler:  func() { app.EditorGroup.TrimTrailingWhitespaceLines() },
+	})
 
 	reg.Register(command.Command{
 		ID: "editor.upperCase", Title: "Transform to Uppercase",

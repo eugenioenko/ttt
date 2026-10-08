@@ -87,6 +87,7 @@ These commands are available from the command palette:
 - **Sort Lines Ascending** (**Ctrl+K O**) / **Sort Lines Descending**
 - **Reverse Lines**
 - **Unique Lines** (remove duplicates)
+- **Trim Trailing Whitespace** (selected lines, or the whole file)
 - **Split Selection into Lines**
 
 ## Word Operations

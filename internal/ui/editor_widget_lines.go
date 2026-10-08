@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -509,5 +510,27 @@ func (e *EditorPaneWidget) UniqueLines() {
 	}
 	e.exec(&undo.ReplaceLinesCommand{Start: start, OldLines: old, NewLines: unique})
 	e.clampCursor()
+	e.scrollViewport()
+}
+
+func (e *EditorPaneWidget) TrimTrailingWhitespaceLines() {
+	if e.ReadOnly {
+		return
+	}
+	e.collapseMultiForLineOp()
+	start, end := e.lineRange()
+	old := e.copyLines(start, end)
+	trimmed := make([]string, len(old))
+	for i, line := range old {
+		trimmed[i] = strings.TrimRight(line, " \t")
+	}
+	if slices.Equal(trimmed, old) {
+		return
+	}
+	e.exec(&undo.ReplaceLinesCommand{Start: start, OldLines: old, NewLines: trimmed})
+	e.clampCursor()
+	if lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line])); e.Cursor.Col > lineLen {
+		e.Cursor.Col = lineLen
+	}
 	e.scrollViewport()
 }
