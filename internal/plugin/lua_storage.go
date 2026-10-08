@@ -53,6 +53,11 @@ func storageSet(p *Plugin) lua.LGFunction {
 	return func(L *lua.LState) int {
 		key := L.CheckString(1)
 		value := L.CheckAny(2)
+		switch value.Type() {
+		case lua.LTNil, lua.LTBool, lua.LTNumber, lua.LTString, lua.LTTable:
+		default:
+			L.ArgError(2, "storage values must be nil, a boolean, number, string, or table, got "+value.Type().String())
+		}
 		if err := p.storage(L).set(key, luaToGo(value)); err != nil {
 			L.RaiseError("%s", err.Error())
 		}

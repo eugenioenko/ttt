@@ -2143,6 +2143,8 @@ Each plugin's data lives in its own file, `<config dir>/state/plugins/<name>.jso
 
 Storage works at load time, so a plugin can restore its state while it initializes.
 
+Several ttt windows can share a plugin's storage. Each `set` re-reads the file if another window changed it, so windows writing different keys keep each other's data, while two writes to the same key keep the last one. Prefer one key per item (for example, one key per file path) over a single key holding everything, so windows don't overwrite each other's changes.
+
 ## Styles
 
 Named styles available for both widget and raw cell rendering. Actual colors depend on the user's theme.

@@ -146,3 +146,40 @@ func TestUninstallDeletesPluginStorage(t *testing.T) {
 		t.Errorf("storage file survived uninstall: %v", err)
 	}
 }
+
+func TestStorageSetRejectsUnsupportedValues(t *testing.T) {
+	p := newStoragePlugin(t, t.TempDir(), "marks", PermissionSet{Storage: true})
+	if err := p.State.DoString(`require("ttt.storage").set("k", "keep")`); err != nil {
+		t.Fatalf("DoString: %v", err)
+	}
+	if err := p.State.DoString(`require("ttt.storage").set("k", function() end)`); err == nil {
+		t.Fatal("set accepted a function")
+	}
+	if err := p.State.DoString(`v = require("ttt.storage").get("k")`); err != nil {
+		t.Fatalf("DoString: %v", err)
+	}
+	if got := p.State.GetGlobal("v").String(); got != "keep" {
+		t.Errorf("rejected set changed the key: %q", got)
+	}
+}
+
+func TestStorageDoesNotOverwriteOtherInstanceKeys(t *testing.T) {
+	dir := t.TempDir()
+	a := newStoragePlugin(t, dir, "marks", PermissionSet{Storage: true})
+	b := newStoragePlugin(t, dir, "marks", PermissionSet{Storage: true})
+	if err := a.State.DoString(`require("ttt.storage").get("x")`); err != nil {
+		t.Fatalf("DoString: %v", err)
+	}
+	if err := b.State.DoString(`require("ttt.storage").set("from_b", 1)`); err != nil {
+		t.Fatalf("DoString: %v", err)
+	}
+	if err := a.State.DoString(`require("ttt.storage").set("from_a", 1)`); err != nil {
+		t.Fatalf("DoString: %v", err)
+	}
+	if err := b.State.DoString(`keys = table.concat(require("ttt.storage").keys(), ",")`); err != nil {
+		t.Fatalf("DoString: %v", err)
+	}
+	if got := b.State.GetGlobal("keys").String(); got != "from_a,from_b" {
+		t.Errorf("keys = %q, want from_a,from_b", got)
+	}
+}

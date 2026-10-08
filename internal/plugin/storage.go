@@ -7,14 +7,17 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 const maxStorageBytes = 1 << 20
 
 type pluginStore struct {
-	path   string
-	data   map[string]any
-	loaded bool
+	path    string
+	data    map[string]any
+	loaded  bool
+	modTime time.Time
+	size    int64
 }
 
 func storagePath(dir, name string) (string, error) {
@@ -27,46 +30,57 @@ func storagePath(dir, name string) (string, error) {
 	return filepath.Join(dir, name+".json"), nil
 }
 
-func (s *pluginStore) load() error {
-	if s.loaded {
-		return nil
+// Reloads when mtime or size changed so another ttt process's keys survive our
+// next write. No cross-process lock: simultaneous writes can still lose one.
+func (s *pluginStore) read() (map[string]any, error) {
+	info, err := os.Stat(s.path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		s.data, s.loaded, s.modTime, s.size = map[string]any{}, true, time.Time{}, 0
+		return s.data, nil
 	}
-	s.data = map[string]any{}
+	if s.loaded && info.ModTime().Equal(s.modTime) && info.Size() == s.size {
+		return s.data, nil
+	}
 	raw, err := os.ReadFile(s.path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			s.loaded = true
-			return nil
-		}
-		return err
+		return nil, err
 	}
-	if err := json.Unmarshal(raw, &s.data); err != nil {
-		return fmt.Errorf("read plugin storage: %w", err)
+	data := map[string]any{}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil, fmt.Errorf("read plugin storage: %w", err)
 	}
-	if s.data == nil {
-		s.data = map[string]any{}
+	if data == nil {
+		data = map[string]any{}
 	}
-	s.loaded = true
-	return nil
+	s.data, s.loaded, s.modTime, s.size = data, true, info.ModTime(), info.Size()
+	return s.data, nil
 }
 
 func (s *pluginStore) get(key string) (any, bool, error) {
-	if err := s.load(); err != nil {
+	data, err := s.read()
+	if err != nil {
 		return nil, false, err
 	}
-	v, ok := s.data[key]
+	v, ok := data[key]
 	return v, ok, nil
 }
 
 func (s *pluginStore) set(key string, value any) error {
-	if err := s.load(); err != nil {
+	data, err := s.read()
+	if err != nil {
 		return err
 	}
-	next := make(map[string]any, len(s.data)+1)
-	for k, v := range s.data {
+	next := make(map[string]any, len(data)+1)
+	for k, v := range data {
 		next[k] = v
 	}
 	if value == nil {
+		if _, ok := next[key]; !ok {
+			return nil
+		}
 		delete(next, key)
 	} else {
 		next[key] = value
@@ -75,15 +89,21 @@ func (s *pluginStore) set(key string, value any) error {
 		return err
 	}
 	s.data = next
+	if info, err := os.Stat(s.path); err == nil {
+		s.modTime, s.size = info.ModTime(), info.Size()
+	} else {
+		s.modTime, s.size = time.Time{}, 0
+	}
 	return nil
 }
 
 func (s *pluginStore) keys() ([]string, error) {
-	if err := s.load(); err != nil {
+	data, err := s.read()
+	if err != nil {
 		return nil, err
 	}
-	keys := make([]string, 0, len(s.data))
-	for k := range s.data {
+	keys := make([]string, 0, len(data))
+	for k := range data {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
