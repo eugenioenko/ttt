@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 	"github.com/eugenioenko/xterm-go"
@@ -358,7 +359,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					} else if tw.linkAt(unifiedLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
-					surface.SetCell(x, y, c)
+					surface.SetCell(x, y, clipFullwidthAtEdge(c, x, contentW))
 				}
 			}
 		} else {
@@ -395,7 +396,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					} else if tw.linkAt(srcLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
-					surface.SetCell(x, screenY, c)
+					surface.SetCell(x, screenY, clipFullwidthAtEdge(c, x, contentW))
 				}
 			}
 		}
@@ -413,6 +414,15 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			tw.scrollbar.Render(surface, w-1, 0)
 		}
 	})
+}
+
+// A fullwidth rune paints two columns even when the clip ends after the first.
+// Substituting a space at the last content column keeps it off the scrollbar.
+func clipFullwidthAtEdge(c term.Cell, x, contentW int) term.Cell {
+	if x == contentW-1 && textwidth.Rune(c.Ch) > 1 {
+		c.Ch = ' '
+	}
+	return c
 }
 
 // Avoids BufferLine.LoadCell, which allocates an ExtendedAttrs per cell.
