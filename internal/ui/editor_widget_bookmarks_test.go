@@ -71,6 +71,9 @@ func TestGutterClickOnBookmarkColumn(t *testing.T) {
 		}
 		gutterClick(e, e.bookmarkColumn()+1, 2)
 		gutterClick(e, e.bookmarkColumn(), 5)
+		if e.bookmarkColumn() > 0 {
+			gutterClick(e, 0, 0)
+		}
 
 		if len(clicked) != 1 || clicked[0] != 1 {
 			t.Fatalf("%s: clicked lines = %v, want [1]", style, clicked)
