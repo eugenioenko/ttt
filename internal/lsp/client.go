@@ -16,13 +16,14 @@ import (
 )
 
 type Client struct {
-	cmd     *exec.Cmd
-	codec   *Codec
-	nextID  int
-	pending map[int]chan Response
-	mu      sync.Mutex
-	done    chan struct{}
-	closing atomic.Bool
+	cmd      *exec.Cmd
+	codec    *Codec
+	nextID   int
+	pending  map[int]chan Response
+	mu       sync.Mutex
+	done     chan struct{}
+	closing  atomic.Bool
+	waitOnce sync.Once
 
 	completionTriggers  []string
 	signatureTriggers   []string
@@ -557,12 +558,16 @@ func (c *Client) Shutdown() error {
 		return err
 	}
 	_ = c.notify("exit", nil)
-	c.cmd.Wait()
+	c.wait()
 	return nil
 }
 
 func (c *Client) Close() {
 	c.closing.Store(true)
 	c.cmd.Process.Kill()
-	c.cmd.Wait()
+	c.wait()
+}
+
+func (c *Client) wait() {
+	c.waitOnce.Do(func() { c.cmd.Wait() })
 }

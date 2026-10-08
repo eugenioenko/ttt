@@ -382,9 +382,11 @@ func RunEventLoop(
 					app.ApplyTextEdits(v.Edits)
 				}
 			case *DiagnosticsResult:
-				// SetDiagnostics routes through the "lsp" source and fires
-				// OnDiagnosticsChanged, which rebuilds the Diagnostics panel.
-				app.EditorGroup.SetDiagnostics(v.Path, v.Diagnostics)
+				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, v.Diagnostics)
+			case *LSPServerStopped:
+				app.handleLSPServerStopped(v)
+			case *LSPServerRestarted:
+				app.handleLSPServerRestarted(v)
 			case *OutputLineResult:
 				app.LogOutput(v.Level, v.Source, v.Message)
 			case *LSPStateChanged:

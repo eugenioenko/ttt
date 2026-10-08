@@ -497,6 +497,12 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "lsp.restartServer", Title: "LSP: Server Restart",
+		Keywords: []string{"lsp", "language server", "restart", "reload"},
+		Handler:  app.RestartLSPServer,
+	})
+
+	reg.Register(command.Command{
 		ID: "editor.formatExternal", Title: "Format Document (External Formatter)",
 		Keywords: []string{"editor", "format", "formatter", "external"},
 		Handler:  app.RunExternalFormatter,

@@ -117,7 +117,7 @@ type EditorGroupWidget struct {
 	OnNotify      func(msg string)
 	pendingNotify []string
 	focused       bool
-	// diagSources holds diagnostics keyed by source ("lsp", "plugin:<name>")
+	// diagSources holds diagnostics keyed by source ("lsp:<server>", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
 	// bookmarksByPath holds bookmarks keyed by file path so they survive a
@@ -764,6 +764,28 @@ func (g *EditorGroupWidget) OpenFilePaths() []string {
 		paths = append(paths, t.FilePath)
 	}
 	return paths
+}
+
+type OpenDocument struct {
+	Path     string
+	Language string
+	Text     string
+}
+
+func (g *EditorGroupWidget) OpenDocuments() []OpenDocument {
+	var docs []OpenDocument
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if t.Content != nil || t.Buf == nil || t.Highlighter == nil || t.Virtual || t.FilePath == "" {
+			continue
+		}
+		docs = append(docs, OpenDocument{
+			Path:     t.FilePath,
+			Language: t.Highlighter.Language(),
+			Text:     strings.Join(t.Buf.Lines, "\n"),
+		})
+	}
+	return docs
 }
 
 // BufferForPath returns the buffer of the tab with the given path, or nil.

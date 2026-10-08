@@ -33,7 +33,7 @@ type Manager struct {
 	states  map[string]ServerState
 	stateMu sync.Mutex
 
-	OnDiagnostics func(params PublishDiagnosticsParams)
+	OnDiagnostics func(server string, params PublishDiagnosticsParams)
 
 	// OnLog receives server-reported messages. Called from the client's stderr
 	// and read-loop goroutines, so the handler must be goroutine-safe.
@@ -113,7 +113,11 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 		m.setState(key, ServerFailed)
 		return nil, fmt.Errorf("start LSP for %s: %w", lang, err)
 	}
-	client.OnDiagnostics = m.OnDiagnostics
+	client.OnDiagnostics = func(params PublishDiagnosticsParams) {
+		if m.OnDiagnostics != nil {
+			m.OnDiagnostics(key, params)
+		}
+	}
 
 	rootURI := FileURI(workDir)
 	if err := client.Initialize(rootURI); err != nil {
@@ -164,6 +168,46 @@ func (m *Manager) ResolveLanguage(filePath, languageName string) (serverKey, lan
 	return "", "", false
 }
 
+var shutdownTimeout = 3 * time.Second
+
+// Stop returns only after the old read loop has exited, so callers can rely on
+// no message from the stopped server being delivered afterwards.
+func (m *Manager) Stop(key string) bool {
+	key = strings.ToLower(key)
+	m.mu.Lock()
+	client, ok := m.servers[key]
+	delete(m.servers, key)
+	m.mu.Unlock()
+	if !ok {
+		return false
+	}
+	stopClient(key, client)
+	m.setState(key, ServerStopped)
+	m.log(key, "info", "stopped")
+	return true
+}
+
+func stopClient(key string, client *Client) {
+	done := make(chan struct{})
+	go func() {
+		if err := client.Shutdown(); err != nil {
+			slog.Debug("lsp shutdown error", "language", key, "err", err)
+			client.Close()
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(shutdownTimeout):
+		slog.Debug("lsp shutdown timeout, killing", "language", key)
+		client.Close()
+	}
+	select {
+	case <-client.done:
+	case <-time.After(shutdownTimeout):
+	}
+}
+
 func (m *Manager) Shutdown() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -173,20 +217,7 @@ func (m *Manager) Shutdown() {
 		wg.Add(1)
 		go func(lang string, client *Client) {
 			defer wg.Done()
-			done := make(chan struct{})
-			go func() {
-				if err := client.Shutdown(); err != nil {
-					slog.Debug("lsp shutdown error", "language", lang, "err", err)
-					client.Close()
-				}
-				close(done)
-			}()
-			select {
-			case <-done:
-			case <-time.After(3 * time.Second):
-				slog.Debug("lsp shutdown timeout, killing", "language", lang)
-				client.Close()
-			}
+			stopClient(lang, client)
 		}(lang, client)
 	}
 	wg.Wait()

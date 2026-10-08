@@ -261,7 +261,7 @@ To add file extensions to an existing server, override the full entry with the a
 
 The optional `languages` field is for servers that handle multiple file types requiring different `languageId` values. It maps file extensions to language IDs. Without the `languages` field, the server key is used as the language ID and files are matched by their syntax highlighter name.
 
-The server is started lazily on first use and shut down when the editor exits.
+The server is started lazily on first use and shut down when the editor exits. Run **LSP: Server Restart** from the command palette to restart the server for the current file, for example after it hangs or after installing a dependency it caches. Its diagnostics are cleared and every open file it handles is reopened in the new server.
 
 ## Server Status
 
@@ -292,6 +292,7 @@ Click the segment to open the OUTPUT panel, where each server logs its startup c
 | Format Selection | Ctrl+L S | Format the selected range |
 | Organize Imports | Ctrl+L O | Organize imports via code action |
 | Fix All | Ctrl+L X | Apply all available fixes |
+| Server Restart | *(palette only)* | Restart the language server for the current file |
 | Diagnostics | *(automatic)* | Error/warning squiggles, status bar summary, hover popup |
 
 ## Auto-Completion

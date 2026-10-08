@@ -32,6 +32,7 @@ type AutocompleteTrigger struct {
 }
 
 type DiagnosticsResult struct {
+	Server      string
 	Path        string
 	Diagnostics []ui.Diagnostic
 }
