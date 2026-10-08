@@ -45,6 +45,9 @@ type Plugin struct {
 	Enabled  bool
 	State    *lua.LState
 
+	StorageDir string
+	store      *pluginStore
+
 	SidebarTitle       string
 	SidebarMenuEntries []widgets.MenuEntry
 	sidebarMenuFunc    *lua.LFunction
@@ -148,6 +151,7 @@ func (p *Plugin) Init() error {
 	setupEventsModule(p.State, p)
 	setupJSONModule(p.State)
 	setupSettingsModule(p.State, p)
+	setupStorageModule(p.State, p)
 
 	if p.Manifest.Entry == "" {
 		p.Enabled = true
@@ -191,6 +195,7 @@ func (p *Plugin) InitFromSource(source string) error {
 	setupEventsModule(p.State, p)
 	setupJSONModule(p.State)
 	setupSettingsModule(p.State, p)
+	setupStorageModule(p.State, p)
 
 	if err := p.State.DoString(source); err != nil {
 		p.LastError = err

@@ -29,6 +29,7 @@ type Manager struct {
 	registry     *Registry
 	pluginsDir   string
 	registryPath string
+	storageDir   string
 	extraDirs    []string
 
 	SidebarPanels []SidebarRegistration
@@ -44,7 +45,12 @@ type Manager struct {
 }
 
 func NewManager(pluginsDir, registryPath string, extraDirs ...string) *Manager {
-	return &Manager{pluginsDir: pluginsDir, registryPath: registryPath, extraDirs: extraDirs}
+	return &Manager{
+		pluginsDir:   pluginsDir,
+		registryPath: registryPath,
+		storageDir:   filepath.Join(filepath.Dir(registryPath), "state", "plugins"),
+		extraDirs:    extraDirs,
+	}
 }
 
 func (m *Manager) LoadAll() []*Plugin {
@@ -117,7 +123,7 @@ func (m *Manager) LoadAll() []*Plugin {
 				p.Log = m.logFactory(p.Name)
 			}
 			p.AppVersion = m.appVersion
-			if err := p.Init(); err != nil {
+			if err := m.initPlugin(p); err != nil {
 				continue
 			}
 
@@ -181,7 +187,7 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 
 	m.wireAPIs(p)
 
-	if err := p.Init(); err != nil {
+	if err := m.initPlugin(p); err != nil {
 		return err
 	}
 
@@ -253,6 +259,13 @@ func (m *Manager) SetAppVersion(version string) {
 		p.AppVersion = version
 	}
 }
+
+func (m *Manager) initPlugin(p *Plugin) error {
+	p.StorageDir = m.storageDir
+	return p.Init()
+}
+
+func (m *Manager) StorageDir() string { return m.storageDir }
 
 func (m *Manager) wireAPIs(p *Plugin) {
 	if m.editorAPI != nil {
@@ -434,6 +447,11 @@ func (m *Manager) Uninstall(name string) error {
 	if err := os.RemoveAll(dir); err != nil {
 		slog.Error("remove plugin directory", "error", err)
 	}
+	if path, err := storagePath(m.storageDir, name); err == nil {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			slog.Error("remove plugin storage", "error", err)
+		}
+	}
 
 	m.registry.Remove(name)
 	if err := m.registry.Save(); err != nil {
@@ -540,7 +558,7 @@ func (m *Manager) Update(name string) (*Plugin, bool, error) {
 			p.Destroy()
 			p.Manifest = newManifest
 			p.Granted = regEntry.Permissions
-			if err := p.Init(); err != nil {
+			if err := m.initPlugin(p); err != nil {
 				return nil, false, err
 			}
 			m.collectRegistrations(p)
@@ -600,7 +618,7 @@ func (m *Manager) updateFromSubdir(name, dir string, regEntry *RegistryEntry) (*
 			p.Destroy()
 			p.Manifest = newManifest
 			p.Granted = regEntry.Permissions
-			if err := p.Init(); err != nil {
+			if err := m.initPlugin(p); err != nil {
 				return nil, false, err
 			}
 			m.collectRegistrations(p)
@@ -647,7 +665,7 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 		Manifest: manifest,
 		Granted:  regEntry.Permissions,
 	}
-	if err := p.Init(); err != nil {
+	if err := m.initPlugin(p); err != nil {
 		return nil, err
 	}
 
@@ -692,7 +710,7 @@ func (m *Manager) Reload(name string) (*Plugin, error) {
 		Log:      logFn,
 	}
 
-	if err := p.Init(); err != nil {
+	if err := m.initPlugin(p); err != nil {
 		m.plugins = append(m.plugins[:idx], m.plugins[idx+1:]...)
 		return nil, fmt.Errorf("reload init: %w", err)
 	}
