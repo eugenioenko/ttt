@@ -252,6 +252,8 @@ func TestPluginFilesystemAPI_SymlinkEscape(t *testing.T) {
 }
 
 func TestPluginNetworkAPI_SSRFProtection(t *testing.T) {
+	// TODO(#749): validateURL does real DNS lookups; inject a fake resolver.
+	t.Skip("makes real DNS lookups, see #749")
 	api := NewPluginNetworkAPI()
 
 	tests := []struct {
