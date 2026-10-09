@@ -34,7 +34,7 @@ describe("current changes document", () => {
       expect(screen).toContain("M  tracked.txt · unstaged");
       expect(screen).toContain("staged version");
       expect(screen).toContain("final working version 界");
-      expect(screen.match(/Current Changes x/g)).toHaveLength(1);
+      expect(screen.match(/Current Changes ✕/g)).toHaveLength(1);
     }
   });
 

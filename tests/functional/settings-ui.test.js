@@ -98,9 +98,9 @@ describe("settings editor", () => {
     const s0 = tui.snapshot();
 
     const { snapshots } = tui.run();
-    const tabBar = snapshots[s0].split("\n").find((l) => l.includes("Settings x"));
+    const tabBar = snapshots[s0].split("\n").find((l) => l.includes("Settings ✕"));
     expect(tabBar).toBeTruthy();
-    expect(tabBar.match(/Settings x/g)).toHaveLength(1);
+    expect(tabBar.match(/Settings ✕/g)).toHaveLength(1);
   });
 
   // Regression for issue #414: Ctrl+C (editor.copy) while the settings tab was
