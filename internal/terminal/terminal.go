@@ -35,10 +35,11 @@ type Terminal struct {
 	rawTail    []byte
 	// promptMarker tracks the row of the last OSC 133 prompt start while
 	// that prompt is still being edited; promptCol is the column it starts at.
-	promptMarker *xterm.Marker
-	promptCol    int
-	OnUpdate     func()
-	OnExit       func()
+	promptMarker        *xterm.Marker
+	promptCol           int
+	promptRedrawPending bool
+	OnUpdate            func()
+	OnExit              func()
 
 	updatePending atomic.Bool
 }
@@ -153,7 +154,11 @@ func (t *Terminal) readLoop() {
 		n, err := t.pt.Read(buf)
 		if n > 0 {
 			t.mu.Lock()
-			t.term.Write(buf[:n])
+			out := buf[:n]
+			if t.promptRedrawPending {
+				out = t.takePromptRedraw(out)
+			}
+			t.term.Write(out)
 			t.appendRawTail(buf[:n])
 			t.mu.Unlock()
 			if t.OnUpdate != nil && t.updatePending.CompareAndSwap(false, true) {
@@ -194,6 +199,7 @@ func (t *Terminal) resizeEmulator(cols, rows int) bool {
 	// ConPTY repaints the screen itself on resize; the blanking is only for
 	// Unix ptys, where the shell's SIGWINCH redraw is what brings it back.
 	if runtime.GOOS != "windows" {
+		t.promptRedrawPending = t.promptMarker == nil && !t.term.IsAltBufferActive()
 		t.clearPromptForRedraw()
 	}
 	t.cols = cols

@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"bytes"
 	"strings"
 
 	xterm "github.com/eugenioenko/xterm-go"
@@ -12,6 +13,11 @@ import (
 // row and leaves a copy of the old prompt above the new one on every resize.
 // Blanking the prompt rows before the reflow keeps their count, the same
 // thing kitty and Ghostty do for a prompt that redraws itself.
+//
+// bash marks nothing, and readline moves up by a row count from a prompt
+// layout it never updates for the new width. Its repaint, the first output
+// after a resize, is fixed up instead: the old prompt is found by the
+// repaint's own text and the repaint is moved to start there.
 
 func (t *Terminal) watchPromptMarks() {
 	t.term.RegisterOscHandler(133, xterm.NewOscStringHandler(func(data string) bool {
@@ -60,6 +66,9 @@ func (t *Terminal) clearPromptForRedraw() {
 	attr := xterm.DefaultAttrData()
 	for row := marker.Line; row <= cursor && row < buf.Lines.Length(); row++ {
 		line := buf.Lines.Get(row)
+		if line == nil {
+			continue
+		}
 		// A prompt can start after output that lacked a final newline: keep
 		// that output, and the first row's wrap flag that belongs to it.
 		start := 0
@@ -71,4 +80,81 @@ func (t *Terminal) clearPromptForRedraw() {
 			line.IsWrapped = false
 		}
 	}
+}
+
+func (t *Terminal) takePromptRedraw(p []byte) []byte {
+	t.promptRedrawPending = false
+	rest, ok := bytes.CutPrefix(p, []byte("\r\x1b[K"))
+	if !ok || t.term.IsAltBufferActive() {
+		return p
+	}
+	for {
+		next, up := bytes.CutPrefix(rest, []byte("\x1b[A"))
+		if !up {
+			break
+		}
+		rest = next
+	}
+	text := firstVisibleLine(rest)
+	if len(text) < 2 {
+		return p
+	}
+	buf := t.term.NormalBuffer()
+	cursor := buf.YBase + buf.Y
+	for row := cursor; row >= buf.YBase; row-- {
+		line := lineAt(buf, row)
+		if line == nil {
+			continue
+		}
+		old := line.TranslateToString(true, 0, -1)
+		if len(old) < 2 || !(strings.HasPrefix(text, old) || strings.HasPrefix(old, text)) {
+			continue
+		}
+		last := cursor
+		for next := lineAt(buf, last+1); next != nil && next.IsWrapped; next = lineAt(buf, last+1) {
+			last++
+		}
+		attr := xterm.DefaultAttrData()
+		for r := row; r <= last; r++ {
+			if line := lineAt(buf, r); line != nil {
+				line.ReplaceCells(0, line.Len, buf.GetNullCell(&attr), false)
+				line.IsWrapped = false
+			}
+		}
+		buf.Y, buf.X = row-buf.YBase, 0
+		return rest
+	}
+	return p
+}
+
+func lineAt(buf *xterm.Buffer, row int) *xterm.BufferLine {
+	if row < 0 || row >= buf.Lines.Length() {
+		return nil
+	}
+	return buf.Lines.Get(row)
+}
+
+// firstVisibleLine returns the printable text of p up to its first line break.
+func firstVisibleLine(p []byte) string {
+	var out []byte
+	for i := 0; i < len(p); i++ {
+		switch c := p[i]; {
+		case c == '\r' || c == '\n':
+			return string(out)
+		case c == 0x1b && i+1 < len(p) && p[i+1] == '[':
+			for i += 2; i < len(p) && (p[i] < 0x40 || p[i] > 0x7e); i++ {
+			}
+		case c == 0x1b && i+1 < len(p) && p[i+1] == ']':
+			for i += 2; i < len(p) && p[i] != 0x07 && !(p[i] == 0x1b && i+1 < len(p) && p[i+1] == '\\'); i++ {
+			}
+			if i < len(p) && p[i] == 0x1b {
+				i++
+			}
+		case c == 0x1b:
+			i++
+		case c >= 0x20:
+			out = append(out, c)
+		}
+	}
+	return string(out)
 }
