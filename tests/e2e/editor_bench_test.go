@@ -144,6 +144,7 @@ func BenchmarkEditor(b *testing.B) {
 				h := newBenchHarness(b)
 				openBenchFile(b, h, lang.fixture, medium)
 				gotoLine(h, mediumLines/2)
+				h.settle()
 				h.pressKey(tcell.KeyEnd, tcell.ModNone)
 				b.ReportAllocs()
 				for b.Loop() {
@@ -179,7 +180,8 @@ func BenchmarkEditor(b *testing.B) {
 				}
 			})
 
-			// The first render at the end highlights every line above it.
+			// The frame after a jump: lines past the synchronous budget are
+			// deferred to steps between frames, which this does not include.
 			b.Run("jump_to_end_large", func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
@@ -200,6 +202,7 @@ func BenchmarkEditor(b *testing.B) {
 				h := newBenchHarness(b)
 				openBenchFile(b, h, lang.fixture, large)
 				gotoLine(h, largeLines())
+				h.settle()
 				b.ReportAllocs()
 				for b.Loop() {
 					gotoLine(h, 0)

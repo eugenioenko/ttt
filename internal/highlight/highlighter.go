@@ -30,6 +30,20 @@ var tokenizeOptions = textmate.TokenizeOptions{
 
 const maxIsolatedCache = 4_096
 
+// A render tokenizes at most this many lines past the document's materialized
+// lines before deferring. A far line is drawn with its last spans instead,
+// and Step catches up between frames. Edits usually reconverge with the old
+// tail well within it.
+var syncLines = 200
+
+var scheduleStep func(*Highlighter)
+
+// SetStepScheduler sets fn to be called, on the UI goroutine, when a render
+// deferred lines; fn should arrange for Step to run between frames.
+func SetStepScheduler(fn func(*Highlighter)) {
+	scheduleStep = fn
+}
+
 type Highlighter struct {
 	grammar  *textmate.Grammar
 	language string
@@ -39,6 +53,11 @@ type Highlighter struct {
 	styles   map[*textmate.ScopeStack]term.Style
 	// tokenTheme is the token theme the caches above were built with.
 	tokenTheme *TokenTheme
+	// lastSpans keeps each line's latest spans, drawn while Step catches up
+	// instead of leaving the line uncolored.
+	lastSpans map[int][]Span
+	wantLine  int
+	stepping  bool
 }
 
 // Conventional extensionless names the grammar catalog does not declare.
@@ -120,11 +139,56 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 		h.dirty = false
 		h.doc.SetLines(lines)
 	}
+	// The synchronous budget is spent once; while steps catch up, further
+	// lines that are not ready use their last spans too.
+	budget := syncLines
+	if h.stepping {
+		budget = 0
+	}
+	if !h.materialize(idx, budget) {
+		h.wantLine = max(h.wantLine, idx)
+		if !h.stepping {
+			h.stepping = true
+			if scheduleStep != nil {
+				scheduleStep(h)
+			}
+		}
+		return h.lastSpans[idx]
+	}
 	res, ok := h.doc.Line(idx)
 	if !ok {
 		return nil
 	}
-	return h.tokensToSpans(res.Tokens)
+	spans := h.tokensToSpans(res.Tokens)
+	if h.lastSpans == nil || len(h.lastSpans) >= maxIsolatedCache {
+		h.lastSpans = make(map[int][]Span)
+	}
+	h.lastSpans[idx] = spans
+	return spans
+}
+
+// Step materializes lines toward the farthest deferred line for about budget
+// and reports whether more remain.
+func (h *Highlighter) Step(budget time.Duration) bool {
+	deadline := time.Now().Add(budget)
+	for !h.materialize(h.wantLine, 1) && time.Now().Before(deadline) {
+	}
+	h.stepping = !h.materialize(h.wantLine, 0)
+	return h.stepping
+}
+
+// materialize tokenizes at most lines lines toward idx and reports whether
+// idx's start state is now known.
+func (h *Highlighter) materialize(idx, lines int) bool {
+	for range lines {
+		n := h.doc.MaterializedLines()
+		if n > idx || n >= h.doc.Len() {
+			return true
+		}
+		h.doc.StateAt(n)
+	}
+	n := h.doc.MaterializedLines()
+	return n > idx || n >= h.doc.Len()
 }
 
 // ClearCache marks the buffer as edited; the next lookup hands the new lines

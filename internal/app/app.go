@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -625,6 +626,9 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.EditorGroup.Editor.PostDragAutoScrollTick = func(generation uint64) {
 		screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Generation: generation}))
 	}
+	highlight.SetStepScheduler(func(h *highlight.Highlighter) {
+		screen.PostEvent(tcell.NewEventInterrupt(h))
+	})
 	a.StartWatcher()
 
 	if a.Changes != nil {

@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
@@ -26,6 +28,9 @@ type testHarness struct {
 	renderer *render.Renderer
 	running  bool
 	dir      string
+	// highlightSteps holds highlighters waiting for Step, which the app's
+	// event loop would run between frames.
+	highlightSteps []*highlight.Highlighter
 }
 
 func displayColumnOf(row, label string) int {
@@ -95,8 +100,26 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 		running:  running,
 		dir:      dir,
 	}
+	highlight.SetStepScheduler(func(hl *highlight.Highlighter) {
+		h2.highlightSteps = append(h2.highlightSteps, hl)
+	})
+	t.Cleanup(func() { highlight.SetStepScheduler(nil) })
 	h2.redraw()
 	return h2
+}
+
+// settle runs deferred highlighting to completion, as the event loop does
+// between frames, and redraws.
+func (h *testHarness) settle() {
+	for len(h.highlightSteps) > 0 {
+		steps := h.highlightSteps
+		h.highlightSteps = nil
+		for _, hl := range steps {
+			for hl.Step(time.Hour) {
+			}
+		}
+		h.redraw()
+	}
 }
 
 func (h *testHarness) redraw() {

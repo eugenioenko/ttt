@@ -3,8 +3,10 @@ package app
 import (
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -297,6 +299,11 @@ func RunEventLoop(
 				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
 			case *ui.EditorDragAutoScrollTick:
 				app.EditorGroup.Editor.HandleDragAutoScrollTick(v.Generation)
+			case *highlight.Highlighter:
+				// Short steps keep input responsive while a large file catches up.
+				if v.Step(4 * time.Millisecond) {
+					screen.PostEvent(tcell.NewEventInterrupt(v))
+				}
 			case *GitGutterResult:
 				if v.Gen == app.GitGutterGen {
 					app.EditorGroup.SetLineChanges(v.Path, v.Changes)
