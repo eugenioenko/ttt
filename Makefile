@@ -1,10 +1,13 @@
 # Makefile for ttt - terminal text editor
 
-.PHONY: all test build run clean fmt lint chaos chaos-docker chaos-docker-build profiler bench-editor
+.PHONY: all test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor
 
 all: build
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
+GOFMT_GO_VERSION := 1.25.14
+GOFMT = "$$(GOTOOLCHAIN=go$(GOFMT_GO_VERSION) go env GOROOT)/bin/gofmt"
 
 build:
 	go build -ldflags="-s -w -X main.version=$(VERSION)" -o bin/ttt ./cmd/ttt
@@ -25,9 +28,13 @@ bench-editor:
 	go test -run '^$$' -bench 'Editor/$(BENCH_LANG)' -benchmem -benchtime $(BENCH_TIME) $(BENCH_FLAGS) ./tests/e2e/
 
 fmt:
-	gofmt -w .
+	$(GOFMT) -w .
 
-lint:
+fmt-check:
+	@files=$$($(GOFMT) -l .) || exit 1; \
+	if [ -n "$$files" ]; then echo "Not gofmt-formatted (run make fmt):"; echo "$$files"; exit 1; fi
+
+lint: fmt-check
 	golangci-lint run
 
 vet:

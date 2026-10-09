@@ -9,7 +9,7 @@ Prerequisites: [Go](https://go.dev/) 1.25+, [Git](https://git-scm.com/), [ripgre
 ```sh
 make build   # builds to bin/ttt
 make test    # go test ./...
-make lint    # golangci-lint run
+make lint    # gofmt check + golangci-lint run
 ```
 
 ## How to contribute

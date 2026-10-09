@@ -12,8 +12,8 @@ ttt is a terminal text editor written in Go, using tcell for terminal rendering.
 make build        # builds to bin/ttt
 make run          # build + run
 make test         # go test ./...
-make fmt          # gofmt -w .
-make lint         # golangci-lint run
+make fmt          # gofmt -w . (pinned Go version)
+make lint         # fmt-check + golangci-lint run
 make bench-editor # editor benchmarks per language (BENCH_LANG=ts, BENCH_TIME=5s)
 go test ./internal/core/buffer/   # run tests for a single package
 
