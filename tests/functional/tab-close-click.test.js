@@ -23,7 +23,7 @@ describe("tab close button hit test (#354)", () => {
     const { snapshots } = tui.run();
 
     // Sanity: the × really is under the click (guard against geometry drift).
-    expect(snapshots[before].split("\n")[2][72]).toBe("x");
+    expect(snapshots[before].split("\n")[2][72]).toBe("✕");
     expect(snapshots[before]).toContain("untitled-4");
 
     // The click must close the active tab.
