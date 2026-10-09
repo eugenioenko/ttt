@@ -611,6 +611,7 @@ func registerWidgetCallbacks(app *App) {
 			ui.MenuSep(),
 			ui.ContextMenuItem{Label: "Copy Absolute Path", Command: "file.copyAbsolutePath"},
 			ui.ContextMenuItem{Label: "Copy Relative Path", Command: "file.copyRelativePath"},
+			ui.ContextMenuItem{Label: "Reveal in Explorer", Command: "explorer.revealActiveFile"},
 		)
 		tabContextMenu = app.withActiveDiffViewSubmenu(tabContextMenu)
 		openContextMenu(app, tabContextMenu, sx, sy)
