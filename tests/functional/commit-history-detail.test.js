@@ -146,7 +146,7 @@ describe("commit history detail", () => {
 		tui.press("enter");
 		tui.rclick(50, 2);
 		const compactTabMenu = tui.snapshot();
-		for (let index = 0; index < 8; index++) tui.press("down");
+		for (let index = 0; index < 9; index++) tui.press("down");
 		tui.press("right");
 		const tabMenu = tui.snapshot();
 
