@@ -124,7 +124,6 @@ Community plugins are maintained in the [ttt-plugins](https://github.com/eugenio
 
 | Plugin | Description |
 |--------|-------------|
-| cheat-sheet | Fetch programming cheat sheets from cheat.sh |
 | color-picker | Color picker with hex/RGB swatches |
 | docker-manager | Docker container, image, and volume management |
 | go-test-runner | Run Go tests and view results |

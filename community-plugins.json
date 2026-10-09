@@ -10,16 +10,6 @@
     "tags": ["bookmarks", "navigation", "productivity"]
   },
   {
-    "name": "cheat-sheet",
-    "displayName": "Cheat Sheet",
-    "author": "eugenioenko",
-    "description": "Fetch programming cheat sheets from cheat.sh and display them in an editor tab",
-    "repo": "https://github.com/eugenioenko/ttt-plugins",
-    "path": "cheat-sheet",
-    "version": "0.1.0",
-    "tags": ["reference", "cheatsheet", "documentation", "learning"]
-  },
-  {
     "name": "color-picker",
     "displayName": "Color Picker",
     "author": "eugenioenko",
