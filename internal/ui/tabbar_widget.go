@@ -98,7 +98,7 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 		if tab.Pinned {
 			label += " " + icons.Get(t.Icons, icons.Pinned)
 		} else {
-			label += " x"
+			label += " ✕"
 		}
 	}
 	label += " "
