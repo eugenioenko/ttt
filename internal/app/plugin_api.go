@@ -465,9 +465,7 @@ func (s *PluginSystemAPI) Env(name string) string {
 
 // PluginNetworkAPI implements plugin.NetworkAPI.
 type PluginNetworkAPI struct {
-	client *http.Client
-	// lookupIP resolves hostnames for the SSRF check. A field so tests can
-	// inject a fake resolver instead of making real DNS lookups.
+	client   *http.Client
 	lookupIP func(string) ([]net.IP, error)
 }
 

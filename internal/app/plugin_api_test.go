@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -255,13 +256,16 @@ func TestPluginFilesystemAPI_SymlinkEscape(t *testing.T) {
 func TestPluginNetworkAPI_SSRFProtection(t *testing.T) {
 	api := NewPluginNetworkAPI()
 	api.lookupIP = func(host string) ([]net.IP, error) {
-		if host == "rebind.example.com" {
+		switch host {
+		case "example.com":
+			return []net.IP{net.IPv4(93, 184, 216, 34)}, nil
+		case "rebind.example.com":
 			return []net.IP{net.IPv4(10, 0, 0, 1)}, nil
 		}
 		if ip := net.ParseIP(host); ip != nil {
 			return []net.IP{ip}, nil
 		}
-		return []net.IP{net.IPv4(93, 184, 216, 34)}, nil
+		return nil, errors.New("no such host")
 	}
 
 	tests := []struct {
