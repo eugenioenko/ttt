@@ -330,6 +330,14 @@ func (m *Manager) DispatchEvent(name string, args ...interface{}) {
 	}
 }
 
+// The editor owns the tty, so a git credential prompt would hang invisibly
+// instead of failing.
+func remoteGitCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	return cmd
+}
+
 func (m *Manager) Install(repoURL, repoPath string) (*Plugin, error) {
 	if !strings.HasPrefix(repoURL, "https://") {
 		return nil, fmt.Errorf("only https:// URLs are allowed for plugin install")
@@ -350,7 +358,7 @@ func (m *Manager) Install(repoURL, repoPath string) (*Plugin, error) {
 		return nil, fmt.Errorf("plugin %q already exists", name)
 	}
 
-	cmd := exec.Command("git", "clone", repoURL, targetDir)
+	cmd := remoteGitCommand("clone", repoURL, targetDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("git clone failed: %s: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -376,7 +384,7 @@ func (m *Manager) installFromSubdir(repoURL, repoPath string) (*Plugin, error) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	cmd := exec.Command("git", "clone", "--depth", "1", repoURL, tmpDir)
+	cmd := remoteGitCommand("clone", "--depth", "1", repoURL, tmpDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("git clone failed: %s: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -532,7 +540,7 @@ func (m *Manager) Update(name string) (*Plugin, bool, error) {
 		return m.updateFromSubdir(name, dir, regEntry)
 	}
 
-	cmd := exec.Command("git", "-C", dir, "pull")
+	cmd := remoteGitCommand("-C", dir, "pull")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, false, fmt.Errorf("git pull failed: %s: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -591,7 +599,7 @@ func (m *Manager) updateFromSubdir(name, dir string, regEntry *RegistryEntry) (*
 	}
 	defer os.RemoveAll(tmpDir)
 
-	cmd := exec.Command("git", "clone", "--depth", "1", regEntry.Repo, tmpDir)
+	cmd := remoteGitCommand("clone", "--depth", "1", regEntry.Repo, tmpDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, false, fmt.Errorf("git clone failed: %s: %s", err, strings.TrimSpace(string(out)))
 	}
