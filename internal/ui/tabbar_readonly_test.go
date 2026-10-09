@@ -23,31 +23,31 @@ func TestTabLabelReadOnlyFollowsIconMode(t *testing.T) {
 			name: "disk read-only plain",
 			mode: config.IconsNone,
 			tab:  Tab{Name: "/tmp/notes.txt", ReadOnly: true, Active: true, Closable: true},
-			want: " notes.txt (readonly) x ",
+			want: " notes.txt (readonly) ✕ ",
 		},
 		{
 			name: "viewer read-only plain",
 			mode: config.IconsNone,
 			tab:  Tab{Name: "notes.txt", ReadOnly: true, Active: true, Closable: true},
-			want: " notes.txt (readonly) x ",
+			want: " notes.txt (readonly) ✕ ",
 		},
 		{
 			name: "disk read-only nerd font",
 			mode: config.IconsNerdFont,
 			tab:  Tab{Name: "/tmp/notes.txt", ReadOnly: true, Active: true, Closable: true, Dirty: true},
-			want: " ● " + lock + " notes.txt x ",
+			want: " ● " + lock + " notes.txt ✕ ",
 		},
 		{
 			name: "viewer read-only nerd font",
 			mode: config.IconsNerdFont,
 			tab:  Tab{Name: "notes.txt", ReadOnly: true, Active: true, Closable: true},
-			want: " " + lock + " notes.txt x ",
+			want: " " + lock + " notes.txt ✕ ",
 		},
 		{
 			name: "writable tab has no lock",
 			mode: config.IconsNerdFont,
 			tab:  Tab{Name: "notes.txt", Active: true, Closable: true},
-			want: " notes.txt x ",
+			want: " notes.txt ✕ ",
 		},
 	}
 	for _, tc := range cases {

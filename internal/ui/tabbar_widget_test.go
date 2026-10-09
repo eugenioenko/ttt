@@ -480,7 +480,7 @@ func TestTabBarCloseHitInMoreButtonWindow(t *testing.T) {
 	// Find the rendered close × of the active tab (row 1, StyleActiveTab).
 	closeX := -1
 	for x := 0; x < w; x++ {
-		if grid[1][x].Ch == 'x' && grid[1][x].Style == term.StyleActiveTab {
+		if grid[1][x].Ch == '✕' && grid[1][x].Style == term.StyleActiveTab {
 			closeX = x
 		}
 	}
