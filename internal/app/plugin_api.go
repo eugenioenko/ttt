@@ -466,11 +466,15 @@ func (s *PluginSystemAPI) Env(name string) string {
 // PluginNetworkAPI implements plugin.NetworkAPI.
 type PluginNetworkAPI struct {
 	client *http.Client
+	// lookupIP resolves hostnames for the SSRF check. A field so tests can
+	// inject a fake resolver instead of making real DNS lookups.
+	lookupIP func(string) ([]net.IP, error)
 }
 
 func NewPluginNetworkAPI() *PluginNetworkAPI {
 	return &PluginNetworkAPI{
-		client: &http.Client{Timeout: 30 * time.Second},
+		client:   &http.Client{Timeout: 30 * time.Second},
+		lookupIP: net.LookupIP,
 	}
 }
 
@@ -497,7 +501,7 @@ func (n *PluginNetworkAPI) validateURL(rawURL string) error {
 		return fmt.Errorf("requests to localhost are not allowed")
 	}
 
-	ips, err := net.LookupIP(hostname)
+	ips, err := n.lookupIP(hostname)
 	if err != nil {
 		return nil
 	}

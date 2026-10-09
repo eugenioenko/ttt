@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -252,9 +253,16 @@ func TestPluginFilesystemAPI_SymlinkEscape(t *testing.T) {
 }
 
 func TestPluginNetworkAPI_SSRFProtection(t *testing.T) {
-	// TODO(#749): validateURL does real DNS lookups; inject a fake resolver.
-	t.Skip("makes real DNS lookups, see #749")
 	api := NewPluginNetworkAPI()
+	api.lookupIP = func(host string) ([]net.IP, error) {
+		if host == "rebind.example.com" {
+			return []net.IP{net.IPv4(10, 0, 0, 1)}, nil
+		}
+		if ip := net.ParseIP(host); ip != nil {
+			return []net.IP{ip}, nil
+		}
+		return []net.IP{net.IPv4(93, 184, 216, 34)}, nil
+	}
 
 	tests := []struct {
 		name    string
@@ -268,6 +276,7 @@ func TestPluginNetworkAPI_SSRFProtection(t *testing.T) {
 		{"localhost blocked", "http://localhost/admin", true},
 		{"127.0.0.1 blocked", "http://127.0.0.1/admin", true},
 		{"169.254 metadata blocked", "http://169.254.169.254/latest/meta-data/", true},
+		{"public hostname resolving to a private IP blocked", "http://rebind.example.com/admin", true},
 	}
 
 	for _, tt := range tests {
