@@ -308,7 +308,7 @@ func (e *PluginEditorAPI) SetSearch(pattern string, useRegex bool) {
 	}
 	opts := ui.SearchOptions{UseRegex: useRegex, CaseSensitive: true}
 	matches, _ := ui.FindInLines(buf.Lines, pattern, opts)
-	e.eg.SetSearch(pattern, matches)
+	e.eg.SetSearch(pattern, opts, matches)
 }
 
 func (e *PluginEditorAPI) ClearSearch() {

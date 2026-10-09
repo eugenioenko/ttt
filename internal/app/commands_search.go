@@ -25,7 +25,7 @@ func (a *App) OpenFind() {
 			a.StatusWarn("Invalid regex: " + err.Error())
 			return nil
 		}
-		a.EditorGroup.SetSearch(query, matches)
+		a.EditorGroup.SetSearch(query, opts, matches)
 		return matches
 	}
 	findBar.OnNavigate = func(match ui.FindMatch) {
@@ -35,7 +35,12 @@ func (a *App) OpenFind() {
 		a.EditorGroup.Editor.Cursor.Col = match.Col
 		a.EditorGroup.ScrollToCursor()
 	}
+	a.EditorGroup.Editor.OnSearchRefresh = func(matches []ui.FindMatch) {
+		findBar.SetMatches(matches)
+		a.EditorGroup.SetSearchActive(findBar.Current)
+	}
 	findBar.OnDismiss = func() {
+		a.EditorGroup.Editor.OnSearchRefresh = nil
 		a.DismissDialog()
 		a.EditorGroup.ClearSearch()
 	}
@@ -54,7 +59,7 @@ func (a *App) OpenFindReplace() {
 			a.StatusWarn("Invalid regex: " + err.Error())
 			return nil
 		}
-		a.EditorGroup.SetSearch(query, matches)
+		a.EditorGroup.SetSearch(query, opts, matches)
 		return matches
 	}
 	bar.OnNavigate = func(match ui.FindMatch) {
@@ -70,7 +75,12 @@ func (a *App) OpenFindReplace() {
 	bar.OnReplaceAll = func(query, replacement string, opts ui.SearchOptions) {
 		a.EditorGroup.ReplaceAll(query, replacement, opts)
 	}
+	a.EditorGroup.Editor.OnSearchRefresh = func(matches []ui.FindMatch) {
+		bar.SetMatches(matches)
+		a.EditorGroup.SetSearchActive(bar.Current)
+	}
 	bar.OnDismiss = func() {
+		a.EditorGroup.Editor.OnSearchRefresh = nil
 		a.DismissDialog()
 		a.EditorGroup.ClearSearch()
 	}

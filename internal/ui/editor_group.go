@@ -1531,11 +1531,12 @@ func (g *EditorGroupWidget) SelectAll() {
 	t.Cur.Col = len([]rune(t.Buf.Lines[lastLine]))
 }
 
-func (g *EditorGroupWidget) SetSearch(query string, matches []FindMatch) {
+func (g *EditorGroupWidget) SetSearch(query string, opts SearchOptions, matches []FindMatch) {
 	if !g.IsEditorActive() {
 		return
 	}
 	g.Editor.SearchQuery = query
+	g.Editor.SearchOptions = opts
 	g.Editor.SearchMatches = matches
 	g.Editor.SearchActive = 0
 	g.Editor.buildSearchIndex()
@@ -1630,6 +1631,7 @@ func (g *EditorGroupWidget) ClearSearch() {
 		return
 	}
 	g.Editor.SearchQuery = ""
+	g.Editor.SearchOptions = SearchOptions{}
 	g.Editor.SearchMatches = nil
 	g.Editor.SearchActive = 0
 	g.Editor.searchByLine = nil

@@ -180,7 +180,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 	}
 	if a.Search.Input.Text != "" {
 		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
-		a.EditorGroup.SetSearch(a.Search.Input.Text, matches)
+		a.EditorGroup.SetSearch(a.Search.Input.Text, a.Search.Options, matches)
 	}
 	a.Root.SetFocus(a.EditorGroup)
 }

@@ -186,6 +186,13 @@ func (f *FindBarWidget) doSearch() {
 	}
 }
 
+// SetMatches must not navigate: it runs after the user edits, and moving the
+// cursor would yank it away from where they are typing.
+func (f *FindBarWidget) SetMatches(matches []FindMatch) {
+	f.Matches = matches
+	f.Current = min(f.Current, max(len(matches)-1, 0))
+}
+
 func (f *FindBarWidget) navigate() {
 	if f.OnNavigate != nil && len(f.Matches) > 0 {
 		f.OnNavigate(f.Matches[f.Current])

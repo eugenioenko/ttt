@@ -51,8 +51,10 @@ type EditorPaneWidget struct {
 	BracketColorStyles      []term.Style
 	Highlighter             *highlight.Highlighter
 	SearchQuery             string
+	SearchOptions           SearchOptions
 	SearchMatches           []FindMatch
 	SearchActive            int
+	OnSearchRefresh         func(matches []FindMatch)
 	lastClickTime           int64
 	lastClickLine           int
 	lastClickCol            int
@@ -226,6 +228,22 @@ func (e *EditorPaneWidget) clampLeftCol() {
 	}
 }
 
+func (e *EditorPaneWidget) refreshSearch() {
+	if e.SearchQuery == "" || e.Buf == nil {
+		return
+	}
+	matches, err := FindInLines(e.Buf.Lines, e.SearchQuery, e.SearchOptions)
+	if err != nil {
+		return
+	}
+	e.SearchMatches = matches
+	e.SearchActive = min(e.SearchActive, max(len(matches)-1, 0))
+	e.buildSearchIndex()
+	if e.OnSearchRefresh != nil {
+		e.OnSearchRefresh(matches)
+	}
+}
+
 func (e *EditorPaneWidget) buildSearchIndex() {
 	e.searchByLine = make(map[int][]int, len(e.SearchMatches))
 	for i, m := range e.SearchMatches {
@@ -313,6 +331,7 @@ func (e *EditorPaneWidget) FlushOnChange() {
 		if e.Highlighter != nil {
 			e.Highlighter.ClearCache()
 		}
+		e.refreshSearch()
 		if e.OnChange != nil {
 			e.OnChange()
 		}

@@ -180,6 +180,13 @@ func (r *ReplaceBarWidget) search() {
 	}
 }
 
+// SetMatches must not navigate: it runs after the user edits, and moving the
+// cursor would yank it away from where they are typing.
+func (r *ReplaceBarWidget) SetMatches(matches []FindMatch) {
+	r.Matches = matches
+	r.Current = min(r.Current, max(len(matches)-1, 0))
+}
+
 func (r *ReplaceBarWidget) navigate() {
 	if r.OnNavigate != nil && len(r.Matches) > 0 {
 		r.OnNavigate(r.Matches[r.Current])
