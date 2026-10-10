@@ -2,6 +2,7 @@ package undo
 
 import (
 	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"strings"
 	"testing"
 )
 
@@ -863,6 +864,30 @@ func TestDeleteSelectionCommandComputeDeleted(t *testing.T) {
 			cmd:   DeleteSelectionCommand{StartLine: 1, StartCol: 0, EndLine: 1, EndCol: 0},
 			want:  "",
 		},
+		{
+			name:  "negative start line deletes nothing",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: -1, StartCol: 0, EndLine: 0, EndCol: 2},
+			want:  "",
+		},
+		{
+			name:  "negative end line deletes nothing",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: -1, EndCol: 0},
+			want:  "",
+		},
+		{
+			name:  "reversed lines delete nothing",
+			lines: []string{"alpha", "beta", "gamma"},
+			cmd:   DeleteSelectionCommand{StartLine: 2, StartCol: 0, EndLine: 0, EndCol: 3},
+			want:  "",
+		},
+		{
+			name:  "negative cols clamp to zero",
+			lines: []string{"alpha", "beta"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: -3, EndLine: 1, EndCol: -1},
+			want:  "alpha\n",
+		},
 	}
 
 	for _, test := range tests {
@@ -875,5 +900,34 @@ func TestDeleteSelectionCommandComputeDeleted(t *testing.T) {
 				t.Errorf("ComputeDeleted mutated the buffer: %v", b.Lines)
 			}
 		})
+	}
+}
+
+func TestDeleteSelectionCommandInvalidRangeIsNoop(t *testing.T) {
+	cmds := []DeleteSelectionCommand{
+		{StartLine: 0, StartCol: 0, EndLine: -1, EndCol: 0},
+		{StartLine: -1, StartCol: 0, EndLine: 1, EndCol: 0},
+		{StartLine: 2, StartCol: 0, EndLine: 0, EndCol: 3},
+	}
+	for _, cmd := range cmds {
+		b := &buffer.Buffer{Lines: []string{"alpha", "beta", "gamma"}}
+		cmd.Apply(b)
+		cmd.Undo(b)
+		if strings.Join(b.Lines, "\n") != "alpha\nbeta\ngamma" || b.Dirty {
+			t.Errorf("%+v changed the buffer: %q dirty=%v", cmd, b.Lines, b.Dirty)
+		}
+	}
+}
+
+func TestDeleteSelectionCommandNegativeColsRoundTrip(t *testing.T) {
+	b := &buffer.Buffer{Lines: []string{"alpha", "beta"}}
+	cmd := &DeleteSelectionCommand{StartLine: 0, StartCol: -3, EndLine: 1, EndCol: -1}
+	cmd.Apply(b)
+	if strings.Join(b.Lines, "\n") != "beta" {
+		t.Fatalf("after Apply got %q", b.Lines)
+	}
+	cmd.Undo(b)
+	if strings.Join(b.Lines, "\n") != "alpha\nbeta" {
+		t.Fatalf("after Undo got %q", b.Lines)
 	}
 }

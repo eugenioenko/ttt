@@ -171,8 +171,12 @@ func (e *PluginEditorAPI) Insert(line, col int, text string) {
 	if ed == nil || ed.Buf == nil || ed.Undo == nil {
 		return
 	}
-	if line < 0 || line >= len(ed.Buf.Lines) {
+	if line < 0 || line >= len(ed.Buf.Lines) || col < 0 {
 		return
+	}
+	runes := []rune(ed.Buf.Lines[line])
+	if col > len(runes) {
+		col = len(runes)
 	}
 
 	if !strings.Contains(text, "\n") {
@@ -180,13 +184,7 @@ func (e *PluginEditorAPI) Insert(line, col int, text string) {
 		cmd.Apply(ed.Buf)
 		ed.Undo.Push(cmd)
 	} else {
-		runes := []rune(ed.Buf.Lines[line])
-		colClamped := col
-		if colClamped > len(runes) {
-			colClamped = len(runes)
-		}
-		suffix := string(runes[colClamped:])
-		cmd := &undo.PasteCommand{Line: line, Col: colClamped, Text: text, Suffix: suffix}
+		cmd := &undo.PasteCommand{Line: line, Col: col, Text: text, Suffix: string(runes[col:])}
 		cmd.Apply(ed.Buf)
 		ed.Undo.Push(cmd)
 	}
@@ -198,7 +196,10 @@ func (e *PluginEditorAPI) Replace(startLine, startCol, endLine, endCol int, text
 	if ed == nil || ed.Buf == nil || ed.Undo == nil {
 		return
 	}
-	if startLine < 0 || startLine >= len(ed.Buf.Lines) {
+	if startLine < 0 || startLine >= len(ed.Buf.Lines) || endLine < startLine || startCol < 0 || endCol < 0 {
+		return
+	}
+	if startLine == endLine && endCol < startCol {
 		return
 	}
 
@@ -217,17 +218,13 @@ func (e *PluginEditorAPI) Replace(startLine, startCol, endLine, endCol int, text
 		return
 	}
 
+	col := delCmd.StartCol
 	var insertCmd undo.EditCommand
 	if !strings.Contains(text, "\n") {
-		insertCmd = &undo.InsertStringCommand{Line: startLine, Col: startCol, Text: text}
+		insertCmd = &undo.InsertStringCommand{Line: startLine, Col: col, Text: text}
 	} else {
-		runes := []rune(ed.Buf.Lines[startLine])
-		colClamped := startCol
-		if colClamped > len(runes) {
-			colClamped = len(runes)
-		}
-		suffix := string(runes[colClamped:])
-		insertCmd = &undo.PasteCommand{Line: startLine, Col: colClamped, Text: text, Suffix: suffix}
+		suffix := string([]rune(ed.Buf.Lines[startLine])[col:])
+		insertCmd = &undo.PasteCommand{Line: startLine, Col: col, Text: text, Suffix: suffix}
 	}
 	insertCmd.Apply(ed.Buf)
 

@@ -444,37 +444,44 @@ type DeleteSelectionCommand struct {
 	Deleted             string
 }
 
-func (c *DeleteSelectionCommand) ComputeDeleted(b *buffer.Buffer) string {
-	if c.StartLine >= len(b.Lines) {
-		return ""
+func (c *DeleteSelectionCommand) normalize(b *buffer.Buffer) bool {
+	if c.StartLine < 0 || c.StartLine >= len(b.Lines) || c.EndLine < c.StartLine {
+		return false
 	}
 	if c.EndLine >= len(b.Lines) {
 		c.EndLine = len(b.Lines) - 1
 		c.EndCol = len([]rune(b.Lines[c.EndLine]))
 	}
+	c.StartCol = clampCol(c.StartCol, len([]rune(b.Lines[c.StartLine])))
+	c.EndCol = clampCol(c.EndCol, len([]rune(b.Lines[c.EndLine])))
+	if c.StartLine == c.EndLine && c.StartCol > c.EndCol {
+		c.StartCol = c.EndCol
+	}
+	return true
+}
 
-	startRunes := []rune(b.Lines[c.StartLine])
-	if c.StartCol > len(startRunes) {
-		c.StartCol = len(startRunes)
+func clampCol(col, length int) int {
+	if col < 0 {
+		return 0
+	}
+	if col > length {
+		return length
+	}
+	return col
+}
+
+func (c *DeleteSelectionCommand) ComputeDeleted(b *buffer.Buffer) string {
+	if !c.normalize(b) {
+		return ""
 	}
 
+	startRunes := []rune(b.Lines[c.StartLine])
 	if c.StartLine == c.EndLine {
-		endRunes := []rune(b.Lines[c.StartLine])
-		if c.EndCol > len(endRunes) {
-			c.EndCol = len(endRunes)
-		}
-		if c.StartCol > c.EndCol {
-			c.StartCol = c.EndCol
-		}
-		c.Deleted = string(endRunes[c.StartCol:c.EndCol])
+		c.Deleted = string(startRunes[c.StartCol:c.EndCol])
 		return c.Deleted
 	}
 
 	endRunes := []rune(b.Lines[c.EndLine])
-	if c.EndCol > len(endRunes) {
-		c.EndCol = len(endRunes)
-	}
-
 	var del []rune
 	del = append(del, startRunes[c.StartCol:]...)
 	del = append(del, '\n')
@@ -488,7 +495,7 @@ func (c *DeleteSelectionCommand) ComputeDeleted(b *buffer.Buffer) string {
 }
 
 func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
-	if c.StartLine >= len(b.Lines) {
+	if !c.normalize(b) {
 		return
 	}
 	c.ComputeDeleted(b)
@@ -503,7 +510,7 @@ func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
 }
 
 func (c *DeleteSelectionCommand) Undo(b *buffer.Buffer) {
-	if c.StartLine >= len(b.Lines) {
+	if c.StartLine < 0 || c.StartLine >= len(b.Lines) || c.EndLine < c.StartLine {
 		return
 	}
 
