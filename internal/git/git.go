@@ -763,50 +763,34 @@ func TreeEntryContext(ctx context.Context, dir, revision, path string) (TreeEntr
 	return TreeEntry{Mode: fields[0], Object: fields[2]}, true, nil
 }
 
-func DiffFile(dir, path string) (string, error) {
-	absPath := filepath.Join(dir, path)
-	cmd := exec.Command("git", "-C", dir, "diff", "--", absPath)
-	out, err := cmd.Output()
+// DiffWorktreeFile diffs the index against the working tree.
+func DiffWorktreeFile(dir, path string) (string, error) {
+	return diffPaths(dir, nil, path)
+}
+
+// DiffStagedFile diffs HEAD against the index. Pass the old and new path of a
+// staged rename to get a rename diff.
+func DiffStagedFile(dir string, paths ...string) (string, error) {
+	return diffPaths(dir, []string{"--cached", "-M"}, paths...)
+}
+
+func diffPaths(dir string, flags []string, paths ...string) (string, error) {
+	args := append([]string{"-C", dir, "diff"}, flags...)
+	args = append(args, "--")
+	for _, p := range paths {
+		args = append(args, filepath.Join(dir, p))
+	}
+	out, err := gitCommandContext(context.Background(), args...).Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) == 0 {
-			return string(out), nil
-		}
 		return "", err
-	}
-	if len(out) == 0 {
-		cmd = exec.Command("git", "-C", dir, "diff", "--cached", "--", absPath)
-		out, err = cmd.Output()
-		if err != nil {
-			return "", err
-		}
-	}
-	if len(out) == 0 {
-		cmd = exec.Command("git", "-C", dir, "diff", "HEAD", "--", absPath)
-		out, err = cmd.Output()
-		if err != nil {
-			return "", err
-		}
 	}
 	return string(out), nil
 }
 
-func DiffRename(dir, oldPath, newPath string) (string, error) {
-	cmd := exec.Command("git", "-C", dir, "diff", "HEAD", "--", filepath.Join(dir, oldPath), filepath.Join(dir, newPath))
-	out, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) == 0 {
-			return string(out), nil
-		}
-		return "", err
-	}
-	if len(out) == 0 {
-		cmd = exec.Command("git", "-C", dir, "diff", "--cached", "--", filepath.Join(dir, oldPath), filepath.Join(dir, newPath))
-		out, err = cmd.Output()
-		if err != nil {
-			return "", err
-		}
-	}
-	return string(out), nil
+// ShowIndexFileContext reads a file's stage-0 blob from the index.
+func ShowIndexFileContext(ctx context.Context, dir, path string) (string, error) {
+	out, err := ShowIndexFileBytesContext(ctx, dir, path, 0)
+	return string(out), err
 }
 
 func DiffWorkingTreeFileContext(ctx context.Context, dir, revision string, status FileStatus) (string, error) {

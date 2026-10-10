@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+
 	"github.com/eugenioenko/ttt/internal/git"
 )
 
@@ -20,16 +22,16 @@ func (a *App) repoPathForFile(path string) (repoDir, relPath string, ok bool) {
 	return repoDir, relPath, ok
 }
 
-func (a *App) headLines(path, repoDir, relPath string) []string {
+func (a *App) indexLines(path, repoDir, relPath string) []string {
 	showTrailing := false
 	if buf := a.EditorGroup.BufferForPath(path); buf != nil {
 		showTrailing = buf.ShowTrailingNewline
 	}
-	content, err := git.ShowFile(repoDir, relPath, "HEAD")
+	content, err := git.ShowIndexFileContext(context.Background(), repoDir, relPath)
 	if err != nil {
 		return nil
 	}
-	return headBaseLines(content, showTrailing)
+	return blobLines(content, showTrailing)
 }
 
 func (a *App) openInlineDiff(path, repoDir, relPath string) bool {
@@ -37,7 +39,7 @@ func (a *App) openInlineDiff(path, repoDir, relPath string) bool {
 	if a.EditorGroup.ActiveFilePath() != path || !a.EditorGroup.IsEditorActive() {
 		return false
 	}
-	if !a.EditorGroup.EnableInlineDiff(path, a.headLines(path, repoDir, relPath)) {
+	if !a.EditorGroup.EnableInlineDiff(path, a.indexLines(path, repoDir, relPath)) {
 		return false
 	}
 	if a.inlineDiffRepos == nil {
@@ -62,4 +64,19 @@ func (a *App) ToggleInlineDiff() {
 		return
 	}
 	a.RequestGitGutterForActiveFile()
+}
+
+func (a *App) onChangesRefreshed() {
+	if a.Sidebar != nil {
+		a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
+	}
+	if a.pendingCurrentChangesOpen && a.selectedChangesDir() != "" {
+		a.pendingCurrentChangesOpen = false
+		a.OpenCurrentChanges()
+	}
+	// Staging, unstaging and commits move the index an open working-tree diff
+	// is based on.
+	if a.EditorGroup != nil && a.EditorGroup.IsInlineDiffActive() {
+		a.RequestGitGutterForActiveFile()
+	}
 }

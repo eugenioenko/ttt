@@ -630,13 +630,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 
 	if a.Changes != nil {
 		a.Changes.Screen = screen
-		a.Changes.OnRefreshed = func() {
-			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
-			if a.pendingCurrentChangesOpen && a.selectedChangesDir() != "" {
-				a.pendingCurrentChangesOpen = false
-				a.OpenCurrentChanges()
-			}
-		}
+		a.Changes.OnRefreshed = a.onChangesRefreshed
 	}
 	if a.Repository != nil {
 		a.Repository.SetPoster(screen)

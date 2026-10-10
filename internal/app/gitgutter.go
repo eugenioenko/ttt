@@ -82,8 +82,12 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 			}
 		}
 		if diffOn {
-			if gitErr == nil {
-				result.Base = headBaseLines(headContent, showTrailing)
+			indexContent, indexErr := git.ShowIndexFileContext(ctx, repoDir, relPath)
+			if ctx.Err() != nil {
+				return
+			}
+			if indexErr == nil {
+				result.Base = blobLines(indexContent, showTrailing)
 			}
 			lines, err := diff.FullDiffLinesContext(ctx, result.Base, linesCopy)
 			if err != nil {
@@ -134,9 +138,9 @@ func (a *App) ScheduleGitGutter() {
 // recomputation on the main thread after a debounce delay.
 type GitGutterTrigger struct{}
 
-// headBaseLines splits a blob the way buffer.LoadFile splits a file, so an
+// blobLines splits a blob the way buffer.LoadFile splits a file, so an
 // unchanged file diffs as identical rather than off by a trailing line.
-func headBaseLines(content string, showTrailingNewline bool) []string {
+func blobLines(content string, showTrailingNewline bool) []string {
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {

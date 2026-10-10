@@ -137,6 +137,67 @@ func writeFile(t *testing.T, dir, name, content string) {
 	}
 }
 
+func setupPartiallyStagedRepo(t *testing.T) string {
+	t.Helper()
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "notes.txt", "one\ntwo\nthree\n")
+	gitRun(t, dir, "add", "notes.txt")
+	gitRun(t, dir, "commit", "-qm", "init")
+	writeFile(t, dir, "notes.txt", "ONE\ntwo\nthree\n")
+	gitRun(t, dir, "add", "notes.txt")
+	writeFile(t, dir, "notes.txt", "ONE\ntwo\nTHREE\n")
+	return dir
+}
+
+func TestDiffWorktreeFileShowsOnlyUnstagedChanges(t *testing.T) {
+	dir := setupPartiallyStagedRepo(t)
+	out, err := DiffWorktreeFile(dir, "notes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "+THREE") || strings.Contains(out, "-one") {
+		t.Fatalf("worktree diff = %q", out)
+	}
+}
+
+func TestDiffStagedFileShowsOnlyStagedChanges(t *testing.T) {
+	dir := setupPartiallyStagedRepo(t)
+	out, err := DiffStagedFile(dir, "notes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "-one") || !strings.Contains(out, "+ONE") || strings.Contains(out, "THREE") {
+		t.Fatalf("staged diff = %q", out)
+	}
+}
+
+func TestDiffStagedFileFollowsRename(t *testing.T) {
+	dir := setupPartiallyStagedRepo(t)
+	gitRun(t, dir, "commit", "-qam", "both")
+	gitRun(t, dir, "mv", "notes.txt", "renamed.txt")
+	out, err := DiffStagedFile(dir, "notes.txt", "renamed.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "rename from notes.txt") || !strings.Contains(out, "rename to renamed.txt") {
+		t.Fatalf("staged rename diff = %q", out)
+	}
+}
+
+func TestShowIndexFileContextReadsStagedContent(t *testing.T) {
+	dir := setupPartiallyStagedRepo(t)
+	got, err := ShowIndexFileContext(context.Background(), dir, "notes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "ONE\ntwo\nthree\n" {
+		t.Fatalf("index content = %q", got)
+	}
+	if _, err := ShowIndexFileContext(context.Background(), dir, "missing.txt"); err == nil {
+		t.Fatal("expected an error for a path not in the index")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // StatusFiles
 // ---------------------------------------------------------------------------
