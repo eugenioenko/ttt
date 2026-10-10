@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,15 +22,11 @@ func (b *Buffer) LoadFile(filename string) error {
 		return err
 	}
 
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), math.MaxInt)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
+	data, err := io.ReadAll(f)
+	if err != nil {
 		return err
 	}
+	lines := splitFileLines(string(data))
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
@@ -44,6 +39,21 @@ func (b *Buffer) LoadFile(filename string) error {
 		b.recordDiskInfo(info)
 	}
 	return nil
+}
+
+// splitFileLines splits like bufio.ScanLines, with every line a substring of
+// text instead of its own allocation.
+func splitFileLines(text string) []string {
+	lines := make([]string, 0, strings.Count(text, "\n")+1)
+	for text != "" {
+		line, rest, found := strings.Cut(text, "\n")
+		lines = append(lines, strings.TrimSuffix(line, "\r"))
+		if !found {
+			break
+		}
+		text = rest
+	}
+	return lines
 }
 
 // detectLineEnding reads up to 64KB of a file to determine its line ending.
