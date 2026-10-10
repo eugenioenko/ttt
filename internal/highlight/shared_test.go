@@ -1,7 +1,9 @@
 package highlight
 
 import (
+	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -58,4 +60,32 @@ func TestSharedTokensFollowEdits(t *testing.T) {
 	lines = lines[1:]
 	h.ClearCache()
 	check("comment removed")
+}
+
+func TestSharedTokensConcurrentSides(t *testing.T) {
+	lines := make([]string, 0, 600)
+	for i := range 100 {
+		lines = append(lines, "func f() {", "\t/* note", "\t*/", fmt.Sprintf("\tx := %d", i), "}", "")
+	}
+	a, b := New("main.go"), New("main.go")
+	a.ShareTokens(nil)
+	b.ShareTokens(a)
+	var wg sync.WaitGroup
+	for _, h := range []*Highlighter{a, b} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h.HighlightLineAt(lines, len(lines)-1)
+		}()
+	}
+	wg.Wait()
+	for _, i := range []int{2, 3, len(lines) - 3} {
+		want := freshSpans(lines, i)
+		if got := a.HighlightLineAt(lines, i); !reflect.DeepEqual(got, want) {
+			t.Fatalf("side a line %d spans %v, want %v", i, got, want)
+		}
+		if got := b.HighlightLineAt(lines, i); !reflect.DeepEqual(got, want) {
+			t.Fatalf("side b line %d spans %v, want %v", i, got, want)
+		}
+	}
 }
