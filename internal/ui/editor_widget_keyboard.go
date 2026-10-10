@@ -235,7 +235,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 			if len(cmds) > 0 && e.Undo != nil {
 				e.Undo.Push(&undo.BatchCommand{Commands: cmds})
-				e.bufferDirty = true
+				e.markBufferDirty()
 			}
 		} else {
 			remove := leadingIndentWidth(e.Buf.Lines[e.Cursor.Line], tabSize)
@@ -268,7 +268,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 			if len(cmds) > 0 && e.Undo != nil {
 				e.Undo.Push(&undo.BatchCommand{Commands: cmds})
-				e.bufferDirty = true
+				e.markBufferDirty()
 			}
 		} else {
 			e.exec(&undo.InsertStringCommand{Line: e.Cursor.Line, Col: e.Cursor.Col, Text: indent})
@@ -343,7 +343,7 @@ func (e *EditorPaneWidget) execEnter() {
 	if e.Undo != nil {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
-	e.bufferDirty = true
+	e.markBufferDirty()
 	if e.Folds != nil {
 		e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
 	}

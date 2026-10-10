@@ -2,6 +2,7 @@ package ui
 
 import (
 	"sort"
+	"unsafe"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/cursor"
@@ -70,7 +71,8 @@ type DiffEditorWidget struct {
 	searchRefs         []diffSearchRef
 	searchActiveRight  bool
 
-	pairs []splitPair
+	pairs    []splitPair
+	alignKey splitAlignKey
 
 	editable    bool
 	live        *EditorPaneWidget
@@ -783,7 +785,42 @@ func syncFollower(lead, follow *EditorPaneWidget) {
 	follow.Viewport.LeftCol = lead.Viewport.LeftCol
 }
 
+type splitAlignKey struct {
+	pairs        *splitPair
+	nPairs       int
+	left, right  *DiffOverlay
+	lPane, rPane paneAlignKey
+}
+
+type paneAlignKey struct {
+	lines   *string
+	n       int
+	editGen uint64
+	wrap    bool
+	width   int
+	tabW    int
+}
+
+func paneAlignKeyOf(p *EditorPaneWidget) paneAlignKey {
+	k := paneAlignKey{lines: unsafe.SliceData(p.Buf.Lines), n: len(p.Buf.Lines), editGen: p.editGen, wrap: p.WordWrap, tabW: p.resolveTabSize()}
+	if p.WordWrap {
+		k.width = max(p.Viewport.Width, 1)
+	}
+	return k
+}
+
+// alignSplit recomputes filler rows only when something they depend on
+// changed: setting an overlay invalidates the panes' cached row layouts.
 func (d *DiffEditorWidget) alignSplit() {
+	key := splitAlignKey{
+		pairs: unsafe.SliceData(d.pairs), nPairs: len(d.pairs),
+		left: d.leftBase, right: d.rightBase,
+		lPane: paneAlignKeyOf(d.left), rPane: paneAlignKeyOf(d.right),
+	}
+	if key == d.alignKey && d.left.DiffOverlay == d.leftBase && d.right.DiffOverlay == d.rightBase {
+		return
+	}
+	d.alignKey = key
 	d.leftBase.Fillers, d.rightBase.Fillers = alignSplitFillers(d.pairs, d.left, d.right)
 	d.left.SetDiffOverlay(d.leftBase)
 	d.right.SetDiffOverlay(d.rightBase)
@@ -794,6 +831,7 @@ func (d *DiffEditorWidget) alignSplit() {
 // with filler rows before the next line it shows.
 func alignSplitFillers(pairs []splitPair, left, right *EditorPaneWidget) (lf, rf map[int]int) {
 	lf, rf = make(map[int]int), make(map[int]int)
+	ll, rl := left.layout(), right.layout()
 	segs := func(p *EditorPaneWidget, line int) int {
 		if line < 0 || !p.WordWrap || line >= len(p.Buf.Lines) {
 			return 1
@@ -801,7 +839,10 @@ func alignSplitFillers(pairs []splitPair, left, right *EditorPaneWidget) (lf, rf
 		if _, ok := p.DiffOverlay.label(line); ok {
 			return 1
 		}
-		return len(wrapLineSegments([]rune(p.Buf.Lines[line]), max(p.Viewport.Width, 1), p.resolveTabSize()))
+		if p == left {
+			return ll.textRows(line)
+		}
+		return rl.textRows(line)
 	}
 	nextL := make([]int, len(pairs)+1)
 	nextR := make([]int, len(pairs)+1)

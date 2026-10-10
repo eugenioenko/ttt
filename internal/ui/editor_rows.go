@@ -2,6 +2,7 @@ package ui
 
 import (
 	"sort"
+	"unsafe"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/textwidth"
@@ -29,34 +30,82 @@ type rowLayout struct {
 	phantoms map[int]int
 	labels   map[int]string
 	deleted  map[int][]diff.SideLine
+
+	key    rowLayoutKey
+	starts []int
+	memo   []lineRowsMemo
+	endRow int
+}
+
+// rowLayoutKey identifies what a cached layout was built from. Edits made
+// through the editor bump editGen; the line-slice identity catches buffers
+// replaced wholesale.
+type rowLayoutKey struct {
+	lines      *string
+	n          int
+	editGen    uint64
+	overlay    *DiffOverlay
+	overlayGen uint64
+	visible    *int
+	visN       int
+	wrap       bool
+	width      int
+	tabW       int
+}
+
+type lineRowsMemo struct {
+	text string
+	rows int
 }
 
 func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	if width < 1 {
 		width = 1
 	}
-	l := &rowLayout{
-		lines: e.Buf.Lines,
-		wrap:  e.WordWrap,
-		width: width,
-		tabW:  e.resolveTabSize(),
-	}
 	n := len(e.Buf.Lines)
+	var visible []int
 	folds, hidden := e.hasFolds(), e.DiffOverlay.hasHidden()
 	switch {
 	case folds && hidden:
 		for _, line := range e.Folds.VisibleLines(n) {
 			if !e.DiffOverlay.hidden(line) {
-				l.visible = append(l.visible, line)
+				visible = append(visible, line)
 			}
 		}
-		if l.visible == nil {
-			l.visible = []int{}
+		if visible == nil {
+			visible = []int{}
 		}
 	case folds:
-		l.visible = e.Folds.VisibleLines(n)
+		visible = e.Folds.VisibleLines(n)
 	case hidden:
-		l.visible = e.DiffOverlay.visibleLines(n)
+		visible = e.DiffOverlay.visibleLines(n)
+	}
+	key := rowLayoutKey{
+		lines:      unsafe.SliceData(e.Buf.Lines),
+		n:          n,
+		editGen:    e.editGen,
+		overlay:    e.DiffOverlay,
+		overlayGen: e.overlayGen,
+		visible:    unsafe.SliceData(visible),
+		visN:       len(visible),
+		wrap:       e.WordWrap,
+		tabW:       e.resolveTabSize(),
+	}
+	if e.WordWrap {
+		key.width = width
+	}
+	for _, c := range e.layoutCache {
+		if c != nil && c.key == key {
+			return c
+		}
+	}
+	l := &rowLayout{
+		lines:   e.Buf.Lines,
+		wrap:    e.WordWrap,
+		width:   width,
+		tabW:    key.tabW,
+		visible: visible,
+		key:     key,
 	}
 	if len(e.phantoms) > 0 {
 		l.phantoms = e.phantoms
@@ -65,7 +114,82 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 		l.labels = e.DiffOverlay.Labels
 		l.deleted = e.DiffOverlay.Deleted
 	}
+	slot := 0
+	for i, c := range e.layoutCache {
+		if c == nil {
+			slot = i
+			break
+		}
+		if c.key.wrap == key.wrap && c.key.width == key.width && c.key.tabW == key.tabW {
+			l.memo = c.memo
+			slot = i
+			break
+		}
+		if i == len(e.layoutCache)-1 {
+			slot = e.layoutNext
+			e.layoutNext = (e.layoutNext + 1) % len(e.layoutCache)
+		}
+	}
+	e.layoutCache[slot] = l
 	return l
+}
+
+// lineRows is how many rows a wrapped line takes, reusing the count from the
+// previous layout when the line's text is unchanged; a line shifted by an
+// insert or delete is found at its old index offset by the line delta.
+func (l *rowLayout) lineRows(line int, prev []lineRowsMemo, delta int) int {
+	text := l.lines[line]
+	for _, i := range [2]int{line, line - delta} {
+		if i >= 0 && i < len(prev) && len(prev[i].text) == len(text) && unsafe.StringData(prev[i].text) == unsafe.StringData(text) {
+			l.memo[line] = prev[i]
+			return prev[i].rows
+		}
+	}
+	rows := len(wrapLineSegments([]rune(text), l.width, l.tabW))
+	l.memo[line] = lineRowsMemo{text: text, rows: rows}
+	return rows
+}
+
+// textRows is how many rows a buffer line's text wraps into, phantoms aside.
+func (l *rowLayout) textRows(line int) int {
+	if !l.wrap || line < 0 || line >= l.n() || l.hasLabel(line) {
+		return 1
+	}
+	l.ensure()
+	if m := l.memo[line]; m.rows > 0 {
+		return m.rows
+	}
+	return len(l.segments(line))
+}
+
+func (l *rowLayout) ensure() {
+	if l.starts != nil {
+		return
+	}
+	prev := l.memo
+	if l.wrap {
+		l.memo = make([]lineRowsMemo, l.n())
+	}
+	delta := l.n() - len(prev)
+	count := l.visibleCount()
+	starts := make([]int, count+1)
+	row := 0
+	for i := 0; i < count; i++ {
+		starts[i] = row
+		line := l.visLine(i)
+		row += l.phantomRows(line)
+		switch {
+		case !l.wrap:
+			row++
+		case l.hasLabel(line):
+			row++
+		default:
+			row += l.lineRows(line, prev, delta)
+		}
+	}
+	starts[count] = row
+	l.starts = starts
+	l.endRow = row + l.phantomRows(l.n())
 }
 
 func (e *EditorPaneWidget) layout() *rowLayout {
@@ -76,8 +200,13 @@ func (l *rowLayout) n() int { return len(l.lines) }
 
 func (l *rowLayout) identity() bool { return !l.wrap && l.phantoms == nil }
 
+func (l *rowLayout) hasLabel(line int) bool {
+	_, ok := l.labels[line]
+	return ok
+}
+
 func (l *rowLayout) segments(line int) []int {
-	if _, ok := l.labels[line]; ok {
+	if l.hasLabel(line) {
 		return singleSegment
 	}
 	if l.wrap && line >= 0 && line < l.n() {
@@ -167,19 +296,16 @@ func (l *rowLayout) startRow(line int) int {
 	if line > l.n() {
 		return l.startRow(l.n()) + l.phantomRows(l.n()) + line - l.n() - 1
 	}
-	row := 0
-	end := l.visIndex(line)
-	for i := 0; i < end && i < l.visibleCount(); i++ {
-		row += l.blockRows(l.visLine(i))
-	}
-	return row
+	l.ensure()
+	return l.starts[min(l.visIndex(line), l.visibleCount())]
 }
 
 func (l *rowLayout) total() int {
 	if l.identity() {
 		return l.visibleCount()
 	}
-	return l.startRow(l.n()) + l.phantomRows(l.n())
+	l.ensure()
+	return l.endRow
 }
 
 func (l *rowLayout) rowOf(line, col int) (row, screenCol int) {
@@ -227,15 +353,12 @@ func (l *rowLayout) rowToTop(abs int) (line, offset int) {
 		}
 		return l.visLine(abs), 0
 	}
-	acc := 0
-	for i := 0; i < l.visibleCount(); i++ {
-		ln := l.visLine(i)
-		rows := l.blockRows(ln)
-		if acc+rows > abs {
-			return ln, abs - acc
-		}
-		acc += rows
+	l.ensure()
+	count := l.visibleCount()
+	if i := sort.Search(count, func(i int) bool { return l.starts[i+1] > abs }); i < count {
+		return l.visLine(i), abs - l.starts[i]
 	}
+	acc := l.starts[count]
 	last := l.lastVisibleLine()
 	if abs < acc+l.phantomRows(l.n()) {
 		return last, abs - l.startRow(last)

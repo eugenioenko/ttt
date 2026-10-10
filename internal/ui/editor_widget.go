@@ -87,6 +87,10 @@ type EditorPaneWidget struct {
 	Embedded                bool
 	NoWrapMargin            bool
 	wrapCols                int
+	editGen                 uint64
+	overlayGen              uint64
+	layoutCache             [4]*rowLayout
+	layoutNext              int
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
 	bracketMatchCache       bracketMatch
@@ -297,13 +301,18 @@ func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 	if e.Undo != nil {
 		e.Undo.Push(cmd)
 	}
-	e.bufferDirty = true
+	e.markBufferDirty()
 	if e.Folds != nil && len(e.Buf.Lines) != prevLines {
 		e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
 	}
 }
 
 func (e *EditorPaneWidget) ExecCommand(cmd undo.EditCommand) { e.exec(cmd) }
+
+func (e *EditorPaneWidget) markBufferDirty() {
+	e.bufferDirty = true
+	e.editGen++
+}
 
 func (e *EditorPaneWidget) FlushOnChange() {
 	if e.bufferDirty {

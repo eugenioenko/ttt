@@ -1498,7 +1498,7 @@ func (g *EditorGroupWidget) undoRedoPostProcess() {
 		g.Editor.Folds.SetRanges(fold.ComputeIndentRanges(g.Editor.Buf.Lines))
 		g.Editor.ExpandFoldContaining(g.Editor.Cursor.Line)
 	}
-	g.Editor.bufferDirty = true
+	g.Editor.markBufferDirty()
 }
 
 func (g *EditorGroupWidget) Undo() {
