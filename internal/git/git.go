@@ -788,6 +788,13 @@ func diffPaths(dir string, flags []string, paths ...string) (string, error) {
 }
 
 // ShowIndexFileContext reads a file's stage-0 blob from the index.
+// IsUnmergedContext reports whether path has unresolved merge conflicts, when
+// the index holds its conflict stages instead of a single staged version.
+func IsUnmergedContext(ctx context.Context, dir, path string) bool {
+	out, err := gitCommandContext(ctx, "-C", dir, "--literal-pathspecs", "ls-files", "--unmerged", "--", path).Output()
+	return err == nil && len(bytes.TrimSpace(out)) > 0
+}
+
 func ShowIndexFileContext(ctx context.Context, dir, path string) (string, error) {
 	out, err := ShowIndexFileBytesContext(ctx, dir, path, 0)
 	return string(out), err

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/git"
 )
@@ -59,6 +60,10 @@ func (a *App) ToggleInlineDiff() {
 		return
 	}
 	repoDir, relPath, ok := a.repoPathForFile(path)
+	if ok && git.IsUnmergedContext(context.Background(), repoDir, relPath) {
+		a.StatusNotify(fmt.Sprintf("%s has merge conflicts; no diff to show", relPath))
+		return
+	}
 	if !ok || !a.openInlineDiff(path, repoDir, relPath) {
 		a.StatusNotify("Not in a git repository")
 		return

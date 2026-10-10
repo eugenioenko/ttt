@@ -265,6 +265,12 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 		a.FocusEditorIfEnabled()
 		return
 	}
+	if git.IsUnmergedContext(context.Background(), dir, status.Path) {
+		a.EditorGroup.OpenFile(fullPath)
+		a.StatusNotify(fmt.Sprintf("%s has merge conflicts; opened without a diff", status.Path))
+		a.FocusEditorIfEnabled()
+		return
+	}
 	if staged {
 		a.openStagedDiff(dir, status, extended)
 		return

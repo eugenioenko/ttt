@@ -142,3 +142,33 @@ func TestStagingUpdatesOpenUnstagedDiff(t *testing.T) {
 		t.Fatalf("staged line still diffed against the old index:\n%s", h.screenText())
 	}
 }
+
+func TestConflictedFileOpensWithoutADiff(t *testing.T) {
+	h := newTestHarness(t, 100, 45)
+	defer h.stop()
+	path := filepath.Join(h.dir, "conflict.txt")
+	os.WriteFile(path, []byte("base\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	harnessGit(t, h.dir, "checkout", "-q", "-b", "other")
+	os.WriteFile(path, []byte("other side\n"), 0644)
+	harnessGit(t, h.dir, "commit", "-qam", "other")
+	harnessGit(t, h.dir, "checkout", "-q", "main")
+	os.WriteFile(path, []byte("main side\n"), 0644)
+	harnessGit(t, h.dir, "commit", "-qam", "main")
+	cmd := exec.Command("git", "merge", "-q", "other")
+	cmd.Dir = h.dir
+	if err := cmd.Run(); err == nil {
+		t.Fatal("merge did not conflict")
+	}
+	h.app.RefreshChanges()
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "conflict.txt", Status: "U"}, false, false)
+	h.redraw()
+	if h.app.EditorGroup.ActiveFilePath() != path {
+		t.Fatalf("active file %q, want the conflicted file", h.app.EditorGroup.ActiveFilePath())
+	}
+	if h.app.EditorGroup.ActiveInlineDiff() != nil {
+		t.Fatal("a conflicted file opened as a diff against the index")
+	}
+	h.assertContains("merge conflicts")
+}

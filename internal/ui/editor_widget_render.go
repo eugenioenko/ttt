@@ -149,7 +149,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					}
 				}
 			}
-			if lineIdx < totalLines && lineIdx < len(e.LineChanges) && !isWrapContinuation {
+			if e.DiffOverlay == nil && lineIdx < totalLines && lineIdx < len(e.LineChanges) && !isWrapContinuation {
 				change := e.LineChanges[lineIdx]
 				if change != diff.LineUnchanged {
 					var ch rune

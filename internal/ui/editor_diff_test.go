@@ -214,3 +214,30 @@ func TestReadOnlyDiffSignsToggle(t *testing.T) {
 		t.Fatalf("signs drawn in the minimal gutter: %q", g)
 	}
 }
+
+func TestDiffPanesHideGitGutterMarkers(t *testing.T) {
+	lines := []string{"a", "B", "c"}
+	marker := func(withDiff bool) rune {
+		e := newRowsEditor(lines, 30, 6)
+		e.LineNumbers = true
+		e.GutterStyle = "compact"
+		e.LineChanges = []diff.LineChangeKind{diff.LineUnchanged, diff.LineModified, diff.LineUnchanged}
+		if withDiff {
+			e.SetDiffOverlay(fullLiveDiff([]string{"a", "b", "c"}, lines).liveUnified)
+		}
+		grid := makeGrid(30, 6)
+		e.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 6}))
+		for y := range grid {
+			if grid[y][0].Ch == '▎' {
+				return '▎'
+			}
+		}
+		return 0
+	}
+	if marker(false) != '▎' {
+		t.Fatal("plain editor lost its git gutter marker")
+	}
+	if marker(true) != 0 {
+		t.Fatal("diff pane drew a git gutter marker over its own diff")
+	}
+}

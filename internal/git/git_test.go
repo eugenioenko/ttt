@@ -198,6 +198,34 @@ func TestShowIndexFileContextReadsStagedContent(t *testing.T) {
 	}
 }
 
+func TestIsUnmergedContextDetectsConflicts(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "f.txt", "base\n")
+	gitRun(t, dir, "add", "f.txt")
+	gitRun(t, dir, "commit", "-m", "base")
+	gitRun(t, dir, "checkout", "-q", "-b", "other")
+	writeFile(t, dir, "f.txt", "other\n")
+	gitRun(t, dir, "commit", "-qam", "other")
+	gitRun(t, dir, "checkout", "-q", "-")
+	writeFile(t, dir, "f.txt", "mine\n")
+	writeFile(t, dir, "clean.txt", "clean\n")
+	gitRun(t, dir, "add", "clean.txt")
+	gitRun(t, dir, "commit", "-qam", "mine")
+	if IsUnmergedContext(context.Background(), dir, "f.txt") {
+		t.Fatal("unmerged before the merge")
+	}
+	cmd := exec.Command("git", "-C", dir, "merge", "-q", "other")
+	if cmd.Run() == nil {
+		t.Fatal("merge did not conflict")
+	}
+	if !IsUnmergedContext(context.Background(), dir, "f.txt") {
+		t.Fatal("conflicted file not reported as unmerged")
+	}
+	if IsUnmergedContext(context.Background(), dir, "clean.txt") {
+		t.Fatal("clean file reported as unmerged")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // StatusFiles
 // ---------------------------------------------------------------------------
