@@ -34,7 +34,7 @@ func TestCompactDiffSeparatorUsesSingularLine(t *testing.T) {
 
 func TestCompactDiffSeparatorOmitsAdjacentLines(t *testing.T) {
 	lines := compactLines(t, "--- a/test.go\n+++ b/test.go\n@@ -24,1 +24,1 @@\n line 24\n@@ -25,1 +25,1 @@\n line 25\n")
-	if len(lines) != 3 {
+	if len(lines) != 2 {
 		t.Fatalf("lines = %d, want adjacent diff rows with no separator: %v", len(lines), lines)
 	}
 	if lines[0].Left.Text != "line 24" || lines[1].Left.Text != "line 25" {

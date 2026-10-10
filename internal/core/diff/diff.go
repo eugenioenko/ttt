@@ -113,7 +113,7 @@ func FullDiffLinesContext(ctx context.Context, oldLines, newLines []string) ([]D
 
 func Parse(unified string) FileDiff {
 	var fd FileDiff
-	lines := strings.Split(unified, "\n")
+	lines := strings.Split(strings.TrimSuffix(unified, "\n"), "\n")
 
 	var curHunk *Hunk
 	var delBuf []string
