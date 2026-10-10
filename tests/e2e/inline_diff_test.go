@@ -243,3 +243,36 @@ func TestInlineDiffGapRowExpands(t *testing.T) {
 		t.Fatalf("gap still shown after click:\n%s", h.screenText())
 	}
 }
+
+func TestOpenChangesFocusFollowsFocusOnOpen(t *testing.T) {
+	for _, focusOnOpen := range []bool{false, true} {
+		h := newTestHarness(t, 100, 30)
+		path := filepath.Join(h.dir, "focus.txt")
+		os.WriteFile(path, []byte("one\ntwo\n"), 0644)
+		initializeHarnessRepository(t, h.dir)
+		os.WriteFile(path, []byte("one\nTWO\n"), 0644)
+		h.app.Settings.Editor.FocusOnOpen = focusOnOpen
+		h.app.FocusSidebar()
+		before := h.app.Root.Focused
+
+		h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "focus.txt", Status: "M"}, false)
+		h.redraw()
+		if !h.app.EditorGroup.IsInlineDiffActive() {
+			t.Fatal("inline diff not active")
+		}
+		focusedEditor := h.app.Root.Focused == h.app.EditorGroup
+		if focusOnOpen && !focusedEditor {
+			t.Fatal("focusOnOpen did not focus the editable diff")
+		}
+		if !focusOnOpen && h.app.Root.Focused != before {
+			t.Fatal("opening changes moved focus although focusOnOpen is off")
+		}
+		if focusOnOpen {
+			h.pressRune('!')
+			if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; !strings.Contains(got, "!") {
+				t.Fatalf("typing after open did not reach the diff buffer: %q", got)
+			}
+		}
+		h.stop()
+	}
+}
