@@ -679,7 +679,7 @@ func (d *DiffEditorWidget) scrollToDiffRow(row int, side diffSide, top bool) {
 	p.Cursor.Line = p.Buf.ClampLine(line)
 	p.Cursor.Col = 0
 	l := p.layout()
-	start := l.startRow(p.Cursor.Line) + l.phantoms[p.Cursor.Line]
+	start := l.startRow(p.Cursor.Line) + l.phantomRows(p.Cursor.Line)
 	h := p.Viewport.Height
 	if top {
 		if h > 0 {

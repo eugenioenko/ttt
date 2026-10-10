@@ -256,7 +256,7 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 	}
 	if gutterW > 0 {
 		padded := []rune(e.gutterNumber("", gutterW))
-		if e.LineNumbers && old.Num > 0 {
+		if e.LineNumbers && old.Num > 0 && row.startCol == 0 {
 			padded = []rune(e.gutterNumber(strconv.Itoa(old.Num), gutterW))
 		}
 		for i := 0; i < gutterW; i++ {
@@ -266,7 +266,9 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 			}
 			surface.SetCell(i, y, term.Cell{Ch: ch, Style: term.StyleLineNumber, BgStyle: term.StyleDiffDeleted})
 		}
-		e.renderDiffSign(surface, y, gutterW, diff.Deleted, term.StyleDiffDeleted)
+		if row.startCol == 0 {
+			e.renderDiffSign(surface, y, gutterW, diff.Deleted, term.StyleDiffDeleted)
+		}
 	}
 	var spans []highlight.Span
 	if e.Highlighter != nil && old.Text != "" {
@@ -274,7 +276,7 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 	}
 	leftCol := e.Viewport.LeftCol
 	if e.WordWrap {
-		leftCol = 0
+		leftCol = bufColToVisualCol(old.Text, row.startCol, e.resolveTabSize())
 	}
 	cells := e.renderLineToScreen([]rune(old.Text), spans, false, nil, e.resolveTabSize(), leftCol, editorW)
 	matches := e.DiffOverlay.DeletedMatches[row.bufLine]
