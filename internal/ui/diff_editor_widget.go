@@ -77,8 +77,12 @@ type DiffEditorWidget struct {
 	pairs    []splitPair
 	alignKey splitAlignKey
 
-	oldHL, newHL *highlight.Highlighter
-	docSyntax    diffSyntax
+	docSyntax diffSyntax
+
+	deferPanes bool
+	panesGen   int
+	unifiedGen int
+	splitGen   int
 
 	editable    bool
 	live        *EditorPaneWidget
@@ -162,18 +166,31 @@ func (d *DiffEditorWidget) viewPanes() []*EditorPaneWidget {
 	return d.panes()
 }
 
+// attachHighlighters drops the panes' highlighters; Render creates them for
+// the panes it draws, since loading a grammar is costly and a commit view
+// holds a diff widget per file.
 func (d *DiffEditorWidget) attachHighlighters() {
 	for _, p := range d.panes() {
 		p.Highlighter = nil
-		if d.syntax {
+	}
+	path := ""
+	if d.syntax {
+		path = d.FilePath
+	}
+	d.docSyntax.old.reset(path)
+	d.docSyntax.new.reset(path)
+	d.syncDocSyntax()
+}
+
+func (d *DiffEditorWidget) ensureHighlighters(panes ...*EditorPaneWidget) {
+	if !d.syntax {
+		return
+	}
+	for _, p := range panes {
+		if p != nil && p != d.live && p.Highlighter == nil {
 			p.Highlighter = highlight.New(d.FilePath)
 		}
 	}
-	d.oldHL, d.newHL = nil, nil
-	if d.syntax {
-		d.oldHL, d.newHL = highlight.New(d.FilePath), highlight.New(d.FilePath)
-	}
-	d.syncDocSyntax()
 }
 
 // syncDocSyntax points the whole-file highlighters at the current sides; a
@@ -183,8 +200,8 @@ func (d *DiffEditorWidget) syncDocSyntax() {
 	if !d.editable && !d.contextLoaded {
 		oldLines, newLines = nil, nil
 	}
-	d.docSyntax.old.set(d.oldHL, oldLines)
-	d.docSyntax.new.set(d.newHL, newLines)
+	d.docSyntax.old.set(oldLines)
+	d.docSyntax.new.set(newLines)
 }
 
 func (d *DiffEditorWidget) SetSyntaxHighlight(enabled bool) {
@@ -252,6 +269,7 @@ func (d *DiffEditorWidget) applyMode(mode DiffMode) {
 	}
 	row, _ := d.topDiffRow()
 	d.mode = mode
+	d.ensurePanes()
 	d.ClearSelection()
 	if len(d.SearchMatchesLeft) > 0 || len(d.SearchMatchesRight) > 0 {
 		d.SetSearchMatches(d.SearchMatchesLeft, d.SearchMatchesRight)
@@ -480,31 +498,6 @@ func (d *DiffEditorWidget) rebuild() {
 
 	d.syncDocSyntax()
 	d.unifiedRows = buildUnifiedDiffLines(d.Lines)
-	uLines := make([]string, 0, len(d.unifiedRows))
-	uo := &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Syntax: &d.docSyntax}
-	for i, u := range d.unifiedRows {
-		uLines = append(uLines, u.side.Text)
-		uo.Kinds = append(uo.Kinds, u.side.Kind)
-		uo.Nums = append(uo.Nums, u.side.Num)
-		uo.NewSide = append(uo.NewSide, u.right || d.Lines[u.sourceLine].Left.Kind == diff.Blank)
-		if gap, ok := d.gapByLine[u.sourceLine]; ok {
-			uo.Gaps[i] = gap
-		}
-	}
-
-	d.leftBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
-	d.rightBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
-	var lLines, rLines []string
-	d.leftRows, d.rightRows = nil, nil
-	for i, dl := range d.Lines {
-		lLines, d.leftRows = appendDiffSide(d.leftBase, lLines, d.leftRows, dl.Left, i, d.gapByLine)
-		rLines, d.rightRows = appendDiffSide(d.rightBase, rLines, d.rightRows, dl.Right, i, d.gapByLine)
-	}
-	d.rightBase.NewSide = make([]bool, len(rLines))
-	for i := range d.rightBase.NewSide {
-		d.rightBase.NewSide[i] = true
-	}
-
 	d.pairs = d.pairs[:0]
 	li, ri := 0, 0
 	for _, dl := range d.Lines {
@@ -517,11 +510,67 @@ func (d *DiffEditorWidget) rebuild() {
 		}
 		d.pairs = append(d.pairs, pair)
 	}
-	d.resetPane(d.unified, uLines, uo)
-	d.resetPane(d.left, lLines, d.leftBase)
-	d.resetPane(d.right, rLines, d.rightBase)
+	d.panesGen++
+	if !d.deferPanes {
+		d.buildUnifiedPane()
+		d.buildSplitPanes()
+	}
 	d.applyOverlayOptions()
 	d.ClearSearch()
+}
+
+// ensurePanes builds the current mode's panes for a widget that defers them.
+// A commit view holds a diff widget per file and only draws the visible ones,
+// so it builds panes on demand rather than for every file and both modes.
+func (d *DiffEditorWidget) ensurePanes() {
+	if !d.deferPanes || d.editable {
+		return
+	}
+	if d.IsUnified() {
+		if d.unifiedGen != d.panesGen {
+			d.buildUnifiedPane()
+			d.applyOverlayOptions()
+		}
+		return
+	}
+	if d.splitGen != d.panesGen {
+		d.buildSplitPanes()
+		d.applyOverlayOptions()
+	}
+}
+
+func (d *DiffEditorWidget) buildUnifiedPane() {
+	d.unifiedGen = d.panesGen
+	uLines := make([]string, 0, len(d.unifiedRows))
+	uo := &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Syntax: &d.docSyntax}
+	for i, u := range d.unifiedRows {
+		uLines = append(uLines, u.side.Text)
+		uo.Kinds = append(uo.Kinds, u.side.Kind)
+		uo.Nums = append(uo.Nums, u.side.Num)
+		uo.NewSide = append(uo.NewSide, u.right || d.Lines[u.sourceLine].Left.Kind == diff.Blank)
+		if gap, ok := d.gapByLine[u.sourceLine]; ok {
+			uo.Gaps[i] = gap
+		}
+	}
+	d.resetPane(d.unified, uLines, uo)
+}
+
+func (d *DiffEditorWidget) buildSplitPanes() {
+	d.splitGen = d.panesGen
+	d.leftBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
+	d.rightBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
+	var lLines, rLines []string
+	d.leftRows, d.rightRows = nil, nil
+	for i, dl := range d.Lines {
+		lLines, d.leftRows = appendDiffSide(d.leftBase, lLines, d.leftRows, dl.Left, i, d.gapByLine)
+		rLines, d.rightRows = appendDiffSide(d.rightBase, rLines, d.rightRows, dl.Right, i, d.gapByLine)
+	}
+	d.rightBase.NewSide = make([]bool, len(rLines))
+	for i := range d.rightBase.NewSide {
+		d.rightBase.NewSide[i] = true
+	}
+	d.resetPane(d.left, lLines, d.leftBase)
+	d.resetPane(d.right, rLines, d.rightBase)
 }
 
 func appendDiffSide(o *DiffOverlay, lines []string, rows []int, side diff.SideLine, row int, gaps map[int]int) ([]string, []int) {
@@ -557,6 +606,7 @@ func (d *DiffEditorWidget) resetPane(p *EditorPaneWidget, lines []string, o *Dif
 }
 
 func (d *DiffEditorWidget) lead() *EditorPaneWidget {
+	d.ensurePanes()
 	if d.IsUnified() {
 		return d.unified
 	}
@@ -761,10 +811,12 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 		if !d.editable {
 			d.unified.Passive = !d.focused
 		}
+		d.ensureHighlighters(d.unified)
 		d.unified.SetRect(r)
 		d.unified.Render(surface)
 		return
 	}
+	d.ensureHighlighters(d.left, d.right)
 	divider := (w - 1) / 2
 	if divider < 1 {
 		d.right.SetRect(r)
@@ -950,6 +1002,7 @@ func (d *DiffEditorWidget) CursorPosition() (int, int, bool) {
 }
 
 func (d *DiffEditorWidget) HandleEvent(ev tcell.Event) EventResult {
+	d.ensurePanes()
 	if d.extendedFetching || d.Loading {
 		return EventIgnored
 	}
@@ -1038,6 +1091,7 @@ func (d *DiffEditorWidget) ClearSelection() {
 }
 
 func (d *DiffEditorWidget) CopySelection() string {
+	d.ensurePanes()
 	p := d.lead()
 	if !p.Selection.Active {
 		return ""

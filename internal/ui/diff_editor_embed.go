@@ -26,12 +26,20 @@ func (d *DiffEditorWidget) setEmbedded() {
 	for _, p := range d.panes() {
 		p.Embedded = true
 	}
+	d.deferPanes = true
 }
 
 // embedRows lays the diff out at width w for a host that stacks several
 // diffs in one scroll area, and returns how many screen rows it takes.
 func (d *DiffEditorWidget) embedRows(w int) int {
 	wrap := d.IsWrapped()
+	if !wrap {
+		if d.IsUnified() {
+			return max(len(d.unifiedRows), 1)
+		}
+		return max(len(d.pairs), 1)
+	}
+	d.ensurePanes()
 	for _, p := range d.panes() {
 		p.WordWrap = wrap
 	}
@@ -59,6 +67,7 @@ func (d *DiffEditorWidget) embedRows(w int) int {
 // renderEmbedded draws rows [top, top+rect.H) of the diff laid out by
 // embedRows into surface, which covers rect on screen.
 func (d *DiffEditorWidget) renderEmbedded(surface Surface, rect Rect, top, leftCol int) {
+	d.ensurePanes()
 	d.SetRect(rect)
 	for _, p := range d.panes() {
 		p.hScrollPending = false
@@ -73,6 +82,7 @@ func (d *DiffEditorWidget) renderEmbedded(surface Surface, rect Rect, top, leftC
 }
 
 func (d *DiffEditorWidget) gapAtPoint(x, y int) (int, bool) {
+	d.ensurePanes()
 	p := d.paneAt(x, y)
 	if p == nil {
 		return 0, false
@@ -158,6 +168,7 @@ func (d *DiffEditorWidget) captureSelection() (diffSelectionMark, bool) {
 }
 
 func (d *DiffEditorWidget) restoreSelection(m diffSelectionMark) bool {
+	d.ensurePanes()
 	p := d.paneByIndex(m.pane)
 	line := func(row int, right bool) int {
 		if p == d.unified {

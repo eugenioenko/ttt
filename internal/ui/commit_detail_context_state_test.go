@@ -83,6 +83,7 @@ func TestCommitDetailCollapsedRowsAreNotSelectableOrCopied(t *testing.T) {
 		Diff: diff.Parse("--- a/file.txt\n+++ b/file.txt\n@@ -1,1 +1,1 @@\n-old one\n+new one\n@@ -10,1 +10,1 @@\n-old ten\n+new ten\n"),
 	}}, "")
 	detail.SetMode(DiffModeUnified)
+	renderDetail(detail, 60, 20)
 	p := detail.Files[0].view.unified
 	gapLine := -1
 	for line := range p.Buf.Lines {
