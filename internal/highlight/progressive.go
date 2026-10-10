@@ -2,6 +2,7 @@ package highlight
 
 import (
 	"sync"
+	"sync/atomic"
 
 	textmate "github.com/eugenioenko/textmate-go"
 )
@@ -12,6 +13,12 @@ import (
 const progressiveSlack = 64
 
 const warmChunk = 16
+
+var warming atomic.Int64
+
+// Warming reports how many highlighters are tokenizing in the background, so
+// a benchmark can time steady state instead of a diff that is still settling.
+func Warming() int { return int(warming.Load()) }
 
 // SetProgressive makes HighlightLineAt answer lines far below the tokenized
 // prefix with single-line highlighting while a goroutine tokenizes down to
@@ -82,6 +89,7 @@ func (h *Highlighter) EndPass() {
 	w.running = w.running || start
 	w.mu.Unlock()
 	if start {
+		warming.Add(1)
 		go w.run(h.doc, p.notify)
 	}
 }
@@ -175,6 +183,7 @@ func (w *warmer) run(doc *textmate.Document, notify func()) {
 		if reached >= target {
 			w.running = false
 			w.mu.Unlock()
+			warming.Add(-1)
 			notify()
 			return
 		}
