@@ -93,6 +93,7 @@ type EditorGroupWidget struct {
 	DiffWordWrap            bool
 	DiffHighContrast        bool
 	DiffSigns               bool
+	DiffSignsColor          bool
 	DiffCollapsedEmphasis   bool
 	ImageProtocol           string
 	ImageCellW              int
@@ -579,6 +580,7 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	surface.SetDiffHighContrast(g.DiffHighContrast)
 	if d, ok := surface.(diffSignsSurface); ok {
 		d.SetDiffSigns(g.DiffSigns)
+		d.SetDiffSignsColor(g.DiffSignsColor)
 	}
 	surface.SetDiffCollapsedEmphasis(g.DiffCollapsedEmphasis)
 }
@@ -608,8 +610,18 @@ func (g *EditorGroupWidget) SetDiffSigns(enabled bool) {
 	}
 }
 
+func (g *EditorGroupWidget) SetDiffSignsColor(enabled bool) {
+	g.DiffSignsColor = enabled
+	for _, surface := range g.diffSurfaces() {
+		if d, ok := surface.(diffSignsSurface); ok {
+			d.SetDiffSignsColor(enabled)
+		}
+	}
+}
+
 type diffSignsSurface interface {
 	SetDiffSigns(bool)
+	SetDiffSignsColor(bool)
 	setGutterStyle(string)
 }
 

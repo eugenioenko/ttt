@@ -69,8 +69,8 @@ func TestCompactDiffGapsBeforeFirstAndAfterLastHunk(t *testing.T) {
 func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
 	grid := makeGrid(10, 2)
 	surface := NewRenderSurface(grid, Rect{W: 10, H: 2})
-	renderDiffGutterWithSigns(surface, 0, 0, 5, diff.SideLine{Num: 12, Kind: diff.Deleted}, term.StyleDefault, true)
-	renderDiffGutterWithSigns(surface, 0, 1, 5, diff.SideLine{Num: 13, Kind: diff.Added}, term.StyleDefault, true)
+	renderDiffGutterWithSigns(surface, 0, 0, 5, diff.SideLine{Num: 12, Kind: diff.Deleted}, term.StyleDefault, true, true)
+	renderDiffGutterWithSigns(surface, 0, 1, 5, diff.SideLine{Num: 13, Kind: diff.Added}, term.StyleDefault, true, true)
 
 	if deleted, added := cellRow(grid, 0), cellRow(grid, 1); !strings.Contains(deleted, "12 −") || !strings.Contains(added, "13 +") {
 		t.Fatalf("changed gutters do not show line markers:\n%s\n%s", deleted, added)
@@ -94,8 +94,8 @@ func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
 func TestDiffGutterRightAlignsLineNumbers(t *testing.T) {
 	grid := makeGrid(12, 1)
 	surface := NewRenderSurface(grid, Rect{W: 12, H: 1})
-	renderDiffGutterWithSigns(surface, 0, 0, 6, diff.SideLine{Num: 1, Kind: diff.Added}, term.StyleDefault, true)
-	renderDiffGutterWithSigns(surface, 6, 0, 6, diff.SideLine{Num: 123, Kind: diff.Deleted}, term.StyleDefault, true)
+	renderDiffGutterWithSigns(surface, 0, 0, 6, diff.SideLine{Num: 1, Kind: diff.Added}, term.StyleDefault, true, true)
+	renderDiffGutterWithSigns(surface, 6, 0, 6, diff.SideLine{Num: 123, Kind: diff.Deleted}, term.StyleDefault, true, true)
 	if got := cellRow(grid, 0); got != "   1 + 123 −" {
 		t.Fatalf("aligned diff gutters = %q, want right-aligned line numbers", got)
 	}

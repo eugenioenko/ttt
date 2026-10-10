@@ -43,6 +43,7 @@ type DiffEditorWidget struct {
 	wrapExplicit    bool
 	highContrast    bool
 	signs           bool
+	signsColor      bool
 	emphasizeGaps   bool
 	hoveredGap      int
 	minGutter       int
@@ -133,6 +134,7 @@ func NewDiffEditorWidget(filePath string, fd diff.FileDiff, oldLines, newLines [
 		hoveredGap:    -1,
 		syntax:        true,
 		signs:         true,
+		signsColor:    true,
 		unified:       newDiffPane(),
 		left:          newDiffPane(),
 		right:         newDiffPane(),
@@ -341,6 +343,11 @@ func (d *DiffEditorWidget) SetDiffSigns(enabled bool) {
 	d.applyOverlayOptions()
 }
 
+func (d *DiffEditorWidget) SetDiffSignsColor(enabled bool) {
+	d.signsColor = enabled
+	d.applyOverlayOptions()
+}
+
 func (d *DiffEditorWidget) setGutterStyle(style string) {
 	for _, p := range d.panes() {
 		p.GutterStyle = style
@@ -361,6 +368,7 @@ func (d *DiffEditorWidget) applyOverlayOptions() {
 		if o != nil {
 			o.HighContrast = d.highContrast
 			o.Signs = d.signs
+			o.SignsColor = d.signsColor
 			o.EmphasizeGaps = d.emphasizeGaps
 			o.HoveredGap = d.hoveredGap
 			o.MinGutter = d.minGutter

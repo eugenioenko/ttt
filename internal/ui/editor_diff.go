@@ -31,6 +31,7 @@ type DiffOverlay struct {
 	HighContrast  bool
 	EmphasizeGaps bool
 	Signs         bool
+	SignsColor    bool
 	MinGutter     int
 
 	// DeletedMatches holds find matches on deleted rows, keyed like Deleted;
@@ -230,7 +231,7 @@ func (e *EditorPaneWidget) renderDiffGutterRow(surface Surface, y, gutterW, line
 	if !continuation && line < len(e.Buf.Lines) {
 		side = diff.SideLine{Num: o.num(line), Kind: o.kind(line)}
 	}
-	renderDiffGutterWithSigns(surface, 0, y, gutterW, side, collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line)), e.diffSignCol(gutterW) >= 0)
+	renderDiffGutterWithSigns(surface, 0, y, gutterW, side, collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line)), e.diffSignCol(gutterW) >= 0, o.SignsColor)
 }
 
 // diffSignCol is where an editor-layout gutter draws +, − and ▶, or -1 when
@@ -251,11 +252,15 @@ func (e *EditorPaneWidget) renderDiffSign(surface Surface, y, gutterW int, kind 
 	if col < 0 {
 		return
 	}
+	added, deleted := term.StyleGutterAdded, term.StyleGutterDeleted
+	if !e.DiffOverlay.SignsColor {
+		added, deleted = term.StyleLineNumber, term.StyleLineNumber
+	}
 	switch kind {
 	case diff.Added:
-		surface.SetCell(col, y, term.Cell{Ch: '+', Style: term.StyleGutterAdded, BgStyle: bg})
+		surface.SetCell(col, y, term.Cell{Ch: '+', Style: added, BgStyle: bg})
 	case diff.Deleted:
-		surface.SetCell(col, y, term.Cell{Ch: '−', Style: term.StyleGutterDeleted, BgStyle: bg})
+		surface.SetCell(col, y, term.Cell{Ch: '−', Style: deleted, BgStyle: bg})
 	case diff.Collapsed:
 		surface.SetCell(col, y, term.Cell{Ch: '▶', Style: term.StyleLineNumber, BgStyle: bg})
 	}
@@ -391,7 +396,7 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 	}
 }
 
-func renderDiffGutterWithSigns(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style, signs bool) {
+func renderDiffGutterWithSigns(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style, signs, colored bool) {
 	number := ""
 	if line.Num > 0 {
 		number = fmt.Sprintf("%d", line.Num)
@@ -416,6 +421,9 @@ func renderDiffGutterWithSigns(surface Surface, x, y, width int, line diff.SideL
 	}
 	if !signs {
 		marker = ' '
+	}
+	if !colored && (line.Kind == diff.Added || line.Kind == diff.Deleted) {
+		style = term.StyleLineNumber
 	}
 	text := fmt.Sprintf("%*s %c", width-2, number, marker)
 	for column, ch := range []rune(text) {

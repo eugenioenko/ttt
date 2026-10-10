@@ -32,6 +32,7 @@ func NewEditableDiffWidget(filePath string, base []string, lines []diff.DiffLine
 		hoveredGap:    -1,
 		syntax:        true,
 		signs:         true,
+		signsColor:    true,
 		left:          newDiffPane(),
 		liveCursor:    -1,
 		liveActive:    -1,

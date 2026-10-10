@@ -85,6 +85,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.SetDiffHighContrast(s.Editor.DiffHighContrast)
 	a.EditorGroup.SetDiffCollapsedEmphasis(s.Editor.DiffCollapsedEmphasis)
 	a.EditorGroup.SetDiffSigns(s.Editor.IsDiffSignsEnabled())
+	a.EditorGroup.SetDiffSignsColor(s.Editor.IsDiffSignsColorEnabled())
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
 	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
 	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)

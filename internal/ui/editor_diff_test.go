@@ -215,6 +215,51 @@ func TestReadOnlyDiffSignsToggle(t *testing.T) {
 	}
 }
 
+func TestDiffSignsColor(t *testing.T) {
+	signStyles := func(colored bool) (deleted, added term.Style) {
+		e := newRowsEditor([]string{"a", "B", "c"}, 30, 6)
+		e.LineNumbers = true
+		e.GutterStyle = "compact"
+		d := fullLiveDiff([]string{"a", "b", "c"}, []string{"a", "B", "c"})
+		d.SetDiffSignsColor(colored)
+		e.SetDiffOverlay(d.liveUnified)
+		grid := makeGrid(30, 6)
+		e.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 6}))
+		col := e.diffSignCol(e.GutterWidth())
+		return grid[1][col].Style, grid[2][col].Style
+	}
+	if del, add := signStyles(true); del != term.StyleGutterDeleted || add != term.StyleGutterAdded {
+		t.Fatalf("colored signs: deleted %v, added %v", del, add)
+	}
+	if del, add := signStyles(false); del != term.StyleLineNumber || add != term.StyleLineNumber {
+		t.Fatalf("plain signs: deleted %v, added %v, want line number style", del, add)
+	}
+
+	d := NewDiffEditorWidget("f.txt", diff.FileDiff{}, []string{"a", "b"}, []string{"a", "B"}, true)
+	d.SetMode(DiffModeUnified)
+	readOnlyStyles := func() map[rune]term.Style {
+		grid := makeGrid(30, 4)
+		d.SetRect(Rect{X: 0, Y: 0, W: 30, H: 4})
+		d.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 4}))
+		styles := map[rune]term.Style{}
+		for y := 0; y < 4; y++ {
+			for x := 0; x < d.unified.GutterWidth(); x++ {
+				if c := grid[y][x]; c.Ch == '+' || c.Ch == '−' {
+					styles[c.Ch] = c.Style
+				}
+			}
+		}
+		return styles
+	}
+	if s := readOnlyStyles(); s['+'] != term.StyleGutterAdded || s['−'] != term.StyleGutterDeleted {
+		t.Fatalf("read-only colored signs: %v", s)
+	}
+	d.SetDiffSignsColor(false)
+	if s := readOnlyStyles(); s['+'] != term.StyleLineNumber || s['−'] != term.StyleLineNumber {
+		t.Fatalf("read-only plain signs: %v", s)
+	}
+}
+
 func TestDiffPanesHideGitGutterMarkers(t *testing.T) {
 	lines := []string{"a", "B", "c"}
 	marker := func(withDiff bool) rune {
