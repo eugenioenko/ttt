@@ -1368,7 +1368,7 @@ func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []s
 	}
 	newBuf := &buffer.Buffer{Lines: lines}
 	if len(lines) == 0 {
-		newBuf.Lines = []string{""}
+		newBuf.SetLines([]string{""})
 	}
 	tabSize := g.TabSize
 	detected := buffer.DetectIndent(newBuf.Lines)
