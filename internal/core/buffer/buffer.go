@@ -87,6 +87,8 @@ type Buffer struct {
 	diskModTime time.Time
 	diskSize    int64
 	diskInfoSet bool
+
+	log changeLog
 }
 
 func (b *Buffer) ClampLine(line int) int {
@@ -110,7 +112,7 @@ func (b *Buffer) InsertRune(line, col int, r rune) {
 	}
 	runes := []rune(l)
 	runes = append(runes[:col], append([]rune{r}, runes[col:]...)...)
-	b.Lines[line] = string(runes)
+	b.SetLine(line, string(runes))
 	b.Dirty = true
 }
 
@@ -125,7 +127,7 @@ func (b *Buffer) DeleteRune(line, col int) {
 		return
 	}
 	runes = append(runes[:col], runes[col+1:]...)
-	b.Lines[line] = string(runes)
+	b.SetLine(line, string(runes))
 	b.Dirty = true
 }
 
@@ -134,7 +136,7 @@ func (b *Buffer) InsertLine(idx int, text string) {
 	if idx < 0 || idx > len(b.Lines) {
 		return
 	}
-	b.Lines = append(b.Lines[:idx], append([]string{text}, b.Lines[idx:]...)...)
+	b.Splice(idx, 0, text)
 	b.Dirty = true
 }
 
@@ -143,6 +145,6 @@ func (b *Buffer) DeleteLine(idx int) {
 	if idx < 0 || idx >= len(b.Lines) {
 		return
 	}
-	b.Lines = append(b.Lines[:idx], b.Lines[idx+1:]...)
+	b.Splice(idx, 1)
 	b.Dirty = true
 }

@@ -38,7 +38,7 @@ func (b *Buffer) LoadFile(filename string) error {
 	if b.ShowTrailingNewline && (len(lines) == 0 || lines[len(lines)-1] != "") {
 		lines = append(lines, "")
 	}
-	b.Lines = lines
+	b.SetLines(lines)
 	b.Dirty = false
 	if info, err := f.Stat(); err == nil {
 		b.recordDiskInfo(info)

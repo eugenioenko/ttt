@@ -590,7 +590,7 @@ func (d *DiffEditorWidget) resetPane(p *EditorPaneWidget, lines []string, o *Dif
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
-	p.Buf.Lines = lines
+	p.Buf.SetLines(lines)
 	p.Cursor.Line = p.Buf.ClampLine(p.Cursor.Line)
 	if n := len([]rune(lines[p.Cursor.Line])); p.Cursor.Col > n {
 		p.Cursor.Col = n
