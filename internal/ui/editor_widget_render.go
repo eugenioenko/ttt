@@ -106,6 +106,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			e.renderPhantomRow(surface, y, gutterW, editorW, row)
 			continue
 		}
+		if label, ok := e.DiffOverlay.label(lineIdx); ok && !isWrapContinuation {
+			e.renderGapRow(surface, y, gutterW, editorW, lineIdx, label)
+			continue
+		}
 
 		if gutterW > 0 && e.DiffOverlay.diffGutter() {
 			e.renderDiffGutterRow(surface, y, gutterW, lineIdx, isWrapContinuation)

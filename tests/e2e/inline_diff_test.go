@@ -178,3 +178,68 @@ func TestSplitInlineDiffWrapsInStepAndCopiesFromHead(t *testing.T) {
 		t.Fatalf("copy from HEAD pane = %q", got)
 	}
 }
+
+func TestInlineDiffSuspendsFoldsAndRestoresThem(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	path := filepath.Join(h.dir, "fold.txt")
+	content := "top\nblock:\n    inner one\n    inner two\nend\n"
+	os.WriteFile(path, []byte(content), 0644)
+	initializeHarnessRepository(t, h.dir)
+	os.WriteFile(path, []byte(strings.Replace(content, "top", "TOP", 1)), 0644)
+
+	h.app.EditorGroup.OpenFile(path)
+	h.app.EditorGroup.GoToLine(2)
+	h.exec("fold.toggle")
+	h.redraw()
+	if strings.Contains(h.screenText(), "inner one") {
+		t.Fatal("fold did not collapse before opening the diff")
+	}
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "fold.txt", Status: "M"}, false)
+	h.redraw()
+	h.assertContains("inner one")
+	h.exec("fold.collapseAll")
+	h.redraw()
+	h.assertContains("inner one")
+
+	h.exec("editor.toggleDiff")
+	h.redraw()
+	if strings.Contains(h.screenText(), "inner one") {
+		t.Fatal("file folds not restored after leaving the diff")
+	}
+}
+
+func TestInlineDiffGapRowExpands(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	path := filepath.Join(h.dir, "gaps.txt")
+	var old []string
+	for i := 1; i <= 40; i++ {
+		old = append(old, fmt.Sprintf("row %02d", i))
+	}
+	cur := append([]string(nil), old...)
+	cur[19] = "row 20 edited"
+	os.WriteFile(path, []byte(strings.Join(old, "\n")+"\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "gaps.txt", Status: "M"}, false)
+	h.redraw()
+	h.assertContains("⋯ 16 lines ⋯")
+	if strings.Contains(h.screenText(), "row 05") {
+		t.Fatalf("unchanged rows not collapsed:\n%s", h.screenText())
+	}
+	for y := 0; y < 30; y++ {
+		row := h.screenRow(y)
+		if i := strings.Index(row, "⋯ 16 lines ⋯"); i >= 0 {
+			h.click(len([]rune(row[:i]))+2, y)
+			break
+		}
+	}
+	h.redraw()
+	h.assertContains("row 05")
+	if strings.Contains(h.screenText(), "⋯ 16 lines ⋯") {
+		t.Fatalf("gap still shown after click:\n%s", h.screenText())
+	}
+}

@@ -5,11 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eugenioenko/ttt/internal/core/buffer"
-	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/term"
-	"github.com/eugenioenko/ttt/internal/view"
 )
 
 func deletedTexts(o *DiffOverlay) map[int][]string {
@@ -22,7 +19,14 @@ func deletedTexts(o *DiffOverlay) map[int][]string {
 	return out
 }
 
-func TestNewDiffOverlay(t *testing.T) {
+func fullLiveDiff(old, cur []string) *DiffEditorWidget {
+	d := NewEditableDiffWidget("f.txt", old, diff.FullDiffLines(old, cur))
+	d.SetMode(DiffModeUnified)
+	d.SetContextMode(DiffContextFullFile)
+	return d
+}
+
+func TestEditableDiffOverlay(t *testing.T) {
 	C, A := diff.Context, diff.Added
 	tests := []struct {
 		name      string
@@ -43,7 +47,7 @@ func TestNewDiffOverlay(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			o := NewDiffOverlay(diff.FullDiffLines(tt.old, tt.new))
+			o := fullLiveDiff(tt.old, tt.new).liveUnified
 			if !reflect.DeepEqual(o.Kinds, tt.wantKinds) {
 				t.Errorf("kinds = %v, want %v", o.Kinds, tt.wantKinds)
 			}
@@ -59,7 +63,7 @@ func TestEditorRendersDiffOverlay(t *testing.T) {
 	newLines := []string{"a", "B", "c", "e", "f"}
 	e := newRowsEditor(newLines, 20, 8)
 	e.LineNumbers = true
-	e.SetDiffOverlay(NewDiffOverlay(diff.FullDiffLines(oldLines, newLines)))
+	e.SetDiffOverlay(fullLiveDiff(oldLines, newLines).liveUnified)
 
 	grid := makeGrid(20, 8)
 	e.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 20, H: 8}))
@@ -98,32 +102,42 @@ func TestEditorRendersDiffOverlay(t *testing.T) {
 	}
 }
 
-func TestNewSplitDiffOverlaysAlignRows(t *testing.T) {
+func TestEditableSplitAlignsRows(t *testing.T) {
 	old := []string{"a", "b", "c", "d", "e"}
 	cur := []string{"a", "B", "x", "y", "c", "e", "f"}
-	left, right := NewSplitDiffOverlays(diff.FullDiffLines(old, cur))
-	if len(left.Kinds) != len(old) || len(right.Kinds) != len(cur) {
-		t.Fatalf("kinds: left %d right %d", len(left.Kinds), len(right.Kinds))
-	}
-	rows := func(o *DiffOverlay) int {
-		n := len(o.Kinds)
-		for _, f := range o.Fillers {
-			n += f
-		}
-		return n
-	}
-	if rows(left) != rows(right) {
-		t.Fatalf("row totals differ: left %d right %d", rows(left), rows(right))
-	}
+	d := fullLiveDiff(old, cur)
+	d.SetMode(DiffModeSplit)
+	e := newRowsEditor(cur, 30, 10)
+	e.LineNumbers = true
+	d.bind(e)
+	d.SetRect(Rect{X: 0, Y: 0, W: 61, H: 10})
+	grid := makeGrid(61, 10)
+	d.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 61, H: 10}))
 
-	leftPane := NewEditorPaneWidget(&buffer.Buffer{Lines: old}, &cursor.Cursor{}, &view.Viewport{Width: 20})
-	rightPane := NewEditorPaneWidget(&buffer.Buffer{Lines: cur}, &cursor.Cursor{}, &view.Viewport{Width: 20})
-	leftPane.SetDiffOverlay(left)
-	rightPane.SetDiffOverlay(right)
-	ll, rl := leftPane.layout(), rightPane.layout()
-	for _, pair := range [][2]int{{0, 0}, {2, 4}, {4, 5}} {
-		if l, r := ll.startRow(pair[0])+leftPane.phantoms[pair[0]], rl.startRow(pair[1])+rightPane.phantoms[pair[1]]; l != r {
-			t.Fatalf("old line %d at row %d, new line %d at row %d", pair[0], l, pair[1], r)
+	row := func(y int) string {
+		var sb strings.Builder
+		for x := 0; x < 61; x++ {
+			sb.WriteRune(grid[y][x].Ch)
+		}
+		return sb.String()
+	}
+	for _, text := range []string{"a", "c", "e"} {
+		found := false
+		for y := 0; y < 10; y++ {
+			r := row(y)
+			left, right := r[:strings.IndexRune(r, '│')], r[strings.IndexRune(r, '│'):]
+			if strings.Contains(left, " "+text+" ") && strings.Contains(right, " "+text+" ") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("context line %q not on one row in both panes:\n%s", text, strings.Join(func() []string {
+				var out []string
+				for y := 0; y < 10; y++ {
+					out = append(out, row(y))
+				}
+				return out
+			}(), "\n"))
 		}
 	}
 }

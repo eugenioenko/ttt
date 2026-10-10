@@ -15,9 +15,11 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-// DiffEditorWidget shows a read-only diff with editor panes over synthetic
-// buffers. Unified mode holds old and new lines as real buffer lines; split
-// mode holds each side in its own pane, aligned with filler rows.
+// DiffEditorWidget shows a diff with editor panes. A read-only diff uses
+// synthetic buffers: unified mode holds old and new lines as real buffer
+// lines, split mode holds each side in its own pane, aligned with filler rows.
+// An editable diff shows the file's own buffer, with removed lines as phantom
+// rows in unified mode and a read-only base pane beside it in split mode.
 type DiffEditorWidget struct {
 	BaseWidget
 	FilePath string
@@ -65,6 +67,19 @@ type DiffEditorWidget struct {
 	SearchMatchesRight []FindMatch
 	searchRefs         []diffSearchRef
 	searchActiveRight  bool
+
+	pairs []splitPair
+
+	editable    bool
+	live        *EditorPaneWidget
+	full        []diff.DiffLine
+	revealed    [][2]int
+	liveRows    []int
+	liveGapLen  map[int]int
+	liveSpans   [][2]int
+	liveN       int
+	liveCursor  int
+	liveUnified *DiffOverlay
 }
 
 type diffSearchRef struct {
@@ -109,8 +124,23 @@ func newDiffPane() *EditorPaneWidget {
 	return p
 }
 
+// panes are the panes the widget owns; an editable diff borrows its live
+// pane from the editor group and must leave that pane's state alone.
 func (d *DiffEditorWidget) panes() []*EditorPaneWidget {
+	if d.editable {
+		return []*EditorPaneWidget{d.left}
+	}
 	return []*EditorPaneWidget{d.unified, d.left, d.right}
+}
+
+func (d *DiffEditorWidget) viewPanes() []*EditorPaneWidget {
+	if d.editable {
+		if d.live == nil {
+			return []*EditorPaneWidget{d.left}
+		}
+		return []*EditorPaneWidget{d.left, d.live}
+	}
+	return d.panes()
 }
 
 func (d *DiffEditorWidget) attachHighlighters() {
@@ -177,6 +207,14 @@ func (d *DiffEditorWidget) applyMode(mode DiffMode) {
 	if mode == d.mode {
 		return
 	}
+	if d.editable {
+		d.mode = mode
+		d.focusLeft = false
+		if d.live != nil {
+			d.live.SetDiffOverlay(d.liveOverlay())
+		}
+		return
+	}
 	row, _ := d.topDiffRow()
 	d.mode = mode
 	d.ClearSelection()
@@ -209,6 +247,14 @@ func (d *DiffEditorWidget) applyWrapMode(mode DiffWrapMode) {
 	if mode == d.wrapMode {
 		return
 	}
+	if d.editable {
+		d.wrapMode = mode
+		for _, p := range d.viewPanes() {
+			p.WordWrap = mode == DiffWrapOn
+			p.Viewport.LeftCol = 0
+		}
+		return
+	}
 	row, right := d.topDiffRow()
 	side := diffAnySide
 	if d.IsUnified() {
@@ -234,7 +280,7 @@ func (d *DiffEditorWidget) SetDiffCollapsedEmphasis(enabled bool) {
 }
 
 func (d *DiffEditorWidget) applyOverlayOptions() {
-	for _, p := range d.panes() {
+	for _, p := range d.viewPanes() {
 		if o := p.DiffOverlay; o != nil {
 			o.HighContrast = d.highContrast
 			o.EmphasizeGaps = d.emphasizeGaps
@@ -267,6 +313,16 @@ func (d *DiffEditorWidget) SetExtendedFetcher(fetch func(dv *DiffEditorWidget)) 
 }
 
 func (d *DiffEditorWidget) applyExtended(extended bool) {
+	if d.editable {
+		d.extended = extended
+		d.contextMode = DiffContextChangesOnly
+		if extended {
+			d.contextMode = DiffContextFullFile
+		}
+		d.revealed = nil
+		d.rebuild()
+		return
+	}
 	row, right := d.topDiffRow()
 	anchor := d.anchorFor(row, right)
 	d.extended = extended
@@ -332,6 +388,13 @@ func (d *DiffEditorWidget) startExtendedFetch(gap int) bool {
 
 func (d *DiffEditorWidget) expandContextGap(gap int) {
 	d.hoveredGap = -1
+	if d.editable {
+		if gap >= 0 && gap < len(d.liveSpans) {
+			d.revealed = append(d.revealed, d.liveSpans[gap])
+			d.rebuild()
+		}
+		return
+	}
 	if gap < 0 || d.expandedGaps[gap] || d.extendedFetching {
 		return
 	}
@@ -350,6 +413,10 @@ func (d *DiffEditorWidget) expandContextGap(gap int) {
 }
 
 func (d *DiffEditorWidget) rebuild() {
+	if d.editable {
+		d.rebuildLive()
+		return
+	}
 	if d.extended && d.contextLoaded {
 		d.Lines = diff.FullDiffLines(d.oldLines, d.newLines)
 		d.gapByLine = nil
@@ -380,6 +447,18 @@ func (d *DiffEditorWidget) rebuild() {
 		rLines, d.rightRows = appendDiffSide(d.rightBase, rLines, d.rightRows, dl.Right, i, d.gapByLine)
 	}
 
+	d.pairs = d.pairs[:0]
+	li, ri := 0, 0
+	for _, dl := range d.Lines {
+		pair := splitPair{l: -1, r: -1}
+		if dl.Left.Kind != diff.Blank {
+			pair.l, li = li, li+1
+		}
+		if dl.Right.Kind != diff.Blank {
+			pair.r, ri = ri, ri+1
+		}
+		d.pairs = append(d.pairs, pair)
+	}
 	d.resetPane(d.unified, uLines, uo)
 	d.resetPane(d.left, lLines, d.leftBase)
 	d.resetPane(d.right, rLines, d.rightBase)
@@ -562,6 +641,9 @@ func sideOf(right bool) diffSide {
 // into view, as the top row when top is set. In unified mode side picks
 // between the removed and added projection of a changed row.
 func (d *DiffEditorWidget) scrollToDiffRow(row int, side diffSide, top bool) {
+	if d.editable {
+		return
+	}
 	p := d.lead()
 	line := d.bufLineForDiffRow(p, row)
 	if p == d.unified && side != diffAnySide {
@@ -608,11 +690,19 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 		return
 	}
 	wrap := d.IsWrapped()
-	for _, p := range d.panes() {
+	for _, p := range d.viewPanes() {
 		p.WordWrap = wrap
 	}
+	if d.editable {
+		if d.live == nil {
+			return
+		}
+		d.syncLive()
+	}
 	if d.IsUnified() {
-		d.unified.Passive = !d.focused
+		if !d.editable {
+			d.unified.Passive = !d.focused
+		}
 		d.unified.SetRect(r)
 		d.unified.Render(surface)
 		return
@@ -626,8 +716,12 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 	d.left.SetRect(Rect{X: r.X, Y: r.Y, W: divider, H: h})
 	d.right.SetRect(Rect{X: r.X + divider + 1, Y: r.Y, W: w - divider - 1, H: h})
 	lead, follow := d.lead(), d.follower()
-	lead.Passive = !d.focused
-	follow.Passive = true
+	if lead != d.live {
+		lead.Passive = !d.focused && !d.editable
+	}
+	if follow != d.live {
+		follow.Passive = true
+	}
 	surfaceFor := func(p *EditorPaneWidget) Surface {
 		pr := p.GetRect()
 		return surface.Sub(Rect{X: pr.X - r.X, Y: 0, W: pr.W, H: h})
@@ -654,55 +748,49 @@ func syncFollower(lead, follow *EditorPaneWidget) {
 }
 
 func (d *DiffEditorWidget) alignSplit() {
-	d.leftBase.Fillers, d.rightBase.Fillers = alignSplitFillers(d.Lines, d.left, d.right)
+	d.leftBase.Fillers, d.rightBase.Fillers = alignSplitFillers(d.pairs, d.left, d.right)
 	d.left.SetDiffOverlay(d.leftBase)
 	d.right.SetDiffOverlay(d.rightBase)
 }
 
 // alignSplitFillers gives every diff row the same number of screen rows on
 // both sides: a side that is blank, or wraps into fewer segments, is padded
-// with filler rows after its line.
-func alignSplitFillers(lines []diff.DiffLine, left, right *EditorPaneWidget) (lf, rf map[int]int) {
+// with filler rows before the next line it shows.
+func alignSplitFillers(pairs []splitPair, left, right *EditorPaneWidget) (lf, rf map[int]int) {
 	lf, rf = make(map[int]int), make(map[int]int)
 	segs := func(p *EditorPaneWidget, line int) int {
-		if !p.WordWrap || line >= len(p.Buf.Lines) {
+		if line < 0 || !p.WordWrap || line >= len(p.Buf.Lines) {
+			return 1
+		}
+		if _, ok := p.DiffOverlay.label(line); ok {
 			return 1
 		}
 		return len(wrapLineSegments([]rune(p.Buf.Lines[line]), max(p.Viewport.Width, 1), p.resolveTabSize()))
 	}
-	li, ri := 0, 0
-	for _, dl := range lines {
-		lBlank, rBlank := dl.Left.Kind == diff.Blank, dl.Right.Kind == diff.Blank
-		lr, rr := 1, 1
-		if !lBlank {
-			lr = segs(left, li)
+	nextL := make([]int, len(pairs)+1)
+	nextR := make([]int, len(pairs)+1)
+	nextL[len(pairs)], nextR[len(pairs)] = len(left.Buf.Lines), len(right.Buf.Lines)
+	for i := len(pairs) - 1; i >= 0; i-- {
+		nextL[i], nextR[i] = nextL[i+1], nextR[i+1]
+		if pairs[i].l >= 0 {
+			nextL[i] = pairs[i].l
 		}
-		if !rBlank {
-			rr = segs(right, ri)
+		if pairs[i].r >= 0 {
+			nextR[i] = pairs[i].r
 		}
+	}
+	pad := func(fillers map[int]int, line, rows, m int, next []int, i int) {
+		if line < 0 {
+			fillers[next[i]] += m
+		} else if m > rows {
+			fillers[next[i+1]] += m - rows
+		}
+	}
+	for i, p := range pairs {
+		lr, rr := segs(left, p.l), segs(right, p.r)
 		m := max(lr, rr)
-		if lBlank {
-			lf[li] += m
-		} else {
-			lf[li+1] += m - lr
-			li++
-		}
-		if rBlank {
-			rf[ri] += m
-		} else {
-			rf[ri+1] += m - rr
-			ri++
-		}
-	}
-	for k, v := range lf {
-		if v == 0 {
-			delete(lf, k)
-		}
-	}
-	for k, v := range rf {
-		if v == 0 {
-			delete(rf, k)
-		}
+		pad(lf, p.l, lr, m, nextL, i)
+		pad(rf, p.r, rr, m, nextR, i)
 	}
 	return lf, rf
 }
@@ -737,7 +825,7 @@ func (d *DiffEditorWidget) OwnsPointerCapture() bool {
 	if d.captured != nil {
 		return true
 	}
-	for _, p := range d.panes() {
+	for _, p := range d.viewPanes() {
 		if p.OwnsPointerCapture() {
 			return true
 		}
@@ -756,6 +844,15 @@ func (d *DiffEditorWidget) CursorPosition() (int, int, bool) {
 func (d *DiffEditorWidget) HandleEvent(ev tcell.Event) EventResult {
 	if d.extendedFetching || d.Loading {
 		return EventIgnored
+	}
+	if d.editable {
+		if d.live == nil {
+			return EventIgnored
+		}
+		d.syncLive()
+		if kev, ok := ev.(*tcell.EventKey); ok {
+			return d.handleLiveKey(kev)
+		}
 	}
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
@@ -812,6 +909,9 @@ func (d *DiffEditorWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		}
 		if !d.IsUnified() && d.captured == nil {
 			d.focusLeft = target == d.left
+			if d.editable && !d.focusLeft {
+				d.left.Selection.Clear()
+			}
 		}
 	}
 	result := target.HandleEvent(ev)

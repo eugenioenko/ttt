@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -498,7 +499,29 @@ func (e *EditorPaneWidget) clampCursor() {
 	}
 }
 
+func (e *EditorPaneWidget) diffHiddenRange(line int) (gapLine, end int, ok bool) {
+	o := e.DiffOverlay
+	if !o.hasHidden() {
+		return 0, 0, false
+	}
+	i := sort.Search(len(o.Hidden), func(i int) bool { return o.Hidden[i].end >= line })
+	if i < len(o.Hidden) && o.Hidden[i].start <= line {
+		return o.Hidden[i].start - 1, o.Hidden[i].end, true
+	}
+	return 0, 0, false
+}
+
+func (e *EditorPaneWidget) clampCursorCol() {
+	if lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line])); e.Cursor.Col > lineLen {
+		e.Cursor.Col = lineLen
+	}
+}
+
 func (e *EditorPaneWidget) skipHiddenLineDown() {
+	if _, end, ok := e.diffHiddenRange(e.Cursor.Line); ok {
+		e.Cursor.Line = e.Buf.ClampLine(end + 1)
+		e.clampCursorCol()
+	}
 	if e.Folds == nil {
 		return
 	}
@@ -512,6 +535,10 @@ func (e *EditorPaneWidget) skipHiddenLineDown() {
 }
 
 func (e *EditorPaneWidget) skipHiddenLineUp() {
+	if gapLine, _, ok := e.diffHiddenRange(e.Cursor.Line); ok {
+		e.Cursor.Line = e.Buf.ClampLine(gapLine)
+		e.clampCursorCol()
+	}
 	if e.Folds == nil {
 		return
 	}

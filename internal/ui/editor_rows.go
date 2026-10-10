@@ -1,7 +1,8 @@
 package ui
 
 import (
-	"github.com/eugenioenko/ttt/internal/core/fold"
+	"sort"
+
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
@@ -23,9 +24,9 @@ type rowLayout struct {
 	wrap     bool
 	width    int
 	tabW     int
-	folds    *fold.State
 	visible  []int
 	phantoms map[int]int
+	labels   map[int]string
 }
 
 func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
@@ -38,12 +39,28 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 		width: width,
 		tabW:  e.resolveTabSize(),
 	}
-	if e.hasFolds() {
-		l.folds = e.Folds
-		l.visible = e.Folds.VisibleLines(len(e.Buf.Lines))
+	n := len(e.Buf.Lines)
+	folds, hidden := e.hasFolds(), e.DiffOverlay.hasHidden()
+	switch {
+	case folds && hidden:
+		for _, line := range e.Folds.VisibleLines(n) {
+			if !e.DiffOverlay.hidden(line) {
+				l.visible = append(l.visible, line)
+			}
+		}
+		if l.visible == nil {
+			l.visible = []int{}
+		}
+	case folds:
+		l.visible = e.Folds.VisibleLines(n)
+	case hidden:
+		l.visible = e.DiffOverlay.visibleLines(n)
 	}
 	if len(e.phantoms) > 0 {
 		l.phantoms = e.phantoms
+	}
+	if e.DiffOverlay != nil {
+		l.labels = e.DiffOverlay.Labels
 	}
 	return l
 }
@@ -57,6 +74,9 @@ func (l *rowLayout) n() int { return len(l.lines) }
 func (l *rowLayout) identity() bool { return !l.wrap && l.phantoms == nil }
 
 func (l *rowLayout) segments(line int) []int {
+	if _, ok := l.labels[line]; ok {
+		return singleSegment
+	}
 	if l.wrap && line >= 0 && line < l.n() {
 		return wrapLineSegments([]rune(l.lines[line]), l.width, l.tabW)
 	}
@@ -85,11 +105,12 @@ func (l *rowLayout) visIndex(line int) int {
 	if line >= l.n() {
 		return len(l.visible) + line - l.n()
 	}
-	if v := l.folds.BufferToVisible(line); v >= 0 {
-		return v
+	i := sort.SearchInts(l.visible, line)
+	if i < len(l.visible) && l.visible[i] == line {
+		return i
 	}
-	if r := l.folds.ContainingFold(line); r != nil {
-		return l.folds.BufferToVisible(r.StartLine)
+	if i > 0 {
+		return i - 1
 	}
 	return 0
 }
@@ -105,10 +126,8 @@ func (l *rowLayout) visLine(i int) int {
 }
 
 func (l *rowLayout) visibleLine(line int) int {
-	if l.folds != nil && line < l.n() {
-		if r := l.folds.ContainingFold(line); r != nil {
-			return r.StartLine
-		}
+	if l.visible != nil && line < l.n() && len(l.visible) > 0 {
+		return l.visible[l.visIndex(line)]
 	}
 	return line
 }

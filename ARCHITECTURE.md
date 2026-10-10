@@ -189,9 +189,10 @@ their interaction or lifecycle differs. The target is shared models with thin
 surface adapters, not one highly conditional diff widget.
 
 File diffs render through the editor: `EditorPaneWidget` draws a `DiffOverlay`
-(line kinds, deleted and filler phantom rows, gutter numbers, gaps), editable
-working-tree diffs use the file's own tab, and read-only diffs use
-`DiffEditorWidget`. `CommitDetailWidget` remains a separate surface.
+(line kinds, deleted and filler phantom rows, gutter numbers, gaps) and
+`DiffEditorWidget` owns layout, split alignment, gaps and context modes for
+both editable diffs (bound to the file tab's editor pane) and read-only diffs
+(synthetic buffers). `CommitDetailWidget` remains a separate surface.
 
 ### Application owners
 

@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"sort"
 	"strconv"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
 // DiffOverlay decorates an editor buffer with a diff against an older
@@ -25,57 +27,48 @@ type DiffOverlay struct {
 	HoveredGap    int
 	HighContrast  bool
 	EmphasizeGaps bool
+
+	// Labels draws a gap label in place of a buffer line's text; Hidden holds
+	// the buffer lines folded away behind such a gap line, so a real buffer can
+	// show changes only without touching the user's folds.
+	Labels  map[int]string
+	Hidden  []diffHiddenRange
+	visible []int
+	visN    int
 }
 
-// NewDiffOverlay projects full-file diff lines onto the new side. A change
-// block shows all of its removals before its first addition, matching the
-// unified diff view.
-func NewDiffOverlay(lines []diff.DiffLine) *DiffOverlay {
-	o := &DiffOverlay{Deleted: make(map[int][]diff.SideLine)}
-	for i := 0; i < len(lines); {
-		dl := lines[i]
-		if dl.Left.Kind != diff.Deleted && dl.Right.Kind != diff.Added {
-			if dl.Right.Kind != diff.Blank {
-				o.Kinds = append(o.Kinds, diff.Context)
-			}
-			i++
-			continue
-		}
-		anchor := len(o.Kinds)
-		end := i
-		for end < len(lines) && (lines[end].Left.Kind == diff.Deleted || lines[end].Right.Kind == diff.Added) {
-			if lines[end].Left.Kind == diff.Deleted {
-				o.Deleted[anchor] = append(o.Deleted[anchor], lines[end].Left)
-			}
-			end++
-		}
-		for ; i < end; i++ {
-			if lines[i].Right.Kind == diff.Added {
-				o.Kinds = append(o.Kinds, diff.Added)
-			}
-		}
+type diffHiddenRange struct{ start, end int }
+
+func (o *DiffOverlay) label(line int) (string, bool) {
+	if o == nil {
+		return "", false
 	}
-	return o
+	s, ok := o.Labels[line]
+	return s, ok
 }
 
-// NewSplitDiffOverlays aligns both sides of a split diff: each diff row
-// yields exactly one screen row per side, so equal top rows stay in step.
-func NewSplitDiffOverlays(lines []diff.DiffLine) (left, right *DiffOverlay) {
-	left = &DiffOverlay{Fillers: make(map[int]int)}
-	right = &DiffOverlay{Fillers: make(map[int]int)}
-	for _, dl := range lines {
-		if dl.Left.Kind == diff.Blank {
-			left.Fillers[len(left.Kinds)]++
-		} else {
-			left.Kinds = append(left.Kinds, dl.Left.Kind)
-		}
-		if dl.Right.Kind == diff.Blank {
-			right.Fillers[len(right.Kinds)]++
-		} else {
-			right.Kinds = append(right.Kinds, dl.Right.Kind)
+func (o *DiffOverlay) hasHidden() bool { return o != nil && len(o.Hidden) > 0 }
+
+func (o *DiffOverlay) hidden(line int) bool {
+	if o == nil {
+		return false
+	}
+	i := sort.Search(len(o.Hidden), func(i int) bool { return o.Hidden[i].end >= line })
+	return i < len(o.Hidden) && o.Hidden[i].start <= line
+}
+
+func (o *DiffOverlay) visibleLines(n int) []int {
+	if o.visible != nil && o.visN == n {
+		return o.visible
+	}
+	vis := make([]int, 0, n)
+	for line := 0; line < n; line++ {
+		if !o.hidden(line) {
+			vis = append(vis, line)
 		}
 	}
-	return left, right
+	o.visible, o.visN = vis, n
+	return vis
 }
 
 func (o *DiffOverlay) kind(line int) diff.LineKind {
@@ -179,6 +172,31 @@ func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
 		return collapsedDiffRowStyle(diff.Collapsed, e.DiffOverlay.EmphasizeGaps, e.DiffOverlay.gapHovered(line))
 	}
 	return 0
+}
+
+func (e *EditorPaneWidget) renderGapRow(surface Surface, y, gutterW, editorW, line int, label string) {
+	o := e.DiffOverlay
+	hovered := o.gapHovered(line)
+	rowStyle := collapsedDiffRowStyle(diff.Collapsed, o.EmphasizeGaps, hovered)
+	if gutterW > 0 {
+		renderDiffGutterWithCollapsedStyle(surface, 0, y, gutterW, diff.SideLine{Kind: diff.Collapsed}, collapsedDiffGutterStyle(diff.Collapsed, o.EmphasizeGaps, hovered))
+	}
+	fg := rowStyle
+	if fg == term.StyleDefault {
+		fg = term.StyleMuted
+	}
+	x := 0
+	for _, ch := range label {
+		w := textwidth.Rune(ch)
+		if x+w > editorW {
+			break
+		}
+		surface.SetCell(gutterW+x, y, term.Cell{Ch: ch, Style: fg, BgStyle: rowStyle})
+		x += w
+	}
+	for ; x < editorW; x++ {
+		surface.SetCell(gutterW+x, y, term.Cell{Ch: ' ', Style: fg, BgStyle: rowStyle})
+	}
 }
 
 func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW int, row editorRow) {
