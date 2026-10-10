@@ -31,6 +31,12 @@ type DiffOverlay struct {
 	Signs         bool
 	MinGutter     int
 
+	// DeletedMatches holds find matches on deleted rows, keyed like Deleted;
+	// a match's Line is the row's index in its block. DeletedActive is the
+	// anchor and index into DeletedMatches of the active match, or -1s.
+	DeletedMatches map[int][]FindMatch
+	DeletedActive  [2]int
+
 	// Labels draws a gap label in place of a buffer line's text; Hidden holds
 	// the buffer lines folded away behind such a gap line, so a real buffer can
 	// show changes only without touching the user's folds.
@@ -271,8 +277,20 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		leftCol = 0
 	}
 	cells := e.renderLineToScreen([]rune(old.Text), spans, false, nil, e.resolveTabSize(), leftCol, editorW)
+	matches := e.DiffOverlay.DeletedMatches[row.bufLine]
 	for x := 0; x < editorW; x++ {
-		surface.SetCell(gutterW+x, y, term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted})
+		cell := term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted}
+		for i, m := range matches {
+			if m.Line != row.phantom || cells[x].bufCol < m.Col || cells[x].bufCol >= m.Col+m.Len {
+				continue
+			}
+			cell.Style, cell.BgStyle = term.StyleSearchMatch, 0
+			if e.DiffOverlay.DeletedActive == [2]int{row.bufLine, i} {
+				cell.Style = term.StyleSearchActive
+			}
+			break
+		}
+		surface.SetCell(gutterW+x, y, cell)
 	}
 }
 

@@ -82,6 +82,10 @@ type DiffEditorWidget struct {
 	liveN       int
 	liveCursor  int
 	liveUnified *DiffOverlay
+	liveHits    []liveSearchHit
+	liveRefs    []liveSearchRef
+	liveActive  int
+	gapText     map[int]string
 }
 
 type diffSearchRef struct {
@@ -969,16 +973,18 @@ func (d *DiffEditorWidget) CopySelection() string {
 }
 
 func (d *DiffEditorWidget) LeftLines() []string {
-	lines := make([]string, len(d.Lines))
-	for i, dl := range d.Lines {
+	rows := d.searchRows()
+	lines := make([]string, len(rows))
+	for i, dl := range rows {
 		lines[i] = dl.Left.Text
 	}
 	return lines
 }
 
 func (d *DiffEditorWidget) RightLines() []string {
-	lines := make([]string, len(d.Lines))
-	for i, dl := range d.Lines {
+	rows := d.searchRows()
+	lines := make([]string, len(rows))
+	for i, dl := range rows {
 		lines[i] = dl.Right.Text
 	}
 	return lines
@@ -1006,6 +1012,9 @@ func (d *DiffEditorWidget) ApplySearchHighlight(query string, opts SearchOptions
 }
 
 func (d *DiffEditorWidget) ClearSearch() {
+	if d.editable {
+		d.clearLiveSearch()
+	}
 	d.SearchMatchesLeft = nil
 	d.SearchMatchesRight = nil
 	d.searchRefs = nil
@@ -1029,6 +1038,9 @@ func (d *DiffEditorWidget) unifiedIndex(row int, right bool) int {
 // SetSearchMatches takes matches indexed by diff row (see LeftLines and
 // RightLines) and returns them merged in display order.
 func (d *DiffEditorWidget) SetSearchMatches(left, right []FindMatch) []FindMatch {
+	if d.editable {
+		return d.setLiveSearch(left, right)
+	}
 	d.SearchMatchesLeft = left
 	d.SearchMatchesRight = right
 	type entry struct {
@@ -1094,6 +1106,10 @@ func (d *DiffEditorWidget) SetSearchMatches(left, right []FindMatch) []FindMatch
 }
 
 func (d *DiffEditorWidget) SetActiveMatch(mergedIdx int) {
+	if d.editable {
+		d.setLiveActive(mergedIdx)
+		return
+	}
 	for _, p := range d.panes() {
 		p.SearchActive = -1
 	}
@@ -1111,6 +1127,10 @@ func (d *DiffEditorWidget) SetActiveMatch(mergedIdx int) {
 
 // ScrollToLine reveals a diff row (an index into LeftLines/RightLines).
 func (d *DiffEditorWidget) ScrollToLine(line int) {
+	if d.editable {
+		d.scrollToLiveHit(line)
+		return
+	}
 	d.scrollToDiffRow(line, sideOf(d.searchActiveRight), false)
 }
 

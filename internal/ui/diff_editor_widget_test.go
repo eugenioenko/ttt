@@ -187,14 +187,17 @@ func TestDiffEditorHunkOnlyDiffKeepsHunkNumbersAndGap(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -22,3 +22,3 @@\n line 22\n line 23\n line 24\n@@ -356,2 +356,2 @@\n line 356\n line 357\n")
 	d := NewDiffEditorWidget("test.go", fd, nil, nil, false)
 	grid := renderDiffEditor(d, 70, 8)
-	if !strings.Contains(cellRow(grid, 0), "22  line 22") {
-		t.Fatalf("hunk numbers:\n%s", cellRow(grid, 0))
+	if !strings.Contains(cellRow(grid, 0), "▶ ⋯ 21 lines ⋯") {
+		t.Fatalf("leading gap row:\n%s", cellRow(grid, 0))
 	}
-	if !strings.Contains(cellRow(grid, 3), "▶ ⋯ 331 lines ⋯") {
-		t.Fatalf("gap row:\n%s", cellRow(grid, 3))
+	if !strings.Contains(cellRow(grid, 1), "22  line 22") {
+		t.Fatalf("hunk numbers:\n%s", cellRow(grid, 1))
 	}
-	if !strings.Contains(cellRow(grid, 4), "356  line 356") {
-		t.Fatalf("second hunk:\n%s", cellRow(grid, 4))
+	if !strings.Contains(cellRow(grid, 4), "▶ ⋯ 331 lines ⋯") {
+		t.Fatalf("gap row:\n%s", cellRow(grid, 4))
+	}
+	if !strings.Contains(cellRow(grid, 5), "356  line 356") {
+		t.Fatalf("second hunk:\n%s", cellRow(grid, 5))
 	}
 }
 

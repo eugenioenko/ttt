@@ -28,6 +28,7 @@ func NewEditableDiffWidget(filePath string, base []string, lines []diff.DiffLine
 		signs:         true,
 		left:          newDiffPane(),
 		liveCursor:    -1,
+		liveActive:    -1,
 	}
 	d.attachHighlighters()
 	d.rebuild()
@@ -39,6 +40,7 @@ func (d *DiffEditorWidget) Editable() bool { return d.editable }
 func (d *DiffEditorWidget) SetLiveDiff(base []string, lines []diff.DiffLine) {
 	d.oldLines = base
 	d.full = lines
+	d.ClearSearch()
 	d.rebuild()
 }
 
@@ -130,7 +132,6 @@ func (d *DiffEditorWidget) rebuildLive() {
 	d.resetPane(d.left, lLines, d.leftBase)
 	d.buildLiveOverlays()
 	d.applyOverlayOptions()
-	d.ClearSearch()
 	if gap, ok := d.hiddenCursorGap(); ok {
 		d.revealed = append(d.revealed, d.liveSpans[gap])
 		d.rebuildLive()
@@ -213,7 +214,8 @@ func (d *DiffEditorWidget) buildLiveOverlays() {
 		i = end
 	}
 
-	d.liveUnified = &DiffOverlay{Kinds: kinds, Deleted: deleted, Gaps: gaps, Labels: labels, Hidden: hidden}
+	d.gapText = nil
+	d.liveUnified = &DiffOverlay{Kinds: kinds, Deleted: deleted, Gaps: gaps, Labels: labels, Hidden: hidden, DeletedActive: [2]int{-1, -1}}
 	d.rightBase = &DiffOverlay{Kinds: kinds, Fillers: map[int]int{}, Gaps: gaps, Labels: labels, Hidden: hidden}
 	d.pairs = d.pairs[:0]
 	li := 0
@@ -229,6 +231,7 @@ func (d *DiffEditorWidget) buildLiveOverlays() {
 		d.live.SetDiffOverlay(d.liveOverlay())
 	}
 	d.applyOverlayOptions()
+	d.applyLiveSearch()
 }
 
 // syncLive keeps the overlay roughly in place while the buffer is edited and
@@ -237,6 +240,9 @@ func (d *DiffEditorWidget) syncLive() {
 	e := d.live
 	if e == nil {
 		return
+	}
+	if gap, ok := d.editedGap(); ok {
+		d.expandContextGap(gap)
 	}
 	if n := len(e.Buf.Lines); n != d.liveN {
 		delta := n - d.liveN
@@ -252,6 +258,9 @@ func (d *DiffEditorWidget) syncLive() {
 		d.liveN = n
 		d.buildLiveOverlays()
 	}
+	if d.gapText == nil {
+		d.snapshotGapText()
+	}
 	if d.liveCursor < 0 {
 		d.placeInitialCursor()
 		return
@@ -261,6 +270,43 @@ func (d *DiffEditorWidget) syncLive() {
 		if gap, ok := d.hiddenCursorGap(); ok {
 			d.expandContextGap(gap)
 		}
+	}
+}
+
+// A gap row draws a label over the first line it hides, so an edit there
+// (from any command, not only typing) is otherwise invisible until the diff
+// is recomputed.
+func (d *DiffEditorWidget) snapshotGapText() {
+	d.gapText = make(map[int]string)
+	for line := range d.live.DiffOverlay.Labels {
+		if line < len(d.live.Buf.Lines) {
+			d.gapText[line] = d.live.Buf.Lines[line]
+		}
+	}
+}
+
+// editedGap reports the gap whose row held the cursor before an edit that
+// changed the line behind its label.
+func (d *DiffEditorWidget) editedGap() (int, bool) {
+	e := d.live
+	line := d.liveCursor
+	text, ok := d.gapText[line]
+	if !ok {
+		return 0, false
+	}
+	if line < len(e.Buf.Lines) && e.Buf.Lines[line] == text && len(e.Buf.Lines) == d.liveN {
+		return 0, false
+	}
+	gap, ok := e.DiffOverlay.Gaps[line]
+	return gap, ok
+}
+
+func (d *DiffEditorWidget) revealCursorGap() {
+	if d.live == nil {
+		return
+	}
+	if gap, ok := d.live.DiffOverlay.Gaps[d.live.Cursor.Line]; ok {
+		d.expandContextGap(gap)
 	}
 }
 
@@ -289,9 +335,18 @@ func isNavigationKey(ev *tcell.EventKey) bool {
 	return false
 }
 
+func (d *DiffEditorWidget) headFocused() bool {
+	return d.editable && !d.IsUnified() && d.focusLeft
+}
+
+// handleLiveKey sends keys to the pane last clicked. The base pane is
+// read-only, so typing there changes nothing.
 func (d *DiffEditorWidget) handleLiveKey(ev *tcell.EventKey) EventResult {
+	if d.headFocused() {
+		d.left.HandleEvent(ev)
+		return EventConsumed
+	}
 	e := d.live
-	d.focusLeft = false
 	if gap, ok := e.DiffOverlay.Gaps[e.Cursor.Line]; ok && !isNavigationKey(ev) {
 		d.expandContextGap(gap)
 		if ev.Key() == tcell.KeyEnter && ev.Modifiers() == 0 {

@@ -64,6 +64,10 @@ func (g *EditorGroupWidget) IsInlineDiffActive() bool {
 	return g.activeInlineDiff() != nil
 }
 
+func (g *EditorGroupWidget) ActiveInlineDiff() *DiffEditorWidget {
+	return g.activeInlineDiff()
+}
+
 func (g *EditorGroupWidget) activeInlineDiff() *DiffEditorWidget {
 	t := g.activeTab()
 	if t == nil || t.Content != nil {

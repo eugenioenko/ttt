@@ -16,10 +16,10 @@ func compactLines(t *testing.T, unified string) []diff.DiffLine {
 
 func TestCompactDiffSeparatorShowsLineDistance(t *testing.T) {
 	lines := compactLines(t, "--- a/test.go\n+++ b/test.go\n@@ -22,3 +22,3 @@\n line 22\n line 23\n line 24\n@@ -356,2 +356,2 @@\n line 356\n line 357\n")
-	if len(lines) < 4 {
-		t.Fatalf("expected two hunks and a separator, got %v", lines)
+	if len(lines) < 5 {
+		t.Fatalf("expected a leading gap, two hunks and a separator, got %v", lines)
 	}
-	separator := lines[3]
+	separator := lines[4]
 	if separator.Left.Text != " ⋯ 331 lines ⋯" || separator.Right.Text != " ⋯ 331 lines ⋯" {
 		t.Fatalf("separator = %q / %q, want collapsed distance", separator.Left.Text, separator.Right.Text)
 	}
@@ -27,18 +27,42 @@ func TestCompactDiffSeparatorShowsLineDistance(t *testing.T) {
 
 func TestCompactDiffSeparatorUsesSingularLine(t *testing.T) {
 	lines := compactLines(t, "--- a/test.go\n+++ b/test.go\n@@ -24,1 +24,1 @@\n line 24\n@@ -26,1 +26,1 @@\n line 26\n")
-	if got := lines[1].Left.Text; got != " ⋯ 1 line ⋯" {
+	if got := lines[2].Left.Text; got != " ⋯ 1 line ⋯" {
 		t.Fatalf("separator = %q, want singular distance", got)
 	}
 }
 
 func TestCompactDiffSeparatorOmitsAdjacentLines(t *testing.T) {
-	lines := compactLines(t, "--- a/test.go\n+++ b/test.go\n@@ -24,1 +24,1 @@\n line 24\n@@ -25,1 +25,1 @@\n line 25\n")
+	lines := compactLines(t, "--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n line 1\n@@ -2,1 +2,1 @@\n line 2\n")
 	if len(lines) != 2 {
 		t.Fatalf("lines = %d, want adjacent diff rows with no separator: %v", len(lines), lines)
 	}
-	if lines[0].Left.Text != "line 24" || lines[1].Left.Text != "line 25" {
+	if lines[0].Left.Text != "line 1" || lines[1].Left.Text != "line 2" {
 		t.Fatalf("adjacent rows shifted: %q then %q", lines[0].Left.Text, lines[1].Left.Text)
+	}
+}
+
+func TestCompactDiffGapsBeforeFirstAndAfterLastHunk(t *testing.T) {
+	fd := diff.Parse("--- a/f\n+++ b/f\n@@ -4,1 +4,1 @@\n-old\n+new\n")
+	lines, gaps := compactDiffLinesWithContext(fd, nil, nil, nil)
+	if len(lines) != 2 || lines[0].Left.Text != " ⋯ 3 lines ⋯" || gaps[0] != 0 {
+		t.Fatalf("hunk-only diff = %v gaps %v, want a leading gap and no trailing gap", lines, gaps)
+	}
+
+	old := []string{"a", "b", "c", "old", "e", "f"}
+	updated := []string{"a", "b", "c", "new", "e", "f"}
+	lines, gaps = compactDiffLinesWithContext(fd, old, updated, nil)
+	if len(lines) != 3 || lines[2].Right.Text != " ⋯ 2 lines ⋯" || gaps[2] != 1 {
+		t.Fatalf("diff with content = %v gaps %v, want leading and trailing gaps", lines, gaps)
+	}
+
+	lines, _ = compactDiffLinesWithContext(fd, old, updated, map[int]bool{0: true, 1: true})
+	var got []string
+	for _, line := range lines {
+		got = append(got, line.Right.Text)
+	}
+	if strings.Join(got, ",") != "a,b,c,new,e,f" || lines[5].Left.Num != 6 || lines[0].Right.Num != 1 {
+		t.Fatalf("expanded edges = %v (%v)", got, lines)
 	}
 }
 

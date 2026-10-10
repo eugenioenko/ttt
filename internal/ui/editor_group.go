@@ -934,6 +934,9 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 		}
 	}
 	if g.IsEditorActive() {
+		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
+			return d.left.CursorX, d.left.CursorY, true
+		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
@@ -2088,7 +2091,7 @@ func (g *EditorGroupWidget) Paste() {
 	if text == "" {
 		return
 	}
-	g.Editor.pasteText(text)
+	g.pasteIntoEditor(text)
 }
 
 func (g *EditorGroupWidget) PasteText(text string) {
@@ -2097,6 +2100,16 @@ func (g *EditorGroupWidget) PasteText(text string) {
 	}
 	if text == "" {
 		return
+	}
+	g.pasteIntoEditor(text)
+}
+
+func (g *EditorGroupWidget) pasteIntoEditor(text string) {
+	if d := g.activeInlineDiff(); d != nil {
+		if d.headFocused() {
+			return
+		}
+		d.revealCursorGap()
 	}
 	g.Editor.pasteText(text)
 }
