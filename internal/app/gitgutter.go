@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -23,6 +24,10 @@ type GitGutterResult struct {
 	// computed from, so edits made while it ran can be replayed onto it.
 	Version uint64
 	Lines   []string
+	// Conflict reports that the file has no single staged version to diff
+	// against, because it has unresolved merge conflicts.
+	Conflict bool
+	RelPath  string
 }
 
 // RequestGitGutter triggers an async computation of git gutter indicators for
@@ -94,12 +99,16 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 			}
 			if indexErr == nil {
 				result.Base = blobLines(indexContent, showTrailing)
+			} else if git.IsUnmergedContext(ctx, repoDir, relPath) {
+				result.Conflict, result.RelPath = true, relPath
 			}
-			lines, err := diff.FullDiffLinesContext(ctx, result.Base, linesCopy)
-			if err != nil {
-				return
+			if !result.Conflict {
+				lines, err := diff.FullDiffLinesContext(ctx, result.Base, linesCopy)
+				if err != nil {
+					return
+				}
+				result.Diff = lines
 			}
-			result.Diff = lines
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -110,7 +119,13 @@ func (a *App) ApplyGitGutterResult(v *GitGutterResult) {
 		return
 	}
 	a.EditorGroup.SetLineChanges(v.Path, v.Changes)
-	if v.DiffOn {
+	switch {
+	case v.DiffOn && v.Conflict:
+		if a.EditorGroup.IsInlineDiffPath(v.Path) {
+			a.EditorGroup.DisableInlineDiff(v.Path)
+			a.StatusNotify(fmt.Sprintf("%s has merge conflicts; diff closed", v.RelPath))
+		}
+	case v.DiffOn:
 		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
 	}
 }
