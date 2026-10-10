@@ -267,6 +267,12 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, extended bool) {
 		a.FocusEditorIfEnabled()
 		return
 	}
+	if status.Status != "D" && status.Status != "R" {
+		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() && a.openInlineDiff(fullPath, dir, status.Path) {
+			a.FocusEditorIfEnabled()
+			return
+		}
+	}
 	var diffText string
 	var err error
 	if status.Status == "R" && status.OldPath != "" {

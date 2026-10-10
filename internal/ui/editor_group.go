@@ -69,6 +69,7 @@ type editorTab struct {
 	Virtual     bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
+	InlineDiff  *inlineDiffState
 }
 
 type EditorGroupWidget struct {
@@ -2104,6 +2105,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Diagnostics = t.Diagnostics
 		g.Editor.Folds = t.Folds
 		g.Editor.LineChanges = t.LineChanges
+		g.Editor.SetDiffOverlay(t.InlineDiff.overlay())
 		g.Editor.buildDiagIndex()
 		g.Editor.InvalidateBracketColors()
 		if t.TabSize > 0 {
@@ -2125,6 +2127,9 @@ func (g *EditorGroupWidget) syncTabs() {
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title
+		}
+		if ts.InlineDiff != nil {
+			name += " (diff)"
 		}
 		uiTabs = append(uiTabs, Tab{
 			ID:       ts.ID,
