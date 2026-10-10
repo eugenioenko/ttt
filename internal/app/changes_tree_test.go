@@ -220,7 +220,7 @@ func TestFolderNodesNeverResolveAsFilesOrExecuteFileActions(t *testing.T) {
 		t.Fatalf("rename/colon path identity was not preserved: status=%+v ok=%v", status, ok)
 	}
 	opened := false
-	cp.OnOpenDiff = func(string, git.FileStatus, bool) { opened = true }
+	cp.OnOpenDiff = func(string, git.FileStatus, bool, bool) { opened = true }
 	cp.handleCommand("activate", folder)
 	if opened {
 		t.Fatal("folder activation executed a file action")

@@ -71,7 +71,7 @@ type ChangesPanel struct {
 	fileView           string
 	icons              string
 
-	OnOpenDiff       func(dir string, status git.FileStatus, extended bool)
+	OnOpenDiff       func(dir string, status git.FileStatus, staged, extended bool)
 	OnOpenCommitDiff func(dir, ref, short string, status git.FileStatus, extended bool)
 	OnOpenCommit     func(dir, ref, short string)
 	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
@@ -1064,7 +1064,7 @@ func (cp *ChangesPanel) openDiff(dir string, status git.FileStatus, staged bool,
 		}
 	}
 	if cp.OnOpenDiff != nil {
-		cp.OnOpenDiff(dir, status, extended)
+		cp.OnOpenDiff(dir, status, staged, extended)
 	}
 }
 

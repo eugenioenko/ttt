@@ -38,6 +38,13 @@ TTT refreshes repository status after editor and source-control mutations. While
 
 Select a changed file in the changes panel to open a diff. Syntax highlighting is layered on top of diff background colors so you can read the code naturally while seeing what changed. Added and removed line numbers use `+` and `−` markers with semantic green and red styling.
 
+Which entry you select decides what the diff compares:
+
+- **Changes:** the staged version (the index) against the working tree, so only the changes you have not staged yet. The tab title ends in `(diff)`.
+- **Staged Changes:** `HEAD` against the staged version, so only what the next commit will contain. The tab title ends in `(staged)`, so a file's staged and unstaged diffs can be open at the same time.
+
+A file with unresolved merge conflicts has no single staged version to compare against, so it opens as a plain file with a status message instead.
+
 ## Explorer Git Status Colors
 
 The file explorer sidebar colors files and folders by their git status: modified files are colored with the theme's `warning` color, new/untracked files with `success`, deleted files with `danger`, and merge-conflicted files with `conflict`. Staged and pending changes share one color by default, since the Changes panel is where staged work is easiest to read. Turning on `explorer.dimStagedGitColors` renders staged changes in a dimmed version of their color, telling the two apart at the cost of a busier sidebar. A folder takes the color of the most attention-worthy change among its descendants, which is how a deletion usually shows: the file itself is gone from disk and has no row, but its folder still carries the `danger` color. This is on by default and can be turned off via `explorer.gitStatusColors` in Settings.

@@ -260,48 +260,94 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 
 func (a *App) openSelectedDiff(extended bool) { a.Changes.OpenSelectedDiff(extended) }
 
-func (a *App) OpenChangeDiff(dir string, status git.FileStatus, extended bool) {
+func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended bool) {
 	fullPath := filepath.Join(dir, status.Path)
 	if status.Status == "?" {
 		a.EditorGroup.OpenFile(fullPath)
 		a.FocusEditorIfEnabled()
 		return
 	}
-	var diffText string
-	var err error
-	if status.Status == "R" && status.OldPath != "" {
-		diffText, err = git.DiffRename(dir, status.OldPath, status.Path)
-	} else {
-		diffText, err = git.DiffFile(dir, status.Path)
-	}
-	if err != nil || diffText == "" {
-		a.EditorGroup.OpenFile(fullPath)
-		a.FocusEditorIfEnabled()
+	if staged {
+		a.openStagedDiff(dir, status, extended)
 		return
 	}
-	parsed := diff.Parse(diffText)
-	if len(parsed.Hunks) == 0 {
+	index, indexErr := git.ShowIndexFileContext(context.Background(), dir, status.Path)
+	// A conflicted file has no stage-0 entry, so only a failed index read
+	// needs the conflict check.
+	if indexErr != nil && git.IsUnmergedContext(context.Background(), dir, status.Path) {
+		a.openConflictedFile(fullPath, status.Path)
+		return
+	}
+	parsed, ok := parseChangeDiff(git.DiffWorktreeFile(dir, status.Path))
+	if !ok {
 		a.EditorGroup.OpenFile(fullPath)
 		a.FocusEditorIfEnabled()
 		return
 	}
 	var oldLines, newLines []string
-	oldContent, err := git.ShowFile(dir, status.Path, "HEAD")
-	if err == nil {
-		oldLines = strings.Split(oldContent, "\n")
-		if len(oldLines) > 0 && oldLines[len(oldLines)-1] == "" {
-			oldLines = oldLines[:len(oldLines)-1]
-		}
+	if indexErr == nil {
+		oldLines = diffSideLines(index)
 	}
-	newData, err := os.ReadFile(fullPath)
-	if err == nil {
-		newLines = strings.Split(string(newData), "\n")
-		if len(newLines) > 0 && newLines[len(newLines)-1] == "" {
-			newLines = newLines[:len(newLines)-1]
-		}
+	if data, err := os.ReadFile(fullPath); err == nil {
+		newLines = diffSideLines(string(data))
 	}
 	a.EditorGroup.OpenDiff(status.Path, parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
+}
+
+func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
+	oldPath := status.Path
+	paths := []string{status.Path}
+	if status.OldPath != "" && status.OldPath != status.Path {
+		oldPath = status.OldPath
+		paths = []string{status.OldPath, status.Path}
+	}
+	var newLines []string
+	if status.Status != "D" {
+		content, err := git.ShowIndexFileContext(context.Background(), dir, status.Path)
+		if err != nil && git.IsUnmergedContext(context.Background(), dir, status.Path) {
+			a.openConflictedFile(filepath.Join(dir, status.Path), status.Path)
+			return
+		}
+		if err == nil {
+			newLines = diffSideLines(content)
+		}
+	}
+	parsed, ok := parseChangeDiff(git.DiffStagedFile(dir, paths...))
+	if !ok {
+		a.StatusNotify(fmt.Sprintf("No staged line changes for %s", status.Path))
+		return
+	}
+	var oldLines []string
+	if status.Status != "A" {
+		if content, err := git.ShowFile(dir, oldPath, "HEAD"); err == nil {
+			oldLines = diffSideLines(content)
+		}
+	}
+	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", status.Path, parsed, oldLines, newLines, extended)
+	a.FocusEditorIfEnabled()
+}
+
+func (a *App) openConflictedFile(fullPath, relPath string) {
+	a.EditorGroup.OpenFile(fullPath)
+	a.StatusNotify(fmt.Sprintf("%s has merge conflicts; opened without a diff", relPath))
+	a.FocusEditorIfEnabled()
+}
+
+func parseChangeDiff(text string, err error) (diff.FileDiff, bool) {
+	if err != nil || text == "" {
+		return diff.FileDiff{}, false
+	}
+	parsed := diff.Parse(text)
+	return parsed, len(parsed.Hunks) > 0
+}
+
+func diffSideLines(content string) []string {
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 func (a *App) OpenCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) {
@@ -686,9 +732,7 @@ func registerWidgetCallbacks(app *App) {
 		app.EditorGroup.OpenFile(path)
 		app.FocusEditorIfEnabled()
 	}
-	app.Changes.OnOpenDiff = func(dir string, status git.FileStatus, extended bool) {
-		app.OpenChangeDiff(dir, status, extended)
-	}
+	app.Changes.OnOpenDiff = app.OpenChangeDiff
 	app.Changes.OnOpenCommitDiff = app.OpenCommitDiff
 	app.Changes.OnOpenCommit = app.OpenCommitDetail
 	app.Changes.OnOpenPRDetail = app.OpenPRDetail

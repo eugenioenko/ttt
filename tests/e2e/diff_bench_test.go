@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -96,7 +97,7 @@ func newDiffBenchHarness(b *testing.B, pair diffBenchPair, mode, context string,
 
 // openChangesFromGit mirrors OpenChangeDiff after its git calls. Keep it in step
 // with that function so open_changes_large measures the app, not git.
-func openChangesFromGit(b *testing.B, h *testHarness, path, diffText, head string) {
+func openChangesFromGit(b *testing.B, h *testHarness, path, diffText, index string) {
 	b.Helper()
 	trim := func(text string) []string {
 		lines := strings.Split(text, "\n")
@@ -109,7 +110,7 @@ func openChangesFromGit(b *testing.B, h *testHarness, path, diffText, head strin
 	if err != nil {
 		b.Fatal(err)
 	}
-	h.app.EditorGroup.OpenDiff(diffBenchFile, diff.Parse(diffText), trim(head), trim(string(data)), false)
+	h.app.EditorGroup.OpenDiff(diffBenchFile, diff.Parse(diffText), trim(index), trim(string(data)), false)
 	h.app.FocusEditorIfEnabled()
 }
 
@@ -368,17 +369,17 @@ func BenchmarkDiff(b *testing.B) {
 			writeBenchLines(b, path, large.new)
 			// Git's process time is not the diff view's; fetch its output once and
 			// time what OpenChangeDiff does with it.
-			diffText, err := git.DiffFile(h.dir, diffBenchFile)
+			diffText, err := git.DiffWorktreeFile(h.dir, diffBenchFile)
 			if err != nil {
 				b.Fatal(err)
 			}
-			head, err := git.ShowFile(h.dir, diffBenchFile, "HEAD")
+			index, err := git.ShowIndexFileContext(context.Background(), h.dir, diffBenchFile)
 			if err != nil {
 				b.Fatal(err)
 			}
 			b.ReportAllocs()
 			for b.Loop() {
-				openChangesFromGit(b, h, path, diffText, head)
+				openChangesFromGit(b, h, path, diffText, index)
 				h.redraw()
 				b.StopTimer()
 				h.exec("tab.close")
