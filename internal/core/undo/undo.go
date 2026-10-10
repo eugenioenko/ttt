@@ -65,6 +65,9 @@ func (s *UndoStack) AtSavePoint() bool {
 // Consecutive InsertRuneCommand or DeleteRuneCommand at adjacent positions
 // are automatically grouped so a single undo reverses the whole sequence.
 func (s *UndoStack) Push(cmd EditCommand) {
+	if IsNoop(cmd) {
+		return
+	}
 	s.redo = nil
 	if s.grouping {
 		if len(s.undo) > 0 {
@@ -437,11 +440,25 @@ func (c *InsertStringCommand) Undo(b *buffer.Buffer) {
 	b.Dirty = true
 }
 
+// IsNoop reports whether cmd was applied without changing the buffer, so it
+// should not be recorded as an undo step.
+func IsNoop(cmd EditCommand) bool {
+	n, ok := cmd.(interface{ Noop() bool })
+	return ok && n.Noop()
+}
+
 // DeleteSelectionCommand deletes a multi-line range and stores the deleted text for undo.
 type DeleteSelectionCommand struct {
 	StartLine, StartCol int
 	EndLine, EndCol     int
 	Deleted             string
+	applied             bool
+}
+
+// Noop reports whether the last Apply deleted nothing (an empty, reversed or
+// out-of-range selection).
+func (c *DeleteSelectionCommand) Noop() bool {
+	return !c.applied
 }
 
 func (c *DeleteSelectionCommand) normalize(b *buffer.Buffer) bool {
@@ -495,10 +512,11 @@ func (c *DeleteSelectionCommand) ComputeDeleted(b *buffer.Buffer) string {
 }
 
 func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
-	if !c.normalize(b) {
+	c.applied = false
+	if !c.normalize(b) || c.ComputeDeleted(b) == "" {
 		return
 	}
-	c.ComputeDeleted(b)
+	c.applied = true
 
 	startRunes := []rune(b.Lines[c.StartLine])
 	endRunes := []rune(b.Lines[c.EndLine])
@@ -510,7 +528,7 @@ func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
 }
 
 func (c *DeleteSelectionCommand) Undo(b *buffer.Buffer) {
-	if c.StartLine < 0 || c.StartLine >= len(b.Lines) || c.EndLine < c.StartLine {
+	if !c.applied || c.StartLine >= len(b.Lines) {
 		return
 	}
 

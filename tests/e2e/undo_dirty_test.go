@@ -171,3 +171,20 @@ func TestPluginEditPastLineEndUndoes(t *testing.T) {
 		t.Fatalf("undo of replace past line end got %q", got)
 	}
 }
+
+func TestDeleteLineOnEmptyBufferStaysClean(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	f := filepath.Join(h.dir, "empty.txt")
+	os.WriteFile(f, []byte(""), 0644)
+	h.app.EditorGroup.OpenFile(f)
+	h.redraw()
+
+	h.exec("editor.deleteLine")
+	h.redraw()
+
+	if h.app.EditorGroup.IsDirty() {
+		t.Fatal("deleting the only, empty line changes nothing and should not mark the buffer dirty")
+	}
+}

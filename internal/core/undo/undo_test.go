@@ -931,3 +931,45 @@ func TestDeleteSelectionCommandNegativeColsRoundTrip(t *testing.T) {
 		t.Fatalf("after Undo got %q", b.Lines)
 	}
 }
+
+func TestDeleteSelectionCommandEmptyRangeIsNoop(t *testing.T) {
+	cmds := []*DeleteSelectionCommand{
+		{StartLine: 0, StartCol: 2, EndLine: 0, EndCol: 2},
+		{StartLine: 0, StartCol: 4, EndLine: 0, EndCol: 1},
+		{StartLine: 0, StartCol: 9, EndLine: 0, EndCol: 9},
+	}
+	for _, cmd := range cmds {
+		b := &buffer.Buffer{Lines: []string{"alpha"}}
+		cmd.Apply(b)
+		if !cmd.Noop() {
+			t.Errorf("%+v: expected Noop after Apply", *cmd)
+		}
+		cmd.Undo(b)
+		if b.Lines[0] != "alpha" || b.Dirty {
+			t.Errorf("%+v changed the buffer: %q dirty=%v", *cmd, b.Lines, b.Dirty)
+		}
+	}
+}
+
+func TestUndoStackSkipsNoopCommands(t *testing.T) {
+	b := &buffer.Buffer{Lines: []string{"alpha"}}
+	s := &UndoStack{}
+
+	ins := &InsertStringCommand{Line: 0, Col: 5, Text: "!"}
+	ins.Apply(b)
+	s.Push(ins)
+	s.Undo(b)
+	if len(s.redo) == 0 {
+		t.Fatal("expected a redo entry after undo")
+	}
+
+	noop := &DeleteSelectionCommand{StartLine: 0, StartCol: 1, EndLine: 0, EndCol: 1}
+	noop.Apply(b)
+	s.Push(noop)
+	if len(s.undo) != 0 {
+		t.Error("a no-op delete should not be recorded as an undo step")
+	}
+	if len(s.redo) == 0 {
+		t.Error("a no-op delete should not clear the redo stack")
+	}
+}
