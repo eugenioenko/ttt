@@ -84,6 +84,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
 	a.EditorGroup.SetDiffHighContrast(s.Editor.DiffHighContrast)
 	a.EditorGroup.SetDiffCollapsedEmphasis(s.Editor.DiffCollapsedEmphasis)
+	a.EditorGroup.SetDiffSigns(s.Editor.IsDiffSignsEnabled())
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
 	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
 	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)

@@ -92,6 +92,7 @@ type EditorGroupWidget struct {
 	DiffContext             DiffContextMode
 	DiffWordWrap            bool
 	DiffHighContrast        bool
+	DiffSigns               bool
 	DiffCollapsedEmphasis   bool
 	ImageProtocol           string
 	ImageCellW              int
@@ -576,6 +577,9 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	}
 	surface.ApplyDefaultWrapMode(wrapMode)
 	surface.SetDiffHighContrast(g.DiffHighContrast)
+	if d, ok := surface.(*DiffEditorWidget); ok {
+		d.SetDiffSigns(g.DiffSigns)
+	}
 	surface.SetDiffCollapsedEmphasis(g.DiffCollapsedEmphasis)
 }
 
@@ -592,6 +596,15 @@ func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {
 	g.DiffHighContrast = enabled
 	for _, surface := range g.diffSurfaces() {
 		surface.SetDiffHighContrast(enabled)
+	}
+}
+
+func (g *EditorGroupWidget) SetDiffSigns(enabled bool) {
+	g.DiffSigns = enabled
+	for _, surface := range g.diffSurfaces() {
+		if d, ok := surface.(*DiffEditorWidget); ok {
+			d.SetDiffSigns(enabled)
+		}
 	}
 }
 
@@ -2201,10 +2214,14 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if t == nil {
 		return
 	}
+	if d, ok := t.Content.(*DiffEditorWidget); ok {
+		d.setGutterStyle(g.GutterStyle)
+	}
 	if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)
 	} else if t.Diff != nil {
+		t.Diff.setGutterStyle(g.GutterStyle)
 		t.Diff.SetRect(contentRect)
 		t.Diff.Render(contentSurface)
 	} else {

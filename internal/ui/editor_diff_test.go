@@ -82,8 +82,11 @@ func TestEditorRendersDiffOverlay(t *testing.T) {
 			t.Fatalf("row %d = %q, want %q", y, got, w)
 		}
 	}
-	if grid[1][g].BgStyle != term.StyleDiffDeleted || grid[1][0].Ch != '−' {
-		t.Errorf("phantom row not styled as deleted: %+v %+v", grid[1][g], grid[1][0])
+	if grid[1][g].BgStyle != term.StyleDiffDeleted || grid[1][g-1].Ch != '−' {
+		t.Errorf("phantom row not styled as deleted: %+v %+v", grid[1][g], grid[1][g-1])
+	}
+	if grid[2][g-1].Ch != '+' {
+		t.Errorf("added row has no + sign: %+v", grid[2][g-1])
 	}
 	if !strings.Contains(string([]rune{grid[1][1].Ch, grid[1][2].Ch, grid[1][3].Ch}), "2") {
 		t.Errorf("phantom row gutter should show old line number 2")
@@ -139,5 +142,75 @@ func TestEditableSplitAlignsRows(t *testing.T) {
 				return out
 			}(), "\n"))
 		}
+	}
+}
+
+func TestDiffSignsFollowGutterStyle(t *testing.T) {
+	oldLines := []string{"a", "b", "c"}
+	newLines := []string{"a", "B", "c"}
+	signs := func(style string, on bool) (deleted, added string) {
+		e := newRowsEditor(newLines, 30, 6)
+		e.LineNumbers = true
+		e.GutterStyle = style
+		d := fullLiveDiff(oldLines, newLines)
+		d.SetDiffSigns(on)
+		e.SetDiffOverlay(d.liveUnified)
+		grid := makeGrid(30, 6)
+		e.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 6}))
+		gutter := func(y int) string {
+			var sb strings.Builder
+			for x := 0; x < e.GutterWidth(); x++ {
+				sb.WriteRune(grid[y][x].Ch)
+			}
+			return sb.String()
+		}
+		return gutter(1), gutter(2)
+	}
+	for _, tt := range []struct {
+		style string
+		on    bool
+		want  bool
+	}{
+		{"compact", true, true},
+		{"extended", true, true},
+		{"minimal", true, false},
+		{"compact", false, false},
+		{"extended", false, false},
+	} {
+		del, add := signs(tt.style, tt.on)
+		got := strings.ContainsRune(del, '−') && strings.ContainsRune(add, '+')
+		none := !strings.ContainsAny(del+add, "−+")
+		if tt.want && !got || !tt.want && !none {
+			t.Errorf("style %s signs %v: deleted gutter %q, added gutter %q", tt.style, tt.on, del, add)
+		}
+	}
+}
+
+func TestReadOnlyDiffSignsToggle(t *testing.T) {
+	d := NewDiffEditorWidget("f.txt", diff.FileDiff{}, []string{"a", "b"}, []string{"a", "B"}, true)
+	d.SetMode(DiffModeUnified)
+	render := func() string {
+		grid := makeGrid(30, 4)
+		d.SetRect(Rect{X: 0, Y: 0, W: 30, H: 4})
+		d.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 4}))
+		var sb strings.Builder
+		for y := 0; y < 4; y++ {
+			for x := 0; x < d.unified.GutterWidth(); x++ {
+				sb.WriteRune(grid[y][x].Ch)
+			}
+		}
+		return sb.String()
+	}
+	if g := render(); !strings.ContainsRune(g, '+') || !strings.ContainsRune(g, '−') {
+		t.Fatalf("signs missing by default: %q", g)
+	}
+	d.SetDiffSigns(false)
+	if g := render(); strings.ContainsAny(g, "+−") {
+		t.Fatalf("signs drawn while off: %q", g)
+	}
+	d.SetDiffSigns(true)
+	d.setGutterStyle("minimal")
+	if g := render(); strings.ContainsAny(g, "+−") {
+		t.Fatalf("signs drawn in the minimal gutter: %q", g)
 	}
 }

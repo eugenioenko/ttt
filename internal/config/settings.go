@@ -99,6 +99,7 @@ type EditorSettings struct {
 	DiffWordWrap            bool             `json:"diffWordWrap"`
 	DiffHighContrast        bool             `json:"diffHighContrast,omitempty"`
 	DiffCollapsedEmphasis   bool             `json:"diffEmphasizeCollapsedRows,omitempty"`
+	DiffSigns               *bool            `json:"diffSigns,omitempty"`
 	LineNumbers             bool             `json:"lineNumbers"`
 	CursorStyle             string           `json:"cursorStyle,omitempty"`
 	FormatOnSave            bool             `json:"formatOnSave"`
@@ -141,6 +142,10 @@ func (e EditorSettings) IsSyntaxHighlightEnabled() bool {
 
 func (e EditorSettings) IsGitGutterEnabled() bool {
 	return e.GitGutter == nil || *e.GitGutter
+}
+
+func (e EditorSettings) IsDiffSignsEnabled() bool {
+	return e.DiffSigns == nil || *e.DiffSigns
 }
 
 func (e EditorSettings) IsAutoDedentEnabled() bool {

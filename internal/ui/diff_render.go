@@ -191,6 +191,10 @@ func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine) {
 }
 
 func renderDiffGutterWithCollapsedStyle(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style) {
+	renderDiffGutterWithSigns(surface, x, y, width, line, collapsedStyle, true)
+}
+
+func renderDiffGutterWithSigns(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style, signs bool) {
 	number := ""
 	if line.Num > 0 {
 		number = fmt.Sprintf("%d", line.Num)
@@ -212,6 +216,9 @@ func renderDiffGutterWithCollapsedStyle(surface Surface, x, y, width int, line d
 		if collapsedStyle != term.StyleDefault {
 			style = collapsedStyle
 		}
+	}
+	if !signs {
+		marker = ' '
 	}
 	text := fmt.Sprintf("%*s %c", width-2, number, marker)
 	for column, ch := range []rune(text) {

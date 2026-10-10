@@ -27,6 +27,7 @@ type DiffOverlay struct {
 	HoveredGap    int
 	HighContrast  bool
 	EmphasizeGaps bool
+	Signs         bool
 
 	// Labels draws a gap label in place of a buffer line's text; Hidden holds
 	// the buffer lines folded away behind such a gap line, so a real buffer can
@@ -139,7 +140,35 @@ func (e *EditorPaneWidget) renderDiffGutterRow(surface Surface, y, gutterW, line
 	if !continuation && line < len(e.Buf.Lines) {
 		side = diff.SideLine{Num: o.num(line), Kind: o.kind(line)}
 	}
-	renderDiffGutterWithCollapsedStyle(surface, 0, y, gutterW, side, collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line)))
+	renderDiffGutterWithSigns(surface, 0, y, gutterW, side, collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line)), e.diffSignCol(gutterW) >= 0)
+}
+
+// diffSignCol is where an editor-layout gutter draws +, − and ▶, or -1 when
+// signs are off; the minimal gutter has no room for them.
+func (e *EditorPaneWidget) diffSignCol(gutterW int) int {
+	o := e.DiffOverlay
+	if o == nil || !o.Signs || e.GutterStyle == "minimal" || gutterW < 3 {
+		return -1
+	}
+	if e.GutterStyle == "extended" {
+		return gutterW - 2
+	}
+	return gutterW - 1
+}
+
+func (e *EditorPaneWidget) renderDiffSign(surface Surface, y, gutterW int, kind diff.LineKind, bg term.Style) {
+	col := e.diffSignCol(gutterW)
+	if col < 0 {
+		return
+	}
+	switch kind {
+	case diff.Added:
+		surface.SetCell(col, y, term.Cell{Ch: '+', Style: term.StyleGutterAdded, BgStyle: bg})
+	case diff.Deleted:
+		surface.SetCell(col, y, term.Cell{Ch: '−', Style: term.StyleGutterDeleted, BgStyle: bg})
+	case diff.Collapsed:
+		surface.SetCell(col, y, term.Cell{Ch: '▶', Style: term.StyleLineNumber, BgStyle: bg})
+	}
 }
 
 func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
@@ -179,7 +208,17 @@ func (e *EditorPaneWidget) renderGapRow(surface Surface, y, gutterW, editorW, li
 	hovered := o.gapHovered(line)
 	rowStyle := collapsedDiffRowStyle(diff.Collapsed, o.EmphasizeGaps, hovered)
 	if gutterW > 0 {
-		renderDiffGutterWithCollapsedStyle(surface, 0, y, gutterW, diff.SideLine{Kind: diff.Collapsed}, collapsedDiffGutterStyle(diff.Collapsed, o.EmphasizeGaps, hovered))
+		gutterStyle := collapsedDiffGutterStyle(diff.Collapsed, o.EmphasizeGaps, hovered)
+		cell := term.Cell{Ch: ' ', Style: term.StyleLineNumber}
+		if gutterStyle != term.StyleDefault {
+			cell.Style = gutterStyle
+		}
+		for x := 0; x < gutterW; x++ {
+			surface.SetCell(x, y, cell)
+		}
+		if col := e.diffSignCol(gutterW); col >= 0 {
+			surface.SetCell(col, y, term.Cell{Ch: '▶', Style: cell.Style})
+		}
 	}
 	fg := rowStyle
 	if fg == term.StyleDefault {
@@ -219,7 +258,7 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 			}
 			surface.SetCell(i, y, term.Cell{Ch: ch, Style: term.StyleLineNumber, BgStyle: term.StyleDiffDeleted})
 		}
-		surface.SetCell(0, y, term.Cell{Ch: '−', Style: term.StyleGutterDeleted, BgStyle: term.StyleDiffDeleted})
+		e.renderDiffSign(surface, y, gutterW, diff.Deleted, term.StyleDiffDeleted)
 	}
 	var spans []highlight.Span
 	if e.Highlighter != nil && old.Text != "" {

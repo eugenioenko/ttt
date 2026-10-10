@@ -170,6 +170,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					surface.SetCell(0, y, term.Cell{Ch: ch, Style: style})
 				}
 			}
+			if lineIdx < totalLines && !isWrapContinuation && e.DiffOverlay.kind(lineIdx) == diff.Added {
+				e.renderDiffSign(surface, y, gutterW, diff.Added, gutterStyle)
+			}
 			if len(e.Bookmarks) > 0 && lineIdx < totalLines && !isWrapContinuation {
 				if b, ok := e.Bookmarks[lineIdx]; ok {
 					surface.SetCell(e.bookmarkColumn(), y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: gutterStyle})

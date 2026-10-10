@@ -41,6 +41,7 @@ type DiffEditorWidget struct {
 	wrapMode        DiffWrapMode
 	wrapExplicit    bool
 	highContrast    bool
+	signs           bool
 	emphasizeGaps   bool
 	hoveredGap      int
 
@@ -101,6 +102,7 @@ func NewDiffEditorWidget(filePath string, fd diff.FileDiff, oldLines, newLines [
 		pendingGap:    -1,
 		hoveredGap:    -1,
 		syntax:        true,
+		signs:         true,
 		unified:       newDiffPane(),
 		left:          newDiffPane(),
 		right:         newDiffPane(),
@@ -274,15 +276,31 @@ func (d *DiffEditorWidget) SetDiffHighContrast(enabled bool) {
 	d.applyOverlayOptions()
 }
 
+func (d *DiffEditorWidget) SetDiffSigns(enabled bool) {
+	d.signs = enabled
+	d.applyOverlayOptions()
+}
+
+func (d *DiffEditorWidget) setGutterStyle(style string) {
+	for _, p := range d.panes() {
+		p.GutterStyle = style
+	}
+}
+
 func (d *DiffEditorWidget) SetDiffCollapsedEmphasis(enabled bool) {
 	d.emphasizeGaps = enabled
 	d.applyOverlayOptions()
 }
 
 func (d *DiffEditorWidget) applyOverlayOptions() {
+	overlays := []*DiffOverlay{d.leftBase, d.rightBase, d.liveUnified}
 	for _, p := range d.viewPanes() {
-		if o := p.DiffOverlay; o != nil {
+		overlays = append(overlays, p.DiffOverlay)
+	}
+	for _, o := range overlays {
+		if o != nil {
 			o.HighContrast = d.highContrast
+			o.Signs = d.signs
 			o.EmphasizeGaps = d.emphasizeGaps
 			o.HoveredGap = d.hoveredGap
 		}
