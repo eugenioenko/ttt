@@ -44,6 +44,9 @@ func (d *DiffEditorWidget) SetLiveDiff(base []string, lines []diff.DiffLine) {
 	d.liveSnap, d.liveTouched = nil, nil
 	d.ClearSearch()
 	d.rebuild()
+	if d.OnRecompute != nil {
+		d.OnRecompute()
+	}
 }
 
 func (d *DiffEditorWidget) bind(e *EditorPaneWidget) {

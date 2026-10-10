@@ -982,8 +982,15 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 		dv.ScrollToLine(match.Line)
 	}
 	findBar.OnDismiss = func() {
+		dv.OnRecompute = nil
 		a.DismissDialog()
 		dv.ClearSearch()
+	}
+	dv.OnRecompute = func() {
+		findBar.Refresh()
+		if len(findBar.Matches) > 0 {
+			dv.SetActiveMatch(findBar.Current)
+		}
 	}
 	a.ShowFindBar(findBar)
 }

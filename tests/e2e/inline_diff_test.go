@@ -10,6 +10,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/gdamore/tcell/v3"
 )
@@ -274,5 +275,35 @@ func TestOpenChangesFocusFollowsFocusOnOpen(t *testing.T) {
 			}
 		}
 		h.stop()
+	}
+}
+
+func TestInlineDiffFindSurvivesRecompute(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	path := filepath.Join(h.dir, "code.txt")
+	os.WriteFile(path, []byte("foo\nbar\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	h.app.Repository.RefreshNow(app.RepositoryWorktree)
+	os.WriteFile(path, []byte("foo\nbar\nbaz\n"), 0644)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "code.txt", Status: "M"}, false)
+	h.redraw()
+	h.exec("editor.focus")
+	h.app.OpenFind()
+	h.redraw()
+	for _, r := range "ba" {
+		h.pressRune(r)
+	}
+	h.assertContains(" 1/3")
+
+	h.app.EditorGroup.Editor.ExecCommand(&undo.InsertLineCommand{Idx: 3, Text: "bat"})
+	h.flushOnChange()
+	h.app.RequestGitGutterForActiveFile()
+	awaitGitGutter(t, h)
+
+	h.assertContains(" 1/4")
+	if dv := h.app.EditorGroup.ActiveInlineDiff(); dv == nil || len(dv.SearchMatchesRight) != 3 {
+		t.Fatal("recomputed diff lost its search highlights")
 	}
 }

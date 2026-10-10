@@ -47,7 +47,10 @@ type DiffEditorWidget struct {
 	hoveredGap      int
 	minGutter       int
 
-	OnFetchExtended  func(dv *DiffEditorWidget)
+	OnFetchExtended func(dv *DiffEditorWidget)
+	// OnRecompute runs after an editable diff takes a recomputed diff, which
+	// clears its search; an open find bar re-runs its query from it.
+	OnRecompute      func()
 	Loading          bool
 	extendedFetching bool
 	loadingAnchor    diffEditorAnchor
