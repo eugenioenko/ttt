@@ -115,6 +115,7 @@ try {
           .map((name) => [base[name][field], head[name][field]])
           .filter(([before, after]) => (before > 0) === (after > 0))
           .map(([before, after]) => (before > 0 ? after / before : 1));
+        if (ratios.length === 0) return '**n/a**';
         const mean = Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length);
         return `**${percent(mean, 1)}**`;
       };
