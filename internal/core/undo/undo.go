@@ -65,6 +65,9 @@ func (s *UndoStack) AtSavePoint() bool {
 // Consecutive InsertRuneCommand or DeleteRuneCommand at adjacent positions
 // are automatically grouped so a single undo reverses the whole sequence.
 func (s *UndoStack) Push(cmd EditCommand) {
+	if IsNoop(cmd) {
+		return
+	}
 	s.redo = nil
 	if s.grouping {
 		if len(s.undo) > 0 {
@@ -437,64 +440,87 @@ func (c *InsertStringCommand) Undo(b *buffer.Buffer) {
 	b.Dirty = true
 }
 
+// IsNoop reports whether cmd was applied without changing the buffer, so it
+// should not be recorded as an undo step.
+func IsNoop(cmd EditCommand) bool {
+	n, ok := cmd.(interface{ Noop() bool })
+	return ok && n.Noop()
+}
+
 // DeleteSelectionCommand deletes a multi-line range and stores the deleted text for undo.
 type DeleteSelectionCommand struct {
 	StartLine, StartCol int
 	EndLine, EndCol     int
 	Deleted             string
+	applied             bool
 }
 
-func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
-	if c.StartLine >= len(b.Lines) {
-		return
+// Noop reports whether the last Apply deleted nothing (an empty, reversed or
+// out-of-range selection).
+func (c *DeleteSelectionCommand) Noop() bool {
+	return !c.applied
+}
+
+func (c *DeleteSelectionCommand) normalize(b *buffer.Buffer) bool {
+	if c.StartLine < 0 || c.StartLine >= len(b.Lines) || c.EndLine < c.StartLine {
+		return false
 	}
 	if c.EndLine >= len(b.Lines) {
 		c.EndLine = len(b.Lines) - 1
 		c.EndCol = len([]rune(b.Lines[c.EndLine]))
 	}
+	c.StartCol = clampCol(c.StartCol, len([]rune(b.Lines[c.StartLine])))
+	c.EndCol = clampCol(c.EndCol, len([]rune(b.Lines[c.EndLine])))
+	if c.StartLine == c.EndLine && c.StartCol > c.EndCol {
+		c.StartCol = c.EndCol
+	}
+	return true
+}
 
-	startRunes := []rune(b.Lines[c.StartLine])
-	sc := c.StartCol
-	if sc > len(startRunes) {
-		sc = len(startRunes)
+func clampCol(col, length int) int {
+	if col < 0 {
+		return 0
+	}
+	if col > length {
+		return length
+	}
+	return col
+}
+
+func (c *DeleteSelectionCommand) ComputeDeleted(b *buffer.Buffer) string {
+	if !c.normalize(b) {
+		return ""
 	}
 
+	startRunes := []rune(b.Lines[c.StartLine])
 	if c.StartLine == c.EndLine {
-		endRunes := []rune(b.Lines[c.StartLine])
-		ec := c.EndCol
-		if ec > len(endRunes) {
-			ec = len(endRunes)
-		}
-		if sc > ec {
-			sc = ec
-		}
-		c.Deleted = string(endRunes[sc:ec])
-		b.Lines[c.StartLine] = string(startRunes[:sc]) + string(endRunes[ec:])
-		b.Dirty = true
-		return
+		c.Deleted = string(startRunes[c.StartCol:c.EndCol])
+		return c.Deleted
 	}
 
 	endRunes := []rune(b.Lines[c.EndLine])
-	ec := c.EndCol
-	if ec > len(endRunes) {
-		ec = len(endRunes)
-	}
-
-	// Build deleted text
 	var del []rune
-	del = append(del, startRunes[sc:]...)
+	del = append(del, startRunes[c.StartCol:]...)
 	del = append(del, '\n')
 	for l := c.StartLine + 1; l < c.EndLine; l++ {
 		del = append(del, []rune(b.Lines[l])...)
 		del = append(del, '\n')
 	}
-	del = append(del, endRunes[:ec]...)
+	del = append(del, endRunes[:c.EndCol]...)
 	c.Deleted = string(del)
+	return c.Deleted
+}
 
-	// Merge start prefix with end suffix
-	b.Lines[c.StartLine] = string(startRunes[:sc]) + string(endRunes[ec:])
+func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
+	c.applied = false
+	if !c.normalize(b) || c.ComputeDeleted(b) == "" {
+		return
+	}
+	c.applied = true
 
-	// Remove lines between
+	startRunes := []rune(b.Lines[c.StartLine])
+	endRunes := []rune(b.Lines[c.EndLine])
+	b.Lines[c.StartLine] = string(startRunes[:c.StartCol]) + string(endRunes[c.EndCol:])
 	if c.EndLine > c.StartLine {
 		b.Lines = append(b.Lines[:c.StartLine+1], b.Lines[c.EndLine+1:]...)
 	}
@@ -502,7 +528,7 @@ func (c *DeleteSelectionCommand) Apply(b *buffer.Buffer) {
 }
 
 func (c *DeleteSelectionCommand) Undo(b *buffer.Buffer) {
-	if c.StartLine >= len(b.Lines) {
+	if !c.applied || c.StartLine >= len(b.Lines) {
 		return
 	}
 

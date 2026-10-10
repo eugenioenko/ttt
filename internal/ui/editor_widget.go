@@ -293,6 +293,9 @@ func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
 func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 	prevLines := len(e.Buf.Lines)
 	cmd.Apply(e.Buf)
+	if undo.IsNoop(cmd) {
+		return
+	}
 	if e.Undo != nil {
 		e.Undo.Push(cmd)
 	}

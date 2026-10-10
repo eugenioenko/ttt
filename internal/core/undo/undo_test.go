@@ -2,6 +2,7 @@ package undo
 
 import (
 	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"strings"
 	"testing"
 )
 
@@ -824,4 +825,151 @@ func TestTransactionNoEdits(t *testing.T) {
 func TestEndTransactionWithoutBegin(t *testing.T) {
 	s := &UndoStack{}
 	s.EndTransaction()
+}
+
+func TestDeleteSelectionCommandComputeDeleted(t *testing.T) {
+	tests := []struct {
+		name  string
+		lines []string
+		cmd   DeleteSelectionCommand
+		want  string
+	}{
+		{
+			name:  "single line range",
+			lines: []string{"alpha beta"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: 0, EndCol: 5},
+			want:  "alpha",
+		},
+		{
+			name:  "cols clamp to line length",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: 0, EndCol: 99},
+			want:  "alpha",
+		},
+		{
+			name:  "multi line range joins with newlines",
+			lines: []string{"alpha", "beta", "gamma"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 2, EndLine: 2, EndCol: 3},
+			want:  "pha\nbeta\ngam",
+		},
+		{
+			name:  "end line clamps to last line",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: 5, EndCol: 0},
+			want:  "alpha",
+		},
+		{
+			name:  "invalid start line deletes nothing",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 1, StartCol: 0, EndLine: 1, EndCol: 0},
+			want:  "",
+		},
+		{
+			name:  "negative start line deletes nothing",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: -1, StartCol: 0, EndLine: 0, EndCol: 2},
+			want:  "",
+		},
+		{
+			name:  "negative end line deletes nothing",
+			lines: []string{"alpha"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: -1, EndCol: 0},
+			want:  "",
+		},
+		{
+			name:  "reversed lines delete nothing",
+			lines: []string{"alpha", "beta", "gamma"},
+			cmd:   DeleteSelectionCommand{StartLine: 2, StartCol: 0, EndLine: 0, EndCol: 3},
+			want:  "",
+		},
+		{
+			name:  "negative cols clamp to zero",
+			lines: []string{"alpha", "beta"},
+			cmd:   DeleteSelectionCommand{StartLine: 0, StartCol: -3, EndLine: 1, EndCol: -1},
+			want:  "alpha\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b := &buffer.Buffer{Lines: test.lines}
+			if got := test.cmd.ComputeDeleted(b); got != test.want {
+				t.Errorf("ComputeDeleted = %q, want %q", got, test.want)
+			}
+			if len(b.Lines) != len(test.lines) {
+				t.Errorf("ComputeDeleted mutated the buffer: %v", b.Lines)
+			}
+		})
+	}
+}
+
+func TestDeleteSelectionCommandInvalidRangeIsNoop(t *testing.T) {
+	cmds := []DeleteSelectionCommand{
+		{StartLine: 0, StartCol: 0, EndLine: -1, EndCol: 0},
+		{StartLine: -1, StartCol: 0, EndLine: 1, EndCol: 0},
+		{StartLine: 2, StartCol: 0, EndLine: 0, EndCol: 3},
+	}
+	for _, cmd := range cmds {
+		b := &buffer.Buffer{Lines: []string{"alpha", "beta", "gamma"}}
+		cmd.Apply(b)
+		cmd.Undo(b)
+		if strings.Join(b.Lines, "\n") != "alpha\nbeta\ngamma" || b.Dirty {
+			t.Errorf("%+v changed the buffer: %q dirty=%v", cmd, b.Lines, b.Dirty)
+		}
+	}
+}
+
+func TestDeleteSelectionCommandNegativeColsRoundTrip(t *testing.T) {
+	b := &buffer.Buffer{Lines: []string{"alpha", "beta"}}
+	cmd := &DeleteSelectionCommand{StartLine: 0, StartCol: -3, EndLine: 1, EndCol: -1}
+	cmd.Apply(b)
+	if strings.Join(b.Lines, "\n") != "beta" {
+		t.Fatalf("after Apply got %q", b.Lines)
+	}
+	cmd.Undo(b)
+	if strings.Join(b.Lines, "\n") != "alpha\nbeta" {
+		t.Fatalf("after Undo got %q", b.Lines)
+	}
+}
+
+func TestDeleteSelectionCommandEmptyRangeIsNoop(t *testing.T) {
+	cmds := []*DeleteSelectionCommand{
+		{StartLine: 0, StartCol: 2, EndLine: 0, EndCol: 2},
+		{StartLine: 0, StartCol: 4, EndLine: 0, EndCol: 1},
+		{StartLine: 0, StartCol: 9, EndLine: 0, EndCol: 9},
+	}
+	for _, cmd := range cmds {
+		b := &buffer.Buffer{Lines: []string{"alpha"}}
+		cmd.Apply(b)
+		if !cmd.Noop() {
+			t.Errorf("%+v: expected Noop after Apply", *cmd)
+		}
+		cmd.Undo(b)
+		if b.Lines[0] != "alpha" || b.Dirty {
+			t.Errorf("%+v changed the buffer: %q dirty=%v", *cmd, b.Lines, b.Dirty)
+		}
+	}
+}
+
+func TestUndoStackSkipsNoopCommands(t *testing.T) {
+	b := &buffer.Buffer{Lines: []string{"alpha"}}
+	s := &UndoStack{}
+
+	ins := &InsertStringCommand{Line: 0, Col: 5, Text: "!"}
+	ins.Apply(b)
+	s.Push(ins)
+	s.Undo(b)
+	if len(s.redo) == 0 {
+		t.Fatal("expected a redo entry after undo")
+	}
+
+	noop := &DeleteSelectionCommand{StartLine: 0, StartCol: 1, EndLine: 0, EndCol: 1}
+	noop.Apply(b)
+	s.Push(noop)
+	if len(s.undo) != 0 {
+		t.Error("a no-op delete should not be recorded as an undo step")
+	}
+	if len(s.redo) == 0 {
+		t.Error("a no-op delete should not clear the redo stack")
+	}
 }
