@@ -411,7 +411,7 @@ func TestDiffWidgetCollapsedSeparatorOmitsAdjacentLines(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -24,1 +24,1 @@\n line 24\n@@ -25,1 +25,1 @@\n line 25\n")
 	dv := NewDiffViewWidget("test.go", fd, nil, nil, false)
 
-	if len(dv.Lines) != 3 {
+	if len(dv.Lines) != 2 {
 		t.Fatalf("lines = %d, want adjacent diff rows with no separator: %v", len(dv.Lines), dv.Lines)
 	}
 	if dv.Lines[0].Left.Text != "line 24" || dv.Lines[1].Left.Text != "line 25" {
