@@ -350,7 +350,7 @@ func BenchmarkDiff(b *testing.B) {
 			status := git.FileStatus{Status: "M", Path: diffBenchFile}
 			b.ReportAllocs()
 			for b.Loop() {
-				h.app.OpenChangeDiff(h.dir, status, false)
+				h.app.OpenChangeDiff(h.dir, status, false, false)
 				h.redraw()
 				b.StopTimer()
 				h.exec("tab.close")
