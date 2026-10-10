@@ -127,7 +127,7 @@ type commitDetailPreservedSelection struct {
 }
 
 // CommitDetailWidget renders an entire commit as one virtualized scrollable
-// document. Unlike stacking several DiffViewWidgets, it owns one vertical
+// document. Unlike stacking one diff widget per file, it owns one vertical
 // viewport and only draws visible rows, so a large commit does not allocate a
 // full-screen cell grid for every changed line on every redraw.
 type CommitDetailWidget struct {

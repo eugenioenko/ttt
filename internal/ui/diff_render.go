@@ -298,3 +298,21 @@ func drawTextSegment(surface Surface, x, y, width int, text string, segmentStart
 		}
 	}
 }
+
+func diffSegmentVisualColToRune(text string, startCol, visualCol int) int {
+	if startCol < 0 {
+		return 0
+	}
+	runes := []rune(text)
+	if startCol >= len(runes) {
+		return len(runes)
+	}
+	return startCol + visualColToBufCol(string(runes[startCol:]), visualCol, diffTabWidth)
+}
+
+func diffLineNumberDistance(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}

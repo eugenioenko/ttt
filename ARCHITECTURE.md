@@ -188,6 +188,11 @@ where their contracts agree. They should remain separate product surfaces when
 their interaction or lifecycle differs. The target is shared models with thin
 surface adapters, not one highly conditional diff widget.
 
+File diffs render through the editor: `EditorPaneWidget` draws a `DiffOverlay`
+(line kinds, deleted and filler phantom rows, gutter numbers, gaps), editable
+working-tree diffs use the file's own tab, and read-only diffs use
+`DiffEditorWidget`. `CommitDetailWidget` remains a separate surface.
+
 ### Application owners
 
 Subsystem owners must establish all of the following:
@@ -273,7 +278,7 @@ P2
 `-- [P3/P4] H1 PTY readiness fixture correction for issue #533
 
 S2 + D2
-  `-- D3  Migrate DiffViewWidget
+  `-- D3  Migrate DiffViewWidget (done: replaced by the editor-based diff, #697)
         `-- D4  Migrate CommitDetailWidget and remove duplicate projection
 ```
 

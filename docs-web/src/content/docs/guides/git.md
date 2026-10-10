@@ -38,6 +38,10 @@ TTT refreshes repository status after editor and source-control mutations. While
 
 Select a changed file in the changes panel to open a diff. Syntax highlighting is layered on top of diff background colors so you can read the code naturally while seeing what changed. Added and removed line numbers use `+` and `−` markers with semantic green and red styling.
 
+Diffs of working-tree changes open in the file's own editor tab in diff mode (the tab title ends in `(diff)`). You can edit and save there as in any editor tab; the diff against `HEAD` recomputes shortly after you stop typing, on save, and when the file reloads from disk. In the unified layout, removed lines appear above the lines that replaced them and cannot be edited. In the split layout, `HEAD` is shown read-only on the left and the file on the right, scrolling together. Run **Git: Toggle Inline Diff** from the command palette to turn diff mode on or off for any tracked file.
+
+Commit, pull request, deleted, and renamed file diffs open read-only.
+
 ## Explorer Git Status Colors
 
 The file explorer sidebar colors files and folders by their git status: modified files are colored with the theme's `warning` color, new/untracked files with `success`, deleted files with `danger`, and merge-conflicted files with `conflict`. Staged and pending changes share one color by default, since the Changes panel is where staged work is easiest to read. Turning on `explorer.dimStagedGitColors` renders staged changes in a dimmed version of their color, telling the two apart at the cost of a busier sidebar. A folder takes the color of the most attention-worthy change among its descendants, which is how a deletion usually shows: the file itself is gone from disk and has no row, but its folder still carries the `danger` color. This is on by default and can be turned off via `explorer.gitStatusColors` in Settings.
