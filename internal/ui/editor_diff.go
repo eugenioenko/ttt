@@ -73,9 +73,18 @@ type diffSyntax struct {
 // diffSideSyntax creates its highlighter on first use; path is empty when
 // syntax highlighting is off.
 type diffSideSyntax struct {
-	path  string
-	hl    *highlight.Highlighter
-	lines []string
+	path   string
+	hl     *highlight.Highlighter
+	lines  []string
+	notify func()
+	peer   *diffSideSyntax
+}
+
+func (s *diffSideSyntax) setNotify(notify func()) {
+	s.notify = notify
+	if s.hl != nil {
+		s.hl.SetProgressive(notify)
+	}
 }
 
 func (s *diffSideSyntax) reset(path string) {
@@ -97,6 +106,10 @@ func (s *diffSideSyntax) spans(num int, text string) ([]highlight.Span, bool) {
 		if s.hl = highlight.New(s.path); s.hl == nil {
 			s.path = ""
 			return nil, false
+		}
+		s.hl.SetProgressive(s.notify)
+		if s.peer != nil {
+			s.hl.ShareSingleLines(s.peer.hl)
 		}
 	}
 	return s.hl.HighlightLineAt(s.lines, num-1), true

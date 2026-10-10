@@ -716,6 +716,8 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.OnReplace = app.ApplySearchReplace
 	app.Search.OnReplaceAll = app.ApplySearchReplaceAll
 
+	app.EditorGroup.RequestRedraw = app.requestRedraw
+
 	app.Changes.OnRightClick = app.ShowChangesFileContextMenu
 	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
@@ -799,5 +801,11 @@ func registerWidgetCallbacks(app *App) {
 			}
 			openContextMenu(app, items, sx, sy)
 		}},
+	}
+}
+
+func (a *App) requestRedraw() {
+	if a.Screen != nil {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 }

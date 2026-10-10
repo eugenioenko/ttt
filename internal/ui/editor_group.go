@@ -113,6 +113,9 @@ type EditorGroupWidget struct {
 	// OnEmpty fires after the last tab closes and the untitled placeholder
 	// takes its place.
 	OnEmpty func()
+	// RequestRedraw asks the event loop for a frame; it is called off the
+	// main thread when background highlighting settles.
+	RequestRedraw func()
 	// EmptyStateID names a content tab that stands in for the placeholder:
 	// like it, it has no close button while it is the only tab.
 	EmptyStateID  string
@@ -569,6 +572,9 @@ func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.Fil
 
 func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	surface.ApplyDefaultMode(g.DiffMode)
+	if r, ok := surface.(interface{ SetRedrawRequest(func()) }); ok {
+		r.SetRedrawRequest(g.RequestRedraw)
+	}
 	if contextSurface, ok := surface.(DiffContextSurface); ok {
 		contextSurface.ApplyDefaultContextMode(g.DiffContext)
 	}
@@ -727,6 +733,7 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
+	tab.Highlighter.SetProgressive(nil)
 	if tab.Content == nil {
 		return
 	}
@@ -2160,8 +2167,10 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.LineChanges = t.LineChanges
 		g.Editor.WordWrap = g.WordWrap
 		if t.Diff != nil {
+			t.Highlighter.SetProgressive(g.RequestRedraw)
 			t.Diff.bind(g.Editor)
 		} else {
+			t.Highlighter.SetProgressive(nil)
 			g.Editor.SetDiffOverlay(nil)
 		}
 		g.Editor.buildDiagIndex()

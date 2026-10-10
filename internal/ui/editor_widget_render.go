@@ -12,6 +12,12 @@ import (
 
 func (e *EditorPaneWidget) Render(surface Surface) {
 	e.syncDiffOverlay()
+	e.Highlighter.BeginPass()
+	if o := e.DiffOverlay; o != nil && o.Syntax != nil {
+		o.Syntax.old.hl.BeginPass()
+		o.Syntax.new.hl.BeginPass()
+	}
+	defer e.endHighlightPass()
 	w, h := surface.Size()
 
 	totalLines := len(e.Buf.Lines)
@@ -368,6 +374,14 @@ func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num, li
 	}
 	for range trail {
 		put(' ')
+	}
+}
+
+func (e *EditorPaneWidget) endHighlightPass() {
+	e.Highlighter.EndPass()
+	if o := e.DiffOverlay; o != nil && o.Syntax != nil {
+		o.Syntax.old.hl.EndPass()
+		o.Syntax.new.hl.EndPass()
 	}
 }
 
