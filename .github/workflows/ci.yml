@@ -179,7 +179,7 @@ jobs:
         run: go test ./...
 
   bench-editor:
-    name: Base vs PR editor benchmarks
+    name: Base vs PR editor and diff benchmarks
     needs: classify
     if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
