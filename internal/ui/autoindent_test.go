@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
@@ -11,7 +12,7 @@ import (
 )
 
 func newEditorWithLines(lines ...string) *EditorPaneWidget {
-	buf := &buffer.Buffer{Lines: lines}
+	buf := &buffer.Buffer{Lines: slices.Clone(lines)}
 	cur := &cursor.Cursor{Line: 0, Col: 0}
 	vp := &view.Viewport{TopLine: 0, LeftCol: 0, Width: 40, Height: 10}
 	return NewEditorPaneWidget(buf, cur, vp)
