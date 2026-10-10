@@ -79,7 +79,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		bracketColors = e.bracketColorCache
 	}
 
-	e.rowMap = layout.rows(e.Viewport.TopLine, e.topOffset(), h)
+	e.rowMap = layout.appendRows(e.rowMap[:0], e.Viewport.TopLine, e.topOffset(), h)
 	e.rowMapTop = e.Viewport.TopLine
 	e.rowMapOffset = e.topOffset()
 	topRow := e.topRow(layout)
@@ -177,7 +177,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		}
 
 		if lineIdx < totalLines {
-			line := []rune(e.Buf.Lines[lineIdx])
+			e.runeScratch = e.runeScratch[:0]
+			for _, r := range e.Buf.Lines[lineIdx] {
+				e.runeScratch = append(e.runeScratch, r)
+			}
+			line := e.runeScratch
 			var syntaxSpans []highlight.Span
 			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
 			if diffFgOverride {

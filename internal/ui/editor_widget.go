@@ -31,6 +31,7 @@ type Bookmark struct {
 type EditorPaneWidget struct {
 	BaseWidget
 	lineScratch             []screenCell
+	runeScratch             []rune
 	Buf                     *buffer.Buffer
 	Cursor                  *cursor.Cursor
 	Viewport                *view.Viewport

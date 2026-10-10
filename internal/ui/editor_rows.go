@@ -488,7 +488,10 @@ func (l *rowLayout) maxOffset(line int) int {
 }
 
 func (l *rowLayout) rows(topLine, offset, h int) []editorRow {
-	out := make([]editorRow, 0, h)
+	return l.appendRows(make([]editorRow, 0, h), topLine, offset, h)
+}
+
+func (l *rowLayout) appendRows(out []editorRow, topLine, offset, h int) []editorRow {
 	if h <= 0 {
 		return out
 	}
