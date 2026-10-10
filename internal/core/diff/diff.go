@@ -62,7 +62,16 @@ func FullDiffLinesContext(ctx context.Context, oldLines, newLines []string) ([]D
 	if err != nil {
 		return nil, err
 	}
-	lines := make([]DiffLine, 0, max(len(oldLines), len(newLines)))
+	rows, prevA, prevB := len(matchA), 0, 0
+	for m := 0; m <= len(matchA); m++ {
+		endA, endB := len(oldLines), len(newLines)
+		if m < len(matchA) {
+			endA, endB = matchA[m], matchB[m]
+		}
+		rows += max(endA-prevA, endB-prevB)
+		prevA, prevB = endA+1, endB+1
+	}
+	lines := make([]DiffLine, 0, rows)
 	oi, ni := 0, 0
 	for m := 0; m <= len(matchA); m++ {
 		oEnd, nEnd := len(oldLines), len(newLines)
