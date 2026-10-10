@@ -13,8 +13,22 @@ import "context"
 // (https://github.com/google/diff-match-patch), Copyright 2018 The
 // diff-match-patch Authors, Apache License 2.0.
 func computeLCSContext(ctx context.Context, a, b []string) ([]string, error) {
-	if err := ctx.Err(); err != nil {
+	matchA, _, err := computeMatchesContext(ctx, a, b)
+	if err != nil {
 		return nil, err
+	}
+	lcs := make([]string, len(matchA))
+	for i, ai := range matchA {
+		lcs[i] = a[ai]
+	}
+	return lcs, nil
+}
+
+// computeMatchesContext returns the line pairs of a longest common
+// subsequence of a and b, as ascending indices into each.
+func computeMatchesContext(ctx context.Context, a, b []string) (matchA, matchB []int, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
 	}
 	s := &lcsSolver{ctx: ctx}
 	ids := make(map[string]int, len(a))
@@ -33,28 +47,28 @@ func computeLCSContext(ctx context.Context, a, b []string) ([]string, error) {
 		}
 		return out, nil
 	}
-	var err error
 	if s.a, err = intern(a); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if s.b, err = intern(b); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	capacity := min(len(a), len(b))
+	s.matched = make([]int, 0, capacity)
+	s.matchedB = make([]int, 0, capacity)
 	if err := s.solve(0, len(a), 0, len(b)); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	lcs := make([]string, len(s.matched))
-	for i, ai := range s.matched {
-		lcs[i] = a[ai]
-	}
-	return lcs, nil
+	return s.matched, s.matchedB, nil
 }
 
 type lcsSolver struct {
-	ctx     context.Context
-	a, b    []int
-	matched []int // indices into a, in order
-	work    int
+	ctx      context.Context
+	a, b     []int
+	matched  []int // indices into a, in order
+	matchedB []int // the paired indices into b
+	work     int
+	v1, v2   []int // bisect's scratch, reused across the recursion
 }
 
 func (s *lcsSolver) checkCanceled() error {
@@ -71,6 +85,7 @@ func (s *lcsSolver) solve(a0, a1, b0, b1 int) error {
 			return err
 		}
 		s.matched = append(s.matched, a0)
+		s.matchedB = append(s.matchedB, b0)
 		a0++
 		b0++
 	}
@@ -99,6 +114,7 @@ func (s *lcsSolver) solve(a0, a1, b0, b1 int) error {
 	}
 	for i := range suffix {
 		s.matched = append(s.matched, a1+i)
+		s.matchedB = append(s.matchedB, b1+i)
 	}
 	return nil
 }
@@ -115,8 +131,10 @@ func (s *lcsSolver) bisect(a0, a1, b0, b1 int) (int, int, error) {
 	maxD := (n + m + 1) / 2
 	vOff := maxD
 	vLen := 2*maxD + 2
-	v1 := make([]int, vLen)
-	v2 := make([]int, vLen)
+	if cap(s.v1) < vLen {
+		s.v1, s.v2 = make([]int, vLen), make([]int, vLen)
+	}
+	v1, v2 := s.v1[:vLen], s.v2[:vLen]
 	for i := range v1 {
 		v1[i], v2[i] = -1, -1
 	}
