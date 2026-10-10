@@ -64,6 +64,7 @@ func TestDeferredDiffRowCountMatchesBuiltPanes(t *testing.T) {
 			lazy.setSource(diff.Parse(text), nil, nil, false, false, nil)
 			eager := NewDiffEditorWidget("x", diff.Parse(text), nil, nil, false)
 			eager.mode = mode
+			eager.ensurePanes()
 			want := eager.unified.layout().total()
 			if mode == DiffModeSplit {
 				eager.right.Viewport.Width, eager.left.Viewport.Width = 40, 40

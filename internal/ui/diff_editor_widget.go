@@ -139,6 +139,7 @@ func NewDiffEditorWidget(filePath string, fd diff.FileDiff, oldLines, newLines [
 		unified:       newDiffPane(),
 		left:          newDiffPane(),
 		right:         newDiffPane(),
+		deferPanes:    true,
 	}
 	if extended {
 		d.contextMode = DiffContextFullFile
@@ -607,8 +608,11 @@ func (d *DiffEditorWidget) buildSplitPanes() {
 	d.splitGen = d.panesGen
 	d.leftBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
 	d.rightBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
-	var lLines, rLines []string
-	d.leftRows, d.rightRows = nil, nil
+	n := len(d.Lines)
+	lLines, rLines := make([]string, 0, n), make([]string, 0, n)
+	d.leftRows, d.rightRows = make([]int, 0, n), make([]int, 0, n)
+	d.leftBase.Kinds, d.rightBase.Kinds = make([]diff.LineKind, 0, n), make([]diff.LineKind, 0, n)
+	d.leftBase.Nums, d.rightBase.Nums = make([]int, 0, n), make([]int, 0, n)
 	for i, dl := range d.Lines {
 		lLines, d.leftRows = appendDiffSide(d.leftBase, lLines, d.leftRows, dl.Left, i, d.gapByLine)
 		rLines, d.rightRows = appendDiffSide(d.rightBase, rLines, d.rightRows, dl.Right, i, d.gapByLine)
@@ -832,6 +836,7 @@ func (d *DiffEditorWidget) scrollToDiffRow(row int, side diffSide, top bool) {
 func (d *DiffEditorWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := d.GetRect()
+	d.ensurePanes()
 	if d.Loading {
 		for y := 0; y < h; y++ {
 			for x := 0; x < w; x++ {
@@ -1248,6 +1253,7 @@ func (d *DiffEditorWidget) SetSearchMatches(left, right []FindMatch) []FindMatch
 	if d.editable {
 		return d.setLiveSearch(left, right)
 	}
+	d.ensurePanes()
 	d.SearchMatchesLeft = left
 	d.SearchMatchesRight = right
 	type entry struct {
@@ -1313,6 +1319,7 @@ func (d *DiffEditorWidget) SetSearchMatches(left, right []FindMatch) []FindMatch
 }
 
 func (d *DiffEditorWidget) SetActiveMatch(mergedIdx int) {
+	d.ensurePanes()
 	if d.editable {
 		d.setLiveActive(mergedIdx)
 		return
