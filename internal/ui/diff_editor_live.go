@@ -1,6 +1,12 @@
 package ui
 
 import (
+	"maps"
+	"slices"
+	"sort"
+	"unsafe"
+
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 
 	"github.com/gdamore/tcell/v3"
@@ -38,10 +44,19 @@ func NewEditableDiffWidget(filePath string, base []string, lines []diff.DiffLine
 
 func (d *DiffEditorWidget) Editable() bool { return d.editable }
 
-func (d *DiffEditorWidget) SetLiveDiff(base []string, lines []diff.DiffLine) {
+// SetLiveDiff takes a recomputed diff of the buffer as it was at version ver,
+// with snap that version's text. Edits made since are replayed onto it.
+func (d *DiffEditorWidget) SetLiveDiff(base []string, lines []diff.DiffLine, ver uint64, snap []string) {
 	d.oldLines = base
 	d.full = lines
-	d.liveSnap, d.liveTouched = nil, nil
+	d.fullChanges = nil
+	d.liveTouched = nil
+	if d.liveBuf != nil {
+		d.liveVer, d.liveSnap = ver, snap
+		if snap == nil {
+			d.liveVer, d.liveSnap = d.liveBuf.Version(), slices.Clone(d.liveBuf.Lines)
+		}
+	}
 	d.ClearSearch()
 	d.rebuild()
 	if d.OnRecompute != nil {
@@ -50,10 +65,16 @@ func (d *DiffEditorWidget) SetLiveDiff(base []string, lines []diff.DiffLine) {
 }
 
 func (d *DiffEditorWidget) bind(e *EditorPaneWidget) {
-	if d.live != e {
-		d.live = e
+	d.live = e
+	if d.liveBuf != e.Buf {
+		d.liveBuf = e.Buf
 		d.liveCursor = -1
-		d.liveSnap, d.liveTouched = nil, nil
+		d.liveVer = e.Buf.Version()
+		d.liveSnap = slices.Clone(e.Buf.Lines)
+		d.fullChanges, d.liveTouched = nil, nil
+		if len(e.Buf.Lines) != d.liveN {
+			d.shiftStaleDiff(len(e.Buf.Lines) - d.liveN)
+		}
 	}
 	d.unified, d.right = e, e
 	e.WordWrap = d.IsWrapped()
@@ -121,12 +142,28 @@ func compactLiveDiff(full []diff.DiffLine, compact bool, revealed [][2]int) (row
 }
 
 func (d *DiffEditorWidget) rebuildLive() {
+	if cs, _ := d.takeChanges(); len(cs) > 0 {
+		for _, c := range cs {
+			d.recordChange(c)
+		}
+	}
 	d.Lines, d.gapByLine, d.liveRows, d.liveGapLen, d.liveSpans = compactLiveDiff(d.full, d.contextMode != DiffContextFullFile, d.revealed)
 	d.liveN = 0
 	for _, dl := range d.full {
 		if dl.Right.Kind != diff.Blank {
 			d.liveN++
 		}
+	}
+	for _, c := range d.fullChanges {
+		for i, r := range d.liveRows {
+			if r >= 0 {
+				d.liveRows[i] = shiftLine(r, c)
+			}
+		}
+		d.liveN += c.Added - c.Removed
+	}
+	if d.liveBuf != nil {
+		d.liveN = len(d.liveBuf.Lines)
 	}
 	d.hoveredGap = -1
 	d.captured = nil
@@ -225,9 +262,13 @@ func (d *DiffEditorWidget) buildLiveOverlays() {
 		i = end
 	}
 
-	d.gapText = nil
 	d.liveUnified = &DiffOverlay{Kinds: kinds, Deleted: deleted, Gaps: gaps, Labels: labels, Hidden: hidden, DeletedActive: [2]int{-1, -1}, Syntax: &d.docSyntax}
-	d.rightBase = &DiffOverlay{Kinds: kinds, Fillers: map[int]int{}, Gaps: gaps, Labels: labels, Hidden: hidden}
+	d.rightBase = &DiffOverlay{Kinds: slices.Clone(kinds), Fillers: map[int]int{}, Gaps: maps.Clone(gaps), Labels: maps.Clone(labels), Hidden: slices.Clone(hidden)}
+	if d.liveBuf != nil {
+		d.liveUnified.buf, d.liveUnified.ver = d.liveBuf, d.liveVer
+		d.rightBase.buf, d.rightBase.ver = d.liveBuf, d.liveVer
+	}
+	d.alignContribs = nil
 	d.pairs = d.pairs[:0]
 	li := 0
 	for i, dl := range d.Lines {
@@ -238,32 +279,24 @@ func (d *DiffEditorWidget) buildLiveOverlays() {
 		}
 		d.pairs = append(d.pairs, splitPair{l: l, r: d.liveRows[i]})
 	}
-	if d.live != nil {
+	if d.live != nil && d.live.Buf == d.liveBuf {
 		d.live.SetDiffOverlay(d.liveOverlay())
 	}
 	d.applyOverlayOptions()
 	d.applyLiveSearch()
 }
 
-// syncLive keeps the overlay roughly in place while the buffer is edited and
-// the recomputed diff is still pending: rows below the edit shift with it.
 func (d *DiffEditorWidget) syncLive() {
 	e := d.live
 	if e == nil {
 		return
 	}
-	if gap, ok := d.editedGap(); ok {
-		d.expandContextGap(gap)
-	}
-	d.trackLiveEdits()
-	if d.gapText == nil {
-		d.snapshotGapText()
-	}
+	edited := d.trackLiveEdits()
 	if d.liveCursor < 0 {
 		d.placeInitialCursor()
 		return
 	}
-	if e.Cursor.Line != d.liveCursor {
+	if edited || e.Cursor.Line != d.liveCursor {
 		d.liveCursor = e.Cursor.Line
 		if gap, ok := d.hiddenCursorGap(); ok {
 			d.expandContextGap(gap)
@@ -271,66 +304,237 @@ func (d *DiffEditorWidget) syncLive() {
 	}
 }
 
-// trackLiveEdits moves the overlay with an edit made since the last sync, so
-// it stays on the right lines until the recomputed diff arrives. The edited
-// region is found by comparing the buffer with a snapshot, which covers every
-// way of editing: typing, paste, undo, multiple cursors and plugins.
-func (d *DiffEditorWidget) trackLiveEdits() {
-	e := d.live
-	cur := e.Buf.Lines
-	if d.liveSnap == nil {
-		d.liveSnap = append([]string(nil), cur...)
-		d.liveSnapGen = e.Buf.Version()
-		if len(cur) != d.liveN {
-			d.shiftStaleDiff(len(cur) - d.liveN)
+// takeChanges reads the buffer edits made since liveVer. exact is false when
+// the change log could not replay them, or one replaced the whole buffer; the
+// edit is then found by comparing the text with liveSnap.
+func (d *DiffEditorWidget) takeChanges() (cs []buffer.Change, ok bool) {
+	buf := d.liveBuf
+	if buf == nil || buf.Version() == d.liveVer {
+		return nil, true
+	}
+	n, exact := len(d.liveSnap), true
+	exact = buf.ChangesSince(d.liveVer, func(c buffer.Change) {
+		if c.Start == 0 && c.Removed == n && n > 1 {
+			exact = false
 		}
-		return
-	}
-	if d.liveSnapGen == e.Buf.Version() && len(cur) == len(d.liveSnap) {
-		return
-	}
-	d.liveSnapGen = e.Buf.Version()
-	start, oldEnd, newEnd, changed := changedLineRange(d.liveSnap, cur)
-	if !changed {
-		return
-	}
-	d.liveSnap = append(d.liveSnap[:0], cur...)
-	shift := func(r int) int {
-		switch {
-		case r >= oldEnd:
-			return r + newEnd - oldEnd
-		case r >= start:
-			return min(r, max(newEnd-1, start))
+		n += c.Added - c.Removed
+		cs = append(cs, c)
+	}) && exact
+	if !exact {
+		cs = nil
+		if start, oldEnd, newEnd, changed := changedLineRange(d.liveSnap, buf.Lines); changed {
+			cs = []buffer.Change{{Start: start, Removed: oldEnd - start, Added: newEnd - start}}
 		}
-		return r
+		d.liveSnap = slices.Clone(buf.Lines)
+	} else {
+		d.liveSnap = spliceSnapshot(d.liveSnap, buf.Lines, cs)
 	}
-	for i, r := range d.liveRows {
-		if r >= 0 {
-			d.liveRows[i] = shift(r)
-		}
-	}
-	for i, t := range d.liveTouched {
-		d.liveTouched[i] = [2]int{shift(t[0]), max(shift(t[1]-1)+1, shift(t[0]))}
-	}
-	if newEnd > start {
-		d.liveTouched = append(d.liveTouched, [2]int{start, newEnd})
-	}
-	if len(cur) != d.liveN || oldEnd != newEnd {
-		d.liveN = len(cur)
-		d.buildLiveOverlays()
-		return
-	}
-	d.tintTouched(d.liveUnified.Kinds)
+	d.liveVer = buf.Version()
+	return cs, exact
 }
 
-// shiftStaleDiff handles a diff computed for an older version of the buffer:
-// without that version to compare against, rows below the cursor move by the
-// change in line count.
+func spliceSnapshot(snap, cur []string, cs []buffer.Change) []string {
+	if len(cs) == 0 {
+		return snap
+	}
+	a, b, delta := cs[0].Start, cs[0].Start+cs[0].Added, cs[0].Added-cs[0].Removed
+	for _, c := range cs[1:] {
+		bPre := max(b, c.Start+c.Removed)
+		if b < c.Start {
+			bPre = c.Start + c.Removed
+		}
+		a = min(a, c.Start)
+		b = bPre + c.Added - c.Removed
+		delta += c.Added - c.Removed
+	}
+	a = min(a, len(cur))
+	b = min(b, len(cur))
+	return slices.Replace(snap, a, min(b-delta, len(snap)), cur[a:b]...)
+}
+
+func (d *DiffEditorWidget) recordChange(c buffer.Change) {
+	var touched [][2]int
+	for _, t := range d.liveTouched {
+		if left := [2]int{t[0], min(t[1], c.Start)}; left[0] < left[1] {
+			touched = append(touched, left)
+		}
+		if right := [2]int{max(t[0], c.Start+c.Removed), t[1]}; right[0] < right[1] {
+			delta := c.Added - c.Removed
+			touched = append(touched, [2]int{right[0] + delta, right[1] + delta})
+		}
+	}
+	if c.Added > 0 {
+		touched = append(touched, [2]int{c.Start, c.Start + c.Added})
+	}
+	d.liveTouched = touched
+	if c.Added != c.Removed {
+		d.fullChanges = append(d.fullChanges, c)
+	}
+}
+
+func editsGap(c buffer.Change, line, n int) bool {
+	if c.Removed == 0 {
+		return c.Start > line && c.Start < line+n
+	}
+	return c.Start < line+n && c.Start+c.Removed > line
+}
+
+// trackLiveEdits moves the diff with the edits made since the last sync, until
+// the recomputed diff arrives.
+func (d *DiffEditorWidget) trackLiveEdits() bool {
+	if d.liveBuf == nil {
+		return false
+	}
+	prevVer := d.liveVer
+	cs, exact := d.takeChanges()
+	if len(cs) == 0 {
+		return false
+	}
+	d.liveExpand = d.liveExpand[:0]
+	var window []int
+	for _, c := range cs {
+		for i, gap := range d.gapByLine {
+			if editsGap(c, d.liveRows[i], d.liveGapLen[i]) {
+				d.liveExpand = append(d.liveExpand, gap)
+			}
+		}
+		window = d.shiftLive(c, window)
+		d.recordChange(c)
+	}
+	d.liveN = len(d.liveBuf.Lines)
+	if !exact || len(d.liveExpand) > 0 {
+		for _, gap := range d.liveExpand {
+			if gap >= 0 && gap < len(d.liveSpans) {
+				d.revealed = append(d.revealed, d.liveSpans[gap])
+			}
+		}
+		d.rebuildLive()
+		return true
+	}
+	e := d.live
+	if e == nil || e.Buf != d.liveBuf {
+		return true
+	}
+	if !e.syncDiffOverlay() {
+		d.buildLiveOverlays()
+		return true
+	}
+	if d.IsUnified() || d.alignContribs == nil || d.alignVer != prevVer || d.right != e ||
+		e.DiffOverlay != d.rightBase || d.left.DiffOverlay != d.leftBase {
+		return true
+	}
+	d.realignLive(window)
+	return true
+}
+
+// shiftLive adds to window the split rows whose wrapped height may change.
+func (d *DiffEditorWidget) shiftLive(c buffer.Change, window []int) []int {
+	inNew := func(r int) bool { return r >= c.Start && r < c.Start+max(c.Added, 1) }
+	if c.Added == c.Removed {
+		i := sort.Search(len(d.liveRows), func(i int) bool { return d.rowLineFrom(i) >= c.Start })
+		for ; i < len(d.liveRows); i++ {
+			r := d.liveRows[i]
+			if r >= c.Start+c.Added {
+				break
+			}
+			if inNew(r) {
+				window = append(window, i)
+			}
+		}
+		return window
+	}
+	from := sort.Search(len(d.liveRows), func(i int) bool { return d.rowLineFrom(i) >= c.Start })
+	for i := from; i < len(d.liveRows); i++ {
+		r := d.liveRows[i]
+		if r < 0 {
+			continue
+		}
+		nr := shiftLine(r, c)
+		if (r >= c.Start && r < c.Start+c.Removed) || inNew(nr) {
+			window = append(window, i)
+		}
+		d.liveRows[i] = nr
+		if i < len(d.pairs) {
+			d.pairs[i].r = nr
+		}
+	}
+	for i := range d.alignContribs {
+		if d.alignContribs[i].rAmt > 0 && d.alignContribs[i].rKey >= c.Start {
+			d.alignContribs[i].rKey = shiftLine(d.alignContribs[i].rKey, c)
+		}
+	}
+	for i := range d.liveRefs {
+		if d.liveRefs[i].anchor >= 0 {
+			d.liveRefs[i].anchor = shiftLine(d.liveRefs[i].anchor, c)
+		}
+	}
+	if e := d.live; e != nil && e.Buf == d.liveBuf && len(e.SearchMatches) > 0 {
+		for i := range e.SearchMatches {
+			e.SearchMatches[i].Line = shiftLine(e.SearchMatches[i].Line, c)
+		}
+		e.buildSearchIndex()
+	}
+	return window
+}
+
+func (d *DiffEditorWidget) rowLineFrom(i int) int {
+	for ; i < len(d.liveRows); i++ {
+		if r := d.liveRows[i]; r >= 0 {
+			return r
+		}
+	}
+	return int(^uint(0) >> 1)
+}
+
+func (d *DiffEditorWidget) realignLive(window []int) {
+	if len(window) > 0 {
+		d.right.advanceLayouts()
+		ll, rl := d.left.layout(), d.right.layout()
+		slices.Sort(window)
+		window = slices.Compact(window)
+		next := func(i int, right bool) int {
+			for ; i < len(d.pairs); i++ {
+				if right && d.pairs[i].r >= 0 {
+					return d.pairs[i].r
+				}
+				if !right && d.pairs[i].l >= 0 {
+					return d.pairs[i].l
+				}
+			}
+			if right {
+				return len(d.right.Buf.Lines)
+			}
+			return len(d.left.Buf.Lines)
+		}
+		for _, i := range window {
+			if i >= len(d.pairs) || i >= len(d.alignContribs) {
+				continue
+			}
+			p := d.pairs[i]
+			nc := pairContrib(p, alignSegs(d.left, ll, p.l), alignSegs(d.right, rl, p.r), next(i, false), next(i+1, false), next(i, true), next(i+1, true))
+			oc := d.alignContribs[i]
+			if nc == oc {
+				continue
+			}
+			d.left.addFillers(oc.lKey, -oc.lAmt)
+			d.left.addFillers(nc.lKey, nc.lAmt)
+			d.right.addFillers(oc.rKey, -oc.rAmt)
+			d.right.addFillers(nc.rKey, nc.rAmt)
+			d.alignContribs[i] = nc
+		}
+	}
+	d.alignVer = d.right.Buf.Version()
+	d.alignKey = splitAlignKey{
+		pairs: unsafe.SliceData(d.pairs), nPairs: len(d.pairs),
+		left: d.leftBase, right: d.rightBase,
+		lPane: paneAlignKeyOf(d.left), rPane: paneAlignKeyOf(d.right),
+	}
+}
+
+// shiftStaleDiff handles a buffer whose edits since the diff are unknown:
+// rows below the cursor move by the change in line count.
 func (d *DiffEditorWidget) shiftStaleDiff(delta int) {
 	at := d.live.Cursor.Line
-	if d.liveCursor >= 0 {
-		at = min(at, d.liveCursor)
-	}
 	for i, r := range d.liveRows {
 		if r > at {
 			d.liveRows[i] = max(r+delta, at)
@@ -363,34 +567,6 @@ func (d *DiffEditorWidget) tintTouched(kinds []diff.LineKind) {
 			}
 		}
 	}
-}
-
-// A gap row draws a label over the first line it hides, so an edit there
-// (from any command, not only typing) is otherwise invisible until the diff
-// is recomputed.
-func (d *DiffEditorWidget) snapshotGapText() {
-	d.gapText = make(map[int]string)
-	for line := range d.live.DiffOverlay.Labels {
-		if line < len(d.live.Buf.Lines) {
-			d.gapText[line] = d.live.Buf.Lines[line]
-		}
-	}
-}
-
-// editedGap reports the gap whose row held the cursor before an edit that
-// changed the line behind its label.
-func (d *DiffEditorWidget) editedGap() (int, bool) {
-	e := d.live
-	line := d.liveCursor
-	text, ok := d.gapText[line]
-	if !ok {
-		return 0, false
-	}
-	if line < len(e.Buf.Lines) && e.Buf.Lines[line] == text && len(e.Buf.Lines) == d.liveN {
-		return 0, false
-	}
-	gap, ok := e.DiffOverlay.Gaps[line]
-	return gap, ok
 }
 
 func (d *DiffEditorWidget) revealCursorGap() {

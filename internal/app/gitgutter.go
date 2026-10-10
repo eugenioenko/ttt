@@ -19,6 +19,10 @@ type GitGutterResult struct {
 	DiffOn  bool
 	Diff    []diff.DiffLine
 	Base    []string
+	// Version and Lines are the buffer version and text the diff was
+	// computed from, so edits made while it ran can be replayed onto it.
+	Version uint64
+	Lines   []string
 }
 
 // RequestGitGutter triggers an async computation of git gutter indicators for
@@ -56,8 +60,10 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 	linesCopy := make([]string, len(bufferLines))
 	copy(linesCopy, bufferLines)
 	showTrailing := false
+	var version uint64
 	if buf := a.EditorGroup.BufferForPath(filePath); buf != nil {
 		showTrailing = buf.ShowTrailingNewline
+		version = buf.Version()
 	}
 
 	go func() {
@@ -66,7 +72,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		if ctx.Err() != nil {
 			return
 		}
-		result := &GitGutterResult{Gen: gen, Path: filePath, DiffOn: diffOn}
+		result := &GitGutterResult{Gen: gen, Path: filePath, DiffOn: diffOn, Version: version, Lines: linesCopy}
 		if gitErr != nil && gutterOn {
 			// File is not tracked by git (new file) — mark all lines as added
 			result.Changes = make([]diff.LineChangeKind, len(linesCopy))
@@ -105,7 +111,7 @@ func (a *App) ApplyGitGutterResult(v *GitGutterResult) {
 	}
 	a.EditorGroup.SetLineChanges(v.Path, v.Changes)
 	if v.DiffOn {
-		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff)
+		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
 	}
 }
 

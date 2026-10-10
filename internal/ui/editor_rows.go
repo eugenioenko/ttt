@@ -65,6 +65,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	if width < 1 {
 		width = 1
 	}
+	e.syncDiffOverlay()
 	n := len(e.Buf.Lines)
 	var visible []int
 	folds, hidden := e.hasFolds(), e.DiffOverlay.hasHidden()
@@ -221,7 +222,7 @@ func (l *rowLayout) advance(key rowLayoutKey, buf *buffer.Buffer) bool {
 		if !ok {
 			return
 		}
-		if c.Start < 0 || c.Start+c.Removed > n || (l.phantoms != nil && c.Added != c.Removed) {
+		if c.Start < 0 || c.Start+c.Removed > n {
 			ok = false
 			return
 		}

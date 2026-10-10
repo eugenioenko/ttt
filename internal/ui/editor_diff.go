@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"unsafe"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -52,6 +53,15 @@ type DiffOverlay struct {
 	// phantom rows always come from the old one.
 	Syntax  *diffSyntax
 	NewSide []bool
+
+	// buf and ver are the buffer and version the overlay's line numbers refer
+	// to. The pane replays later edits of that buffer onto the overlay before
+	// using it, so it moves with the text until its owner rebuilds it.
+	buf   *buffer.Buffer
+	ver   uint64
+	stale bool
+
+	maxNum, numsN int
 }
 
 type diffHiddenRange struct{ start, end int }
@@ -131,11 +141,19 @@ func (o *DiffOverlay) visibleLines(n int) []int {
 	if o.visible != nil && o.visN == n {
 		return o.visible
 	}
-	vis := make([]int, 0, n)
-	for line := 0; line < n; line++ {
-		if !o.hidden(line) {
+	var vis []int
+	next := 0
+	for _, h := range o.Hidden {
+		for line := next; line < min(h.start, n); line++ {
 			vis = append(vis, line)
 		}
+		next = max(next, h.end+1)
+	}
+	for line := next; line < n; line++ {
+		vis = append(vis, line)
+	}
+	if vis == nil {
+		vis = []int{}
 	}
 	o.visible, o.visN = vis, n
 	return vis
@@ -177,11 +195,14 @@ func (o *DiffOverlay) gapHovered(line int) bool {
 }
 
 func (o *DiffOverlay) gutterWidth() int {
-	maxNum := 0
-	for _, n := range o.Nums {
-		maxNum = max(maxNum, n)
+	if o.numsN != len(o.Nums) || o.numsN == 0 {
+		o.maxNum = 0
+		for _, n := range o.Nums {
+			o.maxNum = max(o.maxNum, n)
+		}
+		o.numsN = len(o.Nums)
 	}
-	return max(len(strconv.Itoa(maxNum))+3, o.MinGutter)
+	return max(len(strconv.Itoa(o.maxNum))+3, o.MinGutter)
 }
 
 // diffLineFg overrides syntax colors: collapsed separators are muted labels
@@ -244,12 +265,19 @@ func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
 	if o == nil && e.DiffOverlay == nil {
 		return
 	}
+	if o != nil && o == e.DiffOverlay {
+		e.syncDiffOverlay()
+	}
 	e.DiffOverlay = o
 	e.overlayGen++
 	e.phantoms = nil
 	if o == nil {
 		return
 	}
+	if o.buf == nil {
+		o.buf, o.ver = e.Buf, e.Buf.Version()
+	}
+	e.syncDiffOverlay()
 	e.phantoms = make(map[int]int, len(o.Deleted)+len(o.Fillers))
 	for anchor, block := range o.Deleted {
 		e.phantoms[anchor] += len(block)

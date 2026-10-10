@@ -59,9 +59,6 @@ func TestRowLayoutIsCachedUntilItsInputsChange(t *testing.T) {
 
 	e.ExecCommand(&undo.InsertLineCommand{Idx: 0, Text: "x"})
 	l2 := e.layout()
-	if l2 == l {
-		t.Fatal("layout kept after an edit")
-	}
 	if l2.total() <= total {
 		t.Fatalf("total %d after inserting a line, was %d", l2.total(), total)
 	}

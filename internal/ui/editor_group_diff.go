@@ -47,12 +47,12 @@ func (g *EditorGroupWidget) DisableInlineDiff(path string) {
 	}
 }
 
-func (g *EditorGroupWidget) SetInlineDiff(path string, base []string, lines []diff.DiffLine) {
+func (g *EditorGroupWidget) SetInlineDiff(path string, base []string, lines []diff.DiffLine, ver uint64, snap []string) {
 	i := g.tabIndexByPath(path)
 	if i < 0 || g.tabs[i].Diff == nil {
 		return
 	}
-	g.tabs[i].Diff.SetLiveDiff(base, lines)
+	g.tabs[i].Diff.SetLiveDiff(base, lines, ver, snap)
 }
 
 func (g *EditorGroupWidget) IsInlineDiffPath(path string) bool {

@@ -12,6 +12,7 @@ import (
 )
 
 func (e *EditorPaneWidget) Render(surface Surface) {
+	e.syncDiffOverlay()
 	w, h := surface.Size()
 
 	totalLines := len(e.Buf.Lines)

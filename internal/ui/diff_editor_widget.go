@@ -74,8 +74,11 @@ type DiffEditorWidget struct {
 	searchRefs         []diffSearchRef
 	searchActiveRight  bool
 
-	pairs    []splitPair
-	alignKey splitAlignKey
+	pairs         []splitPair
+	alignKey      splitAlignKey
+	alignContribs []alignContrib
+	alignVer      uint64
+	wrapKey       [4]int
 
 	docSyntax diffSyntax
 
@@ -97,10 +100,17 @@ type DiffEditorWidget struct {
 	liveHits    []liveSearchHit
 	liveRefs    []liveSearchRef
 	liveActive  int
-	gapText     map[int]string
-	liveSnap    []string
-	liveSnapGen uint64
 	liveTouched [][2]int
+
+	// liveBuf is the file's buffer and liveVer the version the live rows and
+	// overlays refer to. liveSnap holds that version's text, for edits that
+	// cannot be replayed from the buffer's change log. fullChanges are the
+	// line-count changes made since full was computed.
+	liveBuf     *buffer.Buffer
+	liveVer     uint64
+	liveSnap    []string
+	fullChanges []buffer.Change
+	liveExpand  []int
 }
 
 type diffSearchRef struct {
@@ -262,9 +272,8 @@ func (d *DiffEditorWidget) applyMode(mode DiffMode) {
 	if d.editable {
 		d.mode = mode
 		d.focusLeft = false
-		if d.live != nil {
-			d.live.SetDiffOverlay(d.liveOverlay())
-		}
+		d.trackLiveEdits()
+		d.buildLiveOverlays()
 		return
 	}
 	row, _ := d.topDiffRow()
@@ -836,7 +845,12 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 		pr := p.GetRect()
 		return surface.Sub(Rect{X: pr.X - r.X, Y: 0, W: pr.W, H: h})
 	}
-	d.left.wrapCols, d.right.wrapCols = 0, 0
+	// Resetting the common wrap width every frame would render each pane at
+	// its own width first, leaving a second row layout per pane to keep current.
+	if wk := [4]int{d.left.GetRect().W, d.right.GetRect().W, d.left.GutterWidth(), d.right.GutterWidth()}; wk != d.wrapKey {
+		d.wrapKey = wk
+		d.left.wrapCols, d.right.wrapCols = 0, 0
+	}
 	for pass := 0; pass < 3; pass++ {
 		widths := [2]int{d.left.Viewport.Width, d.right.Viewport.Width}
 		d.alignSplit()
@@ -905,29 +919,46 @@ func (d *DiffEditorWidget) alignSplit() {
 		return
 	}
 	d.alignKey = key
-	d.leftBase.Fillers, d.rightBase.Fillers = alignSplitFillers(d.pairs, d.left, d.right)
+	d.leftBase.Fillers, d.rightBase.Fillers, d.alignContribs = alignSplitFillers(d.pairs, d.left, d.right)
+	d.alignVer = d.right.Buf.Version()
 	d.left.SetDiffOverlay(d.leftBase)
 	d.right.SetDiffOverlay(d.rightBase)
+}
+
+type alignContrib struct{ lKey, lAmt, rKey, rAmt int }
+
+func pairContrib(p splitPair, lr, rr, nl0, nl1, nr0, nr1 int) alignContrib {
+	m := max(lr, rr)
+	var c alignContrib
+	if p.l < 0 {
+		c.lKey, c.lAmt = nl0, m
+	} else if m > lr {
+		c.lKey, c.lAmt = nl1, m-lr
+	}
+	if p.r < 0 {
+		c.rKey, c.rAmt = nr0, m
+	} else if m > rr {
+		c.rKey, c.rAmt = nr1, m-rr
+	}
+	return c
+}
+
+func alignSegs(p *EditorPaneWidget, l *rowLayout, line int) int {
+	if line < 0 || !p.WordWrap || line >= len(p.Buf.Lines) {
+		return 1
+	}
+	if _, ok := p.DiffOverlay.label(line); ok {
+		return 1
+	}
+	return l.textRows(line)
 }
 
 // alignSplitFillers gives every diff row the same number of screen rows on
 // both sides: a side that is blank, or wraps into fewer segments, is padded
 // with filler rows before the next line it shows.
-func alignSplitFillers(pairs []splitPair, left, right *EditorPaneWidget) (lf, rf map[int]int) {
+func alignSplitFillers(pairs []splitPair, left, right *EditorPaneWidget) (lf, rf map[int]int, contribs []alignContrib) {
 	lf, rf = make(map[int]int), make(map[int]int)
 	ll, rl := left.layout(), right.layout()
-	segs := func(p *EditorPaneWidget, line int) int {
-		if line < 0 || !p.WordWrap || line >= len(p.Buf.Lines) {
-			return 1
-		}
-		if _, ok := p.DiffOverlay.label(line); ok {
-			return 1
-		}
-		if p == left {
-			return ll.textRows(line)
-		}
-		return rl.textRows(line)
-	}
 	nextL := make([]int, len(pairs)+1)
 	nextR := make([]int, len(pairs)+1)
 	nextL[len(pairs)], nextR[len(pairs)] = len(left.Buf.Lines), len(right.Buf.Lines)
@@ -940,20 +971,18 @@ func alignSplitFillers(pairs []splitPair, left, right *EditorPaneWidget) (lf, rf
 			nextR[i] = pairs[i].r
 		}
 	}
-	pad := func(fillers map[int]int, line, rows, m int, next []int, i int) {
-		if line < 0 {
-			fillers[next[i]] += m
-		} else if m > rows {
-			fillers[next[i+1]] += m - rows
+	contribs = make([]alignContrib, len(pairs))
+	for i, p := range pairs {
+		c := pairContrib(p, alignSegs(left, ll, p.l), alignSegs(right, rl, p.r), nextL[i], nextL[i+1], nextR[i], nextR[i+1])
+		contribs[i] = c
+		if c.lAmt > 0 {
+			lf[c.lKey] += c.lAmt
+		}
+		if c.rAmt > 0 {
+			rf[c.rKey] += c.rAmt
 		}
 	}
-	for i, p := range pairs {
-		lr, rr := segs(left, p.l), segs(right, p.r)
-		m := max(lr, rr)
-		pad(lf, p.l, lr, m, nextL, i)
-		pad(rf, p.r, rr, m, nextR, i)
-	}
-	return lf, rf
+	return lf, rf, contribs
 }
 
 func (d *DiffEditorWidget) paneAt(x, y int) *EditorPaneWidget {
