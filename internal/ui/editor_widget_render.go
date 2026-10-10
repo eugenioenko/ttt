@@ -184,7 +184,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		}
 
 		if lineIdx < totalLines {
-			line := []rune(e.Buf.Lines[lineIdx])
+			e.runeScratch = e.runeScratch[:0]
+			for _, r := range e.Buf.Lines[lineIdx] {
+				e.runeScratch = append(e.runeScratch, r)
+			}
+			line := e.runeScratch
 			var syntaxSpans []highlight.Span
 			if e.Highlighter != nil {
 				syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
