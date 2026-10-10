@@ -84,6 +84,16 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.rowMapOffset = e.topOffset()
 	topRow := e.topRow(layout)
 
+	textEnd := w
+	if showScrollbar {
+		textEnd--
+	}
+	for y := 0; y < h; y++ {
+		for x := gutterW + editorW; x < textEnd; x++ {
+			surface.SetCell(x, y, term.Cell{Ch: ' '})
+		}
+	}
+
 	for y := 0; y < h; y++ {
 		row := e.rowMap[y]
 		lineIdx := row.bufLine

@@ -217,3 +217,21 @@ func TestEditableOverlayFollowsEditsAwayFromTheCursor(t *testing.T) {
 	f.e.markBufferDirty()
 	above(f.render())
 }
+
+func TestEditableSplitWrapDrawsTheSameTextOnBothSides(t *testing.T) {
+	long := "The line below is removed in the working tree."
+	old := []string{"a", long, "removed", "b"}
+	cur := []string{"a", long, "b"}
+	f := newLiveDiffFixture(t, old, cur, DiffModeSplit, 98, 12)
+	f.d.SetWrapped(true)
+	rows := f.render()
+	y := rowWith(rows, "The line below")
+	if y < 0 {
+		t.Fatalf("long line missing:\n%s", strings.Join(rows, "\n"))
+	}
+	halves := strings.SplitN(rows[y], "│", 2)
+	text := func(s string) string { return strings.TrimSpace(s[strings.Index(s, "The"):]) }
+	if text(halves[0]) != text(halves[1]) {
+		t.Fatalf("split sides wrap differently:\n%q\n%q", halves[0], halves[1])
+	}
+}
