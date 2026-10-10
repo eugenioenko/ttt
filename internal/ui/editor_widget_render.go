@@ -2,7 +2,6 @@ package ui
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
@@ -117,18 +116,16 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if lineIdx < totalLines && lineIdx == e.Cursor.Line && !e.Passive {
 				gutterStyle = term.StyleActiveLine
 			}
-			var padded string
 			if !e.LineNumbers || (e.WordWrap && isWrapContinuation) {
-				padded = strings.Repeat(" ", gutterW)
-			} else {
-				numStr := ""
-				if lineIdx < totalLines {
-					numStr = strconv.Itoa(lineIdx + 1)
+				for i := 0; i < gutterW; i++ {
+					surface.SetCell(i, y, term.Cell{Ch: ' ', Style: gutterStyle})
 				}
-				padded = e.gutterNumber(numStr, gutterW)
-			}
-			for i, ch := range padded {
-				surface.SetCell(i, y, term.Cell{Ch: ch, Style: gutterStyle})
+			} else {
+				num := 0
+				if lineIdx < totalLines {
+					num = lineIdx + 1
+				}
+				e.drawGutterNumber(surface, y, gutterW, num, -1, term.Cell{Style: gutterStyle})
 			}
 			if e.Folds != nil && !e.WordWrap && lineIdx < totalLines && !isWrapContinuation {
 				if fr := e.Folds.FoldAt(lineIdx); fr != nil {
@@ -335,20 +332,38 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.CursorY = curRow - topRow + r.Y
 }
 
-func (e *EditorPaneWidget) gutterNumber(numStr string, gutterW int) string {
-	pad := func(n int) string {
-		if n < 0 {
-			n = 0
-		}
-		return strings.Repeat(" ", n)
+// drawGutterNumber writes the gutter's number column for num (0 leaves it
+// blank) without building a string. limit < 0 lets an over-wide number run
+// past gutterW, as the editor gutter always has.
+func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num, limit int, cell term.Cell) {
+	var buf [20]byte
+	digits := buf[:0]
+	if num > 0 {
+		digits = strconv.AppendInt(digits, int64(num), 10)
 	}
+	lead, fixed, trail := 1, 3, 2
 	switch e.GutterStyle {
 	case "minimal":
-		return pad(gutterW-1-len(numStr)) + numStr + " "
+		lead, fixed, trail = 0, 1, 1
 	case "extended":
-		return "  " + pad(gutterW-5-len(numStr)) + numStr + "   "
-	default:
-		return " " + pad(gutterW-3-len(numStr)) + numStr + "  "
+		lead, fixed, trail = 2, 5, 3
+	}
+	x := 0
+	put := func(ch rune) {
+		if limit < 0 || x < limit {
+			cell.Ch = ch
+			surface.SetCell(x, y, cell)
+		}
+		x++
+	}
+	for range lead + max(gutterW-fixed-len(digits), 0) {
+		put(' ')
+	}
+	for _, d := range digits {
+		put(rune(d))
+	}
+	for range trail {
+		put(' ')
 	}
 }
 

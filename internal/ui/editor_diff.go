@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"unsafe"
@@ -353,17 +352,15 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		return
 	}
 	if gutterW > 0 {
-		padded := []rune(e.gutterNumber("", gutterW))
-		if e.LineNumbers && old.Num > 0 && row.startCol == 0 {
-			padded = []rune(e.gutterNumber(strconv.Itoa(old.Num), gutterW))
-		}
+		cell := term.Cell{Ch: ' ', Style: term.StyleLineNumber, BgStyle: term.StyleDiffDeleted}
 		for i := 0; i < gutterW; i++ {
-			ch := ' '
-			if i < len(padded) {
-				ch = padded[i]
-			}
-			surface.SetCell(i, y, term.Cell{Ch: ch, Style: term.StyleLineNumber, BgStyle: term.StyleDiffDeleted})
+			surface.SetCell(i, y, cell)
 		}
+		num := 0
+		if e.LineNumbers && old.Num > 0 && row.startCol == 0 {
+			num = old.Num
+		}
+		e.drawGutterNumber(surface, y, gutterW, num, gutterW, cell)
 		if row.startCol == 0 {
 			e.renderDiffSign(surface, y, gutterW, diff.Deleted, term.StyleDiffDeleted)
 		}
@@ -397,9 +394,10 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 }
 
 func renderDiffGutterWithSigns(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style, signs, colored bool) {
-	number := ""
+	var buf [20]byte
+	number := buf[:0]
 	if line.Num > 0 {
-		number = fmt.Sprintf("%d", line.Num)
+		number = strconv.AppendInt(number, int64(line.Num), 10)
 	}
 	marker := ' '
 	style := term.StyleLineNumber
@@ -425,11 +423,28 @@ func renderDiffGutterWithSigns(surface Surface, x, y, width int, line diff.SideL
 	if !colored && (line.Kind == diff.Added || line.Kind == diff.Deleted) {
 		style = term.StyleLineNumber
 	}
-	text := fmt.Sprintf("%*s %c", width-2, number, marker)
-	for column, ch := range []rune(text) {
-		if column >= width {
-			break
+	column := 0
+	put := func(ch rune) {
+		if column < width {
+			surface.SetCell(x+column, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle})
 		}
-		surface.SetCell(x+column, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle})
+		column++
 	}
+	pad := width - 2 - len(number)
+	if width < 2 {
+		pad = 0
+	}
+	for range pad {
+		put(' ')
+	}
+	for _, d := range number {
+		put(rune(d))
+	}
+	if width < 2 {
+		for range 2 - width - len(number) {
+			put(' ')
+		}
+	}
+	put(' ')
+	put(marker)
 }
