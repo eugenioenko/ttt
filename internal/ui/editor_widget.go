@@ -115,6 +115,9 @@ func (e *EditorPaneWidget) InvalidateBracketColors() {
 func (e *EditorPaneWidget) Focusable() bool { return true }
 
 func (e *EditorPaneWidget) GutterWidth() int {
+	if e.DiffOverlay.diffGutter() {
+		return e.DiffOverlay.gutterWidth()
+	}
 	if !e.LineNumbers {
 		if e.GutterStyle != "minimal" {
 			return 1

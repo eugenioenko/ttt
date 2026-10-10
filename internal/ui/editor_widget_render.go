@@ -107,7 +107,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			continue
 		}
 
-		if gutterW > 0 {
+		if gutterW > 0 && e.DiffOverlay.diffGutter() {
+			e.renderDiffGutterRow(surface, y, gutterW, lineIdx, isWrapContinuation)
+		} else if gutterW > 0 {
 			gutterStyle := term.StyleLineNumber
 			if lineIdx < totalLines && lineIdx == e.Cursor.Line && !e.Passive {
 				gutterStyle = term.StyleActiveLine
@@ -174,7 +176,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		if lineIdx < totalLines {
 			line := []rune(e.Buf.Lines[lineIdx])
 			var syntaxSpans []highlight.Span
-			if e.Highlighter != nil {
+			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
+			if diffFgOverride {
+				syntaxSpans = []highlight.Span{{Start: 0, End: len(line), Style: diffFg}}
+			} else if e.Highlighter != nil {
 				syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
 			}
 
@@ -200,6 +205,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				colIdx := screenCells[x].bufCol
 				ch := screenCells[x].ch
 				style := screenCells[x].style
+				if diffFgFull {
+					style = diffFg
+				}
 
 				for _, bc := range lineBrackets {
 					if bc.col == colIdx {

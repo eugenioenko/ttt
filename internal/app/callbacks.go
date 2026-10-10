@@ -142,9 +142,7 @@ func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 			if seen[tabName] {
 				continue
 			}
-			fd := diff.Parse(diffText)
-			dv := ui.NewDiffViewWidget(path, fd, nil, nil, false)
-			sources = append(sources, ui.DiffSearchSource{TabName: tabName, Lines: dv.CombinedLines()})
+			sources = append(sources, ui.DiffSearchSource{TabName: tabName, Lines: ui.DiffCombinedLines(diff.Parse(diffText))})
 		}
 	}
 	return sources
@@ -373,7 +371,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 	}
 	a.EditorGroup.OpenDiff(status.Path, parsed, nil, nil, false)
 	if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
-		dv.SetExtendedFetcher(func(dv *ui.DiffViewWidget) {
+		dv.SetExtendedFetcher(func(dv *ui.DiffEditorWidget) {
 			a.fetchPRFileContent(dv, group.PROwner, group.PRRepo, group.PRBaseSHA, group.PRHeadSHA, status.Path)
 		})
 		if extended {
@@ -383,7 +381,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 	a.FocusEditorIfEnabled()
 }
 
-func (a *App) fetchPRFileContent(dv *ui.DiffViewWidget, owner, repo, baseSHA, headSHA, path string) {
+func (a *App) fetchPRFileContent(dv *ui.DiffEditorWidget, owner, repo, baseSHA, headSHA, path string) {
 	if owner == "" || baseSHA == "" {
 		dv.FailLoading()
 		return

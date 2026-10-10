@@ -965,7 +965,7 @@ func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callb
 	a.ShowDialog(adapter)
 }
 
-func (a *App) showDiffFindBar(dv *ui.DiffViewWidget) {
+func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 	findBar := ui.NewFindBarWidget()
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {

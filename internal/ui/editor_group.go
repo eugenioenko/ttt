@@ -545,24 +545,17 @@ func (g *EditorGroupWidget) OpenDiff(path string, fd diff.FileDiff, oldLines, ne
 }
 
 func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.FileDiff, oldLines, newLines []string, extended bool) {
+	widget := NewDiffEditorWidget(path, fd, oldLines, newLines, extended)
+	widget.SetSyntaxHighlight(g.SyntaxHighlight)
+	g.ApplyDiffDefaults(widget)
 	for i, t := range g.tabs {
 		if t.FilePath == tabName {
-			dw := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
-			g.ApplyDiffDefaults(dw)
-			if !g.SyntaxHighlight {
-				dw.Highlighter = nil
-			}
-			t.Content = dw
+			t.Content = widget
 			t.Title = title
 			g.tabs[i] = t
 			g.SwitchTab(i)
 			return
 		}
-	}
-	widget := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
-	g.ApplyDiffDefaults(widget)
-	if !g.SyntaxHighlight {
-		widget.Highlighter = nil
 	}
 	g.tabs = append(g.tabs, editorTab{
 		FilePath: tabName,
@@ -813,15 +806,13 @@ func (g *EditorGroupWidget) IsEditorActive() bool {
 	return t != nil && t.Content == nil
 }
 
-func (g *EditorGroupWidget) ActiveDiffWidget() *DiffViewWidget {
+func (g *EditorGroupWidget) ActiveDiffWidget() *DiffEditorWidget {
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
 		return nil
 	}
-	if dv, ok := t.Content.(*DiffViewWidget); ok {
-		return dv
-	}
-	return nil
+	dv, _ := t.Content.(*DiffEditorWidget)
+	return dv
 }
 
 func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
@@ -862,13 +853,11 @@ func (g *EditorGroupWidget) ActiveDiffContextSurface() DiffContextSurface {
 	return surface
 }
 
-func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffViewWidget {
+func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffEditorWidget {
 	for _, t := range g.tabs {
 		if t.FilePath == tabName {
-			if dv, ok := t.Content.(*DiffViewWidget); ok {
-				return dv
-			}
-			return nil
+			dv, _ := t.Content.(*DiffEditorWidget)
+			return dv
 		}
 	}
 	return nil
@@ -905,7 +894,7 @@ func (g *EditorGroupWidget) SwitchToTabByPath(path string) bool {
 func (g *EditorGroupWidget) DiffTabSources() []DiffSearchSource {
 	var result []DiffSearchSource
 	for _, t := range g.tabs {
-		if dv, ok := t.Content.(*DiffViewWidget); ok {
+		if dv, ok := t.Content.(*DiffEditorWidget); ok {
 			result = append(result, DiffSearchSource{TabName: t.FilePath, Lines: dv.CombinedLines()})
 		}
 	}
@@ -2012,7 +2001,7 @@ func (g *EditorGroupWidget) Copy() {
 	if t == nil {
 		return
 	}
-	if dv, ok := t.Content.(*DiffViewWidget); ok {
+	if dv, ok := t.Content.(*DiffEditorWidget); ok {
 		if text := dv.CopySelection(); text != "" {
 			clipboard.Set(text)
 		}

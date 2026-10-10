@@ -16,6 +16,15 @@ type DiffOverlay struct {
 	Kinds   []diff.LineKind
 	Deleted map[int][]diff.SideLine
 	Fillers map[int]int
+
+	// Nums switches the gutter to the diff layout (line number plus change
+	// marker); 0 leaves a row unnumbered. Read-only diffs number their
+	// synthetic buffers from the source files this way.
+	Nums          []int
+	Gaps          map[int]int
+	HoveredGap    int
+	HighContrast  bool
+	EmphasizeGaps bool
 }
 
 // NewDiffOverlay projects full-file diff lines onto the new side. A change
@@ -87,6 +96,59 @@ func (o *DiffOverlay) deletedLine(row editorRow) (diff.SideLine, bool) {
 	return block[row.phantom], true
 }
 
+func (o *DiffOverlay) diffGutter() bool { return o != nil && o.Nums != nil }
+
+func (o *DiffOverlay) num(line int) int {
+	if o == nil || line < 0 || line >= len(o.Nums) {
+		return 0
+	}
+	return o.Nums[line]
+}
+
+func (o *DiffOverlay) gapHovered(line int) bool {
+	if o == nil {
+		return false
+	}
+	gap, ok := o.Gaps[line]
+	return ok && gap == o.HoveredGap
+}
+
+func (o *DiffOverlay) gutterWidth() int {
+	maxNum := 0
+	for _, n := range o.Nums {
+		maxNum = max(maxNum, n)
+	}
+	return len(strconv.Itoa(maxNum)) + 3
+}
+
+// diffLineFg overrides syntax colors: collapsed separators are muted labels
+// and high contrast paints changed text with its semantic color. full reports
+// that the style also owns the row background.
+func (e *EditorPaneWidget) diffLineFg(line int) (style term.Style, override, full bool) {
+	o := e.DiffOverlay
+	kind := o.kind(line)
+	if kind == diff.Collapsed {
+		row := collapsedDiffRowStyle(kind, o.EmphasizeGaps, o.gapHovered(line))
+		if row != term.StyleDefault {
+			return row, true, true
+		}
+		return term.StyleMuted, true, false
+	}
+	if o != nil && o.HighContrast && (kind == diff.Added || kind == diff.Deleted) {
+		return diffKindForeground(kind, true), true, false
+	}
+	return 0, false, false
+}
+
+func (e *EditorPaneWidget) renderDiffGutterRow(surface Surface, y, gutterW, line int, continuation bool) {
+	o := e.DiffOverlay
+	side := diff.SideLine{}
+	if !continuation && line < len(e.Buf.Lines) {
+		side = diff.SideLine{Num: o.num(line), Kind: o.kind(line)}
+	}
+	renderDiffGutterWithCollapsedStyle(surface, 0, y, gutterW, side, collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line)))
+}
+
 func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
 	e.DiffOverlay = o
 	e.phantoms = nil
@@ -113,6 +175,8 @@ func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
 		return term.StyleDiffAdded
 	case diff.Deleted:
 		return term.StyleDiffDeleted
+	case diff.Collapsed:
+		return collapsedDiffRowStyle(diff.Collapsed, e.DiffOverlay.EmphasizeGaps, e.DiffOverlay.gapHovered(line))
 	}
 	return 0
 }
