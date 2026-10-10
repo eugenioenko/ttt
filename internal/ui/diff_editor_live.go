@@ -280,16 +280,16 @@ func (d *DiffEditorWidget) trackLiveEdits() {
 	cur := e.Buf.Lines
 	if d.liveSnap == nil {
 		d.liveSnap = append([]string(nil), cur...)
-		d.liveSnapGen = e.editGen
+		d.liveSnapGen = e.Buf.Version()
 		if len(cur) != d.liveN {
 			d.shiftStaleDiff(len(cur) - d.liveN)
 		}
 		return
 	}
-	if d.liveSnapGen == e.editGen && len(cur) == len(d.liveSnap) {
+	if d.liveSnapGen == e.Buf.Version() && len(cur) == len(d.liveSnap) {
 		return
 	}
-	d.liveSnapGen = e.editGen
+	d.liveSnapGen = e.Buf.Version()
 	start, oldEnd, newEnd, changed := changedLineRange(d.liveSnap, cur)
 	if !changed {
 		return

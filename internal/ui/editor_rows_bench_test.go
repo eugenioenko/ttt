@@ -9,7 +9,10 @@ import (
 )
 
 func newPhantomBenchEditor(wrap bool) *EditorPaneWidget {
-	const n = 50000
+	return newPhantomBenchEditorN(50000, wrap, true)
+}
+
+func newPhantomBenchEditorN(n int, wrap, phantoms bool) *EditorPaneWidget {
 	lines := make([]string, n)
 	kinds := make([]diff.LineKind, n)
 	deleted := make(map[int][]diff.SideLine)
@@ -22,7 +25,9 @@ func newPhantomBenchEditor(wrap bool) *EditorPaneWidget {
 	}
 	e := newRowsEditor(lines, 60, 40)
 	e.WordWrap = wrap
-	e.SetDiffOverlay(&DiffOverlay{Kinds: kinds, Deleted: deleted})
+	if phantoms {
+		e.SetDiffOverlay(&DiffOverlay{Kinds: kinds, Deleted: deleted})
+	}
 	return e
 }
 
@@ -72,19 +77,36 @@ func TestRowLayoutIsCachedUntilItsInputsChange(t *testing.T) {
 	}
 }
 
-func BenchmarkPhantomLayoutTypeWrap(b *testing.B) {
-	e := newPhantomBenchEditor(true)
+func benchmarkTypeWrap(b *testing.B, n int, phantoms, newline bool) {
+	e := newPhantomBenchEditorN(n, true, phantoms)
 	grid := makeGrid(60, 40)
 	surface := NewRenderSurface(grid, Rect{W: 60, H: 40})
-	e.Cursor.Line = 25000
+	at := n / 2
+	e.Cursor.Line = at
 	e.Render(surface)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		e.exec(&undo.InsertRuneCommand{Line: 25000, Col: 0, Rune: 'x'})
+		switch {
+		case newline && i%2 == 1:
+			e.exec(&undo.JoinLineCommand{Line: at + 1})
+		case newline:
+			e.exec(&undo.SplitLineCommand{Line: at, Col: 4})
+		case i%2 == 1:
+			e.exec(&undo.DeleteRuneCommand{Line: at, Col: 0})
+		default:
+			e.exec(&undo.InsertRuneCommand{Line: at, Col: 0, Rune: 'x'})
+		}
 		e.scrollViewport()
 		e.Render(surface)
 	}
 }
+
+func BenchmarkPhantomLayoutTypeWrap(b *testing.B)     { benchmarkTypeWrap(b, 50000, true, false) }
+func BenchmarkPhantomLayoutTypeWrap500k(b *testing.B) { benchmarkTypeWrap(b, 500000, true, false) }
+func BenchmarkLayoutTypeWrap50k(b *testing.B)         { benchmarkTypeWrap(b, 50000, false, false) }
+func BenchmarkLayoutTypeWrap500k(b *testing.B)        { benchmarkTypeWrap(b, 500000, false, false) }
+func BenchmarkLayoutTypeNewlineWrap50k(b *testing.B)  { benchmarkTypeWrap(b, 50000, false, true) }
+func BenchmarkLayoutTypeNewlineWrap500k(b *testing.B) { benchmarkTypeWrap(b, 500000, false, true) }
 
 func benchmarkSplitDiffScroll(b *testing.B, wrap bool) {
 	const n = 50000

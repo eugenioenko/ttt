@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"slices"
 	"sort"
 	"unsafe"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
@@ -37,13 +39,14 @@ type rowLayout struct {
 	endRow int
 }
 
-// rowLayoutKey identifies what a cached layout was built from. Edits made
-// through the editor bump editGen; the line-slice identity catches buffers
-// replaced wholesale.
+// rowLayoutKey identifies what a cached layout was built from. The buffer
+// version covers every edit; the line-slice identity catches a slice assigned
+// to Lines without going through the buffer.
 type rowLayoutKey struct {
+	buf        *buffer.Buffer
 	lines      *string
 	n          int
-	editGen    uint64
+	version    uint64
 	overlay    *DiffOverlay
 	overlayGen uint64
 	visible    *int
@@ -81,9 +84,10 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 		visible = e.DiffOverlay.visibleLines(n)
 	}
 	key := rowLayoutKey{
+		buf:        e.Buf,
 		lines:      unsafe.SliceData(e.Buf.Lines),
 		n:          n,
-		editGen:    e.editGen,
+		version:    e.Buf.Version(),
 		overlay:    e.DiffOverlay,
 		overlayGen: e.overlayGen,
 		visible:    unsafe.SliceData(visible),
@@ -96,6 +100,11 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	}
 	for _, c := range e.layoutCache {
 		if c != nil && c.key == key {
+			return c
+		}
+	}
+	for _, c := range e.layoutCache {
+		if c != nil && c.advance(key, e.Buf) {
 			return c
 		}
 	}
@@ -140,7 +149,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 func (l *rowLayout) lineRows(line int, prev []lineRowsMemo, delta int) int {
 	text := l.lines[line]
 	for _, i := range [2]int{line, line - delta} {
-		if i >= 0 && i < len(prev) && len(prev[i].text) == len(text) && unsafe.StringData(prev[i].text) == unsafe.StringData(text) {
+		if i >= 0 && i < len(prev) && prev[i].rows > 0 && len(prev[i].text) == len(text) && unsafe.StringData(prev[i].text) == unsafe.StringData(text) {
 			l.memo[line] = prev[i]
 			return prev[i].rows
 		}
@@ -190,6 +199,109 @@ func (l *rowLayout) ensure() {
 	starts[count] = row
 	l.starts = starts
 	l.endRow = row + l.phantomRows(l.n())
+}
+
+func sameInputs(a, b rowLayoutKey) bool {
+	a.lines, a.n, a.version = nil, 0, 0
+	b.lines, b.n, b.version = nil, 0, 0
+	return a == b
+}
+
+// advance brings an ensured layout up to date with the buffer edits made
+// since it was built, re-measuring only the edited lines. It reports false
+// when the edits cannot be replayed and the layout must be rebuilt.
+func (l *rowLayout) advance(key rowLayoutKey, buf *buffer.Buffer) bool {
+	if l.starts == nil || l.visible != nil || key.visible != nil || key.version <= l.key.version || !sameInputs(l.key, key) {
+		return false
+	}
+	n := len(l.lines)
+	lo, hi := n, 0
+	ok := true
+	replayed := buf.ChangesSince(l.key.version, func(c buffer.Change) {
+		if !ok {
+			return
+		}
+		if c.Start < 0 || c.Start+c.Removed > n || (l.phantoms != nil && c.Added != c.Removed) {
+			ok = false
+			return
+		}
+		lo, hi = spliceRange(lo, hi, c)
+		if c.Added != c.Removed {
+			l.spliceStarts(c)
+			if l.wrap {
+				l.memo = slices.Replace(l.memo, c.Start, c.Start+c.Removed, make([]lineRowsMemo, c.Added)...)
+			}
+		}
+		n += c.Added - c.Removed
+	})
+	if !replayed || !ok || n != len(buf.Lines) {
+		l.starts, l.memo = nil, nil
+		return false
+	}
+	l.lines = buf.Lines
+	l.key = key
+	l.restart(lo, min(hi, n))
+	return true
+}
+
+// spliceRange grows the edited range [lo, hi) of earlier changes to cover c,
+// moving it to the line numbers after c. A deletion dirties the line that
+// takes the removed lines' place, whose row count is no longer known.
+func spliceRange(lo, hi int, c buffer.Change) (int, int) {
+	end := c.Start + max(c.Added, 1)
+	if lo >= hi {
+		return c.Start, end
+	}
+	move := func(p int) int {
+		switch {
+		case p <= c.Start:
+			return p
+		case p >= c.Start+c.Removed:
+			return p + c.Added - c.Removed
+		}
+		return c.Start + c.Added
+	}
+	return min(move(lo), c.Start), max(move(hi), end)
+}
+
+// spliceStarts replaces the row starts of the removed lines with placeholders
+// for the added ones. The starts after the edit keep their old values, so the
+// differences between them, the row counts of unedited lines, stay valid.
+func (l *rowLayout) spliceStarts(c buffer.Change) {
+	s := c.Start
+	switch {
+	case c.Added == 0:
+		l.starts = slices.Delete(l.starts, s+1, s+c.Removed+1)
+	case c.Removed == 0:
+		fill := make([]int, c.Added)
+		fill[c.Added-1] = l.starts[s]
+		l.starts = slices.Insert(l.starts, s+1, fill...)
+	default:
+		l.starts = slices.Replace(l.starts, s+1, s+c.Removed, make([]int, c.Added-1)...)
+	}
+}
+
+// restart re-measures the lines in [lo, hi) and shifts the starts after them
+// by the change in their rows.
+func (l *rowLayout) restart(lo, hi int) {
+	n := l.n()
+	hi = min(hi, n)
+	lo = min(lo, hi)
+	oldHi := l.starts[hi]
+	for i := lo; i < hi; i++ {
+		rows := l.phantomRows(i) + 1
+		if l.wrap && !l.hasLabel(i) {
+			rows += l.lineRows(i, l.memo, 0) - 1
+		}
+		l.starts[i+1] = l.starts[i] + rows
+	}
+	if delta := l.starts[hi] - oldHi; delta != 0 {
+		tail := l.starts[hi+1:]
+		for i := range tail {
+			tail[i] += delta
+		}
+	}
+	l.endRow = l.starts[n] + l.phantomRows(n)
 }
 
 func (e *EditorPaneWidget) layout() *rowLayout {

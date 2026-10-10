@@ -876,16 +876,17 @@ type splitAlignKey struct {
 }
 
 type paneAlignKey struct {
+	buf     *buffer.Buffer
 	lines   *string
 	n       int
-	editGen uint64
+	version uint64
 	wrap    bool
 	width   int
 	tabW    int
 }
 
 func paneAlignKeyOf(p *EditorPaneWidget) paneAlignKey {
-	k := paneAlignKey{lines: unsafe.SliceData(p.Buf.Lines), n: len(p.Buf.Lines), editGen: p.editGen, wrap: p.WordWrap, tabW: p.resolveTabSize()}
+	k := paneAlignKey{buf: p.Buf, lines: unsafe.SliceData(p.Buf.Lines), n: len(p.Buf.Lines), version: p.Buf.Version(), wrap: p.WordWrap, tabW: p.resolveTabSize()}
 	if p.WordWrap {
 		k.width = max(p.Viewport.Width, 1)
 	}
