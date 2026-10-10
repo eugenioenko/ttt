@@ -36,7 +36,10 @@ type Highlighter struct {
 	doc      *textmate.Document
 	dirty    bool
 	isolated map[string][]Span
-	styles   map[*textmate.ScopeStack]term.Style
+	// The document's token slices are immutable and shared across calls, so
+	// a slice's first element identifies its spans.
+	lineSpans map[*textmate.Token]cachedSpans
+	styles    map[*textmate.ScopeStack]term.Style
 	// tokenTheme is the token theme the caches above were built with.
 	tokenTheme *TokenTheme
 }
@@ -121,10 +124,24 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 		h.doc.SetLines(lines)
 	}
 	res, ok := h.doc.Line(idx)
-	if !ok {
+	if !ok || len(res.Tokens) == 0 {
 		return nil
 	}
-	return h.tokensToSpans(res.Tokens)
+	key := &res.Tokens[0]
+	if c, ok := h.lineSpans[key]; ok && c.n == len(res.Tokens) {
+		return c.spans
+	}
+	spans := h.tokensToSpans(res.Tokens)
+	if h.lineSpans == nil || len(h.lineSpans) >= maxIsolatedCache {
+		h.lineSpans = make(map[*textmate.Token]cachedSpans)
+	}
+	h.lineSpans[key] = cachedSpans{n: len(res.Tokens), spans: spans}
+	return spans
+}
+
+type cachedSpans struct {
+	n     int
+	spans []Span
 }
 
 // ClearCache marks the buffer as edited; the next lookup hands the new lines
@@ -183,6 +200,7 @@ func (h *Highlighter) syncTokenTheme() {
 		h.tokenTheme = theme
 		h.styles = nil
 		h.isolated = nil
+		h.lineSpans = nil
 	}
 }
 
