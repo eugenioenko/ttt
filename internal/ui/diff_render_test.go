@@ -45,8 +45,8 @@ func TestCompactDiffSeparatorOmitsAdjacentLines(t *testing.T) {
 func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
 	grid := makeGrid(10, 2)
 	surface := NewRenderSurface(grid, Rect{W: 10, H: 2})
-	renderDiffGutter(surface, 0, 0, 5, diff.SideLine{Num: 12, Kind: diff.Deleted})
-	renderDiffGutter(surface, 0, 1, 5, diff.SideLine{Num: 13, Kind: diff.Added})
+	renderDiffGutterWithSigns(surface, 0, 0, 5, diff.SideLine{Num: 12, Kind: diff.Deleted}, term.StyleDefault, true)
+	renderDiffGutterWithSigns(surface, 0, 1, 5, diff.SideLine{Num: 13, Kind: diff.Added}, term.StyleDefault, true)
 
 	if deleted, added := cellRow(grid, 0), cellRow(grid, 1); !strings.Contains(deleted, "12 −") || !strings.Contains(added, "13 +") {
 		t.Fatalf("changed gutters do not show line markers:\n%s\n%s", deleted, added)
@@ -70,21 +70,23 @@ func TestDiffGutterMarksAndColorsChangedLines(t *testing.T) {
 func TestDiffGutterRightAlignsLineNumbers(t *testing.T) {
 	grid := makeGrid(12, 1)
 	surface := NewRenderSurface(grid, Rect{W: 12, H: 1})
-	renderDiffGutter(surface, 0, 0, 6, diff.SideLine{Num: 1, Kind: diff.Added})
-	renderDiffGutter(surface, 6, 0, 6, diff.SideLine{Num: 123, Kind: diff.Deleted})
+	renderDiffGutterWithSigns(surface, 0, 0, 6, diff.SideLine{Num: 1, Kind: diff.Added}, term.StyleDefault, true)
+	renderDiffGutterWithSigns(surface, 6, 0, 6, diff.SideLine{Num: 123, Kind: diff.Deleted}, term.StyleDefault, true)
 	if got := cellRow(grid, 0); got != "   1 + 123 −" {
 		t.Fatalf("aligned diff gutters = %q, want right-aligned line numbers", got)
 	}
 }
 
-func TestDiffTextDoesNotDrawFullwidthRuneInLastColumn(t *testing.T) {
+func TestTextSegmentDoesNotDrawFullwidthRuneInLastColumn(t *testing.T) {
 	grid := makeGrid(2, 1)
 	surface := NewRenderSurface(grid, Rect{W: 2, H: 1})
-	renderDiffText(surface, 0, 0, 2, "a界", term.StyleDiffAdded, term.StyleDefault, nil, 0, 0, nil)
+	drawTextSegment(surface, 0, 0, 2, "a界", 0, 0, term.Cell{Ch: ' '}, func(_ int, ch rune) term.Cell {
+		return term.Cell{Ch: ch, BgStyle: term.StyleCommitHeader}
+	})
 	if grid[0][0].Ch != 'a' || grid[0][1].Ch != ' ' {
 		t.Fatalf("last-column fullwidth rendering = %q / %q, want 'a' then a safe space", grid[0][0].Ch, grid[0][1].Ch)
 	}
-	if grid[0][1].BgStyle != term.StyleDiffAdded {
-		t.Fatalf("substituted last-column cell lost diff background: %+v", grid[0][1])
+	if grid[0][1].BgStyle != term.StyleCommitHeader {
+		t.Fatalf("substituted last-column cell lost its background: %+v", grid[0][1])
 	}
 }

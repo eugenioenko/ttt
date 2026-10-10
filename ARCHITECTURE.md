@@ -192,7 +192,9 @@ File diffs render through the editor: `EditorPaneWidget` draws a `DiffOverlay`
 (line kinds, deleted and filler phantom rows, gutter numbers, gaps) and
 `DiffEditorWidget` owns layout, split alignment, gaps and context modes for
 both editable diffs (bound to the file tab's editor pane) and read-only diffs
-(synthetic buffers). `CommitDetailWidget` remains a separate surface.
+(synthetic buffers). `CommitDetailWidget` keeps its own document (message,
+file headings, notices, one scroll viewport) and draws each file's diff by
+asking that file's `DiffEditorWidget` for the rows currently on screen.
 
 ### Application owners
 

@@ -577,7 +577,7 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	}
 	surface.ApplyDefaultWrapMode(wrapMode)
 	surface.SetDiffHighContrast(g.DiffHighContrast)
-	if d, ok := surface.(*DiffEditorWidget); ok {
+	if d, ok := surface.(diffSignsSurface); ok {
 		d.SetDiffSigns(g.DiffSigns)
 	}
 	surface.SetDiffCollapsedEmphasis(g.DiffCollapsedEmphasis)
@@ -602,10 +602,15 @@ func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {
 func (g *EditorGroupWidget) SetDiffSigns(enabled bool) {
 	g.DiffSigns = enabled
 	for _, surface := range g.diffSurfaces() {
-		if d, ok := surface.(*DiffEditorWidget); ok {
+		if d, ok := surface.(diffSignsSurface); ok {
 			d.SetDiffSigns(enabled)
 		}
 	}
+}
+
+type diffSignsSurface interface {
+	SetDiffSigns(bool)
+	setGutterStyle(string)
 }
 
 func (g *EditorGroupWidget) diffSurfaces() []DiffModeSurface {
@@ -2214,7 +2219,7 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if t == nil {
 		return
 	}
-	if d, ok := t.Content.(*DiffEditorWidget); ok {
+	if d, ok := t.Content.(diffSignsSurface); ok {
 		d.setGutterStyle(g.GutterStyle)
 	}
 	if t.Content != nil {

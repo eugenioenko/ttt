@@ -21,7 +21,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	tabW := e.resolveTabSize()
 
 	editorW := w - gutterW
-	showHScrollbar := !e.WordWrap && maxLineW > editorW
+	showHScrollbar := !e.Embedded && !e.WordWrap && maxLineW > editorW
 	if showHScrollbar {
 		h--
 	}
@@ -31,23 +31,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 	visibleCount := e.rowLayout(editorW).total()
 
-	showScrollbar := visibleCount > h
+	showScrollbar := !e.Embedded && visibleCount > h
 	if showScrollbar {
 		editorW--
 	}
-	if editorW < 1 {
-		editorW = 1
-	}
-	if e.WordWrap && editorW > 4 {
-		switch e.GutterStyle {
-		case "minimal":
-			editorW--
-		case "extended":
-			editorW -= 3
-		default:
-			editorW -= 2
-		}
-	}
+	editorW = e.wrapTextWidth(max(editorW, 1))
 
 	e.Viewport.Width = editorW
 	e.Viewport.Height = h
@@ -60,7 +48,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	if e.WordWrap {
 		e.Viewport.LeftCol = 0
 		visibleCount = layout.total()
-		showScrollbar = visibleCount > h
+		showScrollbar = !e.Embedded && visibleCount > h
 	}
 
 	sel := e.Selection
@@ -448,4 +436,24 @@ func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Spa
 		}
 	}
 	return cells
+}
+
+func (e *EditorPaneWidget) wrapTextWidth(editorW int) int {
+	if !e.WordWrap || editorW <= 4 {
+		return editorW
+	}
+	switch e.GutterStyle {
+	case "minimal":
+		return editorW - 1
+	case "extended":
+		return editorW - 3
+	default:
+		return editorW - 2
+	}
+}
+
+// embeddedTextWidth is the text width Render gives an Embedded pane drawn at
+// width w, so a host can lay the pane out before drawing it.
+func (e *EditorPaneWidget) embeddedTextWidth(w int) int {
+	return e.wrapTextWidth(max(w-e.GutterWidth(), 1))
 }

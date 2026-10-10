@@ -44,6 +44,7 @@ type DiffEditorWidget struct {
 	signs           bool
 	emphasizeGaps   bool
 	hoveredGap      int
+	minGutter       int
 
 	OnFetchExtended  func(dv *DiffEditorWidget)
 	Loading          bool
@@ -303,6 +304,7 @@ func (d *DiffEditorWidget) applyOverlayOptions() {
 			o.Signs = d.signs
 			o.EmphasizeGaps = d.emphasizeGaps
 			o.HoveredGap = d.hoveredGap
+			o.MinGutter = d.minGutter
 		}
 	}
 }
@@ -1117,4 +1119,11 @@ func DiffCombinedLines(fd diff.FileDiff) []string {
 	d := &DiffEditorWidget{}
 	d.Lines, _ = compactDiffLinesWithContext(fd, nil, nil, nil)
 	return d.CombinedLines()
+}
+
+func diffLineNumberDistance(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
 }

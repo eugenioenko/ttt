@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -28,6 +29,7 @@ type DiffOverlay struct {
 	HighContrast  bool
 	EmphasizeGaps bool
 	Signs         bool
+	MinGutter     int
 
 	// Labels draws a gap label in place of a buffer line's text; Hidden holds
 	// the buffer lines folded away behind such a gap line, so a real buffer can
@@ -112,7 +114,7 @@ func (o *DiffOverlay) gutterWidth() int {
 	for _, n := range o.Nums {
 		maxNum = max(maxNum, n)
 	}
-	return len(strconv.Itoa(maxNum)) + 3
+	return max(len(strconv.Itoa(maxNum))+3, o.MinGutter)
 }
 
 // diffLineFg overrides syntax colors: collapsed separators are muted labels
@@ -271,5 +273,40 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 	cells := e.renderLineToScreen([]rune(old.Text), spans, false, nil, e.resolveTabSize(), leftCol, editorW)
 	for x := 0; x < editorW; x++ {
 		surface.SetCell(gutterW+x, y, term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted})
+	}
+}
+
+func renderDiffGutterWithSigns(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style, signs bool) {
+	number := ""
+	if line.Num > 0 {
+		number = fmt.Sprintf("%d", line.Num)
+	}
+	marker := ' '
+	style := term.StyleLineNumber
+	bgStyle := term.StyleDefault
+	switch line.Kind {
+	case diff.Added:
+		marker = '+'
+		style = term.StyleGutterAdded
+		bgStyle = term.StyleDiffAdded
+	case diff.Deleted:
+		marker = '−'
+		style = term.StyleGutterDeleted
+		bgStyle = term.StyleDiffDeleted
+	case diff.Collapsed:
+		marker = '▶'
+		if collapsedStyle != term.StyleDefault {
+			style = collapsedStyle
+		}
+	}
+	if !signs {
+		marker = ' '
+	}
+	text := fmt.Sprintf("%*s %c", width-2, number, marker)
+	for column, ch := range []rune(text) {
+		if column >= width {
+			break
+		}
+		surface.SetCell(x+column, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle})
 	}
 }

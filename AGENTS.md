@@ -67,7 +67,7 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 
 **Product presentation**:
 
-- **`internal/ui/`**: editor and panel widgets: `EditorGroupWidget`/`EditorPaneWidget` (tabs and editing), sidebar, bottom panel, search, diff tabs (`DiffEditorWidget` for read-only diffs, `editor_diff.go` overlay and `editor_group_diff.go` inline diff mode for editable ones), menus, dialogs. Notable files: `root.go` (`Root`, overlays, key matching, force keys, and the `RawKeyConsumer` interface), `terminal_widget.go` (renders the terminal grid as direct-color cells, translates keys to VT sequences), `content_split.go` (focus routing between editor and bottom panel).
+- **`internal/ui/`**: editor and panel widgets: `EditorGroupWidget`/`EditorPaneWidget` (tabs and editing), sidebar, bottom panel, search, diffs (`DiffEditorWidget` for every diff tab and for each file in the commit detail view, `editor_diff.go` overlay, `editor_group_diff.go` binding editable diffs to file tabs), menus, dialogs. Notable files: `root.go` (`Root`, overlays, key matching, force keys, and the `RawKeyConsumer` interface), `terminal_widget.go` (renders the terminal grid as direct-color cells, translates keys to VT sequences), `content_split.go` (focus routing between editor and bottom panel).
 
 **Application**:
 

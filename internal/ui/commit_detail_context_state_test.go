@@ -82,24 +82,23 @@ func TestCommitDetailCollapsedRowsAreNotSelectableOrCopied(t *testing.T) {
 		Path: "file.txt",
 		Diff: diff.Parse("--- a/file.txt\n+++ b/file.txt\n@@ -1,1 +1,1 @@\n-old one\n+new one\n@@ -10,1 +10,1 @@\n-old ten\n+new ten\n"),
 	}}, "")
-	gapRow := -1
-	for rowIndex, row := range detail.rows {
-		if row.kind == commitDetailDiffRow && detail.Files[0].lines[row.lineIndex].Left.Kind == diff.Collapsed {
-			gapRow = rowIndex
+	detail.SetMode(DiffModeUnified)
+	p := detail.Files[0].view.unified
+	gapLine := -1
+	for line := range p.Buf.Lines {
+		if p.DiffOverlay.kind(line) == diff.Collapsed {
+			gapLine = line
 			break
 		}
 	}
-	if gapRow < 0 {
-		t.Fatal("missing collapsed presentation row")
+	if gapLine < 0 || !strings.Contains(p.Buf.Lines[gapLine], "8 lines") {
+		t.Fatalf("missing collapsed presentation row: %q", p.Buf.Lines)
 	}
-	if text, selectable := detail.rowText(gapRow, false); selectable || !strings.Contains(text, "8 lines") {
-		t.Fatalf("collapsed row text = %q, selectable=%v", text, selectable)
-	}
-	detail.hasSelection = true
-	detail.selection.Anchor = diffSelPos{Line: gapRow - 1, Col: 0}
-	detail.selection.Current = diffSelPos{Line: gapRow + 1, Col: 100}
-	if copied := detail.selectionText(); strings.Contains(copied, "lines ⋯") {
-		t.Fatalf("copy included collapsed presentation text: %q", copied)
+	p.Selection.Start(0, 0)
+	p.Cursor.Line, p.Cursor.Col = len(p.Buf.Lines)-1, 100
+	copied := detail.CopySelection()
+	if strings.Contains(copied, "lines ⋯") || !strings.Contains(copied, "new ten") {
+		t.Fatalf("copy = %q, want diff text without the collapsed label", copied)
 	}
 }
 

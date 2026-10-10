@@ -84,6 +84,7 @@ type EditorPaneWidget struct {
 	OnGutterClick           func(line int) bool
 	ReadOnly                bool
 	Passive                 bool
+	Embedded                bool
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
 	bracketMatchCache       bracketMatch
