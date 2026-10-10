@@ -53,6 +53,25 @@ func wordBoundaryRight(runes []rune, col int) int {
 	return pos
 }
 
+// MoveToFileEdge puts the cursor at the start of the first line or the end
+// of the last, extending the selection when shift is held.
+func (e *EditorPaneWidget) MoveToFileEdge(end, shift bool) {
+	if e.Buf == nil || len(e.Buf.Lines) == 0 {
+		return
+	}
+	e.collapseMulti()
+	e.startOrExtendSelection(shift)
+	if end {
+		e.Cursor.Line = len(e.Buf.Lines) - 1
+		e.Cursor.Col = len([]rune(e.Buf.Lines[e.Cursor.Line]))
+		e.skipHiddenLineUp()
+	} else {
+		e.Cursor.Line, e.Cursor.Col = 0, 0
+		e.skipHiddenLineDown()
+	}
+	e.scrollViewport()
+}
+
 func (e *EditorPaneWidget) MoveWordLeft(shift bool) {
 	if e.isMultiActive() && !shift {
 		e.multiMoveAll(func(cs *multicursor.CursorState) {

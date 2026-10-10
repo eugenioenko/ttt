@@ -53,6 +53,10 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 
 | Shortcut | Command | Description |
 |----------|---------|-------------|
+| Ctrl+Home | `editor.goToFileStart` | Move cursor to the start of the file |
+| Ctrl+End | `editor.goToFileEnd` | Move cursor to the end of the file |
+| Ctrl+Shift+Home | `editor.selectToFileStart` | Select to the start of the file |
+| Ctrl+Shift+End | `editor.selectToFileEnd` | Select to the end of the file |
 | Ctrl+Left | `editor.moveWordLeft` | Move cursor one word left |
 | Ctrl+Right | `editor.moveWordRight` | Move cursor one word right |
 | Ctrl+Shift+Left | `editor.selectWordLeft` | Select one word left |

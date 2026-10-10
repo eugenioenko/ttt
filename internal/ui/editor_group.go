@@ -1932,6 +1932,14 @@ func (g *EditorGroupWidget) TrimTrailingWhitespaceLines() {
 	}
 }
 
+func (g *EditorGroupWidget) MoveToFileEdge(end, shift bool) {
+	if g.IsEditorActive() {
+		g.Editor.MoveToFileEdge(end, shift)
+	} else if d := g.ActiveDiffWidget(); d != nil {
+		d.keyPane().MoveToFileEdge(end, shift)
+	}
+}
+
 func (g *EditorGroupWidget) MoveWordLeft(shift bool) {
 	if g.IsEditorActive() {
 		g.Editor.MoveWordLeft(shift)

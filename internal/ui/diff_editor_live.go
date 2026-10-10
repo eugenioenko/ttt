@@ -604,6 +604,18 @@ func isNavigationKey(ev *tcell.EventKey) bool {
 	return false
 }
 
+// keyPane is the pane keys move: the one last clicked in a split, the
+// buffer's own pane in an editable diff.
+func (d *DiffEditorWidget) keyPane() *EditorPaneWidget {
+	if !d.editable {
+		return d.lead()
+	}
+	if d.headFocused() {
+		return d.left
+	}
+	return d.live
+}
+
 func (d *DiffEditorWidget) headFocused() bool {
 	return d.editable && !d.IsUnified() && d.focusLeft
 }
