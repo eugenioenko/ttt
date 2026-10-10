@@ -142,9 +142,7 @@ func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 			if seen[tabName] {
 				continue
 			}
-			fd := diff.Parse(diffText)
-			dv := ui.NewDiffViewWidget(path, fd, nil, nil, false)
-			sources = append(sources, ui.DiffSearchSource{TabName: tabName, Lines: dv.CombinedLines()})
+			sources = append(sources, ui.DiffSearchSource{TabName: tabName, Lines: ui.DiffCombinedLines(diff.Parse(diffText))})
 		}
 	}
 	return sources
@@ -260,48 +258,91 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 
 func (a *App) openSelectedDiff(extended bool) { a.Changes.OpenSelectedDiff(extended) }
 
-func (a *App) OpenChangeDiff(dir string, status git.FileStatus, extended bool) {
+func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended bool) {
 	fullPath := filepath.Join(dir, status.Path)
 	if status.Status == "?" {
 		a.EditorGroup.OpenFile(fullPath)
 		a.FocusEditorIfEnabled()
 		return
 	}
-	var diffText string
-	var err error
-	if status.Status == "R" && status.OldPath != "" {
-		diffText, err = git.DiffRename(dir, status.OldPath, status.Path)
-	} else {
-		diffText, err = git.DiffFile(dir, status.Path)
+	conflict := false
+	if !staged && status.Status != "D" {
+		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() {
+			var opened bool
+			if opened, conflict = a.openInlineDiff(fullPath, dir, status.Path); opened {
+				a.FocusEditorIfEnabled()
+				return
+			}
+		}
 	}
-	if err != nil || diffText == "" {
+	if conflict || git.IsUnmergedContext(context.Background(), dir, status.Path) {
 		a.EditorGroup.OpenFile(fullPath)
+		a.StatusNotify(fmt.Sprintf("%s has merge conflicts; opened without a diff", status.Path))
 		a.FocusEditorIfEnabled()
 		return
 	}
-	parsed := diff.Parse(diffText)
-	if len(parsed.Hunks) == 0 {
+	if staged {
+		a.openStagedDiff(dir, status, extended)
+		return
+	}
+	parsed, ok := parseChangeDiff(git.DiffWorktreeFile(dir, status.Path))
+	if !ok {
 		a.EditorGroup.OpenFile(fullPath)
 		a.FocusEditorIfEnabled()
 		return
 	}
 	var oldLines, newLines []string
-	oldContent, err := git.ShowFile(dir, status.Path, "HEAD")
-	if err == nil {
-		oldLines = strings.Split(oldContent, "\n")
-		if len(oldLines) > 0 && oldLines[len(oldLines)-1] == "" {
-			oldLines = oldLines[:len(oldLines)-1]
-		}
+	if content, err := git.ShowIndexFileContext(context.Background(), dir, status.Path); err == nil {
+		oldLines = diffSideLines(content)
 	}
-	newData, err := os.ReadFile(fullPath)
-	if err == nil {
-		newLines = strings.Split(string(newData), "\n")
-		if len(newLines) > 0 && newLines[len(newLines)-1] == "" {
-			newLines = newLines[:len(newLines)-1]
-		}
+	if data, err := os.ReadFile(fullPath); err == nil {
+		newLines = diffSideLines(string(data))
 	}
 	a.EditorGroup.OpenDiff(status.Path, parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
+}
+
+func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
+	oldPath := status.Path
+	paths := []string{status.Path}
+	if status.OldPath != "" && status.OldPath != status.Path {
+		oldPath = status.OldPath
+		paths = []string{status.OldPath, status.Path}
+	}
+	parsed, ok := parseChangeDiff(git.DiffStagedFile(dir, paths...))
+	if !ok {
+		a.StatusNotify(fmt.Sprintf("No staged line changes for %s", status.Path))
+		return
+	}
+	var oldLines, newLines []string
+	if status.Status != "A" {
+		if content, err := git.ShowFile(dir, oldPath, "HEAD"); err == nil {
+			oldLines = diffSideLines(content)
+		}
+	}
+	if status.Status != "D" {
+		if content, err := git.ShowIndexFileContext(context.Background(), dir, status.Path); err == nil {
+			newLines = diffSideLines(content)
+		}
+	}
+	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", status.Path, parsed, oldLines, newLines, extended)
+	a.FocusEditorIfEnabled()
+}
+
+func parseChangeDiff(text string, err error) (diff.FileDiff, bool) {
+	if err != nil || text == "" {
+		return diff.FileDiff{}, false
+	}
+	parsed := diff.Parse(text)
+	return parsed, len(parsed.Hunks) > 0
+}
+
+func diffSideLines(content string) []string {
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 func (a *App) OpenCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) {
@@ -367,7 +408,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 	}
 	a.EditorGroup.OpenDiff(status.Path, parsed, nil, nil, false)
 	if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
-		dv.SetExtendedFetcher(func(dv *ui.DiffViewWidget) {
+		dv.SetExtendedFetcher(func(dv *ui.DiffEditorWidget) {
 			a.fetchPRFileContent(dv, group.PROwner, group.PRRepo, group.PRBaseSHA, group.PRHeadSHA, status.Path)
 		})
 		if extended {
@@ -377,7 +418,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 	a.FocusEditorIfEnabled()
 }
 
-func (a *App) fetchPRFileContent(dv *ui.DiffViewWidget, owner, repo, baseSHA, headSHA, path string) {
+func (a *App) fetchPRFileContent(dv *ui.DiffEditorWidget, owner, repo, baseSHA, headSHA, path string) {
 	if owner == "" || baseSHA == "" {
 		dv.FailLoading()
 		return
@@ -679,6 +720,8 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.OnReplace = app.ApplySearchReplace
 	app.Search.OnReplaceAll = app.ApplySearchReplaceAll
 
+	app.EditorGroup.RequestRedraw = app.requestRedraw
+
 	app.Changes.OnRightClick = app.ShowChangesFileContextMenu
 	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
@@ -686,9 +729,8 @@ func registerWidgetCallbacks(app *App) {
 		app.EditorGroup.OpenFile(path)
 		app.FocusEditorIfEnabled()
 	}
-	app.Changes.OnOpenDiff = func(dir string, status git.FileStatus, extended bool) {
-		app.OpenChangeDiff(dir, status, extended)
-	}
+	app.Changes.OnOpenDiff = app.OpenChangeDiff
+	app.Changes.OnRefreshed = app.onChangesRefreshed
 	app.Changes.OnOpenCommitDiff = app.OpenCommitDiff
 	app.Changes.OnOpenCommit = app.OpenCommitDetail
 	app.Changes.OnOpenPRDetail = app.OpenPRDetail
@@ -763,5 +805,11 @@ func registerWidgetCallbacks(app *App) {
 			}
 			openContextMenu(app, items, sx, sy)
 		}},
+	}
+}
+
+func (a *App) requestRedraw() {
+	if a.Screen != nil {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 }

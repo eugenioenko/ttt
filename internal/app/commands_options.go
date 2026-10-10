@@ -53,6 +53,18 @@ func (a *App) ToggleDiffHighContrast() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleDiffSigns() {
+	enabled := !a.Settings.Editor.IsDiffSignsEnabled()
+	a.Settings.Editor.DiffSigns = &enabled
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleDiffSignsColor() {
+	enabled := !a.Settings.Editor.IsDiffSignsColorEnabled()
+	a.Settings.Editor.DiffSignsColor = &enabled
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleDiffCollapsedEmphasis() {
 	a.Settings.Editor.DiffCollapsedEmphasis = !a.Settings.Editor.DiffCollapsedEmphasis
 	a.SaveAndApplySettings()
@@ -400,6 +412,8 @@ func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
 		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+		{Label: "Gutter Signs", Command: "options.toggleDiffSigns", Checked: menuChecked(a.Settings.Editor.IsDiffSignsEnabled())},
+		{Label: "Colored Gutter Signs", Command: "options.toggleDiffSignsColor", Checked: menuChecked(a.Settings.Editor.IsDiffSignsColorEnabled())},
 		{Label: "Emphasize Collapsed Rows", Command: "options.toggleDiffCollapsedEmphasis", Checked: menuChecked(a.Settings.Editor.DiffCollapsedEmphasis)},
 	}
 }
@@ -490,6 +504,18 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleDiffHighContrast", Title: "Toggle High Contrast Diffs",
 		Keywords: []string{"preferences", "settings", "git", "diff", "contrast", "color", "accessibility"},
 		Handler:  app.ToggleDiffHighContrast,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffSigns", Title: "Toggle Diff Gutter Signs",
+		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "plus", "minus", "signs"},
+		Handler:  app.ToggleDiffSigns,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffSignsColor", Title: "Toggle Colored Diff Gutter Signs",
+		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "plus", "minus", "signs", "color"},
+		Handler:  app.ToggleDiffSignsColor,
 	})
 
 	reg.Register(command.Command{

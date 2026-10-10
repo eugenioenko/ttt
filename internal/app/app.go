@@ -91,6 +91,7 @@ type App struct {
 	GitGutterGen           int
 	GitGutterTimer         *time.Timer
 	gitGutterCancel        context.CancelFunc
+	inlineDiffRepos        map[string]inlineDiffRepo
 	commitDetailMu         sync.Mutex
 	commitDetailNext       uint64
 	commitDetailRequests   map[string]commitDetailRequest
@@ -629,13 +630,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 
 	if a.Changes != nil {
 		a.Changes.Screen = screen
-		a.Changes.OnRefreshed = func() {
-			a.Sidebar.SetPanelDirty("changes", a.Changes.TotalChanges() > 0)
-			if a.pendingCurrentChangesOpen && a.selectedChangesDir() != "" {
-				a.pendingCurrentChangesOpen = false
-				a.OpenCurrentChanges()
-			}
-		}
+		a.Changes.OnRefreshed = a.onChangesRefreshed
 	}
 	if a.Repository != nil {
 		a.Repository.SetPoster(screen)
@@ -964,7 +959,7 @@ func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callb
 	a.ShowDialog(adapter)
 }
 
-func (a *App) showDiffFindBar(dv *ui.DiffViewWidget) {
+func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 	findBar := ui.NewFindBarWidget()
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
@@ -981,8 +976,15 @@ func (a *App) showDiffFindBar(dv *ui.DiffViewWidget) {
 		dv.ScrollToLine(match.Line)
 	}
 	findBar.OnDismiss = func() {
+		dv.OnRecompute = nil
 		a.DismissDialog()
 		dv.ClearSearch()
+	}
+	dv.OnRecompute = func() {
+		findBar.Refresh()
+		if len(findBar.Matches) > 0 {
+			dv.SetActiveMatch(findBar.Current)
+		}
 	}
 	a.ShowFindBar(findBar)
 }

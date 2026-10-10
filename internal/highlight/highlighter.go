@@ -33,12 +33,17 @@ const maxIsolatedCache = 4_096
 type Highlighter struct {
 	grammar  *textmate.Grammar
 	language string
-	doc      *textmate.Document
+	doc      lineDoc
 	dirty    bool
-	isolated map[string][]Span
-	styles   map[*textmate.ScopeStack]term.Style
+	isolated *singleLineCache
+	// The document's token slices are immutable and shared across calls, so
+	// a slice's first element identifies its spans.
+	lineSpans map[*textmate.Token]cachedSpans
+	styles    map[*textmate.ScopeStack]term.Style
 	// tokenTheme is the token theme the caches above were built with.
 	tokenTheme *TokenTheme
+
+	progress *progressive
 }
 
 // Conventional extensionless names the grammar catalog does not declare.
@@ -84,6 +89,7 @@ func (c *grammarCatalog) newHighlighter(ref grammarRef) *Highlighter {
 		grammar:  g,
 		language: ref.language,
 		doc:      textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
+		isolated: &singleLineCache{},
 		dirty:    true,
 	}
 }
@@ -92,19 +98,29 @@ func (h *Highlighter) Language() string {
 	return h.language
 }
 
+type singleLineCache struct{ m map[string][]Span }
+
+// ShareSingleLines makes h reuse o's cache of lines highlighted in isolation;
+// the two sides of a diff share most of their lines.
+func (h *Highlighter) ShareSingleLines(o *Highlighter) {
+	if h != nil && o != nil && h.grammar == o.grammar {
+		h.isolated = o.isolated
+	}
+}
+
 // HighlightLine highlights a line in isolation, as the first line of a file.
 func (h *Highlighter) HighlightLine(line string) []Span {
 	h.syncTokenTheme()
-	if spans, ok := h.isolated[line]; ok {
+	if spans, ok := h.isolated.m[line]; ok {
 		return spans
 	}
 	res := h.grammar.TokenizeLineWithOptions(line, nil, tokenizeOptions)
 	spans := h.tokensToSpans(res.Tokens)
 	if !res.Stopped {
-		if h.isolated == nil || len(h.isolated) >= maxIsolatedCache {
-			h.isolated = make(map[string][]Span)
+		if h.isolated.m == nil || len(h.isolated.m) >= maxIsolatedCache {
+			h.isolated.m = make(map[string][]Span)
 		}
-		h.isolated[line] = spans
+		h.isolated.m[line] = spans
 	}
 	return spans
 }
@@ -118,13 +134,33 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	h.syncTokenTheme()
 	if h.dirty || h.doc.Len() != len(lines) {
 		h.dirty = false
+		h.progress.linesChanged(lines)
 		h.doc.SetLines(lines)
 	}
+	if p := h.progress; p != nil && idx > p.base+p.slack() {
+		p.warmTo(idx)
+		return h.HighlightLine(lines[idx])
+	}
 	res, ok := h.doc.Line(idx)
-	if !ok {
+	h.progress.reached(idx)
+	if !ok || len(res.Tokens) == 0 {
 		return nil
 	}
-	return h.tokensToSpans(res.Tokens)
+	key := &res.Tokens[0]
+	if c, ok := h.lineSpans[key]; ok && c.n == len(res.Tokens) {
+		return c.spans
+	}
+	spans := h.tokensToSpans(res.Tokens)
+	if h.lineSpans == nil || len(h.lineSpans) >= maxIsolatedCache {
+		h.lineSpans = make(map[*textmate.Token]cachedSpans)
+	}
+	h.lineSpans[key] = cachedSpans{n: len(res.Tokens), spans: spans}
+	return spans
+}
+
+type cachedSpans struct {
+	n     int
+	spans []Span
 }
 
 // ClearCache marks the buffer as edited; the next lookup hands the new lines
@@ -182,7 +218,8 @@ func (h *Highlighter) syncTokenTheme() {
 	if theme := CurrentTokenTheme(); theme != h.tokenTheme {
 		h.tokenTheme = theme
 		h.styles = nil
-		h.isolated = nil
+		h.isolated.m = nil
+		h.lineSpans = nil
 	}
 }
 

@@ -104,20 +104,11 @@ func TestCurrentChangesSamePathBoundariesPreserveIndependentCollapseAndSelection
 	detail.SetCurrentChanges("1 file", []CommitDetailFile{staged, unstaged}, "")
 	detail.collapsedFiles[0] = true
 	detail.rebuildRows()
-	selectedRow := -1
-	for i, row := range detail.rows {
-		if row.kind == commitDetailDiffRow && row.fileIndex == 1 {
-			selectedRow = i
-			break
-		}
-	}
-	if selectedRow < 0 {
+	selected := detail.Files[1].view
+	if selected == nil {
 		t.Fatal("unstaged boundary has no selectable diff row")
 	}
-	detail.hasSelection = true
-	detail.selRight = true
-	detail.selection.Anchor = diffSelPos{Line: selectedRow, Col: 0}
-	detail.selection.Current = diffSelPos{Line: selectedRow, Col: 4}
+	selectDetailFileText(selected)
 
 	refreshedStaged := currentChangesTestFile("file.txt", CommitDetailStageStaged, []string{"head"}, []string{"index"})
 	refreshedStaged.Boundary = CommitDetailBoundaryHeadToIndex
@@ -128,12 +119,11 @@ func TestCurrentChangesSamePathBoundariesPreserveIndependentCollapseAndSelection
 	if !detail.collapsedFiles[0] || detail.collapsedFiles[1] {
 		t.Fatalf("independent collapse state = %v", detail.collapsedFiles)
 	}
-	if !detail.hasSelection {
+	if detail.Files[1].view == nil || !detail.Files[1].view.hasSelection() {
 		t.Fatal("unstaged selection was lost when the same-path staged boundary refreshed")
 	}
-	row := detail.rows[detail.selection.Anchor.Line]
-	if row.fileIndex != 1 || detail.Files[row.fileIndex].Boundary != CommitDetailBoundaryIndexToWorktree {
-		t.Fatalf("selection moved across boundary: row=%+v files=%+v", row, detail.Files)
+	if detail.Files[0].view != nil && detail.Files[0].view.hasSelection() {
+		t.Fatal("selection moved across boundary")
 	}
 }
 
@@ -177,20 +167,11 @@ func TestCurrentChangesConflictRefreshPreservesCollapseAndSelection(t *testing.T
 	detail.SetCurrentChanges("2 conflicts", []CommitDetailFile{collapsed, selected}, "")
 	detail.collapsedFiles[0] = true
 	detail.rebuildRows()
-	selectedRow := -1
-	for i, row := range detail.rows {
-		if row.kind == commitDetailDiffRow && row.fileIndex == 1 {
-			selectedRow = i
-			break
-		}
-	}
-	if selectedRow < 0 {
+	selectedView := detail.Files[1].view
+	if selectedView == nil {
 		t.Fatal("selected conflict has no diff row")
 	}
-	detail.hasSelection = true
-	detail.selRight = true
-	detail.selection.Anchor = diffSelPos{Line: selectedRow, Col: 0}
-	detail.selection.Current = diffSelPos{Line: selectedRow, Col: 4}
+	selectDetailFileText(selectedView)
 
 	refreshedCollapsed := currentChangesConflictTestFile("collapsed.txt", "UD", []byte{1, 2}, []string{"ours"}, []string{"resolved latest"})
 	refreshedSelected := currentChangesConflictTestFile("selected.txt", "DU", []byte{1, 3}, []string{"theirs"}, []string{"working latest"})
@@ -198,11 +179,16 @@ func TestCurrentChangesConflictRefreshPreservesCollapseAndSelection(t *testing.T
 	if !detail.collapsedFiles[0] || detail.collapsedFiles[1] {
 		t.Fatalf("conflict collapse state = %v", detail.collapsedFiles)
 	}
-	if !detail.hasSelection {
+	if detail.Files[1].view == nil || !detail.Files[1].view.hasSelection() || detail.Files[1].ConflictCode != "DU" {
 		t.Fatal("conflict selection was lost across a same-identity refresh")
 	}
-	row := detail.rows[detail.selection.Anchor.Line]
-	if row.fileIndex != 1 || detail.Files[row.fileIndex].ConflictCode != "DU" {
-		t.Fatalf("conflict selection moved across identity: row=%+v files=%+v", row, detail.Files)
+	if detail.Files[0].view != nil && detail.Files[0].view.hasSelection() {
+		t.Fatal("conflict selection moved across identity")
 	}
+}
+
+func selectDetailFileText(v *DiffEditorWidget) {
+	p := v.lead()
+	p.Selection.Start(0, 0)
+	p.Cursor.Line, p.Cursor.Col = 0, 4
 }

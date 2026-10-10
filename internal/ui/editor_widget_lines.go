@@ -209,7 +209,7 @@ func (e *EditorPaneWidget) moveLinesMulti(delta int) {
 	if e.Undo != nil {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
-	e.bufferDirty = true
+	e.markBufferDirty()
 
 	for i := range e.Multi.Cursors {
 		cs := &e.Multi.Cursors[i]
@@ -413,7 +413,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 
 	if len(cmds) > 0 && e.Undo != nil {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
-		e.bufferDirty = true
+		e.markBufferDirty()
 	}
 
 	e.Cursor.Col += cursorDelta

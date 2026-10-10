@@ -62,19 +62,7 @@ func TestCommitDetailCollapsedEmphasisCoversContentAndDisclosureUntilHovered(t *
 			grid := makeGrid(60, 15)
 			detail.Render(NewRenderSurface(grid, Rect{W: 60, H: 15}))
 
-			gapRow := -1
-			for rowIndex, row := range detail.rows {
-				if row.kind == commitDetailDiffRow {
-					lineIndex := row.lineIndex
-					if mode == DiffModeUnified && lineIndex >= 0 && lineIndex < len(detail.Files[row.fileIndex].unified) {
-						lineIndex = detail.Files[row.fileIndex].unified[lineIndex].sourceLine
-					}
-					if _, ok := detail.Files[row.fileIndex].gapByLine[lineIndex]; ok {
-						gapRow = rowIndex
-						break
-					}
-				}
-			}
+			gapRow := detailGapScreenRow(grid)
 			if gapRow < 0 {
 				t.Fatal("missing collapsed detail row")
 			}
@@ -106,6 +94,17 @@ func TestCommitDetailCollapsedEmphasisCoversContentAndDisclosureUntilHovered(t *
 			}
 		})
 	}
+}
+
+// detailGapScreenRow returns the screen row of the first collapsed-context
+// label; the test grids are indexed by screen coordinates.
+func detailGapScreenRow(cells [][]term.Cell) int {
+	for y, line := range strings.Split(detailTestText(cells), "\n") {
+		if strings.Contains(line, "⋯") {
+			return y
+		}
+	}
+	return -1
 }
 
 func TestCommitDetailRendersMetadataAndAllFilesInOneDocument(t *testing.T) {
@@ -157,8 +156,8 @@ func TestCommitDetailUsesSharedContextProjectionAndHighContrastPainter(t *testin
 	if !detail.ApplyFileContext(0, CommitDetailContextKey(detail.Files[0]), []string{"before", "old", "after"}, []string{"before", "new", "after"}) {
 		t.Fatal("context result was rejected")
 	}
-	if len(detail.Files[0].lines) != 3 {
-		t.Fatalf("shared full-file projection has %d lines, want 3", len(detail.Files[0].lines))
+	if len(detail.Files[0].view.Lines) != 3 {
+		t.Fatalf("shared full-file projection has %d lines, want 3", len(detail.Files[0].view.Lines))
 	}
 	detail.SetDiffHighContrast(true)
 	detail.SetRect(Rect{W: 60, H: 10})
@@ -208,7 +207,7 @@ func TestFullFileLCSProjectionIsSharedByHistoricalAndCurrentChanges(t *testing.T
 			file := CommitDetailFileWithContent(CommitDetailFile{Status: "M", Path: "file.txt", Diff: fileDiff}, oldLines, newLines)
 			test.apply(test.detail, file)
 			test.detail.SetContextMode(DiffContextFullFile)
-			if !reflect.DeepEqual(test.detail.Files[0].lines, want) {
+			if !reflect.DeepEqual(test.detail.Files[0].view.Lines, want) {
 				t.Fatal("Full File surface did not preserve the established LCS projection")
 			}
 		})
@@ -229,22 +228,18 @@ func TestCommitDetailCollapsedContextUsesSharedExpansionControl(t *testing.T) {
 		requests++
 	}
 	detail.SetRect(Rect{X: 4, Y: 3, W: 60, H: 15})
-	detail.Render(NewRenderSurface(makeGrid(60, 15), Rect{X: 4, Y: 3, W: 60, H: 15}))
+	grid := makeGrid(60, 15)
+	detail.Render(NewRenderSurface(grid, Rect{X: 4, Y: 3, W: 60, H: 15}))
 
-	gapRow, gap := -1, -1
-	for rowIndex, row := range detail.rows {
-		if row.kind != commitDetailDiffRow {
-			continue
-		}
-		if candidate, ok := detail.Files[0].gapByLine[row.lineIndex]; ok {
-			gapRow, gap = rowIndex, candidate
-			break
-		}
-	}
+	gapRow := detailGapScreenRow(grid)
 	if gapRow < 0 {
-		t.Fatalf("commit detail has no collapsed context row: hunks=%d lines=%+v gaps=%v", len(detail.Files[0].Diff.Hunks), detail.Files[0].lines, detail.Files[0].gapByLine)
+		t.Fatalf("commit detail has no collapsed context row:\n%s", detailTestText(grid))
 	}
-	press := tcell.NewEventMouse(20, detail.GetRect().Y+gapRow, tcell.Button1, tcell.ModNone)
+	gap, ok := detail.Files[0].view.gapAtPoint(20, gapRow)
+	if !ok {
+		t.Fatal("collapsed context row is not a gap hit target")
+	}
+	press := tcell.NewEventMouse(20, gapRow, tcell.Button1, tcell.ModNone)
 	if result := detail.HandleEvent(press); result != EventConsumed {
 		t.Fatalf("collapsed context click result = %v", result)
 	}
@@ -252,15 +247,15 @@ func TestCommitDetailCollapsedContextUsesSharedExpansionControl(t *testing.T) {
 	if requests != 1 {
 		t.Fatalf("held click started %d context reads, want 1", requests)
 	}
-	detail.HandleEvent(tcell.NewEventMouse(20, detail.GetRect().Y+gapRow, tcell.ButtonNone, tcell.ModNone))
+	detail.HandleEvent(tcell.NewEventMouse(20, gapRow, tcell.ButtonNone, tcell.ModNone))
 
 	oldLines := []string{"old one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "old ten"}
 	newLines := []string{"new one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "new ten"}
 	if !detail.ApplyFileContext(0, CommitDetailContextKey(detail.Files[0]), oldLines, newLines) {
 		t.Fatal("collapsed context result was rejected")
 	}
-	if !detail.Files[0].expandedGaps[gap] || len(detail.Files[0].gapByLine) != 0 {
-		t.Fatalf("shared context gap remained collapsed: expanded=%v gaps=%v", detail.Files[0].expandedGaps, detail.Files[0].gapByLine)
+	if !detail.Files[0].expandedGaps[gap] || len(detail.Files[0].view.gapByLine) != 0 {
+		t.Fatalf("shared context gap remained collapsed: expanded=%v gaps=%v", detail.Files[0].expandedGaps, detail.Files[0].view.gapByLine)
 	}
 }
 
@@ -282,34 +277,18 @@ func TestCommitDetailWrappedCollapsedContextUsesFullRowHitTarget(t *testing.T) {
 			const width, height = 20, 16
 			rect := Rect{X: 3, Y: 2, W: width, H: height}
 			detail.SetRect(rect)
-			detail.Render(NewRenderSurface(makeGrid(width, height), rect))
-			gapRow := -1
-			for rowIndex, row := range detail.rows {
-				if row.kind == commitDetailDiffRow {
-					lineIndex := row.lineIndex
-					if mode == DiffModeUnified {
-						lineIndex = detail.Files[0].unified[lineIndex].sourceLine
-					}
-					if _, ok := detail.Files[0].gapByLine[lineIndex]; ok {
-						gapRow = rowIndex
-						break
-					}
-				}
+			grid := makeGrid(width, height)
+			detail.Render(NewRenderSurface(grid, rect))
+			gapRow := detailGapScreenRow(grid)
+			if gapRow < 0 {
+				t.Fatalf("wrapped detail separator missing:\n%s", detailTestText(grid))
 			}
-			clickY := -1
-			for visualIndex, visual := range detail.visualRows {
-				if visual.row == gapRow && visualIndex >= detail.TopLine && visualIndex < detail.TopLine+detail.viewH {
-					clickY = rect.Y + visualIndex - detail.TopLine
-				}
-			}
-			if clickY < 0 {
-				t.Fatalf("wrapped detail separator mapping missing: row=%d visual=%+v", gapRow, detail.visualRows)
-			}
+			clickY := gapRow
 			if result := detail.HandleEvent(tcell.NewEventMouse(rect.X+rect.W-2, clickY, tcell.Button1, tcell.ModNone)); result != EventConsumed {
 				t.Fatalf("wrapped aggregate gap click result = %v", result)
 			}
-			if len(detail.Files[0].gapByLine) != 0 || detail.ContextMode() != DiffContextChangesOnly {
-				t.Fatalf("wrapped aggregate gap not locally expanded: gaps=%v mode=%v", detail.Files[0].gapByLine, detail.ContextMode())
+			if len(detail.Files[0].view.gapByLine) != 0 || detail.ContextMode() != DiffContextChangesOnly {
+				t.Fatalf("wrapped aggregate gap not locally expanded: gaps=%v mode=%v", detail.Files[0].view.gapByLine, detail.ContextMode())
 			}
 		})
 	}

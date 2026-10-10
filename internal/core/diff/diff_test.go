@@ -237,3 +237,21 @@ func TestFullDiffLinesDeletion(t *testing.T) {
 		t.Errorf("line 1 right: expected blank, got %v", lines[1].Right.Kind)
 	}
 }
+
+func TestParseTrailingNewlineIsNotAContextLine(t *testing.T) {
+	fd := Parse("--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n")
+	lines := fd.Hunks[0].Lines
+	if len(lines) != 2 {
+		t.Fatalf("hunk lines = %d (%v), want the change and one context line", len(lines), lines)
+	}
+	if last := lines[1]; last.Left.Num != 2 || last.Left.Text != "same" {
+		t.Fatalf("last line = %+v, want context line 2", last)
+	}
+}
+
+func TestParseKeepsEmptyContextLineBeforeTrailingNewline(t *testing.T) {
+	fd := Parse("--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n-old\n+new\n \n")
+	if lines := fd.Hunks[0].Lines; len(lines) != 2 || lines[1].Left.Text != "" || lines[1].Left.Kind != Context {
+		t.Fatalf("hunk lines = %v, want an empty context line kept", lines)
+	}
+}

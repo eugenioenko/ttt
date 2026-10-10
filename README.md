@@ -202,6 +202,8 @@ Working-tree files and files under expanded commits can be shown as a compact di
 
 **Diff view:**
 - Select a changed file to open a split or unified diff with syntax highlighting layered on diff backgrounds
+- Working-tree changes open in the file's own editor tab in diff mode, so you can edit and save there; the diff recomputes as you type. **Git: Toggle Inline Diff** turns diff mode on or off for any tracked file
+- Commit, pull request, deleted, and renamed file diffs open read-only
 - Set the global view mode, context, wrapping, and high-contrast presentation under **Options**; the Changes panel menu provides the same contextual controls
 - Changes-only views show quiet collapsed-context rows that can be expanded in place; full-file context remains available globally or per diff
 - Untracked files open directly in the editor

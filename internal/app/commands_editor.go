@@ -356,6 +356,12 @@ func registerEditorCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
+		ID: "editor.toggleDiff", Title: "Git: Toggle Inline Diff",
+		Keywords: []string{"git", "diff", "inline", "changes", "head", "edit"},
+		Handler:  app.ToggleInlineDiff,
+	})
+
+	reg.Register(command.Command{
 		ID: "diff.nextHunk", Title: "Git: Next Changed Hunk",
 		Keywords: []string{"git", "diff", "hunk", "change", "navigate"},
 		Handler:  app.DiffNextHunk,
@@ -708,6 +714,26 @@ func registerEditorCommands(app *App) {
 		ID: "editor.toggleComment", Title: "Toggle Line Comment",
 		Keywords: []string{"editor", "comment", "uncomment"},
 		Handler:  func() { app.EditorGroup.ToggleLineComment() },
+	})
+	reg.Register(command.Command{
+		ID: "editor.goToFileStart", Title: "Go to Start of File",
+		Keywords: []string{"editor", "navigate", "top", "beginning", "document"},
+		Handler:  func() { app.EditorGroup.MoveToFileEdge(false, false) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.goToFileEnd", Title: "Go to End of File",
+		Keywords: []string{"editor", "navigate", "bottom", "document"},
+		Handler:  func() { app.EditorGroup.MoveToFileEdge(true, false) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.selectToFileStart", Title: "Select to Start of File",
+		Keywords: []string{"editor", "selection", "top", "beginning", "document"},
+		Handler:  func() { app.EditorGroup.MoveToFileEdge(false, true) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.selectToFileEnd", Title: "Select to End of File",
+		Keywords: []string{"editor", "selection", "bottom", "document"},
+		Handler:  func() { app.EditorGroup.MoveToFileEdge(true, true) },
 	})
 	reg.Register(command.Command{
 		ID: "editor.moveWordLeft", Title: "Move Word Left",

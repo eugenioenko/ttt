@@ -81,7 +81,7 @@ func (e *EditorPaneWidget) multiExecRune(r rune) {
 	if e.Undo != nil {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
-	e.bufferDirty = true
+	e.markBufferDirty()
 	e.syncFromMulti()
 }
 
@@ -117,7 +117,7 @@ func (e *EditorPaneWidget) multiExecTab() {
 	if e.Undo != nil {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
-	e.bufferDirty = true
+	e.markBufferDirty()
 	e.syncFromMulti()
 }
 
@@ -161,7 +161,7 @@ func (e *EditorPaneWidget) multiExecBackspace() {
 		if e.Undo != nil {
 			e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 		}
-		e.bufferDirty = true
+		e.markBufferDirty()
 	}
 	e.Multi.Deduplicate()
 	e.syncFromMulti()
@@ -204,7 +204,7 @@ func (e *EditorPaneWidget) multiExecDelete() {
 		if e.Undo != nil {
 			e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 		}
-		e.bufferDirty = true
+		e.markBufferDirty()
 	}
 	e.Multi.Deduplicate()
 	e.syncFromMulti()
@@ -249,7 +249,7 @@ func (e *EditorPaneWidget) multiExecEnter() {
 	if e.Undo != nil {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
-	e.bufferDirty = true
+	e.markBufferDirty()
 	e.syncFromMulti()
 }
 

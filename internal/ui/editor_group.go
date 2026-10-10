@@ -69,6 +69,7 @@ type editorTab struct {
 	Virtual     bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
+	Diff        *DiffEditorWidget
 }
 
 type EditorGroupWidget struct {
@@ -91,6 +92,8 @@ type EditorGroupWidget struct {
 	DiffContext             DiffContextMode
 	DiffWordWrap            bool
 	DiffHighContrast        bool
+	DiffSigns               bool
+	DiffSignsColor          bool
 	DiffCollapsedEmphasis   bool
 	ImageProtocol           string
 	ImageCellW              int
@@ -110,6 +113,9 @@ type EditorGroupWidget struct {
 	// OnEmpty fires after the last tab closes and the untitled placeholder
 	// takes its place.
 	OnEmpty func()
+	// RequestRedraw asks the event loop for a frame; it is called off the
+	// main thread when background highlighting settles.
+	RequestRedraw func()
 	// EmptyStateID names a content tab that stands in for the placeholder:
 	// like it, it has no close button while it is the only tab.
 	EmptyStateID  string
@@ -544,24 +550,17 @@ func (g *EditorGroupWidget) OpenDiff(path string, fd diff.FileDiff, oldLines, ne
 }
 
 func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.FileDiff, oldLines, newLines []string, extended bool) {
+	widget := NewDiffEditorWidget(path, fd, oldLines, newLines, extended)
+	widget.SetSyntaxHighlight(g.SyntaxHighlight)
+	g.ApplyDiffDefaults(widget)
 	for i, t := range g.tabs {
 		if t.FilePath == tabName {
-			dw := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
-			g.ApplyDiffDefaults(dw)
-			if !g.SyntaxHighlight {
-				dw.Highlighter = nil
-			}
-			t.Content = dw
+			t.Content = widget
 			t.Title = title
 			g.tabs[i] = t
 			g.SwitchTab(i)
 			return
 		}
-	}
-	widget := NewDiffViewWidget(path, fd, oldLines, newLines, extended)
-	g.ApplyDiffDefaults(widget)
-	if !g.SyntaxHighlight {
-		widget.Highlighter = nil
 	}
 	g.tabs = append(g.tabs, editorTab{
 		FilePath: tabName,
@@ -573,6 +572,9 @@ func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.Fil
 
 func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	surface.ApplyDefaultMode(g.DiffMode)
+	if r, ok := surface.(interface{ SetRedrawRequest(func()) }); ok {
+		r.SetRedrawRequest(g.RequestRedraw)
+	}
 	if contextSurface, ok := surface.(DiffContextSurface); ok {
 		contextSurface.ApplyDefaultContextMode(g.DiffContext)
 	}
@@ -582,6 +584,10 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	}
 	surface.ApplyDefaultWrapMode(wrapMode)
 	surface.SetDiffHighContrast(g.DiffHighContrast)
+	if d, ok := surface.(diffSignsSurface); ok {
+		d.SetDiffSigns(g.DiffSigns)
+		d.SetDiffSignsColor(g.DiffSignsColor)
+	}
 	surface.SetDiffCollapsedEmphasis(g.DiffCollapsedEmphasis)
 }
 
@@ -589,28 +595,59 @@ func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffConte
 	g.DiffMode = mode
 	g.DiffContext = contextMode
 	g.DiffWordWrap = wordWrap
-	for _, tab := range g.tabs {
-		if surface, ok := tab.Content.(DiffModeSurface); ok {
-			g.ApplyDiffDefaults(surface)
-		}
+	for _, surface := range g.diffSurfaces() {
+		g.ApplyDiffDefaults(surface)
 	}
 }
 
 func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {
 	g.DiffHighContrast = enabled
-	for _, tab := range g.tabs {
-		if surface, ok := tab.Content.(DiffModeSurface); ok {
-			surface.SetDiffHighContrast(enabled)
+	for _, surface := range g.diffSurfaces() {
+		surface.SetDiffHighContrast(enabled)
+	}
+}
+
+func (g *EditorGroupWidget) SetDiffSigns(enabled bool) {
+	g.DiffSigns = enabled
+	for _, surface := range g.diffSurfaces() {
+		if d, ok := surface.(diffSignsSurface); ok {
+			d.SetDiffSigns(enabled)
 		}
 	}
 }
 
-func (g *EditorGroupWidget) SetDiffCollapsedEmphasis(enabled bool) {
-	g.DiffCollapsedEmphasis = enabled
+func (g *EditorGroupWidget) SetDiffSignsColor(enabled bool) {
+	g.DiffSignsColor = enabled
+	for _, surface := range g.diffSurfaces() {
+		if d, ok := surface.(diffSignsSurface); ok {
+			d.SetDiffSignsColor(enabled)
+		}
+	}
+}
+
+type diffSignsSurface interface {
+	SetDiffSigns(bool)
+	SetDiffSignsColor(bool)
+	setGutterStyle(string)
+}
+
+func (g *EditorGroupWidget) diffSurfaces() []DiffModeSurface {
+	var out []DiffModeSurface
 	for _, tab := range g.tabs {
 		if surface, ok := tab.Content.(DiffModeSurface); ok {
-			surface.SetDiffCollapsedEmphasis(enabled)
+			out = append(out, surface)
 		}
+		if tab.Diff != nil {
+			out = append(out, tab.Diff)
+		}
+	}
+	return out
+}
+
+func (g *EditorGroupWidget) SetDiffCollapsedEmphasis(enabled bool) {
+	g.DiffCollapsedEmphasis = enabled
+	for _, surface := range g.diffSurfaces() {
+		surface.SetDiffCollapsedEmphasis(enabled)
 	}
 }
 
@@ -696,6 +733,7 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
+	tab.Highlighter.SetProgressive(nil)
 	if tab.Content == nil {
 		return
 	}
@@ -809,15 +847,13 @@ func (g *EditorGroupWidget) IsEditorActive() bool {
 	return t != nil && t.Content == nil
 }
 
-func (g *EditorGroupWidget) ActiveDiffWidget() *DiffViewWidget {
+func (g *EditorGroupWidget) ActiveDiffWidget() *DiffEditorWidget {
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
 		return nil
 	}
-	if dv, ok := t.Content.(*DiffViewWidget); ok {
-		return dv
-	}
-	return nil
+	dv, _ := t.Content.(*DiffEditorWidget)
+	return dv
 }
 
 func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
@@ -838,6 +874,9 @@ func (g *EditorGroupWidget) ActiveCurrentChangesWidget() *CommitDetailWidget {
 }
 
 func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
+	if d := g.activeInlineDiff(); d != nil {
+		return d
+	}
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
 		return nil
@@ -847,6 +886,9 @@ func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
 }
 
 func (g *EditorGroupWidget) ActiveDiffContextSurface() DiffContextSurface {
+	if d := g.activeInlineDiff(); d != nil {
+		return d
+	}
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
 		return nil
@@ -855,13 +897,11 @@ func (g *EditorGroupWidget) ActiveDiffContextSurface() DiffContextSurface {
 	return surface
 }
 
-func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffViewWidget {
+func (g *EditorGroupWidget) DiffWidgetByTab(tabName string) *DiffEditorWidget {
 	for _, t := range g.tabs {
 		if t.FilePath == tabName {
-			if dv, ok := t.Content.(*DiffViewWidget); ok {
-				return dv
-			}
-			return nil
+			dv, _ := t.Content.(*DiffEditorWidget)
+			return dv
 		}
 	}
 	return nil
@@ -898,7 +938,7 @@ func (g *EditorGroupWidget) SwitchToTabByPath(path string) bool {
 func (g *EditorGroupWidget) DiffTabSources() []DiffSearchSource {
 	var result []DiffSearchSource
 	for _, t := range g.tabs {
-		if dv, ok := t.Content.(*DiffViewWidget); ok {
+		if dv, ok := t.Content.(*DiffEditorWidget); ok {
 			result = append(result, DiffSearchSource{TabName: t.FilePath, Lines: dv.CombinedLines()})
 		}
 	}
@@ -913,6 +953,9 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 		}
 	}
 	if g.IsEditorActive() {
+		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
+			return d.left.CursorX, d.left.CursorY, true
+		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
@@ -1361,7 +1404,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []string) {
 	for i := range g.tabs {
 		if g.tabs[i].Title == title && g.tabs[i].ReadOnly {
-			g.tabs[i].Buf.Lines = lines
+			g.tabs[i].Buf.SetLines(lines)
 			g.SwitchTab(i)
 			return
 		}
@@ -1474,7 +1517,7 @@ func (g *EditorGroupWidget) undoRedoPostProcess() {
 		g.Editor.Folds.SetRanges(fold.ComputeIndentRanges(g.Editor.Buf.Lines))
 		g.Editor.ExpandFoldContaining(g.Editor.Cursor.Line)
 	}
-	g.Editor.bufferDirty = true
+	g.Editor.markBufferDirty()
 }
 
 func (g *EditorGroupWidget) Undo() {
@@ -1889,6 +1932,14 @@ func (g *EditorGroupWidget) TrimTrailingWhitespaceLines() {
 	}
 }
 
+func (g *EditorGroupWidget) MoveToFileEdge(end, shift bool) {
+	if g.IsEditorActive() {
+		g.Editor.MoveToFileEdge(end, shift)
+	} else if d := g.ActiveDiffWidget(); d != nil {
+		d.keyPane().MoveToFileEdge(end, shift)
+	}
+}
+
 func (g *EditorGroupWidget) MoveWordLeft(shift bool) {
 	if g.IsEditorActive() {
 		g.Editor.MoveWordLeft(shift)
@@ -2005,7 +2056,7 @@ func (g *EditorGroupWidget) Copy() {
 	if t == nil {
 		return
 	}
-	if dv, ok := t.Content.(*DiffViewWidget); ok {
+	if dv, ok := t.Content.(*DiffEditorWidget); ok {
 		if text := dv.CopySelection(); text != "" {
 			clipboard.Set(text)
 		}
@@ -2020,6 +2071,14 @@ func (g *EditorGroupWidget) Copy() {
 	if t.Content != nil {
 		// Non-editor tab (settings UI, plugin panel, ...): no buffer to copy from.
 		return
+	}
+	if t.Diff != nil {
+		if text, ok := t.Diff.HeadSelection(); ok {
+			if text != "" {
+				clipboard.Set(text)
+			}
+			return
+		}
 	}
 	if t.Sel == nil || !t.Sel.Active {
 		// No selection: copy the whole current line, including a trailing
@@ -2059,7 +2118,7 @@ func (g *EditorGroupWidget) Paste() {
 	if text == "" {
 		return
 	}
-	g.Editor.pasteText(text)
+	g.pasteIntoEditor(text)
 }
 
 func (g *EditorGroupWidget) PasteText(text string) {
@@ -2068,6 +2127,16 @@ func (g *EditorGroupWidget) PasteText(text string) {
 	}
 	if text == "" {
 		return
+	}
+	g.pasteIntoEditor(text)
+}
+
+func (g *EditorGroupWidget) pasteIntoEditor(text string) {
+	if d := g.activeInlineDiff(); d != nil {
+		if d.headFocused() {
+			return
+		}
+		d.revealCursorGap()
 	}
 	g.Editor.pasteText(text)
 }
@@ -2104,6 +2173,14 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Diagnostics = t.Diagnostics
 		g.Editor.Folds = t.Folds
 		g.Editor.LineChanges = t.LineChanges
+		g.Editor.WordWrap = g.WordWrap
+		if t.Diff != nil {
+			t.Highlighter.SetProgressive(g.RequestRedraw)
+			t.Diff.bind(g.Editor)
+		} else {
+			t.Highlighter.SetProgressive(nil)
+			g.Editor.SetDiffOverlay(nil)
+		}
 		g.Editor.buildDiagIndex()
 		g.Editor.InvalidateBracketColors()
 		if t.TabSize > 0 {
@@ -2125,6 +2202,9 @@ func (g *EditorGroupWidget) syncTabs() {
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title
+		}
+		if ts.Diff != nil {
+			name += " (diff)"
 		}
 		uiTabs = append(uiTabs, Tab{
 			ID:       ts.ID,
@@ -2182,9 +2262,16 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if t == nil {
 		return
 	}
+	if d, ok := t.Content.(diffSignsSurface); ok {
+		d.setGutterStyle(g.GutterStyle)
+	}
 	if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)
+	} else if t.Diff != nil {
+		t.Diff.setGutterStyle(g.GutterStyle)
+		t.Diff.SetRect(contentRect)
+		t.Diff.Render(contentSurface)
 	} else {
 		g.Editor.SetRect(contentRect)
 		g.Editor.Render(contentSurface)
@@ -2223,6 +2310,9 @@ func (g *EditorGroupWidget) OwnsPointerCapture() bool {
 	if t := g.activeTab(); t != nil && t.Content != nil {
 		owner, ok := t.Content.(widgets.PointerCaptureOwner)
 		return ok && owner.OwnsPointerCapture()
+	}
+	if t := g.activeTab(); t != nil && t.Diff != nil {
+		return t.Diff.OwnsPointerCapture()
 	}
 	return g.Editor != nil && g.Editor.OwnsPointerCapture()
 }
@@ -2277,7 +2367,12 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		return EventIgnored
 	}
-	result := g.Editor.HandleEvent(ev)
+	var result EventResult
+	if t.Diff != nil {
+		result = t.Diff.HandleEvent(ev)
+	} else {
+		result = g.Editor.HandleEvent(ev)
+	}
 	g.saveMultiState()
 	return result
 }

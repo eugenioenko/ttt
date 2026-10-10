@@ -298,9 +298,7 @@ func RunEventLoop(
 			case *ui.EditorDragAutoScrollTick:
 				app.EditorGroup.Editor.HandleDragAutoScrollTick(v.Generation)
 			case *GitGutterResult:
-				if v.Gen == app.GitGutterGen {
-					app.EditorGroup.SetLineChanges(v.Path, v.Changes)
-				}
+				app.ApplyGitGutterResult(v)
 			case *GitGutterTrigger:
 				app.RequestGitGutterForActiveFile()
 			case *execInputRequest:
