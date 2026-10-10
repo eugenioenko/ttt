@@ -265,7 +265,17 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 		a.FocusEditorIfEnabled()
 		return
 	}
-	if git.IsUnmergedContext(context.Background(), dir, status.Path) {
+	conflict := false
+	if !staged && status.Status != "D" {
+		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() {
+			var opened bool
+			if opened, conflict = a.openInlineDiff(fullPath, dir, status.Path); opened {
+				a.FocusEditorIfEnabled()
+				return
+			}
+		}
+	}
+	if conflict || git.IsUnmergedContext(context.Background(), dir, status.Path) {
 		a.EditorGroup.OpenFile(fullPath)
 		a.StatusNotify(fmt.Sprintf("%s has merge conflicts; opened without a diff", status.Path))
 		a.FocusEditorIfEnabled()
@@ -274,12 +284,6 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 	if staged {
 		a.openStagedDiff(dir, status, extended)
 		return
-	}
-	if status.Status != "D" {
-		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() && a.openInlineDiff(fullPath, dir, status.Path) {
-			a.FocusEditorIfEnabled()
-			return
-		}
 	}
 	parsed, ok := parseChangeDiff(git.DiffWorktreeFile(dir, status.Path))
 	if !ok {
