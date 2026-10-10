@@ -41,6 +41,7 @@ func (d *DiffEditorWidget) Editable() bool { return d.editable }
 func (d *DiffEditorWidget) SetLiveDiff(base []string, lines []diff.DiffLine) {
 	d.oldLines = base
 	d.full = lines
+	d.liveSnap, d.liveTouched = nil, nil
 	d.ClearSearch()
 	d.rebuild()
 }
@@ -49,6 +50,7 @@ func (d *DiffEditorWidget) bind(e *EditorPaneWidget) {
 	if d.live != e {
 		d.live = e
 		d.liveCursor = -1
+		d.liveSnap, d.liveTouched = nil, nil
 	}
 	d.unified, d.right = e, e
 	e.WordWrap = d.IsWrapped()
@@ -186,6 +188,8 @@ func (d *DiffEditorWidget) buildLiveOverlays() {
 		kinds[r] = dl.Right.Kind
 	}
 
+	d.tintTouched(kinds)
+
 	deleted := make(map[int][]diff.SideLine)
 	for i := 0; i < len(d.Lines); {
 		if d.Lines[i].Left.Kind != diff.Deleted && d.Lines[i].Right.Kind != diff.Added {
@@ -246,20 +250,7 @@ func (d *DiffEditorWidget) syncLive() {
 	if gap, ok := d.editedGap(); ok {
 		d.expandContextGap(gap)
 	}
-	if n := len(e.Buf.Lines); n != d.liveN {
-		delta := n - d.liveN
-		at := e.Cursor.Line
-		if d.liveCursor >= 0 {
-			at = min(at, d.liveCursor)
-		}
-		for i, r := range d.liveRows {
-			if r > at {
-				d.liveRows[i] = max(r+delta, at)
-			}
-		}
-		d.liveN = n
-		d.buildLiveOverlays()
-	}
+	d.trackLiveEdits()
 	if d.gapText == nil {
 		d.snapshotGapText()
 	}
@@ -271,6 +262,100 @@ func (d *DiffEditorWidget) syncLive() {
 		d.liveCursor = e.Cursor.Line
 		if gap, ok := d.hiddenCursorGap(); ok {
 			d.expandContextGap(gap)
+		}
+	}
+}
+
+// trackLiveEdits moves the overlay with an edit made since the last sync, so
+// it stays on the right lines until the recomputed diff arrives. The edited
+// region is found by comparing the buffer with a snapshot, which covers every
+// way of editing: typing, paste, undo, multiple cursors and plugins.
+func (d *DiffEditorWidget) trackLiveEdits() {
+	e := d.live
+	cur := e.Buf.Lines
+	if d.liveSnap == nil {
+		d.liveSnap = append([]string(nil), cur...)
+		d.liveSnapGen = e.editGen
+		if len(cur) != d.liveN {
+			d.shiftStaleDiff(len(cur) - d.liveN)
+		}
+		return
+	}
+	if d.liveSnapGen == e.editGen && len(cur) == len(d.liveSnap) {
+		return
+	}
+	d.liveSnapGen = e.editGen
+	start, oldEnd, newEnd, changed := changedLineRange(d.liveSnap, cur)
+	if !changed {
+		return
+	}
+	d.liveSnap = append(d.liveSnap[:0], cur...)
+	shift := func(r int) int {
+		switch {
+		case r >= oldEnd:
+			return r + newEnd - oldEnd
+		case r >= start:
+			return min(r, max(newEnd-1, start))
+		}
+		return r
+	}
+	for i, r := range d.liveRows {
+		if r >= 0 {
+			d.liveRows[i] = shift(r)
+		}
+	}
+	for i, t := range d.liveTouched {
+		d.liveTouched[i] = [2]int{shift(t[0]), max(shift(t[1]-1)+1, shift(t[0]))}
+	}
+	if newEnd > start {
+		d.liveTouched = append(d.liveTouched, [2]int{start, newEnd})
+	}
+	if len(cur) != d.liveN || oldEnd != newEnd {
+		d.liveN = len(cur)
+		d.buildLiveOverlays()
+		return
+	}
+	d.tintTouched(d.liveUnified.Kinds)
+}
+
+// shiftStaleDiff handles a diff computed for an older version of the buffer:
+// without that version to compare against, rows below the cursor move by the
+// change in line count.
+func (d *DiffEditorWidget) shiftStaleDiff(delta int) {
+	at := d.live.Cursor.Line
+	if d.liveCursor >= 0 {
+		at = min(at, d.liveCursor)
+	}
+	for i, r := range d.liveRows {
+		if r > at {
+			d.liveRows[i] = max(r+delta, at)
+		}
+	}
+	d.liveN = len(d.live.Buf.Lines)
+	d.buildLiveOverlays()
+}
+
+// changedLineRange reports the lines that differ between two versions of a
+// buffer as [start, oldEnd) in before and [start, newEnd) in after.
+func changedLineRange(before, after []string) (start, oldEnd, newEnd int, changed bool) {
+	n := min(len(before), len(after))
+	for start < n && before[start] == after[start] {
+		start++
+	}
+	oldEnd, newEnd = len(before), len(after)
+	for oldEnd > start && newEnd > start && before[oldEnd-1] == after[newEnd-1] {
+		oldEnd--
+		newEnd--
+	}
+	return start, oldEnd, newEnd, start != oldEnd || start != newEnd
+}
+
+func (d *DiffEditorWidget) tintTouched(kinds []diff.LineKind) {
+	for _, t := range d.liveTouched {
+		for line := max(t[0], 0); line < t[1] && line < len(kinds); line++ {
+			if kinds[line] == diff.Context {
+				kinds[line] = diff.Added
+			}
 		}
 	}
 }

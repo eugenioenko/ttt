@@ -180,3 +180,40 @@ func TestEditableDiffHasNoFolds(t *testing.T) {
 		t.Fatal("editable diff pane kept the file's folds")
 	}
 }
+
+func TestEditableOverlayFollowsEditsAwayFromTheCursor(t *testing.T) {
+	old := []string{"a", "b", "c", "d", "gone", "e", "f", "g"}
+	cur := []string{"a", "b", "c", "d", "e", "f", "g"}
+	f := newLiveDiffFixture(t, old, cur, DiffModeUnified, 40, 20)
+	f.d.SetContextMode(DiffContextFullFile)
+	f.e.Cursor.Line = 6
+	f.render()
+	above := func(rows []string) {
+		t.Helper()
+		g, e := rowWith(rows, "gone"), rowWith(rows, " e")
+		if g < 0 || e != g+1 {
+			t.Fatalf("deleted row at %d, its anchor line at %d:\n%s", g, e, strings.Join(rows, "\n"))
+		}
+	}
+
+	f.e.exec(&undo.InsertLineCommand{Idx: 1, Text: "new"})
+	above(f.render())
+	if k := f.e.DiffOverlay.kind(1); k != diff.Added {
+		t.Fatalf("inserted line kind %v before the recompute, want added", k)
+	}
+
+	f.e.exec(&undo.PasteCommand{Line: 0, Col: 1, Text: "x\ny\nz"})
+	above(f.render())
+
+	for i := 0; i < 5 && strings.Join(f.e.Buf.Lines, ",") != strings.Join(cur, ","); i++ {
+		f.e.Undo.Undo(f.e.Buf)
+		f.e.markBufferDirty()
+		above(f.render())
+	}
+	if strings.Join(f.e.Buf.Lines, ",") != strings.Join(cur, ",") {
+		t.Fatalf("undo left %v", f.e.Buf.Lines)
+	}
+	f.e.Undo.Redo(f.e.Buf)
+	f.e.markBufferDirty()
+	above(f.render())
+}

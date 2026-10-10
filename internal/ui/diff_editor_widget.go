@@ -91,6 +91,9 @@ type DiffEditorWidget struct {
 	liveRefs    []liveSearchRef
 	liveActive  int
 	gapText     map[int]string
+	liveSnap    []string
+	liveSnapGen uint64
+	liveTouched [][2]int
 }
 
 type diffSearchRef struct {
