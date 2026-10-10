@@ -2147,9 +2147,10 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Folds = t.Folds
 		g.Editor.LineChanges = t.LineChanges
 		g.Editor.WordWrap = g.WordWrap
-		g.Editor.SetDiffOverlay(nil)
 		if t.Diff != nil {
 			t.Diff.bind(g.Editor)
+		} else {
+			g.Editor.SetDiffOverlay(nil)
 		}
 		g.Editor.buildDiagIndex()
 		g.Editor.InvalidateBracketColors()

@@ -230,6 +230,9 @@ func (e *EditorPaneWidget) renderDiffSign(surface Surface, y, gutterW int, kind 
 }
 
 func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
+	if o == nil && e.DiffOverlay == nil {
+		return
+	}
 	e.DiffOverlay = o
 	e.overlayGen++
 	e.phantoms = nil

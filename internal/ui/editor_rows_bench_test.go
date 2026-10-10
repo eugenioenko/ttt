@@ -113,3 +113,17 @@ func benchmarkSplitDiffScroll(b *testing.B, wrap bool) {
 
 func BenchmarkSplitDiffScroll(b *testing.B)     { benchmarkSplitDiffScroll(b, false) }
 func BenchmarkSplitDiffScrollWrap(b *testing.B) { benchmarkSplitDiffScroll(b, true) }
+
+func TestEditorGroupRenderKeepsTheLayoutCache(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, true, "compact")
+	g.NewFile()
+	g.WordWrap = true
+	grid := makeGrid(40, 12)
+	g.SetRect(Rect{W: 40, H: 12})
+	g.Render(NewRenderSurface(grid, Rect{W: 40, H: 12}))
+	l := g.Editor.layout()
+	g.Render(NewRenderSurface(grid, Rect{W: 40, H: 12}))
+	if g.Editor.layout() != l {
+		t.Fatal("a render with nothing changed rebuilt the row layout")
+	}
+}

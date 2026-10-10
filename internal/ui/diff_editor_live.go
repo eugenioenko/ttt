@@ -55,7 +55,9 @@ func (d *DiffEditorWidget) bind(e *EditorPaneWidget) {
 	d.unified, d.right = e, e
 	e.WordWrap = d.IsWrapped()
 	e.Folds = nil
-	e.SetDiffOverlay(d.liveOverlay())
+	if o := d.liveOverlay(); e.DiffOverlay != o {
+		e.SetDiffOverlay(o)
+	}
 	d.syncLive()
 }
 
