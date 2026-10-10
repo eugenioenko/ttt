@@ -92,6 +92,7 @@ type EditorPaneWidget struct {
 	topRowOffset            int
 	topOffsetLine           int
 	phantoms                map[int]int
+	DiffOverlay             *DiffOverlay
 }
 
 func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewport) *EditorPaneWidget {

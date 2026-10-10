@@ -119,14 +119,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				if lineIdx < totalLines {
 					numStr = strconv.Itoa(lineIdx + 1)
 				}
-				switch e.GutterStyle {
-				case "minimal":
-					padded = strings.Repeat(" ", gutterW-1-len(numStr)) + numStr + " "
-				case "extended":
-					padded = "  " + strings.Repeat(" ", gutterW-5-len(numStr)) + numStr + "   "
-				default:
-					padded = " " + strings.Repeat(" ", gutterW-3-len(numStr)) + numStr + "  "
-				}
+				padded = e.gutterNumber(numStr, gutterW)
 			}
 			for i, ch := range padded {
 				surface.SetCell(i, y, term.Cell{Ch: ch, Style: gutterStyle})
@@ -196,6 +189,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			} else {
 				leftCol = e.Viewport.LeftCol
 			}
+			diffBg := e.diffLineBg(lineIdx)
 			screenCells := e.renderLineToScreen(line, syntaxSpans, isCollapsedLine, annRunes, tabW, leftCol, editorW)
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
@@ -259,6 +253,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						bgStyle = term.StyleActiveLine
 					}
 				}
+				if diffBg != 0 && !inAnySel && (bgStyle == 0 || bgStyle == term.StyleActiveLine) {
+					bgStyle = diffBg
+				}
 				if hasMatch && ((lineIdx == e.Cursor.Line && colIdx == e.Cursor.Col) ||
 					(lineIdx == matchLine && colIdx == matchCol)) {
 					bgStyle = term.StyleBracketMatch
@@ -321,9 +318,20 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.CursorY = curRow - topRow + r.Y
 }
 
-func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW int, row editorRow) {
-	for x := 0; x < gutterW+editorW; x++ {
-		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleLineNumber})
+func (e *EditorPaneWidget) gutterNumber(numStr string, gutterW int) string {
+	pad := func(n int) string {
+		if n < 0 {
+			n = 0
+		}
+		return strings.Repeat(" ", n)
+	}
+	switch e.GutterStyle {
+	case "minimal":
+		return pad(gutterW-1-len(numStr)) + numStr + " "
+	case "extended":
+		return "  " + pad(gutterW-5-len(numStr)) + numStr + "   "
+	default:
+		return " " + pad(gutterW-3-len(numStr)) + numStr + "  "
 	}
 }
 
