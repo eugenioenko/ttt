@@ -14,6 +14,8 @@ import (
 
 type inlineDiffState struct {
 	Base         []string
+	lines        []diff.DiffLine
+	headActive   bool
 	Mode         DiffMode
 	modeExplicit bool
 	unified      *DiffOverlay
@@ -25,10 +27,16 @@ type inlineDiffState struct {
 
 func (s *inlineDiffState) setLines(base []string, lines []diff.DiffLine) {
 	s.Base = base
+	s.lines = lines
 	s.unified = NewDiffOverlay(lines)
 	s.left, s.right = NewSplitDiffOverlays(lines)
 	if s.head != nil {
 		s.head.Buf.Lines = base
+		s.head.Cursor.Line = s.head.Buf.ClampLine(s.head.Cursor.Line)
+		s.head.Selection.Clear()
+		if s.head.Highlighter != nil {
+			s.head.Highlighter.ClearCache()
+		}
 		s.head.SetDiffOverlay(s.left)
 	}
 }
@@ -121,7 +129,7 @@ func (g *EditorGroupWidget) headPane(t *editorTab) *EditorPaneWidget {
 	h.LineNumbers = g.Editor.LineNumbers
 	h.GutterStyle = g.Editor.GutterStyle
 	h.TabSize = g.Editor.TabSize
-	h.WordWrap = false
+	h.WordWrap = g.Editor.WordWrap
 	h.Passive = true
 	return h
 }
@@ -135,41 +143,78 @@ func (g *EditorGroupWidget) renderSplitDiff(t *editorTab, surface Surface, rect 
 		return
 	}
 	rightX := leftW + 1
-	g.Editor.SetRect(Rect{X: rect.X + rightX, Y: rect.Y, W: w - rightX, H: h})
-	g.Editor.Render(surface.Sub(Rect{X: rightX, Y: 0, W: w - rightX, H: h}))
-
+	s := t.InlineDiff
 	head := g.headPane(t)
-	t.InlineDiff.headRect = Rect{X: rect.X, Y: rect.Y, W: leftW, H: h}
-	head.SetRect(t.InlineDiff.headRect)
-	head.Viewport.Width = g.Editor.Viewport.Width
-	head.Viewport.Height = g.Editor.Viewport.Height
-	head.setTopRow(head.layout(), g.Editor.topRow(g.Editor.layout()))
-	head.Viewport.LeftCol = g.Editor.Viewport.LeftCol
-	head.Render(surface.Sub(Rect{X: 0, Y: 0, W: leftW, H: h}))
+	s.headRect = Rect{X: rect.X, Y: rect.Y, W: leftW, H: h}
+	head.SetRect(s.headRect)
+	g.Editor.SetRect(Rect{X: rect.X + rightX, Y: rect.Y, W: w - rightX, H: h})
+	for pass := 0; pass < 2; pass++ {
+		widths := [2]int{head.Viewport.Width, g.Editor.Viewport.Width}
+		s.left.Fillers, s.right.Fillers = alignSplitFillers(s.lines, head, g.Editor)
+		head.SetDiffOverlay(s.left)
+		g.Editor.SetDiffOverlay(s.right)
+		g.Editor.Render(surface.Sub(Rect{X: rightX, Y: 0, W: w - rightX, H: h}))
+		syncFollower(g.Editor, head)
+		head.Render(surface.Sub(Rect{X: 0, Y: 0, W: leftW, H: h}))
+		if !g.Editor.WordWrap || widths == [2]int{head.Viewport.Width, g.Editor.Viewport.Width} {
+			break
+		}
+	}
 	for y := 0; y < h; y++ {
 		surface.SetCell(leftW, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 	}
 }
 
-// splitHeadEvent keeps the read-only HEAD pane passive: wheel scrolling is
-// forwarded to the editor so both panes stay in step.
+// splitHeadEvent routes pointer input over the read-only HEAD pane to it, so
+// its text can be selected and copied; wheel scrolling still drives the
+// editor so both panes stay in step.
 func (g *EditorGroupWidget) splitHeadEvent(t *editorTab, ev tcell.Event) (EventResult, bool) {
-	if !t.InlineDiff.split() || g.Editor.mouseDown {
+	s := t.InlineDiff
+	if !s.split() || g.Editor.mouseDown {
+		return EventIgnored, false
+	}
+	if _, ok := ev.(*tcell.EventKey); ok {
+		s.headActive = false
 		return EventIgnored, false
 	}
 	mev, ok := ev.(*tcell.EventMouse)
-	if !ok {
+	if !ok || s.head == nil {
 		return EventIgnored, false
 	}
 	x, y := mev.Position()
-	r := t.InlineDiff.headRect
-	if x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
+	r := s.headRect
+	inside := x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
+	if !inside && !s.head.mouseDown {
+		if mev.Buttons()&tcell.Button1 != 0 {
+			s.headActive = false
+			s.head.Selection.Clear()
+		}
 		return EventIgnored, false
 	}
 	if mev.Buttons()&(tcell.WheelUp|tcell.WheelDown|tcell.WheelLeft|tcell.WheelRight) != 0 {
 		return g.Editor.HandleEvent(ev), true
 	}
-	return EventConsumed, true
+	if mev.Buttons()&tcell.Button1 != 0 {
+		s.headActive = true
+	}
+	result := s.head.HandleEvent(ev)
+	if result == EventIgnored {
+		result = EventConsumed
+	}
+	return result, true
+}
+
+func (g *EditorGroupWidget) inlineHeadSelection() (string, bool) {
+	t := g.activeTab()
+	if t == nil || t.Content != nil || !t.InlineDiff.split() {
+		return "", false
+	}
+	s := t.InlineDiff
+	if !s.headActive || s.head == nil || !s.head.Selection.Active {
+		return "", false
+	}
+	h := s.head
+	return h.Selection.Text(h.Buf.Lines, h.Cursor.Line, h.Cursor.Col), true
 }
 
 type inlineDiffSurface struct {

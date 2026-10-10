@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/app"
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/gdamore/tcell/v3"
 )
@@ -133,4 +134,47 @@ func TestSplitInlineDiffScrollsInStep(t *testing.T) {
 		t.Fatalf("no context rows visible after scrolling:\n%s", h.screenText())
 	}
 	h.assertContains("line 078")
+}
+
+func TestSplitInlineDiffWrapsInStepAndCopiesFromHead(t *testing.T) {
+	clipboard.DisableSystem()
+	h := newTestHarness(t, 100, 20)
+	defer h.stop()
+	path := filepath.Join(h.dir, "wrap.txt")
+	os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	os.WriteFile(path, []byte("alpha\nbeta "+strings.Repeat("wrapped ", 12)+"\ngamma\n"), 0644)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "wrap.txt", Status: "M"}, false)
+	h.exec("diff.splitView")
+	if !h.app.Settings.Editor.WordWrap {
+		h.exec("options.toggleWordWrap")
+	}
+	h.redraw()
+
+	gammaRows := 0
+	for y := 0; y < 20; y++ {
+		if strings.Count(h.screenRow(y), "gamma") == 2 {
+			gammaRows++
+		}
+	}
+	if gammaRows != 1 {
+		t.Fatalf("wrapped split rows are not aligned:\n%s", h.screenText())
+	}
+
+	alphaY := -1
+	for y := 0; y < 20; y++ {
+		if strings.Contains(h.screenRow(y), "alpha") {
+			alphaY = y
+			break
+		}
+	}
+	x := strings.Index(h.screenRow(alphaY), "alpha")
+	x = len([]rune(h.screenRow(alphaY)[:x]))
+	h.click(x+1, alphaY)
+	h.click(x+1, alphaY)
+	h.exec("editor.copy")
+	if got := clipboard.Get(); got != "alpha" {
+		t.Fatalf("copy from HEAD pane = %q", got)
+	}
 }
