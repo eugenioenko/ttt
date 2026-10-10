@@ -2,7 +2,6 @@ package ui
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
@@ -127,25 +126,16 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if lineIdx < totalLines && lineIdx == e.Cursor.Line {
 				gutterStyle = term.StyleActiveLine
 			}
-			var padded string
 			if !e.LineNumbers || (e.WordWrap && isWrapContinuation) {
-				padded = strings.Repeat(" ", gutterW)
+				for i := 0; i < gutterW; i++ {
+					surface.SetCell(i, y, term.Cell{Ch: ' ', Style: gutterStyle})
+				}
 			} else {
-				numStr := ""
+				num := 0
 				if lineIdx < totalLines {
-					numStr = strconv.Itoa(lineIdx + 1)
+					num = lineIdx + 1
 				}
-				switch e.GutterStyle {
-				case "minimal":
-					padded = strings.Repeat(" ", gutterW-1-len(numStr)) + numStr + " "
-				case "extended":
-					padded = "  " + strings.Repeat(" ", gutterW-5-len(numStr)) + numStr + "   "
-				default:
-					padded = " " + strings.Repeat(" ", gutterW-3-len(numStr)) + numStr + "  "
-				}
-			}
-			for i, ch := range padded {
-				surface.SetCell(i, y, term.Cell{Ch: ch, Style: gutterStyle})
+				e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: gutterStyle})
 			}
 			if e.Folds != nil && !e.WordWrap && lineIdx < totalLines && !isWrapContinuation {
 				if fr := e.Folds.FoldAt(lineIdx); fr != nil {
@@ -459,4 +449,36 @@ func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Spa
 		}
 	}
 	return cells
+}
+
+// drawGutterNumber writes the gutter's number column for num (0 leaves it
+// blank) without building a string.
+func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num int, cell term.Cell) {
+	var buf [20]byte
+	digits := buf[:0]
+	if num > 0 {
+		digits = strconv.AppendInt(digits, int64(num), 10)
+	}
+	lead, fixed, trail := 1, 3, 2
+	switch e.GutterStyle {
+	case "minimal":
+		lead, fixed, trail = 0, 1, 1
+	case "extended":
+		lead, fixed, trail = 2, 5, 3
+	}
+	x := 0
+	put := func(ch rune) {
+		cell.Ch = ch
+		surface.SetCell(x, y, cell)
+		x++
+	}
+	for range lead + max(gutterW-fixed-len(digits), 0) {
+		put(' ')
+	}
+	for _, d := range digits {
+		put(rune(d))
+	}
+	for range trail {
+		put(' ')
+	}
 }
