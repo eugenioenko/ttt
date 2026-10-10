@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"unsafe"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/highlight"
@@ -44,9 +45,58 @@ type DiffOverlay struct {
 	Hidden  []diffHiddenRange
 	visible []int
 	visN    int
+
+	// Syntax highlights lines taken from the diff's source files within those
+	// whole files, so a line inside a multi-line comment or string keeps its
+	// state. NewSide marks a Nums line as taken from the new file; deleted
+	// phantom rows always come from the old one.
+	Syntax  *diffSyntax
+	NewSide []bool
 }
 
 type diffHiddenRange struct{ start, end int }
+
+type diffSyntax struct {
+	old, new diffSideSyntax
+}
+
+type diffSideSyntax struct {
+	hl    *highlight.Highlighter
+	lines []string
+}
+
+func (s *diffSideSyntax) set(hl *highlight.Highlighter, lines []string) {
+	if s.hl != hl || len(s.lines) != len(lines) || unsafe.SliceData(s.lines) != unsafe.SliceData(lines) {
+		if hl != nil {
+			hl.ClearCache()
+		}
+	}
+	s.hl, s.lines = hl, lines
+}
+
+func (s *diffSideSyntax) spans(num int, text string) ([]highlight.Span, bool) {
+	if s.hl == nil || num < 1 || num > len(s.lines) || s.lines[num-1] != text {
+		return nil, false
+	}
+	return s.hl.HighlightLineAt(s.lines, num-1), true
+}
+
+func (o *DiffOverlay) syntaxAt(line int, text string) ([]highlight.Span, bool) {
+	if o == nil || o.Syntax == nil || line < 0 || line >= len(o.Nums) {
+		return nil, false
+	}
+	if line < len(o.NewSide) && o.NewSide[line] {
+		return o.Syntax.new.spans(o.Nums[line], text)
+	}
+	return o.Syntax.old.spans(o.Nums[line], text)
+}
+
+func (o *DiffOverlay) deletedSyntax(old diff.SideLine) ([]highlight.Span, bool) {
+	if o == nil || o.Syntax == nil {
+		return nil, false
+	}
+	return o.Syntax.old.spans(old.Num, old.Text)
+}
 
 func (o *DiffOverlay) label(line int) (string, bool) {
 	if o == nil {
@@ -272,7 +322,9 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		}
 	}
 	var spans []highlight.Span
-	if e.Highlighter != nil && old.Text != "" {
+	if whole, ok := e.DiffOverlay.deletedSyntax(old); ok {
+		spans = whole
+	} else if e.Highlighter != nil && old.Text != "" {
 		spans = e.Highlighter.HighlightLine(old.Text)
 	}
 	leftCol := e.Viewport.LeftCol

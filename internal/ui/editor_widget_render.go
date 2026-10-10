@@ -174,6 +174,8 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
 			if diffFgOverride {
 				syntaxSpans = []highlight.Span{{Start: 0, End: len(line), Style: diffFg}}
+			} else if whole, ok := e.DiffOverlay.syntaxAt(lineIdx, e.Buf.Lines[lineIdx]); ok {
+				syntaxSpans = whole
 			} else if e.Highlighter != nil {
 				syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
 			}

@@ -124,7 +124,8 @@ func (d *DiffEditorWidget) rebuildLive() {
 	d.hoveredGap = -1
 	d.captured = nil
 
-	d.leftBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}}
+	d.syncDocSyntax()
+	d.leftBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
 	var lLines []string
 	d.leftRows = nil
 	for i, dl := range d.Lines {
@@ -216,7 +217,7 @@ func (d *DiffEditorWidget) buildLiveOverlays() {
 	}
 
 	d.gapText = nil
-	d.liveUnified = &DiffOverlay{Kinds: kinds, Deleted: deleted, Gaps: gaps, Labels: labels, Hidden: hidden, DeletedActive: [2]int{-1, -1}}
+	d.liveUnified = &DiffOverlay{Kinds: kinds, Deleted: deleted, Gaps: gaps, Labels: labels, Hidden: hidden, DeletedActive: [2]int{-1, -1}, Syntax: &d.docSyntax}
 	d.rightBase = &DiffOverlay{Kinds: kinds, Fillers: map[int]int{}, Gaps: gaps, Labels: labels, Hidden: hidden}
 	d.pairs = d.pairs[:0]
 	li := 0

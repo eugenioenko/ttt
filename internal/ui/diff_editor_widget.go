@@ -74,6 +74,9 @@ type DiffEditorWidget struct {
 	pairs    []splitPair
 	alignKey splitAlignKey
 
+	oldHL, newHL *highlight.Highlighter
+	docSyntax    diffSyntax
+
 	editable    bool
 	live        *EditorPaneWidget
 	full        []diff.DiffLine
@@ -160,6 +163,22 @@ func (d *DiffEditorWidget) attachHighlighters() {
 			p.Highlighter = highlight.New(d.FilePath)
 		}
 	}
+	d.oldHL, d.newHL = nil, nil
+	if d.syntax {
+		d.oldHL, d.newHL = highlight.New(d.FilePath), highlight.New(d.FilePath)
+	}
+	d.syncDocSyntax()
+}
+
+// syncDocSyntax points the whole-file highlighters at the current sides; a
+// side whose content is not loaded falls back to the pane's own highlighting.
+func (d *DiffEditorWidget) syncDocSyntax() {
+	oldLines, newLines := d.oldLines, d.newLines
+	if !d.editable && !d.contextLoaded {
+		oldLines, newLines = nil, nil
+	}
+	d.docSyntax.old.set(d.oldHL, oldLines)
+	d.docSyntax.new.set(d.newHL, newLines)
 }
 
 func (d *DiffEditorWidget) SetSyntaxHighlight(enabled bool) {
@@ -453,25 +472,31 @@ func (d *DiffEditorWidget) rebuild() {
 	d.hoveredGap = -1
 	d.captured = nil
 
+	d.syncDocSyntax()
 	d.unifiedRows = buildUnifiedDiffLines(d.Lines)
 	uLines := make([]string, 0, len(d.unifiedRows))
-	uo := &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}}
+	uo := &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Syntax: &d.docSyntax}
 	for i, u := range d.unifiedRows {
 		uLines = append(uLines, u.side.Text)
 		uo.Kinds = append(uo.Kinds, u.side.Kind)
 		uo.Nums = append(uo.Nums, u.side.Num)
+		uo.NewSide = append(uo.NewSide, u.right || d.Lines[u.sourceLine].Left.Kind == diff.Blank)
 		if gap, ok := d.gapByLine[u.sourceLine]; ok {
 			uo.Gaps[i] = gap
 		}
 	}
 
-	d.leftBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}}
-	d.rightBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}}
+	d.leftBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
+	d.rightBase = &DiffOverlay{Nums: []int{}, Gaps: map[int]int{}, Fillers: map[int]int{}, Syntax: &d.docSyntax}
 	var lLines, rLines []string
 	d.leftRows, d.rightRows = nil, nil
 	for i, dl := range d.Lines {
 		lLines, d.leftRows = appendDiffSide(d.leftBase, lLines, d.leftRows, dl.Left, i, d.gapByLine)
 		rLines, d.rightRows = appendDiffSide(d.rightBase, rLines, d.rightRows, dl.Right, i, d.gapByLine)
+	}
+	d.rightBase.NewSide = make([]bool, len(rLines))
+	for i := range d.rightBase.NewSide {
+		d.rightBase.NewSide[i] = true
 	}
 
 	d.pairs = d.pairs[:0]
