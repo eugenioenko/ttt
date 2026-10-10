@@ -107,10 +107,13 @@ func (s *diffSideSyntax) spans(num int, text string) ([]highlight.Span, bool) {
 			s.path = ""
 			return nil, false
 		}
-		s.hl.SetProgressive(s.notify)
+		var peer *highlight.Highlighter
 		if s.peer != nil {
-			s.hl.ShareSingleLines(s.peer.hl)
+			peer = s.peer.hl
 		}
+		s.hl.ShareTokens(peer)
+		s.hl.SetProgressive(s.notify)
+		s.hl.ShareSingleLines(peer)
 	}
 	return s.hl.HighlightLineAt(s.lines, num-1), true
 }

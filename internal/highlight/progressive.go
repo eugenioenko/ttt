@@ -3,8 +3,6 @@ package highlight
 import (
 	"sync"
 	"sync/atomic"
-
-	textmate "github.com/eugenioenko/textmate-go"
 )
 
 // progressiveSlack is how far below the prefix tokenized when a pass began a
@@ -173,7 +171,7 @@ func (p *progressive) warmTo(idx int) {
 	w.mu.Unlock()
 }
 
-func (w *warmer) run(doc *textmate.Document, notify func()) {
+func (w *warmer) run(doc lineDoc, notify func()) {
 	for {
 		w.mu.Lock()
 		for w.pause > 0 && w.reached < w.target {

@@ -33,7 +33,7 @@ const maxIsolatedCache = 4_096
 type Highlighter struct {
 	grammar  *textmate.Grammar
 	language string
-	doc      *textmate.Document
+	doc      lineDoc
 	dirty    bool
 	isolated *singleLineCache
 	// The document's token slices are immutable and shared across calls, so
