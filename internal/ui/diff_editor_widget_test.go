@@ -393,3 +393,22 @@ func TestDiffEditorSplitFollowerScrollsWithLead(t *testing.T) {
 		t.Fatalf("top rows left %d right %d", d.left.topRow(d.left.layout()), d.right.topRow(d.right.layout()))
 	}
 }
+
+func TestDiffEditorSplitWrapUsesFullSymmetricWidth(t *testing.T) {
+	long := strings.Repeat("wrapme ", 30)
+	old := []string{long, "a"}
+	cur := []string{long, "b"}
+	for _, w := range []int{60, 61} {
+		d := NewDiffEditorWidget("test.txt", diff.FileDiff{}, old, cur, true)
+		d.SetWrapped(true)
+		renderDiffEditor(d, w, 4)
+		lw, rw := d.left.Viewport.Width, d.right.Viewport.Width
+		if lw != rw {
+			t.Fatalf("width %d: left wraps at %d, right at %d", w, lw, rw)
+		}
+		widest := min(d.left.GetRect().W-d.left.GutterWidth(), d.right.GetRect().W-d.right.GutterWidth()) - 1
+		if rw != widest {
+			t.Fatalf("width %d: wraps at %d, want the full text width %d", w, rw, widest)
+		}
+	}
+}

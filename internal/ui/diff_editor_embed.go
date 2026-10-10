@@ -44,8 +44,14 @@ func (d *DiffEditorWidget) embedRows(w int) int {
 		d.right.Viewport.Width = d.right.embeddedTextWidth(w)
 		return d.right.layout().total()
 	}
-	d.left.Viewport.Width = d.left.embeddedTextWidth(divider)
-	d.right.Viewport.Width = d.right.embeddedTextWidth(w - divider - 1)
+	d.left.wrapCols, d.right.wrapCols = 0, 0
+	lw, rw := d.left.embeddedTextWidth(divider), d.right.embeddedTextWidth(w-divider-1)
+	if wrap {
+		c := min(lw, rw)
+		lw, rw = c, c
+		d.left.wrapCols, d.right.wrapCols = c, c
+	}
+	d.left.Viewport.Width, d.right.Viewport.Width = lw, rw
 	d.alignSplit()
 	return max(d.left.layout().total(), d.right.layout().total())
 }

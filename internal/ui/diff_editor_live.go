@@ -30,6 +30,7 @@ func NewEditableDiffWidget(filePath string, base []string, lines []diff.DiffLine
 		liveCursor:    -1,
 		liveActive:    -1,
 	}
+	d.left.NoWrapMargin = false
 	d.attachHighlighters()
 	d.rebuild()
 	return d

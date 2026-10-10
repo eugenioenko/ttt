@@ -85,6 +85,8 @@ type EditorPaneWidget struct {
 	ReadOnly                bool
 	Passive                 bool
 	Embedded                bool
+	NoWrapMargin            bool
+	wrapCols                int
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
 	bracketMatchCache       bracketMatch

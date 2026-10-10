@@ -439,17 +439,24 @@ func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Spa
 }
 
 func (e *EditorPaneWidget) wrapTextWidth(editorW int) int {
-	if !e.WordWrap || editorW <= 4 {
+	if !e.WordWrap {
 		return editorW
 	}
-	switch e.GutterStyle {
-	case "minimal":
-		return editorW - 1
-	case "extended":
-		return editorW - 3
-	default:
-		return editorW - 2
+	w := editorW
+	if !e.NoWrapMargin && editorW > 4 {
+		switch e.GutterStyle {
+		case "minimal":
+			w--
+		case "extended":
+			w -= 3
+		default:
+			w -= 2
+		}
 	}
+	if e.wrapCols > 0 && w > e.wrapCols {
+		w = e.wrapCols
+	}
+	return w
 }
 
 // embeddedTextWidth is the text width Render gives an Embedded pane drawn at

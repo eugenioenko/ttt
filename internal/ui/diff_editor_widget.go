@@ -126,6 +126,7 @@ func newDiffPane() *EditorPaneWidget {
 	p.Undo = &undo.UndoStack{}
 	p.Selection = &selection.Selection{}
 	p.ReadOnly = true
+	p.NoWrapMargin = true
 	p.LineNumbers = true
 	p.TabSize = diffTabWidth
 	return p
@@ -750,13 +751,24 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 		pr := p.GetRect()
 		return surface.Sub(Rect{X: pr.X - r.X, Y: 0, W: pr.W, H: h})
 	}
-	for pass := 0; pass < 2; pass++ {
+	d.left.wrapCols, d.right.wrapCols = 0, 0
+	for pass := 0; pass < 3; pass++ {
 		widths := [2]int{d.left.Viewport.Width, d.right.Viewport.Width}
 		d.alignSplit()
 		lead.Render(surfaceFor(lead))
 		syncFollower(lead, follow)
 		follow.Render(surfaceFor(follow))
-		if !wrap || widths == [2]int{d.left.Viewport.Width, d.right.Viewport.Width} {
+		if !wrap {
+			break
+		}
+		lw, rw := d.left.Viewport.Width, d.right.Viewport.Width
+		if lw != rw {
+			c := min(lw, rw)
+			d.left.wrapCols, d.right.wrapCols = c, c
+			d.left.Viewport.Width, d.right.Viewport.Width = c, c
+			continue
+		}
+		if widths == [2]int{lw, rw} {
 			break
 		}
 	}
