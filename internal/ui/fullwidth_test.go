@@ -144,12 +144,12 @@ func TestWrapLineSegmentsNeverSplitsFullwidthRune(t *testing.T) {
 
 func TestBufferPosToWrapScreenPosFullwidth(t *testing.T) {
 	lines := []string{"가나다라마바"}
-	_, screenCol := bufferPosToWrapScreenPos(lines, 0, 2, 6, 4)
+	_, screenCol := wrapLayout(lines, 6, 4).rowOf(0, 2)
 	if screenCol != 4 {
 		t.Errorf("screenCol = %d, want 4", screenCol)
 	}
 	// The fourth rune starts the second visual row.
-	row, screenCol := bufferPosToWrapScreenPos(lines, 0, 3, 6, 4)
+	row, screenCol := wrapLayout(lines, 6, 4).rowOf(0, 3)
 	if row != 1 || screenCol != 0 {
 		t.Errorf("row, col = %d, %d; want 1, 0", row, screenCol)
 	}

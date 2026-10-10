@@ -26,22 +26,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		h--
 	}
 
-	foldsActive := e.hasFolds()
-	if foldsActive {
+	if e.hasFolds() {
 		e.ensureTopLineVisible()
-		e.cachedVisibleLines = e.Folds.VisibleLines(totalLines)
-	} else {
-		e.cachedVisibleLines = nil
 	}
-
-	visibleCount := totalLines
-	if foldsActive {
-		visibleCount = len(e.cachedVisibleLines)
-	}
-
-	if e.WordWrap {
-		visibleCount = totalVisualLines(e.Buf.Lines, editorW, tabW)
-	}
+	visibleCount := e.rowLayout(editorW).total()
 
 	showScrollbar := visibleCount > h
 	if showScrollbar {
@@ -68,9 +56,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.scrollViewport()
 	}
 
+	layout := e.layout()
 	if e.WordWrap {
 		e.Viewport.LeftCol = 0
-		visibleCount = totalVisualLines(e.Buf.Lines, editorW, tabW)
+		visibleCount = layout.total()
 		showScrollbar = visibleCount > h
 	}
 
@@ -101,25 +90,20 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		bracketColors = e.bracketColorCache
 	}
 
-	if e.WordWrap {
-		e.wrapMap = buildWrapMap(e.Buf.Lines, e.Viewport.TopLine, e.wrapTopOffset, h, editorW, tabW)
-	} else {
-		e.wrapMap = nil
-	}
+	e.rowMap = layout.rows(e.Viewport.TopLine, e.topOffset(), h)
+	e.rowMapTop = e.Viewport.TopLine
+	e.rowMapOffset = e.topOffset()
+	topRow := e.topRow(layout)
 
 	for y := 0; y < h; y++ {
-		var lineIdx int
-		var segStartCol int
-		var isWrapContinuation bool
+		row := e.rowMap[y]
+		lineIdx := row.bufLine
+		segStartCol := row.startCol
+		isWrapContinuation := segStartCol > 0
 
-		if e.WordWrap && e.wrapMap != nil {
-			entry := e.wrapMap[y]
-			lineIdx = entry.bufLine
-			segStartCol = entry.startCol
-			isWrapContinuation = segStartCol > 0
-		} else {
-			lineIdx = e.screenToBufferLine(y)
-			segStartCol = 0
+		if row.isPhantom() {
+			e.renderPhantomRow(surface, y, gutterW, editorW, row)
+			continue
 		}
 
 		if gutterW > 0 {
@@ -307,22 +291,8 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.scrollbar.X = r.X + scrollbarCol
 		e.scrollbar.Y = r.Y
 		e.scrollbar.Height = h
-		if e.WordWrap {
-			e.scrollbar.TotalItems = visibleCount + h - 1
-			curTopVisRow, _ := bufferPosToWrapScreenPos(e.Buf.Lines, e.Viewport.TopLine, 0, editorW, tabW)
-			curTopVisRow += e.wrapTopOffset
-			e.scrollbar.TopItem = curTopVisRow
-		} else if foldsActive {
-			e.scrollbar.TotalItems = visibleCount + h - 1
-			topVis := e.Folds.BufferToVisible(e.Viewport.TopLine)
-			if topVis < 0 {
-				topVis = 0
-			}
-			e.scrollbar.TopItem = topVis
-		} else {
-			e.scrollbar.TotalItems = totalLines + h - 1
-			e.scrollbar.TopItem = e.Viewport.TopLine
-		}
+		e.scrollbar.TotalItems = visibleCount + h - 1
+		e.scrollbar.TopItem = topRow
 		e.scrollbar.Render(surface, scrollbarCol, 0)
 	}
 
@@ -338,27 +308,22 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 
 	r := e.GetRect()
-	if e.WordWrap {
-		curVisRow, curScreenCol := bufferPosToWrapScreenPos(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col, editorW, tabW)
-		topVisRow, _ := bufferPosToWrapScreenPos(e.Buf.Lines, e.Viewport.TopLine, 0, editorW, tabW)
-		topVisRow += e.wrapTopOffset
-		e.CursorX = curScreenCol + gutterW + r.X
-		e.CursorY = curVisRow - topVisRow + r.Y
-	} else {
+	if !e.WordWrap {
 		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line)
+	}
+	curRow, curScreenCol := layout.rowOf(e.Cursor.Line, e.Cursor.Col)
+	if e.WordWrap {
+		e.CursorX = curScreenCol + gutterW + r.X
+	} else {
 		cursorVisCol := bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, tabW)
 		e.CursorX = cursorVisCol - e.Viewport.LeftCol + gutterW + r.X
-		if foldsActive {
-			curVis := e.Folds.BufferToVisible(e.Cursor.Line)
-			topVis := e.Folds.BufferToVisible(e.Viewport.TopLine)
-			if curVis >= 0 && topVis >= 0 {
-				e.CursorY = curVis - topVis + r.Y
-			} else {
-				e.CursorY = e.Cursor.Line - e.Viewport.TopLine + r.Y
-			}
-		} else {
-			e.CursorY = e.Cursor.Line - e.Viewport.TopLine + r.Y
-		}
+	}
+	e.CursorY = curRow - topRow + r.Y
+}
+
+func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW int, row editorRow) {
+	for x := 0; x < gutterW+editorW; x++ {
+		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleLineNumber})
 	}
 }
 

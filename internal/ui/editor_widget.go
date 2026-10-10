@@ -75,7 +75,6 @@ type EditorPaneWidget struct {
 	autoScrollTimer         *time.Timer
 	autoScrollGeneration    uint64
 	maxWidthSeen            int
-	cachedVisibleLines      []int
 	searchByLine            map[int][]int
 	diagByLine              map[int][]int
 	LineChanges             []diff.LineChangeKind
@@ -87,8 +86,12 @@ type EditorPaneWidget struct {
 	bracketColorDirty       bool
 	bracketMatchCache       bracketMatch
 	bracketGen              int
-	wrapMap                 []wrapEntry
-	wrapTopOffset           int
+	rowMap                  []editorRow
+	rowMapTop               int
+	rowMapOffset            int
+	topRowOffset            int
+	topOffsetLine           int
+	phantoms                map[int]int
 }
 
 func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewport) *EditorPaneWidget {
@@ -256,21 +259,7 @@ func (e *EditorPaneWidget) ensureTopLineVisible() {
 }
 
 func (e *EditorPaneWidget) screenToBufferLine(y int) int {
-	if e.cachedVisibleLines == nil || e.Folds == nil {
-		return e.Viewport.TopLine + y
-	}
-	topVis := e.Folds.BufferToVisible(e.Viewport.TopLine)
-	if topVis < 0 {
-		topVis = 0
-	}
-	idx := topVis + y
-	if idx < 0 {
-		return 0
-	}
-	if idx >= len(e.cachedVisibleLines) {
-		return len(e.Buf.Lines)
-	}
-	return e.cachedVisibleLines[idx]
+	return e.rowAt(y).bufLine
 }
 
 func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
@@ -553,33 +542,18 @@ func (e *EditorPaneWidget) expandFoldAtCursor() {
 }
 
 func (e *EditorPaneWidget) scrollViewport() {
-	if e.WordWrap {
-		e.scrollViewportWrap()
-		return
+	l := e.layout()
+	curRow, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	top := e.topRow(l)
+	if curRow < top {
+		e.setTopRow(l, curRow)
 	}
-	if e.Folds != nil && e.Folds.HasCollapsedFolds() {
-		curVis := e.Folds.BufferToVisible(e.Cursor.Line)
-		topVis := e.Folds.BufferToVisible(e.Viewport.TopLine)
-		if curVis < 0 {
-			curVis = 0
-		}
-		if topVis < 0 {
-			topVis = 0
-		}
-		if curVis < topVis {
-			e.Viewport.TopLine = e.Folds.VisibleToBuffer(curVis)
-		}
-		if curVis >= topVis+e.Viewport.Height {
-			newTopVis := curVis - e.Viewport.Height + 1
-			e.Viewport.TopLine = e.Folds.VisibleToBuffer(newTopVis)
-		}
-	} else {
-		if e.Cursor.Line < e.Viewport.TopLine {
-			e.Viewport.TopLine = e.Cursor.Line
-		}
-		if e.Cursor.Line >= e.Viewport.TopLine+e.Viewport.Height {
-			e.Viewport.TopLine = e.Cursor.Line - e.Viewport.Height + 1
-		}
+	if curRow >= top+e.Viewport.Height {
+		e.setTopRow(l, curRow-e.Viewport.Height+1)
+	}
+	if e.WordWrap {
+		e.Viewport.LeftCol = 0
+		return
 	}
 	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line)
 	if e.Viewport.Width <= 0 {
@@ -595,100 +569,18 @@ func (e *EditorPaneWidget) scrollViewport() {
 	}
 }
 
-func (e *EditorPaneWidget) scrollViewportWrap() {
-	e.Viewport.LeftCol = 0
-	tabW := e.resolveTabSize()
-	width := e.Viewport.Width
-	if width < 1 {
-		width = 1
-	}
-
-	curVisRow, _ := bufferPosToWrapScreenPos(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col, width, tabW)
-	topVisRow, _ := bufferPosToWrapScreenPos(e.Buf.Lines, e.Viewport.TopLine, 0, width, tabW)
-	topVisRow += e.wrapTopOffset
-
-	if curVisRow < topVisRow {
-		e.Viewport.TopLine, e.wrapTopOffset = wrapVisualRowToTopLine(e.Buf.Lines, curVisRow, width, tabW)
-	}
-	if curVisRow >= topVisRow+e.Viewport.Height {
-		newTop := curVisRow - e.Viewport.Height + 1
-		e.Viewport.TopLine, e.wrapTopOffset = wrapVisualRowToTopLine(e.Buf.Lines, newTop, width, tabW)
-	}
-}
-
 func (e *EditorPaneWidget) scrollUp(n int) {
-	if e.WordWrap {
-		tabW := e.resolveTabSize()
-		width := e.Viewport.Width
-		if width < 1 {
-			width = 1
-		}
-		topVisRow, _ := bufferPosToWrapScreenPos(e.Buf.Lines, e.Viewport.TopLine, 0, width, tabW)
-		topVisRow += e.wrapTopOffset
-		newTop := topVisRow - n
-		if newTop < 0 {
-			newTop = 0
-		}
-		e.Viewport.TopLine, e.wrapTopOffset = wrapVisualRowToTopLine(e.Buf.Lines, newTop, width, tabW)
-		return
-	}
-	if e.Folds != nil && e.Folds.HasCollapsedFolds() {
-		topVis := e.Folds.BufferToVisible(e.Viewport.TopLine)
-		newVis := topVis - n
-		if newVis < 0 {
-			newVis = 0
-		}
-		e.Viewport.TopLine = e.Folds.VisibleToBuffer(newVis)
-	} else {
-		e.Viewport.TopLine -= n
-		if e.Viewport.TopLine < 0 {
-			e.Viewport.TopLine = 0
-		}
-	}
+	l := e.layout()
+	e.setTopRow(l, e.topRow(l)-n)
 }
 
 func (e *EditorPaneWidget) scrollDown(n int) {
-	if e.WordWrap {
-		tabW := e.resolveTabSize()
-		width := e.Viewport.Width
-		if width < 1 {
-			width = 1
-		}
-		topVisRow, _ := bufferPosToWrapScreenPos(e.Buf.Lines, e.Viewport.TopLine, 0, width, tabW)
-		topVisRow += e.wrapTopOffset
-		totalVis := totalVisualLines(e.Buf.Lines, width, tabW)
-		newTop := topVisRow + n
-		if newTop >= totalVis {
-			newTop = totalVis - 1
-		}
-		if newTop < 0 {
-			newTop = 0
-		}
-		e.Viewport.TopLine, e.wrapTopOffset = wrapVisualRowToTopLine(e.Buf.Lines, newTop, width, tabW)
-		return
+	l := e.layout()
+	newTop := e.topRow(l) + n
+	if total := l.total(); newTop >= total {
+		newTop = total - 1
 	}
-	if e.Folds != nil && e.Folds.HasCollapsedFolds() {
-		totalLines := len(e.Buf.Lines)
-		visCount := e.Folds.VisibleLineCount(totalLines)
-		topVis := e.Folds.BufferToVisible(e.Viewport.TopLine)
-		newVis := topVis + n
-		if newVis >= visCount {
-			newVis = visCount - 1
-		}
-		if newVis < 0 {
-			newVis = 0
-		}
-		e.Viewport.TopLine = e.Folds.VisibleToBuffer(newVis)
-	} else {
-		max := len(e.Buf.Lines) - 1
-		if max < 0 {
-			max = 0
-		}
-		e.Viewport.TopLine += n
-		if e.Viewport.TopLine > max {
-			e.Viewport.TopLine = max
-		}
-	}
+	e.setTopRow(l, newTop)
 }
 
 func (e *EditorPaneWidget) SmartHome() {

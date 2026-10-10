@@ -184,3 +184,54 @@ func TestEditorRowsWordWrap(t *testing.T) {
 		t.Fatalf("after scrollUp(1) rows=%q", rows)
 	}
 }
+
+func TestEditorRowsPhantoms(t *testing.T) {
+	e := newRowsEditor(numberedLines(10), 20, 5)
+	e.phantoms = map[int]int{2: 2, 10: 1}
+
+	rows := renderRows(e)
+	want := []string{"line 0", "line 1", "", "", "line 2"}
+	for i := range want {
+		if rows[i] != want[i] {
+			t.Fatalf("rows = %q, want %q", rows, want)
+		}
+	}
+	if !e.rowAt(2).isPhantom() || e.rowAt(4).isPhantom() {
+		t.Fatalf("phantom flags wrong: %+v %+v", e.rowAt(2), e.rowAt(4))
+	}
+
+	e.Cursor.Line = 1
+	e.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", 0))
+	renderRows(e)
+	if e.Cursor.Line != 2 || e.CursorY != 4 {
+		t.Fatalf("cursor after down = line %d y %d, want line 2 y 4", e.Cursor.Line, e.CursorY)
+	}
+
+	clickAt(e, e.GutterWidth()+1, 3)
+	if e.Cursor.Line != 2 {
+		t.Fatalf("click on phantom = line %d, want 2", e.Cursor.Line)
+	}
+
+	e.scrollDown(2)
+	rows = renderRows(e)
+	if e.Viewport.TopLine != 2 || rows[0] != "" || rows[2] != "line 2" {
+		t.Fatalf("after scrollDown(2) top=%d rows=%q", e.Viewport.TopLine, rows)
+	}
+
+	e.scrollDown(100)
+	rows = renderRows(e)
+	if e.Viewport.TopLine != 9 || rows[0] != "" || !e.rowAt(0).isPhantom() {
+		t.Fatalf("after scrollDown(100) top=%d rows=%q", e.Viewport.TopLine, rows)
+	}
+
+	e.Viewport.TopLine = 0
+	e.Cursor.Line = 9
+	e.scrollViewport()
+	renderRows(e)
+	if e.CursorY != 4 {
+		t.Fatalf("CursorY after reveal = %d, want 4", e.CursorY)
+	}
+	if got := e.layout().total(); got != 13 {
+		t.Fatalf("total rows = %d, want 13", got)
+	}
+}
