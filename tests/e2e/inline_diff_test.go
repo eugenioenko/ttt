@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,4 +87,50 @@ func TestOpenChangesEditsInlineDiff(t *testing.T) {
 	if strings.Contains(h.screenText(), "two") {
 		t.Fatal("deleted row still shown after leaving inline diff")
 	}
+}
+
+func TestSplitInlineDiffScrollsInStep(t *testing.T) {
+	h := newTestHarness(t, 120, 20)
+	defer h.stop()
+	path := filepath.Join(h.dir, "long.txt")
+	var old, cur []string
+	for i := 1; i <= 100; i++ {
+		line := fmt.Sprintf("line %03d", i)
+		old = append(old, line)
+		switch i {
+		case 10:
+			cur = append(cur, "changed 010")
+		case 20:
+			cur = append(cur, line, "added a", "added b", "added c")
+		case 30:
+		default:
+			cur = append(cur, line)
+		}
+	}
+	os.WriteFile(path, []byte(strings.Join(old, "\n")+"\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "long.txt", Status: "M"}, false)
+	h.exec("diff.splitView")
+	h.app.EditorGroup.GoToLine(80)
+	h.redraw()
+
+	aligned := 0
+	for y := 0; y < 20; y++ {
+		row := h.screenRow(y)
+		idx := strings.Index(row, "line ")
+		if idx < 0 {
+			continue
+		}
+		label := row[idx : idx+len("line 000")]
+		if strings.Count(row, label) != 2 {
+			t.Fatalf("row %d not aligned across panes: %q", y, row)
+		}
+		aligned++
+	}
+	if aligned == 0 {
+		t.Fatalf("no context rows visible after scrolling:\n%s", h.screenText())
+	}
+	h.assertContains("line 078")
 }

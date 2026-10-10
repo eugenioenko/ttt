@@ -594,6 +594,9 @@ func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffConte
 		if surface, ok := tab.Content.(DiffModeSurface); ok {
 			g.ApplyDiffDefaults(surface)
 		}
+		if tab.InlineDiff != nil {
+			inlineDiffSurface{g: g, s: tab.InlineDiff}.ApplyDefaultMode(mode)
+		}
 	}
 }
 
@@ -839,6 +842,9 @@ func (g *EditorGroupWidget) ActiveCurrentChangesWidget() *CommitDetailWidget {
 }
 
 func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
+	if surface := g.activeInlineDiffSurface(); surface != nil {
+		return surface
+	}
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
 		return nil
@@ -2190,6 +2196,8 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)
+	} else if t.InlineDiff.split() {
+		g.renderSplitDiff(t, contentSurface, contentRect)
 	} else {
 		g.Editor.SetRect(contentRect)
 		g.Editor.Render(contentSurface)
@@ -2281,6 +2289,9 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 		return EventIgnored
+	}
+	if result, handled := g.splitHeadEvent(t, ev); handled {
+		return result
 	}
 	result := g.Editor.HandleEvent(ev)
 	g.saveMultiState()

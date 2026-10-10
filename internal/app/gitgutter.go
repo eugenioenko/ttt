@@ -7,7 +7,6 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
-	"github.com/eugenioenko/ttt/internal/ui"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -17,7 +16,8 @@ type GitGutterResult struct {
 	Gen     int
 	Path    string
 	Changes []diff.LineChangeKind
-	Diff    *ui.DiffOverlay
+	DiffOn  bool
+	Diff    []diff.DiffLine
 	Base    []string
 }
 
@@ -66,7 +66,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		if ctx.Err() != nil {
 			return
 		}
-		result := &GitGutterResult{Gen: gen, Path: filePath}
+		result := &GitGutterResult{Gen: gen, Path: filePath, DiffOn: diffOn}
 		if gitErr != nil && gutterOn {
 			// File is not tracked by git (new file) — mark all lines as added
 			result.Changes = make([]diff.LineChangeKind, len(linesCopy))
@@ -89,7 +89,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 			if err != nil {
 				return
 			}
-			result.Diff = ui.NewDiffOverlay(lines)
+			result.Diff = lines
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -100,7 +100,7 @@ func (a *App) ApplyGitGutterResult(v *GitGutterResult) {
 		return
 	}
 	a.EditorGroup.SetLineChanges(v.Path, v.Changes)
-	if v.Diff != nil {
+	if v.DiffOn {
 		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff)
 	}
 }

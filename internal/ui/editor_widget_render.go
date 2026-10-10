@@ -76,6 +76,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	hasSearch := len(e.SearchMatches) > 0
 
 	matchLine, matchCol, hasMatch := e.findMatchingBracket()
+	hasMatch = hasMatch && !e.Passive
 
 	if e.Viewport.TopLine < 0 {
 		e.Viewport.TopLine = 0
@@ -108,7 +109,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 
 		if gutterW > 0 {
 			gutterStyle := term.StyleLineNumber
-			if lineIdx < totalLines && lineIdx == e.Cursor.Line {
+			if lineIdx < totalLines && lineIdx == e.Cursor.Line && !e.Passive {
 				gutterStyle = term.StyleActiveLine
 			}
 			var padded string
@@ -247,7 +248,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 							}
 						}
 					} else {
-						isCursorLine = lineIdx == e.Cursor.Line
+						isCursorLine = lineIdx == e.Cursor.Line && !e.Passive
 					}
 					if isCursorLine && !isSearchHighlight {
 						bgStyle = term.StyleActiveLine

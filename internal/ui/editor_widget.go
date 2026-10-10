@@ -82,6 +82,7 @@ type EditorPaneWidget struct {
 	OnBookmarkChange        func(line int, action string, b Bookmark)
 	OnGutterClick           func(line int) bool
 	ReadOnly                bool
+	Passive                 bool
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
 	bracketMatchCache       bracketMatch

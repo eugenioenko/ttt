@@ -5,8 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/view"
 )
 
 func deletedTexts(o *DiffOverlay) map[int][]string {
@@ -92,5 +95,35 @@ func TestEditorRendersDiffOverlay(t *testing.T) {
 	clickAt(e, g, 4)
 	if e.Cursor.Line != 3 {
 		t.Fatalf("click on deleted row = line %d, want 3", e.Cursor.Line)
+	}
+}
+
+func TestNewSplitDiffOverlaysAlignRows(t *testing.T) {
+	old := []string{"a", "b", "c", "d", "e"}
+	cur := []string{"a", "B", "x", "y", "c", "e", "f"}
+	left, right := NewSplitDiffOverlays(diff.FullDiffLines(old, cur))
+	if len(left.Kinds) != len(old) || len(right.Kinds) != len(cur) {
+		t.Fatalf("kinds: left %d right %d", len(left.Kinds), len(right.Kinds))
+	}
+	rows := func(o *DiffOverlay) int {
+		n := len(o.Kinds)
+		for _, f := range o.Fillers {
+			n += f
+		}
+		return n
+	}
+	if rows(left) != rows(right) {
+		t.Fatalf("row totals differ: left %d right %d", rows(left), rows(right))
+	}
+
+	leftPane := NewEditorPaneWidget(&buffer.Buffer{Lines: old}, &cursor.Cursor{}, &view.Viewport{Width: 20})
+	rightPane := NewEditorPaneWidget(&buffer.Buffer{Lines: cur}, &cursor.Cursor{}, &view.Viewport{Width: 20})
+	leftPane.SetDiffOverlay(left)
+	rightPane.SetDiffOverlay(right)
+	ll, rl := leftPane.layout(), rightPane.layout()
+	for _, pair := range [][2]int{{0, 0}, {2, 4}, {4, 5}} {
+		if l, r := ll.startRow(pair[0])+leftPane.phantoms[pair[0]], rl.startRow(pair[1])+rightPane.phantoms[pair[1]]; l != r {
+			t.Fatalf("old line %d at row %d, new line %d at row %d", pair[0], l, pair[1], r)
+		}
 	}
 }

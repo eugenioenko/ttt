@@ -10,10 +10,12 @@ import (
 
 // DiffOverlay decorates an editor buffer with a diff against an older
 // version: Kinds is indexed by buffer line, Deleted holds removed old lines
-// keyed by the buffer line they precede (len(Kinds) for end of file).
+// and Fillers blank alignment rows, both keyed by the buffer line they precede
+// (len(Kinds) for end of file). A block's deleted rows come before its fillers.
 type DiffOverlay struct {
 	Kinds   []diff.LineKind
 	Deleted map[int][]diff.SideLine
+	Fillers map[int]int
 }
 
 // NewDiffOverlay projects full-file diff lines onto the new side. A change
@@ -47,6 +49,26 @@ func NewDiffOverlay(lines []diff.DiffLine) *DiffOverlay {
 	return o
 }
 
+// NewSplitDiffOverlays aligns both sides of a split diff: each diff row
+// yields exactly one screen row per side, so equal top rows stay in step.
+func NewSplitDiffOverlays(lines []diff.DiffLine) (left, right *DiffOverlay) {
+	left = &DiffOverlay{Fillers: make(map[int]int)}
+	right = &DiffOverlay{Fillers: make(map[int]int)}
+	for _, dl := range lines {
+		if dl.Left.Kind == diff.Blank {
+			left.Fillers[len(left.Kinds)]++
+		} else {
+			left.Kinds = append(left.Kinds, dl.Left.Kind)
+		}
+		if dl.Right.Kind == diff.Blank {
+			right.Fillers[len(right.Kinds)]++
+		} else {
+			right.Kinds = append(right.Kinds, dl.Right.Kind)
+		}
+	}
+	return left, right
+}
+
 func (o *DiffOverlay) kind(line int) diff.LineKind {
 	if o == nil || line < 0 || line >= len(o.Kinds) {
 		return diff.Context
@@ -71,17 +93,26 @@ func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
 	if o == nil {
 		return
 	}
-	e.phantoms = make(map[int]int, len(o.Deleted))
+	e.phantoms = make(map[int]int, len(o.Deleted)+len(o.Fillers))
 	for anchor, block := range o.Deleted {
-		if len(block) > 0 {
-			e.phantoms[anchor] = len(block)
+		e.phantoms[anchor] += len(block)
+	}
+	for anchor, n := range o.Fillers {
+		e.phantoms[anchor] += n
+	}
+	for anchor, n := range e.phantoms {
+		if n == 0 {
+			delete(e.phantoms, anchor)
 		}
 	}
 }
 
 func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
-	if e.DiffOverlay.kind(line) == diff.Added {
+	switch e.DiffOverlay.kind(line) {
+	case diff.Added:
 		return term.StyleDiffAdded
+	case diff.Deleted:
+		return term.StyleDiffDeleted
 	}
 	return 0
 }
