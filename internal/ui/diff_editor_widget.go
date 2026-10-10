@@ -200,10 +200,22 @@ func (d *DiffEditorWidget) ensureHighlighters(panes ...*EditorPaneWidget) {
 	if !d.syntax {
 		return
 	}
+	var peer *highlight.Highlighter
+	for _, p := range d.panes() {
+		if p != nil && p != d.live && p.Highlighter != nil {
+			peer = p.Highlighter
+			break
+		}
+	}
 	for _, p := range panes {
 		if p != nil && p != d.live && p.Highlighter == nil {
 			p.Highlighter = highlight.New(d.FilePath)
+			p.Highlighter.ShareTokens(peer)
 			p.Highlighter.SetProgressive(d.redraw)
+			p.Highlighter.ShareSingleLines(peer)
+			if peer == nil {
+				peer = p.Highlighter
+			}
 		}
 	}
 }
