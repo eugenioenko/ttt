@@ -421,7 +421,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 		Preview:  true,
 	}
 	if g.SyntaxHighlight {
-		newTab.Highlighter = highlight.New(path)
+		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
 	}
 	if t := g.activeTab(); g.canReplaceTab(t) && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
@@ -1286,7 +1286,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t.Virtual = false
 	t.Placeholder = false
 	if g.SyntaxHighlight {
-		t.Highlighter = highlight.New(path)
+		t.Highlighter = highlight.NewForLines(path, t.Buf.Lines)
 	} else {
 		t.Highlighter = nil
 	}
@@ -1355,7 +1355,7 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 		}
 		t.FilePath = updated
 		if g.SyntaxHighlight {
-			t.Highlighter = highlight.New(updated)
+			t.Highlighter = highlight.NewForLines(updated, t.Buf.Lines)
 		} else {
 			t.Highlighter = nil
 		}
@@ -1385,7 +1385,7 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 		if t.Highlighter != nil {
 			prevLang = t.Highlighter.Language()
 		}
-		t.Highlighter = highlight.New(t.FilePath)
+		t.Highlighter = highlight.NewForLines(t.FilePath, t.Buf.Lines)
 		lang := ""
 		if t.Highlighter != nil {
 			lang = t.Highlighter.Language()
@@ -1461,7 +1461,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 		ReadOnly: true,
 	}
 	if g.SyntaxHighlight {
-		newTab.Highlighter = highlight.New(path)
+		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
 	}
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
@@ -1500,7 +1500,7 @@ func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []s
 		ReadOnly: true,
 	}
 	if g.SyntaxHighlight && filePath != "" {
-		newTab.Highlighter = highlight.New(filePath)
+		newTab.Highlighter = highlight.NewForLines(filePath, newBuf.Lines)
 	}
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)

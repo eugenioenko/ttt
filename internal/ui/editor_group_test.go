@@ -4,7 +4,57 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/term"
 )
+
+func TestEditorGroupShebangHighlighting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "deploy")
+	text := "#!/usr/bin/env python3\nprint(\"deploy\")\n"
+	if err := os.WriteFile(path, []byte(text), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"open", "readonly", "buffer", "save-as", "rename", "refresh", "disabled"} {
+		t.Run(mode, func(t *testing.T) {
+			g := NewEditorGroupWidget(nil, 4, false, "extended")
+			g.SyntaxHighlight = mode != "disabled"
+			switch mode {
+			case "readonly":
+				g.OpenFileReadOnly(path, "deploy")
+			case "buffer":
+				g.OpenBufferReadOnly("deploy", path, []string{"#!/usr/bin/env python3", `print("deploy")`})
+			default:
+				g.OpenFile(path)
+			}
+			switch mode {
+			case "save-as":
+				if !g.SaveAs(filepath.Join(t.TempDir(), "renamed")) {
+					t.Fatal("SaveAs failed")
+				}
+			case "rename":
+				g.RenamePath(path, filepath.Join(t.TempDir(), "renamed"))
+			case "refresh":
+				g.RefreshHighlighters()
+			}
+			h := g.Editor.Highlighter
+			if mode == "disabled" {
+				if h != nil {
+					t.Fatal("highlighting should remain disabled")
+				}
+				return
+			}
+			if h == nil || h.Language() != "Python" {
+				t.Fatalf("highlighter = %v, want Python", h)
+			}
+			for _, span := range h.HighlightLineAt(g.Editor.Buf.Lines, 1) {
+				if span.Style == term.StyleSyntaxString {
+					return
+				}
+			}
+			t.Fatal("script string is not highlighted")
+		})
+	}
+}
 
 func TestOpenPluginTabReplacementClosesPreviousContent(t *testing.T) {
 	group := NewEditorGroupWidget(nil, 4, true, "relative")
