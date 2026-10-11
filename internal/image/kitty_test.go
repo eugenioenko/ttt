@@ -52,7 +52,7 @@ func parseAPC(t *testing.T, out []byte) []apcSeq {
 
 func testSource(t *testing.T, w, h int) *Source {
 	t.Helper()
-	s, err := decode(mustPNG(t, solidRGBA(w, h, color.RGBA{R: 10, G: 20, B: 30, A: 255})), "test.png")
+	s, err := Decode(mustPNG(t, solidRGBA(w, h, color.RGBA{R: 10, G: 20, B: 30, A: 255})), "test.png")
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}

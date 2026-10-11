@@ -68,10 +68,13 @@ func Load(path string) (*Source, error) {
 	if len(data) > maxImageFileBytes {
 		return nil, fmt.Errorf("image: %s exceeds maximum %d bytes", path, maxImageFileBytes)
 	}
-	return decode(data, path)
+	return Decode(data, path)
 }
 
-func decode(data []byte, name string) (*Source, error) {
+func Decode(data []byte, name string) (*Source, error) {
+	if len(data) > maxImageFileBytes {
+		return nil, fmt.Errorf("image: %s exceeds maximum %d bytes", name, maxImageFileBytes)
+	}
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("image: decode config %s: %w", name, err)

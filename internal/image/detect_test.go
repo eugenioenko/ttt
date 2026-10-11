@@ -33,3 +33,21 @@ func TestDetect(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveProtocolHonorsSetting(t *testing.T) {
+	kittyEnv := func(k string) string {
+		if k == "KITTY_WINDOW_ID" {
+			return "1"
+		}
+		return ""
+	}
+	if got := ResolveProtocol("none", kittyEnv, 10, 20); got != None {
+		t.Errorf("none setting = %v, want none", got)
+	}
+	if got := ResolveProtocol("kitty", func(string) string { return "" }, 10, 20); got != Kitty {
+		t.Errorf("kitty setting = %v, want kitty", got)
+	}
+	if got := ResolveProtocol("auto", kittyEnv, 10, 20); got != Kitty {
+		t.Errorf("auto in kitty = %v, want kitty", got)
+	}
+}

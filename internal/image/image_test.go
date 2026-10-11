@@ -74,7 +74,7 @@ func TestDecodeFormats(t *testing.T) {
 		{"jpeg", jpgBuf.Bytes()},
 		{"gif", gifBuf.Bytes()},
 	} {
-		s, err := decode(tc.data, "test."+tc.name)
+		s, err := Decode(tc.data, "test."+tc.name)
 		if err != nil {
 			t.Errorf("%s: Decode: %v", tc.name, err)
 			continue
@@ -96,11 +96,11 @@ func TestDecodeFormats(t *testing.T) {
 
 func TestDecodeIDsUnique(t *testing.T) {
 	data := mustPNG(t, solidRGBA(2, 2, color.RGBA{G: 255, A: 255}))
-	a, err := decode(data, "a.png")
+	a, err := Decode(data, "a.png")
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
-	b, err := decode(data, "b.png")
+	b, err := Decode(data, "b.png")
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestDecodeCorrupt(t *testing.T) {
 					t.Errorf("%s: panicked: %v", tc.name, r)
 				}
 			}()
-			if _, err := decode(tc.data, tc.name); err == nil {
+			if _, err := Decode(tc.data, tc.name); err == nil {
 				t.Errorf("%s: expected error", tc.name)
 			}
 		}()

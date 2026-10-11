@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eugenioenko/ttt/internal/config"
 	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -106,14 +105,7 @@ func (w *ImageViewWidget) cardLines() []string {
 }
 
 func (w *ImageViewWidget) resolveProtocol() tttimage.Protocol {
-	switch w.Protocol {
-	case config.ImageProtocolKitty:
-		return tttimage.Kitty
-	case config.ImageProtocolNone:
-		return tttimage.None
-	default:
-		return tttimage.Detect(os.Getenv, w.CellW, w.CellH)
-	}
+	return tttimage.ResolveProtocol(w.Protocol, os.Getenv, w.CellW, w.CellH)
 }
 
 // A rejected file is not retried, so a broken image never costs per-frame disk I/O.
@@ -135,20 +127,10 @@ func (w *ImageViewWidget) decoded() *tttimage.Source {
 
 // Result is centered and in surface-local cells, never upscaled.
 func (w *ImageViewWidget) fitImageBox(box Rect, src *tttimage.Source) (Rect, bool) {
-	if box.W <= 0 || box.H <= 0 || src.W <= 0 || src.H <= 0 {
+	cw, ch, ok := tttimage.FitCells(src.W, src.H, box.W, box.H, w.CellW, w.CellH)
+	if !ok {
 		return Rect{}, false
 	}
-	maxW := float64(box.W * w.CellW)
-	maxH := float64(box.H * w.CellH)
-	if maxW <= 0 || maxH <= 0 {
-		return Rect{}, false
-	}
-	scale := min(maxW/float64(src.W), maxH/float64(src.H))
-	if scale > 1 {
-		scale = 1
-	}
-	cw := min(max(int(float64(src.W)*scale/float64(w.CellW)+0.5), 1), box.W)
-	ch := min(max(int(float64(src.H)*scale/float64(w.CellH)+0.5), 1), box.H)
 	return Rect{X: box.X + (box.W-cw)/2, Y: box.Y + (box.H-ch)/2, W: cw, H: ch}, true
 }
 
