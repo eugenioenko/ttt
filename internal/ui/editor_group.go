@@ -1595,6 +1595,13 @@ func (g *EditorGroupWidget) ActiveTabIndex() int {
 	return g.active
 }
 
+func (g *EditorGroupWidget) TabContent(index int) Widget {
+	if index < 0 || index >= len(g.tabs) {
+		return nil
+	}
+	return g.tabs[index].Content
+}
+
 func (g *EditorGroupWidget) TabInfo(index int) (path string, modified bool) {
 	if index < 0 || index >= len(g.tabs) {
 		return "", false

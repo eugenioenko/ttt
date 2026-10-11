@@ -243,6 +243,15 @@ func (tp *TabbedPanel) PanelWidget(id string) Widget {
 	return nil
 }
 
+func (tp *TabbedPanel) ReplacePanelWidget(id string, w Widget) {
+	for i := range tp.panels {
+		if tp.panels[i].ID == id {
+			tp.panels[i].W = w
+			return
+		}
+	}
+}
+
 func (tp *TabbedPanel) HasPanel(id string) bool {
 	for _, p := range tp.panels {
 		if p.ID == id {

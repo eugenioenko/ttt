@@ -179,9 +179,8 @@ func TestRemovingPluginPanelsFreesTheirImages(t *testing.T) {
 	assertImageFreed(t, layer)
 }
 
-func TestRemovingPluginPanelsClosesItsDrawer(t *testing.T) {
-	h := newTestHarness(t, 100, 30)
-	defer h.stop()
+func wiredImagePanel(t *testing.T, h *testHarness) (*plugin.Plugin, *plugin.PluginPanelWidget) {
+	t.Helper()
 	cfg := filepath.Join(h.dir, "config")
 	h.app.PluginManager = plugin.NewManager(filepath.Join(cfg, "plugins"), filepath.Join(cfg, "plugins.ttt.json"))
 	p, panel := newImagePanel(t)
@@ -189,6 +188,13 @@ func TestRemovingPluginPanelsClosesItsDrawer(t *testing.T) {
 	// WirePlugin installs the harness's real graphics detection (none) and async decoding.
 	p.Graphics = kittyGraphics
 	p.RequestRedraw = nil
+	return p, panel
+}
+
+func TestRemovingPluginPanelsClosesItsDrawer(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	p, panel := wiredImagePanel(t, h)
 	p.OpenDrawer(panel, 40, 20, "right")
 	if !h.app.Root.HasOverlay() {
 		t.Fatal("drawer did not open")
@@ -203,6 +209,56 @@ func TestRemovingPluginPanelsClosesItsDrawer(t *testing.T) {
 	h.app.RemovePluginPanels("pages")
 	if h.app.Root.HasOverlay() {
 		t.Fatal("drawer still open")
+	}
+	assertImageFreed(t, layer)
+}
+
+func TestRemovingPluginPanelsClosesItsEditorTabs(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	p, panel := wiredImagePanel(t, h)
+	p.OpenTab("Pages", panel)
+	hasTab := func() bool {
+		for i := range h.app.EditorGroup.TabCount() {
+			if path, _ := h.app.EditorGroup.TabInfo(i); path == "Pages" {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasTab() {
+		t.Fatal("tab did not open")
+	}
+	layer := placeOnLayer(t, panel)
+
+	h.app.RemovePluginPanels("other")
+	if !hasTab() {
+		t.Fatal("removing another plugin's panels closed this tab")
+	}
+
+	h.app.RemovePluginPanels("pages")
+	if hasTab() {
+		t.Fatal("tab still open")
+	}
+	assertImageFreed(t, layer)
+}
+
+func TestWirePluginReplacesStaleSidebarPanel(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	_, stale := newImagePanel(t)
+	h.app.Sidebar.AddPanel("plugin.pages", "Pages", ui.NewWidgetAdapter(stale))
+	layer := placeOnLayer(t, stale)
+
+	cfg := filepath.Join(h.dir, "config")
+	h.app.PluginManager = plugin.NewManager(filepath.Join(cfg, "plugins"), filepath.Join(cfg, "plugins.ttt.json"))
+	p, fresh := newImagePanel(t)
+	h.app.PluginManager.SidebarPanels = []plugin.SidebarRegistration{{ID: "plugin.pages", Title: "Pages", Widget: fresh}}
+	h.app.WirePlugin(p)
+
+	adapter, ok := h.app.Sidebar.PanelWidget("plugin.pages").(*ui.WidgetAdapter)
+	if !ok || adapter.W != fresh {
+		t.Fatal("sidebar still shows the stale panel")
 	}
 	assertImageFreed(t, layer)
 }

@@ -311,7 +311,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			if !a.Sidebar.HasPanel(reg.ID) {
 				a.Sidebar.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
 			} else {
-				closeStalePluginPanel(&a.Sidebar.TabbedPanel, reg.ID, reg.Widget)
+				a.replaceStalePluginPanel(&a.Sidebar.TabbedPanel, reg.ID, reg.Widget)
 			}
 			break
 		}
@@ -321,7 +321,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			if !a.BottomPanel.HasPanel(reg.ID) {
 				a.BottomPanel.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
 			} else {
-				closeStalePluginPanel(&a.BottomPanel.TabbedPanel, reg.ID, reg.Widget)
+				a.replaceStalePluginPanel(&a.BottomPanel.TabbedPanel, reg.ID, reg.Widget)
 			}
 			break
 		}
@@ -983,11 +983,31 @@ func (a *App) RemovePluginPanels(name string) {
 	if a.pluginDrawerPanel != nil && a.pluginDrawerPanel.PluginName() == name {
 		a.ClosePluginDrawer()
 	}
+	// File-handler tabs are left to SyncFileHandlerTabs, which falls back to the binary card.
+	var tabs []string
+	for i := range a.EditorGroup.TabCount() {
+		path, _ := a.EditorGroup.TabInfo(i)
+		if panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget); ok && panel.PluginName() == name {
+			if _, handled := a.fileHandlerTabs[path]; !handled {
+				tabs = append(tabs, path)
+			}
+		}
+	}
+	for _, id := range tabs {
+		a.EditorGroup.ClosePluginTab(id)
+	}
 }
 
-func closeStalePluginPanel(tp *ui.TabbedPanel, id string, current *plugin.PluginPanelWidget) {
-	if adapter, ok := tp.PanelWidget(id).(*ui.WidgetAdapter); ok && adapter.W != current {
-		closePluginPanel(adapter)
+func (a *App) replaceStalePluginPanel(tp *ui.TabbedPanel, id string, current *plugin.PluginPanelWidget) {
+	old, ok := tp.PanelWidget(id).(*ui.WidgetAdapter)
+	if !ok || old.W == current {
+		return
+	}
+	closePluginPanel(old)
+	replacement := ui.NewWidgetAdapter(current)
+	tp.ReplacePanelWidget(id, replacement)
+	if a.Root.Focused == old {
+		a.Root.SetFocus(replacement)
 	}
 }
 
