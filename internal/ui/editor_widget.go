@@ -94,6 +94,8 @@ type EditorPaneWidget struct {
 	topOffsetLine           int
 	phantoms                map[int]int
 	phantomGen              uint64
+	DiffOverlay             *DiffOverlay
+	diffNumDigits           int
 	layoutCache             [4]*rowLayout
 	layoutNext              int
 }
@@ -123,10 +125,7 @@ func (e *EditorPaneWidget) GutterWidth() int {
 		}
 		return 0
 	}
-	digits := len(strconv.Itoa(len(e.Buf.Lines)))
-	if digits < 2 {
-		digits = 2
-	}
+	digits := max(len(strconv.Itoa(len(e.Buf.Lines))), e.diffNumDigits, 2)
 	switch e.GutterStyle {
 	case "minimal":
 		return digits + 1

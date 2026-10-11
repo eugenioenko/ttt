@@ -107,6 +107,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			e.renderPhantomRow(surface, y, gutterW, editorW, row)
 			continue
 		}
+		if label, ok := e.DiffOverlay.label(lineIdx); ok && lineIdx < totalLines {
+			e.renderGapRow(surface, y, gutterW, editorW, label)
+			continue
+		}
 
 		if gutterW > 0 {
 			gutterStyle := term.StyleLineNumber
@@ -121,6 +125,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				num := 0
 				if lineIdx < totalLines {
 					num = lineIdx + 1
+					if n, ok := e.DiffOverlay.num(lineIdx); ok {
+						num = n
+					}
 				}
 				e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: gutterStyle})
 			}
@@ -193,6 +200,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			} else {
 				leftCol = e.Viewport.LeftCol
 			}
+			diffBg := e.diffLineBg(lineIdx)
 			screenCells := e.renderLineToScreen(line, syntaxSpans, isCollapsedLine, annRunes, tabW, leftCol, editorW)
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
@@ -256,6 +264,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						bgStyle = term.StyleActiveLine
 					}
 				}
+				if diffBg != 0 && !inAnySel && (bgStyle == 0 || bgStyle == term.StyleActiveLine) {
+					bgStyle = diffBg
+				}
 				if hasMatch && ((lineIdx == e.Cursor.Line && colIdx == e.Cursor.Col) ||
 					(lineIdx == matchLine && colIdx == matchCol)) {
 					bgStyle = term.StyleBracketMatch
@@ -316,12 +327,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.CursorX = cursorVisCol - e.Viewport.LeftCol + gutterW + r.X
 	}
 	e.CursorY = curRow - topRow + r.Y
-}
-
-func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW int, row editorRow) {
-	for x := 0; x < gutterW+editorW; x++ {
-		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleLineNumber})
-	}
 }
 
 func (e *EditorPaneWidget) diagStyleAt(line, col int) term.Style {
