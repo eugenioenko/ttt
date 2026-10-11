@@ -274,7 +274,7 @@ P2
 
 S2 + D2
   `-- D3  Migrate DiffViewWidget (done: diff tabs use DiffEditorWidget, #791 and #792)
-        `-- D4  Migrate CommitDetailWidget and remove duplicate projection
+        `-- D4  Migrate CommitDetailWidget and remove duplicate projection (done: #796)
 ```
 
 ### Parallel work

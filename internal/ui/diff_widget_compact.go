@@ -6,13 +6,6 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 )
 
-// compactDiffLinesWithContext keeps Git's hunk projection but can replace an
-// individual collapsed separator with the omitted unchanged rows. The map
-// identifies which rendered rows remain expandable.
-func compactDiffLinesWithContext(fileDiff diff.FileDiff, oldLines, newLines []string, expanded map[int]bool) ([]diff.DiffLine, map[int]int) {
-	return compactDiffLines(fileDiff, oldLines, newLines, expanded, false)
-}
-
 // compactDiffLinesWithEdges also collapses the unchanged lines above the first
 // hunk and, once the file content is known, below the last one. Gap ids are
 // stable for a given diff: i-1 sits before hunk i, len(hunks)-1 before the

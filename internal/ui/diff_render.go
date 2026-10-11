@@ -1,10 +1,7 @@
 package ui
 
 import (
-	"fmt"
-
 	"github.com/eugenioenko/ttt/internal/core/diff"
-	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
@@ -118,8 +115,6 @@ func buildUnifiedDiffLines(lines []diff.DiffLine) []diffUnifiedLine {
 	return unified
 }
 
-type diffCellDecorator func(runeIndex int, cell term.Cell) term.Cell
-
 func diffKindStyle(kind diff.LineKind) term.Style {
 	switch kind {
 	case diff.Added:
@@ -184,76 +179,6 @@ func diffLineVisualWidth(text string) int {
 
 func diffWrapStarts(text string, width int) []int {
 	return wrapLineSegments([]rune(text), width, diffTabWidth)
-}
-
-func renderDiffGutter(surface Surface, x, y, width int, line diff.SideLine) {
-	renderDiffGutterWithCollapsedStyle(surface, x, y, width, line, term.StyleDefault)
-}
-
-func renderDiffGutterWithCollapsedStyle(surface Surface, x, y, width int, line diff.SideLine, collapsedStyle term.Style) {
-	number := ""
-	if line.Num > 0 {
-		number = fmt.Sprintf("%d", line.Num)
-	}
-	marker := ' '
-	style := term.StyleLineNumber
-	bgStyle := term.StyleDefault
-	switch line.Kind {
-	case diff.Added:
-		marker = '+'
-		style = term.StyleGutterAdded
-		bgStyle = term.StyleDiffAdded
-	case diff.Deleted:
-		marker = '−'
-		style = term.StyleGutterDeleted
-		bgStyle = term.StyleDiffDeleted
-	case diff.Collapsed:
-		marker = '▶'
-		if collapsedStyle != term.StyleDefault {
-			style = collapsedStyle
-		}
-	}
-	text := fmt.Sprintf("%*s %c", width-2, number, marker)
-	for column, ch := range []rune(text) {
-		if column >= width {
-			break
-		}
-		surface.SetCell(x+column, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle})
-	}
-}
-
-func renderDiffText(surface Surface, x, y, width int, text string, baseStyle, foregroundStyle term.Style, spans []highlight.Span, segmentStart, leftVisualCol int, decorate diffCellDecorator) {
-	if foregroundStyle != term.StyleDefault {
-		spans = nil
-	}
-	fullBaseStyle := baseStyle == term.StyleDiffCollapsedEmphasis || baseStyle == term.StyleDiffCollapsedHover
-	blank := term.Cell{Ch: ' '}
-	if fullBaseStyle {
-		blank.Style = baseStyle
-	} else if baseStyle != term.StyleDefault {
-		blank.BgStyle = baseStyle
-	}
-
-	drawTextSegment(surface, x, y, width, text, segmentStart, leftVisualCol, blank, func(runeIndex int, ch rune) term.Cell {
-		style := foregroundStyle
-		if fullBaseStyle {
-			style = baseStyle
-		}
-		for _, span := range spans {
-			if runeIndex >= span.Start && runeIndex < span.End {
-				style = span.Style
-				break
-			}
-		}
-		cell := term.Cell{Ch: ch, Style: style}
-		if !fullBaseStyle && baseStyle != term.StyleDefault {
-			cell.BgStyle = baseStyle
-		}
-		if decorate != nil {
-			cell = decorate(runeIndex, cell)
-		}
-		return cell
-	})
 }
 
 // drawTextSegment draws one horizontally clipped or wrapped segment. Rune
