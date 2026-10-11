@@ -56,6 +56,14 @@ func nextSourceID() uint64 {
 }
 
 func Load(path string) (*Source, error) {
+	data, err := ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return Decode(data, path)
+}
+
+func ReadFile(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("image: read %s: %w", path, err)
@@ -68,7 +76,7 @@ func Load(path string) (*Source, error) {
 	if len(data) > maxImageFileBytes {
 		return nil, fmt.Errorf("image: %s exceeds maximum %d bytes", path, maxImageFileBytes)
 	}
-	return Decode(data, path)
+	return data, nil
 }
 
 func Decode(data []byte, name string) (*Source, error) {

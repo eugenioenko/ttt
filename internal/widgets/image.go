@@ -92,6 +92,17 @@ func (w *ImageWidget) Render(surface Surface) {
 	inner.DrawText(0, 0, w.fallbackText(), bw, term.StyleMuted)
 }
 
+// Place renders like Render but leaves the fallback to the caller when it returns false.
+func (w *ImageWidget) Place(surface Surface) bool {
+	inner := w.RenderBox(surface)
+	bw, bh := inner.Size()
+	return bw > 0 && bh > 0 && w.place(inner, bw, bh)
+}
+
+func (w *ImageWidget) Err() string { return w.err }
+
+func (w *ImageWidget) Decoding() bool { return w.pending != nil }
+
 func (w *ImageWidget) place(surface Surface, bw, bh int) bool {
 	placer, ok := surface.(ImagePlacer)
 	if !ok {

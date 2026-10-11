@@ -623,6 +623,9 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			}
 		})
 	}
+	a.EditorGroup.SetImageRedraw(func() {
+		screen.PostEvent(tcell.NewEventInterrupt(nil))
+	})
 	a.RefreshImageCellSize()
 	a.EditorGroup.TabBar.PostDragAutoScrollTick = func(generation uint64) {
 		screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Generation: generation}))
