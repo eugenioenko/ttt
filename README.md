@@ -438,6 +438,10 @@ curl -X POST --data "type hi; wait-for hi; screenshot /tmp/screen.txt" http://12
 curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 ```
 
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the package structure, dependency boundaries, and architecture convergence plan.
+
 ## Contributing
 
 Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening one.
