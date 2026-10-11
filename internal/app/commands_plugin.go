@@ -980,6 +980,9 @@ func (a *App) RemovePluginPanels(name string) {
 		closePluginPanel(tp.PanelWidget(id))
 		tp.RemovePanel(id)
 	}
+	if a.pluginDrawerPanel != nil && a.pluginDrawerPanel.PluginName() == name {
+		a.ClosePluginDrawer()
+	}
 }
 
 func closeStalePluginPanel(tp *ui.TabbedPanel, id string, current *plugin.PluginPanelWidget) {

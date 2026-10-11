@@ -116,25 +116,28 @@ func TestPluginImageTransmitsOnceAndFreesOnPageChange(t *testing.T) {
 	}
 }
 
-func TestRemovingPluginPanelsFreesTheirImages(t *testing.T) {
-	h := newTestHarness(t, 100, 30)
-	defer h.stop()
+func kittyGraphics() plugin.GraphicsInfo {
+	return plugin.GraphicsInfo{Protocol: tttimage.Kitty, CellW: 10, CellH: 20}
+}
+
+func newImagePanel(t *testing.T) (*plugin.Plugin, *plugin.PluginPanelWidget) {
+	t.Helper()
 	p := &plugin.Plugin{Name: "pages", Enabled: true}
 	if err := p.InitFromSource(`function render(panel) panel:image({ data = img }) end`); err != nil {
 		t.Fatal(err)
 	}
-	defer p.Destroy()
-	p.Graphics = func() plugin.GraphicsInfo {
-		return plugin.GraphicsInfo{Protocol: tttimage.Kitty, CellW: 10, CellH: 20}
-	}
+	t.Cleanup(p.Destroy)
+	p.Graphics = kittyGraphics
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, 40, 40))); err != nil {
 		t.Fatal(err)
 	}
 	p.State.SetGlobal("img", lua.LString(buf.String()))
-	panel := plugin.NewPluginPanelWidget(p, p.State.GetGlobal("render").(*lua.LFunction), nil)
-	h.app.Sidebar.AddPanel("plugin.pages", "Pages", ui.NewWidgetAdapter(panel))
+	return p, plugin.NewPluginPanelWidget(p, p.State.GetGlobal("render").(*lua.LFunction), nil)
+}
 
+func placeOnLayer(t *testing.T, panel *plugin.PluginPanelWidget) *tttimage.Layer {
+	t.Helper()
 	layer := tttimage.NewLayer()
 	grid := make([][]term.Cell, 20)
 	for y := range grid {
@@ -147,11 +150,11 @@ func TestRemovingPluginPanelsFreesTheirImages(t *testing.T) {
 	if err := layer.Commit(&bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
+	return layer
+}
 
-	h.app.RemovePluginPanels("pages")
-	if h.app.Sidebar.HasPanel("plugin.pages") {
-		t.Fatal("panel still in the sidebar")
-	}
+func assertImageFreed(t *testing.T, layer *tttimage.Layer) {
+	t.Helper()
 	layer.Begin()
 	var out bytes.Buffer
 	if err := layer.Commit(&out); err != nil {
@@ -160,4 +163,46 @@ func TestRemovingPluginPanelsFreesTheirImages(t *testing.T) {
 	if !strings.Contains(out.String(), "d=I") {
 		t.Errorf("removing the panel should free its image data, got %q", out.String())
 	}
+}
+
+func TestRemovingPluginPanelsFreesTheirImages(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	_, panel := newImagePanel(t)
+	h.app.Sidebar.AddPanel("plugin.pages", "Pages", ui.NewWidgetAdapter(panel))
+	layer := placeOnLayer(t, panel)
+
+	h.app.RemovePluginPanels("pages")
+	if h.app.Sidebar.HasPanel("plugin.pages") {
+		t.Fatal("panel still in the sidebar")
+	}
+	assertImageFreed(t, layer)
+}
+
+func TestRemovingPluginPanelsClosesItsDrawer(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	cfg := filepath.Join(h.dir, "config")
+	h.app.PluginManager = plugin.NewManager(filepath.Join(cfg, "plugins"), filepath.Join(cfg, "plugins.ttt.json"))
+	p, panel := newImagePanel(t)
+	h.app.WirePlugin(p)
+	// WirePlugin installs the harness's real graphics detection (none) and async decoding.
+	p.Graphics = kittyGraphics
+	p.RequestRedraw = nil
+	p.OpenDrawer(panel, 40, 20, "right")
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("drawer did not open")
+	}
+	layer := placeOnLayer(t, panel)
+
+	h.app.RemovePluginPanels("other")
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("removing another plugin's panels closed this drawer")
+	}
+
+	h.app.RemovePluginPanels("pages")
+	if h.app.Root.HasOverlay() {
+		t.Fatal("drawer still open")
+	}
+	assertImageFreed(t, layer)
 }

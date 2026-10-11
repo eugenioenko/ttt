@@ -94,6 +94,8 @@ func (pw *PluginPanelWidget) SetFocused(focused bool) {
 }
 func (pw *PluginPanelWidget) IsFocused() bool { return pw.focused }
 
+func (pw *PluginPanelWidget) PluginName() string { return pw.plugin.Name }
+
 func (pw *PluginPanelWidget) Close() {
 	if pw.state != nil && pw.state.root != nil {
 		closeImages(pw.state.root)
