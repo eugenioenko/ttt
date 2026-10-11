@@ -291,7 +291,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						bgStyle = term.StyleActiveLine
 					}
 				}
-				if diffBg != 0 && !inAnySel && (bgStyle == 0 || bgStyle == term.StyleActiveLine) {
+				if diffBg != 0 && !inAnySel && !isSearchHighlight && (bgStyle == 0 || bgStyle == term.StyleActiveLine) {
 					bgStyle = diffBg
 				}
 				if hasMatch && ((lineIdx == e.Cursor.Line && colIdx == e.Cursor.Col) ||

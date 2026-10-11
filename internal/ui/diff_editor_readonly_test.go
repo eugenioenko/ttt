@@ -335,3 +335,30 @@ func TestDiffPanesHideGitGutterMarkers(t *testing.T) {
 		t.Fatal("a diff pane drew a git gutter marker; the diff already marks its changes")
 	}
 }
+
+func TestDiffEditorSearchMatchOnAChangedLineReplacesTheDiffTint(t *testing.T) {
+	d := NewDiffEditorWidget("test.go", diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-var oldValue = 1\n+var newValue = 2\n"), nil, nil, false)
+	d.SetUnified(true)
+	d.ApplySearchHighlight("var", SearchOptions{})
+	grid := renderDiffEditor(d, 60, 3)
+	x, y := cellAtText(t, grid, "var oldValue")
+	if c := grid[y][x]; c.Style != term.StyleSearchMatch && c.Style != term.StyleSearchActive || c.BgStyle != 0 {
+		t.Fatalf("searched cell on a deleted line = %+v, want the search style with no diff tint over it", c)
+	}
+	x, y = cellAtText(t, grid, "oldValue")
+	if c := grid[y][x]; c.BgStyle != term.StyleDiffDeleted {
+		t.Fatalf("unmatched cell on a deleted line = %+v, want the deleted tint", c)
+	}
+}
+
+func cellAtText(t *testing.T, grid [][]term.Cell, text string) (x, y int) {
+	t.Helper()
+	for y := range grid {
+		row := []rune(cellRow(grid, y))
+		if i := strings.Index(string(row), text); i >= 0 {
+			return len([]rune(string(row)[:i])), y
+		}
+	}
+	t.Fatalf("text %q not on screen", text)
+	return 0, 0
+}
