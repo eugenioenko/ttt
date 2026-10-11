@@ -228,7 +228,11 @@ func TestFolderNodesNeverResolveAsFilesOrExecuteFileActions(t *testing.T) {
 }
 
 func TestWorkingFileIdentitySeparatesColonAmbiguousRoots(t *testing.T) {
-	base := t.TempDir()
+	// Working groups are keyed by git's repository root, which resolves symlinks such as macOS /var.
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	repoA := filepath.Join(base, "a")
 	repoB := filepath.Join(base, "a:b")
 	for _, dir := range []string{repoA, repoB} {

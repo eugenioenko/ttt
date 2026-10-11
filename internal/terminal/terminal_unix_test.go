@@ -103,6 +103,9 @@ func TestCloseHangsUpJobsWhenParentIgnoresHangup(t *testing.T) {
 	cmd := exec.Command("sh", "-c", `trap "" HUP; exec "$0" -test.run='^TestCloseHangsUpJobsWhenParentIgnoresHangup$' -test.count=1 -test.v`, os.Args[0])
 	cmd.Env = append(os.Environ(), "TTT_TEST_HUP_IGNORED=1")
 	out, err := cmd.CombinedOutput()
+	if err == nil && strings.Contains(string(out), "--- SKIP") {
+		t.Skipf("rerun with SIGHUP ignored skipped:\n%s", out)
+	}
 	if err != nil || !strings.Contains(string(out), "--- PASS") {
 		t.Fatalf("hangup test with SIGHUP ignored failed: %v\n%s", err, out)
 	}
