@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"sort"
 	"unsafe"
 
@@ -81,6 +82,11 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	}
 	for _, c := range e.layoutCache {
 		if c != nil && c.key == key {
+			return c
+		}
+	}
+	for _, c := range e.layoutCache {
+		if c != nil && c.advance(key, e.Buf) {
 			return c
 		}
 	}
@@ -171,6 +177,111 @@ func (e *EditorPaneWidget) layout() *rowLayout {
 func (l *rowLayout) n() int { return len(l.lines) }
 
 func (l *rowLayout) identity() bool { return !l.wrap && l.phantoms == nil }
+
+func sameInputs(a, b rowLayoutKey) bool {
+	a.lines, a.n, a.version = nil, 0, 0
+	b.lines, b.n, b.version = nil, 0, 0
+	return a == b
+}
+
+// advance brings an ensured layout up to date with the buffer edits made
+// since it was built, re-measuring only the edited lines. It reports false
+// when the edits cannot be replayed and the layout must be rebuilt. Non-buffer
+// rows are anchored by line number and do not move with edits, so a layout
+// with any is always rebuilt.
+func (l *rowLayout) advance(key rowLayoutKey, buf *buffer.Buffer) bool {
+	if l.starts == nil || l.visible != nil || l.phantoms != nil || key.visible != nil || key.version <= l.key.version || !sameInputs(l.key, key) {
+		return false
+	}
+	n := len(l.lines)
+	lo, hi := n, 0
+	ok := true
+	replayed := buf.ChangesSince(l.key.version, func(c buffer.Change) {
+		if !ok {
+			return
+		}
+		if c.Start < 0 || c.Start+c.Removed > n {
+			ok = false
+			return
+		}
+		lo, hi = spliceRange(lo, hi, c)
+		if c.Added != c.Removed {
+			l.spliceStarts(c)
+			if l.wrap {
+				l.memo = slices.Replace(l.memo, c.Start, c.Start+c.Removed, make([]lineRowsMemo, c.Added)...)
+			}
+		}
+		n += c.Added - c.Removed
+	})
+	if !replayed || !ok || n != len(buf.Lines) {
+		l.starts, l.memo = nil, nil
+		return false
+	}
+	l.lines = buf.Lines
+	l.key = key
+	l.restart(lo, min(hi, n))
+	return true
+}
+
+// spliceRange grows the edited range [lo, hi) of earlier changes to cover c,
+// moving it to the line numbers after c. A deletion dirties the line that
+// takes the removed lines' place, whose row count is no longer known.
+func spliceRange(lo, hi int, c buffer.Change) (int, int) {
+	end := c.Start + max(c.Added, 1)
+	if lo >= hi {
+		return c.Start, end
+	}
+	move := func(p int) int {
+		switch {
+		case p <= c.Start:
+			return p
+		case p >= c.Start+c.Removed:
+			return p + c.Added - c.Removed
+		}
+		return c.Start + c.Added
+	}
+	return min(move(lo), c.Start), max(move(hi), end)
+}
+
+// spliceStarts replaces the row starts of the removed lines with placeholders
+// for the added ones. The starts after the edit keep their old values, so the
+// differences between them, the row counts of unedited lines, stay valid.
+func (l *rowLayout) spliceStarts(c buffer.Change) {
+	s := c.Start
+	switch {
+	case c.Added == 0:
+		l.starts = slices.Delete(l.starts, s+1, s+c.Removed+1)
+	case c.Removed == 0:
+		fill := make([]int, c.Added)
+		fill[c.Added-1] = l.starts[s]
+		l.starts = slices.Insert(l.starts, s+1, fill...)
+	default:
+		l.starts = slices.Replace(l.starts, s+1, s+c.Removed, make([]int, c.Added-1)...)
+	}
+}
+
+// restart re-measures the lines in [lo, hi) and shifts the starts after them
+// by the change in their rows.
+func (l *rowLayout) restart(lo, hi int) {
+	n := l.n()
+	hi = min(hi, n)
+	lo = min(lo, hi)
+	oldHi := l.starts[hi]
+	for i := lo; i < hi; i++ {
+		rows := l.phantoms[i] + 1
+		if l.wrap {
+			rows += l.lineRows(i, l.memo, 0) - 1
+		}
+		l.starts[i+1] = l.starts[i] + rows
+	}
+	if delta := l.starts[hi] - oldHi; delta != 0 {
+		tail := l.starts[hi+1:]
+		for i := range tail {
+			tail[i] += delta
+		}
+	}
+	l.endRow = l.starts[n] + l.phantoms[n]
+}
 
 func (l *rowLayout) segments(line int) []int {
 	if l.wrap && line >= 0 && line < l.n() {
