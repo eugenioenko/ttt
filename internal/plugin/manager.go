@@ -136,24 +136,14 @@ func (m *Manager) LoadAll() []*Plugin {
 	return needsApproval
 }
 
+func (m *Manager) dropRegistrations(id string) {
+	m.SidebarPanels = slices.DeleteFunc(m.SidebarPanels, func(reg SidebarRegistration) bool { return reg.ID == id })
+	m.BottomPanels = slices.DeleteFunc(m.BottomPanels, func(reg BottomRegistration) bool { return reg.ID == id })
+}
+
 func (m *Manager) collectRegistrations(p *Plugin) {
 	id := "plugin." + p.Name
-
-	filtered := m.SidebarPanels[:0]
-	for _, reg := range m.SidebarPanels {
-		if reg.ID != id {
-			filtered = append(filtered, reg)
-		}
-	}
-	m.SidebarPanels = filtered
-
-	filteredBottom := m.BottomPanels[:0]
-	for _, reg := range m.BottomPanels {
-		if reg.ID != id {
-			filteredBottom = append(filteredBottom, reg)
-		}
-	}
-	m.BottomPanels = filteredBottom
+	m.dropRegistrations(id)
 
 	if p.SidebarTitle != "" && p.RenderFunc != nil {
 		m.SidebarPanels = append(m.SidebarPanels, SidebarRegistration{
@@ -641,6 +631,7 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 	p.AppVersion = m.appVersion
 	m.plugins[idx] = p
 	if err := m.initPlugin(p); err != nil {
+		m.dropRegistrations("plugin." + p.Name)
 		return nil, false, err
 	}
 	m.collectRegistrations(p)
