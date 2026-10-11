@@ -33,8 +33,6 @@ INSTALL_DIR=~/.local/bin curl -sSfL https://raw.githubusercontent.com/eugenioenk
 
 ### [Arch Linux (AUR)](https://aur.archlinux.org/packages/ttt)
 
-Thanks to [@Dominiquini](https://github.com/Dominiquini) for maintaining the AUR package.
-
 ```sh
 yay -S ttt
 ```
@@ -56,8 +54,6 @@ Add to your `flake.nix` inputs:
 ```
 
 Then add `inputs.ttt.packages.${system}.default` to your `environment.systemPackages` or home-manager packages.
-
-Thanks to [@pirate-boop](https://github.com/pirate-boop) for keeping the flake's `vendorHash` in sync.
 
 ### Go Install
 
@@ -219,15 +215,11 @@ ttt . https://github.com/owner/repo/pull/123    # review a PR with the repo tree
 
 Opens the PR as a review surface — commit-by-commit history detail, a live view of the current changes, and the same unified presentation controls as local diffs.
 
-Thanks to [@arimxyer](https://github.com/arimxyer) for contributing the diff & code review experience.
-
 See [Git Integration](docs-web/src/content/docs/guides/git.md).
 
 ### Outline
 
 Symbol tree of the current file in the sidebar. Navigate and jump to definitions. Uses LSP document symbols with a built-in fallback for Go and Markdown. Open it from the command palette.
-
-Thanks to [@tenox7](https://github.com/tenox7) for contributing the Outline feature.
 
 ### Command Palette
 
@@ -261,9 +253,7 @@ See [Integrated Terminal](docs-web/src/content/docs/guides/terminal.md).
 
 TTT has built-in LSP support for language-aware editing: autocomplete, signature help, go to definition/implementation/type definition, find references, rename symbol, hover, document/selection formatting, format-on-save, and diagnostics.
 
-Language servers are configured via plugins — install the LSP plugin for your language and the corresponding server binary from the Plugins panel or command palette. Available plugins:
-
-`lsp-go`, `lsp-typescript`, `lsp-python`, `lsp-c`, `lsp-rust`, `lsp-lua`, `lsp-zig`, `lsp-vue`, `lsp-svelte`, `lsp-css`, `lsp-html`, `lsp-json`, `lsp-yaml`, `lsp-bash`, `lsp-docker`, `lsp-tailwindcss`, `lsp-kotlin`, `lsp-java`, `lsp-ruby`, `lsp-dart`, `lsp-elixir`, `lsp-php`, `lsp-terraform`, `lsp-markdown`, `lsp-haskell`
+Language servers are configured via plugins — install the LSP plugin for your language and the corresponding server binary from the Plugins panel or command palette.
 
 You can also add custom servers manually in `~/.config/ttt/settings.json`. To disable LSP entirely: `"lsp": { "enabled": false }`.
 
@@ -285,7 +275,7 @@ Tabs follow a pin-on-reclick model similar to VS Code:
 
 TTT supports fully customizable themes via JSON files. Every color is themeable — syntax highlighting, diff backgrounds, sidebar, tabs, status bar, terminal ANSI colors, borders, and semantic colors (success, danger, warning).
 
-10 themes ship in the binary ([`internal/config/themes/`](internal/config/themes/)): Aurora, Bubblegum, Default Dark, Default Light, Hotline, Monokai, One Dark, Solarized Dark, Solarized Light, Virtru Dark. Another 78 [extra themes](docs-web/src/content/docs/guides/extra-themes.md) are available for download from the repo.
+Built-in themes ship with the binary, and [extra themes](docs-web/src/content/docs/guides/extra-themes.md) are available for download from the repo.
 
 Switch themes via **View > Switch Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
 
@@ -295,9 +285,9 @@ See [Themes](docs-web/src/content/docs/guides/themes.md).
 
 TTT supports Lua plugins that add sidebar panels, bottom panel tabs, commands, and keybindings. Plugins run in a sandboxed Lua VM with a permission system — users approve each plugin's capabilities on first load.
 
-**Editor emulation** — prefer modal or Emacs-style editing? Install [Vim Mode](https://github.com/eugenioenko/ttt-vim) (Normal/Insert/Visual modes, the operator/motion/text-object grammar, registers, marks, macros, dot-repeat, `:` command line and `/` search) or [Emacs Mode](https://github.com/eugenioenko/ttt-emacs) (prefix keymaps, kill ring, mark and region, incremental search, universal argument, keyboard macros). Both require ttt 1.1.0 or newer and install from the **Plugins** sidebar tab.
+**Editor emulation** — prefer modal or Emacs-style editing? Install [Vim Mode](https://github.com/eugenioenko/ttt-vim) or [Emacs Mode](https://github.com/eugenioenko/ttt-emacs) from the **Plugins** sidebar tab. Both require ttt 1.1.0 or newer.
 
-**Installing** — open the **Plugins** sidebar tab to browse and install from the community registry, or use **Plugins: Install from URL** to install from any git repository. Community plugins are maintained at [ttt-plugins](https://github.com/eugenioenko/ttt-plugins): general utilities (color-picker, docker-manager, git-history, go-test-runner, http-client, json-viewer, markdown-preview, notepad, port-finder, spell, todo-scanner), one-click formatter setup (`formatter-gofmt`, `formatter-prettier`, `formatter-black`, `formatter-rustfmt`, `formatter-stylua`, `formatter-clang-format`, `formatter-shfmt`), and the LSP plugins listed above.
+**Installing** — open the **Plugins** sidebar tab to browse and install from the community registry, or use **Plugins: Install from URL** to install from any git repository. Browse the available utilities, formatters, and language servers at [ttt-plugins](https://github.com/eugenioenko/ttt-plugins).
 
 **Managing** — click an installed plugin to enable/disable it; **↑** to update, **×** to uninstall, **Plugins: Reload** for live reload during development. To disable the plugin system entirely: `"plugins": { "enabled": false }`.
 
@@ -447,20 +437,6 @@ ttt --listen &
 curl -X POST --data "type hi; wait-for hi; screenshot /tmp/screen.txt" http://127.0.0.1:4242/exec
 curl -X POST --data "shutdown" http://127.0.0.1:4242/exec
 ```
-
-## Architecture
-
-TTT uses dependency zones rather than a strict linear layer chain:
-
-- **Domain** — editor algorithms and state in `internal/core/*`
-- **Services** — Git, GitHub, LSP, terminal, watcher, and workspace integration
-- **Presentation kernel** — screen cells, rendering, width, layout, and reusable widgets
-- **Product presentation** — editor, diff, search, terminal, panel, and dialog surfaces in `internal/ui`
-- **Application** — commands, async lifecycle, cancellation, and service coordination in `internal/app`
-- **Plugin host** — Lua runtime, permissions, registry, and widget adapters in `internal/plugin`
-- **Platform** — process startup and concrete composition in `cmd/ttt`
-
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the current dependency graph, known violations, explicit boundary decisions, package ownership rules, verification strategy, and the incremental convergence plan.
 
 ## Contributing
 
