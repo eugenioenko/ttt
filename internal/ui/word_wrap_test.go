@@ -69,7 +69,7 @@ func TestTotalVisualLines(t *testing.T) {
 		"",
 		"another short",
 	}
-	total := totalVisualLines(lines, 10, 4)
+	total := wrapLayout(lines, 10, 4).total()
 	expected := 1 + 4 + 1 + 2
 	if total != expected {
 		t.Errorf("expected %d total visual lines, got %d", expected, total)
@@ -83,27 +83,27 @@ func TestBufferPosToWrapScreenPos(t *testing.T) {
 	}
 	width := 5
 
-	visRow, screenCol := bufferPosToWrapScreenPos(lines, 0, 0, width, 4)
+	visRow, screenCol := wrapLayout(lines, width, 4).rowOf(0, 0)
 	if visRow != 0 || screenCol != 0 {
 		t.Errorf("(0,0): expected visRow=0, screenCol=0, got %d, %d", visRow, screenCol)
 	}
 
-	visRow, screenCol = bufferPosToWrapScreenPos(lines, 0, 3, width, 4)
+	visRow, screenCol = wrapLayout(lines, width, 4).rowOf(0, 3)
 	if visRow != 0 || screenCol != 3 {
 		t.Errorf("(0,3): expected visRow=0, screenCol=3, got %d, %d", visRow, screenCol)
 	}
 
-	visRow, screenCol = bufferPosToWrapScreenPos(lines, 0, 7, width, 4)
+	visRow, screenCol = wrapLayout(lines, width, 4).rowOf(0, 7)
 	if visRow != 1 || screenCol != 2 {
 		t.Errorf("(0,7): expected visRow=1, screenCol=2, got %d, %d", visRow, screenCol)
 	}
 
-	visRow, screenCol = bufferPosToWrapScreenPos(lines, 1, 0, width, 4)
+	visRow, screenCol = wrapLayout(lines, width, 4).rowOf(1, 0)
 	if visRow != 3 || screenCol != 0 {
 		t.Errorf("(1,0): expected visRow=3, screenCol=0, got %d, %d", visRow, screenCol)
 	}
 
-	visRow, screenCol = bufferPosToWrapScreenPos(lines, 1, 3, width, 4)
+	visRow, screenCol = wrapLayout(lines, width, 4).rowOf(1, 3)
 	if visRow != 3 || screenCol != 3 {
 		t.Errorf("(1,3): expected visRow=3, screenCol=3, got %d, %d", visRow, screenCol)
 	}
@@ -116,17 +116,17 @@ func TestWrapVisualRowToTopLine(t *testing.T) {
 	}
 	width := 5
 
-	bufLine, offset := wrapVisualRowToTopLine(lines, 0, width, 4)
+	bufLine, offset := wrapLayout(lines, width, 4).rowToTop(0)
 	if bufLine != 0 || offset != 0 {
 		t.Errorf("visRow=0: expected (0,0), got (%d,%d)", bufLine, offset)
 	}
 
-	bufLine, offset = wrapVisualRowToTopLine(lines, 1, width, 4)
+	bufLine, offset = wrapLayout(lines, width, 4).rowToTop(1)
 	if bufLine != 0 || offset != 1 {
 		t.Errorf("visRow=1: expected (0,1), got (%d,%d)", bufLine, offset)
 	}
 
-	bufLine, offset = wrapVisualRowToTopLine(lines, 2, width, 4)
+	bufLine, offset = wrapLayout(lines, width, 4).rowToTop(2)
 	if bufLine != 1 || offset != 0 {
 		t.Errorf("visRow=2: expected (1,0), got (%d,%d)", bufLine, offset)
 	}
@@ -139,7 +139,7 @@ func TestBuildWrapMap(t *testing.T) {
 	}
 	width := 5
 
-	wm := buildWrapMap(lines, 0, 0, 4, width, 4)
+	wm := wrapLayout(lines, width, 4).rows(0, 0, 4)
 	if len(wm) != 4 {
 		t.Fatalf("expected 4 entries, got %d", len(wm))
 	}
@@ -154,7 +154,7 @@ func TestBuildWrapMap(t *testing.T) {
 		t.Errorf("entry[2]: expected (1,0), got (%d,%d)", wm[2].bufLine, wm[2].startCol)
 	}
 
-	wm2 := buildWrapMap(lines, 0, 1, 3, width, 4)
+	wm2 := wrapLayout(lines, width, 4).rows(0, 1, 3)
 	if wm2[0].bufLine != 0 || wm2[0].startCol != 5 {
 		t.Errorf("offset entry[0]: expected (0,5), got (%d,%d)", wm2[0].bufLine, wm2[0].startCol)
 	}
@@ -168,7 +168,7 @@ func TestBuildWrapMapLongLine(t *testing.T) {
 	lines := []string{longLine}
 	width := 10
 
-	wm := buildWrapMap(lines, 0, 0, 5, width, 4)
+	wm := wrapLayout(lines, width, 4).rows(0, 0, 5)
 	for i, entry := range wm {
 		if entry.bufLine != 0 {
 			t.Errorf("entry[%d]: expected bufLine=0, got %d", i, entry.bufLine)
@@ -178,4 +178,8 @@ func TestBuildWrapMapLongLine(t *testing.T) {
 			t.Errorf("entry[%d]: expected startCol=%d, got %d", i, expectedStart, entry.startCol)
 		}
 	}
+}
+
+func wrapLayout(lines []string, width, tabW int) *rowLayout {
+	return &rowLayout{lines: lines, wrap: true, width: width, tabW: tabW}
 }

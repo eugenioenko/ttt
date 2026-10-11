@@ -138,8 +138,9 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 			}
 		}
 		if mx == e.mouseDownX && my == e.mouseDownY && inGutter {
-			bufLine := e.screenToBufferLine(my - r.Y)
-			if e.Folds != nil && e.Folds.FoldAt(bufLine) != nil {
+			row := e.rowAt(my - r.Y)
+			bufLine := row.bufLine
+			if !row.isPhantom() && e.Folds != nil && e.Folds.FoldAt(bufLine) != nil {
 				e.Folds.Toggle(bufLine)
 				return EventConsumed
 			}
@@ -155,11 +156,7 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 
 func (e *EditorPaneWidget) handleScrollbarMouse(mev *tcell.EventMouse) (EventResult, bool) {
 	if newTop, consumed := e.scrollbar.HandleEvent(mev); consumed {
-		if e.Folds != nil && e.Folds.HasCollapsedFolds() {
-			e.Viewport.TopLine = e.Folds.VisibleToBuffer(newTop)
-		} else {
-			e.Viewport.TopLine = newTop
-		}
+		e.setTopRow(e.layout(), newTop)
 		if e.scrollbar.IsDragging() {
 			return EventCaptured, true
 		}
@@ -183,15 +180,8 @@ func (e *EditorPaneWidget) handleScrollbarMouse(mev *tcell.EventMouse) (EventRes
 }
 
 func (e *EditorPaneWidget) gutterLineAt(screenY int) (int, bool) {
-	if e.WordWrap && e.wrapMap != nil {
-		if screenY < 0 || screenY >= len(e.wrapMap) {
-			return 0, false
-		}
-		entry := e.wrapMap[screenY]
-		return entry.bufLine, entry.startCol == 0 && entry.bufLine < len(e.Buf.Lines)
-	}
-	line := e.screenToBufferLine(screenY)
-	return line, line >= 0 && line < len(e.Buf.Lines)
+	row := e.rowAt(screenY)
+	return row.bufLine, !row.isPhantom() && row.startCol == 0 && row.bufLine >= 0 && row.bufLine < len(e.Buf.Lines)
 }
 
 func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
@@ -199,40 +189,32 @@ func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
 		return 0, 0
 	}
 	gutterW := e.GutterWidth()
-	screenY := my - r.Y
-
-	if e.WordWrap && e.wrapMap != nil && screenY >= 0 && screenY < len(e.wrapMap) {
-		entry := e.wrapMap[screenY]
-		line = entry.bufLine
-		if line >= len(e.Buf.Lines) {
-			line = len(e.Buf.Lines) - 1
-		}
-		segVisCol := mx - r.X - gutterW
-		if segVisCol < 0 {
-			segVisCol = 0
-		}
-		segLeftCol := bufColToVisualCol(e.Buf.Lines[line], entry.startCol, e.resolveTabSize())
-		col = visualColToBufCol(e.Buf.Lines[line], segLeftCol+segVisCol, e.resolveTabSize())
-	} else {
-		line = e.screenToBufferLine(screenY)
-		visCol := mx - r.X - gutterW + e.Viewport.LeftCol
-		if visCol < 0 {
-			visCol = 0
-		}
-		if line < 0 {
-			line = 0
-		}
-		if line >= len(e.Buf.Lines) {
-			line = len(e.Buf.Lines) - 1
-		}
-		col = visualColToBufCol(e.Buf.Lines[line], visCol, e.resolveTabSize())
-	}
-
+	row := e.rowAt(my - r.Y)
+	line = row.bufLine
 	if line < 0 {
 		line = 0
 	}
 	if line >= len(e.Buf.Lines) {
 		line = len(e.Buf.Lines) - 1
+	}
+	tabW := e.resolveTabSize()
+	if e.WordWrap {
+		segVisCol := mx - r.X - gutterW
+		if segVisCol < 0 {
+			segVisCol = 0
+		}
+		startCol := 0
+		if !row.isPhantom() && row.bufLine == line {
+			startCol = row.startCol
+		}
+		segLeftCol := bufColToVisualCol(e.Buf.Lines[line], startCol, tabW)
+		col = visualColToBufCol(e.Buf.Lines[line], segLeftCol+segVisCol, tabW)
+	} else {
+		visCol := mx - r.X - gutterW + e.Viewport.LeftCol
+		if visCol < 0 {
+			visCol = 0
+		}
+		col = visualColToBufCol(e.Buf.Lines[line], visCol, tabW)
 	}
 	lineLen := len([]rune(e.Buf.Lines[line]))
 	if col > lineLen {

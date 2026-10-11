@@ -184,3 +184,102 @@ func TestEditorRowsWordWrap(t *testing.T) {
 		t.Fatalf("after scrollUp(1) rows=%q", rows)
 	}
 }
+
+func TestEditorRowsPhantoms(t *testing.T) {
+	e := newRowsEditor(numberedLines(10), 20, 5)
+	e.phantoms = map[int]int{2: 2, 10: 1}
+
+	rows := renderRows(e)
+	want := []string{"line 0", "line 1", "", "", "line 2"}
+	for i := range want {
+		if rows[i] != want[i] {
+			t.Fatalf("rows = %q, want %q", rows, want)
+		}
+	}
+	if !e.rowAt(2).isPhantom() || e.rowAt(4).isPhantom() {
+		t.Fatalf("phantom flags wrong: %+v %+v", e.rowAt(2), e.rowAt(4))
+	}
+
+	e.Cursor.Line = 1
+	e.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", 0))
+	renderRows(e)
+	if e.Cursor.Line != 2 || e.CursorY != 4 {
+		t.Fatalf("cursor after down = line %d y %d, want line 2 y 4", e.Cursor.Line, e.CursorY)
+	}
+
+	clickAt(e, e.GutterWidth()+1, 3)
+	if e.Cursor.Line != 2 {
+		t.Fatalf("click on phantom = line %d, want 2", e.Cursor.Line)
+	}
+
+	e.scrollDown(2)
+	rows = renderRows(e)
+	if e.Viewport.TopLine != 2 || rows[0] != "" || rows[2] != "line 2" {
+		t.Fatalf("after scrollDown(2) top=%d rows=%q", e.Viewport.TopLine, rows)
+	}
+
+	e.scrollDown(100)
+	rows = renderRows(e)
+	if e.Viewport.TopLine != 9 || rows[0] != "" || !e.rowAt(0).isPhantom() {
+		t.Fatalf("after scrollDown(100) top=%d rows=%q", e.Viewport.TopLine, rows)
+	}
+
+	e.Viewport.TopLine = 0
+	e.Cursor.Line = 9
+	e.scrollViewport()
+	renderRows(e)
+	if e.CursorY != 4 {
+		t.Fatalf("CursorY after reveal = %d, want 4", e.CursorY)
+	}
+	if got := e.layout().total(); got != 13 {
+		t.Fatalf("total rows = %d, want 13", got)
+	}
+}
+
+func TestEditorRowsScrollbarDragWithWrapMapsRows(t *testing.T) {
+	lines := make([]string, 10)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("%d%s", i, strings.Repeat("x", 25))
+	}
+	e := newRowsEditor(lines, 12, 5)
+	e.WordWrap = true
+	renderRows(e)
+	sb := e.scrollbar
+	e.HandleEvent(tcell.NewEventMouse(sb.X, sb.Y+sb.Height-1, tcell.Button1, tcell.ModNone))
+	e.HandleEvent(tcell.NewEventMouse(sb.X, sb.Y+sb.Height-1, tcell.ButtonNone, tcell.ModNone))
+	rows := renderRows(e)
+	if e.Viewport.TopLine >= len(lines) || rows[0] == "" {
+		t.Fatalf("scrollbar drag set TopLine %d of %d lines, rows %q", e.Viewport.TopLine, len(lines), rows)
+	}
+}
+
+func TestEditorRowsExternalTopLineResetsRowOffset(t *testing.T) {
+	lines := make([]string, 10)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("%d%s", i, strings.Repeat("x", 25))
+	}
+	e := newRowsEditor(lines, 12, 5)
+	e.WordWrap = true
+	renderRows(e)
+	e.scrollDown(1)
+	if rows := renderRows(e); strings.HasPrefix(rows[0], "0") {
+		t.Fatalf("scrollDown(1) did not move inside line 0: %q", rows)
+	}
+	e.Viewport.TopLine = 5
+	if rows := renderRows(e); !strings.HasPrefix(rows[0], "5") {
+		t.Fatalf("after setting TopLine = 5 the first row is %q, want the start of line 5", rows[0])
+	}
+}
+
+func TestEditorRowsCursorInsideCollapsedFoldShowsOnFoldLine(t *testing.T) {
+	lines := []string{"a0", "b1", "  b2", "  b3", "c4"}
+	e := newRowsEditor(lines, 20, 5)
+	e.Folds = fold.NewState()
+	e.Folds.SetRanges(fold.ComputeIndentRanges(lines))
+	e.Folds.Toggle(1)
+	e.Cursor.Line = 3
+	renderRows(e)
+	if e.CursorY != 1 {
+		t.Fatalf("CursorY = %d for a cursor inside the fold at line 1, want 1", e.CursorY)
+	}
+}
