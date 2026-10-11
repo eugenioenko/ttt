@@ -37,11 +37,15 @@ type ImageWidget struct {
 	BaseWidget
 	Config ImageConfig
 
-	src     *image.Source
-	err     string
-	pending chan decodeResult
-	release func(id uint64)
+	src         *image.Source
+	err         string
+	info        string
+	pending     chan decodeResult
+	pendingData string
+	release     func(id uint64)
 }
+
+var decodeImage = image.Decode
 
 func NewImageWidget(config ImageConfig) *ImageWidget {
 	w := &ImageWidget{}
@@ -55,7 +59,7 @@ func (w *ImageWidget) SetConfig(config ImageConfig) {
 	if config.Data != w.Config.Data {
 		w.dropSource()
 		w.err = ""
-		w.pending = nil
+		w.info = ""
 	}
 	w.Config = config
 }
@@ -121,32 +125,37 @@ func (w *ImageWidget) place(surface Surface, bw, bh int) bool {
 }
 
 // A rejected image is not retried until its content changes, so a broken image never costs per-frame decoding.
+// At most one decode runs per widget: data that changes mid-decode waits for it, so paging fast cannot pile up
+// full-size decodes in memory.
 func (w *ImageWidget) decoded() *image.Source {
+	if w.pending != nil {
+		select {
+		case r := <-w.pending:
+			w.pending = nil
+			if w.pendingData == w.Config.Data {
+				w.setDecoded(r.src, r.err)
+			}
+		default:
+			return nil
+		}
+	}
 	if w.src != nil || w.err != "" {
 		return w.src
 	}
-	if w.pending == nil {
-		data := w.Config.Data
-		if w.Config.Redraw == nil {
-			w.setDecoded(image.Decode([]byte(data), "data"))
-			return w.src
-		}
-		ch := make(chan decodeResult, 1)
-		w.pending = ch
-		redraw := w.Config.Redraw
-		go func() {
-			src, err := image.Decode([]byte(data), "data")
-			ch <- decodeResult{src, err}
-			redraw()
-		}()
+	data := w.Config.Data
+	if w.Config.Redraw == nil {
+		w.setDecoded(decodeImage([]byte(data), "data"))
+		return w.src
 	}
-	select {
-	case r := <-w.pending:
-		w.pending = nil
-		w.setDecoded(r.src, r.err)
-	default:
-	}
-	return w.src
+	ch := make(chan decodeResult, 1)
+	w.pending, w.pendingData = ch, data
+	redraw := w.Config.Redraw
+	go func() {
+		src, err := decodeImage([]byte(data), "data")
+		ch <- decodeResult{src, err}
+		redraw()
+	}()
+	return nil
 }
 
 func (w *ImageWidget) setDecoded(src *image.Source, err error) {
@@ -164,9 +173,13 @@ func (w *ImageWidget) fallbackText() string {
 	if w.err != "" {
 		return w.err
 	}
-	cfg, format, err := stdimage.DecodeConfig(strings.NewReader(w.Config.Data))
-	if err != nil {
-		return "Image: " + err.Error()
+	if w.info == "" {
+		cfg, format, err := stdimage.DecodeConfig(strings.NewReader(w.Config.Data))
+		if err != nil {
+			w.info = "Image: " + err.Error()
+		} else {
+			w.info = fmt.Sprintf("%s image %dx%d", strings.ToUpper(format), cfg.Width, cfg.Height)
+		}
 	}
-	return fmt.Sprintf("%s image %dx%d", strings.ToUpper(format), cfg.Width, cfg.Height)
+	return w.info
 }
