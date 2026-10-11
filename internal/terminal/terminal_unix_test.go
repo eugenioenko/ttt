@@ -88,10 +88,13 @@ func TestCloseHangsUpBackgroundJobs(t *testing.T) {
 // the test reruns itself under a shell that ignores SIGHUP.
 func TestCloseHangsUpJobsWhenParentIgnoresHangup(t *testing.T) {
 	if os.Getenv("TTT_TEST_HUP_IGNORED") == "1" {
-		if !signal.Ignored(syscall.SIGHUP) {
-			t.Fatal("expected SIGHUP to be ignored at startup")
+		for range 2 {
+			if !signal.Ignored(syscall.SIGHUP) {
+				t.Fatal("expected SIGHUP to be ignored outside shell startup")
+			}
+			assertCloseHangsUpJob(t)
+			assertChildIgnoresHangup(t)
 		}
-		assertCloseHangsUpJob(t)
 		return
 	}
 	if _, err := exec.LookPath("bash"); err != nil {
@@ -103,6 +106,35 @@ func TestCloseHangsUpJobsWhenParentIgnoresHangup(t *testing.T) {
 	if err != nil || !strings.Contains(string(out), "--- PASS") {
 		t.Fatalf("hangup test with SIGHUP ignored failed: %v\n%s", err, out)
 	}
+}
+
+func assertChildIgnoresHangup(t *testing.T) {
+	t.Helper()
+	child := exec.Command("sleep", "5")
+	if err := child.Start(); err != nil {
+		t.Fatalf("start child: %v", err)
+	}
+	defer func() {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+	}()
+	status, err := os.ReadFile("/proc/" + strconv.Itoa(child.Process.Pid) + "/status")
+	if err != nil {
+		t.Skipf("no procfs: %v", err)
+	}
+	for line := range strings.Lines(string(status)) {
+		if mask, ok := strings.CutPrefix(line, "SigIgn:"); ok {
+			bits, err := strconv.ParseUint(strings.TrimSpace(mask), 16, 64)
+			if err != nil {
+				t.Fatalf("parse SigIgn %q: %v", mask, err)
+			}
+			if bits&(1<<(syscall.SIGHUP-1)) == 0 {
+				t.Fatalf("child started after the shell does not ignore SIGHUP (SigIgn %s)", strings.TrimSpace(mask))
+			}
+			return
+		}
+	}
+	t.Fatal("SigIgn missing from /proc status")
 }
 
 func assertCloseHangsUpJob(t *testing.T) {

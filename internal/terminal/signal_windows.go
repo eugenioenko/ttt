@@ -15,4 +15,4 @@ func signalProcessGroup(p *os.Process, _ shellSignal) {
 	_ = p.Kill()
 }
 
-func restoreChildHangup() {}
+func defaultHangupForChild() (restore func()) { return func() {} }

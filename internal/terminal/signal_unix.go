@@ -28,9 +28,11 @@ var discardedHangups = make(chan os.Signal, 1)
 // A parent that ignores SIGHUP (nohup, some launchers, CI runners) passes that
 // on to the shell and its jobs, so hanging up the pty would leave the jobs
 // running. Go resets a signal to its default in children only while it handles
-// the signal itself, so take SIGHUP over and keep discarding it.
-func restoreChildHangup() {
-	if signal.Ignored(syscall.SIGHUP) {
-		signal.Notify(discardedHangups, syscall.SIGHUP)
+// the signal itself, so handle SIGHUP just for the shell's fork.
+func defaultHangupForChild() (restore func()) {
+	if !signal.Ignored(syscall.SIGHUP) {
+		return func() {}
 	}
+	signal.Notify(discardedHangups, syscall.SIGHUP)
+	return func() { signal.Ignore(syscall.SIGHUP) }
 }
