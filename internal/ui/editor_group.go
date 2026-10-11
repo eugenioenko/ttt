@@ -1634,6 +1634,8 @@ func (g *EditorGroupWidget) SelectAll() {
 	if e == nil || e.Selection == nil {
 		return
 	}
+	e.collapseMulti()
+	g.saveMultiState()
 	e.Selection.Start(0, 0)
 	lastLine := len(e.Buf.Lines) - 1
 	e.Cursor.Line = lastLine

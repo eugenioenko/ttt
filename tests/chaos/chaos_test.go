@@ -468,7 +468,7 @@ func TestChaosMonkey(t *testing.T) {
 		report := runIteration(seed, i, eventsPerRun)
 		if report != nil {
 			file := writeCrashReport(*report)
-			t.Errorf("CRASH at iteration %d (seed=%d): %s\n  saved to %s", i, seed, report.Panic, file)
+			t.Errorf("CRASH at iteration %d (seed=%d): %s\n  saved to %s\n%s", i, seed, report.Panic, file, report.Stack)
 			crashes = append(crashes, *report)
 		}
 
