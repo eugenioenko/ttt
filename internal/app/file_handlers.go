@@ -47,7 +47,7 @@ func (a *App) closeFileHandlerTab(path string) {
 func (a *App) SyncFileHandlerTabs() {
 	released := false
 	for path, owner := range a.fileHandlerTabs {
-		if owner.Loaded() {
+		if owner.Active() {
 			continue
 		}
 		a.EditorGroup.ShowBinaryCard(path)

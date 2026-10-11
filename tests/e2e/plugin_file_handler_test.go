@@ -138,3 +138,21 @@ func TestPluginFileHandlerTabSurvivesReloadAndDisable(t *testing.T) {
 	h.assertContains("Binary file")
 	h.assertNotContains("PDF page 1 of 3")
 }
+
+func TestPluginFileHandlerTabReleasedWhenPluginIsDisabledByErrors(t *testing.T) {
+	h, p := newFileHandlerHarness(t)
+	defer h.stop()
+
+	pdf := filepath.Join(h.dir, "paper.pdf")
+	if err := os.WriteFile(pdf, []byte("%PDF-1.7\n\x00\x01\x02\xff"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(pdf)
+	h.redraw()
+	h.assertContains("PDF page 1 of 3")
+
+	p.Enabled = false
+	h.redraw()
+	h.assertContains("Binary file")
+	h.assertNotContains("PDF page 1 of 3")
+}

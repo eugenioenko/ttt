@@ -244,11 +244,11 @@ func (p *Plugin) SafePostAsync(result *PluginAsyncResult) {
 	}
 }
 
-// Loaded is safe to call from the UI goroutine while Update destroys the plugin on another.
-func (p *Plugin) Loaded() bool {
+// Active is safe to call from the UI goroutine while Update destroys the plugin on another.
+func (p *Plugin) Active() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.State != nil
+	return p.State != nil && p.Enabled
 }
 
 func (p *Plugin) Destroy() {
