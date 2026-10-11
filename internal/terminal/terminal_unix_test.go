@@ -137,9 +137,24 @@ func assertChildIgnoresHangup(t *testing.T) {
 	t.Fatal("SigIgn missing from /proc status")
 }
 
+func signalStatus(pid int) string {
+	status, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/status")
+	if err != nil {
+		return err.Error()
+	}
+	var fields []string
+	for line := range strings.Lines(string(status)) {
+		if strings.HasPrefix(line, "Sig") || strings.HasPrefix(line, "ShdPnd") || strings.HasPrefix(line, "State") {
+			fields = append(fields, strings.Join(strings.Fields(line), " "))
+		}
+	}
+	return strings.Join(fields, ", ")
+}
+
 func assertCloseHangsUpJob(t *testing.T) {
 	t.Helper()
 	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!")
+	before := "self: " + signalStatus(os.Getpid()) + "\nshell: " + signalStatus(term.cmd.Process.Pid) + "\njob: " + signalStatus(pid)
 
 	closeWithin(t, term, readLoopGrace)
 
@@ -151,7 +166,7 @@ func assertCloseHangsUpJob(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for !processGone(pid) {
 		if time.Now().After(deadline) {
-			t.Fatalf("background job %d survived Close()", pid)
+			t.Fatalf("background job %d survived Close()\nbefore close:\n%s\nafter: %s", pid, before, signalStatus(pid))
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
