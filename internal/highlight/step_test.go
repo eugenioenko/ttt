@@ -138,6 +138,22 @@ func TestHighlightLineAtWithoutSyncLinesDefersEveryUnreachedLine(t *testing.T) {
 	}
 }
 
+func TestStepWorksOnlyTowardLinesRenderedSinceAnEdit(t *testing.T) {
+	recordWakes(t)
+	lines := goLines(5000)
+	h := New("x.go")
+	h.HighlightLineAt(lines, 4000)
+
+	edited := append([]string(nil), lines...)
+	edited[1] = "var edited = 1"
+	h.ClearCache()
+	h.HighlightLineAt(edited, 10)
+	stepUntilDone(t)
+	if got := h.doc.MaterializedLines(); got > 1000 {
+		t.Fatalf("steps materialized %d lines after the edit; only line 10 was rendered since", got)
+	}
+}
+
 // Typing never defers: lines around an edit are within the synchronous range.
 func TestHighlightLineAtTypingStaysSynchronous(t *testing.T) {
 	wakes := recordWakes(t)

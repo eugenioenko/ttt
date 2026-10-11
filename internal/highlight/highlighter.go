@@ -154,6 +154,9 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	if h.dirty || h.doc.Len() != len(lines) {
 		h.dirty = false
 		h.doc.SetLines(lines)
+		// An edit can lower what is materialized below an old target; steps
+		// work only toward lines rendered since.
+		h.wantLine = 0
 	}
 	if wake != nil && !h.sync {
 		// The synchronous budget is spent once; while steps catch up, other

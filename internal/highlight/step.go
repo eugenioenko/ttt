@@ -36,6 +36,7 @@ func Step(budget time.Duration) bool {
 			}
 		}
 		h.stepping = false
+		h.wantLine = 0
 		delete(pending, h)
 	}
 	return len(pending) > 0
@@ -64,6 +65,7 @@ func (h *Highlighter) Close() {
 	}
 	delete(pending, h)
 	h.stepping = false
+	h.wantLine = 0
 }
 
 func (h *Highlighter) deferTo(idx int) {
