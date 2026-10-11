@@ -229,6 +229,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Colored diff gutter signs", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffSignsColor },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffSignsColor = v }},
+			{
+				GetBool: func(s *config.Settings) bool { return s.Editor.DiffColorGutterNumbers },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffColorGutterNumbers = v }},
 			{Label: "Diff gutter highlight", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffGutterHighlight },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffGutterHighlight = v }},

@@ -6,7 +6,7 @@ all: build
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-GOFMT_GO_VERSION := 1.25.14
+GOFMT_GO_VERSION ?= 1.25.14
 GOFMT = "$$(GOTOOLCHAIN=go$(GOFMT_GO_VERSION) go env GOROOT)/bin/gofmt"
 
 build:

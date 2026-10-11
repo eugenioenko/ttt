@@ -151,6 +151,7 @@ type CommitDetailWidget struct {
 	signs            bool
 	signsColor       bool
 	gutterHighlight  bool
+	colorNumbers     bool
 	chevronCollapsed rune
 	chevronExpanded  rune
 	gutterStyle      string
@@ -208,6 +209,7 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 		signs:           false,
 		signsColor:      true,
 		gutterHighlight: true,
+		colorNumbers:    false,
 		capturedFile:    -1,
 	}
 }
@@ -224,6 +226,7 @@ func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidg
 		signs:           false,
 		signsColor:      true,
 		gutterHighlight: true,
+		colorNumbers:    false,
 		capturedFile:    -1,
 	}
 }
@@ -296,6 +299,11 @@ func (d *CommitDetailWidget) SetDiffGutterHighlight(enabled bool) {
 	d.applyViewOptions()
 }
 
+func (d *CommitDetailWidget) SetDiffColorNumbers(enabled bool) {
+	d.colorNumbers = enabled
+	d.applyViewOptions()
+}
+
 func (d *CommitDetailWidget) setGutterStyle(style string) {
 	if d.gutterStyle == style {
 		return
@@ -320,6 +328,7 @@ func (d *CommitDetailWidget) applyViewOptions() {
 		v.signs = d.signs
 		v.signsColor = d.signsColor
 		v.gutterHighlight = d.gutterHighlight
+		v.colorNumbers = d.colorNumbers
 		v.gapChevron = d.chevronCollapsed
 		v.minGutter = d.gutterW
 		v.applyOverlayOptions()

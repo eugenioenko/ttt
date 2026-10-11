@@ -19,6 +19,7 @@
     "diffEmphasizeCollapsedRows": false,
     "diffSigns": false,
     "diffSignsColor": true,
+    "diffColorGutterNumbers": false,
     "diffGutterHighlight": true,
     "lineNumbers": true,
     "formatOnSave": false,
