@@ -7,6 +7,9 @@ reviews:
   high_level_summary: true
   poem: false
   collapse_walkthrough: true
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
   auto_review:
     enabled: true
     drafts: false
