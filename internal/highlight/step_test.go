@@ -67,8 +67,8 @@ func TestHighlightLineAtDefersFarLines(t *testing.T) {
 	if got, want := h.HighlightLineAt(lines, 900), New("x.go").HighlightLine(lines[900]); !reflect.DeepEqual(got, want) {
 		t.Fatalf("far line during the render = %v, want the line highlighted on its own %v", got, want)
 	}
-	if got := h.doc.MaterializedLines(); got > syncLines+1 {
-		t.Fatalf("render tokenized %d lines, want at most %d", got, syncLines)
+	if got := h.doc.MaterializedLines(); got > DefaultSyncLines+1 {
+		t.Fatalf("render tokenized %d lines, want at most %d", got, DefaultSyncLines)
 	}
 	if *wakes != 1 || Pending() != 1 {
 		t.Fatalf("wakes = %d, pending = %d, want one each", *wakes, Pending())
@@ -108,11 +108,33 @@ func TestHighlightLineAtNearLinesStaySynchronous(t *testing.T) {
 	lines := goLines(1000)
 	h := New("x.go")
 
-	if got, want := h.HighlightLineAt(lines, syncLines-1), wantSpans(lines, syncLines-1); !reflect.DeepEqual(got, want) {
+	if got, want := h.HighlightLineAt(lines, DefaultSyncLines-1), wantSpans(lines, DefaultSyncLines-1); !reflect.DeepEqual(got, want) {
 		t.Fatalf("near line = %v, want %v", got, want)
 	}
 	if *wakes != 0 {
 		t.Fatalf("woke the scheduler %d times for a near line, want 0", *wakes)
+	}
+}
+
+func TestHighlightLineAtWithoutSyncLinesDefersEveryUnreachedLine(t *testing.T) {
+	wakes := recordWakes(t)
+	lines := commentedFile(100)
+	h := New("x.go")
+	h.SetSyncLines(0)
+
+	h.HighlightLineAt(lines, 0)
+	if *wakes != 0 || h.doc.MaterializedLines() != 2 {
+		t.Fatalf("first line: wakes = %d, materialized = %d; want 0 and 2", *wakes, h.doc.MaterializedLines())
+	}
+	if got, want := h.HighlightLineAt(lines, 50), h.HighlightLine(lines[50]); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unreached line = %v, want its single-line spans %v", got, want)
+	}
+	if *wakes != 1 || h.doc.MaterializedLines() != 2 {
+		t.Fatalf("unreached line: wakes = %d, materialized = %d; want 1 and 2", *wakes, h.doc.MaterializedLines())
+	}
+	stepUntilDone(t)
+	if got, want := h.HighlightLineAt(lines, 50), wantSpans(lines, 50); !reflect.DeepEqual(got, want) {
+		t.Fatalf("after steps line = %v, want %v", got, want)
 	}
 }
 

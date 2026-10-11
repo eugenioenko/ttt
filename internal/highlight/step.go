@@ -2,11 +2,11 @@ package highlight
 
 import "time"
 
-// A render tokenizes at most this many lines past a document's materialized
-// lines before deferring. A deferred line is drawn with its last spans, or
-// highlighted on its own, and Step catches up between frames. Edits usually
-// reconverge with the old tail well within it.
-const syncLines = 200
+// DefaultSyncLines is how many lines a render tokenizes past a document's
+// materialized lines before deferring. A deferred line is drawn with its last
+// spans, or highlighted on its own, and Step catches up between frames. Edits
+// usually reconverge with the old tail well within it.
+const DefaultSyncLines = 200
 
 var (
 	wake    func()
@@ -46,6 +46,14 @@ func Step(budget time.Duration) bool {
 func (h *Highlighter) Synchronous() {
 	if h != nil {
 		h.sync = true
+	}
+}
+
+// SetSyncLines sets how many lines a render may tokenize past what h has
+// materialized before deferring the rest to Step.
+func (h *Highlighter) SetSyncLines(n int) {
+	if h != nil {
+		h.syncLines = max(n, 0)
 	}
 }
 

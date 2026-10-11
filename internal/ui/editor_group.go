@@ -2232,9 +2232,11 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Folds = t.Folds
 		g.Editor.LineChanges = t.LineChanges
 		if t.Diff != nil {
+			t.Highlighter.SetSyncLines(0)
 			t.Diff.bind(g.Editor)
 			g.editorInDiff = true
 		} else {
+			t.Highlighter.SetSyncLines(highlight.DefaultSyncLines)
 			g.Editor.SetDiffOverlay(nil)
 			if g.editorInDiff {
 				g.editorInDiff = false

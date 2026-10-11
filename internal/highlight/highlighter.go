@@ -56,6 +56,7 @@ type Highlighter struct {
 	wantLine  int
 	stepping  bool
 	sync      bool
+	syncLines int
 }
 
 // Conventional extensionless names the grammar catalog does not declare.
@@ -98,11 +99,12 @@ func (c *grammarCatalog) newHighlighter(ref grammarRef) *Highlighter {
 		return nil
 	}
 	return &Highlighter{
-		grammar:  g,
-		language: ref.language,
-		doc:      textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
-		isolated: &singleLineCache{},
-		dirty:    true,
+		grammar:   g,
+		language:  ref.language,
+		doc:       textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
+		isolated:  &singleLineCache{},
+		dirty:     true,
+		syncLines: DefaultSyncLines,
 	}
 }
 
@@ -156,7 +158,7 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	if wake != nil && !h.sync {
 		// The synchronous budget is spent once; while steps catch up, other
 		// lines that are not ready are deferred too.
-		budget := syncLines
+		budget := h.syncLines
 		if h.stepping {
 			budget = 0
 		}

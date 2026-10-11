@@ -199,6 +199,7 @@ func (s *diffSideSyntax) spans(num int, text string) ([]highlight.Span, bool) {
 			peer = s.peer.hl
 		}
 		s.hl.ShareTokens(peer)
+		s.hl.SetSyncLines(0)
 		if peer == nil {
 			peer = s.anchor
 		}

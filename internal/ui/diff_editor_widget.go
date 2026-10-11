@@ -231,6 +231,7 @@ func (d *DiffEditorWidget) ensureHighlighters(panes ...*EditorPaneWidget) {
 				return
 			}
 			p.Highlighter.ShareTokens(peer)
+			p.Highlighter.SetSyncLines(0)
 			p.Highlighter.ShareSingleLines(lines)
 			if peer == nil {
 				peer = p.Highlighter
