@@ -1,11 +1,13 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/github"
@@ -212,6 +214,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 
 	bracketStyles := ResolveBracketColorStyles(cfg.Theme.Editor.BracketColors)
 
+	highlight.SetTimeLimit(time.Duration(cfg.Settings.Editor.HighlightTimeLimit) * time.Millisecond)
 	editorGroup := ui.NewEditorGroupWidget(borders, cfg.Settings.Editor.TabSize, cfg.Settings.Editor.LineNumbers, cfg.Settings.Editor.GutterStyle)
 	editorGroup.TabBar.Icons = cfg.Settings.Appearance.Icons
 	editorGroup.InsertSpaces = cfg.Settings.Editor.InsertSpaces

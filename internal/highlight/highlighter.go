@@ -30,6 +30,15 @@ var tokenizeOptions = textmate.TokenizeOptions{
 
 const maxIsolatedCache = 4_096
 
+// SetTimeLimit sets the per-line tokenizing time limit for highlighters
+// created afterwards; d <= 0 restores the default.
+func SetTimeLimit(d time.Duration) {
+	if d <= 0 {
+		d = tokenizeTimeLimit
+	}
+	tokenizeOptions.TimeLimit = d
+}
+
 type Highlighter struct {
 	grammar  *textmate.Grammar
 	language string

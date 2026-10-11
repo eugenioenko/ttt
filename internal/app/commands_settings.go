@@ -3,9 +3,11 @@ package app
 import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"time"
 )
 
 func configuredDiffMode(mode string) ui.DiffMode {
@@ -71,6 +73,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	a.refreshWelcome()
 
+	highlight.SetTimeLimit(time.Duration(s.Editor.HighlightTimeLimit) * time.Millisecond)
 	// Apply editor settings to the editor group and active editor
 	a.EditorGroup.TabSize = s.Editor.TabSize
 	a.EditorGroup.TabBar.Icons = s.Appearance.Icons

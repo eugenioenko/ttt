@@ -231,3 +231,27 @@ func TestDiffGutterSettingsDefaultWhenMissing(t *testing.T) {
 		t.Errorf("missing keys loaded as diffSigns=%v diffSignsColor=%v diffGutterHighlight=%v, want false, true, true", got.DiffSigns, got.DiffSignsColor, got.DiffGutterHighlight)
 	}
 }
+
+func TestHighlightTimeLimitIsHiddenUntilSet(t *testing.T) {
+	editorKeys := func(s Settings) map[string]json.RawMessage {
+		data, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var raw struct {
+			Editor map[string]json.RawMessage `json:"editor"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			t.Fatal(err)
+		}
+		return raw.Editor
+	}
+	if v, ok := editorKeys(DefaultSettings())["highlightTimeLimit"]; ok {
+		t.Fatalf("default settings wrote editor.highlightTimeLimit = %s; it should stay out of settings.json", v)
+	}
+	s := DefaultSettings()
+	s.Editor.HighlightTimeLimit = 5000
+	if v := string(editorKeys(s)["highlightTimeLimit"]); v != "5000" {
+		t.Fatalf("editor.highlightTimeLimit = %q, want 5000 written once set", v)
+	}
+}

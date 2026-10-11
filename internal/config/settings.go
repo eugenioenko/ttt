@@ -91,9 +91,13 @@ func DefaultLSPSettings() LSPSettings {
 }
 
 type EditorSettings struct {
-	TabSize                 int              `json:"tabSize"`
-	InsertSpaces            bool             `json:"insertSpaces"`
-	WordWrap                bool             `json:"wordWrap"`
+	TabSize      int  `json:"tabSize"`
+	InsertSpaces bool `json:"insertSpaces"`
+	WordWrap     bool `json:"wordWrap"`
+	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
+	// built-in limit. Unlisted: raise it only where every line must finish, such
+	// as slow CI runners.
+	HighlightTimeLimit      int              `json:"highlightTimeLimit,omitempty"`
 	DiffMode                string           `json:"diffMode"`
 	DiffContext             string           `json:"diffContext"`
 	DiffWordWrap            bool             `json:"diffWordWrap"`

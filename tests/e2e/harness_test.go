@@ -65,6 +65,9 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 		Settings:    config.DefaultSettings(),
 		Theme:       config.DefaultTheme(),
 	}
+	// Tests check highlighting results, not the time budget: under the race
+	// detector on a loaded runner the default limit stops lines mid-construct.
+	cfg.Settings.Editor.HighlightTimeLimit = 60_000
 	config.ParseKeyBindings(cfg.Keybindings)
 
 	screen := term.NewTcellScreenFrom(sim)
