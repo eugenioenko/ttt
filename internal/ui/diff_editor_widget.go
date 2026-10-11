@@ -50,6 +50,7 @@ type DiffEditorWidget struct {
 	gapChevron      rune
 	emphasizeGaps   bool
 	hoveredGap      int
+	minGutter       int
 
 	OnFetchExtended func(dv *DiffEditorWidget)
 	// OnRecompute runs after an editable diff takes a recomputed diff, which
@@ -443,6 +444,7 @@ func (d *DiffEditorWidget) applyOverlayOptions() {
 			o.GapChevron = d.gapChevron
 			o.EmphasizeGaps = d.emphasizeGaps
 			o.HoveredGap = d.hoveredGap
+			o.MinGutter = d.minGutter
 		}
 	}
 }

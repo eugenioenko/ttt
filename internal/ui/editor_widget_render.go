@@ -27,7 +27,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	tabW := e.resolveTabSize()
 
 	editorW := w - gutterW
-	showHScrollbar := !e.WordWrap && maxLineW > editorW
+	showHScrollbar := !e.Embedded && !e.WordWrap && maxLineW > editorW
 	if showHScrollbar {
 		h--
 	}
@@ -37,7 +37,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 	visibleCount := e.rowLayout(editorW).total()
 
-	showScrollbar := visibleCount > h
+	showScrollbar := !e.Embedded && visibleCount > h
 	if showScrollbar {
 		editorW--
 	}
@@ -54,7 +54,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	if e.WordWrap {
 		e.Viewport.LeftCol = 0
 		visibleCount = layout.total()
-		showScrollbar = visibleCount > h
+		showScrollbar = !e.Embedded && visibleCount > h
 	}
 
 	sel := e.Selection
@@ -363,6 +363,12 @@ func (e *EditorPaneWidget) endHighlightPass() {
 		o.Syntax.old.hl.EndPass()
 		o.Syntax.new.hl.EndPass()
 	}
+}
+
+// embeddedTextWidth is the text width Render gives an Embedded pane drawn at
+// width w, so a host can lay the pane out before drawing it.
+func (e *EditorPaneWidget) embeddedTextWidth(w int) int {
+	return e.wrapTextWidth(max(w-e.GutterWidth(), 1))
 }
 
 func (e *EditorPaneWidget) wrapTextWidth(editorW int) int {

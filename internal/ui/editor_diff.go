@@ -38,6 +38,8 @@ type DiffOverlay struct {
 	SignsColor      bool
 	GutterHighlight bool
 	GapChevron      rune
+	// MinGutter widens the diff gutter so several stacked diffs line up.
+	MinGutter int
 
 	// DeletedMatches holds find matches on deleted rows, keyed like Deleted;
 	// a match's Line is the row's index in its block. DeletedActive is the
@@ -318,7 +320,7 @@ func (o *DiffOverlay) gutterWidth() int {
 		}
 		o.numsN = len(o.Nums)
 	}
-	return len(strconv.Itoa(o.maxNum)) + 3
+	return max(len(strconv.Itoa(o.maxNum))+3, o.MinGutter)
 }
 
 // maxDeletedNum is the widest old line number on a deleted row, so an editor
