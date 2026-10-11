@@ -40,10 +40,12 @@ Select a changed file in the changes panel to open a diff. Syntax highlighting i
 
 Which entry you select decides what the diff compares:
 
-- **Changes:** the staged version (the index) against the working tree, so only the changes you have not staged yet. The tab title ends in `(diff)`.
+- **Changes:** the staged version (the index) against the working tree, so only the changes you have not staged yet. It opens in the file's own editor tab in diff mode, with the tab title ending in `(diff)`. You can edit and save there as in any editor tab. The diff updates as you type and recomputes shortly after you stop, on save, when the file reloads from disk, and when you stage, unstage, or commit. In the unified layout, removed lines appear above the lines that replaced them and cannot be edited. In the split layout, the staged version is shown read-only on the left and the file on the right, scrolling together; click the left side to move around and select in it, and click the file side to go back to editing. Find (`Ctrl+F`) searches both sides. In the changes-only context, typing or pasting on a `⋯ N lines ⋯` row expands it first. Code folds are not shown in diff mode and come back when you leave it.
 - **Staged Changes:** `HEAD` against the staged version, so only what the next commit will contain. The tab title ends in `(staged)`, so a file's staged and unstaged diffs can be open at the same time.
 
-A file with unresolved merge conflicts has no single staged version to compare against, so it opens as a plain file with a status message instead.
+A file with unresolved merge conflicts has no single staged version to compare against, so it opens as a plain file with a status message instead. If a file gets merge conflicts while its diff is open, diff mode turns off.
+
+Run **Git: Toggle Inline Diff** from the command palette to turn diff mode on or off for any tracked file.
 
 ## Explorer Git Status Colors
 
