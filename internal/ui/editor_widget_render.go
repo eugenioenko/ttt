@@ -12,12 +12,6 @@ import (
 
 func (e *EditorPaneWidget) Render(surface Surface) {
 	e.syncDiffOverlay()
-	e.Highlighter.BeginPass()
-	if o := e.DiffOverlay; o != nil && o.Syntax != nil {
-		o.Syntax.old.hl.BeginPass()
-		o.Syntax.new.hl.BeginPass()
-	}
-	defer e.endHighlightPass()
 	w, h := surface.Size()
 
 	totalLines := len(e.Buf.Lines)
@@ -355,14 +349,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.CursorX = cursorVisCol - e.Viewport.LeftCol + gutterW + r.X
 	}
 	e.CursorY = curRow - topRow + r.Y
-}
-
-func (e *EditorPaneWidget) endHighlightPass() {
-	e.Highlighter.EndPass()
-	if o := e.DiffOverlay; o != nil && o.Syntax != nil {
-		o.Syntax.old.hl.EndPass()
-		o.Syntax.new.hl.EndPass()
-	}
 }
 
 // embeddedTextWidth is the text width Render gives an Embedded pane drawn at

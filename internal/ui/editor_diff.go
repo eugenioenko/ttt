@@ -164,27 +164,17 @@ type diffSyntax struct {
 // diffSideSyntax creates its highlighter on first use; path is empty when
 // syntax highlighting is off.
 type diffSideSyntax struct {
-	path   string
-	hl     *highlight.Highlighter
-	lines  []string
-	notify func()
-	peer   *diffSideSyntax
+	path  string
+	hl    *highlight.Highlighter
+	lines []string
+	peer  *diffSideSyntax
 	// anchor is the editable side's own highlighter, whose single-line cache
 	// the HEAD side shares while both draw the same unchanged lines.
 	anchor *highlight.Highlighter
 }
 
-func (s *diffSideSyntax) setNotify(notify func()) {
-	s.notify = notify
-	if s.hl != nil {
-		s.hl.SetProgressive(notify)
-	}
-}
-
 func (s *diffSideSyntax) reset(path string) {
-	if s.hl != nil {
-		s.hl.SetProgressive(nil)
-	}
+	s.hl.Close()
 	s.path, s.hl = path, nil
 }
 
@@ -209,7 +199,6 @@ func (s *diffSideSyntax) spans(num int, text string) ([]highlight.Span, bool) {
 			peer = s.peer.hl
 		}
 		s.hl.ShareTokens(peer)
-		s.hl.SetProgressive(s.notify)
 		if peer == nil {
 			peer = s.anchor
 		}

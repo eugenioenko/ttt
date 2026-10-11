@@ -394,6 +394,7 @@ func renderCodeBlock(block []string, lang string) []Line {
 	var h *highlight.Highlighter
 	if lang != "" {
 		h = highlight.NewForLanguage(lang)
+		h.Synchronous()
 	}
 	lines := make([]Line, len(block))
 	for i, text := range block {

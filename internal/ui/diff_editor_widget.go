@@ -89,7 +89,6 @@ type DiffEditorWidget struct {
 	wrapKey       [4]int
 
 	docSyntax diffSyntax
-	redraw    func()
 
 	panesGen   int
 	unifiedGen int
@@ -196,7 +195,7 @@ func (d *DiffEditorWidget) viewPanes() []*EditorPaneWidget {
 func (d *DiffEditorWidget) attachHighlighters() {
 	d.noGrammar = false
 	for _, p := range d.panes() {
-		p.Highlighter.SetProgressive(nil)
+		p.Highlighter.Close()
 		p.Highlighter = nil
 	}
 	path := ""
@@ -206,8 +205,6 @@ func (d *DiffEditorWidget) attachHighlighters() {
 	d.docSyntax.old.reset(path)
 	d.docSyntax.new.reset(path)
 	d.docSyntax.old.peer, d.docSyntax.new.peer = &d.docSyntax.new, &d.docSyntax.old
-	d.docSyntax.old.setNotify(d.redraw)
-	d.docSyntax.new.setNotify(d.redraw)
 	d.syncDocSyntax()
 }
 
@@ -235,7 +232,6 @@ func (d *DiffEditorWidget) ensureHighlighters(panes ...*EditorPaneWidget) {
 			}
 			p.Highlighter.ShareTokens(peer)
 			p.Highlighter.ShareSingleLines(lines)
-			p.Highlighter.SetProgressive(d.redraw)
 			if peer == nil {
 				peer = p.Highlighter
 			}
@@ -383,18 +379,13 @@ func (d *DiffEditorWidget) SetDiffHighContrast(enabled bool) {
 	d.applyOverlayOptions()
 }
 
-// Close stops background highlighting for a diff that is no longer shown.
-func (d *DiffEditorWidget) Close() { d.SetRedrawRequest(nil) }
-
-// SetRedrawRequest lets lines deep in a large diff draw before the lines
-// above them are tokenized; notify must be safe to call off the main thread.
-func (d *DiffEditorWidget) SetRedrawRequest(notify func()) {
-	d.redraw = notify
-	d.docSyntax.old.setNotify(notify)
-	d.docSyntax.new.setNotify(notify)
+// Close drops deferred highlighting for a diff that is no longer shown.
+func (d *DiffEditorWidget) Close() {
+	d.docSyntax.old.hl.Close()
+	d.docSyntax.new.hl.Close()
 	for _, p := range d.panes() {
 		if p != nil && p != d.live {
-			p.Highlighter.SetProgressive(notify)
+			p.Highlighter.Close()
 		}
 	}
 }

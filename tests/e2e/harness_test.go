@@ -1,10 +1,12 @@
 package e2e
 
 import (
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/command"
@@ -98,8 +100,24 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 		running:  running,
 		dir:      dir,
 	}
+	highlight.SetStepScheduler(func() {})
+	t.Cleanup(func() {
+		editor.EditorGroup.CloseAllTabs()
+		highlight.SetStepScheduler(nil)
+	})
 	h2.redraw()
 	return h2
+}
+
+// settle runs deferred highlighting to completion, as the event loop does
+// between frames, and redraws.
+func (h *testHarness) settle() {
+	h.t.Helper()
+	for highlight.Pending() > 0 {
+		for highlight.Step(time.Hour) {
+		}
+		h.redraw()
+	}
 }
 
 func (h *testHarness) redraw() {

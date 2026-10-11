@@ -51,15 +51,14 @@ func BenchmarkDeepLineFirstAnswer(b *testing.B) {
 			New("main.go").HighlightLineAt(lines, deep)
 		}
 	})
-	b.Run("progressive", func(b *testing.B) {
+	b.Run("deferred", func(b *testing.B) {
+		recordWakes(b)
 		b.ReportAllocs()
 		for b.Loop() {
 			h := New("main.go")
-			h.SetProgressive(func() {})
-			h.BeginPass()
 			h.HighlightLineAt(lines, deep)
 			b.StopTimer()
-			h.SetProgressive(nil)
+			h.Close()
 			b.StartTimer()
 		}
 	})

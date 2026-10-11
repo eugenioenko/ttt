@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"fmt"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -101,17 +104,48 @@ func TestSeverityStyleWhenNoCustomStyle(t *testing.T) {
 	}
 }
 
-func TestInlineDiffStopsBackgroundHighlightingWhenItEnds(t *testing.T) {
+func TestInlineDiffDropsDeferredHighlightingWhenItEnds(t *testing.T) {
+	highlight.SetStepScheduler(func() {})
+	t.Cleanup(func() { highlight.SetStepScheduler(nil) })
+	var file strings.Builder
+	var base []string
+	for i := 0; i < 3000; i++ {
+		fmt.Fprintf(&file, "var v%d = %d\n", i, i)
+		base = append(base, fmt.Sprintf("var v%d = %d", i, i))
+	}
+	base[2900] = "var changed = 1"
+	owned := func(d *DiffEditorWidget) []*highlight.Highlighter {
+		hs := []*highlight.Highlighter{d.docSyntax.old.hl, d.docSyntax.new.hl}
+		for _, p := range d.panes() {
+			if p != d.live {
+				hs = append(hs, p.Highlighter)
+			}
+		}
+		return hs
+	}
 	for _, end := range []string{"close tab", "disable", "re-enable"} {
-		g, path := openTabWithFile(t, "a\nB\nc\n")
-		g.RequestRedraw = func() {}
-		if !g.EnableInlineDiff(path, []string{"a", "b", "c"}) {
+		path := filepath.Join(t.TempDir(), "big.go")
+		if err := os.WriteFile(path, []byte(file.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		g := NewEditorGroupWidget(nil, 4, true, "compact")
+		g.SyntaxHighlight = true
+		g.OpenFile(path)
+		if !g.EnableInlineDiff(path, base) {
 			t.Fatalf("%s: diff mode did not turn on", end)
 		}
 		d := g.tabs[g.active].Diff
-		g.syncTabs()
-		if d.redraw == nil {
-			t.Fatalf("%s: diff has no redraw request to clear", end)
+		d.SetMode(DiffModeSplit)
+		g.Editor.Cursor.Line = 2950
+		g.Editor.EnsureCursorVisible()
+		g.SetRect(Rect{W: 120, H: 30})
+		g.Render(NewRenderSurface(makeGrid(120, 30), Rect{W: 120, H: 30}))
+		deferred := false
+		for _, h := range owned(d) {
+			deferred = deferred || h.HasDeferredLines()
+		}
+		if !deferred {
+			t.Fatalf("%s: fixture: rendering deep in the diff should defer its HEAD side", end)
 		}
 		switch end {
 		case "close tab":
@@ -119,10 +153,12 @@ func TestInlineDiffStopsBackgroundHighlightingWhenItEnds(t *testing.T) {
 		case "disable":
 			g.DisableInlineDiff(path)
 		case "re-enable":
-			g.EnableInlineDiff(path, []string{"a", "b", "c"})
+			g.EnableInlineDiff(path, base)
 		}
-		if d.redraw != nil {
-			t.Errorf("%s: the old diff still tokenizes in the background", end)
+		for _, h := range owned(d) {
+			if h.HasDeferredLines() {
+				t.Errorf("%s: the old diff still waits for highlighting steps", end)
+			}
 		}
 	}
 }

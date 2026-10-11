@@ -52,7 +52,10 @@ type Highlighter struct {
 	// tokenTheme is the token theme the caches above were built with.
 	tokenTheme *TokenTheme
 
-	progress *progressive
+	lastSpans map[int]lastLine
+	wantLine  int
+	stepping  bool
+	sync      bool
 }
 
 // Conventional extensionless names the grammar catalog does not declare.
@@ -148,20 +151,27 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	h.syncTokenTheme()
 	if h.dirty || h.doc.Len() != len(lines) {
 		h.dirty = false
-		h.progress.linesChanged(lines)
 		h.doc.SetLines(lines)
 	}
-	if p := h.progress; p != nil && idx > p.base+p.slack() {
-		p.warmTo(idx)
-		return h.HighlightLine(lines[idx])
+	if wake != nil && !h.sync {
+		// The synchronous budget is spent once; while steps catch up, other
+		// lines that are not ready are deferred too.
+		budget := syncLines
+		if h.stepping {
+			budget = 0
+		}
+		if !h.materialize(idx, budget) {
+			h.deferTo(idx)
+			return h.deferred(idx, lines[idx])
+		}
 	}
 	res, ok := h.doc.Line(idx)
-	h.progress.reached(idx)
 	if !ok || len(res.Tokens) == 0 {
 		return nil
 	}
 	key := &res.Tokens[0]
 	if c, ok := h.lineSpans[key]; ok && c.n == len(res.Tokens) {
+		h.remember(idx, lines[idx], c.spans)
 		return c.spans
 	}
 	spans := h.tokensToSpans(res.Tokens)
@@ -169,6 +179,7 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 		h.lineSpans = make(map[*textmate.Token]cachedSpans)
 	}
 	h.lineSpans[key] = cachedSpans{n: len(res.Tokens), spans: spans}
+	h.remember(idx, lines[idx], spans)
 	return spans
 }
 
@@ -234,6 +245,7 @@ func (h *Highlighter) syncTokenTheme() {
 		h.styles = nil
 		h.isolated.m = nil
 		h.lineSpans = nil
+		h.lastSpans = nil
 	}
 }
 

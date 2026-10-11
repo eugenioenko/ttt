@@ -219,7 +219,7 @@ func TestDiffEditorPanesNeverFold(t *testing.T) {
 	}
 }
 
-func TestDiffEditorCloseTurnsOffBackgroundHighlighting(t *testing.T) {
+func TestDiffEditorCloseDropsDeferredHighlighting(t *testing.T) {
 	var old, cur []string
 	for i := 0; i < 30000; i++ {
 		line := fmt.Sprintf("var v%d = %d // comment", i, i)
@@ -229,16 +229,19 @@ func TestDiffEditorCloseTurnsOffBackgroundHighlighting(t *testing.T) {
 		}
 		cur = append(cur, line)
 	}
+	highlight.SetStepScheduler(func() {})
+	t.Cleanup(func() { highlight.SetStepScheduler(nil) })
 	d := NewDiffEditorWidget("f.go", diff.Parse(diff.Generate(old, cur, "f.go")), old, cur, false)
-	d.SetRedrawRequest(func() {})
 	d.SetMode(DiffModeSplit)
-	renderDiffEditor(d, 120, 20)
-	d.Close()
 	d.SetContextMode(DiffContextFullFile)
 	d.ScrollToLine(29000)
 	renderDiffEditor(d, 120, 20)
-	if n := highlight.Warming(); n != 0 {
-		t.Fatalf("a closed diff started %d background highlighters", n)
+	if highlight.Pending() == 0 {
+		t.Fatal("fixture: rendering deep in a large diff should defer highlighting")
+	}
+	d.Close()
+	if n := highlight.Pending(); n != 0 {
+		t.Fatalf("a closed diff left %d highlighters waiting for steps", n)
 	}
 }
 

@@ -2,7 +2,9 @@ package app
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -18,6 +20,10 @@ type BlameResult struct {
 	Gen  int
 	Info *git.BlameInfo
 }
+
+type highlightStep struct{}
+
+const highlightStepBudget = 4 * time.Millisecond
 
 func RunEventLoop(
 	screen *term.TcellScreen,
@@ -283,7 +289,15 @@ func RunEventLoop(
 		case *tcell.EventInterrupt:
 			var execRequest *execRequestLifecycle
 			var execErr error
+			skipRedraw := false
 			switch v := tev.Data().(type) {
+			case *highlightStep:
+				// Short steps keep input responsive while a large file catches up;
+				// the frame is redrawn once the deferred lines are ready.
+				if highlight.Step(highlightStepBudget) {
+					screen.PostEvent(tcell.NewEventInterrupt(v))
+					skipRedraw = true
+				}
 			case string:
 				if v != "" {
 					closeTerminal(v)
@@ -473,7 +487,9 @@ func RunEventLoop(
 					app.StatusNotify(fmt.Sprintf("Opened PR #%d: %s (%d files)", v.Info.Number, v.Info.Title, len(v.Info.Files)))
 				}
 			}
-			redraw()
+			if !skipRedraw {
+				redraw()
+			}
 			if execRequest != nil {
 				execRequest.complete(execErr)
 			}

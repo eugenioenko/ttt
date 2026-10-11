@@ -3,13 +3,9 @@ package highlight
 import (
 	"fmt"
 	"reflect"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
-
-	textmate "github.com/eugenioenko/textmate-go"
 )
 
 func TestSharedTokensDoNotLeakAcrossSides(t *testing.T) {
@@ -65,7 +61,7 @@ func TestSharedTokensFollowEdits(t *testing.T) {
 	check("comment removed")
 }
 
-func TestSharedTokensConcurrentSides(t *testing.T) {
+func TestSharedTokensReuseTheOtherSidesWork(t *testing.T) {
 	lines := make([]string, 0, 600)
 	for i := range 100 {
 		lines = append(lines, "func f() {", "\t/* note", "\t*/", fmt.Sprintf("\tx := %d", i), "}", "")
@@ -73,15 +69,12 @@ func TestSharedTokensConcurrentSides(t *testing.T) {
 	a, b := New("main.go"), New("main.go")
 	a.ShareTokens(nil)
 	b.ShareTokens(a)
-	var wg sync.WaitGroup
-	for _, h := range []*Highlighter{a, b} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			h.HighlightLineAt(lines, len(lines)-1)
-		}()
+	a.HighlightLineAt(lines, len(lines)-1)
+	cached := len(a.doc.(*sharedDoc).cache.m)
+	b.HighlightLineAt(lines, len(lines)-1)
+	if got := len(b.doc.(*sharedDoc).cache.m); got != cached {
+		t.Fatalf("the second side added %d cache entries for identical lines, want 0", got-cached)
 	}
-	wg.Wait()
 	for _, i := range []int{2, 3, len(lines) - 3} {
 		want := freshSpans(lines, i)
 		if got := a.HighlightLineAt(lines, i); !reflect.DeepEqual(got, want) {
@@ -90,34 +83,6 @@ func TestSharedTokensConcurrentSides(t *testing.T) {
 		if got := b.HighlightLineAt(lines, i); !reflect.DeepEqual(got, want) {
 			t.Fatalf("side b line %d spans %v, want %v", i, got, want)
 		}
-	}
-}
-
-func TestTokenCacheWaitsForALineInFlight(t *testing.T) {
-	c := &tokenCache{limit: 8}
-	k := tokenKey{line: "x := 1"}
-	if _, ok := c.claim(k); ok {
-		t.Fatal("empty cache returned a result")
-	}
-	got := make(chan bool)
-	go func() {
-		_, ok := c.claim(k)
-		got <- ok
-	}()
-	select {
-	case <-got:
-		t.Fatal("a second claim of a key in flight did not wait for it")
-	case <-time.After(50 * time.Millisecond):
-	}
-	c.put(k, textmate.LineResult{})
-	c.done(k)
-	select {
-	case ok := <-got:
-		if !ok {
-			t.Fatal("the waiting claim tokenized again instead of using the finished result")
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the waiting claim never woke up")
 	}
 }
 

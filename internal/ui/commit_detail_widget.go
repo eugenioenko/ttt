@@ -121,7 +121,6 @@ type commitDetailPreservedSelection struct {
 // DiffEditorWidget asked to draw only the rows of it that are on screen.
 type CommitDetailWidget struct {
 	BaseWidget
-	redraw         func()
 	Dir            string
 	Ref            string
 	Short          string
@@ -239,7 +238,11 @@ func CommitDetailFileWithContent(file CommitDetailFile, oldLines, newLines []str
 func (d *CommitDetailWidget) Focusable() bool { return true }
 
 func (d *CommitDetailWidget) Close() {
-	d.SetRedrawRequest(nil)
+	for i := range d.Files {
+		if v := d.Files[i].view; v != nil {
+			v.Close()
+		}
+	}
 	if d.OnClose == nil {
 		return
 	}
@@ -258,15 +261,6 @@ func (d *CommitDetailWidget) DiffHighContrast() bool { return d.highContrast }
 func (d *CommitDetailWidget) SetDiffCollapsedEmphasis(enabled bool) {
 	d.emphasizeGaps = enabled
 	d.applyViewOptions()
-}
-
-func (d *CommitDetailWidget) SetRedrawRequest(notify func()) {
-	d.redraw = notify
-	for i := range d.Files {
-		if v := d.Files[i].view; v != nil {
-			v.SetRedrawRequest(notify)
-		}
-	}
 }
 
 func (d *CommitDetailWidget) SetDiffSigns(enabled bool) {
@@ -798,7 +792,6 @@ func (d *CommitDetailWidget) fileView(file *CommitDetailFile) *DiffEditorWidget 
 	if v == nil {
 		v = NewDiffEditorWidget(file.Path, diff.FileDiff{}, nil, nil, false)
 		v.setEmbedded()
-		v.SetRedrawRequest(d.redraw)
 		file.view = v
 	}
 	v.SetSyntaxHighlight(d.SyntaxHighlight && file.Path != "")

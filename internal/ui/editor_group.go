@@ -118,9 +118,6 @@ type EditorGroupWidget struct {
 	OnFileChange            func(path, lang, text string)
 	OnFileClose             func(path, lang string)
 	OnContentTabClose       func(id string)
-	// RequestRedraw asks the event loop for a frame; it is called off the
-	// main thread when background highlighting settles.
-	RequestRedraw func()
 	// OnEmpty fires after the last tab closes and the untitled placeholder
 	// takes its place.
 	OnEmpty func()
@@ -612,9 +609,6 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	surface.ApplyDefaultWrapMode(wrapMode)
 	surface.SetDiffHighContrast(g.DiffHighContrast)
 	surface.SetDiffCollapsedEmphasis(g.DiffCollapsedEmphasis)
-	if r, ok := surface.(interface{ SetRedrawRequest(func()) }); ok {
-		r.SetRedrawRequest(g.RequestRedraw)
-	}
 	if d, ok := surface.(diffSignsSurface); ok {
 		d.SetDiffSigns(g.DiffSigns)
 		d.SetDiffSignsColor(g.DiffSignsColor)
@@ -793,7 +787,7 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
-	tab.Highlighter.SetProgressive(nil)
+	tab.Highlighter.Close()
 	if tab.Diff != nil {
 		tab.Diff.Close()
 	}
@@ -2238,11 +2232,9 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Folds = t.Folds
 		g.Editor.LineChanges = t.LineChanges
 		if t.Diff != nil {
-			t.Highlighter.SetProgressive(g.RequestRedraw)
 			t.Diff.bind(g.Editor)
 			g.editorInDiff = true
 		} else {
-			t.Highlighter.SetProgressive(nil)
 			g.Editor.SetDiffOverlay(nil)
 			if g.editorInDiff {
 				g.editorInDiff = false
@@ -2306,7 +2298,6 @@ func (g *EditorGroupWidget) ensureTabIdentities() {
 }
 
 func (g *EditorGroupWidget) Render(surface Surface) {
-	defer highlight.HoldWarmers()()
 	g.syncTabs()
 	w, h := surface.Size()
 	r := g.GetRect()

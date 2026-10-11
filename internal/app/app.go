@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
 	"os/exec"
 	"runtime"
@@ -626,6 +627,9 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.EditorGroup.Editor.PostDragAutoScrollTick = func(generation uint64) {
 		screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Generation: generation}))
 	}
+	highlight.SetStepScheduler(func() {
+		screen.PostEvent(tcell.NewEventInterrupt(&highlightStep{}))
+	})
 	a.StartWatcher()
 
 	if a.Changes != nil {
