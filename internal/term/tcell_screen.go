@@ -2,6 +2,8 @@ package term
 
 import (
 	"fmt"
+	"unicode/utf8"
+
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -79,7 +81,7 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 		if c.Attrs&CellAttrBlink != 0 {
 			s = s.Blink(true)
 		}
-		t.scr.SetContent(x, y, c.Ch, nil, s)
+		t.scr.Put(x, y, runeString(c.Ch), s)
 		return
 	}
 	s := t.styleMap[c.Style]
@@ -111,7 +113,7 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 	if c.Bold {
 		s = s.Bold(true)
 	}
-	t.scr.SetContent(x, y, c.Ch, nil, s)
+	t.scr.Put(x, y, runeString(c.Ch), s)
 }
 
 func (t *TcellScreen) Show() {
@@ -214,4 +216,20 @@ func (t *TcellScreen) Tty() (tcell.Tty, bool) {
 // tcell drops all locks on resize, so the image layer re-asserts them every frame.
 func (t *TcellScreen) LockRegion(x, y, w, h int, lock bool) {
 	t.scr.LockRegion(x, y, w, h, lock)
+}
+
+var asciiStrings = func() (out [utf8.RuneSelf]string) {
+	for r := range out {
+		out[r] = string(rune(r))
+	}
+	return out
+}()
+
+// runeString avoids tcell's SetContent, which allocates a string for every
+// changed cell; a scroll changes thousands of them.
+func runeString(r rune) string {
+	if r >= 0 && r < utf8.RuneSelf {
+		return asciiStrings[r]
+	}
+	return string(r)
 }
