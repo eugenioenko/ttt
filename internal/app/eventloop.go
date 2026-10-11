@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
@@ -151,9 +152,21 @@ func RunEventLoop(
 				gen := blameGen
 				blameLine := line + 1
 				blameFile, ok := app.Repository.gitRelativePath(repoDir, filePath)
+				var contents *string
+				if buf := app.EditorGroup.ActiveBuffer(); buf != nil && buf.Dirty {
+					eol := buf.LineEnding
+					if eol == "" {
+						eol = "\n"
+					}
+					text := strings.Join(buf.Lines, eol)
+					contents = &text
+				}
 				go func() {
 					var info *git.BlameInfo
-					if ok {
+					switch {
+					case ok && contents != nil:
+						info = git.BlameLineContents(repoDir, blameFile, blameLine, *contents)
+					case ok:
 						info = git.BlameLine(repoDir, blameFile, blameLine)
 					}
 					screen.PostEvent(tcell.NewEventInterrupt(&BlameResult{Gen: gen, Info: info}))

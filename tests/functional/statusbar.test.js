@@ -1,6 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import * as tui from "./tui.js";
-import { createTempDir, createTempFile, cleanupDir } from "./helpers.js";
+import { createGitRepo, createTempDir, createTempFile, cleanupDir, git } from "./helpers.js";
 
 let dir;
 
@@ -67,5 +69,28 @@ describe("status bar segments", () => {
 
     const lastLine = snapshots[s].split("\n").pop();
     expect(lastLine).toContain("Screenshot");
+  });
+
+  it("blames the line under the cursor after unsaved edits shift it", () => {
+    dir = createTempDir();
+    createGitRepo(dir);
+    const file = join(dir, "authors.txt");
+    writeFileSync(file, "first line\n");
+    git(dir, "add", "authors.txt");
+    git(dir, "-c", "user.name=Alice", "commit", "-qm", "first");
+    writeFileSync(file, "first line\nsecond line\n");
+    git(dir, "-c", "user.name=Bob", "commit", "-qam", "second");
+
+    tui.start(file);
+    tui.waitFor("Alice");
+    tui.press("enter");
+    tui.waitFor("Alice");
+    const s = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    const lastLine = snapshots[s].split("\n").pop();
+    expect(lastLine).toContain("Ln 2, Col 1");
+    expect(lastLine).toContain("Alice");
+    expect(lastLine).not.toContain("Bob");
   });
 });

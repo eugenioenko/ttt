@@ -869,6 +869,26 @@ func TestBlameLineUncommittedReturnsNil(t *testing.T) {
 	}
 }
 
+func TestBlameLineContentsUsesUnsavedLineNumbers(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "file.txt", "first\n")
+	gitRun(t, dir, "add", "file.txt")
+	gitRun(t, dir, "-c", "user.name=First Author", "commit", "-m", "first")
+	writeFile(t, dir, "file.txt", "first\nsecond\n")
+	gitRun(t, dir, "-c", "user.name=Second Author", "commit", "-am", "second")
+
+	contents := "unsaved\nfirst\nsecond\n"
+	if info := BlameLineContents(dir, "file.txt", 1, contents); info != nil {
+		t.Errorf("unsaved line: got %+v, want nil", info)
+	}
+	if info := BlameLineContents(dir, "file.txt", 2, contents); info == nil || info.Author != "First Author" {
+		t.Errorf("line 2: got %+v, want First Author", info)
+	}
+	if info := BlameLineContents(dir, "file.txt", 3, contents); info == nil || info.Author != "Second Author" {
+		t.Errorf("line 3: got %+v, want Second Author", info)
+	}
+}
+
 func TestBlameLineNonexistentFile(t *testing.T) {
 	dir := setupTestRepo(t)
 	writeFile(t, dir, "file.txt", "x\n")

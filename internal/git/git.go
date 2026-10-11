@@ -454,11 +454,31 @@ type BlameInfo struct {
 }
 
 func BlameLine(dir, file string, line int) *BlameInfo {
-	lineStr := fmt.Sprintf("%d,%d", line, line)
-	cmd := exec.Command("git", "-C", dir, "blame", "-L", lineStr,
-		"--porcelain", "--", file)
+	return blameLine(dir, file, line, nil)
+}
+
+// BlameLineContents blames line of contents, the unsaved text of file, so
+// line numbers match the editor rather than the file on disk.
+func BlameLineContents(dir, file string, line int, contents string) *BlameInfo {
+	return blameLine(dir, file, line, &contents)
+}
+
+func blameLine(dir, file string, line int, contents *string) *BlameInfo {
+	args := []string{"-C", dir, "blame", "-L", fmt.Sprintf("%d,%d", line, line), "--porcelain"}
+	if contents != nil {
+		args = append(args, "--contents", "-")
+	}
+	cmd := exec.Command("git", append(args, "--", file)...)
+	if contents != nil {
+		cmd.Stdin = strings.NewReader(*contents)
+	}
 	out, err := cmd.Output()
 	if err != nil {
+		return nil
+	}
+
+	// Lines not committed yet carry the all-zero object ID.
+	if hash, _, _ := strings.Cut(string(out), " "); strings.Trim(hash, "0") == "" {
 		return nil
 	}
 
@@ -475,10 +495,6 @@ func BlameLine(dir, file string, line int) *BlameInfo {
 	}
 
 	if info.Author == "" {
-		return nil
-	}
-	// Uncommitted changes
-	if strings.HasPrefix(info.Author, "Not Committed") {
 		return nil
 	}
 	return info
