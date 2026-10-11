@@ -92,6 +92,7 @@ These commands are available from the command palette:
 
 ## Word Operations
 
+- **Ctrl+Home / Ctrl+End** moves the cursor to the start or end of the file; with **Shift** it selects
 - **Ctrl+Left / Ctrl+Right** moves the cursor one word left or right
 - **Ctrl+Shift+Left / Ctrl+Shift+Right** selects one word left or right
 - **Alt+Backspace** deletes the word to the left

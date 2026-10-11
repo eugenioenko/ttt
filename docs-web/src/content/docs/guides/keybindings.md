@@ -51,6 +51,8 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 
 | Shortcut | Action |
 |----------|--------|
+| Ctrl+Home / Ctrl+End | Move to the start or end of the file |
+| Ctrl+Shift+Home / Ctrl+Shift+End | Select to the start or end of the file |
 | Ctrl+Left | Move word left |
 | Ctrl+Right | Move word right |
 | Ctrl+Shift+Left | Select word left |
