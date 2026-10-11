@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"sort"
 	"strconv"
 	"unsafe"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -37,6 +39,18 @@ type DiffOverlay struct {
 	GutterHighlight bool
 	GapChevron      rune
 
+	// DeletedMatches holds find matches on deleted rows, keyed like Deleted;
+	// a match's Line is the row's index in its block. DeletedActive is the
+	// anchor and index into DeletedMatches of the active match, or -1s.
+	DeletedMatches map[int][]FindMatch
+	DeletedActive  [2]int
+
+	// Hidden holds buffer lines folded away behind a gap line, so a real
+	// buffer can show changes only without touching the user's folds.
+	Hidden  []diffHiddenRange
+	visible []int
+	visN    int
+
 	// Syntax highlights lines taken from the diff's source files within those
 	// whole files, so a line inside a multi-line comment or string keeps its
 	// state. NewSide marks a Nums line as taken from the new file; deleted
@@ -44,8 +58,17 @@ type DiffOverlay struct {
 	Syntax  *diffSyntax
 	NewSide []bool
 
+	// buf and ver are the buffer and version the overlay's line numbers refer
+	// to. The pane replays later edits of that buffer onto the overlay before
+	// using it, so it moves with the text until its owner rebuilds it.
+	buf   *buffer.Buffer
+	ver   uint64
+	stale bool
+
 	maxNum, numsN int
 }
+
+type diffHiddenRange struct{ start, end int }
 
 // DiffSide is one pane of a split diff: its buffer lines and their overlay.
 type DiffSide struct {
@@ -144,6 +167,9 @@ type diffSideSyntax struct {
 	lines  []string
 	notify func()
 	peer   *diffSideSyntax
+	// anchor is the editable side's own highlighter, whose single-line cache
+	// the HEAD side shares while both draw the same unchanged lines.
+	anchor *highlight.Highlighter
 }
 
 func (s *diffSideSyntax) setNotify(notify func()) {
@@ -181,8 +207,11 @@ func (s *diffSideSyntax) spans(num int, text string) ([]highlight.Span, bool) {
 			peer = s.peer.hl
 		}
 		s.hl.ShareTokens(peer)
-		s.hl.ShareSingleLines(peer)
 		s.hl.SetProgressive(s.notify)
+		if peer == nil {
+			peer = s.anchor
+		}
+		s.hl.ShareSingleLines(peer)
 	}
 	return s.hl.HighlightLineAt(s.lines, num-1), true
 }
@@ -226,6 +255,38 @@ func (o *DiffOverlay) label(line int) (string, bool) {
 	}
 	s, ok := o.Labels[line]
 	return s, ok
+}
+
+func (o *DiffOverlay) hasHidden() bool { return o != nil && len(o.Hidden) > 0 }
+
+func (o *DiffOverlay) hidden(line int) bool {
+	if o == nil {
+		return false
+	}
+	i := sort.Search(len(o.Hidden), func(i int) bool { return o.Hidden[i].end >= line })
+	return i < len(o.Hidden) && o.Hidden[i].start <= line
+}
+
+func (o *DiffOverlay) visibleLines(n int) []int {
+	if o.visible != nil && o.visN == n {
+		return o.visible
+	}
+	var vis []int
+	next := 0
+	for _, h := range o.Hidden {
+		for line := next; line < min(h.start, n); line++ {
+			vis = append(vis, line)
+		}
+		next = max(next, h.end+1)
+	}
+	for line := next; line < n; line++ {
+		vis = append(vis, line)
+	}
+	if vis == nil {
+		vis = []int{}
+	}
+	o.visible, o.visN = vis, n
+	return vis
 }
 
 func (o *DiffOverlay) gapHovered(line int) bool {
@@ -373,12 +434,22 @@ func (e *EditorPaneWidget) renderEditorDiffGutter(surface Surface, y, gutterW, n
 }
 
 func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
+	if o == nil && e.DiffOverlay == nil {
+		return
+	}
+	if o != nil && o == e.DiffOverlay {
+		e.syncDiffOverlay()
+	}
 	e.DiffOverlay = o
 	e.diffNumDigits = diffGutterDigits(o)
 	if o == nil {
 		e.setPhantoms(nil)
 		return
 	}
+	if o.buf == nil {
+		o.buf, o.ver = e.Buf, e.Buf.Version()
+	}
+	e.syncDiffOverlay()
 	phantoms := make(map[int]int, len(o.Deleted)+len(o.Fillers))
 	for anchor, block := range o.Deleted {
 		phantoms[anchor] += len(block)
@@ -476,8 +547,20 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		leftCol = bufColToVisualCol(old.Text, row.startCol, tabW)
 	}
 	cells := e.renderLineToScreen([]rune(old.Text), spans, false, nil, tabW, leftCol, editorW)
+	matches := e.DiffOverlay.DeletedMatches[row.bufLine]
 	for x := 0; x < editorW; x++ {
-		surface.SetCell(gutterW+x, y, term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted})
+		cell := term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted}
+		for i, m := range matches {
+			if m.Line != row.phantom || cells[x].bufCol < m.Col || cells[x].bufCol >= m.Col+m.Len {
+				continue
+			}
+			cell.Style, cell.BgStyle = term.StyleSearchMatch, 0
+			if e.DiffOverlay.DeletedActive == [2]int{row.bufLine, i} {
+				cell.Style = term.StyleSearchActive
+			}
+			break
+		}
+		surface.SetCell(gutterW+x, y, cell)
 	}
 }
 

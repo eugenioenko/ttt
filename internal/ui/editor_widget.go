@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -105,6 +106,10 @@ type EditorPaneWidget struct {
 	wrapCols     int
 	layoutCache  [4]*rowLayout
 	layoutNext   int
+
+	// revealGapRow asks a diff to open a gap row the cursor jumped onto,
+	// where moving onto one normally leaves it collapsed.
+	revealGapRow bool
 }
 
 func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewport) *EditorPaneWidget {
@@ -506,28 +511,59 @@ func (e *EditorPaneWidget) clampCursor() {
 	}
 }
 
+func (e *EditorPaneWidget) diffHiddenRange(line int) (gapLine, end int, ok bool) {
+	o := e.DiffOverlay
+	if !o.hasHidden() {
+		return 0, 0, false
+	}
+	i := sort.Search(len(o.Hidden), func(i int) bool { return o.Hidden[i].end >= line })
+	if i < len(o.Hidden) && o.Hidden[i].start <= line {
+		return o.Hidden[i].start - 1, o.Hidden[i].end, true
+	}
+	return 0, 0, false
+}
+
+func (e *EditorPaneWidget) clampCursorCol() {
+	if lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line])); e.Cursor.Col > lineLen {
+		e.Cursor.Col = lineLen
+	}
+}
+
 func (e *EditorPaneWidget) skipHiddenLineDown() {
+	if _, end, ok := e.diffHiddenRange(e.Cursor.Line); ok {
+		e.Cursor.Line = e.Buf.ClampLine(end + 1)
+		e.clampCursorCol()
+	}
+	e.skipFoldDown()
+}
+
+func (e *EditorPaneWidget) skipHiddenLineUp() {
+	if gapLine, _, ok := e.diffHiddenRange(e.Cursor.Line); ok {
+		e.Cursor.Line = e.Buf.ClampLine(gapLine)
+		e.clampCursorCol()
+	}
+	e.skipFoldUp()
+}
+
+func (e *EditorPaneWidget) skipFoldDown() {
 	if e.Folds == nil {
 		return
 	}
 	moved := false
 	for r := e.Folds.ContainingFold(e.Cursor.Line); r != nil; r = e.Folds.ContainingFold(e.Cursor.Line) {
 		if r.EndLine+1 >= len(e.Buf.Lines) {
-			e.skipHiddenLineUp()
+			e.skipFoldUp()
 			return
 		}
 		e.Cursor.Line = r.EndLine + 1
 		moved = true
 	}
 	if moved {
-		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		if e.Cursor.Col > lineLen {
-			e.Cursor.Col = lineLen
-		}
+		e.clampCursorCol()
 	}
 }
 
-func (e *EditorPaneWidget) skipHiddenLineUp() {
+func (e *EditorPaneWidget) skipFoldUp() {
 	if e.Folds == nil {
 		return
 	}
@@ -537,10 +573,7 @@ func (e *EditorPaneWidget) skipHiddenLineUp() {
 		moved = true
 	}
 	if moved {
-		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		if e.Cursor.Col > lineLen {
-			e.Cursor.Col = lineLen
-		}
+		e.clampCursorCol()
 	}
 }
 

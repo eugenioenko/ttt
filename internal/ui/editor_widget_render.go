@@ -11,6 +11,7 @@ import (
 )
 
 func (e *EditorPaneWidget) Render(surface Surface) {
+	e.syncDiffOverlay()
 	e.Highlighter.BeginPass()
 	if o := e.DiffOverlay; o != nil && o.Syntax != nil {
 		o.Syntax.old.hl.BeginPass()

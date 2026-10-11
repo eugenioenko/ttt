@@ -47,6 +47,7 @@ type rowLayoutKey struct {
 	lines      *string
 	n          int
 	version    uint64
+	overlay    *DiffOverlay
 	visible    *int
 	visN       int
 	phantomGen uint64
@@ -64,16 +65,31 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	if width < 1 {
 		width = 1
 	}
+	e.syncDiffOverlay()
 	n := len(e.Buf.Lines)
 	var visible []int
-	if e.hasFolds() {
+	folds, hidden := e.hasFolds(), e.DiffOverlay.hasHidden()
+	switch {
+	case folds && hidden:
+		for _, line := range e.Folds.VisibleLines(n) {
+			if !e.DiffOverlay.hidden(line) {
+				visible = append(visible, line)
+			}
+		}
+		if visible == nil {
+			visible = []int{}
+		}
+	case folds:
 		visible = e.Folds.VisibleLines(n)
+	case hidden:
+		visible = e.DiffOverlay.visibleLines(n)
 	}
 	key := rowLayoutKey{
 		buf:        e.Buf,
 		lines:      unsafe.SliceData(e.Buf.Lines),
 		n:          n,
 		version:    e.Buf.Version(),
+		overlay:    e.DiffOverlay,
 		visible:    unsafe.SliceData(visible),
 		visN:       len(visible),
 		phantomGen: e.phantomGen,
@@ -194,10 +210,10 @@ func sameInputs(a, b rowLayoutKey) bool {
 // advance brings an ensured layout up to date with the buffer edits made
 // since it was built, re-measuring only the edited lines. It reports false
 // when the edits cannot be replayed and the layout must be rebuilt. Non-buffer
-// rows are anchored by line number and do not move with edits, so a layout
-// with any is always rebuilt.
+// rows move with edits only through a diff overlay, which shifts their anchors
+// as it replays the same edits; without one a layout with any is rebuilt.
 func (l *rowLayout) advance(key rowLayoutKey, buf *buffer.Buffer) bool {
-	if l.starts == nil || l.visible != nil || l.phantoms != nil || key.visible != nil || key.version <= l.key.version || !sameInputs(l.key, key) {
+	if l.starts == nil || l.visible != nil || (l.phantoms != nil && key.overlay == nil) || key.visible != nil || key.version <= l.key.version || !sameInputs(l.key, key) {
 		return false
 	}
 	n := len(l.lines)
