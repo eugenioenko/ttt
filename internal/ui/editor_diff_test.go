@@ -215,6 +215,37 @@ func TestDiffGutterFitsSourceLineNumbers(t *testing.T) {
 	}
 }
 
+func TestDeletedRowsWrap(t *testing.T) {
+	long := strings.Repeat("abcdefghij", 3)
+	e := newRowsEditor([]string{"keep", "new"}, 16, 8)
+	e.LineNumbers = true
+	e.WordWrap = true
+	e.SetDiffOverlay(NewDiffOverlay(diff.FullDiffLines([]string{"keep", long}, []string{"keep", "new"})))
+	rows := renderRows(e)
+	grid := renderGrid(e)
+	g := e.GutterWidth()
+
+	if rows[0] != "keep" || !strings.HasPrefix(long, rows[1]) || rows[1] == long {
+		t.Fatalf("deleted line did not wrap: %q", rows)
+	}
+	segs := 0
+	for y := 1; y < len(rows) && rows[y] != "new"; y++ {
+		segs++
+		if grid[y][g].BgStyle != term.StyleDiffDeleted {
+			t.Fatalf("wrapped deleted row %d not tinted", y)
+		}
+	}
+	if segs < 2 || strings.Join(rows[1:1+segs], "") != long {
+		t.Fatalf("deleted segments = %q, want %q split over rows", rows[1:1+segs], long)
+	}
+	if gutterText(grid, 1, g) != "2" || gutterText(grid, 2, g) != "" {
+		t.Fatalf("old line number should show only on the first segment: %q %q", gutterText(grid, 1, g), gutterText(grid, 2, g))
+	}
+	if total := e.layout().total(); total != 2+segs {
+		t.Fatalf("layout total = %d, want %d", total, 2+segs)
+	}
+}
+
 func TestCursorSkipsDiffRows(t *testing.T) {
 	e := newRowsEditor([]string{"a", "B", "c"}, 20, 8)
 	e.LineNumbers = true

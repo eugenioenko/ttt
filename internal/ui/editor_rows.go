@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
@@ -29,6 +30,7 @@ type rowLayout struct {
 	tabW     int
 	visible  []int
 	phantoms map[int]int
+	deleted  map[int][]diff.SideLine
 
 	key    rowLayoutKey
 	starts []int
@@ -100,6 +102,9 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	}
 	if len(e.phantoms) > 0 {
 		l.phantoms = e.phantoms
+		if e.DiffOverlay != nil {
+			l.deleted = e.DiffOverlay.Deleted
+		}
 	}
 	slot := 0
 	for i, c := range e.layoutCache {
@@ -158,7 +163,7 @@ func (l *rowLayout) ensure() {
 	for i := 0; i < count; i++ {
 		starts[i] = row
 		line := l.visLine(i)
-		row += l.phantoms[line]
+		row += l.phantomRows(line)
 		if l.wrap {
 			row += l.lineRows(line, prev, delta)
 		} else {
@@ -167,7 +172,7 @@ func (l *rowLayout) ensure() {
 	}
 	starts[count] = row
 	l.starts = starts
-	l.endRow = row + l.phantoms[l.n()]
+	l.endRow = row + l.phantomRows(l.n())
 }
 
 func (e *EditorPaneWidget) layout() *rowLayout {
@@ -268,7 +273,7 @@ func (l *rowLayout) restart(lo, hi int) {
 	lo = min(lo, hi)
 	oldHi := l.starts[hi]
 	for i := lo; i < hi; i++ {
-		rows := l.phantoms[i] + 1
+		rows := l.phantomRows(i) + 1
 		if l.wrap {
 			rows += l.lineRows(i, l.memo, 0) - 1
 		}
@@ -280,7 +285,7 @@ func (l *rowLayout) restart(lo, hi int) {
 			tail[i] += delta
 		}
 	}
-	l.endRow = l.starts[n] + l.phantoms[n]
+	l.endRow = l.starts[n] + l.phantomRows(n)
 }
 
 func (l *rowLayout) segments(line int) []int {
@@ -290,8 +295,41 @@ func (l *rowLayout) segments(line int) []int {
 	return singleSegment
 }
 
+// phantomSegments is where each wrapped row of the k-th phantom row anchored
+// at line starts: deleted lines wrap like buffer lines, fillers never do.
+func (l *rowLayout) phantomSegments(line, k int) []int {
+	block := l.deleted[line]
+	if !l.wrap || k >= len(block) {
+		return singleSegment
+	}
+	return wrapLineSegments([]rune(block[k].Text), l.width, l.tabW)
+}
+
+func (l *rowLayout) phantomRows(line int) int {
+	n := l.phantoms[line]
+	if !l.wrap || n == 0 {
+		return n
+	}
+	rows := 0
+	for k := 0; k < n; k++ {
+		rows += len(l.phantomSegments(line, k))
+	}
+	return rows
+}
+
+func (l *rowLayout) phantomAt(line, offset int) (editorRow, bool) {
+	for k := 0; k < l.phantoms[line]; k++ {
+		segs := l.phantomSegments(line, k)
+		if offset < len(segs) {
+			return editorRow{bufLine: line, startCol: segs[offset], phantom: k}, true
+		}
+		offset -= len(segs)
+	}
+	return editorRow{}, false
+}
+
 func (l *rowLayout) blockRows(line int) int {
-	rows := l.phantoms[line]
+	rows := l.phantomRows(line)
 	if line < l.n() {
 		rows += len(l.segments(line))
 	}
@@ -344,7 +382,7 @@ func (l *rowLayout) startRow(line int) int {
 		return l.visIndex(line)
 	}
 	if line > l.n() {
-		return l.startRow(l.n()) + l.phantoms[l.n()] + line - l.n() - 1
+		return l.startRow(l.n()) + l.phantomRows(l.n()) + line - l.n() - 1
 	}
 	l.ensure()
 	return l.starts[min(l.visIndex(line), l.visibleCount())]
@@ -363,7 +401,7 @@ func (l *rowLayout) rowOf(line, col int) (row, screenCol int) {
 	if line >= l.n() {
 		return l.total(), 0
 	}
-	row = l.startRow(line) + l.phantoms[line]
+	row = l.startRow(line) + l.phantomRows(line)
 	if !l.wrap {
 		return row, 0
 	}
@@ -410,7 +448,7 @@ func (l *rowLayout) rowToTop(abs int) (line, offset int) {
 	}
 	acc := l.starts[count]
 	last := l.lastVisibleLine()
-	if abs < acc+l.phantoms[l.n()] {
+	if abs < acc+l.phantomRows(l.n()) {
 		return last, abs - l.startRow(last)
 	}
 	return last, 0
@@ -419,7 +457,7 @@ func (l *rowLayout) rowToTop(abs int) (line, offset int) {
 func (l *rowLayout) maxOffset(line int) int {
 	rows := l.blockRows(line)
 	if line == l.lastVisibleLine() {
-		rows += l.phantoms[l.n()]
+		rows += l.phantomRows(l.n())
 	}
 	return rows
 }
@@ -449,8 +487,10 @@ func (l *rowLayout) appendRows(out []editorRow, topLine, offset, h int) []editor
 	}
 	emitBlock := func(line int) bool {
 		for k := 0; k < l.phantoms[line]; k++ {
-			if emit(editorRow{bufLine: line, phantom: k}) {
-				return true
+			for _, seg := range l.phantomSegments(line, k) {
+				if emit(editorRow{bufLine: line, startCol: seg, phantom: k}) {
+					return true
+				}
 			}
 		}
 		if line >= l.n() {
@@ -483,15 +523,18 @@ func (l *rowLayout) appendRows(out []editorRow, topLine, offset, h int) []editor
 }
 
 func (l *rowLayout) rowInBlock(line, offset int) editorRow {
-	ph := l.phantoms[line]
+	ph := l.phantomRows(line)
 	if offset < ph {
-		return editorRow{bufLine: line, phantom: offset}
+		r, _ := l.phantomAt(line, offset)
+		return r
 	}
 	segs := l.segments(line)
 	idx := offset - ph
 	if idx >= len(segs) {
-		if line == l.lastVisibleLine() && idx-len(segs) < l.phantoms[l.n()] {
-			return editorRow{bufLine: l.n(), phantom: idx - len(segs)}
+		if line == l.lastVisibleLine() {
+			if r, ok := l.phantomAt(l.n(), idx-len(segs)); ok {
+				return r
+			}
 		}
 		idx = len(segs) - 1
 	}
