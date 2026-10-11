@@ -470,34 +470,37 @@ Bug reports, feature requests, and pull requests are all welcome — open an [is
 
 TTT is better because of the people who took the time to try it, report bugs, request features, and contribute code. Thank you — this project grows because of you. 🙏
 
-**Code contributions**
-
-- [@tenox7](https://github.com/tenox7) — the **Outline** sidebar panel (LSP document symbols with a built-in Go/Markdown fallback) and **markdown syntax highlighting**.
-- [@pirate-boop](https://github.com/pirate-boop) — **NixOS support** end to end: the initial `flake.nix` and ongoing `vendorHash` upkeep.
-- [@arimxyer](https://github.com/arimxyer) — re-envisioned and re-designed the **diff & code review experience** (commit history detail, live current changes, unified presentation controls, hierarchical file trees), plus tab drag reordering, orientation help, checked plugin menu entries, deterministic exec automation, and CLI open-at-line support.
-- [@SimonOcampo1](https://github.com/SimonOcampo1) — the **welcome page**, the **folder picker**, the **right-docked panel**, LSP file URI fixes, and a run of integrated terminal fixes.
-- [@bet4it](https://github.com/bet4it) — migrated the **integrated terminal to xterm-go**, plus terminal copy/paste and device-attribute fixes.
-- [@sjdonado](https://github.com/sjdonado) — **inline image rendering** via the Kitty graphics protocol.
-- [@RonanCodes](https://github.com/RonanCodes) — **Nerd Font file icons** in the Explorer and Changes panel.
-- [@risixdzn](https://github.com/risixdzn) — **git status colors** in the Explorer.
-- [@austinm911](https://github.com/austinm911) — **multi-line string highlighting** across lines.
-- [@DBinK](https://github.com/DBinK) — the **VSCode Dark+ theme**.
-- [@vikas-0](https://github.com/vikas-0) — whitespace handling in **Quick Open**.
-
-**Packaging**
-
-- [@Dominiquini](https://github.com/Dominiquini) — maintaining the [Arch Linux (AUR)](https://aur.archlinux.org/packages/ttt) package.
-
-**Bug reports & feature requests**
-
-- [@jetpax](https://github.com/jetpax): surfacing the macOS / iTerm2 issues (mouse support, clipboard copy, large-list scrolling, workspace paths).
-- [@egorse](https://github.com/egorse): the search-panel focus fix.
-- [@pirate-boop](https://github.com/pirate-boop): the Cyrillic cursor-offset fix and a number of UX/packaging ideas.
-- [@forthrin](https://github.com/forthrin): great insight into emacs, keyboards and keyboard shortcuts :) 
-- [@lozzo](https://github.com/lozzo): the fullwidth CJK rendering report, tested through to the fix.
-- [@vikas-0](https://github.com/vikas-0): the Quick Open behavior report.
-- [@JohnWJ-co](https://github.com/JohnWJ-co) and [@hassanabdulqayyum](https://github.com/hassanabdulqayyum): the Herdr plugin crash reports.
-- [@SimonOcampo1](https://github.com/SimonOcampo1): the welcome page proposal and terminal drag-and-drop idea.
+<p>
+  <a href="https://github.com/eugenioenko"><img src="https://avatars.githubusercontent.com/u/17834212?v=4&amp;s=96" width="48" height="48" alt="@eugenioenko" title="@eugenioenko" /></a>
+  <a href="https://github.com/arimxyer"><img src="https://avatars.githubusercontent.com/u/37885347?v=4&amp;s=96" width="48" height="48" alt="@arimxyer" title="@arimxyer" /></a>
+  <a href="https://github.com/SimonOcampo1"><img src="https://avatars.githubusercontent.com/u/124914405?v=4&amp;s=96" width="48" height="48" alt="@SimonOcampo1" title="@SimonOcampo1" /></a>
+  <a href="https://github.com/tenox7"><img src="https://avatars.githubusercontent.com/u/8151602?v=4&amp;s=96" width="48" height="48" alt="@tenox7" title="@tenox7" /></a>
+  <a href="https://github.com/pirate-boop"><img src="https://avatars.githubusercontent.com/u/241358583?v=4&amp;s=96" width="48" height="48" alt="@pirate-boop" title="@pirate-boop" /></a>
+  <a href="https://github.com/bet4it"><img src="https://avatars.githubusercontent.com/u/16643669?v=4&amp;s=96" width="48" height="48" alt="@bet4it" title="@bet4it" /></a>
+  <a href="https://github.com/Detoy"><img src="https://avatars.githubusercontent.com/u/5773665?v=4&amp;s=96" width="48" height="48" alt="@Detoy" title="@Detoy" /></a>
+  <a href="https://github.com/DBinK"><img src="https://avatars.githubusercontent.com/u/21201676?v=4&amp;s=96" width="48" height="48" alt="@DBinK" title="@DBinK" /></a>
+  <a href="https://github.com/risixdzn"><img src="https://avatars.githubusercontent.com/u/102877738?v=4&amp;s=96" width="48" height="48" alt="@risixdzn" title="@risixdzn" /></a>
+  <a href="https://github.com/LetMeSleep8h"><img src="https://avatars.githubusercontent.com/u/183817470?v=4&amp;s=96" width="48" height="48" alt="@LetMeSleep8h" title="@LetMeSleep8h" /></a>
+  <a href="https://github.com/austinm911"><img src="https://avatars.githubusercontent.com/u/31991302?v=4&amp;s=96" width="48" height="48" alt="@austinm911" title="@austinm911" /></a>
+  <a href="https://github.com/sjdonado"><img src="https://avatars.githubusercontent.com/u/27580836?v=4&amp;s=96" width="48" height="48" alt="@sjdonado" title="@sjdonado" /></a>
+  <a href="https://github.com/mshafir"><img src="https://avatars.githubusercontent.com/u/1139669?v=4&amp;s=96" width="48" height="48" alt="@mshafir" title="@mshafir" /></a>
+  <a href="https://github.com/w3lld1"><img src="https://avatars.githubusercontent.com/u/42353747?v=4&amp;s=96" width="48" height="48" alt="@w3lld1" title="@w3lld1" /></a>
+  <a href="https://github.com/omar3903"><img src="https://avatars.githubusercontent.com/u/22183080?v=4&amp;s=96" width="48" height="48" alt="@omar3903" title="@omar3903" /></a>
+  <a href="https://github.com/RhenCloud"><img src="https://avatars.githubusercontent.com/u/111980217?v=4&amp;s=96" width="48" height="48" alt="@RhenCloud" title="@RhenCloud" /></a>
+  <a href="https://github.com/RonanCodes"><img src="https://avatars.githubusercontent.com/u/6930753?v=4&amp;s=96" width="48" height="48" alt="@RonanCodes" title="@RonanCodes" /></a>
+  <a href="https://github.com/choephix"><img src="https://avatars.githubusercontent.com/u/962412?v=4&amp;s=96" width="48" height="48" alt="@choephix" title="@choephix" /></a>
+  <a href="https://github.com/O1sumitkumar"><img src="https://avatars.githubusercontent.com/u/109774891?v=4&amp;s=96" width="48" height="48" alt="@O1sumitkumar" title="@O1sumitkumar" /></a>
+  <a href="https://github.com/vikas-0"><img src="https://avatars.githubusercontent.com/u/15345994?v=4&amp;s=96" width="48" height="48" alt="@vikas-0" title="@vikas-0" /></a>
+  <a href="https://github.com/YodHeVauHe"><img src="https://avatars.githubusercontent.com/u/43342618?v=4&amp;s=96" width="48" height="48" alt="@YodHeVauHe" title="@YodHeVauHe" /></a>
+  <a href="https://github.com/anyingiit"><img src="https://avatars.githubusercontent.com/u/49945850?v=4&amp;s=96" width="48" height="48" alt="@anyingiit" title="@anyingiit" /></a>
+  <a href="https://github.com/Dominiquini"><img src="https://avatars.githubusercontent.com/u/1180808?v=4&amp;s=96" width="48" height="48" alt="@Dominiquini" title="@Dominiquini" /></a>
+  <a href="https://github.com/jetpax"><img src="https://avatars.githubusercontent.com/u/6566148?v=4&amp;s=96" width="48" height="48" alt="@jetpax" title="@jetpax" /></a>
+  <a href="https://github.com/egorse"><img src="https://avatars.githubusercontent.com/u/1152410?v=4&amp;s=96" width="48" height="48" alt="@egorse" title="@egorse" /></a>
+  <a href="https://github.com/forthrin"><img src="https://avatars.githubusercontent.com/u/1167421?v=4&amp;s=96" width="48" height="48" alt="@forthrin" title="@forthrin" /></a>
+  <a href="https://github.com/lozzo"><img src="https://avatars.githubusercontent.com/u/8793008?v=4&amp;s=96" width="48" height="48" alt="@lozzo" title="@lozzo" /></a>
+  <a href="https://github.com/JohnWJ-co"><img src="https://avatars.githubusercontent.com/u/57254767?v=4&amp;s=96" width="48" height="48" alt="@JohnWJ-co" title="@JohnWJ-co" /></a>
+  <a href="https://github.com/hassanabdulqayyum"><img src="https://avatars.githubusercontent.com/u/13608799?v=4&amp;s=96" width="48" height="48" alt="@hassanabdulqayyum" title="@hassanabdulqayyum" /></a>
+</p>
 
 Want to help? Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR.
 
