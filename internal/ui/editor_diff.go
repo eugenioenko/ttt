@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strconv"
+	"unsafe"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/highlight"
@@ -18,14 +19,32 @@ type DiffOverlay struct {
 	Deleted map[int][]diff.SideLine
 	Fillers map[int]int
 
-	// Nums numbers buffer lines from the diff's source files instead of by
-	// buffer position; 0 leaves a line unnumbered.
+	// Nums switches the gutter to the diff layout (line number plus change
+	// mark), numbering buffer lines from the diff's source files instead of
+	// by buffer position; 0 leaves a line unnumbered.
 	Nums []int
 
-	// Gaps maps a collapsed gap line to its gap index and Labels holds the
-	// text drawn in its place.
+	// Gaps maps a collapsed gap line to its gap index. Labels draws a gap
+	// label in place of a buffer line's text.
 	Gaps   map[int]int
 	Labels map[int]string
+
+	HoveredGap      int
+	HighContrast    bool
+	EmphasizeGaps   bool
+	Signs           bool
+	SignsColor      bool
+	GutterHighlight bool
+	GapChevron      rune
+
+	// Syntax highlights lines taken from the diff's source files within those
+	// whole files, so a line inside a multi-line comment or string keeps its
+	// state. NewSide marks a Nums line as taken from the new file; deleted
+	// rows always come from the old one.
+	Syntax  *diffSyntax
+	NewSide []bool
+
+	maxNum, numsN int
 }
 
 // DiffSide is one pane of a split diff: its buffer lines and their overlay.
@@ -112,6 +131,79 @@ func (s *DiffSide) add(side diff.SideLine, gap int) {
 	o.Nums = append(o.Nums, side.Num)
 }
 
+// diffSyntax holds the whole-file highlighters of a diff's two sides.
+type diffSyntax struct {
+	old, new diffSideSyntax
+}
+
+// diffSideSyntax creates its highlighter on first use; path is empty when
+// syntax highlighting is off.
+type diffSideSyntax struct {
+	path   string
+	hl     *highlight.Highlighter
+	lines  []string
+	notify func()
+	peer   *diffSideSyntax
+}
+
+func (s *diffSideSyntax) setNotify(notify func()) {
+	s.notify = notify
+	if s.hl != nil {
+		s.hl.SetProgressive(notify)
+	}
+}
+
+func (s *diffSideSyntax) reset(path string) {
+	if s.hl != nil {
+		s.hl.SetProgressive(nil)
+	}
+	s.path, s.hl = path, nil
+}
+
+func (s *diffSideSyntax) set(lines []string) {
+	if s.hl != nil && (len(s.lines) != len(lines) || unsafe.SliceData(s.lines) != unsafe.SliceData(lines)) {
+		s.hl.ClearCache()
+	}
+	s.lines = lines
+}
+
+func (s *diffSideSyntax) spans(num int, text string) ([]highlight.Span, bool) {
+	if s.path == "" || num < 1 || num > len(s.lines) || s.lines[num-1] != text {
+		return nil, false
+	}
+	if s.hl == nil {
+		if s.hl = highlight.New(s.path); s.hl == nil {
+			s.path = ""
+			return nil, false
+		}
+		var peer *highlight.Highlighter
+		if s.peer != nil {
+			peer = s.peer.hl
+		}
+		s.hl.ShareTokens(peer)
+		s.hl.ShareSingleLines(peer)
+		s.hl.SetProgressive(s.notify)
+	}
+	return s.hl.HighlightLineAt(s.lines, num-1), true
+}
+
+func (o *DiffOverlay) syntaxAt(line int, text string) ([]highlight.Span, bool) {
+	if o == nil || o.Syntax == nil || line < 0 || line >= len(o.Nums) {
+		return nil, false
+	}
+	if line < len(o.NewSide) && o.NewSide[line] {
+		return o.Syntax.new.spans(o.Nums[line], text)
+	}
+	return o.Syntax.old.spans(o.Nums[line], text)
+}
+
+func (o *DiffOverlay) deletedSyntax(old diff.SideLine) ([]highlight.Span, bool) {
+	if o == nil || o.Syntax == nil {
+		return nil, false
+	}
+	return o.Syntax.old.spans(old.Num, old.Text)
+}
+
 func (o *DiffOverlay) kind(line int) diff.LineKind {
 	if o == nil || line < 0 || line >= len(o.Kinds) {
 		return diff.Context
@@ -119,14 +211,13 @@ func (o *DiffOverlay) kind(line int) diff.LineKind {
 	return o.Kinds[line]
 }
 
-func (o *DiffOverlay) num(line int) (int, bool) {
-	if o == nil || o.Nums == nil {
-		return 0, false
+func (o *DiffOverlay) diffGutter() bool { return o != nil && o.Nums != nil }
+
+func (o *DiffOverlay) num(line int) int {
+	if o == nil || line < 0 || line >= len(o.Nums) {
+		return 0
 	}
-	if line < 0 || line >= len(o.Nums) {
-		return 0, true
-	}
-	return o.Nums[line], true
+	return o.Nums[line]
 }
 
 func (o *DiffOverlay) label(line int) (string, bool) {
@@ -135,6 +226,14 @@ func (o *DiffOverlay) label(line int) (string, bool) {
 	}
 	s, ok := o.Labels[line]
 	return s, ok
+}
+
+func (o *DiffOverlay) gapHovered(line int) bool {
+	if o == nil {
+		return false
+	}
+	gap, ok := o.Gaps[line]
+	return ok && gap == o.HoveredGap
 }
 
 func (o *DiffOverlay) deletedLine(row editorRow) (diff.SideLine, bool) {
@@ -148,22 +247,129 @@ func (o *DiffOverlay) deletedLine(row editorRow) (diff.SideLine, bool) {
 	return block[row.phantom], true
 }
 
-// maxNum is the widest line number the overlay draws, so the gutter can fit
-// numbers from a source file longer than the buffer.
-func (o *DiffOverlay) maxNum() int {
+// gutterWidth is the diff layout's width: the widest source line number, a
+// space and the change mark, with the editor gutter's leading space.
+func (o *DiffOverlay) gutterWidth() int {
+	if o.numsN != len(o.Nums) || o.numsN == 0 {
+		o.maxNum = 0
+		for _, n := range o.Nums {
+			o.maxNum = max(o.maxNum, n)
+		}
+		o.numsN = len(o.Nums)
+	}
+	return len(strconv.Itoa(o.maxNum)) + 3
+}
+
+// maxDeletedNum is the widest old line number on a deleted row, so an editor
+// layout gutter fits numbers from a source file longer than the buffer.
+func (o *DiffOverlay) maxDeletedNum() int {
 	if o == nil {
 		return 0
 	}
 	n := 0
-	for _, v := range o.Nums {
-		n = max(n, v)
-	}
 	for _, block := range o.Deleted {
 		for _, l := range block {
 			n = max(n, l.Num)
 		}
 	}
 	return n
+}
+
+// diffLineFg overrides syntax colors: collapsed separators are muted labels
+// and high contrast paints changed text with its semantic color. full reports
+// that the style also owns the row background.
+func (e *EditorPaneWidget) diffLineFg(line int) (style term.Style, override, full bool) {
+	o := e.DiffOverlay
+	kind := o.kind(line)
+	if kind == diff.Collapsed {
+		row := collapsedDiffRowStyle(kind, o.EmphasizeGaps, o.gapHovered(line))
+		if row != term.StyleDefault {
+			return row, true, true
+		}
+		return term.StyleMuted, true, false
+	}
+	if o != nil && o.HighContrast && (kind == diff.Added || kind == diff.Deleted) {
+		return diffKindForeground(kind, true), true, false
+	}
+	return 0, false, false
+}
+
+func (e *EditorPaneWidget) renderDiffGutterRow(surface Surface, y, gutterW, line int, continuation bool) {
+	o := e.DiffOverlay
+	side := diff.SideLine{}
+	if !continuation && line < len(e.Buf.Lines) {
+		side = diff.SideLine{Num: o.num(line), Kind: o.kind(line)}
+	}
+	look := o.gutterLook(side.Kind, term.StyleLineNumber, collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line)))
+	renderDiffGutterWithSigns(surface, 0, y, gutterW, side.Num, look, e.diffMarkCol(gutterW, side.Kind) >= 0)
+}
+
+// diffGutterLook is how a diff row's gutter is drawn. Every diff gutter, the
+// compact diff layout and the editor layout alike, takes it from gutterLook
+// so the two cannot drift apart.
+type diffGutterLook struct {
+	num, bg, sign term.Style
+	mark          rune
+}
+
+// gutterLook styles a row of kind; base is the gutter's style for an
+// unchanged row and collapsed the gap row style, if any.
+func (o *DiffOverlay) gutterLook(kind diff.LineKind, base, collapsed term.Style) diffGutterLook {
+	look := diffGutterLook{num: base, sign: base}
+	switch kind {
+	case diff.Added:
+		look.mark, look.num, look.bg, look.sign = '+', term.StyleGutterAdded, term.StyleDiffAdded, term.StyleGutterAdded
+	case diff.Deleted:
+		look.mark, look.num, look.bg, look.sign = '−', term.StyleGutterDeleted, term.StyleDiffDeleted, term.StyleGutterDeleted
+	case diff.Collapsed:
+		look.mark = o.gapChevron()
+		if collapsed != term.StyleDefault {
+			look.num, look.sign = collapsed, collapsed
+		}
+		return look
+	default:
+		return look
+	}
+	if o != nil && !o.SignsColor {
+		look.sign = term.StyleLineNumber
+	}
+	if o != nil && !o.GutterHighlight {
+		look.num, look.bg = base, 0
+	}
+	return look
+}
+
+func (o *DiffOverlay) gapChevron() rune {
+	if o == nil || o.GapChevron == 0 {
+		return '▶'
+	}
+	return o.GapChevron
+}
+
+// diffMarkCol is where a gutter draws a row's mark, or -1 when it has none:
+// + and − follow the signs setting, while a gap row's chevron always shows
+// because it is what expands the gap. The minimal gutter has no room for
+// either.
+func (e *EditorPaneWidget) diffMarkCol(gutterW int, kind diff.LineKind) int {
+	o := e.DiffOverlay
+	if o == nil || (!o.Signs && kind != diff.Collapsed) || e.GutterStyle == "minimal" || gutterW < 3 {
+		return -1
+	}
+	if e.GutterStyle == "extended" {
+		return gutterW - 2
+	}
+	return gutterW - 1
+}
+
+// renderEditorDiffGutter draws an editor-layout gutter row of kind: the
+// number, the gutter tint and the mark, all from gutterLook.
+func (e *EditorPaneWidget) renderEditorDiffGutter(surface Surface, y, gutterW, num int, kind diff.LineKind, base term.Style) diffGutterLook {
+	look := e.DiffOverlay.gutterLook(kind, base, term.StyleDefault)
+	e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: look.num, BgStyle: look.bg})
+	if col := e.diffMarkCol(gutterW, kind); col >= 0 && look.mark != 0 {
+		surface.SetCell(col, y, term.Cell{Ch: look.mark, Style: look.sign, BgStyle: look.bg})
+	}
+	return look
 }
 
 func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
@@ -197,13 +403,32 @@ func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
 		return term.StyleDiffAdded
 	case diff.Deleted:
 		return term.StyleDiffDeleted
+	case diff.Collapsed:
+		return collapsedDiffRowStyle(diff.Collapsed, e.DiffOverlay.EmphasizeGaps, e.DiffOverlay.gapHovered(line))
 	}
 	return 0
 }
 
-func (e *EditorPaneWidget) renderGapRow(surface Surface, y, gutterW, editorW int, label string) {
-	for x := 0; x < gutterW; x++ {
-		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleLineNumber})
+func (e *EditorPaneWidget) renderGapRow(surface Surface, y, gutterW, editorW, line int, label string) {
+	o := e.DiffOverlay
+	hovered := o.gapHovered(line)
+	rowStyle := collapsedDiffRowStyle(diff.Collapsed, o.EmphasizeGaps, hovered)
+	if gutterW > 0 {
+		gutterStyle := collapsedDiffGutterStyle(diff.Collapsed, o.EmphasizeGaps, hovered)
+		cell := term.Cell{Ch: ' ', Style: term.StyleLineNumber}
+		if gutterStyle != term.StyleDefault {
+			cell.Style = gutterStyle
+		}
+		for x := 0; x < gutterW; x++ {
+			surface.SetCell(x, y, cell)
+		}
+		if col := e.diffMarkCol(gutterW, diff.Collapsed); col >= 0 {
+			surface.SetCell(col, y, term.Cell{Ch: o.gapChevron(), Style: cell.Style})
+		}
+	}
+	fg := rowStyle
+	if fg == term.StyleDefault {
+		fg = term.StyleMuted
 	}
 	x := 0
 	for _, ch := range label {
@@ -211,11 +436,11 @@ func (e *EditorPaneWidget) renderGapRow(surface Surface, y, gutterW, editorW int
 		if x+w > editorW {
 			break
 		}
-		surface.SetCell(gutterW+x, y, term.Cell{Ch: ch, Style: term.StyleMuted})
+		surface.SetCell(gutterW+x, y, term.Cell{Ch: ch, Style: fg, BgStyle: rowStyle})
 		x += w
 	}
 	for ; x < editorW; x++ {
-		surface.SetCell(gutterW+x, y, term.Cell{Ch: ' ', Style: term.StyleMuted})
+		surface.SetCell(gutterW+x, y, term.Cell{Ch: ' ', Style: fg, BgStyle: rowStyle})
 	}
 }
 
@@ -232,10 +457,17 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		if e.LineNumbers && row.startCol == 0 {
 			num = old.Num
 		}
-		e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: term.StyleGutterDeleted, BgStyle: term.StyleDiffDeleted})
+		if row.startCol == 0 {
+			e.renderEditorDiffGutter(surface, y, gutterW, num, diff.Deleted, term.StyleLineNumber)
+		} else {
+			look := e.DiffOverlay.gutterLook(diff.Deleted, term.StyleLineNumber, term.StyleDefault)
+			e.drawGutterNumber(surface, y, gutterW, 0, term.Cell{Style: look.num, BgStyle: look.bg})
+		}
 	}
 	var spans []highlight.Span
-	if e.Highlighter != nil && old.Text != "" {
+	if whole, ok := e.DiffOverlay.deletedSyntax(old); ok {
+		spans = whole
+	} else if e.Highlighter != nil && old.Text != "" {
 		spans = e.Highlighter.HighlightLine(old.Text)
 	}
 	tabW := e.resolveTabSize()
@@ -249,8 +481,39 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 	}
 }
 
+// renderDiffGutterWithSigns draws the compact diff gutter: the number
+// right-aligned, a space, then the mark.
+func renderDiffGutterWithSigns(surface Surface, x, y, width, num int, look diffGutterLook, signs bool) {
+	var buf [20]byte
+	number := buf[:0]
+	if num > 0 {
+		number = strconv.AppendInt(number, int64(num), 10)
+	}
+	marker, markerStyle := look.mark, look.sign
+	if !signs || marker == 0 {
+		marker, markerStyle = ' ', look.num
+	}
+	column := 0
+	style := look.num
+	put := func(ch rune) {
+		if column < width {
+			surface.SetCell(x+column, y, term.Cell{Ch: ch, Style: style, BgStyle: look.bg})
+		}
+		column++
+	}
+	for range max(width-2-len(number), 0) {
+		put(' ')
+	}
+	for _, d := range number {
+		put(rune(d))
+	}
+	put(' ')
+	style = markerStyle
+	put(marker)
+}
+
 func diffGutterDigits(o *DiffOverlay) int {
-	if n := o.maxNum(); n > 0 {
+	if n := o.maxDeletedNum(); n > 0 {
 		return len(strconv.Itoa(n))
 	}
 	return 0

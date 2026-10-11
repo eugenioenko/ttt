@@ -144,7 +144,9 @@ func TestEditorRendersDiffOverlay(t *testing.T) {
 	newLines := []string{"a", "B", "c", "e", "f"}
 	e := newRowsEditor(newLines, 20, 8)
 	e.LineNumbers = true
-	e.SetDiffOverlay(NewDiffOverlay(diff.FullDiffLines(oldLines, newLines)))
+	o := NewDiffOverlay(diff.FullDiffLines(oldLines, newLines))
+	o.GutterHighlight = true
+	e.SetDiffOverlay(o)
 
 	grid := renderGrid(e)
 	g := e.GutterWidth()
@@ -192,8 +194,8 @@ func TestEditorRendersFillerAndGapRows(t *testing.T) {
 	if grid[4][g+1].Style != term.StyleMuted {
 		t.Errorf("gap label style = %v, want muted", grid[4][g+1].Style)
 	}
-	if got := gutterText(grid, 4, g); got != "" {
-		t.Errorf("gap row gutter = %q, want blank", got)
+	if got := gutterText(grid, 4, g); got != "▶" {
+		t.Errorf("gap row gutter = %q, want the expand chevron", got)
 	}
 }
 

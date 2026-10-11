@@ -30,6 +30,7 @@ type rowLayout struct {
 	tabW     int
 	visible  []int
 	phantoms map[int]int
+	labels   map[int]string
 	deleted  map[int][]diff.SideLine
 
 	key    rowLayoutKey
@@ -102,9 +103,10 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	}
 	if len(e.phantoms) > 0 {
 		l.phantoms = e.phantoms
-		if e.DiffOverlay != nil {
-			l.deleted = e.DiffOverlay.Deleted
-		}
+	}
+	if e.DiffOverlay != nil {
+		l.labels = e.DiffOverlay.Labels
+		l.deleted = e.DiffOverlay.Deleted
 	}
 	slot := 0
 	for i, c := range e.layoutCache {
@@ -164,7 +166,7 @@ func (l *rowLayout) ensure() {
 		starts[i] = row
 		line := l.visLine(i)
 		row += l.phantomRows(line)
-		if l.wrap {
+		if l.wrap && !l.hasLabel(line) {
 			row += l.lineRows(line, prev, delta)
 		} else {
 			row++
@@ -274,7 +276,7 @@ func (l *rowLayout) restart(lo, hi int) {
 	oldHi := l.starts[hi]
 	for i := lo; i < hi; i++ {
 		rows := l.phantomRows(i) + 1
-		if l.wrap {
+		if l.wrap && !l.hasLabel(i) {
 			rows += l.lineRows(i, l.memo, 0) - 1
 		}
 		l.starts[i+1] = l.starts[i] + rows
@@ -288,7 +290,28 @@ func (l *rowLayout) restart(lo, hi int) {
 	l.endRow = l.starts[n] + l.phantomRows(n)
 }
 
+// hasLabel reports a gap line, which shows its label on a single row.
+func (l *rowLayout) hasLabel(line int) bool {
+	_, ok := l.labels[line]
+	return ok
+}
+
+// textRows is how many rows a buffer line's text wraps into, phantoms aside.
+func (l *rowLayout) textRows(line int) int {
+	if !l.wrap || line < 0 || line >= l.n() || l.hasLabel(line) {
+		return 1
+	}
+	l.ensure()
+	if line < len(l.memo) && l.memo[line].rows > 0 {
+		return l.memo[line].rows
+	}
+	return len(l.segments(line))
+}
+
 func (l *rowLayout) segments(line int) []int {
+	if l.hasLabel(line) {
+		return singleSegment
+	}
 	if l.wrap && line >= 0 && line < l.n() {
 		return wrapLineSegments([]rune(l.lines[line]), l.width, l.tabW)
 	}

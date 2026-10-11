@@ -11,6 +11,12 @@ import (
 )
 
 func (e *EditorPaneWidget) Render(surface Surface) {
+	e.Highlighter.BeginPass()
+	if o := e.DiffOverlay; o != nil && o.Syntax != nil {
+		o.Syntax.old.hl.BeginPass()
+		o.Syntax.new.hl.BeginPass()
+	}
+	defer e.endHighlightPass()
 	w, h := surface.Size()
 
 	totalLines := len(e.Buf.Lines)
@@ -34,19 +40,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	if showScrollbar {
 		editorW--
 	}
-	if editorW < 1 {
-		editorW = 1
-	}
-	if e.WordWrap && editorW > 4 {
-		switch e.GutterStyle {
-		case "minimal":
-			editorW--
-		case "extended":
-			editorW -= 3
-		default:
-			editorW -= 2
-		}
-	}
+	editorW = e.wrapTextWidth(max(editorW, 1))
 
 	e.Viewport.Width = editorW
 	e.Viewport.Height = h
@@ -75,6 +69,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	hasSearch := len(e.SearchMatches) > 0
 
 	matchLine, matchCol, hasMatch := e.findMatchingBracket()
+	hasMatch = hasMatch && !e.Passive
 
 	if e.Viewport.TopLine < 0 {
 		e.Viewport.TopLine = 0
@@ -97,6 +92,18 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.rowMapOffset = e.topOffset()
 	topRow := e.topRow(layout)
 
+	// A pane narrowed to a shared wrap width leaves columns past its text
+	// that the row loop does not draw.
+	textEnd := w
+	if showScrollbar {
+		textEnd--
+	}
+	for y := 0; y < h; y++ {
+		for x := gutterW + editorW; x < textEnd; x++ {
+			surface.SetCell(x, y, term.Cell{Ch: ' '})
+		}
+	}
+
 	for y := 0; y < h; y++ {
 		row := e.rowMap[y]
 		lineIdx := row.bufLine
@@ -107,17 +114,32 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			e.renderPhantomRow(surface, y, gutterW, editorW, row)
 			continue
 		}
-		if label, ok := e.DiffOverlay.label(lineIdx); ok && lineIdx < totalLines {
-			e.renderGapRow(surface, y, gutterW, editorW, label)
+		if label, ok := e.DiffOverlay.label(lineIdx); ok && lineIdx < totalLines && !isWrapContinuation {
+			e.renderGapRow(surface, y, gutterW, editorW, lineIdx, label)
 			continue
 		}
 
-		if gutterW > 0 {
+		if gutterW > 0 && e.DiffOverlay.diffGutter() {
+			e.renderDiffGutterRow(surface, y, gutterW, lineIdx, isWrapContinuation)
+		} else if gutterW > 0 {
 			gutterStyle := term.StyleLineNumber
-			if lineIdx < totalLines && lineIdx == e.Cursor.Line {
+			if lineIdx < totalLines && lineIdx == e.Cursor.Line && !e.Passive {
 				gutterStyle = term.StyleActiveLine
 			}
-			if !e.LineNumbers || (e.WordWrap && isWrapContinuation) {
+			bookmarkBg := gutterStyle
+			diffKind := diff.Context
+			if lineIdx < totalLines && !isWrapContinuation {
+				diffKind = e.DiffOverlay.kind(lineIdx)
+			}
+			if e.DiffOverlay != nil && (diffKind == diff.Added || diffKind == diff.Deleted) {
+				num := 0
+				if e.LineNumbers {
+					num = lineIdx + 1
+				}
+				if bg := e.renderEditorDiffGutter(surface, y, gutterW, num, diffKind, gutterStyle).bg; bg != 0 {
+					bookmarkBg = bg
+				}
+			} else if !e.LineNumbers || (e.WordWrap && isWrapContinuation) {
 				for i := 0; i < gutterW; i++ {
 					surface.SetCell(i, y, term.Cell{Ch: ' ', Style: gutterStyle})
 				}
@@ -125,9 +147,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				num := 0
 				if lineIdx < totalLines {
 					num = lineIdx + 1
-					if n, ok := e.DiffOverlay.num(lineIdx); ok {
-						num = n
-					}
 				}
 				e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: gutterStyle})
 			}
@@ -151,7 +170,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					}
 				}
 			}
-			if lineIdx < totalLines && lineIdx < len(e.LineChanges) && !isWrapContinuation {
+			if e.DiffOverlay == nil && lineIdx < totalLines && lineIdx < len(e.LineChanges) && !isWrapContinuation {
 				change := e.LineChanges[lineIdx]
 				if change != diff.LineUnchanged {
 					var ch rune
@@ -172,7 +191,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			}
 			if len(e.Bookmarks) > 0 && lineIdx < totalLines && !isWrapContinuation {
 				if b, ok := e.Bookmarks[lineIdx]; ok {
-					surface.SetCell(e.bookmarkColumn(), y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: gutterStyle})
+					surface.SetCell(e.bookmarkColumn(), y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: bookmarkBg})
 				}
 			}
 		}
@@ -184,7 +203,12 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			}
 			line := e.runeScratch
 			var syntaxSpans []highlight.Span
-			if e.Highlighter != nil {
+			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
+			if diffFgOverride {
+				syntaxSpans = []highlight.Span{{Start: 0, End: len(line), Style: diffFg}}
+			} else if whole, ok := e.DiffOverlay.syntaxAt(lineIdx, e.Buf.Lines[lineIdx]); ok {
+				syntaxSpans = whole
+			} else if e.Highlighter != nil {
 				syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
 			}
 
@@ -210,6 +234,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				colIdx := screenCells[x].bufCol
 				ch := screenCells[x].ch
 				style := screenCells[x].style
+				if diffFgFull {
+					style = diffFg
+				}
 
 				for _, bc := range lineBrackets {
 					if bc.col == colIdx {
@@ -258,7 +285,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 							}
 						}
 					} else {
-						isCursorLine = lineIdx == e.Cursor.Line
+						isCursorLine = lineIdx == e.Cursor.Line && !e.Passive
 					}
 					if isCursorLine && !isSearchHighlight {
 						bgStyle = term.StyleActiveLine
@@ -327,6 +354,35 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.CursorX = cursorVisCol - e.Viewport.LeftCol + gutterW + r.X
 	}
 	e.CursorY = curRow - topRow + r.Y
+}
+
+func (e *EditorPaneWidget) endHighlightPass() {
+	e.Highlighter.EndPass()
+	if o := e.DiffOverlay; o != nil && o.Syntax != nil {
+		o.Syntax.old.hl.EndPass()
+		o.Syntax.new.hl.EndPass()
+	}
+}
+
+func (e *EditorPaneWidget) wrapTextWidth(editorW int) int {
+	if !e.WordWrap {
+		return editorW
+	}
+	w := editorW
+	if !e.NoWrapMargin && editorW > 4 {
+		switch e.GutterStyle {
+		case "minimal":
+			w--
+		case "extended":
+			w -= 3
+		default:
+			w -= 2
+		}
+	}
+	if e.wrapCols > 0 && w > e.wrapCols {
+		w = e.wrapCols
+	}
+	return w
 }
 
 func (e *EditorPaneWidget) diagStyleAt(line, col int) term.Style {

@@ -96,8 +96,15 @@ type EditorPaneWidget struct {
 	phantomGen              uint64
 	DiffOverlay             *DiffOverlay
 	diffNumDigits           int
-	layoutCache             [4]*rowLayout
-	layoutNext              int
+	// Passive panes draw no active line or bracket match: a diff pane that
+	// does not have the keys.
+	Passive bool
+	// NoWrapMargin wraps at the full text width; wrapCols caps it, so the
+	// two panes of a split diff wrap at the same column.
+	NoWrapMargin bool
+	wrapCols     int
+	layoutCache  [4]*rowLayout
+	layoutNext   int
 }
 
 func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewport) *EditorPaneWidget {
@@ -119,6 +126,9 @@ func (e *EditorPaneWidget) InvalidateBracketColors() {
 func (e *EditorPaneWidget) Focusable() bool { return true }
 
 func (e *EditorPaneWidget) GutterWidth() int {
+	if e.DiffOverlay.diffGutter() {
+		return e.DiffOverlay.gutterWidth()
+	}
 	if !e.LineNumbers {
 		if e.GutterStyle != "minimal" {
 			return 1
