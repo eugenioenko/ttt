@@ -271,3 +271,18 @@ func TestConflictDuringAnOpenDiffClosesIt(t *testing.T) {
 	}
 	h.assertContains("merge conflicts")
 }
+
+func TestOpenChangesExtendedOpensTheFullFile(t *testing.T) {
+	h := newTestHarness(t, 100, 45)
+	defer h.stop()
+	setupPartiallyStagedFile(t, h)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, true)
+	d := h.app.EditorGroup.ActiveInlineDiff()
+	if d == nil {
+		t.Fatal("open changes did not open a diff")
+	}
+	if d.ContextMode() != ui.DiffContextFullFile {
+		t.Fatalf("extended open changes context = %v, want the full file", d.ContextMode())
+	}
+}

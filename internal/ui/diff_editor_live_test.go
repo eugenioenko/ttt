@@ -242,3 +242,34 @@ func TestEditableFileEdgesRevealTheEdgeGaps(t *testing.T) {
 		t.Fatal("shift+ctrl+home did not select")
 	}
 }
+
+func TestEditableModeSwitchRefiltersTheSearch(t *testing.T) {
+	old := []string{"alpha", "beta", "gamma"}
+	cur := []string{"alpha", "BETA", "gamma"}
+	f := newLiveDiffFixture(t, old, cur, DiffModeSplit, 60, 10)
+	f.d.ApplySearchHighlight("a", SearchOptions{})
+	split := len(f.d.liveHits)
+
+	f.d.SetMode(DiffModeUnified)
+	got := len(f.d.liveHits)
+	f.d.ApplySearchHighlight("a", SearchOptions{})
+	if want := len(f.d.liveHits); got != want || got >= split {
+		t.Fatalf("hits after switching to unified = %d, a fresh unified search finds %d (split had %d)", got, want, split)
+	}
+
+	calls := 0
+	f.d.OnRecompute = func() { calls++ }
+	f.d.SetMode(DiffModeSplit)
+	if calls != 1 {
+		t.Fatalf("an open find bar was refreshed %d times after a mode switch, want 1", calls)
+	}
+}
+
+func TestFileEdgeInAPlainPaneLeavesNoGapReveal(t *testing.T) {
+	e := newRowsEditor([]string{"a", "b", "c"}, 30, 6)
+	e.MoveToFileEdge(true, false)
+	e.MoveToFileEdge(false, false)
+	if e.revealGapRow {
+		t.Fatal("Ctrl+Home/Ctrl+End in a plain pane left the gap-reveal flag set for a later diff")
+	}
+}

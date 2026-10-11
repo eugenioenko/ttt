@@ -273,6 +273,9 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 				return
 			}
 			if opened {
+				if d := a.EditorGroup.ActiveInlineDiff(); d != nil && extended {
+					d.SetContextMode(ui.DiffContextFullFile)
+				}
 				a.FocusEditorIfEnabled()
 				return
 			}

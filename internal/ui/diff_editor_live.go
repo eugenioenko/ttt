@@ -591,6 +591,7 @@ func (d *DiffEditorWidget) revealCursorGap() {
 
 func (d *DiffEditorWidget) placeInitialCursor() {
 	e := d.live
+	e.revealGapRow = false
 	line := e.Cursor.Line
 	_, _, hidden := e.diffHiddenRange(line)
 	_, onGap := e.DiffOverlay.label(line)

@@ -313,6 +313,13 @@ func (d *DiffEditorWidget) applyMode(mode DiffMode) {
 		d.focusLeft = false
 		d.trackLiveEdits()
 		d.buildLiveOverlays()
+		// Live hits are filtered per mode: unified keeps only base-side hits
+		// on deleted lines, split keeps them all.
+		if d.OnRecompute != nil {
+			d.OnRecompute()
+		} else if len(d.SearchMatchesLeft) > 0 || len(d.SearchMatchesRight) > 0 {
+			d.SetSearchMatches(d.SearchMatchesLeft, d.SearchMatchesRight)
+		}
 		return
 	}
 	row, _ := d.topDiffRow()

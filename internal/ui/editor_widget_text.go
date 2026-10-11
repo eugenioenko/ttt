@@ -70,7 +70,7 @@ func (e *EditorPaneWidget) MoveToFileEdge(end, shift bool) {
 		e.Cursor.Line, e.Cursor.Col = 0, 0
 		e.skipFoldDown()
 	}
-	e.revealGapRow = true
+	e.revealGapRow = e.DiffOverlay != nil
 	e.scrollViewport()
 }
 
