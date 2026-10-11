@@ -50,8 +50,8 @@ func (a *App) applyChevrons(ap config.AppearanceSettings) {
 		a.Search.ChevronCollapsed = collapsed
 		a.Search.ChevronExpanded = expanded
 	}
-	if a.EditorGroup != nil && a.EditorGroup.Editor != nil {
-		a.EditorGroup.Editor.FoldChevronCollapsed, a.EditorGroup.Editor.FoldChevronExpanded = collapsed, expanded
+	if a.EditorGroup != nil {
+		a.EditorGroup.SetChevrons(collapsed, expanded)
 	}
 }
 
