@@ -139,7 +139,7 @@ Run **Plugins: Reload** from the command palette to reload a plugin without rest
 
 ## Registration
 
-The entry point Lua file must call `ttt.register()` to declare what the plugin provides. `ttt.register()` accepts a single table with `sidebar`, `bottom`, `commands`, and/or `keybindings` fields. A plugin can register any combination:
+The entry point Lua file must call `ttt.register()` to declare what the plugin provides. `ttt.register()` accepts a single table with `sidebar`, `bottom`, `commands`, `keybindings`, and/or `file_handlers` fields. A plugin can register any combination:
 
 ```lua
 local ttt = require("ttt")
@@ -162,6 +162,9 @@ ttt.register({
   },
   keybindings = {
     { key = "ctrl+k d", command = "myplugin.doSomething" },
+  },
+  file_handlers = {
+    { id = "pdf", extensions = { "pdf" }, magic = "%PDF-", open = function(path, tab) end },
   },
 })
 ```
@@ -233,6 +236,48 @@ Each keybinding entry is a table with:
 | `command` | string | yes      | Command ID to execute when the key is pressed.        |
 
 Use `ctrl+k <key>` chords for plugin keybindings to avoid conflicts with built-in shortcuts. Avoid `ctrl+shift` combos — they are unreliable in many terminals.
+
+### File Handlers
+
+A plugin can present a binary file type that ttt cannot display itself. Requires the `editor.file_handlers` permission.
+
+Each file handler entry is a table with:
+
+| Field        | Type     | Required | Description |
+|--------------|----------|----------|-------------|
+| `id`         | string   | yes      | Handler ID, unique within the plugin. |
+| `open`       | function | yes      | Called as `open(path, tab)` when a matching file is opened. |
+| `extensions` | table    | one of   | File extensions without the dot (`{ "pdf" }`), matched case-insensitively. |
+| `magic`      | string   | one of   | Bytes the file must start with (`"%PDF-"`), at most 512. |
+| `title`      | string   | no       | Name used in error messages. Defaults to `id`. |
+
+ttt consults handlers only for files that would otherwise open as the binary file card. Text files and the images ttt displays natively (PNG, JPEG, GIF) always open normally. When several handlers match, a `magic` match wins over an `extensions` match; ties go to plugin load order, then registration order.
+
+`open` receives the absolute file path and a `tab` table. Set `tab.render` (and optionally `tab.on_event`) exactly as you would pass them to [`ttt.open_tab`](#tttopen_tabconfig). The tab is bound to the file: it is titled with the file name, opening the same file again switches to it without calling `open`, and the `file.open` and `file.close` events fire for it.
+
+```lua
+local ttt = require("ttt")
+local sys = require("ttt.system")
+
+ttt.register({
+  file_handlers = {
+    { id = "pdf", title = "PDF Viewer", extensions = { "pdf" }, magic = "%PDF-",
+      open = function(path, tab)
+        local info = "Loading..."
+        sys.exec_async("pdfinfo", { path }, function(result)
+          info = result.exit_code == 0 and result.stdout or "pdfinfo failed"
+          if tab.panel then tab.panel:redraw() end
+        end)
+        tab.render = function(panel)
+          tab.panel = panel
+          panel:label(info)
+        end
+      end },
+  },
+})
+```
+
+Keep `open` fast: it runs on the UI thread. Start slow work with `sys.exec_async` and call `panel:redraw()` when it finishes. If `open` raises an error or does not set `tab.render`, the error is logged to the OUTPUT panel and the file opens as the binary card.
 
 ## ttt Module Functions
 
@@ -2099,8 +2144,8 @@ Register an event listener. Multiple listeners can be registered for the same ev
 
 | Event         | Description                 |
 |---------------|-----------------------------|
-| `file.open`   | A file was opened.          |
-| `file.close`  | A file tab was closed.      |
+| `file.open`   | A file was opened, including files opened by a plugin file handler. |
+| `file.close`  | A file tab was closed, including file handler tabs. |
 | `file.save`   | A file was saved.           |
 
 **Editor events** (require `events.editor` permission):
@@ -2376,6 +2421,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `editor.write`   | boolean  | Modify editor buffers (`ttt.editor` write functions). |
 | `editor.diagnostics` | boolean | Publish editor diagnostics/squiggles via `ttt.diagnostics`. |
 | `editor.bookmarks` | boolean | Manage gutter bookmarks via `ttt.bookmarks`, and listen for the `bookmark.change` and `gutter.click` events. |
+| `editor.file_handlers` | boolean | Present binary file types in editor tabs via `file_handlers` in `ttt.register()`. |
 | `fs.read`        | boolean  | Read files and list directories (`ttt.fs` read functions). |
 | `fs.write`       | boolean  | Write files to the file system (`ttt.fs.write`).  |
 | `system.exec`    | string[] | Execute specific system commands. List each allowed binary name. |

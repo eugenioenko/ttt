@@ -391,6 +391,8 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	// Rebuild the Diagnostics panel whenever any source (LSP or a plugin)
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
+	app.EditorGroup.FileHandler = app.openWithFileHandler
+	app.EditorGroup.OnFileHandled = app.fileHandlerTabOpened
 	app.applyChevrons(cfg.Settings.Appearance)
 	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)
 	app.reportGrammarErrors(grammarErrs)

@@ -231,6 +231,14 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 				})
 			}
 
+			if ft, ok := L.GetField(tbl, "file_handlers").(*lua.LTable); ok {
+				if err := p.Granted.Check("editor.file_handlers"); err != nil {
+					L.ArgError(1, "editor.file_handlers permission not granted")
+					return 0
+				}
+				p.FileHandlers = append(p.FileHandlers, parseFileHandlers(L, ft)...)
+			}
+
 			return 0
 		}))
 

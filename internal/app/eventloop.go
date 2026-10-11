@@ -169,6 +169,7 @@ func RunEventLoop(
 
 	redraw := func() {
 		// Every event path ends here, including scripted commands.
+		app.SyncFileHandlerTabs()
 		app.SyncEmptyState()
 		cells := renderer.NextFrame(app.Root.Width, app.Root.Height)
 		if app.ImageLayer != nil {

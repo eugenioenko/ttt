@@ -109,6 +109,7 @@ type App struct {
 	runningRepoOp             string
 	pluginDetailWidgets       map[string]*pluginDetailState
 	pluginDrawer              ui.Widget
+	fileHandlerTabs           map[string]*plugin.Plugin
 	commandLine               *ui.CommandLineWidget
 	commandLinePrevFocus      ui.Widget
 	settingsView              *settingsView
@@ -665,6 +666,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.EditorGroup.OnContentTabClose = func(id string) {
 		a.cleanupPluginDetailTab(id)
 		a.cleanupSettingsTab(id)
+		a.closeFileHandlerTab(id)
 	}
 	if path := a.EditorGroup.ActiveFilePath(); path != "" {
 		if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {

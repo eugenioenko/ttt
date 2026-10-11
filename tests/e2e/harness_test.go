@@ -125,6 +125,7 @@ func (h *testHarness) settle() {
 
 func (h *testHarness) redraw() {
 	h.t.Helper()
+	h.app.SyncFileHandlerTabs()
 	h.app.SyncEmptyState()
 	cells := h.renderer.NextFrame(h.app.Root.Width, h.app.Root.Height)
 	h.app.Root.Render(cells)

@@ -203,3 +203,26 @@ func TestDiffPermissionsNetworkHosts(t *testing.T) {
 		t.Error("escalating to all-hosts should require approval")
 	}
 }
+
+func TestFileHandlersPermission(t *testing.T) {
+	var ps PermissionSet
+	if err := json.Unmarshal([]byte(`{"editor.file_handlers": true}`), &ps); err != nil {
+		t.Fatal(err)
+	}
+	if err := ps.Check("editor.file_handlers"); err != nil {
+		t.Errorf("expected allowed, got %v", err)
+	}
+	if err := (PermissionSet{}).Check("editor.file_handlers"); err == nil {
+		t.Error("expected denied without the permission")
+	}
+
+	diff := DiffPermissions(PermissionSet{}, ps)
+	if len(diff.Entries) != 1 || diff.Entries[0].Name != "editor.file_handlers" {
+		t.Fatalf("diff = %+v, want one editor.file_handlers entry", diff.Entries)
+	}
+
+	entries := ps.DisplayEntries()
+	if len(entries) != 1 || entries[0].Name != "Handle file types" {
+		t.Fatalf("display entries = %+v, want Handle file types", entries)
+	}
+}

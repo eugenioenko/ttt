@@ -119,6 +119,9 @@ type EditorGroupWidget struct {
 	OnFileChange            func(path, lang, text string)
 	OnFileClose             func(path, lang string)
 	OnContentTabClose       func(id string)
+	// FileHandler may claim a file that would open as the binary card; nil keeps the card.
+	FileHandler   func(path string, head []byte) Widget
+	OnFileHandled func(path string)
 	// OnEmpty fires after the last tab closes and the untitled placeholder
 	// takes its place.
 	OnEmpty func()
@@ -368,11 +371,18 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 			return
 		}
 	}
-	switch sniffFileKind(path) {
+	switch kind, head := sniffFileKind(path); kind {
 	case fileKindImage:
 		g.openContentFileTab(path, NewImageViewWidget(path))
 		return
 	case fileKindBinary:
+		if g.FileHandler != nil {
+			if content := g.FileHandler(path, head); content != nil {
+				g.openContentFileTab(path, content)
+				g.fileHandled(path)
+				return
+			}
+		}
 		g.openContentFileTab(path, NewBinaryFileWidget(path))
 		return
 	}
@@ -468,10 +478,10 @@ const (
 )
 
 // The binary check mirrors isBinaryContent in internal/app/current_changes.go, which this package cannot import without a cycle.
-func sniffFileKind(path string) fileKind {
+func sniffFileKind(path string) (fileKind, []byte) {
 	f, err := os.Open(path)
 	if err != nil {
-		return fileKindText
+		return fileKindText, nil
 	}
 	defer f.Close()
 	var head [512]byte
@@ -480,10 +490,10 @@ func sniffFileKind(path string) fileKind {
 	ct := http.DetectContentType(sample)
 	switch ct {
 	case "image/png", "image/jpeg", "image/gif":
-		return fileKindImage
+		return fileKindImage, head[:n]
 	}
 	if len(sample) == 0 {
-		return fileKindText
+		return fileKindText, nil
 	}
 	// A rune cut by the 512-byte window is not invalid UTF-8.
 	if n == len(head) {
@@ -497,12 +507,65 @@ func sniffFileKind(path string) fileKind {
 		}
 	}
 	if bytes.IndexByte(sample, 0) >= 0 || !utf8.Valid(sample) {
-		return fileKindBinary
+		return fileKindBinary, head[:n]
 	}
 	if !strings.HasPrefix(ct, "text/") {
-		return fileKindBinary
+		return fileKindBinary, head[:n]
 	}
-	return fileKindText
+	return fileKindText, nil
+}
+
+// RetryFileHandlers offers binary-card tabs to FileHandler again: files opened from the command line load before plugins do.
+func (g *EditorGroupWidget) RetryFileHandlers() {
+	if g.FileHandler == nil {
+		return
+	}
+	for i := range g.tabs {
+		if _, ok := g.tabs[i].Content.(*BinaryFileWidget); !ok {
+			continue
+		}
+		path := g.tabs[i].FilePath
+		kind, head := sniffFileKind(path)
+		if kind != fileKindBinary {
+			continue
+		}
+		if content := g.FileHandler(path, head); content != nil {
+			g.replaceContent(i, content)
+			g.fileHandled(path)
+		}
+	}
+	g.syncTabs()
+}
+
+func (g *EditorGroupWidget) ShowBinaryCard(path string) {
+	for i := range g.tabs {
+		if g.tabs[i].FilePath == path && g.tabs[i].Content != nil {
+			g.replaceContent(i, NewBinaryFileWidget(path))
+		}
+	}
+	g.syncTabs()
+}
+
+func (g *EditorGroupWidget) fileHandled(path string) {
+	if g.OnFileHandled != nil {
+		g.OnFileHandled(path)
+	}
+}
+
+func (g *EditorGroupWidget) replaceContent(i int, content Widget) {
+	old := g.tabs[i].Content
+	if setter, ok := old.(interface{ SetFocused(bool) }); ok {
+		setter.SetFocused(false)
+	}
+	if closer, ok := old.(interface{ Close() }); ok {
+		closer.Close()
+	}
+	g.tabs[i].Content = content
+	if i == g.active && g.focused {
+		if setter, ok := content.(interface{ SetFocused(bool) }); ok {
+			setter.SetFocused(true)
+		}
+	}
 }
 
 // Content tabs carry no buffer.

@@ -622,6 +622,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 
 	a.registerPluginCommandsAndKeys(p)
 	p.FlushPendingDrawer()
+	if len(p.FileHandlers) > 0 {
+		a.EditorGroup.RetryFileHandlers()
+	}
 }
 
 func (a *App) wirePluginLog(p *plugin.Plugin) {

@@ -63,6 +63,7 @@ type Plugin struct {
 
 	Commands          []PluginCommand
 	PluginKeybindings []PluginKeybinding
+	FileHandlers      []FileHandler
 
 	RequestRedraw      func()
 	PostAsync          func(*PluginAsyncResult)
@@ -242,6 +243,13 @@ func (p *Plugin) SafePostAsync(result *PluginAsyncResult) {
 	}
 }
 
+// Loaded is safe to call from the UI goroutine while Update destroys the plugin on another.
+func (p *Plugin) Loaded() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.State != nil
+}
+
 func (p *Plugin) Destroy() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -258,6 +266,7 @@ func (p *Plugin) Destroy() {
 	p.sidebarMenuFunc = nil
 	p.Commands = nil
 	p.PluginKeybindings = nil
+	p.FileHandlers = nil
 	p.RequestRedraw = nil
 	p.PostAsync = nil
 	p.Log = nil
