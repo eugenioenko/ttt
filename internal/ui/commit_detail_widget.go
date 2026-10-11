@@ -512,6 +512,8 @@ func (d *CommitDetailWidget) SetDetail(message string, files []CommitDetailFile,
 	d.Error = errText
 	d.Message = message
 	d.Files = files
+	d.capturedFile = -1
+	d.primaryPressed = false
 	d.collapsedFiles = make([]bool, len(files))
 	for i := range d.Files {
 		d.Files[i].expandedGaps = make(map[int]bool)
@@ -567,6 +569,8 @@ func (d *CommitDetailWidget) SetCurrentChanges(message string, files []CommitDet
 	d.RefreshError = ""
 	d.Message = message
 	d.Files = files
+	d.capturedFile = -1
+	d.primaryPressed = false
 	d.collapsedFiles = make([]bool, len(files))
 	for i := range d.Files {
 		d.Files[i].pendingGap = -1
@@ -657,6 +661,14 @@ func (d *CommitDetailWidget) afterCollapseChange() {
 }
 
 func (d *CommitDetailWidget) rebuildRows() {
+	selection, keep := d.captureCurrentChangesSelection()
+	d.buildRows()
+	if keep {
+		d.restoreCurrentChangesSelection(selection)
+	}
+}
+
+func (d *CommitDetailWidget) buildRows() {
 	d.rows = nil
 	d.visualRows = nil
 	d.visualRowsW = -1
@@ -1426,6 +1438,10 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult {
 	buttons := event.Buttons()
 	mx, my := event.Position()
+	if d.capturedFile >= len(d.Files) {
+		d.capturedFile = -1
+		d.primaryPressed = false
+	}
 	if d.capturedFile >= 0 {
 		v := d.Files[d.capturedFile].view
 		result := EventConsumed

@@ -153,3 +153,53 @@ func TestCommitDetailSteadyFrameKeepsItsVisualRows(t *testing.T) {
 		t.Fatal("a steady frame rebuilt the visual rows; the scrollbar width toggles the cached layout")
 	}
 }
+
+func dragSelect(t *testing.T, detail *CommitDetailWidget, grid [][]term.Cell, text string) {
+	t.Helper()
+	x, y, ok := detailFind(grid, text)
+	if !ok {
+		t.Fatalf("%q not on screen:\n%s", text, detailTestText(grid))
+	}
+	detail.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	detail.HandleEvent(tcell.NewEventMouse(x+len(text), y, tcell.Button1, tcell.ModNone))
+	detail.HandleEvent(tcell.NewEventMouse(x+len(text), y, tcell.ButtonNone, tcell.ModNone))
+}
+
+func TestCommitDetailKeepsSelectionWhenAnotherFileLoadsContext(t *testing.T) {
+	detail := manyFileDetail(2)
+	detail.OnFetchContext = func(int, CommitDetailFile) {}
+	dragSelect(t, detail, renderDetail(detail, 80, 40), "new line 0")
+	if !detail.Files[0].view.hasSelection() {
+		t.Fatal("fixture: dragging should select text in the first file")
+	}
+
+	detail.requestFileContext(1, -1)
+	renderDetail(detail, 80, 40)
+	if !detail.Files[0].view.hasSelection() {
+		t.Fatal("requesting context for another file cleared the first file's selection")
+	}
+}
+
+func TestCommitDetailDragSurvivesFewerFiles(t *testing.T) {
+	detail := manyFileDetail(2)
+	detail.CurrentChanges = true
+	grid := renderDetail(detail, 80, 40)
+	x, y, ok := detailFind(grid, "new line 1")
+	if !ok {
+		t.Fatalf("second file not on screen:\n%s", detailTestText(grid))
+	}
+	detail.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	if detail.capturedFile != 1 {
+		t.Fatalf("fixture: drag should capture file 1, got %d", detail.capturedFile)
+	}
+
+	detail.SetCurrentChanges("Subject", detail.Files[:1], "")
+	if len(detail.Files) != 1 {
+		t.Fatalf("fixture: the refresh should leave 1 file, got %d", len(detail.Files))
+	}
+	detail.HandleEvent(tcell.NewEventMouse(x+3, y, tcell.Button1, tcell.ModNone))
+	detail.HandleEvent(tcell.NewEventMouse(x+3, y, tcell.ButtonNone, tcell.ModNone))
+	if detail.capturedFile != -1 {
+		t.Fatalf("captured file = %d after the file list shrank, want -1", detail.capturedFile)
+	}
+}
