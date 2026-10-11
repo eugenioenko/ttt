@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
 )
@@ -100,5 +101,34 @@ func TestSidesShareSingleLineHighlighting(t *testing.T) {
 	other.ShareSingleLines(a)
 	if other.SharesSingleLinesWith(a) {
 		t.Fatal("highlighters for different grammars shared a single-line cache")
+	}
+}
+
+func TestSharedTokensRetryATimeStoppedState(t *testing.T) {
+	lines := commentedFile(50)
+	h := New("main.go")
+	h.ShareTokens(nil)
+	doc := h.doc.(*sharedDoc)
+	doc.options.TimeLimit = time.Nanosecond
+	h.HighlightLineAt(lines, 30)
+
+	doc.options.TimeLimit = time.Minute
+	if got := styleAt(h.HighlightLineAt(lines, 30), 1); got != term.StyleSyntaxComment {
+		t.Fatalf("line inside the comment has style %v after the time limit was lifted, want a comment", got)
+	}
+}
+
+func TestSharedTokensKeepATimeStoppedStateAfterRetries(t *testing.T) {
+	lines := commentedFile(50)
+	h := New("main.go")
+	h.ShareTokens(nil)
+	doc := h.doc.(*sharedDoc)
+	doc.options.TimeLimit = time.Nanosecond
+	h.HighlightLineAt(lines, 30)
+	for range maxTimeLimitRetries {
+		doc.StateAt(31)
+	}
+	if got := doc.MaterializedLines(); got < 31 {
+		t.Fatalf("materialized lines = %d after the retries ran out, want at least 31", got)
 	}
 }

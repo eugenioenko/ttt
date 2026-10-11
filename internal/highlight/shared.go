@@ -62,13 +62,24 @@ type sharedDoc struct {
 	lines   []string
 	states  []*textmate.StateStack
 	cache   *tokenCache
+
+	// partial is the earliest index i > 0 whose states[i] came from a line
+	// stopped by the time limit, or 0. As in textmate.Document, that state
+	// and every one after it are recomputed on the next call, at most
+	// maxTimeLimitRetries times in a row for the same line.
+	partial   int
+	retries   int
+	retryLine int
 }
+
+const maxTimeLimitRetries = 3
 
 func (d *sharedDoc) Len() int {
 	return len(d.lines)
 }
 
 func (d *sharedDoc) MaterializedLines() int {
+	d.retryPartial()
 	return min(len(d.states), len(d.lines))
 }
 
@@ -81,16 +92,22 @@ func (d *sharedDoc) SetLines(lines []string) {
 	}
 	d.states = d.states[:keep+1]
 	d.lines = owned
+	if d.partial > keep {
+		d.partial = 0
+	}
+	d.retries = 0
 }
 
 func (d *sharedDoc) Line(index int) (textmate.LineResult, bool) {
 	if index < 0 || index >= len(d.lines) {
 		return textmate.LineResult{}, false
 	}
-	state := d.stateAtLocked(index)
+	d.retryPartial()
+	state := d.stateAt(index)
 	result := d.tokenize(d.lines[index], state)
 	if len(d.states) == index+1 {
 		d.states = append(d.states, result.RuleStack)
+		d.noteState(index, result)
 	}
 	return result, true
 }
@@ -99,15 +116,40 @@ func (d *sharedDoc) StateAt(index int) (*textmate.StateStack, bool) {
 	if index < 0 || index > len(d.lines) {
 		return nil, false
 	}
-	return d.stateAtLocked(index), true
+	d.retryPartial()
+	return d.stateAt(index), true
 }
 
-func (d *sharedDoc) stateAtLocked(index int) *textmate.StateStack {
+func (d *sharedDoc) stateAt(index int) *textmate.StateStack {
 	for len(d.states) <= index {
 		i := len(d.states) - 1
-		d.states = append(d.states, d.tokenize(d.lines[i], d.states[i]).RuleStack)
+		result := d.tokenize(d.lines[i], d.states[i])
+		d.states = append(d.states, result.RuleStack)
+		d.noteState(i, result)
 	}
 	return d.states[index]
+}
+
+func (d *sharedDoc) noteState(i int, result textmate.LineResult) {
+	if result.StoppedReason == textmate.StopReasonTimeLimit {
+		if d.partial == 0 || i+1 < d.partial {
+			d.partial = i + 1
+		}
+		return
+	}
+	if i == d.retryLine {
+		d.retries = 0
+	}
+}
+
+func (d *sharedDoc) retryPartial() {
+	if d.partial == 0 || d.retries >= maxTimeLimitRetries {
+		return
+	}
+	d.retries++
+	d.retryLine = d.partial - 1
+	d.states = d.states[:d.partial]
+	d.partial = 0
 }
 
 func (d *sharedDoc) tokenize(line string, state *textmate.StateStack) textmate.LineResult {
