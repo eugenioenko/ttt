@@ -70,24 +70,29 @@ type editorTab struct {
 	Placeholder bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
+	// Diff shows the tab's own buffer as an editable diff against its base.
+	Diff *DiffEditorWidget
 }
 
 type EditorGroupWidget struct {
 	BaseWidget
-	TabBar                  *TabBarWidget
-	Editor                  *EditorPaneWidget
-	Autocomplete            *AutocompleteWidget
-	Hover                   *HoverWidget
-	SignatureHelp           *SignatureHelpWidget
-	tabs                    []editorTab
-	nextTabIdentity         uint64
-	active                  int
-	pinnedCount             int
-	TabSize                 int
-	InsertSpaces            bool
-	LineNumbers             bool
-	GutterStyle             string
-	WordWrap                bool
+	TabBar          *TabBarWidget
+	Editor          *EditorPaneWidget
+	Autocomplete    *AutocompleteWidget
+	Hover           *HoverWidget
+	SignatureHelp   *SignatureHelpWidget
+	tabs            []editorTab
+	nextTabIdentity uint64
+	active          int
+	pinnedCount     int
+	TabSize         int
+	InsertSpaces    bool
+	LineNumbers     bool
+	GutterStyle     string
+	WordWrap        bool
+	// editorInDiff is set while the shared editor is bound to an editable
+	// diff, which sets its word wrap from the diff's own wrap mode.
+	editorInDiff            bool
 	DiffMode                DiffMode
 	DiffContext             DiffContextMode
 	DiffWordWrap            bool
@@ -624,28 +629,22 @@ func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffConte
 	g.DiffMode = mode
 	g.DiffContext = contextMode
 	g.DiffWordWrap = wordWrap
-	for _, tab := range g.tabs {
-		if surface, ok := tab.Content.(DiffModeSurface); ok {
-			g.ApplyDiffDefaults(surface)
-		}
+	for _, surface := range g.diffSurfaces() {
+		g.ApplyDiffDefaults(surface)
 	}
 }
 
 func (g *EditorGroupWidget) SetDiffHighContrast(enabled bool) {
 	g.DiffHighContrast = enabled
-	for _, tab := range g.tabs {
-		if surface, ok := tab.Content.(DiffModeSurface); ok {
-			surface.SetDiffHighContrast(enabled)
-		}
+	for _, surface := range g.diffSurfaces() {
+		surface.SetDiffHighContrast(enabled)
 	}
 }
 
 func (g *EditorGroupWidget) SetDiffCollapsedEmphasis(enabled bool) {
 	g.DiffCollapsedEmphasis = enabled
-	for _, tab := range g.tabs {
-		if surface, ok := tab.Content.(DiffModeSurface); ok {
-			surface.SetDiffCollapsedEmphasis(enabled)
-		}
+	for _, surface := range g.diffSurfaces() {
+		surface.SetDiffCollapsedEmphasis(enabled)
 	}
 }
 
@@ -665,11 +664,25 @@ func (g *EditorGroupWidget) SetDiffGutterHighlight(enabled bool) {
 }
 
 func (g *EditorGroupWidget) eachDiffSigns(apply func(diffSignsSurface)) {
-	for _, tab := range g.tabs {
-		if d, ok := tab.Content.(diffSignsSurface); ok {
+	for _, surface := range g.diffSurfaces() {
+		if d, ok := surface.(diffSignsSurface); ok {
 			apply(d)
 		}
 	}
+}
+
+// diffSurfaces are the diff tabs' widgets and the editable diffs of file tabs.
+func (g *EditorGroupWidget) diffSurfaces() []DiffModeSurface {
+	var out []DiffModeSurface
+	for _, tab := range g.tabs {
+		if surface, ok := tab.Content.(DiffModeSurface); ok {
+			out = append(out, surface)
+		}
+		if tab.Diff != nil {
+			out = append(out, tab.Diff)
+		}
+	}
+	return out
 }
 
 // SetChevrons sets the collapsed and expanded glyphs for the editor's fold
@@ -679,8 +692,8 @@ func (g *EditorGroupWidget) SetChevrons(collapsed, expanded rune) {
 	if g.Editor != nil {
 		g.Editor.FoldChevronCollapsed, g.Editor.FoldChevronExpanded = collapsed, expanded
 	}
-	for _, tab := range g.tabs {
-		if c, ok := tab.Content.(chevronSurface); ok {
+	for _, surface := range g.diffSurfaces() {
+		if c, ok := surface.(chevronSurface); ok {
 			c.SetChevrons(collapsed, expanded)
 		}
 	}
@@ -780,6 +793,10 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
+	tab.Highlighter.SetProgressive(nil)
+	if tab.Diff != nil {
+		tab.Diff.Close()
+	}
 	if tab.Content == nil {
 		return
 	}
@@ -920,6 +937,9 @@ func (g *EditorGroupWidget) ActiveCurrentChangesWidget() *CommitDetailWidget {
 }
 
 func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
+	if d := g.activeInlineDiff(); d != nil {
+		return d
+	}
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
 		return nil
@@ -929,6 +949,9 @@ func (g *EditorGroupWidget) ActiveDiffModeSurface() DiffModeSurface {
 }
 
 func (g *EditorGroupWidget) ActiveDiffContextSurface() DiffContextSurface {
+	if d := g.activeInlineDiff(); d != nil {
+		return d
+	}
 	t := g.activeTab()
 	if t == nil || t.Content == nil {
 		return nil
@@ -993,6 +1016,9 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 		}
 	}
 	if g.IsEditorActive() {
+		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
+			return d.left.CursorX, d.left.CursorY, true
+		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
@@ -2110,6 +2136,14 @@ func (g *EditorGroupWidget) Copy() {
 		// Non-editor tab (settings UI, plugin panel, ...): no buffer to copy from.
 		return
 	}
+	if t.Diff != nil {
+		if text, ok := t.Diff.HeadSelection(); ok {
+			if text != "" {
+				clipboard.Set(text)
+			}
+			return
+		}
+	}
 	if t.Sel == nil || !t.Sel.Active {
 		// No selection: copy the whole current line, including a trailing
 		// newline so a paste inserts it as a full line.
@@ -2148,7 +2182,7 @@ func (g *EditorGroupWidget) Paste() {
 	if text == "" {
 		return
 	}
-	g.Editor.pasteText(text)
+	g.pasteIntoEditor(text)
 }
 
 func (g *EditorGroupWidget) PasteText(text string) {
@@ -2157,6 +2191,16 @@ func (g *EditorGroupWidget) PasteText(text string) {
 	}
 	if text == "" {
 		return
+	}
+	g.pasteIntoEditor(text)
+}
+
+func (g *EditorGroupWidget) pasteIntoEditor(text string) {
+	if d := g.activeInlineDiff(); d != nil {
+		if d.headFocused() {
+			return
+		}
+		d.revealCursorGap()
 	}
 	g.Editor.pasteText(text)
 }
@@ -2193,6 +2237,18 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.Diagnostics = t.Diagnostics
 		g.Editor.Folds = t.Folds
 		g.Editor.LineChanges = t.LineChanges
+		if t.Diff != nil {
+			t.Highlighter.SetProgressive(g.RequestRedraw)
+			t.Diff.bind(g.Editor)
+			g.editorInDiff = true
+		} else {
+			t.Highlighter.SetProgressive(nil)
+			g.Editor.SetDiffOverlay(nil)
+			if g.editorInDiff {
+				g.editorInDiff = false
+				g.Editor.WordWrap = g.WordWrap
+			}
+		}
 		g.Editor.buildDiagIndex()
 		g.Editor.InvalidateBracketColors()
 		if t.TabSize > 0 {
@@ -2212,6 +2268,9 @@ func (g *EditorGroupWidget) syncTabs() {
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title
+		}
+		if ts.Diff != nil {
+			name += " (diff)"
 		}
 		uiTabs = append(uiTabs, Tab{
 			ID:       ts.ID,
@@ -2276,6 +2335,10 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)
+	} else if t.Diff != nil {
+		t.Diff.setGutterStyle(g.GutterStyle)
+		t.Diff.SetRect(contentRect)
+		t.Diff.Render(contentSurface)
 	} else {
 		g.Editor.SetRect(contentRect)
 		g.Editor.Render(contentSurface)
@@ -2314,6 +2377,9 @@ func (g *EditorGroupWidget) OwnsPointerCapture() bool {
 	if t := g.activeTab(); t != nil && t.Content != nil {
 		owner, ok := t.Content.(widgets.PointerCaptureOwner)
 		return ok && owner.OwnsPointerCapture()
+	}
+	if t := g.activeTab(); t != nil && t.Diff != nil {
+		return t.Diff.OwnsPointerCapture()
 	}
 	return g.Editor != nil && g.Editor.OwnsPointerCapture()
 }
@@ -2368,7 +2434,12 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		return EventIgnored
 	}
-	result := g.Editor.HandleEvent(ev)
+	var result EventResult
+	if t.Diff != nil {
+		result = t.Diff.HandleEvent(ev)
+	} else {
+		result = g.Editor.HandleEvent(ev)
+	}
 	g.saveMultiState()
 	return result
 }

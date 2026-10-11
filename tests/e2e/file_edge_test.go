@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/app"
+	"github.com/eugenioenko/ttt/internal/git"
+
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -179,4 +182,42 @@ func TestCtrlHomeEndInAnEmptyFile(t *testing.T) {
 			t.Fatalf("cursor in an empty file = %d:%d, want 0:0", ed.Cursor.Line, ed.Cursor.Col)
 		}
 	}
+}
+
+func TestCtrlEndInEditableDiff(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	path := filepath.Join(h.dir, "code.txt")
+	lines := prefixedLines(300, "row ")
+	write := func(ls []string) {
+		content := ""
+		for _, l := range ls {
+			content += l + "\n"
+		}
+		os.WriteFile(path, []byte(content), 0644)
+	}
+	write(lines)
+	initializeHarnessRepository(t, h.dir)
+	h.app.Repository.RefreshNow(app.RepositoryWorktree)
+	edited := append([]string(nil), lines...)
+	edited[299] = "last row edited"
+	write(edited)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "code.txt", Status: "M"}, false, false)
+	h.exec("editor.focus")
+	h.redraw()
+	h.pressKey(tcell.KeyEnd, tcell.ModCtrl)
+	ed := h.app.EditorGroup.Editor
+	if last := len(ed.Buf.Lines) - 1; ed.Cursor.Line != last {
+		t.Fatalf("ctrl+end in an editable diff left the cursor on line %d, want %d", ed.Cursor.Line, last)
+	}
+	h.assertContains("last row edited")
+}
+
+func prefixedLines(n int, prefix string) []string {
+	lines := make([]string, n)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("%s%d", prefix, i+1)
+	}
+	return lines
 }

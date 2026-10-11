@@ -356,6 +356,12 @@ func registerEditorCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
+		ID: "editor.toggleDiff", Title: "Git: Toggle Inline Diff",
+		Keywords: []string{"git", "diff", "inline", "changes", "head", "edit"},
+		Handler:  app.ToggleInlineDiff,
+	})
+
+	reg.Register(command.Command{
 		ID: "diff.nextHunk", Title: "Git: Next Changed Hunk",
 		Keywords: []string{"git", "diff", "hunk", "change", "navigate"},
 		Handler:  app.DiffNextHunk,

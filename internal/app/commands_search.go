@@ -13,6 +13,9 @@ func (a *App) OpenFind() {
 		return
 	}
 	dv := a.EditorGroup.ActiveDiffWidget()
+	if dv == nil {
+		dv = a.EditorGroup.ActiveInlineDiff()
+	}
 	if dv != nil {
 		a.showDiffFindBar(dv)
 		return

@@ -265,6 +265,19 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 		a.FocusEditorIfEnabled()
 		return
 	}
+	if !staged && status.Status != "D" {
+		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() {
+			opened, conflict := a.openInlineDiff(fullPath, dir, status.Path)
+			if conflict {
+				a.openConflictedFile(fullPath, status.Path)
+				return
+			}
+			if opened {
+				a.FocusEditorIfEnabled()
+				return
+			}
+		}
+	}
 	if staged {
 		a.openStagedDiff(dir, status, extended)
 		return
@@ -739,6 +752,7 @@ func registerWidgetCallbacks(app *App) {
 		app.FocusEditorIfEnabled()
 	}
 	app.Changes.OnOpenDiff = app.OpenChangeDiff
+	app.Changes.OnRefreshed = app.onChangesRefreshed
 	app.Changes.OnOpenCommitDiff = app.OpenCommitDiff
 	app.Changes.OnOpenCommit = app.OpenCommitDetail
 	app.Changes.OnOpenPRDetail = app.OpenPRDetail

@@ -7,10 +7,35 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
+
+	"github.com/gdamore/tcell/v3"
 )
+
+func awaitCurrentGitGutter(t *testing.T, h *testHarness) {
+	t.Helper()
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case ev := <-h.screen.EventQ():
+			if intr, ok := ev.(*tcell.EventInterrupt); ok {
+				if res, ok := intr.Data().(*app.GitGutterResult); ok {
+					h.app.ApplyGitGutterResult(res)
+					if res.Gen == h.app.GitGutterGen {
+						h.redraw()
+						return
+					}
+				}
+			}
+		case <-timeout:
+			t.Fatal("current git gutter result never arrived")
+		}
+	}
+}
 
 func harnessGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -23,7 +48,7 @@ func harnessGit(t *testing.T, dir string, args ...string) {
 
 // setupPartiallyStagedFile commits a 30-line file, stages a change to line 3
 // and leaves an unstaged change to line 25.
-func setupPartiallyStagedFile(t *testing.T, h *testHarness) {
+func setupPartiallyStagedFile(t *testing.T, h *testHarness) string {
 	t.Helper()
 	path := filepath.Join(h.dir, "staged.txt")
 	var lines []string
@@ -42,6 +67,8 @@ func setupPartiallyStagedFile(t *testing.T, h *testHarness) {
 	harnessGit(t, h.dir, "add", "staged.txt")
 	lines[24] = "UNSTAGED 25"
 	write()
+	h.app.RefreshChanges()
+	return path
 }
 
 func openFullFileDiff(h *testHarness) {
@@ -54,21 +81,34 @@ func openFullFileDiff(h *testHarness) {
 func TestUnstagedEntryDiffsIndexAgainstWorkingTree(t *testing.T) {
 	h := newTestHarness(t, 100, 45)
 	defer h.stop()
-	setupPartiallyStagedFile(t, h)
+	path := setupPartiallyStagedFile(t, h)
 
 	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, false)
-	if h.app.EditorGroup.ActiveDiffWidget() == nil {
-		t.Fatal("unstaged entry did not open a diff")
+	d := h.app.EditorGroup.ActiveInlineDiff()
+	if d == nil || !d.Editable() {
+		t.Fatal("unstaged entry did not open an editable diff")
 	}
+	d.SetContextMode(ui.DiffContextFullFile)
 	h.redraw()
-	h.assertContains("staged.txt (diff)")
-	h.assertContains("UNSTAGED 25")
-	h.assertNotContains("row 03")
 
-	openFullFileDiff(h)
+	h.assertContains("staged.txt (diff)")
 	h.assertContains("STAGED 03")
+	h.assertContains("UNSTAGED 25")
 	h.assertContains("row 25")
-	h.assertNotContains("row 03")
+	if strings.Contains(h.screenText(), "row 03") {
+		t.Fatalf("staged change shown in the unstaged diff:\n%s", h.screenText())
+	}
+
+	h.app.EditorGroup.GoToLine(1)
+	h.exec("editor.focus")
+	h.pressRune('X')
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "Xrow 01" {
+		t.Fatalf("edit did not reach the buffer: %q", got)
+	}
+	data, _ := os.ReadFile(path)
+	if strings.HasPrefix(string(data), "X") {
+		t.Fatal("edit saved without a save command")
+	}
 }
 
 func TestStagedEntryDiffsHeadAgainstIndex(t *testing.T) {
@@ -120,22 +160,48 @@ func TestStagedChangesWithoutLineEditsOpenADiff(t *testing.T) {
 	h.assertContains("empty.txt (staged)")
 }
 
-func TestStagedAndUnstagedDiffsOpenSideBySide(t *testing.T) {
-	h := newTestHarness(t, 140, 45)
+func TestStagedEntryDiffsHeadAgainstIndexReadOnly(t *testing.T) {
+	h := newTestHarness(t, 100, 45)
 	defer h.stop()
 	setupPartiallyStagedFile(t, h)
 
 	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, false)
 	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M", Staged: true}, true, false)
-	h.redraw()
-	h.assertContains("staged.txt (diff)")
-	h.assertContains("staged.txt (staged)")
-
-	if !h.app.EditorGroup.SwitchToTabByPath("staged.txt (diff)") {
-		t.Fatal("unstaged diff tab was replaced by the staged one")
+	d := h.app.EditorGroup.ActiveDiffWidget()
+	if d == nil || d.Editable() {
+		t.Fatal("staged entry did not open a read-only diff")
 	}
+	d.SetContextMode(ui.DiffContextFullFile)
 	h.redraw()
+
+	h.assertContains("staged.txt (staged)")
+	h.assertContains("staged.txt (diff)")
+	h.assertContains("row 03")
+	h.assertContains("STAGED 03")
+	h.assertContains("row 25")
+	if strings.Contains(h.screenText(), "UNSTAGED") {
+		t.Fatalf("unstaged change shown in the staged diff:\n%s", h.screenText())
+	}
+}
+
+func TestStagingUpdatesOpenUnstagedDiff(t *testing.T) {
+	h := newTestHarness(t, 100, 45)
+	defer h.stop()
+	setupPartiallyStagedFile(t, h)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, false)
+	h.app.EditorGroup.ActiveInlineDiff().SetContextMode(ui.DiffContextFullFile)
+	h.redraw()
+	h.assertContains("row 25")
+
+	harnessGit(t, h.dir, "add", "staged.txt")
+	h.app.RefreshChanges()
+	awaitCurrentGitGutter(t, h)
+
 	h.assertContains("UNSTAGED 25")
+	if strings.Contains(h.screenText(), "row 25") {
+		t.Fatalf("staged line still diffed against the old index:\n%s", h.screenText())
+	}
 }
 
 func TestConflictedFileOpensWithoutADiff(t *testing.T) {
@@ -165,4 +231,43 @@ func TestConflictedFileOpensWithoutADiff(t *testing.T) {
 		t.Fatalf("active file = %q, want %q", got, path)
 	}
 	h.assertContains("has merge conflicts")
+}
+
+func TestConflictDuringAnOpenDiffClosesIt(t *testing.T) {
+	h := newTestHarness(t, 100, 45)
+	defer h.stop()
+	path := filepath.Join(h.dir, "conflict.txt")
+	os.WriteFile(path, []byte("base\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	harnessGit(t, h.dir, "checkout", "-q", "-b", "other")
+	os.WriteFile(path, []byte("other side\n"), 0644)
+	harnessGit(t, h.dir, "commit", "-qam", "other")
+	harnessGit(t, h.dir, "checkout", "-q", "main")
+	os.WriteFile(path, []byte("main side\n"), 0644)
+	harnessGit(t, h.dir, "commit", "-qam", "main")
+	os.WriteFile(path, []byte("main side\nedited\n"), 0644)
+	h.app.RefreshChanges()
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "conflict.txt", Status: "M"}, false, false)
+	h.redraw()
+	if h.app.EditorGroup.ActiveInlineDiff() == nil {
+		t.Fatal("modified file did not open as a diff")
+	}
+
+	harnessGit(t, h.dir, "checkout", "-q", "--", "conflict.txt")
+	cmd := exec.Command("git", "merge", "-q", "other")
+	cmd.Dir = h.dir
+	if err := cmd.Run(); err == nil {
+		t.Fatal("merge did not conflict")
+	}
+	h.app.RequestGitGutterForActiveFile()
+	awaitCurrentGitGutter(t, h)
+
+	if h.app.EditorGroup.ActiveInlineDiff() != nil {
+		t.Fatal("diff against the index stayed open after the file got merge conflicts")
+	}
+	if h.app.EditorGroup.ActiveFilePath() != path {
+		t.Fatalf("active file %q, want the conflicted file", h.app.EditorGroup.ActiveFilePath())
+	}
+	h.assertContains("merge conflicts")
 }
