@@ -198,3 +198,36 @@ func TestChevronsDefaultAndValidate(t *testing.T) {
 		t.Errorf("chevrons = %q/%q, want the default and the configured glyph", collapsed, expanded)
 	}
 }
+
+func TestDiffSettingsAreAlwaysWritten(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.DiffSigns = false
+	s.Editor.DiffSignsColor = false
+	s.Editor.DiffGutterHighlight = false
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw struct {
+		Editor map[string]json.RawMessage `json:"editor"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"diffSigns", "diffSignsColor", "diffGutterHighlight", "diffHighContrast", "diffEmphasizeCollapsedRows"} {
+		if string(raw.Editor[key]) != "false" {
+			t.Errorf("editor.%s = %s, want false written to settings.json", key, raw.Editor[key])
+		}
+	}
+}
+
+func TestDiffGutterSettingsDefaultWhenMissing(t *testing.T) {
+	dir := withTempConfigDir(t)
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"editor": {"tabSize": 2}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := LoadSettings().Editor
+	if got.DiffSigns || !got.DiffSignsColor || !got.DiffGutterHighlight {
+		t.Errorf("missing keys loaded as diffSigns=%v diffSignsColor=%v diffGutterHighlight=%v, want false, true, true", got.DiffSigns, got.DiffSignsColor, got.DiffGutterHighlight)
+	}
+}

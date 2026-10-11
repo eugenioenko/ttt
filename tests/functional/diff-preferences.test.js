@@ -60,14 +60,17 @@ function diffRow(screen, text) {
 }
 
 describe("diff reading preferences", () => {
-  it("marks removed and added line numbers in the shared diff gutter", () => {
+  it("draws diff gutter signs only when enabled", () => {
     const fixture = diffFixture();
     startWithConfig(fixture);
     tui.exec("Test Preference Diff");
-    const snapshot = tui.snapshot();
+    const off = tui.snapshot();
+    tui.exec("Toggle Diff Gutter Signs");
+    const on = tui.snapshot();
 
     const { snapshots } = tui.run();
-    expect(snapshots[snapshot]).toMatch(/1 −.*1 \+/u);
+    expect(snapshots[off]).not.toMatch(/1 [−+]/u);
+    expect(snapshots[on]).toMatch(/1 −.*1 \+/u);
   });
 
   it("updates an inherited open diff when Options defaults change", () => {

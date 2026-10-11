@@ -54,7 +54,9 @@ The shared diff reader has two independent presentation choices:
 - **Split** places old and new content side by side; **Unified** stacks removals before additions.
 - **Changes Only** shows changed hunks and surrounding context; quiet disclosure rows expand omitted context in place. **Full File** shows the complete file with changes highlighted inline.
 
-Set global defaults for layout, context, line wrapping, and high contrast from the **Diff Views** submenu under **Options**. The adjacent **Git Files** submenu chooses a persisted full-path List (the default) or compact Tree and exposes bulk expansion controls. The Changes panel menu exposes the same choices contextually. Commands applied directly to an open diff override that surface without changing the saved defaults.
+Diffs read like the editor: the cursor, selection, copy and find work the same way, Ctrl+Home and Ctrl+End jump to the top and bottom, and each side is highlighted as a whole file, so a line inside a multi-line comment or string keeps its colors. In **Changes Only**, gap rows also cover the unchanged lines above the first change and below the last one.
+
+Set global defaults for layout, context, line wrapping, and high contrast from the **Diff Views** submenu under **Options**. The same submenu controls the diff gutter: **Gutter Highlight** colors the line numbers of changed rows and tints their gutter, **Gutter Signs** adds `+` and `−` marks (off by default, since the highlight already shows the change), and **Colored Gutter Signs** draws those marks in the added and removed colors. The adjacent **Git Files** submenu chooses a persisted full-path List (the default) or compact Tree and exposes bulk expansion controls. The Changes panel menu exposes the same choices contextually. Commands applied directly to an open diff override that surface without changing the saved defaults.
 
 Commit History initially shows the 10 most recent commits. Activate **Load older commits…** to append the next bounded page; selecting or scrolling to that row does not load anything by itself.
 

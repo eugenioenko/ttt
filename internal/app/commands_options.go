@@ -53,6 +53,21 @@ func (a *App) ToggleDiffHighContrast() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleDiffSigns() {
+	a.Settings.Editor.DiffSigns = !a.Settings.Editor.DiffSigns
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleDiffSignsColor() {
+	a.Settings.Editor.DiffSignsColor = !a.Settings.Editor.DiffSignsColor
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleDiffGutterHighlight() {
+	a.Settings.Editor.DiffGutterHighlight = !a.Settings.Editor.DiffGutterHighlight
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleDiffCollapsedEmphasis() {
 	a.Settings.Editor.DiffCollapsedEmphasis = !a.Settings.Editor.DiffCollapsedEmphasis
 	a.SaveAndApplySettings()
@@ -400,6 +415,9 @@ func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 		ui.MenuSep(),
 		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
 		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+		{Label: "Gutter Signs", Command: "options.toggleDiffSigns", Checked: menuChecked(a.Settings.Editor.DiffSigns)},
+		{Label: "Colored Gutter Signs", Command: "options.toggleDiffSignsColor", Checked: menuChecked(a.Settings.Editor.DiffSignsColor)},
+		{Label: "Gutter Highlight", Command: "options.toggleDiffGutterHighlight", Checked: menuChecked(a.Settings.Editor.DiffGutterHighlight)},
 		{Label: "Emphasize Collapsed Rows", Command: "options.toggleDiffCollapsedEmphasis", Checked: menuChecked(a.Settings.Editor.DiffCollapsedEmphasis)},
 	}
 }
@@ -490,6 +508,24 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleDiffHighContrast", Title: "Toggle High Contrast Diffs",
 		Keywords: []string{"preferences", "settings", "git", "diff", "contrast", "color", "accessibility"},
 		Handler:  app.ToggleDiffHighContrast,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffSigns", Title: "Toggle Diff Gutter Signs",
+		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "plus", "minus", "signs"},
+		Handler:  app.ToggleDiffSigns,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffSignsColor", Title: "Toggle Colored Diff Gutter Signs",
+		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "plus", "minus", "signs", "color"},
+		Handler:  app.ToggleDiffSignsColor,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleDiffGutterHighlight", Title: "Toggle Diff Gutter Highlight",
+		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "line numbers", "highlight", "color"},
+		Handler:  app.ToggleDiffGutterHighlight,
 	})
 
 	reg.Register(command.Command{

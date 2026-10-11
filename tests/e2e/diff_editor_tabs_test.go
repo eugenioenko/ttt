@@ -151,3 +151,31 @@ func TestCtrlEndReachesTheEndOfADiffTab(t *testing.T) {
 	h.pressKey(tcell.KeyHome, tcell.ModCtrl)
 	h.assertContains("CHANGED 02")
 }
+
+func TestDiffGutterOptionsReachAnOpenDiffTab(t *testing.T) {
+	h := newTestHarness(t, 100, 12)
+	defer h.stop()
+	h.app.EditorGroup.OpenDiff("code.txt", diff.FileDiff{}, []string{"same", "old"}, []string{"same", "new"}, true)
+	h.app.EditorGroup.SetDiffDefaults(ui.DiffModeUnified, ui.DiffContextFullFile, false)
+	h.redraw()
+	signs := func() bool {
+		for y := 0; y < 12; y++ {
+			row := h.screenRow(y)
+			if strings.Contains(row, "+new") || strings.Contains(row, "−old") {
+				return true
+			}
+		}
+		return false
+	}
+	if signs() {
+		t.Fatalf("diff gutter signs drawn by default:\n%s", h.screenText())
+	}
+	h.exec("options.toggleDiffSigns")
+	if !h.app.Settings.Editor.DiffSigns || !signs() {
+		t.Fatalf("toggling diff gutter signs did not draw them:\n%s", h.screenText())
+	}
+	h.exec("options.toggleDiffGutterHighlight")
+	if h.app.Settings.Editor.DiffGutterHighlight {
+		t.Fatal("toggling diff gutter highlight did not turn it off")
+	}
+}
