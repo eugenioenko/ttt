@@ -405,3 +405,36 @@ func TestPluginSystemExecCompletionPostsMainThreadRepositoryRequest(t *testing.T
 		t.Fatalf("main-thread invalidation resources = %b", repository.dirty)
 	}
 }
+
+func TestPluginFilesystemAPI_SymlinkedRoot(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.MkdirAll(filepath.Join(real, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(real, "file.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(base, "outside")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(real, "escape")); err != nil {
+		t.Fatal(err)
+	}
+
+	fs := NewPluginFilesystemAPI(link)
+	if got, err := fs.ReadFile(filepath.Join(link, "file.txt")); err != nil || got != "hi" {
+		t.Errorf("read through the symlinked root = %q, %v", got, err)
+	}
+	if err := fs.WriteFile(filepath.Join(link, "sub", "new.txt"), "x"); err != nil {
+		t.Errorf("write through the symlinked root: %v", err)
+	}
+	if err := fs.WriteFile(filepath.Join(link, "escape", "x.txt"), "x"); err == nil {
+		t.Error("a symlink inside the root that points outside it was allowed")
+	}
+}

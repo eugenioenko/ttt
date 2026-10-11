@@ -324,8 +324,16 @@ type PluginFilesystemAPI struct {
 func NewPluginFilesystemAPI(allowedRoots ...string) *PluginFilesystemAPI {
 	resolved := make([]string, 0, len(allowedRoots))
 	for _, root := range allowedRoots {
-		if abs, err := filepath.Abs(root); err == nil {
-			resolved = append(resolved, filepath.Clean(abs))
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		abs = filepath.Clean(abs)
+		resolved = append(resolved, abs)
+		// validatePath resolves symlinks in the requested path, so a root under a symlink (macOS /tmp and
+		// /var) must also be allowed in resolved form, or the workspace denies its own files.
+		if real, err := filepath.EvalSymlinks(abs); err == nil && real != abs {
+			resolved = append(resolved, real)
 		}
 	}
 	return &PluginFilesystemAPI{allowedRoots: resolved}
