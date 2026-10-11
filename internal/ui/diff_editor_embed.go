@@ -22,6 +22,13 @@ func (d *DiffEditorWidget) setSource(fd diff.FileDiff, oldLines, newLines []stri
 	d.rebuild()
 }
 
+// cancelPointer drops a press and capture its host cancelled mid-drag, so the
+// next press starts fresh.
+func (d *DiffEditorWidget) cancelPointer() {
+	d.pressed = false
+	d.captured = nil
+}
+
 func (d *DiffEditorWidget) setEmbedded() {
 	for _, p := range d.panes() {
 		p.Embedded = true

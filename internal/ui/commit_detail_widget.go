@@ -511,9 +511,8 @@ func (d *CommitDetailWidget) SetDetail(message string, files []CommitDetailFile,
 	d.Loading = false
 	d.Error = errText
 	d.Message = message
+	d.cancelFileDrag()
 	d.Files = files
-	d.capturedFile = -1
-	d.primaryPressed = false
 	d.collapsedFiles = make([]bool, len(files))
 	for i := range d.Files {
 		d.Files[i].expandedGaps = make(map[int]bool)
@@ -568,9 +567,8 @@ func (d *CommitDetailWidget) SetCurrentChanges(message string, files []CommitDet
 	d.Error = ""
 	d.RefreshError = ""
 	d.Message = message
+	d.cancelFileDrag()
 	d.Files = files
-	d.capturedFile = -1
-	d.primaryPressed = false
 	d.collapsedFiles = make([]bool, len(files))
 	for i := range d.Files {
 		d.Files[i].pendingGap = -1
@@ -658,6 +656,16 @@ func (d *CommitDetailWidget) afterCollapseChange() {
 	d.ClearSelection()
 	d.rebuildRows()
 	d.clampScroll()
+}
+
+func (d *CommitDetailWidget) cancelFileDrag() {
+	if d.capturedFile >= 0 && d.capturedFile < len(d.Files) {
+		if v := d.Files[d.capturedFile].view; v != nil {
+			v.cancelPointer()
+		}
+	}
+	d.capturedFile = -1
+	d.primaryPressed = false
 }
 
 func (d *CommitDetailWidget) rebuildRows() {

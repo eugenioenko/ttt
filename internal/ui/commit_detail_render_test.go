@@ -203,3 +203,26 @@ func TestCommitDetailDragSurvivesFewerFiles(t *testing.T) {
 		t.Fatalf("captured file = %d after the file list shrank, want -1", detail.capturedFile)
 	}
 }
+
+func TestCommitDetailRefreshCancelsTheFileViewPress(t *testing.T) {
+	detail := manyFileDetail(2)
+	detail.CurrentChanges = true
+	grid := renderDetail(detail, 80, 40)
+	x, y, ok := detailFind(grid, "new line 0")
+	if !ok {
+		t.Fatalf("first file not on screen:\n%s", detailTestText(grid))
+	}
+	detail.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	view := detail.Files[0].view
+	if !view.pressed {
+		t.Fatal("fixture: the press should reach the file's diff view")
+	}
+
+	detail.SetCurrentChanges("Subject", detail.Files, "")
+	if detail.Files[0].view != view {
+		t.Fatal("fixture: the refresh should keep the file's diff view")
+	}
+	if view.pressed || view.captured != nil {
+		t.Fatal("the refresh cancelled the drag but left the file view pressed")
+	}
+}
