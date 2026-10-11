@@ -41,3 +41,26 @@ func BenchmarkDiffSidesTokenize(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkDeepLineFirstAnswer(b *testing.B) {
+	lines := commentedFile(4000)
+	deep := len(lines) - 2
+	b.Run("synchronous", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			New("main.go").HighlightLineAt(lines, deep)
+		}
+	})
+	b.Run("progressive", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			h := New("main.go")
+			h.SetProgressive(func() {})
+			h.BeginPass()
+			h.HighlightLineAt(lines, deep)
+			b.StopTimer()
+			h.SetProgressive(nil)
+			b.StartTimer()
+		}
+	})
+}

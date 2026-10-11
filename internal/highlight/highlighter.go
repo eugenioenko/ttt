@@ -42,6 +42,8 @@ type Highlighter struct {
 	styles    map[*textmate.ScopeStack]term.Style
 	// tokenTheme is the token theme the caches above were built with.
 	tokenTheme *TokenTheme
+
+	progress *progressive
 }
 
 // Conventional extensionless names the grammar catalog does not declare.
@@ -137,9 +139,15 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	h.syncTokenTheme()
 	if h.dirty || h.doc.Len() != len(lines) {
 		h.dirty = false
+		h.progress.linesChanged(lines)
 		h.doc.SetLines(lines)
 	}
+	if p := h.progress; p != nil && idx > p.base+p.slack() {
+		p.warmTo(idx)
+		return h.HighlightLine(lines[idx])
+	}
 	res, ok := h.doc.Line(idx)
+	h.progress.reached(idx)
 	if !ok || len(res.Tokens) == 0 {
 		return nil
 	}
