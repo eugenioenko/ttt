@@ -241,7 +241,9 @@ func (t *Terminal) Size() (cols, rows int) {
 }
 
 // Close hangs up the shell the way a terminal emulator does when its window
-// closes, then kills what is left of the shell's process group.
+// closes, and kills the shell's process group only if the shell outlives the
+// hangup. Jobs that ignore SIGHUP (nohup) survive a shell that exits, as they
+// would under a real terminal.
 //
 // readLoop only returns once every holder of the pty slave has closed it, and
 // a background job that ignores SIGHUP can keep it open indefinitely, so the
