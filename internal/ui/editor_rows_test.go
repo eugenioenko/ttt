@@ -187,7 +187,7 @@ func TestEditorRowsWordWrap(t *testing.T) {
 
 func TestEditorRowsPhantoms(t *testing.T) {
 	e := newRowsEditor(numberedLines(10), 20, 5)
-	e.phantoms = map[int]int{2: 2, 10: 1}
+	e.setPhantoms(map[int]int{2: 2, 10: 1})
 
 	rows := renderRows(e)
 	want := []string{"line 0", "line 1", "", "", "line 2"}

@@ -1,7 +1,10 @@
 package ui
 
 import (
-	"github.com/eugenioenko/ttt/internal/core/fold"
+	"sort"
+	"unsafe"
+
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
@@ -23,29 +26,142 @@ type rowLayout struct {
 	wrap     bool
 	width    int
 	tabW     int
-	folds    *fold.State
 	visible  []int
 	phantoms map[int]int
+
+	key    rowLayoutKey
+	starts []int
+	memo   []lineRowsMemo
+	endRow int
+}
+
+// rowLayoutKey identifies what a cached layout was built from. The buffer
+// version covers every edit; the line-slice identity catches a slice assigned
+// to Lines without going through the buffer.
+type rowLayoutKey struct {
+	buf        *buffer.Buffer
+	lines      *string
+	n          int
+	version    uint64
+	visible    *int
+	visN       int
+	phantomGen uint64
+	wrap       bool
+	width      int
+	tabW       int
+}
+
+type lineRowsMemo struct {
+	text string
+	rows int
 }
 
 func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	if width < 1 {
 		width = 1
 	}
-	l := &rowLayout{
-		lines: e.Buf.Lines,
-		wrap:  e.WordWrap,
-		width: width,
-		tabW:  e.resolveTabSize(),
-	}
+	n := len(e.Buf.Lines)
+	var visible []int
 	if e.hasFolds() {
-		l.folds = e.Folds
-		l.visible = e.Folds.VisibleLines(len(e.Buf.Lines))
+		visible = e.Folds.VisibleLines(n)
+	}
+	key := rowLayoutKey{
+		buf:        e.Buf,
+		lines:      unsafe.SliceData(e.Buf.Lines),
+		n:          n,
+		version:    e.Buf.Version(),
+		visible:    unsafe.SliceData(visible),
+		visN:       len(visible),
+		phantomGen: e.phantomGen,
+		wrap:       e.WordWrap,
+		tabW:       e.resolveTabSize(),
+	}
+	if e.WordWrap {
+		key.width = width
+	}
+	for _, c := range e.layoutCache {
+		if c != nil && c.key == key {
+			return c
+		}
+	}
+	l := &rowLayout{
+		lines:   e.Buf.Lines,
+		wrap:    e.WordWrap,
+		width:   width,
+		tabW:    key.tabW,
+		visible: visible,
+		key:     key,
 	}
 	if len(e.phantoms) > 0 {
 		l.phantoms = e.phantoms
 	}
+	slot := 0
+	for i, c := range e.layoutCache {
+		if c == nil {
+			slot = i
+			break
+		}
+		if c.key.wrap == key.wrap && c.key.width == key.width && c.key.tabW == key.tabW {
+			l.memo = c.memo
+			slot = i
+			break
+		}
+		if i == len(e.layoutCache)-1 {
+			slot = e.layoutNext
+			e.layoutNext = (e.layoutNext + 1) % len(e.layoutCache)
+		}
+	}
+	e.layoutCache[slot] = l
 	return l
+}
+
+func (e *EditorPaneWidget) setPhantoms(p map[int]int) {
+	e.phantoms = p
+	e.phantomGen++
+}
+
+// lineRows is how many rows a wrapped line takes, reusing the count from the
+// previous layout when the line's text is unchanged; a line shifted by an
+// insert or delete is found at its old index offset by the line delta.
+func (l *rowLayout) lineRows(line int, prev []lineRowsMemo, delta int) int {
+	text := l.lines[line]
+	for _, i := range [2]int{line, line - delta} {
+		if i >= 0 && i < len(prev) && prev[i].rows > 0 && len(prev[i].text) == len(text) && unsafe.StringData(prev[i].text) == unsafe.StringData(text) {
+			l.memo[line] = prev[i]
+			return prev[i].rows
+		}
+	}
+	rows := len(wrapLineSegments([]rune(text), l.width, l.tabW))
+	l.memo[line] = lineRowsMemo{text: text, rows: rows}
+	return rows
+}
+
+// ensure computes each visible line's first row once per layout.
+func (l *rowLayout) ensure() {
+	if l.starts != nil {
+		return
+	}
+	prev := l.memo
+	if l.wrap {
+		l.memo = make([]lineRowsMemo, l.n())
+	}
+	delta := l.n() - len(prev)
+	count := l.visibleCount()
+	starts := make([]int, count+1)
+	row := 0
+	for i := 0; i < count; i++ {
+		starts[i] = row
+		line := l.visLine(i)
+		row += l.phantoms[line]
+		if l.wrap {
+			row += l.lineRows(line, prev, delta)
+		} else {
+			row++
+		}
+	}
+	starts[count] = row
+	l.starts = starts
+	l.endRow = row + l.phantoms[l.n()]
 }
 
 func (e *EditorPaneWidget) layout() *rowLayout {
@@ -85,11 +201,12 @@ func (l *rowLayout) visIndex(line int) int {
 	if line >= l.n() {
 		return len(l.visible) + line - l.n()
 	}
-	if v := l.folds.BufferToVisible(line); v >= 0 {
-		return v
+	i := sort.SearchInts(l.visible, line)
+	if i < len(l.visible) && l.visible[i] == line {
+		return i
 	}
-	if r := l.folds.ContainingFold(line); r != nil {
-		return l.folds.BufferToVisible(r.StartLine)
+	if i > 0 {
+		return i - 1
 	}
 	return 0
 }
@@ -105,10 +222,8 @@ func (l *rowLayout) visLine(i int) int {
 }
 
 func (l *rowLayout) visibleLine(line int) int {
-	if l.folds != nil && line < l.n() {
-		if r := l.folds.ContainingFold(line); r != nil {
-			return r.StartLine
-		}
+	if l.visible != nil && line < l.n() && len(l.visible) > 0 {
+		return l.visible[l.visIndex(line)]
 	}
 	return line
 }
@@ -120,19 +235,16 @@ func (l *rowLayout) startRow(line int) int {
 	if line > l.n() {
 		return l.startRow(l.n()) + l.phantoms[l.n()] + line - l.n() - 1
 	}
-	row := 0
-	end := l.visIndex(line)
-	for i := 0; i < end && i < l.visibleCount(); i++ {
-		row += l.blockRows(l.visLine(i))
-	}
-	return row
+	l.ensure()
+	return l.starts[min(l.visIndex(line), l.visibleCount())]
 }
 
 func (l *rowLayout) total() int {
 	if l.identity() {
 		return l.visibleCount()
 	}
-	return l.startRow(l.n()) + l.phantoms[l.n()]
+	l.ensure()
+	return l.endRow
 }
 
 func (l *rowLayout) rowOf(line, col int) (row, screenCol int) {
@@ -180,15 +292,12 @@ func (l *rowLayout) rowToTop(abs int) (line, offset int) {
 		}
 		return l.visLine(abs), 0
 	}
-	acc := 0
-	for i := 0; i < l.visibleCount(); i++ {
-		ln := l.visLine(i)
-		rows := l.blockRows(ln)
-		if acc+rows > abs {
-			return ln, abs - acc
-		}
-		acc += rows
+	l.ensure()
+	count := l.visibleCount()
+	if i := sort.Search(count, func(i int) bool { return l.starts[i+1] > abs }); i < count {
+		return l.visLine(i), abs - l.starts[i]
 	}
+	acc := l.starts[count]
 	last := l.lastVisibleLine()
 	if abs < acc+l.phantoms[l.n()] {
 		return last, abs - l.startRow(last)
@@ -205,7 +314,10 @@ func (l *rowLayout) maxOffset(line int) int {
 }
 
 func (l *rowLayout) rows(topLine, offset, h int) []editorRow {
-	out := make([]editorRow, 0, h)
+	return l.appendRows(make([]editorRow, 0, h), topLine, offset, h)
+}
+
+func (l *rowLayout) appendRows(out []editorRow, topLine, offset, h int) []editorRow {
 	if h <= 0 {
 		return out
 	}

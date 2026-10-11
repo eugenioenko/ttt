@@ -93,6 +93,9 @@ type EditorPaneWidget struct {
 	topRowOffset            int
 	topOffsetLine           int
 	phantoms                map[int]int
+	phantomGen              uint64
+	layoutCache             [4]*rowLayout
+	layoutNext              int
 }
 
 func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewport) *EditorPaneWidget {
