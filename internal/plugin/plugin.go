@@ -244,13 +244,13 @@ func (p *Plugin) SafePostAsync(result *PluginAsyncResult) {
 	}
 }
 
-// Loaded is safe to call from the UI goroutine while Update destroys the plugin on another.
 func (p *Plugin) Loaded() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.State != nil
 }
 
+// Destroy and Init must run on the UI goroutine, which uses p.State without a lock.
 func (p *Plugin) Destroy() {
 	p.mu.Lock()
 	defer p.mu.Unlock()

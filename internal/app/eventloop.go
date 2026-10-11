@@ -460,8 +460,8 @@ func RunEventLoop(
 				}
 			case *pluginInstallResult:
 				app.handlePluginInstallResult(v)
-			case *pluginUpdateResult:
-				app.handlePluginUpdateResult(v)
+			case *PluginUpdateResult:
+				app.HandlePluginUpdateResult(v)
 			case *RemoteRegistryResult:
 				app.handleRemoteRegistryResult(v)
 			case *pluginReadmeResult:
