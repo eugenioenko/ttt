@@ -1030,12 +1030,36 @@ func TestRemoteToHTTPS(t *testing.T) {
 		{"git@github.com:user/repo", "https://github.com/user/repo"},
 		{"https://github.com/user/repo.git", "https://github.com/user/repo"},
 		{"https://github.com/user/repo", "https://github.com/user/repo"},
+		{"ssh://git@github.com/user/repo.git", "https://github.com/user/repo"},
+		{"ssh://git@github.com:22/user/repo.git", "https://github.com/user/repo"},
+		{"https://user:secret@github.com/user/repo.git", "https://github.com/user/repo"},
+		{"https://git.example.com:8443/user/repo.git", "https://git.example.com:8443/user/repo"},
 	}
 	for _, tt := range tests {
 		got := remoteToHTTPS(tt.input)
 		if got != tt.want {
 			t.Errorf("remoteToHTTPS(%q) = %q, want %q", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestPermalink(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "docs/my notes#1.md", "one\ntwo\n")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "commit", "-m", "init")
+	gitRun(t, dir, "remote", "add", "origin", "git@github.com:user/repo.git")
+	sha := HeadSHA(dir)
+
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	file := filepath.Join(link, "docs", "my notes#1.md")
+	got := Permalink(RepoRoot(filepath.Dir(file)), file, 1)
+	want := "https://github.com/user/repo/blob/" + sha + "/docs/my%20notes%231.md#L2"
+	if got != want {
+		t.Errorf("Permalink = %q, want %q", got, want)
 	}
 }
 

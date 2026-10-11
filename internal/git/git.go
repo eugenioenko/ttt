@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -620,13 +621,20 @@ func Permalink(dir, filePath string, line int) string {
 		return ""
 	}
 
+	// dir comes from rev-parse with symlinks resolved, so the file must be too.
+	if resolved, err := filepath.EvalSymlinks(filePath); err == nil {
+		filePath = resolved
+	}
 	relPath, err := filepath.Rel(dir, filePath)
 	if err != nil {
 		return ""
 	}
-	relPath = filepath.ToSlash(relPath)
+	segments := strings.Split(filepath.ToSlash(relPath), "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
 
-	return fmt.Sprintf("%s/blob/%s/%s#L%d", baseURL, sha, relPath, line+1)
+	return fmt.Sprintf("%s/blob/%s/%s#L%d", baseURL, sha, strings.Join(segments, "/"), line+1)
 }
 
 func remoteToHTTPS(remote string) string {
@@ -635,6 +643,14 @@ func remoteToHTTPS(remote string) string {
 		remote = strings.TrimPrefix(remote, "git@")
 		remote = strings.Replace(remote, ":", "/", 1)
 		remote = "https://" + remote
+	}
+	if u, err := url.Parse(remote); err == nil && u.Host != "" {
+		if u.Scheme == "ssh" || u.Scheme == "git" {
+			u.Host = u.Hostname()
+		}
+		u.Scheme = "https"
+		u.User = nil
+		remote = u.String()
 	}
 	remote = strings.TrimSuffix(remote, ".git")
 	return remote
