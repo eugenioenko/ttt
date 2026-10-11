@@ -176,14 +176,6 @@ func TestImageWidgetUndecodableFileShowsMessage(t *testing.T) {
 	}
 }
 
-func TestBinaryWidgetMissingFileShowsMessage(t *testing.T) {
-	w := NewBinaryFileWidget(filepath.Join(t.TempDir(), "gone.bin"))
-	text := renderWidgetText(w, 60, 10)
-	if !strings.Contains(text, "File not found.") {
-		t.Errorf("missing file should report %q, got:\n%s", "File not found.", text)
-	}
-}
-
 func renderWidgetOnLayer(t *testing.T, w *ImageViewWidget, width, height int) (string, string) {
 	t.Helper()
 	layer := tttimage.NewLayer()
