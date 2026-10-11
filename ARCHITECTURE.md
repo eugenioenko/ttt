@@ -273,7 +273,7 @@ P2
 `-- [P3/P4] H1 PTY readiness fixture correction for issue #533
 
 S2 + D2
-  `-- D3  Migrate DiffViewWidget
+  `-- D3  Migrate DiffViewWidget (done: diff tabs use DiffEditorWidget, #791 and #792)
         `-- D4  Migrate CommitDetailWidget and remove duplicate projection
 ```
 
