@@ -1,10 +1,6 @@
 package image
 
-import (
-	"strings"
-
-	"github.com/eugenioenko/ttt/internal/config"
-)
+import "strings"
 
 type Protocol int
 
@@ -54,9 +50,9 @@ func Detect(env func(string) string, cellW, cellH int) Protocol {
 
 func ResolveProtocol(setting string, env func(string) string, cellW, cellH int) Protocol {
 	switch setting {
-	case config.ImageProtocolKitty:
+	case "kitty":
 		return Kitty
-	case config.ImageProtocolNone:
+	case "none":
 		return None
 	default:
 		return Detect(env, cellW, cellH)

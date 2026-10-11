@@ -7,6 +7,7 @@ import (
 	stdimage "image"
 	"image/png"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/image"
@@ -196,5 +197,51 @@ func TestImageWidgetDecodesOffTheRenderPath(t *testing.T) {
 	w.Render(s)
 	if len(s.placed) != 2 || s.placed[1].id == s.placed[0].id {
 		t.Errorf("changed data placements = %+v, want a new source", s.placed)
+	}
+}
+
+func TestImageWidgetRunsOneDecodeAtATime(t *testing.T) {
+	var mu sync.Mutex
+	running, peak := 0, 0
+	gate := make(chan struct{})
+	decodeImage = func(data []byte, name string) (*image.Source, error) {
+		mu.Lock()
+		running++
+		peak = max(peak, running)
+		mu.Unlock()
+		<-gate
+		mu.Lock()
+		running--
+		mu.Unlock()
+		return image.Decode(data, name)
+	}
+	t.Cleanup(func() { decodeImage = image.Decode })
+
+	woke := make(chan struct{}, 4)
+	cfg := kittyConfig(pngBytes(t, 40, 40))
+	cfg.Redraw = func() { woke <- struct{}{} }
+	s := newPlacerSurface(60, 20)
+	w := NewImageWidget(cfg)
+	w.Render(s)
+	for _, size := range []int{50, 60} {
+		cfg.Data = string(pngBytes(t, size, 40))
+		w.SetConfig(cfg)
+		w.Render(s)
+	}
+
+	gate <- struct{}{}
+	<-woke
+	w.Render(s)
+	if len(s.placed) != 0 {
+		t.Fatalf("placed a stale decode: %+v", s.placed)
+	}
+	gate <- struct{}{}
+	<-woke
+	w.Render(s)
+	if peak != 1 {
+		t.Errorf("peak concurrent decodes = %d, want 1", peak)
+	}
+	if len(s.placed) != 1 || w.src == nil || w.src.W != 60 {
+		t.Errorf("placements = %+v, want the latest 60px image", s.placed)
 	}
 }

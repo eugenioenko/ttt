@@ -158,6 +158,53 @@ func TestLoadAllLogsInitFailure(t *testing.T) {
 	}
 }
 
+// An update whose new code fails to init stays listed with its error, so it can
+// be reloaded once fixed, but must not leave panel registrations behind.
+func TestApplyUpdateInitFailureDropsRegistrations(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "panel")
+	entry := filepath.Join(dir, "main.ttt.lua")
+	registerSidebar := `require("ttt").register({ sidebar = { title = "P", render = function() end } })`
+	if err := os.WriteFile(entry, []byte(registerSidebar), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reg := `[{"name":"panel","version":"1.0.0","enabled":true,"permissions":{"panel.sidebar":true}}]`
+	if err := os.WriteFile(regPath, []byte(reg), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, regPath)
+	m.LoadAll()
+	old := m.FindPlugin("panel")
+	if old == nil || len(m.SidebarPanels) != 1 {
+		t.Fatalf("plugin not loaded with its sidebar: %v, %d panels", old, len(m.SidebarPanels))
+	}
+	defer m.Shutdown()
+
+	if err := os.WriteFile(entry, []byte(registerSidebar+"\nerror('boom')"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	u := m.PrepareUpdate("panel")
+	manifest, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.manifest = manifest
+	if _, _, err := m.ApplyUpdate(u); err == nil {
+		t.Fatal("ApplyUpdate succeeded with failing init code")
+	}
+
+	if old.Loaded() {
+		t.Error("old plugin still loaded")
+	}
+	if len(m.SidebarPanels) != 0 {
+		t.Errorf("sidebar registrations = %d, want 0", len(m.SidebarPanels))
+	}
+	if p := m.FindPlugin("panel"); p == nil || p.Loaded() || p.LastError == nil {
+		t.Errorf("failed plugin should stay listed, unloaded, with its error: %v", p)
+	}
+}
+
 // A plugin that loads cleanly must still get its log sink, so ttt.log works
 // from the plugin's own init.
 func TestLoadAllWiresLogForHealthyPlugin(t *testing.T) {

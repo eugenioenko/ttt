@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/gdamore/tcell/v3"
@@ -135,24 +136,14 @@ func (m *Manager) LoadAll() []*Plugin {
 	return needsApproval
 }
 
+func (m *Manager) dropRegistrations(id string) {
+	m.SidebarPanels = slices.DeleteFunc(m.SidebarPanels, func(reg SidebarRegistration) bool { return reg.ID == id })
+	m.BottomPanels = slices.DeleteFunc(m.BottomPanels, func(reg BottomRegistration) bool { return reg.ID == id })
+}
+
 func (m *Manager) collectRegistrations(p *Plugin) {
 	id := "plugin." + p.Name
-
-	filtered := m.SidebarPanels[:0]
-	for _, reg := range m.SidebarPanels {
-		if reg.ID != id {
-			filtered = append(filtered, reg)
-		}
-	}
-	m.SidebarPanels = filtered
-
-	filteredBottom := m.BottomPanels[:0]
-	for _, reg := range m.BottomPanels {
-		if reg.ID != id {
-			filteredBottom = append(filteredBottom, reg)
-		}
-	}
-	m.BottomPanels = filteredBottom
+	m.dropRegistrations(id)
 
 	if p.SidebarTitle != "" && p.RenderFunc != nil {
 		m.SidebarPanels = append(m.SidebarPanels, SidebarRegistration{
@@ -528,124 +519,125 @@ func withinDir(parent, child string) bool {
 	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-func (m *Manager) Update(name string) (*Plugin, bool, error) {
-	dir := filepath.Join(m.pluginsDir, name)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return nil, false, fmt.Errorf("plugin %q not found", name)
-	}
-
-	regEntry := m.registry.Find(name)
-
-	if regEntry != nil && regEntry.Path != "" {
-		return m.updateFromSubdir(name, dir, regEntry)
-	}
-
-	cmd := remoteGitCommand("-C", dir, "pull")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, false, fmt.Errorf("git pull failed: %s: %s", err, strings.TrimSpace(string(out)))
-	}
-
-	newManifest, err := LoadManifest(dir)
-	if err != nil {
-		return nil, false, fmt.Errorf("invalid manifest after update: %w", err)
-	}
-
-	if regEntry == nil {
-		p := &Plugin{Name: newManifest.Name, Dir: dir, Manifest: newManifest}
-		return p, true, nil
-	}
-
-	diff := DiffPermissions(regEntry.Permissions, newManifest.Permissions)
-	if !diff.IsEmpty() {
-		for i, p := range m.plugins {
-			if p.Name == name {
-				p.Destroy()
-				m.plugins = append(m.plugins[:i], m.plugins[i+1:]...)
-				break
-			}
-		}
-		regEntry.Enabled = false
-		m.registry.Save()
-		p := &Plugin{Name: newManifest.Name, Dir: dir, Manifest: newManifest}
-		return p, true, nil
-	}
-
-	for _, p := range m.plugins {
-		if p.Name == name {
-			p.Destroy()
-			p.Manifest = newManifest
-			p.Granted = regEntry.Permissions
-			if err := m.initPlugin(p); err != nil {
-				return nil, false, err
-			}
-			m.collectRegistrations(p)
-			regEntry.Version = newManifest.Version
-			m.registry.Save()
-			return p, false, nil
-		}
-	}
-
-	return nil, false, nil
+// PluginUpdate carries an update from Fetch, which may run off the UI goroutine,
+// to ApplyUpdate, which replaces the plugin's Lua state and must run on it.
+type PluginUpdate struct {
+	name     string
+	dir      string
+	repo     string
+	repoPath string
+	manifest Manifest
 }
 
-func (m *Manager) updateFromSubdir(name, dir string, regEntry *RegistryEntry) (*Plugin, bool, error) {
-	if regEntry.Repo == "" {
-		return nil, false, fmt.Errorf("plugin %q has no repository URL", name)
+func (m *Manager) PrepareUpdate(name string) *PluginUpdate {
+	u := &PluginUpdate{name: name, dir: filepath.Join(m.pluginsDir, name)}
+	if m.registry != nil {
+		if entry := m.registry.Find(name); entry != nil {
+			u.repo, u.repoPath = entry.Repo, entry.Path
+		}
+	}
+	return u
+}
+
+func (u *PluginUpdate) Name() string { return u.name }
+
+func (u *PluginUpdate) Fetch() error {
+	if _, err := os.Stat(u.dir); os.IsNotExist(err) {
+		return fmt.Errorf("plugin %q not found", u.name)
+	}
+	if u.repoPath != "" {
+		return u.fetchFromSubdir()
+	}
+
+	cmd := remoteGitCommand("-C", u.dir, "pull")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git pull failed: %s: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	manifest, err := LoadManifest(u.dir)
+	if err != nil {
+		return fmt.Errorf("invalid manifest after update: %w", err)
+	}
+	u.manifest = manifest
+	return nil
+}
+
+func (u *PluginUpdate) fetchFromSubdir() error {
+	if u.repo == "" {
+		return fmt.Errorf("plugin %q has no repository URL", u.name)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "ttt-plugin-update-*")
 	if err != nil {
-		return nil, false, fmt.Errorf("create temp dir: %w", err)
+		return fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	cmd := remoteGitCommand("clone", "--depth", "1", regEntry.Repo, tmpDir)
+	cmd := remoteGitCommand("clone", "--depth", "1", u.repo, tmpDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, false, fmt.Errorf("git clone failed: %s: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("git clone failed: %s: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	srcDir := filepath.Join(tmpDir, regEntry.Path)
-	newManifest, err := LoadManifest(srcDir)
+	srcDir := filepath.Join(tmpDir, u.repoPath)
+	manifest, err := LoadManifest(srcDir)
 	if err != nil {
-		return nil, false, fmt.Errorf("invalid manifest after update: %w", err)
+		return fmt.Errorf("invalid manifest after update: %w", err)
 	}
 
-	os.RemoveAll(dir)
-	if err := copyDir(srcDir, dir); err != nil {
-		return nil, false, fmt.Errorf("copy plugin: %w", err)
+	os.RemoveAll(u.dir)
+	if err := copyDir(srcDir, u.dir); err != nil {
+		return fmt.Errorf("copy plugin: %w", err)
+	}
+	u.manifest = manifest
+	return nil
+}
+
+// ApplyUpdate loads the update into a new Plugin, so panels and async callbacks
+// still bound to the old one find it unloaded instead of running in the new state.
+func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
+	regEntry := m.registry.Find(u.name)
+	if regEntry == nil {
+		return &Plugin{Name: u.manifest.Name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, true, nil
 	}
 
-	diff := DiffPermissions(regEntry.Permissions, newManifest.Permissions)
+	idx := slices.IndexFunc(m.plugins, func(p *Plugin) bool { return p.Name == u.name })
+
+	diff := DiffPermissions(regEntry.Permissions, u.manifest.Permissions)
 	if !diff.IsEmpty() {
-		for i, p := range m.plugins {
-			if p.Name == name {
-				p.Destroy()
-				m.plugins = append(m.plugins[:i], m.plugins[i+1:]...)
-				break
-			}
+		if idx >= 0 {
+			m.plugins[idx].Destroy()
+			m.plugins = slices.Delete(m.plugins, idx, idx+1)
 		}
 		regEntry.Enabled = false
 		m.registry.Save()
-		p := &Plugin{Name: newManifest.Name, Dir: dir, Repo: regEntry.Repo, RepoPath: regEntry.Path, Manifest: newManifest}
-		return p, true, nil
+		return &Plugin{Name: u.manifest.Name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, true, nil
 	}
 
-	for _, p := range m.plugins {
-		if p.Name == name {
-			p.Destroy()
-			p.Manifest = newManifest
-			p.Granted = regEntry.Permissions
-			if err := m.initPlugin(p); err != nil {
-				return nil, false, err
-			}
-			m.collectRegistrations(p)
-			regEntry.Version = newManifest.Version
-			m.registry.Save()
-			return p, false, nil
-		}
+	if idx < 0 {
+		return nil, false, nil
 	}
 
-	return nil, false, nil
+	old := m.plugins[idx]
+	old.Destroy()
+	p := &Plugin{
+		Name:     old.Name,
+		Dir:      old.Dir,
+		Repo:     old.Repo,
+		RepoPath: old.RepoPath,
+		Manifest: u.manifest,
+		Granted:  regEntry.Permissions,
+	}
+	m.wireAPIs(p)
+	p.AppVersion = m.appVersion
+	m.plugins[idx] = p
+	if err := m.initPlugin(p); err != nil {
+		m.dropRegistrations("plugin." + p.Name)
+		return nil, false, err
+	}
+	m.collectRegistrations(p)
+	regEntry.Version = u.manifest.Version
+	m.registry.Save()
+	return p, false, nil
 }
 
 func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {

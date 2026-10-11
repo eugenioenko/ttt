@@ -43,11 +43,11 @@ func (a *App) closeFileHandlerTab(path string) {
 	}
 }
 
-// A handled tab renders through its plugin's Lua state. Update destroys plugins off the main thread, so orphaned tabs are found here each frame rather than from Destroy.
+// Reload, update and disable destroy the plugin a handled tab renders through, so orphaned tabs are found here each frame rather than at every Destroy.
 func (a *App) SyncFileHandlerTabs() {
 	released := false
 	for path, owner := range a.fileHandlerTabs {
-		if owner.Active() {
+		if owner.Loaded() && owner.Enabled {
 			continue
 		}
 		a.EditorGroup.ShowBinaryCard(path)
