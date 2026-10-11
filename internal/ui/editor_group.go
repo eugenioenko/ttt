@@ -107,6 +107,7 @@ type EditorGroupWidget struct {
 	ImageProtocol           string
 	ImageCellW              int
 	ImageCellH              int
+	ImageRedraw             func()
 	SyntaxHighlight         bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
@@ -458,6 +459,7 @@ func (g *EditorGroupWidget) applyImagePrefs(content Widget) {
 	if iv, ok := content.(*ImageViewWidget); ok {
 		iv.Protocol = g.ImageProtocol
 		iv.CellW, iv.CellH = g.ImageCellW, g.ImageCellH
+		iv.Redraw = g.ImageRedraw
 	}
 }
 
@@ -791,6 +793,15 @@ func (g *EditorGroupWidget) SetImageCellSize(w, h int) {
 	for _, tab := range g.tabs {
 		if iv, ok := tab.Content.(*ImageViewWidget); ok {
 			iv.CellW, iv.CellH = w, h
+		}
+	}
+}
+
+func (g *EditorGroupWidget) SetImageRedraw(redraw func()) {
+	g.ImageRedraw = redraw
+	for _, tab := range g.tabs {
+		if iv, ok := tab.Content.(*ImageViewWidget); ok {
+			iv.Redraw = redraw
 		}
 	}
 }

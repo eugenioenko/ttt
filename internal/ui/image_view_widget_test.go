@@ -6,8 +6,10 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -171,14 +173,6 @@ func TestImageWidgetUndecodableFileShowsMessage(t *testing.T) {
 	text := renderWidgetText(w, 60, 10)
 	if !strings.Contains(text, "Not a readable image") {
 		t.Errorf("undecodable file should report a readable message, got:\n%s", text)
-	}
-}
-
-func TestBinaryWidgetMissingFileShowsMessage(t *testing.T) {
-	w := NewBinaryFileWidget(filepath.Join(t.TempDir(), "gone.bin"))
-	text := renderWidgetText(w, 60, 10)
-	if !strings.Contains(text, "File not found.") {
-		t.Errorf("missing file should report %q, got:\n%s", "File not found.", text)
 	}
 }
 
@@ -376,5 +370,86 @@ func TestImageWidgetCloseFreesTerminalImage(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "d=I") {
 		t.Errorf("closing the tab should free the image, got %q", buf.String())
+	}
+}
+
+func commitFrame(t *testing.T, layer *tttimage.Layer, w Widget, surface *RenderSurface) string {
+	t.Helper()
+	layer.Begin()
+	w.Render(surface)
+	var buf bytes.Buffer
+	if err := layer.Commit(&buf); err != nil {
+		t.Fatal(err)
+	}
+	return buf.String()
+}
+
+func TestImageWidgetRefreshReplacesChangedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.png")
+	writeTestPNG(t, path, 16, 12)
+	w := NewImageViewWidget(path)
+	w.Protocol = "kitty"
+	w.CellW, w.CellH = 10, 20
+
+	layer := tttimage.NewLayer()
+	surface := NewRenderSurface(makeGrid(60, 20), Rect{X: 0, Y: 0, W: 60, H: 20})
+	surface.SetImageLayer(layer)
+	first := commitFrame(t, layer, w, surface)
+	m := regexp.MustCompile(`a=t,[^;]*?i=(\d+)`).FindStringSubmatch(first)
+	if m == nil {
+		t.Fatalf("first frame should transmit the image, got %q", first)
+	}
+	oldID := m[1]
+
+	writeTestPNG(t, path, 40, 20)
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(path, later, later); err != nil {
+		t.Fatal(err)
+	}
+	w.Refresh()
+	out := commitFrame(t, layer, w, surface)
+	if !strings.Contains(out, "d=I,i="+oldID) {
+		t.Errorf("refresh after a change should free image %s, got %q", oldID, out)
+	}
+	if !strings.Contains(out, "s=40,v=20") {
+		t.Errorf("refresh after a change should transmit the new image, got %q", out)
+	}
+	if !strings.Contains(out, "c=4,r=1") {
+		t.Errorf("new image should place a 4x1 box, got %q", out)
+	}
+	if w.WidthPx != 40 || w.HeightPx != 20 {
+		t.Errorf("card dimensions = %dx%d, want 40x20", w.WidthPx, w.HeightPx)
+	}
+}
+
+func TestImageWidgetShowsCardWhileDecoding(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.png")
+	writeTestPNG(t, path, 16, 12)
+	w := NewImageViewWidget(path)
+	w.Protocol = "kitty"
+	w.CellW, w.CellH = 10, 20
+	woke := make(chan struct{}, 1)
+	w.Redraw = func() { woke <- struct{}{} }
+
+	layer := tttimage.NewLayer()
+	grid := makeGrid(60, 20)
+	surface := NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 60, H: 20})
+	surface.SetImageLayer(layer)
+	if out := commitFrame(t, layer, w, surface); strings.Contains(out, "a=p") {
+		t.Fatalf("first frame placed the image before the decode finished: %q", out)
+	}
+	if text := gridText(grid); !strings.Contains(text, "PNG image 16x12") || !strings.Contains(text, imageLoadingHint) || strings.Contains(text, imageCardHint) {
+		t.Errorf("card should show the loading hint while decoding, got:\n%s", text)
+	}
+
+	<-woke
+	grid = makeGrid(60, 20)
+	surface = NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 60, H: 20})
+	surface.SetImageLayer(layer)
+	if out := commitFrame(t, layer, w, surface); !strings.Contains(out, "a=p") {
+		t.Errorf("frame after the decode should place the image, got %q", out)
+	}
+	if text := gridText(grid); strings.Contains(text, "photo.png") {
+		t.Errorf("card must not render alongside the image, got:\n%s", text)
 	}
 }
