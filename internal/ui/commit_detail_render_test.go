@@ -140,3 +140,16 @@ func TestCommitDetailGutterShowsSourceLineNumbers(t *testing.T) {
 		t.Fatalf("second hunk row %q lacks its line number 10", row)
 	}
 }
+
+func TestCommitDetailSteadyFrameKeepsItsVisualRows(t *testing.T) {
+	detail := manyFileDetail(20)
+	renderDetail(detail, 80, 10)
+	if detail.totalVisualRows <= 10 {
+		t.Fatal("fixture: the commit should need a vertical scrollbar")
+	}
+	before := &detail.visualRows[0]
+	renderDetail(detail, 80, 10)
+	if &detail.visualRows[0] != before {
+		t.Fatal("a steady frame rebuilt the visual rows; the scrollbar width toggles the cached layout")
+	}
+}

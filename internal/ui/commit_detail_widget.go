@@ -927,6 +927,9 @@ func (d *CommitDetailWidget) rowView(rowIndex int) *DiffEditorWidget {
 
 func (d *CommitDetailWidget) layout(w, h int) (viewW, viewH int, showV, showH bool) {
 	viewH = h
+	// Visual rows are cached for one width; starting from the last frame's
+	// scrollbar keeps a steady frame from rebuilding them at both widths.
+	showV = d.totalVisualRows > viewH
 	for range 3 {
 		viewW = max(w, 0)
 		if showV {
