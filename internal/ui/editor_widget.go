@@ -501,8 +501,12 @@ func (e *EditorPaneWidget) skipHiddenLineDown() {
 	if e.Folds == nil {
 		return
 	}
-	if r := e.Folds.ContainingFold(e.Cursor.Line); r != nil {
-		e.Cursor.Line = e.Buf.ClampLine(r.EndLine + 1)
+	moved := false
+	for r := e.Folds.ContainingFold(e.Cursor.Line); r != nil && r.EndLine+1 < len(e.Buf.Lines); r = e.Folds.ContainingFold(e.Cursor.Line) {
+		e.Cursor.Line = r.EndLine + 1
+		moved = true
+	}
+	if moved {
 		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
 		if e.Cursor.Col > lineLen {
 			e.Cursor.Col = lineLen
@@ -514,8 +518,12 @@ func (e *EditorPaneWidget) skipHiddenLineUp() {
 	if e.Folds == nil {
 		return
 	}
-	if r := e.Folds.ContainingFold(e.Cursor.Line); r != nil {
+	moved := false
+	for r := e.Folds.ContainingFold(e.Cursor.Line); r != nil; r = e.Folds.ContainingFold(e.Cursor.Line) {
 		e.Cursor.Line = r.StartLine
+		moved = true
+	}
+	if moved {
 		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
 		if e.Cursor.Col > lineLen {
 			e.Cursor.Col = lineLen

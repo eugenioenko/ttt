@@ -91,6 +91,45 @@ func TestCtrlEndStopsOnACollapsedFinalFold(t *testing.T) {
 	}
 }
 
+func TestCtrlEndLandsOnTheOutermostCollapsedFold(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.exec("options.toggleShowTrailingNewline")
+	openFileEdgeFixture(t, h, "nested.py", "first = 1\ndef outer():\n    x = 1\n    def inner():\n        a = 1\n        b = 2")
+	ed := h.app.EditorGroup.Editor
+	h.exec("fold.collapseAll")
+	h.redraw()
+	if ed.Folds == nil || ed.Folds.IsLineHidden(1) || !ed.Folds.IsLineHidden(3) {
+		t.Fatal("fixture: outer fold should be collapsed and hide the inner fold's line")
+	}
+
+	h.pressKey(tcell.KeyEnd, tcell.ModCtrl|tcell.ModShift)
+	if ed.Cursor.Line != 1 || ed.Cursor.Col != len("def outer():") {
+		t.Fatalf("ctrl+shift+end with nested folds = %d:%d, want the outer fold line 1:%d", ed.Cursor.Line, ed.Cursor.Col, len("def outer():"))
+	}
+	if ed.Folds.IsLineHidden(ed.Cursor.Line) {
+		t.Fatalf("cursor landed on hidden line %d", ed.Cursor.Line)
+	}
+}
+
+func TestRevealingANestedHiddenLineLandsBelowTheOuterFold(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	openFileEdgeFixture(t, h, "reveal.py", "first = 1\ndef outer():\n    x = 1\n    def inner():\n        a = 1\n        b = 2\n    y = 3\nlast = 2\n")
+	ed := h.app.EditorGroup.Editor
+	h.exec("fold.collapseAll")
+	h.redraw()
+	if !ed.Folds.IsLineHidden(6) || ed.Folds.IsLineHidden(7) {
+		t.Fatal("fixture: the outer fold should hide line 6 and leave line 7 visible")
+	}
+
+	ed.Cursor.Line, ed.Cursor.Col = 4, 0
+	ed.EnsureCursorVisible()
+	if ed.Cursor.Line != 7 {
+		t.Fatalf("revealing hidden line 4 moved the cursor to line %d, want 7 below the outer fold", ed.Cursor.Line)
+	}
+}
+
 func TestCtrlEndRevealsAWrappedLastLine(t *testing.T) {
 	h := newTestHarness(t, 60, 20)
 	defer h.stop()
