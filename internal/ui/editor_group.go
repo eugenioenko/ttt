@@ -1586,7 +1586,7 @@ func (g *EditorGroupWidget) undoRedoPostProcess() {
 
 func (g *EditorGroupWidget) Undo() {
 	t := g.activeTab()
-	if t == nil || t.Content != nil {
+	if t == nil || g.editableKeyEditor() == nil {
 		return
 	}
 	// Undo has no concept of e.Multi; collapsing first avoids stranding
@@ -1609,7 +1609,7 @@ func (g *EditorGroupWidget) Undo() {
 
 func (g *EditorGroupWidget) Redo() {
 	t := g.activeTab()
-	if t == nil || t.Content != nil {
+	if t == nil || g.editableKeyEditor() == nil {
 		return
 	}
 	if g.IsEditorActive() && g.Editor.isMultiActive() {
@@ -1628,14 +1628,14 @@ func (g *EditorGroupWidget) Redo() {
 }
 
 func (g *EditorGroupWidget) SelectAll() {
-	t := g.activeTab()
-	if t == nil || t.Content != nil || t.Sel == nil {
+	e := g.keyEditor()
+	if e == nil || e.Selection == nil {
 		return
 	}
-	t.Sel.Start(0, 0)
-	lastLine := len(t.Buf.Lines) - 1
-	t.Cur.Line = lastLine
-	t.Cur.Col = len([]rune(t.Buf.Lines[lastLine]))
+	e.Selection.Start(0, 0)
+	lastLine := len(e.Buf.Lines) - 1
+	e.Cursor.Line = lastLine
+	e.Cursor.Col = len([]rune(e.Buf.Lines[lastLine]))
 }
 
 func (g *EditorGroupWidget) SetSearch(query string, matches []FindMatch) {
@@ -1919,164 +1919,164 @@ func (g *EditorGroupWidget) FindPrev() {
 }
 
 func (g *EditorGroupWidget) MoveLineUp() {
-	if g.IsEditorActive() {
-		g.Editor.MoveLineUp()
+	if e := g.editableKeyEditor(); e != nil {
+		e.MoveLineUp()
 	}
 }
 
 func (g *EditorGroupWidget) MoveLineDown() {
-	if g.IsEditorActive() {
-		g.Editor.MoveLineDown()
+	if e := g.editableKeyEditor(); e != nil {
+		e.MoveLineDown()
 	}
 }
 
 func (g *EditorGroupWidget) DuplicateLine() {
-	if g.IsEditorActive() {
-		g.Editor.DuplicateLine()
+	if e := g.editableKeyEditor(); e != nil {
+		e.DuplicateLine()
 	}
 }
 
 func (g *EditorGroupWidget) DeleteLine() {
-	if g.IsEditorActive() {
-		g.Editor.DeleteLine()
+	if e := g.editableKeyEditor(); e != nil {
+		e.DeleteLine()
 	}
 }
 
 func (g *EditorGroupWidget) JoinLines() {
-	if g.IsEditorActive() {
-		g.Editor.JoinLines()
+	if e := g.editableKeyEditor(); e != nil {
+		e.JoinLines()
 	}
 }
 
 func (g *EditorGroupWidget) InsertLineBelow() {
-	if g.IsEditorActive() {
-		g.Editor.InsertLineBelow()
+	if e := g.editableKeyEditor(); e != nil {
+		e.InsertLineBelow()
 	}
 }
 
 func (g *EditorGroupWidget) InsertLineAbove() {
-	if g.IsEditorActive() {
-		g.Editor.InsertLineAbove()
+	if e := g.editableKeyEditor(); e != nil {
+		e.InsertLineAbove()
 	}
 }
 
 func (g *EditorGroupWidget) ToggleLineComment() {
-	if g.IsEditorActive() {
-		g.Editor.ToggleLineComment()
+	if e := g.editableKeyEditor(); e != nil {
+		e.ToggleLineComment()
 	}
 }
 
 func (g *EditorGroupWidget) SortLinesAsc() {
-	if g.IsEditorActive() {
-		g.Editor.SortLinesAsc()
+	if e := g.editableKeyEditor(); e != nil {
+		e.SortLinesAsc()
 	}
 }
 
 func (g *EditorGroupWidget) SortLinesDesc() {
-	if g.IsEditorActive() {
-		g.Editor.SortLinesDesc()
+	if e := g.editableKeyEditor(); e != nil {
+		e.SortLinesDesc()
 	}
 }
 
 func (g *EditorGroupWidget) ReverseLines() {
-	if g.IsEditorActive() {
-		g.Editor.ReverseLines()
+	if e := g.editableKeyEditor(); e != nil {
+		e.ReverseLines()
 	}
 }
 
 func (g *EditorGroupWidget) UniqueLines() {
-	if g.IsEditorActive() {
-		g.Editor.UniqueLines()
+	if e := g.editableKeyEditor(); e != nil {
+		e.UniqueLines()
 	}
 }
 
 func (g *EditorGroupWidget) TrimTrailingWhitespaceLines() {
-	if g.IsEditorActive() {
-		g.Editor.TrimTrailingWhitespaceLines()
+	if e := g.editableKeyEditor(); e != nil {
+		e.TrimTrailingWhitespaceLines()
 	}
 }
 
 func (g *EditorGroupWidget) MoveToFileEdge(end, shift bool) {
-	if g.IsEditorActive() {
-		g.Editor.MoveToFileEdge(end, shift)
+	if e := g.keyEditor(); e != nil {
+		e.MoveToFileEdge(end, shift)
 	} else if d := g.ActiveDiffWidget(); d != nil {
 		d.KeyPane().MoveToFileEdge(end, shift)
 	}
 }
 
 func (g *EditorGroupWidget) MoveWordLeft(shift bool) {
-	if g.IsEditorActive() {
-		g.Editor.MoveWordLeft(shift)
+	if e := g.keyEditor(); e != nil {
+		e.MoveWordLeft(shift)
 	}
 }
 
 func (g *EditorGroupWidget) MoveWordRight(shift bool) {
-	if g.IsEditorActive() {
-		g.Editor.MoveWordRight(shift)
+	if e := g.keyEditor(); e != nil {
+		e.MoveWordRight(shift)
 	}
 }
 
 func (g *EditorGroupWidget) DeleteWordLeft() {
-	if g.IsEditorActive() {
-		g.Editor.DeleteWordLeft()
+	if e := g.editableKeyEditor(); e != nil {
+		e.DeleteWordLeft()
 	}
 }
 
 func (g *EditorGroupWidget) DeleteWordRight() {
-	if g.IsEditorActive() {
-		g.Editor.DeleteWordRight()
+	if e := g.editableKeyEditor(); e != nil {
+		e.DeleteWordRight()
 	}
 }
 
 func (g *EditorGroupWidget) SelectNextOccurrence() {
-	if g.IsEditorActive() {
-		g.Editor.SelectNextOccurrence()
+	if e := g.keyEditor(); e != nil {
+		e.SelectNextOccurrence()
 		g.saveMultiState()
 	}
 }
 
 func (g *EditorGroupWidget) SelectAllOccurrences() {
-	if g.IsEditorActive() {
-		g.Editor.SelectAllOccurrences()
+	if e := g.keyEditor(); e != nil {
+		e.SelectAllOccurrences()
 		g.saveMultiState()
 	}
 }
 
 func (g *EditorGroupWidget) UndoLastCursor() {
-	if g.IsEditorActive() {
-		g.Editor.UndoLastCursor()
+	if e := g.keyEditor(); e != nil {
+		e.UndoLastCursor()
 		g.saveMultiState()
 	}
 }
 
 func (g *EditorGroupWidget) SplitSelectionToLines() {
-	if g.IsEditorActive() {
-		g.Editor.SplitSelectionToLines()
+	if e := g.keyEditor(); e != nil {
+		e.SplitSelectionToLines()
 		g.saveMultiState()
 	}
 }
 
 func (g *EditorGroupWidget) UpperCase() {
-	if g.IsEditorActive() {
-		g.Editor.UpperCase()
+	if e := g.editableKeyEditor(); e != nil {
+		e.UpperCase()
 	}
 }
 
 func (g *EditorGroupWidget) LowerCase() {
-	if g.IsEditorActive() {
-		g.Editor.LowerCase()
+	if e := g.editableKeyEditor(); e != nil {
+		e.LowerCase()
 	}
 }
 
 func (g *EditorGroupWidget) TitleCase() {
-	if g.IsEditorActive() {
-		g.Editor.TitleCase()
+	if e := g.editableKeyEditor(); e != nil {
+		e.TitleCase()
 	}
 }
 
 func (g *EditorGroupWidget) GoToMatchingBracket() {
-	if g.IsEditorActive() {
-		g.Editor.GoToMatchingBracket()
+	if e := g.keyEditor(); e != nil {
+		e.GoToMatchingBracket()
 	}
 }
 
@@ -2144,21 +2144,22 @@ func (g *EditorGroupWidget) Copy() {
 			return
 		}
 	}
-	if t.Sel == nil || !t.Sel.Active {
+	e := g.keyEditor()
+	if e.Selection == nil || !e.Selection.Active {
 		// No selection: copy the whole current line, including a trailing
 		// newline so a paste inserts it as a full line.
-		if t.Cur.Line >= 0 && t.Cur.Line < len(t.Buf.Lines) {
-			clipboard.Set(t.Buf.Lines[t.Cur.Line] + "\n")
+		if e.Cursor.Line >= 0 && e.Cursor.Line < len(e.Buf.Lines) {
+			clipboard.Set(e.Buf.Lines[e.Cursor.Line] + "\n")
 		}
 		return
 	}
-	text := t.Sel.Text(t.Buf.Lines, t.Cur.Line, t.Cur.Col)
+	text := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
 	clipboard.Set(text)
 }
 
 func (g *EditorGroupWidget) Cut() {
 	t := g.activeTab()
-	if t == nil || t.Content != nil {
+	if t == nil || g.editableKeyEditor() == nil {
 		return
 	}
 	if t.Sel == nil || !t.Sel.Active {

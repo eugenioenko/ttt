@@ -632,11 +632,11 @@ func (d *DiffEditorWidget) headFocused() bool {
 }
 
 // handleLiveKey sends keys to the pane last clicked. The base pane is
-// read-only, so typing there changes nothing.
+// read-only, so typing there changes nothing; keys it ignores reach the
+// global bindings.
 func (d *DiffEditorWidget) handleLiveKey(ev *tcell.EventKey) EventResult {
 	if d.headFocused() {
-		d.left.HandleEvent(ev)
-		return EventConsumed
+		return d.left.HandleEvent(ev)
 	}
 	e := d.live
 	if gap, ok := e.DiffOverlay.Gaps[e.Cursor.Line]; ok && !isNavigationKey(ev) {

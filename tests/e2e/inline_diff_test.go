@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -305,5 +306,106 @@ func TestInlineDiffFindSurvivesRecompute(t *testing.T) {
 	h.assertContains(" 1/4")
 	if dv := h.app.EditorGroup.ActiveInlineDiff(); dv == nil || len(dv.SearchMatchesRight) != 3 {
 		t.Fatal("recomputed diff lost its search highlights")
+	}
+}
+
+func openSplitDiffWithHeadFocused(t *testing.T, h *testHarness, beforeHead func()) {
+	t.Helper()
+	path := filepath.Join(h.dir, "keys.txt")
+	os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	os.WriteFile(path, []byte("alpha\nBETA\ngamma\n"), 0644)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "keys.txt", Status: "M"}, false, false)
+	h.exec("diff.splitView")
+	h.app.Root.SetFocus(h.app.EditorGroup)
+	h.redraw()
+	if beforeHead != nil {
+		beforeHead()
+	}
+	for y := 0; y < 30; y++ {
+		row := h.screenRow(y)
+		if i := strings.Index(row, "alpha"); i >= 0 {
+			h.click(len([]rune(row[:i]))+1, y)
+			dv := h.app.EditorGroup.ActiveInlineDiff()
+			if dv == nil || dv.KeyPane() == h.app.EditorGroup.Editor {
+				t.Fatal("fixture: clicking the HEAD pane should give it the keys")
+			}
+			return
+		}
+	}
+	t.Fatalf("HEAD pane text not on screen:\n%s", h.screenText())
+}
+
+func TestGlobalShortcutsWorkFromTheDiffHeadPane(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	openSplitDiffWithHeadFocused(t, h, nil)
+
+	h.pressKey(tcell.KeyCtrlP, tcell.ModCtrl)
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("ctrl+p from the HEAD pane did not open the command palette")
+	}
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+
+	before := h.app.Root.Focused
+	h.pressKey(tcell.KeyF6, tcell.ModNone)
+	if h.app.Root.Focused == before {
+		t.Fatal("f6 from the HEAD pane did not move focus to the next group")
+	}
+}
+
+func TestDiffHeadPaneKeysDoNotEditTheFile(t *testing.T) {
+	clipboard.DisableSystem()
+	clipboard.Set("pasted")
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	openSplitDiffWithHeadFocused(t, h, func() { h.pressRune('!') })
+	want := strings.Join(h.app.EditorGroup.ActiveBuffer().Lines, "\n")
+	if !strings.Contains(want, "!") {
+		t.Fatalf("fixture: typing in the file side should edit it, got %q", want)
+	}
+
+	h.pressRune('x')
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
+	h.pressKey(tcell.KeyCtrlV, tcell.ModCtrl)
+	h.pressKey(tcell.KeyCtrlK, tcell.ModCtrl)
+	h.pressRune('k')
+	h.exec("editor.joinLines")
+	if got := strings.Join(h.app.EditorGroup.ActiveBuffer().Lines, "\n"); got != want {
+		t.Fatalf("keys pressed in the read-only HEAD pane edited the file:\n%q\nwant\n%q", got, want)
+	}
+
+	h.pressKey(tcell.KeyCtrlC, tcell.ModCtrl)
+	if got := clipboard.Get(); got != "alpha\n" {
+		t.Fatalf("ctrl+c in the HEAD pane copied %q, want the HEAD line", got)
+	}
+
+	h.app.EditorGroup.Editor.ExecCommand(&undo.InsertLineCommand{Idx: 0, Text: "lsp"})
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "lsp" {
+		t.Fatalf("an edit not made from the HEAD pane's keys was refused, first line %q", got)
+	}
+}
+
+func TestReadOnlyTabKeepsMultiCursorSelection(t *testing.T) {
+	h := newTestHarness(t, 80, 30)
+	defer h.stop()
+	h.app.EditorGroup.OpenBufferReadOnly("readonly", "", []string{"foo bar", "foo baz"})
+	h.app.Root.SetFocus(h.app.EditorGroup)
+	h.redraw()
+
+	h.pressKey(tcell.KeyCtrlD, tcell.ModCtrl)
+	h.pressKey(tcell.KeyCtrlD, tcell.ModCtrl)
+	if n := h.app.EditorGroup.MultiCursorCount(); n != 2 {
+		t.Fatalf("ctrl+d in a read-only tab gave %d cursors, want 2", n)
+	}
+	h.pressRune('x')
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	want := []string{"foo bar", "foo baz"}
+	if got := h.app.EditorGroup.Editor.Buf.Lines; !slices.Equal(got, want) {
+		t.Fatalf("typing with multiple cursors edited a read-only tab: %q", got)
 	}
 }
