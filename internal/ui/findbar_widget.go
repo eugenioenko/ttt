@@ -186,6 +186,16 @@ func (f *FindBarWidget) doSearch() {
 	}
 }
 
+// Refresh re-runs the query against content that changed under the bar,
+// keeping the current match index where it still exists, without navigating.
+func (f *FindBarWidget) Refresh() {
+	if f.OnSearch == nil || f.Input.Text == "" {
+		return
+	}
+	f.Matches = f.OnSearch(f.Input.Text, f.Options)
+	f.Current = max(min(f.Current, len(f.Matches)-1), 0)
+}
+
 func (f *FindBarWidget) navigate() {
 	if f.OnNavigate != nil && len(f.Matches) > 0 {
 		f.OnNavigate(f.Matches[f.Current])

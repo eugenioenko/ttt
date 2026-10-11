@@ -296,3 +296,111 @@ func TestScrollbarCountsDiffRows(t *testing.T) {
 		t.Fatalf("top row 9 = %q at top line %d, want a deleted row anchored at line 5", rows[0], e.Viewport.TopLine)
 	}
 }
+
+func TestEditableDiffOverlay(t *testing.T) {
+	C, A := diff.Context, diff.Added
+	tests := []struct {
+		name      string
+		old, new  []string
+		wantKinds []diff.LineKind
+		wantDel   map[int][]string
+	}{
+		{"modify and append", []string{"a", "b", "c", "d"}, []string{"a", "B", "c", "e", "f"},
+			[]diff.LineKind{C, A, C, A, A}, map[int][]string{1: {"b"}, 3: {"d"}}},
+		{"delete at end", []string{"a", "b"}, []string{"a"},
+			[]diff.LineKind{C}, map[int][]string{1: {"b"}}},
+		{"delete in middle", []string{"a", "b", "c"}, []string{"a", "c"},
+			[]diff.LineKind{C, C}, map[int][]string{1: {"b"}}},
+		{"block replace", []string{"a", "x", "y", "z"}, []string{"a", "P", "Q"},
+			[]diff.LineKind{C, A, A}, map[int][]string{1: {"x", "y", "z"}}},
+		{"no changes", []string{"a"}, []string{"a"},
+			[]diff.LineKind{C}, map[int][]string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := fullLiveDiff(tt.old, tt.new).liveUnified
+			if !reflect.DeepEqual(o.Kinds, tt.wantKinds) {
+				t.Errorf("kinds = %v, want %v", o.Kinds, tt.wantKinds)
+			}
+			if got := deletedTexts(o); !reflect.DeepEqual(got, tt.wantDel) {
+				t.Errorf("deleted = %v, want %v", got, tt.wantDel)
+			}
+		})
+	}
+}
+
+func TestEditableSplitAlignsRows(t *testing.T) {
+	old := []string{"a", "b", "c", "d", "e"}
+	cur := []string{"a", "B", "x", "y", "c", "e", "f"}
+	d := fullLiveDiff(old, cur)
+	d.SetMode(DiffModeSplit)
+	e := newRowsEditor(cur, 30, 10)
+	e.LineNumbers = true
+	d.bind(e)
+	d.SetRect(Rect{X: 0, Y: 0, W: 61, H: 10})
+	grid := makeGrid(61, 10)
+	d.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 61, H: 10}))
+
+	row := func(y int) string {
+		var sb strings.Builder
+		for x := 0; x < 61; x++ {
+			sb.WriteRune(grid[y][x].Ch)
+		}
+		return sb.String()
+	}
+	for _, text := range []string{"a", "c", "e"} {
+		found := false
+		for y := 0; y < 10; y++ {
+			r := row(y)
+			left, right := r[:strings.IndexRune(r, '│')], r[strings.IndexRune(r, '│'):]
+			if strings.Contains(left, " "+text+" ") && strings.Contains(right, " "+text+" ") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("context line %q not on one row in both panes:\n%s", text, strings.Join(func() []string {
+				var out []string
+				for y := 0; y < 10; y++ {
+					out = append(out, row(y))
+				}
+				return out
+			}(), "\n"))
+		}
+	}
+}
+
+func TestEditableAndReadOnlyDiffGuttersMatch(t *testing.T) {
+	oldLines := []string{"a", "b", "c"}
+	newLines := []string{"a", "B", "c"}
+	for _, style := range []string{"compact", "extended"} {
+		e := newRowsEditor(newLines, 30, 6)
+		e.LineNumbers = true
+		e.GutterStyle = style
+		e.Passive = true
+		e.SetDiffOverlay(fullLiveDiff(oldLines, newLines).liveUnified)
+		editable := makeGrid(30, 6)
+		e.Render(NewRenderSurface(editable, Rect{W: 30, H: 6}))
+
+		d := NewDiffEditorWidget("f.txt", diff.FileDiff{}, oldLines, newLines, true)
+		d.SetMode(DiffModeUnified)
+		d.setGutterStyle(style)
+		readOnly := makeGrid(30, 6)
+		d.SetRect(Rect{W: 30, H: 6})
+		d.Render(NewRenderSurface(readOnly, Rect{W: 30, H: 6}))
+
+		for row, kind := range []string{"context", "deleted", "added", "context"} {
+			got := readGutter(editable, row, e.GutterWidth())
+			want := readGutter(readOnly, row, d.unified.GutterWidth())
+			if got != want {
+				t.Errorf("%s gutter, %s row %d: editable %+v, read-only %+v", style, kind, row, got, want)
+			}
+		}
+	}
+}
+
+func fullLiveDiff(old, cur []string) *DiffEditorWidget {
+	d := NewEditableDiffWidget("f.txt", old, diff.FullDiffLines(old, cur))
+	d.SetMode(DiffModeUnified)
+	d.SetContextMode(DiffContextFullFile)
+	return d
+}
