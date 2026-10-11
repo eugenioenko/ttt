@@ -313,10 +313,16 @@ func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
 			newLines = diffSideLines(content)
 		}
 	}
-	parsed, ok := parseChangeDiff(git.DiffStagedFile(dir, paths...))
-	if !ok {
-		a.StatusNotify(fmt.Sprintf("No staged line changes for %s", status.Path))
+	patch, err := git.DiffStagedFile(dir, paths...)
+	if err != nil || patch == "" {
+		a.StatusNotify(fmt.Sprintf("No staged changes for %s", status.Path))
 		return
+	}
+	parsed := diff.Parse(patch)
+	// A rename, mode change or empty new file stages a patch with no line
+	// hunks; like VS Code, show both sides in full rather than nothing.
+	if len(parsed.Hunks) == 0 {
+		extended = true
 	}
 	var oldLines []string
 	if status.Status != "A" {

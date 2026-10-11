@@ -91,6 +91,35 @@ func TestStagedEntryDiffsHeadAgainstIndex(t *testing.T) {
 	h.assertNotContains("UNSTAGED")
 }
 
+func TestStagedChangesWithoutLineEditsOpenADiff(t *testing.T) {
+	h := newTestHarness(t, 100, 45)
+	defer h.stop()
+	if err := os.WriteFile(filepath.Join(h.dir, "old.txt"), []byte("kept line\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	initializeHarnessRepository(t, h.dir)
+	harnessGit(t, h.dir, "mv", "old.txt", "new.txt")
+	if err := os.WriteFile(filepath.Join(h.dir, "empty.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	harnessGit(t, h.dir, "add", "empty.txt")
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "new.txt", OldPath: "old.txt", Status: "R", Staged: true}, true, false)
+	if h.app.EditorGroup.ActiveDiffWidget() == nil {
+		t.Fatal("staged rename without line edits did not open a diff")
+	}
+	h.redraw()
+	h.assertContains("new.txt (staged)")
+	h.assertContains("kept line")
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "empty.txt", Status: "A", Staged: true}, true, false)
+	if h.app.EditorGroup.ActiveDiffWidget() == nil {
+		t.Fatal("staged empty file did not open a diff")
+	}
+	h.redraw()
+	h.assertContains("empty.txt (staged)")
+}
+
 func TestStagedAndUnstagedDiffsOpenSideBySide(t *testing.T) {
 	h := newTestHarness(t, 140, 45)
 	defer h.stop()
