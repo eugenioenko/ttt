@@ -89,6 +89,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		bracketColors = e.bracketColorCache
 	}
 
+	if off := e.topOffset(); off > 0 && off >= layout.maxOffset(e.Viewport.TopLine) {
+		e.topRowOffset = 0
+	}
 	e.rowMap = layout.appendRows(e.rowMap[:0], e.Viewport.TopLine, e.topOffset(), h)
 	e.rowMapTop = e.Viewport.TopLine
 	e.rowMapOffset = e.topOffset()

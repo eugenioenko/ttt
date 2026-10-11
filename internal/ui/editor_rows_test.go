@@ -283,3 +283,28 @@ func TestEditorRowsCursorInsideCollapsedFoldShowsOnFoldLine(t *testing.T) {
 		t.Fatalf("CursorY = %d for a cursor inside the fold at line 1, want 1", e.CursorY)
 	}
 }
+
+func TestTopOffsetPastShrunkenTopLineKeepsCursorOnItsRow(t *testing.T) {
+	e := newRowsEditor([]string{strings.Repeat("abcdefghij", 4), "second", "third"}, 14, 6)
+	e.WordWrap = true
+	renderRows(e)
+	l := e.layout()
+	if l.blockRows(0) < 3 {
+		t.Fatalf("top line wraps to %d rows, want at least 3", l.blockRows(0))
+	}
+	e.setTopRow(l, 2)
+	e.Cursor.Line = 1
+	renderRows(e)
+
+	e.SetRect(Rect{X: 0, Y: 0, W: 60, H: 6})
+	renderRows(e)
+	for y, row := range e.rowMap {
+		if row.bufLine == 1 && !row.isPhantom() {
+			if e.CursorY != y {
+				t.Fatalf("cursor drawn at row %d, line 1 is at row %d", e.CursorY, y)
+			}
+			return
+		}
+	}
+	t.Fatal("line 1 not on screen")
+}
