@@ -48,7 +48,7 @@ All editor settings are nested under the `editor` key.
 | `editor.diffWordWrap` | bool | `false` | Wrap long lines in diff views |
 | `editor.diffHighContrast` | bool | `false` | Strengthen changed-line visibility with semantic red/green foregrounds |
 | `editor.diffEmphasizeCollapsedRows` | bool | `false` | Emphasize collapsed or omitted-line rows in diff views |
-| `editor.diffSigns` | bool | `false` | Draw `+`/`−` in the diff gutter. Off by default: the gutter highlight already marks changed lines. The `minimal` gutter style never shows them; gap rows always show their expand chevron |
+| `editor.diffSigns` | bool | `false` | Draw `+`/`−` in the diff gutter. Off by default: the gutter highlight already marks changed lines. Gap rows show their expand chevron regardless of this setting. The `minimal` gutter style has no room for signs or the chevron |
 | `editor.diffSignsColor` | bool | `true` | Color diff gutter signs with the added/deleted colors; when off they use the line number color |
 | `editor.diffGutterHighlight` | bool | `true` | Color the line numbers of added and deleted rows and tint their gutter; when off the gutter stays plain and only the text is tinted |
 | `editor.autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |

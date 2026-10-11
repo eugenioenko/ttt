@@ -267,3 +267,71 @@ func TestDiffEditorSplitWrapClearsColumnsPastTheSharedWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestDiffEditorUnifiedIndexMatchesAScanOfTheRows(t *testing.T) {
+	old, cur := gapFile()
+	cur = append(cur[:5], append([]string{"inserted a", "inserted b"}, cur[5:]...)...)
+	cur = append(cur[:20], cur[22:]...)
+	d := NewDiffEditorWidget("f.txt", diff.FileDiff{}, old, cur, true)
+	d.SetMode(DiffModeUnified)
+	scan := func(row int, right bool) int {
+		for i, u := range d.unifiedRows {
+			if u.sourceLine == row && u.right == right {
+				return i
+			}
+		}
+		return -1
+	}
+	for row := -1; row <= len(d.Lines); row++ {
+		for _, right := range []bool{false, true} {
+			if got, want := d.unifiedIndex(row, right), scan(row, right); got != want {
+				t.Fatalf("unifiedIndex(%d, %v) = %d, want %d", row, right, got, want)
+			}
+		}
+	}
+}
+
+func TestDiffEditorRemembersAMissingGrammar(t *testing.T) {
+	d := NewDiffEditorWidget("notes.unknown-extension-xyz", diff.FileDiff{}, []string{"a"}, []string{"b"}, true)
+	d.SetSyntaxHighlight(true)
+	renderDiffEditor(d, 40, 5)
+	if !d.noGrammar {
+		t.Fatal("a file with no grammar should be remembered after the first lookup")
+	}
+	for _, p := range d.panes() {
+		if p.Highlighter != nil {
+			t.Fatal("a pane got a highlighter for a file with no grammar")
+		}
+	}
+	d.FilePath = "main.go"
+	d.attachHighlighters()
+	if d.noGrammar {
+		t.Fatal("attaching highlighters again should forget the miss")
+	}
+}
+
+func TestDiffPanesHideGitGutterMarkers(t *testing.T) {
+	marker := func(withDiff bool) bool {
+		e := newRowsEditor([]string{"a", "B", "c"}, 30, 6)
+		e.LineNumbers = true
+		e.GutterStyle = "compact"
+		e.LineChanges = []diff.LineChangeKind{diff.LineUnchanged, diff.LineModified, diff.LineUnchanged}
+		if withDiff {
+			e.SetDiffOverlay(NewDiffOverlay(diff.FullDiffLines([]string{"a", "b", "c"}, []string{"a", "B", "c"})))
+		}
+		grid := makeGrid(30, 6)
+		e.Render(NewRenderSurface(grid, Rect{X: 0, Y: 0, W: 30, H: 6}))
+		for y := range grid {
+			if grid[y][0].Ch == '▎' {
+				return true
+			}
+		}
+		return false
+	}
+	if !marker(false) {
+		t.Fatal("fixture: a plain pane should draw the git gutter marker")
+	}
+	if marker(true) {
+		t.Fatal("a diff pane drew a git gutter marker; the diff already marks its changes")
+	}
+}

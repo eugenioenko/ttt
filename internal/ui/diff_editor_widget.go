@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"sort"
 	"unsafe"
 
@@ -54,18 +55,21 @@ type DiffEditorWidget struct {
 	loadingAnchor    diffEditorAnchor
 
 	syntax      bool
+	noGrammar   bool
 	focused     bool
 	unified     *EditorPaneWidget
 	left        *EditorPaneWidget
 	right       *EditorPaneWidget
 	unifiedRows []diffUnifiedLine
-	leftRows    []int
-	rightRows   []int
-	leftBase    *DiffOverlay
-	rightBase   *DiffOverlay
-	focusLeft   bool
-	captured    *EditorPaneWidget
-	pressed     bool
+	// unifiedAt maps a diff row to its unified rows: [0] left, [1] right.
+	unifiedAt [][2]int
+	leftRows  []int
+	rightRows []int
+	leftBase  *DiffOverlay
+	rightBase *DiffOverlay
+	focusLeft bool
+	captured  *EditorPaneWidget
+	pressed   bool
 
 	SearchMatchesLeft  []FindMatch
 	SearchMatchesRight []FindMatch
@@ -142,6 +146,7 @@ func (d *DiffEditorWidget) panes() []*EditorPaneWidget {
 // attachHighlighters drops the panes' highlighters; Render creates them for
 // the panes it draws, since loading a grammar is costly.
 func (d *DiffEditorWidget) attachHighlighters() {
+	d.noGrammar = false
 	for _, p := range d.panes() {
 		p.Highlighter.SetProgressive(nil)
 		p.Highlighter = nil
@@ -159,7 +164,7 @@ func (d *DiffEditorWidget) attachHighlighters() {
 }
 
 func (d *DiffEditorWidget) ensureHighlighters(panes ...*EditorPaneWidget) {
-	if !d.syntax {
+	if !d.syntax || d.noGrammar {
 		return
 	}
 	var peer *highlight.Highlighter
@@ -172,6 +177,10 @@ func (d *DiffEditorWidget) ensureHighlighters(panes ...*EditorPaneWidget) {
 	for _, p := range panes {
 		if p.Highlighter == nil {
 			p.Highlighter = highlight.New(d.FilePath)
+			if p.Highlighter == nil {
+				d.noGrammar = true
+				return
+			}
 			p.Highlighter.ShareTokens(peer)
 			p.Highlighter.ShareSingleLines(peer)
 			p.Highlighter.SetProgressive(d.redraw)
@@ -481,6 +490,19 @@ func (d *DiffEditorWidget) rebuild() {
 
 	d.syncDocSyntax()
 	d.unifiedRows = buildUnifiedDiffLines(d.Lines)
+	d.unifiedAt = slices.Grow(d.unifiedAt[:0], len(d.Lines))[:len(d.Lines)]
+	for i := range d.unifiedAt {
+		d.unifiedAt[i] = [2]int{-1, -1}
+	}
+	for i, u := range d.unifiedRows {
+		side := 0
+		if u.right {
+			side = 1
+		}
+		if u.sourceLine >= 0 && u.sourceLine < len(d.unifiedAt) && d.unifiedAt[u.sourceLine][side] < 0 {
+			d.unifiedAt[u.sourceLine][side] = i
+		}
+	}
 	d.pairs = d.pairs[:0]
 	li, ri := 0, 0
 	for _, dl := range d.Lines {
@@ -1117,12 +1139,13 @@ func (d *DiffEditorWidget) ClearSearch() {
 }
 
 func (d *DiffEditorWidget) unifiedIndex(row int, right bool) int {
-	for i, u := range d.unifiedRows {
-		if u.sourceLine == row && u.right == right {
-			return i
-		}
+	if row < 0 || row >= len(d.unifiedAt) {
+		return -1
 	}
-	return -1
+	if right {
+		return d.unifiedAt[row][1]
+	}
+	return d.unifiedAt[row][0]
 }
 
 // SetSearchMatches takes matches indexed by diff row (see LeftLines and
