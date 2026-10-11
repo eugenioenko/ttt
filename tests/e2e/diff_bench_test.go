@@ -113,21 +113,55 @@ func settleHighlight(h *testHarness) {
 
 // openChangesFromGit mirrors OpenChangeDiff after its git calls. Keep it in step
 // with that function so open_changes_large measures the app, not git.
-func openChangesFromGit(b *testing.B, h *testHarness, path, diffText, index string) {
-	b.Helper()
-	trim := func(text string) []string {
-		lines := strings.Split(text, "\n")
-		if len(lines) > 0 && lines[len(lines)-1] == "" {
-			lines = lines[:len(lines)-1]
-		}
-		return lines
+func openChangesFromGit(h *testHarness, path, index string) {
+	base := strings.Split(strings.ReplaceAll(index, "\r\n", "\n"), "\n")
+	if len(base) > 0 && base[len(base)-1] == "" {
+		base = base[:len(base)-1]
 	}
-	data, err := os.ReadFile(path)
+	h.app.EditorGroup.OpenFile(path)
+	h.app.EditorGroup.EnableInlineDiff(path, base)
+	h.app.FocusEditorIfEnabled()
+}
+
+// newEditableDiffBench opens pair as an editable diff of a working-tree file,
+// with the cursor at the end of line, git kept out of the timed loop.
+func newEditableDiffBench(b *testing.B, pair diffBenchPair, mode string, wrap bool, line int) *testHarness {
+	b.Helper()
+	h := newBenchHarness(b)
+	setDiffView(h, mode, config.DiffContextChanges, wrap)
+	initBenchRepo(b, h.dir)
+	path := filepath.Join(h.dir, diffBenchFile)
+	writeBenchLines(b, path, pair.old)
+	runBenchGit(b, h.dir, "add", "-A")
+	runBenchGit(b, h.dir, "commit", "-qm", "base")
+	writeBenchLines(b, path, pair.new)
+	index, err := git.ShowIndexFileContext(context.Background(), h.dir, diffBenchFile)
 	if err != nil {
 		b.Fatal(err)
 	}
-	h.app.EditorGroup.OpenDiff(diffBenchFile, diff.Parse(diffText), trim(index), trim(string(data)), false)
-	h.app.FocusEditorIfEnabled()
+	openChangesFromGit(h, path, index)
+	h.exec("editor.focus")
+	settleHighlight(h)
+	gotoLine(h, line)
+	h.pressKey(tcell.KeyEnd, tcell.ModNone)
+	settleHighlight(h)
+	if got := h.app.EditorGroup.Editor.Cursor.Line; got != line {
+		b.Fatalf("cursor on line %d, want %d", got, line)
+	}
+	return h
+}
+
+// emptyLineAfter is the first empty line of lines after from, where Enter
+// and Backspace add and remove a line without auto-indent getting involved.
+func emptyLineAfter(b *testing.B, lines []string, from int) int {
+	b.Helper()
+	for i := from; i < len(lines); i++ {
+		if lines[i] == "" {
+			return i
+		}
+	}
+	b.Fatal("no empty line to type on")
+	return 0
 }
 
 func diffWheel(h *testHarness) {
@@ -244,6 +278,28 @@ func BenchmarkDiff(b *testing.B) {
 						steps++
 					}
 				})
+
+				if layout.name != "unified_wrap" {
+					b.Run("type_and_delete", func(b *testing.B) {
+						h := newEditableDiffBench(b, large, layout.mode, layout.wrap, 20)
+						b.ReportAllocs()
+						for b.Loop() {
+							h.pressRune('x')
+							h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+						}
+					})
+				}
+
+				if layout.name == "split" {
+					b.Run("enter_and_backspace", func(b *testing.B) {
+						h := newEditableDiffBench(b, large, layout.mode, layout.wrap, emptyLineAfter(b, large.new, 20))
+						b.ReportAllocs()
+						for b.Loop() {
+							h.pressKey(tcell.KeyEnter, tcell.ModNone)
+							h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+						}
+					})
+				}
 
 				if layout.scrollOnly {
 					b.Run("resize", func(b *testing.B) {
@@ -392,17 +448,13 @@ func BenchmarkDiff(b *testing.B) {
 			writeBenchLines(b, path, large.new)
 			// Git's process time is not the diff view's; fetch its output once and
 			// time what OpenChangeDiff does with it.
-			diffText, err := git.DiffWorktreeFile(h.dir, diffBenchFile)
-			if err != nil {
-				b.Fatal(err)
-			}
 			index, err := git.ShowIndexFileContext(context.Background(), h.dir, diffBenchFile)
 			if err != nil {
 				b.Fatal(err)
 			}
 			b.ReportAllocs()
 			for b.Loop() {
-				openChangesFromGit(b, h, path, diffText, index)
+				openChangesFromGit(h, path, index)
 				h.redraw()
 				b.StopTimer()
 				h.exec("tab.close")
