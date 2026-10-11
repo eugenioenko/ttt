@@ -33,9 +33,9 @@ const maxIsolatedCache = 4_096
 type Highlighter struct {
 	grammar  *textmate.Grammar
 	language string
-	doc      *textmate.Document
+	doc      lineDoc
 	dirty    bool
-	isolated map[string][]Span
+	isolated *singleLineCache
 	// The document's token slices are immutable and shared across calls, so
 	// a slice's first element identifies its spans.
 	lineSpans map[*textmate.Token]cachedSpans
@@ -87,6 +87,7 @@ func (c *grammarCatalog) newHighlighter(ref grammarRef) *Highlighter {
 		grammar:  g,
 		language: ref.language,
 		doc:      textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
+		isolated: &singleLineCache{},
 		dirty:    true,
 	}
 }
@@ -95,19 +96,34 @@ func (h *Highlighter) Language() string {
 	return h.language
 }
 
+type singleLineCache struct{ m map[string][]Span }
+
+// ShareSingleLines makes h reuse o's cache of lines highlighted in isolation;
+// the two sides of a diff share most of their lines.
+func (h *Highlighter) ShareSingleLines(o *Highlighter) {
+	if h != nil && o != nil && h.grammar == o.grammar {
+		h.isolated = o.isolated
+	}
+}
+
+// SharesSingleLinesWith reports whether h and o use one single-line cache.
+func (h *Highlighter) SharesSingleLinesWith(o *Highlighter) bool {
+	return h != nil && o != nil && h.isolated == o.isolated
+}
+
 // HighlightLine highlights a line in isolation, as the first line of a file.
 func (h *Highlighter) HighlightLine(line string) []Span {
 	h.syncTokenTheme()
-	if spans, ok := h.isolated[line]; ok {
+	if spans, ok := h.isolated.m[line]; ok {
 		return spans
 	}
 	res := h.grammar.TokenizeLineWithOptions(line, nil, tokenizeOptions)
 	spans := h.tokensToSpans(res.Tokens)
 	if !res.Stopped {
-		if h.isolated == nil || len(h.isolated) >= maxIsolatedCache {
-			h.isolated = make(map[string][]Span)
+		if h.isolated.m == nil || len(h.isolated.m) >= maxIsolatedCache {
+			h.isolated.m = make(map[string][]Span)
 		}
-		h.isolated[line] = spans
+		h.isolated.m[line] = spans
 	}
 	return spans
 }
@@ -199,7 +215,7 @@ func (h *Highlighter) syncTokenTheme() {
 	if theme := CurrentTokenTheme(); theme != h.tokenTheme {
 		h.tokenTheme = theme
 		h.styles = nil
-		h.isolated = nil
+		h.isolated.m = nil
 		h.lineSpans = nil
 	}
 }
