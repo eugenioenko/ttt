@@ -113,10 +113,13 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 // between frames, and redraws.
 func (h *testHarness) settle() {
 	h.t.Helper()
-	for highlight.Pending() > 0 {
+	for {
 		for highlight.Step(time.Hour) {
 		}
 		h.redraw()
+		if highlight.Pending() == 0 {
+			return
+		}
 	}
 }
 
