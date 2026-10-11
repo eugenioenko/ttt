@@ -675,6 +675,33 @@ else
 end
 ```
 
+### `ttt.graphics()`
+
+Report whether images can be shown and how large a terminal cell is in pixels. No permission required.
+
+**Returns** a table:
+
+| Field      | Type   | Description |
+|------------|--------|-------------|
+| `protocol` | string | `"kitty"` when [`panel:image`](#image) can draw graphics, otherwise `"none"` (unsupported terminal, tmux, a terminal that does not report its cell size in pixels, or the `image.protocol` setting is `"none"`). |
+| `cell_w`   | number | Pixels per cell horizontally, or `0` when unknown. |
+| `cell_h`   | number | Pixels per cell vertically, or `0` when unknown. |
+
+Use it to choose a render resolution or a text fallback. The values follow terminal resizes, so call it from your render function rather than caching it at load time:
+
+```lua
+render = function(panel)
+  local g = ttt.graphics()
+  local w = panel:size()
+  if g.protocol == "kitty" then
+    local dpi = math.floor(w * g.cell_w / 8.5)   -- fit a letter-size page width
+    -- render an image at that DPI, then panel:image({ data = png })
+  else
+    panel:label("Text mode")
+  end
+end
+```
+
 ### `ttt.set_timeout(ms, callback)` / `ttt.set_interval(ms, callback)`
 
 Schedule a callback to run later on the editor's main loop. `set_timeout` fires once after `ms` milliseconds; `set_interval` fires every `ms` milliseconds until cleared. Both return a numeric timer id. No permission required.
@@ -1285,6 +1312,27 @@ panel:markdown({ text = readme_content, margin_top = 1 })
 | + [box model fields](#box-model) | | | Margin and padding. |
 
 Prose lines wrap at the `markdown.wrapWidth` setting (default 80). Headings, bold, italic, code spans, fenced code blocks, lists, and links are styled using the theme's styles. Text inside the widget can be selected with the mouse and copied.
+
+### Image
+
+Display a PNG, JPEG or GIF image through the terminal's graphics protocol. No permission required.
+
+```lua
+panel:image({ data = png_bytes, alt = "Page 3 of 10" })
+```
+
+| Field    | Type   | Required | Description |
+|----------|--------|----------|-------------|
+| `data`   | string | yes      | Encoded image bytes, for example the stdout of `sys.exec_async("pdftoppm", {"-png", ...})` or the result of `fs.read`. |
+| `fit`    | string | no       | `"contain"` (default) scales the image down to fit the widget, keeping its aspect ratio and never scaling up, centered. `"none"` draws it at its natural size from the top-left corner, cropped to the widget. |
+| `alt`    | string | no       | Text shown instead of the image when graphics are unavailable. Defaults to the image's format and size, or the decode error. |
+| `height` | number | no       | Height in rows. Without it the image grows to fill the remaining space. |
+
+Box model fields (`padding_*`, `margin_*`) also apply.
+
+Graphics need a terminal that supports the Kitty graphics protocol (Kitty, Ghostty, WezTerm) and are unavailable inside tmux; check [`ttt.graphics()`](#tttgraphics) to offer a text alternative. An image inside a `scrollview` always shows its `alt` text, and needs a `height` to take up any rows there.
+
+ttt decodes each image in the background, showing its `alt` text until it is ready, then keeps it in the terminal across redraws, so re-rendering the same bytes is cheap, even when other widgets shift the image to a different position. An image inside a container that changes position is decoded and sent again. Changing the bytes, removing the widget, or closing the panel, drawer or tab frees the previous image. Images larger than 64 MB, wider or taller than 16384 pixels, or over 40 megapixels are refused and show an error instead.
 
 ### Tree Node Format
 

@@ -110,6 +110,7 @@ func RegisterPanelType(L *lua.LState) {
 		"checkbox":   panelCheckboxWidget,
 		"redraw":     panelRedraw,
 		"markdown":   panelMarkdownWidget,
+		"image":      panelImageWidget,
 	}))
 }
 
@@ -821,5 +822,37 @@ func panelRedraw(L *lua.LState) int {
 	if proxy.plugin != nil && proxy.plugin.RequestRedraw != nil {
 		proxy.plugin.RequestRedraw()
 	}
+	return 0
+}
+
+func panelImageWidget(L *lua.LState) int {
+	proxy := checkPanelProxy(L)
+	if proxy == nil {
+		return 0
+	}
+	tbl := L.CheckTable(2)
+	data, ok := L.GetField(tbl, "data").(lua.LString)
+	if !ok {
+		L.ArgError(2, "image requires data (encoded PNG, JPEG or GIF bytes)")
+		return 0
+	}
+	desc := WidgetDesc{ImageData: string(data)}
+	if v, ok := L.GetField(tbl, "fit").(lua.LString); ok {
+		switch string(v) {
+		case widgets.ImageFitContain, widgets.ImageFitNone:
+			desc.ImageFit = string(v)
+		default:
+			L.ArgError(2, "image fit must be \"contain\" or \"none\"")
+			return 0
+		}
+	}
+	if v := L.GetField(tbl, "alt"); v != lua.LNil {
+		desc.ImageAlt = v.String()
+	}
+	if v := L.GetField(tbl, "height"); v != lua.LNil {
+		desc.ImageHeight = int(lua.LVAsNumber(v))
+	}
+	parseBoxModel(L, tbl, &desc)
+	proxy.appendDesc(WidgetImage, desc)
 	return 0
 }

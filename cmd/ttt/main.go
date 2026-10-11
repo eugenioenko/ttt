@@ -315,8 +315,7 @@ Docs: https://tttedit.dev
 		}
 		pluginsPanel.OnToggle = func(name string, enabled bool) {
 			if !enabled {
-				editor.Sidebar.RemovePanel("plugin." + name)
-				editor.BottomPanel.RemovePanel("plugin." + name)
+				editor.RemovePluginPanels(name)
 				editor.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
 			}
 			p, err := pluginManager.SetEnabled(name, enabled)

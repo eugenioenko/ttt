@@ -109,6 +109,8 @@ type App struct {
 	runningRepoOp             string
 	pluginDetailWidgets       map[string]*pluginDetailState
 	pluginDrawer              ui.Widget
+	pluginDrawerPanel         *plugin.PluginPanelWidget
+	graphics                  *cachedGraphics
 	fileHandlerTabs           map[string]*plugin.Plugin
 	commandLine               *ui.CommandLineWidget
 	commandLinePrevFocus      ui.Widget
@@ -870,6 +872,10 @@ func (a *App) ClosePluginDrawer() {
 	}
 	a.Root.RemoveOverlay(a.pluginDrawer)
 	a.pluginDrawer = nil
+	if a.pluginDrawerPanel != nil {
+		a.pluginDrawerPanel.Close()
+		a.pluginDrawerPanel = nil
+	}
 	a.FocusEditor()
 }
 

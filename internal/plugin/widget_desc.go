@@ -24,6 +24,7 @@ const (
 	WidgetTable
 	WidgetMarkdown
 	WidgetCheckbox
+	WidgetImage
 )
 
 func (k WidgetKind) String() string {
@@ -62,6 +63,8 @@ func (k WidgetKind) String() string {
 		return "markdown"
 	case WidgetCheckbox:
 		return "checkbox"
+	case WidgetImage:
+		return "image"
 	}
 	return "unknown"
 }
@@ -105,6 +108,11 @@ type WidgetDesc struct {
 	OnChange      func(text string)
 	OnSubmit      func(text string)
 	ClearOnSubmit bool
+
+	ImageData   string
+	ImageFit    string
+	ImageAlt    string
+	ImageHeight int
 
 	Children     []WidgetDesc
 	Border       bool

@@ -2,7 +2,10 @@ package app
 
 import (
 	"log/slog"
+	"os"
 
+	"github.com/eugenioenko/ttt/internal/image"
+	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -27,6 +30,30 @@ func (a *App) RefreshImageCellSize() {
 	if a.EditorGroup != nil {
 		a.EditorGroup.SetImageCellSize(w, h)
 	}
+}
+
+type graphicsKey struct {
+	setting      string
+	cellW, cellH int
+}
+
+// Plugin image widgets ask on every frame, so detection reruns only when the setting or cell size changes.
+// Without a pixel cell size nothing can be placed, so plugins are told there are no graphics.
+func (a *App) pluginGraphics() plugin.GraphicsInfo {
+	key := graphicsKey{a.EditorGroup.ImageProtocol, a.imageCellW, a.imageCellH}
+	if a.graphics == nil || a.graphics.key != key {
+		info := plugin.GraphicsInfo{CellW: key.cellW, CellH: key.cellH}
+		if key.cellW > 0 && key.cellH > 0 {
+			info.Protocol = image.ResolveProtocol(key.setting, os.Getenv, key.cellW, key.cellH)
+		}
+		a.graphics = &cachedGraphics{key: key, info: info}
+	}
+	return a.graphics.info
+}
+
+type cachedGraphics struct {
+	key  graphicsKey
+	info plugin.GraphicsInfo
 }
 
 // Must run after the text grid is rendered.

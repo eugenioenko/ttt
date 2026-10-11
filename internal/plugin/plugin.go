@@ -76,6 +76,7 @@ type Plugin struct {
 	OpenTab            func(id string, panel *PluginPanelWidget)
 	CloseTab           func(id string)
 	RenderMarkdown     func(text string) []MarkdownLine
+	Graphics           func() GraphicsInfo
 	Markdown           config.MarkdownSettings
 	Borders            *term.BorderSet
 	AppVersion         string
@@ -278,6 +279,7 @@ func (p *Plugin) Destroy() {
 	p.OpenTab = nil
 	p.CloseTab = nil
 	p.RenderMarkdown = nil
+	p.Graphics = nil
 	p.Borders = nil
 	p.SimulateClick = nil
 	p.SimulateDrag = nil

@@ -234,6 +234,15 @@ func (tp *TabbedPanel) PrevPanel() {
 	}
 }
 
+func (tp *TabbedPanel) PanelWidget(id string) Widget {
+	for _, p := range tp.panels {
+		if p.ID == id {
+			return p.W
+		}
+	}
+	return nil
+}
+
 func (tp *TabbedPanel) HasPanel(id string) bool {
 	for _, p := range tp.panels {
 		if p.ID == id {

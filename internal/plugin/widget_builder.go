@@ -27,18 +27,12 @@ func NewWidgetState() *WidgetState {
 
 func (ws *WidgetState) Reconcile(descs []WidgetDesc, p *Plugin) *widgets.VStackWidget {
 	newKeys := make([]string, len(descs))
-	newWidgets := make([]widgets.Widget, len(descs))
-
 	for i, desc := range descs {
 		newKeys[i] = desc.Key
-
-		if i < len(ws.keys) && ws.keys[i] == desc.Key && widgetMatchesKind(ws.items[i], desc.Kind) {
-			updateWidget(ws.items[i], desc, p)
-			newWidgets[i] = ws.items[i]
-		} else {
-			newWidgets[i] = createWidget(desc, p)
-		}
 	}
+	newWidgets := reconcileSlots(ws.items, descs, p, func(i int) bool {
+		return i < len(ws.keys) && ws.keys[i] == descs[i].Key && widgetMatchesKind(ws.items[i], descs[i].Kind)
+	})
 
 	ws.keys = newKeys
 	ws.items = newWidgets
@@ -83,6 +77,10 @@ func createWidget(desc WidgetDesc, p *Plugin) widgets.Widget {
 		return createMarkdownWidget(desc, p)
 	case WidgetCheckbox:
 		return createCheckboxWidget(desc, p)
+	case WidgetImage:
+		iw := widgets.NewImageWidget(imageConfig(desc, p))
+		applyBoxModel(&iw.Box, desc)
+		return iw
 	}
 	return widgets.NewLabelWidget(widgets.LabelConfig{Text: "unknown widget"})
 }
@@ -195,9 +193,15 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 				if vs, ok := bw.Child.(*widgets.VStackWidget); ok {
 					vs.Children = reconcileChildren(vs.Children, desc.Children, p)
 				} else {
+					closeImages(bw.Child)
 					bw.Child = createVStackFromDescs(desc.Children, p)
 				}
 			}
+		}
+	case WidgetImage:
+		if iw, ok := w.(*widgets.ImageWidget); ok {
+			iw.SetConfig(imageConfig(desc, p))
+			applyBoxModel(&iw.Box, desc)
 		}
 	case WidgetProgress:
 		if pw, ok := w.(*widgets.ProgressWidget); ok {
@@ -241,6 +245,9 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 
 func widgetMatchesKind(w widgets.Widget, kind WidgetKind) bool {
 	switch kind {
+	case WidgetImage:
+		_, ok := w.(*widgets.ImageWidget)
+		return ok
 	case WidgetLabel:
 		_, ok := w.(*widgets.LabelWidget)
 		return ok
@@ -294,16 +301,9 @@ func widgetMatchesKind(w widgets.Widget, kind WidgetKind) bool {
 }
 
 func reconcileChildren(old []widgets.Widget, descs []WidgetDesc, p *Plugin) []widgets.Widget {
-	children := make([]widgets.Widget, len(descs))
-	for i, cd := range descs {
-		if i < len(old) && widgetMatchesKind(old[i], cd.Kind) {
-			updateWidget(old[i], cd, p)
-			children[i] = old[i]
-		} else {
-			children[i] = createWidget(cd, p)
-		}
-	}
-	return children
+	return reconcileSlots(old, descs, p, func(i int) bool {
+		return i < len(old) && widgetMatchesKind(old[i], descs[i].Kind)
+	})
 }
 
 func applyBoxModel(box *widgets.BoxModel, desc WidgetDesc) {

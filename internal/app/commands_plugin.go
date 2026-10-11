@@ -182,8 +182,7 @@ func (a *App) pluginUninstall() {
 }
 
 func (a *App) doPluginUninstall(name string) {
-	a.Sidebar.RemovePanel("plugin." + name)
-	a.BottomPanel.RemovePanel("plugin." + name)
+	a.RemovePluginPanels(name)
 	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
 
 	if err := a.PluginManager.Uninstall(name); err != nil {
@@ -311,6 +310,8 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		if reg.ID == "plugin."+p.Name {
 			if !a.Sidebar.HasPanel(reg.ID) {
 				a.Sidebar.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
+			} else {
+				closeStalePluginPanel(&a.Sidebar.TabbedPanel, reg.ID, reg.Widget)
 			}
 			break
 		}
@@ -319,6 +320,8 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		if reg.ID == "plugin."+p.Name {
 			if !a.BottomPanel.HasPanel(reg.ID) {
 				a.BottomPanel.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
+			} else {
+				closeStalePluginPanel(&a.BottomPanel.TabbedPanel, reg.ID, reg.Widget)
 			}
 			break
 		}
@@ -586,17 +589,21 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				a.Root.RemoveOverlay(adapter)
 				if a.pluginDrawer == adapter {
 					a.pluginDrawer = nil
+					a.pluginDrawerPanel = nil
 				}
+				panel.Close()
 				a.FocusEditor()
 			},
 		})
 		drawer.SetContent(panel)
 		adapter = a.ShowDrawer(drawer)
 		a.pluginDrawer = adapter
+		a.pluginDrawerPanel = panel
 	}
 	p.CloseDrawer = func() {
 		a.ClosePluginDrawer()
 	}
+	p.Graphics = a.pluginGraphics
 	p.OpenTab = func(id string, panel *plugin.PluginPanelWidget) {
 		a.EditorGroup.OpenPluginTab(id, id, panel)
 	}
@@ -724,8 +731,7 @@ func (a *App) pluginReload() {
 }
 
 func (a *App) doPluginReload(name string) {
-	a.Sidebar.RemovePanel("plugin." + name)
-	a.BottomPanel.RemovePanel("plugin." + name)
+	a.RemovePluginPanels(name)
 	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
 
 	p, err := a.PluginManager.Reload(name)
@@ -964,5 +970,28 @@ func (a *App) showNextPluginApproval() {
 func (a *App) ShowPendingPluginApprovals() {
 	if len(a.PendingPluginApprovals) > 0 {
 		a.ShowPluginApprovalDialog(a.PendingPluginApprovals[0])
+	}
+}
+
+// Panel images live in the terminal until released, so a plugin panel is closed whenever it leaves the UI.
+func (a *App) RemovePluginPanels(name string) {
+	id := "plugin." + name
+	for _, tp := range []*ui.TabbedPanel{&a.Sidebar.TabbedPanel, &a.BottomPanel.TabbedPanel} {
+		closePluginPanel(tp.PanelWidget(id))
+		tp.RemovePanel(id)
+	}
+}
+
+func closeStalePluginPanel(tp *ui.TabbedPanel, id string, current *plugin.PluginPanelWidget) {
+	if adapter, ok := tp.PanelWidget(id).(*ui.WidgetAdapter); ok && adapter.W != current {
+		closePluginPanel(adapter)
+	}
+}
+
+func closePluginPanel(w ui.Widget) {
+	if adapter, ok := w.(*ui.WidgetAdapter); ok {
+		if panel, ok := adapter.W.(*plugin.PluginPanelWidget); ok {
+			panel.Close()
+		}
 	}
 }

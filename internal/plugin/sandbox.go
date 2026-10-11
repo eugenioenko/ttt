@@ -581,6 +581,16 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			return 1
 		}))
 
+		L.SetField(mod, "graphics", L.NewFunction(func(L *lua.LState) int {
+			g := p.graphics()
+			tbl := L.NewTable()
+			L.SetField(tbl, "protocol", lua.LString(g.Protocol.String()))
+			L.SetField(tbl, "cell_w", lua.LNumber(g.CellW))
+			L.SetField(tbl, "cell_h", lua.LNumber(g.CellH))
+			L.Push(tbl)
+			return 1
+		}))
+
 		L.SetField(mod, "platform", L.NewFunction(func(L *lua.LState) int {
 			L.Push(lua.LString(runtime.GOOS))
 			return 1

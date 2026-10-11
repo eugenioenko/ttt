@@ -4,7 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/config"
+	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/ui"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -33,5 +36,17 @@ func TestCloseFileHandlerTabDispatchesFileClose(t *testing.T) {
 	}
 	if got := p.State.GetTable(closed, lua.LNumber(1)).String(); got != "/x/paper.pdf" {
 		t.Errorf("file.close path = %q", got)
+	}
+}
+
+func TestPluginGraphicsNeedsACellSize(t *testing.T) {
+	a := &App{EditorGroup: ui.NewEditorGroupWidget(nil, 4, true, "relative")}
+	a.EditorGroup.ImageProtocol = config.ImageProtocolKitty
+	if g := a.pluginGraphics(); g.Protocol != tttimage.None {
+		t.Errorf("protocol without a cell size = %v, want none", g.Protocol)
+	}
+	a.imageCellW, a.imageCellH = 10, 20
+	if g := a.pluginGraphics(); g.Protocol != tttimage.Kitty || g.CellW != 10 || g.CellH != 20 {
+		t.Errorf("graphics = %+v, want kitty with the cell size", g)
 	}
 }
