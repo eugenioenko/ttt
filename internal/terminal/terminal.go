@@ -264,15 +264,17 @@ func (t *Terminal) Close() {
 	t.cbMu.Unlock()
 
 	t.signalShell(sigHangup, started)
-	t.mu.Lock()
-	t.pt.Close()
-	t.mu.Unlock()
+	// Closing the pty while bash handles SIGHUP can make it exit without
+	// hanging up its jobs, so the pty stays open until the shell is gone.
 	if started {
 		select {
 		case <-t.waited:
 		case <-time.After(hangupGrace):
 		}
 	}
+	t.mu.Lock()
+	t.pt.Close()
+	t.mu.Unlock()
 	t.signalShell(sigKill, started)
 	if started {
 		<-t.waited

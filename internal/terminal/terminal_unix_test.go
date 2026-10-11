@@ -166,7 +166,7 @@ func assertCloseHangsUpJob(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for !processGone(pid) {
 		if time.Now().After(deadline) {
-			t.Fatalf("background job %d survived Close()\nbefore close:\n%s\nafter: %s", pid, before, signalStatus(pid))
+			t.Fatalf("background job %d survived Close() (shell: %v)\nbefore close:\n%s\nafter: %s", pid, term.cmd.ProcessState, before, signalStatus(pid))
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
