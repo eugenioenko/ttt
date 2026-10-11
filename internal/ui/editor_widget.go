@@ -502,7 +502,11 @@ func (e *EditorPaneWidget) skipHiddenLineDown() {
 		return
 	}
 	moved := false
-	for r := e.Folds.ContainingFold(e.Cursor.Line); r != nil && r.EndLine+1 < len(e.Buf.Lines); r = e.Folds.ContainingFold(e.Cursor.Line) {
+	for r := e.Folds.ContainingFold(e.Cursor.Line); r != nil; r = e.Folds.ContainingFold(e.Cursor.Line) {
+		if r.EndLine+1 >= len(e.Buf.Lines) {
+			e.skipHiddenLineUp()
+			return
+		}
 		e.Cursor.Line = r.EndLine + 1
 		moved = true
 	}

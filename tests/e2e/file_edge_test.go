@@ -130,6 +130,25 @@ func TestRevealingANestedHiddenLineLandsBelowTheOuterFold(t *testing.T) {
 	}
 }
 
+func TestRevealingALineInAFoldThatEndsTheFileLandsOnTheFold(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.exec("options.toggleShowTrailingNewline")
+	openFileEdgeFixture(t, h, "eof.py", "first = 1\ndef outer():\n    x = 1\n    def inner():\n        a = 1\n        b = 2")
+	ed := h.app.EditorGroup.Editor
+	h.exec("fold.collapseAll")
+	h.redraw()
+	if !ed.Folds.IsLineHidden(5) {
+		t.Fatal("fixture: the outer fold should hide the file's last line")
+	}
+
+	ed.Cursor.Line, ed.Cursor.Col = 4, 0
+	ed.EnsureCursorVisible()
+	if ed.Cursor.Line != 1 || ed.Folds.IsLineHidden(ed.Cursor.Line) {
+		t.Fatalf("revealing hidden line 4 left the cursor on line %d, want the outer fold line 1", ed.Cursor.Line)
+	}
+}
+
 func TestCtrlEndRevealsAWrappedLastLine(t *testing.T) {
 	h := newTestHarness(t, 60, 20)
 	defer h.stop()
