@@ -150,6 +150,8 @@ func (w *ImageWidget) decoded() *image.Source {
 			ch <- decodeResult{src, err}
 			redraw()
 		}()
+		// The result is taken on the frame Redraw triggers, never this one, so the pending state always renders once.
+		return nil
 	}
 	select {
 	case r := <-w.pending:
