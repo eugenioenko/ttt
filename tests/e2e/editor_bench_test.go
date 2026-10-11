@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -20,6 +22,9 @@ var benchLanguages = []struct{ name, fixture string }{
 	{"cpp", "matrix.cpp"},
 	{"python", "inventory.py"},
 }
+
+// highlightStepBudget matches the event loop's step between frames.
+const highlightStepBudget = 4 * time.Millisecond
 
 const (
 	benchWidth  = 200
@@ -144,6 +149,7 @@ func BenchmarkEditor(b *testing.B) {
 				h := newBenchHarness(b)
 				openBenchFile(b, h, lang.fixture, medium)
 				gotoLine(h, mediumLines/2)
+				h.settle()
 				h.pressKey(tcell.KeyEnd, tcell.ModNone)
 				b.ReportAllocs()
 				for b.Loop() {
@@ -179,7 +185,8 @@ func BenchmarkEditor(b *testing.B) {
 				}
 			})
 
-			// The first render at the end highlights every line above it.
+			// The frame after a jump: lines past the synchronous budget are
+			// deferred to steps between frames, which this does not include.
 			b.Run("jump_to_end_large", func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
@@ -194,12 +201,44 @@ func BenchmarkEditor(b *testing.B) {
 				}
 			})
 
+			// Typing at the end of a large file while the lines above are
+			// still being tokenized between frames: each keystroke must stay
+			// cheap however far the catch-up has got.
+			if lang.name == "cpp" {
+				b.Run("type_while_catching_up_large", func(b *testing.B) {
+					var h *testHarness
+					start := func() {
+						if h != nil {
+							h.app.EditorGroup.CloseAllTabs()
+							h.stop()
+						}
+						h = newTestHarness(b, benchWidth, benchHeight)
+						openBenchFile(b, h, lang.fixture, large)
+						gotoLine(h, largeLines())
+						h.pressKey(tcell.KeyEnd, tcell.ModNone)
+					}
+					start()
+					defer func() { h.stop() }()
+					b.ReportAllocs()
+					for b.Loop() {
+						b.StopTimer()
+						if !highlight.Step(highlightStepBudget) {
+							start()
+						}
+						b.StartTimer()
+						h.pressRune('x')
+						h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+					}
+				})
+			}
+
 			// An edit at the top invalidates highlighting below it until the
 			// tokenizer state converges with the cached tail.
 			b.Run("edit_top_view_end_large", func(b *testing.B) {
 				h := newBenchHarness(b)
 				openBenchFile(b, h, lang.fixture, large)
 				gotoLine(h, largeLines())
+				h.settle()
 				b.ReportAllocs()
 				for b.Loop() {
 					gotoLine(h, 0)
