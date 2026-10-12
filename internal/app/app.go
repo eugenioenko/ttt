@@ -132,6 +132,13 @@ type App struct {
 	eventLoopCloseOnce    sync.Once
 	eventLoopDone         chan struct{}
 	tasks                 taskOwner
+
+	// lspSent holds, per document, a channel closed once its latest didOpen or
+	// didChange was sent. Guarded by DocVersionsMu.
+	lspSent map[string]<-chan struct{}
+	// lspEpochs counts restarts per server; UI goroutine only.
+	lspEpochs map[string]int
+	diagPull  *asynctask.Task[pulledDiagnostics]
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
@@ -656,6 +663,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			lang = a.EditorGroup.Editor.Highlighter.Language()
 		}
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
+		a.ScheduleDiagnosticPull(false)
 		a.ScheduleAutocomplete()
 		a.CheckSignatureHelpTrigger(changeDone)
 		a.ScheduleGitGutter()

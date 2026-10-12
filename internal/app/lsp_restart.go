@@ -20,6 +20,13 @@ func lspDiagnosticsSource(server string) string {
 	return "lsp:" + server
 }
 
+// Pulled diagnostics have their own source: each source holds one list per
+// file, so a server that both pushes and pulls would otherwise have each
+// replace the other.
+func lspPullDiagnosticsSource(server string) string {
+	return "lsp:" + server + ":pull"
+}
+
 func (a *App) RestartLSPServer() {
 	path, lang := a.editorPathLang()
 	serverKey, _, ok := a.lspResolve(path, lang)
@@ -40,9 +47,12 @@ func (a *App) RestartLSPServer() {
 // landing after the restart.
 func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 	a.EditorGroup.ClearDiagnosticsSource(lspDiagnosticsSource(ev.Server))
+	a.EditorGroup.ClearDiagnosticsSource(lspPullDiagnosticsSource(ev.Server))
+	a.lspEpochs[ev.Server]++
 
 	type openDoc struct{ uri, langID, text string }
 	var docs []openDoc
+	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
 	for _, d := range a.EditorGroup.OpenDocuments() {
 		key, langID, ok := a.lspResolve(d.Path, d.Language)
@@ -50,6 +60,7 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 			continue
 		}
 		a.DocVersions[d.Path] = 1
+		a.lspSent[d.Path] = sent
 		docs = append(docs, openDoc{uri: FileURI(d.Path), langID: langID, text: d.Text})
 	}
 	a.DocVersionsMu.Unlock()
@@ -61,6 +72,7 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 				client.DidOpen(d.uri, d.langID, d.text)
 			}
 		}
+		close(sent)
 		a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerRestarted{Server: ev.Server, Err: err}))
 	}()
 }
@@ -73,4 +85,5 @@ func (a *App) handleLSPServerRestarted(ev *LSPServerRestarted) {
 	a.StatusNotify(ev.Server + " restarted")
 	a.SyncLanguageSegment()
 	a.RefreshSymbols()
+	a.ScheduleDiagnosticPull(true)
 }

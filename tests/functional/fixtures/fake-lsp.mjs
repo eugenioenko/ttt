@@ -2,16 +2,23 @@ import { appendFileSync, writeFileSync } from "node:fs";
 
 const tracePath = process.argv[2];
 if (!tracePath) {
-  process.stderr.write("usage: node fake-lsp.mjs TRACE_PATH\n");
+  process.stderr.write("usage: node fake-lsp.mjs TRACE_PATH [--hold-hover] [--late=METHOD] [--pull [--push] [--retrigger-first]]\n");
   process.exit(2);
 }
+// --pull answers textDocument/diagnostic and stops pushing publishDiagnostics,
+// like TypeScript 7's native server. --push keeps pushing alongside it.
+// --retrigger-first cancels the first pull and asks the client to resend it.
+const flags = new Set(process.argv.slice(3));
+const pullMode = flags.has("--pull");
+const pushMode = !pullMode || flags.has("--push");
+let retriggerPending = flags.has("--retrigger-first");
 
 writeFileSync(tracePath, "", "utf8");
 
 let input = Buffer.alloc(0);
 let sequence = 0;
 let documentText = "";
-let holdNextHover = process.argv[3] === "--hold-hover";
+let holdNextHover = flags.has("--hold-hover");
 let pendingHover;
 // --late=METHOD answers the first request for METHOD only after a delay, so a
 // test can move the cursor before the reply arrives.
@@ -35,20 +42,31 @@ function respond(id, result) {
   send({ jsonrpc: "2.0", id, result });
 }
 
+function diagnosticItem(line, message) {
+  return {
+    range: {
+      start: { line, character: 0 },
+      end: { line, character: 1 },
+    },
+    severity: 3,
+    source: "fake-lsp",
+    message,
+  };
+}
+
 function diagnostic(uri, message) {
   send({
     jsonrpc: "2.0",
     method: "textDocument/publishDiagnostics",
-    params: {
-      uri,
-      diagnostics: [{
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-        severity: 3,
-        source: "fake-lsp",
-        message,
-      }],
-    },
+    params: { uri, diagnostics: [diagnosticItem(0, message)] },
   });
+}
+
+function pulledDiagnostics() {
+  if (documentText.includes("clean")) return [];
+  const items = [diagnosticItem(0, "FAKE_LSP_READY")];
+  if (documentText.includes("bad")) items.push(diagnosticItem(1, "FAKE_PULL_BAD"));
+  return items;
 }
 
 function completionItem() {
@@ -89,6 +107,13 @@ function handle(message) {
             retriggerCharacters: [","],
           },
           documentSymbolProvider: true,
+          ...(pullMode && {
+            diagnosticProvider: {
+              identifier: "fake",
+              interFileDependencies: false,
+              workspaceDiagnostics: false,
+            },
+          }),
         },
       });
       break;
@@ -96,24 +121,20 @@ function handle(message) {
       break;
     case "textDocument/didOpen":
       documentText = message.params.textDocument.text;
-      send({
-        jsonrpc: "2.0",
-        method: "textDocument/publishDiagnostics",
-        params: {
-          uri: message.params.textDocument.uri,
-          diagnostics: [
-            {
-              range: {
-                start: { line: 0, character: 0 },
-                end: { line: 0, character: 1 },
-              },
-              severity: 3,
-              source: "fake-lsp",
-              message: "FAKE_LSP_READY",
-            },
-          ],
-        },
-      });
+      if (!pushMode) break;
+      diagnostic(message.params.textDocument.uri, pullMode ? "FAKE_PUSHED" : "FAKE_LSP_READY");
+      break;
+    case "textDocument/diagnostic":
+      if (retriggerPending) {
+        retriggerPending = false;
+        send({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: { code: -32802, message: "busy", data: { retriggerRequest: true } },
+        });
+        break;
+      }
+      respond(message.id, { kind: "full", items: pulledDiagnostics() });
       break;
     case "textDocument/didChange":
       documentText = message.params.contentChanges[0].text;

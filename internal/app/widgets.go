@@ -383,9 +383,12 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		References:          references,
 		Output:              output,
 		DocVersions:         make(map[string]int),
+		lspSent:             make(map[string]<-chan struct{}),
+		lspEpochs:           make(map[string]int),
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	app.diagPull = NewTask[pulledDiagnostics](app, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
 	app.Repository = NewRepositoryState(changes, ws.Paths())
 	app.Repository.SetExplorer(explorer)
 	app.Repository.SetCurrentChangesHandler(app.ApplyCurrentChanges)

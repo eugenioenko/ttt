@@ -265,6 +265,60 @@ describe("deterministic fake LSP protocol", () => {
     assertGracefulShutdown(trace);
   });
 
+  it("pulls diagnostics from a pull-only server on open and after edits", () => {
+    const { file, trace: tracePath } = startCase("pull-diagnostics", ["--pull"]);
+
+    tui.type("bad");
+    tui.waitFor("FAKE_PULL_BAD");
+    const added = tui.snapshot();
+    tui.type(" clean");
+    tui.waitFor("No problems detected");
+    const cleared = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    const trace = readTrace(tracePath);
+    const pulls = messagesFor(trace, "textDocument/diagnostic");
+
+    expect(snapshots[added]).toContain("FAKE_LSP_READY");
+    expect(snapshots[cleared]).not.toContain("FAKE_PULL_BAD");
+    expect(traceEntriesFor(trace, "server->client", "textDocument/publishDiagnostics")).toEqual([]);
+    for (const pull of pulls) {
+      expect(pull.params).toEqual({
+        textDocument: { uri: `file://${file}` },
+        identifier: "fake",
+      });
+    }
+    assertRequestAfterDocument(trace, pulls.at(-1), `${INITIAL_TEXT}bad clean`);
+    expect(pulls.length).toBeLessThan("bad clean".length);
+  });
+
+  it("keeps pushed and pulled diagnostics from the same server side by side", () => {
+    startCase("push-and-pull", ["--pull", "--push"]);
+
+    tui.type("bad");
+    tui.waitFor("FAKE_PULL_BAD");
+    const both = tui.snapshot();
+
+    const { snapshots } = tui.run();
+
+    expect(snapshots[both]).toContain("FAKE_PUSHED");
+    expect(snapshots[both]).toContain("FAKE_LSP_READY");
+  });
+
+  it("resends a pull the server cancelled with retriggerRequest", () => {
+    const { trace: tracePath } = startCase("pull-retrigger", ["--pull", "--retrigger-first"]);
+
+    tui.run();
+    const trace = readTrace(tracePath);
+    const cancelled = trace.find(
+      (entry) => entry.direction === "server->client" && entry.message.error?.code === -32802,
+    );
+    const pulls = traceEntriesFor(trace, "client->server", "textDocument/diagnostic");
+
+    expect(cancelled).toBeDefined();
+    expect(pulls.at(-1).sequence).toBeGreaterThan(cancelled.sequence);
+  });
+
   it("records invoked and dot-trigger completions after ordered full-document changes", () => {
     const { file, trace: tracePath } = startCase("completion-triggers");
 

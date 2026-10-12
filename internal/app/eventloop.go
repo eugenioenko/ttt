@@ -116,6 +116,7 @@ func RunEventLoop(
 			lastOutlineFile = filePath
 			lastOutlineLine = line
 			app.EnsureLSPOpen(filePath)
+			app.ScheduleDiagnosticPull(true)
 			app.RefreshSymbols()
 		} else if line != lastOutlineLine {
 			lastOutlineLine = line

@@ -247,6 +247,7 @@ func (a *App) doSaveFile() {
 func (a *App) afterFileSave(path, lang string) {
 	if lang != "" {
 		a.NotifyLSPSave(path, lang, a.EditorGroup.Editor.Buf.Lines)
+		a.ScheduleDiagnosticPull(true)
 	}
 	a.RequestGitGutterForActiveFile()
 	a.RefreshSymbols()

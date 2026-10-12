@@ -832,11 +832,14 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 
 	text := strings.Join(lines, "\n")
 	workDir := a.lspWorkDir(path)
+	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path] = 1
+	a.lspSent[path] = sent
 	a.DocVersionsMu.Unlock()
 	slog.Debug("lsp didOpen", "path", path, "language", langID)
 	go func() {
+		defer close(sent)
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			return
@@ -860,6 +863,7 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path]++
 	version := a.DocVersions[path]
+	a.lspSent[path] = done
 	a.DocVersionsMu.Unlock()
 	go func() {
 		defer close(done)
@@ -896,6 +900,7 @@ func (a *App) NotifyLSPClose(path, lang string) {
 	workDir := a.lspWorkDir(path)
 	a.DocVersionsMu.Lock()
 	delete(a.DocVersions, path)
+	delete(a.lspSent, path)
 	a.DocVersionsMu.Unlock()
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
