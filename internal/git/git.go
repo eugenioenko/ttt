@@ -694,8 +694,27 @@ func ShowFile(dir, path, ref string) (string, error) {
 }
 
 func ShowFileContext(ctx context.Context, dir, path, ref string) (string, error) {
-	out, err := ShowFileBytesContext(ctx, dir, path, ref)
-	return string(out), err
+	return showString(ctx, dir, ref+":"+path)
+}
+
+// showString reads a blob into a string sized from the blob, so a large file
+// is neither regrown while it is read nor copied into the string afterwards.
+func showString(ctx context.Context, dir, spec string) (string, error) {
+	var sb strings.Builder
+	if out, err := gitCommandContext(ctx, "-C", dir, "cat-file", "-s", spec).Output(); err == nil {
+		if size, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil {
+			sb.Grow(size)
+		}
+	}
+	cmd := gitCommandContext(ctx, "-C", dir, "show", spec)
+	cmd.Stdout = &sb
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
+	}
+	return sb.String(), nil
 }
 
 func ShowFileBytesContext(ctx context.Context, dir, path, ref string) ([]byte, error) {
@@ -821,8 +840,7 @@ func diffPaths(dir string, flags []string, paths ...string) (string, error) {
 
 // ShowIndexFileContext reads a file's stage-0 blob from the index.
 func ShowIndexFileContext(ctx context.Context, dir, path string) (string, error) {
-	out, err := ShowIndexFileBytesContext(ctx, dir, path, 0)
-	return string(out), err
+	return showString(ctx, dir, ":0:"+path)
 }
 
 // IsUnmergedContext reports whether path has unresolved merge conflicts: the
