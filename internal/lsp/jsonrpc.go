@@ -52,11 +52,15 @@ type Reply struct {
 	Error   *RPCError       `json:"error,omitempty"`
 }
 
-const CodeMethodNotFound = -32601
+const (
+	CodeMethodNotFound  = -32601
+	CodeServerCancelled = -32802
+)
 
 type RPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 func (e *RPCError) Error() string {

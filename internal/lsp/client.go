@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,6 +30,7 @@ type Client struct {
 	completionTriggers  []string
 	signatureTriggers   []string
 	signatureRetriggers []string
+	diagnosticProvider  *DiagnosticOptions
 
 	hooks ClientHooks
 
@@ -279,6 +281,7 @@ func (c *Client) Initialize(rootURI string) error {
 				DocumentSymbol: &DocumentSymbolClientCapabilities{
 					HierarchicalDocumentSymbolSupport: true,
 				},
+				Diagnostic: &DiagnosticClientCapabilities{},
 			},
 		},
 	})
@@ -299,6 +302,7 @@ func (c *Client) Initialize(rootURI string) error {
 		c.signatureTriggers = caps.SignatureHelpProvider.TriggerCharacters
 		c.signatureRetriggers = caps.SignatureHelpProvider.RetriggerCharacters
 	}
+	c.diagnosticProvider = caps.DiagnosticProvider
 
 	return c.notify("initialized", struct{}{})
 }
@@ -347,6 +351,51 @@ func (c *Client) SignatureHelpTriggerCharacters() []string {
 
 func (c *Client) SignatureHelpRetriggerCharacters() []string {
 	return c.signatureRetriggers
+}
+
+func (c *Client) SupportsPullDiagnostics() bool {
+	return c.diagnosticProvider != nil
+}
+
+// ok is false for an "unchanged" report, whose diagnostics the caller should
+// keep.
+func (c *Client) Diagnostic(ctx context.Context, uri string) (diags []Diagnostic, ok bool, err error) {
+	params := DocumentDiagnosticParams{TextDocument: TextDocumentIdentifier{URI: uri}}
+	if c.diagnosticProvider != nil {
+		params.Identifier = c.diagnosticProvider.Identifier
+	}
+	result, err := c.callContext(ctx, "textDocument/diagnostic", params)
+	if err != nil {
+		if shouldRetrigger(err) {
+			return nil, false, fmt.Errorf("%w: %w", ErrRetriggerDiagnostic, err)
+		}
+		return nil, false, err
+	}
+	var report DocumentDiagnosticReport
+	if err := json.Unmarshal(result, &report); err != nil {
+		return nil, false, fmt.Errorf("parse diagnostic result: %w", err)
+	}
+	switch report.Kind {
+	case "full":
+		return report.Items, true, nil
+	case "unchanged":
+		return nil, false, nil
+	default:
+		return nil, false, fmt.Errorf("unknown diagnostic report kind %q", report.Kind)
+	}
+}
+
+var ErrRetriggerDiagnostic = errors.New("server asked to retrigger the diagnostic pull")
+
+func shouldRetrigger(err error) bool {
+	var rpcErr *RPCError
+	if !errors.As(err, &rpcErr) || rpcErr.Code != CodeServerCancelled {
+		return false
+	}
+	var data struct {
+		RetriggerRequest bool `json:"retriggerRequest"`
+	}
+	return json.Unmarshal(rpcErr.Data, &data) == nil && data.RetriggerRequest
 }
 
 func (c *Client) Completion(ctx context.Context, uri string, line, col int, trigger *CompletionContext) ([]CompletionItem, error) {

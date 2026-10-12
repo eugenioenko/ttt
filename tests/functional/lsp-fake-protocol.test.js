@@ -103,6 +103,7 @@ function expectedInitialize(root) {
         },
         publishDiagnostics: {},
         documentSymbol: { hierarchicalDocumentSymbolSupport: true },
+        diagnostic: { dynamicRegistration: false, relatedDocumentSupport: false },
       },
     },
   };

@@ -42,6 +42,12 @@ type TextDocumentClientCapabilities struct {
 	Completion         *CompletionClientCapabilities         `json:"completion,omitempty"`
 	PublishDiagnostics *PublishDiagnosticsClientCapabilities `json:"publishDiagnostics,omitempty"`
 	DocumentSymbol     *DocumentSymbolClientCapabilities     `json:"documentSymbol,omitempty"`
+	Diagnostic         *DiagnosticClientCapabilities         `json:"diagnostic,omitempty"`
+}
+
+type DiagnosticClientCapabilities struct {
+	DynamicRegistration    bool `json:"dynamicRegistration"`
+	RelatedDocumentSupport bool `json:"relatedDocumentSupport"`
 }
 
 type DocumentSymbolClientCapabilities struct {
@@ -75,6 +81,13 @@ type ServerCapabilities struct {
 	TextDocumentSync                *TextDocumentSyncOptions `json:"textDocumentSync,omitempty"`
 	DocumentFormattingProvider      BoolOrObject             `json:"documentFormattingProvider,omitempty"`
 	DocumentRangeFormattingProvider BoolOrObject             `json:"documentRangeFormattingProvider,omitempty"`
+	DiagnosticProvider              *DiagnosticOptions       `json:"diagnosticProvider,omitempty"`
+}
+
+type DiagnosticOptions struct {
+	Identifier            string `json:"identifier,omitempty"`
+	InterFileDependencies bool   `json:"interFileDependencies"`
+	WorkspaceDiagnostics  bool   `json:"workspaceDiagnostics"`
 }
 
 type SignatureHelpOptions struct {
@@ -382,6 +395,16 @@ type MarkupContent struct {
 type PublishDiagnosticsParams struct {
 	URI         string       `json:"uri"`
 	Diagnostics []Diagnostic `json:"diagnostics"`
+}
+
+type DocumentDiagnosticParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Identifier   string                 `json:"identifier,omitempty"`
+}
+
+type DocumentDiagnosticReport struct {
+	Kind  string       `json:"kind"`
+	Items []Diagnostic `json:"items"`
 }
 
 type Diagnostic struct {
