@@ -79,10 +79,12 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		}
 		result := &GitGutterResult{Gen: gen, Path: filePath, DiffOn: diffOn, Version: version, Lines: linesCopy}
 		if gitErr != nil && gutterOn {
-			// File is not tracked by git (new file) — mark all lines as added
-			result.Changes = make([]diff.LineChangeKind, len(linesCopy))
-			for i := range result.Changes {
-				result.Changes[i] = diff.LineAdded
+			if !git.IgnoredFiles(repoDir, []string{relPath})[relPath] {
+				// File is not tracked by git (new file) — mark all lines as added
+				result.Changes = make([]diff.LineChangeKind, len(linesCopy))
+				for i := range result.Changes {
+					result.Changes[i] = diff.LineAdded
+				}
 			}
 		} else if gutterOn {
 			oldLines := strings.Split(headContent, "\n")
