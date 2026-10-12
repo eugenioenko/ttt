@@ -155,6 +155,9 @@ try {
         lines.push(
           `Geometric-mean change: time ${geomean('ns')}, peak RSS ${geomean('rss')}.`,
           '',
+          '<details>',
+          '<summary>Click here to see benchmark details</summary>',
+          '',
           '| Benchmark | Base | PR | Time change | Base peak RSS | PR peak RSS | Peak RSS change |',
           '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
         );
@@ -166,6 +169,7 @@ try {
               `${memory(before.rss)} | ${memory(after.rss)} | ${percent(after.rss, before.rss)} |`,
           );
         }
+        lines.push('', '</details>');
       } else {
         lines.push(
           `Geometric-mean change: time ${geomean('ns')}, allocated bytes ${geomean('bytes')}, allocations ${geomean('allocs')}.`,
