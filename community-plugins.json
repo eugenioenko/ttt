@@ -50,16 +50,6 @@
     "tags": ["go", "testing", "runner", "golang"]
   },
   {
-    "name": "http-client",
-    "displayName": "HTTP Client",
-    "author": "eugenioenko",
-    "description": "Simple HTTP client for testing APIs",
-    "repo": "https://github.com/eugenioenko/ttt-plugins",
-    "path": "http-client",
-    "version": "0.1.0",
-    "tags": ["http", "api", "rest", "networking"]
-  },
-  {
     "name": "json-viewer",
     "displayName": "JSON Viewer",
     "author": "eugenioenko",
