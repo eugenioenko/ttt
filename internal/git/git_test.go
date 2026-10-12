@@ -1171,6 +1171,58 @@ func TestDiscardMultiplePaths(t *testing.T) {
 	}
 }
 
+// "[id]" is a glob pathspec that also matches the sibling "i" directory.
+func setupGlobNamedRepo(t *testing.T) string {
+	t.Helper()
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "app/[id]/page.tsx", "original")
+	writeFile(t, dir, "app/i/page.tsx", "original")
+	gitRun(t, dir, "add", ".")
+	gitRun(t, dir, "commit", "-qm", "init")
+	writeFile(t, dir, "app/[id]/page.tsx", "changed")
+	writeFile(t, dir, "app/i/page.tsx", "keep me")
+	return dir
+}
+
+func TestDiscardTreatsPathLiterally(t *testing.T) {
+	dir := setupGlobNamedRepo(t)
+
+	if err := Discard(dir, "app/[id]/page.tsx"); err != nil {
+		t.Fatalf("Discard: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "app/i/page.tsx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "keep me" {
+		t.Errorf("app/i/page.tsx = %q, discarding app/[id]/page.tsx must leave it alone", data)
+	}
+}
+
+func TestStageTreatsPathLiterally(t *testing.T) {
+	dir := setupGlobNamedRepo(t)
+
+	if err := Stage(dir, "app/[id]/page.tsx"); err != nil {
+		t.Fatalf("Stage: %v", err)
+	}
+	staged := stagedPaths(t, dir)
+	if !staged["app/[id]/page.tsx"] || staged["app/i/page.tsx"] {
+		t.Errorf("staged = %v, want only app/[id]/page.tsx", staged)
+	}
+}
+
+func TestDiffWorktreeFileTreatsPathLiterally(t *testing.T) {
+	dir := setupGlobNamedRepo(t)
+
+	out, err := DiffWorktreeFile(dir, "app/[id]/page.tsx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "keep me") {
+		t.Errorf("diff of app/[id]/page.tsx includes app/i/page.tsx: %q", out)
+	}
+}
+
 func TestDiscardUntrackedMultiplePaths(t *testing.T) {
 	dir := setupTestRepo(t)
 	writeFile(t, dir, "a.txt", "a")

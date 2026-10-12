@@ -195,7 +195,7 @@ func runPaths(dir string, gitArgs, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
-	args := append([]string{"-C", dir}, gitArgs...)
+	args := append([]string{"-C", dir, "--literal-pathspecs"}, gitArgs...)
 	args = append(args, paths...)
 	cmd := exec.Command("git", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -830,7 +830,7 @@ func DiffStagedFile(dir string, paths ...string) (string, error) {
 }
 
 func diffPaths(dir string, flags []string, paths ...string) (string, error) {
-	args := append([]string{"-C", dir, "diff"}, flags...)
+	args := append([]string{"-C", dir, "--literal-pathspecs", "diff"}, flags...)
 	args = append(args, "--")
 	for _, p := range paths {
 		args = append(args, filepath.Join(dir, p))
