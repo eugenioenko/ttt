@@ -102,6 +102,7 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 	}
 	highlight.SetStepScheduler(func() {})
 	t.Cleanup(func() {
+		editor.CloseTasks()
 		editor.EditorGroup.CloseAllTabs()
 		highlight.SetStepScheduler(nil)
 	})

@@ -134,6 +134,7 @@ type App struct {
 	eventLoopDoneOnce     sync.Once
 	eventLoopCloseOnce    sync.Once
 	eventLoopDone         chan struct{}
+	tasks                 taskOwner
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
@@ -610,6 +611,7 @@ func (a *App) DismissHover() {
 
 func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManager *lsp.Manager, imageLayer *image.Layer) {
 	a.Screen = screen
+	a.initTaskDelivery(screen)
 	a.Renderer = renderer
 	a.LspManager = lspManager
 	a.ImageLayer = imageLayer

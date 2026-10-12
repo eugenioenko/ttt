@@ -103,7 +103,7 @@ single source of truth for hit testing and interaction routing.
 
 ### Application
 
-Packages: `internal/app` and `internal/command`.
+Packages: `internal/app`, `internal/command`, and `internal/asynctask`.
 
 Owns composition, commands, async lifecycle, cancellation, request identity,
 and service coordination. An App subsystem owner is valuable only when it owns
@@ -112,6 +112,15 @@ structs while unrelated methods continue to mutate them is not decomposition.
 
 Application code may route `tcell` events where it composes the event loop and
 UI, but new feature state should not depend directly on terminal event types.
+
+`internal/asynctask` owns the terminal-independent debounced task primitive.
+`app.NewTask` registers reusable tasks for shutdown and injects UI delivery;
+create production tasks after `App.Init`. Uninitialized/headless Apps use
+synchronous execution, including the E2E simulation harness. Scheduling and
+lifecycle calls share the UI goroutine with delivery; work uses captured inputs
+and cancellation contexts. Product widgets receive scheduling callbacks from
+the application rather than importing its task lifecycle. Feature migrations
+and removal of their old async machinery are tracked in issue #834.
 
 ### Plugin host
 
