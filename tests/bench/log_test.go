@@ -68,6 +68,8 @@ func peakRSS(state *os.ProcessState) float64 {
 // BenchmarkLog opens a log in the built binary, as a person would from the
 // command line, so the time and peak RSS include everything up to the first
 // frame that shows the log: startup, loading, and the event loop's first pass.
+// The _wrap variants start with word wrap on, so that frame also lays out every
+// line's wrapped rows.
 func BenchmarkLog(b *testing.B) {
 	// CI shares generated files across base/PR passes; -short only skips
 	// the manual 1 GiB case, keeping the smaller files at their real sizes.
@@ -80,22 +82,31 @@ func BenchmarkLog(b *testing.B) {
 		sizes = append(sizes, 1024)
 	}
 	binary := buildTTT(b)
-	configDir := b.TempDir()
-	for _, sizeMiB := range sizes {
-		b.Run(fmt.Sprintf("%dMiB", sizeMiB), func(b *testing.B) {
-			path := logFile(b, dir, sizeMiB)
-			var peak float64
-			for b.Loop() {
-				cmd := exec.Command(binary, "--size", "120x40", "--exec", "wait-for "+logMarker+"; quit", path)
-				cmd.Dir = dir
-				cmd.Env = append(os.Environ(), "TTT_CONFIG_DIR="+configDir)
-				started := time.Now()
-				if out, err := cmd.CombinedOutput(); err != nil {
-					b.Fatalf("open %s after %s: %v\n%s", filepath.Base(path), time.Since(started), err, out)
+	wrapConfigDir := b.TempDir()
+	if err := os.WriteFile(filepath.Join(wrapConfigDir, "settings.json"), []byte(`{"editor":{"wordWrap":true}}`), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	variants := []struct{ suffix, configDir string }{
+		{"", b.TempDir()},
+		{"_wrap", wrapConfigDir},
+	}
+	for _, variant := range variants {
+		for _, sizeMiB := range sizes {
+			b.Run(fmt.Sprintf("%dMiB%s", sizeMiB, variant.suffix), func(b *testing.B) {
+				path := logFile(b, dir, sizeMiB)
+				var peak float64
+				for b.Loop() {
+					cmd := exec.Command(binary, "--size", "120x40", "--exec", "wait-for "+logMarker+"; quit", path)
+					cmd.Dir = dir
+					cmd.Env = append(os.Environ(), "TTT_CONFIG_DIR="+variant.configDir)
+					started := time.Now()
+					if out, err := cmd.CombinedOutput(); err != nil {
+						b.Fatalf("open %s after %s: %v\n%s", filepath.Base(path), time.Since(started), err, out)
+					}
+					peak = max(peak, peakRSS(cmd.ProcessState))
 				}
-				peak = max(peak, peakRSS(cmd.ProcessState))
-			}
-			b.ReportMetric(peak, "peak-RSS-B")
-		})
+				b.ReportMetric(peak, "peak-RSS-B")
+			})
+		}
 	}
 }
