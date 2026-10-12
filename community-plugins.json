@@ -90,6 +90,15 @@
     "tags": ["notes", "scratchpad", "productivity", "utility"]
   },
   {
+    "name": "pdf-viewer",
+    "displayName": "PDF Viewer",
+    "author": "sercanatalik",
+    "description": "View and search PDFs in an editor tab, with fit width and auto-reload, falling back to text in terminals without graphics",
+    "repo": "https://github.com/sercanatalik/ttt-pdf",
+    "version": "0.3.0",
+    "tags": ["pdf", "viewer", "search", "documents"]
+  },
+  {
     "name": "port-finder",
     "displayName": "Port Finder",
     "author": "eugenioenko",
