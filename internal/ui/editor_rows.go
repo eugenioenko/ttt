@@ -160,7 +160,7 @@ func (l *rowLayout) lineRows(line int, prev []lineRowsMemo, delta int) int {
 			return prev[i].rows
 		}
 	}
-	rows := len(wrapLineSegments([]rune(text), l.width, l.tabW))
+	rows := wrapLineVisualRows(text, l.width, l.tabW)
 	l.memo[line] = lineRowsMemo{text: text, rows: rows}
 	return rows
 }

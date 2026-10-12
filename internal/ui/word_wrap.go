@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
@@ -29,8 +32,27 @@ func wrapLineSegments(runes []rune, width, tabW int) []int {
 	return segments
 }
 
-// wrapLineVisualRows returns the number of visual rows a line occupies when wrapped.
+// wrapLineVisualRows returns len(wrapLineSegments) for line without allocating.
 func wrapLineVisualRows(line string, width, tabW int) int {
-	runes := []rune(line)
-	return len(wrapLineSegments(runes, width, tabW))
+	// No rune is wider than its UTF-8 encoding, so only a tab can make a line
+	// wider than its byte length.
+	if len(line) <= width && strings.IndexByte(line, '\t') < 0 {
+		return 1
+	}
+	rows, visCol := 1, 0
+	for _, ch := range line {
+		advance := 1
+		if ch == '\t' {
+			advance = ((visCol/tabW)+1)*tabW - visCol
+		} else if ch >= utf8.RuneSelf {
+			advance = textwidth.Rune(ch)
+		}
+		if visCol+advance > width && visCol > 0 {
+			rows++
+			visCol = advance
+		} else {
+			visCol += advance
+		}
+	}
+	return rows
 }

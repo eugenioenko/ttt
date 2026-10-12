@@ -62,6 +62,21 @@ func TestWrapLineVisualRows(t *testing.T) {
 	}
 }
 
+func TestWrapLineVisualRowsMatchesSegments(t *testing.T) {
+	lines := []string{
+		"", "hello", "1234567890", "가나다라마바", "a가b나c다d", "😀😀😀x", "éééé",
+		"\tab\tcd", "ab\t\t가", "\xff\xfeab", strings.Repeat("x가", 20),
+	}
+	for _, line := range lines {
+		for width := 1; width <= 12; width++ {
+			want := len(wrapLineSegments([]rune(line), width, 4))
+			if got := wrapLineVisualRows(line, width, 4); got != want {
+				t.Errorf("wrapLineVisualRows(%q, %d) = %d, want %d", line, width, got, want)
+			}
+		}
+	}
+}
+
 func TestTotalVisualLines(t *testing.T) {
 	lines := []string{
 		"short",
