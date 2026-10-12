@@ -31,12 +31,11 @@ bench-editor:
 bench-diff:
 	go test -run '^$$' -bench 'Diff/$(BENCH_LANG)' -benchmem -benchtime $(BENCH_TIME) $(BENCH_FLAGS) ./tests/e2e/
 
-LOG_OPEN_BENCH_TIME ?= 1x
-LOG_SCROLL_BENCH_TIME ?= 100x
+# Opens real logs in the built binary and reports time to first frame and peak RSS.
+LOG_BENCH_TIME ?= 1x
 BENCH_LOG_SIZE ?= 1MiB|128MiB|256MiB
 bench-log:
-	go test -run '^$$' -bench '^BenchmarkLog$$/^($(BENCH_LOG_SIZE))$$/^open$$' -benchmem -benchtime $(LOG_OPEN_BENCH_TIME) $(BENCH_FLAGS) ./tests/e2e/
-	go test -run '^$$' -bench '^BenchmarkLog$$/^($(BENCH_LOG_SIZE))$$/^wheel_scroll$$' -benchmem -benchtime $(LOG_SCROLL_BENCH_TIME) $(BENCH_FLAGS) ./tests/e2e/
+	go test -run '^$$' -bench '^BenchmarkLog$$/^($(BENCH_LOG_SIZE))$$' -benchtime $(LOG_BENCH_TIME) $(BENCH_FLAGS) ./tests/bench/
 
 fmt:
 	$(GOFMT) -w .

@@ -209,8 +209,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           COUNT: "3"
           BENCH_TIME: 5x
-          LOG_OPEN_BENCH_TIME: 1x
-          LOG_SCROLL_BENCH_TIME: 100x
+          LOG_BENCH_TIME: 1x
           REPORT_FILE: ${{ runner.temp }}/editor-bench.md
         run: node scripts/bench-compare.mjs
 

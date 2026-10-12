@@ -15,14 +15,14 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const baseDir = path.resolve(process.env.BASE_DIR ?? '');
 const count = Number(process.env.COUNT ?? 3);
 const benchTime = process.env.BENCH_TIME ?? '5x';
-const logOpenTime = process.env.LOG_OPEN_BENCH_TIME ?? '1x';
-const logScrollTime = process.env.LOG_SCROLL_BENCH_TIME ?? '100x';
+const logBenchTime = process.env.LOG_BENCH_TIME ?? '1x';
 const marker = '<!-- ttt-editor-benchmarks -->';
 const suites = [
   { name: 'Editor', title: 'Editor', file: 'tests/e2e/editor_bench_test.go' },
   { name: 'Diff', title: 'Diff views', file: 'tests/e2e/diff_bench_test.go' },
-  { name: 'Log', title: 'Log files', file: 'tests/e2e/log_bench_test.go' },
+  { name: 'Log', title: 'Log files', file: 'tests/bench/log_test.go', process: true },
 ];
+const packages = ['tests/e2e', 'tests/bench'];
 const harnessFile = 'tests/e2e/harness_test.go';
 const fixtures = 'tests/e2e/testdata/bench';
 
@@ -33,6 +33,7 @@ if (!Number.isInteger(count) || count < 1) throw new Error(`COUNT must be a posi
 // base without the editor suite also takes the PR's harness and fixtures.
 const overlaid = suites.filter((suite) => !fs.existsSync(path.join(baseDir, suite.file)));
 for (const suite of overlaid) {
+  fs.mkdirSync(path.dirname(path.join(baseDir, suite.file)), { recursive: true });
   fs.copyFileSync(path.join(root, suite.file), path.join(baseDir, suite.file));
 }
 if (overlaid.some((suite) => suite.name === 'Editor')) {
@@ -44,22 +45,26 @@ const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ttt-bench-'));
 const logDir = path.join(temporaryDir, 'logs');
 fs.mkdirSync(logDir);
 const sides = {
-  base: { dir: baseDir, binary: path.join(temporaryDir, 'base.test'), results: {} },
-  head: { dir: root, binary: path.join(temporaryDir, 'head.test'), results: {} },
+  base: { name: 'base', dir: baseDir, results: {} },
+  head: { name: 'head', dir: root, results: {} },
 };
 const runs = [
-  { name: 'editor/diff', pattern: '^Benchmark(Editor|Diff)$', time: benchTime },
-  { name: 'log opening', pattern: '^BenchmarkLog$/./^open$', time: logOpenTime },
-  { name: 'log scrolling', pattern: '^BenchmarkLog$/./^wheel_scroll$', time: logScrollTime },
+  { name: 'editor/diff', pkg: 'tests/e2e', pattern: '^Benchmark(Editor|Diff)$', time: benchTime },
+  { name: 'log opening', pkg: 'tests/bench', pattern: '^BenchmarkLog$', time: logBenchTime },
 ];
-const resultLine = new RegExp(`^Benchmark(${suites.map((suite) => suite.name).join('|')})\\/(\\S+?)(?:-\\d+)?\\s+\\d+\\s+([\\d.]+) ns\\/op.*?([\\d.]+) B\\/op\\s+([\\d.]+) allocs\\/op`);
+const resultLine = new RegExp(`^Benchmark(${suites.map((suite) => suite.name).join('|')})\\/(\\S+?)(?:-\\d+)?\\s+\\d+\\s+(.*)$`);
+const metricUnits = { 'ns/op': 'ns', 'B/op': 'bytes', 'allocs/op': 'allocs', 'peak-RSS-B': 'rss' };
 const results = (side, suite) => {
   side.results[suite] ??= {};
   return side.results[suite];
 };
 
+const testBinary = (side, pkg) => path.join(temporaryDir, `${side.name}-${path.basename(pkg)}.test`);
+
 function compile(side) {
-  execFileSync('go', ['test', '-c', '-o', side.binary, './tests/e2e'], { cwd: side.dir, stdio: ['ignore', 'inherit', 'inherit'] });
+  for (const pkg of packages) {
+    execFileSync('go', ['test', '-c', '-o', testBinary(side, pkg), `./${pkg}`], { cwd: side.dir, stdio: ['ignore', 'inherit', 'inherit'] });
+  }
 }
 
 function run(side) {
@@ -69,18 +74,23 @@ function run(side) {
 function runScenarios(side, scenario) {
   const started = performance.now();
   const output = execFileSync(
-    side.binary,
+    testBinary(side, scenario.pkg),
     ['-test.run', '^$', '-test.bench', scenario.pattern, '-test.benchmem', '-test.benchtime', scenario.time, '-test.short'],
-    { cwd: path.join(side.dir, 'tests/e2e'), env: { ...process.env, TTT_BENCH_LOG_DIR: logDir }, encoding: 'utf8', maxBuffer: 64 << 20 },
+    { cwd: path.join(side.dir, scenario.pkg), env: { ...process.env, TTT_BENCH_LOG_DIR: logDir }, encoding: 'utf8', maxBuffer: 64 << 20 },
   );
-  console.error(`${path.basename(side.binary)} ${scenario.name}: ${((performance.now() - started) / 1000).toFixed(1)} s`);
+  console.error(`${side.name} ${scenario.name}: ${((performance.now() - started) / 1000).toFixed(1)} s`);
   for (const line of output.split('\n')) {
     const match = line.match(resultLine);
     if (!match) continue;
-    const [, suite, name, ns, bytes, allocs] = match;
+    const [, suite, name, rest] = match;
+    const metrics = {};
+    const fields = rest.trim().split(/\s+/);
+    for (let i = 0; i + 1 < fields.length; i += 2) {
+      if (metricUnits[fields[i + 1]]) metrics[metricUnits[fields[i + 1]]] = Number(fields[i]);
+    }
     const suiteResults = results(side, suite);
     const previous = suiteResults[name];
-    if (!previous || Number(ns) < previous.ns) suiteResults[name] = { ns: Number(ns), bytes: Number(bytes), allocs: Number(allocs) };
+    if (!previous || metrics.ns < previous.ns) suiteResults[name] = metrics;
   }
 }
 
@@ -114,9 +124,11 @@ try {
         ? ` The base predates ${overlaid.map((suite) => `\`Benchmark${suite.name}\``).join(' and ')}, so it was measured with the PR's scenarios.`
         : ''),
     '',
-    `Logs use real 1, 128, and 256 MiB files: ${logOpenTime} for opening and ${logScrollTime} for scrolling per pass. ` +
-      'Fixtures are generated once outside timing and shared across both checkouts; opening measures file loading through the first frame, scrolling samples the beginning, middle, and end. Reads may use the OS file cache.',
     'Allocated bytes measure total allocation per operation, not peak or retained RAM.',
+    '',
+    `Logs are opened by each side's built \`ttt\` binary, ${logBenchTime} per pass, timed from launch until the first frame shows the log. ` +
+      'Time includes process startup, so the 1 MiB case is mostly startup; peak RSS is the process\'s maximum resident memory. ' +
+      'The 1, 128, and 256 MiB fixtures are generated once outside timing and shared across both checkouts, so reads may use the OS file cache.',
   ];
   let compared = 0;
   for (const suite of suites) {
@@ -139,34 +151,51 @@ try {
         const mean = Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length);
         return `**${percent(mean, 1)}**`;
       };
-      lines.push(
-        `Geometric-mean change: time ${geomean('ns')}, allocated bytes ${geomean('bytes')}, allocations ${geomean('allocs')}.`,
-        '',
-        '<details>',
-        '<summary>Click here to see benchmark details</summary>',
-        '',
-        '| Benchmark | Base | PR | Time change | Base allocs | PR allocs | Allocation change |',
-        '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
-      );
-      for (const name of names) {
-        const before = base[name];
-        const after = head[name];
+      if (suite.process) {
         lines.push(
-          `| ${name} | ${duration(before.ns)} | ${duration(after.ns)} | ${percent(after.ns, before.ns)} | ` +
-            `${before.allocs} | ${after.allocs} | ${percent(after.allocs, before.allocs)} |`,
+          `Geometric-mean change: time ${geomean('ns')}, peak RSS ${geomean('rss')}.`,
+          '',
+          '| Benchmark | Base | PR | Time change | Base peak RSS | PR peak RSS | Peak RSS change |',
+          '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
         );
+        for (const name of names) {
+          const before = base[name];
+          const after = head[name];
+          lines.push(
+            `| ${name} | ${duration(before.ns)} | ${duration(after.ns)} | ${percent(after.ns, before.ns)} | ` +
+              `${memory(before.rss)} | ${memory(after.rss)} | ${percent(after.rss, before.rss)} |`,
+          );
+        }
+      } else {
+        lines.push(
+          `Geometric-mean change: time ${geomean('ns')}, allocated bytes ${geomean('bytes')}, allocations ${geomean('allocs')}.`,
+          '',
+          '<details>',
+          '<summary>Click here to see benchmark details</summary>',
+          '',
+          '| Benchmark | Base | PR | Time change | Base allocs | PR allocs | Allocation change |',
+          '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+        );
+        for (const name of names) {
+          const before = base[name];
+          const after = head[name];
+          lines.push(
+            `| ${name} | ${duration(before.ns)} | ${duration(after.ns)} | ${percent(after.ns, before.ns)} | ` +
+              `${before.allocs} | ${after.allocs} | ${percent(after.allocs, before.allocs)} |`,
+          );
+        }
+        lines.push(
+          '',
+          '| Benchmark | Base allocated bytes | PR allocated bytes | Change |',
+          '| --- | ---: | ---: | ---: |',
+        );
+        for (const name of names) {
+          const before = base[name];
+          const after = head[name];
+          lines.push(`| ${name} | ${memory(before.bytes)} | ${memory(after.bytes)} | ${percent(after.bytes, before.bytes)} |`);
+        }
+        lines.push('', '</details>');
       }
-      lines.push(
-        '',
-        '| Benchmark | Base allocated bytes | PR allocated bytes | Change |',
-        '| --- | ---: | ---: | ---: |',
-      );
-      for (const name of names) {
-        const before = base[name];
-        const after = head[name];
-        lines.push(`| ${name} | ${memory(before.bytes)} | ${memory(after.bytes)} | ${percent(after.bytes, before.bytes)} |`);
-      }
-      lines.push('', '</details>');
     }
     if (added.length) lines.push('', `New in this PR: ${added.map((name) => `\`${name}\``).join(', ')}.`);
   }
