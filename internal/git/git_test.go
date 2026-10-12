@@ -819,7 +819,7 @@ func TestBlameLineBasic(t *testing.T) {
 	gitRun(t, dir, "add", "file.txt")
 	gitRun(t, dir, "commit", "-m", "add file")
 
-	info := BlameLine(dir, "file.txt", 1)
+	info := BlameLine(context.Background(), dir, "file.txt", 1)
 	if info == nil {
 		t.Fatal("BlameLine returned nil, expected info")
 	}
@@ -828,6 +828,19 @@ func TestBlameLineBasic(t *testing.T) {
 	}
 	if info.Time.IsZero() {
 		t.Error("Time is zero, expected a valid timestamp")
+	}
+}
+
+func TestBlameLineCanceled(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, "file.txt", "line one\n")
+	gitRun(t, dir, "add", "file.txt")
+	gitRun(t, dir, "commit", "-m", "add file")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if info := BlameLineContents(ctx, dir, "file.txt", 1, "line one\n"); info != nil {
+		t.Errorf("canceled blame returned %+v, want nil", info)
 	}
 }
 
@@ -843,12 +856,12 @@ func TestBlameLineDifferentLines(t *testing.T) {
 	gitRun(t, dir, "commit", "-m", "second commit")
 
 	// Line 1 should reference "first commit"
-	info1 := BlameLine(dir, "file.txt", 1)
+	info1 := BlameLine(context.Background(), dir, "file.txt", 1)
 	if info1 == nil {
 		t.Fatal("BlameLine(line 1) returned nil")
 	}
 	// Line 2 should reference "second commit"
-	info2 := BlameLine(dir, "file.txt", 2)
+	info2 := BlameLine(context.Background(), dir, "file.txt", 2)
 	if info2 == nil {
 		t.Fatal("BlameLine(line 2) returned nil")
 	}
@@ -863,7 +876,7 @@ func TestBlameLineUncommittedReturnsNil(t *testing.T) {
 	// Add an uncommitted line
 	writeFile(t, dir, "file.txt", "committed\nuncommitted\n")
 
-	info := BlameLine(dir, "file.txt", 2)
+	info := BlameLine(context.Background(), dir, "file.txt", 2)
 	if info != nil {
 		t.Errorf("expected nil for uncommitted line, got %+v", info)
 	}
@@ -878,13 +891,13 @@ func TestBlameLineContentsUsesUnsavedLineNumbers(t *testing.T) {
 	gitRun(t, dir, "-c", "user.name=Second Author", "commit", "-am", "second")
 
 	contents := "unsaved\nfirst\nsecond\n"
-	if info := BlameLineContents(dir, "file.txt", 1, contents); info != nil {
+	if info := BlameLineContents(context.Background(), dir, "file.txt", 1, contents); info != nil {
 		t.Errorf("unsaved line: got %+v, want nil", info)
 	}
-	if info := BlameLineContents(dir, "file.txt", 2, contents); info == nil || info.Author != "First Author" {
+	if info := BlameLineContents(context.Background(), dir, "file.txt", 2, contents); info == nil || info.Author != "First Author" {
 		t.Errorf("line 2: got %+v, want First Author", info)
 	}
-	if info := BlameLineContents(dir, "file.txt", 3, contents); info == nil || info.Author != "Second Author" {
+	if info := BlameLineContents(context.Background(), dir, "file.txt", 3, contents); info == nil || info.Author != "Second Author" {
 		t.Errorf("line 3: got %+v, want Second Author", info)
 	}
 }
@@ -895,7 +908,7 @@ func TestBlameLineNonexistentFile(t *testing.T) {
 	gitRun(t, dir, "add", "file.txt")
 	gitRun(t, dir, "commit", "-m", "init")
 
-	info := BlameLine(dir, "nonexistent.txt", 1)
+	info := BlameLine(context.Background(), dir, "nonexistent.txt", 1)
 	if info != nil {
 		t.Errorf("expected nil for nonexistent file, got %+v", info)
 	}
@@ -908,7 +921,7 @@ func TestBlameLineInvalidLineNumber(t *testing.T) {
 	gitRun(t, dir, "commit", "-m", "init")
 
 	// Line 999 doesn't exist
-	info := BlameLine(dir, "file.txt", 999)
+	info := BlameLine(context.Background(), dir, "file.txt", 999)
 	if info != nil {
 		t.Errorf("expected nil for out-of-range line, got %+v", info)
 	}
@@ -920,7 +933,7 @@ func TestBlameLineTimeIsRecent(t *testing.T) {
 	gitRun(t, dir, "add", "file.txt")
 	gitRun(t, dir, "commit", "-m", "now")
 
-	info := BlameLine(dir, "file.txt", 1)
+	info := BlameLine(context.Background(), dir, "file.txt", 1)
 	if info == nil {
 		t.Fatal("BlameLine returned nil")
 	}

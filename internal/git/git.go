@@ -454,22 +454,22 @@ type BlameInfo struct {
 	Time   time.Time
 }
 
-func BlameLine(dir, file string, line int) *BlameInfo {
-	return blameLine(dir, file, line, nil)
+func BlameLine(ctx context.Context, dir, file string, line int) *BlameInfo {
+	return blameLine(ctx, dir, file, line, nil)
 }
 
 // BlameLineContents blames line of contents, the unsaved text of file, so
 // line numbers match the editor rather than the file on disk.
-func BlameLineContents(dir, file string, line int, contents string) *BlameInfo {
-	return blameLine(dir, file, line, &contents)
+func BlameLineContents(ctx context.Context, dir, file string, line int, contents string) *BlameInfo {
+	return blameLine(ctx, dir, file, line, &contents)
 }
 
-func blameLine(dir, file string, line int, contents *string) *BlameInfo {
+func blameLine(ctx context.Context, dir, file string, line int, contents *string) *BlameInfo {
 	args := []string{"-C", dir, "blame", "-L", fmt.Sprintf("%d,%d", line, line), "--porcelain"}
 	if contents != nil {
 		args = append(args, "--contents", "-")
 	}
-	cmd := exec.Command("git", append(args, "--", file)...)
+	cmd := gitCommandContext(ctx, append(args, "--", file)...)
 	if contents != nil {
 		cmd.Stdin = strings.NewReader(*contents)
 	}

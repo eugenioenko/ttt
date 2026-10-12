@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +58,8 @@ func RunEventLoop(
 	lastCursorFile := ""
 	lastBlameRepo := ""
 	blameGen := 0
+	cancelBlame := func() {}
+	defer func() { cancelBlame() }()
 
 	syncStatus := func() {
 		app.syncRepositoryObservation()
@@ -147,27 +151,32 @@ func RunEventLoop(
 			lastBlameLine = line
 			lastBlameRepo = repoDir
 			blameGen++
+			cancelBlame()
 			app.Status.SetSegment(view.StatusSegment{ID: "blame", Side: "left", Priority: 200, Text: ""})
+			blameFile, ok := "", false
 			if repoDir != "" {
+				blameFile, ok = app.Repository.gitRelativePath(repoDir, filePath)
+			}
+			if ok {
 				gen := blameGen
 				blameLine := line + 1
-				blameFile, ok := app.Repository.gitRelativePath(repoDir, filePath)
-				var contents *string
+				var lines []string
+				eol := "\n"
 				if buf := app.EditorGroup.ActiveBuffer(); buf != nil && buf.Dirty {
-					eol := buf.LineEnding
-					if eol == "" {
-						eol = "\n"
+					lines = slices.Clone(buf.Lines)
+					if buf.LineEnding != "" {
+						eol = buf.LineEnding
 					}
-					text := strings.Join(buf.Lines, eol)
-					contents = &text
 				}
+				ctx, cancel := context.WithCancel(context.Background())
+				cancelBlame = cancel
 				go func() {
+					defer cancel()
 					var info *git.BlameInfo
-					switch {
-					case ok && contents != nil:
-						info = git.BlameLineContents(repoDir, blameFile, blameLine, *contents)
-					case ok:
-						info = git.BlameLine(repoDir, blameFile, blameLine)
+					if lines != nil {
+						info = git.BlameLineContents(ctx, repoDir, blameFile, blameLine, strings.Join(lines, eol))
+					} else {
+						info = git.BlameLine(ctx, repoDir, blameFile, blameLine)
 					}
 					screen.PostEvent(tcell.NewEventInterrupt(&BlameResult{Gen: gen, Info: info}))
 				}()

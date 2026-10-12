@@ -350,7 +350,7 @@ func TestGitRelativePathEnablesBlameForExternalFileSymlink(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	if info := git.BlameLine(repo, link, 1); info != nil {
+	if info := git.BlameLine(context.Background(), repo, link, 1); info != nil {
 		t.Fatalf("raw external blame = %+v, want nil", info)
 	}
 
@@ -359,7 +359,7 @@ func TestGitRelativePathEnablesBlameForExternalFileSymlink(t *testing.T) {
 	if !ok || blamePath != "nested/blamed.txt" {
 		t.Fatalf("canonical blame path = (%q, %t), want nested/blamed.txt", blamePath, ok)
 	}
-	info := git.BlameLine(repo, blamePath, 1)
+	info := git.BlameLine(context.Background(), repo, blamePath, 1)
 	if info == nil || info.Author != "Test User" {
 		t.Fatalf("canonical blame = %+v, want Test User", info)
 	}
