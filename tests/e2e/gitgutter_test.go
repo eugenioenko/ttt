@@ -3,6 +3,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
@@ -21,8 +22,9 @@ func TestGitGutterSkipsIgnoredFiles(t *testing.T) {
 	h.app.RequestGitGutterForActiveFile()
 	awaitGitGutter(t, h)
 	changes := h.app.EditorGroup.Editor.LineChanges
-	if len(changes) == 0 || changes[0] != diff.LineAdded {
-		t.Fatalf("untracked file gutter = %v, want every line added", changes)
+	lines := h.app.EditorGroup.ActiveBuffer().Lines
+	if len(changes) != len(lines) || slices.ContainsFunc(changes, func(c diff.LineChangeKind) bool { return c != diff.LineAdded }) {
+		t.Fatalf("untracked file gutter = %v for %d lines, want every line added", changes, len(lines))
 	}
 
 	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "app.log"))
