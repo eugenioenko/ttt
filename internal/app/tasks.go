@@ -9,13 +9,14 @@ import (
 type taskDelivery struct{ run func() }
 
 type taskOwner struct {
-	post   asynctask.Post
-	tasks  []interface{ Close() }
+	post  asynctask.Post
+	tasks []interface {
+		Close()
+		SetPost(asynctask.Post)
+	}
 	closed bool
 }
 
-// Create UI tasks after Init wires delivery. Without initialization, tasks run
-// synchronously, even when a simulation screen is present in the E2E harness.
 func NewTask[T any](a *App, options asynctask.TaskOptions) *asynctask.Task[T] {
 	task := asynctask.New[T](options, a.tasks.post)
 	if a.tasks.closed {
@@ -27,8 +28,14 @@ func NewTask[T any](a *App, options asynctask.TaskOptions) *asynctask.Task[T] {
 }
 
 func (a *App) initTaskDelivery(screen *term.TcellScreen) {
-	a.tasks.post = func(run func()) error {
-		return screen.PostEvent(tcell.NewEventInterrupt(&taskDelivery{run: run}))
+	a.tasks.post = nil
+	if screen != nil {
+		a.tasks.post = func(run func()) error {
+			return screen.PostEvent(tcell.NewEventInterrupt(&taskDelivery{run: run}))
+		}
+	}
+	for _, task := range a.tasks.tasks {
+		task.SetPost(a.tasks.post)
 	}
 }
 

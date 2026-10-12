@@ -55,10 +55,11 @@ func (r *taskRig) drain() {
 		fn()
 	}
 }
-func newTaskRig(delay, maxWait time.Duration) (*Task[int], *taskRig) {
+func newTaskRig(options TaskOptions) (*Task[int], *taskRig) {
 	r := &taskRig{now: time.Unix(1, 0)}
-	task := New[int](TaskOptions{Delay: delay, MaxWait: maxWait, Clock: r,
-		Run: func(fn func()) { r.work = append(r.work, fn) }}, func(fn func()) error {
+	options.Clock = r
+	options.Run = func(fn func()) { r.work = append(r.work, fn) }
+	task := New[int](options, func(fn func()) error {
 		r.posts = append(r.posts, fn)
 		return nil
 	})
@@ -75,7 +76,7 @@ func (r *taskRig) apply(value int, err error) {
 }
 
 func TestDebounceLatestAndPending(t *testing.T) {
-	task, r := newTaskRig(10*time.Second, 0)
+	task, r := newTaskRig(TaskOptions{Delay: 10 * time.Second})
 	task.Schedule(r.read(1), r.apply)
 	r.advance(8 * time.Second)
 	task.Schedule(r.read(2), r.apply)
@@ -102,7 +103,7 @@ func TestDebounceLatestAndPending(t *testing.T) {
 func TestMaxWaitAndFlushRunLatest(t *testing.T) {
 	for _, flush := range []bool{false, true} {
 		t.Run(map[bool]string{false: "max wait", true: "flush"}[flush], func(t *testing.T) {
-			task, r := newTaskRig(10*time.Second, 25*time.Second)
+			task, r := newTaskRig(TaskOptions{Delay: 10 * time.Second, MaxWait: 25 * time.Second})
 			for value := 1; value <= 4; value++ {
 				task.Schedule(r.read(value), r.apply)
 				if value < 4 {
@@ -134,7 +135,7 @@ func TestMaxWaitAndFlushRunLatest(t *testing.T) {
 }
 
 func TestKeyDedupThroughCompletionAndInvalidation(t *testing.T) {
-	task, r := newTaskRig(time.Second, 0)
+	task, r := newTaskRig(TaskOptions{Delay: time.Second})
 	key := struct{ File string }{"file.go"}
 	same := func() { task.ScheduleKey(key, r.read(1), r.apply) }
 	same()
@@ -174,7 +175,7 @@ func TestKeyDedupThroughCompletionAndInvalidation(t *testing.T) {
 func TestQueuedDeliveryRejectedAfterLifecycleChange(t *testing.T) {
 	for _, action := range []string{"supersede", "stop", "close"} {
 		t.Run(action, func(t *testing.T) {
-			task, r := newTaskRig(0, 0)
+			task, r := newTaskRig(TaskOptions{})
 			task.ScheduleKey("key", r.read(1), r.apply)
 			r.work[0]()
 			r.work = nil
@@ -275,5 +276,139 @@ func TestPostFailureAllowsRetry(t *testing.T) {
 	}
 	if posts != 2 {
 		t.Fatal("failed post retained its key")
+	}
+}
+
+func TestKeepRunningDeliversUnderContinuousInput(t *testing.T) {
+	task, r := newTaskRig(TaskOptions{
+		Delay: 200 * time.Millisecond, MaxWait: 250 * time.Millisecond, KeepRunning: true,
+	})
+	active := 0
+	task.options.Run = func(fn func()) {
+		active++
+		if active > 1 {
+			t.Fatal("refresh work overlapped")
+		}
+		r.AfterFunc(300*time.Millisecond, func() {
+			fn()
+			active--
+		})
+	}
+	for value := 1; value <= 12; value++ {
+		task.Schedule(func(ctx context.Context) (int, error) {
+			if ctx.Err() != nil {
+				t.Fatal("continuous input cancelled active refresh")
+			}
+			return value, nil
+		}, r.apply)
+		r.advance(100 * time.Millisecond)
+		r.drain()
+	}
+	if len(r.values) < 3 {
+		t.Fatalf("refreshes starved: values = %v", r.values)
+	}
+	for remaining := 0; remaining < 4 && task.Pending(); remaining++ {
+		r.advance(300 * time.Millisecond)
+		r.drain()
+	}
+	if task.Pending() || r.values[len(r.values)-1] != 12 {
+		t.Fatalf("latest refresh was lost: values = %v", r.values)
+	}
+}
+
+func TestKeepRunningFlushesLatestQueueAfterDelivery(t *testing.T) {
+	task, r := newTaskRig(TaskOptions{Delay: time.Second, KeepRunning: true})
+	task.Schedule(r.read(1), r.apply)
+	r.advance(time.Second)
+	task.Schedule(r.read(2), r.apply)
+	task.Schedule(r.read(3), r.apply)
+	task.Flush()
+	if len(r.work) != 1 {
+		t.Fatal("Flush overlapped active work")
+	}
+	r.drain()
+	if len(r.values) != 1 || r.values[0] != 1 || !task.Pending() || len(r.work) != 1 {
+		t.Fatalf("active result or queued refresh missing: values = %v", r.values)
+	}
+	r.drain()
+	if len(r.values) != 2 || r.values[1] != 3 || task.Pending() {
+		t.Fatalf("expected only latest queued refresh: values = %v", r.values)
+	}
+}
+
+func TestKeepRunningLifecycleCancelsQueue(t *testing.T) {
+	for _, closeTask := range []bool{false, true} {
+		task, r := newTaskRig(TaskOptions{KeepRunning: true})
+		task.Schedule(r.read(1), r.apply)
+		r.work[0]()
+		r.work = nil
+		task.Schedule(r.read(2), r.apply)
+		if closeTask {
+			task.Close()
+		} else {
+			task.Stop()
+		}
+		r.drain()
+		if task.Pending() || len(r.values) != 0 || len(r.work) != 0 {
+			t.Fatal("lifecycle cancellation left active or queued work")
+		}
+	}
+}
+
+func TestKeepRunningReentrantApplyReplacesQueue(t *testing.T) {
+	task, r := newTaskRig(TaskOptions{KeepRunning: true})
+	task.Schedule(r.read(1), func(value int, err error) {
+		r.apply(value, err)
+		task.Schedule(r.read(3), r.apply)
+	})
+	task.Schedule(r.read(2), r.apply)
+	r.drain()
+	r.drain()
+	if len(r.values) != 2 || r.values[0] != 1 || r.values[1] != 3 || task.Pending() {
+		t.Fatalf("reentrant apply resurrected old queue: values = %v", r.values)
+	}
+}
+
+func TestKeepRunningPostFailurePreservesLatestQueue(t *testing.T) {
+	task, r := newTaskRig(TaskOptions{KeepRunning: true})
+	posts := 0
+	task.SetPost(func(fn func()) error {
+		posts++
+		if posts == 1 {
+			return errors.New("posting failed")
+		}
+		r.posts = append(r.posts, fn)
+		return nil
+	})
+	task.ScheduleKey("first", r.read(1), r.apply)
+	task.ScheduleKey("latest", r.read(2), r.apply)
+	r.drain()
+	task.ScheduleKey("latest", r.read(3), r.apply)
+	if len(r.values) != 1 || r.values[0] != 2 || task.Pending() {
+		t.Fatalf("post failure lost queued refresh or retained key: values = %v", r.values)
+	}
+}
+
+func TestSetPostRebindsDeliveryAndInvalidatesOldResults(t *testing.T) {
+	task, r := newTaskRig(TaskOptions{KeepRunning: true})
+	post := task.post
+	task.SetPost(nil)
+	task.ScheduleKey("key", r.read(1), r.apply)
+	if len(r.values) != 1 {
+		t.Fatal("nil poster did not execute inline")
+	}
+	task.SetPost(post)
+	task.ScheduleKey("key", r.read(2), r.apply)
+	if len(r.values) != 1 || len(r.work) != 1 {
+		t.Fatal("rebinding kept inline execution or retained the key")
+	}
+	r.work[0]()
+	r.work = nil
+	task.ScheduleKey("next", r.read(3), r.apply)
+	task.SetPost(nil)
+	task.ScheduleKey("key", r.read(4), r.apply)
+	r.drain()
+	if len(r.values) != 2 || r.values[1] != 4 || task.Pending() {
+		t.Fatalf("old delivery applied after rebinding: values = %v", r.values)
 	}
 }

@@ -35,7 +35,6 @@ func RunEventLoop(
 	running *bool,
 	closeTerminal func(panelID string),
 ) {
-	app.initTaskDelivery(screen)
 	app.eventLoopDoneSignal()
 	defer app.closeEventLoopDone()
 	defer app.Root.CancelPointerCapture()

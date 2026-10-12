@@ -42,6 +42,7 @@ func prepareListenTestApp(t *testing.T) *App {
 
 func startListenTestEventLoop(t *testing.T, a *App) {
 	t.Helper()
+	a.initTaskDelivery(a.Screen)
 	loopDone := make(chan struct{})
 	go func() {
 		RunEventLoop(a.Screen, a.Renderer, a, a.Running, a.CloseTerminal)
