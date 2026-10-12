@@ -2,7 +2,6 @@ package buffer
 
 import (
 	"bufio"
-	"bytes"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,16 +17,16 @@ func (b *Buffer) LoadFile(filename string) error {
 	defer f.Close()
 
 	info, statErr := f.Stat()
-	var data []byte
+	var sb strings.Builder
 	if statErr == nil && info.Mode().IsRegular() && info.Size() > 0 {
-		data = make([]byte, 0, info.Size()+1)
+		sb.Grow(int(info.Size()))
 	}
-	data, err = readAllInto(f, data)
-	if err != nil {
+	if _, err := io.Copy(&sb, f); err != nil {
 		return err
 	}
-	b.LineEnding = detectLineEnding(data)
-	lines := splitFileLines(string(data))
+	text := sb.String()
+	b.LineEnding = detectLineEnding(text)
+	lines := splitFileLines(text)
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
@@ -40,24 +39,6 @@ func (b *Buffer) LoadFile(filename string) error {
 		b.recordDiskInfo(info)
 	}
 	return nil
-}
-
-// readAllInto is io.ReadAll appending to data, so a buffer sized from the
-// file's length is filled without regrowing.
-func readAllInto(r io.Reader, data []byte) ([]byte, error) {
-	for {
-		if len(data) == cap(data) {
-			data = append(data, 0)[:len(data)]
-		}
-		n, err := r.Read(data[len(data):cap(data)])
-		data = data[:len(data)+n]
-		if err == io.EOF {
-			return data, nil
-		}
-		if err != nil {
-			return data, err
-		}
-	}
 }
 
 // splitFileLines splits like bufio.ScanLines, with every line a substring of
@@ -77,8 +58,8 @@ func splitFileLines(text string) []string {
 
 // detectLineEnding checks the first 64KB of a file's contents for its line ending.
 // Returns "\r\n" if CRLF is found, "\n" otherwise.
-func detectLineEnding(data []byte) string {
-	if bytes.Contains(data[:min(len(data), 64*1024)], []byte("\r\n")) {
+func detectLineEnding(text string) string {
+	if strings.Contains(text[:min(len(text), 64*1024)], "\r\n") {
 		return "\r\n"
 	}
 	return "\n"
