@@ -172,6 +172,9 @@ func RunEventLoop(
 				cancelBlame = cancel
 				go func() {
 					defer cancel()
+					if ctx.Err() != nil {
+						return
+					}
 					var info *git.BlameInfo
 					if lines != nil {
 						info = git.BlameLineContents(ctx, repoDir, blameFile, blameLine, strings.Join(lines, eol))
