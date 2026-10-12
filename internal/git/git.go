@@ -680,14 +680,13 @@ func IgnoredFilesContext(ctx context.Context, dir string, paths []string) map[st
 	if len(paths) == 0 {
 		return nil
 	}
-	args := append([]string{"-C", dir, "check-ignore"}, paths...)
-	cmd := gitCommandContext(ctx, args...)
+	cmd := gitCommandContext(ctx, "-C", dir, "check-ignore", "--stdin", "-z")
+	cmd.Stdin = strings.NewReader(strings.Join(paths, "\x00") + "\x00")
 	out, _ := cmd.Output()
 	result := make(map[string]bool)
-	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			result[line] = true
+	for _, path := range strings.Split(string(out), "\x00") {
+		if path != "" {
+			result[path] = true
 		}
 	}
 	return result

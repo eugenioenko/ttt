@@ -1215,6 +1215,21 @@ func TestStageReportsError(t *testing.T) {
 	}
 }
 
+func TestIgnoredFilesMatchesNonASCIIPaths(t *testing.T) {
+	dir := setupTestRepo(t)
+	writeFile(t, dir, ".gitignore", "*.log\n")
+	paths := []string{
+		filepath.Join(dir, "café.log"),
+		filepath.Join(dir, `say "hi".log`),
+		filepath.Join(dir, "main.go"),
+	}
+
+	ignored := IgnoredFiles(dir, paths)
+	if !ignored[paths[0]] || !ignored[paths[1]] || ignored[paths[2]] {
+		t.Errorf("IgnoredFiles = %v, want the two .log paths", ignored)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DiscoverChildRepos
 // ---------------------------------------------------------------------------
