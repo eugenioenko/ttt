@@ -179,7 +179,7 @@ jobs:
         run: go test ./...
 
   bench-editor:
-    name: Base vs PR editor and diff benchmarks
+    name: Base vs PR editor, diff, and log benchmarks
     needs: classify
     if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
@@ -213,6 +213,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           COUNT: "3"
           BENCH_TIME: 5x
+          LOG_OPEN_BENCH_TIME: 1x
+          LOG_SCROLL_BENCH_TIME: 100x
           REPORT_FILE: ${{ runner.temp }}/editor-bench.md
         run: node scripts/bench-compare.mjs
 

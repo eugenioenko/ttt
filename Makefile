@@ -1,6 +1,6 @@
 # Makefile for ttt - terminal text editor
 
-.PHONY: all test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff
+.PHONY: all test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff bench-log
 
 all: build
 
@@ -30,6 +30,13 @@ bench-editor:
 # Diff view benchmarks (split, unified, wrap, open changes, commit detail).
 bench-diff:
 	go test -run '^$$' -bench 'Diff/$(BENCH_LANG)' -benchmem -benchtime $(BENCH_TIME) $(BENCH_FLAGS) ./tests/e2e/
+
+LOG_OPEN_BENCH_TIME ?= 1x
+LOG_SCROLL_BENCH_TIME ?= 100x
+BENCH_LOG_SIZE ?= 1MiB|128MiB|256MiB
+bench-log:
+	go test -run '^$$' -bench '^BenchmarkLog$$/^($(BENCH_LOG_SIZE))$$/^open$$' -benchmem -benchtime $(LOG_OPEN_BENCH_TIME) $(BENCH_FLAGS) ./tests/e2e/
+	go test -run '^$$' -bench '^BenchmarkLog$$/^($(BENCH_LOG_SIZE))$$/^wheel_scroll$$' -benchmem -benchtime $(LOG_SCROLL_BENCH_TIME) $(BENCH_FLAGS) ./tests/e2e/
 
 fmt:
 	$(GOFMT) -w .

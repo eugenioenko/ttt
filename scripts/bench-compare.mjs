@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Compares BenchmarkEditor and BenchmarkDiff between a base checkout (BASE_DIR)
+// Compares editor, diff, and log benchmarks between a base checkout (BASE_DIR)
 // and this one on the same machine, alternating passes, and writes a Markdown
 // report with one table per suite.
 //
@@ -15,10 +15,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const baseDir = path.resolve(process.env.BASE_DIR ?? '');
 const count = Number(process.env.COUNT ?? 3);
 const benchTime = process.env.BENCH_TIME ?? '5x';
+const logOpenTime = process.env.LOG_OPEN_BENCH_TIME ?? '1x';
+const logScrollTime = process.env.LOG_SCROLL_BENCH_TIME ?? '100x';
 const marker = '<!-- ttt-editor-benchmarks -->';
 const suites = [
   { name: 'Editor', title: 'Editor', file: 'tests/e2e/editor_bench_test.go' },
   { name: 'Diff', title: 'Diff views', file: 'tests/e2e/diff_bench_test.go' },
+  { name: 'Log', title: 'Log files', file: 'tests/e2e/log_bench_test.go' },
 ];
 const harnessFile = 'tests/e2e/harness_test.go';
 const fixtures = 'tests/e2e/testdata/bench';
@@ -38,12 +41,18 @@ if (overlaid.some((suite) => suite.name === 'Editor')) {
 }
 
 const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ttt-bench-'));
+const logDir = path.join(temporaryDir, 'logs');
+fs.mkdirSync(logDir);
 const sides = {
   base: { dir: baseDir, binary: path.join(temporaryDir, 'base.test'), results: {} },
   head: { dir: root, binary: path.join(temporaryDir, 'head.test'), results: {} },
 };
-const pattern = `^Benchmark(${suites.map((suite) => suite.name).join('|')})$`;
-const resultLine = new RegExp(`^Benchmark(${suites.map((suite) => suite.name).join('|')})\\/(\\S+?)(?:-\\d+)?\\s+\\d+\\s+([\\d.]+) ns\\/op.*?([\\d.]+) allocs\\/op`);
+const runs = [
+  { name: 'editor/diff', pattern: '^Benchmark(Editor|Diff)$', time: benchTime },
+  { name: 'log opening', pattern: '^BenchmarkLog$/./^open$', time: logOpenTime },
+  { name: 'log scrolling', pattern: '^BenchmarkLog$/./^wheel_scroll$', time: logScrollTime },
+];
+const resultLine = new RegExp(`^Benchmark(${suites.map((suite) => suite.name).join('|')})\\/(\\S+?)(?:-\\d+)?\\s+\\d+\\s+([\\d.]+) ns\\/op.*?([\\d.]+) B\\/op\\s+([\\d.]+) allocs\\/op`);
 const results = (side, suite) => {
   side.results[suite] ??= {};
   return side.results[suite];
@@ -54,22 +63,29 @@ function compile(side) {
 }
 
 function run(side) {
+  for (const scenario of runs) runScenarios(side, scenario);
+}
+
+function runScenarios(side, scenario) {
+  const started = performance.now();
   const output = execFileSync(
     side.binary,
-    ['-test.run', '^$', '-test.bench', pattern, '-test.benchmem', '-test.benchtime', benchTime, '-test.short'],
-    { cwd: path.join(side.dir, 'tests/e2e'), encoding: 'utf8', maxBuffer: 64 << 20 },
+    ['-test.run', '^$', '-test.bench', scenario.pattern, '-test.benchmem', '-test.benchtime', scenario.time, '-test.short'],
+    { cwd: path.join(side.dir, 'tests/e2e'), env: { ...process.env, TTT_BENCH_LOG_DIR: logDir }, encoding: 'utf8', maxBuffer: 64 << 20 },
   );
+  console.error(`${path.basename(side.binary)} ${scenario.name}: ${((performance.now() - started) / 1000).toFixed(1)} s`);
   for (const line of output.split('\n')) {
     const match = line.match(resultLine);
     if (!match) continue;
-    const [, suite, name, ns, allocs] = match;
+    const [, suite, name, ns, bytes, allocs] = match;
     const suiteResults = results(side, suite);
     const previous = suiteResults[name];
-    if (!previous || Number(ns) < previous.ns) suiteResults[name] = { ns: Number(ns), allocs: Number(allocs) };
+    if (!previous || Number(ns) < previous.ns) suiteResults[name] = { ns: Number(ns), bytes: Number(bytes), allocs: Number(allocs) };
   }
 }
 
 const duration = (ns) => ns >= 1e6 ? `${(ns / 1e6).toFixed(1)} ms` : `${(ns / 1e3).toFixed(0)} µs`;
+const memory = (bytes) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MiB` : `${bytes} B`;
 const percent = (next, previous) => {
   if (!previous) return 'n/a';
   const change = ((next / previous) - 1) * 100;
@@ -90,13 +106,17 @@ try {
   const short = (sha, fallback) => (sha ? sha.slice(0, 12) : fallback);
   const lines = [
     marker,
-    '## Editor and diff benchmarks',
+    '## Editor, diff, and log benchmarks',
     '',
     `Comparing \`${short(process.env.BASE_SHA, 'base')}\` with \`${short(process.env.HEAD_SHA, 'PR')}\` on the same runner: ` +
       `fastest of ${count} alternating passes at ${benchTime} each, \`-short\` (2,000-line large file).` +
       (overlaid.length
         ? ` The base predates ${overlaid.map((suite) => `\`Benchmark${suite.name}\``).join(' and ')}, so it was measured with the PR's scenarios.`
         : ''),
+    '',
+    `Logs use real 1, 128, and 256 MiB files: ${logOpenTime} for opening and ${logScrollTime} for scrolling per pass. ` +
+      'Fixtures are generated once outside timing and shared across both checkouts; opening measures file loading through the first frame, scrolling samples the beginning, middle, and end. Reads may use the OS file cache.',
+    'Allocated bytes measure total allocation per operation, not peak or retained RAM.',
   ];
   let compared = 0;
   for (const suite of suites) {
@@ -120,7 +140,7 @@ try {
         return `**${percent(mean, 1)}**`;
       };
       lines.push(
-        `Geometric-mean change: time ${geomean('ns')}, memory (allocations) ${geomean('allocs')}.`,
+        `Geometric-mean change: time ${geomean('ns')}, allocated bytes ${geomean('bytes')}, allocations ${geomean('allocs')}.`,
         '',
         '<details>',
         '<summary>Click here to see benchmark details</summary>',
@@ -135,6 +155,16 @@ try {
           `| ${name} | ${duration(before.ns)} | ${duration(after.ns)} | ${percent(after.ns, before.ns)} | ` +
             `${before.allocs} | ${after.allocs} | ${percent(after.allocs, before.allocs)} |`,
         );
+      }
+      lines.push(
+        '',
+        '| Benchmark | Base allocated bytes | PR allocated bytes | Change |',
+        '| --- | ---: | ---: | ---: |',
+      );
+      for (const name of names) {
+        const before = base[name];
+        const after = head[name];
+        lines.push(`| ${name} | ${memory(before.bytes)} | ${memory(after.bytes)} | ${percent(after.bytes, before.bytes)} |`);
       }
       lines.push('', '</details>');
     }
