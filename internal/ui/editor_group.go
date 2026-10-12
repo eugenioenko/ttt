@@ -116,7 +116,7 @@ type EditorGroupWidget struct {
 	TrimTrailingWhitespace  bool
 	UndoDeleteCursorStart   bool
 	Borders                 *term.BorderSet
-	OnFileOpen              func(path, lang, text string)
+	OnFileOpen              func(path, lang string, lines []string)
 	OnFileChange            func(path, lang, text string)
 	OnFileClose             func(path, lang string)
 	OnContentTabClose       func(id string)
@@ -443,7 +443,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 		g.SwitchTab(len(g.tabs) - 1)
 	}
 	if g.OnFileOpen != nil && newTab.Highlighter != nil {
-		g.OnFileOpen(path, newTab.Highlighter.Language(), strings.Join(newBuf.Lines, "\n"))
+		g.OnFileOpen(path, newTab.Highlighter.Language(), newBuf.Lines)
 	}
 }
 
@@ -1434,7 +1434,7 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 			t.Highlighter = nil
 		}
 		if g.OnFileOpen != nil && t.Highlighter != nil {
-			g.OnFileOpen(updated, t.Highlighter.Language(), strings.Join(t.Buf.Lines, "\n"))
+			g.OnFileOpen(updated, t.Highlighter.Language(), t.Buf.Lines)
 		}
 		renamed = true
 	}
@@ -1471,7 +1471,7 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 			g.OnFileClose(t.FilePath, prevLang)
 		}
 		if g.OnFileOpen != nil && lang != "" {
-			g.OnFileOpen(t.FilePath, lang, strings.Join(t.Buf.Lines, "\n"))
+			g.OnFileOpen(t.FilePath, lang, t.Buf.Lines)
 		}
 	}
 	g.syncTabs()

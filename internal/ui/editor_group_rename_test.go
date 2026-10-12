@@ -150,7 +150,7 @@ func TestRenamePathNotifiesLSPOfMove(t *testing.T) {
 
 	var closed, opened string
 	g.OnFileClose = func(path, _ string) { closed = path }
-	g.OnFileOpen = func(path, _, _ string) { opened = path }
+	g.OnFileOpen = func(path, _ string, _ []string) { opened = path }
 
 	newPath := filepath.Join(tmp, "new.go")
 	g.RenamePath(old, newPath)

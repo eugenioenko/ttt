@@ -655,8 +655,8 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.StatusNotify(msg)
 	}
 	a.EditorGroup.FlushNotifications()
-	a.EditorGroup.OnFileOpen = func(path, lang, text string) {
-		a.NotifyLSPOpen(path, lang, text)
+	a.EditorGroup.OnFileOpen = func(path, lang string, lines []string) {
+		a.NotifyLSPOpen(path, lang, lines)
 		a.RequestGitGutterForActiveFile()
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("file.open", path)
@@ -676,8 +676,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	if path := a.EditorGroup.ActiveFilePath(); path != "" {
 		if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {
 			lang := a.EditorGroup.Editor.Highlighter.Language()
-			text := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
-			a.NotifyLSPOpen(path, lang, text)
+			a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		}
 	}
 	a.Problems.OnNavigate = func(file string, line, col int) {
@@ -696,8 +695,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		if a.EditorGroup.Editor.Highlighter != nil {
 			lang = a.EditorGroup.Editor.Highlighter.Language()
 		}
-		text := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
-		changeDone := a.NotifyLSPChange(path, lang, text)
+		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.ScheduleAutocomplete()
 		a.CheckSignatureHelpTrigger(changeDone)
 		a.ScheduleGitGutter()

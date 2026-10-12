@@ -705,8 +705,7 @@ func (a *App) EnsureLSPOpen(path string) {
 	if a.EditorGroup.Editor.Highlighter != nil {
 		lang = a.EditorGroup.Editor.Highlighter.Language()
 	}
-	text := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
-	a.NotifyLSPOpen(path, lang, text)
+	a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
 }
 
 func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
@@ -941,7 +940,7 @@ func (a *App) lspWorkDir(path string) string {
 	return workDir
 }
 
-func (a *App) NotifyLSPOpen(path, lang, text string) {
+func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 	serverKey, langID, ok := a.lspResolve(path, lang)
 	if !ok {
 		return
@@ -971,6 +970,7 @@ func (a *App) NotifyLSPOpen(path, lang, text string) {
 		}
 	}
 
+	text := strings.Join(lines, "\n")
 	workDir := a.lspWorkDir(path)
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path] = 1
@@ -988,13 +988,14 @@ func (a *App) NotifyLSPOpen(path, lang, text string) {
 // The returned channel closes once the didChange notification has been sent,
 // so callers that must not race ahead of it (e.g. a signature-help request
 // for the same keystroke) can wait on it.
-func (a *App) NotifyLSPChange(path, lang, text string) <-chan struct{} {
+func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{} {
 	done := make(chan struct{})
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		close(done)
 		return done
 	}
+	text := strings.Join(lines, "\n")
 	workDir := a.lspWorkDir(path)
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path]++
@@ -1011,11 +1012,12 @@ func (a *App) NotifyLSPChange(path, lang, text string) <-chan struct{} {
 	return done
 }
 
-func (a *App) NotifyLSPSave(path, lang, text string) {
+func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		return
 	}
+	text := strings.Join(lines, "\n")
 	workDir := a.lspWorkDir(path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)

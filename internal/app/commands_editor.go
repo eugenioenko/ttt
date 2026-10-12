@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/diff"
@@ -245,8 +244,7 @@ func (a *App) doSaveFile() {
 
 func (a *App) afterFileSave(path, lang string) {
 	if lang != "" {
-		text := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
-		a.NotifyLSPSave(path, lang, text)
+		a.NotifyLSPSave(path, lang, a.EditorGroup.Editor.Buf.Lines)
 	}
 	a.RequestGitGutterForActiveFile()
 	a.RefreshSymbols()
