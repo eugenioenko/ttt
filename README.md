@@ -6,6 +6,8 @@ The IDE that lives in your terminal. A TUI that feels like GUI. A real alternati
 
 Full documentation lives in [`docs-web/src/content/docs/`](docs-web/src/content/docs/) (published at [tttedit.dev](https://tttedit.dev)).
 
+[![Live demo by Demoshell](https://build.demoshell.com/v1/embed/badge.svg)](https://build.demoshell.com/launch?snapshot=demoshell%2Ftui%3Attt&utm_source=badge)
+
 ## Installation
 
 ### Prerequisites
