@@ -372,6 +372,14 @@ pnpm install
 pnpm test
 ```
 
+To run the pinned LSP tests independently in GitHub Actions, open **Actions → LSP Tests → Run workflow**, select a branch, and choose `all`, `c`, `go`, or `typescript`. The same workflow runs in CI. With the GitHub CLI:
+
+```sh
+gh workflow run lsp-tests.yml --ref main -f language=go
+```
+
+The **LSP Latest Canary** workflow can also be triggered manually to test the broader set of servers at their latest versions.
+
 Use the smallest deterministic layer that proves an invariant. Functional tests are a compact real-binary contract, not a mandatory copy of lower-layer coverage. Add a broader test only when it establishes behavior unique to that boundary. CI runs the broad regression lanes on pull requests.
 
 ### Chaos Monkey (Fuzz Testing)
