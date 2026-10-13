@@ -36,7 +36,8 @@ func (a *App) currentCompletionTarget() completionTarget {
 	return completionTarget{buf: a.EditorGroup.ActiveBuffer(), line: line, start: start}
 }
 
-// ScheduleAutocomplete runs auto-suggest once typing pauses.
+// ScheduleAutocomplete runs auto-suggest once typing pauses, if the cursor is
+// still in the word being typed. Navigation does not stop the debounce.
 func (a *App) ScheduleAutocomplete() {
 	if !a.Settings.Autocomplete.Enabled || !a.Settings.Autocomplete.AutoSuggest {
 		return
@@ -49,10 +50,11 @@ func (a *App) ScheduleAutocomplete() {
 		a.completion.debounce = NewTask[struct{}](a, asynctask.TaskOptions{Delay: delay})
 		a.completion.delay = delay
 	}
+	target := a.currentCompletionTarget()
 	a.completion.debounce.Schedule(func(context.Context) (struct{}, error) {
 		return struct{}{}, nil
 	}, func(_ struct{}, err error) {
-		if err == nil {
+		if err == nil && a.currentCompletionTarget() == target {
 			a.HandleAutocompleteTrigger()
 		}
 	})

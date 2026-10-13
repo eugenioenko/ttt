@@ -23,7 +23,7 @@ afterEach(() => {
   dir = null;
 });
 
-function startCase(name, serverArgs = []) {
+function startCase(name, serverArgs = [], debounce = 100) {
   dir = createTempDir();
   const file = createTempFile(dir, `${name}.js`, INITIAL_TEXT);
   const trace = join(dir, "fake-lsp-trace.jsonl");
@@ -43,7 +43,7 @@ function startCase(name, serverArgs = []) {
         autocomplete: {
           enabled: true,
           autoSuggest: true,
-          debounce: 100,
+          debounce,
           signatureHelp: true,
         },
       },
@@ -235,6 +235,18 @@ describe("deterministic fake LSP protocol", () => {
 
     expect(snapshots[after]).toContain("consol");
     expect(snapshots[after]).not.toContain("console");
+  });
+
+  it("skips a pending auto-suggest once the cursor leaves the word being typed", () => {
+    const { trace: tracePath } = startCase("autosuggest-moved", [], 500);
+    tui.type("consol");
+    tui.press("up");
+    tui.elapse(800);
+    const after = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[after]).not.toContain("console");
+    expect(messagesFor(readTrace(tracePath), "textDocument/completion")).toEqual([]);
   });
 
   it("drops a signature help reply that arrives after the cursor left the call", () => {
