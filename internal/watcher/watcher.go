@@ -18,6 +18,10 @@ import (
 // uses to save) into one notification.
 const defaultDebounce = 150 * time.Millisecond
 
+// defaultMaxWait bounds the debounce under a continuous stream of events: a
+// log written every 100 ms never goes quiet for a full debounce window.
+const defaultMaxWait = time.Second
+
 // Watcher tracks a set of files and invokes onChange when one of them changes
 // on disk. onChange is called from an internal goroutine with the same path
 // string that was passed to Sync. SyncDirs tracks a parallel set of directories
@@ -27,6 +31,7 @@ type Watcher struct {
 	onChange    func(path string)
 	onDirChange func(dir string)
 	debounce    time.Duration
+	maxWait     time.Duration
 
 	mu        sync.Mutex
 	files     map[string]string // cleaned-abs path -> path as tracked
@@ -34,7 +39,11 @@ type Watcher struct {
 	dirRefs   map[string]int    // fsnotify-watched dir -> refcount (file parents + watchDirs)
 	timers    map[string]*time.Timer
 	dirTimers map[string]*time.Timer
-	closed    bool
+	// firstEvent and dirFirstEvent hold when the oldest unreported event
+	// arrived, for maxWait.
+	firstEvent    map[string]time.Time
+	dirFirstEvent map[string]time.Time
+	closed        bool
 }
 
 // New creates a Watcher and starts its event loop. The callbacks run on an
@@ -49,11 +58,15 @@ func New(onChange func(path string), onDirChange func(dir string)) (*Watcher, er
 		onChange:    onChange,
 		onDirChange: onDirChange,
 		debounce:    defaultDebounce,
+		maxWait:     defaultMaxWait,
 		files:       make(map[string]string),
 		watchDirs:   make(map[string]string),
 		dirRefs:     make(map[string]int),
 		timers:      make(map[string]*time.Timer),
 		dirTimers:   make(map[string]*time.Timer),
+
+		firstEvent:    make(map[string]time.Time),
+		dirFirstEvent: make(map[string]time.Time),
 	}
 	go w.run()
 	return w, nil
@@ -114,6 +127,7 @@ func (w *Watcher) SyncDirs(paths []string) {
 				t.Stop()
 				delete(w.dirTimers, key)
 			}
+			delete(w.dirFirstEvent, key)
 			w.releaseDirLocked(key)
 		}
 	}
@@ -164,6 +178,7 @@ func (w *Watcher) untrackLocked(key string) {
 		t.Stop()
 		delete(w.timers, key)
 	}
+	delete(w.firstEvent, key)
 	w.releaseDirLocked(filepath.Dir(key))
 }
 
@@ -201,13 +216,9 @@ func (w *Watcher) handle(key string) {
 		w.mu.Unlock()
 		return
 	}
-	if t := w.timers[key]; t != nil {
-		t.Stop()
-	}
-	w.timers[key] = time.AfterFunc(w.debounce, func() {
+	w.debounceLocked(w.timers, w.firstEvent, key, func() {
 		w.mu.Lock()
 		_, still := w.files[key]
-		delete(w.timers, key)
 		closed := w.closed
 		w.mu.Unlock()
 		if still && !closed {
@@ -215,6 +226,36 @@ func (w *Watcher) handle(key string) {
 		}
 	})
 	w.mu.Unlock()
+}
+
+// debounceLocked (re)starts key's timer to call fire once events pause for
+// the debounce window, or at most maxWait after the first unreported event.
+func (w *Watcher) debounceLocked(timers map[string]*time.Timer, first map[string]time.Time, key string, fire func()) {
+	now := time.Now()
+	start, waiting := first[key]
+	if !waiting {
+		start = now
+		first[key] = now
+	}
+	if t := timers[key]; t != nil {
+		t.Stop()
+	}
+	delay := min(w.debounce, max(0, w.maxWait-now.Sub(start)))
+	var timer *time.Timer
+	timer = time.AfterFunc(delay, func() {
+		w.mu.Lock()
+		// A timer that fired while a newer event replaced it must not clear
+		// the newer one's state.
+		if timers[key] != timer {
+			w.mu.Unlock()
+			return
+		}
+		delete(timers, key)
+		delete(first, key)
+		w.mu.Unlock()
+		fire()
+	})
+	timers[key] = timer
 }
 
 // handleDir debounces changes to a watched directory into one onDirChange call.
@@ -237,12 +278,8 @@ func (w *Watcher) handleDir(key string) {
 			return
 		}
 	}
-	if t := w.dirTimers[dirKey]; t != nil {
-		t.Stop()
-	}
-	w.dirTimers[dirKey] = time.AfterFunc(w.debounce, func() {
+	w.debounceLocked(w.dirTimers, w.dirFirstEvent, dirKey, func() {
 		w.mu.Lock()
-		delete(w.dirTimers, dirKey)
 		_, still := w.watchDirs[dirKey]
 		closed := w.closed
 		w.mu.Unlock()
@@ -269,6 +306,8 @@ func (w *Watcher) Close() error {
 		t.Stop()
 		delete(w.dirTimers, key)
 	}
+	clear(w.firstEvent)
+	clear(w.dirFirstEvent)
 	w.mu.Unlock()
 	return w.fsw.Close()
 }

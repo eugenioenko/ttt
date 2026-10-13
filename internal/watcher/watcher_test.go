@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,6 +47,35 @@ func (w *Watcher) setDebounce(d time.Duration) {
 	w.mu.Lock()
 	w.debounce = d
 	w.mu.Unlock()
+}
+
+func (w *Watcher) setMaxWait(d time.Duration) {
+	w.mu.Lock()
+	w.maxWait = d
+	w.mu.Unlock()
+}
+
+// writeContinuously calls write every interval until stop is closed.
+func writeContinuously(t *testing.T, interval time.Duration, stop <-chan struct{}, write func(i int) error) <-chan struct{} {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for i := 0; ; i++ {
+			if err := write(i); err != nil {
+				t.Error(err)
+				return
+			}
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	return done
 }
 
 func TestWatcherDetectsChange(t *testing.T) {
@@ -208,5 +238,53 @@ func TestWatcherDebouncesBurst(t *testing.T) {
 	// another full debounce window.
 	if got, ok := waitForChange(t, ch, 2*time.Second); ok {
 		t.Errorf("expected burst to be debounced, got extra notification %q", got)
+	}
+}
+
+func TestWatcherNotifiesWhileAFileKeepsChanging(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "app.log")
+	if err := os.WriteFile(file, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	w, ch := newTestWatcher(t)
+	// Writes arrive every 50 ms, well inside the debounce window, so only
+	// maxWait can produce a notification while they continue.
+	w.setDebounce(time.Second)
+	w.setMaxWait(300 * time.Millisecond)
+	w.Sync([]string{file})
+
+	stop := make(chan struct{})
+	done := writeContinuously(t, 50*time.Millisecond, stop, func(i int) error {
+		f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			return err
+		}
+		_, err = f.WriteString("line\n")
+		f.Close()
+		return err
+	})
+	defer func() { close(stop); <-done }()
+
+	if _, ok := waitForChange(t, ch, 3*time.Second); !ok {
+		t.Fatal("no notification while the file was written continuously")
+	}
+}
+
+func TestWatcherNotifiesWhileADirectoryKeepsChanging(t *testing.T) {
+	dir := t.TempDir()
+	w, ch := newTestDirWatcher(t)
+	w.setDebounce(time.Second)
+	w.setMaxWait(300 * time.Millisecond)
+	w.SyncDirs([]string{dir})
+
+	stop := make(chan struct{})
+	done := writeContinuously(t, 50*time.Millisecond, stop, func(i int) error {
+		return os.WriteFile(filepath.Join(dir, fmt.Sprintf("entry-%d", i)), nil, 0644)
+	})
+	defer func() { close(stop); <-done }()
+
+	if _, ok := waitForChange(t, ch, 3*time.Second); !ok {
+		t.Fatal("no notification while entries were created continuously")
 	}
 }
