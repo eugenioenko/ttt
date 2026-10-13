@@ -132,7 +132,7 @@ try {
       'Time includes process startup, so the 1 MiB case is mostly startup; peak RSS is the process\'s maximum resident memory. ' +
       'The 1, 128, and 256 MiB fixtures are generated once outside timing and shared across both checkouts, so reads may use the OS file cache.',
     '',
-    'Code files open a 64 MiB Go file, this repository\'s sources repeated, with LSP and the git gutter off; `_type` also types 20 characters before quitting.',
+    'Code files open a 64 MiB Go file, this repository\'s sources repeated, with LSP and the git gutter off; `_type` also types 20 characters and `_enter` presses Enter 10 times before quitting.',
   ];
   let compared = 0;
   for (const suite of suites) {

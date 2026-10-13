@@ -38,7 +38,7 @@ BENCH_LOG_SIZE ?= 1MiB|128MiB|256MiB
 bench-log:
 	go test -run '^$$' -bench '^BenchmarkLog$$/^($(BENCH_LOG_SIZE))(_wrap|_edit)?$$' -benchtime $(LOG_BENCH_TIME) $(BENCH_FLAGS) ./tests/bench/
 
-# Opens and types in a 64 MiB Go file in the built binary; reports time and peak RSS.
+# Opens, types, and presses Enter in a 64 MiB Go file in the built binary; reports time and peak RSS.
 bench-code:
 	go test -run '^$$' -bench '^BenchmarkCode$$' -benchtime $(LOG_BENCH_TIME) $(BENCH_FLAGS) ./tests/bench/
 

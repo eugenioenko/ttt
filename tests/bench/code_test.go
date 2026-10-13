@@ -60,7 +60,8 @@ func codeFile(b *testing.B, dir string, sizeMiB int) string {
 
 // BenchmarkCode opens a large Go file in the built binary with LSP and the
 // git gutter off, as the other editors in a comparison run. The _type variant
-// then types 20 characters, which re-highlights and refolds after each one.
+// then types 20 characters, which re-highlights after each one; _enter
+// presses Enter 10 times, which also adds a line and refolds the file.
 func BenchmarkCode(b *testing.B) {
 	dir := os.Getenv("TTT_BENCH_LOG_DIR")
 	if dir == "" {
@@ -75,6 +76,7 @@ func BenchmarkCode(b *testing.B) {
 	scripts := []struct{ name, script string }{
 		{"64MiB", "wait-for " + codeMarker + "; quit"},
 		{"64MiB_type", "wait-for " + codeMarker + ";" + strings.Repeat(" type x;", 20) + " quit"},
+		{"64MiB_enter", "wait-for " + codeMarker + ";" + strings.Repeat(" key enter;", 10) + " quit"},
 	}
 	for _, s := range scripts {
 		b.Run(s.name, func(b *testing.B) {

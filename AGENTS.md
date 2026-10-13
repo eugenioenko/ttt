@@ -18,7 +18,7 @@ make bench-editor # editor benchmarks per language (BENCH_LANG=ts, BENCH_TIME=5s
 make bench-diff   # diff view benchmarks (BENCH_LANG=go or commit_detail)
 make bench-log    # open real 1, 128, and 256 MiB logs in the built binary, wrap off and on, plus a dirty edit in a repo: time and peak RSS
 make bench-log BENCH_LOG_SIZE=1024MiB # manual 1 GiB log benchmark
-make bench-code   # open and type in a 64 MiB Go file in the built binary: time and peak RSS
+make bench-code   # open, type, and press Enter in a 64 MiB Go file in the built binary: time and peak RSS
 go test ./internal/core/buffer/   # run tests for a single package
 
 # Open a multi-folder workspace
