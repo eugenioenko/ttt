@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 )
@@ -168,11 +168,7 @@ func (a *App) ScheduleGitGutter() {
 // blobLines splits a blob the way buffer.LoadFile splits a file, so an
 // unchanged file diffs as identical rather than off by a trailing line.
 func blobLines(content string, showTrailingNewline bool) []string {
-	content = strings.ReplaceAll(content, "\r\n", "\n")
-	lines := strings.Split(content, "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
+	lines := buffer.SplitLines(content)
 	if len(lines) == 0 {
 		lines = []string{""}
 	}

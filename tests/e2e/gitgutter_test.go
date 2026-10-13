@@ -60,6 +60,9 @@ func TestGitGutterUnchangedCommittedFiles(t *testing.T) {
 			h.app.RequestGitGutterForActiveFile()
 			h.redraw()
 			changes := h.app.EditorGroup.Editor.LineChanges
+			if want := len(h.app.EditorGroup.ActiveBuffer().Lines); len(changes) != want {
+				t.Fatalf("unchanged file gutter has %d entries, want one per buffer line (%d)", len(changes), want)
+			}
 			if slices.ContainsFunc(changes, func(c diff.LineChangeKind) bool { return c != diff.LineUnchanged }) {
 				t.Fatalf("unchanged file gutter = %v, want no markers", changes)
 			}

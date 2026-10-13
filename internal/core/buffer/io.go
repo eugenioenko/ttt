@@ -26,7 +26,7 @@ func (b *Buffer) LoadFile(filename string) error {
 	}
 	text := sb.String()
 	b.LineEnding = detectLineEnding(text)
-	lines := splitFileLines(text)
+	lines := SplitLines(text)
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
@@ -41,9 +41,9 @@ func (b *Buffer) LoadFile(filename string) error {
 	return nil
 }
 
-// splitFileLines splits like bufio.ScanLines, with every line a substring of
+// SplitLines splits like bufio.ScanLines, with every line a substring of
 // text instead of its own allocation.
-func splitFileLines(text string) []string {
+func SplitLines(text string) []string {
 	lines := make([]string, 0, strings.Count(text, "\n")+1)
 	for text != "" {
 		line, rest, found := strings.Cut(text, "\n")
