@@ -543,7 +543,12 @@ func (a *App) ShowReferences(locs []lsp.Location) {
 	items := make([]ui.ReferenceItem, 0, len(locs))
 	for _, loc := range locs {
 		path := URIToPath(loc.URI)
-		text := ReadLineFromFile(path, loc.Range.Start.Line)
+		var text string
+		if buf := a.EditorGroup.BufferForPath(path); buf != nil && loc.Range.Start.Line < len(buf.Lines) {
+			text = buf.Lines[loc.Range.Start.Line]
+		} else {
+			text = ReadLineFromFile(path, loc.Range.Start.Line)
+		}
 		items = append(items, ui.ReferenceItem{
 			File: path,
 			Line: loc.Range.Start.Line,
