@@ -179,6 +179,10 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 				startCol = identCol
 				endCol = cursorCol
 			}
+		} else if cursorLine, identCol, cursorCol := a.identStart(); startLine == endLine && endLine == cursorLine && identCol <= endCol && endCol < cursorCol {
+			// The range covers the word as it was when completion was
+			// requested; characters typed since then belong to it too.
+			endCol = cursorCol
 		}
 	} else {
 		text = item.InsertText

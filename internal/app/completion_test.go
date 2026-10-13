@@ -84,3 +84,37 @@ func TestCompletionTriggersAreTheServersOwn(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionEditCoversCharactersTypedAfterTheRequest(t *testing.T) {
+	tests := []struct {
+		name, line string
+		cursor     int
+		start, end int
+		want       string
+		wantCol    int
+	}{
+		{"typed past the requested word", "x := str", 8, 5, 7, "x := string", 11},
+		{"range already reaches the cursor", "x := str", 8, 5, 8, "x := string", 11},
+		{"replace range past the cursor", "x := strz", 8, 5, 9, "x := string", 11},
+		{"not an identifier after the range", "x := st)", 8, 5, 7, "x := string)", 11},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := completionTestApp(t, "a.go", tt.line+"\n")
+			moveCursor(a, 0, tt.cursor)
+			a.insertCompletion(ui.CompletionItem{Label: "string"}, &lsp.TextEdit{
+				Range: lsp.Range{
+					Start: lsp.Position{Line: 0, Character: tt.start},
+					End:   lsp.Position{Line: 0, Character: tt.end},
+				},
+				NewText: "string",
+			})
+			if got := a.EditorGroup.ActiveBuffer().Lines[0]; got != tt.want {
+				t.Fatalf("line = %q, want %q", got, tt.want)
+			}
+			if _, col := a.EditorGroup.ActiveCursor(); col != tt.wantCol {
+				t.Fatalf("cursor col = %d, want %d", col, tt.wantCol)
+			}
+		})
+	}
+}
