@@ -1,12 +1,15 @@
 package highlight
 
 import (
+	"slices"
+
 	textmate "github.com/eugenioenko/textmate-go"
 )
 
 type lineDoc interface {
 	Len() int
 	SetLines(lines []string)
+	ReplaceLines(start, end int, replacement []string) error
 	Line(index int) (textmate.LineResult, bool)
 	StateAt(index int) (*textmate.StateStack, bool)
 	MaterializedLines() int
@@ -96,6 +99,22 @@ func (d *sharedDoc) SetLines(lines []string) {
 		d.partial = 0
 	}
 	d.retries = 0
+}
+
+// ReplaceLines keeps the states above the edit, as SetLines does.
+func (d *sharedDoc) ReplaceLines(start, end int, replacement []string) error {
+	if start < 0 || start > end || end > len(d.lines) {
+		return textmate.ErrInvalidLineRange
+	}
+	d.lines = slices.Replace(d.lines, start, end, replacement...)
+	d.cache.reserve(len(d.lines))
+	keep := min(start, len(d.states)-1)
+	d.states = d.states[:keep+1]
+	if d.partial > keep {
+		d.partial = 0
+	}
+	d.retries = 0
+	return nil
 }
 
 func (d *sharedDoc) Line(index int) (textmate.LineResult, bool) {

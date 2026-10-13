@@ -324,7 +324,7 @@ func (e *EditorPaneWidget) FlushOnChange() {
 		e.bracketColorDirty = true
 		e.bracketGen++
 		if e.Highlighter != nil {
-			e.Highlighter.ClearCache()
+			e.Highlighter.SyncBuffer(e.Buf)
 		}
 		if e.OnChange != nil {
 			e.OnChange()

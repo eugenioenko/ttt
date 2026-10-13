@@ -7,6 +7,7 @@ import (
 
 	textmate "github.com/eugenioenko/textmate-go"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -44,6 +45,10 @@ type Highlighter struct {
 	language string
 	doc      lineDoc
 	dirty    bool
+	// buf, version and lines identify what SyncBuffer last handed the document.
+	buf      *buffer.Buffer
+	version  uint64
+	lines    *string
 	isolated *singleLineCache
 	// The document's token slices are immutable and shared across calls, so
 	// a slice's first element identifies its spans.
