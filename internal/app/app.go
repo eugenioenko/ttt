@@ -90,6 +90,7 @@ type App struct {
 	quitPending            bool
 	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
+	gitGutterDebounce      *asynctask.Task[struct{}]
 	gitGutterTask          *asynctask.Task[*gitGutterResult]
 	inlineDiffRepos        map[string]inlineDiffRepo
 	commitDetailMu         sync.Mutex

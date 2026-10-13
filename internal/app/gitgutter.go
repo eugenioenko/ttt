@@ -30,13 +30,9 @@ type gitGutterResult struct {
 }
 
 func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
-	a.scheduleGitGutter(filePath, bufferLines)
-	if a.gitGutterTask != nil {
-		a.gitGutterTask.Flush()
+	if a.gitGutterDebounce != nil {
+		a.gitGutterDebounce.Stop()
 	}
-}
-
-func (a *App) scheduleGitGutter(filePath string, bufferLines []string) {
 	if a.gitGutterTask != nil {
 		a.gitGutterTask.Stop()
 	}
@@ -58,6 +54,7 @@ func (a *App) scheduleGitGutter(filePath string, bufferLines []string) {
 		return
 	}
 
+	// Snapshot on the UI goroutine before the worker can race with edits.
 	linesCopy := make([]string, len(bufferLines))
 	copy(linesCopy, bufferLines)
 	showTrailing := false
@@ -68,7 +65,7 @@ func (a *App) scheduleGitGutter(filePath string, bufferLines []string) {
 	}
 
 	if a.gitGutterTask == nil {
-		a.gitGutterTask = NewTask[*gitGutterResult](a, asynctask.TaskOptions{Delay: gitGutterDelay})
+		a.gitGutterTask = NewTask[*gitGutterResult](a, asynctask.TaskOptions{})
 	}
 	a.gitGutterTask.Schedule(func(ctx context.Context) (*gitGutterResult, error) {
 		headContent, gitErr := git.ShowFileContext(ctx, repoDir, relPath, "HEAD")
@@ -133,20 +130,39 @@ func (a *App) applyGitGutterResult(v *gitGutterResult) {
 
 func (a *App) RequestGitGutterForActiveFile() {
 	a.ScheduleGitGutter()
-	if a.gitGutterTask != nil {
-		a.gitGutterTask.Flush()
+	if a.gitGutterDebounce != nil {
+		a.gitGutterDebounce.Flush()
 	}
 }
 
 func (a *App) ScheduleGitGutter() {
-	buf := a.EditorGroup.ActiveBuffer()
-	if buf == nil {
-		if a.gitGutterTask != nil {
-			a.gitGutterTask.Stop()
-		}
+	if a.gitGutterDebounce != nil {
+		a.gitGutterDebounce.Stop()
+	}
+	if a.gitGutterTask != nil {
+		a.gitGutterTask.Stop()
+	}
+	path := a.EditorGroup.ActiveFilePath()
+	diffOn := a.EditorGroup.IsInlineDiffPath(path)
+	if a.EditorGroup.ActiveBuffer() == nil || path == "" || a.EditorGroup.IsActiveVirtual() || (!a.Settings.Editor.IsGitGutterEnabled() && !diffOn) {
 		return
 	}
-	a.scheduleGitGutter(a.EditorGroup.ActiveFilePath(), buf.Lines)
+	if _, _, ok := a.repoPathForFile(path); !ok && (!diffOn || a.inlineDiffRepos[path].dir == "") {
+		return
+	}
+	if a.gitGutterDebounce == nil {
+		a.gitGutterDebounce = NewTask[struct{}](a, asynctask.TaskOptions{Delay: gitGutterDelay})
+	}
+	a.gitGutterDebounce.Schedule(func(context.Context) (struct{}, error) {
+		return struct{}{}, nil
+	}, func(_ struct{}, err error) {
+		if err != nil {
+			return
+		}
+		if buf := a.EditorGroup.ActiveBuffer(); buf != nil {
+			a.RequestGitGutter(a.EditorGroup.ActiveFilePath(), buf.Lines)
+		}
+	})
 }
 
 // blobLines splits a blob the way buffer.LoadFile splits a file, so an

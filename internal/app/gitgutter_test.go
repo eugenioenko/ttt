@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -65,13 +66,18 @@ func newGitGutterTestHarness(t *testing.T) *gitGutterTestHarness {
 		h.delivery = append(h.delivery, fn)
 		return nil
 	}
-	a.gitGutterTask = NewTask[*gitGutterResult](a, asynctask.TaskOptions{
+	a.gitGutterDebounce = NewTask[struct{}](a, asynctask.TaskOptions{
 		Delay: gitGutterDelay,
 		Clock: &h.clock,
 		Run:   func(fn func()) { h.work = append(h.work, fn) },
 	})
-	t.Cleanup(a.CloseTasks)
-	t.Cleanup(a.EditorGroup.CloseAllTabs)
+	a.gitGutterTask = NewTask[*gitGutterResult](a, asynctask.TaskOptions{
+		Run: func(fn func()) { h.work = append(h.work, fn) },
+	})
+	t.Cleanup(func() {
+		a.CloseTasks()
+		a.EditorGroup.CloseAllTabs()
+	})
 	return h
 }
 
@@ -107,6 +113,11 @@ func TestGitGutterDebouncesLatestBuffer(t *testing.T) {
 		t.Fatal("edit did not restart the delay")
 	}
 	h.clock.advance(time.Millisecond)
+	trigger := h.run(t)
+	if a.gitGutterTask.Pending() {
+		t.Fatal("diff started before the debounce reached the UI goroutine")
+	}
+	trigger()
 	deliver := h.run(t)
 	if len(a.EditorGroup.Editor.LineChanges) != 0 || !a.gitGutterTask.Pending() {
 		t.Fatal("gutter applied before UI delivery")
@@ -116,7 +127,7 @@ func TestGitGutterDebouncesLatestBuffer(t *testing.T) {
 	if len(changes) < 3 || changes[1] != diff.LineAdded || changes[2] != diff.LineAdded {
 		t.Fatalf("latest gutter changes = %v, want added lines 1 and 2", changes)
 	}
-	if a.gitGutterTask.Pending() {
+	if a.gitGutterTask.Pending() || a.gitGutterDebounce.Pending() {
 		t.Fatal("gutter pending after delivery")
 	}
 }
@@ -132,6 +143,7 @@ func TestGitGutterSaveFlushesPostCleanupBuffer(t *testing.T) {
 	if err != nil || string(data) != "one\ntwo\n" {
 		t.Fatalf("saved buffer = %q, err = %v", data, err)
 	}
+	h.run(t)()
 	h.run(t)()
 	if len(a.EditorGroup.Editor.LineChanges) != len(a.EditorGroup.ActiveBuffer().Lines) {
 		t.Fatalf("save gutter = %v, want one entry per buffer line", a.EditorGroup.Editor.LineChanges)
@@ -149,6 +161,7 @@ func TestGitGutterDropsQueuedResultOnEdit(t *testing.T) {
 	h := newGitGutterTestHarness(t)
 	a := h.a
 	a.RequestGitGutterForActiveFile()
+	h.run(t)()
 	stale := h.run(t)
 	a.EditorGroup.Editor.ExecCommand(&undo.InsertLineCommand{Idx: 1, Text: "latest"})
 	a.ScheduleGitGutter()
@@ -157,6 +170,7 @@ func TestGitGutterDropsQueuedResultOnEdit(t *testing.T) {
 		t.Fatal("superseded queued gutter result applied")
 	}
 	h.clock.advance(500 * time.Millisecond)
+	h.run(t)()
 	h.run(t)()
 	changes := a.EditorGroup.Editor.LineChanges
 	if len(changes) < 2 || changes[1] != diff.LineAdded {
@@ -170,6 +184,7 @@ func TestGitGutterStopsWhenTargetCannotUseGutter(t *testing.T) {
 			h := newGitGutterTestHarness(t)
 			a := h.a
 			a.RequestGitGutterForActiveFile()
+			h.run(t)()
 			stale := h.run(t)
 			switch target {
 			case "virtual":
@@ -189,9 +204,73 @@ func TestGitGutterStopsWhenTargetCannotUseGutter(t *testing.T) {
 				a.RequestGitGutterForActiveFile()
 			}
 			stale()
-			if a.gitGutterTask.Pending() || len(a.EditorGroup.Editor.LineChanges) != 0 {
+			if a.gitGutterTask.Pending() || a.gitGutterDebounce.Pending() || len(a.EditorGroup.Editor.LineChanges) != 0 {
 				t.Fatal("invalid target retained or applied gutter work")
 			}
 		})
+	}
+}
+
+func TestGitGutterDebounceDoesNotCopyBufferOnEachEdit(t *testing.T) {
+	h := newGitGutterTestHarness(t)
+	a := h.a
+	lines := make([]string, 100_000)
+	for i := range lines {
+		lines[i] = "line"
+	}
+	a.EditorGroup.Editor.ExecCommand(&undo.ReplaceLinesCommand{
+		OldLines: slices.Clone(a.EditorGroup.ActiveBuffer().Lines),
+		NewLines: lines,
+	})
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for range 20 {
+		a.ScheduleGitGutter()
+	}
+	runtime.ReadMemStats(&after)
+	allocated := after.TotalAlloc - before.TotalAlloc
+	t.Logf("20 debounce resets allocated %d bytes", allocated)
+	if allocated > 1<<20 {
+		t.Fatalf("debouncing allocated %d bytes, want less than one 100k-line snapshot", allocated)
+	}
+}
+
+func TestGitGutterShutdownDropsQueuedDelivery(t *testing.T) {
+	for _, stage := range []string{"debounce", "diff"} {
+		t.Run(stage, func(t *testing.T) {
+			h := newGitGutterTestHarness(t)
+			a := h.a
+			a.RequestGitGutterForActiveFile()
+			if stage == "diff" {
+				h.run(t)()
+			}
+			stale := h.run(t)
+			a.CloseTasks()
+			stale()
+			if len(h.work) != 0 || a.gitGutterTask.Pending() || a.gitGutterDebounce.Pending() || len(a.EditorGroup.Editor.LineChanges) != 0 {
+				t.Fatal("shutdown started or applied gutter work")
+			}
+		})
+	}
+}
+
+func TestGitGutterDropsQueuedDebounceOnEdit(t *testing.T) {
+	h := newGitGutterTestHarness(t)
+	a := h.a
+	a.ScheduleGitGutter()
+	h.clock.advance(gitGutterDelay)
+	stale := h.run(t)
+	a.EditorGroup.Editor.ExecCommand(&undo.InsertLineCommand{Idx: 1, Text: "latest"})
+	a.ScheduleGitGutter()
+	stale()
+	if len(h.work) != 0 || a.gitGutterTask.Pending() {
+		t.Fatal("superseded queued debounce started a diff")
+	}
+	h.clock.advance(gitGutterDelay)
+	h.run(t)()
+	h.run(t)()
+	changes := a.EditorGroup.Editor.LineChanges
+	if len(changes) < 2 || changes[1] != diff.LineAdded {
+		t.Fatalf("gutter changes = %v, want added line 1", changes)
 	}
 }
