@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
@@ -15,25 +14,6 @@ import (
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/gdamore/tcell/v3"
 )
-
-func awaitGitGutter(t *testing.T, h *testHarness) {
-	t.Helper()
-	timeout := time.After(5 * time.Second)
-	for {
-		select {
-		case ev := <-h.screen.EventQ():
-			if intr, ok := ev.(*tcell.EventInterrupt); ok {
-				if res, ok := intr.Data().(*app.GitGutterResult); ok {
-					h.app.ApplyGitGutterResult(res)
-					h.redraw()
-					return
-				}
-			}
-		case <-timeout:
-			t.Fatal("git gutter result never arrived")
-		}
-	}
-}
 
 func TestOpenChangesEditsInlineDiff(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
@@ -63,7 +43,7 @@ func TestOpenChangesEditsInlineDiff(t *testing.T) {
 	h.pressRune('!')
 	h.flushOnChange()
 	h.app.RequestGitGutterForActiveFile()
-	awaitGitGutter(t, h)
+	h.redraw()
 
 	screen := h.screenText()
 	if !strings.Contains(screen, "three!") {
@@ -301,7 +281,7 @@ func TestInlineDiffFindSurvivesRecompute(t *testing.T) {
 	h.app.EditorGroup.Editor.ExecCommand(&undo.InsertLineCommand{Idx: 3, Text: "bat"})
 	h.flushOnChange()
 	h.app.RequestGitGutterForActiveFile()
-	awaitGitGutter(t, h)
+	h.redraw()
 
 	h.assertContains(" 1/4")
 	if dv := h.app.EditorGroup.ActiveInlineDiff(); dv == nil || len(dv.SearchMatchesRight) != 3 {

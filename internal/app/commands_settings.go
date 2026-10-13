@@ -123,11 +123,10 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.Search.Debounce.DelayMs = s.Search.Debounce
 
 	if s.Editor.IsGitGutterEnabled() != prev.Editor.IsGitGutterEnabled() {
-		if s.Editor.IsGitGutterEnabled() {
-			a.RequestGitGutterForActiveFile()
-		} else if a.EditorGroup.Editor != nil {
+		if !s.Editor.IsGitGutterEnabled() && a.EditorGroup.Editor != nil {
 			a.EditorGroup.Editor.LineChanges = nil
 		}
+		a.RequestGitGutterForActiveFile()
 	}
 
 	a.applyChevrons(s.Appearance)

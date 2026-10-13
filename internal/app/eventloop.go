@@ -340,10 +340,6 @@ func RunEventLoop(
 				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
 			case *ui.EditorDragAutoScrollTick:
 				app.EditorGroup.Editor.HandleDragAutoScrollTick(v.Generation)
-			case *GitGutterResult:
-				app.ApplyGitGutterResult(v)
-			case *GitGutterTrigger:
-				app.RequestGitGutterForActiveFile()
 			case *execInputRequest:
 				if v.Lifecycle.claim() {
 					switch event := v.Event.(type) {

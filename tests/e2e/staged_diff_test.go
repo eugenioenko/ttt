@@ -7,35 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/ui"
-
-	"github.com/gdamore/tcell/v3"
 )
-
-func awaitCurrentGitGutter(t *testing.T, h *testHarness) {
-	t.Helper()
-	timeout := time.After(5 * time.Second)
-	for {
-		select {
-		case ev := <-h.screen.EventQ():
-			if intr, ok := ev.(*tcell.EventInterrupt); ok {
-				if res, ok := intr.Data().(*app.GitGutterResult); ok {
-					h.app.ApplyGitGutterResult(res)
-					if res.Gen == h.app.GitGutterGen {
-						h.redraw()
-						return
-					}
-				}
-			}
-		case <-timeout:
-			t.Fatal("current git gutter result never arrived")
-		}
-	}
-}
 
 func harnessGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -196,7 +171,7 @@ func TestStagingUpdatesOpenUnstagedDiff(t *testing.T) {
 
 	harnessGit(t, h.dir, "add", "staged.txt")
 	h.app.RefreshChanges()
-	awaitCurrentGitGutter(t, h)
+	h.redraw()
 
 	h.assertContains("UNSTAGED 25")
 	if strings.Contains(h.screenText(), "row 25") {
@@ -261,7 +236,7 @@ func TestConflictDuringAnOpenDiffClosesIt(t *testing.T) {
 		t.Fatal("merge did not conflict")
 	}
 	h.app.RequestGitGutterForActiveFile()
-	awaitCurrentGitGutter(t, h)
+	h.redraw()
 
 	if h.app.EditorGroup.ActiveInlineDiff() != nil {
 		t.Fatal("diff against the index stayed open after the file got merge conflicts")

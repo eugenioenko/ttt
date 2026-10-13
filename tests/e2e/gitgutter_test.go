@@ -20,7 +20,7 @@ func TestGitGutterSkipsIgnoredFiles(t *testing.T) {
 	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "new.txt"))
 	h.app.SyncRepositoryBranch()
 	h.app.RequestGitGutterForActiveFile()
-	awaitGitGutter(t, h)
+	h.redraw()
 	changes := h.app.EditorGroup.Editor.LineChanges
 	lines := h.app.EditorGroup.ActiveBuffer().Lines
 	if len(changes) != len(lines) || slices.ContainsFunc(changes, func(c diff.LineChangeKind) bool { return c != diff.LineAdded }) {
@@ -30,7 +30,7 @@ func TestGitGutterSkipsIgnoredFiles(t *testing.T) {
 	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "app.log"))
 	h.app.SyncRepositoryBranch()
 	h.app.RequestGitGutterForActiveFile()
-	awaitGitGutter(t, h)
+	h.redraw()
 	if changes := h.app.EditorGroup.Editor.LineChanges; len(changes) != 0 {
 		t.Fatalf("ignored file gutter = %v, want no markers", changes)
 	}

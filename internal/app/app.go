@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
@@ -89,9 +90,7 @@ type App struct {
 	quitPending            bool
 	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
-	GitGutterGen           int
-	GitGutterTimer         *time.Timer
-	gitGutterCancel        context.CancelFunc
+	gitGutterTask          *asynctask.Task[*gitGutterResult]
 	inlineDiffRepos        map[string]inlineDiffRepo
 	commitDetailMu         sync.Mutex
 	commitDetailNext       uint64

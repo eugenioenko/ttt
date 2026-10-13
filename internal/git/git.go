@@ -673,11 +673,15 @@ func remoteToHTTPS(remote string) string {
 }
 
 func IgnoredFiles(dir string, paths []string) map[string]bool {
+	return IgnoredFilesContext(context.Background(), dir, paths)
+}
+
+func IgnoredFilesContext(ctx context.Context, dir string, paths []string) map[string]bool {
 	if len(paths) == 0 {
 		return nil
 	}
 	args := append([]string{"-C", dir, "check-ignore"}, paths...)
-	cmd := exec.Command("git", args...)
+	cmd := gitCommandContext(ctx, args...)
 	out, _ := cmd.Output()
 	result := make(map[string]bool)
 	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
