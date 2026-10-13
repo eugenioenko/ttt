@@ -2400,7 +2400,8 @@ func (g *EditorGroupWidget) ensureTabIdentities() {
 
 func (g *EditorGroupWidget) scheduleFolds() {
 	t := g.activeTab()
-	if t == nil || t.Folds == nil || !t.Folds.Pending() {
+	// Wrapped panes do not fold, so folds wait until wrap is turned off.
+	if t == nil || t.Folds == nil || !t.Folds.Pending() || g.Editor.WordWrap {
 		return
 	}
 	if g.FoldTask == nil {

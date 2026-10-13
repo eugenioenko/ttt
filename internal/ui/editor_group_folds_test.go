@@ -44,3 +44,21 @@ func TestOpenFileComputesFoldsAfterFirstFrame(t *testing.T) {
 		t.Fatal("folds not applied after the background computation")
 	}
 }
+
+func TestWrappedPaneDefersFolds(t *testing.T) {
+	scheduled := 0
+	g := newRenameGroup(t, filepath.Join(t.TempDir(), "a.go"), "func a() {\n\tx := 1\n}\n")
+	g.FoldTask = asynctask.New[[]fold.Range](asynctask.TaskOptions{Run: func(func()) { scheduled++ }},
+		func(func()) error { return nil })
+
+	g.Editor.WordWrap = true
+	g.scheduleFolds()
+	if scheduled != 0 {
+		t.Fatal("folds computed for a wrapped pane, which cannot fold")
+	}
+	g.Editor.WordWrap = false
+	g.scheduleFolds()
+	if scheduled != 1 {
+		t.Fatalf("%d fold computations after turning wrap off, want 1", scheduled)
+	}
+}
