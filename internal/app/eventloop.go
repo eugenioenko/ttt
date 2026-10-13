@@ -301,29 +301,15 @@ func RunEventLoop(
 					execRequest = v.Lifecycle
 				}
 			case *AutocompleteTrigger:
-				triggerChar := app.charBeforeCursor()
-				isTrigger := triggerChar != "" && (len(app.CompletionTriggers) == 0 || app.isCompletionTrigger(triggerChar))
-				if isTrigger && app.IsAutocompleteActive() {
-					app.DismissAutocomplete()
-				}
-				if !app.IsAutocompleteActive() {
-					prefix := app.currentPrefix()
-					if len(prefix) >= 1 || isTrigger {
-						path := app.EditorGroup.ActiveFilePath()
-						lang := ""
-						if app.EditorGroup.Editor != nil && app.EditorGroup.Editor.Highlighter != nil {
-							lang = app.EditorGroup.Editor.Highlighter.Language()
-						}
-						line, col := app.EditorGroup.ActiveCursor()
-						app.RequestCompletions(path, lang, line, col, triggerChar)
-					}
-				}
+				app.HandleAutocompleteTrigger()
 			case *SignatureHelpResult:
 				if v.Label != "" {
 					app.ShowSignatureHelp(v)
 				}
 			case *CompletionResult:
-				if len(v.Items) > 0 {
+				// A request sent before the user closed the popup must not
+				// reopen it.
+				if len(v.Items) > 0 && !app.completionClosedHere() {
 					app.CompletionTriggers = v.TriggerChars
 					app.ShowAutocomplete(v.Items, v.LspItems)
 				}

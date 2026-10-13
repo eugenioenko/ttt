@@ -174,6 +174,38 @@ function prepareCase(language) {
   return { completion, dir, settings, signature, source, spec };
 }
 
+// Each case types a word whose completions include "string" on line 2.
+// Which item ranks first is up to the server, so lines are found by prefix.
+const POPUP_CASES = {
+  go: {
+    source: "popup.go",
+    content: "package main\n\n",
+    waitFor: "package main",
+    type: ["type T struct {", "enter", "fieldName str"],
+    accepted: "fieldName ",
+    again: "other str",
+  },
+  typescript: {
+    source: "popup.ts",
+    content: "// popup\n\n",
+    waitFor: "// popup",
+    type: ["let first: str"],
+    accepted: "let first: ",
+    again: "let second: str",
+  },
+};
+
+function typeSteps(steps) {
+  for (const step of steps) {
+    if (step === "enter") tui.press("enter");
+    else tui.type(step);
+  }
+}
+
+function showsPopup(screen) {
+  return /│ ■ string/.test(screen);
+}
+
 describe("pinned real-LSP compatibility", () => {
   let dir;
 
@@ -283,6 +315,43 @@ describe("pinned real-LSP compatibility", () => {
         );
         expect(completionLog).toMatch(new RegExp(spec.completion.log));
       }
+    });
+  }
+
+  for (const [language, popup] of Object.entries(POPUP_CASES)) {
+    const settings = resolve(LSP_DIR, language, "settings.json");
+    const testFn = serverAvailable(settings) ? it : it.skip;
+
+    testFn(`${language} keeps the completion popup closed once accepted or escaped`, () => {
+      dir = createTempDir();
+      cpSync(resolve(LSP_DIR, language), dir, { recursive: true });
+      writeFileSync(resolve(dir, popup.source), popup.content, "utf8");
+      tui.start("--config", settings, resolve(dir, popup.source));
+      tui.waitFor(popup.waitFor);
+      expect(waitForLogAfter("lsp initialized")).toContain("lsp initialized");
+      navigateTo("2:0");
+
+      let mark = logSize();
+      typeSteps(popup.type);
+      expect(waitForLogAfter("lsp completion response.*count=[1-9]", mark)).toMatch(/lsp completion response/);
+      tui.waitFor("■ string");
+
+      // Accepting inserts "string"; auto-suggest must not reopen the popup
+      // for it, or the next Enter accepts again instead of breaking the line.
+      tui.press("enter");
+      mark = logSize();
+      sleep(1500);
+      expect(readFileSync(LOG_FILE).subarray(mark).toString("utf8")).not.toMatch(/lsp completion request/);
+      expect(showsPopup(tui.snapshot())).toBe(false);
+      tui.press("enter");
+      tui.type(popup.again);
+      tui.press("escape");
+      sleep(1500);
+      const lines = tui.snapshot().split("\n");
+      const accepted = lines.findIndex((line) => line.includes(popup.accepted));
+      expect(accepted).toBeGreaterThanOrEqual(0);
+      expect(lines[accepted + 1]).toContain(popup.again);
+      expect(showsPopup(lines.join("\n"))).toBe(false);
     });
   }
 });

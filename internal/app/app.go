@@ -68,6 +68,7 @@ type App struct {
 	DocVersions            map[string]int
 	CompletionItems        []ui.CompletionItem
 	LspCompletionItems     []lsp.CompletionItem
+	completionClosed       completionMark
 	CompletionTriggers     []string
 	AutocompleteTimer      *time.Timer
 	HoverTimer             *time.Timer

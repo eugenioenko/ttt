@@ -80,11 +80,11 @@ func FormatKeyBinding(key string) string {
 func RegisterEscapeDismissers(app *App) {
 	app.Root.EscapeDismissers = []func() bool{
 		func() bool {
-			if app.IsAutocompleteActive() {
-				app.DismissAutocomplete()
-				return true
-			}
-			return false
+			// Escape also cancels a suggestion still on its way, so it only
+			// consumes the key when a popup was showing.
+			active := app.IsAutocompleteActive()
+			app.CloseAutocomplete()
+			return active
 		},
 		func() bool {
 			if app.EditorGroup.SignatureHelp != nil {

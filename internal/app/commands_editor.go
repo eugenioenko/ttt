@@ -67,6 +67,7 @@ func (a *App) TriggerAutocomplete() {
 	} else if _, _, ok := a.lspResolve(path, lang); !ok {
 		a.StatusWarn(lang + " language server is not configured. Add it to settings.json under lsp.servers")
 	} else {
+		a.completionClosed = completionMark{}
 		line, col := a.EditorGroup.ActiveCursor()
 		a.RequestCompletions(path, lang, line, col, "")
 	}

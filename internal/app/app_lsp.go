@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -30,11 +31,9 @@ func (a *App) ShowAutocomplete(items []ui.CompletionItem, lspItems []lsp.Complet
 	ac.Icons = a.Settings.Appearance.Icons
 	ac.OnSelect = func(item ui.CompletionItem) {
 		a.resolveAndInsert(item)
-		a.DismissAutocomplete()
+		a.CloseAutocomplete()
 	}
-	ac.OnDismiss = func() {
-		a.DismissAutocomplete()
-	}
+	ac.OnDismiss = a.CloseAutocomplete
 	a.EditorGroup.Autocomplete = ac
 }
 
@@ -101,6 +100,52 @@ func (a *App) currentPrefix() string {
 		return ""
 	}
 	return string(runes[start:col])
+}
+
+// completionMark records the buffer state when the user closed the popup.
+// The debounced auto-suggest and a request already in flight would otherwise
+// reopen it for the word at the cursor: after accepting, Enter would accept
+// that word again instead of breaking the line, and Escape would not stick.
+type completionMark struct {
+	buf     *buffer.Buffer
+	version uint64
+}
+
+// CloseAutocomplete dismisses the popup on the user's behalf, keeping it
+// closed until the buffer changes again.
+func (a *App) CloseAutocomplete() {
+	a.DismissAutocomplete()
+	if buf := a.EditorGroup.ActiveBuffer(); buf != nil {
+		a.completionClosed = completionMark{buf: buf, version: buf.Version()}
+	}
+}
+
+// completionClosedHere reports whether the active buffer is unchanged since the
+// user closed the popup.
+func (a *App) completionClosedHere() bool {
+	buf := a.EditorGroup.ActiveBuffer()
+	return buf != nil && buf == a.completionClosed.buf && buf.Version() == a.completionClosed.version
+}
+
+// HandleAutocompleteTrigger requests completions when the debounced
+// auto-suggest fires.
+func (a *App) HandleAutocompleteTrigger() {
+	if a.completionClosedHere() {
+		return
+	}
+	triggerChar := a.charBeforeCursor()
+	isTrigger := triggerChar != "" && (len(a.CompletionTriggers) == 0 || a.isCompletionTrigger(triggerChar))
+	if isTrigger && a.IsAutocompleteActive() {
+		a.DismissAutocomplete()
+	}
+	if a.IsAutocompleteActive() {
+		return
+	}
+	if prefix := a.currentPrefix(); len(prefix) >= 1 || isTrigger {
+		path, lang := a.editorPathLang()
+		line, col := a.EditorGroup.ActiveCursor()
+		a.RequestCompletions(path, lang, line, col, triggerChar)
+	}
 }
 
 func (a *App) DismissAutocomplete() {
