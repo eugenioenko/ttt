@@ -361,3 +361,27 @@ func TestIsLineHidden(t *testing.T) {
 		t.Error("line 6 should not be hidden")
 	}
 }
+
+func TestPendingRangesResolveOnDemand(t *testing.T) {
+	s := NewState()
+	calls := 0
+	s.SetPending(func() []Range {
+		calls++
+		return []Range{{StartLine: 0, EndLine: 2}}
+	})
+	if !s.Pending() || s.FoldAt(0) != nil {
+		t.Fatal("pending state should have no ranges before Resolve")
+	}
+	s.Resolve()
+	s.Resolve()
+	if s.Pending() || s.FoldAt(0) == nil || calls != 1 {
+		t.Fatalf("Resolve: pending=%v, fold=%v, calls=%d; want ranges computed once", s.Pending(), s.FoldAt(0), calls)
+	}
+
+	s.SetPending(func() []Range { t.Fatal("SetRanges should drop the pending computation"); return nil })
+	s.SetRanges([]Range{{StartLine: 1, EndLine: 2}})
+	s.Resolve()
+	if s.FoldAt(1) == nil {
+		t.Error("SetRanges ranges lost")
+	}
+}

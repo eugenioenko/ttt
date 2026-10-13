@@ -2,11 +2,13 @@ package ui
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"unicode/utf8"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
@@ -145,6 +147,11 @@ type EditorGroupWidget struct {
 	// OnDiagnosticsChanged fires whenever any source's diagnostics change, so
 	// the Diagnostics panel can rebuild from DiagnosticsByPath().
 	OnDiagnosticsChanged func()
+
+	// FoldTask computes an opened file's folds after its first frame; without
+	// it they are computed on that frame.
+	FoldTask *asynctask.Task[[]fold.Range]
+	foldBuf  *buffer.Buffer
 }
 
 func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool, gutterStyle string) *EditorGroupWidget {
@@ -418,7 +425,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 		tabSize = detected.Size
 	}
 	folds := fold.NewState()
-	folds.SetRanges(fold.ComputeIndentRanges(newBuf.Lines))
+	folds.SetPending(func() []fold.Range { return fold.ComputeIndentRanges(newBuf.Lines) })
 	newTab := editorTab{
 		FilePath: path,
 		Buf:      newBuf,
@@ -2391,7 +2398,34 @@ func (g *EditorGroupWidget) ensureTabIdentities() {
 	}
 }
 
+func (g *EditorGroupWidget) scheduleFolds() {
+	t := g.activeTab()
+	if t == nil || t.Folds == nil || !t.Folds.Pending() {
+		return
+	}
+	if g.FoldTask == nil {
+		t.Folds.Resolve()
+		return
+	}
+	if g.foldBuf == t.Buf {
+		return
+	}
+	buf, folds := t.Buf, t.Folds
+	lines, version := slices.Clone(buf.Lines), buf.Version()
+	g.foldBuf = buf
+	g.FoldTask.Schedule(func(context.Context) ([]fold.Range, error) {
+		return fold.ComputeIndentRanges(lines), nil
+	}, func(ranges []fold.Range, _ error) {
+		g.foldBuf = nil
+		// After an edit the ranges are stale; the next frame schedules again.
+		if folds.Pending() && buf.Version() == version {
+			folds.SetRanges(ranges)
+		}
+	})
+}
+
 func (g *EditorGroupWidget) Render(surface Surface) {
+	g.scheduleFolds()
 	g.syncTabs()
 	w, h := surface.Size()
 	r := g.GetRect()

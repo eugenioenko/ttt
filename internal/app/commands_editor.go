@@ -17,6 +17,7 @@ func (a *App) OpenFold() {
 	if e.Folds == nil || e.WordWrap {
 		return
 	}
+	e.Folds.Resolve()
 	e.Folds.Expand(e.Cursor.Line)
 }
 
@@ -28,6 +29,7 @@ func (a *App) CloseFold() {
 	if e.Folds == nil || e.WordWrap {
 		return
 	}
+	e.Folds.Resolve()
 	e.Folds.Collapse(e.Cursor.Line)
 	if r := e.Folds.ContainingFold(e.Cursor.Line); r != nil {
 		e.Cursor.Line = r.StartLine
@@ -612,6 +614,7 @@ func registerEditorCommands(app *App) {
 			}
 			e := app.EditorGroup.Editor
 			if e.Folds != nil && !e.WordWrap {
+				e.Folds.Resolve()
 				e.Folds.Toggle(e.Cursor.Line)
 			}
 		},
@@ -638,6 +641,7 @@ func registerEditorCommands(app *App) {
 			}
 			e := app.EditorGroup.Editor
 			if e.Folds != nil && !e.WordWrap {
+				e.Folds.Resolve()
 				e.Folds.CollapseAll()
 				e.EnsureCursorVisible()
 			}
