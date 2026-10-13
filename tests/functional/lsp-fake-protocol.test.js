@@ -221,6 +221,25 @@ describe("deterministic fake LSP protocol", () => {
     expect(messagesFor(readTrace(trace), "textDocument/documentSymbol")).toHaveLength(3);
   });
 
+  it("applies a rename answered with documentChanges", () => {
+    const { file, trace: tracePath } = startCase("rename-document-changes");
+    tui.exec("Rename Symbol");
+    tui.type("renamed");
+    tui.press("enter");
+    tui.waitFor("// renamed protocol");
+    const after = tui.snapshot();
+    const { snapshots } = tui.run();
+    const renames = messagesFor(readTrace(tracePath), "textDocument/rename");
+
+    expect(snapshots[after]).toContain("Renamed across 1 file(s)");
+    expect(renames).toHaveLength(1);
+    expect(renames[0].params).toEqual({
+      textDocument: { uri: `file://${file}` },
+      position: { line: 1, character: 0 },
+      newName: "renamed",
+    });
+  });
+
   it("drops a completion reply that arrives after the cursor left the word", () => {
     startCase("completion-late", ["--late=textDocument/completion"]);
     tui.type("consol");

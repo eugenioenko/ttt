@@ -1,6 +1,9 @@
 package lsp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+)
 
 type Position struct {
 	Line      int `json:"line"`
@@ -192,7 +195,39 @@ type RenameParams struct {
 }
 
 type WorkspaceEdit struct {
-	Changes map[string][]TextEdit `json:"changes,omitempty"`
+	Changes         map[string][]TextEdit `json:"changes,omitempty"`
+	DocumentChanges []DocumentChange      `json:"documentChanges,omitempty"`
+}
+
+// DocumentChange is a TextDocumentEdit, or a CreateFile, RenameFile or
+// DeleteFile operation when Kind is set.
+type DocumentChange struct {
+	Kind         string                          `json:"kind,omitempty"`
+	TextDocument VersionedTextDocumentIdentifier `json:"textDocument"`
+	Edits        []TextEdit                      `json:"edits,omitempty"`
+}
+
+var ErrFileOperations = errors.New("workspace edit includes file operations")
+
+// DocumentChanges takes precedence over Changes when present (LSP spec).
+func (e *WorkspaceEdit) TextEdits() (map[string][]TextEdit, error) {
+	if e == nil {
+		return nil, nil
+	}
+	if e.DocumentChanges == nil {
+		return e.Changes, nil
+	}
+	edits := make(map[string][]TextEdit)
+	for _, change := range e.DocumentChanges {
+		if change.Kind != "" {
+			return nil, ErrFileOperations
+		}
+		if len(change.Edits) > 0 {
+			uri := change.TextDocument.URI
+			edits[uri] = append(edits[uri], change.Edits...)
+		}
+	}
+	return edits, nil
 }
 
 type CodeActionContext struct {

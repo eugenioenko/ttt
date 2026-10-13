@@ -38,6 +38,11 @@ type RenameResult struct {
 	Edit *lsp.WorkspaceEdit
 }
 
+type CodeActionResult struct {
+	Path string
+	Edit *lsp.WorkspaceEdit
+}
+
 func ReadLineFromFile(path string, line int) string {
 	f, err := os.Open(path)
 	if err != nil {

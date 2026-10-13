@@ -314,9 +314,9 @@ func RunEventLoop(
 					app.Root.SetFocus(app.EditorGroup)
 				}
 			case *RenameResult:
-				if v.Edit != nil && len(v.Edit.Changes) > 0 {
-					app.ApplyWorkspaceEdit(v.Edit)
-				}
+				app.ApplyWorkspaceEdit(v.Edit)
+			case *CodeActionResult:
+				app.applyCodeActionEdit(v.Path, v.Edit)
 			case *ReferencesResult:
 				if len(v.Locations) > 0 {
 					app.ShowReferences(v.Locations)

@@ -182,6 +182,17 @@ function handle(message) {
         selectionRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
       }] : []);
       break;
+    case "textDocument/rename":
+      respond(message.id, {
+        documentChanges: [{
+          textDocument: { uri: message.params.textDocument.uri, version: null },
+          edits: [{
+            range: { start: { line: 0, character: 3 }, end: { line: 0, character: 7 } },
+            newText: message.params.newName,
+          }],
+        }],
+      });
+      break;
     case "shutdown":
       respond(message.id, null);
       break;

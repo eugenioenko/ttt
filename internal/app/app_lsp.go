@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -396,14 +397,31 @@ func (a *App) RunCodeActionsOnSave(path, lang string) {
 		return
 	}
 	for _, action := range actions {
-		if action.Edit != nil && len(action.Edit.Changes) > 0 {
-			for uri, edits := range action.Edit.Changes {
-				if URIToPath(uri) == path {
-					a.ApplyTextEdits(edits)
-				}
-			}
+		if action.Edit != nil {
+			a.applyCodeActionEdit(path, action.Edit)
 		}
 	}
+}
+
+func (a *App) applyCodeActionEdit(path string, edit *lsp.WorkspaceEdit) {
+	changes, ok := a.workspaceTextEdits(edit)
+	if !ok {
+		return
+	}
+	for uri, edits := range changes {
+		if URIToPath(uri) == path && len(edits) > 0 {
+			a.ApplyTextEdits(edits)
+		}
+	}
+}
+
+func (a *App) workspaceTextEdits(edit *lsp.WorkspaceEdit) (map[string][]lsp.TextEdit, bool) {
+	changes, err := edit.TextEdits()
+	if errors.Is(err, lsp.ErrFileOperations) {
+		a.StatusWarn("The language server's edit creates, renames or deletes files, which ttt does not support yet")
+		return nil, false
+	}
+	return changes, true
 }
 
 func (a *App) RequestCodeAction(path, lang, kind string) {
@@ -435,8 +453,8 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 			return
 		}
 		for _, action := range actions {
-			if action.Edit != nil && len(action.Edit.Changes) > 0 {
-				a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{Edits: action.Edit.Changes[FileURI(path)]}))
+			if changes, err := action.Edit.TextEdits(); err != nil || len(changes) > 0 {
+				a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionResult{Path: path, Edit: action.Edit}))
 				return
 			}
 		}
@@ -484,16 +502,20 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 			slog.Error("lsp rename", "err", err)
 			return
 		}
-		if edit != nil && len(edit.Changes) > 0 {
+		if edit != nil {
 			a.Screen.PostEvent(tcell.NewEventInterrupt(&RenameResult{Edit: edit}))
 		}
 	}()
 }
 
 func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
+	changes, ok := a.workspaceTextEdits(edit)
+	if !ok || len(changes) == 0 {
+		return
+	}
 	currentPath := a.EditorGroup.ActiveFilePath()
 
-	for uri, edits := range edit.Changes {
+	for uri, edits := range changes {
 		path := URIToPath(uri)
 		a.EditorGroup.OpenFile(path)
 		a.ApplyTextEdits(edits)
@@ -507,8 +529,7 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	}
 
 	a.EditorGroup.OpenFile(currentPath)
-	fileCount := len(edit.Changes)
-	a.StatusNotify(fmt.Sprintf("Renamed across %d file(s)", fileCount))
+	a.StatusNotify(fmt.Sprintf("Renamed across %d file(s)", len(changes)))
 }
 
 func (a *App) RequestReferences(path, lang string, line, col int) {
