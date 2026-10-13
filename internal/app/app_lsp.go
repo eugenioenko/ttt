@@ -863,10 +863,16 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path]++
 	version := a.DocVersions[path]
+	previous := a.lspSent[path]
 	a.lspSent[path] = done
 	a.DocVersionsMu.Unlock()
 	go func() {
 		defer close(done)
+		// Each change carries the full text, so one sent out of order would
+		// leave the server on an older version.
+		if previous != nil {
+			<-previous
+		}
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			return

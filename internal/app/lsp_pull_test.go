@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/lsp"
@@ -78,5 +79,29 @@ func TestFailedDiagnosticPullCanBeRetried(t *testing.T) {
 	schedule(nil)
 	if runs != 3 {
 		t.Fatalf("same key after failure ran %d times in total, want 3", runs)
+	}
+}
+
+func TestDidChangeWaitsForThePreviousSend(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	a.LspManager = lsp.NewManager(&config.LSPSettings{Servers: map[string]config.LSPServerConfig{
+		"go": {Command: []string{"ttt-test-missing-server"}, Languages: map[string]string{".go": "go"}},
+	}})
+	const path = "/tmp/a.go"
+	previous := make(chan struct{})
+	a.DocVersions[path] = 1
+	a.lspSent[path] = previous
+
+	done := a.NotifyLSPChange(path, "go", []string{"x"})
+	select {
+	case <-done:
+		t.Fatal("didChange was sent before the previous notification")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(previous)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("didChange never sent after the previous notification")
 	}
 }
