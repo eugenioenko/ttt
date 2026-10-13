@@ -543,15 +543,8 @@ func (a *App) checkMouseHover(mx, my int) {
 		a.DismissHover()
 		return
 	}
-	r := a.EditorGroup.Editor.GetRect()
-	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
-		a.DismissHover()
-		return
-	}
-	gw := a.EditorGroup.Editor.GutterWidth()
-	line := my - r.Y + a.EditorGroup.Editor.Viewport.TopLine
-	col := mx - r.X - gw + a.EditorGroup.Editor.Viewport.LeftCol
-	if col < 0 {
+	line, col, ok := a.EditorGroup.Editor.TextPosAt(mx, my)
+	if !ok {
 		a.DismissHover()
 		return
 	}

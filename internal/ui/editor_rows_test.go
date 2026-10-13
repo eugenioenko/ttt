@@ -308,3 +308,55 @@ func TestTopOffsetPastShrunkenTopLineKeepsCursorOnItsRow(t *testing.T) {
 	}
 	t.Fatal("line 1 not on screen")
 }
+
+func TestTextPosAtMapsTabsFoldsAndWraps(t *testing.T) {
+	type probe struct {
+		x, y      int
+		line, col int
+		ok        bool
+	}
+	check := func(t *testing.T, e *EditorPaneWidget, probes []probe) {
+		t.Helper()
+		renderRows(e)
+		g := e.GutterWidth()
+		for _, p := range probes {
+			line, col, ok := e.TextPosAt(g+p.x, p.y)
+			if ok != p.ok || (ok && (line != p.line || col != p.col)) {
+				t.Fatalf("TextPosAt(%d,%d) = (%d,%d,%v), want (%d,%d,%v)", p.x, p.y, line, col, ok, p.line, p.col, p.ok)
+			}
+		}
+	}
+
+	t.Run("tabs", func(t *testing.T) {
+		e := newRowsEditor([]string{"\tx := 1"}, 30, 4)
+		check(t, e, []probe{
+			{x: 0, y: 0, line: 0, col: 0, ok: true},
+			{x: 3, y: 0, line: 0, col: 0, ok: true},
+			{x: 4, y: 0, line: 0, col: 1, ok: true},
+			{x: 9, y: 0, line: 0, col: 6, ok: true},
+			{x: 10, y: 0},
+			{x: 0, y: 1},
+			{x: -1, y: 0},
+		})
+	})
+
+	t.Run("folds", func(t *testing.T) {
+		lines := []string{"a0", "  a1", "  a2", "b3"}
+		e := newRowsEditor(lines, 20, 4)
+		e.Folds = fold.NewState()
+		e.Folds.SetRanges(fold.ComputeIndentRanges(lines))
+		e.Folds.Toggle(0)
+		check(t, e, []probe{{x: 1, y: 1, line: 3, col: 1, ok: true}})
+	})
+
+	t.Run("wrap", func(t *testing.T) {
+		e := newRowsEditor([]string{"short", "aaaaaaaaaabbbbbbbbbbcc", "end"}, 12, 6)
+		e.WordWrap = true
+		check(t, e, []probe{
+			{x: 3, y: 2, line: 1, col: 12, ok: true},
+			{x: 1, y: 3, line: 1, col: 19, ok: true},
+			{x: 4, y: 3},
+			{x: 0, y: 4, line: 2, col: 0, ok: true},
+		})
+	})
+}
