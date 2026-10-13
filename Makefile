@@ -1,6 +1,6 @@
 # Makefile for ttt - terminal text editor
 
-.PHONY: all test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff bench-log
+.PHONY: all test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff bench-log bench-code
 
 all: build
 
@@ -37,6 +37,10 @@ LOG_BENCH_TIME ?= 1x
 BENCH_LOG_SIZE ?= 1MiB|128MiB|256MiB
 bench-log:
 	go test -run '^$$' -bench '^BenchmarkLog$$/^($(BENCH_LOG_SIZE))(_wrap|_edit)?$$' -benchtime $(LOG_BENCH_TIME) $(BENCH_FLAGS) ./tests/bench/
+
+# Opens and types in a 64 MiB Go file in the built binary; reports time and peak RSS.
+bench-code:
+	go test -run '^$$' -bench '^BenchmarkCode$$' -benchtime $(LOG_BENCH_TIME) $(BENCH_FLAGS) ./tests/bench/
 
 fmt:
 	$(GOFMT) -w .

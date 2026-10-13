@@ -21,6 +21,7 @@ const suites = [
   { name: 'Editor', title: 'Editor', file: 'tests/e2e/editor_bench_test.go' },
   { name: 'Diff', title: 'Diff views', file: 'tests/e2e/diff_bench_test.go' },
   { name: 'Log', title: 'Log files', file: 'tests/bench/log_test.go', process: true },
+  { name: 'Code', title: 'Code files', file: 'tests/bench/code_test.go', process: true },
 ];
 const packages = ['tests/e2e', 'tests/bench'];
 const harnessFile = 'tests/e2e/harness_test.go';
@@ -51,6 +52,7 @@ const sides = {
 const runs = [
   { name: 'editor/diff', pkg: 'tests/e2e', pattern: '^Benchmark(Editor|Diff)$', time: benchTime },
   { name: 'log opening', pkg: 'tests/bench', pattern: '^BenchmarkLog$', time: logBenchTime },
+  { name: 'code', pkg: 'tests/bench', pattern: '^BenchmarkCode$', time: logBenchTime },
 ];
 const resultLine = new RegExp(`^Benchmark(${suites.map((suite) => suite.name).join('|')})\\/(\\S+?)(?:-\\d+)?\\s+\\d+\\s+(.*)$`);
 const metricUnits = { 'ns/op': 'ns', 'B/op': 'bytes', 'allocs/op': 'allocs', 'peak-RSS-B': 'rss' };
@@ -129,6 +131,8 @@ try {
     `Logs are opened by each side's built \`ttt\` binary, ${logBenchTime} per pass, timed from launch until the first frame shows the log; \`_wrap\` rows start with word wrap on, and \`_edit\` opens a log committed to git, types a character, and moves down 20 lines. ` +
       'Time includes process startup, so the 1 MiB case is mostly startup; peak RSS is the process\'s maximum resident memory. ' +
       'The 1, 128, and 256 MiB fixtures are generated once outside timing and shared across both checkouts, so reads may use the OS file cache.',
+    '',
+    'Code files open a 64 MiB Go file, this repository\'s sources repeated, with LSP and the git gutter off; `_type` also types 20 characters before quitting.',
   ];
   let compared = 0;
   for (const suite of suites) {
