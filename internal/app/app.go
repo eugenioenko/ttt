@@ -81,6 +81,7 @@ type App struct {
 	Changes                *ChangesPanel
 	Repository             *RepositoryState
 	Symbols                *SymbolsPanel
+	symbolsTask            *asynctask.Task[symbolsReply]
 	Reg                    *command.Registry
 	Running                *bool
 	quitPending            bool

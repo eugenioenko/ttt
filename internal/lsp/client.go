@@ -513,8 +513,8 @@ func (c *Client) References(uri string, line, col int, includeDeclaration bool) 
 // DocumentSymbols returns the symbol tree for a document. Servers reply with
 // either hierarchical DocumentSymbol[] or flat SymbolInformation[]; flat
 // results are converted so callers always get the hierarchical form.
-func (c *Client) DocumentSymbols(uri string) ([]DocumentSymbol, error) {
-	result, err := c.call("textDocument/documentSymbol", DocumentSymbolParams{
+func (c *Client) DocumentSymbols(ctx context.Context, uri string) ([]DocumentSymbol, error) {
+	result, err := c.callContext(ctx, "textDocument/documentSymbol", DocumentSymbolParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 	})
 	if err != nil {

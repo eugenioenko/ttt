@@ -158,6 +158,53 @@ func TestCompletionAndSignatureHelpRespectCancellation(t *testing.T) {
 	}
 }
 
+func TestDocumentSymbolsRespectCancellation(t *testing.T) {
+	var output bytes.Buffer
+	c := &Client{codec: NewCodec(nil, &output)}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.DocumentSymbols(ctx, "file:///test.go"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("document symbols error = %v, want context cancellation", err)
+	}
+	if output.Len() != 0 {
+		t.Fatal("cancelled document symbols request was sent")
+	}
+}
+
+func TestDocumentSymbolsCancellationSendsCancelRequest(t *testing.T) {
+	c, server := pipeClient(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.DocumentSymbols(ctx, "file:///test.go")
+		done <- err
+	}()
+	request := receiveWithin(t, server)
+	if request.Method != "textDocument/documentSymbol" {
+		t.Fatalf("request method = %q", request.Method)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("document symbols error = %v, want context cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("document symbols cancellation waited for the server reply")
+	}
+	message := receiveWithin(t, server)
+	var params struct {
+		ID json.RawMessage `json:"id"`
+	}
+	if err := json.Unmarshal(message.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if message.Method != "$/cancelRequest" || string(params.ID) != string(request.ID) {
+		t.Fatalf("cancellation = %s %s, want request %s", message.Method, message.Params, request.ID)
+	}
+}
+
 func TestClientAnswersServerRequests(t *testing.T) {
 	tests := []struct {
 		name      string

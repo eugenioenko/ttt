@@ -611,6 +611,8 @@ func registerWidgetCallbacks(app *App) {
 		app.syncRepositoryObservation()
 		if id == "outline" {
 			app.RefreshSymbols()
+		} else {
+			app.stopSymbolsTask()
 		}
 		if id == "explorer" {
 			app.Explorer.Reload()

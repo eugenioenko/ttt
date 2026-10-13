@@ -34,12 +34,6 @@ type ReferencesResult struct {
 	Locations []lsp.Location
 }
 
-type SymbolsResult struct {
-	Path    string
-	Symbols []lsp.DocumentSymbol
-	Status  string
-}
-
 type RenameResult struct {
 	Edit *lsp.WorkspaceEdit
 }

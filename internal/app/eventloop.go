@@ -322,14 +322,6 @@ func RunEventLoop(
 				} else {
 					app.StatusNotify("No references found")
 				}
-			case *SymbolsResult:
-				if v.Path == app.EditorGroup.ActiveFilePath() {
-					if len(v.Symbols) == 0 && v.Status != "" {
-						app.Symbols.SetStatus(v.Status)
-					} else {
-						app.ApplySymbols(v.Symbols)
-					}
-				}
 			case *FormattingResult:
 				if len(v.Edits) > 0 {
 					app.ApplyTextEdits(v.Edits)

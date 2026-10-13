@@ -13,6 +13,7 @@ let sequence = 0;
 let documentText = "";
 let holdNextHover = process.argv[3] === "--hold-hover";
 let pendingHover;
+let symbolRequests = 0;
 // --late=METHOD answers the first request for METHOD only after a delay, so a
 // test can move the cursor before the reply arrives.
 let lateMethod = process.argv.find((arg) => arg.startsWith("--late="))?.slice("--late=".length);
@@ -153,7 +154,12 @@ function handle(message) {
       });
       break;
     case "textDocument/documentSymbol":
-      respond(message.id, []);
+      respond(message.id, process.argv.includes("--symbols") ? [{
+        name: `FAKE_SYMBOL_${++symbolRequests}`,
+        kind: 12,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        selectionRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      }] : []);
       break;
     case "shutdown":
       respond(message.id, null);

@@ -204,6 +204,22 @@ function assertProtocol(trace, file, expectedTexts) {
 }
 
 describe("deterministic fake LSP protocol", () => {
+  it("refreshes outline symbols on unchanged save and panel return", () => {
+    const { trace } = startCase("outline-refresh", ["--symbols"]);
+    tui.exec("Show Outline");
+    tui.waitFor("FAKE_SYMBOL_1");
+    tui.exec("Save File");
+    tui.waitFor("FAKE_SYMBOL_2");
+    tui.exec("Show Explorer");
+    tui.exec("Show Outline");
+    tui.waitFor("FAKE_SYMBOL_3");
+    const after = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[after]).toContain("FAKE_SYMBOL_3");
+    expect(messagesFor(readTrace(trace), "textDocument/documentSymbol")).toHaveLength(3);
+  });
+
   it("drops a completion reply that arrives after the cursor left the word", () => {
     startCase("completion-late", ["--late=textDocument/completion"]);
     tui.type("consol");

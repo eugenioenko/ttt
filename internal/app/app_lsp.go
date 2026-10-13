@@ -558,10 +558,12 @@ func (a *App) ShowReferences(locs []lsp.Location) {
 // unless the Outline panel is the active sidebar panel.
 func (a *App) RefreshSymbols() {
 	if a.Symbols == nil || a.Sidebar.ActivePanel != "outline" {
+		a.stopSymbolsTask()
 		return
 	}
 	path, lang := a.editorPathLang()
 	if path == "" || !a.EditorGroup.IsEditorActive() || a.EditorGroup.IsActiveVirtual() {
+		a.stopSymbolsTask()
 		a.Symbols.Path = ""
 		a.Symbols.Clear()
 		return
@@ -575,62 +577,6 @@ func (a *App) ApplySymbols(symbols []lsp.DocumentSymbol) {
 	a.Symbols.SetSymbols(symbols)
 	line, _ := a.EditorGroup.ActiveCursor()
 	a.Symbols.SelectNearest(line)
-}
-
-func (a *App) RequestDocumentSymbols(path, lang string) {
-	samePath := a.Symbols.Path == path
-	a.Symbols.Path = path
-	fallback := a.fallbackSymbols(path, lang)
-	serverKey, _, ok := a.lspResolve(path, lang)
-	if !ok {
-		if len(fallback) == 0 && lang != "" && !strings.EqualFold(lang, "plaintext") {
-			a.Symbols.SetStatus("No language server for " + lang)
-			return
-		}
-		a.ApplySymbols(fallback)
-		return
-	}
-	serverCfg := a.LspManager.ServerConfig(serverKey)
-	if len(serverCfg.Command) > 0 {
-		if _, err := exec.LookPath(serverCfg.Command[0]); err != nil {
-			if len(fallback) > 0 {
-				a.ApplySymbols(fallback)
-			} else {
-				a.Symbols.SetStatus(serverCfg.Command[0] + " is not installed")
-			}
-			return
-		}
-	}
-	// Show the built-in outline immediately when available; the server
-	// response replaces it. Otherwise show a loading state — except when
-	// re-requesting the same file, where the current outline stays up to
-	// avoid flicker (e.g. refresh on save).
-	if len(fallback) > 0 {
-		a.ApplySymbols(fallback)
-	} else if !samePath || a.Symbols.Tree.ItemCount() == 0 {
-		a.Symbols.SetStatus("Loading symbols…")
-	}
-	workDir := a.lspWorkDir(path)
-	go func() {
-		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-		if err != nil {
-			slog.Error("lsp client", "err", err)
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&SymbolsResult{Path: path, Symbols: fallback, Status: "Language server unavailable"}))
-			return
-		}
-		symbols, err := client.DocumentSymbols(FileURI(path))
-		if err != nil {
-			// One retry absorbs cold-start latency and didOpen races.
-			time.Sleep(1500 * time.Millisecond)
-			symbols, err = client.DocumentSymbols(FileURI(path))
-		}
-		if err != nil {
-			slog.Error("lsp documentSymbol", "err", err)
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&SymbolsResult{Path: path, Symbols: fallback, Status: lspStatusMessage(err)}))
-			return
-		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&SymbolsResult{Path: path, Symbols: symbols}))
-	}()
 }
 
 func lspStatusMessage(err error) string {
