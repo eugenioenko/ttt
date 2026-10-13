@@ -117,7 +117,8 @@ func pullServerApp(t *testing.T, interFile bool) (a *App, active, background str
 
 // queueTaskDelivery makes task results wait for drain, as they wait for the
 // event loop in the editor.
-func queueTaskDelivery(a *App) (drain func()) {
+func queueTaskDelivery(t *testing.T, a *App) (drain func()) {
+	t.Helper()
 	queue := make(chan func(), 64)
 	a.tasks.post = func(run func()) error {
 		queue <- run
@@ -141,7 +142,7 @@ func queueTaskDelivery(a *App) (drain func()) {
 			case run := <-queue:
 				run()
 			case <-deadline:
-				return
+				t.Fatal("tasks still pending after 10s")
 			case <-time.After(10 * time.Millisecond):
 				if !pending() {
 					return
@@ -219,7 +220,7 @@ func TestReopenedDocumentIsPulledAgain(t *testing.T) {
 func TestRefreshSurvivesActivePullApplyingDuringIt(t *testing.T) {
 	a, active, background := pullServerApp(t, false)
 	a.ScheduleDiagnosticPull(true)
-	drain := queueTaskDelivery(a)
+	drain := queueTaskDelivery(t, a)
 
 	a.handleDiagnosticRefresh("go")
 	key := pullKey{path: active, version: a.DocVersions[active], epoch: a.lspEpochs["go"]}
@@ -233,7 +234,7 @@ func TestRefreshSurvivesActivePullApplyingDuringIt(t *testing.T) {
 
 func TestEditOnAnotherServerKeepsBackgroundPull(t *testing.T) {
 	a, paths := fakePullServersApp(t, false, "b.go", "a.go", "c.py")
-	drain := queueTaskDelivery(a)
+	drain := queueTaskDelivery(t, a)
 
 	a.handleDiagnosticRefresh("go")
 	a.cancelBackgroundPull(paths[2], "")
@@ -246,7 +247,7 @@ func TestEditOnAnotherServerKeepsBackgroundPull(t *testing.T) {
 
 func TestBackgroundPullsForTwoServersBothApply(t *testing.T) {
 	a, paths := fakePullServersApp(t, false, "a.go", "b.go", "c.py", "d.py")
-	drain := queueTaskDelivery(a)
+	drain := queueTaskDelivery(t, a)
 
 	a.pullOpenDocuments("go", paths[0], true)
 	a.pullOpenDocuments("py", paths[2], true)
@@ -278,7 +279,7 @@ func TestBackgroundPullDoesNotStartARestartingServer(t *testing.T) {
 			// Each open starts the server itself if it is not running.
 			<-a.lspSent[active]
 			<-a.lspSent[background]
-			drain := queueTaskDelivery(a)
+			drain := queueTaskDelivery(t, a)
 			var starts atomic.Int32
 			a.LspManager.OnLog = func(_, _, message string) {
 				if strings.HasPrefix(message, "starting ") {
