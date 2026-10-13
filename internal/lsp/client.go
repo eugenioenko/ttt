@@ -506,7 +506,7 @@ func (c *Client) CodeAction(uri string, r Range, kinds []string) ([]CodeAction, 
 	result, err := c.call("textDocument/codeAction", CodeActionParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Range:        r,
-		Context:      CodeActionContext{Only: kinds},
+		Context:      CodeActionContext{Diagnostics: []Diagnostic{}, Only: kinds},
 	})
 	if err != nil {
 		return nil, err

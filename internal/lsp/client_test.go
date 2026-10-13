@@ -418,3 +418,32 @@ func TestParseDocumentSymbolsEmpty(t *testing.T) {
 		t.Fatalf("expected no symbols, got %d", len(symbols))
 	}
 }
+
+func TestCodeActionSendsEmptyDiagnosticsArray(t *testing.T) {
+	c, server := pipeClient(t)
+	go func() {
+		_, _ = c.CodeAction("file:///a.ts", Range{}, []string{"source.organizeImports"})
+	}()
+
+	req := receiveWithin(t, server)
+	if req.Method != "textDocument/codeAction" {
+		t.Fatalf("expected textDocument/codeAction, got %s", req.Method)
+	}
+
+	// Kept raw: decoding into []Diagnostic would turn null into a nil slice and
+	// erase the distinction this test exists to catch. TypeScript 7 rejects a
+	// null diagnostics field with -32602.
+	var params struct {
+		Context struct {
+			Diagnostics json.RawMessage `json:"diagnostics"`
+		} `json:"context"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+	if string(params.Context.Diagnostics) != "[]" {
+		t.Fatalf("expected diagnostics to serialize as [], got %s", params.Context.Diagnostics)
+	}
+
+	server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")})
+}
