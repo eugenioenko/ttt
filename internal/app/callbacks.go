@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -198,7 +199,27 @@ func (a *App) PreviewSearchReplace(filePath string, matches []ui.SearchMatch, re
 	a.Root.SetFocus(a.EditorGroup)
 }
 
+// staleSearchMatches reports whether any match's line no longer reads as it did
+// when the search ran, so its columns may point at other text.
+func staleSearchMatches(lines []string, matches []ui.SearchMatch) bool {
+	for _, m := range matches {
+		idx := m.LineNum - 1
+		if idx < 0 || idx >= len(lines) {
+			return true
+		}
+		// rg sends non-UTF-8 lines as bytes, which leaves LineText empty.
+		if m.LineText != "" && strings.TrimRight(lines[idx], "\r") != m.LineText {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, replacement string, opts ui.SearchOptions) {
+	if a.EditorGroup.IsDirtyPath(filePath) {
+		a.StatusWarn(filepath.Base(filePath) + " has unsaved changes; save it before replacing")
+		return
+	}
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		a.StatusWarn("Cannot read file: " + err.Error())
@@ -207,6 +228,11 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 	lines := strings.Split(string(data), "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
+	}
+	if staleSearchMatches(lines, matches) {
+		a.StatusWarn(filepath.Base(filePath) + " changed since the search; nothing replaced")
+		a.Search.Refresh()
+		return
 	}
 	newLines := ui.ApplyReplacements(lines, matches, replacement, opts)
 	if err := os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")+"\n"), 0644); err != nil {
@@ -231,7 +257,13 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 		func() {
 			a.DismissDialog()
 			invalidatePath := ""
+			replacedMatches, replacedFiles := 0, 0
+			var skipped []string
 			for filePath, matches := range allMatches {
+				if a.EditorGroup.IsDirtyPath(filePath) {
+					skipped = append(skipped, filepath.Base(filePath))
+					continue
+				}
 				data, err := os.ReadFile(filePath)
 				if err != nil {
 					continue
@@ -240,10 +272,16 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 				if len(lines) > 0 && lines[len(lines)-1] == "" {
 					lines = lines[:len(lines)-1]
 				}
+				if staleSearchMatches(lines, matches) {
+					skipped = append(skipped, filepath.Base(filePath))
+					continue
+				}
 				newLines := ui.ApplyReplacements(lines, matches, replacement, opts)
 				if err := os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")+"\n"), 0644); err != nil {
 					continue
 				}
+				replacedMatches += len(matches)
+				replacedFiles++
 				if invalidatePath == "" {
 					invalidatePath = filePath
 				}
@@ -251,7 +289,13 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 			}
 			a.invalidateRepositoryPath(invalidatePath, RepositoryWorktree)
 			a.Search.Refresh()
-			a.StatusNotify(fmt.Sprintf("Replaced %d matches across %d files", totalMatches, totalFiles))
+			msg := fmt.Sprintf("Replaced %d matches across %d files", replacedMatches, replacedFiles)
+			if len(skipped) > 0 {
+				sort.Strings(skipped)
+				a.StatusWarn(msg + "; skipped " + strings.Join(skipped, ", ") + " (unsaved or changed since the search)")
+				return
+			}
+			a.StatusNotify(msg)
 		},
 	})
 }
