@@ -858,6 +858,7 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path]++
 	version := a.DocVersions[path]
+	epoch := a.lspEpochs[serverKey]
 	previous := a.lspSent[path]
 	a.lspSent[path] = done
 	a.DocVersionsMu.Unlock()
@@ -867,6 +868,14 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 		// leave the server on an older version.
 		if previous != nil {
 			<-previous
+		}
+		// A restart reopens the document with its current text; a change from
+		// before it would reach a server that has not opened the document yet.
+		a.DocVersionsMu.Lock()
+		restarted := a.lspEpochs[serverKey] != epoch
+		a.DocVersionsMu.Unlock()
+		if restarted {
+			return
 		}
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {

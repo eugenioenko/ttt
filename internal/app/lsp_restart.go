@@ -35,6 +35,11 @@ func (a *App) RestartLSPServer() {
 		return
 	}
 	workDir := a.lspWorkDir(path)
+	// Raised before the old server stops, since a change made while it stops
+	// would otherwise start the new server and reach it before the reopen.
+	a.DocVersionsMu.Lock()
+	a.lspEpochs[serverKey]++
+	a.DocVersionsMu.Unlock()
 	a.StatusNotify(fmt.Sprintf("Restarting %s…", serverKey))
 	go func() {
 		a.LspManager.Stop(serverKey)
@@ -48,9 +53,10 @@ func (a *App) RestartLSPServer() {
 func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 	a.EditorGroup.ClearDiagnosticsSource(lspDiagnosticsSource(ev.Server))
 	a.EditorGroup.ClearDiagnosticsSource(lspPullDiagnosticsSource(ev.Server))
-	a.lspEpochs[ev.Server]++
-
-	type openDoc struct{ uri, langID, text string }
+	type openDoc struct {
+		uri, langID, text string
+		inFlight          <-chan struct{}
+	}
 	var docs []openDoc
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
@@ -59,13 +65,21 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 		if !ok || key != ev.Server {
 			continue
 		}
+		inFlight := a.lspSent[d.Path]
 		a.DocVersions[d.Path] = 1
 		a.lspSent[d.Path] = sent
-		docs = append(docs, openDoc{uri: FileURI(d.Path), langID: langID, text: d.Text})
+		docs = append(docs, openDoc{uri: FileURI(d.Path), langID: langID, text: d.Text, inFlight: inFlight})
 	}
 	a.DocVersionsMu.Unlock()
 
 	go func() {
+		// A send already past its restart check must reach the server before
+		// the reopen, or it would replace the current text.
+		for _, d := range docs {
+			if d.inFlight != nil {
+				<-d.inFlight
+			}
+		}
 		client, err := a.LspManager.ClientForLanguage(ev.Server, ev.WorkDir)
 		if err == nil {
 			for _, d := range docs {
