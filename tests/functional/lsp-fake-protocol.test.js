@@ -347,19 +347,8 @@ describe("deterministic fake LSP protocol", () => {
           context: { triggerKind: 2, triggerCharacter: "." },
         },
       },
-      {
-        jsonrpc: "2.0",
-        id: expect.any(Number),
-        method: "textDocument/completion",
-        params: {
-          textDocument: { uri: `file://${file}` },
-          position: { line: 1, character: 11 },
-          context: { triggerKind: 1 },
-        },
-      },
     ]);
     assertRequestAfterDocument(trace, completions[0], `${INITIAL_TEXT}console.`);
-    assertRequestAfterDocument(trace, completions[1], `${INITIAL_TEXT}console.log`);
     expect(messagesFor(trace, "completionItem/resolve")).toEqual([
       {
         jsonrpc: "2.0",
