@@ -134,6 +134,7 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 	var candidates []pullCandidate
 	workDir := ""
 	a.DocVersionsMu.Lock()
+	epoch := a.lspEpochs[server]
 	for _, d := range a.EditorGroup.OpenFiles() {
 		if d.Path == exclude {
 			continue
@@ -146,7 +147,7 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 		if !opened {
 			continue
 		}
-		k := pullKey{path: d.Path, version: version, epoch: a.lspEpochs[server]}
+		k := pullKey{path: d.Path, version: version, epoch: epoch}
 		candidates = append(candidates, pullCandidate{
 			key:       k,
 			sent:      a.lspSent[d.Path],
@@ -161,6 +162,14 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 		return
 	}
 	task.Schedule(func(ctx context.Context) ([]backgroundPull, error) {
+		// A restart raises the epoch before stopping the server, which
+		// ClientForLanguage would otherwise start again ahead of the reopen.
+		a.DocVersionsMu.Lock()
+		restarted := a.lspEpochs[server] != epoch
+		a.DocVersionsMu.Unlock()
+		if restarted {
+			return nil, nil
+		}
 		client, err := a.LspManager.ClientForLanguage(server, workDir)
 		if err != nil {
 			return nil, err

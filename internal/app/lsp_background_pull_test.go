@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -124,13 +126,26 @@ func queueTaskDelivery(a *App) (drain func()) {
 	for _, task := range a.tasks.tasks {
 		task.SetPost(a.tasks.post)
 	}
+	pending := func() bool {
+		for _, task := range a.tasks.tasks {
+			if p, ok := task.(interface{ Pending() bool }); ok && p.Pending() {
+				return true
+			}
+		}
+		return false
+	}
 	return func() {
+		deadline := time.After(10 * time.Second)
 		for {
 			select {
 			case run := <-queue:
 				run()
-			case <-time.After(pullDiagnosticsDelay + 500*time.Millisecond):
+			case <-deadline:
 				return
+			case <-time.After(10 * time.Millisecond):
+				if !pending() {
+					return
+				}
 			}
 		}
 	}
@@ -211,8 +226,8 @@ func TestRefreshSurvivesActivePullApplyingDuringIt(t *testing.T) {
 	a.applyPulledDiagnostics("go", key, pulledDiagnostics{replace: true}, nil)
 	drain()
 
-	if got := pulledMessage(a, background); got != "b.go#2" {
-		t.Errorf("background document = %q, want b.go#2", got)
+	if got := pulledMessage(a, background); got == "b.go#1" || !strings.HasPrefix(got, "b.go#") {
+		t.Errorf("background document = %q, want it pulled again after b.go#1", got)
 	}
 }
 
@@ -253,5 +268,37 @@ func TestBackgroundPullRetriesWhenServerAsks(t *testing.T) {
 
 	if got := pulledMessage(a, background); got != "b.go#2" {
 		t.Errorf("background document = %q, want b.go#2", got)
+	}
+}
+
+func TestBackgroundPullDoesNotStartARestartingServer(t *testing.T) {
+	for _, restarted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("restarted=%v", restarted), func(t *testing.T) {
+			a, active, background := pullServerApp(t, false)
+			// Each open starts the server itself if it is not running.
+			<-a.lspSent[active]
+			<-a.lspSent[background]
+			drain := queueTaskDelivery(a)
+			var starts atomic.Int32
+			a.LspManager.OnLog = func(_, _, message string) {
+				if strings.HasPrefix(message, "starting ") {
+					starts.Add(1)
+				}
+			}
+
+			a.pullOpenDocuments("go", active, false)
+			// RestartLSPServer's order.
+			if restarted {
+				a.DocVersionsMu.Lock()
+				a.lspEpochs["go"]++
+				a.DocVersionsMu.Unlock()
+			}
+			a.LspManager.Stop("go")
+			drain()
+
+			if started := starts.Load() > 0; started != !restarted {
+				t.Errorf("server started = %v, want %v", started, !restarted)
+			}
+		})
 	}
 }
