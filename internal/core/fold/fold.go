@@ -11,6 +11,8 @@ type State struct {
 	ranges    []Range
 	collapsed map[int]bool
 	pending   func() []Range
+	stale     bool
+	gen       int
 
 	dirty          bool
 	cachedVisible  []int
@@ -37,6 +39,7 @@ func (s *State) SetRanges(ranges []Range) {
 	s.ranges = ranges
 	s.collapsed = keep
 	s.pending = nil
+	s.stale = false
 	s.dirty = true
 }
 
@@ -45,11 +48,32 @@ func (s *State) SetRanges(ranges []Range) {
 func (s *State) SetPending(compute func() []Range) {
 	s.ranges = nil
 	s.pending = compute
+	s.stale = false
+	s.gen++
 	s.dirty = true
+}
+
+// MarkStale is SetPending that keeps the current ranges until Resolve or
+// SetRanges replaces them, so fold markers stay put while a recompute is
+// pending after an edit.
+func (s *State) MarkStale(compute func() []Range) {
+	s.pending = compute
+	s.stale = true
+	s.gen++
 }
 
 func (s *State) Pending() bool {
 	return s.pending != nil
+}
+
+func (s *State) Stale() bool {
+	return s.pending != nil && s.stale
+}
+
+// Generation changes with every SetPending and MarkStale, so a result
+// computed for one can be told apart from a later one.
+func (s *State) Generation() int {
+	return s.gen
 }
 
 func (s *State) Resolve() {

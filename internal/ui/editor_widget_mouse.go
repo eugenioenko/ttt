@@ -141,6 +141,7 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 			row := e.rowAt(my - r.Y)
 			bufLine := row.bufLine
 			if !row.isPhantom() && e.Folds != nil && e.Folds.FoldAt(bufLine) != nil {
+				e.Folds.Resolve()
 				e.Folds.Toggle(bufLine)
 				return EventConsumed
 			}

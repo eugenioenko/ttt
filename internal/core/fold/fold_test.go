@@ -390,3 +390,25 @@ func TestPendingRangesResolveOnDemand(t *testing.T) {
 		t.Error("SetRanges ranges lost")
 	}
 }
+
+func TestMarkStaleKeepsRangesUntilResolved(t *testing.T) {
+	s := NewState()
+	s.SetRanges([]Range{{StartLine: 0, EndLine: 2}})
+	gen := s.Generation()
+	s.MarkStale(func() []Range { return []Range{{StartLine: 1, EndLine: 3}} })
+	if !s.Pending() || !s.Stale() || s.Generation() == gen {
+		t.Fatalf("pending=%v stale=%v generation=%d, want a new stale generation", s.Pending(), s.Stale(), s.Generation())
+	}
+	if s.FoldAt(0) == nil {
+		t.Fatal("marking stale dropped the current ranges")
+	}
+	s.Resolve()
+	if s.Pending() || s.Stale() || s.FoldAt(0) != nil || s.FoldAt(1) == nil {
+		t.Fatal("resolve did not replace the stale ranges")
+	}
+
+	s.SetPending(func() []Range { return nil })
+	if s.Stale() || s.FoldAt(1) != nil {
+		t.Fatal("SetPending kept ranges or counted as stale")
+	}
+}

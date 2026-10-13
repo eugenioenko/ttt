@@ -402,6 +402,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)
 	app.reportGrammarErrors(grammarErrs)
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
+	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
 	return app
 }
 

@@ -92,9 +92,7 @@ func (e *EditorPaneWidget) moveLineBlock(delta int) {
 		blockShift:    blockShift,
 		neighborShift: -len(block) * delta,
 	})
-	if e.Folds != nil {
-		e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
-	}
+	e.refreshFolds()
 	e.Cursor.Line += blockShift
 	if hasSel {
 		e.Selection.Anchor.Line += blockShift

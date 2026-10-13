@@ -310,9 +310,24 @@ func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 		e.Undo.Push(cmd)
 	}
 	e.bufferDirty = true
-	if e.Folds != nil && len(e.Buf.Lines) != prevLines {
-		e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
+	if len(e.Buf.Lines) != prevLines {
+		e.refreshFolds()
 	}
+}
+
+const asyncFoldLines = 50_000
+
+func (e *EditorPaneWidget) refreshFolds() {
+	if e.Folds == nil {
+		return
+	}
+	buf := e.Buf
+	// Collapsed folds hide lines, so they need ranges that match the edit now.
+	if len(buf.Lines) < asyncFoldLines || e.Folds.HasCollapsedFolds() {
+		e.Folds.SetRanges(fold.ComputeIndentRanges(buf.Lines))
+		return
+	}
+	e.Folds.MarkStale(func() []fold.Range { return fold.ComputeIndentRanges(buf.Lines) })
 }
 
 func (e *EditorPaneWidget) ExecCommand(cmd undo.EditCommand) { e.exec(cmd) }

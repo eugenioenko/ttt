@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -344,9 +343,7 @@ func (e *EditorPaneWidget) execEnter() {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
 	e.bufferDirty = true
-	if e.Folds != nil {
-		e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
-	}
+	e.refreshFolds()
 }
 
 // execBackspace deletes the selection, the previous character (with soft-tab

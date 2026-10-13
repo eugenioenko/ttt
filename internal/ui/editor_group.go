@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
@@ -148,11 +149,17 @@ type EditorGroupWidget struct {
 	// the Diagnostics panel can rebuild from DiagnosticsByPath().
 	OnDiagnosticsChanged func()
 
-	// FoldTask computes an opened file's folds after its first frame; without
-	// it they are computed on that frame.
-	FoldTask *asynctask.Task[[]fold.Range]
-	foldBuf  *buffer.Buffer
+	// FoldTask computes an opened file's folds after its first frame, and a
+	// large file's folds after an edit once FoldDelay passes without another;
+	// without them they are computed on the next frame.
+	FoldTask  *asynctask.Task[[]fold.Range]
+	FoldDelay *asynctask.Task[struct{}]
+	foldBuf   *buffer.Buffer
+	foldGen   int
 }
+
+// FoldRecomputeDelay lets a run of Enters in a large file recompute folds once.
+const FoldRecomputeDelay = 150 * time.Millisecond
 
 func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool, gutterStyle string) *EditorGroupWidget {
 	editor := NewEditorPaneWidget(
@@ -1668,7 +1675,7 @@ func (g *EditorGroupWidget) AnyDirty() bool {
 
 func (g *EditorGroupWidget) undoRedoPostProcess() {
 	if g.Editor.Folds != nil {
-		g.Editor.Folds.SetRanges(fold.ComputeIndentRanges(g.Editor.Buf.Lines))
+		g.Editor.refreshFolds()
 		g.Editor.ExpandFoldContaining(g.Editor.Cursor.Line)
 	}
 	g.Editor.bufferDirty = true
@@ -2404,26 +2411,40 @@ func (g *EditorGroupWidget) scheduleFolds() {
 	if t == nil || t.Folds == nil || !t.Folds.Pending() || g.Editor.WordWrap {
 		return
 	}
-	if g.FoldTask == nil {
+	if g.FoldTask == nil || (t.Folds.Stale() && g.FoldDelay == nil) {
 		t.Folds.Resolve()
 		return
 	}
-	if g.foldBuf == t.Buf {
+	gen := t.Folds.Generation()
+	if g.foldBuf == t.Buf && g.foldGen == gen {
 		return
 	}
 	buf, folds := t.Buf, t.Folds
-	lines := slices.Clone(buf.Lines)
-	g.foldBuf = buf
-	g.FoldTask.Schedule(func(context.Context) ([]fold.Range, error) {
-		return fold.ComputeIndentRanges(lines), nil
-	}, func(ranges []fold.Range, _ error) {
-		g.foldBuf = nil
-		// Edits only recompute folds when they add or remove lines, which also
-		// ends pending, so ranges for an unchanged line count are as current as
-		// an edit would leave them. Rejecting them on every keystroke would
-		// keep folds from landing while the user types.
-		if folds.Pending() && len(buf.Lines) == len(lines) {
-			folds.SetRanges(ranges)
+	g.foldBuf, g.foldGen = buf, gen
+	compute := func() {
+		lines := slices.Clone(buf.Lines)
+		g.FoldTask.Schedule(func(context.Context) ([]fold.Range, error) {
+			return fold.ComputeIndentRanges(lines), nil
+		}, func(ranges []fold.Range, _ error) {
+			g.foldBuf = nil
+			// Only edits that add or remove lines start a new generation, so
+			// ranges for the same generation and line count are as current as
+			// an edit would leave them. Rejecting them on every keystroke would
+			// keep folds from landing while the user types.
+			if folds.Pending() && folds.Generation() == gen && len(buf.Lines) == len(lines) {
+				folds.SetRanges(ranges)
+			}
+		})
+	}
+	if !folds.Stale() {
+		compute()
+		return
+	}
+	g.FoldDelay.Schedule(func(context.Context) (struct{}, error) {
+		return struct{}{}, nil
+	}, func(_ struct{}, err error) {
+		if err == nil && folds.Pending() && folds.Generation() == gen {
+			compute()
 		}
 	})
 }
