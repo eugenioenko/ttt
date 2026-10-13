@@ -378,6 +378,11 @@ func TestPendingRangesResolveOnDemand(t *testing.T) {
 		t.Fatalf("Resolve: pending=%v, fold=%v, calls=%d; want ranges computed once", s.Pending(), s.FoldAt(0), calls)
 	}
 
+	s.SetPending(func() []Range { return nil })
+	if s.FoldAt(0) != nil {
+		t.Error("SetPending kept the previous ranges")
+	}
+
 	s.SetPending(func() []Range { t.Fatal("SetRanges should drop the pending computation"); return nil })
 	s.SetRanges([]Range{{StartLine: 1, EndLine: 2}})
 	s.Resolve()

@@ -43,7 +43,9 @@ func (s *State) SetRanges(ranges []Range) {
 // SetPending defers computing the ranges until Resolve, unless SetRanges
 // supplies them first. Until then the state has no ranges.
 func (s *State) SetPending(compute func() []Range) {
+	s.ranges = nil
 	s.pending = compute
+	s.dirty = true
 }
 
 func (s *State) Pending() bool {
