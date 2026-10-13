@@ -34,7 +34,8 @@ type Client struct {
 
 	hooks ClientHooks
 
-	OnDiagnostics func(params PublishDiagnosticsParams)
+	OnDiagnostics       func(params PublishDiagnosticsParams)
+	OnDiagnosticRefresh func()
 }
 
 // ClientHooks are passed to NewClient rather than assigned afterwards: the
@@ -177,6 +178,11 @@ func (c *Client) answer(req Response) {
 		reply.Result, _ = json.Marshal(make([]any, len(params.Items)))
 	case "client/registerCapability", "client/unregisterCapability":
 		reply.Result = json.RawMessage("null")
+	case "workspace/diagnostic/refresh":
+		reply.Result = json.RawMessage("null")
+		if c.OnDiagnosticRefresh != nil {
+			c.OnDiagnosticRefresh()
+		}
 	default:
 		reply.Error = &RPCError{Code: CodeMethodNotFound, Message: "method not supported: " + req.Method}
 	}
@@ -283,6 +289,9 @@ func (c *Client) Initialize(rootURI string) error {
 				},
 				Diagnostic: &DiagnosticClientCapabilities{},
 			},
+			Workspace: &WorkspaceClientCapabilities{
+				Diagnostics: &DiagnosticWorkspaceClientCapabilities{RefreshSupport: true},
+			},
 		},
 	})
 	if err != nil {
@@ -355,6 +364,10 @@ func (c *Client) SignatureHelpRetriggerCharacters() []string {
 
 func (c *Client) SupportsPullDiagnostics() bool {
 	return c.diagnosticProvider != nil
+}
+
+func (c *Client) InterFileDependencies() bool {
+	return c.diagnosticProvider != nil && c.diagnosticProvider.InterFileDependencies
 }
 
 // ok is false for an "unchanged" report, whose diagnostics the caller should

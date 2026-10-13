@@ -232,6 +232,12 @@ func TestClientAnswersServerRequests(t *testing.T) {
 			wantRes: `[null,null]`,
 		},
 		{
+			name:    "diagnostic refresh",
+			request: `{"jsonrpc":"2.0","id":3,"method":"workspace/diagnostic/refresh"}`,
+			wantID:  `3`,
+			wantRes: `null`,
+		},
+		{
 			name:      "unknown method",
 			request:   `{"jsonrpc":"2.0","id":"x","method":"window/showDocument","params":{}}`,
 			wantID:    `"x"`,
@@ -259,6 +265,21 @@ func TestClientAnswersServerRequests(t *testing.T) {
 				t.Errorf("reply = result %s error %v, want result %s", reply.Result, reply.Error, tt.wantRes)
 			}
 		})
+	}
+}
+
+func TestClientDiagnosticRefreshCallsHook(t *testing.T) {
+	c, server := pipeClient(t)
+	refreshed := make(chan struct{}, 1)
+	c.OnDiagnosticRefresh = func() { refreshed <- struct{}{} }
+	if err := server.Send(json.RawMessage(`{"jsonrpc":"2.0","id":1,"method":"workspace/diagnostic/refresh"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveWithin(t, server)
+	select {
+	case <-refreshed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("refresh hook not called")
 	}
 }
 

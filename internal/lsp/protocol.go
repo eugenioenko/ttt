@@ -40,6 +40,15 @@ type InitializeParams struct {
 
 type ClientCapabilities struct {
 	TextDocument *TextDocumentClientCapabilities `json:"textDocument,omitempty"`
+	Workspace    *WorkspaceClientCapabilities    `json:"workspace,omitempty"`
+}
+
+type WorkspaceClientCapabilities struct {
+	Diagnostics *DiagnosticWorkspaceClientCapabilities `json:"diagnostics,omitempty"`
+}
+
+type DiagnosticWorkspaceClientCapabilities struct {
+	RefreshSupport bool `json:"refreshSupport"`
 }
 
 type TextDocumentClientCapabilities struct {

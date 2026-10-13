@@ -105,6 +105,7 @@ function expectedInitialize(root) {
         documentSymbol: { hierarchicalDocumentSymbolSupport: true },
         diagnostic: { dynamicRegistration: false, relatedDocumentSupport: false },
       },
+      workspace: { diagnostics: { refreshSupport: true } },
     },
   };
 }

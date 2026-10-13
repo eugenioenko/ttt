@@ -34,6 +34,8 @@ type Manager struct {
 	stateMu sync.Mutex
 
 	OnDiagnostics func(server string, params PublishDiagnosticsParams)
+	// OnDiagnosticRefresh is called off the UI goroutine.
+	OnDiagnosticRefresh func(server string)
 
 	// OnLog receives server-reported messages. Called from the client's stderr
 	// and read-loop goroutines, so the handler must be goroutine-safe.
@@ -116,6 +118,11 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	client.OnDiagnostics = func(params PublishDiagnosticsParams) {
 		if m.OnDiagnostics != nil {
 			m.OnDiagnostics(key, params)
+		}
+	}
+	client.OnDiagnosticRefresh = func() {
+		if m.OnDiagnosticRefresh != nil {
+			m.OnDiagnosticRefresh(key)
 		}
 	}
 
