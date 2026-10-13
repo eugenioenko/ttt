@@ -329,6 +329,8 @@ func RunEventLoop(
 				}
 			case *DiagnosticsResult:
 				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, v.Diagnostics)
+			case *LSPDiagnosticRefresh:
+				app.handleDiagnosticRefresh(v.Server)
 			case *LSPServerStopped:
 				app.handleLSPServerStopped(v)
 			case *LSPServerRestarted:

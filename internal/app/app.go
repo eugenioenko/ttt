@@ -141,6 +141,11 @@ type App struct {
 	// DocVersionsMu, so other goroutines must hold the lock to read it.
 	lspEpochs map[string]int
 	diagPull  *asynctask.Task[pulledDiagnostics]
+	// diagBackground holds one task per server.
+	diagBackground map[string]*asynctask.Task[[]backgroundPull]
+	// lastPulled holds the document state behind each path's applied pull.
+	// UI goroutine only.
+	lastPulled map[string]pullKey
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
@@ -658,6 +663,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			lang = a.EditorGroup.Editor.Highlighter.Language()
 		}
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
+		a.cancelBackgroundPull(path, lang)
 		a.ScheduleDiagnosticPull(false)
 		a.ScheduleAutocomplete()
 		a.CheckSignatureHelpTrigger(changeDone)
@@ -687,6 +693,10 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	// the indicator does not keep claiming the server is up.
 	lspManager.OnStateChange = func() {
 		screen.PostEvent(tcell.NewEventInterrupt(&LSPStateChanged{}))
+	}
+
+	lspManager.OnDiagnosticRefresh = func(server string) {
+		screen.PostEvent(tcell.NewEventInterrupt(&LSPDiagnosticRefresh{Server: server}))
 	}
 
 	lspManager.OnDiagnostics = func(server string, params lsp.PublishDiagnosticsParams) {

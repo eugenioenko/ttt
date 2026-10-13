@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/lsp"
 )
 
@@ -26,8 +27,6 @@ type pulledDiagnostics struct {
 	replace bool
 }
 
-// Background documents keep their last pulled diagnostics until they become
-// active again.
 func (a *App) ScheduleDiagnosticPull(immediate bool) {
 	path, lang := a.editorPathLang()
 	serverKey, _, ok := a.lspResolve(path, lang)
@@ -69,6 +68,148 @@ func (a *App) ScheduleDiagnosticPull(immediate bool) {
 	}
 }
 
+type LSPDiagnosticRefresh struct {
+	Server string
+}
+
+type backgroundPull struct {
+	key pullKey
+	res pulledDiagnostics
+	err error
+}
+
+type pullCandidate struct {
+	key       pullKey
+	sent      <-chan struct{}
+	unchanged bool
+}
+
+func (a *App) backgroundPullTask(server string) *asynctask.Task[[]backgroundPull] {
+	if a.diagBackground == nil {
+		return nil
+	}
+	task := a.diagBackground[server]
+	if task == nil {
+		task = NewTask[[]backgroundPull](a, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
+		a.diagBackground[server] = task
+	}
+	return task
+}
+
+// cancelBackgroundPull stops the background pull of the edited document's
+// server. Its documents count as pulled only once a result is applied, so the
+// pull after the next active one covers them.
+func (a *App) cancelBackgroundPull(path, lang string) {
+	if server, _, ok := a.lspResolve(path, lang); ok {
+		if task := a.diagBackground[server]; task != nil {
+			task.Stop()
+		}
+	}
+}
+
+func (a *App) handleDiagnosticRefresh(server string) {
+	for _, d := range a.EditorGroup.OpenFiles() {
+		if key, _, ok := a.lspResolve(d.Path, d.Language); ok && key == server {
+			delete(a.lastPulled, d.Path)
+		}
+	}
+	// An active pull from before the refresh would otherwise apply its result
+	// and replace this run with one that skips the active document.
+	if path, lang := a.editorPathLang(); path != "" {
+		if key, _, ok := a.lspResolve(path, lang); ok && key == server {
+			a.diagPull.Stop()
+		}
+	}
+	a.pullOpenDocuments(server, "", true)
+}
+
+// pullOpenDocuments pulls the documents open on server other than exclude. A
+// server without interFileDependencies only gets the ones that changed since
+// their last applied pull.
+func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
+	task := a.backgroundPullTask(server)
+	if task == nil {
+		return
+	}
+	var candidates []pullCandidate
+	workDir := ""
+	a.DocVersionsMu.Lock()
+	for _, d := range a.EditorGroup.OpenFiles() {
+		if d.Path == exclude {
+			continue
+		}
+		key, _, ok := a.lspResolve(d.Path, d.Language)
+		if !ok || key != server {
+			continue
+		}
+		version, opened := a.DocVersions[d.Path]
+		if !opened {
+			continue
+		}
+		k := pullKey{path: d.Path, version: version, epoch: a.lspEpochs[server]}
+		candidates = append(candidates, pullCandidate{
+			key:       k,
+			sent:      a.lspSent[d.Path],
+			unchanged: a.lastPulled[d.Path] == k,
+		})
+		if workDir == "" {
+			workDir = a.lspWorkDir(d.Path)
+		}
+	}
+	a.DocVersionsMu.Unlock()
+	if len(candidates) == 0 {
+		return
+	}
+	task.Schedule(func(ctx context.Context) ([]backgroundPull, error) {
+		client, err := a.LspManager.ClientForLanguage(server, workDir)
+		if err != nil {
+			return nil, err
+		}
+		if !client.SupportsPullDiagnostics() {
+			return nil, nil
+		}
+		interFile := client.InterFileDependencies()
+		var pulls []backgroundPull
+		for _, c := range candidates {
+			if c.unchanged && !interFile {
+				continue
+			}
+			if c.sent != nil {
+				select {
+				case <-c.sent:
+				case <-ctx.Done():
+					return pulls, ctx.Err()
+				}
+			}
+			diags, replace, err := client.Diagnostic(ctx, FileURI(c.key.path))
+			if ctx.Err() != nil {
+				return pulls, ctx.Err()
+			}
+			pulls = append(pulls, backgroundPull{key: c.key, res: pulledDiagnostics{diags: diags, replace: replace}, err: err})
+		}
+		return pulls, nil
+	}, func(pulls []backgroundPull, err error) {
+		if err != nil {
+			slog.Debug("lsp background diagnostic pull failed", "server", server, "err", err)
+		}
+		retrigger := false
+		for _, p := range pulls {
+			if p.err != nil {
+				slog.Debug("lsp diagnostic pull failed", "server", server, "path", p.key.path, "err", p.err)
+				retrigger = retrigger || errors.Is(p.err, lsp.ErrRetriggerDiagnostic)
+				continue
+			}
+			a.setPulledDiagnostics(server, p.key, p.res)
+		}
+		if retrigger {
+			a.pullOpenDocuments(server, exclude, false)
+		}
+	})
+	if immediate {
+		task.Flush()
+	}
+}
+
 func (a *App) applyPulledDiagnostics(server string, key pullKey, res pulledDiagnostics, err error) {
 	if err != nil {
 		slog.Debug("lsp diagnostic pull failed", "server", server, "path", key.path, "err", err)
@@ -80,14 +221,22 @@ func (a *App) applyPulledDiagnostics(server string, key pullKey, res pulledDiagn
 		}
 		return
 	}
+	if a.setPulledDiagnostics(server, key, res) {
+		a.pullOpenDocuments(server, key.path, true)
+	}
+}
+
+func (a *App) setPulledDiagnostics(server string, key pullKey, res pulledDiagnostics) bool {
 	if !res.replace {
-		return
+		return false
 	}
 	a.DocVersionsMu.Lock()
 	version, open := a.DocVersions[key.path]
 	a.DocVersionsMu.Unlock()
 	if !open || version != key.version || a.lspEpochs[server] != key.epoch {
-		return
+		return false
 	}
+	a.lastPulled[key.path] = key
 	a.EditorGroup.SetDiagnosticsSource(lspPullDiagnosticsSource(server), key.path, LspToUIDiagnostics(res.diags))
+	return true
 }

@@ -356,7 +356,7 @@ Diagnostics (errors, warnings, hints) show up as:
 - **Hover popup** over a squiggle to see the diagnostic message
 - **Status bar** error/warning counts
 
-Some servers, such as TypeScript 7, send diagnostics only when asked. TTT asks for the current file when you open or switch to it, when you stop typing, and when you save. Other open files update when you switch to them.
+Some servers, such as TypeScript 7, send diagnostics only when asked. TTT asks for the current file when you open or switch to it, when you stop typing, and when you save, and then asks for the other open files that server handles. When a server says diagnostics are out of date, TTT asks again for every open file.
 
 ## Formatting
 

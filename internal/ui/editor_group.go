@@ -979,6 +979,19 @@ func (g *EditorGroupWidget) OpenDocuments() []OpenDocument {
 	return docs
 }
 
+// OpenFiles is OpenDocuments without joining each buffer's text.
+func (g *EditorGroupWidget) OpenFiles() []OpenDocument {
+	var docs []OpenDocument
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if t.Content != nil || t.Buf == nil || t.Highlighter == nil || t.Virtual || t.FilePath == "" {
+			continue
+		}
+		docs = append(docs, OpenDocument{Path: t.FilePath, Language: t.Highlighter.Language()})
+	}
+	return docs
+}
+
 // BufferForPath returns the buffer of the tab with the given path, or nil.
 func (g *EditorGroupWidget) BufferForPath(path string) *buffer.Buffer {
 	for i := range g.tabs {

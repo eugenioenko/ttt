@@ -912,6 +912,8 @@ func (a *App) NotifyLSPClose(path, lang string) {
 	delete(a.DocVersions, path)
 	delete(a.lspSent, path)
 	a.DocVersionsMu.Unlock()
+	// Reopening starts the version over at 1, which would match this entry.
+	delete(a.lastPulled, path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
