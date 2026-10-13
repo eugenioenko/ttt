@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -55,13 +56,16 @@ func (a *App) RefreshAutocomplete() {
 	a.EditorGroup.Autocomplete.SetItems(filtered)
 }
 
+// isCompletionTrigger reports whether ch is a completion trigger character of
+// the active file's language server. Each server has its own: a space that
+// triggers TypeScript completions must not open them in Go.
 func (a *App) isCompletionTrigger(ch string) bool {
-	for _, tc := range a.CompletionTriggers {
-		if ch == tc {
-			return true
-		}
+	if ch == "" {
+		return false
 	}
-	return false
+	path, lang := a.editorPathLang()
+	serverKey, _, ok := a.lspResolve(path, lang)
+	return ok && slices.Contains(a.LspManager.CompletionTriggerCharacters(serverKey), ch)
 }
 
 func (a *App) identStart() (line, start, col int) {

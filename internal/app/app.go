@@ -68,7 +68,6 @@ type App struct {
 	DocVersions            map[string]int
 	CompletionItems        []ui.CompletionItem
 	LspCompletionItems     []lsp.CompletionItem
-	CompletionTriggers     []string
 	completion             completionState
 	hover                  hoverState
 	diffOpenGen            int

@@ -19,9 +19,8 @@ type completionState struct {
 }
 
 type completionReply struct {
-	items        []ui.CompletionItem
-	lspItems     []lsp.CompletionItem
-	triggerChars []string
+	items    []ui.CompletionItem
+	lspItems []lsp.CompletionItem
 }
 
 // completionTarget is the word a completion request was made for. A reply is
@@ -62,7 +61,7 @@ func (a *App) ScheduleAutocomplete() {
 // HandleAutocompleteTrigger requests completions when auto-suggest fires.
 func (a *App) HandleAutocompleteTrigger() {
 	triggerChar := a.charBeforeCursor()
-	isTrigger := triggerChar != "" && (len(a.CompletionTriggers) == 0 || a.isCompletionTrigger(triggerChar))
+	isTrigger := a.isCompletionTrigger(triggerChar)
 	if isTrigger && a.IsAutocompleteActive() {
 		a.DismissAutocomplete()
 	}
@@ -119,18 +118,21 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 			return completionReply{}, err
 		}
 		slog.Debug("lsp completion response", "count", len(items))
-		return completionReply{
-			items:        LspToUICompletions(items),
-			lspItems:     items,
-			triggerChars: client.CompletionTriggerCharacters(),
-		}, nil
+		return completionReply{items: LspToUICompletions(items), lspItems: items}, nil
 	}, func(reply completionReply, err error) {
-		if err != nil || len(reply.items) == 0 || a.currentCompletionTarget() != target {
-			return
+		if err == nil {
+			a.applyCompletionReply(target, reply)
 		}
-		a.CompletionTriggers = reply.triggerChars
-		a.ShowAutocomplete(reply.items, reply.lspItems)
 	})
+}
+
+// applyCompletionReply shows reply while the cursor is still in the word the
+// request was made for.
+func (a *App) applyCompletionReply(target completionTarget, reply completionReply) {
+	if len(reply.items) == 0 || a.currentCompletionTarget() != target {
+		return
+	}
+	a.ShowAutocomplete(reply.items, reply.lspItems)
 }
 
 // CloseAutocomplete dismisses the popup on the user's behalf and cancels the
@@ -191,13 +193,20 @@ func (a *App) RequestSignatureHelp(path, lang string, line, col int, changeDone 
 		}
 		return result, nil
 	}, func(result *SignatureHelpResult, err error) {
-		curLine, curCol := a.EditorGroup.ActiveCursor()
-		if err != nil || result == nil || result.Label == "" ||
-			a.EditorGroup.ActiveBuffer() != buf || curLine != line || curCol < col {
-			return
+		if err == nil {
+			a.applySignatureHelp(buf, line, col, result)
 		}
-		a.ShowSignatureHelp(result)
 	})
+}
+
+// applySignatureHelp shows result while the cursor is still on the requested
+// line, at or after the requested column.
+func (a *App) applySignatureHelp(buf *buffer.Buffer, line, col int, result *SignatureHelpResult) {
+	curLine, curCol := a.EditorGroup.ActiveCursor()
+	if result == nil || result.Label == "" || a.EditorGroup.ActiveBuffer() != buf || curLine != line || curCol < col {
+		return
+	}
+	a.ShowSignatureHelp(result)
 }
 
 // DismissSignatureHelp hides the popup and cancels a request still on its way.

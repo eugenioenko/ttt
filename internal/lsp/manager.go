@@ -142,6 +142,18 @@ func (m *Manager) forget(key string) {
 	m.setState(key, ServerFailed)
 }
 
+// CompletionTriggerCharacters returns the characters serverKey advertises as
+// completion triggers, or none while it is not running.
+func (m *Manager) CompletionTriggerCharacters(serverKey string) []string {
+	m.mu.Lock()
+	client, ok := m.servers[serverKey]
+	m.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	return client.CompletionTriggerCharacters()
+}
+
 func (m *Manager) SignatureHelpTriggerCharacters(serverKey string) []string {
 	m.mu.Lock()
 	client, ok := m.servers[serverKey]
