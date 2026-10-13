@@ -404,24 +404,24 @@ func (a *App) RunCodeActionsOnSave(path, lang string) {
 }
 
 func (a *App) applyCodeActionEdit(path string, edit *lsp.WorkspaceEdit) {
-	changes, ok := a.workspaceTextEdits(edit)
+	batches, ok := a.workspaceTextEdits(edit)
 	if !ok {
 		return
 	}
-	for uri, edits := range changes {
-		if URIToPath(uri) == path && len(edits) > 0 {
-			a.ApplyTextEdits(edits)
+	for _, batch := range batches {
+		if URIToPath(batch.URI) == path {
+			a.ApplyTextEdits(batch.Edits)
 		}
 	}
 }
 
-func (a *App) workspaceTextEdits(edit *lsp.WorkspaceEdit) (map[string][]lsp.TextEdit, bool) {
-	changes, err := edit.TextEdits()
+func (a *App) workspaceTextEdits(edit *lsp.WorkspaceEdit) ([]lsp.FileEdits, bool) {
+	batches, err := edit.TextEdits()
 	if errors.Is(err, lsp.ErrFileOperations) {
 		a.StatusWarn("The language server's edit creates, renames or deletes files, which ttt does not support yet")
 		return nil, false
 	}
-	return changes, true
+	return batches, true
 }
 
 func (a *App) RequestCodeAction(path, lang, kind string) {
@@ -452,13 +452,30 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 			slog.Error("lsp codeAction", "err", err)
 			return
 		}
-		for _, action := range actions {
-			if changes, err := action.Edit.TextEdits(); err != nil || len(changes) > 0 {
-				a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionResult{Path: path, Edit: action.Edit}))
-				return
-			}
+		if edit := pickCodeActionEdit(actions); edit != nil {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionResult{Path: path, Edit: edit}))
 		}
 	}()
+}
+
+// pickCodeActionEdit returns the first action's edit that ttt can apply. If
+// none can, it returns the first one with file operations, so applying it
+// reports why nothing changed.
+func pickCodeActionEdit(actions []lsp.CodeAction) *lsp.WorkspaceEdit {
+	var unsupported *lsp.WorkspaceEdit
+	for _, action := range actions {
+		batches, err := action.Edit.TextEdits()
+		if errors.Is(err, lsp.ErrFileOperations) {
+			if unsupported == nil {
+				unsupported = action.Edit
+			}
+			continue
+		}
+		if len(batches) > 0 {
+			return action.Edit
+		}
+	}
+	return unsupported
 }
 
 func (a *App) FormatOnSave(path, lang string) {
@@ -509,16 +526,18 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 }
 
 func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
-	changes, ok := a.workspaceTextEdits(edit)
-	if !ok || len(changes) == 0 {
+	batches, ok := a.workspaceTextEdits(edit)
+	if !ok || len(batches) == 0 {
 		return
 	}
 	currentPath := a.EditorGroup.ActiveFilePath()
 
-	for uri, edits := range changes {
-		path := URIToPath(uri)
+	files := make(map[string]bool)
+	for _, batch := range batches {
+		path := URIToPath(batch.URI)
+		files[path] = true
 		a.EditorGroup.OpenFile(path)
-		a.ApplyTextEdits(edits)
+		a.ApplyTextEdits(batch.Edits)
 
 		if buf := a.EditorGroup.ActiveBuffer(); a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
 			if a.EditorGroup.Save() {
@@ -529,7 +548,7 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	}
 
 	a.EditorGroup.OpenFile(currentPath)
-	a.StatusNotify(fmt.Sprintf("Renamed across %d file(s)", len(changes)))
+	a.StatusNotify(fmt.Sprintf("Renamed across %d file(s)", len(files)))
 }
 
 func (a *App) RequestReferences(path, lang string, line, col int) {

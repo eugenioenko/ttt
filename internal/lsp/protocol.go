@@ -3,6 +3,7 @@ package lsp
 import (
 	"encoding/json"
 	"errors"
+	"sort"
 )
 
 type Position struct {
@@ -209,25 +210,38 @@ type DocumentChange struct {
 
 var ErrFileOperations = errors.New("workspace edit includes file operations")
 
-// DocumentChanges takes precedence over Changes when present (LSP spec).
-func (e *WorkspaceEdit) TextEdits() (map[string][]TextEdit, error) {
+type FileEdits struct {
+	URI   string
+	Edits []TextEdit
+}
+
+// TextEdits returns the edits as batches to apply in order, each against the
+// document as the previous batch left it: a later TextDocumentEdit for the
+// same file refers to the text after the earlier one. DocumentChanges takes
+// precedence over Changes when present (LSP spec).
+func (e *WorkspaceEdit) TextEdits() ([]FileEdits, error) {
 	if e == nil {
 		return nil, nil
 	}
+	var batches []FileEdits
 	if e.DocumentChanges == nil {
-		return e.Changes, nil
+		for uri, edits := range e.Changes {
+			if len(edits) > 0 {
+				batches = append(batches, FileEdits{URI: uri, Edits: edits})
+			}
+		}
+		sort.Slice(batches, func(i, j int) bool { return batches[i].URI < batches[j].URI })
+		return batches, nil
 	}
-	edits := make(map[string][]TextEdit)
 	for _, change := range e.DocumentChanges {
 		if change.Kind != "" {
 			return nil, ErrFileOperations
 		}
 		if len(change.Edits) > 0 {
-			uri := change.TextDocument.URI
-			edits[uri] = append(edits[uri], change.Edits...)
+			batches = append(batches, FileEdits{URI: change.TextDocument.URI, Edits: change.Edits})
 		}
 	}
-	return edits, nil
+	return batches, nil
 }
 
 type CodeActionContext struct {

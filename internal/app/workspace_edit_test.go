@@ -110,3 +110,37 @@ func TestWorkspaceEditWithFileOperationChangesNothing(t *testing.T) {
 		t.Errorf("notification = %q, want the unsupported file operation reported", a.Status.Notification)
 	}
 }
+
+func TestSuccessiveDocumentChangesApplyInOrder(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{"main.go": "foo bar\n"})
+	path := filepath.Join(dir, "main.go")
+	a.EditorGroup.OpenFile(path)
+	uri := FileURI(path)
+
+	// The second edit's range is in the text the first one leaves: "Xfoo bar".
+	a.ApplyWorkspaceEdit(decodeWorkspaceEdit(t, `{"documentChanges":[`+
+		renameEdit(uri, 0, 0, 0, "X")+","+renameEdit(uri, 0, 5, 8, "baz")+`]}`))
+
+	if got := bufferText(t, a, path); got != "Xfoo baz\n" {
+		t.Errorf("main.go = %q, want \"Xfoo baz\\n\"", got)
+	}
+	if !strings.Contains(a.Status.Notification, "1 file") {
+		t.Errorf("notification = %q, want one file counted", a.Status.Notification)
+	}
+}
+
+func TestPickCodeActionEditSkipsFileOperations(t *testing.T) {
+	fileOp := decodeWorkspaceEdit(t, `{"documentChanges":[{"kind":"create","uri":"file:///new.go"}]}`)
+	applicable := decodeWorkspaceEdit(t, `{"documentChanges":[`+renameEdit("file:///a.go", 0, 0, 1, "x")+`]}`)
+	empty := decodeWorkspaceEdit(t, `{}`)
+
+	if got := pickCodeActionEdit([]lsp.CodeAction{{Edit: empty}, {Edit: fileOp}, {Edit: applicable}}); got != applicable {
+		t.Errorf("picked %+v, want the action ttt can apply", got)
+	}
+	if got := pickCodeActionEdit([]lsp.CodeAction{{Edit: nil}, {Edit: fileOp}}); got != fileOp {
+		t.Errorf("picked %+v, want the file operation so it is reported", got)
+	}
+	if got := pickCodeActionEdit([]lsp.CodeAction{{Edit: empty}}); got != nil {
+		t.Errorf("picked %+v, want nothing", got)
+	}
+}
