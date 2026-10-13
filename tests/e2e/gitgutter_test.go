@@ -35,3 +35,34 @@ func TestGitGutterSkipsIgnoredFiles(t *testing.T) {
 		t.Fatalf("ignored file gutter = %v, want no markers", changes)
 	}
 }
+
+func TestGitGutterUnchangedCommittedFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		content         string
+		trailingNewline bool
+	}{
+		{"crlf", "one\r\ntwo\r\nthree\r\n", true},
+		{"crlf no trailing line", "one\r\ntwo\r\nthree\r\n", false},
+		{"lf no trailing line", "one\ntwo\nthree\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHarness(t, 100, 30)
+			defer h.stop()
+			path := filepath.Join(h.dir, "file.txt")
+			os.WriteFile(path, []byte(tc.content), 0644)
+			os.WriteFile(filepath.Join(h.dir, ".gitattributes"), []byte("file.txt -text\n"), 0644)
+			initializeHarnessRepository(t, h.dir)
+
+			h.app.EditorGroup.ShowTrailingNewline = tc.trailingNewline
+			h.app.EditorGroup.OpenFile(path)
+			h.app.SyncRepositoryBranch()
+			h.app.RequestGitGutterForActiveFile()
+			h.redraw()
+			changes := h.app.EditorGroup.Editor.LineChanges
+			if slices.ContainsFunc(changes, func(c diff.LineChangeKind) bool { return c != diff.LineUnchanged }) {
+				t.Fatalf("unchanged file gutter = %v, want no markers", changes)
+			}
+		})
+	}
+}

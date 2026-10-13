@@ -82,7 +82,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 				}
 			}
 		} else if gutterOn {
-			oldLines := strings.Split(headContent, "\n")
+			oldLines := blobLines(headContent, showTrailing)
 			var err error
 			result.Changes, err = diff.ComputeGutterChangesContext(ctx, oldLines, linesCopy)
 			if err != nil {
