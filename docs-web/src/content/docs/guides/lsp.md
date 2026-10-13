@@ -28,10 +28,40 @@ go install golang.org/x/tools/gopls@latest
 ### TypeScript / JavaScript {#typescript}
 
 ```sh
-npm install -g typescript typescript-language-server
+npm install -g typescript-language-server typescript@6
 ```
 
 Handles `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.mts`, `.cjs`, and `.cts` files.
+
+`typescript-language-server` doesn't work with TypeScript 7, which dropped `tsserver`. For TypeScript 7, use its built-in server instead:
+
+```sh
+npm install -g typescript@7
+```
+
+Then add this to `settings.json`:
+
+```json
+{
+  "lsp": {
+    "servers": {
+      "typescript": {
+        "command": ["tsc", "--lsp", "--stdio"],
+        "languages": {
+          ".ts": "typescript",
+          ".tsx": "typescriptreact",
+          ".js": "javascript",
+          ".jsx": "javascriptreact",
+          ".mjs": "javascript",
+          ".mts": "typescript",
+          ".cjs": "javascript",
+          ".cts": "typescript"
+        }
+      }
+    }
+  }
+}
+```
 
 ### Python {#python}
 
@@ -319,12 +349,14 @@ Completions trigger automatically as you type with a configurable debounce (defa
 
 ## Diagnostics
 
-The LSP server publishes diagnostics (errors, warnings, hints) which are displayed as:
+Diagnostics (errors, warnings, hints) show up as:
 
 - **Inline squiggles** on the affected range, colored by severity
 - **Diagnostics panel** in the bottom panel listing all diagnostics grouped by file
 - **Hover popup** over a squiggle to see the diagnostic message
 - **Status bar** error/warning counts
+
+Some servers, such as TypeScript 7, send diagnostics only when asked. TTT asks for the current file when you open or switch to it, when you stop typing, and when you save. Other open files update when you switch to them.
 
 ## Formatting
 
