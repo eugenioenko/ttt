@@ -34,14 +34,24 @@ func TestOpenFileComputesFoldsAfterFirstFrame(t *testing.T) {
 	g.scheduleFolds()
 	g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 1, Col: 0, Rune: ' '})
 	finish()
-	if !g.Editor.Folds.Pending() {
-		t.Fatal("folds computed before an edit were applied, want them recomputed")
+	if g.Editor.Folds.Pending() || g.Editor.Folds.FoldAt(0) == nil {
+		t.Fatal("folds not applied after typing on a line, want them applied")
 	}
+}
+
+func TestBackgroundFoldsYieldToLineCountEdit(t *testing.T) {
+	var runs, deliveries []func()
+	g := newRenameGroup(t, filepath.Join(t.TempDir(), "a.go"), "func a() {\n\tx := 1\n}\n")
+	g.FoldTask = asynctask.New[[]fold.Range](asynctask.TaskOptions{Run: func(fn func()) { runs = append(runs, fn) }},
+		func(fn func()) error { deliveries = append(deliveries, fn); return nil })
+	g.OpenFile(g.ActiveFilePath())
 
 	g.scheduleFolds()
-	finish()
-	if g.Editor.Folds.Pending() || g.Editor.Folds.FoldAt(0) == nil {
-		t.Fatal("folds not applied after the background computation")
+	g.Editor.ExecCommand(&undo.InsertLineCommand{Idx: 0, Text: "// header"})
+	runs[0]()
+	deliveries[0]()
+	if g.Editor.Folds.FoldAt(1) == nil || g.Editor.Folds.FoldAt(0) != nil {
+		t.Fatal("background folds for the old line count replaced the ones the edit computed")
 	}
 }
 

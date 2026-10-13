@@ -2412,14 +2412,17 @@ func (g *EditorGroupWidget) scheduleFolds() {
 		return
 	}
 	buf, folds := t.Buf, t.Folds
-	lines, version := slices.Clone(buf.Lines), buf.Version()
+	lines := slices.Clone(buf.Lines)
 	g.foldBuf = buf
 	g.FoldTask.Schedule(func(context.Context) ([]fold.Range, error) {
 		return fold.ComputeIndentRanges(lines), nil
 	}, func(ranges []fold.Range, _ error) {
 		g.foldBuf = nil
-		// After an edit the ranges are stale; the next frame schedules again.
-		if folds.Pending() && buf.Version() == version {
+		// Edits only recompute folds when they add or remove lines, which also
+		// ends pending, so ranges for an unchanged line count are as current as
+		// an edit would leave them. Rejecting them on every keystroke would
+		// keep folds from landing while the user types.
+		if folds.Pending() && len(buf.Lines) == len(lines) {
 			folds.SetRanges(ranges)
 		}
 	})
