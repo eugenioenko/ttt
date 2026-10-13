@@ -131,10 +131,9 @@ func (s *State) HasCollapsedFolds() bool {
 }
 
 func (s *State) FoldAt(line int) *Range {
-	for i := range s.ranges {
-		if s.ranges[i].StartLine == line {
-			return &s.ranges[i]
-		}
+	i := sort.Search(len(s.ranges), func(i int) bool { return s.ranges[i].StartLine >= line })
+	if i < len(s.ranges) && s.ranges[i].StartLine == line {
+		return &s.ranges[i]
 	}
 	return nil
 }
