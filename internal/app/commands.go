@@ -87,11 +87,9 @@ func RegisterEscapeDismissers(app *App) {
 			return active
 		},
 		func() bool {
-			if app.EditorGroup.SignatureHelp != nil {
-				app.DismissSignatureHelp()
-				return true
-			}
-			return false
+			active := app.EditorGroup.SignatureHelp != nil
+			app.DismissSignatureHelp()
+			return active
 		},
 		func() bool {
 			if app.EditorGroup.Hover != nil {

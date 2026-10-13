@@ -349,11 +349,11 @@ func (c *Client) SignatureHelpRetriggerCharacters() []string {
 	return c.signatureRetriggers
 }
 
-func (c *Client) Completion(uri string, line, col int, ctx *CompletionContext) ([]CompletionItem, error) {
-	result, err := c.call("textDocument/completion", CompletionParams{
+func (c *Client) Completion(ctx context.Context, uri string, line, col int, trigger *CompletionContext) ([]CompletionItem, error) {
+	result, err := c.callContext(ctx, "textDocument/completion", CompletionParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Position:     Position{Line: line, Character: col},
-		Context:      ctx,
+		Context:      trigger,
 	})
 	if err != nil {
 		return nil, err
@@ -382,8 +382,8 @@ func (c *Client) ResolveCompletion(item CompletionItem) (*CompletionItem, error)
 	return &resolved, nil
 }
 
-func (c *Client) SignatureHelp(uri string, line, col int) (*SignatureHelp, error) {
-	result, err := c.call("textDocument/signatureHelp", SignatureHelpParams{
+func (c *Client) SignatureHelp(ctx context.Context, uri string, line, col int) (*SignatureHelp, error) {
+	result, err := c.callContext(ctx, "textDocument/signatureHelp", SignatureHelpParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Position:     Position{Line: line, Character: col},
 	})

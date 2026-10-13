@@ -204,6 +204,36 @@ function assertProtocol(trace, file, expectedTexts) {
 }
 
 describe("deterministic fake LSP protocol", () => {
+  it("drops a completion reply that arrives after the cursor left the word", () => {
+    startCase("completion-late", ["--late=textDocument/completion"]);
+    tui.type("consol");
+    tui.waitFor("FAKE_LATE_PENDING");
+    // Line start has no prefix, so a stale reply would show unfiltered there.
+    tui.press("up");
+    tui.press("home");
+    tui.waitFor("FAKE_LATE_SENT");
+    tui.elapse(300);
+    const after = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[after]).toContain("consol");
+    expect(snapshots[after]).not.toContain("console");
+  });
+
+  it("drops a signature help reply that arrives after the cursor left the call", () => {
+    startCase("signature-late", ["--late=textDocument/signatureHelp"]);
+    tui.type("fn(");
+    tui.waitFor("FAKE_LATE_PENDING");
+    tui.press("left");
+    tui.press("left");
+    tui.waitFor("FAKE_LATE_SENT");
+    tui.elapse(300);
+    const after = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    expect(snapshots[after]).not.toContain("fakeSignature");
+  });
+
   it("cancels hover on Escape, ignores a late reply, and allows a new hover", () => {
     const { file, trace: tracePath } = startCase("hover-cancel", ["--hold-hover"]);
     tui.exec("Show Hover");

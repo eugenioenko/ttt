@@ -13,6 +13,9 @@ let sequence = 0;
 let documentText = "";
 let holdNextHover = process.argv[3] === "--hold-hover";
 let pendingHover;
+// --late=METHOD answers the first request for METHOD only after a delay, so a
+// test can move the cursor before the reply arrives.
+let lateMethod = process.argv.find((arg) => arg.startsWith("--late="))?.slice("--late=".length);
 
 function record(direction, message) {
   appendFileSync(
@@ -56,6 +59,20 @@ function completionItem() {
     return { label: "log", kind: 2, insertText: "log" };
   }
   return { label: "console", kind: 6, insertText: "console" };
+}
+
+function respondMaybeLate(message, result) {
+  if (message.method !== lateMethod) {
+    respond(message.id, result);
+    return;
+  }
+  lateMethod = undefined;
+  const uri = message.params.textDocument.uri;
+  diagnostic(uri, "FAKE_LATE_PENDING");
+  setTimeout(() => {
+    respond(message.id, result);
+    diagnostic(uri, "FAKE_LATE_SENT");
+  }, 800);
 }
 
 function handle(message) {
@@ -102,7 +119,7 @@ function handle(message) {
       documentText = message.params.contentChanges[0].text;
       break;
     case "textDocument/completion":
-      respond(message.id, { isIncomplete: false, items: [completionItem()] });
+      respondMaybeLate(message, { isIncomplete: false, items: [completionItem()] });
       break;
     case "textDocument/hover":
       if (holdNextHover) {
@@ -124,7 +141,7 @@ function handle(message) {
       respond(message.id, message.params);
       break;
     case "textDocument/signatureHelp":
-      respond(message.id, {
+      respondMaybeLate(message, {
         signatures: [
           {
             label: "fakeSignature(value: string)",

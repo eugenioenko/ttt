@@ -10,18 +10,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
-type CompletionResult struct {
-	Items        []ui.CompletionItem
-	LspItems     []lsp.CompletionItem
-	TriggerChars []string
-}
-
 type LocationResult struct {
 	Locations []lsp.Location
-}
-
-type AutocompleteTrigger struct {
-	TriggerChar string
 }
 
 type DiagnosticsResult struct {

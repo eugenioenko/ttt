@@ -142,6 +142,22 @@ func TestHoverContextAlreadyCancelledSendsNothing(t *testing.T) {
 	}
 }
 
+func TestCompletionAndSignatureHelpRespectCancellation(t *testing.T) {
+	var output bytes.Buffer
+	c := &Client{codec: NewCodec(nil, &output)}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.Completion(ctx, "file:///test.go", 0, 0, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("completion error = %v, want context cancellation", err)
+	}
+	if _, err := c.SignatureHelp(ctx, "file:///test.go", 0, 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("signature help error = %v, want context cancellation", err)
+	}
+	if output.Len() != 0 {
+		t.Fatal("cancelled requests were sent")
+	}
+}
+
 func TestClientAnswersServerRequests(t *testing.T) {
 	tests := []struct {
 		name      string

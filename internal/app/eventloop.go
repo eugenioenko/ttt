@@ -204,9 +204,10 @@ func RunEventLoop(
 		btn := tev.Buttons()
 		if btn != 0 {
 			app.stopHoverTask()
+			app.DismissSignatureHelp()
 		}
 		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
-		app.DismissSignatureHelp()
+		app.EditorGroup.SignatureHelp = nil
 		if app.EditorGroup.Hover == nil {
 			if btn == 0 {
 				app.checkMouseHover(mx, my)
@@ -302,19 +303,6 @@ func RunEventLoop(
 					execErr = v.Run()
 					syncStatus()
 					execRequest = v.Lifecycle
-				}
-			case *AutocompleteTrigger:
-				app.HandleAutocompleteTrigger()
-			case *SignatureHelpResult:
-				if v.Label != "" {
-					app.ShowSignatureHelp(v)
-				}
-			case *CompletionResult:
-				// A request sent before the user closed the popup must not
-				// reopen it.
-				if len(v.Items) > 0 && !app.completionClosedHere() {
-					app.CompletionTriggers = v.TriggerChars
-					app.ShowAutocomplete(v.Items, v.LspItems)
 				}
 			case *LocationResult:
 				if len(v.Locations) > 0 {
