@@ -832,54 +832,6 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 	}()
 }
 
-func (a *App) RequestHover(path, lang string, line, col, anchorX, anchorY int, diagText string, gen uint64) {
-	post := func(text string) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&HoverResult{Text: text, AnchorX: anchorX, AnchorY: anchorY, Gen: gen}))
-	}
-
-	serverKey, _, ok := a.lspResolve(path, lang)
-	if !ok {
-		if diagText != "" {
-			post(diagText)
-		}
-		return
-	}
-	workDir := a.lspWorkDir(path)
-	go func() {
-		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-		if err != nil {
-			slog.Error("lsp client", "err", err)
-			if diagText != "" {
-				post(diagText)
-			}
-			return
-		}
-		hover, err := client.Hover(FileURI(path), line, col)
-		if err != nil {
-			slog.Error("lsp hover", "err", err)
-			if diagText != "" {
-				post(diagText)
-			}
-			return
-		}
-		text := ""
-		if hover != nil {
-			text = hover.Contents.Value
-			slog.Debug("lsp hover response", "length", len(text))
-		}
-		if diagText != "" {
-			if text != "" {
-				text = diagText + "\n---\n" + text
-			} else {
-				text = diagText
-			}
-		}
-		if text != "" {
-			post(text)
-		}
-	}()
-}
-
 func (a *App) RequestDefinition(path, lang string, line, col int) {
 	a.requestLocation("textDocument/definition", path, lang, line, col)
 }

@@ -451,19 +451,7 @@ func registerEditorCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "editor.hover", Title: "Show Hover",
 		Keywords: []string{"editor", "tooltip", "info"},
-		Handler: func() {
-			path, lang := app.editorPathLang()
-			line, col := app.EditorGroup.ActiveCursor()
-			ax, ay, _ := app.EditorGroup.CursorPosition()
-			diagText := ""
-			if app.EditorGroup.Editor != nil {
-				if d := app.EditorGroup.Editor.DiagnosticAt(line, col); d != nil {
-					diagText = d.Message
-				}
-			}
-			gen := app.HoverGen
-			app.RequestHover(path, lang, line, col, ax, ay, diagText, gen)
-		},
+		Handler:  app.ShowCursorHover,
 	})
 
 	reg.Register(command.Command{

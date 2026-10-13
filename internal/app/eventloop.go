@@ -183,7 +183,7 @@ func RunEventLoop(
 	app.ShowPendingPluginApprovals()
 
 	handleKey := func(tev *tcell.EventKey) {
-		app.cancelHoverTimer()
+		app.stopHoverTask()
 		if app.EditorGroup.SignatureHelp != nil {
 			switch tev.Key() {
 			case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyRight,
@@ -202,6 +202,9 @@ func RunEventLoop(
 		mx, my := tev.Position()
 		mouseX, mouseY = mx, my
 		btn := tev.Buttons()
+		if btn != 0 {
+			app.stopHoverTask()
+		}
 		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
 		app.DismissSignatureHelp()
 		if app.EditorGroup.Hover == nil {
@@ -326,10 +329,6 @@ func RunEventLoop(
 				if len(v.Items) > 0 {
 					app.CompletionTriggers = v.TriggerChars
 					app.ShowAutocomplete(v.Items, v.LspItems)
-				}
-			case *HoverResult:
-				if v.Text != "" && v.Gen == app.HoverGen {
-					app.ShowHover(v.Text, v.AnchorX, v.AnchorY)
 				}
 			case *LocationResult:
 				if len(v.Locations) > 0 {

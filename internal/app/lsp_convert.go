@@ -20,13 +20,6 @@ type LocationResult struct {
 	Locations []lsp.Location
 }
 
-type HoverResult struct {
-	Text    string
-	AnchorX int
-	AnchorY int
-	Gen     uint64
-}
-
 type AutocompleteTrigger struct {
 	TriggerChar string
 }

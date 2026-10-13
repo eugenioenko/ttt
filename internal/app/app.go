@@ -70,12 +70,9 @@ type App struct {
 	LspCompletionItems     []lsp.CompletionItem
 	CompletionTriggers     []string
 	AutocompleteTimer      *time.Timer
-	HoverTimer             *time.Timer
-	HoverGen               uint64
+	hover                  hoverState
 	diffOpenGen            int
 	diffOpenCancel         context.CancelFunc
-	LastHoverLine          int
-	LastHoverCol           int
 	Problems               *ui.ProblemsWidget
 	References             *ui.ReferencesWidget
 	Keybindings            []config.KeyBinding
@@ -536,12 +533,12 @@ func (a *App) refreshProblems() {
 
 func (a *App) checkMouseHover(mx, my int) {
 	if a.EditorGroup.Editor == nil || !a.Settings.LSP.IsHoverEnabled() {
+		a.DismissHover()
 		return
 	}
 	r := a.EditorGroup.Editor.GetRect()
 	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
 		a.DismissHover()
-		a.cancelHoverTimer()
 		return
 	}
 	gw := a.EditorGroup.Editor.GutterWidth()
@@ -549,49 +546,16 @@ func (a *App) checkMouseHover(mx, my int) {
 	col := mx - r.X - gw + a.EditorGroup.Editor.Viewport.LeftCol
 	if col < 0 {
 		a.DismissHover()
-		a.cancelHoverTimer()
 		return
 	}
-	if line == a.LastHoverLine && col == a.LastHoverCol {
-		return
-	}
-	a.LastHoverLine = line
-	a.LastHoverCol = col
-	a.DismissHover()
-	a.cancelHoverTimer()
-	delay := a.Settings.LSP.HoverDelay
-	if delay <= 0 {
-		delay = 400
-	}
-	path := a.EditorGroup.ActiveFilePath()
-	lang := ""
-	if a.EditorGroup.Editor.Highlighter != nil {
-		lang = a.EditorGroup.Editor.Highlighter.Language()
-	}
-	diagText := ""
-	if a.EditorGroup.Editor != nil {
-		if d := a.EditorGroup.Editor.DiagnosticAt(line, col); d != nil {
-			diagText = d.Message
-		}
-	}
-	gen := a.HoverGen
-	a.HoverTimer = time.AfterFunc(time.Duration(delay)*time.Millisecond, func() {
-		a.RequestHover(path, lang, line, col, mx, my, diagText, gen)
-	})
-}
-
-func (a *App) cancelHoverTimer() {
-	if a.HoverTimer != nil {
-		a.HoverTimer.Stop()
-		a.HoverTimer = nil
-	}
+	path, lang := a.editorPathLang()
+	a.scheduleHover(path, lang, line, col, mx, my, a.hoverDiagnostic(line, col))
 }
 
 func (a *App) ShowHover(text string, anchorX, anchorY int) {
-	if text == "" {
-		return
+	if text != "" {
+		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY)
 	}
-	a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY)
 }
 
 func (a *App) isMouseOverHover(mx, my int) bool {
@@ -602,12 +566,6 @@ func (a *App) isMouseOverHover(mx, my int) bool {
 	r := h.GetRect()
 	m := hoverGraceMargin
 	return mx >= r.X-m && mx < r.X+r.W+m && my >= r.Y-m && my < r.Y+r.H+m
-}
-
-func (a *App) DismissHover() {
-	a.EditorGroup.Hover = nil
-	a.cancelHoverTimer()
-	a.HoverGen++
 }
 
 func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManager *lsp.Manager, imageLayer *image.Layer) {

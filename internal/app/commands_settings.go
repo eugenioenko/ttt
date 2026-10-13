@@ -121,6 +121,9 @@ func (a *App) ApplySettings(s config.Settings) {
 
 	// Apply search debounce
 	a.Search.Debounce.DelayMs = s.Search.Debounce
+	if s.LSP.IsHoverEnabled() != prev.LSP.IsHoverEnabled() || s.LSP.IsEnabled() != prev.LSP.IsEnabled() {
+		a.DismissHover()
+	}
 
 	if s.Editor.IsGitGutterEnabled() != prev.Editor.IsGitGutterEnabled() {
 		if !s.Editor.IsGitGutterEnabled() && a.EditorGroup.Editor != nil {

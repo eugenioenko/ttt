@@ -11,6 +11,8 @@ writeFileSync(tracePath, "", "utf8");
 let input = Buffer.alloc(0);
 let sequence = 0;
 let documentText = "";
+let holdNextHover = process.argv[3] === "--hold-hover";
+let pendingHover;
 
 function record(direction, message) {
   appendFileSync(
@@ -28,6 +30,22 @@ function send(message) {
 
 function respond(id, result) {
   send({ jsonrpc: "2.0", id, result });
+}
+
+function diagnostic(uri, message) {
+  send({
+    jsonrpc: "2.0",
+    method: "textDocument/publishDiagnostics",
+    params: {
+      uri,
+      diagnostics: [{
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        severity: 3,
+        source: "fake-lsp",
+        message,
+      }],
+    },
+  });
 }
 
 function completionItem() {
@@ -85,6 +103,22 @@ function handle(message) {
       break;
     case "textDocument/completion":
       respond(message.id, { isIncomplete: false, items: [completionItem()] });
+      break;
+    case "textDocument/hover":
+      if (holdNextHover) {
+        holdNextHover = false;
+        pendingHover = message;
+        diagnostic(message.params.textDocument.uri, "FAKE_HOVER_PENDING");
+      } else {
+        respond(message.id, { contents: { kind: "markdown", value: "FAKE_HOVER_INFO" } });
+      }
+      break;
+    case "$/cancelRequest":
+      if (pendingHover?.id === message.params.id) {
+        respond(pendingHover.id, { contents: { kind: "markdown", value: "FAKE_STALE_HOVER" } });
+        diagnostic(pendingHover.params.textDocument.uri, "FAKE_HOVER_CANCELLED");
+        pendingHover = undefined;
+      }
       break;
     case "completionItem/resolve":
       respond(message.id, message.params);

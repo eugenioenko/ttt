@@ -23,7 +23,7 @@ afterEach(() => {
   dir = null;
 });
 
-function startCase(name) {
+function startCase(name, serverArgs = []) {
   dir = createTempDir();
   const file = createTempFile(dir, `${name}.js`, INITIAL_TEXT);
   const trace = join(dir, "fake-lsp-trace.jsonl");
@@ -35,7 +35,7 @@ function startCase(name) {
         lsp: {
           servers: {
             javascript: {
-              command: [process.execPath, FAKE_SERVER, trace],
+              command: [process.execPath, FAKE_SERVER, trace, ...serverArgs],
               languages: { ".js": "javascript" },
             },
           },
@@ -204,6 +204,36 @@ function assertProtocol(trace, file, expectedTexts) {
 }
 
 describe("deterministic fake LSP protocol", () => {
+  it("cancels hover on Escape, ignores a late reply, and allows a new hover", () => {
+    const { file, trace: tracePath } = startCase("hover-cancel", ["--hold-hover"]);
+    tui.exec("Show Hover");
+    tui.waitFor("FAKE_HOVER_PENDING");
+    tui.press("esc");
+    tui.waitFor("FAKE_HOVER_CANCELLED");
+    const cancelled = tui.snapshot();
+    tui.exec("Show Hover");
+    tui.waitFor("FAKE_HOVER_INFO");
+    const visible = tui.snapshot();
+    tui.press("esc");
+    const dismissed = tui.snapshot();
+    const { snapshots } = tui.run();
+    const trace = readTrace(tracePath);
+    const hovers = messagesFor(trace, "textDocument/hover");
+
+    expect(snapshots[cancelled]).not.toContain("FAKE_STALE_HOVER");
+    expect(snapshots[visible]).toContain("FAKE_HOVER_INFO");
+    expect(snapshots[dismissed]).not.toContain("FAKE_HOVER_INFO");
+    expect(hovers).toHaveLength(2);
+    expect(hovers[0].params).toEqual({
+      textDocument: { uri: `file://${file}` },
+      position: { line: 1, character: 0 },
+    });
+    expect(messagesFor(trace, "$/cancelRequest")).toEqual([
+      { jsonrpc: "2.0", method: "$/cancelRequest", params: { id: hovers[0].id } },
+    ]);
+    assertGracefulShutdown(trace);
+  });
+
   it("records invoked and dot-trigger completions after ordered full-document changes", () => {
     const { file, trace: tracePath } = startCase("completion-triggers");
 

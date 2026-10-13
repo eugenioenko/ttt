@@ -2,7 +2,9 @@ package lsp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
@@ -71,6 +73,72 @@ func TestClientCallAndResponse(t *testing.T) {
 	}
 	if parsed["status"] != "ok" {
 		t.Fatalf("expected status ok, got %s", parsed["status"])
+	}
+}
+
+func TestHoverContextCancellationDropsLateResponse(t *testing.T) {
+	c, server := pipeClient(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.HoverContext(ctx, "file:///test.go", 1, 2)
+		done <- err
+	}()
+	request := receiveWithin(t, server)
+	if request.Method != "textDocument/hover" {
+		t.Fatalf("request method = %q", request.Method)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("hover error = %v, want context cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("hover cancellation waited for the server to read stdin")
+	}
+	message := receiveWithin(t, server)
+	var params struct {
+		ID json.RawMessage `json:"id"`
+	}
+	if err := json.Unmarshal(message.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if message.Method != "$/cancelRequest" || string(params.ID) != string(request.ID) {
+		t.Fatalf("cancellation = %s %s, want request %s", message.Method, message.Params, request.ID)
+	}
+	c.mu.Lock()
+	pending := len(c.pending)
+	c.mu.Unlock()
+	if pending != 0 {
+		t.Fatalf("cancelled request left %d pending calls", pending)
+	}
+	if err := server.Send(Reply{JSONRPC: "2.0", ID: request.ID, Result: json.RawMessage(`{"contents":"stale"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		req, err := server.Receive()
+		if err == nil {
+			server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"contents":"latest"}`)})
+		}
+	}()
+	hover, err := c.Hover("file:///test.go", 2, 3)
+	if err != nil || hover == nil || hover.Contents.Value != "latest" {
+		t.Fatalf("next hover = %v, error = %v", hover, err)
+	}
+}
+
+func TestHoverContextAlreadyCancelledSendsNothing(t *testing.T) {
+	var output bytes.Buffer
+	c := &Client{codec: NewCodec(nil, &output)}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.HoverContext(ctx, "file:///test.go", 0, 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("hover error = %v, want context cancellation", err)
+	}
+	if output.Len() != 0 {
+		t.Fatal("cancelled hover sent a request")
 	}
 }
 

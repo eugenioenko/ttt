@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -183,6 +184,13 @@ func (c *Client) answer(req Response) {
 }
 
 func (c *Client) call(method string, params any) (json.RawMessage, error) {
+	return c.callContext(context.Background(), method, params)
+}
+
+func (c *Client) callContext(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	c.mu.Lock()
 	id := c.nextID
 	c.nextID++
@@ -207,6 +215,17 @@ func (c *Client) call(method string, params any) (json.RawMessage, error) {
 	var ok bool
 	select {
 	case resp, ok = <-ch:
+	case <-ctx.Done():
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
+		// A server not reading stdin must not prevent cancellation from returning.
+		go func() {
+			_ = c.notify("$/cancelRequest", struct {
+				ID int `json:"id"`
+			}{ID: id})
+		}()
+		return nil, ctx.Err()
 	case <-c.done:
 		// The read loop empties the pending map when it exits, so a request
 		// registered after that point would otherwise wait out the full
@@ -382,7 +401,11 @@ func (c *Client) SignatureHelp(uri string, line, col int) (*SignatureHelp, error
 }
 
 func (c *Client) Hover(uri string, line, col int) (*HoverResult, error) {
-	result, err := c.call("textDocument/hover", TextDocumentPositionParams{
+	return c.HoverContext(context.Background(), uri, line, col)
+}
+
+func (c *Client) HoverContext(ctx context.Context, uri string, line, col int) (*HoverResult, error) {
+	result, err := c.callContext(ctx, "textDocument/hover", TextDocumentPositionParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Position:     Position{Line: line, Character: col},
 	})
