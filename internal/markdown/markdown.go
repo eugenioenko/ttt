@@ -114,6 +114,7 @@ func Render(text string) []Line {
 	doc := md.Parser().Parse(gmtext.NewReader(src))
 	r := &renderer{src: src}
 	r.renderNode(doc)
+	r.dropTrailingBlanks()
 	if len(r.lines) == 0 {
 		r.lines = []Line{{Spans: []Span{{Text: "", Style: term.StyleDefault}}}}
 	}
@@ -131,6 +132,12 @@ func (r *renderer) emit(line Line) {
 
 func (r *renderer) emitBlank() {
 	r.lines = append(r.lines, Line{Kind: KindBlank, Spans: []Span{{Text: "", Style: term.StyleDefault}}})
+}
+
+func (r *renderer) dropTrailingBlanks() {
+	for len(r.lines) > 0 && r.lines[len(r.lines)-1].Kind == KindBlank {
+		r.lines = r.lines[:len(r.lines)-1]
+	}
 }
 
 func (r *renderer) renderNode(n ast.Node) {
@@ -170,8 +177,8 @@ func (r *renderer) renderBlock(n ast.Node) {
 		r.emitBlank()
 
 	case *ast.ThematicBreak:
+		r.dropTrailingBlanks()
 		r.emit(Line{Kind: KindDivider, Spans: []Span{{Text: "---", Style: term.StyleBorder}}})
-		r.emitBlank()
 
 	case *ast.List:
 		for child := n.FirstChild(); child != nil; child = child.NextSibling() {

@@ -154,14 +154,26 @@ func lineForText(t *testing.T, lines []Line, text string) Line {
 
 func TestRenderDivider(t *testing.T) {
 	lines := Render("above\n\n---\n\nbelow")
-	foundDivider := false
-	for _, l := range lines {
-		if len(l.Spans) > 0 && l.Spans[0].Style == term.StyleBorder && l.Spans[0].Text == "---" {
-			foundDivider = true
+	want := []LineKind{KindParagraph, KindDivider, KindParagraph}
+	if len(lines) != len(want) {
+		t.Fatalf("expected %d lines, got %q", len(want), textLines(lines))
+	}
+	for i, kind := range want {
+		if lines[i].Kind != kind {
+			t.Errorf("line %d: expected kind %v, got %v (%q)", i, kind, lines[i].Kind, lines[i].Text())
 		}
 	}
-	if !foundDivider {
+	if lines[1].Spans[0].Style != term.StyleBorder || lines[1].Spans[0].Text != "---" {
 		t.Error("expected divider line with StyleBorder")
+	}
+}
+
+func TestRenderEndsWithoutBlankLine(t *testing.T) {
+	for _, text := range []string{"hello", "# Title\n\nbody", "```go\nx := 1\n```", "---"} {
+		lines := Render(text)
+		if last := lines[len(lines)-1]; last.Kind == KindBlank {
+			t.Errorf("Render(%q) ends with a blank line: %q", text, textLines(lines))
+		}
 	}
 }
 
