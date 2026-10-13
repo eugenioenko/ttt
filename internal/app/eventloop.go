@@ -184,12 +184,12 @@ func RunEventLoop(
 
 	handleKey := func(tev *tcell.EventKey) {
 		app.stopHoverTask()
-		if app.EditorGroup.SignatureHelp != nil {
-			switch tev.Key() {
-			case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyRight,
-				tcell.KeyHome, tcell.KeyEnd, tcell.KeyPgUp, tcell.KeyPgDn:
-				app.DismissSignatureHelp()
-			}
+		switch tev.Key() {
+		case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyRight,
+			tcell.KeyHome, tcell.KeyEnd, tcell.KeyPgUp, tcell.KeyPgDn:
+			// Also cancels a reply still on its way, which could otherwise
+			// show after navigating past the end of the call.
+			app.DismissSignatureHelp()
 		}
 		slog.Debug("key", "key", tev.Key(), "rune", string(term.KeyRune(tev)), "mod", tev.Modifiers())
 		app.Root.HandleEvent(tev)
