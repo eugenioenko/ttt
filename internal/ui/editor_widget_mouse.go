@@ -187,27 +187,18 @@ func (e *EditorPaneWidget) gutterLineAt(screenY int) (int, bool) {
 
 func (e *EditorPaneWidget) TextPosAt(mx, my int) (line, col int, ok bool) {
 	r := e.GetRect()
-	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+	if mx < r.X+e.GutterWidth() || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
 		return 0, 0, false
 	}
-	visCol := mx - r.X - e.GutterWidth()
 	row := e.rowAt(my - r.Y)
-	line = row.bufLine
-	if visCol < 0 || row.isPhantom() || line < 0 || line >= len(e.Buf.Lines) {
+	if row.isPhantom() || row.bufLine < 0 || row.bufLine >= len(e.Buf.Lines) {
 		return 0, 0, false
 	}
-	text := e.Buf.Lines[line]
-	tabW := e.resolveTabSize()
-	end := len([]rune(text))
-	if e.WordWrap {
-		visCol += bufColToVisualCol(text, row.startCol, tabW)
-		if next := e.rowAt(my - r.Y + 1); !next.isPhantom() && next.bufLine == line && next.startCol > row.startCol {
-			end = next.startCol
-		}
-	} else {
-		visCol += e.Viewport.LeftCol
+	line, col = e.mouseToPos(r, mx, my)
+	end := len([]rune(e.Buf.Lines[line]))
+	if next := e.rowAt(my - r.Y + 1); e.WordWrap && !next.isPhantom() && next.bufLine == line && next.startCol > row.startCol {
+		end = next.startCol
 	}
-	col = visualColToBufCol(text, visCol, tabW)
 	return line, col, col < end
 }
 
