@@ -47,9 +47,9 @@ func newRawMouseLoopbackTerminal(t *testing.T) (*terminal.Terminal, chan struct{
 	if err != nil {
 		t.Fatalf("terminal.New() error: %v", err)
 	}
+	updated := newUpdateChan(term)
 	term.Run()
 
-	updated := newUpdateChan(term)
 	term.WriteString("stty raw -echo; printf RAWOK; exec cat\n")
 	waitFor(t, updated, func() bool {
 		return strings.Contains(string(term.RawTail()), "RAWOK")
