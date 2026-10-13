@@ -1,12 +1,9 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
@@ -18,11 +15,6 @@ import (
 
 	"github.com/gdamore/tcell/v3"
 )
-
-type BlameResult struct {
-	Gen  int
-	Info *git.BlameInfo
-}
 
 type highlightStep struct{}
 
@@ -47,8 +39,6 @@ func RunEventLoop(
 	}
 	defer app.CloseTasks()
 
-	lastBlameLine := -1
-	lastBlameFile := ""
 	lastGutterFile := ""
 	lastGutterRepo := ""
 	lastTabFile := ""
@@ -57,10 +47,6 @@ func RunEventLoop(
 	lastCursorLine := -1
 	lastCursorCol := -1
 	lastCursorFile := ""
-	lastBlameRepo := ""
-	blameGen := 0
-	cancelBlame := func() {}
-	defer func() { cancelBlame() }()
 
 	syncStatus := func() {
 		app.syncRepositoryObservation()
@@ -146,46 +132,6 @@ func RunEventLoop(
 				app.PluginManager.DispatchEvent("cursor.change", filePath)
 			}
 		}
-
-		if filePath != lastBlameFile || line != lastBlameLine || repoDir != lastBlameRepo {
-			lastBlameFile = filePath
-			lastBlameLine = line
-			lastBlameRepo = repoDir
-			blameGen++
-			cancelBlame()
-			app.Status.SetSegment(view.StatusSegment{ID: "blame", Side: "left", Priority: 200, Text: ""})
-			blameFile, ok := "", false
-			if repoDir != "" {
-				blameFile, ok = app.Repository.gitRelativePath(repoDir, filePath)
-			}
-			if ok {
-				gen := blameGen
-				blameLine := line + 1
-				var lines []string
-				eol := "\n"
-				if buf := app.EditorGroup.ActiveBuffer(); buf != nil && buf.Dirty {
-					lines = slices.Clone(buf.Lines)
-					if buf.LineEnding != "" {
-						eol = buf.LineEnding
-					}
-				}
-				ctx, cancel := context.WithCancel(context.Background())
-				cancelBlame = cancel
-				go func() {
-					defer cancel()
-					if ctx.Err() != nil {
-						return
-					}
-					var info *git.BlameInfo
-					if lines != nil {
-						info = git.BlameLineContents(ctx, repoDir, blameFile, blameLine, strings.Join(lines, eol))
-					} else {
-						info = git.BlameLine(ctx, repoDir, blameFile, blameLine)
-					}
-					screen.PostEvent(tcell.NewEventInterrupt(&BlameResult{Gen: gen, Info: info}))
-				}()
-			}
-		}
 	}
 
 	// Last mouse position, so redraw can refresh the pointer after a key or
@@ -197,6 +143,7 @@ func RunEventLoop(
 		// Every event path ends here, including scripted commands.
 		app.SyncFileHandlerTabs()
 		app.SyncEmptyState()
+		app.SyncBlame()
 		cells := renderer.NextFrame(app.Root.Width, app.Root.Height)
 		if app.ImageLayer != nil {
 			app.ImageLayer.Begin()
@@ -330,11 +277,6 @@ func RunEventLoop(
 			case string:
 				if v != "" {
 					closeTerminal(v)
-				}
-			case *BlameResult:
-				if v.Gen == blameGen && v.Info != nil {
-					app.Status.SetSegment(view.StatusSegment{ID: "blame", Side: "left", Priority: 200, Text: fmt.Sprintf("%s, %s",
-						v.Info.Author, git.FormatRelativeTime(v.Info.Time))})
 				}
 			case *ui.TabDragAutoScrollTick:
 				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)

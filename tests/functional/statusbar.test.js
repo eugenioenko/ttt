@@ -93,4 +93,27 @@ describe("status bar segments", () => {
     expect(lastLine).toContain("Alice");
     expect(lastLine).not.toContain("Bob");
   });
+
+  it("clears blame on a same-line edit and restores it after undo", () => {
+    dir = createTempDir();
+    createGitRepo(dir);
+    const file = join(dir, "authors.txt");
+    writeFileSync(file, "committed line\n");
+    git(dir, "add", "authors.txt");
+    git(dir, "-c", "user.name=Alice", "commit", "-qm", "committed");
+
+    tui.start(file);
+    tui.waitFor("Alice");
+    tui.type("X");
+    const edited = tui.snapshot();
+    tui.exec("Undo");
+    tui.waitFor("Alice");
+    const restored = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    const editedStatus = snapshots[edited].split("\n").pop();
+    expect(editedStatus).toContain("Ln 1, Col 2");
+    expect(editedStatus).not.toContain("Alice");
+    expect(snapshots[restored].split("\n").pop()).toContain("Alice");
+  });
 });
