@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -181,11 +182,41 @@ func (a *App) SaveFileAs() {
 		initial = current
 	}
 	a.ShowInputDialog("Save As", "Filename", initial, func(path string) {
-		if path != "" && a.EditorGroup.SaveAs(path) {
-			path, lang := a.editorPathLang()
-			a.afterFileSave(path, lang)
+		if path == "" {
+			return
 		}
+		if saveAsReplaces(initial, path) {
+			a.ShowConfirmDialog(
+				fmt.Sprintf("%s already exists. Replace it?", filepath.Base(path)),
+				[]string{"Cancel", "Replace"},
+				[]func(){
+					func() { a.DismissDialog() },
+					func() { a.DismissDialog(); a.saveFileAs(path) },
+				},
+			)
+			return
+		}
+		a.saveFileAs(path)
 	})
+}
+
+func (a *App) saveFileAs(path string) {
+	if a.EditorGroup.SaveAs(path) {
+		path, lang := a.editorPathLang()
+		a.afterFileSave(path, lang)
+	}
+}
+
+// saveAsReplaces reports whether saving to path would overwrite a file other than current.
+func saveAsReplaces(current, path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	if cur, err := os.Stat(current); err == nil && os.SameFile(cur, info) {
+		return false
+	}
+	return true
 }
 
 func (a *App) SaveFile() {
