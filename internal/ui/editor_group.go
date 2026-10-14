@@ -403,14 +403,8 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 		g.openContentFileTab(path, NewBinaryFileWidget(path))
 		return
 	}
-	newBuf := &buffer.Buffer{Lines: []string{""}, InsertFinalNewline: g.InsertFinalNewline, ShowTrailingNewline: g.ShowTrailingNewline, TrimTrailingWhitespace: g.TrimTrailingWhitespace}
-	ec := config.LoadEditorConfig(path)
-	if ec.InsertFinalNLSet {
-		newBuf.InsertFinalNewline = ec.InsertFinalNewline
-	}
-	if ec.TrimTrailingWSSet {
-		newBuf.TrimTrailingWhitespace = ec.TrimTrailingWS
-	}
+	newBuf := &buffer.Buffer{Lines: []string{""}, ShowTrailingNewline: g.ShowTrailingNewline}
+	ec := g.applySaveSettings(newBuf, path)
 	if err := newBuf.LoadFile(path); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			g.reportError(fmt.Sprintf("Failed to open %s: %v", path, err))
@@ -1387,11 +1381,26 @@ func (g *EditorGroupWidget) Save() bool {
 	return true
 }
 
+// applySaveSettings sets buf's save-time cleanups for path from settings and .editorconfig.
+func (g *EditorGroupWidget) applySaveSettings(buf *buffer.Buffer, path string) config.EditorConfigProps {
+	buf.InsertFinalNewline = g.InsertFinalNewline
+	buf.TrimTrailingWhitespace = g.TrimTrailingWhitespace
+	ec := config.LoadEditorConfig(path)
+	if ec.InsertFinalNLSet {
+		buf.InsertFinalNewline = ec.InsertFinalNewline
+	}
+	if ec.TrimTrailingWSSet {
+		buf.TrimTrailingWhitespace = ec.TrimTrailingWS
+	}
+	return ec
+}
+
 func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t := g.activeTab()
 	if t == nil || t.Content != nil {
 		return false
 	}
+	g.applySaveSettings(t.Buf, path)
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
 		g.reportError(fmt.Sprintf("Failed to save %s: %v", path, err))

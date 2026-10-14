@@ -324,3 +324,39 @@ func TestEditorGroupSaveAsSuccess(t *testing.T) {
 		t.Fatal("SaveAs should clear Virtual flag")
 	}
 }
+
+func TestEditorGroupSaveAsNewFileUsesSaveSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name, editorconfig, want string
+	}{
+		{"settings", "", "hello\n"},
+		{"editorconfig", "root = true\n[*]\ninsert_final_newline = false\n", "hello"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.editorconfig != "" {
+				if err := os.WriteFile(filepath.Join(dir, ".editorconfig"), []byte(tc.editorconfig), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			path := filepath.Join(dir, "new.txt")
+
+			g := NewEditorGroupWidget(nil, 4, false, "extended")
+			g.InsertFinalNewline = true
+			g.TrimTrailingWhitespace = true
+			g.NewFile()
+			g.activeTab().Buf.Lines = []string{"hello  "}
+			if !g.SaveAs(path) {
+				t.Fatal("SaveAs failed")
+			}
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != tc.want {
+				t.Fatalf("saved %q, want %q", data, tc.want)
+			}
+		})
+	}
+}

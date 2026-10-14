@@ -69,6 +69,6 @@ describe("new file", () => {
     const { snapshots } = tui.run();
 
     expect(fileExists(newFile)).toBe(true);
-    expect(readFile(newFile)).toBe("Brand new content");
+    expect(readFile(newFile)).toBe("Brand new content\n");
   });
 });
