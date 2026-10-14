@@ -5,11 +5,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/fold"
+	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 
@@ -225,6 +227,94 @@ func TestGitScrollMarksToleratesChangesShorterThanBuffer(t *testing.T) {
 
 	got := editor.gitScrollMarks(editor.rowLayout(40))
 	want := []ScrollMark{{Item: 1, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("marks = %v, want %v", got, want)
+	}
+}
+
+func TestGitScrollMarksFoldHeaderKeepsTheHigherRankedChange(t *testing.T) {
+	editor := newMarksTestEditor(10)
+	editor.Folds = fold.NewState()
+	editor.Folds.SetRanges([]fold.Range{{StartLine: 2, EndLine: 6}})
+	editor.Folds.Toggle(2)
+	changes := make([]diff.LineChangeKind, 10)
+	changes[3] = diff.LineDeleted
+	changes[4] = diff.LineAdded
+	changes[6] = diff.LineAdded
+	changes[7] = diff.LineAdded
+	editor.LineChanges = changes
+
+	got := editor.gitScrollMarks(editor.rowLayout(40))
+	want := []ScrollMark{
+		{Item: 2, Count: 1, Style: term.StyleScrollMarkDeleted, Rank: 3},
+		{Item: 3, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("marks = %v, want %v", got, want)
+	}
+}
+
+func TestGitScrollMarksKeepTheirIndexWhileTyping(t *testing.T) {
+	editor := newMarksTestEditor(10)
+	changes := make([]diff.LineChangeKind, 10)
+	changes[6] = diff.LineModified
+	editor.LineChanges = changes
+	editor.gitScrollMarks(editor.rowLayout(40))
+	runs := unsafe.SliceData(editor.gitChanges.runs)
+
+	editor.exec(&undo.InsertRuneCommand{Line: 2, Col: 0, Rune: 'x'})
+	editor.gitScrollMarks(editor.rowLayout(40))
+	if unsafe.SliceData(editor.gitChanges.runs) != runs {
+		t.Fatal("typing rebuilt the change index")
+	}
+
+	changes = slices.Clone(changes)
+	changes[2] = diff.LineAdded
+	editor.LineChanges = changes
+	got := editor.gitScrollMarks(editor.rowLayout(40))
+	want := []ScrollMark{
+		{Item: 2, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1},
+		{Item: 6, Count: 1, Style: term.StyleScrollMarkModified, Rank: 2},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("marks after new gutter changes = %v, want %v", got, want)
+	}
+}
+
+func TestGitScrollMarksFollowDiffOverlayEdits(t *testing.T) {
+	editor := newRowsEditor([]string{"a", "b", "c"}, 40, 10)
+	editor.SetDiffOverlay(&DiffOverlay{Kinds: []diff.LineKind{diff.Context, diff.Added, diff.Context}, ScrollMarks: true})
+	editor.gitScrollMarks(editor.rowLayout(40))
+
+	editor.exec(&undo.InsertRuneCommand{Line: 2, Col: 0, Rune: 'x'})
+	got := editor.gitScrollMarks(editor.rowLayout(40))
+	want := []ScrollMark{{Item: 1, Count: 2, Style: term.StyleScrollMarkAdded, Rank: 1}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("marks after typing on an unchanged line = %v, want %v", got, want)
+	}
+
+	editor.exec(&undo.InsertLineCommand{Idx: 0, Text: "new"})
+	got = editor.gitScrollMarks(editor.rowLayout(40))
+	want = []ScrollMark{
+		{Item: 0, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1},
+		{Item: 2, Count: 2, Style: term.StyleScrollMarkAdded, Rank: 1},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("marks after inserting a line = %v, want %v", got, want)
+	}
+}
+
+func TestGitScrollMarksSkipFillersMovedIntoARun(t *testing.T) {
+	editor := newRowsEditor([]string{"a", "b", "c", "d"}, 40, 10)
+	editor.SetDiffOverlay(&DiffOverlay{Kinds: []diff.LineKind{diff.Added, diff.Added, diff.Added, diff.Added}, ScrollMarks: true})
+	editor.gitScrollMarks(editor.rowLayout(40))
+
+	editor.addFillers(2, 1)
+	got := editor.gitScrollMarks(editor.rowLayout(40))
+	want := []ScrollMark{
+		{Item: 0, Count: 2, Style: term.StyleScrollMarkAdded, Rank: 1},
+		{Item: 3, Count: 2, Style: term.StyleScrollMarkAdded, Rank: 1},
+	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("marks = %v, want %v", got, want)
 	}

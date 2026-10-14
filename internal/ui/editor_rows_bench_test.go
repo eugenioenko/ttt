@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 )
 
@@ -34,6 +35,28 @@ func benchmarkLayoutScroll(b *testing.B, n int, wrap bool) {
 func BenchmarkLayoutScroll50k(b *testing.B)      { benchmarkLayoutScroll(b, 50000, false) }
 func BenchmarkLayoutScrollWrap50k(b *testing.B)  { benchmarkLayoutScroll(b, 50000, true) }
 func BenchmarkLayoutScrollWrap500k(b *testing.B) { benchmarkLayoutScroll(b, 500000, true) }
+
+func benchmarkScrollGitMarks(b *testing.B, n int, wrap bool) {
+	e := newLayoutBenchEditor(n, wrap)
+	changes := make([]diff.LineChangeKind, n)
+	for i := 0; i < n; i += 5000 {
+		changes[i] = diff.LineModified
+	}
+	e.LineChanges = changes
+	grid := makeGrid(60, 40)
+	surface := NewRenderSurface(grid, Rect{W: 60, H: 40})
+	e.Render(surface)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		e.Cursor.Line = (i * 997) % len(e.Buf.Lines)
+		e.scrollViewport()
+		e.scrollDown(3)
+		e.Render(surface)
+	}
+}
+
+func BenchmarkScrollGitMarks500k(b *testing.B)     { benchmarkScrollGitMarks(b, 500000, false) }
+func BenchmarkScrollGitMarksWrap500k(b *testing.B) { benchmarkScrollGitMarks(b, 500000, true) }
 
 func benchmarkTypeWrap(b *testing.B, n int, newline bool) {
 	e := newLayoutBenchEditor(n, true)

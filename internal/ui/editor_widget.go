@@ -111,6 +111,7 @@ type EditorPaneWidget struct {
 	wrapCols     int
 	layoutCache  [4]*rowLayout
 	layoutNext   int
+	gitChanges   gitChangeIndex
 
 	// revealGapRow asks a diff to open a gap row the cursor jumped onto,
 	// where moving onto one normally leaves it collapsed.
