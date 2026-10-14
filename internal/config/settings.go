@@ -10,23 +10,26 @@ import (
 
 // Validated by normalizeSettings and used to populate the settings UI pickers.
 var (
-	GutterStyles = []string{"minimal", "compact", "extended"}
-	BorderStyles = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
-	DiffModes    = []string{"split", "unified"}
-	DiffContexts = []string{"changes", "full"}
-	GitFileViews = []string{"tree", "list"}
-	IconModes    = []string{IconsNerdFont, IconsNone}
+	GutterStyles        = []string{"minimal", "compact", "extended"}
+	BorderStyles        = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
+	DiffModes           = []string{"split", "unified"}
+	DiffContexts        = []string{"changes", "full"}
+	GitFileViews        = []string{"tree", "list"}
+	IconModes           = []string{IconsNerdFont, IconsNone}
+	ScrollbarGlyphModes = []string{ScrollbarGlyphsBlocks, ScrollbarGlyphsLegacy}
 )
 
 const (
-	DiffModeSplit      = "split"
-	DiffModeUnified    = "unified"
-	DiffContextChanges = "changes"
-	DiffContextFull    = "full"
-	GitFileViewTree    = "tree"
-	GitFileViewList    = "list"
-	IconsNone          = "none"
-	IconsNerdFont      = "nerd-font"
+	DiffModeSplit         = "split"
+	DiffModeUnified       = "unified"
+	DiffContextChanges    = "changes"
+	DiffContextFull       = "full"
+	GitFileViewTree       = "tree"
+	GitFileViewList       = "list"
+	IconsNone             = "none"
+	IconsNerdFont         = "nerd-font"
+	ScrollbarGlyphsBlocks = "blocks"
+	ScrollbarGlyphsLegacy = "legacy"
 )
 
 type TerminalSettings struct {
@@ -205,8 +208,9 @@ type ChevronSettings struct {
 }
 
 type AppearanceSettings struct {
-	Icons    string          `json:"icons"`
-	Chevrons ChevronSettings `json:"chevrons"`
+	Icons           string          `json:"icons"`
+	Chevrons        ChevronSettings `json:"chevrons"`
+	ScrollbarGlyphs string          `json:"scrollbarGlyphs"`
 }
 
 func DefaultAppearanceSettings() AppearanceSettings {
@@ -216,6 +220,7 @@ func DefaultAppearanceSettings() AppearanceSettings {
 			Collapsed: DefaultChevronCollapsed,
 			Expanded:  DefaultChevronExpanded,
 		},
+		ScrollbarGlyphs: ScrollbarGlyphsBlocks,
 	}
 }
 
@@ -457,6 +462,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(IconModes, s.Appearance.Icons) {
 		s.Appearance.Icons = IconsNone
+	}
+	if !slices.Contains(ScrollbarGlyphModes, s.Appearance.ScrollbarGlyphs) {
+		s.Appearance.ScrollbarGlyphs = ScrollbarGlyphsBlocks
 	}
 }
 

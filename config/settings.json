@@ -6,7 +6,8 @@
     "chevrons": {
       "collapsed": "▶",
       "expanded": "▼"
-    }
+    },
+    "scrollbarGlyphs": "blocks"
   },
   "editor": {
     "tabSize": 4,

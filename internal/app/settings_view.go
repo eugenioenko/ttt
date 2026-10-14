@@ -161,6 +161,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Git gutter", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsGitGutterEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.GitGutter = boolPtr(v) }},
+			{Label: "Scrollbar glyphs", Kind: settingEnum, Options: scrollbarGlyphItems,
+				GetString: func(s *config.Settings) string { return s.Appearance.ScrollbarGlyphs },
+				SetString: func(s *config.Settings, v string) { s.Appearance.ScrollbarGlyphs = v }},
 			section("Markdown"),
 			{Label: "Wrap width", Kind: settingInt, Min: 1,
 				GetInt: func(s *config.Settings) int { return s.Markdown.WrapWidth },
@@ -253,6 +256,13 @@ func iconModeItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
 		{ID: config.IconsNerdFont, Label: "Nerd Font"},
 		{ID: config.IconsNone, Label: "None"},
+	}
+}
+
+func scrollbarGlyphItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.ScrollbarGlyphsBlocks, Label: "Blocks"},
+		{ID: config.ScrollbarGlyphsLegacy, Label: "Legacy Computing"},
 	}
 }
 

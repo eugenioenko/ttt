@@ -120,3 +120,5 @@ Inline blame info for the current line is shown in the status bar, including the
 ## Git Gutter
 
 When enabled, diff indicators appear in the line number gutter showing added, modified, and removed lines compared to the last committed version. Toggle with the "Toggle Git Gutter" command in the command palette.
+
+When a file is taller than the editor, the same changes are marked on the vertical scrollbar in the gutter colors. Marks are placed to an eighth of a cell, and even a single changed line stays visible in a long file. Set `appearance.scrollbarGlyphs` to `"legacy"` for thin line marks if your terminal or font has the Symbols for Legacy Computing glyphs. Click a mark to scroll to that change.

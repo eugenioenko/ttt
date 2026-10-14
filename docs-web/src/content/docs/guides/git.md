@@ -92,7 +92,7 @@ This gives you the local file tree in the explorer and the PR's changed files in
 
 ## Git Gutter
 
-The line number area displays diff indicators that show which lines have been added, modified, or deleted compared to the last commit. This gives you at-a-glance visibility into your uncommitted changes as you edit.
+The line number area displays diff indicators that show which lines have been added, modified, or deleted compared to the last commit. This gives you at-a-glance visibility into your uncommitted changes as you edit. In files taller than the editor, the changes are also marked on the vertical scrollbar; click a mark to jump there.
 
 ## Git Blame
 

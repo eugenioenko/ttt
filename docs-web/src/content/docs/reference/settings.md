@@ -33,6 +33,7 @@ Both write the same file, so you can move between them freely.
 | `appearance.icons` | string | `"none"` | Icons in the explorer, Changes panel, and commit history: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one, so this defaults off; turn it on here, in Settings > Sidebar, or via **Options > Font Icons**. Colors come from the theme's `fileIcons` section |
 | `appearance.chevrons.collapsed` | string | `▶` | Glyph drawn beside a collapsed folder or group in trees, and on a collapsed foldable line in the editor gutter. Must be a single-width character, for example a Nerd Font chevron such as `\ueab6`; anything else falls back to the default. |
 | `appearance.chevrons.expanded` | string | `▼` | Glyph drawn beside an expanded folder or group, and on an expanded foldable line while hovering the gutter. Same rules as above. |
+| `appearance.scrollbarGlyphs` | string | `"blocks"` | Glyphs that draw git change marks on the editor scrollbar: `"blocks"` uses the half and eighth blocks every font has, which place a mark exactly near the top or bottom of a cell and stretch one in the middle to the nearer edge; `"legacy"` adds the Symbols for Legacy Computing thin bars, which place every mark to the exact eighth of a cell. Kitty, Ghostty, WezTerm and foot draw those themselves; elsewhere the font needs them or the marks show as boxes. |
 
 ## Editor
 
@@ -218,7 +219,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "chevrons": {
       "collapsed": "▶",
       "expanded": "▼"
-    }
+    },
+    "scrollbarGlyphs": "blocks"
   },
   "editor": {
     "tabSize": 4,

@@ -326,6 +326,8 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.scrollbar.Height = h
 		e.scrollbar.TotalItems = visibleCount + h - 1
 		e.scrollbar.TopItem = topRow
+		e.scrollbar.Marks = e.gitScrollMarks(layout)
+		e.scrollbar.LegacyGlyphs = e.LegacyScrollbarGlyphs
 		e.scrollbar.Render(surface, scrollbarCol, 0)
 	}
 

@@ -44,6 +44,7 @@ type EditorPaneWidget struct {
 	UseTabs                 bool
 	LineNumbers             bool
 	GutterStyle             string
+	LegacyScrollbarGlyphs   bool
 	FoldChevronCollapsed    rune
 	FoldChevronExpanded     rune
 	WordWrap                bool
