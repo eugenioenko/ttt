@@ -30,6 +30,8 @@ const (
 	benchWidth  = 200
 	benchHeight = 50
 	mediumLines = 1_500
+
+	gitChangeEvery = 50
 )
 
 func largeLines() int {
@@ -87,6 +89,27 @@ func gotoLine(h *testHarness, line int) {
 func atLastLine(h *testHarness) bool {
 	ed := h.app.EditorGroup.Editor
 	return ed.Cursor.Line == len(ed.Buf.Lines)-1
+}
+
+// openGitChangedBenchFile commits content and opens it with every
+// gitChangeEvery-th line modified, so the git gutter covers the whole file.
+func openGitChangedBenchFile(b *testing.B, h *testHarness, name string, content []byte) {
+	b.Helper()
+	if err := os.WriteFile(filepath.Join(h.dir, name), content, 0o644); err != nil {
+		b.Fatal(err)
+	}
+	initializeHarnessRepository(b, h.dir)
+	lines := bytes.Split(content, []byte("\n"))
+	for i := 0; i < len(lines); i += gitChangeEvery {
+		lines[i] = append(bytes.Clone(lines[i]), " // changed"...)
+	}
+	openBenchFile(b, h, name, bytes.Join(lines, []byte("\n")))
+	h.app.SyncRepositoryBranch()
+	h.app.RequestGitGutterForActiveFile()
+	h.redraw()
+	if len(h.app.EditorGroup.Editor.LineChanges) == 0 {
+		b.Fatal("git gutter has no line changes")
+	}
 }
 
 func BenchmarkEditor(b *testing.B) {
@@ -226,6 +249,45 @@ func BenchmarkEditor(b *testing.B) {
 							start()
 						}
 						b.StartTimer()
+						h.pressRune('x')
+						h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+					}
+				})
+			}
+
+			if lang.name == "go" {
+				b.Run("redraw_git_changes_large", func(b *testing.B) {
+					h := newBenchHarness(b)
+					openGitChangedBenchFile(b, h, lang.fixture, large)
+					gotoLine(h, largeLines()/2)
+					h.settle()
+					b.ReportAllocs()
+					for b.Loop() {
+						h.redraw()
+					}
+				})
+
+				b.Run("wheel_scroll_git_changes_large", func(b *testing.B) {
+					h := newBenchHarness(b)
+					openGitChangedBenchFile(b, h, lang.fixture, large)
+					b.ReportAllocs()
+					for b.Loop() {
+						h.app.Root.HandleEvent(tcell.NewEventMouse(benchWidth/2, benchHeight/2, tcell.WheelDown, tcell.ModNone))
+						h.redraw()
+						if ed := h.app.EditorGroup.Editor; ed.Viewport.TopLine+ed.Viewport.Height >= len(ed.Buf.Lines) {
+							gotoLine(h, 0)
+						}
+					}
+				})
+
+				b.Run("type_and_delete_git_changes_large", func(b *testing.B) {
+					h := newBenchHarness(b)
+					openGitChangedBenchFile(b, h, lang.fixture, large)
+					gotoLine(h, largeLines()/2)
+					h.settle()
+					h.pressKey(tcell.KeyEnd, tcell.ModNone)
+					b.ReportAllocs()
+					for b.Loop() {
 						h.pressRune('x')
 						h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
 					}

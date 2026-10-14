@@ -10,7 +10,7 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-func initializeHarnessRepository(t *testing.T, dir string) {
+func initializeHarnessRepository(t testing.TB, dir string) {
 	t.Helper()
 	commands := [][]string{
 		{"init", "-q", "-b", "main"},
