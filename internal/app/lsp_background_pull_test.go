@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/gittest"
 	"github.com/eugenioenko/ttt/internal/lsp"
 )
 
@@ -26,6 +27,7 @@ func TestMain(m *testing.M) {
 		runFakePullServer(mode == "interfile")
 		os.Exit(0)
 	}
+	gittest.DisableAutoMaintenance()
 	os.Exit(m.Run())
 }
 
