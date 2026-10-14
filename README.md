@@ -494,6 +494,37 @@ TTT is better because of the people who took the time to try it, report bugs, re
   <a href="https://github.com/lozzo"><img src="https://avatars.githubusercontent.com/u/8793008?v=4&amp;s=96" width="48" height="48" alt="@lozzo" title="@lozzo" /></a>
   <a href="https://github.com/JohnWJ-co"><img src="https://avatars.githubusercontent.com/u/57254767?v=4&amp;s=96" width="48" height="48" alt="@JohnWJ-co" title="@JohnWJ-co" /></a>
   <a href="https://github.com/hassanabdulqayyum"><img src="https://avatars.githubusercontent.com/u/13608799?v=4&amp;s=96" width="48" height="48" alt="@hassanabdulqayyum" title="@hassanabdulqayyum" /></a>
+  <a href="https://github.com/atreus44"><img src="https://avatars.githubusercontent.com/u/222225326?v=4&amp;s=96" width="48" height="48" alt="@atreus44" title="@atreus44" /></a>
+  <a href="https://github.com/z-hunter"><img src="https://avatars.githubusercontent.com/u/3431923?v=4&amp;s=96" width="48" height="48" alt="@z-hunter" title="@z-hunter" /></a>
+  <a href="https://github.com/LeTuR"><img src="https://avatars.githubusercontent.com/u/38325495?v=4&amp;s=96" width="48" height="48" alt="@LeTuR" title="@LeTuR" /></a>
+  <a href="https://github.com/aaronsb"><img src="https://avatars.githubusercontent.com/u/2738471?v=4&amp;s=96" width="48" height="48" alt="@aaronsb" title="@aaronsb" /></a>
+  <a href="https://github.com/rishubil"><img src="https://avatars.githubusercontent.com/u/382014?v=4&amp;s=96" width="48" height="48" alt="@rishubil" title="@rishubil" /></a>
+  <a href="https://github.com/leandrocm86"><img src="https://avatars.githubusercontent.com/u/30850489?v=4&amp;s=96" width="48" height="48" alt="@leandrocm86" title="@leandrocm86" /></a>
+  <a href="https://github.com/anderlli0053"><img src="https://avatars.githubusercontent.com/u/22171451?v=4&amp;s=96" width="48" height="48" alt="@anderlli0053" title="@anderlli0053" /></a>
+  <a href="https://github.com/lecheel"><img src="https://avatars.githubusercontent.com/u/148137?v=4&amp;s=96" width="48" height="48" alt="@lecheel" title="@lecheel" /></a>
+  <a href="https://github.com/michalekmatej"><img src="https://avatars.githubusercontent.com/u/42139665?v=4&amp;s=96" width="48" height="48" alt="@michalekmatej" title="@michalekmatej" /></a>
+  <a href="https://github.com/micuit-cuit"><img src="https://avatars.githubusercontent.com/u/89157073?v=4&amp;s=96" width="48" height="48" alt="@micuit-cuit" title="@micuit-cuit" /></a>
+  <a href="https://github.com/antonantal"><img src="https://avatars.githubusercontent.com/u/10272353?v=4&amp;s=96" width="48" height="48" alt="@antonantal" title="@antonantal" /></a>
+  <a href="https://github.com/HarshRajSinghania"><img src="https://avatars.githubusercontent.com/u/40535627?v=4&amp;s=96" width="48" height="48" alt="@HarshRajSinghania" title="@HarshRajSinghania" /></a>
+  <a href="https://github.com/xircon"><img src="https://avatars.githubusercontent.com/u/1316691?v=4&amp;s=96" width="48" height="48" alt="@xircon" title="@xircon" /></a>
+  <a href="https://github.com/hazymoon22"><img src="https://avatars.githubusercontent.com/u/53938840?v=4&amp;s=96" width="48" height="48" alt="@hazymoon22" title="@hazymoon22" /></a>
+  <a href="https://github.com/aahoughton"><img src="https://avatars.githubusercontent.com/u/502696?v=4&amp;s=96" width="48" height="48" alt="@aahoughton" title="@aahoughton" /></a>
+  <a href="https://github.com/AnushreeKasturi"><img src="https://avatars.githubusercontent.com/u/219416439?v=4&amp;s=96" width="48" height="48" alt="@AnushreeKasturi" title="@AnushreeKasturi" /></a>
+  <a href="https://github.com/EuanTop"><img src="https://avatars.githubusercontent.com/u/194128472?v=4&amp;s=96" width="48" height="48" alt="@EuanTop" title="@EuanTop" /></a>
+  <a href="https://github.com/rafjaf"><img src="https://avatars.githubusercontent.com/u/2151998?v=4&amp;s=96" width="48" height="48" alt="@rafjaf" title="@rafjaf" /></a>
+  <a href="https://github.com/sercanatalik"><img src="https://avatars.githubusercontent.com/u/6832079?v=4&amp;s=96" width="48" height="48" alt="@sercanatalik" title="@sercanatalik" /></a>
+  <a href="https://github.com/jayhemnani9910"><img src="https://avatars.githubusercontent.com/u/193022578?v=4&amp;s=96" width="48" height="48" alt="@jayhemnani9910" title="@jayhemnani9910" /></a>
+  <a href="https://github.com/kooler"><img src="https://avatars.githubusercontent.com/u/714009?v=4&amp;s=96" width="48" height="48" alt="@kooler" title="@kooler" /></a>
+  <a href="https://github.com/cestercian"><img src="https://avatars.githubusercontent.com/u/183791452?v=4&amp;s=96" width="48" height="48" alt="@cestercian" title="@cestercian" /></a>
+  <a href="https://github.com/ibraah007"><img src="https://avatars.githubusercontent.com/u/229618553?v=4&amp;s=96" width="48" height="48" alt="@ibraah007" title="@ibraah007" /></a>
+  <a href="https://github.com/gondsman"><img src="https://avatars.githubusercontent.com/u/45125414?v=4&amp;s=96" width="48" height="48" alt="@gondsman" title="@gondsman" /></a>
+  <a href="https://github.com/Yami066"><img src="https://avatars.githubusercontent.com/u/124346195?v=4&amp;s=96" width="48" height="48" alt="@Yami066" title="@Yami066" /></a>
+  <a href="https://github.com/KeuqS"><img src="https://avatars.githubusercontent.com/u/50778230?v=4&amp;s=96" width="48" height="48" alt="@KeuqS" title="@KeuqS" /></a>
+  <a href="https://github.com/wzd8888"><img src="https://avatars.githubusercontent.com/u/324454403?v=4&amp;s=96" width="48" height="48" alt="@wzd8888" title="@wzd8888" /></a>
+  <a href="https://github.com/MattOrmianek"><img src="https://avatars.githubusercontent.com/u/16574489?v=4&amp;s=96" width="48" height="48" alt="@MattOrmianek" title="@MattOrmianek" /></a>
+  <a href="https://github.com/mahirhir"><img src="https://avatars.githubusercontent.com/u/246701683?v=4&amp;s=96" width="48" height="48" alt="@mahirhir" title="@mahirhir" /></a>
+  <a href="https://github.com/vincentmathis"><img src="https://avatars.githubusercontent.com/u/33002126?v=4&amp;s=96" width="48" height="48" alt="@vincentmathis" title="@vincentmathis" /></a>
+  <a href="https://github.com/danielmrdev"><img src="https://avatars.githubusercontent.com/u/17232506?v=4&amp;s=96" width="48" height="48" alt="@danielmrdev" title="@danielmrdev" /></a>
 </p>
 
 Want to help? Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR.
