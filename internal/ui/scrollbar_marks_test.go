@@ -201,6 +201,18 @@ func TestGitScrollMarksAttributeFoldedChangesToHeader(t *testing.T) {
 	}
 }
 
+func TestGitScrollMarksSkipAFileThatIsOneChange(t *testing.T) {
+	editor := newMarksTestEditor(5)
+	editor.LineChanges = slices.Repeat([]diff.LineChangeKind{diff.LineAdded}, 5)
+	if got := editor.gitScrollMarks(editor.rowLayout(40)); got != nil {
+		t.Fatalf("new file marks = %v, want none", got)
+	}
+	editor.LineChanges = slices.Concat(editor.LineChanges[:4], []diff.LineChangeKind{diff.LineUnchanged})
+	if got := editor.gitScrollMarks(editor.rowLayout(40)); len(got) != 1 {
+		t.Fatalf("partly added file marks = %v, want one", got)
+	}
+}
+
 func TestGitScrollMarksUseVisualRowsUnderWordWrap(t *testing.T) {
 	editor := newMarksTestEditor(3)
 	editor.WordWrap = true
@@ -305,8 +317,8 @@ func TestGitScrollMarksFollowDiffOverlayEdits(t *testing.T) {
 }
 
 func TestGitScrollMarksSkipFillersMovedIntoARun(t *testing.T) {
-	editor := newRowsEditor([]string{"a", "b", "c", "d"}, 40, 10)
-	editor.SetDiffOverlay(&DiffOverlay{Kinds: []diff.LineKind{diff.Added, diff.Added, diff.Added, diff.Added}, ScrollMarks: true})
+	editor := newRowsEditor([]string{"a", "b", "c", "d", "e"}, 40, 10)
+	editor.SetDiffOverlay(&DiffOverlay{Kinds: []diff.LineKind{diff.Added, diff.Added, diff.Added, diff.Added, diff.Context}, ScrollMarks: true})
 	editor.gitScrollMarks(editor.rowLayout(40))
 
 	editor.addFillers(2, 1)
@@ -456,6 +468,22 @@ func TestScrollbarClickOnThumbOverMarkStillDrags(t *testing.T) {
 	top, consumed := pressScrollbar(s, 7, tcell.Button1)
 	if !consumed || top != 770 || !s.IsDragging() {
 		t.Fatalf("click on the thumb = (%d, %v), dragging %v; want (770, true) and a drag", top, consumed, s.IsDragging())
+	}
+}
+
+func TestScrollbarThumbStaysVisibleOverMarks(t *testing.T) {
+	s := &Scrollbar{Height: 10, TotalItems: 20, Marks: []ScrollMark{
+		{Item: 0, Count: 2, Style: term.StyleScrollMarkAdded, Rank: 1},
+		{Item: 1, Count: 1, Style: term.StyleScrollMarkDeleted, Rank: 3},
+	}}
+	grid := makeGrid(1, 10)
+	s.Render(NewRenderSurface(grid, Rect{W: 1, H: 10}), 0, 0)
+	want := term.Cell{Ch: '▐', Style: term.StyleScrollMarkDeleted, BgStyle: term.StyleScrollbarThumbFill}
+	if grid[0][0] != want {
+		t.Fatalf("thumb row over marks = %+v, want %+v", grid[0][0], want)
+	}
+	if want := (term.Cell{Ch: '█', Style: term.StyleScrollbarThumb}); grid[1][0] != want {
+		t.Fatalf("unmarked thumb row = %+v, want %+v", grid[1][0], want)
 	}
 }
 

@@ -58,19 +58,26 @@ func (s *Scrollbar) Render(surface Surface, rx, ry int) {
 		return
 	}
 	thumbTop, thumbH := s.ThumbPos()
-	slots := s.markSlots()
+	owners := s.slotOwners()
+	slots := s.ownerStyles(owners)
 	glyphs := blockGlyphs
 	if s.LegacyGlyphs {
 		glyphs = legacyGlyphs
 	}
 	for y := 0; y < s.Height; y++ {
+		onThumb := y >= thumbTop && y < thumbTop+thumbH
 		track := term.StyleScrollbar
-		if y >= thumbTop && y < thumbTop+thumbH {
+		if onThumb {
 			track = term.StyleScrollbarThumb
 		}
 		cell := term.Cell{Ch: '█', Style: track}
-		if slots != nil {
-			cell = markCell(track, slots[y*cellSlots:(y+1)*cellSlots], glyphs)
+		if owners != nil {
+			if !onThumb {
+				cell = markCell(track, slots[y*cellSlots:(y+1)*cellSlots], glyphs)
+			} else if top := s.topMark(owners[y*cellSlots : (y+1)*cellSlots]); top >= 0 {
+				// Marks never cover the thumb: it keeps the left half of the cell.
+				cell = term.Cell{Ch: '▐', Style: s.Marks[top].Style, BgStyle: term.StyleScrollbarThumbFill}
+			}
 		}
 		surface.SetCell(rx, ry+y, cell)
 	}
@@ -85,7 +92,10 @@ const markClickContext = 3
 // there is none. Every mark keeps at least one slot however many items share
 // it, so a single changed line in a huge file stays visible.
 func (s *Scrollbar) markSlots() []term.Style {
-	owners := s.slotOwners()
+	return s.ownerStyles(s.slotOwners())
+}
+
+func (s *Scrollbar) ownerStyles(owners []int) []term.Style {
 	if owners == nil {
 		return nil
 	}
@@ -96,6 +106,17 @@ func (s *Scrollbar) markSlots() []term.Style {
 		}
 	}
 	return slots
+}
+
+// topMark returns the highest ranked of owners, -1 when there is none.
+func (s *Scrollbar) topMark(owners []int) int {
+	best := -1
+	for _, owner := range owners {
+		if owner >= 0 && (best < 0 || s.Marks[owner].Rank > s.Marks[best].Rank) {
+			best = owner
+		}
+	}
+	return best
 }
 
 // slotOwners returns the index in Marks of the mark drawn in every slot of
@@ -130,12 +151,7 @@ func (s *Scrollbar) markTarget(y int) (int, bool) {
 	if owners == nil || y < 0 || y >= s.Height {
 		return 0, false
 	}
-	best := -1
-	for _, owner := range owners[y*cellSlots : (y+1)*cellSlots] {
-		if owner >= 0 && (best < 0 || s.Marks[owner].Rank > s.Marks[best].Rank) {
-			best = owner
-		}
-	}
+	best := s.topMark(owners[y*cellSlots : (y+1)*cellSlots])
 	if best < 0 {
 		return 0, false
 	}

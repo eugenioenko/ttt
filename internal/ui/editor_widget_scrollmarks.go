@@ -90,6 +90,11 @@ func (e *EditorPaneWidget) gitScrollMarks(l *rowLayout) []ScrollMark {
 	if len(idx.runs) == 0 && len(idx.deleted) == 0 {
 		return nil
 	}
+	// A new file is one change from top to bottom, which marks nothing the
+	// gutter does not already show.
+	if len(idx.runs) == 1 && len(idx.deleted) == 0 && idx.runs[0].start == 0 && idx.runs[0].end == idx.key.n {
+		return nil
+	}
 	// A run is marked on its text rows only, so it is cut where phantom rows
 	// sit between its lines; fillers move without a buffer edit, so the cuts
 	// are taken from the layout on every frame.
