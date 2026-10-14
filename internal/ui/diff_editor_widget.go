@@ -50,6 +50,8 @@ type DiffEditorWidget struct {
 	colorNumbers    bool
 	gapChevron      rune
 	emphasizeGaps   bool
+	scrollMarks     bool
+	legacyGlyphs    bool
 	hoveredGap      int
 	minGutter       int
 
@@ -432,6 +434,7 @@ func (d *DiffEditorWidget) applyOverlayOptions() {
 	overlays := []*DiffOverlay{d.leftBase, d.rightBase, d.liveUnified}
 	for _, p := range d.viewPanes() {
 		overlays = append(overlays, p.DiffOverlay)
+		p.LegacyScrollbarGlyphs = d.legacyGlyphs
 	}
 	for _, o := range overlays {
 		if o != nil {
@@ -442,10 +445,16 @@ func (d *DiffEditorWidget) applyOverlayOptions() {
 			o.ColorNumbers = d.colorNumbers
 			o.GapChevron = d.gapChevron
 			o.EmphasizeGaps = d.emphasizeGaps
+			o.ScrollMarks = d.scrollMarks
 			o.HoveredGap = d.hoveredGap
 			o.MinGutter = d.minGutter
 		}
 	}
+}
+
+func (d *DiffEditorWidget) SetDiffScrollMarks(enabled, legacyGlyphs bool) {
+	d.scrollMarks, d.legacyGlyphs = enabled, legacyGlyphs
+	d.applyOverlayOptions()
 }
 
 func (d *DiffEditorWidget) SetContextMode(mode DiffContextMode) {

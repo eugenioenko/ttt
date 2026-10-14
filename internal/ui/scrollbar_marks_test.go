@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
@@ -224,5 +225,105 @@ func TestGitScrollMarksToleratesChangesShorterThanBuffer(t *testing.T) {
 	want := []ScrollMark{{Item: 1, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1}}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("marks = %v, want %v", got, want)
+	}
+}
+
+func TestEditorOmitsScrollbarGitMarksWhenDisabled(t *testing.T) {
+	editor := newMarksTestEditor(200)
+	editor.ScrollbarGitMarks = false
+	changes := make([]diff.LineChangeKind, 200)
+	changes[150] = diff.LineModified
+	editor.LineChanges = changes
+	editor.SetRect(Rect{W: 40, H: 10})
+
+	grid := makeGrid(40, 10)
+	editor.Render(NewRenderSurface(grid, Rect{W: 40, H: 10}))
+
+	if editor.scrollbar.Marks != nil {
+		t.Fatalf("marks = %v, want none while disabled", editor.scrollbar.Marks)
+	}
+	for row := range 10 {
+		if slots := drawnSlots(t, grid[row][39]); slices.Contains(slots[:], term.StyleScrollMarkModified) {
+			t.Fatalf("scrollbar row %d = %+v, want no mark while disabled", row, grid[row][39])
+		}
+	}
+}
+
+func marksTestDiffEditor(t *testing.T) *DiffEditorWidget {
+	t.Helper()
+	var text strings.Builder
+	text.WriteString("--- a/test.go\n+++ b/test.go\n@@ -1,40 +1,40 @@\n")
+	for line := range 40 {
+		switch line {
+		case 10:
+			text.WriteString("-gone\n")
+		case 30:
+			text.WriteString("+added\n")
+		default:
+			fmt.Fprintf(&text, " line %d\n", line)
+		}
+	}
+	return NewDiffEditorWidget("test.go", diff.Parse(text.String()), nil, nil, false)
+}
+
+func TestDiffScrollMarksOffByDefault(t *testing.T) {
+	d := marksTestDiffEditor(t)
+	renderDiffEditor(d, 60, 10)
+	if d.left.scrollbar.Marks != nil || d.right.scrollbar.Marks != nil {
+		t.Fatalf("marks = %v / %v, want none by default", d.left.scrollbar.Marks, d.right.scrollbar.Marks)
+	}
+}
+
+func TestDiffScrollMarksSplitPanesMarkTheirOwnSide(t *testing.T) {
+	d := marksTestDiffEditor(t)
+	d.SetDiffScrollMarks(true, false)
+	renderDiffEditor(d, 60, 10)
+	wantLeft := []ScrollMark{{Item: 10, Count: 1, Style: term.StyleScrollMarkDeleted, Rank: 3}}
+	wantRight := []ScrollMark{{Item: 30, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1}}
+	if fmt.Sprint(d.left.scrollbar.Marks) != fmt.Sprint(wantLeft) || fmt.Sprint(d.right.scrollbar.Marks) != fmt.Sprint(wantRight) {
+		t.Fatalf("marks = %v / %v, want %v / %v", d.left.scrollbar.Marks, d.right.scrollbar.Marks, wantLeft, wantRight)
+	}
+}
+
+func TestDiffScrollMarksUnifiedMarksDeletedPhantomRows(t *testing.T) {
+	d := marksTestDiffEditor(t)
+	d.SetDiffScrollMarks(true, false)
+	d.SetUnified(true)
+	grid := renderDiffEditor(d, 60, 10)
+	want := []ScrollMark{
+		{Item: 10, Count: 1, Style: term.StyleScrollMarkDeleted, Rank: 3},
+		{Item: 30, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1},
+	}
+	if fmt.Sprint(d.unified.scrollbar.Marks) != fmt.Sprint(want) {
+		t.Fatalf("marks = %v, want %v", d.unified.scrollbar.Marks, want)
+	}
+	marked := false
+	for row := range 10 {
+		slots := drawnSlots(t, grid[row][59])
+		marked = marked || slices.Contains(slots[:], term.StyleScrollMarkAdded)
+	}
+	if !marked {
+		t.Fatal("expected the added row drawn on the unified scrollbar")
+	}
+}
+
+func TestDiffScrollMarksCountWrappedDeletedRows(t *testing.T) {
+	var text strings.Builder
+	text.WriteString("--- a/test.go\n+++ b/test.go\n@@ -1,40 +1,39 @@\n")
+	for line := range 40 {
+		if line == 5 {
+			text.WriteString("-" + strings.Repeat("word ", 30) + "\n")
+			continue
+		}
+		fmt.Fprintf(&text, " line %d\n", line)
+	}
+	d := NewDiffEditorWidget("test.go", diff.Parse(text.String()), nil, nil, false)
+	d.SetDiffScrollMarks(true, false)
+	d.SetUnified(true)
+	d.SetWrapped(true)
+	renderDiffEditor(d, 40, 10)
+	marks := d.unified.scrollbar.Marks
+	if len(marks) != 1 || marks[0].Item != 5 || marks[0].Count < 2 || marks[0].Style != term.StyleScrollMarkDeleted {
+		t.Fatalf("marks = %v, want one deleted mark at row 5 spanning its wrapped rows", marks)
 	}
 }

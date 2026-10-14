@@ -34,6 +34,7 @@ type DiffOverlay struct {
 	HoveredGap      int
 	HighContrast    bool
 	EmphasizeGaps   bool
+	ScrollMarks     bool
 	Signs           bool
 	SignsColor      bool
 	GutterHighlight bool

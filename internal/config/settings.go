@@ -110,6 +110,7 @@ type EditorSettings struct {
 	DiffSignsColor          bool             `json:"diffSignsColor"`
 	DiffGutterHighlight     bool             `json:"diffGutterHighlight"`
 	DiffColorGutterNumbers  bool             `json:"diffColorGutterNumbers"`
+	DiffScrollbarGitMarks   bool             `json:"diffScrollbarGitMarks"`
 	LineNumbers             bool             `json:"lineNumbers"`
 	CursorStyle             string           `json:"cursorStyle,omitempty"`
 	FormatOnSave            bool             `json:"formatOnSave"`
@@ -118,6 +119,7 @@ type EditorSettings struct {
 	FocusOnOpen             bool             `json:"focusOnOpen"`
 	SyntaxHighlight         *bool            `json:"syntaxHighlight,omitempty"`
 	GitGutter               *bool            `json:"gitGutter,omitempty"`
+	ScrollbarGitMarks       *bool            `json:"scrollbarGitMarks,omitempty"`
 	AutoDedent              *bool            `json:"autoDedent,omitempty"`
 	AutoIndent              *bool            `json:"autoIndent,omitempty"`
 	GutterStyle             string           `json:"gutterStyle,omitempty"`
@@ -152,6 +154,10 @@ func (e EditorSettings) IsSyntaxHighlightEnabled() bool {
 
 func (e EditorSettings) IsGitGutterEnabled() bool {
 	return e.GitGutter == nil || *e.GitGutter
+}
+
+func (e EditorSettings) IsScrollbarGitMarksEnabled() bool {
+	return e.ScrollbarGitMarks == nil || *e.ScrollbarGitMarks
 }
 
 func (e EditorSettings) IsAutoDedentEnabled() bool {

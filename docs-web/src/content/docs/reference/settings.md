@@ -53,6 +53,7 @@ All editor settings are nested under the `editor` key.
 | `editor.diffSignsColor` | bool | `true` | Color diff gutter signs with the added/deleted colors; when off they use the line number color |
 | `editor.diffGutterHighlight` | bool | `true` | Tint the gutter background of added and deleted rows; when off the gutter stays plain and only the text is tinted |
 | `editor.diffColorGutterNumbers` | bool | `false` | Color the line numbers of added and deleted rows with the added/deleted gutter colors; when off the numbers use the normal line number color |
+| `editor.diffScrollbarGitMarks` | bool | `false` | Mark added and deleted rows on the diff view scrollbar |
 | `editor.autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
 | `editor.autoDedent` | bool | `true` | Dedent one level when typing a closing `} ) ]` on a blank line |
 | `editor.lineNumbers` | bool | `true` | Show line numbers in the gutter |
@@ -63,6 +64,7 @@ All editor settings are nested under the `editor` key.
 | `editor.focusOnOpen` | bool | `false` | Focus the editor when opening a file |
 | `editor.syntaxHighlight` | bool | `true` | Enable syntax highlighting |
 | `editor.gitGutter` | bool | `true` | Show git change indicators in the gutter |
+| `editor.scrollbarGitMarks` | bool | `true` | Mark git changes on the editor's vertical scrollbar. Needs `editor.gitGutter` |
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
@@ -235,6 +237,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "diffSignsColor": true,
     "diffGutterHighlight": true,
     "diffColorGutterNumbers": false,
+    "diffScrollbarGitMarks": false,
     "autoIndent": true,
     "autoDedent": true,
     "lineNumbers": true,

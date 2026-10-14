@@ -91,6 +91,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.SetDiffSignsColor(s.Editor.DiffSignsColor)
 	a.EditorGroup.SetDiffGutterHighlight(s.Editor.DiffGutterHighlight)
 	a.EditorGroup.SetDiffColorGutterNumbers(s.Editor.DiffColorGutterNumbers)
+	a.EditorGroup.SetDiffScrollMarks(s.Editor.DiffScrollbarGitMarks, s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy)
 	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
 	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
 	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)
@@ -104,6 +105,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.EditorGroup.Editor.LineNumbers = s.Editor.LineNumbers
 		a.EditorGroup.Editor.GutterStyle = s.Editor.GutterStyle
 		a.EditorGroup.Editor.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
+		a.EditorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
 		a.EditorGroup.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
 		a.EditorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
 		a.EditorGroup.Editor.WordWrap = s.Editor.WordWrap

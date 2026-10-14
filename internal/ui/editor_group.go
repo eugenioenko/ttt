@@ -101,6 +101,8 @@ type EditorGroupWidget struct {
 	DiffWordWrap            bool
 	DiffHighContrast        bool
 	DiffCollapsedEmphasis   bool
+	DiffScrollbarGitMarks   bool
+	LegacyScrollbarGlyphs   bool
 	DiffSigns               bool
 	DiffSignsColor          bool
 	DiffGutterHighlight     bool
@@ -698,6 +700,9 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	if c, ok := surface.(chevronSurface); ok {
 		c.SetChevrons(g.ChevronCollapsed, g.ChevronExpanded)
 	}
+	if m, ok := surface.(scrollMarkSurface); ok {
+		m.SetDiffScrollMarks(g.DiffScrollbarGitMarks, g.LegacyScrollbarGlyphs)
+	}
 }
 
 func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffContextMode, wordWrap bool) {
@@ -751,6 +756,15 @@ func (g *EditorGroupWidget) eachDiffSigns(apply func(diffSignsSurface)) {
 	}
 }
 
+func (g *EditorGroupWidget) SetDiffScrollMarks(enabled, legacyGlyphs bool) {
+	g.DiffScrollbarGitMarks, g.LegacyScrollbarGlyphs = enabled, legacyGlyphs
+	for _, surface := range g.diffSurfaces() {
+		if m, ok := surface.(scrollMarkSurface); ok {
+			m.SetDiffScrollMarks(enabled, legacyGlyphs)
+		}
+	}
+}
+
 // diffSurfaces are the diff tabs' widgets and the editable diffs of file tabs.
 func (g *EditorGroupWidget) diffSurfaces() []DiffModeSurface {
 	var out []DiffModeSurface
@@ -789,6 +803,10 @@ type diffSignsSurface interface {
 	SetDiffGutterHighlight(bool)
 	SetDiffColorGutterNumbers(bool)
 	setGutterStyle(string)
+}
+
+type scrollMarkSurface interface {
+	SetDiffScrollMarks(enabled, legacyGlyphs bool)
 }
 
 // An empty protocol means auto-detection.

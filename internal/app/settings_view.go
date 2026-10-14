@@ -161,6 +161,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Git gutter", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsGitGutterEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.GitGutter = boolPtr(v) }},
+			{Label: "Scrollbar git marks", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.IsScrollbarGitMarksEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.ScrollbarGitMarks = boolPtr(v) }},
 			{Label: "Scrollbar glyphs", Kind: settingEnum, Options: scrollbarGlyphItems,
 				GetString: func(s *config.Settings) string { return s.Appearance.ScrollbarGlyphs },
 				SetString: func(s *config.Settings, v string) { s.Appearance.ScrollbarGlyphs = v }},
@@ -241,6 +244,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Emphasize collapsed diff rows", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffCollapsedEmphasis },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffCollapsedEmphasis = v }},
+			{Label: "Diff scrollbar git marks", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.DiffScrollbarGitMarks },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffScrollbarGitMarks = v }},
 		}},
 	}
 }
