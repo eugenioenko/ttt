@@ -20,6 +20,7 @@ type Scrollbar struct {
 	LegacyGlyphs bool
 	dragging     bool
 	dragOffset   int
+	onMark       bool
 }
 
 // ScrollMark highlights Count items starting at Item on the track. Its style
@@ -78,29 +79,67 @@ func (s *Scrollbar) Render(surface Surface, rx, ry int) {
 // cellSlots is how many marks fit in one track cell, one per eighth.
 const cellSlots = 8
 
+const markClickContext = 3
+
 // markSlots returns the mark style for every slot of the track, zero where
 // there is none. Every mark keeps at least one slot however many items share
 // it, so a single changed line in a huge file stays visible.
 func (s *Scrollbar) markSlots() []term.Style {
+	owners := s.slotOwners()
+	if owners == nil {
+		return nil
+	}
+	slots := make([]term.Style, len(owners))
+	for slot, owner := range owners {
+		if owner >= 0 {
+			slots[slot] = s.Marks[owner].Style
+		}
+	}
+	return slots
+}
+
+// slotOwners returns the index in Marks of the mark drawn in every slot of
+// the track, -1 where there is none.
+func (s *Scrollbar) slotOwners() []int {
 	if len(s.Marks) == 0 || s.TotalItems <= 0 {
 		return nil
 	}
 	total := cellSlots * s.Height
-	slots := make([]term.Style, total)
-	ranks := make([]int, total)
+	owners := make([]int, total)
+	for slot := range owners {
+		owners[slot] = -1
+	}
 	slotOf := func(item int) int {
 		return max(0, min(item*total/s.TotalItems, total-1))
 	}
-	for _, mark := range s.Marks {
+	for i, mark := range s.Marks {
 		first := slotOf(mark.Item)
 		last := slotOf(mark.Item + max(mark.Count, 1) - 1)
 		for slot := first; slot <= last; slot++ {
-			if slots[slot] == term.StyleDefault || mark.Rank > ranks[slot] {
-				slots[slot], ranks[slot] = mark.Style, mark.Rank
+			if owners[slot] < 0 || mark.Rank > s.Marks[owners[slot]].Rank {
+				owners[slot] = i
 			}
 		}
 	}
-	return slots
+	return owners
+}
+
+// markTarget returns the item of the highest ranked mark drawn in track cell y.
+func (s *Scrollbar) markTarget(y int) (int, bool) {
+	owners := s.slotOwners()
+	if owners == nil || y < 0 || y >= s.Height {
+		return 0, false
+	}
+	best := -1
+	for _, owner := range owners[y*cellSlots : (y+1)*cellSlots] {
+		if owner >= 0 && (best < 0 || s.Marks[owner].Rank > s.Marks[best].Rank) {
+			best = owner
+		}
+	}
+	if best < 0 {
+		return 0, false
+	}
+	return s.Marks[best].Item, true
 }
 
 // scrollGlyph paints eighths top through bottom (0 is the top of the cell) in
@@ -224,9 +263,13 @@ func (s *Scrollbar) HandleEvent(ev tcell.Event) (newTopItem int, consumed bool) 
 	if s.dragging {
 		if btn == tcell.ButtonNone {
 			s.dragging = false
+			s.onMark = false
 			return s.TopItem, false
 		}
 		if btn&tcell.Button1 != 0 {
+			if s.onMark {
+				return s.TopItem, true
+			}
 			relY := my - s.Y
 			return s.posToTopItem(relY - s.dragOffset), true
 		}
@@ -239,6 +282,9 @@ func (s *Scrollbar) HandleEvent(ev tcell.Event) (newTopItem int, consumed bool) 
 		s.dragging = true
 		if relY >= thumbTop && relY < thumbTop+thumbH {
 			s.dragOffset = relY - thumbTop
+		} else if item, ok := s.markTarget(relY); ok {
+			s.onMark = true
+			s.TopItem = min(max(item-markClickContext, 0), s.TotalItems-s.Height)
 		} else {
 			s.dragOffset = thumbH / 2
 			return s.posToTopItem(relY - s.dragOffset), true

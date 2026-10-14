@@ -12,6 +12,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestScrollbarMarkSingleItemInHugeRangeStaysVisible(t *testing.T) {
@@ -325,5 +327,110 @@ func TestDiffScrollMarksCountWrappedDeletedRows(t *testing.T) {
 	marks := d.unified.scrollbar.Marks
 	if len(marks) != 1 || marks[0].Item != 5 || marks[0].Count < 2 || marks[0].Style != term.StyleScrollMarkDeleted {
 		t.Fatalf("marks = %v, want one deleted mark at row 5 spanning its wrapped rows", marks)
+	}
+}
+
+func markClickScrollbar() *Scrollbar {
+	return &Scrollbar{Height: 10, TotalItems: 1000, Marks: []ScrollMark{
+		{Item: 700, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1},
+		{Item: 715, Count: 1, Style: term.StyleScrollMarkDeleted, Rank: 3},
+	}}
+}
+
+func pressScrollbar(s *Scrollbar, y int, btn tcell.ButtonMask) (int, bool) {
+	return s.HandleEvent(tcell.NewEventMouse(s.X, s.Y+y, btn, tcell.ModNone))
+}
+
+func TestScrollbarClickOnMarkScrollsToItAndStaysThere(t *testing.T) {
+	s := markClickScrollbar()
+	// Both marks share row 7 (slots 56 and 57); the deleted one ranks higher.
+	top, consumed := pressScrollbar(s, 7, tcell.Button1)
+	if !consumed || top != 715-markClickContext {
+		t.Fatalf("click on the marked row = (%d, %v), want (%d, true)", top, consumed, 715-markClickContext)
+	}
+	if top, _ := pressScrollbar(s, 2, tcell.Button1); top != 715-markClickContext {
+		t.Fatalf("moving with the button held scrolled to %d, want to stay at %d", top, 715-markClickContext)
+	}
+	pressScrollbar(s, 2, tcell.ButtonNone)
+	if top, _ := pressScrollbar(s, 2, tcell.Button1); top != s.posToTopItem(2) {
+		t.Fatalf("a new click on an unmarked row after release = %d, want the proportional %d", top, s.posToTopItem(2))
+	}
+}
+
+func TestScrollbarClickOnThumbOverMarkStillDrags(t *testing.T) {
+	s := markClickScrollbar()
+	s.TopItem = 770
+	if thumbTop, _ := s.ThumbPos(); thumbTop != 7 {
+		t.Fatalf("thumb top = %d, want 7 so it covers the marks", thumbTop)
+	}
+	top, consumed := pressScrollbar(s, 7, tcell.Button1)
+	if !consumed || top != 770 || !s.IsDragging() {
+		t.Fatalf("click on the thumb = (%d, %v), dragging %v; want (770, true) and a drag", top, consumed, s.IsDragging())
+	}
+}
+
+func TestScrollbarClickOnUnmarkedTrackScrollsProportionally(t *testing.T) {
+	s := markClickScrollbar()
+	top, consumed := pressScrollbar(s, 3, tcell.Button1)
+	if !consumed || top != s.posToTopItem(3) || !s.IsDragging() {
+		t.Fatalf("click on an unmarked row = (%d, %v), dragging %v; want (%d, true) and a drag", top, consumed, s.IsDragging(), s.posToTopItem(3))
+	}
+}
+
+func clickScrollbarMark(t *testing.T, e *EditorPaneWidget, style term.Style) []string {
+	t.Helper()
+	r := e.GetRect()
+	grid := makeGrid(r.W, r.H)
+	e.Render(NewRenderSurface(grid, Rect{W: r.W, H: r.H}))
+	sb := e.scrollbar
+	for y := range sb.Height {
+		if slots := drawnSlots(t, grid[sb.Y+y][sb.X]); slices.Contains(slots[:], style) {
+			e.HandleEvent(tcell.NewEventMouse(sb.X, sb.Y+y, tcell.Button1, tcell.ModNone))
+			e.HandleEvent(tcell.NewEventMouse(sb.X, sb.Y+y, tcell.ButtonNone, tcell.ModNone))
+			return renderRows(e)
+		}
+	}
+	t.Fatalf("no %v mark drawn on the scrollbar", style)
+	return nil
+}
+
+func markClickEditor(width int, changed int) *EditorPaneWidget {
+	lines := make([]string, 2000)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("L%04d %s", i, strings.Repeat("x", 20))
+	}
+	e := newRowsEditor(lines, width, 10)
+	changes := make([]diff.LineChangeKind, len(lines))
+	changes[changed] = diff.LineModified
+	e.LineChanges = changes
+	return e
+}
+
+func rowsShow(rows []string, prefix string) bool {
+	return slices.ContainsFunc(rows, func(row string) bool { return strings.HasPrefix(row, prefix) })
+}
+
+func TestEditorClickOnScrollbarMarkShowsTheChange(t *testing.T) {
+	e := markClickEditor(60, 1500)
+	if rows := clickScrollbarMark(t, e, term.StyleScrollMarkModified); !rowsShow(rows, "L1500") {
+		t.Fatalf("after clicking the mark the screen shows %q, want line 1500", rows)
+	}
+}
+
+func TestEditorClickOnScrollbarMarkShowsTheChangeWithWrap(t *testing.T) {
+	e := markClickEditor(12, 1500)
+	e.WordWrap = true
+	if rows := clickScrollbarMark(t, e, term.StyleScrollMarkModified); !rowsShow(rows, "L1500") {
+		t.Fatalf("after clicking the mark the screen shows %q, want line 1500", rows)
+	}
+}
+
+func TestEditorClickOnScrollbarMarkShowsTheFoldHeader(t *testing.T) {
+	e := markClickEditor(60, 1500)
+	e.Folds = fold.NewState()
+	e.Folds.SetRanges([]fold.Range{{StartLine: 1300, EndLine: 1700}})
+	e.Folds.Toggle(1300)
+	if rows := clickScrollbarMark(t, e, term.StyleScrollMarkModified); !rowsShow(rows, "L1300") {
+		t.Fatalf("after clicking the mark the screen shows %q, want the fold header at line 1300", rows)
 	}
 }
