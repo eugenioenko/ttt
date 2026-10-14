@@ -20,6 +20,11 @@ brew trust eugenioenko/ttt
 brew install ttt
 ```
 
+### Quick Install Windows (scoop)
+```sh
+scoop install ttt
+```
+
 ### Quick Install Linux
 ```sh
 curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
