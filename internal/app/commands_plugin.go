@@ -417,6 +417,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.ClipboardWrite = func(text string) {
 		clipboard.Set(text)
 	}
+	p.ClipboardRead = func() string {
+		return clipboard.Get()
+	}
 	p.SetEcho = func(text string) {
 		a.Status.EchoText = text
 	}

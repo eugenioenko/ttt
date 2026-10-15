@@ -364,6 +364,19 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			return 0
 		}))
 
+		L.SetField(mod, "clipboard_read", L.NewFunction(func(L *lua.LState) int {
+			if err := p.Granted.Check("clipboard.read"); err != nil {
+				L.ArgError(1, "clipboard.read permission not granted")
+				return 0
+			}
+			text := ""
+			if p.ClipboardRead != nil {
+				text = p.ClipboardRead()
+			}
+			L.Push(lua.LString(text))
+			return 1
+		}))
+
 		L.SetField(mod, "show_info", L.NewFunction(func(L *lua.LState) int {
 			title := L.CheckString(1)
 			tbl := L.CheckTable(2)

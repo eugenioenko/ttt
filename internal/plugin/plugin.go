@@ -94,6 +94,7 @@ type Plugin struct {
 	SetEcho            func(text string) // status bar shows only this text when non-empty
 	ExecCommand        func(id string) bool
 	ClipboardWrite     func(text string)
+	ClipboardRead      func() string
 	ListCommands       func() []CommandInfo
 	PublishDiagnostics func(path string, items []DiagnosticItem)
 	ClearDiagnostics   func(path string)
