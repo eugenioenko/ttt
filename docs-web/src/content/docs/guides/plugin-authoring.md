@@ -423,6 +423,35 @@ for _, cmd in ipairs(cmds) do
 end
 ```
 
+### `ttt.clipboard_write(text)`
+
+Write `text` to the system clipboard. Requires the `commands` permission.
+
+**Returns:** nothing.
+
+```lua
+ttt.clipboard_write("copied from my plugin")
+```
+
+### `ttt.clipboard_read()`
+
+Read the system clipboard. Requires the `clipboard.read` permission. Reading has its own permission because the clipboard may hold passwords or tokens; `ttt.clipboard_write` stays under `commands`.
+
+**Returns:** the clipboard text as a string, or `""` when the clipboard is empty or unavailable (never `nil`). Raises a Lua error when the permission was not granted.
+
+```lua
+local text = ttt.clipboard_read()
+if text ~= "" then
+  ttt.notify("clipboard: " .. text)
+end
+```
+
+Declare the permission in the manifest:
+
+```json
+"permissions": { "commands": true, "clipboard.read": true }
+```
+
 ### `ttt.command_line` Module
 
 A single-line, framed input docked directly above the status bar — the `:` prompt of a modal editor. It is drawn as a modal overlay, so opening it never resizes the editor underneath and the buffer does not jump.
@@ -2480,6 +2509,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `settings`       | boolean  | Read/write editor settings (`ttt.settings`).      |
 | `settings_keys`  | string[] | Allowed settings key patterns. Use `group.*` for prefix match or exact key. |
 | `storage`        | boolean  | Persist private plugin data (`ttt.storage`).      |
+| `clipboard.read` | boolean  | Read the system clipboard (`ttt.clipboard_read`). | 
 
 **Example with multiple permissions:**
 
