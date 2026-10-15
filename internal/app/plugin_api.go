@@ -411,39 +411,62 @@ func newFsRoots(dirs []string, all bool) fsRoots {
 	return fsRoots{dirs: resolved, all: all}
 }
 
-func (r fsRoots) check(path string) error {
-	if r.all {
-		return nil
-	}
+func (r fsRoots) openRoot(path string) (*os.Root, string, string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("invalid path: %w", err)
+		return nil, "", "", fmt.Errorf("invalid path: %w", err)
 	}
 	clean := filepath.Clean(abs)
-
 	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
 		clean = resolved
 	} else if info, err := os.Lstat(clean); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		// A dangling symlink: writing through it would create its target, wherever that is.
-		return fmt.Errorf("access denied: path %q is a dangling symlink", path)
+		return nil, "", "", fmt.Errorf("access denied: path %q is a dangling symlink", path)
 	} else if resolved, err := filepath.EvalSymlinks(filepath.Dir(clean)); err == nil {
 		clean = filepath.Join(resolved, filepath.Base(clean))
 	}
 
-	for _, root := range r.dirs {
-		if clean == root || strings.HasPrefix(clean, root+string(filepath.Separator)) {
-			return nil
+	selectedRoot := ""
+	selectedRelative := ""
+	if r.all {
+		volumeRoot := string(os.PathSeparator)
+		if volume := filepath.VolumeName(clean); volume != "" {
+			volumeRoot = volume + string(os.PathSeparator)
+		}
+		selectedRoot = volumeRoot
+		selectedRelative, err = filepath.Rel(volumeRoot, clean)
+		if err != nil || filepath.IsAbs(selectedRelative) {
+			return nil, "", "", fmt.Errorf("invalid path: %q", path)
+		}
+	} else {
+		for _, root := range r.dirs {
+			relative, err := filepath.Rel(root, clean)
+			if err != nil || filepath.IsAbs(relative) || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+				continue
+			}
+			if selectedRoot == "" || len(root) < len(selectedRoot) {
+				selectedRoot, selectedRelative = root, relative
+			}
 		}
 	}
-	return fmt.Errorf("access denied: path %q is outside allowed directories", path)
+	if selectedRoot == "" {
+		return nil, "", "", fmt.Errorf("access denied: path %q is outside allowed directories", path)
+	}
+	root, err := os.OpenRoot(selectedRoot)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return root, selectedRelative, clean, nil
 }
 
 func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
 	path = f.vars.Expand(path)
-	if err := f.read.check(path); err != nil {
+	root, relative, _, err := f.read.openRoot(path)
+	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(path)
+	defer root.Close()
+	data, err := root.ReadFile(relative)
 	if err != nil {
 		return "", err
 	}
@@ -452,39 +475,54 @@ func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
 
 func (f *PluginFilesystemAPI) WriteFile(path, content string) error {
 	path = f.vars.Expand(path)
-	if err := f.write.check(path); err != nil {
+	root, relative, resolved, err := f.write.openRoot(path)
+	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	err = root.WriteFile(relative, []byte(content), 0644)
+	closeErr := root.Close()
+	if err != nil {
 		return err
 	}
 	if f.onWrite != nil {
-		f.onWrite(path)
+		f.onWrite(resolved)
 	}
-	return nil
+	return closeErr
 }
 
 func (f *PluginFilesystemAPI) FileExists(path string) bool {
 	path = f.vars.Expand(path)
-	if err := f.read.check(path); err != nil {
+	root, relative, _, err := f.read.openRoot(path)
+	if err != nil {
 		return false
 	}
-	_, err := os.Stat(path)
+	defer root.Close()
+	_, err = root.Stat(relative)
 	return err == nil
 }
 
 func (f *PluginFilesystemAPI) ListDir(path string) ([]plugin.FileEntry, error) {
 	path = f.vars.Expand(path)
-	if err := f.read.check(path); err != nil {
-		return nil, err
-	}
-	entries, err := os.ReadDir(path)
+	root, relative, _, err := f.read.openRoot(path)
 	if err != nil {
 		return nil, err
 	}
+	defer root.Close()
+	directory, err := root.Open(relative)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := directory.ReadDir(-1)
+	closeErr := directory.Close()
+	if err != nil {
+		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
 	result := make([]plugin.FileEntry, len(entries))
-	for i, e := range entries {
-		result[i] = plugin.FileEntry{Name: e.Name(), IsDir: e.IsDir()}
+	for i, entry := range entries {
+		result[i] = plugin.FileEntry{Name: entry.Name(), IsDir: entry.IsDir()}
 	}
 	return result, nil
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -731,5 +732,87 @@ func TestPluginNetworkAPI_RedirectsStayOnTheAllowedHosts(t *testing.T) {
 	want := []string{"public.example/elsewhere", "public.example/moved", "mirror.example/new"}
 	if !slices.Equal(paths, want) {
 		t.Errorf("requests = %v, want %v", paths, want)
+	}
+}
+
+func TestPluginFilesystemAPI_SymlinkReplacementRace(t *testing.T) {
+	const iterations = 512
+
+	base := t.TempDir()
+	root := filepath.Join(base, "root")
+	inside := filepath.Join(root, "inside")
+	outside := filepath.Join(base, "outside")
+	for _, dir := range []string{inside, outside} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(inside, "value.txt"), []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "value.txt"), []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	link := filepath.Join(root, "switch")
+	if err := os.Symlink("inside", link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	probe := filepath.Join(root, "probe")
+	if err := os.Symlink("inside", probe); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(probe, link); err != nil {
+		t.Skipf("rename-over-symlink unavailable: %v", err)
+	}
+	if err := os.Symlink("inside", probe); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(probe, link); err != nil {
+		t.Fatal(err)
+	}
+
+	api := NewPluginFilesystemAPI(root)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	path := filepath.Join(link, "value.txt")
+	go func() {
+		<-start
+		for i := 0; i < iterations; i++ {
+			value, err := api.ReadFile(path)
+			if err == nil && value != "inside" {
+				results <- fmt.Errorf("read outside sentinel %q at iteration %d", value, i)
+				return
+			}
+		}
+		results <- nil
+	}()
+	go func() {
+		<-start
+		for i := 0; i < iterations; i++ {
+			next := filepath.Join(root, "switch-next")
+			target := "inside"
+			if i%2 == 0 {
+				target = "../outside"
+			}
+			if err := os.Symlink(target, next); err != nil {
+				results <- fmt.Errorf("create replacement %d: %w", i, err)
+				return
+			}
+			if err := os.Rename(next, link); err != nil {
+				results <- fmt.Errorf("replace symlink %d: %w", i, err)
+				return
+			}
+		}
+		results <- nil
+	}()
+	close(start)
+	for i := 0; i < 2; i++ {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := os.ReadFile(filepath.Join(outside, "value.txt")); err != nil || string(got) != "outside" {
+		t.Errorf("outside sentinel after race = %q, %v; want unchanged", got, err)
 	}
 }
