@@ -74,6 +74,20 @@ func TestCheckPermission(t *testing.T) {
 	if err := ps.Check("commands"); err == nil {
 		t.Error("expected denied for commands")
 	}
+	if err := ps.Check("clipboard.read"); err == nil {
+		t.Error("expected denied for clipboard.read")
+	}
+	ps.ClipboardRead = true
+	if err := ps.Check("clipboard.read"); err != nil {
+		t.Errorf("expected allowed for clipboard.read, got %v", err)
+	}
+}
+
+func TestDiffPermissionsClipboardRead(t *testing.T) {
+	diff := DiffPermissions(PermissionSet{Commands: true}, PermissionSet{Commands: true, ClipboardRead: true})
+	if len(diff.Entries) != 1 || diff.Entries[0].Name != "clipboard.read" {
+		t.Fatalf("expected one clipboard.read entry, got %+v", diff.Entries)
+	}
 }
 
 func TestCheckExec(t *testing.T) {
@@ -97,6 +111,11 @@ func TestDisplayEntries(t *testing.T) {
 	entries := ps.DisplayEntries()
 	if len(entries) != 3 {
 		t.Fatalf("expected 3 display entries, got %d", len(entries))
+	}
+
+	ps.ClipboardRead = true
+	if got := len(ps.DisplayEntries()); got != 4 {
+		t.Fatalf("expected 4 display entries with clipboard.read, got %d", got)
 	}
 }
 
