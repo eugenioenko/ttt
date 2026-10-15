@@ -144,6 +144,7 @@ func (a *App) debugRunPlugin() {
 			EventsFile:        true,
 			EventsEditor:      true,
 			Storage:           true,
+			ClipboardRead:     true,
 		},
 	}
 
@@ -265,6 +266,7 @@ func LoadPluginFromFile(a *App, path string) {
 			Storage:           true,
 			Settings:          true,
 			SettingsKeys:      []string{"*"},
+			ClipboardRead:     true,
 		},
 	}
 

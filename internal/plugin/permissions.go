@@ -81,6 +81,7 @@ type PermissionSet struct {
 	Settings          bool        `json:"settings,omitempty"`
 	SettingsKeys      []string    `json:"settings_keys,omitempty"`
 	Storage           bool        `json:"storage,omitempty"`
+	ClipboardRead     bool        `json:"clipboard.read,omitempty"`
 }
 
 type PermissionDiffEntry struct {
@@ -119,6 +120,7 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	check("events.editor", granted.EventsEditor, requested.EventsEditor)
 	check("settings", granted.Settings, requested.Settings)
 	check("storage", granted.Storage, requested.Storage)
+	check("clipboard.read", granted.ClipboardRead, requested.ClipboardRead)
 
 	grantedSettingsKeys := make(map[string]bool)
 	for _, k := range granted.SettingsKeys {
@@ -198,6 +200,8 @@ func (ps PermissionSet) Check(perm string) error {
 		allowed = ps.Settings
 	case "storage":
 		allowed = ps.Storage
+	case "clipboard.read":
+		allowed = ps.ClipboardRead
 	default:
 		return fmt.Errorf("unknown permission: %s", perm)
 	}
@@ -266,6 +270,7 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 	add("File events", ps.EventsFile)
 	add("Editor events", ps.EventsEditor)
 	add("Plugin storage", ps.Storage)
+	add("Clipboard read", ps.ClipboardRead)
 
 	for _, b := range ps.SystemExec {
 		entries = append(entries, PermissionDiffEntry{Name: "Run binary", Value: b})
