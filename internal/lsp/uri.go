@@ -29,6 +29,8 @@ func fileURI(path string, windows bool) string {
 		path = strings.ReplaceAll(path, `\`, "/")
 		if unc, ok := strings.CutPrefix(path, "//"); ok {
 			u.Host, path, _ = strings.Cut(unc, "/")
+		} else if hasDrive(path) {
+			path = upperDrive(path)
 		}
 	}
 	if !strings.HasPrefix(path, "/") {
@@ -52,16 +54,21 @@ func uriToPath(uri string, windows bool) string {
 		return u.Path
 	}
 	path := u.Path
-	if u.Host != "" && u.Host != "localhost" {
+	if drive := strings.TrimPrefix(path, "/"); hasDrive(drive) {
+		path = upperDrive(drive)
+	} else if u.Host != "" {
 		path = "//" + u.Host + path
-	} else if len(path) >= 3 && path[0] == '/' && isDriveLetter(path[1]) && path[2] == ':' {
-		// Servers may send the drive in lowercase ("file:///c%3A/x"); the app
-		// compares paths byte for byte against what filepath.Abs returned.
-		path = strings.ToUpper(path[1:2]) + path[2:]
 	}
 	return strings.ReplaceAll(path, "/", `\`)
 }
 
-func isDriveLetter(c byte) bool {
-	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
+func hasDrive(path string) bool {
+	return len(path) >= 2 && path[1] == ':' &&
+		(('a' <= path[0] && path[0] <= 'z') || ('A' <= path[0] && path[0] <= 'Z'))
+}
+
+// Servers may send the drive in lowercase ("file:///c%3A/x") while the app
+// compares paths byte for byte, so both directions use the uppercase form.
+func upperDrive(path string) string {
+	return strings.ToUpper(path[:1]) + path[1:]
 }

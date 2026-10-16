@@ -49,6 +49,7 @@ func TestFileURIWindows(t *testing.T) {
 		{`C:\Users\NHI\Downloads\php_demo`, "file:///C:/Users/NHI/Downloads/php_demo"},
 		{`C:\Users\NHI\with space\a.php`, "file:///C:/Users/NHI/with%20space/a.php"},
 		{`\\server\share\dir\a.php`, "file://server/share/dir/a.php"},
+		{`\\localhost\share\a.php`, "file://localhost/share/a.php"},
 	} {
 		if got := fileURI(tc.path, true); got != tc.uri {
 			t.Errorf("fileURI(%q) = %q, want %q", tc.path, got, tc.uri)
@@ -60,10 +61,16 @@ func TestFileURIWindows(t *testing.T) {
 }
 
 func TestURIToPathWindowsNormalizesDrive(t *testing.T) {
-	for _, uri := range []string{"file:///c%3A/x/a.php", "file:///c:/x/a.php", "file:///C:/x/a.php"} {
+	for _, uri := range []string{"file:///c%3A/x/a.php", "file:///c:/x/a.php", "file:///C:/x/a.php", "file://localhost/C:/x/a.php"} {
 		if got := uriToPath(uri, true); got != `C:\x\a.php` {
 			t.Errorf("uriToPath(%q) = %q, want %q", uri, got, `C:\x\a.php`)
 		}
+	}
+}
+
+func TestFileURIWindowsNormalizesDrive(t *testing.T) {
+	if got := fileURI(`c:\x\a.php`, true); got != "file:///C:/x/a.php" {
+		t.Errorf("fileURI(%q) = %q, want %q", `c:\x\a.php`, got, "file:///C:/x/a.php")
 	}
 }
 
