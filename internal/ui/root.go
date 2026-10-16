@@ -213,7 +213,6 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 
 	// The terminal gets every non-force key, chord prefixes included.
 	if r.rawKeysFocused() {
-		r.chord = nil
 		return r.Focused.HandleEvent(kev)
 	}
 
@@ -432,6 +431,7 @@ func (r *Root) SetFocus(w Widget) {
 	if r.Focused == w {
 		return
 	}
+	r.chord = nil
 	if r.capturedWidget != nil {
 		r.CancelPointerCapture()
 	}
