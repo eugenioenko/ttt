@@ -61,8 +61,3 @@ func readWorkingTreeFileContext(ctx context.Context, root, path string) (working
 	}
 	return readWorkingTreeFilePlatform(ctx, root, clean)
 }
-
-func readWorkingTreeContent(path string) ([]byte, bool, error) {
-	file, err := readWorkingTreeFileContext(context.Background(), filepath.Dir(path), filepath.Base(path))
-	return file.Content, file.Exists, err
-}

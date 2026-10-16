@@ -156,8 +156,8 @@ func TestReleaseContractSymlinkSwapCannotExposeTarget(t *testing.T) {
 	}()
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		content, _, _ := readWorkingTreeContent(path)
-		if string(content) == "RACE SECRET" {
+		file, _ := readWorkingTreeFileContext(context.Background(), filepath.Dir(path), filepath.Base(path))
+		if string(file.Content) == "RACE SECRET" {
 			t.Fatal("symlink target bytes escaped")
 		}
 	}
