@@ -20,11 +20,6 @@ brew trust eugenioenko/ttt
 brew install ttt
 ```
 
-### Quick Install Windows (scoop)
-```sh
-scoop install ttt
-```
-
 ### Quick Install Linux
 ```sh
 curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
@@ -59,6 +54,11 @@ Add to your `flake.nix` inputs:
 ```
 
 Then add `inputs.ttt.packages.${system}.default` to your `environment.systemPackages` or home-manager packages.
+
+### Quick Install Windows (scoop)
+```sh
+scoop install ttt
+```
 
 ### Go Install
 
