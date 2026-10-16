@@ -85,6 +85,10 @@ func (s *RenderSurface) DrawText(x, y int, text string, maxW int, style term.Sty
 }
 
 func (s *RenderSurface) ClearRect(x, y, w, h int, style term.Style) {
+	x, y, w, h, ok := widgets.ClampRectToBounds(x, y, w, h, 0, 0, s.clip.W, s.clip.H)
+	if !ok {
+		return
+	}
 	for dy := 0; dy < h; dy++ {
 		for dx := 0; dx < w; dx++ {
 			s.SetCell(x+dx, y+dy, term.Cell{Ch: ' ', Style: style})

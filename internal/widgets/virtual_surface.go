@@ -51,6 +51,10 @@ func (v *virtualSurface) DrawBorder(x, y, w, h int, b term.BorderSet, style term
 }
 
 func (v *virtualSurface) ClearRect(x, y, w, h int, style term.Style) {
+	x, y, w, h, ok := ClampRectToBounds(x, y, w, h, 0, 0, v.w, v.h)
+	if !ok {
+		return
+	}
 	for dy := range h {
 		for dx := range w {
 			v.SetCell(x+dx, y+dy, term.Cell{Ch: ' ', Style: style})
@@ -110,11 +114,63 @@ func (s *subVirtualSurface) DrawBorder(x, y, w, h int, b term.BorderSet, style t
 }
 
 func (s *subVirtualSurface) ClearRect(x, y, w, h int, style term.Style) {
+	minX, maxX := subSurfaceBounds(s.offX, s.w, s.parent.w)
+	minY, maxY := subSurfaceBounds(s.offY, s.h, s.parent.h)
+	x, y, w, h, ok := ClampRectToBounds(x, y, w, h, minX, minY, maxX, maxY)
+	if !ok {
+		return
+	}
 	for dy := range h {
 		for dx := range w {
 			s.SetCell(x+dx, y+dy, term.Cell{Ch: ' ', Style: style})
 		}
 	}
+}
+
+// ClampRectToBounds returns the part of the requested rectangle inside the bounds.
+func ClampRectToBounds(x, y, w, h, minX, minY, maxX, maxY int) (int, int, int, int, bool) {
+	if w <= 0 || h <= 0 || minX >= maxX || minY >= maxY {
+		return 0, 0, 0, 0, false
+	}
+	maxInt := int(^uint(0) >> 1)
+	right := x + w
+	if x > maxInt-w {
+		right = maxInt
+	}
+	bottom := y + h
+	if y > maxInt-h {
+		bottom = maxInt
+	}
+	x = max(x, minX)
+	y = max(y, minY)
+	right = min(right, maxX)
+	bottom = min(bottom, maxY)
+	if x >= right || y >= bottom {
+		return 0, 0, 0, 0, false
+	}
+	return x, y, right - x, bottom - y, true
+}
+
+func subSurfaceBounds(offset, size, parentSize int) (int, int) {
+	if size <= 0 || parentSize <= 0 || offset >= parentSize {
+		return 0, 0
+	}
+	if offset >= 0 {
+		max := parentSize - offset
+		if max > size {
+			max = size
+		}
+		return 0, max
+	}
+	if offset <= -size {
+		return 0, 0
+	}
+	min := -offset
+	visible := size - min
+	if parentSize >= visible {
+		return min, size
+	}
+	return min, min + parentSize
 }
 
 func (s *subVirtualSurface) Fill(c term.Cell) {

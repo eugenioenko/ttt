@@ -1,8 +1,10 @@
 package ui
 
 import (
-	"github.com/eugenioenko/ttt/internal/term"
 	"testing"
+	"time"
+
+	"github.com/eugenioenko/ttt/internal/term"
 )
 
 func makeGrid(w, h int) [][]term.Cell {
@@ -161,5 +163,32 @@ func TestClearRect(t *testing.T) {
 	}
 	if grid[0][0].Ch != '.' {
 		t.Fatal("ClearRect leaked outside region")
+	}
+}
+
+func TestClearRectClampsToSurfaceBounds(t *testing.T) {
+	grid := makeGrid(30, 20)
+	s := NewRenderSurface(grid, Rect{X: 5, Y: 4, W: 20, H: 10})
+	done := make(chan struct{})
+	go func() {
+		s.ClearRect(-10, -10, 100000, 100000, term.StyleDefault)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ClearRect did not return within 2 seconds")
+	}
+	s.ClearRect(100000, 100000, 10, 10, term.StyleDefault)
+	for y := range grid {
+		for x := range grid[y] {
+			want := '.'
+			if x >= 5 && x < 25 && y >= 4 && y < 14 {
+				want = ' '
+			}
+			if got := grid[y][x].Ch; got != want {
+				t.Errorf("grid cell (%d,%d) = %q, want %q", x, y, got, want)
+			}
+		}
 	}
 }
