@@ -42,6 +42,31 @@ func TestFileURIRoundTrip(t *testing.T) {
 	}
 }
 
+// Issue #933: a Windows path became "file://C:%5CUsers...", which phpantom
+// rejects at initialize as an invalid hostname.
+func TestFileURIWindows(t *testing.T) {
+	for _, tc := range []struct{ path, uri string }{
+		{`C:\Users\NHI\Downloads\php_demo`, "file:///C:/Users/NHI/Downloads/php_demo"},
+		{`C:\Users\NHI\with space\a.php`, "file:///C:/Users/NHI/with%20space/a.php"},
+		{`\\server\share\dir\a.php`, "file://server/share/dir/a.php"},
+	} {
+		if got := fileURI(tc.path, true); got != tc.uri {
+			t.Errorf("fileURI(%q) = %q, want %q", tc.path, got, tc.uri)
+		}
+		if got := uriToPath(tc.uri, true); got != tc.path {
+			t.Errorf("uriToPath(%q) = %q, want %q", tc.uri, got, tc.path)
+		}
+	}
+}
+
+func TestURIToPathWindowsNormalizesDrive(t *testing.T) {
+	for _, uri := range []string{"file:///c%3A/x/a.php", "file:///c:/x/a.php", "file:///C:/x/a.php"} {
+		if got := uriToPath(uri, true); got != `C:\x\a.php` {
+			t.Errorf("uriToPath(%q) = %q, want %q", uri, got, `C:\x\a.php`)
+		}
+	}
+}
+
 // Absolute paths are what the rest of the app works in; a relative one reaching
 // the server would make every position it reports refer to another file.
 func TestFileURIIsAbsolute(t *testing.T) {
