@@ -196,6 +196,8 @@ func (f *FindBarWidget) Refresh() {
 	f.Current = max(min(f.Current, len(f.Matches)-1), 0)
 }
 
+func (f *FindBarWidget) CurrentMatch() int { return f.Current }
+
 func (f *FindBarWidget) navigate() {
 	if f.OnNavigate != nil && len(f.Matches) > 0 {
 		f.OnNavigate(f.Matches[f.Current])

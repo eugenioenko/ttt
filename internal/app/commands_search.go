@@ -1,6 +1,10 @@
 package app
 
 import (
+	"context"
+	"time"
+
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
@@ -43,6 +47,44 @@ func (a *App) OpenFind() {
 		a.EditorGroup.ClearSearch()
 	}
 	a.ShowFindBar(findBar)
+}
+
+const findRefreshDelay = 150 * time.Millisecond
+
+// scheduleFindRefresh re-runs the open find bar's query after an edit so
+// matches follow the text. Find Next/Prev refresh first if it hasn't run yet.
+func (a *App) scheduleFindRefresh() {
+	if a.findBar() == nil {
+		return
+	}
+	a.findStale = true
+	if a.findRefresh == nil {
+		a.findRefresh = NewTask[struct{}](a, asynctask.TaskOptions{Delay: findRefreshDelay})
+	}
+	a.findRefresh.Schedule(func(context.Context) (struct{}, error) {
+		return struct{}{}, nil
+	}, func(struct{}, error) { a.refreshFind() })
+}
+
+func (a *App) refreshFind() {
+	if !a.findStale {
+		return
+	}
+	a.findStale = false
+	if bar := a.findBar(); bar != nil {
+		bar.Refresh()
+		a.EditorGroup.SetSearchActive(bar.CurrentMatch())
+	}
+}
+
+type findBar interface {
+	Refresh()
+	CurrentMatch() int
+}
+
+func (a *App) findBar() findBar {
+	bar, _ := a.Root.TopOverlayWidget().(findBar)
+	return bar
 }
 
 func (a *App) OpenFindReplace() {
@@ -102,13 +144,13 @@ func registerSearchCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "search.findNext", Title: "Find Next",
 		Keywords: []string{"search", "find"},
-		Handler:  func() { app.EditorGroup.FindNext() },
+		Handler:  func() { app.refreshFind(); app.EditorGroup.FindNext() },
 	})
 
 	reg.Register(command.Command{
 		ID: "search.findPrev", Title: "Find Previous",
 		Keywords: []string{"search", "find"},
-		Handler:  func() { app.EditorGroup.FindPrev() },
+		Handler:  func() { app.refreshFind(); app.EditorGroup.FindPrev() },
 	})
 
 	reg.Register(command.Command{

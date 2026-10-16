@@ -180,6 +180,18 @@ func (r *ReplaceBarWidget) search() {
 	}
 }
 
+// Refresh re-runs the query against content that changed under the bar,
+// keeping the current match index where it still exists, without navigating.
+func (r *ReplaceBarWidget) Refresh() {
+	if r.OnSearch == nil || r.SearchInput.Text == "" {
+		return
+	}
+	r.Matches = r.OnSearch(r.SearchInput.Text, r.Options)
+	r.Current = max(min(r.Current, len(r.Matches)-1), 0)
+}
+
+func (r *ReplaceBarWidget) CurrentMatch() int { return r.Current }
+
 func (r *ReplaceBarWidget) navigate() {
 	if r.OnNavigate != nil && len(r.Matches) > 0 {
 		r.OnNavigate(r.Matches[r.Current])

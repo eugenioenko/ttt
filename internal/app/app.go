@@ -89,6 +89,8 @@ type App struct {
 	Watcher                *watcher.Watcher
 	blame                  statusBlameState
 	gitGutterDebounce      *asynctask.Task[struct{}]
+	findRefresh            *asynctask.Task[struct{}]
+	findStale              bool
 	gitGutterTask          *asynctask.Task[*gitGutterResult]
 	inlineDiffRepos        map[string]inlineDiffRepo
 	commitDetailMu         sync.Mutex
@@ -668,6 +670,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.ScheduleAutocomplete()
 		a.CheckSignatureHelpTrigger(changeDone)
 		a.ScheduleGitGutter()
+		a.scheduleFindRefresh()
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("editor.change", path)
 		}

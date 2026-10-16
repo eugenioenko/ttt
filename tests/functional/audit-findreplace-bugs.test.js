@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 describe("BUG-010: search matches go stale after buffer edits", () => {
-  it.fails("find-next after inserting a line lands on a matching line", () => {
+  it("find-next after inserting a line lands on a matching line", () => {
     dir = createTempDir();
     const file = createTempFile(
       dir,
