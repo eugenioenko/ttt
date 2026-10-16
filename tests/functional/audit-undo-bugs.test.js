@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 describe("BUG-020: undo of line commands does not restore the cursor", () => {
-  it.fails("undo after Delete Line returns the cursor to the edit site", () => {
+  it("undo after Delete Line returns the cursor to the edit site", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "cur.txt", "A\nB\nC\nD\nE\n");
 
@@ -32,9 +32,7 @@ describe("BUG-020: undo of line commands does not restore the cursor", () => {
     tui.press("ctrl+s");
     tui.run();
 
-    // Correct: cursor returns to the restored line ("C"), like it does for
-    // typed text/paste. Buggy: cursorAfterUndo has no case for line
-    // commands, cursor stays where it wandered ("E" gets the marker).
+    // Cursor returns to the restored line ("C"), like typed text and paste.
     expect(readFile(file)).toBe("A\nB\nZC\nD\nE\n");
   });
 });

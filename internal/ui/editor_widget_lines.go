@@ -121,6 +121,14 @@ func (c *moveLinesCommand) Undo(b *buffer.Buffer) {
 	c.remapFolds(c.start+c.blockShift, c.end+c.blockShift, -1)
 }
 
+func (c *moveLinesCommand) UndoCursor() (int, int) {
+	return c.start, 0
+}
+
+func (c *moveLinesCommand) RedoCursor() (int, int) {
+	return c.start + c.blockShift, 0
+}
+
 func (c *moveLinesCommand) remapFolds(blockStart, blockEnd, sign int) {
 	if c.folds == nil {
 		return
@@ -324,7 +332,7 @@ func (e *EditorPaneWidget) InsertLineBelow() {
 }
 
 func (e *EditorPaneWidget) InsertLineAbove() {
-	e.exec(&undo.InsertLineCommand{Idx: e.Cursor.Line, Text: ""})
+	e.exec(&undo.InsertLineCommand{Idx: e.Cursor.Line, Text: "", Above: true})
 	e.Cursor.Col = 0
 	e.clampCursor()
 	e.scrollViewport()

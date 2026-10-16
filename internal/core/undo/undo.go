@@ -143,7 +143,7 @@ func (s *UndoStack) Undo(b *buffer.Buffer) *CursorPos {
 	s.undo = s.undo[:len(s.undo)-1]
 	cmd.Undo(b)
 	s.redo = append(s.redo, cmd)
-	return s.cursorAfterUndo(cmd)
+	return clampCursorPos(b, s.cursorAfterUndo(cmd))
 }
 
 // Redo re-applies the last undone command and returns where the cursor should be placed.
@@ -156,7 +156,26 @@ func (s *UndoStack) Redo(b *buffer.Buffer) *CursorPos {
 	s.redo = s.redo[:len(s.redo)-1]
 	cmd.Apply(b)
 	s.undo = append(s.undo, cmd)
-	return cursorAfterRedo(cmd)
+	return clampCursorPos(b, cursorAfterRedo(cmd))
+}
+
+// lineCursor lets a command defined outside this package report a cursor.
+// Move Line wraps its ReplaceLinesCommand, so the type switch never sees it.
+type lineCursor interface {
+	UndoCursor() (line, col int)
+	RedoCursor() (line, col int)
+}
+
+func clampCursorPos(b *buffer.Buffer, pos *CursorPos) *CursorPos {
+	if pos == nil || len(b.Lines) == 0 {
+		return pos
+	}
+	if pos.Line < 0 {
+		pos.Line = 0
+	} else if pos.Line >= len(b.Lines) {
+		pos.Line = len(b.Lines) - 1
+	}
+	return pos
 }
 
 func (s *UndoStack) cursorAfterUndo(cmd EditCommand) *CursorPos {
@@ -180,10 +199,25 @@ func (s *UndoStack) cursorAfterUndo(cmd EditCommand) *CursorPos {
 		return &CursorPos{c.EndLine, c.EndCol}
 	case *PasteCommand:
 		return &CursorPos{c.Line, c.Col}
+	case *InsertLineCommand:
+		line := c.Idx
+		if !c.Above && line > 0 {
+			line--
+		}
+		return &CursorPos{line, 0}
+	case *DeleteLineCommand:
+		return &CursorPos{c.Idx, 0}
+	case *SwapLineCommand:
+		return &CursorPos{c.Line1, 0}
+	case *ReplaceLinesCommand:
+		return &CursorPos{c.Start, 0}
 	case *BatchCommand:
 		if len(c.Commands) > 0 {
 			return s.cursorAfterUndo(c.Commands[0])
 		}
+	case lineCursor:
+		line, col := c.UndoCursor()
+		return &CursorPos{line, col}
 	}
 	return nil
 }
@@ -210,10 +244,21 @@ func cursorAfterRedo(cmd EditCommand) *CursorPos {
 			return &CursorPos{c.Line, c.Col + len([]rune(lines[0]))}
 		}
 		return &CursorPos{c.Line + len(lines) - 1, len([]rune(lines[len(lines)-1]))}
+	case *InsertLineCommand:
+		return &CursorPos{c.Idx, 0}
+	case *DeleteLineCommand:
+		return &CursorPos{c.Idx, 0}
+	case *SwapLineCommand:
+		return &CursorPos{c.Line2, 0}
+	case *ReplaceLinesCommand:
+		return &CursorPos{c.Start, 0}
 	case *BatchCommand:
 		if len(c.Commands) > 0 {
 			return cursorAfterRedo(c.Commands[len(c.Commands)-1])
 		}
+	case lineCursor:
+		line, col := c.RedoCursor()
+		return &CursorPos{line, col}
 	}
 	return nil
 }
@@ -353,8 +398,9 @@ func (c *JoinNextLineCommand) Undo(b *buffer.Buffer) {
 
 // InsertLineCommand implements EditCommand for inserting a line.
 type InsertLineCommand struct {
-	Idx  int
-	Text string
+	Idx   int
+	Text  string
+	Above bool // inserted at the caret; undo stays on Idx instead of the line above
 }
 
 func (c *InsertLineCommand) Apply(b *buffer.Buffer) {
@@ -384,7 +430,7 @@ func (c *DeleteLineCommand) Undo(b *buffer.Buffer) {
 }
 
 type SwapLineCommand struct {
-	Line1, Line2 int
+	Line1, Line2 int // Line1 is the pre-move line; Line2 is where it moved
 }
 
 func (c *SwapLineCommand) Apply(b *buffer.Buffer) {

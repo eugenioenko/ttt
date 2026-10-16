@@ -973,3 +973,132 @@ func TestUndoStackSkipsNoopCommands(t *testing.T) {
 		t.Error("a no-op delete should not clear the redo stack")
 	}
 }
+
+func TestLineCommandUndoRedoCursor(t *testing.T) {
+	tests := []struct {
+		name               string
+		lines              []string
+		cmd                EditCommand
+		undoLine, redoLine int
+		undoCol, redoCol   int
+	}{
+		{
+			name:     "insert line",
+			lines:    []string{"A", "B", "C", "D", "E"},
+			cmd:      &InsertLineCommand{Idx: 3, Text: "C"},
+			undoLine: 2, redoLine: 3,
+		},
+		{
+			name:     "insert line at start",
+			lines:    []string{"A", "B"},
+			cmd:      &InsertLineCommand{Idx: 0, Text: "Z"},
+			undoLine: 0, redoLine: 0,
+		},
+		{
+			name:     "insert line above",
+			lines:    []string{"A", "B", "C"},
+			cmd:      &InsertLineCommand{Idx: 2, Text: "", Above: true},
+			undoLine: 2, redoLine: 2,
+		},
+		{
+			name:     "delete line",
+			lines:    []string{"A", "B", "C", "D", "E"},
+			cmd:      &DeleteLineCommand{Idx: 2},
+			undoLine: 2, redoLine: 2,
+		},
+		{
+			name:     "delete last line",
+			lines:    []string{"A", "B"},
+			cmd:      &DeleteLineCommand{Idx: 1},
+			undoLine: 1, redoLine: 0,
+		},
+		{
+			name:     "swap line",
+			lines:    []string{"A", "B", "C"},
+			cmd:      &SwapLineCommand{Line1: 2, Line2: 1},
+			undoLine: 2, redoLine: 1,
+		},
+		{
+			name:  "replace lines",
+			lines: []string{"C", "A", "B"},
+			cmd: &ReplaceLinesCommand{
+				Start:    0,
+				OldLines: []string{"C", "A", "B"},
+				NewLines: []string{"A", "B", "C"},
+			},
+			undoLine: 0, redoLine: 0,
+		},
+		{
+			name:  "replace lines shrinks",
+			lines: []string{"A", "B", "B", "C"},
+			cmd: &ReplaceLinesCommand{
+				Start:    1,
+				OldLines: []string{"B", "B"},
+				NewLines: []string{"B"},
+			},
+			undoLine: 1, redoLine: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &buffer.Buffer{Lines: append([]string(nil), tt.lines...)}
+			s := &UndoStack{}
+			tt.cmd.Apply(b)
+			s.Push(tt.cmd)
+
+			pos := s.Undo(b)
+			if pos == nil || pos.Line != tt.undoLine || pos.Col != tt.undoCol {
+				t.Fatalf("Undo cursor = %+v, want {%d %d}", pos, tt.undoLine, tt.undoCol)
+			}
+			pos = s.Redo(b)
+			if pos == nil || pos.Line != tt.redoLine || pos.Col != tt.redoCol {
+				t.Fatalf("Redo cursor = %+v, want {%d %d}", pos, tt.redoLine, tt.redoCol)
+			}
+		})
+	}
+}
+
+func TestBatchOfLineCommandsCursor(t *testing.T) {
+	b := &buffer.Buffer{Lines: []string{"A", "B", "C", "D", "E"}}
+	s := &UndoStack{}
+	// Move Line Down over two non-adjacent lines applies the lower swap first.
+	batch := &BatchCommand{Commands: []EditCommand{
+		&SwapLineCommand{Line1: 3, Line2: 4},
+		&SwapLineCommand{Line1: 1, Line2: 2},
+	}}
+	batch.Apply(b)
+	s.Push(batch)
+
+	pos := s.Undo(b)
+	if pos == nil || pos.Line != 3 || pos.Col != 0 {
+		t.Fatalf("Undo cursor = %+v, want {3 0}", pos)
+	}
+	pos = s.Redo(b)
+	if pos == nil || pos.Line != 2 || pos.Col != 0 {
+		t.Fatalf("Redo cursor = %+v, want {2 0}", pos)
+	}
+}
+
+func TestBatchReplaceLinesCursor(t *testing.T) {
+	b := &buffer.Buffer{Lines: []string{"A", "d", "b", "c", "E"}}
+	s := &UndoStack{}
+	batch := &BatchCommand{Commands: []EditCommand{
+		&ReplaceLinesCommand{
+			Start:    1,
+			OldLines: []string{"d", "b", "c"},
+			NewLines: []string{"b", "c", "d"},
+		},
+	}}
+	batch.Apply(b)
+	s.Push(batch)
+
+	pos := s.Undo(b)
+	if pos == nil || pos.Line != 1 || pos.Col != 0 {
+		t.Fatalf("Undo cursor = %+v, want {1 0}", pos)
+	}
+	pos = s.Redo(b)
+	if pos == nil || pos.Line != 1 || pos.Col != 0 {
+		t.Fatalf("Redo cursor = %+v, want {1 0}", pos)
+	}
+}
