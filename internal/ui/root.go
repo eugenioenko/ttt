@@ -211,6 +211,12 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		return r.handleMouse(ev)
 	}
 
+	// The terminal gets every non-force key, chord prefixes included.
+	if r.rawKeysFocused() {
+		r.chord = nil
+		return r.Focused.HandleEvent(kev)
+	}
+
 	// Plugin key interceptors run before Escape handling and chords so modal
 	// plugins (e.g. Vim mode) can own the keyboard. Overlays stay above: a
 	// plugin must never steal keys from a modal dialog.
@@ -241,10 +247,6 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 
 	if res := r.handleChord(kev); res == EventConsumed {
 		return EventConsumed
-	}
-
-	if r.rawKeysFocused() {
-		return r.handleRawKeyConsumer(kev)
 	}
 
 	if r.Focused != nil {
@@ -350,16 +352,6 @@ func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
 	}
 
 	return EventIgnored
-}
-
-func (r *Root) handleRawKeyConsumer(kev *tcell.EventKey) EventResult {
-	for _, gk := range r.ForceKeys {
-		if matchKey(kev, gk) {
-			gk.Handler()
-			return EventConsumed
-		}
-	}
-	return r.Focused.HandleEvent(kev)
 }
 
 func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {

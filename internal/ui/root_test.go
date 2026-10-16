@@ -351,3 +351,36 @@ func TestModalOverlayBlocksChord(t *testing.T) {
 		t.Fatalf("modal should have received both events, got %d", modal.eventCount)
 	}
 }
+
+type rawKeysWidget struct {
+	mockWidget
+}
+
+func (w *rawKeysWidget) WantsRawKeys() bool { return true }
+
+func TestRawKeyConsumerGetsChordKeys(t *testing.T) {
+	root := NewRoot(&mockWidget{})
+	root.SetSize(80, 24)
+	root.SetFocus(&mockWidget{focusable: true})
+
+	fired := false
+	root.AddChordKey([]GlobalKeyBinding{
+		{Key: tcell.KeyCtrlK, Mod: tcell.ModCtrl},
+		{Key: tcell.KeyEnter},
+	}, func() { fired = true })
+
+	// A chord started before the terminal took focus must be dropped.
+	root.HandleEvent(makeKeyEvent(tcell.KeyCtrlK, tcell.ModCtrl))
+	terminal := &rawKeysWidget{mockWidget{focusable: true}}
+	root.SetFocus(terminal)
+	root.HandleEvent(makeKeyEvent(tcell.KeyEnter, 0))
+	root.HandleEvent(makeKeyEvent(tcell.KeyCtrlK, tcell.ModCtrl))
+	root.HandleEvent(makeKeyEvent(tcell.KeyEnter, 0))
+
+	if fired {
+		t.Fatal("chord fired while terminal focused")
+	}
+	if terminal.eventCount != 3 {
+		t.Fatalf("terminal got %d keys, want 3", terminal.eventCount)
+	}
+}
