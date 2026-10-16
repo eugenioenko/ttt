@@ -70,8 +70,8 @@ func (a *App) refreshFind() {
 	if !a.findStale {
 		return
 	}
-	a.findStale = false
 	if bar := a.findBar(); bar != nil {
+		a.findStale = false
 		bar.Refresh()
 		a.EditorGroup.SetSearchActive(bar.CurrentMatch())
 	}
