@@ -376,7 +376,12 @@ func (r fsRoots) check(path string) error {
 	}
 	clean := filepath.Clean(abs)
 
-	if resolved, err := filepath.EvalSymlinks(filepath.Dir(clean)); err == nil {
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+		clean = resolved
+	} else if info, err := os.Lstat(clean); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		// A dangling symlink: writing through it would create its target, wherever that is.
+		return fmt.Errorf("access denied: path %q is a dangling symlink", path)
+	} else if resolved, err := filepath.EvalSymlinks(filepath.Dir(clean)); err == nil {
 		clean = filepath.Join(resolved, filepath.Base(clean))
 	}
 

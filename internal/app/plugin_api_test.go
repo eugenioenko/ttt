@@ -255,6 +255,55 @@ func TestPluginFilesystemAPI_SymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestPluginFilesystemAPI_FinalSymlinkEscape(t *testing.T) {
+	tmpDir := t.TempDir()
+	allowed := filepath.Join(tmpDir, "workspace")
+	secrets := filepath.Join(tmpDir, "secrets")
+	os.MkdirAll(allowed, 0755)
+	os.MkdirAll(secrets, 0755)
+	secret := filepath.Join(secrets, "key.pem")
+	os.WriteFile(secret, []byte("secret"), 0644)
+	os.WriteFile(filepath.Join(allowed, "notes.txt"), []byte("notes"), 0644)
+
+	link := filepath.Join(allowed, "key.pem")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skip("symlinks not supported")
+	}
+	dangling := filepath.Join(allowed, "new.pem")
+	planted := filepath.Join(secrets, "planted.pem")
+	if err := os.Symlink(planted, dangling); err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(allowed, "notes-link.txt")
+	if err := os.Symlink(filepath.Join(allowed, "notes.txt"), inside); err != nil {
+		t.Fatal(err)
+	}
+
+	api := NewPluginFilesystemAPI(allowed)
+
+	if _, err := api.ReadFile(link); err == nil {
+		t.Error("read through a final symlink to an outside file was allowed")
+	}
+	if err := api.WriteFile(link, "overwritten"); err == nil {
+		t.Error("write through a final symlink to an outside file was allowed")
+	}
+	if data, _ := os.ReadFile(secret); string(data) != "secret" {
+		t.Errorf("outside file was modified: %q", data)
+	}
+	if err := api.WriteFile(dangling, "planted"); err == nil {
+		t.Error("write through a dangling final symlink was allowed")
+	}
+	if _, err := os.Stat(planted); err == nil {
+		t.Error("write through a dangling symlink created a file outside the grant")
+	}
+	if got, err := api.ReadFile(inside); err != nil || got != "notes" {
+		t.Errorf("read through a symlink inside the grant = %q, %v", got, err)
+	}
+	if err := api.WriteFile(filepath.Join(allowed, "fresh.txt"), "new"); err != nil {
+		t.Errorf("creating a new file inside the grant failed: %v", err)
+	}
+}
+
 func TestPluginNetworkAPI_SSRFProtection(t *testing.T) {
 	api := NewPluginNetworkAPI()
 	api.lookupIP = func(host string) ([]net.IP, error) {
