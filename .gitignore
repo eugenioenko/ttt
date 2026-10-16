@@ -15,7 +15,7 @@ vendor/
 .config/
 
 # Node / docs
-node_modules/
+node_modules
 docs-web/dist/
 
 # Editor files
