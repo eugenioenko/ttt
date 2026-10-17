@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 func writeE2EPNG(t *testing.T, path string, w, h int) {
@@ -80,5 +82,42 @@ func TestSaveOnImageTabIsNoop(t *testing.T) {
 	}
 	if string(after) != string(before) {
 		t.Error("saving an image tab must not touch the file")
+	}
+}
+
+func TestClosingFindOnImageTabClearsTextHighlights(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+
+	text := filepath.Join(h.dir, "notes.txt")
+	if err := os.WriteFile(text, []byte("foo\nbar foo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	img := filepath.Join(h.dir, "photo.png")
+	writeE2EPNG(t, img, 16, 12)
+
+	h.app.EditorGroup.OpenFile(text)
+	h.redraw()
+	h.exec("search.find")
+	for _, r := range "foo" {
+		h.pressRune(r)
+	}
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	if n := len(h.app.EditorGroup.Editor.SearchMatches); n != 2 {
+		t.Fatalf("find matches = %d, want 2", n)
+	}
+
+	h.app.EditorGroup.OpenFile(img)
+	h.redraw()
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	if h.app.Root.HasOverlay() {
+		t.Fatal("Escape should close the find bar")
+	}
+
+	h.app.EditorGroup.OpenFile(text)
+	h.redraw()
+	ed := h.app.EditorGroup.Editor
+	if ed.SearchQuery != "" || len(ed.SearchMatches) != 0 {
+		t.Fatalf("highlights after closing find = %q %v, want none", ed.SearchQuery, ed.SearchMatches)
 	}
 }
