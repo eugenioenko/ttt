@@ -14,6 +14,9 @@ type PluginPanelWidget struct {
 	eventFunc  *lua.LFunction
 	state      *WidgetState
 	focused    bool
+	// autofocus asks the next render to focus the autofocus input, when
+	// FocusAutofocusInput ran before the input existed.
+	autofocus bool
 }
 
 func NewPluginPanelWidget(p *Plugin, renderFunc, eventFunc *lua.LFunction) *PluginPanelWidget {
@@ -45,6 +48,12 @@ func (pw *PluginPanelWidget) Render(surface widgets.Surface) {
 
 	if proxy.UsedWidgets() {
 		root := pw.state.Reconcile(proxy.Descriptors(), pw.plugin)
+		if pw.autofocus {
+			pw.autofocus = false
+			if pw.focused {
+				pw.focusInput()
+			}
+		}
 		r := pw.GetRect()
 		root.SetRect(widgets.Rect{X: r.X, Y: r.Y, W: w, H: h})
 		root.Render(surface)
@@ -98,9 +107,30 @@ func (pw *PluginPanelWidget) FocusedInput() *widgets.InputWidget {
 func (pw *PluginPanelWidget) Focusable() bool { return true }
 func (pw *PluginPanelWidget) SetFocused(focused bool) {
 	pw.focused = focused
+	if !focused {
+		pw.autofocus = false
+	}
 	if pw.state != nil && pw.state.focus != nil {
 		pw.state.focus.SetActive(focused)
 	}
+}
+
+// FocusAutofocusInput moves the panel's focus to its first input with
+// autofocus set. Without one it tries once more on the next render, which
+// shows an input the same plugin callback has just added.
+func (pw *PluginPanelWidget) FocusAutofocusInput() {
+	if !pw.focusInput() {
+		pw.autofocus = true
+	}
+}
+
+func (pw *PluginPanelWidget) focusInput() bool {
+	for _, item := range pw.state.focus.Items() {
+		if iw, ok := item.(*widgets.InputWidget); ok && iw.Config.Autofocus {
+			return pw.state.focus.Focus(iw)
+		}
+	}
+	return false
 }
 func (pw *PluginPanelWidget) IsFocused() bool { return pw.focused }
 

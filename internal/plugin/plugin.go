@@ -65,14 +65,17 @@ type Plugin struct {
 	PluginKeybindings []PluginKeybinding
 	FileHandlers      []FileHandler
 
-	RequestRedraw      func()
-	PostAsync          func(*PluginAsyncResult)
-	Log                func(level, message string)
-	ShowContextMenu    func(entries []widgets.MenuEntry, x, y int, onCommand func(cmd string))
-	ShowInfoDialog     func(title string, entries []widgets.KeyValueEntry)
-	ShowConfirmDialog  func(message string, confirmLabel string, cancelLabel string, onConfirm func())
-	OpenDrawer         func(panel *PluginPanelWidget, width, minWidth int, side string)
-	CloseDrawer        func()
+	RequestRedraw     func()
+	PostAsync         func(*PluginAsyncResult)
+	Log               func(level, message string)
+	ShowContextMenu   func(entries []widgets.MenuEntry, x, y int, onCommand func(cmd string))
+	ShowInfoDialog    func(title string, entries []widgets.KeyValueEntry)
+	ShowConfirmDialog func(message string, confirmLabel string, cancelLabel string, onConfirm func())
+	OpenDrawer        func(panel *PluginPanelWidget, width, minWidth int, side string)
+	CloseDrawer       func()
+	// ShowPanel shows the plugin's sidebar or bottom panel, and focuses it
+	// when focus is set. It reports whether the panel is now showing.
+	ShowPanel          func(area string, focus bool) (bool, error)
 	OpenTab            func(id string, panel *PluginPanelWidget)
 	CloseTab           func(id string)
 	RenderMarkdown     func(text string) []MarkdownLine
@@ -281,6 +284,7 @@ func (p *Plugin) Destroy() {
 	p.ShowConfirmDialog = nil
 	p.OpenDrawer = nil
 	p.CloseDrawer = nil
+	p.ShowPanel = nil
 	p.OpenTab = nil
 	p.CloseTab = nil
 	p.RenderMarkdown = nil

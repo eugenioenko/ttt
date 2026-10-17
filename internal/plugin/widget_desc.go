@@ -110,6 +110,7 @@ type WidgetDesc struct {
 	ClearOnSubmit bool
 	Wrap          bool
 	MaxRows       int
+	Autofocus     bool
 
 	ImageData   string
 	ImageFit    string
@@ -140,4 +141,5 @@ type WidgetDesc struct {
 	OnCommandStr  func(command string, rowIndex int)
 
 	MarkdownContent string
+	Follow          bool
 }

@@ -482,6 +482,7 @@ func panelInputWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "max_rows"); v != lua.LNil {
 		desc.MaxRows = int(min(max(float64(lua.LVAsNumber(v)), 0), 1000))
 	}
+	desc.Autofocus = lua.LVAsBool(L.GetField(tbl, "autofocus"))
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetInput, desc)
@@ -646,6 +647,7 @@ func panelScrollViewWidget(L *lua.LState) int {
 	if fn, ok := L.GetField(tbl, "render").(*lua.LFunction); ok {
 		desc.Children = collectChildren(L, proxy, fn)
 	}
+	desc.Follow = lua.LVAsBool(L.GetField(tbl, "follow"))
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetScrollView, desc)
@@ -812,6 +814,7 @@ func panelMarkdownWidget(L *lua.LState) int {
 		if t := L.GetField(v, "text"); t != lua.LNil {
 			desc.MarkdownContent = t.String()
 		}
+		desc.Follow = lua.LVAsBool(L.GetField(v, "follow"))
 		parseBoxModel(L, v, &desc)
 	}
 	proxy.appendDesc(WidgetMarkdown, desc)

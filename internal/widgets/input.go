@@ -21,8 +21,8 @@ type InputConfig struct {
 	// break.
 	Wrap    bool `json:"-"`
 	MaxRows int  `json:"-"`
-	// Autofocus asks the plugin panel holding the input to focus it whenever
-	// the panel gains focus.
+	// Autofocus asks the plugin panel holding the input to focus it when the
+	// plugin focuses the panel.
 	Autofocus bool `json:"-"`
 
 	OnChange func(text string)

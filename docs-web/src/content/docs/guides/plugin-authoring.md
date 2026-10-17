@@ -576,6 +576,22 @@ Close the current drawer panel. No arguments. Requires `panel.drawer` permission
 ttt.close_drawer()
 ```
 
+### `ttt.show_panel(area)` / `ttt.focus_panel(area)`
+
+Show the plugin's own panel in `area`, `"bottom"` or `"sidebar"`: make it the active tab and open the area if it is hidden. Requires the `panel.bottom` or `panel.sidebar` permission, and raises an error if the plugin registered no panel there.
+
+`show_panel` does not move focus. If the area is open and the user is typing in another of its tabs (a terminal, say), it leaves that tab in front and marks the plugin's tab with a dot (or the `»` overflow menu, when the tab is in it) until it is next shown. It returns `true` if the panel is showing.
+
+`focus_panel` shows the panel and moves focus to it, landing on an input with `autofocus` if there is one (including one the same callback has just added). While a dialog is open it shows the panel but leaves focus in the dialog, and returns `false`; otherwise it returns `true`.
+
+```lua
+-- New output arrived: show it without interrupting the user.
+ttt.show_panel("bottom")
+
+-- The user asked to reply: focus the panel's input.
+ttt.focus_panel("bottom")
+```
+
 ### `ttt.open_tab(config)`
 
 Open a custom editor tab with plugin-rendered content. Requires `panel.editor` permission.
@@ -1102,6 +1118,7 @@ panel:input({
 | `clear_on_submit`  | boolean  | `false` | When `true`, the input text is cleared after `on_submit` fires. |
 | `wrap`             | boolean  | `false` | When `true`, long text wraps onto more rows, and the input grows up to `max_rows` and then scrolls, with an arrow at the right edge when rows are out of view. Inside a `scrollview` it wraps at the scroll view's content width, which can be wider than what is visible, so put wrapping inputs outside scroll views. Shift+Enter, Alt+Enter or Ctrl+J adds a line break (many terminals send Shift+Enter as plain Enter; the other two work in most); Enter still submits. Up and Down move between rows; Ctrl+Home and Ctrl+End go to the start and end of the text. |
 | `max_rows`         | number   | `5`     | The most rows a wrapping input grows to. |
+| `autofocus`        | boolean  | `false` | When `true`, the input takes focus when the plugin calls `ttt.focus_panel`. |
 | `on_change`        | function | nil     | Called after every text change. Receives the current text (string). |
 | `on_submit`        | function | nil     | Called when Enter is pressed. Receives the current text (string). |
 
@@ -1173,6 +1190,7 @@ panel:scrollview({
 | Field    | Type     | Required | Description                                                |
 |----------|----------|----------|------------------------------------------------------------|
 | `render` | function | yes      | Builder function that receives a child panel proxy. Call widget methods on it to add children. |
+| `follow` | boolean  | no       | Keep the end of the content in view as it grows. Scrolling up stops following until the user scrolls back to the end. |
 
 Use `scrollview` when the content may exceed the panel height. The scroll position is preserved across re-renders. A scrollbar indicator appears on the right edge when content overflows.
 
@@ -1340,6 +1358,7 @@ panel:markdown({ text = readme_content, margin_top = 1 })
 | Field  | Type   | Required | Description               |
 |--------|--------|----------|---------------------------|
 | `text` | string | yes      | Markdown source to render. |
+| `follow` | boolean | no     | Keep the end of the text in view as it grows, as in a log or chat. Scrolling up stops following until the user scrolls back to the end. |
 | + [box model fields](#box-model) | | | Margin and padding. |
 
 Prose lines wrap at the `markdown.wrapWidth` setting (default 80). Headings, bold, italic, code spans, fenced code blocks, lists, and links are styled using the theme's styles. Text inside the widget can be selected with the mouse and copied.
@@ -2680,7 +2699,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 
 | Module         | Description                    |
 |----------------|--------------------------------|
-| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `open_tab`, `close_tab`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
+| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.editor`   | Editor buffer read/write       |
 | `ttt.diagnostics` | Publish editor diagnostics (squiggles) |

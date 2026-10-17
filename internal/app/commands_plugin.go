@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
@@ -337,6 +338,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	a.syncPluginPanel(&a.BottomPanel.TabbedPanel, id, bottomTitle, bottom)
 	p.RequestRedraw = func() {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+	p.ShowPanel = func(area string, focus bool) (bool, error) {
+		return a.ShowPluginPanel(p.Name, area, focus)
 	}
 	p.SimulateClick = func(x, y int) {
 		go func() {
@@ -998,6 +1002,48 @@ func (a *App) ShowPendingPluginApprovals() {
 	if len(a.PendingPluginApprovals) > 0 {
 		a.ShowPluginApprovalDialog(a.PendingPluginApprovals[0])
 	}
+}
+
+// ShowPluginPanel makes plugin name's panel the active tab of area ("bottom"
+// or "sidebar") and shows the area. Unless focus is set, it leaves alone an
+// area whose active tab has keyboard focus and flags the panel's tab instead,
+// reporting false. With focus it also focuses the panel and its autofocus
+// input, unless a dialog is open; then it reports false.
+func (a *App) ShowPluginPanel(name, area string, focus bool) (bool, error) {
+	id := "plugin." + name
+	tp, visible := &a.BottomPanel.TabbedPanel, a.ContentSplit.ShowBottom
+	if area == "sidebar" {
+		tp, visible = &a.Sidebar.TabbedPanel, a.Sidebar.Visible
+	}
+	if !tp.HasPanel(id) {
+		return false, fmt.Errorf("plugin %s has no %s panel", name, area)
+	}
+	if !focus && visible && tp.ActivePanel != id && a.Root.Focused != nil && a.Root.Focused == tp.ActiveWidget() {
+		tp.FlagPanel(id)
+		return false, nil
+	}
+	tp.SetActivePanel(id)
+	if area == "sidebar" {
+		if !visible {
+			a.ShowSidebar()
+		}
+	} else {
+		a.ContentSplit.ShowBottom = true
+	}
+	if !focus {
+		return true, nil
+	}
+	if a.Root.HasModalOverlay() {
+		return false, nil
+	}
+	w := tp.ActiveWidget()
+	a.Root.SetFocus(w)
+	if adapter, ok := w.(*ui.WidgetAdapter); ok {
+		if panel, ok := adapter.W.(*plugin.PluginPanelWidget); ok {
+			panel.FocusAutofocusInput()
+		}
+	}
+	return true, nil
 }
 
 // Panel images live in the terminal until released, so a plugin panel is closed whenever it leaves the UI.

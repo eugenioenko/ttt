@@ -456,6 +456,34 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			return 0
 		}))
 
+		showPanel := func(focus bool) lua.LGFunction {
+			return func(L *lua.LState) int {
+				area := L.CheckString(1)
+				perm := map[string]string{"bottom": "panel.bottom", "sidebar": "panel.sidebar"}[area]
+				if perm == "" {
+					L.ArgError(1, `area must be "bottom" or "sidebar"`)
+					return 0
+				}
+				if err := p.Granted.Check(perm); err != nil {
+					L.ArgError(1, perm+" permission not granted")
+					return 0
+				}
+				if p.ShowPanel == nil {
+					L.Push(lua.LFalse)
+					return 1
+				}
+				shown, err := p.ShowPanel(area, focus)
+				if err != nil {
+					L.RaiseError("%s", err.Error())
+					return 0
+				}
+				L.Push(lua.LBool(shown))
+				return 1
+			}
+		}
+		L.SetField(mod, "show_panel", L.NewFunction(showPanel(false)))
+		L.SetField(mod, "focus_panel", L.NewFunction(showPanel(true)))
+
 		L.SetField(mod, "close_drawer", L.NewFunction(func(L *lua.LState) int {
 			if p.CloseDrawer != nil {
 				p.CloseDrawer()

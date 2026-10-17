@@ -180,6 +180,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			if vs, ok := sv.Child.(*widgets.VStackWidget); ok {
 				vs.Children = reconcileChildren(vs.Children, desc.Children, p)
 			}
+			sv.Follow = desc.Follow
 			applyBoxModel(&sv.Box, desc)
 		}
 	case WidgetBox:
@@ -229,6 +230,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			if md, ok := sv.Child.(*widgets.MarkdownWidget); ok {
 				md.SetContent(desc.MarkdownContent)
 			}
+			sv.Follow = desc.Follow
 		}
 	case WidgetCheckbox:
 		if cw, ok := w.(*widgets.CheckboxWidget); ok {
@@ -449,6 +451,7 @@ func createScrollViewWidget(desc WidgetDesc, p *Plugin) *widgets.ScrollViewWidge
 	// Measure grow widgets by content height so the stack doesn't collapse to zero.
 	child.MeasureGrow = true
 	sv := widgets.NewScrollViewWidget(child)
+	sv.Follow = desc.Follow
 	applyBoxModel(&sv.Box, desc)
 	return sv
 }
@@ -568,6 +571,7 @@ func createInputWidget(desc WidgetDesc, p *Plugin) *widgets.InputWidget {
 
 func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, _ *Plugin) {
 	iw.Config.Wrap, iw.Config.MaxRows = desc.Wrap, desc.MaxRows
+	iw.Config.Autofocus = desc.Autofocus
 	if desc.OnChange != nil {
 		iw.Config.OnChange = desc.OnChange
 	}
@@ -606,6 +610,7 @@ func createMarkdownWidget(desc WidgetDesc, p *Plugin) *widgets.ScrollViewWidget 
 	md.SetContent(desc.MarkdownContent)
 	applyBoxModel(&md.Box, desc)
 	sv := widgets.NewScrollViewWidget(md)
+	sv.Follow = desc.Follow
 	md.SetScrollParent(sv)
 	return sv
 }
