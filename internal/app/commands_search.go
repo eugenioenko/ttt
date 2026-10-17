@@ -27,6 +27,10 @@ func (a *App) OpenFind() {
 	findBar := ui.NewFindBarWidget()
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
+		if !a.EditorGroup.IsEditorActive() {
+			a.EditorGroup.SetFindSearch(query, nil, opts)
+			return nil
+		}
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
 			a.StatusWarn("Invalid regex: " + err.Error())
