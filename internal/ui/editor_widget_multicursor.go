@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
@@ -251,6 +253,157 @@ func (e *EditorPaneWidget) multiExecEnter() {
 	}
 	e.bufferDirty = true
 	e.syncFromMulti()
+}
+
+// multiCopyText gathers the text a multi-cursor Copy or Cut places on the
+// clipboard: every cursor's selection in document order, or each cursor's
+// whole line when it has no selection, joined by newlines (VS Code
+// semantics). The second result reports whether multi-cursor mode is active,
+// so callers can fall back to the single-cursor path.
+func (e *EditorPaneWidget) multiCopyText() (string, bool) {
+	if !e.isMultiActive() {
+		return "", false
+	}
+	e.syncToMulti()
+	parts := make([]string, 0, len(e.Multi.Cursors))
+	for i := range e.Multi.Cursors {
+		cs := &e.Multi.Cursors[i]
+		if cs.Line < 0 || cs.Line >= len(e.Buf.Lines) {
+			continue
+		}
+		if cs.Sel.Active {
+			parts = append(parts, cs.Sel.Text(e.Buf.Lines, cs.Line, cs.Col))
+		} else {
+			parts = append(parts, e.Buf.Lines[cs.Line])
+		}
+	}
+	return strings.Join(parts, "\n"), true
+}
+
+// multiCut removes what multiCopyText collected, at every cursor, as a single
+// undo step. Cursors are processed back to front so earlier offsets stay
+// valid, mirroring the multiExec* handlers. A line already deleted for an
+// earlier cursor on the same line is not deleted twice.
+func (e *EditorPaneWidget) multiCut() bool {
+	if !e.isMultiActive() {
+		return false
+	}
+	e.syncToMulti()
+	var cmds []undo.EditCommand
+	deletedLines := make(map[int]bool)
+	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
+		cs := &e.Multi.Cursors[i]
+		if cs.Line < 0 || cs.Line >= len(e.Buf.Lines) {
+			continue
+		}
+		if cs.Sel.Active {
+			start, end := cs.Sel.Range(cs.Line, cs.Col)
+			delCmd := &undo.DeleteSelectionCommand{
+				StartLine: start.Line, StartCol: start.Col,
+				EndLine: end.Line, EndCol: end.Col,
+			}
+			delCmd.Apply(e.Buf)
+			cmds = append(cmds, delCmd)
+			cs.Line = start.Line
+			cs.Col = start.Col
+			cs.Sel.Clear()
+			e.adjustLaterCursors(i, start, end)
+			continue
+		}
+		if deletedLines[cs.Line] {
+			continue
+		}
+		cmd := &undo.DeleteLineCommand{Idx: cs.Line}
+		cmd.Apply(e.Buf)
+		cmds = append(cmds, cmd)
+		deletedLines[cs.Line] = true
+		// The cursor keeps its line number (the next line shifted up into
+		// its place); cursors on later lines shift up with the buffer.
+		e.shiftLaterLines(i, cs.Line+1, -1)
+		cs.Line = e.Buf.ClampLine(cs.Line)
+	}
+	if len(cmds) == 0 {
+		return false
+	}
+	if e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+	}
+	e.bufferDirty = true
+	e.Multi.Deduplicate()
+	e.syncFromMulti()
+	return true
+}
+
+// multiPasteText pastes at every cursor as a single undo step. When the
+// clipboard holds exactly one line per cursor, each cursor receives its own
+// line in order (VS Code's default "spread" paste); otherwise every cursor
+// receives the full text. Selections at the cursors are replaced first.
+func (e *EditorPaneWidget) multiPasteText(text string) bool {
+	if !e.isMultiActive() {
+		return false
+	}
+	e.syncToMulti()
+	pieces := strings.Split(text, "\n")
+	spread := len(pieces) == len(e.Multi.Cursors)
+	var cmds []undo.EditCommand
+	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
+		cs := &e.Multi.Cursors[i]
+		piece := text
+		if spread {
+			piece = pieces[i]
+		}
+		if piece == "" {
+			continue
+		}
+		if cs.Sel.Active {
+			start, end := cs.Sel.Range(cs.Line, cs.Col)
+			delCmd := &undo.DeleteSelectionCommand{
+				StartLine: start.Line, StartCol: start.Col,
+				EndLine: end.Line, EndCol: end.Col,
+			}
+			delCmd.Apply(e.Buf)
+			cmds = append(cmds, delCmd)
+			cs.Line = start.Line
+			cs.Col = start.Col
+			cs.Sel.Clear()
+			e.adjustLaterCursors(i, start, end)
+		}
+		cs.Line = e.Buf.ClampLine(cs.Line)
+		pieceLines := strings.Split(piece, "\n")
+		if len(pieceLines) == 1 {
+			cmd := &undo.InsertStringCommand{Line: cs.Line, Col: cs.Col, Text: piece}
+			cmd.Apply(e.Buf)
+			cmds = append(cmds, cmd)
+			n := len([]rune(piece))
+			e.shiftLaterCursors(i, cs.Line, cs.Col, n)
+			cs.Col += n
+			continue
+		}
+		lineRunes := []rune(e.Buf.Lines[cs.Line])
+		col := min(cs.Col, len(lineRunes))
+		cmd := &undo.PasteCommand{
+			Line:   cs.Line,
+			Col:    col,
+			Text:   piece,
+			Suffix: string(lineRunes[col:]),
+		}
+		cmd.Apply(e.Buf)
+		cmds = append(cmds, cmd)
+		e.shiftLaterCursors(i, cs.Line, col, len([]rune(pieceLines[0])))
+		e.shiftLaterLines(i, cs.Line+1, len(pieceLines)-1)
+		cs.Line += len(pieceLines) - 1
+		cs.Col = len([]rune(pieceLines[len(pieceLines)-1]))
+	}
+	if len(cmds) == 0 {
+		return false
+	}
+	if e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+	}
+	e.bufferDirty = true
+	e.Multi.Deduplicate()
+	e.syncFromMulti()
+	return true
 }
 
 func (e *EditorPaneWidget) adjustLaterCursors(editedIdx int, start, end selection.Position) {
