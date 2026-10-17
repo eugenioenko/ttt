@@ -108,6 +108,8 @@ type WidgetDesc struct {
 	OnChange      func(text string)
 	OnSubmit      func(text string)
 	ClearOnSubmit bool
+	Wrap          bool
+	MaxRows       int
 
 	ImageData   string
 	ImageFit    string

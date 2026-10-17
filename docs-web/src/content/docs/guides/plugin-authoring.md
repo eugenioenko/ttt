@@ -1100,6 +1100,8 @@ panel:input({
 | `placeholder`      | string   | `""`    | Grayed-out hint text shown when input is empty.|
 | `prefix`           | string   | `""`    | Non-editable text displayed before the input.  |
 | `clear_on_submit`  | boolean  | `false` | When `true`, the input text is cleared after `on_submit` fires. |
+| `wrap`             | boolean  | `false` | When `true`, long text wraps onto more rows, and the input grows up to `max_rows` and then scrolls, with an arrow at the right edge when rows are out of view. Inside a `scrollview` it wraps at the scroll view's content width, which can be wider than what is visible, so put wrapping inputs outside scroll views. Shift+Enter, Alt+Enter or Ctrl+J adds a line break (many terminals send Shift+Enter as plain Enter; the other two work in most); Enter still submits. Up and Down move between rows; Ctrl+Home and Ctrl+End go to the start and end of the text. |
+| `max_rows`         | number   | `5`     | The most rows a wrapping input grows to. |
 | `on_change`        | function | nil     | Called after every text change. Receives the current text (string). |
 | `on_submit`        | function | nil     | Called when Enter is pressed. Receives the current text (string). |
 
