@@ -93,10 +93,98 @@ func DefaultLSPSettings() LSPSettings {
 	}
 }
 
+type LargeFileSettings struct {
+	WordWrapMaxMB   *int         `json:"wordWrapMaxMB,omitempty"`
+	AutoReloadMaxMB *int         `json:"autoReloadMaxMB,omitempty"`
+	LogModeMinMB    *MBThreshold `json:"logModeMinMB,omitempty"`
+}
+
+const DefaultWordWrapMaxMB = 32
+const DefaultAutoReloadMaxMB = 64
+
+func megabytes(mb *int, def int) int64 {
+	n := def
+	if mb != nil {
+		n = *mb
+	}
+	if n <= 0 {
+		return 0
+	}
+	if int64(n) > ((1<<63)-1)>>20 {
+		return (1 << 63) - 1
+	}
+	return int64(n) << 20
+}
+func (e EditorSettings) WordWrapMaxBytes() int64 {
+	var mb *int
+	if e.LargeFiles != nil {
+		mb = e.LargeFiles.WordWrapMaxMB
+	}
+	return megabytes(mb, DefaultWordWrapMaxMB)
+}
+func (e EditorSettings) AutoReloadMaxBytes() int64 {
+	var mb *int
+	if e.LargeFiles != nil {
+		mb = e.LargeFiles.AutoReloadMaxMB
+	}
+	return megabytes(mb, DefaultAutoReloadMaxMB)
+}
+
+const DefaultLogModeMinMB = 64
+
+func (e EditorSettings) LogModeMinBytes() (int64, bool) {
+	var threshold *MBThreshold
+	if e.LargeFiles != nil {
+		threshold = e.LargeFiles.LogModeMinMB
+	}
+	if threshold == nil || threshold.unset {
+		return megabytes(nil, DefaultLogModeMinMB), true
+	}
+	if threshold.Off {
+		return 0, false
+	}
+	return megabytes(&threshold.MB, DefaultLogModeMinMB), true
+}
+
+type MBThreshold struct {
+	Off   bool
+	MB    int
+	unset bool
+}
+
+func (t *MBThreshold) UnmarshalJSON(data []byte) error {
+	*t = MBThreshold{}
+	if string(data) == "false" {
+		t.Off = true
+		return nil
+	}
+	if err := json.Unmarshal(data, &t.MB); err != nil || t.MB < 0 || string(data) == "null" {
+		t.unset = true
+	}
+	return nil
+}
+func (t MBThreshold) MarshalJSON() ([]byte, error) {
+	if t.Off {
+		return []byte("false"), nil
+	}
+	return json.Marshal(t.MB)
+}
+func (l *LargeFileSettings) UnmarshalJSON(data []byte) error {
+	type plain LargeFileSettings
+	if err := json.Unmarshal(data, (*plain)(l)); err != nil {
+		return err
+	}
+	if l.LogModeMinMB != nil && l.LogModeMinMB.unset {
+		l.LogModeMinMB = nil
+	}
+	return nil
+}
+
 type EditorSettings struct {
-	TabSize      int  `json:"tabSize"`
-	InsertSpaces bool `json:"insertSpaces"`
-	WordWrap     bool `json:"wordWrap"`
+	LargeFiles   *LargeFileSettings `json:"largeFiles,omitempty"`
+	TabSize      int                `json:"tabSize"`
+	InsertSpaces bool               `json:"insertSpaces"`
+	WordWrap     bool               `json:"wordWrap"`
 	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
 	// built-in limit. Unlisted: raise it only where every line must finish, such
 	// as slow CI runners.

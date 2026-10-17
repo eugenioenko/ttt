@@ -16,6 +16,7 @@ type FindBarWidget struct {
 	BaseWidget
 	Input             *InputWidget
 	Matches           []FindMatch
+	Progress          string
 	Current           int
 	Options           SearchOptions
 	Borders           *term.BorderSet
@@ -116,7 +117,7 @@ func (f *FindBarWidget) Render(surface Surface) {
 	info := ""
 	hasMatches := f.Input.Text != "" && len(f.Matches) > 0
 	if f.Input.Text != "" {
-		info = fmt.Sprintf(" %d/%d", f.currentDisplay(), len(f.Matches))
+		info = fmt.Sprintf(" %d/%d", f.currentDisplay(), len(f.Matches)) + f.Progress
 	}
 	navButtons := ""
 	if hasMatches {

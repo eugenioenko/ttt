@@ -148,6 +148,9 @@ type App struct {
 	// lastPulled holds the document state behind each path's applied pull.
 	// UI goroutine only.
 	lastPulled map[string]pullKey
+	// logViews holds the open log mode tabs by path. UI goroutine only.
+	logViews   map[string]*logView
+	largeFiles largeFileState
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {

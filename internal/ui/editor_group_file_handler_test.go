@@ -167,3 +167,46 @@ func TestReplacedContentTakesFocus(t *testing.T) {
 		t.Error("replaced content kept focus")
 	}
 }
+
+func TestLargeFileHandlerOnlyReceivesText(t *testing.T) {
+	dir := t.TempDir()
+	imagePath := filepath.Join(dir, "image.png")
+	writeTestPNG(t, imagePath, 4, 4)
+	binaryPath := filepath.Join(dir, "binary.dat")
+	textPath := filepath.Join(dir, "text.log")
+	if err := os.WriteFile(binaryPath, []byte{0, 1, 0xff}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(textPath, []byte("plain log text\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, handler := range []bool{false, true} {
+		g := NewEditorGroupWidget(nil, 4, true, "compact")
+		logContent := &BaseWidget{}
+		g.LargeFileHandler = func(path string) Widget {
+			if path != textPath {
+				t.Errorf("large-file handler received non-text %s", path)
+			}
+			return logContent
+		}
+		binaryContent := NewBinaryFileWidget(binaryPath)
+		if handler {
+			g.FileHandler = func(string, []byte) Widget { return binaryContent }
+		}
+		g.OpenFile(imagePath)
+		if _, ok := g.activeTab().Content.(*ImageViewWidget); !ok {
+			t.Fatalf("image opened as %T", g.activeTab().Content)
+		}
+		g.OpenFile(binaryPath)
+		if _, ok := g.activeTab().Content.(*BinaryFileWidget); !ok {
+			t.Fatalf("binary opened as %T", g.activeTab().Content)
+		}
+		if handler && g.activeTab().Content != binaryContent {
+			t.Fatal("binary plugin handler was bypassed")
+		}
+		g.OpenFile(textPath)
+		if g.activeTab().Content != logContent {
+			t.Fatal("text file bypassed the large-file handler")
+		}
+	}
+}

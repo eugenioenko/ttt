@@ -38,6 +38,7 @@ func RunEventLoop(
 		defer app.Repository.Close()
 	}
 	defer app.CloseTasks()
+	defer app.closeLogViews()
 
 	lastGutterFile := ""
 	lastGutterRepo := ""
@@ -50,11 +51,16 @@ func RunEventLoop(
 
 	syncStatus := func() {
 		app.syncRepositoryObservation()
+		app.syncLogStatus()
+		app.SyncReloadSegment()
 		line, col := app.EditorGroup.ActiveCursor()
 		filePath := app.EditorGroup.ActiveFilePath()
 		cursorCount := app.EditorGroup.MultiCursorCount()
 
 		posText := fmt.Sprintf("Ln %d, Col %d", line+1, col+1)
+		if lv := app.activeLogView(); lv != nil && line < 0 {
+			posText = fmt.Sprintf("Byte %d, Col %d", lv.viewer.Cursor.Offset, col+1)
+		}
 		if cursorCount > 1 {
 			posText += fmt.Sprintf(" (%d cursors)", cursorCount)
 		}
@@ -91,6 +97,11 @@ func RunEventLoop(
 		app.Status.SetSegment(view.StatusSegment{ID: "indent", Side: "right", Priority: 200, Text: fmt.Sprintf("%s: %d", indentLabel, tabSize)})
 
 		app.SyncLanguageSegment()
+		if app.activeLogView() != nil {
+			app.Status.RemoveSegment("indent")
+			app.Status.RemoveSegment("eol")
+			app.Status.RemoveSegment("language")
+		}
 
 		repoDir := app.SyncRepositoryBranch()
 
@@ -283,6 +294,8 @@ func RunEventLoop(
 				if v != "" {
 					closeTerminal(v)
 				}
+			case *LogFileProgress:
+				app.handleLogProgress(v)
 			case *ui.TabDragAutoScrollTick:
 				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
 			case *ui.EditorDragAutoScrollTick:

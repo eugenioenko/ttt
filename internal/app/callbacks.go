@@ -12,6 +12,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/core/logfile"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -151,6 +152,16 @@ func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 }
 
 func (a *App) NavigateToSearchMatch(path string, line, col int) {
+	a.navigateToSearchMatch(path, line, col, nil)
+}
+func (a *App) NavigateToSearchResult(match ui.SearchMatch) {
+	var offset *int64
+	if match.HasByteOffset {
+		offset = &match.ByteOffset
+	}
+	a.navigateToSearchMatch(match.FilePath, match.LineNum, match.ColStart, offset)
+}
+func (a *App) navigateToSearchMatch(path string, line, col int, offset *int64) {
 	if strings.HasSuffix(path, " (diff)") {
 		if !a.EditorGroup.SwitchToTabByPath(path) {
 			filePath := strings.TrimSuffix(path, " (diff)")
@@ -172,6 +183,27 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		return
 	}
 	a.EditorGroup.OpenFile(path)
+	if lv := a.activeLogView(); lv != nil {
+		off, ok := int64(0), false
+		if offset != nil {
+			off, ok = *offset, true
+		} else {
+			off, ok = lv.file.OffsetForLine(line - 1)
+		}
+		if ok {
+			rows, _ := lv.file.ReadRows(off, 1)
+			runeCol := 0
+			if len(rows) > 0 {
+				text := rows[0].Text
+				runeCol = utf8.RuneCountInString(text[:min(col, len(text))])
+			}
+			lv.viewer.Navigate(logfile.Match{Offset: off, Col: runeCol})
+		} else {
+			a.StatusNotify("Search result line has not been indexed yet")
+		}
+		a.Root.SetFocus(a.EditorGroup)
+		return
+	}
 	a.EditorGroup.GoToLine(line)
 	if a.EditorGroup.IsEditorActive() {
 		text := a.EditorGroup.Editor.Buf.Lines[a.EditorGroup.Editor.Cursor.Line]
@@ -750,6 +782,7 @@ func registerWidgetCallbacks(app *App) {
 		app.ExplorerContextNode = node
 		items := []ui.ContextMenuItem{
 			{Label: "Open", Command: "explorer.open"},
+			{Label: "Open in Log Mode", Command: "explorer.openInLogMode"},
 			ui.MenuSep(),
 			{Label: "New File", Command: "explorer.newFile"},
 			{Label: "New Folder", Command: "explorer.newFolder"},
@@ -794,6 +827,7 @@ func registerWidgetCallbacks(app *App) {
 	}
 	app.Search.DiffSources = app.DiffSearchSources
 	app.Search.OnOpenMatch = app.NavigateToSearchMatch
+	app.Search.OnOpenMatchAt = app.NavigateToSearchResult
 	app.Search.OnPreview = app.PreviewSearchReplace
 	app.Search.OnReplace = app.ApplySearchReplace
 	app.Search.OnReplaceAll = app.ApplySearchReplaceAll

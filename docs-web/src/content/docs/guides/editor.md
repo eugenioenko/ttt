@@ -7,6 +7,18 @@ description: Core editing features in TTT.
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.
 
+## Large Files and Log Mode
+
+Files over 64 MiB open in **log mode**, a read-only viewer that reads visible lines from disk. Use **Open in Log Mode** in the command palette or a file's Explorer context menu for smaller files. Set `editor.largeFiles.logModeMinMB` to another size, `0` for every text file, or `false` for manual activation only. The threshold is checked when opening a new tab; existing editor tabs keep their mode.
+
+**Ctrl+End** reads the tail immediately and follows appended lines. Scrolling up or pressing Page Up pauses following; Ctrl+End resumes. The **LOG** item before the cursor position shows following and indexing progress. Click it, or run **Open in Editor**, to confirm loading the file into an editable tab. Large loads warn about time and memory use.
+
+**Ctrl+F** searches the whole file in the background, including lines beyond the current index. **F3 / Shift+F3** move between matches. The find bar shows search progress; queries stop at 10,000 matches with a notice to refine the query. Go to Line works on indexed lines and reports when a requested line is not indexed yet. Line numbers appear as indexing reaches the view.
+
+Selection works with the mouse, Shift and the navigation keys, and Ctrl+A. Ctrl+C copies up to 4 MiB, with a notice when the selection is capped. Each displayed line is capped at 1 MiB and marked when cut off; search still scans its full text. Long lines scroll horizontally. Log mode has no editing, undo, word wrap, highlighting, folds, language-server work, or git gutter. Truncating or replacing the file resets the view with a notice.
+
+Normal editor tabs disable word wrap above `editor.largeFiles.wordWrapMaxMB` (32 MiB by default). If a clean editor file grows beyond `editor.largeFiles.autoReloadMaxMB` (64 MiB), changes on disk show a persistent **↻ Reload** item offering **Reload** and **Open in Log Mode**. **Reload File from Disk** also works from the command palette and confirms discarding unsaved edits. Set either limit to `0` to remove it. One megabyte in these settings is 1,048,576 bytes.
+
 ## Bracket Matching
 
 Matching brackets are highlighted automatically when the cursor is on a bracket character. Press **Ctrl+K M** to jump to the matching bracket.

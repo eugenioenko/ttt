@@ -84,6 +84,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
+	a.EditorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
 	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
 	a.EditorGroup.SetDiffHighContrast(s.Editor.DiffHighContrast)
 	a.EditorGroup.SetDiffCollapsedEmphasis(s.Editor.DiffCollapsedEmphasis)
@@ -108,13 +109,17 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.EditorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
 		a.EditorGroup.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
 		a.EditorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
-		a.EditorGroup.Editor.WordWrap = s.Editor.WordWrap
+		a.EditorGroup.Editor.WordWrap = a.EditorGroup.ActiveFileWordWrap()
 		a.EditorGroup.Editor.BracketPairColorization = s.Editor.BracketPairColorization
 		if s.Editor.BracketPairColorization != prev.Editor.BracketPairColorization {
 			a.EditorGroup.Editor.InvalidateBracketColors()
 		}
 	}
 
+	for _, lv := range a.logViews {
+		lv.viewer.LineNumbers = s.Editor.LineNumbers
+		lv.viewer.TabSize = s.Editor.TabSize
+	}
 	a.applyMenuBarVisibility(s.Editor.IsMenuBarVisible())
 
 	// Apply cursor style

@@ -185,3 +185,5 @@ func (b *Buffer) writeLines(w io.Writer, lines []string) error {
 	}
 	return nil
 }
+
+func (b *Buffer) DiskSize() int64 { return b.diskSize }

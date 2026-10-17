@@ -27,6 +27,13 @@ func (a *App) OpenFind() {
 	findBar := ui.NewFindBarWidget()
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
+		if lv := a.activeLogView(); lv != nil {
+			return a.searchLog(lv, query, opts, false)
+		}
+		findBar.Progress = ""
+		if !a.EditorGroup.IsEditorActive() {
+			return nil
+		}
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
 			a.StatusWarn("Invalid regex: " + err.Error())
@@ -36,6 +43,13 @@ func (a *App) OpenFind() {
 		return matches
 	}
 	findBar.OnNavigate = func(match ui.FindMatch) {
+		if lv := a.activeLogView(); lv != nil {
+			if findBar.Current < len(lv.result.Matches) {
+				lv.current = findBar.Current
+				lv.viewer.Navigate(lv.result.Matches[findBar.Current])
+			}
+			return
+		}
 		a.EditorGroup.SetSearchActive(findBar.Current)
 		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
 		a.EditorGroup.Editor.Cursor.Line = match.Line
@@ -44,7 +58,9 @@ func (a *App) OpenFind() {
 	}
 	findBar.OnDismiss = func() {
 		a.DismissDialog()
-		a.EditorGroup.ClearFindHighlights()
+		if a.activeLogView() == nil {
+			a.EditorGroup.ClearFindHighlights()
+		}
 	}
 	findBar.OnEditorTabChange = func() {
 		findBar.Current = 0
@@ -93,6 +109,11 @@ func (a *App) findBar() findBar {
 }
 
 func (a *App) OpenFindReplace() {
+	if a.activeLogView() != nil {
+		a.StatusNotify("Log mode is read-only")
+		a.OpenFind()
+		return
+	}
 	if a.Root.HasOverlay() {
 		return
 	}

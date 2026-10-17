@@ -225,6 +225,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
 	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
 	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
+	editorGroup.WordWrapMaxBytes = cfg.Settings.Editor.WordWrapMaxBytes()
 	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
 	editorGroup.DiffContext = configuredDiffContext(cfg.Settings.Editor.DiffContext)
 	editorGroup.DiffWordWrap = cfg.Settings.Editor.DiffWordWrap
@@ -248,17 +249,6 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.BracketColorStyles = bracketStyles
 	editorGroup.Editor.BracketColorStyles = bracketStyles
 	grammarErrs := loadGrammarSettings(cfg.Settings.Editor.Grammars)
-	for _, f := range openFiles {
-		editorGroup.OpenFile(f.Path)
-		editorGroup.CommitActiveTab()
-		// The tab just opened is the active one, so this lands on the right
-		// buffer without switching tabs. PlaceCursor rather than GoToLineCol:
-		// the viewport has no height yet, and ApplyFileTargets frames the file
-		// left active once the first render has run.
-		if f.Line > 0 {
-			editorGroup.PlaceCursor(f.Line, f.Col)
-		}
-	}
 
 	terminalPanel := ui.NewTerminalPanelWidget()
 	terminalPanel.Borders = borders
@@ -391,6 +381,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		lspSent:             make(map[string]<-chan struct{}),
 		lspEpochs:           make(map[string]int),
 		lastPulled:          make(map[string]pullKey),
+		logViews:            make(map[string]*logView),
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
@@ -410,6 +401,23 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.reportGrammarErrors(grammarErrs)
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
 	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
+	app.EditorGroup.LargeFileHandler = app.autoLogViewer
+	for _, f := range openFiles {
+		editorGroup.OpenFile(f.Path)
+		editorGroup.CommitActiveTab()
+		// The tab just opened is the active one, so this lands on the right
+		// buffer without switching tabs. PlaceCursor rather than GoToLineCol:
+		// the viewport has no height yet, and ApplyFileTargets frames the file
+		// left active once the first render has run.
+		if f.Line > 0 {
+			if editorGroup.ActiveLogViewer() != nil {
+				editorGroup.GoToLineCol(f.Line, f.Col)
+			} else {
+				editorGroup.PlaceCursor(f.Line, f.Col)
+			}
+		}
+	}
+
 	return app
 }
 

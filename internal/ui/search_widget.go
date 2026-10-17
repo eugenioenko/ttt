@@ -24,11 +24,13 @@ type SearchBatch struct {
 }
 
 type SearchMatch struct {
-	FilePath string
-	LineNum  int
-	ColStart int
-	ColEnd   int
-	LineText string
+	ByteOffset    int64
+	HasByteOffset bool
+	FilePath      string
+	LineNum       int
+	ColStart      int
+	ColEnd        int
+	LineText      string
 }
 
 type SearchFileGroup struct {
@@ -47,32 +49,33 @@ type DiffSearchSource struct {
 
 type SearchWidget struct {
 	BaseWidget
-	Icons        string
-	Input        *InputWidget
-	Include      *InputWidget
-	Exclude      *InputWidget
-	ReplaceInput *InputWidget
-	Options      SearchOptions
-	focusIdx     int
-	showFilters  bool
-	showReplace  bool
-	Groups       []SearchFileGroup
-	FlatList     []searchItem
-	Selected     int
-	lastSelected int
-	ScrollTop    int
-	scrollbar    Scrollbar
-	WorkDirs     []string
-	Searching    bool
-	Error        string
-	DiffSources  func() []DiffSearchSource
-	OnOpenMatch  func(path string, line, col int)
-	OnReplace    func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
-	OnReplaceAll func(allMatches map[string][]SearchMatch, replacement string, opts SearchOptions)
-	OnPreview    func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
-	OnClear      func()
-	PostBatch    func(batch *SearchBatch)
-	Debounce     Debouncer
+	Icons         string
+	Input         *InputWidget
+	Include       *InputWidget
+	Exclude       *InputWidget
+	ReplaceInput  *InputWidget
+	Options       SearchOptions
+	focusIdx      int
+	showFilters   bool
+	showReplace   bool
+	Groups        []SearchFileGroup
+	FlatList      []searchItem
+	Selected      int
+	lastSelected  int
+	ScrollTop     int
+	scrollbar     Scrollbar
+	WorkDirs      []string
+	Searching     bool
+	Error         string
+	DiffSources   func() []DiffSearchSource
+	OnOpenMatch   func(path string, line, col int)
+	OnOpenMatchAt func(SearchMatch)
+	OnReplace     func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
+	OnReplaceAll  func(allMatches map[string][]SearchMatch, replacement string, opts SearchOptions)
+	OnPreview     func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
+	OnClear       func()
+	PostBatch     func(batch *SearchBatch)
+	Debounce      Debouncer
 	// ChevronCollapsed and ChevronExpanded mirror TreeConfig; zero means the
 	// default triangle.
 	ChevronCollapsed rune
@@ -414,7 +417,8 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 
 		for _, sub := range msg.Data.Submatches {
 			match := SearchMatch{
-				FilePath: absPath,
+				FilePath:   absPath,
+				ByteOffset: msg.Data.AbsoluteOffset, HasByteOffset: true,
 				LineNum:  msg.Data.LineNumber,
 				ColStart: sub.Start,
 				ColEnd:   sub.End,
@@ -478,10 +482,11 @@ type rgMessage struct {
 }
 
 type rgMatchData struct {
-	Path       rgText       `json:"path"`
-	Lines      rgText       `json:"lines"`
-	LineNumber int          `json:"line_number"`
-	Submatches []rgSubmatch `json:"submatches"`
+	AbsoluteOffset int64        `json:"absolute_offset"`
+	Path           rgText       `json:"path"`
+	Lines          rgText       `json:"lines"`
+	LineNumber     int          `json:"line_number"`
+	Submatches     []rgSubmatch `json:"submatches"`
 }
 
 type rgText struct {
@@ -951,7 +956,9 @@ func (s *SearchWidget) activateSelected() {
 			s.previewFile(item.Group)
 		} else {
 			m := s.Groups[item.Group].Matches[item.Match]
-			if s.OnOpenMatch != nil {
+			if s.OnOpenMatchAt != nil {
+				s.OnOpenMatchAt(m)
+			} else if s.OnOpenMatch != nil {
 				s.OnOpenMatch(m.FilePath, m.LineNum, m.ColStart)
 			}
 		}

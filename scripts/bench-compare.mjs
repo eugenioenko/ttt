@@ -129,6 +129,7 @@ try {
     'Allocated bytes measure total allocation per operation, not peak or retained RAM.',
     '',
     `Logs are opened by each side's built \`ttt\` binary, ${logBenchTime} per pass, timed from launch until the first frame shows the log; \`_wrap\` rows start with word wrap on, and \`_edit\` opens a log committed to git, types a character, and moves down 20 lines. ` +
+      '`_log` opens directly in log mode and `_log_tail` also presses Ctrl+End before quitting. ' +
       'Time includes process startup, so the 1 MiB case is mostly startup; peak RSS is the process\'s maximum resident memory. ' +
       'The 1, 128, and 256 MiB fixtures are generated once outside timing and shared across both checkouts, so reads may use the OS file cache.',
     '',

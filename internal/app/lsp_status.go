@@ -14,6 +14,10 @@ import (
 // the indicator without the full status sync, which the event loop runs only on
 // user input.
 func (a *App) SyncLanguageSegment() {
+	if a.activeLogView() != nil {
+		a.Status.RemoveSegment("language")
+		return
+	}
 	if a.EditorGroup.Editor == nil || a.EditorGroup.Editor.Highlighter == nil {
 		a.Status.SetSegment(view.StatusSegment{ID: "language", Side: "right", Priority: 500, Text: ""})
 		return

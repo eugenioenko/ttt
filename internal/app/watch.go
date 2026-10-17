@@ -50,19 +50,26 @@ func (a *App) SyncWatched() {
 	if a.Watcher == nil {
 		return
 	}
-	a.Watcher.Sync(a.EditorGroup.OpenFilePaths())
+	a.Watcher.Sync(append(a.EditorGroup.OpenFilePaths(), a.logPaths()...))
 	if a.Explorer != nil {
 		a.Watcher.SyncDirs(a.Explorer.WatchedDirs())
 	}
 }
 
 // HandleFileChanged reconciles an open buffer with a change detected on disk.
-// A clean buffer is reloaded silently; a buffer with unsaved edits is left
+// A clean buffer is reloaded silently up to the configured size limit;
+// larger files show a Reload item. A buffer with unsaved edits is left
 // untouched (the save path still guards against clobbering) and the user is
 // warned. The recorded disk state of a dirty buffer is deliberately not
 // updated, so the save-time conflict check keeps working.
 func (a *App) HandleFileChanged(path string) {
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
+	if lv := a.logViews[path]; lv != nil {
+		if err := lv.file.Refresh(); err != nil {
+			a.StatusWarn("Cannot refresh log: " + err.Error())
+		}
+		return
+	}
 	buf := a.EditorGroup.BufferForPath(path)
 	if buf == nil {
 		return
@@ -72,7 +79,8 @@ func (a *App) HandleFileChanged(path string) {
 		return
 	}
 	name := filepath.Base(path)
-	if _, err := os.Stat(path); err != nil {
+	info, err := os.Stat(path)
+	if err != nil {
 		a.StatusWarn(name + " was deleted on disk")
 		return
 	}
@@ -80,12 +88,25 @@ func (a *App) HandleFileChanged(path string) {
 		a.StatusWarn(name + " changed on disk; you have unsaved changes")
 		return
 	}
-	// Reload silently: a clean buffer picking up disk changes is the routine
-	// case (e.g. tailing a live log), and a notification on every change would
-	// be noise. Only the cases needing attention (conflict, deletion) warn.
-	a.EditorGroup.ReloadFile(path)
+	if limit := a.Settings.Editor.AutoReloadMaxBytes(); limit > 0 && info.Size() > limit {
+		if a.largeFiles.stale == nil {
+			a.largeFiles.stale = make(map[string]bool)
+		}
+		a.largeFiles.stale[path] = true
+		a.SyncReloadSegment()
+		return
+	}
+	a.reloadFile(path)
+}
+
+func (a *App) reloadFile(path string) {
+	if !a.EditorGroup.ReloadFile(path) {
+		return
+	}
+	delete(a.largeFiles.stale, path)
 	a.RequestGitGutterForActiveFile()
 	a.RefreshSymbols()
+	a.SyncReloadSegment()
 }
 
 // HandleExplorerDirChanged re-reads the explorer tree after its backing

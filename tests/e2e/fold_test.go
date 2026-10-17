@@ -53,6 +53,7 @@ func TestFoldOpenClose_Commands(t *testing.T) {
 		t.Fatal("close outside folds should do nothing")
 	}
 
+	h.app.EditorGroup.WordWrap = true
 	e.WordWrap = true
 	e.Cursor.Line = 1
 	h.exec("fold.close")
@@ -64,6 +65,7 @@ func TestFoldOpenClose_Commands(t *testing.T) {
 	if !e.Folds.IsCollapsed(0) || !e.Folds.IsCollapsed(1) {
 		t.Fatal("open should do nothing with word wrap enabled")
 	}
+	h.app.EditorGroup.WordWrap = false
 	e.WordWrap = false
 	e.Folds = nil
 	h.exec("fold.open")

@@ -139,7 +139,14 @@ func BenchmarkLog(b *testing.B) {
 	binary := buildTTT(b)
 	configDir := b.TempDir()
 	wrapConfigDir := b.TempDir()
-	if err := os.WriteFile(filepath.Join(wrapConfigDir, "settings.json"), []byte(`{"editor":{"wordWrap":true}}`), 0o644); err != nil {
+	logConfigDir := b.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), []byte(`{"editor":{"largeFiles":{"logModeMinMB":false}}}`), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(logConfigDir, "settings.json"), []byte(`{"editor":{"largeFiles":{"logModeMinMB":0}}}`), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wrapConfigDir, "settings.json"), []byte(`{"editor":{"wordWrap":true,"largeFiles":{"logModeMinMB":false,"wordWrapMaxMB":0}}}`), 0o644); err != nil {
 		b.Fatal(err)
 	}
 	openScript := "wait-for " + logMarker + "; quit"
@@ -154,6 +161,28 @@ func BenchmarkLog(b *testing.B) {
 				var peak float64
 				for b.Loop() {
 					peak = max(peak, runTTT(b, binary, variant.configDir, path, openScript))
+				}
+				b.ReportMetric(peak, "peak-RSS-B")
+			})
+		}
+	}
+	logSizes := append([]int(nil), sizes...)
+	if !testing.Short() {
+		logSizes = append(logSizes, 2048)
+	}
+	for _, sizeMiB := range logSizes {
+		for _, tail := range []bool{false, true} {
+			suffix := "_log"
+			script := openScript
+			if tail {
+				suffix += "_tail"
+				script = "wait-for " + logMarker + "; key ctrl+end; quit"
+			}
+			b.Run(fmt.Sprintf("%dMiB%s", sizeMiB, suffix), func(b *testing.B) {
+				path := logFile(b, dir, sizeMiB)
+				var peak float64
+				for b.Loop() {
+					peak = max(peak, runTTT(b, binary, logConfigDir, path, script))
 				}
 				b.ReportMetric(peak, "peak-RSS-B")
 			})
