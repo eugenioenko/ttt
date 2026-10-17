@@ -42,6 +42,34 @@ describe("BUG-010: search matches go stale after buffer edits", () => {
     // line index, now "beta" — the marker produces "Zbeta".
     expect(readFile(file)).toMatch(/^Z.*alpha/m);
   });
+
+  it("find-next after an edit with the find bar closed lands on a matching line", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "closed-stale.txt", "one\ntwo\nfoo\nfour\nfive\nfoo\n");
+
+    tui.start(file);
+    tui.waitFor("foo");
+
+    tui.press("ctrl+f");
+    tui.type("foo");
+    tui.press("escape");
+    // Closing the bar clears highlights, so this F3 recomputes and caches the
+    // matches. The following edit must not leave that cache in place.
+    tui.press("f3");
+    tui.press("ctrl+home");
+    tui.press("enter");
+    tui.press("enter");
+    tui.press("f3");
+    tui.press("home");
+    tui.type("Z");
+
+    tui.press("ctrl+s");
+    tui.run();
+
+    // Buggy behavior: the cached matches still point at the old lines, so
+    // f3 lands on "one" and the marker produces "Zone".
+    expect(readFile(file)).toMatch(/^Zfoo/m);
+  });
 });
 
 describe("BUG-011: Replace All ignores case-sensitive toggle", () => {
