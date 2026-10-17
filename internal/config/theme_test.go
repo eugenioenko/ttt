@@ -526,3 +526,17 @@ func TestBundledThemesResolveEveryFileIconColor(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveColorsDerivesHighlightStyles(t *testing.T) {
+	theme := DefaultTheme()
+	if err := json.Unmarshal([]byte(`{"default":{"fg":"#ffffff","bg":"#000000"},"diff":{"gutterBookmark":{"fg":"#6464c8"}},"editor":{"highlightStrong":{"bg":"#123456"}}}`), &theme); err != nil {
+		t.Fatal(err)
+	}
+	theme.ResolveColors()
+	if got := theme.Editor.Highlight.Bg; got != "#0f0f1e" {
+		t.Errorf("highlight bg = %q, want the default bg mixed toward the bookmark color", got)
+	}
+	if got := theme.Editor.HighlightStrong.Bg; got != "#123456" {
+		t.Errorf("highlightStrong bg = %q, want the explicit value", got)
+	}
+}

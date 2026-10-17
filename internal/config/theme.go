@@ -79,6 +79,10 @@ type EditorStyles struct {
 	BracketMatch  StyleDef         `json:"bracketMatch"`
 	BracketColors []string         `json:"bracketColors,omitempty"`
 	Diagnostics   DiagnosticStyles `json:"diagnostics"`
+	// Highlight and HighlightStrong are the backgrounds plugins decorate
+	// lines and text with.
+	Highlight       StyleDef `json:"highlight,omitempty"`
+	HighlightStrong StyleDef `json:"highlightStrong,omitempty"`
 }
 
 type DiffStyles struct {
@@ -427,6 +431,8 @@ func (t *ThemeConfig) ResolveColors() {
 	t.Diff.GutterAdded.Fg = contrastSafeForeground(t.Diff.GutterAdded.Fg, t.Diff.Added.Bg, t.Default.Fg)
 	t.Diff.GutterDeleted.Fg = contrastSafeForeground(t.Diff.GutterDeleted.Fg, t.Diff.Deleted.Bg, t.Default.Fg)
 	fillFg(&t.Diff.GutterBookmark, "#3794ff")
+	fillBg(&t.Editor.Highlight, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.15, t.Editor.ActiveLine.Bg))
+	fillBg(&t.Editor.HighlightStrong, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.30, t.Editor.ActiveLine.Bg))
 	fillFg(&t.Success, "#73c991")
 	fillFg(&t.Danger, "#f14c4c")
 	fillFg(&t.Warning, "#e2c08d")
@@ -550,6 +556,21 @@ func formatThemeRGB(color themeRGB) string {
 // stagedFadeAmount blends a status color toward the background to fake a
 // dimmed variant, since terminals don't support real alpha/opacity.
 const stagedFadeAmount = 0.45
+
+// mixThemeColor moves base toward accent by amount, or returns fallback when
+// either color is not #rrggbb.
+func mixThemeColor(base, accent string, amount float64, fallback string) string {
+	b, bOK := parseThemeRGB(base)
+	a, aOK := parseThemeRGB(accent)
+	if !bOK || !aOK {
+		return fallback
+	}
+	return formatThemeRGB(themeRGB{
+		r: b.r + (a.r-b.r)*amount,
+		g: b.g + (a.g-b.g)*amount,
+		b: b.b + (a.b-b.b)*amount,
+	})
+}
 
 func fadeStyleDef(base StyleDef, bg string) StyleDef {
 	faded := base

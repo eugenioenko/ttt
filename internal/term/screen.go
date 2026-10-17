@@ -106,6 +106,8 @@ const (
 	StyleScrollMarkDeleted
 	StyleScrollbarFill
 	StyleScrollbarThumbFill
+	StyleHighlight
+	StyleHighlightStrong
 	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
 	// tokenColors fill; see TokenStyle.
 	styleTokenBase
