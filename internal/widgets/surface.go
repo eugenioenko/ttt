@@ -119,6 +119,13 @@ type HeightForWidther interface {
 	HeightForWidth(w int) int
 }
 
+// WidthSizer is implemented by widgets with a fixed height that depends on
+// the width they are laid out at. Layouts that know the width ask
+// HeightAtWidth before Height.
+type WidthSizer interface {
+	HeightAtWidth(w int) int
+}
+
 // ContentHeighter reports the natural content height of a grow widget inside a scroll view.
 type ContentHeighter interface {
 	ContentHeight() int

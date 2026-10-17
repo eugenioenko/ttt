@@ -35,8 +35,14 @@ func (v *VStackWidget) Height() int {
 }
 func (v *VStackWidget) Width() int { return 0 }
 
-// measureChild: fixed height, then HeightForWidth, then (MeasureGrow) content height.
+// measureChild: width-dependent height, fixed height, then HeightForWidth, then
+// (MeasureGrow) content height.
 func (v *VStackWidget) measureChild(child Widget, w int) int {
+	if ws, ok := child.(WidthSizer); ok {
+		if ch := ws.HeightAtWidth(w); ch > 0 {
+			return ch
+		}
+	}
 	ch := child.Height()
 	if ch == 0 {
 		if hfw, ok := child.(HeightForWidther); ok {
@@ -49,6 +55,15 @@ func (v *VStackWidget) measureChild(child Widget, w int) int {
 		}
 	}
 	return ch
+}
+
+// HeightAtWidth measures a fixed-height stack at width w, so the width
+// passes down to children whose height depends on it.
+func (v *VStackWidget) HeightAtWidth(w int) int {
+	if v.Height() == 0 {
+		return 0
+	}
+	return v.HeightForWidth(w - v.BoxOverheadW())
 }
 
 func (v *VStackWidget) HeightForWidth(w int) int {

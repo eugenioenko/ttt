@@ -16,6 +16,11 @@ type InputConfig struct {
 	Placeholder string     `json:"placeholder,omitempty"`
 	Bordered    bool       `json:"bordered"`
 	Style       term.Style `json:"-"`
+	// Wrap lays the text out on as many rows as it needs, up to MaxRows
+	// (default 5), then scrolls. Shift+Enter, Alt+Enter or Ctrl+J adds a line
+	// break.
+	Wrap    bool `json:"-"`
+	MaxRows int  `json:"-"`
 
 	OnChange func(text string)
 	OnSubmit func(text string)
@@ -33,6 +38,13 @@ type InputWidget struct {
 	lastClickTime int64
 	lastClickPos  int
 	clickCount    int
+	// wrapWidth is the text width of the last render, which a wrapping input
+	// lays out at; rowOffset is its first visible row.
+	wrapWidth int
+	rowOffset int
+	// goalCol is the column Up and Down aim for, kept across rows shorter
+	// than it; -1 when the cursor last moved some other way.
+	goalCol int
 }
 
 // DefaultPrefix is the chevron shown on a borderless input when the caller
@@ -46,11 +58,22 @@ func NewInputWidget(config InputConfig) *InputWidget {
 	return &InputWidget{
 		Config:   config,
 		selStart: -1,
+		goalCol:  -1,
 	}
 }
 
+// Height lays a wrapping input out at the width of its last render;
+// HeightAtWidth gives the height for the width a layout is about to use.
 func (inp *InputWidget) Height() int {
-	h := 1 + inp.BoxOverheadH()
+	rows := 1
+	if inp.Config.Wrap && inp.wrapWidth > 0 {
+		rows = inp.visibleRows(inp.wrapWidth)
+	}
+	return inp.heightFor(rows)
+}
+
+func (inp *InputWidget) heightFor(rows int) int {
+	h := rows + inp.BoxOverheadH()
 	if inp.Config.Bordered {
 		h += 2
 	}
@@ -76,6 +99,10 @@ func (inp *InputWidget) CursorPosition() (int, int, bool) {
 	} else {
 		textX += textwidth.String(inp.Config.Prefix)
 	}
+	if inp.Config.Wrap {
+		col, row := inp.wrappedCursor()
+		return textX + col, textY + row, true
+	}
 	return textX + inp.visualOffset([]rune(inp.text), inp.cursorPos), textY, true
 }
 
@@ -89,6 +116,7 @@ func (inp *InputWidget) visualOffset(runes []rune, pos int) int {
 
 func (inp *InputWidget) Text() string { return inp.text }
 func (inp *InputWidget) SetText(t string) {
+	inp.goalCol = -1
 	inp.text = t
 	inp.cursorPos = len([]rune(t))
 	inp.clearSel()
@@ -106,15 +134,24 @@ func (inp *InputWidget) PasteText(text string) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	text = strings.TrimRight(text, "\n")
-	text = strings.ReplaceAll(text, "\n", " ")
+	if !inp.Config.Wrap {
+		text = strings.ReplaceAll(text, "\n", " ")
+	}
 	if text == "" {
 		return
 	}
+	inp.insertRunes([]rune(text))
+}
+
+func (inp *InputWidget) insertRunes(text []rune) {
+	inp.goalCol = -1
+	if inp.hasSelection() {
+		inp.deleteSelection()
+	}
 	runes := []rune(inp.text)
-	pasted := []rune(text)
-	runes = append(runes[:inp.cursorPos], append(pasted, runes[inp.cursorPos:]...)...)
+	runes = append(runes[:inp.cursorPos], append(text, runes[inp.cursorPos:]...)...)
 	inp.text = string(runes)
-	inp.cursorPos += len(pasted)
+	inp.cursorPos += len(text)
 	inp.notify()
 }
 
@@ -122,6 +159,8 @@ func (inp *InputWidget) Clear() {
 	inp.text = ""
 	inp.cursorPos = 0
 	inp.scrollOffset = 0
+	inp.rowOffset = 0
+	inp.goalCol = -1
 	inp.clearSel()
 	inp.notify()
 }
@@ -149,12 +188,16 @@ func (inp *InputWidget) renderBordered(surface Surface) {
 
 	inner.DrawBorder(0, 0, w, h, bs, borderStyle)
 
+	if inp.Config.Wrap {
+		inp.renderWrapped(inner, 2, 1, w-4, h-2)
+		return
+	}
 	inp.renderText(inner, 2, 1, w-4)
 }
 
 func (inp *InputWidget) renderBorderless(surface Surface) {
 	inner := inp.RenderBox(surface)
-	w, _ := inner.Size()
+	w, h := inner.Size()
 	if w <= 0 {
 		return
 	}
@@ -175,6 +218,10 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 		px += textwidth.Rune(ch)
 	}
 
+	if inp.Config.Wrap {
+		inp.renderWrapped(inner, prefixW, 0, w-prefixW, h)
+		return
+	}
 	inp.renderText(inner, prefixW, 0, w-prefixW)
 }
 
@@ -309,20 +356,21 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 	}
 	shift := ev.Modifiers()&tcell.ModShift != 0
 	ctrl := ev.Modifiers()&tcell.ModCtrl != 0
+	if inp.Config.Wrap {
+		if k := ev.Key(); k != tcell.KeyUp && k != tcell.KeyDown {
+			inp.goalCol = -1
+		}
+		if res, handled := inp.handleWrappedKey(ev); handled {
+			return res
+		}
+	}
 
 	switch ev.Key() {
 	case tcell.KeyRune:
 		if ev.Modifiers()&^tcell.ModShift != 0 {
 			return EventIgnored
 		}
-		if inp.hasSelection() {
-			inp.deleteSelection()
-		}
-		runes := []rune(inp.text)
-		runes = append(runes[:inp.cursorPos], append([]rune{term.KeyRune(ev)}, runes[inp.cursorPos:]...)...)
-		inp.text = string(runes)
-		inp.cursorPos++
-		inp.notify()
+		inp.insertRunes([]rune{term.KeyRune(ev)})
 		return EventConsumed
 	case tcell.KeyEnter:
 		if !shift && inp.Config.OnSubmit != nil {
@@ -446,6 +494,14 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	}
 	runes := []rune(inp.text)
 	pos := inp.posAtColumn(runes, mx-textX)
+	if inp.Config.Wrap {
+		inp.goalCol = -1
+		textY := r.Y + inp.Box.MarginTop + inp.Box.PaddingTop
+		if inp.Config.Bordered {
+			textY++
+		}
+		pos = inp.wrappedPosAt(mx-textX, my-textY)
+	}
 
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < 400 && pos == inp.lastClickPos {

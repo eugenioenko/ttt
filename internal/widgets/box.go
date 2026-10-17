@@ -57,6 +57,19 @@ func (b *BoxWidget) Height() int {
 	return 0
 }
 
+// HeightAtWidth passes the width down to a child whose height depends on it.
+func (b *BoxWidget) HeightAtWidth(w int) int {
+	if b.FixedHeight > 0 {
+		return 0
+	}
+	if ws, ok := b.Child.(WidthSizer); ok {
+		if ch := ws.HeightAtWidth(w - b.BoxOverheadW()); ch > 0 {
+			return ch + b.BoxOverheadH()
+		}
+	}
+	return 0
+}
+
 func (b *BoxWidget) Width() int {
 	if b.FixedWidth > 0 {
 		return b.FixedWidth
