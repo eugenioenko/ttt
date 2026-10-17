@@ -22,6 +22,7 @@ type TabbedPanel struct {
 
 	panels         []panelEntry
 	preferredOrder []string
+	flagged        map[string]bool
 }
 
 func NewTabbedPanel() TabbedPanel {
@@ -170,7 +171,9 @@ func (tp *TabbedPanel) RemovePanel(id string) {
 					tp.ActivePanel = ""
 				}
 			}
+			delete(tp.flagged, id)
 			tp.syncTabs()
+			tp.unflag(tp.ActivePanel)
 			return
 		}
 	}
@@ -184,6 +187,7 @@ func (tp *TabbedPanel) SetActivePanel(id string) {
 			}
 			tp.ActivePanel = id
 			tp.syncTabs()
+			tp.unflag(id)
 			if tp.OnPanelChange != nil {
 				tp.OnPanelChange(id)
 			}
@@ -286,6 +290,27 @@ func (tp *TabbedPanel) SetPanelDirty(id string, dirty bool) {
 	tp.Tabs.SetDirty(id, dirty)
 }
 
+// FlagPanel marks an inactive panel's tab until the panel is next shown.
+func (tp *TabbedPanel) FlagPanel(id string) {
+	if id == tp.ActivePanel || !tp.HasPanel(id) {
+		return
+	}
+	if tp.flagged == nil {
+		tp.flagged = map[string]bool{}
+	}
+	tp.flagged[id] = true
+	tp.Tabs.SetDirty(id, true)
+	tp.syncTabs()
+}
+
+func (tp *TabbedPanel) unflag(id string) {
+	if tp.flagged[id] {
+		delete(tp.flagged, id)
+		tp.Tabs.SetDirty(id, false)
+		tp.syncTabs()
+	}
+}
+
 func (tp *TabbedPanel) HiddenTabs() ([]string, []string) {
 	var ids, titles []string
 	for _, idx := range tp.Tabs.HiddenTabs() {
@@ -307,10 +332,11 @@ func (tp *TabbedPanel) syncTabs() {
 	items := make([]widgets.TabItem, len(tp.panels))
 	for i, p := range tp.panels {
 		items[i] = widgets.TabItem{
-			ID:     p.ID,
-			Label:  p.Title,
-			Active: p.ID == tp.ActivePanel,
-			Dirty:  dirty[p.ID],
+			ID:      p.ID,
+			Label:   p.Title,
+			Active:  p.ID == tp.ActivePanel,
+			Dirty:   dirty[p.ID],
+			Flagged: tp.flagged[p.ID],
 		}
 	}
 	tp.Tabs.SetItems(items)

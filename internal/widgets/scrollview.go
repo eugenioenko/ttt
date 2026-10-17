@@ -8,6 +8,11 @@ import (
 type ScrollViewWidget struct {
 	BaseWidget
 	Child ScrollableWidget
+	// Follow keeps the view at the end of the content as it grows, unless
+	// the user has scrolled away from the end.
+	Follow bool
+
+	followEnd int
 
 	scrollX                   int
 	scrollY                   int
@@ -116,7 +121,11 @@ func (sv *ScrollViewWidget) Render(surface Surface) {
 	sv.lastContentH = contentH
 	sv.lastViewW = viewW
 	sv.lastViewH = viewH
+	if sv.Follow && sv.scrollY >= sv.followEnd {
+		sv.scrollY = max(contentH-viewH, 0)
+	}
 	sv.clamp(contentW, contentH, viewW, viewH)
+	sv.followEnd = max(contentH-viewH, 0)
 
 	virt := newVirtualSurface(contentW, contentH)
 	// Children keep screen-space rects: content origin = viewport origin minus scroll offset.

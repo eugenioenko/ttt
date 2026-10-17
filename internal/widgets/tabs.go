@@ -12,6 +12,8 @@ type TabItem struct {
 	Label  string `json:"label"`
 	Active bool   `json:"-"`
 	Dirty  bool   `json:"-"`
+	// Flagged marks the overflow chevron while the tab is hidden in it.
+	Flagged bool `json:"-"`
 }
 
 type TabAction struct {
@@ -232,7 +234,14 @@ func (t *TabsWidget) Render(surface Surface) {
 		if t.focused && t.isHidden(t.selected) {
 			style = term.StyleSelectedTab
 		}
-		inner.SetCell(ox, 0, term.Cell{Ch: ' ', Style: style})
+		mark := term.Cell{Ch: ' ', Style: style}
+		for _, h := range t.hiddenTabs {
+			if h < len(t.Config.Items) && t.Config.Items[h].Flagged {
+				mark = term.Cell{Ch: icons.Rune(icons.Dirty), Style: term.StyleWarning}
+				break
+			}
+		}
+		inner.SetCell(ox, 0, mark)
 		inner.SetCell(ox+1, 0, term.Cell{Ch: '»', Style: style})
 		inner.SetCell(ox+2, 0, term.Cell{Ch: ' ', Style: style})
 	}

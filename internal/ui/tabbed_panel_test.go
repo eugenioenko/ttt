@@ -87,3 +87,34 @@ func TestTabbedPanelLateDuplicatePreservesPersistedOrder(t *testing.T) {
 		t.Fatal("late duplicate changed active plugin identity")
 	}
 }
+
+func TestTabbedPanelFlagLastsUntilThePanelIsShown(t *testing.T) {
+	tp := NewTabbedPanel()
+	tp.InitTabClick()
+	for _, id := range []string{"terminal", "plugin.a", "changes"} {
+		tp.AddPanel(id, id, &mockWidget{})
+	}
+	tp.SetActivePanel("terminal")
+	dirty := func(id string) bool {
+		for _, item := range tp.Tabs.Config.Items {
+			if item.ID == id {
+				return item.Dirty
+			}
+		}
+		return false
+	}
+	tp.SetPanelDirty("changes", true)
+	tp.FlagPanel("plugin.a")
+	tp.FlagPanel("terminal")
+	if !dirty("plugin.a") || dirty("terminal") {
+		t.Fatalf("flags: plugin.a %v terminal %v, want only the inactive panel flagged", dirty("plugin.a"), dirty("terminal"))
+	}
+	tp.SetActivePanel("plugin.a")
+	if dirty("plugin.a") {
+		t.Fatal("flag stayed after the panel was shown")
+	}
+	tp.SetActivePanel("changes")
+	if !dirty("changes") {
+		t.Fatal("showing a panel cleared a dirty mark that was not a flag")
+	}
+}

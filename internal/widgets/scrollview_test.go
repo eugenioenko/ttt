@@ -529,3 +529,34 @@ func TestScrollViewHorizontalDragReachesExactEnd(t *testing.T) {
 		t.Fatalf("horizontal release result = %v, want consumed", got)
 	}
 }
+
+func TestScrollViewFollowKeepsTheEndInView(t *testing.T) {
+	child := newScrollTestChild(15, 30)
+	sv := NewScrollViewWidget(child)
+	sv.Follow = true
+	renderWidget(sv, 0, 0, 20, 10)
+	if sv.scrollY != 20 {
+		t.Fatalf("scrollY = %d, want 20 (the end)", sv.scrollY)
+	}
+	child.contentH = 40
+	renderWidget(sv, 0, 0, 20, 10)
+	if sv.scrollY != 30 {
+		t.Fatalf("scrollY = %d after growth, want 30", sv.scrollY)
+	}
+
+	sv.HandleEvent(tcell.NewEventMouse(5, 5, tcell.WheelUp, tcell.ModNone))
+	child.contentH = 50
+	renderWidget(sv, 0, 0, 20, 10)
+	if sv.scrollY != 27 {
+		t.Fatalf("scrollY = %d, want 27: scrolling up stops following", sv.scrollY)
+	}
+
+	for range 10 {
+		sv.HandleEvent(tcell.NewEventMouse(5, 5, tcell.WheelDown, tcell.ModNone))
+	}
+	child.contentH = 60
+	renderWidget(sv, 0, 0, 20, 10)
+	if sv.scrollY != 50 {
+		t.Fatalf("scrollY = %d, want 50: back at the end it follows again", sv.scrollY)
+	}
+}

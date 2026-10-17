@@ -200,6 +200,18 @@ func (fm *FocusManager) firstVisibleHit(mx, my int) int {
 	return -1
 }
 
+// Focus moves focus to w and reports whether w is one of the collected
+// widgets.
+func (fm *FocusManager) Focus(w Widget) bool {
+	for i, item := range fm.items {
+		if Widget(item) == w {
+			fm.setFocus(i)
+			return true
+		}
+	}
+	return false
+}
+
 func (fm *FocusManager) setFocus(idx int) {
 	if fm.focused >= 0 && fm.focused < len(fm.items) {
 		fm.items[fm.focused].SetFocused(false)

@@ -258,3 +258,30 @@ func TestTabsHiddenTabsNotClickable(t *testing.T) {
 		}
 	}
 }
+
+func TestOverflowChevronMarksOnlyAFlaggedHiddenTab(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		item TabItem
+		want bool
+	}{
+		{"dirty", TabItem{ID: "changes", Label: "Changes", Dirty: true}, false},
+		{"flagged", TabItem{ID: "plugin.a", Label: "Chat", Dirty: true, Flagged: true}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tw := NewTabsWidget(TabsConfig{Items: []TabItem{
+				{ID: "explorer", Label: "Explore", Active: true},
+				{ID: "search", Label: "Find"},
+				tc.item,
+			}})
+			s := renderWidget(tw, 0, 0, 20, 1)
+			if tw.overSpan == [2]int{} {
+				t.Fatalf("no overflow at this width: %q", tabsRowText(s, 0))
+			}
+			marked := s.cells[0][tw.overSpan[0]].Ch != ' '
+			if marked != tc.want {
+				t.Fatalf("chevron marked = %v, want %v: %q", marked, tc.want, tabsRowText(s, 0))
+			}
+		})
+	}
+}
