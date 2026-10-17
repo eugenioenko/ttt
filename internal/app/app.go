@@ -803,7 +803,36 @@ func (a *App) Paste() {
 			return
 		}
 	}
+	if inp := a.focusedWidgetInput(); inp != nil {
+		inp.PasteText(clipboard.Get())
+		return
+	}
 	a.EditorGroup.Paste()
+}
+
+// widgetInputHolder is implemented by widgets that keep their own focus and
+// may hold a focused widgets.InputWidget, such as plugin panels.
+type widgetInputHolder interface {
+	FocusedInput() *widgets.InputWidget
+}
+
+// focusedWidgetInput returns the widgets.InputWidget with keyboard focus
+// inside a focused widget adapter or plugin editor tab, or nil.
+func (a *App) focusedWidgetInput() *widgets.InputWidget {
+	var w widgets.Widget
+	switch f := a.Root.Focused.(type) {
+	case *ui.WidgetAdapter:
+		w = f.FocusedWidget()
+	case *ui.EditorGroupWidget:
+		w = f.TabContent(f.ActiveTabIndex())
+	}
+	switch w := w.(type) {
+	case *widgets.InputWidget:
+		return w
+	case widgetInputHolder:
+		return w.FocusedInput()
+	}
+	return nil
 }
 
 func (a *App) PasteText(text string) {
@@ -817,11 +846,9 @@ func (a *App) PasteText(text string) {
 			return
 		}
 	}
-	if adapter, ok := a.Root.Focused.(*ui.WidgetAdapter); ok {
-		if inp, ok := adapter.FocusedWidget().(*widgets.InputWidget); ok {
-			inp.PasteText(text)
-			return
-		}
+	if inp := a.focusedWidgetInput(); inp != nil {
+		inp.PasteText(text)
+		return
 	}
 	a.EditorGroup.PasteText(text)
 }
