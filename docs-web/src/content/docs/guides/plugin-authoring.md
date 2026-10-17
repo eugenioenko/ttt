@@ -1802,6 +1802,64 @@ uninstalled.
 Clears this plugin's diagnostics. With a `path`, clears just that file; with no
 argument, clears every file.
 
+## Decorations
+
+Plugins can tint whole lines and highlight text with a background color through
+the `ttt.decorations` module, for coverage, review comments, matches the plugin
+found, or what it is talking about. They do not touch the user's search or
+selection. Requires the `editor.decorations` permission.
+
+```lua
+local deco = require("ttt.decorations")
+
+deco.set("/abs/path/to/main.go", {
+  { line = 10, end_line = 14 },                                 -- tint lines 10 to 14
+  { line = 12, col = 9, end_col = 17 },                         -- highlight text on line 12
+  { line = 20, col = 5, end_line = 22, end_col = 2, style = "highlight" },
+})
+
+deco.clear("/abs/path/to/main.go")   -- clear this plugin's decorations for one file
+deco.clear()                         -- clear all of this plugin's decorations
+```
+
+### `decorations.set(path, items)`
+
+Replaces this plugin's decorations for `path` with `items`. An item without
+`col` tints whole lines; an item with `col` and `end_col` highlights text.
+
+| Field      | Type   | Required | Description                                                          |
+|------------|--------|----------|----------------------------------------------------------------------|
+| `line`     | number | yes      | 1-based start line.                                                  |
+| `end_line` | number | no       | 1-based end line. Defaults to `line`; `math.huge` reaches the end of the file. |
+| `col`      | number | no       | 1-based start **rune column** of a text highlight.                   |
+| `end_col`  | number | with `col` | 1-based end column on `end_line`, exclusive.                       |
+| `style`    | string | no       | A named style whose background is used. Defaults to `highlight` for lines and `highlight_strong` for text. |
+
+Lines and columns are whole numbers from 1. An invalid item (no `line`,
+`end_line` before `line`, `col` without `end_col`, an empty text range, or an
+unknown style) raises an error and sets nothing. Lines past the end of the file
+are ignored.
+
+The file does not have to be open; its decorations show when it opens, and
+they follow it when it is renamed or saved under a new name. They move with
+edits. A text highlight on a line that is edited is removed, since its columns
+no longer match, and a tint goes with a deleted line. All of the file's
+decorations are removed when its tab is closed with unsaved edits, or when a
+single action makes too many edits at once to follow (a multi-cursor edit of
+dozens of lines, say); set them again from `editor.change` or `file.open` if
+you need them back. A tab showing an inline diff hides them until the diff
+closes. When several plugins decorate the same text, the plugin whose name
+sorts last wins. Decorations are cleared when the plugin is disabled, reloaded
+or uninstalled.
+
+Columns are rune columns: convert `string.find` byte offsets with
+`editor.byte_to_col`, as for diagnostics.
+
+### `decorations.clear([path])`
+
+Clears this plugin's decorations. With a `path`, clears just that file; with no
+argument, clears every file.
+
 ## Bookmarks
 
 Plugins can manage gutter **bookmarks**, a per-line icon drawn left of the line
@@ -2410,6 +2468,8 @@ Named styles available for both widget and raw cell rendering. Actual colors dep
 | `italic`   | Italic text                    |
 | `code`     | Code/monospace text            |
 | `bookmark` | Gutter bookmark icon           |
+| `highlight` | Background for decorated lines |
+| `highlight_strong` | Background for highlighted text |
 | `syntax_comment`   | Syntax: comments       |
 | `syntax_string`    | Syntax: string literals |
 | `syntax_keyword`   | Syntax: keywords       |
@@ -2518,6 +2578,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `editor.write`   | boolean  | Modify editor buffers (`ttt.editor` write functions). |
 | `editor.diagnostics` | boolean | Publish editor diagnostics/squiggles via `ttt.diagnostics`. |
 | `editor.bookmarks` | boolean | Manage gutter bookmarks via `ttt.bookmarks`, and listen for the `bookmark.change` and `gutter.click` events. |
+| `editor.decorations` | boolean | Tint lines and highlight text via `ttt.decorations`. |
 | `editor.file_handlers` | boolean | Present binary file types in editor tabs via `file_handlers` in `ttt.register()`. |
 | `fs.read`        | boolean \| string[] | Read files and list directories (`ttt.fs` read functions). `true` allows the workspace; an array lists the allowed paths. See [Path scoping](#path-scoping). |
 | `fs.write`       | boolean \| string[] | Write files (`ttt.fs.write`). Scoped like `fs.read`. |

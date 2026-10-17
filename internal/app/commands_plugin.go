@@ -181,9 +181,15 @@ func (a *App) pluginUninstall() {
 	}, nil)
 }
 
+// ClearPluginSources removes the diagnostics and decorations plugin name set.
+func (a *App) ClearPluginSources(name string) {
+	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
+	a.EditorGroup.ClearDecorationsSource("plugin:" + name)
+}
+
 func (a *App) doPluginUninstall(name string) {
 	a.RemovePluginPanels(name)
-	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
+	a.ClearPluginSources(name)
 
 	if err := a.PluginManager.Uninstall(name); err != nil {
 		slog.Error("plugin uninstall", "error", err)
@@ -456,7 +462,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.PostAsync = func(result *plugin.PluginAsyncResult) {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(result))
 	}
-	diagSource := "plugin:" + p.Name
+	pluginSource := "plugin:" + p.Name
 	p.PublishDiagnostics = func(path string, items []plugin.DiagnosticItem) {
 		diags := make([]ui.Diagnostic, 0, len(items))
 		for _, it := range items {
@@ -471,14 +477,37 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				Source:    it.Source,
 			})
 		}
-		a.EditorGroup.SetDiagnosticsSource(diagSource, path, diags)
+		a.EditorGroup.SetDiagnosticsSource(pluginSource, path, diags)
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ClearDiagnostics = func(path string) {
 		if path == "" {
-			a.EditorGroup.ClearDiagnosticsSource(diagSource)
+			a.EditorGroup.ClearDiagnosticsSource(pluginSource)
 		} else {
-			a.EditorGroup.SetDiagnosticsSource(diagSource, path, nil)
+			a.EditorGroup.SetDiagnosticsSource(pluginSource, path, nil)
+		}
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+	p.SetDecorations = func(path string, items []plugin.DecorationItem) {
+		decos := make([]ui.Decoration, len(items))
+		for i, it := range items {
+			decos[i] = ui.Decoration{
+				StartLine: it.StartLine,
+				StartCol:  it.StartCol,
+				EndLine:   it.EndLine,
+				EndCol:    it.EndCol,
+				Text:      it.Text,
+				Style:     it.Style,
+			}
+		}
+		a.EditorGroup.SetDecorations(pluginSource, path, decos)
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+	p.ClearDecorations = func(path string) {
+		if path == "" {
+			a.EditorGroup.ClearDecorationsSource(pluginSource)
+		} else {
+			a.EditorGroup.SetDecorations(pluginSource, path, nil)
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
@@ -730,7 +759,7 @@ func (a *App) pluginReload() {
 
 func (a *App) doPluginReload(name string) {
 	a.RemovePluginPanels(name)
-	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
+	a.ClearPluginSources(name)
 
 	p, err := a.PluginManager.Reload(name)
 	if err != nil {

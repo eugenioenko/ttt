@@ -98,6 +98,8 @@ type Plugin struct {
 	ListCommands       func() []CommandInfo
 	PublishDiagnostics func(path string, items []DiagnosticItem)
 	ClearDiagnostics   func(path string)
+	SetDecorations     func(path string, items []DecorationItem)
+	ClearDecorations   func(path string)
 
 	SetBookmark     func(line int, icon rune, style term.Style)
 	GetBookmark     func(line int) (icon rune, style term.Style, ok bool)
@@ -155,6 +157,7 @@ func (p *Plugin) Init() error {
 	setupTTTModule(p.State, p)
 	setupEditorModule(p.State, p)
 	setupDiagnosticsModule(p.State, p)
+	setupDecorationsModule(p.State, p)
 	setupBookmarksModule(p.State, p)
 	setupFsModule(p.State, p)
 	setupSystemModule(p.State, p)
@@ -200,6 +203,7 @@ func (p *Plugin) InitFromSource(source string) error {
 	setupTTTModule(p.State, p)
 	setupEditorModule(p.State, p)
 	setupDiagnosticsModule(p.State, p)
+	setupDecorationsModule(p.State, p)
 	setupBookmarksModule(p.State, p)
 	setupFsModule(p.State, p)
 	setupSystemModule(p.State, p)
@@ -297,6 +301,8 @@ func (p *Plugin) Destroy() {
 	p.ListCommands = nil
 	p.PublishDiagnostics = nil
 	p.ClearDiagnostics = nil
+	p.SetDecorations = nil
+	p.ClearDecorations = nil
 	p.SetBookmark = nil
 	p.GetBookmark = nil
 	p.RemoveBookmark = nil

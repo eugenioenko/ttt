@@ -686,6 +686,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		"ttt":             true,
 		"ttt.editor":      true,
 		"ttt.diagnostics": true,
+		"ttt.decorations": true,
 		"ttt.bookmarks":   true,
 		"ttt.fs":          true,
 		"ttt.system":      true,

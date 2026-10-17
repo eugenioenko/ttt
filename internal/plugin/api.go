@@ -17,6 +17,19 @@ type DiagnosticItem struct {
 	Source    string
 }
 
+// DecorationItem is a line tint or text highlight set by a plugin, in 0-based
+// lines and rune columns. Without Text it tints whole lines
+// StartLine..EndLine; with Text it highlights from StartCol on StartLine to
+// EndCol (exclusive) on EndLine.
+type DecorationItem struct {
+	StartLine int
+	StartCol  int
+	EndLine   int
+	EndCol    int
+	Text      bool
+	Style     term.Style
+}
+
 // BookmarkItem is one entry of a bulk bookmarks.set_all() call.
 type BookmarkItem struct {
 	Line  int

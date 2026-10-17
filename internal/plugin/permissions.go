@@ -172,6 +172,7 @@ type PermissionSet struct {
 	EditorWrite       bool        `json:"editor.write,omitempty"`
 	EditorDiagnostics bool        `json:"editor.diagnostics,omitempty"`
 	EditorBookmarks   bool        `json:"editor.bookmarks,omitempty"`
+	EditorDecorations bool        `json:"editor.decorations,omitempty"`
 	FileHandlers      bool        `json:"editor.file_handlers,omitempty"`
 	FsRead            FsAccess    `json:"fs.read,omitzero"`
 	FsWrite           FsAccess    `json:"fs.write,omitzero"`
@@ -214,6 +215,7 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	check("editor.write", granted.EditorWrite, requested.EditorWrite)
 	check("editor.diagnostics", granted.EditorDiagnostics, requested.EditorDiagnostics)
 	check("editor.bookmarks", granted.EditorBookmarks, requested.EditorBookmarks)
+	check("editor.decorations", granted.EditorDecorations, requested.EditorDecorations)
 	check("editor.file_handlers", granted.FileHandlers, requested.FileHandlers)
 	checkFs := func(name string, g, r FsAccess) {
 		for _, p := range r.Paths {
@@ -291,6 +293,8 @@ func (ps PermissionSet) Check(perm string) error {
 		allowed = ps.EditorDiagnostics
 	case "editor.bookmarks":
 		allowed = ps.EditorBookmarks
+	case "editor.decorations":
+		allowed = ps.EditorDecorations
 	case "editor.file_handlers":
 		allowed = ps.FileHandlers
 	case "fs.read":
@@ -372,6 +376,7 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 	add("Write editor", ps.EditorWrite)
 	add("Editor diagnostics", ps.EditorDiagnostics)
 	add("Editor bookmarks", ps.EditorBookmarks)
+	add("Editor decorations", ps.EditorDecorations)
 	add("Handle file types", ps.FileHandlers)
 	for _, p := range ps.FsRead.Paths {
 		entries = append(entries, PermissionDiffEntry{Name: "Read files", Value: fsPathLabel(p)})

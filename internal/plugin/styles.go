@@ -22,6 +22,8 @@ var pluginStyles = []styleEntry{
 	{"italic", term.StyleHoverItalic},
 	{"code", term.StyleHoverCode},
 	{"bookmark", term.StyleGutterBookmark},
+	{"highlight", term.StyleHighlight},
+	{"highlight_strong", term.StyleHighlightStrong},
 	{"syntax_comment", term.StyleSyntaxComment},
 	{"syntax_string", term.StyleSyntaxString},
 	{"syntax_keyword", term.StyleSyntaxKeyword},

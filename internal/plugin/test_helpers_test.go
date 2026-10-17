@@ -15,6 +15,7 @@ func newTestPluginBase(perms PermissionSet) (*Plugin, func()) {
 	setupTTTModule(L, p)
 	setupEditorModule(L, p)
 	setupDiagnosticsModule(L, p)
+	setupDecorationsModule(L, p)
 	setupFsModule(L, p)
 	setupSystemModule(L, p)
 	setupNetModule(L, p)
