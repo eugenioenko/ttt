@@ -113,3 +113,28 @@ func TestSearchReplaceAllSkipsUnsavedAndChangedFiles(t *testing.T) {
 		t.Errorf("unsaved edits were discarded: buffer %q", editorText(h))
 	}
 }
+
+func TestSearchReplaceKeepsMissingFinalNewline(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	one := filepath.Join(h.dir, "one.txt")
+	all := filepath.Join(h.dir, "all.txt")
+	for _, path := range []string{one, all} {
+		if err := os.WriteFile(path, []byte("alpha\nfoo"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h.app.ApplySearchReplace(one, fooMatch(one), "bar", ui.SearchOptions{})
+	h.app.ApplySearchReplaceAll(map[string][]ui.SearchMatch{all: fooMatch(all)}, "bar", ui.SearchOptions{})
+	h.redraw()
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+
+	for _, path := range []string{one, all} {
+		if got := readFile(t, path); got != "alpha\nbar" {
+			t.Errorf("%s = %q, want %q", filepath.Base(path), got, "alpha\nbar")
+		}
+	}
+}

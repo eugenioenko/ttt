@@ -216,6 +216,15 @@ func staleSearchMatches(lines []string, matches []ui.SearchMatch) bool {
 	return false
 }
 
+// joinReplacedLines ends the text with a newline only if the original did.
+func joinReplacedLines(lines []string, original []byte) []byte {
+	text := strings.Join(lines, "\n")
+	if strings.HasSuffix(string(original), "\n") {
+		text += "\n"
+	}
+	return []byte(text)
+}
+
 func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, replacement string, opts ui.SearchOptions) {
 	if a.EditorGroup.IsDirtyPath(filePath) {
 		a.StatusWarn(filepath.Base(filePath) + " has unsaved changes; save it before replacing")
@@ -236,7 +245,7 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 		return
 	}
 	newLines := ui.ApplyReplacements(lines, matches, replacement, opts)
-	if err := os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filePath, joinReplacedLines(newLines, data), 0644); err != nil {
 		a.StatusWarn("Cannot write file: " + err.Error())
 		return
 	}
@@ -278,7 +287,7 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 					continue
 				}
 				newLines := ui.ApplyReplacements(lines, matches, replacement, opts)
-				if err := os.WriteFile(filePath, []byte(strings.Join(newLines, "\n")+"\n"), 0644); err != nil {
+				if err := os.WriteFile(filePath, joinReplacedLines(newLines, data), 0644); err != nil {
 					continue
 				}
 				replacedMatches += len(matches)
