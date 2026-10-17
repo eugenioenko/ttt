@@ -499,6 +499,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				EndLine:   it.EndLine,
 				EndCol:    it.EndCol,
 				Text:      it.Text,
+				Note:      it.Note,
 				Style:     it.Style,
 			}
 		}

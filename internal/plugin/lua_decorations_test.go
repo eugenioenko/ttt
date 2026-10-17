@@ -29,6 +29,7 @@ func TestDecorationsSet(t *testing.T) {
 			{ line = 10, end_line = math.huge },
 			{ line = 11, style = "hide" },
 			{ line = 12, col = 2, end_col = 5, style = "hide" },
+			{ line = 13, note = "Parsed once." },
 		})
 	`)
 	if err != nil {
@@ -45,6 +46,7 @@ func TestDecorationsSet(t *testing.T) {
 		{StartLine: 9, EndLine: math.MaxInt32 - 1, Style: term.StyleHighlight},
 		{StartLine: 10, EndLine: 10, Style: term.StyleHide},
 		{StartLine: 11, StartCol: 1, EndLine: 11, EndCol: 4, Text: true, Style: term.StyleHide},
+		{StartLine: 12, EndLine: 12, Note: "Parsed once.", Style: term.StyleNote},
 	}
 	if !reflect.DeepEqual(gotItems, want) {
 		t.Errorf("items =\n%+v\nwant\n%+v", gotItems, want)
@@ -60,6 +62,10 @@ func TestDecorationsSetRejectsBadItems(t *testing.T) {
 		"{ { line = 1, col = 2 } }":                            "col and end_col go together",
 		"{ { line = 1, col = 4, end_col = 4 } }":               "text range is empty",
 		"{ { line = 1, style = \"no_such\" } }":                "unknown style no_such",
+		"{ { line = 1, note = \" \" } }":                       "note must be text",
+		"{ { line = 1, note = \"x\", end_line = 2 } }":         "a note takes only line and style, not end_line",
+		"{ { line = 1, note = \"x\", style = \"hide\" } }":     "a note can't use style hide",
+		"{ { line = 1, note = \"x\", style = \"reverse\" } }":  "a note can't use style reverse",
 		"{ { line = 1 }, \"not a table\" }":                    "items must be tables",
 		"{ { line = 1 }, { line = 2, col = 0, end_col = 3 } }": "item 2: col must be a whole number >= 1",
 	}

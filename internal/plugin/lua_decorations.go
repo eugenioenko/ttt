@@ -3,6 +3,7 @@ package plugin
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	lua "github.com/yuin/gopher-lua"
 
@@ -57,9 +58,10 @@ func decorationsClear(p *Plugin) lua.LGFunction {
 	}
 }
 
-// luaTableToDecorationItem converts a 1-based Lua item. Without col it tints
-// lines line..end_line; with col it highlights text up to end_col (exclusive)
-// on end_line. end_line may be math.huge for the end of the file.
+// luaTableToDecorationItem converts a 1-based Lua item. With note it draws
+// the note under line. Otherwise, without col it tints lines line..end_line;
+// with col it highlights text up to end_col (exclusive) on end_line. end_line
+// may be math.huge for the end of the file.
 func luaTableToDecorationItem(L *lua.LState, tbl *lua.LTable, i int) DecorationItem {
 	field := func(name string) (int, bool) {
 		v := L.GetField(tbl, name)
@@ -76,6 +78,22 @@ func luaTableToDecorationItem(L *lua.LState, tbl *lua.LTable, i int) DecorationI
 	line, ok := field("line")
 	if !ok {
 		L.ArgError(2, fmt.Sprintf("item %d: line is required", i))
+	}
+	if v := L.GetField(tbl, "note"); v != lua.LNil {
+		item := DecorationItem{StartLine: line - 1, EndLine: line - 1, Note: v.String(), Style: term.StyleNote}
+		if _, ok := v.(lua.LString); !ok || strings.TrimSpace(item.Note) == "" {
+			L.ArgError(2, fmt.Sprintf("item %d: note must be text", i))
+		}
+		for _, name := range []string{"end_line", "col", "end_col"} {
+			if L.GetField(tbl, name) != lua.LNil {
+				L.ArgError(2, fmt.Sprintf("item %d: a note takes only line and style, not %s", i, name))
+			}
+		}
+		item.Style = luaDecorationStyle(L, tbl, i, item.Style)
+		if item.Style == term.StyleHide || item.Style == term.StyleReverse {
+			L.ArgError(2, fmt.Sprintf("item %d: a note can't use style %s", i, L.GetField(tbl, "style").String()))
+		}
+		return item
 	}
 	endLine, ok := field("end_line")
 	if !ok {
@@ -99,12 +117,18 @@ func luaTableToDecorationItem(L *lua.LState, tbl *lua.LTable, i int) DecorationI
 		item.Style = term.StyleHighlightStrong
 	}
 
-	if v := L.GetField(tbl, "style"); v != lua.LNil {
-		style, ok := StyleByName(v.String())
-		if !ok {
-			L.ArgError(2, fmt.Sprintf("item %d: unknown style %s", i, v.String()))
-		}
-		item.Style = style
-	}
+	item.Style = luaDecorationStyle(L, tbl, i, item.Style)
 	return item
+}
+
+func luaDecorationStyle(L *lua.LState, tbl *lua.LTable, i int, def term.Style) term.Style {
+	v := L.GetField(tbl, "style")
+	if v == lua.LNil {
+		return def
+	}
+	style, ok := StyleByName(v.String())
+	if !ok {
+		L.ArgError(2, fmt.Sprintf("item %d: unknown style %s", i, v.String()))
+	}
+	return style
 }

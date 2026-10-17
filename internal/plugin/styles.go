@@ -26,6 +26,7 @@ var pluginStyles = []styleEntry{
 	{"highlight_strong", term.StyleHighlightStrong},
 	{"reverse", term.StyleReverse},
 	{"hide", term.StyleHide},
+	{"note", term.StyleNote},
 	{"syntax_comment", term.StyleSyntaxComment},
 	{"syntax_string", term.StyleSyntaxString},
 	{"syntax_keyword", term.StyleSyntaxKeyword},

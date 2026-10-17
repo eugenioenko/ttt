@@ -1806,10 +1806,11 @@ argument, clears every file.
 
 ## Decorations
 
-Plugins can tint, reverse, or visually hide whole lines and text ranges through
-the `ttt.decorations` module, for coverage, review comments, matches the plugin
-found, or focusing on relevant code. They do not change the buffer or touch the
-user's search or selection. Requires the `editor.decorations` permission.
+Plugins can tint, reverse, or visually hide whole lines and text ranges, and
+draw notes between lines, through the `ttt.decorations` module, for coverage,
+review comments, matches the plugin found, or focusing on relevant code. They do
+not change the buffer (notes are not part of it) or touch the user's search or
+selection. Requires the `editor.decorations` permission.
 
 ```lua
 local deco = require("ttt.decorations")
@@ -1817,8 +1818,9 @@ local deco = require("ttt.decorations")
 deco.set("/abs/path/to/main.go", {
   { line = 10, end_line = 14 },                                 -- tint lines 10 to 14
   { line = 12, col = 9, end_col = 17 },                         -- highlight text on line 12
+  { line = 14, note = "Flags are parsed once, here." },         -- a note under line 14
   { line = 20, col = 5, end_line = 22, end_col = 2, style = "highlight" },
-  { line = 30, end_line = 35, style = "hide" },                  -- conceal text without changing layout
+  { line = 30, end_line = 35, style = "hide" },                 -- conceal text without changing layout
 })
 
 deco.clear("/abs/path/to/main.go")   -- clear this plugin's decorations for one file
@@ -1828,7 +1830,8 @@ deco.clear()                         -- clear all of this plugin's decorations
 ### `decorations.set(path, items)`
 
 Replaces this plugin's decorations for `path` with `items`. An item without
-`col` tints whole lines; an item with `col` and `end_col` highlights text.
+`col` tints whole lines; an item with `col` and `end_col` highlights text; an
+item with `note` draws the note under `line`.
 
 | Field      | Type   | Required | Description                                                          |
 |------------|--------|----------|----------------------------------------------------------------------|
@@ -1836,7 +1839,8 @@ Replaces this plugin's decorations for `path` with `items`. An item without
 | `end_line` | number | no       | 1-based end line. Defaults to `line`; `math.huge` reaches the end of the file. |
 | `col`      | number | no       | 1-based start **rune column** of a text highlight.                   |
 | `end_col`  | number | with `col` | 1-based end column on `end_line`, exclusive.                       |
-| `style`    | string | no       | A named style whose background is used. Defaults to `highlight` for lines and `highlight_strong` for text. `reverse` swaps the text and background colors instead, on text only. `hide` conceals text using its background color, keeping the characters' space and the buffer unchanged. |
+| `note`     | string | no       | Text drawn on rows under `line`, wrapped to the pane (at most 80 columns) and indented like the line. Blank lines separate paragraphs. A note item takes only `line` and `style`, and its style can't be `reverse` or `hide`. |
+| `style`    | string | no       | A named style whose background is used; for a note, its colors. Defaults to `highlight` for lines, `highlight_strong` for text and `note` for notes. `reverse` swaps the text and background colors instead, on text only. `hide` conceals text using its background color, keeping the characters' space and the buffer unchanged. |
 
 `hide` works on whole lines or text ranges. It uses the background already on
 the text, including active-line and decoration backgrounds, and needs no theme
@@ -1844,14 +1848,15 @@ color. Selection and search highlights take precedence. Clearing the decoration
 shows the text again; copying and saving still use the original text.
 
 Lines and columns are whole numbers from 1. An invalid item (no `line`,
-`end_line` before `line`, `col` without `end_col`, an empty text range, or an
-unknown style) raises an error and sets nothing. Lines past the end of the file
+`end_line` before `line`, `col` without `end_col`, an empty text range, an
+unknown style, a blank or non-text `note`, or a note with `end_line`, `col`,
+`end_col` or style `reverse` or `hide`) raises an error and sets nothing. Lines past the end of the file
 are ignored.
 
 The file does not have to be open; its decorations show when it opens, and
 they follow it when it is renamed or saved under a new name. They move with
 edits. A text highlight on a line that is edited is removed, since its columns
-no longer match, and a tint goes with a deleted line. All of the file's
+no longer match, and a tint or note goes with a deleted line. All of the file's
 decorations are removed when its tab is closed with unsaved edits, or when a
 single action makes too many edits at once to follow (a multi-cursor edit of
 dozens of lines, say); set them again from `editor.change` or `file.open` if
@@ -2480,6 +2485,7 @@ Named styles available for both widget and raw cell rendering. Actual colors dep
 | `highlight_strong` | Background for highlighted text |
 | `reverse`  | Reverse video: swaps the text and background colors |
 | `hide`     | Conceal text against its background without changing layout |
+| `note` | Notes drawn between lines |
 | `syntax_comment`   | Syntax: comments       |
 | `syntax_string`    | Syntax: string literals |
 | `syntax_keyword`   | Syntax: keywords       |

@@ -31,6 +31,7 @@ func TestPluginDecorationsTintHighlightAndHide(t *testing.T) {
 				{ line = 2 },
 				{ line = 2, col = 8, end_col = 12 },
 				{ line = 3, col = 1, end_col = 6, style = "hide" },
+				{ line = 3, note = "Read me first." },
 			})
 		end
 	`), 0644); err != nil {
@@ -48,6 +49,7 @@ func TestPluginDecorationsTintHighlightAndHide(t *testing.T) {
 	h.app.EditorGroup.OpenFile(file)
 	h.redraw()
 
+	h.assertContains(" Read me first.")
 	cells, w, _ := h.screen.GetContents()
 	find := func(text string) (int, int) {
 		for y := 0; y*w < len(cells); y++ {
@@ -84,6 +86,7 @@ func TestPluginDecorationsTintHighlightAndHide(t *testing.T) {
 
 	h.app.ClearPluginSources("deco")
 	h.redraw()
+	h.assertNotContains("Read me first.")
 	cells, _, _ = h.screen.GetContents()
 	if bg(x2, y2) != plain || bg(x2+7, y2) != plain {
 		t.Error("decorations remain after the plugin's sources were cleared")

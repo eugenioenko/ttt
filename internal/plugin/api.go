@@ -17,16 +17,18 @@ type DiagnosticItem struct {
 	Source    string
 }
 
-// DecorationItem is a line tint or text highlight set by a plugin, in 0-based
-// lines and rune columns. Without Text it tints whole lines
+// DecorationItem is a line tint, text highlight or note set by a plugin, in
+// 0-based lines and rune columns. Without Text it tints whole lines
 // StartLine..EndLine; with Text it highlights from StartCol on StartLine to
-// EndCol (exclusive) on EndLine.
+// EndCol (exclusive) on EndLine. With Note it draws the note under
+// StartLine.
 type DecorationItem struct {
 	StartLine int
 	StartCol  int
 	EndLine   int
 	EndCol    int
 	Text      bool
+	Note      string
 	Style     term.Style
 }
 
