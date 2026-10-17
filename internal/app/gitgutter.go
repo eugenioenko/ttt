@@ -68,35 +68,49 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		a.gitGutterTask = NewTask[*gitGutterResult](a, asynctask.TaskOptions{})
 	}
 	a.gitGutterTask.Schedule(func(ctx context.Context) (*gitGutterResult, error) {
-		headContent, gitErr := git.ShowFileContext(ctx, repoDir, relPath, "HEAD")
+		// The index is the base for both the gutter and the inline diff, as in
+		// VS Code: staged work drops out of the gutter, which then agrees with
+		// the "Changes" diff.
+		indexContent, indexErr := git.ShowIndexFileContext(ctx, repoDir, relPath)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		unmerged := indexErr != nil && git.IsUnmergedContext(ctx, repoDir, relPath)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		result := &gitGutterResult{Path: filePath, DiffOn: diffOn, Version: version, Lines: linesCopy}
-		if gitErr != nil && gutterOn {
-			if !git.IgnoredFilesContext(ctx, repoDir, []string{relPath})[relPath] {
-				// File is not tracked by git (new file) — mark all lines as added
-				result.Changes = make([]diff.LineChangeKind, len(linesCopy))
-				for i := range result.Changes {
-					result.Changes[i] = diff.LineAdded
+		if gutterOn {
+			baseContent, baseErr := indexContent, indexErr
+			if unmerged {
+				// A conflicted file has no single staged version, so the
+				// gutter falls back to HEAD.
+				baseContent, baseErr = git.ShowFileContext(ctx, repoDir, relPath, "HEAD")
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
 				}
 			}
-		} else if gutterOn {
-			oldLines := blobLines(headContent, showTrailing)
-			var err error
-			result.Changes, err = diff.ComputeGutterChangesContext(ctx, oldLines, linesCopy)
-			if err != nil {
-				return nil, err
+			if baseErr != nil {
+				if !git.IgnoredFilesContext(ctx, repoDir, []string{relPath})[relPath] {
+					// File is not in the index (untracked) — mark all lines as added
+					result.Changes = make([]diff.LineChangeKind, len(linesCopy))
+					for i := range result.Changes {
+						result.Changes[i] = diff.LineAdded
+					}
+				}
+			} else {
+				oldLines := blobLines(baseContent, showTrailing)
+				var err error
+				result.Changes, err = diff.ComputeGutterChangesContext(ctx, oldLines, linesCopy)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 		if diffOn {
-			indexContent, indexErr := git.ShowIndexFileContext(ctx, repoDir, relPath)
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
 			if indexErr == nil {
 				result.Base = blobLines(indexContent, showTrailing)
-			} else if git.IsUnmergedContext(ctx, repoDir, relPath) {
+			} else if unmerged {
 				result.Conflict, result.RelPath = true, relPath
 			}
 			if !result.Conflict {

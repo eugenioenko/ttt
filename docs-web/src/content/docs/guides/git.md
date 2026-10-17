@@ -92,7 +92,7 @@ This gives you the local file tree in the explorer and the PR's changed files in
 
 ## Git Gutter
 
-The line number area displays diff indicators that show which lines have been added, modified, or deleted compared to the last commit. This gives you at-a-glance visibility into your uncommitted changes as you edit. In files taller than the editor, the changes are also marked on the vertical scrollbar; click a mark to jump there.
+The line number area displays diff indicators that show which lines have been added, modified, or deleted compared to the staged version of the file (the git index), the same base the **Changes** diff uses. Once you stage a file its markers clear, so the gutter shows only the work you have not staged yet. A file that is not in the index yet marks every line as added, and a file with unresolved merge conflicts is compared against the last commit instead. In files taller than the editor, the changes are also marked on the vertical scrollbar; click a mark to jump there.
 
 ## Git Blame
 

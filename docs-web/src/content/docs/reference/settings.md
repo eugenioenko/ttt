@@ -63,7 +63,7 @@ All editor settings are nested under the `editor` key.
 | `editor.trimTrailingWhitespace` | bool | `false` | Remove trailing whitespace from lines on save |
 | `editor.focusOnOpen` | bool | `false` | Focus the editor when opening a file |
 | `editor.syntaxHighlight` | bool | `true` | Enable syntax highlighting |
-| `editor.gitGutter` | bool | `true` | Show git change indicators in the gutter |
+| `editor.gitGutter` | bool | `true` | Show git change indicators in the gutter, compared against the staged version of the file (the git index) |
 | `editor.scrollbarGitMarks` | bool | `true` | Mark git changes on the editor's vertical scrollbar. Needs `editor.gitGutter` |
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |

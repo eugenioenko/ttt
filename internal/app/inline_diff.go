@@ -91,9 +91,9 @@ func (a *App) onChangesRefreshed() {
 		a.pendingCurrentChangesOpen = false
 		a.OpenCurrentChanges()
 	}
-	// Staging, unstaging and commits move the index an open working-tree diff
-	// is based on.
-	if a.EditorGroup != nil && a.EditorGroup.IsInlineDiffActive() {
+	// Staging, unstaging and commits move the index that an open working-tree
+	// diff and the git gutter are based on.
+	if a.EditorGroup != nil && (a.EditorGroup.IsInlineDiffActive() || a.Settings.Editor.IsGitGutterEnabled()) {
 		a.RequestGitGutterForActiveFile()
 	}
 }
