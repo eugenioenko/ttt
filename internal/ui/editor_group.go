@@ -1968,19 +1968,16 @@ func (g *EditorGroupWidget) ClearSearch() {
 }
 
 func (g *EditorGroupWidget) ClearFindHighlights() {
-	if !g.IsEditorActive() {
-		return
-	}
 	active := g.Editor.SearchActive
 	g.clearSearchState()
 	g.Editor.SearchActive = active
 	g.find.activeMatch = active
 }
 
+// clearSearchState also runs while an image or binary tab is active: the
+// shared editor keeps the last text tab's highlights and shows them again
+// when that tab comes back.
 func (g *EditorGroupWidget) clearSearchState() {
-	if !g.IsEditorActive() {
-		return
-	}
 	g.Editor.SearchQuery = ""
 	g.Editor.SearchMatches = nil
 	g.Editor.SearchActive = 0
