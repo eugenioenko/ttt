@@ -70,7 +70,42 @@ type DiffOverlay struct {
 	stale bool
 
 	maxNum, numsN int
+
+	// LineBg and Spans decorate an annotation overlay (see
+	// NewAnnotationOverlay): LineBg tints buffer lines and Spans highlight
+	// parts of lines on top of it. parts are the overlays merged into this
+	// one; they move with its edits so they can be merged again later.
+	LineBg   map[int]term.Style
+	Spans    map[int][]ColSpan
+	parts    []*DiffOverlay
+	annotate bool
 }
+
+// ColSpan highlights the runes [Start, End) of one buffer line.
+type ColSpan struct {
+	Start, End int
+	Style      term.Style
+}
+
+// NewAnnotationOverlay returns an overlay that only decorates lines. Unlike a
+// diff overlay it keeps the editor's own gutter, git change bars and
+// scrollbar marks.
+func NewAnnotationOverlay() *DiffOverlay {
+	return &DiffOverlay{LineBg: map[int]term.Style{}, Spans: map[int][]ColSpan{}, annotate: true}
+}
+
+// spanStyle returns the style of the last span covering col, or 0.
+func spanStyle(spans []ColSpan, col int) term.Style {
+	for i := len(spans) - 1; i >= 0; i-- {
+		if sp := spans[i]; col >= sp.Start && col < sp.End {
+			return sp.Style
+		}
+	}
+	return 0
+}
+
+// isDiff reports whether o shows a diff, as opposed to annotations only.
+func (o *DiffOverlay) isDiff() bool { return o != nil && !o.annotate }
 
 type diffHiddenRange struct{ start, end int }
 
@@ -473,6 +508,9 @@ func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
 		return term.StyleDiffDeleted
 	case diff.Collapsed:
 		return collapsedDiffRowStyle(diff.Collapsed, e.DiffOverlay.EmphasizeGaps, e.DiffOverlay.gapHovered(line))
+	}
+	if e.DiffOverlay != nil {
+		return e.DiffOverlay.LineBg[line]
 	}
 	return 0
 }

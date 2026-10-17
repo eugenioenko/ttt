@@ -50,7 +50,7 @@ type gitChangeIndex struct {
 
 func (e *EditorPaneWidget) gitChangeIndex() *gitChangeIndex {
 	key := gitChangeIndexKey{changes: unsafe.SliceData(e.LineChanges), n: len(e.LineChanges)}
-	if o := e.DiffOverlay; o != nil {
+	if o := e.DiffOverlay; o.isDiff() {
 		key = gitChangeIndexKey{overlay: o, kinds: unsafe.SliceData(o.Kinds), n: len(o.Kinds), version: e.Buf.Version()}
 	}
 	if e.gitChanges.key == key {
@@ -154,7 +154,7 @@ func appendDeletedScrollMark(marks []ScrollMark, l *rowLayout, line int) []Scrol
 }
 
 func (e *EditorPaneWidget) scrollMarksEnabled() bool {
-	if e.DiffOverlay != nil {
+	if e.DiffOverlay.isDiff() {
 		return e.DiffOverlay.ScrollMarks
 	}
 	return e.ScrollbarGitMarks
@@ -163,7 +163,7 @@ func (e *EditorPaneWidget) scrollMarksEnabled() bool {
 // lineChangeSource returns each buffer line's change kind and how many lines
 // it covers, which lags behind the buffer until the next git diff.
 func (e *EditorPaneWidget) lineChangeSource() (func(int) diff.LineChangeKind, int) {
-	if o := e.DiffOverlay; o != nil {
+	if o := e.DiffOverlay; o.isDiff() {
 		return func(line int) diff.LineChangeKind {
 			switch o.Kinds[line] {
 			case diff.Added:

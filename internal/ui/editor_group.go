@@ -76,6 +76,9 @@ type editorTab struct {
 	ReadOnly    bool
 	// Diff shows the tab's own buffer as an editable diff against its base.
 	Diff *DiffEditorWidget
+	// Annotations shows the decorations for the tab's file when it is not
+	// showing a diff.
+	Annotations *DiffOverlay
 }
 
 // findSession keeps the editor query after its bar closes and tracks which buffer version the matches describe.
@@ -155,6 +158,8 @@ type EditorGroupWidget struct {
 	// diagSources holds diagnostics keyed by source ("lsp:<server>", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
+	// decoSources holds each source's decorations by file path.
+	decoSources map[string]map[string]*decoSource
 	// bookmarksByPath holds bookmarks keyed by file path so they survive a
 	// preview tab being replaced (its editorTab struct is discarded entirely).
 	bookmarksByPath   map[string]map[int]Bookmark
@@ -459,6 +464,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
 	}
+	newTab.Annotations = g.mergedDecorations(path, newBuf)
 	if t := g.activeTab(); g.canReplaceTab(t) && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
 		g.tabs[g.active] = newTab
@@ -1447,7 +1453,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	if t.Undo != nil {
 		t.Undo.MarkSaved()
 	}
-	g.moveBookmarks(t.FilePath, path)
+	g.movePathState(t.FilePath, path)
 	t.FilePath = path
 	t.IconPath = path
 	t.Virtual = false
@@ -1461,7 +1467,9 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	return true
 }
 
-func (g *EditorGroupWidget) moveBookmarks(oldPath, newPath string) {
+// movePathState moves the bookmarks and decorations kept for oldPath, or for
+// the files under it, to newPath.
+func (g *EditorGroupWidget) movePathState(oldPath, newPath string) {
 	prefix := oldPath + string(filepath.Separator)
 	remap := func(p string) (string, bool) {
 		switch {
@@ -1472,6 +1480,7 @@ func (g *EditorGroupWidget) moveBookmarks(oldPath, newPath string) {
 		}
 		return "", false
 	}
+	g.moveDecorations(remap)
 	if p, ok := remap(g.bookmarkSyncPath); ok {
 		g.bookmarkSyncPath = p
 	}
@@ -1500,7 +1509,7 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 	if oldPath == "" || newPath == "" || oldPath == newPath {
 		return false
 	}
-	g.moveBookmarks(oldPath, newPath)
+	g.movePathState(oldPath, newPath)
 	prefix := oldPath + string(filepath.Separator)
 	remapPath := func(path string) (string, bool) {
 		switch {
@@ -2535,7 +2544,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			g.editorInDiff = true
 		} else {
 			t.Highlighter.SetSyncLines(highlight.DefaultSyncLines)
-			g.Editor.SetDiffOverlay(nil)
+			g.Editor.SetDiffOverlay(t.Annotations)
 			if g.editorInDiff {
 				g.editorInDiff = false
 				g.Editor.WordWrap = g.WordWrap

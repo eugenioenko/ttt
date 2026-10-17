@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/term"
 )
 
 // shiftLine moves a line number across an edit. A line inside the replaced
@@ -74,6 +75,17 @@ func keepLast[V any](_, b V) V { return b }
 // splice moves the overlay across one buffer edit. Edited and inserted lines
 // are marked added; everything else keeps its decoration on the line it was on.
 func (o *DiffOverlay) splice(c buffer.Change) {
+	for _, part := range o.parts {
+		part.splice(c)
+	}
+	// Span columns go stale when their line is edited, and a tint goes with
+	// its line when nothing replaces it.
+	for line := c.Start; line < c.Start+c.Removed; line++ {
+		delete(o.Spans, line)
+		if line >= c.Start+c.Added {
+			delete(o.LineBg, line)
+		}
+	}
 	if c.Added == c.Removed {
 		for line := c.Start; line < c.Start+c.Added && line < len(o.Kinds); line++ {
 			if o.Kinds[line] == diff.Context {
@@ -95,6 +107,8 @@ func (o *DiffOverlay) splice(c buffer.Change) {
 	shiftKeys(o.Fillers, c, sumInts)
 	shiftKeys(o.Gaps, c, keepLast[int])
 	shiftKeys(o.Labels, c, keepLast[string])
+	shiftKeys(o.LineBg, c, keepLast[term.Style])
+	shiftKeys(o.Spans, c, func(a, b []ColSpan) []ColSpan { return append(slices.Clip(a), b...) })
 	shiftKeys(o.DeletedMatches, c, func(a, b []FindMatch) []FindMatch { return append(slices.Clip(a), b...) })
 	if o.DeletedActive[0] >= 0 {
 		o.DeletedActive[0] = shiftLine(o.DeletedActive[0], c)
@@ -120,6 +134,7 @@ func (e *EditorPaneWidget) syncDiffOverlay() bool {
 		o.stale = true
 	}
 	o.ver = e.Buf.Version()
+	o.syncParts()
 	return !o.stale
 }
 

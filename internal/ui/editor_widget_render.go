@@ -168,7 +168,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					}
 				}
 			}
-			if e.DiffOverlay == nil && lineIdx < totalLines && lineIdx < len(e.LineChanges) && !isWrapContinuation {
+			if !e.DiffOverlay.isDiff() && lineIdx < totalLines && lineIdx < len(e.LineChanges) && !isWrapContinuation {
 				change := e.LineChanges[lineIdx]
 				if change != diff.LineUnchanged {
 					var ch rune
@@ -223,6 +223,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				leftCol = e.Viewport.LeftCol
 			}
 			diffBg := e.diffLineBg(lineIdx)
+			var lineSpans []ColSpan
+			if e.DiffOverlay != nil {
+				lineSpans = e.DiffOverlay.Spans[lineIdx]
+			}
 			screenCells := e.renderLineToScreen(line, syntaxSpans, isCollapsedLine, annRunes, tabW, leftCol, editorW)
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
@@ -291,6 +295,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				}
 				if diffBg != 0 && !inAnySel && !isSearchHighlight && (bgStyle == 0 || bgStyle == term.StyleActiveLine) {
 					bgStyle = diffBg
+				}
+				if len(lineSpans) > 0 && colIdx < len(line) && !inAnySel && !isSearchHighlight {
+					if spanBg := spanStyle(lineSpans, colIdx); spanBg != 0 {
+						bgStyle = spanBg
+					}
 				}
 				if hasMatch && ((lineIdx == e.Cursor.Line && colIdx == e.Cursor.Col) ||
 					(lineIdx == matchLine && colIdx == matchCol)) {
