@@ -11,13 +11,19 @@ import (
 // Decoration tints a range of buffer lines or highlights text. Lines and
 // columns are 0-based; columns are runes. Without Text it tints whole lines
 // StartLine..EndLine; with Text it highlights from StartCol on StartLine to
-// EndCol (exclusive) on EndLine. Lines past the end of the file are ignored.
+// EndCol (exclusive) on EndLine. With Note it draws the note under
+// StartLine instead, wrapped to the pane and indented like the line. Lines
+// past the end of the file are ignored.
 type Decoration struct {
 	StartLine, StartCol int
 	EndLine, EndCol     int
 	Text                bool
+	Note                string
 	Style               term.Style
 }
+
+// noteMaxWidth keeps notes readable in a wide pane.
+const noteMaxWidth = 80
 
 // decoSource is one source's decorations for one file. overlay holds them
 // on the file's open buffer, moved by the edits made since; it is built
@@ -83,14 +89,24 @@ func (g *EditorGroupWidget) moveDecorations(remap func(string) (string, bool)) {
 	}
 }
 
-// decorationOverlay builds the overlay for decos on a buffer of n lines.
-func decorationOverlay(decos []Decoration, n int) *DiffOverlay {
+// decorationOverlay builds the overlay for decos on lines.
+func decorationOverlay(decos []Decoration, lines []string, tabSize int) *DiffOverlay {
 	o := NewAnnotationOverlay()
+	n := len(lines)
 	for _, d := range decos {
 		if d.StartLine < 0 || d.EndLine < d.StartLine || d.StartLine >= n {
 			continue
 		}
 		endLine := min(d.EndLine, n-1)
+		if d.Note != "" {
+			o.NoteTexts[d.StartLine] = append(o.NoteTexts[d.StartLine], NoteText{
+				Text:     d.Note,
+				Indent:   leadingIndent(lines[d.StartLine], tabSize),
+				Style:    d.Style,
+				MaxWidth: noteMaxWidth,
+			})
+			continue
+		}
 		if !d.Text {
 			for line := d.StartLine; line <= endLine; line++ {
 				o.LineBg[line] = d.Style
@@ -134,7 +150,7 @@ func (g *EditorGroupWidget) applyDecorations(path string) {
 		return
 	}
 	t := &g.tabs[i]
-	t.Annotations = g.mergedDecorations(path, t.Buf)
+	t.Annotations = g.mergedDecorations(path, t.Buf, t.TabSize)
 	if i == g.active && t.Diff == nil {
 		g.Editor.SetDiffOverlay(t.Annotations)
 	}
@@ -142,7 +158,7 @@ func (g *EditorGroupWidget) applyDecorations(path string) {
 
 // mergedDecorations returns the overlay for path on buf, or nil when no
 // source decorates it.
-func (g *EditorGroupWidget) mergedDecorations(path string, buf *buffer.Buffer) *DiffOverlay {
+func (g *EditorGroupWidget) mergedDecorations(path string, buf *buffer.Buffer, tabSize int) *DiffOverlay {
 	sources := make([]string, 0, len(g.decoSources))
 	for source, byPath := range g.decoSources {
 		if byPath[path] != nil {
@@ -156,7 +172,7 @@ func (g *EditorGroupWidget) mergedDecorations(path string, buf *buffer.Buffer) *
 	merged := NewAnnotationOverlay()
 	merged.buf, merged.ver = buf, buf.Version()
 	for _, source := range sources {
-		part := g.bindDecorations(g.decoSources[source][path], buf)
+		part := g.bindDecorations(g.decoSources[source][path], buf, tabSize)
 		if part == nil {
 			delete(g.decoSources[source], path)
 			continue
@@ -166,6 +182,9 @@ func (g *EditorGroupWidget) mergedDecorations(path string, buf *buffer.Buffer) *
 		}
 		for line, spans := range part.Spans {
 			merged.Spans[line] = append(merged.Spans[line], spans...)
+		}
+		for line, notes := range part.NoteTexts {
+			merged.NoteTexts[line] = append(merged.NoteTexts[line], notes...)
 		}
 		merged.parts = append(merged.parts, part)
 	}
@@ -178,7 +197,7 @@ func (g *EditorGroupWidget) mergedDecorations(path string, buf *buffer.Buffer) *
 // bindDecorations returns src's overlay brought up to date on buf, or nil
 // when its positions no longer match the text: it fell too far behind buf's
 // edits, or it belonged to a buffer that was closed with unsaved edits.
-func (g *EditorGroupWidget) bindDecorations(src *decoSource, buf *buffer.Buffer) *DiffOverlay {
+func (g *EditorGroupWidget) bindDecorations(src *decoSource, buf *buffer.Buffer, tabSize int) *DiffOverlay {
 	if o := src.overlay; o != nil && o.buf != buf {
 		if o.buf.Dirty {
 			return nil
@@ -186,7 +205,7 @@ func (g *EditorGroupWidget) bindDecorations(src *decoSource, buf *buffer.Buffer)
 		o.buf, o.ver, o.stale = buf, buf.Version(), false
 	}
 	if src.overlay == nil {
-		src.overlay = decorationOverlay(src.decos, len(buf.Lines))
+		src.overlay = decorationOverlay(src.decos, buf.Lines, tabSize)
 		src.overlay.buf, src.overlay.ver = buf, buf.Version()
 	}
 	if !src.overlay.catchUp(buf) {
@@ -218,6 +237,8 @@ func (o *DiffOverlay) syncParts() {
 	if o.stale && o.annotate {
 		clear(o.LineBg)
 		clear(o.Spans)
+		clear(o.NoteTexts)
+		o.notesMoved = len(o.Notes) > 0
 	}
 	for _, part := range o.parts {
 		part.ver, part.stale = o.ver, o.stale

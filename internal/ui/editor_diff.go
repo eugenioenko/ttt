@@ -74,12 +74,37 @@ type DiffOverlay struct {
 
 	// LineBg and Spans decorate an annotation overlay (see
 	// NewAnnotationOverlay): LineBg tints buffer lines and Spans highlight
-	// parts of lines on top of it. parts are the overlays merged into this
-	// one; they move with its edits so they can be merged again later.
-	LineBg   map[int]term.Style
-	Spans    map[int][]ColSpan
-	parts    []*DiffOverlay
-	annotate bool
+	// parts of lines on top of it. NoteTexts are notes drawn under the line
+	// they are keyed by; they are wrapped into Notes, rows keyed like Deleted,
+	// at the pane's width. parts are the overlays merged into this one; they
+	// move with its edits so they can be merged again later.
+	LineBg     map[int]term.Style
+	Spans      map[int][]ColSpan
+	NoteTexts  map[int][]NoteText
+	Notes      map[int][]NoteRow
+	noteWidth  int
+	notesMoved bool
+	parts      []*DiffOverlay
+	annotate   bool
+}
+
+// NoteText is a note the pane wraps to its own width. Blank lines separate
+// paragraphs. Indent is in terminal columns and is dropped when it would
+// leave the note less than half the width.
+type NoteText struct {
+	Text   string
+	Indent int
+	Style  term.Style
+	// MaxWidth caps the text's width in columns; 0 uses the pane's width.
+	MaxWidth int
+}
+
+// NoteRow is one row of text drawn between buffer lines. Indent is in
+// terminal columns.
+type NoteRow struct {
+	Text   string
+	Indent int
+	Style  term.Style
 }
 
 // ColSpan highlights the runes [Start, End) of one buffer line.
@@ -92,7 +117,7 @@ type ColSpan struct {
 // diff overlay it keeps the editor's own gutter, git change bars and
 // scrollbar marks.
 func NewAnnotationOverlay() *DiffOverlay {
-	return &DiffOverlay{LineBg: map[int]term.Style{}, Spans: map[int][]ColSpan{}, annotate: true}
+	return &DiffOverlay{LineBg: map[int]term.Style{}, Spans: map[int][]ColSpan{}, NoteTexts: map[int][]NoteText{}, annotate: true}
 }
 
 // spanStyle returns the style of the last span covering col, or 0.
@@ -483,12 +508,20 @@ func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
 		o.buf, o.ver = e.Buf, e.Buf.Version()
 	}
 	e.syncDiffOverlay()
-	phantoms := make(map[int]int, len(o.Deleted)+len(o.Fillers))
+	e.setPhantoms(o.phantoms())
+}
+
+// phantoms counts the rows o adds before each buffer line.
+func (o *DiffOverlay) phantoms() map[int]int {
+	phantoms := make(map[int]int, len(o.Deleted)+len(o.Fillers)+len(o.Notes))
 	for anchor, block := range o.Deleted {
 		phantoms[anchor] += len(block)
 	}
 	for anchor, n := range o.Fillers {
 		phantoms[anchor] += n
+	}
+	for anchor, notes := range o.Notes {
+		phantoms[anchor] += len(notes)
 	}
 	for anchor, n := range phantoms {
 		if n == 0 {
@@ -496,9 +529,27 @@ func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
 		}
 	}
 	if len(phantoms) == 0 {
-		phantoms = nil
+		return nil
 	}
-	e.setPhantoms(phantoms)
+	return phantoms
+}
+
+// noteLine returns the note row shown at row, using l's placement of notes
+// around folded lines.
+func (o *DiffOverlay) noteLine(row editorRow, l *rowLayout) (NoteRow, bool) {
+	if o == nil || len(o.Notes) == 0 {
+		return NoteRow{}, false
+	}
+	notes := o.Notes
+	if l != nil && l.notes != nil {
+		notes = l.notes
+	}
+	k := row.phantom - len(o.Deleted[row.bufLine]) - o.Fillers[row.bufLine]
+	rows := notes[row.bufLine]
+	if k < 0 || k >= len(rows) {
+		return NoteRow{}, false
+	}
+	return rows[k], true
 }
 
 func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
@@ -551,7 +602,11 @@ func (e *EditorPaneWidget) renderGapRow(surface Surface, y, gutterW, editorW, li
 	}
 }
 
-func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW int, row editorRow) {
+func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW int, row editorRow, l *rowLayout) {
+	if note, ok := e.DiffOverlay.noteLine(row, l); ok {
+		e.renderNoteRow(surface, y, gutterW, editorW, note)
+		return
+	}
 	old, ok := e.DiffOverlay.deletedLine(row)
 	if !ok {
 		for x := 0; x < gutterW+editorW; x++ {
@@ -636,4 +691,18 @@ func diffGutterDigits(o *DiffOverlay) int {
 		return len(strconv.Itoa(n))
 	}
 	return 0
+}
+
+func (e *EditorPaneWidget) renderNoteRow(surface Surface, y, gutterW, editorW int, note NoteRow) {
+	for x := 0; x < gutterW; x++ {
+		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleLineNumber})
+	}
+	indent := min(note.Indent, editorW)
+	for x := range indent {
+		surface.SetCell(gutterW+x, y, term.Cell{Ch: ' '})
+	}
+	x := surface.DrawText(gutterW+indent, y, note.Text, gutterW+editorW, note.Style)
+	for ; x < gutterW+editorW; x++ {
+		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: note.Style})
+	}
 }

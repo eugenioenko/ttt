@@ -83,6 +83,8 @@ type EditorStyles struct {
 	// lines and text with.
 	Highlight       StyleDef `json:"highlight,omitempty"`
 	HighlightStrong StyleDef `json:"highlightStrong,omitempty"`
+	// Note styles the rows of text plugins draw between lines.
+	Note StyleDef `json:"note,omitempty"`
 }
 
 type DiffStyles struct {
@@ -433,6 +435,8 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Diff.GutterBookmark, "#3794ff")
 	fillBg(&t.Editor.Highlight, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.15, t.Editor.ActiveLine.Bg))
 	fillBg(&t.Editor.HighlightStrong, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.30, t.Editor.ActiveLine.Bg))
+	fillBg(&t.Editor.Note, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.10, t.Editor.ActiveLine.Bg))
+	fillFg(&t.Editor.Note, t.Default.Fg)
 	fillFg(&t.Success, "#73c991")
 	fillFg(&t.Danger, "#f14c4c")
 	fillFg(&t.Warning, "#e2c08d")

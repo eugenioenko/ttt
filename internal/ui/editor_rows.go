@@ -30,8 +30,10 @@ type rowLayout struct {
 	tabW     int
 	visible  []int
 	phantoms map[int]int
-	labels   map[int]string
-	deleted  map[int][]diff.SideLine
+	// notes places an annotation overlay's note rows when folds hide lines.
+	notes   map[int][]NoteRow
+	labels  map[int]string
+	deleted map[int][]diff.SideLine
 
 	key    rowLayoutKey
 	starts []int
@@ -119,6 +121,9 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	}
 	if len(e.phantoms) > 0 {
 		l.phantoms = e.phantoms
+	}
+	if o := e.DiffOverlay; o != nil && o.annotate && visible != nil && len(o.Notes) > 0 {
+		l.phantoms, l.notes = foldedNotes(o.Notes, visible, n)
 	}
 	if e.DiffOverlay != nil {
 		l.labels = e.DiffOverlay.Labels
@@ -616,4 +621,29 @@ func (e *EditorPaneWidget) rowAt(y int) editorRow {
 	}
 	line, off := l.rowToTop(abs)
 	return l.rowInBlock(line, off)
+}
+
+// foldedNotes moves each note to the next visible line after the line it
+// belongs to, so a folded line keeps its note below the fold, and drops the
+// notes of hidden lines. It returns the phantom counts and note rows by
+// anchor.
+func foldedNotes(notes map[int][]NoteRow, visible []int, n int) (map[int]int, map[int][]NoteRow) {
+	phantoms := map[int]int{}
+	placed := map[int][]NoteRow{}
+	for anchor, rows := range notes {
+		i, ok := slices.BinarySearch(visible, anchor-1)
+		if !ok {
+			continue
+		}
+		next := n
+		if i+1 < len(visible) {
+			next = visible[i+1]
+		}
+		phantoms[next] = len(rows)
+		placed[next] = rows
+	}
+	if len(phantoms) == 0 {
+		return nil, placed
+	}
+	return phantoms, placed
 }

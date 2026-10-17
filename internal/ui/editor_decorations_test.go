@@ -89,7 +89,7 @@ func TestDecorationOverlaySplitsTextRangesAndClampsToTheFile(t *testing.T) {
 		{StartLine: 5, StartCol: 3, EndLine: 6, EndCol: 0, Text: true, Style: term.StyleSearchMatch},
 		{StartLine: 8, EndLine: math.MaxInt32, Style: term.StyleDiffDeleted},
 		{StartLine: 10, EndLine: 12, Style: term.StyleDiffDeleted},
-	}, 10)
+	}, make([]string, 10), 4)
 	if want := map[int]term.Style{0: term.StyleDiffAdded, 1: term.StyleDiffAdded, 8: term.StyleDiffDeleted, 9: term.StyleDiffDeleted}; !reflect.DeepEqual(o.LineBg, want) {
 		t.Errorf("LineBg = %v, want %v", o.LineBg, want)
 	}

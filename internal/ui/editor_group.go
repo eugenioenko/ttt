@@ -464,7 +464,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.SyntaxHighlight {
 		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
 	}
-	newTab.Annotations = g.mergedDecorations(path, newBuf)
+	newTab.Annotations = g.mergedDecorations(path, newBuf, tabSize)
 	if t := g.activeTab(); g.canReplaceTab(t) && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
 		g.tabs[g.active] = newTab

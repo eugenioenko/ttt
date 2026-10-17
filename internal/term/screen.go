@@ -110,6 +110,7 @@ const (
 	StyleHighlightStrong
 	StyleReverse
 	StyleHide
+	StyleNote
 	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
 	// tokenColors fill; see TokenStyle.
 	styleTokenBase

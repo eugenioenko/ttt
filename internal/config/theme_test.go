@@ -539,4 +539,7 @@ func TestResolveColorsDerivesHighlightStyles(t *testing.T) {
 	if got := theme.Editor.HighlightStrong.Bg; got != "#123456" {
 		t.Errorf("highlightStrong bg = %q, want the explicit value", got)
 	}
+	if got := theme.Editor.Note; got.Bg != "#0a0a14" || got.Fg != "#ffffff" {
+		t.Errorf("note = %+v, want a faint tint with the default fg", got)
+	}
 }

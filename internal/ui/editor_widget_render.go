@@ -33,6 +33,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	if e.hasFolds() {
 		e.ensureTopLineVisible()
 	}
+	// Note rows count toward the scrollbar, so wrap them before deciding it;
+	// they wrap again below if the scrollbar narrows the text.
+	if e.DiffOverlay.wrapNotes(e.wrapTextWidth(max(editorW, 1)), false) {
+		e.SetDiffOverlay(e.DiffOverlay)
+	}
 	visibleCount := e.rowLayout(editorW).total()
 
 	showScrollbar := !e.Embedded && visibleCount > h
@@ -43,6 +48,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 
 	e.Viewport.Width = editorW
 	e.Viewport.Height = h
+	if e.DiffOverlay.wrapNotes(editorW, false) {
+		e.SetDiffOverlay(e.DiffOverlay)
+	}
 	if e.hScrollPending {
 		e.hScrollPending = false
 		e.scrollViewport()
@@ -110,7 +118,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		isWrapContinuation := segStartCol > 0
 
 		if row.isPhantom() {
-			e.renderPhantomRow(surface, y, gutterW, editorW, row)
+			e.renderPhantomRow(surface, y, gutterW, editorW, row, layout)
 			continue
 		}
 		if label, ok := e.DiffOverlay.label(lineIdx); ok && lineIdx < totalLines && !isWrapContinuation {

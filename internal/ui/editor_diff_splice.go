@@ -84,7 +84,11 @@ func (o *DiffOverlay) splice(c buffer.Change) {
 		delete(o.Spans, line)
 		if line >= c.Start+c.Added {
 			delete(o.LineBg, line)
+			delete(o.NoteTexts, line)
 		}
+	}
+	if len(o.Notes) > 0 && c.Added != c.Removed {
+		o.notesMoved = true
 	}
 	if c.Added == c.Removed {
 		for line := c.Start; line < c.Start+c.Added && line < len(o.Kinds); line++ {
@@ -109,6 +113,7 @@ func (o *DiffOverlay) splice(c buffer.Change) {
 	shiftKeys(o.Labels, c, keepLast[string])
 	shiftKeys(o.LineBg, c, keepLast[term.Style])
 	shiftKeys(o.Spans, c, func(a, b []ColSpan) []ColSpan { return append(slices.Clip(a), b...) })
+	shiftKeys(o.NoteTexts, c, func(a, b []NoteText) []NoteText { return append(slices.Clip(a), b...) })
 	shiftKeys(o.DeletedMatches, c, func(a, b []FindMatch) []FindMatch { return append(slices.Clip(a), b...) })
 	if o.DeletedActive[0] >= 0 {
 		o.DeletedActive[0] = shiftLine(o.DeletedActive[0], c)
@@ -135,6 +140,11 @@ func (e *EditorPaneWidget) syncDiffOverlay() bool {
 	}
 	o.ver = e.Buf.Version()
 	o.syncParts()
+	if o.notesMoved {
+		o.notesMoved = false
+		o.wrapNotes(o.noteWidth, true)
+		e.setPhantoms(o.phantoms())
+	}
 	return !o.stale
 }
 
