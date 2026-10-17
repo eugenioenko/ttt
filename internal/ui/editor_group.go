@@ -78,12 +78,13 @@ type editorTab struct {
 	Diff *DiffEditorWidget
 }
 
-// findSession keeps the editor query after its bar closes and tracks which buffer matches describe.
+// findSession keeps the editor query after its bar closes and tracks which buffer version the matches describe.
 type findSession struct {
-	query         string
-	options       SearchOptions
-	matchesBuffer *buffer.Buffer
-	activeMatch   int // Match index in matchesBuffer; -1 when no match is selected.
+	query          string
+	options        SearchOptions
+	matchesBuffer  *buffer.Buffer
+	matchesVersion uint64
+	activeMatch    int // Match index in matchesBuffer; -1 when no match is selected.
 }
 
 type EditorGroupWidget struct {
@@ -1862,6 +1863,7 @@ func (g *EditorGroupWidget) SetFindSearch(query string, matches []FindMatch, opt
 		return
 	}
 	g.find.matchesBuffer = g.Editor.Buf
+	g.find.matchesVersion = g.Editor.Buf.Version()
 	g.applySearch(query, matches)
 }
 
@@ -1989,7 +1991,8 @@ func (g *EditorGroupWidget) clearSearchState() {
 
 func (g *EditorGroupWidget) refreshFindSearch() bool {
 	if !g.IsEditorActive() || g.find.query == "" ||
-		(g.find.matchesBuffer == g.Editor.Buf && g.Editor.SearchQuery == g.find.query) {
+		(g.find.matchesBuffer == g.Editor.Buf && g.Editor.SearchQuery == g.find.query &&
+			g.find.matchesVersion == g.Editor.Buf.Version()) {
 		return false
 	}
 	matches, err := FindInLines(g.Editor.Buf.Lines, g.find.query, g.find.options)
@@ -2002,6 +2005,7 @@ func (g *EditorGroupWidget) refreshFindSearch() bool {
 		active = -1
 	}
 	g.find.matchesBuffer = g.Editor.Buf
+	g.find.matchesVersion = g.Editor.Buf.Version()
 	g.applySearch(g.find.query, matches)
 	if len(matches) == 0 {
 		g.find.activeMatch = -1
