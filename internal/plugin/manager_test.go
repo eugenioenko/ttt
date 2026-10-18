@@ -407,6 +407,56 @@ func TestDenyRecordsNoPermissionsForANewPlugin(t *testing.T) {
 	}
 }
 
+func TestDenyRevokesDroppedPermissionsBeforeTheyAreRequestedAgain(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	t.Cleanup(m.Shutdown)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	manifestPath := filepath.Join(dir, "plugin.ttt.json")
+	denied := `{"name":"mixed","version":"2.0.0","entry":"main.ttt.lua","permissions":{"commands":true,"editor.read":true}}`
+	if err := os.WriteFile(manifestPath, []byte(denied), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, SystemExec: []string{"curl"}})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+	if err := m.DenyPlugin(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := LoadRegistry(m.registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := stored.Find("mixed")
+	if entry == nil {
+		t.Fatal("denied plugin is missing from the registry")
+	}
+	if entry.Enabled || !entry.Permissions.Commands || entry.Permissions.EditorRead || len(entry.Permissions.SystemExec) != 0 {
+		t.Errorf("denial must retain only approved permissions still declared: %+v", entry)
+	}
+	requestedAgain := `{"name":"mixed","version":"3.0.0","entry":"main.ttt.lua","permissions":{"commands":true,"system.exec":["curl"]}}`
+	if err := os.WriteFile(manifestPath, []byte(requestedAgain), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := m.SetEnabled("mixed", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Granted.Commands || p.Granted.CheckExec("curl") == nil {
+		t.Errorf("re-enabling restored a dropped permission: %+v", p.Granted)
+	}
+	m.Shutdown()
+	again := NewManager(pluginsDir, m.registryPath)
+	t.Cleanup(again.Shutdown)
+	if pending := again.LoadAll(); len(pending) != 1 || pending[0].Name != "mixed" {
+		t.Error("requesting the dropped permission again must require approval after restart")
+	}
+}
+
 // A plugin waiting for approval must still be asked about after a restart,
 // even when something else saved the registry in the meantime.
 func TestPendingApprovalSurvivesARegistrySave(t *testing.T) {
