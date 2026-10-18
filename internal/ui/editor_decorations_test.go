@@ -280,3 +280,38 @@ func TestDecorationsAreDroppedWhenATabClosesWithUnsavedEdits(t *testing.T) {
 		t.Fatal("decorations of a tab closed without edits did not come back")
 	}
 }
+
+func TestAnnotationReverseSwapsTextColorsOnly(t *testing.T) {
+	e := newRowsEditor([]string{"x", "abc", "def"}, 20, 4)
+	o := NewAnnotationOverlay()
+	o.LineBg[1] = term.StyleReverse
+	o.Spans[2] = []ColSpan{{Start: 1, End: 2, Style: term.StyleReverse}}
+	e.SetDiffOverlay(o)
+	grid := renderGrid(e)
+	gutterW := e.GutterWidth()
+	for _, tc := range []struct {
+		y, x     int
+		reversed bool
+	}{{1, 0, true}, {1, 2, true}, {1, 3, false}, {2, 0, false}, {2, 1, true}, {2, 2, false}} {
+		cell := grid[tc.y][gutterW+tc.x]
+		if got := cell.Attrs&term.CellAttrReverse != 0; got != tc.reversed {
+			t.Errorf("row %d column %d reversed = %v, want %v", tc.y, tc.x, got, tc.reversed)
+		}
+		if cell.BgStyle == term.StyleReverse {
+			t.Errorf("row %d column %d kept StyleReverse as its background", tc.y, tc.x)
+		}
+	}
+}
+
+func TestAnnotationReverseKeepsTheActiveLinePastTheText(t *testing.T) {
+	e := newRowsEditor([]string{"x", "abc", "def"}, 20, 4)
+	e.Cursor.Line = 1
+	o := NewAnnotationOverlay()
+	o.LineBg[1] = term.StyleReverse
+	e.SetDiffOverlay(o)
+	grid := renderGrid(e)
+	cell := grid[1][e.GutterWidth()+5]
+	if cell.BgStyle != term.StyleActiveLine || cell.Attrs != 0 {
+		t.Errorf("cell past the text = bg %v attrs %v, want the active line and no attrs", cell.BgStyle, cell.Attrs)
+	}
+}

@@ -108,6 +108,7 @@ const (
 	StyleScrollbarThumbFill
 	StyleHighlight
 	StyleHighlightStrong
+	StyleReverse
 	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
 	// tokenColors fill; see TokenStyle.
 	styleTokenBase
@@ -150,7 +151,8 @@ type Cell struct {
 	Bold      bool  // when true, applies bold to styled (non-Direct) cells
 
 	// Direct-style fields for terminal emulator cells.
-	// When Direct is true, Fg/Bg/Attrs are used instead of Style.
+	// When Direct is true, Fg/Bg/Attrs are used instead of Style. Styled cells
+	// honor only CellAttrReverse.
 	Direct bool
 	Fg     DirectColor
 	Bg     DirectColor

@@ -70,6 +70,7 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 		m[i] = base
 	}
 	m[term.StyleSelection] = base.Reverse(true)
+	m[term.StyleReverse] = base.Reverse(true)
 
 	if o.transparentBg {
 		if theme.CommitHeader.Bg == theme.Default.Bg {

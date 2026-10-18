@@ -17,6 +17,7 @@ func DefaultStyleMap() StyleMap {
 		m[i] = tcell.StyleDefault
 	}
 	m[StyleSelection] = tcell.StyleDefault.Reverse(true)
+	m[StyleReverse] = tcell.StyleDefault.Reverse(true)
 	return m
 }
 
@@ -91,6 +92,9 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 					Foreground(s.GetForeground()).
 					Background(bg).
 					Attributes(s.GetAttributes())
+	}
+	if c.Attrs&CellAttrReverse != 0 {
+		s = s.Reverse(true)
 	}
 	if c.UlStyle != 0 {
 		us := t.styleMap[c.UlStyle]

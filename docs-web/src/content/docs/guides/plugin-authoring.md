@@ -1833,7 +1833,7 @@ Replaces this plugin's decorations for `path` with `items`. An item without
 | `end_line` | number | no       | 1-based end line. Defaults to `line`; `math.huge` reaches the end of the file. |
 | `col`      | number | no       | 1-based start **rune column** of a text highlight.                   |
 | `end_col`  | number | with `col` | 1-based end column on `end_line`, exclusive.                       |
-| `style`    | string | no       | A named style whose background is used. Defaults to `highlight` for lines and `highlight_strong` for text. |
+| `style`    | string | no       | A named style whose background is used. Defaults to `highlight` for lines and `highlight_strong` for text. `reverse` swaps the text and background colors instead, on text only. |
 
 Lines and columns are whole numbers from 1. An invalid item (no `line`,
 `end_line` before `line`, `col` without `end_col`, an empty text range, or an
@@ -2470,6 +2470,7 @@ Named styles available for both widget and raw cell rendering. Actual colors dep
 | `bookmark` | Gutter bookmark icon           |
 | `highlight` | Background for decorated lines |
 | `highlight_strong` | Background for highlighted text |
+| `reverse`  | Reverse video: swaps the text and background colors |
 | `syntax_comment`   | Syntax: comments       |
 | `syntax_string`    | Syntax: string literals |
 | `syntax_keyword`   | Syntax: keywords       |

@@ -293,10 +293,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						bgStyle = term.StyleActiveLine
 					}
 				}
-				if diffBg != 0 && !inAnySel && !isSearchHighlight && (bgStyle == 0 || bgStyle == term.StyleActiveLine) {
+				inText := colIdx >= 0 && colIdx < len(line)
+				if diffBg != 0 && !inAnySel && !isSearchHighlight && (bgStyle == 0 || bgStyle == term.StyleActiveLine) && (diffBg != term.StyleReverse || inText) {
 					bgStyle = diffBg
 				}
-				if len(lineSpans) > 0 && colIdx < len(line) && !inAnySel && !isSearchHighlight {
+				if len(lineSpans) > 0 && inText && !inAnySel && !isSearchHighlight {
 					if spanBg := spanStyle(lineSpans, colIdx); spanBg != 0 {
 						bgStyle = spanBg
 					}
@@ -315,7 +316,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					}
 				}
 				ulStyle := e.diagStyleAt(lineIdx, colIdx)
-				surface.SetCell(gutterW+x, y, term.Cell{Ch: ch, Style: style, BgStyle: bgStyle, UlStyle: ulStyle})
+				cell := term.Cell{Ch: ch, Style: style, BgStyle: bgStyle, UlStyle: ulStyle}
+				if bgStyle == term.StyleReverse {
+					cell.BgStyle, cell.Attrs = 0, term.CellAttrReverse
+				}
+				surface.SetCell(gutterW+x, y, cell)
 			}
 		} else {
 			for x := 0; x < editorW; x++ {
