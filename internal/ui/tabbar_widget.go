@@ -98,7 +98,7 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 	prefix := " "
 	suffix := ""
 	if tab.Dirty {
-		prefix += "● "
+		prefix += string(icons.Rune(icons.Dirty)) + " "
 	}
 	if tab.ReadOnly {
 		if icons.IsNerd(t.Icons) {
@@ -124,7 +124,7 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 		if tab.Pinned {
 			label.text += " " + icons.Get(t.Icons, icons.Pinned)
 		} else {
-			label.text += " ✕"
+			label.text += " " + string(icons.Rune(icons.Close))
 		}
 	}
 	label.text += " "
@@ -140,7 +140,7 @@ func drawTabLabel(surface Surface, x, innerLeft, innerRight int, label tabLabelL
 	for _, ch := range label.text {
 		chStyle := style
 		bgStyle := term.StyleDefault
-		if label.dirty && ch == '●' {
+		if label.dirty && ch == icons.Rune(icons.Dirty) {
 			chStyle = term.StyleWarning
 		}
 		if label.pinned && string(ch) == pinnedGlyph {
@@ -301,10 +301,10 @@ func (t *TabBarWidget) Render(surface Surface) {
 
 	// Arrow zones: " ◀ " on left, " ▶ " on right
 	if t.hasOverflowLeft {
-		surface.SetCell(1, 1, term.Cell{Ch: '◀', Style: term.StyleMuted})
+		surface.SetCell(1, 1, term.Cell{Ch: icons.Rune(icons.ArrowLeft), Style: term.StyleMuted})
 	}
 	if t.hasOverflowRight {
-		surface.SetCell(innerRight+1, 1, term.Cell{Ch: '▶', Style: term.StyleMuted})
+		surface.SetCell(innerRight+1, 1, term.Cell{Ch: icons.Rune(icons.ArrowRight), Style: term.StyleMuted})
 	}
 
 	if t.MoreButton != nil && w >= 5 {

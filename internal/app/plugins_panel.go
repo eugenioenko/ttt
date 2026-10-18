@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -63,7 +64,7 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 		EmptyText: "No plugins installed",
 		Indent:    1,
 		NodeMenu:  []widgets.MenuEntry{{Label: "Actions"}},
-		MenuIcon:  "⋮",
+		MenuIcon:  string(icons.Rune(icons.More)),
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			pp.handleCommand(cmd, node)
 		},

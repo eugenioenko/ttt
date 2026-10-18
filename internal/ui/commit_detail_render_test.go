@@ -159,7 +159,7 @@ func TestCommitDetailStickyHeadingWhileScrolledIntoFile(t *testing.T) {
 	renderDetail(detail, 60, 4)
 	detail.HandleEvent(tcell.NewEventKey(tcell.KeyEnd, "", tcell.ModNone))
 	grid := renderDetail(detail, 60, 4)
-	if first := strings.Split(detailTestText(grid), "\n")[0]; !strings.Contains(first, "▼ test.go") {
+	if first := strings.Split(detailTestText(grid), "\n")[0]; !strings.Contains(first, "▾ test.go") {
 		t.Fatalf("top row = %q, want the sticky file heading", first)
 	}
 }

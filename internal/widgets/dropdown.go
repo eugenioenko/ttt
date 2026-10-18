@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
@@ -22,7 +23,7 @@ type DropdownWidget struct {
 
 func NewDropdownWidget(config DropdownConfig) *DropdownWidget {
 	if config.Label == "" {
-		config.Label = "⋮"
+		config.Label = string(icons.Rune(icons.More))
 	}
 	btn := NewButtonWidget(ButtonConfig{
 		Label: config.Label,
@@ -36,7 +37,7 @@ func NewDropdownWidget(config DropdownConfig) *DropdownWidget {
 
 func (d *DropdownWidget) UpdateConfig(config DropdownConfig) {
 	if config.Label == "" {
-		config.Label = "⋮"
+		config.Label = string(icons.Rune(icons.More))
 	}
 	d.Config = config
 	d.button.Config.Label = config.Label

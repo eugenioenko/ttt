@@ -1,6 +1,7 @@
 package app
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 
@@ -194,11 +195,11 @@ func settingsCategories() []settingsCategory {
 				GetString: func(s *config.Settings) string { return s.Appearance.Icons },
 				SetString: func(s *config.Settings, v string) { s.Appearance.Icons = v }},
 			{Label: "Chevron: collapsed", Kind: settingString,
-				GetString: func(s *config.Settings) string { return s.Appearance.Chevrons.Collapsed },
-				SetString: func(s *config.Settings, v string) { s.Appearance.Chevrons.Collapsed = v }},
+				GetString: func(s *config.Settings) string { return s.Appearance.Overrides["chevron-right"] },
+				SetString: func(s *config.Settings, v string) { setIconOverride(s, "chevron-right", v) }},
 			{Label: "Chevron: expanded", Kind: settingString,
-				GetString: func(s *config.Settings) string { return s.Appearance.Chevrons.Expanded },
-				SetString: func(s *config.Settings, v string) { s.Appearance.Chevrons.Expanded = v }},
+				GetString: func(s *config.Settings) string { return s.Appearance.Overrides["chevron-down"] },
+				SetString: func(s *config.Settings, v string) { setIconOverride(s, "chevron-down", v) }},
 			section("Source Control"),
 			{Label: "File view", Kind: settingEnum, Options: gitFileViewItems,
 				GetString: func(s *config.Settings) string { return s.Git.FileView },
@@ -559,4 +560,17 @@ func (a *App) cleanupSettingsTab(id string) {
 	if id == settingsTabID {
 		a.settingsView = nil
 	}
+}
+
+func setIconOverride(s *config.Settings, name, value string) {
+	overrides := maps.Clone(s.Appearance.Overrides)
+	if overrides == nil {
+		overrides = map[string]string{}
+	}
+	if value == "" {
+		delete(overrides, name)
+	} else {
+		overrides[name] = value
+	}
+	s.Appearance.Overrides = overrides
 }

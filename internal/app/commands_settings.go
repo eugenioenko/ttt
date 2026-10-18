@@ -4,6 +4,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -30,8 +31,11 @@ func (a *App) ReloadSettings() {
 	a.StatusNotify("Settings reloaded")
 }
 
-func (a *App) applyChevrons(ap config.AppearanceSettings) {
-	collapsed, expanded := ap.ChevronRunes()
+func (a *App) applyIcons(ap config.AppearanceSettings) {
+	for _, warning := range icons.Configure(ap.Icons, ap.Overrides) {
+		a.LogOutput("warn", "settings", warning)
+	}
+	collapsed, expanded := icons.Rune(icons.ChevronRight), icons.Rune(icons.ChevronDown)
 	var trees []*widgets.TreeWidget
 	if a.Explorer != nil {
 		trees = append(trees, a.Explorer.Tree)
@@ -136,7 +140,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.RequestGitGutterForActiveFile()
 	}
 
-	a.applyChevrons(s.Appearance)
+	a.applyIcons(s.Appearance)
 	a.applyGrammarSettings(s.Editor.Grammars)
 
 	if a.Explorer != nil && (a.Explorer.Settings != s.Explorer || a.Explorer.Icons != s.Appearance.Icons) {

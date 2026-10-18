@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
-
-	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
 // Validated by normalizeSettings and used to populate the settings UI pickers.
@@ -203,46 +201,43 @@ type ExplorerSettings struct {
 	AutoReveal         bool `json:"autoReveal"`
 }
 
-const (
-	DefaultChevronCollapsed = "▶"
-	DefaultChevronExpanded  = "▼"
-)
-
-type ChevronSettings struct {
+// LegacyChevrons is the old appearance.chevrons setting, migrated into
+// appearance.overrides on load.
+type LegacyChevrons struct {
 	Collapsed string `json:"collapsed"`
 	Expanded  string `json:"expanded"`
 }
 
 type AppearanceSettings struct {
-	Icons           string          `json:"icons"`
-	Chevrons        ChevronSettings `json:"chevrons"`
-	ScrollbarGlyphs string          `json:"scrollbarGlyphs"`
+	Icons           string            `json:"icons"`
+	Overrides       map[string]string `json:"overrides,omitempty"`
+	Chevrons        *LegacyChevrons   `json:"chevrons,omitempty"`
+	ScrollbarGlyphs string            `json:"scrollbarGlyphs"`
 }
 
 func DefaultAppearanceSettings() AppearanceSettings {
 	return AppearanceSettings{
-		Icons: IconsNone,
-		Chevrons: ChevronSettings{
-			Collapsed: DefaultChevronCollapsed,
-			Expanded:  DefaultChevronExpanded,
-		},
+		Icons:           IconsNone,
 		ScrollbarGlyphs: ScrollbarGlyphsBlocks,
 	}
 }
 
-// ChevronRunes falls back to the defaults for any value that is not exactly one
-// single-width rune, since trees and the fold gutter draw the chevron in one
-// cell and reserve exactly two columns for it.
-func (a AppearanceSettings) ChevronRunes() (collapsed, expanded rune) {
-	return chevronRune(a.Chevrons.Collapsed, DefaultChevronCollapsed),
-		chevronRune(a.Chevrons.Expanded, DefaultChevronExpanded)
-}
-
-func chevronRune(value, fallback string) rune {
-	if r := []rune(value); len(r) == 1 && textwidth.Rune(r[0]) == 1 {
-		return r[0]
+// migrateChevrons moves custom appearance.chevrons values into overrides. The
+// old defaults are dropped so they don't override the chevrons forever.
+func (a *AppearanceSettings) migrateChevrons() {
+	if a.Chevrons == nil {
+		return
 	}
-	return []rune(fallback)[0]
+	for name, value := range map[string]string{"chevron-right": a.Chevrons.Collapsed, "chevron-down": a.Chevrons.Expanded} {
+		if value == "" || value == "▶" || value == "▼" || a.Overrides[name] != "" {
+			continue
+		}
+		if a.Overrides == nil {
+			a.Overrides = map[string]string{}
+		}
+		a.Overrides[name] = value
+	}
+	a.Chevrons = nil
 }
 
 type SidebarSettings struct {
@@ -452,8 +447,7 @@ func normalizeSettings(s *Settings) {
 	if s.Sidebar.CommitHistoryHeight < 0 {
 		s.Sidebar.CommitHistoryHeight = 0
 	}
-	collapsed, expanded := s.Appearance.ChevronRunes()
-	s.Appearance.Chevrons = ChevronSettings{Collapsed: string(collapsed), Expanded: string(expanded)}
+	s.Appearance.migrateChevrons()
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
 	}

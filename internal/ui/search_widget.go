@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -665,12 +666,12 @@ func (s *SearchWidget) Render(surface Surface) {
 			g := s.Groups[item.Group]
 			chevron := s.ChevronExpanded
 			if chevron == 0 {
-				chevron = '▼'
+				chevron = icons.Rune(icons.ChevronDown)
 			}
 			if !g.Expanded {
 				chevron = s.ChevronCollapsed
 				if chevron == 0 {
-					chevron = '▶'
+					chevron = icons.Rune(icons.ChevronRight)
 				}
 			}
 			x := surface.DrawText(0, y, string(chevron), w, style) + 1

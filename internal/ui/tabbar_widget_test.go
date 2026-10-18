@@ -116,7 +116,7 @@ func TestTabBarOverflowArrows(t *testing.T) {
 		t.Fatal("should have right overflow with narrow width")
 	}
 	// Right arrow is at innerRight+1 = (30-3)+1 = 28
-	if grid[1][28].Ch != '▶' {
+	if grid[1][28].Ch != '▸' {
 		t.Fatalf("expected right arrow at row 1 col 28, got '%c'", grid[1][28].Ch)
 	}
 }
@@ -139,8 +139,8 @@ func TestTabBarOverflowScrollLeft(t *testing.T) {
 	if !tb.hasOverflowLeft {
 		t.Fatal("should have left overflow when active tab is scrolled right")
 	}
-	// Left arrow " ◀ " — chevron is at col 1
-	if grid[1][1].Ch != '◀' {
+	// Left arrow " ◂ " — chevron is at col 1
+	if grid[1][1].Ch != '◂' {
 		t.Fatalf("expected left arrow at row 1 col 1, got '%c'", grid[1][1].Ch)
 	}
 }
@@ -558,7 +558,7 @@ func TestTabBarChevronNotDrawnOverTab(t *testing.T) {
 	if (tb.hasOverflowLeft || tb.hasOverflowRight) && tb.renderArrowW == 0 {
 		t.Fatal("chevron shown without a reserved gutter — tabs will overlap it")
 	}
-	if tb.hasOverflowLeft && grid[1][1].Ch != '◀' {
+	if tb.hasOverflowLeft && grid[1][1].Ch != '◂' {
 		t.Fatalf("left chevron cell overwritten by a tab, got '%c'", grid[1][1].Ch)
 	}
 }
@@ -598,7 +598,7 @@ func TestTabBarNoOverScrollAfterClose(t *testing.T) {
 	}
 }
 
-// TestTabBarGutterClickDoesNotSpawnTab: at the first tab the ◀ is hidden but its
+// TestTabBarGutterClickDoesNotSpawnTab: at the first tab the ◂ is hidden but its
 // gutter is still reserved. Double-clicking that empty gutter must be a no-op —
 // it must NOT fall through to the empty-space double-click handler and spawn a
 // tab (which looked like "jumping to the other side").
@@ -621,11 +621,11 @@ func TestTabBarGutterClickDoesNotSpawnTab(t *testing.T) {
 	tb.SetRect(r)
 	tb.Render(NewRenderSurface(makeGrid(40, 3), r))
 	if tb.hasOverflowLeft || tb.renderArrowW == 0 {
-		t.Fatalf("test setup: want hidden ◀ with reserved gutter, got ovL=%v arrowW=%d",
+		t.Fatalf("test setup: want hidden ◂ with reserved gutter, got ovL=%v arrowW=%d",
 			tb.hasOverflowLeft, tb.renderArrowW)
 	}
 
-	// Two clicks on the empty left gutter (where ◀ would be), fast enough to be a
+	// Two clicks on the empty left gutter (where ◂ would be), fast enough to be a
 	// double-click.
 	for i := 0; i < 2; i++ {
 		tb.HandleEvent(tcell.NewEventMouse(r.X+1, 1, tcell.Button1, 0))
@@ -636,7 +636,7 @@ func TestTabBarGutterClickDoesNotSpawnTab(t *testing.T) {
 		t.Fatalf("gutter double-click spawned a tab (OnDoubleClick fired %d times)", doubleClicks)
 	}
 	if prevTabs != 0 {
-		t.Fatalf("gutter click on a hidden ◀ scrolled (OnPrevTab fired %d times)", prevTabs)
+		t.Fatalf("gutter click on a hidden ◂ scrolled (OnPrevTab fired %d times)", prevTabs)
 	}
 }
 

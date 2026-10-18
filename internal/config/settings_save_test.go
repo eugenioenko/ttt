@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -175,27 +176,16 @@ func TestIconsDefaultToNoneWhenUnset(t *testing.T) {
 	}
 }
 
-func TestChevronsDefaultAndValidate(t *testing.T) {
-	d := DefaultSettings()
-	if d.Appearance.Chevrons.Collapsed != "▶" || d.Appearance.Chevrons.Expanded != "▼" {
-		t.Fatalf("defaults = %+v", d.Appearance.Chevrons)
-	}
-
-	for name, value := range map[string]string{"empty": "", "two runes": "ab", "wide": "日", "grapheme": "e\u0301"} {
-		s := DefaultSettings()
-		s.Appearance.Chevrons.Collapsed = value
-		normalizeSettings(&s)
-		if s.Appearance.Chevrons.Collapsed != "▶" {
-			t.Errorf("%s: collapsed = %q, want the default", name, s.Appearance.Chevrons.Collapsed)
-		}
-	}
-
+func TestLegacyChevronsMigrateToOverrides(t *testing.T) {
 	s := DefaultSettings()
-	s.Appearance.Chevrons = ChevronSettings{Collapsed: "ab", Expanded: "\ueab4"}
+	s.Appearance.Chevrons = &LegacyChevrons{Collapsed: "»", Expanded: "▼"}
 	normalizeSettings(&s)
-	collapsed, expanded := s.Appearance.ChevronRunes()
-	if collapsed != '▶' || expanded != '\ueab4' {
-		t.Errorf("chevrons = %q/%q, want the default and the configured glyph", collapsed, expanded)
+	if s.Appearance.Chevrons != nil {
+		t.Errorf("chevrons = %+v, want removed", s.Appearance.Chevrons)
+	}
+	want := map[string]string{"chevron-right": "»"}
+	if !maps.Equal(s.Appearance.Overrides, want) {
+		t.Errorf("overrides = %v, want %v (old defaults dropped)", s.Appearance.Overrides, want)
 	}
 }
 

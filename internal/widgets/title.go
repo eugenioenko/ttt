@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
@@ -33,7 +34,7 @@ func (t *TitleWidget) UpdateConfig(config TitleConfig) {
 	if len(config.Menu) > 0 {
 		label := config.Icon
 		if label == "" {
-			label = "⋮"
+			label = string(icons.Rune(icons.More))
 		}
 		var box *BoxModel
 		if config.Padded {

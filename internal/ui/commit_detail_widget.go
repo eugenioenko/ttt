@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"strconv"
 	"strings"
 	"time"
@@ -289,12 +290,12 @@ func (d *CommitDetailWidget) chevron(collapsed bool) rune {
 		if d.chevronCollapsed != 0 {
 			return d.chevronCollapsed
 		}
-		return '▶'
+		return icons.Rune(icons.ChevronRight)
 	}
 	if d.chevronExpanded != 0 {
 		return d.chevronExpanded
 	}
-	return '▼'
+	return icons.Rune(icons.ChevronDown)
 }
 
 func (d *CommitDetailWidget) SetDiffSignsColor(enabled bool) {

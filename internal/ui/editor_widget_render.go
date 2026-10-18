@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"strconv"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
@@ -153,10 +154,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					chevronCol := gutterW - 2
 					collapsedCh, expandedCh := e.FoldChevronCollapsed, e.FoldChevronExpanded
 					if collapsedCh == 0 {
-						collapsedCh = '▶'
+						collapsedCh = icons.Rune(icons.ChevronRight)
 					}
 					if expandedCh == 0 {
-						expandedCh = '▼'
+						expandedCh = icons.Rune(icons.ChevronDown)
 					}
 					if e.GutterStyle == "minimal" {
 						chevronCol = gutterW - 1

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
@@ -20,7 +21,7 @@ func (m *MoreButtonWidget) Focusable() bool { return false }
 
 func (m *MoreButtonWidget) Render(surface Surface) {
 	surface.SetCell(0, 0, term.Cell{Ch: ' ', Style: term.StyleInactiveTab})
-	surface.SetCell(1, 0, term.Cell{Ch: '⋮', Style: term.StyleInactiveTab})
+	surface.SetCell(1, 0, term.Cell{Ch: icons.Rune(icons.More), Style: term.StyleInactiveTab})
 	surface.SetCell(2, 0, term.Cell{Ch: ' ', Style: term.StyleInactiveTab})
 }
 

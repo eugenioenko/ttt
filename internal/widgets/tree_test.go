@@ -73,7 +73,7 @@ func TestTreeRenderIndentation(t *testing.T) {
 
 	// Root is at depth 0, so label starts at x=0 after the chevron (2 chars: chevron + space)
 	// Root has children so chevron at x=0
-	if s.cells[0][0].Ch != '▼' {
+	if s.cells[0][0].Ch != '▾' {
 		t.Errorf("root should show expanded chevron, got %c", s.cells[0][0].Ch)
 	}
 
@@ -155,13 +155,13 @@ func TestTreeRenderChevrons(t *testing.T) {
 	s := renderWidget(tree, 0, 0, 30, 10)
 
 	// Row 0: collapsed node has right-pointing chevron
-	if s.cells[0][0].Ch != '▶' {
-		t.Errorf("collapsed node should show ▶, got %c", s.cells[0][0].Ch)
+	if s.cells[0][0].Ch != '▸' {
+		t.Errorf("collapsed node should show ▸, got %c", s.cells[0][0].Ch)
 	}
 
 	// Row 1: expanded node has down-pointing chevron
-	if s.cells[1][0].Ch != '▼' {
-		t.Errorf("expanded node should show ▼, got %c", s.cells[1][0].Ch)
+	if s.cells[1][0].Ch != '▾' {
+		t.Errorf("expanded node should show ▾, got %c", s.cells[1][0].Ch)
 	}
 
 	// Row 3: leaf node (after expanded + its child C2 at row 2) has no chevron
@@ -183,8 +183,8 @@ func TestTreeRenderExpandableNoChildren(t *testing.T) {
 	s := renderWidget(tree, 0, 0, 30, 10)
 
 	// Expandable flag without children should still show a chevron
-	if s.cells[0][0].Ch != '▶' {
-		t.Errorf("expandable node should show ▶, got %c", s.cells[0][0].Ch)
+	if s.cells[0][0].Ch != '▸' {
+		t.Errorf("expandable node should show ▸, got %c", s.cells[0][0].Ch)
 	}
 }
 
@@ -1071,7 +1071,7 @@ func TestTreeDeeplyNested(t *testing.T) {
 	}
 
 	// L2 at depth 2 has children, chevron at x=4 (2*2), then space, then label at x=6
-	if s.cells[2][4].Ch != '▼' {
+	if s.cells[2][4].Ch != '▾' {
 		t.Errorf("L2 should have chevron at x=4, got %c", s.cells[2][4].Ch)
 	}
 }
@@ -1659,7 +1659,7 @@ func TestTreeRenderCustomChevrons(t *testing.T) {
 
 	plain := NewTreeWidget(TreeConfig{Items: []*TreeNode{{ID: "d", Label: "d", Expandable: true}}})
 	s = renderWidget(plain, 0, 0, 20, 5)
-	if got := s.cells[0][0].Ch; got != '▶' {
+	if got := s.cells[0][0].Ch; got != '▸' {
 		t.Errorf("unset chevron = %c, want the default", got)
 	}
 }

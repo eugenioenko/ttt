@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -380,7 +381,7 @@ func (t *TreeWidget) menuIconWidth() int {
 	}
 	label := t.Config.MenuIcon
 	if label == "" {
-		label = "⋮"
+		label = string(icons.Rune(icons.More))
 	}
 	var box *BoxModel
 	if t.Config.MenuIconPadded {
@@ -433,12 +434,12 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	if hasChildren {
 		chevron := t.Config.ChevronCollapsed
 		if chevron == 0 {
-			chevron = '▶'
+			chevron = icons.Rune(icons.ChevronRight)
 		}
 		if node.Expanded {
 			chevron = t.Config.ChevronExpanded
 			if chevron == 0 {
-				chevron = '▼'
+				chevron = icons.Rune(icons.ChevronDown)
 			}
 		}
 		if x < w {
@@ -514,7 +515,7 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		label := t.Config.MenuIcon
 		if label == "" {
 			if len(node.Children) > 0 {
-				label = "⋮"
+				label = string(icons.Rune(icons.More))
 			} else {
 				label = "⋯"
 			}

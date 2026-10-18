@@ -3,10 +3,6 @@
   "theme": "default-dark",
   "appearance": {
     "icons": "none",
-    "chevrons": {
-      "collapsed": "▶",
-      "expanded": "▼"
-    },
     "scrollbarGlyphs": "blocks"
   },
   "editor": {

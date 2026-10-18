@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
@@ -52,7 +53,7 @@ func NewReplaceBarWidget() *ReplaceBarWidget {
 	r.ReplaceInput = NewInputWidget()
 	r.ReplaceInput.Placeholder = "Replace"
 	r.ReplaceInput.Actions = []InputAction{
-		{Label: "⟳", OnClick: func() {
+		{Label: string(icons.Rune(icons.Replace)), OnClick: func() {
 			if len(r.Matches) > 0 && r.OnReplace != nil {
 				r.OnReplace(r.Matches[r.Current], r.ReplaceInput.Text)
 				r.search()

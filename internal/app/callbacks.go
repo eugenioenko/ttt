@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"os"
 	"path/filepath"
 	"sort"
@@ -628,7 +629,7 @@ func registerWidgetCallbacks(app *App) {
 	app.SplitPanel.OnRightClick = func() {}
 
 	app.Sidebar.Tabs.Config.Actions = []widgets.TabAction{
-		{Icon: "⋮", OnClick: app.ShowSidebarMoreMenu},
+		{Icon: string(icons.Rune(icons.More)), OnClick: app.ShowSidebarMoreMenu},
 	}
 	app.Sidebar.OnPanelReorder = app.persistSidebarPanelOrder
 
@@ -863,10 +864,10 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.BottomPanel.Tabs.Config.Actions = []widgets.TabAction{
-		{Icon: "+", OnClick: func(_, _ int) {
+		{Icon: string(icons.Rune(icons.Add)), OnClick: func(_, _ int) {
 			reg.Execute("terminal.new")
 		}},
-		{Icon: "⋮", OnClick: func(sx, sy int) {
+		{Icon: string(icons.Rune(icons.More)), OnClick: func(sx, sy int) {
 			dock := ui.ContextMenuItem{Label: "Dock Right", Command: "panel.dockRight"}
 			if app.ContentSplit.Position == ui.SplitRight {
 				dock = ui.ContextMenuItem{Label: "Dock Bottom", Command: "panel.dockBottom"}

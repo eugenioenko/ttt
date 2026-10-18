@@ -405,7 +405,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
 	app.EditorGroup.FileHandler = app.openWithFileHandler
 	app.EditorGroup.OnFileHandled = app.fileHandlerTabOpened
-	app.applyChevrons(cfg.Settings.Appearance)
+	app.applyIcons(cfg.Settings.Appearance)
 	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)
 	app.reportGrammarErrors(grammarErrs)
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})

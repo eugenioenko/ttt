@@ -69,7 +69,7 @@ func TestCommitDetailCollapsedEmphasisCoversContentAndDisclosureUntilHovered(t *
 			if got := grid[gapRow][detail.layoutLeftStart]; got.Style != term.StyleMuted || got.BgStyle != term.StyleDefault {
 				t.Fatalf("default detail content style = %+v, want quiet muted row", got)
 			}
-			if got := grid[gapRow][detail.gutterW-1]; got.Ch != '▶' || got.Style != term.StyleLineNumber {
+			if got := grid[gapRow][detail.gutterW-1]; got.Ch != '▸' || got.Style != term.StyleLineNumber {
 				t.Fatalf("default detail disclosure = %+v", got)
 			}
 
@@ -78,7 +78,7 @@ func TestCommitDetailCollapsedEmphasisCoversContentAndDisclosureUntilHovered(t *
 			if got := grid[gapRow][detail.layoutLeftStart].Style; got != term.StyleDiffCollapsedEmphasis {
 				t.Fatalf("emphasized detail content style = %v", got)
 			}
-			if got := grid[gapRow][detail.gutterW-1]; got.Ch != '▶' || got.Style != term.StyleDiffCollapsedEmphasis {
+			if got := grid[gapRow][detail.gutterW-1]; got.Ch != '▸' || got.Style != term.StyleDiffCollapsedEmphasis {
 				t.Fatalf("emphasized detail disclosure = %+v", got)
 			}
 
@@ -309,11 +309,11 @@ func TestCommitDetailChevronsFollowConfiguredGlyphs(t *testing.T) {
 		}
 		return out.String()
 	}
-	if got := column(); strings.Count(got, "v") < 2 || strings.ContainsRune(got, '▼') {
+	if got := column(); strings.Count(got, "v") < 2 || strings.ContainsRune(got, '▾') {
 		t.Fatalf("expanded file headings drew %q, want the configured 'v'", got)
 	}
 	detail.CollapseAllFiles()
-	if got := column(); strings.Count(got, ">") < 2 || strings.ContainsRune(got, '▶') {
+	if got := column(); strings.Count(got, ">") < 2 || strings.ContainsRune(got, '▸') {
 		t.Fatalf("collapsed file headings drew %q, want the configured '>'", got)
 	}
 }

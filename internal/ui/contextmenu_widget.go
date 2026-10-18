@@ -193,7 +193,7 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 			surface.DrawText(sx, row, it.Shortcut, x+menuW-1, shortStyle)
 		}
 		if len(it.Submenu) > 0 && menuW >= 3 {
-			chevron := []rune(icons.Get(c.Icons, icons.ChevronRight))
+			chevron := []rune(icons.Get(c.Icons, icons.Submenu))
 			surface.SetCell(x+menuW-2, row, term.Cell{Ch: chevron[0], Style: style})
 		}
 	}

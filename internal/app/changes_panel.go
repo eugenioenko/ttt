@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"path/filepath"
 	"strings"
 
@@ -734,7 +735,7 @@ func (cp *ChangesPanel) buildTree() {
 				Expanded:   true,
 				Muted:      true,
 				Actions: []widgets.Action{
-					{Icon: "−", Command: "unstageAll"},
+					{Icon: string(icons.Rune(icons.Remove)), Command: "unstageAll"},
 				},
 			}
 			stagedNode.Children = cp.fileNodes(g.Dir, g.Staged, true, gi, false)
@@ -751,8 +752,8 @@ func (cp *ChangesPanel) buildTree() {
 				Expanded:   true,
 				Muted:      true,
 				Actions: []widgets.Action{
-					{Icon: "✕", Command: "discardAll"},
-					{Icon: "+", Command: "stageAll"},
+					{Icon: string(icons.Rune(icons.Discard)), Command: "discardAll"},
+					{Icon: string(icons.Rune(icons.Add)), Command: "stageAll"},
 				},
 			}
 			changesNode.Children = cp.fileNodes(g.Dir, g.Unstaged, false, gi, false)
@@ -769,7 +770,7 @@ func (cp *ChangesPanel) buildTree() {
 				Expanded:   true,
 				Children:   sectionNodes,
 				Actions: []widgets.Action{
-					{Icon: "⋮", Command: "groupMenu"},
+					{Icon: string(icons.Rune(icons.More)), Command: "groupMenu"},
 				},
 			}
 			roots = append(roots, root)
@@ -787,7 +788,7 @@ func (cp *ChangesPanel) buildTree() {
 			Expandable: true,
 			Expanded:   true,
 			Actions: []widgets.Action{
-				{Icon: "⋮", Command: "prGroupMenu"},
+				{Icon: string(icons.Rune(icons.More)), Command: "prGroupMenu"},
 			},
 		}
 		prRoot.Children = cp.fileNodes(pg.Dir, pg.Files, false, pi, true)
@@ -817,10 +818,10 @@ func clearTreeActions(nodes []*widgets.TreeNode) {
 func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind workNodeKind, group int, pr bool) *widgets.TreeNode {
 	icon := ui.StatusBadge(f.Status)
 	iconStyle := ui.StatusStyle(f.Status)
-	actionIcon := "+"
+	actionIcon := string(icons.Rune(icons.Add))
 	actionCmd := "stage"
 	if staged {
-		actionIcon = "−"
+		actionIcon = string(icons.Rune(icons.Remove))
 		actionCmd = "unstage"
 	}
 	id := workingNodeID(kind, dir, f.Path, staged)

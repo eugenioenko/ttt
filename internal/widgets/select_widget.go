@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -320,9 +321,9 @@ func (s *SelectWidget) Render(surface Surface) {
 	inputSurface := surface.Sub(Rect{X: 0, Y: y, W: inputW, H: 1})
 	s.input.Render(inputSurface)
 
-	chevron := '▼'
+	chevron := icons.Rune(icons.ChevronDown)
 	if (s.Config.Collapsible && s.open) || (!s.Config.Collapsible && s.focused) {
-		chevron = '▲'
+		chevron = icons.Rune(icons.ChevronUp)
 	}
 	surface.SetCell(w-2, y, term.Cell{Ch: chevron, Style: term.StyleMuted})
 	y++

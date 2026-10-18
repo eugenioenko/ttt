@@ -200,7 +200,7 @@ func TestContextMenuFullwidthSubmenuFlipsAndKeepsMouseBounds(t *testing.T) {
 }
 
 func TestContextMenuSubmenuChevronFollowsIconMode(t *testing.T) {
-	nerd := icons.Get(config.IconsNerdFont, icons.ChevronRight)
+	nerd := icons.Get(config.IconsNerdFont, icons.Submenu)
 	cases := []struct {
 		name string
 		mode string

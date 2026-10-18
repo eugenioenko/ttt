@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"sort"
 	"strconv"
 	"unsafe"
@@ -434,7 +435,7 @@ func (o *DiffOverlay) gutterLook(kind diff.LineKind, base, collapsed term.Style)
 
 func (o *DiffOverlay) gapChevron() rune {
 	if o == nil || o.GapChevron == 0 {
-		return '▶'
+		return icons.Rune(icons.ChevronRight)
 	}
 	return o.GapChevron
 }

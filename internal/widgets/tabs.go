@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -178,7 +179,7 @@ func (t *TabsWidget) Render(surface Surface) {
 			inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 			x++
 			if item.Dirty {
-				inner.SetCell(x, 0, term.Cell{Ch: '●', Style: term.StyleWarning})
+				inner.SetCell(x, 0, term.Cell{Ch: icons.Rune(icons.Dirty), Style: term.StyleWarning})
 				x++
 				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
@@ -209,7 +210,7 @@ func (t *TabsWidget) Render(surface Surface) {
 			inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 			x++
 			if item.Dirty {
-				inner.SetCell(x, 0, term.Cell{Ch: '●', Style: term.StyleWarning})
+				inner.SetCell(x, 0, term.Cell{Ch: icons.Rune(icons.Dirty), Style: term.StyleWarning})
 				x++
 				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
