@@ -529,6 +529,10 @@ var privateNetworks = []net.IPNet{
 	{IP: net.IPv4(192, 168, 0, 0), Mask: net.CIDRMask(16, 32)},
 	{IP: net.IPv4(169, 254, 0, 0), Mask: net.CIDRMask(16, 32)},
 	{IP: net.IPv4(127, 0, 0, 0), Mask: net.CIDRMask(8, 32)},
+	// Connecting to 0.0.0.0 reaches the local machine on Linux and macOS.
+	{IP: net.IPv4(0, 0, 0, 0), Mask: net.CIDRMask(8, 32)},
+	{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)},
+	{IP: net.ParseIP("fc00::"), Mask: net.CIDRMask(7, 128)},
 }
 
 func (n *PluginNetworkAPI) validateURL(rawURL string) error {
@@ -551,7 +555,7 @@ func (n *PluginNetworkAPI) validateURL(rawURL string) error {
 		return nil
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 			return fmt.Errorf("requests to %s (%s) are not allowed", hostname, ip)
 		}
 		for _, pn := range privateNetworks {

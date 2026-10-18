@@ -332,6 +332,16 @@ func TestPluginNetworkAPI_SSRFProtection(t *testing.T) {
 		{"127.0.0.1 blocked", "http://127.0.0.1/admin", true},
 		{"169.254 metadata blocked", "http://169.254.169.254/latest/meta-data/", true},
 		{"public hostname resolving to a private IP blocked", "http://rebind.example.com/admin", true},
+		{"0.0.0.0 blocked", "http://0.0.0.0:8080/", true},
+		{"0.0.0.0/8 blocked", "http://0.1.2.3/", true},
+		{"IPv6 unspecified blocked", "http://[::]:8080/", true},
+		{"IPv6 loopback blocked", "http://[::1]/", true},
+		{"IPv4-mapped loopback blocked", "http://[::ffff:127.0.0.1]/", true},
+		{"IPv6 unique local blocked", "http://[fd12:3456::1]/", true},
+		{"IPv6 link-local blocked", "http://[fe80::1]/", true},
+		{"shared address space blocked", "http://100.64.0.1/", true},
+		{"public address next to shared space allowed", "http://100.128.0.1/", false},
+		{"public IPv6 allowed", "http://[2606:4700::1111]/", false},
 	}
 
 	for _, tt := range tests {

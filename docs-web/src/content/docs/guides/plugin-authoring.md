@@ -2184,7 +2184,7 @@ local home = sys.env("HOME")
 
 The `ttt.net` module provides HTTP request capabilities. Requires the `network.http` permission.
 
-Requests are restricted for safety: only `http` and `https` URLs are allowed; requests to localhost, loopback, link-local, and private network addresses are blocked; requests time out after 30 seconds; and response bodies are capped at 10 MB.
+Requests are restricted for safety: only `http` and `https` URLs are allowed; requests to localhost, loopback, unspecified (`0.0.0.0`, `::`), link-local, private, and shared (`100.64.0.0/10`) addresses are blocked; requests time out after 30 seconds; and response bodies are capped at 10 MB.
 
 ```lua
 local net = require("ttt.net")
