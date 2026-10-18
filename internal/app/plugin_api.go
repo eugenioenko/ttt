@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -510,30 +509,31 @@ func (s *PluginSystemAPI) Env(name string) string {
 	return os.Getenv(name)
 }
 
-// PluginNetworkAPI implements plugin.NetworkAPI.
+// PluginNetworkAPI implements plugin.NetworkAPI. Where a plugin may connect
+// is its network.http grant's business; this layer only enforces the scheme
+// and holds redirects to the grant.
 type PluginNetworkAPI struct {
-	client   *http.Client
-	lookupIP func(string) ([]net.IP, error)
-	// allowHost is the plugin's network.http host check. The plugin host
-	// applies it to the URL a plugin passes; redirects are checked here.
-	allowHost func(host string) error
+	client *http.Client
+	// allow is the plugin's network.http check. The plugin host applies it
+	// to the URL a plugin passes; redirects are checked here.
+	allow func(*url.URL) error
 }
 
 func NewPluginNetworkAPI() *PluginNetworkAPI {
-	n := &PluginNetworkAPI{lookupIP: net.LookupIP}
+	n := &PluginNetworkAPI{}
 	n.client = &http.Client{Timeout: 30 * time.Second, CheckRedirect: n.checkRedirect}
 	return n
 }
 
-// ForPlugin returns a copy whose redirects are also held to allowHost.
-func (n *PluginNetworkAPI) ForPlugin(allowHost func(host string) error) plugin.NetworkAPI {
-	c := &PluginNetworkAPI{lookupIP: n.lookupIP, allowHost: allowHost}
+// ForPlugin returns a copy whose redirects are also held to allow.
+func (n *PluginNetworkAPI) ForPlugin(allow func(*url.URL) error) plugin.NetworkAPI {
+	c := &PluginNetworkAPI{allow: allow}
 	c.client = &http.Client{Timeout: n.client.Timeout, Transport: n.client.Transport, CheckRedirect: c.checkRedirect}
 	return c
 }
 
 // checkRedirect holds every redirect to the checks the first URL passed;
-// without it a listed host could send a plugin to any host or local address.
+// without it a listed host could send a plugin anywhere.
 func (n *PluginNetworkAPI) checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return fmt.Errorf("stopped after 10 redirects")
@@ -541,18 +541,10 @@ func (n *PluginNetworkAPI) checkRedirect(req *http.Request, via []*http.Request)
 	if err := n.validateURL(req.URL.String()); err != nil {
 		return err
 	}
-	if n.allowHost != nil {
-		return n.allowHost(req.URL.Hostname())
+	if n.allow != nil {
+		return n.allow(req.URL)
 	}
 	return nil
-}
-
-var privateNetworks = []net.IPNet{
-	{IP: net.IPv4(10, 0, 0, 0), Mask: net.CIDRMask(8, 32)},
-	{IP: net.IPv4(172, 16, 0, 0), Mask: net.CIDRMask(12, 32)},
-	{IP: net.IPv4(192, 168, 0, 0), Mask: net.CIDRMask(16, 32)},
-	{IP: net.IPv4(169, 254, 0, 0), Mask: net.CIDRMask(16, 32)},
-	{IP: net.IPv4(127, 0, 0, 0), Mask: net.CIDRMask(8, 32)},
 }
 
 func (n *PluginNetworkAPI) validateURL(rawURL string) error {
@@ -560,31 +552,9 @@ func (n *PluginNetworkAPI) validateURL(rawURL string) error {
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
-
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("URL scheme %q not allowed, only http and https", u.Scheme)
 	}
-
-	hostname := u.Hostname()
-	if hostname == "localhost" {
-		return fmt.Errorf("requests to localhost are not allowed")
-	}
-
-	ips, err := n.lookupIP(hostname)
-	if err != nil {
-		return nil
-	}
-	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return fmt.Errorf("requests to %s (%s) are not allowed", hostname, ip)
-		}
-		for _, pn := range privateNetworks {
-			if pn.Contains(ip) {
-				return fmt.Errorf("requests to private network %s (%s) are not allowed", hostname, ip)
-			}
-		}
-	}
-
 	return nil
 }
 

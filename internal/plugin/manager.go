@@ -3,6 +3,7 @@ package plugin
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -232,7 +233,7 @@ func (m *Manager) SetNetworkAPI(api NetworkAPI) {
 
 func (m *Manager) networkFor(p *Plugin) NetworkAPI {
 	if n, ok := m.networkAPI.(HostCheckedNetwork); ok {
-		return n.ForPlugin(func(host string) error { return p.Granted.CheckHost(host) })
+		return n.ForPlugin(func(u *url.URL) error { return p.Granted.CheckURL(u) })
 	}
 	return m.networkAPI
 }

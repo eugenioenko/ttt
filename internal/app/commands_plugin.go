@@ -2,6 +2,7 @@ package app
 
 import (
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -570,7 +571,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			a.postRepositoryInvalidation("", RepositoryWorktree|RepositoryHistory)
 		}
 	}
-	p.Network = NewPluginNetworkAPI().ForPlugin(func(host string) error { return p.Granted.CheckHost(host) })
+	p.Network = NewPluginNetworkAPI().ForPlugin(func(u *url.URL) error { return p.Granted.CheckURL(u) })
 	a.wirePluginLog(p)
 	p.Markdown = a.Settings.Markdown
 	p.Borders = a.Borders

@@ -98,7 +98,7 @@ Available permissions include:
 | `fs.write` | Write files (`true` for the workspace, or a list of allowed paths) |
 | `system.exec` | Execute specific system commands |
 | `system.env` | Read environment variables |
-| `network.http` | Make HTTP requests (`true` for any host, or a list of allowed hostnames) |
+| `network.http` | Make HTTP requests (`true` for any destination, local services included, or a list of hosts or IPs with optional ports) |
 | `events.file` | Listen for file open/close/save events |
 | `events.editor` | Listen for buffer and cursor changes |
 | `settings` | Read/write editor settings |

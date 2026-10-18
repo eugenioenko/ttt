@@ -187,6 +187,44 @@ func TestLoadManifestNetworkInvalid(t *testing.T) {
 	}
 }
 
+func TestLoadManifestNetworkEntries(t *testing.T) {
+	for _, tt := range []struct {
+		hosts string
+		ok    bool
+	}{
+		{`["api.github.com", "localhost", "127.0.0.1:4250", "[::1]:4250", "[::1]", "192.168.1.50:8080", "my_host.lan", "bücher.example", "127.0.0.1:080"]`, true},
+		{`["127.0.0.1:0"]`, false},
+		{`["127.0.0.1:65536"]`, false},
+		{`["example.com:+443"]`, false},
+		{`["example.com:"]`, false},
+		{`["::1"]`, false},
+		{`["::1:4250"]`, false},
+		{`["[::1"]`, false},
+		{`["[::1]:"]`, false},
+		{`["[::1]x"]`, false},
+		{`["[127.0.0.1]:80"]`, false},
+		{`["[api.github.com]"]`, false},
+		{`["[fe80::1%en0]:80"]`, false},
+		{`["user@example.com"]`, false},
+		{`["*.github.com"]`, false},
+		{`["host with space"]`, false},
+		{`["example.com."]`, false},
+		{`["example.com/path:443"]`, false},
+		{`["api.github.com:http"]`, false},
+		{`["https://api.github.com"]`, false},
+		{`[""]`, false},
+		{`[":4250"]`, false},
+		{`["api.github.com/v3"]`, false},
+	} {
+		dir := t.TempDir()
+		data := `{"name": "t", "entry": "init.lua", "permissions": {"network.http": ` + tt.hosts + `}}`
+		os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+		if _, err := LoadManifest(dir); (err == nil) != tt.ok {
+			t.Errorf("%s: err = %v, want ok %v", tt.hosts, err, tt.ok)
+		}
+	}
+}
+
 func TestLoadManifestGrammarOnly(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{

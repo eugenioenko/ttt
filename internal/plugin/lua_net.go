@@ -25,14 +25,14 @@ func setupNetModule(L *lua.LState, p *Plugin) {
 	L.PreloadModule("ttt.net", loader)
 }
 
-// checkURLHost enforces the plugin's network.http host allowlist. Returns
+// checkURL enforces the plugin's network.http host allowlist. Returns
 // an error if the URL is malformed or its host is not permitted.
-func (p *Plugin) checkURLHost(rawURL string) error {
+func (p *Plugin) checkURL(rawURL string) error {
 	u, err := neturl.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
-	return p.Granted.CheckHost(u.Hostname())
+	return p.Granted.CheckURL(u)
 }
 
 func extractHeaders(L *lua.LState, tbl *lua.LTable) map[string]string {
@@ -76,7 +76,7 @@ func netGet(p *Plugin) lua.LGFunction {
 			return 2
 		}
 		url := L.CheckString(1)
-		if err := p.checkURLHost(url); err != nil {
+		if err := p.checkURL(url); err != nil {
 			L.Push(httpResultToLua(L, 0, "", nil, err))
 			return 1
 		}
@@ -98,7 +98,7 @@ func netPost(p *Plugin) lua.LGFunction {
 			return 2
 		}
 		url := L.CheckString(1)
-		if err := p.checkURLHost(url); err != nil {
+		if err := p.checkURL(url); err != nil {
 			L.Push(httpResultToLua(L, 0, "", nil, err))
 			return 1
 		}
@@ -133,7 +133,7 @@ func netGetAsync(p *Plugin) lua.LGFunction {
 		}
 		callback := L.CheckFunction(callbackIdx)
 
-		if err := p.checkURLHost(url); err != nil {
+		if err := p.checkURL(url); err != nil {
 			p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
 				if p.State == nil {
 					return
@@ -180,7 +180,7 @@ func netPostAsync(p *Plugin) lua.LGFunction {
 		}
 		callback := L.CheckFunction(3)
 
-		if err := p.checkURLHost(url); err != nil {
+		if err := p.checkURL(url); err != nil {
 			p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
 				if p.State == nil {
 					return

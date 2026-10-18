@@ -89,6 +89,9 @@ func LoadManifest(dir string) (Manifest, error) {
 			return Manifest{}, fmt.Errorf("grammar path %q escapes plugin directory", g.Path)
 		}
 	}
+	if err := m.Permissions.NetworkHTTP.Validate(); err != nil {
+		return Manifest{}, err
+	}
 	if m.API == 0 {
 		m.API = 1
 	}

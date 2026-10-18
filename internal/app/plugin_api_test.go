@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -309,46 +308,23 @@ func TestPluginFilesystemAPI_FinalSymlinkEscape(t *testing.T) {
 	}
 }
 
-func TestPluginNetworkAPI_SSRFProtection(t *testing.T) {
+func TestPluginNetworkAPI_OnlyHTTPAndHTTPS(t *testing.T) {
 	api := NewPluginNetworkAPI()
-	api.lookupIP = func(host string) ([]net.IP, error) {
-		switch host {
-		case "example.com":
-			return []net.IP{net.IPv4(93, 184, 216, 34)}, nil
-		case "rebind.example.com":
-			return []net.IP{net.IPv4(10, 0, 0, 1)}, nil
-		}
-		if ip := net.ParseIP(host); ip != nil {
-			return []net.IP{ip}, nil
-		}
-		return nil, errors.New("no such host")
-	}
-
-	tests := []struct {
-		name    string
+	for _, tt := range []struct {
 		url     string
 		blocked bool
 	}{
-		{"https allowed", "https://example.com/api", false},
-		{"http allowed", "http://example.com/api", false},
-		{"file scheme blocked", "file:///etc/passwd", true},
-		{"ftp scheme blocked", "ftp://evil.com/file", true},
-		{"localhost blocked", "http://localhost/admin", true},
-		{"127.0.0.1 blocked", "http://127.0.0.1/admin", true},
-		{"169.254 metadata blocked", "http://169.254.169.254/latest/meta-data/", true},
-		{"public hostname resolving to a private IP blocked", "http://rebind.example.com/admin", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := api.validateURL(tt.url)
-			if tt.blocked && err == nil {
-				t.Errorf("expected URL %q to be blocked", tt.url)
-			}
-			if !tt.blocked && err != nil {
-				t.Errorf("expected URL %q to be allowed, got: %v", tt.url, err)
-			}
-		})
+		{"https://example.com/api", false},
+		{"http://example.com/api", false},
+		{"http://127.0.0.1:4250/", false},
+		{"http://localhost/", false},
+		{"http://192.168.1.50:8080/", false},
+		{"file:///etc/passwd", true},
+		{"ftp://example.com/file", true},
+	} {
+		if err := api.validateURL(tt.url); (err != nil) != tt.blocked {
+			t.Errorf("%s: err = %v, want blocked %v", tt.url, err, tt.blocked)
+		}
 	}
 }
 
@@ -568,19 +544,12 @@ func TestPluginFilesystemAPIFor_AnyPathAndWorkspace(t *testing.T) {
 	}
 }
 
-// redirectingNetworkAPI serves public.example from start and lets lookups of
-// names report a public address, so a redirect test needs no real network.
-func redirectingNetworkAPI(t *testing.T, start *httptest.Server, hosts ...string) *PluginNetworkAPI {
+// redirectingNetworkAPI serves every name from start, so a redirect test
+// needs no real network; 127.0.0.1 addresses are dialled as they are.
+func redirectingNetworkAPI(t *testing.T, start *httptest.Server, grant plugin.NetworkHTTP) *PluginNetworkAPI {
 	t.Helper()
-	api := NewPluginNetworkAPI()
-	api.lookupIP = func(host string) ([]net.IP, error) {
-		if ip := net.ParseIP(host); ip != nil {
-			return []net.IP{ip}, nil
-		}
-		return []net.IP{net.IPv4(93, 184, 216, 34)}, nil
-	}
-	grant := plugin.PermissionSet{NetworkHTTP: plugin.NetworkHTTP{Hosts: hosts}}
-	api = api.ForPlugin(grant.CheckHost).(*PluginNetworkAPI)
+	ps := plugin.PermissionSet{NetworkHTTP: grant}
+	api := NewPluginNetworkAPI().ForPlugin(ps.CheckURL).(*PluginNetworkAPI)
 	startAddr := strings.TrimPrefix(start.URL, "http://")
 	api.client.Transport = &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 		if h, _, _ := net.SplitHostPort(addr); h != "127.0.0.1" {
@@ -591,28 +560,55 @@ func redirectingNetworkAPI(t *testing.T, start *httptest.Server, hosts ...string
 	return api
 }
 
-func TestPluginNetworkAPI_RedirectToALocalAddressIsBlocked(t *testing.T) {
-	reached := false
-	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reached = true
+// localRedirect returns a local server and a public.example server that
+// redirects every request to it; reached reports whether the local one was hit.
+func localRedirect(t *testing.T) (local, public *httptest.Server, reached *bool) {
+	t.Helper()
+	reached = new(bool)
+	local = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*reached = true
+		w.Write([]byte("local"))
 	}))
-	defer local.Close()
-	public := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	t.Cleanup(local.Close)
+	public = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, local.URL+"/admin", http.StatusFound)
 	}))
-	defer public.Close()
-	// Listing 127.0.0.1 leaves the local-address block as the only check
-	// that can refuse the hop, as for a plugin granted any host.
-	api := redirectingNetworkAPI(t, public, "public.example", "127.0.0.1")
+	t.Cleanup(public.Close)
+	return local, public, reached
+}
+
+func TestPluginNetworkAPI_RedirectToALocalServerItDoesNotListIsBlocked(t *testing.T) {
+	_, public, reached := localRedirect(t)
+	// 127.0.0.1 is listed, but not on the local server's port.
+	api := redirectingNetworkAPI(t, public, plugin.NetworkHTTP{Hosts: []string{"public.example", "127.0.0.1:1"}})
 
 	if _, _, _, err := api.Get("http://public.example/", nil); err == nil {
-		t.Error("Get followed a redirect to a loopback address")
+		t.Error("Get followed a redirect to an unlisted local server")
 	}
 	if _, _, _, err := api.Post("http://public.example/", nil, "x"); err == nil {
-		t.Error("Post followed a redirect to a loopback address")
+		t.Error("Post followed a redirect to an unlisted local server")
 	}
-	if reached {
+	if *reached {
 		t.Error("the local server received a request")
+	}
+}
+
+func TestPluginNetworkAPI_RedirectToAListedLocalServerIsFollowed(t *testing.T) {
+	local, public, reached := localRedirect(t)
+	api := redirectingNetworkAPI(t, public, plugin.NetworkHTTP{Hosts: []string{"public.example", strings.TrimPrefix(local.URL, "http://")}})
+
+	status, body, _, err := api.Get("http://public.example/", nil)
+	if err != nil || status != 200 || body != "local" || !*reached {
+		t.Errorf("status %d, body %q, err %v, reached %v", status, body, err, *reached)
+	}
+}
+
+func TestPluginNetworkAPI_AnyDestinationGrantReachesLocalServers(t *testing.T) {
+	_, public, reached := localRedirect(t)
+	api := redirectingNetworkAPI(t, public, plugin.NetworkHTTP{All: true})
+
+	if _, _, _, err := api.Get("http://public.example/", nil); err != nil || !*reached {
+		t.Errorf("err %v, reached %v", err, *reached)
 	}
 }
 
@@ -630,7 +626,7 @@ func TestPluginNetworkAPI_RedirectsStayOnTheAllowedHosts(t *testing.T) {
 		}
 	}))
 	defer public.Close()
-	api := redirectingNetworkAPI(t, public, "public.example", "mirror.example")
+	api := redirectingNetworkAPI(t, public, plugin.NetworkHTTP{Hosts: []string{"public.example", "mirror.example"}})
 
 	if _, _, _, err := api.Get("http://public.example/elsewhere", nil); err == nil {
 		t.Error("followed a redirect to a host the plugin does not list")

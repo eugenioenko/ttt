@@ -6,14 +6,23 @@ import (
 	"os"
 )
 
+// grantsVersion is recorded with each approval. From localAccessGrants on,
+// network.http true reaches local services too, so a true granted before
+// that has to be asked for again.
+const (
+	localAccessGrants = 2
+	grantsVersion     = localAccessGrants
+)
+
 type RegistryEntry struct {
-	Name        string        `json:"name"`
-	DisplayName string        `json:"displayName,omitempty"`
-	Repo        string        `json:"repo,omitempty"`
-	Path        string        `json:"path,omitempty"`
-	Version     string        `json:"version"`
-	Enabled     bool          `json:"enabled"`
-	Permissions PermissionSet `json:"permissions"`
+	Name          string        `json:"name"`
+	DisplayName   string        `json:"displayName,omitempty"`
+	Repo          string        `json:"repo,omitempty"`
+	Path          string        `json:"path,omitempty"`
+	Version       string        `json:"version"`
+	Enabled       bool          `json:"enabled"`
+	Permissions   PermissionSet `json:"permissions"`
+	GrantsVersion int           `json:"grantsVersion,omitempty"`
 }
 
 // Title is the human-facing name: DisplayName when set, else the unique Name.
@@ -42,6 +51,13 @@ func LoadRegistry(path string) (*Registry, error) {
 
 	if err := json.Unmarshal(data, &r.Entries); err != nil {
 		return nil, err
+	}
+	for i := range r.Entries {
+		e := &r.Entries[i]
+		if e.GrantsVersion < localAccessGrants && e.Permissions.NetworkHTTP.All {
+			e.Permissions.NetworkHTTP = NetworkHTTP{}
+		}
+		e.GrantsVersion = grantsVersion
 	}
 	return r, nil
 }
@@ -95,15 +111,17 @@ func (r *Registry) AddOrUpdate(name, displayName, repo, path, version string, pe
 		entry.Version = version
 		entry.Permissions = perms
 		entry.Enabled = true
+		entry.GrantsVersion = grantsVersion
 		return
 	}
 	r.Entries = append(r.Entries, RegistryEntry{
-		Name:        name,
-		DisplayName: displayName,
-		Repo:        repo,
-		Path:        path,
-		Version:     version,
-		Enabled:     true,
-		Permissions: perms,
+		Name:          name,
+		DisplayName:   displayName,
+		Repo:          repo,
+		Path:          path,
+		Version:       version,
+		Enabled:       true,
+		Permissions:   perms,
+		GrantsVersion: grantsVersion,
 	})
 }

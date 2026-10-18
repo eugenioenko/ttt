@@ -2,7 +2,9 @@ package plugin
 
 import (
 	"encoding/json"
+	"net/url"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -185,18 +187,84 @@ func TestNetworkHTTPMarshalRoundTrip(t *testing.T) {
 	}
 }
 
-func TestCheckHost(t *testing.T) {
-	ps := PermissionSet{NetworkHTTP: NetworkHTTP{Hosts: []string{"api.github.com"}}}
-	if err := ps.CheckHost("api.github.com"); err != nil {
-		t.Errorf("allowed host rejected: %v", err)
+func TestCheckURL(t *testing.T) {
+	ps := PermissionSet{NetworkHTTP: NetworkHTTP{Hosts: []string{
+		"api.github.com", "127.0.0.1:4250", "[::1]:4250", "192.168.1.50", "LAN.example:8080",
+	}}}
+	for _, tt := range []struct {
+		url string
+		ok  bool
+	}{
+		{"https://api.github.com/user", true},
+		{"http://API.GITHUB.COM:8443/", true},
+		{"http://127.0.0.1:4250/poll", true},
+		{"http://[::1]:4250/", true},
+		{"http://[0:0:0:0:0:0:0:1]:4250/", true},
+		{"http://192.168.1.50:9000/", true},
+		{"http://lan.example:8080/", true},
+		{"http://127.0.0.1:4251/", false},
+		{"http://127.0.0.1/", false},
+		{"http://127.0.0.2:4250/", false},
+		{"http://lan.example/", false},
+		{"https://lan.example:443/", false},
+		{"http://evil.com/", false},
+		{"http://[fe80::1%25en0]:4250/", false},
+	} {
+		u, _ := url.Parse(tt.url)
+		if err := ps.CheckURL(u); (err == nil) != tt.ok {
+			t.Errorf("%s: err = %v, want ok %v", tt.url, err, tt.ok)
+		}
 	}
-	if err := ps.CheckHost("evil.com"); err == nil {
-		t.Error("expected denial for unlisted host")
+	u, _ := url.Parse("http://127.0.0.1:4251/")
+	if err := ps.CheckURL(u); err == nil || !strings.Contains(err.Error(), `"127.0.0.1:4251"`) {
+		t.Errorf("refusal %v does not name the destination", err)
+	}
+
+	// σ and ς fold together but are different domains once IDNA-encoded.
+	sigma := PermissionSet{NetworkHTTP: NetworkHTTP{Hosts: []string{"σ.example", "127.0.0.1:080"}}}
+	for raw, ok := range map[string]bool{"http://σ.example/": true, "http://ς.example/": false, "http://Σ.example/": false, "http://127.0.0.1/": true} {
+		u, _ := url.Parse(raw)
+		if err := sigma.CheckURL(u); (err == nil) != ok {
+			t.Errorf("%s: err = %v, want ok %v", raw, err, ok)
+		}
 	}
 
 	all := PermissionSet{NetworkHTTP: NetworkHTTP{All: true}}
-	if err := all.CheckHost("evil.com"); err != nil {
-		t.Errorf("All should permit any host: %v", err)
+	u, _ = url.Parse("http://127.0.0.1:5432/")
+	if err := all.CheckURL(u); err != nil {
+		t.Errorf("true should permit any destination: %v", err)
+	}
+}
+
+func TestNetworkHTTPAllowsHostCoversEntries(t *testing.T) {
+	granted := NetworkHTTP{Hosts: []string{"127.0.0.1", "api.example.com:443"}}
+	for entry, want := range map[string]bool{
+		"127.0.0.1:4250":      true,
+		"127.0.0.1":           true,
+		"api.example.com:443": true,
+		"api.example.com":     false,
+		"api.example.com:80":  false,
+	} {
+		if got := granted.AllowsHost(entry); got != want {
+			t.Errorf("AllowsHost(%q) = %v, want %v", entry, got, want)
+		}
+	}
+}
+
+func TestIntersectKeepsTheApprovedPortsOfAHostListedWithoutOne(t *testing.T) {
+	granted := PermissionSet{NetworkHTTP: NetworkHTTP{Hosts: []string{"api.example.com:443", "other.example:80"}}}
+	declared := PermissionSet{NetworkHTTP: NetworkHTTP{Hosts: []string{"api.example.com"}}}
+	got := IntersectPermissions(granted, declared).NetworkHTTP.Hosts
+	if !slices.Equal(got, []string{"api.example.com:443"}) {
+		t.Errorf("hosts = %v, want [api.example.com:443]", got)
+	}
+}
+
+func TestDisplayEntriesSayAnyHostIncludesLocal(t *testing.T) {
+	ps := PermissionSet{NetworkHTTP: NetworkHTTP{All: true}}
+	want := []PermissionDiffEntry{{Name: "HTTP requests", Value: "any host, even local"}}
+	if got := ps.DisplayEntries(); !slices.Equal(got, want) {
+		t.Errorf("entries = %+v, want %+v", got, want)
 	}
 }
 

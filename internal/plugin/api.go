@@ -1,6 +1,10 @@
 package plugin
 
-import "github.com/eugenioenko/ttt/internal/term"
+import (
+	"net/url"
+
+	"github.com/eugenioenko/ttt/internal/term"
+)
 
 // DiagnosticItem is a single editor diagnostic/decoration published by a
 // plugin. Coordinates are 0-based (converted from 1-based Lua on the binding
@@ -113,7 +117,7 @@ type NetworkAPI interface {
 // network.http hosts. The manager gives each plugin its own copy.
 type HostCheckedNetwork interface {
 	NetworkAPI
-	ForPlugin(allowHost func(host string) error) NetworkAPI
+	ForPlugin(allow func(*url.URL) error) NetworkAPI
 }
 
 type SettingsAPI interface {

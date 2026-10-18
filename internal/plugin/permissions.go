@@ -3,9 +3,14 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -110,8 +115,9 @@ func fsPathLabel(p string) string {
 }
 
 // NetworkHTTP is the network.http permission. In a manifest it is either a
-// boolean (`true` = any host) or an array of allowed hostnames
-// (`["api.github.com"]`). A missing field or `false` means no network access.
+// boolean (`true` = any destination, local ones included) or an array of
+// hosts or IPs, each with an optional port (`["api.github.com",
+// "127.0.0.1:4250"]`). A missing field or `false` means no network access.
 type NetworkHTTP struct {
 	All   bool
 	Hosts []string
@@ -120,19 +126,139 @@ type NetworkHTTP struct {
 // Enabled reports whether the plugin may make any HTTP requests at all.
 func (n NetworkHTTP) Enabled() bool { return n.All || len(n.Hosts) > 0 }
 
-// AllowsHost reports whether requests to host are permitted. Matching is
-// exact and case-insensitive; `All` permits any host.
-func (n NetworkHTTP) AllowsHost(host string) bool {
+// AllowsHost reports whether the grant covers entry, a host or IP with an
+// optional port. An entry without a port covers every port on its host.
+// Hostnames match case-insensitively and IPs by value; `All` covers anything.
+func (n NetworkHTTP) AllowsHost(entry string) bool {
 	if n.All {
 		return true
 	}
-	host = strings.ToLower(host)
+	want, err := parseHostEntry(entry)
+	return err == nil && n.allows(want.host, want.port)
+}
+
+// AllowsURL reports whether the grant covers u's host and port; a URL
+// without a port uses its scheme's default.
+func (n NetworkHTTP) AllowsURL(u *url.URL) bool {
+	if n.All {
+		return true
+	}
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+	}
+	return n.allows(u.Hostname(), port)
+}
+
+func (n NetworkHTTP) allows(host, port string) bool {
 	for _, h := range n.Hosts {
-		if strings.ToLower(h) == host {
+		e, err := parseHostEntry(h)
+		if err == nil && sameHost(e.host, host) && (e.port == "" || e.port == port) {
 			return true
 		}
 	}
 	return false
+}
+
+// Validate rejects entries that could never match a request.
+func (n NetworkHTTP) Validate() error {
+	for _, h := range n.Hosts {
+		if _, err := parseHostEntry(h); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type hostEntry struct {
+	host string
+	port string // empty: any port
+}
+
+// parseHostEntry accepts a hostname, an IPv4 address or a bracketed IPv6
+// address, each with an optional port. Bare IPv6 is refused: "::1:4250"
+// would be read as an address, not a port.
+func parseHostEntry(s string) (hostEntry, error) {
+	bad := fmt.Errorf(`network.http entry %q: want a hostname or IP with an optional port, like "api.github.com", "127.0.0.1:4250" or "[::1]:4250"`, s)
+	var host, port string
+	if rest, ok := strings.CutPrefix(s, "["); ok {
+		end := strings.Index(rest, "]")
+		if end < 0 {
+			return hostEntry{}, bad
+		}
+		host = rest[:end]
+		if ip := net.ParseIP(host); ip == nil || ip.To4() != nil {
+			return hostEntry{}, bad
+		}
+		if after := rest[end+1:]; after != "" {
+			p, ok := strings.CutPrefix(after, ":")
+			if !ok {
+				return hostEntry{}, bad
+			}
+			port = p
+		}
+		if strings.Contains(s, "]:") && port == "" {
+			return hostEntry{}, bad
+		}
+	} else {
+		host = s
+		if i := strings.LastIndex(s, ":"); i >= 0 {
+			host, port = s[:i], s[i+1:]
+			if port == "" || strings.Contains(host, ":") {
+				return hostEntry{}, bad
+			}
+		}
+		if net.ParseIP(host) == nil && !validHostname(host) {
+			return hostEntry{}, bad
+		}
+	}
+	if port != "" {
+		p, err := strconv.Atoi(port)
+		if strings.Trim(port, "0123456789") != "" || err != nil || p < 1 || p > 65535 {
+			return hostEntry{}, bad
+		}
+		port = strconv.Itoa(p)
+	}
+	return hostEntry{host: host, port: port}, nil
+}
+
+func validHostname(h string) bool {
+	if h == "" || len(h) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(h, ".") {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+		for _, r := range label {
+			if r != '-' && r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// sameHost compares IPs by value and ASCII hostnames case-insensitively.
+// Non-ASCII names must match exactly: Unicode case folding equates names
+// (σ and ς) that IDNA sends to different domains.
+func sameHost(a, b string) bool {
+	if ipA := net.ParseIP(a); ipA != nil {
+		return ipA.Equal(net.ParseIP(b))
+	}
+	if isASCII(a) && isASCII(b) {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
 }
 
 func (n NetworkHTTP) MarshalJSON() ([]byte, error) {
@@ -160,6 +286,9 @@ func (n *NetworkHTTP) UnmarshalJSON(data []byte) error {
 	n.Hosts = hosts
 	return nil
 }
+
+// The approval dialog has room for about 24 characters of value.
+const anyDestination = "any host, even local"
 
 type PermissionSet struct {
 	PanelSidebar      bool        `json:"panel.sidebar,omitempty"`
@@ -254,7 +383,7 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	}
 
 	if requested.NetworkHTTP.All && !granted.NetworkHTTP.All {
-		entries = append(entries, PermissionDiffEntry{Name: "network.http", Value: "required"})
+		entries = append(entries, PermissionDiffEntry{Name: "network.http", Value: anyDestination})
 	} else if !granted.NetworkHTTP.All {
 		for _, h := range requested.NetworkHTTP.Hosts {
 			if !granted.NetworkHTTP.AllowsHost(h) {
@@ -349,12 +478,12 @@ func (ps PermissionSet) CheckExec(binary string) error {
 	return fmt.Errorf("permission denied: system.exec %q", binary)
 }
 
-// CheckHost reports whether the plugin may make an HTTP request to host.
-func (ps PermissionSet) CheckHost(host string) error {
-	if ps.NetworkHTTP.AllowsHost(host) {
+// CheckURL reports whether the plugin may make an HTTP request to u.
+func (ps PermissionSet) CheckURL(u *url.URL) error {
+	if ps.NetworkHTTP.AllowsURL(u) {
 		return nil
 	}
-	return fmt.Errorf("permission denied: network.http host %q not in the plugin's allowed hosts", host)
+	return fmt.Errorf("permission denied: network.http does not list %q", u.Host)
 }
 
 func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
@@ -395,7 +524,7 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 	}
 
 	if ps.NetworkHTTP.All {
-		entries = append(entries, PermissionDiffEntry{Name: "HTTP requests", Value: "any host"})
+		entries = append(entries, PermissionDiffEntry{Name: "HTTP requests", Value: anyDestination})
 	}
 	for _, h := range ps.NetworkHTTP.Hosts {
 		entries = append(entries, PermissionDiffEntry{Name: "HTTP host", Value: h})
@@ -470,6 +599,18 @@ func intersectNetwork(granted, declared NetworkHTTP) NetworkHTTP {
 	for _, h := range declared.Hosts {
 		if granted.AllowsHost(h) {
 			hosts = append(hosts, h)
+			continue
+		}
+		// A grant for some ports of a host the manifest now lists without a
+		// port still holds for those ports.
+		want, err := parseHostEntry(h)
+		if err != nil || want.port != "" {
+			continue
+		}
+		for _, g := range granted.Hosts {
+			if e, err := parseHostEntry(g); err == nil && e.port != "" && sameHost(e.host, want.host) {
+				hosts = append(hosts, g)
+			}
 		}
 	}
 	return NetworkHTTP{Hosts: hosts}
