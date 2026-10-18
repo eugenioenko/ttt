@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -116,6 +117,22 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 	}
 	if c.Bold {
 		s = s.Bold(true)
+	}
+	if c.Attrs&CellAttrHide != 0 || c.Style == StyleHide {
+		bg := s.GetBackground()
+		if s.HasReverse() {
+			bg = s.GetForeground()
+		}
+		s = tcell.StyleDefault.Foreground(bg).Background(bg)
+		if bg == tcell.ColorDefault {
+			// The terminal's default background has no RGB value to use as a
+			// foreground. Blank every occupied column without changing layout.
+			t.scr.Put(x, y, " ", s)
+			if textwidth.Rune(c.Ch) == 2 {
+				t.scr.Put(x+1, y, " ", s)
+			}
+			return
+		}
 	}
 	t.scr.Put(x, y, runeString(c.Ch), s)
 }

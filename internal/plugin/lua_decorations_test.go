@@ -27,6 +27,8 @@ func TestDecorationsSet(t *testing.T) {
 			{ line = 6, col = 3, end_line = 8, end_col = 1, style = "highlight" },
 			{ line = 9, style = "selected" },
 			{ line = 10, end_line = math.huge },
+			{ line = 11, style = "hide" },
+			{ line = 12, col = 2, end_col = 5, style = "hide" },
 		})
 	`)
 	if err != nil {
@@ -41,6 +43,8 @@ func TestDecorationsSet(t *testing.T) {
 		{StartLine: 5, StartCol: 2, EndLine: 7, EndCol: 0, Text: true, Style: term.StyleHighlight},
 		{StartLine: 8, EndLine: 8, Style: term.StyleSidebarSelected},
 		{StartLine: 9, EndLine: math.MaxInt32 - 1, Style: term.StyleHighlight},
+		{StartLine: 10, EndLine: 10, Style: term.StyleHide},
+		{StartLine: 11, StartCol: 1, EndLine: 11, EndCol: 4, Text: true, Style: term.StyleHide},
 	}
 	if !reflect.DeepEqual(gotItems, want) {
 		t.Errorf("items =\n%+v\nwant\n%+v", gotItems, want)

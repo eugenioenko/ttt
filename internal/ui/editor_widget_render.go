@@ -295,12 +295,21 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					}
 				}
 				inText := colIdx >= 0 && colIdx < len(line)
-				if diffBg != 0 && !inAnySel && !isSearchHighlight && (bgStyle == 0 || bgStyle == term.StyleActiveLine) && (diffBg != term.StyleReverse || inText) {
-					bgStyle = diffBg
+				hide := false
+				textOnly := diffBg == term.StyleReverse || diffBg == term.StyleHide
+				if diffBg != 0 && !inAnySel && !isSearchHighlight && (bgStyle == 0 || bgStyle == term.StyleActiveLine) && (!textOnly || inText) {
+					if diffBg == term.StyleHide {
+						hide = true
+					} else {
+						bgStyle = diffBg
+					}
 				}
 				if len(lineSpans) > 0 && inText && !inAnySel && !isSearchHighlight {
 					if spanBg := spanStyle(lineSpans, colIdx); spanBg != 0 {
-						bgStyle = spanBg
+						hide = spanBg == term.StyleHide
+						if !hide {
+							bgStyle = spanBg
+						}
 					}
 				}
 				if hasMatch && ((lineIdx == e.Cursor.Line && colIdx == e.Cursor.Col) ||
@@ -320,6 +329,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				cell := term.Cell{Ch: ch, Style: style, BgStyle: bgStyle, UlStyle: ulStyle}
 				if bgStyle == term.StyleReverse {
 					cell.BgStyle, cell.Attrs = 0, term.CellAttrReverse
+				}
+				if hide {
+					cell.Attrs |= term.CellAttrHide
 				}
 				surface.SetCell(gutterW+x, y, cell)
 			}

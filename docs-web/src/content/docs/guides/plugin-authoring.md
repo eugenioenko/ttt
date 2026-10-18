@@ -1806,10 +1806,10 @@ argument, clears every file.
 
 ## Decorations
 
-Plugins can tint whole lines and highlight text with a background color through
+Plugins can tint, reverse, or visually hide whole lines and text ranges through
 the `ttt.decorations` module, for coverage, review comments, matches the plugin
-found, or what it is talking about. They do not touch the user's search or
-selection. Requires the `editor.decorations` permission.
+found, or focusing on relevant code. They do not change the buffer or touch the
+user's search or selection. Requires the `editor.decorations` permission.
 
 ```lua
 local deco = require("ttt.decorations")
@@ -1818,6 +1818,7 @@ deco.set("/abs/path/to/main.go", {
   { line = 10, end_line = 14 },                                 -- tint lines 10 to 14
   { line = 12, col = 9, end_col = 17 },                         -- highlight text on line 12
   { line = 20, col = 5, end_line = 22, end_col = 2, style = "highlight" },
+  { line = 30, end_line = 35, style = "hide" },                  -- conceal text without changing layout
 })
 
 deco.clear("/abs/path/to/main.go")   -- clear this plugin's decorations for one file
@@ -1835,7 +1836,12 @@ Replaces this plugin's decorations for `path` with `items`. An item without
 | `end_line` | number | no       | 1-based end line. Defaults to `line`; `math.huge` reaches the end of the file. |
 | `col`      | number | no       | 1-based start **rune column** of a text highlight.                   |
 | `end_col`  | number | with `col` | 1-based end column on `end_line`, exclusive.                       |
-| `style`    | string | no       | A named style whose background is used. Defaults to `highlight` for lines and `highlight_strong` for text. `reverse` swaps the text and background colors instead, on text only. |
+| `style`    | string | no       | A named style whose background is used. Defaults to `highlight` for lines and `highlight_strong` for text. `reverse` swaps the text and background colors instead, on text only. `hide` conceals text using its background color, keeping the characters' space and the buffer unchanged. |
+
+`hide` works on whole lines or text ranges. It uses the background already on
+the text, including active-line and decoration backgrounds, and needs no theme
+color. Selection and search highlights take precedence. Clearing the decoration
+shows the text again; copying and saving still use the original text.
 
 Lines and columns are whole numbers from 1. An invalid item (no `line`,
 `end_line` before `line`, `col` without `end_col`, an empty text range, or an
@@ -2473,6 +2479,7 @@ Named styles available for both widget and raw cell rendering. Actual colors dep
 | `highlight` | Background for decorated lines |
 | `highlight_strong` | Background for highlighted text |
 | `reverse`  | Reverse video: swaps the text and background colors |
+| `hide`     | Conceal text against its background without changing layout |
 | `syntax_comment`   | Syntax: comments       |
 | `syntax_string`    | Syntax: string literals |
 | `syntax_keyword`   | Syntax: keywords       |

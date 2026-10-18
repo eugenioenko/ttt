@@ -109,6 +109,7 @@ const (
 	StyleHighlight
 	StyleHighlightStrong
 	StyleReverse
+	StyleHide
 	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
 	// tokenColors fill; see TokenStyle.
 	styleTokenBase
@@ -139,6 +140,7 @@ const (
 	CellAttrItalic
 	CellAttrReverse
 	CellAttrBlink
+	CellAttrHide
 )
 
 // Cell represents a single character cell on the screen.
@@ -152,7 +154,7 @@ type Cell struct {
 
 	// Direct-style fields for terminal emulator cells.
 	// When Direct is true, Fg/Bg/Attrs are used instead of Style. Styled cells
-	// honor only CellAttrReverse.
+	// honor CellAttrReverse and CellAttrHide.
 	Direct bool
 	Fg     DirectColor
 	Bg     DirectColor

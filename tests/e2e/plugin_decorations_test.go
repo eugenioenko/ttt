@@ -11,7 +11,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-func TestPluginDecorationsTintAndHighlight(t *testing.T) {
+func TestPluginDecorationsTintHighlightAndHide(t *testing.T) {
 	h := newTestHarness(t, 60, 12)
 	defer h.stop()
 	theme := config.DefaultTheme()
@@ -30,6 +30,7 @@ func TestPluginDecorationsTintAndHighlight(t *testing.T) {
 			deco.set(path, {
 				{ line = 2 },
 				{ line = 2, col = 8, end_col = 12 },
+				{ line = 3, col = 1, end_col = 6, style = "hide" },
 			})
 		end
 	`), 0644); err != nil {
@@ -70,11 +71,24 @@ func TestPluginDecorationsTintAndHighlight(t *testing.T) {
 	if got := bg(x2+6, y2); got != tinted {
 		t.Error("highlight starts before its column")
 	}
+	for x := x1; x < x1+5; x++ {
+		style := cells[y1*w+x].Style
+		if style.GetForeground() != style.GetBackground() {
+			t.Error("hidden text is visible")
+		}
+	}
+	neighbor := cells[y1*w+x1+6].Style
+	if neighbor.GetForeground() == neighbor.GetBackground() {
+		t.Error("text outside the hidden range is concealed")
+	}
 
 	h.app.ClearPluginSources("deco")
 	h.redraw()
 	cells, _, _ = h.screen.GetContents()
 	if bg(x2, y2) != plain || bg(x2+7, y2) != plain {
 		t.Error("decorations remain after the plugin's sources were cleared")
+	}
+	if style := cells[y1*w+x1].Style; style.GetForeground() == style.GetBackground() {
+		t.Error("text remains concealed after the plugin's sources were cleared")
 	}
 }

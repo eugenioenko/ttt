@@ -315,3 +315,76 @@ func TestAnnotationReverseKeepsTheActiveLinePastTheText(t *testing.T) {
 		t.Errorf("cell past the text = bg %v attrs %v, want the active line and no attrs", cell.BgStyle, cell.Attrs)
 	}
 }
+
+func TestAnnotationHideKeepsTextPositionsAndBackgrounds(t *testing.T) {
+	e := newRowsEditor([]string{"x", "abc", "a世界b"}, 20, 4)
+	e.Cursor.Line = 1
+	before := renderGrid(e)
+	version := e.Buf.Version()
+	o := NewAnnotationOverlay()
+	o.LineBg[1] = term.StyleHide
+	o.LineBg[2] = term.StyleHighlight
+	o.Spans[2] = []ColSpan{{Start: 1, End: 3, Style: term.StyleHide}}
+	e.SetDiffOverlay(o)
+	grid := renderGrid(e)
+	gutterW := e.GutterWidth()
+	for y, row := range grid {
+		for x, cell := range row {
+			if cell.Ch != before[y][x].Ch {
+				t.Errorf("row %d column %d changed its character", y, x)
+			}
+		}
+	}
+	for _, tc := range []struct {
+		y, x   int
+		hidden bool
+		bg     term.Style
+	}{
+		{1, 0, true, term.StyleActiveLine},
+		{1, 2, true, term.StyleActiveLine},
+		{1, 3, false, term.StyleActiveLine},
+		{2, 0, false, term.StyleHighlight},
+		{2, 1, true, term.StyleHighlight},
+		{2, 3, true, term.StyleHighlight},
+		{2, 5, false, term.StyleHighlight},
+	} {
+		cell := grid[tc.y][gutterW+tc.x]
+		if hidden := cell.Attrs&term.CellAttrHide != 0; hidden != tc.hidden || cell.BgStyle != tc.bg {
+			t.Errorf("row %d column %d: hidden %v background %v, want %v/%v", tc.y, tc.x, hidden, cell.BgStyle, tc.hidden, tc.bg)
+		}
+	}
+	if e.Buf.Version() != version || !reflect.DeepEqual(e.Buf.Lines, []string{"x", "abc", "a世界b"}) {
+		t.Fatal("concealment changed the document")
+	}
+	e.SetDiffOverlay(nil)
+	grid = renderGrid(e)
+	for _, row := range grid {
+		for _, cell := range row {
+			if cell.Attrs&term.CellAttrHide != 0 {
+				t.Fatal("clearing decorations left concealed text")
+			}
+		}
+	}
+}
+
+func TestAnnotationHideYieldsToSelectionAndSearch(t *testing.T) {
+	e := newRowsEditor([]string{"abc"}, 20, 2)
+	o := NewAnnotationOverlay()
+	o.LineBg[0] = term.StyleHide
+	e.SetDiffOverlay(o)
+	e.Selection.Start(0, 0)
+	e.Cursor.Col = 1
+	e.SearchMatches = []FindMatch{{Line: 0, Col: 1, Len: 1}}
+	e.buildSearchIndex()
+	grid := renderGrid(e)
+	x := e.GutterWidth()
+	if grid[0][x].BgStyle != term.StyleSelection || grid[0][x].Attrs&term.CellAttrHide != 0 {
+		t.Fatal("selection did not take precedence over concealment")
+	}
+	if grid[0][x+1].Style != term.StyleSearchActive || grid[0][x+1].Attrs&term.CellAttrHide != 0 {
+		t.Fatal("search did not take precedence over concealment")
+	}
+	if grid[0][x+2].Attrs&term.CellAttrHide == 0 {
+		t.Fatal("unselected text outside the search match was revealed")
+	}
+}
