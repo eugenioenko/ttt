@@ -84,6 +84,30 @@ func splitWide(word string, width int) []string {
 	return append(pieces, string(cur))
 }
 
+// refreshNoteIndents sets each note's indent, in o and the sources merged
+// into it, to its line's current indent, reporting whether any changed.
+func (o *DiffOverlay) refreshNoteIndents(lines []string, tabSize int) bool {
+	changed := false
+	for line, notes := range o.NoteTexts {
+		if line < 0 || line >= len(lines) {
+			continue
+		}
+		indent := leadingIndent(lines[line], tabSize)
+		for i := range notes {
+			if notes[i].Indent != indent {
+				notes[i].Indent = indent
+				changed = true
+			}
+		}
+	}
+	for _, part := range o.parts {
+		if part.refreshNoteIndents(lines, tabSize) {
+			changed = true
+		}
+	}
+	return changed
+}
+
 // leadingIndent is the width in columns of line's leading blanks.
 func leadingIndent(line string, tabSize int) int {
 	if tabSize <= 0 {

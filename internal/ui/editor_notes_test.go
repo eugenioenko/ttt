@@ -125,6 +125,26 @@ func TestDecorationNotesMergeAndIndentLikeTheirLine(t *testing.T) {
 	}
 }
 
+func TestDecorationNotesFollowTheirLineIndent(t *testing.T) {
+	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "\tfunc a() {\n}\n"})
+	a := filepath.Join(dir, "a.txt")
+	openCommitted(g, a)
+	g.Editor.SetRect(Rect{W: 40, H: 6})
+	g.Editor.Viewport.Width, g.Editor.Viewport.Height = 40, 6
+	g.SetDecorations("a", a, []Decoration{{StartLine: 0, EndLine: 0, Note: "from a", Style: term.StyleMuted}})
+	renderRows(g.Editor)
+	g.Editor.Buf.Splice(0, 1, "func a() {")
+	want := []string{"func a() {", " from a", "}", "", "", ""}
+	if got := renderRows(g.Editor); !reflect.DeepEqual(got, want) {
+		t.Fatalf("after unindenting rows = %q, want %q", got, want)
+	}
+	g.SetDecorations("b", a, []Decoration{{StartLine: 1, EndLine: 1, Note: "from b", Style: term.StyleMuted}})
+	want = []string{"func a() {", " from a", "}", " from b", "", ""}
+	if got := renderRows(g.Editor); !reflect.DeepEqual(got, want) {
+		t.Fatalf("after another source rows = %q, want %q", got, want)
+	}
+}
+
 func TestStaleNotesLeaveNoRowsBehind(t *testing.T) {
 	e := newRowsEditor([]string{"a", "b"}, 20, 4)
 	o := noteOverlay(map[int]string{0: "note"})

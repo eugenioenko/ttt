@@ -140,6 +140,9 @@ func (e *EditorPaneWidget) syncDiffOverlay() bool {
 	}
 	o.ver = e.Buf.Version()
 	o.syncParts()
+	if o.refreshNoteIndents(e.Buf.Lines, e.resolveTabSize()) {
+		o.notesMoved = true
+	}
 	if o.notesMoved {
 		o.notesMoved = false
 		o.wrapNotes(o.noteWidth, true)
