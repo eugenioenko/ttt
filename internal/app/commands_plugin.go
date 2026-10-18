@@ -189,11 +189,12 @@ func (a *App) ClearPluginSources(name string) {
 
 func (a *App) doPluginUninstall(name string) {
 	a.RemovePluginPanels(name)
-	a.ClearPluginSources(name)
 
 	if err := a.PluginManager.Uninstall(name); err != nil {
 		slog.Error("plugin uninstall", "error", err)
 	}
+	// After Uninstall: its on_uninstall callback can still publish.
+	a.ClearPluginSources(name)
 	a.uninstallPluginGrammars(name)
 
 	a.resetPluginDetailButton(name)
@@ -233,6 +234,7 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 		old := a.PluginManager.FindPlugin(result.update.Name())
 		p, needsApproval, err = a.PluginManager.ApplyUpdate(result.update)
 		if old != nil && !old.Loaded() {
+			a.ClearPluginSources(old.Name)
 			if p != nil && !needsApproval {
 				a.closePluginDrawerAndTabs(old.Name)
 			} else {
