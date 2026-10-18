@@ -1078,7 +1078,7 @@ panel:checkbox({
 
 ### Input
 
-Single-line text input with placeholder text and optional prefix.
+Text input with placeholder text and optional prefix. Single-line by default; set `wrap = true` for multiline input.
 
 ```lua
 panel:input({
