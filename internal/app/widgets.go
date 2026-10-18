@@ -127,6 +127,9 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 		if args[i] == "--listen" {
 			continue
 		}
+		if args[i] == "-" {
+			continue
+		}
 		if args[i] == "--welcome" {
 			welcome = true
 			continue

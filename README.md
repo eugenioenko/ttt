@@ -138,6 +138,7 @@ ttt /path/to/repo/subdir        # opens that folder; git features (changes,
 ttt dir1 dir2                   # opens multiple folders as a multi-root workspace
 ttt --workspace project.ttt     # loads a saved workspace file
 ttt https://github.com/owner/repo/pull/123 # opens pull request review
+git diff | ttt                  # opens piped output in an unsaved tab (or: ttt -)
 ```
 
 Workspace files use the `.ttt` extension and store a list of folders as relative paths:

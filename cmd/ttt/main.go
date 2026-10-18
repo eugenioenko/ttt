@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"path/filepath"
@@ -71,6 +72,8 @@ type cliFlags struct {
 	sizeW, sizeH int
 	debug        bool
 	listen       bool
+	stdin        bool
+	targets      bool
 }
 
 type cliExecOutcome struct {
@@ -112,9 +115,28 @@ func parseFlags() cliFlags {
 			f.debug = true
 		case "--listen":
 			f.listen = true
+		case "--workspace":
+			f.targets = true
+			i++
+		case "-":
+			f.stdin = true
+		default:
+			if !strings.HasPrefix(args[i], "-") {
+				f.targets = true
+			}
 		}
 	}
 	return f
+}
+
+// stdinIsPiped reports whether stdin is a pipe or a redirected file. A socket
+// or device is left alone: a launcher's stdin may never reach EOF.
+func stdinIsPiped() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeNamedPipe != 0 || info.Mode().IsRegular()
 }
 
 func initTerminalScreen(listen bool) *term.TcellScreen {
@@ -159,6 +181,9 @@ Arguments:
   folders             Open directories as workspace roots
   .                   Open the current directory
   PR URL              Open a GitHub pull request for review
+  -                   Read stdin into an untitled tab (automatic when stdin
+                      is a pipe or a redirected file and nothing else is
+                      given to open)
 
 Options:
   --help, -h          Show this help message
@@ -183,6 +208,7 @@ Examples:
   ttt internal/app/widgets.go:42:8              Open at line 42, column 8
   ttt ~/projectA ~/projectB                     Multi-root workspace
   ttt . https://github.com/o/r/pull/123         Review a PR with repo tree
+  git diff | ttt                                Open piped output in a tab
 
 Docs: https://tttedit.dev
 `, version)
@@ -214,6 +240,22 @@ Docs: https://tttedit.dev
 		defer logFile.Close()
 	}
 	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
+
+	// Without "-", stdin is read only when nothing else was asked for: a shell
+	// loop running `ttt "$f"` must keep its input, and --exec runs from scripts
+	// and tests whose stdin is a pipe. The UI reads keys from the terminal.
+	var stdinText *string
+	if flags.stdin || (flags.exec == "" && !flags.targets && stdinIsPiped()) {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ttt: reading stdin: %v\n", err)
+			os.Exit(1)
+		}
+		if flags.stdin || len(data) > 0 {
+			text := string(data)
+			stdinText = &text
+		}
+	}
 
 	var screen *term.TcellScreen
 	if flags.exec != "" {
@@ -333,8 +375,11 @@ Docs: https://tttedit.dev
 
 	editor.PendingFileTargets = fileTargets
 	editor.RememberRecentFolders()
-	if len(editor.Workspace.Paths()) == 0 && len(fileTargets) == 0 && len(prURLs) == 0 {
+	if len(editor.Workspace.Paths()) == 0 && len(fileTargets) == 0 && len(prURLs) == 0 && stdinText == nil {
 		editor.ShowEmptyState()
+	}
+	if stdinText != nil {
+		editor.NewFileFromText(*stdinText)
 	}
 
 	if flags.pluginFile != "" {

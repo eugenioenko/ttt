@@ -23,6 +23,7 @@ let snapCount = 0;
 let tmpDir = "";
 let size = "120x40";
 let extraEnv = {};
+let input;
 
 export function start(...startArgs) {
   commands = [];
@@ -31,9 +32,15 @@ export function start(...startArgs) {
   tmpDir = mkdtempSync(join(tmpdir(), "ttt-bb-"));
   args = [];
   extraEnv = {};
+  input = undefined;
   for (const a of startArgs) {
     args.push(a);
   }
+}
+
+// Text written to ttt's stdin for this run. Reset by start().
+export function stdin(text) {
+  input = text;
 }
 
 export function setEnv(vars) {
@@ -134,6 +141,7 @@ export function run(timeout = 15000) {
       encoding: "utf8",
       timeout,
       stdio: "pipe",
+      input,
       // Isolate from the real ~/.config/ttt — settings toggles persist and race across test files.
       env: { ...process.env, TTT_CONFIG_DIR: join(tmpDir, "config"), ...extraEnv },
     });

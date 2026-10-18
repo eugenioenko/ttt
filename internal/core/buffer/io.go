@@ -24,7 +24,16 @@ func (b *Buffer) LoadFile(filename string) error {
 	if _, err := io.Copy(&sb, f); err != nil {
 		return err
 	}
-	text := sb.String()
+	b.SetText(sb.String())
+	if statErr == nil {
+		b.recordDiskInfo(info)
+	}
+	return nil
+}
+
+// SetText replaces the buffer's contents with text, as loading a file with
+// that content would, and leaves the buffer clean.
+func (b *Buffer) SetText(text string) {
 	b.LineEnding = detectLineEnding(text)
 	lines := SplitLines(text)
 	if len(lines) == 0 {
@@ -35,10 +44,6 @@ func (b *Buffer) LoadFile(filename string) error {
 	}
 	b.SetLines(lines)
 	b.Dirty = false
-	if statErr == nil {
-		b.recordDiskInfo(info)
-	}
-	return nil
 }
 
 // SplitLines splits like bufio.ScanLines, with every line a substring of

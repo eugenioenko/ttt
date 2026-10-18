@@ -175,6 +175,11 @@ func (a *App) NewFile() {
 	a.Root.SetFocus(a.EditorGroup)
 }
 
+func (a *App) NewFileFromText(text string) {
+	a.EditorGroup.NewFileFromText(text)
+	a.Root.SetFocus(a.EditorGroup)
+}
+
 func (a *App) SaveFileAs() {
 	a.showSaveFileAs(nil)
 }

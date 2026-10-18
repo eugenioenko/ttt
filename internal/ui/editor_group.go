@@ -649,6 +649,28 @@ func (g *EditorGroupWidget) NewFile() {
 	g.SwitchTab(len(g.tabs) - 1)
 }
 
+func (g *EditorGroupWidget) NewFileFromText(text string) {
+	buf := &buffer.Buffer{ShowTrailingNewline: g.ShowTrailingNewline}
+	buf.SetText(text)
+	tab := editorTab{
+		Buf:     buf,
+		Cur:     &cursor.Cursor{},
+		Vp:      &view.Viewport{},
+		Undo:    g.newUndoStack(),
+		Sel:     &selection.Selection{},
+		Virtual: true,
+	}
+	if t := g.activeTab(); len(g.tabs) == 1 && g.isUntouchedPlaceholder(t) {
+		tab.FilePath = t.FilePath
+		g.tabs[g.active] = tab
+		g.syncTabs()
+		return
+	}
+	tab.FilePath = g.nextUntitledName()
+	g.tabs = append(g.tabs, tab)
+	g.SwitchTab(len(g.tabs) - 1)
+}
+
 func (g *EditorGroupWidget) nextUntitledName() string {
 	taken := make(map[string]bool)
 	for _, t := range g.tabs {
