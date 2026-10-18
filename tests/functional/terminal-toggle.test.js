@@ -54,8 +54,8 @@ describe("terminal key routing", () => {
     const file = createTempFile(dir, "keys.txt", "Editor content");
     const marker = join(dir, "ok");
 
-    tui.setEnv({ SHELL: "/bin/bash" });
     tui.start(file);
+    tui.setEnv({ SHELL: "/bin/bash" });
     tui.waitFor("keys.txt");
 
     tui.press("ctrl+t");
