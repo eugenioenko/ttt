@@ -113,7 +113,6 @@ func (m *Manager) LoadAll() []*Plugin {
 
 			diff := DiffPermissions(regEntry.Permissions, manifest.Permissions)
 			if !diff.IsEmpty() {
-				regEntry.Enabled = false
 				needsApproval = append(needsApproval, p)
 				continue
 			}
@@ -622,8 +621,6 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 			m.plugins[idx].Destroy()
 			m.plugins = slices.Delete(m.plugins, idx, idx+1)
 		}
-		regEntry.Enabled = false
-		m.registry.Save()
 		return &Plugin{Name: u.manifest.Name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, true, nil
 	}
 

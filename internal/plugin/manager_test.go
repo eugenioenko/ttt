@@ -406,3 +406,70 @@ func TestDenyRecordsNoPermissionsForANewPlugin(t *testing.T) {
 		t.Errorf("denied plugin recorded as approved: %+v", got)
 	}
 }
+
+// A plugin waiting for approval must still be asked about after a restart,
+// even when something else saved the registry in the meantime.
+func TestPendingApprovalSurvivesARegistrySave(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	for name, perms := range map[string]string{
+		"asks":    `{"commands": true, "system.exec": ["curl"]}`,
+		"narrows": `{"commands": true}`,
+	} {
+		dir := writePluginDir(t, pluginsDir, name)
+		manifest := `{"name":"` + name + `","version":"1.0.0","entry":"main.ttt.lua","permissions":` + perms + `}`
+		if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// narrows' grant has a permission its manifest dropped, so loading it saves the registry.
+	registry := `[
+		{"name": "asks", "version": "1.0.0", "enabled": true, "permissions": {"commands": true}},
+		{"name": "narrows", "version": "1.0.0", "enabled": true, "permissions": {"commands": true, "editor.read": true}}
+	]`
+	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	first := NewManager(pluginsDir, regPath)
+	if pending := first.LoadAll(); len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+	first.Shutdown()
+
+	second := NewManager(pluginsDir, regPath)
+	t.Cleanup(second.Shutdown)
+	if pending := second.LoadAll(); len(pending) != 1 || pending[0].Name != "asks" {
+		t.Errorf("after a restart pending = %d, want asks again", len(pending))
+	}
+}
+
+// An update that needs approval must still be asked about after a restart.
+func TestUpdateAwaitingApprovalSurvivesARestart(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "grower")
+	registry := `[{"name": "grower", "version": "1.0.0", "enabled": true, "permissions": {}}]`
+	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, regPath)
+	if pending := m.LoadAll(); len(pending) != 0 {
+		t.Fatalf("pending = %d before the update", len(pending))
+	}
+	manifest := `{"name":"grower","version":"2.0.0","entry":"main.ttt.lua","permissions":{"system.exec":["curl"]}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	u := m.PrepareUpdate("grower")
+	u.manifest, _ = LoadManifest(dir)
+	if _, needsApproval, err := m.ApplyUpdate(u); err != nil || !needsApproval {
+		t.Fatalf("ApplyUpdate: needsApproval %v, err %v", needsApproval, err)
+	}
+	m.Shutdown()
+
+	again := NewManager(pluginsDir, regPath)
+	t.Cleanup(again.Shutdown)
+	if pending := again.LoadAll(); len(pending) != 1 {
+		t.Errorf("after a restart pending = %d, want the update asked about again", len(pending))
+	}
+}
