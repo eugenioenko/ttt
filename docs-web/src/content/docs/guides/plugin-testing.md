@@ -98,7 +98,7 @@ TTT_CONFIG_DIR="$CFG" bin/ttt --size 100x30 somefile.txt \
   --exec "wait 400; panel output; wait 100; screenshot /tmp/out.txt; quit"
 ```
 
-The `permissions` block in the registry entry must match the plugin's manifest, or the editor will re-prompt for approval. Keep `"grantsVersion": 2`: without it a `"network.http": true` grant counts as approved before `true` covered local services, and is asked for again.
+The `permissions` block in the registry entry must match the plugin's manifest, or the editor will re-prompt for approval. Keep `"grantsVersion": 2`: without it a `network.http` grant counts as approved before it could reach local services, and is asked for again.
 
 ## Example: assert an interval timer fires
 

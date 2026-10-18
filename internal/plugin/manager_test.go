@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -525,26 +526,30 @@ func TestManagerGivesEachPluginANetworkCheckedAgainstItsHosts(t *testing.T) {
 	}
 }
 
-// network.http true used to stop short of local services, so a grant made
-// before that changed has to be asked for again.
-func TestManagerAsksAgainForAnAnyDestinationGrantFromBeforeLocalAccess(t *testing.T) {
+// network.http used to stop short of local services, so a grant made before
+// that changed, true or a list whose hostnames can resolve to a local address,
+// has to be asked for again.
+func TestManagerAsksAgainForANetworkGrantFromBeforeLocalAccess(t *testing.T) {
 	pluginsDir := t.TempDir()
 	regPath := filepath.Join(t.TempDir(), "registry.json")
-	for _, name := range []string{"old", "current", "listed"} {
+	perms := map[string]string{
+		"old":            `{"network.http": true}`,
+		"old-listed":     `{"network.http": ["api.example.com"]}`,
+		"current":        `{"network.http": true}`,
+		"current-listed": `{"network.http": ["api.example.com"]}`,
+	}
+	for name, p := range perms {
 		dir := writePluginDir(t, pluginsDir, name)
-		perms := `{"network.http": true}`
-		if name == "listed" {
-			perms = `{"network.http": ["api.example.com"]}`
-		}
-		manifest := `{"name":"` + name + `","version":"1.0.0","entry":"main.ttt.lua","permissions":` + perms + `}`
+		manifest := `{"name":"` + name + `","version":"1.0.0","entry":"main.ttt.lua","permissions":` + p + `}`
 		if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	registry := `[
 		{"name": "old", "version": "1.0.0", "enabled": true, "permissions": {"network.http": true}},
+		{"name": "old-listed", "version": "1.0.0", "enabled": true, "permissions": {"network.http": ["api.example.com"]}},
 		{"name": "current", "version": "1.0.0", "enabled": true, "permissions": {"network.http": true}, "grantsVersion": 2},
-		{"name": "listed", "version": "1.0.0", "enabled": true, "permissions": {"network.http": ["api.example.com"]}}
+		{"name": "current-listed", "version": "1.0.0", "enabled": true, "permissions": {"network.http": ["api.example.com"]}, "grantsVersion": 2}
 	]`
 	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
 		t.Fatal(err)
@@ -553,18 +558,21 @@ func TestManagerAsksAgainForAnAnyDestinationGrantFromBeforeLocalAccess(t *testin
 	t.Cleanup(m.Shutdown)
 
 	pending := m.LoadAll()
-	if len(pending) != 1 || pending[0].Name != "old" {
-		names := []string{}
-		for _, p := range pending {
-			names = append(names, p.Name)
+	names := []string{}
+	for _, p := range pending {
+		names = append(names, p.Name)
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"old", "old-listed"}) {
+		t.Fatalf("pending = %v, want [old old-listed]", names)
+	}
+	for _, p := range pending {
+		if err := m.ApproveAndLoad(p); err != nil {
+			t.Fatal(err)
 		}
-		t.Fatalf("pending = %v, want [old]", names)
-	}
-	if err := m.ApproveAndLoad(pending[0]); err != nil {
-		t.Fatal(err)
-	}
-	if m.registry.Find("old").GrantsVersion != grantsVersion {
-		t.Error("the new approval does not record the current grants version")
+		if m.registry.Find(p.Name).GrantsVersion != grantsVersion {
+			t.Errorf("%s: the new approval does not record the current grants version", p.Name)
+		}
 	}
 	if pending := NewManager(pluginsDir, regPath).LoadAll(); len(pending) != 0 {
 		t.Errorf("approved again but still pending after a restart: %d", len(pending))

@@ -7,8 +7,9 @@ import (
 )
 
 // grantsVersion is recorded with each approval. From localAccessGrants on,
-// network.http true reaches local services too, so a true granted before
-// that has to be asked for again.
+// network.http reaches local services too, through true or through a listed
+// hostname that resolves to one, so a network.http granted before that has
+// to be asked for again.
 const (
 	localAccessGrants = 2
 	grantsVersion     = localAccessGrants
@@ -54,7 +55,7 @@ func LoadRegistry(path string) (*Registry, error) {
 	}
 	for i := range r.Entries {
 		e := &r.Entries[i]
-		if e.GrantsVersion < localAccessGrants && e.Permissions.NetworkHTTP.All {
+		if e.GrantsVersion < localAccessGrants {
 			e.Permissions.NetworkHTTP = NetworkHTTP{}
 		}
 		e.GrantsVersion = grantsVersion

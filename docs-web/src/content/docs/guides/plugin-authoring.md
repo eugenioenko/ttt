@@ -2203,7 +2203,7 @@ Each entry is a hostname or IP, with an optional port; `[::1]:4250` for an IPv6 
 
 When an array is declared, `ttt.net` requests anywhere else fail with a permission error in the response table (`status = 0`, `error` set) — the request never leaves the editor. Hostnames match exactly and case-insensitively (`api.github.com` does not cover `codeload.github.com`; list each host you need), and IPs match by value. Redirects are followed only to listed destinations, so list a host your endpoint redirects to as well; otherwise the request fails with a permission error. The approval dialog shows the exact entries, or says that `true` covers any destination, including local services, so users can see what a plugin talks to. Prefer an explicit list over `true` whenever your plugin knows its endpoints.
 
-A `true` approved before it covered local services is asked for again the next time ttt starts.
+A `network.http` approved before it could reach local services, `true` or a list, is asked for again the next time ttt starts.
 
 > This scopes the `ttt.net` client only. A plugin that also has `system.exec` for a network-capable binary (`curl`, `git`, `gh`, …) can still reach the network through that binary — `system.exec` is the permission that governs it.
 
