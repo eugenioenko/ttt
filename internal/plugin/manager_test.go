@@ -358,3 +358,51 @@ func TestManagerGivesEachPluginANetworkCheckedAgainstItsHosts(t *testing.T) {
 		t.Error("unlisted host allowed")
 	}
 }
+
+// Denying a request for more permissions must not record them as approved:
+// enabling the plugin afterwards would load it with them.
+func TestDenyKeepsThePreviouslyApprovedPermissions(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "grower")
+	manifest := `{"name":"grower","version":"2.0.0","entry":"main.ttt.lua","permissions":{"commands":true,"system.exec":["curl"]}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	registry := `[{"name": "grower", "version": "1.0.0", "enabled": true, "permissions": {"commands": true}}]`
+	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, regPath)
+	t.Cleanup(m.Shutdown)
+
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+	if err := m.DenyPlugin(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.registry.Find("grower").Permissions.SystemExec; len(got) != 0 {
+		t.Errorf("denied system.exec recorded as approved: %v", got)
+	}
+	p, err := m.SetEnabled("grower", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Granted.CheckExec("curl"); err == nil {
+		t.Error("enabling after a deny granted the denied system.exec")
+	}
+}
+
+func TestDenyRecordsNoPermissionsForANewPlugin(t *testing.T) {
+	m, _ := newTestManager(t)
+	dir := writePluginDir(t, t.TempDir(), "local")
+	p := &Plugin{Name: "local", Dir: dir, Manifest: Manifest{Name: "local", Version: "1.0.0", Permissions: PermissionSet{Commands: true}}}
+	if err := m.DenyPlugin(p); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.registry.Find("local").Permissions; got.Commands {
+		t.Errorf("denied plugin recorded as approved: %+v", got)
+	}
+}

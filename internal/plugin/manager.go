@@ -512,7 +512,13 @@ func (m *Manager) DenyPlugin(p *Plugin) error {
 	if m.registry == nil {
 		return nil
 	}
-	m.registry.AddOrUpdate(p.Manifest.Name, p.Manifest.DisplayName, p.Repo, p.RepoPath, p.Manifest.Version, p.Manifest.Permissions)
+	// Keep only what was approved before: recording the denied request would
+	// grant it the next time the plugin is enabled.
+	var approved PermissionSet
+	if entry != nil {
+		approved = entry.Permissions
+	}
+	m.registry.AddOrUpdate(p.Manifest.Name, p.Manifest.DisplayName, p.Repo, p.RepoPath, p.Manifest.Version, approved)
 	m.registry.SetEnabled(p.Manifest.Name, false)
 	return m.registry.Save()
 }
