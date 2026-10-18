@@ -128,6 +128,9 @@ type EditorSettings struct {
 	UndoDeleteCursorStart   bool             `json:"undoDeleteCursorStart,omitempty"`
 	TransparentBackground   bool             `json:"transparentBackground"`
 	Grammars                []GrammarSetting `json:"grammars,omitempty"`
+
+	SaveAllOnQuit              bool `json:"saveAllOnQuit"`
+	SaveAllOnQuitExceptUnnamed bool `json:"saveAllOnQuitExceptUnnamed"`
 }
 
 // Path is relative to the config directory unless absolute.

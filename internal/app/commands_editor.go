@@ -176,12 +176,20 @@ func (a *App) NewFile() {
 }
 
 func (a *App) SaveFileAs() {
+	a.showSaveFileAs(nil)
+}
+
+func (a *App) showSaveFileAs(onSaved func()) {
 	current := a.EditorGroup.ActiveFilePath()
 	initial := ""
 	if !a.EditorGroup.IsActiveVirtual() {
 		initial = current
 	}
-	a.ShowInputDialog("Save As", "Filename", initial, func(path string) {
+	title := "Save As"
+	if onSaved != nil {
+		title += ": " + a.EditorGroup.ActiveFileName()
+	}
+	a.ShowInputDialog(title, "Filename", initial, func(path string) {
 		if path == "" {
 			return
 		}
@@ -191,19 +199,22 @@ func (a *App) SaveFileAs() {
 				[]string{"Cancel", "Replace"},
 				[]func(){
 					func() { a.DismissDialog() },
-					func() { a.DismissDialog(); a.saveFileAs(path) },
+					func() { a.DismissDialog(); a.saveFileAs(path, onSaved) },
 				},
 			)
 			return
 		}
-		a.saveFileAs(path)
+		a.saveFileAs(path, onSaved)
 	})
 }
 
-func (a *App) saveFileAs(path string) {
+func (a *App) saveFileAs(path string, onSaved func()) {
 	if a.EditorGroup.SaveAs(path) {
 		path, lang := a.editorPathLang()
 		a.afterFileSave(path, lang)
+		if onSaved != nil {
+			onSaved()
+		}
 	}
 }
 
@@ -234,6 +245,10 @@ func samePath(a, b string) bool {
 }
 
 func (a *App) SaveFile() {
+	a.saveFile(nil)
+}
+
+func (a *App) saveFile(onSaved func()) {
 	path := a.EditorGroup.ActiveFilePath()
 	buf := a.EditorGroup.ActiveBuffer()
 	if buf != nil && !a.EditorGroup.IsActiveVirtual() && buf.ReadOnlyOnDisk {
@@ -242,15 +257,15 @@ func (a *App) SaveFile() {
 			[]string{"Cancel", "Overwrite"},
 			[]func(){
 				func() { a.DismissDialog() },
-				func() { a.DismissDialog(); a.saveFileCheckingDisk() },
+				func() { a.DismissDialog(); a.saveFileCheckingDisk(onSaved) },
 			},
 		)
 		return
 	}
-	a.saveFileCheckingDisk()
+	a.saveFileCheckingDisk(onSaved)
 }
 
-func (a *App) saveFileCheckingDisk() {
+func (a *App) saveFileCheckingDisk(onSaved func()) {
 	path := a.EditorGroup.ActiveFilePath()
 	buf := a.EditorGroup.ActiveBuffer()
 	if buf != nil && !a.EditorGroup.IsActiveVirtual() && buf.DiskChanged(path) {
@@ -258,16 +273,16 @@ func (a *App) saveFileCheckingDisk() {
 			fmt.Sprintf("%s was modified on disk. Overwrite with your version?", filepath.Base(path)),
 			[]string{"Overwrite", "Cancel"},
 			[]func(){
-				func() { a.DismissDialog(); a.doSaveFile() },
+				func() { a.DismissDialog(); a.doSaveFile(onSaved) },
 				func() { a.DismissDialog() },
 			},
 		)
 		return
 	}
-	a.doSaveFile()
+	a.doSaveFile(onSaved)
 }
 
-func (a *App) doSaveFile() {
+func (a *App) doSaveFile(onSaved func()) {
 	// Content tabs (image/binary viewers, diffs) hold no buffer: the format/code-action pipeline below must never run against their paths with a stale language.
 	if a.EditorGroup.ActiveBuffer() == nil {
 		return
@@ -282,11 +297,16 @@ func (a *App) doSaveFile() {
 		}
 	}
 	if !a.EditorGroup.Save() {
-		a.SaveFileAs()
+		if onSaved == nil || a.EditorGroup.IsActiveVirtual() {
+			a.showSaveFileAs(onSaved)
+		}
 		return
 	}
 	path, lang = a.editorPathLang()
 	a.afterFileSave(path, lang)
+	if onSaved != nil {
+		onSaved()
+	}
 }
 
 func (a *App) afterFileSave(path, lang string) {
@@ -310,15 +330,64 @@ func (a *App) forceQuit() {
 }
 
 func (a *App) Quit() {
-	if a.quitPending || !a.EditorGroup.AnyDirty() {
+	if a.quitPending {
+		a.forceQuit()
+		return
+	}
+	if a.Root.HasOverlay() {
+		return
+	}
+	if !a.EditorGroup.AnyDirty() {
 		a.forceQuit()
 		return
 	}
 	a.quitPending = true
-	a.ShowConfirmDialogEx("Unsaved changes", "Press Ctrl+Q to force quit.", []string{"Cancel", "Quit"}, []func(){
-		func() { a.quitPending = false; a.DismissDialog() },
-		func() { a.forceQuit() },
-	})
+	cancel := func() { a.quitPending = false; a.DismissDialog() }
+	buttons := []string{"Cancel", "Quit"}
+	callbacks := []func(){cancel, a.forceQuit}
+	showSaveAll := a.Settings.Editor.SaveAllOnQuit
+	if a.Settings.Editor.SaveAllOnQuitExceptUnnamed {
+		for i := 0; i < a.EditorGroup.TabCount(); i++ {
+			if a.EditorGroup.IsTabUnnamed(i) {
+				showSaveAll = false
+				break
+			}
+		}
+	}
+	if showSaveAll {
+		buttons = append(buttons, "Save All & Quit")
+		callbacks = append(callbacks, func() {
+			cancel()
+			a.saveAllAndQuit()
+		})
+	}
+	dialog := a.ShowConfirmDialogEx("Unsaved changes", "Press Ctrl+Q to force quit.", buttons, callbacks)
+	dialog.OnDismiss = cancel
+}
+
+func (a *App) saveAllAndQuit() {
+	if a.Root.HasOverlay() {
+		return
+	}
+	next := -1
+	for i := 0; i < a.EditorGroup.TabCount(); i++ {
+		if _, dirty := a.EditorGroup.TabInfo(i); !dirty {
+			continue
+		}
+		if !a.EditorGroup.IsTabUnnamed(i) {
+			next = i
+			break
+		}
+		if next < 0 {
+			next = i
+		}
+	}
+	if next < 0 {
+		a.forceQuit()
+		return
+	}
+	a.EditorGroup.SwitchTab(next)
+	a.saveFile(a.saveAllAndQuit)
 }
 
 // hunkStarts returns the buffer-line indices (0-based) at which each diff hunk

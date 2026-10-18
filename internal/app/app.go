@@ -960,7 +960,7 @@ func (a *App) ShowConfirmDialog(message string, buttons []string, callbacks []fu
 	a.ShowConfirmDialogEx("", message, buttons, callbacks)
 }
 
-func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callbacks []func()) {
+func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callbacks []func()) *widgets.DialogWidget {
 	content := widgets.NewParagraphWidget(message)
 
 	dialog := widgets.NewDialogWidget(50)
@@ -982,6 +982,7 @@ func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callb
 
 	adapter := ui.NewWidgetAdapter(dialog)
 	a.ShowDialog(adapter)
+	return dialog
 }
 
 func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {

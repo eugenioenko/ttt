@@ -1751,6 +1751,14 @@ func (g *EditorGroupWidget) TabContent(index int) Widget {
 	return g.tabs[index].Content
 }
 
+func (g *EditorGroupWidget) IsTabUnnamed(index int) bool {
+	if index < 0 || index >= len(g.tabs) {
+		return false
+	}
+	t := &g.tabs[index]
+	return t.Content == nil && t.Buf != nil && (t.Virtual || t.FilePath == "")
+}
+
 func (g *EditorGroupWidget) TabInfo(index int) (path string, modified bool) {
 	if index < 0 || index >= len(g.tabs) {
 		return "", false

@@ -110,6 +110,8 @@ All editor settings are nested under the `editor` key.
 | `editor.lineNumbers` | bool | `true` | Show line numbers in the gutter |
 | `editor.cursorStyle` | string | `""` | Cursor style: `"block"`, `"underline"`, or `"bar"` |
 | `editor.formatOnSave` | bool | `false` | Auto-format the document via LSP on save |
+| `editor.saveAllOnQuit` | bool | `false` | Add **Save All & Quit** to the **Unsaved changes** dialog. Saves modified named buffers first, then prompts **Save As** for each modified unnamed buffer. Cancelling or failing a save stops quitting; files already saved remain saved. Also in **Settings > Editor > On quit**. |
+| `editor.saveAllOnQuitExceptUnnamed` | bool | `false` | Hide **Save All & Quit** whenever an unnamed buffer is open, even if it is unmodified. Only applies when `editor.saveAllOnQuit` is enabled. |
 | `editor.insertFinalNewline` | bool | `true` | Ensure files end with a newline on load and save |
 | `editor.trimTrailingWhitespace` | bool | `false` | Remove trailing whitespace from lines on save |
 | `editor.focusOnOpen` | bool | `false` | Focus the editor when opening a file |

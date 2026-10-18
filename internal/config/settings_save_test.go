@@ -70,6 +70,27 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 }
 
+func TestQuitSaveAllSettings(t *testing.T) {
+	withTempConfigDir(t)
+	for _, enabled := range []bool{false, true} {
+		for _, exception := range []bool{false, true} {
+			s := DefaultSettings()
+			if s.Editor.SaveAllOnQuit || s.Editor.SaveAllOnQuitExceptUnnamed {
+				t.Fatal("both quit settings must default to off")
+			}
+			s.Editor.SaveAllOnQuit = enabled
+			s.Editor.SaveAllOnQuitExceptUnnamed = exception
+			if err := SaveSettings(s); err != nil {
+				t.Fatal(err)
+			}
+			got := LoadSettings().Editor
+			if got.SaveAllOnQuit != enabled || got.SaveAllOnQuitExceptUnnamed != exception {
+				t.Fatalf("quit settings did not round-trip: enabled=%v, exception=%v", enabled, exception)
+			}
+		}
+	}
+}
+
 func TestSaveSettingsWritesValidJSON(t *testing.T) {
 	dir := withTempConfigDir(t)
 

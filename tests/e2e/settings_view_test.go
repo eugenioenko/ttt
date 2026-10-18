@@ -51,6 +51,22 @@ func TestSettingsViewReflectsCurrentValues(t *testing.T) {
 	}
 }
 
+func TestSettingsQuitOptions(t *testing.T) {
+	h := newTestHarness(t, 120, 50)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Editor", "Editor")
+	for _, label := range []string{"Show Save All & Quit button", "Except with unnamed buffers"} {
+		if !rowHas(h, label, uncheckedBox) {
+			t.Fatalf("%s should default to off:\n%s", label, h.screenText())
+		}
+		clickRowControl(t, h, label, uncheckedBox)
+	}
+	h.exec("settings.apply")
+	if !h.app.Settings.Editor.SaveAllOnQuit || !h.app.Settings.Editor.SaveAllOnQuitExceptUnnamed {
+		t.Fatal("quit options were not applied")
+	}
+}
+
 const (
 	checkedBox   = "[x]"
 	uncheckedBox = "[ ]"
