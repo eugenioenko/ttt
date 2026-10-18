@@ -109,6 +109,13 @@ type NetworkAPI interface {
 	Post(url string, headers map[string]string, body string) (status int, respBody string, respHeaders map[string]string, err error)
 }
 
+// HostCheckedNetwork is a NetworkAPI that can hold redirects to a plugin's
+// network.http hosts. The manager gives each plugin its own copy.
+type HostCheckedNetwork interface {
+	NetworkAPI
+	ForPlugin(allowHost func(host string) error) NetworkAPI
+}
+
 type SettingsAPI interface {
 	Get(key string) (any, bool)
 	Set(key string, value any) error

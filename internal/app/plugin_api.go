@@ -514,13 +514,37 @@ func (s *PluginSystemAPI) Env(name string) string {
 type PluginNetworkAPI struct {
 	client   *http.Client
 	lookupIP func(string) ([]net.IP, error)
+	// allowHost is the plugin's network.http host check. The plugin host
+	// applies it to the URL a plugin passes; redirects are checked here.
+	allowHost func(host string) error
 }
 
 func NewPluginNetworkAPI() *PluginNetworkAPI {
-	return &PluginNetworkAPI{
-		client:   &http.Client{Timeout: 30 * time.Second},
-		lookupIP: net.LookupIP,
+	n := &PluginNetworkAPI{lookupIP: net.LookupIP}
+	n.client = &http.Client{Timeout: 30 * time.Second, CheckRedirect: n.checkRedirect}
+	return n
+}
+
+// ForPlugin returns a copy whose redirects are also held to allowHost.
+func (n *PluginNetworkAPI) ForPlugin(allowHost func(host string) error) plugin.NetworkAPI {
+	c := &PluginNetworkAPI{lookupIP: n.lookupIP, allowHost: allowHost}
+	c.client = &http.Client{Timeout: n.client.Timeout, Transport: n.client.Transport, CheckRedirect: c.checkRedirect}
+	return c
+}
+
+// checkRedirect holds every redirect to the checks the first URL passed;
+// without it a listed host could send a plugin to any host or local address.
+func (n *PluginNetworkAPI) checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
 	}
+	if err := n.validateURL(req.URL.String()); err != nil {
+		return err
+	}
+	if n.allowHost != nil {
+		return n.allowHost(req.URL.Hostname())
+	}
+	return nil
 }
 
 var privateNetworks = []net.IPNet{

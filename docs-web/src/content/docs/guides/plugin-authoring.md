@@ -2199,7 +2199,7 @@ The `network.http` permission can be a boolean or an array of hostnames:
 "network.http": ["api.github.com", "cheat.sh"] // only these hosts
 ```
 
-When an array is declared, `ttt.net` requests to any other host fail with a permission error in the response table (`status = 0`, `error` set) — the request never leaves the editor. Host matching is exact and case-insensitive (`api.github.com` does not cover `codeload.github.com`; list each host you need). The approval dialog shows the exact hosts, so users can see what a plugin talks to. Prefer an explicit list over `true` whenever your plugin knows its endpoints.
+When an array is declared, `ttt.net` requests to any other host fail with a permission error in the response table (`status = 0`, `error` set) — the request never leaves the editor. Host matching is exact and case-insensitive (`api.github.com` does not cover `codeload.github.com`; list each host you need). Redirects are followed only to listed hosts (and never to local addresses), so list a host your endpoint redirects to as well; otherwise the request fails with a permission error. The approval dialog shows the exact hosts, so users can see what a plugin talks to. Prefer an explicit list over `true` whenever your plugin knows its endpoints.
 
 > This scopes the `ttt.net` client only. A plugin that also has `system.exec` for a network-capable binary (`curl`, `git`, `gh`, …) can still reach the network through that binary — `system.exec` is the permission that governs it.
 

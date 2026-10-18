@@ -227,8 +227,15 @@ func (m *Manager) SetSystemAPI(api SystemAPI) {
 func (m *Manager) SetNetworkAPI(api NetworkAPI) {
 	m.networkAPI = api
 	for _, p := range m.plugins {
-		p.Network = api
+		p.Network = m.networkFor(p)
 	}
+}
+
+func (m *Manager) networkFor(p *Plugin) NetworkAPI {
+	if n, ok := m.networkAPI.(HostCheckedNetwork); ok {
+		return n.ForPlugin(func(host string) error { return p.Granted.CheckHost(host) })
+	}
+	return m.networkAPI
 }
 
 func (m *Manager) SetSettingsAPI(api SettingsAPI) {
@@ -267,7 +274,7 @@ func (m *Manager) wireAPIs(p *Plugin) {
 		p.Settings = m.settingsAPI
 	}
 	if m.networkAPI != nil {
-		p.Network = m.networkAPI
+		p.Network = m.networkFor(p)
 	}
 	if m.systemAPI != nil {
 		p.System = m.systemAPI

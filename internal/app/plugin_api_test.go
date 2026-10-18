@@ -1,11 +1,16 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -560,5 +565,82 @@ func TestPluginFilesystemAPIFor_AnyPathAndWorkspace(t *testing.T) {
 	}
 	if err := fs.WriteFile(filepath.Join(outside, "f.txt"), "y"); err == nil {
 		t.Error("writing outside the workspace was allowed")
+	}
+}
+
+// redirectingNetworkAPI serves public.example from start and lets lookups of
+// names report a public address, so a redirect test needs no real network.
+func redirectingNetworkAPI(t *testing.T, start *httptest.Server, hosts ...string) *PluginNetworkAPI {
+	t.Helper()
+	api := NewPluginNetworkAPI()
+	api.lookupIP = func(host string) ([]net.IP, error) {
+		if ip := net.ParseIP(host); ip != nil {
+			return []net.IP{ip}, nil
+		}
+		return []net.IP{net.IPv4(93, 184, 216, 34)}, nil
+	}
+	grant := plugin.PermissionSet{NetworkHTTP: plugin.NetworkHTTP{Hosts: hosts}}
+	api = api.ForPlugin(grant.CheckHost).(*PluginNetworkAPI)
+	startAddr := strings.TrimPrefix(start.URL, "http://")
+	api.client.Transport = &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if h, _, _ := net.SplitHostPort(addr); h != "127.0.0.1" {
+			addr = startAddr
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}}
+	return api
+}
+
+func TestPluginNetworkAPI_RedirectToALocalAddressIsBlocked(t *testing.T) {
+	reached := false
+	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+	}))
+	defer local.Close()
+	public := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, local.URL+"/admin", http.StatusFound)
+	}))
+	defer public.Close()
+	// Listing 127.0.0.1 leaves the local-address block as the only check
+	// that can refuse the hop, as for a plugin granted any host.
+	api := redirectingNetworkAPI(t, public, "public.example", "127.0.0.1")
+
+	if _, _, _, err := api.Get("http://public.example/", nil); err == nil {
+		t.Error("Get followed a redirect to a loopback address")
+	}
+	if _, _, _, err := api.Post("http://public.example/", nil, "x"); err == nil {
+		t.Error("Post followed a redirect to a loopback address")
+	}
+	if reached {
+		t.Error("the local server received a request")
+	}
+}
+
+func TestPluginNetworkAPI_RedirectsStayOnTheAllowedHosts(t *testing.T) {
+	var paths []string
+	public := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Host+r.URL.Path)
+		switch r.URL.Path {
+		case "/elsewhere":
+			http.Redirect(w, r, "http://other.example/steal", http.StatusFound)
+		case "/moved":
+			http.Redirect(w, r, "http://mirror.example/new", http.StatusFound)
+		default:
+			w.Write([]byte("ok"))
+		}
+	}))
+	defer public.Close()
+	api := redirectingNetworkAPI(t, public, "public.example", "mirror.example")
+
+	if _, _, _, err := api.Get("http://public.example/elsewhere", nil); err == nil {
+		t.Error("followed a redirect to a host the plugin does not list")
+	}
+	status, body, _, err := api.Get("http://public.example/moved", nil)
+	if err != nil || status != 200 || body != "ok" {
+		t.Errorf("redirect to a listed host: status %d, body %q, err %v", status, body, err)
+	}
+	want := []string{"public.example/elsewhere", "public.example/moved", "mirror.example/new"}
+	if !slices.Equal(paths, want) {
+		t.Errorf("requests = %v, want %v", paths, want)
 	}
 }

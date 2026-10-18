@@ -570,7 +570,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			a.postRepositoryInvalidation("", RepositoryWorktree|RepositoryHistory)
 		}
 	}
-	p.Network = NewPluginNetworkAPI()
+	p.Network = NewPluginNetworkAPI().ForPlugin(func(host string) error { return p.Granted.CheckHost(host) })
 	a.wirePluginLog(p)
 	p.Markdown = a.Settings.Markdown
 	p.Borders = a.Borders

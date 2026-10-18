@@ -316,3 +316,45 @@ func TestDroppedPermissionIsRevoked(t *testing.T) {
 		t.Error("requesting fs.write again should need approval")
 	}
 }
+
+type hostCheckedNetworkStub struct {
+	mockNetworkAPI
+	checks []func(string) error
+}
+
+func (s *hostCheckedNetworkStub) ForPlugin(allowHost func(string) error) NetworkAPI {
+	s.checks = append(s.checks, allowHost)
+	return &s.mockNetworkAPI
+}
+
+// A plugin's init code runs before the app wires it, so the manager must
+// already give it a network API that knows its hosts.
+func TestManagerGivesEachPluginANetworkCheckedAgainstItsHosts(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	stub := &hostCheckedNetworkStub{}
+	m.SetNetworkAPI(stub)
+	dir := writePluginDir(t, pluginsDir, "netty")
+	manifest := `{"name":"netty","version":"1.0.0","entry":"main.ttt.lua","permissions":{"network.http":["api.example.com"]}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+	if err := m.ApproveAndLoad(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	if len(stub.checks) != 1 {
+		t.Fatalf("ForPlugin calls = %d, want 1", len(stub.checks))
+	}
+	if pending[0].Network != &stub.mockNetworkAPI {
+		t.Error("the plugin does not use the copy ForPlugin returned")
+	}
+	if err := stub.checks[0]("api.example.com"); err != nil {
+		t.Errorf("listed host refused: %v", err)
+	}
+	if err := stub.checks[0]("other.example.com"); err == nil {
+		t.Error("unlisted host allowed")
+	}
+}
