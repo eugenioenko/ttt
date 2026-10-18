@@ -23,7 +23,7 @@ afterEach(() => {
   dir = null;
 });
 
-function startCase(name, serverArgs = [], debounce = 100) {
+function startCase(name, serverArgs = [], debounce = 100, extraFiles = []) {
   dir = createTempDir();
   const file = createTempFile(dir, `${name}.js`, INITIAL_TEXT);
   const trace = join(dir, "fake-lsp-trace.jsonl");
@@ -53,7 +53,8 @@ function startCase(name, serverArgs = [], debounce = 100) {
     "utf8",
   );
 
-  tui.start("--config", config, dir, file);
+  const extraPaths = extraFiles.map(([fileName, text]) => createTempFile(dir, fileName, text));
+  tui.start("--config", config, dir, ...extraPaths, file);
   tui.waitFor("// fake protocol");
   tui.panel("problems");
   tui.waitFor("FAKE_LSP_READY");
@@ -435,6 +436,19 @@ describe("deterministic fake LSP protocol", () => {
       },
     ]);
     assertRequestAfterDocument(trace, signatures[0], `${INITIAL_TEXT}console.log(`);
+  });
+
+  it("closes signature help when the active tab changes", () => {
+    startCase("signature-tab", [], 100, [["other.js", "// other file\n"]]);
+
+    tui.type("console.log(");
+    tui.waitFor("fakeSignature(value: string)");
+    tui.exec("View: Next Tab");
+    tui.waitFor("// other file");
+    const after = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[after]).not.toContain("fakeSignature");
   });
 
   it("uses byte-length framing in both directions for a multibyte dot completion", () => {

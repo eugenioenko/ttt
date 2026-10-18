@@ -106,6 +106,7 @@ func RunEventLoop(
 		// switches — giving plugins a reliable hook to (re)scan the active file.
 		if filePath != lastTabFile {
 			lastTabFile = filePath
+			app.DismissSignatureHelp()
 			if app.PluginManager != nil && filePath != "" {
 				app.PluginManager.DispatchEvent("tab.change", filePath)
 			}
