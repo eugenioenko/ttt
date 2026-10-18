@@ -170,6 +170,10 @@ func TestApplyUpdateInitFailureDropsRegistrations(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg := `[{"name":"panel","version":"1.0.0","enabled":true,"permissions":{"panel.sidebar":true}}]`
+	manifestJSON := `{"name":"panel","version":"1.0.0","entry":"main.ttt.lua","permissions":{"panel.sidebar":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifestJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(regPath, []byte(reg), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -259,5 +263,56 @@ func TestLoadAllWiresAppVersionForHealthyPlugin(t *testing.T) {
 
 	if len(logged) != 1 || logged[0] != "9.9.9" {
 		t.Errorf("logged = %v, want a single %q", logged, "9.9.9")
+	}
+}
+
+// A permission dropped from the manifest is no longer granted, and asking for
+// it again needs approval (#915).
+func TestDroppedPermissionIsRevoked(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "p")
+	reg := `[{"name":"p","version":"1.0.0","enabled":true,"permissions":{"editor.read":true,"fs.write":true}}]`
+	if err := os.WriteFile(regPath, []byte(reg), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manifestJSON := `{"name":"p","version":"1.0.0","entry":"main.ttt.lua","permissions":{"editor.read":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifestJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := NewManager(pluginsDir, regPath)
+	m.LoadAll()
+	defer m.Shutdown()
+	assertRevoked := func(when string) {
+		t.Helper()
+		p := m.FindPlugin("p")
+		if p == nil {
+			t.Fatalf("after %s: plugin not loaded", when)
+		}
+		if p.Granted.Check("fs.write") == nil || p.Granted.Check("editor.read") != nil {
+			t.Fatalf("after %s: want editor.read only, got %+v", when, p.Granted)
+		}
+		stored, err := os.ReadFile(regPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(stored), "fs.write") {
+			t.Fatalf("after %s: fs.write still stored: %s", when, stored)
+		}
+	}
+	assertRevoked("LoadAll")
+
+	m.registry.Find("p").Permissions.FsWrite = FsAccess{Paths: []string{FsWorkspace}}
+	u := m.PrepareUpdate("p")
+	u.manifest, _ = LoadManifest(dir)
+	if _, _, err := m.ApplyUpdate(u); err != nil {
+		t.Fatal(err)
+	}
+	assertRevoked("ApplyUpdate")
+
+	u.manifest.Permissions.FsWrite = FsAccess{Paths: []string{FsWorkspace}}
+	if DiffPermissions(m.registry.Find("p").Permissions, u.manifest.Permissions).IsEmpty() {
+		t.Error("requesting fs.write again should need approval")
 	}
 }

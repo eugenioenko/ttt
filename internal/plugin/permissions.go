@@ -408,3 +408,69 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 
 	return entries
 }
+
+// IntersectPermissions returns the granted permissions the manifest still
+// declares, so a permission dropped from the manifest is no longer granted.
+func IntersectPermissions(granted, declared PermissionSet) PermissionSet {
+	return PermissionSet{
+		PanelSidebar:      granted.PanelSidebar && declared.PanelSidebar,
+		PanelBottom:       granted.PanelBottom && declared.PanelBottom,
+		PanelDrawer:       granted.PanelDrawer && declared.PanelDrawer,
+		PanelEditor:       granted.PanelEditor && declared.PanelEditor,
+		Commands:          granted.Commands && declared.Commands,
+		Keybindings:       granted.Keybindings && declared.Keybindings,
+		EditorRead:        granted.EditorRead && declared.EditorRead,
+		EditorWrite:       granted.EditorWrite && declared.EditorWrite,
+		EditorDiagnostics: granted.EditorDiagnostics && declared.EditorDiagnostics,
+		EditorBookmarks:   granted.EditorBookmarks && declared.EditorBookmarks,
+		EditorDecorations: granted.EditorDecorations && declared.EditorDecorations,
+		FileHandlers:      granted.FileHandlers && declared.FileHandlers,
+		FsRead:            intersectFs(granted.FsRead, declared.FsRead),
+		FsWrite:           intersectFs(granted.FsWrite, declared.FsWrite),
+		SystemExec:        intersectStrings(granted.SystemExec, declared.SystemExec),
+		SystemEnv:         granted.SystemEnv && declared.SystemEnv,
+		NetworkHTTP:       intersectNetwork(granted.NetworkHTTP, declared.NetworkHTTP),
+		EventsFile:        granted.EventsFile && declared.EventsFile,
+		EventsEditor:      granted.EventsEditor && declared.EventsEditor,
+		Settings:          granted.Settings && declared.Settings,
+		SettingsKeys:      intersectStrings(granted.SettingsKeys, declared.SettingsKeys),
+		Storage:           granted.Storage && declared.Storage,
+		ClipboardRead:     granted.ClipboardRead && declared.ClipboardRead,
+	}
+}
+
+func intersectStrings(granted, declared []string) []string {
+	var out []string
+	for _, s := range declared {
+		if slices.Contains(granted, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func intersectFs(granted, declared FsAccess) FsAccess {
+	if declared.Covers(FsAnyPath) {
+		return granted
+	}
+	var paths []string
+	for _, p := range declared.Paths {
+		if granted.Covers(p) {
+			paths = append(paths, p)
+		}
+	}
+	return FsAccess{Paths: paths}
+}
+
+func intersectNetwork(granted, declared NetworkHTTP) NetworkHTTP {
+	if declared.All {
+		return granted
+	}
+	var hosts []string
+	for _, h := range declared.Hosts {
+		if granted.AllowsHost(h) {
+			hosts = append(hosts, h)
+		}
+	}
+	return NetworkHTTP{Hosts: hosts}
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -117,7 +118,7 @@ func (m *Manager) LoadAll() []*Plugin {
 				continue
 			}
 
-			p.Granted = regEntry.Permissions
+			p.Granted = m.grant(regEntry, manifest.Permissions)
 
 			// Init reports compile failures through p.Log, so wire it first.
 			if m.logFactory != nil {
@@ -625,7 +626,7 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 		Repo:     old.Repo,
 		RepoPath: old.RepoPath,
 		Manifest: u.manifest,
-		Granted:  regEntry.Permissions,
+		Granted:  m.grant(regEntry, u.manifest.Permissions),
 	}
 	m.wireAPIs(p)
 	p.AppVersion = m.appVersion
@@ -672,7 +673,7 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 		Name:     manifest.Name,
 		Dir:      dir,
 		Manifest: manifest,
-		Granted:  regEntry.Permissions,
+		Granted:  m.grant(regEntry, manifest.Permissions),
 	}
 	if err := m.initPlugin(p); err != nil {
 		return nil, err
@@ -681,6 +682,18 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 	m.plugins = append(m.plugins, p)
 	m.collectRegistrations(p)
 	return p, nil
+}
+
+// grant returns the approved permissions the manifest still declares. A
+// dropped permission is removed from the registry so asking for it again
+// needs approval.
+func (m *Manager) grant(entry *RegistryEntry, declared PermissionSet) PermissionSet {
+	granted := IntersectPermissions(entry.Permissions, declared)
+	if !reflect.DeepEqual(granted, entry.Permissions) {
+		entry.Permissions = granted
+		m.registry.Save()
+	}
+	return granted
 }
 
 func (m *Manager) Reload(name string) (*Plugin, error) {
@@ -708,6 +721,10 @@ func (m *Manager) Reload(name string) (*Plugin, error) {
 	if err != nil {
 		m.plugins = append(m.plugins[:idx], m.plugins[idx+1:]...)
 		return nil, fmt.Errorf("reload manifest: %w", err)
+	}
+
+	if regEntry := m.registry.Find(name); regEntry != nil {
+		granted = m.grant(regEntry, manifest.Permissions)
 	}
 
 	p := &Plugin{
