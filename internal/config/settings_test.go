@@ -439,3 +439,67 @@ func TestPanelPositionSurvivesRoundTrip(t *testing.T) {
 		t.Fatalf("panel.position = %q after round trip, want \"bottom\"\n%s", final.Panel.Position, second)
 	}
 }
+
+func TestWordWrapMaxBytes(t *testing.T) {
+	var e EditorSettings
+	if got := e.WordWrapMaxBytes(); got != 32<<20 {
+		t.Errorf("nil LargeFiles: got %d, want %d", got, 32<<20)
+	}
+
+	e.LargeFiles = &LargeFileSettings{}
+	if got := e.WordWrapMaxBytes(); got != 32<<20 {
+		t.Errorf("nil WordWrapMaxMB: got %d, want %d", got, 32<<20)
+	}
+
+	zero := 0
+	e.LargeFiles.WordWrapMaxMB = &zero
+	if got := e.WordWrapMaxBytes(); got != 0 {
+		t.Errorf("0 WordWrapMaxMB: got %d, want 0", got)
+	}
+
+	neg := -1
+	e.LargeFiles.WordWrapMaxMB = &neg
+	if got := e.WordWrapMaxBytes(); got != 0 {
+		t.Errorf("-1 WordWrapMaxMB: got %d, want 0", got)
+	}
+
+	hundred := 100
+	e.LargeFiles.WordWrapMaxMB = &hundred
+	if got := e.WordWrapMaxBytes(); got != 100<<20 {
+		t.Errorf("100 WordWrapMaxMB: got %d, want %d", got, 100<<20)
+	}
+
+	withTempConfigDir(t)
+	s := DefaultSettings()
+	s.Editor.LargeFiles = &LargeFileSettings{WordWrapMaxMB: &zero}
+	if err := SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	loaded := LoadSettings()
+	if loaded.Editor.LargeFiles == nil || loaded.Editor.LargeFiles.WordWrapMaxMB == nil || *loaded.Editor.LargeFiles.WordWrapMaxMB != 0 {
+		t.Fatalf("loaded wordWrapMaxMB = %v, want 0", loaded.Editor.LargeFiles)
+	}
+	if got := loaded.Editor.WordWrapMaxBytes(); got != 0 {
+		t.Errorf("loaded WordWrapMaxBytes() = %d, want 0", got)
+	}
+
+	dir := withTempConfigDir(t)
+	if err := SaveSettings(DefaultSettings()); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	var editorRaw map[string]json.RawMessage
+	if err := json.Unmarshal(raw["editor"], &editorRaw); err != nil {
+		t.Fatalf("Unmarshal editor: %v", err)
+	}
+	if _, ok := editorRaw["largeFiles"]; ok {
+		t.Errorf("settings.json contains largeFiles key for default settings: %s", string(data))
+	}
+}

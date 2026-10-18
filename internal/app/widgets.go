@@ -225,6 +225,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
 	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
 	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
+	editorGroup.WordWrapMaxBytes = cfg.Settings.Editor.WordWrapMaxBytes()
 	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
 	editorGroup.DiffContext = configuredDiffContext(cfg.Settings.Editor.DiffContext)
 	editorGroup.DiffWordWrap = cfg.Settings.Editor.DiffWordWrap
@@ -236,7 +237,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.DiffColorGutterNumbers = cfg.Settings.Editor.DiffColorGutterNumbers
 	editorGroup.DiffScrollbarGitMarks = cfg.Settings.Editor.DiffScrollbarGitMarks
 	editorGroup.LegacyScrollbarGlyphs = cfg.Settings.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
-	editorGroup.Editor.WordWrap = cfg.Settings.Editor.WordWrap
+	editorGroup.Editor.WordWrap = editorGroup.ActiveFileWordWrap()
 	editorGroup.Editor.AutoDedent = cfg.Settings.Editor.IsAutoDedentEnabled()
 	editorGroup.Editor.AutoIndent = cfg.Settings.Editor.IsAutoIndentEnabled()
 	editorGroup.Editor.LegacyScrollbarGlyphs = cfg.Settings.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy

@@ -89,6 +89,10 @@ func (b *Buffer) DiskChanged(filename string) bool {
 	return !info.ModTime().Equal(b.diskModTime) || info.Size() != b.diskSize
 }
 
+// DiskSize returns the size of the file on disk when it was last loaded or saved,
+// or 0 when the buffer has no recorded disk state.
+func (b *Buffer) DiskSize() int64 { return b.diskSize }
+
 // SaveFile writes the buffer contents to a file atomically: it writes to a
 // temporary file in the same directory, fsyncs it, then renames it over the
 // target. This guarantees the file on disk is always either the complete old

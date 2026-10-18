@@ -101,39 +101,44 @@ type EditorSettings struct {
 	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
 	// built-in limit. Unlisted: raise it only where every line must finish, such
 	// as slow CI runners.
-	HighlightTimeLimit      int              `json:"highlightTimeLimit,omitempty"`
-	DiffMode                string           `json:"diffMode"`
-	DiffContext             string           `json:"diffContext"`
-	DiffWordWrap            bool             `json:"diffWordWrap"`
-	DiffHighContrast        bool             `json:"diffHighContrast"`
-	DiffCollapsedEmphasis   bool             `json:"diffEmphasizeCollapsedRows"`
-	DiffSigns               bool             `json:"diffSigns"`
-	DiffSignsColor          bool             `json:"diffSignsColor"`
-	DiffGutterHighlight     bool             `json:"diffGutterHighlight"`
-	DiffColorGutterNumbers  bool             `json:"diffColorGutterNumbers"`
-	DiffScrollbarGitMarks   bool             `json:"diffScrollbarGitMarks"`
-	LineNumbers             bool             `json:"lineNumbers"`
-	CursorStyle             string           `json:"cursorStyle,omitempty"`
-	FormatOnSave            bool             `json:"formatOnSave"`
-	InsertFinalNewline      bool             `json:"insertFinalNewline"`
-	TrimTrailingWhitespace  bool             `json:"trimTrailingWhitespace"`
-	FocusOnOpen             bool             `json:"focusOnOpen"`
-	SyntaxHighlight         *bool            `json:"syntaxHighlight,omitempty"`
-	GitGutter               *bool            `json:"gitGutter,omitempty"`
-	ScrollbarGitMarks       *bool            `json:"scrollbarGitMarks,omitempty"`
-	AutoDedent              *bool            `json:"autoDedent,omitempty"`
-	AutoIndent              *bool            `json:"autoIndent,omitempty"`
-	GutterStyle             string           `json:"gutterStyle,omitempty"`
-	BorderStyle             string           `json:"borderStyle,omitempty"`
-	BracketPairColorization bool             `json:"bracketPairColorization"`
-	ShowTrailingNewline     *bool            `json:"showTrailingNewline,omitempty"`
-	MenuBar                 *bool            `json:"menuBar,omitempty"`
-	UndoDeleteCursorStart   bool             `json:"undoDeleteCursorStart,omitempty"`
-	TransparentBackground   bool             `json:"transparentBackground"`
-	Grammars                []GrammarSetting `json:"grammars,omitempty"`
+	HighlightTimeLimit      int                `json:"highlightTimeLimit,omitempty"`
+	DiffMode                string             `json:"diffMode"`
+	DiffContext             string             `json:"diffContext"`
+	DiffWordWrap            bool               `json:"diffWordWrap"`
+	DiffHighContrast        bool               `json:"diffHighContrast"`
+	DiffCollapsedEmphasis   bool               `json:"diffEmphasizeCollapsedRows"`
+	DiffSigns               bool               `json:"diffSigns"`
+	DiffSignsColor          bool               `json:"diffSignsColor"`
+	DiffGutterHighlight     bool               `json:"diffGutterHighlight"`
+	DiffColorGutterNumbers  bool               `json:"diffColorGutterNumbers"`
+	DiffScrollbarGitMarks   bool               `json:"diffScrollbarGitMarks"`
+	LineNumbers             bool               `json:"lineNumbers"`
+	CursorStyle             string             `json:"cursorStyle,omitempty"`
+	FormatOnSave            bool               `json:"formatOnSave"`
+	InsertFinalNewline      bool               `json:"insertFinalNewline"`
+	TrimTrailingWhitespace  bool               `json:"trimTrailingWhitespace"`
+	FocusOnOpen             bool               `json:"focusOnOpen"`
+	SyntaxHighlight         *bool              `json:"syntaxHighlight,omitempty"`
+	GitGutter               *bool              `json:"gitGutter,omitempty"`
+	ScrollbarGitMarks       *bool              `json:"scrollbarGitMarks,omitempty"`
+	AutoDedent              *bool              `json:"autoDedent,omitempty"`
+	AutoIndent              *bool              `json:"autoIndent,omitempty"`
+	GutterStyle             string             `json:"gutterStyle,omitempty"`
+	BorderStyle             string             `json:"borderStyle,omitempty"`
+	BracketPairColorization bool               `json:"bracketPairColorization"`
+	ShowTrailingNewline     *bool              `json:"showTrailingNewline,omitempty"`
+	MenuBar                 *bool              `json:"menuBar,omitempty"`
+	UndoDeleteCursorStart   bool               `json:"undoDeleteCursorStart,omitempty"`
+	TransparentBackground   bool               `json:"transparentBackground"`
+	Grammars                []GrammarSetting   `json:"grammars,omitempty"`
+	LargeFiles              *LargeFileSettings `json:"largeFiles,omitempty"`
 
 	SaveAllOnQuit              bool `json:"saveAllOnQuit"`
 	SaveAllOnQuitExceptUnnamed bool `json:"saveAllOnQuitExceptUnnamed"`
+}
+
+type LargeFileSettings struct {
+	WordWrapMaxMB *int `json:"wordWrapMaxMB,omitempty"`
 }
 
 // Path is relative to the config directory unless absolute.
@@ -170,6 +175,28 @@ func (e EditorSettings) IsAutoDedentEnabled() bool {
 
 func (e EditorSettings) IsAutoIndentEnabled() bool {
 	return e.AutoIndent == nil || *e.AutoIndent
+}
+
+const DefaultWordWrapMaxMB = 32
+
+// WordWrapMaxBytes returns 0 when there is no limit.
+func (e EditorSettings) WordWrapMaxBytes() int64 {
+	var mb *int
+	if e.LargeFiles != nil {
+		mb = e.LargeFiles.WordWrapMaxMB
+	}
+	return megabytes(mb, DefaultWordWrapMaxMB)
+}
+
+func megabytes(mb *int, def int) int64 {
+	n := def
+	if mb != nil {
+		n = *mb
+	}
+	if n <= 0 {
+		return 0
+	}
+	return int64(n) << 20
 }
 
 func DefaultEditorSettings() EditorSettings {

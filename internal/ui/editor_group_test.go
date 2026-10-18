@@ -396,3 +396,80 @@ func TestEditorGroupSaveAsNewFileUsesSaveSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestEditorGroupWordWrapMaxBytes(t *testing.T) {
+	dir := t.TempDir()
+	largePath := filepath.Join(dir, "large.txt")
+	smallPath := filepath.Join(dir, "small.txt")
+	if err := os.WriteFile(largePath, []byte("01234567890123456789"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(smallPath, []byte("12345"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	g := NewEditorGroupWidget(nil, 4, false, "compact")
+	g.WordWrap = true
+	g.WordWrapMaxBytes = 10
+
+	// 1. A file larger than the limit opens with g.Editor.WordWrap == false.
+	g.OpenFile(largePath)
+	g.CommitActiveTab()
+	if g.Editor.WordWrap {
+		t.Errorf("large file opened with WordWrap = true, want false")
+	}
+	if g.ActiveFileWordWrap() {
+		t.Errorf("large file ActiveFileWordWrap() = true, want false")
+	}
+
+	// 2. A file at or under the limit opens with g.Editor.WordWrap == true.
+	g.OpenFile(smallPath)
+	g.CommitActiveTab()
+	if !g.Editor.WordWrap {
+		t.Errorf("small file opened with WordWrap = false, want true")
+	}
+	if !g.ActiveFileWordWrap() {
+		t.Errorf("small file ActiveFileWordWrap() = false, want true")
+	}
+
+	// 3. Switching between those two tabs flips g.Editor.WordWrap each time.
+	g.SwitchTab(0)
+	if g.Editor.WordWrap {
+		t.Errorf("switching to large file: WordWrap = true, want false")
+	}
+	g.SwitchTab(1)
+	if !g.Editor.WordWrap {
+		t.Errorf("switching back to small file: WordWrap = false, want true")
+	}
+	g.SwitchTab(0)
+	if g.Editor.WordWrap {
+		t.Errorf("switching to large file again: WordWrap = true, want false")
+	}
+
+	// 4. With g.WordWrapMaxBytes = 0, the large file wraps.
+	g.WordWrapMaxBytes = 0
+	g.syncTabs()
+	if !g.Editor.WordWrap {
+		t.Errorf("with WordWrapMaxBytes = 0, large file WordWrap = false, want true")
+	}
+	if !g.ActiveFileWordWrap() {
+		t.Errorf("with WordWrapMaxBytes = 0, ActiveFileWordWrap() = false, want true")
+	}
+
+	// 5. With g.WordWrap = false, neither file wraps.
+	g.WordWrap = false
+	g.syncTabs()
+	if g.Editor.WordWrap {
+		t.Errorf("with WordWrap = false, large file WordWrap = true, want false")
+	}
+	if g.ActiveFileWordWrap() {
+		t.Errorf("with WordWrap = false, large file ActiveFileWordWrap() = true, want false")
+	}
+	g.SwitchTab(1)
+	if g.Editor.WordWrap {
+		t.Errorf("with WordWrap = false, small file WordWrap = true, want false")
+	}
+	if g.ActiveFileWordWrap() {
+		t.Errorf("with WordWrap = false, small file ActiveFileWordWrap() = true, want false")
+	}
+}

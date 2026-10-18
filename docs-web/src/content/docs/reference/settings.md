@@ -95,6 +95,7 @@ All editor settings are nested under the `editor` key.
 | `editor.tabSize` | int | `4` | Number of spaces per indentation level |
 | `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
 | `editor.wordWrap` | bool | `false` | Wrap long lines at the editor width |
+| `editor.largeFiles.wordWrapMaxMB` | int | `32` | Files larger than this many megabytes open without word wrap, even when `editor.wordWrap` is on. `0` removes the limit |
 | `editor.diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
 | `editor.diffContext` | string | `"changes"` | Default diff context: `"changes"` or `"full"` |
 | `editor.diffWordWrap` | bool | `false` | Wrap long lines in diff views |

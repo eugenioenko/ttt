@@ -391,3 +391,36 @@ func TestLoadFileReadsWholeFileAndLineEnding(t *testing.T) {
 		}
 	}
 }
+
+func TestBufferDiskSize(t *testing.T) {
+	b := &Buffer{Lines: []string{"hello", "world"}}
+	if got := b.DiskSize(); got != 0 {
+		t.Errorf("untitled DiskSize() = %d, want 0", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "disksize.txt")
+	content := []byte("hello world!\n")
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded := &Buffer{}
+	if err := loaded.LoadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.DiskSize(); got != int64(len(content)) {
+		t.Errorf("loaded DiskSize() = %d, want %d", got, len(content))
+	}
+
+	b.Lines = []string{"abc"}
+	if err := b.SaveFile(path); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := b.DiskSize(); got != info.Size() {
+		t.Errorf("saved DiskSize() = %d, want %d", got, info.Size())
+	}
+}
