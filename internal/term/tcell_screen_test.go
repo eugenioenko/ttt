@@ -103,3 +103,34 @@ func TestTcellScreen_HideWithDefaultBackgroundClearsWideCharacters(t *testing.T)
 		t.Fatal("clearing concealment did not restore the character")
 	}
 }
+
+func TestTcellScreen_HideReversedDefaultForegroundKeepsBackground(t *testing.T) {
+	for _, fromStyle := range []bool{false, true} {
+		name := "cell attribute"
+		if fromStyle {
+			name = "theme style"
+		}
+		t.Run(name, func(t *testing.T) {
+			sim := NewSimScreen()
+			sim.SetSize(2, 1)
+			ts := NewTcellScreenFrom(sim)
+			styles := DefaultStyleMap()
+			styles[StyleDefault] = tcell.StyleDefault.Background(color.Blue).Reverse(fromStyle)
+			ts.SetStyleMap(styles)
+			cell := Cell{Ch: '界', Attrs: CellAttrHide, Bold: true, Underline: true}
+			if !fromStyle {
+				cell.Attrs |= CellAttrReverse
+			}
+			ts.SetCell(0, 0, cell)
+			for x := range 2 {
+				text, style, _ := sim.Get(x, 0)
+				if text != " " || !style.HasReverse() || style.GetForeground() != tcell.ColorDefault {
+					t.Errorf("column %d: concealment lost the terminal-default foreground as its displayed background", x)
+				}
+				if style.HasBold() || style.GetUnderlineStyle() != tcell.UnderlineStyleNone {
+					t.Errorf("column %d: fallback space retained visible attributes", x)
+				}
+			}
+		})
+	}
+}
