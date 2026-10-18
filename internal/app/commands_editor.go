@@ -334,11 +334,11 @@ func (a *App) Quit() {
 		a.forceQuit()
 		return
 	}
-	if a.Root.HasOverlay() {
-		return
-	}
 	if !a.EditorGroup.AnyDirty() {
 		a.forceQuit()
+		return
+	}
+	if a.Root.HasOverlay() {
 		return
 	}
 	a.quitPending = true

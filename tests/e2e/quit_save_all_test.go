@@ -233,3 +233,34 @@ func TestQuitEscapeResetsConfirmation(t *testing.T) {
 		t.Fatal("second Ctrl+Q must still force quit")
 	}
 }
+
+func TestQuitWithOpenOverlay(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		dirty bool
+	}{
+		{name: "clean session"},
+		{name: "dirty session", dirty: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHarness(t, 100, 28)
+			defer h.stop()
+			h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+			if tc.dirty {
+				h.typeText("edited")
+			}
+			h.pressCtrl(tcell.KeyCtrlP)
+			if len(h.app.Root.Overlays) != 1 {
+				t.Fatal("expected the command palette overlay")
+			}
+			overlay := h.app.Root.Overlays[0].Widget
+			h.pressCtrl(tcell.KeyCtrlQ)
+			if *h.app.Running != tc.dirty {
+				t.Fatalf("running = %v, want %v", *h.app.Running, tc.dirty)
+			}
+			if tc.dirty && (len(h.app.Root.Overlays) != 1 || h.app.Root.Overlays[0].Widget != overlay) {
+				t.Fatal("dirty sessions must keep the current overlay without stacking quit confirmation")
+			}
+		})
+	}
+}
