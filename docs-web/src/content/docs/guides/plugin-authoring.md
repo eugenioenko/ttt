@@ -892,6 +892,47 @@ else
 end
 ```
 
+### `ttt.regex` Module
+
+The `ttt.regex` module exposes Go's regular expressions, which use [RE2 syntax](https://github.com/google/re2/wiki/Syntax): alternation, counted repeats and quantified groups work; backreferences and lookaround are not supported. Matching runs in linear time, so a pattern can't hang the editor. No permission required.
+
+```lua
+local regex = require("ttt.regex")
+```
+
+#### `regex.compile(pattern, [opts])`
+
+Compile a pattern. Returns `nil, error_string` for an invalid pattern. Set `opts.ignore_case` to match case-insensitively. Compile once and reuse the object.
+
+```lua
+local re, err = regex.compile("foo|bar", { ignore_case = true })
+if not re then
+  ttt.log("error", "bad pattern: " .. err)
+end
+```
+
+#### `re:find(text, [init])`
+
+Find the first match at or after byte offset `init` (1-based, default 1; negative counts from the end). Returns the start and end byte offsets (1-based, end inclusive, like `string.find`) and a table of capture groups, or `nil` when there is no match. A group that did not take part in the match is `false`. `^`, `\b` and `\B` still see the text before `init`, so a search from the cursor does not match in the middle of a word. Use `editor.byte_to_col` to turn offsets into columns.
+
+```lua
+local re = regex.compile("(\\w+)@(\\w+)")
+local s, e, caps = re:find("mail bob@example now")
+-- s == 6, e == 16, caps == { "bob", "example" }
+```
+
+An empty match has `e == s - 1`.
+
+#### `re:find_all(text, [n])`
+
+Return every non-overlapping match in order, as a list of `{ s = start, e = end, caps = { ... } }`. `n` limits the number of matches (default: all; `0` returns none).
+
+```lua
+for _, m in ipairs(regex.compile("\\d+"):find_all("a1 b22")) do
+  -- m.s, m.e: 2, 2 then 5, 6
+end
+```
+
 ## Widget API
 
 The `render` function receives a **panel proxy** object. Call methods on it to build a declarative widget tree. Widgets are stacked vertically in the order they are declared.
@@ -2733,6 +2774,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 |----------------|--------------------------------|
 | `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
+| `ttt.regex`    | RE2 regular expressions        |
 | `ttt.editor`   | Editor buffer read/write       |
 | `ttt.diagnostics` | Publish editor diagnostics (squiggles) |
 | `ttt.bookmarks` | Manage gutter bookmarks        |
