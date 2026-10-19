@@ -1,6 +1,8 @@
 package image
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -21,9 +23,20 @@ func Transmit(w io.Writer, s *Source) error {
 	if s == nil || s.Pix == nil {
 		return fmt.Errorf("image: transmit nil source")
 	}
-	raw := s.Pix.Pix
-	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(raw)))
-	base64.StdEncoding.Encode(encoded, raw)
+	// Raw RGBA is megabytes per screen-sized image, which is slow over SSH; o=z sends it deflated instead.
+	var raw bytes.Buffer
+	zw, err := zlib.NewWriterLevel(&raw, zlib.BestSpeed)
+	if err != nil {
+		return fmt.Errorf("image: compress: %w", err)
+	}
+	if _, err := zw.Write(s.Pix.Pix); err != nil {
+		return fmt.Errorf("image: compress: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("image: compress: %w", err)
+	}
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(raw.Len()))
+	base64.StdEncoding.Encode(encoded, raw.Bytes())
 	chunks := len(encoded) / kittyChunkSize
 	if len(encoded)%kittyChunkSize != 0 {
 		chunks++
@@ -41,7 +54,7 @@ func Transmit(w io.Writer, s *Source) error {
 		var params string
 		if i == 0 {
 			// a=t transmits only; a=T would also display at the cursor, which tcell parks at the bottom-right, scrolling the whole screen.
-			params = fmt.Sprintf("a=t,q=2,f=32,t=d,s=%d,v=%d,i=%d,m=%d", s.W, s.H, s.ID, m)
+			params = fmt.Sprintf("a=t,q=2,f=32,o=z,t=d,s=%d,v=%d,i=%d,m=%d", s.W, s.H, s.ID, m)
 		} else {
 			params = fmt.Sprintf("m=%d", m)
 		}

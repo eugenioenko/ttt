@@ -2,9 +2,12 @@ package image
 
 import (
 	"bytes"
+	"compress/zlib"
 	"encoding/base64"
 	"image"
 	"image/color"
+	"io"
+	"math/rand/v2"
 	"strings"
 	"testing"
 )
@@ -50,6 +53,23 @@ func parseAPC(t *testing.T, out []byte) []apcSeq {
 	return seqs
 }
 
+func inflatePayload(t *testing.T, payload string) []byte {
+	t.Helper()
+	deflated, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		t.Fatalf("payload not base64: %v", err)
+	}
+	zr, err := zlib.NewReader(bytes.NewReader(deflated))
+	if err != nil {
+		t.Fatalf("payload not zlib: %v", err)
+	}
+	raw, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatalf("inflate payload: %v", err)
+	}
+	return raw
+}
+
 func testSource(t *testing.T, w, h int) *Source {
 	t.Helper()
 	s, err := Decode(mustPNG(t, solidRGBA(w, h, color.RGBA{R: 10, G: 20, B: 30, A: 255})), "test.png")
@@ -70,7 +90,7 @@ func TestTransmitSmall(t *testing.T) {
 		t.Fatalf("expected 1 chunk, got %d", len(seqs))
 	}
 	p := seqs[0].params
-	for k, want := range map[string]string{"a": "t", "f": "32", "t": "d", "s": "2", "v": "1", "m": "0"} {
+	for k, want := range map[string]string{"a": "t", "f": "32", "o": "z", "t": "d", "s": "2", "v": "1", "m": "0"} {
 		if p[k] != want {
 			t.Errorf("param %s = %q, want %q (params %v)", k, p[k], want, p)
 		}
@@ -78,17 +98,46 @@ func TestTransmitSmall(t *testing.T) {
 	if p["i"] == "" {
 		t.Errorf("expected image id param, got %v", p)
 	}
-	raw, err := base64.StdEncoding.DecodeString(seqs[0].payload)
-	if err != nil {
-		t.Fatalf("payload not base64: %v", err)
+	if !bytes.Equal(inflatePayload(t, seqs[0].payload), s.Pix.Pix) {
+		t.Error("payload does not round-trip to pixel bytes")
 	}
-	if !bytes.Equal(raw, s.Pix.Pix) {
+}
+
+// Noise barely compresses, so it still spans several chunks once deflated.
+func noiseSource(t *testing.T, w, h int) *Source {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	rng := rand.New(rand.NewPCG(1, 2))
+	for i := range img.Pix {
+		img.Pix[i] = byte(rng.UintN(256))
+	}
+	s, err := Decode(mustPNG(t, img), "noise.png")
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	return s
+}
+
+func TestTransmitCompresses(t *testing.T) {
+	s := testSource(t, 400, 300)
+	var buf bytes.Buffer
+	if err := Transmit(&buf, s); err != nil {
+		t.Fatalf("Transmit: %v", err)
+	}
+	var payload strings.Builder
+	for _, seq := range parseAPC(t, buf.Bytes()) {
+		payload.WriteString(seq.payload)
+	}
+	if raw := base64.StdEncoding.EncodedLen(len(s.Pix.Pix)); payload.Len()*20 > raw {
+		t.Errorf("flat image sent as %d bytes, want under 1/20 of the %d raw", payload.Len(), raw)
+	}
+	if !bytes.Equal(inflatePayload(t, payload.String()), s.Pix.Pix) {
 		t.Error("payload does not round-trip to pixel bytes")
 	}
 }
 
 func TestTransmitChunking(t *testing.T) {
-	s := testSource(t, 64, 64)
+	s := noiseSource(t, 64, 64)
 	var buf bytes.Buffer
 	if err := Transmit(&buf, s); err != nil {
 		t.Fatalf("Transmit: %v", err)
@@ -111,11 +160,7 @@ func TestTransmitChunking(t *testing.T) {
 		}
 		combined.WriteString(seq.payload)
 	}
-	raw, err := base64.StdEncoding.DecodeString(combined.String())
-	if err != nil {
-		t.Fatalf("combined payload not base64: %v", err)
-	}
-	if !bytes.Equal(raw, s.Pix.Pix) {
+	if !bytes.Equal(inflatePayload(t, combined.String()), s.Pix.Pix) {
 		t.Error("combined chunks do not round-trip to pixel bytes")
 	}
 }
