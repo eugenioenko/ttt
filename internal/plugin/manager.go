@@ -164,9 +164,9 @@ func (m *Manager) collectRegistrations(p *Plugin) {
 
 func (m *Manager) ApproveAndLoad(p *Plugin) error {
 	if m.registry != nil {
-		name := p.Name
+		name := p.Manifest.Name
 		if name == "" {
-			name = p.Manifest.Name
+			name = p.Name
 		}
 		if entry := m.registry.Find(name); entry != nil && !entry.Enabled {
 			return fmt.Errorf("plugin %q is disabled: approval is stale", name)
