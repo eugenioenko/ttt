@@ -35,6 +35,9 @@ func TestNerdGlyphsAreSingleRune(t *testing.T) {
 			t.Errorf("%s: nerd glyph %q must be exactly one rune", name, g.Nerd)
 			continue
 		}
+		if g.Nerd == g.Plain {
+			continue
+		}
 		if got := textwidth.Rune(r[0]); got != privateUseWidth {
 			t.Errorf("%s: nerd glyph %q measures %d, want the private-use width %d", name, g.Nerd, got, privateUseWidth)
 		}

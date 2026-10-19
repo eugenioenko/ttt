@@ -67,10 +67,10 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `dirty` | `●` | `\uea71` | Unsaved changes marker in tabs |
 | `pinned` | `♦` | `\ueba0` | Pinned tab |
 | `lock` | `⚿` | `\uea75` | Read-only tab |
-| `more` | `⋮` | `\ueb10` | More actions menu buttons |
-| `add` | `+` | `\uea60` | Stage and new-item actions |
-| `remove` | `−` | `\ueb3b` | Unstage actions |
-| `discard` | `✕` | `\ueae2` | Discard changes action |
+| `more` | `⋮` | `⋮` | More actions menu buttons |
+| `add` | `+` | `+` | Stage and new-item actions |
+| `remove` | `−` | `−` | Unstage actions |
+| `discard` | `✕` | `✕` | Discard changes action |
 | `replace` | `⟳` | `\ueb3d` | Replace button in the replace bar |
 | `branch` | `⎇` | `\uf418` | Branch in the Changes panel |
 | `commit` | `●` | `\uf417` | Commit in commit history |
