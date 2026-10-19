@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -450,6 +451,9 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	}
 	if spec.Cwd == "" {
 		spec.Cwd = a.Workspace.Primary()
+	} else if err := checkTerminalDir(spec.Cwd); err != nil {
+		a.StatusError("Failed to open terminal: " + err.Error())
+		return "", err
 	}
 	t, err := terminal.New(spec.Shell, cols, rows, a.Settings.Terminal.Scrollback, spec.Env, spec.Cwd, spec.Args...)
 	if err != nil {
@@ -490,6 +494,19 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	}
 	t.Run()
 	return panelID, nil
+}
+
+// checkTerminalDir rejects an explicit cwd that is missing or not a directory;
+// terminal.New would otherwise fall back to the process directory.
+func checkTerminalDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("terminal cwd: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("terminal cwd %s: not a directory", dir)
+	}
+	return nil
 }
 
 // ---- terminal handles for plugins (the ttt.terminal Lua module) ----
