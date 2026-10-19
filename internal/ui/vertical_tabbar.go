@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -65,21 +66,24 @@ func (v *VerticalTabBar) Render(surface Surface) {
 		} else {
 			label = fmt.Sprintf("[%d]", n)
 		}
-		for x, ch := range label {
-			if x < borderX {
-				surface.SetCell(x, i, term.Cell{Ch: ch, Style: style})
-			}
-		}
+		surface.DrawText(0, i, label, borderX, style)
 	}
 }
 
 // truncateTabLabel fits a label into the strip's 4-cell content area ("[pi]").
 func truncateTabLabel(label string) string {
-	r := []rune(label)
-	if len(r) > 2 {
-		r = r[:2]
+	avail := 2
+	w := 0
+	var out []rune
+	for _, r := range label {
+		rw := textwidth.Rune(r)
+		if w+rw > avail {
+			break
+		}
+		out = append(out, r)
+		w += rw
 	}
-	return string(r)
+	return string(out)
 }
 
 func (v *VerticalTabBar) HandleEvent(ev tcell.Event) EventResult {
