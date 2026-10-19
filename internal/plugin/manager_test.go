@@ -779,3 +779,90 @@ func TestSetEnabledRequestsApprovalForAdditionalPermissions(t *testing.T) {
 		t.Fatalf("re-enabled grant = %+v, want commands and curl", p2.Granted)
 	}
 }
+
+func TestApproveAndLoadRejectsStaleApprovalWhenDisabled(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	m := NewManager(pluginsDir, regPath)
+
+	pluginDir := filepath.Join(pluginsDir, "stale-plugin")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{
+		"name": "stale-plugin",
+		"version": "1.0.0",
+		"entry": "main.ttt.lua",
+		"permissions": {
+			"commands": true,
+			"system.exec": ["curl"]
+		}
+	}`
+	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "main.ttt.lua"), []byte("-- noop"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Registered with initial commands permission only.
+	registry := `[{"name": "stale-plugin", "version": "1.0.0", "enabled": false, "permissions": {"commands": true}}]`
+	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.LoadAll()
+
+	// 1. Enable requests approval for additional system.exec permission.
+	pending, err := m.SetEnabled("stale-plugin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending == nil || pending.Loaded() {
+		t.Fatal("expected uninitialized pending plugin awaiting approval")
+	}
+
+	// 2. Plugin is disabled before approval is resolved.
+	if _, err := m.SetEnabled("stale-plugin", false); err != nil {
+		t.Fatal(err)
+	}
+	entry := m.registry.Find("stale-plugin")
+	if entry == nil || entry.Enabled {
+		t.Fatalf("expected disabled registry entry, got %+v", entry)
+	}
+
+	// 3. Stale approval must be rejected.
+	if err := m.ApproveAndLoad(pending); err == nil {
+		t.Fatal("ApproveAndLoad on disabled plugin should fail, got nil")
+	}
+
+	// 4. Stale approval must not grant additional permissions or execute entry.
+	entry = m.registry.Find("stale-plugin")
+	if entry == nil || entry.Enabled {
+		t.Fatalf("registry entry must remain disabled, got: %+v", entry)
+	}
+	if len(entry.Permissions.SystemExec) != 0 {
+		t.Fatalf("stale approval granted permissions: %+v", entry.Permissions)
+	}
+	if pending.Loaded() || m.FindPlugin("stale-plugin") != nil {
+		t.Fatal("stale plugin must not be loaded or registered in active plugins")
+	}
+
+	// 5. First-time installation with no registry entry must still succeed.
+	freshDir := writePluginDir(t, pluginsDir, "fresh-plugin")
+	freshMf, err := LoadManifest(freshDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshPlugin := &Plugin{
+		Name:     freshMf.Name,
+		Dir:      freshDir,
+		Manifest: freshMf,
+	}
+	if err := m.ApproveAndLoad(freshPlugin); err != nil {
+		t.Fatalf("first-time install failed: %v", err)
+	}
+	freshEntry := m.registry.Find("fresh-plugin")
+	if freshEntry == nil || !freshEntry.Enabled {
+		t.Fatalf("fresh plugin should be enabled in registry, got %+v", freshEntry)
+	}
+}
