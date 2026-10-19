@@ -101,7 +101,7 @@
     "author": "sercanatalik",
     "description": "View and search PDFs in an editor tab, with fit width and auto-reload, falling back to text in terminals without graphics",
     "repo": "https://github.com/sercanatalik/ttt-pdf",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "tags": ["pdf", "viewer", "search", "documents"]
   },
   {
