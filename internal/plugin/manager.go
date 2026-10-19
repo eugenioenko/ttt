@@ -178,6 +178,7 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 	}
 
 	m.wireAPIs(p)
+	p.AppVersion = m.appVersion
 
 	if err := m.initPlugin(p); err != nil {
 		return err

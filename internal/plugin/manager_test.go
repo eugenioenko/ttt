@@ -268,6 +268,43 @@ func TestLoadAllWiresAppVersionForHealthyPlugin(t *testing.T) {
 	}
 }
 
+// A pending plugin's AppVersion must be set before Init runs in ApproveAndLoad,
+// so ttt.version() is available during the entry point before any application
+// wiring runs (#997).
+func TestApproveAndLoadWiresAppVersionDuringInit(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+
+	dir := writePluginDir(t, pluginsDir, "pending")
+	entry := filepath.Join(dir, "main.ttt.lua")
+	if err := os.WriteFile(entry, []byte(`local ttt = require("ttt")`+"\n"+`ttt.log(ttt.version())`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var logged []string
+	m := NewManager(pluginsDir, regPath)
+	m.SetLogFactory(func(name string) func(string, string) {
+		return func(level, message string) { logged = append(logged, message) }
+	})
+	m.SetAppVersion("1.2.3")
+
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+	if len(logged) != 0 {
+		t.Fatalf("logged before approval = %q, want none", logged)
+	}
+
+	if err := m.ApproveAndLoad(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(logged) != 1 || logged[0] != "1.2.3" {
+		t.Errorf("logged = %q, want a single %q", logged, "1.2.3")
+	}
+}
+
 // A permission dropped from the manifest is no longer granted, and asking for
 // it again needs approval (#915).
 func TestDroppedPermissionIsRevoked(t *testing.T) {
