@@ -138,26 +138,29 @@ type CommitDetailWidget struct {
 	Metadata string
 	Files    []CommitDetailFile
 
-	SyntaxHighlight  bool
-	Icons            string
-	TopLine          int
-	LeftCol          int
-	wrapMode         DiffWrapMode
-	wrapExplicit     bool
-	mode             DiffMode
-	modeExplicit     bool
-	contextMode      DiffContextMode
-	contextExplicit  bool
-	highContrast     bool
-	emphasizeGaps    bool
-	signs            bool
-	signsColor       bool
-	gutterHighlight  bool
-	colorNumbers     bool
-	chevronCollapsed rune
-	chevronExpanded  rune
-	gutterStyle      string
-	collapsedFiles   []bool
+	SyntaxHighlight    bool
+	Icons              string
+	TopLine            int
+	LeftCol            int
+	wrapMode           DiffWrapMode
+	wrapExplicit       bool
+	mode               DiffMode
+	modeExplicit       bool
+	contextMode        DiffContextMode
+	contextExplicit    bool
+	highContrast       bool
+	emphasizeGaps      bool
+	signs              bool
+	signsColor         bool
+	gutterHighlight    bool
+	colorNumbers       bool
+	chevronCollapsed   rune
+	chevronExpanded    rune
+	gutterStyle        string
+	collapsedFiles     []bool
+	focused            bool
+	keyboardDisclosure bool
+	selectedDisclosure detailDisclosure
 
 	rows            []commitDetailRow
 	visualRows      []commitDetailVisualRow
@@ -927,6 +930,7 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 		screenY += n
 	}
 	d.renderStickyHeading(surface, viewW)
+	d.renderDisclosureFocus(surface)
 
 	if showV {
 		d.scrollbar.X = r.X + viewW
@@ -1092,7 +1096,7 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 	}
 	controlW := textwidth.String(label)
 	controlX := viewW - controlW - 1
-	if controlX <= 1+textwidth.String(header) {
+	if controlX < 1 || controlX <= 1+textwidth.String(header) && !(d.keyboardDisclosure && d.selectedDisclosure.file == "") {
 		return
 	}
 	d.drawStaticText(surface, controlX, y, controlW, label, term.StyleCommitHeader, term.StyleCommitHeader, true)
@@ -1421,6 +1425,9 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	switch event := ev.(type) {
 	case *tcell.EventKey:
+		if d.handleDisclosureKey(event) {
+			return EventConsumed
+		}
 		switch event.Key() {
 		case tcell.KeyUp:
 			d.TopLine--
@@ -1501,35 +1508,32 @@ func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult 
 		}
 	}
 	if primaryPressed {
+		d.keyboardDisclosure = false
 		d.primaryPressed = true
 		if d.disclosurePressed {
 			return EventConsumed
 		}
 		if freshPrimaryPress && !d.selecting && pointInCommitDetailRect(mx, my, d.topControl) {
-			if d.allFilesCollapsed() {
-				d.ExpandAllFiles()
-			} else {
-				d.CollapseAllFiles()
-			}
+			d.activateDisclosure(d.disclosure(-1, -1))
 			d.disclosurePressed = true
 			return EventConsumed
 		}
 		if freshPrimaryPress && !d.selecting && pointInCommitDetailRect(mx, my, d.stickyControl.rect) {
-			d.toggleFile(d.stickyControl.fileIndex)
+			d.activateDisclosure(d.disclosure(d.stickyControl.fileIndex, -1))
 			d.disclosurePressed = true
 			return EventConsumed
 		}
 		if freshPrimaryPress && !d.selecting {
 			for _, control := range d.fileControls {
 				if pointInCommitDetailRect(mx, my, control.rect) {
-					d.toggleFile(control.fileIndex)
+					d.activateDisclosure(d.disclosure(control.fileIndex, -1))
 					d.disclosurePressed = true
 					return EventConsumed
 				}
 			}
 			if overFile {
 				if gap, ok := d.Files[fileIndex].view.gapAtPoint(mx, my); ok {
-					d.requestFileContext(fileIndex, gap)
+					d.activateDisclosure(d.disclosure(fileIndex, gap))
 					d.disclosurePressed = true
 					return EventConsumed
 				}
