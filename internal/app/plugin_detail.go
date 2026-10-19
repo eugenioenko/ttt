@@ -81,6 +81,9 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 	headerRow.FixedHeight = 1
 
 	var metaParts []string
+	if entry.Featured {
+		metaParts = append(metaParts, "Featured")
+	}
 	if entry.Version != "" {
 		metaParts = append(metaParts, "v"+entry.Version)
 	}

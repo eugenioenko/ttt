@@ -1,6 +1,7 @@
 [
   {
     "name": "bookmarks",
+    "featured": true,
     "displayName": "Bookmarks",
     "author": "eugenioenko",
     "description": "Toggle line bookmarks from the gutter or context menu and browse them in the sidebar",
@@ -21,6 +22,7 @@
   },
   {
     "name": "docker-manager",
+    "featured": true,
     "displayName": "Docker Manager",
     "author": "eugenioenko",
     "description": "Manage Docker containers, images and volumes",
@@ -31,6 +33,7 @@
   },
   {
     "name": "git-history",
+    "featured": true,
     "displayName": "Git History",
     "author": "eugenioenko",
     "description": "Per-file commit history with inline diffs, compare with HEAD, and file-at-commit viewer",
@@ -51,6 +54,7 @@
   },
   {
     "name": "json-viewer",
+    "featured": true,
     "displayName": "JSON Viewer",
     "author": "eugenioenko",
     "description": "Parse and display JSON from the active editor as an interactive tree",
@@ -61,6 +65,7 @@
   },
   {
     "name": "markdown-preview",
+    "featured": true,
     "displayName": "Markdown Preview",
     "author": "eugenioenko",
     "description": "Preview markdown files with styled rendering",
@@ -91,6 +96,7 @@
   },
   {
     "name": "pdf-viewer",
+    "featured": true,
     "displayName": "PDF Viewer",
     "author": "sercanatalik",
     "description": "View and search PDFs in an editor tab, with fit width and auto-reload, falling back to text in terminals without graphics",
@@ -110,6 +116,7 @@
   },
   {
     "name": "spell",
+    "featured": true,
     "displayName": "Spell Check",
     "author": "eugenioenko",
     "description": "Spell checking for prose files via aspell, with inline squiggles and corrections",
@@ -129,6 +136,7 @@
   },
   {
     "name": "vim",
+    "featured": true,
     "displayName": "Vim Mode",
     "author": "eugenioenko",
     "description": "Vim compatibility layer: modal editing, motions, operators, text objects, registers, marks and macros",
@@ -138,6 +146,7 @@
   },
   {
     "name": "emacs",
+    "featured": true,
     "displayName": "Emacs Mode",
     "author": "eugenioenko",
     "description": "Emacs compatibility layer: prefix keymaps, kill ring, mark and region, incremental search, universal argument and keyboard macros",

@@ -1,9 +1,9 @@
 package app
 
 import (
-	"github.com/eugenioenko/ttt/internal/icons"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -13,6 +13,7 @@ import (
 type PluginsPanel struct {
 	SearchInput   *widgets.InputWidget
 	SearchTree    *widgets.TreeWidget
+	FeaturedTree  *widgets.TreeWidget
 	InstalledTree *widgets.TreeWidget
 	Dropdown      *widgets.DropdownWidget
 	Adapter       *ui.WidgetAdapter
@@ -59,6 +60,7 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 			}
 		},
 	})
+	pp.FeaturedTree = widgets.NewTreeWidget(pp.SearchTree.Config)
 
 	pp.InstalledTree = widgets.NewTreeWidget(widgets.TreeConfig{
 		EmptyText: "No plugins installed",
@@ -89,7 +91,7 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 
 	titleLabel := widgets.NewLabelWidget(widgets.LabelConfig{
 		Text:  "Installed",
-		Style: term.StyleDefault,
+		Style: term.StyleHoverBold,
 	})
 
 	titleLabel.Box.PaddingLeft = 1
@@ -101,11 +103,17 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 
 	divSearch := widgets.NewDividerWidget(widgets.DividerConfig{})
 	divInstalled := widgets.NewDividerWidget(widgets.DividerConfig{})
+	featuredHeading := widgets.NewLabelWidget(widgets.LabelConfig{Text: "Featured", Style: term.StyleHoverBold})
+	featuredHeading.Box.PaddingLeft = 1
 
 	vstack := widgets.NewVStackWidget(
 		pp.SearchInput,
 		divSearch,
 		pp.SearchTree,
+		widgets.NewDividerWidget(widgets.DividerConfig{}),
+		featuredHeading,
+		widgets.NewDividerWidget(widgets.DividerConfig{}),
+		pp.FeaturedTree,
 		divInstalled,
 		titleRow,
 		divider,
@@ -133,6 +141,12 @@ func (pp *PluginsPanel) openInstalledDetail(name string) {
 		return
 	}
 	entry := plugin.RemoteRegistryEntry{Name: name}
+	for _, remote := range pp.available {
+		if remote.Name == name {
+			entry.Featured = remote.Featured
+			break
+		}
+	}
 	if reg := pp.manager.Registry(); reg != nil {
 		if e := reg.Find(name); e != nil {
 			entry.DisplayName = e.DisplayName
@@ -207,6 +221,7 @@ func (pp *PluginsPanel) Refresh() {
 
 	pp.InstalledTree.SetItems(installed)
 	pp.refreshAvailable()
+	pp.refreshFeatured()
 }
 
 func (pp *PluginsPanel) refreshAvailable() {
@@ -236,6 +251,25 @@ func (pp *PluginsPanel) refreshAvailable() {
 	}
 
 	pp.SearchTree.SetItems(items)
+}
+
+func (pp *PluginsPanel) refreshFeatured() {
+	installedSet := make(map[string]bool)
+	for _, name := range pp.manager.InstalledPluginNames() {
+		installedSet[name] = true
+	}
+	var items []*widgets.TreeNode
+	for _, entry := range pp.available {
+		if !entry.Featured || installedSet[entry.Name] {
+			continue
+		}
+		items = append(items, &widgets.TreeNode{
+			ID:    "available." + entry.Name,
+			Label: entry.Title(),
+			Badge: entry.Description,
+		})
+	}
+	pp.FeaturedTree.SetItems(items)
 }
 
 func matchesSearch(entry plugin.RemoteRegistryEntry, query string) bool {
@@ -270,6 +304,7 @@ func termMatches(entry plugin.RemoteRegistryEntry, t string) bool {
 func (pp *PluginsPanel) SetAvailable(entries []plugin.RemoteRegistryEntry) {
 	pp.available = entries
 	pp.SearchTree.Config.EmptyText = "Type to search plugins"
+	pp.FeaturedTree.Config.EmptyText = "No featured plugins"
 	pp.Refresh()
 }
 

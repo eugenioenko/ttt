@@ -19,6 +19,7 @@ type RemoteRegistryEntry struct {
 	Version     string   `json:"version,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	Path        string   `json:"path,omitempty"`
+	Featured    bool     `json:"featured,omitempty"`
 }
 
 // Title is the human-facing name shown in the registry UI: DisplayName when the

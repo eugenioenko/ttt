@@ -42,10 +42,13 @@ Restart TTT. If the plugin is new, you'll see an approval dialog.
 
 ### Plugins Panel
 
-The **Plugins** sidebar tab has two sections:
+The **Plugins** sidebar tab has three separate sections, each with its own scrollable list:
 
-- **Available** — plugins fetched from the community registry. Search and click to view details or install.
+- **Search** — browse available plugins from the community registry, including featured plugins, or type a query to filter them. An empty query shows all available plugins.
+- **Featured** — a small selection curated by the ttt maintainers. This list stays visible while you search. Click a plugin to view its details or install it; featured plugins also show a Featured label in their details.
 - **Installed** — your installed plugins with status icons. Click to toggle enabled/disabled. Action buttons for update (↑) and uninstall (×).
+
+Installed plugins are omitted from Search and Featured; use the Installed section to open their details or manage them.
 
 The **⋮** menu in the Plugins panel header provides:
 
@@ -182,3 +185,4 @@ Registry fields:
 | `version` | no | Current version string |
 | `tags` | no | Array of search tags for discoverability |
 | `path` | no | Subdirectory path within the repo (for monorepos) |
+| `featured` | no | Boolean, default `false`. Maintainer-curated placement in the Featured group of the Plugins tab. Set in the community registry, not the plugin manifest. |
