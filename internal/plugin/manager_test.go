@@ -866,3 +866,48 @@ func TestApproveAndLoadRejectsStaleApprovalWhenDisabled(t *testing.T) {
 		t.Fatalf("fresh plugin should be enabled in registry, got %+v", freshEntry)
 	}
 }
+
+func TestApproveAndLoadEnabledPluginWithAdditionalPermissions(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	m := NewManager(pluginsDir, regPath)
+
+	pluginDir := filepath.Join(pluginsDir, "grower")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{
+		"name": "grower",
+		"version": "1.0.0",
+		"entry": "main.ttt.lua",
+		"permissions": {
+			"commands": true,
+			"system.exec": ["curl"]
+		}
+	}`
+	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "main.ttt.lua"), []byte("-- noop"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Registered as enabled with initial commands permission only.
+	registry := `[{"name": "grower", "version": "1.0.0", "enabled": true, "permissions": {"commands": true}}]`
+	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+
+	if err := m.ApproveAndLoad(pending[0]); err != nil {
+		t.Fatalf("enabled approval failed: %v", err)
+	}
+
+	entry := m.registry.Find("grower")
+	if entry == nil || !entry.Enabled || len(entry.Permissions.SystemExec) != 1 || m.FindPlugin("grower") == nil {
+		t.Fatalf("enabled approval did not persist permission or load plugin: %+v", entry)
+	}
+}
