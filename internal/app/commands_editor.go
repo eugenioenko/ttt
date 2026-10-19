@@ -7,8 +7,64 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
+
+func (a *App) ToggleBookmark() {
+	if !a.EditorGroup.IsEditorActive() {
+		return
+	}
+	e := a.EditorGroup.Editor
+	line := e.Cursor.Line
+	if _, ok := e.GetBookmark(line); ok {
+		e.RemoveBookmark(line)
+		return
+	}
+	e.SetBookmark(line, '*', term.StyleGutterBookmark)
+}
+
+func (a *App) moveBookmark(direction int) {
+	if !a.EditorGroup.IsEditorActive() {
+		return
+	}
+	e := a.EditorGroup.Editor
+	target := nextBookmarkLine(e.Bookmarks, e.Cursor.Line, direction)
+	if target < 0 {
+		a.StatusNotify("No bookmarks in this file")
+		return
+	}
+	a.EditorGroup.GoToLine(target + 1)
+}
+
+func (a *App) NextBookmark() { a.moveBookmark(1) }
+
+func (a *App) PrevBookmark() { a.moveBookmark(-1) }
+
+func nextBookmarkLine(bookmarks map[int]ui.Bookmark, current, direction int) int {
+	target, wrap := -1, -1
+	for line := range bookmarks {
+		if direction > 0 {
+			if wrap < 0 || line < wrap {
+				wrap = line
+			}
+			if line > current && (target < 0 || line < target) {
+				target = line
+			}
+		} else {
+			if wrap < 0 || line > wrap {
+				wrap = line
+			}
+			if line < current && (target < 0 || line > target) {
+				target = line
+			}
+		}
+	}
+	if target >= 0 {
+		return target
+	}
+	return wrap
+}
 
 func (a *App) OpenFold() {
 	if !a.EditorGroup.IsEditorActive() {
@@ -413,6 +469,22 @@ func (a *App) DiffUseFullFileContext() {
 
 func registerEditorCommands(app *App) {
 	reg := app.Reg
+
+	reg.Register(command.Command{
+		ID: "bookmark.toggle", Title: "Toggle Bookmark",
+		Keywords: []string{"editor", "mark", "line"},
+		Handler:  app.ToggleBookmark,
+	})
+	reg.Register(command.Command{
+		ID: "bookmark.next", Title: "Go to Next Bookmark",
+		Keywords: []string{"editor", "mark", "line", "navigate"},
+		Handler:  app.NextBookmark,
+	})
+	reg.Register(command.Command{
+		ID: "bookmark.prev", Title: "Go to Previous Bookmark",
+		Keywords: []string{"editor", "mark", "line", "navigate"},
+		Handler:  app.PrevBookmark,
+	})
 
 	reg.Register(command.Command{
 		ID: "editor.toggleDiff", Title: "Git: Toggle Inline Diff",

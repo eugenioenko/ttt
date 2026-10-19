@@ -48,6 +48,9 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 | Ctrl+K J | `editor.joinLines` | Join lines |
 | Ctrl+K O | `editor.sortLinesAsc` | Sort lines ascending |
 | Ctrl+K M | `editor.goToMatchingBracket` | Go to matching bracket |
+| Ctrl+K X | `bookmark.toggle` | Toggle a bookmark on the current line |
+| Ctrl+K N | `bookmark.next` | Go to the next bookmark (wraps at the end) |
+| Ctrl+K V | `bookmark.prev` | Go to the previous bookmark (wraps at the start) |
 
 ## Word Navigation
 
