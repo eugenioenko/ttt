@@ -129,6 +129,20 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	if btn == tcell.ButtonNone && e.mouseDown {
 		e.mouseDown = false
 		e.cancelDragAutoScroll()
+		if mx == e.mouseDownX && my == e.mouseDownY && !inGutter {
+			row := e.rowAt(my - r.Y)
+			if row.startCol == 0 && e.conflictActionLine(row.bufLine) {
+				column := mx - r.X - gutterW
+				if e.WordWrap {
+					column += row.startCol
+				} else {
+					column += e.Viewport.LeftCol
+				}
+				if e.resolveConflict(row.bufLine, conflictActionAt(column)) {
+					return EventConsumed
+				}
+			}
+		}
 		if mx == e.mouseDownX && my == e.mouseDownY && inGutter && mx-r.X <= e.bookmarkColumn() && e.OnGutterClick != nil {
 			if line, ok := e.gutterLineAt(my - r.Y); ok && e.OnGutterClick(line) {
 				if e.Selection != nil {
