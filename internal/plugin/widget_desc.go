@@ -110,6 +110,8 @@ type WidgetDesc struct {
 	ClearOnSubmit bool
 	Wrap          bool
 	MaxRows       int
+	MinRows       int
+	Multiline     bool
 	Autofocus     bool
 
 	ImageData   string

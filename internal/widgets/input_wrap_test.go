@@ -284,3 +284,28 @@ func TestScrollMarksStayOffTextAndCursor(t *testing.T) {
 		t.Errorf("one-row input scrolled to the middle shows %q, want both directions marked", got[0])
 	}
 }
+
+func TestMultilineInputKeepsRowsAndEnterInsertsNewline(t *testing.T) {
+	submitted := false
+	inp := NewInputWidget(InputConfig{Multiline: true, MinRows: 4, MaxRows: 6,
+		OnSubmit: func(string) { submitted = true }})
+	inp.SetFocused(true)
+	if inp.Height() != 4 || inp.HeightAtWidth(25) != 4 {
+		t.Fatal("empty multiline input did not reserve its minimum rows")
+	}
+	renderWidget(inp, 0, 0, 25, inp.Height())
+	typeText(inp, "first")
+	inp.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	typeText(inp, "second")
+	if inp.Text() != "first\nsecond" || submitted {
+		t.Fatalf("Enter submitted instead of inserting a newline: %q, submitted=%v", inp.Text(), submitted)
+	}
+	inp.SetText("1\n2\n3\n4\n5\n6\n7")
+	if inp.HeightAtWidth(25) != 6 {
+		t.Fatal("multiline input grew beyond max_rows")
+	}
+	inp.Config.MinRows = 20
+	if inp.HeightAtWidth(25) != 6 {
+		t.Fatal("min_rows exceeded max_rows")
+	}
+}

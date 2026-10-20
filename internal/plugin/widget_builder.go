@@ -571,6 +571,7 @@ func createInputWidget(desc WidgetDesc, p *Plugin) *widgets.InputWidget {
 
 func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, _ *Plugin) {
 	iw.Config.Wrap, iw.Config.MaxRows = desc.Wrap, desc.MaxRows
+	iw.Config.MinRows, iw.Config.Multiline = desc.MinRows, desc.Multiline
 	iw.Config.Autofocus = desc.Autofocus
 	if desc.OnChange != nil {
 		iw.Config.OnChange = desc.OnChange

@@ -478,7 +478,11 @@ func panelInputWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "clear_on_submit"); v != lua.LNil {
 		desc.ClearOnSubmit = lua.LVAsBool(v)
 	}
-	desc.Wrap = lua.LVAsBool(L.GetField(tbl, "wrap"))
+	desc.Multiline = lua.LVAsBool(L.GetField(tbl, "multiline"))
+	desc.Wrap = desc.Multiline || lua.LVAsBool(L.GetField(tbl, "wrap"))
+	if v := L.GetField(tbl, "min_rows"); v != lua.LNil {
+		desc.MinRows = int(min(max(float64(lua.LVAsNumber(v)), 0), 1000))
+	}
 	if v := L.GetField(tbl, "max_rows"); v != lua.LNil {
 		desc.MaxRows = int(min(max(float64(lua.LVAsNumber(v)), 0), 1000))
 	}

@@ -106,7 +106,7 @@ func (inp *InputWidget) rowsAt(textW int) []inputRow {
 
 // visibleRows is how many rows a wrapping input shows in textW columns.
 func (inp *InputWidget) visibleRows(textW int) int {
-	return min(max(len(inp.rowsAt(textW)), 1), inp.maxRows())
+	return min(max(len(inp.rowsAt(textW)), max(1, inp.Config.MinRows)), inp.maxRows())
 }
 
 // HeightAtWidth is the input's height laid out w columns wide.
@@ -240,7 +240,7 @@ func (inp *InputWidget) handleWrappedKey(ev *tcell.EventKey) (EventResult, bool)
 	shift := mods&tcell.ModShift != 0
 	switch ev.Key() {
 	case tcell.KeyEnter:
-		if mods&(tcell.ModShift|tcell.ModAlt) == 0 {
+		if !inp.Config.Multiline && mods&(tcell.ModShift|tcell.ModAlt) == 0 {
 			return EventIgnored, false
 		}
 		inp.insertRunes([]rune{'\n'})

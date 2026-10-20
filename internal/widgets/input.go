@@ -19,8 +19,10 @@ type InputConfig struct {
 	// Wrap lays the text out on as many rows as it needs, up to MaxRows
 	// (default 5), then scrolls. Shift+Enter, Alt+Enter or Ctrl+J adds a line
 	// break.
-	Wrap    bool `json:"-"`
-	MaxRows int  `json:"-"`
+	Wrap      bool `json:"-"`
+	MaxRows   int  `json:"-"`
+	MinRows   int  `json:"-"`
+	Multiline bool `json:"-"`
 	// Autofocus asks the plugin panel holding the input to focus it when the
 	// plugin focuses the panel.
 	Autofocus bool `json:"-"`
@@ -55,6 +57,9 @@ type InputWidget struct {
 const DefaultPrefix = " ❯ "
 
 func NewInputWidget(config InputConfig) *InputWidget {
+	if config.Multiline {
+		config.Wrap = true
+	}
 	if !config.Bordered && config.Prefix == "" {
 		config.Prefix = DefaultPrefix
 	}
@@ -69,6 +74,9 @@ func NewInputWidget(config InputConfig) *InputWidget {
 // HeightAtWidth gives the height for the width a layout is about to use.
 func (inp *InputWidget) Height() int {
 	rows := 1
+	if inp.Config.Wrap {
+		rows = min(max(inp.Config.MinRows, 1), inp.maxRows())
+	}
 	if inp.Config.Wrap && inp.wrapWidth > 0 {
 		rows = inp.visibleRows(inp.wrapWidth)
 	}

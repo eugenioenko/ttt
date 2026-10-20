@@ -1223,6 +1223,8 @@ panel:input({
 
 | Field              | Type     | Default | Description                                    |
 |--------------------|----------|---------|------------------------------------------------|
+| `multiline`        | boolean  | `false` | Enables wrapping and makes Enter insert a newline. Use separate buttons to submit. |
+| `min_rows`         | number   | `1`     | Minimum visible rows for a wrapping input, capped by `max_rows`. |
 | `placeholder`      | string   | `""`    | Grayed-out hint text shown when input is empty.|
 | `prefix`           | string   | `""`    | Non-editable text displayed before the input.  |
 | `clear_on_submit`  | boolean  | `false` | When `true`, the input text is cleared after `on_submit` fires. |
