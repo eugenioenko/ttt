@@ -145,33 +145,97 @@ func FetchFileContent(owner, repo, path, ref string) (string, error) {
 
 func SplitMultiFileDiff(unified string) map[string]string {
 	result := make(map[string]string)
-	lines := strings.Split(unified, "\n")
 	var currentFile string
 	var currentLines []string
-
+	inHeader := false
 	flush := func() {
 		if currentFile != "" && len(currentLines) > 0 {
 			result[currentFile] = strings.Join(currentLines, "\n")
 		}
 	}
-
-	for _, line := range lines {
+	for _, line := range strings.Split(unified, "\n") {
 		if strings.HasPrefix(line, "diff --git ") {
 			flush()
-			parts := strings.Fields(line)
-			if len(parts) >= 4 {
-				bPath := parts[len(parts)-1]
-				if strings.HasPrefix(bPath, "b/") {
-					currentFile = bPath[2:]
-				} else {
-					currentFile = bPath
-				}
-			}
+			currentFile = diffDestinationPath(strings.TrimPrefix(line, "diff --git "))
 			currentLines = []string{line}
-		} else {
-			currentLines = append(currentLines, line)
+			inHeader = true
+			continue
+		}
+		currentLines = append(currentLines, line)
+		if strings.HasPrefix(line, "@@") || line == "GIT binary patch" {
+			inHeader = false
+		}
+		if !inHeader {
+			continue
+		}
+		for _, prefix := range []string{"rename to ", "copy to ", "+++ ", "--- "} {
+			if !strings.HasPrefix(line, prefix) {
+				continue
+			}
+			path := strings.TrimPrefix(line, prefix)
+			if prefix == "+++ " || prefix == "--- " {
+				path, _, _ = strings.Cut(path, "\t")
+			}
+			path = unquoteDiffPath(path)
+			if path == "" || path == "/dev/null" {
+				break
+			}
+			if prefix == "--- " {
+				if currentFile == "" {
+					currentFile = strings.TrimPrefix(path, "a/")
+				}
+			} else if prefix == "+++ " {
+				currentFile = strings.TrimPrefix(path, "b/")
+			} else {
+				currentFile = path
+			}
+			break
 		}
 	}
 	flush()
 	return result
+}
+
+func unquoteDiffPath(path string) string {
+	if strings.HasPrefix(path, "\"") {
+		value, err := strconv.Unquote(path)
+		if err != nil {
+			return ""
+		}
+		return value
+	}
+	return path
+}
+
+func diffDestinationPath(paths string) string {
+	if strings.HasPrefix(paths, "\"") {
+		quoted, err := strconv.QuotedPrefix(paths)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimPrefix(unquoteDiffPath(strings.TrimLeft(paths[len(quoted):], " ")), "b/")
+	}
+	if i := strings.Index(paths, " \"b/"); i >= 0 {
+		return strings.TrimPrefix(unquoteDiffPath(paths[i+1:]), "b/")
+	}
+	// Git leaves spaces unquoted; equal old/new paths disambiguate embedded " b/".
+	for offset := 0; offset < len(paths); {
+		i := strings.Index(paths[offset:], " b/")
+		if i < 0 {
+			break
+		}
+		i += offset
+		oldPath, newPath := strings.TrimPrefix(paths[:i], "a/"), paths[i+3:]
+		if oldPath == newPath {
+			return newPath
+		}
+		offset = i + 3
+	}
+	if i := strings.LastIndex(paths, " b/"); i >= 0 {
+		return paths[i+3:]
+	}
+	if fields := strings.Fields(paths); len(fields) == 2 {
+		return unquoteDiffPath(fields[1])
+	}
+	return ""
 }

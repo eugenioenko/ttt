@@ -12,19 +12,18 @@ func setupChangesFunctions(L *lua.LState, mod *lua.LTable, p *Plugin) {
 		cfg := L.CheckTable(1)
 		diff, ok := L.GetField(cfg, "diff").(lua.LString)
 		if !ok || strings.TrimSpace(string(diff)) == "" {
-			L.ArgError(1, "non-empty diff required")
+			L.ArgError(1, "diff must be a non-empty string")
 			return 0
 		}
-		opts := ChangesOptions{Title: "Changes", Diff: string(diff)}
-		if v := L.GetField(cfg, "title"); v != lua.LNil {
-			opts.Title = v.String()
+		opts := ChangesOptions{
+			Title:       changesStringOption(L, cfg, "title", "Changes"),
+			Description: changesStringOption(L, cfg, "description", ""),
+			Diff:        string(diff),
 		}
-		if v := L.GetField(cfg, "description"); v != lua.LNil {
-			opts.Description = v.String()
-		}
-		opts.ID = opts.Title
-		if v := L.GetField(cfg, "id"); v != lua.LNil {
-			opts.ID = v.String()
+		opts.ID = changesStringOption(L, cfg, "id", opts.Title)
+		if strings.TrimSpace(opts.ID) == "" {
+			L.ArgError(1, "non-empty id or title required")
+			return 0
 		}
 		if p.OpenChanges == nil {
 			L.Push(lua.LNil)
@@ -40,4 +39,17 @@ func setupChangesFunctions(L *lua.LState, mod *lua.LTable, p *Plugin) {
 		L.Push(lua.LString(id))
 		return 1
 	}))
+}
+
+func changesStringOption(L *lua.LState, cfg *lua.LTable, name, fallback string) string {
+	value := L.GetField(cfg, name)
+	if value == lua.LNil {
+		return fallback
+	}
+	text, ok := value.(lua.LString)
+	if !ok {
+		L.ArgError(1, name+" must be a string")
+		return ""
+	}
+	return string(text)
 }

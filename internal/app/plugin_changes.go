@@ -7,6 +7,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -32,7 +33,21 @@ func (a *App) wirePluginChanges(p *plugin.Plugin) {
 			} else if strings.Contains(text, "\nrename from ") {
 				status = "R"
 			}
-			file := ui.CommitDetailFile{Path: path, Status: status, Diff: diff.Parse(text)}
+			oldPath := ""
+			if status == "R" {
+				for _, line := range strings.Split(text, "\n") {
+					if strings.HasPrefix(line, "rename from ") {
+						oldPath = strings.TrimPrefix(line, "rename from ")
+						if strings.HasPrefix(oldPath, "\"") {
+							if decoded, err := strconv.Unquote(oldPath); err == nil {
+								oldPath = decoded
+							}
+						}
+						break
+					}
+				}
+			}
+			file := ui.CommitDetailFile{Path: path, OldPath: oldPath, Status: status, Diff: diff.Parse(text)}
 			if len(file.Diff.Hunks) == 0 {
 				file.Error = "No textual changes"
 			}

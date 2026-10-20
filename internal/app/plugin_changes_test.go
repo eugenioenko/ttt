@@ -43,3 +43,17 @@ diff --git a/second.go b/second.go
 		t.Fatal("opening changes moved focus out of a modal dialog")
 	}
 }
+
+func TestPluginChangesPreservesRenamePaths(t *testing.T) {
+	a := prepareListenTestApp(t)
+	p := &plugin.Plugin{Name: "review"}
+	a.wirePluginChanges(p)
+	id, err := p.OpenChanges(plugin.ChangesOptions{ID: "rename", Title: "Rename", Diff: "diff --git \"a/old\\tname.txt\" \"b/new name.txt\"\nsimilarity index 100%\nrename from \"old\\tname.txt\"\nrename to new name.txt\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := a.EditorGroup.CommitDetailWidgetByTab(id).Files
+	if len(files) != 1 || files[0].Path != "new name.txt" || files[0].OldPath != "old\tname.txt" || files[0].Status != "R" {
+		t.Fatalf("files=%+v", files)
+	}
+}
