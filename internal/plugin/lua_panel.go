@@ -815,6 +815,14 @@ func panelMarkdownWidget(L *lua.LState) int {
 			desc.MarkdownContent = t.String()
 		}
 		desc.Follow = lua.LVAsBool(L.GetField(v, "follow"))
+		if w := L.GetField(v, "wrap_width"); w != lua.LNil {
+			num, ok := w.(lua.LNumber)
+			if !ok || int(num) <= 0 || float64(int(num)) != float64(num) {
+				L.ArgError(2, "wrap_width must be a positive integer")
+				return 0
+			}
+			desc.WrapWidth = int(num)
+		}
 		parseBoxModel(L, v, &desc)
 	}
 	proxy.appendDesc(WidgetMarkdown, desc)

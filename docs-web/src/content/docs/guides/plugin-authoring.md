@@ -1469,9 +1469,10 @@ panel:markdown({ text = readme_content, margin_top = 1 })
 |--------|--------|----------|---------------------------|
 | `text` | string | yes      | Markdown source to render. |
 | `follow` | boolean | no     | Keep the end of the text in view as it grows, as in a log or chat. Scrolling up stops following until the user scrolls back to the end. |
+| `wrap_width` | number | no | Maximum column width for prose wrapping (positive integer). Overrides the global `markdown.wrapWidth` setting for this widget only. If omitted, uses the global setting. |
 | + [box model fields](#box-model) | | | Margin and padding. |
 
-Prose lines wrap at the `markdown.wrapWidth` setting (default 80). Headings, bold, italic, code spans, fenced code blocks, lists, and links are styled using the theme's styles. Text inside the widget can be selected with the mouse and copied.
+Prose lines wrap at `wrap_width` when specified, or fall back to the `markdown.wrapWidth` setting (default 80). Headings, bold, italic, code spans, fenced code blocks, lists, and links are styled using the theme's styles. Text inside the widget can be selected with the mouse and copied.
 
 ### Image
 

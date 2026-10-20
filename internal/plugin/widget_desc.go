@@ -142,4 +142,5 @@ type WidgetDesc struct {
 
 	MarkdownContent string
 	Follow          bool
+	WrapWidth       int
 }

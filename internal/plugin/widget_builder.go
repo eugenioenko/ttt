@@ -228,6 +228,14 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 	case WidgetMarkdown:
 		if sv, ok := w.(*widgets.ScrollViewWidget); ok {
 			if md, ok := sv.Child.(*widgets.MarkdownWidget); ok {
+				maxWidth := 80
+				if p != nil && p.Markdown.WrapWidth > 0 {
+					maxWidth = p.Markdown.WrapWidth
+				}
+				if desc.WrapWidth > 0 {
+					maxWidth = desc.WrapWidth
+				}
+				md.SetMaxWidth(maxWidth)
 				md.SetContent(desc.MarkdownContent)
 			}
 			sv.Follow = desc.Follow
@@ -604,9 +612,14 @@ func createProgressWidget(desc WidgetDesc) *widgets.ProgressWidget {
 
 func createMarkdownWidget(desc WidgetDesc, p *Plugin) *widgets.ScrollViewWidget {
 	md := widgets.NewMarkdownWidget()
+	maxWidth := 80
 	if p != nil && p.Markdown.WrapWidth > 0 {
-		md.MaxWidth = p.Markdown.WrapWidth
+		maxWidth = p.Markdown.WrapWidth
 	}
+	if desc.WrapWidth > 0 {
+		maxWidth = desc.WrapWidth
+	}
+	md.MaxWidth = maxWidth
 	md.SetContent(desc.MarkdownContent)
 	applyBoxModel(&md.Box, desc)
 	sv := widgets.NewScrollViewWidget(md)

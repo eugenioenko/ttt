@@ -32,6 +32,15 @@ func (m *MarkdownWidget) SetScrollParent(sv *ScrollViewWidget) {
 	m.scrollParent = sv
 }
 
+func (m *MarkdownWidget) SetMaxWidth(maxWidth int) {
+	if m.MaxWidth == maxWidth {
+		return
+	}
+	m.MaxWidth = maxWidth
+	m.wrapWidth = 0
+	m.wrapped = nil
+}
+
 func (m *MarkdownWidget) SetContent(text string) {
 	if text == m.rawText {
 		return
