@@ -104,6 +104,9 @@ func TestSplitMultiFileDiffSkipsIncompleteBlocks(t *testing.T) {
 	valid := "diff --git a/valid.txt b/valid.txt\n@@ -1 +1 @@\n-old\n+new"
 	for _, malformed := range []string{
 		"diff --git a/other.txt b/other.txt",
+		"diff --git a/other.txt b/other.txt\nindex 1111111..2222222 100644",
+		"diff --git a/other.txt b/other.txt\nindex 1111111..2222222 100644\n+++ b/valid.txt",
+		"diff --git a/other.txt b/other.txt\nsimilarity index 100%",
 		"diff --git a/other.txt b/other.txt\n+++ b/valid.txt\nignored",
 	} {
 		files := SplitMultiFileDiff(valid + "\n" + malformed)

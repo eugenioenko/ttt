@@ -172,8 +172,8 @@ func SplitMultiFileDiff(unified string) map[string]string {
 			continue
 		}
 		for _, prefix := range []string{
-			"index ", "old mode ", "new mode ", "new file mode ", "deleted file mode ",
-			"similarity index ", "dissimilarity index ", "rename from ", "rename to ",
+			"old mode ", "new mode ", "new file mode ", "deleted file mode ",
+			"rename from ", "rename to ",
 			"copy from ", "copy to ", "Binary files ",
 		} {
 			if strings.HasPrefix(line, prefix) {

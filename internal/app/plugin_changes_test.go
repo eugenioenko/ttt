@@ -34,7 +34,7 @@ diff --git a/second.go b/second.go
 	if _, err := p.OpenChanges(opts); err != nil || a.EditorGroup.TabCount() != tabs {
 		t.Fatal("reopening the same changes duplicated the tab")
 	}
-	for _, invalid := range []string{"invalid", "diff --git a/a b/a", "diff --git a/a b/a\n--- a/a\n+++ b/a"} {
+	for _, invalid := range []string{"invalid", "diff --git a/a b/a", "diff --git a/a b/a\n--- a/a\n+++ b/a", "diff --git a/a b/a\nindex 1111111..2222222 100644"} {
 		if _, err := p.OpenChanges(plugin.ChangesOptions{Diff: invalid}); err == nil {
 			t.Fatalf("invalid diff was accepted: %q", invalid)
 		}
