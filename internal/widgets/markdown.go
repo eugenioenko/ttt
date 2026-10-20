@@ -5,6 +5,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -48,34 +49,37 @@ func (m *MarkdownWidget) Height() int { return 0 }
 func (m *MarkdownWidget) Width() int  { return 0 }
 
 func (m *MarkdownWidget) ScrollSize() (int, int) {
-	var w int
+	w, h := m.GetRect().W, 0
 	if m.scrollParent != nil {
-		w = m.scrollParent.GetRect().W
-	}
-	if w <= 0 {
-		r := m.GetRect()
-		w = r.W
+		r := m.scrollParent.GetRect()
+		w, h = r.W-m.scrollParent.BoxOverheadW(), r.H-m.scrollParent.BoxOverheadH()
 	}
 	if w <= 0 {
 		w = 80
 	}
-	wrapW := w - m.Box.PaddingLeft - m.Box.PaddingRight
-	if wrapW < 1 {
-		wrapW = 1
-	}
-	m.rewrap(wrapW)
-	contentW := 0
-	for _, line := range m.wrapped {
-		if line.Kind == markdown.KindDivider {
-			continue
+	wrapW := max(1, w-m.BoxOverheadW())
+	for {
+		m.rewrap(wrapW)
+		contentW := 0
+		for _, line := range m.wrapped {
+			if line.Kind == markdown.KindDivider {
+				contentW = max(contentW, wrapW)
+			} else {
+				contentW = max(contentW, textwidth.String(line.Text()))
+			}
 		}
-		if lw := len([]rune(line.Text())); lw > contentW {
-			contentW = lw
+		contentW += m.BoxOverheadW()
+		contentH := len(m.wrapped) + m.BoxOverheadH()
+		if m.scrollParent == nil || h <= 0 {
+			return contentW, contentH
 		}
+		viewW, _ := m.scrollParent.viewportSize(w, h, contentW, contentH)
+		nextWidth := max(1, viewW-m.BoxOverheadW())
+		if nextWidth >= wrapW {
+			return contentW, contentH
+		}
+		wrapW = nextWidth
 	}
-	contentW += m.Box.PaddingLeft + m.Box.PaddingRight
-	h := len(m.wrapped) + m.Box.PaddingTop + m.Box.PaddingBottom
-	return contentW, h
 }
 
 func (m *MarkdownWidget) rewrap(width int) {
@@ -124,11 +128,15 @@ func (m *MarkdownWidget) Render(surface Surface) {
 		surface.Fill(term.Cell{Ch: ' ', Style: m.FillStyle})
 	}
 
-	m.rewrap(w)
+	// The virtual surface can be wider than the viewport because of code blocks.
+	if m.scrollParent == nil || m.wrapWidth == 0 {
+		m.rewrap(w)
+	}
 
 	for y := 0; y < h && y < len(m.wrapped); y++ {
 		line := m.wrapped[y]
 		if line.Kind == markdown.KindDivider {
+
 			for x := 0; x < w; x++ {
 				surface.SetCell(x, y, term.Cell{Ch: '─', Style: term.StyleBorder})
 			}
@@ -162,10 +170,9 @@ func (m *MarkdownWidget) mouseToContent(mx, my int) selection.Position {
 	if m.scrollParent == nil {
 		return selection.Position{}
 	}
-	pr := m.scrollParent.GetRect()
-
-	contentY := my - pr.Y + m.scrollParent.scrollY
-	contentX := mx - pr.X + m.scrollParent.scrollX
+	ox, oy := m.contentOrigin()
+	contentY := my - oy
+	contentX := mx - ox
 
 	if contentY < 0 {
 		contentY = 0

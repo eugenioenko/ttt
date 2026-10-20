@@ -1,11 +1,13 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/gdamore/tcell/v3"
 )
 
 func mkLine(text string) markdown.Line {
@@ -119,5 +121,43 @@ func TestMarkdownSelectedTextEmpty(t *testing.T) {
 	got = m.sel.Text(m.wrappedTextLines(), m.selEnd.Line, m.selEnd.Col)
 	if got != "" {
 		t.Errorf("zero-width: got %q, want empty", got)
+	}
+}
+
+func TestMarkdownProseWrapsInsideVerticalScrollbar(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.Box.PaddingLeft, m.Box.PaddingRight = 1, 1
+	m.SetContent(strings.Repeat("alpha beta gamma delta epsilon ", 20))
+	sv := NewScrollViewWidget(m)
+	m.SetScrollParent(sv)
+	renderWidget(sv, 0, 0, 24, 8)
+	if sv.lastContentH <= sv.lastViewH || sv.lastContentW > sv.lastViewW {
+		t.Fatalf("prose should scroll vertically only: content %dx%d, viewport %dx%d", sv.lastContentW, sv.lastContentH, sv.lastViewW, sv.lastViewH)
+	}
+	if m.wrapWidth != sv.lastViewW-2 {
+		t.Fatalf("wrap width = %d, want viewport minus padding = %d", m.wrapWidth, sv.lastViewW-2)
+	}
+}
+
+func TestMarkdownCodeOverflowDoesNotReflowProse(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.Box.PaddingLeft, m.Box.PaddingRight = 1, 1
+	m.SetContent(strings.Repeat("alpha beta gamma delta ", 10) + "\n\n```\n" + strings.Repeat("x", 120) + "\n```")
+	sv := NewScrollViewWidget(m)
+	m.SetScrollParent(sv)
+	for _, width := range []int{24, 34} {
+		renderWidget(sv, 0, 0, width, 8)
+		wrapWidth, rows := m.wrapWidth, len(m.wrapped)
+		if wrapWidth != sv.lastViewW-2 || rows != sv.lastContentH {
+			t.Fatalf("measurement and render disagree: wrap=%d, viewport=%d, rows=%d, measured=%d", wrapWidth, sv.lastViewW, rows, sv.lastContentH)
+		}
+		if sv.lastContentW <= sv.lastViewW {
+			t.Fatal("long code should retain horizontal scrolling")
+		}
+		sv.HandleEvent(tcell.NewEventMouse(5, 5, tcell.WheelRight, 0))
+		renderWidget(sv, 0, 0, width, 8)
+		if m.wrapWidth != wrapWidth || len(m.wrapped) != rows {
+			t.Fatal("horizontal scroll changed paragraph wrapping")
+		}
 	}
 }
