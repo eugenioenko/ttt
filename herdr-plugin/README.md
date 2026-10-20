@@ -37,6 +37,8 @@ Opens TTT in a new Herdr tab, pointed at the active worktree or workspace direct
 herdr plugin pane open --plugin ttt.editor --entrypoint editor
 ```
 
+The pane routes right-click to TTT, so its context menus work. Right-clicking the pane frame still opens Herdr's menu.
+
 ### Actions
 
 | Action | Description |

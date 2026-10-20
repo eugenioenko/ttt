@@ -31,6 +31,12 @@ if [ -z "${HERDR_PLUGIN_ENTRYPOINT_ID:-}" ] && ! { [ -t 0 ] && [ -t 1 ]; }; then
     --focus
 fi
 
+# herdr routes right-click to its own pane menu by default, which hides ttt's
+# context menus; routing is per-pane runtime state, so set it before exec.
+if [ -n "${HERDR_PLUGIN_ENTRYPOINT_ID:-}" ]; then
+  "${HERDR_BIN_PATH:-herdr}" pane input --current --right-click pane >/dev/null 2>&1 || true
+fi
+
 # Pane / interactive context: cd into the project so herdr's cwd-following sees
 # the pane living there rather than in the plugin root.
 if [ -n "$target" ] && [ -d "$target" ]; then
