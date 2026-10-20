@@ -789,6 +789,12 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "file.reloadFromDisk", Title: "Reload File from Disk",
+		Keywords: []string{"file", "reload", "refresh"},
+		Handler:  app.ReloadActiveFile,
+	})
+
+	reg.Register(command.Command{
 		ID: "editor.undo", Title: "Undo",
 		Keywords: []string{"editor", "revert"},
 		Handler:  func() { app.EditorGroup.Undo() },

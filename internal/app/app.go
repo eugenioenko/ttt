@@ -105,6 +105,7 @@ type App struct {
 	quitPending            bool
 	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
+	largeFiles             largeFileState
 	blame                  statusBlameState
 	gitGutterDebounce      *asynctask.Task[struct{}]
 	findRefresh            *asynctask.Task[struct{}]

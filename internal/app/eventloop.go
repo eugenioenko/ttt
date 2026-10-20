@@ -146,6 +146,7 @@ func RunEventLoop(
 		app.SyncFileHandlerTabs()
 		app.SyncEmptyState()
 		app.SyncBlame()
+		app.SyncReloadSegment()
 		cells := renderer.NextFrame(app.Root.Width, app.Root.Height)
 		if app.ImageLayer != nil {
 			app.ImageLayer.Begin()

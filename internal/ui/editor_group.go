@@ -972,10 +972,13 @@ func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
 	}
 }
 
-func (g *EditorGroupWidget) ReloadFile(path string) {
+func (g *EditorGroupWidget) ReloadFile(path string) bool {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path && g.tabs[i].Buf != nil {
-			g.tabs[i].Buf.LoadFile(path)
+			if err := g.tabs[i].Buf.LoadFile(path); err != nil {
+				g.reportError(fmt.Sprintf("Failed to reload %s: %v", path, err))
+				return false
+			}
 			g.tabs[i].Buf.Dirty = false
 			g.tabs[i].Undo = g.newUndoStack()
 			if g.tabs[i].Folds != nil {
@@ -985,9 +988,10 @@ func (g *EditorGroupWidget) ReloadFile(path string) {
 			if i == g.active {
 				g.syncTabs()
 			}
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // clampCursor keeps a tab's cursor within the bounds of its buffer, which may

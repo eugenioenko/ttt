@@ -39,6 +39,12 @@ Press **Ctrl+G** to open the Go to Line dialog.
 - **Ctrl+Z** to undo, **Ctrl+Y** to redo
 - Uses a command-pattern undo stack for reliable history tracking
 
+## External File Changes
+
+Files without unsaved edits reload automatically when another program changes them on disk. Files over 64 MiB keep their current contents and show **↻ Reload** in the status bar instead. Click it, or run **Reload File from Disk** from the command palette, to load the latest contents. Reloading a file with unsaved edits asks for confirmation.
+
+Set `editor.largeFiles.autoReloadMaxMB` to change the limit, or `0` to allow automatic reloads at any size. File watching remains active to detect changes.
+
 ## Multi-Cursor Editing
 
 TTT supports editing with multiple cursors simultaneously. Place cursors at multiple locations and type, delete, or insert lines. All cursors act in parallel.

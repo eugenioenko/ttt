@@ -138,7 +138,8 @@ type EditorSettings struct {
 }
 
 type LargeFileSettings struct {
-	WordWrapMaxMB *int `json:"wordWrapMaxMB,omitempty"`
+	WordWrapMaxMB   *int `json:"wordWrapMaxMB,omitempty"`
+	AutoReloadMaxMB *int `json:"autoReloadMaxMB,omitempty"`
 }
 
 // Path is relative to the config directory unless absolute.
@@ -178,6 +179,7 @@ func (e EditorSettings) IsAutoIndentEnabled() bool {
 }
 
 const DefaultWordWrapMaxMB = 32
+const DefaultAutoReloadMaxMB = 64
 
 // WordWrapMaxBytes returns 0 when there is no limit.
 func (e EditorSettings) WordWrapMaxBytes() int64 {
@@ -188,6 +190,14 @@ func (e EditorSettings) WordWrapMaxBytes() int64 {
 	return megabytes(mb, DefaultWordWrapMaxMB)
 }
 
+func (e EditorSettings) AutoReloadMaxBytes() int64 {
+	var mb *int
+	if e.LargeFiles != nil {
+		mb = e.LargeFiles.AutoReloadMaxMB
+	}
+	return megabytes(mb, DefaultAutoReloadMaxMB)
+}
+
 func megabytes(mb *int, def int) int64 {
 	n := def
 	if mb != nil {
@@ -195,6 +205,9 @@ func megabytes(mb *int, def int) int64 {
 	}
 	if n <= 0 {
 		return 0
+	}
+	if int64(n) > ((1<<63)-1)>>20 {
+		return (1 << 63) - 1
 	}
 	return int64(n) << 20
 }
