@@ -103,6 +103,7 @@ type WidgetDesc struct {
 	Checked      bool
 	OnChangeBool func(bool)
 
+	InputValue    *string
 	Placeholder   string
 	Prefix        string
 	OnChange      func(text string)

@@ -154,6 +154,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 				prefix = widgets.DefaultPrefix
 			}
 			iw.Config.Prefix = prefix
+			syncInputValue(iw, desc)
 			wireInputCallbacks(iw, desc, p)
 		}
 	case WidgetVStack:
@@ -575,9 +576,21 @@ func createInputWidget(desc WidgetDesc, p *Plugin) *widgets.InputWidget {
 		Placeholder: desc.Placeholder,
 		Prefix:      desc.Prefix,
 	})
+	syncInputValue(iw, desc)
 	wireInputCallbacks(iw, desc, p)
 	applyBoxModel(&iw.Box, desc)
 	return iw
+}
+
+func syncInputValue(iw *widgets.InputWidget, desc WidgetDesc) {
+	if desc.InputValue == nil || iw.Text() == *desc.InputValue {
+		return
+	}
+	onChange := iw.Config.OnChange
+	iw.Config.OnChange = nil
+	iw.SetText(*desc.InputValue)
+	iw.ResetScroll()
+	iw.Config.OnChange = onChange
 }
 
 func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, _ *Plugin) {
