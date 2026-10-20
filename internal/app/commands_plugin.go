@@ -326,6 +326,7 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
 	a.wirePluginDialogs(p)
+	a.wirePluginChanges(p)
 	id := "plugin." + p.Name
 	var sidebar, bottom *plugin.PluginPanelWidget
 	var sidebarTitle, bottomTitle string

@@ -719,6 +719,28 @@ ttt.open_dialog({
 })
 ```
 
+### `ttt.open_changes(config)`
+
+Open a native multi-file diff detail tab from a Git-style unified diff. No special permission is required. It uses the same split/unified layout, wrapping, file collapse, and keyboard navigation as commit details.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `diff` | string | required | Non-empty unified diff containing `diff --git` file headers. |
+| `title` | string | `"Changes"` | Tab title and view heading. |
+| `description` | string | `""` | Text displayed above the changed files. |
+| `id` | string | title | Stable ID within the plugin; opening it again refreshes the same tab. |
+
+Returns the tab ID, or `nil, error` for an unavailable host or unparseable diff. Pass the returned ID to `ttt.close_tab` to close it. Native diff tabs remain usable when the plugin is unloaded.
+
+```lua
+local id, err = ttt.open_changes({
+  id = "review-123",
+  title = "Review #123",
+  description = "Update the parser",
+  diff = unified_diff,
+})
+```
+
 ### `ttt.open_file(path, [line], [readonly])`
 
 Open a file in the editor, optionally jumping to a specific line and/or opening it in readonly mode.
@@ -2844,7 +2866,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 
 | Module         | Description                    |
 |----------------|--------------------------------|
-| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
+| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.regex`    | RE2 regular expressions        |
 | `ttt.editor`   | Editor buffer read/write       |

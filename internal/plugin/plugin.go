@@ -80,6 +80,7 @@ type Plugin struct {
 	CloseTab           func(id string)
 	OpenDialog         func(*PluginDialogWidget, func()) bool
 	CloseDialog        func()
+	OpenChanges        func(ChangesOptions) (string, error)
 	RenderMarkdown     func(text string) []MarkdownLine
 	Graphics           func() GraphicsInfo
 	Markdown           config.MarkdownSettings
@@ -296,6 +297,7 @@ func (p *Plugin) Destroy() {
 	p.CloseTab = nil
 	p.OpenDialog = nil
 	p.CloseDialog = nil
+	p.OpenChanges = nil
 	p.RenderMarkdown = nil
 	p.Graphics = nil
 	p.Borders = nil

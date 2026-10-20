@@ -139,6 +139,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 	loader := func(L *lua.LState) int {
 		mod := L.NewTable()
 		setupDialogFunctions(L, mod, p)
+		setupChangesFunctions(L, mod, p)
 
 		L.SetField(mod, "register", L.NewFunction(func(L *lua.LState) int {
 			tbl := L.CheckTable(1)
