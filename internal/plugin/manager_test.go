@@ -911,3 +911,77 @@ func TestApproveAndLoadEnabledPluginWithAdditionalPermissions(t *testing.T) {
 		t.Fatalf("enabled approval did not persist permission or load plugin: %+v", entry)
 	}
 }
+
+// --- symlinked plugin directories (#1029) ---
+
+// A plugin installed as a directory symlink outside the plugins dir must load
+// like a real directory; os.ReadDir reports the link type, not the target.
+func TestLoadAllFollowsSymlinkedPluginDir(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	external := writePluginDir(t, t.TempDir(), "linked")
+	if err := os.Symlink(external, filepath.Join(pluginsDir, "linked")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	reg := `[{"name": "linked", "version": "1.0.0", "enabled": true, "permissions": {}}]`
+	if err := os.WriteFile(regPath, []byte(reg), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := NewManager(pluginsDir, regPath)
+	defer m.Shutdown()
+	m.LoadAll()
+
+	if m.FindPlugin("linked") == nil {
+		t.Fatal("a symlinked plugin directory was not loaded")
+	}
+}
+
+// A dangling symlink names nothing, so it must be skipped rather than made to
+// look like a plugin that failed to load.
+func TestLoadAllSkipsDanglingSymlink(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	if err := os.Symlink(filepath.Join(t.TempDir(), "gone"), filepath.Join(pluginsDir, "dangling")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if pending := m.LoadAll(); len(pending) != 0 {
+		t.Fatalf("pending = %d, want 0 for a dangling symlink", len(pending))
+	}
+}
+
+// A symlink pointing at a sibling inside the plugins dir resolves to a
+// directory the scan already visits, so following it would load the same
+// plugin twice.
+func TestLoadAllSkipsSymlinkInsidePluginsDir(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	writePluginDir(t, pluginsDir, "real")
+	if err := os.Symlink(filepath.Join(pluginsDir, "real"), filepath.Join(pluginsDir, "alias")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1 (only the real directory)", len(pending))
+	}
+	if pending[0].Name != "real" {
+		t.Fatalf("pending[0].Name = %q, want the real directory", pending[0].Name)
+	}
+}
+
+// A symlink to a regular file keeps the pre-existing behavior: only
+// directories are plugin candidates.
+func TestLoadAllSkipsSymlinkToFile(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	target := filepath.Join(t.TempDir(), "plugin.ttt.json")
+	if err := os.WriteFile(target, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(pluginsDir, "filelink")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if pending := m.LoadAll(); len(pending) != 0 {
+		t.Fatalf("pending = %d, want 0 for a symlink to a file", len(pending))
+	}
+}
