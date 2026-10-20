@@ -138,9 +138,12 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		}
 	case WidgetButton:
 		if bw, ok := w.(*widgets.ButtonWidget); ok {
-			_ = bw
-			// Button label cannot be changed after construction due to accelerator parsing.
-			// Rewire callback only.
+			if bw.Config.Label != desc.Label {
+				r, focused := bw.GetRect(), bw.IsFocused()
+				*bw = *createButtonWidget(desc, p)
+				bw.SetRect(r)
+				bw.SetFocused(focused)
+			}
 			wireButtonCallback(bw, desc, p)
 		}
 	case WidgetInput:
