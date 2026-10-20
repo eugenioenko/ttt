@@ -689,6 +689,36 @@ Both terminal permissions grant broad capabilities that interact directly with t
 - **Independence from `system.exec` and `fs.*`**: Unlike `ttt.system.exec`, `terminal.control` is **not** restricted to an allowlist of permitted binary names in the plugin manifest. Similarly, child processes launched in the terminal operate directly at the OS level and are **not** constrained by `ttt.fs.read` or `ttt.fs.write` sandbox path restrictions.
 - **Access to User-Created Terminals**: Both `terminal.control` and `terminal.read` apply to **all** open terminal tabs in the editor, including tabs opened manually by the user or by other plugins. `terminal.control` can send input to or close user terminals, and `terminal.read` can list and read the contents of user terminals.
 
+### `ttt.open_dialog(config)` / `ttt.close_dialog()`
+
+Open a modal dialog built with the same widgets as plugin panels. No special permission is required, as with `ttt.confirm`. Call it from a command or callback after the plugin is wired.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | string | `""` | Dialog heading. |
+| `width` | number | `70` | Width in columns, clipped to the screen; at least 8. |
+| `height` | number | `12` | Content height in rows, clipped to the screen; positive. |
+| `render` | function | required | Receives a panel proxy; widget state survives redraws. |
+| `on_event` | function | none | Fallback event handler. |
+| `on_close` | function | none | Called after Escape or `close_dialog`, with focus restored. Not called during plugin teardown. |
+
+Returns `true` when opened, or `false` if another overlay is already open or the host is not wired. Escape closes the dialog. `close_dialog` closes only the calling plugin's dialog. Disabling, reloading, or uninstalling the plugin also closes it. An input with `autofocus = true` receives keyboard focus on opening; Tab and Shift+Tab navigate its widgets.
+
+```lua
+local message = ""
+ttt.open_dialog({
+  title = "Review",
+  render = function(panel)
+    panel:input({wrap = true, autofocus = true,
+      on_change = function(text) message = text end})
+    panel:button({label = "Submit", on_click = function()
+      ttt.close_dialog()
+      ttt.log(message)
+    end})
+  end,
+})
+```
+
 ### `ttt.open_file(path, [line], [readonly])`
 
 Open a file in the editor, optionally jumping to a specific line and/or opening it in readonly mode.
@@ -2811,7 +2841,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 
 | Module         | Description                    |
 |----------------|--------------------------------|
-| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
+| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.regex`    | RE2 regular expressions        |
 | `ttt.editor`   | Editor buffer read/write       |

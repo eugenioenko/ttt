@@ -14,6 +14,7 @@ type PluginPanelWidget struct {
 	eventFunc  *lua.LFunction
 	state      *WidgetState
 	focused    bool
+	height     int
 	// autofocus asks the next render to focus the autofocus input, when
 	// FocusAutofocusInput ran before the input existed.
 	autofocus bool
@@ -28,7 +29,7 @@ func NewPluginPanelWidget(p *Plugin, renderFunc, eventFunc *lua.LFunction) *Plug
 	}
 }
 
-func (pw *PluginPanelWidget) Height() int { return 0 }
+func (pw *PluginPanelWidget) Height() int { return pw.height }
 func (pw *PluginPanelWidget) Width() int  { return 0 }
 
 func (pw *PluginPanelWidget) Render(surface widgets.Surface) {

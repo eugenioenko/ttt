@@ -130,6 +130,7 @@ type App struct {
 	pluginDetailWidgets       map[string]*pluginDetailState
 	pluginDrawer              ui.Widget
 	pluginDrawerPanel         *plugin.PluginPanelWidget
+	pluginDialog              *pluginDialogState
 	graphics                  *cachedGraphics
 	fileHandlerTabs           map[string]*plugin.Plugin
 	commandLine               *ui.CommandLineWidget

@@ -325,6 +325,7 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 }
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
+	a.wirePluginDialogs(p)
 	id := "plugin." + p.Name
 	var sidebar, bottom *plugin.PluginPanelWidget
 	var sidebarTitle, bottomTitle string
@@ -1102,6 +1103,7 @@ func (a *App) RemovePluginPanels(name string) {
 }
 
 func (a *App) closePluginDrawerAndTabs(name string) {
+	a.closePluginDialog(name, false)
 	if a.pluginDrawerPanel != nil && a.pluginDrawerPanel.PluginName() == name {
 		a.ClosePluginDrawer()
 	}
