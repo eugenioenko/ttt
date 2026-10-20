@@ -101,10 +101,21 @@ func regexFind(L *lua.LState) int {
 
 // findFrom returns the first match that starts at or after byte offset start.
 // It matches from the character before start, so that ^, \b and \B see it,
-// unless start is the beginning of text or inside a character. Inside a
-// character, a contextual pattern has no match, because the context it
-// depends on is gone; other patterns keep matching from the raw offset.
+// unless start is the beginning of text. Contextual patterns skip a partial
+// UTF-8 character; unanchored patterns keep the raw byte offset.
 func (r *luaRegex) findFrom(text string, start int) []int {
+	if start > 0 && start < len(text) && !utf8.RuneStart(text[start]) {
+		base := start
+		for base > 0 && start-base < utf8.UTFMax-1 && !utf8.RuneStart(text[base]) {
+			base--
+		}
+		if _, width := utf8.DecodeRuneInString(text[base:]); base+width > start {
+			if !r.contextual {
+				return shiftedMatch(r.re, text, start)
+			}
+			start = base + width
+		}
+	}
 	if start > 0 {
 		_, w := utf8.DecodeLastRuneInString(text[:start])
 		base := start - w
@@ -115,9 +126,6 @@ func (r *luaRegex) findFrom(text string, start int) []int {
 				loc[0] += dw
 			}
 			return loc
-		}
-		if r.contextual {
-			return nil
 		}
 	}
 	return shiftedMatch(r.re, text, start)

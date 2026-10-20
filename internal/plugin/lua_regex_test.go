@@ -209,10 +209,7 @@ func TestRegexModuleLoadsInPlugins(t *testing.T) {
 	}
 }
 
-// An inside-character offset has no context before it that anchors and word
-// boundaries can see, so those patterns must not match there. Unanchored
-// patterns keep matching from the raw byte offset.
-func TestRegexFindInsideCharacterAnchorsDoNotMatch(t *testing.T) {
+func TestRegexFindInsideCharacterContext(t *testing.T) {
 	tests := []struct {
 		pattern, text string
 		init          int
@@ -222,16 +219,51 @@ func TestRegexFindInsideCharacterAnchorsDoNotMatch(t *testing.T) {
 		{`^.`, "€x", 3, "nil nil"},
 		{`\A.`, "é", 2, "nil nil"},
 		{`\b.`, "é", 2, "nil nil"},
+		{`\B.`, "é", 2, "nil nil"},
+		{`\B.`, "€", 2, "nil nil"},
+		{`\B.`, "€", 3, "nil nil"},
+		{`(?m)^x`, "é\nx", 2, "4 4"},
+		{`(?m)^x`, "€\nx", 2, "5 5"},
+		{`(?m)^x`, "€\nx", 3, "5 5"},
+		{`^z|x`, "éx", 2, "3 3"},
+		{`\bfoo`, "éfoo", 2, "3 5"},
+		{`\Bbar`, "€foobar", 3, "7 9"},
+		{`\bx`, "🙂x", 4, "5 5"},
+		{`\B`, "€", 3, "4 3"},
 		{`.`, "€", 2, "2 2"},
+		{`.`, "€", 3, "3 3"},
+		{`[^a]`, "€", 3, "3 3"},
 	}
 	for _, tt := range tests {
 		got := runRegexScript(t, `
-			local re = regex.compile("`+tt.pattern+`")
-			local s, e = re:find("`+tt.text+`", `+strconv.Itoa(tt.init)+`)
+			local re = regex.compile([=[`+tt.pattern+`]=])
+			local s, e = re:find(`+strconv.Quote(tt.text)+`, `+strconv.Itoa(tt.init)+`)
 			result = tostring(s) .. " " .. tostring(e)
 		`)
 		if got != tt.want {
 			t.Errorf("%s in %q from %d: got %q, want %q", tt.pattern, tt.text, tt.init, got, tt.want)
 		}
+	}
+}
+
+func TestRegexFindInsideCharacterCaptures(t *testing.T) {
+	got := runRegexScript(t, `
+		local re = regex.compile([[(?m)^(x)(y)?]])
+		local s, e, caps = re:find("€\nx", 3)
+		result = s .. " " .. e .. " " .. caps[1] .. " " .. tostring(caps[2])
+	`)
+	if got != "5 5 x false" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestRegexFindInvalidByteKeepsContext(t *testing.T) {
+	got := runRegexScript(t, `
+		local re = regex.compile([[\B.]])
+		local s, e = re:find("é" .. string.char(128), 3)
+		result = tostring(s) .. " " .. tostring(e)
+	`)
+	if got != "3 3" {
+		t.Errorf("got %q", got)
 	}
 }

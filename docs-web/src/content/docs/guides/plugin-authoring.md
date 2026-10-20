@@ -958,7 +958,7 @@ local s, e, caps = re:find("mail bob@example now")
 -- s == 6, e == 16, caps == { "bob", "example" }
 ```
 
-An empty match has `e == s - 1`.
+An empty match has `e == s - 1`. If `init` falls inside a UTF-8 character, patterns containing `^`, `\A`, `\b`, or `\B` continue searching from the next character boundary with the preceding context preserved. Other patterns retain raw byte-offset matching.
 
 #### `re:find_all(text, [n])`
 
