@@ -92,7 +92,7 @@ func (m *MarkdownWidget) rewrap(width int) {
 	m.wrapWidth = width
 	m.wrapped = nil
 	for _, line := range m.lines {
-		if !line.Kind.Wrappable() || len([]rune(line.Text())) <= width {
+		if !line.Kind.Wrappable() || textwidth.String(line.Text()) <= width {
 			m.wrapped = append(m.wrapped, line)
 			continue
 		}
@@ -111,7 +111,7 @@ func (m *MarkdownWidget) wrappedTextLines() []string {
 func (m *MarkdownWidget) ContentSize(width int) (maxLineW, lineCount int) {
 	m.rewrap(width)
 	for _, line := range m.wrapped {
-		if w := len([]rune(line.Text())); w > maxLineW {
+		if w := textwidth.String(line.Text()); w > maxLineW {
 			maxLineW = w
 		}
 	}
@@ -142,23 +142,29 @@ func (m *MarkdownWidget) Render(surface Surface) {
 			}
 			continue
 		}
-		x := 0
+		x, col := 0, 0
 		for _, span := range line.Spans {
 			for _, ch := range span.Text {
 				if x >= w {
 					break
 				}
+				width := textwidth.Rune(ch)
 				cell := term.Cell{Ch: ch, Style: span.Style}
-				if m.sel.Contains(y, x, m.selEnd.Line, m.selEnd.Col) {
+				if x+width > w {
+					cell.Ch = ' '
+					width = 1
+				}
+				if m.sel.Contains(y, col, m.selEnd.Line, m.selEnd.Col) {
 					cell.BgStyle = term.StyleSelection
 				}
 				surface.SetCell(x, y, cell)
-				x++
+				x += width
+				col++
 			}
 		}
 		if m.sel.Active {
 			for pad := x; pad < w; pad++ {
-				if m.sel.Contains(y, pad, m.selEnd.Line, m.selEnd.Col) {
+				if m.sel.Contains(y, col+pad-x, m.selEnd.Line, m.selEnd.Col) {
 					surface.SetCell(pad, y, term.Cell{Ch: ' ', BgStyle: term.StyleSelection})
 				}
 			}
@@ -186,13 +192,19 @@ func (m *MarkdownWidget) mouseToContent(mx, my int) selection.Position {
 			contentY = 0
 		}
 	}
+	col := 0
 	if contentY < len(m.wrapped) {
-		lineLen := len([]rune(m.wrapped[contentY].Text()))
-		if contentX > lineLen {
-			contentX = lineLen
+		x := 0
+		for _, ch := range m.wrapped[contentY].Text() {
+			width := textwidth.Rune(ch)
+			if x+width > contentX {
+				break
+			}
+			x += width
+			col++
 		}
 	}
-	return selection.Position{Line: contentY, Col: contentX}
+	return selection.Position{Line: contentY, Col: col}
 }
 
 func (m *MarkdownWidget) HandleEvent(ev tcell.Event) EventResult {

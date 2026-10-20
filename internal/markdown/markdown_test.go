@@ -1,10 +1,12 @@
 package markdown
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
 func textLines(lines []Line) []string {
@@ -468,5 +470,27 @@ func TestRenderBlockquote(t *testing.T) {
 	}
 	if !hasBorder {
 		t.Error("expected blockquote prefix with StyleBorder")
+	}
+}
+
+func TestWrapLineWideRunes(t *testing.T) {
+	line := Line{Kind: KindParagraph, Spans: []Span{
+		{Text: "界界 ab ", Style: term.StyleHoverBold},
+		{Text: "語語cd", Style: term.StyleHoverCode},
+	}}
+	for _, width := range []int{1, 2, 5, 8} {
+		wrapped := WrapLine(line, width)
+		var text string
+		var styles []term.Style
+		for _, row := range wrapped {
+			text += row.Text()
+			styles = append(styles, FlattenStyles(row)...)
+			if w := textwidth.String(row.Text()); w > width && !(width == 1 && len([]rune(row.Text())) == 1) {
+				t.Fatalf("width %d: row %q occupies %d columns", width, row.Text(), w)
+			}
+		}
+		if text != line.Text() || !slices.Equal(styles, FlattenStyles(line)) {
+			t.Fatalf("width %d: wrapping changed text or styles", width)
+		}
 	}
 }

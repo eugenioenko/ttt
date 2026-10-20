@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -55,16 +56,21 @@ func (l Line) Text() string {
 
 func WrapLine(line Line, width int) []Line {
 	text := line.Text()
-	if len([]rune(text)) <= width {
+	if width <= 0 || textwidth.String(text) <= width {
 		return []Line{line}
 	}
 	styles := FlattenStyles(line)
 	runes := []rune(text)
 	var result []Line
 	for len(runes) > 0 {
-		end := width
-		if end > len(runes) {
-			end = len(runes)
+		end, columns := 0, 0
+		for end < len(runes) {
+			w := textwidth.Rune(runes[end])
+			if columns+w > width && end > 0 {
+				break
+			}
+			columns += w
+			end++
 		}
 		if end < len(runes) {
 			bp := -1
