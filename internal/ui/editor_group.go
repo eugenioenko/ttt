@@ -1423,6 +1423,7 @@ func (g *EditorGroupWidget) Save() bool {
 	if t.Undo != nil {
 		t.Undo.MarkSaved()
 	}
+	g.syncTabs()
 	return true
 }
 

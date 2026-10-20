@@ -158,6 +158,7 @@ func TestCtrlEndRevealsAWrappedLastLine(t *testing.T) {
 	last := strings.Repeat("wrap ", 40) + "TAIL"
 	h.exec("options.toggleShowTrailingNewline")
 	openFileEdgeFixture(t, h, "wrap.txt", numberedFile(100)+last)
+	h.app.EditorGroup.WordWrap = true
 	ed := h.app.EditorGroup.Editor
 	ed.WordWrap = true
 	h.redraw()

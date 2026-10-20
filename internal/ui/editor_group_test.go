@@ -472,4 +472,19 @@ func TestEditorGroupWordWrapMaxBytes(t *testing.T) {
 	if g.ActiveFileWordWrap() {
 		t.Errorf("with WordWrap = false, small file ActiveFileWordWrap() = true, want false")
 	}
+
+	// 6. Saving a file that grows past the limit disables wrap immediately.
+	g.WordWrap = true
+	g.WordWrapMaxBytes = 10
+	g.syncTabs()
+	if !g.Editor.WordWrap {
+		t.Fatalf("expected small file to have WordWrap = true")
+	}
+	g.Editor.Buf.Lines = []string{"01234567890123456789"}
+	if !g.Save() {
+		t.Fatalf("Save() failed")
+	}
+	if g.Editor.WordWrap {
+		t.Errorf("after saving large content: WordWrap = true, want false")
+	}
 }
