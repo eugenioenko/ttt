@@ -36,6 +36,9 @@ jobs:
           CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ttt-darwin-arm64  ./cmd/ttt
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ttt-windows-amd64.exe ./cmd/ttt
 
+      - name: Checksums
+        run: sha256sum ttt-linux-amd64 ttt-linux-arm64 ttt-darwin-amd64 ttt-darwin-arm64 ttt-windows-amd64.exe > checksums.txt
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -46,3 +49,4 @@ jobs:
             ttt-darwin-amd64
             ttt-darwin-arm64
             ttt-windows-amd64.exe
+            checksums.txt
