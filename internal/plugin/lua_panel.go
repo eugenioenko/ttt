@@ -463,7 +463,8 @@ func panelInputWidget(L *lua.LState) int {
 	tbl := L.CheckTable(2)
 	desc := WidgetDesc{}
 
-	if v := L.GetField(tbl, "value"); v != lua.LNil {
+	switch v := L.GetField(tbl, "value").(type) {
+	case lua.LString, lua.LNumber:
 		value := lua.LVAsString(v)
 		desc.InputValue = &value
 	}

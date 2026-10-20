@@ -52,3 +52,36 @@ end}})
 		t.Fatal("omitted value cleared an uncontrolled input")
 	}
 }
+
+func TestControlledInputIgnoresUnsupportedValueTypes(t *testing.T) {
+	p, cleanup := newTestPluginBase(PermissionSet{PanelSidebar: true})
+	defer cleanup()
+	if err := p.State.DoString(`
+local ttt=require("ttt")
+value=true
+ttt.register({sidebar={title="Input",render=function(panel) panel:input({value=value}) end}})
+`); err != nil {
+		t.Fatal(err)
+	}
+	input := createInputWidget(WidgetDesc{}, p)
+	input.SetText("preserve this")
+	for _, value := range []string{"true", "{}", "function() end", "nil", "42", "\"\""} {
+		if err := p.State.DoString("value=" + value); err != nil {
+			t.Fatal(err)
+		}
+		proxy := NewPanelProxy(newMockSurface(40, 10), p)
+		if err := p.CallRenderWith(p.RenderFunc, proxy); err != nil {
+			t.Fatal(err)
+		}
+		updateWidget(input, proxy.Descriptors()[0], p)
+		want := "preserve this"
+		if value == "42" {
+			want = "42"
+		} else if value == "\"\"" {
+			want = ""
+		}
+		if input.Text() != want {
+			t.Fatalf("value=%s: text=%q, want %q", value, input.Text(), want)
+		}
+	}
+}
