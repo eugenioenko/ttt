@@ -1470,6 +1470,7 @@ panel:markdown({ text = readme_content, margin_top = 1 })
 | Field  | Type   | Required | Description               |
 |--------|--------|----------|---------------------------|
 | `text` | string | yes      | Markdown source to render. |
+| `full_width_dividers` | boolean | no | Extend horizontal rules through the widget’s left/right padding. Default `false`. |
 | `follow` | boolean | no     | Keep the end of the text in view as it grows, as in a log or chat. Scrolling up stops following until the user scrolls back to the end. |
 | `wrap_width` | number | no | Maximum column width for prose wrapping (positive integer). Overrides the global `markdown.wrapWidth` setting for this widget only. If omitted, uses the global setting. |
 | + [box model fields](#box-model) | | | Margin and padding. |

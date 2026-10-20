@@ -11,12 +11,13 @@ import (
 
 type MarkdownWidget struct {
 	BaseWidget
-	MaxWidth  int
-	FillStyle term.Style
-	rawText   string
-	lines     []markdown.Line
-	wrapWidth int
-	wrapped   []markdown.Line
+	MaxWidth          int
+	FillStyle         term.Style
+	FullWidthDividers bool
+	rawText           string
+	lines             []markdown.Line
+	wrapWidth         int
+	wrapped           []markdown.Line
 
 	sel      selection.Selection
 	selEnd   selection.Position
@@ -128,6 +129,7 @@ func (m *MarkdownWidget) ContentSize(width int) (maxLineW, lineCount int) {
 }
 
 func (m *MarkdownWidget) Render(surface Surface) {
+	outer := surface
 	surface = m.RenderBox(surface)
 	w, h := surface.Size()
 	if w <= 0 || h <= 0 {
@@ -145,7 +147,17 @@ func (m *MarkdownWidget) Render(surface Surface) {
 	for y := 0; y < h && y < len(m.wrapped); y++ {
 		line := m.wrapped[y]
 		if line.Kind == markdown.KindDivider {
-
+			if m.FullWidthDividers {
+				outerW, _ := outer.Size()
+				dividerY := y + m.Box.MarginTop + m.Box.PaddingTop
+				if m.Box.BorderTop {
+					dividerY++
+				}
+				for x := m.Box.MarginLeft; x < outerW-m.Box.MarginRight; x++ {
+					outer.SetCell(x, dividerY, term.Cell{Ch: '─', Style: term.StyleBorder})
+				}
+				continue
+			}
 			for x := 0; x < w; x++ {
 				surface.SetCell(x, y, term.Cell{Ch: '─', Style: term.StyleBorder})
 			}

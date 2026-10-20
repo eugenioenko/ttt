@@ -827,6 +827,7 @@ func panelMarkdownWidget(L *lua.LState) int {
 			}
 			desc.WrapWidth = int(num)
 		}
+		desc.FullWidthDividers = lua.LVAsBool(L.GetField(v, "full_width_dividers"))
 		parseBoxModel(L, v, &desc)
 	}
 	proxy.appendDesc(WidgetMarkdown, desc)

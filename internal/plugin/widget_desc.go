@@ -142,7 +142,8 @@ type WidgetDesc struct {
 	OnSelectIndex func(int)
 	OnCommandStr  func(command string, rowIndex int)
 
-	MarkdownContent string
-	Follow          bool
-	WrapWidth       int
+	FullWidthDividers bool
+	MarkdownContent   string
+	Follow            bool
+	WrapWidth         int
 }

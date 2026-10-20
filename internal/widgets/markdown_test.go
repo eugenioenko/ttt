@@ -217,3 +217,29 @@ func TestMarkdownWideRenderingAndMouseSelection(t *testing.T) {
 		t.Fatal("wide rune must not straddle the clipping boundary")
 	}
 }
+
+func TestMarkdownFullWidthDividerPreservesContentPadding(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.FullWidthDividers = true
+	m.Box.PaddingLeft, m.Box.PaddingRight = 1, 1
+	m.SetContent("text\n\n---\n\ntext")
+	sv := NewScrollViewWidget(m)
+	m.SetScrollParent(sv)
+	s := renderWidget(sv, 0, 0, 20, 8)
+	for y, line := range m.wrapped {
+		if line.Kind == markdown.KindDivider {
+			for x := range sv.lastViewW {
+				if s.cells[y][x].Ch != '─' {
+					t.Fatalf("divider did not extend through padding at x=%d", x)
+				}
+			}
+		}
+	}
+	if s.cells[0][0].Ch != ' ' || s.cells[0][1].Ch != 't' {
+		t.Fatal("paragraph lost its left padding")
+	}
+	pos := m.mouseToContent(1, 0)
+	if pos.Line != 0 || pos.Col != 0 {
+		t.Fatalf("padded text hit = %+v, want first character", pos)
+	}
+}

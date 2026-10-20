@@ -239,6 +239,8 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 					maxWidth = desc.WrapWidth
 				}
 				md.SetMaxWidth(maxWidth)
+				md.FullWidthDividers = desc.FullWidthDividers
+				md.FullWidthDividers = desc.FullWidthDividers
 				md.SetContent(desc.MarkdownContent)
 			}
 			sv.Follow = desc.Follow
