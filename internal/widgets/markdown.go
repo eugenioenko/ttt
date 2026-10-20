@@ -153,7 +153,14 @@ func (m *MarkdownWidget) Render(surface Surface) {
 				if m.Box.BorderTop {
 					dividerY++
 				}
-				for x := m.Box.MarginLeft; x < outerW-m.Box.MarginRight; x++ {
+				startX, endX := m.Box.MarginLeft, outerW-m.Box.MarginRight
+				if m.Box.BorderLeft {
+					startX++
+				}
+				if m.Box.BorderRight {
+					endX--
+				}
+				for x := startX; x < endX; x++ {
 					outer.SetCell(x, dividerY, term.Cell{Ch: '─', Style: term.StyleBorder})
 				}
 				continue

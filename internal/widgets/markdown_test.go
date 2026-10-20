@@ -243,3 +243,42 @@ func TestMarkdownFullWidthDividerPreservesContentPadding(t *testing.T) {
 		t.Fatalf("padded text hit = %+v, want first character", pos)
 	}
 }
+
+func TestMarkdownFullWidthDividerPreservesBordersAndMargins(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		left, right bool
+	}{{"left", true, false}, {"right", false, true}, {"both", true, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewMarkdownWidget()
+			m.FullWidthDividers = true
+			m.Box = BoxModel{
+				BorderTop: true, BorderLeft: tc.left, BorderRight: tc.right,
+				MarginLeft: 1, MarginRight: 2, MarginTop: 1,
+				PaddingLeft: 2, PaddingRight: 1, PaddingTop: 1,
+				Borders: term.RoundedBorderSet(),
+			}
+			m.SetContent("text\n\n---\n\ntext")
+			s := renderWidget(m, 0, 0, 24, 10)
+			for row, line := range m.wrapped {
+				if line.Kind != markdown.KindDivider {
+					continue
+				}
+				y := row + 3
+				for x := range 24 {
+					want := '─'
+					if x < 1 || x >= 22 {
+						want = 0
+					} else if (x == 1 && tc.left) || (x == 21 && tc.right) {
+						want = '│'
+					}
+					if got := s.cells[y][x].Ch; got != want {
+						t.Fatalf("divider cell (%d,%d) = %q, want %q", x, y, got, want)
+					}
+				}
+				return
+			}
+			t.Fatal("divider not rendered")
+		})
+	}
+}
