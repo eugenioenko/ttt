@@ -53,6 +53,7 @@ type DiffEditorWidget struct {
 	scrollMarks     bool
 	legacyGlyphs    bool
 	hoveredGap      int
+	focusedGap      *int
 	minGutter       int
 
 	OnFetchExtended func(dv *DiffEditorWidget)
@@ -455,6 +456,7 @@ func (d *DiffEditorWidget) applyOverlayOptions() {
 			o.EmphasizeGaps = d.emphasizeGaps
 			o.ScrollMarks = d.scrollMarks
 			o.HoveredGap = d.hoveredGap
+			o.focusedGap = d.focusedGap
 			o.MinGutter = d.minGutter
 		}
 	}

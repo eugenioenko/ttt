@@ -158,32 +158,6 @@ func (d *CommitDetailWidget) activateDisclosure(control detailDisclosure) {
 	}
 }
 
-func (d *CommitDetailWidget) renderDisclosureFocus(surface Surface) {
-	if !d.focused || !d.keyboardDisclosure {
-		return
-	}
-	controls := d.disclosureRows()
-	d.reconcileDisclosure(controls)
-	if !d.focused || !d.keyboardDisclosure {
-		return
-	}
-	x, y := 0, -1
-	for _, c := range controls {
-		if c.id == d.selectedDisclosure {
-			y = c.row - d.TopLine
-			break
-		}
-	}
-	r := d.GetRect()
-	if d.selectedDisclosure.file == "" {
-		if d.topControl.W > 0 {
-			x = d.topControl.X - r.X - 1
-		}
-	} else if d.selectedDisclosure.gap < 0 && d.stickyControl.fileIndex >= 0 &&
-		d.disclosure(d.stickyControl.fileIndex, -1) == d.selectedDisclosure {
-		y = d.stickyControl.rect.Y - r.Y
-	}
-	if y >= 0 && y < d.viewH {
-		surface.SetCell(x, y, term.Cell{Ch: '>', Style: term.StyleButtonFocused, Bold: true})
-	}
+func (d *CommitDetailWidget) disclosureFocused(fileIndex, gap int) bool {
+	return d.focused && d.keyboardDisclosure && d.selectedDisclosure == d.disclosure(fileIndex, gap)
 }

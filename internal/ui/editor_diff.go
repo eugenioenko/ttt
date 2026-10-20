@@ -33,6 +33,7 @@ type DiffOverlay struct {
 	Labels map[int]string
 
 	HoveredGap      int
+	focusedGap      *int
 	HighContrast    bool
 	EmphasizeGaps   bool
 	ScrollMarks     bool
@@ -352,6 +353,21 @@ func (o *DiffOverlay) gapHovered(line int) bool {
 	return ok && gap == o.HoveredGap
 }
 
+func (o *DiffOverlay) gapFocused(line int) bool {
+	if o == nil || o.focusedGap == nil {
+		return false
+	}
+	gap, ok := o.Gaps[line]
+	return ok && gap == *o.focusedGap
+}
+
+func (o *DiffOverlay) gapStyle(line int) term.Style {
+	if o.gapFocused(line) {
+		return term.StyleSidebarSelected
+	}
+	return collapsedDiffRowStyle(diff.Collapsed, o.EmphasizeGaps, o.gapHovered(line))
+}
+
 func (o *DiffOverlay) deletedLine(row editorRow) (diff.SideLine, bool) {
 	if o == nil {
 		return diff.SideLine{}, false
@@ -398,7 +414,7 @@ func (e *EditorPaneWidget) diffLineFg(line int) (style term.Style, override, ful
 	o := e.DiffOverlay
 	kind := o.kind(line)
 	if kind == diff.Collapsed {
-		row := collapsedDiffRowStyle(kind, o.EmphasizeGaps, o.gapHovered(line))
+		row := o.gapStyle(line)
 		if row != term.StyleDefault {
 			return row, true, true
 		}
@@ -416,7 +432,11 @@ func (e *EditorPaneWidget) renderDiffGutterRow(surface Surface, y, gutterW, line
 	if !continuation && line < len(e.Buf.Lines) {
 		side = diff.SideLine{Num: o.num(line), Kind: o.kind(line)}
 	}
-	look := o.gutterLook(side.Kind, term.StyleLineNumber, collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line)))
+	collapsed := collapsedDiffGutterStyle(side.Kind, o.EmphasizeGaps, o.gapHovered(line))
+	if side.Kind == diff.Collapsed && o.gapFocused(line) {
+		collapsed = term.StyleSidebarSelected
+	}
+	look := o.gutterLook(side.Kind, term.StyleLineNumber, collapsed)
 	renderDiffGutterWithSigns(surface, 0, y, gutterW, side.Num, look, e.diffMarkCol(gutterW, side.Kind) >= 0)
 }
 
@@ -559,7 +579,7 @@ func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
 	case diff.Deleted:
 		return term.StyleDiffDeleted
 	case diff.Collapsed:
-		return collapsedDiffRowStyle(diff.Collapsed, e.DiffOverlay.EmphasizeGaps, e.DiffOverlay.gapHovered(line))
+		return e.DiffOverlay.gapStyle(line)
 	}
 	if e.DiffOverlay != nil {
 		return e.DiffOverlay.LineBg[line]
@@ -570,9 +590,12 @@ func (e *EditorPaneWidget) diffLineBg(line int) term.Style {
 func (e *EditorPaneWidget) renderGapRow(surface Surface, y, gutterW, editorW, line int, label string) {
 	o := e.DiffOverlay
 	hovered := o.gapHovered(line)
-	rowStyle := collapsedDiffRowStyle(diff.Collapsed, o.EmphasizeGaps, hovered)
+	rowStyle := o.gapStyle(line)
 	if gutterW > 0 {
 		gutterStyle := collapsedDiffGutterStyle(diff.Collapsed, o.EmphasizeGaps, hovered)
+		if o.gapFocused(line) {
+			gutterStyle = rowStyle
+		}
 		cell := term.Cell{Ch: ' ', Style: term.StyleLineNumber}
 		if gutterStyle != term.StyleDefault {
 			cell.Style = gutterStyle

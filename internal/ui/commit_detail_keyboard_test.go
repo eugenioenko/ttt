@@ -28,14 +28,9 @@ func TestCommitDetailKeyboardDisclosures(t *testing.T) {
 				render()
 				press(tcell.KeyTab, "")
 				grid := render()
-				marked := false
-				for _, row := range grid {
-					for _, cell := range row {
-						marked = marked || cell.Ch == '>' && cell.Style == term.StyleButtonFocused
-					}
-				}
-				if !marked {
-					t.Fatal("keyboard selection has no visible marker")
+				x, y, ok := detailFind(grid, "Collapse all")
+				if !ok || grid[y][x].BgStyle != term.StyleSidebarSelected {
+					t.Fatal("focused Collapse all is not highlighted")
 				}
 				press(tcell.KeyEnter, "")
 				if !d.allFilesCollapsed() {
@@ -43,6 +38,11 @@ func TestCommitDetailKeyboardDisclosures(t *testing.T) {
 				}
 				press(tcell.KeyRune, " ")
 				press(tcell.KeyTab, "")
+				grid = render()
+				x, y, ok = detailFind(grid, d.Files[0].Path)
+				if !ok || grid[y][x].BgStyle != term.StyleSidebarSelected {
+					t.Fatal("focused file heading is not highlighted")
+				}
 				press(tcell.KeyEnter, "")
 				if !d.collapsedFiles[0] {
 					t.Fatal("file heading did not collapse")
@@ -51,6 +51,18 @@ func TestCommitDetailKeyboardDisclosures(t *testing.T) {
 				press(tcell.KeyTab, "")
 				if d.selectedDisclosure.gap < 0 {
 					t.Fatal("Tab skipped the context gap")
+				}
+				grid = render()
+				x, y, ok = detailFind(grid, "⋯")
+				if !ok || grid[y][x].BgStyle != term.StyleSidebarSelected {
+					t.Fatal("focused context gap is not highlighted")
+				}
+				press(tcell.KeyEscape, "")
+				if grid = render(); grid[y][x].BgStyle == term.StyleSidebarSelected {
+					t.Fatal("Escape left the context gap highlighted")
+				}
+				for range 3 {
+					press(tcell.KeyTab, "")
 				}
 				requested := false
 				d.OnFetchContext = func(index int, file CommitDetailFile) { requested = index == 0 }
@@ -110,8 +122,8 @@ func TestCommitDetailKeyboardWrapAndRefreshIdentity(t *testing.T) {
 	grid := renderDetail(d, 60, 10)
 	for _, row := range grid {
 		for _, c := range row {
-			if c.Ch == '>' && c.Style == term.StyleButtonFocused {
-				t.Fatal("blurred detail retained focus marker")
+			if c.BgStyle == term.StyleSidebarSelected || c.Style == term.StyleSidebarSelected {
+				t.Fatal("blurred detail retained focus highlight")
 			}
 		}
 	}
@@ -142,7 +154,7 @@ func TestCommitDetailKeyboardPreservesCopyAndStickyHeading(t *testing.T) {
 		}
 	}
 	grid = renderDetail(d, 60, 2)
-	if d.stickyControl.fileIndex != 0 || grid[0][0].Ch != '>' || grid[0][0].Style != term.StyleButtonFocused {
+	if d.stickyControl.fileIndex != 0 || grid[0][0].Ch != ' ' || grid[0][0].Style != term.StyleSidebarSelected {
 		t.Fatalf("sticky=%+v selected=%+v keyboard=%v top=%d grid:\n%s", d.stickyControl, d.selectedDisclosure, d.keyboardDisclosure, d.TopLine, detailTestText(grid))
 	}
 }

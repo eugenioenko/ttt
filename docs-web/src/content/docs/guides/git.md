@@ -62,7 +62,7 @@ Set global defaults for layout, context, line wrapping, and high contrast from t
 
 Commit History initially shows the 10 most recent commits. Activate **Load older commits…** to append the next bounded page; selecting or scrolling to that row does not load anything by itself.
 
-In commit details and **Git: Open Current Changes**, use **Tab** and **Shift+Tab** to select **Collapse all / Expand all**, file headings, and collapsed context gaps. A `>` marks the selected control; **Enter** or **Space** activates it. Arrow keys and Page Up/Down still scroll, and selecting a control keeps your text selection available for copying. **Escape** clears the control selection. When an expanded gap disappears, selection returns to its file heading.
+In commit details and **Git: Open Current Changes**, use **Tab** and **Shift+Tab** to select **Collapse all / Expand all**, file headings, and collapsed context gaps. The selected control is highlighted while the view has focus; **Enter** or **Space** activates it. Arrow keys and Page Up/Down still scroll, and selecting a control keeps your text selection available for copying. **Escape** clears the control selection. When an expanded gap disappears, selection returns to its file heading.
 
 Untracked files open directly in the editor instead of showing a diff.
 
