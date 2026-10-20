@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"regexp"
+	"regexp/syntax"
 	"unicode/utf8"
 
 	lua "github.com/yuin/gopher-lua"
@@ -25,10 +26,12 @@ func setupRegexModule(L *lua.LState) {
 }
 
 // luaRegex is the value behind a compiled regex. after is the pattern with
-// one character in front, for findFrom.
+// one character in front, for findFrom. contextual is set when the pattern
+// has an anchor or word boundary, which depends on the text before the match.
 type luaRegex struct {
-	re    *regexp.Regexp
-	after *regexp.Regexp
+	re         *regexp.Regexp
+	after      *regexp.Regexp
+	contextual bool
 }
 
 func regexCompile(L *lua.LState) int {
@@ -48,8 +51,14 @@ func regexCompile(L *lua.LState) int {
 		L.Push(lua.LString(err.Error()))
 		return 2
 	}
+	parsed, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
 	ud := L.NewUserData()
-	ud.Value = &luaRegex{re: re, after: after}
+	ud.Value = &luaRegex{re: re, after: after, contextual: hasContextOp(parsed)}
 	L.SetMetatable(ud, L.GetTypeMetatable(regexTypeName))
 	L.Push(ud)
 	return 1
@@ -92,7 +101,9 @@ func regexFind(L *lua.LState) int {
 
 // findFrom returns the first match that starts at or after byte offset start.
 // It matches from the character before start, so that ^, \b and \B see it,
-// unless start is the beginning of text or inside a character.
+// unless start is the beginning of text or inside a character. Inside a
+// character, a contextual pattern has no match, because the context it
+// depends on is gone; other patterns keep matching from the raw offset.
 func (r *luaRegex) findFrom(text string, start int) []int {
 	if start > 0 {
 		_, w := utf8.DecodeLastRuneInString(text[:start])
@@ -105,8 +116,24 @@ func (r *luaRegex) findFrom(text string, start int) []int {
 			}
 			return loc
 		}
+		if r.contextual {
+			return nil
+		}
 	}
 	return shiftedMatch(r.re, text, start)
+}
+
+func hasContextOp(re *syntax.Regexp) bool {
+	switch re.Op {
+	case syntax.OpBeginLine, syntax.OpBeginText, syntax.OpWordBoundary, syntax.OpNoWordBoundary:
+		return true
+	}
+	for _, sub := range re.Sub {
+		if hasContextOp(sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // shiftedMatch matches re against text[start:] and returns offsets into text.

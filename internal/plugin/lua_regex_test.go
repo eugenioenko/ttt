@@ -208,3 +208,30 @@ func TestRegexModuleLoadsInPlugins(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// An inside-character offset has no context before it that anchors and word
+// boundaries can see, so those patterns must not match there. Unanchored
+// patterns keep matching from the raw byte offset.
+func TestRegexFindInsideCharacterAnchorsDoNotMatch(t *testing.T) {
+	tests := []struct {
+		pattern, text string
+		init          int
+		want          string
+	}{
+		{`^.`, "é", 2, "nil nil"},
+		{`^.`, "€x", 3, "nil nil"},
+		{`\A.`, "é", 2, "nil nil"},
+		{`\b.`, "é", 2, "nil nil"},
+		{`.`, "€", 2, "2 2"},
+	}
+	for _, tt := range tests {
+		got := runRegexScript(t, `
+			local re = regex.compile("`+tt.pattern+`")
+			local s, e = re:find("`+tt.text+`", `+strconv.Itoa(tt.init)+`)
+			result = tostring(s) .. " " .. tostring(e)
+		`)
+		if got != tt.want {
+			t.Errorf("%s in %q from %d: got %q, want %q", tt.pattern, tt.text, tt.init, got, tt.want)
+		}
+	}
+}
