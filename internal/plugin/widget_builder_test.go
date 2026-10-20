@@ -355,3 +355,22 @@ func assertMenuEntryChecked(t *testing.T, surface string, entry widgets.MenuEntr
 		t.Errorf("%s checked = %v, want %v", surface, entry.Checked, *want)
 	}
 }
+
+func TestReconcileMarkdownFullWidthDividers(t *testing.T) {
+	ws := NewWidgetState()
+	p := &Plugin{Name: "test", State: lua.NewState()}
+	defer p.State.Close()
+	var previous *widgets.MarkdownWidget
+	for _, enabled := range []bool{true, false, true} {
+		ws.Reconcile([]WidgetDesc{{Kind: WidgetMarkdown, Key: "markdown:0", MarkdownContent: "---", FullWidthDividers: enabled}}, p)
+		sv := ws.items[0].(*widgets.ScrollViewWidget)
+		md := sv.Child.(*widgets.MarkdownWidget)
+		if md.FullWidthDividers != enabled {
+			t.Fatalf("full-width dividers = %v, want %v", md.FullWidthDividers, enabled)
+		}
+		if previous != nil && previous != md {
+			t.Fatal("reconciliation replaced the Markdown widget")
+		}
+		previous = md
+	}
+}
