@@ -53,7 +53,7 @@ func (a *App) wirePluginChanges(p *plugin.Plugin) {
 			}
 			files = append(files, file)
 		}
-		id := "plugin:" + p.Name + ":changes:" + opts.ID
+		id := "plugin:" + strconv.Quote(p.Name) + ":changes:" + strconv.Quote(opts.ID)
 		detail := a.EditorGroup.CommitDetailWidgetByTab(id)
 		if detail == nil {
 			detail = ui.NewCommitDetailWidget("", "", "", a.EditorGroup.SyntaxHighlight)

@@ -148,8 +148,9 @@ func SplitMultiFileDiff(unified string) map[string]string {
 	var currentFile string
 	var currentLines []string
 	inHeader := false
+	hasStructure := false
 	flush := func() {
-		if currentFile != "" && len(currentLines) > 0 {
+		if currentFile != "" && hasStructure {
 			result[currentFile] = strings.Join(currentLines, "\n")
 		}
 	}
@@ -159,14 +160,26 @@ func SplitMultiFileDiff(unified string) map[string]string {
 			currentFile = diffDestinationPath(strings.TrimPrefix(line, "diff --git "))
 			currentLines = []string{line}
 			inHeader = true
+			hasStructure = false
 			continue
 		}
 		currentLines = append(currentLines, line)
-		if strings.HasPrefix(line, "@@") || line == "GIT binary patch" {
+		if strings.HasPrefix(line, "@@ ") || line == "GIT binary patch" {
+			hasStructure = true
 			inHeader = false
 		}
 		if !inHeader {
 			continue
+		}
+		for _, prefix := range []string{
+			"index ", "old mode ", "new mode ", "new file mode ", "deleted file mode ",
+			"similarity index ", "dissimilarity index ", "rename from ", "rename to ",
+			"copy from ", "copy to ", "Binary files ",
+		} {
+			if strings.HasPrefix(line, prefix) {
+				hasStructure = true
+				break
+			}
 		}
 		for _, prefix := range []string{"rename to ", "copy to ", "+++ ", "--- "} {
 			if !strings.HasPrefix(line, prefix) {

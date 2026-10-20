@@ -34,8 +34,10 @@ diff --git a/second.go b/second.go
 	if _, err := p.OpenChanges(opts); err != nil || a.EditorGroup.TabCount() != tabs {
 		t.Fatal("reopening the same changes duplicated the tab")
 	}
-	if _, err := p.OpenChanges(plugin.ChangesOptions{Diff: "invalid"}); err == nil {
-		t.Fatal("invalid diff was accepted")
+	for _, invalid := range []string{"invalid", "diff --git a/a b/a", "diff --git a/a b/a\n--- a/a\n+++ b/a"} {
+		if _, err := p.OpenChanges(plugin.ChangesOptions{Diff: invalid}); err == nil {
+			t.Fatalf("invalid diff was accepted: %q", invalid)
+		}
 	}
 	a.ShowConfirmDialog("Keep focus", []string{"Close"}, []func(){a.DismissDialog})
 	focused := a.Root.Focused
@@ -55,5 +57,33 @@ func TestPluginChangesPreservesRenamePaths(t *testing.T) {
 	files := a.EditorGroup.CommitDetailWidgetByTab(id).Files
 	if len(files) != 1 || files[0].Path != "new name.txt" || files[0].OldPath != "old\tname.txt" || files[0].Status != "R" {
 		t.Fatalf("files=%+v", files)
+	}
+}
+
+func TestPluginChangesIDsDoNotCollide(t *testing.T) {
+	a := prepareListenTestApp(t)
+	first := &plugin.Plugin{Name: "a"}
+	second := &plugin.Plugin{Name: "a:changes:b"}
+	a.wirePluginChanges(first)
+	a.wirePluginChanges(second)
+	opts := plugin.ChangesOptions{ID: "b:changes:c", Title: "First", Diff: "diff --git a/a b/a\n@@ -1 +1 @@\n-old\n+new"}
+	firstID, err := first.OpenChanges(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts.ID, opts.Title = "c", "Second"
+	secondID, err := second.OpenChanges(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstID == secondID {
+		t.Fatal("distinct plugins and requests shared a tab ID")
+	}
+	if a.EditorGroup.CommitDetailWidgetByTab(firstID).Header != "First" || a.EditorGroup.CommitDetailWidgetByTab(secondID).Header != "Second" {
+		t.Fatal("opening a second plugin's changes replaced the first tab")
+	}
+	tabs := a.EditorGroup.TabCount()
+	if id, err := second.OpenChanges(opts); err != nil || id != secondID || a.EditorGroup.TabCount() != tabs {
+		t.Fatal("reopening the same request did not reuse its tab")
 	}
 }

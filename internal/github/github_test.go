@@ -76,10 +76,14 @@ func TestSplitMultiFileDiffGitPaths(t *testing.T) {
 		{"quoted unicode", `"a/\347\225\214.txt" "b/\347\225\214.txt"`, "", "界.txt"},
 		{"rename", "a/old name.txt b/new b/name.txt", "rename from old name.txt\nrename to new b/name.txt", "new b/name.txt"},
 		{"quoted rename", `a/old.txt "b/new\tname.txt"`, "rename from old.txt\nrename to \"new\\tname.txt\"", "new\tname.txt"},
-		{"deletion", "a/my file.txt b/my file.txt", "--- a/my file.txt\t\n+++ /dev/null", "my file.txt"},
+		{"deletion", "a/my file.txt b/my file.txt", "deleted file mode 100644\n--- a/my file.txt\t\n+++ /dev/null", "my file.txt"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			text := "diff --git " + tc.header + "\n" + tc.extra
+			extra := tc.extra
+			if extra == "" {
+				extra = "@@ -1 +1 @@\n-old\n+new"
+			}
+			text := "diff --git " + tc.header + "\n" + extra
 			files := SplitMultiFileDiff(text)
 			if len(files) != 1 || files[tc.want] != text {
 				t.Fatalf("split=%v, want path %q", files, tc.want)
@@ -89,9 +93,43 @@ func TestSplitMultiFileDiffGitPaths(t *testing.T) {
 }
 
 func TestSplitMultiFileDiffMalformedHeaderDoesNotOverwritePreviousFile(t *testing.T) {
-	text := "diff --git a/valid.txt b/valid.txt\n-old\n+new\ndiff --git invalid\nignored"
+	text := "diff --git a/valid.txt b/valid.txt\n@@ -1 +1 @@\n-old\n+new\ndiff --git invalid\nignored"
 	files := SplitMultiFileDiff(text)
-	if len(files) != 1 || files["valid.txt"] != "diff --git a/valid.txt b/valid.txt\n-old\n+new" {
+	if len(files) != 1 || files["valid.txt"] != "diff --git a/valid.txt b/valid.txt\n@@ -1 +1 @@\n-old\n+new" {
 		t.Fatalf("split = %#v", files)
+	}
+}
+
+func TestSplitMultiFileDiffSkipsIncompleteBlocks(t *testing.T) {
+	valid := "diff --git a/valid.txt b/valid.txt\n@@ -1 +1 @@\n-old\n+new"
+	for _, malformed := range []string{
+		"diff --git a/other.txt b/other.txt",
+		"diff --git a/other.txt b/other.txt\n+++ b/valid.txt\nignored",
+	} {
+		files := SplitMultiFileDiff(valid + "\n" + malformed)
+		if len(files) != 1 || files["valid.txt"] != valid {
+			t.Fatalf("incomplete block replaced a valid file: %#v", files)
+		}
+		if files := SplitMultiFileDiff(malformed); len(files) != 0 {
+			t.Fatalf("incomplete block was accepted: %#v", files)
+		}
+	}
+}
+
+func TestSplitMultiFileDiffKeepsMetadataOnlyChanges(t *testing.T) {
+	for _, metadata := range []string{
+		"old mode 100644\nnew mode 100755",
+		"new file mode 100644\nindex 0000000..e69de29",
+		"deleted file mode 100644\nindex e69de29..0000000",
+		"similarity index 100%\nrename from old.txt\nrename to file.txt",
+		"similarity index 100%\ncopy from old.txt\ncopy to file.txt",
+		"Binary files a/file.txt and b/file.txt differ",
+		"GIT binary patch\nliteral 1\nIc${MZ000310RR91",
+	} {
+		text := "diff --git a/file.txt b/file.txt\n" + metadata
+		files := SplitMultiFileDiff(text)
+		if len(files) != 1 || files["file.txt"] != text {
+			t.Fatalf("metadata-only change was lost: %#v", files)
+		}
 	}
 }
