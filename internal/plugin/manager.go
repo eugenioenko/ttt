@@ -73,7 +73,19 @@ func isLinkedDir(path, pluginDir string) bool {
 	if err != nil {
 		realDir = pluginDir
 	}
-	rel, err := filepath.Rel(realDir, real)
+	// Resolve both sides to absolute paths. EvalSymlinks keeps a relative path
+	// relative unless a symlink target is absolute, and filepath.Rel rejects a
+	// relative/absolute mix, which would read as an external target and admit
+	// an internal link.
+	realAbs, err := filepath.Abs(real)
+	if err != nil {
+		return true
+	}
+	realDirAbs, err := filepath.Abs(realDir)
+	if err != nil {
+		return true
+	}
+	rel, err := filepath.Rel(realDirAbs, realAbs)
 	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 

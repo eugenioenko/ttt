@@ -967,6 +967,9 @@ func TestLoadAllSkipsSymlinkInsidePluginsDir(t *testing.T) {
 	if pending[0].Name != "real" {
 		t.Fatalf("pending[0].Name = %q, want the real directory", pending[0].Name)
 	}
+	if pending[0].Dir != filepath.Join(pluginsDir, "real") {
+		t.Fatalf("pending[0].Dir = %q, want the real directory", pending[0].Dir)
+	}
 }
 
 // A symlink to a regular file keeps the pre-existing behavior: only
