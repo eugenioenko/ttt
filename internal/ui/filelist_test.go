@@ -40,6 +40,37 @@ func TestListDirFilesCollectsFiles(t *testing.T) {
 	}
 }
 
+func TestListDirFilesIncludesHiddenFiles(t *testing.T) {
+	dir := t.TempDir()
+	hidden := filepath.Join(dir, ".config", "fish")
+	os.MkdirAll(hidden, 0o755)
+	os.WriteFile(filepath.Join(hidden, "config.fish"), []byte(""), 0o644)
+	gitDir := filepath.Join(dir, ".git")
+	os.MkdirAll(gitDir, 0o755)
+	os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0o644)
+
+	files := listDirFiles(dir, "")
+
+	rels := make([]string, len(files))
+	for i, f := range files {
+		rels[i] = f.Rel
+	}
+
+	want := filepath.Join(".config", "fish", "config.fish")
+	found := false
+	for _, r := range rels {
+		if r == want {
+			found = true
+		}
+		if strings.HasPrefix(r, ".git"+string(filepath.Separator)) {
+			t.Fatalf("expected the .git directory to stay out, got %v", rels)
+		}
+	}
+	if !found {
+		t.Fatalf("expected %q in results, got %v", want, rels)
+	}
+}
+
 func TestListFilesWalkDirSkipsDirs(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "app.js"), []byte(""), 0o644)

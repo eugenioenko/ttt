@@ -25,7 +25,10 @@ func listWorkspaceFiles(workDirs []string) []paletteFile {
 
 func listDirFiles(workDir, prefix string) []paletteFile {
 	if _, err := exec.LookPath("rg"); err == nil {
-		if files, ok := listFilesCmdLines(workDir, prefix, "rg", "--files"); ok {
+		// --hidden lists the files under a dot directory, the way the
+		// explorer tree does; without it the palette misses them. The .git
+		// directory stays out, as it does in the walk below.
+		if files, ok := listFilesCmdLines(workDir, prefix, "rg", "--files", "--hidden", "--glob", "!.git"); ok {
 			return files
 		}
 	}
