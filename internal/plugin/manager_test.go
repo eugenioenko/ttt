@@ -616,6 +616,48 @@ func TestManagerAsksAgainForANetworkGrantFromBeforeLocalAccess(t *testing.T) {
 	}
 }
 
+// A denied plugin must not get its old network grant back. The migration
+// clears a grant from before local access was allowed, and the denial has to
+// keep it cleared (#989).
+func TestDenyingALegacyNetworkGrantDoesNotRestoreIt(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "old-listed")
+	manifest := `{"name":"old-listed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"network.http":["api.example.com"]}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// A grant from before the local-access migration: no grants version.
+	registry := `[{"name": "old-listed", "version": "1.0.0", "enabled": true, "permissions": {"network.http": ["api.example.com"]}}]`
+	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, regPath)
+	t.Cleanup(m.Shutdown)
+
+	pending := m.LoadAll()
+	if len(pending) != 1 || pending[0].Name != "old-listed" {
+		t.Fatalf("pending = %v, want the legacy grant to be asked for again", pending)
+	}
+	if err := m.DenyPlugin(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	entry := m.registry.Find("old-listed")
+	if entry == nil {
+		t.Fatal("the denied plugin is missing from the registry")
+	}
+	if entry.Permissions.NetworkHTTP.Enabled() {
+		t.Errorf("the denied plugin kept its network grant: %+v", entry.Permissions.NetworkHTTP)
+	}
+	// A restart must not bring the old grant back either.
+	again := NewManager(pluginsDir, regPath)
+	t.Cleanup(again.Shutdown)
+	again.LoadAll()
+	if entry := again.registry.Find("old-listed"); entry != nil && entry.Permissions.NetworkHTTP.Enabled() {
+		t.Errorf("the old network grant came back after a restart: %+v", entry.Permissions.NetworkHTTP)
+	}
+}
+
 func TestAnAnyDestinationGrantApprovedNowIsNotAskedForAgain(t *testing.T) {
 	pluginsDir := t.TempDir()
 	regPath := filepath.Join(t.TempDir(), "registry.json")
