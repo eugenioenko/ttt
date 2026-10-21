@@ -683,11 +683,13 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 	}
 
 	old := m.plugins[idx]
-	old.Destroy()
+	// Grant before destroying the old plugin: a reduction that cannot be
+	// persisted must leave the running plugin alone.
 	granted, err := m.grant(regEntry, u.manifest.Permissions)
 	if err != nil {
 		return nil, false, err
 	}
+	old.Destroy()
 	p := &Plugin{
 		Name:     old.Name,
 		Dir:      old.Dir,

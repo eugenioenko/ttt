@@ -990,13 +990,20 @@ func TestLoadAllSkipsSymlinkToFile(t *testing.T) {
 }
 
 // makeRegistryUnwritable makes the registry file read-only, so it can still
-// be read but a save fails the way a permission or quota error would.
+// be read but a save fails the way a permission or quota error would. A
+// privileged user can still write such a file, so the write is probed and
+// the test skipped when the filesystem does not enforce it.
 func makeRegistryUnwritable(t *testing.T, path string) {
 	t.Helper()
 	if err := os.Chmod(path, 0444); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(path, 0644) })
+	probe, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err == nil {
+		probe.Close()
+		t.Skip("this filesystem still allows writing a read-only file")
+	}
 }
 
 // A dropped permission is only really dropped once the reduction reaches the
@@ -1136,6 +1143,7 @@ func TestApplyUpdateReportsAFailedPermissionSave(t *testing.T) {
 	if m.FindPlugin("mixed") == nil {
 		t.Fatal("plugin not loaded before the update")
 	}
+	old := m.FindPlugin("mixed")
 
 	// The new manifest drops a permission, so the update has to persist a
 	// reduction that the registry file cannot accept.
@@ -1154,5 +1162,8 @@ func TestApplyUpdateReportsAFailedPermissionSave(t *testing.T) {
 
 	if _, _, err := m.ApplyUpdate(u); err == nil {
 		t.Fatal("ApplyUpdate reported success although the registry could not be saved")
+	}
+	if !old.Loaded() {
+		t.Error("the running plugin was destroyed although the reduction was not persisted")
 	}
 }
