@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -198,6 +199,10 @@ func scanBatch(ctx context.Context, opts Options, paths []string) (map[string][]
 	waitErr := cmd.Wait()
 	if scanErr != nil {
 		return nil, scanErr
+	}
+	var exitErr *exec.ExitError
+	if errors.As(waitErr, &exitErr) && exitErr.ExitCode() == 1 {
+		return matches, nil
 	}
 	return matches, waitErr
 }

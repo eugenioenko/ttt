@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -60,6 +61,77 @@ func TestFindAllMatchesIgnoresColumnCap(t *testing.T) {
 	}
 	if got := len(found[filepath.Clean(path)]); got != 1 {
 		t.Fatalf("matches = %d, want 1 past the column cap", got)
+	}
+}
+
+func TestFindAllMatchesTreatsNoMatchesAsSuccess(t *testing.T) {
+	requireRipgrep(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty.txt")
+	if err := os.WriteFile(path, []byte("nothing here\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := FindAllMatches(context.Background(), Options{Query: "foo"}, []string{path})
+	if err != nil {
+		t.Fatalf("FindAllMatches: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("matches = %v, want none", found)
+	}
+}
+
+func TestFindAllMatchesContinuesAfterEmptyBatch(t *testing.T) {
+	requireRipgrep(t)
+	dir := t.TempDir()
+	matching := filepath.Join(dir, "matching.txt")
+	content := strings.Repeat("foo\n", 150)
+	if err := os.WriteFile(matching, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var paths []string
+	for i := 0; len(batchPaths(append(paths, matching))) == 1; i++ {
+		path := filepath.Join(dir, fmt.Sprintf("no-match-%04d-%064d.txt", i, i))
+		if err := os.WriteFile(path, []byte("nothing here\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, path)
+	}
+
+	paths = append(paths, matching)
+	if got := len(batchPaths(paths)); got != 2 {
+		t.Fatalf("batches = %d, want 2", got)
+	}
+
+	found, err := FindAllMatches(context.Background(), Options{Query: "foo"}, paths)
+	if err != nil {
+		t.Fatalf("FindAllMatches: %v", err)
+	}
+	if got := len(found[filepath.Clean(matching)]); got != 150 {
+		t.Fatalf("matches = %d, want 150 after the empty batch", got)
+	}
+}
+
+func TestScanBatchPreservesRipgrepErrorsWithPartialMatches(t *testing.T) {
+	requireRipgrep(t)
+	dir := t.TempDir()
+	matching := filepath.Join(dir, "matching.txt")
+	if err := os.WriteFile(matching, []byte("foo\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "missing.txt")
+
+	found, err := scanBatch(
+		context.Background(),
+		Options{Query: "foo"},
+		[]string{matching, missing},
+	)
+	if err == nil {
+		t.Fatal("scanBatch error = nil, want ripgrep status 2")
+	}
+	if got := len(found[filepath.Clean(matching)]); got != 1 {
+		t.Fatalf("partial matches = %d, want 1", got)
 	}
 }
 
