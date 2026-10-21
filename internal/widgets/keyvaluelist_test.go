@@ -116,7 +116,6 @@ func TestKeyValueListHandleEventIgnored(t *testing.T) {
 	}
 }
 
-
 // A fullwidth key covers two columns, so measuring the key column in runes
 // misaligns it and cuts the key off (#1067).
 func TestKeyValueListRendersFullwidthKeys(t *testing.T) {
