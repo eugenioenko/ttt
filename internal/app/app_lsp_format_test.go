@@ -80,7 +80,7 @@ func TestFormattingResultForAChangedBufferIsDropped(t *testing.T) {
 		Edits:   formattingEdits(),
 	})
 
-	if got := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n"); got != "package firstX" {
+	if got := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n"); got != "package firstX\n" {
 		t.Errorf("the changed buffer was edited: %q", got)
 	}
 }
