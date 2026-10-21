@@ -181,7 +181,6 @@ func TestTitleHeightWithBoxModel(t *testing.T) {
 	}
 }
 
-
 // A fullwidth rune covers two columns, so a title drawn one column per rune
 // drops every other character, and a fullwidth badge starts too far right and
 // is clipped (#1064).
