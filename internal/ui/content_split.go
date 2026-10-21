@@ -348,7 +348,10 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 			return result
 		}
-	} else {
+	} else if cs.Position != SplitRight {
+		// The bottom edge opens a bottom-docked panel. A right-docked panel
+		// has no bottom edge, and starting the drag anyway opened it from
+		// the right, sized by the drag's x position (#1068).
 		if freshClick && my == r.Y+r.H {
 			cs.dragging = true
 			return EventCaptured
