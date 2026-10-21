@@ -28,6 +28,18 @@ type DebugState struct {
 	Output      []string           `json:"output"`
 	Terminals   []DebugTerminal    `json:"terminals,omitempty"`
 	WidgetTree  *DebugWidgetNode   `json:"widget_tree"`
+
+	// ActiveTerminal names the terminal tab that is active in the
+	// integrated-terminal panel, so an agent can address it without guessing.
+	// Tab is that tab's 0-based index in the panel.
+	ActiveTerminal *DebugActiveTerminal `json:"active_terminal,omitempty"`
+}
+
+// DebugActiveTerminal names the terminal tab that is active in the
+// integrated-terminal panel.
+type DebugActiveTerminal struct {
+	ID  string `json:"id"`
+	Tab int    `json:"tab"`
 }
 
 // DebugTerminal reports one integrated-terminal tab's raw, unparsed PTY byte
@@ -242,9 +254,30 @@ func (a *App) BuildDebugState() *DebugState {
 		})
 	}
 
+	state.ActiveTerminal = a.activeTerminal()
+
 	state.WidgetTree = walkWidget(a.Root.Main)
 
 	return state
+}
+
+// activeTerminal reports the terminal tab that is active in the terminal
+// panel. The panel and a.Terminals are kept in the same order, but the widget
+// is matched rather than the index, so a removed tab cannot shift the answer.
+func (a *App) activeTerminal() *DebugActiveTerminal {
+	if a.TerminalPanel == nil {
+		return nil
+	}
+	active := a.TerminalPanel.ActiveWidget()
+	if active == nil {
+		return nil
+	}
+	for _, tt := range a.Terminals {
+		if tt.Widget == active {
+			return &DebugActiveTerminal{ID: tt.ID, Tab: a.TerminalPanel.ActiveIndex()}
+		}
+	}
+	return nil
 }
 
 func (a *App) describeFocus() string {
@@ -261,6 +294,8 @@ func (a *App) describeFocus() string {
 		return "bottom_panel"
 	case *ui.SearchWidget:
 		return "search"
+	case *ui.TerminalPanelWidget:
+		return "terminal"
 	default:
 		return "other"
 	}
