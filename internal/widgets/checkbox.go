@@ -60,14 +60,7 @@ func (c *CheckboxWidget) Render(surface Surface) {
 	inner.SetCell(2, 0, term.Cell{Ch: mark, Style: style})
 	inner.SetCell(3, 0, term.Cell{Ch: ']', Style: bracket})
 
-	x := 5
-	for _, ch := range c.Config.Label {
-		if x >= w {
-			break
-		}
-		inner.SetCell(x, 0, term.Cell{Ch: ch, Style: style})
-		x++
-	}
+	inner.DrawText(5, 0, c.Config.Label, w, style)
 }
 
 func (c *CheckboxWidget) toggle() {
