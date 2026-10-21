@@ -352,23 +352,23 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	}
 	p.SimulateClick = func(x, y int) {
 		go func() {
-			a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+			a.postPluginInput(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
 			time.Sleep(50 * time.Millisecond)
-			a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+			a.postPluginInput(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
 		}()
 	}
 	p.SimulateDrag = func(x1, y1, x2, y2 int) {
 		go func() {
-			a.Screen.PostEvent(tcell.NewEventMouse(x1, y1, tcell.Button1, tcell.ModNone))
+			a.postPluginInput(tcell.NewEventMouse(x1, y1, tcell.Button1, tcell.ModNone))
 			time.Sleep(30 * time.Millisecond)
 			steps := 10
 			for i := 1; i <= steps; i++ {
 				mx := x1 + (x2-x1)*i/steps
 				my := y1 + (y2-y1)*i/steps
-				a.Screen.PostEvent(tcell.NewEventMouse(mx, my, tcell.Button1, tcell.ModNone))
+				a.postPluginInput(tcell.NewEventMouse(mx, my, tcell.Button1, tcell.ModNone))
 				time.Sleep(15 * time.Millisecond)
 			}
-			a.Screen.PostEvent(tcell.NewEventMouse(x2, y2, tcell.ButtonNone, tcell.ModNone))
+			a.postPluginInput(tcell.NewEventMouse(x2, y2, tcell.ButtonNone, tcell.ModNone))
 		}()
 	}
 	p.ScreenshotToFile = func(path string) error {
@@ -1156,4 +1156,18 @@ func closePluginPanel(w ui.Widget) {
 			panel.Close()
 		}
 	}
+}
+
+// pluginInput is input a plugin synthesized. The event loop drops it while a
+// plugin approval dialog is open, so no plugin can grant permissions.
+type pluginInput struct {
+	Event tcell.Event
+}
+
+func (a *App) postPluginInput(ev tcell.Event) {
+	a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInput{Event: ev}))
+}
+
+func (a *App) acceptsPluginInput() bool {
+	return len(a.PendingPluginApprovals) == 0
 }

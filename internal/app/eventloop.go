@@ -301,6 +301,15 @@ func RunEventLoop(
 					}
 					execRequest = v.Lifecycle
 				}
+			case *pluginInput:
+				if app.acceptsPluginInput() {
+					switch event := v.Event.(type) {
+					case *tcell.EventKey:
+						handleKey(event)
+					case *tcell.EventMouse:
+						handleMouse(event)
+					}
+				}
 			case *execMainRequest:
 				if v.Lifecycle.claim() {
 					execErr = v.Run()
