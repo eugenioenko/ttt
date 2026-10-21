@@ -277,7 +277,6 @@ func TestButtonAcceleratorKeyCaseInsensitive(t *testing.T) {
 	}
 }
 
-
 // A fullwidth rune covers two columns, so a label drawn one column per rune
 // drops every other character (#1065).
 func TestButtonRendersFullwidthLabel(t *testing.T) {
