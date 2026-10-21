@@ -242,7 +242,6 @@ func TestCheckboxLabelRendered(t *testing.T) {
 	}
 }
 
-
 // A fullwidth rune covers two columns, so a label drawn one column per rune
 // drops every other character (#1066).
 func TestCheckboxRendersFullwidthLabel(t *testing.T) {
