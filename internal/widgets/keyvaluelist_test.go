@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -112,5 +113,32 @@ func TestKeyValueListHandleEventIgnored(t *testing.T) {
 	ev := tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone)
 	if got := kv.HandleEvent(ev); got != EventIgnored {
 		t.Errorf("expected EventIgnored, got %v", got)
+	}
+}
+
+
+// A fullwidth key covers two columns, so measuring the key column in runes
+// misaligns it and cuts the key off (#1067).
+func TestKeyValueListRendersFullwidthKeys(t *testing.T) {
+	kv := NewKeyValueListWidget([]KeyValueEntry{
+		{Key: "名前", Value: "値"},
+		{Key: "Port", Value: "8080"},
+	})
+
+	s := renderWidget(kv, 0, 0, 20, 2)
+
+	// The key column is four columns wide for both keys, so both end at
+	// column 6 and both values start at column 8.
+	if got := rowText(s, 0); !strings.Contains(got, "名前") {
+		t.Errorf("row 0 = %q, want it to hold the whole key", got)
+	}
+	if got := s.cells[0][4].Ch; got != '前' {
+		t.Errorf("row 0 cell 4 = %q, want the second fullwidth rune", got)
+	}
+	if got := s.cells[0][8].Ch; got != '値' {
+		t.Errorf("row 0 cell 8 = %q, want the value in the same column as row 1", got)
+	}
+	if got := s.cells[1][8].Ch; got != '8' {
+		t.Errorf("row 1 cell 8 = %q, want the value in the same column as row 0", got)
 	}
 }
