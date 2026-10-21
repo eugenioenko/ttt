@@ -276,3 +276,36 @@ func TestButtonAcceleratorKeyCaseInsensitive(t *testing.T) {
 		t.Error("OnClick should be called via uppercase accelerator key")
 	}
 }
+
+
+// A fullwidth rune covers two columns, so a label drawn one column per rune
+// drops every other character (#1065).
+func TestButtonRendersFullwidthLabel(t *testing.T) {
+	btn := NewButtonWidget(ButtonConfig{Label: "&ボタン押す"})
+
+	s := renderWidget(btn, 0, 0, 20, 1)
+
+	if got := rowText(s, 0); got != "ボタン押す" {
+		t.Errorf("label = %q, want %q", got, "ボタン押す")
+	}
+	// The label is six columns wide, plus the button's own padding.
+	if want := 6 + btn.BoxOverheadW(); btn.Width() != want {
+		t.Errorf("width = %d, want %d", btn.Width(), want)
+	}
+}
+
+// The accelerator is a rune index, so it has to be counted in runes and not
+// in columns (#1065).
+func TestButtonUnderlinesFullwidthAccelerator(t *testing.T) {
+	btn := NewButtonWidget(ButtonConfig{Label: "日本&語"})
+
+	s := renderWidget(btn, 0, 0, 20, 1)
+
+	if got := rowText(s, 0); got != "日本語" {
+		t.Errorf("label = %q, want %q", got, "日本語")
+	}
+	// The underline belongs on the third rune, which starts at column 4.
+	if !s.cells[0][4].Underline {
+		t.Error("the accelerator rune is not underlined")
+	}
+}

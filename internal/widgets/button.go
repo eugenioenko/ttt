@@ -5,6 +5,7 @@ import (
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -57,7 +58,7 @@ func (b *ButtonWidget) SetLabel(label string) {
 
 func (b *ButtonWidget) Height() int { return 1 + b.BoxOverheadH() }
 func (b *ButtonWidget) Width() int {
-	w := len([]rune(b.label)) + b.BoxOverheadW()
+	w := textwidth.String(b.label) + b.BoxOverheadW()
 	return w
 }
 
@@ -92,16 +93,23 @@ func (b *ButtonWidget) Render(surface Surface) {
 	}
 
 	x := 0
+	i := 0
 	for _, ch := range b.label {
-		if x >= w {
+		rw := textwidth.Rune(ch)
+		if x+rw > w {
+			// A fullwidth rune that would cross the last column becomes a
+			// space: the terminal paints it across two columns regardless of
+			// clipping, so it would bleed past the button.
+			inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 			break
 		}
 		cell := term.Cell{Ch: ch, Style: style}
-		if x == b.accelIndex {
+		if i == b.accelIndex {
 			cell.Underline = true
 		}
 		inner.SetCell(x, 0, cell)
-		x++
+		x += rw
+		i++
 	}
 }
 
