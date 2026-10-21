@@ -188,7 +188,7 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 ```
 
 - **`--exec "commands"`** runs semicolon-separated actions after startup: `click`, `rclick`, `hover`, `drag`, `key`, `type`, `paste`, `copy`, `exec "Command Name"`, `screenshot`, `debug`, `wait`, `wait-for TEXT`, `panel ID`, `quit`. `bin/ttt --help` (`ExecScriptUsage()` in `internal/app/exec_script.go`) is the reference. Each action is acknowledged after the event loop handles and redraws it; any failure stops the script with a nonzero exit.
-- **`debug PATH`** dumps screen, cursor, buffer, focus, panels, tabs, selection, output log, terminal PTY tails, and the widget tree.
+- **`debug PATH`** dumps screen, cursor, buffer, focus, panels, tabs, selection, output log, terminal PTY tails, and the widget tree. `focus` is where keys go (`editor`, `terminal`, `sidebar`, `bottom_panel`, `search`, `overlay` while a modal dialog or drawer is open, else `other`); `active_terminal` is the selected terminal tab as `{id, index}` with a 0-based index.
 - **`--listen`** accepts the same script over `POST http://127.0.0.1:4242/exec` (loopback only), to drive an editor a person started in a real terminal: `curl -X POST --data "type hi; screenshot /tmp/s.txt" http://127.0.0.1:4242/exec`.
 - **`--size WxH`** makes layout and click coordinates deterministic.
 - **`--plugin FILE`** loads a Lua plugin with full permissions (see the Plugin API caveats).
