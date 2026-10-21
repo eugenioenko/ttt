@@ -336,9 +336,7 @@ func RunEventLoop(
 					app.StatusNotify("No references found")
 				}
 			case *FormattingResult:
-				if len(v.Edits) > 0 {
-					app.ApplyTextEdits(v.Edits)
-				}
+				app.applyFormattingResult(v)
 			case *DiagnosticsResult:
 				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, v.Diagnostics)
 			case *LSPDiagnosticRefresh:

@@ -27,7 +27,12 @@ type SignatureHelpResult struct {
 }
 
 type FormattingResult struct {
-	Edits []lsp.TextEdit
+	// Path is the file the server formatted and Version the buffer it
+	// formatted, so a result that arrives for another file, or for a buffer
+	// that changed in the meantime, is not applied to the wrong one (#876).
+	Path    string
+	Version uint64
+	Edits   []lsp.TextEdit
 }
 
 type ReferencesResult struct {

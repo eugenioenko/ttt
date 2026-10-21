@@ -322,6 +322,7 @@ func (a *App) RequestFormatting(path, lang string) {
 	}
 	workDir := a.lspWorkDir(path)
 	tabSize, insertSpaces := a.editorTabSize()
+	version := a.editorBufferVersion()
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -334,7 +335,9 @@ func (a *App) RequestFormatting(path, lang string) {
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{Edits: edits}))
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+				Path: path, Version: version, Edits: edits,
+			}))
 		}
 	}()
 }
@@ -349,6 +352,7 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 	}
 	workDir := a.lspWorkDir(path)
 	tabSize, insertSpaces := a.editorTabSize()
+	version := a.editorBufferVersion()
 	r := lsp.Range{
 		Start: lsp.Position{Line: startLine, Character: startCol},
 		End:   lsp.Position{Line: endLine, Character: endCol},
@@ -365,7 +369,9 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{Edits: edits}))
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+				Path: path, Version: version, Edits: edits,
+			}))
 		}
 	}()
 }
@@ -654,6 +660,36 @@ func (a *App) EnsureLSPOpen(path string) {
 		lang = a.EditorGroup.Editor.Highlighter.Language()
 	}
 	a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
+}
+
+// editorBufferVersion is the change counter of the buffer being edited, so a
+// result computed for it can be dropped once the text has moved on.
+func (a *App) editorBufferVersion() uint64 {
+	if a.EditorGroup.Editor == nil {
+		return 0
+	}
+	return a.EditorGroup.Editor.Buf.Version()
+}
+
+// applyFormattingResult applies a formatting result to the file the server
+// formatted. A result that arrives for another file, or for a buffer that
+// changed while the server was formatting, is dropped: applying it would
+// write the edits into the file the user is looking at instead (#876).
+func (a *App) applyFormattingResult(v *FormattingResult) {
+	editor := a.EditorGroup.Editor
+	if editor == nil || len(v.Edits) == 0 {
+		return
+	}
+	path, _ := a.editorPathLang()
+	if path != v.Path {
+		a.StatusWarn("Formatting result discarded: " + filepath.Base(v.Path) + " is no longer the open file")
+		return
+	}
+	if editor.Buf.Version() != v.Version {
+		a.StatusWarn("Formatting result discarded: the file changed while it was formatted")
+		return
+	}
+	a.ApplyTextEdits(v.Edits)
 }
 
 func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
