@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -25,6 +26,70 @@ func TestCommitDetailMarkdownStyles(t *testing.T) {
 	}
 	if text := detailTestText(grid); strings.Contains(text, "```") || strings.Contains(text, "[guide]") {
 		t.Fatalf("Markdown syntax leaked into preview:\n%s", text)
+	}
+}
+
+func TestCommitDetailMarkdownHeadingLevels(t *testing.T) {
+	for _, width := range []int{18, 80} {
+		d := NewCommitDetailWidget("", "", "", false)
+		d.SetDetail("# First heading with long words\n\n## Second heading with long words", nil, "")
+		grid := renderDetail(d, width, 30)
+		var headings []string
+		for y, visual := range d.visualRows {
+			if d.rows[visual.row].markdown.Kind != markdown.KindHeading {
+				continue
+			}
+			if !visual.continuation {
+				headings = append(headings, "")
+			}
+			headings[len(headings)-1] += visual.messageText
+			for x := 1; x <= textwidth.String(visual.messageText); x++ {
+				if cell := grid[y][x]; cell.Style != term.StyleHoverBold || cell.Ch != []rune(visual.messageText)[x-1] {
+					t.Fatalf("width %d: heading cell (%d,%d) = %+v", width, x, y, cell)
+				}
+			}
+		}
+		if strings.Join(headings, "\n") != "# First heading with long words\n## Second heading with long words" {
+			t.Fatalf("width %d: heading levels or wrapped content changed: %q", width, headings)
+		}
+	}
+}
+
+func TestCommitDetailMarkdownNarrowCodeUnicodeSelection(t *testing.T) {
+	for _, width := range []int{8, 12, 24, 40} {
+		for _, wrap := range []bool{false, true} {
+			d := NewCommitDetailWidget("", "", "", false)
+			d.SetWrapped(wrap)
+			code := "\t界" + strings.Repeat("x", 60) + "TAIL界"
+			d.SetDetail("Text\n\n```\n"+code+"\n```", nil, "")
+			renderDetail(d, width, 12)
+			codeY, count := 0, 0
+			for y, visual := range d.visualRows {
+				if d.rows[visual.row].markdown.Kind == markdown.KindCode {
+					codeY, count = y, count+1
+				}
+			}
+			if count != 1 || !d.hscrollbar.Visible() {
+				t.Fatalf("width %d wrap %v: code reflowed or cannot scroll", width, wrap)
+			}
+			for range 4 {
+				d.HandleEvent(tcell.NewEventKey(tcell.KeyRight, "", 0))
+			}
+			renderDetail(d, width, 12)
+			d.HandleEvent(tcell.NewEventMouse(1, codeY, tcell.Button1, 0))
+			d.HandleEvent(tcell.NewEventMouse(3, codeY, tcell.Button1, 0))
+			d.HandleEvent(tcell.NewEventMouse(3, codeY, tcell.ButtonNone, 0))
+			if got := d.CopySelection(); got != "界" {
+				t.Fatalf("width %d wrap %v: scrolled code copied %q", width, wrap, got)
+			}
+			for range 100 {
+				d.HandleEvent(tcell.NewEventKey(tcell.KeyRight, "", 0))
+			}
+			grid := renderDetail(d, width, 12)
+			if !strings.Contains(detailTestText(grid), "TAIL界") || grid[1][1].Ch != 'T' {
+				t.Fatalf("width %d wrap %v: code tail lost or prose shifted:\n%s", width, wrap, detailTestText(grid))
+			}
+		}
 	}
 }
 
