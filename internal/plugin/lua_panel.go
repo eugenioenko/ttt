@@ -203,7 +203,7 @@ func panelText(L *lua.LState) int {
 	style := resolveStyle(L, 5)
 
 	w, _ := proxy.surface.Size()
-	proxy.surface.DrawText(x, y, text, w-x, style)
+	proxy.surface.DrawText(x, y, text, w, style)
 	return 0
 }
 

@@ -33,7 +33,29 @@ func (s *mockSurface) Sub(r widgets.Rect) widgets.Surface                       
 
 func (s *mockSurface) DrawText(x, y int, text string, maxW int, style term.Style) int {
 	s.texts = append(s.texts, mockText{x, y, text, style})
-	return len([]rune(text))
+	limit := s.w
+	if maxW > 0 && maxW < limit {
+		limit = maxW
+	}
+	for _, ch := range text {
+		if x >= limit {
+			break
+		}
+		s.SetCell(x, y, term.Cell{Ch: ch, Style: style})
+		x++
+	}
+	return x
+}
+
+func (s *mockSurface) row(y int) string {
+	out := make([]rune, s.w)
+	for x := range out {
+		out[x] = ' '
+		if c, ok := s.cells[[2]int{x, y}]; ok {
+			out[x] = c.Ch
+		}
+	}
+	return string(out)
 }
 
 func TestPluginPanelWidgetRender(t *testing.T) {
@@ -69,6 +91,43 @@ func TestPluginPanelWidgetRender(t *testing.T) {
 	}
 	if surface.texts[0].text != "Hello Plugin!" {
 		t.Errorf("expected 'Hello Plugin!', got %q", surface.texts[0].text)
+	}
+}
+
+func TestPanelTextPastMidpointReachesRightEdge(t *testing.T) {
+	p := &Plugin{
+		Name:    "test",
+		Granted: PermissionSet{PanelSidebar: true},
+	}
+	p.State = NewSandbox()
+	defer p.State.Close()
+	setupTTTModule(p.State, p)
+
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		ttt.register({
+			sidebar = {
+				title = "Test",
+				render = function(panel)
+					panel:text(4, 0, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+					panel:text(14, 1, "right")
+				end,
+			},
+		})
+	`)
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	pw := NewPluginPanelWidget(p, p.RenderFunc, p.EventFunc)
+	surface := newMockSurface(20, 2)
+	pw.Render(surface)
+
+	if got, want := surface.row(0), "    ABCDEFGHIJKLMNOP"; got != want {
+		t.Errorf("row 0 = %q, want %q", got, want)
+	}
+	if got, want := surface.row(1), "              right "; got != want {
+		t.Errorf("row 1 = %q, want %q", got, want)
 	}
 }
 
