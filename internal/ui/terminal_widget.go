@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
@@ -358,6 +359,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					} else if tw.linkAt(unifiedLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
+					tw.clipWideRune(&c, x, contentW)
 					surface.SetCell(x, y, c)
 				}
 			}
@@ -395,6 +397,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					} else if tw.linkAt(srcLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
+					tw.clipWideRune(&c, x, contentW)
 					surface.SetCell(x, screenY, c)
 				}
 			}
@@ -413,6 +416,16 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			tw.scrollbar.Render(surface, w-1, 0)
 		}
 	})
+}
+
+// clipWideRune replaces a fullwidth rune in the last content column with a
+// space. The terminal paints such a rune across two columns regardless of
+// clipping, so drawing it there would bleed over the scrollbar to its right.
+// DrawText makes the same substitution.
+func (tw *TerminalWidget) clipWideRune(c *term.Cell, x, contentW int) {
+	if x == contentW-1 && textwidth.Rune(c.Ch) == 2 {
+		c.Ch = ' '
+	}
 }
 
 // Avoids BufferLine.LoadCell, which allocates an ExtendedAttrs per cell.
