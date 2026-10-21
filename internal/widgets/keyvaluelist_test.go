@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -112,5 +113,50 @@ func TestKeyValueListHandleEventIgnored(t *testing.T) {
 	ev := tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone)
 	if got := kv.HandleEvent(ev); got != EventIgnored {
 		t.Errorf("expected EventIgnored, got %v", got)
+	}
+}
+
+func TestKeyValueListFullwidthKeys(t *testing.T) {
+	kv := NewKeyValueListWidget([]KeyValueEntry{
+		{Key: "名前", Value: "値"},
+		{Key: "Port", Value: "8080"},
+	})
+
+	s := renderWidget(kv, 0, 0, 30, 5)
+
+	// keyColWidth = max(width("名前"), width("Port")) + 2 = 4 + 2 = 6.
+	// Both keys are right-aligned to end at column 6, so 名前 occupies
+	// columns 2-5 and Port occupies columns 2-5.
+	if s.cells[0][2].Ch != '名' || s.cells[0][4].Ch != '前' {
+		t.Errorf("名前 not complete/right-aligned: col2=%q col4=%q, want 名 and 前",
+			s.cells[0][2].Ch, s.cells[0][4].Ch)
+	}
+	if s.cells[1][2].Ch != 'P' || s.cells[1][5].Ch != 't' {
+		t.Errorf("Port not right-aligned: col2=%q col5=%q, want P and t",
+			s.cells[1][2].Ch, s.cells[1][5].Ch)
+	}
+
+	// Both values start at the same column (keyColW + 2 = 8).
+	if s.cells[0][8].Ch != '値' {
+		t.Errorf("value 値 not at col 8, got %q", s.cells[0][8].Ch)
+	}
+	if s.cells[1][8].Ch != '8' {
+		t.Errorf("value 8080 not at col 8, got %q", s.cells[1][8].Ch)
+	}
+
+	// rowText reads the row the way the terminal shows it, so a complete
+	// 名前 proves neither rune was dropped or clipped.
+	if row := rowText(s, 0); !strings.Contains(row, "名前") {
+		t.Errorf("row 0 = %q, want it to contain the complete key 名前", row)
+	}
+}
+
+func TestKeyValueListScrollSizeFullwidth(t *testing.T) {
+	kv := NewKeyValueListWidget([]KeyValueEntry{
+		{Key: "名前ラベル", Value: "値"},
+	})
+	// Widest row: width("名前ラベル") + 4 + width("値") = 10 + 4 + 2 = 16.
+	if w, _ := kv.ScrollSize(); w != 16 {
+		t.Errorf("scroll width = %d, want 16", w)
 	}
 }
