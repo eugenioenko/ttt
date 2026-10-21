@@ -155,7 +155,12 @@ func (m *Manager) LoadAll() []*Plugin {
 				continue
 			}
 
-			p.Granted = m.grant(regEntry, manifest.Permissions)
+			granted, err := m.grant(regEntry, manifest.Permissions)
+			if err != nil {
+				slog.Error("persist plugin permissions", "plugin", manifest.Name, "error", err)
+				continue
+			}
+			p.Granted = granted
 
 			// Init reports compile failures through p.Log, so wire it first.
 			if m.logFactory != nil {
@@ -679,13 +684,17 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 
 	old := m.plugins[idx]
 	old.Destroy()
+	granted, err := m.grant(regEntry, u.manifest.Permissions)
+	if err != nil {
+		return nil, false, err
+	}
 	p := &Plugin{
 		Name:     old.Name,
 		Dir:      old.Dir,
 		Repo:     old.Repo,
 		RepoPath: old.RepoPath,
 		Manifest: u.manifest,
-		Granted:  m.grant(regEntry, u.manifest.Permissions),
+		Granted:  granted,
 	}
 	m.wireAPIs(p)
 	p.AppVersion = m.appVersion
@@ -739,13 +748,18 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 
 	idx := slices.IndexFunc(m.plugins, func(p *Plugin) bool { return p.Name == name })
 
+	granted, err := m.grant(regEntry, manifest.Permissions)
+	if err != nil {
+		return nil, err
+	}
+
 	p := &Plugin{
 		Name:     manifest.Name,
 		Dir:      dir,
 		Repo:     regEntry.Repo,
 		RepoPath: regEntry.Path,
 		Manifest: manifest,
-		Granted:  m.grant(regEntry, manifest.Permissions),
+		Granted:  granted,
 	}
 
 	diff := DiffPermissions(regEntry.Permissions, manifest.Permissions)
@@ -775,14 +789,22 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 
 // grant returns the approved permissions the manifest still declares. A
 // dropped permission is removed from the registry so asking for it again
-// needs approval.
-func (m *Manager) grant(entry *RegistryEntry, declared PermissionSet) PermissionSet {
+// needs approval. The reduction is only real once it is on disk, so a
+// failed save is reported and the in-memory entry keeps its old permissions:
+// otherwise a retry would see the reduced grant already applied and skip the
+// save, leaving the dropped permission in the registry forever.
+func (m *Manager) grant(entry *RegistryEntry, declared PermissionSet) (PermissionSet, error) {
 	granted := IntersectPermissions(entry.Permissions, declared)
-	if !reflect.DeepEqual(granted, entry.Permissions) {
-		entry.Permissions = granted
-		m.registry.Save()
+	if reflect.DeepEqual(granted, entry.Permissions) {
+		return granted, nil
 	}
-	return granted
+	previous := entry.Permissions
+	entry.Permissions = granted
+	if err := m.registry.Save(); err != nil {
+		entry.Permissions = previous
+		return PermissionSet{}, fmt.Errorf("persist reduced permissions for %q: %w", entry.Name, err)
+	}
+	return granted, nil
 }
 
 func (m *Manager) Reload(name string) (*Plugin, error) {
@@ -813,7 +835,12 @@ func (m *Manager) Reload(name string) (*Plugin, error) {
 	}
 
 	if regEntry := m.registry.Find(name); regEntry != nil {
-		granted = m.grant(regEntry, manifest.Permissions)
+		reduced, err := m.grant(regEntry, manifest.Permissions)
+		if err != nil {
+			m.plugins = append(m.plugins[:idx], m.plugins[idx+1:]...)
+			return nil, err
+		}
+		granted = reduced
 	}
 
 	p := &Plugin{

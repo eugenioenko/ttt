@@ -988,3 +988,168 @@ func TestLoadAllSkipsSymlinkToFile(t *testing.T) {
 		t.Fatalf("pending = %d, want 0 for a symlink to a file", len(pending))
 	}
 }
+
+// makeRegistryUnwritable makes the registry file read-only, so it can still
+// be read but a save fails the way a permission or quota error would.
+func makeRegistryUnwritable(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Chmod(path, 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0644) })
+}
+
+// A dropped permission is only really dropped once the reduction reaches the
+// registry on disk, so a failed save must be reported and must leave the
+// in-memory permissions retryable.
+func TestGrantReportsAFailedRegistrySave(t *testing.T) {
+	m, _ := newTestManager(t)
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registry.path)
+	entry := m.registry.Find("mixed")
+
+	granted, err := m.grant(entry, PermissionSet{Commands: true})
+	if err == nil {
+		t.Fatal("grant reported success although the registry could not be saved")
+	}
+	if granted.Commands || granted.EditorRead {
+		t.Errorf("a failed grant must not report permissions, got %+v", granted)
+	}
+	if !entry.Permissions.Commands || !entry.Permissions.EditorRead {
+		t.Errorf("a failed save must keep the in-memory permissions, got %+v", entry.Permissions)
+	}
+}
+
+// A retry after a failed save must persist the reduction: the in-memory
+// permissions must not already look like the reduced grant, or the save is
+// skipped and the dropped permission stays in the registry forever.
+func TestGrantRetriesTheSaveAfterAFailure(t *testing.T) {
+	m, _ := newTestManager(t)
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	path := m.registry.path
+	makeRegistryUnwritable(t, path)
+	entry := m.registry.Find("mixed")
+
+	if _, err := m.grant(entry, PermissionSet{Commands: true}); err == nil {
+		t.Fatal("grant reported success although the registry could not be saved")
+	}
+
+	// The registry can be written again; the retry must persist the reduction.
+	if err := os.Chmod(path, 0644); err != nil {
+		t.Fatal(err)
+	}
+	granted, err := m.grant(entry, PermissionSet{Commands: true})
+	if err != nil {
+		t.Fatalf("retry failed: %v", err)
+	}
+	if granted.Commands || granted.EditorRead {
+		t.Errorf("retry granted more than the manifest declares: %+v", granted)
+	}
+	stored, err := LoadRegistry(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedEntry := stored.Find("mixed")
+	if storedEntry == nil {
+		t.Fatal("plugin missing from the saved registry")
+	}
+	if storedEntry.Permissions.EditorRead {
+		t.Errorf("the dropped permission is still in the saved registry: %+v", storedEntry.Permissions)
+	}
+}
+
+// A plugin whose reduced permissions could not be persisted must not be
+// loaded: the registry on disk still grants what the manifest dropped.
+func TestLoadAllSkipsAPluginWhosePermissionsCannotBePersisted(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	manifest := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registryPath)
+
+	m.LoadAll()
+
+	if p := m.FindPlugin("mixed"); p != nil {
+		t.Errorf("plugin loaded although its reduced permissions were not persisted: %+v", p.Granted)
+	}
+}
+
+// Reloading a plugin must report a failed permission reduction instead of
+// reporting success and running the plugin with the stale grant.
+func TestReloadReportsAFailedPermissionSave(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	wide := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true,"editor.read":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(wide), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	m.LoadAll()
+	if m.FindPlugin("mixed") == nil {
+		t.Fatal("plugin not loaded before the reload")
+	}
+
+	// The manifest drops a permission, so the reload has to persist a
+	// reduction that the registry file cannot accept.
+	narrow := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(narrow), 0644); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registryPath)
+
+	if _, err := m.Reload("mixed"); err == nil {
+		t.Fatal("Reload reported success although the registry could not be saved")
+	}
+}
+
+// Applying an update must report a failed permission reduction too.
+func TestApplyUpdateReportsAFailedPermissionSave(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	wide := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true,"editor.read":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(wide), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	m.LoadAll()
+	if m.FindPlugin("mixed") == nil {
+		t.Fatal("plugin not loaded before the update")
+	}
+
+	// The new manifest drops a permission, so the update has to persist a
+	// reduction that the registry file cannot accept.
+	narrow := `{"name":"mixed","version":"2.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(narrow), 0644); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registryPath)
+
+	u := m.PrepareUpdate("mixed")
+	manifest, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.manifest = manifest
+
+	if _, _, err := m.ApplyUpdate(u); err == nil {
+		t.Fatal("ApplyUpdate reported success although the registry could not be saved")
+	}
+}
