@@ -14,6 +14,7 @@ type ChangesGroup struct {
 	Unstaged  []git.FileStatus
 	IsPR      bool
 	PRURL     string
+	PRBody    string
 	PRDiffs   map[string]string
 	PROwner   string
 	PRRepo    string

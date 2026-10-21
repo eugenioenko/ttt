@@ -82,8 +82,10 @@ func (a *App) OpenPRDetail(group *ui.ChangesGroup) {
 	}
 	detail := ui.NewCommitDetailWidget(group.Dir, group.PRURL, "", a.EditorGroup.SyntaxHighlight)
 	detail.Header = "Pull request"
+	detail.Metadata = fmt.Sprintf("%s · %d file(s) changed", group.Name, len(files))
+	detail.EmptyMessage = "(No pull request description)"
 	a.EditorGroup.ApplyDiffDefaults(detail)
-	detail.SetDetail(fmt.Sprintf("%s\n%d file(s) changed", group.Name, len(files)), files, "")
+	detail.SetDetail(group.PRBody, files, "")
 	a.EditorGroup.OpenPluginTab(tabID, group.Name, detail)
 	a.FocusEditorIfEnabled()
 }

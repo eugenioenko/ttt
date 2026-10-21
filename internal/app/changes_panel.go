@@ -151,6 +151,7 @@ type prGroup struct {
 	Name      string
 	Files     []git.FileStatus
 	PRURL     string
+	PRBody    string
 	PRDiffs   map[string]string
 	PROwner   string
 	PRRepo    string
@@ -1217,6 +1218,7 @@ func (cp *ChangesPanel) toUIChangesGroup(pg *prGroup) *ui.ChangesGroup {
 		Unstaged:  pg.Files,
 		IsPR:      true,
 		PRURL:     pg.PRURL,
+		PRBody:    pg.PRBody,
 		PRDiffs:   pg.PRDiffs,
 		PROwner:   pg.PROwner,
 		PRRepo:    pg.PRRepo,
@@ -1225,12 +1227,13 @@ func (cp *ChangesPanel) toUIChangesGroup(pg *prGroup) *ui.ChangesGroup {
 	}
 }
 
-func (cp *ChangesPanel) AddPRGroup(name, url, owner, repo, baseSHA, headSHA string, files []git.FileStatus, diffs map[string]string) {
+func (cp *ChangesPanel) AddPRGroup(name, url, owner, repo, baseSHA, headSHA, body string, files []git.FileStatus, diffs map[string]string) {
 	cp.PRGroups = append(cp.PRGroups, prGroup{
 		Dir:       "pr://" + name,
 		Name:      name,
 		Files:     files,
 		PRURL:     url,
+		PRBody:    body,
 		PRDiffs:   diffs,
 		PROwner:   owner,
 		PRRepo:    repo,

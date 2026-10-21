@@ -727,7 +727,7 @@ Open a native multi-file diff detail tab from a Git-style unified diff. No speci
 |-------|------|---------|-------------|
 | `diff` | string | required | Non-empty unified diff containing `diff --git` file headers. |
 | `title` | string | `"Changes"` | Tab title and view heading. |
-| `description` | string | `""` | Text displayed above the changed files. |
+| `description` | string | `""` | Markdown displayed above the changed files, using the configured Markdown wrap width. |
 | `id` | string | title | Non-empty stable ID within the plugin; opening it again refreshes the same tab. Supply an explicit ID when the title is empty. |
 
 Configuration fields must be strings; invalid configuration raises a Lua argument error. Returns the tab ID, or `nil, error` for an unavailable host or unparseable diff. Pass the returned ID to `ttt.close_tab` to close it. Native diff tabs remain usable when the plugin is unloaded.

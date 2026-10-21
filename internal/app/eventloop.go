@@ -424,7 +424,7 @@ func RunEventLoop(
 						})
 					}
 					groupName := fmt.Sprintf("PR #%d: %s", v.Info.Number, v.Info.Title)
-					app.Changes.AddPRGroup(groupName, v.URL, v.Info.Owner, v.Info.Repo, v.Info.BaseSHA, v.Info.HeadSHA, files, v.Diffs)
+					app.Changes.AddPRGroup(groupName, v.URL, v.Info.Owner, v.Info.Repo, v.Info.BaseSHA, v.Info.HeadSHA, v.Info.Body, files, v.Diffs)
 					app.Sidebar.SetActivePanel("changes")
 					if !app.Sidebar.Visible {
 						app.ShowSidebar()

@@ -232,6 +232,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
 	editorGroup.DiffContext = configuredDiffContext(cfg.Settings.Editor.DiffContext)
 	editorGroup.DiffWordWrap = cfg.Settings.Editor.DiffWordWrap
+	editorGroup.SetMarkdownMaxWidth(cfg.Settings.Markdown.WrapWidth)
 	editorGroup.DiffHighContrast = cfg.Settings.Editor.DiffHighContrast
 	editorGroup.DiffCollapsedEmphasis = cfg.Settings.Editor.DiffCollapsedEmphasis
 	editorGroup.DiffSigns = cfg.Settings.Editor.DiffSigns

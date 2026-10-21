@@ -113,6 +113,7 @@ type EditorGroupWidget struct {
 	DiffMode                DiffMode
 	DiffContext             DiffContextMode
 	DiffWordWrap            bool
+	MarkdownMaxWidth        int
 	DiffHighContrast        bool
 	DiffCollapsedEmphasis   bool
 	DiffScrollbarGitMarks   bool
@@ -207,6 +208,7 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 
 		DiffSignsColor:      true,
 		DiffGutterHighlight: true,
+		MarkdownMaxWidth:    80,
 	}
 	tabBar.OnTabClick = func(index int) {
 		g.SwitchTab(index)
@@ -721,6 +723,9 @@ func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.Fil
 }
 
 func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
+	if detail, ok := surface.(*CommitDetailWidget); ok {
+		detail.SetMarkdownMaxWidth(g.MarkdownMaxWidth)
+	}
 	surface.ApplyDefaultMode(g.DiffMode)
 	if contextSurface, ok := surface.(DiffContextSurface); ok {
 		contextSurface.ApplyDefaultContextMode(g.DiffContext)
@@ -765,6 +770,15 @@ func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffConte
 	g.DiffWordWrap = wordWrap
 	for _, surface := range g.diffSurfaces() {
 		g.ApplyDiffDefaults(surface)
+	}
+}
+
+func (g *EditorGroupWidget) SetMarkdownMaxWidth(width int) {
+	g.MarkdownMaxWidth = width
+	for _, surface := range g.diffSurfaces() {
+		if detail, ok := surface.(*CommitDetailWidget); ok {
+			detail.SetMarkdownMaxWidth(width)
+		}
 	}
 }
 

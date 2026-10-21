@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"strconv"
-	"strings"
 	"time"
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -96,6 +96,8 @@ type commitDetailRow struct {
 	bold      bool
 	danger    bool
 	fileIndex int
+	markdown  markdown.Line
+	styles    []term.Style
 }
 
 // commitDetailVisualRow is one screen row. A file's diff is a single logical
@@ -103,6 +105,8 @@ type commitDetailRow struct {
 type commitDetailVisualRow struct {
 	row          int
 	leftStart    int
+	messageEnd   int
+	messageText  string
 	offset       int
 	continuation bool
 }
@@ -134,9 +138,16 @@ type CommitDetailWidget struct {
 	RefreshError   string
 	hasDetail      bool
 
-	Message  string
-	Metadata string
-	Files    []CommitDetailFile
+	Message      string
+	Metadata     string
+	Files        []CommitDetailFile
+	EmptyMessage string
+
+	messageSource    string
+	messageRows      []commitDetailRow
+	markdownMaxWidth int
+	messageMaxLineW  int
+	maxLeftCol       int
 
 	SyntaxHighlight    bool
 	Icons              string
@@ -169,7 +180,6 @@ type CommitDetailWidget struct {
 	maxLineW        int
 	gutterW         int
 	viewH           int
-	contentW        int
 	scrollbar       Scrollbar
 	hscrollbar      HScrollbar
 	rhscroll        HScrollbar
@@ -204,33 +214,35 @@ type CommitDetailWidget struct {
 
 func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *CommitDetailWidget {
 	return &CommitDetailWidget{
-		Dir:             dir,
-		Ref:             ref,
-		Short:           short,
-		Loading:         true,
-		Header:          "Commit message",
-		LoadingText:     fmt.Sprintf("Loading commit %s…", short),
-		SyntaxHighlight: syntaxHighlight,
-		signs:           false,
-		signsColor:      true,
-		gutterHighlight: true,
-		capturedFile:    -1,
+		Dir:              dir,
+		Ref:              ref,
+		Short:            short,
+		Loading:          true,
+		Header:           "Commit message",
+		LoadingText:      fmt.Sprintf("Loading commit %s…", short),
+		SyntaxHighlight:  syntaxHighlight,
+		signs:            false,
+		signsColor:       true,
+		gutterHighlight:  true,
+		capturedFile:     -1,
+		markdownMaxWidth: 80,
 	}
 }
 
 func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidget {
 	return &CommitDetailWidget{
-		Dir:             dir,
-		Ref:             "working-tree",
-		Loading:         true,
-		Header:          "Current changes",
-		LoadingText:     "Loading current changes…",
-		CurrentChanges:  true,
-		SyntaxHighlight: syntaxHighlight,
-		signs:           false,
-		signsColor:      true,
-		gutterHighlight: true,
-		capturedFile:    -1,
+		Dir:              dir,
+		Ref:              "working-tree",
+		markdownMaxWidth: 80,
+		Loading:          true,
+		Header:           "Current changes",
+		LoadingText:      "Loading current changes…",
+		CurrentChanges:   true,
+		SyntaxHighlight:  syntaxHighlight,
+		signs:            false,
+		signsColor:       true,
+		gutterHighlight:  true,
+		capturedFile:     -1,
 	}
 }
 
@@ -711,18 +723,7 @@ func (d *CommitDetailWidget) buildRows() {
 		d.recordWidth(d.Metadata)
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
 	}
-	message := strings.TrimRight(d.Message, "\r\n")
-	if message == "" {
-		if d.CurrentChanges {
-			message = "Working tree clean"
-		} else {
-			message = "(No commit message)"
-		}
-	}
-	for i, line := range strings.Split(message, "\n") {
-		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageRow, text: line, bold: i == 0})
-		d.recordWidth(line)
-	}
+	d.rows = append(d.rows, d.buildMessageRows()...)
 	if d.RefreshError != "" {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: d.RefreshError, danger: true})
 		d.recordWidth(d.RefreshError)
@@ -897,10 +898,6 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	d.topControl = Rect{}
 	d.stickyRect = Rect{}
 	d.stickyControl = commitDetailControl{fileIndex: -1}
-	d.contentW = leftW
-	if d.mode == DiffModeSplit {
-		d.contentW = min(leftW, rightW)
-	}
 	d.clampScroll()
 	if d.keyboardDisclosure {
 		d.reconcileDisclosure(d.disclosureRows())
@@ -983,15 +980,8 @@ func (d *CommitDetailWidget) layout(w, h int) (viewW, viewH int, showV, showH bo
 			d.visualRowsW = viewW
 		}
 		d.totalVisualRows = len(d.visualRows)
-		showH = false
-		if !d.IsWrapped() {
-			_, leftW, _, rightW := d.sideGeometry(viewW)
-			sideW := leftW
-			if d.mode == DiffModeSplit {
-				sideW = min(leftW, rightW)
-			}
-			showH = sideW > 0 && d.maxLineW > sideW
-		}
+		d.maxLeftCol = d.horizontalLimit(viewW)
+		showH = d.maxLeftCol > 0
 		newViewH := h
 		if showH {
 			newViewH--
@@ -1019,6 +1009,10 @@ func (d *CommitDetailWidget) buildVisualRows(viewW int) []commitDetailVisualRow 
 	wrap := d.IsWrapped()
 	visualRows := make([]commitDetailVisualRow, 0, len(d.rows))
 	for rowIndex, row := range d.rows {
+		if row.kind == commitDetailMessageRow {
+			visualRows = append(visualRows, d.messageVisualRows(rowIndex, row, viewW)...)
+			continue
+		}
 		if row.kind == commitDetailDiffRow {
 			v := d.rowView(rowIndex)
 			if v == nil {
@@ -1035,7 +1029,7 @@ func (d *CommitDetailWidget) buildVisualRows(viewW int) []commitDetailVisualRow 
 			case commitDetailMessageHeaderRow, commitDetailHeaderDividerRow, commitDetailSpacerRow:
 			case commitDetailHeadingRow:
 				starts = diffWrapStarts(row.text, viewW-3-fileIconPrefixWidth(d.Icons, d.Files[row.fileIndex].Path))
-			case commitDetailMetadataRow, commitDetailMessageRow:
+			case commitDetailMetadataRow:
 				starts = diffWrapStarts(row.text, viewW-2)
 			default:
 				starts = diffWrapStarts(row.text, viewW)
@@ -1073,7 +1067,7 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 	case commitDetailSpacerRow:
 		return
 	case commitDetailMessageRow:
-		d.drawTextRow(surface, 1, y, viewW-2, row.text, term.StyleCommitHeader, term.StyleCommitHeader, row.bold, visual.leftStart, rowIndex)
+		d.renderMarkdownRow(surface, rowIndex, row, visual, y, viewW)
 	case commitDetailHeadingRow:
 		d.renderHeading(surface, rowIndex, row, visual, y, viewW)
 	case commitDetailNoticeRow:
@@ -1184,6 +1178,9 @@ func (d *CommitDetailWidget) rowText(rowIndex int) (string, bool) {
 		return "", false
 	}
 	row := d.rows[rowIndex]
+	if row.kind == commitDetailMessageRow && row.markdown.Kind == markdown.KindDivider {
+		return "", false
+	}
 	switch row.kind {
 	case commitDetailMessageRow, commitDetailHeadingRow, commitDetailNoticeRow:
 		return row.text, true
@@ -1251,6 +1248,14 @@ func (d *CommitDetailWidget) screenToSelection(mx, my int) (pos diffSelPos, ok b
 		return diffSelPos{}, false
 	}
 	visualCol := localX - textX
+	if d.rows[rowIndex].kind == commitDetailMessageRow {
+		row := d.rows[rowIndex]
+		if !row.markdown.Kind.Wrappable() {
+			visualCol += d.LeftCol
+		}
+		col := diffSegmentVisualColToRune(text, visual.leftStart, visualCol)
+		return diffSelPos{Line: rowIndex, Col: min(col, visual.messageEnd)}, true
+	}
 	if !d.IsWrapped() {
 		visualCol += d.LeftCol
 	}
@@ -1364,10 +1369,19 @@ func truncateCommitDetailPath(text string, width int) string {
 
 func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect, viewW, y int) {
 	leftStart, leftW, rightStart, rightW := d.sideGeometry(viewW)
+	if leftW <= 0 || d.mode == DiffModeSplit && rightW <= 0 {
+		d.hscrollbar.X, d.hscrollbar.Y = r.X, r.Y+y
+		d.hscrollbar.Width = viewW
+		d.hscrollbar.TotalCols = viewW + d.maxLeftCol
+		d.hscrollbar.LeftCol = d.LeftCol
+		d.hscrollbar.Render(surface, 0, y)
+		d.rhscroll.TotalCols = 0
+		return
+	}
 	d.hscrollbar.X = r.X + leftStart
 	d.hscrollbar.Y = r.Y + y
 	d.hscrollbar.Width = leftW
-	d.hscrollbar.TotalCols = d.maxLineW
+	d.hscrollbar.TotalCols = leftW + d.maxLeftCol
 	d.hscrollbar.LeftCol = d.LeftCol
 	d.hscrollbar.Render(surface, leftStart, y)
 	for column := 0; column < d.gutterW; column++ {
@@ -1382,7 +1396,7 @@ func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect,
 	d.rhscroll.X = r.X + rightStart
 	d.rhscroll.Y = r.Y + y
 	d.rhscroll.Width = rightW
-	d.rhscroll.TotalCols = d.maxLineW
+	d.rhscroll.TotalCols = rightW + d.maxLeftCol
 	d.rhscroll.LeftCol = d.LeftCol
 	d.rhscroll.Render(surface, rightStart, y)
 
@@ -1403,18 +1417,11 @@ func (d *CommitDetailWidget) clampScroll() {
 	if d.TopLine > maxTop {
 		d.TopLine = maxTop
 	}
-	maxLeft := d.maxLineW - d.contentW
-	if d.IsWrapped() {
-		maxLeft = 0
-	}
-	if maxLeft < 0 {
-		maxLeft = 0
-	}
 	if d.LeftCol < 0 {
 		d.LeftCol = 0
 	}
-	if d.LeftCol > maxLeft {
-		d.LeftCol = maxLeft
+	if d.LeftCol > d.maxLeftCol {
+		d.LeftCol = d.maxLeftCol
 	}
 }
 
@@ -1430,7 +1437,7 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		return EventConsumed
 	}
-	if !d.IsWrapped() {
+	if d.maxLeftCol > 0 {
 		if newLeft, consumed := d.hscrollbar.HandleEvent(ev); consumed {
 			d.LeftCol = newLeft
 			if d.hscrollbar.IsDragging() {
