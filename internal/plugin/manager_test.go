@@ -1048,8 +1048,11 @@ func TestGrantRetriesTheSaveAfterAFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("retry failed: %v", err)
 	}
-	if granted.Commands || granted.EditorRead {
-		t.Errorf("retry granted more than the manifest declares: %+v", granted)
+	if granted.EditorRead {
+		t.Errorf("retry granted the dropped permission: %+v", granted)
+	}
+	if !granted.Commands {
+		t.Errorf("retry must still grant what the manifest declares: %+v", granted)
 	}
 	stored, err := LoadRegistry(path)
 	if err != nil {
