@@ -2284,21 +2284,41 @@ func (g *EditorGroupWidget) Copy() {
 		}
 	}
 	e := g.keyEditor()
+
+	// Copy from every cursor when multicursor mode is active.
+	if e.isMultiActive() {
+		pieces := e.multiCopyPieces()
+		if len(pieces) > 0 {
+			clipboard.Set(strings.Join(pieces, "\n"))
+		}
+		return
+	}
+
 	if e.Selection == nil || !e.Selection.Active {
-		// No selection: copy the whole current line, including a trailing
-		// newline so a paste inserts it as a full line.
+		// No selection: copy the whole current line.
 		if e.Cursor.Line >= 0 && e.Cursor.Line < len(e.Buf.Lines) {
 			clipboard.Set(e.Buf.Lines[e.Cursor.Line] + "\n")
 		}
 		return
 	}
+
 	text := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
 	clipboard.Set(text)
 }
 
 func (g *EditorGroupWidget) Cut() {
 	t := g.activeTab()
-	if t == nil || g.editableKeyEditor() == nil {
+	e := g.editableKeyEditor()
+	if t == nil || e == nil {
+		return
+	}
+	// Cut from every cursor when multicursor mode is active.
+	if e.isMultiActive() {
+		pieces := e.multiCopyPieces()
+		if len(pieces) > 0 {
+			clipboard.Set(strings.Join(pieces, "\n"))
+		}
+		e.multiCut()
 		return
 	}
 	if t.Sel == nil || !t.Sel.Active {
@@ -2309,6 +2329,7 @@ func (g *EditorGroupWidget) Cut() {
 		}
 		return
 	}
+
 	text := t.Sel.Text(t.Buf.Lines, t.Cur.Line, t.Cur.Col)
 	clipboard.Set(text)
 	g.Editor.deleteSelection()
