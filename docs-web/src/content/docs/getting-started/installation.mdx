@@ -31,11 +31,13 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
     curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
     ```
 
-    This installs to `/usr/local/bin`. To install to a different directory:
+    This installs to `~/.local/bin`. To install to a different directory:
 
     ```sh
-    INSTALL_DIR=~/.local/bin curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
+    curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | INSTALL_DIR="$HOME/bin" sh
     ```
+
+    Set `INSTALL_DIR` on `sh` so the installer receives it.
   </TabItem>
   <TabItem label="Arch Linux (AUR)">
     Available on the [AUR](https://aur.archlinux.org/packages/ttt):

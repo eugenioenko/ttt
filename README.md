@@ -25,11 +25,13 @@ brew install ttt
 curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
 ```
 
-The script downloads the latest release binary for your OS/architecture and installs it to `/usr/local/bin`. To install elsewhere:
+The script downloads the latest release binary for your OS/architecture and installs it to `~/.local/bin` on Linux (`/usr/local/bin` on macOS). To install elsewhere:
 
 ```sh
-INSTALL_DIR=~/.local/bin curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
+curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | INSTALL_DIR="$HOME/bin" sh
 ```
+
+Set `INSTALL_DIR` on `sh` so the installer receives it.
 
 ### [Arch Linux (AUR)](https://aur.archlinux.org/packages/ttt)
 
