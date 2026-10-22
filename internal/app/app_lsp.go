@@ -195,6 +195,12 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		endLine = startLine
 	}
 
+	// One undo step for the whole accept: the replaced range, the inserted
+	// text and the additional edits are one change (#876).
+	if editor.Undo != nil {
+		editor.Undo.BeginTransaction()
+		defer editor.Undo.EndTransaction()
+	}
 	if startLine != endLine || startCol != endCol {
 		editor.ExecCommand(&undo.DeleteSelectionCommand{
 			StartLine: startLine, StartCol: startCol,
@@ -721,6 +727,12 @@ func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
 		return edits[i].Range.Start.Character > edits[j].Range.Start.Character
 	})
 
+	// One undo step for the whole batch: a rename, a format or a code action
+	// is a single change, not one per edited range (#876).
+	if editor.Undo != nil {
+		editor.Undo.BeginTransaction()
+		defer editor.Undo.EndTransaction()
+	}
 	for _, edit := range edits {
 		sl, sc := edit.Range.Start.Line, edit.Range.Start.Character
 		el, ec := edit.Range.End.Line, edit.Range.End.Character
