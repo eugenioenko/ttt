@@ -85,6 +85,69 @@ func TestConnNullResultIsSent(t *testing.T) {
 	}
 }
 
+func TestConnDispatchPreservesWireOrderWhileRepliesAreBlocked(t *testing.T) {
+	events := make(chan string, 6)
+	_, peer := pipeConn(t, Options{
+		DispatchRequest: func(method string, _ json.RawMessage, reply func(any, error)) {
+			events <- method
+			if method == "fail" {
+				reply(nil, &Error{Code: 42, Message: "custom"})
+			} else {
+				reply(method, nil)
+			}
+		},
+		OnRequest: func(string, json.RawMessage) (any, error) {
+			t.Error("ordered dispatcher did not replace OnRequest")
+			return nil, nil
+		},
+		OnNotification: func(method string, _ json.RawMessage) { events <- method },
+	})
+	methods := []string{"first", "note-a", "fail", "note-b", "last", "note-c"}
+	sent := make(chan error, 1)
+	go func() {
+		for i, method := range methods {
+			message := map[string]any{"jsonrpc": "2.0", "method": method}
+			if i%2 == 0 {
+				message["id"] = method
+			}
+			if err := peer.Send(message); err != nil {
+				sent <- err
+				return
+			}
+		}
+		sent <- nil
+	}()
+	for _, want := range methods {
+		select {
+		case got := <-events:
+			if got != want {
+				t.Fatalf("dispatch = %q, want %q", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("unread replies blocked dispatch of later peer messages")
+		}
+	}
+	if err := <-sent; err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool)
+	for range 3 {
+		reply := receive(t, peer)
+		id := string(reply.ID)
+		if seen[id] {
+			t.Fatalf("duplicate reply for %s", id)
+		}
+		seen[id] = true
+		if id == `"fail"` {
+			if reply.Error == nil || reply.Error.Code != 42 {
+				t.Fatalf("custom reply error = %+v", reply.Error)
+			}
+		} else if (id != `"first"` && id != `"last"`) || string(reply.Result) != id || reply.Error != nil {
+			t.Fatalf("reply ID/result mismatch: %+v", reply)
+		}
+	}
+}
+
 func TestConnDeliversNotificationsInOrder(t *testing.T) {
 	got := make(chan string, 3)
 	_, peer := pipeConn(t, Options{

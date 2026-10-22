@@ -2522,7 +2522,7 @@ Connects in the background and calls `callback(conn, err)` on the main thread: `
 | `on_notification` | function | `(method, params)` for a notification from the peer. |
 | `on_close` | function | `(err)` when the connection ends: `nil` when either side closed it normally, otherwise the error. |
 
-Params and results convert between JSON and Lua values as `ttt.json` does. Callbacks run on the main thread in the order the messages arrived. A message from the peer larger than 32 MiB closes the connection.
+Params and results convert between JSON and Lua values as `ttt.json` does. Callbacks run on the main thread; peer request and notification handlers run in the order their messages arrived. Replies can arrive in a different order and are matched by request ID. A message from the peer larger than 32 MiB closes the connection.
 
 ### Connection methods
 

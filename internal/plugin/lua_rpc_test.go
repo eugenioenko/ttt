@@ -1,11 +1,13 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +89,104 @@ func (h *rpcHarness) connectPeer(opts jsonrpc.Options) *jsonrpc.Conn {
 }
 
 var rpcPerms = PermissionSet{NetworkRPC: NetworkRPC{Endpoints: []string{"127.0.0.1:4250"}}}
+
+func TestRPCPipelinedRequestsAndNotificationsKeepWireOrder(t *testing.T) {
+	previous := runtime.GOMAXPROCS(1)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previous) })
+	h := newRPCHarness(t, rpcPerms)
+	h.run(`
+		order = ""
+		rpc.connect("127.0.0.1:4250", {
+			on_request = function(method, params)
+				order = order .. method .. ";"
+				return params
+			end,
+			on_notification = function(method)
+				order = order .. method .. ";"
+			end,
+		}, function(c) conn = c end)
+	`)
+	h.pumpUntil(func() bool { return h.global("conn") != lua.LNil })
+	if err := h.peer.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var batch bytes.Buffer
+	writer := jsonrpc.NewCodec(nil, &batch)
+	for i, method := range []string{"request-a", "note-a", "request-b", "note-b", "request-c", "note-c"} {
+		message := map[string]any{"jsonrpc": "2.0", "method": method}
+		if i%2 == 0 {
+			message["id"] = method
+			message["params"] = method
+		}
+		if err := writer.Send(message); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := h.peer.Write(batch.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	h.pumpUntil(func() bool { return strings.Count(h.global("order").String(), ";") == 6 })
+	if got := h.global("order").String(); got != "request-a;note-a;request-b;note-b;request-c;note-c;" {
+		t.Fatalf("peer handlers ran out of wire order: %q", got)
+	}
+	peer := jsonrpc.NewCodec(h.peer, h.peer)
+	for range 3 {
+		reply, err := peer.Receive()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reply.Error != nil || !bytes.Equal(reply.ID, reply.Result) {
+			t.Fatalf("reply lost its request ID or result: %+v", reply)
+		}
+	}
+}
+
+func TestRPCQueuedRequestAfterDestroyDoesNotCallLua(t *testing.T) {
+	h := newRPCHarness(t, rpcPerms)
+	called := false
+	h.p.State.SetGlobal("record", h.p.State.NewFunction(func(*lua.LState) int {
+		called = true
+		return 0
+	}))
+	h.run(`rpc.connect("127.0.0.1:4250", {
+		on_request = function() record(); return true end,
+	}, function(c) conn = c end)`)
+	h.pumpUntil(func() bool { return h.global("conn") != lua.LNil })
+	peer := jsonrpc.NewCodec(h.peer, h.peer)
+	if err := peer.Send(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "queued"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case event := <-h.posted:
+		h.p.Destroy()
+		event.Callback()
+	case <-time.After(5 * time.Second):
+		t.Fatal("request was not queued for UI delivery")
+	}
+	if called {
+		t.Fatal("queued request called Lua after plugin destruction")
+	}
+}
+
+func TestRPCWithoutRequestHandlerRepliesMethodNotFound(t *testing.T) {
+	h := newRPCHarness(t, rpcPerms)
+	h.run(`rpc.connect("127.0.0.1:4250", {}, function(c) conn = c end)`)
+	h.pumpUntil(func() bool { return h.global("conn") != lua.LNil })
+	if err := h.peer.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	peer := jsonrpc.NewCodec(h.peer, h.peer)
+	if err := peer.Send(map[string]any{"jsonrpc": "2.0", "id": "missing", "method": "unknown"}); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := peer.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(reply.ID) != `"missing"` || reply.Error == nil || reply.Error.Code != jsonrpc.CodeMethodNotFound {
+		t.Fatalf("missing handler reply = %+v", reply)
+	}
+}
 
 func TestRPCModuleRequiresPermission(t *testing.T) {
 	h := newRPCHarness(t, PermissionSet{})

@@ -111,10 +111,10 @@ func (c *rpcConn) dial(callback *lua.LFunction) {
 	}
 	c.transport = transport
 	c.conn = jsonrpc.NewConn(transport, transport, jsonrpc.Options{
-		OnNotification: c.handleNotification,
-		OnRequest:      c.handleRequest,
-		OnClose:        c.handleClose,
-		MaxMessageSize: rpcMaxMessageSize,
+		OnNotification:  c.handleNotification,
+		DispatchRequest: c.handleRequest,
+		OnClose:         c.handleClose,
+		MaxMessageSize:  rpcMaxMessageSize,
 	})
 	post := c.enqueueLocked(connected)
 	c.mu.Unlock()
@@ -123,9 +123,8 @@ func (c *rpcConn) dial(callback *lua.LFunction) {
 	}
 }
 
-// enqueue runs fn on the UI goroutine. Everything a connection delivers goes
-// through one queue so callbacks run in arrival order: separate posts can be
-// reordered when the event queue is full.
+// One queue preserves dispatch order when a full event queue could reorder
+// separate posts. The read loop queues peer requests and notifications directly.
 func (c *rpcConn) enqueue(fn func()) {
 	c.mu.Lock()
 	post := c.enqueueLocked(fn)
@@ -168,36 +167,26 @@ func (c *rpcConn) handleNotification(method string, params json.RawMessage) {
 	})
 }
 
-func (c *rpcConn) handleRequest(method string, params json.RawMessage) (any, error) {
+func (c *rpcConn) handleRequest(method string, params json.RawMessage, reply func(any, error)) {
 	if c.onRequest == nil {
-		return nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not supported: " + method}
+		reply(nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not supported: " + method})
+		return
 	}
-	type reply struct {
-		result any
-		err    error
-	}
-	replies := make(chan reply, 1)
 	c.enqueue(func() {
 		L := c.p.State
 		if L == nil {
-			replies <- reply{err: errRPCClosed}
+			reply(nil, errRPCClosed)
 			return
 		}
 		err := L.CallByParam(lua.P{Fn: c.onRequest, NRet: 1, Protect: true}, lua.LString(method), decodeRPCValue(L, params))
 		if err != nil {
-			replies <- reply{err: errors.New(luaErrorMessage(err))}
+			reply(nil, errors.New(luaErrorMessage(err)))
 			return
 		}
 		result := luaToGo(L.Get(-1))
 		L.Pop(1)
-		replies <- reply{result: result}
+		reply(result, nil)
 	})
-	select {
-	case r := <-replies:
-		return r.result, r.err
-	case <-c.ctx.Done():
-		return nil, errRPCClosed
-	}
 }
 
 func (c *rpcConn) handleClose(err error) {

@@ -22,6 +22,10 @@ type Options struct {
 	// reply; an *Error is sent as is, any other error as an internal error.
 	// A nil OnRequest answers every request with method-not-found.
 	OnRequest func(method string, params json.RawMessage) (any, error)
+	// DispatchRequest, when set, replaces OnRequest and runs on the read loop
+	// to preserve ordering with notifications. It must not block or Call the
+	// same peer. reply may be called later; it writes off the read loop.
+	DispatchRequest func(method string, params json.RawMessage, reply func(any, error))
 	// OnCancel runs when a Call's context ends before its reply arrives.
 	OnCancel func(id int)
 	// OnClose runs once when the read loop ends, after pending Calls are
@@ -86,6 +90,13 @@ func (c *Conn) readLoop() {
 			continue
 		}
 		if msg.IsRequest() {
+			if c.opts.DispatchRequest != nil {
+				var once sync.Once
+				c.opts.DispatchRequest(msg.Method, msg.Params, func(result any, err error) {
+					once.Do(func() { go c.sendReply(msg, result, err) })
+				})
+				continue
+			}
 			// Off the read loop: a peer blocked writing to us may not be
 			// reading, and a reply written from here could then deadlock
 			// both sides.
@@ -109,10 +120,17 @@ func (c *Conn) readLoop() {
 }
 
 func (c *Conn) answer(req Message) {
-	reply := Reply{JSONRPC: "2.0", ID: req.ID}
 	if c.opts.OnRequest == nil {
-		reply.Error = &Error{Code: CodeMethodNotFound, Message: "method not supported: " + req.Method}
-	} else if result, err := c.opts.OnRequest(req.Method, req.Params); err != nil {
+		c.sendReply(req, nil, &Error{Code: CodeMethodNotFound, Message: "method not supported: " + req.Method})
+		return
+	}
+	result, err := c.opts.OnRequest(req.Method, req.Params)
+	c.sendReply(req, result, err)
+}
+
+func (c *Conn) sendReply(req Message, result any, err error) {
+	reply := Reply{JSONRPC: "2.0", ID: req.ID}
+	if err != nil {
 		var rpcErr *Error
 		if !errors.As(err, &rpcErr) {
 			rpcErr = &Error{Code: CodeInternalError, Message: err.Error()}
