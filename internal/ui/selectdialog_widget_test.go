@@ -57,7 +57,7 @@ func TestPaletteFileResultsShowThemedIconsWithoutChangingLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := NewSelectDialogWidget(nil)
-	p.SetFiles([]string{dir})
+	p.SetFiles([]string{dir}, config.QuickOpenSettings{})
 	p.Icons = config.IconsNerdFont
 	p.Input.SetText("")
 	p.Items = append(p.Items, PaletteItem{Label: "other.txt", ID: filepath.Join(dir, "other.txt")})

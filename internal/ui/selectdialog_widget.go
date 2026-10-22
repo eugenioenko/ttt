@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 
@@ -97,8 +98,8 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 	return p
 }
 
-func (p *SelectDialogWidget) SetFiles(workDirs []string) {
-	p.files = listWorkspaceFiles(workDirs)
+func (p *SelectDialogWidget) SetFiles(workDirs []string, opts config.QuickOpenSettings) {
+	p.files = listWorkspaceFiles(workDirs, opts)
 }
 
 func (p *SelectDialogWidget) Focusable() bool { return true }

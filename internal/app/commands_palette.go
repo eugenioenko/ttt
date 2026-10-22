@@ -16,7 +16,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	palette := ui.NewSelectDialogWidget(a.Reg.List())
 	palette.Borders = a.Borders
 	palette.Icons = a.Settings.Appearance.Icons
-	palette.SetFiles(a.Workspace.Paths())
+	palette.SetFiles(a.Workspace.Paths(), a.Settings.QuickOpen)
 	if len(initialText) > 0 {
 		palette.Input.SetText(initialText[0])
 	} else if fileMode {
