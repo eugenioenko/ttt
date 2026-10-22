@@ -224,10 +224,6 @@ Opens the PR as a review surface — commit-by-commit history detail, a live vie
 
 See [Git Integration](docs-web/src/content/docs/guides/git.md).
 
-### Outline
-
-Symbol tree of the current file in the sidebar. Navigate and jump to definitions. Uses LSP document symbols with a built-in fallback for Go and Markdown. Open it from the command palette.
-
 ### Command Palette
 
 - **Ctrl+P** — opens the command palette with all available commands
@@ -235,14 +231,6 @@ Symbol tree of the current file in the sidebar. Navigate and jump to definitions
 - Type `>` in quick-open mode to switch to command mode; delete the `>` to switch back
 - Type `?` to browse searchable help for panels, navigation, and key chords
 - Menu shortcuts resolve dynamically from your keybindings
-
-### Bottom Panel
-
-The bottom panel (Ctrl+K B to toggle) contains the **Terminal**, **Problems**, and **References** tabs.
-
-- **Diagnostics tab** — lists all LSP diagnostics (errors, warnings) grouped by file; click to jump to location
-- **References tab** — shows results from Find All References; click to jump to location
-- **Terminal tab** — integrated terminal emulator (see below)
 
 ### Integrated Terminal
 
@@ -268,15 +256,6 @@ The language segment in the status bar shows server state for the current file: 
 
 See the [LSP guide](docs-web/src/content/docs/guides/lsp.md) and [LSP feature reference](docs-web/src/content/docs/reference/lsp-features.md) for keybindings, configuration, and per-feature detail.
 
-### Tabs
-
-Tabs follow a pin-on-reclick model similar to VS Code:
-
-- Opening a file from the explorer or search replaces the current **unpinned** tab
-- Clicking on an already-open tab (or opening the same file again) **pins** it
-- **Ctrl+W** to close a tab, **Alt+.** / **Alt+,** to switch tabs
-- Right-click a tab for **Close**, **Close Others**, **Close All**
-- Drag tabs to reorder them
 
 ### Theming
 
@@ -301,10 +280,6 @@ TTT supports Lua plugins that add sidebar panels, bottom panel tabs, commands, a
 **Creating** — plugins are Lua scripts with a `plugin.ttt.json` manifest. See the [Plugin Authoring Guide](docs-web/src/content/docs/guides/plugin-authoring.md).
 
 See [Plugins](docs-web/src/content/docs/guides/plugins.md).
-
-### Menu Bar
-
-File, Edit, Selection, View, and Help menus accessible via the menu bar or keyboard shortcuts. Menus display resolved keybindings next to each command. Navigate between menus with left/right arrow keys.
 
 ## Configuration
 
