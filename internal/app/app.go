@@ -154,6 +154,7 @@ type App struct {
 	eventLoopCloseOnce    sync.Once
 	eventLoopDone         chan struct{}
 	tasks                 taskOwner
+	searchReplace         searchReplaceState
 
 	// lspSent holds, per document, a channel closed once its latest didOpen or
 	// didChange was sent. Guarded by DocVersionsMu.
