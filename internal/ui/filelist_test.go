@@ -2,10 +2,13 @@ package ui
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/config"
 )
 
 func TestListDirFilesCollectsFiles(t *testing.T) {
@@ -14,7 +17,7 @@ func TestListDirFilesCollectsFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "main.go"), []byte(""), 0o644)
 	os.WriteFile(filepath.Join(dir, "src", "lib.go"), []byte(""), 0o644)
 
-	files := listDirFiles(dir, "")
+	files := listDirFiles(dir, "", config.QuickOpenSettings{})
 
 	rels := make([]string, len(files))
 	for i, f := range files {
@@ -37,6 +40,37 @@ func TestListDirFilesCollectsFiles(t *testing.T) {
 		if !filepath.IsAbs(f.Abs) {
 			t.Fatalf("expected absolute path, got %q", f.Abs)
 		}
+	}
+}
+
+func TestListDirFilesIncludesHiddenFiles(t *testing.T) {
+	dir := t.TempDir()
+	hidden := filepath.Join(dir, ".config", "fish")
+	os.MkdirAll(hidden, 0o755)
+	os.WriteFile(filepath.Join(hidden, "config.fish"), []byte(""), 0o644)
+	gitDir := filepath.Join(dir, ".git")
+	os.MkdirAll(gitDir, 0o755)
+	os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0o644)
+
+	files := listDirFiles(dir, "", config.QuickOpenSettings{ShowHidden: true})
+
+	rels := make([]string, len(files))
+	for i, f := range files {
+		rels[i] = f.Rel
+	}
+
+	want := filepath.Join(".config", "fish", "config.fish")
+	found := false
+	for _, r := range rels {
+		if r == want {
+			found = true
+		}
+		if strings.HasPrefix(r, ".git"+string(filepath.Separator)) {
+			t.Fatalf("expected the .git directory to stay out, got %v", rels)
+		}
+	}
+	if !found {
+		t.Fatalf("expected %q in results, got %v", want, rels)
 	}
 }
 
@@ -80,7 +114,7 @@ func TestListWorkspaceFilesMultiRoot(t *testing.T) {
 	os.WriteFile(filepath.Join(dir1, "a.txt"), []byte(""), 0o644)
 	os.WriteFile(filepath.Join(dir2, "b.txt"), []byte(""), 0o644)
 
-	files := listWorkspaceFiles([]string{dir1, dir2})
+	files := listWorkspaceFiles([]string{dir1, dir2}, config.QuickOpenSettings{})
 
 	if len(files) < 2 {
 		t.Fatalf("expected at least 2 files, got %d", len(files))
@@ -98,7 +132,7 @@ func TestListWorkspaceFilesSingleRoot(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "x.txt"), []byte(""), 0o644)
 
-	files := listWorkspaceFiles([]string{dir})
+	files := listWorkspaceFiles([]string{dir}, config.QuickOpenSettings{})
 
 	if len(files) != 1 || files[0].Rel != "x.txt" {
 		t.Fatalf("single root should have no prefix, got %v", files)
@@ -206,5 +240,89 @@ func TestFuzzyFilterFilesDetail(t *testing.T) {
 	}
 	if items[0].Detail != "src/components" {
 		t.Fatalf("expected detail 'src/components', got %q", items[0].Detail)
+	}
+}
+
+func TestListDirFilesRespectsQuickOpenSettings(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+	dir := t.TempDir()
+	write := func(rel string) {
+		path := filepath.Join(dir, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(path), 0o755)
+		if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("main.go")
+	write(".hidden.go")
+	write("ignored.go")
+	write(".ignored.go")
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("ignored.go\n.ignored.go\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "init")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init in %s: %v\n%s", dir, err, out)
+	}
+
+	cases := []struct {
+		name     string
+		opts     config.QuickOpenSettings
+		want     []string
+		unwanted []string
+	}{
+		{
+			name:     "both off",
+			opts:     config.QuickOpenSettings{},
+			want:     []string{"main.go"},
+			unwanted: []string{".hidden.go", "ignored.go", ".ignored.go"},
+		},
+		{
+			name:     "hidden only",
+			opts:     config.QuickOpenSettings{ShowHidden: true},
+			want:     []string{"main.go", ".hidden.go"},
+			unwanted: []string{"ignored.go", ".ignored.go"},
+		},
+		{
+			name:     "gitignored only",
+			opts:     config.QuickOpenSettings{ShowGitIgnored: true},
+			want:     []string{"main.go", "ignored.go"},
+			unwanted: []string{".hidden.go", ".ignored.go"},
+		},
+		{
+			name: "both on",
+			opts: config.QuickOpenSettings{ShowHidden: true, ShowGitIgnored: true},
+			want: []string{"main.go", ".hidden.go", "ignored.go", ".ignored.go"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			files := listDirFiles(dir, "", tc.opts)
+			got := make(map[string]bool, len(files))
+			var rels []string
+			for _, f := range files {
+				rel := filepath.ToSlash(f.Rel)
+				got[rel] = true
+				rels = append(rels, rel)
+			}
+			for _, want := range tc.want {
+				if !got[want] {
+					t.Errorf("expected %q in %v", want, rels)
+				}
+			}
+			for _, unwanted := range tc.unwanted {
+				if got[unwanted] {
+					t.Errorf("expected %q to stay out of %v", unwanted, rels)
+				}
+			}
+			for _, rel := range rels {
+				if strings.HasPrefix(rel, ".git/") {
+					t.Errorf("expected the .git directory to stay out, got %v", rels)
+				}
+			}
+		})
 	}
 }

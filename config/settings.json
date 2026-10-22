@@ -41,6 +41,10 @@
     "dimStagedGitColors": false,
     "autoReveal": false
   },
+  "quickOpen": {
+    "showHidden": false,
+    "showGitIgnored": false
+  },
   "git": {
     "fileView": "list"
   },

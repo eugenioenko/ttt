@@ -216,6 +216,15 @@ func settingsCategories() []settingsCategory {
 				GetInt: func(s *config.Settings) int { return s.Search.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Search.Debounce = v }},
 		}},
+		{Title: "Quick Open", Fields: []settingField{
+			section("Files"),
+			{Label: "Hidden files", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.QuickOpen.ShowHidden },
+				SetBool: func(s *config.Settings, v bool) { s.QuickOpen.ShowHidden = v }},
+			{Label: "Git-ignored files", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.QuickOpen.ShowGitIgnored },
+				SetBool: func(s *config.Settings, v bool) { s.QuickOpen.ShowGitIgnored = v }},
+		}},
 		{Title: "Terminal", Fields: []settingField{
 			{Label: "Shell", Kind: settingString, Restart: true,
 				GetString: func(s *config.Settings) string { return s.Terminal.Shell },

@@ -316,6 +316,22 @@ func DefaultExplorerSettings() ExplorerSettings {
 	}
 }
 
+// QuickOpenSettings govern what the quick open lists. They are the
+// explorer's two visibility settings under their own name, and each one
+// stands on its own: showing the gitignored files does not bring the
+// dot-prefixed ones along.
+type QuickOpenSettings struct {
+	ShowHidden     bool `json:"showHidden"`
+	ShowGitIgnored bool `json:"showGitIgnored"`
+}
+
+func DefaultQuickOpenSettings() QuickOpenSettings {
+	return QuickOpenSettings{
+		ShowHidden:     false,
+		ShowGitIgnored: false,
+	}
+}
+
 type PluginSettings struct {
 	Enabled *bool `json:"enabled,omitempty"`
 }
@@ -374,6 +390,7 @@ type Settings struct {
 	Editor       EditorSettings       `json:"editor"`
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
+	QuickOpen    QuickOpenSettings    `json:"quickOpen"`
 	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
 	Panel        PanelSettings        `json:"panel,omitzero"`
 	Git          GitSettings          `json:"git"`
@@ -398,7 +415,7 @@ type Settings struct {
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "appearance": true, "editor": true,
-	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
+	"search": true, "explorer": true, "quickOpen": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }
 
@@ -453,6 +470,7 @@ func DefaultSettings() Settings {
 		Editor:       DefaultEditorSettings(),
 		Search:       DefaultSearchSettings(),
 		Explorer:     DefaultExplorerSettings(),
+		QuickOpen:    DefaultQuickOpenSettings(),
 		Sidebar:      DefaultSidebarSettings(),
 		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
