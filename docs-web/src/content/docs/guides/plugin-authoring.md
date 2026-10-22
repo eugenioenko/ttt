@@ -2522,15 +2522,17 @@ Connects in the background and calls `callback(conn, err)` on the main thread: `
 | `on_notification` | function | `(method, params)` for a notification from the peer. |
 | `on_close` | function | `(err)` when the connection ends: `nil` when either side closed it normally, otherwise the error. |
 
-Params and results convert between JSON and Lua values as `ttt.json` does. Callbacks run on the main thread; peer request and notification handlers run in the order their messages arrived. Replies can arrive in a different order and are matched by request ID. A message from the peer larger than 32 MiB closes the connection.
+Params and results convert between JSON and Lua values as `ttt.json` does. Callbacks run on the main thread; peer request and notification handlers run in the order their messages arrived. Replies can arrive in a different order and are matched by request ID. Incoming message bodies are limited to 32 MiB and headers to 8 KiB; exceeding either limit closes the connection.
 
 ### Connection methods
 
 | Method | Description |
 |--------|-------------|
 | `conn:request(method, params, [callback])` | Send a request. `callback(result, err)` receives the result, or `nil` and the peer's error message. |
-| `conn:notify(method, params)` | Send a notification. Returns `true`, or `false` and an error message. |
+| `conn:notify(method, params)` | Queue a notification without waiting for the peer to read it. Returns `true` when accepted, or `false` and an error message when closed or the queue is full. |
 | `conn:close()` | Close the connection. Connections also close when the plugin unloads. |
+
+Outbound frames share an ordered queue capped at 64 frames and 32 MiB, including the frame being written. A full queue, failed write, or write taking longer than 10 seconds closes the connection and reports the failure through `on_close`.
 
 ```lua
 local rpc = require("ttt.rpc")

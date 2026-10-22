@@ -181,3 +181,42 @@ func TestCodecRejectsOversizedMessageBeforeReading(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestCodecRejectsUnterminatedHeaderWithinReadBudget(t *testing.T) {
+	reader := &io.LimitedReader{R: strings.NewReader(strings.Repeat("x", 32768)), N: 32768}
+	codec := NewCodec(reader, nil)
+	codec.SetMaxContentLength(1024)
+	_, err := codec.Receive()
+	if err == nil || !strings.Contains(err.Error(), "header") || 32768-reader.N > 8192 {
+		t.Fatalf("oversized header: error = %v, consumed = %d bytes; want rejection within 8 KiB", err, 32768-reader.N)
+	}
+}
+
+func TestCodecHeaderLimitsAndLegacyCompatibility(t *testing.T) {
+	trailer := "\r\nContent-Length: 2\r\n\r\n"
+	exact := "X: " + strings.Repeat("x", maxHeaderBytes-len("X: ")-len(trailer)) + trailer
+	for _, tc := range []struct {
+		name, headers string
+		limited, fail bool
+	}{
+		{name: "exact limit", headers: exact, limited: true},
+		{name: "long line", headers: "X: " + strings.Repeat("x", maxHeaderBytes) + trailer, limited: true, fail: true},
+		{name: "many short lines", headers: strings.Repeat("X: value\r\n", 1024) + "Content-Length: 2\r\n\r\n", limited: true, fail: true},
+		{name: "unlimited legacy transport", headers: "X: " + strings.Repeat("x", maxHeaderBytes*2) + trailer},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			codec := NewCodec(strings.NewReader(tc.headers+"{}"), nil)
+			if tc.limited {
+				codec.SetMaxContentLength(1024)
+			}
+			_, err := codec.Receive()
+			if tc.fail {
+				if err == nil || !strings.Contains(err.Error(), "headers exceed") {
+					t.Fatalf("oversized headers error = %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

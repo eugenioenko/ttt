@@ -15,6 +15,8 @@ const rpcConnTypeName = "ttt.rpc.conn"
 
 const rpcMaxMessageSize = 32 << 20
 
+const rpcOutboundQueueSize = 64
+
 var errRPCClosed = errors.New("connection closed")
 
 type rpcConn struct {
@@ -34,6 +36,8 @@ type rpcConn struct {
 	draining   bool
 	closedByUs bool
 	closed     bool
+	closeOnce  sync.Once
+	outbox     *rpcOutbox
 }
 
 func setupRPCModule(L *lua.LState, p *Plugin) {
@@ -64,7 +68,10 @@ func rpcConnect(p *Plugin) lua.LGFunction {
 			L.ArgError(1, err.Error())
 			return 0
 		}
-		if p.DialRPC == nil {
+		p.mu.Lock()
+		dialRPC := p.DialRPC
+		p.mu.Unlock()
+		if dialRPC == nil {
 			L.RaiseError("rpc API not available")
 			return 0
 		}
@@ -74,14 +81,14 @@ func rpcConnect(p *Plugin) lua.LGFunction {
 		c.onClose, _ = L.GetField(opts, "on_close").(*lua.LFunction)
 		c.ctx, c.cancel = context.WithCancel(context.Background())
 		p.registerRPCConn(c)
-		go c.dial(callback)
+		go c.dial(callback, dialRPC)
 		return 0
 	}
 }
 
-func (c *rpcConn) dial(callback *lua.LFunction) {
+func (c *rpcConn) dial(callback *lua.LFunction, dialRPC func(context.Context, string) (io.ReadWriteCloser, error)) {
 	p := c.p
-	transport, err := p.DialRPC(c.ctx, c.endpoint)
+	transport, err := dialRPC(c.ctx, c.endpoint)
 	if err != nil {
 		p.unregisterRPCConn(c)
 		c.enqueue(func() {
@@ -110,14 +117,18 @@ func (c *rpcConn) dial(callback *lua.LFunction) {
 		return
 	}
 	c.transport = transport
-	c.conn = jsonrpc.NewConn(transport, transport, jsonrpc.Options{
+	outbox := newRPCOutbox(c.ctx, rpcWriter{transport: transport, timeout: rpcWriteTimeout, onError: c.handleClose})
+	conn := jsonrpc.NewConn(transport, outbox, jsonrpc.Options{
 		OnNotification:  c.handleNotification,
 		DispatchRequest: c.handleRequest,
 		OnClose:         c.handleClose,
 		MaxMessageSize:  rpcMaxMessageSize,
 	})
+	c.conn = conn
+	c.outbox = outbox
 	post := c.enqueueLocked(connected)
 	c.mu.Unlock()
+	go outbox.run()
 	if post {
 		c.postDrain()
 	}
@@ -190,24 +201,35 @@ func (c *rpcConn) handleRequest(method string, params json.RawMessage, reply fun
 }
 
 func (c *rpcConn) handleClose(err error) {
-	c.mu.Lock()
-	byUs := c.closedByUs
-	c.closed = true
-	c.mu.Unlock()
-	c.cancel()
-	c.p.unregisterRPCConn(c)
-	if c.onClose == nil {
-		return
-	}
-	c.enqueue(func() {
-		if c.p.State == nil {
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		byUs := c.closedByUs
+		c.closed = true
+		outbox := c.outbox
+		transport := c.transport
+		c.transport = nil
+		c.mu.Unlock()
+		c.cancel()
+		if outbox != nil {
+			outbox.stop()
+		}
+		if transport != nil {
+			transport.Close()
+		}
+		c.p.unregisterRPCConn(c)
+		if c.onClose == nil {
 			return
 		}
-		reason := lua.LValue(lua.LNil)
-		if !byUs && err != nil && !errors.Is(err, io.EOF) {
-			reason = lua.LString(err.Error())
-		}
-		_ = c.p.CallLuaFunc(c.onClose, reason)
+		c.enqueue(func() {
+			if c.p.State == nil {
+				return
+			}
+			reason := lua.LValue(lua.LNil)
+			if !byUs && err != nil && !errors.Is(err, io.EOF) {
+				reason = lua.LString(err.Error())
+			}
+			_ = c.p.CallLuaFunc(c.onClose, reason)
+		})
 	})
 }
 
@@ -216,9 +238,14 @@ func (c *rpcConn) close() {
 	c.mu.Lock()
 	c.closedByUs = true
 	c.closed = true
+	outbox := c.outbox
 	transport := c.transport
+	c.transport = nil
 	c.mu.Unlock()
 	c.cancel()
+	if outbox != nil {
+		outbox.stop()
+	}
 	if transport != nil {
 		transport.Close()
 	}
@@ -273,7 +300,7 @@ func rpcNotify(L *lua.LState) int {
 	method := L.CheckString(2)
 	if err := c.conn.Notify(method, luaToGo(L.Get(3))); err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString(c.callError(err)))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 	L.Push(lua.LTrue)

@@ -55,6 +55,7 @@ type Reply struct {
 const (
 	CodeMethodNotFound = -32601
 	CodeInternalError  = -32603
+	maxHeaderBytes     = 8 << 10
 )
 
 type Error struct {
@@ -74,6 +75,11 @@ type Codec struct {
 	maxContentLength int
 }
 
+// FrameWriter accepts whole frames and may retain body, which Send never reuses.
+type FrameWriter interface {
+	WriteFrame(header string, body []byte) error
+}
+
 func NewCodec(r io.Reader, w io.Writer) *Codec {
 	return &Codec{
 		reader: bufio.NewReader(r),
@@ -81,8 +87,8 @@ func NewCodec(r io.Reader, w io.Writer) *Codec {
 	}
 }
 
-// SetMaxContentLength makes Receive reject messages larger than n bytes before
-// allocating them; 0 means no limit. Set it for peers that are not trusted.
+// SetMaxContentLength bounds the body and enables an 8 KiB header limit.
+// Zero leaves both unlimited for existing trusted transports.
 func (c *Codec) SetMaxContentLength(n int) {
 	c.maxContentLength = n
 }
@@ -95,6 +101,9 @@ func (c *Codec) Send(msg any) error {
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(data))
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if writer, ok := c.writer.(FrameWriter); ok {
+		return writer.WriteFrame(header, data)
+	}
 	if _, err := io.WriteString(c.writer, header); err != nil {
 		return err
 	}
@@ -104,11 +113,13 @@ func (c *Codec) Send(msg any) error {
 
 func (c *Codec) Receive() (Message, error) {
 	contentLen := -1
+	headerBytes := 0
 	for {
-		line, err := c.reader.ReadString('\n')
+		line, err := c.readHeaderLine(maxHeaderBytes - headerBytes)
 		if err != nil {
 			return Message{}, err
 		}
+		headerBytes += len(line)
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
 			break
@@ -136,4 +147,25 @@ func (c *Codec) Receive() (Message, error) {
 		return Message{}, err
 	}
 	return msg, nil
+}
+
+func (c *Codec) readHeaderLine(remaining int) (string, error) {
+	if c.maxContentLength <= 0 {
+		return c.reader.ReadString('\n')
+	}
+	if remaining <= 0 {
+		return "", fmt.Errorf("message headers exceed the %d byte limit", maxHeaderBytes)
+	}
+	var line []byte
+	for {
+		chunk, err := c.reader.ReadSlice('\n')
+		size := len(line) + len(chunk)
+		if size > remaining || err == bufio.ErrBufferFull && size == remaining {
+			return "", fmt.Errorf("message headers exceed the %d byte limit", maxHeaderBytes)
+		}
+		line = append(line, chunk...)
+		if err != bufio.ErrBufferFull {
+			return string(line), err
+		}
+	}
 }
