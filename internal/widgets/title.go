@@ -3,6 +3,7 @@ package widgets
 import (
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -88,21 +89,27 @@ func (t *TitleWidget) Render(surface Surface) {
 		t.dropdown.Render(ddSurface)
 	}
 	if t.Config.Badge != "" {
-		badgeRunes := []rune(t.Config.Badge)
-		bx := maxTextW - len(badgeRunes)
+		bx := maxTextW - textwidth.String(t.Config.Badge)
 		if bx > 0 {
 			inner.DrawText(bx, 0, t.Config.Badge, maxTextW, term.StyleMuted)
 			maxTextW = bx - 1
 		}
 	}
 
+	// The title is bold, which DrawText cannot express, so the loop draws
+	// the cells itself and advances by the rune's display width.
 	x := 0
 	for _, ch := range t.Config.Title {
-		if x >= maxTextW {
+		rw := textwidth.Rune(ch)
+		if x+rw > maxTextW {
+			// A fullwidth rune that would cross the last column becomes a
+			// space: the terminal paints it across two columns regardless of
+			// clipping.
+			inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style, Bold: true})
 			break
 		}
 		inner.SetCell(x, 0, term.Cell{Ch: ch, Style: style, Bold: true})
-		x++
+		x += rw
 	}
 }
 

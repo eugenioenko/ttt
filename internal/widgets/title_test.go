@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -177,5 +178,33 @@ func TestTitleHeightWithBoxModel(t *testing.T) {
 	// Height = 1 (title) + padding overhead
 	if h := tw.Height(); h != 3 {
 		t.Fatalf("expected Height()=3 with padding, got %d", h)
+	}
+}
+
+// A fullwidth rune covers two columns, so a title drawn one column per rune
+// drops every other character, and a fullwidth badge starts too far right and
+// is clipped (#1064).
+func TestTitleRendersFullwidthTextAndBadge(t *testing.T) {
+	title := NewTitleWidget(TitleConfig{Title: "タイトル", Badge: "バッジ"})
+
+	s := renderWidget(title, 0, 0, 20, 1)
+
+	row := rowText(s, 0)
+	if !strings.Contains(row, "タイトル") {
+		t.Errorf("row = %q, want it to hold the whole title", row)
+	}
+	if !strings.Contains(row, "バッジ") {
+		t.Errorf("row = %q, want it to hold the whole badge", row)
+	}
+	// The second rune of the title sits at column 2, and the badge is six
+	// columns wide, so it starts at column 14.
+	if got := s.cells[0][2].Ch; got != 'イ' {
+		t.Errorf("cell 2 = %q, want the second fullwidth rune of the title", got)
+	}
+	if got := s.cells[0][14].Ch; got != 'バ' {
+		t.Errorf("cell 14 = %q, want the badge to start there", got)
+	}
+	if got := s.cells[0][16].Ch; got != 'ッ' {
+		t.Errorf("cell 16 = %q, want the badge's second fullwidth rune", got)
 	}
 }
