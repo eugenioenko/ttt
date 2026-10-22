@@ -1,14 +1,67 @@
 package plugin
 
 import (
+	"context"
 	"encoding/json"
+	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/jsonrpc"
 	lua "github.com/yuin/gopher-lua"
 )
+
+func TestRPCDisconnectBeforeContextCancellationDeliversCallback(t *testing.T) {
+	h := newRPCHarness(t, rpcPerms)
+	local, peer := net.Pipe()
+	defer peer.Close()
+	if err := peer.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	c := &rpcConn{p: h.p, transport: local}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	h.p.registerRPCConn(c)
+	allowClose := make(chan struct{})
+	var once sync.Once
+	release := func() { once.Do(func() { close(allowClose) }) }
+	t.Cleanup(release)
+	c.conn = jsonrpc.NewConn(local, local, jsonrpc.Options{OnClose: func(err error) {
+		<-allowClose
+		c.handleClose(err)
+	}})
+	L := h.p.State
+	ud := L.NewUserData()
+	ud.Value = c
+	L.SetMetatable(ud, L.GetTypeMetatable(rpcConnTypeName))
+	L.SetGlobal("conn", ud)
+	h.run(`conn:request("pending", {}, function(_, err)
+		request_err = err; callback_count = (callback_count or 0) + 1
+	end)`)
+	if _, err := jsonrpc.NewCodec(peer, peer).Receive(); err != nil {
+		t.Fatal(err)
+	}
+	peer.Close()
+	select {
+	case event := <-h.posted:
+		if c.ctx.Err() != nil {
+			t.Fatal("context canceled before the request callback was queued")
+		}
+		release()
+		select {
+		case <-c.ctx.Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("connection did not close")
+		}
+		event.Callback()
+	case <-time.After(5 * time.Second):
+		t.Fatal("disconnected request did not queue a callback")
+	}
+	if h.global("request_err") != lua.LString("connection closed") || h.global("callback_count") != lua.LNumber(1) {
+		t.Fatalf("disconnect callback = %v, count = %v", h.global("request_err"), h.global("callback_count"))
+	}
+}
 
 func TestRPCInboxOverflowDropsQueuedMessages(t *testing.T) {
 	for _, kind := range []string{"notifications", "requests", "params bytes", "ID bytes"} {

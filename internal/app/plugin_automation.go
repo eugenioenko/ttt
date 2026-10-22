@@ -110,7 +110,12 @@ func (a *App) runPluginAutomation(ctx context.Context, p *plugin.Plugin, action,
 			}
 		}
 	case "type":
-		for _, event := range pluginTextEvents(args) {
+		var events []tcell.Event
+		events, err = pluginTextEvents(args)
+		if err != nil {
+			break
+		}
+		for _, event := range events {
 			err = post(event)
 			if err != nil {
 				break

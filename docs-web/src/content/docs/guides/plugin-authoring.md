@@ -950,10 +950,10 @@ These drive and capture the editor for automated testing (see [Testing Plugins](
 | `ttt.click(x, y)` | `input` | Simulate a mouse click at screen coordinates. |
 | `ttt.drag(x1, y1, x2, y2)` | `input` | Simulate a mouse drag between two points. |
 | `ttt.key(combo)` | `input` | Press a key combo or chord, written as in keybindings (`"ctrl+s"`, `"ctrl+k ctrl+s"`). Raises an error for an unknown key. |
-| `ttt.type(text)` | `input` | Type text as individual key presses. LF, CRLF and CR produce Enter; CRLF produces one Enter. Other control characters follow key handling. |
+| `ttt.type(text)` | `input` | Type text as individual key presses. LF, CRLF and CR produce Enter; CRLF produces one Enter. Other control characters follow key handling. Raises an error above 64 KiB of UTF-8 input; use automation `paste` for bulk text. |
 | `ttt.quit()` | none | Exit the editor. |
 
-Simulated input is queued and handled after the current callback returns, in the order it was sent. It is dropped if its originating plugin is disabled, unloaded or reloaded, or while a plugin approval dialog is open, so no plugin can grant permissions on the user's behalf.
+Events within a key or text call are queued as one batch and handled in order after the current callback returns. Mouse clicks and drags run asynchronously and can interleave with, or arrive after, later keyboard input. When a click must finish before typing, chain acknowledged automation actions through their callbacks. Queued input is dropped if its originating plugin is disabled, unloaded or reloaded, or while a plugin approval dialog is open, so no plugin can grant permissions on the user's behalf.
 
 These calls do not report when the input has been applied. When you need to know, for example to read the screen after a key press, use [`ttt.automation`](#automation-api) instead.
 
@@ -2588,6 +2588,8 @@ end)
 | `type`, `paste` | `input` | Text input. Type sends individual key presses, mapping LF, CRLF and CR to Enter (one Enter per CRLF); other control characters follow key handling. Paste inserts literal text through the editor's undoable paste path. |
 | `wait` | `input` | Milliseconds, at most 30000. |
 | `wait-for` | `screen.read` | Screen text and optional `timeout=MS`, as in `--exec`; at most 30000 ms, default 5000. |
+
+The `type` action rejects input above 64 KiB of UTF-8 text through its callback, before applying any input. Use `paste` for larger text.
 
 Call `cancel()` to stop waiting and prevent queued events from applying. Claimed events finish handling before cancellation returns through the callback. Actions fail while plugin permission approvals are pending; synthesized input cannot approve permissions. Commands may start external work that continues after their acknowledgment; use `wait-for` or inspect state to observe its completion.
 

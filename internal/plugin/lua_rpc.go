@@ -337,7 +337,7 @@ func rpcRequest(L *lua.LState) int {
 		if err != nil {
 			errText = c.callError(err)
 		}
-		closed := c.ctx.Err() != nil
+		closed := c.ctx.Err() != nil || errors.Is(err, jsonrpc.ErrClosed)
 		if closed {
 			result, errText = nil, errRPCClosed.Error()
 		}

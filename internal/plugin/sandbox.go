@@ -576,7 +576,9 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			}
 			text := L.CheckString(1)
 			if p.SimulateText != nil {
-				p.SimulateText(text)
+				if err := p.SimulateText(text); err != nil {
+					L.ArgError(1, err.Error())
+				}
 			}
 			return 0
 		}))

@@ -124,7 +124,7 @@ func TestKeyAndTypeRequireInputPermission(t *testing.T) {
 		p, cleanup := newTestPluginBase(PermissionSet{})
 		called := false
 		p.SimulateKeys = func(string) error { called = true; return nil }
-		p.SimulateText = func(string) { called = true }
+		p.SimulateText = func(string) error { called = true; return nil }
 		err := p.State.DoString(`local ttt = require("ttt")` + "\n" + call)
 		cleanup()
 		if err == nil || !strings.Contains(err.Error(), "input permission not granted") {
@@ -147,12 +147,19 @@ func TestKeyAndTypeWithPermission(t *testing.T) {
 		keys = append(keys, combo)
 		return nil
 	}
-	p.SimulateText = func(s string) { text = append(text, s) }
+	p.SimulateText = func(s string) error {
+		if s == "too long" {
+			return errors.New("type input exceeds limit")
+		}
+		text = append(text, s)
+		return nil
+	}
 	if err := p.State.DoString(`
 		local ttt = require("ttt")
 		ttt.key("ctrl+k ctrl+s")
 		ttt.type("héllo")
 		ok, err = pcall(ttt.key, "nope")
+		type_ok, type_err = pcall(ttt.type, "too long")
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -161,5 +168,8 @@ func TestKeyAndTypeWithPermission(t *testing.T) {
 	}
 	if p.State.GetGlobal("ok") != lua.LFalse || !strings.Contains(p.State.GetGlobal("err").String(), "unknown key") {
 		t.Fatalf("invalid combo: ok = %v, err = %v", p.State.GetGlobal("ok"), p.State.GetGlobal("err"))
+	}
+	if p.State.GetGlobal("type_ok") != lua.LFalse || !strings.Contains(p.State.GetGlobal("type_err").String(), "type input exceeds") {
+		t.Fatalf("invalid type: ok = %v, err = %v", p.State.GetGlobal("type_ok"), p.State.GetGlobal("type_err"))
 	}
 }

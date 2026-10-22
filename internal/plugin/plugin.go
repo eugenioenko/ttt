@@ -93,7 +93,7 @@ type Plugin struct {
 	SimulateClick      func(x, y int)
 	SimulateDrag       func(x1, y1, x2, y2 int)
 	SimulateKeys       func(combo string) error
-	SimulateText       func(text string)
+	SimulateText       func(text string) error
 	DialRPC            func(ctx context.Context, endpoint string) (io.ReadWriteCloser, error)
 	RunAutomation      func(ctx context.Context, action, args string) (json.RawMessage, error)
 	ScreenText         func() string

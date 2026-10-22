@@ -377,7 +377,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		}()
 	}
 	p.SimulateKeys = func(combo string) error { return a.simulatePluginKeys(combo, allowed) }
-	p.SimulateText = func(text string) { a.simulatePluginText(text, allowed) }
+	p.SimulateText = func(text string) error { return a.simulatePluginText(text, allowed) }
 	p.ScreenText = a.Screenshot
 	p.DebugState = func() (string, error) {
 		data, err := json.MarshalIndent(a.BuildDebugState(), "", "  ")
@@ -1196,7 +1196,12 @@ func (a *App) simulatePluginKeys(combo string, allowed func() bool) error {
 	return nil
 }
 
-func pluginTextEvents(text string) []tcell.Event {
+const maxPluginTypeBytes = 64 << 10
+
+func pluginTextEvents(text string) ([]tcell.Event, error) {
+	if len(text) > maxPluginTypeBytes {
+		return nil, fmt.Errorf("type input exceeds %d bytes; use automation paste for bulk text", maxPluginTypeBytes)
+	}
 	var events []tcell.Event
 	for _, r := range strings.ReplaceAll(text, "\r\n", "\n") {
 		if r == '\n' {
@@ -1205,14 +1210,18 @@ func pluginTextEvents(text string) []tcell.Event {
 			events = append(events, tcell.NewEventKey(tcell.KeyRune, string(r), tcell.ModNone))
 		}
 	}
-	return events
+	return events, nil
 }
 
-func (a *App) simulatePluginText(text string, allowed func() bool) {
-	events := pluginTextEvents(text)
+func (a *App) simulatePluginText(text string, allowed func() bool) error {
+	events, err := pluginTextEvents(text)
+	if err != nil {
+		return err
+	}
 	if len(events) > 0 {
 		a.postPluginInput(allowed, events...)
 	}
+	return nil
 }
 
 func (a *App) acceptsPluginInput() bool {
