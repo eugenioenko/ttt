@@ -88,7 +88,8 @@ func TestConnNullResultIsSent(t *testing.T) {
 func TestConnDispatchPreservesWireOrderWhileRepliesAreBlocked(t *testing.T) {
 	events := make(chan string, 6)
 	_, peer := pipeConn(t, Options{
-		DispatchRequest: func(method string, _ json.RawMessage, reply func(any, error)) {
+		DispatchRequest: func(request Message, reply func(any, error)) {
+			method := request.Method
 			events <- method
 			if method == "fail" {
 				reply(nil, &Error{Code: 42, Message: "custom"})

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -352,29 +353,31 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.ShowPanel = func(area string, focus bool) (bool, error) {
 		return a.ShowPluginPanel(p.Name, area, focus)
 	}
+	state := p.State
+	allowed := func() bool { return p.Enabled && p.State == state && state != nil }
 	p.SimulateClick = func(x, y int) {
 		go func() {
-			a.postPluginInput(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+			a.postPluginInput(allowed, tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
 			time.Sleep(50 * time.Millisecond)
-			a.postPluginInput(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+			a.postPluginInput(allowed, tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
 		}()
 	}
 	p.SimulateDrag = func(x1, y1, x2, y2 int) {
 		go func() {
-			a.postPluginInput(tcell.NewEventMouse(x1, y1, tcell.Button1, tcell.ModNone))
+			a.postPluginInput(allowed, tcell.NewEventMouse(x1, y1, tcell.Button1, tcell.ModNone))
 			time.Sleep(30 * time.Millisecond)
 			steps := 10
 			for i := 1; i <= steps; i++ {
 				mx := x1 + (x2-x1)*i/steps
 				my := y1 + (y2-y1)*i/steps
-				a.postPluginInput(tcell.NewEventMouse(mx, my, tcell.Button1, tcell.ModNone))
+				a.postPluginInput(allowed, tcell.NewEventMouse(mx, my, tcell.Button1, tcell.ModNone))
 				time.Sleep(15 * time.Millisecond)
 			}
-			a.postPluginInput(tcell.NewEventMouse(x2, y2, tcell.ButtonNone, tcell.ModNone))
+			a.postPluginInput(allowed, tcell.NewEventMouse(x2, y2, tcell.ButtonNone, tcell.ModNone))
 		}()
 	}
-	p.SimulateKeys = a.simulatePluginKeys
-	p.SimulateText = a.simulatePluginText
+	p.SimulateKeys = func(combo string) error { return a.simulatePluginKeys(combo, allowed) }
+	p.SimulateText = func(text string) { a.simulatePluginText(text, allowed) }
 	p.ScreenText = a.Screenshot
 	p.DebugState = func() (string, error) {
 		data, err := json.MarshalIndent(a.BuildDebugState(), "", "  ")
@@ -1175,11 +1178,11 @@ type pluginInput struct {
 
 // postPluginInput sends events as one interrupt: PostEvent falls back to a
 // goroutine when the queue is full, which would reorder separate posts.
-func (a *App) postPluginInput(events ...tcell.Event) {
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInput{Events: events}))
+func (a *App) postPluginInput(allowed func() bool, events ...tcell.Event) {
+	a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInput{Events: events, Allowed: allowed}))
 }
 
-func (a *App) simulatePluginKeys(combo string) error {
+func (a *App) simulatePluginKeys(combo string, allowed func() bool) error {
 	steps, err := config.ParseKeyString(combo)
 	if err != nil {
 		return err
@@ -1189,17 +1192,26 @@ func (a *App) simulatePluginKeys(combo string) error {
 		key, mod, ch := comboToTcell(step)
 		events = append(events, tcell.NewEventKey(key, keyEventStr(ch), mod))
 	}
-	a.postPluginInput(events...)
+	a.postPluginInput(allowed, events...)
 	return nil
 }
 
-func (a *App) simulatePluginText(text string) {
+func pluginTextEvents(text string) []tcell.Event {
 	var events []tcell.Event
-	for _, r := range text {
-		events = append(events, tcell.NewEventKey(tcell.KeyRune, string(r), tcell.ModNone))
+	for _, r := range strings.ReplaceAll(text, "\r\n", "\n") {
+		if r == '\n' {
+			events = append(events, tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+		} else {
+			events = append(events, tcell.NewEventKey(tcell.KeyRune, string(r), tcell.ModNone))
+		}
 	}
+	return events
+}
+
+func (a *App) simulatePluginText(text string, allowed func() bool) {
+	events := pluginTextEvents(text)
 	if len(events) > 0 {
-		a.postPluginInput(events...)
+		a.postPluginInput(allowed, events...)
 	}
 }
 

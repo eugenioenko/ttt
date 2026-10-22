@@ -179,6 +179,12 @@ func TestRPCWithoutRequestHandlerRepliesMethodNotFound(t *testing.T) {
 	if err := peer.Send(map[string]any{"jsonrpc": "2.0", "id": "missing", "method": "unknown"}); err != nil {
 		t.Fatal(err)
 	}
+	select {
+	case event := <-h.posted:
+		event.Callback()
+	case <-time.After(5 * time.Second):
+		t.Fatal("request was not queued")
+	}
 	reply, err := peer.Receive()
 	if err != nil {
 		t.Fatal(err)

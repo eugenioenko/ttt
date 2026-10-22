@@ -15,9 +15,7 @@ const typist = `local ttt = require("ttt")
 ttt.register({
   commands = {
     { id = "typist.run", title = "Typist Run", handler = function()
-      ttt.type("hello")
-      ttt.key("enter")
-      ttt.type("wörld")
+      ttt.type("hello\\nwörld\\r\\nend")
       ttt.key("ctrl+s")
     end },
   },
@@ -33,12 +31,13 @@ describe("plugin key input", () => {
 
     tui.start(file, "--plugin", pluginPath);
     tui.exec("Typist Run");
-    tui.waitFor("wörld");
+    tui.waitFor("end");
     const typed = tui.snapshot();
     const { snapshots } = tui.run();
 
     expect(snapshots[typed]).toMatch(/1\s+hello/);
     expect(snapshots[typed]).toMatch(/2\s+wörld/);
-    expect(readFileSync(file, "utf8")).toBe("hello\nwörld\n");
+    expect(snapshots[typed]).toMatch(/3\s+end/);
+    expect(readFileSync(file, "utf8")).toBe("hello\nwörld\nend\n");
   });
 });

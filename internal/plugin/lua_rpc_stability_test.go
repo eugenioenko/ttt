@@ -108,8 +108,10 @@ func TestRPCOutboxBoundsQueuedBytesAndReleasesFrames(t *testing.T) {
 	if err := q.WriteFrame("next", []byte("body")); !errors.Is(err, errRPCQueueFull) {
 		t.Fatalf("full byte budget returned %v", err)
 	}
-	if !errors.Is(<-failure, errRPCQueueFull) {
-		t.Fatal("byte overflow did not report the connection failure")
+	select {
+	case err := <-failure:
+		t.Fatalf("byte overflow closed the connection: %v", err)
+	default:
 	}
 	q.stop()
 	if len(q.frames) != 0 || q.bytes != 0 || q.pending != 0 {
@@ -120,10 +122,13 @@ func TestRPCOutboxBoundsQueuedBytesAndReleasesFrames(t *testing.T) {
 	}
 }
 
-func TestRPCNotificationQueueOverflowClosesConnection(t *testing.T) {
+func TestRPCNotificationQueueOverflowAllowsRetry(t *testing.T) {
 	h := newRPCHarness(t, rpcPerms)
 	connectRPCWithoutPeerReader(h)
 	h.p.State.SetGlobal("count", lua.LNumber(rpcOutboundQueueSize+2))
+	if err := h.peer.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
 	h.run(`for i = 1, count do
 		local ok, err = conn:notify("blocked", {})
 		if not ok then queue_err = err; break end
@@ -131,13 +136,23 @@ func TestRPCNotificationQueueOverflowClosesConnection(t *testing.T) {
 	if !strings.Contains(h.global("queue_err").String(), "queue is full") {
 		t.Fatalf("queue overflow error = %v", h.global("queue_err"))
 	}
-	h.pumpUntil(func() bool { return h.global("closed") != lua.LNil })
-	if !strings.Contains(h.global("closed").String(), "queue is full") || h.global("close_count") != lua.LNumber(1) {
-		t.Fatalf("queue overflow close = %v, count = %v", h.global("closed"), h.global("close_count"))
+	c := h.global("conn").(*lua.LUserData).Value.(*rpcConn)
+	if c.ctx.Err() != nil {
+		t.Fatal("queue overflow closed the connection")
 	}
-	h.run(`ok, err = conn:notify("late", {})`)
-	if h.global("ok") != lua.LFalse || h.global("err").String() != "connection closed" {
-		t.Fatal("closed queue accepted another notification")
+	peer := jsonrpc.NewCodec(h.peer, h.peer)
+	for range rpcOutboundQueueSize {
+		if _, err := peer.Receive(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.run(`assert(conn:notify("retry", {}))`)
+	message, err := peer.Receive()
+	if err != nil || message.Method != "retry" {
+		t.Fatalf("retried notification = %+v, %v", message, err)
+	}
+	if h.global("closed") != lua.LNil {
+		t.Fatal("queue overflow called on_close")
 	}
 }
 

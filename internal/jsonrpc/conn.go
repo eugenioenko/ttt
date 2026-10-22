@@ -25,7 +25,9 @@ type Options struct {
 	// DispatchRequest, when set, replaces OnRequest and runs on the read loop
 	// to preserve ordering with notifications. It must not block or Call the
 	// same peer. reply may be called later; it writes off the read loop.
-	DispatchRequest func(method string, params json.RawMessage, reply func(any, error))
+	DispatchRequest func(request Message, reply func(any, error))
+	// OnReplyError lets a transport close rather than silently lose a reply.
+	OnReplyError func(error)
 	// OnCancel runs when a Call's context ends before its reply arrives.
 	OnCancel func(id int)
 	// OnClose runs once when the read loop ends, after pending Calls are
@@ -91,9 +93,11 @@ func (c *Conn) readLoop() {
 		}
 		if msg.IsRequest() {
 			if c.opts.DispatchRequest != nil {
+				request := Message{ID: msg.ID, Method: msg.Method, Params: msg.Params}
+				replyRequest := Message{ID: msg.ID, Method: msg.Method}
 				var once sync.Once
-				c.opts.DispatchRequest(msg.Method, msg.Params, func(result any, err error) {
-					once.Do(func() { go c.sendReply(msg, result, err) })
+				c.opts.DispatchRequest(request, func(result any, err error) {
+					once.Do(func() { go c.sendReply(replyRequest, result, err) })
 				})
 				continue
 			}
@@ -142,6 +146,9 @@ func (c *Conn) sendReply(req Message, result any, err error) {
 	}
 	if err := c.codec.Send(reply); err != nil {
 		slog.Debug("jsonrpc reply failed", "method", req.Method, "err", err)
+		if c.opts.OnReplyError != nil {
+			c.opts.OnReplyError(err)
+		}
 	}
 }
 

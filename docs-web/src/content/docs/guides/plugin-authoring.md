@@ -950,10 +950,10 @@ These drive and capture the editor for automated testing (see [Testing Plugins](
 | `ttt.click(x, y)` | `input` | Simulate a mouse click at screen coordinates. |
 | `ttt.drag(x1, y1, x2, y2)` | `input` | Simulate a mouse drag between two points. |
 | `ttt.key(combo)` | `input` | Press a key combo or chord, written as in keybindings (`"ctrl+s"`, `"ctrl+k ctrl+s"`). Raises an error for an unknown key. |
-| `ttt.type(text)` | `input` | Type text as individual key presses. |
+| `ttt.type(text)` | `input` | Type text as individual key presses. LF, CRLF and CR produce Enter; CRLF produces one Enter. Other control characters follow key handling. |
 | `ttt.quit()` | none | Exit the editor. |
 
-Simulated input is queued and handled after the current callback returns, in the order it was sent. It is dropped while a plugin approval dialog is open, so no plugin can grant permissions on the user's behalf.
+Simulated input is queued and handled after the current callback returns, in the order it was sent. It is dropped if its originating plugin is disabled, unloaded or reloaded, or while a plugin approval dialog is open, so no plugin can grant permissions on the user's behalf.
 
 These calls do not report when the input has been applied. When you need to know, for example to read the screen after a key press, use [`ttt.automation`](#automation-api) instead.
 
@@ -2529,10 +2529,12 @@ Params and results convert between JSON and Lua values as `ttt.json` does. Callb
 | Method | Description |
 |--------|-------------|
 | `conn:request(method, params, [callback])` | Send a request. `callback(result, err)` receives the result, or `nil` and the peer's error message. |
-| `conn:notify(method, params)` | Queue a notification without waiting for the peer to read it. Returns `true` when accepted, or `false` and an error message when closed or the queue is full. |
+| `conn:notify(method, params)` | Queue a notification without waiting for the peer to read it. Returns `true` when accepted, or `false` and an error message when closed or the queue is full. A full queue leaves the connection open so the plugin can retry later. |
 | `conn:close()` | Close the connection. Connections also close when the plugin unloads. |
 
-Outbound frames share an ordered queue capped at 64 frames and 32 MiB, including the frame being written. A full queue, failed write, or write taking longer than 10 seconds closes the connection and reports the failure through `on_close`.
+Outbound frames share an ordered queue capped at 64 frames and 32 MiB, including the frame being written. A full queue rejects a notification or outgoing request; requests report the error through their callback. A reply that cannot be queued, a failed write, or a write taking longer than 10 seconds closes the connection and reports the failure through `on_close`.
+
+Incoming callbacks are limited to 256 pending messages and 32 MiB of retained message data per connection, including callbacks currently being delivered. Exceeding either limit closes the connection with an incoming-queue error. Closing a connection or unloading its plugin discards queued messages. The connect and close callbacks are delivered separately from this budget.
 
 ```lua
 local rpc = require("ttt.rpc")
@@ -2583,7 +2585,7 @@ end)
 | `drag` | `input` | `x1 y1 x2 y2`. |
 | `scroll` | `input` | `x y signed-count`, positive down; maximum magnitude 1000. |
 | `key` | `input` | Key combination or chord, as in keybindings. |
-| `type`, `paste` | `input` | Literal text; paste uses the editor's undoable paste path. |
+| `type`, `paste` | `input` | Text input. Type sends individual key presses, mapping LF, CRLF and CR to Enter (one Enter per CRLF); other control characters follow key handling. Paste inserts literal text through the editor's undoable paste path. |
 | `wait` | `input` | Milliseconds, at most 30000. |
 | `wait-for` | `screen.read` | Screen text and optional `timeout=MS`, as in `--exec`; at most 30000 ms, default 5000. |
 

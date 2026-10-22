@@ -68,7 +68,6 @@ func (q *rpcOutbox) WriteFrame(header string, body []byte) error {
 	size := len(header) + len(body)
 	if q.pending >= cap(q.frames) || size > rpcMaxMessageSize-q.bytes {
 		q.mu.Unlock()
-		q.onError(errRPCQueueFull)
 		return errRPCQueueFull
 	}
 	q.pending++

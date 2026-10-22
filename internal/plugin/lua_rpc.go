@@ -16,8 +16,15 @@ const rpcConnTypeName = "ttt.rpc.conn"
 const rpcMaxMessageSize = 32 << 20
 
 const rpcOutboundQueueSize = 64
+const rpcInboundQueueSize = 256
 
 var errRPCClosed = errors.New("connection closed")
+var errRPCInboxFull = errors.New("RPC incoming queue is full")
+
+type rpcCallback struct {
+	run  func()
+	size int // Negative for lifecycle callbacks, which must survive closing.
+}
 
 type rpcConn struct {
 	p        *Plugin
@@ -32,7 +39,9 @@ type rpcConn struct {
 	mu         sync.Mutex
 	transport  io.ReadWriteCloser
 	conn       *jsonrpc.Conn
-	inbox      []func()
+	inbox      []rpcCallback
+	inboxCount int
+	inboxBytes int
 	draining   bool
 	closedByUs bool
 	closed     bool
@@ -121,12 +130,13 @@ func (c *rpcConn) dial(callback *lua.LFunction, dialRPC func(context.Context, st
 	conn := jsonrpc.NewConn(transport, outbox, jsonrpc.Options{
 		OnNotification:  c.handleNotification,
 		DispatchRequest: c.handleRequest,
+		OnReplyError:    c.handleClose,
 		OnClose:         c.handleClose,
 		MaxMessageSize:  rpcMaxMessageSize,
 	})
 	c.conn = conn
 	c.outbox = outbox
-	post := c.enqueueLocked(connected)
+	post := c.enqueueLocked(connected, -1)
 	c.mu.Unlock()
 	go outbox.run()
 	if post {
@@ -138,15 +148,35 @@ func (c *rpcConn) dial(callback *lua.LFunction, dialRPC func(context.Context, st
 // separate posts. The read loop queues peer requests and notifications directly.
 func (c *rpcConn) enqueue(fn func()) {
 	c.mu.Lock()
-	post := c.enqueueLocked(fn)
+	post := c.enqueueLocked(fn, -1)
 	c.mu.Unlock()
 	if post {
 		c.postDrain()
 	}
 }
 
-func (c *rpcConn) enqueueLocked(fn func()) bool {
-	c.inbox = append(c.inbox, fn)
+func (c *rpcConn) enqueueMessage(size int, fn func()) {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	if c.inboxCount >= rpcInboundQueueSize || size > rpcMaxMessageSize-c.inboxBytes {
+		c.mu.Unlock()
+		c.handleClose(errRPCInboxFull)
+		return
+	}
+	c.inboxCount++
+	c.inboxBytes += size
+	post := c.enqueueLocked(fn, size)
+	c.mu.Unlock()
+	if post {
+		c.postDrain()
+	}
+}
+
+func (c *rpcConn) enqueueLocked(fn func(), size int) bool {
+	c.inbox = append(c.inbox, rpcCallback{run: fn, size: size})
 	post := !c.draining
 	c.draining = true
 	return post
@@ -160,30 +190,61 @@ func (c *rpcConn) drain() {
 	c.mu.Lock()
 	inbox := c.inbox
 	c.inbox = nil
-	c.draining = false
 	c.mu.Unlock()
-	for _, fn := range inbox {
-		fn()
+	for i, callback := range inbox {
+		c.mu.Lock()
+		run := callback.size < 0 || !c.closed
+		c.mu.Unlock()
+		if run {
+			callback.run()
+		}
+		inbox[i] = rpcCallback{}
+		c.mu.Lock()
+		if callback.size >= 0 && !c.closed {
+			c.inboxCount--
+			c.inboxBytes -= callback.size
+		}
+		c.mu.Unlock()
 	}
+	c.mu.Lock()
+	post := len(c.inbox) > 0
+	c.draining = post
+	c.mu.Unlock()
+	if post {
+		c.postDrain()
+	}
+}
+
+func (c *rpcConn) discardMessagesLocked() {
+	kept := c.inbox[:0]
+	for _, callback := range c.inbox {
+		if callback.size < 0 {
+			kept = append(kept, callback)
+		}
+	}
+	clear(c.inbox[len(kept):])
+	c.inbox = kept
+	c.inboxCount, c.inboxBytes = 0, 0
 }
 
 func (c *rpcConn) handleNotification(method string, params json.RawMessage) {
 	if c.onNotification == nil {
 		return
 	}
-	c.enqueue(func() {
+	c.enqueueMessage(len(method)+len(params), func() {
 		if c.p.State != nil {
 			_ = c.p.CallLuaFunc(c.onNotification, lua.LString(method), decodeRPCValue(c.p.State, params))
 		}
 	})
 }
 
-func (c *rpcConn) handleRequest(method string, params json.RawMessage, reply func(any, error)) {
-	if c.onRequest == nil {
-		reply(nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not supported: " + method})
-		return
-	}
-	c.enqueue(func() {
+func (c *rpcConn) handleRequest(request jsonrpc.Message, reply func(any, error)) {
+	method, params := request.Method, request.Params
+	c.enqueueMessage(len(request.ID)+len(method)+len(params), func() {
+		if c.onRequest == nil {
+			reply(nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not supported: " + method})
+			return
+		}
 		L := c.p.State
 		if L == nil {
 			reply(nil, errRPCClosed)
@@ -205,6 +266,7 @@ func (c *rpcConn) handleClose(err error) {
 		c.mu.Lock()
 		byUs := c.closedByUs
 		c.closed = true
+		c.discardMessagesLocked()
 		outbox := c.outbox
 		transport := c.transport
 		c.transport = nil
@@ -238,6 +300,7 @@ func (c *rpcConn) close() {
 	c.mu.Lock()
 	c.closedByUs = true
 	c.closed = true
+	c.discardMessagesLocked()
 	outbox := c.outbox
 	transport := c.transport
 	c.transport = nil
@@ -270,16 +333,29 @@ func rpcRequest(L *lua.LState) int {
 		if callback == nil {
 			return
 		}
-		c.enqueue(func() {
+		errText := ""
+		if err != nil {
+			errText = c.callError(err)
+		}
+		closed := c.ctx.Err() != nil
+		if closed {
+			result, errText = nil, errRPCClosed.Error()
+		}
+		callbackRun := func() {
 			if c.p.State == nil {
 				return
 			}
-			if err != nil {
-				_ = c.p.CallLuaFunc(callback, lua.LNil, lua.LString(c.callError(err)))
+			if errText != "" {
+				_ = c.p.CallLuaFunc(callback, lua.LNil, lua.LString(errText))
 				return
 			}
 			_ = c.p.CallLuaFunc(callback, decodeRPCValue(c.p.State, result), lua.LNil)
-		})
+		}
+		if closed {
+			c.enqueue(callbackRun)
+		} else {
+			c.enqueueMessage(len(result)+len(errText), callbackRun)
+		}
 	}()
 	return 0
 }
