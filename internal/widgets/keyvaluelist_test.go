@@ -160,3 +160,22 @@ func TestKeyValueListScrollSizeFullwidth(t *testing.T) {
 		t.Errorf("scroll width = %d, want 16", w)
 	}
 }
+
+func TestKeyValueListScrollSizeWithWidthsInDifferentRows(t *testing.T) {
+	kv := NewKeyValueListWidget([]KeyValueEntry{
+		{Key: "名前ラベル", Value: "x"},
+		{Key: "Port", Value: "123456789012"},
+	})
+
+	w, h := kv.ScrollSize()
+	if w != 26 || h != 2 {
+		t.Errorf("scroll size = (%d, %d), want (26, 2)", w, h)
+	}
+
+	scroll := NewScrollViewWidget(kv)
+	scroll.scrollX = 100
+	s := renderWidget(scroll, 0, 0, 20, 3)
+	if got := rowText(s, 1); !strings.Contains(got, "123456789012") {
+		t.Errorf("value at the end of horizontal scrolling = %q, want the complete value", got)
+	}
+}

@@ -25,14 +25,14 @@ func (kv *KeyValueListWidget) Height() int { return len(kv.Entries) + kv.BoxOver
 func (kv *KeyValueListWidget) Width() int  { return 0 }
 
 func (kv *KeyValueListWidget) ScrollSize() (int, int) {
-	w := 0
-	for _, e := range kv.Entries {
-		row := textwidth.String(e.Key) + 4 + textwidth.String(e.Value)
-		if row > w {
-			w = row
-		}
+	if len(kv.Entries) == 0 {
+		return 0, 0
 	}
-	return w, len(kv.Entries)
+	valueW := 0
+	for _, e := range kv.Entries {
+		valueW = max(valueW, textwidth.String(e.Value))
+	}
+	return kv.keyColWidth() + 2 + valueW, len(kv.Entries)
 }
 
 func (kv *KeyValueListWidget) keyColWidth() int {
