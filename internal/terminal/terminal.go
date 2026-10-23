@@ -76,6 +76,12 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	if err != nil {
 		return nil, err
 	}
+	pollable, err := makePtyPollable(pt)
+	if err != nil {
+		pt.Close()
+		return nil, err
+	}
+	pt = pollable
 
 	t.term = xterm.New(
 		xterm.WithCols(cols),
@@ -280,10 +286,6 @@ func (t *Terminal) Size() (cols, rows int) {
 // closes, and kills the shell's process group only if the shell outlives the
 // hangup. Jobs that ignore SIGHUP (nohup) survive a shell that exits, as they
 // would under a real terminal.
-//
-// readLoop only returns once every holder of the pty slave has closed it, and
-// a background job that ignores SIGHUP can keep it open indefinitely, so the
-// wait for readLoop is bounded and the goroutine may outlive Close.
 func (t *Terminal) Close() {
 	t.cbMu.Lock()
 	t.mu.Lock()
@@ -309,6 +311,14 @@ func (t *Terminal) Close() {
 	t.mu.Lock()
 	t.pt.Close()
 	t.mu.Unlock()
+	// PTY hangup wakes a shell that did not act on the explicit SIGHUP.
+	// Let it finish hanging up its jobs before escalating to SIGKILL.
+	if started {
+		select {
+		case <-t.waited:
+		case <-time.After(hangupGrace):
+		}
+	}
 	t.signalShell(sigKill, started)
 	if started {
 		<-t.waited

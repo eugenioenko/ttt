@@ -157,6 +157,45 @@ func TestCloseHangsUpBackgroundJobs(t *testing.T) {
 	assertCloseHangsUpJob(t)
 }
 
+func TestCloseLetsProgramHandlePtyHangup(t *testing.T) {
+	if os.Getenv("TTT_TEST_PTY_HANGUP") == "1" {
+		signal.Ignore(syscall.SIGHUP)
+		_, _ = os.Stdout.WriteString("hangup-ready\n")
+		var input [1]byte
+		if _, err := os.Stdin.Read(input[:]); err == nil {
+			os.Exit(2)
+		}
+		// Cleanup after PTY EOF must finish before Close escalates to SIGKILL.
+		time.Sleep(hangupGrace / 4)
+		os.Exit(0)
+	}
+	term, err := New(os.Args[0], 80, 24, 0, []string{"TTT_TEST_PTY_HANGUP=1", "GORACE=atexit_sleep_ms=0"}, "", "-test.run=^TestCloseLetsProgramHandlePtyHangup$")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer term.Close()
+	ready := make(chan struct{}, 1)
+	term.OnUpdate = func() {
+		term.AckUpdate()
+		if strings.Contains(string(term.RawTail()), "hangup-ready\r\n") {
+			select {
+			case ready <- struct{}{}:
+			default:
+			}
+		}
+	}
+	term.Run()
+	select {
+	case <-ready:
+	case <-time.After(5 * time.Second):
+		t.Fatal("program did not become ready")
+	}
+	closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
+	if !term.cmd.ProcessState.Success() {
+		t.Fatalf("program was killed before it handled PTY hangup: %v", term.cmd.ProcessState)
+	}
+}
+
 // nohup and some CI runners start ttt with SIGHUP ignored, which children
 // inherit. The disposition must be in place before the Go runtime starts, so
 // the test reruns itself under a shell that ignores SIGHUP.
@@ -221,7 +260,7 @@ func signalStatus(pid int) string {
 	}
 	var fields []string
 	for line := range strings.Lines(string(status)) {
-		if strings.HasPrefix(line, "Sig") || strings.HasPrefix(line, "ShdPnd") || strings.HasPrefix(line, "State") {
+		if strings.HasPrefix(line, "Sig") || strings.HasPrefix(line, "ShdPnd") || strings.HasPrefix(line, "State") || strings.HasPrefix(line, "Pid:") || strings.HasPrefix(line, "NSpgid:") {
 			fields = append(fields, strings.Join(strings.Fields(line), " "))
 		}
 	}
@@ -232,18 +271,17 @@ func assertCloseHangsUpJob(t *testing.T) {
 	t.Helper()
 	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!")
 	before := "self: " + signalStatus(os.Getpid()) + "\nshell: " + signalStatus(term.cmd.Process.Pid) + "\njob: " + signalStatus(pid)
-
-	closeWithin(t, term, readLoopGrace)
+	elapsed := closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
 
 	select {
 	case <-term.done:
 	default:
-		t.Fatal("readLoop still running after the background job was hung up")
+		t.Fatalf("readLoop still running after Close() took %v (shell: %v)\nbefore close:\n%s\nafter job: %s", elapsed, term.cmd.ProcessState, before, signalStatus(pid))
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for !processGone(pid) {
 		if time.Now().After(deadline) {
-			t.Fatalf("background job %d survived Close() (shell: %v)\nbefore close:\n%s\nafter: %s", pid, term.cmd.ProcessState, before, signalStatus(pid))
+			t.Fatalf("background job %d survived Close() taking %v (shell: %v)\nbefore close:\n%s\nafter: %s", pid, elapsed, term.cmd.ProcessState, before, signalStatus(pid))
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -252,17 +290,17 @@ func assertCloseHangsUpJob(t *testing.T) {
 func TestCloseIsBoundedWhenJobIgnoresHangup(t *testing.T) {
 	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`)
 
-	closeWithin(t, term, hangupGrace+readLoopGrace+time.Second)
+	closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
 
 	if processGone(pid) {
 		t.Fatal("expected the HUP-ignoring job to outlive Close()")
 	}
-	_ = syscall.Kill(pid, syscall.SIGKILL)
 	select {
 	case <-term.done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("readLoop did not finish after the last slave holder exited")
+		t.Fatal("readLoop did not stop while the background job held the slave open")
 	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
 }
 
 func TestOnExitIsBoundedWhenJobKeepsSlaveOpen(t *testing.T) {
