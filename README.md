@@ -20,12 +20,12 @@ brew trust eugenioenko/ttt
 brew install ttt
 ```
 
-### Quick Install Linux, macOS, & FreeBSD
+### Quick Install Linux, macOS, FreeBSD, & Android (Termux)
 ```sh
 curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
 ```
 
-The script downloads the latest release binary for your OS/architecture and installs it to `~/.local/bin` on Linux (`/usr/local/bin` on macOS & FreeBSD). To install elsewhere:
+The script downloads the latest release binary for your OS/architecture and installs it to `~/.local/bin` on Linux, `/usr/local/bin` on macOS and FreeBSD, or `$PREFIX/bin` in Android Termux (arm64). To install elsewhere:
 
 ```sh
 curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | INSTALL_DIR="$HOME/bin" sh
@@ -74,7 +74,7 @@ This installs the `ttt` binary to your `$GOPATH/bin` (or `$HOME/go/bin` by defau
 
 ### Download Binary
 
-Pre-built binaries for Linux, macOS, FreeBSD, and Windows are available on the [Releases](https://github.com/eugenioenko/ttt/releases) page. Download the one for your platform, make it executable, and put it in your `PATH`.
+Pre-built binaries for Linux, macOS, FreeBSD, Android (arm64), and Windows are available on the [Releases](https://github.com/eugenioenko/ttt/releases) page. Windows downloads include `ttt-windows-amd64.exe` for Intel/AMD PCs and `ttt-windows-arm64.exe` for ARM PCs. Download the one for your platform, make it executable, and put it in your `PATH`.
 
 ### From Source
 
