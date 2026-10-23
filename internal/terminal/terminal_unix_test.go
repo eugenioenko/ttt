@@ -295,16 +295,14 @@ func waitForHangupReady(t *testing.T, term *Terminal, pid int, comm string) {
 
 func procComm(pid int, comm string) bool {
 	got, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
-	if errors.Is(err, os.ErrNotExist) {
-		if _, statErr := os.Stat("/proc/self"); statErr != nil {
-			return true
-		}
-	}
 	return err == nil && strings.TrimSpace(string(got)) == comm
 }
 
 func assertCloseHangsUpJob(t *testing.T) {
 	t.Helper()
+	if _, err := os.Stat("/proc/self"); err != nil {
+		t.Skipf("no procfs; cannot observe the job exec: %v", err)
+	}
 	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!")
 	waitForHangupReady(t, term, pid, "sleep")
 	before := "self: " + signalStatus(os.Getpid()) + "\nshell: " + signalStatus(term.cmd.Process.Pid) + "\njob: " + signalStatus(pid)
