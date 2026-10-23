@@ -42,6 +42,7 @@ type Terminal struct {
 	started    bool
 	closed     bool
 	exited     bool
+	ptyClosed  bool
 	rawTail    []byte
 	lastRead   time.Time
 	// promptMarker tracks the row of the last OSC 133 prompt start while
@@ -167,7 +168,7 @@ func (t *Terminal) waitLoop() {
 	}
 
 	t.mu.Lock()
-	t.pt.Close()
+	t.closePty()
 	t.mu.Unlock()
 
 	// Close() already tears the tab down; firing OnExit there would close it twice.
@@ -309,7 +310,7 @@ func (t *Terminal) Close() {
 		}
 	}
 	t.mu.Lock()
-	t.pt.Close()
+	t.closePty()
 	t.mu.Unlock()
 	// PTY hangup wakes a shell that did not act on the explicit SIGHUP.
 	// Let it finish hanging up its jobs before escalating to SIGKILL.
@@ -327,6 +328,15 @@ func (t *Terminal) Close() {
 		case <-time.After(readLoopGrace):
 		}
 	}
+}
+
+func (t *Terminal) closePty() {
+	// Caller holds t.mu.
+	if t.ptyClosed {
+		return
+	}
+	t.ptyClosed = true
+	t.pt.Close()
 }
 
 func (t *Terminal) signalShell(sig shellSignal, started bool) {

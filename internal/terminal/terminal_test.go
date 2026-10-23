@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aymanbagabas/go-pty"
 	"github.com/eugenioenko/xterm-go"
 )
 
@@ -166,6 +167,35 @@ func TestCloseConcurrentIsSafe(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("concurrent Close() calls did not all return")
+	}
+}
+
+type countingPty struct {
+	pty.Pty
+	closes atomic.Int32
+}
+
+func (p *countingPty) Close() error {
+	p.closes.Add(1)
+	return p.Pty.Close()
+}
+
+func TestClosePtyIsIdempotent(t *testing.T) {
+	pt, err := pty.New()
+	if err != nil {
+		t.Fatalf("pty.New() error: %v", err)
+	}
+	counted := &countingPty{Pty: pt}
+	term := &Terminal{pt: counted}
+
+	term.mu.Lock()
+	term.closePty()
+	term.mu.Unlock()
+
+	term.Close()
+
+	if n := counted.closes.Load(); n != 1 {
+		t.Fatalf("pty.Close() called %d times, want 1", n)
 	}
 }
 
