@@ -43,6 +43,7 @@ type Terminal struct {
 	closed     bool
 	exited     bool
 	rawTail    []byte
+	lastRead   time.Time
 	// promptMarker tracks the row of the last OSC 133 prompt start while
 	// that prompt is still being edited; promptCol is the column it starts at.
 	promptMarker *xterm.Marker
@@ -150,16 +151,13 @@ func (t *Terminal) waitLoop() {
 		// go-pty retains the parent's slave fd. Release it so the reader can
 		// drain to EOF without closing the master and discarding queued output.
 		unixPty.Slave().Close()
+		t.lastRead = time.Now()
 	}
 	t.mu.Unlock()
 	close(t.waited)
 
 	if isUnix {
-		// A surviving background job can keep the slave open indefinitely.
-		select {
-		case <-t.done:
-		case <-time.After(readLoopGrace):
-		}
+		t.waitForDrain()
 	}
 
 	t.mu.Lock()
@@ -174,6 +172,26 @@ func (t *Terminal) waitLoop() {
 	}
 }
 
+func (t *Terminal) waitForDrain() {
+	timer := time.NewTimer(readLoopGrace)
+	defer timer.Stop()
+	for {
+		select {
+		case <-t.done:
+			return
+		case <-timer.C:
+			t.mu.Lock()
+			remaining := readLoopGrace - time.Since(t.lastRead)
+			t.mu.Unlock()
+			// Bound an idle slave holder without cutting off an active drain.
+			if remaining <= 0 {
+				return
+			}
+			timer.Reset(remaining)
+		}
+	}
+}
+
 func (t *Terminal) readLoop() {
 	defer close(t.done)
 	buf := make([]byte, 4096)
@@ -185,6 +203,7 @@ func (t *Terminal) readLoop() {
 				t.term.Write(buf[:n])
 				t.appendRawTail(buf[:n])
 			}
+			t.lastRead = time.Now()
 			t.mu.Unlock()
 			t.cbMu.Lock()
 			if !t.closed && t.OnUpdate != nil && t.updatePending.CompareAndSwap(false, true) {

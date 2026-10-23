@@ -23,10 +23,14 @@ var jobPidRe = regexp.MustCompile(`JOBPID=(\d+)`)
 type delayedReadPty struct {
 	pty.UnixPty
 	ready <-chan struct{}
+	delay time.Duration
 }
 
 func (p *delayedReadPty) Read(b []byte) (int, error) {
 	<-p.ready
+	if p.delay > 0 {
+		time.Sleep(p.delay)
+	}
 	return p.UnixPty.Read(b[:min(len(b), 3)])
 }
 
@@ -59,6 +63,31 @@ func TestExitDrainsOutputBeforeCallback(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("OnExit never fired after the reader was released")
+	}
+}
+
+func TestExitKeepsDrainingWhileReaderMakesProgress(t *testing.T) {
+	term, err := New("/bin/sh", 80, 24, 0, nil, "", "-c", "printf drain-end")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer term.Close()
+	term.pt = &delayedReadPty{
+		UnixPty: term.pt.(pty.UnixPty),
+		ready:   term.waited,
+		delay:   readLoopGrace / 2,
+	}
+	exited := make(chan string, 1)
+	term.OnExit = func() { exited <- string(term.RawTail()) }
+	term.Run()
+
+	select {
+	case got := <-exited:
+		if got != "drain-end" {
+			t.Fatalf("OnExit interrupted an active drain; raw tail: %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnExit never fired after the output was drained")
 	}
 }
 
