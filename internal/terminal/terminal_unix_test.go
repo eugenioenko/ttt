@@ -10,12 +10,86 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/aymanbagabas/go-pty"
 )
 
 var jobPidRe = regexp.MustCompile(`JOBPID=(\d+)`)
+
+type delayedReadPty struct {
+	pty.UnixPty
+	ready <-chan struct{}
+	delay time.Duration
+}
+
+func (p *delayedReadPty) Read(b []byte) (int, error) {
+	<-p.ready
+	if p.delay > 0 {
+		time.Sleep(p.delay)
+	}
+	return p.UnixPty.Read(b[:min(len(b), 3)])
+}
+
+func TestExitDrainsOutputBeforeCallback(t *testing.T) {
+	term, err := New("/bin/sh", 80, 24, 0, nil, "", "-c", "printf drain-end")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ready := make(chan struct{})
+	var release sync.Once
+	defer term.Close()
+	defer release.Do(func() { close(ready) })
+	term.pt = &delayedReadPty{UnixPty: term.pt.(pty.UnixPty), ready: ready}
+	exited := make(chan string, 1)
+	term.OnExit = func() { exited <- string(term.RawTail()) }
+	term.Run()
+
+	select {
+	case <-term.waited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("program never exited")
+	}
+	release.Do(func() { close(ready) })
+
+	select {
+	case got := <-exited:
+		want := "drain-end"
+		if got != want {
+			t.Fatalf("OnExit saw %d output bytes, want %d", len(got), len(want))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnExit never fired after the reader was released")
+	}
+}
+
+func TestExitKeepsDrainingWhileReaderMakesProgress(t *testing.T) {
+	term, err := New("/bin/sh", 80, 24, 0, nil, "", "-c", "printf drain-end")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer term.Close()
+	term.pt = &delayedReadPty{
+		UnixPty: term.pt.(pty.UnixPty),
+		ready:   term.waited,
+		delay:   readLoopGrace / 2,
+	}
+	exited := make(chan string, 1)
+	term.OnExit = func() { exited <- string(term.RawTail()) }
+	term.Run()
+
+	select {
+	case got := <-exited:
+		if got != "drain-end" {
+			t.Fatalf("OnExit interrupted an active drain; raw tail: %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnExit never fired after the output was drained")
+	}
+}
 
 // startShellJob runs cmdline in an interactive shell; cmdline must print
 // JOBPID=<pid> once the job is ready to be hung up.
@@ -182,6 +256,31 @@ func TestCloseIsBoundedWhenJobIgnoresHangup(t *testing.T) {
 
 	if processGone(pid) {
 		t.Fatal("expected the HUP-ignoring job to outlive Close()")
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+	select {
+	case <-term.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("readLoop did not finish after the last slave holder exited")
+	}
+}
+
+func TestOnExitIsBoundedWhenJobKeepsSlaveOpen(t *testing.T) {
+	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`)
+	defer term.Close()
+	exited := make(chan struct{})
+	term.cbMu.Lock()
+	term.OnExit = func() { close(exited) }
+	term.cbMu.Unlock()
+	term.WriteString("exit\n")
+
+	select {
+	case <-exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnExit hung with a background job holding the pty")
+	}
+	if processGone(pid) {
+		t.Fatal("expected the HUP-ignoring job to outlive the shell")
 	}
 	_ = syscall.Kill(pid, syscall.SIGKILL)
 	select {

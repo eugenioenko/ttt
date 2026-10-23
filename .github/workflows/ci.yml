@@ -171,6 +171,11 @@ jobs:
       - name: Build
         run: go build ./...
 
+      - name: Cross-build Android and Windows ARM64
+        run: |
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -o "$RUNNER_TEMP/ttt-android-arm64" ./cmd/ttt
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o "$RUNNER_TEMP/ttt-windows-arm64.exe" ./cmd/ttt
+
       - name: Test
         run: go test ./...
 

@@ -1,6 +1,88 @@
 package e2e
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
+)
+
+func TestBottomPanelOverflowMenu(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		width     int
+		dockRight bool
+	}{
+		{name: "bottom dock", width: 56},
+		{name: "right dock", width: 80, dockRight: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHarness(t, tc.width, 30)
+			defer h.stop()
+
+			target := newEmptyWidget()
+			h.app.BottomPanel.AddPanel("overflow-target", "Hidden Target", target)
+			if tc.dockRight {
+				h.exec("panel.dockRight")
+			}
+			h.app.ContentSplit.ShowBottom = true
+			h.app.BottomPanel.SetActivePanel("terminal")
+			h.redraw()
+
+			hiddenIDs, _ := h.app.BottomPanel.HiddenTabs()
+			hidden := false
+			for _, id := range hiddenIDs {
+				if id == "overflow-target" {
+					hidden = true
+					break
+				}
+			}
+			if !hidden {
+				t.Fatalf("test target is not hidden at width %d: %v", tc.width, hiddenIDs)
+			}
+
+			tabsRect := h.app.BottomPanel.Tabs.GetRect()
+			cells, screenWidth, _ := h.screen.GetContents()
+			overflowX := -1
+			for x := tabsRect.X; x < tabsRect.X+tabsRect.W; x++ {
+				if cells[tabsRect.Y*screenWidth+x].Str == "»" {
+					overflowX = x
+					break
+				}
+			}
+			if overflowX < 0 {
+				t.Fatalf("no bottom-panel overflow chevron in %s layout:\n%s", tc.name, h.screenText())
+			}
+			h.click(overflowX, tabsRect.Y)
+			menu, ok := h.app.Root.Focused.(*ui.ContextMenuWidget)
+			if !ok {
+				t.Fatalf("focused widget = %T, want context menu", h.app.Root.Focused)
+			}
+
+			targetIndex := -1
+			for i, item := range menu.Items {
+				if item.Label == "Hidden Target" {
+					targetIndex = i
+					break
+				}
+			}
+			if targetIndex < 0 {
+				t.Fatalf("overflow menu missing hidden target: %+v", menu.Items)
+			}
+			for menu.Selected != targetIndex {
+				h.pressKey(tcell.KeyDown, tcell.ModNone)
+			}
+			h.pressKey(tcell.KeyEnter, tcell.ModNone)
+
+			if got := h.app.BottomPanel.ActivePanel; got != "overflow-target" {
+				t.Errorf("active panel = %q, want overflow-target", got)
+			}
+			if h.app.Root.Focused != target {
+				t.Errorf("focused widget = %T, want selected panel content", h.app.Root.Focused)
+			}
+		})
+	}
+}
 
 func TestBottomPanelTabClick(t *testing.T) {
 	h := newTestHarness(t, 120, 24)

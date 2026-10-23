@@ -35,8 +35,9 @@ func (e RegistryEntry) Title() string {
 }
 
 type Registry struct {
-	Entries []RegistryEntry
-	path    string
+	Entries  []RegistryEntry
+	path     string
+	saveHook func() error
 }
 
 func LoadRegistry(path string) (*Registry, error) {
@@ -64,6 +65,11 @@ func LoadRegistry(path string) (*Registry, error) {
 }
 
 func (r *Registry) Save() error {
+	if r.saveHook != nil {
+		if err := r.saveHook(); err != nil {
+			return err
+		}
+	}
 	data, err := json.MarshalIndent(r.Entries, "", "  ")
 	if err != nil {
 		return err

@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"encoding/json"
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -649,13 +651,47 @@ func TestDenyingALegacyNetworkGrantDoesNotRestoreIt(t *testing.T) {
 	if entry.Permissions.NetworkHTTP.Enabled() {
 		t.Errorf("the denied plugin kept its network grant: %+v", entry.Permissions.NetworkHTTP)
 	}
-	// A restart must not bring the old grant back either.
+	// Read the file without LoadRegistry's migration: the denial itself must
+	// have been persisted, not just the in-memory grant cleared.
+	savedBytes, err := os.ReadFile(regPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved []RegistryEntry
+	if err := json.Unmarshal(savedBytes, &saved); err != nil {
+		t.Fatal(err)
+	}
+	savedEntry := findRegistryEntry(saved, "old-listed")
+	if savedEntry == nil {
+		t.Fatal("the denied plugin is missing from the saved registry")
+	}
+	if savedEntry.Enabled {
+		t.Error("the denied plugin is still enabled in the saved registry")
+	}
+	if savedEntry.Permissions.NetworkHTTP.Enabled() {
+		t.Errorf("the saved registry kept the denied network grant: %+v", savedEntry.Permissions.NetworkHTTP)
+	}
+	if savedEntry.GrantsVersion != grantsVersion {
+		t.Errorf("saved grants version = %d, want %d", savedEntry.GrantsVersion, grantsVersion)
+	}
+	// A restart must neither bring the old grant back nor ask for it again.
 	again := NewManager(pluginsDir, regPath)
 	t.Cleanup(again.Shutdown)
-	again.LoadAll()
+	if pending := again.LoadAll(); len(pending) != 0 {
+		t.Errorf("the denied plugin was asked for again after a restart: %v", pending)
+	}
 	if entry := again.registry.Find("old-listed"); entry != nil && entry.Permissions.NetworkHTTP.Enabled() {
 		t.Errorf("the old network grant came back after a restart: %+v", entry.Permissions.NetworkHTTP)
 	}
+}
+
+func findRegistryEntry(entries []RegistryEntry, name string) *RegistryEntry {
+	for i := range entries {
+		if entries[i].Name == name {
+			return &entries[i]
+		}
+	}
+	return nil
 }
 
 func TestAnAnyDestinationGrantApprovedNowIsNotAskedForAgain(t *testing.T) {
@@ -1207,5 +1243,92 @@ func TestApplyUpdateReportsAFailedPermissionSave(t *testing.T) {
 	}
 	if !old.Loaded() {
 		t.Error("the running plugin was destroyed although the reduction was not persisted")
+	}
+}
+
+// Enabling a plugin must report a failed permission reduction instead of
+// reporting success and running the plugin with the stale grant.
+func TestSetEnabledReportsAFailedPermissionSave(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	manifest := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	m.registry.SetEnabled("mixed", false)
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	// The manifest drops a permission. SetEnabled first saves the enabled
+	// state, then persists the permission reduction during grant. Let the
+	// initial enabled-state save succeed, but fail the reduction save.
+	saves := 0
+	m.registry.saveHook = func() error {
+		saves++
+		if saves == 2 {
+			return errors.New("simulated save error")
+		}
+		return nil
+	}
+
+	p, err := m.SetEnabled("mixed", true)
+	if err == nil {
+		t.Fatal("SetEnabled reported success although the reduced permissions could not be saved")
+	}
+	if p != nil {
+		t.Errorf("SetEnabled returned a plugin instance on failure: %+v", p)
+	}
+	if saves < 2 {
+		t.Fatalf("expected at least 2 save attempts (enabled state, then permission reduction), got %d", saves)
+	}
+	if loaded := m.FindPlugin("mixed"); loaded != nil {
+		t.Errorf("plugin loaded although its reduced permissions were not persisted: %+v", loaded.Granted)
+	}
+	if len(m.plugins) != 0 {
+		t.Errorf("expected 0 loaded plugins, got %d", len(m.plugins))
+	}
+
+	// Retrying after restoring persistence must save the reduced
+	// permissions and enable the plugin.
+	m.registry.saveHook = nil
+
+	p, err = m.SetEnabled("mixed", true)
+	if err != nil {
+		t.Fatalf("retry failed: %v", err)
+	}
+	if p == nil {
+		t.Fatal("retry succeeded but returned nil plugin")
+	}
+	if !p.Loaded() {
+		t.Error("plugin was not loaded after retry")
+	}
+	if p.Granted.EditorRead {
+		t.Errorf("retry granted the dropped permission: %+v", p.Granted)
+	}
+	if !p.Granted.Commands {
+		t.Errorf("retry must still grant what the manifest declares: %+v", p.Granted)
+	}
+	if m.FindPlugin("mixed") == nil {
+		t.Fatal("plugin not found in manager after successful retry")
+	}
+
+	stored, err := LoadRegistry(m.registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedEntry := stored.Find("mixed")
+	if storedEntry == nil {
+		t.Fatal("plugin missing from the saved registry")
+	}
+	if !storedEntry.Enabled {
+		t.Error("plugin is not marked enabled in the saved registry")
+	}
+	if storedEntry.Permissions.EditorRead {
+		t.Errorf("the dropped permission is still in the saved registry: %+v", storedEntry.Permissions)
+	}
+	if !storedEntry.Permissions.Commands {
+		t.Errorf("the kept permission is missing from the saved registry: %+v", storedEntry.Permissions)
 	}
 }

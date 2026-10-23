@@ -884,6 +884,25 @@ func registerWidgetCallbacks(app *App) {
 		}
 	}
 
+	app.BottomPanel.Tabs.Config.OnOverflow = func(sx, sy int) {
+		ids, titles := app.BottomPanel.HiddenTabs()
+		var items []ui.ContextMenuItem
+		for i, id := range ids {
+			panelID := id
+			commandID := "bottom.overflow." + panelID
+			items = append(items, ui.ContextMenuItem{Label: titles[i], Command: commandID})
+			reg.Register(command.Command{
+				ID:    commandID,
+				Title: titles[i],
+				Handler: func() {
+					app.BottomPanel.SetActivePanel(panelID)
+					app.FocusPanel()
+				},
+			})
+		}
+		openContextMenu(app, items, sx, sy)
+	}
+
 	app.BottomPanel.Tabs.Config.Actions = []widgets.TabAction{
 		{Icon: string(icons.Rune(icons.Add)), OnClick: func(_, _ int) {
 			reg.Execute("terminal.new")

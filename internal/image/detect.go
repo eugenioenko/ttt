@@ -45,6 +45,9 @@ func Detect(env func(string) string, cellW, cellH int) Protocol {
 	if env("KONSOLE_VERSION") != "" || strings.Contains(term, "konsole") {
 		return Kitty
 	}
+	if strings.EqualFold(termProgram, "falcon") || strings.Contains(term, "falcon") {
+		return Kitty
+	}
 	return None
 }
 

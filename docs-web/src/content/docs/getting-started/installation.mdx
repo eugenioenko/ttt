@@ -23,6 +23,8 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
     ```sh
     scoop install ttt
     ```
+
+    For a native Windows ARM64 binary, download `ttt-windows-arm64.exe` from [Releases](https://github.com/eugenioenko/ttt/releases) and add it to your `PATH`.
   </TabItem>
   <TabItem label="Linux">
     Download the latest release binary for your platform:
@@ -31,11 +33,23 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
     curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
     ```
 
-    This installs to `/usr/local/bin`. To install to a different directory:
+    This installs to `~/.local/bin`. To install to a different directory:
 
     ```sh
-    INSTALL_DIR=~/.local/bin curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
+    curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | INSTALL_DIR="$HOME/bin" sh
     ```
+
+    Set `INSTALL_DIR` on `sh` so the installer receives it.
+  </TabItem>
+  <TabItem label="Android (Termux)">
+    On arm64 Android devices, run this inside Termux:
+
+    ```sh
+    pkg install curl
+    curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | sh
+    ```
+
+    The installer selects `ttt-android-arm64` and installs it to `$PREFIX/bin`. Set `INSTALL_DIR` on `sh` to choose another directory.
   </TabItem>
   <TabItem label="Arch Linux (AUR)">
     Available on the [AUR](https://aur.archlinux.org/packages/ttt):
@@ -69,7 +83,7 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 ## Download Binary
 
-Pre-built binaries for Linux, macOS, and Windows are available on the [Releases](https://github.com/eugenioenko/ttt/releases) page. Download the one for your platform, make it executable, and put it in your `PATH`.
+Pre-built binaries for Linux, macOS, FreeBSD, Android (arm64), and Windows (amd64 and arm64) are available on the [Releases](https://github.com/eugenioenko/ttt/releases) page. Download the one for your platform, make it executable, and put it in your `PATH`.
 
 ## Go Install
 

@@ -960,7 +960,7 @@ func (s *SearchWidget) ReplaceAllFiles() {
 }
 
 func (s *SearchWidget) requestReplacement(groups []SearchFileGroup, all bool) {
-	if s.OnReplaceRequest == nil || s.Input.Text == "" || len(groups) == 0 {
+	if s.OnReplaceRequest == nil || len(groups) == 0 {
 		return
 	}
 	req := SearchReplaceRequest{

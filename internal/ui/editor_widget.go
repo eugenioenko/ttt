@@ -69,7 +69,6 @@ type EditorPaneWidget struct {
 	OnChange                func()
 	bufferDirty             bool
 	Multi                   *multicursor.MultiCursor
-	multiSearchWord         string
 	gutterHover             bool
 	gutterHoverLine         int
 	mouseDownX, mouseDownY  int

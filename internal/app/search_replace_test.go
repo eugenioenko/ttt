@@ -89,7 +89,7 @@ func TestSearchReplacePreflightDeliveryAndCompleteCount(t *testing.T) {
 				if err := os.WriteFile(gone, []byte("nothing here\n"), 0600); err != nil {
 					t.Fatal(err)
 				}
-				h.a.Search.Groups = append(h.a.Search.Groups, ui.SearchFileGroup{FilePath: gone, Matches: []ui.SearchMatch{{LineText: "foo"}}})
+				h.a.Search.Groups = append(h.a.Search.Groups, ui.SearchFileGroup{FilePath: gone, Matches: []ui.SearchMatch{{LineNum: 1, ColStart: 1, ColEnd: 4}}})
 			}
 			h.a.searchReplace.scan = nil
 			h.a.Search.OnReplaceRequest = func(req ui.SearchReplaceRequest) { req.AllFiles = all; h.a.startSearchReplace(req) }

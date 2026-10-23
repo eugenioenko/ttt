@@ -34,10 +34,14 @@ jobs:
           CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ttt-linux-arm64   ./cmd/ttt
           CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ttt-darwin-amd64  ./cmd/ttt
           CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ttt-darwin-arm64  ./cmd/ttt
+          CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ttt-freebsd-amd64 ./cmd/ttt
+          CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ttt-freebsd-arm64 ./cmd/ttt
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ttt-android-arm64 ./cmd/ttt
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ttt-windows-amd64.exe ./cmd/ttt
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o ttt-windows-arm64.exe ./cmd/ttt
 
       - name: Checksums
-        run: sha256sum ttt-linux-amd64 ttt-linux-arm64 ttt-darwin-amd64 ttt-darwin-arm64 ttt-windows-amd64.exe > checksums.txt
+        run: sha256sum ttt-linux-amd64 ttt-linux-arm64 ttt-darwin-amd64 ttt-darwin-arm64 ttt-freebsd-amd64 ttt-freebsd-arm64 ttt-android-arm64 ttt-windows-amd64.exe ttt-windows-arm64.exe > checksums.txt
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -48,5 +52,9 @@ jobs:
             ttt-linux-arm64
             ttt-darwin-amd64
             ttt-darwin-arm64
+            ttt-freebsd-amd64
+            ttt-freebsd-arm64
+            ttt-android-arm64
             ttt-windows-amd64.exe
+            ttt-windows-arm64.exe
             checksums.txt

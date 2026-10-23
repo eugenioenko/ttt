@@ -51,6 +51,9 @@ func (a *App) startSearchReplace(req ui.SearchReplaceRequest) {
 	}
 	a.Search.SetReplacementPending(true)
 	a.searchReplace.task.Schedule(func(ctx context.Context) (map[string][]search.Match, error) {
+		if req.Options.Query == "" {
+			return nil, ctx.Err()
+		}
 		found, err := scan(ctx, req.Options, req.Paths)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -69,9 +72,9 @@ func (a *App) startSearchReplace(req ui.SearchReplaceRequest) {
 		matches := make(map[string][]ui.SearchMatch)
 		for _, path := range req.Paths {
 			ms := found[filepath.Clean(path)]
-			// Preserve the existing fallback only for scan failures, never for
-			// cancellation or a successful scan that finds no matches.
-			if err != nil {
+			// Preserve panel-only callers with no query. A successful empty
+			// rescan stays authoritative even when stale LineText is empty.
+			if err != nil || req.Options.Query == "" {
 				ms = req.Fallback[path]
 			}
 			if len(ms) > 0 {

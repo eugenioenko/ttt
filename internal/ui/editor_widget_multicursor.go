@@ -50,7 +50,6 @@ func (e *EditorPaneWidget) collapseMulti() {
 	e.Multi.CollapseToSingle()
 	e.syncFromMulti()
 	e.Multi = nil
-	e.multiSearchWord = ""
 }
 
 func (e *EditorPaneWidget) multiExecRune(r rune) {
@@ -313,22 +312,15 @@ func (e *EditorPaneWidget) SelectNextOccurrence() {
 	}
 	if word == "" {
 		e.selectWord(e.Cursor.Line, e.Cursor.Col)
-		if e.Selection.Active {
-			e.multiSearchWord = e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
-		}
 		e.ensureMulti()
 		e.syncToMulti()
 		return
-	}
-	if e.multiSearchWord == "" {
-		e.multiSearchWord = word
 	}
 	e.ensureMulti()
 	e.syncToMulti()
 	e.Multi.NormalizePrimary()
 	e.syncFromMulti()
 
-	searchWord := e.multiSearchWord
 	lastCursor := e.Multi.Cursors[len(e.Multi.Cursors)-1]
 	startLine := lastCursor.Line
 	startCol := lastCursor.Col
@@ -336,13 +328,13 @@ func (e *EditorPaneWidget) SelectNextOccurrence() {
 	for line := startLine; line < len(e.Buf.Lines)+startLine; line++ {
 		l := line % len(e.Buf.Lines)
 		runes := []rune(e.Buf.Lines[l])
-		searchRunes := []rune(searchWord)
+		searchRunes := []rune(word)
 		fromCol := 0
 		if l == startLine {
 			fromCol = startCol
 		}
 		for col := fromCol; col <= len(runes)-len(searchRunes); col++ {
-			if string(runes[col:col+len(searchRunes)]) == searchWord {
+			if string(runes[col:col+len(searchRunes)]) == word {
 				already := false
 				for _, c := range e.Multi.Cursors {
 					s, end := c.Sel.Range(c.Line, c.Col)
@@ -381,7 +373,6 @@ func (e *EditorPaneWidget) SelectAllOccurrences() {
 	if word == "" {
 		return
 	}
-	e.multiSearchWord = word
 	e.ensureMulti()
 	e.syncToMulti()
 
@@ -406,7 +397,6 @@ func (e *EditorPaneWidget) UndoLastCursor() {
 	if !e.Multi.IsMulti() {
 		e.syncFromMulti()
 		e.Multi = nil
-		e.multiSearchWord = ""
 	} else {
 		e.syncFromMulti()
 	}
