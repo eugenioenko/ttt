@@ -18,7 +18,10 @@ import (
 	"github.com/aymanbagabas/go-pty"
 )
 
-var jobPidRe = regexp.MustCompile(`JOBPID=(\d+)`)
+var (
+	jobPidRe = regexp.MustCompile(`JOBPID=(\d+)`)
+	promptRe = regexp.MustCompile(`[$#] $`)
+)
 
 type delayedReadPty struct {
 	pty.UnixPty
@@ -267,9 +270,43 @@ func signalStatus(pid int) string {
 	return strings.Join(fields, ", ")
 }
 
+// Close loses the hangup if it lands before bash is reading at its prompt
+// again, or before the job has exec'd and dropped bash's signal handlers
+// (#1114). Wait for both.
+func waitForHangupReady(t *testing.T, term *Terminal, pid int, comm string) {
+	t.Helper()
+	marker := "JOBPID=" + strconv.Itoa(pid)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		tail := string(term.RawTail())
+		atPrompt := false
+		if i := strings.LastIndex(tail, marker); i >= 0 {
+			atPrompt = promptRe.MatchString(tail[i:])
+		}
+		if atPrompt && procComm(pid, comm) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("shell never settled with job %d running %s; output: %q", pid, comm, tail)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func procComm(pid int, comm string) bool {
+	got, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
+	if errors.Is(err, os.ErrNotExist) {
+		if _, statErr := os.Stat("/proc/self"); statErr != nil {
+			return true
+		}
+	}
+	return err == nil && strings.TrimSpace(string(got)) == comm
+}
+
 func assertCloseHangsUpJob(t *testing.T) {
 	t.Helper()
 	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!")
+	waitForHangupReady(t, term, pid, "sleep")
 	before := "self: " + signalStatus(os.Getpid()) + "\nshell: " + signalStatus(term.cmd.Process.Pid) + "\njob: " + signalStatus(pid)
 	elapsed := closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
 
