@@ -304,6 +304,7 @@ func assertCloseHangsUpJob(t *testing.T) {
 		t.Skipf("no procfs; cannot observe the job exec: %v", err)
 	}
 	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!")
+	t.Cleanup(term.Close)
 	waitForHangupReady(t, term, pid, "sleep")
 	before := "self: " + signalStatus(os.Getpid()) + "\nshell: " + signalStatus(term.cmd.Process.Pid) + "\njob: " + signalStatus(pid)
 	elapsed := closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
