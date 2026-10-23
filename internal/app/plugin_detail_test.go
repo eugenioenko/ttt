@@ -68,27 +68,103 @@ func pluginReadmeText(state *pluginDetailState) string {
 	return text.String()
 }
 
-func TestPluginReadmeHeadlessDeliveryAndErrors(t *testing.T) {
-	for _, status := range []int{http.StatusOK, http.StatusNotFound} {
-		t.Run(fmt.Sprint(status), func(t *testing.T) {
+func TestPluginReadmeRootFallback(t *testing.T) {
+	pluginURL := "https://raw.githubusercontent.com/owner/repo/main/plugin/README.md"
+	rootURL := "https://raw.githubusercontent.com/owner/repo/main/README.md"
+
+	tests := []struct {
+		name     string
+		statuses map[string]int // URL -> status to serve
+		want     []string       // fragments expected in the rendered view
+		counts   map[string]int // URL -> expected request count
+	}{
+		{
+			name:     "plugin README loads directly",
+			statuses: map[string]int{pluginURL: http.StatusOK, rootURL: http.StatusOK},
+			want:     []string{"plugin readme loaded"},
+			counts:   map[string]int{pluginURL: 1, rootURL: 0},
+		},
+		{
+			name:     "subdirectory 404 falls back to root README",
+			statuses: map[string]int{pluginURL: http.StatusNotFound, rootURL: http.StatusOK},
+			want:     []string{"root readme loaded"},
+			counts:   map[string]int{pluginURL: 1, rootURL: 1},
+		},
+		{
+			name:     "both READMEs missing shows friendly message with repo link",
+			statuses: map[string]int{pluginURL: http.StatusNotFound, rootURL: http.StatusNotFound},
+			want:     []string{"No documentation is available", "https://github.com/owner/repo"},
+			counts:   map[string]int{pluginURL: 1, rootURL: 1},
+		},
+		{
+			name:     "non-404 plugin error is not masked as missing",
+			statuses: map[string]int{pluginURL: http.StatusInternalServerError, rootURL: http.StatusOK},
+			want:     []string{"Could not load README: readme returned status 500"},
+			counts:   map[string]int{pluginURL: 1, rootURL: 0},
+		},
+		{
+			name:     "non-404 root error is not masked as missing",
+			statuses: map[string]int{pluginURL: http.StatusNotFound, rootURL: http.StatusInternalServerError},
+			want:     []string{"Could not load README: readme returned status 500"},
+			counts:   map[string]int{pluginURL: 1, rootURL: 1},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			counts := map[string]int{}
 			a := readmeTestApp(t, func(req *http.Request) (*http.Response, error) {
-				if req.URL.String() != "https://raw.githubusercontent.com/owner/repo/main/plugin/README.md" {
-					t.Errorf("README URL = %s", req.URL)
+				u := req.URL.String()
+				counts[u]++
+				body := "**unknown**"
+				switch u {
+				case pluginURL:
+					body = "**plugin readme loaded**"
+				case rootURL:
+					body = "**root readme loaded**"
 				}
-				response, err := readmeResponse("**README loaded**")
-				response.StatusCode = status
+				response, err := readmeResponse(body)
+				if status, ok := tc.statuses[u]; ok {
+					response.StatusCode = status
+				} else {
+					response.StatusCode = http.StatusNotFound
+				}
 				return response, err
 			})
 			a.OpenPluginDetail(plugin.RemoteRegistryEntry{Name: "example", Repo: "https://github.com/owner/repo", Path: "plugin"})
 			text := pluginReadmeText(a.pluginDetailWidgets["example"])
-			want := "README loaded"
-			if status != http.StatusOK {
-				want = "Could not load README: readme returned status 404"
+			for _, want := range tc.want {
+				if !strings.Contains(text, want) {
+					t.Fatalf("README view = %q, want fragment %q", text, want)
+				}
 			}
-			if !strings.Contains(text, want) || strings.Contains(text, "**") {
-				t.Fatalf("README view = %q, want %q", text, want)
+			for u, wantCount := range tc.counts {
+				if counts[u] != wantCount {
+					t.Fatalf("requests to %s = %d, want %d", u, counts[u], wantCount)
+				}
 			}
 		})
+	}
+}
+
+func TestPluginReadmeAtRepoRootFetchesOnce(t *testing.T) {
+	var requests int
+	a := readmeTestApp(t, func(req *http.Request) (*http.Response, error) {
+		requests++
+		if req.URL.String() != "https://raw.githubusercontent.com/owner/repo/main/README.md" {
+			t.Errorf("README URL = %s", req.URL)
+		}
+		return readmeResponse("**root readme loaded**")
+	})
+	// No Path: the plugin lives at the repository root, so the root README is
+	// the only URL worth requesting.
+	a.OpenPluginDetail(plugin.RemoteRegistryEntry{Name: "example", Repo: "https://github.com/owner/repo"})
+	text := pluginReadmeText(a.pluginDetailWidgets["example"])
+	if requests != 1 {
+		t.Fatalf("requests = %d, want exactly 1", requests)
+	}
+	if !strings.Contains(text, "root readme loaded") {
+		t.Fatalf("README view = %q, want root readme", text)
 	}
 }
 

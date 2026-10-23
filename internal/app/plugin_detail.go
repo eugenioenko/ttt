@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -142,7 +143,12 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 		return fetchPluginReadme(ctx, entry.Repo, entry.Path)
 	}, func(content string, err error) {
 		if err != nil {
-			md.SetContent(fmt.Sprintf("Could not load README: %s", err))
+			var missing *readmeMissingError
+			if errors.As(err, &missing) {
+				md.SetContent("No documentation is available for this plugin.\n\nRepository: " + missing.repoURL)
+			} else {
+				md.SetContent(fmt.Sprintf("Could not load README: %s", err))
+			}
 		} else {
 			md.SetContent(content)
 		}
@@ -183,6 +189,63 @@ func fetchPluginReadme(ctx context.Context, repoURL, repoPath string) (string, e
 		return "", fmt.Errorf("unsupported repository URL")
 	}
 
+	body, err := fetchRawReadme(ctx, rawURL)
+	if err == nil {
+		return body, nil
+	}
+
+	// A plugin README is only worth falling back from when the plugin lives in
+	// a subdirectory. At the repository root the root README *is* the plugin
+	// README, so there is nothing else to try.
+	if !isReadmeNotFound(err) || repoPath == "" {
+		if isReadmeNotFound(err) {
+			return "", &readmeMissingError{repoURL: repoURL}
+		}
+		return "", err
+	}
+
+	// The plugin directory has no README; try the repository root README
+	// before giving up. Server errors and connection failures are still
+	// reported as errors rather than silently masked.
+	rootURL := repoToRawReadme(repoURL, "")
+	if rootURL == "" || rootURL == rawURL {
+		return "", &readmeMissingError{repoURL: repoURL}
+	}
+	rootBody, rootErr := fetchRawReadme(ctx, rootURL)
+	if rootErr == nil {
+		return rootBody, nil
+	}
+	if isReadmeNotFound(rootErr) {
+		return "", &readmeMissingError{repoURL: repoURL}
+	}
+	return "", rootErr
+}
+
+// readmeFetchError is returned when the README URL responds with a non-OK
+// HTTP status. The message matches the previous error text so existing copy
+// stays intact.
+type readmeFetchError struct{ status int }
+
+func (e *readmeFetchError) Error() string {
+	return fmt.Sprintf("readme returned status %d", e.status)
+}
+
+func isReadmeNotFound(err error) bool {
+	var fetchErr *readmeFetchError
+	return errors.As(err, &fetchErr) && fetchErr.status == http.StatusNotFound
+}
+
+// readmeMissingError signals that neither the plugin README nor the
+// repository root README exists. The detail tab renders a friendly
+// documentation-unavailable message with the repository link instead of an
+// error for this case.
+type readmeMissingError struct{ repoURL string }
+
+func (e *readmeMissingError) Error() string {
+	return fmt.Sprintf("no README found for repository %s", e.repoURL)
+}
+
+func fetchRawReadme(ctx context.Context, rawURL string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -195,7 +258,7 @@ func fetchPluginReadme(ctx context.Context, repoURL, repoPath string) (string, e
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("readme returned status %d", resp.StatusCode)
+		return "", &readmeFetchError{status: resp.StatusCode}
 	}
 
 	body, err := io.ReadAll(resp.Body)
