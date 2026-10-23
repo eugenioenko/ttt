@@ -136,22 +136,33 @@ func (t *Terminal) Run() {
 	go t.readLoop()
 }
 
-// waitLoop reaps the child and is what makes shell exit observable.
-//
-// Reading the master until it errors does not work here: go-pty assigns the
-// slave to the child's stdio and keeps its own copy of that fd open in this
-// process, so the master never reports EOF when the child dies and readLoop
-// blocks forever. Waiting on the process is the only reliable signal, and
-// closing the pty afterwards is what releases readLoop.
 func (t *Terminal) waitLoop() {
-	defer close(t.waited)
 	if t.cmd == nil {
+		close(t.waited)
 		return
 	}
 	t.cmd.Wait()
 
 	t.mu.Lock()
 	t.exited = true
+	unixPty, isUnix := t.pt.(pty.UnixPty)
+	if isUnix {
+		// go-pty retains the parent's slave fd. Release it so the reader can
+		// drain to EOF without closing the master and discarding queued output.
+		unixPty.Slave().Close()
+	}
+	t.mu.Unlock()
+	close(t.waited)
+
+	if isUnix {
+		// A surviving background job can keep the slave open indefinitely.
+		select {
+		case <-t.done:
+		case <-time.After(readLoopGrace):
+		}
+	}
+
+	t.mu.Lock()
 	t.pt.Close()
 	t.mu.Unlock()
 
