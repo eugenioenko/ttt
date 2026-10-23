@@ -135,6 +135,17 @@
     "tags": ["todo", "scanner", "productivity", "comments"]
   },
   {
+    "name": "ttt-mcp",
+    "featured": true,
+    "displayName": "MCP Integration",
+    "author": "eugenioenko",
+    "description": "Connect AI agents to running ttt editors over MCP; requires the ttt-mcp binary on PATH",
+    "repo": "https://github.com/eugenioenko/ttt-mcp",
+    "path": "plugin",
+    "version": "0.2.0",
+    "tags": ["mcp", "ai", "agents", "automation"]
+  },
+  {
     "name": "vim",
     "featured": true,
     "displayName": "Vim Mode",
