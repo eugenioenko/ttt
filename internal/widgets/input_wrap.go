@@ -240,12 +240,22 @@ func (inp *InputWidget) handleWrappedKey(ev *tcell.EventKey) (EventResult, bool)
 	shift := mods&tcell.ModShift != 0
 	switch ev.Key() {
 	case tcell.KeyEnter:
+		if inp.Config.Multiline && mods&tcell.ModCtrl != 0 {
+			if inp.Config.OnSubmit != nil {
+				inp.Config.OnSubmit(inp.text)
+			}
+			return EventConsumed, true
+		}
 		if !inp.Config.Multiline && mods&(tcell.ModShift|tcell.ModAlt) == 0 {
 			return EventIgnored, false
 		}
 		inp.insertRunes([]rune{'\n'})
 		return EventConsumed, true
 	case tcell.KeyCtrlJ:
+		if inp.Config.Multiline && inp.Config.OnSubmit != nil {
+			inp.Config.OnSubmit(inp.text)
+			return EventConsumed, true
+		}
 		inp.insertRunes([]rune{'\n'})
 		return EventConsumed, true
 	case tcell.KeyRune:

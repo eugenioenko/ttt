@@ -378,6 +378,7 @@ type Settings struct {
 	Panel        PanelSettings        `json:"panel,omitzero"`
 	Git          GitSettings          `json:"git"`
 	Terminal     TerminalSettings     `json:"terminal"`
+	Codex        CodexSettings        `json:"codex"`
 	LSP          LSPSettings          `json:"lsp"`
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
 	Markdown     MarkdownSettings     `json:"markdown"`
@@ -394,11 +395,19 @@ type Settings struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// CodexSettings controls the local Codex CLI used by the Agent panel.
+type CodexSettings struct {
+	// CLI is the executable name or absolute path.
+	CLI string `json:"cli,omitempty"`
+	// Args are additional arguments inserted before the prompt.
+	Args string `json:"args,omitempty"`
+}
+
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "appearance": true, "editor": true,
-	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
+	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "codex": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }
 
@@ -456,6 +465,7 @@ func DefaultSettings() Settings {
 		Sidebar:      DefaultSidebarSettings(),
 		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
+		Codex:        CodexSettings{CLI: "codex"},
 		LSP:          DefaultLSPSettings(),
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),

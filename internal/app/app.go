@@ -54,29 +54,33 @@ type TerminalSpec struct {
 }
 
 type App struct {
-	Root          *ui.Root
-	EditorGroup   *ui.EditorGroupWidget
-	Sidebar       *ui.SidebarWidget
-	SplitPanel    *ui.SplitPanelWidget
-	ContentSplit  *ui.ContentSplitWidget
-	BottomPanel   *ui.BottomPanelWidget
-	Search        *ui.SearchWidget
-	MenuBar       *ui.MenuBarWidget
-	RootBox       *widgets.VStackWidget
-	StatusBar     *ui.StatusBarWidget
-	Status        *view.StatusBar
-	Borders       *term.BorderSet
-	Screen        *term.TcellScreen
-	Renderer      *render.Renderer
-	ImageLayer    *image.Layer
-	imageCellW    int
-	imageCellH    int
-	Settings      *config.Settings
-	State         config.State
-	Workspace     *workspace.Workspace
-	Palette       *ui.TerminalColorPalette
-	TerminalPanel *ui.TerminalPanelWidget
-	Terminals     []TerminalTab
+	Root                *ui.Root
+	EditorGroup         *ui.EditorGroupWidget
+	Sidebar             *ui.SidebarWidget
+	Agent               *ui.AgentWidget
+	CodexTerminalID     string
+	CodexTerminalWidget *ui.TerminalWidget
+	SplitPanel          *ui.SplitPanelWidget
+	ContentSplit        *ui.ContentSplitWidget
+	AgentSplit          *ui.ContentSplitWidget
+	BottomPanel         *ui.BottomPanelWidget
+	Search              *ui.SearchWidget
+	MenuBar             *ui.MenuBarWidget
+	RootBox             *widgets.VStackWidget
+	StatusBar           *ui.StatusBarWidget
+	Status              *view.StatusBar
+	Borders             *term.BorderSet
+	Screen              *term.TcellScreen
+	Renderer            *render.Renderer
+	ImageLayer          *image.Layer
+	imageCellW          int
+	imageCellH          int
+	Settings            *config.Settings
+	State               config.State
+	Workspace           *workspace.Workspace
+	Palette             *ui.TerminalColorPalette
+	TerminalPanel       *ui.TerminalPanelWidget
+	Terminals           []TerminalTab
 	// TerminalSeq is monotonic so a closed-and-reopened tab never reuses an id
 	// (plugin handles key off it).
 	TerminalSeq            int
@@ -167,6 +171,48 @@ type App struct {
 	// lastPulled holds the document state behind each path's applied pull.
 	// UI goroutine only.
 	lastPulled map[string]pullKey
+}
+
+type agentReply struct {
+	Text string
+	Err  error
+}
+
+// ToggleAgentPanel opens the embedded Codex conversation in the right split.
+func (a *App) ToggleAgentPanel() {
+	if a.CodexTerminalID != "" {
+		a.CloseTerminal(a.CodexTerminalID)
+		return
+	}
+	a.AgentSplit.Bottom = a.Agent
+	a.AgentSplit.Position = ui.SplitRight
+	a.AgentSplit.ShowBottom = true
+	cli := a.Settings.Codex.CLI
+	if cli == "" {
+		cli = "codex"
+	}
+	id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: cli, Args: strings.Fields(a.Settings.Codex.Args), Label: "codex"})
+	if err != nil {
+		return
+	}
+	a.CodexTerminalID = id
+}
+
+func (a *App) submitAgentPrompt(prompt string) {
+	if a.Screen == nil {
+		return
+	}
+	go func() {
+		cli := a.Settings.Codex.CLI
+		if cli == "" {
+			cli = "codex"
+		}
+		args := append([]string{"exec", "--skip-git-repo-check"}, strings.Fields(a.Settings.Codex.Args)...)
+		args = append(args, prompt)
+		cmd := exec.Command(cli, args...)
+		out, err := cmd.CombinedOutput()
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&agentReply{Text: strings.TrimSpace(string(out)), Err: err}))
+	}()
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
@@ -478,13 +524,23 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	panelID := fmt.Sprintf("terminal-%d", a.TerminalSeq)
 	a.TerminalSeq++
 	a.Terminals = append(a.Terminals, TerminalTab{ID: panelID, Label: spec.Label, Term: t, Widget: tw})
-	a.TerminalPanel.AddTerminalLabeled(tw, spec.Label)
-	a.BottomPanel.SetActivePanel("terminal")
+	if spec.Label == "codex" {
+		a.CodexTerminalWidget = tw
+		a.AgentSplit.Bottom = tw
+		a.AgentSplit.ShowBottom = true
+	} else {
+		a.TerminalPanel.AddTerminalLabeled(tw, spec.Label)
+		a.BottomPanel.SetActivePanel("terminal")
+	}
 
-	if !a.ContentSplit.ShowBottom {
+	if spec.Label != "codex" && !a.ContentSplit.ShowBottom {
 		a.ContentSplit.ShowBottom = true
 	}
-	a.Root.SetFocus(a.TerminalPanel)
+	if spec.Label == "codex" {
+		a.Root.SetFocus(tw)
+	} else {
+		a.Root.SetFocus(a.TerminalPanel)
+	}
 
 	t.OnUpdate = func() {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
@@ -580,6 +636,7 @@ func (a *App) ListTerminals() []plugin.TerminalInfo {
 }
 
 func (a *App) CloseTerminal(panelID string) {
+	isCodex := panelID == a.CodexTerminalID
 	idx := -1
 	for i, tt := range a.Terminals {
 		if tt.ID == panelID {
@@ -592,7 +649,17 @@ func (a *App) CloseTerminal(panelID string) {
 	}
 	a.Terminals[idx].Term.Close()
 	a.Terminals = append(a.Terminals[:idx], a.Terminals[idx+1:]...)
-	a.TerminalPanel.RemoveTerminal(idx)
+	if !isCodex {
+		a.TerminalPanel.RemoveTerminal(idx)
+	}
+	if isCodex {
+		a.CodexTerminalID = ""
+		a.CodexTerminalWidget = nil
+		a.AgentSplit.ShowBottom = false
+		a.AgentSplit.Bottom = a.Agent
+		a.FocusEditor()
+		return
+	}
 
 	if a.TerminalPanel.Count() == 0 {
 		a.hideBottomPanelIfTerminalActive()

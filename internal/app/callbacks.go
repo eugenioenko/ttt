@@ -15,6 +15,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 
@@ -856,6 +857,9 @@ func registerWidgetCallbacks(app *App) {
 		}
 		if w := app.BottomPanel.ActiveWidget(); w != nil {
 			app.Root.SetFocus(w)
+			if app.Screen != nil {
+				app.Screen.SetCursorStyle(term.CursorStyleSteadyBlock)
+			}
 		}
 	}
 

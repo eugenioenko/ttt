@@ -281,6 +281,13 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	contentSplit.Bottom = bottomPanel
 	contentSplit.Borders = borders
 	contentSplit.ShowBottom = false
+	var app *App
+	agent := ui.NewAgentWidget(func(prompt string) { app.submitAgentPrompt(prompt) })
+	agentSplit := ui.NewContentSplitWidget()
+	agentSplit.Top = contentSplit
+	agentSplit.Bottom = agent
+	agentSplit.Position = ui.SplitRight
+	agentSplit.ShowBottom = false
 
 	status := view.NewStatusBar()
 	statusBar := ui.NewStatusBarWidget(status)
@@ -331,7 +338,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 
 	splitPanel := ui.NewSplitPanelWidget()
 	splitPanel.Left = sidebar
-	splitPanel.Right = contentSplit
+	splitPanel.Right = agentSplit
 	splitPanel.Borders = borders
 	splitPanel.DividerPos = ui.DefaultSidebarWidth
 	if state.SidebarWidth >= ui.MinSidebarWidth {
@@ -339,13 +346,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	} else if cfg.Settings.Sidebar.Width >= ui.MinSidebarWidth {
 		splitPanel.DividerPos = cfg.Settings.Sidebar.Width
 	}
-	panelPos := state.PanelPosition
-	if panelPos == "" {
-		panelPos = cfg.Settings.Panel.Position
-	}
-	if panelPos == "right" {
-		contentSplit.Position = ui.SplitRight
-	}
+	// The integrated terminal is always hosted by the bottom panel. The
+	// outer AgentSplit owns the independent right-hand Codex surface.
+	contentSplit.Position = ui.SplitBottom
 	if state.PanelHeight >= ui.MinPanelHeight {
 		contentSplit.BottomH = state.PanelHeight
 	}
@@ -354,7 +357,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	}
 	splitPanel.ShowLeft = sidebar.Visible
 	splitPanel.RightBorderStartY = 2
-	contentSplit.RightBorderStartY = &splitPanel.RightBorderStartY
+	agentSplit.RightBorderStartY = &splitPanel.RightBorderStartY
 	editorGroup.TabBar.PointerInteractionValid = func() bool {
 		return contentSplit.TopContentHeight() > 3
 	}
@@ -368,13 +371,15 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	root := ui.NewRoot(rootBox)
 	root.SetFocus(editorGroup)
 
-	app := &App{
+	app = &App{
 		Root:                root,
 		RootBox:             rootBox,
 		EditorGroup:         editorGroup,
 		Sidebar:             sidebar,
+		Agent:               agent,
 		SplitPanel:          splitPanel,
 		ContentSplit:        contentSplit,
+		AgentSplit:          agentSplit,
 		BottomPanel:         bottomPanel,
 		Explorer:            explorer,
 		Search:              search,
@@ -399,6 +404,21 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	// Clicking the outer right pane must explicitly reactivate the PTY. The
+	// outer split is not the regular terminal panel, so it has no default focus
+	// callback of its own.
+	agentSplit.OnBottomClick = func() {
+		if agentSplit.Bottom != nil {
+			app.Root.SetFocus(agentSplit.Bottom)
+			if app.Screen != nil {
+				app.Screen.SetCursorStyle(term.CursorStyleSteadyBlock)
+			}
+		}
+	}
+	// The top child is itself a split containing the editor and Bottom panel.
+	// Let that inner split decide whether a click targets the editor or terminal;
+	// otherwise the outer split would steal focus back from the terminal.
+	agentSplit.OnTopClick = func() {}
 	app.diagPull = NewTask[pulledDiagnostics](app, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
 	app.diagBackground = make(map[string]*asynctask.Task[[]backgroundPull])
 	app.Repository = NewRepositoryState(changes, ws.Paths())

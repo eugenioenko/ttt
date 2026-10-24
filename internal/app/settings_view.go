@@ -216,6 +216,15 @@ func settingsCategories() []settingsCategory {
 				GetInt: func(s *config.Settings) int { return s.Search.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Search.Debounce = v }},
 		}},
+		{Title: "Codex", Fields: []settingField{
+			section("CLI"),
+			{Label: "CLI executable", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.Codex.CLI },
+				SetString: func(s *config.Settings, v string) { s.Codex.CLI = v }},
+			{Label: "Additional arguments", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.Codex.Args },
+				SetString: func(s *config.Settings, v string) { s.Codex.Args = v }},
+		}},
 		{Title: "Terminal", Fields: []settingField{
 			{Label: "Shell", Kind: settingString, Restart: true,
 				GetString: func(s *config.Settings) string { return s.Terminal.Shell },

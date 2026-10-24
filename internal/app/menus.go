@@ -64,6 +64,7 @@ var menuBarMenus = [][]ui.ContextMenuItem{
 		{Label: "Outline", Command: "sidebar.outline"},
 		ui.MenuSep(),
 		{Label: "Toggle Sidebar", Command: "sidebar.toggle"},
+		{Label: "Codex", Command: "agent.toggle"},
 		{Label: "Toggle Terminal", Command: "terminal.toggle"},
 		{Label: "New Terminal", Command: "terminal.new"},
 		ui.MenuSep(),

@@ -8,6 +8,13 @@ import (
 )
 
 func (a *App) ToggleTerminal() {
+	// The terminal belongs to the bottom panel. If the Codex right panel is
+	// active, restore the normal bottom-panel host before toggling it.
+	if a.ContentSplit.Bottom == a.Agent {
+		a.ContentSplit.Bottom = a.BottomPanel
+		a.ContentSplit.Position = ui.SplitBottom
+		a.ContentSplit.ShowBottom = false
+	}
 	if !a.ContentSplit.ShowBottom {
 		a.ensureUsablePanelSize()
 		a.showTerminalPanel()
@@ -266,6 +273,7 @@ func (a *App) ToggleSearchReplace() {
 
 func registerViewCommands(app *App) {
 	reg := app.Reg
+	reg.Register(command.Command{ID: "agent.toggle", Title: "View: Toggle Codex Agent", Keywords: []string{"codex", "ai", "agent", "chat"}, Handler: app.ToggleAgentPanel})
 
 	reg.Register(command.Command{
 		ID: "sidebar.toggle", Title: "View: Toggle Sidebar",

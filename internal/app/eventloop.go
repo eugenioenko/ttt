@@ -274,6 +274,11 @@ func RunEventLoop(
 			switch v := tev.Data().(type) {
 			case *taskDelivery:
 				v.run()
+			case *agentReply:
+				if app.Agent != nil {
+					if v.Err != nil { app.Agent.Messages = append(app.Agent.Messages, ui.AgentMessage{Role: "codex", Text: "Error: " + v.Err.Error()})
+					} else { app.Agent.Messages = append(app.Agent.Messages, ui.AgentMessage{Role: "codex", Text: v.Text}) }
+				}
 			case *highlightStep:
 				// Short steps keep input responsive while a large file catches up;
 				// the frame is redrawn once the deferred lines are ready.

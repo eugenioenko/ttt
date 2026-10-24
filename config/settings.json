@@ -47,6 +47,9 @@
   "terminal": {
     "scrollback": 1000
   },
+  "codex": {
+    "cli": "codex"
+  },
   "lsp": {
     "saveOnRename": false,
     "hoverDelay": 500

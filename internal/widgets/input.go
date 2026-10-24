@@ -384,6 +384,16 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		inp.insertRunes([]rune{term.KeyRune(ev)})
 		return EventConsumed
 	case tcell.KeyEnter:
+		if inp.Config.Multiline && ctrl {
+			if inp.Config.OnSubmit != nil {
+				inp.Config.OnSubmit(inp.text)
+			}
+			return EventConsumed
+		}
+		if inp.Config.Multiline {
+			inp.insertRunes([]rune{'\n'})
+			return EventConsumed
+		}
 		if !shift && inp.Config.OnSubmit != nil {
 			inp.Config.OnSubmit(inp.text)
 		}
