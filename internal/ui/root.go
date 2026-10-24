@@ -49,6 +49,8 @@ type Root struct {
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
+	lastMouseBtn     tcell.ButtonMask
+	prevMouseBtn     tcell.ButtonMask
 }
 
 func NewRoot(main Widget) *Root {
@@ -184,6 +186,13 @@ func (r *Root) rawKeysFocused() bool {
 }
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
+	if mev, ok := ev.(*tcell.EventMouse); ok {
+		r.prevMouseBtn = r.lastMouseBtn
+		r.lastMouseBtn = mev.Buttons()
+	} else if _, ok := ev.(*tcell.EventKey); ok {
+		r.prevMouseBtn = 0
+		r.lastMouseBtn = 0
+	}
 	kev, isKey := ev.(*tcell.EventKey)
 	// ForceKeys punch through two things that would otherwise swallow them: a
 	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
@@ -300,7 +309,7 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 		return EventConsumed
 	}
 
-	if btn&tcell.Button2 != 0 && r.OnRightClick != nil {
+	if (btn&tcell.Button2 != 0) && (btn&tcell.Button1 == 0) && (r.prevMouseBtn&tcell.Button2 == 0) && r.OnRightClick != nil {
 		mx, my := mev.Position()
 		slog.Debug("root", "action", "rightClick", "x", mx, "y", my)
 		r.OnRightClick(mx, my)
@@ -407,6 +416,8 @@ func (r *Root) PushOverlay(o Overlay) {
 }
 
 func (r *Root) PopOverlay() {
+	r.prevMouseBtn = 0
+	r.lastMouseBtn = 0
 	if len(r.Overlays) > 0 {
 		r.Overlays = r.Overlays[:len(r.Overlays)-1]
 		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))

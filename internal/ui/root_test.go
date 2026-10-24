@@ -384,3 +384,65 @@ func TestRawKeyConsumerGetsChordKeys(t *testing.T) {
 		t.Fatalf("terminal got %d keys, want 3", terminal.eventCount)
 	}
 }
+
+func TestRoot_RightClickTriggeredOnlyOnInitialPress(t *testing.T) {
+	main := &mockWidget{}
+	root := NewRoot(main)
+	root.SetSize(80, 24)
+
+	var rightClicks []struct{ x, y int }
+	root.OnRightClick = func(mx, my int) {
+		rightClicks = append(rightClicks, struct{ x, y int }{mx, my})
+	}
+
+	// 1. Initial right-click press at (10, 5)
+	evPress := tcell.NewEventMouse(10, 5, tcell.Button2, 0)
+	if res := root.HandleEvent(evPress); res != EventConsumed {
+		t.Fatalf("expected EventConsumed on right-click press, got %v", res)
+	}
+	if len(rightClicks) != 1 {
+		t.Fatalf("expected 1 right click, got %d", len(rightClicks))
+	}
+
+	// 2. Subsequent mouse events while Button2 is still held (motion or dropped release)
+	evMotion := tcell.NewEventMouse(15, 6, tcell.Button2, 0)
+	root.HandleEvent(evMotion)
+	if len(rightClicks) != 1 {
+		t.Fatalf("expected right click NOT to retrigger on held button, got %d", len(rightClicks))
+	}
+
+	// 3. Mouse release
+	evRelease := tcell.NewEventMouse(15, 6, tcell.ButtonNone, 0)
+	root.HandleEvent(evRelease)
+
+	// 4. New right-click press at (20, 8)
+	evPress2 := tcell.NewEventMouse(20, 8, tcell.Button2, 0)
+	root.HandleEvent(evPress2)
+	if len(rightClicks) != 2 {
+		t.Fatalf("expected 2nd right click after release, got %d", len(rightClicks))
+	}
+	if rightClicks[1].x != 20 || rightClicks[1].y != 8 {
+		t.Fatalf("expected 2nd right click at (20, 8), got %v", rightClicks[1])
+	}
+}
+
+func TestRoot_RightClickNotTriggeredWhenLeftClickActive(t *testing.T) {
+	main := &mockWidget{}
+	root := NewRoot(main)
+	root.SetSize(80, 24)
+
+	rightClicked := false
+	root.OnRightClick = func(mx, my int) {
+		rightClicked = true
+	}
+
+	// Event with both Button1 and Button2 set (e.g. left click with stuck Button2)
+	ev := tcell.NewEventMouse(10, 5, tcell.Button1|tcell.Button2, 0)
+	res := root.HandleEvent(ev)
+	if rightClicked {
+		t.Fatal("right click should not trigger when Button1 is active")
+	}
+	if res != EventConsumed || main.eventCount != 1 {
+		t.Fatalf("event should be forwarded to main widget, got result %v, eventCount %d", res, main.eventCount)
+	}
+}
