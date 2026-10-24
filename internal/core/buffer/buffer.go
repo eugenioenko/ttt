@@ -76,6 +76,9 @@ type Buffer struct {
 	ShowTrailingNewline    bool
 	TrimTrailingWhitespace bool
 	LineEnding             string // "\n" (LF) or "\r\n" (CRLF); defaults to "\n"
+	// savedLineEnding is LineEnding as last loaded or saved. Changing the line
+	// ending is not on the undo stack, so undo alone cannot tell it apart.
+	savedLineEnding string
 	// ReadOnlyOnDisk must be checked before saving: SaveFile renames over the
 	// target, which succeeds on a read-only file in a writable directory.
 	ReadOnlyOnDisk bool
@@ -147,4 +150,17 @@ func (b *Buffer) DeleteLine(idx int) {
 	}
 	b.Splice(idx, 1)
 	b.Dirty = true
+}
+
+// LineEndingChanged reports whether LineEnding differs from the file as last
+// loaded or saved.
+func (b *Buffer) LineEndingChanged() bool {
+	return effectiveLineEnding(b.LineEnding) != effectiveLineEnding(b.savedLineEnding)
+}
+
+func effectiveLineEnding(eol string) string {
+	if eol == "" {
+		return "\n"
+	}
+	return eol
 }
