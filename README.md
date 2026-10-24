@@ -299,7 +299,7 @@ See [Settings reference](docs-web/src/content/docs/reference/settings.md) for ev
 
 ## Keybindings
 
-All keybindings are customizable via [`keybindings.json`](config/keybindings.json). Chord sequences (e.g. `ctrl+k e`) are supported. Open your keybindings file with **Ctrl+K Y**, or press **Ctrl+P** and type `?` to browse shortcuts in-app.
+All keybindings are customizable via [`keybindings.json`](config/keybindings.json). Chord sequences (e.g. `ctrl+k e`) are supported. Use **Ctrl+K X** to toggle a bookmark on the current line, **Ctrl+K N** for the next bookmark, and **Ctrl+K V** for the previous bookmark. Open your keybindings file with **Ctrl+K Y**, or press **Ctrl+P** and type `?` to browse shortcuts in-app.
 
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 
