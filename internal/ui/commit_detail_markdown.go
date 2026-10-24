@@ -5,6 +5,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
 func (d *CommitDetailWidget) SetMarkdownMaxWidth(width int) {
@@ -60,8 +61,10 @@ func (d *CommitDetailWidget) messageVisualRows(index int, row commitDetailRow, v
 	start := 0
 	for _, line := range lines {
 		text := line.Text()
-		end := start + len([]rune(text))
-		rows = append(rows, commitDetailVisualRow{row: index, leftStart: start, messageEnd: end, messageText: text, continuation: start > 0})
+		end := start + len([]rune(text)) - line.PrefixRunes
+		rows = append(rows, commitDetailVisualRow{
+			row: index, leftStart: start, messageEnd: end, messageText: text, prefix: line.PrefixRunes, continuation: start > 0,
+		})
 		start = end
 	}
 	return rows
@@ -81,14 +84,22 @@ func (d *CommitDetailWidget) renderMarkdownRow(surface Surface, index int, row c
 		width = min(width, d.messageWrapWidth(viewW))
 	}
 	blank := term.Cell{Ch: ' ', BgStyle: term.StyleCommitHeader}
+	hangStyles := markdown.FlattenStyles(markdown.Line{Spans: row.markdown.Hang})
 	drawTextSegment(surface, 1, y, width, visual.messageText, 0, left, blank, func(col int, ch rune) term.Cell {
-		col += visual.leftStart
+		if col < visual.prefix {
+			return term.Cell{Ch: ch, Style: hangStyles[col], BgStyle: term.StyleCommitHeader}
+		}
+		col += visual.leftStart - visual.prefix
 		cell := term.Cell{Ch: ch, Style: row.styles[col], BgStyle: term.StyleCommitHeader}
 		if d.hasSelection && d.selection.Contains(index, col) {
 			cell.BgStyle = term.StyleSelection
 		}
 		return cell
 	})
+}
+
+func (v commitDetailVisualRow) prefixWidth() int {
+	return textwidth.Runes([]rune(v.messageText)[:v.prefix])
 }
 
 func (d *CommitDetailWidget) horizontalLimit(viewW int) int {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -76,4 +77,54 @@ func TestCommitDetailMarkdownScrollAndCopyAcrossPages(t *testing.T) {
 	if got := strings.Join(h.app.EditorGroup.Editor.Buf.Lines, "\n"); got != visible {
 		t.Fatalf("Ctrl+V did not restore the selected Markdown text: %q", got)
 	}
+}
+
+func TestCommitDetailMarkdownWrappedQuoteKeepsBarAndSelection(t *testing.T) {
+	clipboard.DisableSystem()
+	clipboard.Set("sentinel")
+	h := newTestHarness(t, 50, 18)
+	defer h.stop()
+	d := ui.NewCommitDetailWidget(h.dir, "ref", "abcdef0", false)
+	d.SetDetail("> alpha beta gamma delta epsilon zeta eta theta iota kappa lambda TARGET mu nu xi omicron", nil, "")
+	h.app.EditorGroup.OpenPluginTab("markdown-quote", "Markdown quote", d)
+	h.app.Root.SetFocus(h.app.EditorGroup)
+	h.redraw()
+	r := d.GetRect()
+	rows := strings.Split(h.screenText(), "\n")
+	firstY, targetY, targetX := -1, -1, -1
+	for y, row := range rows {
+		if firstY < 0 && displayColumnOf(row, "alpha") >= 0 {
+			firstY = y
+		}
+		if x := displayColumnOf(row, "TARGET"); x >= 0 {
+			targetY, targetX = y, x
+		}
+	}
+	if firstY < 0 || targetY <= firstY {
+		t.Fatalf("expected TARGET on a wrapped continuation row:\n%s", h.screenText())
+	}
+	for y := firstY; y <= targetY; y++ {
+		if got := strings.TrimSpace(sliceColumns(rows[y], r.X, r.X+r.W)); !strings.HasPrefix(got, "│ ") {
+			t.Errorf("row %d lost the quote bar: %q", y, got)
+		}
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(targetX, targetY, tcell.Button1, 0))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(targetX+len("TARGET"), targetY, tcell.Button1, 0))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(targetX+len("TARGET"), targetY, tcell.ButtonNone, 0))
+	h.pressCtrl(tcell.KeyCtrlC)
+	if got := clipboard.Get(); got != "TARGET" {
+		t.Fatalf("selecting TARGET on a wrapped quote row copied %q", got)
+	}
+}
+
+func sliceColumns(row string, from, to int) string {
+	var b strings.Builder
+	col := 0
+	for _, ch := range row {
+		if col >= from && col < to {
+			b.WriteRune(ch)
+		}
+		col += textwidth.Rune(ch)
+	}
+	return b.String()
 }
