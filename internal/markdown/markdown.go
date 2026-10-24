@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/highlight"
@@ -44,6 +45,11 @@ type Span struct {
 type Line struct {
 	Spans []Span
 	Kind  LineKind
+	Hang  []Span
+	// PrefixRunes is how many leading runes of a wrapped row repeat Hang
+	// instead of carrying source text; offsets into the unwrapped line must
+	// skip them.
+	PrefixRunes int
 }
 
 func (l Line) Text() string {
@@ -59,14 +65,22 @@ func WrapLine(line Line, width int) []Line {
 	if width <= 0 || textwidth.String(text) <= width {
 		return []Line{line}
 	}
+	hang := Line{Spans: line.Hang}.Text()
+	hangRunes := len([]rune(hang))
+	hangWidth := textwidth.String(hang)
 	styles := FlattenStyles(line)
 	runes := []rune(text)
 	var result []Line
+	rowWidth := width
+	// The first row starts with the line's own prefix (a marker or quote bar),
+	// which is as long as Hang; breaking at a space inside it would leave a row
+	// holding nothing but the prefix.
+	minBreak := max(1, hangRunes)
 	for len(runes) > 0 {
 		end, columns := 0, 0
 		for end < len(runes) {
 			w := textwidth.Rune(runes[end])
-			if columns+w > width && end > 0 {
+			if columns+w > rowWidth && end > 0 {
 				break
 			}
 			columns += w
@@ -74,7 +88,7 @@ func WrapLine(line Line, width int) []Line {
 		}
 		if end < len(runes) {
 			bp := -1
-			for j := end - 1; j > 0; j-- {
+			for j := end - 1; j >= minBreak; j-- {
 				if runes[j] == ' ' {
 					bp = j
 					break
@@ -96,9 +110,16 @@ func WrapLine(line Line, width int) []Line {
 			}
 			spans = append(spans, Span{Text: string(chunk[start:pos]), Style: st})
 		}
-		result = append(result, Line{Kind: line.Kind, Spans: spans})
+		row := Line{Kind: line.Kind, Spans: spans, Hang: line.Hang}
+		if len(result) > 0 && hangRunes > 0 {
+			row.Spans = append(append([]Span(nil), line.Hang...), spans...)
+			row.PrefixRunes = hangRunes
+		}
+		result = append(result, row)
 		runes = runes[end:]
 		styles = styles[end:]
+		rowWidth = max(1, width-hangWidth)
+		minBreak = 1
 	}
 	return result
 }
@@ -130,14 +151,47 @@ func Render(text string) []Line {
 type renderer struct {
 	src   []byte
 	lines []Line
+	// indent holds the continuation prefix of every enclosing list item and
+	// quote, outermost first.
+	indent []Span
 }
 
 func (r *renderer) emit(line Line) {
+	line.Spans = append(append([]Span(nil), r.indent...), line.Spans...)
+	line.Hang = append(append([]Span(nil), r.indent...), line.Hang...)
 	r.lines = append(r.lines, line)
 }
 
 func (r *renderer) emitBlank() {
-	r.lines = append(r.lines, Line{Kind: KindBlank, Spans: []Span{{Text: "", Style: term.StyleDefault}}})
+	if n := len(r.lines); n > 0 && r.lines[n-1].Kind == KindBlank {
+		return
+	}
+	spans := trimTrailingSpaces(r.indent)
+	if len(spans) == 0 {
+		spans = []Span{{Text: "", Style: term.StyleDefault}}
+	}
+	r.lines = append(r.lines, Line{Kind: KindBlank, Spans: spans})
+}
+
+func (r *renderer) pushIndent(spans ...Span) {
+	r.indent = append(r.indent, spans...)
+}
+
+func (r *renderer) popIndent(n int) {
+	r.indent = r.indent[:len(r.indent)-n]
+}
+
+func trimTrailingSpaces(spans []Span) []Span {
+	out := append([]Span(nil), spans...)
+	for len(out) > 0 {
+		last := &out[len(out)-1]
+		last.Text = strings.TrimRight(last.Text, " ")
+		if last.Text != "" {
+			break
+		}
+		out = out[:len(out)-1]
+	}
+	return out
 }
 
 func (r *renderer) dropTrailingBlanks() {
@@ -162,13 +216,11 @@ func (r *renderer) renderBlock(n ast.Node) {
 		r.emitBlank()
 
 	case *ast.Paragraph:
-		spans := r.collectInlineSpans(n, term.StylePaletteItem)
-		r.emit(Line{Kind: KindParagraph, Spans: spans})
+		r.emitInline(KindParagraph, nil, nil, r.collectInlineLines(n, term.StylePaletteItem))
 		r.emitBlank()
 
 	case *ast.TextBlock:
-		spans := r.collectInlineSpans(n, term.StylePaletteItem)
-		r.emit(Line{Kind: KindParagraph, Spans: spans})
+		r.emitInline(KindParagraph, nil, nil, r.collectInlineLines(n, term.StylePaletteItem))
 
 	case *ast.FencedCodeBlock:
 		lang := ""
@@ -187,11 +239,7 @@ func (r *renderer) renderBlock(n ast.Node) {
 		r.emit(Line{Kind: KindDivider, Spans: []Span{{Text: "---", Style: term.StyleBorder}}})
 
 	case *ast.List:
-		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
-			if li, ok := child.(*ast.ListItem); ok {
-				r.renderListItem(li, n.IsOrdered())
-			}
-		}
+		r.renderList(n)
 		r.emitBlank()
 
 	case *east.Table:
@@ -199,15 +247,16 @@ func (r *renderer) renderBlock(n ast.Node) {
 		r.emitBlank()
 
 	case *ast.Blockquote:
+		r.pushIndent(Span{Text: "│ ", Style: term.StyleBorder})
 		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 			if p, ok := child.(*ast.Paragraph); ok {
-				spans := r.collectInlineSpans(p, term.StylePaletteItem)
-				spans = append([]Span{{Text: "│ ", Style: term.StyleBorder}}, spans...)
-				r.emit(Line{Kind: KindBlockquote, Spans: spans})
+				r.emitInline(KindBlockquote, nil, nil, r.collectInlineLines(p, term.StylePaletteItem))
 			} else {
 				r.renderBlock(child)
 			}
 		}
+		r.dropTrailingBlanks()
+		r.popIndent(1)
 		r.emitBlank()
 
 	case *ast.HTMLBlock:
@@ -237,40 +286,49 @@ func (r *renderer) collectBlockLines(n ast.Node) []string {
 func (r *renderer) emitCodeBlock(block []string, lang string) {
 	for _, cl := range renderCodeBlock(block, lang) {
 		cl.Kind = KindCode
-		r.lines = append(r.lines, cl)
+		r.emit(cl)
 	}
 }
 
-func (r *renderer) renderListItem(li *ast.ListItem, ordered bool) {
-	marker := "• "
-	if ordered {
-		idx := 0
-		parent := li.Parent()
-		for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
-			idx++
-			if c == li {
-				break
-			}
+func (r *renderer) renderList(list *ast.List) {
+	num := list.Start
+	for child := list.FirstChild(); child != nil; child = child.NextSibling() {
+		li, ok := child.(*ast.ListItem)
+		if !ok {
+			continue
 		}
-		marker = fmt.Sprintf("%d. ", idx)
+		marker := "• "
+		if list.IsOrdered() {
+			marker = fmt.Sprintf("%d. ", num)
+			num++
+		}
+		r.renderListItem(li, marker)
 	}
+}
 
+func (r *renderer) renderListItem(li *ast.ListItem, marker string) {
+	hang := Span{Text: strings.Repeat(" ", textwidth.String(marker)), Style: term.StylePaletteItem}
 	first := true
 	for child := li.FirstChild(); child != nil; child = child.NextSibling() {
-		switch child.Kind() {
-		case ast.KindTextBlock, ast.KindParagraph:
-			spans := r.collectInlineSpans(child, term.StylePaletteItem)
-			if first {
-				spans = append([]Span{{Text: marker, Style: term.StylePaletteItem}}, spans...)
-				first = false
-			} else {
-				indent := strings.Repeat(" ", len([]rune(marker)))
-				spans = append([]Span{{Text: indent, Style: term.StylePaletteItem}}, spans...)
-			}
-			r.emit(Line{Kind: KindListItem, Spans: spans})
-		default:
-			r.renderBlock(child)
+		isText := child.Kind() == ast.KindTextBlock || child.Kind() == ast.KindParagraph
+		if first && isText {
+			lead := []Span{{Text: marker, Style: term.StylePaletteItem}}
+			r.emitInline(KindListItem, lead, []Span{hang}, r.collectInlineLines(child, term.StylePaletteItem))
+			first = false
+			continue
 		}
+		r.pushIndent(hang)
+		switch c := child.(type) {
+		case *ast.List:
+			r.renderList(c)
+		default:
+			if isText {
+				r.emitInline(KindListItem, nil, nil, r.collectInlineLines(child, term.StylePaletteItem))
+			} else {
+				r.renderBlock(child)
+			}
+		}
+		r.popIndent(1)
 	}
 }
 
@@ -353,52 +411,81 @@ func (r *renderer) emitTableRow(cells [][]Span, colWidths []int, defaultStyle te
 func spanWidth(spans []Span) int {
 	n := 0
 	for _, s := range spans {
-		n += len([]rune(s.Text))
+		n += textwidth.String(s.Text)
 	}
 	return n
 }
 
 func (r *renderer) collectInlineSpans(n ast.Node, defaultStyle term.Style) []Span {
-	var spans []Span
-	r.walkInline(n, defaultStyle, &spans)
-	if len(spans) == 0 {
-		spans = []Span{{Text: "", Style: defaultStyle}}
-	}
-	return spans
+	return slices.Concat(r.collectInlineLines(n, defaultStyle)...)
 }
 
-func (r *renderer) walkInline(n ast.Node, style term.Style, spans *[]Span) {
+func (r *renderer) collectInlineLines(n ast.Node, defaultStyle term.Style) [][]Span {
+	segs := inlineLines{nil}
+	r.walkInline(n, defaultStyle, &segs)
+	for len(segs) > 1 && len(segs[len(segs)-1]) == 0 {
+		segs = segs[:len(segs)-1]
+	}
+	for i := range segs {
+		if len(segs[i]) == 0 {
+			segs[i] = []Span{{Text: "", Style: defaultStyle}}
+		}
+	}
+	return segs
+}
+
+func (r *renderer) emitInline(kind LineKind, lead, hang []Span, segs [][]Span) {
+	for i, seg := range segs {
+		prefix := lead
+		if i > 0 {
+			prefix = hang
+		}
+		spans := append(append([]Span(nil), prefix...), seg...)
+		r.emit(Line{Kind: kind, Spans: spans, Hang: hang})
+	}
+}
+
+type inlineLines [][]Span
+
+func (l *inlineLines) add(s Span) {
+	last := len(*l) - 1
+	(*l)[last] = append((*l)[last], s)
+}
+
+func (r *renderer) walkInline(n ast.Node, style term.Style, segs *inlineLines) {
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 		switch c := child.(type) {
 		case *ast.Text:
 			txt := string(c.Value(r.src))
 			if txt != "" {
-				*spans = append(*spans, Span{Text: txt, Style: style})
+				segs.add(Span{Text: txt, Style: style})
 			}
-			if c.SoftLineBreak() && child.NextSibling() != nil {
-				*spans = append(*spans, Span{Text: " ", Style: style})
+			if c.HardLineBreak() {
+				*segs = append(*segs, nil)
+			} else if c.SoftLineBreak() && child.NextSibling() != nil {
+				segs.add(Span{Text: " ", Style: style})
 			}
 		case *ast.String:
 			txt := string(c.Value)
 			if txt != "" {
-				*spans = append(*spans, Span{Text: txt, Style: style})
+				segs.add(Span{Text: txt, Style: style})
 			}
 		case *ast.CodeSpan:
 			txt := string(c.Text(r.src)) //nolint:staticcheck // Node.Text is deprecated but walkInline may differ for edge-case CodeSpan children
-			*spans = append(*spans, Span{Text: txt, Style: term.StyleHoverCode})
+			segs.add(Span{Text: txt, Style: term.StyleHoverCode})
 		case *ast.Emphasis:
 			emphStyle := term.StyleHoverBold
 			if c.Level == 1 {
 				emphStyle = term.StyleHoverItalic
 			}
-			r.walkInline(c, emphStyle, spans)
+			r.walkInline(c, emphStyle, segs)
 		case *ast.Link:
-			r.walkInline(c, style, spans)
+			r.walkInline(c, style, segs)
 		case *ast.AutoLink:
 			txt := string(c.URL(r.src))
-			*spans = append(*spans, Span{Text: txt, Style: style})
+			segs.add(Span{Text: txt, Style: style})
 		default:
-			r.walkInline(child, style, spans)
+			r.walkInline(child, style, segs)
 		}
 	}
 }

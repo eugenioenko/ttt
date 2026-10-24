@@ -103,10 +103,13 @@ type commitDetailRow struct {
 // commitDetailVisualRow is one screen row. A file's diff is a single logical
 // row drawn by that file's diff widget; offset is the row within it.
 type commitDetailVisualRow struct {
-	row          int
-	leftStart    int
-	messageEnd   int
-	messageText  string
+	row         int
+	leftStart   int
+	messageEnd  int
+	messageText string
+	// prefix counts the leading runes of messageText that repeat a wrapped
+	// markdown line's indent or quote bar and have no source offset.
+	prefix       int
 	offset       int
 	continuation bool
 }
@@ -1253,7 +1256,7 @@ func (d *CommitDetailWidget) screenToSelection(mx, my int) (pos diffSelPos, ok b
 		if !row.markdown.Kind.Wrappable() {
 			visualCol += d.LeftCol
 		}
-		col := diffSegmentVisualColToRune(text, visual.leftStart, visualCol)
+		col := diffSegmentVisualColToRune(text, visual.leftStart, max(0, visualCol-visual.prefixWidth()))
 		return diffSelPos{Line: rowIndex, Col: min(col, visual.messageEnd)}, true
 	}
 	if !d.IsWrapped() {

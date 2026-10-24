@@ -494,3 +494,261 @@ func TestWrapLineWideRunes(t *testing.T) {
 		}
 	}
 }
+
+func unwrapRows(rows []Line) (string, []term.Style) {
+	var text strings.Builder
+	var styles []term.Style
+	for _, row := range rows {
+		runes := []rune(row.Text())
+		text.WriteString(string(runes[row.PrefixRunes:]))
+		styles = append(styles, FlattenStyles(row)[row.PrefixRunes:]...)
+	}
+	return text.String(), styles
+}
+
+func TestWrapLineRepeatsHang(t *testing.T) {
+	bar := Span{Text: "│ ", Style: term.StyleBorder}
+	line := Line{Kind: KindBlockquote, Hang: []Span{bar}, Spans: []Span{
+		bar,
+		{Text: "alpha beta gamma delta epsilon zeta", Style: term.StylePaletteItem},
+	}}
+	for _, width := range []int{8, 12, 20} {
+		rows := WrapLine(line, width)
+		if len(rows) < 2 {
+			t.Fatalf("width %d: expected the quote to wrap, got %q", width, textLines(rows))
+		}
+		for i, row := range rows {
+			if !strings.HasPrefix(row.Text(), "│ ") || row.Spans[0].Style != term.StyleBorder {
+				t.Errorf("width %d row %d: %q does not start with the quote bar", width, i, row.Text())
+			}
+			if w := textwidth.String(row.Text()); w > width {
+				t.Errorf("width %d row %d: %q occupies %d columns", width, i, row.Text(), w)
+			}
+			wantPrefix := 2
+			if i == 0 {
+				wantPrefix = 0
+			}
+			if row.PrefixRunes != wantPrefix {
+				t.Errorf("width %d row %d: PrefixRunes = %d, want %d", width, i, row.PrefixRunes, wantPrefix)
+			}
+		}
+		text, styles := unwrapRows(rows)
+		if text != line.Text() || !slices.Equal(styles, FlattenStyles(line)) {
+			t.Errorf("width %d: dropping the repeated prefix gives %q, want %q", width, text, line.Text())
+		}
+	}
+}
+
+func TestWrapLineHangWithWideRunes(t *testing.T) {
+	line := Line{Kind: KindListItem, Hang: []Span{{Text: "  ", Style: term.StylePaletteItem}}, Spans: []Span{
+		{Text: "• ", Style: term.StylePaletteItem},
+		{Text: "東京 大阪 名古屋 札幌 福岡", Style: term.StylePaletteItem},
+	}}
+	for _, width := range []int{4, 6, 9} {
+		rows := WrapLine(line, width)
+		for i, row := range rows {
+			if w := textwidth.String(row.Text()); w > width {
+				t.Errorf("width %d row %d: %q occupies %d columns", width, i, row.Text(), w)
+			}
+			if i > 0 && !strings.HasPrefix(row.Text(), "  ") {
+				t.Errorf("width %d row %d: %q lost its hanging indent", width, i, row.Text())
+			}
+		}
+		if text, _ := unwrapRows(rows); text != line.Text() {
+			t.Errorf("width %d: dropping the repeated prefix gives %q, want %q", width, text, line.Text())
+		}
+	}
+}
+
+func TestWrapLineKeepsTextAfterLeadingPrefix(t *testing.T) {
+	bar := Span{Text: "│ ", Style: term.StyleBorder}
+	line := Line{Kind: KindBlockquote, Hang: []Span{bar}, Spans: []Span{
+		bar,
+		{Text: "supercalifragilistic word", Style: term.StylePaletteItem},
+	}}
+	rows := WrapLine(line, 10)
+	for i, row := range rows {
+		if strings.TrimSpace(strings.TrimPrefix(row.Text(), "│ ")) == "" {
+			t.Errorf("row %d holds only the prefix: %q", i, textLines(rows))
+		}
+	}
+}
+
+func assertLines(t *testing.T, got []Line, want ...string) {
+	t.Helper()
+	if tl := textLines(got); !slices.Equal(tl, want) {
+		t.Errorf("got lines %q, want %q", tl, want)
+	}
+}
+
+func wrapAll(lines []Line, width int) []Line {
+	var rows []Line
+	for _, l := range lines {
+		if l.Kind.Wrappable() {
+			rows = append(rows, WrapLine(l, width)...)
+		} else {
+			rows = append(rows, l)
+		}
+	}
+	return rows
+}
+
+func TestRenderNestedListUnderOrderedItem(t *testing.T) {
+	assertLines(t, Render("1. top\n   - nested a\n   - nested b"),
+		"1. top", "   • nested a", "   • nested b")
+}
+
+func TestRenderThreeLevelList(t *testing.T) {
+	assertLines(t, Render("- a\n  - b\n    - c"), "• a", "  • b", "    • c")
+}
+
+func TestRenderNestedQuote(t *testing.T) {
+	assertLines(t, Render("> outer\n> > inner"), "│ outer", "│ │ inner")
+}
+
+func TestRenderListInsideQuote(t *testing.T) {
+	assertLines(t, Render("> - item"), "│ • item")
+}
+
+func TestRenderNestedListAddsNoBlankInsideParent(t *testing.T) {
+	assertLines(t, Render("1. top\n   - nested\n2. second"), "1. top", "   • nested", "2. second")
+}
+
+func TestRenderNestedQuoteThenTableSingleBlank(t *testing.T) {
+	lines := Render("> outer\n> > inner\n\n| a | b |\n|---|---|\n| 1 | 2 |")
+	if len(lines) < 4 || lines[2].Kind != KindBlank || lines[2].Text() != "" || lines[3].Kind != KindTable {
+		t.Errorf("expected one plain blank between the quote and the table, got %q", textLines(lines))
+	}
+}
+
+func TestRenderBlankInsideQuoteKeepsBar(t *testing.T) {
+	assertLines(t, Render("> ```\n> code\n> ```\n> after"), "│ code", "│", "│ after")
+}
+
+func TestRenderNoConsecutiveBlankLines(t *testing.T) {
+	input := "1. top\n   - nested a\n   - nested b\n2. second\n\nSteps continue below.\n\n" +
+		"3. starts at three\n4. four\n\n> outer\n> > inner\n\n| name | note |\n|------|------|\n| 東京 | wide |\n\n" +
+		"> - item in a quote\n\n- a\n  - b\n    - c\n\nend"
+	lines := Render(input)
+	for i := 1; i < len(lines); i++ {
+		if lines[i].Kind == KindBlank && lines[i-1].Kind == KindBlank {
+			t.Fatalf("consecutive blank lines at %d: %q", i, textLines(lines))
+		}
+	}
+}
+
+func TestRenderWrappedBulletKeepsHangingIndent(t *testing.T) {
+	rows := wrapAll(Render("- a list item long enough that it has to wrap onto a second line when narrow"), 40)
+	if len(rows) < 2 || !strings.HasPrefix(rows[0].Text(), "• ") {
+		t.Fatalf("expected a wrapped bullet item, got %q", textLines(rows))
+	}
+	for i, row := range rows {
+		if w := textwidth.String(row.Text()); w > 40 {
+			t.Errorf("row %d occupies %d columns: %q", i, w, row.Text())
+		}
+		if i > 0 && (!strings.HasPrefix(row.Text(), "  ") || strings.HasPrefix(row.Text(), "   ")) {
+			t.Errorf("row %d should start with exactly two spaces of hang: %q", i, row.Text())
+		}
+	}
+}
+
+func TestRenderWrappedTenthItemHangsFourSpaces(t *testing.T) {
+	var src strings.Builder
+	for i := 1; i <= 9; i++ {
+		src.WriteString("1. x\n")
+	}
+	src.WriteString("1. the tenth item is long enough that it has to wrap onto another row\n")
+	rows := wrapAll(Render(src.String()), 40)
+	start := slices.IndexFunc(rows, func(l Line) bool { return strings.HasPrefix(l.Text(), "10. ") })
+	if start < 0 || start+1 >= len(rows) {
+		t.Fatalf("expected a wrapped tenth item, got %q", textLines(rows))
+	}
+	for _, row := range rows[start+1:] {
+		if !strings.HasPrefix(row.Text(), "    ") || strings.HasPrefix(row.Text(), "     ") {
+			t.Errorf("continuation should start with exactly four spaces: %q", row.Text())
+		}
+	}
+}
+
+func TestRenderWrappedQuoteKeepsBar(t *testing.T) {
+	rows := wrapAll(Render("> a quote long enough that it has to wrap onto a second line when narrow"), 40)
+	if len(rows) < 2 {
+		t.Fatalf("expected the quote to wrap, got %q", textLines(rows))
+	}
+	for i, row := range rows {
+		if !strings.HasPrefix(row.Text(), "│ ") {
+			t.Errorf("row %d lost the quote bar: %q", i, row.Text())
+		}
+		if w := textwidth.String(row.Text()); w > 40 {
+			t.Errorf("row %d occupies %d columns: %q", i, w, row.Text())
+		}
+	}
+}
+
+func TestRenderHardLineBreaks(t *testing.T) {
+	assertLines(t, Render("line one  \nline two\\\nline three"), "line one", "line two", "line three")
+}
+
+func TestRenderSoftLineBreakJoinsWithSpace(t *testing.T) {
+	assertLines(t, Render("alpha\nbeta"), "alpha beta")
+}
+
+func TestRenderHardBreakInListItemKeepsHang(t *testing.T) {
+	lines := Render("- first  \n  second")
+	assertLines(t, lines, "• first", "  second")
+	hang := Line{Spans: lines[1].Hang}.Text()
+	if lines[1].Kind != KindListItem || hang != "  " {
+		t.Errorf("hard-break row should be a list item hanging by two spaces, got kind %v hang %q", lines[1].Kind, hang)
+	}
+}
+
+func TestRenderHardBreakInQuoteKeepsBar(t *testing.T) {
+	assertLines(t, Render("> first  \n> second"), "│ first", "│ second")
+}
+
+func TestRenderHardBreakInsideEmphasis(t *testing.T) {
+	lines := Render("*first  \nsecond*")
+	assertLines(t, lines, "first", "second")
+	if lines[1].Spans[0].Style != term.StyleHoverItalic {
+		t.Errorf("second row should stay italic, got style %v", lines[1].Spans[0].Style)
+	}
+}
+
+func TestRenderOrderedListKeepsStartNumber(t *testing.T) {
+	assertLines(t, Render("Steps continue below.\n\n3. starts at three\n4. four"),
+		"Steps continue below.", "", "3. starts at three", "4. four")
+}
+
+func TestRenderOrderedListStartingAtOne(t *testing.T) {
+	assertLines(t, Render("1. a\n2. b"), "1. a", "2. b")
+}
+
+func TestRenderNestedListAlignsUnderTwoDigitParent(t *testing.T) {
+	assertLines(t, Render("9. nine\n   - child of nine\n10. ten\n    - child of ten"),
+		"9. nine", "   • child of nine", "10. ten", "    • child of ten")
+}
+
+func TestRenderTableAlignsWideCells(t *testing.T) {
+	lines := Render("| name | note |\n|------|------|\n| 東京 | wide |\n| ab | narrow |")
+	var rows []string
+	for _, l := range lines {
+		if l.Kind == KindTable {
+			rows = append(rows, l.Text())
+		}
+	}
+	if len(rows) != 4 {
+		t.Fatalf("expected 4 table rows, got %q", rows)
+	}
+	col := -1
+	for _, row := range rows {
+		i := strings.IndexAny(row, "│┼")
+		if i < 0 {
+			t.Fatalf("row %q has no column separator", row)
+		}
+		at := textwidth.String(row[:i])
+		if col >= 0 && at != col {
+			t.Errorf("separator at column %d in %q, want %d: %q", at, row, col, rows)
+		}
+		col = at
+	}
+}
