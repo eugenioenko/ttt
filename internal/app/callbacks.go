@@ -257,6 +257,10 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 }
 
 func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, replacement string, opts ui.SearchOptions) {
+	a.confirmSearchReplaceAll(allMatches, replacement, opts, nil)
+}
+
+func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, replacement string, opts ui.SearchOptions, current func() bool) {
 	totalFiles := len(allMatches)
 	totalMatches := 0
 	for _, m := range allMatches {
@@ -264,8 +268,16 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 	}
 	msg := fmt.Sprintf("Replace %d matches across %d files? This cannot be undone.", totalMatches, totalFiles)
 	a.ShowConfirmDialog(msg, []string{"Cancel", "Replace All"}, []func(){
-		func() { a.DismissDialog() },
 		func() {
+			a.DismissDialog()
+			if current != nil {
+				a.cancelSearchReplace()
+			}
+		},
+		func() {
+			if current != nil && !current() {
+				return
+			}
 			a.DismissDialog()
 			invalidatePath := ""
 			replacedMatches, replacedFiles := 0, 0
@@ -805,8 +817,8 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.DiffSources = app.DiffSearchSources
 	app.Search.OnOpenMatch = app.NavigateToSearchMatch
 	app.Search.OnPreview = app.PreviewSearchReplace
-	app.Search.OnReplace = app.ApplySearchReplace
-	app.Search.OnReplaceAll = app.ApplySearchReplaceAll
+	app.Search.OnReplaceRequest = app.startSearchReplace
+	app.Search.OnCancelReplace = app.cancelSearchReplace
 
 	app.Changes.OnRightClick = app.ShowChangesFileContextMenu
 	app.Changes.OnPanelMenu = app.ShowChangesContextMenu

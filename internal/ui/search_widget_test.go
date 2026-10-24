@@ -287,10 +287,10 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			t.Fatalf("overridden expanded filter toggle = %q, want '<'", got)
 		}
 
-		// Clicking the per-file replace control triggers OnReplace for the file group.
+		s.Input.Text = "old"
 		replacedFile := ""
-		s.OnReplace = func(filePath string, _ []SearchMatch, replacement string, _ SearchOptions) {
-			replacedFile = filePath + ":" + replacement
+		s.OnReplaceRequest = func(req SearchReplaceRequest) {
+			replacedFile = req.Paths[0] + ":" + req.Replacement
 		}
 		s.HandleEvent(tcell.NewEventMouse(5+w-2, 2+s.resultStartY, tcell.Button1, tcell.ModNone))
 		if replacedFile != "/repo/main.go:next" {
