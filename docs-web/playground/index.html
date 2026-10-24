@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TTT playground</title>
+    <link rel="stylesheet" href="playground.css">
+    <script src="wasm_exec.js"></script>
+  </head>
+  <body>
+    <div id="terminal" data-max-cols="120" data-max-rows="50" tabindex="0" aria-label="TTT editor. Click to focus; use the parent page navigation to leave the demo."></div>
+    <div id="loader" role="status" aria-live="polite">
+      <div class="loading-card">
+        <span class="spinner" aria-hidden="true"></span>
+        <h1 id="loading-status">Loading editor…</h1>
+        <progress id="loading-progress" max="1" aria-label="Editor download progress"></progress>
+        <p id="loading-detail">Your playground runs in this browser. No account or server session needed.</p>
+        <button id="retry" hidden>Try again</button>
+        <p class="credits">Powered by <a href="https://github.com/gdamore/tcell">tcell</a> and <a href="https://github.com/coder/ghostty-web">Ghostty Web</a>.<br><a href="https://github.com/zen-fs/core/tree/v2.7.7">ZenFS</a>, © James Prevett and contributors, <a href="https://www.gnu.org/licenses/lgpl-3.0.html">LGPL 3.0+</a> with its <a href="https://github.com/zen-fs/core/blob/v2.7.7/COPYING.md">web application exception</a>.</p>
+      </div>
+    </div>
+    <script type="module" src="host.js"></script>
+  </body>
+</html>
