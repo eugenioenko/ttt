@@ -12,8 +12,9 @@ import (
 )
 
 type Overlay struct {
-	Widget Widget
-	Modal  bool
+	Widget      Widget
+	Modal       bool
+	returnFocus Widget
 }
 
 type GlobalKeyBinding struct {
@@ -402,26 +403,34 @@ func (r *Root) TopOverlayWidget() Widget {
 
 func (r *Root) PushOverlay(o Overlay) {
 	r.CancelPointerCapture()
+	o.returnFocus = r.Focused
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
 }
 
-func (r *Root) PopOverlay() {
-	if len(r.Overlays) > 0 {
-		r.Overlays = r.Overlays[:len(r.Overlays)-1]
-		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
+// PopOverlay removes the top overlay and returns the widget that was focused
+// when it was pushed. That widget may since have been hidden or removed.
+func (r *Root) PopOverlay() Widget {
+	if len(r.Overlays) == 0 {
+		return nil
 	}
+	top := r.Overlays[len(r.Overlays)-1]
+	r.Overlays = r.Overlays[:len(r.Overlays)-1]
+	slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
+	return top.returnFocus
 }
 
-// RemoveOverlay removes the overlay holding the given widget without disturbing overlays above it.
-func (r *Root) RemoveOverlay(w Widget) {
+// RemoveOverlay removes the overlay holding the given widget without disturbing
+// overlays above it, and returns the widget that was focused when it was pushed.
+func (r *Root) RemoveOverlay(w Widget) Widget {
 	for i, o := range r.Overlays {
 		if o.Widget == w {
 			r.Overlays = append(r.Overlays[:i], r.Overlays[i+1:]...)
 			slog.Debug("root", "action", "removeOverlay", "count", len(r.Overlays))
-			return
+			return o.returnFocus
 		}
 	}
+	return nil
 }
 
 // Refocusing the already-focused widget is a no-op: a click inside the focused

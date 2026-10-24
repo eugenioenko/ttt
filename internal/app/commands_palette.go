@@ -29,10 +29,12 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	palette.OnOpenFile = func(absPath string) {
 		a.DismissDialog()
 		a.EditorGroup.OpenFile(absPath)
+		a.FocusEditor()
 	}
 	palette.OnGoToLine = func(line int) {
 		a.DismissDialog()
 		a.EditorGroup.GoToLine(line)
+		a.FocusEditor()
 	}
 	palette.OnDismiss = func() {
 		a.DismissDialog()

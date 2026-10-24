@@ -1005,19 +1005,47 @@ func (a *App) ClosePluginDrawer() {
 	if a.pluginDrawer == nil {
 		return
 	}
-	a.Root.RemoveOverlay(a.pluginDrawer)
+	prev := a.Root.RemoveOverlay(a.pluginDrawer)
 	a.pluginDrawer = nil
 	if a.pluginDrawerPanel != nil {
 		a.pluginDrawerPanel.Close()
 		a.pluginDrawerPanel = nil
 	}
-	a.FocusEditor()
+	a.restoreFocus(prev)
 }
 
 func (a *App) DismissDialog() {
 	a.approvalDialog = nil
-	a.Root.PopOverlay()
+	a.restoreFocus(a.Root.PopOverlay())
+}
+
+// restoreFocus returns focus to w after an overlay closes, falling back to the
+// editor when w was hidden or removed while the overlay was open: focusing a
+// hidden terminal would send keystrokes to a PTY the user cannot see.
+func (a *App) restoreFocus(w ui.Widget) {
+	if a.canRestoreFocus(w) {
+		a.Root.SetFocus(w)
+		return
+	}
 	a.FocusEditor()
+}
+
+func (a *App) canRestoreFocus(w ui.Widget) bool {
+	if w == nil {
+		return false
+	}
+	for _, o := range a.Root.Overlays {
+		if o.Widget == w {
+			return true
+		}
+	}
+	if a.Sidebar.Visible && (w == a.Sidebar || w == a.Sidebar.ActiveWidget()) {
+		return true
+	}
+	if !a.ContentSplit.ShowBottom || (w != a.BottomPanel && w != a.BottomPanel.ActiveWidget()) {
+		return false
+	}
+	return w != a.TerminalPanel || len(a.Terminals) > 0
 }
 
 func (a *App) ShowInputDialog(title, placeholder, initial string, onSubmit func(string)) {

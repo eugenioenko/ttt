@@ -320,7 +320,7 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 	dialog.Build()
 
 	if a.approvalDialog != nil {
-		a.Root.RemoveOverlay(a.approvalDialog)
+		a.restoreFocus(a.Root.RemoveOverlay(a.approvalDialog))
 	}
 	adapter := ui.NewWidgetAdapter(dialog)
 	a.approvalDialog = adapter
@@ -641,13 +641,13 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			Side:     side,
 			Borders:  *a.Borders,
 			OnDismiss: func() {
-				a.Root.RemoveOverlay(adapter)
+				prev := a.Root.RemoveOverlay(adapter)
 				if a.pluginDrawer == adapter {
 					a.pluginDrawer = nil
 					a.pluginDrawerPanel = nil
 				}
 				panel.Close()
-				a.FocusEditor()
+				a.restoreFocus(prev)
 			},
 		})
 		drawer.SetContent(panel)
