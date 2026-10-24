@@ -827,6 +827,48 @@ func TestEndTransactionWithoutBegin(t *testing.T) {
 	s.EndTransaction()
 }
 
+func TestNestedTransactions(t *testing.T) {
+	b := &buffer.Buffer{Lines: []string{"a"}}
+	s := &UndoStack{}
+
+	s.BeginTransaction()
+
+	cmd1 := &InsertStringCommand{Line: 0, Col: 1, Text: "b"}
+	cmd1.Apply(b)
+	s.Push(cmd1)
+
+	// Nested inner transaction (e.g. from ApplyTextEdits or insertCompletion)
+	s.BeginTransaction()
+	cmd2 := &InsertStringCommand{Line: 0, Col: 2, Text: "c"}
+	cmd2.Apply(b)
+	s.Push(cmd2)
+	cmd3 := &InsertStringCommand{Line: 0, Col: 3, Text: "d"}
+	cmd3.Apply(b)
+	s.Push(cmd3)
+	s.EndTransaction()
+
+	cmd4 := &InsertStringCommand{Line: 0, Col: 4, Text: "e"}
+	cmd4.Apply(b)
+	s.Push(cmd4)
+
+	s.EndTransaction()
+
+	if b.Lines[0] != "abcde" {
+		t.Fatalf("expected 'abcde', got %q", b.Lines[0])
+	}
+
+	// Single undo should revert the entire outer transaction back to 'a'
+	s.Undo(b)
+	if b.Lines[0] != "a" {
+		t.Errorf("expected 'a' after single undo of outer transaction, got %q", b.Lines[0])
+	}
+
+	s.Redo(b)
+	if b.Lines[0] != "abcde" {
+		t.Errorf("expected 'abcde' after redo, got %q", b.Lines[0])
+	}
+}
+
 func TestDeleteSelectionCommandComputeDeleted(t *testing.T) {
 	tests := []struct {
 		name  string

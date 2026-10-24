@@ -127,6 +127,48 @@ func TestSuccessiveDocumentChangesApplyInOrder(t *testing.T) {
 	if !strings.Contains(a.Status.Notification, "1 file") {
 		t.Errorf("notification = %q, want one file counted", a.Status.Notification)
 	}
+
+	// Multiple successive edits to the same file undo in a single step (#876).
+	a.EditorGroup.Undo()
+	if got := bufferText(t, a, path); got != "foo bar\n" {
+		t.Errorf("after undo = %q, want \"foo bar\\n\"", got)
+	}
+}
+
+func TestInterleavedDocumentChangesSingleUndoPerFile(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"a.go": "foo\n",
+		"b.go": "bar\n",
+	})
+	aPath, bPath := filepath.Join(dir, "a.go"), filepath.Join(dir, "b.go")
+	aUri, bUri := FileURI(aPath), FileURI(bPath)
+
+	// Interleaved batches: A, B, A
+	a.ApplyWorkspaceEdit(decodeWorkspaceEdit(t, `{"documentChanges":[`+
+		renameEdit(aUri, 0, 0, 3, "step1")+","+
+		renameEdit(bUri, 0, 0, 3, "step2")+","+
+		renameEdit(aUri, 0, 0, 5, "step3")+`]}`))
+
+	if got := bufferText(t, a, aPath); got != "step3\n" {
+		t.Errorf("a.go = %q, want step3", got)
+	}
+	if got := bufferText(t, a, bPath); got != "step2\n" {
+		t.Errorf("b.go = %q, want step2", got)
+	}
+
+	// Single undo in a.go reverts all changes made to a.go across interleaved batches
+	a.EditorGroup.OpenFile(aPath)
+	a.EditorGroup.Undo()
+	if got := bufferText(t, a, aPath); got != "foo\n" {
+		t.Errorf("a.go after single undo = %q, want \"foo\\n\"", got)
+	}
+
+	// Single undo in b.go reverts all changes made to b.go
+	a.EditorGroup.OpenFile(bPath)
+	a.EditorGroup.Undo()
+	if got := bufferText(t, a, bPath); got != "bar\n" {
+		t.Errorf("b.go after single undo = %q, want \"bar\\n\"", got)
+	}
 }
 
 func TestPickCodeActionEditSkipsFileOperations(t *testing.T) {
