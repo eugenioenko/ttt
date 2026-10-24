@@ -246,6 +246,9 @@ func (r *renderer) renderListItem(li *ast.ListItem, ordered bool) {
 	if ordered {
 		idx := 0
 		parent := li.Parent()
+		if list, ok := parent.(*ast.List); ok {
+			idx = list.Start - 1
+		}
 		for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 			idx++
 			if c == li {
@@ -375,7 +378,7 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, spans *[]Span) {
 			if txt != "" {
 				*spans = append(*spans, Span{Text: txt, Style: style})
 			}
-			if c.SoftLineBreak() && child.NextSibling() != nil {
+			if (c.SoftLineBreak() || c.HardLineBreak()) && child.NextSibling() != nil {
 				*spans = append(*spans, Span{Text: " ", Style: style})
 			}
 		case *ast.String:
