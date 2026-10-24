@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
@@ -445,9 +447,271 @@ func (e *EditorPaneWidget) SplitSelectionToLines() {
 	}
 	e.Selection.Clear()
 	// Clear selections on all cursors
+
 	for i := range e.Multi.Cursors {
 		e.Multi.Cursors[i].Sel.Clear()
 	}
+	e.syncFromMulti()
+	e.scrollViewport()
+}
+
+// multiCopyPieces returns selected text or the complete line for each cursor.
+func (e *EditorPaneWidget) multiCopyPieces() []string {
+	if !e.isMultiActive() {
+		return nil
+	}
+
+	e.syncToMulti()
+	pieces := make([]string, 0, len(e.Multi.Cursors))
+
+	for _, cs := range e.Multi.Cursors {
+		if cs.Sel.Active {
+			pieces = append(
+				pieces,
+				cs.Sel.Text(e.Buf.Lines, cs.Line, cs.Col),
+			)
+		} else if cs.Line >= 0 && cs.Line < len(e.Buf.Lines) {
+			pieces = append(pieces, e.Buf.Lines[cs.Line])
+		}
+	}
+
+	return pieces
+}
+
+// pastePieces distributes clipboard lines when their count matches
+// the number of cursors; otherwise, it repeats the full text.
+func pastePieces(text string, n int) []string {
+	if n <= 0 {
+		return nil
+	}
+
+	parts := strings.Split(text, "\n")
+	if len(parts) == n {
+		return parts
+	}
+
+	pieces := make([]string, n)
+	for i := range pieces {
+		pieces[i] = text
+	}
+
+	return pieces
+}
+
+// multiPasteText inserts clipboard text at each cursor in one undo step.
+func (e *EditorPaneWidget) multiPasteText(text string) {
+	if !e.isMultiActive() {
+		return
+	}
+
+	e.syncToMulti()
+	pieces := pastePieces(text, len(e.Multi.Cursors))
+	var commands []undo.EditCommand
+
+	// Work from bottom to top to avoid shifting later edit positions.
+	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
+		cs := &e.Multi.Cursors[i]
+
+		if cs.Sel.Active {
+			start, end := cs.Sel.Range(cs.Line, cs.Col)
+			cmd := &undo.DeleteSelectionCommand{
+				StartLine: start.Line,
+				StartCol:  start.Col,
+				EndLine:   end.Line,
+				EndCol:    end.Col,
+			}
+			cmd.Apply(e.Buf)
+
+			if !undo.IsNoop(cmd) {
+				commands = append(commands, cmd)
+			}
+
+			cs.Line, cs.Col = start.Line, start.Col
+			cs.Sel.Clear()
+			e.adjustLaterCursors(i, start, end)
+		}
+
+		line := e.Buf.ClampLine(cs.Line)
+		runes := []rune(e.Buf.Lines[line])
+		col := cs.Col
+
+		if col < 0 {
+			col = 0
+		}
+		if col > len(runes) {
+			col = len(runes)
+		}
+
+		parts := strings.Split(pieces[i], "\n")
+
+		if len(parts) == 1 {
+			cmd := &undo.InsertStringCommand{
+				Line: line,
+				Col:  col,
+				Text: parts[0],
+			}
+			cmd.Apply(e.Buf)
+			commands = append(commands, cmd)
+			cs.Line, cs.Col = line, col+len([]rune(parts[0]))
+
+			// Shift previously processed cursors on the same line.
+			e.shiftLaterCursors(i, line, col, len([]rune(parts[0])))
+			continue
+		}
+
+		newLines := make([]string, 0, len(parts)+1)
+		newLines = append(newLines, string(runes[:col])+parts[0])
+		newLines = append(newLines, parts[1:len(parts)-1]...)
+		newLines = append(
+			newLines,
+			parts[len(parts)-1]+string(runes[col:]),
+		)
+
+		cmd := &undo.ReplaceLinesCommand{
+			Start:    line,
+			OldLines: []string{e.Buf.Lines[line]},
+			NewLines: newLines,
+		}
+		cmd.Apply(e.Buf)
+		commands = append(commands, cmd)
+
+		cs.Line = line + len(parts) - 1
+		cs.Col = len([]rune(parts[len(parts)-1]))
+
+		// Earlier insertions shift already-processed cursors down.
+		addedLines := len(parts) - 1
+		for j := i + 1; j < len(e.Multi.Cursors); j++ {
+			other := &e.Multi.Cursors[j]
+
+			if other.Line > line {
+				other.Line += addedLines
+			} else if other.Line == line && other.Col >= col {
+				other.Line += addedLines
+				other.Col = len([]rune(parts[len(parts)-1])) + other.Col - col
+			}
+		}
+	}
+
+	if len(commands) > 0 && e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: commands})
+	}
+
+	e.bufferDirty = true
+	e.syncFromMulti()
+}
+
+// adjustSelectionAnchorAfterLineDelete keeps a selection anchor
+// aligned when a line above it is removed.
+func adjustSelectionAnchorAfterLineDelete(cs *multicursor.CursorState, deletedLine int) {
+	if !cs.Sel.Active {
+		return
+	}
+
+	if cs.Sel.Anchor.Line > deletedLine {
+		cs.Sel.Anchor.Line--
+	} else if cs.Sel.Anchor.Line == deletedLine {
+		cs.Sel.Anchor.Line = deletedLine
+		cs.Sel.Anchor.Col = 0
+	}
+}
+
+// multiCut cuts selections or entire lines in one undo step.
+func (e *EditorPaneWidget) multiCut() {
+	if !e.isMultiActive() {
+		return
+	}
+
+	e.syncToMulti()
+	// Avoid deleting the same original line more than once.
+	seenLines := make(map[int]bool)
+	unique := make([]multicursor.CursorState, 0, len(e.Multi.Cursors))
+	newPrimary := 0
+
+	for i, cs := range e.Multi.Cursors {
+		if !cs.Sel.Active && seenLines[cs.Line] {
+			continue
+		}
+
+		if !cs.Sel.Active {
+			seenLines[cs.Line] = true
+		}
+
+		if i == e.Multi.Primary {
+			newPrimary = len(unique)
+		}
+
+		unique = append(unique, cs)
+	}
+
+	e.Multi.Cursors = unique
+	e.Multi.Primary = newPrimary
+
+	var commands []undo.EditCommand
+
+	// Process cursors from bottom to top so earlier line positions
+	// remain stable as later lines are deleted.
+	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
+		cs := &e.Multi.Cursors[i]
+
+		if cs.Sel.Active {
+			start, end := cs.Sel.Range(cs.Line, cs.Col)
+			cmd := &undo.DeleteSelectionCommand{
+				StartLine: start.Line,
+				StartCol:  start.Col,
+				EndLine:   end.Line,
+				EndCol:    end.Col,
+			}
+			cmd.Apply(e.Buf)
+
+			if !undo.IsNoop(cmd) {
+				commands = append(commands, cmd)
+			}
+
+			cs.Line, cs.Col = start.Line, start.Col
+			cs.Sel.Clear()
+			e.adjustLaterCursors(i, start, end)
+			continue
+		}
+
+		line := e.Buf.ClampLine(cs.Line)
+
+		if len(e.Buf.Lines) == 1 {
+			cmd := &undo.ReplaceLinesCommand{
+				Start:    0,
+				OldLines: []string{e.Buf.Lines[0]},
+				NewLines: []string{""},
+			}
+			cmd.Apply(e.Buf)
+			commands = append(commands, cmd)
+			cs.Line, cs.Col = 0, 0
+			continue
+		}
+
+		cmd := &undo.DeleteLineCommand{Idx: line}
+		cmd.Apply(e.Buf)
+		commands = append(commands, cmd)
+		// Adjust cursor positions and active selection anchors.
+		for j := range e.Multi.Cursors {
+			other := &e.Multi.Cursors[j]
+
+			adjustSelectionAnchorAfterLineDelete(other, line)
+
+			if other.Line > line {
+				other.Line--
+			} else if other.Line == line {
+				other.Line = e.Buf.ClampLine(line)
+				other.Col = 0
+			}
+		}
+	}
+
+	if len(commands) > 0 && e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: commands})
+	}
+
+	e.bufferDirty = true
+	e.refreshFolds()
+	e.Multi.Deduplicate()
 	e.syncFromMulti()
 	e.scrollViewport()
 }
