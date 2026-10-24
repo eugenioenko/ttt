@@ -379,6 +379,58 @@ func TestRenderParagraphJoining(t *testing.T) {
 	}
 }
 
+func TestRenderLineBreakJoining(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "hard break with two trailing spaces",
+			input:    "line one  \nline two",
+			expected: "line one line two",
+		},
+		{
+			name:     "hard break with backslash",
+			input:    "line one\\\nline two",
+			expected: "line one line two",
+		},
+		{
+			name:     "soft break",
+			input:    "line one\nline two",
+			expected: "line one line two",
+		},
+		{
+			name:     "hard break followed by emphasis",
+			input:    "line one  \n*italic*",
+			expected: "line one italic",
+		},
+		{
+			name:     "emphasis followed by hard break",
+			input:    "*italic*  \nline two",
+			expected: "italic line two",
+		},
+		{
+			name:     "trailing hard break does not add space",
+			input:    "line one  ",
+			expected: "line one",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lines := Render(tc.input)
+			if len(lines) == 0 {
+				t.Fatalf("expected at least 1 line for %q", tc.input)
+			}
+			got := lines[0].Text()
+			if got != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, got)
+			}
+		})
+	}
+}
+
 func TestRenderTable(t *testing.T) {
 	input := "| A | B |\n|---|---|\n| 1 | 2 |"
 	lines := Render(input)
@@ -417,6 +469,66 @@ func TestRenderList(t *testing.T) {
 	}
 	if found != 3 {
 		t.Errorf("expected 3 list items with bullet, got %d: %v", found, tl)
+	}
+}
+
+func TestRenderOrderedListStandard(t *testing.T) {
+	input := "1. foo\n2. bar"
+	lines := Render(input)
+	tl := textLines(lines)
+	if len(tl) < 2 {
+		t.Fatalf("expected at least 2 lines, got %d: %v", len(tl), tl)
+	}
+	if tl[0] != "1. foo" {
+		t.Errorf("expected '1. foo', got %q", tl[0])
+	}
+	if tl[1] != "2. bar" {
+		t.Errorf("expected '2. bar', got %q", tl[1])
+	}
+}
+
+func TestRenderOrderedListCustomStart(t *testing.T) {
+	input := "3. foo\n4. bar"
+	lines := Render(input)
+	tl := textLines(lines)
+	if len(tl) < 2 {
+		t.Fatalf("expected at least 2 lines, got %d: %v", len(tl), tl)
+	}
+	if tl[0] != "3. foo" {
+		t.Errorf("expected '3. foo', got %q", tl[0])
+	}
+	if tl[1] != "4. bar" {
+		t.Errorf("expected '4. bar', got %q", tl[1])
+	}
+}
+
+func TestRenderOrderedListZeroStart(t *testing.T) {
+	input := "0. foo\n1. bar"
+	lines := Render(input)
+	tl := textLines(lines)
+	if len(tl) < 2 {
+		t.Fatalf("expected at least 2 lines, got %d: %v", len(tl), tl)
+	}
+	if tl[0] != "0. foo" {
+		t.Errorf("expected '0. foo', got %q", tl[0])
+	}
+	if tl[1] != "1. bar" {
+		t.Errorf("expected '1. bar', got %q", tl[1])
+	}
+}
+
+func TestRenderUnorderedList(t *testing.T) {
+	input := "* apple\n* banana"
+	lines := Render(input)
+	tl := textLines(lines)
+	if len(tl) < 2 {
+		t.Fatalf("expected at least 2 lines, got %d: %v", len(tl), tl)
+	}
+	if tl[0] != "• apple" {
+		t.Errorf("expected '• apple', got %q", tl[0])
+	}
+	if tl[1] != "• banana" {
+		t.Errorf("expected '• banana', got %q", tl[1])
 	}
 }
 
