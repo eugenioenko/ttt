@@ -29,6 +29,7 @@ export default defineConfig({
             { label: 'Search', link: '/guides/search/' },
             { label: 'Git Integration', link: '/guides/git/' },
             { label: 'Integrated Terminal', link: '/guides/terminal/' },
+            { label: 'AI Agents', link: '/guides/ai-agents/' },
             { label: 'LSP', link: '/guides/lsp/' },
             { label: 'Themes', link: '/guides/themes/' },
             { label: 'Extra Themes', link: '/guides/extra-themes/' },

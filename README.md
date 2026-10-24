@@ -125,6 +125,12 @@ Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active w
 - **Line numbers** with current-line highlighting
 - **Diff-based renderer** for efficient terminal updates (double-buffered cell grid)
 
+### AI Agents
+
+TTT can host persistent command-line coding-agent sessions in a right-side panel. The built-in provider entries cover Codex, Claude Code, CodeBuddy, GitHub Copilot CLI, Cursor Agent, and Kimi CLI. Choose an agent from the **View** menu or the command palette; each provider keeps its own interactive terminal session, while the regular terminal remains in the bottom panel.
+
+Agent executables, arguments, and optional installation commands are configured under `agents` in `~/.config/ttt/settings.json`, or through **Settings → AI Agents**. If an executable is missing, TTT can run its configured install command in the embedded terminal before launching it. See the [AI Agents guide](docs-web/src/content/docs/guides/ai-agents.md) for the full configuration example and migration notes.
+
 ### Multi-Folder Workspaces
 
 Open multiple project directories in a single session. Each root appears as a collapsible group in the explorer, search, and changes panels.

@@ -18,6 +18,54 @@ const (
 	settingsControlCols = 34
 )
 
+func agentSettingFields() []settingField {
+	providers := []struct{ key, label string }{
+		{"codex", "Codex"}, {"claude", "Claude Code"}, {"codebuddy", "CodeBuddy"},
+		{"copilot", "GitHub Copilot"}, {"cursor", "Cursor"}, {"kimi", "Kimi"},
+	}
+	fields := make([]settingField, 0, len(providers)*3)
+	for _, provider := range providers {
+		p := provider
+		fields = append(fields, section(p.label))
+		fields = append(fields,
+			settingField{Label: "CLI executable", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.Agents[p.key].CLI },
+				SetString: func(s *config.Settings, v string) { setAgentCLI(s, p.key, v) }},
+			settingField{Label: "Additional arguments", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.Agents[p.key].Args },
+				SetString: func(s *config.Settings, v string) { setAgentArgs(s, p.key, v) }},
+			settingField{Label: "Install command", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.Agents[p.key].Install },
+				SetString: func(s *config.Settings, v string) { setAgentInstall(s, p.key, v) }})
+	}
+	return fields
+}
+
+func ensureAgent(s *config.Settings, key string) config.AgentSettings {
+	if s.Agents == nil {
+		s.Agents = make(map[string]config.AgentSettings)
+	}
+	return s.Agents[key]
+}
+
+func setAgentCLI(s *config.Settings, key, value string) {
+	a := ensureAgent(s, key)
+	a.CLI = value
+	s.Agents[key] = a
+}
+
+func setAgentArgs(s *config.Settings, key, value string) {
+	a := ensureAgent(s, key)
+	a.Args = value
+	s.Agents[key] = a
+}
+
+func setAgentInstall(s *config.Settings, key, value string) {
+	a := ensureAgent(s, key)
+	a.Install = value
+	s.Agents[key] = a
+}
+
 type settingKind int
 
 const (
@@ -216,15 +264,7 @@ func settingsCategories() []settingsCategory {
 				GetInt: func(s *config.Settings) int { return s.Search.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Search.Debounce = v }},
 		}},
-		{Title: "Codex", Fields: []settingField{
-			section("CLI"),
-			{Label: "CLI executable", Kind: settingString,
-				GetString: func(s *config.Settings) string { return s.Codex.CLI },
-				SetString: func(s *config.Settings, v string) { s.Codex.CLI = v }},
-			{Label: "Additional arguments", Kind: settingString,
-				GetString: func(s *config.Settings) string { return s.Codex.Args },
-				SetString: func(s *config.Settings, v string) { s.Codex.Args = v }},
-		}},
+		{Title: "AI Agents", Fields: agentSettingFields()},
 		{Title: "Terminal", Fields: []settingField{
 			{Label: "Shell", Kind: settingString, Restart: true,
 				GetString: func(s *config.Settings) string { return s.Terminal.Shell },

@@ -27,7 +27,7 @@ type AgentWidget struct {
 // NewAgentWidget creates an empty Agent conversation panel.
 func NewAgentWidget(onSubmit func(string)) *AgentWidget {
 	w := &AgentWidget{OnSubmit: onSubmit}
-	w.Input = widgets.NewInputWidget(widgets.InputConfig{Placeholder: "Ask Codex…", Bordered: true, Multiline: true, MaxRows: 4, Autofocus: true})
+	w.Input = widgets.NewInputWidget(widgets.InputConfig{Placeholder: "Ask AI agent…", Bordered: true, Multiline: true, MaxRows: 4, Autofocus: true})
 	w.Input.Config.OnSubmit = func(string) { w.Submit() }
 	return w
 }
@@ -41,13 +41,13 @@ func (w *AgentWidget) CursorPosition() (int, int, bool) { return w.Input.CursorP
 func (w *AgentWidget) Render(s widgets.Surface) {
 	width, height := s.Size()
 	s.Fill(term.Cell{Ch: ' ', Style: term.StyleDefault})
-	s.DrawText(1, 0, "Codex Agent", width-1, term.StyleActiveTab)
+	s.DrawText(1, 0, "AI Agent", width-1, term.StyleActiveTab)
 	row := 2
 	for _, msg := range w.Messages {
 		prefix := "You: "
 		style := term.StyleDefault
 		if msg.Role != "user" {
-			prefix, style = "Codex: ", term.StyleMuted
+			prefix, style = "Agent: ", term.StyleMuted
 		}
 		for _, line := range strings.Split(msg.Text, "\n") {
 			if row >= height-6 {

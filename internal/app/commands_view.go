@@ -8,14 +8,13 @@ import (
 )
 
 func (a *App) ToggleTerminal() {
-	// The terminal belongs to the bottom panel. If the Codex right panel is
-	// active, restore the normal bottom-panel host before toggling it.
-	if a.ContentSplit.Bottom == a.Agent {
+	// The normal terminal always belongs to the bottom panel. Agent terminals
+	// live in AgentSplit and must not be counted as bottom-panel terminals.
+	if a.ContentSplit.Bottom != a.BottomPanel || a.ContentSplit.Position != ui.SplitBottom {
 		a.ContentSplit.Bottom = a.BottomPanel
 		a.ContentSplit.Position = ui.SplitBottom
-		a.ContentSplit.ShowBottom = false
 	}
-	if !a.ContentSplit.ShowBottom {
+	if !a.ContentSplit.ShowBottom || a.TerminalPanel.Count() == 0 {
 		a.ensureUsablePanelSize()
 		a.showTerminalPanel()
 		resizeTerminals(a)
@@ -25,6 +24,10 @@ func (a *App) ToggleTerminal() {
 }
 
 func (a *App) ToggleTerminalFullscreen() {
+	if a.ContentSplit.Bottom != a.BottomPanel || a.ContentSplit.Position != ui.SplitBottom {
+		a.ContentSplit.Bottom = a.BottomPanel
+		a.ContentSplit.Position = ui.SplitBottom
+	}
 	r := a.ContentSplit.GetRect()
 	fullH := r.H - 1
 	if a.ContentSplit.ShowBottom && a.ContentSplit.BottomH >= fullH {
@@ -274,6 +277,11 @@ func (a *App) ToggleSearchReplace() {
 func registerViewCommands(app *App) {
 	reg := app.Reg
 	reg.Register(command.Command{ID: "agent.toggle", Title: "View: Toggle Codex Agent", Keywords: []string{"codex", "ai", "agent", "chat"}, Handler: app.ToggleAgentPanel})
+	for _, provider := range []string{"claude", "codebuddy", "copilot", "cursor", "kimi"} {
+		p := provider
+		reg.Register(command.Command{ID: "agent." + p, Title: "View: Use " + p + " Agent", Keywords: []string{"ai", "agent", p}, Handler: func() { app.ShowAgentPanel(p) }})
+	}
+	reg.Register(command.Command{ID: "agent.codex", Title: "View: Use codex Agent", Keywords: []string{"codex", "ai", "agent"}, Handler: func() { app.ShowAgentPanel("codex") }})
 
 	reg.Register(command.Command{
 		ID: "sidebar.toggle", Title: "View: Toggle Sidebar",

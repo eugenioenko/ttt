@@ -51,6 +51,8 @@ type TerminalSpec struct {
 	Cwd string
 	// Label is a short badge for the strip ("pi", "lg") and the tab record.
 	Label string
+	// Agent marks a terminal as a persistent right-side Agent session.
+	Agent bool
 }
 
 type App struct {
@@ -60,6 +62,8 @@ type App struct {
 	Agent               *ui.AgentWidget
 	CodexTerminalID     string
 	CodexTerminalWidget *ui.TerminalWidget
+	AgentProvider       string
+	AgentTerminalIDs    map[string]string
 	SplitPanel          *ui.SplitPanelWidget
 	ContentSplit        *ui.ContentSplitWidget
 	AgentSplit          *ui.ContentSplitWidget
@@ -180,22 +184,76 @@ type agentReply struct {
 
 // ToggleAgentPanel opens the embedded Codex conversation in the right split.
 func (a *App) ToggleAgentPanel() {
-	if a.CodexTerminalID != "" {
-		a.CloseTerminal(a.CodexTerminalID)
+	provider := a.AgentProvider
+	if provider == "" {
+		provider = "codex"
+	}
+	if a.AgentSplit.ShowBottom && a.AgentProvider == provider {
+		// Hiding the panel must not terminate the session.
+		a.AgentSplit.ShowBottom = false
+		a.Root.SetFocus(a.EditorGroup)
 		return
+	}
+	a.ShowAgentPanel(provider)
+}
+
+// ShowAgentPanel activates the requested Agent terminal without closing any
+// other Agent session. Existing sessions are restored from AgentTerminalIDs.
+func (a *App) ShowAgentPanel(provider string) {
+	if provider == "" {
+		provider = "codex"
+	}
+	a.AgentProvider = provider
+	if a.AgentTerminalIDs == nil {
+		a.AgentTerminalIDs = make(map[string]string)
+	}
+	if id := a.AgentTerminalIDs[provider]; id != "" {
+		for _, tab := range a.Terminals {
+			if tab.ID == id {
+				a.CodexTerminalID, a.CodexTerminalWidget = id, tab.Widget
+				a.AgentSplit.Bottom, a.AgentSplit.ShowBottom = tab.Widget, true
+				a.Root.SetFocus(tab.Widget)
+				return
+			}
+		}
 	}
 	a.AgentSplit.Bottom = a.Agent
 	a.AgentSplit.Position = ui.SplitRight
 	a.AgentSplit.ShowBottom = true
-	cli := a.Settings.Codex.CLI
-	if cli == "" {
-		cli = "codex"
-	}
-	id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: cli, Args: strings.Fields(a.Settings.Codex.Args), Label: "codex"})
+	settings := a.agentSettings(provider)
+	// Always host an Agent in a real interactive shell. This keeps the right
+	// panel usable when the configured CLI is missing and lets the terminal
+	// display the executable error without falling back to the transcript widget.
+	// Agent sessions need an interactive shell; global terminal arguments may
+	// contain one-shot flags such as `-c`, which would immediately close this
+	// panel after startup.
+	id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: a.Settings.Terminal.Shell, Label: provider, Agent: true})
 	if err != nil {
 		return
 	}
 	a.CodexTerminalID = id
+	a.AgentTerminalIDs[provider] = id
+	command := strings.TrimSpace(strings.Join(append([]string{settings.CLI}, strings.Fields(settings.Args)...), " "))
+	check := "command -v " + shellQuote(settings.CLI) + " >/dev/null 2>&1"
+	launch := "exec " + command
+	if settings.Install == "" {
+		a.CodexTerminalWidget.Term.WriteString("if " + check + "; then " + launch + "; else printf '\\n[ttt] Agent CLI not found: " + shellQuote(settings.CLI) + "\\n'; fi\n")
+		return
+	}
+	install := "printf '\\n[ttt] Installing " + shellQuote(settings.CLI) + "...\\n'; " + settings.Install
+	a.CodexTerminalWidget.Term.WriteString("if ! " + check + "; then " + install + "; fi; if " + check + "; then " + launch + "; else printf '\\n[ttt] Agent installation failed or CLI is still unavailable.\\n'; fi\n")
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func (a *App) agentSettings(provider string) config.AgentSettings {
+	settings := a.Settings.Agents[provider]
+	if settings.CLI == "" {
+		settings.CLI = provider
+	}
+	return settings
 }
 
 func (a *App) submitAgentPrompt(prompt string) {
@@ -203,13 +261,17 @@ func (a *App) submitAgentPrompt(prompt string) {
 		return
 	}
 	go func() {
-		cli := a.Settings.Codex.CLI
-		if cli == "" {
-			cli = "codex"
+		provider := a.AgentProvider
+		if provider == "" {
+			provider = "codex"
 		}
-		args := append([]string{"exec", "--skip-git-repo-check"}, strings.Fields(a.Settings.Codex.Args)...)
+		settings := a.agentSettings(provider)
+		args := strings.Fields(settings.Args)
+		if provider == "codex" {
+			args = append([]string{"exec", "--skip-git-repo-check"}, args...)
+		}
 		args = append(args, prompt)
-		cmd := exec.Command(cli, args...)
+		cmd := exec.Command(settings.CLI, args...)
 		out, err := cmd.CombinedOutput()
 		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&agentReply{Text: strings.TrimSpace(string(out)), Err: err}))
 	}()
@@ -437,7 +499,7 @@ func (a *App) ShowBottomPanel() {
 
 func (a *App) showTerminalPanel() {
 	a.ContentSplit.ShowBottom = true
-	if len(a.Terminals) == 0 {
+	if a.TerminalPanel.Count() == 0 {
 		a.SpawnTerminal()
 	} else {
 		a.BottomPanel.SetActivePanel("terminal")
@@ -524,8 +586,12 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	panelID := fmt.Sprintf("terminal-%d", a.TerminalSeq)
 	a.TerminalSeq++
 	a.Terminals = append(a.Terminals, TerminalTab{ID: panelID, Label: spec.Label, Term: t, Widget: tw})
-	if spec.Label == "codex" {
+	if spec.Agent {
 		a.CodexTerminalWidget = tw
+		if a.AgentTerminalIDs == nil {
+			a.AgentTerminalIDs = make(map[string]string)
+		}
+		a.AgentTerminalIDs[spec.Label] = panelID
 		a.AgentSplit.Bottom = tw
 		a.AgentSplit.ShowBottom = true
 	} else {
@@ -533,10 +599,10 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 		a.BottomPanel.SetActivePanel("terminal")
 	}
 
-	if spec.Label != "codex" && !a.ContentSplit.ShowBottom {
+	if !spec.Agent && !a.ContentSplit.ShowBottom {
 		a.ContentSplit.ShowBottom = true
 	}
-	if spec.Label == "codex" {
+	if spec.Agent {
 		a.Root.SetFocus(tw)
 	} else {
 		a.Root.SetFocus(a.TerminalPanel)
@@ -637,6 +703,14 @@ func (a *App) ListTerminals() []plugin.TerminalInfo {
 
 func (a *App) CloseTerminal(panelID string) {
 	isCodex := panelID == a.CodexTerminalID
+	agentProvider := ""
+	for provider, id := range a.AgentTerminalIDs {
+		if id == panelID {
+			agentProvider = provider
+			break
+		}
+	}
+	isAgent := agentProvider != ""
 	idx := -1
 	for i, tt := range a.Terminals {
 		if tt.ID == panelID {
@@ -649,15 +723,20 @@ func (a *App) CloseTerminal(panelID string) {
 	}
 	a.Terminals[idx].Term.Close()
 	a.Terminals = append(a.Terminals[:idx], a.Terminals[idx+1:]...)
-	if !isCodex {
+	if !isAgent {
 		a.TerminalPanel.RemoveTerminal(idx)
 	}
-	if isCodex {
+	if isAgent {
+		if agentProvider != "" {
+			delete(a.AgentTerminalIDs, agentProvider)
+		}
 		a.CodexTerminalID = ""
 		a.CodexTerminalWidget = nil
-		a.AgentSplit.ShowBottom = false
-		a.AgentSplit.Bottom = a.Agent
-		a.FocusEditor()
+		if isCodex {
+			a.AgentSplit.ShowBottom = false
+			a.AgentSplit.Bottom = a.Agent
+			a.FocusEditor()
+		}
 		return
 	}
 

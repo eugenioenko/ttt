@@ -276,8 +276,11 @@ func RunEventLoop(
 				v.run()
 			case *agentReply:
 				if app.Agent != nil {
-					if v.Err != nil { app.Agent.Messages = append(app.Agent.Messages, ui.AgentMessage{Role: "codex", Text: "Error: " + v.Err.Error()})
-					} else { app.Agent.Messages = append(app.Agent.Messages, ui.AgentMessage{Role: "codex", Text: v.Text}) }
+					if v.Err != nil {
+						app.Agent.Messages = append(app.Agent.Messages, ui.AgentMessage{Role: "codex", Text: "Error: " + v.Err.Error()})
+					} else {
+						app.Agent.Messages = append(app.Agent.Messages, ui.AgentMessage{Role: "codex", Text: v.Text})
+					}
 				}
 			case *highlightStep:
 				// Short steps keep input responsive while a large file catches up;
@@ -462,6 +465,19 @@ func resizeTerminals(app *App) {
 		return
 	}
 	for _, tt := range app.Terminals {
+		if tt.ID == app.CodexTerminalID || app.isAgentTerminal(tt.ID) {
+			// Right-docked Agent terminals are resized from their widget rect.
+			continue
+		}
 		tt.Term.Resize(cols, rows)
 	}
+}
+
+func (a *App) isAgentTerminal(id string) bool {
+	for _, agentID := range a.AgentTerminalIDs {
+		if agentID == id {
+			return true
+		}
+	}
+	return false
 }

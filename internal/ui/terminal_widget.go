@@ -300,6 +300,12 @@ func (tw *TerminalWidget) Render(surface Surface) {
 	}
 	w, h := surface.Size()
 	r := tw.GetRect()
+	// The embedded terminal is hosted by a resizable split. Keep the PTY
+	// emulator dimensions synchronized with the widget rather than the size it
+	// had when the terminal was created.
+	if cols, rows := tw.Term.Size(); cols != w || rows != h {
+		tw.Term.Resize(w, h)
+	}
 
 	tw.Term.AckUpdate()
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {

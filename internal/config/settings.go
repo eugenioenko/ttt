@@ -370,19 +370,21 @@ type Settings struct {
 	// These sections must NOT use omitzero: their defaults are non-zero, so an
 	// all-false/all-zero section would be omitted on save and silently revert to
 	// the defaults on the next load.
-	Appearance   AppearanceSettings   `json:"appearance"`
-	Editor       EditorSettings       `json:"editor"`
-	Search       SearchSettings       `json:"search"`
-	Explorer     ExplorerSettings     `json:"explorer"`
-	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
-	Panel        PanelSettings        `json:"panel,omitzero"`
-	Git          GitSettings          `json:"git"`
-	Terminal     TerminalSettings     `json:"terminal"`
-	Codex        CodexSettings        `json:"codex"`
-	LSP          LSPSettings          `json:"lsp"`
-	Autocomplete AutocompleteSettings `json:"autocomplete"`
-	Markdown     MarkdownSettings     `json:"markdown"`
-	Image        ImageSettings        `json:"image"`
+	Appearance AppearanceSettings `json:"appearance"`
+	Editor     EditorSettings     `json:"editor"`
+	Search     SearchSettings     `json:"search"`
+	Explorer   ExplorerSettings   `json:"explorer"`
+	Sidebar    SidebarSettings    `json:"sidebar,omitzero"`
+	Panel      PanelSettings      `json:"panel,omitzero"`
+	Git        GitSettings        `json:"git"`
+	Terminal   TerminalSettings   `json:"terminal"`
+	// Codex is retained in memory only for backwards-compatible decoding.
+	Codex        CodexSettings            `json:"-"`
+	Agents       map[string]AgentSettings `json:"agents,omitempty"`
+	LSP          LSPSettings              `json:"lsp"`
+	Autocomplete AutocompleteSettings     `json:"autocomplete"`
+	Markdown     MarkdownSettings         `json:"markdown"`
+	Image        ImageSettings            `json:"image"`
 	// Plugins is safe: its only field is a tri-state *bool where nil means the
 	// default, so the zero value and "unset" mean the same thing.
 	Plugins    PluginSettings    `json:"plugins,omitzero"`
@@ -403,11 +405,19 @@ type CodexSettings struct {
 	Args string `json:"args,omitempty"`
 }
 
+// AgentSettings describes a coding agent executable and its extra arguments.
+type AgentSettings struct {
+	CLI  string `json:"cli,omitempty"`
+	Args string `json:"args,omitempty"`
+	// Install is an optional shell command used when CLI is not found.
+	Install string `json:"install,omitempty"`
+}
+
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "appearance": true, "editor": true,
-	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "codex": true, "lsp": true,
+	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "codex": true, "agents": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }
 
@@ -452,20 +462,36 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 			s.Extra[k] = v
 		}
 	}
+	// Migrate the former top-level codex block into the unified agents map.
+	if raw, ok := m["codex"]; ok {
+		var legacy CodexSettings
+		if err := json.Unmarshal(raw, &legacy); err == nil {
+			if s.Agents == nil {
+				s.Agents = make(map[string]AgentSettings)
+			}
+			if s.Agents["codex"].CLI == "" {
+				s.Agents["codex"] = AgentSettings{CLI: legacy.CLI, Args: legacy.Args}
+			}
+		}
+	}
 	return nil
 }
 
 func DefaultSettings() Settings {
 	return Settings{
-		Version:      1,
-		Appearance:   DefaultAppearanceSettings(),
-		Editor:       DefaultEditorSettings(),
-		Search:       DefaultSearchSettings(),
-		Explorer:     DefaultExplorerSettings(),
-		Sidebar:      DefaultSidebarSettings(),
-		Git:          DefaultGitSettings(),
-		Terminal:     DefaultTerminalSettings(),
-		Codex:        CodexSettings{CLI: "codex"},
+		Version:    1,
+		Appearance: DefaultAppearanceSettings(),
+		Editor:     DefaultEditorSettings(),
+		Search:     DefaultSearchSettings(),
+		Explorer:   DefaultExplorerSettings(),
+		Sidebar:    DefaultSidebarSettings(),
+		Git:        DefaultGitSettings(),
+		Terminal:   DefaultTerminalSettings(),
+		Agents: map[string]AgentSettings{
+			"codex":  {CLI: "codex", Install: "npm install -g @openai/codex"},
+			"claude": {CLI: "claude", Args: "-p", Install: "npm install -g @anthropic-ai/claude-code"}, "codebuddy": {CLI: "codebuddy", Install: "npm install -g @tencent-ai/codebuddy-code"},
+			"copilot": {CLI: "gh", Args: "copilot", Install: "gh extension install github/gh-copilot"}, "cursor": {CLI: "cursor-agent", Install: "curl https://cursor.com/install -fsS | bash"}, "kimi": {CLI: "kimi", Install: "pip install kimi-cli"},
+		},
 		LSP:          DefaultLSPSettings(),
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),

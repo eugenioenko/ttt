@@ -47,8 +47,33 @@
   "terminal": {
     "scrollback": 1000
   },
-  "codex": {
-    "cli": "codex"
+  "agents": {
+    "claude": {
+      "cli": "claude",
+      "args": "-p",
+      "install": "npm install -g @anthropic-ai/claude-code"
+    },
+    "codebuddy": {
+      "cli": "codebuddy",
+      "install": "npm install -g @tencent-ai/codebuddy-code"
+    },
+    "codex": {
+      "cli": "codex",
+      "install": "npm install -g @openai/codex"
+    },
+    "copilot": {
+      "cli": "gh",
+      "args": "copilot",
+      "install": "gh extension install github/gh-copilot"
+    },
+    "cursor": {
+      "cli": "cursor-agent",
+      "install": "curl https://cursor.com/install -fsS | bash"
+    },
+    "kimi": {
+      "cli": "kimi",
+      "install": "pip install kimi-cli"
+    }
   },
   "lsp": {
     "saveOnRename": false,
