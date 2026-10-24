@@ -92,6 +92,47 @@ func TestNormalizeSettingsEmptyGutterStyle(t *testing.T) {
 	}
 }
 
+func TestNormalizeSettingsValidSelectionStyles(t *testing.T) {
+	for _, style := range SelectionStyles {
+		s := DefaultSettings()
+		s.Editor.SelectionStyle = style
+		s.Terminal.SelectionStyle = style
+		normalizeSettings(&s)
+		if s.Editor.SelectionStyle != style {
+			t.Errorf("expected editor SelectionStyle %q to be preserved, got %q", style, s.Editor.SelectionStyle)
+		}
+		if s.Terminal.SelectionStyle != style {
+			t.Errorf("expected terminal SelectionStyle %q to be preserved, got %q", style, s.Terminal.SelectionStyle)
+		}
+	}
+}
+
+func TestNormalizeSettingsInvalidSelectionStyle(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.SelectionStyle = "invalid"
+	s.Terminal.SelectionStyle = "invalid"
+	normalizeSettings(&s)
+	if s.Editor.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected invalid editor SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Editor.SelectionStyle)
+	}
+	if s.Terminal.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected invalid terminal SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Terminal.SelectionStyle)
+	}
+}
+
+func TestNormalizeSettingsEmptySelectionStyle(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.SelectionStyle = ""
+	s.Terminal.SelectionStyle = ""
+	normalizeSettings(&s)
+	if s.Editor.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected empty editor SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Editor.SelectionStyle)
+	}
+	if s.Terminal.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected empty terminal SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Terminal.SelectionStyle)
+	}
+}
+
 func TestLSPSettingsIsEnabled(t *testing.T) {
 	// nil Enabled means default (true)
 	s := LSPSettings{}

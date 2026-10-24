@@ -53,8 +53,8 @@ func (a *App) ShowThemePicker() {
 	originalTokenTheme := highlight.CurrentTokenTheme()
 	originalPalette := *a.Palette
 	applyTheme := func(theme config.ThemeConfig) {
-		ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground))
-		*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground))
+		ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground), WithEditorSelectionStyle(a.Settings.Editor.SelectionStyle))
+		*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground), WithTerminalSelectionStyle(a.Settings.Terminal.SelectionStyle))
 		*a.Borders = BuildBorderSet(theme.Borders)
 		a.ApplyBorderStyle()
 		a.Renderer.Clear()

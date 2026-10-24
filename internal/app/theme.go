@@ -13,13 +13,30 @@ import (
 )
 
 type styleMapOptions struct {
-	transparentBg bool
+	transparentBg          bool
+	editorSelectionStyle   string
+	terminalSelectionStyle string
 }
 
 type StyleMapOption func(*styleMapOptions)
 
 func WithTransparentBackground(v bool) StyleMapOption {
 	return func(o *styleMapOptions) { o.transparentBg = v }
+}
+
+func WithEditorSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) { o.editorSelectionStyle = style }
+}
+
+func WithTerminalSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) { o.terminalSelectionStyle = style }
+}
+
+func WithSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) {
+		o.editorSelectionStyle = style
+		o.terminalSelectionStyle = style
+	}
 }
 
 func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleMap {
@@ -98,7 +115,14 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleMenuBarActive, theme.Menu.Active)
 	applyStyleDef(&m, term.StyleBorder, theme.Border)
 	applyStyleDef(&m, term.StyleBorderActive, theme.BorderActive)
-	applyStyleDef(&m, term.StyleSelection, theme.Editor.Selection)
+	if o.editorSelectionStyle == config.SelectionStyleInvert {
+		// Keep reverse/inversion and skip the theme's selection background override.
+	} else {
+		if theme.Editor.Selection.Bg != "" {
+			m[term.StyleSelection] = base
+		}
+		applyStyleDef(&m, term.StyleSelection, theme.Editor.Selection)
+	}
 	applyStyleDef(&m, term.StyleSearchMatch, theme.Editor.SearchMatch)
 	applyStyleDef(&m, term.StyleSearchActive, theme.Editor.SearchActive)
 	applyStyleDef(&m, term.StyleBracketMatch, theme.Editor.BracketMatch)
@@ -333,11 +357,16 @@ func BuildTerminalPalette(theme config.ThemeConfig, opts ...StyleMapOption) ui.T
 		bg = theme.Default.Bg
 	}
 	ansi := tc.ANSIPalette()
+	selBg := tc.Selection
+	if o.terminalSelectionStyle == config.SelectionStyleInvert {
+		selBg = ""
+	}
 	p := ui.TerminalColorPalette{
-		Fg:          ui.ParseHexColor(fg),
-		Bg:          ui.ParseHexColor(bg),
-		SelectionBg: ui.ParseHexColor(tc.Selection),
-		Color256:    ui.Build256Palette(),
+		Fg:             ui.ParseHexColor(fg),
+		Bg:             ui.ParseHexColor(bg),
+		SelectionBg:    ui.ParseHexColor(selBg),
+		SelectionStyle: o.terminalSelectionStyle,
+		Color256:       ui.Build256Palette(),
 	}
 	for i, hex := range ansi {
 		p.ANSI[i] = ui.ParseHexColor(hex)

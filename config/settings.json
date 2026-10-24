@@ -20,6 +20,7 @@
     "diffColorGutterNumbers": false,
     "diffScrollbarGitMarks": false,
     "lineNumbers": true,
+    "selectionStyle": "background",
     "formatOnSave": false,
     "insertFinalNewline": true,
     "trimTrailingWhitespace": false,
@@ -45,7 +46,8 @@
     "fileView": "list"
   },
   "terminal": {
-    "scrollback": 1000
+    "scrollback": 1000,
+    "selectionStyle": "background"
   },
   "lsp": {
     "saveOnRename": false,

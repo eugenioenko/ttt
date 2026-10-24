@@ -32,6 +32,8 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Editor.SyntaxHighlight = &enabled
 	s.Welcome.RecentFolders = &enabled
 	s.Terminal.Shell = "/bin/zsh"
+	s.Editor.SelectionStyle = SelectionStyleInvert
+	s.Terminal.SelectionStyle = SelectionStyleInvert
 
 	if err := SaveSettings(s); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
@@ -67,6 +69,12 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Terminal.Shell != "/bin/zsh" {
 		t.Errorf("shell = %q, want /bin/zsh", got.Terminal.Shell)
+	}
+	if got.Editor.SelectionStyle != SelectionStyleInvert {
+		t.Errorf("editor.selectionStyle = %q, want %q", got.Editor.SelectionStyle, SelectionStyleInvert)
+	}
+	if got.Terminal.SelectionStyle != SelectionStyleInvert {
+		t.Errorf("terminal.selectionStyle = %q, want %q", got.Terminal.SelectionStyle, SelectionStyleInvert)
 	}
 }
 

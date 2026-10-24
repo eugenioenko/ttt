@@ -15,32 +15,37 @@ var (
 	GitFileViews        = []string{"tree", "list"}
 	IconModes           = []string{IconsNerdFont, IconsNone}
 	ScrollbarGlyphModes = []string{ScrollbarGlyphsBlocks, ScrollbarGlyphsLegacy}
+	SelectionStyles     = []string{SelectionStyleBackground, SelectionStyleInvert}
 )
 
 const (
-	DiffModeSplit         = "split"
-	DiffModeUnified       = "unified"
-	DiffContextChanges    = "changes"
-	DiffContextFull       = "full"
-	GitFileViewTree       = "tree"
-	GitFileViewList       = "list"
-	IconsNone             = "none"
-	IconsNerdFont         = "nerd-font"
-	ScrollbarGlyphsBlocks = "blocks"
-	ScrollbarGlyphsLegacy = "legacy"
+	DiffModeSplit            = "split"
+	DiffModeUnified          = "unified"
+	DiffContextChanges       = "changes"
+	DiffContextFull          = "full"
+	GitFileViewTree          = "tree"
+	GitFileViewList          = "list"
+	IconsNone                = "none"
+	IconsNerdFont            = "nerd-font"
+	ScrollbarGlyphsBlocks    = "blocks"
+	ScrollbarGlyphsLegacy    = "legacy"
+	SelectionStyleBackground = "background"
+	SelectionStyleInvert     = "invert"
 )
 
 type TerminalSettings struct {
 	Shell string `json:"shell,omitempty"`
 	// Args are passed to Shell unchanged, so a tab can run a program other than
 	// an interactive shell (e.g. Shell="pi", Args=["--model", "..."]).
-	Args       []string `json:"args,omitempty"`
-	Scrollback int      `json:"scrollback,omitempty"`
+	Args           []string `json:"args,omitempty"`
+	Scrollback     int      `json:"scrollback,omitempty"`
+	SelectionStyle string   `json:"selectionStyle"`
 }
 
 func DefaultTerminalSettings() TerminalSettings {
 	return TerminalSettings{
-		Scrollback: 1000,
+		Scrollback:     1000,
+		SelectionStyle: SelectionStyleBackground,
 	}
 }
 
@@ -114,6 +119,7 @@ type EditorSettings struct {
 	DiffScrollbarGitMarks   bool               `json:"diffScrollbarGitMarks"`
 	LineNumbers             bool               `json:"lineNumbers"`
 	CursorStyle             string             `json:"cursorStyle,omitempty"`
+	SelectionStyle          string             `json:"selectionStyle"`
 	FormatOnSave            bool               `json:"formatOnSave"`
 	InsertFinalNewline      bool               `json:"insertFinalNewline"`
 	TrimTrailingWhitespace  bool               `json:"trimTrailingWhitespace"`
@@ -222,6 +228,7 @@ func DefaultEditorSettings() EditorSettings {
 		DiffGutterHighlight:     true,
 		DiffColorGutterNumbers:  false,
 		LineNumbers:             true,
+		SelectionStyle:          SelectionStyleBackground,
 		InsertFinalNewline:      true,
 		GutterStyle:             "compact",
 		BorderStyle:             "default",
@@ -476,6 +483,12 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(BorderStyles, s.Editor.BorderStyle) {
 		s.Editor.BorderStyle = "default"
+	}
+	if !slices.Contains(SelectionStyles, s.Editor.SelectionStyle) {
+		s.Editor.SelectionStyle = SelectionStyleBackground
+	}
+	if !slices.Contains(SelectionStyles, s.Terminal.SelectionStyle) {
+		s.Terminal.SelectionStyle = SelectionStyleBackground
 	}
 	seenPanels := make(map[string]bool)
 	panelOrder := s.Sidebar.PanelOrder[:0]
