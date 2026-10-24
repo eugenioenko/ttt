@@ -44,6 +44,7 @@ func (b *Buffer) SetText(text string) {
 	}
 	b.SetLines(lines)
 	b.Dirty = false
+	b.savedLineEnding = b.LineEnding
 }
 
 // SplitLines splits like bufio.ScanLines, with every line a substring of
@@ -151,6 +152,7 @@ func (b *Buffer) SaveFile(filename string) error {
 	}
 
 	b.Dirty = false
+	b.savedLineEnding = b.LineEnding
 	if info, err := os.Stat(target); err == nil {
 		b.recordDiskInfo(info)
 	}
@@ -178,10 +180,7 @@ func (b *Buffer) CleanedLines() []string {
 }
 
 func (b *Buffer) writeLines(w io.Writer, lines []string) error {
-	eol := b.LineEnding
-	if eol == "" {
-		eol = "\n"
-	}
+	eol := effectiveLineEnding(b.LineEnding)
 	for i, line := range lines {
 		if _, err := io.WriteString(w, line); err != nil {
 			return err

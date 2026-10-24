@@ -1887,7 +1887,7 @@ func (g *EditorGroupWidget) Undo() {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
-		if t.Undo.AtSavePoint() {
+		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
 		g.undoRedoPostProcess()
@@ -1907,7 +1907,7 @@ func (g *EditorGroupWidget) Redo() {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
-		if t.Undo.AtSavePoint() {
+		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
 		g.undoRedoPostProcess()
