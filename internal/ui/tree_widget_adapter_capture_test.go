@@ -105,6 +105,47 @@ func (p *adapterCaptureProbe) InvalidatePointerInteraction() bool {
 	return p.CancelPointerCapture()
 }
 
+func TestWidgetAdapterCancelingButtonPressPreventsActivation(t *testing.T) {
+	clicked := false
+	button := widgets.NewButtonWidget(widgets.ButtonConfig{
+		Label:   "Quit",
+		OnClick: func() { clicked = true },
+	})
+	adapter := NewWidgetAdapter(widgets.NewVStackWidget(button))
+	adapter.SetRect(Rect{X: 0, Y: 0, W: 12, H: 2})
+	adapter.Render(NewRenderSurface(makeGrid(12, 2), Rect{W: 12, H: 2}))
+	invalidations := 0
+	adapter.SetPointerCaptureInvalidated(func() { invalidations++ })
+
+	r := button.GetRect()
+	x, y := r.X+1, r.Y
+	if got := adapter.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, 0)); got != widgets.EventCaptured {
+		t.Fatalf("button press result = %v, want captured", got)
+	}
+	if !adapter.CancelPointerCapture() {
+		t.Fatal("adapter did not cancel the button press")
+	}
+	adapter.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, 0))
+	if clicked {
+		t.Fatal("canceled button press activated on later release")
+	}
+	if invalidations != 1 {
+		t.Fatalf("capture invalidations = %d, want 1", invalidations)
+	}
+
+	if got := adapter.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, 0)); got != widgets.EventCaptured {
+		t.Fatalf("second button press result = %v, want captured", got)
+	}
+	button.SetFocused(false)
+	if adapter.capturedWidget != nil || invalidations != 2 {
+		t.Fatalf("focus loss left capture=%v invalidations=%d, want no capture and 2 invalidations", adapter.capturedWidget, invalidations)
+	}
+	adapter.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, 0))
+	if clicked {
+		t.Fatal("focus-lost button press activated on later release")
+	}
+}
+
 func TestWidgetAdapterRetainsFocusRoutedCaptureAcrossChildren(t *testing.T) {
 	first := &adapterCaptureProbe{height: 2}
 	second := &adapterCaptureProbe{height: 2}
@@ -140,6 +181,7 @@ func TestWidgetAdapterRetainsFocusRoutedCaptureAcrossChildren(t *testing.T) {
 		t.Fatalf("capture invalidations = %d, want 1", invalidations)
 	}
 
+	adapter.HandleEvent(tcell.NewEventMouse(1, 3, tcell.ButtonNone, 0))
 	adapter.HandleEvent(tcell.NewEventMouse(1, 3, tcell.Button1, 0))
 	if !adapter.InvalidatePointerInteraction() || second.capturing {
 		t.Fatal("adapter did not invalidate exact capture owner")

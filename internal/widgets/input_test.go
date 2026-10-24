@@ -75,8 +75,12 @@ func (s *testSurface) Sub(r Rect) Surface {
 	}
 }
 
-func mouseClick(x, y int) *tcell.EventMouse {
+func mousePress(x, y int) *tcell.EventMouse {
 	return tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone)
+}
+
+func mouseClick(x, y int) *tcell.EventMouse {
+	return mousePress(x, y)
 }
 
 func mouseRelease(x, y int) *tcell.EventMouse {

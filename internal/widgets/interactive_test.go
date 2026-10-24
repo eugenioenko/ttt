@@ -94,14 +94,17 @@ func TestButtonClickInside(t *testing.T) {
 
 	renderWidget(btn, 5, 5, 10, 1)
 
-	// Click inside the rect
-	ev := mouseClick(6, 5)
-	result := btn.HandleEvent(ev)
-	if result != EventConsumed {
-		t.Error("click inside button should be consumed")
+	// Mouse-down arms the button; release activates it.
+	result := btn.HandleEvent(mousePress(6, 5))
+	if result != EventCaptured {
+		t.Errorf("mouse-down result = %v, want captured", result)
 	}
+	if clicked {
+		t.Fatal("OnClick ran before mouse-up")
+	}
+	btn.HandleEvent(mouseRelease(6, 5))
 	if !clicked {
-		t.Error("OnClick should fire on click inside")
+		t.Error("OnClick should fire on mouse-up")
 	}
 }
 

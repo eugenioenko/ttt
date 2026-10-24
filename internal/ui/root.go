@@ -49,6 +49,7 @@ type Root struct {
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
+	mouseButtons     tcell.ButtonMask
 }
 
 func NewRoot(main Widget) *Root {
@@ -61,7 +62,11 @@ func NewRoot(main Widget) *Root {
 
 func (r *Root) SetSize(w, h int) {
 	if w != r.Width || h != r.Height {
+		captured := r.capturedWidget
 		widgets.InvalidatePointerInteraction(r.Main)
+		if captured != nil && captured != r.Main {
+			widgets.InvalidatePointerInteraction(captured)
+		}
 		r.capturedWidget = nil
 	}
 	r.Width = w
@@ -70,8 +75,12 @@ func (r *Root) SetSize(w, h int) {
 }
 
 func (r *Root) CancelPointerCapture() bool {
+	captured := r.capturedWidget
 	canceled := widgets.CancelPointerCapture(r.Main)
-	if r.capturedWidget != nil {
+	if captured != nil {
+		if captured != r.Main {
+			widgets.CancelPointerCapture(captured)
+		}
 		canceled = true
 		r.capturedWidget = nil
 	}
@@ -184,6 +193,17 @@ func (r *Root) rawKeysFocused() bool {
 }
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
+	if mouse, ok := ev.(*tcell.EventMouse); ok {
+		buttons := mouse.Buttons()
+		button1WasDown := r.mouseButtons&tcell.Button1 != 0
+		r.mouseButtons = buttons
+		r.reconcilePointerCapture()
+		// Without capture, held motion must not retarget a press to a widget entered by dragging.
+		if buttons&tcell.Button1 != 0 && button1WasDown && r.capturedWidget == nil {
+			return EventConsumed
+		}
+	}
+
 	kev, isKey := ev.(*tcell.EventKey)
 	// ForceKeys punch through two things that would otherwise swallow them: a
 	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
@@ -268,6 +288,10 @@ func (r *Root) handleOverlay(ev tcell.Event) EventResult {
 	top := r.Overlays[len(r.Overlays)-1]
 	slog.Debug("root", "action", "overlayIntercept", "modal", top.Modal, "count", len(r.Overlays))
 	result := top.Widget.HandleEvent(ev)
+	if result == EventCaptured {
+		r.capturedWidget = top.Widget
+		return EventConsumed
+	}
 	if top.Modal {
 		return EventConsumed
 	}
@@ -408,6 +432,10 @@ func (r *Root) PushOverlay(o Overlay) {
 
 func (r *Root) PopOverlay() {
 	if len(r.Overlays) > 0 {
+		top := r.Overlays[len(r.Overlays)-1].Widget
+		if r.capturedWidget == top {
+			r.CancelPointerCapture()
+		}
 		r.Overlays = r.Overlays[:len(r.Overlays)-1]
 		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
 	}
@@ -417,6 +445,9 @@ func (r *Root) PopOverlay() {
 func (r *Root) RemoveOverlay(w Widget) {
 	for i, o := range r.Overlays {
 		if o.Widget == w {
+			if r.capturedWidget == w {
+				r.CancelPointerCapture()
+			}
 			r.Overlays = append(r.Overlays[:i], r.Overlays[i+1:]...)
 			slog.Debug("root", "action", "removeOverlay", "count", len(r.Overlays))
 			return

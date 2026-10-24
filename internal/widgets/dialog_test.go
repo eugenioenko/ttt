@@ -605,11 +605,14 @@ func TestDialogMouseClickOnFooterButton(t *testing.T) {
 		t.Fatal("button rect should be set after render")
 	}
 
-	// Click inside the button
-	click := mouseClick(r.X+1, r.Y)
-	d.HandleEvent(click)
+	// An immediate mouse-up after the press triggers the button handler.
+	d.HandleEvent(mousePress(r.X+1, r.Y))
+	if clicked {
+		t.Fatal("mouse-down triggered the button handler")
+	}
+	d.HandleEvent(mouseRelease(r.X+1, r.Y))
 	if !clicked {
-		t.Error("mouse click on button should trigger handler")
+		t.Error("mouse-up should trigger the button handler")
 	}
 }
 

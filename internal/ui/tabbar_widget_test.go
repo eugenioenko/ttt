@@ -409,6 +409,7 @@ func TestTabBarInvalidatedSourceDoesNotCaptureNextClick(t *testing.T) {
 	}
 	clicked = -1
 	firstX := tb.tabSpans[0].start + 2
+	root.HandleEvent(tcell.NewEventMouse(secondX, 1, tcell.ButtonNone, 0))
 	root.HandleEvent(tcell.NewEventMouse(firstX, 1, tcell.Button1, 0))
 	root.HandleEvent(tcell.NewEventMouse(firstX, 1, tcell.ButtonNone, 0))
 

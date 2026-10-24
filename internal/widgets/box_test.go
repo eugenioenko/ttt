@@ -269,15 +269,18 @@ func TestBoxHandleEventDelegatesToChild(t *testing.T) {
 	// Render to set rects
 	renderWidget(box, 5, 5, 20, 3)
 
-	// Click inside the button (which is inside the box)
+	// Press and release inside the button (which is inside the box).
 	r := btn.GetRect()
-	ev := mouseClick(r.X+1, r.Y)
-	result := box.HandleEvent(ev)
-	if result != EventConsumed {
-		t.Error("box should delegate event to child")
+	result := box.HandleEvent(mousePress(r.X+1, r.Y))
+	if result != EventCaptured {
+		t.Errorf("box press result = %v, want captured child", result)
 	}
+	if clicked {
+		t.Fatal("child button ran before mouse-up")
+	}
+	box.HandleEvent(mouseRelease(r.X+1, r.Y))
 	if !clicked {
-		t.Error("child button OnClick should have been triggered")
+		t.Error("child button OnClick should run on mouse-up")
 	}
 }
 

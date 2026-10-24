@@ -6,8 +6,82 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
+
+func TestMouseQuitRunsOnRelease(t *testing.T) {
+	h := newTestHarness(t, 100, 28)
+	defer h.stop()
+
+	h.click(h.app.MenuBar.ItemAnchorX(0), h.app.MenuBar.GetRect().Y)
+	menu := focusedContextMenu(t, h)
+	quitIndex := -1
+	for i, item := range menu.Items {
+		if item.Command == "editor.quit" {
+			quitIndex = i
+			break
+		}
+	}
+	if quitIndex < 0 {
+		t.Fatal("File menu does not contain Quit")
+	}
+	r := menu.GetRect()
+	x, y := r.X+2, r.Y+1+quitIndex
+
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	if !*h.app.Running {
+		t.Fatal("mouse-down exited the editor before the mouse-up event")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+	if *h.app.Running {
+		t.Fatal("mouse-up did not exit the editor")
+	}
+}
+
+func TestMouseQuitConfirmationRunsOnRelease(t *testing.T) {
+	h := newTestHarness(t, 100, 28)
+	defer h.stop()
+
+	h.typeText("dirty")
+	h.exec("editor.quit")
+	adapter, ok := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+	if !ok {
+		t.Fatalf("quit confirmation overlay = %T, want WidgetAdapter", h.app.Root.TopOverlayWidget())
+	}
+	dialog, ok := adapter.Inner().(*widgets.DialogWidget)
+	if !ok {
+		t.Fatalf("quit confirmation widget = %T, want DialogWidget", adapter.Inner())
+	}
+	children := dialog.WidgetChildren()
+	footer, ok := children[len(children)-1].(*widgets.HStackWidget)
+	if !ok {
+		t.Fatalf("dialog footer = %T, want HStackWidget", children[len(children)-1])
+	}
+	var quit *widgets.ButtonWidget
+	for _, child := range footer.WidgetChildren() {
+		button, ok := child.(*widgets.ButtonWidget)
+		if ok && strings.TrimPrefix(button.Config.Label, "&") == "Quit" {
+			quit = button
+			break
+		}
+	}
+	if quit == nil {
+		t.Fatal("quit confirmation does not contain a Quit button")
+	}
+	r := quit.GetRect()
+	x, y := r.X+r.W/2, r.Y
+
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	if !*h.app.Running {
+		t.Fatal("mouse-down exited before the Quit button release")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+	if *h.app.Running {
+		t.Fatal("Quit button mouse-up did not exit the editor")
+	}
+}
 
 func TestQuitSaveAllVisibility(t *testing.T) {
 	for _, tc := range []struct {
