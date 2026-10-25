@@ -1235,6 +1235,7 @@ panel:button({
 |------------|----------|----------|------------------------------------------------|
 | `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
+| `disabled` | boolean  | no       | Draws the button muted and ignores presses, for example while a request is in flight. |
 
 ### Checkbox
 

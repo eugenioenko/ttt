@@ -421,6 +421,7 @@ func panelButtonWidget(L *lua.LState) int {
 	if fn, ok := L.GetField(tbl, "on_click").(*lua.LFunction); ok {
 		desc.OnClick = proxy.wrapSimpleCallback(fn)
 	}
+	desc.Disabled = lua.LVAsBool(L.GetField(tbl, "disabled"))
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetButton, desc)

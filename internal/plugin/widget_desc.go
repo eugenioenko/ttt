@@ -100,6 +100,7 @@ type WidgetDesc struct {
 
 	Label        string
 	OnClick      func()
+	Disabled     bool
 	Checked      bool
 	OnChangeBool func(bool)
 
