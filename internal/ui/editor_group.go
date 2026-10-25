@@ -946,7 +946,8 @@ func (g *EditorGroupWidget) notifyEmpty() {
 	}
 }
 
-func (g *EditorGroupWidget) ClosePluginTab(id string) {
+// ClosePluginTab closes the tab keyed id and reports whether there was one.
+func (g *EditorGroupWidget) ClosePluginTab(id string) bool {
 	for i, t := range g.tabs {
 		if t.FilePath == id {
 			g.notifyContentTabClose(t)
@@ -965,9 +966,10 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 			if emptied {
 				g.notifyEmpty()
 			}
-			return
+			return true
 		}
 	}
+	return false
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {

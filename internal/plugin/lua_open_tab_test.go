@@ -22,7 +22,11 @@ func TestOpenTabWithIDFocusesExistingTab(t *testing.T) {
 		}
 		return false
 	}
-	p.CloseTab = func(key string) { delete(open, key) }
+	p.CloseTab = func(key string) bool {
+		_, ok := open[key]
+		delete(open, key)
+		return ok
+	}
 
 	err := p.State.DoString(`
 		local ttt = require("ttt")
@@ -80,5 +84,36 @@ func TestOpenTabOnCloseRunsOnceAfterClose(t *testing.T) {
 	posted[0].Callback()
 	if v := p.State.GetGlobal("closed"); v != lua.LNumber(1) {
 		t.Fatalf("closed = %v, want 1", v)
+	}
+}
+
+func TestCloseTabPrefersTheIDOverATitle(t *testing.T) {
+	p, done := newTestPluginBase(PermissionSet{PanelEditor: true})
+	defer done()
+	open := map[string]bool{}
+	p.OpenTab = func(key, _ string, _ *PluginPanelWidget) { open[key] = true }
+	p.CloseTab = func(key string) bool {
+		ok := open[key]
+		delete(open, key)
+		return ok
+	}
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		local r = function(panel) end
+		ttt.open_tab({ title = "ns", render = r })
+		ttt.open_tab({ id = "ns", title = "Namespaces", render = r })
+		ttt.close_tab("ns")
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open["plugin:test:ns"] || !open["ns"] {
+		t.Fatalf("close_tab should close only the tab with that id, open = %v", open)
+	}
+	if err := p.State.DoString(`require("ttt").close_tab("ns")`); err != nil {
+		t.Fatal(err)
+	}
+	if open["ns"] {
+		t.Fatal("with no tab for the id, close_tab should fall back to the title")
 	}
 }

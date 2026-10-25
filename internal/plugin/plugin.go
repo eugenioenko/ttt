@@ -81,7 +81,7 @@ type Plugin struct {
 	ShowPanel          func(area string, focus bool) (bool, error)
 	OpenTab            func(key, title string, panel *PluginPanelWidget)
 	FocusTab           func(key string) bool
-	CloseTab           func(key string)
+	CloseTab           func(key string) bool
 	OpenDialog         func(*PluginDialogWidget, func()) bool
 	CloseDialog        func()
 	OpenChanges        func(ChangesOptions) (string, error)

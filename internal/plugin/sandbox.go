@@ -540,8 +540,9 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		L.SetField(mod, "close_tab", L.NewFunction(func(L *lua.LState) int {
 			id := L.CheckString(1)
 			if p.CloseTab != nil {
-				p.CloseTab(p.tabKey(id))
-				p.CloseTab(id)
+				if !p.CloseTab(p.tabKey(id)) {
+					p.CloseTab(id)
+				}
 			}
 			return 0
 		}))

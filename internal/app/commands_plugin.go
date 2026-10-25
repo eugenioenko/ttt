@@ -669,8 +669,8 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		a.FocusEditor()
 		return true
 	}
-	p.CloseTab = func(key string) {
-		a.EditorGroup.ClosePluginTab(key)
+	p.CloseTab = func(key string) bool {
+		return a.EditorGroup.ClosePluginTab(key)
 	}
 
 	if p.HasSidebarMenu() {
