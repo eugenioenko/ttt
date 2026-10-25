@@ -1763,8 +1763,7 @@ func TestTreeRightBadgeNeverCoversTheRowContent(t *testing.T) {
 		Inset:      4,
 	})
 	s := renderWidget(tree, 0, 0, 8, 1)
-	got := rowText(s, 0)
-	if strings.Contains(got, "7") || !strings.Contains(got, "▸") {
-		t.Fatalf("row = %q, want the chevron kept and the badge dropped", got)
+	if got, want := rowText(s, 0), "    ▸"; got != want {
+		t.Fatalf("row = %q, want %q: the chevron kept and the badge dropped", got, want)
 	}
 }
