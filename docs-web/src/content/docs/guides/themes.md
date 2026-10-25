@@ -59,7 +59,7 @@ Theme files are stored as `<name>.json` in the `themes/` subdirectory of your co
 
 ## Full Theme Reference
 
-Below is a complete theme file showing every configurable section. Ordinary color values are hex strings (`"#rrggbb"`); `editor.bracketColors` also accepts the named terminal colors documented below. Optional `"bold"` and `"italic"` flags are supported where noted. Any field left empty (`{}`) inherits from the `default` colors, with these exceptions: `diff.collapsedHover.bg` inherits from `editor.activeLine.bg`; `diff.collapsedEmphasis` defaults to the normal theme colors with bold text; and the backgrounds of `editor.highlight` and `editor.highlightStrong` (what plugins highlight lines and text with) and of `editor.note` (the notes plugins draw between lines) default to the `default` background mixed toward `diff.gutterBookmark`.
+Below is a complete theme file showing every configurable section. Ordinary color values are hex strings (`"#rrggbb"`); `editor.bracketColors` also accepts the named terminal colors documented below. Optional `"bold"` and `"italic"` flags are supported where noted. Any field left empty (`{}`) inherits from the `default` colors, with these exceptions: `diff.collapsedHover.bg` inherits from `editor.activeLine.bg`; `button.focused` inherits from `sidebar.selected`; `button.filled.bg` inherits from `editor.activeLine.bg`, or a shade off the `default` background when that is unset; `button.inverse` swaps the `default` colors; `diff.collapsedEmphasis` defaults to the normal theme colors with bold text; and the backgrounds of `editor.highlight` and `editor.highlightStrong` (what plugins highlight lines and text with) and of `editor.note` (the notes plugins draw between lines) default to the `default` background mixed toward `diff.gutterBookmark`.
 
 ```json
 {
@@ -142,6 +142,12 @@ Below is a complete theme file showing every configurable section. Ordinary colo
       "bg": "#3e3d32",
       "bold": true
     }
+  },
+  "button": {
+    "item": {},
+    "focused": {},
+    "filled": {},
+    "inverse": {}
   },
   "diff": {
     "added": {

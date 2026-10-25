@@ -1261,6 +1261,17 @@ panel:button({
 | `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
 | `disabled` | boolean  | no       | Draws the button muted and ignores presses, for example while a request is in flight. |
+| `style`    | string   | no       | How the button looks when it is not focused. Default: `"filled"`. |
+
+**Button styles.** Every style draws in the focused button colors while it has focus, and muted while disabled.
+
+| Style       | Looks like | Use it for |
+|-------------|------------|------------|
+| `"filled"`  | Label on a subtle background (`button.filled` in the theme) | Most actions: toolbars, rows of commands. |
+| `"inverse"` | Label in the theme's colors swapped (`button.inverse`) | The one primary action of a form, such as Save or Create. |
+| `"bracket"` | `[Label]` | Inline actions next to fields, and themes with few colors. |
+| `"link"`    | The bare label, as ttt's own dialogs draw buttons | Places where the button is obvious from context. |
+| `"muted"`   | The label in the muted color | Secondary actions such as Cancel. |
 
 ### Checkbox
 

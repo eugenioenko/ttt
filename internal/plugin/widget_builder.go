@@ -599,6 +599,7 @@ func wireButtonCallback(bw *widgets.ButtonWidget, desc WidgetDesc, _ *Plugin) {
 		bw.Config.OnClick = desc.OnClick
 	}
 	bw.Disabled = desc.Disabled
+	bw.Config.Variant = desc.Variant
 }
 
 func createCheckboxWidget(desc WidgetDesc, p *Plugin) *widgets.CheckboxWidget {

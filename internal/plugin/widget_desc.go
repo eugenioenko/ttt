@@ -113,6 +113,7 @@ type WidgetDesc struct {
 	Label        string
 	OnClick      func()
 	Disabled     bool
+	Variant      widgets.ButtonVariant
 	Checked      bool
 	OnChangeBool func(bool)
 

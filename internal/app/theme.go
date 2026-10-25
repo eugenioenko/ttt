@@ -189,6 +189,8 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleInputAction, theme.Input.Action)
 	applyStyleDef(&m, term.StyleButton, theme.Button.Item)
 	applyStyleDef(&m, term.StyleButtonFocused, theme.Button.Focused)
+	applyStyleDef(&m, term.StyleButtonFilled, theme.Button.Filled)
+	applyStyleDef(&m, term.StyleButtonInverse, theme.Button.Inverse)
 	applyStyleDef(&m, term.StyleHoverBold, theme.Hover.Bold)
 	applyStyleDef(&m, term.StyleHoverItalic, theme.Hover.Italic)
 	applyStyleDef(&m, term.StyleHoverCode, theme.Hover.Code)

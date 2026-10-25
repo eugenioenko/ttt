@@ -433,10 +433,28 @@ func panelButtonWidget(L *lua.LState) int {
 		desc.OnClick = proxy.wrapSimpleCallback(fn)
 	}
 	desc.Disabled = lua.LVAsBool(L.GetField(tbl, "disabled"))
+	desc.Variant = buttonVariant(L.GetField(tbl, "style"))
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetButton, desc)
 	return 0
+}
+
+var buttonVariants = map[string]widgets.ButtonVariant{
+	"filled":  widgets.ButtonFilled,
+	"link":    widgets.ButtonLink,
+	"bracket": widgets.ButtonBracket,
+	"inverse": widgets.ButtonInverse,
+	"muted":   widgets.ButtonMuted,
+}
+
+// Plugin buttons are filled unless they ask otherwise: a bare label is hard to
+// tell from text in a panel.
+func buttonVariant(v lua.LValue) widgets.ButtonVariant {
+	if variant, ok := buttonVariants[lua.LVAsString(v)]; ok {
+		return variant
+	}
+	return widgets.ButtonFilled
 }
 
 func panelCheckboxWidget(L *lua.LState) int {

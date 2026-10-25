@@ -543,3 +543,32 @@ func TestResolveColorsDerivesHighlightStyles(t *testing.T) {
 		t.Errorf("note = %+v, want a faint tint with the default fg", got)
 	}
 }
+
+func TestButtonFilledAndInverseFallbacks(t *testing.T) {
+	theme := ThemeConfig{
+		Default: StyleDef{Fg: "#ffffff", Bg: "#000000"},
+		Editor:  EditorStyles{ActiveLine: StyleDef{Bg: "#222222"}},
+	}
+	theme.ResolveColors()
+	if theme.Button.Filled.Bg != "#222222" || theme.Button.Filled.Fg != "#ffffff" {
+		t.Errorf("filled = %+v, want the active line background and default text", theme.Button.Filled)
+	}
+	if theme.Button.Inverse.Bg != "#ffffff" || theme.Button.Inverse.Fg != "#000000" {
+		t.Errorf("inverse = %+v, want the default colors swapped", theme.Button.Inverse)
+	}
+
+	bare := ThemeConfig{Default: StyleDef{Fg: "#ffffff", Bg: "#000000"}}
+	bare.ResolveColors()
+	if bg := bare.Button.Filled.Bg; bg == "" || bg == "#000000" {
+		t.Errorf("filled bg without an active line = %q, want a shade off the background", bg)
+	}
+
+	custom := ThemeConfig{
+		Default: StyleDef{Fg: "#ffffff", Bg: "#000000"},
+		Button:  ButtonStyles{Filled: StyleDef{Bg: "#123456"}},
+	}
+	custom.ResolveColors()
+	if custom.Button.Filled.Bg != "#123456" {
+		t.Errorf("a theme's button.filled should win, got %q", custom.Button.Filled.Bg)
+	}
+}
