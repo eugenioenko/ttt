@@ -1551,6 +1551,34 @@ end
 | `on_change` | function | no       | Called with the `id` of the tab the user picked. |
 | + [box model fields](#box-model) | | | Margin and padding. |
 
+### Pager
+
+Page navigation for a list that is too long to show at once, such as a server-paged API. It shows `« ‹ 21–40 of 85 › »`; the arrows that lead nowhere are muted. When it has focus, Left/Right or PgUp/PgDn move a page and Home/End go to the first or last page.
+
+```lua
+local offset, total = 0, 0
+
+panel:pager({
+  offset = offset,
+  limit = 20,
+  total = total,
+  on_change = function(new_offset)
+    offset = new_offset
+    load_page(offset)
+  end,
+})
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `offset`    | number   | yes      | 0-based index of the first item on the current page. |
+| `limit`     | number   | yes      | Items per page. |
+| `total`     | number   | yes      | Total number of items. `0` shows `No items`. |
+| `on_change` | function | no       | Called with the new 0-based offset when the user changes page. |
+| + [box model fields](#box-model) | | | Margin and padding. |
+
+The pager does not load anything itself: fetch or slice the page in `on_change` and render the rows it returns.
+
 ### Markdown
 
 Render a markdown string as rich text with text selection and copy support. The content is wrapped in a scroll view automatically.
@@ -1858,6 +1886,7 @@ Widget-specific events are routed automatically to the callbacks you provide:
 | Dropdown | menu item selected | `on_menu`    | Command string                      |
 | Table    | row selected       | `on_select`  | Row index (number, 1-based)         |
 | Tabs     | tab picked         | `on_change`  | Tab `id` (string)                   |
+| Pager    | page changed       | `on_change`  | New offset (number, 0-based)        |
 | Table    | context menu cmd   | `on_command` | `(command_string, row_index)`       |
 | Title    | menu item selected | `on_menu`    | Command string                      |
 

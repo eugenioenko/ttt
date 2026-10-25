@@ -108,6 +108,7 @@ func RegisterPanelType(L *lua.LState) {
 		"progress":   panelProgressWidget,
 		"table":      panelTableWidget,
 		"tabs":       panelTabsWidget,
+		"pager":      panelPagerWidget,
 		"checkbox":   panelCheckboxWidget,
 		"redraw":     panelRedraw,
 		"markdown":   panelMarkdownWidget,
@@ -842,6 +843,31 @@ func panelTabsWidget(L *lua.LState) int {
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetTabs, desc)
+	return 0
+}
+
+func panelPagerWidget(L *lua.LState) int {
+	proxy := checkPanelProxy(L)
+	if proxy == nil {
+		return 0
+	}
+
+	tbl := L.CheckTable(2)
+	desc := WidgetDesc{}
+	desc.PagerOffset = int(lua.LVAsNumber(L.GetField(tbl, "offset")))
+	desc.PagerLimit = int(lua.LVAsNumber(L.GetField(tbl, "limit")))
+	desc.PagerTotal = int(lua.LVAsNumber(L.GetField(tbl, "total")))
+	if fn, ok := L.GetField(tbl, "on_change").(*lua.LFunction); ok {
+		p := proxy.plugin
+		desc.OnPage = func(offset int) {
+			if p != nil && p.State != nil {
+				p.CallLuaFunc(fn, lua.LNumber(offset))
+			}
+		}
+	}
+
+	parseBoxModel(L, tbl, &desc)
+	proxy.appendDesc(WidgetPager, desc)
 	return 0
 }
 

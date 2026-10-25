@@ -86,6 +86,10 @@ func createWidget(desc WidgetDesc, p *Plugin) widgets.Widget {
 		syncTabs(tw, desc)
 		applyBoxModel(&tw.Box, desc)
 		return tw
+	case WidgetPager:
+		pw := widgets.NewPagerWidget(pagerConfig(desc))
+		applyBoxModel(&pw.Box, desc)
+		return pw
 	}
 	return widgets.NewLabelWidget(widgets.LabelConfig{Text: "unknown widget"})
 }
@@ -256,6 +260,11 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			syncTabs(tw, desc)
 			applyBoxModel(&tw.Box, desc)
 		}
+	case WidgetPager:
+		if pw, ok := w.(*widgets.PagerWidget); ok {
+			pw.Config = pagerConfig(desc)
+			applyBoxModel(&pw.Box, desc)
+		}
 	case WidgetCheckbox:
 		if cw, ok := w.(*widgets.CheckboxWidget); ok {
 			cw.Config.Label = desc.Label
@@ -324,6 +333,9 @@ func widgetMatchesKind(w widgets.Widget, kind WidgetKind) bool {
 		return ok
 	case WidgetTabs:
 		_, ok := w.(*widgets.TabsWidget)
+		return ok
+	case WidgetPager:
+		_, ok := w.(*widgets.PagerWidget)
 		return ok
 	}
 	return false
@@ -709,5 +721,14 @@ func syncTabs(tw *widgets.TabsWidget, desc WidgetDesc) {
 		if onChange != nil && items[i].ID != active {
 			onChange(items[i].ID)
 		}
+	}
+}
+
+func pagerConfig(desc WidgetDesc) widgets.PagerConfig {
+	return widgets.PagerConfig{
+		Offset:   desc.PagerOffset,
+		Limit:    desc.PagerLimit,
+		Total:    desc.PagerTotal,
+		OnChange: desc.OnPage,
 	}
 }

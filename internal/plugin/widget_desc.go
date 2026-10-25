@@ -26,6 +26,7 @@ const (
 	WidgetCheckbox
 	WidgetImage
 	WidgetTabs
+	WidgetPager
 )
 
 func (k WidgetKind) String() string {
@@ -68,6 +69,8 @@ func (k WidgetKind) String() string {
 		return "image"
 	case WidgetTabs:
 		return "tabs"
+	case WidgetPager:
+		return "pager"
 	}
 	return "unknown"
 }
@@ -152,6 +155,11 @@ type WidgetDesc struct {
 	TabItems    []widgets.TabItem
 	ActiveTab   string
 	OnTabChange func(id string)
+
+	PagerOffset int
+	PagerLimit  int
+	PagerTotal  int
+	OnPage      func(offset int)
 
 	FullWidthDividers bool
 	MarkdownContent   string
