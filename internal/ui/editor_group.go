@@ -1125,6 +1125,21 @@ func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
 	return detail
 }
 
+// TextSelectionContent is tab content that selects the text it draws.
+type TextSelectionContent interface {
+	CopyTextSelection() bool
+	SelectAllText()
+}
+
+func (g *EditorGroupWidget) ActiveTextSelection() TextSelectionContent {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	sel, _ := t.Content.(TextSelectionContent)
+	return sel
+}
+
 func (g *EditorGroupWidget) ActiveCurrentChangesWidget() *CommitDetailWidget {
 	detail := g.ActiveCommitDetailWidget()
 	if detail != nil && detail.CurrentChanges {
@@ -1917,6 +1932,10 @@ func (g *EditorGroupWidget) Redo() {
 }
 
 func (g *EditorGroupWidget) SelectAll() {
+	if sel := g.ActiveTextSelection(); sel != nil {
+		sel.SelectAllText()
+		return
+	}
 	e := g.keyEditor()
 	if e == nil || e.Selection == nil {
 		return

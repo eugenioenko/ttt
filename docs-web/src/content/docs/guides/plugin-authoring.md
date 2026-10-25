@@ -606,6 +606,8 @@ Open a custom editor tab with plugin-rendered content. Requires `panel.editor` p
 
 Returns the tab's ID: the `id` you passed, or the title when you passed none.
 
+Text in a plugin panel can be selected like in a terminal: dragging from one cell to another selects what the panel drew, in reading order, borders included. A click without a drag still reaches the widgets, and a widget that captures the pointer (a scrollbar) or selects its own text (`markdown`) keeps its drag. Ctrl+C copies the selection; Escape or a click clears it. Right-clicking a plugin tab shows Copy and Select All, unless a widget there, like a table row with a `node_menu`, opens its own menu.
+
 ```lua
 local id = ttt.open_tab({
   id = "preview",

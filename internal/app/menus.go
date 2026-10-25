@@ -117,6 +117,11 @@ var commitDetailContextMenu = []ui.ContextMenuItem{
 	{Label: "Collapse All Files", Command: "changes.collapseAllCommitDetail"},
 }
 
+var textContentContextMenu = []ui.ContextMenuItem{
+	{Label: "Copy", Command: "editor.copy"},
+	{Label: "Select All", Command: "editor.selectAll"},
+}
+
 var terminalContextMenu = []ui.ContextMenuItem{
 	{Label: "Copy", Command: "editor.copy"},
 	{Label: "Paste", Command: "editor.paste"},
@@ -352,7 +357,12 @@ func handleRightClick(app *App, mx, my int) {
 		}
 	}
 
-	if app.EditorGroup.ActiveCommitDetailWidget() != nil {
+	if content := app.EditorGroup.ActiveTextSelection(); content != nil {
+		if w, ok := content.(ui.Widget); ok && w.HandleEvent(tcell.NewEventMouse(mx, my, tcell.Button2, 0)) != ui.EventIgnored {
+			return
+		}
+		openContextMenu(app, textContentContextMenu, mx, my)
+	} else if app.EditorGroup.ActiveCommitDetailWidget() != nil {
 		openContextMenu(app, app.withActiveDiffViewMenu(commitDetailContextMenu), mx, my)
 	} else if app.EditorGroup.ActiveDiffModeSurface() != nil || app.EditorGroup.ActiveDiffContextSurface() != nil {
 		openContextMenu(app, app.withActiveDiffViewMenu(diffContextMenu), mx, my)

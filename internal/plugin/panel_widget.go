@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -20,6 +21,7 @@ type PluginPanelWidget struct {
 	autofocus bool
 	// OnClose runs once, when the editor tab holding the panel closes.
 	OnClose func()
+	sel     panelSelection
 }
 
 func NewPluginPanelWidget(p *Plugin, renderFunc, eventFunc *lua.LFunction) *PluginPanelWidget {
@@ -61,9 +63,52 @@ func (pw *PluginPanelWidget) Render(surface widgets.Surface) {
 		root.SetRect(widgets.Rect{X: r.X, Y: r.Y, W: w, H: h})
 		root.Render(surface)
 	}
+
+	pw.sel.snapshot(surface)
+	pw.sel.highlight(surface)
 }
 
 func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {
+	switch e := ev.(type) {
+	case *tcell.EventMouse:
+		mx, my := e.Position()
+		owns := pw.state != nil && pw.state.root != nil && ownsDragAt(pw.state.root, mx, my)
+		if result, ok := pw.sel.track(e, pw.GetRect(), owns); ok {
+			return result
+		}
+		result := pw.dispatch(ev)
+		if result == widgets.EventCaptured {
+			pw.sel.blocked = true
+		}
+		return result
+	case *tcell.EventKey:
+		if isCopyKey(e) && pw.CopyTextSelection() {
+			return widgets.EventConsumed
+		}
+		if e.Key() == tcell.KeyEscape && pw.sel.clear() {
+			return widgets.EventConsumed
+		}
+	}
+	return pw.dispatch(ev)
+}
+
+// CopyTextSelection copies the selected text and reports whether there was any.
+func (pw *PluginPanelWidget) CopyTextSelection() bool {
+	if !pw.sel.active {
+		return false
+	}
+	if text := pw.sel.text(); text != "" {
+		clipboard.Set(text)
+	}
+	pw.sel.clear()
+	return true
+}
+
+func (pw *PluginPanelWidget) SelectAllText() { pw.sel.selectAll() }
+
+func (pw *PluginPanelWidget) CancelPointerCapture() bool { return pw.sel.release() }
+
+func (pw *PluginPanelWidget) dispatch(ev tcell.Event) widgets.EventResult {
 	if pw.state != nil && pw.state.focus != nil {
 		if result := pw.state.focus.HandleEvent(ev); result != widgets.EventIgnored {
 			return result
@@ -112,6 +157,7 @@ func (pw *PluginPanelWidget) SetFocused(focused bool) {
 	pw.focused = focused
 	if !focused {
 		pw.autofocus = false
+		pw.sel.release()
 	}
 	if pw.state != nil && pw.state.focus != nil {
 		pw.state.focus.SetActive(focused)

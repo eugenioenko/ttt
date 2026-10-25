@@ -886,6 +886,9 @@ func (a *App) Copy() {
 		tw.CopySelection()
 		return
 	}
+	if sel := a.EditorGroup.ActiveTextSelection(); sel != nil && sel.CopyTextSelection() {
+		return
+	}
 	if holder, ok := a.Root.Focused.(ui.InputHolder); ok {
 		if inp := holder.FocusedInput(); inp != nil {
 			inp.CopySelection()

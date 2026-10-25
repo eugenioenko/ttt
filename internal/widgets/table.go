@@ -413,9 +413,10 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	if btn&tcell.Button2 != 0 {
 		t.clickAt = 0
 		t.selected = idx
-		if t.Config.OnMenu != nil && len(t.Config.NodeMenu) > 0 {
-			t.Config.OnMenu(t.Config.NodeMenu, idx, mx, my)
+		if t.Config.OnMenu == nil || len(t.Config.NodeMenu) == 0 {
+			return EventIgnored
 		}
+		t.Config.OnMenu(t.Config.NodeMenu, idx, mx, my)
 		return EventConsumed
 	}
 

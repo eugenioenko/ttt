@@ -764,3 +764,11 @@ func TestTableDoubleClickNeedsTwoQuickClicksOnTheSameRow(t *testing.T) {
 		t.Fatalf("a quick second click on the row should activate it, got %d", activated)
 	}
 }
+
+func TestTableRightClickWithoutMenuIsIgnored(t *testing.T) {
+	tbl := newBasicTable()
+	renderWidget(tbl, 0, 0, 20, 10)
+	if got := tbl.HandleEvent(tcell.NewEventMouse(1, 3, tcell.Button2, tcell.ModNone)); got != EventIgnored {
+		t.Errorf("right-click result = %v, want ignored so the caller can show its own menu", got)
+	}
+}
