@@ -3,6 +3,7 @@ bin/
 vendor/
 /pico
 /ttt
+dist/
 *.exe
 *.exe~
 *.dll
