@@ -560,3 +560,22 @@ func TestScrollViewFollowKeepsTheEndInView(t *testing.T) {
 		t.Fatalf("scrollY = %d, want 50: back at the end it follows again", sv.scrollY)
 	}
 }
+
+func TestScrollViewFitsStackToItsWidth(t *testing.T) {
+	stack := NewVStackWidget(NewLabelWidget(LabelConfig{Text: "row"}))
+	sv := NewScrollViewWidget(stack)
+	renderWidget(sv, 0, 0, 120, 10)
+	if got := stack.GetRect().W; got != 120 {
+		t.Errorf("stack width = %d, want the scroll view's 120", got)
+	}
+
+	tall := NewVStackWidget()
+	for range 20 {
+		tall.Children = append(tall.Children, NewLabelWidget(LabelConfig{Text: "row"}))
+	}
+	sv = NewScrollViewWidget(tall)
+	renderWidget(sv, 0, 0, 120, 10)
+	if got := tall.GetRect().W; got != 119 {
+		t.Errorf("overflowing stack width = %d, want 119 beside the scrollbar", got)
+	}
+}
