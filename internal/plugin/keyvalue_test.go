@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func TestKeyValueMutedKeysDrawsValuesInItemStyle(t *testing.T) {
@@ -38,5 +39,18 @@ func TestKeyValueMutedKeysDrawsValuesInItemStyle(t *testing.T) {
 	}
 	if got, ok := styles['a']; !ok || got != term.StylePaletteItem {
 		t.Errorf("value style = %v (drawn %v), want the item style", got, ok)
+	}
+}
+
+func TestReconcileUpdatesKeyValueMutedKeys(t *testing.T) {
+	ws := NewWidgetState()
+	p := &Plugin{Name: "test"}
+	desc := WidgetDesc{Kind: WidgetKeyValue, KeyValueEntries: []widgets.KeyValueEntry{{Key: "Name", Value: "acme"}}}
+
+	first := ws.Reconcile([]WidgetDesc{desc}, p).Children[0].(*widgets.KeyValueListWidget)
+	desc.KeyValueMuted = true
+	again := ws.Reconcile([]WidgetDesc{desc}, p).Children[0].(*widgets.KeyValueListWidget)
+	if again != first || !again.InvertStyles {
+		t.Fatalf("reused %v, InvertStyles %v: muted_keys should update the existing widget", again == first, again.InvertStyles)
 	}
 }
