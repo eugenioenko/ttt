@@ -432,7 +432,7 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 
 	badgeW := 0
 	if t.Config.BadgeRight && node.Badge != "" {
-		badgeW = textwidth.String(node.Badge) + 1
+		badgeW = textwidth.String(node.Badge)
 		if len(node.Actions) > 0 {
 			badgeW++
 		}

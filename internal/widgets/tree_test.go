@@ -1767,3 +1767,14 @@ func TestTreeRightBadgeNeverCoversTheRowContent(t *testing.T) {
 		t.Fatalf("row = %q, want %q: the chevron kept and the badge dropped", got, want)
 	}
 }
+
+func TestTreeRightBadgeLeavesOneGapAfterTheLabel(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "ab", Badge: "7"}},
+		BadgeRight: true,
+	})
+	s := renderWidget(tree, 0, 0, 5, 1)
+	if got, want := rowText(s, 0), "ab 7"; got != want {
+		t.Fatalf("row = %q, want %q", got, want)
+	}
+}
