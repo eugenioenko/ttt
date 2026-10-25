@@ -704,6 +704,40 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			return 1
 		}))
 
+		L.SetField(mod, "debounce", L.NewFunction(func(L *lua.LState) int {
+			ms := L.CheckInt(1)
+			fn := L.CheckFunction(2)
+			// A cleared timer may already be queued on the main loop, so each
+			// call bumps gen and stale callbacks drop themselves.
+			id, gen := 0, 0
+			cancel := func() {
+				gen++
+				p.ClearTimer(id)
+			}
+			L.Push(L.NewFunction(func(L *lua.LState) int {
+				cancel()
+				args := make([]lua.LValue, L.GetTop())
+				for i := range args {
+					args[i] = L.Get(i + 1)
+				}
+				mine := gen
+				id = p.SetTimeout(ms, func() {
+					if mine != gen {
+						return
+					}
+					if err := p.CallLuaFunc(fn, args...); err != nil {
+						p.logError("debounce callback", err)
+					}
+				})
+				return 0
+			}))
+			L.Push(L.NewFunction(func(L *lua.LState) int {
+				cancel()
+				return 0
+			}))
+			return 2
+		}))
+
 		clearTimer := L.NewFunction(func(L *lua.LState) int {
 			p.ClearTimer(L.CheckInt(1))
 			return 0

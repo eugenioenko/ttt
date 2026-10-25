@@ -158,3 +158,57 @@ func TestTimerIDsAreDistinct(t *testing.T) {
 		t.Errorf("expected distinct ids, got %s %s %s", a, b, c)
 	}
 }
+
+func TestDebounceRunsLastCallOnce(t *testing.T) {
+	h := newTimerHarness(t)
+	err := h.p.State.DoString(`
+		local ttt = require("ttt")
+		calls, last = 0, nil
+		run, cancel_run = ttt.debounce(20, function(v) calls = calls + 1; last = v end)
+		run("a"); run("b"); run("c")
+	`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !h.runOne(t, 2*time.Second) {
+		t.Fatal("debounced callback never posted")
+	}
+	if h.luaGlobal("calls").String() != "1" || h.luaGlobal("last").String() != "c" {
+		t.Fatalf("calls=%s last=%s, want 1 call with the last argument", h.luaGlobal("calls"), h.luaGlobal("last"))
+	}
+	if h.runOne(t, 100*time.Millisecond) {
+		t.Error("debounce fired more than once")
+	}
+}
+
+func TestDebounceDropsQueuedStaleCallAndCancels(t *testing.T) {
+	h := newTimerHarness(t)
+	if err := h.p.State.DoString(`
+		local ttt = require("ttt")
+		last = nil
+		run, cancel_run = ttt.debounce(1, function(v) last = v end)
+		run("stale")
+	`); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if err := h.p.State.DoString(`run("fresh")`); err != nil {
+		t.Fatal(err)
+	}
+	h.runOne(t, time.Second)
+	if got := h.luaGlobal("last"); got != lua.LNil {
+		t.Fatalf("stale call ran: last=%s", got)
+	}
+	h.runOne(t, time.Second)
+	if got := h.luaGlobal("last").String(); got != "fresh" {
+		t.Fatalf("last=%s, want fresh", got)
+	}
+	if err := h.p.State.DoString(`run("cancelled"); cancel_run()`); err != nil {
+		t.Fatal(err)
+	}
+	for h.runOne(t, 100*time.Millisecond) {
+	}
+	if got := h.luaGlobal("last").String(); got != "fresh" {
+		t.Fatalf("cancelled call ran: last=%s", got)
+	}
+}

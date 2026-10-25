@@ -901,6 +901,20 @@ ttt.clear_interval(id)
 
 All of a plugin's timers are automatically stopped when the plugin is disabled, reloaded, or uninstalled — you don't need to clear them on shutdown.
 
+### `ttt.debounce(ms, callback)`
+
+Returns two functions: `run(...)` and `cancel()`. Each call to `run` restarts the timer, and `callback` runs once, `ms` milliseconds after the last call, with that call's arguments. `cancel` drops a pending call. No permission required.
+
+```lua
+local search = ttt.debounce(250, function(text)
+  fetch_results(text)
+end)
+
+panel:input({ placeholder = "Search…", on_change = search })
+```
+
+Create the debounced function once (at load time, or stored on your state), not inside `render`: each `ttt.debounce` call has its own timer.
+
 ### `ttt.on_install(callback)`
 
 Register a function that runs once when the plugin is installed (from the Plugins panel or **Plugins: Install from URL**). Use this for one-time setup like writing default settings. No permission required to register the hook; whatever the callback does is still permission-checked.
@@ -2978,7 +2992,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 
 | Module         | Description                    |
 |----------------|--------------------------------|
-| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
+| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `debounce`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.regex`    | RE2 regular expressions        |
 | `ttt.editor`   | Editor buffer read/write       |
