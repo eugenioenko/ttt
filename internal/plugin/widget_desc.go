@@ -139,9 +139,9 @@ type WidgetDesc struct {
 	BorderLeft   bool
 	BorderRight  bool
 	FixedHeight  int
+	Align        string
 	FixedWidth   int
 	Gap          int
-	Align        string
 
 	Entries         []widgets.MenuEntry
 	OnMenu          func(command string)
