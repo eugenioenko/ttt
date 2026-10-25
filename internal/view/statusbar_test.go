@@ -67,6 +67,30 @@ func TestRemoveSegmentsByOwner(t *testing.T) {
 	}
 }
 
+func TestRemoveSegmentsByPrefix(t *testing.T) {
+	sb := NewStatusBar()
+	sb.SetSegment(StatusSegment{ID: "core", Side: "left", Priority: 100, Text: "core"})
+	sb.SetSegment(StatusSegment{ID: "probe:a", Side: "left", Priority: 200, Text: "A"})
+	sb.SetSegment(StatusSegment{ID: "probe:b", Side: "right", Priority: 200, Text: "B"})
+	sb.SetSegment(StatusSegment{ID: "other:a", Side: "left", Priority: 300, Text: "O"})
+	_ = sb.LeftSegments()
+
+	sb.RemoveSegmentsByPrefix("probe:")
+
+	left := sb.LeftSegments()
+	if len(left) != 2 || left[0].ID != "core" || left[1].ID != "other:a" {
+		t.Errorf("expected core and other:a on the left, got %v", left)
+	}
+	if right := sb.RightSegments(); len(right) != 0 {
+		t.Errorf("expected no right segments, got %v", right)
+	}
+
+	sb.RemoveSegmentsByPrefix("")
+	if left := sb.LeftSegments(); len(left) != 2 {
+		t.Errorf("an empty prefix must not remove segments, got %v", left)
+	}
+}
+
 func TestSegmentPrioritySorting(t *testing.T) {
 	sb := NewStatusBar()
 	sb.SetSegment(StatusSegment{ID: "c", Side: "left", Priority: 300, Text: "C"})

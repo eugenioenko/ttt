@@ -2,6 +2,7 @@ package view
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -101,6 +102,19 @@ func (s *StatusBar) RemoveSegmentsByOwner(owner string) {
 	}
 	for id, seg := range s.segments {
 		if seg.Owner == owner {
+			delete(s.segments, id)
+			s.dirty = true
+		}
+	}
+}
+
+// RemoveSegmentsByPrefix removes every segment whose ID starts with prefix.
+func (s *StatusBar) RemoveSegmentsByPrefix(prefix string) {
+	if prefix == "" {
+		return
+	}
+	for id := range s.segments {
+		if strings.HasPrefix(id, prefix) {
 			delete(s.segments, id)
 			s.dirty = true
 		}

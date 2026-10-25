@@ -191,17 +191,17 @@ func (a *App) ClearPluginSources(name string) {
 	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
 	a.EditorGroup.ClearDecorationsSource("plugin:" + name)
 	a.Status.RemoveSegmentsByOwner("plugin:" + name)
+	a.Status.RemoveSegmentsByPrefix(name + ":")
 }
 
 func (a *App) doPluginUninstall(name string) {
-	a.RemovePluginPanels(name)
-
 	if err := a.PluginManager.Uninstall(name); err != nil {
 		slog.Error("plugin uninstall", "error", err)
 	}
-	// After Uninstall: its on_uninstall callback can still publish and open tabs.
+	// After Uninstall: its on_uninstall callback has completed, so tear down all
+	// status items, diagnostics, decorations, panels, and tabs belonging to that plugin.
 	a.ClearPluginSources(name)
-	a.closePluginDrawerAndTabs(name)
+	a.RemovePluginPanels(name)
 	a.uninstallPluginGrammars(name)
 
 	a.resetPluginDetailButton(name)
