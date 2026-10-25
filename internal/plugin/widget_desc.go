@@ -141,6 +141,7 @@ type WidgetDesc struct {
 	FixedHeight  int
 	FixedWidth   int
 	Gap          int
+	BoxTitle     string
 
 	Entries         []widgets.MenuEntry
 	OnMenu          func(command string)

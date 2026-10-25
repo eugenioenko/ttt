@@ -10,6 +10,7 @@ type BoxWidget struct {
 	Child       Widget
 	FixedHeight int
 	FixedWidth  int
+	Title       string
 }
 
 func (b *BoxWidget) WidgetChildren() []Widget {
@@ -94,6 +95,7 @@ func (b *BoxWidget) Render(surface Surface) {
 		b.Box.Style = 0
 	}
 	inner := b.RenderBox(surface)
+	b.renderTitle(surface)
 	iw, ih := inner.Size()
 	if b.Child != nil && iw > 0 && ih > 0 {
 		r := b.GetRect()
@@ -110,6 +112,23 @@ func (b *BoxWidget) Render(surface Surface) {
 	} else if b.Child != nil {
 		InvalidatePointerInteraction(b.Child)
 	}
+}
+
+func (b *BoxWidget) renderTitle(surface Surface) {
+	if b.Title == "" || !b.Box.BorderTop {
+		return
+	}
+	w, _ := surface.Size()
+	right := w - b.Box.MarginRight - 1
+	x := b.Box.MarginLeft + 1
+	if x+2 >= right {
+		return
+	}
+	style := b.Box.Style
+	if style == 0 {
+		style = term.StyleBorder
+	}
+	surface.DrawText(x, b.Box.MarginTop, " "+b.Title+" ", right, style)
 }
 
 func (b *BoxWidget) HandleEvent(ev tcell.Event) EventResult {

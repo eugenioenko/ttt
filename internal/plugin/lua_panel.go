@@ -691,6 +691,12 @@ func panelBoxWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "height"); v != lua.LNil {
 		desc.FixedHeight = int(lua.LVAsNumber(v))
 	}
+	if v := L.GetField(tbl, "title"); v != lua.LNil {
+		desc.BoxTitle = v.String()
+	}
+	if v := L.GetField(tbl, "width"); v != lua.LNil {
+		desc.FixedWidth = int(lua.LVAsNumber(v))
+	}
 	parseBoxModel(L, tbl, &desc)
 
 	proxy.appendDesc(WidgetBox, desc)

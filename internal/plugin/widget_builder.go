@@ -205,6 +205,8 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			applyBoxModel(&bw.Box, desc)
 			applyBoxBorders(&bw.Box, desc, p)
 			bw.FixedHeight = desc.FixedHeight
+			bw.Title = desc.BoxTitle
+			bw.FixedWidth = desc.FixedWidth
 			if len(desc.Children) > 0 {
 				if vs, ok := bw.Child.(*widgets.VStackWidget); ok {
 					vs.Children = reconcileChildren(vs.Children, desc.Children, p)
@@ -512,6 +514,8 @@ func createBoxWidget(desc WidgetDesc, p *Plugin) *widgets.BoxWidget {
 	if desc.FixedHeight > 0 {
 		box.FixedHeight = desc.FixedHeight
 	}
+	box.Title = desc.BoxTitle
+	box.FixedWidth = desc.FixedWidth
 	if len(desc.Children) > 0 {
 		box.Child = createVStackFromDescs(desc.Children, p)
 	}
