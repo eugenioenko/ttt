@@ -57,6 +57,10 @@ type TreeConfig struct {
 	EmptyText        string `json:"emptyText,omitempty"`
 	SelectOnClick    bool   `json:"-"`
 	TruncateLeft     bool   `json:"truncateLeft,omitempty"` // truncate labels from the left (…tail) so the end stays visible
+	// BadgeRight draws badges against the right edge instead of after the label.
+	BadgeRight bool `json:"-"`
+	// Inset indents rows; the selection highlight still spans the full width.
+	Inset int `json:"-"`
 
 	OnCommand          func(command string, node *TreeNode)
 	OnMenu             func(entries []MenuEntry, node *TreeNode, screenX, screenY int)
@@ -426,9 +430,13 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 	}
 
-	maxX := w - 2 - t.rightSideWidth(node)
+	badgeW := 0
+	if t.Config.BadgeRight && node.Badge != "" {
+		badgeW = textwidth.String(node.Badge) + 1
+	}
+	maxX := w - 2 - t.rightSideWidth(node) - badgeW
 
-	x := node.depth * t.Config.Indent
+	x := t.Config.Inset + node.depth*t.Config.Indent
 
 	hasChildren := len(node.Children) > 0 || node.Expandable
 	if hasChildren {
@@ -497,16 +505,9 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	}
 	x = drawRunesClipped(surface, x, y, maxX, labelRunes, labelStyle)
 
-	if node.Badge != "" {
-		badgeStyle := node.BadgeStyle
-		if badgeStyle == term.StyleDefault {
-			badgeStyle = term.StyleMuted
-		}
-		if idx == t.selected {
-			badgeStyle = style
-		}
+	if node.Badge != "" && !t.Config.BadgeRight {
 		x++
-		drawRunesClipped(surface, x, y, maxX, []rune(node.Badge), badgeStyle)
+		drawRunesClipped(surface, x, y, maxX, []rune(node.Badge), t.badgeStyle(node, idx, style))
 	}
 
 	rightX := w - 2
@@ -565,6 +566,21 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 			rightX--
 		}
 	}
+
+	if badgeW > 0 {
+		bx := max(rightX-badgeW+2, 0)
+		drawRunesClipped(surface, bx, y, rightX+1, []rune(node.Badge), t.badgeStyle(node, idx, style))
+	}
+}
+
+func (t *TreeWidget) badgeStyle(node *TreeNode, idx int, rowStyle term.Style) term.Style {
+	if idx == t.selected {
+		return rowStyle
+	}
+	if node.BadgeStyle == term.StyleDefault {
+		return term.StyleMuted
+	}
+	return node.BadgeStyle
 }
 
 func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {

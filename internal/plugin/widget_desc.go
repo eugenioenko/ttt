@@ -98,6 +98,9 @@ type WidgetDesc struct {
 	NodeMenu      []widgets.MenuEntry
 	KeyCommands   map[rune]string
 
+	BadgeRight bool
+	Inset      int
+
 	Label        string
 	OnClick      func()
 	Checked      bool

@@ -1725,3 +1725,16 @@ func TestTreeRevealIDScrollsBackToUnchangedSelection(t *testing.T) {
 		t.Error("RevealID returned true for an unknown id")
 	}
 }
+
+func TestTreeBadgeRightAndInset(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71"}},
+		BadgeRight: true,
+		Inset:      1,
+	})
+	s := renderWidget(tree, 0, 0, 20, 2)
+	got := rowText(s, 0)
+	if want := " Namespaces      71"; got != want {
+		t.Fatalf("row = %q, want %q", got, want)
+	}
+}
