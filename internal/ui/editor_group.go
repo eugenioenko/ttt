@@ -2510,6 +2510,14 @@ func (g *EditorGroupWidget) Copy() {
 		}
 	}
 	e := g.keyEditor()
+	if e.isMultiActive() {
+		// Multi-cursor Copy: every cursor's selection (or whole line when it
+		// has none), in document order, joined by newlines.
+		if text, ok := e.multiCopyText(); ok && text != "" {
+			clipboard.Set(text)
+		}
+		return
+	}
 	if e.Selection == nil || !e.Selection.Active {
 		// No selection: copy the whole current line, including a trailing
 		// newline so a paste inserts it as a full line.
@@ -2524,7 +2532,20 @@ func (g *EditorGroupWidget) Copy() {
 
 func (g *EditorGroupWidget) Cut() {
 	t := g.activeTab()
-	if t == nil || g.editableKeyEditor() == nil {
+	e := g.editableKeyEditor()
+	if t == nil || e == nil {
+		return
+	}
+	if e.isMultiActive() {
+		// Multi-cursor Cut: same text as multi-cursor Copy, deleted at every
+		// cursor as one undo step.
+		if text, ok := e.multiCopyText(); ok {
+			if text != "" {
+				clipboard.Set(text)
+			}
+			e.multiCut()
+			g.saveMultiState()
+		}
 		return
 	}
 	if t.Sel == nil || !t.Sel.Active {
@@ -2567,6 +2588,14 @@ func (g *EditorGroupWidget) pasteIntoEditor(text string) {
 			return
 		}
 		d.revealCursorGap()
+	}
+	if g.Editor.isMultiActive() {
+		// Multi-cursor Paste: one clipboard line per cursor when the counts
+		// match ("spread"), otherwise the full text at every cursor.
+		if g.Editor.multiPasteText(text) {
+			g.saveMultiState()
+			return
+		}
 	}
 	g.Editor.pasteText(text)
 }
