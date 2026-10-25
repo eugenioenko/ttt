@@ -433,6 +433,9 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	badgeW := 0
 	if t.Config.BadgeRight && node.Badge != "" {
 		badgeW = textwidth.String(node.Badge) + 1
+		if len(node.Actions) > 0 {
+			badgeW++
+		}
 	}
 	maxX := w - 2 - t.rightSideWidth(node) - badgeW
 
@@ -568,7 +571,10 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 	}
 
 	if badgeW > 0 {
-		bx := max(rightX-badgeW+2, 0)
+		if len(node.Actions) > 0 {
+			rightX--
+		}
+		bx := max(rightX-textwidth.String(node.Badge)+1, 0)
 		drawRunesClipped(surface, bx, y, rightX+1, []rune(node.Badge), t.badgeStyle(node, idx, style))
 	}
 }

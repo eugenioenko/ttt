@@ -1732,9 +1732,26 @@ func TestTreeBadgeRightAndInset(t *testing.T) {
 		BadgeRight: true,
 		Inset:      1,
 	})
+	tree.SetFocused(true)
 	s := renderWidget(tree, 0, 0, 20, 2)
 	got := rowText(s, 0)
 	if want := " Namespaces      71"; got != want {
 		t.Fatalf("row = %q, want %q", got, want)
+	}
+	for x, cell := range s.cells[0] {
+		if cell.Style != term.StyleSidebarSelected {
+			t.Errorf("selected row cell %d has style %v, want the full-width highlight", x, cell.Style)
+		}
+	}
+}
+
+func TestTreeRightBadgeKeepsAGapBeforeActions(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71", Actions: []Action{{Icon: "+"}}}},
+		BadgeRight: true,
+	})
+	s := renderWidget(tree, 0, 0, 20, 2)
+	if got := rowText(s, 0); !strings.Contains(got, "71 +") {
+		t.Fatalf("row = %q, want a space between the badge and the action", got)
 	}
 }
