@@ -86,3 +86,34 @@ func TestPagerEmpty(t *testing.T) {
 		t.Fatalf("empty pager = %q", got)
 	}
 }
+
+func TestPagerClampsAnOffsetPastTheTotal(t *testing.T) {
+	var got []int
+	p := NewPagerWidget(PagerConfig{Offset: 80, Limit: 20, Total: 50, OnChange: func(o int) { got = append(got, o) }})
+	s := renderWidget(p, 0, 0, 40, 1)
+	if row := rowText(s, 0); !strings.Contains(row, "41–50 of 50") {
+		t.Fatalf("pager text = %q, want the last valid page", row)
+	}
+	p.SetFocused(true)
+	p.HandleEvent(tcell.NewEventKey(tcell.KeyLeft, "", tcell.ModNone))
+	if len(got) != 1 || got[0] != 20 {
+		t.Fatalf("previous from the clamped last page = %v, want 20", got)
+	}
+}
+
+func TestPagerIgnoresClicksOnItsPadding(t *testing.T) {
+	calls := 0
+	p := NewPagerWidget(PagerConfig{Limit: 10, Total: 100, OnChange: func(int) { calls++ }})
+	p.Box.PaddingTop = 1
+	s := renderWidget(p, 0, 0, 40, 2)
+	x := textwidth.String(rowText(s, 1)[:strings.IndexRune(rowText(s, 1), '›')])
+	p.HandleEvent(mouseClick(x, 0))
+	p.HandleEvent(mouseRelease(x, 0))
+	if calls != 0 {
+		t.Fatal("a click on the padding row above the arrow paged")
+	}
+	p.HandleEvent(mouseClick(x, 1))
+	if calls != 1 {
+		t.Fatal("a click on the arrow did not page")
+	}
+}

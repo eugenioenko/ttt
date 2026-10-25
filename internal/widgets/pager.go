@@ -55,28 +55,39 @@ func (p *PagerWidget) limit() int {
 	return p.Config.Limit
 }
 
+func (p *PagerWidget) lastOffset() int {
+	if p.Config.Total <= 0 {
+		return 0
+	}
+	return (p.Config.Total - 1) / p.limit() * p.limit()
+}
+
+// offset keeps the page in range when the total shrinks under it.
+func (p *PagerWidget) offset() int {
+	return min(max(p.Config.Offset, 0), p.lastOffset())
+}
+
 func (p *PagerWidget) rangeText() string {
-	c := p.Config
-	if c.Total <= 0 {
+	total := p.Config.Total
+	if total <= 0 {
 		return "No items"
 	}
-	first := min(c.Offset+1, c.Total)
-	last := min(c.Offset+p.limit(), c.Total)
-	return fmt.Sprintf("%d–%d of %d", first, last, c.Total)
+	off := p.offset()
+	return fmt.Sprintf("%d–%d of %d", off+1, min(off+p.limit(), total), total)
 }
 
 // targets returns the offsets for first, previous, next and last, with -1 for
 // a direction that is not available from the current page.
 func (p *PagerWidget) targets() [4]int {
-	c, lim := p.Config, p.limit()
+	off, lim := p.offset(), p.limit()
 	t := [4]int{-1, -1, -1, -1}
-	if c.Offset > 0 {
+	if off > 0 {
 		t[0] = 0
-		t[1] = max(c.Offset-lim, 0)
+		t[1] = max(off-lim, 0)
 	}
-	if c.Offset+lim < c.Total {
-		t[2] = c.Offset + lim
-		t[3] = (c.Total - 1) / lim * lim
+	if off+lim < p.Config.Total {
+		t[2] = off + lim
+		t[3] = p.lastOffset()
 	}
 	return t
 }
@@ -128,7 +139,10 @@ func (p *PagerWidget) HandleEvent(ev tcell.Event) EventResult {
 		if !fresh {
 			return EventIgnored
 		}
-		ox, _ := p.contentOrigin()
+		ox, oy := p.contentOrigin()
+		if my != oy {
+			return EventConsumed
+		}
 		lx := mx - ox
 		for _, hit := range p.hits {
 			if lx >= hit.x0 && lx < hit.x1 {

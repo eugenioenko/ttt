@@ -1556,7 +1556,8 @@ end
 Page navigation for a list that is too long to show at once, such as a server-paged API. It shows `« ‹ 21–40 of 85 › »`; the arrows that lead nowhere are muted. When it has focus, Left/Right or PgUp/PgDn move a page and Home/End go to the first or last page.
 
 ```lua
-local offset, total = 0, 0
+-- load_page fetches the rows at offset and sets total from the response.
+local offset, total = 0, 85
 
 panel:pager({
   offset = offset,
