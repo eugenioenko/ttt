@@ -191,11 +191,16 @@ func TestDebounceDropsQueuedStaleCallAndCancels(t *testing.T) {
 	`); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(30 * time.Millisecond)
+	var stale *PluginAsyncResult
+	select {
+	case stale = <-h.results:
+	case <-time.After(2 * time.Second):
+		t.Fatal("stale callback never posted")
+	}
 	if err := h.p.State.DoString(`run("fresh")`); err != nil {
 		t.Fatal(err)
 	}
-	h.runOne(t, time.Second)
+	stale.Callback()
 	if got := h.luaGlobal("last"); got != lua.LNil {
 		t.Fatalf("stale call ran: last=%s", got)
 	}
@@ -210,5 +215,22 @@ func TestDebounceDropsQueuedStaleCallAndCancels(t *testing.T) {
 	}
 	if got := h.luaGlobal("last").String(); got != "fresh" {
 		t.Fatalf("cancelled call ran: last=%s", got)
+	}
+}
+
+func TestDebounceCallbackErrorCountsOnce(t *testing.T) {
+	h := newTimerHarness(t)
+	if err := h.p.State.DoString(`
+		local ttt = require("ttt")
+		run = ttt.debounce(1, function() error("boom") end)
+		run()
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if !h.runOne(t, 2*time.Second) {
+		t.Fatal("debounced callback never posted")
+	}
+	if h.p.errorCount != 1 {
+		t.Fatalf("errorCount = %d, want 1", h.p.errorCount)
 	}
 }

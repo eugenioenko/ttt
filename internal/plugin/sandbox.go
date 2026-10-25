@@ -725,9 +725,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 					if mine != gen {
 						return
 					}
-					if err := p.CallLuaFunc(fn, args...); err != nil {
-						p.logError("debounce callback", err)
-					}
+					p.CallLuaFunc(fn, args...)
 				})
 				return 0
 			}))
