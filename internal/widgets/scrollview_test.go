@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -577,5 +578,18 @@ func TestScrollViewFitsStackToItsWidth(t *testing.T) {
 	renderWidget(sv, 0, 0, 120, 10)
 	if got := tall.GetRect().W; got != 119 {
 		t.Errorf("overflowing stack width = %d, want 119 beside the scrollbar", got)
+	}
+}
+
+func TestScrollViewRewrapsParagraphWhenItNarrows(t *testing.T) {
+	para := NewParagraphWidget(strings.Repeat("word ", 30))
+	sv := NewScrollViewWidget(NewVStackWidget(para))
+	renderWidget(sv, 0, 0, 120, 5)
+	s := renderWidget(sv, 0, 0, 20, 5)
+	if got := para.GetRect().H; got <= 1 {
+		t.Fatalf("paragraph height = %d after narrowing, want it rewrapped", got)
+	}
+	if got := s.cells[0][19].Ch; got == ' ' {
+		t.Fatal("no scrollbar once the rewrapped paragraph overflows")
 	}
 }
