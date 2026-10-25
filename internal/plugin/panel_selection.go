@@ -164,7 +164,8 @@ func (s *panelSelection) track(ev *tcell.EventMouse, r widgets.Rect, ownsDrag bo
 	return widgets.EventIgnored, false
 }
 
-// ownsDragAt reports whether the widget under the pointer selects text itself.
+// ownsDragAt reports whether the widget under the pointer selects text itself:
+// inputs and markdown keep their drags.
 func ownsDragAt(w widgets.Widget, x, y int) bool {
 	if w == nil {
 		return false
@@ -173,7 +174,8 @@ func ownsDragAt(w widgets.Widget, x, y int) bool {
 	if x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
 		return false
 	}
-	if _, ok := w.(*widgets.MarkdownWidget); ok {
+	switch w.(type) {
+	case *widgets.MarkdownWidget, *widgets.InputWidget:
 		return true
 	}
 	if c, ok := w.(widgets.ContainerWidget); ok {

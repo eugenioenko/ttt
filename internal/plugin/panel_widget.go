@@ -48,6 +48,8 @@ func (pw *PluginPanelWidget) Render(surface widgets.Surface) {
 	if err := pw.plugin.CallRenderWith(pw.renderFunc, proxy); err != nil {
 		msg := "Plugin error: " + err.Error()
 		surface.DrawText(0, 0, msg, w, term.StyleDanger)
+		pw.sel.snapshot(surface)
+		pw.sel.highlight(surface)
 		return
 	}
 
@@ -93,18 +95,27 @@ func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {
 }
 
 // CopyTextSelection copies the selected text and reports whether there was any.
+// A focused input with its own selection wins, so the copy goes to it.
 func (pw *PluginPanelWidget) CopyTextSelection() bool {
 	if !pw.sel.active {
 		return false
 	}
-	if text := pw.sel.text(); text != "" {
-		clipboard.Set(text)
+	if inp := pw.FocusedInput(); inp != nil && inp.HasSelection() {
+		return false
 	}
+	clipboard.Set(pw.sel.text())
 	pw.sel.clear()
 	return true
 }
 
-func (pw *PluginPanelWidget) SelectAllText() { pw.sel.selectAll() }
+// SelectAllText selects the focused input's text, or else the panel's.
+func (pw *PluginPanelWidget) SelectAllText() {
+	if inp := pw.FocusedInput(); inp != nil {
+		inp.SelectAll()
+		return
+	}
+	pw.sel.selectAll()
+}
 
 func (pw *PluginPanelWidget) CancelPointerCapture() bool { return pw.sel.release() }
 

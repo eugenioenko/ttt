@@ -551,6 +551,12 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 
 // selection helpers
 
+// HasSelection reports whether the input has selected text.
+func (inp *InputWidget) HasSelection() bool { return inp.hasSelection() }
+
+// SelectAll selects the whole text.
+func (inp *InputWidget) SelectAll() { inp.selectAll() }
+
 func (inp *InputWidget) hasSelection() bool {
 	return inp.selStart >= 0 && inp.selStart != inp.selEnd
 }
