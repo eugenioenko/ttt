@@ -28,6 +28,7 @@ func TestCryptoBase64DecodeAcceptsUnpaddedAndSpacedInput(t *testing.T) {
 		unpadded = crypto.base64_decode("aGk")
 		spaced = crypto.base64_decode("  aGk=\n")
 		bad, msg = crypto.base64_decode("!!")
+		overpadded = crypto.base64_decode("aGk==")
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -40,5 +41,8 @@ func TestCryptoBase64DecodeAcceptsUnpaddedAndSpacedInput(t *testing.T) {
 	}
 	if L.GetGlobal("bad") != lua.LNil || L.GetGlobal("msg") == lua.LNil {
 		t.Error("invalid base64 should return nil and an error")
+	}
+	if L.GetGlobal("overpadded") != lua.LNil {
+		t.Error("malformed padding should be rejected, not stripped")
 	}
 }
