@@ -1755,3 +1755,16 @@ func TestTreeRightBadgeKeepsAGapBeforeActions(t *testing.T) {
 		t.Fatalf("row = %q, want a space between the badge and the action", got)
 	}
 }
+
+func TestTreeRightBadgeNeverCoversTheRowContent(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71", Expandable: true}},
+		BadgeRight: true,
+		Inset:      4,
+	})
+	s := renderWidget(tree, 0, 0, 8, 1)
+	got := rowText(s, 0)
+	if strings.Contains(got, "7") || !strings.Contains(got, "▸") {
+		t.Fatalf("row = %q, want the chevron kept and the badge dropped", got)
+	}
+}
