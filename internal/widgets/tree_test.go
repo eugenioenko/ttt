@@ -1807,3 +1807,14 @@ func TestTreeReselectOnActivate(t *testing.T) {
 		}
 	}
 }
+
+func TestTreeReselectSkipsAnEmptyTree(t *testing.T) {
+	called := false
+	tree := NewTreeWidget(TreeConfig{OnSelect: func(*TreeNode) { called = true }, ReselectOnActivate: true})
+	tree.SetFocused(true)
+	renderWidget(tree, 0, 0, 20, 3)
+	tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if called {
+		t.Fatal("Enter on an empty tree called OnSelect")
+	}
+}

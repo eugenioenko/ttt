@@ -1170,13 +1170,15 @@ panel:tree({
   },
   indent = 2,
   on_select = function(node)
-    -- called when a node is activated (Enter key or double-click)
+    -- called when the selection moves to a node, and when a node is clicked
+    -- or gets Enter, even if it was already selected
   end,
   on_expand = function(node)
     -- called when a node is expanded (use it to lazy-load children)
   end,
   on_command = function(command, node)
-    -- called when a context menu command or inline action is triggered
+    -- called for context menu commands and inline actions, and with
+    -- "activate" when a leaf node is clicked or gets Enter
   end,
   node_menu = {
     { label = "Open", command = "open" },
@@ -1214,10 +1216,12 @@ panel:list({
     { id = "item3", label = "Third item", muted = true },
   },
   on_select = function(node)
-    -- called when an item is activated
+    -- called when the selection moves to an item, and when an item is
+    -- clicked or gets Enter, even if it was already selected
   end,
   on_command = function(command, node)
-    -- called when a context menu command is triggered
+    -- called for context menu commands, and with "activate" when an item is
+    -- clicked or gets Enter
   end,
   node_menu = {
     { label = "Start", command = "start" },

@@ -611,7 +611,7 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 	default:
 		return EventIgnored
 	}
-	reselected := t.activated && t.Config.ReselectOnActivate
+	reselected := t.activated && t.Config.ReselectOnActivate && t.Selected() != nil
 	if (t.selected != prev || reselected) && t.Config.OnSelect != nil {
 		t.Config.OnSelect(t.Selected())
 	}
