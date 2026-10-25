@@ -323,6 +323,7 @@ func panelKeyValueWidget(L *lua.LState) int {
 		desc.KeyValueEntries = append(desc.KeyValueEntries, entry)
 	})
 
+	desc.KeyValueMuted = lua.LVAsBool(L.GetField(tbl, "muted_keys"))
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetKeyValue, desc)
 	return 0

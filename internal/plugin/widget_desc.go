@@ -133,6 +133,7 @@ type WidgetDesc struct {
 	Entries         []widgets.MenuEntry
 	OnMenu          func(command string)
 	KeyValueEntries []widgets.KeyValueEntry
+	KeyValueMuted   bool
 
 	Value     float64
 	Char      rune
