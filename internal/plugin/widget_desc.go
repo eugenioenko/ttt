@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -160,6 +161,13 @@ type WidgetDesc struct {
 	PagerLimit  int
 	PagerTotal  int
 	OnPage      func(offset int)
+
+	OnActivateIndex func(int)
+	RowStyles       []term.Style
+	Selected        int
+	Loading         bool
+	EmptyText       string
+	Inset           int
 
 	FullWidthDividers bool
 	MarkdownContent   string

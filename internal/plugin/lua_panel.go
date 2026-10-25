@@ -792,6 +792,14 @@ func panelTableWidget(L *lua.LState) int {
 			}
 		}
 	}
+	if fn, ok := L.GetField(tbl, "on_activate").(*lua.LFunction); ok {
+		luaFn := fn
+		desc.OnActivateIndex = func(rowIndex int) {
+			if proxy.plugin != nil && proxy.plugin.State != nil {
+				proxy.plugin.CallLuaFunc(luaFn, lua.LNumber(rowIndex+1))
+			}
+		}
+	}
 	if fn, ok := L.GetField(tbl, "on_command").(*lua.LFunction); ok {
 		luaFn := fn
 		desc.OnCommandStr = func(command string, rowIndex int) {
@@ -805,6 +813,24 @@ func panelTableWidget(L *lua.LState) int {
 	}
 	if kc, ok := L.GetField(tbl, "key_commands").(*lua.LTable); ok {
 		desc.KeyCommands = parseLuaKeyCommands(L, kc)
+	}
+	if rs, ok := L.GetField(tbl, "row_styles").(*lua.LTable); ok {
+		desc.RowStyles = make([]term.Style, rs.MaxN())
+		for i := range desc.RowStyles {
+			if name := rs.RawGetInt(i + 1); name != lua.LNil {
+				desc.RowStyles[i] = resolveStyleName(name.String())
+			}
+		}
+	}
+	if v, ok := L.GetField(tbl, "selected").(lua.LNumber); ok {
+		desc.Selected = int(v)
+	}
+	desc.Loading = lua.LVAsBool(L.GetField(tbl, "loading"))
+	if v := L.GetField(tbl, "empty"); v != lua.LNil {
+		desc.EmptyText = v.String()
+	}
+	if v, ok := L.GetField(tbl, "inset").(lua.LNumber); ok {
+		desc.Inset = int(v)
 	}
 
 	parseBoxModel(L, tbl, &desc)

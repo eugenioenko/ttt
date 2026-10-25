@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -658,4 +659,75 @@ func extractText(s *testSurface, x, y, length int) string {
 		runes = append(runes, ch)
 	}
 	return string(runes)
+}
+
+func TestTableActivateFiresOnEnterAndClickNotArrows(t *testing.T) {
+	tbl := newBasicTable()
+	var activated []int
+	tbl.Config.OnActivate = func(i int) { activated = append(activated, i) }
+	tbl.SetFocused(true)
+	renderWidget(tbl, 0, 0, 20, 10)
+
+	tbl.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModNone))
+	if len(activated) != 0 {
+		t.Fatalf("arrow keys should not activate, got %v", activated)
+	}
+	tbl.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	tbl.HandleEvent(mouseClick(2, 4))
+	tbl.HandleEvent(mouseClick(2, 4))
+	tbl.HandleEvent(mouseRelease(2, 4))
+	if len(activated) != 1 || tbl.SelectedIndex() != 2 {
+		t.Fatalf("a single click should select without activating, got %v", activated)
+	}
+	tbl.HandleEvent(mouseClick(2, 4))
+	tbl.HandleEvent(mouseRelease(2, 4))
+	if len(activated) != 2 || activated[0] != 1 || activated[1] != 2 {
+		t.Fatalf("enter then a double click should activate rows 1 and 2, got %v", activated)
+	}
+}
+
+func TestTableRowStyles(t *testing.T) {
+	tbl := newBasicTable()
+	tbl.Config.RowStyles = []term.Style{0, term.StyleMuted}
+	s := renderWidget(tbl, 0, 0, 20, 10)
+	if s.cells[2][0].Style != term.StyleDefault || s.cells[3][0].Style != term.StyleMuted {
+		t.Fatalf("row styles = %v, %v", s.cells[2][0].Style, s.cells[3][0].Style)
+	}
+}
+
+func TestTableLoadingAndEmptyStates(t *testing.T) {
+	tbl := NewTableWidget(TableConfig{Columns: []TableColumn{{Label: "Name"}}, EmptyText: "No keys yet"})
+	s := renderWidget(tbl, 0, 0, 30, 8)
+	if got := strings.TrimSpace(rowText(s, 4)); got != "No keys yet" {
+		t.Fatalf("empty state = %q", got)
+	}
+	tbl.Config.Loading = true
+	s = renderWidget(tbl, 0, 0, 30, 8)
+	if got := strings.TrimSpace(rowText(s, 4)); got != "Loading…" {
+		t.Fatalf("loading state = %q", got)
+	}
+	tbl.Config.Rows = [][]string{{"a"}}
+	s = renderWidget(tbl, 0, 0, 30, 8)
+	if got := rowText(s, 0); !strings.HasSuffix(got, "Loading…") || rowText(s, 2) != "a" {
+		t.Fatalf("loading with rows keeps them and marks the header: %q / %q", got, rowText(s, 2))
+	}
+}
+
+func TestInsetKeepsScrollbarAtEdge(t *testing.T) {
+	rows := make([][]string, 20)
+	for i := range rows {
+		rows[i] = []string{strings.Repeat("x", 30)}
+	}
+	tbl := NewTableWidget(TableConfig{Columns: []TableColumn{{Label: "Name"}}, Rows: rows, Inset: 1})
+	tbl.SetFocused(true)
+	s := renderWidget(tbl, 0, 0, 12, 8)
+	if got := rowText(s, 2); got[:len(got)-len("█")] != " xxxxxxxx… " {
+		t.Fatalf("row = %q, want 1 cell inset on both sides", got)
+	}
+	if s.cells[2][0].Style != term.StyleSidebarSelected || s.cells[2][10].Style != term.StyleSidebarSelected {
+		t.Fatalf("selection should span the inset: %v %v", s.cells[2][0].Style, s.cells[2][10].Style)
+	}
+	if s.cells[2][11].Style == term.StyleSidebarSelected || s.cells[2][11].Ch == ' ' {
+		t.Fatalf("scrollbar should stay at the right edge, got %q", s.cells[2][11].Ch)
+	}
 }

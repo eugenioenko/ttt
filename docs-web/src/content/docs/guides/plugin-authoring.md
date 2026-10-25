@@ -1526,6 +1526,12 @@ panel:table({
 | `columns`      | table    | yes      | Array of column tables: `{label, width, align}`. `width` is fixed columns (omit to auto-size); `align` is `"right"` or default left. |
 | `rows`         | table    | yes      | Array of rows; each row is an array of cell strings.        |
 | `on_select`    | function | no       | Callback when the selected row changes (arrow keys, click) or Enter is pressed. Receives the 1-based row index. |
+| `on_activate`  | function | no       | Callback when a row is opened: Enter or a double-click. A single click only selects, so a table can drive a detail view on `on_select` and open on `on_activate`. Receives the 1-based row index. |
+| `selected`     | number   | no       | 1-based row to select. When set, the plugin controls the selection: keep it in step with `on_select`. When omitted, the table keeps its own. |
+| `row_styles`   | table    | no       | Array of [style names](#styles), one per row, for example `"muted"` for inactive items. |
+| `loading`      | boolean  | no       | Shows `Loading…` in place of the rows while there are none, or in the header while the current rows are kept. |
+| `empty`        | string   | no       | Text shown in place of the rows when there are none and `loading` is not set. |
+| `inset`        | number   | no       | Blank cells before the first column and after the last. Unlike `padding_left`/`padding_right`, the row highlight and the scrollbar still reach the edges. |
 | `on_command`   | function | no       | Callback for context menu or key commands. Receives `(command, row_index)`. |
 | `node_menu`    | table    | no       | Array of [menu entries](#menu-entry-format) for the right-click context menu on rows. |
 | `key_commands` | table    | no       | Map of single-char keys to command strings. Triggers `on_command(command, selected_row_index)`. |
@@ -1895,6 +1901,7 @@ Widget-specific events are routed automatically to the callbacks you provide:
 | Table    | row selected       | `on_select`  | Row index (number, 1-based)         |
 | Tabs     | tab picked         | `on_change`  | Tab `id` (string)                   |
 | Pager    | page changed       | `on_change`  | New offset (number, 0-based)        |
+| Table    | row opened         | `on_activate` | Row index (number, 1-based)        |
 | Table    | context menu cmd   | `on_command` | `(command_string, row_index)`       |
 | Title    | menu item selected | `on_menu`    | Command string                      |
 

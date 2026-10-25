@@ -233,9 +233,14 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			tw.Config.Columns = desc.Columns
 			tw.Config.Rows = desc.Rows
 			tw.Config.OnSelect = desc.OnSelectIndex
+			tw.Config.OnActivate = desc.OnActivateIndex
 			tw.Config.OnCommand = desc.OnCommandStr
 			tw.Config.NodeMenu = desc.NodeMenu
 			tw.Config.KeyCommands = desc.KeyCommands
+			tw.Config.RowStyles = desc.RowStyles
+			tw.Config.Loading, tw.Config.EmptyText = desc.Loading, desc.EmptyText
+			tw.Config.Inset = desc.Inset
+			syncTableSelection(tw, desc)
 			wireTableMenu(tw, p)
 			applyBoxModel(&tw.Box, desc)
 		}
@@ -681,10 +686,16 @@ func createTableWidget(desc WidgetDesc, p *Plugin) *widgets.TableWidget {
 		Columns:     desc.Columns,
 		Rows:        desc.Rows,
 		OnSelect:    desc.OnSelectIndex,
+		OnActivate:  desc.OnActivateIndex,
 		OnCommand:   desc.OnCommandStr,
 		NodeMenu:    desc.NodeMenu,
 		KeyCommands: desc.KeyCommands,
+		RowStyles:   desc.RowStyles,
+		Loading:     desc.Loading,
+		EmptyText:   desc.EmptyText,
+		Inset:       desc.Inset,
 	})
+	syncTableSelection(tw, desc)
 	wireTableMenu(tw, p)
 	applyBoxModel(&tw.Box, desc)
 	return tw
@@ -730,5 +741,13 @@ func pagerConfig(desc WidgetDesc) widgets.PagerConfig {
 		Limit:    desc.PagerLimit,
 		Total:    desc.PagerTotal,
 		OnChange: desc.OnPage,
+	}
+}
+
+// A table's selected row is controlled only when the plugin passes one, so
+// arrow keys keep working for plugins that leave it out.
+func syncTableSelection(tw *widgets.TableWidget, desc WidgetDesc) {
+	if desc.Selected > 0 && desc.Selected-1 != tw.SelectedIndex() {
+		tw.SetSelectedIndex(desc.Selected - 1)
 	}
 }

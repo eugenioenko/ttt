@@ -1,6 +1,8 @@
 package widgets
 
 import (
+	"time"
+
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -16,10 +18,17 @@ type TableConfig struct {
 	Columns     []TableColumn
 	Rows        [][]string
 	OnSelect    func(rowIndex int)
+	OnActivate  func(rowIndex int)
 	OnCommand   func(command string, rowIndex int)
 	OnMenu      func(entries []MenuEntry, rowIndex int, screenX, screenY int)
 	NodeMenu    []MenuEntry
 	KeyCommands map[rune]string
+	RowStyles   []term.Style
+	// Loading and EmptyText fill the data area while there are no rows.
+	Loading   bool
+	EmptyText string
+	// Inset indents cells on both sides; row highlight and scrollbar still span the full width.
+	Inset int
 }
 
 type TableWidget struct {
@@ -29,12 +38,17 @@ type TableWidget struct {
 	scrollTop int
 	lastSel   int
 	focused   bool
+	pressed   bool
+	clickRow  int
+	clickAt   int64
 
 	scrollbar                 scrollbar
 	contentW                  int
 	widths                    []int
 	pointerCaptureInvalidated func()
 }
+
+const tableDoubleClickMs = 500
 
 func NewTableWidget(cfg TableConfig) *TableWidget {
 	return &TableWidget{Config: cfg}
@@ -111,9 +125,10 @@ func (t *TableWidget) Render(surface Surface) {
 	if rangeModel.visible() {
 		t.contentW = w - 1
 	}
-	t.widths = t.effectiveWidths(t.contentW)
+	t.widths = t.effectiveWidths(t.cellsEnd() - t.inset())
 
 	t.renderHeader(surface, t.contentW)
+	t.renderState(surface, headerH, dataH)
 
 	for i := range dataH {
 		idx := t.scrollTop + i
@@ -131,6 +146,15 @@ func (t *TableWidget) Render(surface Surface) {
 	_, invalidated := t.scrollbar.Render(surface, geometry, rangeModel)
 	t.notifyPointerCaptureInvalidated(invalidated)
 }
+
+func (t *TableWidget) inset() int {
+	if t.Config.Inset <= 0 || t.contentW <= 2*t.Config.Inset {
+		return 0
+	}
+	return t.Config.Inset
+}
+
+func (t *TableWidget) cellsEnd() int { return t.contentW - t.inset() }
 
 // effectiveWidths keeps fixed widths; auto columns split the remaining space (min 1 cell).
 func (t *TableWidget) effectiveWidths(w int) []int {
@@ -172,24 +196,24 @@ func (t *TableWidget) effectiveWidths(w int) []int {
 
 func (t *TableWidget) renderHeader(surface Surface, w int) {
 	style := term.StyleHoverBold
-	x := 0
+	for fx := 0; fx < w; fx++ {
+		surface.SetCell(fx, 0, term.Cell{Ch: ' ', Style: style})
+	}
+	x := t.inset()
+	end := t.cellsEnd()
 	for i, col := range t.Config.Columns {
 		if i > 0 {
-			if x < w {
+			if x < end {
 				surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
 			}
-			if x < w {
+			if x < end {
 				surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 				x++
 			}
 		}
 		t.renderCell(surface, col.Label, col, t.widths[i], x, 0, style)
 		x += t.widths[i]
-	}
-	// Fill remaining header space
-	for fx := x; fx < w; fx++ {
-		surface.SetCell(fx, 0, term.Cell{Ch: ' ', Style: style})
 	}
 
 	// Separator line
@@ -199,8 +223,32 @@ func (t *TableWidget) renderHeader(surface Surface, w int) {
 	}
 }
 
+func (t *TableWidget) renderState(surface Surface, headerH, dataH int) {
+	w := t.cellsEnd()
+	if len(t.Config.Rows) > 0 {
+		if t.Config.Loading && w > 12 {
+			label := "Loading… "
+			surface.DrawText(w-textwidth.String(label), 0, label, w, term.StyleMuted)
+		}
+		return
+	}
+	text := t.Config.EmptyText
+	if t.Config.Loading {
+		text = "Loading…"
+	}
+	if text == "" || dataH <= 0 {
+		return
+	}
+	y := headerH + min(dataH/2, 2)
+	x := max((t.contentW-textwidth.String(text))/2, 0)
+	surface.DrawText(x, y, text, t.contentW, term.StyleMuted)
+}
+
 func (t *TableWidget) renderRow(surface Surface, idx, y, w int) {
 	style := term.StyleDefault
+	if idx < len(t.Config.RowStyles) && t.Config.RowStyles[idx] != 0 {
+		style = t.Config.RowStyles[idx]
+	}
 	if idx == t.selected && t.focused {
 		style = term.StyleSidebarSelected
 	}
@@ -210,14 +258,15 @@ func (t *TableWidget) renderRow(surface Surface, idx, y, w int) {
 	}
 
 	row := t.Config.Rows[idx]
-	x := 0
+	x := t.inset()
+	end := t.cellsEnd()
 	for i, col := range t.Config.Columns {
 		if i > 0 {
-			if x < w {
+			if x < end {
 				surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 				x++
 			}
-			if x < w {
+			if x < end {
 				surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 				x++
 			}
@@ -237,7 +286,8 @@ func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, 
 		return
 	}
 
-	maxX := min(x+colW, t.contentW)
+	end := t.cellsEnd()
+	maxX := min(x+colW, end)
 	textW := textwidth.Runes(runes)
 	if textW > colW {
 		drawRunesClipped(surface, x, y, maxX, runes, style)
@@ -247,13 +297,13 @@ func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, 
 	padding := colW - textW
 	switch col.Align {
 	case "right":
-		for i := 0; i < padding && x+i < t.contentW; i++ {
+		for i := 0; i < padding && x+i < end; i++ {
 			surface.SetCell(x+i, y, term.Cell{Ch: ' ', Style: style})
 		}
 		drawRunesClipped(surface, x+padding, y, maxX, runes, style)
 	case "center":
 		leftPad := padding / 2
-		for i := 0; i < leftPad && x+i < t.contentW; i++ {
+		for i := 0; i < leftPad && x+i < end; i++ {
 			surface.SetCell(x+i, y, term.Cell{Ch: ' ', Style: style})
 		}
 		drawRunesClipped(surface, x+leftPad, y, maxX, runes, style)
@@ -309,6 +359,8 @@ func (t *TableWidget) notifyPointerCaptureInvalidated(invalidated bool) {
 
 func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	btn := ev.Buttons()
+	fresh := btn&tcell.Button1 != 0 && !t.pressed
+	t.pressed = btn&tcell.Button1 != 0
 	mx, my := ev.Position()
 	r := t.rect
 
@@ -364,6 +416,15 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		if t.Config.OnSelect != nil {
 			t.Config.OnSelect(idx)
 		}
+		if fresh && t.Config.OnActivate != nil {
+			now := time.Now().UnixMilli()
+			if idx == t.clickRow && now-t.clickAt < tableDoubleClickMs {
+				t.clickAt = 0
+				t.Config.OnActivate(idx)
+			} else {
+				t.clickRow, t.clickAt = idx, now
+			}
+		}
 		return EventConsumed
 	}
 
@@ -393,6 +454,9 @@ func (t *TableWidget) handleKey(ev *tcell.EventKey) EventResult {
 			}
 			if t.Config.OnSelect != nil {
 				t.Config.OnSelect(t.selected)
+			}
+			if t.Config.OnActivate != nil {
+				t.Config.OnActivate(t.selected)
 			}
 		}
 		return EventConsumed
