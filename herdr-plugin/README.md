@@ -55,12 +55,14 @@ Both keys are optional. With neither, the plugin asks Herdr for nothing and the 
 placement decides, which is `tab`. `open_direction` needs `open_placement` set to `split`
 or `zoomed`. The values are the ones the reviewr plugin takes for `toggle_placement` and
 `toggle_direction`; the key names follow ttt's `open` action. An unknown key, an unquoted
-value, or a value outside the list fails the action rather than quietly keeping the
-default, and `herdr plugin log list --plugin ttt.editor` says which.
+value, trailing text after the closing quote, or a value outside the list fails the action
+rather than quietly keeping the default, and `herdr plugin log list --plugin ttt.editor`
+says which.
 
 Only the actions read this file, because they re-open the pane through Herdr and can
 name the placement. A `type = "shell"` keybinding that calls `plugin pane open` itself
-always gets the manifest placement.
+never reads it: it gets the manifest placement unless its own command passes Herdr's
+placement flags, as in the `--placement` example under Editor pane.
 
 ### Actions
 
@@ -109,6 +111,9 @@ type = "shell"
 command = "herdr plugin pane open --plugin ttt.editor --entrypoint editor"
 description = "open TTT editor"
 ```
+
+That command can pass Herdr's placement flags itself, for example
+`--placement split --direction right`, which override the manifest for that call.
 
 ## Requirements
 

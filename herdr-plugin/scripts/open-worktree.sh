@@ -6,6 +6,14 @@ die() {
   exit 1
 }
 
+# A TOML string value, and nothing else on the line: only whitespace or a comment
+# may follow the closing quote, so "split" garbage is a config error, not "split".
+toml_value() {
+  printf '%s' "$1" | sed -n \
+    -e 's/^[[:space:]]*"\([^"]*\)"[[:space:]]*$/\1/p' \
+    -e 's/^[[:space:]]*"\([^"]*\)"[[:space:]]*#.*$/\1/p'
+}
+
 json_str() {
   printf '%s' "$HERDR_PLUGIN_CONTEXT_JSON" \
     | grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
@@ -30,7 +38,8 @@ target="${TTT_TARGET_DIR:-${dir:-.}}"
 # the script unfindable.
 if [ -z "${HERDR_PLUGIN_ENTRYPOINT_ID:-}" ] && ! { [ -t 0 ] && [ -t 1 ]; }; then
   # The layout knobs live in the plugin config, and only the actions read them: a
-  # keybinding that calls `plugin pane open` itself gets the manifest placement.
+  # keybinding that calls `plugin pane open` itself gets the manifest placement unless
+  # its own command passes herdr's placement flags.
   # Unset keys ask herdr for nothing, which leaves the manifest in charge.
   placement=""
   direction=""
@@ -42,25 +51,25 @@ if [ -z "${HERDR_PLUGIN_ENTRYPOINT_ID:-}" ] && ! { [ -t 0 ] && [ -t 1 ]; }; then
   fi
 
   if [ -f "$config_file" ]; then
-    # An unknown key or an unquoted value says so (see `herdr plugin log list`)
-    # instead of quietly keeping the default placement.
+    # An unknown key, an unquoted value, or trailing text after the value says so
+    # (see `herdr plugin log list`) instead of quietly keeping the default placement.
     while IFS= read -r line || [ -n "$line" ]; do
       line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//')
       case "$line" in '' | '#'*) continue ;; esac
       key=$(printf '%s' "${line%%=*}" | tr -d '[:space:]')
-      value=$(printf '%s' "${line#*=}" | sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p')
+      value=$(toml_value "${line#*=}")
       case "$key" in
         open_placement)
           case "$value" in
             tab | split | overlay | zoomed) placement=$value ;;
-            '') die "config $config_file: open_placement needs a quoted value, like \"split\"" ;;
+            '') die "config $config_file: open_placement needs a quoted value like \"split\", with nothing after the closing quote" ;;
             *) die "config $config_file: open_placement must be tab, split, overlay or zoomed" ;;
           esac
           ;;
         open_direction)
           case "$value" in
             right | down) direction=$value ;;
-            '') die "config $config_file: open_direction needs a quoted value, like \"right\"" ;;
+            '') die "config $config_file: open_direction needs a quoted value like \"right\", with nothing after the closing quote" ;;
             *) die "config $config_file: open_direction must be right or down" ;;
           esac
           ;;
