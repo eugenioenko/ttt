@@ -1,6 +1,6 @@
 id = "ttt.editor"
 name = "TTT Editor"
-version = "0.1.2"
+version = "0.2.0"
 min_herdr_version = "0.8.2"
 description = "Terminal Text Tool — a full IDE in your terminal"
 platforms = ["linux", "macos"]
@@ -21,6 +21,8 @@ title = "Open TTT in worktree"
 contexts = ["workspace"]
 command = ["sh", "scripts/open-worktree.sh"]
 
+# `plugin pane open` reads this placement; the actions override it with the
+# open_placement/open_direction pair from the plugin config.
 [[panes]]
 id = "editor"
 title = "TTT Editor"

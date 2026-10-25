@@ -37,7 +37,30 @@ Opens TTT in a new Herdr tab, pointed at the active worktree or workspace direct
 herdr plugin pane open --plugin ttt.editor --entrypoint editor
 ```
 
+Herdr's own flags override the manifest for that call: `--placement split --direction
+right --target-pane w1:p3` puts the editor beside a specific pane instead.
+
 The pane routes right-click to TTT, so its context menus work. Right-clicking the pane frame still opens Herdr's menu.
+
+### Configuration
+
+`~/.config/herdr/plugins/config/ttt.editor/config.toml`, which `herdr plugin config-dir ttt.editor` prints:
+
+```toml
+open_placement = "split"  # split | overlay | zoomed | tab
+open_direction = "right"  # right | down, for split and zoomed
+```
+
+Both keys are optional. With neither, the plugin asks Herdr for nothing and the manifest
+placement decides, which is `tab`. `open_direction` needs `open_placement` set to `split`
+or `zoomed`. The values are the ones the reviewr plugin takes for `toggle_placement` and
+`toggle_direction`; the key names follow ttt's `open` action. An unknown key, an unquoted
+value, or a value outside the list fails the action rather than quietly keeping the
+default, and `herdr plugin log list --plugin ttt.editor` says which.
+
+Only the actions read this file, because they re-open the pane through Herdr and can
+name the placement. A `type = "shell"` keybinding that calls `plugin pane open` itself
+always gets the manifest placement.
 
 ### Actions
 
@@ -66,7 +89,18 @@ When opening, the plugin resolves the target directory in this order:
 
 ## Keybinding
 
-Add this to your Herdr `config.toml` to open TTT with `Ctrl+b e` (or your custom prefix key followed by `e`):
+Add this to your Herdr `config.toml` to open TTT with `Ctrl+b e` (or your custom prefix key followed by `e`), honouring the `open_placement` above:
+
+```toml
+[[keys.command]]
+key = "prefix+e"
+type = "plugin_action"
+command = "ttt.editor.open"
+description = "open TTT editor"
+```
+
+The `type = "shell"` form opens the pane through Herdr directly and so keeps the manifest
+placement, whichever way the plugin's defaults change:
 
 ```toml
 [[keys.command]]
@@ -78,7 +112,8 @@ description = "open TTT editor"
 
 ## Requirements
 
-- [Herdr](https://herdr.dev) 0.7.0 or newer
+- [Herdr](https://herdr.dev) 0.8.2 or newer — the plugin routes right-click to TTT with
+  `herdr pane input --right-click pane`, which shipped in 0.8.2
 - Linux or macOS
 - [Git](https://git-scm.com/) and [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for TTT's full feature set
 
