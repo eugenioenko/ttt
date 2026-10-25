@@ -6,7 +6,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
-func TestKeyValueMutedKeysDrawsValuesInDefaultStyle(t *testing.T) {
+func TestKeyValueMutedKeysDrawsValuesInItemStyle(t *testing.T) {
 	p := &Plugin{Name: "test", Granted: PermissionSet{PanelSidebar: true}}
 	p.State = NewSandbox()
 	defer p.State.Close()
