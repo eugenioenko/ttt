@@ -25,6 +25,7 @@ const (
 	WidgetMarkdown
 	WidgetCheckbox
 	WidgetImage
+	WidgetTabs
 )
 
 func (k WidgetKind) String() string {
@@ -65,6 +66,8 @@ func (k WidgetKind) String() string {
 		return "checkbox"
 	case WidgetImage:
 		return "image"
+	case WidgetTabs:
+		return "tabs"
 	}
 	return "unknown"
 }
@@ -142,6 +145,10 @@ type WidgetDesc struct {
 	Rows          [][]string
 	OnSelectIndex func(int)
 	OnCommandStr  func(command string, rowIndex int)
+
+	TabItems    []widgets.TabItem
+	ActiveTab   string
+	OnTabChange func(id string)
 
 	FullWidthDividers bool
 	MarkdownContent   string

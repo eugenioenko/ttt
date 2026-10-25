@@ -107,6 +107,7 @@ func RegisterPanelType(L *lua.LState) {
 		"divider":    panelDividerWidget,
 		"progress":   panelProgressWidget,
 		"table":      panelTableWidget,
+		"tabs":       panelTabsWidget,
 		"checkbox":   panelCheckboxWidget,
 		"redraw":     panelRedraw,
 		"markdown":   panelMarkdownWidget,
@@ -806,6 +807,40 @@ func panelTableWidget(L *lua.LState) int {
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetTable, desc)
+	return 0
+}
+
+func panelTabsWidget(L *lua.LState) int {
+	proxy := checkPanelProxy(L)
+	if proxy == nil {
+		return 0
+	}
+
+	tbl := L.CheckTable(2)
+	desc := WidgetDesc{}
+	if items, ok := L.GetField(tbl, "items").(*lua.LTable); ok {
+		items.ForEach(func(_, v lua.LValue) {
+			it, ok := v.(*lua.LTable)
+			if !ok {
+				return
+			}
+			id := L.GetField(it, "id").String()
+			label := id
+			if l := L.GetField(it, "label"); l != lua.LNil {
+				label = l.String()
+			}
+			desc.TabItems = append(desc.TabItems, widgets.TabItem{ID: id, Label: label})
+		})
+	}
+	if v := L.GetField(tbl, "active"); v != lua.LNil {
+		desc.ActiveTab = v.String()
+	}
+	if fn, ok := L.GetField(tbl, "on_change").(*lua.LFunction); ok {
+		desc.OnTabChange = proxy.wrapStringCallback(fn)
+	}
+
+	parseBoxModel(L, tbl, &desc)
+	proxy.appendDesc(WidgetTabs, desc)
 	return 0
 }
 

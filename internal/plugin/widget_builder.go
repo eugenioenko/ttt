@@ -81,6 +81,11 @@ func createWidget(desc WidgetDesc, p *Plugin) widgets.Widget {
 		iw := widgets.NewImageWidget(imageConfig(desc, p))
 		applyBoxModel(&iw.Box, desc)
 		return iw
+	case WidgetTabs:
+		tw := widgets.NewTabsWidget(widgets.TabsConfig{})
+		syncTabs(tw, desc)
+		applyBoxModel(&tw.Box, desc)
+		return tw
 	}
 	return widgets.NewLabelWidget(widgets.LabelConfig{Text: "unknown widget"})
 }
@@ -245,6 +250,11 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			}
 			sv.Follow = desc.Follow
 		}
+	case WidgetTabs:
+		if tw, ok := w.(*widgets.TabsWidget); ok {
+			syncTabs(tw, desc)
+			applyBoxModel(&tw.Box, desc)
+		}
 	case WidgetCheckbox:
 		if cw, ok := w.(*widgets.CheckboxWidget); ok {
 			cw.Config.Label = desc.Label
@@ -310,6 +320,9 @@ func widgetMatchesKind(w widgets.Widget, kind WidgetKind) bool {
 		return ok
 	case WidgetCheckbox:
 		_, ok := w.(*widgets.CheckboxWidget)
+		return ok
+	case WidgetTabs:
+		_, ok := w.(*widgets.TabsWidget)
 		return ok
 	}
 	return false
@@ -672,5 +685,25 @@ func wireTableMenu(tw *widgets.TableWidget, p *Plugin) {
 				tw.Config.OnCommand(cmd, rowIdx)
 			}
 		})
+	}
+}
+
+func syncTabs(tw *widgets.TabsWidget, desc WidgetDesc) {
+	items := append([]widgets.TabItem(nil), desc.TabItems...)
+	tw.SetItems(items)
+	active := desc.ActiveTab
+	if active == "" && len(items) > 0 {
+		active = items[0].ID
+	}
+	tw.SetActive(active)
+	onChange := desc.OnTabChange
+	tw.Config.OnTabClick = func(i int) {
+		if i < 0 || i >= len(items) {
+			return
+		}
+		tw.SetActive(items[i].ID)
+		if onChange != nil && items[i].ID != active {
+			onChange(items[i].ID)
+		}
 	}
 }

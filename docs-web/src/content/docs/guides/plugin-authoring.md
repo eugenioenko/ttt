@@ -1510,6 +1510,33 @@ panel:table({
 | `key_commands` | table    | no       | Map of single-char keys to command strings. Triggers `on_command(command, selected_row_index)`. |
 | + [box model fields](#box-model) | | | Margin and padding. |
 
+### Tabs
+
+A row of tabs, for switching between sections of a panel or editor tab. The plugin draws the active section itself.
+
+```lua
+local current = "details"
+
+panel:tabs({
+  items = { { id = "details", label = "Details" }, { id = "keys", label = "Keys" } },
+  active = current,
+  on_change = function(id)
+    current = id
+    panel:redraw()
+  end,
+})
+if current == "keys" then
+  -- draw the keys section
+end
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `items`     | table    | yes      | Array of `{ id, label }` tables. |
+| `active`    | string   | no       | `id` of the active tab. Defaults to the first. |
+| `on_change` | function | no       | Called with the `id` of the tab the user picked. |
+| + [box model fields](#box-model) | | | Margin and padding. |
+
 ### Markdown
 
 Render a markdown string as rich text with text selection and copy support. The content is wrapped in a scroll view automatically.
@@ -1816,6 +1843,7 @@ Widget-specific events are routed automatically to the callbacks you provide:
 | Input    | Enter pressed      | `on_submit`  | Current text (string)               |
 | Dropdown | menu item selected | `on_menu`    | Command string                      |
 | Table    | row selected       | `on_select`  | Row index (number, 1-based)         |
+| Tabs     | tab picked         | `on_change`  | Tab `id` (string)                   |
 | Table    | context menu cmd   | `on_command` | `(command_string, row_index)`       |
 | Title    | menu item selected | `on_menu`    | Command string                      |
 
