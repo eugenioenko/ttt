@@ -36,7 +36,7 @@ func TestKeyValueMutedKeysDrawsValuesInDefaultStyle(t *testing.T) {
 	if styles['N'] != term.StyleMuted {
 		t.Errorf("key style = %v, want muted", styles['N'])
 	}
-	if styles['a'] == term.StyleMuted {
-		t.Errorf("value is muted, want the default style")
+	if got, ok := styles['a']; !ok || got != term.StylePaletteItem {
+		t.Errorf("value style = %v (drawn %v), want the item style", got, ok)
 	}
 }
