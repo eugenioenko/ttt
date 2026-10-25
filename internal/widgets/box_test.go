@@ -343,7 +343,8 @@ func TestBoxTitleClipsBeforeTheCorner(t *testing.T) {
 	box := NewBoxWithBorder(term.SingleBorderSet())
 	box.Title = "A very long title"
 	s := renderWidget(box, 0, 0, 10, 3)
-	if got := []rune(rowText(s, 0)); got[0] != '┌' || got[len(got)-1] != '┐' {
-		t.Fatalf("top border = %q, want the corners kept", string(got))
+	got := []rune(rowText(s, 0))
+	if got[0] != '┌' || got[len(got)-1] != '┐' || !strings.HasPrefix(string(got), "┌ A very") {
+		t.Fatalf("top border = %q, want the clipped title between the corners", string(got))
 	}
 }
