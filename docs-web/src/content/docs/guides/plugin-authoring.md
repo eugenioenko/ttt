@@ -1345,7 +1345,7 @@ VStack is useful for grouping related widgets into sections. The child panel pro
 
 ### HStack
 
-Horizontal stack layout container. Lays out child widgets side by side. The first child grows to fill available space; remaining children get fixed width.
+Horizontal stack layout container. Lays out child widgets side by side; see below for how they share the width.
 
 ```lua
 panel:hstack({
