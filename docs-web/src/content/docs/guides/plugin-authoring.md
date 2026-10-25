@@ -1364,8 +1364,9 @@ panel:hstack({
 | `render` | function | yes      | Builder function that receives a child panel proxy. Call widget methods on it to add children. |
 | `gap`    | number   | no       | Horizontal gap (in columns) between children. Default: `0`. |
 | `height` | number   | no       | Fixed height in rows.                                       |
+| `align`  | string   | no       | `"left"` (default), `"center"` or `"right"`. Applies only when no child expands. |
 
-The first child in the hstack expands to fill remaining horizontal space. All subsequent children are given their natural/fixed width. This is useful for toolbar-style layouts with a label or spacer on the left and action buttons on the right.
+Children without a natural width (labels, inputs, checkboxes, tables) share the remaining horizontal space equally. Buttons, dropdowns and children with a `width` take their own width. This is useful for toolbar-style layouts with a search input on the left and action buttons on the right. When every child has its own width, `align` places the group, for example `align = "right"` for a dialog's buttons.
 
 ### ScrollView
 

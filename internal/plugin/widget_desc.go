@@ -141,6 +141,7 @@ type WidgetDesc struct {
 	FixedHeight  int
 	FixedWidth   int
 	Gap          int
+	Align        string
 
 	Entries         []widgets.MenuEntry
 	OnMenu          func(command string)

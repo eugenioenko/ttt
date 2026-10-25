@@ -178,6 +178,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			hs.Children = reconcileChildren(hs.Children, desc.Children, p)
 			hs.Gap = desc.Gap
 			hs.FixedHeight = desc.FixedHeight
+			hs.Align = desc.Align
 			applyBoxModel(&hs.Box, desc)
 		}
 	case WidgetDivider:
@@ -487,6 +488,7 @@ func createHStackWidget(desc WidgetDesc, p *Plugin) *widgets.HStackWidget {
 	hs := widgets.NewHStackWidget(children...)
 	hs.Gap = desc.Gap
 	hs.FixedHeight = desc.FixedHeight
+	hs.Align = desc.Align
 	applyBoxModel(&hs.Box, desc)
 	return hs
 }

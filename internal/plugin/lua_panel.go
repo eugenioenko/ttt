@@ -639,6 +639,9 @@ func panelHStackWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "height"); v != lua.LNil {
 		desc.FixedHeight = int(lua.LVAsNumber(v))
 	}
+	if v, ok := L.GetField(tbl, "align").(lua.LString); ok {
+		desc.Align = string(v)
+	}
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetHStack, desc)
