@@ -376,3 +376,12 @@ func TestHStackBoxModelApplied(t *testing.T) {
 		t.Errorf("expected empty at (0,0) due to margins, got %q", s.cells[0][0].Ch)
 	}
 }
+
+func TestHStackFixedHeightIncludesMargins(t *testing.T) {
+	h := NewHStackWidget(NewLabelWidget(LabelConfig{Text: "x"}))
+	h.FixedHeight = 1
+	h.Box.MarginTop = 1
+	if got := h.Height(); got != 2 {
+		t.Fatalf("height = %d, want the row plus its top margin", got)
+	}
+}

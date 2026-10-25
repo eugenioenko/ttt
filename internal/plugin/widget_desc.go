@@ -87,6 +87,9 @@ type WidgetDesc struct {
 	PaddingBottom int
 	PaddingLeft   int
 	PaddingRight  int
+	// PaddingXSet records an explicit padding_left/padding_right, so widgets with
+	// default horizontal padding keep it when the plugin sets neither.
+	PaddingXSet bool
 
 	Items         []*widgets.TreeNode
 	Indent        int

@@ -536,6 +536,7 @@ func parseBoxModel(L *lua.LState, tbl *lua.LTable, desc *WidgetDesc) {
 			*field.dst = int(lua.LVAsNumber(v))
 		}
 	}
+	desc.PaddingXSet = L.GetField(tbl, "padding_left") != lua.LNil || L.GetField(tbl, "padding_right") != lua.LNil
 }
 
 func parseLuaKeyCommands(_ *lua.LState, tbl *lua.LTable) map[rune]string {

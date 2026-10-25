@@ -160,11 +160,14 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 	case WidgetVStack:
 		if vs, ok := w.(*widgets.VStackWidget); ok {
 			vs.Children = reconcileChildren(vs.Children, desc.Children, p)
+			vs.Gap = desc.Gap
 			applyBoxModel(&vs.Box, desc)
 		}
 	case WidgetHStack:
 		if hs, ok := w.(*widgets.HStackWidget); ok {
 			hs.Children = reconcileChildren(hs.Children, desc.Children, p)
+			hs.Gap = desc.Gap
+			hs.FixedHeight = desc.FixedHeight
 			applyBoxModel(&hs.Box, desc)
 		}
 	case WidgetDivider:
@@ -191,9 +194,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		if bw, ok := w.(*widgets.BoxWidget); ok {
 			applyBoxModel(&bw.Box, desc)
 			applyBoxBorders(&bw.Box, desc, p)
-			if desc.FixedHeight > 0 {
-				bw.FixedHeight = desc.FixedHeight
-			}
+			bw.FixedHeight = desc.FixedHeight
 			if len(desc.Children) > 0 {
 				if vs, ok := bw.Child.(*widgets.VStackWidget); ok {
 					vs.Children = reconcileChildren(vs.Children, desc.Children, p)
@@ -544,6 +545,9 @@ func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 	})
 	wireButtonCallback(bw, desc, p)
 	applyBoxModel(&bw.Box, desc)
+	if !desc.PaddingXSet {
+		bw.Box.PaddingLeft, bw.Box.PaddingRight = 1, 1
+	}
 	return bw
 }
 
