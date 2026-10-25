@@ -1778,3 +1778,32 @@ func TestTreeRightBadgeLeavesOneGapAfterTheLabel(t *testing.T) {
 		t.Fatalf("row = %q, want %q", got, want)
 	}
 }
+
+func TestTreeReselectOnActivate(t *testing.T) {
+	for _, reselect := range []bool{false, true} {
+		selects := 0
+		tree := NewTreeWidget(TreeConfig{
+			Items:              []*TreeNode{{ID: "a", Label: "Alpha"}, {ID: "b", Label: "Beta"}},
+			OnSelect:           func(*TreeNode) { selects++ },
+			ReselectOnActivate: reselect,
+		})
+		tree.SetFocused(true)
+		renderWidget(tree, 0, 0, 20, 3)
+
+		tree.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModNone))
+		if selects != 1 {
+			t.Fatalf("reselect=%v: moving the selection should select once, got %d", reselect, selects)
+		}
+		tree.HandleEvent(mouseClick(2, 1))
+		tree.HandleEvent(mouseClick(2, 1))
+		tree.HandleEvent(mouseRelease(2, 1))
+		tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+		want := 1
+		if reselect {
+			want = 3
+		}
+		if selects != want {
+			t.Errorf("reselect=%v: a click on the selected row, held, then Enter gave %d selects, want %d", reselect, selects, want)
+		}
+	}
+}

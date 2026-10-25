@@ -56,7 +56,10 @@ type TreeConfig struct {
 	ActiveID         string `json:"-"`
 	EmptyText        string `json:"emptyText,omitempty"`
 	SelectOnClick    bool   `json:"-"`
-	TruncateLeft     bool   `json:"truncateLeft,omitempty"` // truncate labels from the left (…tail) so the end stays visible
+	// ReselectOnActivate also calls OnSelect when a click or Enter lands on
+	// the row that is already selected, so the row can be opened again.
+	ReselectOnActivate bool `json:"-"`
+	TruncateLeft       bool `json:"truncateLeft,omitempty"` // truncate labels from the left (…tail) so the end stays visible
 	// BadgeRight draws badges against the right edge instead of after the label.
 	BadgeRight bool `json:"-"`
 	// Inset indents rows; the selection highlight still spans the full width.
@@ -80,6 +83,7 @@ type TreeWidget struct {
 	selected  int
 	scrollTop int
 	leftHeld  bool // the left button was down on the last mouse report
+	activated bool // the event being handled clicked or pressed Enter on a row
 	pressX    int  // where that press started
 	pressY    int
 	lastSel   int
@@ -597,6 +601,7 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	prev := t.selected
+	t.activated = false
 	var result EventResult
 	switch tev := ev.(type) {
 	case *tcell.EventMouse:
@@ -606,7 +611,8 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 	default:
 		return EventIgnored
 	}
-	if t.selected != prev && t.Config.OnSelect != nil {
+	reselected := t.activated && t.Config.ReselectOnActivate
+	if (t.selected != prev || reselected) && t.Config.OnSelect != nil {
 		t.Config.OnSelect(t.Selected())
 	}
 	return result
@@ -645,6 +651,7 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	// reports come from a new position; acting on them toggled a held folder
 	// over and over and opened every row the pointer crossed.
 	moved := t.leftHeld && (mx != t.pressX || my != t.pressY)
+	fresh := btn&tcell.Button1 != 0 && !t.leftHeld
 	t.leftHeld = btn&tcell.Button1 != 0
 	if t.leftHeld && !moved {
 		t.pressX, t.pressY = mx, my
@@ -718,6 +725,7 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 			}
 		}
 
+		t.activated = fresh
 		if !t.Config.SelectOnClick {
 			if t.Config.ActivateExpandable && node.isExpandable() {
 				if mx == node.chevronX {
@@ -760,6 +768,7 @@ func (t *TreeWidget) handleKey(ev *tcell.EventKey) EventResult {
 			}
 			return EventConsumed
 		}
+		t.activated = true
 		if t.Config.ActivateExpandable {
 			t.activateSelectedNode()
 		} else {

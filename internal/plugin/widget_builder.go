@@ -551,6 +551,7 @@ func wireDropdownCallback(dd *widgets.DropdownWidget, desc WidgetDesc, p *Plugin
 }
 
 func wireTreeCallbacks(tw *widgets.TreeWidget, desc WidgetDesc, p *Plugin) {
+	tw.Config.ReselectOnActivate = true
 	tw.Config.OnSelect = desc.OnSelect
 	tw.Config.OnExpand = desc.OnExpand
 	tw.Config.OnCommand = desc.OnCommand
