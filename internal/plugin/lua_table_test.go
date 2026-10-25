@@ -82,3 +82,33 @@ func TestLuaTableSelectionIsControlledOnlyWhenGiven(t *testing.T) {
 		t.Fatalf("selected = 1 should move to the first row, got %d", tbl.SelectedIndex())
 	}
 }
+
+func TestLuaTableSelectionClampsWhenRowsShrink(t *testing.T) {
+	p, done := newTestPluginBase(PermissionSet{PanelSidebar: true})
+	defer done()
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		rows = {{ "a" }, { "b" }, { "c" }}
+		ttt.register({ sidebar = { title = "T", render = function(panel)
+			panel:table({ columns = {{ label = "N" }}, rows = rows, selected = 3 })
+		end } })
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := NewWidgetState()
+	render := func() *widgets.TableWidget {
+		proxy := NewPanelProxy(newMockSurface(80, 20), p)
+		if err := p.CallRenderWith(p.RenderFunc, proxy); err != nil {
+			t.Fatal(err)
+		}
+		return ws.Reconcile(proxy.Descriptors(), p).Children[0].(*widgets.TableWidget)
+	}
+	render()
+	if err := p.State.DoString(`rows = {{ "a" }}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := render().SelectedIndex(); got != 0 {
+		t.Fatalf("selected = %d after the rows shrank to one, want 0", got)
+	}
+}

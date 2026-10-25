@@ -747,7 +747,7 @@ func pagerConfig(desc WidgetDesc) widgets.PagerConfig {
 // A table's selected row is controlled only when the plugin passes one, so
 // arrow keys keep working for plugins that leave it out.
 func syncTableSelection(tw *widgets.TableWidget, desc WidgetDesc) {
-	if desc.Selected > 0 && desc.Selected-1 != tw.SelectedIndex() {
+	if desc.Selected > 0 {
 		tw.SetSelectedIndex(desc.Selected - 1)
 	}
 }

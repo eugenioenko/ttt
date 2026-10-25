@@ -41,6 +41,7 @@ type TableWidget struct {
 	pressed   bool
 	clickRow  int
 	clickAt   int64
+	now       func() time.Time
 
 	scrollbar                 scrollbar
 	contentW                  int
@@ -49,6 +50,13 @@ type TableWidget struct {
 }
 
 const tableDoubleClickMs = 500
+
+func (t *TableWidget) clock() time.Time {
+	if t.now != nil {
+		return t.now()
+	}
+	return time.Now()
+}
 
 func NewTableWidget(cfg TableConfig) *TableWidget {
 	return &TableWidget{Config: cfg}
@@ -394,16 +402,16 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	}
 
 	localY := my - r.Y
-	if localY < headerH {
-		return EventIgnored
-	}
-
 	idx := t.scrollTop + (localY - headerH)
-	if idx < 0 || idx >= len(t.Config.Rows) {
+	if localY < headerH || idx < 0 || idx >= len(t.Config.Rows) {
+		if fresh {
+			t.clickAt = 0
+		}
 		return EventIgnored
 	}
 
 	if btn&tcell.Button2 != 0 {
+		t.clickAt = 0
 		t.selected = idx
 		if t.Config.OnMenu != nil && len(t.Config.NodeMenu) > 0 {
 			t.Config.OnMenu(t.Config.NodeMenu, idx, mx, my)
@@ -417,7 +425,7 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 			t.Config.OnSelect(idx)
 		}
 		if fresh && t.Config.OnActivate != nil {
-			now := time.Now().UnixMilli()
+			now := t.clock().UnixMilli()
 			if idx == t.clickRow && now-t.clickAt < tableDoubleClickMs {
 				t.clickAt = 0
 				t.Config.OnActivate(idx)

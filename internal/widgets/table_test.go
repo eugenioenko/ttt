@@ -3,6 +3,7 @@ package widgets
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
@@ -665,6 +666,8 @@ func TestTableActivateFiresOnEnterAndClickNotArrows(t *testing.T) {
 	tbl := newBasicTable()
 	var activated []int
 	tbl.Config.OnActivate = func(i int) { activated = append(activated, i) }
+	at := time.Unix(1000, 0)
+	tbl.now = func() time.Time { return at }
 	tbl.SetFocused(true)
 	renderWidget(tbl, 0, 0, 20, 10)
 
@@ -679,6 +682,7 @@ func TestTableActivateFiresOnEnterAndClickNotArrows(t *testing.T) {
 	if len(activated) != 1 || tbl.SelectedIndex() != 2 {
 		t.Fatalf("a single click should select without activating, got %v", activated)
 	}
+	at = at.Add(100 * time.Millisecond)
 	tbl.HandleEvent(mouseClick(2, 4))
 	tbl.HandleEvent(mouseRelease(2, 4))
 	if len(activated) != 2 || activated[0] != 1 || activated[1] != 2 {
@@ -729,5 +733,34 @@ func TestInsetKeepsScrollbarAtEdge(t *testing.T) {
 	}
 	if s.cells[2][11].Style == term.StyleSidebarSelected || s.cells[2][11].Ch == ' ' {
 		t.Fatalf("scrollbar should stay at the right edge, got %q", s.cells[2][11].Ch)
+	}
+}
+
+func TestTableDoubleClickNeedsTwoQuickClicksOnTheSameRow(t *testing.T) {
+	tbl := newBasicTable()
+	activated := 0
+	tbl.Config.OnActivate = func(int) { activated++ }
+	at := time.Unix(1000, 0)
+	tbl.now = func() time.Time { return at }
+	renderWidget(tbl, 0, 0, 20, 10)
+	click := func(x, y int, after time.Duration) {
+		at = at.Add(after)
+		tbl.HandleEvent(mouseClick(x, y))
+		tbl.HandleEvent(mouseRelease(x, y))
+	}
+
+	click(2, 4, 0)
+	click(2, 4, 600*time.Millisecond)
+	if activated != 0 {
+		t.Fatal("two clicks 600ms apart activated the row")
+	}
+	click(2, 0, 100*time.Millisecond)
+	click(2, 4, 100*time.Millisecond)
+	if activated != 0 {
+		t.Fatal("a header click between the row clicks still counted as a double-click")
+	}
+	click(2, 4, 100*time.Millisecond)
+	if activated != 1 {
+		t.Fatalf("a quick second click on the row should activate it, got %d", activated)
 	}
 }
