@@ -18,6 +18,8 @@ type PluginPanelWidget struct {
 	// autofocus asks the next render to focus the autofocus input, when
 	// FocusAutofocusInput ran before the input existed.
 	autofocus bool
+	// OnClose runs once, when the editor tab holding the panel closes.
+	OnClose func()
 }
 
 func NewPluginPanelWidget(p *Plugin, renderFunc, eventFunc *lua.LFunction) *PluginPanelWidget {
@@ -140,5 +142,9 @@ func (pw *PluginPanelWidget) PluginName() string { return pw.plugin.Name }
 func (pw *PluginPanelWidget) Close() {
 	if pw.state != nil && pw.state.root != nil {
 		closeImages(pw.state.root)
+	}
+	if onClose := pw.OnClose; onClose != nil {
+		pw.OnClose = nil
+		onClose()
 	}
 }

@@ -79,8 +79,9 @@ type Plugin struct {
 	// ShowPanel shows the plugin's sidebar or bottom panel, and focuses it
 	// when focus is set. It reports whether the panel is now showing.
 	ShowPanel          func(area string, focus bool) (bool, error)
-	OpenTab            func(id string, panel *PluginPanelWidget)
-	CloseTab           func(id string)
+	OpenTab            func(key, title string, panel *PluginPanelWidget)
+	FocusTab           func(key string) bool
+	CloseTab           func(key string)
 	OpenDialog         func(*PluginDialogWidget, func()) bool
 	CloseDialog        func()
 	OpenChanges        func(ChangesOptions) (string, error)
@@ -313,6 +314,7 @@ func (p *Plugin) Destroy() {
 	p.CloseDrawer = nil
 	p.ShowPanel = nil
 	p.OpenTab = nil
+	p.FocusTab = nil
 	p.CloseTab = nil
 	p.OpenDialog = nil
 	p.CloseDialog = nil
@@ -421,4 +423,10 @@ func (p *Plugin) CallRenderWith(renderFunc *lua.LFunction, proxy *PanelProxy) er
 		p.logError("render", err)
 	}
 	return err
+}
+
+// tabKey scopes a plugin's tab id so it cannot collide with a file path or
+// another plugin's tab.
+func (p *Plugin) tabKey(id string) string {
+	return "plugin:" + p.Name + ":" + id
 }

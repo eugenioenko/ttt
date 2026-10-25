@@ -598,12 +598,17 @@ Open a custom editor tab with plugin-rendered content. Requires `panel.editor` p
 
 | Parameter  | Type     | Required | Description                                       |
 |------------|----------|----------|---------------------------------------------------|
+| `id`       | string   | no       | Stable ID for the tab. Opening an ID that is already open focuses that tab and keeps its state; the new `render` is ignored. |
 | `title`    | string   | yes      | Tab title displayed in the editor tab bar.        |
 | `render`   | function | yes      | Render function. Receives a panel proxy object.   |
 | `on_event` | function | no       | Fallback handler for key/mouse events not consumed by widgets. |
+| `on_close` | function | no       | Called once after the tab closes, by the user or `ttt.close_tab`. It runs on the next main-loop tick, so it may open or close other tabs. Like `render`, it is ignored when the `id` is already open. |
+
+Returns the tab's ID: the `id` you passed, or the title when you passed none.
 
 ```lua
-ttt.open_tab({
+local id = ttt.open_tab({
+  id = "preview",
   title = "Preview",
   render = function(panel)
     panel:label("Tab content here")
@@ -612,9 +617,11 @@ ttt.open_tab({
 })
 ```
 
+Without an `id`, the title is the key, and opening the same title again replaces the tab's content.
+
 ### `ttt.close_tab(id)`
 
-Close a plugin editor tab by its ID (string). Requires `panel.editor` permission.
+Close a plugin editor tab by the ID `open_tab` returned. Requires `panel.editor` permission.
 
 ```lua
 ttt.close_tab("my-tab-id")

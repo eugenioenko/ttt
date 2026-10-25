@@ -659,11 +659,18 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		a.ClosePluginDrawer()
 	}
 	p.Graphics = a.pluginGraphics
-	p.OpenTab = func(id string, panel *plugin.PluginPanelWidget) {
-		a.EditorGroup.OpenPluginTab(id, id, panel)
+	p.OpenTab = func(key, title string, panel *plugin.PluginPanelWidget) {
+		a.EditorGroup.OpenPluginTab(key, title, panel)
 	}
-	p.CloseTab = func(id string) {
-		a.EditorGroup.ClosePluginTab(id)
+	p.FocusTab = func(key string) bool {
+		if !a.EditorGroup.SwitchToTabByPath(key) {
+			return false
+		}
+		a.FocusEditor()
+		return true
+	}
+	p.CloseTab = func(key string) {
+		a.EditorGroup.ClosePluginTab(key)
 	}
 
 	if p.HasSidebarMenu() {

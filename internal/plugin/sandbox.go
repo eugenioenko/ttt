@@ -512,16 +512,37 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			if fn, ok := L.GetField(tbl, "on_event").(*lua.LFunction); ok {
 				eventFunc = fn
 			}
+			id, key := title, title
+			if v := L.GetField(tbl, "id"); v != lua.LNil {
+				id, key = v.String(), p.tabKey(v.String())
+				if p.FocusTab != nil && p.FocusTab(key) {
+					L.Push(lua.LString(id))
+					return 1
+				}
+			}
 			if p.OpenTab != nil {
 				panel := NewPluginPanelWidget(p, renderFunc, eventFunc)
-				p.OpenTab(title, panel)
+				if fn, ok := L.GetField(tbl, "on_close").(*lua.LFunction); ok {
+					// Deferred to the main loop: the tab list is mid-update when
+					// Close runs, and the callback may open or close tabs.
+					panel.OnClose = func() {
+						p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
+							if err := p.CallLuaFunc(fn); err != nil {
+								p.logError("tab on_close", err)
+							}
+						}})
+					}
+				}
+				p.OpenTab(key, title, panel)
 			}
-			return 0
+			L.Push(lua.LString(id))
+			return 1
 		}))
 
 		L.SetField(mod, "close_tab", L.NewFunction(func(L *lua.LState) int {
 			id := L.CheckString(1)
 			if p.CloseTab != nil {
+				p.CloseTab(p.tabKey(id))
 				p.CloseTab(id)
 			}
 			return 0
