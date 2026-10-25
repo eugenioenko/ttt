@@ -527,9 +527,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 					// Close runs, and the callback may open or close tabs.
 					panel.OnClose = func() {
 						p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
-							if err := p.CallLuaFunc(fn); err != nil {
-								p.logError("tab on_close", err)
-							}
+							p.CallLuaFunc(fn)
 						}})
 					}
 				}
