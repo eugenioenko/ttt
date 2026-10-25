@@ -503,6 +503,11 @@ func panelInputWidget(L *lua.LState) int {
 		desc.MaxRows = int(min(max(float64(lua.LVAsNumber(v)), 0), 1000))
 	}
 	desc.Autofocus = lua.LVAsBool(L.GetField(tbl, "autofocus"))
+	desc.Border = lua.LVAsBool(L.GetField(tbl, "border"))
+	desc.Password = lua.LVAsBool(L.GetField(tbl, "password"))
+	if v := L.GetField(tbl, "title"); v != lua.LNil {
+		desc.BoxTitle = v.String()
+	}
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetInput, desc)

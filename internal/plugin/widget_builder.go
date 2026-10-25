@@ -160,7 +160,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		if iw, ok := w.(*widgets.InputWidget); ok {
 			iw.Config.Placeholder = desc.Placeholder
 			prefix := desc.Prefix
-			if !iw.Config.Bordered && prefix == "" {
+			if !desc.Border && prefix == "" {
 				prefix = widgets.DefaultPrefix
 			}
 			iw.Config.Prefix = prefix
@@ -633,7 +633,11 @@ func syncInputValue(iw *widgets.InputWidget, desc WidgetDesc) {
 	iw.Config.OnChange = onChange
 }
 
-func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, _ *Plugin) {
+func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, p *Plugin) {
+	iw.Config.Bordered, iw.Config.Title, iw.Config.Mask = desc.Border, desc.BoxTitle, desc.Password
+	if desc.Border && p != nil && p.Borders != nil {
+		iw.Box.Borders = *p.Borders
+	}
 	iw.Config.Wrap, iw.Config.MaxRows = desc.Wrap, desc.MaxRows
 	iw.Config.MinRows, iw.Config.Multiline = desc.MinRows, desc.Multiline
 	iw.Config.Autofocus = desc.Autofocus

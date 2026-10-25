@@ -126,6 +126,7 @@ type WidgetDesc struct {
 	MinRows       int
 	Multiline     bool
 	Autofocus     bool
+	Password      bool
 
 	ImageData   string
 	ImageFit    string
@@ -141,6 +142,7 @@ type WidgetDesc struct {
 	FixedHeight  int
 	FixedWidth   int
 	Gap          int
+	BoxTitle     string
 
 	Entries         []widgets.MenuEntry
 	OnMenu          func(command string)

@@ -111,7 +111,7 @@ func (inp *InputWidget) visibleRows(textW int) int {
 
 // HeightAtWidth is the input's height laid out w columns wide.
 func (inp *InputWidget) HeightAtWidth(w int) int {
-	if !inp.Config.Wrap {
+	if !inp.wraps() {
 		return 0
 	}
 	textW := w - inp.BoxOverheadW()

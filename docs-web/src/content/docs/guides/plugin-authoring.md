@@ -1315,6 +1315,9 @@ panel:input({
 | `wrap`             | boolean  | `false` | When `true`, long text wraps onto more rows, and the input grows up to `max_rows` and then scrolls, with an arrow at the right edge when rows are out of view. Inside a `scrollview` it wraps at the scroll view's content width, which can be wider than what is visible, so put wrapping inputs outside scroll views. Shift+Enter, Alt+Enter or Ctrl+J adds a line break (many terminals send Shift+Enter as plain Enter; the other two work in most); Enter still submits when `multiline` is disabled. Up and Down move between rows; Ctrl+Home and Ctrl+End go to the start and end of the text. |
 | `max_rows`         | number   | `5`     | The most rows a wrapping input grows to. |
 | `autofocus`        | boolean  | `false` | When `true`, the input takes focus when the plugin calls `ttt.focus_panel`. |
+| `border`           | boolean  | `false` | Draws a full border around the input, which highlights while it has focus. A bordered input is 3 rows tall. |
+| `title`            | string   | unset   | Label drawn in the top border of a bordered input, so a form field needs no separate label. |
+| `password`         | boolean  | `false` | Shows each character as `•` and keeps the text off the clipboard. A password input is one line: `wrap` is ignored. |
 | `on_change`        | function | nil     | Called after every text change. Receives the current text (string). |
 | `on_submit`        | function | nil     | Called when Enter is pressed and `multiline` is disabled. Receives the current text (string). |
 
