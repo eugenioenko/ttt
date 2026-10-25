@@ -2966,6 +2966,8 @@ local date = os.date("%Y-%m-%d") -- "2026-06-28"
 |----------|---------|-------------|
 | `crypto.random_bytes(n)` | string | `n` cryptographically secure random bytes as a hex string. `n` must be 1–1024. |
 | `crypto.uuid()` | string | Random UUID v4 (e.g. `"550e8400-e29b-41d4-a716-446655440000"`). |
+| `crypto.base64_encode(s)` | string | Standard base64 of the string `s`. |
+| `crypto.base64_decode(s)` | string, or `nil` and an error | Decodes standard base64, padded or not. Surrounding whitespace is ignored. |
 
 ```lua
 local bytes = crypto.random_bytes(16)  -- "a1b2c3d4e5f6..."  (32 hex chars)

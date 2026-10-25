@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"runtime"
@@ -126,6 +127,24 @@ func NewSandbox() *lua.LState {
 		s := hex.EncodeToString(buf[:])
 		uuid := s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 		L.Push(lua.LString(uuid))
+		return 1
+	}))
+	L.SetField(cryptoMod, "base64_encode", L.NewFunction(func(L *lua.LState) int {
+		L.Push(lua.LString(base64.StdEncoding.EncodeToString([]byte(L.CheckString(1)))))
+		return 1
+	}))
+	L.SetField(cryptoMod, "base64_decode", L.NewFunction(func(L *lua.LState) int {
+		s := strings.TrimSpace(L.CheckString(1))
+		out, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			out, err = base64.RawStdEncoding.DecodeString(strings.TrimRight(s, "="))
+		}
+		if err != nil {
+			L.Push(lua.LNil)
+			L.Push(lua.LString(err.Error()))
+			return 2
+		}
+		L.Push(lua.LString(out))
 		return 1
 	}))
 	L.SetGlobal("crypto", cryptoMod)
