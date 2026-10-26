@@ -2534,24 +2534,33 @@ query:cancel()
 By default the whole output is collected and handed to the callback at the end, so a command that prints a lot (a large query result, a long log) holds all of it in memory first. Pass `on_stdout` and `on_stderr` to receive it as it arrives instead:
 
 ```lua
-local rows = {}
+local rows, partial = {}, {}
 local query = sys.exec_async("psql", {"-At", "-c", sql}, {
   env = {PGPASSWORD = password},
   max_output_bytes = 50 * 1024 * 1024,
   on_stdout = function(chunk)
-    for line in chunk:gmatch("[^\n]+") do
-      rows[#rows + 1] = line
+    local start = 1
+    for newline in chunk:gmatch("()\n") do
+      partial[#partial + 1] = chunk:sub(start, newline - 1)
+      rows[#rows + 1] = table.concat(partial)
+      partial = {}
+      start = newline + 1
     end
+    partial[#partial + 1] = chunk:sub(start)
     panel:redraw()
   end,
 }, function(result)
+  local last = table.concat(partial)
+  if last ~= "" then
+    rows[#rows + 1] = last
+  end
   if result.truncated then
     ttt.notify("Showing the first 50 MB of results")
   end
 end)
 ```
 
-- Chunks end at a newline, so a line is never split across two calls. Only a line longer than 64 KiB is split, at a UTF-8 character boundary, and the last chunk may lack a trailing newline. Output without a newline arrives when the line completes or the command ends.
+- Chunks end at a newline, so a line up to 64 KiB is never split across two calls. A longer line arrives in pieces of at most 64 KiB, split at a UTF-8 character boundary, so carry the text after the last newline over to the next call, as above. The last chunk may lack a trailing newline. Output without a newline arrives when the line completes or the command ends.
 - Callbacks run on the main thread, in order, and all of them before the final callback. Each stream is ordered on its own; how stdout and stderr chunks interleave is not defined.
 - ttt reads more output only after the previous chunk's callback returns. A command that prints faster than the plugin handles it waits instead of filling memory, so keep the callback quick.
 - A streamed stream is not collected: the result's `stdout` (or `stderr`) is empty. A stream without a callback is collected as usual.

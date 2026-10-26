@@ -166,6 +166,61 @@ func TestExecStreamChunkQueuedBehindCancelIsDropped(t *testing.T) {
 	}
 }
 
+func TestExecStreamChunkQueuedBeforeCancelIsDropped(t *testing.T) {
+	mock := &mockSystemAPI{writes: []string{"first\n"}, block: true}
+	p, ch, cleanup := startStream(t, mock, collectOpts)
+	defer cleanup()
+
+	chunk := <-ch
+	if err := p.State.DoString(`handle:cancel()`); err != nil {
+		t.Fatal(err)
+	}
+	final := <-ch
+	chunk()
+	if got := luaStrings(p, "chunks"); len(got) != 0 {
+		t.Errorf("chunk ran after cancel(): %q", got)
+	}
+	final()
+	if r := p.State.GetGlobal("result").(*lua.LTable); r.RawGetString("cancelled") != lua.LTrue {
+		t.Error("result not cancelled")
+	}
+}
+
+func TestExecOutputChunksStayWithinChunkMax(t *testing.T) {
+	long := strings.Repeat("a", 70000)
+	exact := strings.Repeat("b", execChunkMax)
+	for _, tc := range []struct {
+		name   string
+		writes []string
+		want   int
+	}{
+		{"newline arrives after the line outgrew the max", []string{long[:60000], long[60000:] + "\nshort\n"}, 2},
+		{"long line in one write", []string{long + "\n"}, 2},
+		{"line of exactly the max", []string{exact + "\n"}, 1},
+		{"short lines after a partial one", []string{long[:60000], "x\n" + strings.Repeat("row\n", 4000)}, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var chunks []string
+			o := &execOutput{deliver: func(c string) { chunks = append(chunks, c) }}
+			for _, w := range tc.writes {
+				o.Write([]byte(w))
+			}
+			o.flush()
+			if len(chunks) != tc.want {
+				t.Errorf("got %d chunks, want %d", len(chunks), tc.want)
+			}
+			for i, c := range chunks {
+				if len(strings.TrimSuffix(c, "\n")) > execChunkMax {
+					t.Errorf("chunk %d: %d bytes", i, len(c))
+				}
+			}
+			if strings.Join(chunks, "") != strings.Join(tc.writes, "") {
+				t.Error("chunks do not add up to the output")
+			}
+		})
+	}
+}
+
 func TestExecStreamOptionsRejected(t *testing.T) {
 	for _, code := range []string{
 		`sys.exec("psql", {}, { on_stdout = function() end })`,

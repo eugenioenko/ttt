@@ -74,13 +74,16 @@ func (o *execOutput) Write(p []byte) (int, error) {
 		return n, nil
 	}
 	o.pending = append(o.pending, p...)
-	if i := bytes.LastIndexByte(o.pending, '\n'); i >= 0 {
-		o.send(i + 1)
+	for {
+		window := o.pending[:min(len(o.pending), execChunkMax+1)]
+		if i := bytes.LastIndexByte(window, '\n'); i >= 0 {
+			o.send(i + 1)
+		} else if len(o.pending) > execChunkMax {
+			o.send(runeBoundary(o.pending, execChunkMax))
+		} else {
+			return n, nil
+		}
 	}
-	for len(o.pending) > execChunkMax {
-		o.send(runeBoundary(o.pending, execChunkMax))
-	}
-	return n, nil
 }
 
 func (o *execOutput) flush() {
@@ -118,7 +121,7 @@ func (p *Plugin) streamTo(ctx context.Context, fn *lua.LFunction, finished *bool
 		delivered := make(chan struct{})
 		p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
 			defer close(delivered)
-			if p.State == nil || *finished {
+			if p.State == nil || *finished || ctx.Err() != nil {
 				return
 			}
 			if err := p.CallLuaFunc(fn, lua.LString(chunk)); err != nil {
