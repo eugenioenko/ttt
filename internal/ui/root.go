@@ -50,6 +50,7 @@ type Root struct {
 	EscapeFallback   func()
 	capturedWidget   Widget
 	pressTarget      Widget
+	mouseReceiver    Widget
 	button1Held      bool
 	focusClaimed     bool
 }
@@ -192,14 +193,18 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		return r.dispatch(ev)
 	}
 	held := mev.Buttons()&tcell.Button1 != 0
+	pressed := held && !r.button1Held
 	released := !held && r.button1Held
-	if held && !r.button1Held {
+	if pressed {
 		r.focusClaimed = false
-		r.pressTarget, _ = r.pointerTarget()
 	}
 	r.button1Held = held
 	receiver, modal := r.pointerTarget()
+	r.mouseReceiver = nil
 	result := r.dispatch(ev)
+	if pressed {
+		r.pressTarget = r.mouseReceiver
+	}
 	if released {
 		r.releasePressTarget(ev, receiver, modal)
 	}
@@ -256,6 +261,7 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	}
 
 	if !isKey && r.capturedWidget != nil {
+		r.mouseReceiver = r.Main
 		return r.handleMouse(ev)
 	}
 
@@ -264,6 +270,7 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	}
 
 	if !isKey {
+		r.mouseReceiver = r.Main
 		return r.handleMouse(ev)
 	}
 
@@ -324,11 +331,9 @@ func (r *Root) handleOverlay(ev tcell.Event) EventResult {
 	top := r.Overlays[len(r.Overlays)-1]
 	slog.Debug("root", "action", "overlayIntercept", "modal", top.Modal, "count", len(r.Overlays))
 	result := top.Widget.HandleEvent(ev)
-	if top.Modal {
+	if top.Modal || result == EventConsumed {
+		r.mouseReceiver = top.Widget
 		return EventConsumed
-	}
-	if result == EventConsumed {
-		return result
 	}
 	return EventIgnored
 }
