@@ -206,10 +206,6 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 	divX := w - rightW - 1
 	topW := divX
 
-	if cs.RightBorderStartY != nil {
-		*cs.RightBorderStartY = 0
-	}
-
 	if cs.Top != nil && topW > 0 {
 		cs.Top.SetRect(Rect{X: r.X, Y: r.Y, W: topW, H: r.H})
 		cs.Top.Render(surface.Sub(Rect{X: 0, Y: 0, W: topW, H: h}))
@@ -218,6 +214,12 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 		if cs.capturedChild == cs.Top {
 			cs.capturedChild = nil
 		}
+	}
+
+	// This row 0 is a border row of its own, so the outer border's corner
+	// belongs on it, above anything the top child reported.
+	if cs.RightBorderStartY != nil {
+		*cs.RightBorderStartY = 0
 	}
 
 	surface.SetCell(divX, 0, term.Cell{Ch: b.TopLeft, Style: bs})

@@ -384,3 +384,54 @@ func TestRawKeyConsumerGetsChordKeys(t *testing.T) {
 		t.Fatalf("terminal got %d keys, want 3", terminal.eventCount)
 	}
 }
+
+// Some terminals never report the secondary button's release, so tcell keeps
+// Button2 in every later mask. A left click must still arrive as a left click,
+// and a later right press must still open the context menu.
+func TestStaleSecondaryButtonDoesNotTurnLeftClicksIntoRightClicks(t *testing.T) {
+	main := &mockWidget{}
+	root := NewRoot(main)
+	root.SetSize(80, 24)
+
+	rightClicks := 0
+	root.OnRightClick = func(_, _ int) { rightClicks++ }
+
+	mouse := func(btn tcell.ButtonMask) {
+		root.HandleEvent(tcell.NewEventMouse(10, 5, btn, tcell.ModNone))
+	}
+	lastButtons := func() tcell.ButtonMask {
+		ev, ok := main.lastEvent.(*tcell.EventMouse)
+		if !ok {
+			t.Fatalf("main got %T, want *tcell.EventMouse", main.lastEvent)
+		}
+		return ev.Buttons()
+	}
+
+	mouse(tcell.Button2)
+	if rightClicks != 1 {
+		t.Fatalf("right press opened %d menus, want 1", rightClicks)
+	}
+
+	// The release is consumed by the open menu and the terminal never clears
+	// the bit, so the left press and its release both carry Button2.
+	mouse(tcell.Button1 | tcell.Button2)
+	if rightClicks != 1 {
+		t.Errorf("left press reopened the menu")
+	}
+	if got := lastButtons(); got != tcell.Button1 {
+		t.Errorf("left press reached main as %v, want %v", got, tcell.Button1)
+	}
+
+	mouse(tcell.Button2)
+	if rightClicks != 1 {
+		t.Errorf("left release reopened the menu")
+	}
+	if got := lastButtons(); got != tcell.ButtonNone {
+		t.Errorf("left release reached main as %v, want %v", got, tcell.ButtonNone)
+	}
+
+	mouse(tcell.Button2)
+	if rightClicks != 2 {
+		t.Errorf("a fresh right press opened %d menus, want 2", rightClicks)
+	}
+}

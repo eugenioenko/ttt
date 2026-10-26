@@ -49,6 +49,7 @@ type Root struct {
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
+	lastMouseButtons tcell.ButtonMask
 }
 
 func NewRoot(main Widget) *Root {
@@ -282,7 +283,8 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 	if !ok {
 		return EventIgnored
 	}
-	btn := mev.Buttons()
+	mev, btn := r.dropStaleSecondaryButton(mev)
+	ev = mev
 
 	if r.capturedWidget != nil {
 		r.reconcilePointerCapture()
@@ -315,6 +317,23 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 	}
 	slog.Debug("root", "action", "mouseToMain", "result", result)
 	return result
+}
+
+// dropStaleSecondaryButton removes a secondary-button bit the terminal never
+// released. Every event carries the buttons the terminal reports as still held,
+// and some terminals never report a secondary-button release: afterwards Button2
+// rides along in every later mask, so a left click arrives as
+// Button1|Button2 and would be taken for a right click. A primary-button press,
+// or the release that directly follows one, proves the secondary bit stale.
+func (r *Root) dropStaleSecondaryButton(ev *tcell.EventMouse) (*tcell.EventMouse, tcell.ButtonMask) {
+	btn := ev.Buttons()
+	if btn&tcell.Button1 != 0 || (btn == tcell.Button2 && r.lastMouseButtons&tcell.Button1 != 0) {
+		x, y := ev.Position()
+		btn &^= tcell.Button2
+		ev = tcell.NewEventMouse(x, y, btn, ev.Modifiers())
+	}
+	r.lastMouseButtons = btn
+	return ev, btn
 }
 
 func (r *Root) handleChord(kev *tcell.EventKey) EventResult {

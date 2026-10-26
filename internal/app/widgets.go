@@ -358,6 +358,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	splitPanel.ShowLeft = sidebar.Visible
 	splitPanel.RightBorderStartY = 2
 	agentSplit.RightBorderStartY = &splitPanel.RightBorderStartY
+	// The innermost split renders last, so whichever one borders the outer frame
+	// sets where its right border starts.
+	contentSplit.RightBorderStartY = &splitPanel.RightBorderStartY
 	editorGroup.TabBar.PointerInteractionValid = func() bool {
 		return contentSplit.TopContentHeight() > 3
 	}
