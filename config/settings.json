@@ -9,6 +9,7 @@
     "tabSize": 4,
     "insertSpaces": true,
     "wordWrap": false,
+    "wordWrapColumn": 0,
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,

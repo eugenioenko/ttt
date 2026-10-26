@@ -94,7 +94,9 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `editor.tabSize` | int | `4` | Number of spaces per indentation level |
 | `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
-| `editor.wordWrap` | bool | `false` | Wrap long lines at the editor width |
+| `editor.wordWrap` | bool | `false` | Soft-wrap long lines; the global Options toggle changes this default |
+| `editor.wordWrapColumn` | int | `0` | Maximum soft-wrap width in terminal display columns; `0` uses the available text width. Positive values cap it after gutters, scrollbars, and wrap margins. Ignored when wrapping is off; negative values normalize to `0` |
+| `editor.languageOverrides` | object | `{}` | Per-language `wordWrap` and `wordWrapColumn` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
 | `editor.largeFiles.wordWrapMaxMB` | int | `32` | Files larger than this many megabytes open without word wrap, even when `editor.wordWrap` is on. `0` removes the limit |
 | `editor.largeFiles.autoReloadMaxMB` | int | `64` | Files larger than this many megabytes show a Reload action instead of automatically reloading after disk changes. `0` removes the limit. One megabyte is 1,048,576 bytes; negative values also remove the limit |
 | `editor.diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
@@ -126,6 +128,25 @@ All editor settings are nested under the `editor` key.
 | `editor.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
 | `editor.grammars` | array | `[]` | External TextMate grammars (see [Grammars](#grammars)) |
+
+### Language-specific wrapping
+
+Each wrap field resolves independently: language override → global setting → built-in default. The defaults are `wordWrap: false` and `wordWrapColumn: 0`.
+
+```json
+{
+  "editor": {
+    "wordWrap": true,
+    "wordWrapColumn": 0,
+    "languageOverrides": {
+      "typescript": { "wordWrapColumn": 80 },
+      "markdown": { "wordWrapColumn": 65 }
+    }
+  }
+}
+```
+
+With a global column of `80`, a Markdown override of `0` instead wraps at the pane width. Explicit `wordWrap: false` disables wrapping for that language. The global Word Wrap toggle leaves language overrides in place. Effective settings update on tab switches, language detection changes, and settings reload, without requiring LSP. Large-file safeguards still apply; diff wrapping and rendered `markdown.wrapWidth` remain separate. See [Soft Wrapping](/guides/editor/#soft-wrapping) for details.
 
 ## Explorer
 
@@ -290,6 +311,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "tabSize": 4,
     "insertSpaces": true,
     "wordWrap": false,
+    "wordWrapColumn": 0,
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,

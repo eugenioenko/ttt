@@ -95,21 +95,23 @@ type findSession struct {
 
 type EditorGroupWidget struct {
 	BaseWidget
-	TabBar           *TabBarWidget
-	Editor           *EditorPaneWidget
-	Autocomplete     *AutocompleteWidget
-	Hover            *HoverWidget
-	SignatureHelp    *SignatureHelpWidget
-	tabs             []editorTab
-	nextTabIdentity  uint64
-	active           int
-	pinnedCount      int
-	TabSize          int
-	InsertSpaces     bool
-	LineNumbers      bool
-	GutterStyle      string
-	WordWrap         bool
-	WordWrapMaxBytes int64
+	TabBar            *TabBarWidget
+	Editor            *EditorPaneWidget
+	Autocomplete      *AutocompleteWidget
+	Hover             *HoverWidget
+	SignatureHelp     *SignatureHelpWidget
+	tabs              []editorTab
+	nextTabIdentity   uint64
+	active            int
+	pinnedCount       int
+	TabSize           int
+	InsertSpaces      bool
+	LineNumbers       bool
+	GutterStyle       string
+	WordWrap          bool
+	WordWrapColumn    int
+	LanguageOverrides map[string]config.EditorLanguageOverride
+	WordWrapMaxBytes  int64
 	// editorInDiff is set while the shared editor is bound to an editable
 	// diff, which sets its word wrap from the diff's own wrap mode.
 	editorInDiff            bool
@@ -1729,10 +1731,33 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 }
 
 func (g *EditorGroupWidget) wrapsTab(t *editorTab) bool {
-	if !g.WordWrap {
-		return false
+	enabled, _ := g.tabWordWrap(t)
+	return enabled
+}
+
+func (g *EditorGroupWidget) tabWordWrap(t *editorTab) (bool, int) {
+	language := ""
+	if t != nil && t.Buf != nil {
+		language = highlight.DetectLanguageID(t.FilePath, t.Buf.Lines)
 	}
-	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes
+	s := config.EditorSettings{WordWrap: g.WordWrap, WordWrapColumn: g.WordWrapColumn, LanguageOverrides: g.LanguageOverrides}
+	enabled, column := s.ResolveWordWrap(language)
+	if !enabled {
+		return false, column
+	}
+	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes, column
+}
+
+func (g *EditorGroupWidget) ApplyFileWordWrap() {
+	t := g.activeTab()
+	if g.Editor == nil || t == nil || t.Content != nil || t.Diff != nil {
+		return
+	}
+	enabled, column := g.tabWordWrap(t)
+	if g.Editor.WordWrap != enabled || g.Editor.WordWrapColumn != column {
+		g.Editor.wrapGoal = wrapGoal{}
+	}
+	g.Editor.WordWrap, g.Editor.WordWrapColumn = enabled, column
 }
 
 // ActiveFileWordWrap reports whether the active file tab should wrap.
@@ -2706,8 +2731,11 @@ func (g *EditorGroupWidget) syncTabs() {
 		} else {
 			t.Highlighter.SetSyncLines(highlight.DefaultSyncLines)
 			g.Editor.SetDiffOverlay(t.Annotations)
+			if g.editorInDiff {
+				g.Editor.wrapCols = 0
+			}
 			g.editorInDiff = false
-			g.Editor.WordWrap = g.wrapsTab(t)
+			g.ApplyFileWordWrap()
 		}
 		g.Editor.buildDiagIndex()
 		g.Editor.InvalidateBracketColors()

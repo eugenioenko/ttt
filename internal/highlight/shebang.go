@@ -7,14 +7,34 @@ import (
 
 func NewForLines(filename string, lines []string) *Highlighter {
 	c := currentCatalog()
-	ref, ok := c.forFilename(filepath.Base(filename))
-	if !ok && len(lines) > 0 {
-		ref, ok = c.forLanguage(shebangLanguage(lines[0]))
-	}
+	ref, ok := c.forLines(filename, lines)
 	if !ok {
 		return nil
 	}
 	return c.newHighlighter(ref)
+}
+
+func DetectLanguageID(filename string, lines []string) string {
+	ref, ok := currentCatalog().forLines(filename, lines)
+	if !ok {
+		return ""
+	}
+	switch ref.languageID {
+	case "tsx":
+		return "typescriptreact"
+	case "jsx":
+		return "javascriptreact"
+	default:
+		return ref.languageID
+	}
+}
+
+func (c *grammarCatalog) forLines(filename string, lines []string) (grammarRef, bool) {
+	ref, ok := c.forFilename(filepath.Base(filename))
+	if !ok && len(lines) > 0 {
+		ref, ok = c.forLanguage(shebangLanguage(lines[0]))
+	}
+	return ref, ok
 }
 
 func shebangLanguage(line string) string {

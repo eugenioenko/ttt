@@ -17,8 +17,9 @@ type ExternalGrammar struct {
 }
 
 type grammarRef struct {
-	scopeName string
-	language  string
+	scopeName  string
+	language   string
+	languageID string
 }
 
 type grammarCatalog struct {
@@ -70,6 +71,10 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 		}
 		if ref.language == "" {
 			ref.language = shortName
+		}
+		ref.languageID = strings.ToLower(strings.TrimSpace(ref.language))
+		if info, ok := grammars.InfoForScope(g.ScopeName); ok && ext.Language == "" {
+			ref.languageID = info.ID
 		}
 		types := ext.FileTypes
 		if len(types) == 0 {
@@ -172,5 +177,5 @@ func (c *grammarCatalog) forLanguage(lang string) (grammarRef, bool) {
 }
 
 func refFromInfo(info grammars.GrammarInfo) grammarRef {
-	return grammarRef{scopeName: info.ScopeName, language: info.DisplayName}
+	return grammarRef{scopeName: info.ScopeName, language: info.DisplayName, languageID: info.ID}
 }

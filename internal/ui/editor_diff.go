@@ -656,11 +656,11 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		spans = e.Highlighter.HighlightLine(old.Text)
 	}
 	tabW := e.resolveTabSize()
-	leftCol := e.Viewport.LeftCol
+	startCol, leftCol := 0, e.Viewport.LeftCol
 	if e.WordWrap {
-		leftCol = bufColToVisualCol(old.Text, row.startCol, tabW)
+		startCol, leftCol = row.startCol, 0
 	}
-	cells := e.renderLineToScreen([]rune(old.Text), spans, false, nil, tabW, leftCol, editorW)
+	cells := e.renderLineSegmentToScreen([]rune(old.Text), spans, false, nil, startCol, tabW, leftCol, editorW)
 	matches := e.DiffOverlay.DeletedMatches[row.bufLine]
 	for x := 0; x < editorW; x++ {
 		cell := term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted}

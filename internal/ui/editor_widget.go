@@ -49,6 +49,7 @@ type EditorPaneWidget struct {
 	FoldChevronCollapsed    rune
 	FoldChevronExpanded     rune
 	WordWrap                bool
+	WordWrapColumn          int
 	AutoDedent              bool
 	AutoIndent              bool
 	BracketPairColorization bool

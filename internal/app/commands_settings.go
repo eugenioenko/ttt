@@ -88,6 +88,8 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
+	a.EditorGroup.WordWrapColumn = s.Editor.WordWrapColumn
+	a.EditorGroup.LanguageOverrides = s.Editor.LanguageOverrides
 	a.EditorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
 	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
 	a.EditorGroup.SetMarkdownMaxWidth(s.Markdown.WrapWidth)
@@ -114,7 +116,6 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.EditorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
 		a.EditorGroup.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
 		a.EditorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
-		a.EditorGroup.Editor.WordWrap = a.EditorGroup.ActiveFileWordWrap()
 		a.EditorGroup.Editor.BracketPairColorization = s.Editor.BracketPairColorization
 		if s.Editor.BracketPairColorization != prev.Editor.BracketPairColorization {
 			a.EditorGroup.Editor.InvalidateBracketColors()
@@ -144,6 +145,7 @@ func (a *App) ApplySettings(s config.Settings) {
 
 	a.applyIcons(s.Appearance)
 	a.applyGrammarSettings(s.Editor.Grammars)
+	a.EditorGroup.ApplyFileWordWrap()
 
 	if a.Explorer != nil && (a.Explorer.Settings != s.Explorer || a.Explorer.Icons != s.Appearance.Icons) {
 		a.Explorer.Settings = s.Explorer

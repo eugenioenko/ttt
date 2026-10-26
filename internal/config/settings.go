@@ -100,9 +100,11 @@ func DefaultLSPSettings() LSPSettings {
 }
 
 type EditorSettings struct {
-	TabSize      int  `json:"tabSize"`
-	InsertSpaces bool `json:"insertSpaces"`
-	WordWrap     bool `json:"wordWrap"`
+	TabSize           int                               `json:"tabSize"`
+	InsertSpaces      bool                              `json:"insertSpaces"`
+	WordWrap          bool                              `json:"wordWrap"`
+	WordWrapColumn    int                               `json:"wordWrapColumn"`
+	LanguageOverrides map[string]EditorLanguageOverride `json:"languageOverrides,omitempty"`
 	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
 	// built-in limit. Unlisted: raise it only where every line must finish, such
 	// as slow CI runners.
@@ -141,6 +143,24 @@ type EditorSettings struct {
 
 	SaveAllOnQuit              bool `json:"saveAllOnQuit"`
 	SaveAllOnQuitExceptUnnamed bool `json:"saveAllOnQuitExceptUnnamed"`
+}
+
+type EditorLanguageOverride struct {
+	WordWrap       *bool `json:"wordWrap,omitempty"`
+	WordWrapColumn *int  `json:"wordWrapColumn,omitempty"`
+}
+
+func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
+	enabled, column := e.WordWrap, e.WordWrapColumn
+	if o, ok := e.LanguageOverrides[languageID]; ok && languageID != "" {
+		if o.WordWrap != nil {
+			enabled = *o.WordWrap
+		}
+		if o.WordWrapColumn != nil {
+			column = *o.WordWrapColumn
+		}
+	}
+	return enabled, max(column, 0)
 }
 
 type LargeFileSettings struct {
@@ -484,6 +504,14 @@ func (s Settings) FormatterForExt(ext string) string {
 }
 
 func normalizeSettings(s *Settings) {
+	s.Editor.WordWrapColumn = max(s.Editor.WordWrapColumn, 0)
+	for language, o := range s.Editor.LanguageOverrides {
+		if o.WordWrapColumn != nil && *o.WordWrapColumn < 0 {
+			column := 0
+			o.WordWrapColumn = &column
+			s.Editor.LanguageOverrides[language] = o
+		}
+	}
 	if !slices.Contains(GutterStyles, s.Editor.GutterStyle) {
 		s.Editor.GutterStyle = "compact"
 	}

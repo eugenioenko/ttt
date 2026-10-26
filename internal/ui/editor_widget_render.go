@@ -38,7 +38,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	if e.DiffOverlay.wrapNotes(e.wrapTextWidth(max(editorW, 1)), false) {
 		e.SetDiffOverlay(e.DiffOverlay)
 	}
-	visibleCount := e.rowLayout(editorW).total()
+	visibleCount := e.rowLayout(e.wrapTextWidth(max(editorW, 1))).total()
 
 	showScrollbar := !e.Embedded && visibleCount > h
 	if showScrollbar {
@@ -46,6 +46,15 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 	editorW = e.wrapTextWidth(max(editorW, 1))
 
+	if e.Viewport.Width != editorW {
+		e.wrapGoal = wrapGoal{}
+		if e.WordWrap && !e.Embedded && e.WordWrapColumn > 0 && e.Viewport.Width > 0 {
+			previous := e.layout()
+			row, _ := previous.rowOf(e.Cursor.Line, e.Cursor.Col)
+			top := e.topRow(previous)
+			e.hScrollPending = e.hScrollPending || (row >= top && row < top+e.Viewport.Height)
+		}
+	}
 	e.Viewport.Width = editorW
 	e.Viewport.Height = h
 	if e.DiffOverlay.wrapNotes(editorW, false) {
@@ -225,18 +234,16 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				annRunes = []rune(" ⋯")
 			}
 
-			var leftCol int
+			startCol, leftCol := 0, e.Viewport.LeftCol
 			if e.WordWrap {
-				leftCol = bufColToVisualCol(e.Buf.Lines[lineIdx], segStartCol, tabW)
-			} else {
-				leftCol = e.Viewport.LeftCol
+				startCol, leftCol = segStartCol, 0
 			}
 			diffBg := e.diffLineBg(lineIdx)
 			var lineSpans []ColSpan
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineToScreen(line, syntaxSpans, isCollapsedLine, annRunes, tabW, leftCol, editorW)
+			screenCells := e.renderLineSegmentToScreen(line, syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
 				lineBrackets = bracketColors[lineIdx]
@@ -418,6 +425,9 @@ func (e *EditorPaneWidget) wrapTextWidth(editorW int) int {
 	if e.wrapCols > 0 && w > e.wrapCols {
 		w = e.wrapCols
 	}
+	if e.WordWrapColumn > 0 {
+		w = min(w, e.WordWrapColumn)
+	}
 	return w
 }
 
@@ -461,6 +471,10 @@ type screenCell struct {
 
 // The returned slice is reused by the next call.
 func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Span, collapsed bool, ann []rune, tabW, leftCol, width int) []screenCell {
+	return e.renderLineSegmentToScreen(line, spans, collapsed, ann, 0, tabW, leftCol, width)
+}
+
+func (e *EditorPaneWidget) renderLineSegmentToScreen(line []rune, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)
 	}
@@ -470,7 +484,7 @@ func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Spa
 	}
 	visCol := 0
 	lineLen := len(line)
-	for bufCol := 0; bufCol < lineLen; bufCol++ {
+	for bufCol := startCol; bufCol < lineLen; bufCol++ {
 		ch := line[bufCol]
 		style := term.StyleDefault
 		for _, sp := range spans {
