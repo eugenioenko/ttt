@@ -978,6 +978,9 @@ func (g *EditorGroupWidget) ClosePluginTab(key string) bool {
 			if i < g.pinnedCount {
 				g.pinnedCount--
 			}
+			if i < g.active {
+				g.active--
+			}
 			g.tabs = append(g.tabs[:i], g.tabs[i+1:]...)
 			emptied := len(g.tabs) == 0
 			if emptied {

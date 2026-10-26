@@ -539,3 +539,19 @@ func TestEditorGroupWordWrapMaxBytes(t *testing.T) {
 		t.Errorf("after saving large content: WordWrap = true, want false")
 	}
 }
+
+func TestClosePluginTabLeftOfActiveKeepsActiveTab(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	for _, key := range []string{"a", "b", "c"} {
+		g.OpenPluginTab(key, key, NewCommitDetailWidget("/repo", key, "abcdef0", false))
+	}
+	for i, tab := range g.tabs {
+		if tab.PluginKey == "b" {
+			g.SwitchTab(i)
+		}
+	}
+	g.ClosePluginTab("a")
+	if got := g.PluginTabKey(g.active); got != "b" {
+		t.Fatalf("active tab after closing a tab to its left = %q, want b", got)
+	}
+}
