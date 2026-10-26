@@ -133,6 +133,23 @@ func TestNormalizeSettingsEmptySelectionStyle(t *testing.T) {
 	}
 }
 
+func TestNormalizeSettingsPluginSelectionStyleDefaultsToInvert(t *testing.T) {
+	for _, style := range []string{"", "invalid"} {
+		s := DefaultSettings()
+		s.Plugins.SelectionStyle = style
+		normalizeSettings(&s)
+		if s.Plugins.SelectionStyle != SelectionStyleInvert {
+			t.Errorf("plugins SelectionStyle %q became %q, want %q", style, s.Plugins.SelectionStyle, SelectionStyleInvert)
+		}
+	}
+	s := DefaultSettings()
+	s.Plugins.SelectionStyle = SelectionStyleBackground
+	normalizeSettings(&s)
+	if s.Plugins.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("plugins SelectionStyle %q was not preserved", SelectionStyleBackground)
+	}
+}
+
 func TestLSPSettingsIsEnabled(t *testing.T) {
 	// nil Enabled means default (true)
 	s := LSPSettings{}

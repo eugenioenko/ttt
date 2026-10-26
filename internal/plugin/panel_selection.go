@@ -77,7 +77,7 @@ func (s *panelSelection) highlight(surface widgets.Surface) {
 		row := s.cells[y]
 		for x := x0; x <= x1; x++ {
 			c := row[x]
-			c.BgStyle = term.StyleSelection
+			c.BgStyle = term.StylePluginSelection
 			surface.SetCell(x, y, c)
 			if textwidth.Rune(c.Ch) == 2 {
 				x++

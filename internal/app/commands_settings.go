@@ -168,7 +168,7 @@ func (a *App) ApplySettings(s config.Settings) {
 			theme, ok = loaded, err == nil
 		}
 		if ok {
-			ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(s.Editor.TransparentBackground), WithEditorSelectionStyle(s.Editor.SelectionStyle))
+			ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(s.Editor.TransparentBackground), WithEditorSelectionStyle(s.Editor.SelectionStyle), WithPluginSelectionStyle(s.Plugins.SelectionStyle))
 			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground), WithTerminalSelectionStyle(s.Terminal.SelectionStyle))
 			borders := BuildBorderSet(theme.Borders)
 			*a.Borders = borders

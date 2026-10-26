@@ -16,6 +16,7 @@ type styleMapOptions struct {
 	transparentBg          bool
 	editorSelectionStyle   string
 	terminalSelectionStyle string
+	pluginSelectionStyle   string
 }
 
 type StyleMapOption func(*styleMapOptions)
@@ -26,6 +27,10 @@ func WithTransparentBackground(v bool) StyleMapOption {
 
 func WithEditorSelectionStyle(style string) StyleMapOption {
 	return func(o *styleMapOptions) { o.editorSelectionStyle = style }
+}
+
+func WithPluginSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) { o.pluginSelectionStyle = style }
 }
 
 func WithTerminalSelectionStyle(style string) StyleMapOption {
@@ -88,6 +93,7 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	}
 	m[term.StyleSelection] = base.Reverse(true)
 	m[term.StyleReverse] = base.Reverse(true)
+	m[term.StylePluginSelection] = base.Reverse(true)
 
 	if o.transparentBg {
 		if theme.CommitHeader.Bg == theme.Default.Bg {
@@ -115,6 +121,12 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleMenuBarActive, theme.Menu.Active)
 	applyStyleDef(&m, term.StyleBorder, theme.Border)
 	applyStyleDef(&m, term.StyleBorderActive, theme.BorderActive)
+	if o.pluginSelectionStyle == config.SelectionStyleBackground {
+		if theme.Editor.Selection.Bg != "" {
+			m[term.StylePluginSelection] = base
+		}
+		applyStyleDef(&m, term.StylePluginSelection, theme.Editor.Selection)
+	}
 	if o.editorSelectionStyle == config.SelectionStyleInvert {
 		// Keep reverse/inversion and skip the theme's selection background override.
 	} else {

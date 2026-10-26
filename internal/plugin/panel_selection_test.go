@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
@@ -54,10 +55,10 @@ func TestPanelDragSelectsDrawnTextAndCopies(t *testing.T) {
 	mouse(pw, 14, 6, tcell.ButtonNone)
 	pw.Render(surface)
 
-	if c := surface.cells[[2]int{6, 0}]; c.BgStyle != term.StyleSelection || c.Ch != 'b' {
+	if c := surface.cells[[2]int{6, 0}]; c.BgStyle != term.StylePluginSelection || c.Ch != 'b' {
 		t.Errorf("selection start cell = %+v, want highlighted 'b'", c)
 	}
-	if c := surface.cells[[2]int{5, 1}]; c.BgStyle == term.StyleSelection {
+	if c := surface.cells[[2]int{5, 1}]; c.BgStyle == term.StylePluginSelection {
 		t.Errorf("cell past the selection end is highlighted")
 	}
 
@@ -264,7 +265,7 @@ func TestPanelTableCellCopiesFullValue(t *testing.T) {
 	}
 	for x := range 7 {
 		c := surface.cells[[2]int{x, 2}]
-		if hl := c.BgStyle == term.StyleSelection; hl != (x < 6) {
+		if hl := c.BgStyle == term.StylePluginSelection; hl != (x < 6) {
 			t.Fatalf("cell %d %q highlighted=%v, want the drawn id only", x, c.Ch, hl)
 		}
 	}
@@ -291,5 +292,47 @@ func TestPanelTableCellCopiesFullValue(t *testing.T) {
 	mouse(pw, 25, 10, tcell.ButtonNone)
 	if pw.CopyTextSelection() {
 		t.Fatal("a click below the rows kept the cell selection")
+	}
+}
+
+func TestPanelDrawsWidgetSelectionsInPluginSelectionStyle(t *testing.T) {
+	p := &Plugin{Name: "test", Granted: PermissionSet{PanelSidebar: true}}
+	p.State = NewSandbox()
+	t.Cleanup(p.State.Close)
+	setupTTTModule(p.State, p)
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		ttt.register({
+			sidebar = {
+				title = "Test",
+				render = function(panel)
+					panel:input({ value = "hi界", autofocus = true })
+				end,
+			},
+		})
+	`)
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	pw := NewPluginPanelWidget(p, p.RenderFunc, p.EventFunc)
+	pw.SetRect(widgets.Rect{W: 20, H: 3})
+	surface := newMockSurface(20, 3)
+	pw.SetFocused(true)
+	pw.Render(surface)
+	pw.FocusAutofocusInput()
+	pw.SelectAllText()
+	pw.Render(surface)
+
+	selected := 0
+	for _, c := range surface.cells {
+		if c.Style == term.StyleSelection || c.BgStyle == term.StyleSelection {
+			t.Fatalf("cell %q still uses the editor selection style", c.Ch)
+		}
+		if c.Style == term.StylePluginSelection || c.BgStyle == term.StylePluginSelection {
+			selected++
+		}
+	}
+	if want := textwidth.String("hi界"); selected != want {
+		t.Fatalf("cells in the plugin selection style = %d, want %d, both columns of the wide rune included", selected, want)
 	}
 }

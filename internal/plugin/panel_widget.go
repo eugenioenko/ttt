@@ -65,10 +65,38 @@ func (pw *PluginPanelWidget) Render(surface widgets.Surface) {
 		r := pw.GetRect()
 		root.SetRect(widgets.Rect{X: r.X, Y: r.Y, W: w, H: h})
 		root.Render(surface)
+		usePluginSelection(surface)
 	}
 
 	pw.sel.snapshot(surface)
 	pw.sel.highlight(surface)
+}
+
+// The shared widgets draw selections in the editor's style; a plugin panel
+// redraws them in the plugin selection style from the plugins settings.
+func usePluginSelection(surface widgets.Surface) {
+	reader, ok := surface.(widgets.CellReader)
+	if !ok {
+		return
+	}
+	w, h := surface.Size()
+	for y := range h {
+		for x := range w {
+			c, ok := reader.CellAt(x, y)
+			if !ok {
+				continue
+			}
+			if c.Style == term.StyleSelection || c.BgStyle == term.StyleSelection {
+				if c.Style == term.StyleSelection {
+					c.Style = term.StylePluginSelection
+				}
+				if c.BgStyle == term.StyleSelection {
+					c.BgStyle = term.StylePluginSelection
+				}
+				surface.SetCell(x, y, c)
+			}
+		}
+	}
 }
 
 func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {

@@ -68,5 +68,8 @@
   },
   "image": {
     "protocol": "auto"
+  },
+  "plugins": {
+    "selectionStyle": "invert"
   }
 }

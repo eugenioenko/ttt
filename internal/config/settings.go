@@ -329,7 +329,8 @@ func DefaultExplorerSettings() ExplorerSettings {
 }
 
 type PluginSettings struct {
-	Enabled *bool `json:"enabled,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty"`
+	SelectionStyle string `json:"selectionStyle,omitempty"`
 }
 
 func (p PluginSettings) IsEnabled() bool {
@@ -395,8 +396,8 @@ type Settings struct {
 	Autocomplete AutocompleteSettings `json:"autocomplete"`
 	Markdown     MarkdownSettings     `json:"markdown"`
 	Image        ImageSettings        `json:"image"`
-	// Plugins is safe: its only field is a tri-state *bool where nil means the
-	// default, so the zero value and "unset" mean the same thing.
+	// Plugins is safe: each field's zero value (a nil *bool, an empty string)
+	// means its default, so the zero value and "unset" mean the same thing.
 	Plugins    PluginSettings    `json:"plugins,omitzero"`
 	Welcome    WelcomeSettings   `json:"welcome,omitzero"`
 	Formatters map[string]string `json:"formatters,omitempty"`
@@ -473,6 +474,7 @@ func DefaultSettings() Settings {
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),
 		Image:        DefaultImageSettings(),
+		Plugins:      PluginSettings{SelectionStyle: SelectionStyleInvert},
 	}
 }
 
@@ -495,6 +497,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(SelectionStyles, s.Terminal.SelectionStyle) {
 		s.Terminal.SelectionStyle = SelectionStyleBackground
+	}
+	if !slices.Contains(SelectionStyles, s.Plugins.SelectionStyle) {
+		s.Plugins.SelectionStyle = SelectionStyleInvert
 	}
 	seenPanels := make(map[string]bool)
 	panelOrder := s.Sidebar.PanelOrder[:0]

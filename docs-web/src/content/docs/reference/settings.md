@@ -209,6 +209,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `plugins.enabled` | bool | `true` | Enable the plugin system. When `false`, no plugins are loaded and the Plugins sidebar tab is hidden. |
+| `plugins.selectionStyle` | string | `"invert"` | Selection highlight style inside plugin panels, tabs and dialogs: `"invert"` (invert foreground and background colors) or `"background"` (use theme's selection background). Inverted selections stay visible on a plugin's highlighted rows. |
 
 ## Markdown
 
@@ -359,7 +360,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "signatureHelp": true
   },
   "plugins": {
-    "enabled": true
+    "enabled": true,
+    "selectionStyle": "invert"
   },
   "formatters": {
     "go": "gofmt",

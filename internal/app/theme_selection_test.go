@@ -89,3 +89,19 @@ func TestBuildTerminalPaletteSelectionStyleDefaultUnset(t *testing.T) {
 		t.Errorf("TerminalColorPalette.SelectionBg.Set = false, want set by default")
 	}
 }
+
+func TestBuildStyleMapPluginSelectionStyleIsIndependentOfTheEditor(t *testing.T) {
+	theme := config.DefaultTheme()
+	theme.Editor.Selection.Bg = "#123456"
+
+	styles := BuildStyleMap(theme, WithEditorSelectionStyle(config.SelectionStyleBackground), WithPluginSelectionStyle(config.SelectionStyleInvert))
+	if !styles[term.StylePluginSelection].HasReverse() || styles[term.StyleSelection].HasReverse() {
+		t.Error("plugin invert with editor background: want only the plugin selection reversed")
+	}
+
+	styles = BuildStyleMap(theme, WithEditorSelectionStyle(config.SelectionStyleInvert), WithPluginSelectionStyle(config.SelectionStyleBackground))
+	plugin := styles[term.StylePluginSelection]
+	if plugin.HasReverse() || plugin.GetBackground() != tcell.GetColor("#123456") {
+		t.Errorf("plugin background with editor invert = %v reverse=%v, want the theme selection background", plugin.GetBackground(), plugin.HasReverse())
+	}
+}
