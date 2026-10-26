@@ -345,7 +345,15 @@ func TestPluginSystemAPI_ArgumentInjection(t *testing.T) {
 		{"git pager injection", "git", []string{"-c", "core.pager=!cmd"}, true},
 		{"git upload-pack", "git", []string{"clone", "--upload-pack=evil"}, true},
 		{"git receive-pack", "git", []string{"push", "--receive-pack=evil"}, true},
-		{"general =! injection", "/usr/bin/some-tool", []string{"--config=!evil"}, true},
+		{"git =! in any argument", "git", []string{"-calias.x=!evil", "x"}, true},
+		{"git config-env", "git", []string{"--config-env=alias.x=FOO", "x"}, true},
+		{"git by absolute path", "/usr/bin/git", []string{"-c", "alias.x=!evil"}, true},
+		{"git with exe suffix", "git.exe", []string{"-c", "alias.x=!evil"}, true},
+		{"git in another case", "/usr/bin/Git", []string{"-c", "core.pager=!cmd"}, true},
+		{"=! for a non-git binary", "/usr/bin/some-tool", []string{"--config=!evil"}, false},
+		{"psql connection string", "psql", []string{"postgresql://u:pa=!ss@host/db"}, false},
+		{"sqlite3 with =! in sql", "sqlite3", []string{"db.sqlite", "select 'a=!b'"}, false},
+		{"git-like name is not git", "legit", []string{"-c", "alias.x=!evil"}, false},
 		{"safe non-git args", "docker", []string{"ps", "-a"}, false},
 	}
 

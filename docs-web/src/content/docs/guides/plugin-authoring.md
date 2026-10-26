@@ -2480,7 +2480,7 @@ end
 
 `env` values are set only in the child's environment (and inherited by any process it starts). They are not set in the editor's environment and do not appear on the command line. Keys must be non-empty strings without `=` or NUL, and values must be strings or numbers. Keys that change which code the child loads are rejected: `PATH`, `LD_*` and `DYLD_*` for every binary, and `GIT_*` for `git`. An invalid `env` or `timeout_ms` raises an error.
 
-Arguments are validated before execution: shell-injection patterns and dangerous git flags (e.g. `--upload-pack`, `core.fsmonitor`) are rejected.
+Arguments go to the binary as they are, with no shell in between, so characters like `=!`, `;` or `$` in a password, connection string or query need no escaping. Only `git` arguments are checked, because git runs some configuration values as commands: an argument containing `=!` (a shell alias set through `-c`) or a flag like `--upload-pack`, `--config-env` or `core.fsmonitor` is rejected.
 
 ### `sys.exec_async(binary, [args], [opts], callback)`
 

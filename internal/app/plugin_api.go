@@ -512,28 +512,27 @@ func NewPluginSystemAPI() *PluginSystemAPI {
 	return &PluginSystemAPI{}
 }
 
-var dangerousArgPatterns = []string{
+var dangerousGitArgPatterns = []string{
 	"--upload-pack", "--receive-pack",
-	"--exec=", "--config=",
+	"--exec=", "--config=", "--config-env",
 	"core.fsmonitor", "core.sshCommand", "core.pager",
 	"diff.external", "merge.tool",
 }
 
+// validateArgs guards git only: git runs a config value starting with "!"
+// (an alias or helper set through -c) as a shell command. Other binaries get
+// their arguments as plain argv with no shell, so "=!" is ordinary text there.
 func (s *PluginSystemAPI) validateArgs(binary string, args []string) error {
-	base := filepath.Base(binary)
+	if !plugin.IsGitBinary(binary) {
+		return nil
+	}
 	for i, arg := range args {
 		if strings.Contains(arg, "=!") {
 			return fmt.Errorf("argument %d contains command injection pattern", i)
 		}
-
-		if base == "git" {
-			if arg == "-c" && i+1 < len(args) && strings.Contains(args[i+1], "=!") {
-				return fmt.Errorf("git -c argument contains command injection pattern")
-			}
-			for _, pattern := range dangerousArgPatterns {
-				if strings.Contains(arg, pattern) {
-					return fmt.Errorf("argument %d contains blocked pattern %q", i, pattern)
-				}
+		for _, pattern := range dangerousGitArgPatterns {
+			if strings.Contains(arg, pattern) {
+				return fmt.Errorf("argument %d contains blocked pattern %q", i, pattern)
 			}
 		}
 	}

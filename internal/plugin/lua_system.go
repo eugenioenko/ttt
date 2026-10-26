@@ -132,14 +132,19 @@ func validateExecEnv(binary, key, val string) error {
 	}
 	upper := strings.ToUpper(key)
 	blocked := upper == "PATH" || strings.HasPrefix(upper, "LD_") || strings.HasPrefix(upper, "DYLD_")
-	base := strings.TrimSuffix(strings.ToLower(filepath.Base(binary)), ".exe")
-	if base == "git" && strings.HasPrefix(upper, "GIT_") {
+	if IsGitBinary(binary) && strings.HasPrefix(upper, "GIT_") {
 		blocked = true
 	}
 	if blocked {
 		return fmt.Errorf("env key %q is not allowed", key)
 	}
 	return nil
+}
+
+// IsGitBinary reports whether binary names git, the way a case-insensitive
+// filesystem or Windows would resolve it.
+func IsGitBinary(binary string) bool {
+	return strings.TrimSuffix(strings.ToLower(filepath.Base(binary)), ".exe") == "git"
 }
 
 func runExec(ctx context.Context, sys SystemAPI, binary string, req execRequest) execResult {
