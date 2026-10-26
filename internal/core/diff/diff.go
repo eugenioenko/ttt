@@ -3,6 +3,7 @@ package diff
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -325,31 +326,20 @@ func computeLCS(a, b []string) []string {
 }
 
 func parseHunkHeader(header string) (oldStart, newStart int) {
-	// @@ -oldStart,oldCount +newStart,newCount @@
-	parts := strings.Split(header, " ")
-	for _, p := range parts {
-		if strings.HasPrefix(p, "-") && strings.Contains(p, ",") {
-			n := 0
-			for _, ch := range p[1:] {
-				if ch >= '0' && ch <= '9' {
-					n = n*10 + int(ch-'0')
-				} else {
-					break
-				}
-			}
-			oldStart = n
-		}
-		if strings.HasPrefix(p, "+") && strings.Contains(p, ",") {
-			n := 0
-			for _, ch := range p[1:] {
-				if ch >= '0' && ch <= '9' {
-					n = n*10 + int(ch-'0')
-				} else {
-					break
-				}
-			}
-			newStart = n
-		}
+	// @@ -oldStart[,oldCount] +newStart[,newCount] @@; git leaves out a count of 1.
+	parts := strings.Fields(header)
+	if len(parts) < 3 {
+		return 0, 0
 	}
-	return oldStart, newStart
+	return hunkRangeStart(parts[1], "-"), hunkRangeStart(parts[2], "+")
+}
+
+func hunkRangeStart(r, sign string) int {
+	r, ok := strings.CutPrefix(r, sign)
+	if !ok {
+		return 0
+	}
+	start, _, _ := strings.Cut(r, ",")
+	n, _ := strconv.Atoi(start)
+	return n
 }
