@@ -60,6 +60,15 @@ func TestDrawRunesClippedFullwidthEllipsis(t *testing.T) {
 	}
 }
 
+func TestDrawRunesClippedEllipsisWhenAWideRuneCrossesMaxX(t *testing.T) {
+	s := newTestSurface(20, 1)
+	// a가 needs 3 columns; with 2 the wide rune would cross maxX.
+	end := drawRunesClipped(s, 0, 0, 2, []rune("a가"), term.StyleDefault)
+	if s.cells[0][0].Ch != 'a' || s.cells[0][1].Ch != '…' || end != 2 {
+		t.Fatalf("cells = %q %q, end = %d, want a… ending at 2", s.cells[0][0].Ch, s.cells[0][1].Ch, end)
+	}
+}
+
 func TestTruncateRunesLeftFullwidth(t *testing.T) {
 	// 5 columns available: the ellipsis takes 1, leaving 4 for two runes.
 	got := string(truncateRunesLeft([]rune("가나다라"), 5))

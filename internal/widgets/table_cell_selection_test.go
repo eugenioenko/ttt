@@ -82,8 +82,8 @@ func TestTableTruncatedCellHighlightsVisibleTextAndCopiesFullValue(t *testing.T)
 
 	doubleClick(tbl, 0, 3)
 	s = renderWidget(tbl, 0, 0, 20, 10)
-	if got := highlighted(s, 3); !slices.Equal(got, []int{0, 2}) {
-		t.Fatalf("wide-rune highlight = %v, want the two drawn runes", got)
+	if got := highlighted(s, 3); !slices.Equal(got, []int{0, 2, 4}) {
+		t.Fatalf("wide-rune highlight = %v, want the two drawn runes and the ellipsis", got)
 	}
 	if text, _ := tbl.SelectedCellText(); text != "日本語テキスト" {
 		t.Fatalf("copied value = %q", text)

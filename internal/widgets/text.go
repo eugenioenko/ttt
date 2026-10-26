@@ -37,12 +37,12 @@ func drawRunesClipped(surface Surface, x, y, maxX int, runes []rune, style term.
 	fits := x+textwidth.Runes(runes) <= maxX
 	for i, ch := range runes {
 		w := textwidth.Rune(ch)
-		if x+w > maxX {
-			break
-		}
-		if !fits && x+w >= maxX && i < len(runes)-1 {
+		if !fits && x < maxX && x+w >= maxX && (i < len(runes)-1 || x+w > maxX) {
 			surface.SetCell(x, y, term.Cell{Ch: '…', Style: style})
 			return x + 1
+		}
+		if x+w > maxX {
+			break
 		}
 		surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
 		x += w
