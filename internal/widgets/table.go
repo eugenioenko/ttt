@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"slices"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/icons"
@@ -101,7 +102,7 @@ const tableDoubleClickMs = 500
 type tableCellSelection struct {
 	active   bool
 	row, col int
-	value    string
+	cells    []string
 }
 
 func (t *TableWidget) clock() time.Time {
@@ -540,12 +541,15 @@ func (t *TableWidget) columnAt(x int) int {
 }
 
 func (t *TableWidget) selectCell(row, col int) {
-	value := t.cellValue(row, col)
-	t.cellSel = tableCellSelection{active: value != "", row: row, col: col, value: value}
+	if t.cellValue(row, col) == "" {
+		t.cellSel = tableCellSelection{}
+		return
+	}
+	t.cellSel = tableCellSelection{active: true, row: row, col: col, cells: slices.Clone(t.Config.Rows[row])}
 }
 
 func (t *TableWidget) validateCellSelection() {
-	if t.cellSel.active && t.cellValue(t.cellSel.row, t.cellSel.col) != t.cellSel.value {
+	if t.cellSel.active && (t.cellValue(t.cellSel.row, t.cellSel.col) == "" || !slices.Equal(t.Config.Rows[t.cellSel.row], t.cellSel.cells)) {
 		t.cellSel = tableCellSelection{}
 	}
 }
@@ -553,7 +557,10 @@ func (t *TableWidget) validateCellSelection() {
 // SelectedCellText returns the selected cell's full value, not its truncated text.
 func (t *TableWidget) SelectedCellText() (string, bool) {
 	t.validateCellSelection()
-	return t.cellSel.value, t.cellSel.active
+	if !t.cellSel.active {
+		return "", false
+	}
+	return t.cellSel.cells[t.cellSel.col], true
 }
 
 func (t *TableWidget) ClearCellSelection() bool {

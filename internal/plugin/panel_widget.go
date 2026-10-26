@@ -122,11 +122,11 @@ func (pw *PluginPanelWidget) CopyTextSelection() bool {
 
 // SelectAllText selects the focused input's text, or else the panel's.
 func (pw *PluginPanelWidget) SelectAllText() {
+	pw.clearTableCells()
 	if inp := pw.FocusedInput(); inp != nil {
 		inp.SelectAll()
 		return
 	}
-	pw.clearTableCells()
 	pw.sel.selectAll()
 }
 

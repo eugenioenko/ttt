@@ -11,6 +11,7 @@ import (
 )
 
 func doubleClick(tbl *TableWidget, x, y int) {
+	tbl.clickAt = 0
 	clickAndRelease(tbl, x, y)
 	clickAndRelease(tbl, x, y)
 }
@@ -112,6 +113,17 @@ func TestTableCellSelectionClears(t *testing.T) {
 		t.Fatalf("a single click should still select the row, got %d", tbl.SelectedIndex())
 	}
 
+	doubleClick(tbl, 1, 3)
+	tbl.Config.Rows = [][]string{{"Alice", "30"}, {"Bob", "25"}, {"", "1"}}
+	renderWidget(tbl, 0, 0, 20, 10)
+	if text, ok := tbl.SelectedCellText(); !ok || text != "Bob" {
+		t.Fatalf("a render with the same rows should keep the selection, got %q %v", text, ok)
+	}
+	tbl.Config.Rows = [][]string{{"Alice", "30"}, {"Bob", "26"}}
+	renderWidget(tbl, 0, 0, 20, 10)
+	if selected() {
+		t.Fatal("a render that replaced the row kept the selection")
+	}
 	doubleClick(tbl, 1, 3)
 	tbl.Config.Rows = [][]string{{"Alice", "30"}}
 	renderWidget(tbl, 0, 0, 20, 10)
