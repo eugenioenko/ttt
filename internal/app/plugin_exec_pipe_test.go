@@ -55,7 +55,7 @@ func TestPluginSystemAPI_ExecGrandchildWritingPastExitDoesNotHang(t *testing.T) 
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh not available")
 	}
-	script := "(i=0; while [ $i -lt 60 ]; do echo tick; sleep 0.1; i=$((i+1)); done) & echo hi"
+	script := "echo hi; (i=0; while [ $i -lt 60 ]; do echo tick; sleep 0.1; i=$((i+1)); done) &"
 	start := time.Now()
 	stdout, _, _, err := NewPluginSystemAPI().Exec(context.Background(), "sh", []string{"-c", script}, plugin.ExecOptions{})
 	if elapsed := time.Since(start); elapsed > 3*time.Second {
