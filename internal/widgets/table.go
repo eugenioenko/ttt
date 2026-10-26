@@ -11,7 +11,9 @@ import (
 type TableColumn struct {
 	Label string
 	Width int
-	Align string // "left" (default), "right", "center"
+	// MinWidth bounds an auto-sized column (Width 0); 0 means the label's width.
+	MinWidth int
+	Align    string // "left" (default), "right", "center"
 }
 
 type TableConfig struct {
@@ -44,7 +46,11 @@ type TableWidget struct {
 	now       func() time.Time
 
 	scrollbar                 scrollbar
+	hbar                      horizontalScrollbar
+	scrollLeft                int
 	contentW                  int
+	fullW                     int
+	dataH                     int
 	widths                    []int
 	pointerCaptureInvalidated func()
 }
@@ -110,17 +116,18 @@ func (t *TableWidget) Render(surface Surface) {
 	surface.Fill(term.Cell{Ch: ' '})
 
 	if h <= 0 || w <= 0 || len(t.Config.Columns) == 0 {
+		t.dataH = 0
 		_, invalidated := t.scrollbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, len(t.Config.Rows), t.scrollTop))
-		t.notifyPointerCaptureInvalidated(invalidated)
+		_, hInvalidated := t.hbar.Render(surface, scrollbarGeometry{}, newScrollRange(0, 0, t.scrollLeft))
+		t.notifyPointerCaptureInvalidated(invalidated || hInvalidated)
 		return
 	}
 
 	// Header takes 2 lines (labels + separator)
 	headerH := 2
-	dataH := h - headerH
-	if dataH < 0 {
-		dataH = 0
-	}
+	minW := t.minContentWidth()
+	viewW, dataH := fitScrollViewport(w, h-headerH, minW, len(t.Config.Rows))
+	t.dataH = dataH
 
 	rangeModel := newScrollRange(dataH, len(t.Config.Rows), t.scrollTop)
 	t.scrollTop = rangeModel.offset
@@ -129,13 +136,14 @@ func (t *TableWidget) Render(surface Surface) {
 	rangeModel = newScrollRange(dataH, len(t.Config.Rows), t.scrollTop)
 	t.scrollTop = rangeModel.offset
 
-	t.contentW = w
-	if rangeModel.visible() {
-		t.contentW = w - 1
-	}
+	t.contentW = viewW
+	t.fullW = max(viewW, minW)
 	t.widths = t.effectiveWidths(t.cellsEnd() - t.inset())
+	hRange := newScrollRange(viewW, t.fullW, t.scrollLeft)
+	t.scrollLeft = hRange.offset
 
-	t.renderHeader(surface, t.contentW)
+	line := newVirtualSurface(t.fullW, 1)
+	t.renderHeader(surface, line)
 	t.renderState(surface, headerH, dataH)
 
 	for i := range dataH {
@@ -143,16 +151,21 @@ func (t *TableWidget) Render(surface Surface) {
 		if idx >= len(t.Config.Rows) {
 			break
 		}
-		t.renderRow(surface, idx, headerH+i, t.contentW)
+		t.renderRow(surface, line, idx, headerH+i)
 	}
 
 	ox, oy := t.contentOrigin()
 	geometry := scrollbarGeometry{
-		localTrack: Rect{X: w - 1, Y: headerH, W: 1, H: dataH},
-		hitTrack:   Rect{X: ox + w - 1, Y: oy + headerH, W: 1, H: dataH},
+		localTrack: Rect{X: viewW, Y: headerH, W: 1, H: dataH},
+		hitTrack:   Rect{X: ox + viewW, Y: oy + headerH, W: 1, H: dataH},
 	}
 	_, invalidated := t.scrollbar.Render(surface, geometry, rangeModel)
-	t.notifyPointerCaptureInvalidated(invalidated)
+	hGeometry := scrollbarGeometry{
+		localTrack: Rect{X: 0, Y: headerH + dataH, W: viewW, H: 1},
+		hitTrack:   Rect{X: ox, Y: oy + headerH + dataH, W: viewW, H: 1},
+	}
+	_, hInvalidated := t.hbar.Render(surface, hGeometry, hRange)
+	t.notifyPointerCaptureInvalidated(invalidated || hInvalidated)
 }
 
 func (t *TableWidget) inset() int {
@@ -162,77 +175,114 @@ func (t *TableWidget) inset() int {
 	return t.Config.Inset
 }
 
-func (t *TableWidget) cellsEnd() int { return t.contentW - t.inset() }
+func (t *TableWidget) cellsEnd() int { return t.fullW - t.inset() }
 
-// effectiveWidths keeps fixed widths; auto columns split the remaining space (min 1 cell).
-func (t *TableWidget) effectiveWidths(w int) []int {
-	n := len(t.Config.Columns)
-	widths := make([]int, n)
-	sep := 0
-	if n > 1 {
-		sep = 2 * (n - 1)
+func (t *TableWidget) columnGaps() int {
+	if n := len(t.Config.Columns); n > 1 {
+		return 2 * (n - 1)
 	}
-	fixed := 0
-	autoCount := 0
+	return 0
+}
+
+func columnMinWidth(col TableColumn) int {
+	switch {
+	case col.Width > 0:
+		return col.Width
+	case col.MinWidth > 0:
+		return col.MinWidth
+	}
+	return max(textwidth.String(col.Label), 1)
+}
+
+func (t *TableWidget) minContentWidth() int {
+	w := t.columnGaps() + 2*max(t.Config.Inset, 0)
+	for _, col := range t.Config.Columns {
+		w += columnMinWidth(col)
+	}
+	return w
+}
+
+// effectiveWidths keeps fixed widths; auto columns split the remaining space
+// equally, except that none gets less than its minimum.
+func (t *TableWidget) effectiveWidths(w int) []int {
+	widths := make([]int, len(t.Config.Columns))
+	remaining := w - t.columnGaps()
+	var auto []int
 	for i, col := range t.Config.Columns {
 		if col.Width > 0 {
 			widths[i] = col.Width
-			fixed += col.Width
+			remaining -= col.Width
 		} else {
-			autoCount++
+			auto = append(auto, i)
 		}
 	}
-	if autoCount > 0 {
-		remaining := w - fixed - sep
-		if remaining < autoCount {
-			remaining = autoCount
-		}
-		per := remaining / autoCount
-		rem := remaining % autoCount
-		for i := range widths {
-			if widths[i] == 0 {
-				widths[i] = per
-				if rem > 0 {
-					widths[i]++
-					rem--
-				}
+	for len(auto) > 0 {
+		per := max(remaining, 0) / len(auto)
+		var free []int
+		for _, i := range auto {
+			if m := columnMinWidth(t.Config.Columns[i]); m > per {
+				widths[i] = m
+				remaining -= m
+			} else {
+				free = append(free, i)
 			}
 		}
+		if len(free) < len(auto) {
+			auto = free
+			continue
+		}
+		rem := max(remaining, 0) % len(auto)
+		for _, i := range auto {
+			widths[i] = per
+			if rem > 0 {
+				widths[i]++
+				rem--
+			}
+		}
+		break
 	}
 	return widths
 }
 
-func (t *TableWidget) renderHeader(surface Surface, w int) {
-	style := term.StyleHoverBold
-	for fx := 0; fx < w; fx++ {
-		surface.SetCell(fx, 0, term.Cell{Ch: ' ', Style: style})
+func (t *TableWidget) blitLine(surface Surface, line *virtualSurface, y int) {
+	cells := line.cells[0]
+	for x := range t.contentW {
+		sx := x + t.scrollLeft
+		if sx >= len(cells) {
+			break
+		}
+		c := cells[sx]
+		if x == t.contentW-1 && textwidth.Rune(c.Ch) > 1 {
+			c.Ch = ' '
+		}
+		surface.SetCell(x, y, c)
 	}
+}
+
+func (t *TableWidget) drawColumns(line *virtualSurface, texts func(i int) string, style term.Style) {
+	line.Fill(term.Cell{Ch: ' ', Style: style})
 	x := t.inset()
-	end := t.cellsEnd()
 	for i, col := range t.Config.Columns {
 		if i > 0 {
-			if x < end {
-				surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
-				x++
-			}
-			if x < end {
-				surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
-				x++
-			}
+			x += 2
 		}
-		t.renderCell(surface, col.Label, col, t.widths[i], x, 0, style)
+		t.renderCell(line, texts(i), col, t.widths[i], x, 0, style)
 		x += t.widths[i]
 	}
+}
 
-	// Separator line
+func (t *TableWidget) renderHeader(surface Surface, line *virtualSurface) {
+	t.drawColumns(line, func(i int) string { return t.Config.Columns[i].Label }, term.StyleHoverBold)
+	t.blitLine(surface, line, 0)
+
 	sepStyle := term.StyleBorder
-	for sx := 0; sx < w; sx++ {
+	for sx := 0; sx < t.contentW; sx++ {
 		surface.SetCell(sx, 1, term.Cell{Ch: '─', Style: sepStyle})
 	}
 }
 
 func (t *TableWidget) renderState(surface Surface, headerH, dataH int) {
-	w := t.cellsEnd()
+	w := t.contentW - t.inset()
 	if len(t.Config.Rows) > 0 {
 		if t.Config.Loading && w > 12 {
 			label := "Loading… "
@@ -252,7 +302,7 @@ func (t *TableWidget) renderState(surface Surface, headerH, dataH int) {
 	surface.DrawText(x, y, text, t.contentW, term.StyleMuted)
 }
 
-func (t *TableWidget) renderRow(surface Surface, idx, y, w int) {
+func (t *TableWidget) renderRow(surface Surface, line *virtualSurface, idx, y int) {
 	style := term.StyleDefault
 	if idx < len(t.Config.RowStyles) && t.Config.RowStyles[idx] != 0 {
 		style = t.Config.RowStyles[idx]
@@ -261,31 +311,14 @@ func (t *TableWidget) renderRow(surface Surface, idx, y, w int) {
 		style = term.StyleSidebarSelected
 	}
 
-	for fx := 0; fx < w; fx++ {
-		surface.SetCell(fx, y, term.Cell{Ch: ' ', Style: style})
-	}
-
 	row := t.Config.Rows[idx]
-	x := t.inset()
-	end := t.cellsEnd()
-	for i, col := range t.Config.Columns {
-		if i > 0 {
-			if x < end {
-				surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
-				x++
-			}
-			if x < end {
-				surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
-				x++
-			}
-		}
-		cellText := ""
+	t.drawColumns(line, func(i int) string {
 		if i < len(row) {
-			cellText = row[i]
+			return row[i]
 		}
-		t.renderCell(surface, cellText, col, t.widths[i], x, y, style)
-		x += t.widths[i]
-	}
+		return ""
+	}, style)
+	t.blitLine(surface, line, y)
 }
 
 func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, colW, x, y int, style term.Style) {
@@ -321,6 +354,10 @@ func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, 
 }
 
 func (t *TableWidget) HandleEvent(ev tcell.Event) EventResult {
+	if newLeft, result := t.hbar.HandleEvent(ev); result != EventIgnored {
+		t.scrollLeft = newLeft
+		return result
+	}
 	if newTop, result := t.scrollbar.HandleEvent(ev); result != EventIgnored {
 		t.scrollTop = newTop
 		return result
@@ -343,12 +380,53 @@ func (t *TableWidget) HandleEvent(ev tcell.Event) EventResult {
 
 func (t *TableWidget) CancelPointerCapture() bool {
 	canceled := t.scrollbar.cancel()
+	if t.hbar.cancel() {
+		canceled = true
+	}
 	t.notifyPointerCaptureInvalidated(canceled)
 	return canceled
 }
 
 func (t *TableWidget) OwnsPointerCapture() bool {
-	return t.scrollbar.isDragging()
+	return t.scrollbar.isDragging() || t.hbar.isDragging()
+}
+
+func (t *TableWidget) hRange() scrollRange {
+	return newScrollRange(t.contentW, t.fullW, t.scrollLeft)
+}
+
+func (t *TableWidget) scrollHorizontally(delta int) {
+	t.scrollLeft = t.hRange().clampOffset(t.scrollLeft + delta)
+}
+
+func (t *TableWidget) columnStops() []int {
+	stops := []int{0}
+	x := t.inset()
+	for i, w := range t.widths {
+		if i > 0 {
+			x += 2
+		}
+		if x > 0 {
+			stops = append(stops, x)
+		}
+		x += w
+	}
+	return stops
+}
+
+func (t *TableWidget) stepColumn(dir int) {
+	step := max(t.contentW, 1)
+	target := t.scrollLeft + dir*step
+	for _, s := range t.columnStops() {
+		if dir > 0 && s > t.scrollLeft && s < target {
+			target = s
+			break
+		}
+		if dir < 0 && s < t.scrollLeft && s > target {
+			target = s
+		}
+	}
+	t.scrollLeft = t.hRange().clampOffset(target)
 }
 
 func (t *TableWidget) InvalidatePointerInteraction() bool {
@@ -378,6 +456,15 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 
 	headerH := 2
 
+	shift := ev.Modifiers()&tcell.ModShift != 0
+	if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && shift) {
+		t.scrollHorizontally(-3)
+		return EventConsumed
+	}
+	if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && shift) {
+		t.scrollHorizontally(3)
+		return EventConsumed
+	}
 	if btn&tcell.WheelUp != 0 {
 		t.scrollTop -= 3
 		if t.scrollTop < 0 {
@@ -401,9 +488,11 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		return EventConsumed
 	}
 
+	_, oy := t.contentOrigin()
+	onHBar := t.hbar.visible() && my >= oy+headerH+t.dataH
 	localY := my - r.Y
 	idx := t.scrollTop + (localY - headerH)
-	if localY < headerH || idx < 0 || idx >= len(t.Config.Rows) {
+	if localY < headerH || onHBar || idx < 0 || idx >= len(t.Config.Rows) {
 		if fresh {
 			t.clickAt = 0
 		}
@@ -450,6 +539,16 @@ func (t *TableWidget) handleKey(ev *tcell.EventKey) EventResult {
 	case tcell.KeyDown:
 		if t.selected < len(t.Config.Rows)-1 {
 			t.selected++
+		}
+		return EventConsumed
+	case tcell.KeyLeft, tcell.KeyRight:
+		if !t.hRange().visible() {
+			return EventIgnored
+		}
+		if ev.Key() == tcell.KeyLeft {
+			t.stepColumn(-1)
+		} else {
+			t.stepColumn(1)
 		}
 		return EventConsumed
 	case tcell.KeyEnter:

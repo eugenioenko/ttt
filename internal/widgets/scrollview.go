@@ -76,6 +76,10 @@ func (sv *ScrollViewWidget) EnsureVisible(x, y int) {
 }
 
 func (sv *ScrollViewWidget) viewportSize(w, h, contentW, contentH int) (int, int) {
+	return fitScrollViewport(w, h, contentW, contentH)
+}
+
+func fitScrollViewport(w, h, contentW, contentH int) (int, int) {
 	w = max(w, 0)
 	h = max(h, 0)
 	vw, vh := w, h

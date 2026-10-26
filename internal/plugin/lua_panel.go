@@ -805,6 +805,9 @@ func panelTableWidget(L *lua.LState) int {
 			if w := L.GetField(ct, "width"); w != lua.LNil {
 				col.Width = int(lua.LVAsNumber(w))
 			}
+			if w := L.GetField(ct, "min_width"); w != lua.LNil {
+				col.MinWidth = int(lua.LVAsNumber(w))
+			}
 			if a := L.GetField(ct, "align"); a != lua.LNil {
 				col.Align = a.String()
 			}

@@ -16,7 +16,7 @@ func TestLuaTableOptions(t *testing.T) {
 		activated = nil
 		ttt.register({ sidebar = { title = "T", render = function(panel)
 			panel:table({
-				columns = {{ label = "Name" }},
+				columns = {{ label = "Name", min_width = 12 }},
 				rows = {{ "a" }, { "b" }, { "c" }},
 				row_styles = { nil, "muted" },
 				selected = 3,
@@ -41,6 +41,9 @@ func TestLuaTableOptions(t *testing.T) {
 	}
 	if len(tbl.Config.RowStyles) != 2 || tbl.Config.RowStyles[0] != 0 || tbl.Config.RowStyles[1] != term.StyleMuted {
 		t.Errorf("row styles = %v", tbl.Config.RowStyles)
+	}
+	if got := tbl.Config.Columns[0].MinWidth; got != 12 {
+		t.Errorf("min_width = %d, want 12", got)
 	}
 	if !tbl.Config.Loading || tbl.Config.EmptyText != "No keys yet" || tbl.Config.Inset != 1 {
 		t.Errorf("loading %v, empty %q, inset %d", tbl.Config.Loading, tbl.Config.EmptyText, tbl.Config.Inset)

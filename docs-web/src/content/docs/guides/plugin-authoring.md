@@ -1564,7 +1564,7 @@ panel:table({
 
 | Field          | Type     | Required | Description                                                 |
 |----------------|----------|----------|-------------------------------------------------------------|
-| `columns`      | table    | yes      | Array of column tables: `{label, width, align}`. `width` is fixed columns (omit to auto-size); `align` is `"right"` or default left. |
+| `columns`      | table    | yes      | Array of column tables: `{label, width, min_width, align}`. `width` fixes a column's width (omit it to auto-size); `min_width` is the narrowest an auto-sized column gets (default: its label's width); `align` is `"right"`, `"center"` or default left. |
 | `rows`         | table    | yes      | Array of rows; each row is an array of cell strings.        |
 | `on_select`    | function | no       | Callback when the selected row changes (arrow keys, click) or Enter is pressed. Receives the 1-based row index. |
 | `on_activate`  | function | no       | Callback when a row is opened: Enter or a double-click. A single click only selects, so a table can drive a detail view on `on_select` and open on `on_activate`. Receives the 1-based row index. |
@@ -1577,6 +1577,8 @@ panel:table({
 | `node_menu`    | table    | no       | Array of [menu entries](#menu-entry-format) for the right-click context menu on rows. |
 | `key_commands` | table    | no       | Map of single-char keys to command strings. Triggers `on_command(command, selected_row_index)`. |
 | + [box model fields](#box-model) | | | Margin and padding. |
+
+Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
 
 ### Tabs
 
