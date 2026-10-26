@@ -57,7 +57,10 @@ func DetectIndent(lines []string) IndentInfo {
 	bestSize := 0
 	bestCount := 0
 	for size, count := range diffs {
-		if count > bestCount {
+		// Map order is random, so break a tie by size: the smaller step, which
+		// also fits the larger one (2 and 4 -> 2), but never a one-space step
+		// over a real one, as " * " doc comment lines make those.
+		if count > bestCount || (count == bestCount && tieRank(size) < tieRank(bestSize)) {
 			bestSize = size
 			bestCount = count
 		}
@@ -66,6 +69,13 @@ func DetectIndent(lines []string) IndentInfo {
 		return IndentInfo{}
 	}
 	return IndentInfo{Size: bestSize}
+}
+
+func tieRank(size int) int {
+	if size == 1 {
+		return 9
+	}
+	return size
 }
 
 // Buffer represents a text buffer with line-based storage.

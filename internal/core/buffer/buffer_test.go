@@ -43,6 +43,36 @@ func TestDetectIndent2Spaces(t *testing.T) {
 	}
 }
 
+func TestDetectIndentTieIsStable(t *testing.T) {
+	// One step of 2 and one of 4: the answer must not depend on map order.
+	lines := []string{
+		"a:",
+		"  b: 1",
+		"c:",
+		"    d: 2",
+	}
+	for i := 0; i < 100; i++ {
+		if info := DetectIndent(lines); info.Size != 2 {
+			t.Fatalf("run %d: expected indent size 2, got %d", i, info.Size)
+		}
+	}
+
+	// A doc comment's " * " lines step by one space; that loses a tie.
+	lines = []string{
+		"/**",
+		" * doc",
+		" */",
+		"function f() {",
+		"  return 1",
+		"}",
+	}
+	for i := 0; i < 100; i++ {
+		if info := DetectIndent(lines); info.Size != 2 {
+			t.Fatalf("doc comment run %d: expected indent size 2, got %d", i, info.Size)
+		}
+	}
+}
+
 func TestDetectIndent4Spaces(t *testing.T) {
 	lines := []string{
 		"func main() {",
