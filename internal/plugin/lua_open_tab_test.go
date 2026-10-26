@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	lua "github.com/yuin/gopher-lua"
@@ -15,9 +17,9 @@ func TestOpenTabWithIDFocusesExistingTab(t *testing.T) {
 		open[key] = title
 		opened = append(opened, key)
 	}
-	p.FocusTab = func(key string) bool {
+	p.FocusTab = func(key string, focus bool) bool {
 		if _, ok := open[key]; ok {
-			focused = append(focused, key)
+			focused = append(focused, fmt.Sprintf("%s:%t", key, focus))
 			return true
 		}
 		return false
@@ -42,8 +44,8 @@ func TestOpenTabWithIDFocusesExistingTab(t *testing.T) {
 	if len(opened) != 2 || opened[0] != "plugin:test:ns" || opened[1] != "Legacy" {
 		t.Fatalf("opened = %v", opened)
 	}
-	if len(focused) != 1 || focused[0] != "plugin:test:ns" {
-		t.Fatalf("second open with the same id should focus the tab, focused = %v", focused)
+	if want := []string{"plugin:test:ns:true", "plugin:test:ns:true", "Legacy:true"}; !slices.Equal(focused, want) {
+		t.Fatalf("each open should focus its tab, focused = %v, want %v", focused, want)
 	}
 	if a, b, c := p.State.GetGlobal("a"), p.State.GetGlobal("b"), p.State.GetGlobal("c"); a.String() != "ns" || b.String() != "ns" || c.String() != "Legacy" {
 		t.Fatalf("returned ids = %v %v %v", a, b, c)
@@ -115,5 +117,42 @@ func TestCloseTabPrefersTheIDOverATitle(t *testing.T) {
 	}
 	if open["ns"] {
 		t.Fatal("with no tab for the id, close_tab should fall back to the title")
+	}
+}
+
+func TestOpenTabFocusFalseAndFocusTab(t *testing.T) {
+	p, done := newTestPluginBase(PermissionSet{PanelEditor: true})
+	defer done()
+	open := map[string]bool{}
+	var calls []string
+	p.OpenTab = func(key, _ string, _ *PluginPanelWidget) { open[key] = true }
+	p.FocusTab = func(key string, focus bool) bool {
+		calls = append(calls, fmt.Sprintf("%s:%t", key, focus))
+		return open[key]
+	}
+
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		local r = function(panel) end
+		ttt.open_tab({ id = "q", title = "Quiet", focus = false, render = r })
+		ttt.open_tab({ id = "q", title = "Quiet", focus = false, render = r })
+		found = ttt.focus_tab("q")
+		missing = ttt.focus_tab("nope")
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"plugin:test:q:false",
+		"plugin:test:q:false",
+		"plugin:test:q:true",
+		"plugin:test:nope:true",
+		"nope:true",
+	}
+	if !slices.Equal(calls, want) {
+		t.Fatalf("FocusTab calls = %v, want %v", calls, want)
+	}
+	if p.State.GetGlobal("found") != lua.LTrue || p.State.GetGlobal("missing") != lua.LFalse {
+		t.Fatalf("focus_tab returned %v and %v", p.State.GetGlobal("found"), p.State.GetGlobal("missing"))
 	}
 }

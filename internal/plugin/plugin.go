@@ -80,7 +80,7 @@ type Plugin struct {
 	// when focus is set. It reports whether the panel is now showing.
 	ShowPanel          func(area string, focus bool) (bool, error)
 	OpenTab            func(key, title string, panel *PluginPanelWidget)
-	FocusTab           func(key string) bool
+	FocusTab           func(key string, focus bool) bool
 	CloseTab           func(key string) bool
 	OpenDialog         func(*PluginDialogWidget, func()) bool
 	CloseDialog        func()

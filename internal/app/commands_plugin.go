@@ -662,12 +662,8 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.OpenTab = func(key, title string, panel *plugin.PluginPanelWidget) {
 		a.EditorGroup.OpenPluginTab(key, title, panel)
 	}
-	p.FocusTab = func(key string) bool {
-		if !a.EditorGroup.SwitchToTabByPath(key) {
-			return false
-		}
-		a.FocusEditor()
-		return true
+	p.FocusTab = func(key string, focus bool) bool {
+		return a.switchToPluginTab(p.Name, key, focus)
 	}
 	p.CloseTab = func(key string) bool {
 		return a.EditorGroup.ClosePluginTab(key)
@@ -1101,13 +1097,30 @@ func (a *App) ShowPluginPanel(name, area string, focus bool) (bool, error) {
 		return false, nil
 	}
 	w := tp.ActiveWidget()
-	a.Root.SetFocus(w)
+	a.Root.ClaimFocus(w)
 	if adapter, ok := w.(*ui.WidgetAdapter); ok {
 		if panel, ok := adapter.W.(*plugin.PluginPanelWidget); ok {
 			panel.FocusAutofocusInput()
 		}
 	}
 	return true, nil
+}
+
+func (a *App) switchToPluginTab(name, key string, focus bool) bool {
+	for i := range a.EditorGroup.TabCount() {
+		path, _ := a.EditorGroup.TabInfo(i)
+		panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget)
+		if path != key || !ok || panel.PluginName() != name {
+			continue
+		}
+		a.EditorGroup.SwitchTab(i)
+		if focus && !a.Root.HasModalOverlay() {
+			a.Root.ClaimFocus(a.EditorGroup)
+			panel.FocusAutofocusInput()
+		}
+		return true
+	}
+	return false
 }
 
 // Panel images live in the terminal until released, so a plugin panel is closed whenever it leaves the UI.

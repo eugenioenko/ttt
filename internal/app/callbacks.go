@@ -628,9 +628,10 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	// A click that opened a dialog (a welcome or empty-Explorer action runs on
-	// the press) must leave the focus in it, or typing goes nowhere.
+	// the press) or claimed focus elsewhere must leave the focus there, or
+	// typing goes nowhere.
 	app.SplitPanel.OnLeftClick = func() {
-		if app.Root.HasOverlay() {
+		if app.Root.HasOverlay() || app.Root.FocusClaimed() {
 			return
 		}
 		reg.Execute("sidebar.focus")
@@ -844,14 +845,14 @@ func registerWidgetCallbacks(app *App) {
 	app.ContentSplit.OnResizeEnd = app.finishPanelResize
 
 	app.ContentSplit.OnTopClick = func() {
-		if app.Root.HasOverlay() {
+		if app.Root.HasOverlay() || app.Root.FocusClaimed() {
 			return
 		}
 		app.Root.SetFocus(app.EditorGroup)
 	}
 
 	app.ContentSplit.OnBottomClick = func() {
-		if app.Root.HasOverlay() {
+		if app.Root.HasOverlay() || app.Root.FocusClaimed() {
 			return
 		}
 		if w := app.BottomPanel.ActiveWidget(); w != nil {

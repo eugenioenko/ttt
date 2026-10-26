@@ -598,13 +598,16 @@ Open a custom editor tab with plugin-rendered content. Requires `panel.editor` p
 
 | Parameter  | Type     | Required | Description                                       |
 |------------|----------|----------|---------------------------------------------------|
-| `id`       | string   | no       | Stable ID for the tab. Opening an ID that is already open focuses that tab and keeps its state; the new `render` is ignored. |
+| `id`       | string   | no       | Stable ID for the tab. Opening an ID that is already open switches to that tab and keeps its state; the new `render` is ignored. |
 | `title`    | string   | yes      | Tab title displayed in the editor tab bar.        |
 | `render`   | function | yes      | Render function. Receives a panel proxy object.   |
 | `on_event` | function | no       | Fallback handler for key/mouse events not consumed by widgets. |
 | `on_close` | function | no       | Called once after the tab closes, by the user or `ttt.close_tab`. It runs on the next main-loop tick, so it may open or close other tabs. Like `render`, it is ignored when the `id` is already open. |
+| `focus`    | boolean  | no       | Default `true`: move keyboard focus into the tab, landing on an input with `autofocus` if it has one. Pass `false` to open or switch to the tab and leave focus where it is (in a sidebar list the user is browsing, say). |
 
 Returns the tab's ID: the `id` you passed, or the title when you passed none.
+
+Focus moves even when `open_tab` runs from a click in the plugin's sidebar or bottom panel: the click does not take it back. While a dialog is open the tab opens behind it and focus stays in the dialog.
 
 Text in a plugin panel can be selected like in a terminal: dragging from one cell to another selects what the panel drew, in reading order, borders included. A click without a drag still reaches the widgets, and a widget that captures the pointer (a scrollbar) or selects its own text (`markdown`) keeps its drag. Ctrl+C copies the selection; Escape or a click clears it. Right-clicking a plugin tab shows Copy and Select All, unless a widget there, like a table row with a `node_menu`, opens its own menu.
 
@@ -620,6 +623,16 @@ local id = ttt.open_tab({
 ```
 
 Without an `id`, the title is the key, and opening the same title again replaces the tab's content.
+
+### `ttt.focus_tab(id)`
+
+Switch to one of the plugin's open editor tabs by the ID `open_tab` returned and move keyboard focus into it, landing on an input with `autofocus` if it has one. Returns `true` if the tab is open, `false` otherwise. Like `open_tab`, it leaves focus in an open dialog. Requires `panel.editor` permission.
+
+```lua
+ttt.open_tab({ id = "draft", title = "Draft", focus = false, render = render_draft })
+-- later, when the user is ready to type:
+ttt.focus_tab("draft")
+```
 
 ### `ttt.close_tab(id)`
 
@@ -1328,7 +1341,7 @@ panel:input({
 | `clear_on_submit`  | boolean  | `false` | When `true`, the input text is cleared after `on_submit` fires. |
 | `wrap`             | boolean  | `false` | When `true`, long text wraps onto more rows, and the input grows up to `max_rows` and then scrolls, with an arrow at the right edge when rows are out of view. Inside a `scrollview` it wraps at the scroll view's content width, which can be wider than what is visible, so put wrapping inputs outside scroll views. Shift+Enter, Alt+Enter or Ctrl+J adds a line break (many terminals send Shift+Enter as plain Enter; the other two work in most); Enter still submits when `multiline` is disabled. Up and Down move between rows; Ctrl+Home and Ctrl+End go to the start and end of the text. |
 | `max_rows`         | number   | `5`     | The most rows a wrapping input grows to. |
-| `autofocus`        | boolean  | `false` | When `true`, the input takes focus when the plugin calls `ttt.focus_panel`. |
+| `autofocus`        | boolean  | `false` | When `true`, the input takes focus when its dialog opens, when the plugin calls `ttt.focus_panel`, and when `ttt.open_tab` or `ttt.focus_tab` focuses its tab. |
 | `border`           | boolean  | `false` | Draws a full border around the input, which highlights while it has focus. A one-line bordered input is 3 rows tall; `wrap` and `min_rows` add rows inside the border. |
 | `title`            | string   | unset   | Label drawn in the top border of a bordered input, so a form field needs no separate label. |
 | `password`         | boolean  | `false` | Shows each character as `•` and keeps the text off the clipboard. A password input is one line: `wrap` is ignored. |
@@ -3090,7 +3103,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 
 | Module         | Description                    |
 |----------------|--------------------------------|
-| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `debounce`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
+| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `focus_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `debounce`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.regex`    | RE2 regular expressions        |
 | `ttt.editor`   | Editor buffer read/write       |

@@ -49,6 +49,8 @@ type Root struct {
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
+	button1Held      bool
+	focusClaimed     bool
 }
 
 func NewRoot(main Widget) *Root {
@@ -184,6 +186,13 @@ func (r *Root) rawKeysFocused() bool {
 }
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
+	if mev, ok := ev.(*tcell.EventMouse); ok {
+		held := mev.Buttons()&tcell.Button1 != 0
+		if held && !r.button1Held {
+			r.focusClaimed = false
+		}
+		r.button1Held = held
+	}
 	kev, isKey := ev.(*tcell.EventKey)
 	// ForceKeys punch through two things that would otherwise swallow them: a
 	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
@@ -445,6 +454,17 @@ func (r *Root) SetFocus(w Widget) {
 		setter.SetFocused(true)
 	}
 }
+
+// ClaimFocus is SetFocus for a deliberate move made while handling a click:
+// until the next mouse press, FocusClaimed tells the click-to-focus of the pane
+// that received the click, which runs after the pane's own handlers, to leave
+// the focus where it is.
+func (r *Root) ClaimFocus(w Widget) {
+	r.SetFocus(w)
+	r.focusClaimed = true
+}
+
+func (r *Root) FocusClaimed() bool { return r.focusClaimed }
 
 func (r *Root) CursorPosition() (x, y int, visible bool) {
 	if len(r.Overlays) > 0 {

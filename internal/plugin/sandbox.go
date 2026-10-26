@@ -531,10 +531,11 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			if fn, ok := L.GetField(tbl, "on_event").(*lua.LFunction); ok {
 				eventFunc = fn
 			}
+			focus := L.GetField(tbl, "focus") != lua.LFalse
 			id, key := title, title
 			if v := L.GetField(tbl, "id"); v != lua.LNil {
 				id, key = v.String(), p.tabKey(v.String())
-				if p.FocusTab != nil && p.FocusTab(key) {
+				if p.FocusTab != nil && p.FocusTab(key, focus) {
 					L.Push(lua.LString(id))
 					return 1
 				}
@@ -551,8 +552,22 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 					}
 				}
 				p.OpenTab(key, title, panel)
+				if focus && p.FocusTab != nil {
+					p.FocusTab(key, true)
+				}
 			}
 			L.Push(lua.LString(id))
+			return 1
+		}))
+
+		L.SetField(mod, "focus_tab", L.NewFunction(func(L *lua.LState) int {
+			if err := p.Granted.Check("panel.editor"); err != nil {
+				L.ArgError(1, "panel.editor permission not granted")
+				return 0
+			}
+			id := L.CheckString(1)
+			focused := p.FocusTab != nil && (p.FocusTab(p.tabKey(id), true) || p.FocusTab(id, true))
+			L.Push(lua.LBool(focused))
 			return 1
 		}))
 
