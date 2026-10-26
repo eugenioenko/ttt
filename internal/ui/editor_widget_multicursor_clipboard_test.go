@@ -1,13 +1,133 @@
 package ui
 
 import (
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 )
+
+func TestPastePiecesTrailingNewline(t *testing.T) {
+	for _, tt := range []struct {
+		text string
+		want []string
+	}{
+		{"apple\n", []string{"apple\n", "apple\n"}},
+		{"one\ntwo\n", []string{"one", "two"}},
+		{"one\n\n", []string{"one", ""}},
+	} {
+		t.Run(tt.text, func(t *testing.T) {
+			if got := pastePieces(tt.text, 2); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("pastePieces() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMultiCursorPasteWholeCopiedLine(t *testing.T) {
+	clipboard.DisableSystem()
+	g := newRenameGroup(t, filepath.Join(t.TempDir(), "lines.txt"), "apple\nfoo\nfoo\n")
+	g.Copy()
+	g.Editor.Cursor.Line, g.Editor.Cursor.Col = 1, 0
+	g.Editor.SelectAllOccurrences()
+	g.Paste()
+	if got := strings.Join(g.Editor.Buf.Lines, "\n"); got != "apple\napple\n\napple\n" {
+		t.Fatalf("pasted text = %q", got)
+	}
+}
+
+func TestMultiCursorClipboardOverlappingOccurrences(t *testing.T) {
+	clipboard.DisableSystem()
+	for _, operation := range []string{"copy", "cut", "paste", "multiline paste"} {
+		t.Run(operation, func(t *testing.T) {
+			g := newRenameGroup(t, filepath.Join(t.TempDir(), "overlap.txt"), "aaaaZ\n")
+			e := g.Editor
+			e.Selection.Start(0, 0)
+			e.Cursor.Col = 2
+			e.SelectAllOccurrences()
+			want := "aaaaZ"
+			switch operation {
+			case "copy":
+				g.Copy()
+				if got := clipboard.Get(); got != "aaaa" {
+					t.Errorf("copied text = %q, want aaaa", got)
+				}
+			case "cut":
+				g.Cut()
+				want = "Z"
+				if got := clipboard.Get(); got != "aaaa" {
+					t.Errorf("cut text = %q, want aaaa", got)
+				}
+			case "paste":
+				g.PasteText("X")
+				want = "XZ"
+			case "multiline paste":
+				g.PasteText("X\n")
+				want = "X\nZ"
+			}
+			if got := strings.Join(e.Buf.Lines, "\n"); got != want {
+				t.Fatalf("buffer = %q, want %q", got, want)
+			}
+			if operation != "copy" {
+				e.Undo.Undo(e.Buf)
+				if got := strings.Join(e.Buf.Lines, "\n"); got != "aaaaZ" {
+					t.Fatalf("undo = %q, want original text", got)
+				}
+				e.Undo.Redo(e.Buf)
+				if got := strings.Join(e.Buf.Lines, "\n"); got != want {
+					t.Fatalf("redo = %q, want %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestMultiCursorClipboardMergedPieceMapping(t *testing.T) {
+	e := newMultiCursorEditor([]string{"aaaaZ", "foo!"}, [][2]int{{0, 2}, {0, 3}, {0, 4}, {1, 3}})
+	e.Undo = &undo.UndoStack{}
+	for i, anchor := range []selection.Position{{Line: 0, Col: 0}, {Line: 0, Col: 1}, {Line: 0, Col: 2}, {Line: 1, Col: 0}} {
+		e.Multi.Cursors[i].Sel = selection.Selection{Active: true, Anchor: anchor}
+	}
+	if got := e.multiCopyPieces(); !reflect.DeepEqual(got, []string{"aaaa", "foo"}) {
+		t.Fatalf("copied pieces = %q, want [aaaa foo]", got)
+	}
+	e.multiPasteText("one\ntwo")
+	want := []string{"oneZ", "two!"}
+	if !reflect.DeepEqual(e.Buf.Lines, want) {
+		t.Fatalf("buffer = %q, want %q", e.Buf.Lines, want)
+	}
+	if e.Multi.Cursors[0].Col != 3 || e.Multi.Cursors[1].Col != 3 {
+		t.Fatalf("paste cursor positions = %+v", e.Multi.Cursors)
+	}
+	e.Undo.Undo(e.Buf)
+	if !reflect.DeepEqual(e.Buf.Lines, []string{"aaaaZ", "foo!"}) {
+		t.Fatalf("undo = %q, want original text", e.Buf.Lines)
+	}
+}
+
+func TestMultiCursorPasteRefreshesFoldsAndViewport(t *testing.T) {
+	e := newMultiCursorEditor([]string{"foo", "foo"}, [][2]int{{0, 0}, {1, 0}})
+	e.Undo = &undo.UndoStack{}
+	e.Folds = fold.NewState()
+	e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
+	e.Viewport.Height = 5
+	e.multiPasteText(strings.Repeat("head\n    child\n", 15) + "end")
+	if e.Cursor.Line < e.Viewport.TopLine || e.Cursor.Line >= e.Viewport.TopLine+e.Viewport.Height {
+		t.Errorf("cursor line %d outside viewport %+v", e.Cursor.Line, e.Viewport)
+	}
+	if got := e.Folds.FoldAt(0); got == nil || got.EndLine != 1 {
+		t.Errorf("first pasted fold = %+v, want lines 0–1", got)
+	}
+	if got := e.Folds.FoldAt(2); got == nil || got.EndLine != 3 {
+		t.Errorf("second pasted fold = %+v, want lines 2–3", got)
+	}
+}
 
 func TestMultiCursorCopyPiecesUsesSelectionsAndLines(t *testing.T) {
 	e := newMultiCursorEditor(

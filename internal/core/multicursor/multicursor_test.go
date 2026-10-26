@@ -1,10 +1,74 @@
 package multicursor
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/selection"
 )
+
+func TestMergeSelections(t *testing.T) {
+	selected := func(anchorLine, anchorCol, line, col int) CursorState {
+		return CursorState{Line: line, Col: col, Sel: selection.Selection{
+			Active: true, Anchor: selection.Position{Line: anchorLine, Col: anchorCol},
+		}}
+	}
+	for _, tt := range []struct {
+		name        string
+		cursors     []CursorState
+		primary     int
+		want        []CursorState
+		wantPrimary int
+	}{
+		{
+			name: "transitive overlap",
+			cursors: []CursorState{
+				selected(0, 0, 0, 2), selected(0, 1, 0, 3), selected(0, 2, 0, 4), selected(0, 6, 0, 7),
+			},
+			primary: 2,
+			want:    []CursorState{selected(0, 0, 0, 4), selected(0, 6, 0, 7)},
+		},
+		{
+			name:    "nested reversed primary",
+			cursors: []CursorState{selected(0, 0, 0, 6), selected(0, 5, 0, 1), selected(0, 8, 0, 9)},
+			primary: 1,
+			want:    []CursorState{selected(0, 6, 0, 0), selected(0, 8, 0, 9)},
+		},
+		{
+			name: "covered cursors",
+			cursors: []CursorState{
+				selected(0, 1, 0, 5), {Line: 0, Col: 0}, {Line: 0, Col: 3}, {Line: 0, Col: 5}, {Line: 0, Col: 8},
+			},
+			primary:     3,
+			want:        []CursorState{{Line: 0, Col: 0}, selected(0, 1, 0, 5), {Line: 0, Col: 8}},
+			wantPrimary: 1,
+		},
+		{
+			name:        "adjacent selections stay separate",
+			cursors:     []CursorState{selected(0, 0, 0, 2), selected(0, 2, 0, 4)},
+			primary:     1,
+			want:        []CursorState{selected(0, 0, 0, 2), selected(0, 2, 0, 4)},
+			wantPrimary: 1,
+		},
+		{
+			name:    "multiline overlap",
+			cursors: []CursorState{selected(2, 2, 0, 3), selected(1, 0, 3, 1), {Line: 1, Col: 3}},
+			want:    []CursorState{selected(3, 1, 0, 3)},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			mc := &MultiCursor{Cursors: tt.cursors, Primary: tt.primary}
+			mc.MergeSelections()
+			if !reflect.DeepEqual(mc.Cursors, tt.want) || mc.Primary != tt.wantPrimary {
+				t.Fatalf("merged = %+v, primary %d; want %+v, primary %d", mc.Cursors, mc.Primary, tt.want, tt.wantPrimary)
+			}
+			mc.MergeSelections()
+			if !reflect.DeepEqual(mc.Cursors, tt.want) || mc.Primary != tt.wantPrimary {
+				t.Fatalf("normalizing again changed cursors: %+v, primary %d", mc.Cursors, mc.Primary)
+			}
+		})
+	}
+}
 
 func TestNewMultiCursor(t *testing.T) {
 	mc := New(5, 10)

@@ -465,13 +465,19 @@ func (e *EditorPaneWidget) SplitSelectionToLines() {
 	e.scrollViewport()
 }
 
+func (e *EditorPaneWidget) normalizeClipboardCursors() {
+	e.syncToMulti()
+	e.Multi.MergeSelections()
+	e.syncFromMulti()
+}
+
 // multiCopyPieces returns selected text or the complete line for each cursor.
 func (e *EditorPaneWidget) multiCopyPieces() []string {
-	if !e.isMultiActive() {
+	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return nil
 	}
 
-	e.syncToMulti()
+	e.normalizeClipboardCursors()
 	pieces := make([]string, 0, len(e.Multi.Cursors))
 
 	for _, cs := range e.Multi.Cursors {
@@ -494,8 +500,11 @@ func pastePieces(text string, n int) []string {
 	if n <= 0 {
 		return nil
 	}
+	if n == 1 {
+		return []string{text}
+	}
 
-	parts := strings.Split(text, "\n")
+	parts := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	if len(parts) == n {
 		return parts
 	}
@@ -510,11 +519,11 @@ func pastePieces(text string, n int) []string {
 
 // multiPasteText inserts clipboard text at each cursor in one undo step.
 func (e *EditorPaneWidget) multiPasteText(text string) {
-	if !e.isMultiActive() {
+	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
 
-	e.syncToMulti()
+	e.normalizeClipboardCursors()
 	pieces := pastePieces(text, len(e.Multi.Cursors))
 	var commands []undo.EditCommand
 
@@ -608,6 +617,8 @@ func (e *EditorPaneWidget) multiPasteText(text string) {
 
 	e.bufferDirty = true
 	e.syncFromMulti()
+	e.refreshFolds()
+	e.scrollViewport()
 }
 
 // adjustSelectionAnchorAfterLineDelete keeps a selection anchor
@@ -627,11 +638,11 @@ func adjustSelectionAnchorAfterLineDelete(cs *multicursor.CursorState, deletedLi
 
 // multiCut cuts selections or entire lines in one undo step.
 func (e *EditorPaneWidget) multiCut() {
-	if !e.isMultiActive() {
+	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
 
-	e.syncToMulti()
+	e.normalizeClipboardCursors()
 	// Avoid deleting the same original line more than once.
 	seenLines := make(map[int]bool)
 	unique := make([]multicursor.CursorState, 0, len(e.Multi.Cursors))
