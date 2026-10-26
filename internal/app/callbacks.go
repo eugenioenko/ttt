@@ -90,8 +90,6 @@ func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 		{Label: "Open Current Changes", Command: "changes.viewAll"},
 		ui.MenuSep(),
 		{Label: "Refresh", Command: "changes.refresh"},
-		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
-		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 		ui.MenuSep(),
 		{Label: "Pull", Command: "git.pull"},
 		{Label: "Push", Command: "git.push"},
@@ -109,8 +107,6 @@ func (a *App) BuildChangesContextMenu() []ui.ContextMenuItem {
 		{Label: "Open Current Changes", Command: "changes.viewAll"},
 		ui.MenuSep(),
 		{Label: "Refresh", Command: "changes.refresh"},
-		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
-		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
 	}
 }
 
