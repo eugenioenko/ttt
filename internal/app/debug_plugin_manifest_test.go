@@ -4,7 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/config"
 )
 
 func TestDebugPluginManifestUsesManifestNextToFile(t *testing.T) {
@@ -55,5 +58,51 @@ func TestDebugPluginManifestRejectsInvalidManifest(t *testing.T) {
 	}
 	if _, _, err := debugPluginManifest(filepath.Join(dir, "init.lua")); err == nil {
 		t.Fatal("manifest without a name loaded")
+	}
+}
+
+func TestDebugPluginManifestUnreadableManifestIsAnError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read the directory regardless of its mode")
+	}
+	dir := filepath.Join(t.TempDir(), "plugin")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{"name": "scoped"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	if _, _, err := debugPluginManifest(filepath.Join(dir, "init.lua")); err == nil {
+		t.Fatal("an unreadable manifest fell back to the default permissions")
+	}
+}
+
+func TestLoadPluginFromFileReportsAnInvalidManifest(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	dir := t.TempDir()
+	src := filepath.Join(dir, "init.lua")
+	if err := os.WriteFile(src, []byte(`local ttt = require("ttt")`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{"entry": "init.lua"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	before := len(a.Output.Lines)
+	LoadPluginFromFile(a, src)
+	reported := false
+	for _, line := range a.Output.Lines[before:] {
+		if strings.Contains(line.Message, "--plugin") {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Fatal("the invalid manifest was not reported in the Output panel")
+	}
+	if a.PluginManager != nil && a.PluginManager.FindPlugin("init") != nil {
+		t.Fatal("a plugin was registered despite the invalid manifest")
 	}
 }

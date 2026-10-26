@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -284,6 +286,9 @@ func debugPluginManifest(path string) (plugin.Manifest, plugin.PermissionSet, er
 			return plugin.Manifest{}, plugin.PermissionSet{}, err
 		}
 		return m, m.Permissions, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		// A manifest we cannot read must not fall back to the broad defaults.
+		return plugin.Manifest{}, plugin.PermissionSet{}, err
 	}
 	name := strings.TrimSuffix(filepath.Base(path), ".lua")
 	return plugin.Manifest{Name: name, Entry: "inline"}, plugin.PermissionSet{
