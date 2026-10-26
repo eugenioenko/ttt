@@ -192,7 +192,7 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 - **`debug PATH`** dumps screen, cursor, buffer, focus, panels, tabs, selection, output log, terminal PTY tails, and the widget tree. `focus` is where keys go (`editor`, `terminal`, `sidebar`, `bottom_panel`, `search`, `overlay` while a modal dialog or drawer is open, else `other`); `active_terminal` is the selected terminal tab as `{id, index}` with a 0-based index.
 - **`--listen`** accepts the same script over `POST http://127.0.0.1:4242/exec` (loopback only), to drive an editor a person started in a real terminal: `curl -X POST --data "type hi; screenshot /tmp/s.txt" http://127.0.0.1:4242/exec`.
 - **`--size WxH`** makes layout and click coordinates deterministic.
-- **`--plugin FILE`** loads a Lua plugin with full permissions (see the Plugin API caveats).
+- **`--plugin FILE`** loads a Lua plugin without approval. A `plugin.ttt.json` next to the file sets its name and exact permissions (including `system.exec`); without one it is named after the file and gets every permission except `system.exec` (see the Plugin API caveats).
 - **`TTT_CONFIG_DIR`** overrides the config directory. Set it for scripted sessions so the real `~/.config/ttt` is not read or mutated. Headless `--exec` uses a process-local clipboard.
 
 ### Implementation patterns
