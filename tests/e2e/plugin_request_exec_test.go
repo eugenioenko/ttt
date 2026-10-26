@@ -3,6 +3,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -55,6 +56,9 @@ func newRequestExecHarness(t *testing.T) (*testHarness, *plugin.Manager, string)
 }
 
 func TestPluginRequestExecAllowPersistsThePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixtures use Unix absolute paths")
+	}
 	h, m, regPath := newRequestExecHarness(t)
 	defer h.stop()
 
@@ -93,6 +97,9 @@ func TestPluginRequestExecAllowPersistsThePath(t *testing.T) {
 }
 
 func TestPluginRequestExecDismissGrantsNothing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixtures use Unix absolute paths")
+	}
 	h, m, regPath := newRequestExecHarness(t)
 	defer h.stop()
 

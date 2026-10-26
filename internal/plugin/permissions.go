@@ -585,6 +585,11 @@ func (ps PermissionSet) CheckExecPathRequest(path string) error {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return fmt.Errorf("system.exec path %q must be absolute and clean", path)
 	}
+	// The path is shown in the approval dialog, so control characters could
+	// redraw the screen and mislead the user.
+	if strings.IndexFunc(path, unicode.IsControl) >= 0 {
+		return fmt.Errorf("system.exec path %q must not contain control characters", path)
+	}
 	name := execName(path)
 	for _, b := range ps.SystemExec {
 		if execName(b) == name {

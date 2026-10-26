@@ -3,11 +3,21 @@ package plugin
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
 
+// The fixtures use Unix absolute paths, which filepath.IsAbs rejects on Windows.
+func skipOnWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fixtures use Unix absolute paths")
+	}
+}
+
 func TestCheckExecPathRequest(t *testing.T) {
+	skipOnWindows(t)
 	ps := PermissionSet{SystemExec: []string{"psql", "/usr/bin/sqlite3"}}
 	tests := []struct {
 		path string
@@ -22,6 +32,8 @@ func TestCheckExecPathRequest(t *testing.T) {
 		{"/opt/pg16/bin/psql/", false},
 		{"/bin/sh", false},
 		{"/opt/pg16/bin/psql-evil", false},
+		{"/opt/pg16/bin/psql\n/x/psql", false},
+		{"/opt/pg16/bin\x1b[2J/psql", false},
 	}
 	for _, tt := range tests {
 		if err := ps.CheckExecPathRequest(tt.path); (err == nil) != tt.ok {
@@ -31,6 +43,7 @@ func TestCheckExecPathRequest(t *testing.T) {
 }
 
 func TestExecPathGrantDoesNotMatchByName(t *testing.T) {
+	skipOnWindows(t)
 	ps := PermissionSet{SystemExec: []string{"psql", "/opt/pg16/bin/psql"}}
 	if err := ps.CheckExec("/tmp/psql"); err == nil {
 		t.Error("a path grant covered another file with the same name")
@@ -54,6 +67,7 @@ func writeExecPlugin(t *testing.T, pluginsDir, regPath string, exec string, exec
 }
 
 func TestGrantExecPathPersistsAcrossLoads(t *testing.T) {
+	skipOnWindows(t)
 	pluginsDir := t.TempDir()
 	regPath := filepath.Join(t.TempDir(), "registry.json")
 	writeExecPlugin(t, pluginsDir, regPath, `["psql","sqlite3"]`, `[]`)
@@ -96,6 +110,7 @@ func TestGrantExecPathPersistsAcrossLoads(t *testing.T) {
 }
 
 func TestGrantExecPathRequiresARegistryEntry(t *testing.T) {
+	skipOnWindows(t)
 	m, _ := newTestManager(t)
 	p := &Plugin{Name: "debug", Granted: PermissionSet{SystemExec: []string{"psql"}}}
 	if err := m.GrantExecPath(p, "/opt/pg16/bin/psql"); err == nil {
@@ -104,6 +119,7 @@ func TestGrantExecPathRequiresARegistryEntry(t *testing.T) {
 }
 
 func TestExecPathDroppedWithItsManifestName(t *testing.T) {
+	skipOnWindows(t)
 	pluginsDir := t.TempDir()
 	regPath := filepath.Join(t.TempDir(), "registry.json")
 	writeExecPlugin(t, pluginsDir, regPath, `["sqlite3"]`, `["/opt/pg16/bin/psql","/opt/bin/sqlite3"]`)
@@ -126,6 +142,7 @@ func TestExecPathDroppedWithItsManifestName(t *testing.T) {
 }
 
 func TestApproveAndLoadKeepsExecPaths(t *testing.T) {
+	skipOnWindows(t)
 	pluginsDir := t.TempDir()
 	regPath := filepath.Join(t.TempDir(), "registry.json")
 	writeExecPlugin(t, pluginsDir, regPath, `["psql","sqlite3","pg_dump"]`, `["/opt/pg16/bin/psql"]`)
@@ -144,6 +161,7 @@ func TestApproveAndLoadKeepsExecPaths(t *testing.T) {
 }
 
 func TestSystemRequestExec(t *testing.T) {
+	skipOnWindows(t)
 	p, cleanup := setupTestPluginWithSystem(PermissionSet{SystemExec: []string{"psql"}}, &mockSystemAPI{})
 	defer cleanup()
 	var asked []string
@@ -179,6 +197,7 @@ func TestSystemRequestExec(t *testing.T) {
 }
 
 func TestSystemRequestExecDenied(t *testing.T) {
+	skipOnWindows(t)
 	p, cleanup := setupTestPluginWithSystem(PermissionSet{SystemExec: []string{"psql"}}, &mockSystemAPI{})
 	defer cleanup()
 	p.RequestExecPath = func(_ string, done func(bool)) error {
@@ -198,6 +217,7 @@ func TestSystemRequestExecDenied(t *testing.T) {
 }
 
 func TestSystemRequestExecAlreadyGranted(t *testing.T) {
+	skipOnWindows(t)
 	p, cleanup := setupTestPluginWithSystem(PermissionSet{SystemExec: []string{"psql", "/opt/pg16/bin/psql"}}, &mockSystemAPI{})
 	defer cleanup()
 	ch := make(chan func(), 1)
@@ -219,6 +239,7 @@ func TestSystemRequestExecAlreadyGranted(t *testing.T) {
 }
 
 func TestSystemRequestExecDialogUnavailable(t *testing.T) {
+	skipOnWindows(t)
 	p, cleanup := setupTestPluginWithSystem(PermissionSet{SystemExec: []string{"psql"}}, &mockSystemAPI{})
 	defer cleanup()
 	err := p.State.DoString(`
