@@ -79,7 +79,9 @@ type TableWidget struct {
 	focused   bool
 	pressed   bool
 	clickRow  int
+	clickCol  int
 	clickAt   int64
+	cellSel   tableCellSelection
 	now       func() time.Time
 
 	scrollbar                 scrollbar
@@ -95,6 +97,12 @@ type TableWidget struct {
 }
 
 const tableDoubleClickMs = 500
+
+type tableCellSelection struct {
+	active   bool
+	row, col int
+	value    string
+}
 
 func (t *TableWidget) clock() time.Time {
 	if t.now != nil {
@@ -151,6 +159,7 @@ func (t *TableWidget) ensureVisible(visibleH int) {
 
 func (t *TableWidget) Render(surface Surface) {
 	surface = t.RenderBox(surface)
+	t.validateCellSelection()
 	w, h := surface.Size()
 	surface.Fill(term.Cell{Ch: ' '})
 
@@ -355,20 +364,34 @@ func (t *TableWidget) blitLine(surface Surface, line *virtualSurface, y int) {
 	}
 }
 
-func (t *TableWidget) drawColumns(line *virtualSurface, texts func(i int) string, style term.Style, rowActions bool) {
+// drawColumns draws the header when row is -1, else that data row.
+func (t *TableWidget) drawColumns(line *virtualSurface, texts func(i int) string, style term.Style, row int) {
 	line.Fill(term.Cell{Ch: ' ', Style: style})
 	x := t.inset()
 	for i, col := range t.Config.Columns {
 		if i > 0 {
 			x += 2
 		}
-		if !rowActions || len(col.Actions) == 0 {
-			t.renderCell(line, texts(i), col, t.widths[i], x, 0, style)
+		if row < 0 || len(col.Actions) == 0 {
+			start, end := t.renderCell(line, texts(i), col, t.widths[i], x, 0, style)
+			if row >= 0 && t.cellSel.active && t.cellSel.row == row && t.cellSel.col == i {
+				highlightSpan(line, start, end)
+			}
 		}
 		x += t.widths[i]
 	}
-	if rowActions {
+	if row >= 0 {
 		t.renderActions(line, style)
+	}
+}
+
+func highlightSpan(line *virtualSurface, start, end int) {
+	cells := line.cells[0]
+	for x := max(start, 0); x < end && x < len(cells); x++ {
+		cells[x].BgStyle = term.StyleSelection
+		if textwidth.Rune(cells[x].Ch) > 1 {
+			x++
+		}
 	}
 }
 
@@ -408,7 +431,7 @@ func (t *TableWidget) actionAt(x int) (actionSpan, bool) {
 }
 
 func (t *TableWidget) renderHeader(surface Surface, line *virtualSurface) {
-	t.drawColumns(line, func(i int) string { return t.Config.Columns[i].Label }, term.StyleHoverBold, false)
+	t.drawColumns(line, func(i int) string { return t.Config.Columns[i].Label }, term.StyleHoverBold, -1)
 	t.blitLine(surface, line, 0)
 
 	sepStyle := term.StyleBorder
@@ -453,22 +476,21 @@ func (t *TableWidget) renderRow(surface Surface, line *virtualSurface, idx, y in
 			return row[i]
 		}
 		return ""
-	}, style, true)
+	}, style, idx)
 	t.blitLine(surface, line, y)
 }
 
-func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, colW, x, y int, style term.Style) {
+func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, colW, x, y int, style term.Style) (int, int) {
 	runes := []rune(text)
 	if colW <= 0 {
-		return
+		return x, x
 	}
 
 	end := t.cellsEnd()
 	maxX := min(x+colW, end)
 	textW := textwidth.Runes(runes)
 	if textW > colW {
-		drawRunesClipped(surface, x, y, maxX, runes, style)
-		return
+		return x, drawRunesClipped(surface, x, y, maxX, runes, style)
 	}
 
 	padding := colW - textW
@@ -477,16 +499,67 @@ func (t *TableWidget) renderCell(surface Surface, text string, col TableColumn, 
 		for i := 0; i < padding && x+i < end; i++ {
 			surface.SetCell(x+i, y, term.Cell{Ch: ' ', Style: style})
 		}
-		drawRunesClipped(surface, x+padding, y, maxX, runes, style)
+		return x + padding, drawRunesClipped(surface, x+padding, y, maxX, runes, style)
 	case "center":
 		leftPad := padding / 2
 		for i := 0; i < leftPad && x+i < end; i++ {
 			surface.SetCell(x+i, y, term.Cell{Ch: ' ', Style: style})
 		}
-		drawRunesClipped(surface, x+leftPad, y, maxX, runes, style)
-	default: // left
-		drawRunesClipped(surface, x, y, maxX, runes, style)
+		return x + leftPad, drawRunesClipped(surface, x+leftPad, y, maxX, runes, style)
 	}
+	return x, drawRunesClipped(surface, x, y, maxX, runes, style)
+}
+
+func (t *TableWidget) cellValue(row, col int) string {
+	if row < 0 || row >= len(t.Config.Rows) || col < 0 || col >= len(t.Config.Columns) ||
+		len(t.Config.Columns[col].Actions) > 0 || col >= len(t.Config.Rows[row]) {
+		return ""
+	}
+	return t.Config.Rows[row][col]
+}
+
+func (t *TableWidget) columnAt(x int) int {
+	if len(t.widths) != len(t.Config.Columns) {
+		return -1
+	}
+	lx := t.lineX(x)
+	cx := t.inset()
+	for i, col := range t.Config.Columns {
+		if i > 0 {
+			cx += 2
+		}
+		if lx >= cx && lx < cx+t.widths[i] {
+			if len(col.Actions) > 0 {
+				return -1
+			}
+			return i
+		}
+		cx += t.widths[i]
+	}
+	return -1
+}
+
+func (t *TableWidget) selectCell(row, col int) {
+	value := t.cellValue(row, col)
+	t.cellSel = tableCellSelection{active: value != "", row: row, col: col, value: value}
+}
+
+func (t *TableWidget) validateCellSelection() {
+	if t.cellSel.active && t.cellValue(t.cellSel.row, t.cellSel.col) != t.cellSel.value {
+		t.cellSel = tableCellSelection{}
+	}
+}
+
+// SelectedCellText returns the selected cell's full value, not its truncated text.
+func (t *TableWidget) SelectedCellText() (string, bool) {
+	t.validateCellSelection()
+	return t.cellSel.value, t.cellSel.active
+}
+
+func (t *TableWidget) ClearCellSelection() bool {
+	was := t.cellSel.active
+	t.cellSel = tableCellSelection{}
+	return was
 }
 
 func (t *TableWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -631,6 +704,7 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	if localY < headerH || onHBar || idx < 0 || idx >= len(t.Config.Rows) {
 		if fresh {
 			t.clickAt = 0
+			t.ClearCellSelection()
 		}
 		return EventIgnored
 	}
@@ -650,19 +724,22 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		if t.Config.OnSelect != nil {
 			t.Config.OnSelect(idx)
 		}
-		if span, ok := t.actionAt(mx - ox); fresh && ok {
+		if !fresh {
+			return EventConsumed
+		}
+		t.ClearCellSelection()
+		if span, ok := t.actionAt(mx - ox); ok {
 			t.clickAt = 0
 			t.runAction(span, idx, mx-(t.lineX(mx-ox)-span.x), my+1)
 			return EventConsumed
 		}
-		if fresh && t.Config.OnActivate != nil {
-			now := t.clock().UnixMilli()
-			if idx == t.clickRow && now-t.clickAt < tableDoubleClickMs {
-				t.clickAt = 0
-				t.Config.OnActivate(idx)
-			} else {
-				t.clickRow, t.clickAt = idx, now
-			}
+		col := t.columnAt(mx - ox)
+		now := t.clock().UnixMilli()
+		if col >= 0 && idx == t.clickRow && col == t.clickCol && now-t.clickAt < tableDoubleClickMs {
+			t.clickAt = 0
+			t.selectCell(idx, col)
+		} else {
+			t.clickRow, t.clickCol, t.clickAt = idx, col, now
 		}
 		return EventConsumed
 	}
@@ -699,6 +776,11 @@ func (t *TableWidget) handleKey(ev *tcell.EventKey) EventResult {
 			t.selected++
 		}
 		return EventConsumed
+	case tcell.KeyEscape:
+		if t.ClearCellSelection() {
+			return EventConsumed
+		}
+		return EventIgnored
 	case tcell.KeyLeft, tcell.KeyRight:
 		if !t.hRange().visible() {
 			return EventIgnored

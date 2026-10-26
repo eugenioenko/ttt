@@ -75,6 +75,9 @@ func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {
 	switch e := ev.(type) {
 	case *tcell.EventMouse:
 		mx, my := e.Position()
+		if e.Buttons()&tcell.Button1 != 0 && !pw.sel.pressed {
+			pw.clearTableCells()
+		}
 		owns := pw.state != nil && pw.state.root != nil && ownsDragAt(pw.state.root, mx, my)
 		if result, ok := pw.sel.track(e, pw.GetRect(), owns); ok {
 			return result
@@ -88,20 +91,28 @@ func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {
 		if isCopyKey(e) && pw.CopyTextSelection() {
 			return widgets.EventConsumed
 		}
-		if e.Key() == tcell.KeyEscape && pw.sel.clear() {
-			return widgets.EventConsumed
+		if e.Key() == tcell.KeyEscape {
+			cleared := pw.sel.clear()
+			if pw.clearTableCells() || cleared {
+				return widgets.EventConsumed
+			}
 		}
 	}
 	return pw.dispatch(ev)
 }
 
 // CopyTextSelection copies the selected text and reports whether there was any.
-// A focused input with its own selection wins, so the copy goes to it.
+// A focused input with its own selection wins, so the copy goes to it; then a
+// table cell, whose full value is copied rather than its truncated text.
 func (pw *PluginPanelWidget) CopyTextSelection() bool {
-	if !pw.sel.active {
+	if inp := pw.FocusedInput(); inp != nil && inp.HasSelection() {
 		return false
 	}
-	if inp := pw.FocusedInput(); inp != nil && inp.HasSelection() {
+	if text, ok := pw.tableCellText(); ok {
+		clipboard.Set(text)
+		return true
+	}
+	if !pw.sel.active {
 		return false
 	}
 	clipboard.Set(pw.sel.text())
@@ -115,7 +126,47 @@ func (pw *PluginPanelWidget) SelectAllText() {
 		inp.SelectAll()
 		return
 	}
+	pw.clearTableCells()
 	pw.sel.selectAll()
+}
+
+func (pw *PluginPanelWidget) tableCellText() (string, bool) {
+	var text string
+	var ok bool
+	pw.eachTable(func(t *widgets.TableWidget) {
+		if !ok {
+			text, ok = t.SelectedCellText()
+		}
+	})
+	return text, ok
+}
+
+func (pw *PluginPanelWidget) clearTableCells() bool {
+	cleared := false
+	pw.eachTable(func(t *widgets.TableWidget) {
+		if t.ClearCellSelection() {
+			cleared = true
+		}
+	})
+	return cleared
+}
+
+func (pw *PluginPanelWidget) eachTable(fn func(*widgets.TableWidget)) {
+	if pw.state != nil && pw.state.root != nil {
+		eachTable(pw.state.root, fn)
+	}
+}
+
+func eachTable(w widgets.Widget, fn func(*widgets.TableWidget)) {
+	switch v := w.(type) {
+	case nil:
+	case *widgets.TableWidget:
+		fn(v)
+	case widgets.ContainerWidget:
+		for _, child := range v.WidgetChildren() {
+			eachTable(child, fn)
+		}
+	}
 }
 
 func (pw *PluginPanelWidget) CancelPointerCapture() bool { return pw.sel.release() }

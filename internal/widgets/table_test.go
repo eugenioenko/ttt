@@ -663,7 +663,7 @@ func extractText(s *testSurface, x, y, length int) string {
 	return string(runes)
 }
 
-func TestTableActivateFiresOnEnterAndClickNotArrows(t *testing.T) {
+func TestTableActivateFiresOnEnterOnly(t *testing.T) {
 	tbl := newBasicTable()
 	var activated []int
 	tbl.Config.OnActivate = func(i int) { activated = append(activated, i) }
@@ -686,8 +686,12 @@ func TestTableActivateFiresOnEnterAndClickNotArrows(t *testing.T) {
 	at = at.Add(100 * time.Millisecond)
 	tbl.HandleEvent(mouseClick(2, 4))
 	tbl.HandleEvent(mouseRelease(2, 4))
-	if len(activated) != 2 || activated[0] != 1 || activated[1] != 2 {
-		t.Fatalf("enter then a double click should activate rows 1 and 2, got %v", activated)
+	if len(activated) != 1 || activated[0] != 1 {
+		t.Fatalf("a double click should not activate, got %v", activated)
+	}
+	tbl.HandleEvent(keyPress(tcell.KeyEnter))
+	if len(activated) != 2 || activated[1] != 2 {
+		t.Fatalf("enter should activate the clicked row, got %v", activated)
 	}
 }
 
@@ -737,10 +741,9 @@ func TestInsetKeepsScrollbarAtEdge(t *testing.T) {
 	}
 }
 
-func TestTableDoubleClickNeedsTwoQuickClicksOnTheSameRow(t *testing.T) {
+func TestTableDoubleClickNeedsTwoQuickClicksOnTheSameCell(t *testing.T) {
 	tbl := newBasicTable()
-	activated := 0
-	tbl.Config.OnActivate = func(int) { activated++ }
+	selected := func() bool { _, ok := tbl.SelectedCellText(); return ok }
 	at := time.Unix(1000, 0)
 	tbl.now = func() time.Time { return at }
 	renderWidget(tbl, 0, 0, 20, 10)
@@ -752,17 +755,21 @@ func TestTableDoubleClickNeedsTwoQuickClicksOnTheSameRow(t *testing.T) {
 
 	click(2, 4, 0)
 	click(2, 4, 600*time.Millisecond)
-	if activated != 0 {
-		t.Fatal("two clicks 600ms apart activated the row")
+	if selected() {
+		t.Fatal("two clicks 600ms apart selected the cell")
 	}
 	click(2, 0, 100*time.Millisecond)
 	click(2, 4, 100*time.Millisecond)
-	if activated != 0 {
+	if selected() {
 		t.Fatal("a header click between the row clicks still counted as a double-click")
 	}
-	click(2, 4, 100*time.Millisecond)
-	if activated != 1 {
-		t.Fatalf("a quick second click on the row should activate it, got %d", activated)
+	click(12, 4, 100*time.Millisecond)
+	if selected() {
+		t.Fatal("clicks on two cells of the row counted as a double-click")
+	}
+	click(12, 4, 100*time.Millisecond)
+	if text, ok := tbl.SelectedCellText(); !ok || text != "35" {
+		t.Fatalf("a quick second click on the cell should select it, got %q %v", text, ok)
 	}
 }
 

@@ -1595,7 +1595,7 @@ panel:table({
 | `columns`      | table    | yes      | Array of column tables: `{label, width, min_width, align, actions}`. `width` fixes a column's width (omit it to auto-size); `min_width` is the narrowest an auto-sized column gets (default: its label's width); `align` is `"right"`, `"center"` or default left. `actions` turns the column into [row actions](#row-actions). |
 | `rows`         | table    | yes      | Array of rows; each row is an array of cell strings.        |
 | `on_select`    | function | no       | Callback when the selected row changes (arrow keys, click) or Enter is pressed. Receives the 1-based row index. |
-| `on_activate`  | function | no       | Callback when a row is opened: Enter or a double-click. A single click only selects, so a table can drive a detail view on `on_select` and open on `on_activate`. Receives the 1-based row index. |
+| `on_activate`  | function | no       | Callback when a row is opened with Enter. A click only selects, so a table can drive a detail view on `on_select` and open on `on_activate`; give mouse users an [action](#row-actions) to open a row. Receives the 1-based row index. |
 | `selected`     | number   | no       | 1-based row to select. When set, the plugin controls the selection: keep it in step with `on_select`. When omitted, the table keeps its own. |
 | `row_styles`   | table    | no       | Array of [style names](#styles), one per row, for example `"muted"` for inactive items. |
 | `loading`      | boolean  | no       | Shows `Loading…` in place of the rows while there are none, or in the header while the current rows are kept. |
@@ -1606,11 +1606,13 @@ panel:table({
 | `key_commands` | table    | no       | Map of single-char keys to command strings. Triggers `on_command(command, selected_row_index)`. |
 | + [box model fields](#box-model) | | | Margin and padding. |
 
+Double-clicking a cell highlights its text, and Ctrl+C then copies the cell's full value, even when the cell is truncated with `…`. Escape, a click elsewhere, or a render that changes the cell clears it.
+
 Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
 
 #### Row actions
 
-A column with `actions` draws the same clickable links in every row, so the row's actions are visible instead of hidden behind a double-click or a right-click. Make it the last column: it then stays pinned at the right edge while the other columns scroll horizontally. Its width is the width of its labels.
+A column with `actions` draws the same clickable links in every row, so the row's actions are visible instead of hidden behind Enter or a right-click. Make it the last column: it then stays pinned at the right edge while the other columns scroll horizontally. Its width is the width of its labels.
 
 Each action is a table:
 

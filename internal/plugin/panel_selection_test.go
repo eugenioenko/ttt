@@ -209,3 +209,87 @@ func TestSelectionAfterARenderErrorCopiesTheError(t *testing.T) {
 		t.Fatalf("clipboard = %q, want the error that is on screen", got)
 	}
 }
+
+func newTablePanel(t *testing.T) (*PluginPanelWidget, *mockSurface, *Plugin) {
+	t.Helper()
+	p := &Plugin{Name: "test", Granted: PermissionSet{PanelSidebar: true}}
+	p.State = NewSandbox()
+	t.Cleanup(p.State.Close)
+	setupTTTModule(p.State, p)
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		activated = 0
+		ttt.register({
+			sidebar = {
+				title = "Test",
+				render = function(panel)
+					panel:table({
+						columns = {{ label = "Id", width = 6 }, { label = "Name" }},
+						rows = {{ "0123456789abcdef", "alpha" }, { "42", "beta" }},
+						on_activate = function() activated = activated + 1 end,
+					})
+				end,
+			},
+		})
+	`)
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	pw := NewPluginPanelWidget(p, p.RenderFunc, p.EventFunc)
+	pw.SetRect(widgets.Rect{X: 10, Y: 5, W: 20, H: 6})
+	surface := newMockSurface(20, 6)
+	pw.Render(surface)
+	return pw, surface, p
+}
+
+func doubleClickPanel(pw *PluginPanelWidget, x, y int) {
+	for range 2 {
+		mouse(pw, x, y, tcell.Button1)
+		mouse(pw, x, y, tcell.ButtonNone)
+	}
+}
+
+func TestPanelTableCellCopiesFullValue(t *testing.T) {
+	clipboard.DisableSystem()
+	clipboard.Set("before")
+	pw, surface, p := newTablePanel(t)
+
+	doubleClickPanel(pw, 11, 7)
+	pw.Render(surface)
+	if clipboard.Get() != "before" {
+		t.Fatal("double-click touched the clipboard")
+	}
+	if v := p.State.GetGlobal("activated"); v != lua.LNumber(0) {
+		t.Fatalf("double-click fired on_activate %v times", v)
+	}
+	for x := range 7 {
+		c := surface.cells[[2]int{x, 2}]
+		if hl := c.BgStyle == term.StyleSelection; hl != (x < 6) {
+			t.Fatalf("cell %d %q highlighted=%v, want the drawn id only", x, c.Ch, hl)
+		}
+	}
+	if c := surface.cells[[2]int{5, 2}]; c.Ch != '…' {
+		t.Fatalf("truncated id should end in an ellipsis, got %q", c.Ch)
+	}
+
+	if got := pw.HandleEvent(tcell.NewEventKey(tcell.KeyCtrlC, "", tcell.ModCtrl)); got != widgets.EventConsumed {
+		t.Fatalf("ctrl+c result = %v, want consumed", got)
+	}
+	if got := clipboard.Get(); got != "0123456789abcdef" {
+		t.Fatalf("clipboard = %q, want the full value", got)
+	}
+
+	if got := pw.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone)); got != widgets.EventConsumed {
+		t.Fatalf("escape result = %v, want consumed", got)
+	}
+	if pw.CopyTextSelection() {
+		t.Fatal("escape kept the cell selection")
+	}
+
+	doubleClickPanel(pw, 11, 8)
+	mouse(pw, 25, 10, tcell.Button1)
+	mouse(pw, 25, 10, tcell.ButtonNone)
+	if pw.CopyTextSelection() {
+		t.Fatal("a click below the rows kept the cell selection")
+	}
+}
