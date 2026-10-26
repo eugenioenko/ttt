@@ -57,7 +57,7 @@ func TestPaletteFileResultsShowThemedIconsWithoutChangingLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := NewSelectDialogWidget(nil)
-	p.SetFiles([]string{dir})
+	p.SetFiles([]PaletteFile{{Rel: "Dockerfile", Abs: path}})
 	p.Icons = config.IconsNerdFont
 	p.Input.SetText("")
 	p.Items = append(p.Items, PaletteItem{Label: "other.txt", ID: filepath.Join(dir, "other.txt")})
@@ -469,7 +469,7 @@ func TestCalculatePaletteWidth(t *testing.T) {
 
 func TestPaletteSharedWidthAcrossModeTransitionsAndReopen(t *testing.T) {
 	p := NewSelectDialogWidget(helpTestCommands())
-	p.files = []paletteFile{{Rel: "alpha.txt", Abs: "/workspace/alpha.txt"}}
+	p.files = []PaletteFile{{Rel: "alpha.txt", Abs: "/workspace/alpha.txt"}}
 
 	commandCells := renderPaletteAt(p, 200, 50)
 	if p.boxX != 70 || p.boxW != 60 {

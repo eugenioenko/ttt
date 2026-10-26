@@ -137,6 +137,15 @@ All editor settings are nested under the `editor` key.
 | `explorer.dimStagedGitColors` | bool | `false` | Render staged changes in a dimmed version of their status color, telling them apart from pending ones. Off by default: the Changes panel already separates staged from unstaged, and the extra shades make the explorer busier. Needs `explorer.gitStatusColors` |
 | `explorer.autoReveal` | bool | `false` | Expand the file explorer to the active file and select it whenever the active file changes. **Explorer: Reveal Active File** does the same on demand |
 
+## Quick Open
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `quickOpen.showHidden` | bool | `false` | Show dot-prefixed files and directories in Go to File |
+| `quickOpen.showGitIgnored` | bool | `false` | Show Git-ignored files in Go to File |
+
+Set these independently in **Settings > Sidebar > Quick Open**. Hidden files still respect Git ignore rules unless `showGitIgnored` is enabled; showing Git-ignored files does not include hidden paths unless `showHidden` is enabled. `.git` files and directories always stay excluded. These options do not affect Explorer or workspace text search.
+
 ## Sidebar
 
 | Key | Type | Default | Description |
@@ -306,6 +315,10 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "borderStyle": "default",
     "selectionStyle": "background",
     "bracketPairColorization": false
+  },
+  "quickOpen": {
+    "showHidden": false,
+    "showGitIgnored": false
   },
   "search": {
     "debounce": 350

@@ -1,109 +1,10 @@
 package ui
 
 import (
-	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 )
-
-func TestListDirFilesCollectsFiles(t *testing.T) {
-	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, "src"), 0o755)
-	os.WriteFile(filepath.Join(dir, "main.go"), []byte(""), 0o644)
-	os.WriteFile(filepath.Join(dir, "src", "lib.go"), []byte(""), 0o644)
-
-	files := listDirFiles(dir, "")
-
-	rels := make([]string, len(files))
-	for i, f := range files {
-		rels[i] = f.Rel
-	}
-	sort.Strings(rels)
-
-	found := map[string]bool{"main.go": false, filepath.Join("src", "lib.go"): false}
-	for _, r := range rels {
-		if _, ok := found[r]; ok {
-			found[r] = true
-		}
-	}
-	for name, ok := range found {
-		if !ok {
-			t.Fatalf("expected %q in results, got %v", name, rels)
-		}
-	}
-	for _, f := range files {
-		if !filepath.IsAbs(f.Abs) {
-			t.Fatalf("expected absolute path, got %q", f.Abs)
-		}
-	}
-}
-
-func TestListFilesWalkDirSkipsDirs(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "app.js"), []byte(""), 0o644)
-	for _, skip := range []string{".git", "node_modules", ".cache", "__pycache__"} {
-		sub := filepath.Join(dir, skip)
-		os.MkdirAll(sub, 0o755)
-		os.WriteFile(filepath.Join(sub, "junk.txt"), []byte(""), 0o644)
-	}
-
-	files := listFilesWalkDir(dir, "")
-
-	if len(files) != 1 || files[0].Rel != "app.js" {
-		rels := make([]string, len(files))
-		for i, f := range files {
-			rels[i] = f.Rel
-		}
-		t.Fatalf("expected only [app.js], got %v", rels)
-	}
-}
-
-func TestListFilesWalkDirPrefix(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.txt"), []byte(""), 0o644)
-
-	files := listFilesWalkDir(dir, "proj/")
-
-	if len(files) != 1 {
-		t.Fatalf("expected 1 file, got %d", len(files))
-	}
-	if files[0].Rel != "proj/a.txt" {
-		t.Fatalf("expected rel %q, got %q", "proj/a.txt", files[0].Rel)
-	}
-}
-
-func TestListWorkspaceFilesMultiRoot(t *testing.T) {
-	dir1 := t.TempDir()
-	dir2 := t.TempDir()
-	os.WriteFile(filepath.Join(dir1, "a.txt"), []byte(""), 0o644)
-	os.WriteFile(filepath.Join(dir2, "b.txt"), []byte(""), 0o644)
-
-	files := listWorkspaceFiles([]string{dir1, dir2})
-
-	if len(files) < 2 {
-		t.Fatalf("expected at least 2 files, got %d", len(files))
-	}
-	for _, f := range files {
-		base1 := filepath.Base(dir1)
-		base2 := filepath.Base(dir2)
-		if !strings.HasPrefix(f.Rel, base1) && !strings.HasPrefix(f.Rel, base2) {
-			t.Fatalf("multi-root file %q missing workspace prefix", f.Rel)
-		}
-	}
-}
-
-func TestListWorkspaceFilesSingleRoot(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "x.txt"), []byte(""), 0o644)
-
-	files := listWorkspaceFiles([]string{dir})
-
-	if len(files) != 1 || files[0].Rel != "x.txt" {
-		t.Fatalf("single root should have no prefix, got %v", files)
-	}
-}
 
 func TestFileDetail(t *testing.T) {
 	tests := []struct {
@@ -122,7 +23,7 @@ func TestFileDetail(t *testing.T) {
 }
 
 func TestFuzzyFilterFilesEmptyQuery(t *testing.T) {
-	files := []paletteFile{
+	files := []PaletteFile{
 		{Rel: "a.txt", Abs: "/w/a.txt"},
 		{Rel: "b.txt", Abs: "/w/b.txt"},
 		{Rel: "c.txt", Abs: "/w/c.txt"},
@@ -139,7 +40,7 @@ func TestFuzzyFilterFilesEmptyQuery(t *testing.T) {
 }
 
 func TestFuzzyFilterFilesWithQuery(t *testing.T) {
-	files := []paletteFile{
+	files := []PaletteFile{
 		{Rel: "readme.md", Abs: "/w/readme.md"},
 		{Rel: "src/main.go", Abs: "/w/src/main.go"},
 		{Rel: "src/util.go", Abs: "/w/src/util.go"},
@@ -158,7 +59,7 @@ func TestFuzzyFilterFilesWithQuery(t *testing.T) {
 func TestFuzzyFilterFilesIgnoresQueryWhitespace(t *testing.T) {
 	for _, rel := range []string{"src/user_profile.go", "src/user-profile.go"} {
 		abs := "/w/" + rel
-		items := fuzzyFilterFiles([]paletteFile{{Rel: rel, Abs: abs}}, "user profile", 10)
+		items := fuzzyFilterFiles([]PaletteFile{{Rel: rel, Abs: abs}}, "user profile", 10)
 		if len(items) != 1 || items[0].ID != abs {
 			t.Errorf("expected whitespace-separated query to match %q, got %v", abs, items)
 		}
@@ -166,10 +67,10 @@ func TestFuzzyFilterFilesIgnoresQueryWhitespace(t *testing.T) {
 }
 
 func TestFuzzyFilterFilesMaxResults(t *testing.T) {
-	var files []paletteFile
+	var files []PaletteFile
 	for i := 0; i < 200; i++ {
 		name := filepath.Join("src", strings.Repeat("a", i%26+1)+".go")
-		files = append(files, paletteFile{Rel: name, Abs: "/w/" + name})
+		files = append(files, PaletteFile{Rel: name, Abs: "/w/" + name})
 	}
 
 	items := fuzzyFilterFiles(files, "a", 5)
@@ -180,7 +81,7 @@ func TestFuzzyFilterFilesMaxResults(t *testing.T) {
 }
 
 func TestFuzzyFilterFilesNoMatch(t *testing.T) {
-	files := []paletteFile{
+	files := []PaletteFile{
 		{Rel: "hello.txt", Abs: "/w/hello.txt"},
 	}
 
@@ -192,7 +93,7 @@ func TestFuzzyFilterFilesNoMatch(t *testing.T) {
 }
 
 func TestFuzzyFilterFilesDetail(t *testing.T) {
-	files := []paletteFile{
+	files := []PaletteFile{
 		{Rel: "src/components/button.tsx", Abs: "/w/src/components/button.tsx"},
 	}
 

@@ -32,6 +32,10 @@
     "saveAllOnQuit": false,
     "saveAllOnQuitExceptUnnamed": false
   },
+  "quickOpen": {
+    "showHidden": false,
+    "showGitIgnored": false
+  },
   "search": {
     "debounce": 350
   },

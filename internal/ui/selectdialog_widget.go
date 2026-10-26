@@ -45,7 +45,7 @@ type PaletteItem struct {
 	searchText  []string
 }
 
-type paletteFile struct {
+type PaletteFile struct {
 	Rel string
 	Abs string
 }
@@ -60,7 +60,7 @@ type SelectDialogWidget struct {
 	inputX            int
 	inputY            int
 	mode              paletteMode
-	files             []paletteFile
+	files             []PaletteFile
 	helpTopics        []PaletteItem
 	helpCommands      []PaletteItem
 	activeHelpTopic   string
@@ -97,8 +97,8 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 	return p
 }
 
-func (p *SelectDialogWidget) SetFiles(workDirs []string) {
-	p.files = listWorkspaceFiles(workDirs)
+func (p *SelectDialogWidget) SetFiles(files []PaletteFile) {
+	p.files = files
 }
 
 func (p *SelectDialogWidget) Focusable() bool { return true }

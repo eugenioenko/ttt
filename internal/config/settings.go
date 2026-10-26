@@ -246,6 +246,11 @@ func DefaultSearchSettings() SearchSettings {
 	}
 }
 
+type QuickOpenSettings struct {
+	ShowHidden     bool `json:"showHidden"`
+	ShowGitIgnored bool `json:"showGitIgnored"`
+}
+
 type ExplorerSettings struct {
 	ShowHidden         bool `json:"showHidden"`
 	ShowGitIgnored     bool `json:"showGitIgnored"`
@@ -379,6 +384,7 @@ type Settings struct {
 	// the defaults on the next load.
 	Appearance   AppearanceSettings   `json:"appearance"`
 	Editor       EditorSettings       `json:"editor"`
+	QuickOpen    QuickOpenSettings    `json:"quickOpen"`
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
 	Sidebar      SidebarSettings      `json:"sidebar,omitzero"`
@@ -405,7 +411,7 @@ type Settings struct {
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "appearance": true, "editor": true,
-	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
+	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }
 
