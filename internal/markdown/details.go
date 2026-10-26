@@ -260,7 +260,7 @@ func parseDocument(lines []string, nextID *int) *Document {
 			trimmedAfterSummary := strings.TrimSpace(afterDetails)
 			singleLineClosed := false
 			if trimmedAfterSummary != "" {
-				if closeLoc := detailsCloseRegex.FindStringIndex(trimmedAfterSummary); closeLoc != nil {
+				if closeLoc := findDetailsClose(trimmedAfterSummary); closeLoc != nil {
 					inside := trimmedAfterSummary[:closeLoc[0]]
 					if inside != "" {
 						innerLines = append(innerLines, inside)
@@ -300,7 +300,7 @@ func parseDocument(lines []string, nextID *int) *Document {
 
 					if currIndent <= 3 {
 						hasStart := detailsStartRegex.MatchString(currTrimmedLeft)
-						hasClose := detailsCloseRegex.MatchString(currTrimmedLeft)
+						hasClose := findDetailsClose(currTrimmedLeft) != nil
 						if hasStart && hasClose {
 							innerLines = append(innerLines, curr)
 							i++
@@ -355,6 +355,51 @@ func parseDocument(lines []string, nextID *int) *Document {
 
 	flushContent()
 	return &Document{Blocks: blocks, details: allDetails}
+}
+
+func findDetailsClose(s string) []int {
+	return detailsCloseRegex.FindStringIndex(maskInlineCode(s))
+}
+
+// maskInlineCode blanks out inline code spans, keeping byte offsets intact.
+func maskInlineCode(s string) string {
+	var masked []byte
+	for i := 0; i < len(s); {
+		if s[i] != '`' {
+			i++
+			continue
+		}
+		open := i
+		for i < len(s) && s[i] == '`' {
+			i++
+		}
+		n := i - open
+		for j := i; j < len(s); {
+			if s[j] != '`' {
+				j++
+				continue
+			}
+			k := j
+			for k < len(s) && s[k] == '`' {
+				k++
+			}
+			if k-j == n {
+				if masked == nil {
+					masked = []byte(s)
+				}
+				for m := open; m < k; m++ {
+					masked[m] = ' '
+				}
+				i = k
+				break
+			}
+			j = k
+		}
+	}
+	if masked == nil {
+		return s
+	}
+	return string(masked)
 }
 
 func extractSummaryFromLine(line string) (summary string, spans []Span, remaining string) {

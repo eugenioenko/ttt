@@ -942,6 +942,32 @@ func TestDetailsPreservesFencedCodeContainingHTML(t *testing.T) {
 	}
 }
 
+func TestDetailsIgnoresClosingTagInInlineCode(t *testing.T) {
+	input := "<details>\n<summary>More information</summary>\n\nUse `</details>` to close a section.\n\nThis should stay hidden until expanded.\n</details>"
+
+	doc := Parse(input)
+	if len(doc.Details()) != 1 {
+		t.Fatalf("expected 1 detail block, got %d", len(doc.Details()))
+	}
+	tl := textLines(doc.Render())
+	if len(tl) != 1 || tl[0] != "▶ More information" {
+		t.Fatalf("expected only '▶ More information' when collapsed, got %v", tl)
+	}
+
+	doc.Toggle(doc.Details()[0].ID)
+	tl = textLines(doc.Render())
+	want := []string{
+		"▼ More information",
+		"",
+		"Use </details> to close a section.",
+		"",
+		"This should stay hidden until expanded.",
+	}
+	if !slices.Equal(tl, want) {
+		t.Fatalf("expected %v when expanded, got %v", want, tl)
+	}
+}
+
 func TestDetailsPreservesOrdinaryProseWithHTML(t *testing.T) {
 	input := "Use `<details>` and <details> in prose."
 	lines := Render(input)
