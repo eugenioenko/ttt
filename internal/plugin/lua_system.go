@@ -37,9 +37,11 @@ func setupSystemModule(L *lua.LState, p *Plugin) {
 }
 
 type execRequest struct {
-	args    []string
-	opts    ExecOptions
-	timeout time.Duration
+	args               []string
+	opts               ExecOptions
+	timeout            time.Duration
+	maxOutput          int64
+	onStdout, onStderr *lua.LFunction
 }
 
 type execResult struct {
@@ -48,6 +50,7 @@ type execResult struct {
 	err            error
 	timedOut       bool
 	cancelled      bool
+	truncated      bool
 }
 
 // parseExecArgs reads the optional argv array and options table that follow
@@ -87,7 +90,31 @@ func parseExecArgs(L *lua.LState, binary string, start int) execRequest {
 	default:
 		L.ArgError(start+1, "env must be a table of strings")
 	}
+	switch v := L.GetField(optsTbl, "max_output_bytes").(type) {
+	case *lua.LNilType:
+	case lua.LNumber:
+		if v < 1 {
+			L.ArgError(start+1, "max_output_bytes must be at least 1")
+		}
+		req.maxOutput = int64(v)
+	default:
+		L.ArgError(start+1, "max_output_bytes must be a number")
+	}
+	req.onStdout = optFunction(L, start+1, optsTbl, "on_stdout")
+	req.onStderr = optFunction(L, start+1, optsTbl, "on_stderr")
 	return req
+}
+
+func optFunction(L *lua.LState, arg int, tbl *lua.LTable, name string) *lua.LFunction {
+	switch v := L.GetField(tbl, name).(type) {
+	case *lua.LNilType:
+		return nil
+	case *lua.LFunction:
+		return v
+	default:
+		L.ArgError(arg, name+" must be a function")
+		return nil
+	}
 }
 
 func parseExecEnv(binary string, tbl *lua.LTable) ([]string, error) {
@@ -148,15 +175,36 @@ func IsGitBinary(binary string) bool {
 	return strings.TrimSuffix(strings.ToLower(filepath.Base(binary)), ".exe") == "git"
 }
 
-func runExec(ctx context.Context, sys SystemAPI, binary string, req execRequest) execResult {
+// finished is read and written only on the main loop: it is set before the
+// final callback so a chunk still queued behind it is dropped.
+func runExec(ctx context.Context, p *Plugin, binary string, req execRequest, finished *bool) execResult {
 	if req.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, req.timeout)
 		defer cancel()
 	}
-	stdout, stderr, exitCode, err := sys.Exec(ctx, binary, req.args, req.opts)
-	r := execResult{stdout: stdout, stderr: stderr, exitCode: exitCode, err: err}
-	if ctxErr := ctx.Err(); ctxErr != nil && (err != nil || exitCode != 0) {
+	childCtx, kill := context.WithCancel(ctx)
+	defer kill()
+	limit := newOutputLimit(req.maxOutput, kill)
+	stdout := &execOutput{limit: limit}
+	stderr := &execOutput{limit: limit}
+	if req.onStdout != nil {
+		stdout.deliver = p.streamTo(ctx, req.onStdout, finished, "exec on_stdout")
+	}
+	if req.onStderr != nil {
+		stderr.deliver = p.streamTo(ctx, req.onStderr, finished, "exec on_stderr")
+	}
+	opts := req.opts
+	opts.Stdout, opts.Stderr = stdout, stderr
+	_, _, exitCode, err := p.System.Exec(childCtx, binary, req.args, opts)
+	stdout.flush()
+	stderr.flush()
+	r := execResult{stdout: stdout.String(), stderr: stderr.String(), exitCode: exitCode, err: err}
+	if limit.exceeded() {
+		r.truncated = true
+		r.exitCode = -1
+		r.err = nil
+	} else if ctxErr := ctx.Err(); ctxErr != nil && (err != nil || exitCode != 0) {
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
 			r.timedOut = true
 			r.err = fmt.Errorf("timed out after %s", req.timeout)
@@ -185,6 +233,9 @@ func pushExecResult(L *lua.LState, r execResult) *lua.LTable {
 	if r.cancelled {
 		L.SetField(tbl, "cancelled", lua.LTrue)
 	}
+	if r.truncated {
+		L.SetField(tbl, "truncated", lua.LTrue)
+	}
 	return tbl
 }
 
@@ -203,7 +254,11 @@ func sysExec(p *Plugin) lua.LGFunction {
 		}
 
 		req := parseExecArgs(L, binary, 2)
-		L.Push(pushExecResult(L, runExec(context.Background(), p.System, binary, req)))
+		if req.onStdout != nil || req.onStderr != nil {
+			L.ArgError(3, "on_stdout and on_stderr need sys.exec_async")
+		}
+		finished := false
+		L.Push(pushExecResult(L, runExec(context.Background(), p, binary, req, &finished)))
 		return 1
 	}
 }
@@ -236,11 +291,13 @@ func sysExecAsync(p *Plugin) lua.LGFunction {
 		}
 
 		id, ctx, done := p.startExec()
+		finished := false
 		go func() {
 			defer close(done)
-			r := runExec(ctx, p.System, binary, req)
+			r := runExec(ctx, p, binary, req, &finished)
 			p.finishExec(id)
 			resultFn := func() {
+				finished = true
 				if p.State == nil {
 					return
 				}

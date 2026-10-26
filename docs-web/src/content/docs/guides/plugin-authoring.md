@@ -2438,6 +2438,8 @@ Execute a command synchronously. Requires the `system.exec` permission with the 
 | `stdin`      | string | Written to the command's standard input. Nothing is written when omitted or empty. |
 | `env`        | table  | Extra environment variables for the child, as `{NAME = "value"}`, merged over the editor's environment. |
 | `timeout_ms` | number | Kill the command after this many milliseconds. Must be positive. |
+| `max_output_bytes` | number | Kill the command once its stdout and stderr together exceed this many bytes. The result keeps the first `max_output_bytes` bytes and sets `truncated`. Must be at least 1. |
+| `on_stdout`, `on_stderr` | function | `sys.exec_async` only: receive the output in chunks as it arrives instead of in the result. See [Streaming output](#streaming-output). |
 
 **Returns** a table:
 
@@ -2445,9 +2447,10 @@ Execute a command synchronously. Requires the `system.exec` permission with the 
 |-------------|---------|-------------------------------------------------|
 | `stdout`    | string  | Standard output.                                |
 | `stderr`    | string  | Standard error, or the error message when the command could not run, timed out or was cancelled. |
-| `exit_code` | number  | Exit code (`0` for success, `-1` for exec errors, timeouts and cancellation). |
+| `exit_code` | number  | Exit code (`0` for success, `-1` for exec errors, timeouts, cancellation and truncation). |
 | `timed_out` | boolean | `true` when `timeout_ms` elapsed and the command was killed. |
 | `cancelled` | boolean | `true` when an `exec_async` handle's `cancel()` killed the command. |
+| `truncated` | boolean | `true` when the output passed `max_output_bytes` and the command was killed. `stdout` and `stderr` hold what arrived before the limit. |
 
 ```lua
 local result = sys.exec("git", {"status", "--porcelain"})
@@ -2525,6 +2528,35 @@ end)
 -- later, for example from a Cancel button:
 query:cancel()
 ```
+
+#### Streaming output
+
+By default the whole output is collected and handed to the callback at the end, so a command that prints a lot (a large query result, a long log) holds all of it in memory first. Pass `on_stdout` and `on_stderr` to receive it as it arrives instead:
+
+```lua
+local rows = {}
+local query = sys.exec_async("psql", {"-At", "-c", sql}, {
+  env = {PGPASSWORD = password},
+  max_output_bytes = 50 * 1024 * 1024,
+  on_stdout = function(chunk)
+    for line in chunk:gmatch("[^\n]+") do
+      rows[#rows + 1] = line
+    end
+    panel:redraw()
+  end,
+}, function(result)
+  if result.truncated then
+    ttt.notify("Showing the first 50 MB of results")
+  end
+end)
+```
+
+- Chunks end at a newline, so a line is never split across two calls. Only a line longer than 64 KiB is split, at a UTF-8 character boundary, and the last chunk may lack a trailing newline. Output without a newline arrives when the line completes or the command ends.
+- Callbacks run on the main thread, in order, and all of them before the final callback. Each stream is ordered on its own; how stdout and stderr chunks interleave is not defined.
+- ttt reads more output only after the previous chunk's callback returns. A command that prints faster than the plugin handles it waits instead of filling memory, so keep the callback quick.
+- A streamed stream is not collected: the result's `stdout` (or `stderr`) is empty. A stream without a callback is collected as usual.
+- After `cancel()`, a timeout or the plugin unloading, no more chunks are delivered. `max_output_bytes` counts streamed bytes too, and the chunks stop at the limit.
+- `sys.exec` raises an error for `on_stdout` and `on_stderr`: it blocks the main thread, so there is nowhere to deliver chunks.
 
 ### `sys.request_exec(path, callback)`
 

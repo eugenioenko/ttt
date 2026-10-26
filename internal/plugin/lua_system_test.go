@@ -17,7 +17,9 @@ type mockSystemAPI struct {
 	execStdin  string
 	execEnv    []string
 	// block makes Exec wait for its context, as a running child would.
-	block    bool
+	block bool
+	// writes go to stdout one Write at a time, before stdout.
+	writes   []string
 	started  chan struct{}
 	returned chan struct{}
 }
@@ -33,9 +35,22 @@ func (m *mockSystemAPI) Exec(ctx context.Context, binary string, args []string, 
 	if m.started != nil {
 		close(m.started)
 	}
+	for _, chunk := range m.writes {
+		if ctx.Err() != nil {
+			return "", "", -1, nil
+		}
+		if opts.Stdout != nil {
+			opts.Stdout.Write([]byte(chunk))
+		}
+	}
 	if m.block {
 		<-ctx.Done()
 		return "", "signal: killed", -1, nil
+	}
+	if opts.Stdout != nil && opts.Stderr != nil {
+		opts.Stdout.Write([]byte(m.stdout))
+		opts.Stderr.Write([]byte(m.stderr))
+		return "", "", m.exitCode, m.execErr
 	}
 	return m.stdout, m.stderr, m.exitCode, m.execErr
 }

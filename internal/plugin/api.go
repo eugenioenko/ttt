@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"io"
 	"net/url"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -141,6 +142,9 @@ type ExecOptions struct {
 	Stdin string
 	// Env holds KEY=VALUE entries added over the editor's environment.
 	Env []string
+	// Stdout and Stderr, when set, receive the child's output instead of the
+	// returned strings. A Write may block; the child then waits for it.
+	Stdout, Stderr io.Writer
 }
 
 type SystemAPI interface {
