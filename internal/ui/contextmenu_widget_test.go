@@ -74,10 +74,38 @@ func TestContextMenuSelectionStillSkipsSeparatorsAndExecutes(t *testing.T) {
 	}
 
 	renderContextMenu(menu, 40, 10)
-	menu.HandleEvent(tcell.NewEventMouse(6, 4, tcell.ButtonNone, tcell.ModNone))
+	menu.firstEvent = false
 	menu.HandleEvent(tcell.NewEventMouse(6, 4, tcell.Button1, tcell.ModNone))
+	if len(commands) != 1 {
+		t.Fatalf("mouse-down executed command: %v", commands)
+	}
+	menu.HandleEvent(tcell.NewEventMouse(6, 6, tcell.ButtonNone, tcell.ModNone))
+	if len(commands) != 1 {
+		t.Fatalf("release on a different item executed command: %v", commands)
+	}
+	menu.HandleEvent(tcell.NewEventMouse(6, 4, tcell.Button1, tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventMouse(6, 4, tcell.ButtonNone, tcell.ModNone))
 	if len(commands) != 2 || commands[1] != "first" {
 		t.Fatalf("mouse commands = %v, want second then first", commands)
+	}
+}
+
+func TestContextMenuDragDoesNotRetargetPressedItem(t *testing.T) {
+	var commands []string
+	menu := NewContextMenuWidget([]ContextMenuItem{
+		{Label: "First", Command: "first"},
+		{Label: "Second", Command: "second"},
+	}, 2, 1)
+	menu.OnExec = func(command string) { commands = append(commands, command) }
+	renderContextMenu(menu, 40, 10)
+	menu.firstEvent = false
+
+	r := menu.GetRect()
+	menu.HandleEvent(tcell.NewEventMouse(r.X+2, r.Y+1, tcell.Button1, tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventMouse(r.X+2, r.Y+2, tcell.Button1, tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventMouse(r.X+2, r.Y+2, tcell.ButtonNone, tcell.ModNone))
+	if len(commands) != 0 {
+		t.Fatalf("dragging from First to Second executed commands: %v", commands)
 	}
 }
 
@@ -95,8 +123,12 @@ func TestContextMenuMixedFullwidthLabelsKeepExactMouseBounds(t *testing.T) {
 		t.Fatalf("rendered bounds = %+v, want display-width-clamped 15-column menu", r)
 	}
 
-	menu.HandleEvent(tcell.NewEventMouse(r.X+r.W-1, r.Y+2, tcell.ButtonNone, tcell.ModNone))
+	menu.firstEvent = false
 	menu.HandleEvent(tcell.NewEventMouse(r.X+r.W-1, r.Y+2, tcell.Button1, tcell.ModNone))
+	if len(commands) != 0 {
+		t.Fatalf("mouse-down executed command: %v", commands)
+	}
+	menu.HandleEvent(tcell.NewEventMouse(r.X+r.W-1, r.Y+2, tcell.ButtonNone, tcell.ModNone))
 	if len(commands) != 1 || commands[0] != "second" {
 		t.Fatalf("right-edge command = %v, want [second]", commands)
 	}
@@ -194,8 +226,54 @@ func TestContextMenuFullwidthSubmenuFlipsAndKeepsMouseBounds(t *testing.T) {
 	}
 
 	menu.HandleEvent(tcell.NewEventMouse(child.X+child.W-1, child.Y+2, tcell.Button1, tcell.ModNone))
+	if executed != "" {
+		t.Fatalf("mouse-down executed submenu command %q", executed)
+	}
+	menu.HandleEvent(tcell.NewEventMouse(child.X+child.W-1, child.Y+2, tcell.ButtonNone, tcell.ModNone))
 	if executed != "unified" {
 		t.Fatalf("right-edge submenu command = %q, want unified", executed)
+	}
+}
+
+func TestContextMenuMouseReleaseOpensSubmenu(t *testing.T) {
+	var executed string
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label: "Views",
+		Submenu: []ContextMenuItem{
+			{Label: "Split", Command: "split"},
+			{Label: "Unified", Command: "unified"},
+		},
+	}}, 2, 1)
+	menu.firstEvent = false
+	menu.OnExec = func(command string) { executed = command }
+	renderContextMenu(menu, 40, 10)
+
+	parent := menu.GetRect()
+	x, y := parent.X+2, parent.Y+1
+	menu.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	if menu.Submenu != nil {
+		t.Fatal("mouse-down opened submenu before release")
+	}
+	menu.HandleEvent(tcell.NewEventMouse(parent.X+parent.W+1, y, tcell.ButtonNone, tcell.ModNone))
+	if menu.Submenu != nil || executed != "" {
+		t.Fatal("release outside parent item activated submenu")
+	}
+
+	menu.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+	if menu.Submenu == nil {
+		t.Fatal("mouse-up on parent item did not open submenu")
+	}
+	renderContextMenu(menu, 40, 10)
+	child := menu.Submenu.GetRect()
+	childX, childY := child.X+2, child.Y+1
+	menu.HandleEvent(tcell.NewEventMouse(childX, childY, tcell.Button1, tcell.ModNone))
+	if executed != "" {
+		t.Fatalf("mouse-down executed submenu command %q", executed)
+	}
+	menu.HandleEvent(tcell.NewEventMouse(childX, childY, tcell.ButtonNone, tcell.ModNone))
+	if executed != "split" {
+		t.Fatalf("submenu command = %q, want split", executed)
 	}
 }
 
