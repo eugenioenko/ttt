@@ -1451,8 +1451,8 @@ panel:box({
 | `border_bottom` | boolean  | false   | Draw only the bottom border.                   |
 | `border_left`   | boolean  | false   | Draw only the left border.                     |
 | `border_right`  | boolean  | false   | Draw only the right border.                    |
-| `height`        | number   | 0       | Fixed height in rows. `0` means auto-size.     |
-| `width`         | number   | 0       | Fixed width in columns inside an `hstack`. `0` means the box grows. |
+| `height`        | number   | 0       | Fixed height in rows, borders and padding included. Margins are added outside it. `0` means auto-size. |
+| `width`         | number   | 0       | Fixed width in columns inside an `hstack`, borders and padding included. Margins are added outside it. `0` means the box grows. |
 | `title`         | string   | unset   | Label drawn in the top border, when the box has one. |
 
 Individual `border_*` flags can be combined. If `border` is true, all four sides are drawn regardless of individual flags.

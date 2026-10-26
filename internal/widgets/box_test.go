@@ -83,6 +83,34 @@ func TestBoxFixedHeight(t *testing.T) {
 	}
 }
 
+func TestBoxFixedHeightAddsMarginsOutside(t *testing.T) {
+	box := NewBoxWidget(BoxModel{MarginTop: 1, MarginBottom: 2})
+	box.FixedHeight = 3
+	box.Child = NewVStackWidget(
+		NewLabelWidget(LabelConfig{Text: "one"}),
+		NewLabelWidget(LabelConfig{Text: "two"}),
+		NewLabelWidget(LabelConfig{Text: "three"}),
+	)
+	stack := NewVStackWidget(box, NewLabelWidget(LabelConfig{Text: "after"}))
+	s := renderWidget(stack, 0, 0, 10, 10)
+	for y, want := range []string{"", "one", "two", "three", "", "", "after"} {
+		if got := rowText(s, y); got != want {
+			t.Errorf("row %d = %q, want %q", y, got, want)
+		}
+	}
+}
+
+func TestBoxFixedWidthAddsMarginsOutside(t *testing.T) {
+	box := NewBoxWidget(BoxModel{MarginLeft: 1, MarginRight: 2})
+	box.FixedWidth = 5
+	box.Child = NewLabelWidget(LabelConfig{Text: "abcde"})
+	row := NewHStackWidget(box, NewLabelWidget(LabelConfig{Text: "z"}))
+	s := renderWidget(row, 0, 0, 12, 1)
+	if got, want := rowText(s, 0), " abcde  z"; got != want {
+		t.Errorf("row = %q, want %q", got, want)
+	}
+}
+
 func TestBoxFixedWidth(t *testing.T) {
 	box := NewBoxWidget(BoxModel{})
 	box.FixedWidth = 15

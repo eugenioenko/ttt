@@ -47,7 +47,7 @@ func NewBoxWithBorderAndPadding(borders term.BorderSet, padding int) *BoxWidget 
 
 func (b *BoxWidget) Height() int {
 	if b.FixedHeight > 0 {
-		return b.FixedHeight
+		return b.FixedHeight + b.Box.MarginTop + b.Box.MarginBottom
 	}
 	if b.Child != nil {
 		ch := b.Child.Height()
@@ -73,7 +73,7 @@ func (b *BoxWidget) HeightAtWidth(w int) int {
 
 func (b *BoxWidget) Width() int {
 	if b.FixedWidth > 0 {
-		return b.FixedWidth
+		return b.FixedWidth + b.Box.MarginLeft + b.Box.MarginRight
 	}
 	if b.Child != nil {
 		cw := b.Child.Width()
