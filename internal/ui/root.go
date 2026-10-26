@@ -49,6 +49,7 @@ type Root struct {
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
+	pressTarget      Widget
 	button1Held      bool
 	focusClaimed     bool
 }
@@ -186,13 +187,59 @@ func (r *Root) rawKeysFocused() bool {
 }
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
-	if mev, ok := ev.(*tcell.EventMouse); ok {
-		held := mev.Buttons()&tcell.Button1 != 0
-		if held && !r.button1Held {
-			r.focusClaimed = false
-		}
-		r.button1Held = held
+	mev, ok := ev.(*tcell.EventMouse)
+	if !ok {
+		return r.dispatch(ev)
 	}
+	held := mev.Buttons()&tcell.Button1 != 0
+	released := !held && r.button1Held
+	if held && !r.button1Held {
+		r.focusClaimed = false
+		r.pressTarget, _ = r.pointerTarget()
+	}
+	r.button1Held = held
+	receiver, modal := r.pointerTarget()
+	result := r.dispatch(ev)
+	if released {
+		r.releasePressTarget(ev, receiver, modal)
+	}
+	return result
+}
+
+func (r *Root) pointerTarget() (Widget, bool) {
+	if r.capturedWidget != nil || len(r.Overlays) == 0 {
+		return r.Main, false
+	}
+	top := r.Overlays[len(r.Overlays)-1]
+	return top.Widget, top.Modal
+}
+
+// A modal overlay opened by a press (a menu) takes that press's release. The
+// widget that took the press must still see it: widgets that track a held
+// button otherwise read their next press as a drag and ignore it, once the
+// overlay closes from the keyboard.
+func (r *Root) releasePressTarget(ev tcell.Event, receiver Widget, modal bool) {
+	target := r.pressTarget
+	r.pressTarget = nil
+	if target == nil || target == receiver || !modal {
+		return
+	}
+	if target != r.Main && !r.hasOverlayWidget(target) {
+		return
+	}
+	target.HandleEvent(ev)
+}
+
+func (r *Root) hasOverlayWidget(w Widget) bool {
+	for _, o := range r.Overlays {
+		if o.Widget == w {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Root) dispatch(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
 	// ForceKeys punch through two things that would otherwise swallow them: a
 	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
