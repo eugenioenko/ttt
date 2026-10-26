@@ -74,6 +74,7 @@ type Plugin struct {
 	ShowContextMenu   func(entries []widgets.MenuEntry, x, y int, onCommand func(cmd string))
 	ShowInfoDialog    func(title string, entries []widgets.KeyValueEntry)
 	ShowConfirmDialog func(message string, confirmLabel string, cancelLabel string, onConfirm func())
+	RequestExecPath   func(path string, done func(granted bool)) error
 	OpenDrawer        func(panel *PluginPanelWidget, width, minWidth int, side string)
 	CloseDrawer       func()
 	// ShowPanel shows the plugin's sidebar or bottom panel, and focuses it
@@ -310,6 +311,7 @@ func (p *Plugin) Destroy() {
 	p.ShowContextMenu = nil
 	p.ShowInfoDialog = nil
 	p.ShowConfirmDialog = nil
+	p.RequestExecPath = nil
 	p.OpenDrawer = nil
 	p.CloseDrawer = nil
 	p.ShowPanel = nil

@@ -14,6 +14,7 @@ func setupSystemModule(L *lua.LState, p *Plugin) {
 		if hasExec {
 			L.SetField(mod, "exec", L.NewFunction(sysExec(p)))
 			L.SetField(mod, "exec_async", L.NewFunction(sysExecAsync(p)))
+			L.SetField(mod, "request_exec", L.NewFunction(sysRequestExec(p)))
 		}
 
 		if hasEnv {

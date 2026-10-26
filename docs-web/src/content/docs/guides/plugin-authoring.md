@@ -2477,6 +2477,33 @@ sys.exec_async("aspell", {"pipe"}, {stdin = text}, function(result)
 end)
 ```
 
+### `sys.request_exec(path, callback)`
+
+Ask the user to approve running one binary by absolute path. The `system.exec` allowlist matches exactly, so a plugin allowed `"psql"` runs `psql` from `PATH` but not `/opt/pg16/bin/psql`. Use this when the user points the plugin at a specific copy, for example in a setting.
+
+| Parameter  | Type     | Required | Description |
+|------------|----------|----------|-------------|
+| `path`     | string   | yes      | Absolute, clean path. Its file name must match a `system.exec` entry the plugin was granted. |
+| `callback` | function | yes      | Receives `true` if the path is granted, `false` if the user denied or dismissed the dialog. |
+
+**Returns** `true` when the request was made, or `nil, err` when the path is invalid, its file name is not in the allowlist, or another dialog is open.
+
+ttt shows its own approval dialog with the full path. Allowing it records the grant for this plugin in `plugins.ttt.json`, next to its other approvals, so it survives restarts and updates; denying records nothing. A path that is already granted calls back `true` without a dialog. The grant covers that exact path only, never other files with the same name, and stops applying if the manifest no longer lists the file name. Uninstalling the plugin removes it.
+
+Call it in response to a user action, such as saving a setting, not on every run:
+
+```lua
+local function use_binary(path)
+  sys.request_exec(path, function(granted)
+    if granted then
+      sys.exec_async(path, {"--version"}, function(result)
+        ttt.notify(result.stdout)
+      end)
+    end
+  end)
+end
+```
+
 ### `sys.env(name)`
 
 Read an environment variable. Requires `system.env` permission.
@@ -3005,7 +3032,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `editor.file_handlers` | boolean | Present binary file types in editor tabs via `file_handlers` in `ttt.register()`. |
 | `fs.read`        | boolean \| string[] | Read files and list directories (`ttt.fs` read functions). `true` allows the workspace; an array lists the allowed paths. See [Path scoping](#path-scoping). |
 | `fs.write`       | boolean \| string[] | Write files (`ttt.fs.write`). Scoped like `fs.read`. |
-| `system.exec`    | string[] | Execute specific system commands. List each allowed binary name. |
+| `system.exec`    | string[] | Execute specific system commands. List each allowed binary name. Other copies of a listed binary need [`sys.request_exec`](#sysrequest_execpath-callback). |
 | `system.env`     | boolean  | Read environment variables (`ttt.system.env`).    |
 | `terminal.control` | boolean | Spawn terminal tabs, send text, focus tabs, and close tabs (`ttt.terminal`). Not constrained by `system.exec` or `fs.*`. |
 | `terminal.read`  | boolean  | Read raw PTY output and visible screen text, and list open terminals (`ttt.terminal`). Accesses any tab, including user tabs. |
