@@ -560,7 +560,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		tw.ClearSelection()
 		tw.scrollOffset = 0
-		data := keyToVT(tev)
+		data := keyToVT(tev, tw.Term.DecPrivateModes().ApplicationCursorKeys)
 		if data != "" {
 			tw.Term.WriteString(data)
 			return EventConsumed
@@ -916,7 +916,7 @@ func (tw *TerminalWidget) scrollDown(n int) {
 	slog.Debug("terminal scroll down", "scrollOffset", tw.scrollOffset)
 }
 
-func keyToVT(ev *tcell.EventKey) string {
+func keyToVT(ev *tcell.EventKey, applicationCursorKeys bool) string {
 	if ev.Key() == tcell.KeyRune {
 		mod := ev.Modifiers()
 		// tcell v3 reports ctrl+non-letter printables (ctrl+space, ctrl+/,
@@ -941,6 +941,11 @@ func keyToVT(ev *tcell.EventKey) string {
 		return seq
 	}
 
+	cursorPrefix := "\x1b["
+	if applicationCursorKeys && ev.Modifiers() == tcell.ModNone {
+		cursorPrefix = "\x1bO"
+	}
+
 	switch ev.Key() {
 	case tcell.KeyEnter:
 		return "\r"
@@ -953,17 +958,17 @@ func keyToVT(ev *tcell.EventKey) string {
 	case tcell.KeyEscape:
 		return "\x1b"
 	case tcell.KeyUp:
-		return "\x1b[A"
+		return cursorPrefix + "A"
 	case tcell.KeyDown:
-		return "\x1b[B"
+		return cursorPrefix + "B"
 	case tcell.KeyRight:
-		return "\x1b[C"
+		return cursorPrefix + "C"
 	case tcell.KeyLeft:
-		return "\x1b[D"
+		return cursorPrefix + "D"
 	case tcell.KeyHome:
-		return "\x1b[H"
+		return cursorPrefix + "H"
 	case tcell.KeyEnd:
-		return "\x1b[F"
+		return cursorPrefix + "F"
 	case tcell.KeyInsert:
 		return "\x1b[2~"
 	case tcell.KeyDelete:
