@@ -369,6 +369,14 @@ func maskInlineCode(s string) string {
 			i++
 			continue
 		}
+		backslashes := 0
+		for b := i - 1; b >= 0 && s[b] == '\\'; b-- {
+			backslashes++
+		}
+		if backslashes%2 == 1 {
+			i++
+			continue
+		}
 		open := i
 		for i < len(s) && s[i] == '`' {
 			i++

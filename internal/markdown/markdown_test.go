@@ -968,6 +968,20 @@ func TestDetailsIgnoresClosingTagInInlineCode(t *testing.T) {
 	}
 }
 
+func TestDetailsClosesAfterEscapedBacktick(t *testing.T) {
+	input := "<details>\n<summary>More information</summary>\n\nInside.\n\\` </details> `\n\nOutside."
+
+	doc := Parse(input)
+	if len(doc.Details()) != 1 {
+		t.Fatalf("expected 1 detail block, got %d", len(doc.Details()))
+	}
+	tl := textLines(doc.Render())
+	want := []string{"▶ More information", "", "Outside."}
+	if !slices.Equal(tl, want) {
+		t.Fatalf("expected %v when collapsed, got %v", want, tl)
+	}
+}
+
 func TestDetailsPreservesOrdinaryProseWithHTML(t *testing.T) {
 	input := "Use `<details>` and <details> in prose."
 	lines := Render(input)
