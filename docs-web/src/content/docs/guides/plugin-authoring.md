@@ -255,6 +255,8 @@ ttt consults handlers only for files that would otherwise open as the binary fil
 
 `open` receives the absolute file path and a `tab` table. Set `tab.render` (and optionally `tab.on_event`) exactly as you would pass them to [`ttt.open_tab`](#tttopen_tabconfig). The tab is bound to the file: it is titled with the file name, opening the same file again switches to it without calling `open`, and the `file.open` and `file.close` events fire for it.
 
+`tab.id` is set before `open` runs: it is the tab's ID, the same absolute path. Pass it to [`ttt.focus_tab`](#tttfocus_tabid) or [`ttt.close_tab`](#tttclose_tabid) later, for example to close the viewer when its file is deleted. It is the plugin's own ID, so `ttt.open_tab` with the same `id` switches to this tab.
+
 ```lua
 local ttt = require("ttt")
 local sys = require("ttt.system")
@@ -626,7 +628,7 @@ Without an `id`, the title is the key, and opening the same title again replaces
 
 ### `ttt.focus_tab(id)`
 
-Switch to one of the plugin's open editor tabs by the ID `open_tab` returned and move keyboard focus into it, landing on an input with `autofocus` if it has one. Returns `true` if the tab is open, `false` otherwise. Like `open_tab`, it leaves focus in an open dialog. Requires `panel.editor` permission.
+Switch to one of the plugin's open editor tabs by the ID `open_tab` returned (or a file handler's `tab.id`) and move keyboard focus into it, landing on an input with `autofocus` if it has one. Returns `true` if the tab is open, `false` otherwise. Like `open_tab`, it leaves focus in an open dialog. Requires `panel.editor` or `editor.file_handlers` permission.
 
 ```lua
 ttt.open_tab({ id = "draft", title = "Draft", focus = false, render = render_draft })
@@ -636,7 +638,7 @@ ttt.focus_tab("draft")
 
 ### `ttt.close_tab(id)`
 
-Close a plugin editor tab by the ID `open_tab` returned. Requires `panel.editor` permission.
+Close one of the plugin's editor tabs by the ID `open_tab` returned, or a tab its file handler opened by `tab.id`. File tabs, buffers and other plugins' tabs are never closed, even when the ID matches their path. Requires `panel.editor` or `editor.file_handlers` permission.
 
 ```lua
 ttt.close_tab("my-tab-id")

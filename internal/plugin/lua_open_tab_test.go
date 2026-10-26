@@ -156,3 +156,25 @@ func TestOpenTabFocusFalseAndFocusTab(t *testing.T) {
 		t.Fatalf("focus_tab returned %v and %v", p.State.GetGlobal("found"), p.State.GetGlobal("missing"))
 	}
 }
+
+func TestFocusTabAllowedForFileHandlers(t *testing.T) {
+	for _, tt := range []struct {
+		perms PermissionSet
+		ok    bool
+	}{
+		{PermissionSet{PanelEditor: true}, true},
+		{PermissionSet{FileHandlers: true}, true},
+		{PermissionSet{}, false},
+	} {
+		p, done := newTestPluginBase(tt.perms)
+		p.FocusTab = func(key string, _ bool) bool { return key == "plugin:test:/tmp/a.pdf" }
+		err := p.State.DoString(`found = require("ttt").focus_tab("/tmp/a.pdf")`)
+		if (err == nil) != tt.ok {
+			t.Errorf("%+v: err = %v, want ok %v", tt.perms, err, tt.ok)
+		}
+		if tt.ok && p.State.GetGlobal("found") != lua.LTrue {
+			t.Errorf("%+v: focus_tab did not find the tab", tt.perms)
+		}
+		done()
+	}
+}

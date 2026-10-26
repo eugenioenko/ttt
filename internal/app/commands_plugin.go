@@ -666,7 +666,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		return a.switchToPluginTab(p.Name, key, focus)
 	}
 	p.CloseTab = func(key string) bool {
-		return a.EditorGroup.ClosePluginTab(key)
+		return a.closePluginTab(p.Name, key)
 	}
 
 	if p.HasSidebarMenu() {
@@ -1106,21 +1106,34 @@ func (a *App) ShowPluginPanel(name, area string, focus bool) (bool, error) {
 	return true, nil
 }
 
-func (a *App) switchToPluginTab(name, key string, focus bool) bool {
+func (a *App) pluginTab(name, key string) (int, *plugin.PluginPanelWidget) {
 	for i := range a.EditorGroup.TabCount() {
-		path, _ := a.EditorGroup.TabInfo(i)
 		panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget)
-		if path != key || !ok || panel.PluginName() != name {
-			continue
+		if ok && panel.PluginName() == name && a.EditorGroup.PluginTabKey(i) == key {
+			return i, panel
 		}
-		a.EditorGroup.SwitchTab(i)
-		if focus && !a.Root.HasModalOverlay() {
-			a.Root.ClaimFocus(a.EditorGroup)
-			panel.FocusAutofocusInput()
-		}
-		return true
 	}
-	return false
+	return -1, nil
+}
+
+func (a *App) switchToPluginTab(name, key string, focus bool) bool {
+	i, panel := a.pluginTab(name, key)
+	if i < 0 {
+		return false
+	}
+	a.EditorGroup.SwitchTab(i)
+	if focus && !a.Root.HasModalOverlay() {
+		a.Root.ClaimFocus(a.EditorGroup)
+		panel.FocusAutofocusInput()
+	}
+	return true
+}
+
+func (a *App) closePluginTab(name, key string) bool {
+	if i, _ := a.pluginTab(name, key); i < 0 {
+		return false
+	}
+	return a.EditorGroup.ClosePluginTab(key)
 }
 
 // Panel images live in the terminal until released, so a plugin panel is closed whenever it leaves the UI.
@@ -1139,17 +1152,17 @@ func (a *App) closePluginDrawerAndTabs(name string) {
 		a.ClosePluginDrawer()
 	}
 	// File-handler tabs are left to SyncFileHandlerTabs, which falls back to the binary card.
-	var tabs []string
+	var keys []string
 	for i := range a.EditorGroup.TabCount() {
 		path, _ := a.EditorGroup.TabInfo(i)
 		if panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget); ok && panel.PluginName() == name {
 			if _, handled := a.fileHandlerTabs[path]; !handled {
-				tabs = append(tabs, path)
+				keys = append(keys, a.EditorGroup.PluginTabKey(i))
 			}
 		}
 	}
-	for _, id := range tabs {
-		a.EditorGroup.ClosePluginTab(id)
+	for _, key := range keys {
+		a.EditorGroup.ClosePluginTab(key)
 	}
 }
 

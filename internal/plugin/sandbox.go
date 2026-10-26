@@ -561,7 +561,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		}))
 
 		L.SetField(mod, "focus_tab", L.NewFunction(func(L *lua.LState) int {
-			if err := p.Granted.Check("panel.editor"); err != nil {
+			if p.Granted.Check("panel.editor") != nil && p.Granted.Check("editor.file_handlers") != nil {
 				L.ArgError(1, "panel.editor permission not granted")
 				return 0
 			}

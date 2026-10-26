@@ -22,6 +22,7 @@ type PluginPanelWidget struct {
 	// OnClose runs once, when the editor tab holding the panel closes.
 	OnClose func()
 	sel     panelSelection
+	fileKey string
 }
 
 func NewPluginPanelWidget(p *Plugin, renderFunc, eventFunc *lua.LFunction) *PluginPanelWidget {
@@ -195,6 +196,10 @@ func (pw *PluginPanelWidget) focusInput() bool {
 func (pw *PluginPanelWidget) IsFocused() bool { return pw.focused }
 
 func (pw *PluginPanelWidget) PluginName() string { return pw.plugin.Name }
+
+// PluginTabKey is the tab key of a panel a file handler opened; the editor
+// group keys the file's tab with it so ttt.close_tab and ttt.focus_tab find it.
+func (pw *PluginPanelWidget) PluginTabKey() string { return pw.fileKey }
 
 func (pw *PluginPanelWidget) Close() {
 	if pw.state != nil && pw.state.root != nil {

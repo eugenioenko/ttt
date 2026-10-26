@@ -53,8 +53,11 @@ type Diagnostic struct {
 }
 
 type editorTab struct {
-	ID          string
-	FilePath    string
+	ID       string
+	FilePath string
+	// PluginKey identifies a plugin's tab. It is kept apart from FilePath so a
+	// file or buffer at the same path is never taken for the plugin's tab.
+	PluginKey   string
 	IconPath    string
 	Title       string
 	Buf         *buffer.Buffer
@@ -597,6 +600,7 @@ func (g *EditorGroupWidget) replaceContent(i int, content Widget) {
 		closer.Close()
 	}
 	g.tabs[i].Content = content
+	g.tabs[i].PluginKey = contentPluginKey(content)
 	if i == g.active && g.focused {
 		if setter, ok := content.(interface{ SetFocused(bool) }); ok {
 			setter.SetFocused(true)
@@ -608,10 +612,11 @@ func (g *EditorGroupWidget) replaceContent(i int, content Widget) {
 func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
 	g.applyImagePrefs(content)
 	newTab := editorTab{
-		FilePath: path,
-		IconPath: path,
-		Content:  content,
-		Preview:  true,
+		FilePath:  path,
+		PluginKey: contentPluginKey(content),
+		IconPath:  path,
+		Content:   content,
+		Preview:   true,
 	}
 	if t := g.activeTab(); g.canReplaceTab(t) && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
@@ -906,10 +911,10 @@ func (g *EditorGroupWidget) SetImageRedraw(redraw func()) {
 	}
 }
 
-func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
+func (g *EditorGroupWidget) OpenPluginTab(key, title string, content Widget) {
 	g.applyFileIconMode(content)
 	for i, t := range g.tabs {
-		if t.FilePath == id {
+		if key != "" && t.PluginKey == key {
 			g.notifyContentTabClose(t)
 			t.Content = content
 			t.IconPath = ""
@@ -920,11 +925,27 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 		}
 	}
 	g.tabs = append(g.tabs, editorTab{
-		FilePath: id,
-		Title:    title,
-		Content:  content,
+		FilePath:  key,
+		PluginKey: key,
+		Title:     title,
+		Content:   content,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
+}
+
+// PluginTabKey returns the key of the plugin tab at index, or "" for any other tab.
+func (g *EditorGroupWidget) PluginTabKey(index int) string {
+	if index < 0 || index >= len(g.tabs) {
+		return ""
+	}
+	return g.tabs[index].PluginKey
+}
+
+func contentPluginKey(content Widget) string {
+	if k, ok := content.(interface{ PluginTabKey() string }); ok {
+		return k.PluginTabKey()
+	}
+	return ""
 }
 
 func (g *EditorGroupWidget) placeholderTab() editorTab {
@@ -946,10 +967,13 @@ func (g *EditorGroupWidget) notifyEmpty() {
 	}
 }
 
-// ClosePluginTab closes the tab keyed id and reports whether there was one.
-func (g *EditorGroupWidget) ClosePluginTab(id string) bool {
+// ClosePluginTab closes the plugin tab keyed key and reports whether there was one.
+func (g *EditorGroupWidget) ClosePluginTab(key string) bool {
+	if key == "" {
+		return false
+	}
 	for i, t := range g.tabs {
-		if t.FilePath == id {
+		if t.PluginKey == key {
 			g.notifyContentTabClose(t)
 			if i < g.pinnedCount {
 				g.pinnedCount--
