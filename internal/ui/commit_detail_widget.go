@@ -1660,9 +1660,7 @@ func (d *CommitDetailWidget) Hunks() []DiffHunk {
 		if v == nil {
 			continue
 		}
-		for _, h := range diffHunksInRows(v.Lines, file.Path, fileIndex) {
-			hunks = append(hunks, h)
-		}
+		hunks = append(hunks, diffHunksInRows(v.Lines, file.Path, fileIndex)...)
 	}
 	return hunks
 }
