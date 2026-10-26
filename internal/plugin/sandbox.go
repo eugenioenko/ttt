@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"runtime"
@@ -126,6 +127,24 @@ func NewSandbox() *lua.LState {
 		s := hex.EncodeToString(buf[:])
 		uuid := s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 		L.Push(lua.LString(uuid))
+		return 1
+	}))
+	L.SetField(cryptoMod, "base64_encode", L.NewFunction(func(L *lua.LState) int {
+		L.Push(lua.LString(base64.StdEncoding.EncodeToString([]byte(L.CheckString(1)))))
+		return 1
+	}))
+	L.SetField(cryptoMod, "base64_decode", L.NewFunction(func(L *lua.LState) int {
+		s := strings.TrimSpace(L.CheckString(1))
+		out, err := base64.StdEncoding.DecodeString(s)
+		if err != nil && !strings.Contains(s, "=") {
+			out, err = base64.RawStdEncoding.DecodeString(s)
+		}
+		if err != nil {
+			L.Push(lua.LNil)
+			L.Push(lua.LString(err.Error()))
+			return 2
+		}
+		L.Push(lua.LString(out))
 		return 1
 	}))
 	L.SetGlobal("crypto", cryptoMod)
@@ -512,17 +531,52 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			if fn, ok := L.GetField(tbl, "on_event").(*lua.LFunction); ok {
 				eventFunc = fn
 			}
+			focus := L.GetField(tbl, "focus") != lua.LFalse
+			id, key := title, title
+			if v := L.GetField(tbl, "id"); v != lua.LNil {
+				id, key = v.String(), p.tabKey(v.String())
+				if p.FocusTab != nil && p.FocusTab(key, focus) {
+					L.Push(lua.LString(id))
+					return 1
+				}
+			}
 			if p.OpenTab != nil {
 				panel := NewPluginPanelWidget(p, renderFunc, eventFunc)
-				p.OpenTab(title, panel)
+				if fn, ok := L.GetField(tbl, "on_close").(*lua.LFunction); ok {
+					// Deferred to the main loop: the tab list is mid-update when
+					// Close runs, and the callback may open or close tabs.
+					panel.OnClose = func() {
+						p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
+							p.CallLuaFunc(fn)
+						}})
+					}
+				}
+				p.OpenTab(key, title, panel)
+				if focus && p.FocusTab != nil {
+					p.FocusTab(key, true)
+				}
 			}
-			return 0
+			L.Push(lua.LString(id))
+			return 1
+		}))
+
+		L.SetField(mod, "focus_tab", L.NewFunction(func(L *lua.LState) int {
+			if p.Granted.Check("panel.editor") != nil && p.Granted.Check("editor.file_handlers") != nil {
+				L.ArgError(1, "panel.editor permission not granted")
+				return 0
+			}
+			id := L.CheckString(1)
+			focused := p.FocusTab != nil && (p.FocusTab(p.tabKey(id), true) || p.FocusTab(id, true))
+			L.Push(lua.LBool(focused))
+			return 1
 		}))
 
 		L.SetField(mod, "close_tab", L.NewFunction(func(L *lua.LState) int {
 			id := L.CheckString(1)
 			if p.CloseTab != nil {
-				p.CloseTab(id)
+				if !p.CloseTab(p.tabKey(id)) {
+					p.CloseTab(id)
+				}
 			}
 			return 0
 		}))
@@ -704,6 +758,38 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 			return 1
 		}))
 
+		L.SetField(mod, "debounce", L.NewFunction(func(L *lua.LState) int {
+			ms := L.CheckInt(1)
+			fn := L.CheckFunction(2)
+			// A cleared timer may already be queued on the main loop, so each
+			// call bumps gen and stale callbacks drop themselves.
+			id, gen := 0, 0
+			cancel := func() {
+				gen++
+				p.ClearTimer(id)
+			}
+			L.Push(L.NewFunction(func(L *lua.LState) int {
+				cancel()
+				args := make([]lua.LValue, L.GetTop())
+				for i := range args {
+					args[i] = L.Get(i + 1)
+				}
+				mine := gen
+				id = p.SetTimeout(ms, func() {
+					if mine != gen {
+						return
+					}
+					p.CallLuaFunc(fn, args...)
+				})
+				return 0
+			}))
+			L.Push(L.NewFunction(func(L *lua.LState) int {
+				cancel()
+				return 0
+			}))
+			return 2
+		}))
+
 		clearTimer := L.NewFunction(func(L *lua.LState) int {
 			p.ClearTimer(L.CheckInt(1))
 			return 0
@@ -766,6 +852,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		"ttt.events":      true,
 		"ttt.json":        true,
 		"ttt.regex":       true,
+		"ttt.text":        true,
 		"ttt.settings":    true,
 		"ttt.storage":     true,
 	}

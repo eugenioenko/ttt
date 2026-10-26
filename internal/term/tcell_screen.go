@@ -88,11 +88,15 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 	}
 	s := t.styleMap[c.Style]
 	if c.BgStyle != 0 {
-		bg := t.styleMap[c.BgStyle].GetBackground()
+		bgStyle := t.styleMap[c.BgStyle]
+		bg := bgStyle.GetBackground()
 		s = tcell.StyleDefault. //nolint:staticcheck // Attributes is deprecated but individual calls don't replicate the exact reset-and-copy semantics
 					Foreground(s.GetForeground()).
 					Background(bg).
 					Attributes(s.GetAttributes())
+		if bgStyle.HasReverse() {
+			s = s.Reverse(true)
+		}
 	}
 	if c.Attrs&CellAttrReverse != 0 {
 		s = s.Reverse(true)

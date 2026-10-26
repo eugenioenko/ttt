@@ -197,7 +197,9 @@ Options:
                       invalid or failed actions exit nonzero)
   --exec-split-on <s> Split --exec on <s> instead of ";" (for scripts that
                       need to send a literal semicolon)
-  --plugin <file>     Load a Lua plugin file on startup with full permissions
+  --plugin <file>     Load a Lua plugin file on startup without approval, with
+                      the name and permissions of a plugin.ttt.json next to it;
+                      without one, every permission except system.exec
   --debug             Enable debug mode regardless of config setting
   --listen            Start an HTTP command server on 127.0.0.1:4242
                       (POST /exec accepts the same script format as --exec)
@@ -267,7 +269,7 @@ Docs: https://tttedit.dev
 	defer screen.Fini()
 	defer handlePanic(screen)
 
-	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground))
+	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), app.WithEditorSelectionStyle(cfg.Settings.Editor.SelectionStyle))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
 
 	// Route OSC 52 clipboard writes through the tty, not raw stderr

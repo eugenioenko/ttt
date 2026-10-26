@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -344,7 +345,15 @@ func TestPluginSystemAPI_ArgumentInjection(t *testing.T) {
 		{"git pager injection", "git", []string{"-c", "core.pager=!cmd"}, true},
 		{"git upload-pack", "git", []string{"clone", "--upload-pack=evil"}, true},
 		{"git receive-pack", "git", []string{"push", "--receive-pack=evil"}, true},
-		{"general =! injection", "/usr/bin/some-tool", []string{"--config=!evil"}, true},
+		{"git =! in any argument", "git", []string{"-calias.x=!evil", "x"}, true},
+		{"git config-env", "git", []string{"--config-env=alias.x=FOO", "x"}, true},
+		{"git by absolute path", "/usr/bin/git", []string{"-c", "alias.x=!evil"}, true},
+		{"git with exe suffix", "git.exe", []string{"-c", "alias.x=!evil"}, true},
+		{"git in another case", "/usr/bin/Git", []string{"-c", "core.pager=!cmd"}, true},
+		{"=! for a non-git binary", "/usr/bin/some-tool", []string{"--config=!evil"}, false},
+		{"psql connection string", "psql", []string{"postgresql://u:pa=!ss@host/db"}, false},
+		{"sqlite3 with =! in sql", "sqlite3", []string{"db.sqlite", "select 'a=!b'"}, false},
+		{"git-like name is not git", "legit", []string{"-c", "alias.x=!evil"}, false},
 		{"safe non-git args", "docker", []string{"ps", "-a"}, false},
 	}
 
@@ -372,7 +381,7 @@ func TestPluginSystemAPI_ExecStdin(t *testing.T) {
 	execCount := 0
 	api.onExec = func() { execCount++ }
 
-	stdout, _, code, err := api.Exec("cat", nil, "hello from stdin\n")
+	stdout, _, code, err := api.Exec(context.Background(), "cat", nil, plugin.ExecOptions{Stdin: "hello from stdin\n"})
 	if err != nil || code != 0 {
 		t.Fatalf("exec cat: err=%v code=%d", err, code)
 	}
@@ -382,7 +391,7 @@ func TestPluginSystemAPI_ExecStdin(t *testing.T) {
 
 	// With no stdin the child must see EOF immediately. If Stdin were left
 	// attached to the terminal instead, this would block forever.
-	stdout, _, code, err = api.Exec("cat", nil, "")
+	stdout, _, code, err = api.Exec(context.Background(), "cat", nil, plugin.ExecOptions{})
 	if err != nil || code != 0 {
 		t.Fatalf("exec cat with no stdin: err=%v code=%d", err, code)
 	}
@@ -391,6 +400,42 @@ func TestPluginSystemAPI_ExecStdin(t *testing.T) {
 	}
 	if execCount != 2 {
 		t.Fatalf("system command completions invalidated repository %d times, want 2", execCount)
+	}
+}
+
+func TestPluginSystemAPI_ExecEnv(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	t.Setenv("TTT_EXEC_INHERITED", "inherited")
+	api := NewPluginSystemAPI()
+	stdout, _, code, err := api.Exec(context.Background(), "sh", []string{"-c", `printf '%s %s' "$TTT_EXEC_INHERITED" "$TTT_EXEC_EXTRA"`},
+		plugin.ExecOptions{Env: []string{"TTT_EXEC_EXTRA=extra"}})
+	if err != nil || code != 0 {
+		t.Fatalf("exec sh: err=%v code=%d", err, code)
+	}
+	if stdout != "inherited extra" {
+		t.Errorf("child env = %q, want editor env plus extra", stdout)
+	}
+	if os.Getenv("TTT_EXEC_EXTRA") != "" {
+		t.Error("extra env leaked into the editor's environment")
+	}
+}
+
+func TestPluginSystemAPI_ExecKilledOnContextDone(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep not available")
+	}
+	api := NewPluginSystemAPI()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, _, code, _ := api.Exec(ctx, "sleep", []string{"10"}, plugin.ExecOptions{})
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("child not killed when context ended, took %s", elapsed)
+	}
+	if code == 0 {
+		t.Error("killed child reported exit code 0")
 	}
 }
 
@@ -414,7 +459,7 @@ func TestPluginSystemExecCompletionPostsMainThreadRepositoryRequest(t *testing.T
 
 	done := make(chan error, 1)
 	go func() {
-		_, _, _, err := api.Exec("true", nil, "")
+		_, _, _, err := api.Exec(context.Background(), "true", nil, plugin.ExecOptions{})
 		done <- err
 	}()
 	if err := <-done; err != nil {

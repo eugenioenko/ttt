@@ -81,6 +81,15 @@ func createWidget(desc WidgetDesc, p *Plugin) widgets.Widget {
 		iw := widgets.NewImageWidget(imageConfig(desc, p))
 		applyBoxModel(&iw.Box, desc)
 		return iw
+	case WidgetTabs:
+		tw := widgets.NewTabsWidget(widgets.TabsConfig{})
+		syncTabs(tw, desc)
+		applyBoxModel(&tw.Box, desc)
+		return tw
+	case WidgetPager:
+		pw := widgets.NewPagerWidget(pagerConfig(desc))
+		applyBoxModel(&pw.Box, desc)
+		return pw
 	}
 	return widgets.NewLabelWidget(widgets.LabelConfig{Text: "unknown widget"})
 }
@@ -114,6 +123,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 	case WidgetKeyValue:
 		if kv, ok := w.(*widgets.KeyValueListWidget); ok {
 			kv.Entries = desc.KeyValueEntries
+			kv.InvertStyles = desc.KeyValueMuted
 			applyBoxModel(&kv.Box, desc)
 		}
 	case WidgetTree, WidgetList:
@@ -134,6 +144,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			}
 			tw.RestoreExpandedSilent(expanded)
 			tw.SetSelectedIndex(savedIdx)
+			tw.Config.BadgeRight, tw.Config.Inset = desc.BadgeRight, desc.Inset
 			wireTreeCallbacks(tw, desc, p)
 		}
 	case WidgetButton:
@@ -150,7 +161,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		if iw, ok := w.(*widgets.InputWidget); ok {
 			iw.Config.Placeholder = desc.Placeholder
 			prefix := desc.Prefix
-			if !iw.Config.Bordered && prefix == "" {
+			if !desc.Border && prefix == "" {
 				prefix = widgets.DefaultPrefix
 			}
 			iw.Config.Prefix = prefix
@@ -160,11 +171,15 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 	case WidgetVStack:
 		if vs, ok := w.(*widgets.VStackWidget); ok {
 			vs.Children = reconcileChildren(vs.Children, desc.Children, p)
+			vs.Gap = desc.Gap
 			applyBoxModel(&vs.Box, desc)
 		}
 	case WidgetHStack:
 		if hs, ok := w.(*widgets.HStackWidget); ok {
 			hs.Children = reconcileChildren(hs.Children, desc.Children, p)
+			hs.Gap = desc.Gap
+			hs.FixedHeight = desc.FixedHeight
+			hs.Align = desc.Align
 			applyBoxModel(&hs.Box, desc)
 		}
 	case WidgetDivider:
@@ -191,9 +206,9 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		if bw, ok := w.(*widgets.BoxWidget); ok {
 			applyBoxModel(&bw.Box, desc)
 			applyBoxBorders(&bw.Box, desc, p)
-			if desc.FixedHeight > 0 {
-				bw.FixedHeight = desc.FixedHeight
-			}
+			bw.FixedHeight = desc.FixedHeight
+			bw.Title = desc.BoxTitle
+			bw.FixedWidth = desc.FixedWidth
 			if len(desc.Children) > 0 {
 				if vs, ok := bw.Child.(*widgets.VStackWidget); ok {
 					vs.Children = reconcileChildren(vs.Children, desc.Children, p)
@@ -223,9 +238,14 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			tw.Config.Columns = desc.Columns
 			tw.Config.Rows = desc.Rows
 			tw.Config.OnSelect = desc.OnSelectIndex
+			tw.Config.OnActivate = desc.OnActivateIndex
 			tw.Config.OnCommand = desc.OnCommandStr
 			tw.Config.NodeMenu = desc.NodeMenu
 			tw.Config.KeyCommands = desc.KeyCommands
+			tw.Config.RowStyles = desc.RowStyles
+			tw.Config.Loading, tw.Config.EmptyText = desc.Loading, desc.EmptyText
+			tw.Config.Inset = desc.Inset
+			syncTableSelection(tw, desc)
 			wireTableMenu(tw, p)
 			applyBoxModel(&tw.Box, desc)
 		}
@@ -244,6 +264,16 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 				md.SetContent(desc.MarkdownContent)
 			}
 			sv.Follow = desc.Follow
+		}
+	case WidgetTabs:
+		if tw, ok := w.(*widgets.TabsWidget); ok {
+			syncTabs(tw, desc)
+			applyBoxModel(&tw.Box, desc)
+		}
+	case WidgetPager:
+		if pw, ok := w.(*widgets.PagerWidget); ok {
+			pw.Config = pagerConfig(desc)
+			applyBoxModel(&pw.Box, desc)
 		}
 	case WidgetCheckbox:
 		if cw, ok := w.(*widgets.CheckboxWidget); ok {
@@ -310,6 +340,12 @@ func widgetMatchesKind(w widgets.Widget, kind WidgetKind) bool {
 		return ok
 	case WidgetCheckbox:
 		_, ok := w.(*widgets.CheckboxWidget)
+		return ok
+	case WidgetTabs:
+		_, ok := w.(*widgets.TabsWidget)
+		return ok
+	case WidgetPager:
+		_, ok := w.(*widgets.PagerWidget)
 		return ok
 	}
 	return false
@@ -399,6 +435,7 @@ func wireTitleMenu(config *widgets.TitleConfig, desc WidgetDesc, p *Plugin) {
 
 func createKeyValueWidget(desc WidgetDesc) *widgets.KeyValueListWidget {
 	kv := widgets.NewKeyValueListWidget(desc.KeyValueEntries)
+	kv.InvertStyles = desc.KeyValueMuted
 	applyBoxModel(&kv.Box, desc)
 	return kv
 }
@@ -410,6 +447,8 @@ func createTreeWidget(desc WidgetDesc, p *Plugin) *widgets.TreeWidget {
 		NodeMenu:      desc.NodeMenu,
 		SelectOnClick: desc.SelectOnClick,
 		TruncateLeft:  desc.TruncateLeft,
+		BadgeRight:    desc.BadgeRight,
+		Inset:         desc.Inset,
 	})
 	wireTreeCallbacks(tw, desc, p)
 	applyBoxModel(&tw.Box, desc)
@@ -422,6 +461,8 @@ func createListWidget(desc WidgetDesc, p *Plugin) *widgets.TreeWidget {
 		NodeMenu:      desc.NodeMenu,
 		SelectOnClick: desc.SelectOnClick,
 		TruncateLeft:  desc.TruncateLeft,
+		BadgeRight:    desc.BadgeRight,
+		Inset:         desc.Inset,
 	})
 	wireTreeCallbacks(tw, desc, p)
 	applyBoxModel(&tw.Box, desc)
@@ -451,6 +492,7 @@ func createHStackWidget(desc WidgetDesc, p *Plugin) *widgets.HStackWidget {
 	hs := widgets.NewHStackWidget(children...)
 	hs.Gap = desc.Gap
 	hs.FixedHeight = desc.FixedHeight
+	hs.Align = desc.Align
 	applyBoxModel(&hs.Box, desc)
 	return hs
 }
@@ -476,6 +518,8 @@ func createBoxWidget(desc WidgetDesc, p *Plugin) *widgets.BoxWidget {
 	if desc.FixedHeight > 0 {
 		box.FixedHeight = desc.FixedHeight
 	}
+	box.Title = desc.BoxTitle
+	box.FixedWidth = desc.FixedWidth
 	if len(desc.Children) > 0 {
 		box.Child = createVStackFromDescs(desc.Children, p)
 	}
@@ -507,6 +551,7 @@ func wireDropdownCallback(dd *widgets.DropdownWidget, desc WidgetDesc, p *Plugin
 }
 
 func wireTreeCallbacks(tw *widgets.TreeWidget, desc WidgetDesc, p *Plugin) {
+	tw.Config.ReselectOnActivate = true
 	tw.Config.OnSelect = desc.OnSelect
 	tw.Config.OnExpand = desc.OnExpand
 	tw.Config.OnCommand = desc.OnCommand
@@ -544,6 +589,9 @@ func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 	})
 	wireButtonCallback(bw, desc, p)
 	applyBoxModel(&bw.Box, desc)
+	if !desc.PaddingXSet {
+		bw.Box.PaddingLeft, bw.Box.PaddingRight = 1, 1
+	}
 	return bw
 }
 
@@ -551,6 +599,8 @@ func wireButtonCallback(bw *widgets.ButtonWidget, desc WidgetDesc, _ *Plugin) {
 	if desc.OnClick != nil {
 		bw.Config.OnClick = desc.OnClick
 	}
+	bw.Disabled = desc.Disabled
+	bw.Config.Variant = desc.Variant
 }
 
 func createCheckboxWidget(desc WidgetDesc, p *Plugin) *widgets.CheckboxWidget {
@@ -594,7 +644,11 @@ func syncInputValue(iw *widgets.InputWidget, desc WidgetDesc) {
 	iw.Config.OnChange = onChange
 }
 
-func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, _ *Plugin) {
+func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, p *Plugin) {
+	iw.Config.Bordered, iw.Config.Title, iw.Config.Mask = desc.Border, desc.BoxTitle, desc.Password
+	if desc.Border && p != nil && p.Borders != nil {
+		iw.Box.Borders = *p.Borders
+	}
 	iw.Config.Wrap, iw.Config.MaxRows = desc.Wrap, desc.MaxRows
 	iw.Config.MinRows, iw.Config.Multiline = desc.MinRows, desc.Multiline
 	iw.Config.Autofocus = desc.Autofocus
@@ -652,10 +706,16 @@ func createTableWidget(desc WidgetDesc, p *Plugin) *widgets.TableWidget {
 		Columns:     desc.Columns,
 		Rows:        desc.Rows,
 		OnSelect:    desc.OnSelectIndex,
+		OnActivate:  desc.OnActivateIndex,
 		OnCommand:   desc.OnCommandStr,
 		NodeMenu:    desc.NodeMenu,
 		KeyCommands: desc.KeyCommands,
+		RowStyles:   desc.RowStyles,
+		Loading:     desc.Loading,
+		EmptyText:   desc.EmptyText,
+		Inset:       desc.Inset,
 	})
+	syncTableSelection(tw, desc)
 	wireTableMenu(tw, p)
 	applyBoxModel(&tw.Box, desc)
 	return tw
@@ -673,4 +733,43 @@ func wireTableMenu(tw *widgets.TableWidget, p *Plugin) {
 			}
 		})
 	}
+}
+
+func syncTabs(tw *widgets.TabsWidget, desc WidgetDesc) {
+	items := append([]widgets.TabItem(nil), desc.TabItems...)
+	tw.SetItems(items)
+	active := desc.ActiveTab
+	if active == "" && len(items) > 0 {
+		active = items[0].ID
+	}
+	tw.SetActive(active)
+	onChange := desc.OnTabChange
+	tw.Config.OnTabClick = func(i int) {
+		if i < 0 || i >= len(items) {
+			return
+		}
+		tw.SetActive(items[i].ID)
+		if onChange != nil && items[i].ID != active {
+			onChange(items[i].ID)
+		}
+	}
+}
+
+func pagerConfig(desc WidgetDesc) widgets.PagerConfig {
+	return widgets.PagerConfig{
+		Offset:   desc.PagerOffset,
+		Limit:    desc.PagerLimit,
+		Total:    desc.PagerTotal,
+		OnChange: desc.OnPage,
+	}
+}
+
+// A table's selected row is controlled only when the plugin passes one, so
+// arrow keys keep working for plugins that leave it out.
+func syncTableSelection(tw *widgets.TableWidget, desc WidgetDesc) {
+	sel := tw.SelectedIndex()
+	if desc.Selected > 0 {
+		sel = desc.Selected - 1
+	}
+	tw.SetSelectedIndex(sel)
 }

@@ -49,6 +49,10 @@ type Root struct {
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
+	pressTarget      Widget
+	mouseReceiver    Widget
+	button1Held      bool
+	focusClaimed     bool
 }
 
 func NewRoot(main Widget) *Root {
@@ -184,6 +188,63 @@ func (r *Root) rawKeysFocused() bool {
 }
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
+	mev, ok := ev.(*tcell.EventMouse)
+	if !ok {
+		return r.dispatch(ev)
+	}
+	held := mev.Buttons()&tcell.Button1 != 0
+	pressed := held && !r.button1Held
+	released := !held && r.button1Held
+	if pressed {
+		r.focusClaimed = false
+	}
+	r.button1Held = held
+	receiver, modal := r.pointerTarget()
+	r.mouseReceiver = nil
+	result := r.dispatch(ev)
+	if pressed {
+		r.pressTarget = r.mouseReceiver
+	}
+	if released {
+		r.releasePressTarget(ev, receiver, modal)
+	}
+	return result
+}
+
+func (r *Root) pointerTarget() (Widget, bool) {
+	if r.capturedWidget != nil || len(r.Overlays) == 0 {
+		return r.Main, false
+	}
+	top := r.Overlays[len(r.Overlays)-1]
+	return top.Widget, top.Modal
+}
+
+// A modal overlay opened by a press (a menu) takes that press's release. The
+// widget that took the press must still see it: widgets that track a held
+// button otherwise read their next press as a drag and ignore it, once the
+// overlay closes from the keyboard.
+func (r *Root) releasePressTarget(ev tcell.Event, receiver Widget, modal bool) {
+	target := r.pressTarget
+	r.pressTarget = nil
+	if target == nil || target == receiver || !modal {
+		return
+	}
+	if target != r.Main && !r.hasOverlayWidget(target) {
+		return
+	}
+	target.HandleEvent(ev)
+}
+
+func (r *Root) hasOverlayWidget(w Widget) bool {
+	for _, o := range r.Overlays {
+		if o.Widget == w {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Root) dispatch(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
 	// ForceKeys punch through two things that would otherwise swallow them: a
 	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
@@ -200,6 +261,7 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	if !isKey && r.capturedWidget != nil {
+		r.mouseReceiver = r.Main
 		return r.handleMouse(ev)
 	}
 
@@ -208,6 +270,7 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	if !isKey {
+		r.mouseReceiver = r.Main
 		return r.handleMouse(ev)
 	}
 
@@ -268,11 +331,9 @@ func (r *Root) handleOverlay(ev tcell.Event) EventResult {
 	top := r.Overlays[len(r.Overlays)-1]
 	slog.Debug("root", "action", "overlayIntercept", "modal", top.Modal, "count", len(r.Overlays))
 	result := top.Widget.HandleEvent(ev)
-	if top.Modal {
+	if top.Modal || result == EventConsumed {
+		r.mouseReceiver = top.Widget
 		return EventConsumed
-	}
-	if result == EventConsumed {
-		return result
 	}
 	return EventIgnored
 }
@@ -445,6 +506,17 @@ func (r *Root) SetFocus(w Widget) {
 		setter.SetFocused(true)
 	}
 }
+
+// ClaimFocus is SetFocus for a deliberate move made while handling a click:
+// until the next mouse press, FocusClaimed tells the click-to-focus of the pane
+// that received the click, which runs after the pane's own handlers, to leave
+// the focus where it is.
+func (r *Root) ClaimFocus(w Widget) {
+	r.SetFocus(w)
+	r.focusClaimed = true
+}
+
+func (r *Root) FocusClaimed() bool { return r.focusClaimed }
 
 func (r *Root) CursorPosition() (x, y int, visible bool) {
 	if len(r.Overlays) > 0 {

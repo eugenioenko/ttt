@@ -1,6 +1,7 @@
 package multicursor
 
 import (
+	"cmp"
 	"sort"
 
 	"github.com/eugenioenko/ttt/internal/core/selection"
@@ -118,6 +119,72 @@ func (mc *MultiCursor) NormalizePrimary() {
 	c.Sel.Anchor = start
 	c.Line = end.Line
 	c.Col = end.Col
+}
+
+func (mc *MultiCursor) MergeSelections() {
+	type cursorRange struct {
+		start, end        selection.Position
+		primary, reversed bool
+	}
+	ranges := make([]cursorRange, 0, len(mc.Cursors))
+	for i, c := range mc.Cursors {
+		start, end := selection.Position{Line: c.Line, Col: c.Col}, selection.Position{Line: c.Line, Col: c.Col}
+		if c.Sel.Active {
+			start, end = c.Sel.Range(c.Line, c.Col)
+		}
+		ranges = append(ranges, cursorRange{
+			start: start, end: end, primary: i == mc.Primary,
+			reversed: start != end && c.Line == start.Line && c.Col == start.Col,
+		})
+	}
+	sort.SliceStable(ranges, func(i, j int) bool {
+		if order := comparePosition(ranges[i].start, ranges[j].start); order != 0 {
+			return order < 0
+		}
+		return comparePosition(ranges[i].end, ranges[j].end) > 0
+	})
+	merged := ranges[:0]
+	for _, current := range ranges {
+		if len(merged) > 0 {
+			last := &merged[len(merged)-1]
+			overlaps := comparePosition(current.start, last.end) < 0 ||
+				(current.start == last.end && (current.start == current.end || last.start == last.end))
+			if overlaps {
+				if comparePosition(current.end, last.end) > 0 {
+					last.end = current.end
+				}
+				if current.primary {
+					last.primary, last.reversed = true, current.reversed
+				}
+				continue
+			}
+		}
+		merged = append(merged, current)
+	}
+	if len(merged) < len(mc.Cursors) {
+		mc.history = nil
+	}
+	mc.Cursors = mc.Cursors[:0]
+	for i, r := range merged {
+		c := CursorState{Line: r.end.Line, Col: r.end.Col}
+		if r.start != r.end {
+			c.Sel = selection.Selection{Active: true, Anchor: r.start}
+			if r.reversed {
+				c.Line, c.Col, c.Sel.Anchor = r.start.Line, r.start.Col, r.end
+			}
+		}
+		if r.primary {
+			mc.Primary = i
+		}
+		mc.Cursors = append(mc.Cursors, c)
+	}
+}
+
+func comparePosition(a, b selection.Position) int {
+	if order := cmp.Compare(a.Line, b.Line); order != 0 {
+		return order
+	}
+	return cmp.Compare(a.Col, b.Col)
 }
 
 func (mc *MultiCursor) Deduplicate() {

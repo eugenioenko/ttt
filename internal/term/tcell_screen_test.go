@@ -44,6 +44,26 @@ func TestTcellScreen_SetCellReversesAStyledCell(t *testing.T) {
 	}
 }
 
+func TestTcellScreen_SetCellInheritsReverseFromBgStyle(t *testing.T) {
+	sim := NewSimScreen()
+	sim.SetSize(2, 1)
+	ts := NewTcellScreenFrom(sim)
+	styles := DefaultStyleMap()
+	styles[StyleSelection] = tcell.StyleDefault.Reverse(true)
+	styles[StyleActiveLine] = tcell.StyleDefault.Background(color.Green)
+	ts.SetStyleMap(styles)
+
+	ts.SetCell(0, 0, Cell{Ch: 'a', BgStyle: StyleSelection})
+	ts.SetCell(1, 0, Cell{Ch: 'b', BgStyle: StyleActiveLine})
+
+	if _, style, _ := sim.Get(0, 0); !style.HasReverse() {
+		t.Error("cell with reversed BgStyle is not reversed")
+	}
+	if _, style, _ := sim.Get(1, 0); style.HasReverse() {
+		t.Error("cell with normal BgStyle is reversed")
+	}
+}
+
 func TestTcellScreen_HideUsesTheRenderedBackground(t *testing.T) {
 	for _, tc := range []struct {
 		name string

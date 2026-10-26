@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -242,44 +244,17 @@ func LoadPluginFromFile(a *App, path string) {
 		return
 	}
 
-	name := strings.TrimSuffix(filepath.Base(path), ".lua")
+	manifest, granted, err := debugPluginManifest(path)
+	if err != nil {
+		a.LogOutput("error", "ttt", "--plugin "+path+": "+err.Error())
+		return
+	}
 	p := &plugin.Plugin{
-		Name:    name,
-		Dir:     filepath.Dir(path),
-		Enabled: true,
-		Manifest: plugin.Manifest{
-			Name:  name,
-			Entry: "inline",
-		},
-		Granted: plugin.PermissionSet{
-			PanelSidebar:      true,
-			PanelBottom:       true,
-			PanelDrawer:       true,
-			PanelEditor:       true,
-			Commands:          true,
-			Keybindings:       true,
-			EditorRead:        true,
-			EditorWrite:       true,
-			EditorDiagnostics: true,
-			EditorBookmarks:   true,
-			EditorDecorations: true,
-			FileHandlers:      true,
-			FsRead:            plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
-			FsWrite:           plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
-			SystemEnv:         true,
-			NetworkHTTP:       plugin.NetworkHTTP{All: true},
-			NetworkRPC:        plugin.NetworkRPC{All: true},
-			EventsFile:        true,
-			EventsEditor:      true,
-			Storage:           true,
-			Settings:          true,
-			SettingsKeys:      []string{"*"},
-			ClipboardRead:     true,
-			Input:             true,
-			ScreenRead:        true,
-			TerminalControl:   true,
-			TerminalRead:      true,
-		},
+		Name:     manifest.Name,
+		Dir:      filepath.Dir(path),
+		Enabled:  true,
+		Manifest: manifest,
+		Granted:  granted,
 	}
 
 	// Wire the settings API before init so plugins loaded via --plugin can read
@@ -297,5 +272,52 @@ func LoadPluginFromFile(a *App, path string) {
 	a.WirePlugin(p)
 	a.ensureKeyInterceptor()
 
-	slog.Info("plugin loaded from file", "path", path, "name", name)
+	slog.Info("plugin loaded from file", "path", path, "name", p.Name)
+}
+
+// debugPluginManifest uses the plugin.ttt.json next to path when there is one,
+// granting exactly what it declares; otherwise the plugin is named after the
+// file and gets every permission except system.exec, which needs a binary list.
+func debugPluginManifest(path string) (plugin.Manifest, plugin.PermissionSet, error) {
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(filepath.Join(dir, "plugin.ttt.json")); err == nil {
+		m, err := plugin.LoadManifest(dir)
+		if err != nil {
+			return plugin.Manifest{}, plugin.PermissionSet{}, err
+		}
+		return m, m.Permissions, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		// A manifest we cannot read must not fall back to the broad defaults.
+		return plugin.Manifest{}, plugin.PermissionSet{}, err
+	}
+	name := strings.TrimSuffix(filepath.Base(path), ".lua")
+	return plugin.Manifest{Name: name, Entry: "inline"}, plugin.PermissionSet{
+		PanelSidebar:      true,
+		PanelBottom:       true,
+		PanelDrawer:       true,
+		PanelEditor:       true,
+		Commands:          true,
+		Keybindings:       true,
+		EditorRead:        true,
+		EditorWrite:       true,
+		EditorDiagnostics: true,
+		EditorBookmarks:   true,
+		EditorDecorations: true,
+		FileHandlers:      true,
+		FsRead:            plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
+		FsWrite:           plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
+		SystemEnv:         true,
+		NetworkHTTP:       plugin.NetworkHTTP{All: true},
+		NetworkRPC:        plugin.NetworkRPC{All: true},
+		EventsFile:        true,
+		EventsEditor:      true,
+		Storage:           true,
+		Settings:          true,
+		SettingsKeys:      []string{"*"},
+		ClipboardRead:     true,
+		Input:             true,
+		ScreenRead:        true,
+		TerminalControl:   true,
+		TerminalRead:      true,
+	}, nil
 }

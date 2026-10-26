@@ -154,6 +154,7 @@ type App struct {
 	eventLoopCloseOnce    sync.Once
 	eventLoopDone         chan struct{}
 	tasks                 taskOwner
+	searchReplace         searchReplaceState
 
 	// lspSent holds, per document, a channel closed once its latest didOpen or
 	// didChange was sent. Guarded by DocVersionsMu.
@@ -884,6 +885,9 @@ func (a *App) focusedTerminalWidget() *ui.TerminalWidget {
 func (a *App) Copy() {
 	if tw := a.focusedTerminalWidget(); tw != nil {
 		tw.CopySelection()
+		return
+	}
+	if sel := a.EditorGroup.ActiveTextSelection(); sel != nil && sel.CopyTextSelection() {
 		return
 	}
 	if holder, ok := a.Root.Focused.(ui.InputHolder); ok {

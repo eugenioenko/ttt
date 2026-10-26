@@ -1,7 +1,10 @@
 package widgets
 
 import (
+	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
@@ -658,4 +661,248 @@ func extractText(s *testSurface, x, y, length int) string {
 		runes = append(runes, ch)
 	}
 	return string(runes)
+}
+
+func TestTableActivateFiresOnEnterAndClickNotArrows(t *testing.T) {
+	tbl := newBasicTable()
+	var activated []int
+	tbl.Config.OnActivate = func(i int) { activated = append(activated, i) }
+	at := time.Unix(1000, 0)
+	tbl.now = func() time.Time { return at }
+	tbl.SetFocused(true)
+	renderWidget(tbl, 0, 0, 20, 10)
+
+	tbl.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModNone))
+	if len(activated) != 0 {
+		t.Fatalf("arrow keys should not activate, got %v", activated)
+	}
+	tbl.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	tbl.HandleEvent(mouseClick(2, 4))
+	tbl.HandleEvent(mouseClick(2, 4))
+	tbl.HandleEvent(mouseRelease(2, 4))
+	if len(activated) != 1 || tbl.SelectedIndex() != 2 {
+		t.Fatalf("a single click should select without activating, got %v", activated)
+	}
+	at = at.Add(100 * time.Millisecond)
+	tbl.HandleEvent(mouseClick(2, 4))
+	tbl.HandleEvent(mouseRelease(2, 4))
+	if len(activated) != 2 || activated[0] != 1 || activated[1] != 2 {
+		t.Fatalf("enter then a double click should activate rows 1 and 2, got %v", activated)
+	}
+}
+
+func TestTableRowStyles(t *testing.T) {
+	tbl := newBasicTable()
+	tbl.Config.RowStyles = []term.Style{0, term.StyleMuted}
+	s := renderWidget(tbl, 0, 0, 20, 10)
+	if s.cells[2][0].Style != term.StyleDefault || s.cells[3][0].Style != term.StyleMuted {
+		t.Fatalf("row styles = %v, %v", s.cells[2][0].Style, s.cells[3][0].Style)
+	}
+}
+
+func TestTableLoadingAndEmptyStates(t *testing.T) {
+	tbl := NewTableWidget(TableConfig{Columns: []TableColumn{{Label: "Name"}}, EmptyText: "No keys yet"})
+	s := renderWidget(tbl, 0, 0, 30, 8)
+	if got := strings.TrimSpace(rowText(s, 4)); got != "No keys yet" {
+		t.Fatalf("empty state = %q", got)
+	}
+	tbl.Config.Loading = true
+	s = renderWidget(tbl, 0, 0, 30, 8)
+	if got := strings.TrimSpace(rowText(s, 4)); got != "Loading…" {
+		t.Fatalf("loading state = %q", got)
+	}
+	tbl.Config.Rows = [][]string{{"a"}}
+	s = renderWidget(tbl, 0, 0, 30, 8)
+	if got := rowText(s, 0); !strings.HasSuffix(got, "Loading…") || rowText(s, 2) != "a" {
+		t.Fatalf("loading with rows keeps them and marks the header: %q / %q", got, rowText(s, 2))
+	}
+}
+
+func TestInsetKeepsScrollbarAtEdge(t *testing.T) {
+	rows := make([][]string, 20)
+	for i := range rows {
+		rows[i] = []string{strings.Repeat("x", 30)}
+	}
+	tbl := NewTableWidget(TableConfig{Columns: []TableColumn{{Label: "Name"}}, Rows: rows, Inset: 1})
+	tbl.SetFocused(true)
+	s := renderWidget(tbl, 0, 0, 12, 8)
+	if got := rowText(s, 2); got[:len(got)-len("█")] != " xxxxxxxx… " {
+		t.Fatalf("row = %q, want 1 cell inset on both sides", got)
+	}
+	if s.cells[2][0].Style != term.StyleSidebarSelected || s.cells[2][10].Style != term.StyleSidebarSelected {
+		t.Fatalf("selection should span the inset: %v %v", s.cells[2][0].Style, s.cells[2][10].Style)
+	}
+	if s.cells[2][11].Style == term.StyleSidebarSelected || s.cells[2][11].Ch == ' ' {
+		t.Fatalf("scrollbar should stay at the right edge, got %q", s.cells[2][11].Ch)
+	}
+}
+
+func TestTableDoubleClickNeedsTwoQuickClicksOnTheSameRow(t *testing.T) {
+	tbl := newBasicTable()
+	activated := 0
+	tbl.Config.OnActivate = func(int) { activated++ }
+	at := time.Unix(1000, 0)
+	tbl.now = func() time.Time { return at }
+	renderWidget(tbl, 0, 0, 20, 10)
+	click := func(x, y int, after time.Duration) {
+		at = at.Add(after)
+		tbl.HandleEvent(mouseClick(x, y))
+		tbl.HandleEvent(mouseRelease(x, y))
+	}
+
+	click(2, 4, 0)
+	click(2, 4, 600*time.Millisecond)
+	if activated != 0 {
+		t.Fatal("two clicks 600ms apart activated the row")
+	}
+	click(2, 0, 100*time.Millisecond)
+	click(2, 4, 100*time.Millisecond)
+	if activated != 0 {
+		t.Fatal("a header click between the row clicks still counted as a double-click")
+	}
+	click(2, 4, 100*time.Millisecond)
+	if activated != 1 {
+		t.Fatalf("a quick second click on the row should activate it, got %d", activated)
+	}
+}
+
+func TestTableRightClickWithoutMenuIsIgnored(t *testing.T) {
+	tbl := newBasicTable()
+	renderWidget(tbl, 0, 0, 20, 10)
+	if got := tbl.HandleEvent(tcell.NewEventMouse(1, 3, tcell.Button2, tcell.ModNone)); got != EventIgnored {
+		t.Errorf("right-click result = %v, want ignored so the caller can show its own menu", got)
+	}
+}
+
+func newWideTable() *TableWidget {
+	return NewTableWidget(TableConfig{
+		Columns: []TableColumn{
+			{Label: "A", Width: 10},
+			{Label: "B", Width: 10},
+			{Label: "C", Width: 10},
+		},
+		Rows: [][]string{{"a1", "b1", "c1"}},
+	})
+}
+
+func keyPress(k tcell.Key) *tcell.EventKey {
+	return tcell.NewEventKey(k, "", tcell.ModNone)
+}
+
+func TestTableScrollsOverflowingColumnsWithLeftRight(t *testing.T) {
+	tbl := newWideTable()
+	s := renderWidget(tbl, 0, 0, 20, 6)
+	if got := rowText(s, 2); got != "a1          b1" {
+		t.Fatalf("row before scrolling = %q", got)
+	}
+	if s.cells[5][0].Ch != '▄' || s.cells[5][19].Ch != '▄' {
+		t.Fatalf("horizontal scrollbar should fill the last row, got %q", rowText(s, 5))
+	}
+
+	if got := tbl.HandleEvent(keyPress(tcell.KeyRight)); got != EventConsumed {
+		t.Fatalf("Right on an overflowing table = %v, want consumed", got)
+	}
+	s = renderWidget(tbl, 0, 0, 20, 6)
+	if got := rowText(s, 0); got != "B           C" {
+		t.Fatalf("header after Right = %q, want it to scroll to column B", got)
+	}
+	if got := rowText(s, 2); got != "b1          c1" {
+		t.Fatalf("row after Right = %q, want it aligned with the header", got)
+	}
+
+	tbl.HandleEvent(keyPress(tcell.KeyRight))
+	s = renderWidget(tbl, 0, 0, 20, 6)
+	if got := rowText(s, 0); got != "          C" {
+		t.Fatalf("header at the right end = %q", got)
+	}
+
+	tbl.HandleEvent(keyPress(tcell.KeyLeft))
+	tbl.HandleEvent(keyPress(tcell.KeyLeft))
+	s = renderWidget(tbl, 0, 0, 20, 6)
+	if got := rowText(s, 0); got != "A           B" {
+		t.Fatalf("header after Left = %q, want the start", got)
+	}
+}
+
+func TestTableLeftRightIgnoredWhenColumnsFit(t *testing.T) {
+	tbl := newBasicTable()
+	s := renderWidget(tbl, 0, 0, 20, 6)
+	if got := tbl.HandleEvent(keyPress(tcell.KeyRight)); got != EventIgnored {
+		t.Fatalf("Right on a table that fits = %v, want ignored", got)
+	}
+	if s.cells[5][0].Ch == '▄' {
+		t.Fatal("a table that fits should not draw a horizontal scrollbar")
+	}
+}
+
+func TestTableHorizontalWheel(t *testing.T) {
+	tbl := newWideTable()
+	renderWidget(tbl, 0, 0, 20, 6)
+	tbl.HandleEvent(tcell.NewEventMouse(1, 2, tcell.WheelDown, tcell.ModShift))
+	if tbl.scrollLeft != 3 || tbl.scrollTop != 0 {
+		t.Fatalf("Shift+wheel down: scrollLeft=%d scrollTop=%d, want 3 and 0", tbl.scrollLeft, tbl.scrollTop)
+	}
+	for range 3 {
+		tbl.HandleEvent(tcell.NewEventMouse(1, 2, tcell.WheelRight, tcell.ModNone))
+	}
+	if tbl.scrollLeft != 12 {
+		t.Fatalf("wheel right: scrollLeft=%d, want 12", tbl.scrollLeft)
+	}
+	tbl.HandleEvent(tcell.NewEventMouse(1, 2, tcell.WheelRight, tcell.ModNone))
+	if tbl.scrollLeft != 14 {
+		t.Fatalf("wheel right past the end: scrollLeft=%d, want clamped to 14", tbl.scrollLeft)
+	}
+	tbl.HandleEvent(tcell.NewEventMouse(1, 2, tcell.WheelUp, tcell.ModShift))
+	tbl.HandleEvent(tcell.NewEventMouse(1, 2, tcell.WheelLeft, tcell.ModNone))
+	if tbl.scrollLeft != 8 {
+		t.Fatalf("wheel left: scrollLeft=%d, want 8", tbl.scrollLeft)
+	}
+}
+
+func TestTableHorizontalScrollbarClickScrollsWithoutSelecting(t *testing.T) {
+	selected := -1
+	tbl := newWideTable()
+	tbl.Config.Rows = makeRows(10)
+	tbl.Config.OnSelect = func(i int) { selected = i }
+	renderWidget(tbl, 0, 0, 20, 6)
+	if got := tbl.HandleEvent(mouseClick(18, 5)); got != EventCaptured {
+		t.Fatalf("click on the horizontal track = %v, want captured", got)
+	}
+	tbl.HandleEvent(mouseRelease(18, 5))
+	if tbl.scrollLeft == 0 {
+		t.Fatal("click near the right of the track should scroll right")
+	}
+	if selected != -1 {
+		t.Fatalf("click on the scrollbar selected row %d", selected)
+	}
+}
+
+func TestTableAutoColumnsKeepTheirMinimumWidth(t *testing.T) {
+	tbl := NewTableWidget(TableConfig{
+		Columns: []TableColumn{
+			{Label: "Name"},
+			{Label: "Notes", MinWidth: 8},
+			{Label: "Fixed", Width: 10},
+		},
+		Rows: [][]string{{"alice", "longer notes", "x"}},
+	})
+	renderWidget(tbl, 0, 0, 20, 6)
+	if got, want := tbl.widths, []int{4, 8, 10}; !slices.Equal(got, want) {
+		t.Fatalf("widths = %v, want %v", got, want)
+	}
+	renderWidget(tbl, 0, 0, 40, 6)
+	if got, want := tbl.widths, []int{13, 13, 10}; !slices.Equal(got, want) {
+		t.Fatalf("widths with room = %v, want the space split equally: %v", got, want)
+	}
+}
+
+func TestTableFullwidthRuneNotDrawnInLastVisibleColumn(t *testing.T) {
+	tbl := NewTableWidget(TableConfig{
+		Columns: []TableColumn{{Label: "X", Width: 30}},
+		Rows:    [][]string{{"a漢漢漢漢漢漢漢"}},
+	})
+	s := renderWidget(tbl, 0, 0, 10, 5)
+	if s.cells[2][9].Ch != ' ' {
+		t.Fatalf("last visible column holds %q, want a space instead of a fullwidth rune", s.cells[2][9].Ch)
+	}
 }

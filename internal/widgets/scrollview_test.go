@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -558,5 +559,37 @@ func TestScrollViewFollowKeepsTheEndInView(t *testing.T) {
 	renderWidget(sv, 0, 0, 20, 10)
 	if sv.scrollY != 50 {
 		t.Fatalf("scrollY = %d, want 50: back at the end it follows again", sv.scrollY)
+	}
+}
+
+func TestScrollViewFitsStackToItsWidth(t *testing.T) {
+	stack := NewVStackWidget(NewLabelWidget(LabelConfig{Text: "row"}))
+	sv := NewScrollViewWidget(stack)
+	renderWidget(sv, 0, 0, 120, 10)
+	if got := stack.GetRect().W; got != 120 {
+		t.Errorf("stack width = %d, want the scroll view's 120", got)
+	}
+
+	tall := NewVStackWidget()
+	for range 20 {
+		tall.Children = append(tall.Children, NewLabelWidget(LabelConfig{Text: "row"}))
+	}
+	sv = NewScrollViewWidget(tall)
+	renderWidget(sv, 0, 0, 120, 10)
+	if got := tall.GetRect().W; got != 119 {
+		t.Errorf("overflowing stack width = %d, want 119 beside the scrollbar", got)
+	}
+}
+
+func TestScrollViewRewrapsParagraphWhenItNarrows(t *testing.T) {
+	para := NewParagraphWidget(strings.Repeat("word ", 30))
+	sv := NewScrollViewWidget(NewVStackWidget(para))
+	renderWidget(sv, 0, 0, 120, 5)
+	s := renderWidget(sv, 0, 0, 20, 5)
+	if got := para.GetRect().H; got <= 1 {
+		t.Fatalf("paragraph height = %d after narrowing, want it rewrapped", got)
+	}
+	if got := s.cells[0][19].Ch; got == ' ' {
+		t.Fatal("no scrollbar once the rewrapped paragraph overflows")
 	}
 }

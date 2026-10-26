@@ -132,6 +132,7 @@ func (a *App) OpenFindReplace() {
 }
 
 func (a *App) ClearGlobalSearch() {
+	a.Search.CancelReplacement()
 	a.Search.Input.Text = ""
 	a.Search.Input.CursorPos = 0
 	a.Search.Groups = nil

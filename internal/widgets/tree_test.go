@@ -1725,3 +1725,119 @@ func TestTreeRevealIDScrollsBackToUnchangedSelection(t *testing.T) {
 		t.Error("RevealID returned true for an unknown id")
 	}
 }
+
+func TestTreeBadgeRightAndInset(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71"}},
+		BadgeRight: true,
+		Inset:      1,
+	})
+	tree.SetFocused(true)
+	s := renderWidget(tree, 0, 0, 20, 2)
+	got := rowText(s, 0)
+	if want := " Namespaces      71"; got != want {
+		t.Fatalf("row = %q, want %q", got, want)
+	}
+	for x, cell := range s.cells[0] {
+		if cell.Style != term.StyleSidebarSelected {
+			t.Errorf("selected row cell %d has style %v, want the full-width highlight", x, cell.Style)
+		}
+	}
+}
+
+func TestTreeRightBadgeKeepsAGapBeforeActions(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71", Actions: []Action{{Icon: "+"}}}},
+		BadgeRight: true,
+	})
+	s := renderWidget(tree, 0, 0, 20, 2)
+	if got := rowText(s, 0); !strings.Contains(got, "71 +") {
+		t.Fatalf("row = %q, want a space between the badge and the action", got)
+	}
+}
+
+func TestTreeRightBadgeNeverCoversTheRowContent(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71", Expandable: true}},
+		BadgeRight: true,
+		Inset:      4,
+	})
+	s := renderWidget(tree, 0, 0, 8, 1)
+	if got, want := rowText(s, 0), "    ▸"; got != want {
+		t.Fatalf("row = %q, want %q: the chevron kept and the badge dropped", got, want)
+	}
+}
+
+func TestTreeRightBadgeLeavesOneGapAfterTheLabel(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "ab", Badge: "7"}},
+		BadgeRight: true,
+	})
+	s := renderWidget(tree, 0, 0, 5, 1)
+	if got, want := rowText(s, 0), "ab 7"; got != want {
+		t.Fatalf("row = %q, want %q", got, want)
+	}
+}
+
+func TestTreeRightBadgeGivesWayToTheLabel(t *testing.T) {
+	cases := []struct {
+		name, label, badge string
+		w                  int
+		want               string
+	}{
+		{"long badge is truncated, label keeps half", "order_line_items", "table · 98,213,004 rows", 22, "order_lin… table · 9…"},
+		{"short badge stays whole, label truncated", "customer_shipping_addresses", "12 rows", 22, "customer_shi… 12 rows"},
+		{"short label stays whole", "x", "a very long badge that fills the row", 22, "x a very long badge …"},
+		{"badge dropped when under three cells are left", "order_line_items", "rows", 6, "ord…"},
+	}
+	for _, tc := range cases {
+		tree := NewTreeWidget(TreeConfig{
+			Items:      []*TreeNode{{ID: "a", Label: tc.label, Badge: tc.badge}},
+			BadgeRight: true,
+		})
+		s := renderWidget(tree, 0, 0, tc.w, 1)
+		if got := rowText(s, 0); got != tc.want {
+			t.Errorf("%s: row = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestTreeReselectOnActivate(t *testing.T) {
+	for _, reselect := range []bool{false, true} {
+		selects := 0
+		tree := NewTreeWidget(TreeConfig{
+			Items:              []*TreeNode{{ID: "a", Label: "Alpha"}, {ID: "b", Label: "Beta"}},
+			OnSelect:           func(*TreeNode) { selects++ },
+			ReselectOnActivate: reselect,
+		})
+		tree.SetFocused(true)
+		renderWidget(tree, 0, 0, 20, 3)
+
+		tree.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModNone))
+		if selects != 1 {
+			t.Fatalf("reselect=%v: moving the selection should select once, got %d", reselect, selects)
+		}
+		tree.HandleEvent(mouseClick(2, 1))
+		tree.HandleEvent(mouseClick(2, 1))
+		tree.HandleEvent(mouseRelease(2, 1))
+		tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+		want := 1
+		if reselect {
+			want = 3
+		}
+		if selects != want {
+			t.Errorf("reselect=%v: a click on the selected row, held, then Enter gave %d selects, want %d", reselect, selects, want)
+		}
+	}
+}
+
+func TestTreeReselectSkipsAnEmptyTree(t *testing.T) {
+	called := false
+	tree := NewTreeWidget(TreeConfig{OnSelect: func(*TreeNode) { called = true }, ReselectOnActivate: true})
+	tree.SetFocused(true)
+	renderWidget(tree, 0, 0, 20, 3)
+	tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if called {
+		t.Fatal("Enter on an empty tree called OnSelect")
+	}
+}

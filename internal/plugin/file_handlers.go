@@ -105,6 +105,7 @@ func (p *Plugin) OpenFileHandler(h *FileHandler, path string) (*PluginPanelWidge
 		return nil, errors.New("plugin is not loaded")
 	}
 	tab := p.State.NewTable()
+	p.State.SetField(tab, "id", lua.LString(path))
 	if err := p.CallLuaFunc(h.Open, lua.LString(path), tab); err != nil {
 		return nil, err
 	}
@@ -114,5 +115,7 @@ func (p *Plugin) OpenFileHandler(h *FileHandler, path string) (*PluginPanelWidge
 		return nil, errHandlerNoRender
 	}
 	event, _ := p.State.GetField(tab, "on_event").(*lua.LFunction)
-	return NewPluginPanelWidget(p, render, event), nil
+	panel := NewPluginPanelWidget(p, render, event)
+	panel.fileKey = p.tabKey(path)
+	return panel, nil
 }

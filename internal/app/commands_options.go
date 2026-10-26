@@ -218,16 +218,26 @@ func (a *App) SetGutterStyle(style string) {
 
 // Display labels for the gutter and border style values in config.
 var styleLabels = map[string]string{
-	"minimal":  "Minimal",
-	"compact":  "Compact",
-	"extended": "Extended",
-	"default":  "Default",
-	"rounded":  "Rounded",
-	"sharp":    "Sharp",
-	"double":   "Double",
-	"bold":     "Bold",
-	"ascii":    "ASCII",
-	"none":     "None",
+	"minimal":    "Minimal",
+	"compact":    "Compact",
+	"extended":   "Extended",
+	"default":    "Default",
+	"rounded":    "Rounded",
+	"sharp":      "Sharp",
+	"double":     "Double",
+	"bold":       "Bold",
+	"ascii":      "ASCII",
+	"none":       "None",
+	"background": "Background",
+	"invert":     "Invert",
+}
+
+func selectionStyleItems() []widgets.SelectItem {
+	items := make([]widgets.SelectItem, 0, len(config.SelectionStyles))
+	for _, id := range config.SelectionStyles {
+		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
+	}
+	return items
 }
 
 func gutterStyleItems() []widgets.SelectItem {
@@ -312,6 +322,34 @@ func (a *App) applyBorderStyle(themeBorders *term.BorderSet) {
 func (a *App) ShowBorderStylePicker() {
 	a.ShowSelectDialog("Border Style", borderStyleItems(), func(id string) {
 		a.SetBorderStyle(id)
+	}, nil)
+}
+
+func (a *App) SetEditorSelectionStyle(style string) {
+	a.Settings.Editor.SelectionStyle = style
+	a.SaveAndApplySettings()
+}
+
+func (a *App) SetTerminalSelectionStyle(style string) {
+	a.Settings.Terminal.SelectionStyle = style
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ShowEditorSelectionStylePicker() {
+	if a.Root.HasOverlay() {
+		return
+	}
+	a.ShowSelectDialog("Editor Selection Style", selectionStyleItems(), func(id string) {
+		a.SetEditorSelectionStyle(id)
+	}, nil)
+}
+
+func (a *App) ShowTerminalSelectionStylePicker() {
+	if a.Root.HasOverlay() {
+		return
+	}
+	a.ShowSelectDialog("Terminal Selection Style", selectionStyleItems(), func(id string) {
+		a.SetTerminalSelectionStyle(id)
 	}, nil)
 }
 
@@ -646,6 +684,18 @@ func registerOptionsCommands(app *App) {
 		ID: "options.borderStyle", Title: "Change Border Style",
 		Keywords: []string{"preferences", "settings", "editor", "view", "borders", "rounded", "sharp"},
 		Handler:  app.ShowBorderStylePicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.editorSelectionStyle", Title: "Change Editor Selection Style",
+		Keywords: []string{"preferences", "settings", "editor", "view", "selection", "invert", "highlight"},
+		Handler:  app.ShowEditorSelectionStylePicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.terminalSelectionStyle", Title: "Change Terminal Selection Style",
+		Keywords: []string{"preferences", "settings", "terminal", "view", "selection", "invert", "highlight"},
+		Handler:  app.ShowTerminalSelectionStylePicker,
 	})
 
 	reg.Register(command.Command{

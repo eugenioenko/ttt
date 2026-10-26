@@ -15,7 +15,11 @@ type InputConfig struct {
 	Prefix      string     `json:"prefix,omitempty"`
 	Placeholder string     `json:"placeholder,omitempty"`
 	Bordered    bool       `json:"bordered"`
+	Title       string     `json:"-"`
 	Style       term.Style `json:"-"`
+	// Mask draws each rune as • and keeps the text off the clipboard. A masked
+	// input is one line: Wrap is ignored.
+	Mask bool `json:"-"`
 	// Wrap lays the text out on as many rows as it needs, up to MaxRows
 	// (default 5), then scrolls. Shift+Enter, Alt+Enter or Ctrl+J adds a line
 	// break.
@@ -74,10 +78,10 @@ func NewInputWidget(config InputConfig) *InputWidget {
 // HeightAtWidth gives the height for the width a layout is about to use.
 func (inp *InputWidget) Height() int {
 	rows := 1
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		rows = min(max(inp.Config.MinRows, 1), inp.maxRows())
 	}
-	if inp.Config.Wrap && inp.wrapWidth > 0 {
+	if inp.wraps() && inp.wrapWidth > 0 {
 		rows = inp.visibleRows(inp.wrapWidth)
 	}
 	return inp.heightFor(rows)
@@ -110,11 +114,11 @@ func (inp *InputWidget) CursorPosition() (int, int, bool) {
 	} else {
 		textX += textwidth.String(inp.Config.Prefix)
 	}
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		col, row := inp.wrappedCursor()
 		return textX + col, textY + row, true
 	}
-	return textX + inp.visualOffset([]rune(inp.text), inp.cursorPos), textY, true
+	return textX + inp.visualOffset(inp.shownRunes(), inp.cursorPos), textY, true
 }
 
 // visualOffset returns how many columns the rune at index pos sits to the right
@@ -123,6 +127,17 @@ func (inp *InputWidget) visualOffset(runes []rune, pos int) int {
 	lo := max(min(inp.scrollOffset, len(runes)), 0)
 	hi := max(min(pos, len(runes)), lo)
 	return textwidth.Runes(runes[lo:hi])
+}
+
+func (inp *InputWidget) wraps() bool { return inp.Config.Wrap && !inp.Config.Mask }
+
+// shownRunes is the text as drawn, which layout and hit testing measure.
+func (inp *InputWidget) shownRunes() []rune {
+	runes := []rune(inp.text)
+	if inp.Config.Mask {
+		return []rune(strings.Repeat("•", len(runes)))
+	}
+	return runes
 }
 
 func (inp *InputWidget) Text() string { return inp.text }
@@ -145,7 +160,7 @@ func (inp *InputWidget) PasteText(text string) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	text = strings.TrimRight(text, "\n")
-	if !inp.Config.Wrap {
+	if !inp.wraps() {
 		text = strings.ReplaceAll(text, "\n", " ")
 	}
 	if text == "" {
@@ -198,8 +213,11 @@ func (inp *InputWidget) renderBordered(surface Surface) {
 	bs := widgetBorders(inp.Box)
 
 	inner.DrawBorder(0, 0, w, h, bs, borderStyle)
+	if inp.Config.Title != "" && w > 4 {
+		inner.DrawText(1, 0, " "+inp.Config.Title+" ", w-1, borderStyle)
+	}
 
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		inp.renderWrapped(inner, 2, 1, w-4, h-2)
 		return
 	}
@@ -229,7 +247,7 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 		px += textwidth.Rune(ch)
 	}
 
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		inp.renderWrapped(inner, prefixW, 0, w-prefixW, h)
 		return
 	}
@@ -246,7 +264,7 @@ func (inp *InputWidget) renderText(surface Surface, x, y, textW int) {
 		style = term.StyleInput
 	}
 
-	textRunes := []rune(inp.text)
+	textRunes := inp.shownRunes()
 
 	// Scrolling is measured in columns, not runes: a window of textW columns
 	// holds fewer fullwidth runes than narrow ones.
@@ -367,7 +385,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 	}
 	shift := ev.Modifiers()&tcell.ModShift != 0
 	ctrl := ev.Modifiers()&tcell.ModCtrl != 0
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		if k := ev.Key(); k != tcell.KeyUp && k != tcell.KeyDown {
 			inp.goalCol = -1
 		}
@@ -503,9 +521,8 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	if inp.Config.Bordered {
 		textX = r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + 2
 	}
-	runes := []rune(inp.text)
-	pos := inp.posAtColumn(runes, mx-textX)
-	if inp.Config.Wrap {
+	pos := inp.posAtColumn(inp.shownRunes(), mx-textX)
+	if inp.wraps() {
 		inp.goalCol = -1
 		textY := r.Y + inp.Box.MarginTop + inp.Box.PaddingTop
 		if inp.Config.Bordered {
@@ -533,6 +550,12 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 }
 
 // selection helpers
+
+// HasSelection reports whether the input has selected text.
+func (inp *InputWidget) HasSelection() bool { return inp.hasSelection() }
+
+// SelectAll selects the whole text.
+func (inp *InputWidget) SelectAll() { inp.selectAll() }
 
 func (inp *InputWidget) hasSelection() bool {
 	return inp.selStart >= 0 && inp.selStart != inp.selEnd
@@ -573,6 +596,10 @@ func (inp *InputWidget) deleteSelection() {
 }
 
 func (inp *InputWidget) selectWordAt(pos int) {
+	if inp.Config.Mask {
+		inp.selectAll()
+		return
+	}
 	runes := []rune(inp.text)
 	if pos < 0 || pos >= len(runes) {
 		return
@@ -616,9 +643,9 @@ func (inp *InputWidget) selectAll() {
 }
 
 // CopySelection copies the selected text to the clipboard. It does nothing
-// when there is no selection.
+// when there is no selection or the input is masked.
 func (inp *InputWidget) CopySelection() {
-	if !inp.hasSelection() {
+	if !inp.hasSelection() || inp.Config.Mask {
 		return
 	}
 	lo, hi := inp.selRange()
@@ -627,9 +654,10 @@ func (inp *InputWidget) CopySelection() {
 }
 
 // CutSelection copies the selected text to the clipboard and removes it from
-// the input. It does nothing when there is no selection.
+// the input. It does nothing when there is no selection or the input is
+// masked.
 func (inp *InputWidget) CutSelection() {
-	if !inp.hasSelection() {
+	if !inp.hasSelection() || inp.Config.Mask {
 		return
 	}
 	inp.CopySelection()
@@ -643,6 +671,9 @@ func (inp *InputWidget) pasteClipboard() {
 // word navigation
 
 func (inp *InputWidget) wordLeft() int {
+	if inp.Config.Mask {
+		return 0
+	}
 	runes := []rune(inp.text)
 	pos := inp.cursorPos - 1
 	if pos >= len(runes) {
@@ -668,6 +699,9 @@ func (inp *InputWidget) wordLeft() int {
 }
 
 func (inp *InputWidget) wordRight() int {
+	if inp.Config.Mask {
+		return len([]rune(inp.text))
+	}
 	runes := []rune(inp.text)
 	pos := inp.cursorPos
 	if pos >= len(runes) {

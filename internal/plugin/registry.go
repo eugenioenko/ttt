@@ -23,6 +23,7 @@ type RegistryEntry struct {
 	Version       string        `json:"version"`
 	Enabled       bool          `json:"enabled"`
 	Permissions   PermissionSet `json:"permissions"`
+	ExecPaths     []string      `json:"execPaths,omitempty"` // from sys.request_exec; outside Permissions, which is intersected with the manifest
 	GrantsVersion int           `json:"grantsVersion,omitempty"`
 }
 

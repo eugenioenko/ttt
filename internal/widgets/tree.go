@@ -56,7 +56,14 @@ type TreeConfig struct {
 	ActiveID         string `json:"-"`
 	EmptyText        string `json:"emptyText,omitempty"`
 	SelectOnClick    bool   `json:"-"`
-	TruncateLeft     bool   `json:"truncateLeft,omitempty"` // truncate labels from the left (…tail) so the end stays visible
+	// ReselectOnActivate also calls OnSelect when a click or Enter lands on
+	// the row that is already selected, so the row can be opened again.
+	ReselectOnActivate bool `json:"-"`
+	TruncateLeft       bool `json:"truncateLeft,omitempty"` // truncate labels from the left (…tail) so the end stays visible
+	// BadgeRight draws badges against the right edge instead of after the label.
+	BadgeRight bool `json:"-"`
+	// Inset indents rows; the selection highlight still spans the full width.
+	Inset int `json:"-"`
 
 	OnCommand          func(command string, node *TreeNode)
 	OnMenu             func(entries []MenuEntry, node *TreeNode, screenX, screenY int)
@@ -76,6 +83,7 @@ type TreeWidget struct {
 	selected  int
 	scrollTop int
 	leftHeld  bool // the left button was down on the last mouse report
+	activated bool // the event being handled clicked or pressed Enter on a row
 	pressX    int  // where that press started
 	pressY    int
 	lastSel   int
@@ -428,7 +436,7 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 
 	maxX := w - 2 - t.rightSideWidth(node)
 
-	x := node.depth * t.Config.Indent
+	x := t.Config.Inset + node.depth*t.Config.Indent
 
 	hasChildren := len(node.Children) > 0 || node.Expandable
 	if hasChildren {
@@ -492,21 +500,25 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		}
 	}
 	labelRunes := []rune(node.Label)
+	badgeW := 0
+	if t.Config.BadgeRight && node.Badge != "" {
+		gap := 0
+		if len(node.Actions) > 0 {
+			gap = 1
+		}
+		badgeW = rightBadgeWidth(maxX-x, textwidth.Runes(labelRunes), textwidth.String(node.Badge), gap)
+		if badgeW > 0 {
+			maxX -= badgeW + gap
+		}
+	}
 	if t.Config.TruncateLeft || node.TruncateLeft {
 		labelRunes = truncateRunesLeft(labelRunes, maxX-x)
 	}
 	x = drawRunesClipped(surface, x, y, maxX, labelRunes, labelStyle)
 
-	if node.Badge != "" {
-		badgeStyle := node.BadgeStyle
-		if badgeStyle == term.StyleDefault {
-			badgeStyle = term.StyleMuted
-		}
-		if idx == t.selected {
-			badgeStyle = style
-		}
+	if node.Badge != "" && !t.Config.BadgeRight {
 		x++
-		drawRunesClipped(surface, x, y, maxX, []rune(node.Badge), badgeStyle)
+		drawRunesClipped(surface, x, y, maxX, []rune(node.Badge), t.badgeStyle(node, idx, style))
 	}
 
 	rightX := w - 2
@@ -565,6 +577,41 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 			rightX--
 		}
 	}
+
+	if badgeW > 0 {
+		if len(node.Actions) > 0 {
+			rightX--
+		}
+		if bx := rightX - badgeW + 1; bx >= x {
+			drawRunesClipped(surface, bx, y, rightX+1, []rune(node.Badge), t.badgeStyle(node, idx, style))
+		}
+	}
+}
+
+const minTruncatedBadgeWidth = 3
+
+func rightBadgeWidth(space, labelW, badgeW, gap int) int {
+	if labelW+badgeW+gap <= space {
+		return badgeW
+	}
+	room := space - min(labelW, space/2) - gap
+	switch {
+	case room >= badgeW:
+		return badgeW
+	case room >= minTruncatedBadgeWidth:
+		return room
+	}
+	return 0
+}
+
+func (t *TreeWidget) badgeStyle(node *TreeNode, idx int, rowStyle term.Style) term.Style {
+	if idx == t.selected {
+		return rowStyle
+	}
+	if node.BadgeStyle == term.StyleDefault {
+		return term.StyleMuted
+	}
+	return node.BadgeStyle
 }
 
 func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -574,6 +621,7 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	prev := t.selected
+	t.activated = false
 	var result EventResult
 	switch tev := ev.(type) {
 	case *tcell.EventMouse:
@@ -583,7 +631,8 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 	default:
 		return EventIgnored
 	}
-	if t.selected != prev && t.Config.OnSelect != nil {
+	reselected := t.activated && t.Config.ReselectOnActivate && t.Selected() != nil
+	if (t.selected != prev || reselected) && t.Config.OnSelect != nil {
 		t.Config.OnSelect(t.Selected())
 	}
 	return result
@@ -622,6 +671,7 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	// reports come from a new position; acting on them toggled a held folder
 	// over and over and opened every row the pointer crossed.
 	moved := t.leftHeld && (mx != t.pressX || my != t.pressY)
+	fresh := btn&tcell.Button1 != 0 && !t.leftHeld
 	t.leftHeld = btn&tcell.Button1 != 0
 	if t.leftHeld && !moved {
 		t.pressX, t.pressY = mx, my
@@ -695,6 +745,7 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 			}
 		}
 
+		t.activated = fresh
 		if !t.Config.SelectOnClick {
 			if t.Config.ActivateExpandable && node.isExpandable() {
 				if mx == node.chevronX {
@@ -737,6 +788,7 @@ func (t *TreeWidget) handleKey(ev *tcell.EventKey) EventResult {
 			}
 			return EventConsumed
 		}
+		t.activated = true
 		if t.Config.ActivateExpandable {
 			t.activateSelectedNode()
 		} else {

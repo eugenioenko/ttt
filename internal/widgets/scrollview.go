@@ -76,6 +76,10 @@ func (sv *ScrollViewWidget) EnsureVisible(x, y int) {
 }
 
 func (sv *ScrollViewWidget) viewportSize(w, h, contentW, contentH int) (int, int) {
+	return fitScrollViewport(w, h, contentW, contentH)
+}
+
+func fitScrollViewport(w, h, contentW, contentH int) (int, int) {
 	w = max(w, 0)
 	h = max(h, 0)
 	vw, vh := w, h
@@ -98,6 +102,25 @@ func (sv *ScrollViewWidget) viewportSize(w, h, contentW, contentH int) (int, int
 	return vw, vh
 }
 
+// widthFitter is content that lays out to the width it is given, like a
+// stack, so it only scrolls vertically. Its own ScrollSize reports its last
+// width, which would keep it at whatever width it first had.
+type widthFitter interface {
+	HeightForWidth(w int) int
+}
+
+func (sv *ScrollViewWidget) measure(w, h int) (int, int) {
+	fit, ok := sv.Child.(widthFitter)
+	if !ok {
+		return sv.Child.ScrollSize()
+	}
+	if contentH := fit.HeightForWidth(w); contentH <= h {
+		return w, contentH
+	}
+	w = max(w-1, 0)
+	return w, fit.HeightForWidth(w)
+}
+
 // viewportOrigin returns the screen position of the inner content area.
 func (sv *ScrollViewWidget) viewportOrigin() (int, int) {
 	return sv.contentOrigin()
@@ -112,7 +135,7 @@ func (sv *ScrollViewWidget) Render(surface Surface) {
 		return
 	}
 
-	contentW, contentH := sv.Child.ScrollSize()
+	contentW, contentH := sv.measure(w, h)
 	contentW = max(contentW, 0)
 	contentH = max(contentH, 0)
 	viewW, viewH := sv.viewportSize(w, h, contentW, contentH)
@@ -274,7 +297,12 @@ func (sv *ScrollViewWidget) scrollHRight(amount int) {
 	sv.scrollX = horizontal.clampOffset(sv.scrollX + amount)
 }
 
-func (sv *ScrollViewWidget) Focusable() bool         { return true }
+func (sv *ScrollViewWidget) Focusable() bool {
+	if fw, ok := sv.Child.(FocusableWidget); ok && fw.Focusable() {
+		return false
+	}
+	return true
+}
 func (sv *ScrollViewWidget) SetFocused(focused bool) { sv.focused = focused }
 func (sv *ScrollViewWidget) IsFocused() bool         { return sv.focused }
 

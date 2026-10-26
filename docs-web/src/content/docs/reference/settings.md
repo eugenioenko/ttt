@@ -123,6 +123,7 @@ All editor settings are nested under the `editor` key.
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
+| `editor.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
 | `editor.grammars` | array | `[]` | External TextMate grammars (see [Grammars](#grammars)) |
 
@@ -174,6 +175,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 |-----|------|---------|-------------|
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
+| `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 
 ## LSP
 
@@ -302,6 +304,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "menuBar": true,
     "gutterStyle": "compact",
     "borderStyle": "default",
+    "selectionStyle": "background",
     "bracketPairColorization": false
   },
   "search": {
@@ -322,7 +325,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   },
   "terminal": {
     "shell": "/bin/zsh",
-    "scrollback": 1000
+    "scrollback": 1000,
+    "selectionStyle": "background"
   },
   "lsp": {
     "enabled": true,

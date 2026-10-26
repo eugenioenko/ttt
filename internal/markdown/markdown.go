@@ -26,11 +26,12 @@ const (
 	KindListItem
 	KindBlockquote
 	KindBlank
+	KindSummary
 )
 
 func (k LineKind) Wrappable() bool {
 	switch k {
-	case KindParagraph, KindHeading, KindListItem, KindBlockquote:
+	case KindParagraph, KindHeading, KindListItem, KindBlockquote, KindSummary:
 		return true
 	default:
 		return false
@@ -43,9 +44,10 @@ type Span struct {
 }
 
 type Line struct {
-	Spans []Span
-	Kind  LineKind
-	Hang  []Span
+	Spans    []Span
+	Kind     LineKind
+	Hang     []Span
+	DetailID int
 	// PrefixRunes is how many leading runes of a wrapped row repeat Hang
 	// instead of carrying source text; offsets into the unwrapped line must
 	// skip them.
@@ -110,7 +112,7 @@ func WrapLine(line Line, width int) []Line {
 			}
 			spans = append(spans, Span{Text: string(chunk[start:pos]), Style: st})
 		}
-		row := Line{Kind: line.Kind, Spans: spans, Hang: line.Hang}
+		row := Line{Kind: line.Kind, Spans: spans, Hang: line.Hang, DetailID: line.DetailID}
 		if len(result) > 0 && hangRunes > 0 {
 			row.Spans = append(append([]Span(nil), line.Hang...), spans...)
 			row.PrefixRunes = hangRunes
@@ -137,14 +139,15 @@ func FlattenStyles(line Line) []term.Style {
 var md = goldmark.New(goldmark.WithExtensions(extension.Table))
 
 func Render(text string) []Line {
+	return Parse(text).Render()
+}
+
+func renderMarkdownRaw(text string) []Line {
 	src := []byte(text)
 	doc := md.Parser().Parse(gmtext.NewReader(src))
 	r := &renderer{src: src}
 	r.renderNode(doc)
 	r.dropTrailingBlanks()
-	if len(r.lines) == 0 {
-		r.lines = []Line{{Spans: []Span{{Text: "", Style: term.StyleDefault}}}}
-	}
 	return r.lines
 }
 
@@ -484,6 +487,11 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, segs *inlineLines) {
 		case *ast.AutoLink:
 			txt := string(c.URL(r.src))
 			segs.add(Span{Text: txt, Style: style})
+		case *ast.RawHTML:
+			for i := 0; i < c.Segments.Len(); i++ {
+				seg := c.Segments.At(i)
+				segs.add(Span{Text: string(seg.Value(r.src)), Style: style})
+			}
 		default:
 			r.walkInline(child, style, segs)
 		}

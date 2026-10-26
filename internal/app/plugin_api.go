@@ -512,44 +512,51 @@ func NewPluginSystemAPI() *PluginSystemAPI {
 	return &PluginSystemAPI{}
 }
 
-var dangerousArgPatterns = []string{
+var dangerousGitArgPatterns = []string{
 	"--upload-pack", "--receive-pack",
-	"--exec=", "--config=",
+	"--exec=", "--config=", "--config-env",
 	"core.fsmonitor", "core.sshCommand", "core.pager",
 	"diff.external", "merge.tool",
 }
 
+// validateArgs guards git only: git runs a config value starting with "!"
+// (an alias or helper set through -c) as a shell command. Other binaries get
+// their arguments as plain argv with no shell, so "=!" is ordinary text there.
 func (s *PluginSystemAPI) validateArgs(binary string, args []string) error {
-	base := filepath.Base(binary)
+	if !plugin.IsGitBinary(binary) {
+		return nil
+	}
 	for i, arg := range args {
 		if strings.Contains(arg, "=!") {
 			return fmt.Errorf("argument %d contains command injection pattern", i)
 		}
-
-		if base == "git" {
-			if arg == "-c" && i+1 < len(args) && strings.Contains(args[i+1], "=!") {
-				return fmt.Errorf("git -c argument contains command injection pattern")
-			}
-			for _, pattern := range dangerousArgPatterns {
-				if strings.Contains(arg, pattern) {
-					return fmt.Errorf("argument %d contains blocked pattern %q", i, pattern)
-				}
+		for _, pattern := range dangerousGitArgPatterns {
+			if strings.Contains(arg, pattern) {
+				return fmt.Errorf("argument %d contains blocked pattern %q", i, pattern)
 			}
 		}
 	}
 	return nil
 }
 
-func (s *PluginSystemAPI) Exec(binary string, args []string, stdin string) (string, string, int, error) {
+// pluginExecWaitDelay bounds how long a killed child's grandchildren can hold
+// its output pipes open and so delay the result.
+const pluginExecWaitDelay = time.Second
+
+func (s *PluginSystemAPI) Exec(ctx context.Context, binary string, args []string, opts plugin.ExecOptions) (string, string, int, error) {
 	if err := s.validateArgs(binary, args); err != nil {
 		return "", "", -1, err
 	}
-	cmd := exec.Command(binary, args...)
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.WaitDelay = pluginExecWaitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if stdin != "" {
-		cmd.Stdin = strings.NewReader(stdin)
+	if opts.Stdin != "" {
+		cmd.Stdin = strings.NewReader(opts.Stdin)
+	}
+	if len(opts.Env) > 0 {
+		cmd.Env = append(os.Environ(), opts.Env...)
 	}
 	err := cmd.Run()
 	if s.onExec != nil {

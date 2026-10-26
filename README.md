@@ -392,7 +392,7 @@ TTT includes a built-in scripted interaction system designed for AI agent intera
 |------|-------------|
 | `--exec "commands"` | Execute semicolon-separated commands after startup |
 | `--listen` | Start an HTTP command server on `127.0.0.1:4242` (`POST /exec` accepts the same script format as `--exec`, against an already-running editor) |
-| `--plugin FILE` | Load a Lua plugin file on startup with full permissions |
+| `--plugin FILE` | Load a Lua plugin file on startup without approval, using the name and permissions of a `plugin.ttt.json` next to it (without one: every permission except `system.exec`) |
 | `--size WxH` | Force screen dimensions (e.g. `120x40`) for deterministic layout |
 | `--debug` | Enable debug mode regardless of config |
 

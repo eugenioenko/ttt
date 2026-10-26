@@ -24,9 +24,10 @@ type TerminalColorPalette struct {
 	Bg term.DirectColor
 	// SelectionBg is the theme's terminal selection background; unset means the
 	// theme defines none.
-	SelectionBg term.DirectColor
-	ANSI        [16]term.DirectColor
-	Color256    [256]term.DirectColor
+	SelectionBg    term.DirectColor
+	SelectionStyle string
+	ANSI           [16]term.DirectColor
+	Color256       [256]term.DirectColor
 }
 
 type termSelPos struct {
@@ -72,12 +73,13 @@ type TerminalWidget struct {
 	selAnchor  termSelPos
 	selCurrent termSelPos
 
-	OnOpenURL  func(url string)
-	OnOpenFile func(path string, line, col int)
-	WorkDir    string
-	ctrlHeld   bool
-	linkCache  map[int][]linkSpan
-	linkMemo   map[string][]linkSpan
+	OnOpenURL      func(url string)
+	OnOpenFile     func(path string, line, col int)
+	WorkDir        string
+	SelectionStyle string
+	ctrlHeld       bool
+	linkCache      map[int][]linkSpan
+	linkMemo       map[string][]linkSpan
 
 	// SGR button code of a held press being forwarded, or -1 when none.
 	mouseButtonHeld int
@@ -558,7 +560,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		tw.ClearSelection()
 		tw.scrollOffset = 0
-		data := keyToVT(tev)
+		data := keyToVT(tev, tw.Term.DecPrivateModes().ApplicationCursorKeys)
 		if data != "" {
 			tw.Term.WriteString(data)
 			return EventConsumed
@@ -800,10 +802,11 @@ func (tw *TerminalWidget) screenToLine(mx, my int) termSelPos {
 }
 
 // highlightSelected matches the editor: the theme's terminal selection
-// background with the text color left alone. A theme with no selection color
-// falls back to swapping foreground and background.
+// background with the text color left alone. When SelectionStyle is "invert"
+// or a theme defines no selection color, it falls back to swapping foreground
+// and background.
 func (tw *TerminalWidget) highlightSelected(c *term.Cell) {
-	if tw.Palette != nil && tw.Palette.SelectionBg.Set {
+	if tw.selectionStyle() != "invert" && tw.Palette != nil && tw.Palette.SelectionBg.Set {
 		c.Bg = tw.Palette.SelectionBg
 		return
 	}
@@ -814,6 +817,16 @@ func (tw *TerminalWidget) highlightSelected(c *term.Cell) {
 	if !c.Bg.Set && tw.Palette != nil {
 		c.Bg = tw.Palette.Fg
 	}
+}
+
+func (tw *TerminalWidget) selectionStyle() string {
+	if tw.SelectionStyle != "" {
+		return tw.SelectionStyle
+	}
+	if tw.Palette != nil && tw.Palette.SelectionStyle != "" {
+		return tw.Palette.SelectionStyle
+	}
+	return "background"
 }
 
 func (tw *TerminalWidget) isCellSelected(unifiedLine, col int) bool {
@@ -903,7 +916,7 @@ func (tw *TerminalWidget) scrollDown(n int) {
 	slog.Debug("terminal scroll down", "scrollOffset", tw.scrollOffset)
 }
 
-func keyToVT(ev *tcell.EventKey) string {
+func keyToVT(ev *tcell.EventKey, applicationCursorKeys bool) string {
 	if ev.Key() == tcell.KeyRune {
 		mod := ev.Modifiers()
 		// tcell v3 reports ctrl+non-letter printables (ctrl+space, ctrl+/,
@@ -928,6 +941,11 @@ func keyToVT(ev *tcell.EventKey) string {
 		return seq
 	}
 
+	cursorPrefix := "\x1b["
+	if applicationCursorKeys && ev.Modifiers() == tcell.ModNone {
+		cursorPrefix = "\x1bO"
+	}
+
 	switch ev.Key() {
 	case tcell.KeyEnter:
 		return "\r"
@@ -940,17 +958,17 @@ func keyToVT(ev *tcell.EventKey) string {
 	case tcell.KeyEscape:
 		return "\x1b"
 	case tcell.KeyUp:
-		return "\x1b[A"
+		return cursorPrefix + "A"
 	case tcell.KeyDown:
-		return "\x1b[B"
+		return cursorPrefix + "B"
 	case tcell.KeyRight:
-		return "\x1b[C"
+		return cursorPrefix + "C"
 	case tcell.KeyLeft:
-		return "\x1b[D"
+		return cursorPrefix + "D"
 	case tcell.KeyHome:
-		return "\x1b[H"
+		return cursorPrefix + "H"
 	case tcell.KeyEnd:
-		return "\x1b[F"
+		return cursorPrefix + "F"
 	case tcell.KeyInsert:
 		return "\x1b[2~"
 	case tcell.KeyDelete:

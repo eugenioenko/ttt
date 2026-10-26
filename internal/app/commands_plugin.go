@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -19,6 +20,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -288,10 +290,10 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 		})
 	}
 
-	content := widgets.NewKeyValueListWidget(kvEntries)
+	content := widgets.NewWrappingKeyValueListWidget(kvEntries)
 	content.InvertStyles = true
 
-	dialog := widgets.NewDialogWidget(50)
+	dialog := widgets.NewDialogWidget(max(50, content.NaturalWidth()+4))
 	dialog.Title = p.Manifest.Title() + " requests"
 	dialog.Borders = *a.Borders
 	dialog.SetContent(content)
@@ -325,6 +327,42 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 	adapter := ui.NewWidgetAdapter(dialog)
 	a.approvalDialog = adapter
 	a.ShowDialog(adapter)
+}
+
+// ShowExecPathApproval asks the user whether plugin p may run the binary at
+// path. The full path is shown, wrapped rather than clipped, since it is what
+// the user approves.
+func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(granted bool)) error {
+	if a.Root.HasModalOverlay() {
+		return errors.New("another dialog is open")
+	}
+	content := widgets.NewParagraphWidget(fmt.Sprintf(
+		"Allow it to run %s? Its manifest allows programs named %s; this approves only this file.",
+		path, filepath.Base(path)))
+	dialog := widgets.NewDialogWidget(max(50, textwidth.String(path)+6))
+	dialog.Title = p.Manifest.Title() + " requests"
+	dialog.Borders = *a.Borders
+	dialog.SetContent(content)
+	deny := func() {
+		a.DismissDialog()
+		done(false)
+	}
+	dialog.Buttons = []widgets.DialogButton{
+		{Label: "&Deny", Handler: deny},
+		{Label: "&Allow", Handler: func() {
+			a.DismissDialog()
+			if err := a.PluginManager.GrantExecPath(p, path); err != nil {
+				a.StatusError("Plugin permission not saved: " + err.Error())
+				done(false)
+				return
+			}
+			done(true)
+		}},
+	}
+	dialog.OnDismiss = deny
+	dialog.Build()
+	a.ShowDialog(ui.NewWidgetAdapter(dialog))
+	return nil
 }
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
@@ -613,6 +651,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			},
 		})
 	}
+	p.RequestExecPath = func(path string, done func(bool)) error {
+		return a.ShowExecPathApproval(p, path, done)
+	}
 	p.ShowContextMenu = func(entries []widgets.MenuEntry, x, y int, onCommand func(string)) {
 		items := contextMenuItemsFromWidgetEntries(entries)
 		a.captureMenuFocus()
@@ -659,11 +700,14 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		a.ClosePluginDrawer()
 	}
 	p.Graphics = a.pluginGraphics
-	p.OpenTab = func(id string, panel *plugin.PluginPanelWidget) {
-		a.EditorGroup.OpenPluginTab(id, id, panel)
+	p.OpenTab = func(key, title string, panel *plugin.PluginPanelWidget) {
+		a.EditorGroup.OpenPluginTab(key, title, panel)
 	}
-	p.CloseTab = func(id string) {
-		a.EditorGroup.ClosePluginTab(id)
+	p.FocusTab = func(key string, focus bool) bool {
+		return a.switchToPluginTab(p.Name, key, focus)
+	}
+	p.CloseTab = func(key string) bool {
+		return a.closePluginTab(p.Name, key)
 	}
 
 	if p.HasSidebarMenu() {
@@ -1094,13 +1138,43 @@ func (a *App) ShowPluginPanel(name, area string, focus bool) (bool, error) {
 		return false, nil
 	}
 	w := tp.ActiveWidget()
-	a.Root.SetFocus(w)
+	a.Root.ClaimFocus(w)
 	if adapter, ok := w.(*ui.WidgetAdapter); ok {
 		if panel, ok := adapter.W.(*plugin.PluginPanelWidget); ok {
 			panel.FocusAutofocusInput()
 		}
 	}
 	return true, nil
+}
+
+func (a *App) pluginTab(name, key string) (int, *plugin.PluginPanelWidget) {
+	for i := range a.EditorGroup.TabCount() {
+		panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget)
+		if ok && panel.PluginName() == name && a.EditorGroup.PluginTabKey(i) == key {
+			return i, panel
+		}
+	}
+	return -1, nil
+}
+
+func (a *App) switchToPluginTab(name, key string, focus bool) bool {
+	i, panel := a.pluginTab(name, key)
+	if i < 0 {
+		return false
+	}
+	a.EditorGroup.SwitchTab(i)
+	if focus && !a.Root.HasModalOverlay() {
+		a.Root.ClaimFocus(a.EditorGroup)
+		panel.FocusAutofocusInput()
+	}
+	return true
+}
+
+func (a *App) closePluginTab(name, key string) bool {
+	if i, _ := a.pluginTab(name, key); i < 0 {
+		return false
+	}
+	return a.EditorGroup.ClosePluginTab(key)
 }
 
 // Panel images live in the terminal until released, so a plugin panel is closed whenever it leaves the UI.
@@ -1119,17 +1193,17 @@ func (a *App) closePluginDrawerAndTabs(name string) {
 		a.ClosePluginDrawer()
 	}
 	// File-handler tabs are left to SyncFileHandlerTabs, which falls back to the binary card.
-	var tabs []string
+	var keys []string
 	for i := range a.EditorGroup.TabCount() {
 		path, _ := a.EditorGroup.TabInfo(i)
 		if panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget); ok && panel.PluginName() == name {
 			if _, handled := a.fileHandlerTabs[path]; !handled {
-				tabs = append(tabs, path)
+				keys = append(keys, a.EditorGroup.PluginTabKey(i))
 			}
 		}
 	}
-	for _, id := range tabs {
-		a.EditorGroup.ClosePluginTab(id)
+	for _, key := range keys {
+		a.EditorGroup.ClosePluginTab(key)
 	}
 }
 

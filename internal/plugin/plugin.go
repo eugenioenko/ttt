@@ -74,13 +74,15 @@ type Plugin struct {
 	ShowContextMenu   func(entries []widgets.MenuEntry, x, y int, onCommand func(cmd string))
 	ShowInfoDialog    func(title string, entries []widgets.KeyValueEntry)
 	ShowConfirmDialog func(message string, confirmLabel string, cancelLabel string, onConfirm func())
+	RequestExecPath   func(path string, done func(granted bool)) error
 	OpenDrawer        func(panel *PluginPanelWidget, width, minWidth int, side string)
 	CloseDrawer       func()
 	// ShowPanel shows the plugin's sidebar or bottom panel, and focuses it
 	// when focus is set. It reports whether the panel is now showing.
 	ShowPanel          func(area string, focus bool) (bool, error)
-	OpenTab            func(id string, panel *PluginPanelWidget)
-	CloseTab           func(id string)
+	OpenTab            func(key, title string, panel *PluginPanelWidget)
+	FocusTab           func(key string, focus bool) bool
+	CloseTab           func(key string) bool
 	OpenDialog         func(*PluginDialogWidget, func()) bool
 	CloseDialog        func()
 	OpenChanges        func(ChangesOptions) (string, error)
@@ -143,6 +145,8 @@ type Plugin struct {
 
 	timers      map[int]func()
 	nextTimerID int
+	execs       map[int]runningExec
+	nextExecID  int
 	rpcConns    map[*rpcConn]struct{}
 }
 
@@ -183,6 +187,7 @@ func (p *Plugin) Init() error {
 	setupEventsModule(p.State, p)
 	setupJSONModule(p.State)
 	setupRegexModule(p.State)
+	setupTextModule(p.State)
 	setupSettingsModule(p.State, p)
 	setupStorageModule(p.State, p)
 
@@ -233,6 +238,7 @@ func (p *Plugin) InitFromSource(source string) error {
 	setupEventsModule(p.State, p)
 	setupJSONModule(p.State)
 	setupRegexModule(p.State)
+	setupTextModule(p.State)
 	setupSettingsModule(p.State, p)
 	setupStorageModule(p.State, p)
 
@@ -286,6 +292,7 @@ func (p *Plugin) Loaded() bool {
 
 // Destroy and Init must run on the UI goroutine, which uses p.State without a lock.
 func (p *Plugin) Destroy() {
+	p.killExecs()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.stopTimersLocked()
@@ -309,10 +316,12 @@ func (p *Plugin) Destroy() {
 	p.ShowContextMenu = nil
 	p.ShowInfoDialog = nil
 	p.ShowConfirmDialog = nil
+	p.RequestExecPath = nil
 	p.OpenDrawer = nil
 	p.CloseDrawer = nil
 	p.ShowPanel = nil
 	p.OpenTab = nil
+	p.FocusTab = nil
 	p.CloseTab = nil
 	p.OpenDialog = nil
 	p.CloseDialog = nil
@@ -421,4 +430,10 @@ func (p *Plugin) CallRenderWith(renderFunc *lua.LFunction, proxy *PanelProxy) er
 		p.logError("render", err)
 	}
 	return err
+}
+
+// tabKey scopes a plugin's tab id so it cannot collide with a file path or
+// another plugin's tab.
+func (p *Plugin) tabKey(id string) string {
+	return "plugin:" + p.Name + ":" + id
 }

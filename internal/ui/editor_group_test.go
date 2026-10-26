@@ -110,6 +110,26 @@ func TestOpenPluginTabReplacementClosesPreviousContent(t *testing.T) {
 	}
 }
 
+func TestPluginTabKeyIsSeparateFromFilePath(t *testing.T) {
+	group := NewEditorGroupWidget(nil, 4, true, "relative")
+	group.OpenBufferReadOnly("Lookalike", "plugin:p:a", []string{"text"})
+	before := len(group.tabs)
+
+	group.OpenPluginTab("plugin:p:a", "Page", NewCommitDetailWidget("/repo", "ref", "abcdef0", false))
+	if len(group.tabs) != before+1 {
+		t.Fatalf("OpenPluginTab reused the buffer at its key: tabs = %d, want %d", len(group.tabs), before+1)
+	}
+	if !group.ClosePluginTab("plugin:p:a") || len(group.tabs) != before {
+		t.Fatalf("ClosePluginTab did not close the plugin tab: tabs = %d", len(group.tabs))
+	}
+	if group.ClosePluginTab("plugin:p:a") || group.ClosePluginTab("") {
+		t.Fatal("ClosePluginTab closed a tab that has no plugin key")
+	}
+	if len(group.tabs) != before || group.tabs[len(group.tabs)-1].FilePath != "plugin:p:a" {
+		t.Fatal("the read-only buffer was closed")
+	}
+}
+
 func TestInitialTabIsVirtual(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	if !g.tabs[0].Virtual {

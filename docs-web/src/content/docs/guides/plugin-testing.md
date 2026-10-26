@@ -7,16 +7,16 @@ TTT ships a scripted-interaction harness that lets you load a plugin, click and 
 
 ## The flags
 
-- **`--plugin FILE`** loads a single Lua file as a plugin on startup, granted **all permissions** (no approval dialog). Use it to iterate on a plugin without installing it. `ttt.plugin_dir()` resolves to the file's directory.
+- **`--plugin FILE`** loads a single Lua file as a plugin on startup, with no approval dialog. Use it to iterate on a plugin without installing it. `ttt.plugin_dir()` resolves to the file's directory. When a `plugin.ttt.json` sits next to the file, the plugin takes the manifest's `name` and is granted exactly the permissions it declares, including its `system.exec` allowlist. Without a manifest it gets every permission except `system.exec`, which needs a list of binaries.
 - **`--exec "commands"`** runs a semicolon-separated script after startup, then the editor exits. Combine with `--size WxH` for deterministic layout.
 - **`--listen`** starts an HTTP server on `127.0.0.1:4242` instead — `POST /exec` accepts the same script format, run synchronously against an **already-running** editor. Useful when a bug only reproduces from live, organic interaction and you want to capture a screenshot or debug dump at the moment it happens instead of scripting the repro in advance. See [Driving a running editor with `--listen`](#driving-a-running-editor-with---listen) below.
 
 ```sh
 bin/ttt --size 100x30 --plugin ./my-plugin/init.lua README.md \
-  --exec "wait 300; panel plugin.init; wait 100; screenshot /tmp/out.txt; quit"
+  --exec "wait 300; panel plugin.my-plugin; wait 100; screenshot /tmp/out.txt; quit"
 ```
 
-The plugin's name (used for its panel id, `plugin.<name>`) is the Lua file's basename without `.lua` — so `init.lua` registers as `plugin.init`.
+The plugin's name (used for its panel id `plugin.<name>`, its storage, and its tab ids) is the manifest's `name`. Without a manifest it is the Lua file's basename without `.lua`, so a bare `init.lua` registers as `plugin.init`.
 
 ## `--exec` commands
 
@@ -83,7 +83,7 @@ Headless `--exec` sessions use a process-local clipboard, so parallel scripts ca
 
 ## Testing a scoped plugin (with a manifest)
 
-`--plugin` grants all permissions, so it can't exercise permission scoping. To test a plugin the way it will really run — with its manifest permissions — install it into an isolated config dir and pre-approve it in the registry:
+`--plugin FILE` next to a `plugin.ttt.json` already runs with the manifest's permissions. To also exercise the install path (the registry, the plugins directory, and the entry file the manifest names), install it into an isolated config dir and pre-approve it in the registry:
 
 ```sh
 CFG=/tmp/ttt-test
@@ -145,4 +145,4 @@ The same capture functions are available from Lua, so a plugin can screenshot or
 - `require("ttt.automation").run(action, args, callback)`: run an `--exec` style action and get a callback once it has been handled and redrawn
 - `ttt.quit()`: exit the editor
 
-Capturing needs the `screen.read` permission (`ttt.debug` also needs `editor.read` and `terminal.read`), and writing to a file also needs `fs.write` covering the path. Simulated input needs `input`. Plugins loaded with `--plugin` have every permission.
+Capturing needs the `screen.read` permission (`ttt.debug` also needs `editor.read` and `terminal.read`), and writing to a file also needs `fs.write` covering the path. Simulated input needs `input`. Plugins loaded with `--plugin` and no manifest have all of these.

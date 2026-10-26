@@ -70,6 +70,9 @@ func (fm *FocusManager) FocusNext() {
 	}
 	if next := fm.adjacentRendered(1); next >= 0 && next != fm.focused {
 		fm.setFocus(next)
+		if mw, ok := fm.items[next].(*MarkdownWidget); ok {
+			mw.FocusFirstDetail()
+		}
 	}
 }
 
@@ -79,6 +82,9 @@ func (fm *FocusManager) FocusPrev() {
 	}
 	if next := fm.adjacentRendered(-1); next >= 0 && next != fm.focused {
 		fm.setFocus(next)
+		if mw, ok := fm.items[next].(*MarkdownWidget); ok {
+			mw.FocusLastDetail()
+		}
 	}
 }
 
@@ -327,13 +333,43 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 	}
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
-		if tev.Key() == tcell.KeyTab && fm.renderedItemCount() > 1 {
-			fm.FocusNext()
-			return EventConsumed
+		if tev.Key() == tcell.KeyTab {
+			if fw := fm.Focused(); fw != nil {
+				if mw, ok := fw.(*MarkdownWidget); ok && fm.renderedItemCount() > 1 {
+					if mw.FocusNextDetail() {
+						return EventConsumed
+					}
+				} else {
+					fm.lastEventTarget = fw
+					if res := fw.HandleEvent(ev); res != EventIgnored {
+						return res
+					}
+				}
+			}
+			if fm.renderedItemCount() > 1 {
+				fm.FocusNext()
+				return EventConsumed
+			}
+			return EventIgnored
 		}
-		if tev.Key() == tcell.KeyBacktab && fm.renderedItemCount() > 1 {
-			fm.FocusPrev()
-			return EventConsumed
+		if tev.Key() == tcell.KeyBacktab {
+			if fw := fm.Focused(); fw != nil {
+				if mw, ok := fw.(*MarkdownWidget); ok && fm.renderedItemCount() > 1 {
+					if mw.FocusPrevDetail() {
+						return EventConsumed
+					}
+				} else {
+					fm.lastEventTarget = fw
+					if res := fw.HandleEvent(ev); res != EventIgnored {
+						return res
+					}
+				}
+			}
+			if fm.renderedItemCount() > 1 {
+				fm.FocusPrev()
+				return EventConsumed
+			}
+			return EventIgnored
 		}
 		fm.ensureFocusedRendered()
 		if fw := fm.Focused(); fw != nil {
@@ -354,10 +390,6 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 		if hit >= 0 {
 			fm.lastEventTarget = fm.items[hit]
 			return fm.items[hit].HandleEvent(ev)
-		}
-		if fw := fm.Focused(); fw != nil {
-			fm.lastEventTarget = fw
-			return fw.HandleEvent(ev)
 		}
 	}
 	return EventIgnored

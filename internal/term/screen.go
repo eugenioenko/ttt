@@ -94,6 +94,8 @@ const (
 	StyleGutterBookmark
 	StyleButton
 	StyleButtonFocused
+	StyleButtonFilled
+	StyleButtonInverse
 	StyleSelectedTab
 	StyleFileIconRed
 	StyleFileIconYellow

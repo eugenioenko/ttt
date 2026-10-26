@@ -43,7 +43,7 @@ describe("BUG-006: case transforms under multicursor only affect primary cursor"
 });
 
 describe("BUG-007: paste under multicursor only replaces the primary selection", () => {
-  it.fails("paste applies at every cursor's selection", () => {
+  it("paste applies at every cursor's selection", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "paste.txt", FOO_LINES);
 

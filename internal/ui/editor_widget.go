@@ -405,6 +405,10 @@ func (e *EditorPaneWidget) startOrExtendSelection(shift bool) {
 }
 
 func (e *EditorPaneWidget) pasteText(text string) {
+	if e.isMultiActive() {
+		e.multiPasteText(text)
+		return
+	}
 	if e.Selection != nil && e.Selection.Active {
 		e.deleteSelection()
 	}

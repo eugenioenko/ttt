@@ -56,6 +56,8 @@ type InputStyles struct {
 type ButtonStyles struct {
 	Item    StyleDef `json:"item"`
 	Focused StyleDef `json:"focused"`
+	Filled  StyleDef `json:"filled"`
+	Inverse StyleDef `json:"inverse"`
 }
 
 type MenuStyles struct {
@@ -413,6 +415,11 @@ func (t *ThemeConfig) ResolveColors() {
 	fillFg(&t.Button.Item, t.Default.Fg)
 	fillBg(&t.Button.Focused, t.Sidebar.Selected.Bg)
 	fillFg(&t.Button.Focused, t.Sidebar.Selected.Fg)
+	fillBg(&t.Button.Filled, t.Editor.ActiveLine.Bg)
+	fillBg(&t.Button.Filled, mixThemeColor(t.Default.Bg, t.Default.Fg, 0.12, ""))
+	fillFg(&t.Button.Filled, t.Default.Fg)
+	fillBg(&t.Button.Inverse, t.Default.Fg)
+	fillFg(&t.Button.Inverse, t.Default.Bg)
 	fillFg(&t.BorderActive, t.Default.Fg)
 	fillBg(&t.Diff.Added, "#1e2e1e")
 	fillBg(&t.Diff.Deleted, "#2e1e1e")

@@ -752,3 +752,334 @@ func TestRenderTableAlignsWideCells(t *testing.T) {
 		col = at
 	}
 }
+
+func TestDetailsDefaultCollapsedState(t *testing.T) {
+	input := `<details>
+<summary>Click here for details</summary>
+
+Here is the hidden content:
+- bullet point 1
+- bullet point 2
+</details>`
+
+	lines := Render(input)
+	if len(lines) == 0 {
+		t.Fatal("expected rendered lines")
+	}
+	if lines[0].Text() != "▶ Click here for details" {
+		t.Fatalf("expected summary '▶ Click here for details', got %q", lines[0].Text())
+	}
+	if lines[0].Kind != KindSummary {
+		t.Fatalf("expected KindSummary, got %v", lines[0].Kind)
+	}
+	tl := textLines(lines)
+	for _, l := range tl {
+		if strings.Contains(l, "bullet point") {
+			t.Fatalf("hidden content leaked into collapsed output: %v", tl)
+		}
+	}
+
+	doc := Parse(input)
+	if len(doc.Details()) != 1 {
+		t.Fatalf("expected 1 detail block, got %d", len(doc.Details()))
+	}
+	det := doc.Details()[0]
+	if det.Open {
+		t.Fatal("detail should start collapsed")
+	}
+
+	doc.Toggle(det.ID)
+	if !det.Open {
+		t.Fatal("detail should be open after toggle")
+	}
+
+	openLines := doc.Render()
+	if openLines[0].Text() != "▼ Click here for details" {
+		t.Fatalf("expected summary '▼ Click here for details', got %q", openLines[0].Text())
+	}
+	foundBullet := false
+	for _, l := range textLines(openLines) {
+		if strings.Contains(l, "bullet point 1") {
+			foundBullet = true
+		}
+	}
+	if !foundBullet {
+		t.Fatalf("expected bullet point in open output: %v", textLines(openLines))
+	}
+}
+
+func TestDetailsOpenAttribute(t *testing.T) {
+	samples := []string{
+		`<details open>
+<summary>Open by default</summary>
+
+Expanded body text
+</details>`,
+		`<details open="open">
+<summary>Open by default</summary>
+
+Expanded body text
+</details>`,
+		`<details class="collapsible" open>
+<summary>Open by default</summary>
+
+Expanded body text
+</details>`,
+	}
+
+	for i, input := range samples {
+		lines := Render(input)
+		if lines[0].Text() != "▼ Open by default" {
+			t.Fatalf("sample %d: expected '▼ Open by default', got %q", i, lines[0].Text())
+		}
+		foundBody := false
+		for _, l := range textLines(lines) {
+			if strings.Contains(l, "Expanded body text") {
+				foundBody = true
+			}
+		}
+		if !foundBody {
+			t.Fatalf("sample %d: expected body text visible in open details: %v", i, textLines(lines))
+		}
+	}
+}
+
+func TestNestedDetails(t *testing.T) {
+	input := `<details>
+<summary>Outer</summary>
+
+Outer body
+
+<details>
+<summary>Inner</summary>
+
+Inner body
+</details>
+
+Outer after
+</details>`
+
+	doc := Parse(input)
+	if len(doc.Details()) != 2 {
+		t.Fatalf("expected 2 detail blocks, got %d", len(doc.Details()))
+	}
+	outerID := doc.Details()[0].ID
+	innerID := doc.Details()[1].ID
+
+	// 1. Both collapsed: only Outer summary is visible
+	lines := doc.Render()
+	tl := textLines(lines)
+	if len(tl) != 1 || tl[0] != "▶ Outer" {
+		t.Fatalf("expected only '▶ Outer', got %v", tl)
+	}
+
+	// 2. Expand outer: Outer body and Inner summary become visible
+	doc.Toggle(outerID)
+	lines = doc.Render()
+	tl = textLines(lines)
+	foundOuterBody := false
+	foundInnerSummary := false
+	foundInnerBody := false
+	for _, l := range tl {
+		if strings.Contains(l, "Outer body") {
+			foundOuterBody = true
+		}
+		if l == "▶ Inner" {
+			foundInnerSummary = true
+		}
+		if strings.Contains(l, "Inner body") {
+			foundInnerBody = true
+		}
+	}
+	if !foundOuterBody || !foundInnerSummary || foundInnerBody {
+		t.Fatalf("expected outer body and collapsed inner summary, got %v", tl)
+	}
+
+	// 3. Expand inner: Inner body becomes visible
+	doc.Toggle(innerID)
+	lines = doc.Render()
+	tl = textLines(lines)
+	foundInnerBody = false
+	foundInnerOpenSummary := false
+	for _, l := range tl {
+		if l == "▼ Inner" {
+			foundInnerOpenSummary = true
+		}
+		if strings.Contains(l, "Inner body") {
+			foundInnerBody = true
+		}
+	}
+	if !foundInnerOpenSummary || !foundInnerBody {
+		t.Fatalf("expected open inner summary and inner body, got %v", tl)
+	}
+
+	// 4. Collapse outer again: only Outer summary visible
+	doc.Toggle(outerID)
+	lines = doc.Render()
+	tl = textLines(lines)
+	if len(tl) != 1 || tl[0] != "▶ Outer" {
+		t.Fatalf("expected only '▶ Outer' after outer collapsed, got %v", tl)
+	}
+}
+
+func TestDetailsPreservesFencedCodeContainingHTML(t *testing.T) {
+	input := "```html\n<details>\n<summary>Code</summary>\n</details>\n```"
+	lines := Render(input)
+	for _, l := range lines {
+		if l.Kind == KindSummary {
+			t.Fatalf("fenced code block was wrongly parsed as disclosure: %v", textLines(lines))
+		}
+	}
+	tl := textLines(lines)
+	foundDetails := false
+	for _, l := range tl {
+		if strings.Contains(l, "<details>") {
+			foundDetails = true
+		}
+	}
+	if !foundDetails {
+		t.Fatalf("expected literal <details> inside code fence: %v", tl)
+	}
+}
+
+func TestDetailsPreservesOrdinaryProseWithHTML(t *testing.T) {
+	input := "Use `<details>` and <details> in prose."
+	lines := Render(input)
+	if len(lines) == 0 {
+		t.Fatal("expected lines")
+	}
+	if lines[0].Kind != KindParagraph {
+		t.Fatalf("expected KindParagraph, got %v", lines[0].Kind)
+	}
+	if !strings.Contains(lines[0].Text(), "<details>") {
+		t.Fatalf("expected literal <details> preserved in prose: %q", lines[0].Text())
+	}
+}
+
+func TestDetailsDefaultSummaryText(t *testing.T) {
+	input := "<details>\nNo summary tag provided\n</details>"
+	lines := Render(input)
+	if lines[0].Text() != "▶ Details" {
+		t.Fatalf("expected '▶ Details', got %q", lines[0].Text())
+	}
+}
+
+func TestDetailsPreservesMarkdownStylesInside(t *testing.T) {
+	input := `<details open>
+<summary><b>Styled</b> Summary</summary>
+
+### Inner Heading
+
+- list item 1
+
+` + "```go\nfunc foo() {}\n```" + `
+
+| Col1 | Col2 |
+|---|---|
+| A | B |
+</details>`
+
+	lines := Render(input)
+	foundHeading := false
+	foundListItem := false
+	foundCode := false
+	foundTable := false
+
+	for _, l := range lines {
+		if l.Kind == KindHeading && strings.Contains(l.Text(), "Inner Heading") {
+			foundHeading = true
+		}
+		if l.Kind == KindListItem && strings.Contains(l.Text(), "list item 1") {
+			foundListItem = true
+		}
+		if l.Kind == KindCode && strings.Contains(l.Text(), "func foo") {
+			foundCode = true
+		}
+		if l.Kind == KindTable {
+			foundTable = true
+		}
+	}
+
+	if !foundHeading {
+		t.Error("expected KindHeading inside open details")
+	}
+	if !foundListItem {
+		t.Error("expected KindListItem inside open details")
+	}
+	if !foundCode {
+		t.Error("expected KindCode inside open details")
+	}
+	if !foundTable {
+		t.Error("expected KindTable inside open details")
+	}
+}
+
+func TestNestedSingleLineDetailsTrailingContent(t *testing.T) {
+	input := `<details>
+<summary>Outer</summary>
+<details><summary>Inner</summary>Nested body</details>
+Trailing content inside outer
+</details>
+
+Content outside outer`
+
+	doc := Parse(input)
+	if len(doc.Details()) != 2 {
+		t.Fatalf("expected 2 details, got %d", len(doc.Details()))
+	}
+
+	// When outer is collapsed, content outside the outer section must remain visible.
+	doc.SetOpen(1, false)
+	rendered := doc.Render()
+	foundOutside := false
+	foundInside := false
+	for _, l := range rendered {
+		text := l.Text()
+		if strings.Contains(text, "Content outside outer") {
+			foundOutside = true
+		}
+		if strings.Contains(text, "Trailing content inside outer") {
+			foundInside = true
+		}
+	}
+	if !foundOutside {
+		t.Error("content outside outer details should remain visible when outer is collapsed")
+	}
+	if foundInside {
+		t.Error("content inside outer details should be hidden when outer is collapsed")
+	}
+
+	// When outer is expanded, both inside and outside content are visible.
+	doc.SetOpen(1, true)
+	renderedOpen := doc.Render()
+	foundOutsideOpen := false
+	foundInsideOpen := false
+	for _, l := range renderedOpen {
+		text := l.Text()
+		if strings.Contains(text, "Content outside outer") {
+			foundOutsideOpen = true
+		}
+		if strings.Contains(text, "Trailing content inside outer") {
+			foundInsideOpen = true
+		}
+	}
+	if !foundOutsideOpen {
+		t.Error("content outside outer details should be visible when outer is open")
+	}
+	if !foundInsideOpen {
+		t.Error("content inside outer details should be visible when outer is open")
+	}
+}
+
+func TestWrapLinePreservesDetailID(t *testing.T) {
+	line := Line{Kind: KindSummary, DetailID: 7, Spans: []Span{{Text: "▶ A summary long enough to wrap", Style: term.StyleHoverBold}}}
+	rows := WrapLine(line, 10)
+	if len(rows) < 2 {
+		t.Fatal("expected wrapped summary")
+	}
+	for _, row := range rows {
+		if row.DetailID != line.DetailID || row.Kind != KindSummary {
+			t.Fatalf("wrapped summary lost disclosure metadata: %+v", row)
+		}
+	}
+}

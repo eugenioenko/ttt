@@ -112,6 +112,78 @@ func TestRootModalOverlayCaptures(t *testing.T) {
 	}
 }
 
+func TestRootClickWorksAfterAMenuOpenedByAClickClosesWithTheKeyboard(t *testing.T) {
+	for _, closeKey := range []tcell.Key{tcell.KeyEnter, tcell.KeyEscape} {
+		bar := NewMenuBarWidget([]MenuItem{{Name: "File"}})
+		root := NewRoot(bar)
+		root.SetSize(40, 10)
+		opened := 0
+		bar.OnSelect = func(int) {
+			opened++
+			menu := NewContextMenuWidget([]ContextMenuItem{{Label: "New", Command: "new"}}, 0, 1)
+			menu.OnExec = func(string) { root.PopOverlay() }
+			menu.OnDismiss = root.PopOverlay
+			root.PushOverlay(Overlay{Widget: menu, Modal: true})
+		}
+		x := bar.ItemSpans()[0].Start
+		click := func() {
+			root.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1, tcell.ModNone))
+			root.HandleEvent(tcell.NewEventMouse(x, 0, tcell.ButtonNone, tcell.ModNone))
+		}
+
+		click()
+		root.HandleEvent(makeKeyEvent(closeKey, 0))
+		if root.HasOverlay() {
+			t.Fatalf("key %v should close the menu", closeKey)
+		}
+		click()
+		if opened != 2 {
+			t.Fatalf("after closing the menu with key %v, the next click opened it %d times in all, want 2", closeKey, opened)
+		}
+	}
+}
+
+func TestRootGivesTheReleaseToMainWhenAPassThroughOverlayIgnoredThePress(t *testing.T) {
+	bar := NewMenuBarWidget([]MenuItem{{Name: "File"}})
+	root := NewRoot(bar)
+	root.SetSize(40, 10)
+	findBar := &passThroughWidget{}
+	root.PushOverlay(Overlay{Widget: findBar, Modal: false})
+	opened := 0
+	bar.OnSelect = func(int) {
+		opened++
+		menu := NewContextMenuWidget([]ContextMenuItem{{Label: "New", Command: "new"}}, 0, 1)
+		menu.OnDismiss = root.PopOverlay
+		root.PushOverlay(Overlay{Widget: menu, Modal: true})
+	}
+	x := bar.ItemSpans()[0].Start
+	click := func() {
+		root.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1, tcell.ModNone))
+		root.HandleEvent(tcell.NewEventMouse(x, 0, tcell.ButtonNone, tcell.ModNone))
+	}
+
+	click()
+	root.HandleEvent(makeKeyEvent(tcell.KeyEscape, 0))
+	if len(root.Overlays) != 1 {
+		t.Fatalf("Escape should close only the menu, %d overlays left", len(root.Overlays))
+	}
+	click()
+	if opened != 2 {
+		t.Fatalf("with a pass-through overlay open, the next click opened the menu %d times in all, want 2", opened)
+	}
+}
+
+func TestRootDeliversAReleaseOnceWithoutAMenu(t *testing.T) {
+	main := &mockWidget{}
+	root := NewRoot(main)
+	root.SetSize(40, 10)
+	root.HandleEvent(tcell.NewEventMouse(1, 1, tcell.Button1, tcell.ModNone))
+	root.HandleEvent(tcell.NewEventMouse(1, 1, tcell.ButtonNone, tcell.ModNone))
+	if main.eventCount != 2 {
+		t.Fatalf("main got %d events, want the press and one release", main.eventCount)
+	}
+}
+
 func TestRootGlobalKeysFire(t *testing.T) {
 	main := &mockWidget{}
 	focused := &passThroughWidget{}

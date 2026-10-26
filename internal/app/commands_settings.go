@@ -168,13 +168,22 @@ func (a *App) ApplySettings(s config.Settings) {
 			theme, ok = loaded, err == nil
 		}
 		if ok {
-			ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(s.Editor.TransparentBackground))
-			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground))
+			ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(s.Editor.TransparentBackground), WithEditorSelectionStyle(s.Editor.SelectionStyle))
+			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground), WithTerminalSelectionStyle(s.Terminal.SelectionStyle))
 			borders := BuildBorderSet(theme.Borders)
 			*a.Borders = borders
 			themeBorders = &borders
 			a.Renderer.Clear()
 			a.invalidateImageLayer()
+		}
+	} else if a.Palette != nil {
+		theme, ok := config.DefaultTheme(), s.Theme == ""
+		if !ok {
+			loaded, err := config.LoadTheme(s.Theme)
+			theme, ok = loaded, err == nil
+		}
+		if ok {
+			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground), WithTerminalSelectionStyle(s.Terminal.SelectionStyle))
 		}
 	}
 

@@ -53,8 +53,11 @@ type Diagnostic struct {
 }
 
 type editorTab struct {
-	ID          string
-	FilePath    string
+	ID       string
+	FilePath string
+	// PluginKey identifies a plugin's tab. It is kept apart from FilePath so a
+	// file or buffer at the same path is never taken for the plugin's tab.
+	PluginKey   string
 	IconPath    string
 	Title       string
 	Buf         *buffer.Buffer
@@ -597,6 +600,7 @@ func (g *EditorGroupWidget) replaceContent(i int, content Widget) {
 		closer.Close()
 	}
 	g.tabs[i].Content = content
+	g.tabs[i].PluginKey = contentPluginKey(content)
 	if i == g.active && g.focused {
 		if setter, ok := content.(interface{ SetFocused(bool) }); ok {
 			setter.SetFocused(true)
@@ -608,10 +612,11 @@ func (g *EditorGroupWidget) replaceContent(i int, content Widget) {
 func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
 	g.applyImagePrefs(content)
 	newTab := editorTab{
-		FilePath: path,
-		IconPath: path,
-		Content:  content,
-		Preview:  true,
+		FilePath:  path,
+		PluginKey: contentPluginKey(content),
+		IconPath:  path,
+		Content:   content,
+		Preview:   true,
 	}
 	if t := g.activeTab(); g.canReplaceTab(t) && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
@@ -906,10 +911,10 @@ func (g *EditorGroupWidget) SetImageRedraw(redraw func()) {
 	}
 }
 
-func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
+func (g *EditorGroupWidget) OpenPluginTab(key, title string, content Widget) {
 	g.applyFileIconMode(content)
 	for i, t := range g.tabs {
-		if t.FilePath == id {
+		if key != "" && t.PluginKey == key {
 			g.notifyContentTabClose(t)
 			t.Content = content
 			t.IconPath = ""
@@ -920,11 +925,27 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 		}
 	}
 	g.tabs = append(g.tabs, editorTab{
-		FilePath: id,
-		Title:    title,
-		Content:  content,
+		FilePath:  key,
+		PluginKey: key,
+		Title:     title,
+		Content:   content,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
+}
+
+// PluginTabKey returns the key of the plugin tab at index, or "" for any other tab.
+func (g *EditorGroupWidget) PluginTabKey(index int) string {
+	if index < 0 || index >= len(g.tabs) {
+		return ""
+	}
+	return g.tabs[index].PluginKey
+}
+
+func contentPluginKey(content Widget) string {
+	if k, ok := content.(interface{ PluginTabKey() string }); ok {
+		return k.PluginTabKey()
+	}
+	return ""
 }
 
 func (g *EditorGroupWidget) placeholderTab() editorTab {
@@ -946,9 +967,13 @@ func (g *EditorGroupWidget) notifyEmpty() {
 	}
 }
 
-func (g *EditorGroupWidget) ClosePluginTab(id string) {
+// ClosePluginTab closes the plugin tab keyed key and reports whether there was one.
+func (g *EditorGroupWidget) ClosePluginTab(key string) bool {
+	if key == "" {
+		return false
+	}
 	for i, t := range g.tabs {
-		if t.FilePath == id {
+		if t.PluginKey == key {
 			g.notifyContentTabClose(t)
 			if i < g.pinnedCount {
 				g.pinnedCount--
@@ -965,9 +990,10 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 			if emptied {
 				g.notifyEmpty()
 			}
-			return
+			return true
 		}
 	}
+	return false
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
@@ -1121,6 +1147,21 @@ func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
 	}
 	detail, _ := t.Content.(*CommitDetailWidget)
 	return detail
+}
+
+// TextSelectionContent is tab content that selects the text it draws.
+type TextSelectionContent interface {
+	CopyTextSelection() bool
+	SelectAllText()
+}
+
+func (g *EditorGroupWidget) ActiveTextSelection() TextSelectionContent {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	sel, _ := t.Content.(TextSelectionContent)
+	return sel
 }
 
 func (g *EditorGroupWidget) ActiveCurrentChangesWidget() *CommitDetailWidget {
@@ -1887,7 +1928,7 @@ func (g *EditorGroupWidget) Undo() {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
-		if t.Undo.AtSavePoint() {
+		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
 		g.undoRedoPostProcess()
@@ -1907,7 +1948,7 @@ func (g *EditorGroupWidget) Redo() {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
-		if t.Undo.AtSavePoint() {
+		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
 		g.undoRedoPostProcess()
@@ -1915,6 +1956,10 @@ func (g *EditorGroupWidget) Redo() {
 }
 
 func (g *EditorGroupWidget) SelectAll() {
+	if sel := g.ActiveTextSelection(); sel != nil {
+		sel.SelectAllText()
+		return
+	}
 	e := g.keyEditor()
 	if e == nil || e.Selection == nil {
 		return
@@ -2508,21 +2553,41 @@ func (g *EditorGroupWidget) Copy() {
 		}
 	}
 	e := g.keyEditor()
+
+	// Copy from every cursor when multicursor mode is active.
+	if e.isMultiActive() {
+		pieces := e.multiCopyPieces()
+		if len(pieces) > 0 {
+			clipboard.Set(strings.Join(pieces, "\n"))
+		}
+		return
+	}
+
 	if e.Selection == nil || !e.Selection.Active {
-		// No selection: copy the whole current line, including a trailing
-		// newline so a paste inserts it as a full line.
+		// No selection: copy the whole current line.
 		if e.Cursor.Line >= 0 && e.Cursor.Line < len(e.Buf.Lines) {
 			clipboard.Set(e.Buf.Lines[e.Cursor.Line] + "\n")
 		}
 		return
 	}
+
 	text := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
 	clipboard.Set(text)
 }
 
 func (g *EditorGroupWidget) Cut() {
 	t := g.activeTab()
-	if t == nil || g.editableKeyEditor() == nil {
+	e := g.editableKeyEditor()
+	if t == nil || e == nil {
+		return
+	}
+	// Cut from every cursor when multicursor mode is active.
+	if e.isMultiActive() {
+		pieces := e.multiCopyPieces()
+		if len(pieces) > 0 {
+			clipboard.Set(strings.Join(pieces, "\n"))
+		}
+		e.multiCut()
 		return
 	}
 	if t.Sel == nil || !t.Sel.Active {
@@ -2533,6 +2598,7 @@ func (g *EditorGroupWidget) Cut() {
 		}
 		return
 	}
+
 	text := t.Sel.Text(t.Buf.Lines, t.Cur.Line, t.Cur.Col)
 	clipboard.Set(text)
 	g.Editor.deleteSelection()

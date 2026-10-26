@@ -107,6 +107,8 @@ func RegisterPanelType(L *lua.LState) {
 		"divider":    panelDividerWidget,
 		"progress":   panelProgressWidget,
 		"table":      panelTableWidget,
+		"tabs":       panelTabsWidget,
+		"pager":      panelPagerWidget,
 		"checkbox":   panelCheckboxWidget,
 		"redraw":     panelRedraw,
 		"markdown":   panelMarkdownWidget,
@@ -323,6 +325,7 @@ func panelKeyValueWidget(L *lua.LState) int {
 		desc.KeyValueEntries = append(desc.KeyValueEntries, entry)
 	})
 
+	desc.KeyValueMuted = lua.LVAsBool(L.GetField(tbl, "muted_keys"))
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetKeyValue, desc)
 	return 0
@@ -364,6 +367,10 @@ func panelTreeWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "truncate_left"); v == lua.LTrue {
 		desc.TruncateLeft = true
 	}
+	desc.BadgeRight = L.GetField(tbl, "badge_right") == lua.LTrue
+	if v, ok := L.GetField(tbl, "inset").(lua.LNumber); ok {
+		desc.Inset = int(v)
+	}
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetTree, desc)
@@ -400,6 +407,10 @@ func panelListWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "truncate_left"); v == lua.LTrue {
 		desc.TruncateLeft = true
 	}
+	desc.BadgeRight = L.GetField(tbl, "badge_right") == lua.LTrue
+	if v, ok := L.GetField(tbl, "inset").(lua.LNumber); ok {
+		desc.Inset = int(v)
+	}
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetList, desc)
@@ -421,10 +432,29 @@ func panelButtonWidget(L *lua.LState) int {
 	if fn, ok := L.GetField(tbl, "on_click").(*lua.LFunction); ok {
 		desc.OnClick = proxy.wrapSimpleCallback(fn)
 	}
+	desc.Disabled = lua.LVAsBool(L.GetField(tbl, "disabled"))
+	desc.Variant = buttonVariant(L.GetField(tbl, "style"))
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetButton, desc)
 	return 0
+}
+
+var buttonVariants = map[string]widgets.ButtonVariant{
+	"filled":  widgets.ButtonFilled,
+	"link":    widgets.ButtonLink,
+	"bracket": widgets.ButtonBracket,
+	"inverse": widgets.ButtonInverse,
+	"muted":   widgets.ButtonMuted,
+}
+
+// Plugin buttons are filled unless they ask otherwise: a bare label is hard to
+// tell from text in a panel.
+func buttonVariant(v lua.LValue) widgets.ButtonVariant {
+	if variant, ok := buttonVariants[lua.LVAsString(v)]; ok {
+		return variant
+	}
+	return widgets.ButtonFilled
 }
 
 func panelCheckboxWidget(L *lua.LState) int {
@@ -493,6 +523,11 @@ func panelInputWidget(L *lua.LState) int {
 		desc.MaxRows = int(min(max(float64(lua.LVAsNumber(v)), 0), 1000))
 	}
 	desc.Autofocus = lua.LVAsBool(L.GetField(tbl, "autofocus"))
+	desc.Border = lua.LVAsBool(L.GetField(tbl, "border"))
+	desc.Password = lua.LVAsBool(L.GetField(tbl, "password"))
+	if v := L.GetField(tbl, "title"); v != lua.LNil {
+		desc.BoxTitle = v.String()
+	}
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetInput, desc)
@@ -536,6 +571,7 @@ func parseBoxModel(L *lua.LState, tbl *lua.LTable, desc *WidgetDesc) {
 			*field.dst = int(lua.LVAsNumber(v))
 		}
 	}
+	desc.PaddingXSet = L.GetField(tbl, "padding_left") != lua.LNil || L.GetField(tbl, "padding_right") != lua.LNil
 }
 
 func parseLuaKeyCommands(_ *lua.LState, tbl *lua.LTable) map[rune]string {
@@ -628,6 +664,9 @@ func panelHStackWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "height"); v != lua.LNil {
 		desc.FixedHeight = int(lua.LVAsNumber(v))
 	}
+	if v, ok := L.GetField(tbl, "align").(lua.LString); ok {
+		desc.Align = string(v)
+	}
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetHStack, desc)
@@ -679,6 +718,12 @@ func panelBoxWidget(L *lua.LState) int {
 	parseBorders(L, tbl, &desc)
 	if v := L.GetField(tbl, "height"); v != lua.LNil {
 		desc.FixedHeight = int(lua.LVAsNumber(v))
+	}
+	if v := L.GetField(tbl, "title"); v != lua.LNil {
+		desc.BoxTitle = v.String()
+	}
+	if v := L.GetField(tbl, "width"); v != lua.LNil {
+		desc.FixedWidth = int(lua.LVAsNumber(v))
 	}
 	parseBoxModel(L, tbl, &desc)
 
@@ -760,6 +805,9 @@ func panelTableWidget(L *lua.LState) int {
 			if w := L.GetField(ct, "width"); w != lua.LNil {
 				col.Width = int(lua.LVAsNumber(w))
 			}
+			if w := L.GetField(ct, "min_width"); w != lua.LNil {
+				col.MinWidth = int(lua.LVAsNumber(w))
+			}
 			if a := L.GetField(ct, "align"); a != lua.LNil {
 				col.Align = a.String()
 			}
@@ -789,6 +837,14 @@ func panelTableWidget(L *lua.LState) int {
 			}
 		}
 	}
+	if fn, ok := L.GetField(tbl, "on_activate").(*lua.LFunction); ok {
+		luaFn := fn
+		desc.OnActivateIndex = func(rowIndex int) {
+			if proxy.plugin != nil && proxy.plugin.State != nil {
+				proxy.plugin.CallLuaFunc(luaFn, lua.LNumber(rowIndex+1))
+			}
+		}
+	}
 	if fn, ok := L.GetField(tbl, "on_command").(*lua.LFunction); ok {
 		luaFn := fn
 		desc.OnCommandStr = func(command string, rowIndex int) {
@@ -803,9 +859,86 @@ func panelTableWidget(L *lua.LState) int {
 	if kc, ok := L.GetField(tbl, "key_commands").(*lua.LTable); ok {
 		desc.KeyCommands = parseLuaKeyCommands(L, kc)
 	}
+	if rs, ok := L.GetField(tbl, "row_styles").(*lua.LTable); ok {
+		desc.RowStyles = make([]term.Style, rs.MaxN())
+		for i := range desc.RowStyles {
+			if name := rs.RawGetInt(i + 1); name != lua.LNil {
+				desc.RowStyles[i] = resolveStyleName(name.String())
+			}
+		}
+	}
+	if v, ok := L.GetField(tbl, "selected").(lua.LNumber); ok {
+		desc.Selected = int(v)
+	}
+	desc.Loading = lua.LVAsBool(L.GetField(tbl, "loading"))
+	if v := L.GetField(tbl, "empty"); v != lua.LNil {
+		desc.EmptyText = v.String()
+	}
+	if v, ok := L.GetField(tbl, "inset").(lua.LNumber); ok {
+		desc.Inset = int(v)
+	}
 
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetTable, desc)
+	return 0
+}
+
+func panelTabsWidget(L *lua.LState) int {
+	proxy := checkPanelProxy(L)
+	if proxy == nil {
+		return 0
+	}
+
+	tbl := L.CheckTable(2)
+	desc := WidgetDesc{}
+	if items, ok := L.GetField(tbl, "items").(*lua.LTable); ok {
+		items.ForEach(func(_, v lua.LValue) {
+			it, ok := v.(*lua.LTable)
+			if !ok {
+				return
+			}
+			id := L.GetField(it, "id").String()
+			label := id
+			if l := L.GetField(it, "label"); l != lua.LNil {
+				label = l.String()
+			}
+			desc.TabItems = append(desc.TabItems, widgets.TabItem{ID: id, Label: label})
+		})
+	}
+	if v := L.GetField(tbl, "active"); v != lua.LNil {
+		desc.ActiveTab = v.String()
+	}
+	if fn, ok := L.GetField(tbl, "on_change").(*lua.LFunction); ok {
+		desc.OnTabChange = proxy.wrapStringCallback(fn)
+	}
+
+	parseBoxModel(L, tbl, &desc)
+	proxy.appendDesc(WidgetTabs, desc)
+	return 0
+}
+
+func panelPagerWidget(L *lua.LState) int {
+	proxy := checkPanelProxy(L)
+	if proxy == nil {
+		return 0
+	}
+
+	tbl := L.CheckTable(2)
+	desc := WidgetDesc{}
+	desc.PagerOffset = int(lua.LVAsNumber(L.GetField(tbl, "offset")))
+	desc.PagerLimit = int(lua.LVAsNumber(L.GetField(tbl, "limit")))
+	desc.PagerTotal = int(lua.LVAsNumber(L.GetField(tbl, "total")))
+	if fn, ok := L.GetField(tbl, "on_change").(*lua.LFunction); ok {
+		p := proxy.plugin
+		desc.OnPage = func(offset int) {
+			if p != nil && p.State != nil {
+				p.CallLuaFunc(fn, lua.LNumber(offset))
+			}
+		}
+	}
+
+	parseBoxModel(L, tbl, &desc)
+	proxy.appendDesc(WidgetPager, desc)
 	return 0
 }
 

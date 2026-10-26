@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -575,6 +576,47 @@ func (ps PermissionSet) CheckExec(binary string) error {
 		return nil
 	}
 	return fmt.Errorf("permission denied: system.exec %q", binary)
+}
+
+// CheckExecPathRequest reports whether a plugin may ask the user to approve
+// path: an absolute, clean path whose file name is one of the plugin's
+// system.exec entries.
+func (ps PermissionSet) CheckExecPathRequest(path string) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return fmt.Errorf("system.exec path %q must be absolute and clean", path)
+	}
+	// The path is shown in the approval dialog, so control characters could
+	// redraw the screen and mislead the user.
+	if strings.IndexFunc(path, unicode.IsControl) >= 0 {
+		return fmt.Errorf("system.exec path %q must not contain control characters", path)
+	}
+	name := execName(path)
+	for _, b := range ps.SystemExec {
+		if execName(b) == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("permission denied: system.exec does not list %q", filepath.Base(path))
+}
+
+// execPathsFor keeps the user-approved paths whose file name is still in
+// the declared allowlist.
+func execPathsFor(paths, declared []string) []string {
+	var out []string
+	for _, p := range paths {
+		if (PermissionSet{SystemExec: declared}).CheckExecPathRequest(p) == nil {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func execName(binary string) string {
+	name := filepath.Base(binary)
+	if runtime.GOOS == "windows" {
+		name = strings.TrimSuffix(strings.ToLower(name), ".exe")
+	}
+	return name
 }
 
 func (ps PermissionSet) CheckRPCEndpoint(endpoint string) error {

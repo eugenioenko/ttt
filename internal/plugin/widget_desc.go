@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -25,6 +26,8 @@ const (
 	WidgetMarkdown
 	WidgetCheckbox
 	WidgetImage
+	WidgetTabs
+	WidgetPager
 )
 
 func (k WidgetKind) String() string {
@@ -65,6 +68,10 @@ func (k WidgetKind) String() string {
 		return "checkbox"
 	case WidgetImage:
 		return "image"
+	case WidgetTabs:
+		return "tabs"
+	case WidgetPager:
+		return "pager"
 	}
 	return "unknown"
 }
@@ -87,6 +94,9 @@ type WidgetDesc struct {
 	PaddingBottom int
 	PaddingLeft   int
 	PaddingRight  int
+	// PaddingXSet records an explicit padding_left/padding_right, so widgets with
+	// default horizontal padding keep it when the plugin sets neither.
+	PaddingXSet bool
 
 	Items         []*widgets.TreeNode
 	Indent        int
@@ -98,8 +108,12 @@ type WidgetDesc struct {
 	NodeMenu      []widgets.MenuEntry
 	KeyCommands   map[rune]string
 
+	BadgeRight bool
+
 	Label        string
 	OnClick      func()
+	Disabled     bool
+	Variant      widgets.ButtonVariant
 	Checked      bool
 	OnChangeBool func(bool)
 
@@ -114,6 +128,7 @@ type WidgetDesc struct {
 	MinRows       int
 	Multiline     bool
 	Autofocus     bool
+	Password      bool
 
 	ImageData   string
 	ImageFit    string
@@ -127,12 +142,15 @@ type WidgetDesc struct {
 	BorderLeft   bool
 	BorderRight  bool
 	FixedHeight  int
+	Align        string
 	FixedWidth   int
 	Gap          int
+	BoxTitle     string
 
 	Entries         []widgets.MenuEntry
 	OnMenu          func(command string)
 	KeyValueEntries []widgets.KeyValueEntry
+	KeyValueMuted   bool
 
 	Value     float64
 	Char      rune
@@ -142,6 +160,22 @@ type WidgetDesc struct {
 	Rows          [][]string
 	OnSelectIndex func(int)
 	OnCommandStr  func(command string, rowIndex int)
+
+	TabItems    []widgets.TabItem
+	ActiveTab   string
+	OnTabChange func(id string)
+
+	PagerOffset int
+	PagerLimit  int
+	PagerTotal  int
+	OnPage      func(offset int)
+
+	OnActivateIndex func(int)
+	RowStyles       []term.Style
+	Selected        int
+	Loading         bool
+	EmptyText       string
+	Inset           int
 
 	FullWidthDividers bool
 	MarkdownContent   string

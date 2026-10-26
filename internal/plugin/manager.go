@@ -225,6 +225,10 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 		p.Manifest.Version,
 		p.Manifest.Permissions,
 	)
+	if entry := m.registry.Find(p.Manifest.Name); entry != nil {
+		entry.ExecPaths = execPathsFor(entry.ExecPaths, p.Manifest.Permissions.SystemExec)
+		p.Granted.SystemExec = slices.Concat(p.Granted.SystemExec, entry.ExecPaths)
+	}
 	if err := m.registry.Save(); err != nil {
 		slog.Error("save plugin registry", "error", err)
 	}
@@ -797,16 +801,43 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 // save, leaving the dropped permission in the registry forever.
 func (m *Manager) grant(entry *RegistryEntry, declared PermissionSet) (PermissionSet, error) {
 	granted := IntersectPermissions(entry.Permissions, declared)
-	if reflect.DeepEqual(granted, entry.Permissions) {
-		return granted, nil
+	paths := execPathsFor(entry.ExecPaths, granted.SystemExec)
+	if !reflect.DeepEqual(granted, entry.Permissions) || len(paths) != len(entry.ExecPaths) {
+		previous, previousPaths := entry.Permissions, entry.ExecPaths
+		entry.Permissions, entry.ExecPaths = granted, paths
+		if err := m.registry.Save(); err != nil {
+			entry.Permissions, entry.ExecPaths = previous, previousPaths
+			return PermissionSet{}, fmt.Errorf("persist reduced permissions for %q: %w", entry.Name, err)
+		}
 	}
-	previous := entry.Permissions
-	entry.Permissions = granted
-	if err := m.registry.Save(); err != nil {
-		entry.Permissions = previous
-		return PermissionSet{}, fmt.Errorf("persist reduced permissions for %q: %w", entry.Name, err)
-	}
+	granted.SystemExec = slices.Concat(granted.SystemExec, paths)
 	return granted, nil
+}
+
+// GrantExecPath records the user's approval for p to run path and applies
+// it to the running plugin.
+func (m *Manager) GrantExecPath(p *Plugin, path string) error {
+	if err := p.Granted.CheckExecPathRequest(path); err != nil {
+		return err
+	}
+	var entry *RegistryEntry
+	if m.registry != nil {
+		entry = m.registry.Find(p.Name)
+	}
+	if entry == nil {
+		return fmt.Errorf("plugin %q is not installed", p.Name)
+	}
+	if !slices.Contains(entry.ExecPaths, path) {
+		entry.ExecPaths = append(entry.ExecPaths, path)
+		if err := m.registry.Save(); err != nil {
+			entry.ExecPaths = entry.ExecPaths[:len(entry.ExecPaths)-1]
+			return fmt.Errorf("persist system.exec path for %q: %w", p.Name, err)
+		}
+	}
+	if p.Granted.CheckExec(path) != nil {
+		p.Granted.SystemExec = slices.Concat(p.Granted.SystemExec, []string{path})
+	}
+	return nil
 }
 
 func (m *Manager) Reload(name string) (*Plugin, error) {
