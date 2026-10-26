@@ -93,6 +93,7 @@ type TreeWidget struct {
 	contentX                  int
 	contentY                  int
 	contentW                  int
+	contentH                  int
 	pointerCaptureInvalidated func()
 }
 
@@ -334,6 +335,7 @@ func (t *TreeWidget) ensureVisible(visibleH int) {
 func (t *TreeWidget) Render(surface Surface) {
 	surface = t.RenderBox(surface)
 	w, h := surface.Size()
+	t.contentH = h
 	surface.Fill(term.Cell{Ch: ' '})
 
 	t.contentX, t.contentY = t.contentOrigin()
@@ -765,6 +767,22 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 
 func (t *TreeWidget) handleKey(ev *tcell.EventKey) EventResult {
 	switch ev.Key() {
+	case tcell.KeyHome:
+		t.selected = 0
+		return EventConsumed
+	case tcell.KeyEnd:
+		t.selected = max(0, len(t.flatList)-1)
+		return EventConsumed
+	case tcell.KeyPgUp, tcell.KeyPgDn:
+		if len(t.flatList) > 0 {
+			step := max(1, t.contentH)
+			if ev.Key() == tcell.KeyPgUp {
+				t.selected = max(0, t.selected-step)
+			} else {
+				t.selected = min(len(t.flatList)-1, t.selected+step)
+			}
+		}
+		return EventConsumed
 	case tcell.KeyUp:
 		if t.selected > 0 {
 			t.selected--

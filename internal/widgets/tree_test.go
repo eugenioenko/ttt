@@ -32,6 +32,84 @@ func pressRune(t *TreeWidget, r rune) {
 
 // --- Rendering tests ---
 
+func TestTreePageNavigation(t *testing.T) {
+	var selections []string
+	tree := NewTreeWidget(TreeConfig{
+		Items: makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
+		OnSelect: func(node *TreeNode) { selections = append(selections, node.ID) },
+	})
+	renderWidget(tree, 0, 0, 20, 3)
+	for _, step := range []struct {
+		key  tcell.Key
+		want int
+	}{
+		{tcell.KeyPgDn, 3},
+		{tcell.KeyPgDn, 6},
+		{tcell.KeyPgDn, 7},
+		{tcell.KeyPgDn, 7},
+		{tcell.KeyPgUp, 4},
+		{tcell.KeyPgUp, 1},
+		{tcell.KeyPgUp, 0},
+		{tcell.KeyPgUp, 0},
+	} {
+		if result := tree.HandleEvent(tcell.NewEventKey(step.key, "", tcell.ModNone)); result != EventConsumed {
+			t.Fatalf("key %v returned %v", step.key, result)
+		}
+		renderWidget(tree, 0, 0, 20, 3)
+		if tree.selected != step.want {
+			t.Fatalf("selection = %d, want %d", tree.selected, step.want)
+		}
+		if tree.selected < tree.scrollTop || tree.selected >= tree.scrollTop+3 {
+			t.Fatalf("selection %d outside viewport starting at %d", tree.selected, tree.scrollTop)
+		}
+	}
+	if got := strings.Join(selections, ","); got != "3,6,7,4,1,0" {
+		t.Fatalf("selection callbacks = %q", got)
+	}
+}
+
+func TestTreeHomeEndNavigation(t *testing.T) {
+	var selections []string
+	tree := NewTreeWidget(TreeConfig{
+		Items: makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
+		OnSelect: func(node *TreeNode) { selections = append(selections, node.ID) },
+	})
+	renderWidget(tree, 0, 0, 20, 3)
+	for _, step := range []struct {
+		key  tcell.Key
+		want int
+	}{
+		{tcell.KeyEnd, 7},
+		{tcell.KeyEnd, 7},
+		{tcell.KeyHome, 0},
+		{tcell.KeyHome, 0},
+	} {
+		if result := tree.HandleEvent(tcell.NewEventKey(step.key, "", tcell.ModNone)); result != EventConsumed {
+			t.Fatalf("key %v returned %v", step.key, result)
+		}
+		renderWidget(tree, 0, 0, 20, 3)
+		if tree.selected != step.want {
+			t.Fatalf("selection = %d, want %d", tree.selected, step.want)
+		}
+		if tree.selected < tree.scrollTop || tree.selected >= tree.scrollTop+3 {
+			t.Fatalf("selection %d outside viewport starting at %d", tree.selected, tree.scrollTop)
+		}
+	}
+	if got := strings.Join(selections, ","); got != "7,0" {
+		t.Fatalf("selection callbacks = %q", got)
+	}
+}
+
+func TestTreeNavigationEmpty(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{})
+	for _, key := range []tcell.Key{tcell.KeyPgDn, tcell.KeyPgUp, tcell.KeyHome, tcell.KeyEnd} {
+		pressKey(tree, key)
+		if tree.Selected() != nil || tree.selected != 0 {
+			t.Fatal("paging changed empty tree selection")
+		}
+	}
+}
+
 func TestTreeRenderItemPositions(t *testing.T) {
 	tree := NewTreeWidget(TreeConfig{
 		Items: makeTreeItems("Alpha", "Beta", "Gamma"),
