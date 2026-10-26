@@ -92,6 +92,9 @@ func wrapToWidth(s string, width int) []string {
 			if brk > 0 {
 				lines = append(lines, string(runes[:brk]))
 				runes = runes[brk+1:]
+				for len(runes) > 0 && runes[0] == ' ' {
+					runes = runes[1:]
+				}
 				if len(runes) == 0 {
 					break
 				}

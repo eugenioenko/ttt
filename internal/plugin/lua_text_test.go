@@ -62,6 +62,7 @@ func TestTextWrap(t *testing.T) {
 	}{
 		{`text.wrap("hello world", 20)`, []string{"hello world"}},
 		{`text.wrap("hello world", 5)`, []string{"hello", "world"}},
+		{`text.wrap("hello   world", 5)`, []string{"hello", "world"}},
 		{`text.wrap("the quick brown fox", 10)`, []string{"the quick", "brown fox"}},
 		{`text.wrap("abcdefghij", 4)`, []string{"abcd", "efgh", "ij"}},
 		{`text.wrap("日本語のテキスト", 5)`, []string{"日本", "語の", "テキ", "スト"}},
