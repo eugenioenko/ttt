@@ -179,3 +179,53 @@ func TestKeyValueListScrollSizeWithWidthsInDifferentRows(t *testing.T) {
 		t.Errorf("value at the end of horizontal scrolling = %q, want the complete value", got)
 	}
 }
+
+func TestKeyValueListWrapsLongValues(t *testing.T) {
+	kv := NewWrappingKeyValueListWidget([]KeyValueEntry{
+		{Key: "Run binary", Value: "/opt/postgresql/16/bin/psql"},
+		{Key: "Editor tab", Value: "yes"},
+	})
+	// keyColW 12, values start at 14, leaving 10 columns.
+	if got := kv.HeightForWidth(24); got != 4 {
+		t.Fatalf("HeightForWidth(24) = %d, want 4", got)
+	}
+	s := renderWidget(kv, 0, 0, 24, 4)
+	want := []string{
+		"  Run binary  /opt/postg",
+		"              resql/16/b",
+		"              in/psql",
+		"  Editor tab  yes",
+	}
+	for y, w := range want {
+		if got := rowText(s, y); got != w {
+			t.Errorf("row %d = %q, want %q", y, got, w)
+		}
+	}
+	if got := kv.Height(); got != 4 {
+		t.Errorf("Height after render = %d, want 4", got)
+	}
+}
+
+func TestKeyValueListWrapFullwidthValue(t *testing.T) {
+	kv := NewWrappingKeyValueListWidget([]KeyValueEntry{{Key: "K", Value: "/データ/ベース"}})
+	// keyColW 3, values start at 5, leaving 5 columns: a wide rune that would
+	// straddle the edge moves to the next row.
+	s := renderWidget(kv, 0, 0, 10, 4)
+	want := []string{"  K  /デー", "     タ/ベ", "     ース"}
+	for y, w := range want {
+		if got := rowText(s, y); got != w {
+			t.Errorf("row %d = %q, want %q", y, got, w)
+		}
+	}
+}
+
+func TestKeyValueListWithoutWrapClipsLongValues(t *testing.T) {
+	kv := NewKeyValueListWidget([]KeyValueEntry{{Key: "Run binary", Value: "/opt/postgresql/16/bin/psql"}})
+	s := renderWidget(kv, 0, 0, 24, 3)
+	if got := rowText(s, 1); got != "" {
+		t.Errorf("row 1 = %q, want the value clipped to one row", got)
+	}
+	if got := kv.NaturalWidth(); got != 12+2+27 {
+		t.Errorf("NaturalWidth = %d, want %d", got, 12+2+27)
+	}
+}

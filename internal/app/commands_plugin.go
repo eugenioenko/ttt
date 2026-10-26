@@ -288,10 +288,10 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 		})
 	}
 
-	content := widgets.NewKeyValueListWidget(kvEntries)
+	content := widgets.NewWrappingKeyValueListWidget(kvEntries)
 	content.InvertStyles = true
 
-	dialog := widgets.NewDialogWidget(50)
+	dialog := widgets.NewDialogWidget(max(50, content.NaturalWidth()+4))
 	dialog.Title = p.Manifest.Title() + " requests"
 	dialog.Borders = *a.Borders
 	dialog.SetContent(content)
