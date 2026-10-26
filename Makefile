@@ -1,16 +1,46 @@
 # Makefile for ttt - terminal text editor
 
-.PHONY: all test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff bench-log bench-code
+PLATFORMS := \
+	linux-amd64 linux-arm64 \
+	darwin-amd64 darwin-arm64 \
+	freebsd-amd64 freebsd-arm64 \
+	android-arm64 \
+	windows-amd64 windows-arm64
 
-all: build
+.PHONY: all packages $(PLATFORMS) test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff bench-log bench-code
 
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+DIST_DIR := dist
+
+all: packages
+
+VERSION ?= 1.9.2-AI
 
 GOFMT_GO_VERSION := 1.25.14
 GOFMT = "$$(GOTOOLCHAIN=go$(GOFMT_GO_VERSION) go env GOROOT)/bin/gofmt"
 
 build:
 	go build -ldflags="-s -w -X main.version=$(VERSION)" -o bin/ttt ./cmd/ttt
+
+# Build and package every release platform. Each archive contains the platform
+# binary at its release name (for example, ttt-linux-amd64).
+packages: $(PLATFORMS)
+
+define build_platform
+$(1):
+	@mkdir -p $(DIST_DIR)
+	CGO_ENABLED=0 GOOS=$(2) GOARCH=$(3) go build -ldflags="-s -w -X main.version=$(VERSION)" -o $(DIST_DIR)/ttt-$(1)$(4) ./cmd/ttt
+	tar -czf $(DIST_DIR)/ttt-$(1).tar.gz -C $(DIST_DIR) ttt-$(1)$(4)
+endef
+
+$(eval $(call build_platform,linux-amd64,linux,amd64,))
+$(eval $(call build_platform,linux-arm64,linux,arm64,))
+$(eval $(call build_platform,darwin-amd64,darwin,amd64,))
+$(eval $(call build_platform,darwin-arm64,darwin,arm64,))
+$(eval $(call build_platform,freebsd-amd64,freebsd,amd64,))
+$(eval $(call build_platform,freebsd-arm64,freebsd,arm64,))
+$(eval $(call build_platform,android-arm64,android,arm64,))
+$(eval $(call build_platform,windows-amd64,windows,amd64,.exe))
+$(eval $(call build_platform,windows-arm64,windows,arm64,.exe))
 
 test:
 	go test ./...
