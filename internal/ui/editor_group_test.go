@@ -130,6 +130,59 @@ func TestPluginTabKeyIsSeparateFromFilePath(t *testing.T) {
 	}
 }
 
+type focusProbeWidget struct {
+	mockWidget
+	focused bool
+}
+
+func (f *focusProbeWidget) SetFocused(focused bool) { f.focused = focused }
+
+func closeAllButPinnedA(g *EditorGroupWidget) {
+	for i, tab := range g.tabs {
+		if tab.PluginKey == "a" {
+			g.SwitchTab(i)
+		}
+	}
+	g.TogglePinTab()
+	g.SwitchTab(len(g.tabs) - 1)
+	g.CloseAllTabs()
+}
+
+func TestClosingATabFocusesTheContentTabThatBecomesActive(t *testing.T) {
+	closers := map[string]func(g *EditorGroupWidget){
+		"close tab":        func(g *EditorGroupWidget) { g.CloseTab() },
+		"close plugin tab": func(g *EditorGroupWidget) { g.ClosePluginTab("b") },
+		"close all tabs":   closeAllButPinnedA,
+	}
+	for name, closeTabs := range closers {
+		t.Run(name, func(t *testing.T) {
+			g := NewEditorGroupWidget(nil, 4, false, "extended")
+			g.SetFocused(true)
+			a, b := &focusProbeWidget{}, &focusProbeWidget{}
+			g.OpenPluginTab("a", "A", a)
+			g.OpenPluginTab("b", "B", b)
+			if a.focused || !b.focused {
+				t.Fatalf("before close: a.focused=%v b.focused=%v, want false true", a.focused, b.focused)
+			}
+			closeTabs(g)
+			if !a.focused {
+				t.Fatal("the tab that became active was not focused")
+			}
+		})
+	}
+}
+
+func TestClosingATabKeepsContentUnfocusedWhileTheGroupIsUnfocused(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	a := &focusProbeWidget{}
+	g.OpenPluginTab("a", "A", a)
+	g.OpenPluginTab("b", "B", &focusProbeWidget{})
+	g.CloseTab()
+	if a.focused {
+		t.Fatal("content was focused although the editor group is not")
+	}
+}
+
 func TestInitialTabIsVirtual(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	if !g.tabs[0].Virtual {

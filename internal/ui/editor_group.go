@@ -987,6 +987,7 @@ func (g *EditorGroupWidget) ClosePluginTab(key string) bool {
 				g.active = len(g.tabs) - 1
 			}
 			g.syncTabs()
+			g.focusActiveContent()
 			if emptied {
 				g.notifyEmpty()
 			}
@@ -1295,12 +1296,17 @@ func (g *EditorGroupWidget) SwitchTab(idx int) {
 		g.saveMultiState()
 		g.active = idx
 		g.syncTabs()
-		if g.focused {
-			if t := g.activeTab(); t != nil && t.Content != nil {
-				if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
-					setter.SetFocused(true)
-				}
-			}
+		g.focusActiveContent()
+	}
+}
+
+func (g *EditorGroupWidget) focusActiveContent() {
+	if !g.focused {
+		return
+	}
+	if t := g.activeTab(); t != nil && t.Content != nil {
+		if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
+			setter.SetFocused(true)
 		}
 	}
 }
@@ -1344,6 +1350,7 @@ func (g *EditorGroupWidget) CloseTab() {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	g.focusActiveContent()
 	if emptied {
 		g.notifyEmpty()
 	}
@@ -1426,6 +1433,7 @@ func (g *EditorGroupWidget) CloseAllTabs() {
 	g.tabs = kept
 	g.active = 0
 	g.syncTabs()
+	g.focusActiveContent()
 	if emptied {
 		g.notifyEmpty()
 	}
@@ -1450,6 +1458,7 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	g.focusActiveContent()
 	if emptied {
 		g.notifyEmpty()
 	}
