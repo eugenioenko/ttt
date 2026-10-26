@@ -811,6 +811,9 @@ func panelTableWidget(L *lua.LState) int {
 			if a := L.GetField(ct, "align"); a != lua.LNil {
 				col.Align = a.String()
 			}
+			if acts, ok := L.GetField(ct, "actions").(*lua.LTable); ok {
+				col.Actions = parseLuaTableActions(L, acts)
+			}
 			desc.Columns = append(desc.Columns, col)
 		})
 	}
@@ -881,6 +884,35 @@ func panelTableWidget(L *lua.LState) int {
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetTable, desc)
 	return 0
+}
+
+func parseLuaTableActions(L *lua.LState, tbl *lua.LTable) []widgets.TableAction {
+	var actions []widgets.TableAction
+	tbl.ForEach(func(_, v lua.LValue) {
+		at, ok := v.(*lua.LTable)
+		if !ok {
+			return
+		}
+		a := widgets.TableAction{
+			Label:   lua.LVAsString(L.GetField(at, "label")),
+			Command: lua.LVAsString(L.GetField(at, "command")),
+		}
+		if name := L.GetField(at, "style"); name != lua.LNil {
+			a.Style = resolveStyleName(name.String())
+		}
+		switch menu := L.GetField(at, "menu").(type) {
+		case *lua.LTable:
+			a.Menu = true
+			a.Entries = parseLuaMenuEntries(L, menu)
+		case lua.LBool:
+			a.Menu = bool(menu)
+		}
+		if a.Label == "" && !a.Menu {
+			return
+		}
+		actions = append(actions, a)
+	})
+	return actions
 }
 
 func panelTabsWidget(L *lua.LState) int {

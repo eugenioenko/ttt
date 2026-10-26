@@ -3,6 +3,7 @@ package widgets
 import (
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -14,6 +15,42 @@ type TableColumn struct {
 	// MinWidth bounds an auto-sized column (Width 0); 0 means the label's width.
 	MinWidth int
 	Align    string // "left" (default), "right", "center"
+	// Actions draws clickable links in every row instead of cell text. The
+	// last column, when it has actions, stays pinned under horizontal scroll.
+	Actions []TableAction
+}
+
+type TableAction struct {
+	Label   string
+	Command string
+	Style   term.Style
+	// Menu opens Entries as a dropdown at the action, or NodeMenu when
+	// Entries is empty.
+	Menu    bool
+	Entries []MenuEntry
+}
+
+func (a TableAction) text() string {
+	if a.Label == "" && a.Menu {
+		return string(icons.Rune(icons.More))
+	}
+	return a.Label
+}
+
+func actionsWidth(actions []TableAction) int {
+	w := 0
+	for i, a := range actions {
+		if i > 0 {
+			w++
+		}
+		w += textwidth.String(a.text())
+	}
+	return w
+}
+
+type actionSpan struct {
+	action TableAction
+	x, w   int
 }
 
 type TableConfig struct {
@@ -52,6 +89,8 @@ type TableWidget struct {
 	fullW                     int
 	dataH                     int
 	widths                    []int
+	pinW                      int
+	actionSpans               []actionSpan
 	pointerCaptureInvalidated func()
 }
 
@@ -139,6 +178,7 @@ func (t *TableWidget) Render(surface Surface) {
 	t.contentW = viewW
 	t.fullW = max(viewW, minW)
 	t.widths = t.effectiveWidths(t.cellsEnd() - t.inset())
+	t.layoutActions()
 	hRange := newScrollRange(viewW, t.fullW, t.scrollLeft)
 	t.scrollLeft = hRange.offset
 
@@ -186,6 +226,8 @@ func (t *TableWidget) columnGaps() int {
 
 func columnMinWidth(col TableColumn) int {
 	switch {
+	case len(col.Actions) > 0:
+		return max(col.Width, textwidth.String(col.Label), actionsWidth(col.Actions), 1)
 	case col.Width > 0:
 		return col.Width
 	case col.MinWidth > 0:
@@ -209,9 +251,9 @@ func (t *TableWidget) effectiveWidths(w int) []int {
 	remaining := w - t.columnGaps()
 	var auto []int
 	for i, col := range t.Config.Columns {
-		if col.Width > 0 {
-			widths[i] = col.Width
-			remaining -= col.Width
+		if col.Width > 0 || len(col.Actions) > 0 {
+			widths[i] = columnMinWidth(col)
+			remaining -= widths[i]
 		} else {
 			auto = append(auto, i)
 		}
@@ -244,35 +286,129 @@ func (t *TableWidget) effectiveWidths(w int) []int {
 	return widths
 }
 
+func (t *TableWidget) layoutActions() {
+	t.pinW = 0
+	t.actionSpans = t.actionSpans[:0]
+	x := t.inset()
+	last := len(t.Config.Columns) - 1
+	for i, col := range t.Config.Columns {
+		if i > 0 {
+			x += 2
+		}
+		if len(col.Actions) > 0 {
+			ax := x + alignOffset(col.Align, t.widths[i]-actionsWidth(col.Actions))
+			for j, a := range col.Actions {
+				if j > 0 {
+					ax++
+				}
+				w := textwidth.String(a.text())
+				t.actionSpans = append(t.actionSpans, actionSpan{action: a, x: ax, w: w})
+				ax += w
+			}
+			if i == last {
+				t.pinW = t.fullW - x
+				if i > 0 {
+					t.pinW += 2
+				}
+			}
+		}
+		x += t.widths[i]
+	}
+}
+
+func alignOffset(align string, padding int) int {
+	switch {
+	case padding <= 0:
+		return 0
+	case align == "right":
+		return padding
+	case align == "center":
+		return padding / 2
+	}
+	return 0
+}
+
+func (t *TableWidget) pinStart() int {
+	return max(t.contentW-t.pinW, 0)
+}
+
+func (t *TableWidget) lineX(x int) int {
+	if t.pinW > 0 && x >= t.pinStart() {
+		return t.fullW - t.contentW + x
+	}
+	return x + t.scrollLeft
+}
+
 func (t *TableWidget) blitLine(surface Surface, line *virtualSurface, y int) {
 	cells := line.cells[0]
+	pin := t.pinStart()
 	for x := range t.contentW {
-		sx := x + t.scrollLeft
+		sx := t.lineX(x)
 		if sx >= len(cells) {
 			break
 		}
 		c := cells[sx]
-		if x == t.contentW-1 && textwidth.Rune(c.Ch) > 1 {
+		if (x == t.contentW-1 || (t.pinW > 0 && x == pin-1)) && textwidth.Rune(c.Ch) > 1 {
 			c.Ch = ' '
 		}
 		surface.SetCell(x, y, c)
 	}
 }
 
-func (t *TableWidget) drawColumns(line *virtualSurface, texts func(i int) string, style term.Style) {
+func (t *TableWidget) drawColumns(line *virtualSurface, texts func(i int) string, style term.Style, rowActions bool) {
 	line.Fill(term.Cell{Ch: ' ', Style: style})
 	x := t.inset()
 	for i, col := range t.Config.Columns {
 		if i > 0 {
 			x += 2
 		}
-		t.renderCell(line, texts(i), col, t.widths[i], x, 0, style)
+		if !rowActions || len(col.Actions) == 0 {
+			t.renderCell(line, texts(i), col, t.widths[i], x, 0, style)
+		}
 		x += t.widths[i]
+	}
+	if rowActions {
+		t.renderActions(line, style)
 	}
 }
 
+func (t *TableWidget) renderActions(line *virtualSurface, rowStyle term.Style) {
+	highlighted := rowStyle == term.StyleSidebarSelected
+	end := t.cellsEnd()
+	for _, span := range t.actionSpans {
+		a := span.action
+		cell := term.Cell{Style: rowStyle}
+		switch {
+		case a.Style != 0 && !highlighted:
+			cell.Style, cell.BgStyle = a.Style, rowStyle
+		case !a.Menu:
+			cell.Underline = true
+		}
+		x := span.x
+		for _, ch := range a.text() {
+			cw := textwidth.Rune(ch)
+			if x+cw > end {
+				break
+			}
+			cell.Ch = ch
+			line.SetCell(x, 0, cell)
+			x += cw
+		}
+	}
+}
+
+func (t *TableWidget) actionAt(x int) (actionSpan, bool) {
+	lx := t.lineX(x)
+	for _, span := range t.actionSpans {
+		if lx >= span.x && lx < span.x+span.w {
+			return span, true
+		}
+	}
+	return actionSpan{}, false
+}
+
 func (t *TableWidget) renderHeader(surface Surface, line *virtualSurface) {
-	t.drawColumns(line, func(i int) string { return t.Config.Columns[i].Label }, term.StyleHoverBold)
+	t.drawColumns(line, func(i int) string { return t.Config.Columns[i].Label }, term.StyleHoverBold, false)
 	t.blitLine(surface, line, 0)
 
 	sepStyle := term.StyleBorder
@@ -317,7 +453,7 @@ func (t *TableWidget) renderRow(surface Surface, line *virtualSurface, idx, y in
 			return row[i]
 		}
 		return ""
-	}, style)
+	}, style, true)
 	t.blitLine(surface, line, y)
 }
 
@@ -488,7 +624,7 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		return EventConsumed
 	}
 
-	_, oy := t.contentOrigin()
+	ox, oy := t.contentOrigin()
 	onHBar := t.hbar.visible() && my >= oy+headerH+t.dataH
 	localY := my - r.Y
 	idx := t.scrollTop + (localY - headerH)
@@ -514,6 +650,11 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		if t.Config.OnSelect != nil {
 			t.Config.OnSelect(idx)
 		}
+		if span, ok := t.actionAt(mx - ox); fresh && ok {
+			t.clickAt = 0
+			t.runAction(span, idx, mx-(t.lineX(mx-ox)-span.x), my+1)
+			return EventConsumed
+		}
 		if fresh && t.Config.OnActivate != nil {
 			now := t.clock().UnixMilli()
 			if idx == t.clickRow && now-t.clickAt < tableDoubleClickMs {
@@ -527,6 +668,23 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	}
 
 	return EventIgnored
+}
+
+func (t *TableWidget) runAction(span actionSpan, idx, screenX, screenY int) {
+	a := span.action
+	if !a.Menu {
+		if t.Config.OnCommand != nil {
+			t.Config.OnCommand(a.Command, idx)
+		}
+		return
+	}
+	entries := a.Entries
+	if len(entries) == 0 {
+		entries = t.Config.NodeMenu
+	}
+	if t.Config.OnMenu != nil && len(entries) > 0 {
+		t.Config.OnMenu(entries, idx, screenX, screenY)
+	}
 }
 
 func (t *TableWidget) handleKey(ev *tcell.EventKey) EventResult {

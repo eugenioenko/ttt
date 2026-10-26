@@ -1566,6 +1566,10 @@ panel:table({
     { label = "Name" },
     { label = "Status", width = 10 },
     { label = "Port", width = 6, align = "right" },
+    { label = "", actions = {
+      { label = "Open", command = "open" },
+      { menu = true },
+    } },
   },
   rows = {
     { "web-app", "running", "8080" },
@@ -1588,7 +1592,7 @@ panel:table({
 
 | Field          | Type     | Required | Description                                                 |
 |----------------|----------|----------|-------------------------------------------------------------|
-| `columns`      | table    | yes      | Array of column tables: `{label, width, min_width, align}`. `width` fixes a column's width (omit it to auto-size); `min_width` is the narrowest an auto-sized column gets (default: its label's width); `align` is `"right"`, `"center"` or default left. |
+| `columns`      | table    | yes      | Array of column tables: `{label, width, min_width, align, actions}`. `width` fixes a column's width (omit it to auto-size); `min_width` is the narrowest an auto-sized column gets (default: its label's width); `align` is `"right"`, `"center"` or default left. `actions` turns the column into [row actions](#row-actions). |
 | `rows`         | table    | yes      | Array of rows; each row is an array of cell strings.        |
 | `on_select`    | function | no       | Callback when the selected row changes (arrow keys, click) or Enter is pressed. Receives the 1-based row index. |
 | `on_activate`  | function | no       | Callback when a row is opened: Enter or a double-click. A single click only selects, so a table can drive a detail view on `on_select` and open on `on_activate`. Receives the 1-based row index. |
@@ -1603,6 +1607,21 @@ panel:table({
 | + [box model fields](#box-model) | | | Margin and padding. |
 
 Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
+
+#### Row actions
+
+A column with `actions` draws the same clickable links in every row, so the row's actions are visible instead of hidden behind a double-click or a right-click. Make it the last column: it then stays pinned at the right edge while the other columns scroll horizontally. Its width is the width of its labels.
+
+Each action is a table:
+
+| Field     | Type            | Description |
+|-----------|-----------------|-------------|
+| `label`   | string          | Link text. Required unless `menu` is set, where it defaults to `⋮`. |
+| `command` | string          | Passed to `on_command(command, row_index)` when the action is clicked. |
+| `menu`    | boolean or table | `true` opens `node_menu` as a dropdown below the action; an array of [menu entries](#menu-entry-format) opens those instead. Picking an entry calls `on_command(command, row_index)`. |
+| `style`   | string          | A [style name](#styles), such as `"muted"` for a secondary action. Without one the label is underlined in the row's style. The selected row always uses its own style. |
+
+Clicking an action selects its row first. Enter, `key_commands`, Shift+Enter and right-click work as they do without an actions column.
 
 ### Tabs
 

@@ -54,6 +54,65 @@ func TestLuaTableOptions(t *testing.T) {
 	}
 }
 
+func TestLuaTableActionsColumn(t *testing.T) {
+	p, done := newTestPluginBase(PermissionSet{PanelSidebar: true})
+	defer done()
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		ran = {}
+		ttt.register({ sidebar = { title = "T", render = function(panel)
+			panel:table({
+				columns = {
+					{ label = "Name" },
+					{ label = "", actions = {
+						{ label = "Open", command = "open" },
+						{ label = "Copy", command = "copy", style = "muted" },
+						{ menu = true },
+						{ label = "More", menu = {{ label = "Own", command = "own" }} },
+						{ command = "unlabelled" },
+					} },
+				},
+				rows = {{ "a" }},
+				node_menu = {{ label = "Delete", command = "delete" }},
+				on_command = function(cmd, i) ran[#ran + 1] = cmd .. ":" .. i end,
+			})
+		end } })
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.ShowContextMenu = func(entries []widgets.MenuEntry, _, _ int, onCommand func(string)) {
+		onCommand(entries[0].Command)
+	}
+	proxy := NewPanelProxy(newMockSurface(80, 20), p)
+	if err := p.CallRenderWith(p.RenderFunc, proxy); err != nil {
+		t.Fatal(err)
+	}
+	tbl := NewWidgetState().Reconcile(proxy.Descriptors(), p).Children[0].(*widgets.TableWidget)
+
+	actions := tbl.Config.Columns[1].Actions
+	if len(actions) != 4 {
+		t.Fatalf("actions = %+v, want the unlabelled non-menu action dropped", actions)
+	}
+	if a := actions[0]; a.Label != "Open" || a.Command != "open" || a.Menu || a.Style != 0 {
+		t.Errorf("Open = %+v", a)
+	}
+	if actions[1].Style != term.StyleMuted {
+		t.Errorf("Copy style = %v, want muted", actions[1].Style)
+	}
+	if a := actions[2]; !a.Menu || a.Entries != nil {
+		t.Errorf("menu = true action = %+v, want a menu over node_menu", a)
+	}
+	if a := actions[3]; !a.Menu || a.Label != "More" || len(a.Entries) != 1 || a.Entries[0].Command != "own" {
+		t.Errorf("menu table action = %+v", a)
+	}
+
+	tbl.Config.OnMenu(actions[3].Entries, 0, 0, 0)
+	if got := p.State.GetGlobal("ran").(*lua.LTable).RawGetInt(1); got != lua.LString("own:1") {
+		t.Errorf("picking a dropdown entry ran %v, want on_command(\"own\", 1)", got)
+	}
+}
+
 func TestLuaTableSelectionIsControlledOnlyWhenGiven(t *testing.T) {
 	p, done := newTestPluginBase(PermissionSet{PanelSidebar: true})
 	defer done()
