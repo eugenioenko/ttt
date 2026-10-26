@@ -1214,7 +1214,7 @@ panel:tree({
 | `node_menu`    | table    | nil     | Array of [menu entries](#menu-entry-format) for right-click context menu on nodes. |
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
-| `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. |
+| `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
 | `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 **Keyboard navigation:** When focused, Up/Down arrows move selection, Enter activates `on_select`, Left/Right collapse/expand nodes. Shift+Enter opens the context menu on the selected node.
@@ -1257,7 +1257,7 @@ panel:list({
 | `node_menu`    | table    | nil     | Array of [menu entries](#menu-entry-format) for the right-click context menu. |
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
-| `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. |
+| `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
 | `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 ### Button

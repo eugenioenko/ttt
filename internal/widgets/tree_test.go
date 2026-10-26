@@ -1779,6 +1779,29 @@ func TestTreeRightBadgeLeavesOneGapAfterTheLabel(t *testing.T) {
 	}
 }
 
+func TestTreeRightBadgeGivesWayToTheLabel(t *testing.T) {
+	cases := []struct {
+		name, label, badge string
+		w                  int
+		want               string
+	}{
+		{"long badge is truncated, label keeps half", "order_line_items", "table · 98,213,004 rows", 22, "order_lin… table · 9…"},
+		{"short badge stays whole, label truncated", "customer_shipping_addresses", "12 rows", 22, "customer_shi… 12 rows"},
+		{"short label stays whole", "x", "a very long badge that fills the row", 22, "x a very long badge …"},
+		{"badge dropped when under three cells are left", "order_line_items", "rows", 6, "ord…"},
+	}
+	for _, tc := range cases {
+		tree := NewTreeWidget(TreeConfig{
+			Items:      []*TreeNode{{ID: "a", Label: tc.label, Badge: tc.badge}},
+			BadgeRight: true,
+		})
+		s := renderWidget(tree, 0, 0, tc.w, 1)
+		if got := rowText(s, 0); got != tc.want {
+			t.Errorf("%s: row = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestTreeReselectOnActivate(t *testing.T) {
 	for _, reselect := range []bool{false, true} {
 		selects := 0

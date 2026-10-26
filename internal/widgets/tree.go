@@ -434,14 +434,7 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		surface.SetCell(x, y, term.Cell{Ch: ' ', Style: style})
 	}
 
-	badgeW := 0
-	if t.Config.BadgeRight && node.Badge != "" {
-		badgeW = textwidth.String(node.Badge)
-		if len(node.Actions) > 0 {
-			badgeW++
-		}
-	}
-	maxX := w - 2 - t.rightSideWidth(node) - badgeW
+	maxX := w - 2 - t.rightSideWidth(node)
 
 	x := t.Config.Inset + node.depth*t.Config.Indent
 
@@ -507,6 +500,17 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		}
 	}
 	labelRunes := []rune(node.Label)
+	badgeW := 0
+	if t.Config.BadgeRight && node.Badge != "" {
+		gap := 0
+		if len(node.Actions) > 0 {
+			gap = 1
+		}
+		badgeW = rightBadgeWidth(maxX-x, textwidth.Runes(labelRunes), textwidth.String(node.Badge), gap)
+		if badgeW > 0 {
+			maxX -= badgeW + gap
+		}
+	}
 	if t.Config.TruncateLeft || node.TruncateLeft {
 		labelRunes = truncateRunesLeft(labelRunes, maxX-x)
 	}
@@ -578,10 +582,26 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		if len(node.Actions) > 0 {
 			rightX--
 		}
-		if bx := rightX - textwidth.String(node.Badge) + 1; bx >= x {
+		if bx := rightX - badgeW + 1; bx >= x {
 			drawRunesClipped(surface, bx, y, rightX+1, []rune(node.Badge), t.badgeStyle(node, idx, style))
 		}
 	}
+}
+
+const minTruncatedBadgeWidth = 3
+
+func rightBadgeWidth(space, labelW, badgeW, gap int) int {
+	if labelW+badgeW+gap <= space {
+		return badgeW
+	}
+	room := space - min(labelW, space/2) - gap
+	switch {
+	case room >= badgeW:
+		return badgeW
+	case room >= minTruncatedBadgeWidth:
+		return room
+	}
+	return 0
 }
 
 func (t *TreeWidget) badgeStyle(node *TreeNode, idx int, rowStyle term.Style) term.Style {
