@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -93,10 +94,14 @@ func parseExecArgs(L *lua.LState, binary string, start int) execRequest {
 	switch v := L.GetField(optsTbl, "max_output_bytes").(type) {
 	case *lua.LNilType:
 	case lua.LNumber:
-		if v < 1 {
+		// Negated so NaN is rejected too.
+		if !(v >= 1) {
 			L.ArgError(start+1, "max_output_bytes must be at least 1")
 		}
-		req.maxOutput = int64(v)
+		req.maxOutput = math.MaxInt64
+		if float64(v) < math.MaxInt64 {
+			req.maxOutput = int64(v)
+		}
 	default:
 		L.ArgError(start+1, "max_output_bytes must be a number")
 	}

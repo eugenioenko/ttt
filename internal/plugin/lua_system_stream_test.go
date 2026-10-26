@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -171,6 +172,7 @@ func TestExecStreamOptionsRejected(t *testing.T) {
 		`sys.exec_async("psql", {}, { on_stdout = "print" }, function() end)`,
 		`sys.exec_async("psql", {}, { on_stderr = 1 }, function() end)`,
 		`sys.exec("psql", {}, { max_output_bytes = 0 })`,
+		`sys.exec("psql", {}, { max_output_bytes = 0/0 })`,
 		`sys.exec("psql", {}, { max_output_bytes = "1MB" })`,
 	} {
 		mock := &mockSystemAPI{}
@@ -182,5 +184,20 @@ func TestExecStreamOptionsRejected(t *testing.T) {
 			t.Errorf("%s: ran the command", code)
 		}
 		cleanup()
+	}
+}
+
+func TestExecMaxOutputBytesBeyondInt64StaysALimit(t *testing.T) {
+	for _, v := range []string{"1e20", "math.huge"} {
+		L := lua.NewState()
+		if err := L.DoString("opts = { max_output_bytes = " + v + " }"); err != nil {
+			t.Fatal(err)
+		}
+		L.Push(L.NewTable())
+		L.Push(L.GetGlobal("opts"))
+		if got := parseExecArgs(L, "psql", 1).maxOutput; got != math.MaxInt64 {
+			t.Errorf("max_output_bytes = %s: limit %d", v, got)
+		}
+		L.Close()
 	}
 }

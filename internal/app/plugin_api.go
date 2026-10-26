@@ -540,7 +540,7 @@ func (s *PluginSystemAPI) validateArgs(binary string, args []string) error {
 }
 
 // pluginExecWaitDelay bounds how long a grandchild can hold the output pipes
-// open, idle, after the child exits or is killed, and so delay the result.
+// open after the child exits or is killed, and so delay the result.
 const pluginExecWaitDelay = time.Second
 
 func (s *PluginSystemAPI) Exec(ctx context.Context, binary string, args []string, opts plugin.ExecOptions) (string, string, int, error) {
