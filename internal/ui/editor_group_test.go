@@ -172,6 +172,26 @@ func TestClosingATabFocusesTheContentTabThatBecomesActive(t *testing.T) {
 	}
 }
 
+func TestCloseAllUnfocusesAPinnedTabThatIsNoLongerActive(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	g.SetFocused(true)
+	a, b := &focusProbeWidget{}, &focusProbeWidget{}
+	g.OpenPluginTab("a", "A", a)
+	g.TogglePinTab()
+	g.OpenPluginTab("b", "B", b)
+	g.TogglePinTab()
+	g.OpenPluginTab("c", "C", &focusProbeWidget{})
+	for i, tab := range g.tabs {
+		if tab.PluginKey == "b" {
+			g.SwitchTab(i)
+		}
+	}
+	g.CloseAllTabs()
+	if g.PluginTabKey(g.active) != "a" || !a.focused || b.focused {
+		t.Fatalf("active=%q a.focused=%v b.focused=%v, want a true false", g.PluginTabKey(g.active), a.focused, b.focused)
+	}
+}
+
 func TestClosingATabKeepsContentUnfocusedWhileTheGroupIsUnfocused(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	a := &focusProbeWidget{}
