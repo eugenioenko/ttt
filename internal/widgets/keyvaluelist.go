@@ -82,6 +82,9 @@ func (kv *KeyValueListWidget) keyColWidth() int {
 }
 
 func (kv *KeyValueListWidget) layoutKeyColW(w int) int {
+	if kv.wrap && w >= kv.unwrappedWidth() {
+		return kv.keyColWidth()
+	}
 	return min(kv.keyColWidth(), w/2)
 }
 

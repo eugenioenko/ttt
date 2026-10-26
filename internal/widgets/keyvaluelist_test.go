@@ -229,3 +229,15 @@ func TestKeyValueListWithoutWrapClipsLongValues(t *testing.T) {
 		t.Errorf("NaturalWidth = %d, want %d", got, 12+2+27)
 	}
 }
+
+func TestKeyValueListWrapKeepsTheFullKeyAtNaturalWidth(t *testing.T) {
+	kv := NewWrappingKeyValueListWidget([]KeyValueEntry{{Key: "Accept commands from", Value: "hub"}})
+	w := kv.NaturalWidth()
+	if got := kv.HeightForWidth(w); got != 1 {
+		t.Fatalf("HeightForWidth(NaturalWidth) = %d, want 1", got)
+	}
+	s := renderWidget(kv, 0, 0, w, 2)
+	if got, want := rowText(s, 0), "  Accept commands from  hub"; got != want {
+		t.Errorf("row 0 = %q, want %q", got, want)
+	}
+}
