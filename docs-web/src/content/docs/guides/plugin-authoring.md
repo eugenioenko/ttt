@@ -1619,7 +1619,7 @@ Each action is a table:
 | `label`   | string          | Link text. Required unless `menu` is set, where it defaults to `⋮`. |
 | `command` | string          | Passed to `on_command(command, row_index)` when the action is clicked. |
 | `menu`    | boolean or table | `true` opens `node_menu` as a dropdown below the action; an array of [menu entries](#menu-entry-format) opens those instead. Picking an entry calls `on_command(command, row_index)`. |
-| `style`   | string          | A [style name](#styles), such as `"muted"` for a secondary action. Without one the label is underlined in the row's style. The selected row always uses its own style. |
+| `style`   | string          | A [style name](#styles) for the label, such as `"danger"`. Actions are muted by default so they sit behind the row's data. The selected row always uses its own style. |
 
 Clicking an action selects its row first. Enter, `key_commands`, Shift+Enter and right-click work as they do without an actions column.
 

@@ -55,14 +55,25 @@ func TestTableActionsColumnSizedFromLabels(t *testing.T) {
 		t.Fatalf("row = %q, want the actions at the right edge in place of cell text", got)
 	}
 	open, copyCell, more := s.cells[2][19], s.cells[2][24], s.cells[2][29]
-	if !open.Underline || open.Style != term.StyleDefault {
-		t.Errorf("Open cell = %+v, want an underlined link in the row style", open)
+	if open.Underline || open.Style != term.StyleMuted {
+		t.Errorf("Open cell = %+v, want muted without an underline", open)
 	}
 	if copyCell.Underline || copyCell.Style != term.StyleMuted {
 		t.Errorf("muted action cell = %+v, want the muted style", copyCell)
 	}
-	if more.Ch != '⋮' || more.Underline {
-		t.Errorf("menu cell = %+v, want a plain ⋮", more)
+	if more.Ch != '⋮' || more.Underline || more.Style != term.StyleMuted {
+		t.Errorf("menu cell = %+v, want a muted ⋮", more)
+	}
+}
+
+func TestTableActionsKeepTheirOwnStyleOffTheSelectedRow(t *testing.T) {
+	tbl := NewTableWidget(TableConfig{
+		Columns: []TableColumn{{Label: "Name"}, {Actions: []TableAction{{Label: "Delete", Command: "delete", Style: term.StyleDanger}}}},
+		Rows:    [][]string{{"a1"}},
+	})
+	s := renderWidget(tbl, 0, 0, 30, 4)
+	if c := s.cells[2][24]; c.Ch != 'D' || c.Style != term.StyleDanger || c.Underline {
+		t.Fatalf("styled action cell = %+v, want D in the danger style", c)
 	}
 }
 

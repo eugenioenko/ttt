@@ -378,11 +378,11 @@ func (t *TableWidget) renderActions(line *virtualSurface, rowStyle term.Style) {
 	for _, span := range t.actionSpans {
 		a := span.action
 		cell := term.Cell{Style: rowStyle}
-		switch {
-		case a.Style != 0 && !highlighted:
-			cell.Style, cell.BgStyle = a.Style, rowStyle
-		case !a.Menu:
-			cell.Underline = true
+		if !highlighted {
+			cell.Style, cell.BgStyle = term.StyleMuted, rowStyle
+			if a.Style != 0 {
+				cell.Style = a.Style
+			}
 		}
 		x := span.x
 		for _, ch := range a.text() {
