@@ -35,7 +35,7 @@ func pressRune(t *TreeWidget, r rune) {
 func TestTreePageNavigation(t *testing.T) {
 	var selections []string
 	tree := NewTreeWidget(TreeConfig{
-		Items: makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
+		Items:    makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
 		OnSelect: func(node *TreeNode) { selections = append(selections, node.ID) },
 	})
 	renderWidget(tree, 0, 0, 20, 3)
@@ -71,7 +71,7 @@ func TestTreePageNavigation(t *testing.T) {
 func TestTreeHomeEndNavigation(t *testing.T) {
 	var selections []string
 	tree := NewTreeWidget(TreeConfig{
-		Items: makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
+		Items:    makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
 		OnSelect: func(node *TreeNode) { selections = append(selections, node.ID) },
 	})
 	renderWidget(tree, 0, 0, 20, 3)
