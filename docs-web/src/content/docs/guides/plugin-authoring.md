@@ -2408,21 +2408,25 @@ Execute a command synchronously. Requires the `system.exec` permission with the 
 |-----------|--------|----------|------------------------------------------|
 | `binary`  | string | yes      | Command to execute. Must be in the `system.exec` permission allowlist. |
 | `args`    | table  | no       | Array of string arguments.               |
-| `opts`    | table  | no       | Options table. Only `stdin` is supported. |
+| `opts`    | table  | no       | Options table, see below. |
 
 **Options:**
 
-| Field   | Type   | Description                                                      |
-|---------|--------|------------------------------------------------------------------|
-| `stdin` | string | Written to the command's standard input. Nothing is written when omitted or empty. |
+| Field        | Type   | Description                                                      |
+|--------------|--------|------------------------------------------------------------------|
+| `stdin`      | string | Written to the command's standard input. Nothing is written when omitted or empty. |
+| `env`        | table  | Extra environment variables for the child, as `{NAME = "value"}`, merged over the editor's environment. |
+| `timeout_ms` | number | Kill the command after this many milliseconds. Must be positive. |
 
 **Returns** a table:
 
-| Field       | Type   | Description                                     |
-|-------------|--------|-------------------------------------------------|
-| `stdout`    | string | Standard output.                                |
-| `stderr`    | string | Standard error.                                 |
-| `exit_code` | number | Exit code (`0` for success, `-1` for exec errors). |
+| Field       | Type    | Description                                     |
+|-------------|---------|-------------------------------------------------|
+| `stdout`    | string  | Standard output.                                |
+| `stderr`    | string  | Standard error, or the error message when the command could not run, timed out or was cancelled. |
+| `exit_code` | number  | Exit code (`0` for success, `-1` for exec errors, timeouts and cancellation). |
+| `timed_out` | boolean | `true` when `timeout_ms` elapsed and the command was killed. |
+| `cancelled` | boolean | `true` when an `exec_async` handle's `cancel()` killed the command. |
 
 ```lua
 local result = sys.exec("git", {"status", "--porcelain"})
@@ -2445,6 +2449,20 @@ Prefer `stdin` over passing document text as an argument. Arguments are capped
 by the OS (`ARG_MAX`, commonly 2 MB) and are visible to every process on the
 machine via `ps`; standard input has neither limit.
 
+Pass secrets such as database passwords through `env` for the same reason:
+
+```lua
+local result = sys.exec("psql", {"-h", host, "-U", user, "-c", query}, {
+  env = { PGPASSWORD = password },
+  timeout_ms = 10000,
+})
+if result.timed_out then
+  ttt.notify("Query timed out")
+end
+```
+
+`env` values are set only in the child's environment (and inherited by any process it starts). They are not set in the editor's environment and do not appear on the command line. Keys must be non-empty strings without `=` or NUL, and values must be strings or numbers. Keys that change which code the child loads are rejected: `PATH`, `LD_*` and `DYLD_*` for every binary, and `GIT_*` for `git`. An invalid `env` or `timeout_ms` raises an error.
+
 Arguments are validated before execution: shell-injection patterns and dangerous git flags (e.g. `--upload-pack`, `core.fsmonitor`) are rejected.
 
 ### `sys.exec_async(binary, [args], [opts], callback)`
@@ -2457,6 +2475,8 @@ Execute a command asynchronously. The callback receives the same result table an
 | `args`     | table    | no       | Array of string arguments. May be omitted — the callback can be the second argument. |
 | `opts`     | table    | no       | Options table, same fields as `sys.exec`. Requires `args` to be passed too. |
 | `callback` | function | yes      | Receives the result table when done.         |
+
+**Returns** a handle with a `cancel()` method. Cancelling kills the command, and the callback then receives a result with `cancelled = true`. `cancel()` returns `true` if the command was still running and `false` once it has finished. Running commands are also killed when the plugin is disabled, reloaded or uninstalled; their callbacks do not run.
 
 ```lua
 sys.exec_async("docker", {"ps", "--format", "{{.Names}}"}, function(result)
@@ -2475,6 +2495,14 @@ end)
 sys.exec_async("aspell", {"pipe"}, {stdin = text}, function(result)
   -- parse result.stdout
 end)
+
+-- Cancellable:
+local query = sys.exec_async("psql", {"-c", sql}, {env = {PGPASSWORD = password}}, function(result)
+  if result.cancelled then return end
+  -- show result.stdout
+end)
+-- later, for example from a Cancel button:
+query:cancel()
 ```
 
 ### `sys.env(name)`

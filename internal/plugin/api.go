@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"net/url"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -135,10 +136,16 @@ type TerminalAPI interface {
 	TerminalList() []TerminalInfo
 }
 
+type ExecOptions struct {
+	// Stdin is written to the child's standard input; nothing is written when empty.
+	Stdin string
+	// Env holds KEY=VALUE entries added over the editor's environment.
+	Env []string
+}
+
 type SystemAPI interface {
-	// Exec runs binary with args, writing stdin to the child's standard input
-	// (nothing is written when stdin is empty).
-	Exec(binary string, args []string, stdin string) (stdout, stderr string, exitCode int, err error)
+	// Exec runs binary with args and kills the child when ctx is done.
+	Exec(ctx context.Context, binary string, args []string, opts ExecOptions) (stdout, stderr string, exitCode int, err error)
 	Env(name string) string
 }
 

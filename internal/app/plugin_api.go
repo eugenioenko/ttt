@@ -540,16 +540,24 @@ func (s *PluginSystemAPI) validateArgs(binary string, args []string) error {
 	return nil
 }
 
-func (s *PluginSystemAPI) Exec(binary string, args []string, stdin string) (string, string, int, error) {
+// pluginExecWaitDelay bounds how long a killed child's grandchildren can hold
+// its output pipes open and so delay the result.
+const pluginExecWaitDelay = time.Second
+
+func (s *PluginSystemAPI) Exec(ctx context.Context, binary string, args []string, opts plugin.ExecOptions) (string, string, int, error) {
 	if err := s.validateArgs(binary, args); err != nil {
 		return "", "", -1, err
 	}
-	cmd := exec.Command(binary, args...)
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.WaitDelay = pluginExecWaitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if stdin != "" {
-		cmd.Stdin = strings.NewReader(stdin)
+	if opts.Stdin != "" {
+		cmd.Stdin = strings.NewReader(opts.Stdin)
+	}
+	if len(opts.Env) > 0 {
+		cmd.Env = append(os.Environ(), opts.Env...)
 	}
 	err := cmd.Run()
 	if s.onExec != nil {

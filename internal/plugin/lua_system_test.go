@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -14,12 +15,28 @@ type mockSystemAPI struct {
 	execErr    error
 	envVars    map[string]string
 	execStdin  string
+	execEnv    []string
+	// block makes Exec wait for its context, as a running child would.
+	block    bool
+	started  chan struct{}
+	returned chan struct{}
 }
 
-func (m *mockSystemAPI) Exec(binary string, args []string, stdin string) (string, string, int, error) {
+func (m *mockSystemAPI) Exec(ctx context.Context, binary string, args []string, opts ExecOptions) (string, string, int, error) {
 	m.execBinary = binary
 	m.execArgs = args
-	m.execStdin = stdin
+	m.execStdin = opts.Stdin
+	m.execEnv = opts.Env
+	if m.returned != nil {
+		defer close(m.returned)
+	}
+	if m.started != nil {
+		close(m.started)
+	}
+	if m.block {
+		<-ctx.Done()
+		return "", "signal: killed", -1, nil
+	}
 	return m.stdout, m.stderr, m.exitCode, m.execErr
 }
 

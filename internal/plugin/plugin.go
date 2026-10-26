@@ -144,6 +144,8 @@ type Plugin struct {
 
 	timers      map[int]func()
 	nextTimerID int
+	execs       map[int]runningExec
+	nextExecID  int
 	rpcConns    map[*rpcConn]struct{}
 }
 
@@ -287,6 +289,7 @@ func (p *Plugin) Loaded() bool {
 
 // Destroy and Init must run on the UI goroutine, which uses p.State without a lock.
 func (p *Plugin) Destroy() {
+	p.killExecs()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.stopTimersLocked()
