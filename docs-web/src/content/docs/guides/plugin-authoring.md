@@ -1891,6 +1891,7 @@ Require the `editor.read` permission.
 | `editor.byte_to_col(text, byte)` | number                                          | Convert a 1-based **byte** offset in `text` to a 1-based **rune column**. |
 | `editor.col_to_byte(text, col)`  | number                                          | Convert a 1-based **rune column** in `text` to a 1-based **byte** offset. |
 | `editor.get_cursors()`           | table of `{line, col}`                          | All cursor positions (1-based). Returns a single-element table when no extra cursors are active. |
+| `editor.diff()`                  | `{hunks, current_hunk}` or `nil`                | The active diff's change blocks. `nil` outside a diff. |
 
 > **Columns are runes, not bytes.** The editor — and every position in the
 > `editor.replace` and diagnostics APIs — uses 1-based **rune (visual) columns**.
@@ -1926,6 +1927,7 @@ Require the `editor.write` permission.
 | `editor.end_undo_group()`                         | Close the group; all edits since `begin` undo/redo as one operation. |
 | `editor.add_cursor(line, col)`                    | Add a cursor at position (1-based). Duplicates are ignored. |
 | `editor.clear_cursors()`                          | Collapse back to a single cursor (the primary). |
+| `editor.go_to_diff_hunk(index)`                   | Move to a change block in the active diff (1-based). Returns `true`, or `nil, err`. |
 
 All write operations go through the undo system — they can be undone with Ctrl+Z.
 
@@ -1941,6 +1943,58 @@ local line = editor.current_line()
 -- Insert text at cursor
 editor.insert(pos.line, pos.col, "// TODO: ")
 ```
+
+### Diff navigation
+
+A diff tab — a commit, a PR, a staged diff, or a view opened with
+`ttt.open_changes` — has no buffer, so the functions above return empty values
+there. Use `editor.diff()` and `editor.go_to_diff_hunk()` instead.
+
+```lua
+local editor = require("ttt.editor")
+
+local d = editor.diff()
+if d then
+  ttt.set_status_item("right", "hunks", string.format("%d/%d", d.current_hunk, #d.hunks))
+end
+```
+
+`editor.diff()` returns `nil` outside a diff, so a plugin can tell "no diff
+here" from "a diff with no changes".
+
+| Field           | Meaning                                                          |
+|-----------------|------------------------------------------------------------------|
+| `hunks`         | Flat, 1-based list in document order, across every file in the tab. |
+| `hunks[i].file_path` | Path of the file the block belongs to.                      |
+| `hunks[i].kind` | `"added"`, `"deleted"` or `"modified"`.                          |
+| `current_hunk`  | Block at or immediately before the navigation position; `0` before the first block. |
+
+A **block** is a contiguous run of changed lines, not a whole `@@` patch
+section, so one `@@` section can hold several blocks. Blocks stay addressable
+across wrapping, split/unified mode and collapsing, and a block inside a
+collapsed file is still listed; jumping to it expands that file. Indices are
+recomputed on each call, so read them again after the diff changes rather than
+caching them.
+
+`editor.go_to_diff_hunk(index)` reveals the file, moves to the block and
+scrolls it into view. It changes no buffer content and returns `nil, err` for an
+index out of range.
+
+Neither function wraps: going past the last block returns an error. Build the
+wrap-around you want on top of `current_hunk`:
+
+```lua
+local d = editor.diff()
+if d and #d.hunks > 0 then
+  local nextIndex = d.current_hunk + 1
+  if nextIndex > #d.hunks then nextIndex = 1 end
+  editor.go_to_diff_hunk(nextIndex)
+end
+```
+
+The palette commands `Git: Next Changed Hunk` and `Git: Previous Changed Hunk`
+share this navigation inside a diff, and keep their git-gutter behaviour in a
+normal file tab.
 
 ## Diagnostics
 

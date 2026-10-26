@@ -316,6 +316,48 @@ func (e *PluginEditorAPI) ClearSearch() {
 	e.eg.ClearSearch()
 }
 
+// activeDiff returns the diff surface the plugin should see, or nil when the
+// active tab is not a diff. Commit Details hosts one diff widget per file, so
+// the detail view answers as a whole rather than through its first file.
+func (e *PluginEditorAPI) activeDiff() (hunks []ui.DiffHunk, at int, goTo func(int) error) {
+	if detail := e.eg.ActiveCommitDetailWidget(); detail != nil {
+		fileIndex, row := detail.ViewportFileAndRow()
+		return detail.Hunks(), detail.HunkAt(fileIndex, row), detail.GoToHunk
+	}
+	if dv := e.eg.ActiveDiffWidget(); dv != nil {
+		return dv.Hunks(), dv.HunkAt(dv.CursorRow()), dv.GoToHunk
+	}
+	return nil, 0, nil
+}
+
+func (e *PluginEditorAPI) DiffHunks() []plugin.DiffHunkTarget {
+	hunks, _, _ := e.activeDiff()
+	if len(hunks) == 0 {
+		return nil
+	}
+	out := make([]plugin.DiffHunkTarget, len(hunks))
+	for i, h := range hunks {
+		out[i] = plugin.DiffHunkTarget{FilePath: h.FilePath, Kind: string(h.Kind)}
+	}
+	return out
+}
+
+func (e *PluginEditorAPI) DiffHunkAt() int {
+	_, at, _ := e.activeDiff()
+	return at
+}
+
+func (e *PluginEditorAPI) GoToDiffHunk(index int) error {
+	hunks, _, goTo := e.activeDiff()
+	if goTo == nil {
+		return fmt.Errorf("the active tab is not a diff")
+	}
+	if index < 1 || index > len(hunks) {
+		return fmt.Errorf("hunk %d out of range (1-%d)", index, len(hunks))
+	}
+	return goTo(index)
+}
+
 // PluginFilesystemAPI implements plugin.FilesystemAPI with path restrictions.
 type PluginFilesystemAPI struct {
 	read    fsRoots

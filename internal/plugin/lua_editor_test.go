@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -44,6 +45,9 @@ type mockEditorAPI struct {
 	searchPattern string
 	searchRegex   bool
 	searchCleared bool
+	diffHunks     []DiffHunkTarget
+	diffHunkAt    int
+	wentToHunk    int
 }
 
 func (m *mockEditorAPI) BufferText() string { return m.bufText }
@@ -122,6 +126,16 @@ func (m *mockEditorAPI) SetSearch(pattern string, useRegex bool) {
 }
 func (m *mockEditorAPI) ClearSearch() {
 	m.searchCleared = true
+}
+
+func (m *mockEditorAPI) DiffHunks() []DiffHunkTarget { return m.diffHunks }
+func (m *mockEditorAPI) DiffHunkAt() int             { return m.diffHunkAt }
+func (m *mockEditorAPI) GoToDiffHunk(index int) error {
+	if index < 1 || index > len(m.diffHunks) {
+		return fmt.Errorf("hunk %d out of range", index)
+	}
+	m.wentToHunk = index
+	return nil
 }
 
 func setupTestPluginWithEditor(perms PermissionSet, editor *mockEditorAPI) (*Plugin, func()) {
@@ -386,5 +400,86 @@ func TestEditorClearSearch(t *testing.T) {
 	}
 	if !mock.searchCleared {
 		t.Error("expected ClearSearch to be called")
+	}
+}
+
+func TestEditorDiffReportsHunksAndPosition(t *testing.T) {
+	mock := &mockEditorAPI{
+		diffHunks: []DiffHunkTarget{
+			{FilePath: "a.go", Kind: "modified"},
+			{FilePath: "b.go", Kind: "deleted"},
+		},
+		diffHunkAt: 2,
+	}
+	p, cleanup := setupTestPluginWithEditor(PermissionSet{EditorRead: true}, mock)
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local editor = require("ttt.editor")
+		local d = editor.diff()
+		assert(d, "expected a diff table")
+		assert(#d.hunks == 2, "expected 2 hunks, got " .. #d.hunks)
+		assert(d.hunks[1].file_path == "a.go", "hunk 1 path: " .. tostring(d.hunks[1].file_path))
+		assert(d.hunks[1].kind == "modified", "hunk 1 kind: " .. tostring(d.hunks[1].kind))
+		assert(d.hunks[2].file_path == "b.go", "hunk 2 path: " .. tostring(d.hunks[2].file_path))
+		assert(d.hunks[2].kind == "deleted", "hunk 2 kind: " .. tostring(d.hunks[2].kind))
+		assert(d.current_hunk == 2, "current_hunk: " .. tostring(d.current_hunk))
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+}
+
+// Outside a diff the API must say so with nil rather than an empty table, so a
+// plugin can tell "no diff here" from "a diff with no changes".
+func TestEditorDiffIsNilOutsideADiff(t *testing.T) {
+	mock := &mockEditorAPI{}
+	p, cleanup := setupTestPluginWithEditor(PermissionSet{EditorRead: true}, mock)
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local editor = require("ttt.editor")
+		assert(editor.diff() == nil, "expected nil outside a diff")
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+}
+
+func TestEditorGoToDiffHunkMovesAndReportsErrors(t *testing.T) {
+	mock := &mockEditorAPI{
+		diffHunks: []DiffHunkTarget{{FilePath: "a.go", Kind: "added"}},
+	}
+	p, cleanup := setupTestPluginWithEditor(PermissionSet{EditorRead: true, EditorWrite: true}, mock)
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local editor = require("ttt.editor")
+		local ok = editor.go_to_diff_hunk(1)
+		assert(ok == true, "expected success")
+		local _, err = editor.go_to_diff_hunk(9)
+		assert(err ~= nil, "expected an error for an out-of-range hunk")
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if mock.wentToHunk != 1 {
+		t.Errorf("went to hunk %d, want 1", mock.wentToHunk)
+	}
+}
+
+// Navigation is a write-tier capability, matching the existing cursor calls.
+func TestEditorGoToDiffHunkRequiresWritePermission(t *testing.T) {
+	mock := &mockEditorAPI{diffHunks: []DiffHunkTarget{{FilePath: "a.go", Kind: "added"}}}
+	p, cleanup := setupTestPluginWithEditor(PermissionSet{EditorRead: true}, mock)
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local editor = require("ttt.editor")
+		assert(editor.go_to_diff_hunk == nil, "go_to_diff_hunk must need editor.write")
+		assert(editor.diff ~= nil, "diff must need only editor.read")
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
 	}
 }

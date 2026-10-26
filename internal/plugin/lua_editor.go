@@ -28,6 +28,7 @@ func setupEditorModule(L *lua.LState, p *Plugin) {
 			L.SetField(mod, "col_to_byte", L.NewFunction(editorColToByte(p)))
 			L.SetField(mod, "register_context_menu", L.NewFunction(editorRegisterContextMenu(p)))
 			L.SetField(mod, "get_cursors", L.NewFunction(editorGetCursors(p)))
+			L.SetField(mod, "diff", L.NewFunction(editorDiff(p)))
 		}
 
 		if hasWrite {
@@ -45,6 +46,7 @@ func setupEditorModule(L *lua.LState, p *Plugin) {
 			L.SetField(mod, "clear_cursors", L.NewFunction(editorClearCursors(p)))
 			L.SetField(mod, "set_search", L.NewFunction(editorSetSearch(p)))
 			L.SetField(mod, "clear_search", L.NewFunction(editorClearSearch(p)))
+			L.SetField(mod, "go_to_diff_hunk", L.NewFunction(editorGoToDiffHunk(p)))
 		}
 
 		L.Push(mod)
@@ -543,5 +545,54 @@ func editorClearSearch(p *Plugin) lua.LGFunction {
 		}
 		p.Editor.ClearSearch()
 		return 0
+	}
+}
+
+// editorDiff returns the active diff's change blocks and the cursor's
+// position among them, or nil when the active tab is not a diff. Plugins read
+// this instead of buffer lines because a diff tab has no buffer.
+func editorDiff(p *Plugin) lua.LGFunction {
+	return func(L *lua.LState) int {
+		if p.Editor == nil {
+			L.Push(lua.LNil)
+			return 1
+		}
+		hunks := p.Editor.DiffHunks()
+		if hunks == nil {
+			L.Push(lua.LNil)
+			return 1
+		}
+		tbl := L.NewTable()
+		list := L.NewTable()
+		for i, h := range hunks {
+			item := L.NewTable()
+			L.SetField(item, "file_path", lua.LString(h.FilePath))
+			L.SetField(item, "kind", lua.LString(h.Kind))
+			list.RawSetInt(i+1, item)
+		}
+		L.SetField(tbl, "hunks", list)
+		L.SetField(tbl, "current_hunk", lua.LNumber(p.Editor.DiffHunkAt()))
+		L.Push(tbl)
+		return 1
+	}
+}
+
+// editorGoToDiffHunk moves to a 1-based change block in the active diff,
+// revealing a collapsed file when needed. It never changes buffer contents.
+func editorGoToDiffHunk(p *Plugin) lua.LGFunction {
+	return func(L *lua.LState) int {
+		if p.Editor == nil {
+			L.Push(lua.LNil)
+			L.Push(lua.LString("editor API not available"))
+			return 2
+		}
+		index := L.CheckInt(1)
+		if err := p.Editor.GoToDiffHunk(index); err != nil {
+			L.Push(lua.LNil)
+			L.Push(lua.LString(err.Error()))
+			return 2
+		}
+		L.Push(lua.LTrue)
+		return 1
 	}
 }

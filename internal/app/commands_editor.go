@@ -427,6 +427,9 @@ func hunkStarts(changes []diff.LineChangeKind) []int {
 // current cursor line. No-op when git-gutter data is unavailable or there is no
 // following hunk.
 func (a *App) DiffNextHunk() {
+	if a.diffHunkStep(1) {
+		return
+	}
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
@@ -454,6 +457,9 @@ func (a *App) DiffNextHunk() {
 // the current cursor line. No-op when git-gutter data is unavailable or there is
 // no preceding hunk.
 func (a *App) DiffPrevHunk() {
+	if a.diffHunkStep(-1) {
+		return
+	}
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
@@ -1010,4 +1016,49 @@ func registerEditorCommands(app *App) {
 		Keywords: []string{"exit", "close"},
 		Handler:  app.Quit,
 	})
+}
+
+// diffHunkStep navigates change blocks inside a diff view, where the buffer
+// API and the git gutter do not apply. It reports whether it handled the key:
+// false leaves normal file tabs on their existing gutter behaviour. Stops at
+// the ends with a notification and never wraps, matching the palette command
+// contract; plugins that want wrap-around build it from editor.diff().
+func (a *App) diffHunkStep(delta int) bool {
+	hunks, at, goTo := a.activeDiffHunks()
+	if goTo == nil {
+		return false
+	}
+	if len(hunks) == 0 {
+		a.StatusNotify("No changes in this diff")
+		return true
+	}
+	target := at + delta
+	if delta > 0 && at == 0 {
+		target = 1
+	}
+	if target < 1 {
+		a.StatusNotify("No more changes above")
+		return true
+	}
+	if target > len(hunks) {
+		a.StatusNotify("No more changes below")
+		return true
+	}
+	if err := goTo(target); err != nil {
+		a.StatusNotify(err.Error())
+	}
+	return true
+}
+
+// activeDiffHunks resolves the diff surface the commands should navigate,
+// sharing one implementation with the plugin API.
+func (a *App) activeDiffHunks() (hunks []ui.DiffHunk, at int, goTo func(int) error) {
+	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+		fileIndex, row := detail.ViewportFileAndRow()
+		return detail.Hunks(), detail.HunkAt(fileIndex, row), detail.GoToHunk
+	}
+	if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
+		return dv.Hunks(), dv.HunkAt(dv.CursorRow()), dv.GoToHunk
+	}
+	return nil, 0, nil
 }

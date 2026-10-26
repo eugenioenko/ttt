@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"slices"
 	"sort"
 	"unsafe"
@@ -1426,4 +1427,53 @@ func DiffCombinedLines(fd diff.FileDiff) []string {
 	d := &DiffEditorWidget{}
 	d.Lines, _ = compactDiffLinesWithEdges(fd, nil, nil, nil)
 	return d.CombinedLines()
+}
+
+// Hunks lists the widget's contiguous change blocks in document order. Rows
+// follow the projection the widget currently shows, so a block that a
+// collapsed gap hides is still listed once its file is expanded.
+func (d *DiffEditorWidget) Hunks() []DiffHunk {
+	return diffHunksInRows(d.Lines, d.FilePath, 0)
+}
+
+// HunkAt reports the 1-based index of the change block at or immediately
+// before row, and 0 when row precedes the first block. It gives callers a
+// defined position between changes instead of an empty answer.
+func (d *DiffEditorWidget) HunkAt(row int) int {
+	at := 0
+	for i, h := range d.Hunks() {
+		if h.Row <= row {
+			at = i + 1
+			continue
+		}
+		break
+	}
+	return at
+}
+
+// CursorRow reports the widget's cursor row in the same line space as
+// Hunks. The cursor belongs to the pane the widget leads with, which differs
+// between split and unified projections.
+func (d *DiffEditorWidget) CursorRow() int {
+	if d.editable || d.Loading {
+		return 0
+	}
+	p := d.lead()
+	row, _ := d.diffRowForBufLine(p, p.Cursor.Line)
+	return row
+}
+
+// GoToHunk moves the cursor to the first row of the 1-based change block
+// index and scrolls it into view. It reports an error rather than moving
+// somewhere unexpected when index is out of range.
+func (d *DiffEditorWidget) GoToHunk(index int) error {
+	hunks := d.Hunks()
+	if index < 1 || index > len(hunks) {
+		return fmt.Errorf("hunk %d out of range (1-%d)", index, len(hunks))
+	}
+	if d.editable {
+		return fmt.Errorf("hunk navigation is not supported in editable diffs")
+	}
+	d.scrollToDiffRow(hunks[index-1].Row, diffAnySide, false)
+	return nil
 }

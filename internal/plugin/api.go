@@ -84,6 +84,21 @@ type EditorAPI interface {
 
 	SetSearch(pattern string, useRegex bool)
 	ClearSearch()
+
+	// DiffHunks reports the change blocks of the active diff surface, or
+	// nil when the active tab is not a diff. HunkAt returns the 1-based
+	// block at or before the cursor, 0 when it precedes the first block.
+	DiffHunks() []DiffHunkTarget
+	DiffHunkAt() int
+	GoToDiffHunk(index int) error
+}
+
+// DiffHunkTarget is a diff change block as a plugin sees it: the file it
+// belongs to and what it does. It carries no layout coordinates, so wrapping,
+// split/unified mode and collapsed files cannot shift the target.
+type DiffHunkTarget struct {
+	FilePath string
+	Kind     string
 }
 
 type CursorPosition struct {
