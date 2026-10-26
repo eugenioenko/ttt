@@ -94,6 +94,7 @@ type EditorPaneWidget struct {
 	rowMapOffset            int
 	topRowOffset            int
 	topOffsetLine           int
+	wrapGoal                wrapGoal
 	phantoms                map[int]int
 	phantomGen              uint64
 	DiffOverlay             *DiffOverlay

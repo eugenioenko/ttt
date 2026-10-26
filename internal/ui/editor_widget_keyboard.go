@@ -30,7 +30,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	case tcell.KeyUp:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				if cs.Line > 0 {
+				if e.WordWrap {
+					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, -1, -1)
+				} else if cs.Line > 0 {
 					cs.Line--
 					if e.Folds != nil {
 						if r := e.Folds.ContainingFold(cs.Line); r != nil {
@@ -45,7 +47,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			})
 		} else {
 			e.startOrExtendSelection(shift)
-			if e.Cursor.Line > 0 {
+			if e.WordWrap {
+				e.moveCursorWrapped(-1)
+			} else if e.Cursor.Line > 0 {
 				e.Cursor.Line--
 				e.skipHiddenLineUp()
 				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -57,7 +61,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	case tcell.KeyDown:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				if cs.Line < len(e.Buf.Lines)-1 {
+				if e.WordWrap {
+					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, 1, -1)
+				} else if cs.Line < len(e.Buf.Lines)-1 {
 					cs.Line++
 					if e.Folds != nil {
 						if r := e.Folds.ContainingFold(cs.Line); r != nil {
@@ -72,7 +78,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			})
 		} else {
 			e.startOrExtendSelection(shift)
-			if e.Cursor.Line < len(e.Buf.Lines)-1 {
+			if e.WordWrap {
+				e.moveCursorWrapped(1)
+			} else if e.Cursor.Line < len(e.Buf.Lines)-1 {
 				e.Cursor.Line++
 				e.skipHiddenLineDown()
 				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -150,6 +158,10 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 		}
 	case tcell.KeyPgUp:
 		e.startOrExtendSelection(shift)
+		if e.WordWrap {
+			e.moveCursorWrapped(-e.Viewport.Height)
+			break
+		}
 		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line - e.Viewport.Height)
 		e.skipHiddenLineUp()
 		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -158,6 +170,10 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 		}
 	case tcell.KeyPgDn:
 		e.startOrExtendSelection(shift)
+		if e.WordWrap {
+			e.moveCursorWrapped(e.Viewport.Height)
+			break
+		}
 		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line + e.Viewport.Height)
 		e.skipHiddenLineDown()
 		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
