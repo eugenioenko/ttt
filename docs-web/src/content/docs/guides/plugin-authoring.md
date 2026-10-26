@@ -1064,6 +1064,28 @@ for _, m in ipairs(regex.compile("\\d+"):find_all("a1 b22")) do
 end
 ```
 
+### `ttt.text` Module
+
+The `ttt.text` module measures text in terminal columns, the way ttt draws it. Use it instead of `#s` or `utf8.len(s)` when laying out raw cells or padding table columns: `#s` counts bytes, and a fullwidth character such as `日` is one character but takes two columns. No permission required.
+
+```lua
+local text = require("ttt.text")
+```
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `text.width(s)` | number | Columns `s` occupies. |
+| `text.truncate(s, width, [tail])` | string | `s` unchanged if it fits in `width` columns; otherwise the longest prefix that fits together with `tail` (for example `"…"`), followed by `tail`. A `tail` wider than `width` is dropped. `width` must not be negative. |
+| `text.wrap(s, width)` | table | `s` split into lines of at most `width` columns, breaking at spaces and inside words longer than a line. `\n` starts a new line. A single character wider than `width` gets a line of its own. `width` must be at least 1. |
+
+```lua
+text.width("日本語")                    -- 6
+text.truncate("日本語テキスト", 6, "…")   -- "日本…"
+for i, line in ipairs(text.wrap(message, w)) do
+  panel:text(0, i - 1, line)
+end
+```
+
 ## Widget API
 
 The `render` function receives a **panel proxy** object. Call methods on it to build a declarative widget tree. Widgets are stacked vertically in the order they are declared.
@@ -1803,7 +1825,7 @@ panel:cell(2, 0, "Z", { style = "danger" })   -- named style as table
 
 ### `panel:text(x, y, text, [style])`
 
-Draw a text string starting at the given position. Text is clipped to the panel width.
+Draw a text string starting at the given position. Text is clipped to the panel width. A fullwidth character takes two columns; measure with [`ttt.text`](#ttttext-module) to place what follows.
 
 ```lua
 panel:text(0, 0, "Hello World")                -- default style
@@ -3138,6 +3160,7 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 | `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `focus_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `debounce`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.regex`    | RE2 regular expressions        |
+| `ttt.text`     | Text width in terminal columns |
 | `ttt.editor`   | Editor buffer read/write       |
 | `ttt.diagnostics` | Publish editor diagnostics (squiggles) |
 | `ttt.bookmarks` | Manage gutter bookmarks        |
