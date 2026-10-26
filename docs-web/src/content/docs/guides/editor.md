@@ -115,6 +115,13 @@ TTT supports `.editorconfig` files and picks up indent size automatically per fi
 - Drag sidebar and panel dividers to resize
 - Right-click for context menus
 
+The sidebar resize handle and resize pointer cover only the divider column. Clicks and drags in the first content column beside it go directly to the content, including plugin tabs without a gutter.
+
+Other resize allowances are intentionally retained until a separate change is requested:
+
+- Left and right drawers accept a resize drag on their border or one column outside it.
+- A bottom-docked panel also accepts a resize drag on the tab bar row immediately below its divider when the panel does not consume the press. Right-docked panels use only their divider column.
+
 ## Line Numbers
 
 Line numbers are shown in the gutter with current-line highlighting. The gutter style can be set to `minimal`, `compact` (default), or `extended` via the `editor.gutterStyle` setting. Toggle line numbers on or off with the `lineNumbers` setting.

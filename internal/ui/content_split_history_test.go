@@ -106,7 +106,7 @@ func TestSplitPanelOverDivider(t *testing.T) {
 		want bool
 	}{
 		{divX, 5, true},
-		{divX + 1, 5, true},
+		{divX + 1, 5, false},
 		{divX - 1, 5, false},
 		{divX, 30, false},
 	} {
