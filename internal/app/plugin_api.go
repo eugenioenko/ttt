@@ -316,22 +316,8 @@ func (e *PluginEditorAPI) ClearSearch() {
 	e.eg.ClearSearch()
 }
 
-// activeDiff returns the diff surface the plugin should see, or nil when the
-// active tab is not a diff. Commit Details hosts one diff widget per file, so
-// the detail view answers as a whole rather than through its first file.
-func (e *PluginEditorAPI) activeDiff() (hunks []ui.DiffHunk, at int, goTo func(int) error) {
-	if detail := e.eg.ActiveCommitDetailWidget(); detail != nil {
-		fileIndex, row := detail.ViewportFileAndRow()
-		return detail.Hunks(), detail.HunkAt(fileIndex, row), detail.GoToHunk
-	}
-	if dv := e.eg.ActiveDiffWidget(); dv != nil {
-		return dv.Hunks(), dv.HunkAt(dv.CursorRow()), dv.GoToHunk
-	}
-	return nil, 0, nil
-}
-
 func (e *PluginEditorAPI) DiffHunks() []plugin.DiffHunkTarget {
-	hunks, _, goTo := e.activeDiff()
+	hunks, _, goTo := activeDiffHunks(e.eg)
 	if goTo == nil {
 		return nil
 	}
@@ -345,12 +331,12 @@ func (e *PluginEditorAPI) DiffHunks() []plugin.DiffHunkTarget {
 }
 
 func (e *PluginEditorAPI) DiffHunkAt() int {
-	_, at, _ := e.activeDiff()
+	_, at, _ := activeDiffHunks(e.eg)
 	return at
 }
 
 func (e *PluginEditorAPI) GoToDiffHunk(index int) error {
-	hunks, _, goTo := e.activeDiff()
+	hunks, _, goTo := activeDiffHunks(e.eg)
 	if goTo == nil {
 		return fmt.Errorf("the active tab is not a diff")
 	}

@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
@@ -273,5 +275,35 @@ func TestCommitDetailScrollingClearsTheJumpAnchor(t *testing.T) {
 	fileIndex, row = d.ViewportFileAndRow()
 	if got := d.HunkAt(fileIndex, row); got == 2 {
 		t.Error("Home must clear the jump anchor and report the visible position")
+	}
+}
+
+// An editable inline diff is attached to the file tab, not opened as a content
+// tab, so it needs its own accessor. Testing the widget alone missed this: the
+// widget worked while the tab-level lookup returned nil.
+func TestActiveInlineDiffFindsAnInlineDiff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f.txt")
+	if err := os.WriteFile(path, []byte("a\nb\nc\nd\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g := NewEditorGroupWidget(nil, 4, false, "compact")
+	g.OpenFile(path)
+	if !g.EnableInlineDiff(path, []string{"a", "B", "c", "d"}) {
+		t.Fatal("inline diff did not turn on")
+	}
+	if g.ActiveInlineDiff() == nil {
+		t.Fatal("ActiveInlineDiff returned nil for an inline diff")
+	}
+	if got := len(g.ActiveInlineDiff().Hunks()); got != 1 {
+		t.Errorf("hunks = %d, want 1", got)
+	}
+	// ActiveDiffWidget stays reserved for read-only diff tabs.
+	if g.ActiveDiffWidget() != nil {
+		t.Error("ActiveDiffWidget must stay nil for an editable inline diff")
+	}
+	// A plain file tab must still report no diff.
+	g.DisableInlineDiff(path)
+	if g.ActiveInlineDiff() != nil {
+		t.Error("ActiveInlineDiff must be nil once the inline diff is off")
 	}
 }

@@ -23,13 +23,6 @@ type DiffHunk struct {
 	FileIndex int
 }
 
-// DiffHunkTarget is the plugin-facing view of a hunk: a stable position and
-// the file it belongs to, with no layout-dependent coordinates.
-type DiffHunkTarget struct {
-	FilePath string
-	Kind     string
-}
-
 // diffRowChanged reports whether a row carries a change on either side.
 func diffRowChanged(line diff.DiffLine) bool {
 	return line.Left.Kind == diff.Deleted || line.Right.Kind == diff.Added

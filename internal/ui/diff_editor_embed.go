@@ -207,16 +207,13 @@ func (d *DiffEditorWidget) restoreSelection(m diffSelectionMark) bool {
 func (d *DiffEditorWidget) EmbeddedDiffRowAt(screenRow int) int {
 	d.ensurePanes()
 	lead := d.lead()
-	if !d.IsUnified() && (lead.GetRect().W-1)/2 < 1 {
+	// Match renderEmbedded: it measures the whole embedded rect, not the
+	// pane's own half, so a narrow split draws the right pane. Measuring the
+	// pane width here would pick a different pane than the one on screen.
+	if !d.IsUnified() && (d.GetRect().W-1)/2 < 1 {
 		lead = d.right
 	}
 	line, _ := lead.layout().rowToTop(lead.topRow(lead.layout()) + screenRow)
-	return d.diffRowForBufLineRow(lead, line)
-}
-
-// diffRowForBufLineRow is diffRowForBufLine without the second return value,
-// kept separate so callers that only need the row stay readable.
-func (d *DiffEditorWidget) diffRowForBufLineRow(p *EditorPaneWidget, line int) int {
-	row, _ := d.diffRowForBufLine(p, line)
+	row, _ := d.diffRowForBufLine(lead, line)
 	return row
 }

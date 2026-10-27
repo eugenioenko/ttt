@@ -1024,7 +1024,7 @@ func registerEditorCommands(app *App) {
 // the ends with a notification and never wraps, matching the palette command
 // contract; plugins that want wrap-around build it from editor.diff().
 func (a *App) diffHunkStep(delta int) bool {
-	hunks, at, goTo := a.activeDiffHunks()
+	hunks, at, goTo := activeDiffHunks(a.EditorGroup)
 	if goTo == nil {
 		return false
 	}
@@ -1050,14 +1050,20 @@ func (a *App) diffHunkStep(delta int) bool {
 	return true
 }
 
-// activeDiffHunks resolves the diff surface the commands should navigate,
-// sharing one implementation with the plugin API.
-func (a *App) activeDiffHunks() (hunks []ui.DiffHunk, at int, goTo func(int) error) {
-	if detail := a.EditorGroup.ActiveCommitDetailWidget(); detail != nil {
+// activeDiffHunks resolves the diff surface that navigation and the plugin
+// API both work on. Commit Details spans files and answers as a whole, so it
+// is checked before the single-file diff widget.
+func activeDiffHunks(eg *ui.EditorGroupWidget) (hunks []ui.DiffHunk, at int, goTo func(int) error) {
+	if detail := eg.ActiveCommitDetailWidget(); detail != nil {
 		fileIndex, row := detail.ViewportFileAndRow()
 		return detail.Hunks(), detail.HunkAt(fileIndex, row), detail.GoToHunk
 	}
-	if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
+	if dv := eg.ActiveDiffWidget(); dv != nil {
+		return dv.Hunks(), dv.HunkAt(dv.CursorRow()), dv.GoToHunk
+	}
+	// An editable inline diff is attached to the file tab, so it is not an
+	// ActiveDiffWidget and has to be asked for separately.
+	if dv := eg.ActiveInlineDiff(); dv != nil {
 		return dv.Hunks(), dv.HunkAt(dv.CursorRow()), dv.GoToHunk
 	}
 	return nil, 0, nil
