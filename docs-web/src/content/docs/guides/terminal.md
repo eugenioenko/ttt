@@ -10,6 +10,7 @@ TTT includes a built-in terminal emulator. Press **Ctrl+T** to toggle the termin
 - **Ctrl+T** to toggle the terminal (half screen)
 - **Alt+T** to toggle the terminal fullscreen
 - **Ctrl+K T** to spawn a new terminal tab
+- **Ctrl+V** or **Ctrl+Shift+V** to paste from the clipboard
 - Multiple terminal tabs with a vertical inner tab bar on the left edge
 - Close all terminals from the panel actions menu
 
@@ -38,6 +39,7 @@ Terminal settings in `settings.json`:
   "terminal": {
     "shell": "/bin/zsh",
     "scrollback": 1000,
+    "ctrlVPastes": true,
     "selectionStyle": "background"
   }
 }
@@ -46,7 +48,10 @@ Terminal settings in `settings.json`:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
+| `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V; set to `false` to pass `^V` through to the terminal program |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"` |
+
+Set `terminal.ctrlVPastes` to `false` for shell quoted insert or Vim visual-block mode. Ctrl+Shift+V still pastes when the outer terminal reports it distinctly. Some terminals handle Ctrl+Shift+V themselves and send a bracketed paste, which also works. Terminals that encode both shortcuts as `^V` cannot distinguish them. The setting applies immediately to open terminal tabs and is available under **Settings → Terminal → Ctrl+V pastes**.
 
 Terminal ANSI colors are configurable via the `terminal` field in your theme file.

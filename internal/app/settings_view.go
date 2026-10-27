@@ -233,6 +233,9 @@ func settingsCategories() []settingsCategory {
 				SetInt: func(s *config.Settings, v int) { s.Search.Debounce = v }},
 		}},
 		{Title: "Terminal", Fields: []settingField{
+			{Label: "Ctrl+V pastes", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Terminal.CtrlVPastes },
+				SetBool: func(s *config.Settings, v bool) { s.Terminal.CtrlVPastes = v }},
 			{Label: "Shell", Kind: settingString, Restart: true,
 				GetString: func(s *config.Settings) string { return s.Terminal.Shell },
 				SetString: func(s *config.Settings, v string) { s.Terminal.Shell = v }},

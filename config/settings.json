@@ -52,7 +52,8 @@
   },
   "terminal": {
     "scrollback": 1000,
-    "selectionStyle": "background"
+    "selectionStyle": "background",
+    "ctrlVPastes": true
   },
   "lsp": {
     "saveOnRename": false,

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -70,4 +71,39 @@ func TestSpawnTerminalSpecUsesExplicitCwd(t *testing.T) {
 	}
 	defer a.CloseTerminal(id)
 	waitForTerminalOutput(t, a.Terminals[0].Term, dir)
+}
+
+func TestTerminalCtrlVPastesAppliesToExistingAndNewTabs(t *testing.T) {
+	a := spawnTestApp(t)
+	a.Renderer = &render.Renderer{}
+	s := *a.Settings
+	s.Terminal.CtrlVPastes = false
+	a.ApplySettings(s)
+	for i := 0; i < 2; i++ {
+		id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer a.CloseTerminal(id)
+		if a.Terminals[i].Widget.CtrlVPastes {
+			t.Fatal("new terminal ignored ctrlVPastes=false")
+		}
+	}
+	for _, enabled := range []bool{true, false, true} {
+		s.Terminal.CtrlVPastes = enabled
+		a.ApplySettings(s)
+		for _, tab := range a.Terminals {
+			if tab.Widget.CtrlVPastes != enabled {
+				t.Errorf("terminal %s: CtrlVPastes = %v, want %v", tab.ID, tab.Widget.CtrlVPastes, enabled)
+			}
+		}
+	}
+	id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.CloseTerminal(id)
+	if !a.Terminals[2].Widget.CtrlVPastes {
+		t.Fatal("new terminal ignored ctrlVPastes=true")
+	}
 }

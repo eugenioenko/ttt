@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -154,5 +155,81 @@ func TestTerminalWidget_SelectedTextNegativeBounds(t *testing.T) {
 	got = tw.selectedText()
 	if got != "hello" {
 		t.Errorf("selectedText() = %q, want %q", got, "hello")
+	}
+}
+
+func TestTerminalWidget_CtrlVPastes(t *testing.T) {
+	clipboard.DisableSystem()
+	term, err := terminal.New("/bin/sh", 80, 24, 0, nil, "", "-c",
+		"stty raw -echo; printf paste-keys-ready; exec cat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	updated := newUpdateChan(term)
+	term.Run()
+	waitFor(t, updated, func() bool {
+		return strings.Contains(string(term.RawTail()), "paste-keys-ready")
+	})
+
+	tw := NewTerminalWidget(term, nil)
+	if !tw.CtrlVPastes {
+		t.Fatal("Ctrl+V must paste by default")
+	}
+	for _, bracketed := range []bool{false, true} {
+		mode := "\x1b[?2004l"
+		if bracketed {
+			mode = "\x1b[?2004h"
+		}
+		before := len(term.RawTail())
+		term.WriteString(mode)
+		waitFor(t, updated, func() bool {
+			return len(term.RawTail()) >= before+len(mode) &&
+				term.DecPrivateModes().BracketedPasteMode == bracketed
+		})
+		for _, enabled := range []bool{true, false} {
+			for _, key := range []struct {
+				name string
+				key  tcell.Key
+				text string
+			}{
+				{"control key", tcell.KeyCtrlV, ""},
+				{"lowercase rune", tcell.KeyRune, "v"},
+				{"uppercase rune", tcell.KeyRune, "V"},
+			} {
+				for _, shifted := range []bool{false, true} {
+					t.Run(fmt.Sprintf("bracketed=%t/enabled=%t/%s/shift=%t", bracketed, enabled, key.name, shifted), func(t *testing.T) {
+						tw.CtrlVPastes = enabled
+						tw.hasSelection = true
+						tw.scrollOffset = 1
+						clipboard.Set("clipboard-payload")
+						mod := tcell.ModCtrl
+						if shifted {
+							mod |= tcell.ModShift
+						}
+						want := "\x16"
+						if enabled || shifted {
+							want = "clipboard-payload"
+							if bracketed {
+								want = "\x1b[200~" + want + "\x1b[201~"
+							}
+						}
+						before := len(term.RawTail())
+						if got := tw.HandleEvent(tcell.NewEventKey(key.key, key.text, mod)); got != EventConsumed {
+							t.Fatalf("HandleEvent = %v, want EventConsumed", got)
+						}
+						waitFor(t, updated, func() bool {
+							return len(term.RawTail()) >= before+len(want)
+						})
+						if got := string(term.RawTail()[before:]); got != want {
+							t.Errorf("PTY received %q, want %q", got, want)
+						}
+						if tw.HasSelection() || tw.scrollOffset != 0 {
+							t.Error("key must clear the selection and return to the live view")
+						}
+					})
+				}
+			}
+		}
 	}
 }

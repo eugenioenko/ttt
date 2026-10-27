@@ -40,12 +40,14 @@ type TerminalSettings struct {
 	Args           []string `json:"args,omitempty"`
 	Scrollback     int      `json:"scrollback,omitempty"`
 	SelectionStyle string   `json:"selectionStyle"`
+	CtrlVPastes    bool     `json:"ctrlVPastes"`
 }
 
 func DefaultTerminalSettings() TerminalSettings {
 	return TerminalSettings{
 		Scrollback:     1000,
 		SelectionStyle: SelectionStyleBackground,
+		CtrlVPastes:    true,
 	}
 }
 

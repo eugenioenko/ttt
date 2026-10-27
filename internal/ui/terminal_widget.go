@@ -77,6 +77,7 @@ type TerminalWidget struct {
 	OnOpenFile     func(path string, line, col int)
 	WorkDir        string
 	SelectionStyle string
+	CtrlVPastes    bool
 	ctrlHeld       bool
 	linkCache      map[int][]linkSpan
 	linkMemo       map[string][]linkSpan
@@ -89,6 +90,7 @@ func NewTerminalWidget(t *terminal.Terminal, palette *TerminalColorPalette) *Ter
 	return &TerminalWidget{
 		Term:            t,
 		Palette:         palette,
+		CtrlVPastes:     true,
 		mouseButtonHeld: -1,
 	}
 }
@@ -548,7 +550,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		isPaste := (tev.Key() == tcell.KeyCtrlV) ||
 			(tev.Key() == tcell.KeyRune && (r == 'v' || r == 'V') && tev.Modifiers()&tcell.ModCtrl != 0)
-		if isPaste {
+		if isPaste && (tw.CtrlVPastes || tev.Modifiers()&tcell.ModShift != 0) {
 			text := clipboard.Get()
 			if text != "" {
 				tw.PasteText(text)

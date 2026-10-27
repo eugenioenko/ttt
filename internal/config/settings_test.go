@@ -304,6 +304,9 @@ func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
 
 func TestDefaultTerminalSettings(t *testing.T) {
 	ts := DefaultTerminalSettings()
+	if !ts.CtrlVPastes {
+		t.Error("expected CtrlVPastes true by default")
+	}
 	if ts.Scrollback != 1000 {
 		t.Errorf("expected Scrollback 1000, got %d", ts.Scrollback)
 	}

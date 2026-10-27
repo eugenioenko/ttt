@@ -465,6 +465,7 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 
 	tw := ui.NewTerminalWidget(t, a.Palette)
 	tw.WorkDir = spec.Cwd
+	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
 	tw.OnOpenURL = func(url string) {
 		OpenURL(url)
 	}

@@ -32,6 +32,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Editor.SyntaxHighlight = &enabled
 	s.Welcome.RecentFolders = &enabled
 	s.Terminal.Shell = "/bin/zsh"
+	s.Terminal.CtrlVPastes = false
 	s.Editor.SelectionStyle = SelectionStyleInvert
 	s.Terminal.SelectionStyle = SelectionStyleInvert
 
@@ -70,11 +71,37 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	if got.Terminal.Shell != "/bin/zsh" {
 		t.Errorf("shell = %q, want /bin/zsh", got.Terminal.Shell)
 	}
+	if got.Terminal.CtrlVPastes {
+		t.Error("terminal.ctrlVPastes=false did not round-trip")
+	}
 	if got.Editor.SelectionStyle != SelectionStyleInvert {
 		t.Errorf("editor.selectionStyle = %q, want %q", got.Editor.SelectionStyle, SelectionStyleInvert)
 	}
 	if got.Terminal.SelectionStyle != SelectionStyleInvert {
 		t.Errorf("terminal.selectionStyle = %q, want %q", got.Terminal.SelectionStyle, SelectionStyleInvert)
+	}
+}
+
+func TestLoadTerminalCtrlVPastes(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tt := range []struct {
+		name string
+		json string
+		want bool
+	}{
+		{"no terminal settings", `{}`, true},
+		{"existing terminal settings", `{"terminal":{"scrollback":2000}}`, true},
+		{"enabled", `{"terminal":{"ctrlVPastes":true}}`, true},
+		{"disabled", `{"terminal":{"ctrlVPastes":false}}`, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tt.json), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := LoadSettings().Terminal.CtrlVPastes; got != tt.want {
+				t.Errorf("CtrlVPastes = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

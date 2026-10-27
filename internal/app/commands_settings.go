@@ -76,6 +76,9 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.clearRecentFolders()
 	}
 	a.refreshWelcome()
+	for _, tab := range a.Terminals {
+		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
+	}
 
 	highlight.SetTimeLimit(time.Duration(s.Editor.HighlightTimeLimit) * time.Millisecond)
 	// Apply editor settings to the editor group and active editor
