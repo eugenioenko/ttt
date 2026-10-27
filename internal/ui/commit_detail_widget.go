@@ -1713,11 +1713,9 @@ func (d *CommitDetailWidget) ViewportFileAndRow() (fileIndex, row int) {
 	d.ensureVisualRows()
 	// The sticky heading covers the top row, so the first row a reader can
 	// actually see is one below TopLine.
-	top := max(d.TopLine, 0) + d.stickyRows()
-	if top >= len(d.visualRows) {
-		top = max(len(d.visualRows)-1, 0)
-	}
-	for visualIndex := top; visualIndex < len(d.visualRows); visualIndex++ {
+	top := max(d.TopLine, 0)
+	bottom := min(top+d.viewH, len(d.visualRows))
+	for visualIndex := top + d.stickyRows(); visualIndex < bottom; visualIndex++ {
 		visual := d.visualRows[visualIndex]
 		if visual.row < 0 || visual.row >= len(d.rows) {
 			continue
@@ -1727,7 +1725,7 @@ func (d *CommitDetailWidget) ViewportFileAndRow() (fileIndex, row int) {
 			return r.fileIndex, d.diffRowAt(visual)
 		}
 	}
-	return 0, 0
+	return 0, -1
 }
 
 // stickyRows reports how many screen rows the floating file heading covers.

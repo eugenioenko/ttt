@@ -87,6 +87,67 @@ func TestCommitDetailScrollbarClearsHunkAnchor(t *testing.T) {
 	}
 }
 
+func TestCommitDetailDisclosureScrollClearsHunkAnchor(t *testing.T) {
+	d := navigationDetail(false)
+	renderDetail(d, 100, 10)
+	if err := d.GoToHunk(3); err != nil {
+		t.Fatal(err)
+	}
+	renderDetail(d, 100, 10)
+	before := d.TopLine
+	d.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", 0))
+	if d.TopLine >= before {
+		t.Fatal("Tab did not scroll to the commit header")
+	}
+	renderDetail(d, 100, 10)
+	file, row := d.ViewportFileAndRow()
+	if got := d.HunkAt(file, row); got != 0 {
+		t.Fatalf("Tab scrolled to the header but current_hunk=%d, want 0", got)
+	}
+}
+
+func TestCommitDetailDisclosureWithoutScrollKeepsHunkAnchor(t *testing.T) {
+	d := commitDetailWithFiles(t, "f.txt")
+	renderDetail(d, 167, 40)
+	if err := d.GoToHunk(2); err != nil {
+		t.Fatal(err)
+	}
+	renderDetail(d, 167, 40)
+	before := d.TopLine
+	d.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", 0))
+	if d.TopLine != before {
+		t.Fatal("Tab unexpectedly scrolled")
+	}
+	file, row := d.ViewportFileAndRow()
+	if got := d.HunkAt(file, row); got != 2 {
+		t.Fatalf("Tab without scrolling changed current_hunk=%d, want 2", got)
+	}
+}
+
+func TestCommitDetailMessageDoesNotSelectOffscreenHunk(t *testing.T) {
+	d := NewCommitDetailWidget("", "", "", false)
+	d.SetDetail(strings.Repeat("Commit description\n\n", 20), []CommitDetailFile{{
+		Path: "f.txt",
+		Diff: diff.Parse("--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-first\n+FIRST\n@@ -10 +10 @@\n-last\n+LAST\n"),
+	}}, "")
+	grid := renderDetail(d, 100, 10)
+	if _, _, visible := detailFind(grid, "FIRST"); visible {
+		t.Fatal("fixture must keep the diff below the viewport")
+	}
+	file, row := d.ViewportFileAndRow()
+	at := d.HunkAt(file, row)
+	if at != 0 {
+		t.Fatalf("message-only viewport reports current_hunk=%d, want 0", at)
+	}
+	if err := d.GoToHunk(at + 1); err != nil {
+		t.Fatal(err)
+	}
+	grid = renderDetail(d, 100, 10)
+	if _, _, visible := detailFind(grid, "FIRST"); !visible {
+		t.Fatalf("Next skipped the first hunk:\n%s", detailTestText(grid))
+	}
+}
+
 func TestCommitDetailReplacementClearsHunkAnchor(t *testing.T) {
 	for _, current := range []bool{false, true} {
 		d := navigationDetail(false)
