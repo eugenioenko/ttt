@@ -713,6 +713,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 }
 
 func (d *CommitDetailWidget) buildRows() {
+	d.navValid = false
 	d.rows = nil
 	d.visualRows = nil
 	d.visualRowsW = -1
@@ -1440,6 +1441,7 @@ func (d *CommitDetailWidget) OwnsPointerCapture() bool {
 
 func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 	if newTop, consumed := d.scrollbar.HandleEvent(ev); consumed {
+		d.navValid = false
 		d.TopLine = newTop
 		if d.scrollbar.IsDragging() {
 			return EventCaptured
@@ -1783,9 +1785,6 @@ func indexInFile(hunks []DiffHunk, flat int) int {
 	return n
 }
 
-// scrollToFileHunk sets TopLine to the target row itself. Keeping the file
-// heading above it would make the viewport report the file's first row
-// instead of the row navigated to, so the position would never advance.
 func (d *CommitDetailWidget) scrollToFileHunk(fileIndex, row int) {
 	d.ensureVisualRows()
 	for visualIndex, visual := range d.visualRows {
@@ -1799,9 +1798,8 @@ func (d *CommitDetailWidget) scrollToFileHunk(fileIndex, row int) {
 		if d.diffRowAt(visual) != row {
 			continue
 		}
-		// Keep one row above the target so the sticky heading cannot cover
-		// it, unless that would push the target out of the last screenful.
-		top := max(visualIndex-d.stickyRows(), 0)
+		// The target can need a sticky heading even when the previous frame did not.
+		top := max(visualIndex-1, 0)
 		d.TopLine = top
 		d.clampScroll()
 		return

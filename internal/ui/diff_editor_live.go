@@ -47,6 +47,7 @@ func (d *DiffEditorWidget) Editable() bool { return d.editable }
 // SetLiveDiff takes a recomputed diff of the buffer as it was at version ver,
 // with snap that version's text. Edits made since are replayed onto it.
 func (d *DiffEditorWidget) SetLiveDiff(base []string, lines []diff.DiffLine, ver uint64, snap []string) {
+	d.liveHunk = nil
 	d.oldLines = base
 	d.full = lines
 	d.fullChanges = nil
@@ -68,6 +69,7 @@ func (d *DiffEditorWidget) bind(e *EditorPaneWidget) {
 	d.live = e
 	d.docSyntax.old.anchor, d.docSyntax.new.anchor = e.Highlighter, e.Highlighter
 	if d.liveBuf != e.Buf {
+		d.liveHunk = nil
 		d.liveBuf = e.Buf
 		d.liveCursor = -1
 		d.liveVer = e.Buf.Version()

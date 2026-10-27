@@ -213,7 +213,7 @@ func (d *DiffEditorWidget) EmbeddedDiffRowAt(screenRow int) int {
 	if !d.IsUnified() && (d.GetRect().W-1)/2 < 1 {
 		lead = d.right
 	}
-	line, _ := lead.layout().rowToTop(lead.topRow(lead.layout()) + screenRow)
+	line, _ := lead.layout().rowToTop(screenRow)
 	row, _ := d.diffRowForBufLine(lead, line)
 	return row
 }

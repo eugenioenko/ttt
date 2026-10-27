@@ -123,6 +123,12 @@ type DiffEditorWidget struct {
 	liveSnap    []string
 	fullChanges []buffer.Change
 	liveExpand  []int
+	liveHunk    *liveHunkAnchor
+}
+
+type liveHunkAnchor struct {
+	row, line, col int
+	version        uint64
 }
 
 // splitPair is a diff row's line in each split pane, -1 where that side is
@@ -1160,7 +1166,13 @@ func (d *DiffEditorWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		d.syncLive()
 		if kev, ok := ev.(*tcell.EventKey); ok {
+			if isNavigationKey(kev) {
+				d.liveHunk = nil
+			}
 			return d.handleLiveKey(kev)
+		}
+		if mev, ok := ev.(*tcell.EventMouse); ok && mev.Buttons()&tcell.Button1 != 0 {
+			d.liveHunk = nil
 		}
 	}
 	switch tev := ev.(type) {
@@ -1469,6 +1481,12 @@ func (d *DiffEditorWidget) CursorRow() int {
 		if d.live == nil {
 			return 0
 		}
+		if a := d.liveHunk; a != nil {
+			if a.version == d.live.Buf.Version() && a.line == d.live.Cursor.Line && a.col == d.live.Cursor.Col {
+				return a.row
+			}
+			d.liveHunk = nil
+		}
 		return d.fullRowForBufLine(d.live.Cursor.Line)
 	}
 	p := d.lead()
@@ -1479,15 +1497,28 @@ func (d *DiffEditorWidget) CursorRow() int {
 // fullRowForBufLine maps a buffer line onto its row in full, the space an
 // editable diff enumerates blocks in.
 func (d *DiffEditorWidget) fullRowForBufLine(line int) int {
+	row := 0
 	for i, dl := range d.full {
-		if dl.Right.Kind != diff.Blank && dl.Right.Num-1 == line {
+		if dl.Right.Kind == diff.Blank {
+			continue
+		}
+		current := d.shiftFullLine(dl.Right.Num - 1)
+		if current == line {
 			return i
 		}
-		if dl.Left.Kind != diff.Blank && dl.Right.Kind == diff.Blank && dl.Left.Num-1 == line {
-			return i
+		if current > line {
+			break
 		}
+		row = i
 	}
-	return 0
+	return row
+}
+
+func (d *DiffEditorWidget) shiftFullLine(line int) int {
+	for _, c := range d.fullChanges {
+		line = shiftLine(line, c)
+	}
+	return line
 }
 
 // GoToHunk moves the cursor to the first row of the 1-based change block
@@ -1520,18 +1551,29 @@ func (d *DiffEditorWidget) goToLiveRow(hunk DiffHunk) {
 	if d.live == nil || hunk.Row < 0 || hunk.Row >= len(d.full) {
 		return
 	}
-	line := d.full[hunk.Row]
-	target := line.Right.Num - 1
-	if hunk.Kind == DiffHunkDeleted {
-		// A deleted-only block has no row on the right side; land on the line
-		// the deletion sits before instead of jumping somewhere else.
-		target = line.Right.Num - 1
-		if target < 0 {
-			target = d.live.Buf.ClampLine(line.Left.Num - 1)
+	d.syncLive()
+	d.liveHunk = nil
+	d.focusLeft = false
+	target := len(d.live.Buf.Lines)
+	for _, line := range d.full[hunk.Row:] {
+		if line.Right.Kind != diff.Blank {
+			target = d.shiftFullLine(line.Right.Num - 1)
+			break
 		}
 	}
+	target = min(max(target, 0), len(d.live.Buf.Lines))
 	d.live.Cursor.Line = d.live.Buf.ClampLine(target)
 	d.live.Cursor.Col = 0
 	d.liveCursor = d.live.Cursor.Line
 	d.live.scrollViewport()
+	if hunk.Kind == DiffHunkDeleted {
+		// A deleted row, including one after EOF, has no live cursor position.
+		d.liveHunk = &liveHunkAnchor{row: hunk.Row, line: d.live.Cursor.Line, col: 0, version: d.live.Buf.Version()}
+		l := d.live.layout()
+		row := l.startRow(target)
+		top, height := d.live.topRow(l), d.live.Viewport.Height
+		if height <= 0 || row < top || row >= top+height {
+			d.live.setTopRow(l, row-max(height/2, 0))
+		}
+	}
 }
