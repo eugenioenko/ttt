@@ -199,3 +199,24 @@ func (d *DiffEditorWidget) restoreSelection(m diffSelectionMark) bool {
 	}
 	return true
 }
+
+// EmbeddedDiffRowAt maps a screen row inside the embedded diff, counted from
+// its first row, onto the diff row it shows. A wrapped line spans several
+// screen rows that all resolve to the same diff row, so callers must not use
+// the screen row as a diff row.
+func (d *DiffEditorWidget) EmbeddedDiffRowAt(screenRow int) int {
+	d.ensurePanes()
+	lead := d.lead()
+	if !d.IsUnified() && (lead.GetRect().W-1)/2 < 1 {
+		lead = d.right
+	}
+	line, _ := lead.layout().rowToTop(lead.topRow(lead.layout()) + screenRow)
+	return d.diffRowForBufLineRow(lead, line)
+}
+
+// diffRowForBufLineRow is diffRowForBufLine without the second return value,
+// kept separate so callers that only need the row stay readable.
+func (d *DiffEditorWidget) diffRowForBufLineRow(p *EditorPaneWidget, line int) int {
+	row, _ := d.diffRowForBufLine(p, line)
+	return row
+}

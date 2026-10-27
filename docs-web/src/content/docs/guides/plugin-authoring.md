@@ -1891,7 +1891,7 @@ Require the `editor.read` permission.
 | `editor.byte_to_col(text, byte)` | number                                          | Convert a 1-based **byte** offset in `text` to a 1-based **rune column**. |
 | `editor.col_to_byte(text, col)`  | number                                          | Convert a 1-based **rune column** in `text` to a 1-based **byte** offset. |
 | `editor.get_cursors()`           | table of `{line, col}`                          | All cursor positions (1-based). Returns a single-element table when no extra cursors are active. |
-| `editor.diff()`                  | `{hunks, current_hunk}` or `nil`                | The active diff's change blocks. `nil` outside a diff. |
+| `editor.diff()`                  | `{hunks, current_hunk}` or `nil`                | The active diff's change blocks; empty `hunks` inside a diff with no changes, `nil` outside a diff. |
 
 > **Columns are runes, not bytes.** The editor — and every position in the
 > `editor.replace` and diagnostics APIs — uses 1-based **rune (visual) columns**.
@@ -1959,8 +1959,12 @@ if d then
 end
 ```
 
-`editor.diff()` returns `nil` outside a diff, so a plugin can tell "no diff
-here" from "a diff with no changes".
+`editor.diff()` returns `nil` outside a diff. Inside a diff with no change
+blocks it returns a table with an empty `hunks` list, so a plugin can tell "no
+diff here" from "a diff with no changes".
+
+`editor.diff()` also works in an editable diff (the inline diff over a working
+tree file), where the blocks follow the file's current content.
 
 | Field           | Meaning                                                          |
 |-----------------|------------------------------------------------------------------|

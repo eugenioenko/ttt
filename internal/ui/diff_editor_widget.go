@@ -1433,6 +1433,13 @@ func DiffCombinedLines(fd diff.FileDiff) []string {
 // follow the projection the widget currently shows, so a block that a
 // collapsed gap hides is still listed once its file is expanded.
 func (d *DiffEditorWidget) Hunks() []DiffHunk {
+	// An editable diff keeps its uncompacted rows in full; d.Lines is the
+	// compacted projection, whose indexes do not match the rows navigation
+	// and search use. Enumerate the source rows so a block address means the
+	// same thing on both sides.
+	if d.editable {
+		return diffHunksInRows(d.full, d.FilePath, 0)
+	}
 	return diffHunksInRows(d.Lines, d.FilePath, 0)
 }
 
@@ -1455,12 +1462,32 @@ func (d *DiffEditorWidget) HunkAt(row int) int {
 // Hunks. The cursor belongs to the pane the widget leads with, which differs
 // between split and unified projections.
 func (d *DiffEditorWidget) CursorRow() int {
-	if d.editable || d.Loading {
+	if d.Loading {
 		return 0
+	}
+	if d.editable {
+		if d.live == nil {
+			return 0
+		}
+		return d.fullRowForBufLine(d.live.Cursor.Line)
 	}
 	p := d.lead()
 	row, _ := d.diffRowForBufLine(p, p.Cursor.Line)
 	return row
+}
+
+// fullRowForBufLine maps a buffer line onto its row in full, the space an
+// editable diff enumerates blocks in.
+func (d *DiffEditorWidget) fullRowForBufLine(line int) int {
+	for i, dl := range d.full {
+		if dl.Right.Kind != diff.Blank && dl.Right.Num-1 == line {
+			return i
+		}
+		if dl.Left.Kind != diff.Blank && dl.Right.Kind == diff.Blank && dl.Left.Num-1 == line {
+			return i
+		}
+	}
+	return 0
 }
 
 // GoToHunk moves the cursor to the first row of the 1-based change block
@@ -1471,9 +1498,40 @@ func (d *DiffEditorWidget) GoToHunk(index int) error {
 	if index < 1 || index > len(hunks) {
 		return fmt.Errorf("hunk %d out of range (1-%d)", index, len(hunks))
 	}
+	hunk := hunks[index-1]
 	if d.editable {
-		return fmt.Errorf("hunk navigation is not supported in editable diffs")
+		d.goToLiveRow(hunk)
+		return nil
 	}
-	d.scrollToDiffRow(hunks[index-1].Row, diffAnySide, false)
+	// A deleted-only block has no row on the right pane, so landing there
+	// would push the cursor to the line above and report the previous block.
+	// Focus the pane that actually holds the block.
+	if !d.IsUnified() {
+		d.focusLeft = hunk.Kind == DiffHunkDeleted
+	}
+	d.scrollToDiffRow(hunk.Row, diffAnySide, false)
 	return nil
+}
+
+// goToLiveRow moves an editable diff's cursor onto a change block. The live
+// pane belongs to the editor group, so this moves that pane's cursor rather
+// than a pane the widget owns.
+func (d *DiffEditorWidget) goToLiveRow(hunk DiffHunk) {
+	if d.live == nil || hunk.Row < 0 || hunk.Row >= len(d.full) {
+		return
+	}
+	line := d.full[hunk.Row]
+	target := line.Right.Num - 1
+	if hunk.Kind == DiffHunkDeleted {
+		// A deleted-only block has no row on the right side; land on the line
+		// the deletion sits before instead of jumping somewhere else.
+		target = line.Right.Num - 1
+		if target < 0 {
+			target = d.live.Buf.ClampLine(line.Left.Num - 1)
+		}
+	}
+	d.live.Cursor.Line = d.live.Buf.ClampLine(target)
+	d.live.Cursor.Col = 0
+	d.liveCursor = d.live.Cursor.Line
+	d.live.scrollViewport()
 }

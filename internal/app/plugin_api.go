@@ -331,10 +331,12 @@ func (e *PluginEditorAPI) activeDiff() (hunks []ui.DiffHunk, at int, goTo func(i
 }
 
 func (e *PluginEditorAPI) DiffHunks() []plugin.DiffHunkTarget {
-	hunks, _, _ := e.activeDiff()
-	if len(hunks) == 0 {
+	hunks, _, goTo := e.activeDiff()
+	if goTo == nil {
 		return nil
 	}
+	// An active diff with no change blocks returns an empty slice, not nil,
+	// so a plugin can tell "no diff here" from "a diff with no changes".
 	out := make([]plugin.DiffHunkTarget, len(hunks))
 	for i, h := range hunks {
 		out[i] = plugin.DiffHunkTarget{FilePath: h.FilePath, Kind: string(h.Kind)}

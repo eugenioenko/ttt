@@ -3,7 +3,12 @@ package ui
 import (
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/view"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 // hunkDiffPatch has two change blocks separated by more unchanged context than
@@ -221,5 +226,52 @@ func TestCommitDetailHunksIncludeCollapsedFiles(t *testing.T) {
 	}
 	if d.collapsedFiles[1] {
 		t.Error("jumping into a collapsed file must expand it")
+	}
+}
+
+// An editable diff enumerates blocks in its uncompacted rows, so a jump lands
+// on the same block that editor.diff() reported.
+func TestEditableDiffHunksAndNavigation(t *testing.T) {
+	old := []string{"line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7", "line 8", "line 9", "line 10"}
+	cur := append([]string{}, old...)
+	cur[2] = "changed 3"
+	cur = append(cur[:9], "line 11")
+	d := NewEditableDiffWidget("f.txt", old, diff.FullDiffLines(old, cur))
+	d.SetRect(Rect{X: 0, Y: 0, W: 160, H: 30})
+	// An editable diff borrows the editor's live pane; bind one so the cursor
+	// this test reads is the cursor navigation moved.
+	pane := NewEditorPaneWidget(&buffer.Buffer{Lines: cur}, &cursor.Cursor{}, &view.Viewport{})
+	d.bind(pane)
+	d.rebuild()
+
+	hunks := d.Hunks()
+	if len(hunks) != 2 {
+		t.Fatalf("expected 2 blocks, got %d: %+v", len(hunks), hunks)
+	}
+	for i := range hunks {
+		if err := d.GoToHunk(i + 1); err != nil {
+			t.Fatalf("GoToHunk(%d) on an editable diff: %v", i+1, err)
+		}
+		if got := d.HunkAt(d.CursorRow()); got != i+1 {
+			t.Errorf("after GoToHunk(%d): position = %d", i+1, got)
+		}
+	}
+}
+
+// Scrolling moves the visible position, so a stale jump anchor must not keep
+// answering for it.
+func TestCommitDetailScrollingClearsTheJumpAnchor(t *testing.T) {
+	d := commitDetailWithFiles(t, "a.txt")
+	if err := d.GoToHunk(2); err != nil {
+		t.Fatalf("GoToHunk(2): %v", err)
+	}
+	fileIndex, row := d.ViewportFileAndRow()
+	if got := d.HunkAt(fileIndex, row); got != 2 {
+		t.Fatalf("after jump: position = %d, want 2", got)
+	}
+	d.HandleEvent(tcell.NewEventKey(tcell.KeyHome, "", 0))
+	fileIndex, row = d.ViewportFileAndRow()
+	if got := d.HunkAt(fileIndex, row); got == 2 {
+		t.Error("Home must clear the jump anchor and report the visible position")
 	}
 }

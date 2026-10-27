@@ -45,6 +45,7 @@ type mockEditorAPI struct {
 	searchPattern string
 	searchRegex   bool
 	searchCleared bool
+	notADiff      bool
 	diffHunks     []DiffHunkTarget
 	diffHunkAt    int
 	wentToHunk    int
@@ -128,8 +129,16 @@ func (m *mockEditorAPI) ClearSearch() {
 	m.searchCleared = true
 }
 
-func (m *mockEditorAPI) DiffHunks() []DiffHunkTarget { return m.diffHunks }
-func (m *mockEditorAPI) DiffHunkAt() int             { return m.diffHunkAt }
+func (m *mockEditorAPI) DiffHunks() []DiffHunkTarget {
+	if m.notADiff {
+		return nil
+	}
+	if m.diffHunks == nil {
+		return []DiffHunkTarget{}
+	}
+	return m.diffHunks
+}
+func (m *mockEditorAPI) DiffHunkAt() int { return m.diffHunkAt }
 func (m *mockEditorAPI) GoToDiffHunk(index int) error {
 	if index < 1 || index > len(m.diffHunks) {
 		return fmt.Errorf("hunk %d out of range", index)
@@ -430,22 +439,6 @@ func TestEditorDiffReportsHunksAndPosition(t *testing.T) {
 	}
 }
 
-// Outside a diff the API must say so with nil rather than an empty table, so a
-// plugin can tell "no diff here" from "a diff with no changes".
-func TestEditorDiffIsNilOutsideADiff(t *testing.T) {
-	mock := &mockEditorAPI{}
-	p, cleanup := setupTestPluginWithEditor(PermissionSet{EditorRead: true}, mock)
-	defer cleanup()
-
-	err := p.State.DoString(`
-		local editor = require("ttt.editor")
-		assert(editor.diff() == nil, "expected nil outside a diff")
-	`)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-}
-
 func TestEditorGoToDiffHunkMovesAndReportsErrors(t *testing.T) {
 	mock := &mockEditorAPI{
 		diffHunks: []DiffHunkTarget{{FilePath: "a.go", Kind: "added"}},
@@ -478,6 +471,39 @@ func TestEditorGoToDiffHunkRequiresWritePermission(t *testing.T) {
 		local editor = require("ttt.editor")
 		assert(editor.go_to_diff_hunk == nil, "go_to_diff_hunk must need editor.write")
 		assert(editor.diff ~= nil, "diff must need only editor.read")
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+}
+
+// An active diff with no change blocks must still return a table, so a plugin
+// can tell it apart from a tab that is not a diff at all.
+func TestEditorDiffReportsAnEmptyDiff(t *testing.T) {
+	mock := &mockEditorAPI{}
+	p, cleanup := setupTestPluginWithEditor(PermissionSet{EditorRead: true}, mock)
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local editor = require("ttt.editor")
+		local d = editor.diff()
+		assert(d ~= nil, "an empty diff must return a table, not nil")
+		assert(#d.hunks == 0, "expected no hunks, got " .. #d.hunks)
+		assert(d.current_hunk == 0, "expected current_hunk 0")
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+}
+
+func TestEditorDiffIsNilOnANonDiffTab(t *testing.T) {
+	mock := &mockEditorAPI{notADiff: true}
+	p, cleanup := setupTestPluginWithEditor(PermissionSet{EditorRead: true}, mock)
+	defer cleanup()
+
+	err := p.State.DoString(`
+		local editor = require("ttt.editor")
+		assert(editor.diff() == nil, "a non-diff tab must return nil")
 	`)
 	if err != nil {
 		t.Fatalf("error: %v", err)

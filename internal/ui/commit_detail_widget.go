@@ -207,11 +207,14 @@ type CommitDetailWidget struct {
 	primaryPressed    bool
 	disclosurePressed bool
 	capturedFile      int
-	// navFile and navRow remember the last block a jump or click landed on.
-	// The viewport cannot answer when the diff is shorter than the view, and
-	// TopLine stays 0 then, so navigation keeps its own anchor.
-	navFile int
-	navRow  int
+	// navFile and navRow hold the position navigation last moved to. They are
+	// the answer to "where am I" only while the viewport has not moved since:
+	// the viewport alone cannot answer when the diff is shorter than the view,
+	// because TopLine stays 0 then. Any scroll clears navValid so the visible
+	// position wins again.
+	navFile  int
+	navRow   int
+	navValid bool
 
 	OnFetchContext func(fileIndex int, file CommitDetailFile)
 	OnClose        func()
@@ -1486,6 +1489,7 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		default:
 			return EventIgnored
 		}
+		d.navValid = false
 		d.clampScroll()
 		return EventConsumed
 	case *tcell.EventMouse:
@@ -1507,6 +1511,7 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		default:
 			return d.handlePointer(event)
 		}
+		d.navValid = false
 		d.clampScroll()
 		return EventConsumed
 	}
@@ -1700,19 +1705,16 @@ func (d *CommitDetailWidget) ensureVisualRows() {
 // viewport. Commit Details has no single cursor across files, so the visible
 // position is the navigation position plugins and commands share.
 func (d *CommitDetailWidget) ViewportFileAndRow() (fileIndex, row int) {
-	if d.navFile >= 0 && d.navFile < len(d.Files) {
+	if d.navValid && d.navFile >= 0 && d.navFile < len(d.Files) {
 		return d.navFile, d.navRow
 	}
 	d.ensureVisualRows()
-	top := max(d.TopLine, 0)
-	if top < len(d.visualRows) {
-		visual := d.visualRows[top]
-		if visual.row >= 0 && visual.row < len(d.rows) && d.rows[visual.row].kind == commitDetailDiffRow {
-			return d.rows[visual.row].fileIndex, visual.offset
-		}
+	// The sticky heading covers the top row, so the first row a reader can
+	// actually see is one below TopLine.
+	top := max(d.TopLine, 0) + d.stickyRows()
+	if top >= len(d.visualRows) {
+		top = max(len(d.visualRows)-1, 0)
 	}
-	// The top row is a heading, message or notice: fall back to the first
-	// diff row below it so the position still points into a diff.
 	for visualIndex := top; visualIndex < len(d.visualRows); visualIndex++ {
 		visual := d.visualRows[visualIndex]
 		if visual.row < 0 || visual.row >= len(d.rows) {
@@ -1720,10 +1722,30 @@ func (d *CommitDetailWidget) ViewportFileAndRow() (fileIndex, row int) {
 		}
 		r := d.rows[visual.row]
 		if r.kind == commitDetailDiffRow {
-			return r.fileIndex, visual.offset
+			return r.fileIndex, d.diffRowAt(visual)
 		}
 	}
 	return 0, 0
+}
+
+// stickyRows reports how many screen rows the floating file heading covers.
+// Zero when the heading is not drawn, which is the case before the first frame.
+func (d *CommitDetailWidget) stickyRows() int {
+	if d.stickyRect.H > 0 {
+		return d.stickyRect.H
+	}
+	return 0
+}
+
+// diffRowAt converts a screen row into the diff row it shows. A wrapped line
+// occupies several screen rows that all point at the same diff row, so the
+// wrapped offset cannot be used as a diff row directly.
+func (d *CommitDetailWidget) diffRowAt(visual commitDetailVisualRow) int {
+	v := d.rowView(visual.row)
+	if v == nil {
+		return visual.offset
+	}
+	return v.EmbeddedDiffRowAt(visual.offset)
 }
 
 // GoToHunk reveals the file holding the 1-based change block index, moves
@@ -1743,7 +1765,7 @@ func (d *CommitDetailWidget) GoToHunk(index int) error {
 			return err
 		}
 	}
-	d.navFile, d.navRow = target.FileIndex, target.Row
+	d.navFile, d.navRow, d.navValid = target.FileIndex, target.Row, true
 	d.scrollToFileHunk(target.FileIndex, target.Row)
 	return nil
 }
@@ -1771,10 +1793,16 @@ func (d *CommitDetailWidget) scrollToFileHunk(fileIndex, row int) {
 			continue
 		}
 		r := d.rows[visual.row]
-		if r.kind != commitDetailDiffRow || r.fileIndex != fileIndex || visual.offset != row {
+		if r.kind != commitDetailDiffRow || r.fileIndex != fileIndex {
 			continue
 		}
-		d.TopLine = max(visualIndex, 0)
+		if d.diffRowAt(visual) != row {
+			continue
+		}
+		// Keep one row above the target so the sticky heading cannot cover
+		// it, unless that would push the target out of the last screenful.
+		top := max(visualIndex-d.stickyRows(), 0)
+		d.TopLine = top
 		d.clampScroll()
 		return
 	}
