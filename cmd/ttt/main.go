@@ -265,6 +265,7 @@ Docs: https://tttedit.dev
 		screen = initTerminalScreen(flags.listen)
 	}
 	defer screen.Fini()
+	defer screen.DisableMouse()
 	defer handlePanic(screen)
 
 	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground))

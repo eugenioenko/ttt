@@ -435,3 +435,32 @@ func TestStaleSecondaryButtonDoesNotTurnLeftClicksIntoRightClicks(t *testing.T) 
 		t.Errorf("a fresh right press opened %d menus, want 2", rightClicks)
 	}
 }
+
+func TestWheelAfterDismissedRightClickDoesNotReopenMenu(t *testing.T) {
+	main := &mockWidget{}
+	root := NewRoot(main)
+	root.SetSize(80, 24)
+
+	rightClicks := 0
+	root.OnRightClick = func(_, _ int) { rightClicks++ }
+	root.EscapeDismissers = []func() bool{func() bool { return true }}
+
+	root.HandleEvent(tcell.NewEventMouse(10, 5, tcell.Button2, tcell.ModNone))
+	root.HandleEvent(tcell.NewEventMouse(10, 5, tcell.ButtonNone, tcell.ModNone))
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone))
+
+	for _, wheel := range []tcell.ButtonMask{tcell.WheelUp, tcell.WheelDown} {
+		root.HandleEvent(tcell.NewEventMouse(10, 5, tcell.Button2|wheel, tcell.ModNone))
+
+		if rightClicks != 1 {
+			t.Fatalf("wheel event reopened the menu %d times, want 1", rightClicks)
+		}
+		mev, ok := main.lastEvent.(*tcell.EventMouse)
+		if !ok {
+			t.Fatalf("wheel event reached main as %T, want *tcell.EventMouse", main.lastEvent)
+		}
+		if mev.Buttons() != wheel {
+			t.Fatalf("wheel event reached main as %v, want %v", mev.Buttons(), wheel)
+		}
+	}
+}

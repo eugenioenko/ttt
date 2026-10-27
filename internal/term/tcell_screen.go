@@ -38,9 +38,10 @@ func NewTcellScreen() (*TcellScreen, error) {
 	if err := s.Init(); err != nil {
 		return nil, err
 	}
-	s.EnableMouse()
+	screen := &TcellScreen{scr: s, styleMap: DefaultStyleMap()}
+	screen.EnableMouse()
 	s.EnablePaste()
-	return &TcellScreen{scr: s, styleMap: DefaultStyleMap()}, nil
+	return screen, nil
 }
 
 func NewTcellScreenFrom(s tcell.Screen) *TcellScreen {
@@ -53,6 +54,16 @@ func (t *TcellScreen) SetStyleMap(m StyleMap) {
 
 func (t *TcellScreen) GetStyleMap() StyleMap {
 	return t.styleMap
+}
+
+// EnableMouse captures terminal mouse input while ttt is running.
+func (t *TcellScreen) EnableMouse() {
+	t.scr.EnableMouse()
+}
+
+// DisableMouse restores the terminal emulator's mouse handling before exit.
+func (t *TcellScreen) DisableMouse() {
+	t.scr.DisableMouse()
 }
 
 func (t *TcellScreen) Size() (w, h int) {

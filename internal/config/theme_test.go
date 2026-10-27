@@ -44,6 +44,9 @@ func TestDefaultTheme(t *testing.T) {
 	if th.Border.Fg != "#555555" {
 		t.Fatalf("expected Border.Fg '#555555', got '%s'", th.Border.Fg)
 	}
+	if th.Editor.Selection.Bg != "#264f78" {
+		t.Fatalf("expected visible selection background '#264f78', got '%s'", th.Editor.Selection.Bg)
+	}
 	if !th.Diff.CollapsedEmphasis.Bold {
 		t.Fatal("expected collapsed diff emphasis to default to bold")
 	}

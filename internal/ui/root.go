@@ -327,7 +327,8 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 // or the release that directly follows one, proves the secondary bit stale.
 func (r *Root) dropStaleSecondaryButton(ev *tcell.EventMouse) (*tcell.EventMouse, tcell.ButtonMask) {
 	btn := ev.Buttons()
-	if btn&tcell.Button1 != 0 || (btn == tcell.Button2 && r.lastMouseButtons&tcell.Button1 != 0) {
+	wheel := btn&(tcell.WheelUp|tcell.WheelDown|tcell.WheelLeft|tcell.WheelRight) != 0
+	if wheel || btn&tcell.Button1 != 0 || (btn == tcell.Button2 && r.lastMouseButtons&tcell.Button1 != 0) {
 		x, y := ev.Position()
 		btn &^= tcell.Button2
 		ev = tcell.NewEventMouse(x, y, btn, ev.Modifiers())

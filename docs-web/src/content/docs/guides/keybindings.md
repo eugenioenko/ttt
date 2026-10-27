@@ -35,8 +35,10 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 | Ctrl+Y | Redo |
 | Ctrl+A | Select all |
 | Ctrl+C | Copy |
+| Ctrl+Insert | Copy |
 | Ctrl+X | Cut |
 | Ctrl+V | Paste |
+| Shift+Insert | Paste |
 | Ctrl+G | Go to line |
 | Ctrl+/ | Toggle comment |
 | Ctrl+K J | Join lines |

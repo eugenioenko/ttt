@@ -123,6 +123,26 @@ func TestDefaultKeybindingsParse(t *testing.T) {
 	}
 }
 
+func TestDefaultClipboardKeybindings(t *testing.T) {
+	want := map[string]string{
+		"ctrl+c":       "editor.copy",
+		"ctrl+insert":  "editor.copy",
+		"ctrl+v":       "editor.paste",
+		"shift+insert": "editor.paste",
+	}
+	for _, binding := range DefaultKeybindings() {
+		if command, ok := want[binding.Key]; ok {
+			delete(want, binding.Key)
+			if binding.Command != command {
+				t.Errorf("default binding %q = %q, want %q", binding.Key, binding.Command, command)
+			}
+		}
+	}
+	for key, command := range want {
+		t.Errorf("missing default binding %q for %q", key, command)
+	}
+}
+
 func TestIsChord(t *testing.T) {
 	kb := []KeyBinding{
 		{Key: "ctrl+k ctrl+c", Command: "test.chord"},

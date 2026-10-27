@@ -37,8 +37,10 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 | Ctrl+Y | `editor.redo` | Redo |
 | Ctrl+A | `editor.selectAll` | Select all |
 | Ctrl+C | `editor.copy` | Copy |
+| Ctrl+Insert | `editor.copy` | Copy |
 | Ctrl+X | `editor.cut` | Cut |
 | Ctrl+V | `editor.paste` | Paste |
+| Shift+Insert | `editor.paste` | Paste |
 | Ctrl+G | `editor.goToLine` | Go to line |
 | Ctrl+/ | `editor.toggleComment` | Toggle line comment |
 | Ctrl+Enter | `editor.insertLineBelow` | Insert line below |
