@@ -564,3 +564,22 @@ func TestWordWrapMaxBytes(t *testing.T) {
 		t.Errorf("settings.json contains largeFiles key for default settings: %s", string(data))
 	}
 }
+
+func TestSettingsReuseWindowRoundTrip(t *testing.T) {
+	original := DefaultSettings()
+	original.ReuseWindow = true
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored Settings
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if !restored.ReuseWindow {
+		t.Fatal("reuseWindow did not survive round trip")
+	}
+	if _, ok := restored.Extra["reuseWindow"]; ok {
+		t.Fatal("reuseWindow was treated as an unknown setting")
+	}
+}

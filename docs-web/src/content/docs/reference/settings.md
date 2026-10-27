@@ -25,6 +25,7 @@ Both write the same file, so you can move between them freely.
 | `version` | int | `1` | Settings file format version |
 | `theme` | string | `""` | Theme name (e.g. `"default-dark"`) |
 | `debugMode` | bool | `false` | Enable debug logging |
+| `reuseWindow` | bool | `false` | Open command-line files in the newest reachable editor using the same config directory. Requires a restart. If no editor answers, start normally. Once an editor answers, errors exit with status 1; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
 ## Appearance
 

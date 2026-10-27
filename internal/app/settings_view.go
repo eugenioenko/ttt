@@ -64,6 +64,9 @@ func settingsCategories() []settingsCategory {
 	return []settingsCategory{
 		{Title: "General", Fields: []settingField{
 			section("Startup"),
+			{Label: "Reuse running editor", Kind: settingBool, Restart: true,
+				GetBool: func(s *config.Settings) bool { return s.ReuseWindow },
+				SetBool: func(s *config.Settings, v bool) { s.ReuseWindow = v }},
 			{Label: "Welcome page in home folder", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Welcome.ShowOnHome },
 				SetBool: func(s *config.Settings, v bool) { s.Welcome.ShowOnHome = v }},

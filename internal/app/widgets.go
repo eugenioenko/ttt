@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"os"
 	"path/filepath"
@@ -119,6 +120,9 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 		}
 		if args[i] == "--size" && i+1 < len(args) {
 			i++
+			continue
+		}
+		if args[i] == "--new-window" {
 			continue
 		}
 		if args[i] == "--debug" {
@@ -256,17 +260,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.BracketColorStyles = bracketStyles
 	editorGroup.Editor.BracketColorStyles = bracketStyles
 	grammarErrs := loadGrammarSettings(cfg.Settings.Editor.Grammars)
-	for _, f := range openFiles {
-		editorGroup.OpenFile(f.Path)
-		editorGroup.CommitActiveTab()
-		// The tab just opened is the active one, so this lands on the right
-		// buffer without switching tabs. PlaceCursor rather than GoToLineCol:
-		// the viewport has no height yet, and ApplyFileTargets frames the file
-		// left active once the first render has run.
-		if f.Line > 0 {
-			editorGroup.PlaceCursor(f.Line, f.Col)
-		}
-	}
+	_, _ = openFileTargets(editorGroup, openFiles)
 
 	terminalPanel := ui.NewTerminalPanelWidget()
 	terminalPanel.Borders = borders
@@ -437,4 +431,25 @@ func (a *App) ApplyFileTargets(targets []FileTarget) {
 			return
 		}
 	}
+}
+
+func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarget, error) {
+	var opened []FileTarget
+	var failures []error
+	for _, f := range targets {
+		if err := g.OpenFile(f.Path); err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		opened = append(opened, f)
+		g.CommitActiveTab()
+		// The tab just opened is the active one, so this lands on the right
+		// buffer without switching tabs. PlaceCursor rather than GoToLineCol:
+		// the viewport has no height yet, and ApplyFileTargets frames the file
+		// left active once the first render has run.
+		if f.Line > 0 {
+			g.PlaceCursor(f.Line, f.Col)
+		}
+	}
+	return opened, errors.Join(failures...)
 }

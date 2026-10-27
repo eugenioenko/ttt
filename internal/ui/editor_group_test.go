@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -11,6 +13,66 @@ import (
 	"github.com/eugenioenko/ttt/internal/fileicons"
 	"github.com/eugenioenko/ttt/internal/term"
 )
+
+func TestEditorGroupOpenFileErrors(t *testing.T) {
+	for _, state := range []string{"directory", "reload-directory", "reload-missing"} {
+		t.Run(state, func(t *testing.T) {
+			g := NewEditorGroupWidget(nil, 4, false, "extended")
+			path := filepath.Join(t.TempDir(), "file.txt")
+			if state != "directory" {
+				if err := os.WriteFile(path, []byte("hello"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := g.OpenFile(path); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+				g.NewFile()
+			}
+			if state != "reload-missing" {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := g.OpenFile(path)
+			if state == "reload-missing" {
+				if err != nil || g.tabs[g.active].FilePath != path {
+					t.Fatalf("missing file: error = %v, active path = %q", err, g.tabs[g.active].FilePath)
+				}
+			} else if err == nil || errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("OpenFile = %v, want a non-ENOENT error", err)
+			}
+		})
+	}
+}
+
+func TestEditorGroupFailedReloadStillSwitchesTab(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "file.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	if err := g.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	g.NewFile()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("chmod 0000 does not prevent reads on this platform or user")
+	}
+	if err := os.Chmod(path, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0600) })
+	if err := g.OpenFile(path); err == nil {
+		t.Fatal("reload succeeded")
+	}
+	tab := g.tabs[g.active]
+	if tab.FilePath != path || tab.Preview {
+		t.Fatalf("active tab = %+v, want committed file tab", tab)
+	}
+}
 
 func TestEditorGroupTabIconUsesFilePathInsteadOfCustomTitle(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Dockerfile")

@@ -143,6 +143,8 @@ ttt https://github.com/owner/repo/pull/123 # opens pull request review
 git diff | ttt                  # opens piped output in an unsaved tab (or: ttt -)
 ```
 
+Set `"reuseWindow": true` in settings.json (off by default; restart required) to open command-line files in the newest reachable editor using the same config directory. If none answers, ttt starts normally. Use `ttt --new-window file` to start a separate editor. With reuse enabled, `EDITOR=ttt` returns immediately; use `EDITOR="ttt --new-window"` for commands that wait for editing.
+
 Workspace files use the `.ttt` extension and store a list of folders as relative paths:
 
 ```json

@@ -26,6 +26,7 @@ func RunEventLoop(
 	app *App,
 	running *bool,
 	closeTerminal func(panelID string),
+	onStartupComplete func(),
 ) {
 	app.eventLoopDoneSignal()
 	defer app.closeEventLoopDone()
@@ -221,6 +222,10 @@ func RunEventLoop(
 		app.Root.HandleEvent(tev)
 		app.FlushEditorOnChange()
 		syncStatus()
+	}
+
+	if onStartupComplete != nil {
+		onStartupComplete()
 	}
 
 	for *running {

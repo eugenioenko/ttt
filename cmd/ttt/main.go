@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -74,6 +75,7 @@ type cliFlags struct {
 	listen       bool
 	stdin        bool
 	targets      bool
+	noForward    bool
 }
 
 type cliExecOutcome struct {
@@ -92,11 +94,13 @@ func parseFlags() cliFlags {
 				i++
 			}
 		case "--plugin":
+			f.noForward = true
 			if i+1 < len(args) {
 				f.pluginFile = args[i+1]
 				i++
 			}
 		case "--exec":
+			f.noForward = true
 			if i+1 < len(args) {
 				f.exec = args[i+1]
 				i++
@@ -107,18 +111,25 @@ func parseFlags() cliFlags {
 				i++
 			}
 		case "--size":
+			f.noForward = true
 			if i+1 < len(args) {
 				fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH)
 				i++
 			}
 		case "--debug":
+			f.noForward = true
 			f.debug = true
 		case "--listen":
+			f.noForward = true
 			f.listen = true
 		case "--workspace":
+			f.noForward = true
 			f.targets = true
 			i++
+		case "--new-window":
+			f.noForward = true
 		case "-":
+			f.noForward = true
 			f.stdin = true
 		default:
 			if !strings.HasPrefix(args[i], "-") {
@@ -174,6 +185,7 @@ func main() {
 			fmt.Printf(`ttt %s - TTT Editor, Terminal Text Tool, an IDE for your terminal
 
 Usage: ttt [options] [files/folders/URLs...]
+Set reuseWindow in settings.json to open files in the newest running editor.
 
 Arguments:
   files               Open one or more files
@@ -200,6 +212,7 @@ Options:
   --plugin <file>     Load a Lua plugin file on startup without approval, with
                       the name and permissions of a plugin.ttt.json next to it;
                       without one, every permission except system.exec
+  --new-window        Start a separate editor even when reuseWindow is enabled
   --debug             Enable debug mode regardless of config setting
   --listen            Start an HTTP command server on 127.0.0.1:4242
                       (POST /exec accepts the same script format as --exec)
@@ -231,6 +244,18 @@ Docs: https://tttedit.dev
 
 	flags := parseFlags()
 	cfg := config.Load(flags.configFile)
+	if cfg.Settings.ReuseWindow && !flags.noForward {
+		if targets := app.ForwardableTargets(); len(targets) > 0 {
+			err := app.ForwardFiles(targets)
+			if err == nil {
+				return
+			}
+			if !errors.Is(err, app.ErrForwardUnavailable) {
+				fmt.Fprintf(os.Stderr, "ttt: %v\n", err)
+				os.Exit(1)
+			}
+		}
+	}
 	config.ParseKeyBindings(cfg.Keybindings)
 
 	if flags.debug {
@@ -288,6 +313,8 @@ Docs: https://tttedit.dev
 	editor, prURLs, fileTargets := app.BuildApp(&cfg, &borders)
 	editor.ApplyBorderStyle()
 	editor.Init(screen, renderer, lspManager, imageLayer)
+	stopForward := func() {}
+	defer func() { stopForward() }()
 	// Registered after handlePanic so it runs before it and before Fini: placements are deleted while the tty is still alive, on exit and crash.
 	defer func() { editor.CloseImageLayer() }()
 
@@ -411,7 +438,12 @@ Docs: https://tttedit.dev
 		go app.StartListenServer(editor)
 	}
 
-	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal)
+	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
+		if cfg.Settings.ReuseWindow && flags.exec == "" {
+			stopForward = app.StartForward(editor)
+		}
+	})
+	stopForward()
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

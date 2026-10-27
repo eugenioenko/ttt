@@ -393,50 +393,75 @@ func (g *EditorGroupWidget) MoveActiveTab(direction int) bool {
 	return g.MoveTab(g.active, g.active+direction)
 }
 
-func (g *EditorGroupWidget) OpenFile(path string) {
+func contentFileError(path string, content Widget) error {
+	var message string
+	switch w := content.(type) {
+	case *ImageViewWidget:
+		message = w.Err
+	case *BinaryFileWidget:
+		message = w.Err
+	}
+	if message != "" {
+		return fmt.Errorf("Cannot open %s: %s", path, message)
+	}
+	return nil
+}
+
+func (g *EditorGroupWidget) OpenFile(path string) error {
 	if isSpecialFile(path) {
-		g.reportError("Cannot open " + path + ": not a regular file")
-		return
+		err := fmt.Errorf("Cannot open %s: not a regular file", path)
+		g.reportError(err.Error())
+		return err
 	}
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path {
-			g.tabs[i].Preview = false
 			if g.tabs[i].Content != nil {
+				g.tabs[i].Preview = false
 				g.applyImagePrefs(g.tabs[i].Content)
 				if refresher, ok := g.tabs[i].Content.(interface{ Refresh() }); ok {
 					refresher.Refresh()
 				}
 				g.SwitchTab(i)
-				return
+				return contentFileError(path, g.tabs[i].Content)
 			}
 			if g.tabs[i].Buf != nil && !g.tabs[i].Buf.Dirty {
-				g.tabs[i].Buf.LoadFile(path)
+				if err := g.tabs[i].Buf.LoadFile(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+					err = fmt.Errorf("Failed to reload %s: %w", path, err)
+					g.reportError(err.Error())
+					g.tabs[i].Preview = false
+					g.SwitchTab(i)
+					return err
+				}
 			}
+			g.tabs[i].Preview = false
 			g.SwitchTab(i)
-			return
+			return nil
 		}
 	}
 	switch kind, head := sniffFileKind(path); kind {
 	case fileKindImage:
-		g.openContentFileTab(path, NewImageViewWidget(path))
-		return
+		content := NewImageViewWidget(path)
+		g.openContentFileTab(path, content)
+		return contentFileError(path, content)
 	case fileKindBinary:
 		if g.FileHandler != nil {
 			if content := g.FileHandler(path, head); content != nil {
 				g.openContentFileTab(path, content)
 				g.fileHandled(path)
-				return
+				return nil
 			}
 		}
-		g.openContentFileTab(path, NewBinaryFileWidget(path))
-		return
+		content := NewBinaryFileWidget(path)
+		g.openContentFileTab(path, content)
+		return contentFileError(path, content)
 	}
 	newBuf := &buffer.Buffer{Lines: []string{""}, ShowTrailingNewline: g.ShowTrailingNewline}
 	ec := g.applySaveSettings(newBuf, path)
 	if err := newBuf.LoadFile(path); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			g.reportError(fmt.Sprintf("Failed to open %s: %v", path, err))
-			return
+			err = fmt.Errorf("Failed to open %s: %w", path, err)
+			g.reportError(err.Error())
+			return err
 		}
 		g.notify(fmt.Sprintf("New file: %s", filepath.Base(path)))
 	}
@@ -485,6 +510,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.OnFileOpen != nil && newTab.Highlighter != nil {
 		g.OnFileOpen(path, newTab.Highlighter.Language(), newBuf.Lines)
 	}
+	return nil
 }
 
 func isFileViewerTab(t *editorTab) bool {
