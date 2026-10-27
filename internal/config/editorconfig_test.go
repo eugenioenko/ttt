@@ -68,6 +68,42 @@ indent_size = 2
 	}
 }
 
+func TestEditorConfigPathGlobs(t *testing.T) {
+	dir := t.TempDir()
+	ec := filepath.Join(dir, ".editorconfig")
+	os.WriteFile(ec, []byte(`
+root = true
+
+[lib/**.js]
+indent_size = 2
+
+[*.[ch]]
+indent_size = 3
+
+[file{1..3}.txt]
+indent_size = 5
+`), 0644)
+
+	tests := []struct {
+		path string
+		want int
+	}{
+		{"lib/a.js", 2},
+		{"lib/sub/a.js", 2},
+		{"a.js", 0},
+		{"src/a.c", 3},
+		{"a.h", 3},
+		{"a.cpp", 0},
+		{"file2.txt", 5},
+		{"file4.txt", 0},
+	}
+	for _, tt := range tests {
+		if got := LoadEditorConfig(filepath.Join(dir, tt.path)).IndentSize; got != tt.want {
+			t.Errorf("%s: expected indent_size %d, got %d", tt.path, tt.want, got)
+		}
+	}
+}
+
 func TestEditorConfigNoFile(t *testing.T) {
 	dir := t.TempDir()
 	props := LoadEditorConfig(filepath.Join(dir, "test.go"))
