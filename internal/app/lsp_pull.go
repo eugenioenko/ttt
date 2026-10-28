@@ -246,6 +246,6 @@ func (a *App) setPulledDiagnostics(server string, key pullKey, res pulledDiagnos
 		return false
 	}
 	a.lastPulled[key.path] = key
-	a.EditorGroup.SetDiagnosticsSource(lspPullDiagnosticsSource(server), key.path, LspToUIDiagnostics(res.diags))
+	a.EditorGroup.SetDiagnosticsSource(lspPullDiagnosticsSource(server), key.path, LspToUIDiagnostics(res.diags, a.lspLines(key.path)))
 	return true
 }
