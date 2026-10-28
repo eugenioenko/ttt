@@ -266,8 +266,12 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 		return
 	}
 	if !needsApproval && p != nil {
-		a.WirePlugin(p)
-		a.installPluginGrammars(p)
+		if p.Loaded() {
+			a.WirePlugin(p)
+			a.installPluginGrammars(p)
+		} else {
+			a.installPluginThemes(p)
+		}
 	}
 	if a.PluginsPanel != nil {
 		a.PluginsPanel.Refresh()

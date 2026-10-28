@@ -1,7 +1,9 @@
 package app
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -80,19 +82,42 @@ func replacePluginThemes(name string, files map[string][]byte) error {
 			return fmt.Errorf("theme directory %s must not be a symlink", dir)
 		}
 	}
-	if err := root.RemoveAll(dir); err != nil {
+	if len(files) == 0 {
+		return root.RemoveAll(dir)
+	}
+	stage := filepath.Join("themes", "plugins", ".stage-"+rand.Text())
+	if err := root.Mkdir(stage, 0755); err != nil {
 		return err
 	}
-	if len(files) == 0 {
-		return nil
-	}
-	if err := root.Mkdir(dir, 0755); err != nil {
+	cleanup := true
+	defer func() {
+		if cleanup {
+			root.RemoveAll(stage)
+		}
+	}()
+	next := filepath.Join(stage, "next")
+	if err := root.Mkdir(next, 0755); err != nil {
 		return err
 	}
 	for filename, data := range files {
-		if err := root.WriteFile(filepath.Join(dir, filename), data, 0644); err != nil {
+		if err := root.WriteFile(filepath.Join(next, filename), data, 0644); err != nil {
 			return err
 		}
+	}
+	backup := filepath.Join(stage, "previous")
+	err = root.Rename(dir, backup)
+	hadPrevious := err == nil
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := root.Rename(next, dir); err != nil {
+		if hadPrevious {
+			if rollbackErr := root.Rename(backup, dir); rollbackErr != nil {
+				cleanup = false
+				return errors.Join(err, fmt.Errorf("restore themes from %s: %w", backup, rollbackErr))
+			}
+		}
+		return err
 	}
 	return nil
 }

@@ -99,3 +99,17 @@ func TestPluginThemeDestinationIsolation(t *testing.T) {
 		t.Fatal("modified external theme directory:", err)
 	}
 }
+
+func TestPluginThemeWriteFailurePreservesInstalledFiles(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	if err := replacePluginThemes("pack", map[string][]byte{"dark.json": []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := replacePluginThemes("pack", map[string][]byte{"bad\x00.json": []byte(`{}`)}); err == nil {
+		t.Fatal("expected a write failure for a filename containing NUL")
+	}
+	if _, err := config.LoadTheme("plugins/pack/dark"); err != nil {
+		t.Fatal("write failure removed the installed theme:", err)
+	}
+}

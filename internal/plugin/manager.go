@@ -686,7 +686,13 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 	}
 
 	if idx < 0 {
-		return nil, false, nil
+		previousVersion := regEntry.Version
+		regEntry.Version = u.manifest.Version
+		if err := m.registry.Save(); err != nil {
+			regEntry.Version = previousVersion
+			return nil, false, err
+		}
+		return &Plugin{Name: u.name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, false, nil
 	}
 
 	old := m.plugins[idx]

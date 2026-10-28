@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/app"
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -150,6 +152,60 @@ func TestPluginUpdateSwapsLuaStateOnUIGoroutine(t *testing.T) {
 	h.assertContains("pdf sidebar 2.0.0")
 	h.assertContains("pdf page 2.0.0")
 	h.assertNotContains("Binary file")
+}
+
+func TestDisabledPluginUpdateRefreshesActiveTheme(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	upstream := t.TempDir()
+	gitIn(t, upstream, "init", "-q")
+	writeVersion := func(version, background string) {
+		t.Helper()
+		files := map[string]string{
+			"plugin.ttt.json": `{"name":"theme-pack","version":"` + version + `","themes":[{"path":"dark.json"}]}`,
+			"dark.json":       `{"default":{"bg":"` + background + `"}}`,
+		}
+		for name, data := range files {
+			if err := os.WriteFile(filepath.Join(upstream, name), []byte(data), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		gitIn(t, upstream, "add", ".")
+		gitIn(t, upstream, "commit", "-q", "-m", version)
+	}
+	writeVersion("1.0.0", "#123456")
+	pluginsDir := filepath.Join(config.OverrideConfigDir, "plugins")
+	os.MkdirAll(pluginsDir, 0755)
+	gitIn(t, pluginsDir, "clone", "-q", upstream, "theme-pack")
+	m := plugin.NewManager(pluginsDir, filepath.Join(config.OverrideConfigDir, "plugins.ttt.json"))
+	h.app.PluginManager = m
+	t.Cleanup(m.Shutdown)
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending approvals = %d, want 1", len(pending))
+	}
+	if err := m.ApproveAndLoad(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	h.app.WirePlugin(pending[0])
+	h.app.Settings.Theme = "plugins/theme-pack/dark"
+	h.app.ApplySettings(*h.app.Settings)
+	h.app.PluginToggleByName("theme-pack", false)
+	writeVersion("2.0.0", "#654321")
+	h.awaitPluginUpdate("theme-pack", filepath.Join(h.dir, "unused.pdf"))
+	loaded, err := config.LoadTheme(h.app.Settings.Theme)
+	if err != nil || loaded.Default.Bg != "#654321" {
+		t.Fatalf("installed theme background = %q, err %v, want updated background", loaded.Default.Bg, err)
+	}
+	if h.app.Screen.GetStyleMap()[term.StyleDefault].GetBackground() != tcell.GetColor("#654321") {
+		t.Fatal("active theme colors were not refreshed")
+	}
+	if m.FindPlugin("theme-pack") != nil || m.Registry().Find("theme-pack").Enabled || h.app.Root.HasOverlay() {
+		t.Fatal("updating themes loaded or requested approval for a disabled plugin")
+	}
+	if m.Registry().Find("theme-pack").Version != "2.0.0" {
+		t.Fatal("disabled plugin version was not updated")
+	}
 }
 
 func TestPluginUpdateNeedingApprovalReleasesPanels(t *testing.T) {
