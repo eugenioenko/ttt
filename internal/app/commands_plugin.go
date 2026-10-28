@@ -205,6 +205,7 @@ func (a *App) doPluginUninstall(name string) {
 	a.ClearPluginSources(name)
 	a.closePluginDrawerAndTabs(name)
 	a.uninstallPluginGrammars(name)
+	a.uninstallPluginThemes(name)
 
 	a.resetPluginDetailButton(name)
 	if a.PluginsPanel != nil {
@@ -289,6 +290,9 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 			Value: grammarLabel(g),
 		})
 	}
+	for _, theme := range p.Manifest.Themes {
+		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: "Theme", Value: theme.ID()})
+	}
 
 	content := widgets.NewWrappingKeyValueListWidget(kvEntries)
 	content.InvertStyles = true
@@ -366,6 +370,7 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 }
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
+	a.installPluginThemes(p)
 	a.wirePluginDialogs(p)
 	a.wirePluginChanges(p)
 	id := "plugin." + p.Name

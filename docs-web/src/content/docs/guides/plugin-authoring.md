@@ -50,10 +50,11 @@ Every plugin requires a `plugin.ttt.json` manifest file at the root of its direc
 | `description` | string | no       | Shown in the plugin list dialog.                    |
 | `version`     | string | no       | Semver version string.                              |
 | `author`      | string | no       | Plugin author name.                                 |
-| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars`. |
+| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars` or `themes`. |
 | `api`         | number | no       | Plugin API version the plugin targets. Defaults to `1` when omitted. The editor refuses to load plugins that target a newer API than it supports. |
 | `permissions` | object | no       | Object declaring required permissions (see [Permissions Reference](#permissions-reference)). |
 | `grammars`    | array  | no       | TextMate grammars the plugin contributes (see [Grammar plugins](#grammar-plugins)). |
+| `themes`      | array  | no       | Theme JSON files the plugin contributes (see [Theme plugins](#theme-plugins)). |
 
 ### Minimal Example
 
@@ -81,6 +82,27 @@ ttt.register({
   },
 })
 ```
+
+### Theme plugins
+
+A plugin can contribute one or more ttt theme JSON files. Theme-only plugins need no Lua entry point or permissions:
+
+```json
+{
+  "name": "my-themes",
+  "version": "0.1.0",
+  "themes": [
+    { "path": "themes/dark.json", "name": "midnight" },
+    { "path": "themes/light.json" }
+  ]
+}
+```
+
+Each entry requires a `path` relative to the plugin directory. The optional `name` defaults to the filename without its extension. Names must be unique within the plugin and must be plain filenames, without directory separators. Paths cannot escape the plugin directory, including through symlinks. Files use the [ttt theme format](/guides/themes/).
+
+The approval dialog lists every theme. After approval, ttt copies the files into `~/.config/ttt/themes/plugins/<plugin-name>/`. **Switch Theme** lists them as `plugins/<plugin-name>/<theme-name>`; these names also work in the `theme` setting. This namespace prevents collisions with other plugins and manually installed themes. Installing a plugin does not select its theme.
+
+Updating or reloading replaces the plugin's theme files, removes contributions dropped from its manifest, and refreshes an active theme immediately. Invalid source files leave the previously installed themes intact. Disabling keeps the installed themes available. Uninstalling removes them; if the active theme was removed, ttt switches to its default colors and saves that selection.
 
 ### Grammar plugins
 

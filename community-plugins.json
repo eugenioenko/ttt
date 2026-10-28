@@ -125,6 +125,26 @@
     "tags": ["spelling", "aspell", "prose", "writing", "markdown"]
   },
   {
+    "name": "theme-tokyo-neon",
+    "displayName": "Tokyo Neon Theme",
+    "author": "eugenioenko",
+    "description": "Tokyo Neon color theme for ttt",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "theme-tokyo-neon",
+    "version": "0.1.0",
+    "tags": ["theme", "appearance", "colors"]
+  },
+  {
+    "name": "theme-vermeer",
+    "displayName": "Vermeer Theme",
+    "author": "eugenioenko",
+    "description": "Vermeer color theme for ttt",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "theme-vermeer",
+    "version": "0.1.0",
+    "tags": ["theme", "appearance", "colors"]
+  },
+  {
     "name": "todo-scanner",
     "displayName": "TODO Scanner",
     "author": "eugenioenko",

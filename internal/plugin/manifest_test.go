@@ -261,3 +261,56 @@ func TestLoadManifestRejectsBadGrammarPath(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadManifestThemes(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{
+		"name": "theme-pack", "themes": [
+			{"path": "themes/dark.json", "name": "midnight"},
+			{"path": "themes/light.json"}
+		]
+	}`), 0644)
+	m, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Themes) != 2 || m.Themes[0].ID() != "midnight" || m.Themes[1].ID() != "light" {
+		t.Fatalf("themes = %+v", m.Themes)
+	}
+	p := &Plugin{Name: m.Name, Dir: dir, Manifest: m}
+	if err := p.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer p.Destroy()
+	if !p.Enabled {
+		t.Fatal("theme-only plugin not enabled")
+	}
+}
+
+func TestLoadManifestRejectsInvalidThemes(t *testing.T) {
+	for _, themes := range []string{
+		`[{"path":""}]`, `[{"path":"../outside.json"}]`, `[{"path":"/outside.json"}]`,
+		`[{"path":"theme.json","name":"../outside"}]`, `[{"path":"theme.json","name":"."}]`,
+		`[{"path":"a/dark.json"},{"path":"b/dark.json"}]`,
+		`[{"path":"a.json","name":"same"},{"path":"b.json","name":"same"}]`,
+	} {
+		dir := t.TempDir()
+		os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{"name":"bad","themes":`+themes+`}`), 0644)
+		if _, err := LoadManifest(dir); err == nil {
+			t.Errorf("accepted invalid themes: %s", themes)
+		}
+	}
+}
+
+func TestThemeFileRejectsEscapingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "theme.json")
+	os.WriteFile(outside, []byte(`{}`), 0644)
+	if err := os.Symlink(outside, filepath.Join(dir, "theme.json")); err != nil {
+		t.Skip(err)
+	}
+	p := &Plugin{Dir: dir}
+	if _, err := p.ThemeFile(Theme{Path: "theme.json"}); err == nil {
+		t.Fatal("accepted a theme outside the plugin directory")
+	}
+}
