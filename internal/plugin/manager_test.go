@@ -358,6 +358,42 @@ func TestDroppedPermissionIsRevoked(t *testing.T) {
 	}
 }
 
+func TestDisabledPluginUpdateRevokesDroppedPermission(t *testing.T) {
+	m, _ := newTestManager(t)
+	m.registry.AddOrUpdate("p", "", "", "", "1.0.0", PermissionSet{EditorRead: true})
+	m.registry.SetEnabled("p", false)
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	u := m.PrepareUpdate("p")
+	u.manifest = Manifest{Name: "p", Version: "2.0.0", Entry: "main.ttt.lua"}
+	m.registry.saveHook = func() error { return errors.New("simulated save error") }
+	if _, _, err := m.ApplyUpdate(u); err == nil {
+		t.Fatal("update succeeded despite a failed permission save")
+	}
+	entry := m.registry.Find("p")
+	if !entry.Permissions.EditorRead || entry.Version != "1.0.0" {
+		t.Fatalf("failed update changed registry state: %+v", entry)
+	}
+	m.registry.saveHook = nil
+	p, needsApproval, err := m.ApplyUpdate(u)
+	if err != nil || needsApproval || p == nil || p.Loaded() {
+		t.Fatalf("disabled update: plugin %v, needs approval %v, err %v", p, needsApproval, err)
+	}
+	stored, err := LoadRegistry(m.registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry = stored.Find("p")
+	if entry.Permissions.EditorRead || entry.Enabled || entry.Version != "2.0.0" {
+		t.Fatalf("updated registry retained dropped permission or enabled plugin: %+v", entry)
+	}
+	u.manifest.Permissions.EditorRead = true
+	if _, needsApproval, err := m.ApplyUpdate(u); err != nil || !needsApproval {
+		t.Fatalf("requesting the dropped permission again: needs approval %v, err %v", needsApproval, err)
+	}
+}
+
 // Denying a request for more permissions must not record them as approved:
 // enabling the plugin afterwards would load it with them.
 func TestDenyKeepsThePreviouslyApprovedPermissions(t *testing.T) {

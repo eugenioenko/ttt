@@ -155,6 +155,9 @@ func TestPluginUpdateSwapsLuaStateOnUIGoroutine(t *testing.T) {
 }
 
 func TestDisabledPluginUpdateRefreshesActiveTheme(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 	upstream := t.TempDir()
