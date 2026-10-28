@@ -1919,3 +1919,37 @@ func TestTreeReselectSkipsAnEmptyTree(t *testing.T) {
 		t.Fatal("Enter on an empty tree called OnSelect")
 	}
 }
+
+func TestTreeNodeAt(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{})
+	tree.SetItems([]*TreeNode{{ID: "a", Label: "a"}, {ID: "b", Label: "b"}})
+	renderWidget(tree, 2, 3, 10, 5)
+
+	if n := tree.NodeAt(4, tree.contentY+1); n == nil || n.ID != "b" {
+		t.Fatalf("NodeAt second row = %v, want b", n)
+	}
+	if n := tree.NodeAt(4, tree.contentY+3); n != nil {
+		t.Fatalf("NodeAt past the last row = %v, want nil", n.ID)
+	}
+	if n := tree.NodeAt(20, tree.contentY); n != nil {
+		t.Fatalf("NodeAt outside the tree = %v, want nil", n.ID)
+	}
+}
+
+func TestTreeNodeAtSkipsTheScrollbar(t *testing.T) {
+	ids := make([]string, 20)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("n%02d", i)
+	}
+	tree := NewTreeWidget(TreeConfig{Items: makeTreeItems(ids...)})
+	renderWidget(tree, 0, 0, 10, 5)
+	if tree.contentW != 9 {
+		t.Fatalf("fixture expected a scrollbar, contentW = %d", tree.contentW)
+	}
+	if n := tree.NodeAt(9, tree.contentY); n != nil {
+		t.Fatalf("NodeAt on the scrollbar = %v, want nil", n.ID)
+	}
+	if n := tree.NodeAt(8, tree.contentY); n == nil {
+		t.Fatal("NodeAt left of the scrollbar = nil, want the row")
+	}
+}
