@@ -53,7 +53,12 @@ type Terminal struct {
 	OnExit       func()
 
 	updatePending atomic.Bool
+
+	program string
 }
+
+// Program is the shell or program the terminal runs, as configured.
+func (t *Terminal) Program() string { return t.program }
 
 // New spawns the terminal program in a fresh PTY. `args` are passed to the
 // program unchanged (e.g. Shell="pi", Args=["--model", "openrouter/free"]); a
@@ -67,10 +72,11 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	}
 
 	t := &Terminal{
-		cols:   cols,
-		rows:   rows,
-		done:   make(chan struct{}),
-		waited: make(chan struct{}),
+		program: shell,
+		cols:    cols,
+		rows:    rows,
+		done:    make(chan struct{}),
+		waited:  make(chan struct{}),
 	}
 
 	pt, err := pty.New()

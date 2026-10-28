@@ -14,9 +14,10 @@ import (
 )
 
 // pathDrag tracks a file or folder dragged out of the Explorer. The press
-// stays with the Explorer as usual; once the pointer moves off the pressed
-// spot with the button held the drag starts, and from then on the mouse
-// belongs to the drag until the button is released.
+// stays with the Explorer as usual; once the pointer moves to another row, or
+// two columns along the pressed one, with the button held the drag starts, and
+// from then on the mouse belongs to the drag until the button is released. A
+// one-column wobble while clicking stays a click.
 type pathDrag struct {
 	pressed bool
 	path    string
@@ -34,8 +35,11 @@ func (a *App) handlePathDrag(ev *tcell.EventMouse) bool {
 		wasActive := d.active
 		if wasActive {
 			a.Status.RemoveSegment(pathDragSegment)
-			if tw := a.terminalAt(mx, my); tw != nil {
-				tw.PasteText(shellQuote(d.path) + " ")
+			// The Explorer saw the press; give it the release where the press
+			// was, or it keeps the button held and drops the next click.
+			a.Root.HandleEvent(tcell.NewEventMouse(d.px, d.py, tcell.ButtonNone, tcell.ModNone))
+			if tw := a.terminalAt(mx, my); tw != nil && !a.Root.HasModalOverlay() {
+				tw.PasteText(terminalQuote(d.path, tw) + " ")
 				a.Root.SetFocus(a.TerminalPanel)
 			}
 		}
@@ -112,10 +116,12 @@ func (a *App) pointerShapeAt(mx, my int) string {
 	return a.Root.PointerShapeAt(mx, my)
 }
 
+// InsertExplorerPathInTerminal is the keyboard path to the same result: the
+// selected (or right-clicked) Explorer entry goes into the active terminal.
 func (a *App) InsertExplorerPathInTerminal() {
 	path := a.explorerNodePath()
 	a.ExplorerContextNode = nil
-	if path == "" {
+	if !filepath.IsAbs(path) {
 		a.StatusWarn("No file selected")
 		return
 	}
@@ -125,18 +131,40 @@ func (a *App) InsertExplorerPathInTerminal() {
 		return
 	}
 	a.showTerminalPanel()
-	tw.PasteText(shellQuote(path) + " ")
+	tw.PasteText(terminalQuote(path, tw) + " ")
 }
 
-// shellQuote leaves plain paths alone and quotes the rest for the shell:
-// single quotes on Unix, double quotes on Windows.
-func shellQuote(path string) string {
+// terminalQuote quotes path for the shell running in tw.
+func terminalQuote(path string, tw *ui.TerminalWidget) string {
+	program := ""
+	if tw != nil && tw.Term != nil {
+		program = tw.Term.Program()
+	}
+	return shellQuote(path, program)
+}
+
+// shellQuote leaves plain paths alone and quotes the rest so the shell named
+// by program reads them literally. PowerShell expands $(...) inside double
+// quotes, so it gets single quotes like a POSIX shell; cmd has no literal
+// quoting and gets double quotes.
+func shellQuote(path, program string) string {
+	name := strings.ToLower(strings.TrimSuffix(filepath.Base(program), ".exe"))
+	if program == "" && runtime.GOOS == "windows" {
+		name = "cmd"
+	}
+	plain := "/._-+:@,=~"
+	if name == "pwsh" || name == "powershell" || name == "cmd" {
+		plain = `\/._-:`
+	}
 	if strings.IndexFunc(path, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("/._-+:@,=~\\", r))
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune(plain, r))
 	}) < 0 {
 		return path
 	}
-	if runtime.GOOS == "windows" {
+	switch name {
+	case "pwsh", "powershell":
+		return "'" + strings.ReplaceAll(path, "'", "''") + "'"
+	case "cmd":
 		return `"` + path + `"`
 	}
 	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"

@@ -1977,3 +1977,21 @@ func TestTreeNodeAt(t *testing.T) {
 		t.Fatalf("NodeAt outside the tree = %v, want nil", n.ID)
 	}
 }
+
+func TestTreeNodeAtSkipsTheScrollbar(t *testing.T) {
+	ids := make([]string, 20)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("n%02d", i)
+	}
+	tree := NewTreeWidget(TreeConfig{Items: makeTreeItems(ids...)})
+	renderWidget(tree, 0, 0, 10, 5)
+	if tree.contentW != 9 {
+		t.Fatalf("fixture expected a scrollbar, contentW = %d", tree.contentW)
+	}
+	if n := tree.NodeAt(9, tree.contentY); n != nil {
+		t.Fatalf("NodeAt on the scrollbar = %v, want nil", n.ID)
+	}
+	if n := tree.NodeAt(8, tree.contentY); n == nil {
+		t.Fatal("NodeAt left of the scrollbar = nil, want the row")
+	}
+}

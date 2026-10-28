@@ -901,7 +901,7 @@ func (n *TreeNode) isExpandable() bool {
 // NodeAt returns the row under screen position (mx, my), or nil.
 func (t *TreeWidget) NodeAt(mx, my int) *TreeNode {
 	r := t.rect
-	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+	if mx < t.contentX || mx >= t.contentX+t.contentW || my < r.Y || my >= r.Y+r.H {
 		return nil
 	}
 	idx := t.scrollTop + (my - t.contentY)
