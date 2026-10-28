@@ -46,7 +46,7 @@ Available in [nixpkgs](https://github.com/NixOS/nixpkgs):
 environment.systemPackages = [ pkgs.ttt ];
 ```
 
-Or install directly from the repo flake for the latest release:
+Or install directly from the repo flake (tracks the development branch):
 ```sh
 nix run github:eugenioenko/ttt
 ```
