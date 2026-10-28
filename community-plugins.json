@@ -125,6 +125,16 @@
     "tags": ["spelling", "aspell", "prose", "writing", "markdown"]
   },
   {
+    "name": "theme-catppuccin-mocha",
+    "displayName": "Catppuccin Mocha Theme",
+    "author": "salmonumbrella",
+    "description": "Catppuccin Mocha color theme for ttt",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "theme-catppuccin-mocha",
+    "version": "0.1.0",
+    "tags": ["theme", "appearance", "colors", "catppuccin"]
+  },
+  {
     "name": "theme-tokyo-neon",
     "displayName": "Tokyo Neon Theme",
     "author": "eugenioenko",
