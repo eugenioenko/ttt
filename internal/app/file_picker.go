@@ -191,16 +191,37 @@ func filePickerEntries(dir string) []filePickerEntry {
 	if err != nil {
 		return out
 	}
+
 	for _, item := range items {
 		path := filepath.Join(dir, item.Name())
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
+		entryType := item.Type()
+
+		isDir := item.IsDir()
+		isRegular := entryType.IsRegular()
+
+		// DirEntry describes the symlink itself, not its target.
+		// Follow only symlinks to preserve the existing classification.
+		if entryType&os.ModeSymlink != 0 {
+			info, err := os.Stat(path)
+			if err != nil {
+				// Ignore broken symlinks and inaccessible targets.
+				continue
+			}
+			isDir = info.IsDir()
+			isRegular = info.Mode().IsRegular()
 		}
-		if info.IsDir() {
-			out = append(out, filePickerEntry{label: item.Name(), path: path, dir: true})
-		} else if info.Mode().IsRegular() {
-			out = append(out, filePickerEntry{label: item.Name(), path: path})
+
+		if isDir {
+			out = append(out, filePickerEntry{
+				label: item.Name(),
+				path:  path,
+				dir:   true,
+			})
+		} else if isRegular {
+			out = append(out, filePickerEntry{
+				label: item.Name(),
+				path:  path,
+			})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
