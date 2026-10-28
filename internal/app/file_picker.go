@@ -196,9 +196,10 @@ func filePickerEntries(dir string) []filePickerEntry {
 		isDir := item.IsDir()
 		isRegular := item.Type().IsRegular()
 		// DirEntry reports a symlink's own type, never its target's, so the target
-		// needs one explicit stat. Ordinary entries use the type bits ReadDir
-		// already has, avoiding a metadata call per entry.
-		if item.Type()&os.ModeSymlink != 0 {
+		// needs one explicit stat. Windows junctions are ModeIrregular, not
+		// ModeSymlink, so both need resolving. Ordinary entries use the type bits
+		// ReadDir already has, avoiding a metadata call per entry.
+		if item.Type()&(os.ModeSymlink|os.ModeIrregular) != 0 {
 			info, err := os.Stat(path)
 			if err != nil {
 				continue
