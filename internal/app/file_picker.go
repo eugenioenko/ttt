@@ -193,13 +193,23 @@ func filePickerEntries(dir string) []filePickerEntry {
 	}
 	for _, item := range items {
 		path := filepath.Join(dir, item.Name())
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
+		isDir := item.IsDir()
+		isRegular := item.Type().IsRegular()
+		// DirEntry reports a symlink's own type, never its target's, so the target
+		// needs one explicit stat. Ordinary entries use the type bits ReadDir
+		// already has, avoiding a metadata call per entry.
+		if item.Type()&os.ModeSymlink != 0 {
+			info, err := os.Stat(path)
+			if err != nil {
+				continue
+			}
+			isDir = info.IsDir()
+			isRegular = info.Mode().IsRegular()
 		}
-		if info.IsDir() {
+		switch {
+		case isDir:
 			out = append(out, filePickerEntry{label: item.Name(), path: path, dir: true})
-		} else if info.Mode().IsRegular() {
+		case isRegular:
 			out = append(out, filePickerEntry{label: item.Name(), path: path})
 		}
 	}
