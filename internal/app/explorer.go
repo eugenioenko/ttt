@@ -116,6 +116,53 @@ func (n *NavigationPanel) SetActiveFile(path string) {
 	n.Tree.SetActiveID(path)
 }
 
+func (n *NavigationPanel) ActivatePath(path string) bool {
+	for _, node := range n.Tree.FlatList() {
+		if node.ID != path {
+			if !slices.Contains(n.compactChain(node.ID), path) {
+				continue
+			}
+			n.splitCompactNode(node, path)
+		}
+		if node.Expandable || len(node.Children) > 0 {
+			node.Expanded = !node.Expanded
+			if node.Expanded && len(node.Children) == 0 {
+				n.loadChildren(node)
+			}
+			n.Tree.SetItems(n.Tree.Config.Items)
+			n.Tree.SelectByID(node.ID)
+		} else {
+			n.Tree.SelectByID(node.ID)
+			n.Tree.ActivateSelected()
+		}
+		return true
+	}
+	return false
+}
+
+func (n *NavigationPanel) splitCompactNode(node *widgets.TreeNode, path string) {
+	start := n.compactStarts[node.ID]
+	child := *node
+	rel, _ := filepath.Rel(path, child.ID)
+	child.Label = filepath.ToSlash(rel)
+	node.Label = strings.TrimSuffix(node.Label, "/"+child.Label)
+	node.ID = path
+	node.LabelStyle = n.gitStyleFor(path)
+	node.Children = []*widgets.TreeNode{&child}
+
+	delete(n.compactStarts, child.ID)
+	if path != start {
+		n.compactStarts[path] = start
+	}
+	childStart := child.ID
+	for filepath.Dir(childStart) != path {
+		childStart = filepath.Dir(childStart)
+	}
+	if childStart != child.ID {
+		n.compactStarts[child.ID] = childStart
+	}
+}
+
 func (n *NavigationPanel) RevealPath(path string) bool {
 	root := n.rootContaining(path)
 	if root == nil {
