@@ -1,6 +1,6 @@
 # Makefile for ttt - terminal text editor
 
-.PHONY: all test build run clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff bench-log bench-code
+.PHONY: all test build run contributors clean fmt fmt-check lint chaos chaos-docker chaos-docker-build profiler bench-editor bench-diff bench-log bench-code
 
 all: build
 
@@ -17,6 +17,10 @@ test:
 
 run: build
 	./bin/ttt
+
+# Regenerate the About dialog's contributor and issue reporter lists from GitHub (needs gh and jq).
+contributors:
+	scripts/update-contributors.sh
 
 # Editor benchmarks through the full app. BENCH_LANG picks one language
 # (go, ts, cpp, python). To compare against another checkout the way CI does

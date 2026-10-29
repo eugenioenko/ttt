@@ -473,13 +473,7 @@ func registerViewCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "about", Title: "About TTT Editor",
 		Keywords: []string{"help", "version", "info"},
-		Handler: func() {
-			app.ShowInfoDialogEx("About TTT Editor", []widgets.KeyValueEntry{
-				{Key: "Version", Value: app.Version},
-				{Key: "Website", Value: "https://tttedit.dev"},
-				{Key: "GitHub", Value: "https://github.com/eugenioenko/ttt"},
-			}, true)
-		},
+		Handler:  app.ShowAbout,
 	})
 
 }
