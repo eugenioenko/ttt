@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -271,4 +272,151 @@ func TestExplorerReloadKeepsSelectedFolderWhenItBecomesCompact(t *testing.T) {
 			t.Fatalf("selected %+v after reload, want the %q row", selected, want)
 		}
 	})
+}
+
+func TestExplorerOpenUsesContextPathAndPreservesChildren(t *testing.T) {
+	forEachCompactMode(t, func(t *testing.T, compact bool) {
+		for _, segment := range []string{"src", "src/main", "src/main/java"} {
+			for _, expanded := range []bool{true, false} {
+				t.Run(fmt.Sprintf("%s/expanded=%v", segment, expanded), func(t *testing.T) {
+					rootPath := t.TempDir()
+					writeRevealFixture(t, rootPath, "src/main/java/App.java", "src/main/java/util/Strings.java", "README.md")
+					explorer := NewNavigationPanel(compactSettings(compact), config.IconsNone, rootPath)
+					explorer.ExpandAll()
+					root := explorer.Tree.Config.Items[0]
+					deepest := filepath.Join(rootPath, "src", "main", "java")
+					util := nodeWithLabel(root.Children, "util")
+					file := util.Children[0]
+					target := filepath.Join(rootPath, filepath.FromSlash(segment))
+					explorer.selectRow(target)
+					explorer.Tree.Selected().Expanded = expanded
+					deepestExpanded := nodeWithID(root.Children, deepest).Expanded
+					explorer.Tree.SetItems(explorer.Tree.Config.Items)
+					explorer.Tree.SelectByID(filepath.Join(rootPath, "README.md"))
+					a := &App{Explorer: explorer, Reg: command.NewRegistry()}
+					registerExplorerCommands(a)
+
+					for range 2 {
+						a.ExplorerContextNode = &widgets.TreeNode{ID: target}
+						a.Reg.Execute("explorer.open")
+						selected := explorer.Tree.Selected()
+						if selected == nil || selected.ID != target || selected.Expanded == expanded {
+							t.Fatalf("Open selected %+v, want %s expanded=%v", selected, target, !expanded)
+						}
+						if a.ExplorerContextNode != nil {
+							t.Fatal("Open retained its context target")
+						}
+						if got := nodeWithLabel(root.Children, "util"); got != util || !got.Expanded || got.Children[0] != file {
+							t.Fatal("Open replaced loaded children or lost descendant expansion")
+						}
+						if target != deepest {
+							if row := nodeWithID(root.Children, deepest); row == nil || row.Expanded != deepestExpanded {
+								t.Fatal("Open toggled the deepest folder instead of the ancestor")
+							}
+						}
+						expanded = !expanded
+					}
+				})
+			}
+		}
+	})
+}
+
+func TestExplorerOpenClearsUnresolvedContextWithoutActivatingSelection(t *testing.T) {
+	forEachCompactMode(t, func(t *testing.T, compact bool) {
+		rootPath := t.TempDir()
+		writeRevealFixture(t, rootPath, "src/main/java/App.java")
+		explorer := NewNavigationPanel(compactSettings(compact), config.IconsNone, rootPath)
+		explorer.ExpandAll()
+		explorer.Tree.SelectByID(filepath.Join(rootPath, "src", "main", "java"))
+		selected := explorer.Tree.Selected()
+		a := &App{Explorer: explorer, Reg: command.NewRegistry()}
+		registerExplorerCommands(a)
+		for _, path := range []string{"", filepath.Join(rootPath, "src", "main", "missing"), rootPath + "-other"} {
+			a.ExplorerContextNode = &widgets.TreeNode{ID: path}
+			a.Reg.Execute("explorer.open")
+			if a.ExplorerContextNode != nil || explorer.Tree.Selected() != selected || !selected.Expanded {
+				t.Fatalf("unresolved context %q was retained or activated the selection", path)
+			}
+		}
+	})
+}
+
+func TestExplorerOpenWithoutContextActivatesSelectedRow(t *testing.T) {
+	forEachCompactMode(t, func(t *testing.T, compact bool) {
+		rootPath := t.TempDir()
+		writeRevealFixture(t, rootPath, "src/main/java/App.java")
+		explorer := NewNavigationPanel(compactSettings(compact), config.IconsNone, rootPath)
+		explorer.ExpandAll()
+		deepest := filepath.Join(rootPath, "src", "main", "java")
+		explorer.Tree.SelectByID(deepest)
+		a := &App{Explorer: explorer, Reg: command.NewRegistry()}
+		registerExplorerCommands(a)
+		for _, wantExpanded := range []bool{false, true} {
+			a.Reg.Execute("explorer.open")
+			if selected := explorer.Tree.Selected(); selected.ID != deepest || selected.Expanded != wantExpanded {
+				t.Fatalf("selected %+v, want deepest row expanded=%v", selected, wantExpanded)
+			}
+		}
+	})
+}
+
+func TestExplorerOpenContextLoadsFolderAndOpensFile(t *testing.T) {
+	forEachCompactMode(t, func(t *testing.T, compact bool) {
+		rootPath := t.TempDir()
+		writeRevealFixture(t, rootPath, "src/main/java/App.java", "README.md")
+		explorer := NewNavigationPanel(compactSettings(compact), config.IconsNone, rootPath)
+		a := &App{Explorer: explorer, Reg: command.NewRegistry()}
+		registerExplorerCommands(a)
+		a.ExplorerContextNode = &widgets.TreeNode{ID: filepath.Join(rootPath, "src")}
+		a.Reg.Execute("explorer.open")
+		if row := explorer.Tree.Selected(); !row.Expanded || len(row.Children) == 0 || a.ExplorerContextNode != nil {
+			t.Fatalf("Open did not load the folder: %+v", row)
+		}
+		explorer.ExpandAll()
+		explorer.Tree.SelectByID(filepath.Join(rootPath, "README.md"))
+		filePath := filepath.Join(rootPath, "src", "main", "java", "App.java")
+		var opened []string
+		explorer.OnOpenFile = func(path string) {
+			if a.ExplorerContextNode != nil {
+				t.Fatal("file callback received a stale context target")
+			}
+			opened = append(opened, path)
+		}
+		a.ExplorerContextNode = &widgets.TreeNode{ID: filePath, Expandable: true}
+		a.Reg.Execute("explorer.open")
+		a.Reg.Execute("explorer.open")
+		if !slices.Equal(opened, []string{filePath, filePath}) {
+			t.Fatalf("opened %v, want context file followed by selected file", opened)
+		}
+	})
+}
+
+func TestExplorerOpenSplitPreservesCompactChainPaths(t *testing.T) {
+	rootPath := t.TempDir()
+	writeRevealFixture(t, rootPath, "a/b/c/d/e/file.txt")
+	explorer := NewNavigationPanel(compactSettings(true), config.IconsNone, rootPath)
+	explorer.ExpandAll()
+	a := &App{Explorer: explorer, Reg: command.NewRegistry()}
+	registerExplorerCommands(a)
+	target := filepath.Join(rootPath, "a", "b")
+	deepest := filepath.Join(target, "c", "d", "e")
+	for range 2 {
+		a.ExplorerContextNode = &widgets.TreeNode{ID: target}
+		a.Reg.Execute("explorer.open")
+	}
+	if got, want := explorer.compactChain(target), []string{target, filepath.Join(rootPath, "a")}; !slices.Equal(got, want) {
+		t.Fatalf("prefix chain = %v, want %v", got, want)
+	}
+	if got, want := explorer.compactChain(deepest), []string{deepest, filepath.Dir(deepest), filepath.Join(target, "c")}; !slices.Equal(got, want) {
+		t.Fatalf("suffix chain = %v, want %v", got, want)
+	}
+	a.ExplorerContextNode = &widgets.TreeNode{ID: filepath.Dir(deepest)}
+	a.Reg.Execute("explorer.open")
+	if selected := explorer.Tree.Selected(); selected.ID != filepath.Dir(deepest) || selected.Expanded {
+		t.Fatalf("Open did not target the suffix segment: %+v", selected)
+	}
+	if !explorer.RevealPath(filepath.Join(deepest, "file.txt")) {
+		t.Fatal("RevealPath failed after splitting a compact chain")
+	}
 }
