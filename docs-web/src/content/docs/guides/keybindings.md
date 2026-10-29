@@ -25,6 +25,7 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 |----------|--------|
 | Ctrl+N | New file |
 | Ctrl+S | Save |
+| Alt+S | Save all open files |
 | Ctrl+K S | Save as |
 
 ### Editor
@@ -156,7 +157,6 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 |----------|--------|
 | F10 / Alt+F | File menu |
 | Alt+E | Edit menu |
-| Alt+S | Selection menu |
 | Alt+V | View menu |
 | Alt+O | Options menu |
 | Alt+H | Help menu |

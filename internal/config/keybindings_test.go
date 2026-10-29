@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -488,5 +489,26 @@ func TestMarshalOrderedMap(t *testing.T) {
 	}
 	if parsed["a"] != "val_a" || parsed["b"] != "val_b" {
 		t.Errorf("unexpected values: %v", parsed)
+	}
+}
+
+// A chord whose first step is also a standalone binding makes the single-key
+// command unreachable: pressing the prefix starts the chord and swallows the key.
+func TestChordPrefixDoesNotShadowStandaloneBinding(t *testing.T) {
+	bindings := DefaultKeybindings()
+	plain := map[string]bool{}
+	for _, kb := range bindings {
+		if !strings.Contains(kb.Key, " ") {
+			plain[kb.Key] = true
+		}
+	}
+	for _, kb := range bindings {
+		steps := strings.Fields(kb.Key)
+		if len(steps) < 2 {
+			continue
+		}
+		if plain[steps[0]] {
+			t.Errorf("chord %q starts with %q, which is also bound on its own: the chord prefix swallows that command", kb.Key, steps[0])
+		}
 	}
 }

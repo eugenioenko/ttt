@@ -1467,6 +1467,27 @@ func (g *EditorGroupWidget) Save() bool {
 	return true
 }
 
+// SaveAll writes every modified named editor tab without changing the active tab.
+func (g *EditorGroupWidget) SaveAll() bool {
+	ok := true
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if t.Content != nil || t.Virtual || t.ReadOnly || t.Buf == nil || !t.Buf.Dirty || t.FilePath == "" {
+			continue
+		}
+		if err := t.Buf.SaveFile(t.FilePath); err != nil {
+			g.reportError(fmt.Sprintf("Failed to save %s: %v", t.FilePath, err))
+			ok = false
+			continue
+		}
+		if t.Undo != nil {
+			t.Undo.MarkSaved()
+		}
+	}
+	g.syncTabs()
+	return ok
+}
+
 // applySaveSettings sets buf's save-time cleanups for path from settings and .editorconfig.
 func (g *EditorGroupWidget) applySaveSettings(buf *buffer.Buffer, path string) config.EditorConfigProps {
 	buf.InsertFinalNewline = g.InsertFinalNewline

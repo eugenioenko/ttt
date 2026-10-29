@@ -798,6 +798,12 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "file.saveAll", Title: "Save All",
+		Keywords: []string{"file", "write", "all"},
+		Handler: func() { app.EditorGroup.SaveAll() },
+	})
+
+	reg.Register(command.Command{
 		ID: "file.saveAs", Title: "Save As...",
 		Keywords: []string{"file", "write", "export"},
 		Handler:  app.SaveFileAs,

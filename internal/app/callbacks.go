@@ -584,6 +584,17 @@ func (a *App) ShowGroupMenu(dir string, sx, sy int) {
 }
 
 func (a *App) CommitChanges(dir string, message string) {
+	switch strings.ToLower(strings.TrimSpace(message)) {
+	case "pull":
+		a.RunRepoTask(RepoTask{Progress: "Pulling", Done: "Pulled successfully", Dirs: []string{dir}, Ops: []RepoOp{OpPull}})
+		return
+	case "push":
+		a.RunRepoTask(RepoTask{Progress: "Pushing", Done: "Pushed successfully", Dirs: []string{dir}, Ops: []RepoOp{OpPush}})
+		return
+	case "fetch":
+		a.RunRepoTask(RepoTask{Progress: "Fetching", Done: "Fetched successfully", Dirs: []string{dir}, Ops: []RepoOp{OpFetch}})
+		return
+	}
 	a.RunRepoTask(RepoTask{
 		Progress: "Committing",
 		Done:     "Committed: " + message,

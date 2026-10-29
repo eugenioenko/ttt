@@ -18,6 +18,8 @@ import (
 
 type highlightStep struct{}
 
+type autoSaveTick struct{}
+
 const highlightStepBudget = 4 * time.Millisecond
 
 func RunEventLoop(
@@ -185,6 +187,16 @@ func RunEventLoop(
 
 	app.ShowPendingPluginApprovals()
 
+	var scheduleAutoSave func()
+	scheduleAutoSave = func() {
+		time.AfterFunc(5*time.Second, func() {
+			if *running {
+				_ = screen.PostEvent(tcell.NewEventInterrupt(&autoSaveTick{}))
+			}
+		})
+	}
+	scheduleAutoSave()
+
 	handleKey := func(tev *tcell.EventKey) {
 		app.stopHoverTask()
 		switch tev.Key() {
@@ -272,6 +284,9 @@ func RunEventLoop(
 			var execErr error
 			skipRedraw := false
 			switch v := tev.Data().(type) {
+			case *autoSaveTick:
+				app.EditorGroup.SaveAll()
+				scheduleAutoSave()
 			case *taskDelivery:
 				v.run()
 			case *agentReply:

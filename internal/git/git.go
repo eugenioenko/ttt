@@ -227,6 +227,14 @@ func Pull(dir string) error {
 	return nil
 }
 
+func Fetch(dir string) error {
+	cmd := exec.Command("git", "-C", dir, "fetch")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // Clone runs without a terminal prompt: the editor owns the tty, so git asking
 // for credentials would hang instead of failing.
 func Clone(url, dest string) error {

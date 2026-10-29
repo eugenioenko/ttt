@@ -19,6 +19,7 @@ type RepoOp struct {
 var (
 	OpPull = RepoOp{Name: "pull", Run: git.Pull}
 	OpPush = RepoOp{Name: "push", Run: git.Push}
+	OpFetch = RepoOp{Name: "fetch", Run: git.Fetch}
 )
 
 func OpCommit(message string) RepoOp {
@@ -98,7 +99,7 @@ func (a *App) HandleRepoOpResult(r *RepoOpResult) {
 func repositoryResourcesForTask(task RepoTask) RepositoryResource {
 	resources := RepositoryWorktree
 	for _, op := range task.Ops {
-		if op.Name == "commit" || op.Name == "pull" || op.Name == "branch" {
+		if op.Name == "commit" || op.Name == "pull" || op.Name == "push" || op.Name == "fetch" || op.Name == "branch" {
 			resources |= RepositoryHistory
 		}
 	}

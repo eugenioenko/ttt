@@ -27,6 +27,7 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 | Ctrl+N | `file.new` | New file |
 | Ctrl+O | `workspace.openFolder` | Open folder |
 | Ctrl+S | `file.save` | Save |
+| Alt+S | `file.saveAll` | Save all open files |
 | Ctrl+K S | `file.saveAs` | Save as |
 
 ## Editor
@@ -155,7 +156,6 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 |----------|---------|-------------|
 | F10 / Alt+F | `menu.file` | File menu |
 | Alt+E | `menu.edit` | Edit menu |
-| Alt+S | `menu.selection` | Selection menu |
 | Alt+V | `menu.view` | View menu |
 | Alt+O | `menu.options` | Options menu |
 | Alt+H | `menu.help` | Help menu |
