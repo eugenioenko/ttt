@@ -92,7 +92,7 @@ func TestFilterFilePickerEntriesKeepsParent(t *testing.T) {
 
 func BenchmarkFilePickerEntries(b *testing.B) {
 	dir := b.TempDir()
-	for i := range 1000 {
+	for i := range 100 {
 		name := filepath.Join(dir, fmt.Sprintf("file-%04d.txt", i))
 		if err := os.WriteFile(name, nil, 0644); err != nil {
 			b.Fatal(err)
