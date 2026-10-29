@@ -1,10 +1,12 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
+	"sort"
+	"strings"
 	"testing"
 )
 
@@ -88,19 +90,83 @@ func TestFilterFilePickerEntriesKeepsParent(t *testing.T) {
 	}
 }
 
-// BenchmarkFilePickerEntries exercises the listing path. Ordinary entries are
-// classified from DirEntry type bits without a per-entry os.Stat, so the only
-// stat calls here come from resolving symlink targets.
 func BenchmarkFilePickerEntries(b *testing.B) {
 	dir := b.TempDir()
-	for i := 0; i < 100; i++ {
-		name := "file-" + strconv.Itoa(i) + ".txt"
-		if err := os.WriteFile(filepath.Join(dir, name), nil, 0644); err != nil {
+	for i := range 1000 {
+		name := filepath.Join(dir, fmt.Sprintf("file-%04d.txt", i))
+		if err := os.WriteFile(name, nil, 0644); err != nil {
 			b.Fatal(err)
 		}
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = filePickerEntries(dir)
+
+	b.Run("Optimized", func(b *testing.B) {
+		b.ResetTimer()
+		for range b.N {
+			filePickerEntries(dir)
+		}
+	})
+
+	b.Run("StatBaseline", func(b *testing.B) {
+		b.ResetTimer()
+		for range b.N {
+			benchmarkFilePickerEntriesStatBaseline(dir)
+		}
+	})
+}
+
+func benchmarkFilePickerEntriesStatBaseline(dir string) []filePickerEntry {
+	var out []filePickerEntry
+
+	if parent := filepath.Dir(dir); parent != dir {
+		out = append(out, filePickerEntry{label: "..", path: parent, dir: true})
 	}
+
+	items, err := os.ReadDir(dir)
+	if err != nil {
+		return out
+	}
+
+	for _, item := range items {
+		path := filepath.Join(dir, item.Name())
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+
+		if info.IsDir() {
+			out = append(out, filePickerEntry{
+				label: item.Name(),
+				path:  path,
+				dir:   true,
+			})
+		} else if info.Mode().IsRegular() {
+			out = append(out, filePickerEntry{
+				label: item.Name(),
+				path:  path,
+			})
+		}
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].label == out[j].label {
+			return false
+		}
+		if out[i].label == ".." {
+			return true
+		}
+		if out[j].label == ".." {
+			return false
+		}
+		if out[i].dir != out[j].dir {
+			return out[i].dir
+		}
+		hiddenI := strings.HasPrefix(out[i].label, ".")
+		hiddenJ := strings.HasPrefix(out[j].label, ".")
+		if hiddenI != hiddenJ {
+			return !hiddenI
+		}
+		return strings.ToLower(out[i].label) < strings.ToLower(out[j].label)
+	})
+
+	return out
 }
