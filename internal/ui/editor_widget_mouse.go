@@ -95,6 +95,17 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 				e.collapseMulti()
 			}
 
+			if mod&tcell.ModShift != 0 {
+				if e.Selection != nil && !e.Selection.Active {
+					e.Selection.Start(e.Cursor.Line, e.Cursor.Col)
+				}
+				e.Cursor.Line, e.Cursor.Col = line, col
+				e.clickCount = 0
+				e.lastClickTime = 0
+				e.scrollViewport()
+				return EventCaptured
+			}
+
 			now := time.Now().UnixMilli()
 			if now-e.lastClickTime < DoubleClickMs && line == e.lastClickLine && col == e.lastClickCol {
 				e.clickCount++
