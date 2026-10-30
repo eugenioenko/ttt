@@ -456,3 +456,23 @@ func TestRawKeyConsumerGetsChordKeys(t *testing.T) {
 		t.Fatalf("terminal got %d keys, want 3", terminal.eventCount)
 	}
 }
+
+func TestRemoveLowerOverlayKeepsReturnFocusOfOverlayAbove(t *testing.T) {
+	main := &mockWidget{}
+	origin := &mockWidget{focusable: true}
+	drawer := &mockWidget{focusable: true}
+	dialog := &mockWidget{focusable: true}
+
+	root := NewRoot(main)
+	root.SetFocus(origin)
+	root.PushOverlay(Overlay{Widget: drawer})
+	root.SetFocus(drawer)
+	root.PushOverlay(Overlay{Widget: dialog, Modal: true})
+
+	if got := root.RemoveOverlay(drawer); got != origin {
+		t.Fatalf("RemoveOverlay(drawer) returned %v, want origin", got)
+	}
+	if got := root.PopOverlay(); got != origin {
+		t.Fatalf("PopOverlay() returned %v, want origin after drawer removal", got)
+	}
+}
