@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -333,8 +334,12 @@ func RunEventLoop(
 				if len(v.Locations) > 0 {
 					loc := v.Locations[0]
 					path := URIToPath(loc.URI)
-					app.EditorGroup.OpenFile(path)
-					app.EditorGroup.GoToLine(loc.Range.Start.Line + 1)
+					if err := app.EditorGroup.OpenFile(path); err != nil {
+						app.StatusWarn(err.Error())
+						break
+					}
+					pos := lsp.PositionToRunes(app.lspLines(path), loc.Range.Start)
+					app.EditorGroup.GoToLineCol(pos.Line+1, pos.Character+1)
 					app.Root.SetFocus(app.EditorGroup)
 					syncStatus()
 				}
@@ -351,7 +356,7 @@ func RunEventLoop(
 			case *FormattingResult:
 				app.applyFormattingResult(v)
 			case *DiagnosticsResult:
-				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, v.Diagnostics)
+				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, app.lspLines(v.Path)))
 			case *LSPDiagnosticRefresh:
 				app.handleDiagnosticRefresh(v.Server)
 			case *LSPServerStopped:

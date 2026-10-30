@@ -49,6 +49,7 @@ func (a *App) RequestDocumentSymbols(path, lang string) {
 	}
 	workDir := a.lspWorkDir(path)
 	manager := a.LspManager
+	lines := a.lspLines(path)
 	a.scheduleSymbols(path, func(ctx context.Context) (symbolsReply, error) {
 		client, err := manager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -65,6 +66,7 @@ func (a *App) RequestDocumentSymbols(path, lang string) {
 			slog.Error("lsp documentSymbol", "err", err)
 			return symbolsReply{symbols: fallback, status: lspStatusMessage(err)}, nil
 		}
+		runeSymbols(lines, symbols)
 		return symbolsReply{symbols: symbols}, nil
 	})
 }
