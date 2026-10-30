@@ -98,6 +98,14 @@ func (a *App) debugSimulateClick() {
 	a.ShowDialog(adapter)
 }
 
+func (a *App) registerDebugPlugin(p *plugin.Plugin) {
+	if old := a.PluginManager.FindPlugin(p.Name); old != nil {
+		a.ClearPluginSources(old.Name)
+		a.RemovePluginPanels(old.Name)
+	}
+	a.PluginManager.RegisterDebugPlugin(p)
+}
+
 func (a *App) debugRunPlugin() {
 	if a.PluginManager == nil || a.EditorGroup.Editor == nil {
 		a.Status.SetNotification("No active editor", view.NotifyWarning, 3*time.Second)
@@ -162,7 +170,7 @@ func (a *App) debugRunPlugin() {
 		return
 	}
 
-	a.PluginManager.RegisterDebugPlugin(p)
+	a.registerDebugPlugin(p)
 	a.WirePlugin(p)
 
 	hasSidebar := p.SidebarTitle != ""
@@ -268,7 +276,7 @@ func LoadPluginFromFile(a *App, path string) {
 		return
 	}
 
-	a.PluginManager.RegisterDebugPlugin(p)
+	a.registerDebugPlugin(p)
 	a.WirePlugin(p)
 	a.ensureKeyInterceptor()
 

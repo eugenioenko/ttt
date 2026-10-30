@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/term"
 )
 
 // The probe plugin from #972: a command sets a status item, and on_uninstall
@@ -115,13 +116,17 @@ func TestPluginUninstallClosesTabsItsUninstallCallbackOpens(t *testing.T) {
 func TestPluginReloadDropsTheOldInstancesStatusItems(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
-	loadLeftoverProbe(h)
+	m := loadLeftoverProbe(h)
+	m.FindPlugin("probe").SetBookmark(0, 'Q', term.Style{})
 
 	h.exec("probe.mark")
 	h.assertContains("PROBESTATUS")
 
 	h.exec("plugin.reload")
 	h.assertNotContains("PROBESTATUS")
+	if bookmark, ok := h.app.EditorGroup.Editor.GetBookmark(0); !ok || bookmark.Icon != 'Q' {
+		t.Fatal("shared bookmark did not survive plugin reload")
+	}
 
 	h.exec("probe.mark")
 	h.assertContains("PROBESTATUS")
@@ -145,4 +150,101 @@ func TestPluginUninstallAsksBeforeRemovingAPluginWhoseCleanupFailed(t *testing.T
 	if m.FindPlugin("probe") != nil {
 		t.Fatal("Remove Anyway left the plugin installed")
 	}
+}
+
+func TestPluginBookmarksAreSharedAndSurviveUninstall(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	m := loadProbe(h, `local ttt = require("ttt"); ttt.register({})`)
+	path := filepath.Join(h.dir, "bookmarks.txt")
+	if err := os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.app.EditorGroup.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+
+	first := m.FindPlugin("probe")
+	second := &plugin.Plugin{Name: "other", Enabled: true}
+	h.app.WirePlugin(second)
+	first.SetBookmark(0, 'Q', term.Style{})
+	second.SetBookmark(1, 'R', term.Style{})
+
+	if got := len(first.GetAllBookmarks()); got != 2 {
+		t.Fatalf("shared bookmark count = %d before uninstall, want 2", got)
+	}
+
+	h.confirmUninstall("probe")
+
+	for line, icon := range map[int]rune{0: 'Q', 1: 'R'} {
+		bookmark, ok := h.app.EditorGroup.Editor.GetBookmark(line)
+		if !ok || bookmark.Icon != icon {
+			t.Errorf("bookmark on line %d = (%q, %v), want %q to remain", line+1, bookmark.Icon, ok, icon)
+		}
+	}
+}
+
+func TestDebugPluginReplacementClearsOldPublishedSources(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	m := loadProbe(h, `local ttt = require("ttt"); ttt.register({})`)
+	path := filepath.Join(h.dir, "probe.lua")
+	source := "local ttt = require(\"ttt\")\nttt.register({})\n"
+	if err := os.WriteFile(path, []byte(source), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.app.EditorGroup.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+
+	old := m.FindPlugin("probe")
+	old.PublishDiagnostics(path, []plugin.DiagnosticItem{{
+		StartLine: 0, EndLine: 0, Severity: 1, Message: "old diagnostic",
+	}})
+	old.SetDecorations(path, []plugin.DecorationItem{{
+		StartLine: 0, EndLine: 0, Note: "old decoration",
+	}})
+	old.SetStatusItem("left", "old", "OLDSTATUS", 1000, nil)
+	h.redraw()
+
+	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 1 {
+		t.Fatalf("old diagnostics = %d before replacement, want 1", got)
+	}
+	if h.app.EditorGroup.Editor.DiffOverlay == nil {
+		t.Fatal("old decoration was not applied before replacement")
+	}
+	h.assertContains("OLDSTATUS")
+
+	h.exec("debug.runPlugin")
+
+	if got := m.FindPlugin("probe"); got == nil || got == old {
+		t.Fatal("debug plugin did not replace the previous instance")
+	}
+	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 0 {
+		t.Errorf("old diagnostics after replacement = %d, want 0", got)
+	}
+	if h.app.EditorGroup.Editor.DiffOverlay != nil {
+		t.Error("old decoration remained after debug plugin replacement")
+	}
+	h.assertNotContains("OLDSTATUS")
+
+	replacement := m.FindPlugin("probe")
+	replacement.PublishDiagnostics(path, []plugin.DiagnosticItem{{
+		StartLine: 0, EndLine: 0, Severity: 1, Message: "new diagnostic",
+	}})
+	replacement.SetDecorations(path, []plugin.DecorationItem{{
+		StartLine: 0, EndLine: 0, Note: "new decoration",
+	}})
+	replacement.SetStatusItem("left", "new", "NEWSTATUS", 1000, nil)
+	h.redraw()
+
+	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 1 {
+		t.Errorf("replacement diagnostics = %d, want 1", got)
+	}
+	if h.app.EditorGroup.Editor.DiffOverlay == nil {
+		t.Error("replacement decoration was removed after publishing")
+	}
+	h.assertContains("NEWSTATUS")
 }
