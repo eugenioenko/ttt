@@ -95,6 +95,16 @@
     "tags": ["omarchy", "theme", "appearance", "colors"]
   },
   {
+    "name": "opentdf",
+    "featured": true,
+    "displayName": "OpenTDF",
+    "author": "eugenioenko",
+    "description": "Browse and manage an OpenTDF platform: namespaces, attributes, actions, key access servers and keys",
+    "repo": "https://github.com/eugenioenko/ttt-opentdf",
+    "version": "0.1.0",
+    "tags": ["opentdf", "security", "policy", "access-control"]
+  },
+  {
     "name": "pdf-viewer",
     "featured": true,
     "displayName": "PDF Viewer",
@@ -115,6 +125,26 @@
     "tags": ["ports", "network", "process", "utility"]
   },
   {
+    "name": "postgres",
+    "featured": true,
+    "displayName": "PostgreSQL",
+    "author": "eugenioenko",
+    "description": "Browse PostgreSQL schemas, tables and views, page through rows, inspect structure and run queries through psql",
+    "repo": "https://github.com/eugenioenko/ttt-postgres",
+    "version": "0.2.0",
+    "tags": ["postgres", "postgresql", "database", "sql", "psql"]
+  },
+  {
+    "name": "pr-review",
+    "displayName": "PR Review",
+    "author": "eugenioenko",
+    "description": "Browse GitHub pull requests, inspect native diffs, and submit reviews.",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "pr-review",
+    "version": "0.1.0",
+    "tags": ["github", "pull-requests", "review", "diff", "gh"]
+  },
+  {
     "name": "spell",
     "featured": true,
     "displayName": "Spell Check",
@@ -123,6 +153,16 @@
     "repo": "https://github.com/eugenioenko/ttt-spell",
     "version": "0.1.0",
     "tags": ["spelling", "aspell", "prose", "writing", "markdown"]
+  },
+  {
+    "name": "sqlite",
+    "featured": true,
+    "displayName": "SQLite",
+    "author": "eugenioenko",
+    "description": "Browse SQLite databases: attached schemas, tables and views, paged rows, structure, and a query tab",
+    "repo": "https://github.com/eugenioenko/ttt-sqlite",
+    "version": "0.1.0",
+    "tags": ["sqlite", "sqlite3", "database", "sql"]
   },
   {
     "name": "theme-catppuccin-mocha",
