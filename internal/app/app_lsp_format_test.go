@@ -138,3 +138,43 @@ func TestFormattingResultForTheOpenFileIsApplied(t *testing.T) {
 		t.Errorf("the formatting was not applied: %q", got)
 	}
 }
+
+// Multiple formatting edits are applied as a single undo step (#876).
+func TestFormattingEditsAreSingleUndoStep(t *testing.T) {
+	a, first, _ := formatTestApp(t)
+	buf := a.EditorGroup.Editor.Buf
+	version := buf.Version()
+
+	edits := []lsp.TextEdit{
+		{
+			Range: lsp.Range{
+				Start: lsp.Position{Line: 0, Character: 0},
+				End:   lsp.Position{Line: 0, Character: 7},
+			},
+			NewText: "package",
+		},
+		{
+			Range: lsp.Range{
+				Start: lsp.Position{Line: 0, Character: 8},
+				End:   lsp.Position{Line: 0, Character: 13},
+			},
+			NewText: "formatted",
+		},
+	}
+
+	a.applyFormattingResult(&FormattingResult{
+		Path:    first,
+		Version: version,
+		Buffer:  buf,
+		Edits:   edits,
+	})
+
+	if got := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n"); got != "package formatted\n" {
+		t.Fatalf("edits not applied: %q", got)
+	}
+
+	a.EditorGroup.Editor.Undo.Undo(buf)
+	if got := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n"); got != "package first\n" {
+		t.Errorf("expected original content after single undo, got: %q", got)
+	}
+}
