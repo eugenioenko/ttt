@@ -99,6 +99,9 @@ func listFilesWalkDir(workDir, prefix string, visibility FileVisibility) []File 
 		if err != nil || path == workDir {
 			return nil
 		}
+		if d.IsDir() && !visibility.ShowGitIgnored && (d.Name() == "node_modules" || d.Name() == "__pycache__") {
+			return filepath.SkipDir
+		}
 		rel, err := filepath.Rel(workDir, path)
 		if err != nil {
 			return nil

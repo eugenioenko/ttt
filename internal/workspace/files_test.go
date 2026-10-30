@@ -124,3 +124,46 @@ func TestEmptyRipgrepResultDoesNotFallBack(t *testing.T) {
 		t.Fatalf("ignore rules bypassed: %v", files)
 	}
 }
+
+func TestListFilesWalkDirDependencyExclusions(t *testing.T) {
+	dir := t.TempDir()
+	filesToCreate := []string{
+		"src/app.js",
+		"node_modules/pkg/index.js",
+		"packages/sub/node_modules/dep/index.js",
+		"__pycache__/cache.pyc",
+		"pkg/__pycache__/compiled.pyc",
+	}
+	for _, rel := range filesToCreate {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Default visibility (ShowGitIgnored=false) must exclude node_modules and __pycache__ (including nested)
+	defaultFiles := listFilesWalkDir(dir, "", FileVisibility{ShowGitIgnored: false})
+	var defaultRels []string
+	for _, f := range defaultFiles {
+		defaultRels = append(defaultRels, filepath.ToSlash(f.Rel))
+	}
+	if !slices.Equal(defaultRels, []string{"src/app.js"}) {
+		t.Fatalf("expected only [src/app.js] when ShowGitIgnored=false, got %v", defaultRels)
+	}
+
+	// ShowGitIgnored=true must include files under node_modules and __pycache__
+	allFiles := listFilesWalkDir(dir, "", FileVisibility{ShowGitIgnored: true})
+	var allRels []string
+	for _, f := range allFiles {
+		allRels = append(allRels, filepath.ToSlash(f.Rel))
+	}
+	slices.Sort(allRels)
+	wantAll := append([]string(nil), filesToCreate...)
+	slices.Sort(wantAll)
+	if !slices.Equal(allRels, wantAll) {
+		t.Fatalf("expected all files when ShowGitIgnored=true, got %v, want %v", allRels, wantAll)
+	}
+}
