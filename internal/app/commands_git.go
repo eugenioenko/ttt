@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
@@ -148,6 +149,35 @@ func (a *App) SaveWorkspace() {
 			a.StatusNotify("Workspace saved: " + abs)
 		}
 	})
+}
+
+func (a *App) SaveDefaultWorkspace() {
+	dir := config.UserConfigDir()
+	if dir == "" {
+		a.StatusError("Cannot find the user configuration directory")
+		return
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	if err := a.Workspace.SaveFile(filepath.Join(dir, "workspace.ttt")); err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	a.StatusNotify("Default workspace saved")
+}
+
+func (a *App) ClearDefaultWorkspace() {
+	dir := config.UserConfigDir()
+	if dir == "" {
+		return
+	}
+	if err := os.Remove(filepath.Join(dir, "workspace.ttt")); err != nil && !os.IsNotExist(err) {
+		a.StatusError(err.Error())
+		return
+	}
+	a.StatusNotify("Default workspace cleared")
 }
 
 func (a *App) OpenPullRequestDialog() {
@@ -421,6 +451,14 @@ func registerGitCommands(app *App) {
 
 func registerWorkspaceCommands(app *App) {
 	reg := app.Reg
+	reg.Register(command.Command{
+		ID: "workspace.saveDefault", Title: "Workspace: Save as Default",
+		Keywords: []string{"startup", "folders", "root"}, Handler: app.SaveDefaultWorkspace,
+	})
+	reg.Register(command.Command{
+		ID: "workspace.clearDefault", Title: "Workspace: Clear Default",
+		Keywords: []string{"startup", "folders", "root"}, Handler: app.ClearDefaultWorkspace,
+	})
 
 	reg.Register(command.Command{
 		ID: "workspace.openFolder", Title: "Open Folder",
