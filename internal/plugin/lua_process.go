@@ -60,10 +60,12 @@ type pluginProc struct {
 
 	writeCh chan procWriteMsg
 
-	mu     sync.Mutex
-	closed bool // no more writes accepted
-	eofs   int  // streams that reached EOF; reaping starts at 2
-	reaped bool
+	mu       sync.Mutex
+	closed   bool // no more writes accepted
+	eofs     int  // streams that reached EOF; reaping starts at 2
+	reaped   bool
+	pending  []func()
+	draining bool
 }
 
 func checkProc(L *lua.LState) *pluginProc {
@@ -178,19 +180,56 @@ func (pp *pluginProc) pump(r io.Reader, fn *lua.LFunction, name string) {
 		if n > 0 {
 			chunk := string(buf[:n])
 			p := pp.p
-			p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
+			pp.deliver(func() {
 				if p.State == nil || fn == nil {
 					return
 				}
 				if callErr := p.CallLuaFunc(fn, lua.LString(chunk)); callErr != nil {
 					p.logError("proc "+name+" callback", callErr)
 				}
-			}})
+			})
 		}
 		if err != nil {
 			pp.streamEOF()
 			return
 		}
+	}
+}
+
+// deliver queues fn to run on the main thread after every callback queued
+// before it. Posts can overtake each other once the screen's event queue is
+// full, so a process keeps a single drain posted at a time; that is what keeps
+// each stream's chunks in order and on_exit after the final chunk.
+func (pp *pluginProc) deliver(fn func()) {
+	pp.mu.Lock()
+	pp.pending = append(pp.pending, fn)
+	if pp.draining {
+		pp.mu.Unlock()
+		return
+	}
+	pp.draining = true
+	pp.mu.Unlock()
+	pp.p.SafePostAsync(&PluginAsyncResult{Plugin: pp.p, Callback: pp.drain})
+}
+
+// drain runs the queued callbacks on the main thread, one batch per post so a
+// chatty process cannot hold the event loop.
+func (pp *pluginProc) drain() {
+	pp.mu.Lock()
+	batch := pp.pending
+	pp.pending = nil
+	pp.mu.Unlock()
+
+	for _, fn := range batch {
+		fn()
+	}
+
+	pp.mu.Lock()
+	more := len(pp.pending) > 0
+	pp.draining = more
+	pp.mu.Unlock()
+	if more {
+		pp.p.SafePostAsync(&PluginAsyncResult{Plugin: pp.p, Callback: pp.drain})
 	}
 }
 
@@ -229,14 +268,14 @@ func (pp *pluginProc) reap() {
 		if err != nil {
 			errVal = lua.LString(err.Error())
 		}
-		p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
+		pp.deliver(func() {
 			if p.State == nil {
 				return
 			}
 			if callErr := p.CallLuaFunc(pp.onExit, result, errVal); callErr != nil {
 				p.logError("proc exit callback", callErr)
 			}
-		}})
+		})
 	}
 }
 

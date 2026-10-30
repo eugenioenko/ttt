@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -95,6 +96,20 @@ func runPosted(t *testing.T, ch chan *PluginAsyncResult, n int) {
 			r.Callback()
 		case <-time.After(2 * time.Second):
 			t.Fatalf("timed out waiting for async callback %d of %d", i+1, n)
+		}
+	}
+}
+
+// runPostedUntil runs posted callbacks until done reports true. Process
+// callbacks are batched, so how many posts carry them is not fixed.
+func runPostedUntil(t *testing.T, ch chan *PluginAsyncResult, done func() bool) {
+	t.Helper()
+	for !done() {
+		select {
+		case r := <-ch:
+			r.Callback()
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for async callbacks")
 		}
 	}
 }
@@ -294,8 +309,7 @@ func TestSpawnStreamsToCallbacks(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 
-	// Each stream delivers one chunk, then both EOFs trigger on_exit.
-	runPosted(t, ch, 3)
+	runPostedUntil(t, ch, func() bool { return p.State.GetGlobal("code") != lua.LNil })
 
 	out := p.State.GetGlobal("out").(*lua.LTable)
 	if out.Len() != 1 || out.RawGetInt(1).String() != "hello stdout" {
@@ -457,4 +471,93 @@ func TestProcEnqueueWhileReaping(t *testing.T) {
 			t.Fatalf("write after reaping: %v", err)
 		}
 	}
+}
+
+// The screen queue delivers overflow posts from goroutines, so posts can run in
+// any order. Running every post in reverse must still give each stream's
+// chunks in order and on_exit last.
+func TestProcCallbacksKeepOrderWhenPostsAreReordered(t *testing.T) {
+	p, cleanup := setupTestPluginWithSystem(PermissionSet{SystemExec: []string{"cat"}}, &mockSystemAPI{})
+	defer cleanup()
+	var posted []*PluginAsyncResult
+	p.PostAsync = func(r *PluginAsyncResult) { posted = append(posted, r) }
+	pp := &pluginProc{p: p}
+
+	var got []string
+	for _, name := range []string{"out:1", "err:1", "out:2", "out:3", "exit"} {
+		pp.deliver(func() { got = append(got, name) })
+	}
+	for len(posted) > 0 {
+		batch := posted
+		posted = nil
+		for i := len(batch) - 1; i >= 0; i-- {
+			batch[i].Callback()
+		}
+	}
+
+	if want := []string{"out:1", "err:1", "out:2", "out:3", "exit"}; !slices.Equal(got, want) {
+		t.Fatalf("callbacks ran as %v, want %v", got, want)
+	}
+}
+
+// A callback queued while the queue drains goes out in a new post instead of
+// keeping the event loop in the current one.
+func TestProcDrainYieldsBetweenBatches(t *testing.T) {
+	p, cleanup := setupTestPluginWithSystem(PermissionSet{SystemExec: []string{"cat"}}, &mockSystemAPI{})
+	defer cleanup()
+	var posted []*PluginAsyncResult
+	p.PostAsync = func(r *PluginAsyncResult) { posted = append(posted, r) }
+	pp := &pluginProc{p: p}
+
+	ran := 0
+	pp.deliver(func() {
+		ran++
+		pp.deliver(func() { ran++ })
+	})
+	if len(posted) != 1 {
+		t.Fatalf("posts = %d, want 1", len(posted))
+	}
+	posted[0].Callback()
+	if ran != 1 || len(posted) != 2 {
+		t.Fatalf("after one drain: ran %d, posts %d; want 1 and a second post", ran, len(posted))
+	}
+	posted[1].Callback()
+	if ran != 2 {
+		t.Fatalf("ran = %d, want 2", ran)
+	}
+}
+
+// A drain still queued on the screen when the plugin is destroyed must not
+// call into the closed Lua state.
+func TestProcDrainAfterDestroySkipsCallbacks(t *testing.T) {
+	mp := &mockSpawnedProcess{
+		stdin:  &bytes.Buffer{},
+		stdout: strings.NewReader("late chunk"),
+		stderr: strings.NewReader(""),
+		waited: make(chan struct{}),
+	}
+	p, _ := setupTestPluginWithSystem(PermissionSet{SystemExec: []string{"cat"}}, &mockSystemAPI{spawnProc: mp})
+	post, ch := postChan()
+	p.SetPostAsync(post)
+
+	err := p.State.DoString(`
+		local sys = require("ttt.system")
+		sys.spawn("cat", {
+			on_stdout = function(c) _G.out = c end,
+			on_exit = function() _G.exited = true end,
+		})
+	`)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	waitFor(t, mp.waited, "process reaping")
+	var queued *PluginAsyncResult
+	select {
+	case queued = <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("no drain posted")
+	}
+
+	p.Destroy()
+	queued.Callback()
 }
