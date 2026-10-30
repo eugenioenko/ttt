@@ -338,25 +338,45 @@ func (e *EditorPaneWidget) InsertLineAbove() {
 	e.scrollViewport()
 }
 
-func (e *EditorPaneWidget) commentPrefix() string {
-	prefix := "//"
-	if e.Highlighter != nil {
-		lang := strings.ToLower(e.Highlighter.Language())
-		switch lang {
-		case "python", "ruby", "bash", "shell", "yaml", "toml":
-			prefix = "#"
-		case "lua", "sql":
-			prefix = "--"
-		case "html", "xml":
-			prefix = "<!--"
-		}
+func (e *EditorPaneWidget) commentTokens() (string, string) {
+	if e.Highlighter == nil {
+		return "//", ""
 	}
-	return prefix
+	switch strings.ToLower(e.Highlighter.Language()) {
+	case "awk", "cmake", "coffeescript", "crystal", "desktop", "dockerfile",
+		"dotenv", "elixir", "fish", "gdscript", "gherkin", "graphql",
+		"hashicorp hcl", "julia", "makefile", "mojo", "nix", "nushell", "perl",
+		"powershell", "puppet", "python", "r", "ruby", "shell", "systemd units",
+		"terraform", "toml", "yaml":
+		return "#", ""
+	case "elm", "haskell", "lean 4", "lua", "pl/sql", "sql", "vhdl":
+		return "--", ""
+	case "autohotkey", "clojure", "common lisp", "emacs lisp", "fennel", "hy", "ini",
+		"scheme", "windows registry script":
+		return ";", ""
+	case "bibtex", "erlang", "tex":
+		return "%", ""
+	case "vim script":
+		return "\"", ""
+	case "visual basic":
+		return "'", ""
+	case "batch file":
+		return "REM", ""
+	case "angular html", "html", "html (derivative)", "markdown", "svelte", "xml":
+		return "<!--", "-->"
+	case "css":
+		return "/*", "*/"
+	case "ocaml", "rocq":
+		return "(*", "*)"
+	case "twig":
+		return "{#", "#}"
+	}
+	return "//", ""
 }
 
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
-	prefix := e.commentPrefix()
+	prefix, suffix := e.commentTokens()
 
 	startLine, endLine := e.Cursor.Line, e.Cursor.Line
 	if e.Selection != nil && e.Selection.Active {
@@ -394,6 +414,23 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		indent := len(runes) - len([]rune(trimmed))
 
 		if allCommented {
+			if suffix != "" {
+				body := strings.TrimRight(string(runes), " \t")
+				if strings.HasSuffix(body, suffix) {
+					endCol := len([]rune(body))
+					startCol := endCol - len([]rune(suffix))
+					if startCol > indent+len([]rune(prefix)) && runes[startCol-1] == ' ' {
+						startCol--
+					}
+					cmd := &undo.DeleteSelectionCommand{
+						StartLine: l, StartCol: startCol,
+						EndLine: l, EndCol: endCol,
+					}
+					cmd.Apply(e.Buf)
+					cmds = append(cmds, cmd)
+					runes = []rune(e.Buf.Lines[l])
+				}
+			}
 			removeLen := len([]rune(prefix))
 			if indent+removeLen < len(runes) && runes[indent+removeLen] == ' ' {
 				removeLen++
@@ -408,6 +445,11 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 				cursorDelta = -removeLen
 			}
 		} else {
+			if suffix != "" {
+				cmd := &undo.InsertStringCommand{Line: l, Col: len(runes), Text: " " + suffix}
+				cmd.Apply(e.Buf)
+				cmds = append(cmds, cmd)
+			}
 			cmd := &undo.InsertStringCommand{Line: l, Col: indent, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
