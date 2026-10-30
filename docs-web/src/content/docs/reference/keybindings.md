@@ -35,7 +35,7 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 |----------|---------|-------------|
 | Ctrl+Z | `editor.undo` | Undo |
 | Ctrl+Y | `editor.redo` | Redo |
-| Ctrl+A | `editor.selectAll` | Select all |
+| Ctrl+A, Super+A (Cmd+A on macOS) | `editor.selectAll` | Select all |
 | Ctrl+C | `editor.copy` | Copy |
 | Ctrl+X | `editor.cut` | Cut |
 | Ctrl+V | `editor.paste` | Paste |
@@ -160,3 +160,27 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Alt+Shift+M | `menubar.toggle` | Show/hide the menu bar |
 
 The menu shortcuts above keep working while the menu bar is hidden — the dropdown opens on its own from the top edge.
+
+## Ghostty on macOS
+
+Ghostty binds **Cmd+A** to its own `select_all` action by default, which selects terminal cells before TTT receives the key. TTT cannot override a shortcut consumed by the terminal. Add this to your Ghostty configuration and reload it:
+
+```ini
+keybind = super+a=unbind
+```
+
+This lets Ghostty forward Cmd+A using the kitty keyboard protocol that TTT's terminal backend negotiates. TTT binds `super+a` to `editor.selectAll`; `cmd` and `command` are also accepted modifier names in TTT's keybindings.
+
+If your terminal setup does not forward Cmd+A after unbinding it, use this explicit CSI-u mapping instead:
+
+```ini
+keybind = super+a=csi:97;9u
+```
+
+Choose one mapping. Both change Cmd+A for programs running in that Ghostty terminal; Ctrl+A remains available in TTT.
+
+See Ghostty's [default macOS bindings](https://github.com/ghostty-org/ghostty/blob/main/src/config/Config.zig), [keybinding actions](https://ghostty.org/docs/config/keybind/reference), and [configuration reference](https://ghostty.org/docs/config/reference).
+
+TTT requests Shift+mouse reporting with [XTSHIFTESCAPE](https://ghostty.org/docs/vt/csi/xtshiftescape) while running and releases it on exit or suspension. Click to place the cursor, scroll, then Shift+click to select from that cursor position, even when it is off screen. Further Shift+clicks keep the same selection anchor; an ordinary click starts over.
+
+Ghostty's default `mouse-shift-capture = false` allows TTT to request this. If you set `mouse-shift-capture = never`, change it to `false` so TTT can receive Shift+click. Mouse reporting must also be enabled (`mouse-reporting = true`, the default). See [Ghostty's mouse configuration](https://ghostty.org/docs/config/reference#mouse-shift-capture).

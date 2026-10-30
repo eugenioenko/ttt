@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -359,6 +360,9 @@ func TestDescribeKeyCombo(t *testing.T) {
 		{tcell.KeyCtrlS, "", tcell.ModCtrl, "ctrl+s"},
 		{tcell.KeyRune, "a", tcell.ModNone, "a"},
 		{tcell.KeyRune, "a", tcell.ModAlt, "alt+a"},
+		{tcell.KeyRune, "a", tcell.ModMeta, "super+a"},
+		{tcell.KeyRune, "a", tcell.ModCtrl | tcell.ModMeta, "ctrl+super+a"},
+		{tcell.KeyLeft, "", tcell.ModMeta, "super+left"},
 		{tcell.KeyF1, "", tcell.ModNone, "f1"},
 		{tcell.KeyEnter, "", tcell.ModNone, "enter"},
 		{tcell.KeyTab, "", tcell.ModNone, "tab"},
@@ -373,4 +377,37 @@ func TestDescribeKeyCombo(t *testing.T) {
 			t.Errorf("describeKeyCombo(%v) = %q, want %q", tt, got, tt.want)
 		}
 	}
+}
+
+func FuzzSuperKeyRecording(f *testing.F) {
+	f.Add(uint8(0), uint8(0))
+	f.Add(uint8(25), uint8(7))
+	f.Fuzz(func(t *testing.T, letter, extra uint8) {
+		ch := 'a' + rune(letter%26)
+		mod := tcell.ModMeta
+		if extra&1 != 0 {
+			mod |= tcell.ModCtrl
+		}
+		if extra&2 != 0 {
+			mod |= tcell.ModAlt
+		}
+		if extra&4 != 0 {
+			mod |= tcell.ModShift
+		}
+		ev := tcell.NewEventKey(tcell.KeyRune, string(ch), mod)
+		tester := NewKeyTesterWidget()
+		tester.HandleEvent(ev)
+		for _, recorded := range []string{describeKeyCombo(ev), tester.lines[0]} {
+			steps, err := config.ParseKeyString(recorded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(steps) != 1 || steps[0].Rune != ch || !steps[0].Super ||
+				steps[0].Ctrl != (mod&tcell.ModCtrl != 0) ||
+				steps[0].Alt != (mod&tcell.ModAlt != 0) ||
+				steps[0].Shift != (mod&tcell.ModShift != 0) {
+				t.Fatalf("recording %q lost key or modifiers from %v", recorded, ev)
+			}
+		}
+	})
 }

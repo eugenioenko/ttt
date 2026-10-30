@@ -17,6 +17,7 @@
   { "key": "ctrl+w", "command": "tab.close" },
   { "key": "ctrl+k enter", "command": "tab.pin" },
   { "key": "ctrl+a", "command": "editor.selectAll" },
+  { "key": "super+a", "command": "editor.selectAll" },
   { "key": "ctrl+c", "command": "editor.copy" },
   { "key": "ctrl+x", "command": "editor.cut" },
   { "key": "ctrl+v", "command": "editor.paste" },

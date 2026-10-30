@@ -297,6 +297,8 @@ See [Settings reference](docs-web/src/content/docs/reference/settings.md) for ev
 
 All keybindings are customizable via [`keybindings.json`](config/keybindings.json). Chord sequences (e.g. `ctrl+k e`) are supported. Open your keybindings file with **Ctrl+K Y**, or press **Ctrl+P** and type `?` to browse shortcuts in-app.
 
+Use **Ctrl+A** or **Super+A** (**Cmd+A** on macOS) to select the entire document. The terminal must forward the shortcut; see the [Ghostty setup notes](docs-web/src/content/docs/reference/keybindings.md#ghostty-on-macos). Keybindings accept `super`, `cmd`, and `command` for the Command/Super modifier.
+
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 
 ## Testing
