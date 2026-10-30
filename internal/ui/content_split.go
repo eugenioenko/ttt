@@ -105,6 +105,21 @@ func (cs *ContentSplitWidget) requestedBottomHeight(totalH int) int {
 	return cs.BottomH
 }
 
+// BottomRect returns the panel's outer rectangle, including headers, separators and padding.
+// Hidden panels use the dimensions they would have when shown.
+func (cs *ContentSplitWidget) BottomRect() Rect {
+	return cs.bottomRect(cs.GetRect())
+}
+
+func (cs *ContentSplitWidget) bottomRect(r Rect) Rect {
+	if cs.Position == SplitRight {
+		width := cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W))
+		return Rect{X: r.X + r.W - width, Y: r.Y + 1, W: width, H: max(r.H-1, 0)}
+	}
+	height := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
+	return Rect{X: r.X, Y: r.Y + r.H - height, W: max(r.W, 0), H: height}
+}
+
 func (cs *ContentSplitWidget) ResizePanel(delta int) {
 	r := cs.GetRect()
 	if cs.Position == SplitRight {
@@ -162,7 +177,8 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 		return
 	}
 
-	bottomH := cs.constrainedBottomHeight(h, cs.requestedBottomHeight(h))
+	bottomRect := cs.bottomRect(Rect{X: r.X, Y: r.Y, W: w, H: h})
+	bottomH := bottomRect.H
 	divY := h - bottomH - 1
 	topH := divY
 
@@ -190,7 +206,7 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	// Bottom content
 	bottomContentH := bottomH
 	if cs.Bottom != nil && bottomContentH > 0 {
-		cs.Bottom.SetRect(Rect{X: r.X, Y: r.Y + divY + 1, W: r.W, H: bottomContentH})
+		cs.Bottom.SetRect(bottomRect)
 		bottomSurface := surface.Sub(Rect{X: 0, Y: divY + 1, W: w, H: bottomContentH})
 		cs.Bottom.Render(bottomSurface)
 	} else {
@@ -202,7 +218,8 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 }
 
 func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b term.BorderSet, bs term.Style) {
-	rightW := cs.constrainedRightWidth(w, cs.requestedRightWidth(w))
+	bottomRect := cs.bottomRect(Rect{X: r.X, Y: r.Y, W: w, H: h})
+	rightW := bottomRect.W
 	divX := w - rightW - 1
 	topW := divX
 
@@ -229,7 +246,7 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 	}
 
 	if cs.Bottom != nil && rightW > 0 && h > 1 {
-		cs.Bottom.SetRect(Rect{X: r.X + divX + 1, Y: r.Y + 1, W: rightW, H: r.H - 1})
+		cs.Bottom.SetRect(bottomRect)
 		cs.Bottom.Render(surface.Sub(Rect{X: divX + 1, Y: 1, W: rightW, H: h - 1}))
 		if divider, ok := cs.Bottom.(dividerYProvider); ok {
 			y := divider.DividerScreenY() - r.Y
@@ -290,8 +307,7 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	if cs.ShowBottom && cs.Position == SplitRight {
-		rightW := cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W))
-		divX := r.X + r.W - rightW - 1
+		divX := cs.BottomRect().X - 1
 
 		if freshClick && mx == divX {
 			cs.dragging = true
@@ -313,8 +329,7 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 			return result
 		}
 	} else if cs.ShowBottom {
-		bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
-		divY := r.Y + r.H - bottomH - 1
+		divY := cs.BottomRect().Y - 1
 
 		// r.W-1: exclude last column to avoid colliding with editor scrollbar
 		// For divY+1 (tab bar row), let the bottom panel handle clicks first
@@ -384,7 +399,7 @@ func (cs *ContentSplitWidget) OverDivider(mx, my int) bool {
 		if !cs.ShowBottom || cs.Bottom == nil || my < r.Y || my >= r.Y+r.H {
 			return false
 		}
-		return mx == r.X+r.W-cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W))-1
+		return mx == cs.DividerScreenX()
 	}
 	return my == cs.DividerScreenY() && mx >= r.X && mx < r.X+r.W-1
 }
@@ -403,17 +418,14 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 	if !cs.ShowBottom || cs.Bottom == nil || cs.Position == SplitRight {
 		return -1
 	}
-	r := cs.GetRect()
-	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
-	return r.Y + r.H - bottomH - 1
+	return cs.BottomRect().Y - 1
 }
 
 func (cs *ContentSplitWidget) DividerScreenX() int {
 	if !cs.ShowBottom || cs.Bottom == nil || cs.Position != SplitRight {
 		return -1
 	}
-	r := cs.GetRect()
-	return r.X + r.W - cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W)) - 1
+	return cs.BottomRect().X - 1
 }
 
 func (cs *ContentSplitWidget) BorderJunctions() borderJunctions {
@@ -446,8 +458,7 @@ func (cs *ContentSplitWidget) TopContentHeight() int {
 	if !cs.ShowBottom || cs.Bottom == nil || cs.Position == SplitRight {
 		return r.H
 	}
-	bottomH := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
-	return max(r.H-bottomH-1, 0)
+	return max(cs.BottomRect().Y-r.Y-1, 0)
 }
 
 func (cs *ContentSplitWidget) endDrag() {

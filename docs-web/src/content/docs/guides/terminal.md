@@ -37,6 +37,7 @@ Terminal settings in `settings.json`:
 ```json
 {
   "terminal": {
+    "padding": 1,
     "shell": "/bin/zsh",
     "scrollback": 1000,
     "ctrlVPastes": true,
@@ -48,10 +49,13 @@ Terminal settings in `settings.json`:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
+| `terminal.padding` | int | `1` | Blank columns on each side of the terminal; `0` removes both margins |
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V; set to `false` to pass `^V` through to the terminal program |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"` |
 
 Set `terminal.ctrlVPastes` to `false` for shell quoted insert or Vim visual-block mode. Ctrl+Shift+V still pastes when the outer terminal reports it distinctly. Some terminals handle Ctrl+Shift+V themselves and send a bracketed paste, which also works. Terminals that encode both shortcuts as `^V` cannot distinguish them. The setting applies immediately to open terminal tabs and is available under **Settings → Terminal → Ctrl+V pastes**.
+
+Padding applies immediately to existing and new terminal tabs and is available under **Settings → Terminal → Horizontal padding**. The settings UI rejects negative values; negative values loaded from `settings.json` are treated as `0`. In narrow panels, padding is reduced equally on both sides to leave room for terminal content. Padding is outside the terminal's scrollbar and does not add vertical spacing.
 
 Terminal ANSI colors are configurable via the `terminal` field in your theme file.

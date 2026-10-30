@@ -51,6 +51,26 @@ func TestSettingsViewReflectsCurrentValues(t *testing.T) {
 	}
 }
 
+func TestSettingsTerminalPaddingAcceptsZeroAndLiveApplies(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Terminal", "Terminal")
+	if !rowHas(h, "Horizontal padding", "❯ 1") {
+		t.Fatalf("padding should default to 1:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Horizontal padding", "❯")
+	h.pressKey(tcell.KeyEnd, tcell.ModNone)
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	h.pressRune('0')
+	h.exec("settings.apply")
+	if h.app.Settings.Terminal.Padding != 0 || h.app.TerminalPanel.Padding != 0 {
+		t.Fatalf("padding did not live-apply: settings=%d panel=%d", h.app.Settings.Terminal.Padding, h.app.TerminalPanel.Padding)
+	}
+	if got := config.LoadSettings().Terminal.Padding; got != 0 {
+		t.Fatalf("saved padding = %d, want 0", got)
+	}
+}
+
 func TestSettingsQuitOptions(t *testing.T) {
 	h := newTestHarness(t, 120, 50)
 	h.exec("settings.openUI")

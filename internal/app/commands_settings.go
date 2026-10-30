@@ -76,6 +76,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.clearRecentFolders()
 	}
 	a.refreshWelcome()
+	a.TerminalPanel.Padding = s.Terminal.Padding
 	for _, tab := range a.Terminals {
 		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
 	}

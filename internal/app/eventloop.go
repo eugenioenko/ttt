@@ -455,9 +455,9 @@ func resizeTerminals(app *App) {
 	if !app.ContentSplit.ShowBottom {
 		return
 	}
-	r := app.BottomPanel.GetRect()
-	cols := r.W - terminalStripWidth
-	rows := r.H - 2
+	r := app.ContentSplit.BottomRect()
+	content := app.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2})
+	cols, rows := content.W, content.H
 	if cols <= 0 || rows <= 0 {
 		return
 	}

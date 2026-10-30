@@ -3,6 +3,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
 )
 
 func spawnTestApp(t *testing.T) *App {
@@ -105,5 +107,98 @@ func TestTerminalCtrlVPastesAppliesToExistingAndNewTabs(t *testing.T) {
 	defer a.CloseTerminal(id)
 	if !a.Terminals[2].Widget.CtrlVPastes {
 		t.Fatal("new terminal ignored ctrlVPastes=true")
+	}
+}
+
+func TestTerminalPaddingAppliesToSpawnResizeAndSettings(t *testing.T) {
+	for name, position := range map[string]ui.SplitPosition{"bottom": ui.SplitBottom, "right": ui.SplitRight} {
+		t.Run(name, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Renderer = &render.Renderer{}
+			a.Root.SetSize(120, 40)
+			a.ContentSplit.Position = position
+			a.Root.Render(a.Renderer.NextFrame(120, 40))
+			for i := 0; i < 2; i++ {
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { a.CloseTerminal(id) })
+			}
+			check := func(width, height, padding int) {
+				t.Helper()
+				a.Root.SetSize(width, height)
+				a.Root.Render(a.Renderer.NextFrame(width, height))
+				resizeTerminals(a)
+				r := a.TerminalPanel.ActiveWidget().GetRect()
+				panel := a.TerminalPanel.GetRect()
+				if left, right := r.X-panel.X-ui.VerticalTabBarWidth, panel.X+panel.W-r.X-r.W; left != padding || right != padding {
+					t.Fatalf("margins = (%d,%d), want (%d,%d)", left, right, padding, padding)
+				}
+				for _, tab := range a.Terminals {
+					if cols, rows := tab.Term.Size(); cols != r.W || rows != r.H {
+						t.Fatalf("terminal %s size = %dx%d, content = %+v", tab.ID, cols, rows, r)
+					}
+				}
+			}
+			check(120, 40, 1)
+			for _, padding := range []int{0, 2, 1} {
+				s := *a.Settings
+				s.Terminal.Padding = padding
+				a.ApplySettings(s)
+				check(100, 35, padding)
+				wantCols := a.TerminalPanel.ActiveWidget().GetRect().W
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { a.CloseTerminal(id) })
+				if cols, _ := a.Terminals[len(a.Terminals)-1].Term.Size(); cols != wantCols {
+					t.Fatalf("spawn width = %d, want %d", cols, wantCols)
+				}
+				check(100, 35, padding)
+				a.TerminalPanel.SetActive(0)
+				check(110, 36, padding)
+			}
+			s := *a.Settings
+			s.Terminal.Padding = int(^uint(0) >> 1)
+			a.ApplySettings(s)
+			check(110, 36, (a.TerminalPanel.GetRect().W-ui.VerticalTabBarWidth-2)/2)
+		})
+	}
+}
+
+func TestTerminalSpawnUsesConstrainedLayoutBeforeFirstRender(t *testing.T) {
+	for name, position := range map[string]ui.SplitPosition{"bottom": ui.SplitBottom, "right": ui.SplitRight} {
+		for _, requested := range []int{0, 15, 1000} {
+			t.Run(fmt.Sprintf("%s/%d", name, requested), func(t *testing.T) {
+				a := spawnTestApp(t)
+				a.ContentSplit.SetRect(ui.Rect{X: 2, Y: 3, W: 80, H: 30})
+				a.ContentSplit.Position = position
+				a.ContentSplit.BottomH = requested
+				a.ContentSplit.RightW = requested
+				a.ContentSplit.BottomRatio = 0.5
+				a.BottomPanel.SetRect(ui.Rect{W: 200, H: 100})
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer a.CloseTerminal(id)
+				cols, rows := a.Terminals[0].Term.Size()
+				cells := make([][]term.Cell, 35)
+				for y := range cells {
+					cells[y] = make([]term.Cell, 85)
+				}
+				a.ContentSplit.Render(ui.NewRenderSurface(cells, a.ContentSplit.GetRect()))
+				r := a.Terminals[0].Widget.GetRect()
+				if cols != r.W || rows != r.H {
+					t.Fatalf("spawn size = %dx%d, first rendered content = %+v", cols, rows, r)
+				}
+				resizeTerminals(a)
+				if resizedCols, resizedRows := a.Terminals[0].Term.Size(); resizedCols != cols || resizedRows != rows {
+					t.Fatalf("first resize changed spawn size from %dx%d to %dx%d", cols, rows, resizedCols, resizedRows)
+				}
+			})
+		}
 	}
 }

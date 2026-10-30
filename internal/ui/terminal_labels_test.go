@@ -97,9 +97,6 @@ func TestVerticalTabBarFullwidthLabelBadge(t *testing.T) {
 	if grid[0][4].Ch != '│' || grid[0][4].Style != term.StyleBorder {
 		t.Fatalf("border at col 4 = %q, want '│' with StyleBorder", grid[0][4].Ch)
 	}
-	if grid[0][5].Ch != ' ' {
-		t.Fatalf("padding at col 5 = %q, want ' '", grid[0][5].Ch)
-	}
 
 	if grid[1][0].Ch != '[' || grid[1][0].Style != term.StyleInactiveTab {
 		t.Fatalf("row 1 col 0 = %q, want '[' with StyleInactiveTab", grid[1][0].Ch)
@@ -147,9 +144,6 @@ func TestVerticalTabBarTruncation(t *testing.T) {
 	for row, tc := range cases {
 		if grid[row][4].Ch != '│' || grid[row][4].Style != term.StyleBorder {
 			t.Errorf("row %d (%q): border at col 4 = %q, want '│'", row, tc.input, grid[row][4].Ch)
-		}
-		if grid[row][5].Ch != ' ' {
-			t.Errorf("row %d (%q): padding at col 5 = %q, want ' '", row, tc.input, grid[row][5].Ch)
 		}
 		if grid[row][0].Ch != '[' {
 			t.Errorf("row %d (%q): col 0 = %q, want '['", row, tc.input, grid[row][0].Ch)
@@ -276,13 +270,9 @@ func TestVerticalTabBarRendersAccentedAndFullwidthLabelsByDisplayWidth(t *testin
 		}
 	}
 
-	// border at col 4 and padding at col 5 remain intact across all rows
 	for y := 0; y < 5; y++ {
 		if grid[y][4].Ch != '│' || grid[y][4].Style != term.StyleBorder {
 			t.Fatalf("row %d border = %+v, want vertical border", y, grid[y][4])
-		}
-		if grid[y][5].Ch != ' ' || grid[y][5].Style != term.StyleDefault {
-			t.Fatalf("row %d padding = %+v, want space", y, grid[y][5])
 		}
 	}
 }

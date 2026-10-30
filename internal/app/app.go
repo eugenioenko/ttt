@@ -30,7 +30,6 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-const terminalStripWidth = ui.VerticalTabBarWidth
 const hoverGraceMargin = 3
 
 type TerminalTab struct {
@@ -422,23 +421,9 @@ func (a *App) SpawnTerminal() {
 // names a Shell supplies its own Args (empty = run the program bare); an empty
 // Shell inherits both from the global terminal settings.
 func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
-	r := a.ContentSplit.GetRect()
-	var cols, rows int
-	if a.ContentSplit.Position == ui.SplitRight {
-		panelW := a.ContentSplit.RightW
-		if panelW <= 1 {
-			panelW = min(r.W/2, r.W-4)
-		}
-		cols = panelW - terminalStripWidth
-		rows = r.H - 2
-	} else {
-		panelH := a.ContentSplit.BottomH
-		if panelH <= 1 {
-			panelH = min(r.H/2, r.H-4)
-		}
-		cols = r.W - terminalStripWidth
-		rows = panelH - 2
-	}
+	r := a.ContentSplit.BottomRect()
+	content := a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2})
+	cols, rows := content.W, content.H
 	if cols <= 0 {
 		cols = 80
 	}

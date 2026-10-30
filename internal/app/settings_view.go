@@ -258,6 +258,9 @@ func settingsCategories() []settingsCategory {
 				SetInt: func(s *config.Settings, v int) { s.Search.Debounce = v }},
 		}},
 		{Title: "Terminal", Fields: []settingField{
+			{Label: "Horizontal padding", Kind: settingInt,
+				GetInt: func(s *config.Settings) int { return s.Terminal.Padding },
+				SetInt: func(s *config.Settings, v int) { s.Terminal.Padding = v }},
 			{Label: "Ctrl+V pastes", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Terminal.CtrlVPastes },
 				SetBool: func(s *config.Settings, v bool) { s.Terminal.CtrlVPastes = v }},

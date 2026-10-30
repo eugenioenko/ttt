@@ -3,6 +3,7 @@ package ui
 import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -13,11 +14,13 @@ type TerminalPanelWidget struct {
 	labels  []string
 	active  int
 	Borders *term.BorderSet
+	Padding int
 }
 
 func NewTerminalPanelWidget() *TerminalPanelWidget {
 	tp := &TerminalPanelWidget{
-		TabBar: NewVerticalTabBar(),
+		TabBar:  NewVerticalTabBar(),
+		Padding: 1,
 	}
 	tp.TabBar.OnSelect = func(index int) {
 		tp.SetActive(index)
@@ -30,7 +33,9 @@ func (tp *TerminalPanelWidget) Focusable() bool { return true }
 func (tp *TerminalPanelWidget) CursorPosition() (int, int, bool) {
 	if w := tp.ActiveWidget(); w != nil {
 		if cp, ok := w.(CursorProvider); ok {
-			return cp.CursorPosition()
+			x, y, visible := cp.CursorPosition()
+			r := w.GetRect()
+			return x, y, visible && x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
 		}
 	}
 	return 0, 0, false
@@ -125,10 +130,22 @@ func (tp *TerminalPanelWidget) Count() int {
 
 func (tp *TerminalPanelWidget) DividerScreenX() int {
 	r := tp.GetRect()
-	if len(tp.widgets) == 0 || r.W <= VerticalTabBarWidth {
+	if len(tp.widgets) == 0 || r.W <= verticalTabBarBorderX {
 		return -1
 	}
-	return r.X + VerticalTabBarWidth - 2
+	return r.X + verticalTabBarBorderX
+}
+
+func (tp *TerminalPanelWidget) ContentRect(r Rect) Rect {
+	available := max(r.W-VerticalTabBarWidth, 0)
+	// Preserve xterm's minimum width; clamp before doubling to avoid overflow.
+	padding := min(max(tp.Padding, 0), max(available-xterm.MinimumCols, 0)/2)
+	return Rect{
+		X: r.X + min(VerticalTabBarWidth, max(r.W, 0)) + padding,
+		Y: r.Y,
+		W: available - 2*padding,
+		H: max(r.H, 0),
+	}
 }
 
 func (tp *TerminalPanelWidget) syncTabBar() {
@@ -154,28 +171,54 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 		return
 	}
 
-	stripW := VerticalTabBarWidth
-	contentW := w - stripW
-	if contentW <= 0 {
-		return
-	}
+	stripW := min(VerticalTabBarWidth, max(w, 0))
+	content := tp.ContentRect(Rect{X: r.X, Y: r.Y, W: w, H: h})
 
 	tp.TabBar.Borders = tp.Borders
 	tp.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: stripW, H: h})
 	tp.TabBar.Render(surface.Sub(Rect{X: 0, Y: 0, W: stripW, H: h}))
+	contentX := content.X - r.X
+	blank := term.Cell{Ch: ' ', Style: term.StyleDefault}
+	surface.Sub(Rect{X: stripW, W: contentX - stripW, H: h}).Fill(blank)
+	rightX := contentX + content.W
+	surface.Sub(Rect{X: rightX, W: max(w-rightX, 0), H: h}).Fill(blank)
 
 	active := tp.widgets[tp.active]
-	active.SetRect(Rect{X: r.X + stripW, Y: r.Y, W: contentW, H: h})
-	active.Render(surface.Sub(Rect{X: stripW, Y: 0, W: contentW, H: h}))
+	active.SetRect(content)
+	if content.W > 0 && content.H > 0 {
+		active.Render(surface.Sub(Rect{X: content.X - r.X, Y: 0, W: content.W, H: content.H}))
+	}
 }
 
 func (tp *TerminalPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
-		if mev.Buttons()&tcell.Button1 != 0 && !tp.activeOwnsPointer() {
-			mx, _ := mev.Position()
+		if !tp.activeOwnsPointer() {
+			mx, my := mev.Position()
 			r := tp.GetRect()
-			if mx-r.X < VerticalTabBarWidth {
+			if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+				return EventIgnored
+			}
+			wheel := mev.Buttons()&(tcell.WheelUp|tcell.WheelDown|tcell.WheelLeft|tcell.WheelRight) != 0
+			if wheel {
+				if w := tp.ActiveWidget(); w != nil {
+					return w.HandleEvent(ev)
+				}
+				return EventIgnored
+			}
+			r = tp.TabBar.GetRect()
+			if mev.Buttons()&tcell.Button1 != 0 && mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H {
 				return tp.TabBar.HandleEvent(ev)
+			}
+			w := tp.ActiveWidget()
+			if w == nil {
+				return EventIgnored
+			}
+			r = w.GetRect()
+			if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+				if mev.Buttons()&tcell.Button1 != 0 {
+					return EventConsumed
+				}
+				return EventIgnored
 			}
 		}
 	}
