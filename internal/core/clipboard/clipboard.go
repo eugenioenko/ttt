@@ -1,11 +1,13 @@
 package clipboard
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -36,7 +38,7 @@ func Set(s string) {
 
 func Get() string {
 	if useSystem {
-		if sys := readSystemClipboard(); sys != "" {
+		if sys, ok := readSystemClipboard(); ok {
 			return sys
 		}
 	}
@@ -57,16 +59,29 @@ func writeSystemClipboard(s string) {
 	}
 }
 
-func readSystemClipboard() string {
+func readSystemClipboard() (string, bool) {
 	name, args := findPasteCmd()
 	if name == "" {
-		return ""
+		return "", false
 	}
 	out, err := exec.Command(name, args...).Output()
 	if err != nil {
-		return ""
+		// A clipboard holding only an image has no text, but it was read:
+		// falling back to the process-local copy would paste stale text.
+		return "", holdsNonText(name)
 	}
-	return string(out)
+	if len(out) == 0 {
+		return "", false
+	}
+	return string(out), true
+}
+
+func holdsNonText(pasteCmd string) bool {
+	if filepath.Base(pasteCmd) != "wl-paste" {
+		return false
+	}
+	types, err := exec.Command(pasteCmd, "--list-types").Output()
+	return err == nil && len(bytes.TrimSpace(types)) > 0
 }
 
 func findCopyCmd() (string, []string) {
@@ -95,7 +110,7 @@ func findPasteCmd() (string, []string) {
 	}
 	if os.Getenv("WAYLAND_DISPLAY") != "" {
 		if p, err := exec.LookPath("wl-paste"); err == nil {
-			return p, []string{"--no-newline"}
+			return p, []string{"--no-newline", "--type", "text"}
 		}
 	}
 	if os.Getenv("DISPLAY") != "" {

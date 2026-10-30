@@ -550,14 +550,13 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		isPaste := (tev.Key() == tcell.KeyCtrlV) ||
 			(tev.Key() == tcell.KeyRune && (r == 'v' || r == 'V') && tev.Modifiers()&tcell.ModCtrl != 0)
+		// With no text to paste, Ctrl+V reaches the PTY so a program there can
+		// read a clipboard image itself.
 		if isPaste && (tw.CtrlVPastes || tev.Modifiers()&tcell.ModShift != 0) {
-			text := clipboard.Get()
-			if text != "" {
+			if text := clipboard.Get(); text != "" {
 				tw.PasteText(text)
-			} else {
-				tw.ClearSelection()
+				return EventConsumed
 			}
-			return EventConsumed
 		}
 
 		tw.ClearSelection()

@@ -232,4 +232,17 @@ func TestTerminalWidget_CtrlVPastes(t *testing.T) {
 			}
 		}
 	}
+
+	t.Run("no text in clipboard", func(t *testing.T) {
+		tw.CtrlVPastes = true
+		clipboard.Set("")
+		before := len(term.RawTail())
+		if got := tw.HandleEvent(tcell.NewEventKey(tcell.KeyCtrlV, "", tcell.ModCtrl)); got != EventConsumed {
+			t.Fatalf("HandleEvent = %v, want EventConsumed", got)
+		}
+		waitFor(t, updated, func() bool { return len(term.RawTail()) > before })
+		if got := string(term.RawTail()[before:]); got != "\x16" {
+			t.Errorf("PTY received %q, want Ctrl+V so the program can read a clipboard image", got)
+		}
+	})
 }
