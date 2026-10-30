@@ -697,6 +697,12 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "tab.reopenClosed", Title: "View: Reopen Closed Tab",
+		Keywords: []string{"tab", "reopen", "restore", "undo", "close"},
+		Handler:  func() { app.EditorGroup.ReopenClosedTab() },
+	})
+
+	reg.Register(command.Command{
 		ID: "tab.closeOthers", Title: "View: Close Other Tabs",
 		Keywords: []string{"tab"},
 		Handler:  app.CloseOtherTabs,

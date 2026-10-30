@@ -120,6 +120,7 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Alt+. | `tab.next` | Next tab |
 | Alt+, | `tab.prev` | Previous tab |
 | Ctrl+W | `tab.close` | Close tab |
+| Ctrl+Shift+T | `tab.reopenClosed` | Reopen the last closed tab (terminals with the kitty keyboard protocol; elsewhere it arrives as Ctrl+T) |
 
 ## LSP
 

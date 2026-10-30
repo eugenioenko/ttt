@@ -142,7 +142,9 @@ func normalizeKey(k tcell.Key) tcell.Key {
 //
 // (Legacy ctrl+` and ctrl+space both emit NUL — indistinguishable at the
 // byte level — and legacy ctrl+/ emits 0x1F, which tcell reports as "_".)
-// Ctrl+letter combos are unaffected: tcell folds those to KeyCtrlA..Z itself.
+// tcell folds a plain ctrl+letter to KeyCtrlA..Z itself, but only when Ctrl is
+// the sole modifier: kitty-protocol terminals report ctrl+shift+t as "t" with
+// ModCtrl|ModShift, so letters are folded here too to match comboToTcell.
 // Returns the canonical key and true when the event was folded.
 func foldCtrlEvent(kev *tcell.EventKey) (tcell.Key, bool) {
 	if kev.Key() != tcell.KeyRune || kev.Modifiers()&tcell.ModCtrl == 0 {
@@ -153,6 +155,11 @@ func foldCtrlEvent(kev *tcell.EventKey) (tcell.Key, bool) {
 		return tcell.KeyNUL, true
 	case "_", "/":
 		return tcell.KeyUS, true
+	}
+	if r := []rune(kev.Str()); len(r) == 1 {
+		if c := unicode.ToLower(r[0]); c >= 'a' && c <= 'z' {
+			return tcell.KeyCtrlA + tcell.Key(c-'a'), true
+		}
 	}
 	return 0, false
 }
