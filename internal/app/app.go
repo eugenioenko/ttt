@@ -422,7 +422,7 @@ func (a *App) SpawnTerminal() {
 // Shell inherits both from the global terminal settings.
 func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	r := a.ContentSplit.BottomRect()
-	content := a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2})
+	content := a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, false)
 	cols, rows := content.W, content.H
 	if cols <= 0 {
 		cols = 80

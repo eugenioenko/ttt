@@ -63,7 +63,7 @@
     "scrollback": 1000,
     "selectionStyle": "background",
     "ctrlVPastes": true,
-    "padding": 1
+    "padding_x": 1
   },
   "lsp": {
     "saveOnRename": false,

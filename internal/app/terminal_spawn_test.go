@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/xterm-go"
 )
 
 func spawnTestApp(t *testing.T) *App {
@@ -144,7 +146,7 @@ func TestTerminalPaddingAppliesToSpawnResizeAndSettings(t *testing.T) {
 			check(120, 40, 1)
 			for _, padding := range []int{0, 2, 1} {
 				s := *a.Settings
-				s.Terminal.Padding = padding
+				s.Terminal.PaddingX = padding
 				a.ApplySettings(s)
 				check(100, 35, padding)
 				wantCols := a.TerminalPanel.ActiveWidget().GetRect().W
@@ -161,7 +163,7 @@ func TestTerminalPaddingAppliesToSpawnResizeAndSettings(t *testing.T) {
 				check(110, 36, padding)
 			}
 			s := *a.Settings
-			s.Terminal.Padding = int(^uint(0) >> 1)
+			s.Terminal.PaddingX = int(^uint(0) >> 1)
 			a.ApplySettings(s)
 			check(110, 36, (a.TerminalPanel.GetRect().W-ui.VerticalTabBarWidth-2)/2)
 		})
@@ -200,5 +202,51 @@ func TestTerminalSpawnUsesConstrainedLayoutBeforeFirstRender(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestTerminalScrollbarSizingTracksEachTab(t *testing.T) {
+	for name, position := range map[string]ui.SplitPosition{"bottom": ui.SplitBottom, "right": ui.SplitRight} {
+		t.Run(name, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Renderer = &render.Renderer{}
+			a.Root.SetSize(120, 40)
+			a.ContentSplit.Position = position
+			a.Root.Render(a.Renderer.NextFrame(120, 40))
+			for i := 0; i < 2; i++ {
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { a.CloseTerminal(id) })
+			}
+			wide, rows := a.Terminals[1].Term.Size()
+			first := a.Terminals[0].Term
+			first.Snapshot(func(xt *xterm.Terminal) { xt.WriteString(strings.Repeat("line\r\n", rows*2)) })
+			a.Terminals[1].Term.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[?1049h") })
+			check := func(firstCols int) {
+				t.Helper()
+				resizeTerminals(a)
+				for i, want := range []int{firstCols, wide} {
+					if cols, _ := a.Terminals[i].Term.Size(); cols != want {
+						t.Fatalf("tab %d width = %d, want %d", i, cols, want)
+					}
+				}
+			}
+			check(wide - 1)
+			first.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[?1049h") })
+			check(wide)
+			first.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[?1049l") })
+			check(wide - 1)
+			a.TerminalPanel.SetActive(0)
+			id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { a.CloseTerminal(id) })
+			if cols, _ := a.Terminals[2].Term.Size(); cols != wide {
+				t.Fatalf("new tab width = %d, want %d without a scrollbar", cols, wide)
+			}
+		})
 	}
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -12,8 +13,8 @@ import (
 
 // A fullwidth rune must never be drawn in the last column of the content
 // area: the terminal paints it across two columns regardless of clipping, so
-// it bleeds over the scrollbar to its right (#636).
-func TestTerminalRenderClipsWideRuneAtTheScrollbar(t *testing.T) {
+// it bleeds outside the text surface (#636).
+func TestTerminalRenderClipsWideRuneAtTheContentEdge(t *testing.T) {
 	const cols, rows = 20, 5
 
 	dev, err := terminal.New("/bin/cat", cols, rows, 1000, nil, "")
@@ -22,9 +23,8 @@ func TestTerminalRenderClipsWideRuneAtTheScrollbar(t *testing.T) {
 	}
 	defer dev.Close()
 
-	// Every line ends with a fullwidth rune in the last content column. The
-	// scrollbar takes the last column of the widget, so the content is
-	// columns-1 wide and the wide rune lands at columns-2.
+	// Leave the emulator wider than the clipped surface to place a fullwidth
+	// rune at the surface edge without the emulator wrapping it first.
 	var sb strings.Builder
 	for i := 0; i < rows*2; i++ {
 		sb.WriteString(strings.Repeat("x", cols-2) + "漢\r\n")
@@ -32,12 +32,12 @@ func TestTerminalRenderClipsWideRuneAtTheScrollbar(t *testing.T) {
 	dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString(sb.String()) })
 
 	tw := NewTerminalWidget(dev, &TerminalColorPalette{})
-	tw.SetRect(Rect{W: cols, H: rows})
+	tw.SetRect(Rect{W: cols - 1, H: rows})
 	cells := make([][]term.Cell, rows)
 	for y := range cells {
 		cells[y] = make([]term.Cell, cols)
 	}
-	surface := NewRenderSurface(cells, Rect{W: cols, H: rows})
+	surface := NewRenderSurface(cells, Rect{W: cols - 1, H: rows})
 
 	// Live view.
 	tw.Render(surface)
@@ -118,13 +118,106 @@ func TestTerminalPanelPaddingKeepsContentCoordinatesAndScrollbar(t *testing.T) {
 	for _, offset := range []int{0, 1} {
 		tw.scrollOffset = offset
 		tp.Render(surface)
-		if tw.scrollbar.X != r.X+r.W-1 {
-			t.Fatalf("scrollbar x = %d, want %d", tw.scrollbar.X, r.X+r.W-1)
+		r = tw.GetRect()
+		if tw.scrollbar.X != tp.GetRect().X+tp.GetRect().W-1 {
+			t.Fatalf("scrollbar x = %d, want %d", tw.scrollbar.X, tp.GetRect().X+tp.GetRect().W-1)
 		}
 		for y := r.Y; y < r.Y+r.H; y++ {
 			if grid[y][r.X-1].Ch != ' ' || grid[y][r.X+r.W].Ch != ' ' {
 				t.Fatalf("padding overwritten on row %d, scroll offset %d", y, offset)
 			}
 		}
+	}
+}
+
+func TestTerminalPanelPaddingSeparatesTextFromScrollbar(t *testing.T) {
+	for _, padding := range []int{0, 1, 2} {
+		t.Run(fmt.Sprint(padding), func(t *testing.T) {
+			const width, rows = 24, 3
+			cols := width - VerticalTabBarWidth - 1 - 2*padding
+			dev, err := terminal.New("/bin/cat", cols+1, rows, 1000, nil, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer dev.Close()
+			tw := NewTerminalWidget(dev, nil)
+			tp := NewTerminalPanelWidget()
+			tp.PaddingX = padding
+			tp.AddTerminal(tw)
+			tp.SetRect(Rect{X: 2, Y: 1, W: width, H: rows})
+			grid := makeGrid(width+4, rows+2)
+			surface := NewRenderSurface(grid, tp.GetRect())
+			tp.Render(surface)
+			before := tw.GetRect()
+			barX := tp.GetRect().X + width - 1
+			if before.W != cols+1 || tw.scrollbar.Visible() {
+				t.Fatal("empty terminal displayed a scrollbar")
+			}
+			dev.Resize(cols, rows)
+			line := strings.Repeat("X", cols-1) + "Z"
+			dev.Snapshot(func(xt *xterm.Terminal) {
+				xt.WriteString(strings.Repeat(line+"\r\n", rows*3) + line)
+			})
+			for _, offset := range []int{0, 1} {
+				tw.scrollOffset = offset
+				tp.Render(surface)
+				r := tw.GetRect()
+				if r.W != before.W-1 || r.X != before.X {
+					t.Fatalf("scrollbar text rectangle = %+v, hidden = %+v", r, before)
+				}
+				if !tw.scrollbar.Visible() || tw.scrollbar.X != barX {
+					t.Fatal("scrollbar is not at the panel edge")
+				}
+				for y := r.Y; y < r.Y+r.H; y++ {
+					if grid[y][r.X+r.W-1].Ch != 'Z' {
+						t.Fatalf("last text column was lost on row %d, scroll offset %d", y, offset)
+					}
+					for i := 0; i < padding; i++ {
+						if grid[y][r.X-1-i].Ch != ' ' || grid[y][r.X+r.W+i].Ch != ' ' {
+							t.Fatalf("text is missing padding on row %d, scroll offset %d", y, offset)
+						}
+					}
+					if grid[y][barX].Ch != '█' {
+						t.Fatal("scrollbar was not rendered outside the text padding")
+					}
+				}
+			}
+			if padding > 0 {
+				tp.HandleEvent(tcell.NewEventMouse(barX-1, before.Y, tcell.Button1, 0))
+				tp.HandleEvent(tcell.NewEventMouse(barX-1, before.Y, tcell.ButtonNone, 0))
+				if tw.HasSelection() || tw.OwnsPointerCapture() {
+					t.Fatal("padding click started selection or scrollbar dragging")
+				}
+			}
+			if got := tp.HandleEvent(tcell.NewEventMouse(barX, before.Y, tcell.Button1, 0)); got != EventCaptured {
+				t.Fatalf("scrollbar click = %v, want pointer capture", got)
+			}
+			tp.HandleEvent(tcell.NewEventMouse(before.X, before.Y+rows-1, tcell.Button1, 0))
+			tp.HandleEvent(tcell.NewEventMouse(before.X, before.Y+rows-1, tcell.ButtonNone, 0))
+			if tw.HasSelection() || tw.OwnsPointerCapture() || tw.IsScrolledUp() {
+				t.Fatal("scrollbar drag did not release at the live view")
+			}
+			dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[?1049h") })
+			dev.Resize(cols+1, rows)
+			dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[H" + strings.Repeat("X", cols) + "A") })
+			tp.Render(surface)
+			if tw.scrollbar.Visible() || tw.GetRect() != before {
+				t.Fatal("alternate screen retained the scrollbar or changed text geometry")
+			}
+			if grid[before.Y][before.X+before.W-1].Ch != 'A' {
+				t.Fatal("alternate screen did not use the reclaimed scrollbar column")
+			}
+			for x := before.X + before.W; x <= barX; x++ {
+				if grid[before.Y][x].Ch != ' ' {
+					t.Fatal("alternate screen lost its right padding")
+				}
+			}
+			if padding > 0 {
+				tp.HandleEvent(tcell.NewEventMouse(barX, before.Y, tcell.Button1, 0))
+				if tw.HasSelection() || tw.OwnsPointerCapture() {
+					t.Fatal("hidden scrollbar received the click")
+				}
+			}
+		})
 	}
 }

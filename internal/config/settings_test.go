@@ -304,8 +304,8 @@ func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
 
 func TestDefaultTerminalSettings(t *testing.T) {
 	ts := DefaultTerminalSettings()
-	if ts.Padding != 1 {
-		t.Errorf("expected Padding 1, got %d", ts.Padding)
+	if ts.PaddingX != 1 {
+		t.Errorf("expected PaddingX 1, got %d", ts.PaddingX)
 	}
 	if !ts.CtrlVPastes {
 		t.Error("expected CtrlVPastes true by default")

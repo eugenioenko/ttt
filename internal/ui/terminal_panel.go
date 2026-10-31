@@ -9,18 +9,18 @@ import (
 
 type TerminalPanelWidget struct {
 	BaseWidget
-	TabBar  *VerticalTabBar
-	widgets []Widget
-	labels  []string
-	active  int
-	Borders *term.BorderSet
-	Padding int
+	TabBar   *VerticalTabBar
+	widgets  []Widget
+	labels   []string
+	active   int
+	Borders  *term.BorderSet
+	PaddingX int
 }
 
 func NewTerminalPanelWidget() *TerminalPanelWidget {
 	tp := &TerminalPanelWidget{
-		TabBar:  NewVerticalTabBar(),
-		Padding: 1,
+		TabBar:   NewVerticalTabBar(),
+		PaddingX: 1,
 	}
 	tp.TabBar.OnSelect = func(index int) {
 		tp.SetActive(index)
@@ -136,10 +136,13 @@ func (tp *TerminalPanelWidget) DividerScreenX() int {
 	return r.X + verticalTabBarBorderX
 }
 
-func (tp *TerminalPanelWidget) ContentRect(r Rect) Rect {
+func (tp *TerminalPanelWidget) ContentRect(r Rect, scrollbar bool) Rect {
 	available := max(r.W-VerticalTabBarWidth, 0)
+	if scrollbar {
+		available = max(available-1, 0)
+	}
 	// Preserve xterm's minimum width; clamp before doubling to avoid overflow.
-	padding := min(max(tp.Padding, 0), max(available-xterm.MinimumCols, 0)/2)
+	padding := min(max(tp.PaddingX, 0), max(available-xterm.MinimumCols, 0)/2)
 	return Rect{
 		X: r.X + min(VerticalTabBarWidth, max(r.W, 0)) + padding,
 		Y: r.Y,
@@ -172,7 +175,13 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 	}
 
 	stripW := min(VerticalTabBarWidth, max(w, 0))
-	content := tp.ContentRect(Rect{X: r.X, Y: r.Y, W: w, H: h})
+	active := tp.widgets[tp.active]
+	tw, isTerminal := active.(*TerminalWidget)
+	if isTerminal && tw.Term != nil {
+		tw.Term.AckUpdate()
+	}
+	showScrollbar := isTerminal && tw.ScrollbarVisible()
+	content := tp.ContentRect(Rect{X: r.X, Y: r.Y, W: w, H: h}, showScrollbar)
 
 	tp.TabBar.Borders = tp.Borders
 	tp.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: stripW, H: h})
@@ -183,10 +192,15 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 	rightX := contentX + content.W
 	surface.Sub(Rect{X: rightX, W: max(w-rightX, 0), H: h}).Fill(blank)
 
-	active := tp.widgets[tp.active]
 	active.SetRect(content)
 	if content.W > 0 && content.H > 0 {
 		active.Render(surface.Sub(Rect{X: content.X - r.X, Y: 0, W: content.W, H: content.H}))
+	}
+	if isTerminal {
+		tw.scrollbar.Height = 0
+		if showScrollbar && content.W > 0 && content.H > 0 {
+			tw.renderScrollbar(surface.Sub(Rect{X: w - 1, W: 1, H: h}))
+		}
 	}
 }
 
@@ -212,6 +226,9 @@ func (tp *TerminalPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 			w := tp.ActiveWidget()
 			if w == nil {
 				return EventIgnored
+			}
+			if tw, ok := w.(*TerminalWidget); ok && tw.scrollbar.Visible() && mx == tw.scrollbar.X {
+				return w.HandleEvent(ev)
 			}
 			r = w.GetRect()
 			if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {

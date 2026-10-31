@@ -42,7 +42,7 @@ func TestTerminalPanelPadding(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tp := NewTerminalPanelWidget()
-			tp.Padding = tt.padding
+			tp.PaddingX = tt.padding
 			probe := &terminalPaddingProbe{}
 			tp.AddTerminal(probe)
 			r := Rect{X: 3, Y: 2, W: tt.width, H: 3}
@@ -88,7 +88,7 @@ func TestTerminalPanelPaddingMouseRouting(t *testing.T) {
 	for _, padding := range []int{0, 1, 2} {
 		t.Run(fmt.Sprint(padding), func(t *testing.T) {
 			tp := NewTerminalPanelWidget()
-			tp.Padding = padding
+			tp.PaddingX = padding
 			probe := &terminalPaddingProbe{}
 			tp.AddTerminal(probe)
 			tp.AddTerminal(&terminalPaddingProbe{})

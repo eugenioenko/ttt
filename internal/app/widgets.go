@@ -264,7 +264,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 
 	terminalPanel := ui.NewTerminalPanelWidget()
 	terminalPanel.Borders = borders
-	terminalPanel.Padding = cfg.Settings.Terminal.Padding
+	terminalPanel.PaddingX = cfg.Settings.Terminal.PaddingX
 	problems := ui.NewProblemsWidget()
 	references := ui.NewReferencesWidget()
 	output := ui.NewOutputWidget()

@@ -63,10 +63,10 @@ func TestSettingsTerminalPaddingAcceptsZeroAndLiveApplies(t *testing.T) {
 	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
 	h.pressRune('0')
 	h.exec("settings.apply")
-	if h.app.Settings.Terminal.Padding != 0 || h.app.TerminalPanel.Padding != 0 {
-		t.Fatalf("padding did not live-apply: settings=%d panel=%d", h.app.Settings.Terminal.Padding, h.app.TerminalPanel.Padding)
+	if h.app.Settings.Terminal.PaddingX != 0 || h.app.TerminalPanel.PaddingX != 0 {
+		t.Fatalf("padding did not live-apply: settings=%d panel=%d", h.app.Settings.Terminal.PaddingX, h.app.TerminalPanel.PaddingX)
 	}
-	if got := config.LoadSettings().Terminal.Padding; got != 0 {
+	if got := config.LoadSettings().Terminal.PaddingX; got != 0 {
 		t.Fatalf("saved padding = %d, want 0", got)
 	}
 }

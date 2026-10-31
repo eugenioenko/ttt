@@ -220,7 +220,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
-| `terminal.padding` | int | `1` | Blank columns on each side, outside the scrollbar; `0` removes both margins. Applies immediately. The settings UI rejects negative values; negative values in `settings.json` become `0`. Narrow panels reduce padding equally to preserve terminal content |
+| `terminal.padding_x` | int | `1` | Blank columns on each side of terminal text, before the scrollbar; `0` removes both margins. Applies immediately. The settings UI rejects negative values; negative values in `settings.json` become `0`. Narrow panels reduce padding equally to preserve terminal content |
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V. Set to `false` to send `^V` to the terminal program. Ctrl+Shift+V always pastes when reported distinctly by the outer terminal |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
@@ -379,7 +379,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "fileView": "list"
   },
   "terminal": {
-    "padding": 1,
+    "padding_x": 1,
     "shell": "/bin/zsh",
     "scrollback": 1000,
     "selectionStyle": "background"

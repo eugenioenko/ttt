@@ -114,22 +114,22 @@ func TestTerminalPaddingSettings(t *testing.T) {
 	}{
 		{"missing", `{}`, 1},
 		{"existing", `{"terminal":{"scrollback":2000}}`, 1},
-		{"zero", `{"terminal":{"padding":0}}`, 0},
-		{"custom", `{"terminal":{"padding":2}}`, 2},
-		{"negative", `{"terminal":{"padding":-1}}`, 0},
+		{"zero", `{"terminal":{"padding_x":0}}`, 0},
+		{"custom", `{"terminal":{"padding_x":2}}`, 2},
+		{"negative", `{"terminal":{"padding_x":-1}}`, 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tt.json), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			s := LoadSettings()
-			if s.Terminal.Padding != tt.want {
-				t.Fatalf("padding = %d, want %d", s.Terminal.Padding, tt.want)
+			if s.Terminal.PaddingX != tt.want {
+				t.Fatalf("padding = %d, want %d", s.Terminal.PaddingX, tt.want)
 			}
 			if err := SaveSettings(s); err != nil {
 				t.Fatal(err)
 			}
-			if got := LoadSettings().Terminal.Padding; got != tt.want {
+			if got := LoadSettings().Terminal.PaddingX; got != tt.want {
 				t.Fatalf("round-tripped padding = %d, want %d", got, tt.want)
 			}
 		})

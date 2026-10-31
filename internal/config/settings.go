@@ -41,7 +41,7 @@ type TerminalSettings struct {
 	Scrollback     int      `json:"scrollback,omitempty"`
 	SelectionStyle string   `json:"selectionStyle"`
 	CtrlVPastes    bool     `json:"ctrlVPastes"`
-	Padding        int      `json:"padding"`
+	PaddingX       int      `json:"padding_x"`
 }
 
 func DefaultTerminalSettings() TerminalSettings {
@@ -49,7 +49,7 @@ func DefaultTerminalSettings() TerminalSettings {
 		Scrollback:     1000,
 		SelectionStyle: SelectionStyleBackground,
 		CtrlVPastes:    true,
-		Padding:        1,
+		PaddingX:       1,
 	}
 }
 
@@ -549,7 +549,7 @@ func normalizeSettings(s *Settings) {
 	if !slices.Contains(SelectionStyles, s.Terminal.SelectionStyle) {
 		s.Terminal.SelectionStyle = SelectionStyleBackground
 	}
-	s.Terminal.Padding = max(s.Terminal.Padding, 0)
+	s.Terminal.PaddingX = max(s.Terminal.PaddingX, 0)
 	if !slices.Contains(SelectionStyles, s.Plugins.SelectionStyle) {
 		s.Plugins.SelectionStyle = SelectionStyleInvert
 	}
