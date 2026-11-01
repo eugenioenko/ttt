@@ -206,7 +206,7 @@ func TestDebugPluginReplacementClearsOldPublishedSources(t *testing.T) {
 	old.SetDecorations(path, []plugin.DecorationItem{{
 		StartLine: 0, EndLine: 0, Note: "old decoration",
 	}})
-	old.SetStatusItem("left", "old", "OLDSTATUS", 1000, term.StyleDefault)
+	old.SetStatusItem("left", "old", "OLDSTATUS", 1000, nil)
 	h.redraw()
 
 	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 1 {
@@ -237,7 +237,7 @@ func TestDebugPluginReplacementClearsOldPublishedSources(t *testing.T) {
 	replacement.SetDecorations(path, []plugin.DecorationItem{{
 		StartLine: 0, EndLine: 0, Note: "new decoration",
 	}})
-	replacement.SetStatusItem("left", "new", "NEWSTATUS", 1000, term.StyleDefault)
+	replacement.SetStatusItem("left", "new", "NEWSTATUS", 1000, nil)
 	h.redraw()
 
 	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 1 {
