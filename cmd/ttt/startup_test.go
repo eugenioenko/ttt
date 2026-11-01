@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +24,9 @@ func TestCLIStartupProcess(t *testing.T) {
 		return
 	}
 	os.Args = append([]string{"ttt"}, os.Args[slices.Index(os.Args, "--")+1:]...)
+	if err := os.WriteFile(os.Getenv("TTT_TEST_PID_FILE"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if text, ok := os.LookupEnv("TTT_TEST_STDIN"); ok {
 		// Keep the controlling terminal while replacing stdin with a real pipe.
 		r, w, err := os.Pipe()
@@ -40,14 +43,15 @@ func TestCLIStartupProcess(t *testing.T) {
 	os.Exit(0)
 }
 
-func startCLI(t *testing.T, dir string, env []string, args ...string) (*terminal.Terminal, <-chan struct{}) {
+func startCLI(t *testing.T, dir string, env []string, args ...string) (*terminal.Terminal, <-chan struct{}, int) {
 	t.Helper()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	args = append([]string{"-test.run=^TestCLIStartupProcess$", "--"}, args...)
-	child, err := terminal.New(executable, 100, 30, 100, append(env, "TTT_TEST_CLI=1"), dir, args...)
+	pidPath := filepath.Join(t.TempDir(), "pid")
+	child, err := terminal.New(executable, 100, 30, 100, append(env, "TTT_TEST_CLI=1", "TTT_TEST_PID_FILE="+pidPath), dir, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +59,16 @@ func startCLI(t *testing.T, dir string, env []string, args ...string) (*terminal
 	child.OnExit = func() { close(exited) }
 	child.Run()
 	t.Cleanup(child.Close)
-	return child, exited
+	var pid int
+	waitForCLI(t, child, exited, func() bool {
+		data, err := os.ReadFile(pidPath)
+		if err != nil {
+			return false
+		}
+		pid, err = strconv.Atoi(string(data))
+		return err == nil && pid > 0
+	})
+	return child, exited, pid
 }
 
 func waitForCLI(t *testing.T, child *terminal.Terminal, exited <-chan struct{}, ready func() bool) {
@@ -67,6 +80,9 @@ func waitForCLI(t *testing.T, child *terminal.Terminal, exited <-chan struct{}, 
 	for !ready() {
 		select {
 		case <-exited:
+			if ready() {
+				return
+			}
 			t.Fatalf("editor exited before the expected state:\n%s", child.RawTail())
 		case <-timeout.C:
 			t.Fatalf("editor did not reach the expected state:\n%s", child.ScreenText())
@@ -126,16 +142,17 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 		}
 		return nil
 	}
-	receiver, receiverExited := startCLI(t, dir, nil, "--listen")
+	receiver, receiverExited, receiverPID := startCLI(t, dir, nil, "--listen")
 	waitForCLI(t, receiver, receiverExited, func() bool { return post("wait 0") == nil })
-	forwarded, forwardedExited := startCLI(t, dir, nil, "forwarded.txt:3:2")
+	forwarded, forwardedExited, _ := startCLI(t, dir, nil, "forwarded.txt:3:2")
 	select {
 	case <-forwardedExited:
 	case <-time.After(10 * time.Second):
 		t.Fatalf("plain file was not forwarded:\n%s", forwarded.ScreenText())
 	}
-	if !regexp.MustCompile(`opened in running editor \(pid [1-9][0-9]*\)`).MatchString(forwarded.ScreenText()) {
-		t.Fatalf("forwarding did not report the receiver PID:\n%s", forwarded.ScreenText())
+	confirmation := fmt.Sprintf("opened in running editor (pid %d)", receiverPID)
+	if !strings.Contains(forwarded.ScreenText(), confirmation) {
+		t.Fatalf("forwarding did not report %q:\n%s", confirmation, forwarded.ScreenText())
 	}
 	statePath := filepath.Join(dir, "receiver.json")
 	readReceiver := func() app.DebugState {
@@ -158,7 +175,7 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 		t.Fatalf("forwarded file or cursor missing: %+v", state)
 	}
 	const pipedText = "PIPE_INPUT_1248"
-	sender, senderExited := startCLI(t, dir, []string{"TTT_TEST_STDIN=" + pipedText + "\n"}, "notes.txt")
+	sender, senderExited, _ := startCLI(t, dir, []string{"TTT_TEST_STDIN=" + pipedText + "\n"}, "notes.txt")
 	waitForCLI(t, sender, senderExited, func() bool {
 		screen := sender.ScreenText()
 		return strings.Contains(screen, pipedText) && strings.Contains(screen, "notes.txt") && strings.Contains(screen, "untitled")
