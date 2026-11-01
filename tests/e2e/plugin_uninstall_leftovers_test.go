@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/plugin"
-	"github.com/eugenioenko/ttt/internal/term"
 )
 
 // The probe plugin from #972: a command sets a status item, and on_uninstall
@@ -117,7 +116,7 @@ func TestPluginReloadDropsTheOldInstancesStatusItems(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 	m := loadLeftoverProbe(h)
-	m.FindPlugin("probe").SetBookmark(0, 'Q', term.Style{})
+	m.FindPlugin("probe").SetBookmark(0, 'Q', nil)
 
 	h.exec("probe.mark")
 	h.assertContains("PROBESTATUS")
@@ -168,8 +167,8 @@ func TestPluginBookmarksAreSharedAndSurviveUninstall(t *testing.T) {
 	first := m.FindPlugin("probe")
 	second := &plugin.Plugin{Name: "other", Enabled: true}
 	h.app.WirePlugin(second)
-	first.SetBookmark(0, 'Q', term.Style{})
-	second.SetBookmark(1, 'R', term.Style{})
+	first.SetBookmark(0, 'Q', nil)
+	second.SetBookmark(1, 'R', nil)
 
 	if got := len(first.GetAllBookmarks()); got != 2 {
 		t.Fatalf("shared bookmark count = %d before uninstall, want 2", got)
