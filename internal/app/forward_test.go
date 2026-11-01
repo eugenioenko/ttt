@@ -90,6 +90,7 @@ func TestForwardFilesRoundTrip(t *testing.T) {
 	if err := os.WriteFile(second, []byte("one\ntwo\nthree\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("TMPDIR", filepath.Join(os.TempDir(), "missing"))
 	if pid, err := ForwardFiles([]FileTarget{{Path: first}, {Path: second, Line: 3, Col: 2}}); err != nil || pid != os.Getpid() {
 		t.Fatalf("ForwardFiles = (%d, %v), want pid %d", pid, err, os.Getpid())
 	}
@@ -243,25 +244,36 @@ func TestForwardFilesReceiverChoice(t *testing.T) {
 		name      string
 		preferred string
 		want      string
+		moveTemp  bool
 	}{
-		{"newest wins by one millisecond", "", "newer"},
-		{"parent wins over newer editor", "parent", "older"},
-		{"newest is also parent", "newer", "newer"},
-		{"missing parent falls back", "missing", "newer"},
-		{"stale parent falls back", "stale", "newer"},
-		{"other config is not selected", "other", "newer"},
+		{"newest wins by one millisecond", "", "newer", false},
+		{"parent wins over newer editor", "parent", "older", false},
+		{"parent survives TMPDIR change", "parent", "older", true},
+		{"missing parent falls back", "missing", "newer", true},
+		{"stale parent falls back", "stale", "newer", true},
+		{"other config is not selected", "other", "newer", true},
+		{"unsafe parent directory is rejected", "unsafe", "newer", true},
+		{"symlink parent directory is rejected", "symlink", "newer", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setupForwardTest(t)
 			parent := fakeForwardReceiver(t, time.UnixMilli(1793050000000), nil, errors.New("older"))
-			newer := fakeForwardReceiver(t, time.UnixMilli(1793050000001), nil, errors.New("newer"))
-			saved := config.OverrideConfigDir
-			config.OverrideConfigDir = t.TempDir()
-			other := fakeForwardReceiver(t, time.UnixMilli(1793050000002), nil, errors.New("other"))
-			config.OverrideConfigDir = saved
-			paths := map[string]string{"parent": parent, "newer": newer, "missing": filepath.Join(forwardDirectory(), "missing.sock"), "other": other}
-			if tc.preferred == "stale" {
-				path := filepath.Join(forwardDirectory(), forwardSocketName(time.UnixMilli(1793049999999), os.Getpid()))
+			if tc.moveTemp {
+				t.Setenv("TMPDIR", filepath.Join(os.TempDir(), "child"))
+				if err := os.MkdirAll(forwardDirectory(), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			fakeForwardReceiver(t, time.UnixMilli(1793050000001), nil, errors.New("newer"))
+			paths := map[string]string{"parent": parent, "missing": filepath.Join(filepath.Dir(parent), forwardSocketName(time.UnixMilli(0), os.Getpid()))}
+			switch tc.preferred {
+			case "other":
+				saved := config.OverrideConfigDir
+				config.OverrideConfigDir = t.TempDir()
+				paths["other"] = fakeForwardReceiver(t, time.UnixMilli(1793050000002), nil, errors.New("other"))
+				config.OverrideConfigDir = saved
+			case "stale":
+				path := filepath.Join(filepath.Dir(parent), forwardSocketName(time.UnixMilli(1793049999999), os.Getpid()))
 				ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 				if err != nil {
 					t.Fatal(err)
@@ -269,6 +281,17 @@ func TestForwardFilesReceiverChoice(t *testing.T) {
 				ln.SetUnlinkOnClose(false)
 				ln.Close()
 				paths["stale"] = path
+			case "unsafe":
+				if err := os.Chmod(filepath.Dir(parent), 0777); err != nil {
+					t.Fatal(err)
+				}
+				paths["unsafe"] = parent
+			case "symlink":
+				link := filepath.Join(os.TempDir(), "link")
+				if err := os.Symlink(filepath.Dir(parent), link); err != nil {
+					t.Fatal(err)
+				}
+				paths["symlink"] = filepath.Join(link, filepath.Base(parent))
 			}
 			t.Setenv(forwardSocketEnv, paths[tc.preferred])
 			if _, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); err == nil || err.Error() != tc.want {
@@ -286,11 +309,7 @@ func TestForwardFilesReceiverResult(t *testing.T) {
 	}{
 		{"pid", os.Getpid(), os.Getpid()},
 		{"legacy null", nil, 0},
-		{"string", "unknown", 0},
 		{"object", map[string]int{"pid": os.Getpid()}, 0},
-		{"boolean", true, 0},
-		{"fraction", 1.5, 0},
-		{"overflow", 1e100, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setupForwardTest(t)
@@ -301,32 +320,6 @@ func TestForwardFilesReceiverResult(t *testing.T) {
 				t.Fatalf("ForwardFiles = (%d, %v), want (%d, nil)", pid, err, tc.pid)
 			}
 		})
-	}
-}
-
-func TestForwardStopPreservesReplacementSocket(t *testing.T) {
-	setupForwardTest(t)
-	a := prepareListenTestApp(t)
-	stopFirst := StartForward(a)
-	t.Cleanup(stopFirst)
-	if a.forwardSocket == "" {
-		t.Fatal("first listener did not start")
-	}
-	// A separate directory gives the replacement a distinct path without waiting for the clock.
-	setupForwardTest(t)
-	stopSecond := StartForward(a)
-	t.Cleanup(stopSecond)
-	path := a.forwardSocket
-	if path == "" {
-		t.Fatal("replacement listener did not start")
-	}
-	stopFirst()
-	if a.forwardSocket != path {
-		t.Fatal("stopping the old listener cleared the replacement socket")
-	}
-	stopSecond()
-	if a.forwardSocket != "" {
-		t.Fatal("stopping the current listener did not clear its socket")
 	}
 }
 

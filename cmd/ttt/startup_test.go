@@ -151,9 +151,17 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 	}
 	receiver, receiverExited, receiverPID := startCLI(t, dir, nil, "--listen")
 	waitForCLI(t, receiver, receiverExited, func() bool { return post("wait 0") == nil })
+	sockets, err := filepath.Glob(filepath.Join(dir, "ttt-*", "*.sock"))
+	if err != nil || len(sockets) != 1 {
+		t.Fatalf("receiver sockets = %v, error = %v, want one socket", sockets, err)
+	}
+	childTemp := t.TempDir()
 	// ConPTY may report exit before the PTY read loop has consumed the final output.
 	stderrPath := filepath.Join(t.TempDir(), "forwarded-stderr.txt")
-	forwarded, forwardedExited, _ := startCLI(t, dir, []string{"TTT_TEST_STDERR_FILE=" + stderrPath}, "forwarded.txt:3:2")
+	forwarded, forwardedExited, _ := startCLI(t, dir, []string{
+		"TTT_TEST_STDERR_FILE=" + stderrPath, "TTT_FORWARD_SOCKET=" + sockets[0],
+		"TMPDIR=" + childTemp, "TMP=" + childTemp, "TEMP=" + childTemp,
+	}, "forwarded.txt:3:2")
 	select {
 	case <-forwardedExited:
 	case <-time.After(10 * time.Second):
