@@ -76,12 +76,13 @@ func LspToUICompletions(items []lsp.CompletionItem) []ui.CompletionItem {
 	result := make([]ui.CompletionItem, 0, len(items))
 	for _, item := range items {
 		uiItem := ui.CompletionItem{
-			Label:      item.Label,
-			Detail:     item.Detail,
-			InsertText: item.InsertText,
-			FilterText: item.FilterText,
-			SortText:   item.SortText,
-			Kind:       lspKindToUI(item.Kind),
+			Label:            item.Label,
+			Detail:           item.Detail,
+			InsertText:       item.InsertText,
+			InsertTextFormat: item.InsertTextFormat,
+			FilterText:       item.FilterText,
+			SortText:         item.SortText,
+			Kind:             lspKindToUI(item.Kind),
 		}
 		if uiItem.InsertText == "" && item.TextEdit != nil {
 			uiItem.InsertText = item.TextEdit.NewText
