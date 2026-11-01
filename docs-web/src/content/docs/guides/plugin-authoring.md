@@ -2361,6 +2361,14 @@ local all = bookmarks.get_all()   -- {{line=3, icon="★", style="success"}, ...
 bookmarks.clear()   -- remove every bookmark in the current file
 ```
 
+Bookmarks are shared document state, not resources owned by the plugin that last changed them. Every plugin with `editor.bookmarks` permission works with the same bookmark set for the active file:
+
+- `get` and `get_all` read the current marks, regardless of who created them.
+- `set` replaces the mark on that line, and `remove` removes the current mark.
+- `set_all` replaces the entire set, while `clear` removes every mark in the file.
+
+TTT deliberately leaves bookmarks in place when a plugin is disabled, uninstalled, updated, reloaded, or replaced by the debug runner. They belong to the document and remain until the user or an authorized plugin changes them. Because the API is shared, `set_all` and `clear` can also change marks created by other plugins; plugins that need isolated state should keep their own data rather than treating document bookmarks as private storage.
+
 ### `bookmarks.set(line, icon, style)`
 
 Sets (or replaces) the bookmark on `line` (1-based). `icon` is a single
