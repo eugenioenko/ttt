@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -100,6 +101,7 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 	for key, value := range map[string]string{"TTT_CONFIG_DIR": configDir, "TMPDIR": dir, "TMP": dir, "TEMP": dir} {
 		t.Setenv(key, value)
 	}
+	t.Setenv("TTT_FORWARD_SOCKET", "")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +133,9 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 	case <-forwardedExited:
 	case <-time.After(10 * time.Second):
 		t.Fatalf("plain file was not forwarded:\n%s", forwarded.ScreenText())
+	}
+	if !regexp.MustCompile(`opened in running editor \(pid [1-9][0-9]*\)`).MatchString(forwarded.ScreenText()) {
+		t.Fatalf("forwarding did not report the receiver PID:\n%s", forwarded.ScreenText())
 	}
 	statePath := filepath.Join(dir, "receiver.json")
 	readReceiver := func() app.DebugState {

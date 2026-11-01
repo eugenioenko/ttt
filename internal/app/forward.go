@@ -23,6 +23,8 @@ var ErrForwardUnavailable = errors.New("no running editor")
 
 var forwardCallTimeout = 30 * time.Second
 
+const forwardSocketEnv = "TTT_FORWARD_SOCKET"
+
 type forwardTarget struct {
 	Path []byte
 	Line int
@@ -62,13 +64,21 @@ func ForwardableTargets() []FileTarget {
 	return targets
 }
 
-func ForwardFiles(targets []FileTarget) error {
+func ForwardFiles(targets []FileTarget) (int, error) {
 	dir := forwardDirectory()
 	if err := checkForwardDir(dir); err != nil {
-		return ErrForwardUnavailable
+		return 0, ErrForwardUnavailable
 	}
 	entries, _ := os.ReadDir(dir)
 	slices.Reverse(entries)
+	preferred := os.Getenv(forwardSocketEnv)
+	for i, entry := range entries {
+		if filepath.Join(dir, entry.Name()) == preferred {
+			copy(entries[1:i+1], entries[:i])
+			entries[0] = entry
+			break
+		}
+	}
 	prefix := forwardPrefix()
 	for _, entry := range entries {
 		if !strings.HasPrefix(entry.Name(), prefix) || !strings.HasSuffix(entry.Name(), ".sock") {
@@ -91,19 +101,26 @@ func ForwardFiles(targets []FileTarget) error {
 		ctx, cancel := context.WithTimeout(context.Background(), forwardCallTimeout)
 		deadline, _ := ctx.Deadline()
 		_ = conn.SetDeadline(deadline)
-		_, err = rpc.Call(ctx, "open.v1", wire)
+		result, err := rpc.Call(ctx, "open.v1", wire)
 		cancel()
 		var netErr net.Error
 		if err != nil && (errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) || !time.Now().Before(deadline)) {
-			return errors.New("the running editor did not respond")
+			return 0, errors.New("the running editor did not respond")
 		}
 		var rpcErr *jsonrpc.Error
 		if errors.As(err, &rpcErr) {
-			return errors.New(rpcErr.Message)
+			return 0, errors.New(rpcErr.Message)
 		}
-		return err
+		if err != nil {
+			return 0, err
+		}
+		var pid int
+		if err := json.Unmarshal(result, &pid); err != nil {
+			pid = 0
+		}
+		return pid, nil
 	}
-	return ErrForwardUnavailable
+	return 0, ErrForwardUnavailable
 }
 
 func StartForward(a *App) (stop func()) {
@@ -122,8 +139,14 @@ func StartForward(a *App) (stop func()) {
 		a.StatusError(fmt.Sprintf("forward: listen: %v", err))
 		return func() {}
 	}
+	a.forwardSocket = path
 	go serveForward(a, ln)
-	return func() { ln.Close() }
+	return func() {
+		ln.Close()
+		if a.forwardSocket == path {
+			a.forwardSocket = ""
+		}
+	}
 }
 
 func serveForward(a *App, ln net.Listener) {
@@ -149,7 +172,7 @@ func serveForward(a *App, ln net.Listener) {
 				for i, target := range wire {
 					targets[i] = FileTarget{Path: string(target.Path), Line: target.Line, Col: target.Col}
 				}
-				return nil, runExecMain(a, func() error { return a.openForwarded(targets) })
+				return os.Getpid(), runExecMain(a, func() error { return a.openForwarded(targets) })
 			},
 		})
 	}
