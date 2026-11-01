@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/term"
 )
 
 // The probe plugin from #972: a command sets a status item, and on_uninstall
@@ -116,7 +117,7 @@ func TestPluginReloadDropsTheOldInstancesStatusItems(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 	m := loadLeftoverProbe(h)
-	m.FindPlugin("probe").SetBookmark(0, 'Q', nil)
+	m.FindPlugin("probe").SetBookmark(0, 'Q', term.StyleDefault)
 
 	h.exec("probe.mark")
 	h.assertContains("PROBESTATUS")
@@ -167,8 +168,8 @@ func TestPluginBookmarksAreSharedAndSurviveUninstall(t *testing.T) {
 	first := m.FindPlugin("probe")
 	second := &plugin.Plugin{Name: "other", Enabled: true}
 	h.app.WirePlugin(second)
-	first.SetBookmark(0, 'Q', nil)
-	second.SetBookmark(1, 'R', nil)
+	first.SetBookmark(0, 'Q', term.StyleDefault)
+	second.SetBookmark(1, 'R', term.StyleDefault)
 
 	if got := len(first.GetAllBookmarks()); got != 2 {
 		t.Fatalf("shared bookmark count = %d before uninstall, want 2", got)
@@ -205,7 +206,7 @@ func TestDebugPluginReplacementClearsOldPublishedSources(t *testing.T) {
 	old.SetDecorations(path, []plugin.DecorationItem{{
 		StartLine: 0, EndLine: 0, Note: "old decoration",
 	}})
-	old.SetStatusItem("left", "old", "OLDSTATUS", 1000, nil)
+	old.SetStatusItem("left", "old", "OLDSTATUS", 1000, term.StyleDefault)
 	h.redraw()
 
 	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 1 {
@@ -236,7 +237,7 @@ func TestDebugPluginReplacementClearsOldPublishedSources(t *testing.T) {
 	replacement.SetDecorations(path, []plugin.DecorationItem{{
 		StartLine: 0, EndLine: 0, Note: "new decoration",
 	}})
-	replacement.SetStatusItem("left", "new", "NEWSTATUS", 1000, nil)
+	replacement.SetStatusItem("left", "new", "NEWSTATUS", 1000, term.StyleDefault)
 	h.redraw()
 
 	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 1 {
