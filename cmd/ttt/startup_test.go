@@ -27,6 +27,13 @@ func TestCLIStartupProcess(t *testing.T) {
 	if err := os.WriteFile(os.Getenv("TTT_TEST_PID_FILE"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if path := os.Getenv("TTT_TEST_STDERR_FILE"); path != "" {
+		stderr, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stderr = stderr
+	}
 	if text, ok := os.LookupEnv("TTT_TEST_STDIN"); ok {
 		// Keep the controlling terminal while replacing stdin with a real pipe.
 		r, w, err := os.Pipe()
@@ -144,15 +151,21 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 	}
 	receiver, receiverExited, receiverPID := startCLI(t, dir, nil, "--listen")
 	waitForCLI(t, receiver, receiverExited, func() bool { return post("wait 0") == nil })
-	forwarded, forwardedExited, _ := startCLI(t, dir, nil, "forwarded.txt:3:2")
+	// ConPTY may report exit before the PTY read loop has consumed the final output.
+	stderrPath := filepath.Join(t.TempDir(), "forwarded-stderr.txt")
+	forwarded, forwardedExited, _ := startCLI(t, dir, []string{"TTT_TEST_STDERR_FILE=" + stderrPath}, "forwarded.txt:3:2")
 	select {
 	case <-forwardedExited:
 	case <-time.After(10 * time.Second):
 		t.Fatalf("plain file was not forwarded:\n%s", forwarded.ScreenText())
 	}
-	confirmation := fmt.Sprintf("opened in running editor (pid %d)", receiverPID)
-	if !strings.Contains(forwarded.ScreenText(), confirmation) {
-		t.Fatalf("forwarding did not report %q:\n%s", confirmation, forwarded.ScreenText())
+	stderr, err := os.ReadFile(stderrPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	confirmation := fmt.Sprintf("opened in running editor (pid %d)\n", receiverPID)
+	if string(stderr) != confirmation {
+		t.Fatalf("forwarding stderr = %q, want %q", stderr, confirmation)
 	}
 	statePath := filepath.Join(dir, "receiver.json")
 	readReceiver := func() app.DebugState {
