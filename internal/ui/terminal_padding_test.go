@@ -138,3 +138,30 @@ func TestTerminalPanelPaddingMouseRouting(t *testing.T) {
 		})
 	}
 }
+
+func TestTerminalPanelPaddingUsesActiveTerminalBackground(t *testing.T) {
+	tp := NewTerminalPanelWidget()
+	tp.PaddingX = 2
+	tp.SetRect(Rect{X: 3, Y: 2, W: 20, H: 3})
+	backgrounds := []term.DirectColor{
+		{R: 12, G: 34, B: 56, Set: true},
+		{R: 78, G: 90, B: 123, Set: true},
+		{},
+	}
+	for _, bg := range backgrounds {
+		tp.AddTerminal(NewTerminalWidget(nil, &TerminalColorPalette{Bg: bg}))
+	}
+	grid := makeGrid(25, 6)
+	for i, bg := range backgrounds {
+		tp.SetActive(i)
+		tp.Render(NewRenderSurface(grid, tp.GetRect()))
+		r := tp.ActiveWidget().GetRect()
+		for y := r.Y; y < r.Y+r.H; y++ {
+			for _, x := range []int{r.X - 2, r.X - 1, r.X + r.W, r.X + r.W + 1} {
+				if cell := grid[y][x]; cell.Ch != ' ' || !cell.Direct || cell.Bg != bg {
+					t.Fatalf("terminal %d padding (%d,%d) = %+v, want background %+v", i, x, y, cell, bg)
+				}
+			}
+		}
+	}
+}

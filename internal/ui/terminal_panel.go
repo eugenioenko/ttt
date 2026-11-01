@@ -188,6 +188,11 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 	tp.TabBar.Render(surface.Sub(Rect{X: 0, Y: 0, W: stripW, H: h}))
 	contentX := content.X - r.X
 	blank := term.Cell{Ch: ' ', Style: term.StyleDefault}
+	if isTerminal && tw.Palette != nil {
+		blank.Direct = true
+		blank.Fg = tw.Palette.Fg
+		blank.Bg = tw.Palette.Bg
+	}
 	surface.Sub(Rect{X: stripW, W: contentX - stripW, H: h}).Fill(blank)
 	rightX := contentX + content.W
 	surface.Sub(Rect{X: rightX, W: max(w-rightX, 0), H: h}).Fill(blank)

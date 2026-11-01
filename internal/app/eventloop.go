@@ -457,6 +457,7 @@ func resizeTerminals(app *App) {
 	}
 	r := app.ContentSplit.BottomRect()
 	for _, tt := range app.Terminals {
+		tt.Term.AckUpdate()
 		content := app.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, tt.Widget.ScrollbarVisible())
 		if content.W > 0 && content.H > 0 {
 			tt.Term.Resize(content.W, content.H)

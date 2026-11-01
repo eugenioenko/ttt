@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/terminal"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/xterm-go"
 )
@@ -248,5 +249,57 @@ func TestTerminalScrollbarSizingTracksEachTab(t *testing.T) {
 				t.Fatalf("new tab width = %d, want %d without a scrollbar", cols, wide)
 			}
 		})
+	}
+}
+
+func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
+	a := spawnTestApp(t)
+	a.Renderer = &render.Renderer{}
+	a.Root.SetSize(120, 40)
+	a.ContentSplit.ShowBottom = true
+	updates := make(chan string, 16)
+	for i := 0; i < 2; i++ {
+		dev, err := terminal.New("/bin/cat", 80, 24, 1000, nil, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(dev.Close)
+		if i == 0 {
+			dev.OnUpdate = func() { updates <- string(dev.RawTail()) }
+		}
+		widget := ui.NewTerminalWidget(dev, a.Palette)
+		a.Terminals = append(a.Terminals, TerminalTab{Term: dev, Widget: widget})
+		a.TerminalPanel.AddTerminal(widget)
+		dev.Run()
+	}
+	redraw := func() {
+		a.Root.Render(a.Renderer.NextFrame(120, 40))
+		resizeTerminals(a)
+	}
+	redraw()
+	dev := a.Terminals[0].Term
+	wide, rows := dev.Size()
+	waitForUpdate := func(text string, scrollback bool) {
+		t.Helper()
+		timeout := time.NewTimer(3 * time.Second)
+		defer timeout.Stop()
+		for {
+			select {
+			case raw := <-updates:
+				redraw()
+				if strings.Contains(raw, text) && (!scrollback || dev.ScrollbackLen() > 0) {
+					return
+				}
+			case <-timeout.C:
+				t.Fatalf("inactive terminal did not deliver %q", text)
+			}
+		}
+	}
+	dev.WriteString("first-wave\n")
+	waitForUpdate("first-wave", false)
+	dev.WriteString(strings.Repeat("second-wave\n", rows*2))
+	waitForUpdate("second-wave", true)
+	if cols, _ := dev.Size(); cols != wide-1 {
+		t.Fatalf("inactive terminal width = %d, want %d with scrollbar", cols, wide-1)
 	}
 }
