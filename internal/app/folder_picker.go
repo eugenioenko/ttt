@@ -75,7 +75,7 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 			}
 		},
 	})
-	fp.places.SetItems(placeNodes(workspace.Places()))
+	fp.places.SetItems(placeNodes(a.favoriteDirs(), workspace.Places()))
 
 	fp.list = widgets.NewListWidgetFromConfig(widgets.ListConfig{
 		EmptyText: "No subdirectories",
@@ -243,10 +243,19 @@ func folderPickerNodes(entries []folderPickerEntry) []*widgets.TreeNode {
 	return nodes
 }
 
-func placeNodes(places []workspace.Place) []*widgets.TreeNode {
-	nodes := make([]*widgets.TreeNode, len(places))
-	for i, p := range places {
-		nodes[i] = &widgets.TreeNode{ID: p.Path, Label: p.Name}
+// placeNodes lists the favorites under a heading first, then a blank row and
+// every place.
+func placeNodes(favs []favoriteDir, places []workspace.Place) []*widgets.TreeNode {
+	var nodes []*widgets.TreeNode
+	if len(favs) > 0 {
+		nodes = append(nodes, &widgets.TreeNode{Label: "Favorites", Muted: true, Heading: true})
+		for _, f := range favs {
+			nodes = append(nodes, &widgets.TreeNode{ID: f.abs, Label: filepath.Base(f.abs)})
+		}
+		nodes = append(nodes, &widgets.TreeNode{Heading: true})
+	}
+	for _, p := range places {
+		nodes = append(nodes, &widgets.TreeNode{ID: p.Path, Label: p.Name})
 	}
 	return nodes
 }

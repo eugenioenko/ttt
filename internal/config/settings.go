@@ -41,6 +41,7 @@ type TerminalSettings struct {
 	Scrollback     int      `json:"scrollback,omitempty"`
 	SelectionStyle string   `json:"selectionStyle"`
 	CtrlVPastes    bool     `json:"ctrlVPastes"`
+	PaddingX       int      `json:"padding_x"`
 }
 
 func DefaultTerminalSettings() TerminalSettings {
@@ -48,6 +49,7 @@ func DefaultTerminalSettings() TerminalSettings {
 		Scrollback:     1000,
 		SelectionStyle: SelectionStyleBackground,
 		CtrlVPastes:    true,
+		PaddingX:       1,
 	}
 }
 
@@ -295,6 +297,7 @@ type ExplorerSettings struct {
 	GitStatusColors    bool `json:"gitStatusColors"`
 	DimStagedGitColors bool `json:"dimStagedGitColors"`
 	AutoReveal         bool `json:"autoReveal"`
+	CompactFolders     bool `json:"compactFolders"`
 }
 
 // LegacyChevrons is the old appearance.chevrons setting, migrated into
@@ -363,6 +366,7 @@ func DefaultExplorerSettings() ExplorerSettings {
 		ShowHidden:      true,
 		ShowGitIgnored:  true,
 		GitStatusColors: true,
+		CompactFolders:  true,
 	}
 }
 
@@ -545,6 +549,7 @@ func normalizeSettings(s *Settings) {
 	if !slices.Contains(SelectionStyles, s.Terminal.SelectionStyle) {
 		s.Terminal.SelectionStyle = SelectionStyleBackground
 	}
+	s.Terminal.PaddingX = max(s.Terminal.PaddingX, 0)
 	if !slices.Contains(SelectionStyles, s.Plugins.SelectionStyle) {
 		s.Plugins.SelectionStyle = SelectionStyleInvert
 	}

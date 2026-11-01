@@ -264,6 +264,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 
 	terminalPanel := ui.NewTerminalPanelWidget()
 	terminalPanel.Borders = borders
+	terminalPanel.PaddingX = cfg.Settings.Terminal.PaddingX
 	problems := ui.NewProblemsWidget()
 	references := ui.NewReferencesWidget()
 	output := ui.NewOutputWidget()
@@ -437,12 +438,15 @@ func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarge
 	var opened []FileTarget
 	var failures []error
 	for _, f := range targets {
-		if err := g.OpenFile(f.Path); err != nil {
+		err := g.OpenFile(f.Path)
+		if g.ActiveFilePath() == f.Path {
+			g.CommitActiveTab()
+		}
+		if err != nil {
 			failures = append(failures, err)
 			continue
 		}
 		opened = append(opened, f)
-		g.CommitActiveTab()
 		// The tab just opened is the active one, so this lands on the right
 		// buffer without switching tabs. PlaceCursor rather than GoToLineCol:
 		// the viewport has no height yet, and ApplyFileTargets frames the file

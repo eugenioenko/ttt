@@ -23,21 +23,24 @@ function setup(settings) {
   return { project, file, configFile };
 }
 
-describe("explorer reveal", () => {
+describe.each([
+  { compactFolders: true, open: ["▾ src/deep"] },
+  { compactFolders: false, open: ["▾ src", "▾ deep"] },
+])("explorer reveal (compactFolders: $compactFolders)", ({ compactFolders, open }) => {
   it("reveals the active file when explorer.autoReveal is on", () => {
-    const { project, file, configFile } = setup({ explorer: { autoReveal: true } });
+    const { project, file, configFile } = setup({ explorer: { autoReveal: true, compactFolders } });
 
     tui.start("--config", configFile, project, file);
     tui.waitFor("package main");
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
 
-    expect(snapshots[s0]).toContain("▾ deep");
+    for (const row of open) expect(snapshots[s0]).toContain(row);
     expect(snapshots[s0]).toMatch(/│\s+main\.go/);
   });
 
   it("leaves the tree alone when explorer.autoReveal is off", () => {
-    const { project, file, configFile } = setup({});
+    const { project, file, configFile } = setup({ explorer: { compactFolders } });
 
     tui.start("--config", configFile, project, file);
     tui.waitFor("package main");
@@ -49,7 +52,7 @@ describe("explorer reveal", () => {
   });
 
   it("reveals the active file from the command palette", () => {
-    const { project, file, configFile } = setup({});
+    const { project, file, configFile } = setup({ explorer: { compactFolders } });
 
     tui.start("--config", configFile, project, file);
     tui.waitFor("package main");
@@ -57,7 +60,7 @@ describe("explorer reveal", () => {
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
 
-    expect(snapshots[s0]).toContain("▾ deep");
+    for (const row of open) expect(snapshots[s0]).toContain(row);
     expect(snapshots[s0]).toMatch(/│\s+main\.go/);
   });
 });

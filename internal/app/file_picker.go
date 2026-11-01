@@ -40,7 +40,7 @@ func (a *App) ShowFilePicker(title, confirmLabel, initial string, onPick func(st
 	fp := &filePicker{}
 
 	submit := func(text string) {
-		path := strings.TrimSpace(text)
+		path := text
 		if path == "" {
 			return
 		}
@@ -81,7 +81,7 @@ func (a *App) ShowFilePicker(title, confirmLabel, initial string, onPick func(st
 			}
 		},
 	})
-	fp.places.SetItems(placeNodes(workspace.Places()))
+	fp.places.SetItems(placeNodes(a.favoriteDirs(), workspace.Places()))
 	fp.list = widgets.NewListWidgetFromConfig(widgets.ListConfig{
 		EmptyText: "No files or folders",
 		OnCommand: func(command string, node *widgets.TreeNode) {
@@ -144,7 +144,7 @@ func (fp *filePicker) enter(dir string) {
 // it. Typing "~/repos/br" lists ~/repos showing only the matches, which keeps
 // the path box fast without forcing a separate search mode.
 func (fp *filePicker) syncFromInput(text string) {
-	path := workspace.ExpandPath(strings.TrimSpace(text))
+	path := workspace.ExpandPath(text)
 	if path == "" {
 		return
 	}
@@ -193,13 +193,24 @@ func filePickerEntries(dir string) []filePickerEntry {
 	}
 	for _, item := range items {
 		path := filepath.Join(dir, item.Name())
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
+		isDir := item.IsDir()
+		isRegular := item.Type().IsRegular()
+		// DirEntry reports a symlink's own type, never its target's, so the target
+		// needs one explicit stat. Windows junctions are ModeIrregular, not
+		// ModeSymlink, so both need resolving. Ordinary entries use the type bits
+		// ReadDir already has, avoiding a metadata call per entry.
+		if item.Type()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+			info, err := os.Stat(path)
+			if err != nil {
+				continue
+			}
+			isDir = info.IsDir()
+			isRegular = info.Mode().IsRegular()
 		}
-		if info.IsDir() {
+		switch {
+		case isDir:
 			out = append(out, filePickerEntry{label: item.Name(), path: path, dir: true})
-		} else if info.Mode().IsRegular() {
+		case isRegular:
 			out = append(out, filePickerEntry{label: item.Name(), path: path})
 		}
 	}

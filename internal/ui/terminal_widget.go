@@ -298,14 +298,16 @@ func (tw *TerminalWidget) IsScrolledUp() bool {
 	return tw.scrollOffset > 0
 }
 
+func (tw *TerminalWidget) ScrollbarVisible() bool {
+	return tw.Term != nil && tw.Term.ScrollbackLen() > 0
+}
+
 func (tw *TerminalWidget) Render(surface Surface) {
 	if tw.Term == nil {
 		return
 	}
 	w, h := surface.Size()
-	r := tw.GetRect()
 
-	tw.Term.AckUpdate()
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
 		cols := xt.Cols()
@@ -319,13 +321,6 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		if tw.scrollOffset > sbLen {
 			tw.scrollOffset = sbLen
 		}
-
-		showScrollbar := sbLen > 0
-		contentW := w
-		if showScrollbar {
-			contentW = w - 1
-		}
-
 		if tw.ctrlHeld {
 			tw.linkCache = make(map[int][]linkSpan)
 		} else {
@@ -338,7 +333,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			for y := 0; y < h && y < rows; y++ {
 				unifiedLine := sbLen + y
 				if tw.ctrlHeld {
-					lineText := extractLineText(buf, unifiedLine, contentW)
+					lineText := extractLineText(buf, unifiedLine, w)
 					tw.linkCache[unifiedLine] = tw.linksForLine(lineText)
 				}
 
@@ -347,7 +342,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					bl = buf.Lines.Get(unifiedLine)
 				}
 
-				for x := 0; x < contentW && x < cols; x++ {
+				for x := 0; x < w && x < cols; x++ {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
@@ -363,7 +358,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					} else if tw.linkAt(unifiedLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
-					tw.clipWideRune(&c, x, contentW)
+					tw.clipWideRune(&c, x, w)
 					surface.SetCell(x, y, c)
 				}
 			}
@@ -376,7 +371,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			for screenY := 0; screenY < h; screenY++ {
 				srcLine := startLine + screenY
 				if tw.ctrlHeld {
-					lineText := extractLineText(buf, srcLine, contentW)
+					lineText := extractLineText(buf, srcLine, w)
 					tw.linkCache[srcLine] = tw.linksForLine(lineText)
 				}
 
@@ -385,7 +380,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					bl = buf.Lines.Get(srcLine)
 				}
 
-				for x := 0; x < contentW; x++ {
+				for x := 0; x < w; x++ {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
@@ -401,30 +396,29 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					} else if tw.linkAt(srcLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
-					tw.clipWideRune(&c, x, contentW)
+					tw.clipWideRune(&c, x, w)
 					surface.SetCell(x, screenY, c)
 				}
 			}
 		}
 
-		if showScrollbar {
-			topItem := sbLen - tw.scrollOffset
-			if topItem < 0 {
-				topItem = 0
-			}
-			tw.scrollbar.X = r.X + w - 1
-			tw.scrollbar.Y = r.Y
-			tw.scrollbar.Height = h
+		tw.scrollbar.TotalItems = 0
+		if sbLen > 0 {
 			tw.scrollbar.TotalItems = totalLines
-			tw.scrollbar.TopItem = topItem
-			tw.scrollbar.Render(surface, w-1, 0)
 		}
+		tw.scrollbar.TopItem = max(sbLen-tw.scrollOffset, 0)
 	})
+}
+
+func (tw *TerminalWidget) renderScrollbar(surface Surface) {
+	tw.scrollbar.X, tw.scrollbar.Y = surface.Origin()
+	_, tw.scrollbar.Height = surface.Size()
+	tw.scrollbar.Render(surface, 0, 0)
 }
 
 // clipWideRune replaces a fullwidth rune in the last content column with a
 // space. The terminal paints such a rune across two columns regardless of
-// clipping, so drawing it there would bleed over the scrollbar to its right.
+// clipping, so drawing it there would overwrite the margin to its right.
 // DrawText makes the same substitution.
 func (tw *TerminalWidget) clipWideRune(c *term.Cell, x, contentW int) {
 	if x == contentW-1 && textwidth.Rune(c.Ch) == 2 {

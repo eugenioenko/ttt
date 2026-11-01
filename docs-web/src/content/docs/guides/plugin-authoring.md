@@ -866,15 +866,16 @@ local ok, err = fs.write(state_file, json.encode(state))
 
 Note: the plugin directory is a git clone that `Plugins: Update` pulls into, and it is deleted on uninstall — keep only regenerable state there.
 
-### `ttt.platform()` / `ttt.arch()` / `ttt.version()`
+### `ttt.platform()` / `ttt.arch()` / `ttt.version()` / `ttt.executable_path()`
 
-Return the host OS, CPU architecture, and running ttt version. No permission required.
+Return the host OS, CPU architecture, running ttt version, and the absolute path of the running ttt binary. No permission required.
 
 | Function          | Returns                                                                 |
 |-------------------|--------------------------------------------------------------------------|
 | `ttt.platform()`  | Go `GOOS` value: `"linux"`, `"darwin"`, or `"windows"`.                 |
 | `ttt.arch()`      | Go `GOARCH` value, e.g. `"amd64"`, `"arm64"`.                           |
 | `ttt.version()`   | ttt's version string, e.g. `"1.2.3"` (`"dev"` for unreleased builds).   |
+| `ttt.executable_path()` | Absolute path of the running binary, or `nil, err`. On Linux symlinks are already resolved, so a package-manager symlink yields its versioned target. |
 
 ```lua
 local ttt = require("ttt")
@@ -965,6 +966,8 @@ Create the debounced function once (at load time, or stored on your state), not 
 
 Register a function that runs once when the plugin is installed (from the Plugins panel or **Plugins: Install from URL**). Use this for one-time setup like writing default settings. No permission required to register the hook; whatever the callback does is still permission-checked.
 
+If the callback raises an error, the install fails: the plugin is not loaded, and a fresh install is removed again. When the hook runs on re-approval of an already installed plugin, its previous approval is kept, so the next startup asks again and reruns the hook.
+
 ```lua
 local ttt = require("ttt")
 local settings = require("ttt.settings")
@@ -977,6 +980,8 @@ end)
 ### `ttt.on_uninstall(callback)`
 
 Register a cleanup function that runs when the plugin is uninstalled. Use this to remove settings, files, or other state the plugin created during its lifetime. No permission required. Tabs, drawers, panels, status items, diagnostics and decorations are closed or cleared after the callback returns, so there's no need to clean those up here.
+
+If the callback raises an error, the plugin stays installed and the user is asked whether to remove it anyway. Raise an error when cleanup did not finish, so files the plugin created outside its directory are not orphaned silently.
 
 ```lua
 local ttt = require("ttt")
@@ -2355,6 +2360,14 @@ local all = bookmarks.get_all()   -- {{line=3, icon="★", style="success"}, ...
 
 bookmarks.clear()   -- remove every bookmark in the current file
 ```
+
+Bookmarks are shared document state, not resources owned by the plugin that last changed them. Every plugin with `editor.bookmarks` permission works with the same bookmark set for the active file:
+
+- `get` and `get_all` read the current marks, regardless of who created them.
+- `set` replaces the mark on that line, and `remove` removes the current mark.
+- `set_all` replaces the entire set, while `clear` removes every mark in the file.
+
+TTT deliberately leaves bookmarks in place when a plugin is disabled, uninstalled, updated, reloaded, or replaced by the debug runner. They belong to the document and remain until the user or an authorized plugin changes them. Because the API is shared, `set_all` and `clear` can also change marks created by other plugins; plugins that need isolated state should keep their own data rather than treating document bookmarks as private storage.
 
 ### `bookmarks.set(line, icon, style)`
 

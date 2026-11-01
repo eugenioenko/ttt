@@ -12,6 +12,7 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** (`explorer.revealActiveFile`) expands the folders above the active file, selects it, and scrolls it into view without moving focus from the editor. Set `explorer.autoReveal` to `true` to do this every time the active file changes
+- A folder whose only entry is another folder is shown as one row, such as `src/main/java`, once you expand it, and that one expansion opens the whole chain. Right-click a segment of the row to act on that folder; keyboard actions on the row apply to its deepest folder. Set `explorer.compactFolders` to `false` to show each folder on its own row
 - File-type icons, which need a [Nerd Font](https://www.nerdfonts.com) in your terminal. They default off, since without one they'd render as boxes: turn them on with `"appearance": { "icons": "nerd-font" }`, **Options → Font Icons**, or **Icons** in the settings editor
 
 When multiple folders are open, each root is shown as a collapsible group.

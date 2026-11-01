@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	"path/filepath"
@@ -74,7 +73,6 @@ type cliFlags struct {
 	debug        bool
 	listen       bool
 	stdin        bool
-	targets      bool
 	noForward    bool
 }
 
@@ -124,17 +122,12 @@ func parseFlags() cliFlags {
 			f.listen = true
 		case "--workspace":
 			f.noForward = true
-			f.targets = true
 			i++
 		case "--new-window":
 			f.noForward = true
 		case "-":
 			f.noForward = true
 			f.stdin = true
-		default:
-			if !strings.HasPrefix(args[i], "-") {
-				f.targets = true
-			}
 		}
 	}
 	return f
@@ -194,8 +187,7 @@ Arguments:
   .                   Open the current directory
   PR URL              Open a GitHub pull request for review
   -                   Read stdin into an untitled tab (automatic when stdin
-                      is a pipe or a redirected file and nothing else is
-                      given to open)
+                      is a pipe or a redirected file, except with --exec)
 
 Options:
   --help, -h          Show this help message
@@ -244,7 +236,8 @@ Docs: https://tttedit.dev
 
 	flags := parseFlags()
 	cfg := config.Load(flags.configFile)
-	if cfg.Settings.ReuseWindow && !flags.noForward {
+	stdinPiped := stdinIsPiped()
+	if cfg.Settings.ReuseWindow && !flags.noForward && !stdinPiped {
 		if targets := app.ForwardableTargets(); len(targets) > 0 {
 			err := app.ForwardFiles(targets)
 			if err == nil {
@@ -268,11 +261,9 @@ Docs: https://tttedit.dev
 	}
 	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
 
-	// Without "-", stdin is read only when nothing else was asked for: a shell
-	// loop running `ttt "$f"` must keep its input, and --exec runs from scripts
-	// and tests whose stdin is a pipe. The UI reads keys from the terminal.
+	// --exec inherits scripted stdin; only "-" explicitly consumes it.
 	var stdinText *string
-	if flags.stdin || (flags.exec == "" && !flags.targets && stdinIsPiped()) {
+	if flags.stdin || (flags.exec == "" && stdinPiped) {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ttt: reading stdin: %v\n", err)

@@ -105,6 +105,37 @@ func TestLoadTerminalCtrlVPastes(t *testing.T) {
 	}
 }
 
+func TestTerminalPaddingSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tt := range []struct {
+		name string
+		json string
+		want int
+	}{
+		{"missing", `{}`, 1},
+		{"existing", `{"terminal":{"scrollback":2000}}`, 1},
+		{"zero", `{"terminal":{"padding_x":0}}`, 0},
+		{"custom", `{"terminal":{"padding_x":2}}`, 2},
+		{"negative", `{"terminal":{"padding_x":-1}}`, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tt.json), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			s := LoadSettings()
+			if s.Terminal.PaddingX != tt.want {
+				t.Fatalf("padding = %d, want %d", s.Terminal.PaddingX, tt.want)
+			}
+			if err := SaveSettings(s); err != nil {
+				t.Fatal(err)
+			}
+			if got := LoadSettings().Terminal.PaddingX; got != tt.want {
+				t.Fatalf("round-tripped padding = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestQuitSaveAllSettings(t *testing.T) {
 	withTempConfigDir(t)
 	for _, enabled := range []bool{false, true} {

@@ -826,6 +826,7 @@ func registerWidgetCallbacks(app *App) {
 
 	app.Changes.OnOpenFile = func(path string) {
 		app.EditorGroup.OpenFile(path)
+		app.EditorGroup.DisableInlineDiff(path)
 		app.FocusEditorIfEnabled()
 	}
 	app.Changes.OnOpenDiff = app.OpenChangeDiff

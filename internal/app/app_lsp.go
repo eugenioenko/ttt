@@ -206,6 +206,12 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		endLine = startLine
 	}
 
+	var snippet lsp.SnippetExpansion
+	if item.InsertTextFormat == lsp.InsertTextFormatSnippet {
+		snippet = lsp.ExpandSnippet(text)
+		text = snippet.Text
+	}
+
 	// Every range refers to the text before acceptance, including edits after
 	// the completed word on the same line.
 	edits := []lsp.TextEdit{{
@@ -245,13 +251,46 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		}
 		cursor.Line += len(replacement) - 1 - (end.Line - edit.Range.Start.Line)
 	}
-	inserted := strings.Split(text, "\n")
-	cursor.Line += len(inserted) - 1
-	if len(inserted) > 1 {
-		cursor.Character = 0
+	if editor.Selection != nil {
+		editor.Selection.Clear()
 	}
-	cursor.Character += len([]rune(inserted[len(inserted)-1]))
+	if stop, ok := snippet.FirstStop(); ok {
+		stopLine, stopCol := snippetPosition(text, cursor.Line, cursor.Character, stop.Offset)
+		stopEndLine, stopEndCol := snippetPosition(text, cursor.Line, cursor.Character, stop.Offset+stop.Length)
+		if stop.Length > 0 {
+			editor.Selection.Start(stopLine, stopCol)
+			cursor.Line, cursor.Character = stopEndLine, stopEndCol
+		} else {
+			cursor.Line, cursor.Character = stopLine, stopCol
+		}
+	} else {
+		cursor.Line, cursor.Character = snippetPosition(text, cursor.Line, cursor.Character, len([]rune(text)))
+	}
 	a.applyRuneTextEdits(append(edits, additional...), &cursor)
+}
+
+// snippetPosition converts a rune offset in a snippet expansion to an absolute
+// buffer position. The first line starts at startCol; later lines start at 0.
+func snippetPosition(text string, startLine, startCol, offset int) (line, col int) {
+	if offset < 0 {
+		offset = 0
+	}
+	for _, r := range text {
+		if offset == 0 {
+			break
+		}
+		if r == '\n' {
+			line++
+			col = 0
+		} else {
+			col++
+		}
+		offset--
+	}
+	if line == 0 {
+		col += startCol
+	}
+	return startLine + line, col
 }
 
 func (a *App) charBeforeCursor() string {

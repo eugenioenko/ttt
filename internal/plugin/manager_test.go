@@ -1368,3 +1368,100 @@ func TestSetEnabledReportsAFailedPermissionSave(t *testing.T) {
 		t.Errorf("the kept permission is missing from the saved registry: %+v", storedEntry.Permissions)
 	}
 }
+
+func TestFailedOnInstallUndoesAFreshInstall(t *testing.T) {
+	pluginsDir := t.TempDir()
+	dir := writePluginDir(t, pluginsDir, "broken")
+	manifest := `{"name":"broken","version":"1.0.0","entry":"main.ttt.lua","permissions":{"storage":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	entry := `require("ttt").on_install(function()
+		require("ttt.storage").set("half", "done")
+		error("no write access")
+	end)`
+	if err := os.WriteFile(filepath.Join(dir, "main.ttt.lua"), []byte(entry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, filepath.Join(t.TempDir(), "registry.json"))
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+
+	err := m.ApproveAndLoad(pending[0])
+	if err == nil || !strings.Contains(err.Error(), "no write access") {
+		t.Fatalf("err = %v, want the on_install error", err)
+	}
+	if m.FindPlugin("broken") != nil {
+		t.Error("plugin loaded after its on_install failed")
+	}
+	if m.Registry().Find("broken") != nil {
+		t.Error("registry still records the failed install")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("plugin directory left behind: %v", err)
+	}
+	if path, _ := storagePath(m.StorageDir(), "broken"); path != "" {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("storage written by the failed on_install left behind: %v", err)
+		}
+	}
+}
+
+func TestRevertApprovalReportsAFailedSave(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	pluginsDir := t.TempDir()
+	dir := writePluginDir(t, pluginsDir, "p")
+	regDir := t.TempDir()
+	m := NewManager(pluginsDir, filepath.Join(regDir, "registry.json"))
+	m.LoadAll()
+	if err := os.Chmod(regDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(regDir, 0o700) })
+
+	err := m.revertApproval(&Plugin{Name: "p", Dir: dir, Manifest: Manifest{Name: "p"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "undo approval") {
+		t.Fatalf("err = %v, want the failed registry save", err)
+	}
+}
+
+// A failed on_install on re-approval keeps the plugin's files and its previous
+// grants, so the next startup asks again and reruns the hook.
+func TestFailedOnInstallRestoresThePreviousApproval(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "p")
+	manifest := `{"name":"p","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.ttt.lua"), []byte(`require("ttt").on_install(function() error("boom") end)`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(regPath, []byte(`[{"name":"p","version":"0.9.0","enabled":true,"permissions":{}}]`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, regPath)
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+
+	if err := m.ApproveAndLoad(pending[0]); err == nil {
+		t.Fatal("ApproveAndLoad succeeded although on_install failed")
+	}
+	entry := m.Registry().Find("p")
+	if entry == nil || entry.Version != "0.9.0" || entry.Permissions.Commands {
+		t.Fatalf("registry entry = %+v, want the previous approval", entry)
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("plugin directory removed: %v", err)
+	}
+	if again := NewManager(pluginsDir, regPath).LoadAll(); len(again) != 1 {
+		t.Errorf("pending on next startup = %d, want 1", len(again))
+	}
+}

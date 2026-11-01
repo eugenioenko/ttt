@@ -334,7 +334,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				if multiActive {
 					for _, mc := range allCursors {
 						if mc.Line == lineIdx && mc.Col == colIdx {
-							style = term.StyleSelection
+							style = term.StyleReverse
 							bgStyle = 0
 							break
 						}

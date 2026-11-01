@@ -40,17 +40,11 @@ func (a *App) welcomeItems() []welcomeItem {
 		}
 		items = append(items, welcomeItem{label: c.label, detail: shortcut, run: func() { a.Reg.Execute(c.commandID) }})
 	}
-	for _, fav := range a.Settings.Welcome.Favorites {
-		abs, err := filepath.Abs(workspace.ExpandPath(fav))
-		if err != nil {
-			continue
-		}
-		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-			continue
-		}
+	for _, fav := range a.favoriteDirs() {
+		abs := fav.abs
 		item := welcomeItem{
 			label:  filepath.Base(abs),
-			detail: fav,
+			detail: fav.path,
 			tight:  true,
 			run:    func() { a.openFolderPath(abs) },
 			copy:   func() { a.FileOpCopyAbsolutePath(abs) },
@@ -156,6 +150,28 @@ func (a *App) closeWelcome() {
 	a.welcomeIsEmptyState = false
 	a.EditorGroup.EmptyStateID = ""
 	a.EditorGroup.ClosePluginTab(welcomeTabID)
+}
+
+type favoriteDir struct {
+	path string
+	abs  string
+}
+
+// favoriteDirs returns the favorites that exist as directories, each with its
+// path as written in settings.
+func (a *App) favoriteDirs() []favoriteDir {
+	var out []favoriteDir
+	for _, fav := range a.Settings.Welcome.Favorites {
+		abs, err := filepath.Abs(workspace.ExpandPath(fav))
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+			continue
+		}
+		out = append(out, favoriteDir{path: fav, abs: abs})
+	}
+	return out
 }
 
 // favoriteIndex finds abs in welcome.favorites, comparing expanded paths.

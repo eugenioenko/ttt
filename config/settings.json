@@ -53,7 +53,8 @@
     "showGitIgnored": true,
     "gitStatusColors": true,
     "dimStagedGitColors": false,
-    "autoReveal": false
+    "autoReveal": false,
+    "compactFolders": true
   },
   "git": {
     "fileView": "list"
@@ -61,7 +62,8 @@
   "terminal": {
     "scrollback": 1000,
     "selectionStyle": "background",
-    "ctrlVPastes": true
+    "ctrlVPastes": true,
+    "padding_x": 1
   },
   "lsp": {
     "saveOnRename": false,

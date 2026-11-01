@@ -187,3 +187,57 @@ func TestUTF16NavigationUsesUnsavedDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestUTF16SnippetCompletionWithAdditionalEdits(t *testing.T) {
+	for _, tc := range []struct {
+		name, snippet, want string
+		line, col, anchor   int
+		selected            bool
+	}{
+		{"default", "call(${1:界😀})$0", "😀😀 prefix call(界😀) end\n", 0, 17, 15, true},
+		{"empty stop", "call($1)", "😀😀 prefix call() end\n", 0, 15, 0, false},
+		{"multiline", "call(\n  ${1:界😀}\n)$0", "😀😀 prefix call(\n  界😀\n) end\n", 1, 4, 2, true},
+	} {
+		for _, addImport := range []bool{false, true} {
+			name := tc.name
+			if addImport {
+				name += "/import"
+			}
+			t.Run(name, func(t *testing.T) {
+				a := completionTestApp(t, "a.go", "😀😀 pre fn tail\n")
+				e := a.EditorGroup.Editor
+				moveCursor(a, 0, 9)
+				e.Selection.Start(0, 7)
+				a.completion.lines = append([]string(nil), e.Buf.Lines...)
+				additional := []lsp.TextEdit{utf16Edit(0, 12, 16, "end"), utf16Edit(0, 5, 8, "prefix")}
+				want, wantLine := tc.want, tc.line
+				if addImport {
+					additional = append(additional, utf16Edit(0, 0, 0, "import x\n"))
+					want = "import x\n" + want
+					wantLine++
+				}
+				item := LspToUICompletions([]lsp.CompletionItem{{Label: "call", InsertTextFormat: lsp.InsertTextFormatSnippet, AdditionalTextEdits: additional}}, a.completion.lines)[0]
+				notified := false
+				e.OnChange = func() {
+					notified = true
+					if e.Cursor.Line != wantLine || e.Cursor.Col != tc.col || e.Selection.Active != tc.selected {
+						t.Fatalf("cursor/selection = %d:%d/%v", e.Cursor.Line, e.Cursor.Col, e.Selection.Active)
+					}
+					if tc.selected && (e.Selection.Anchor.Line != wantLine || e.Selection.Anchor.Col != tc.anchor || e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col) != "界😀") {
+						t.Fatalf("selected placeholder = %+v", e.Selection)
+					}
+				}
+				edit := utf16Edit(0, 9, 11, tc.snippet)
+				a.insertCompletion(item, &edit)
+				if got := strings.Join(e.Buf.Lines, "\n"); got != want || !notified {
+					t.Fatalf("completion = %q, want %q; notified = %v", got, want, notified)
+				}
+				e.OnChange = nil
+				a.EditorGroup.Undo()
+				if got := strings.Join(e.Buf.Lines, "\n"); got != "😀😀 pre fn tail\n" {
+					t.Fatalf("undo = %q", got)
+				}
+			})
+		}
+	}
+}
