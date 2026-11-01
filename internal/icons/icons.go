@@ -138,5 +138,4 @@ func Rune(name Name) rune {
 
 func IsNerd(mode string) bool { return mode == config.IconsNerdFont }
 
-// ActiveIsNerd reports whether the mode set by Configure is Nerd Font.
 func ActiveIsNerd() bool { return IsNerd(activeMode) }
