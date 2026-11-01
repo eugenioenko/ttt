@@ -281,3 +281,14 @@ func TestParseTrailingNewlineEndsOnlyTheLastHunk(t *testing.T) {
 		t.Fatalf("last line of hunk 2 = %+v, want K at line 11", last)
 	}
 }
+
+func TestParseHunkHeaderWithoutCount(t *testing.T) {
+	// git leaves out a count of 1: "@@ -1 +1 @@", "@@ -1,2 +1 @@".
+	fd := Parse("--- a/f\n+++ b/f\n@@ -1 +1 @@\n-1.0\n+1.1\n@@ -5,2 +5 @@\n e\n-f\n")
+	if l := fd.Hunks[0].Lines[0]; l.Left.Num != 1 || l.Right.Num != 1 {
+		t.Fatalf("one-line hunk = %+v, want old and new line 1", l)
+	}
+	if l := fd.Hunks[1].Lines[0]; l.Left.Num != 5 || l.Right.Num != 5 {
+		t.Fatalf("context line = %+v, want old and new line 5", l)
+	}
+}

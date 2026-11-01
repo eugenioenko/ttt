@@ -171,6 +171,14 @@ func (a *App) CloseAllTabs() {
 	)
 }
 
+func (a *App) OpenFile() {
+	a.ShowFilePicker("Open File", "Open", "", func(path string) {
+		// Not validating the path here: ShowFilePicker already checks that it exists and is a regular file. OpenFile treats a missing path as a new file.
+		a.EditorGroup.OpenFile(path)
+		a.Root.SetFocus(a.EditorGroup)
+	})
+}
+
 func (a *App) NewFile() {
 	a.EditorGroup.NewFile()
 	a.Root.SetFocus(a.EditorGroup)
@@ -789,6 +797,12 @@ func registerEditorCommands(app *App) {
 				e.Folds.ExpandAll()
 			}
 		},
+	})
+
+	reg.Register(command.Command{
+		ID: "file.open", Title: "Open File",
+		Keywords: []string{"file", "open"},
+		Handler:  app.OpenFile,
 	})
 
 	reg.Register(command.Command{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // SupportedAPIVersion is the plugin API version this editor implements.
@@ -27,6 +28,23 @@ type Manifest struct {
 	API         int           `json:"api,omitempty"`
 	Permissions PermissionSet `json:"permissions"`
 	Grammars    []Grammar     `json:"grammars,omitempty"`
+	Themes      []Theme       `json:"themes,omitempty"`
+}
+
+type Theme struct {
+	Path string `json:"path"`
+	Name string `json:"name,omitempty"`
+}
+
+func (t Theme) ID() string {
+	if t.Name != "" {
+		return t.Name
+	}
+	return strings.TrimSuffix(filepath.Base(t.Path), filepath.Ext(t.Path))
+}
+
+func (p *Plugin) ThemeFile(t Theme) (string, error) {
+	return p.contributionFile(t.Path)
 }
 
 // Grammar is a TextMate grammar the plugin contributes. Path is relative to
@@ -40,16 +58,20 @@ type Grammar struct {
 // GrammarFile resolves symlinks so a grammar cannot point outside the plugin
 // directory, which the lexical check in LoadManifest does not catch.
 func (p *Plugin) GrammarFile(g Grammar) (string, error) {
+	return p.contributionFile(g.Path)
+}
+
+func (p *Plugin) contributionFile(relative string) (string, error) {
 	root, err := filepath.EvalSymlinks(p.Dir)
 	if err != nil {
 		return "", err
 	}
-	path, err := filepath.EvalSymlinks(filepath.Join(p.Dir, g.Path))
+	path, err := filepath.EvalSymlinks(filepath.Join(p.Dir, relative))
 	if err != nil {
 		return "", err
 	}
 	if !withinDir(root, path) {
-		return "", fmt.Errorf("grammar path %q resolves outside plugin directory", g.Path)
+		return "", fmt.Errorf("contribution path %q resolves outside plugin directory", relative)
 	}
 	return path, nil
 }
@@ -78,7 +100,7 @@ func LoadManifest(dir string) (Manifest, error) {
 	if m.Name == "" {
 		return Manifest{}, fmt.Errorf("manifest missing required field: name")
 	}
-	if m.Entry == "" && len(m.Grammars) == 0 {
+	if m.Entry == "" && len(m.Grammars) == 0 && len(m.Themes) == 0 {
 		return Manifest{}, fmt.Errorf("manifest missing required field: entry")
 	}
 	for _, g := range m.Grammars {
@@ -88,6 +110,20 @@ func LoadManifest(dir string) (Manifest, error) {
 		if !withinDir(dir, filepath.Join(dir, g.Path)) {
 			return Manifest{}, fmt.Errorf("grammar path %q escapes plugin directory", g.Path)
 		}
+	}
+	seenThemes := make(map[string]bool)
+	for _, theme := range m.Themes {
+		if !filepath.IsLocal(theme.Path) {
+			return Manifest{}, fmt.Errorf("invalid theme path %q", theme.Path)
+		}
+		name := theme.ID()
+		if name == "." || !filepath.IsLocal(name) || filepath.Base(name) != name {
+			return Manifest{}, fmt.Errorf("invalid theme name %q", name)
+		}
+		if seenThemes[name] {
+			return Manifest{}, fmt.Errorf("duplicate theme name %q", name)
+		}
+		seenThemes[name] = true
 	}
 	if err := m.Permissions.NetworkHTTP.Validate(); err != nil {
 		return Manifest{}, err

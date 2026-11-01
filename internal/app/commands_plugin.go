@@ -196,15 +196,30 @@ func (a *App) ClearPluginSources(name string) {
 }
 
 func (a *App) doPluginUninstall(name string) {
+	if err := a.PluginManager.RunUninstallHook(name); err != nil {
+		a.ShowConfirmDialogEx("Uninstall Failed", "\""+name+"\" could not clean up: "+err.Error()+". Files it created outside its directory may remain.", []string{"Cancel", "Remove Anyway"}, []func(){
+			func() { a.DismissDialog() },
+			func() {
+				a.DismissDialog()
+				a.removePlugin(name)
+			},
+		})
+		return
+	}
+	a.removePlugin(name)
+}
+
+func (a *App) removePlugin(name string) {
 	a.RemovePluginPanels(name)
 
 	if err := a.PluginManager.Uninstall(name); err != nil {
 		slog.Error("plugin uninstall", "error", err)
 	}
-	// After Uninstall: its on_uninstall callback can still publish and open tabs.
+	// After the uninstall hook: its on_uninstall callback can still publish and open tabs.
 	a.ClearPluginSources(name)
 	a.closePluginDrawerAndTabs(name)
 	a.uninstallPluginGrammars(name)
+	a.uninstallPluginThemes(name)
 
 	a.resetPluginDetailButton(name)
 	if a.PluginsPanel != nil {
@@ -265,8 +280,12 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 		return
 	}
 	if !needsApproval && p != nil {
-		a.WirePlugin(p)
-		a.installPluginGrammars(p)
+		if p.Loaded() {
+			a.WirePlugin(p)
+			a.installPluginGrammars(p)
+		} else {
+			a.installPluginThemes(p)
+		}
 	}
 	if a.PluginsPanel != nil {
 		a.PluginsPanel.Refresh()
@@ -288,6 +307,9 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 			Key:   "Grammar",
 			Value: grammarLabel(g),
 		})
+	}
+	for _, theme := range p.Manifest.Themes {
+		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: "Theme", Value: theme.ID()})
 	}
 
 	content := widgets.NewWrappingKeyValueListWidget(kvEntries)
@@ -366,6 +388,7 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 }
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
+	a.installPluginThemes(p)
 	a.wirePluginDialogs(p)
 	a.wirePluginChanges(p)
 	id := "plugin." + p.Name

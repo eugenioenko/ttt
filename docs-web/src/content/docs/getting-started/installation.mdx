@@ -59,25 +59,17 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
     ```
   </TabItem>
   <TabItem label="NixOS">
-    :::note
-    The flake tracks `main`. A future tagged release will ship a pinned flake; until then, install from `main`.
-    :::
-
-    Try it without installing:
-
-    ```sh
-    nix run github:eugenioenko/ttt
-    ```
-
-    Add to your `flake.nix` inputs:
+    Available in [nixpkgs](https://github.com/NixOS/nixpkgs):
 
     ```nix
-    {
-      inputs.ttt.url = "github:eugenioenko/ttt";
-    }
+    environment.systemPackages = [ pkgs.ttt ];
     ```
 
-    Then add `inputs.ttt.packages.${system}.default` to your `environment.systemPackages` or home-manager packages.
+    Or try it without installing:
+
+    ```sh
+    nix run nixpkgs#ttt
+    ```
   </TabItem>
 </Tabs>
 

@@ -304,6 +304,9 @@ func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
 
 func TestDefaultTerminalSettings(t *testing.T) {
 	ts := DefaultTerminalSettings()
+	if ts.PaddingX != 1 {
+		t.Errorf("expected PaddingX 1, got %d", ts.PaddingX)
+	}
 	if !ts.CtrlVPastes {
 		t.Error("expected CtrlVPastes true by default")
 	}
@@ -574,5 +577,24 @@ func TestSidebarTabStyleInvalidFallsBackToLabel(t *testing.T) {
 	normalizeSettings(&s)
 	if s.Sidebar.TabStyle != SidebarTabStyleLabel {
 		t.Errorf("normalized = %q", s.Sidebar.TabStyle)
+	}
+}
+
+func TestSettingsReuseWindowRoundTrip(t *testing.T) {
+	original := DefaultSettings()
+	original.ReuseWindow = true
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored Settings
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if !restored.ReuseWindow {
+		t.Fatal("reuseWindow did not survive round trip")
+	}
+	if _, ok := restored.Extra["reuseWindow"]; ok {
+		t.Fatal("reuseWindow was treated as an unknown setting")
 	}
 }

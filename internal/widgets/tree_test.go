@@ -1919,3 +1919,44 @@ func TestTreeReselectSkipsAnEmptyTree(t *testing.T) {
 		t.Fatal("Enter on an empty tree called OnSelect")
 	}
 }
+
+func TestTreeHeadingsAreNeverSelected(t *testing.T) {
+	var activated []string
+	tree := NewTreeWidget(TreeConfig{
+		Items: []*TreeNode{
+			{Label: "Favorites", Heading: true},
+			{ID: "fav", Label: "fav"},
+			{Heading: true},
+			{ID: "home", Label: "home"},
+		},
+		OnCommand: func(command string, node *TreeNode) { activated = append(activated, node.ID) },
+	})
+	renderWidget(tree, 0, 0, 20, 10)
+
+	if tree.SelectedIndex() != 1 {
+		t.Fatalf("initial selection = %d, want the first non-heading row", tree.SelectedIndex())
+	}
+	pressKey(tree, tcell.KeyUp)
+	if tree.SelectedIndex() != 1 {
+		t.Errorf("Up from the first row = %d, want it to stay on 1", tree.SelectedIndex())
+	}
+	pressKey(tree, tcell.KeyDown)
+	if tree.SelectedIndex() != 3 {
+		t.Errorf("Down = %d, want the blank heading skipped", tree.SelectedIndex())
+	}
+	pressRune(tree, 'k')
+	if tree.SelectedIndex() != 1 {
+		t.Errorf("k = %d, want the blank heading skipped", tree.SelectedIndex())
+	}
+	pressKey(tree, tcell.KeyHome)
+	if tree.SelectedIndex() != 1 {
+		t.Errorf("Home = %d, want the first non-heading row", tree.SelectedIndex())
+	}
+
+	pressKey(tree, tcell.KeyDown)
+	tree.HandleEvent(mouseClick(5, 0))
+	tree.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, tcell.ModNone))
+	if tree.SelectedIndex() != 3 || len(activated) != 0 {
+		t.Errorf("clicking a heading selected %d and activated %v, want neither", tree.SelectedIndex(), activated)
+	}
+}

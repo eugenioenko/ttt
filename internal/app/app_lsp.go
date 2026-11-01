@@ -168,6 +168,7 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 
 	var text string
 	var startLine, startCol, endLine, endCol int
+	var snippet lsp.SnippetExpansion
 
 	if textEdit != nil {
 		text = textEdit.NewText
@@ -195,17 +196,57 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		endLine = startLine
 	}
 
+	if item.InsertTextFormat == lsp.InsertTextFormatSnippet {
+		snippet = lsp.ExpandSnippet(text)
+		text = snippet.Text
+	}
+
+	// One undo step for the whole accept: the replaced range, the inserted
+	// text and the additional edits are one change (#876).
+	if editor.Undo != nil {
+		editor.Undo.BeginTransaction()
+		defer editor.Undo.EndTransaction()
+	}
 	if startLine != endLine || startCol != endCol {
 		editor.ExecCommand(&undo.DeleteSelectionCommand{
 			StartLine: startLine, StartCol: startCol,
 			EndLine: endLine, EndCol: endCol,
 		})
 	}
-	editor.ExecCommand(&undo.InsertStringCommand{
-		Line: startLine, Col: startCol, Text: text,
-	})
-	editor.Cursor.Line = startLine
-	editor.Cursor.Col = startCol + len([]rune(text))
+	lines := strings.Split(text, "\n")
+	if len(lines) == 1 {
+		editor.ExecCommand(&undo.InsertStringCommand{
+			Line: startLine, Col: startCol, Text: text,
+		})
+		editor.Cursor.Line = startLine
+		editor.Cursor.Col = startCol + len([]rune(text))
+	} else {
+		runes := []rune(editor.Buf.Lines[startLine])
+		suffix := ""
+		if startCol < len(runes) {
+			suffix = string(runes[startCol:])
+		}
+		editor.ExecCommand(&undo.PasteCommand{
+			Line: startLine, Col: startCol, Text: text, Suffix: suffix,
+		})
+		editor.Cursor.Line = startLine + len(lines) - 1
+		editor.Cursor.Col = len([]rune(lines[len(lines)-1]))
+	}
+	if editor.Selection != nil {
+		editor.Selection.Clear()
+	}
+	if stop, ok := snippet.FirstStop(); ok {
+		stopLine, stopCol := snippetPosition(text, startLine, startCol, stop.Offset)
+		stopEndLine, stopEndCol := snippetPosition(text, startLine, startCol, stop.Offset+stop.Length)
+		if stop.Length > 0 {
+			editor.Selection.Start(stopLine, stopCol)
+			editor.Cursor.Line = stopEndLine
+			editor.Cursor.Col = stopEndCol
+		} else {
+			editor.Cursor.Line = stopLine
+			editor.Cursor.Col = stopCol
+		}
+	}
 
 	for i := len(item.AdditionalEdits) - 1; i >= 0; i-- {
 		edit := item.AdditionalEdits[i]
@@ -232,11 +273,40 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		}
 
 		linesAdded := len(editor.Buf.Lines) - linesBefore
-		if linesAdded != 0 && edit.StartLine <= editor.Cursor.Line {
-			editor.Cursor.Line += linesAdded
+		if linesAdded != 0 {
+			if edit.StartLine <= editor.Cursor.Line {
+				editor.Cursor.Line += linesAdded
+			}
+			if editor.Selection != nil && editor.Selection.Active && edit.StartLine <= editor.Selection.Anchor.Line {
+				editor.Selection.Anchor.Line += linesAdded
+			}
 		}
 	}
 	editor.FlushOnChange()
+}
+
+// snippetPosition converts a rune offset in a snippet expansion to an absolute
+// buffer position. The first line starts at startCol; later lines start at 0.
+func snippetPosition(text string, startLine, startCol, offset int) (line, col int) {
+	if offset < 0 {
+		offset = 0
+	}
+	for _, r := range text {
+		if offset == 0 {
+			break
+		}
+		if r == '\n' {
+			line++
+			col = 0
+		} else {
+			col++
+		}
+		offset--
+	}
+	if line == 0 {
+		col += startCol
+	}
+	return startLine + line, col
 }
 
 func (a *App) charBeforeCursor() string {
@@ -721,6 +791,12 @@ func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
 		return edits[i].Range.Start.Character > edits[j].Range.Start.Character
 	})
 
+	// One undo step for the whole batch: a rename, a format or a code action
+	// is a single change, not one per edited range (#876).
+	if editor.Undo != nil {
+		editor.Undo.BeginTransaction()
+		defer editor.Undo.EndTransaction()
+	}
 	for _, edit := range edits {
 		sl, sc := edit.Range.Start.Line, edit.Range.Start.Character
 		el, ec := edit.Range.End.Line, edit.Range.End.Character

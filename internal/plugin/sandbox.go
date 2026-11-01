@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -739,6 +740,17 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 
 		L.SetField(mod, "version", L.NewFunction(func(L *lua.LState) int {
 			L.Push(lua.LString(p.AppVersion))
+			return 1
+		}))
+
+		L.SetField(mod, "executable_path", L.NewFunction(func(L *lua.LState) int {
+			exe, err := os.Executable()
+			if err != nil {
+				L.Push(lua.LNil)
+				L.Push(lua.LString(err.Error()))
+				return 2
+			}
+			L.Push(lua.LString(exe))
 			return 1
 		}))
 

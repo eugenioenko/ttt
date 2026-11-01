@@ -136,3 +136,35 @@ func TestResolveArgsSkipsHomeAsWorkspace(t *testing.T) {
 		t.Fatalf("--welcome opened %v, want no workspace", ws.Paths())
 	}
 }
+
+func TestForwardableTargets(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("one\ntwo\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	saved := os.Args
+	defer func() { os.Args = saved }()
+	for _, tc := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"file", []string{file}, true},
+		{"new file", []string{filepath.Join(dir, "new.txt")}, true},
+		{"no arguments", nil, false},
+		{"folder", []string{file, dir}, false},
+		{"pull request", []string{file, "https://github.com/eugenioenko/ttt/pull/1"}, false},
+		{"config value", []string{"--config", "--listen", file}, true},
+		{"split value", []string{"--exec-split-on", "--workspace", file}, true},
+		{"size value", []string{"--size", "-", file}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Args = append([]string{"ttt"}, tc.args...)
+			targets := ForwardableTargets()
+			if (len(targets) > 0) != tc.want {
+				t.Fatalf("targets = %v, want forwardable %v", targets, tc.want)
+			}
+		})
+	}
+}

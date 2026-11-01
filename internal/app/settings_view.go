@@ -64,6 +64,9 @@ func settingsCategories() []settingsCategory {
 	return []settingsCategory{
 		{Title: "General", Fields: []settingField{
 			section("Startup"),
+			{Label: "Reuse running editor", Kind: settingBool, Restart: true,
+				GetBool: func(s *config.Settings) bool { return s.ReuseWindow },
+				SetBool: func(s *config.Settings, v bool) { s.ReuseWindow = v }},
 			{Label: "Welcome page in home folder", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Welcome.ShowOnHome },
 				SetBool: func(s *config.Settings, v bool) { s.Welcome.ShowOnHome = v }},
@@ -219,6 +222,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Reveal active file", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.AutoReveal },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.AutoReveal = v }},
+			{Label: "Compact folders", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Explorer.CompactFolders },
+				SetBool: func(s *config.Settings, v bool) { s.Explorer.CompactFolders = v }},
 			section("Look"),
 			{Label: "Git status colors", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.GitStatusColors },
@@ -255,6 +261,9 @@ func settingsCategories() []settingsCategory {
 				SetInt: func(s *config.Settings, v int) { s.Search.Debounce = v }},
 		}},
 		{Title: "Terminal", Fields: []settingField{
+			{Label: "Horizontal padding", Kind: settingInt,
+				GetInt: func(s *config.Settings) int { return s.Terminal.PaddingX },
+				SetInt: func(s *config.Settings, v int) { s.Terminal.PaddingX = v }},
 			{Label: "Ctrl+V pastes", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Terminal.CtrlVPastes },
 				SetBool: func(s *config.Settings, v bool) { s.Terminal.CtrlVPastes = v }},

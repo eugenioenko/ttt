@@ -41,21 +41,15 @@ yay -S ttt
 
 ### NixOS
 
-> **Note:** The flake tracks `main`. A future tagged release will ship a pinned flake; until then, install from `main`.
+Available in [nixpkgs](https://github.com/NixOS/nixpkgs):
+```nix
+environment.systemPackages = [ pkgs.ttt ];
+```
 
-Try it without installing:
+Or install directly from the repo flake (tracks the development branch):
 ```sh
 nix run github:eugenioenko/ttt
 ```
-
-Add to your `flake.nix` inputs:
-```nix
-{
-  inputs.ttt.url = "github:eugenioenko/ttt";
-}
-```
-
-Then add `inputs.ttt.packages.${system}.default` to your `environment.systemPackages` or home-manager packages.
 
 ### Quick Install Windows (scoop)
 ```sh
@@ -142,6 +136,8 @@ ttt --workspace project.ttt     # loads a saved workspace file
 ttt https://github.com/owner/repo/pull/123 # opens pull request review
 git diff | ttt                  # opens piped output in an unsaved tab (or: ttt -)
 ```
+
+Set `"reuseWindow": true` in settings.json (off by default; restart required) to open command-line files in the newest reachable editor using the same config directory. If none answers, ttt starts normally. Use `ttt --new-window file` to start a separate editor. With reuse enabled, `EDITOR=ttt` returns immediately; use `EDITOR="ttt --new-window"` for commands that wait for editing.
 
 Workspace files use the `.ttt` extension and store a list of folders as relative paths:
 

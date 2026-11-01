@@ -20,6 +20,21 @@ func buildTestApp(t *testing.T, settings config.Settings) *App {
 	return BuildAppFromConfig(&cfg, &borders, workspace.New(nil), nil)
 }
 
+func TestOpenFileMenuItemImmediatelyPrecedesOpenFolder(t *testing.T) {
+	fileMenu := menuBarMenus[0]
+	for i, item := range fileMenu {
+		if item.Command != "file.open" {
+			continue
+		}
+		if item.Label != "Open File" || i+1 >= len(fileMenu) ||
+			fileMenu[i+1].Label != "Open Folder" || fileMenu[i+1].Command != "workspace.openFolder" {
+			t.Fatalf("Open File menu item = %+v, next item = %+v; want it immediately before Open Folder", item, fileMenu[min(i+1, len(fileMenu)-1)])
+		}
+		return
+	}
+	t.Fatal("File menu has no Open File command")
+}
+
 // The hidden state has to survive a restart, so it is applied while the widget
 // tree is being built, not only on a live toggle.
 func TestMenuBarHiddenAtStartup(t *testing.T) {

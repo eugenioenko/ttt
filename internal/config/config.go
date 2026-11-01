@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -97,11 +98,25 @@ func ListThemes() []string {
 			continue
 		}
 		for _, e := range entries {
-			if name := themeNameFromFile(e.Name()); name != "" && !seen[name] {
+			if name := themeNameFromFile(e.Name()); !e.IsDir() && name != "" && !seen[name] {
 				seen[name] = true
 				names = append(names, name)
 			}
 		}
+		pluginDir := filepath.Join(themesDir, "plugins")
+		filepath.WalkDir(pluginDir, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+				return nil
+			}
+			rel, err := filepath.Rel(themesDir, path)
+			if err == nil {
+				if name := themeNameFromFile(filepath.ToSlash(rel)); name != "" && !seen[name] {
+					seen[name] = true
+					names = append(names, name)
+				}
+			}
+			return nil
+		})
 	}
 
 	entries, err := themes.FS.ReadDir(".")

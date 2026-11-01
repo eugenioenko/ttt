@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -220,6 +221,11 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 
 	p.Granted = p.Manifest.Permissions
 
+	var prev *RegistryEntry
+	if entry := m.registry.Find(p.Manifest.Name); entry != nil {
+		saved := *entry
+		prev = &saved
+	}
 	m.registry.AddOrUpdate(
 		p.Manifest.Name,
 		p.Manifest.DisplayName,
@@ -243,10 +249,42 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 		return err
 	}
 
-	p.CallOnInstall()
+	if err := p.CallOnInstall(); err != nil {
+		p.Destroy()
+		return errors.Join(fmt.Errorf("on_install: %w", err), m.revertApproval(p, prev))
+	}
 
 	m.plugins = append(m.plugins, p)
 	m.collectRegistrations(p)
+	return nil
+}
+
+// revertApproval undoes ApproveAndLoad's registry write so the next startup
+// asks again and reruns on_install, instead of loading a plugin whose install
+// never completed.
+func (m *Manager) revertApproval(p *Plugin, prev *RegistryEntry) error {
+	if prev != nil {
+		if entry := m.registry.Find(p.Manifest.Name); entry != nil {
+			*entry = *prev
+		}
+	} else {
+		m.registry.Remove(p.Manifest.Name)
+		if withinDir(m.pluginsDir, p.Dir) {
+			if err := os.RemoveAll(p.Dir); err != nil {
+				slog.Error("remove plugin directory", "error", err)
+			}
+		}
+		// on_install may have written storage before failing; a later install
+		// under the same name must not inherit it.
+		if path, err := storagePath(m.storageDir, p.Manifest.Name); err == nil {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				slog.Error("remove plugin storage", "error", err)
+			}
+		}
+	}
+	if err := m.registry.Save(); err != nil {
+		return fmt.Errorf("undo approval: %w", err)
+	}
 	return nil
 }
 
@@ -505,14 +543,20 @@ func copyDir(src, dst string) error {
 	return nil
 }
 
+// RunUninstallHook runs name's on_uninstall callback. A failure leaves
+// whatever the plugin created outside its directory in place, so the caller
+// decides whether to remove the plugin anyway.
+func (m *Manager) RunUninstallHook(name string) error {
+	p := m.FindPlugin(name)
+	if p == nil {
+		return nil
+	}
+	return hookError(p.CallLuaFunc(p.UninstallFunc))
+}
+
 func (m *Manager) Uninstall(name string) error {
 	for i, p := range m.plugins {
 		if p.Name == name {
-			if p.UninstallFunc != nil {
-				if err := p.CallLuaFunc(p.UninstallFunc); err != nil {
-					slog.Error("plugin on_uninstall", "plugin", name, "error", err)
-				}
-			}
 			p.Destroy()
 			m.plugins = append(m.plugins[:i], m.plugins[i+1:]...)
 			break
@@ -685,17 +729,23 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 		return &Plugin{Name: u.manifest.Name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, true, nil
 	}
 
-	if idx < 0 {
-		return nil, false, nil
-	}
-
-	old := m.plugins[idx]
 	// Grant before destroying the old plugin: a reduction that cannot be
 	// persisted must leave the running plugin alone.
 	granted, err := m.grant(regEntry, u.manifest.Permissions)
 	if err != nil {
 		return nil, false, err
 	}
+	if idx < 0 {
+		previousVersion := regEntry.Version
+		regEntry.Version = u.manifest.Version
+		if err := m.registry.Save(); err != nil {
+			regEntry.Version = previousVersion
+			return nil, false, err
+		}
+		return &Plugin{Name: u.name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, false, nil
+	}
+
+	old := m.plugins[idx]
 	old.Destroy()
 	p := &Plugin{
 		Name:     old.Name,

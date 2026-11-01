@@ -61,6 +61,7 @@ func TestBracketedPasteIntoFindBar(t *testing.T) {
 	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
 		t.Fatalf("paste leaked into editor: %q", got)
 	}
+	clipboard.DisableSystem()
 	clipboard.Set("-clipboard")
 	h.exec("editor.paste")
 	if got := bar.Input.Text; got != "https://github.com/eugenioenko/ttt-clipboard" {
