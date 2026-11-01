@@ -149,6 +149,8 @@ func (n *NavigationPanel) splitCompactNode(node *widgets.TreeNode, path string) 
 	node.ID = path
 	node.LabelStyle = n.gitStyleFor(path)
 	node.Children = []*widgets.TreeNode{&child}
+	// Ancestors inside a compact row are implicitly expanded.
+	node.Expanded = true
 
 	delete(n.compactStarts, child.ID)
 	if path != start {

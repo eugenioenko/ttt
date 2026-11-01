@@ -291,6 +291,10 @@ func TestExplorerOpenUsesContextPathAndPreservesChildren(t *testing.T) {
 					explorer.selectRow(target)
 					explorer.Tree.Selected().Expanded = expanded
 					deepestExpanded := nodeWithID(root.Children, deepest).Expanded
+					targetExpanded := expanded
+					if compact && target != deepest {
+						targetExpanded = true
+					}
 					explorer.Tree.SetItems(explorer.Tree.Config.Items)
 					explorer.Tree.SelectByID(filepath.Join(rootPath, "README.md"))
 					a := &App{Explorer: explorer, Reg: command.NewRegistry()}
@@ -300,8 +304,8 @@ func TestExplorerOpenUsesContextPathAndPreservesChildren(t *testing.T) {
 						a.ExplorerContextNode = &widgets.TreeNode{ID: target}
 						a.Reg.Execute("explorer.open")
 						selected := explorer.Tree.Selected()
-						if selected == nil || selected.ID != target || selected.Expanded == expanded {
-							t.Fatalf("Open selected %+v, want %s expanded=%v", selected, target, !expanded)
+						if selected == nil || selected.ID != target || selected.Expanded == targetExpanded {
+							t.Fatalf("Open selected %+v, want %s expanded=%v", selected, target, !targetExpanded)
 						}
 						if a.ExplorerContextNode != nil {
 							t.Fatal("Open retained its context target")
@@ -314,7 +318,7 @@ func TestExplorerOpenUsesContextPathAndPreservesChildren(t *testing.T) {
 								t.Fatal("Open toggled the deepest folder instead of the ancestor")
 							}
 						}
-						expanded = !expanded
+						targetExpanded = !targetExpanded
 					}
 				})
 			}
