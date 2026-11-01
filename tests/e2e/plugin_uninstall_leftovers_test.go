@@ -238,6 +238,7 @@ func TestDebugPluginReplacementClearsOldPublishedSources(t *testing.T) {
 		StartLine: 0, EndLine: 0, Note: "new decoration",
 	}})
 	replacement.SetStatusItem("left", "new", "NEWSTATUS", 1000, nil)
+	h.app.Status.DismissNotification()
 	h.redraw()
 
 	if got := len(h.app.EditorGroup.DiagnosticsByPath()[path]); got != 1 {
