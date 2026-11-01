@@ -8,10 +8,12 @@ Full documentation lives in [`docs-web/src/content/docs/`](docs-web/src/content/
 
 ## Installation
 
-### Prerequisites
+### Optional dependencies
 
-- [Git](https://git-scm.com/) — required for source control features
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — required for workspace search
+Neither tool is required to install or use ttt for basic editing. They enable additional functionality:
+
+- [Git](https://git-scm.com/) — enables source control features
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — enables workspace search
 
 ### Quick Install MacOS (brew)
 ```sh
