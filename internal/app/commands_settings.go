@@ -35,13 +35,13 @@ func (a *App) applySidebarTabStyle(style string) {
 	if a.Sidebar == nil {
 		return
 	}
-	a.Sidebar.SetTabStyle(style, map[string]string{
-		"explorer": string(icons.Rune(icons.PanelExplorer)),
-		"search":   string(icons.Rune(icons.PanelSearch)),
-		"changes":  string(icons.Rune(icons.PanelChanges)),
-		"outline":  string(icons.Rune(icons.PanelOutline)),
-		"plugins":  string(icons.Rune(icons.PanelPlugins)),
-	})
+	a.Sidebar.SetTabStyle(style)
+	a.Sidebar.SetPanelIcon("explorer", string(icons.Rune(icons.PanelExplorer)))
+	a.Sidebar.SetPanelIcon("search", string(icons.Rune(icons.PanelSearch)))
+	a.Sidebar.SetPanelIcon("changes", string(icons.Rune(icons.PanelChanges)))
+	a.Sidebar.SetPanelIcon("outline", string(icons.Rune(icons.PanelOutline)))
+	a.Sidebar.SetPanelIcon("plugins", string(icons.Rune(icons.PanelPlugins)))
+	a.ApplyPluginPanelIcons()
 }
 
 func (a *App) applyIcons(ap config.AppearanceSettings) {

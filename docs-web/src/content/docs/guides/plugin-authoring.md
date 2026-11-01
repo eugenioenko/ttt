@@ -198,10 +198,30 @@ Sidebar panels appear in the left sidebar alongside the file explorer. Requires 
 | Field       | Type     | Required | Description                                                             |
 |-------------|----------|----------|-------------------------------------------------------------------------|
 | `title`     | string   | yes      | Displayed as the panel's tab label.                                     |
+| `icon`      | string or table | no | Tab icon for when `sidebar.tabStyle` is `"label-icon"` or `"icon"`. See [Sidebar icons](#sidebar-icons). |
 | `render`    | function | yes      | Called each render frame. Receives a [panel proxy](#widget-api) object. |
 | `on_event`  | function | no       | Fallback handler for key/mouse events not consumed by widgets.          |
 | `actions`   | table    | no       | Array of menu entries for the panel's "..." header menu.                |
 | `on_action` | function | no       | Callback when a header menu action is selected. Receives the command string. |
+
+#### Sidebar icons
+
+Give both forms so the tab suits the user's `appearance.icons` setting. Each must be one character; Lua 5.1 has no `\u` escape, so paste the glyph or write its UTF-8 bytes:
+
+```lua
+sidebar = {
+  title = "Todo",
+  icon = { plain = "T", nerd = "\238\171\176" },
+  render = function(panel) end,
+}
+```
+
+| `appearance.icons` | `{ plain, nerd }` | `{ plain }` | `{ nerd }` | `"T"` (string) | no icon |
+|--------------------|-------------------|-------------|------------|----------------|---------|
+| `nerd-font`        | nerd              | plain       | nerd       | `T`            | title   |
+| `none`             | plain             | plain       | title      | `T`            | title   |
+
+The tab shows only its title when the plugin gives no icon, or none for the current mode. An invalid value is ignored with an error in the Output panel, and the plugin still loads. A string is used in both modes, so don't pass a Nerd Font glyph as one: it appears as a box without the font.
 
 The `actions` array defines entries for the sidebar panel's header menu (the "..." button). Each entry uses the [menu entry format](#menu-entry-format):
 

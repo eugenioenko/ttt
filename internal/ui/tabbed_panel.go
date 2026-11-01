@@ -63,12 +63,20 @@ func (tp *TabbedPanel) SetPanelOrder(order []string) {
 	tp.syncTabs()
 }
 
-// SetTabStyle chooses how tabs present a panel. A panel without an entry in
-// panelIcons, such as a plugin panel, always shows its title so it stays
-// identifiable.
-func (tp *TabbedPanel) SetTabStyle(style string, panelIcons map[string]string) {
+// SetTabStyle chooses how tabs present a panel. A panel without an icon always
+// shows its title so it stays identifiable.
+func (tp *TabbedPanel) SetTabStyle(style string) {
 	tp.tabStyle = style
-	tp.panelIcons = panelIcons
+	tp.syncTabs()
+}
+
+// SetPanelIcon may be called before the panel exists, and the icon survives
+// RemovePanel, because the Plugins panel is added after the core icons are set.
+func (tp *TabbedPanel) SetPanelIcon(id, icon string) {
+	if tp.panelIcons == nil {
+		tp.panelIcons = map[string]string{}
+	}
+	tp.panelIcons[id] = icon
 	tp.syncTabs()
 }
 

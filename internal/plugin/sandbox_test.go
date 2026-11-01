@@ -310,3 +310,61 @@ func TestPlatformArchVersionExposed(t *testing.T) {
 		t.Errorf("expected executable_path %q, got %q", want, got)
 	}
 }
+
+func TestRegisterSidebarIcon(t *testing.T) {
+	const nerd = ""
+	cases := []struct {
+		name, icon string
+		want       PanelIcon
+	}{
+		{"string", `icon = "T",`, PanelIcon{Plain: "T", Nerd: "T"}},
+		{"missing", "", PanelIcon{}},
+		{"both forms", `icon = { plain = "T", nerd = "\238\171\176" },`, PanelIcon{Plain: "T", Nerd: nerd}},
+		{"plain only", `icon = { plain = "T" },`, PanelIcon{Plain: "T"}},
+		{"nerd only", `icon = { nerd = "\238\171\176" },`, PanelIcon{Nerd: nerd}},
+		{"empty table", `icon = {},`, PanelIcon{}},
+		{"bad form keeps the good one", `icon = { plain = "toolong", nerd = "\238\171\176" },`, PanelIcon{Nerd: nerd}},
+		{"too long", `icon = "ab",`, PanelIcon{}},
+		{"fullwidth", `icon = "界",`, PanelIcon{}},
+		{"empty", `icon = "",`, PanelIcon{}},
+		{"not a string", `icon = 7,`, PanelIcon{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			L := NewSandbox()
+			defer L.Close()
+			p := &Plugin{Granted: PermissionSet{PanelSidebar: true}}
+			setupTTTModule(L, p)
+			err := L.DoString(`require("ttt").register({ sidebar = { title = "P", ` + tc.icon + ` render = function() end } })`)
+			if err != nil {
+				t.Fatalf("register failed: %v", err)
+			}
+			if p.SidebarIcon != tc.want {
+				t.Errorf("icon = %+v, want %+v", p.SidebarIcon, tc.want)
+			}
+			if p.SidebarTitle != "P" {
+				t.Errorf("title = %q, panel should still register", p.SidebarTitle)
+			}
+		})
+	}
+}
+
+func TestPanelIconResolve(t *testing.T) {
+	both := PanelIcon{Plain: "T", Nerd: "N"}
+	cases := []struct {
+		icon PanelIcon
+		nerd bool
+		want string
+	}{
+		{both, true, "N"},
+		{both, false, "T"},
+		{PanelIcon{Plain: "T"}, true, "T"},
+		{PanelIcon{Nerd: "N"}, false, ""},
+		{PanelIcon{}, true, ""},
+	}
+	for _, tc := range cases {
+		if got := tc.icon.Resolve(tc.nerd); got != tc.want {
+			t.Errorf("%+v.Resolve(%v) = %q, want %q", tc.icon, tc.nerd, got, tc.want)
+		}
+	}
+}

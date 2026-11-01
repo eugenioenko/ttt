@@ -134,7 +134,8 @@ func TestTabbedPanelTabStyle(t *testing.T) {
 		tp := NewTabbedPanel()
 		tp.AddPanel("explorer", "Explore", &mockWidget{})
 		tp.AddPanel("plugin.todo", "Todo", &mockWidget{})
-		tp.SetTabStyle(tc.style, map[string]string{"explorer": "E"})
+		tp.SetTabStyle(tc.style)
+		tp.SetPanelIcon("explorer", "E")
 		var got []string
 		for _, item := range tp.Tabs.Config.Items {
 			got = append(got, item.Label)

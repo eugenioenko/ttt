@@ -17,9 +17,24 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
+type PanelIcon struct {
+	Plain string
+	Nerd  string
+}
+
+// Resolve returns "" for a Nerd Font-only icon in plain mode, so the tab shows
+// its title instead of a glyph the terminal font may lack.
+func (i PanelIcon) Resolve(nerd bool) string {
+	if nerd && i.Nerd != "" {
+		return i.Nerd
+	}
+	return i.Plain
+}
+
 type SidebarRegistration struct {
 	ID     string
 	Title  string
+	Icon   PanelIcon
 	Widget *PluginPanelWidget
 }
 
@@ -196,6 +211,7 @@ func (m *Manager) collectRegistrations(p *Plugin) {
 		m.SidebarPanels = append(m.SidebarPanels, SidebarRegistration{
 			ID:     id,
 			Title:  p.SidebarTitle,
+			Icon:   p.SidebarIcon,
 			Widget: NewPluginPanelWidget(p, p.RenderFunc, p.EventFunc),
 		})
 	}

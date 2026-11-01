@@ -195,7 +195,7 @@ Set these independently in **Settings > Sidebar > Quick Open**. Hidden files sti
 | `sidebar.panelOrder` | string[] | built-in order | Initial sidebar panel-header order. Unknown plugin panel IDs are retained until that plugin loads. |
 | `sidebar.width` | int | `30` | Initial sidebar width in columns. |
 | `sidebar.commitHistoryHeight` | int | proportional | Initial height of the commit history in the Changes panel, in rows. |
-| `sidebar.tabStyle` | string | `"label"` | How the Explore, Find, Changes, Outline and Plugins tabs appear: `"label"`, `"label-icon"` or `"icon"`. Glyphs follow `appearance.icons`. Panels added by a plugin have no icon and always show their title. Also in **Settings > Sidebar > Look**. |
+| `sidebar.tabStyle` | string | `"label"` | How the Explore, Find, Changes, Outline and Plugins tabs appear: `"label"`, `"label-icon"` or `"icon"`. Glyphs follow `appearance.icons`. A plugin panel uses the [`icon` it registers](/guides/plugin-authoring/#sidebar-icons) and shows only its title without one. Also in **Settings > Sidebar > Look**. |
 
 These are starting values. Once you drag a header, resize the sidebar, the commit history, or the panel, the new layout is saved to `state.json` next to `settings.json` and takes precedence. Delete `state.json` to return to these values.
 

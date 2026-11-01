@@ -1,11 +1,13 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
@@ -291,5 +293,40 @@ func TestSidebarTabStyleAppliesAtStartupAndLive(t *testing.T) {
 	a.ApplySettings(next)
 	if got, want := explorerLabel(), icons.Get(config.IconsNerdFont, icons.PanelExplorer); got != want {
 		t.Fatalf("label after icon mode change = %q, want %q", got, want)
+	}
+}
+
+func TestPluginSidebarIconFollowsIconMode(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	settings.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	a := buildTestApp(t, settings)
+	a.PluginManager = plugin.NewManager(t.TempDir(), filepath.Join(t.TempDir(), "plugins.ttt.json"))
+	a.PluginManager.SidebarPanels = []plugin.SidebarRegistration{
+		{ID: "plugin.both", Title: "Both", Icon: plugin.PanelIcon{Plain: "T", Nerd: "N"}},
+		{ID: "plugin.nerdonly", Title: "NerdOnly", Icon: plugin.PanelIcon{Nerd: "N"}},
+	}
+	a.Sidebar.AddPanel("plugin.both", "Both", a.Changes.Adapter)
+	a.Sidebar.AddPanel("plugin.nerdonly", "NerdOnly", a.Changes.Adapter)
+	labels := func() map[string]string {
+		got := map[string]string{}
+		for _, item := range a.Sidebar.Tabs.Config.Items {
+			got[item.ID] = item.Label
+		}
+		return got
+	}
+
+	next := *a.Settings
+	a.ApplySettings(next)
+	if got := labels(); got["plugin.both"] != "T" || got["plugin.nerdonly"] != "NerdOnly" {
+		t.Fatalf("plain mode labels = %v", got)
+	}
+
+	next.Appearance.Icons = config.IconsNerdFont
+	a.ApplySettings(next)
+	if got := labels(); got["plugin.both"] != "N" || got["plugin.nerdonly"] != "N" {
+		t.Fatalf("nerd mode labels = %v", got)
 	}
 }

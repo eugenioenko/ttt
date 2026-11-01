@@ -52,6 +52,7 @@ type Plugin struct {
 	store      *pluginStore
 
 	SidebarTitle       string
+	SidebarIcon        PanelIcon
 	SidebarMenuEntries []widgets.MenuEntry
 	sidebarMenuFunc    *lua.LFunction
 	RenderFunc         *lua.LFunction
