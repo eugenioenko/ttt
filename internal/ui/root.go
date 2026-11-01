@@ -193,9 +193,6 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		r.prevMouseBtn = r.lastMouseBtn
 		r.lastMouseBtn = mev.Buttons()
-	} else if _, ok := ev.(*tcell.EventKey); ok {
-		r.prevMouseBtn = 0
-		r.lastMouseBtn = 0
 	}
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
@@ -359,8 +356,12 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 	}
 
 	if r.capturedWidget != nil {
-		if btn == tcell.ButtonNone {
-			r.capturedWidget.HandleEvent(ev)
+		leftReleased := r.prevMouseBtn&tcell.Button1 != 0 && btn&tcell.Button1 == 0
+		if btn == tcell.ButtonNone || leftReleased {
+			// A stale secondary button must not keep a primary-button drag alive.
+			mx, my := mev.Position()
+			release := tcell.NewEventMouse(mx, my, tcell.ButtonNone, mev.Modifiers())
+			r.capturedWidget.HandleEvent(release)
 			r.capturedWidget = nil
 			slog.Debug("root", "action", "mouseCapture", "state", "released")
 			return EventConsumed
@@ -477,8 +478,6 @@ func (r *Root) PushOverlay(o Overlay) {
 }
 
 func (r *Root) PopOverlay() {
-	r.prevMouseBtn = 0
-	r.lastMouseBtn = 0
 	if len(r.Overlays) > 0 {
 		r.Overlays = r.Overlays[:len(r.Overlays)-1]
 		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))

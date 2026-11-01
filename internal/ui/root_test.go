@@ -518,3 +518,115 @@ func TestRoot_RightClickNotTriggeredWhenLeftClickActive(t *testing.T) {
 		t.Fatalf("event should be forwarded to main widget, got result %v, eventCount %d", res, main.eventCount)
 	}
 }
+
+func TestRootRightClickStaysDismissedUntilButtonRelease(t *testing.T) {
+	for _, dismissal := range []string{"escape", "overlay", "left click"} {
+		t.Run(dismissal, func(t *testing.T) {
+			root := NewRoot(&mockWidget{})
+			root.SetSize(80, 24)
+			opens := 0
+			root.OnRightClick = func(x, y int) {
+				opens++
+				menu := NewContextMenuWidget([]ContextMenuItem{{Label: "Copy", Command: "copy"}}, x, y)
+				menu.OnDismiss = root.PopOverlay
+				root.PushOverlay(Overlay{Widget: menu, Modal: true})
+			}
+			root.HandleEvent(tcell.NewEventMouse(10, 5, tcell.Button2, 0))
+			root.Render(makeGrid(80, 24))
+			root.HandleEvent(tcell.NewEventMouse(11, 6, tcell.Button2, 0))
+
+			switch dismissal {
+			case "escape":
+				root.HandleEvent(makeKeyEvent(tcell.KeyEscape, 0))
+			case "overlay":
+				root.PopOverlay()
+			case "left click":
+				root.HandleEvent(tcell.NewEventMouse(1, 1, tcell.Button1|tcell.Button2, 0))
+				root.HandleEvent(tcell.NewEventMouse(1, 1, tcell.Button2, 0))
+			}
+			if root.HasOverlay() {
+				t.Fatal("context menu did not close")
+			}
+			root.HandleEvent(tcell.NewEventMouse(12, 7, tcell.Button2, 0))
+			if opens != 1 || root.HasOverlay() {
+				t.Fatalf("stale right button reopened the menu: opens=%d", opens)
+			}
+
+			root.HandleEvent(tcell.NewEventMouse(12, 7, tcell.ButtonNone, 0))
+			root.HandleEvent(tcell.NewEventMouse(13, 8, tcell.Button2, 0))
+			if opens != 2 || !root.HasOverlay() {
+				t.Fatalf("fresh right press did not reopen the menu: opens=%d", opens)
+			}
+			root.HandleEvent(tcell.NewEventMouse(13, 8, tcell.ButtonNone, 0))
+			root.HandleEvent(makeKeyEvent(tcell.KeyEscape, 0))
+			root.HandleEvent(tcell.NewEventMouse(14, 9, tcell.Button2, 0))
+			if opens != 3 {
+				t.Fatalf("release handled by the overlay was lost: opens=%d", opens)
+			}
+		})
+	}
+}
+
+func TestRootLeftCaptureEndsWithOtherButtonsStillHeld(t *testing.T) {
+	for name, buttons := range map[string]tcell.ButtonMask{
+		"right": tcell.Button2, "middle": tcell.Button3, "wheel": tcell.WheelDown,
+	} {
+		t.Run(name, func(t *testing.T) {
+			editor := newTestEditor()
+			root := NewRoot(editor)
+			root.SetSize(80, 24)
+			root.Render(makeGrid(80, 24))
+			opens := 0
+			root.OnRightClick = func(int, int) { opens++ }
+			x := editor.GutterWidth() + 1
+			root.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button2, 0))
+			root.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1|tcell.Button2, 0))
+			if !root.PointerCaptureActive() || !editor.mouseDown {
+				t.Fatal("left press did not capture the editor")
+			}
+
+			release := tcell.NewEventMouse(x+1, 1, buttons, tcell.ModShift)
+			root.HandleEvent(release)
+			if root.PointerCaptureActive() || editor.mouseDown {
+				t.Fatal("left release retained pointer capture")
+			}
+			if release.Buttons() != buttons {
+				t.Fatal("root mutated the original mouse event")
+			}
+			line, col := editor.Cursor.Line, editor.Cursor.Col
+			root.HandleEvent(tcell.NewEventMouse(x+2, 2, buttons, 0))
+			if editor.Cursor.Line != line || editor.Cursor.Col != col {
+				t.Fatal("pointer motion continued the released drag")
+			}
+			if opens != 1 {
+				t.Fatalf("left release reopened the context menu: opens=%d", opens)
+			}
+			root.HandleEvent(tcell.NewEventMouse(x+2, 2, tcell.ButtonNone, 0))
+			root.HandleEvent(tcell.NewEventMouse(x+2, 2, tcell.Button2, 0))
+			if opens != 2 {
+				t.Fatalf("fresh right press after capture was lost: opens=%d", opens)
+			}
+		})
+	}
+}
+
+func TestRootKeepsNonPrimaryButtonCaptureUntilRelease(t *testing.T) {
+	for name, buttons := range map[string]tcell.ButtonMask{
+		"right": tcell.Button2, "middle": tcell.Button3,
+	} {
+		t.Run(name, func(t *testing.T) {
+			main := &captureStubWidget{owns: true}
+			root := NewRoot(main)
+			root.SetSize(80, 24)
+			root.HandleEvent(tcell.NewEventMouse(10, 5, buttons, 0))
+			root.HandleEvent(tcell.NewEventMouse(11, 6, buttons, 0))
+			if !root.PointerCaptureActive() {
+				t.Fatal("held non-primary button lost pointer capture")
+			}
+			root.HandleEvent(tcell.NewEventMouse(11, 6, tcell.ButtonNone, 0))
+			if root.PointerCaptureActive() || main.events != 3 {
+				t.Fatalf("button release did not end capture: events=%d", main.events)
+			}
+		})
+	}
+}
