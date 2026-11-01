@@ -206,6 +206,10 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		endLine = startLine
 	}
 
+	if startLine < 0 || endLine < startLine || endLine >= len(editor.Buf.Lines) {
+		return
+	}
+
 	var snippet lsp.SnippetExpansion
 	if item.InsertTextFormat == lsp.InsertTextFormatSnippet {
 		snippet = lsp.ExpandSnippet(text)
@@ -235,8 +239,10 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		})
 	}
 	sortTextEdits(additional)
+	orderedAdditional := slices.Clone(additional)
+	reverseSamePositionTextEdits(orderedAdditional)
 	cursor := lsp.Position{Line: startLine, Character: startCol}
-	for _, edit := range additional {
+	for _, edit := range orderedAdditional {
 		end := edit.Range.End
 		if end.Line > cursor.Line || (end.Line == cursor.Line && end.Character > cursor.Character) {
 			continue
@@ -599,11 +605,11 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	files := make(map[string]bool)
 	for _, batch := range batches {
 		path := URIToPath(batch.URI)
-		files[path] = true
 		if err := a.EditorGroup.OpenFile(path); err != nil {
 			a.StatusWarn(err.Error())
 			continue
 		}
+		files[path] = true
 		a.ApplyTextEdits(batch.Edits)
 
 		if buf := a.EditorGroup.ActiveBuffer(); a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
@@ -787,9 +793,22 @@ func sortTextEdits(edits []lsp.TextEdit) {
 	})
 }
 
+// Reverse equal-position groups so descending application preserves LSP array order.
+func reverseSamePositionTextEdits(edits []lsp.TextEdit) {
+	for start := 0; start < len(edits); {
+		end := start + 1
+		for end < len(edits) && edits[end].Range.Start == edits[start].Range.Start {
+			end++
+		}
+		slices.Reverse(edits[start:end])
+		start = end
+	}
+}
+
 func (a *App) applyRuneTextEdits(edits []lsp.TextEdit, cursor *lsp.Position) {
 	editor := a.EditorGroup.Editor
 	sortTextEdits(edits)
+	reverseSamePositionTextEdits(edits)
 
 	// One undo step for the whole batch: a rename, a format or a code action
 	// is a single change, not one per edited range (#876).

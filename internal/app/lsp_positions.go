@@ -21,6 +21,12 @@ func (a *App) lspLines(path string) []string {
 }
 
 func (a *App) lspColumn(path string, line, col int) int {
+	if buf := a.EditorGroup.BufferForPath(path); buf != nil {
+		if line < 0 || line >= len(buf.Lines) {
+			return 0
+		}
+		return lsp.RuneToUTF16(buf.Lines[line], col)
+	}
 	return lsp.PositionToUTF16(a.lspLines(path), lsp.Position{Line: line, Character: col}).Character
 }
 

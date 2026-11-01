@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -177,10 +178,10 @@ func TestUTF16NavigationUsesUnsavedDestination(t *testing.T) {
 	}}}))
 	if err := runExecMain(a, func() error {
 		if path := a.EditorGroup.ActiveFilePath(); path != second {
-			t.Fatalf("destination = %q, want %q", path, second)
+			return fmt.Errorf("destination = %q, want %q", path, second)
 		}
 		if line, col := a.EditorGroup.ActiveCursor(); line != 0 || col != 3 {
-			t.Fatalf("destination cursor = %d:%d, want 0:3", line, col)
+			return fmt.Errorf("destination cursor = %d:%d, want 0:3", line, col)
 		}
 		return nil
 	}); err != nil {
