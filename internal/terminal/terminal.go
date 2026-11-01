@@ -3,6 +3,7 @@ package terminal
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -45,12 +46,14 @@ type Terminal struct {
 	ptyClosed  bool
 	rawTail    []byte
 	lastRead   time.Time
-	// promptMarker tracks the row of the last OSC 133 prompt start while
-	// that prompt is still being edited; promptCol is the column it starts at.
-	promptMarker *xterm.Marker
-	promptCol    int
-	OnUpdate     func()
-	OnExit       func()
+	// Readline's edit markers survive resize; unlike OSC 133 it does not
+	// announce each repaint. promptEnd also covers input below the cursor.
+	promptMarker   *xterm.Marker
+	promptCol      int
+	promptReadline bool
+	promptEnd      *xterm.Marker
+	OnUpdate       func()
+	OnExit         func()
 
 	updatePending atomic.Bool
 }
@@ -90,6 +93,9 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 		xterm.WithScrollback(scrollbackMax),
 	)
 	t.watchPromptMarks()
+	if filepath.Base(shell) == "bash" {
+		t.watchReadlinePrompt(t.shellOwnsForeground)
+	}
 	t.term.OnData(func(s string) {
 		io.WriteString(pt, s)
 	})

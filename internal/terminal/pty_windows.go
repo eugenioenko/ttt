@@ -5,3 +5,5 @@ package terminal
 import "github.com/aymanbagabas/go-pty"
 
 func makePtyPollable(pt pty.Pty) (pty.Pty, error) { return pt, nil }
+
+func (t *Terminal) shellOwnsForeground() bool { return false }

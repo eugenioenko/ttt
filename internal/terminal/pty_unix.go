@@ -52,3 +52,16 @@ func makePtyPollable(pt pty.Pty) (pty.Pty, error) {
 	}
 	return &pollablePty{UnixPty: unixPty, master: os.NewFile(uintptr(dupFD), unixPty.Master().Name())}, nil
 }
+
+func (t *Terminal) shellOwnsForeground() bool {
+	pt, ok := t.pt.(pty.UnixPty)
+	if !ok || t.cmd == nil || t.cmd.Process == nil {
+		return false
+	}
+	var group int
+	var ioctlErr error
+	err := pt.Control(func(fd uintptr) {
+		group, ioctlErr = unix.IoctlGetInt(int(fd), unix.TIOCGPGRP)
+	})
+	return err == nil && ioctlErr == nil && group == t.cmd.Process.Pid
+}
