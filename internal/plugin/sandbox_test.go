@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -346,6 +347,36 @@ func TestRegisterSidebarIcon(t *testing.T) {
 				t.Errorf("title = %q, panel should still register", p.SidebarTitle)
 			}
 		})
+	}
+}
+
+func TestInvalidSidebarIconWarnsWithoutCountingAsError(t *testing.T) {
+	L := NewSandbox()
+	defer L.Close()
+	var levels []string
+	p := &Plugin{
+		Enabled: true,
+		Granted: PermissionSet{PanelSidebar: true},
+		Log:     func(level, _ string) { levels = append(levels, level) },
+	}
+	setupTTTModule(L, p)
+	script := fmt.Sprintf(`
+		local ttt = require("ttt")
+		for _ = 1, %d do
+			ttt.register({ sidebar = { title = "P", icon = "toolong", render = function() end } })
+		end
+	`, maxPluginErrors)
+	if err := L.DoString(script); err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	if !p.Enabled || p.errorCount != 0 {
+		t.Errorf("enabled = %v, errorCount = %d, want enabled with no errors counted", p.Enabled, p.errorCount)
+	}
+	if len(levels) != maxPluginErrors || levels[0] != "warn" {
+		t.Errorf("logged levels = %v, want %d warnings", levels, maxPluginErrors)
+	}
+	if p.SidebarTitle != "P" {
+		t.Errorf("title = %q, panel should keep its title", p.SidebarTitle)
 	}
 }
 

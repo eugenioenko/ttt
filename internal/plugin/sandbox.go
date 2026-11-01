@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -170,8 +171,17 @@ func parsePanelIcon(L *lua.LState, p *Plugin, value lua.LValue) PanelIcon {
 			Nerd:  validPanelGlyph(p, "sidebar.icon.nerd", L.GetField(v, "nerd")),
 		}
 	}
-	p.logError("sidebar.icon", fmt.Errorf("must be a string or a table with plain and nerd, got %s", value.Type()))
+	p.warnInvalidIcon("sidebar.icon", fmt.Sprintf("must be a string or a table with plain and nerd, got %s", value.Type()))
 	return PanelIcon{}
+}
+
+// warnInvalidIcon bypasses logError: an icon the tab can do without must not
+// count toward the errors that disable a plugin.
+func (p *Plugin) warnInvalidIcon(field, problem string) {
+	slog.Warn("plugin icon ignored", "plugin", p.Name, "field", field, "problem", problem)
+	if p.Log != nil {
+		p.Log("warn", field+": "+problem)
+	}
 }
 
 func validPanelGlyph(p *Plugin, field string, value lua.LValue) string {
@@ -183,7 +193,7 @@ func validPanelGlyph(p *Plugin, field string, value lua.LValue) string {
 	// Private-use glyphs measure two columns under RUNEWIDTH_EASTASIAN, but
 	// that must not reject a Nerd Font icon.
 	if !ok || len(r) != 1 || (textwidth.Rune(r[0]) != 1 && !unicode.Is(unicode.Co, r[0])) {
-		p.logError(field, fmt.Errorf("must be one single-width character, got %q", value.String()))
+		p.warnInvalidIcon(field, fmt.Sprintf("must be one single-width character, got %q", value.String()))
 		return ""
 	}
 	return string(glyph)

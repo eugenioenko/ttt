@@ -221,7 +221,7 @@ sidebar = {
 | `nerd-font`        | nerd              | plain       | nerd       | `T`            | title   |
 | `none`             | plain             | plain       | title      | `T`            | title   |
 
-The tab shows only its title when the plugin gives no icon, or none for the current mode. An invalid value is ignored with an error in the Output panel, and the plugin still loads. A string is used in both modes, so don't pass a Nerd Font glyph as one: it appears as a box without the font.
+The tab shows only its title when the plugin gives no icon, or none for the current mode. An invalid value is ignored with a warning in the Output panel, and the plugin still loads. A string is used in both modes, so don't pass a Nerd Font glyph as one: it appears as a box without the font.
 
 The `actions` array defines entries for the sidebar panel's header menu (the "..." button). Each entry uses the [menu entry format](#menu-entry-format):
 
