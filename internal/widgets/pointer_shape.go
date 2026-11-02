@@ -13,8 +13,6 @@ func (r Rect) Contains(x, y int) bool {
 	return x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
 }
 
-// OwnsPointerCapture reports whether w holds an active gesture. Such a widget
-// keeps deciding the shape after the pointer leaves its rect.
 func OwnsPointerCapture(w Widget) bool {
 	owner, ok := w.(PointerCaptureOwner)
 	return ok && owner.OwnsPointerCapture()

@@ -110,7 +110,6 @@ func (t *TabBarWidget) PointerShapeAt(mx, my int) string {
 	if !r.Contains(mx, my) {
 		return ""
 	}
-	// The ◀/▶ gutters only react while there is something hidden on that side.
 	arrowW := t.renderArrowW
 	if arrowW > 0 && mx < r.X+arrowW {
 		return handIf(t.hasOverflowLeft)
