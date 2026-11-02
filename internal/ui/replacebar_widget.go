@@ -91,6 +91,13 @@ func (r *ReplaceBarWidget) barLayout() (barX, barY, barW, barH int) {
 
 func (r *ReplaceBarWidget) Focusable() bool { return true }
 
+func (r *ReplaceBarWidget) FocusedInput() *InputWidget {
+	if r.focusRow == 1 {
+		return r.ReplaceInput
+	}
+	return r.SearchInput
+}
+
 func (r *ReplaceBarWidget) CursorPosition() (int, int, bool) {
 	rect := r.GetRect()
 	barX, barY, barW, _ := r.barLayout()

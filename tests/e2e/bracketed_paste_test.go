@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -142,5 +143,34 @@ func TestBracketedPasteKeyboardWorksAfter(t *testing.T) {
 	}
 	if buf.Lines[0] != "AB" {
 		t.Errorf("expected 'AB', got %q", buf.Lines[0])
+	}
+}
+
+func TestBracketedPasteIntoReplaceBar(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	h.exec("file.new")
+	h.exec("search.replace")
+	bar, ok := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
+	if !ok {
+		t.Fatalf("expected ReplaceBarWidget, got %T", h.app.Root.TopOverlayWidget())
+	}
+
+	pasteText(h, pasteKeys("old"))
+	if got := bar.SearchInput.Text; got != "old" {
+		t.Fatalf("search input = %q", got)
+	}
+	h.pressKey(tcell.KeyTab, tcell.ModNone)
+	pasteText(h, pasteKeys("new"))
+	if got := bar.ReplaceInput.Text; got != "new" {
+		t.Fatalf("replace input = %q", got)
+	}
+	clipboard.Set("er")
+	h.exec("editor.paste")
+	if got := bar.ReplaceInput.Text; got != "newer" {
+		t.Fatalf("replace input after clipboard command = %q", got)
+	}
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
+		t.Fatalf("paste leaked into editor: %q", got)
 	}
 }
