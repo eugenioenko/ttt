@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/app"
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestUndoToClearsDirty(t *testing.T) {
@@ -64,6 +65,42 @@ func TestUndoToSavePoint(t *testing.T) {
 
 	if h.app.EditorGroup.IsDirty() {
 		t.Fatal("expected clean after undo to save point")
+	}
+}
+
+func TestUndoAfterBranchingKeepsUnsavedChanges(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	f := filepath.Join(h.dir, "branch.txt")
+	if err := os.WriteFile(f, []byte("hello\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.app.EditorGroup.OpenFile(f); err != nil {
+		t.Fatal(err)
+	}
+	h.redraw()
+	h.pressRune('A')
+	h.exec("file.save")
+	h.exec("editor.undo")
+	h.pressRune('B')
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.pressRune('C')
+	h.exec("editor.undo")
+
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "Bhello" {
+		t.Fatalf("buffer = %q, want Bhello", got)
+	}
+	if got := readFile(t, f); got != "Ahello\n" {
+		t.Fatalf("disk = %q, want Ahello\\n", got)
+	}
+	if !h.app.EditorGroup.IsDirty() {
+		t.Error("unsaved branch lost its dirty flag")
+	}
+	h.exec("editor.quit")
+	h.assertContains("Unsaved changes")
+	if !*h.app.Running {
+		t.Fatal("quit discarded unsaved changes")
 	}
 }
 

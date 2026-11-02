@@ -77,6 +77,9 @@ func (s *UndoStack) Push(cmd EditCommand) {
 	if IsNoop(cmd) {
 		return
 	}
+	if s.savePoint > len(s.undo) {
+		s.savePoint = -1
+	}
 	s.redo = nil
 	if s.grouping {
 		if len(s.undo) > 0 {
