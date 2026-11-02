@@ -14,20 +14,25 @@ import (
 // the indicator without the full status sync, which the event loop runs only on
 // user input.
 func (a *App) SyncLanguageSegment() {
-	if a.EditorGroup.Editor == nil || a.EditorGroup.Editor.Highlighter == nil {
+	if a.EditorGroup.ActiveBuffer() == nil {
 		a.Status.SetSegment(view.StatusSegment{ID: "language", Side: "right", Priority: 500, Text: ""})
+		a.Status.SetSegment(view.StatusSegment{ID: "lsp", Side: "right", Priority: 501, Text: ""})
 		return
 	}
 
-	lang := a.EditorGroup.Editor.Highlighter.Language()
-	icon, iconStyle := a.lspStatusIcon(a.EditorGroup.ActiveFilePath(), lang)
-	text := lang
-	if icon != "" {
-		text += " " + icon
+	lang := "Plain Text"
+	if h := a.EditorGroup.Editor.Highlighter; h != nil {
+		lang = h.Language()
 	}
 	a.Status.SetSegment(view.StatusSegment{
 		ID: "language", Side: "right", Priority: 500,
-		Text:    text,
+		Text:    lang,
+		OnClick: a.ShowLanguagePicker,
+	})
+	icon, iconStyle := a.lspStatusIcon(a.EditorGroup.ActiveFilePath(), a.EditorGroup.ActiveLanguage())
+	a.Status.SetSegment(view.StatusSegment{
+		ID: "lsp", Side: "right", Priority: 501,
+		Text:    icon,
 		Style:   iconStyle,
 		OnClick: a.ShowOutputPanel,
 	})

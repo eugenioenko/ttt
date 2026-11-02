@@ -42,6 +42,9 @@ func (e *EditorPaneWidget) syncAutoClosing() *autoClosingState {
 }
 
 func (e *EditorPaneWidget) autoClosingSyntax() *highlight.Highlighter {
+	if e.plainText {
+		return nil
+	}
 	if e.Highlighter != nil {
 		return e.Highlighter
 	}

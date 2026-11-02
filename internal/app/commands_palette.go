@@ -149,6 +149,34 @@ func (a *App) ShowEolPicker() {
 	}, nil)
 }
 
+func (a *App) ShowLanguagePicker() {
+	if a.Root.HasOverlay() || a.EditorGroup.ActiveBuffer() == nil {
+		return
+	}
+	items := []widgets.SelectItem{
+		{ID: "", Label: "Auto Detect"},
+		{ID: highlight.PlainText, Label: "Plain Text"},
+	}
+	for _, language := range highlight.Languages() {
+		items = append(items, widgets.SelectItem{ID: language.ID, Label: language.Name})
+	}
+	for i := range items {
+		if items[i].ID == a.EditorGroup.ActiveLanguageSelection() {
+			items[i].Label += " (current)"
+		}
+	}
+	a.ShowSelectDialog("Change Language Mode", items, func(id string) {
+		if a.EditorGroup.ActiveBuffer() == nil {
+			return
+		}
+		a.EditorGroup.SetActiveLanguage(id)
+		a.SyncLanguageSegment()
+		if !a.EditorGroup.SyntaxHighlight {
+			a.StatusNotify("Syntax highlighting is disabled")
+		}
+	}, nil)
+}
+
 func registerPaletteCommands(app *App) {
 	reg := app.Reg
 
@@ -188,6 +216,12 @@ func registerPaletteCommands(app *App) {
 		ID: "editor.lineEnding", Title: "Change Line Ending",
 		Keywords: []string{"editor", "preferences", "settings", "eol", "crlf", "lf"},
 		Handler:  app.ShowEolPicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "editor.changeLanguage", Title: "Change Language Mode",
+		Keywords: []string{"language", "syntax", "highlighting", "mode", "filetype"},
+		Handler:  app.ShowLanguagePicker,
 	})
 
 	reg.Register(command.Command{

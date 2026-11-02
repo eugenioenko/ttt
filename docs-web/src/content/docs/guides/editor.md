@@ -7,6 +7,10 @@ description: Core editing features in TTT.
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.
 
+Click the language name in the status bar, or run **Change Language Mode** from the command palette, to search built-in and external grammars. This works for files without a recognized extension, such as `~/.bash_aliases`. Choose **Auto Detect** to restore automatic detection, or **Plain Text** to disable syntax highlighting for the tab.
+
+The selection belongs to the current tab and stays after Save As, rename, and grammar reloads. It does not change the language server or word-wrap language overrides, and it is not saved after the tab closes. Selecting a language does not enable syntax highlighting when it is disabled in settings. The adjacent language-server indicator still opens the Output panel.
+
 ## Soft Wrapping
 
 Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.

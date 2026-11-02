@@ -755,8 +755,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.closeFileHandlerTab(id)
 	}
 	if path := a.EditorGroup.ActiveFilePath(); path != "" {
-		if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {
-			lang := a.EditorGroup.Editor.Highlighter.Language()
+		if lang := a.EditorGroup.ActiveLanguage(); lang != "" {
 			a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		}
 	}
@@ -771,11 +770,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.Root.SetFocus(a.EditorGroup)
 	}
 	a.EditorGroup.Editor.OnChange = func() {
-		path := a.EditorGroup.ActiveFilePath()
-		lang := ""
-		if a.EditorGroup.Editor.Highlighter != nil {
-			lang = a.EditorGroup.Editor.Highlighter.Language()
-		}
+		path, lang := a.editorPathLang()
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.cancelBackgroundPull(path, lang)
 		a.ScheduleDiagnosticPull(false)

@@ -41,12 +41,7 @@ func (a *App) CloseFold() {
 }
 
 func (a *App) editorPathLang() (string, string) {
-	path := a.EditorGroup.ActiveFilePath()
-	lang := ""
-	if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {
-		lang = a.EditorGroup.Editor.Highlighter.Language()
-	}
-	return path, lang
+	return a.EditorGroup.ActiveFilePath(), a.EditorGroup.ActiveLanguage()
 }
 
 func (a *App) withEditorLSP(action func(path, lang string, line, col int)) {
