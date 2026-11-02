@@ -27,6 +27,7 @@ func setupForwardTest(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	t.Setenv("TMPDIR", dir)
+	t.Setenv(forwardSocketEnv, "")
 	saved := config.OverrideConfigDir
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = saved })
@@ -35,9 +36,10 @@ func setupForwardTest(t *testing.T) {
 	}
 }
 
-func fakeForwardReceiver(t *testing.T, start time.Time, reply error) {
+func fakeForwardReceiver(t *testing.T, start time.Time, result any, reply error) string {
 	t.Helper()
-	ln, err := net.Listen("unix", filepath.Join(forwardDirectory(), forwardSocketName(start, os.Getpid())))
+	path := filepath.Join(forwardDirectory(), forwardSocketName(start, os.Getpid()))
+	ln, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,10 +52,11 @@ func fakeForwardReceiver(t *testing.T, start time.Time, reply error) {
 			}
 			jsonrpc.NewConn(conn, conn, jsonrpc.Options{
 				OnClose:   func(error) { conn.Close() },
-				OnRequest: func(string, json.RawMessage) (any, error) { return nil, reply },
+				OnRequest: func(string, json.RawMessage) (any, error) { return result, reply },
 			})
 		}
 	}()
+	return path
 }
 
 func TestForwardSocketNameLengthAndOrder(t *testing.T) {
@@ -78,6 +81,8 @@ func TestForwardFilesRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer StartForward(a)()
+	fakeForwardReceiver(t, time.Now().Add(time.Second), nil, errors.New("newer editor must not receive these files"))
+	t.Setenv(forwardSocketEnv, a.forwardSocket)
 
 	dir := t.TempDir()
 	first := filepath.Join(dir, "first-\xff.txt")
@@ -85,8 +90,9 @@ func TestForwardFilesRoundTrip(t *testing.T) {
 	if err := os.WriteFile(second, []byte("one\ntwo\nthree\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := ForwardFiles([]FileTarget{{Path: first}, {Path: second, Line: 3, Col: 2}}); err != nil {
-		t.Fatal(err)
+	t.Setenv("TMPDIR", filepath.Join(os.TempDir(), "missing"))
+	if pid, err := ForwardFiles([]FileTarget{{Path: first}, {Path: second, Line: 3, Col: 2}}); err != nil || pid != os.Getpid() {
+		t.Fatalf("ForwardFiles = (%d, %v), want pid %d", pid, err, os.Getpid())
 	}
 	if err := runExecMain(a, func() error {
 		if paths := a.EditorGroup.OpenFilePaths(); !slices.Contains(paths, first) || !slices.Contains(paths, second) {
@@ -145,7 +151,7 @@ func TestRunEventLoopStartsForwardAfterStartupWork(t *testing.T) {
 	if err := os.WriteFile(forwardedPath, []byte("forwarded"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := ForwardFiles([]FileTarget{{Path: forwardedPath}}); err != nil {
+	if _, err := ForwardFiles([]FileTarget{{Path: forwardedPath}}); err != nil {
 		t.Fatalf("ForwardFiles() after startup = %v", err)
 	}
 	if err := runExecMain(a, func() error {
@@ -168,6 +174,8 @@ func TestForwardFilesSilentReceiver(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { ln.Close() })
+	fakeForwardReceiver(t, time.Now().Add(time.Second), nil, errors.New("newer editor must not receive these files"))
+	t.Setenv(forwardSocketEnv, ln.Addr().String())
 	accepted := make(chan net.Conn, 1)
 	go func() {
 		conn, err := ln.Accept()
@@ -180,7 +188,10 @@ func TestForwardFilesSilentReceiver(t *testing.T) {
 	for i := range targets {
 		targets[i].Path = strings.Repeat("x", 500)
 	}
-	go func() { result <- ForwardFiles(targets) }()
+	go func() {
+		_, err := ForwardFiles(targets)
+		result <- err
+	}()
 	select {
 	case conn := <-accepted:
 		t.Cleanup(func() { conn.Close() })
@@ -230,19 +241,83 @@ func TestForwardFilesPartialFailure(t *testing.T) {
 
 func TestForwardFilesReceiverChoice(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		replies []error
-		want    string
+		name      string
+		preferred string
+		want      string
+		moveTemp  bool
 	}{
-		{"newest wins by one millisecond", []error{errors.New("older"), errors.New("newer")}, "newer"},
+		{"newest wins by one millisecond", "", "newer", false},
+		{"parent wins over newer editor", "parent", "older", false},
+		{"parent survives TMPDIR change", "parent", "older", true},
+		{"missing parent falls back", "missing", "newer", true},
+		{"stale parent falls back", "stale", "newer", true},
+		{"other config is not selected", "other", "newer", true},
+		{"unsafe parent directory is rejected", "unsafe", "newer", true},
+		{"symlink parent directory is rejected", "symlink", "newer", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setupForwardTest(t)
-			for i, reply := range tc.replies {
-				fakeForwardReceiver(t, time.UnixMilli(1793050000000+int64(i)), reply)
+			parent := fakeForwardReceiver(t, time.UnixMilli(1793050000000), nil, errors.New("older"))
+			if tc.moveTemp {
+				t.Setenv("TMPDIR", filepath.Join(os.TempDir(), "child"))
+				if err := os.MkdirAll(forwardDirectory(), 0700); err != nil {
+					t.Fatal(err)
+				}
 			}
-			if err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); err == nil || err.Error() != tc.want {
+			fakeForwardReceiver(t, time.UnixMilli(1793050000001), nil, errors.New("newer"))
+			paths := map[string]string{"parent": parent, "missing": filepath.Join(filepath.Dir(parent), forwardSocketName(time.UnixMilli(0), os.Getpid()))}
+			switch tc.preferred {
+			case "other":
+				saved := config.OverrideConfigDir
+				config.OverrideConfigDir = t.TempDir()
+				paths["other"] = fakeForwardReceiver(t, time.UnixMilli(1793050000002), nil, errors.New("other"))
+				config.OverrideConfigDir = saved
+			case "stale":
+				path := filepath.Join(filepath.Dir(parent), forwardSocketName(time.UnixMilli(1793049999999), os.Getpid()))
+				ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				ln.SetUnlinkOnClose(false)
+				ln.Close()
+				paths["stale"] = path
+			case "unsafe":
+				if err := os.Chmod(filepath.Dir(parent), 0777); err != nil {
+					t.Fatal(err)
+				}
+				paths["unsafe"] = parent
+			case "symlink":
+				link := filepath.Join(os.TempDir(), "link")
+				if err := os.Symlink(filepath.Dir(parent), link); err != nil {
+					t.Fatal(err)
+				}
+				paths["symlink"] = filepath.Join(link, filepath.Base(parent))
+			}
+			t.Setenv(forwardSocketEnv, paths[tc.preferred])
+			if _, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); err == nil || err.Error() != tc.want {
 				t.Fatalf("ForwardFiles = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestForwardFilesReceiverResult(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		result any
+		pid    int
+	}{
+		{"pid", os.Getpid(), os.Getpid()},
+		{"legacy null", nil, 0},
+		{"object", map[string]int{"pid": os.Getpid()}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setupForwardTest(t)
+			parent := fakeForwardReceiver(t, time.UnixMilli(1), tc.result, nil)
+			fakeForwardReceiver(t, time.UnixMilli(2), nil, errors.New("must not retry a successful request"))
+			t.Setenv(forwardSocketEnv, parent)
+			if pid, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); err != nil || pid != tc.pid {
+				t.Fatalf("ForwardFiles = (%d, %v), want (%d, nil)", pid, err, tc.pid)
 			}
 		})
 	}
@@ -265,7 +340,8 @@ func TestForwardFilesLeftoverSockets(t *testing.T) {
 		ln.Close()
 		paths = append(paths, path)
 	}
-	if err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); !errors.Is(err, ErrForwardUnavailable) {
+	t.Setenv(forwardSocketEnv, paths[0])
+	if _, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); !errors.Is(err, ErrForwardUnavailable) {
 		t.Fatalf("no live receiver: %v", err)
 	}
 	if _, err := os.Lstat(paths[0]); !errors.Is(err, os.ErrNotExist) {
@@ -283,7 +359,7 @@ func TestForwardUnsafeDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer StartForward(a)()
-	if err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); !errors.Is(err, ErrForwardUnavailable) {
+	if _, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); !errors.Is(err, ErrForwardUnavailable) {
 		t.Fatalf("unsafe directory: %v", err)
 	}
 	if !strings.Contains(a.Status.Notification, "unsafe forwarding directory") {

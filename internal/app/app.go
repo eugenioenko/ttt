@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -79,6 +80,7 @@ type App struct {
 	// TerminalSeq is monotonic so a closed-and-reopened tab never reuses an id
 	// (plugin handles key off it).
 	TerminalSeq            int
+	forwardSocket          string // UI goroutine only, including listener startup and shutdown.
 	LspManager             *lsp.Manager
 	DocVersionsMu          sync.Mutex
 	DocVersions            map[string]int
@@ -441,7 +443,8 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 		a.StatusError("Failed to open terminal: " + err.Error())
 		return "", err
 	}
-	t, err := terminal.New(spec.Shell, cols, rows, a.Settings.Terminal.Scrollback, spec.Env, spec.Cwd, spec.Args...)
+	env := slices.Concat(spec.Env, []string{forwardSocketEnv + "=" + a.forwardSocket})
+	t, err := terminal.New(spec.Shell, cols, rows, a.Settings.Terminal.Scrollback, env, spec.Cwd, spec.Args...)
 	if err != nil {
 		slog.Error("terminal.New", "err", err)
 		a.StatusError("Failed to open terminal: " + err.Error())

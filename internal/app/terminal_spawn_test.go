@@ -78,6 +78,39 @@ func TestSpawnTerminalSpecUsesExplicitCwd(t *testing.T) {
 	waitForTerminalOutput(t, a.Terminals[0].Term, dir)
 }
 
+func TestSpawnTerminalSpecExportsOwnForwardSocket(t *testing.T) {
+	for _, state := range []string{"listening", "stopped", "disabled"} {
+		t.Run(state, func(t *testing.T) {
+			setupForwardTest(t)
+			t.Setenv(forwardSocketEnv, "/inherited.sock")
+			a := spawnTestApp(t)
+			want := ""
+			if state != "disabled" {
+				stop := StartForward(a)
+				t.Cleanup(stop)
+				if a.forwardSocket == "" {
+					t.Fatal("forwarding listener did not start")
+				}
+				want = a.forwardSocket
+				if state == "stopped" {
+					stop()
+					want = ""
+				}
+			}
+			id, err := a.SpawnTerminalSpec(TerminalSpec{
+				Shell: "/bin/sh",
+				Args:  []string{"-c", `printf 'SOCKET=<%s> EXTRA=<%s>\n' "$TTT_FORWARD_SOCKET" "$TTT_TEST_EXTRA"; exec cat`},
+				Env:   []string{forwardSocketEnv + "=/overridden.sock", "TTT_TEST_EXTRA=preserved"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer a.CloseTerminal(id)
+			waitForTerminalOutput(t, a.Terminals[0].Term, "SOCKET=<"+want+"> EXTRA=<preserved>")
+		})
+	}
+}
+
 func TestTerminalCtrlVPastesAppliesToExistingAndNewTabs(t *testing.T) {
 	a := spawnTestApp(t)
 	a.Renderer = &render.Renderer{}

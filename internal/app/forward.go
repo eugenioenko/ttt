@@ -23,6 +23,8 @@ var ErrForwardUnavailable = errors.New("no running editor")
 
 var forwardCallTimeout = 30 * time.Second
 
+const forwardSocketEnv = "TTT_FORWARD_SOCKET"
+
 type forwardTarget struct {
 	Path []byte
 	Line int
@@ -62,48 +64,78 @@ func ForwardableTargets() []FileTarget {
 	return targets
 }
 
-func ForwardFiles(targets []FileTarget) error {
+func ForwardFiles(targets []FileTarget) (int, error) {
+	prefix := forwardPrefix()
+	preferred := filepath.Clean(os.Getenv(forwardSocketEnv))
+	name := filepath.Base(preferred)
+	triedPreferred := false
+	if filepath.IsAbs(preferred) && strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".sock") && checkForwardDir(filepath.Dir(preferred)) == nil {
+		triedPreferred = true
+		if conn, err := dialForward(preferred); err == nil {
+			return forwardFiles(conn, targets)
+		}
+	}
 	dir := forwardDirectory()
 	if err := checkForwardDir(dir); err != nil {
-		return ErrForwardUnavailable
+		return 0, ErrForwardUnavailable
 	}
 	entries, _ := os.ReadDir(dir)
 	slices.Reverse(entries)
-	prefix := forwardPrefix()
 	for _, entry := range entries {
 		if !strings.HasPrefix(entry.Name(), prefix) || !strings.HasSuffix(entry.Name(), ".sock") {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		conn, err := net.DialTimeout("unix", path, time.Second)
-		if err != nil {
-			if errors.Is(err, syscall.ECONNREFUSED) && entry.Type()&os.ModeSocket != 0 && forwardProcessDead(entry.Name()) {
-				_ = os.Remove(path)
-			}
+		if triedPreferred && path == preferred {
 			continue
 		}
-		defer conn.Close()
-		rpc := jsonrpc.NewConn(conn, conn, jsonrpc.Options{MaxMessageSize: maxExecBodySize})
-		wire := make([]forwardTarget, len(targets))
-		for i, target := range targets {
-			wire[i] = forwardTarget{Path: []byte(target.Path), Line: target.Line, Col: target.Col}
+		conn, err := dialForward(path)
+		if err != nil {
+			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), forwardCallTimeout)
-		deadline, _ := ctx.Deadline()
-		_ = conn.SetDeadline(deadline)
-		_, err = rpc.Call(ctx, "open.v1", wire)
-		cancel()
-		var netErr net.Error
-		if err != nil && (errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) || !time.Now().Before(deadline)) {
-			return errors.New("the running editor did not respond")
-		}
-		var rpcErr *jsonrpc.Error
-		if errors.As(err, &rpcErr) {
-			return errors.New(rpcErr.Message)
-		}
-		return err
+		return forwardFiles(conn, targets)
 	}
-	return ErrForwardUnavailable
+	return 0, ErrForwardUnavailable
+}
+
+func dialForward(path string) (net.Conn, error) {
+	conn, err := net.DialTimeout("unix", path, time.Second)
+	if errors.Is(err, syscall.ECONNREFUSED) && forwardProcessDead(filepath.Base(path)) {
+		if info, statErr := os.Lstat(path); statErr == nil && info.Mode()&os.ModeSocket != 0 {
+			_ = os.Remove(path)
+		}
+	}
+	return conn, err
+}
+
+func forwardFiles(conn net.Conn, targets []FileTarget) (int, error) {
+	defer conn.Close()
+	rpc := jsonrpc.NewConn(conn, conn, jsonrpc.Options{MaxMessageSize: maxExecBodySize})
+	wire := make([]forwardTarget, len(targets))
+	for i, target := range targets {
+		wire[i] = forwardTarget{Path: []byte(target.Path), Line: target.Line, Col: target.Col}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), forwardCallTimeout)
+	deadline, _ := ctx.Deadline()
+	_ = conn.SetDeadline(deadline)
+	result, err := rpc.Call(ctx, "open.v1", wire)
+	cancel()
+	var netErr net.Error
+	if err != nil && (errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) || !time.Now().Before(deadline)) {
+		return 0, errors.New("the running editor did not respond")
+	}
+	var rpcErr *jsonrpc.Error
+	if errors.As(err, &rpcErr) {
+		return 0, errors.New(rpcErr.Message)
+	}
+	if err != nil {
+		return 0, err
+	}
+	var pid int
+	if err := json.Unmarshal(result, &pid); err != nil {
+		pid = 0
+	}
+	return pid, nil
 }
 
 func StartForward(a *App) (stop func()) {
@@ -122,8 +154,14 @@ func StartForward(a *App) (stop func()) {
 		a.StatusError(fmt.Sprintf("forward: listen: %v", err))
 		return func() {}
 	}
+	a.forwardSocket = path
 	go serveForward(a, ln)
-	return func() { ln.Close() }
+	return func() {
+		ln.Close()
+		if a.forwardSocket == path {
+			a.forwardSocket = ""
+		}
+	}
 }
 
 func serveForward(a *App, ln net.Listener) {
@@ -149,7 +187,7 @@ func serveForward(a *App, ln net.Listener) {
 				for i, target := range wire {
 					targets[i] = FileTarget{Path: string(target.Path), Line: target.Line, Col: target.Col}
 				}
-				return nil, runExecMain(a, func() error { return a.openForwarded(targets) })
+				return os.Getpid(), runExecMain(a, func() error { return a.openForwarded(targets) })
 			},
 		})
 	}
