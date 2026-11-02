@@ -266,4 +266,36 @@ describe("find and replace", () => {
     expect(snapshots[s0]).toContain("1/3");
     expect(snapshots[s1]).toContain("0/0");
   });
+
+  it("should navigate and close with the replace bar buttons", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "buttons.txt", "beta one\nbeta two\nbeta three\n");
+
+    tui.start(file);
+    tui.waitFor("beta one");
+
+    tui.press("ctrl+r");
+    tui.type("beta");
+
+    const s0 = tui.snapshot();
+
+    // ▼ on the search row of the replace bar (120 columns)
+    tui.click(115, 5);
+    const s1 = tui.snapshot();
+
+    // ▲
+    tui.click(113, 5);
+    tui.click(113, 5);
+    const s2 = tui.snapshot();
+
+    // ✕
+    tui.click(117, 5);
+    const s3 = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[s0]).toContain("1/3");
+    expect(snapshots[s1]).toContain("2/3");
+    expect(snapshots[s2]).toContain("3/3");
+    expect(snapshots[s3]).not.toContain("Replace");
+  });
 });

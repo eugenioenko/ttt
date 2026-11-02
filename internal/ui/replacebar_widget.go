@@ -209,20 +209,6 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 			localX := mx - rect.X
 			localY := my - rect.Y
 
-			findRow := barY + 1
-			replRow := barY + 2
-
-			if localY == findRow && localX >= barX+1 && localX < barX+1+barW-2 {
-				r.focusRow = 0
-				r.SearchInput.HandleClick(mx, my)
-				return EventConsumed
-			}
-			if localY == replRow && localX >= barX+1 && localX < barX+1+barW-2 {
-				r.focusRow = 1
-				r.ReplaceInput.HandleClick(mx, my)
-				return EventConsumed
-			}
-
 			if r.btnPrev.Contains(mx, my) {
 				if len(r.Matches) > 0 {
 					r.Current = (r.Current - 1 + len(r.Matches)) % len(r.Matches)
@@ -243,6 +229,21 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 				}
 				return EventConsumed
 			}
+
+			findRow := barY + 1
+			replRow := barY + 2
+
+			if localY == findRow && localX >= barX+1 && localX < barX+1+barW-2 {
+				r.focusRow = 0
+				r.SearchInput.HandleClick(mx, my)
+				return EventConsumed
+			}
+			if localY == replRow && localX >= barX+1 && localX < barX+1+barW-2 {
+				r.focusRow = 1
+				r.ReplaceInput.HandleClick(mx, my)
+				return EventConsumed
+			}
+
 		}
 		return EventConsumed
 	case *tcell.EventKey:
