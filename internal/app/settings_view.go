@@ -232,6 +232,9 @@ func settingsCategories() []settingsCategory {
 			{Label: "Dim staged colors", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.DimStagedGitColors },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.DimStagedGitColors = v }},
+			{Label: "Tab style", Kind: settingEnum, Options: sidebarTabStyleItems,
+				GetString: func(s *config.Settings) string { return s.Sidebar.TabStyle },
+				SetString: func(s *config.Settings, v string) { s.Sidebar.TabStyle = v }},
 			{Label: "Icons", Kind: settingEnum, Options: iconModeItems,
 				GetString: func(s *config.Settings) string { return s.Appearance.Icons },
 				SetString: func(s *config.Settings, v string) { s.Appearance.Icons = v }},
@@ -320,6 +323,14 @@ func iconModeItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
 		{ID: config.IconsNerdFont, Label: "Nerd Font"},
 		{ID: config.IconsNone, Label: "None"},
+	}
+}
+
+func sidebarTabStyleItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.SidebarTabStyleLabel, Label: "Label"},
+		{ID: config.SidebarTabStyleLabelIcon, Label: "Label + Icon"},
+		{ID: config.SidebarTabStyleIcon, Label: "Icon"},
 	}
 }
 

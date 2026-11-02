@@ -14,6 +14,7 @@ var (
 	DiffContexts        = []string{"changes", "full"}
 	GitFileViews        = []string{"tree", "list"}
 	IconModes           = []string{IconsNerdFont, IconsNone}
+	SidebarTabStyles    = []string{SidebarTabStyleLabel, SidebarTabStyleLabelIcon, SidebarTabStyleIcon}
 	ScrollbarGlyphModes = []string{ScrollbarGlyphsBlocks, ScrollbarGlyphsLegacy}
 	SelectionStyles     = []string{SelectionStyleBackground, SelectionStyleInvert}
 )
@@ -27,6 +28,9 @@ const (
 	GitFileViewList          = "list"
 	IconsNone                = "none"
 	IconsNerdFont            = "nerd-font"
+	SidebarTabStyleLabel     = "label"
+	SidebarTabStyleLabelIcon = "label-icon"
+	SidebarTabStyleIcon      = "icon"
 	ScrollbarGlyphsBlocks    = "blocks"
 	ScrollbarGlyphsLegacy    = "legacy"
 	SelectionStyleBackground = "background"
@@ -343,10 +347,11 @@ type SidebarSettings struct {
 	PanelOrder          []string `json:"panelOrder,omitempty"`
 	Width               int      `json:"width,omitempty"`
 	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
+	TabStyle            string   `json:"tabStyle,omitempty"`
 }
 
 func DefaultSidebarSettings() SidebarSettings {
-	return SidebarSettings{}
+	return SidebarSettings{TabStyle: SidebarTabStyleLabel}
 }
 
 type PanelSettings struct {
@@ -568,6 +573,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if s.Sidebar.CommitHistoryHeight < 0 {
 		s.Sidebar.CommitHistoryHeight = 0
+	}
+	if !slices.Contains(SidebarTabStyles, s.Sidebar.TabStyle) {
+		s.Sidebar.TabStyle = SidebarTabStyleLabel
 	}
 	s.Appearance.migrateChevrons()
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {

@@ -5,11 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -153,6 +156,49 @@ func NewSandbox() *lua.LState {
 	return L
 }
 
+// parsePanelIcon drops an invalid icon rather than failing the plugin's load:
+// the panel still works, identified by its title.
+func parsePanelIcon(L *lua.LState, p *Plugin, value lua.LValue) PanelIcon {
+	switch v := value.(type) {
+	case *lua.LNilType:
+		return PanelIcon{}
+	case lua.LString:
+		icon := validPanelGlyph(p, "sidebar.icon", v)
+		return PanelIcon{Plain: icon, Nerd: icon}
+	case *lua.LTable:
+		return PanelIcon{
+			Plain: validPanelGlyph(p, "sidebar.icon.plain", L.GetField(v, "plain")),
+			Nerd:  validPanelGlyph(p, "sidebar.icon.nerd", L.GetField(v, "nerd")),
+		}
+	}
+	p.warnInvalidIcon("sidebar.icon", fmt.Sprintf("must be a string or a table with plain and nerd, got %s", value.Type()))
+	return PanelIcon{}
+}
+
+// warnInvalidIcon bypasses logError: an icon the tab can do without must not
+// count toward the errors that disable a plugin.
+func (p *Plugin) warnInvalidIcon(field, problem string) {
+	slog.Warn("plugin icon ignored", "plugin", p.Name, "field", field, "problem", problem)
+	if p.Log != nil {
+		p.Log("warn", field+": "+problem)
+	}
+}
+
+func validPanelGlyph(p *Plugin, field string, value lua.LValue) string {
+	if value == lua.LNil {
+		return ""
+	}
+	glyph, ok := value.(lua.LString)
+	r := []rune(string(glyph))
+	// Private-use glyphs measure two columns under RUNEWIDTH_EASTASIAN, but
+	// that must not reject a Nerd Font icon.
+	if !ok || len(r) != 1 || (textwidth.Rune(r[0]) != 1 && !unicode.Is(unicode.Co, r[0])) {
+		p.warnInvalidIcon(field, fmt.Sprintf("must be one single-width character, got %q", value.String()))
+		return ""
+	}
+	return string(glyph)
+}
+
 func setupTTTModule(L *lua.LState, p *Plugin) {
 	RegisterPanelType(L)
 
@@ -173,6 +219,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 				if title := L.GetField(st, "title"); title != lua.LNil {
 					p.SidebarTitle = title.String()
 				}
+				p.SidebarIcon = parsePanelIcon(L, p, L.GetField(st, "icon"))
 				if fn, ok := L.GetField(st, "render").(*lua.LFunction); ok {
 					p.RenderFunc = fn
 				}

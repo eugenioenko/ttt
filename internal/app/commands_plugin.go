@@ -17,6 +17,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -406,6 +407,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			break
 		}
 	}
+	a.ApplyPluginPanelIcons()
 	a.syncPluginPanel(&a.Sidebar.TabbedPanel, id, sidebarTitle, sidebar)
 	a.syncPluginPanel(&a.BottomPanel.TabbedPanel, id, bottomTitle, bottom)
 	p.RequestRedraw = func() {
@@ -1227,6 +1229,16 @@ func (a *App) closePluginDrawerAndTabs(name string) {
 	}
 	for _, key := range keys {
 		a.EditorGroup.ClosePluginTab(key)
+	}
+}
+
+func (a *App) ApplyPluginPanelIcons() {
+	if a.PluginManager == nil || a.Sidebar == nil {
+		return
+	}
+	nerd := icons.ActiveIsNerd()
+	for _, reg := range a.PluginManager.SidebarPanels {
+		a.Sidebar.SetPanelIcon(reg.ID, reg.Icon.Resolve(nerd))
 	}
 }
 

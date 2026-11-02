@@ -42,6 +42,12 @@ const (
 	Keyword   Name = "keyword"
 	Snippet   Name = "snippet"
 	Symbol    Name = "symbol"
+
+	PanelExplorer Name = "panel-explorer"
+	PanelSearch   Name = "panel-search"
+	PanelChanges  Name = "panel-changes"
+	PanelOutline  Name = "panel-outline"
+	PanelPlugins  Name = "panel-plugins"
 )
 
 type glyphs struct {
@@ -80,6 +86,12 @@ var table = map[Name]glyphs{
 	Keyword:   {Plain: "■", Nerd: ""},
 	Snippet:   {Plain: "■", Nerd: ""},
 	Symbol:    {Plain: "•", Nerd: ""},
+
+	PanelExplorer: {Plain: "⌂", Nerd: "\ueaf0"},
+	PanelSearch:   {Plain: "⌕", Nerd: "\uea6d"},
+	PanelChanges:  {Plain: "⎇", Nerd: "\uea68"},
+	PanelOutline:  {Plain: "ƒ", Nerd: "\ueb86"},
+	PanelPlugins:  {Plain: "⧉", Nerd: "\ueae6"},
 }
 
 var (
@@ -125,3 +137,5 @@ func Rune(name Name) rune {
 }
 
 func IsNerd(mode string) bool { return mode == config.IconsNerdFont }
+
+func ActiveIsNerd() bool { return IsNerd(activeMode) }

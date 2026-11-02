@@ -568,6 +568,18 @@ func TestWordWrapMaxBytes(t *testing.T) {
 	}
 }
 
+func TestSidebarTabStyleInvalidFallsBackToLabel(t *testing.T) {
+	s := DefaultSettings()
+	if s.Sidebar.TabStyle != SidebarTabStyleLabel {
+		t.Fatalf("default = %q", s.Sidebar.TabStyle)
+	}
+	s.Sidebar.TabStyle = "bogus"
+	normalizeSettings(&s)
+	if s.Sidebar.TabStyle != SidebarTabStyleLabel {
+		t.Errorf("normalized = %q", s.Sidebar.TabStyle)
+	}
+}
+
 func TestSettingsReuseWindowRoundTrip(t *testing.T) {
 	original := DefaultSettings()
 	original.ReuseWindow = true
