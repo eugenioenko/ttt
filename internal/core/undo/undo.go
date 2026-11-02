@@ -51,14 +51,22 @@ func (s *UndoStack) EndTransaction() {
 	}
 	s.inTransaction = false
 	idx := s.transactionIdx
-	if idx >= len(s.undo) {
+	end := len(s.undo)
+	if idx >= end {
 		return
 	}
 
-	cmds := make([]EditCommand, len(s.undo)-idx)
+	savedAtEnd := s.savePoint == end
+	savePointInside := s.savePoint > idx && s.savePoint < end
+	cmds := make([]EditCommand, end-idx)
 	copy(cmds, s.undo[idx:])
 	s.undo = s.undo[:idx]
 	s.undo = append(s.undo, &BatchCommand{Commands: cmds})
+	if savedAtEnd {
+		s.savePoint = len(s.undo)
+	} else if savePointInside {
+		s.savePoint = -1
+	}
 }
 
 func (s *UndoStack) MarkSaved() {

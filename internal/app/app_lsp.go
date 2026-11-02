@@ -169,6 +169,10 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		return
 	}
 	editor := a.EditorGroup.Editor
+	if editor.Undo != nil {
+		editor.Undo.BeginTransaction()
+		defer editor.Undo.EndTransaction()
+	}
 
 	var text string
 	var startLine, startCol, endLine, endCol int
@@ -603,6 +607,13 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	currentPath := a.EditorGroup.ActiveFilePath()
 
 	files := make(map[string]bool)
+	txStacks := make(map[*undo.UndoStack]bool)
+	defer func() {
+		for u := range txStacks {
+			u.EndTransaction()
+		}
+	}()
+
 	for _, batch := range batches {
 		path := URIToPath(batch.URI)
 		if err := a.EditorGroup.OpenFile(path); err != nil {
@@ -610,6 +621,13 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 			continue
 		}
 		files[path] = true
+		if a.EditorGroup.IsEditorActive() && a.EditorGroup.Editor.Undo != nil {
+			u := a.EditorGroup.Editor.Undo
+			if !txStacks[u] {
+				txStacks[u] = true
+				u.BeginTransaction()
+			}
+		}
 		a.ApplyTextEdits(batch.Edits)
 
 		if buf := a.EditorGroup.ActiveBuffer(); a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
@@ -780,6 +798,11 @@ func (a *App) applyFormattingResult(v *FormattingResult) {
 func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
 	if !a.EditorGroup.IsEditorActive() {
 		return
+	}
+	editor := a.EditorGroup.Editor
+	if editor.Undo != nil {
+		editor.Undo.BeginTransaction()
+		defer editor.Undo.EndTransaction()
 	}
 	a.applyRuneTextEdits(runeTextEdits(a.EditorGroup.Editor.Buf.Lines, edits), nil)
 }

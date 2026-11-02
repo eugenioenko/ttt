@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -243,5 +244,37 @@ func TestCompletionEditCoversCharactersTypedAfterTheRequest(t *testing.T) {
 				t.Fatalf("cursor col = %d, want %d", col, tt.wantCol)
 			}
 		})
+	}
+}
+
+// Acceptance of completion with additional edits (such as imports) undoes in one step (#876).
+func TestInsertCompletionSingleUndoStep(t *testing.T) {
+	a := completionTestApp(t, "a.go", "package main\n\nfunc main() {\n\tToUpper\n}\n")
+	moveCursor(a, 3, 8)
+	item := ui.CompletionItem{
+		Label:      "ToUpper",
+		InsertText: "strings.ToUpper",
+		AdditionalEdits: []ui.AdditionalEdit{
+			{
+				StartLine: 0, StartCol: 12,
+				EndLine: 0, EndCol: 12,
+				NewText: "\n\nimport \"strings\"",
+			},
+		},
+	}
+	a.insertCompletion(item, nil)
+
+	buf := a.EditorGroup.ActiveBuffer()
+	if !strings.Contains(buf.Lines[2], "import \"strings\"") {
+		t.Fatalf("import not added: %v", buf.Lines)
+	}
+	if !strings.Contains(buf.Lines[5], "strings.ToUpper") {
+		t.Fatalf("completion text not inserted: %v", buf.Lines)
+	}
+
+	a.EditorGroup.Editor.Undo.Undo(buf)
+	expected := "package main\n\nfunc main() {\n\tToUpper\n}\n"
+	if got := strings.Join(buf.Lines, "\n"); got != expected {
+		t.Fatalf("after single undo: got %q, want %q", got, expected)
 	}
 }
