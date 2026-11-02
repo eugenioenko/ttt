@@ -104,6 +104,55 @@ func TestUndoAfterBranchingKeepsUnsavedChanges(t *testing.T) {
 	}
 }
 
+func TestPluginUndoGroupSavePoint(t *testing.T) {
+	for _, saveAtEnd := range []bool{false, true} {
+		t.Run(map[bool]string{false: "save inside group", true: "save at group end"}[saveAtEnd], func(t *testing.T) {
+			h := newTestHarness(t, 80, 24)
+			defer h.stop()
+			f := filepath.Join(h.dir, "transaction.txt")
+			if err := os.WriteFile(f, []byte("hello\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := h.app.EditorGroup.OpenFile(f); err != nil {
+				t.Fatal(err)
+			}
+			api := app.NewPluginEditorAPI(h.app)
+			api.BeginUndoGroup()
+			api.Insert(0, 0, "A")
+			if !saveAtEnd {
+				h.exec("file.save")
+			}
+			api.Insert(0, 1, "B")
+			if saveAtEnd {
+				h.exec("file.save")
+			}
+			api.EndUndoGroup()
+			h.exec("editor.undo")
+			h.exec("editor.redo")
+			if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "ABhello" {
+				t.Fatalf("buffer = %q, want ABhello", got)
+			}
+			wantDisk := "Ahello\n"
+			if saveAtEnd {
+				wantDisk = "ABhello\n"
+			}
+			if got := readFile(t, f); got != wantDisk {
+				t.Fatalf("disk = %q, want %q", got, wantDisk)
+			}
+			if got := h.app.EditorGroup.IsDirty(); got != !saveAtEnd {
+				t.Fatalf("dirty = %v, want %v", got, !saveAtEnd)
+			}
+			if !saveAtEnd {
+				h.exec("editor.quit")
+				h.assertContains("Unsaved changes")
+				if !*h.app.Running {
+					t.Fatal("quit discarded unsaved transaction edits")
+				}
+			}
+		})
+	}
+}
+
 func TestPluginSetLineIdenticalTextIsUndoNoop(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
