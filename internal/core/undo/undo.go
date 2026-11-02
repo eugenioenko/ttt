@@ -16,12 +16,13 @@ type EditCommand interface {
 // UndoStack manages undo and redo stacks with automatic grouping of
 // consecutive character inserts and deletes.
 type UndoStack struct {
-	undo           []EditCommand
-	redo           []EditCommand
-	grouping       bool
-	savePoint      int
-	inTransaction  bool
-	transactionIdx int
+	undo             []EditCommand
+	redo             []EditCommand
+	grouping         bool
+	savePoint        int
+	inTransaction    bool
+	transactionDepth int
+	transactionIdx   int
 	// DeleteCursorStart controls where the cursor lands after undoing a
 	// DeleteSelectionCommand. When true, cursor goes to the start of the
 	// restored text (Emacs convention); when false, to the end (default).
@@ -30,18 +31,26 @@ type UndoStack struct {
 
 func (s *UndoStack) BeginTransaction() {
 	s.grouping = false
+	if s.transactionDepth == 0 {
+		s.transactionIdx = len(s.undo)
+	}
+	s.transactionDepth++
 	s.inTransaction = true
-	s.transactionIdx = len(s.undo)
 }
 
 func (s *UndoStack) EndTransaction() {
-	if !s.inTransaction {
+	if s.transactionDepth == 0 {
 		return
 	}
-	idx := s.transactionIdx
-	s.inTransaction = false
+	s.transactionDepth--
 	s.grouping = false
-
+	if s.transactionDepth > 0 {
+		// Inner scope of a nested transaction: keep the outer transaction
+		// active and preserve its start index.
+		return
+	}
+	s.inTransaction = false
+	idx := s.transactionIdx
 	if idx >= len(s.undo) {
 		return
 	}
