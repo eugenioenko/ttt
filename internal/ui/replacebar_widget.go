@@ -21,14 +21,16 @@ type ReplaceBarWidget struct {
 	OnReplace    func(match FindMatch, replacement string)
 	OnReplaceAll func(query, replacement string, opts SearchOptions)
 	OnDismiss    func()
+	focused      bool
 	focusRow     int
+	barRect      Rect
 	btnPrev      HitRegion
 	btnNext      HitRegion
 	btnClose     HitRegion
 }
 
 func NewReplaceBarWidget() *ReplaceBarWidget {
-	r := &ReplaceBarWidget{}
+	r := &ReplaceBarWidget{focused: true}
 	r.SearchInput = NewInputWidget()
 	r.SearchInput.Placeholder = "Search"
 	r.SearchInput.OnChange = func(string) {
@@ -77,21 +79,16 @@ func (r *ReplaceBarWidget) syncActions() {
 	}
 }
 
-func (r *ReplaceBarWidget) barLayout() (barX, barY, barW, barH int) {
-	rect := r.GetRect()
-	barW = 40
-	if barW > rect.W-4 {
-		barW = rect.W - 4
-	}
-	barX = rect.W - barW - 1
-	barY = 4
-	barH = 4
-	return
-}
-
 func (r *ReplaceBarWidget) Focusable() bool { return true }
 
+func (r *ReplaceBarWidget) Focus() {
+	r.focused = true
+}
+
 func (r *ReplaceBarWidget) FocusedInput() *InputWidget {
+	if !r.focused {
+		return nil
+	}
 	if r.focusRow == 1 {
 		return r.ReplaceInput
 	}
@@ -99,8 +96,11 @@ func (r *ReplaceBarWidget) FocusedInput() *InputWidget {
 }
 
 func (r *ReplaceBarWidget) CursorPosition() (int, int, bool) {
+	if !r.focused {
+		return 0, 0, false
+	}
 	rect := r.GetRect()
-	barX, barY, barW, _ := r.barLayout()
+	barX, barY, barW := r.barRect.X, r.barRect.Y, r.barRect.W
 	row := barY + 1 + r.focusRow
 	inp := r.SearchInput
 	if r.focusRow == 1 {
@@ -123,6 +123,7 @@ func (r *ReplaceBarWidget) Render(surface Surface) {
 	barX := sw - barW - 1
 	barY := 4
 	barH := 4
+	r.barRect = Rect{X: barX, Y: barY, W: barW, H: barH}
 
 	b := term.SingleBorderSet()
 	if r.Borders != nil {
@@ -211,10 +212,15 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	case *tcell.EventMouse:
 		if tev.Buttons()&tcell.Button1 != 0 {
 			mx, my := tev.Position()
-			barX, barY, barW, _ := r.barLayout()
 			rect := r.GetRect()
 			localX := mx - rect.X
 			localY := my - rect.Y
+			barX, barY, barW, barH := r.barRect.X, r.barRect.Y, r.barRect.W, r.barRect.H
+			if localX < barX || localX >= barX+barW || localY < barY || localY >= barY+barH {
+				r.focused = false
+				return EventIgnored
+			}
+			r.focused = true
 
 			if r.btnPrev.Contains(mx, my) {
 				if len(r.Matches) > 0 {
@@ -251,15 +257,20 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventConsumed
 			}
 
+			return EventConsumed
 		}
-		return EventConsumed
+		return EventIgnored
 	case *tcell.EventKey:
 		return r.handleKey(tev)
 	}
-	return EventConsumed
+	return EventIgnored
 }
 
 func (r *ReplaceBarWidget) handleKey(kev *tcell.EventKey) EventResult {
+	if !r.focused && kev.Key() != tcell.KeyEscape {
+		return EventIgnored
+	}
+
 	switch kev.Key() {
 	case tcell.KeyEscape:
 		if r.OnDismiss != nil {
@@ -331,5 +342,5 @@ func (r *ReplaceBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 		return EventConsumed
 	}
 
-	return EventConsumed
+	return EventIgnored
 }
