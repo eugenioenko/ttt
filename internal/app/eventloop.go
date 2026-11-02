@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
@@ -55,6 +56,13 @@ func RunEventLoop(
 		line, col := app.EditorGroup.ActiveCursor()
 		filePath := app.EditorGroup.ActiveFilePath()
 		cursorCount := app.EditorGroup.MultiCursorCount()
+		activePath := ""
+		if filePath != "" && !app.EditorGroup.IsActiveVirtual() && app.EditorGroup.ActiveBuffer() != nil {
+			if abs, err := filepath.Abs(filePath); err == nil {
+				activePath = abs
+			}
+		}
+		app.Status.SetSegment(view.StatusSegment{ID: "file-path", Side: "left", Priority: 50, Text: activePath})
 
 		posText := fmt.Sprintf("Ln %d, Col %d", line+1, col+1)
 		if cursorCount > 1 {
