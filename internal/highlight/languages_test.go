@@ -7,6 +7,7 @@ import (
 
 func TestLanguagesResolveDisplayedGrammars(t *testing.T) {
 	setExternal(t,
+		ExternalGrammar{Path: writeGrammar(t, "collision.json", strings.ReplaceAll(fooGrammar, "source.foo", "source.collision")), Language: "source.go"},
 		ExternalGrammar{Path: writeGrammar(t, "go.json", commentGo)},
 		ExternalGrammar{Path: writeGrammar(t, "foo.json", fooGrammar), Language: "Go"},
 		ExternalGrammar{Path: writeGrammar(t, "other.json", strings.ReplaceAll(fooGrammar, "source.foo", "source.other")), Language: "Go"},

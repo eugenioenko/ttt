@@ -203,12 +203,17 @@ func (c *grammarCatalog) externalForFilename(name string) (grammarRef, bool) {
 func (c *grammarCatalog) forLanguage(lang string) (grammarRef, bool) {
 	key := strings.ToLower(strings.TrimSpace(lang))
 	for _, ref := range c.external {
-		if ref.scopeName == lang || ref.languageID == key {
+		if ref.scopeName == lang {
 			return ref, true
 		}
 	}
 	if info, ok := grammars.InfoForScope(lang); ok {
 		return refFromInfo(info), true
+	}
+	for _, ref := range c.external {
+		if ref.languageID == key {
+			return ref, true
+		}
 	}
 	if ref, ok := c.languages[key]; ok {
 		return ref, true
