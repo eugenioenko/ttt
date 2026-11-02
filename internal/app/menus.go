@@ -244,8 +244,10 @@ func openContextMenu(app *App, items []ui.ContextMenuItem, x, y int) {
 		app.Root.PopOverlay()
 		app.restoreMenuFocus()
 		reg.Execute(cmd)
+		app.ExplorerContextNode = nil
 	}
 	menu.OnDismiss = func() {
+		app.ExplorerContextNode = nil
 		app.Root.PopOverlay()
 		app.restoreMenuFocus()
 	}

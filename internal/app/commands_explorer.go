@@ -12,6 +12,16 @@ func (a *App) explorerReload() {
 	a.Explorer.Reload()
 }
 
+func (a *App) ExplorerOpen() {
+	context := a.ExplorerContextNode
+	a.ExplorerContextNode = nil
+	if context != nil {
+		a.Explorer.ActivatePath(context.ID)
+		return
+	}
+	a.Explorer.Tree.ActivateSelected()
+}
+
 func (a *App) ExplorerNewFile() {
 	a.FileOpNewFile(a.explorerNodePath(), a.explorerReload)
 }
@@ -167,7 +177,7 @@ func registerExplorerCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "explorer.open", Title: "Explorer: Toggle Node",
 		Keywords: []string{"view", "file"},
-		Handler:  func() { app.Explorer.Tree.ActivateSelected() },
+		Handler:  app.ExplorerOpen,
 	})
 
 	reg.Register(command.Command{
