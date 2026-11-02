@@ -350,7 +350,7 @@ func (tp *TabbedPanel) HiddenTabs() ([]string, []string) {
 	for _, idx := range tp.Tabs.HiddenTabs() {
 		if idx >= 0 && idx < len(tp.panels) {
 			ids = append(ids, tp.panels[idx].ID)
-			titles = append(titles, tp.panels[idx].Title)
+			titles = append(titles, tp.tabLabel(tp.panels[idx]))
 		}
 	}
 	return ids, titles
