@@ -111,6 +111,7 @@ func (a *App) DismissAutocomplete() {
 	a.EditorGroup.Autocomplete = nil
 	a.CompletionItems = nil
 	a.LspCompletionItems = nil
+	a.completion.lines = nil
 }
 
 func (a *App) IsAutocompleteActive() bool {
@@ -139,7 +140,10 @@ func (a *App) resolveAndInsert(item ui.CompletionItem) {
 			if err == nil {
 				resolved, err := client.ResolveCompletion(*lspItem)
 				if err == nil && resolved != nil {
-					for _, edit := range resolved.AdditionalTextEdits {
+					if resolved.TextEdit != nil {
+						lspItem = resolved
+					}
+					for _, edit := range runeTextEdits(a.completion.lines, resolved.AdditionalTextEdits) {
 						item.AdditionalEdits = append(item.AdditionalEdits, ui.AdditionalEdit{
 							StartLine: edit.Range.Start.Line,
 							StartCol:  edit.Range.Start.Character,
@@ -168,9 +172,15 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 
 	var text string
 	var startLine, startCol, endLine, endCol int
-	var snippet lsp.SnippetExpansion
 
 	if textEdit != nil {
+		converted := *textEdit
+		lines := a.completion.lines
+		if lines == nil {
+			lines = editor.Buf.Lines
+		}
+		converted.Range = lsp.RangeToRunes(lines, converted.Range)
+		textEdit = &converted
 		text = textEdit.NewText
 		startLine = textEdit.Range.Start.Line
 		startCol = textEdit.Range.Start.Character
@@ -196,93 +206,73 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		endLine = startLine
 	}
 
+	if startLine < 0 || endLine < startLine || endLine >= len(editor.Buf.Lines) {
+		return
+	}
+
+	var snippet lsp.SnippetExpansion
 	if item.InsertTextFormat == lsp.InsertTextFormatSnippet {
 		snippet = lsp.ExpandSnippet(text)
 		text = snippet.Text
 	}
 
-	// One undo step for the whole accept: the replaced range, the inserted
-	// text and the additional edits are one change (#876).
-	if editor.Undo != nil {
-		editor.Undo.BeginTransaction()
-		defer editor.Undo.EndTransaction()
-	}
-	if startLine != endLine || startCol != endCol {
-		editor.ExecCommand(&undo.DeleteSelectionCommand{
-			StartLine: startLine, StartCol: startCol,
-			EndLine: endLine, EndCol: endCol,
-		})
-	}
-	lines := strings.Split(text, "\n")
-	if len(lines) == 1 {
-		editor.ExecCommand(&undo.InsertStringCommand{
-			Line: startLine, Col: startCol, Text: text,
-		})
-		editor.Cursor.Line = startLine
-		editor.Cursor.Col = startCol + len([]rune(text))
-	} else {
-		runes := []rune(editor.Buf.Lines[startLine])
-		suffix := ""
-		if startCol < len(runes) {
-			suffix = string(runes[startCol:])
+	// Every range refers to the text before acceptance, including edits after
+	// the completed word on the same line.
+	edits := []lsp.TextEdit{{
+		Range:   lsp.Range{Start: lsp.Position{Line: startLine, Character: startCol}, End: lsp.Position{Line: endLine, Character: endCol}},
+		NewText: text,
+	}}
+	additional := make([]lsp.TextEdit, 0, len(item.AdditionalEdits))
+	for _, edit := range item.AdditionalEdits {
+		if lines := a.completion.lines; startLine < len(lines) && startLine == endLine {
+			delta := len([]rune(editor.Buf.Lines[startLine])) - len([]rune(lines[startLine]))
+			if edit.StartLine == startLine && edit.StartCol >= a.completion.col {
+				edit.StartCol += delta
+			}
+			if edit.EndLine == startLine && edit.EndCol >= a.completion.col {
+				edit.EndCol += delta
+			}
 		}
-		editor.ExecCommand(&undo.PasteCommand{
-			Line: startLine, Col: startCol, Text: text, Suffix: suffix,
+		additional = append(additional, lsp.TextEdit{
+			Range:   lsp.Range{Start: lsp.Position{Line: edit.StartLine, Character: edit.StartCol}, End: lsp.Position{Line: edit.EndLine, Character: edit.EndCol}},
+			NewText: edit.NewText,
 		})
-		editor.Cursor.Line = startLine + len(lines) - 1
-		editor.Cursor.Col = len([]rune(lines[len(lines)-1]))
+	}
+	sortTextEdits(additional)
+	orderedAdditional := slices.Clone(additional)
+	reverseSamePositionTextEdits(orderedAdditional)
+	cursor := lsp.Position{Line: startLine, Character: startCol}
+	for _, edit := range orderedAdditional {
+		end := edit.Range.End
+		if end.Line > cursor.Line || (end.Line == cursor.Line && end.Character > cursor.Character) {
+			continue
+		}
+		replacement := strings.Split(edit.NewText, "\n")
+		if end.Line == cursor.Line {
+			cursor.Character -= end.Character
+			cursor.Character += len([]rune(replacement[len(replacement)-1]))
+			if len(replacement) == 1 {
+				cursor.Character += edit.Range.Start.Character
+			}
+		}
+		cursor.Line += len(replacement) - 1 - (end.Line - edit.Range.Start.Line)
 	}
 	if editor.Selection != nil {
 		editor.Selection.Clear()
 	}
 	if stop, ok := snippet.FirstStop(); ok {
-		stopLine, stopCol := snippetPosition(text, startLine, startCol, stop.Offset)
-		stopEndLine, stopEndCol := snippetPosition(text, startLine, startCol, stop.Offset+stop.Length)
+		stopLine, stopCol := snippetPosition(text, cursor.Line, cursor.Character, stop.Offset)
+		stopEndLine, stopEndCol := snippetPosition(text, cursor.Line, cursor.Character, stop.Offset+stop.Length)
 		if stop.Length > 0 {
 			editor.Selection.Start(stopLine, stopCol)
-			editor.Cursor.Line = stopEndLine
-			editor.Cursor.Col = stopEndCol
+			cursor.Line, cursor.Character = stopEndLine, stopEndCol
 		} else {
-			editor.Cursor.Line = stopLine
-			editor.Cursor.Col = stopCol
+			cursor.Line, cursor.Character = stopLine, stopCol
 		}
+	} else {
+		cursor.Line, cursor.Character = snippetPosition(text, cursor.Line, cursor.Character, len([]rune(text)))
 	}
-
-	for i := len(item.AdditionalEdits) - 1; i >= 0; i-- {
-		edit := item.AdditionalEdits[i]
-		linesBefore := len(editor.Buf.Lines)
-
-		if edit.StartLine != edit.EndLine || edit.StartCol != edit.EndCol {
-			editor.ExecCommand(&undo.DeleteSelectionCommand{
-				StartLine: edit.StartLine, StartCol: edit.StartCol,
-				EndLine: edit.EndLine, EndCol: edit.EndCol,
-			})
-		}
-		if edit.NewText != "" {
-			suffix := ""
-			if edit.StartLine < len(editor.Buf.Lines) {
-				runes := []rune(editor.Buf.Lines[edit.StartLine])
-				if edit.StartCol < len(runes) {
-					suffix = string(runes[edit.StartCol:])
-				}
-			}
-			editor.ExecCommand(&undo.PasteCommand{
-				Line: edit.StartLine, Col: edit.StartCol,
-				Text: edit.NewText, Suffix: suffix,
-			})
-		}
-
-		linesAdded := len(editor.Buf.Lines) - linesBefore
-		if linesAdded != 0 {
-			if edit.StartLine <= editor.Cursor.Line {
-				editor.Cursor.Line += linesAdded
-			}
-			if editor.Selection != nil && editor.Selection.Active && edit.StartLine <= editor.Selection.Anchor.Line {
-				editor.Selection.Anchor.Line += linesAdded
-			}
-		}
-	}
-	editor.FlushOnChange()
+	a.applyRuneTextEdits(append(edits, additional...), &cursor)
 }
 
 // snippetPosition converts a rune offset in a snippet expansion to an absolute
@@ -427,8 +417,8 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 	version := a.editorBufferVersion()
 	buf := a.editorBuffer()
 	r := lsp.Range{
-		Start: lsp.Position{Line: startLine, Character: startCol},
-		End:   lsp.Position{Line: endLine, Character: endCol},
+		Start: lsp.Position{Line: startLine, Character: a.lspColumn(path, startLine, startCol)},
+		End:   lsp.Position{Line: endLine, Character: a.lspColumn(path, endLine, endCol)},
 	}
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
@@ -488,7 +478,7 @@ func (a *App) applyCodeActionEdit(path string, edit *lsp.WorkspaceEdit) {
 		return
 	}
 	for _, batch := range batches {
-		if URIToPath(batch.URI) == path {
+		if URIToPath(batch.URI) == path && a.EditorGroup.ActiveFilePath() == path {
 			a.ApplyTextEdits(batch.Edits)
 		}
 	}
@@ -586,6 +576,7 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 		}
 		return
 	}
+	col = a.lspColumn(path, line, col)
 	workDir := a.lspWorkDir(path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
@@ -614,8 +605,11 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	files := make(map[string]bool)
 	for _, batch := range batches {
 		path := URIToPath(batch.URI)
+		if err := a.EditorGroup.OpenFile(path); err != nil {
+			a.StatusWarn(err.Error())
+			continue
+		}
 		files[path] = true
-		a.EditorGroup.OpenFile(path)
 		a.ApplyTextEdits(batch.Edits)
 
 		if buf := a.EditorGroup.ActiveBuffer(); a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
@@ -638,6 +632,7 @@ func (a *App) RequestReferences(path, lang string, line, col int) {
 		}
 		return
 	}
+	col = a.lspColumn(path, line, col)
 	workDir := a.lspWorkDir(path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
@@ -660,18 +655,22 @@ func (a *App) RequestReferences(path, lang string, line, col int) {
 
 func (a *App) ShowReferences(locs []lsp.Location) {
 	items := make([]ui.ReferenceItem, 0, len(locs))
+	documents := make(map[string][]string)
 	for _, loc := range locs {
 		path := URIToPath(loc.URI)
+		lines, ok := documents[path]
+		if !ok {
+			lines = a.lspLines(path)
+			documents[path] = lines
+		}
 		var text string
-		if buf := a.EditorGroup.BufferForPath(path); buf != nil && loc.Range.Start.Line < len(buf.Lines) {
-			text = buf.Lines[loc.Range.Start.Line]
-		} else {
-			text = ReadLineFromFile(path, loc.Range.Start.Line)
+		if line := loc.Range.Start.Line; line >= 0 && line < len(lines) {
+			text = lines[line]
 		}
 		items = append(items, ui.ReferenceItem{
 			File: path,
 			Line: loc.Range.Start.Line,
-			Col:  loc.Range.Start.Character,
+			Col:  lsp.UTF16ToRune(text, loc.Range.Start.Character),
 			Text: strings.TrimSpace(text),
 		})
 	}
@@ -782,14 +781,34 @@ func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
-	editor := a.EditorGroup.Editor
+	a.applyRuneTextEdits(runeTextEdits(a.EditorGroup.Editor.Buf.Lines, edits), nil)
+}
 
-	sort.Slice(edits, func(i, j int) bool {
+func sortTextEdits(edits []lsp.TextEdit) {
+	sort.SliceStable(edits, func(i, j int) bool {
 		if edits[i].Range.Start.Line != edits[j].Range.Start.Line {
 			return edits[i].Range.Start.Line > edits[j].Range.Start.Line
 		}
 		return edits[i].Range.Start.Character > edits[j].Range.Start.Character
 	})
+}
+
+// Reverse equal-position groups so descending application preserves LSP array order.
+func reverseSamePositionTextEdits(edits []lsp.TextEdit) {
+	for start := 0; start < len(edits); {
+		end := start + 1
+		for end < len(edits) && edits[end].Range.Start == edits[start].Range.Start {
+			end++
+		}
+		slices.Reverse(edits[start:end])
+		start = end
+	}
+}
+
+func (a *App) applyRuneTextEdits(edits []lsp.TextEdit, cursor *lsp.Position) {
+	editor := a.EditorGroup.Editor
+	sortTextEdits(edits)
+	reverseSamePositionTextEdits(edits)
 
 	// One undo step for the whole batch: a rename, a format or a code action
 	// is a single change, not one per edited range (#876).
@@ -820,6 +839,10 @@ func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
 				Text: edit.NewText, Suffix: suffix,
 			})
 		}
+	}
+	if cursor != nil {
+		editor.Cursor.Line, editor.Cursor.Col = cursor.Line, cursor.Character
+		a.EditorGroup.ScrollToCursor()
 	}
 	editor.FlushOnChange()
 }
@@ -883,6 +906,7 @@ func (a *App) requestLocation(method, path, lang string, line, col int) {
 		}
 		return
 	}
+	col = a.lspColumn(path, line, col)
 	workDir := a.lspWorkDir(path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
