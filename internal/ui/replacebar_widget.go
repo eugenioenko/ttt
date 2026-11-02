@@ -55,12 +55,7 @@ func NewReplaceBarWidget() *ReplaceBarWidget {
 	r.ReplaceInput = NewInputWidget()
 	r.ReplaceInput.Placeholder = "Replace"
 	r.ReplaceInput.Actions = []InputAction{
-		{Label: string(icons.Rune(icons.Replace)), OnClick: func() {
-			if len(r.Matches) > 0 && r.OnReplace != nil {
-				r.OnReplace(r.Matches[r.Current], r.ReplaceInput.Text)
-				r.search()
-			}
-		}},
+		{Label: string(icons.Rune(icons.Replace)), OnClick: r.replaceCurrent},
 		{Label: "All", OnClick: func() {
 			if r.OnReplaceAll != nil {
 				r.OnReplaceAll(r.SearchInput.Text, r.ReplaceInput.Text, r.Options)
@@ -201,6 +196,14 @@ func (r *ReplaceBarWidget) Refresh() {
 
 func (r *ReplaceBarWidget) CurrentMatch() int { return r.Current }
 
+func (r *ReplaceBarWidget) replaceCurrent() {
+	r.Refresh()
+	if len(r.Matches) > 0 && r.OnReplace != nil {
+		r.OnReplace(r.Matches[r.Current], r.ReplaceInput.Text)
+		r.search()
+	}
+}
+
 func (r *ReplaceBarWidget) navigate() {
 	if r.OnNavigate != nil && len(r.Matches) > 0 {
 		r.OnNavigate(r.Matches[r.Current])
@@ -291,10 +294,7 @@ func (r *ReplaceBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 				r.navigate()
 			}
 		} else {
-			if len(r.Matches) > 0 && r.OnReplace != nil {
-				r.OnReplace(r.Matches[r.Current], r.ReplaceInput.Text)
-				r.search()
-			}
+			r.replaceCurrent()
 		}
 		return EventConsumed
 	case tcell.KeyUp:
@@ -342,5 +342,5 @@ func (r *ReplaceBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 		return EventConsumed
 	}
 
-	return EventIgnored
+	return EventConsumed
 }
