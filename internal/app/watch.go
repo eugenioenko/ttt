@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -61,20 +62,29 @@ func (a *App) SyncWatched() {
 // untouched (the save path still guards against clobbering) and the user is
 // warned. The recorded disk state of a dirty buffer is deliberately not
 // updated, so the save-time conflict check keeps working.
+// A missing file is reported without changing the buffer contents.
 func (a *App) HandleFileChanged(path string) {
+	a.handleFileChanged(path, os.Stat)
+}
+
+func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
 	buf := a.EditorGroup.BufferForPath(path)
 	if buf == nil {
 		return
 	}
-	if !buf.DiskChanged(path) {
-		// Our own save, or a change that doesn't affect the bytes we hold.
+	name := filepath.Base(path)
+	info, err := stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			a.StatusWarn(name + " was deleted on disk")
+		} else {
+			a.StatusWarn(fmt.Sprintf("Failed to check %s: %v", name, err))
+		}
 		return
 	}
-	name := filepath.Base(path)
-	info, err := os.Stat(path)
-	if err != nil {
-		a.StatusWarn(name + " was deleted on disk")
+	if !buf.DiskChanged(path) {
+		// Our own save, or a change that doesn't affect the bytes we hold.
 		return
 	}
 	if buf.Dirty {

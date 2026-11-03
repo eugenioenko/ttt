@@ -82,8 +82,9 @@ func (b *Buffer) recordDiskInfo(info os.FileInfo) {
 
 // DiskChanged reports whether the file on disk has been modified since the
 // buffer last loaded or saved it. It returns false when there is no recorded
-// disk state (a new buffer never written to disk) or when the file no longer
-// exists — a missing file is handled by the save itself, which recreates it.
+// disk state (a new buffer never written to disk) or when stat fails. Callers
+// that need to distinguish missing files from other stat errors must check
+// those separately. Saving a missing file recreates it without a conflict.
 func (b *Buffer) DiskChanged(filename string) bool {
 	if !b.diskInfoSet {
 		return false
