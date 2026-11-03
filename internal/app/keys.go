@@ -56,6 +56,9 @@ func comboToTcell(combo config.KeyCombo) (tcell.Key, tcell.ModMask, rune) {
 	if combo.Shift {
 		mod |= tcell.ModShift
 	}
+	if combo.Super {
+		mod |= tcell.ModMeta
+	}
 
 	// Ctrl+non-letter printables (space, backtick, slash) are registered in
 	// their canonical control-key form (KeyNUL for ctrl+space/ctrl+backtick,
@@ -81,7 +84,7 @@ func comboToTcell(combo config.KeyCombo) (tcell.Key, tcell.ModMask, rune) {
 		return key, mod, 0
 	}
 
-	if combo.Ctrl && combo.Rune >= 'a' && combo.Rune <= 'z' {
+	if combo.Ctrl && !combo.Super && combo.Rune >= 'a' && combo.Rune <= 'z' {
 		key := tcell.KeyCtrlA + tcell.Key(combo.Rune-'a')
 		return key, mod, 0
 	}

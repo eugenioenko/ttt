@@ -114,6 +114,9 @@ func (k *KeyTesterWidget) describeKey(kev *tcell.EventKey) string {
 	if mod&tcell.ModAlt != 0 {
 		parts = append(parts, "alt")
 	}
+	if mod&tcell.ModMeta != 0 {
+		parts = append(parts, "super")
+	}
 
 	key := kev.Key()
 	if name := specialKeyName(key); name != "" {

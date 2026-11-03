@@ -470,3 +470,17 @@ func TestMarshalOrderedMap(t *testing.T) {
 		t.Errorf("unexpected values: %v", parsed)
 	}
 }
+
+func TestParseSuperModifier(t *testing.T) {
+	for _, key := range []string{"super+a", "cmd+a", "command+a"} {
+		t.Run(key, func(t *testing.T) {
+			steps, err := ParseKeyString(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(steps) != 1 || steps[0].Rune != 'a' || !steps[0].Super {
+				t.Fatalf("unexpected steps: %+v", steps)
+			}
+		})
+	}
+}

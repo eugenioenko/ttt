@@ -38,9 +38,11 @@ func NewTcellScreen() (*TcellScreen, error) {
 	if err := s.Init(); err != nil {
 		return nil, err
 	}
+	t := &TcellScreen{scr: s, styleMap: DefaultStyleMap()}
 	s.EnableMouse()
+	t.setMouseShiftCapture(true)
 	s.EnablePaste()
-	return &TcellScreen{scr: s, styleMap: DefaultStyleMap()}, nil
+	return t, nil
 }
 
 func NewTcellScreenFrom(s tcell.Screen) *TcellScreen {
@@ -163,7 +165,36 @@ func (t *TcellScreen) Fini() {
 	if t.pointerShape != "" {
 		t.SetPointerShape("default")
 	}
+	t.setMouseShiftCapture(false)
 	t.scr.Fini()
+}
+
+func (t *TcellScreen) Suspend() error {
+	t.setMouseShiftCapture(false)
+	if err := t.scr.Suspend(); err != nil {
+		t.setMouseShiftCapture(true)
+		return err
+	}
+	return nil
+}
+
+func (t *TcellScreen) Resume() error {
+	if err := t.scr.Resume(); err != nil {
+		return err
+	}
+	t.setMouseShiftCapture(true)
+	return nil
+}
+
+// tcell enables mouse reporting but does not request Shift modifiers.
+func (t *TcellScreen) setMouseShiftCapture(capture bool) {
+	if tty, ok := t.scr.Tty(); ok {
+		mode := 0
+		if capture {
+			mode = 1
+		}
+		_, _ = fmt.Fprintf(tty, "\x1b[>%ds", mode)
+	}
 }
 
 func (t *TcellScreen) ShowCursor(x, y int) {

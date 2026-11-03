@@ -14,6 +14,7 @@ type KeyCombo struct {
 	Ctrl    bool
 	Alt     bool
 	Shift   bool
+	Super   bool
 }
 
 type KeyBinding struct {
@@ -90,6 +91,8 @@ func parseSingleKey(s string) (KeyCombo, error) {
 				combo.Alt = true
 			case "shift":
 				combo.Shift = true
+			case "super", "cmd", "command":
+				combo.Super = true
 			default:
 				return combo, fmt.Errorf("unknown modifier %q", token)
 			}
@@ -293,6 +296,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+w", Command: "tab.close"},
 		{Key: "ctrl+k enter", Command: "tab.pin"},
 		{Key: "ctrl+a", Command: "editor.selectAll"},
+		{Key: "super+a", Command: "editor.selectAll"},
 		{Key: "ctrl+c", Command: "editor.copy"},
 		{Key: "ctrl+x", Command: "editor.cut"},
 		{Key: "ctrl+v", Command: "editor.paste"},
