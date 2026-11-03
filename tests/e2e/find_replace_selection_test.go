@@ -3,6 +3,7 @@ package e2e
 import (
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
@@ -142,5 +143,39 @@ func TestFindMultilineSelectionIgnored(t *testing.T) {
 	}
 	if bar.Input.Text != "" {
 		t.Fatalf("multi-line selection should not populate single-line input, got %q", bar.Input.Text)
+	}
+}
+
+func TestDiffFindPrefilledWithSelection(t *testing.T) {
+	h := newTestHarness(t, 120, 30)
+	defer h.stop()
+	h.app.EditorGroup.OpenDiff("code.txt", diff.FileDiff{}, []string{"keep", "old needle"}, []string{"keep", "new needle"}, true)
+	h.redraw()
+	dv := h.app.EditorGroup.ActiveDiffWidget()
+	if dv == nil {
+		t.Fatal("expected ActiveDiffWidget")
+	}
+
+	p := dv.KeyPane()
+	p.Selection.Start(1, 4)
+	p.Cursor.Line = 1
+	p.Cursor.Col = 10
+	p.Selection.Active = true
+
+	h.app.OpenFind()
+	h.redraw()
+
+	bar, ok := h.app.Root.TopOverlayWidget().(*ui.FindBarWidget)
+	if !ok {
+		t.Fatalf("expected FindBarWidget, got %T", h.app.Root.TopOverlayWidget())
+	}
+	if bar.Input.Text != "needle" {
+		t.Fatalf("diff find input = %q, want %q", bar.Input.Text, "needle")
+	}
+	if len(dv.SearchMatchesLeft) != 1 || len(dv.SearchMatchesRight) != 1 {
+		t.Fatalf("find matches left %v right %v, want one per side", dv.SearchMatchesLeft, dv.SearchMatchesRight)
+	}
+	if !p.Selection.Active {
+		t.Fatal("expected diff selection to remain active after prefilling find bar")
 	}
 }

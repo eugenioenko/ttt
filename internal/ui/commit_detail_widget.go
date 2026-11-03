@@ -1282,6 +1282,19 @@ func (d *CommitDetailWidget) selectionText() string {
 	return d.selection.Text(len(d.rows), d.rowText)
 }
 
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (d *CommitDetailWidget) SelectedText() string {
+	if text := d.selectionText(); text != "" {
+		return text
+	}
+	for i := range d.Files {
+		if v := d.Files[i].view; v != nil && v.hasSelection() {
+			return v.SelectedText()
+		}
+	}
+	return ""
+}
+
 func (d *CommitDetailWidget) CopySelection() string {
 	if text := d.selectionText(); text != "" {
 		d.ClearSelection()

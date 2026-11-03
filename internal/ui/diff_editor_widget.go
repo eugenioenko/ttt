@@ -1250,7 +1250,8 @@ func (d *DiffEditorWidget) ClearSelection() {
 	}
 }
 
-func (d *DiffEditorWidget) CopySelection() string {
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (d *DiffEditorWidget) SelectedText() string {
 	p := d.lead()
 	if !p.Selection.Active {
 		return ""
@@ -1260,11 +1261,15 @@ func (d *DiffEditorWidget) CopySelection() string {
 		Anchor:  diffSelPos{Line: start.Line, Col: start.Col},
 		Current: diffSelPos{Line: end.Line, Col: end.Col},
 	}
-	text := sel.Text(len(p.Buf.Lines), func(line int) (string, bool) {
+	return sel.Text(len(p.Buf.Lines), func(line int) (string, bool) {
 		return p.Buf.Lines[line], p.DiffOverlay.kind(line) != diff.Collapsed
 	})
+}
+
+func (d *DiffEditorWidget) CopySelection() string {
+	text := d.SelectedText()
 	if text != "" {
-		p.Selection.Clear()
+		d.lead().Selection.Clear()
 	}
 	return text
 }

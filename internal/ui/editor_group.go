@@ -2715,10 +2715,10 @@ func (g *EditorGroupWidget) SelectedText() string {
 		return ""
 	}
 	if dv, ok := t.Content.(*DiffEditorWidget); ok {
-		return dv.CopySelection()
+		return dv.SelectedText()
 	}
 	if detail, ok := t.Content.(*CommitDetailWidget); ok {
-		return detail.CopySelection()
+		return detail.SelectedText()
 	}
 	if t.Content != nil {
 		return ""
