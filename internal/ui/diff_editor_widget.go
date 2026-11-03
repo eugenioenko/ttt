@@ -1250,10 +1250,23 @@ func (d *DiffEditorWidget) ClearSelection() {
 	}
 }
 
+func (d *DiffEditorWidget) selectionPane() *EditorPaneWidget {
+	lead := d.lead()
+	if lead != nil && lead.Selection.Active {
+		return lead
+	}
+	for _, p := range d.panes() {
+		if p != nil && p.Selection.Active {
+			return p
+		}
+	}
+	return nil
+}
+
 // SelectedText returns the active selection text, or an empty string if no selection is active.
 func (d *DiffEditorWidget) SelectedText() string {
-	p := d.lead()
-	if !p.Selection.Active {
+	p := d.selectionPane()
+	if p == nil {
 		return ""
 	}
 	start, end := p.Selection.Range(p.Cursor.Line, p.Cursor.Col)
@@ -1267,9 +1280,13 @@ func (d *DiffEditorWidget) SelectedText() string {
 }
 
 func (d *DiffEditorWidget) CopySelection() string {
+	p := d.selectionPane()
+	if p == nil {
+		return ""
+	}
 	text := d.SelectedText()
 	if text != "" {
-		d.lead().Selection.Clear()
+		p.Selection.Clear()
 	}
 	return text
 }

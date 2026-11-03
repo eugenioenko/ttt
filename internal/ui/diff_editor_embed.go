@@ -106,12 +106,7 @@ func (d *DiffEditorWidget) setHoveredGap(gap int) bool {
 }
 
 func (d *DiffEditorWidget) hasSelection() bool {
-	for _, p := range d.panes() {
-		if p.Selection.Active {
-			return true
-		}
-	}
-	return false
+	return d.selectionPane() != nil
 }
 
 func (d *DiffEditorWidget) maxTextWidth() int {
