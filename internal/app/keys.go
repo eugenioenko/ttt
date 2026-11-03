@@ -50,6 +50,9 @@ func comboToTcell(combo config.KeyCombo) (tcell.Key, tcell.ModMask, rune) {
 	if combo.Ctrl {
 		mod |= tcell.ModCtrl
 	}
+	if combo.Cmd {
+		mod |= tcell.ModMeta
+	}
 	if combo.Alt {
 		mod |= tcell.ModAlt
 	}

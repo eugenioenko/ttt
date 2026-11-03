@@ -129,6 +129,23 @@ func TestRootGlobalKeysFire(t *testing.T) {
 	}
 }
 
+func TestRootCommentShortcutEncodings(t *testing.T) {
+	root := NewRoot(&mockWidget{})
+	fired := 0
+	root.AddGlobalKey(tcell.KeyUS, tcell.ModCtrl, 0, func() { fired++ })
+	root.AddGlobalKey(tcell.KeyRune, tcell.ModMeta, '/', func() { fired++ })
+
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "/", tcell.ModCtrl))
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "_", tcell.ModCtrl))
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "/", tcell.ModCtrl|tcell.ModShift))
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyUS, "", tcell.ModNone))
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "/", tcell.ModMeta))
+
+	if fired != 5 {
+		t.Fatalf("comment shortcut encodings fired %d times, want 5", fired)
+	}
+}
+
 func TestRootFocusedWidgetBlocksGlobalKey(t *testing.T) {
 	main := &mockWidget{}
 	focused := &mockWidget{focusable: true}

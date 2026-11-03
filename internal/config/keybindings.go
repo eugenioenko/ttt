@@ -12,6 +12,7 @@ type KeyCombo struct {
 	KeyName string
 	Rune    rune
 	Ctrl    bool
+	Cmd     bool
 	Alt     bool
 	Shift   bool
 }
@@ -86,6 +87,8 @@ func parseSingleKey(s string) (KeyCombo, error) {
 			switch token {
 			case "ctrl":
 				combo.Ctrl = true
+			case "cmd", "command", "meta":
+				combo.Cmd = true
 			case "alt":
 				combo.Alt = true
 			case "shift":
@@ -331,6 +334,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "alt+shift+right", Command: "sidebar.wider"},
 		{Key: "ctrl+k k", Command: "editor.deleteLine"},
 		{Key: "ctrl+/", Command: "editor.toggleComment"},
+		{Key: "cmd+/", Command: "editor.toggleComment"},
 		{Key: "ctrl+enter", Command: "editor.insertLineBelow"},
 		{Key: "ctrl+home", Command: "editor.goToFileStart"},
 		{Key: "ctrl+end", Command: "editor.goToFileEnd"},

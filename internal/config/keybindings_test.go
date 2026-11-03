@@ -85,6 +85,16 @@ func TestParseAltModifier(t *testing.T) {
 	}
 }
 
+func TestParseCommandModifier(t *testing.T) {
+	steps, err := ParseKeyString("cmd+/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !steps[0].Cmd || steps[0].Rune != '/' {
+		t.Fatalf("expected Cmd+/, got %+v", steps[0])
+	}
+}
+
 func TestParseCaseInsensitive(t *testing.T) {
 	steps, err := ParseKeyString("Ctrl+B")
 	if err != nil {

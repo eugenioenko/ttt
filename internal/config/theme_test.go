@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -128,6 +130,24 @@ func TestBundledThemesLoad(t *testing.T) {
 				t.Errorf("%s: collapsed emphasis contrast %.2f:1 (%s on %s), want >=4.5:1", name, ratio, th.Diff.CollapsedEmphasis.Fg, emphasisBg)
 			}
 		})
+	}
+}
+
+func TestAllRepositoryThemesAreBundled(t *testing.T) {
+	sourceDir := filepath.Join("..", "..", "config", "themes")
+	entries, err := os.ReadDir(sourceDir)
+	if err != nil {
+		t.Fatalf("failed to read repository themes: %v", err)
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if filepath.Ext(name) != ".json" {
+			continue
+		}
+		if _, err := themes.FS.ReadFile(name); err != nil {
+			t.Errorf("repository theme %s is not bundled: %v", name, err)
+		}
 	}
 }
 

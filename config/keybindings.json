@@ -55,6 +55,7 @@
   { "key": "alt+shift+right", "command": "sidebar.wider" },
   { "key": "ctrl+k k", "command": "editor.deleteLine" },
   { "key": "ctrl+/", "command": "editor.toggleComment" },
+  { "key": "cmd+/", "command": "editor.toggleComment" },
   { "key": "ctrl+enter", "command": "editor.insertLineBelow" },
   { "key": "ctrl+home", "command": "editor.goToFileStart" },
   { "key": "ctrl+end", "command": "editor.goToFileEnd" },

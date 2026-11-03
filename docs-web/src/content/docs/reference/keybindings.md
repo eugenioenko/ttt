@@ -43,7 +43,7 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 | Ctrl+V | `editor.paste` | Paste |
 | Shift+Insert | `editor.paste` | Paste |
 | Ctrl+G | `editor.goToLine` | Go to line |
-| Ctrl+/ | `editor.toggleComment` | Toggle line comment |
+| Ctrl+/ or Cmd+/ | `editor.toggleComment` | Toggle line comment |
 | Ctrl+Enter | `editor.insertLineBelow` | Insert line below |
 | Alt+Up | `editor.moveLineUp` | Move line up |
 | Alt+Down | `editor.moveLineDown` | Move line down |

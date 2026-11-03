@@ -142,6 +142,12 @@ func normalizeKey(k tcell.Key) tcell.Key {
 // Ctrl+letter combos are unaffected: tcell folds those to KeyCtrlA..Z itself.
 // Returns the canonical key and true when the event was folded.
 func foldCtrlEvent(kev *tcell.EventKey) (tcell.Key, bool) {
+	// A few PTY clients preserve the control byte as KeyUS but discard the
+	// modifier metadata. KeyUS is the unambiguous 0x1f representation, so it
+	// is safe to canonicalise it even without ModCtrl.
+	if kev.Key() == tcell.KeyUS && kev.Modifiers() == 0 {
+		return tcell.KeyUS, true
+	}
 	if kev.Key() != tcell.KeyRune || kev.Modifiers()&tcell.ModCtrl == 0 {
 		return 0, false
 	}
@@ -154,9 +160,26 @@ func foldCtrlEvent(kev *tcell.EventKey) (tcell.Key, bool) {
 	return 0, false
 }
 
+func ctrlPunctuationModifiersMatch(got, want tcell.ModMask) bool {
+	if got == want {
+		return true
+	}
+	// Some macOS terminals preserve Shift when Ctrl+/ is produced by the
+	// physical slash key (Ctrl+Shift+7 on non-US layouts). Treat that encoding
+	// as the same Ctrl+/ shortcut, without relaxing matching for other keys.
+	return want == tcell.ModCtrl && got == tcell.ModCtrl|tcell.ModShift
+}
+
+func ctrlSlashModifiersMatch(got, want tcell.ModMask, key tcell.Key) bool {
+	if ctrlPunctuationModifiersMatch(got, want) {
+		return true
+	}
+	return key == tcell.KeyUS && got == 0 && want == tcell.ModCtrl
+}
+
 func matchKey(kev *tcell.EventKey, gk GlobalKeyBinding) bool {
 	if folded, ok := foldCtrlEvent(kev); ok {
-		return folded == normalizeKey(gk.Key) && gk.Key != tcell.KeyRune && kev.Modifiers() == gk.Mod
+		return folded == normalizeKey(gk.Key) && gk.Key != tcell.KeyRune && ctrlSlashModifiersMatch(kev.Modifiers(), gk.Mod, kev.Key())
 	}
 	if gk.Key != tcell.KeyRune {
 		return normalizeKey(kev.Key()) == normalizeKey(gk.Key) && kev.Modifiers() == gk.Mod
@@ -169,7 +192,7 @@ func matchKey(kev *tcell.EventKey, gk GlobalKeyBinding) bool {
 // caps lock sends uppercase "J" as the second key.
 func matchKeyChord(kev *tcell.EventKey, gk GlobalKeyBinding) bool {
 	if folded, ok := foldCtrlEvent(kev); ok {
-		return folded == normalizeKey(gk.Key) && gk.Key != tcell.KeyRune && kev.Modifiers() == gk.Mod
+		return folded == normalizeKey(gk.Key) && gk.Key != tcell.KeyRune && ctrlSlashModifiersMatch(kev.Modifiers(), gk.Mod, kev.Key())
 	}
 	if gk.Key != tcell.KeyRune {
 		return normalizeKey(kev.Key()) == normalizeKey(gk.Key) && kev.Modifiers() == gk.Mod
