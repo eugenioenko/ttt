@@ -167,7 +167,7 @@ func TestExternalDeletionWarnsAndPreservesBuffer(t *testing.T) {
 	}
 }
 
-func TestExternalChangeStatErrorIsNotDeletion(t *testing.T) {
+func TestExternalChangePermissionErrorIsNotDeletion(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("chmod does not deny stat on Windows")
 	}

@@ -64,13 +64,17 @@ func (a *App) SyncWatched() {
 // updated, so the save-time conflict check keeps working.
 // A missing file is reported without changing the buffer contents.
 func (a *App) HandleFileChanged(path string) {
+	a.handleFileChanged(path, os.Stat)
+}
+
+func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
 	buf := a.EditorGroup.BufferForPath(path)
 	if buf == nil {
 		return
 	}
 	name := filepath.Base(path)
-	info, err := os.Stat(path)
+	info, err := stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			a.StatusWarn(name + " was deleted on disk")
