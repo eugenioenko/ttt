@@ -208,6 +208,29 @@ func TestDiffEditorSelectionPaneAcrossSearchFocus(t *testing.T) {
 	}
 }
 
+func TestDiffEditorSplitClickClearsSiblingSelection(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n-old value\n+new value\n")
+	d := NewDiffEditorWidget("test.go", fd, nil, nil, false)
+	d.SetUnified(false)
+	renderDiffEditor(d, 80, 5)
+
+	// Start selection in right pane
+	d.right.Selection.Start(0, 0)
+	d.right.Cursor.Line, d.right.Cursor.Col = 0, len("new value")
+
+	if !d.right.Selection.Active {
+		t.Fatal("expected right pane selection to be active")
+	}
+
+	// Click in left pane
+	ev := tcell.NewEventMouse(2, 1, tcell.Button1, 0)
+	d.HandleEvent(ev)
+
+	if d.right.Selection.Active {
+		t.Fatal("expected right pane selection to be cleared after clicking left pane")
+	}
+}
+
 func TestDiffEditorHunkOnlyDiffKeepsHunkNumbersAndGap(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -22,3 +22,3 @@\n line 22\n line 23\n line 24\n@@ -356,2 +356,2 @@\n line 356\n line 357\n")
 	d := NewDiffEditorWidget("test.go", fd, nil, nil, false)
