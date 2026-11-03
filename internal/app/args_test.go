@@ -3,7 +3,11 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func TestSplitLineCol(t *testing.T) {
@@ -37,6 +41,44 @@ func TestSplitLineCol(t *testing.T) {
 			t.Errorf("splitLineCol(%q) = (%q, %d, %d, %v), want (%q, %d, %d, %v)",
 				c.arg, path, line, col, ok, c.path, c.line, c.col, c.ok)
 		}
+	}
+}
+
+func TestDefaultWorkspaceStartupPrecedence(t *testing.T) {
+	savedArgs, savedConfig := os.Args, config.OverrideConfigDir
+	t.Cleanup(func() { os.Args, config.OverrideConfigDir = savedArgs, savedConfig })
+	config.OverrideConfigDir = t.TempDir()
+	first, second := t.TempDir(), t.TempDir()
+	defaultFile := filepath.Join(config.OverrideConfigDir, "workspace.ttt")
+	if err := workspace.New([]string{first, second}).SaveFile(defaultFile); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{"default", nil, []string{first, second}},
+		{"explicit folder", []string{second}, []string{second}},
+		{"explicit file", []string{filepath.Join(first, "new.txt")}, []string{}},
+		{"welcome", []string{"--welcome"}, []string{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Args = append([]string{"ttt"}, tt.args...)
+			ws, _, _, _ := resolveArgs(true)
+			if !reflect.DeepEqual(ws.Paths(), tt.want) {
+				t.Fatalf("folders = %v, want %v", ws.Paths(), tt.want)
+			}
+		})
+	}
+	os.Args = []string{"ttt"}
+	t.Chdir(first)
+	if err := os.WriteFile(defaultFile, []byte("invalid JSON"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ws, _, _, _ := resolveArgs(false)
+	if !reflect.DeepEqual(ws.Paths(), []string{first}) {
+		t.Fatalf("invalid default opened %v, want cwd", ws.Paths())
 	}
 }
 

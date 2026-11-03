@@ -60,6 +60,10 @@ Workspace files use the `.ttt` extension and store a list of folders as relative
 
 ### Managing Workspaces
 
+Run **Workspace: Save as Default** from the command palette to remember the current folders for future launches. TTT saves them in `~/.config/ttt/workspace.ttt` (or `$TTT_CONFIG_DIR/workspace.ttt`). You can include `/` alongside your project folders; filesystem access uses your normal process permissions.
+
+The default workspace loads when TTT starts without file, folder, PR, or workspace arguments. Explicit targets and `--welcome` take precedence. Without a valid default workspace, normal startup behavior applies. Use **Workspace: Clear Default** to remove the saved default. Open files and panel layout are not stored.
+
 - **Save Workspace As...** from the File menu to create a workspace file
 - **Add Folder to Workspace** and **Remove Folder from Workspace** via the command palette
 - The git branch in the status bar switches automatically based on which workspace folder the active file belongs to

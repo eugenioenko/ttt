@@ -180,6 +180,14 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 			return
 		}
 	}
+	if wsFile == "" && len(folders) == 0 && len(openFiles) == 0 && len(prURLs) == 0 && !welcome {
+		if dir := config.UserConfigDir(); dir != "" {
+			if loaded, err := workspace.LoadFile(filepath.Join(dir, "workspace.ttt")); err == nil {
+				ws = loaded
+				return
+			}
+		}
+	}
 
 	// Opening only files intentionally creates no workspace — a folder must be passed explicitly.
 	// --welcome, or starting in $HOME with welcome.showOnHome, opens no folder
