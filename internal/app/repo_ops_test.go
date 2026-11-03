@@ -8,10 +8,11 @@ func TestRepositoryResourcesForRepoTask(t *testing.T) {
 		ops  []RepoOp
 		want RepositoryResource
 	}{
-		{name: "push", ops: []RepoOp{OpPush}, want: RepositoryWorktree},
+		{name: "push", ops: []RepoOp{OpPush}, want: RepositoryWorktree | RepositoryHistory},
 		{name: "branch", ops: []RepoOp{{Name: "branch"}}, want: RepositoryWorktree | RepositoryHistory},
 		{name: "commit", ops: []RepoOp{OpCommit("message")}, want: RepositoryWorktree | RepositoryHistory},
 		{name: "pull", ops: []RepoOp{OpPull}, want: RepositoryWorktree | RepositoryHistory},
+		{name: "fetch", ops: []RepoOp{OpFetch}, want: RepositoryWorktree | RepositoryHistory},
 		{name: "sync", ops: []RepoOp{OpPull, OpPush}, want: RepositoryWorktree | RepositoryHistory},
 	}
 	for _, test := range tests {

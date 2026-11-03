@@ -277,7 +277,7 @@ func (a *App) ToggleSearchReplace() {
 func registerViewCommands(app *App) {
 	reg := app.Reg
 	reg.Register(command.Command{ID: "agent.toggle", Title: "View: Toggle Codex Agent", Keywords: []string{"codex", "ai", "agent", "chat"}, Handler: app.ToggleAgentPanel})
-	for _, provider := range []string{"claude", "codebuddy", "copilot", "cursor", "kimi"} {
+	for _, provider := range []string{"claude", "codebuddy", "copilot", "cursor", "kimi", "opencode"} {
 		p := provider
 		reg.Register(command.Command{ID: "agent." + p, Title: "View: Use " + p + " Agent", Keywords: []string{"ai", "agent", p}, Handler: func() { app.ShowAgentPanel(p) }})
 	}

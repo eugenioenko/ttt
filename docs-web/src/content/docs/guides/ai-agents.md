@@ -19,6 +19,7 @@ TTT can host several command-line coding agents in persistent sessions on the ri
 - GitHub Copilot CLI
 - Cursor Agent
 - Kimi CLI
+- OpenCode
 
 Open the **View** menu and select an agent, or open the command palette (`Ctrl+P`) and run **View: Use … Agent**. Each provider has its own session. The regular integrated terminal remains separate in the bottom panel.
 
@@ -66,6 +67,7 @@ TTT 现在可以在编辑器右侧托管多个命令行编码 Agent。每个 Age
 - GitHub Copilot CLI
 - Cursor Agent
 - Kimi CLI
+- OpenCode
 
 打开 **View** 菜单选择 Agent，或者按 `Ctrl+P` 打开命令面板，执行 **View: Use … Agent**。不同 Agent 使用独立会话；普通集成终端仍然位于底部面板，不会与 Agent 会话混用。
 

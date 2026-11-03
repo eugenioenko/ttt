@@ -117,7 +117,7 @@ Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active w
 - **Multi-cursor editing** — Ctrl+D to select next occurrence, Ctrl+K L to select all occurrences, Alt+Click to add cursors; typing, backspace, delete, and enter work at all positions simultaneously
 - **`.editorconfig` support** and **indent detection** — indentation is picked up automatically per file; manual override via the status bar indent picker
 - **Mouse support** — click to position cursor, click tabs, drag sidebar/panel dividers, right-click context menus
-- **Auto-completion** — LSP-powered completions with live filtering, debounce, and auto-import support
+- **Auto-completion** — LSP-powered completions with live filtering, debounce, and auto-import support; optional OpenAI-compatible AI fallback is available when no LSP is configured
 - **Signature help** — parameter hints shown automatically on `(` and `,`
 - **Diagnostics** — inline curly underline squiggles, problems panel, hover popup, and status bar counts
 - **Document formatting** — format document, format selection, and format-on-save via LSP or external formatters
@@ -127,7 +127,7 @@ Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active w
 
 ### AI Agents
 
-TTT can host persistent command-line coding-agent sessions in a right-side panel. The built-in provider entries cover Codex, Claude Code, CodeBuddy, GitHub Copilot CLI, Cursor Agent, and Kimi CLI. Choose an agent from the **View** menu or the command palette; each provider keeps its own interactive terminal session, while the regular terminal remains in the bottom panel.
+TTT can host persistent command-line coding-agent sessions in a right-side panel. The built-in provider entries cover Codex, Claude Code, CodeBuddy, GitHub Copilot CLI, Cursor Agent, Kimi CLI, and OpenCode. Choose an agent from the **View** menu or the command palette; each provider keeps its own interactive terminal session, while the regular terminal remains in the bottom panel.
 
 Agent executables, arguments, and optional installation commands are configured under `agents` in `~/.config/ttt/settings.json`, or through **Settings → AI Agents**. If an executable is missing, TTT can run its configured install command in the embedded terminal before launching it. See the [AI Agents guide](docs-web/src/content/docs/guides/ai-agents.md) for the full configuration example and migration notes.
 
@@ -255,6 +255,8 @@ See [Integrated Terminal](docs-web/src/content/docs/guides/terminal.md).
 ### LSP (Language Server Protocol)
 
 TTT has built-in LSP support for language-aware editing: autocomplete, signature help, go to definition/implementation/type definition, find references, rename symbol, hover, document/selection formatting, format-on-save, and diagnostics.
+
+AI completion can be enabled as an optional fallback when a file has no configured LSP. Set `ai.enabled` and `OPENAI_API_KEY` (or the environment variable named by `ai.apiKeyEnv`) in `settings.json`; manual completion remains available through `editor.autocomplete`. Any OpenAI-compatible service works — point `ai.endpoint` and `ai.model` at it, e.g. CodeBuddy's chat-completions API.
 
 Language servers are configured via plugins — install the LSP plugin for your language and the corresponding server binary from the Plugins panel or command palette.
 

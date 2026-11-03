@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/ai"
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
@@ -34,7 +35,7 @@ const terminalStripWidth = ui.VerticalTabBarWidth
 const hoverGraceMargin = 3
 
 type TerminalTab struct {
-	ID     string
+	ID     string `json:"id"`
 	Label  string
 	Term   *terminal.Terminal
 	Widget *ui.TerminalWidget
@@ -89,6 +90,7 @@ type App struct {
 	// (plugin handles key off it).
 	TerminalSeq            int
 	LspManager             *lsp.Manager
+	AIProvider             ai.Provider
 	DocVersionsMu          sync.Mutex
 	DocVersions            map[string]int
 	CompletionItems        []ui.CompletionItem
@@ -849,6 +851,14 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.initTaskDelivery(screen)
 	a.Renderer = renderer
 	a.LspManager = lspManager
+	if a.AIProvider == nil && a.Settings != nil {
+		a.AIProvider = ai.NewOpenAIProvider(ai.OpenAIConfig{
+			Endpoint:  a.Settings.AI.Endpoint,
+			Model:     a.Settings.AI.Model,
+			APIKeyEnv: a.Settings.AI.APIKeyEnv,
+			Timeout:   time.Duration(a.Settings.AI.Timeout) * time.Millisecond,
+		}, nil)
+	}
 	a.ImageLayer = imageLayer
 	if a.Root != nil {
 		a.Root.ImageLayer = imageLayer

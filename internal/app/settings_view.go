@@ -21,7 +21,7 @@ const (
 func agentSettingFields() []settingField {
 	providers := []struct{ key, label string }{
 		{"codex", "Codex"}, {"claude", "Claude Code"}, {"codebuddy", "CodeBuddy"},
-		{"copilot", "GitHub Copilot"}, {"cursor", "Cursor"}, {"kimi", "Kimi"},
+		{"copilot", "GitHub Copilot"}, {"cursor", "Cursor"}, {"kimi", "Kimi"}, {"opencode", "OpenCode"},
 	}
 	fields := make([]settingField, 0, len(providers)*3)
 	for _, provider := range providers {
@@ -181,6 +181,28 @@ func settingsCategories() []settingsCategory {
 			{Label: "Debounce (ms)", Kind: settingInt,
 				GetInt: func(s *config.Settings) int { return s.Autocomplete.Debounce },
 				SetInt: func(s *config.Settings, v int) { s.Autocomplete.Debounce = v }},
+			section("AI completion"),
+			{Label: "Enable AI completion", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.AI.Enabled },
+				SetBool: func(s *config.Settings, v bool) { s.AI.Enabled = v }},
+			{Label: "AI suggest as you type", Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.AI.AutoSuggest },
+				SetBool: func(s *config.Settings, v bool) { s.AI.AutoSuggest = v }},
+			{Label: "AI model", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.AI.Model },
+				SetString: func(s *config.Settings, v string) { s.AI.Model = v }},
+			{Label: "AI endpoint", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.AI.Endpoint },
+				SetString: func(s *config.Settings, v string) { s.AI.Endpoint = v }},
+			{Label: "API key environment", Kind: settingString,
+				GetString: func(s *config.Settings) string { return s.AI.APIKeyEnv },
+				SetString: func(s *config.Settings, v string) { s.AI.APIKeyEnv = v }},
+			{Label: "AI context lines", Kind: settingInt, Min: 1,
+				GetInt: func(s *config.Settings) int { return s.AI.MaxContextLines },
+				SetInt: func(s *config.Settings, v int) { s.AI.MaxContextLines = v }},
+			{Label: "AI timeout (ms)", Kind: settingInt, Min: 1,
+				GetInt: func(s *config.Settings) int { return s.AI.Timeout },
+				SetInt: func(s *config.Settings, v int) { s.AI.Timeout = v }},
 			section("Behavior"),
 			{Label: "Focus editor on open", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.FocusOnOpen },

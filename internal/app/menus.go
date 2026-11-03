@@ -71,6 +71,7 @@ var menuBarMenus = [][]ui.ContextMenuItem{
 		{Label: "GitHub Copilot", Command: "agent.copilot"},
 		{Label: "Cursor", Command: "agent.cursor"},
 		{Label: "Kimi", Command: "agent.kimi"},
+		{Label: "OpenCode", Command: "agent.opencode"},
 		{Label: "Toggle Terminal", Command: "terminal.toggle"},
 		{Label: "New Terminal", Command: "terminal.new"},
 		ui.MenuSep(),

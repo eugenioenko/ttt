@@ -66,8 +66,11 @@ func (a *App) TriggerAutocomplete() {
 	path, lang := a.editorPathLang()
 	if lang == "" {
 		a.StatusWarn("No language detected for this file")
-	} else if _, _, ok := a.lspResolve(path, lang); !ok {
+	} else if _, _, hasLSP := a.lspResolve(path, lang); !hasLSP && !a.aiCompletionAvailable() {
 		a.StatusWarn(lang + " language server is not configured. Add it to settings.json under lsp.servers")
+	} else if _, _, hasLSP := a.lspResolve(path, lang); !hasLSP {
+		line, col := a.EditorGroup.ActiveCursor()
+		a.RequestAICompletions(path, lang, line, col)
 	} else {
 		line, col := a.EditorGroup.ActiveCursor()
 		a.RequestCompletions(path, lang, line, col, "")

@@ -17,6 +17,9 @@ func TestDefaultSettings(t *testing.T) {
 	if !s.Editor.InsertSpaces {
 		t.Fatal("expected InsertSpaces true")
 	}
+	if got := s.Agents["opencode"]; got.CLI != "opencode" || got.Install != "curl -fsSL https://opencode.ai/v2/install | bash" {
+		t.Fatalf("unexpected OpenCode defaults: %+v", got)
+	}
 }
 
 func TestSettingsPartialJSON(t *testing.T) {
@@ -267,6 +270,22 @@ func TestDefaultAutocompleteSettings(t *testing.T) {
 	}
 	if !ac.SignatureHelp {
 		t.Error("expected SignatureHelp true")
+	}
+}
+
+func TestDefaultAISettings(t *testing.T) {
+	ai := DefaultAISettings()
+	if ai.Enabled || ai.AutoSuggest {
+		t.Error("expected AI completion to be disabled by default")
+	}
+	if ai.Model != "gpt-4.1-mini" {
+		t.Errorf("expected default AI model gpt-4.1-mini, got %q", ai.Model)
+	}
+	if ai.APIKeyEnv != "OPENAI_API_KEY" {
+		t.Errorf("expected default AI key environment OPENAI_API_KEY, got %q", ai.APIKeyEnv)
+	}
+	if ai.MaxContextLines != 80 || ai.Timeout != 15000 {
+		t.Errorf("unexpected AI limits: %+v", ai)
 	}
 }
 

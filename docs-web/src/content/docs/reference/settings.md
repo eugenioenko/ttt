@@ -214,6 +214,20 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |
 
+## AI completion
+
+AI completion is an optional OpenAI-compatible fallback used when the current file has no matching LSP server. It is disabled by default. To use CodeBuddy or another OpenAI-compatible service, set `ai.endpoint` and `ai.model` to that service's chat-completions URL and model, and `ai.apiKeyEnv` to the environment variable holding its API key.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ai.enabled` | bool | `false` | Enable AI completion |
+| `ai.autoSuggest` | bool | `false` | Request AI completion automatically after typing pauses |
+| `ai.endpoint` | string | OpenAI chat completions endpoint | OpenAI-compatible completion URL |
+| `ai.model` | string | `gpt-4.1-mini` | Model name |
+| `ai.apiKeyEnv` | string | `OPENAI_API_KEY` | Environment variable containing the API key |
+| `ai.maxContextLines` | int | `80` | Maximum source lines sent around the cursor |
+| `ai.timeout` | int | `15000` | Request timeout in milliseconds |
+
 ## Grammars
 
 ttt embeds TextMate grammars for over 120 languages. `editor.grammars` adds more, or replaces a built-in one, from TextMate grammar files in JSON format (`.tmLanguage.json`). Most VS Code language extensions ship one.

@@ -12,10 +12,16 @@ import (
 )
 
 type completionState struct {
-	debounce  *asynctask.Task[struct{}]
-	delay     time.Duration
-	read      *asynctask.Task[completionReply]
-	signature *asynctask.Task[*SignatureHelpResult]
+	debounce   *asynctask.Task[struct{}]
+	delay      time.Duration
+	read       *asynctask.Task[completionReply]
+	aiRead     *asynctask.Task[completionReply]
+	signature  *asynctask.Task[*SignatureHelpResult]
+	generation uint64
+	target     completionTarget
+	aiItems    []ui.CompletionItem
+	lspItems   []ui.CompletionItem
+	lspRaw     []lsp.CompletionItem
 }
 
 type completionReply struct {
@@ -73,7 +79,11 @@ func (a *App) HandleAutocompleteTrigger() {
 	if prefix := a.currentPrefix(); len(prefix) >= 1 || isTrigger {
 		path, lang := a.editorPathLang()
 		line, col := a.EditorGroup.ActiveCursor()
-		a.RequestCompletions(path, lang, line, col, triggerChar)
+		if _, _, ok := a.lspResolve(path, lang); ok {
+			a.RequestCompletions(path, lang, line, col, triggerChar)
+		} else if a.Settings.AI.AutoSuggest {
+			a.RequestAICompletions(path, lang, line, col)
+		}
 	}
 }
 
@@ -85,6 +95,8 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 		return
 	}
 	target := a.currentCompletionTarget()
+	a.startCompletionSources(target)
+	generation := a.completion.generation
 	workDir := a.lspWorkDir(path)
 	manager := a.LspManager
 	if a.completion.read == nil {
@@ -122,10 +134,43 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 		slog.Debug("lsp completion response", "count", len(items))
 		return completionReply{items: LspToUICompletions(items), lspItems: items}, nil
 	}, func(reply completionReply, err error) {
-		if err == nil {
-			a.applyCompletionReply(target, reply)
+		if err == nil && generation == a.completion.generation {
+			a.completion.lspItems = reply.items
+			a.completion.lspRaw = reply.lspItems
+			a.applyMergedCompletionReply(target, generation)
 		}
 	})
+	if a.Settings.AI.AutoSuggest {
+		a.requestAICompletions(path, lang, line, col, target, generation)
+	}
+}
+
+func (a *App) startCompletionSources(target completionTarget) {
+	if a.completion.read != nil {
+		a.completion.read.Stop()
+	}
+	if a.completion.aiRead != nil {
+		a.completion.aiRead.Stop()
+	}
+	a.completion.generation++
+	a.completion.target = target
+	a.completion.aiItems = nil
+	a.completion.lspItems = nil
+	a.completion.lspRaw = nil
+}
+
+func (a *App) applyMergedCompletionReply(target completionTarget, generation uint64) {
+	if generation != a.completion.generation {
+		return
+	}
+	items := mergedCompletionItems(a.completion.aiItems, a.completion.lspItems)
+	a.applyCompletionReply(target, completionReply{items: items, lspItems: a.completion.lspRaw})
+}
+
+func mergedCompletionItems(aiItems, lspItems []ui.CompletionItem) []ui.CompletionItem {
+	items := make([]ui.CompletionItem, 0, len(aiItems)+len(lspItems))
+	items = append(items, aiItems...)
+	return append(items, lspItems...)
 }
 
 // applyCompletionReply shows reply while the cursor is still in the word the
@@ -148,6 +193,9 @@ func (a *App) CloseAutocomplete() {
 	}
 	if a.completion.read != nil {
 		a.completion.read.Stop()
+	}
+	if a.completion.aiRead != nil {
+		a.completion.aiRead.Stop()
 	}
 }
 

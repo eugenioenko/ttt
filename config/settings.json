@@ -73,6 +73,10 @@
     "kimi": {
       "cli": "kimi",
       "install": "pip install kimi-cli"
+    },
+    "opencode": {
+      "cli": "opencode",
+      "install": "curl -fsSL https://opencode.ai/v2/install | bash"
     }
   },
   "lsp": {
@@ -84,6 +88,15 @@
     "autoSuggest": true,
     "debounce": 150,
     "signatureHelp": true
+  },
+  "ai": {
+    "enabled": false,
+    "autoSuggest": false,
+    "endpoint": "https://api.openai.com/v1/chat/completions",
+    "model": "gpt-4.1-mini",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "maxContextLines": 80,
+    "timeout": 15000
   },
   "markdown": {
     "wrapWidth": 80

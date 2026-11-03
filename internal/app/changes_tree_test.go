@@ -19,6 +19,7 @@ func runTreeGit(t *testing.T, dir string, args ...string) string {
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
+
 	return string(out)
 }
 

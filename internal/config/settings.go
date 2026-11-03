@@ -51,6 +51,28 @@ type AutocompleteSettings struct {
 	SignatureHelp bool `json:"signatureHelp"`
 }
 
+// AISettings controls the optional AI completion provider.
+type AISettings struct {
+	Enabled         bool   `json:"enabled"`
+	AutoSuggest     bool   `json:"autoSuggest"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	Model           string `json:"model,omitempty"`
+	APIKeyEnv       string `json:"apiKeyEnv,omitempty"`
+	MaxContextLines int    `json:"maxContextLines,omitempty"`
+	Timeout         int    `json:"timeout,omitempty"`
+}
+
+// DefaultAISettings returns conservative defaults for optional AI completion.
+func DefaultAISettings() AISettings {
+	return AISettings{
+		Endpoint:        "https://api.openai.com/v1/chat/completions",
+		Model:           "gpt-4.1-mini",
+		APIKeyEnv:       "OPENAI_API_KEY",
+		MaxContextLines: 80,
+		Timeout:         15000,
+	}
+}
+
 func DefaultAutocompleteSettings() AutocompleteSettings {
 	return AutocompleteSettings{
 		Enabled:       true,
@@ -383,6 +405,7 @@ type Settings struct {
 	Agents       map[string]AgentSettings `json:"agents,omitempty"`
 	LSP          LSPSettings              `json:"lsp"`
 	Autocomplete AutocompleteSettings     `json:"autocomplete"`
+	AI           AISettings               `json:"ai"`
 	Markdown     MarkdownSettings         `json:"markdown"`
 	Image        ImageSettings            `json:"image"`
 	// Plugins is safe: its only field is a tri-state *bool where nil means the
@@ -418,7 +441,7 @@ type AgentSettings struct {
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "appearance": true, "editor": true,
 	"search": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "codex": true, "agents": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
+	"autocomplete": true, "ai": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {
@@ -491,9 +514,11 @@ func DefaultSettings() Settings {
 			"codex":  {CLI: "codex", Install: "npm install -g @openai/codex"},
 			"claude": {CLI: "claude", Args: "-p", Install: "npm install -g @anthropic-ai/claude-code"}, "codebuddy": {CLI: "codebuddy", Install: "npm install -g @tencent-ai/codebuddy-code"},
 			"copilot": {CLI: "gh", Args: "copilot", Install: "gh extension install github/gh-copilot"}, "cursor": {CLI: "cursor-agent", Install: "curl https://cursor.com/install -fsS | bash"}, "kimi": {CLI: "kimi", Install: "pip install kimi-cli"},
+			"opencode": {CLI: "opencode", Install: "curl -fsSL https://opencode.ai/v2/install | bash"},
 		},
 		LSP:          DefaultLSPSettings(),
 		Autocomplete: DefaultAutocompleteSettings(),
+		AI:           DefaultAISettings(),
 		Markdown:     DefaultMarkdownSettings(),
 		Image:        DefaultImageSettings(),
 	}

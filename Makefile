@@ -19,7 +19,7 @@ GOFMT_GO_VERSION := 1.25.14
 GOFMT = "$$(GOTOOLCHAIN=go$(GOFMT_GO_VERSION) go env GOROOT)/bin/gofmt"
 
 build:
-	go build -ldflags="-s -w -X main.version=$(VERSION)" -o bin/ttt ./cmd/ttt
+	CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=$(VERSION)" -o bin/ttt ./cmd/ttt
 
 # Build and package every release platform. Each archive contains the platform
 # binary at its release name (for example, ttt-linux-amd64).
