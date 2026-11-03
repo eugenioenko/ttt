@@ -2705,6 +2705,36 @@ func (g *EditorGroupWidget) Copy() {
 	clipboard.Set(text)
 }
 
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (g *EditorGroupWidget) SelectedText() string {
+	if g == nil {
+		return ""
+	}
+	t := g.activeTab()
+	if t == nil {
+		return ""
+	}
+	if dv, ok := t.Content.(*DiffEditorWidget); ok {
+		return dv.CopySelection()
+	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		return detail.CopySelection()
+	}
+	if t.Content != nil {
+		return ""
+	}
+	if t.Diff != nil {
+		if text, ok := t.Diff.HeadSelection(); ok {
+			return text
+		}
+	}
+	e := g.keyEditor()
+	if e == nil || e.Selection == nil || !e.Selection.Active || e.Buf == nil {
+		return ""
+	}
+	return e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
+}
+
 func (g *EditorGroupWidget) Cut() {
 	t := g.activeTab()
 	e := g.editableKeyEditor()

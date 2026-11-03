@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
@@ -9,9 +10,23 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
+func (a *App) selectedSearchText() string {
+	if a.EditorGroup == nil {
+		return ""
+	}
+	text := a.EditorGroup.SelectedText()
+	if text == "" || strings.Contains(text, "\n") || strings.Contains(text, "\r") {
+		return ""
+	}
+	return text
+}
+
 func (a *App) OpenFind() {
 	if a.Root.HasOverlay() {
 		if fb, ok := a.Root.TopOverlayWidget().(*ui.FindBarWidget); ok {
+			if text := a.selectedSearchText(); text != "" {
+				fb.Input.SetText(text)
+			}
 			fb.Focus()
 		}
 		return
@@ -54,6 +69,9 @@ func (a *App) OpenFind() {
 		findBar.Current = 0
 		findBar.Refresh()
 		a.EditorGroup.SetSearchActive(findBar.Current)
+	}
+	if text := a.selectedSearchText(); text != "" {
+		findBar.Input.SetText(text)
 	}
 	a.ShowFindBar(findBar)
 }
@@ -99,6 +117,9 @@ func (a *App) findBar() findBar {
 func (a *App) OpenFindReplace() {
 	if a.Root.HasOverlay() {
 		if bar, ok := a.Root.TopOverlayWidget().(*ui.ReplaceBarWidget); ok {
+			if text := a.selectedSearchText(); text != "" {
+				bar.SearchInput.SetText(text)
+			}
 			bar.Focus()
 		}
 		return
@@ -130,6 +151,9 @@ func (a *App) OpenFindReplace() {
 	bar.OnDismiss = func() {
 		a.DismissDialog()
 		a.EditorGroup.ClearSearch()
+	}
+	if text := a.selectedSearchText(); text != "" {
+		bar.SearchInput.SetText(text)
 	}
 	a.ShowFindBar(bar)
 }

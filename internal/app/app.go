@@ -1135,6 +1135,9 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 			dv.SetActiveMatch(findBar.Current)
 		}
 	}
+	if text := a.selectedSearchText(); text != "" {
+		findBar.Input.SetText(text)
+	}
 	a.ShowFindBar(findBar)
 }
 
