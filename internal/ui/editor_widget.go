@@ -55,6 +55,7 @@ type EditorPaneWidget struct {
 	AutoClosing             config.AutoClosingSettings
 	autoClosing             *autoClosingState
 	autoClosingPath         string
+	plainText               bool
 	AutoIndent              bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style

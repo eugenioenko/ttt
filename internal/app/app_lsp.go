@@ -128,11 +128,7 @@ func (a *App) resolveAndInsert(item ui.CompletionItem) {
 	}
 
 	if lspItem != nil && len(lspItem.AdditionalTextEdits) == 0 {
-		path := a.EditorGroup.ActiveFilePath()
-		lang := ""
-		if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {
-			lang = a.EditorGroup.Editor.Highlighter.Language()
-		}
+		path, lang := a.editorPathLang()
 		serverKey, _, ok := a.lspResolve(path, lang)
 		if ok {
 			workDir := a.lspWorkDir(path)
@@ -340,11 +336,7 @@ func (a *App) CheckSignatureHelpTrigger(changeDone <-chan struct{}) {
 		a.DismissSignatureHelp()
 		return
 	}
-	path := a.EditorGroup.ActiveFilePath()
-	lang := ""
-	if editor.Highlighter != nil {
-		lang = editor.Highlighter.Language()
-	}
+	path, lang := a.editorPathLang()
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		return
@@ -727,10 +719,7 @@ func (a *App) EnsureLSPOpen(path string) {
 	if opened {
 		return
 	}
-	lang := ""
-	if a.EditorGroup.Editor.Highlighter != nil {
-		lang = a.EditorGroup.Editor.Highlighter.Language()
-	}
+	lang := a.EditorGroup.ActiveLanguage()
 	a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
 }
 

@@ -78,6 +78,10 @@ type editorTab struct {
 	Placeholder bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
+
+	LanguageSelection string
+	// Keep document lifecycle and language servers independent of the highlighting selection.
+	DetectedLanguage string
 	// Diff shows the tab's own buffer as an editable diff against its base.
 	Diff *DiffEditorWidget
 	// Annotations shows the decorations for the tab's file when it is not
@@ -280,6 +284,65 @@ func (g *EditorGroupWidget) activeTab() *editorTab {
 		return nil
 	}
 	return &g.tabs[g.active]
+}
+
+func (g *EditorGroupWidget) ActiveLanguageSelection() string {
+	if t := g.activeTab(); t != nil {
+		return t.LanguageSelection
+	}
+	return ""
+}
+
+func (g *EditorGroupWidget) ActiveLanguage() string {
+	if t := g.activeTab(); t != nil && t.Content == nil {
+		return t.DetectedLanguage
+	}
+	return ""
+}
+
+func (g *EditorGroupWidget) SetActiveLanguage(selection string) {
+	if g.ActiveBuffer() == nil {
+		return
+	}
+	t := g.activeTab()
+	t.LanguageSelection = selection
+	t.Highlighter.Close()
+	t.Highlighter = g.tabHighlighter(t)
+	if t.autoClosing != nil {
+		t.autoClosing.syntax.Close()
+		t.autoClosing.syntax = nil
+	}
+	g.syncTabs()
+}
+
+func (g *EditorGroupWidget) tabHighlighter(t *editorTab) *highlight.Highlighter {
+	if !g.SyntaxHighlight {
+		return nil
+	}
+	switch t.LanguageSelection {
+	case "":
+		return highlight.NewForLines(t.FilePath, t.Buf.Lines)
+	case highlight.PlainText:
+		return nil
+	default:
+		return highlight.NewForLanguage(t.LanguageSelection)
+	}
+}
+
+func (g *EditorGroupWidget) rebuildHighlighter(t *editorTab) {
+	t.Highlighter.Close()
+	t.Highlighter = nil
+	t.DetectedLanguage = ""
+	if g.SyntaxHighlight {
+		t.Highlighter = highlight.NewForLines(t.FilePath, t.Buf.Lines)
+		if t.Highlighter != nil {
+			t.DetectedLanguage = t.Highlighter.Language()
+		}
+	}
+	if t.LanguageSelection != "" {
+		t.Highlighter.Close()
+		t.Highlighter = g.tabHighlighter(t)
+	}
 }
 
 func (g *EditorGroupWidget) reportError(msg string) {
@@ -495,9 +558,7 @@ func (g *EditorGroupWidget) OpenFile(path string) error {
 		UseTabs:  useTabs,
 		Preview:  true,
 	}
-	if g.SyntaxHighlight {
-		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
-	}
+	g.rebuildHighlighter(&newTab)
 	newTab.Annotations = g.mergedDecorations(path, newBuf, tabSize)
 	if t := g.activeTab(); g.canReplaceTab(t) && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
@@ -1122,12 +1183,12 @@ func (g *EditorGroupWidget) OpenDocuments() []OpenDocument {
 	var docs []OpenDocument
 	for i := range g.tabs {
 		t := &g.tabs[i]
-		if t.Content != nil || t.Buf == nil || t.Highlighter == nil || t.Virtual || t.FilePath == "" {
+		if t.Content != nil || t.Buf == nil || t.DetectedLanguage == "" || t.Virtual || t.FilePath == "" {
 			continue
 		}
 		docs = append(docs, OpenDocument{
 			Path:     t.FilePath,
-			Language: t.Highlighter.Language(),
+			Language: t.DetectedLanguage,
 			Text:     strings.Join(t.Buf.Lines, "\n"),
 		})
 	}
@@ -1139,10 +1200,10 @@ func (g *EditorGroupWidget) OpenFiles() []OpenDocument {
 	var docs []OpenDocument
 	for i := range g.tabs {
 		t := &g.tabs[i]
-		if t.Content != nil || t.Buf == nil || t.Highlighter == nil || t.Virtual || t.FilePath == "" {
+		if t.Content != nil || t.Buf == nil || t.DetectedLanguage == "" || t.Virtual || t.FilePath == "" {
 			continue
 		}
-		docs = append(docs, OpenDocument{Path: t.FilePath, Language: t.Highlighter.Language()})
+		docs = append(docs, OpenDocument{Path: t.FilePath, Language: t.DetectedLanguage})
 	}
 	return docs
 }
@@ -1387,8 +1448,8 @@ func (g *EditorGroupWidget) CloseTab() {
 	}
 	closing := g.tabs[g.active]
 	prev := closing.Content
-	if g.OnFileClose != nil && closing.Highlighter != nil && !closing.Virtual {
-		g.OnFileClose(closing.FilePath, closing.Highlighter.Language())
+	if g.OnFileClose != nil && closing.DetectedLanguage != "" && !closing.Virtual {
+		g.OnFileClose(closing.FilePath, closing.DetectedLanguage)
 	}
 	g.notifyContentTabClose(closing)
 	if g.active < g.pinnedCount {
@@ -1605,11 +1666,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t.IconPath = path
 	t.Virtual = false
 	t.Placeholder = false
-	if g.SyntaxHighlight {
-		t.Highlighter = highlight.NewForLines(path, t.Buf.Lines)
-	} else {
-		t.Highlighter = nil
-	}
+	g.rebuildHighlighter(t)
 	g.syncTabs()
 	return true
 }
@@ -1701,8 +1758,8 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 		if !ok {
 			continue
 		}
-		if g.OnFileClose != nil && t.Highlighter != nil {
-			g.OnFileClose(t.FilePath, t.Highlighter.Language())
+		if g.OnFileClose != nil && t.DetectedLanguage != "" {
+			g.OnFileClose(t.FilePath, t.DetectedLanguage)
 		}
 		t.FilePath = updated
 		if t.Diff != nil {
@@ -1711,13 +1768,9 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 		if t.IconPath != "" {
 			t.IconPath = updated
 		}
-		if g.SyntaxHighlight {
-			t.Highlighter = highlight.NewForLines(updated, t.Buf.Lines)
-		} else {
-			t.Highlighter = nil
-		}
-		if g.OnFileOpen != nil && t.Highlighter != nil {
-			g.OnFileOpen(updated, t.Highlighter.Language(), t.Buf.Lines)
+		g.rebuildHighlighter(t)
+		if g.OnFileOpen != nil && t.DetectedLanguage != "" {
+			g.OnFileOpen(updated, t.DetectedLanguage, t.Buf.Lines)
 		}
 		renamed = true
 	}
@@ -1735,19 +1788,13 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 	}
 	for i := range g.tabs {
 		t := &g.tabs[i]
-		if t.Content != nil || t.Buf == nil || t.FilePath == "" {
+		if t.Content != nil || t.Buf == nil || (t.FilePath == "" && t.LanguageSelection == "") {
 			continue
 		}
-		prevLang := ""
-		if t.Highlighter != nil {
-			prevLang = t.Highlighter.Language()
-		}
-		t.Highlighter = highlight.NewForLines(t.FilePath, t.Buf.Lines)
-		lang := ""
-		if t.Highlighter != nil {
-			lang = t.Highlighter.Language()
-		}
-		if lang == prevLang || t.Virtual {
+		prevLang := t.DetectedLanguage
+		g.rebuildHighlighter(t)
+		lang := t.DetectedLanguage
+		if lang == prevLang || t.Virtual || t.FilePath == "" {
 			continue
 		}
 		if g.OnFileClose != nil && prevLang != "" {
@@ -1857,9 +1904,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 		UseTabs:  detected.UseTabs,
 		ReadOnly: true,
 	}
-	if g.SyntaxHighlight {
-		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
-	}
+	g.rebuildHighlighter(&newTab)
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -1897,9 +1942,7 @@ func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []s
 		UseTabs:  detected.UseTabs,
 		ReadOnly: true,
 	}
-	if g.SyntaxHighlight && filePath != "" {
-		newTab.Highlighter = highlight.NewForLines(filePath, newBuf.Lines)
-	}
+	g.rebuildHighlighter(&newTab)
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -2749,6 +2792,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		}
 		g.Editor.autoClosing = t.autoClosing
 		g.Editor.autoClosingPath = t.FilePath
+		g.Editor.plainText = t.LanguageSelection == highlight.PlainText
 		g.Editor.Buf = t.Buf
 		g.Editor.Cursor = t.Cur
 		g.Editor.Viewport = t.Vp
