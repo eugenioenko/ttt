@@ -45,6 +45,7 @@ type Root struct {
 	ImageLayer       *tttimage.Layer
 	chord            *chordState
 	KeyInterceptor   func(ev *tcell.EventKey) bool
+	ControlModifiers tcell.ModMask
 	OnRightClick     func(mx, my int)
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
@@ -116,6 +117,13 @@ func (r *Root) ClearKeys() {
 	r.ForceKeys = nil
 	r.ChordKeys = nil
 	r.chord = nil
+}
+
+func (r *Root) SetControlModifiers(modifiers tcell.ModMask) {
+	if r.ControlModifiers != modifiers {
+		r.ControlModifiers = modifiers
+		r.chord = nil
+	}
 }
 
 // normalizeKey folds KeyBackspace2 (DEL, 0x7F) into KeyBackspace (BS, 0x08) so
@@ -253,7 +261,7 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	// which is what lets a key interceptor claim them while editing.
 	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
 		for _, gk := range r.ForceKeys {
-			if matchKey(kev, gk) {
+			if key := controlKeyEvent(kev, r.ControlModifiers); key != nil && matchKey(key, gk) {
 				gk.Handler()
 				return EventConsumed
 			}
@@ -379,6 +387,11 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 }
 
 func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
+	kev = controlKeyEvent(kev, r.ControlModifiers)
+	if kev == nil {
+		r.chord = nil
+		return EventIgnored
+	}
 	if r.chord != nil {
 		var next []int
 		for _, ci := range r.chord.candidates {
@@ -415,6 +428,10 @@ func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
 }
 
 func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
+	kev = controlKeyEvent(kev, r.ControlModifiers)
+	if kev == nil {
+		return EventIgnored
+	}
 	for _, gk := range r.GlobalKeys {
 		if matchKey(kev, gk) {
 			gk.Handler()

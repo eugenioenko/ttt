@@ -27,6 +27,24 @@ Both write the same file, so you can move between them freely.
 | `debugMode` | bool | `false` | Enable debug logging |
 | `reuseWindow` | bool | `false` | Open command-line files in a running editor using the same config directory. Requires a restart. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, use the newest reachable editor. If none is reachable, start normally. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Once connected, errors exit with status 1 without trying another editor; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
+## Keyboard
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `keyboard.modifierKey` | string | `"control"` | Modifier for registered `ctrl+…` shortcuts, including user and plugin bindings: `"control"` uses Ctrl, `"control+super"` accepts either Ctrl or Super/Cmd, and `"super"` uses Super/Cmd instead of Ctrl. Applies live; binding definitions stay unchanged. |
+
+`"control+super"` means either modifier, not both pressed together. On macOS, Super is Command (⌘). Chords retain their unmodified continuation keys: `ctrl+k e` becomes Cmd+K followed by E in `"super"` mode. Change this setting under **General → Keyboard** in the settings editor, or in JSON:
+
+```json
+{
+  "keyboard": {
+    "modifierKey": "control+super"
+  }
+}
+```
+
+The terminal must forward the Super/Cmd shortcuts to TTT. Ordinary keys sent to the integrated terminal keep their original modifiers; registered force shortcuts, such as terminal toggle, use the setting even when the terminal has focus. Plugin key interception retains its existing behavior.
+
 ## Appearance
 
 | Key | Type | Default | Description |

@@ -19,7 +19,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	}
 
 	mods := kev.Modifiers()
-	if mods&tcell.ModAlt != 0 || mods&tcell.ModCtrl != 0 {
+	if mods&(tcell.ModAlt|tcell.ModCtrl|tcell.ModMeta) != 0 {
 		return EventIgnored
 	}
 

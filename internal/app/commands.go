@@ -6,6 +6,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
 
 func RegisterCommands(app *App) {
@@ -40,7 +41,7 @@ func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBind
 			continue
 		}
 		cmdID := kb.Command
-		reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key))
+		reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key, root.ControlModifiers))
 		if kb.IsChord() {
 			steps := make([]ui.GlobalKeyBinding, len(kb.Steps))
 			for i, step := range kb.Steps {
@@ -61,12 +62,17 @@ func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBind
 	}
 }
 
-func FormatKeyBinding(key string) string {
+func FormatKeyBinding(key string, modifiers tcell.ModMask) string {
 	parts := strings.Fields(key)
 	for i, part := range parts {
 		tokens := strings.Split(part, "+")
 		for j, t := range tokens {
-			if t == "backtick" {
+			if strings.EqualFold(t, "ctrl") && modifiers&tcell.ModMeta != 0 {
+				tokens[j] = "Super"
+				if modifiers&tcell.ModCtrl != 0 {
+					tokens[j] = "Ctrl/Super"
+				}
+			} else if t == "backtick" {
 				tokens[j] = "`"
 			} else if len(t) > 0 {
 				tokens[j] = strings.ToUpper(t[:1]) + t[1:]

@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -188,24 +187,10 @@ func (a *App) closeEventLoopDone() {
 func (a *App) KeyFor(cmd string) string {
 	for _, kb := range a.Keybindings {
 		if kb.Command == cmd {
-			return formatKeyDisplay(kb.Key)
+			return FormatKeyBinding(kb.Key, controlModifiers(a.Settings.Keyboard.ModifierKey))
 		}
 	}
 	return ""
-}
-
-func formatKeyDisplay(key string) string {
-	parts := strings.Fields(key)
-	for i, part := range parts {
-		tokens := strings.Split(part, "+")
-		for j, tok := range tokens {
-			if len(tok) > 0 {
-				tokens[j] = strings.ToUpper(tok[:1]) + tok[1:]
-			}
-		}
-		parts[i] = strings.Join(tokens, "+")
-	}
-	return strings.Join(parts, " ")
 }
 
 func (a *App) ShowSidebar() {

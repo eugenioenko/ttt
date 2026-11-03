@@ -299,6 +299,8 @@ See [Settings reference](docs-web/src/content/docs/reference/settings.md) for ev
 
 All keybindings are customizable via [`keybindings.json`](config/keybindings.json). Chord sequences (e.g. `ctrl+k e`) are supported. Open your keybindings file with **Ctrl+K Y**, or press **Ctrl+P** and type `?` to browse shortcuts in-app.
 
+Set [`keyboard.modifierKey`](docs-web/src/content/docs/reference/settings.md#keyboard) to `"control+super"` to also accept Super/Cmd for Ctrl shortcuts, or `"super"` to use Super/Cmd instead. The default is `"control"`. Binding definitions stay unchanged, and the terminal must forward the shortcuts.
+
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 
 ## Testing

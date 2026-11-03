@@ -73,6 +73,10 @@ func settingsCategories() []settingsCategory {
 			{Label: "Recent folder history", Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Welcome.IsRecentFoldersEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Welcome.RecentFolders = boolPtr(v) }},
+			section("Keyboard"),
+			{Label: "Shortcut modifier", Kind: settingEnum, Options: keyboardModifierItems,
+				GetString: func(s *config.Settings) string { return s.Keyboard.ModifierKey },
+				SetString: func(s *config.Settings, v string) { s.Keyboard.ModifierKey = v }},
 			section("Plugins"),
 			{Label: "Enable plugins", Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Plugins.IsEnabled() },
@@ -309,6 +313,14 @@ func settingsCategories() []settingsCategory {
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffScrollbarGitMarks },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffScrollbarGitMarks = v }},
 		}},
+	}
+}
+
+func keyboardModifierItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.ModifierControl, Label: "Control"},
+		{ID: config.ModifierControlSuper, Label: "Control or Super (Cmd)"},
+		{ID: config.ModifierSuper, Label: "Super (Cmd)"},
 	}
 }
 
