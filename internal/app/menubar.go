@@ -1,6 +1,8 @@
 package app
 
 import (
+	"path/filepath"
+
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -44,4 +46,23 @@ func (a *App) ToggleMenuBar() {
 	if !visible {
 		a.StatusNotify(a.menuBarRestoreHint())
 	}
+}
+
+func (a *App) updateMenuBarTitle() {
+	if a.MenuBar == nil {
+		return
+	}
+
+	name := ""
+	activeFile := a.EditorGroup.ActiveFilePath()
+	if len(a.Workspace.Paths()) > 0 {
+		folder := a.Workspace.FolderForFile(activeFile)
+		if folder == nil {
+			folder = &a.Workspace.Folders[0]
+		}
+		name = filepath.Base(filepath.Clean(folder.Path))
+	} else if activeFile != "" {
+		name = filepath.Base(filepath.Clean(activeFile))
+	}
+	a.MenuBar.SetCenterText(name)
 }

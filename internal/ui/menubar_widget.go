@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -12,9 +13,10 @@ type MenuItem struct {
 
 type MenuBarWidget struct {
 	BaseWidget
-	Items    []MenuItem
-	Selected int
-	OnSelect func(index int)
+	Items      []MenuItem
+	CenterText string
+	Selected   int
+	OnSelect   func(index int)
 	// Visible reflects whether the bar is part of the layout. The root stack
 	// drops the widget entirely when hidden, so this is only the state flag —
 	// see App.applyMenuBarVisibility.
@@ -29,6 +31,10 @@ func NewMenuBarWidget(items []MenuItem) *MenuBarWidget {
 		Selected: -1,
 		Visible:  true,
 	}
+}
+
+func (m *MenuBarWidget) SetCenterText(text string) {
+	m.CenterText = text
 }
 
 type MenuItemSpan struct {
@@ -50,6 +56,10 @@ func (m *MenuBarWidget) Render(surface Surface) {
 
 	for x := 0; x < w; x++ {
 		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: term.StyleMenuBar})
+	}
+	if m.CenterText != "" {
+		textW := textwidth.String(m.CenterText)
+		surface.DrawText((w-textW)/2, 0, m.CenterText, w, term.StyleMenuBar)
 	}
 
 	m.itemSpans = m.computeSpans()

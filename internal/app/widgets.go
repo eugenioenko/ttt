@@ -428,6 +428,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.Repository.SetExplorer(explorer)
 	app.Repository.SetCurrentChangesHandler(app.ApplyCurrentChanges)
 	app.applyMenuBarVisibility(cfg.Settings.Editor.IsMenuBarVisible())
+	app.updateMenuBarTitle()
 	// Rebuild the Diagnostics panel whenever any source (LSP or a plugin)
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems

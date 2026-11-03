@@ -705,6 +705,7 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.OnActiveTabChange = func() {
+		app.updateMenuBarTitle()
 		if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 			findBar.OnEditorTabChange()
 		}

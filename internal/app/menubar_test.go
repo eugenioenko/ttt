@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,6 +52,37 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 	}
 	if len(a.RootBox.Children) != 3 || a.RootBox.Children[0] != a.MenuBar {
 		t.Error("menu bar should be the first child of the root stack")
+	}
+}
+
+func TestMenuBarTitleUsesWorkspaceFolder(t *testing.T) {
+	dir := t.TempDir()
+	borders := BuildBorderSet(config.DefaultTheme().Borders)
+	a := BuildAppFromConfig(&config.AppConfig{
+		Keybindings: config.DefaultKeybindings(),
+		Settings:    config.DefaultSettings(),
+		Theme:       config.DefaultTheme(),
+	}, &borders, workspace.New([]string{dir}), nil)
+
+	if got := a.MenuBar.CenterText; got != filepath.Base(dir) {
+		t.Fatalf("menu bar title = %q, want %q", got, filepath.Base(dir))
+	}
+}
+
+func TestMenuBarTitleUsesActiveFileWithoutWorkspace(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "main.go")
+	if err := os.WriteFile(file, []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	borders := BuildBorderSet(config.DefaultTheme().Borders)
+	a := BuildAppFromConfig(&config.AppConfig{
+		Keybindings: config.DefaultKeybindings(),
+		Settings:    config.DefaultSettings(),
+		Theme:       config.DefaultTheme(),
+	}, &borders, workspace.New(nil), []FileTarget{{Path: file}})
+
+	if got := a.MenuBar.CenterText; got != "main.go" {
+		t.Fatalf("menu bar title = %q, want %q", got, "main.go")
 	}
 }
 

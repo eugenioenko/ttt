@@ -52,3 +52,19 @@ func TestItemAnchorXOutOfRange(t *testing.T) {
 		t.Errorf("out-of-range index anchor = %d, want 0", got)
 	}
 }
+
+func TestMenuBarCenterText(t *testing.T) {
+	m := NewMenuBarWidget(nil)
+	m.SetCenterText("test-project")
+	cells := makeGrid(40, 1)
+	m.SetRect(Rect{X: 0, Y: 0, W: 40, H: 1})
+	m.Render(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: 40, H: 1}))
+
+	got := make([]rune, 0, len("test-project"))
+	for _, cell := range cells[0][14:26] {
+		got = append(got, cell.Ch)
+	}
+	if string(got) != "test-project" {
+		t.Fatalf("center text = %q, want %q", string(got), "test-project")
+	}
+}
