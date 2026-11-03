@@ -9,6 +9,8 @@ All keybindings can be customized in `~/.config/ttt/keybindings.json`. See [`con
 
 You can open your keybindings file from the command palette (**Ctrl+P**) with **Preferences: Open Keyboard Shortcuts**, or press **Ctrl+K Y**.
 
+The tables show the unchanged `ctrl+…` definitions. Set [`keyboard.modifierKey`](/reference/settings/#keyboard) to `"control+super"` to also accept Super/Cmd, or `"super"` to use Super/Cmd instead of Ctrl. This applies to custom Ctrl bindings too; the terminal must forward the shortcuts.
+
 ## General
 
 | Shortcut | Command | Description |

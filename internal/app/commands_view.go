@@ -170,15 +170,16 @@ func (a *App) FocusPanel() {
 func (a *App) ShowKeybindings() {
 	defaults := make(map[string]string)
 	for _, kb := range config.DefaultKeybindings() {
-		defaults[kb.Command] = FormatKeyBinding(kb.Key)
+		defaults[kb.Command] = FormatKeyBinding(kb.Key, a.Root.ControlModifiers)
 	}
 
 	w := ui.NewKeybindingsWidget(a.Reg.List())
+	w.ControlModifiers = a.Root.ControlModifiers
 	w.Borders = a.Borders
 	w.GetShortcut = func(cmdID string) string {
 		for _, kb := range a.Keybindings {
 			if kb.Command == cmdID {
-				return FormatKeyBinding(kb.Key)
+				return FormatKeyBinding(kb.Key, a.Root.ControlModifiers)
 			}
 		}
 		return ""

@@ -85,6 +85,10 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.recentFolderHistory"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Welcome.IsRecentFoldersEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Welcome.RecentFolders = boolPtr(v) }},
+			section(i18n.Text("settings.keyboard")),
+			{Label: i18n.Text("settings.shortcutModifier"), Kind: settingEnum, Options: keyboardModifierItems,
+				GetString: func(s *config.Settings) string { return s.Keyboard.ModifierKey },
+				SetString: func(s *config.Settings, v string) { s.Keyboard.ModifierKey = v }},
 			section(i18n.Text("settings.plugins")),
 			{Label: i18n.Text("settings.enablePlugins"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Plugins.IsEnabled() },
@@ -339,6 +343,14 @@ func settingsCategories() []settingsCategory {
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffScrollbarGitMarks },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffScrollbarGitMarks = v }},
 		}},
+	}
+}
+
+func keyboardModifierItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.ModifierControl, Label: i18n.Text("settings.modifierControl")},
+		{ID: config.ModifierControlSuper, Label: i18n.Text("settings.modifierControlSuper")},
+		{ID: config.ModifierSuper, Label: i18n.Text("settings.modifierSuper")},
 	}
 }
 

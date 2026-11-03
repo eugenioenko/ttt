@@ -827,7 +827,7 @@ func (a *App) registerPluginCommandsAndKeys(p *plugin.Plugin) {
 				a.Reg.Execute(cmdID)
 			})
 		}
-		a.Reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key))
+		a.Reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key, a.Root.ControlModifiers))
 	}
 }
 
