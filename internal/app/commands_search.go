@@ -98,6 +98,9 @@ func (a *App) findBar() findBar {
 
 func (a *App) OpenFindReplace() {
 	if a.Root.HasOverlay() {
+		if bar, ok := a.Root.TopOverlayWidget().(*ui.ReplaceBarWidget); ok {
+			bar.Focus()
+		}
 		return
 	}
 	bar := ui.NewReplaceBarWidget()
