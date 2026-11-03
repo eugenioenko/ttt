@@ -166,7 +166,7 @@ func RunEventLoop(
 		// Must run after Render/CursorPosition, else content and cursor read different Term states mid-frame.
 		resizeTerminals(app)
 		if app.Screen != nil && mouseX >= 0 {
-			app.Screen.SetPointerShape(app.pointerShapeAt(mouseX, mouseY))
+			app.Screen.SetPointerShape(app.Root.PointerShapeAt(mouseX, mouseY))
 		}
 	}
 

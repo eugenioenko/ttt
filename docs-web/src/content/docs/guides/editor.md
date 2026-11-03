@@ -144,6 +144,8 @@ TTT supports `.editorconfig` files and picks up indent size automatically per fi
 - Drag sidebar and panel dividers to resize
 - Right-click for context menus
 
+In terminals that support OSC 22, the mouse pointer shows what is under it: a text pointer over editor text and plugin inputs, a hand over tabs, menu items, tree rows, and buttons, a grabbing hand while dragging a tab, and a resize pointer over dividers. Other terminals keep their usual pointer.
+
 The sidebar resize handle and resize pointer cover only the divider column. Clicks and drags in the first content column beside it go directly to the content, including plugin tabs without a gutter.
 
 Other resize allowances are intentionally retained until a separate change is requested:

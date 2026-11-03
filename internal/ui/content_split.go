@@ -407,9 +407,9 @@ func (cs *ContentSplitWidget) OverDivider(mx, my int) bool {
 // ResizeShape is the pointer shape for dragging the divider.
 func (cs *ContentSplitWidget) ResizeShape() string {
 	if cs.Position == SplitRight {
-		return "ew-resize"
+		return term.PointerEWResize
 	}
-	return "ns-resize"
+	return term.PointerNSResize
 }
 
 func (cs *ContentSplitWidget) Dragging() bool { return cs.dragging }
