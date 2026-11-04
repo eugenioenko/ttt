@@ -33,6 +33,7 @@ func (a *App) OpenFind() {
 		}
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
+			a.EditorGroup.ClearSearch()
 			a.StatusWarn("Invalid regex: " + err.Error())
 			return nil
 		}
@@ -60,10 +61,9 @@ func (a *App) OpenFind() {
 
 const findRefreshDelay = 150 * time.Millisecond
 
-// scheduleFindRefresh re-runs the open find bar's query after an edit so
-// matches follow the text. Find Next/Prev refresh first if it hasn't run yet.
+// Find Next/Prev refresh first if the debounced update has not run yet.
 func (a *App) scheduleFindRefresh() {
-	if a.findBar() == nil {
+	if a.findBar() == nil && a.EditorGroup.Editor.SearchQuery == "" {
 		return
 	}
 	a.findStale = true
@@ -79,14 +79,17 @@ func (a *App) refreshFind() {
 	if !a.findStale {
 		return
 	}
-	if bar := a.findBar(); bar != nil {
-		a.findStale = false
+	a.findStale = false
+	if bar := a.findBar(); bar != nil && bar.Query() != "" {
 		bar.Refresh()
 		a.EditorGroup.SetSearchActive(bar.CurrentMatch())
+	} else if a.EditorGroup.IsEditorActive() {
+		a.EditorGroup.Editor.RefreshSearch()
 	}
 }
 
 type findBar interface {
+	Query() string
 	Refresh()
 	CurrentMatch() int
 }
@@ -108,10 +111,11 @@ func (a *App) OpenFindReplace() {
 	bar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
+			a.EditorGroup.ClearSearch()
 			a.StatusWarn("Invalid regex: " + err.Error())
 			return nil
 		}
-		a.EditorGroup.SetSearch(query, matches)
+		a.EditorGroup.SetSearch(query, opts, matches)
 		return matches
 	}
 	bar.OnNavigate = func(match ui.FindMatch) {

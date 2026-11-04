@@ -181,7 +181,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 	}
 	if a.Search.Input.Text != "" {
 		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
-		a.EditorGroup.SetSearch(a.Search.Input.Text, matches)
+		a.EditorGroup.SetSearch(a.Search.Input.Text, a.Search.Options, matches)
 	}
 	a.Root.SetFocus(a.EditorGroup)
 }
@@ -709,6 +709,10 @@ func registerWidgetCallbacks(app *App) {
 		if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 			findBar.OnEditorTabChange()
 		}
+		if bar := app.findBar(); bar != nil && bar.Query() != "" {
+			return
+		}
+		app.applySearchHighlights()
 	}
 
 	app.EditorGroup.TabBar.OnTabClose = func(index int) {

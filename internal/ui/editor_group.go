@@ -2102,9 +2102,9 @@ func (g *EditorGroupWidget) SelectAll() {
 	e.Cursor.Col = len([]rune(e.Buf.Lines[lastLine]))
 }
 
-func (g *EditorGroupWidget) SetSearch(query string, matches []FindMatch) {
+func (g *EditorGroupWidget) SetSearch(query string, opts SearchOptions, matches []FindMatch) {
 	g.find = findSession{}
-	g.applySearch(query, matches)
+	g.applySearch(query, opts, matches)
 }
 
 func (g *EditorGroupWidget) SetFindSearch(query string, matches []FindMatch, opts SearchOptions) {
@@ -2114,14 +2114,15 @@ func (g *EditorGroupWidget) SetFindSearch(query string, matches []FindMatch, opt
 	}
 	g.find.matchesBuffer = g.Editor.Buf
 	g.find.matchesVersion = g.Editor.Buf.Version()
-	g.applySearch(query, matches)
+	g.applySearch(query, opts, matches)
 }
 
-func (g *EditorGroupWidget) applySearch(query string, matches []FindMatch) {
+func (g *EditorGroupWidget) applySearch(query string, opts SearchOptions, matches []FindMatch) {
 	if !g.IsEditorActive() {
 		return
 	}
 	g.Editor.SearchQuery = query
+	g.Editor.SearchOptions = opts
 	g.Editor.SearchMatches = matches
 	g.Editor.SearchActive = 0
 	g.Editor.buildSearchIndex()
@@ -2231,6 +2232,7 @@ func (g *EditorGroupWidget) ClearFindHighlights() {
 // when that tab comes back.
 func (g *EditorGroupWidget) clearSearchState() {
 	g.Editor.SearchQuery = ""
+	g.Editor.SearchOptions = SearchOptions{}
 	g.Editor.SearchMatches = nil
 	g.Editor.SearchActive = 0
 	g.Editor.searchByLine = nil
@@ -2253,7 +2255,7 @@ func (g *EditorGroupWidget) refreshFindSearch() bool {
 	}
 	g.find.matchesBuffer = g.Editor.Buf
 	g.find.matchesVersion = g.Editor.Buf.Version()
-	g.applySearch(g.find.query, matches)
+	g.applySearch(g.find.query, g.find.options, matches)
 	if len(matches) == 0 {
 		g.find.activeMatch = -1
 	} else {
