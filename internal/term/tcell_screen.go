@@ -27,7 +27,8 @@ type TcellScreen struct {
 	scr      tcell.Screen
 	styleMap StyleMap
 	// Called on every mouse event; only a change is written to the tty.
-	pointerShape string
+	pointerShape         string
+	pointerShapesEnabled bool
 }
 
 func NewTcellScreen() (*TcellScreen, error) {
@@ -40,11 +41,11 @@ func NewTcellScreen() (*TcellScreen, error) {
 	}
 	s.EnableMouse()
 	s.EnablePaste()
-	return &TcellScreen{scr: s, styleMap: DefaultStyleMap()}, nil
+	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, nil
 }
 
 func NewTcellScreenFrom(s tcell.Screen) *TcellScreen {
-	return &TcellScreen{scr: s, styleMap: DefaultStyleMap()}
+	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}
 }
 
 func (t *TcellScreen) SetStyleMap(m StyleMap) {
@@ -160,7 +161,7 @@ func (t *TcellScreen) PollEvent() tcell.Event {
 }
 
 func (t *TcellScreen) Fini() {
-	if t.pointerShape != "" {
+	if t.pointerShapesEnabled && t.pointerShape != "" && t.pointerShape != "default" {
 		t.SetPointerShape("default")
 	}
 	t.scr.Fini()
@@ -192,6 +193,9 @@ func (t *TcellScreen) SetCursorStyle(style CursorStyle) {
 // SetPointerShape writes OSC 22 straight to the tty: tcell has no API for it.
 // Terminals without support drop the sequence.
 func (t *TcellScreen) SetPointerShape(shape string) {
+	if !t.pointerShapesEnabled {
+		return
+	}
 	if shape == t.pointerShape {
 		return
 	}
@@ -204,6 +208,29 @@ func (t *TcellScreen) SetPointerShape(shape string) {
 		return
 	}
 	t.pointerShape = shape
+}
+
+func (t *TcellScreen) PointerShapesEnabled() bool {
+	return t.pointerShapesEnabled
+}
+
+func (t *TcellScreen) SetPointerShapesEnabled(enabled bool) {
+	if t.pointerShapesEnabled == enabled {
+		return
+	}
+	t.pointerShapesEnabled = enabled
+	if !enabled {
+		// When changing enabled to disabled after ttt has already changed the pointer,
+		// restore the default pointer once before suppressing subsequent writes.
+		if t.pointerShape != "" && t.pointerShape != "default" {
+			if tty, ok := t.scr.Tty(); ok {
+				fmt.Fprintf(tty, "\x1b]22;default\x1b\\")
+			}
+		}
+		// Reset cached pointerShape so that re-enabling will not be suppressed
+		// by a stale cache value matching the current shape.
+		t.pointerShape = ""
+	}
 }
 
 // PostEvent injects an event into the screen's event queue (tcell v3 has no

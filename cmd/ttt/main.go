@@ -293,6 +293,7 @@ Docs: https://tttedit.dev
 
 	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), app.WithEditorSelectionStyle(cfg.Settings.Editor.SelectionStyle), app.WithPluginSelectionStyle(cfg.Settings.Plugins.SelectionStyle))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
+	screen.SetPointerShapesEnabled(cfg.Settings.Appearance.PointerShapesEnabled())
 
 	// Route OSC 52 clipboard writes through the tty, not raw stderr
 	if tty, ok := screen.Tty(); ok {

@@ -316,13 +316,23 @@ type AppearanceSettings struct {
 	Overrides       map[string]string `json:"overrides,omitempty"`
 	Chevrons        *LegacyChevrons   `json:"chevrons,omitempty"`
 	ScrollbarGlyphs string            `json:"scrollbarGlyphs"`
+	PointerShapes   *bool             `json:"pointerShapes,omitempty"`
 }
 
 func DefaultAppearanceSettings() AppearanceSettings {
 	return AppearanceSettings{
 		Icons:           IconsNone,
 		ScrollbarGlyphs: ScrollbarGlyphsBlocks,
+		PointerShapes:   boolPtr(true),
 	}
+}
+
+func (a AppearanceSettings) PointerShapesEnabled() bool {
+	return a.PointerShapes == nil || *a.PointerShapes
+}
+
+func (a AppearanceSettings) IsPointerShapesEnabled() bool {
+	return a.PointerShapesEnabled()
 }
 
 // migrateChevrons moves custom appearance.chevrons values into overrides. The
@@ -617,3 +627,5 @@ func SaveSettings(s Settings) error {
 	data = append(data, '\n')
 	return os.WriteFile(path, data, 0644)
 }
+
+func boolPtr(b bool) *bool { return &b }

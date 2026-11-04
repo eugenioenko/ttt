@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -93,4 +94,89 @@ func TestPointerShapeIgnoresEditorBeneathOverlay(t *testing.T) {
 	if got := h.app.Root.PointerShapeAt(x, y); got != term.PointerDefault {
 		t.Fatalf("beneath the overlay = %q, want %q", got, term.PointerDefault)
 	}
+}
+
+func TestMouseInteractionsWorkWithPointerShapesDisabled(t *testing.T) {
+	disabled := false
+
+	t.Run("selection", func(t *testing.T) {
+		h := newTestHarness(t, 120, 30)
+		defer h.stop()
+
+		s := *h.app.Settings
+		s.Appearance.PointerShapes = &disabled
+		h.app.ApplySettings(s)
+		if h.app.Screen.PointerShapesEnabled() {
+			t.Fatal("expected Screen.PointerShapesEnabled() to be false")
+		}
+
+		f := filepath.Join(h.dir, "test.txt")
+		_ = os.WriteFile(f, []byte("hello world\nline 2\nline 3\n"), 0644)
+		h.app.EditorGroup.OpenFile(f)
+		h.app.EditorGroup.CommitActiveTab()
+		h.redraw()
+
+		e := h.app.EditorGroup.Editor
+		r := e.GetRect()
+		textX := r.X + e.GutterWidth() + 2
+		textY := r.Y + 2
+		h.app.Root.HandleEvent(tcell.NewEventMouse(textX, textY, tcell.Button1, 0))
+		h.app.Root.HandleEvent(tcell.NewEventMouse(textX+5, textY, tcell.Button1, 0))
+		h.app.Root.HandleEvent(tcell.NewEventMouse(textX+5, textY, tcell.ButtonNone, 0))
+		if !e.Selection.Active {
+			t.Error("expected text selection to work with pointer shapes disabled")
+		}
+	})
+
+	t.Run("tab_drag", func(t *testing.T) {
+		h := newTestHarness(t, 120, 30)
+		defer h.stop()
+
+		s := *h.app.Settings
+		s.Appearance.PointerShapes = &disabled
+		h.app.ApplySettings(s)
+
+		for _, name := range []string{"alpha.txt", "beta.txt", "gamma.txt"} {
+			h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+			h.app.EditorGroup.CommitActiveTab()
+		}
+		h.redraw()
+
+		tabsY := h.app.EditorGroup.TabBar.GetRect().Y + 1
+		gammaX := displayColumnOf(h.screenRow(tabsY), "gamma.txt")
+		dropX := h.app.EditorGroup.TabBar.GetRect().X
+		h.app.Root.HandleEvent(tcell.NewEventMouse(gammaX+2, tabsY, tcell.Button1, 0))
+		h.app.Root.HandleEvent(tcell.NewEventMouse(dropX, tabsY, tcell.Button1, 0))
+		h.app.Root.HandleEvent(tcell.NewEventMouse(dropX, tabsY, tcell.ButtonNone, 0))
+		h.redraw()
+
+		path0, _ := h.app.EditorGroup.TabInfo(0)
+		if filepath.Base(path0) != "gamma.txt" {
+			t.Fatalf("first tab = %q, want gamma.txt after drag", path0)
+		}
+	})
+
+	t.Run("divider_resize", func(t *testing.T) {
+		h := newTestHarness(t, 120, 30)
+		defer h.stop()
+
+		s := *h.app.Settings
+		s.Appearance.PointerShapes = &disabled
+		h.app.ApplySettings(s)
+
+		h.app.ShowBottomPanel()
+		h.redraw()
+
+		cs := h.app.ContentSplit
+		divY := cs.DividerScreenY()
+		startH := cs.BottomH
+		h.app.Root.HandleEvent(tcell.NewEventMouse(60, divY, tcell.Button1, tcell.ModNone))
+		h.app.Root.HandleEvent(tcell.NewEventMouse(60, divY-4, tcell.Button1, tcell.ModNone))
+		h.app.Root.HandleEvent(tcell.NewEventMouse(60, divY-4, tcell.ButtonNone, tcell.ModNone))
+		h.redraw()
+
+		if cs.BottomH != startH+4 {
+			t.Errorf("panel height = %d, want %d after divider drag", cs.BottomH, startH+4)
+		}
+	})
 }

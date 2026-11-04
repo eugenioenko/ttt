@@ -145,6 +145,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	// Apply cursor style
 	if a.Screen != nil {
 		a.Screen.SetCursorStyle(term.ParseCursorStyle(s.Editor.CursorStyle))
+		a.Screen.SetPointerShapesEnabled(s.Appearance.PointerShapesEnabled())
 	}
 
 	// Apply search debounce
@@ -194,7 +195,9 @@ func (a *App) ApplySettings(s config.Settings) {
 			borders := BuildBorderSet(theme.Borders)
 			*a.Borders = borders
 			themeBorders = &borders
-			a.Renderer.Clear()
+			if a.Renderer != nil {
+				a.Renderer.Clear()
+			}
 			a.invalidateImageLayer()
 		}
 	} else if a.Palette != nil {

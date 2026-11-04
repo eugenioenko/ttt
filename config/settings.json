@@ -3,7 +3,8 @@
   "theme": "default-dark",
   "appearance": {
     "icons": "none",
-    "scrollbarGlyphs": "blocks"
+    "scrollbarGlyphs": "blocks",
+    "pointerShapes": true
   },
   "editor": {
     "autoClosing": {
