@@ -301,6 +301,25 @@ func TestHorizontalScrollAllowedWhenOverflow(t *testing.T) {
 	}
 }
 
+func TestModifiedWheelScrollsSidewaysWhenOverflow(t *testing.T) {
+	for _, mod := range []tcell.ModMask{tcell.ModShift, tcell.ModAlt} {
+		buf := &buffer.Buffer{Lines: []string{"a very long line that definitely overflows the viewport width of twenty chars"}}
+		cur := &cursor.Cursor{Line: 0, Col: 0}
+		vp := &view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 10}
+		e := NewEditorPaneWidget(buf, cur, vp)
+		e.SetRect(Rect{X: 0, Y: 0, W: 20, H: 10})
+
+		e.HandleEvent(tcell.NewEventMouse(10, 5, tcell.WheelDown, mod))
+		if e.Viewport.LeftCol != 4 || e.Viewport.TopLine != 0 {
+			t.Fatalf("mod %v wheel down: LeftCol=%d TopLine=%d, want 4 and 0", mod, e.Viewport.LeftCol, e.Viewport.TopLine)
+		}
+		e.HandleEvent(tcell.NewEventMouse(10, 5, tcell.WheelUp, mod))
+		if e.Viewport.LeftCol != 0 {
+			t.Fatalf("mod %v wheel up: LeftCol=%d, want 0", mod, e.Viewport.LeftCol)
+		}
+	}
+}
+
 // ensure term import is used
 var _ = term.Cell{}
 

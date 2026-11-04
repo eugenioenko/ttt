@@ -3,6 +3,7 @@ package ui
 import (
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -19,9 +20,9 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		}
 	}
 
-	mod := mev.Modifiers()
+	sideways := widgets.HorizontalWheelMod(mev.Modifiers())
 	if btn&tcell.WheelUp != 0 {
-		if mod&tcell.ModShift != 0 {
+		if sideways {
 			e.Viewport.LeftCol -= 4
 			e.clampLeftCol()
 		} else {
@@ -30,7 +31,7 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		return EventConsumed
 	}
 	if btn&tcell.WheelDown != 0 {
-		if mod&tcell.ModShift != 0 {
+		if sideways {
 			e.Viewport.LeftCol += 4
 			e.clampLeftCol()
 		} else {

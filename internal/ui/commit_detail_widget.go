@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -1499,11 +1500,11 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventConsumed
 	case *tcell.EventMouse:
 		buttons := event.Buttons()
-		modifiers := event.Modifiers()
+		sideways := widgets.HorizontalWheelMod(event.Modifiers())
 		switch {
-		case buttons&tcell.WheelUp != 0 && modifiers&tcell.ModShift != 0:
+		case buttons&tcell.WheelUp != 0 && sideways:
 			d.LeftCol -= 4
-		case buttons&tcell.WheelDown != 0 && modifiers&tcell.ModShift != 0:
+		case buttons&tcell.WheelDown != 0 && sideways:
 			d.LeftCol += 4
 		case buttons&tcell.WheelUp != 0:
 			d.TopLine -= 3

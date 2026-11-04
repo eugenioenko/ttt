@@ -1655,7 +1655,7 @@ panel:table({
 
 Double-clicking a data cell (not an action) highlights its text, and Ctrl+C then copies the cell's full value, even when the cell is truncated with `…`. Escape, a click elsewhere, or a render that changes or removes its row clears it.
 
-Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
+Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, Alt+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
 
 #### Row actions
 
