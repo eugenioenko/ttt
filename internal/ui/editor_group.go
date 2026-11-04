@@ -2566,6 +2566,21 @@ func (g *EditorGroupWidget) DeleteWordRight() {
 	}
 }
 
+func (g *EditorGroupWidget) AddCursorAbove() {
+	g.addCursorVertical(-1)
+}
+
+func (g *EditorGroupWidget) AddCursorBelow() {
+	g.addCursorVertical(1)
+}
+
+func (g *EditorGroupWidget) addCursorVertical(delta int) {
+	if e := g.keyEditor(); e != nil {
+		e.addCursorVertical(delta)
+		g.saveMultiState()
+	}
+}
+
 func (g *EditorGroupWidget) SelectNextOccurrence() {
 	if e := g.keyEditor(); e != nil {
 		e.SelectNextOccurrence()

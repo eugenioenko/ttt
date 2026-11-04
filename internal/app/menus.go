@@ -49,6 +49,8 @@ var menuBarMenus = [][]ui.ContextMenuItem{
 	{
 		{Label: "Select All", Command: "editor.selectAll"},
 		ui.MenuSep(),
+		{Label: "Add Cursor Above", Command: "multicursor.addCursorAbove"},
+		{Label: "Add Cursor Below", Command: "multicursor.addCursorBelow"},
 		{Label: "Add Next Occurrence", Command: "multicursor.selectNext"},
 		{Label: "Select All Occurrences", Command: "multicursor.selectAll"},
 		{Label: "Undo Last Cursor", Command: "multicursor.undoCursor"},
