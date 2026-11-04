@@ -10,10 +10,8 @@ import (
 func TestBottomPanelTabDragPointerGrabbingAcrossPanels(t *testing.T) {
 	bp := NewBottomPanelWidget(nil)
 	bp.Tabs.Config.Reorderable = true
-	var reordered bool
 	bp.Tabs.Config.OnReorder = func(from, to int) {
 		bp.MovePanel(from, to)
-		reordered = true
 	}
 	bp.AddPanel("term", "Terminal", &mockWidget{})
 	bp.AddPanel("probs", "Diagnostics", &mockWidget{})
@@ -105,17 +103,13 @@ func TestBottomPanelTabDragPointerGrabbingAcrossPanels(t *testing.T) {
 	if got := root.PointerShapeAt(tabX, tabsY); got != term.PointerHand {
 		t.Errorf("after release over tab = %q, want %q", got, term.PointerHand)
 	}
-
-	_ = reordered
 }
 
 func TestSidebarTabDragPointerGrabbingAcrossPanels(t *testing.T) {
 	sidebar := NewSidebarWidget()
 	sidebar.Tabs.Config.Reorderable = true
-	var reordered bool
 	sidebar.Tabs.Config.OnReorder = func(from, to int) {
 		sidebar.MovePanel(from, to)
-		reordered = true
 	}
 	sidebar.AddPanel("explore", "Explore", &mockWidget{})
 	sidebar.AddPanel("search", "Search", &mockWidget{})
@@ -192,8 +186,6 @@ func TestSidebarTabDragPointerGrabbingAcrossPanels(t *testing.T) {
 	if got := root.PointerShapeAt(divX, 10); got != term.PointerEWResize {
 		t.Errorf("after release over divider = %q, want %q", got, term.PointerEWResize)
 	}
-
-	_ = reordered
 }
 
 func TestBottomPanelOwnsPointerCaptureLifecycle(t *testing.T) {
