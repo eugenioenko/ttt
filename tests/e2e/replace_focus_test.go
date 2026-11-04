@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -88,25 +89,54 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 
 func TestReplaceBarRefreshesBeforeReplacement(t *testing.T) {
 	for _, action := range []string{"enter", "button"} {
-		for _, tc := range []struct{ name, edited, want string }{
-			{"moved", "Xfoo tail", "Xbar tail"},
-			{"removed", "plain tail", "plain tail"},
+		for _, tc := range []struct {
+			name, initial, edited, want string
+			current, wantCurrent        int
+			noMatches                   bool
+		}{
+			{name: "moved", initial: "foo tail", edited: "Xfoo tail", want: "Xbar tail"},
+			{name: "moved_line", initial: "foo tail", edited: "header\nfoo tail", want: "header\nbar tail"},
+			{name: "removed", initial: "foo tail", edited: "plain tail", want: "plain tail", noMatches: true},
+			{name: "preserves_current", initial: "foo foo foo", edited: "Xfoo foo foo", want: "Xfoo bar foo", current: 1, wantCurrent: 1},
+			{name: "clamps_current", initial: "foo foo foo", edited: "Xfoo foo", want: "Xfoo bar", current: 2},
 		} {
 			t.Run(action+"/"+tc.name, func(t *testing.T) {
 				h := newTestHarness(t, 120, 30)
 				defer h.stop()
 				h.exec("file.new")
-				pasteText(h, pasteKeys("foo tail"))
+				pasteText(h, pasteKeys(tc.initial))
 				h.pressCtrl(tcell.KeyCtrlR)
 				bar := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
 				pasteText(h, pasteKeys("foo"))
+				for range tc.current {
+					h.pressKey(tcell.KeyEnter, tcell.ModNone)
+				}
 				h.pressKey(tcell.KeyTab, tcell.ModNone)
 				pasteText(h, pasteKeys("bar"))
+				stale := slices.Clone(bar.Matches)
 				h.click(6, 4)
 				h.pressCtrl(tcell.KeyCtrlA)
 				pasteText(h, pasteKeys(tc.edited))
-				if len(bar.Matches) != 1 || bar.Matches[0].Col != 0 {
-					t.Fatal("expected stale match before the deferred refresh")
+				if !slices.Equal(bar.Matches, stale) || bar.Current != tc.current {
+					t.Fatalf("expected stale matches %v at index %d, got %v at index %d", stale, tc.current, bar.Matches, bar.Current)
+				}
+				editor := h.app.EditorGroup.Editor
+				line, col := editor.Cursor.Line, editor.Cursor.Col
+				replacements, navigations := 0, 0
+				onReplace, onNavigate := bar.OnReplace, bar.OnNavigate
+				bar.OnReplace = func(match ui.FindMatch, replacement string) {
+					if editor.Cursor.Line != line || editor.Cursor.Col != col {
+						t.Fatal("pre-replacement refresh moved the editor cursor")
+					}
+					replacements++
+					onReplace(match, replacement)
+				}
+				bar.OnNavigate = func(match ui.FindMatch) {
+					if replacements == 0 {
+						t.Fatal("pre-replacement refresh navigated to a match")
+					}
+					navigations++
+					onNavigate(match)
 				}
 
 				if action == "button" {
@@ -118,6 +148,36 @@ func TestReplaceBarRefreshesBeforeReplacement(t *testing.T) {
 				}
 				if got := editorText(h); got != tc.want {
 					t.Fatalf("replacement after edit = %q, want %q", got, tc.want)
+				}
+				wantReplacements := 1
+				if tc.noMatches {
+					wantReplacements = 0
+					if editor.Cursor.Line != line || editor.Cursor.Col != col {
+						t.Fatal("replacement without matches moved the editor cursor")
+					}
+				}
+				if replacements != wantReplacements {
+					t.Fatalf("replacement calls = %d, want %d", replacements, wantReplacements)
+				}
+				wantMatches, err := ui.FindInLines(editor.Buf.Lines, "foo", ui.SearchOptions{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !slices.Equal(bar.Matches, wantMatches) || !slices.Equal(editor.SearchMatches, wantMatches) {
+					t.Fatalf("matches after replacement: bar=%v editor=%v, want %v", bar.Matches, editor.SearchMatches, wantMatches)
+				}
+				if bar.Current != tc.wantCurrent {
+					t.Fatalf("current match after replacement = %d, want %d", bar.Current, tc.wantCurrent)
+				}
+				wantNavigations := 0
+				if len(wantMatches) > 0 {
+					wantNavigations = 1
+					if editor.SearchActive != tc.wantCurrent {
+						t.Fatalf("active editor match = %d, want %d", editor.SearchActive, tc.wantCurrent)
+					}
+				}
+				if navigations != wantNavigations {
+					t.Fatalf("post-replacement navigations = %d, want %d", navigations, wantNavigations)
 				}
 			})
 		}
