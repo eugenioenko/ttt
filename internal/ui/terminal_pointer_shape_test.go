@@ -230,7 +230,6 @@ func TestTerminalWidgetRenderDoesNotTakeNestedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Skipf("skipping terminal test: %v", err)
 	}
-	defer termDev.Close()
 
 	termDev.Snapshot(func(xt *xterm.Terminal) {
 		xt.WriteString("https://example.com/test\r\nplain text\r\n")
@@ -247,6 +246,18 @@ func TestTerminalWidgetRenderDoesNotTakeNestedSnapshot(t *testing.T) {
 	surface := NewRenderSurface(cells, Rect{W: 40, H: 10})
 
 	done := make(chan struct{})
+	t.Cleanup(func() {
+		closed := make(chan struct{})
+		go func() {
+			termDev.Close()
+			close(closed)
+		}()
+		select {
+		case <-closed:
+		case <-time.After(500 * time.Millisecond):
+		}
+	})
+
 	go func() {
 		tw.Render(surface)
 		close(done)
