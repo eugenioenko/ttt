@@ -277,24 +277,41 @@ func (tw *TerminalWidget) linksForLine(text string) []linkSpan {
 	return spans
 }
 
+func (tw *TerminalWidget) cachedLinkAt(unifiedLine, col int) *linkSpan {
+	if tw.linkCache == nil {
+		return nil
+	}
+	spans, ok := tw.linkCache[unifiedLine]
+	if !ok {
+		return nil
+	}
+	for i := range spans {
+		if col >= spans[i].StartCol && col < spans[i].EndCol {
+			return &spans[i]
+		}
+	}
+	return nil
+}
+
 func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
+	if span := tw.cachedLinkAt(unifiedLine, col); span != nil {
+		return span
+	}
+	if tw.Term == nil {
+		return nil
+	}
 	var spans []linkSpan
-	if tw.linkCache != nil {
-		spans = tw.linkCache[unifiedLine]
-	}
-	if len(spans) == 0 && tw.Term != nil {
-		tw.Term.Snapshot(func(xt *xterm.Terminal) {
-			buf := xt.Buffer()
-			if unifiedLine >= 0 && unifiedLine < buf.Lines.Length() {
-				w := tw.GetRect().W
-				if w <= 0 {
-					w = xt.Cols()
-				}
-				lineText := extractLineText(buf, unifiedLine, w)
-				spans = tw.linksForLine(lineText)
+	tw.Term.Snapshot(func(xt *xterm.Terminal) {
+		buf := xt.Buffer()
+		if unifiedLine >= 0 && unifiedLine < buf.Lines.Length() {
+			w := tw.GetRect().W
+			if w <= 0 {
+				w = xt.Cols()
 			}
-		})
-	}
+			lineText := extractLineText(buf, unifiedLine, w)
+			spans = tw.linksForLine(lineText)
+		}
+	})
 	for i := range spans {
 		if col >= spans[i].StartCol && col < spans[i].EndCol {
 			return &spans[i]
@@ -368,7 +385,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(unifiedLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkAt(unifiedLine, x) != nil {
+					} else if tw.cachedLinkAt(unifiedLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)
@@ -406,7 +423,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(srcLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkAt(srcLine, x) != nil {
+					} else if tw.cachedLinkAt(srcLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)

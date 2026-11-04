@@ -2,8 +2,11 @@ package ui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -219,5 +222,43 @@ func TestRootPointerShapeWithTerminalPanelAndOverlay(t *testing.T) {
 	root.PushOverlay(Overlay{Widget: &mockWidget{}, Modal: false})
 	if got := root.PointerShapeAt(11, 2); got != term.PointerDefault {
 		t.Fatalf("root covered by shapeless overlay = %q, want %q", got, term.PointerDefault)
+	}
+}
+
+func TestTerminalWidgetRenderDoesNotTakeNestedSnapshot(t *testing.T) {
+	termDev, err := terminal.New("", 40, 10, 1000, nil, "")
+	if err != nil {
+		t.Skipf("skipping terminal test: %v", err)
+	}
+	defer termDev.Close()
+
+	termDev.Snapshot(func(xt *xterm.Terminal) {
+		xt.WriteString("https://example.com/test\r\nplain text\r\n")
+	})
+
+	tw := NewTerminalWidget(termDev, &TerminalColorPalette{})
+	tw.SetRect(Rect{W: 40, H: 10})
+	tw.ctrlHeld = false
+
+	cells := make([][]term.Cell, 10)
+	for y := range cells {
+		cells[y] = make([]term.Cell, 40)
+	}
+	surface := NewRenderSurface(cells, Rect{W: 40, H: 10})
+
+	done := make(chan struct{})
+	go func() {
+		tw.Render(surface)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("tw.Render deadlocked, likely taking nested terminal Snapshot")
+	}
+
+	if cells[0][0].Attrs&term.CellAttrUnderline != 0 {
+		t.Error("expected no underline when ctrlHeld is false")
 	}
 }
