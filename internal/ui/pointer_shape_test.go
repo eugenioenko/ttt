@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -34,6 +35,34 @@ func TestRootPointerShapeOnlyAsksTopOverlay(t *testing.T) {
 	root.PushOverlay(Overlay{Widget: &mockWidget{}, Modal: false})
 	if got := root.PointerShapeAt(1, 1); got != term.PointerDefault {
 		t.Fatalf("shapeless top overlay = %q, want %q", got, term.PointerDefault)
+	}
+}
+
+func TestRootPointerShapeWithCheckboxAdapterAndOverlay(t *testing.T) {
+	cb := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: "Enable setting"})
+	cb.SetRect(widgets.Rect{X: 0, Y: 0, W: 20, H: 1})
+	adapter := NewWidgetAdapter(cb)
+	root := NewRoot(adapter)
+
+	// Checkbox inside adapter receives hand pointer
+	if got := root.PointerShapeAt(5, 0); got != term.PointerHand {
+		t.Fatalf("over checkbox = %q, want %q", got, term.PointerHand)
+	}
+	// Outside checkbox bounds falls back to default
+	if got := root.PointerShapeAt(25, 0); got != term.PointerDefault {
+		t.Fatalf("outside checkbox = %q, want %q", got, term.PointerDefault)
+	}
+
+	// A covering top overlay prevents the checkbox beneath from determining the pointer
+	root.PushOverlay(Overlay{Widget: &shapeWidget{shape: term.PointerText}, Modal: true})
+	if got := root.PointerShapeAt(5, 0); got != term.PointerText {
+		t.Fatalf("covered by shaped overlay = %q, want %q", got, term.PointerText)
+	}
+
+	// A shapeless top overlay also suppresses the checkbox beneath
+	root.PushOverlay(Overlay{Widget: &mockWidget{}, Modal: false})
+	if got := root.PointerShapeAt(5, 0); got != term.PointerDefault {
+		t.Fatalf("covered by shapeless overlay = %q, want %q", got, term.PointerDefault)
 	}
 }
 
