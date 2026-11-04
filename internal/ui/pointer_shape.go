@@ -200,3 +200,60 @@ func (e *EditorPaneWidget) PointerShapeAt(mx, my int) string {
 	}
 	return term.PointerText
 }
+
+func (v *VerticalTabBar) PointerShapeAt(mx, my int) string {
+	r := v.GetRect()
+	if r.H > 0 && !r.Contains(mx, my) {
+		return ""
+	}
+	ly := my - r.Y
+	if ly >= 0 && ly < v.Count {
+		return term.PointerHand
+	}
+	return term.PointerDefault
+}
+
+func (tp *TerminalPanelWidget) PointerShapeAt(mx, my int) string {
+	if tp.activeOwnsPointer() {
+		return widgets.PointerShapeAt(tp.ActiveWidget(), mx, my)
+	}
+	r := tp.GetRect()
+	if !r.Contains(mx, my) {
+		return ""
+	}
+	stripW := min(VerticalTabBarWidth, max(r.W, 0))
+	if mx < r.X+stripW {
+		return tp.TabBar.PointerShapeAt(mx, my)
+	}
+	if tw, ok := tp.ActiveWidget().(*TerminalWidget); ok {
+		if tw.scrollbar.Visible() && mx == tw.scrollbar.X && my >= tw.scrollbar.Y && my < tw.scrollbar.Y+tw.scrollbar.Height {
+			return term.PointerDefault
+		}
+	}
+	if w := tp.ActiveWidget(); w != nil {
+		if shape := widgets.PointerShapeAt(w, mx, my); shape != "" {
+			return shape
+		}
+	}
+	return term.PointerDefault
+}
+
+func (tw *TerminalWidget) PointerShapeAt(mx, my int) string {
+	if tw.scrollbar.IsDragging() {
+		return term.PointerDefault
+	}
+	if tw.scrollbar.Visible() && mx == tw.scrollbar.X && my >= tw.scrollbar.Y && my < tw.scrollbar.Y+tw.scrollbar.Height {
+		return term.PointerDefault
+	}
+	r := tw.GetRect()
+	if !r.Contains(mx, my) {
+		return ""
+	}
+	if tw.ctrlHeld {
+		pos := tw.screenToLine(mx, my)
+		if tw.linkAt(pos.Line, pos.Col) != nil {
+			return term.PointerHand
+		}
+	}
+	return term.PointerDefault
+}

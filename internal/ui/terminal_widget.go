@@ -278,9 +278,22 @@ func (tw *TerminalWidget) linksForLine(text string) []linkSpan {
 }
 
 func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
-	spans, ok := tw.linkCache[unifiedLine]
-	if !ok {
-		return nil
+	var spans []linkSpan
+	if tw.linkCache != nil {
+		spans = tw.linkCache[unifiedLine]
+	}
+	if len(spans) == 0 && tw.Term != nil {
+		tw.Term.Snapshot(func(xt *xterm.Terminal) {
+			buf := xt.Buffer()
+			if unifiedLine >= 0 && unifiedLine < buf.Lines.Length() {
+				w := tw.GetRect().W
+				if w <= 0 {
+					w = xt.Cols()
+				}
+				lineText := extractLineText(buf, unifiedLine, w)
+				spans = tw.linksForLine(lineText)
+			}
+		})
 	}
 	for i := range spans {
 		if col >= spans[i].StartCol && col < spans[i].EndCol {
@@ -522,6 +535,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
+		tw.ctrlHeld = tev.Modifiers()&tcell.ModCtrl != 0
 		if tev.Modifiers()&tcell.ModShift != 0 {
 			_, h := tw.Term.Size()
 			switch tev.Key() {
@@ -778,6 +792,9 @@ func (tw *TerminalWidget) screenToLine(mx, my int) termSelPos {
 	col := mx - r.X
 	screenY := my - r.Y
 	unifiedLine := 0
+	if tw.Term == nil {
+		return termSelPos{Line: screenY, Col: col}
+	}
 
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
