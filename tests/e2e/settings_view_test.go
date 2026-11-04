@@ -166,6 +166,31 @@ func TestSettingsMouseTogglesAndApplies(t *testing.T) {
 	}
 }
 
+func TestSettingsPointerShapesToggle(t *testing.T) {
+	h := openSettings(t)
+	clickRowControl(t, h, "Appearance", "Appearance")
+
+	if !rowHas(h, "Pointer shapes", checkedBox) {
+		t.Fatalf("expected Pointer shapes to be checked by default:\n%s", h.screenText())
+	}
+	if !h.app.Screen.PointerShapesEnabled() {
+		t.Fatal("screen pointer shapes should start enabled")
+	}
+
+	clickRowControl(t, h, "Pointer shapes", checkedBox)
+	if !rowHas(h, "Pointer shapes", uncheckedBox) {
+		t.Fatalf("clicking Pointer shapes checkbox did not toggle it to unchecked:\n%s", h.screenText())
+	}
+
+	clickRowControl(t, h, "Apply", "Apply")
+	if h.app.Settings.Appearance.PointerShapesEnabled() {
+		t.Error("clicking Apply did not update Settings.Appearance.PointerShapes to false")
+	}
+	if h.app.Screen.PointerShapesEnabled() {
+		t.Error("clicking Apply did not update Screen.PointerShapesEnabled to false")
+	}
+}
+
 func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Appearance", "Appearance")

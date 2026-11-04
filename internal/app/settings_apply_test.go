@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
@@ -328,5 +329,36 @@ func TestPluginSidebarIconFollowsIconMode(t *testing.T) {
 	a.ApplySettings(next)
 	if got := labels(); got["plugin.both"] != "N" || got["plugin.nerdonly"] != "N" {
 		t.Fatalf("nerd mode labels = %v", got)
+	}
+}
+
+func TestApplySettingsPointerShapes(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	a := buildTestApp(t, settings)
+	sim := term.NewSimScreen()
+	a.Screen = term.NewTcellScreenFrom(sim)
+
+	if !a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should default to enabled")
+	}
+
+	next := *a.Settings
+	disabled := false
+	next.Appearance.PointerShapes = &disabled
+	a.ApplySettings(next)
+
+	if a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should be disabled after ApplySettings")
+	}
+
+	enabled := true
+	next.Appearance.PointerShapes = &enabled
+	a.ApplySettings(next)
+
+	if !a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should be enabled after ApplySettings")
 	}
 }

@@ -690,6 +690,9 @@ func (a *App) isMouseOverHover(mx, my int) bool {
 
 func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManager *lsp.Manager, imageLayer *image.Layer) {
 	a.Screen = screen
+	if a.Screen != nil && a.Settings != nil {
+		a.Screen.SetPointerShapesEnabled(a.Settings.Appearance.PointerShapesEnabled())
+	}
 	a.initTaskDelivery(screen)
 	a.Renderer = renderer
 	a.LspManager = lspManager

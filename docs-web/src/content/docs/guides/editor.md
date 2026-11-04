@@ -144,7 +144,7 @@ TTT supports `.editorconfig` files and picks up indent size automatically per fi
 - Drag sidebar and panel dividers to resize
 - Right-click for context menus
 
-In terminals that support OSC 22, the mouse pointer shows what is under it: a text pointer over editor text and plugin inputs, a hand over tabs, menu items, tree rows, and buttons, a grabbing hand while dragging a tab, and a resize pointer over dividers. Other terminals keep their usual pointer.
+In terminals that support OSC 22, the mouse pointer shows what is under it: a text pointer over editor text and plugin inputs, a hand over tabs, menu items, tree rows, and buttons, a grabbing hand while dragging a tab, and a resize pointer over dividers. Other terminals keep their usual pointer. You can opt out of pointer shape changes with `appearance.pointerShapes: false` (or via **Settings > Appearance > Window > Pointer shapes**). Mouse clicks, selection, scrolling, drag gestures, and mouse reporting continue to work normally when pointer shapes are disabled.
 
 The sidebar resize handle and resize pointer cover only the divider column. Clicks and drags in the first content column beside it go directly to the content, including plugin tabs without a gutter.
 

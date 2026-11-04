@@ -31,6 +31,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Welcome.RecentFolders = &enabled
+	s.Appearance.PointerShapes = &enabled
 	s.Terminal.Shell = "/bin/zsh"
 	s.Terminal.CtrlVPastes = false
 	s.Editor.SelectionStyle = SelectionStyleInvert
@@ -67,6 +68,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Welcome.IsRecentFoldersEnabled() {
 		t.Error("welcome.recentFolders=false did not round-trip; tri-state pointer lost")
+	}
+	if got.Appearance.PointerShapesEnabled() {
+		t.Error("appearance.pointerShapes=false did not round-trip; tri-state pointer lost")
 	}
 	if got.Terminal.Shell != "/bin/zsh" {
 		t.Errorf("shell = %q, want /bin/zsh", got.Terminal.Shell)
@@ -331,5 +335,37 @@ func TestHighlightTimeLimitIsHiddenUntilSet(t *testing.T) {
 	s.Editor.HighlightTimeLimit = 5000
 	if v := string(editorKeys(s)["highlightTimeLimit"]); v != "5000" {
 		t.Fatalf("editor.highlightTimeLimit = %q, want 5000 written once set", v)
+	}
+}
+
+func TestAppearanceSettingsPointerShapesExplicitFalseSurvives(t *testing.T) {
+	withTempConfigDir(t)
+
+	s := DefaultSettings()
+	disabled := false
+	s.Appearance.PointerShapes = &disabled
+	if err := SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	got := LoadSettings()
+	if got.Appearance.PointerShapes == nil || *got.Appearance.PointerShapes != false {
+		t.Fatalf("pointerShapes = %v, want explicit false pointer", got.Appearance.PointerShapes)
+	}
+	if got.Appearance.PointerShapesEnabled() {
+		t.Fatal("PointerShapesEnabled() returned true, want false")
+	}
+}
+
+func TestAppearanceSettingsPointerShapesMissingDefaultsToEnabled(t *testing.T) {
+	dir := withTempConfigDir(t)
+	raw := []byte(`{"version":1,"appearance":{"icons":"none"}}` + "\n")
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), raw, 0644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	got := LoadSettings()
+	if !got.Appearance.PointerShapesEnabled() {
+		t.Fatal("missing appearance.pointerShapes must default to enabled")
 	}
 }

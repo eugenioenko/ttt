@@ -191,6 +191,25 @@ func TestWelcomeSettingsRecentFoldersEnabled(t *testing.T) {
 	}
 }
 
+func TestAppearanceSettingsPointerShapesEnabled(t *testing.T) {
+	s := AppearanceSettings{}
+	if !s.PointerShapesEnabled() {
+		t.Error("pointer shapes should default to enabled when nil")
+	}
+
+	enabled := true
+	s.PointerShapes = &enabled
+	if !s.PointerShapesEnabled() {
+		t.Error("pointer shapes should be enabled when explicitly true")
+	}
+
+	disabled := false
+	s.PointerShapes = &disabled
+	if s.PointerShapesEnabled() {
+		t.Error("pointer shapes should be disabled when explicitly false")
+	}
+}
+
 func TestLSPSettingsShouldNotifyAvailability(t *testing.T) {
 	// nil means default (true)
 	s := LSPSettings{}
