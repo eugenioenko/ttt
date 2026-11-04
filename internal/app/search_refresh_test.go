@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/ui"
 
@@ -199,5 +200,68 @@ func TestInvalidRegexDoesNotRestorePreviousSearchAfterEdit(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSearchRefreshWithEmptyBar(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		t.Run(map[bool]string{false: "find", true: "replace"}[replace], func(t *testing.T) {
+			h := newSearchRefreshHarness(t)
+			NewPluginEditorAPI(h.app).SetSearch("foo", false)
+			h.app.EditorGroup.SetSearchActive(1)
+			if replace {
+				h.app.OpenFindReplace()
+			} else {
+				h.app.OpenFind()
+			}
+			editor := h.app.EditorGroup.Editor
+			editor.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+			h.flushOnChange()
+			want := []ui.FindMatch{{Line: 1, Col: 0, Len: 3}, {Line: 2, Col: 0, Len: 3}}
+			if !reflect.DeepEqual(editor.SearchMatches, want) || editor.SearchActive != 1 {
+				t.Fatalf("matches = %+v active = %d, want %+v active = 1", editor.SearchMatches, editor.SearchActive, want)
+			}
+		})
+	}
+}
+
+func TestSidebarSearchRefreshAcrossTabChange(t *testing.T) {
+	h := newSearchRefreshHarness(t)
+	a := h.app
+	firstPath := a.EditorGroup.ActiveFilePath()
+	a.EditorGroup.CommitActiveTab()
+	secondPath := filepath.Join(t.TempDir(), "other.txt")
+	if err := os.WriteFile(secondPath, []byte("other\nxx foo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.EditorGroup.OpenFile(secondPath)
+	a.EditorGroup.CommitActiveTab()
+	a.EditorGroup.SwitchToTabByPath(firstPath)
+	a.Sidebar.SetActivePanel("search")
+	a.Search.Input.Text = "foo"
+	a.applySearchHighlights()
+	var work, deliveries []func()
+	a.tasks.post = func(fn func()) error { deliveries = append(deliveries, fn); return nil }
+	a.findRefresh = NewTask[struct{}](a, asynctask.TaskOptions{Run: func(fn func()) { work = append(work, fn) }})
+	editor := a.EditorGroup.Editor
+	editor.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	h.flushOnChange()
+	if len(work) != 1 {
+		t.Fatalf("queued work = %d, want 1", len(work))
+	}
+	a.EditorGroup.SwitchToTabByPath(secondPath)
+	work[0]()
+	if len(deliveries) != 1 {
+		t.Fatalf("queued deliveries = %d, want 1", len(deliveries))
+	}
+	deliveries[0]()
+	wantSecond := []ui.FindMatch{{Line: 1, Col: 3, Len: 3}}
+	if !reflect.DeepEqual(editor.SearchMatches, wantSecond) {
+		t.Fatalf("second buffer matches = %+v, want %+v", editor.SearchMatches, wantSecond)
+	}
+	a.EditorGroup.SwitchToTabByPath(firstPath)
+	wantFirst := []ui.FindMatch{{Line: 1, Col: 0, Len: 3}, {Line: 2, Col: 0, Len: 3}}
+	if !reflect.DeepEqual(editor.SearchMatches, wantFirst) {
+		t.Fatalf("first buffer matches after return = %+v, want %+v", editor.SearchMatches, wantFirst)
 	}
 }

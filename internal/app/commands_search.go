@@ -80,7 +80,7 @@ func (a *App) refreshFind() {
 		return
 	}
 	a.findStale = false
-	if bar := a.findBar(); bar != nil {
+	if bar := a.findBar(); bar != nil && bar.Query() != "" {
 		bar.Refresh()
 		a.EditorGroup.SetSearchActive(bar.CurrentMatch())
 	} else if a.EditorGroup.IsEditorActive() {
@@ -89,6 +89,7 @@ func (a *App) refreshFind() {
 }
 
 type findBar interface {
+	Query() string
 	Refresh()
 	CurrentMatch() int
 }

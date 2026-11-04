@@ -709,6 +709,10 @@ func registerWidgetCallbacks(app *App) {
 		if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 			findBar.OnEditorTabChange()
 		}
+		if bar := app.findBar(); bar != nil && bar.Query() != "" {
+			return
+		}
+		app.applySearchHighlights()
 	}
 
 	app.EditorGroup.TabBar.OnTabClose = func(index int) {

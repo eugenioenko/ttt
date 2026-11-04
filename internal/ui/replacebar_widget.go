@@ -194,6 +194,8 @@ func (r *ReplaceBarWidget) Refresh() {
 	r.Current = max(min(r.Current, len(r.Matches)-1), 0)
 }
 
+func (r *ReplaceBarWidget) Query() string { return r.SearchInput.Text }
+
 func (r *ReplaceBarWidget) CurrentMatch() int { return r.Current }
 
 func (r *ReplaceBarWidget) replaceCurrent() {
