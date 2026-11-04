@@ -198,13 +198,13 @@ func (sv *ScrollViewWidget) HandleEvent(ev tcell.Event) EventResult {
 		btn := e.Buttons()
 		mx, my := e.Position()
 
-		mod := e.Modifiers()
-		if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && mod&tcell.ModShift != 0) {
+		sideways := HorizontalWheelMod(e.Modifiers())
+		if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && sideways) {
 			horizontal, _ := sv.currentScrollRanges()
 			sv.scrollX = horizontal.clampOffset(sv.scrollX - 3)
 			return EventConsumed
 		}
-		if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && mod&tcell.ModShift != 0) {
+		if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && sideways) {
 			sv.scrollHRight(3)
 			return EventConsumed
 		}

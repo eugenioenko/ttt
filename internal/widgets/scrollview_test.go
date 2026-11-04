@@ -344,6 +344,23 @@ func TestScrollViewHorizontalWheelRight(t *testing.T) {
 	}
 }
 
+func TestScrollViewModifiedWheelScrollsSideways(t *testing.T) {
+	for _, mod := range []tcell.ModMask{tcell.ModShift, tcell.ModAlt} {
+		child := newScrollTestChild(60, 60)
+		sv := NewScrollViewWidget(child)
+		renderWidget(sv, 0, 0, 20, 10)
+
+		sv.HandleEvent(tcell.NewEventMouse(5, 5, tcell.WheelDown, mod))
+		if sv.scrollX != 3 || sv.scrollY != 0 {
+			t.Fatalf("mod %v wheel down: scrollX=%d scrollY=%d, want 3 and 0", mod, sv.scrollX, sv.scrollY)
+		}
+		sv.HandleEvent(tcell.NewEventMouse(5, 5, tcell.WheelUp, mod))
+		if sv.scrollX != 0 || sv.scrollY != 0 {
+			t.Fatalf("mod %v wheel up: scrollX=%d scrollY=%d, want 0 and 0", mod, sv.scrollX, sv.scrollY)
+		}
+	}
+}
+
 func TestScrollViewHorizontalWheelLeft(t *testing.T) {
 	child := newScrollTestChild(60, 5)
 	sv := NewScrollViewWidget(child)

@@ -672,12 +672,12 @@ func (t *TableWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 
 	headerH := 2
 
-	shift := ev.Modifiers()&tcell.ModShift != 0
-	if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && shift) {
+	sideways := HorizontalWheelMod(ev.Modifiers())
+	if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && sideways) {
 		t.scrollHorizontally(-3)
 		return EventConsumed
 	}
-	if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && shift) {
+	if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && sideways) {
 		t.scrollHorizontally(3)
 		return EventConsumed
 	}
