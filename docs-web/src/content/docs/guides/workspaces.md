@@ -45,6 +45,8 @@ ttt . https://github.com/owner/repo/pull/123
 
 Open multiple project directories in a single session. Each root appears as a collapsible group in the explorer, search, and changes panels.
 
+With `"reuseWindow": true`, `ttt another-folder` adds that folder to a running editor's workspace without closing existing tabs. Mixed arguments such as `ttt another-folder file.go` also open the file, and `ttt .` adds the current directory. Adding folders uses the same rules as **Add Folder to Workspace**: duplicate folder paths are ignored, and explicitly added nested folders remain separate roots. Bare `ttt` and `ttt --workspace project.ttt` still start a new editor.
+
 ### Workspace Files
 
 Workspace files use the `.ttt` extension and store a list of folders as relative paths:

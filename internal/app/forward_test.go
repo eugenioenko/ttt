@@ -74,7 +74,7 @@ func TestForwardSocketNameLengthAndOrder(t *testing.T) {
 	}
 }
 
-func TestForwardFilesRoundTrip(t *testing.T) {
+func TestForwardTargetsRoundTrip(t *testing.T) {
 	setupForwardTest(t)
 	a := newListenTestApp(t)
 	if err := runExecMain(a, func() error { a.Root.SetFocus(a.Search); return nil }); err != nil {
@@ -91,8 +91,8 @@ func TestForwardFilesRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TMPDIR", filepath.Join(os.TempDir(), "missing"))
-	if pid, err := ForwardFiles([]FileTarget{{Path: first}, {Path: second, Line: 3, Col: 2}}); err != nil || pid != os.Getpid() {
-		t.Fatalf("ForwardFiles = (%d, %v), want pid %d", pid, err, os.Getpid())
+	if pid, err := ForwardTargets([]FileTarget{{Path: first}, {Path: second, Line: 3, Col: 2}}, nil); err != nil || pid != os.Getpid() {
+		t.Fatalf("ForwardTargets = (%d, %v), want pid %d", pid, err, os.Getpid())
 	}
 	if err := runExecMain(a, func() error {
 		if paths := a.EditorGroup.OpenFilePaths(); !slices.Contains(paths, first) || !slices.Contains(paths, second) {
@@ -151,8 +151,8 @@ func TestRunEventLoopStartsForwardAfterStartupWork(t *testing.T) {
 	if err := os.WriteFile(forwardedPath, []byte("forwarded"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ForwardFiles([]FileTarget{{Path: forwardedPath}}); err != nil {
-		t.Fatalf("ForwardFiles() after startup = %v", err)
+	if _, err := ForwardTargets([]FileTarget{{Path: forwardedPath}}, nil); err != nil {
+		t.Fatalf("ForwardTargets() after startup = %v", err)
 	}
 	if err := runExecMain(a, func() error {
 		if !slices.Contains(a.EditorGroup.OpenFilePaths(), forwardedPath) {
@@ -164,7 +164,7 @@ func TestRunEventLoopStartsForwardAfterStartupWork(t *testing.T) {
 	}
 }
 
-func TestForwardFilesSilentReceiver(t *testing.T) {
+func TestForwardTargetsSilentReceiver(t *testing.T) {
 	setupForwardTest(t)
 	saved := forwardCallTimeout
 	forwardCallTimeout = 50 * time.Millisecond
@@ -189,7 +189,7 @@ func TestForwardFilesSilentReceiver(t *testing.T) {
 		targets[i].Path = strings.Repeat("x", 500)
 	}
 	go func() {
-		_, err := ForwardFiles(targets)
+		_, err := ForwardTargets(targets, nil)
 		result <- err
 	}()
 	select {
@@ -201,14 +201,14 @@ func TestForwardFilesSilentReceiver(t *testing.T) {
 	select {
 	case err := <-result:
 		if err == nil || err.Error() != "the running editor did not respond" || errors.Is(err, ErrForwardUnavailable) {
-			t.Fatalf("ForwardFiles = %v, want non-fallback timeout error", err)
+			t.Fatalf("ForwardTargets = %v, want non-fallback timeout error", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("ForwardFiles blocked on a connected silent receiver past the call deadline")
+		t.Fatal("ForwardTargets blocked on a connected silent receiver past the call deadline")
 	}
 }
 
-func TestForwardFilesPartialFailure(t *testing.T) {
+func TestForwardTargetsPartialFailure(t *testing.T) {
 	a := newListenTestApp(t)
 
 	dir := t.TempDir()
@@ -221,7 +221,7 @@ func TestForwardFilesPartialFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := runExecMain(a, func() error {
-		return a.openForwarded([]FileTarget{{Path: bad}, {Path: good}, {Path: bad, Line: 3, Col: 2}})
+		return a.openForwarded([]FileTarget{{Path: bad}, {Path: good}, {Path: bad, Line: 3, Col: 2}}, nil)
 	})
 	if err == nil || !strings.Contains(err.Error(), bad) {
 		t.Fatalf("forward error = %v, want failed path %s", err, bad)
@@ -239,7 +239,7 @@ func TestForwardFilesPartialFailure(t *testing.T) {
 	}
 }
 
-func TestForwardFilesReceiverChoice(t *testing.T) {
+func TestForwardTargetsReceiverChoice(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		preferred string
@@ -294,14 +294,14 @@ func TestForwardFilesReceiverChoice(t *testing.T) {
 				paths["symlink"] = filepath.Join(link, filepath.Base(parent))
 			}
 			t.Setenv(forwardSocketEnv, paths[tc.preferred])
-			if _, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); err == nil || err.Error() != tc.want {
-				t.Fatalf("ForwardFiles = %v, want %q", err, tc.want)
+			if _, err := ForwardTargets([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}, nil); err == nil || err.Error() != tc.want {
+				t.Fatalf("ForwardTargets = %v, want %q", err, tc.want)
 			}
 		})
 	}
 }
 
-func TestForwardFilesReceiverResult(t *testing.T) {
+func TestForwardTargetsReceiverResult(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		result any
@@ -316,14 +316,14 @@ func TestForwardFilesReceiverResult(t *testing.T) {
 			parent := fakeForwardReceiver(t, time.UnixMilli(1), tc.result, nil)
 			fakeForwardReceiver(t, time.UnixMilli(2), nil, errors.New("must not retry a successful request"))
 			t.Setenv(forwardSocketEnv, parent)
-			if pid, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); err != nil || pid != tc.pid {
-				t.Fatalf("ForwardFiles = (%d, %v), want (%d, nil)", pid, err, tc.pid)
+			if pid, err := ForwardTargets([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}, nil); err != nil || pid != tc.pid {
+				t.Fatalf("ForwardTargets = (%d, %v), want (%d, nil)", pid, err, tc.pid)
 			}
 		})
 	}
 }
 
-func TestForwardFilesLeftoverSockets(t *testing.T) {
+func TestForwardTargetsLeftoverSockets(t *testing.T) {
 	setupForwardTest(t)
 	dead := exec.Command("true")
 	if err := dead.Run(); err != nil {
@@ -341,7 +341,7 @@ func TestForwardFilesLeftoverSockets(t *testing.T) {
 		paths = append(paths, path)
 	}
 	t.Setenv(forwardSocketEnv, paths[0])
-	if _, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); !errors.Is(err, ErrForwardUnavailable) {
+	if _, err := ForwardTargets([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}, nil); !errors.Is(err, ErrForwardUnavailable) {
 		t.Fatalf("no live receiver: %v", err)
 	}
 	if _, err := os.Lstat(paths[0]); !errors.Is(err, os.ErrNotExist) {
@@ -359,7 +359,7 @@ func TestForwardUnsafeDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer StartForward(a)()
-	if _, err := ForwardFiles([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}); !errors.Is(err, ErrForwardUnavailable) {
+	if _, err := ForwardTargets([]FileTarget{{Path: filepath.Join(t.TempDir(), "file.txt")}}, nil); !errors.Is(err, ErrForwardUnavailable) {
 		t.Fatalf("unsafe directory: %v", err)
 	}
 	if !strings.Contains(a.Status.Notification, "unsafe forwarding directory") {

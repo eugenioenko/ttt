@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,19 +69,32 @@ func (a *App) AddWorkspaceFolder() {
 		if path == "" {
 			return
 		}
+		if err := a.addWorkspaceFolders([]string{path}); err != nil {
+			a.StatusError("Error: " + err.Error())
+		}
+	})
+}
+
+func (a *App) addWorkspaceFolders(paths []string) error {
+	var errs []error
+	count := len(a.Workspace.Folders)
+	for _, path := range paths {
 		abs, err := filepath.Abs(workspace.ExpandPath(path))
 		if err != nil {
-			a.StatusError("Error: " + err.Error())
-			return
+			errs = append(errs, err)
+			continue
 		}
 		info, err := os.Stat(abs)
 		if err != nil || !info.IsDir() {
-			a.StatusError("Not a directory: " + abs)
-			return
+			errs = append(errs, fmt.Errorf("not a directory: %s", abs))
+			continue
 		}
 		a.Workspace.AddFolder(abs)
+	}
+	if len(a.Workspace.Folders) != count {
 		a.refreshWorkspaceWidgets()
-	})
+	}
+	return errors.Join(errs...)
 }
 
 func (a *App) RemoveWorkspaceFolder() {
