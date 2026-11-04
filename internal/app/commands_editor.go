@@ -957,6 +957,16 @@ func registerEditorCommands(app *App) {
 		Handler:  func() { app.EditorGroup.SelectNextOccurrence() },
 	})
 	reg.Register(command.Command{
+		ID: "multicursor.addCursorAbove", Title: "Add Cursor Above",
+		Keywords: []string{"editor", "multicursor"},
+		Handler:  app.AddCursorAbove,
+	})
+	reg.Register(command.Command{
+		ID: "multicursor.addCursorBelow", Title: "Add Cursor Below",
+		Keywords: []string{"editor", "multicursor"},
+		Handler:  app.AddCursorBelow,
+	})
+	reg.Register(command.Command{
 		ID: "multicursor.selectAll", Title: "Select All Occurrences",
 		Keywords: []string{"editor", "multicursor", "selection"},
 		Handler:  func() { app.EditorGroup.SelectAllOccurrences() },
@@ -1025,6 +1035,14 @@ func registerEditorCommands(app *App) {
 		Keywords: []string{"exit", "close"},
 		Handler:  app.Quit,
 	})
+}
+
+func (a *App) AddCursorAbove() {
+	a.EditorGroup.AddCursorAbove()
+}
+
+func (a *App) AddCursorBelow() {
+	a.EditorGroup.AddCursorBelow()
 }
 
 // diffHunkStep navigates change blocks inside a diff view, where the buffer

@@ -110,7 +110,7 @@ Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active w
 - **Undo/redo** (Ctrl+Z/Y) via a command-pattern undo stack
 - **Code folding** — toggle folds (Ctrl+K [), fold/unfold all, fold-aware search and navigation
 - **Line operations** — toggle line comment, move/duplicate/delete line, join lines, sort lines, split selection into lines
-- **Multi-cursor editing** — Ctrl+D to select next occurrence, Ctrl+K L to select all occurrences, Alt+Click to add cursors; typing, backspace, delete, and enter work at all positions simultaneously
+- **Multi-cursor editing** — Alt+Shift+Up/Down to add a cursor above/below, Ctrl+D to select next occurrence, Ctrl+K L to select all occurrences, Alt+Click to add cursors; typing, backspace, delete, and enter work at all positions simultaneously
 - **`.editorconfig` support** and **indent detection** — indentation is picked up automatically per file; manual override via the status bar indent picker
 - **Mouse support** — click to position cursor, click tabs, drag sidebar/panel dividers, right-click context menus
 - **Auto-completion** — LSP-powered completions with live filtering, debounce, and auto-import support

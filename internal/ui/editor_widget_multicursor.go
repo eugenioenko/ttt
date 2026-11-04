@@ -54,6 +54,32 @@ func (e *EditorPaneWidget) collapseMulti() {
 	e.Multi = nil
 }
 
+func (e *EditorPaneWidget) addCursorVertical(delta int) {
+	if e.Buf == nil || len(e.Buf.Lines) == 0 {
+		return
+	}
+	e.ensureMulti()
+	e.syncToMulti()
+	// The unchanged primary preserves the goal column across short rows.
+	p := e.Multi.PrimaryCursor()
+	_, x := e.layout().rowOf(p.Line, p.Col)
+	if !e.WordWrap {
+		x = bufColToVisualCol(e.Buf.Lines[p.Line], p.Col, e.resolveTabSize())
+	}
+	i := 0
+	if delta > 0 {
+		i = len(e.Multi.Cursors) - 1
+	}
+	edge := e.Multi.Cursors[i]
+	line, col, _ := e.wrappedRowMove(edge.Line, edge.Col, delta, x)
+	if line == edge.Line && col == edge.Col {
+		return
+	}
+	e.Multi.Add(line, col)
+	e.syncFromMulti()
+	e.scrollViewportTo(line, col)
+}
+
 func (e *EditorPaneWidget) multiExecRune(r rune) {
 	e.syncToMulti()
 	var cmds []undo.EditCommand
