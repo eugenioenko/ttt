@@ -53,6 +53,13 @@ func (p *ProblemsWidget) HandleEvent(ev tcell.Event) EventResult {
 	return EventResult(p.tree.HandleEvent(ev))
 }
 
+func (p *ProblemsWidget) PointerShapeAt(mx, my int) string {
+	if p.tree == nil {
+		return ""
+	}
+	return p.tree.PointerShapeAt(mx, my)
+}
+
 func (p *ProblemsWidget) SetItems(items []ProblemItem) {
 	p.Items = items
 	nodes := make([]*widgets.TreeNode, len(items))

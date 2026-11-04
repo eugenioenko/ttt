@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -179,4 +180,33 @@ func TestMouseInteractionsWorkWithPointerShapesDisabled(t *testing.T) {
 			t.Errorf("panel height = %d, want %d after divider drag", cs.BottomH, startH+4)
 		}
 	})
+}
+
+func TestPointerShapeProblemsPanel(t *testing.T) {
+	h := newTestHarness(t, 120, 30)
+	defer h.stop()
+
+	h.app.Problems.SetItems([]ui.ProblemItem{
+		{File: "main.go", Line: 10, Col: 5, Severity: ui.DiagError, Message: "syntax error"},
+	})
+	h.app.ShowBottomPanel()
+	h.app.BottomPanel.SetActivePanel("problems")
+	h.redraw()
+
+	panelRect := h.app.Problems.GetRect()
+	if panelRect.H <= 0 {
+		t.Fatal("problems panel not rendered")
+	}
+
+	// Diagnostic row inside the Problems panel receives PointerHand through Root
+	if got := h.app.Root.PointerShapeAt(panelRect.X+5, panelRect.Y); got != term.PointerHand {
+		t.Errorf("problems diagnostic row = %q, want %q", got, term.PointerHand)
+	}
+
+	// An overlay suppresses pointer feedback from the Problems panel underneath
+	h.exec("command.palette")
+	h.redraw()
+	if got := h.app.Root.PointerShapeAt(panelRect.X+5, panelRect.Y); got != term.PointerDefault {
+		t.Errorf("problems beneath overlay = %q, want %q", got, term.PointerDefault)
+	}
 }
