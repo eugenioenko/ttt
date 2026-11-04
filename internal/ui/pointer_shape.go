@@ -184,6 +184,9 @@ func (e *EditorPaneWidget) PointerShapeAt(mx, my int) string {
 	if e.mouseDown {
 		return term.PointerText
 	}
+	if _, ok := e.editorLinkAt(mx, my); ok {
+		return term.PointerHand
+	}
 	r := e.GetRect()
 	if !r.Contains(mx, my) {
 		return ""

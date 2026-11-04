@@ -21,6 +21,17 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func (a *App) openFileLink(path string, line, col int) {
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		a.StatusWarn(err.Error())
+		return
+	}
+	if line > 0 {
+		a.EditorGroup.GoToLineCol(line, col)
+	}
+	a.FocusEditor()
+}
+
 func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	var items []ui.ContextMenuItem
 	switch a.Sidebar.ActivePanel {

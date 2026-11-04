@@ -459,16 +459,8 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw := ui.NewTerminalWidget(t, a.Palette)
 	tw.WorkDir = spec.Cwd
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
-	tw.OnOpenURL = func(url string) {
-		OpenURL(url)
-	}
-	tw.OnOpenFile = func(path string, line, col int) {
-		a.EditorGroup.OpenFile(path)
-		if line > 0 {
-			a.EditorGroup.GoToLineCol(line, col)
-		}
-		a.FocusEditor()
-	}
+	tw.OnOpenURL = OpenURL
+	tw.OnOpenFile = a.openFileLink
 
 	panelID := fmt.Sprintf("terminal-%d", a.TerminalSeq)
 	a.TerminalSeq++

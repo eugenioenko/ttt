@@ -178,6 +178,10 @@ type EditorGroupWidget struct {
 	bookmarkSyncPath  string
 	OnBookmarkChanged func(path string, line int, action string, icon rune, style term.Style)
 	OnGutterClick     func(path string, line int) bool
+	LinkWorkDir       func() string
+	OnOpenURL         func(string)
+	OnOpenFileLink    func(string, int, int)
+	OnLinkHover       func(*EditorPaneWidget)
 	// OnDiagnosticsChanged fires whenever any source's diagnostics change, so
 	// the Diagnostics panel can rebuild from DiagnosticsByPath().
 	OnDiagnosticsChanged func()
@@ -2869,6 +2873,12 @@ func (g *EditorGroupWidget) syncTabs() {
 	}
 	g.TabBar.SetTabs(uiTabs)
 	if g.lastActiveTabID != t.ID || g.lastActiveBuf != t.Buf {
+		g.Editor.clearLinkHover()
+		if d := t.diffWidget(); d != nil {
+			for _, p := range d.viewPanes() {
+				p.clearLinkHover()
+			}
+		}
 		g.lastActiveTabID = t.ID
 		g.lastActiveBuf = t.Buf
 		if g.OnActiveTabChange != nil {
@@ -2968,6 +2978,11 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if d, ok := t.Content.(diffSignsSurface); ok {
 		d.setGutterStyle(g.GutterStyle)
 	}
+	if d := t.diffWidget(); d != nil {
+		for _, p := range d.viewPanes() {
+			g.configurePaneLinks(p, d.FilePath)
+		}
+	}
 	if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)
@@ -2976,6 +2991,11 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 		t.Diff.SetRect(contentRect)
 		t.Diff.Render(contentSurface)
 	} else {
+		path := t.FilePath
+		if t.Virtual {
+			path = ""
+		}
+		g.configurePaneLinks(g.Editor, path)
 		g.Editor.SetRect(contentRect)
 		g.Editor.Render(contentSurface)
 	}
