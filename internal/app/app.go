@@ -237,9 +237,14 @@ func (a *App) hideSidebar() {
 }
 
 func (a *App) applySearchHighlights() {
+	if !a.EditorGroup.IsEditorActive() {
+		return
+	}
 	if a.Sidebar.ActivePanel == "search" && a.Search.Input.Text != "" {
 		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
 		a.EditorGroup.SetSearch(a.Search.Input.Text, a.Search.Options, matches)
+	} else {
+		a.EditorGroup.Editor.RefreshSearch()
 	}
 }
 

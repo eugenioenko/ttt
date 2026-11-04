@@ -226,6 +226,17 @@ func TestSearchRefreshWithEmptyBar(t *testing.T) {
 }
 
 func TestSidebarSearchRefreshAcrossTabChange(t *testing.T) {
+	testSearchRefreshAcrossTabChange(t, "sidebar")
+}
+
+func TestPluginSearchRefreshAcrossTabChange(t *testing.T) {
+	for _, source := range []string{"plugin literal", "plugin regex", "plugin empty sidebar"} {
+		t.Run(source, func(t *testing.T) { testSearchRefreshAcrossTabChange(t, source) })
+	}
+}
+
+func testSearchRefreshAcrossTabChange(t *testing.T, source string) {
+	t.Helper()
 	h := newSearchRefreshHarness(t)
 	a := h.app
 	firstPath := a.EditorGroup.ActiveFilePath()
@@ -237,9 +248,20 @@ func TestSidebarSearchRefreshAcrossTabChange(t *testing.T) {
 	a.EditorGroup.OpenFile(secondPath)
 	a.EditorGroup.CommitActiveTab()
 	a.EditorGroup.SwitchToTabByPath(firstPath)
-	a.Sidebar.SetActivePanel("search")
-	a.Search.Input.Text = "foo"
-	a.applySearchHighlights()
+	if source == "sidebar" {
+		a.Sidebar.SetActivePanel("search")
+		a.Search.Input.Text = "foo"
+		a.applySearchHighlights()
+	} else {
+		pattern := "foo"
+		if source == "plugin regex" {
+			pattern = "fo+"
+		}
+		NewPluginEditorAPI(a).SetSearch(pattern, source == "plugin regex")
+		if source == "plugin empty sidebar" {
+			a.Sidebar.SetActivePanel("search")
+		}
+	}
 	var work, deliveries []func()
 	a.tasks.post = func(fn func()) error { deliveries = append(deliveries, fn); return nil }
 	a.findRefresh = NewTask[struct{}](a, asynctask.TaskOptions{Run: func(fn func()) { work = append(work, fn) }})
