@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -317,5 +318,169 @@ func TestSelectPointerShapeClosingPopupRemovesTargetsAndNoSideEffects(t *testing
 	// Once closed, querying former popup coordinates must return empty (no stale targets)
 	if got := sw.PointerShapeAt(optX, optY); got != "" {
 		t.Fatalf("closed popup old target got %q, want empty", got)
+	}
+}
+
+func TestSelectPointerShapeFilteredPopupRows(t *testing.T) {
+	sw := NewSelectWidget(SelectConfig{
+		Items:       makeSelectItems("Apple", "Apricot", "Banana", "Cherry"),
+		Collapsible: true,
+	})
+	sw.SetRect(Rect{X: 10, Y: 5, W: 20, H: 1})
+	sw.SetFocused(true)
+	sw.setOpen(true)
+	sendRune(sw, 'a')
+	sendRune(sw, 'p')
+	if len(sw.filtered) != 2 {
+		t.Fatalf("expected 2 filtered items, got %d", len(sw.filtered))
+	}
+	sw.Render(newVirtualSurface(20, 1))
+
+	pr := sw.PopupRect()
+	sw.RenderPopup(newVirtualSurface(pr.W, pr.H))
+
+	// Both filtered rows are hand pointers
+	for row := 0; row < 2; row++ {
+		y := pr.Y + 1 + row
+		for x := pr.X + 1; x < pr.X+pr.W-1; x++ {
+			if got := sw.PointerShapeAt(x, y); got != term.PointerHand {
+				t.Errorf("filtered row %d at x=%d, y=%d got %q, want %q", row, x, y, got, term.PointerHand)
+			}
+		}
+	}
+
+	// Popup borders stay default even around a filtered subset
+	borderPoints := [][2]int{
+		{pr.X, pr.Y},
+		{pr.X + 3, pr.Y},
+		{pr.X + pr.W - 1, pr.Y},
+		{pr.X, pr.Y + 1},
+		{pr.X + pr.W - 1, pr.Y + 1},
+		{pr.X, pr.Y + pr.H - 1},
+		{pr.X + 3, pr.Y + pr.H - 1},
+		{pr.X + pr.W - 1, pr.Y + pr.H - 1},
+	}
+	for _, pt := range borderPoints {
+		if got := sw.PointerShapeAt(pt[0], pt[1]); got != term.PointerDefault {
+			t.Errorf("filtered popup border at %v got %q, want %q", pt, got, term.PointerDefault)
+		}
+	}
+
+	// Filter input stays an editable text pointer while a subset is shown
+	inputR := sw.input.GetRect()
+	if got := sw.PointerShapeAt(inputR.X, inputR.Y); got != term.PointerText {
+		t.Errorf("filter input while filtered got %q, want %q", got, term.PointerText)
+	}
+
+	// Outside control and popup stays empty
+	if got := sw.PointerShapeAt(pr.X-1, pr.Y+1); got != "" {
+		t.Errorf("outside filtered popup got %q, want empty", got)
+	}
+}
+
+func TestSelectPointerShapeScrolledFilteredRows(t *testing.T) {
+	labels := []string{"Zebra"}
+	for i := 1; i <= 15; i++ {
+		labels = append(labels, fmt.Sprintf("App %02d", i))
+	}
+	sw := NewSelectWidget(SelectConfig{
+		Items:       makeSelectItems(labels...),
+		Collapsible: true,
+	})
+	sw.SetRect(Rect{X: 5, Y: 2, W: 20, H: 1})
+	sw.SetFocused(true)
+	sw.setOpen(true)
+	sendRune(sw, 'p')
+	if len(sw.filtered) != 15 {
+		t.Fatalf("expected 15 filtered items, got %d", len(sw.filtered))
+	}
+
+	// Advance selection past the first popup page so the offset becomes nonzero
+	for i := 0; i < 9; i++ {
+		sendKey(sw, tcell.KeyDown)
+	}
+	if sw.scrollTop == 0 {
+		t.Fatal("expected nonzero scroll offset after navigating down")
+	}
+
+	sw.Render(newVirtualSurface(20, 1))
+	pr := sw.PopupRect()
+	sw.RenderPopup(newVirtualSurface(pr.W, pr.H))
+
+	// Every visible option row (between the borders) is a hand pointer at a nonzero offset
+	for y := pr.Y + 1; y < pr.Y+pr.H-1; y++ {
+		if got := sw.PointerShapeAt(pr.X+2, y); got != term.PointerHand {
+			t.Errorf("scrolled filtered option at y=%d (offset=%d) got %q, want %q", y, sw.scrollTop, got, term.PointerHand)
+		}
+	}
+
+	// Scrollbar track and borders stay default at the same offset
+	barX := pr.X + pr.W - 2
+	for _, pt := range [][2]int{
+		{barX, pr.Y + 1},
+		{barX, pr.Y + pr.H - 2},
+		{pr.X, pr.Y},
+		{pr.X + pr.W - 1, pr.Y},
+		{pr.X, pr.Y + pr.H - 1},
+	} {
+		if got := sw.PointerShapeAt(pt[0], pt[1]); got != term.PointerDefault {
+			t.Errorf("scrolled popup chrome at %v got %q, want %q", pt, got, term.PointerDefault)
+		}
+	}
+}
+
+func TestSelectPointerShapeInlineFilteredEmptyRows(t *testing.T) {
+	// Inline with dividers: rows start at rect.Y+3
+	sw := NewSelectWidget(SelectConfig{
+		Items:       makeSelectItems("Alpha", "Beta", "Gamma", "Delta"),
+		ShowDivider: true,
+		Collapsible: false,
+	})
+	sw.SetRect(Rect{X: 5, Y: 10, W: 25, H: 8})
+	sw.SetFocused(true)
+	sendRune(sw, 'g')
+	if len(sw.filtered) != 1 {
+		t.Fatalf("expected 1 filtered item, got %d", len(sw.filtered))
+	}
+	sw.Render(newVirtualSurface(25, 8))
+
+	// The remaining filtered row is a hand pointer
+	if got := sw.PointerShapeAt(10, 13); got != term.PointerHand {
+		t.Errorf("inline filtered option row got %q, want %q", got, term.PointerHand)
+	}
+
+	// Rows below the filtered subset keep default pointers (list retains more space than items)
+	for y := 14; y < 18; y++ {
+		if got := sw.PointerShapeAt(10, y); got != term.PointerDefault {
+			t.Errorf("inline empty row after filtering at y=%d got %q, want %q", y, got, term.PointerDefault)
+		}
+	}
+
+	// Input row stays an editable text pointer with the filter query in it
+	inputR := sw.input.GetRect()
+	if got := sw.PointerShapeAt(inputR.X, 11); got != term.PointerText {
+		t.Errorf("inline filter input got %q, want %q", got, term.PointerText)
+	}
+
+	// Inline without dividers: rows start at rect.Y+1
+	sw2 := NewSelectWidget(SelectConfig{
+		Items:       makeSelectItems("Alpha", "Beta", "Gamma", "Delta"),
+		Collapsible: false,
+	})
+	sw2.SetRect(Rect{X: 5, Y: 10, W: 25, H: 6})
+	sw2.SetFocused(true)
+	sendRune(sw2, 'b')
+	if len(sw2.filtered) != 1 {
+		t.Fatalf("expected 1 filtered item, got %d", len(sw2.filtered))
+	}
+	sw2.Render(newVirtualSurface(25, 6))
+
+	if got := sw2.PointerShapeAt(10, 11); got != term.PointerHand {
+		t.Errorf("dividerless inline filtered option row got %q, want %q", got, term.PointerHand)
+	}
+	for y := 12; y < 16; y++ {
+		if got := sw2.PointerShapeAt(10, y); got != term.PointerDefault {
+			t.Errorf("dividerless inline empty row at y=%d got %q, want %q", y, got, term.PointerDefault)
+		}
 	}
 }
