@@ -227,7 +227,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			grid = makeGrid(w, h)
 			s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
 
-			wantExpanded := []rune(icons.Get(mode, icons.ArrowLeft))[0]
+			wantExpanded := []rune(icons.Get(mode, icons.ChevronLeft))[0]
 			if got := grid[s.toggleRow()][w-2].Ch; got != wantExpanded {
 				t.Fatalf("expanded filter toggle glyph = %q, want %q", got, wantExpanded)
 			}
@@ -237,7 +237,8 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 	t.Run("overrides", func(t *testing.T) {
 		warnings := icons.Configure(config.IconsNone, map[string]string{
 			"chevron-down": "v",
-			"arrow-left":   "<",
+			"chevron-left": "<",
+			"arrow-left":   "L",
 			"replace":      "R",
 		})
 		if len(warnings) != 0 {

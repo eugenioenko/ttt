@@ -18,6 +18,7 @@ const (
 	Pinned Name = "pinned"
 
 	ChevronRight Name = "chevron-right"
+	ChevronLeft  Name = "chevron-left"
 	ChevronDown  Name = "chevron-down"
 	ChevronUp    Name = "chevron-up"
 	Submenu      Name = "submenu"
@@ -70,6 +71,7 @@ var table = map[Name]glyphs{
 	Pinned: {Plain: "♦", Nerd: ""},
 
 	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
+	ChevronLeft:  {Plain: string(PlainChevronLeft), Nerd: ""},
 	ChevronDown:  {Plain: string(PlainChevronDown), Nerd: ""},
 	ChevronUp:    {Plain: string(PlainChevronUp), Nerd: ""},
 	Submenu:      {Plain: string(PlainChevronRight), Nerd: ""},

@@ -536,7 +536,7 @@ func (s *SearchWidget) Render(surface Surface) {
 
 	filterIcon := icons.ChevronDown
 	if s.showFilters {
-		filterIcon = icons.ArrowLeft
+		filterIcon = icons.ChevronLeft
 	}
 	filterToggle := " " + string(icons.Rune(filterIcon)) + " "
 	filterToggleW := textwidth.String(filterToggle)
