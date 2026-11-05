@@ -17,6 +17,7 @@ make lint    # gofmt check + golangci-lint run
 1. Features need an accepted issue first; bug fixes, docs, and small cleanups can go straight to a PR. Comment on the issue you are picking up so work is not duplicated.
 2. Make your change with tests, and run it in the real binary. `bin/ttt --exec "..."` scripts input and captures screenshots; `bin/ttt --listen` lets you drive a running editor.
 3. Make sure `make test` and `make lint` pass, then open a PR against `main`.
+4. Follow up on CodeRabbit feedback and CI using the [PR follow-up guidance](AGENTS.md#following-up-on-a-pull-request), addressing valid findings and checking the latest commit's results.
 
 [AGENTS.md](AGENTS.md) is the detailed guide for humans and AI agents alike: architecture constraints, test layers, the debug harness, and PR expectations. [ARCHITECTURE.md](ARCHITECTURE.md) covers package boundaries.
 

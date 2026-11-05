@@ -215,3 +215,10 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 - **Body** explains why, which test covers the change, and includes a `--exec` screenshot for visible changes.
 - **Before opening:** `make test` and `make lint` pass, and comments that describe what the code does are removed.
 - **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
+
+### Following up on a pull request
+
+- **Follow through after opening or updating a PR.** Monitor CodeRabbit and required CI checks for the latest head commit. Check pending work about every five minutes. If CodeRabbit is paused or skipped the latest changes, request a review once; avoid duplicate requests while a review is running.
+- **Address valid review findings.** Read inline threads and review summaries, including comments outside the diff. Verify each finding against the current code, fix actionable issues within the PR's scope, and add focused regression coverage where appropriate. Explain why a finding is inapplicable instead of changing code merely to satisfy the bot. Push verified fixes when authorized, then resolve the addressed threads.
+- **Follow CI to a result.** Inspect failing job logs and fix failures caused by the PR. Rerun checks when there is evidence of a transient failure. Report unrelated failures, unavailable checks, missing permissions, and external blockers explicitly; distinguish them from passing checks.
+- **Recheck after each push.** Continue until CodeRabbit has reviewed the latest changes, valid findings are addressed, and required CI passes, or report the concrete blocker and remaining work. Opening the PR alone is not completion. Approval and merge still require the user's authorization.
