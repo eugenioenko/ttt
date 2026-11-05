@@ -52,6 +52,7 @@ Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one leve
 
 - **Ctrl+F** opens the find bar with match navigation
 - **Ctrl+R** opens find and replace with replace-one and replace-all
+- Click the chevron beside the search input to toggle the replacement row. Search text, options, and replacement text are preserved when switching modes.
 - **F3 / Shift+F3** to jump between matches
 
 ## Go to Line

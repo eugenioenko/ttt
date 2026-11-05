@@ -539,6 +539,12 @@ func sanitizePaste(text string) string {
 	return strings.ReplaceAll(text, "\n", " ")
 }
 
+func (inp *InputWidget) CopyTextState(source *InputWidget) {
+	inp.Text, inp.CursorPos = source.Text, source.CursorPos
+	inp.scrollOffset = source.scrollOffset
+	inp.selStart, inp.selEnd = source.selStart, source.selEnd
+}
+
 func (inp *InputWidget) SetText(text string) {
 	inp.Text = text
 	inp.CursorPos = len([]rune(text))

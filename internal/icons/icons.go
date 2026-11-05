@@ -30,6 +30,7 @@ const (
 	Remove       Name = "remove"
 	Discard      Name = "discard"
 	Replace      Name = "replace"
+	ReplaceAll   Name = "replace-all"
 
 	Function  Name = "function"
 	Class     Name = "class"
@@ -74,6 +75,7 @@ var table = map[Name]glyphs{
 	Remove:       {Plain: "−", Nerd: "−"},
 	Discard:      {Plain: "✕", Nerd: "✕"},
 	Replace:      {Plain: "⟳", Nerd: ""},
+	ReplaceAll:   {Plain: "⟳", Nerd: "\ueb3c"},
 
 	Function:  {Plain: "ƒ", Nerd: ""},
 	Class:     {Plain: "◆", Nerd: ""},
