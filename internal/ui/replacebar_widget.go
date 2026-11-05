@@ -160,6 +160,9 @@ func (r *ReplaceBarWidget) navigate() {
 }
 
 func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
+	if result := handleInputDrag(ev, r.SearchInput, r.ReplaceInput); result != EventIgnored {
+		return result
+	}
 	switch tev := ev.(type) {
 	case *tcell.EventMouse:
 		if tev.Buttons()&tcell.Button1 != 0 {
@@ -204,13 +207,11 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 
 			if localY == findRow && localX >= r.inputX && localX < barX+barW-1 {
 				r.focusRow = 0
-				r.SearchInput.HandleClick(mx, my)
-				return EventConsumed
+				return r.SearchInput.HandleMouse(tev)
 			}
 			if localY == replRow && localX >= r.inputX && localX < barX+barW-1 {
 				r.focusRow = 1
-				r.ReplaceInput.HandleClick(mx, my)
-				return EventConsumed
+				return r.ReplaceInput.HandleMouse(tev)
 			}
 
 			return EventConsumed
@@ -296,4 +297,12 @@ func (r *ReplaceBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 	}
 
 	return EventConsumed
+}
+
+func (r *ReplaceBarWidget) CancelPointerCapture() bool {
+	return cancelInputDrags(r.SearchInput, r.ReplaceInput)
+}
+
+func (r *ReplaceBarWidget) OwnsPointerCapture() bool {
+	return ownsInputDrag(r.SearchInput, r.ReplaceInput)
 }

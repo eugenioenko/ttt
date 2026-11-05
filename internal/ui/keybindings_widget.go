@@ -363,6 +363,9 @@ func (w *KeybindingsWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (w *KeybindingsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
+	if result := handleInputDrag(mev, w.input); result != EventIgnored {
+		return result
+	}
 	btn := mev.Buttons()
 	mx, my := mev.Position()
 
@@ -395,13 +398,13 @@ func (w *KeybindingsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 
 	if btn&tcell.Button1 != 0 {
 		if my == w.inputY {
-			w.input.HandleClick(mx, my)
+			result := w.input.HandleMouse(mev)
 			if w.recording {
 				w.recording = false
 				w.recordCombo = ""
 				w.recordChord = ""
 			}
-			return EventConsumed
+			return result
 		}
 
 		if !w.recording {
@@ -697,4 +700,10 @@ func specialKeyName(key tcell.Key) string {
 		return name
 	}
 	return ""
+}
+
+func (w *KeybindingsWidget) CancelPointerCapture() bool { return cancelInputDrags(w.input) }
+
+func (w *KeybindingsWidget) OwnsPointerCapture() bool {
+	return ownsInputDrag(w.input) || w.scrollbar.IsDragging()
 }

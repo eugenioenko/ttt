@@ -308,6 +308,9 @@ func TruncateLeft(detail string, availW int) string {
 }
 
 func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
+	if result := handleInputDrag(ev, p.Input); result != EventIgnored {
+		return result
+	}
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		btn := mev.Buttons()
 		mx, my := mev.Position()
@@ -360,8 +363,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 
 			if my == p.inputY {
-				p.Input.HandleClick(mx, my)
-				return EventConsumed
+				return p.Input.HandleMouse(mev)
 			}
 
 			itemsStartY := p.boxY + 3
@@ -616,4 +618,10 @@ func (p *SelectDialogWidget) filterFiles(query string) {
 	p.Items = fuzzyFilterFiles(p.files, query, 100)
 	p.Selected = 0
 	p.scrollOffset = 0
+}
+
+func (p *SelectDialogWidget) CancelPointerCapture() bool { return cancelInputDrags(p.Input) }
+
+func (p *SelectDialogWidget) OwnsPointerCapture() bool {
+	return ownsInputDrag(p.Input) || p.scrollbar.IsDragging()
 }

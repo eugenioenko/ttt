@@ -54,6 +54,10 @@ type InputWidget struct {
 	// goalCol is the column Up and Down aim for, kept across rows shorter
 	// than it; -1 when the cursor last moved some other way.
 	goalCol int
+
+	drag                      InputDrag
+	textRect                  Rect
+	pointerCaptureInvalidated func()
 }
 
 // DefaultPrefix is the chevron shown on a borderless input when the caller
@@ -97,9 +101,14 @@ func (inp *InputWidget) heightFor(rows int) int {
 
 func (inp *InputWidget) Width() int { return 0 }
 
-func (inp *InputWidget) Focusable() bool   { return true }
-func (inp *InputWidget) SetFocused(f bool) { inp.focused = f }
-func (inp *InputWidget) IsFocused() bool   { return inp.focused }
+func (inp *InputWidget) Focusable() bool { return true }
+func (inp *InputWidget) SetFocused(f bool) {
+	inp.focused = f
+	if !f {
+		inp.CancelPointerCapture()
+	}
+}
+func (inp *InputWidget) IsFocused() bool { return inp.focused }
 
 func (inp *InputWidget) CursorPosition() (int, int, bool) {
 	if !inp.focused {
@@ -142,6 +151,7 @@ func (inp *InputWidget) shownRunes() []rune {
 
 func (inp *InputWidget) Text() string { return inp.text }
 func (inp *InputWidget) SetText(t string) {
+	inp.CancelPointerCapture()
 	inp.goalCol = -1
 	inp.text = t
 	inp.cursorPos = len([]rune(t))
@@ -182,6 +192,7 @@ func (inp *InputWidget) insertRunes(text []rune) {
 }
 
 func (inp *InputWidget) Clear() {
+	inp.CancelPointerCapture()
 	inp.text = ""
 	inp.cursorPos = 0
 	inp.scrollOffset = 0
@@ -255,6 +266,8 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 }
 
 func (inp *InputWidget) renderText(surface Surface, x, y, textW int) {
+	ox, oy := surface.Origin()
+	inp.textRect = Rect{X: ox + x, Y: oy + y, W: max(textW, 0), H: 1}
 	if textW <= 0 {
 		return
 	}
@@ -380,6 +393,7 @@ func (inp *InputWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
+	inp.CancelPointerCapture()
 	if !inp.focused {
 		return EventIgnored
 	}
@@ -507,46 +521,63 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 	return EventIgnored
 }
 
-func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
-	if ev.Buttons()&tcell.Button1 == 0 {
-		return EventIgnored
+func (inp *InputWidget) OwnsPointerCapture() bool               { return inp.drag.Active() }
+func (inp *InputWidget) SetPointerCaptureInvalidated(fn func()) { inp.pointerCaptureInvalidated = fn }
+func (inp *InputWidget) CancelPointerCapture() bool {
+	canceled := inp.drag.Cancel()
+	if canceled && inp.pointerCaptureInvalidated != nil {
+		inp.pointerCaptureInvalidated()
 	}
+	return canceled
+}
+
+func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	mx, my := ev.Position()
 	r := inp.GetRect()
-	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+	if !inp.drag.Active() && (ev.Buttons()&tcell.Button1 == 0 || mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H) {
 		return EventIgnored
 	}
-
-	textX := r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + textwidth.String(inp.Config.Prefix)
-	if inp.Config.Bordered {
-		textX = r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + 2
-	}
-	pos := inp.posAtColumn(inp.shownRunes(), mx-textX)
+	pos := inp.posAtColumn(inp.shownRunes(), mx-inp.textRect.X)
 	if inp.wraps() {
 		inp.goalCol = -1
-		textY := r.Y + inp.Box.MarginTop + inp.Box.PaddingTop
-		if inp.Config.Bordered {
-			textY++
+		pos = inp.wrappedPosAt(mx-inp.textRect.X, my-inp.textRect.Y)
+	} else if inp.drag.Active() {
+		if my < inp.textRect.Y {
+			pos = 0
+		} else if my >= inp.textRect.Y+inp.textRect.H {
+			pos = len([]rune(inp.text))
+		} else if mx < inp.textRect.X {
+			pos = max(inp.scrollOffset-1, 0)
+		} else if mx >= inp.textRect.X+inp.textRect.W {
+			pos = min(pos+1, len([]rune(inp.text)))
 		}
-		pos = inp.wrappedPosAt(mx-textX, my-textY)
 	}
-
+	if inp.drag.Active() {
+		if anchor, end, moved := inp.drag.Extend(mx, my, pos); moved {
+			inp.selStart, inp.selEnd, inp.cursorPos = anchor, end, end
+			inp.lastClickTime, inp.clickCount = 0, 0
+		}
+		if ev.Buttons()&tcell.Button1 == 0 {
+			inp.drag.Cancel()
+			return EventConsumed
+		}
+		return EventCaptured
+	}
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < 400 && pos == inp.lastClickPos {
 		inp.clickCount++
 	} else {
 		inp.clickCount = 1
 	}
-	inp.lastClickTime = now
-	inp.lastClickPos = pos
-
+	inp.lastClickTime, inp.lastClickPos = now, pos
 	if inp.clickCount == 2 {
 		inp.selectWordAt(pos)
 	} else {
 		inp.cursorPos = pos
 		inp.clearSel()
 	}
-	return EventConsumed
+	inp.drag.Begin(mx, my, inp.cursorPos)
+	return EventCaptured
 }
 
 // selection helpers

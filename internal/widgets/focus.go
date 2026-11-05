@@ -30,9 +30,7 @@ func (fm *FocusManager) Collect(w Widget) {
 	if fm.focused >= 0 && fm.focused < len(fm.items) {
 		prev = fm.items[fm.focused]
 	}
-	for _, item := range fm.items {
-		item.SetFocused(false)
-	}
+	previousItems := fm.items
 	fm.items = nil
 	fm.focused = -1
 	fm.root = w
@@ -47,9 +45,14 @@ func (fm *FocusManager) Collect(w Widget) {
 				}
 			}
 		}
-		if fm.active {
-			fm.items[fm.focused].SetFocused(true)
+	}
+	for _, item := range previousItems {
+		if item != fm.Focused() || !fm.active {
+			item.SetFocused(false)
 		}
+	}
+	if fm.active && fm.Focused() != nil {
+		fm.items[fm.focused].SetFocused(true)
 	}
 }
 
@@ -377,6 +380,12 @@ func (fm *FocusManager) HandleEvent(ev tcell.Event) EventResult {
 			return fw.HandleEvent(ev)
 		}
 	case *tcell.EventMouse:
+		if focused := fm.Focused(); focused != nil {
+			if owner, ok := focused.(PointerCaptureOwner); ok && owner.OwnsPointerCapture() {
+				fm.lastEventTarget = focused
+				return focused.HandleEvent(ev)
+			}
+		}
 		mx, my := tev.Position()
 		var hit int
 		if tev.Buttons()&tcell.Button1 != 0 {

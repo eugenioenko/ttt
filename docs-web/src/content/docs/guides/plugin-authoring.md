@@ -1423,7 +1423,9 @@ panel:input({
 | `on_change`        | function | nil     | Called after every text change. Receives the current text (string). |
 | `on_submit`        | function | nil     | Called when Enter is pressed and `multiline` is disabled. Receives the current text (string). |
 
-The input text and cursor position are automatically preserved across re-renders.
+Drag with the left mouse button to select input text, including across wrapped rows. Double-click selects a word. The input keeps the drag when the pointer leaves its bounds; releasing the button ends it.
+
+The input text, cursor position, and selection are automatically preserved across re-renders.
 
 ### VStack
 

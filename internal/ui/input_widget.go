@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -35,6 +36,9 @@ type InputWidget struct {
 	Actions       []InputAction
 	ActionHits    []HitRegion
 	OnChange      func(text string)
+
+	renderLeft, renderWidth, textWidth int
+	drag                               widgets.InputDrag
 }
 
 func NewInputWidget() *InputWidget {
@@ -87,6 +91,7 @@ func (inp *InputWidget) Render(surface Surface, x, y, w int) {
 	ox, oy := surface.Origin()
 	inp.renderX = ox + x + prefixW
 	inp.renderY = oy + y
+	inp.renderLeft, inp.renderWidth, inp.textWidth = ox+x, w, max(textW, 0)
 	px := x
 	for _, ch := range inp.Prefix {
 		surface.SetCell(px, y, term.Cell{Ch: ch, Style: inp.Style})
@@ -465,6 +470,47 @@ func (inp *InputWidget) selectWordAt(pos int) {
 	inp.CursorPos = hi
 }
 
+func (inp *InputWidget) OwnsPointerCapture() bool   { return inp.drag.Active() }
+func (inp *InputWidget) CancelPointerCapture() bool { return inp.drag.Cancel() }
+
+func (inp *InputWidget) HandleMouse(ev *tcell.EventMouse) EventResult {
+	x, y := ev.Position()
+	if inp.drag.Active() {
+		runes := []rune(inp.Text)
+		position := inp.posAtColumn(runes, x-inp.renderX)
+		if y < inp.renderY {
+			position = 0
+		} else if y > inp.renderY {
+			position = len(runes)
+		} else if x < inp.renderX {
+			position = max(inp.scrollOffset-1, 0)
+		} else if x >= inp.renderX+inp.textWidth {
+			position = min(position+1, len(runes))
+		}
+		if anchor, end, moved := inp.drag.Extend(x, y, position); moved {
+			inp.selStart, inp.selEnd, inp.CursorPos = anchor, end, end
+			inp.lastClickTime, inp.clickCount = 0, 0
+		}
+		if ev.Buttons()&tcell.Button1 == 0 {
+			inp.drag.Cancel()
+			return EventConsumed
+		}
+		return EventCaptured
+	}
+	if ev.Buttons()&tcell.Button1 == 0 || y != inp.renderY || x < inp.renderLeft || x >= inp.renderLeft+inp.renderWidth {
+		return EventIgnored
+	}
+	for _, hit := range inp.ActionHits {
+		if hit.Contains(x, y) {
+			inp.HandleClick(x, y)
+			return EventConsumed
+		}
+	}
+	inp.HandleClick(x, y)
+	inp.drag.Begin(x, y, inp.CursorPos)
+	return EventCaptured
+}
+
 // HandleClick handles a mouse click at screen-absolute coordinates.
 // It checks action buttons first, then positions the cursor or selects
 // a word on double-click.
@@ -540,12 +586,14 @@ func sanitizePaste(text string) string {
 }
 
 func (inp *InputWidget) CopyTextState(source *InputWidget) {
+	inp.drag.Cancel()
 	inp.Text, inp.CursorPos = source.Text, source.CursorPos
 	inp.scrollOffset = source.scrollOffset
 	inp.selStart, inp.selEnd = source.selStart, source.selEnd
 }
 
 func (inp *InputWidget) SetText(text string) {
+	inp.drag.Cancel()
 	inp.Text = text
 	inp.CursorPos = len([]rune(text))
 	inp.clearSel()
@@ -553,6 +601,7 @@ func (inp *InputWidget) SetText(text string) {
 }
 
 func (inp *InputWidget) Clear() {
+	inp.drag.Cancel()
 	inp.Text = ""
 	inp.CursorPos = 0
 	inp.clearSel()

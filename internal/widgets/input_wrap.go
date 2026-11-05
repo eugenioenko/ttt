@@ -127,6 +127,8 @@ func (inp *InputWidget) HeightAtWidth(w int) int {
 }
 
 func (inp *InputWidget) renderWrapped(surface Surface, x, y, textW, rowsH int) {
+	ox, oy := surface.Origin()
+	inp.textRect = Rect{X: ox + x, Y: oy + y, W: max(textW, 0), H: rowsH}
 	if textW <= 0 || rowsH <= 0 {
 		return
 	}

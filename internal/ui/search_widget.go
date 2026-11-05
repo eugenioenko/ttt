@@ -759,6 +759,9 @@ func (s *SearchWidget) toggleRow() int {
 }
 
 func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
+	if result := handleInputDrag(ev, s.Input, s.ReplaceInput, s.Include, s.Exclude); result != EventIgnored {
+		return result
+	}
 	if newTop, consumed := s.scrollbar.HandleEvent(ev); consumed {
 		s.ScrollTop = newTop
 		if s.scrollbar.IsDragging() {
@@ -777,8 +780,7 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 
 			if localY == 0 {
 				s.focusIdx = 0
-				s.Input.HandleClick(mx, my)
-				return EventConsumed
+				return s.Input.HandleMouse(tev)
 			}
 
 			if s.showReplace && localY == 2 {
@@ -789,8 +791,7 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 						break
 					}
 				}
-				s.ReplaceInput.HandleClick(mx, my)
-				return EventConsumed
+				return s.ReplaceInput.HandleMouse(tev)
 			}
 
 			renderW := s.renderWidth
@@ -817,7 +818,7 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 					iy := s.inputY(inp)
 					if localY == iy {
 						s.focusIdx = i
-						return EventConsumed
+						return inp.HandleMouse(tev)
 					}
 				}
 			}
@@ -1020,4 +1021,12 @@ func (s *SearchWidget) activateSelected() {
 			}
 		}
 	}
+}
+
+func (s *SearchWidget) CancelPointerCapture() bool {
+	return cancelInputDrags(s.Input, s.ReplaceInput, s.Include, s.Exclude)
+}
+
+func (s *SearchWidget) OwnsPointerCapture() bool {
+	return ownsInputDrag(s.Input, s.ReplaceInput, s.Include, s.Exclude) || s.scrollbar.IsDragging()
 }

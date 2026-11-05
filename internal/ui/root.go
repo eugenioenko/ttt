@@ -65,8 +65,8 @@ func NewRoot(main Widget) *Root {
 
 func (r *Root) SetSize(w, h int) {
 	if w != r.Width || h != r.Height {
+		r.CancelPointerCapture()
 		widgets.InvalidatePointerInteraction(r.Main)
-		r.capturedWidget = nil
 	}
 	r.Width = w
 	r.Height = h
@@ -75,6 +75,9 @@ func (r *Root) SetSize(w, h int) {
 
 func (r *Root) CancelPointerCapture() bool {
 	canceled := widgets.CancelPointerCapture(r.Main)
+	if r.capturedWidget != nil && r.capturedWidget != r.Main {
+		canceled = widgets.CancelPointerCapture(r.capturedWidget) || canceled
+	}
 	if r.capturedWidget != nil {
 		canceled = true
 		r.capturedWidget = nil
@@ -331,6 +334,13 @@ func (r *Root) handleOverlay(ev tcell.Event) EventResult {
 	top := r.Overlays[len(r.Overlays)-1]
 	slog.Debug("root", "action", "overlayIntercept", "modal", top.Modal, "count", len(r.Overlays))
 	result := top.Widget.HandleEvent(ev)
+	if result == EventCaptured {
+		if r.TopOverlayWidget() == top.Widget {
+			r.capturedWidget = top.Widget
+		}
+		r.mouseReceiver = top.Widget
+		return EventConsumed
+	}
 	if top.Modal || result == EventConsumed {
 		r.mouseReceiver = top.Widget
 		return EventConsumed
@@ -469,6 +479,9 @@ func (r *Root) PushOverlay(o Overlay) {
 
 func (r *Root) PopOverlay() {
 	if len(r.Overlays) > 0 {
+		if r.capturedWidget == r.TopOverlayWidget() {
+			r.CancelPointerCapture()
+		}
 		r.Overlays = r.Overlays[:len(r.Overlays)-1]
 		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
 	}
@@ -478,6 +491,9 @@ func (r *Root) PopOverlay() {
 func (r *Root) RemoveOverlay(w Widget) {
 	for i, o := range r.Overlays {
 		if o.Widget == w {
+			if r.capturedWidget == w {
+				r.CancelPointerCapture()
+			}
 			r.Overlays = append(r.Overlays[:i], r.Overlays[i+1:]...)
 			slog.Debug("root", "action", "removeOverlay", "count", len(r.Overlays))
 			return

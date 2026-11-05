@@ -132,6 +132,9 @@ func (f *FindBarWidget) navigate() {
 }
 
 func (f *FindBarWidget) HandleEvent(ev tcell.Event) EventResult {
+	if result := handleInputDrag(ev, f.Input); result != EventIgnored {
+		return result
+	}
 	switch tev := ev.(type) {
 	case *tcell.EventMouse:
 		if tev.Buttons()&tcell.Button1 != 0 {
@@ -148,7 +151,7 @@ func (f *FindBarWidget) HandleEvent(ev tcell.Event) EventResult {
 				}
 				row := barY + 1
 				if localY == row && localX >= f.inputX && localX < f.inputX+f.inputW {
-					f.Input.HandleClick(mx, my)
+					return f.Input.HandleMouse(tev)
 				}
 				if f.btnPrev.Contains(mx, my) {
 					if len(f.Matches) > 0 {
@@ -236,3 +239,7 @@ func (f *FindBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 
 	return EventIgnored
 }
+
+func (f *FindBarWidget) CancelPointerCapture() bool { return cancelInputDrags(f.Input) }
+
+func (f *FindBarWidget) OwnsPointerCapture() bool { return ownsInputDrag(f.Input) }
