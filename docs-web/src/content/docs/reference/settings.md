@@ -60,9 +60,9 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | Name | Plain | Nerd Font | Used for |
 |---|---|---|---|
 | `chevron-right` | `›` | `\ueab6` | Collapsed folder or group in trees, collapsed fold in the editor gutter |
-| `chevron-down` | `⌄` | `\ueab4` | Expanded folder or group, expanded fold while hovering the gutter |
+| `chevron-down` | `⌄` | `\ueab4` | Expanded folder or group, expanded fold while hovering the gutter, expanded global search file filters |
 | `chevron-up` | `⌃` | `\ueab7` | Open select dropdown |
-| `chevron-left` | `‹` | `\ueab5` | Expanded global search file filters |
+| `chevron-left` | `‹` | `\ueab5` | Collapsed global search file filters |
 | `submenu` | `›` | `\ueab6` | Context menu item with a submenu |
 | `arrow-left` | `‹` | `\ueb6f` | Tab strip overflow, left |
 | `arrow-right` | `›` | `\ueb70` | Tab strip overflow, right |
