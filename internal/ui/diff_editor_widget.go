@@ -1230,7 +1230,7 @@ func (d *DiffEditorWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		}
 		if !d.IsUnified() && d.captured == nil {
 			d.focusLeft = target == d.left
-			for _, p := range d.panes() {
+			for _, p := range d.viewPanes() {
 				if p != target {
 					p.Selection.Clear()
 				}
@@ -1257,7 +1257,7 @@ func (d *DiffEditorWidget) selectionPane() *EditorPaneWidget {
 	if lead != nil && lead.Selection.Active {
 		return lead
 	}
-	for _, p := range d.panes() {
+	for _, p := range d.viewPanes() {
 		if p != nil && p.Selection.Active {
 			return p
 		}

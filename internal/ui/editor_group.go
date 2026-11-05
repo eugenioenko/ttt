@@ -2724,9 +2724,7 @@ func (g *EditorGroupWidget) SelectedText() string {
 		return ""
 	}
 	if t.Diff != nil {
-		if text, ok := t.Diff.HeadSelection(); ok {
-			return text
-		}
+		return t.Diff.SelectedText()
 	}
 	e := g.keyEditor()
 	if e == nil || e.Selection == nil || !e.Selection.Active || e.Buf == nil {

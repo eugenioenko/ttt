@@ -179,3 +179,183 @@ func TestDiffFindPrefilledWithSelection(t *testing.T) {
 		t.Fatal("expected diff selection to remain active after prefilling find bar")
 	}
 }
+
+func TestSearchPrefillSurvivesRepeatedShortcut(t *testing.T) {
+	for _, command := range []string{"search.find", "search.replace"} {
+		t.Run(command, func(t *testing.T) {
+			h := newTestHarness(t, 120, 30)
+			defer h.stop()
+			h.exec("file.new")
+			pasteText(h, pasteKeys("beta beta"))
+			editor := h.app.EditorGroup.Editor
+			editor.Selection.Start(0, 5)
+			editor.Cursor.Col = 9
+
+			for range 3 {
+				h.exec(command)
+				var query string
+				switch bar := h.app.Root.TopOverlayWidget().(type) {
+				case *ui.FindBarWidget:
+					query = bar.Input.Text
+				case *ui.ReplaceBarWidget:
+					query = bar.SearchInput.Text
+				default:
+					t.Fatalf("unexpected overlay: %T", bar)
+				}
+				if query != "beta" {
+					t.Fatalf("query after shortcut = %q, want beta", query)
+				}
+			}
+		})
+	}
+}
+
+func TestReplacePrefillRequiresEditableSelection(t *testing.T) {
+	for _, kind := range []string{"diff", "read-only", "diff-base"} {
+		t.Run(kind, func(t *testing.T) {
+			h := newTestHarness(t, 120, 30)
+			defer h.stop()
+			h.exec("file.new")
+			pasteText(h, pasteKeys("needle retained"))
+			editor := h.app.EditorGroup.Editor
+			cursor := *editor.Cursor
+
+			var pane *ui.EditorPaneWidget
+			switch kind {
+			case "diff":
+				h.app.EditorGroup.OpenDiff("code.txt", diff.FileDiff{}, []string{"old needle"}, []string{"new needle"}, true)
+				pane = h.app.EditorGroup.ActiveDiffWidget().KeyPane()
+			case "read-only":
+				h.app.EditorGroup.OpenBufferReadOnly("Read only", "readonly.txt", []string{"new needle"})
+				pane = editor
+			case "diff-base":
+				path := h.app.EditorGroup.ActiveFilePath()
+				if !h.app.EditorGroup.EnableInlineDiff(path, []string{"old needle"}) {
+					t.Fatal("could not open editable diff")
+				}
+				h.redraw()
+				dv := h.app.EditorGroup.ActiveInlineDiff()
+				dv.SetMode(ui.DiffModeSplit)
+				h.redraw()
+				r := dv.GetRect()
+				h.click(r.X+5, r.Y)
+				pane = dv.KeyPane()
+				if !pane.ReadOnly {
+					t.Fatal("expected read-only base pane")
+				}
+			}
+			h.redraw()
+			pane.Selection.Start(0, 4)
+			pane.Cursor.Line, pane.Cursor.Col = 0, 10
+			if kind == "read-only" {
+				cursor = *editor.Cursor
+			}
+
+			for range 2 {
+				h.exec("search.replace")
+				bar, ok := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
+				if !ok {
+					t.Fatalf("unexpected overlay: %T", h.app.Root.TopOverlayWidget())
+				}
+				if bar.SearchInput.Text != "" || len(bar.Matches) != 0 {
+					t.Fatalf("read-only selection populated Replace: query=%q matches=%v", bar.SearchInput.Text, bar.Matches)
+				}
+				if *editor.Cursor != cursor {
+					t.Fatalf("Replace moved the retained editor cursor: got %+v, want %+v", *editor.Cursor, cursor)
+				}
+				if !pane.Selection.Active {
+					t.Fatal("Replace cleared the read-only selection")
+				}
+			}
+		})
+	}
+}
+
+func TestGlobalSearchPrefillsSelection(t *testing.T) {
+	for _, command := range []string{"sidebar.search", "sidebar.searchReplace"} {
+		t.Run(command, func(t *testing.T) {
+			h := newTestHarness(t, 120, 30)
+			defer h.stop()
+			h.exec("file.new")
+			pasteText(h, pasteKeys("alpha beta\ngamma"))
+			editor := h.app.EditorGroup.Editor
+			search := h.app.Search
+			search.Debounce.DelayMs = 60_000
+			t.Cleanup(search.Debounce.Stop)
+			search.Input.Text = "previous query"
+			search.ReplaceInput.Text = "replacement"
+			search.Include.Text = "*.go"
+			search.Exclude.Text = "vendor"
+			search.Options.CaseSensitive = true
+			editor.Selection.Start(0, 0)
+			editor.Cursor.Line, editor.Cursor.Col = 0, 5
+			cursor := *editor.Cursor
+
+			h.exec(command)
+			if search.Input.Text != "alpha" || !search.Searching || h.app.Root.Focused != search {
+				t.Fatalf("global prefill: query=%q searching=%v focus=%T", search.Input.Text, search.Searching, h.app.Root.Focused)
+			}
+			if *editor.Cursor != cursor || !editor.Selection.Active {
+				t.Fatal("global prefill changed the editor selection")
+			}
+			if search.IsReplaceMode() != (command == "sidebar.searchReplace") {
+				t.Fatal("global search opened in the wrong mode")
+			}
+
+			editor.Selection.Start(0, 6)
+			editor.Cursor.Col = 10
+			h.exec(command)
+			if search.Input.Text != "beta" {
+				t.Fatalf("query after new selection = %q, want beta", search.Input.Text)
+			}
+			editor.Selection.Clear()
+			h.exec(command)
+			if search.Input.Text != "beta" {
+				t.Fatal("empty selection overwrote the query")
+			}
+			editor.Selection.Start(0, 0)
+			editor.Cursor.Line, editor.Cursor.Col = 1, 5
+			h.exec(command)
+			if search.Input.Text != "beta" {
+				t.Fatal("multiline selection overwrote the query")
+			}
+			editor.Selection.Start(0, 0)
+			editor.Cursor.Line, editor.Cursor.Col = 0, 5
+			h.app.ShowPanel("explorer", h.app.Explorer.Adapter)
+			h.app.ShowPanel("search", search)
+			if search.Input.Text != "beta" {
+				t.Fatal("switching sidebar panels overwrote the query")
+			}
+			if search.ReplaceInput.Text != "replacement" || search.Include.Text != "*.go" || search.Exclude.Text != "vendor" || !search.Options.CaseSensitive {
+				t.Fatal("selection prefill changed replacement text, filters, or options")
+			}
+		})
+	}
+}
+
+func TestInlineDiffFindPreservesBaseSelection(t *testing.T) {
+	h := newTestHarness(t, 120, 30)
+	defer h.stop()
+	h.exec("file.new")
+	pasteText(h, pasteKeys("new needle"))
+	group := h.app.EditorGroup
+	if !group.EnableInlineDiff(group.ActiveFilePath(), []string{"old needle"}) {
+		t.Fatal("could not open editable diff")
+	}
+	dv := group.ActiveInlineDiff()
+	dv.SetMode(ui.DiffModeSplit)
+	h.redraw()
+	r := dv.GetRect()
+	h.click(r.X+5, r.Y)
+	pane := dv.KeyPane()
+	pane.Selection.Start(0, 4)
+	pane.Cursor.Line, pane.Cursor.Col = 0, 10
+	h.exec("search.find")
+	bar := h.app.Root.TopOverlayWidget().(*ui.FindBarWidget)
+	if bar.Input.Text != "needle" || !pane.Selection.Active {
+		t.Fatalf("diff prefill: query=%q selection=%v", bar.Input.Text, pane.Selection.Active)
+	}
+	if text := dv.CopySelection(); text != "needle" || pane.Selection.Active {
+		t.Fatalf("copy after prefill: text=%q selection=%v", text, pane.Selection.Active)
+	}
+}

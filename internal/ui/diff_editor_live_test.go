@@ -50,6 +50,28 @@ func (f *liveDiffFixture) key(k tcell.Key) {
 	f.render()
 }
 
+func TestEditableDiffSelectionAcrossPaneFocus(t *testing.T) {
+	f := newLiveDiffFixture(t, []string{"old value"}, []string{"new value"}, DiffModeSplit, 100, 10)
+	f.render()
+	f.e.Selection.Start(0, 0)
+	f.e.Cursor.Col = 9
+	f.d.focusLeft = true
+	if text := f.d.SelectedText(); text != "new value" || !f.e.Selection.Active {
+		t.Fatalf("live selection after focus change: text=%q active=%v", text, f.e.Selection.Active)
+	}
+	if text := f.d.CopySelection(); text != "new value" || f.e.Selection.Active {
+		t.Fatalf("copy live selection: text=%q active=%v", text, f.e.Selection.Active)
+	}
+	f.e.Selection.Start(0, 0)
+	f.e.Cursor.Col = 9
+	r := f.d.left.GetRect()
+	f.d.HandleEvent(tcell.NewEventMouse(r.X+5, r.Y, tcell.Button1, 0))
+	f.d.HandleEvent(tcell.NewEventMouse(r.X+5, r.Y, tcell.ButtonNone, 0))
+	if f.e.Selection.Active {
+		t.Fatal("starting a base-pane selection retained the live-pane selection")
+	}
+}
+
 func rowWith(rows []string, text string) int {
 	for y, r := range rows {
 		if strings.Contains(r, text) {
