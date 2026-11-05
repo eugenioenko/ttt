@@ -759,6 +759,7 @@ func isInputWordRune(r rune) bool {
 }
 
 func (inp *InputWidget) notify() {
+	inp.CancelPointerCapture()
 	if inp.Config.OnChange != nil {
 		inp.Config.OnChange(inp.text)
 	}

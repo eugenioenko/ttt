@@ -237,6 +237,7 @@ func (inp *InputWidget) HandleEvent(ev tcell.Event) EventResult {
 	if !ok {
 		return EventIgnored
 	}
+	inp.drag.Cancel()
 	shift := kev.Modifiers()&tcell.ModShift != 0
 
 	switch kev.Key() {
@@ -609,6 +610,7 @@ func (inp *InputWidget) Clear() {
 }
 
 func (inp *InputWidget) notify() {
+	inp.CancelPointerCapture()
 	if inp.OnChange != nil {
 		inp.OnChange(inp.Text)
 	}

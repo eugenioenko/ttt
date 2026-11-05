@@ -40,5 +40,15 @@ func TestInputDragPreservesActionsAndUnicode(t *testing.T) {
 		if actionCalls != 1 {
 			t.Fatal("ordinary action click stopped working")
 		}
+		mouse(input.renderX, tcell.Button1)
+		input.HandleEvent(tcell.NewEventKey(tcell.KeyEnd, "", tcell.ModNone))
+		if input.OwnsPointerCapture() {
+			t.Fatal("keyboard interaction kept drag active")
+		}
+		mouse(input.renderX, tcell.Button1)
+		input.PasteText("X")
+		if input.OwnsPointerCapture() {
+			t.Fatal("paste kept drag active")
+		}
 	}
 }
