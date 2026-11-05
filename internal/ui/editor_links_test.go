@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -156,8 +158,12 @@ func TestEditorLinksClearThroughRoot(t *testing.T) {
 func TestEditorFileLinkCache(t *testing.T) {
 	e := linkEditor([]string{"target.go:12:3"}, 12, 8)
 	e.WordWrap = true
+	e.LinkWorkDir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(e.LinkWorkDir, "target.go"), []byte("package main"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	probes := 0
-	e.ResolveFileLink = func(path, dir string) string { probes++; return dir + "/" + path }
+	e.links.detect = func(text, dir string) []linkSpan { probes++; return detectLinks(text, dir) }
 	e.OnOpenFile = func(string, int, int) {}
 	hoverEditorLinks(e)
 	for range 3 {
@@ -166,9 +172,9 @@ func TestEditorFileLinkCache(t *testing.T) {
 	if probes != 1 || len(e.links.hits) == 0 {
 		t.Fatal("wrapped segments repeated file resolution or lost links")
 	}
-	e.LinkWorkDir = "another-directory"
+	e.LinkWorkDir = t.TempDir()
 	renderGrid(e)
-	if probes != 2 {
+	if probes != 2 || len(e.links.hits) != 0 {
 		t.Fatal("directory change did not refresh file resolution")
 	}
 }
@@ -180,7 +186,7 @@ func TestEditorLinksBoundedCache(t *testing.T) {
 	}
 	e := linkEditor(lines, 30, 4)
 	var visited []string
-	e.links.detect = func(s string) []linkSpan { visited = append(visited, s); return detectLinks(s) }
+	e.links.detect = func(s, dir string) []linkSpan { visited = append(visited, s); return detectLinks(s, dir) }
 	renderGrid(e)
 	if len(visited) != 0 || len(e.links.cells) != 0 {
 		t.Fatal("link work ran without Ctrl")
@@ -218,12 +224,12 @@ func TestEditorLinksBoundedCache(t *testing.T) {
 		e = linkEditor([]string{text}, 35, 4)
 		e.Viewport.LeftCol = 1_000_005
 		calls := 0
-		e.links.detect = func(s string) []linkSpan {
+		e.links.detect = func(s, dir string) []linkSpan {
 			calls++
 			if len(s) > 2*editorLinkLookaround+35 {
 				t.Fatalf("scanned %d hidden bytes", len(s))
 			}
-			return detectLinks(s)
+			return detectLinks(s, dir)
 		}
 		hoverEditorLinks(e)
 		renderGrid(e)

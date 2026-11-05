@@ -34,7 +34,7 @@ type editorLinks struct {
 	buf             *buffer.Buffer
 	version         uint64
 	dir             string
-	detect          func(string) []linkSpan
+	detect          func(string, string) []linkSpan
 }
 
 func (t *editorTab) diffWidget() *DiffEditorWidget {
@@ -52,7 +52,7 @@ func (g *EditorGroupWidget) configurePaneLinks(e *EditorPaneWidget, path string)
 	} else if g.LinkWorkDir != nil {
 		dir = g.LinkWorkDir()
 	}
-	e.LinkWorkDir, e.ResolveFileLink = dir, g.ResolveFileLink
+	e.LinkWorkDir = dir
 	e.OnOpenURL, e.OnOpenFile, e.OnLinkHover = g.OnOpenURL, g.OnOpenFileLink, g.OnLinkHover
 }
 
@@ -162,7 +162,7 @@ func (e *EditorPaneWidget) linksForWindow(window editorLinkWindow) []linkSpan {
 	if detect == nil {
 		detect = detectLinks
 	}
-	spans := resolveLinks(detect(text), e.LinkWorkDir, e.ResolveFileLink)
+	spans := detect(text, e.LinkWorkDir)
 	for i := range spans {
 		spans[i].StartCol += col
 		spans[i].EndCol += col

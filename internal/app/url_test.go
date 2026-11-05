@@ -1,8 +1,6 @@
 package app
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -25,27 +23,6 @@ func TestOpenURLCommand(t *testing.T) {
 		cmd := openURLCommand(raw, tt.platform)
 		if cmd == nil || !reflect.DeepEqual(cmd.Args, tt.args) {
 			t.Errorf("%s command = %v, want %v", tt.platform, cmd, tt.args)
-		}
-	}
-}
-
-func TestResolveFileLinks(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "target.go")
-	if err := os.WriteFile(file, []byte("package main"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, tt := range []struct{ path, dir, want string }{
-		{"target.go", dir, file}, {file, "", file},
-		{"missing.go", dir, ""}, {"target.go", "", ""}, {"", dir, ""},
-	} {
-		if got := resolveFilePath(tt.path, tt.dir); got != tt.want {
-			t.Errorf("resolve(%q, %q) = %q, want %q", tt.path, tt.dir, got, tt.want)
-		}
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		if got := resolveFilePath("~/", ""); got != home {
-			t.Errorf("home path = %q, want %q", got, home)
 		}
 	}
 }

@@ -100,7 +100,6 @@ type EditorPaneWidget struct {
 	rowMapOffset            int
 	links                   editorLinks
 	LinkWorkDir             string
-	ResolveFileLink         func(string, string) string
 	OnOpenURL               func(string)
 	OnOpenFile              func(string, int, int)
 	OnLinkHover             func(*EditorPaneWidget)

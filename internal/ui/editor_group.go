@@ -179,7 +179,6 @@ type EditorGroupWidget struct {
 	OnBookmarkChanged func(path string, line int, action string, icon rune, style term.Style)
 	OnGutterClick     func(path string, line int) bool
 	LinkWorkDir       func() string
-	ResolveFileLink   func(string, string) string
 	OnOpenURL         func(string)
 	OnOpenFileLink    func(string, int, int)
 	OnLinkHover       func(*EditorPaneWidget)
