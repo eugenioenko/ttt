@@ -46,7 +46,7 @@ type linkSpan struct {
 
 var (
 	urlRe      = regexp.MustCompile(`https?://[^\s)>\]'"` + "`" + `]+`)
-	fileLineRe = regexp.MustCompile(`(?:^|[\s(])([^\s:*?"<>|]+):(\d+)(?::(\d+))?`)
+	fileLineRe = regexp.MustCompile(`(?:^|[\s(])((?:[A-Za-z]:[\\/])?[^\s:*?"<>|]+):(\d+)(?::(\d+))?`)
 )
 
 // linkMemoMax bounds the per-widget link detection memo. When the memo grows

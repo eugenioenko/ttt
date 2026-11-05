@@ -3,6 +3,7 @@ package ui
 import (
 	"github.com/eugenioenko/ttt/internal/icons"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
@@ -106,6 +107,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.rowMap = layout.appendRows(e.rowMap[:0], e.Viewport.TopLine, e.topOffset(), h)
 	e.rowMapTop = e.Viewport.TopLine
 	e.rowMapOffset = e.topOffset()
+	decorateLinks := e.beginLinkFrame()
 	topRow := e.topRow(layout)
 
 	// A pane narrowed to a shared wrap width leaves columns past its text
@@ -213,19 +215,18 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		}
 
 		if lineIdx < totalLines {
-			e.runeScratch = e.runeScratch[:0]
-			for _, r := range e.Buf.Lines[lineIdx] {
-				e.runeScratch = append(e.runeScratch, r)
+			segmentByte := 0
+			if e.WordWrap {
+				segmentByte = runeByteOffset(e.Buf.Lines[lineIdx], segStartCol)
 			}
-			line := e.runeScratch
 			var syntaxSpans []highlight.Span
 			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
-			if diffFgOverride {
-				syntaxSpans = []highlight.Span{{Start: 0, End: len(line), Style: diffFg}}
-			} else if whole, ok := e.DiffOverlay.syntaxAt(lineIdx, e.Buf.Lines[lineIdx]); ok {
-				syntaxSpans = whole
-			} else if e.Highlighter != nil {
-				syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
+			if !diffFgOverride {
+				if whole, ok := e.DiffOverlay.syntaxAt(lineIdx, e.Buf.Lines[lineIdx]); ok {
+					syntaxSpans = whole
+				} else if e.Highlighter != nil {
+					syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
+				}
 			}
 
 			isCollapsedLine := e.Folds != nil && e.Folds.IsCollapsed(lineIdx)
@@ -243,16 +244,19 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineSegmentToScreen(line, syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			screenCells := e.renderLineSegmentToScreen(e.Buf.Lines[lineIdx][segmentByte:], syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
 				lineBrackets = bracketColors[lineIdx]
 			}
+			linkFirst := len(e.links.cells)
+			linkWindow := editorLinkWindow{line: lineIdx}
 			for x := 0; x < editorW; x++ {
 				colIdx := screenCells[x].bufCol
 				ch := screenCells[x].ch
 				style := screenCells[x].style
-				if diffFgFull {
+				inText := screenCells[x].byteLen > 0
+				if diffFgFull || (diffFgOverride && inText) {
 					style = diffFg
 				}
 
@@ -309,7 +313,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						bgStyle = term.StyleActiveLine
 					}
 				}
-				inText := colIdx >= 0 && colIdx < len(line)
 				hide := false
 				textOnly := diffBg == term.StyleReverse || diffBg == term.StyleHide
 				if diffBg != 0 && !inAnySel && !isSearchHighlight && (bgStyle == 0 || bgStyle == term.StyleActiveLine) && (!textOnly || inText) {
@@ -349,6 +352,22 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					cell.Attrs |= term.CellAttrHide
 				}
 				surface.SetCell(gutterW+x, y, cell)
+				if decorateLinks && inText && !hide && screenCells[x].width > 0 {
+					if len(e.links.cells) == linkFirst {
+						linkWindow.col = colIdx
+						linkWindow.start = segmentByte + screenCells[x].byteCol
+					}
+					linkWindow.end = segmentByte + screenCells[x].byteCol + screenCells[x].byteLen
+					for dx := 0; dx < screenCells[x].width; dx++ {
+						if dx > 0 {
+							cell.Ch = ' '
+						}
+						e.links.cells = append(e.links.cells, editorLinkCell{linkPoint{gutterW + x + dx, y}, colIdx, cell})
+					}
+				}
+			}
+			if decorateLinks {
+				e.links.finishRow(linkWindow, linkFirst)
 			}
 		} else {
 			for x := 0; x < editorW; x++ {
@@ -357,6 +376,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		}
 	}
 
+	if decorateLinks {
+		e.renderLinks(surface)
+	}
 	scrollbarCol := w - 1
 	if showHScrollbar {
 		scrollbarCol = w - 1
@@ -464,17 +486,15 @@ func (e *EditorPaneWidget) diagStyleAt(line, col int) term.Style {
 }
 
 type screenCell struct {
-	ch     rune
-	style  term.Style
-	bufCol int
+	ch               rune
+	style            term.Style
+	bufCol           int
+	byteCol, byteLen int
+	width            int
 }
 
 // The returned slice is reused by the next call.
-func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Span, collapsed bool, ann []rune, tabW, leftCol, width int) []screenCell {
-	return e.renderLineSegmentToScreen(line, spans, collapsed, ann, 0, tabW, leftCol, width)
-}
-
-func (e *EditorPaneWidget) renderLineSegmentToScreen(line []rune, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
+func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)
 	}
@@ -483,9 +503,9 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(line []rune, spans []highli
 		cells[i] = screenCell{ch: ' ', style: term.StyleDefault, bufCol: -1}
 	}
 	visCol := 0
-	lineLen := len(line)
-	for bufCol := startCol; bufCol < lineLen; bufCol++ {
-		ch := line[bufCol]
+	bufCol := startCol
+	for byteCol := 0; byteCol < len(text); {
+		ch, byteLen := utf8.DecodeRuneInString(text[byteCol:])
 		style := term.StyleDefault
 		for _, sp := range spans {
 			if bufCol >= sp.Start && bufCol < sp.End {
@@ -493,25 +513,29 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(line []rune, spans []highli
 				break
 			}
 		}
+		c := screenCell{ch: ch, style: style, bufCol: bufCol, byteCol: byteCol, byteLen: byteLen, width: 1}
 		if ch == '\t' {
+			c.ch = ' '
 			nextStop := ((visCol / tabW) + 1) * tabW
 			for visCol < nextStop {
 				sx := visCol - leftCol
 				if sx >= 0 && sx < width {
-					cells[sx] = screenCell{ch: ' ', style: style, bufCol: bufCol}
+					cells[sx] = c
 				}
 				visCol++
 			}
 		} else {
 			cw := textwidth.Rune(ch)
+			c.width = cw
 			sx := visCol - leftCol
 			if sx >= 0 && sx < width {
 				if cw > 1 && sx == width-1 {
 					// The rune's second column falls outside the pane; drawing
 					// it would bleed over the scrollbar or border, so pad.
-					cells[sx] = screenCell{ch: ' ', style: style, bufCol: bufCol}
+					c.ch, c.width = ' ', 0
+					cells[sx] = c
 				} else {
-					cells[sx] = screenCell{ch: ch, style: style, bufCol: bufCol}
+					cells[sx] = c
 				}
 			}
 			// A fullwidth rune's second column keeps the blank the cell array
@@ -519,6 +543,8 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(line []rune, spans []highli
 			// rune itself covers it — so it needs no content of its own.
 			visCol += cw
 		}
+		byteCol += byteLen
+		bufCol++
 		if visCol-leftCol >= width {
 			break
 		}
@@ -527,7 +553,7 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(line []rune, spans []highli
 		for i, ch := range ann {
 			sx := visCol + i - leftCol
 			if sx >= 0 && sx < width {
-				cells[sx] = screenCell{ch: ch, style: term.StyleLineNumber, bufCol: lineLen + i}
+				cells[sx] = screenCell{ch: ch, style: term.StyleLineNumber, bufCol: bufCol + i}
 			}
 		}
 	}

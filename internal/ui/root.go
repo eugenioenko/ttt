@@ -53,6 +53,7 @@ type Root struct {
 	mouseReceiver    Widget
 	button1Held      bool
 	focusClaimed     bool
+	linkHover        *EditorPaneWidget
 }
 
 func NewRoot(main Widget) *Root {
@@ -188,6 +189,14 @@ func (r *Root) rawKeysFocused() bool {
 }
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
+	// Overlays and global shortcuts can consume input before the hovered pane sees it.
+	linkPress := r.linkHover != nil && r.linkHover.links.pressed
+	if r.linkHover != nil {
+		r.linkHover.observeLinkInput(ev)
+		if !r.linkHover.links.active && !r.linkHover.links.pressed {
+			r.linkHover = nil
+		}
+	}
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
 		return r.dispatch(ev)
@@ -199,6 +208,12 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		r.focusClaimed = false
 	}
 	r.button1Held = held
+	if linkPress {
+		if released {
+			r.pressTarget = nil
+		}
+		return EventConsumed
+	}
 	receiver, modal := r.pointerTarget()
 	r.mouseReceiver = nil
 	result := r.dispatch(ev)
@@ -462,6 +477,7 @@ func (r *Root) TopOverlayWidget() Widget {
 }
 
 func (r *Root) PushOverlay(o Overlay) {
+	r.ClearEditorLinkHover()
 	r.CancelPointerCapture()
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
@@ -492,6 +508,7 @@ func (r *Root) SetFocus(w Widget) {
 	if r.Focused == w {
 		return
 	}
+	r.ClearEditorLinkHover()
 	r.chord = nil
 	if r.capturedWidget != nil {
 		r.CancelPointerCapture()

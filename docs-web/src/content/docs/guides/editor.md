@@ -36,6 +36,12 @@ The Options **Word Wrap** toggle changes the global default; explicit language o
 
 The `editor.largeFiles.wordWrapMaxMB` safeguard still applies, including when a language enables wrapping. Diff views retain their separate wrap policy. `markdown.wrapWidth` controls rendered Markdown, such as hover popups and plugin widgets; raw Markdown editing uses these editor settings.
 
+## Opening Links
+
+Hold **Ctrl** while moving the mouse over the editor to underline visible HTTP/HTTPS links and existing file references such as `src/main.go:12:3`. **Ctrl+click** an underlined link to open it. File references open in ttt at the specified line and column; relative paths use the current file's directory, or the workspace folder for untitled buffers and remote PR diffs.
+
+Move outside the pane or move the mouse without Ctrl to clear the underlines. Link navigation also works when pointer shapes are disabled, and is available in diff tabs, Commit Details, and Current Changes.
+
 ## Bracket Matching
 
 Matching brackets are highlighted automatically when the cursor is on a bracket character. Press **Ctrl+K M** to jump to the matching bracket.

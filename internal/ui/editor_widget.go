@@ -32,7 +32,6 @@ type Bookmark struct {
 type EditorPaneWidget struct {
 	BaseWidget
 	lineScratch             []screenCell
-	runeScratch             []rune
 	Buf                     *buffer.Buffer
 	Cursor                  *cursor.Cursor
 	Viewport                *view.Viewport
@@ -99,6 +98,11 @@ type EditorPaneWidget struct {
 	rowMap                  []editorRow
 	rowMapTop               int
 	rowMapOffset            int
+	links                   editorLinks
+	LinkWorkDir             string
+	OnOpenURL               func(string)
+	OnOpenFile              func(string, int, int)
+	OnLinkHover             func(*EditorPaneWidget)
 	topRowOffset            int
 	topOffsetLine           int
 	wrapGoal                wrapGoal
@@ -463,6 +467,7 @@ func (e *EditorPaneWidget) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		return e.handleMouse(mev)
 	}
+	e.observeLinkInput(ev)
 	if kev, ok := ev.(*tcell.EventKey); ok {
 		return e.handleKey(kev)
 	}

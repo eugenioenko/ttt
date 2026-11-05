@@ -421,6 +421,10 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
 	app.EditorGroup.FileHandler = app.openWithFileHandler
 	app.EditorGroup.OnFileHandled = app.fileHandlerTabOpened
+	app.EditorGroup.LinkWorkDir = app.Workspace.Primary
+	app.EditorGroup.OnOpenURL = OpenURL
+	app.EditorGroup.OnOpenFileLink = app.openFileLink
+	app.EditorGroup.OnLinkHover = app.Root.TrackEditorLinkHover
 	app.applyIcons(cfg.Settings.Appearance)
 	app.applySidebarTabStyle(cfg.Settings.Sidebar.TabStyle)
 	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)

@@ -21,6 +21,17 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func (a *App) openFileLink(path string, line, col int) {
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		a.StatusWarn(err.Error())
+		return
+	}
+	if line > 0 {
+		a.EditorGroup.GoToLineCol(line, col)
+	}
+	a.FocusEditor()
+}
+
 func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	var items []ui.ContextMenuItem
 	switch a.Sidebar.ActivePanel {
@@ -372,7 +383,7 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 	if data, err := os.ReadFile(fullPath); err == nil {
 		newLines = diffSideLines(string(data))
 	}
-	a.EditorGroup.OpenDiff(status.Path, parsed, oldLines, newLines, extended)
+	a.EditorGroup.OpenDiffTab(status.Path+" (diff)", "", fullPath, parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
 }
 
@@ -411,7 +422,7 @@ func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
 			oldLines = diffSideLines(content)
 		}
 	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", status.Path, parsed, oldLines, newLines, extended)
+	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", filepath.Join(dir, status.Path), parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
 }
 
@@ -467,7 +478,7 @@ func readCommitDiff(ctx context.Context, dir, ref, short string, status git.File
 	return &diffOpenResult{
 		TabName:  fmt.Sprintf("%s:%s (diff)", ref, status.Path),
 		Title:    fmt.Sprintf("%s @ %s", filepath.Base(status.Path), short),
-		Path:     status.Path,
+		Path:     filepath.Join(dir, status.Path),
 		Diff:     parsed,
 		OldLines: oldLines,
 		NewLines: newLines,
@@ -706,6 +717,7 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.OnActiveTabChange = func() {
+		app.Root.ClearEditorLinkHover()
 		if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 			findBar.OnEditorTabChange()
 		}

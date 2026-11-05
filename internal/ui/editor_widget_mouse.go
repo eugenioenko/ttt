@@ -12,6 +12,10 @@ func (e *EditorPaneWidget) OwnsPointerCapture() bool {
 }
 
 func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
+	e.observeLinkInput(mev)
+	if e.handleLinkMouse(mev) {
+		return EventConsumed
+	}
 	btn := mev.Buttons()
 
 	if !e.mouseDown {

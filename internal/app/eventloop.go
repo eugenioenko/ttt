@@ -213,7 +213,10 @@ func RunEventLoop(
 		}
 		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
 		app.EditorGroup.SignatureHelp = nil
-		if app.EditorGroup.Hover == nil {
+		// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
+		if tev.Modifiers()&tcell.ModCtrl != 0 && app.EditorGroup.GetRect().Contains(mx, my) {
+			app.DismissHover()
+		} else if app.EditorGroup.Hover == nil {
 			if btn == 0 {
 				app.checkMouseHover(mx, my)
 			}
@@ -262,6 +265,9 @@ func RunEventLoop(
 
 		case *tcell.EventMouse:
 			handleMouse(tev)
+			redraw()
+		case *tcell.EventFocus:
+			app.Root.HandleEvent(tev)
 			redraw()
 
 		case *tcell.EventResize:
