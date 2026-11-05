@@ -178,7 +178,7 @@ func main() {
 			fmt.Printf(`ttt %s - TTT Editor, Terminal Text Tool, an IDE for your terminal
 
 Usage: ttt [options] [files/folders/URLs...]
-Set reuseWindow in settings.json to open files in a running editor.
+Set reuseWindow in settings.json to open files and add folders in a running editor.
 The integrated terminal prefers its parent editor; otherwise the newest wins.
 
 Arguments:
@@ -239,8 +239,8 @@ Docs: https://tttedit.dev
 	cfg := config.Load(flags.configFile)
 	stdinPiped := stdinIsPiped()
 	if cfg.Settings.ReuseWindow && !flags.noForward && !stdinPiped {
-		if targets := app.ForwardableTargets(); len(targets) > 0 {
-			pid, err := app.ForwardFiles(targets)
+		if files, folders := app.ForwardableTargets(); len(files) > 0 || len(folders) > 0 {
+			pid, err := app.ForwardTargets(files, folders)
 			if err == nil {
 				if pid > 0 {
 					fmt.Fprintf(os.Stderr, "opened in running editor (pid %d)\n", pid)

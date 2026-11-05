@@ -89,20 +89,27 @@ func resolveLineColArg(arg string) (FileTarget, bool) {
 	return FileTarget{Path: abs, Line: line, Col: col}, true
 }
 
-func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
-	var folders []string
-	var wsFile string
-	welcome := false
+type openArgs struct {
+	folders       []string
+	files         []FileTarget
+	workspaceFile string
+	configFile    string
+	prURLs        []string
+	welcome       bool
+}
+
+func parseOpenArgs() openArgs {
+	var parsed openArgs
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--workspace" && i+1 < len(args) {
-			wsFile = args[i+1]
+			parsed.workspaceFile = args[i+1]
 			i++
 			continue
 		}
 		if args[i] == "--config" && i+1 < len(args) {
-			configFile = args[i+1]
+			parsed.configFile = args[i+1]
 			i++
 			continue
 		}
@@ -135,18 +142,18 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 			continue
 		}
 		if args[i] == "--welcome" {
-			welcome = true
+			parsed.welcome = true
 			continue
 		}
 		if isPRURL(args[i]) {
 			if _, _, _, err := github.ParsePRURL(args[i]); err == nil {
-				prURLs = append(prURLs, args[i])
+				parsed.prURLs = append(parsed.prURLs, args[i])
 			}
 			continue
 		}
 		absPath, err := filepath.Abs(workspace.ExpandPath(args[i]))
 		if err != nil {
-			openFiles = append(openFiles, FileTarget{Path: args[i]})
+			parsed.files = append(parsed.files, FileTarget{Path: args[i]})
 			continue
 		}
 		info, err := os.Stat(absPath)
@@ -157,21 +164,27 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 			// A file that genuinely contains a colon still wins, because the
 			// stat above is attempted first.
 			if target, ok := resolveLineColArg(args[i]); ok {
-				openFiles = append(openFiles, target)
+				parsed.files = append(parsed.files, target)
 				continue
 			}
-			openFiles = append(openFiles, FileTarget{Path: absPath})
+			parsed.files = append(parsed.files, FileTarget{Path: absPath})
 			continue
 		}
 		if info.IsDir() {
-			folders = append(folders, absPath)
+			parsed.folders = append(parsed.folders, absPath)
 		} else {
-			openFiles = append(openFiles, FileTarget{Path: absPath})
+			parsed.files = append(parsed.files, FileTarget{Path: absPath})
 		}
 	}
+	return parsed
+}
 
-	if wsFile != "" {
-		loaded, err := workspace.LoadFile(wsFile)
+func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
+	parsed := parseOpenArgs()
+	folders := parsed.folders
+	openFiles, configFile, prURLs = parsed.files, parsed.configFile, parsed.prURLs
+	if parsed.workspaceFile != "" {
+		loaded, err := workspace.LoadFile(parsed.workspaceFile)
 		if err == nil {
 			ws = loaded
 			for _, f := range folders {
@@ -184,7 +197,7 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 	// Opening only files intentionally creates no workspace — a folder must be passed explicitly.
 	// --welcome, or starting in $HOME with welcome.showOnHome, opens no folder
 	// so the welcome page shows instead.
-	if len(folders) == 0 && len(prURLs) == 0 && len(openFiles) == 0 && !welcome {
+	if len(folders) == 0 && len(prURLs) == 0 && len(openFiles) == 0 && !parsed.welcome {
 		cwd, _ := os.Getwd()
 		if home, err := os.UserHomeDir(); !welcomeOnHome || err != nil || filepath.Clean(cwd) != filepath.Clean(home) {
 			folders = append(folders, cwd)

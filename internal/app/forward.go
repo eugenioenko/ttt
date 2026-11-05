@@ -23,12 +23,21 @@ var ErrForwardUnavailable = errors.New("no running editor")
 
 var forwardCallTimeout = 30 * time.Second
 
-const forwardSocketEnv = "TTT_FORWARD_SOCKET"
+const (
+	forwardSocketEnv     = "TTT_FORWARD_SOCKET"
+	forwardFilesMethod   = "open.v1"
+	forwardFoldersMethod = "open.v2"
+)
 
 type forwardTarget struct {
 	Path []byte
 	Line int
 	Col  int
+}
+
+type forwardRequest struct {
+	Files   []forwardTarget `json:"files"`
+	Folders [][]byte        `json:"folders"`
 }
 
 func forwardDirectory() string {
@@ -56,15 +65,18 @@ func checkForwardDir(dir string) error {
 	return nil
 }
 
-func ForwardableTargets() []FileTarget {
-	ws, targets, _, prURLs := resolveArgs(false)
-	if len(targets) == 0 || len(ws.Paths()) != 0 || len(prURLs) != 0 {
-		return nil
+// ForwardableTargets excludes implicit cwd roots, saved workspaces, and PR URLs.
+// The caller must gate startup-only flags and piped stdin before forwarding.
+func ForwardableTargets() (files []FileTarget, folders []string) {
+	args := parseOpenArgs()
+	if args.workspaceFile != "" || len(args.prURLs) != 0 {
+		return nil, nil
 	}
-	return targets
+	return args.files, args.folders
 }
 
-func ForwardFiles(targets []FileTarget) (int, error) {
+// ForwardTargets returns ErrForwardUnavailable only before connecting to an editor.
+func ForwardTargets(files []FileTarget, folders []string) (int, error) {
 	prefix := forwardPrefix()
 	preferred := filepath.Clean(os.Getenv(forwardSocketEnv))
 	name := filepath.Base(preferred)
@@ -72,7 +84,7 @@ func ForwardFiles(targets []FileTarget) (int, error) {
 	if filepath.IsAbs(preferred) && strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".sock") && checkForwardDir(filepath.Dir(preferred)) == nil {
 		triedPreferred = true
 		if conn, err := dialForward(preferred); err == nil {
-			return forwardFiles(conn, targets)
+			return sendForwardRequest(conn, files, folders)
 		}
 	}
 	dir := forwardDirectory()
@@ -93,7 +105,7 @@ func ForwardFiles(targets []FileTarget) (int, error) {
 		if err != nil {
 			continue
 		}
-		return forwardFiles(conn, targets)
+		return sendForwardRequest(conn, files, folders)
 	}
 	return 0, ErrForwardUnavailable
 }
@@ -108,17 +120,26 @@ func dialForward(path string) (net.Conn, error) {
 	return conn, err
 }
 
-func forwardFiles(conn net.Conn, targets []FileTarget) (int, error) {
+func sendForwardRequest(conn net.Conn, files []FileTarget, folders []string) (int, error) {
 	defer conn.Close()
 	rpc := jsonrpc.NewConn(conn, conn, jsonrpc.Options{MaxMessageSize: maxExecBodySize})
-	wire := make([]forwardTarget, len(targets))
-	for i, target := range targets {
+	wire := make([]forwardTarget, len(files))
+	for i, target := range files {
 		wire[i] = forwardTarget{Path: []byte(target.Path), Line: target.Line, Col: target.Col}
+	}
+	// Keep file-only requests compatible with editors started before folder forwarding.
+	method, params := forwardFilesMethod, any(wire)
+	if len(folders) > 0 {
+		request := forwardRequest{Files: wire, Folders: make([][]byte, len(folders))}
+		for i, folder := range folders {
+			request.Folders[i] = []byte(folder)
+		}
+		method, params = forwardFoldersMethod, request
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), forwardCallTimeout)
 	deadline, _ := ctx.Deadline()
 	_ = conn.SetDeadline(deadline)
-	result, err := rpc.Call(ctx, "open.v1", wire)
+	result, err := rpc.Call(ctx, method, params)
 	cancel()
 	var netErr net.Error
 	if err != nil && (errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) || !time.Now().Before(deadline)) {
@@ -126,6 +147,9 @@ func forwardFiles(conn net.Conn, targets []FileTarget) (int, error) {
 	}
 	var rpcErr *jsonrpc.Error
 	if errors.As(err, &rpcErr) {
+		if method == forwardFoldersMethod && rpcErr.Code == jsonrpc.CodeMethodNotFound {
+			return 0, errors.New("the running editor does not support folder forwarding; restart it with this version of ttt or use --new-window")
+		}
 		return 0, errors.New(rpcErr.Message)
 	}
 	if err != nil {
@@ -176,26 +200,40 @@ func serveForward(a *App, ln net.Listener) {
 			OnClose:        func(error) { conn.Close() },
 			OnRequest: func(method string, params json.RawMessage) (any, error) {
 				_ = conn.SetReadDeadline(time.Time{})
-				if method != "open.v1" {
+				var request forwardRequest
+				var err error
+				switch method {
+				case forwardFilesMethod:
+					err = json.Unmarshal(params, &request.Files)
+				case forwardFoldersMethod:
+					err = json.Unmarshal(params, &request)
+				default:
 					return nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not supported: " + method}
 				}
-				var wire []forwardTarget
-				if err := json.Unmarshal(params, &wire); err != nil {
+				if err != nil {
 					return nil, err
 				}
-				targets := make([]FileTarget, len(wire))
-				for i, target := range wire {
+				targets := make([]FileTarget, len(request.Files))
+				for i, target := range request.Files {
 					targets[i] = FileTarget{Path: string(target.Path), Line: target.Line, Col: target.Col}
 				}
-				return os.Getpid(), runExecMain(a, func() error { return a.openForwarded(targets) })
+				folders := make([]string, len(request.Folders))
+				for i, folder := range request.Folders {
+					folders[i] = string(folder)
+				}
+				return os.Getpid(), runExecMain(a, func() error { return a.openForwarded(targets, folders) })
 			},
 		})
 	}
 }
 
-func (a *App) openForwarded(targets []FileTarget) error {
-	opened, err := openFileTargets(a.EditorGroup, targets)
+func (a *App) openForwarded(files []FileTarget, folders []string) error {
+	folderErr := a.addWorkspaceFolders(folders)
+	if len(files) == 0 {
+		return folderErr
+	}
+	opened, err := openFileTargets(a.EditorGroup, files)
 	a.ApplyFileTargets(opened)
 	a.FocusEditorIfEnabled()
-	return err
+	return errors.Join(folderErr, err)
 }

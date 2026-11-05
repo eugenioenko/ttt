@@ -98,7 +98,7 @@ func waitForCLI(t *testing.T, child *terminal.Terminal, exited <-chan struct{}, 
 	}
 }
 
-func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
+func TestReuseWindowForwardsTargetsAndPreservesPipedStdin(t *testing.T) {
 	// Socket paths must also fit macOS's 104-byte limit.
 	tempRoot := ""
 	if runtime.GOOS != "windows" {
@@ -116,7 +116,7 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), []byte(`{"reuseWindow":true,"lsp":{"enabled":false},"plugins":{"enabled":false}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"forwarded.txt", "notes.txt"} {
+	for _, name := range []string{"forwarded.txt", "notes.txt", "piped-only.txt"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("one\ntwo\nthree"), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -195,14 +195,56 @@ func TestReuseWindowPreservesPipedStdinWithFile(t *testing.T) {
 	if state.Buffer == nil || state.Buffer.Path != filepath.Join(dir, "forwarded.txt") || state.Cursor.Line != 2 || state.Cursor.Col != 1 {
 		t.Fatalf("forwarded file or cursor missing: %+v", state)
 	}
+	folder := filepath.Join(dir, "added-workspace")
+	if err := os.Mkdir(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := post("type UNSAVED_1335"); err != nil {
+		t.Fatal(err)
+	}
+	before := readReceiver()
+	forward := func(args ...string) {
+		t.Helper()
+		sender, exited, _ := startCLI(t, folder, []string{"TTT_TEST_STDERR_FILE=" + stderrPath}, args...)
+		select {
+		case <-exited:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("targets %v were not forwarded:\n%s", args, sender.ScreenText())
+		}
+		stderr, err := os.ReadFile(stderrPath)
+		if err != nil || string(stderr) != confirmation {
+			t.Fatalf("forwarding stderr = %q, error = %v, want %q", stderr, err, confirmation)
+		}
+	}
+	forward(".")
+	state = readReceiver()
+	if state.Buffer == nil || !state.Buffer.Modified || state.Buffer.Path != before.Buffer.Path || !slices.Equal(state.Buffer.Text, before.Buffer.Text) || state.ActiveTab != before.ActiveTab || !slices.Equal(state.Tabs, before.Tabs) {
+		t.Fatalf("adding a folder changed open tabs or unsaved text: %+v", state)
+	}
+	screenPath := filepath.Join(dir, "folders.txt")
+	if err := post(fmt.Sprintf(`screenshot "%s"`, filepath.ToSlash(screenPath))); err != nil {
+		t.Fatal(err)
+	}
+	screen, err := os.ReadFile(screenPath)
+	if err != nil || !strings.Contains(string(screen), "added-workspace") {
+		t.Fatalf("forwarded folder missing from explorer: %v\n%s", err, screen)
+	}
+	forward(".", "../notes.txt:2:1")
+	state = readReceiver()
+	if state.Buffer == nil || state.Buffer.Path != filepath.Join(dir, "notes.txt") || state.Cursor.Line != 1 || state.Cursor.Col != 0 {
+		t.Fatalf("mixed request did not open the file at its position: %+v", state)
+	}
+	if len(state.Tabs) != len(before.Tabs)+1 || !slices.Contains(state.Tabs, app.DebugTab{Path: before.Buffer.Path, Modified: true}) {
+		t.Fatalf("mixed request discarded existing tabs: %+v", state.Tabs)
+	}
 	const pipedText = "PIPE_INPUT_1248"
-	sender, senderExited, _ := startCLI(t, dir, []string{"TTT_TEST_STDIN=" + pipedText + "\n"}, "notes.txt")
+	sender, senderExited, _ := startCLI(t, dir, []string{"TTT_TEST_STDIN=" + pipedText + "\n"}, "piped-only.txt")
 	waitForCLI(t, sender, senderExited, func() bool {
 		screen := sender.ScreenText()
-		return strings.Contains(screen, pipedText) && strings.Contains(screen, "notes.txt") && strings.Contains(screen, "untitled")
+		return strings.Contains(screen, pipedText) && strings.Contains(screen, "piped-only.txt") && strings.Contains(screen, "untitled")
 	})
 	for _, tab := range readReceiver().Tabs {
-		if tab.Path == filepath.Join(dir, "notes.txt") {
+		if tab.Path == filepath.Join(dir, "piped-only.txt") {
 			t.Fatal("piped invocation forwarded its file to the running editor")
 		}
 	}
