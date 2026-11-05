@@ -5,6 +5,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestFindPrefilledWithSelection(t *testing.T) {
@@ -211,7 +212,7 @@ func TestSearchPrefillSurvivesRepeatedShortcut(t *testing.T) {
 }
 
 func TestReplacePrefillRequiresEditableSelection(t *testing.T) {
-	for _, kind := range []string{"diff", "read-only", "diff-base"} {
+	for _, kind := range []string{"diff", "read-only", "diff-base", "diff-base-after-find"} {
 		t.Run(kind, func(t *testing.T) {
 			h := newTestHarness(t, 120, 30)
 			defer h.stop()
@@ -228,7 +229,7 @@ func TestReplacePrefillRequiresEditableSelection(t *testing.T) {
 			case "read-only":
 				h.app.EditorGroup.OpenBufferReadOnly("Read only", "readonly.txt", []string{"new needle"})
 				pane = editor
-			case "diff-base":
+			case "diff-base", "diff-base-after-find":
 				path := h.app.EditorGroup.ActiveFilePath()
 				if !h.app.EditorGroup.EnableInlineDiff(path, []string{"old needle"}) {
 					t.Fatal("could not open editable diff")
@@ -248,6 +249,15 @@ func TestReplacePrefillRequiresEditableSelection(t *testing.T) {
 			pane.Selection.Start(0, 4)
 			pane.Cursor.Line, pane.Cursor.Col = 0, 10
 			if kind == "read-only" {
+				cursor = *editor.Cursor
+			}
+			if kind == "diff-base-after-find" {
+				h.exec("search.find")
+				h.pressKey(tcell.KeyEnter, tcell.ModNone)
+				h.pressKey(tcell.KeyEscape, tcell.ModNone)
+				if h.app.EditorGroup.ActiveInlineDiff().KeyPane().ReadOnly || !pane.Selection.Active {
+					t.Fatal("expected writable pane focus with the base selection retained")
+				}
 				cursor = *editor.Cursor
 			}
 

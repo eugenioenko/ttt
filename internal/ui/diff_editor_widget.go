@@ -1257,12 +1257,20 @@ func (d *DiffEditorWidget) selectionPane() *EditorPaneWidget {
 	if lead != nil && lead.Selection.Active {
 		return lead
 	}
+	if d.IsUnified() {
+		return nil
+	}
 	for _, p := range d.viewPanes() {
 		if p != nil && p.Selection.Active {
 			return p
 		}
 	}
 	return nil
+}
+
+func (d *DiffEditorWidget) HasReadOnlySelection() bool {
+	p := d.selectionPane()
+	return p != nil && p.ReadOnly
 }
 
 // SelectedText returns the active selection text, or an empty string if no selection is active.

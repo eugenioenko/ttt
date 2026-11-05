@@ -129,7 +129,7 @@ func (a *App) prefillReplaceInput(input *ui.InputWidget) {
 	if !a.EditorGroup.IsEditorActive() || a.EditorGroup.IsActiveReadOnly() {
 		return
 	}
-	if dv := a.EditorGroup.ActiveInlineDiff(); dv != nil && dv.KeyPane().ReadOnly {
+	if dv := a.EditorGroup.ActiveInlineDiff(); dv != nil && (dv.KeyPane().ReadOnly || dv.HasReadOnlySelection()) {
 		return
 	}
 	a.prefillSearchInput(input)
