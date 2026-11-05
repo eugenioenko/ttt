@@ -115,8 +115,8 @@ func (r *ReplaceBarWidget) Render(surface Surface) {
 		r.ReplaceInput.Actions[1].Label = "All"
 	}
 	r.findBarLayout = renderFindBar(surface, r.Borders, r.SearchInput.Text, r.Current, len(r.Matches), true, r.OnToggleFind != nil)
-	r.SearchInput.Render(surface, r.inputX, r.barRect.Y+1, r.inputW)
-	r.ReplaceInput.Render(surface, r.inputX, r.barRect.Y+2, max(r.barRect.W-5, 0))
+	renderFindBarInput(surface, r.SearchInput, r.inputX, r.barRect.Y+1, r.inputW)
+	renderFindBarInput(surface, r.ReplaceInput, r.inputX, r.barRect.Y+2, max(r.barRect.X+r.barRect.W-1-r.inputX, 0))
 }
 
 func (r *ReplaceBarWidget) search() {

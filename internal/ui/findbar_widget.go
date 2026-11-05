@@ -90,7 +90,7 @@ func (f *FindBarWidget) CursorPosition() (int, int, bool) {
 func (f *FindBarWidget) Render(surface Surface) {
 	f.syncActions()
 	f.findBarLayout = renderFindBar(surface, f.Borders, f.Input.Text, f.Current, len(f.Matches), false, f.OnToggleReplace != nil)
-	f.Input.Render(surface, f.inputX, f.barRect.Y+1, f.inputW)
+	renderFindBarInput(surface, f.Input, f.inputX, f.barRect.Y+1, f.inputW)
 }
 
 func (f *FindBarWidget) search() {

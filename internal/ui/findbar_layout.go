@@ -30,13 +30,14 @@ func renderFindBar(surface Surface, borders *term.BorderSet, query string, curre
 	surface.ClearRect(r.X+1, r.Y+1, max(w-2, 0), r.H-2, term.StyleInput)
 	ox, oy := surface.Origin()
 	row := r.Y + 1
-	l.inputX = r.X + 4
-	if toggle {
+	gutterW := min(3, max(w-3, 0))
+	l.inputX = r.X + 1 + gutterW
+	if toggle && gutterW > 0 {
 		icon := icons.ChevronRight
 		if expanded {
 			icon = icons.ChevronDown
 		}
-		end := surface.DrawText(r.X+2, row, string(icons.Rune(icon)), r.X+w-1, term.StyleMuted)
+		end := surface.DrawText(r.X+1+gutterW/2, row, string(icons.Rune(icon)), l.inputX, term.StyleMuted)
 		l.btnToggle = HitRegion{X: ox + r.X + 1, Y: oy + row, W: end - (r.X + 1)}
 	}
 	info := ""
@@ -51,14 +52,27 @@ func renderFindBar(surface Surface, borders *term.BorderSet, query string, curre
 	if matches > 0 || expanded {
 		nav = " ▲ ▼"
 	}
-	suffix := info + nav + " ✕ "
-	l.inputW = max(w-5-textwidth.String(suffix), 0)
+	available := max(r.X+w-1-l.inputX, 0)
+	suffixBudget := available - min(4, available)
+	closeLabel := " ✕ "
+	if textwidth.String(info+nav+closeLabel) > suffixBudget {
+		info = ""
+	}
+	if textwidth.String(nav+closeLabel) > suffixBudget {
+		nav = ""
+	}
+	if textwidth.String(closeLabel) > suffixBudget {
+		closeLabel = ""
+	}
+	l.inputW = available - textwidth.String(info+nav+closeLabel)
 	x := surface.DrawText(l.inputX+l.inputW, row, info, r.X+w-1, term.StyleMuted)
 	if nav != "" {
 		x, l.btnPrev = drawFindBarButton(surface, x, row, "▲", r.X+w-1)
 		x, l.btnNext = drawFindBarButton(surface, x, row, "▼", r.X+w-1)
 	}
-	_, l.btnClose = drawFindBarButton(surface, x, row, "✕", r.X+w-1)
+	if closeLabel != "" {
+		_, l.btnClose = drawFindBarButton(surface, x, row, "✕", r.X+w-1)
+	}
 	return l
 }
 
@@ -68,4 +82,13 @@ func drawFindBarButton(surface Surface, x, y int, label string, limit int) (int,
 	x = surface.DrawText(x, y, label, limit, term.StyleMuted)
 	ox, oy := surface.Origin()
 	return x, HitRegion{X: ox + start, Y: oy + y, W: x - start}
+}
+
+func renderFindBarInput(surface Surface, input *InputWidget, x, y, width int) {
+	actions := input.Actions
+	if width < input.actionsWidth()+4 {
+		input.Actions = nil
+	}
+	input.Render(surface.Sub(Rect{X: x, Y: y, W: width, H: 1}), 0, 0, width)
+	input.Actions = actions
 }
