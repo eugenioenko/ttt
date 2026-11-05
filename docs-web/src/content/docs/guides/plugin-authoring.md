@@ -1995,7 +1995,7 @@ The widget system uses a **reconciliation** algorithm to preserve interactive st
 
 **What is preserved:**
 - **Tree/List:** Expanded/collapsed state of nodes (matched by `id`), selected item, scroll position.
-- **Input:** Text content, cursor position.
+- **Input:** Text content, cursor position, selection.
 - **Button:** Focus state.
 
 **What is NOT preserved:**
