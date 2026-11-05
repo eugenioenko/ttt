@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"fmt"
-
 	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
@@ -25,14 +23,14 @@ type FindBarWidget struct {
 	OnDismiss         func()
 	Debounce          Debouncer
 	focused           bool
-	btnPrev           HitRegion
-	btnNext           HitRegion
-	btnClose          HitRegion
+	OnToggleReplace   func()
+	findBarLayout
 }
 
 func NewFindBarWidget() *FindBarWidget {
 	f := &FindBarWidget{focused: true}
 	f.Input = NewInputWidget()
+	f.Input.Prefix = ""
 	f.Input.Placeholder = "Search"
 	f.Input.OnChange = func(string) {
 		f.Current = 0
@@ -62,18 +60,6 @@ func (f *FindBarWidget) syncActions() {
 	}
 }
 
-func (f *FindBarWidget) barLayout() (barX, barY, barW, barH int) {
-	r := f.GetRect()
-	barW = 40
-	if barW > r.W-4 {
-		barW = r.W - 4
-	}
-	barX = r.W - barW - 1
-	barY = 4
-	barH = 3
-	return
-}
-
 func (f *FindBarWidget) Focusable() bool { return true }
 
 func (f *FindBarWidget) FocusedInput() *InputWidget {
@@ -92,9 +78,9 @@ func (f *FindBarWidget) CursorPosition() (int, int, bool) {
 		return 0, 0, false
 	}
 	r := f.GetRect()
-	barX, barY, barW, _ := f.barLayout()
+	barX, barY, barW := f.barRect.X, f.barRect.Y, f.barRect.W
 	row := barY + 1
-	cx := f.Input.CursorX(barX + 1)
+	cx := f.Input.CursorX(f.inputX)
 	if cx >= barX+barW-1 {
 		cx = barX + barW - 2
 	}
@@ -102,78 +88,9 @@ func (f *FindBarWidget) CursorPosition() (int, int, bool) {
 }
 
 func (f *FindBarWidget) Render(surface Surface) {
-	sw, _ := surface.Size()
-
-	barW := 40
-	if barW > sw-4 {
-		barW = sw - 4
-	}
-	barX := sw - barW - 1
-	barY := 4
-	barH := 3
-
-	b := term.SingleBorderSet()
-	if f.Borders != nil {
-		b = *f.Borders
-	}
-	surface.DrawBorder(barX, barY, barW, barH, b, term.StyleBorder)
-
-	row := barY + 1
-
-	info := ""
-	hasMatches := f.Input.Text != "" && len(f.Matches) > 0
-	if f.Input.Text != "" {
-		info = fmt.Sprintf(" %d/%d", f.currentDisplay(), len(f.Matches))
-	}
-	navButtons := ""
-	if hasMatches {
-		navButtons = " ▲ ▼"
-	}
-	closeBtn := " ✕ "
-	suffixW := len([]rune(info)) + len([]rune(navButtons)) + len([]rune(closeBtn))
-
-	inputW := barW - 2 - suffixW
-	if inputW < 4 {
-		inputW = 4
-	}
-	f.Input.Render(surface, barX+1, row, inputW)
-
-	cx := barX + 1 + inputW
-	for _, ch := range info {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, row, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-
-	navStart := cx
-	for _, ch := range navButtons {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, row, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-	f.btnPrev = HitRegion{}
-	f.btnNext = HitRegion{}
-	if hasMatches {
-		f.btnPrev = HitRegion{X: navStart + 1, Y: row, W: 1}
-		f.btnNext = HitRegion{X: navStart + 3, Y: row, W: 1}
-	}
-	closeStart := cx
-	for _, ch := range closeBtn {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, row, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-	f.btnClose = HitRegion{X: closeStart + 1, Y: row, W: 1}
-}
-
-func (f *FindBarWidget) currentDisplay() int {
-	if len(f.Matches) == 0 {
-		return 0
-	}
-	return f.Current + 1
+	f.syncActions()
+	f.findBarLayout = renderFindBar(surface, f.Borders, f.Input.Text, f.Current, len(f.Matches), false, f.OnToggleReplace != nil)
+	renderFindBarInput(surface, f.Input, f.inputX, f.barRect.Y+1, f.inputW)
 }
 
 func (f *FindBarWidget) search() {
@@ -219,14 +136,18 @@ func (f *FindBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	case *tcell.EventMouse:
 		if tev.Buttons()&tcell.Button1 != 0 {
 			mx, my := tev.Position()
-			barX, barY, barW, barH := f.barLayout()
+			barX, barY, barW, barH := f.barRect.X, f.barRect.Y, f.barRect.W, f.barRect.H
 			r := f.GetRect()
 			localX := mx - r.X
 			localY := my - r.Y
 			if localY >= barY && localY < barY+barH && localX >= barX && localX < barX+barW {
 				f.focused = true
+				if f.btnToggle.Contains(mx, my) && f.OnToggleReplace != nil {
+					f.OnToggleReplace()
+					return EventConsumed
+				}
 				row := barY + 1
-				if localY == row && localX >= barX+1 && localX < barX+1+barW-2 {
+				if localY == row && localX >= f.inputX && localX < f.inputX+f.inputW {
 					f.Input.HandleClick(mx, my)
 				}
 				if f.btnPrev.Contains(mx, my) {

@@ -40,6 +40,8 @@ func (a *App) OpenFind() {
 		if fb, ok := a.Root.TopOverlayWidget().(*ui.FindBarWidget); ok {
 			a.prefillFindBar(fb)
 			fb.Focus()
+		} else if bar, ok := a.Root.TopOverlayWidget().(*ui.ReplaceBarWidget); ok && bar.OnToggleFind != nil {
+			bar.OnToggleFind()
 		}
 		return
 	}
@@ -51,6 +53,13 @@ func (a *App) OpenFind() {
 		a.showDiffFindBar(dv)
 		return
 	}
+	findBar := a.newFindBar()
+	a.linkFindReplaceBars(findBar, a.newReplaceBar())
+	a.prefillFindBar(findBar)
+	a.ShowFindBar(findBar)
+}
+
+func (a *App) newFindBar() *ui.FindBarWidget {
 	findBar := ui.NewFindBarWidget()
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
@@ -84,8 +93,7 @@ func (a *App) OpenFind() {
 		findBar.Refresh()
 		a.EditorGroup.SetSearchActive(findBar.Current)
 	}
-	a.prefillFindBar(findBar)
-	a.ShowFindBar(findBar)
+	return findBar
 }
 
 const findRefreshDelay = 150 * time.Millisecond
@@ -143,9 +151,18 @@ func (a *App) OpenFindReplace() {
 		if bar, ok := a.Root.TopOverlayWidget().(*ui.ReplaceBarWidget); ok {
 			a.prefillReplaceInput(bar.SearchInput)
 			bar.Focus()
+		} else if bar, ok := a.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && bar.OnToggleReplace != nil {
+			bar.OnToggleReplace()
 		}
 		return
 	}
+	bar := a.newReplaceBar()
+	a.linkFindReplaceBars(a.newFindBar(), bar)
+	a.prefillReplaceInput(bar.SearchInput)
+	a.ShowFindBar(bar)
+}
+
+func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 	bar := ui.NewReplaceBarWidget()
 	bar.Borders = a.Borders
 	bar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
@@ -176,8 +193,31 @@ func (a *App) OpenFindReplace() {
 		a.DismissDialog()
 		a.EditorGroup.ClearSearch()
 	}
-	a.prefillReplaceInput(bar.SearchInput)
-	a.ShowFindBar(bar)
+	return bar
+}
+
+func (a *App) linkFindReplaceBars(find *ui.FindBarWidget, replace *ui.ReplaceBarWidget) {
+	find.OnToggleReplace = func() {
+		find.Debounce.Stop()
+		replace.SearchInput.CopyTextState(find.Input)
+		replace.Options, replace.Current = find.Options, find.Current
+		replace.Matches = find.Matches
+		replace.Refresh()
+		a.EditorGroup.SetSearchActive(replace.Current)
+		replace.Focus()
+		a.Root.PopOverlay()
+		a.ShowFindBar(replace)
+	}
+	replace.OnToggleFind = func() {
+		find.Input.CopyTextState(replace.SearchInput)
+		find.Options, find.Current = replace.Options, replace.Current
+		find.Matches = replace.Matches
+		find.Refresh()
+		a.EditorGroup.SetSearchActive(find.Current)
+		find.Focus()
+		a.Root.PopOverlay()
+		a.ShowFindBar(find)
+	}
 }
 
 func (a *App) ClearGlobalSearch() {

@@ -74,6 +74,7 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `remove` | `−` | `−` | Unstage actions |
 | `discard` | `✕` | `✕` | Discard changes action |
 | `replace` | `⟳` | `\ueb3d` | Replace button in the replace bar |
+| `replace-all` | `⟳` | `\ueb3c` | Replace All button in Nerd Font mode (plain mode uses “All”) |
 | `branch` | `⎇` | `\uf418` | Branch in the Changes panel |
 | `commit` | `●` | `\uf417` | Commit in commit history |
 | `function` | `ƒ` | `\uea8c` | Symbol and completion kinds |

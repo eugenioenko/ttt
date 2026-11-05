@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 
@@ -23,15 +22,14 @@ type ReplaceBarWidget struct {
 	OnDismiss    func()
 	focused      bool
 	focusRow     int
-	barRect      Rect
-	btnPrev      HitRegion
-	btnNext      HitRegion
-	btnClose     HitRegion
+	OnToggleFind func()
+	findBarLayout
 }
 
 func NewReplaceBarWidget() *ReplaceBarWidget {
 	r := &ReplaceBarWidget{focused: true}
 	r.SearchInput = NewInputWidget()
+	r.SearchInput.Prefix = ""
 	r.SearchInput.Placeholder = "Search"
 	r.SearchInput.OnChange = func(string) {
 		r.Current = 0
@@ -53,6 +51,7 @@ func NewReplaceBarWidget() *ReplaceBarWidget {
 	}
 
 	r.ReplaceInput = NewInputWidget()
+	r.ReplaceInput.Prefix = ""
 	r.ReplaceInput.Placeholder = "Replace"
 	r.ReplaceInput.Actions = []InputAction{
 		{Label: string(icons.Rune(icons.Replace)), OnClick: r.replaceCurrent},
@@ -101,7 +100,7 @@ func (r *ReplaceBarWidget) CursorPosition() (int, int, bool) {
 	if r.focusRow == 1 {
 		inp = r.ReplaceInput
 	}
-	cx := inp.CursorX(barX + 1)
+	cx := inp.CursorX(r.inputX)
 	if cx >= barX+barW-1 {
 		cx = barX + barW - 2
 	}
@@ -109,67 +108,15 @@ func (r *ReplaceBarWidget) CursorPosition() (int, int, bool) {
 }
 
 func (r *ReplaceBarWidget) Render(surface Surface) {
-	sw, _ := surface.Size()
-
-	barW := 40
-	if barW > sw-4 {
-		barW = sw - 4
+	r.syncActions()
+	if icons.ActiveIsNerd() {
+		r.ReplaceInput.Actions[1].Label = string(icons.Rune(icons.ReplaceAll))
+	} else {
+		r.ReplaceInput.Actions[1].Label = "All"
 	}
-	barX := sw - barW - 1
-	barY := 4
-	barH := 4
-	r.barRect = Rect{X: barX, Y: barY, W: barW, H: barH}
-
-	b := term.SingleBorderSet()
-	if r.Borders != nil {
-		b = *r.Borders
-	}
-	surface.DrawBorder(barX, barY, barW, barH, b, term.StyleBorder)
-
-	findRow := barY + 1
-	replRow := barY + 2
-
-	info := ""
-	if r.SearchInput.Text != "" {
-		info = fmt.Sprintf(" %d/%d", r.currentDisplay(), len(r.Matches))
-	}
-	navButtons := " ▲ ▼ ✕"
-	suffixW := len([]rune(info)) + len([]rune(navButtons))
-
-	searchInputW := barW - 2 - suffixW
-	if searchInputW < 4 {
-		searchInputW = 4
-	}
-	r.SearchInput.Render(surface, barX+1, findRow, searchInputW)
-
-	cx := barX + 1 + searchInputW
-	for _, ch := range info {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, findRow, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-
-	navStart := cx
-	for _, ch := range navButtons {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, findRow, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-	r.btnPrev = HitRegion{X: navStart + 1, Y: findRow, W: 1}
-	r.btnNext = HitRegion{X: navStart + 3, Y: findRow, W: 1}
-	r.btnClose = HitRegion{X: navStart + 5, Y: findRow, W: 1}
-
-	replInputW := barW - 2
-	r.ReplaceInput.Render(surface, barX+1, replRow, replInputW)
-}
-
-func (r *ReplaceBarWidget) currentDisplay() int {
-	if len(r.Matches) == 0 {
-		return 0
-	}
-	return r.Current + 1
+	r.findBarLayout = renderFindBar(surface, r.Borders, r.SearchInput.Text, r.Current, len(r.Matches), true, r.OnToggleFind != nil)
+	renderFindBarInput(surface, r.SearchInput, r.inputX, r.barRect.Y+1, r.inputW)
+	renderFindBarInput(surface, r.ReplaceInput, r.inputX, r.barRect.Y+2, max(r.barRect.X+r.barRect.W-1-r.inputX, 0))
 }
 
 func (r *ReplaceBarWidget) search() {
@@ -226,6 +173,10 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventIgnored
 			}
 			r.focused = true
+			if r.btnToggle.Contains(mx, my) && r.OnToggleFind != nil {
+				r.OnToggleFind()
+				return EventConsumed
+			}
 
 			if r.btnPrev.Contains(mx, my) {
 				if len(r.Matches) > 0 {
@@ -251,12 +202,12 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 			findRow := barY + 1
 			replRow := barY + 2
 
-			if localY == findRow && localX >= barX+1 && localX < barX+1+barW-2 {
+			if localY == findRow && localX >= r.inputX && localX < barX+barW-1 {
 				r.focusRow = 0
 				r.SearchInput.HandleClick(mx, my)
 				return EventConsumed
 			}
-			if localY == replRow && localX >= barX+1 && localX < barX+1+barW-2 {
+			if localY == replRow && localX >= r.inputX && localX < barX+barW-1 {
 				r.focusRow = 1
 				r.ReplaceInput.HandleClick(mx, my)
 				return EventConsumed
