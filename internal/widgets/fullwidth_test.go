@@ -127,9 +127,10 @@ func TestInputClickMapsColumnToRune(t *testing.T) {
 		inp.SetRect(Rect{X: 0, Y: 0, W: 20, H: 1})
 		inp.SetFocused(true)
 		inp.SetText("가나다")
+		renderWidget(inp, 0, 0, 20, 1)
 
 		ev := tcell.NewEventMouse(defaultPrefixW+tc.col, 0, tcell.Button1, 0)
-		if res := inp.HandleEvent(ev); res != EventConsumed {
+		if res := inp.HandleEvent(ev); res != EventCaptured {
 			t.Fatalf("column %d: click not consumed", tc.col)
 		}
 		if inp.cursorPos != tc.want {

@@ -197,7 +197,13 @@ func eachTable(w widgets.Widget, fn func(*widgets.TableWidget)) {
 	}
 }
 
-func (pw *PluginPanelWidget) CancelPointerCapture() bool { return pw.sel.release() }
+func (pw *PluginPanelWidget) CancelPointerCapture() bool {
+	canceled := pw.sel.release()
+	if pw.state != nil && pw.state.root != nil {
+		canceled = widgets.CancelPointerCapture(pw.state.root) || canceled
+	}
+	return canceled
+}
 
 func (pw *PluginPanelWidget) dispatch(ev tcell.Event) widgets.EventResult {
 	if pw.state != nil && pw.state.focus != nil {

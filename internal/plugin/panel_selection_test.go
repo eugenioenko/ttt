@@ -138,14 +138,17 @@ func newInputPanel(t *testing.T) (*PluginPanelWidget, *mockSurface) {
 }
 
 func TestPanelLeavesInputDragsToTheInput(t *testing.T) {
-	pw, _ := newInputPanel(t)
-	mouse(pw, 14, 6, tcell.Button1)
-	if got := mouse(pw, 18, 6, tcell.Button1); got == widgets.EventCaptured {
-		t.Fatal("the panel captured a drag inside the input")
+	pw, surface := newInputPanel(t)
+	pw.SetRect(widgets.Rect{W: 30, H: 3})
+	pw.Render(surface)
+	mouse(pw, 4, 1, tcell.Button1)
+	pw.Render(surface)
+	if got := mouse(pw, 8, 1, tcell.Button1); got != widgets.EventCaptured {
+		t.Fatal("the input did not capture its drag")
 	}
-	mouse(pw, 18, 6, tcell.ButtonNone)
-	if pw.sel.active {
-		t.Fatal("a drag inside the input selected panel text")
+	mouse(pw, 8, 1, tcell.ButtonNone)
+	if pw.sel.active || !pw.FocusedInput().HasSelection() {
+		t.Fatal("a drag inside the input should select only input text")
 	}
 }
 
