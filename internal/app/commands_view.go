@@ -254,14 +254,18 @@ func (a *App) ShowKeybindings() {
 	a.ShowDialog(w)
 }
 
+func (a *App) OpenGlobalSearch() {
+	a.prefillSearchInput(a.Search.Input)
+	a.ShowPanel("search", a.Search)
+}
+
 func (a *App) ToggleSearchReplace() {
 	if a.Sidebar.Visible && a.Sidebar.ActivePanel == "search" {
 		a.Search.ToggleReplaceMode()
 	} else {
 		a.Search.SetReplaceMode(true)
-		a.ShowPanel("search", a.Search)
 	}
-	a.Root.SetFocus(a.Search)
+	a.OpenGlobalSearch()
 }
 
 func registerViewCommands(app *App) {
@@ -290,9 +294,7 @@ func registerViewCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "sidebar.search", Title: "Show Search",
 		Keywords: []string{"view", "search", "find", "grep"},
-		Handler: func() {
-			app.ShowPanel("search", app.Search)
-		},
+		Handler:  app.OpenGlobalSearch,
 	})
 
 	reg.Register(command.Command{

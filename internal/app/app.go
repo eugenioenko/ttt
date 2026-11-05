@@ -1143,6 +1143,7 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 			dv.SetActiveMatch(findBar.Current)
 		}
 	}
+	a.prefillFindBar(findBar)
 	a.ShowFindBar(findBar)
 }
 

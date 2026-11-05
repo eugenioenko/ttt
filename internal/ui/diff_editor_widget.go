@@ -1230,8 +1230,10 @@ func (d *DiffEditorWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		}
 		if !d.IsUnified() && d.captured == nil {
 			d.focusLeft = target == d.left
-			if d.editable && !d.focusLeft {
-				d.left.Selection.Clear()
+			for _, p := range d.viewPanes() {
+				if p != target {
+					p.Selection.Clear()
+				}
 			}
 		}
 	}
@@ -1250,9 +1252,31 @@ func (d *DiffEditorWidget) ClearSelection() {
 	}
 }
 
-func (d *DiffEditorWidget) CopySelection() string {
-	p := d.lead()
-	if !p.Selection.Active {
+func (d *DiffEditorWidget) selectionPane() *EditorPaneWidget {
+	lead := d.lead()
+	if lead != nil && lead.Selection.Active {
+		return lead
+	}
+	if d.IsUnified() {
+		return nil
+	}
+	for _, p := range d.viewPanes() {
+		if p != nil && p.Selection.Active {
+			return p
+		}
+	}
+	return nil
+}
+
+func (d *DiffEditorWidget) HasReadOnlySelection() bool {
+	p := d.selectionPane()
+	return p != nil && p.ReadOnly
+}
+
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (d *DiffEditorWidget) SelectedText() string {
+	p := d.selectionPane()
+	if p == nil {
 		return ""
 	}
 	start, end := p.Selection.Range(p.Cursor.Line, p.Cursor.Col)
@@ -1260,9 +1284,17 @@ func (d *DiffEditorWidget) CopySelection() string {
 		Anchor:  diffSelPos{Line: start.Line, Col: start.Col},
 		Current: diffSelPos{Line: end.Line, Col: end.Col},
 	}
-	text := sel.Text(len(p.Buf.Lines), func(line int) (string, bool) {
+	return sel.Text(len(p.Buf.Lines), func(line int) (string, bool) {
 		return p.Buf.Lines[line], p.DiffOverlay.kind(line) != diff.Collapsed
 	})
+}
+
+func (d *DiffEditorWidget) CopySelection() string {
+	p := d.selectionPane()
+	if p == nil {
+		return ""
+	}
+	text := d.SelectedText()
 	if text != "" {
 		p.Selection.Clear()
 	}

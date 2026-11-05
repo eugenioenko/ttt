@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
@@ -9,9 +10,35 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
+func (a *App) selectedSearchText() string {
+	if a.EditorGroup == nil {
+		return ""
+	}
+	text := a.EditorGroup.SelectedText()
+	if text == "" || strings.Contains(text, "\n") || strings.Contains(text, "\r") {
+		return ""
+	}
+	return text
+}
+
+func (a *App) prefillSearchInput(input *ui.InputWidget) {
+	if text := a.selectedSearchText(); text != "" && text != input.Text {
+		input.SetText(text)
+	}
+}
+
+func (a *App) prefillFindBar(bar *ui.FindBarWidget) {
+	navigate := bar.OnNavigate
+	// Prefill must preserve the cursor that defines the editor selection.
+	bar.OnNavigate = nil
+	a.prefillSearchInput(bar.Input)
+	bar.OnNavigate = navigate
+}
+
 func (a *App) OpenFind() {
 	if a.Root.HasOverlay() {
 		if fb, ok := a.Root.TopOverlayWidget().(*ui.FindBarWidget); ok {
+			a.prefillFindBar(fb)
 			fb.Focus()
 		}
 		return
@@ -42,6 +69,7 @@ func (a *App) OpenFind() {
 	}
 	findBar.OnNavigate = func(match ui.FindMatch) {
 		a.EditorGroup.SetSearchActive(findBar.Current)
+		a.EditorGroup.Editor.Selection.Clear()
 		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
 		a.EditorGroup.Editor.Cursor.Line = match.Line
 		a.EditorGroup.Editor.Cursor.Col = match.Col
@@ -56,6 +84,7 @@ func (a *App) OpenFind() {
 		findBar.Refresh()
 		a.EditorGroup.SetSearchActive(findBar.Current)
 	}
+	a.prefillFindBar(findBar)
 	a.ShowFindBar(findBar)
 }
 
@@ -99,9 +128,20 @@ func (a *App) findBar() findBar {
 	return bar
 }
 
+func (a *App) prefillReplaceInput(input *ui.InputWidget) {
+	if !a.EditorGroup.IsEditorActive() || a.EditorGroup.IsActiveReadOnly() {
+		return
+	}
+	if dv := a.EditorGroup.ActiveInlineDiff(); dv != nil && (dv.KeyPane().ReadOnly || dv.HasReadOnlySelection()) {
+		return
+	}
+	a.prefillSearchInput(input)
+}
+
 func (a *App) OpenFindReplace() {
 	if a.Root.HasOverlay() {
 		if bar, ok := a.Root.TopOverlayWidget().(*ui.ReplaceBarWidget); ok {
+			a.prefillReplaceInput(bar.SearchInput)
 			bar.Focus()
 		}
 		return
@@ -120,6 +160,7 @@ func (a *App) OpenFindReplace() {
 	}
 	bar.OnNavigate = func(match ui.FindMatch) {
 		a.EditorGroup.SetSearchActive(bar.Current)
+		a.EditorGroup.Editor.Selection.Clear()
 		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
 		a.EditorGroup.Editor.Cursor.Line = match.Line
 		a.EditorGroup.Editor.Cursor.Col = match.Col
@@ -135,6 +176,7 @@ func (a *App) OpenFindReplace() {
 		a.DismissDialog()
 		a.EditorGroup.ClearSearch()
 	}
+	a.prefillReplaceInput(bar.SearchInput)
 	a.ShowFindBar(bar)
 }
 
