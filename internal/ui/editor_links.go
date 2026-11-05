@@ -2,17 +2,22 @@ package ui
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
 )
 
 // Clipped links get at most 2048 runes of context per side; targets crossing that bound are omitted.
 const editorLinkLookaround = 2048
+
+// FileLinkResolver checks paths off-thread and delivers apply on the UI goroutine.
+type FileLinkResolver func(paths []string, dir string, apply func(map[string]string))
 
 type linkPoint struct{ x, y int }
 type editorLinkCell struct {
@@ -25,6 +30,12 @@ type editorLinkLine struct {
 	window      editorLinkWindow
 	first, last int
 }
+type editorLinkFrame struct {
+	viewport view.Viewport
+	rect     Rect
+	offset   int
+	wrap     bool
+}
 type editorLinks struct {
 	active, pressed bool
 	cells           []editorLinkCell
@@ -34,7 +45,12 @@ type editorLinks struct {
 	buf             *buffer.Buffer
 	version         uint64
 	dir             string
-	detect          func(string, string) []linkSpan
+	detect          func(string) []linkSpan
+	windows         []editorLinkWindow
+	resolved        map[string]string
+	generation      uint64
+	pending         bool
+	frame           editorLinkFrame
 }
 
 func (t *editorTab) diffWidget() *DiffEditorWidget {
@@ -54,6 +70,7 @@ func (g *EditorGroupWidget) configurePaneLinks(e *EditorPaneWidget, path string)
 	}
 	e.LinkWorkDir = dir
 	e.OnOpenURL, e.OnOpenFile, e.OnLinkHover = g.OnOpenURL, g.OnOpenFileLink, g.OnLinkHover
+	e.ResolveFileLinks = g.ResolveFileLinks
 }
 
 func (r *Root) TrackEditorLinkHover(e *EditorPaneWidget) {
@@ -75,6 +92,8 @@ func (r *Root) ClearEditorLinkHover() {
 
 func (e *EditorPaneWidget) clearLinkHover() {
 	e.links.active = false
+	e.links.generation++
+	e.links.pending = false
 	clear(e.links.hits)
 }
 
@@ -107,6 +126,9 @@ func (e *EditorPaneWidget) beginLinkFrame() bool {
 	clear(l.hits)
 	if l.buf != e.Buf || l.version != e.Buf.Version() || l.dir != e.LinkWorkDir {
 		l.memo = nil
+		l.resolved = nil
+		l.generation++
+		l.pending = false
 		l.buf, l.version, l.dir = e.Buf, e.Buf.Version(), e.LinkWorkDir
 	}
 	return l.active && (e.OnOpenURL != nil || e.OnOpenFile != nil)
@@ -157,9 +179,9 @@ func (e *EditorPaneWidget) linksForWindow(window editorLinkWindow) []linkSpan {
 	text, col, clippedLeft, clippedRight := visibleLinkWindow(e.Buf.Lines[window.line], window.start, window.end, window.col)
 	detect := l.detect
 	if detect == nil {
-		detect = detectLinks
+		detect = detectLinkCandidates
 	}
-	spans := detect(text, e.LinkWorkDir)
+	spans := detect(text)
 	complete := spans[:0]
 	for _, span := range spans {
 		// Trailing punctuation may have been trimmed by detection at a clipped edge.
@@ -176,6 +198,7 @@ func (e *EditorPaneWidget) linksForWindow(window editorLinkWindow) []linkSpan {
 
 func (e *EditorPaneWidget) renderLinks(surface Surface) {
 	l := &e.links
+	e.resolveVisibleFileLinks()
 	if l.hits == nil {
 		l.hits = make(map[linkPoint]*linkSpan)
 	}
@@ -186,6 +209,15 @@ func (e *EditorPaneWidget) renderLinks(surface Surface) {
 				span := &spans[i]
 				if c.col >= span.StartCol && c.col < span.EndCol &&
 					((span.IsFile && e.OnOpenFile != nil) || (!span.IsFile && e.OnOpenURL != nil)) {
+					if span.IsFile {
+						path := l.resolved[span.FilePath]
+						if path == "" {
+							continue
+						}
+						resolved := *span
+						resolved.FilePath = path
+						span = &resolved
+					}
 					c.cell.Underline = c.cell.UlStyle == 0
 					surface.SetCell(c.point.x, c.point.y, c.cell)
 					l.hits[c.point] = span
@@ -194,6 +226,63 @@ func (e *EditorPaneWidget) renderLinks(surface Surface) {
 			}
 		}
 	}
+}
+
+func (e *EditorPaneWidget) linkFrame() editorLinkFrame {
+	return editorLinkFrame{*e.Viewport, e.GetRect(), e.topRowOffset, e.WordWrap}
+}
+
+func (e *EditorPaneWidget) resolveVisibleFileLinks() {
+	l := &e.links
+	windows := make([]editorLinkWindow, len(l.lines))
+	for i, line := range l.lines {
+		windows[i] = line.window
+	}
+	frame := e.linkFrame()
+	if frame != l.frame || !slices.Equal(windows, l.windows) {
+		l.windows, l.frame = windows, frame
+		l.generation++
+		l.pending = false
+	}
+	files := make(map[string]bool)
+	for _, line := range l.lines {
+		for _, span := range e.linksForWindow(line.window) {
+			if span.IsFile && e.OnOpenFile != nil && span.StartCol <= l.cells[line.last-1].col && span.EndCol > l.cells[line.first].col {
+				files[span.FilePath] = true
+			}
+		}
+	}
+	for path := range l.resolved {
+		if !files[path] {
+			delete(l.resolved, path)
+		}
+	}
+	var paths []string
+	for path := range files {
+		if _, ok := l.resolved[path]; !ok {
+			paths = append(paths, path)
+		}
+	}
+	if len(paths) == 0 || l.pending || e.ResolveFileLinks == nil {
+		return
+	}
+	l.pending = true
+	generation, buf, version, dir := l.generation, l.buf, l.version, l.dir
+	e.ResolveFileLinks(paths, dir, func(resolved map[string]string) {
+		if l.generation != generation {
+			return
+		}
+		l.pending = false
+		if !l.active || e.Buf != buf || e.Buf.Version() != version || e.LinkWorkDir != dir || e.linkFrame() != frame {
+			return
+		}
+		if l.resolved == nil {
+			l.resolved = make(map[string]string)
+		}
+		for _, path := range paths {
+			l.resolved[path] = resolved[path]
+		}
+	})
 }
 
 func (e *EditorPaneWidget) editorLinkAt(mx, my int) (linkSpan, bool) {

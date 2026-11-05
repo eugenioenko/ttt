@@ -103,6 +103,7 @@ type EditorPaneWidget struct {
 	OnOpenURL               func(string)
 	OnOpenFile              func(string, int, int)
 	OnLinkHover             func(*EditorPaneWidget)
+	ResolveFileLinks        FileLinkResolver
 	topRowOffset            int
 	topOffsetLine           int
 	wrapGoal                wrapGoal

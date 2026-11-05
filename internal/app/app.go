@@ -156,6 +156,8 @@ type App struct {
 	eventLoopCloseOnce    sync.Once
 	eventLoopDone         chan struct{}
 	tasks                 taskOwner
+	fileLinks             *asynctask.Task[map[string]string]
+	resolveFileLink       func(string, string) string
 	searchReplace         searchReplaceState
 
 	// lspSent holds, per document, a channel closed once its latest didOpen or

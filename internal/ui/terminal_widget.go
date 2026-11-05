@@ -148,6 +148,21 @@ func byteToRunePos(s string, byteIdx int) int {
 }
 
 func detectLinks(text string, workDir string) []linkSpan {
+	spans := detectLinkCandidates(text)
+	resolved := spans[:0]
+	for _, span := range spans {
+		if span.IsFile {
+			span.FilePath = ResolveFilePath(span.FilePath, workDir)
+			if span.FilePath == "" {
+				continue
+			}
+		}
+		resolved = append(resolved, span)
+	}
+	return resolved
+}
+
+func detectLinkCandidates(text string) []linkSpan {
 	var spans []linkSpan
 
 	for _, loc := range urlRe.FindAllStringIndex(text, -1) {
@@ -177,11 +192,6 @@ func detectLinks(text string, workDir string) []linkSpan {
 			continue
 		}
 
-		resolvedPath := resolveFilePath(filePath, workDir)
-		if resolvedPath == "" {
-			continue
-		}
-
 		spanEnd := match[5]
 		colNum := 0
 		if match[6] != -1 {
@@ -208,7 +218,7 @@ func detectLinks(text string, workDir string) []linkSpan {
 			StartCol: startCol,
 			EndCol:   endCol,
 			IsFile:   true,
-			FilePath: resolvedPath,
+			FilePath: filePath,
 			Line:     lineNum,
 			Col:      colNum,
 		})
@@ -217,7 +227,7 @@ func detectLinks(text string, workDir string) []linkSpan {
 	return spans
 }
 
-func resolveFilePath(path string, workDir string) string {
+func ResolveFilePath(path string, workDir string) string {
 	if path == "" {
 		return ""
 	}
