@@ -135,14 +135,14 @@ func handIf(clickable bool) string {
 }
 
 func (g *EditorGroupWidget) PointerShapeAt(mx, my int) string {
-	// Hover and completion popups are painted over the text and take its clicks.
-	if g.Hover != nil && g.Hover.GetRect().Contains(mx, my) {
-		return term.PointerDefault
-	}
-	if g.Autocomplete != nil && g.Autocomplete.GetRect().Contains(mx, my) {
-		return term.PointerDefault
-	}
-	if !g.Editor.mouseDown {
+	if !g.contentOwnsPointerCapture() {
+		// Hover and completion popups are painted over the text and take its clicks.
+		if g.Hover != nil && g.Hover.GetRect().Contains(mx, my) {
+			return term.PointerDefault
+		}
+		if g.Autocomplete != nil && g.Autocomplete.GetRect().Contains(mx, my) {
+			return term.PointerDefault
+		}
 		if shape := g.TabBar.PointerShapeAt(mx, my); shape != "" {
 			return shape
 		}
