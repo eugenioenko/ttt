@@ -357,6 +357,16 @@
     "tags": ["grammar", "just", "justfile"]
   },
   {
+    "name": "lang-cpp-header",
+    "displayName": "C/C++ Header Syntax Highlighting",
+    "author": "eugenioenko",
+    "description": "Syntax highlighting for .h header files using ttt's built-in C++ grammar",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lang-cpp-header",
+    "version": "0.1.0",
+    "tags": ["grammar", "c", "cpp", "header"]
+  },
+  {
     "name": "lsp-go",
     "displayName": "Go Language Server",
     "author": "eugenioenko",
