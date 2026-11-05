@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,7 +41,11 @@ func screenRowContaining(h *testHarness, text string) int {
 func TestEditorSelectionKeepsTextPointerThroughDrag(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	path := filepath.Join(h.dir, "select.txt")
+	if err := os.WriteFile(path, []byte("hello world\nsecond line\nthird line\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(path)
 	h.app.EditorGroup.CommitActiveTab()
 	h.app.ShowBottomPanel()
 	h.redraw()
@@ -49,7 +54,7 @@ func TestEditorSelectionKeepsTextPointerThroughDrag(t *testing.T) {
 	r := e.GetRect()
 	x, y := r.X+e.GutterWidth()+2, r.Y
 	tabsY := h.app.EditorGroup.TabBar.GetRect().Y + 1
-	tabX := displayColumnOf(h.screenRow(tabsY), "alpha.txt")
+	tabX := displayColumnOf(h.screenRow(tabsY), "select.txt")
 	if tabX < 0 {
 		t.Fatalf("tab label not visible in %q", h.screenRow(tabsY))
 	}
@@ -67,6 +72,9 @@ func TestEditorSelectionKeepsTextPointerThroughDrag(t *testing.T) {
 	})
 	if !e.Selection.Active {
 		t.Fatal("drag did not select text")
+	}
+	if got, want := h.app.EditorGroup.SelectedText(), "llo world\nsecond"; got != want {
+		t.Fatalf("selected text = %q, want %q", got, want)
 	}
 }
 
