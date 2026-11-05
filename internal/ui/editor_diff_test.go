@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
@@ -194,7 +195,7 @@ func TestEditorRendersFillerAndGapRows(t *testing.T) {
 	if grid[4][g+1].Style != term.StyleMuted {
 		t.Errorf("gap label style = %v, want muted", grid[4][g+1].Style)
 	}
-	if got := gutterText(grid, 4, g); got != "▸" {
+	if got := gutterText(grid, 4, g); got != string(icons.PlainChevronRight) {
 		t.Errorf("gap row gutter = %q, want the expand chevron", got)
 	}
 }

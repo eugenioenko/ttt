@@ -3,6 +3,7 @@ package widgets
 import (
 	"fmt"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -28,7 +29,7 @@ type pagerHit struct {
 	offset int
 }
 
-var pagerArrows = [4]string{" « ", " ‹ ", " › ", " » "}
+var pagerArrows = [4]string{" « ", " " + string(icons.PlainChevronLeft) + " ", " " + string(icons.PlainChevronRight) + " ", " » "}
 
 func NewPagerWidget(cfg PagerConfig) *PagerWidget {
 	return &PagerWidget{Config: cfg}

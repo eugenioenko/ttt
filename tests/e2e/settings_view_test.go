@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -203,7 +204,7 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	clickRowControl(t, h, "Default", "Default")
 
 	screen := h.screenText()
-	if !strings.Contains(screen, "▴") {
+	if !strings.Contains(screen, string(icons.PlainChevronUp)) {
 		t.Errorf("chevron should point up while open:\n%s", screen)
 	}
 	if !strings.Contains(screen, "default-dark") {
@@ -216,7 +217,7 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	if strings.Contains(screen, "dracula") {
 		t.Errorf("popup should close after picking an item:\n%s", screen)
 	}
-	if !rowHas(h, "default-dark", "▾") {
+	if !rowHas(h, "default-dark", string(icons.PlainChevronDown)) {
 		t.Errorf("select should display the picked value:\n%s", screen)
 	}
 

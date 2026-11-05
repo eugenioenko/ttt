@@ -1,9 +1,11 @@
 package widgets
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -18,13 +20,13 @@ func TestPagerShowsRangeAndDisablesEdges(t *testing.T) {
 	p := NewPagerWidget(PagerConfig{Offset: 0, Limit: 20, Total: 85})
 	s := renderWidget(p, 0, 0, 40, 1)
 
-	if got := rowText(s, 0); got != " «   ‹   1–20 of 85   ›   »" {
+	if got := rowText(s, 0); got != fmt.Sprintf(" «   %c   1–20 of 85   %c   »", icons.PlainChevronLeft, icons.PlainChevronRight) {
 		t.Fatalf("pager text = %q", got)
 	}
-	if s.cells[0][pagerColumn(s, '«')].Style != term.StyleMuted || s.cells[0][pagerColumn(s, '‹')].Style != term.StyleMuted {
+	if s.cells[0][pagerColumn(s, '«')].Style != term.StyleMuted || s.cells[0][pagerColumn(s, icons.PlainChevronLeft)].Style != term.StyleMuted {
 		t.Error("first and previous should be muted on the first page")
 	}
-	if s.cells[0][pagerColumn(s, '›')].Style != term.StyleButton || s.cells[0][pagerColumn(s, '»')].Style != term.StyleButton {
+	if s.cells[0][pagerColumn(s, icons.PlainChevronRight)].Style != term.StyleButton || s.cells[0][pagerColumn(s, '»')].Style != term.StyleButton {
 		t.Error("next and last should be enabled")
 	}
 	if got := p.Width(); got != textwidth.String(rowText(s, 0))+1 {
@@ -71,7 +73,7 @@ func TestPagerHeldButtonDoesNotRepeat(t *testing.T) {
 	calls := 0
 	p := NewPagerWidget(PagerConfig{Offset: 0, Limit: 10, Total: 100, OnChange: func(int) { calls++ }})
 	s := renderWidget(p, 0, 0, 40, 1)
-	x := pagerColumn(s, '›')
+	x := pagerColumn(s, icons.PlainChevronRight)
 
 	p.HandleEvent(mouseClick(x, 0))
 	p.HandleEvent(mouseClick(x, 0))
@@ -106,7 +108,7 @@ func TestPagerIgnoresClicksOnItsPadding(t *testing.T) {
 	p := NewPagerWidget(PagerConfig{Limit: 10, Total: 100, OnChange: func(int) { calls++ }})
 	p.Box.PaddingTop = 1
 	s := renderWidget(p, 0, 0, 40, 2)
-	x := textwidth.String(rowText(s, 1)[:strings.IndexRune(rowText(s, 1), '›')])
+	x := textwidth.String(rowText(s, 1)[:strings.IndexRune(rowText(s, 1), icons.PlainChevronRight)])
 	p.HandleEvent(mouseClick(x, 0))
 	p.HandleEvent(mouseRelease(x, 0))
 	if calls != 0 {

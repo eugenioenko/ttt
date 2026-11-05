@@ -44,8 +44,8 @@ Both write the same file, so you can move between them freely.
 "appearance": {
   "icons": "nerd-font",
   "overrides": {
-    "chevron-right": "▸",
-    "chevron-down": "▾",
+    "chevron-right": "›",
+    "chevron-down": "⌄",
     "close": "✕"
   }
 }
@@ -59,12 +59,12 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 
 | Name | Plain | Nerd Font | Used for |
 |---|---|---|---|
-| `chevron-right` | `▸` | `\ueab6` | Collapsed folder or group in trees, collapsed fold in the editor gutter |
-| `chevron-down` | `▾` | `\ueab4` | Expanded folder or group, expanded fold while hovering the gutter |
-| `chevron-up` | `▴` | `\ueab7` | Open select dropdown |
+| `chevron-right` | `›` | `\ueab6` | Collapsed folder or group in trees, collapsed fold in the editor gutter |
+| `chevron-down` | `⌄` | `\ueab4` | Expanded folder or group, expanded fold while hovering the gutter |
+| `chevron-up` | `⌃` | `\ueab7` | Open select dropdown |
 | `submenu` | `›` | `\ueab6` | Context menu item with a submenu |
-| `arrow-left` | `◂` | `\ueb6f` | Tab strip overflow, left |
-| `arrow-right` | `▸` | `\ueb70` | Tab strip overflow, right |
+| `arrow-left` | `‹` | `\ueb6f` | Tab strip overflow, left |
+| `arrow-right` | `›` | `\ueb70` | Tab strip overflow, right |
 | `close` | `✕` | `✕` | Tab close button |
 | `dirty` | `●` | `●` | Unsaved changes marker in tabs |
 | `pinned` | `♦` | `\ueba0` | Pinned tab |
