@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -458,6 +459,7 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 
 	tw := ui.NewTerminalWidget(t, a.Palette)
 	tw.WorkDir = spec.Cwd
+	tw.ResolveFileLink = resolveFilePath
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
 	tw.OnOpenURL = OpenURL
 	tw.OnOpenFile = a.openFileLink
@@ -833,17 +835,28 @@ func (a *App) StatusNotify(msg string) { a.statusMessage(msg, view.NotifyInfo) }
 func (a *App) StatusWarn(msg string)   { a.statusMessage(msg, view.NotifyWarning) }
 func (a *App) StatusError(msg string)  { a.statusMessage(msg, view.NotifyError) }
 
-func OpenURL(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
+func OpenURL(rawURL string) {
+	cmd := openURLCommand(rawURL, runtime.GOOS)
+	if cmd != nil {
+		cmd.Start()
 	}
-	cmd.Start()
+}
+
+func openURLCommand(rawURL, platform string) *exec.Cmd {
+	u, err := url.Parse(rawURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil
+	}
+	var cmd *exec.Cmd
+	switch platform {
+	case "darwin":
+		cmd = exec.Command("open", rawURL)
+	case "windows":
+		cmd = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", rawURL)
+	default:
+		cmd = exec.Command("xdg-open", rawURL)
+	}
+	return cmd
 }
 
 func (a *App) FlushEditorOnChange() {

@@ -190,6 +190,7 @@ func (r *Root) rawKeysFocused() bool {
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	// Overlays and global shortcuts can consume input before the hovered pane sees it.
+	linkPress := r.linkHover != nil && r.linkHover.links.pressed
 	if r.linkHover != nil {
 		r.linkHover.observeLinkInput(ev)
 	}
@@ -204,6 +205,12 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		r.focusClaimed = false
 	}
 	r.button1Held = held
+	if linkPress {
+		if released {
+			r.pressTarget = nil
+		}
+		return EventConsumed
+	}
 	receiver, modal := r.pointerTarget()
 	r.mouseReceiver = nil
 	result := r.dispatch(ev)

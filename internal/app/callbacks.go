@@ -383,7 +383,7 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 	if data, err := os.ReadFile(fullPath); err == nil {
 		newLines = diffSideLines(string(data))
 	}
-	a.EditorGroup.OpenDiff(status.Path, parsed, oldLines, newLines, extended)
+	a.EditorGroup.OpenDiffTab(status.Path+" (diff)", "", fullPath, parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
 }
 
@@ -422,7 +422,7 @@ func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
 			oldLines = diffSideLines(content)
 		}
 	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", status.Path, parsed, oldLines, newLines, extended)
+	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", filepath.Join(dir, status.Path), parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
 }
 
@@ -478,7 +478,7 @@ func readCommitDiff(ctx context.Context, dir, ref, short string, status git.File
 	return &diffOpenResult{
 		TabName:  fmt.Sprintf("%s:%s (diff)", ref, status.Path),
 		Title:    fmt.Sprintf("%s @ %s", filepath.Base(status.Path), short),
-		Path:     status.Path,
+		Path:     filepath.Join(dir, status.Path),
 		Diff:     parsed,
 		OldLines: oldLines,
 		NewLines: newLines,
@@ -509,7 +509,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 		a.StatusWarn("Empty diff for " + status.Path)
 		return
 	}
-	a.EditorGroup.OpenDiff(status.Path, parsed, nil, nil, false)
+	a.EditorGroup.OpenDiffTab(status.Path+" (diff)", "", filepath.Join(group.Dir, status.Path), parsed, nil, nil, false)
 	if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
 		dv.SetExtendedFetcher(func(dv *ui.DiffEditorWidget) {
 			a.fetchPRFileContent(dv, group.PROwner, group.PRRepo, group.PRBaseSHA, group.PRHeadSHA, status.Path)

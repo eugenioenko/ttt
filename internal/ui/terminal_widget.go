@@ -49,14 +49,15 @@ type TerminalWidget struct {
 	selAnchor  termSelPos
 	selCurrent termSelPos
 
-	OnOpenURL      func(url string)
-	OnOpenFile     func(path string, line, col int)
-	WorkDir        string
-	SelectionStyle string
-	CtrlVPastes    bool
-	ctrlHeld       bool
-	linkCache      map[int][]linkSpan
-	linkMemo       map[string][]linkSpan
+	OnOpenURL       func(url string)
+	OnOpenFile      func(path string, line, col int)
+	WorkDir         string
+	ResolveFileLink func(string, string) string
+	SelectionStyle  string
+	CtrlVPastes     bool
+	ctrlHeld        bool
+	linkCache       map[int][]linkSpan
+	linkMemo        map[string][]linkSpan
 
 	// SGR button code of a held press being forwarded, or -1 when none.
 	mouseButtonHeld int
@@ -134,10 +135,6 @@ func extractLineText(buf *xterm.Buffer, unifiedLine int, maxCols int) string {
 	return line.TranslateToString(false, 0, endCol)
 }
 
-// linksForLine returns the link spans for a line of terminal text, memoized
-// by the line's text. Detection runs the regexes plus an os.Stat per file
-// candidate, so caching per unique text keeps Render cheap while Ctrl is held
-// (unchanged lines cost a map lookup per frame instead of stats).
 func (tw *TerminalWidget) linksForLine(text string) []linkSpan {
 	if spans, ok := tw.linkMemo[text]; ok {
 		return spans
@@ -145,7 +142,7 @@ func (tw *TerminalWidget) linksForLine(text string) []linkSpan {
 	if tw.linkMemo == nil || len(tw.linkMemo) >= linkMemoMax {
 		tw.linkMemo = make(map[string][]linkSpan)
 	}
-	spans := detectLinks(text, tw.WorkDir)
+	spans := resolveLinks(detectLinks(text), tw.WorkDir, tw.ResolveFileLink)
 	tw.linkMemo[text] = spans
 	return spans
 }

@@ -62,7 +62,7 @@ func TestDetectLinks_URLs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spans := detectLinks(tt.input, "")
+			spans := detectLinks(tt.input)
 			var urls []string
 			for _, s := range spans {
 				if !s.IsFile {
@@ -171,7 +171,7 @@ func TestDetectLinks_FileReferences(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spans := detectLinks(tt.input, tt.workDir)
+			spans := resolvedTestLinks(tt.input, tt.workDir)
 			var fileSpans []linkSpan
 			for _, s := range spans {
 				if s.IsFile {
@@ -203,7 +203,7 @@ func TestDetectLinks_FileReferences(t *testing.T) {
 
 func TestDetectLinks_URLSpanPositions(t *testing.T) {
 	input := "See https://example.com here"
-	spans := detectLinks(input, "")
+	spans := detectLinks(input)
 	if len(spans) != 1 {
 		t.Fatalf("expected 1 span, got %d", len(spans))
 	}
@@ -222,7 +222,7 @@ func TestDetectLinks_MixedURLAndFile(t *testing.T) {
 	os.WriteFile(testFile, []byte("package main\n"), 0644)
 
 	input := "See https://example.com and ./test.go:10"
-	spans := detectLinks(input, tmpDir)
+	spans := resolvedTestLinks(input, tmpDir)
 
 	var urls, files int
 	for _, s := range spans {
@@ -241,36 +241,31 @@ func TestDetectLinks_MixedURLAndFile(t *testing.T) {
 }
 
 func TestDetectLinks_EmptyLine(t *testing.T) {
-	spans := detectLinks("", "")
+	spans := detectLinks("")
 	if len(spans) != 0 {
 		t.Errorf("expected no spans for empty line, got %d", len(spans))
 	}
 }
 
-func TestResolveFilePath_HomeTilde(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("cannot determine home directory")
+func resolveTestFileLink(path, dir string) string {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
 	}
-	result := resolveFilePath("~/", "")
-	if result != home {
-		_ = result
+	if _, err := os.Stat(path); err == nil {
+		return path
 	}
+	return ""
 }
 
-func TestResolveFilePath_Empty(t *testing.T) {
-	result := resolveFilePath("", "/some/dir")
-	if result != "" {
-		t.Errorf("expected empty result for empty path, got %q", result)
-	}
+func resolvedTestLinks(text, dir string) []linkSpan {
+	return resolveLinks(detectLinks(text), dir, resolveTestFileLink)
 }
-
 func TestLinksForLine_Memoizes(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "main.go")
 	os.WriteFile(testFile, []byte("package main\n"), 0644)
 
-	tw := &TerminalWidget{WorkDir: tmpDir}
+	tw := &TerminalWidget{WorkDir: tmpDir, ResolveFileLink: resolveTestFileLink}
 	line := "err at ./main.go:3"
 
 	first := tw.linksForLine(line)

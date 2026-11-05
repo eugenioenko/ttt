@@ -107,9 +107,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.rowMap = layout.appendRows(e.rowMap[:0], e.Viewport.TopLine, e.topOffset(), h)
 	e.rowMapTop = e.Viewport.TopLine
 	e.rowMapOffset = e.topOffset()
-	e.beginLinkFrame()
-	linksEnabled := e.OnOpenURL != nil || e.OnOpenFile != nil
-	decorateLinks := linksEnabled && e.links.active
+	decorateLinks := e.beginLinkFrame()
 	topRow := e.topRow(layout)
 
 	// A pane narrowed to a shared wrap width leaves columns past its text
@@ -354,24 +352,23 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					cell.Attrs |= term.CellAttrHide
 				}
 				surface.SetCell(gutterW+x, y, cell)
-				if linksEnabled && inText && !hide && screenCells[x].width > 0 {
+				if decorateLinks && inText && !hide && screenCells[x].width > 0 {
 					if len(e.links.cells) == linkFirst {
 						linkWindow.col = colIdx
 						linkWindow.start = segmentByte + screenCells[x].byteCol
 					}
 					linkWindow.end = segmentByte + screenCells[x].byteCol + screenCells[x].byteLen
 					for dx := 0; dx < screenCells[x].width; dx++ {
-						e.links.cells = append(e.links.cells, editorLinkCell{position: y*editorW + x + dx, col: colIdx})
-						if decorateLinks {
-							if dx > 0 {
-								cell.Ch = ' '
-							}
-							e.links.styles = append(e.links.styles, cell)
+						if dx > 0 {
+							cell.Ch = ' '
 						}
+						e.links.cells = append(e.links.cells, editorLinkCell{linkPoint{gutterW + x + dx, y}, colIdx, cell})
 					}
 				}
 			}
-			e.links.finishRow(linkWindow, linkFirst)
+			if decorateLinks {
+				e.links.finishRow(linkWindow, linkFirst)
+			}
 		} else {
 			for x := 0; x < editorW; x++ {
 				surface.SetCell(gutterW+x, y, term.Cell{Ch: ' '})
@@ -379,7 +376,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		}
 	}
 
-	e.renderLinks(surface)
+	if decorateLinks {
+		e.renderLinks(surface)
+	}
 	scrollbarCol := w - 1
 	if showHScrollbar {
 		scrollbarCol = w - 1

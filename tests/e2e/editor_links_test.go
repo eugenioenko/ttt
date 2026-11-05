@@ -3,131 +3,143 @@ package e2e
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
 
-func TestEditorLinkNavigationThroughApp(t *testing.T) {
-	h := newTestHarness(t, 100, 25)
-	defer h.stop()
-	source := filepath.Join(h.dir, "subdir", "links.txt")
-	target := filepath.Join(h.dir, "subdir", "target.txt")
-	for path, text := range map[string]string{
-		source: "https://example.com\ntarget.txt:2:3",
-		target: "first\nsecond target\nthird",
-	} {
-		if err := os.WriteFile(path, []byte(text), 0600); err != nil {
-			t.Fatal(err)
+func (h *testHarness) ctrlClickText(text string) {
+	h.t.Helper()
+	h.redraw()
+	for y := 0; y < h.app.Root.Height; y++ {
+		if col := displayColumnOf(h.screenRow(y), text); col >= 0 {
+			x := col + 1
+			h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
+			h.redraw()
+			if h.app.Root.PointerShapeAt(x, y) != term.PointerHand {
+				h.t.Fatalf("missing link pointer for %q", text)
+			}
+			for range 2 {
+				h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModCtrl))
+				h.redraw()
+			}
+			h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
+			return
 		}
 	}
-	if err := h.app.EditorGroup.OpenFile(source); err != nil {
-		t.Fatal(err)
-	}
-	h.app.EditorGroup.CommitActiveTab()
-	h.app.FocusEditor()
-	var urls []string
-	h.app.EditorGroup.OnOpenURL = func(s string) { urls = append(urls, s) }
-	h.redraw()
-	e := h.app.EditorGroup.Editor
-	r := e.GetRect()
-	x, y := r.X+e.GutterWidth()+2, r.Y
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
-	h.redraw()
-	if shape := h.app.Root.PointerShapeAt(x, y); shape != term.PointerHand {
-		t.Fatalf("link pointer = %q", shape)
-	}
-	for range 2 {
-		h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModCtrl))
-		h.redraw()
-	}
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
-	if len(urls) != 1 || urls[0] != "https://example.com" || e.Selection.Active {
-		t.Fatalf("URLs=%v selection=%+v", urls, e.Selection)
-	}
-	h.app.Root.HandleEvent(tcell.NewEventMouse(0, 0, 0, tcell.ModCtrl))
-	h.redraw()
-	if shape := h.app.Root.PointerShapeAt(x, y); shape == term.PointerHand {
-		t.Fatal("link hover survived leaving the pane")
-	}
-	h.app.Screen.SetPointerShapesEnabled(false)
-	y++
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, 0))
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModCtrl))
-	h.redraw()
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModCtrl))
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
-	if got := h.app.EditorGroup.ActiveFilePath(); got != target {
-		t.Fatalf("opened %q, want source-relative %q", got, target)
-	}
-	cur := h.app.EditorGroup.Editor.Cursor
-	if cur.Line != 1 || cur.Col != 2 {
-		t.Fatalf("file link cursor = %d:%d", cur.Line, cur.Col)
-	}
-	if h.app.Root.Focused != h.app.EditorGroup {
-		t.Fatal("file link did not focus editor")
+	h.t.Fatalf("missing %q:\n%s", text, h.screenText())
+}
+
+func TestEditorLinkNavigationThroughApp(t *testing.T) {
+	for _, untitled := range []bool{false, true} {
+		h := newTestHarness(t, 100, 25)
+		defer h.stop()
+		g := h.app.EditorGroup
+		target := filepath.Join(h.dir, "subdir", "nested.txt")
+		if untitled {
+			g.NewFile()
+			h.redraw()
+			h.app.PasteText("https://example.com\nsubdir/nested.txt:1:2")
+		} else {
+			source := filepath.Join(h.dir, "subdir", "links.txt")
+			if err := os.WriteFile(source, []byte("https://example.com\nnested.txt:1:2"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := g.OpenFile(source); err != nil {
+				t.Fatal(err)
+			}
+		}
+		h.app.FocusEditor()
+		opened := 0
+		g.OnOpenURL = func(url string) {
+			opened++
+			if url != "https://example.com" {
+				t.Fatalf("opened URL %q", url)
+			}
+		}
+		h.ctrlClickText("https://example.com")
+		if opened != 1 {
+			t.Fatalf("opened URL %d times", opened)
+		}
+		h.app.Screen.SetPointerShapesEnabled(false)
+		h.ctrlClickText("nested.txt:1:2")
+		if g.ActiveFilePath() != target || g.Editor.Cursor.Line != 0 || g.Editor.Cursor.Col != 1 || h.app.Root.Focused != g {
+			t.Fatalf("file link navigation failed: %q at %+v", g.ActiveFilePath(), g.Editor.Cursor)
+		}
 	}
 }
 
-func TestUntitledEditorLinkUsesWorkspace(t *testing.T) {
-	h := newTestHarness(t, 100, 25)
-	defer h.stop()
-	h.app.EditorGroup.NewFile()
-	h.app.PasteText("subdir/nested.txt:1:2")
-	h.redraw()
-	e := h.app.EditorGroup.Editor
-	r := e.GetRect()
-	x, y := r.X+e.GutterWidth()+1, r.Y
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModCtrl))
-	h.redraw()
-	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
-	if got := h.app.EditorGroup.ActiveFilePath(); got != filepath.Join(h.dir, "subdir", "nested.txt") {
-		t.Fatalf("workspace-relative file link opened %q", got)
-	}
-	if col := e.Cursor.Col; col != 1 {
-		t.Fatalf("file link column = %d", col)
+func TestEditorFileLinksInSecondaryRepositoryDiff(t *testing.T) {
+	for _, kind := range []string{"staged", "deleted", "commit", "pr"} {
+		t.Run(kind, func(t *testing.T) {
+			h := newTestHarness(t, 120, 25)
+			defer h.stop()
+			repo := t.TempDir()
+			runHistoryGit(t, repo, "init", "-q")
+			runHistoryGit(t, repo, "config", "user.name", "Test")
+			runHistoryGit(t, repo, "config", "user.email", "test@example.com")
+			if err := os.MkdirAll(filepath.Join(repo, "subdir"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source, target := filepath.Join(repo, "subdir", "links.txt"), filepath.Join(repo, "subdir", "target.txt")
+			for path, text := range map[string]string{source: "target.txt:2:3\nold\n", target: "first\nsecond target\n"} {
+				if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			runHistoryGit(t, repo, "add", ".")
+			runHistoryGit(t, repo, "commit", "-qm", "initial")
+			if err := os.WriteFile(source, []byte("target.txt:2:3\nnew\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			status := git.FileStatus{Path: "subdir/links.txt", Status: "M"}
+			switch kind {
+			case "staged":
+				runHistoryGit(t, repo, "add", ".")
+				h.app.OpenChangeDiff(repo, status, true, true)
+			case "deleted":
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+				status.Status = "D"
+				h.app.OpenChangeDiff(repo, status, false, true)
+			case "commit":
+				runHistoryGit(t, repo, "add", ".")
+				runHistoryGit(t, repo, "commit", "-qm", "change")
+				h.app.OpenCommitDiff(repo, "HEAD", "HEAD", status, true)
+			case "pr":
+				group := &ui.ChangesGroup{Dir: repo, PRDiffs: map[string]string{
+					status.Path: "--- a/subdir/links.txt\n+++ b/subdir/links.txt\n@@ -1,2 +1,2 @@\n target.txt:2:3\n-old\n+new\n",
+				}}
+				h.app.OpenPRDiff(group, status, false)
+			}
+			h.ctrlClickText("target.txt:2:3")
+			g := h.app.EditorGroup
+			if g.ActiveFilePath() != target || g.Editor.Cursor.Line != 1 || g.Editor.Cursor.Col != 2 {
+				t.Fatalf("diff link navigation failed: %q at %+v", g.ActiveFilePath(), g.Editor.Cursor)
+			}
+		})
 	}
 }
 
 func TestEditorLinksInReadOnlyDiffTabs(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		mode ui.DiffMode
-	}{{"unified", ui.DiffModeUnified}, {"split", ui.DiffModeSplit}} {
-		t.Run(tt.name, func(t *testing.T) {
-			h := newTestHarness(t, 120, 25)
-			defer h.stop()
-			old := []string{"https://old.test", "unchanged"}
-			cur := []string{"https://new.test", "extra", "unchanged"}
-			g := h.app.EditorGroup
-			g.DiffMode = tt.mode
-			g.OpenDiff(filepath.Join(h.dir, "links.txt"), diff.FileDiff{}, old, cur, true)
-			var opened []string
-			g.OnOpenURL = func(url string) { opened = append(opened, url) }
-			h.redraw()
-			for _, url := range []string{"https://old.test", "https://new.test"} {
-				x, y := -1, -1
-				for row := 0; row < h.app.Root.Height; row++ {
-					if strings.Contains(h.screenRow(row), url) {
-						x, y = displayColumnOf(h.screenRow(row), url)+2, row
-						break
-					}
-				}
-				if x < 0 {
-					t.Fatalf("missing %s in diff:\n%s", url, h.screenText())
-				}
-				h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModCtrl))
-				h.redraw()
-				h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
-				if len(opened) != 1 || opened[0] != url {
-					t.Fatalf("diff link opened %v, want %q", opened, url)
-				}
-				opened = nil
+	for _, mode := range []ui.DiffMode{ui.DiffModeUnified, ui.DiffModeSplit} {
+		h := newTestHarness(t, 120, 25)
+		defer h.stop()
+		g := h.app.EditorGroup
+		g.DiffMode = mode
+		g.OpenDiff(filepath.Join(h.dir, "links.txt"), diff.FileDiff{}, []string{"https://old.test"}, []string{"https://new.test"}, true)
+		opened := ""
+		g.OnOpenURL = func(url string) { opened = url }
+		for _, url := range []string{"https://old.test", "https://new.test"} {
+			h.ctrlClickText(url)
+			if opened != url {
+				t.Fatalf("opened %q, want %q", opened, url)
 			}
-		})
+		}
 	}
 }

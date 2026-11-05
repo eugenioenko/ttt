@@ -1,11 +1,8 @@
 package ui
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 )
 
 type linkSpan struct {
@@ -20,6 +17,23 @@ type linkSpan struct {
 
 const linkMemoMax = 512
 
+func resolveLinks(spans []linkSpan, dir string, resolve func(string, string) string) []linkSpan {
+	links := spans[:0]
+	for _, span := range spans {
+		if span.IsFile {
+			if resolve == nil {
+				continue
+			}
+			span.FilePath = resolve(span.FilePath, dir)
+			if span.FilePath == "" {
+				continue
+			}
+		}
+		links = append(links, span)
+	}
+	return links
+}
+
 var (
 	urlRe      = regexp.MustCompile(`https?://[^\s)>\]'"` + "`" + `]+`)
 	fileLineRe = regexp.MustCompile(`(?:^|[\s(])((?:[A-Za-z]:[\\/])?[^\s:*?"<>|]+):(\d+)(?::(\d+))?`)
@@ -29,7 +43,7 @@ func byteToRunePos(s string, byteIdx int) int {
 	return len([]rune(s[:byteIdx]))
 }
 
-func detectLinks(text string, workDir string) []linkSpan {
+func detectLinks(text string) []linkSpan {
 	var spans []linkSpan
 
 	for _, loc := range urlRe.FindAllStringIndex(text, -1) {
@@ -59,11 +73,6 @@ func detectLinks(text string, workDir string) []linkSpan {
 			continue
 		}
 
-		resolvedPath := resolveFilePath(filePath, workDir)
-		if resolvedPath == "" {
-			continue
-		}
-
 		spanEnd := match[5]
 		colNum := 0
 		if match[6] != -1 {
@@ -90,40 +99,11 @@ func detectLinks(text string, workDir string) []linkSpan {
 			StartCol: startCol,
 			EndCol:   endCol,
 			IsFile:   true,
-			FilePath: resolvedPath,
+			FilePath: filePath,
 			Line:     lineNum,
 			Col:      colNum,
 		})
 	}
 
 	return spans
-}
-
-func resolveFilePath(path string, workDir string) string {
-	if path == "" {
-		return ""
-	}
-
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			path = filepath.Join(home, path[2:])
-		}
-	}
-
-	if filepath.IsAbs(path) {
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-		return ""
-	}
-
-	if workDir != "" {
-		abs := filepath.Join(workDir, path)
-		if _, err := os.Stat(abs); err == nil {
-			return abs
-		}
-	}
-
-	return ""
 }
