@@ -280,16 +280,16 @@ describe("find and replace", () => {
     const s0 = tui.snapshot();
 
     // ▼ on the search row of the replace bar (120 columns)
-    tui.click(115, 5);
+    tui.click(114, 5);
     const s1 = tui.snapshot();
 
     // ▲
-    tui.click(113, 5);
-    tui.click(113, 5);
+    tui.click(112, 5);
+    tui.click(112, 5);
     const s2 = tui.snapshot();
 
     // ✕
-    tui.click(117, 5);
+    tui.click(116, 5);
     const s3 = tui.snapshot();
 
     const { snapshots } = tui.run();

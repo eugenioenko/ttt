@@ -60,7 +60,8 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			if replace.SearchInput.Text != "foo" || replace.ReplaceInput.Text != "replacement" || replace.Options != options {
 				t.Fatal("expand lost search or replacement text or options")
 			}
-			replace.ReplaceInput.Actions[1].OnClick()
+			hit := replace.ReplaceInput.ActionHits[1]
+			h.click(hit.X, hit.Y)
 			if got := editorText(h); got != "日replacement 日replacement 日FOO" {
 				t.Fatalf("replace all after toggling = %q", got)
 			}
