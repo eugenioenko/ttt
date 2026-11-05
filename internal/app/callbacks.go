@@ -171,7 +171,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 					continue
 				}
 				if diffText, ok := g.PRDiffs[filePath]; ok {
-					a.EditorGroup.OpenDiffTab(path, "", filepath.Join(g.Dir, filePath), diff.Parse(diffText), nil, nil, false)
+					a.EditorGroup.OpenDiff(filePath, diff.Parse(diffText), nil, nil, false)
 					break
 				}
 			}
@@ -509,7 +509,7 @@ func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended
 		a.StatusWarn("Empty diff for " + status.Path)
 		return
 	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (diff)", "", filepath.Join(group.Dir, status.Path), parsed, nil, nil, false)
+	a.EditorGroup.OpenDiff(status.Path, parsed, nil, nil, false)
 	if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
 		dv.SetExtendedFetcher(func(dv *ui.DiffEditorWidget) {
 			a.fetchPRFileContent(dv, group.PROwner, group.PRRepo, group.PRBaseSHA, group.PRHeadSHA, status.Path)

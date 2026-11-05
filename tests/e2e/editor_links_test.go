@@ -74,7 +74,7 @@ func TestEditorLinkNavigationThroughApp(t *testing.T) {
 }
 
 func TestEditorFileLinksInSecondaryRepositoryDiff(t *testing.T) {
-	for _, kind := range []string{"staged", "deleted", "commit", "pr"} {
+	for _, kind := range []string{"staged", "deleted", "commit"} {
 		t.Run(kind, func(t *testing.T) {
 			h := newTestHarness(t, 120, 25)
 			defer h.stop()
@@ -111,11 +111,6 @@ func TestEditorFileLinksInSecondaryRepositoryDiff(t *testing.T) {
 				runHistoryGit(t, repo, "add", ".")
 				runHistoryGit(t, repo, "commit", "-qm", "change")
 				h.app.OpenCommitDiff(repo, "HEAD", "HEAD", status, true)
-			case "pr":
-				group := &ui.ChangesGroup{Dir: repo, PRDiffs: map[string]string{
-					status.Path: "--- a/subdir/links.txt\n+++ b/subdir/links.txt\n@@ -1,2 +1,2 @@\n target.txt:2:3\n-old\n+new\n",
-				}}
-				h.app.OpenPRDiff(group, status, false)
 			}
 			h.ctrlClickText("target.txt:2:3")
 			g := h.app.EditorGroup
@@ -123,6 +118,38 @@ func TestEditorFileLinksInSecondaryRepositoryDiff(t *testing.T) {
 				t.Fatalf("diff link navigation failed: %q at %+v", g.ActiveFilePath(), g.Editor.Cursor)
 			}
 		})
+	}
+}
+
+func TestEditorPRDiffLinksUseWorkspace(t *testing.T) {
+	for _, search := range []bool{false, true} {
+		h := newTestHarness(t, 120, 25)
+		defer h.stop()
+		target := filepath.Join(h.dir, "target.txt")
+		if err := os.WriteFile(target, []byte("first\nsecond target\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		status := git.FileStatus{Path: "src/links.txt", Status: "M"}
+		diffs := map[string]string{status.Path: "--- a/src/links.txt\n+++ b/src/links.txt\n@@ -1 +1 @@\n-old\n+target.txt:2:3\n"}
+		h.app.Changes.AddPRGroup("PR #1: example", "", "", "", "", "", "", []git.FileStatus{status}, diffs)
+		if search {
+			h.app.NavigateToSearchMatch(status.Path+" (diff)", 1, 1)
+		} else {
+			groups := h.app.Changes.Groups()
+			h.app.OpenPRDiff(&groups[len(groups)-1], status, false)
+		}
+		g := h.app.EditorGroup
+		view := g.ActiveDiffWidget()
+		if view == nil {
+			t.Fatal("PR diff did not open")
+		}
+		if view.FilePath != status.Path {
+			t.Fatalf("PR diff source path = %q, want %q", view.FilePath, status.Path)
+		}
+		h.ctrlClickText("target.txt:2:3")
+		if g.ActiveFilePath() != target || g.Editor.Cursor.Line != 1 || g.Editor.Cursor.Col != 2 {
+			t.Fatalf("PR link did not use the workspace: %q at %+v", g.ActiveFilePath(), g.Editor.Cursor)
+		}
 	}
 }
 

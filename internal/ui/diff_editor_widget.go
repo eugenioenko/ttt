@@ -1236,6 +1236,9 @@ func (d *DiffEditorWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		}
 	}
 	result := target.HandleEvent(ev)
+	if target.links.pressed {
+		d.pressed = false
+	}
 	if btn == tcell.ButtonNone {
 		d.captured = nil
 	} else if result == EventCaptured {

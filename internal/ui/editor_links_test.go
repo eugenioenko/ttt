@@ -155,6 +155,48 @@ func TestEditorLinksClearThroughRoot(t *testing.T) {
 	}
 }
 
+func TestEditorLinkReleaseClearsDiffOwners(t *testing.T) {
+	for _, embedded := range []bool{false, true} {
+		t.Run(fmt.Sprint(embedded), func(t *testing.T) {
+			patch := diff.Parse("--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+https://example.com\n")
+			view := NewDiffEditorWidget("file.txt", patch, nil, nil, false)
+			var widget Widget = view
+			var detail *CommitDetailWidget
+			if embedded {
+				detail = NewCommitDetailWidget("", "HEAD", "HEAD", false)
+				detail.SetDetail("Subject", []CommitDetailFile{{Path: "file.txt", Diff: patch}}, "")
+				view, widget = detail.Files[0].view, detail
+			}
+			r := NewRoot(widget)
+			opened := 0
+			configure := func(e *EditorPaneWidget, _ string) {
+				e.OnOpenURL = func(string) { opened++ }
+				e.OnLinkHover = r.TrackEditorLinkHover
+			}
+			for _, pane := range view.viewPanes() {
+				configure(pane, "")
+			}
+			if detail != nil {
+				detail.configurePaneLinks = configure
+			}
+			r.SetSize(80, 20)
+			grid := makeGrid(80, 20)
+			r.Render(grid)
+			x, y, ok := detailFind(grid, "https://example.com")
+			if !ok {
+				t.Fatal("URL missing from diff")
+			}
+			r.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
+			r.Render(grid)
+			r.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModCtrl))
+			r.HandleEvent(tcell.NewEventMouse(x, y, 0, tcell.ModCtrl))
+			if opened != 1 || view.pressed || (detail != nil && detail.primaryPressed) {
+				t.Fatalf("link gesture left an owner pressed: opened=%d diff=%v detail=%v", opened, view.pressed, detail != nil && detail.primaryPressed)
+			}
+		})
+	}
+}
+
 func TestEditorLinksPathFallback(t *testing.T) {
 	workspace := t.TempDir()
 	file := filepath.Join(t.TempDir(), "source.go")

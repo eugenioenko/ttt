@@ -1602,6 +1602,7 @@ func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult 
 			d.hasSelection = false
 			d.clearFileSelections(fileIndex)
 			result := d.Files[fileIndex].view.HandleEvent(event)
+			d.primaryPressed = d.Files[fileIndex].view.pressed
 			if result == EventCaptured {
 				d.capturedFile = fileIndex
 				return EventCaptured
