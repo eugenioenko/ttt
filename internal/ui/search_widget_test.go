@@ -210,7 +210,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			grid := makeGrid(w, h)
 			s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
 
-			wantCollapsed := []rune(icons.Get(mode, icons.ChevronDown))[0]
+			wantCollapsed := []rune(icons.Get(mode, icons.ChevronLeft))[0]
 			if got := grid[s.toggleRow()][w-2].Ch; got != wantCollapsed {
 				t.Fatalf("collapsed filter toggle glyph = %q, want %q", got, wantCollapsed)
 			}
@@ -227,7 +227,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			grid = makeGrid(w, h)
 			s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
 
-			wantExpanded := []rune(icons.Get(mode, icons.ArrowLeft))[0]
+			wantExpanded := []rune(icons.Get(mode, icons.ChevronDown))[0]
 			if got := grid[s.toggleRow()][w-2].Ch; got != wantExpanded {
 				t.Fatalf("expanded filter toggle glyph = %q, want %q", got, wantExpanded)
 			}
@@ -237,7 +237,8 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 	t.Run("overrides", func(t *testing.T) {
 		warnings := icons.Configure(config.IconsNone, map[string]string{
 			"chevron-down": "v",
-			"arrow-left":   "<",
+			"chevron-left": "<",
+			"arrow-left":   "L",
 			"replace":      "R",
 		})
 		if len(warnings) != 0 {
@@ -262,8 +263,8 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 		grid := makeGrid(w, h)
 		s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
 
-		if got := grid[s.toggleRow()][w-2].Ch; got != 'v' {
-			t.Fatalf("overridden collapsed filter toggle = %q, want 'v'", got)
+		if got := grid[s.toggleRow()][w-2].Ch; got != '<' {
+			t.Fatalf("overridden collapsed filter toggle = %q, want '<'", got)
 		}
 		if got := grid[s.resultStartY][w-2].Ch; got != 'R' {
 			t.Fatalf("overridden per-file replace glyph = %q, want 'R'", got)
@@ -283,8 +284,8 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 
 		grid = makeGrid(w, h)
 		s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
-		if got := grid[s.toggleRow()][w-2].Ch; got != '<' {
-			t.Fatalf("overridden expanded filter toggle = %q, want '<'", got)
+		if got := grid[s.toggleRow()][w-2].Ch; got != 'v' {
+			t.Fatalf("overridden expanded filter toggle = %q, want 'v'", got)
 		}
 
 		s.Input.Text = "old"
