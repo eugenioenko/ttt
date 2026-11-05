@@ -273,7 +273,7 @@ func (e *EditorPaneWidget) resolveVisibleFileLinks() {
 			return
 		}
 		l.pending = false
-		if !l.active || e.Buf != buf || e.Buf.Version() != version || e.LinkWorkDir != dir || e.linkFrame() != frame {
+		if resolved == nil || !l.active || e.Buf != buf || e.Buf.Version() != version || e.LinkWorkDir != dir || e.linkFrame() != frame {
 			return
 		}
 		if l.resolved == nil {

@@ -374,6 +374,27 @@ func TestEditorFileLinksAwaitResolution(t *testing.T) {
 	}
 }
 
+func TestEditorFileLinksRetryFailedResolution(t *testing.T) {
+	e := linkEditor([]string{"target.go:12:3"}, 40, 4)
+	e.OnOpenFile = func(string, int, int) {}
+	var deliveries []func(map[string]string)
+	e.ResolveFileLinks = func(_ []string, _ string, apply func(map[string]string)) { deliveries = append(deliveries, apply) }
+	hoverEditorLinks(e)
+	deliveries[0](nil)
+	if e.links.pending || len(e.links.resolved) != 0 {
+		t.Fatal("failed resolution left pending work or cached a missing file")
+	}
+	renderGrid(e)
+	if len(deliveries) != 2 || len(e.links.hits) != 0 {
+		t.Fatal("failed resolution did not retry without enabling the file")
+	}
+	deliveries[1](map[string]string{"target.go": "/source/target.go"})
+	renderGrid(e)
+	if len(deliveries) != 2 || len(e.links.hits) == 0 {
+		t.Fatal("successful retry was not cached and made actionable")
+	}
+}
+
 func TestEditorFileLinksRejectStaleResolution(t *testing.T) {
 	for _, action := range []string{"edit", "buffer", "directory", "scroll", "resize", "wrap", "dismiss", "return"} {
 		t.Run(action, func(t *testing.T) {
