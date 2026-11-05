@@ -4,6 +4,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -46,6 +47,8 @@ type ContextMenuWidget struct {
 	pressedMenu      *ContextMenuWidget
 	pressedItem      int
 }
+
+var _ widgets.PointerShaper = (*ContextMenuWidget)(nil)
 
 func NewContextMenuWidget(items []ContextMenuItem, x, y int) *ContextMenuWidget {
 	sel := 0
@@ -220,6 +223,29 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 
 func (c *ContextMenuWidget) storeRect(x, y, w, h int) {
 	c.SetRect(Rect{X: x, Y: y, W: w, H: h})
+}
+
+func (c *ContextMenuWidget) PointerShapeAt(mx, my int) string {
+	menu := c.menuAt(mx, my)
+	if menu == nil {
+		return term.PointerDefault
+	}
+	r := menu.GetRect()
+	if mx <= r.X || mx >= r.X+r.W-1 || my <= r.Y || my >= r.Y+r.H-1 {
+		return term.PointerDefault
+	}
+	itemIdx := my - r.Y - 1
+	if itemIdx < 0 || itemIdx >= len(menu.Items) {
+		return term.PointerDefault
+	}
+	it := menu.Items[itemIdx]
+	if it.IsSep {
+		return term.PointerDefault
+	}
+	if it.Command != "" || len(it.Submenu) > 0 {
+		return term.PointerHand
+	}
+	return term.PointerDefault
 }
 
 func (c *ContextMenuWidget) HandleEvent(ev tcell.Event) EventResult {
