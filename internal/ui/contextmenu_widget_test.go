@@ -284,7 +284,7 @@ func TestContextMenuSubmenuChevronFollowsIconMode(t *testing.T) {
 		mode string
 		want rune
 	}{
-		{name: "plain", mode: config.IconsNone, want: '›'},
+		{name: "plain", mode: config.IconsNone, want: icons.PlainChevronRight},
 		{name: "nerd font", mode: config.IconsNerdFont, want: []rune(nerd)[0]},
 	}
 	for _, tc := range cases {

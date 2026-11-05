@@ -199,7 +199,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						ch = '▎'
 						style = term.StyleGutterModified
 					case diff.LineDeleted:
-						ch = '▾'
+						ch = icons.PlainChevronDown
 						style = term.StyleGutterDeleted
 					}
 					surface.SetCell(0, y, term.Cell{Ch: ch, Style: style})

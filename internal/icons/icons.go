@@ -51,6 +51,13 @@ const (
 	PanelPlugins  Name = "panel-plugins"
 )
 
+const (
+	PlainChevronRight = '›'
+	PlainChevronDown  = '⌄'
+	PlainChevronLeft  = '‹'
+	PlainChevronUp    = '⌃'
+)
+
 type glyphs struct {
 	Plain string
 	Nerd  string
@@ -62,12 +69,12 @@ var table = map[Name]glyphs{
 	Lock:   {Plain: "⚿", Nerd: ""},
 	Pinned: {Plain: "♦", Nerd: ""},
 
-	ChevronRight: {Plain: "▸", Nerd: ""},
-	ChevronDown:  {Plain: "▾", Nerd: ""},
-	ChevronUp:    {Plain: "▴", Nerd: ""},
-	Submenu:      {Plain: "›", Nerd: ""},
-	ArrowLeft:    {Plain: "◂", Nerd: ""},
-	ArrowRight:   {Plain: "▸", Nerd: ""},
+	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
+	ChevronDown:  {Plain: string(PlainChevronDown), Nerd: ""},
+	ChevronUp:    {Plain: string(PlainChevronUp), Nerd: ""},
+	Submenu:      {Plain: string(PlainChevronRight), Nerd: ""},
+	ArrowLeft:    {Plain: string(PlainChevronLeft), Nerd: ""},
+	ArrowRight:   {Plain: string(PlainChevronRight), Nerd: ""},
 	Close:        {Plain: "✕", Nerd: "✕"},
 	Dirty:        {Plain: "●", Nerd: "●"},
 	More:         {Plain: "⋮", Nerd: "⋮"},

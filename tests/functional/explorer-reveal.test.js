@@ -4,6 +4,8 @@ import { createTempDir, cleanupDir } from "./helpers.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+const treeIcons = { collapsed: ">", expanded: "v" };
+
 let dir;
 
 afterEach(() => {
@@ -19,13 +21,14 @@ function setup(settings) {
   const file = join(project, "src", "deep", "main.go");
   writeFileSync(file, "package main\n");
   const configFile = join(dir, "settings.json");
-  writeFileSync(configFile, JSON.stringify(settings));
+  const overrides = { "chevron-right": treeIcons.collapsed, "chevron-down": treeIcons.expanded };
+  writeFileSync(configFile, JSON.stringify({ ...settings, appearance: { overrides } }));
   return { project, file, configFile };
 }
 
 describe.each([
-  { compactFolders: true, open: ["▾ src/deep"] },
-  { compactFolders: false, open: ["▾ src", "▾ deep"] },
+  { compactFolders: true, open: [`${treeIcons.expanded} src/deep`] },
+  { compactFolders: false, open: [`${treeIcons.expanded} src`, `${treeIcons.expanded} deep`] },
 ])("explorer reveal (compactFolders: $compactFolders)", ({ compactFolders, open }) => {
   it("reveals the active file when explorer.autoReveal is on", () => {
     const { project, file, configFile } = setup({ explorer: { autoReveal: true, compactFolders } });
@@ -47,7 +50,7 @@ describe.each([
     const s0 = tui.snapshot();
     const { snapshots } = tui.run();
 
-    expect(snapshots[s0]).toContain("▸ src");
+    expect(snapshots[s0]).toContain(`${treeIcons.collapsed} src`);
     expect(snapshots[s0]).not.toContain("deep");
   });
 
