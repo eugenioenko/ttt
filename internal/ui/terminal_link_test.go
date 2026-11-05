@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func TestFileLineReWindowsDrive(t *testing.T) {
+	for _, path := range []string{`C:\src\main.go`, `C:/src/main.go`} {
+		match := fileLineRe.FindStringSubmatch("error: " + path + ":12:3")
+		if len(match) != 4 || match[1] != path || match[2] != "12" || match[3] != "3" {
+			t.Fatalf("Windows file reference %q parsed as %v", path, match)
+		}
+	}
+}
+
 func TestDetectLinks_URLs(t *testing.T) {
 	tests := []struct {
 		name     string

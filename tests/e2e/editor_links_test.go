@@ -143,3 +143,45 @@ func TestEditorLinksInReadOnlyDiffTabs(t *testing.T) {
 		}
 	}
 }
+
+func TestEditorLinksInCommitDetails(t *testing.T) {
+	for _, current := range []bool{false, true} {
+		for _, mode := range []ui.DiffMode{ui.DiffModeUnified, ui.DiffModeSplit} {
+			h := newTestHarness(t, 120, 30)
+			defer h.stop()
+			repo := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(repo, "src"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(repo, "src", "target.txt")
+			if err := os.WriteFile(target, []byte("first\nsecond target\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			detail := ui.NewCommitDetailWidget(repo, "HEAD", "HEAD", false)
+			if current {
+				detail = ui.NewCurrentChangesWidget(repo, false)
+			}
+			detail.SetDetail("Subject", []ui.CommitDetailFile{{Path: "src/change.txt", Diff: diff.Parse(
+				"--- a/src/change.txt\n+++ b/src/change.txt\n@@ -1,1 +1,2 @@\n-https://old.test\n+https://new.test\n+target.txt:2:3\n",
+			)}}, "")
+			g := h.app.EditorGroup
+			g.DiffMode = mode
+			g.ApplyDiffDefaults(detail)
+			g.OpenPluginTab("detail", "Details", detail)
+			h.app.FocusEditor()
+			var opened []string
+			g.OnOpenURL = func(url string) { opened = append(opened, url) }
+			for _, url := range []string{"https://old.test", "https://new.test"} {
+				h.ctrlClickText(url)
+				if len(opened) != 1 || opened[0] != url {
+					t.Fatalf("detail URL routing = %v, want %q", opened, url)
+				}
+				opened = nil
+			}
+			h.ctrlClickText("target.txt:2:3")
+			if g.ActiveFilePath() != target || g.Editor.Cursor.Line != 1 || g.Editor.Cursor.Col != 2 {
+				t.Fatalf("detail file link opened %q at %+v", g.ActiveFilePath(), g.Editor.Cursor)
+			}
+		}
+	}
+}

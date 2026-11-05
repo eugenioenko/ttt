@@ -2983,6 +2983,9 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 			g.configurePaneLinks(p, d.FilePath)
 		}
 	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		detail.configurePaneLinks = g.configurePaneLinks
+	}
 	if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)

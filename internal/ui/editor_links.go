@@ -11,7 +11,7 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-// Clipped targets get at most 2048 runes of context per side; longer tokens are omitted.
+// Clipped links get at most 2048 runes of context per side; targets crossing that bound are omitted.
 const editorLinkLookaround = 2048
 
 type linkPoint struct{ x, y int }
@@ -47,7 +47,7 @@ func (t *editorTab) diffWidget() *DiffEditorWidget {
 
 func (g *EditorGroupWidget) configurePaneLinks(e *EditorPaneWidget, path string) {
 	dir := ""
-	if path != "" {
+	if filepath.IsAbs(path) {
 		dir = filepath.Dir(path)
 	} else if g.LinkWorkDir != nil {
 		dir = g.LinkWorkDir()
@@ -61,6 +61,16 @@ func (r *Root) TrackEditorLinkHover(e *EditorPaneWidget) {
 		r.linkHover.clearLinkHover()
 	}
 	r.linkHover = e
+}
+
+func (r *Root) ClearEditorLinkHover() {
+	if e := r.linkHover; e != nil {
+		e.clearLinkHover()
+		// Keep the gesture's owner until release, even if opening a link switches tabs.
+		if !e.links.pressed {
+			r.linkHover = nil
+		}
+	}
 }
 
 func (e *EditorPaneWidget) clearLinkHover() {
@@ -115,7 +125,7 @@ func (l *editorLinks) finishRow(window editorLinkWindow, first int) {
 	}
 }
 
-func visibleLinkWindow(text string, start, end, col int) (string, int) {
+func visibleLinkWindow(text string, start, end, col int) (string, int, bool, bool) {
 	for n := 0; n < editorLinkLookaround && start > 0; n++ {
 		r, size := utf8.DecodeLastRuneInString(text[:start])
 		if unicode.IsSpace(r) {
@@ -131,22 +141,9 @@ func visibleLinkWindow(text string, start, end, col int) (string, int) {
 		}
 		end += size
 	}
-	if r, _ := utf8.DecodeLastRuneInString(text[:start]); start > 0 && !unicode.IsSpace(r) {
-		if skip := strings.IndexFunc(text[start:end], unicode.IsSpace); skip >= 0 {
-			col += utf8.RuneCountInString(text[start : start+skip])
-			start += skip
-		} else {
-			return "", col
-		}
-	}
-	if r, _ := utf8.DecodeRuneInString(text[end:]); end < len(text) && !unicode.IsSpace(r) {
-		if stop := strings.LastIndexFunc(text[start:end], unicode.IsSpace); stop >= 0 {
-			end = start + stop
-		} else {
-			return "", col
-		}
-	}
-	return strings.Clone(text[start:end]), col
+	left, _ := utf8.DecodeLastRuneInString(text[:start])
+	right, _ := utf8.DecodeRuneInString(text[end:])
+	return strings.Clone(text[start:end]), col, start > 0 && !unicode.IsSpace(left), end < len(text) && !unicode.IsSpace(right)
 }
 
 func (e *EditorPaneWidget) linksForWindow(window editorLinkWindow) []linkSpan {
@@ -157,18 +154,24 @@ func (e *EditorPaneWidget) linksForWindow(window editorLinkWindow) []linkSpan {
 	if l.memo == nil || len(l.memo) >= linkMemoMax {
 		l.memo = make(map[editorLinkWindow][]linkSpan)
 	}
-	text, col := visibleLinkWindow(e.Buf.Lines[window.line], window.start, window.end, window.col)
+	text, col, clippedLeft, clippedRight := visibleLinkWindow(e.Buf.Lines[window.line], window.start, window.end, window.col)
 	detect := l.detect
 	if detect == nil {
 		detect = detectLinks
 	}
 	spans := detect(text, e.LinkWorkDir)
-	for i := range spans {
-		spans[i].StartCol += col
-		spans[i].EndCol += col
+	complete := spans[:0]
+	for _, span := range spans {
+		// Trailing punctuation may have been trimmed by detection at a clipped edge.
+		if (clippedLeft && span.StartCol == 0) || (clippedRight && strings.TrimRight(text[runeByteOffset(text, span.EndCol):], ".,;:") == "") {
+			continue
+		}
+		span.StartCol += col
+		span.EndCol += col
+		complete = append(complete, span)
 	}
-	l.memo[window] = spans
-	return spans
+	l.memo[window] = complete
+	return complete
 }
 
 func (e *EditorPaneWidget) renderLinks(surface Surface) {

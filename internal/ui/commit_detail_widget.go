@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"path/filepath"
 	"strconv"
 	"time"
 	"unicode"
@@ -220,8 +221,9 @@ type CommitDetailWidget struct {
 	navRow   int
 	navValid bool
 
-	OnFetchContext func(fileIndex int, file CommitDetailFile)
-	OnClose        func()
+	OnFetchContext     func(fileIndex int, file CommitDetailFile)
+	OnClose            func()
+	configurePaneLinks func(*EditorPaneWidget, string)
 }
 
 func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *CommitDetailWidget {
@@ -938,6 +940,15 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 			n++
 		}
 		if v := d.rowView(visual.row); v != nil {
+			if d.configurePaneLinks != nil {
+				path := d.Files[row.fileIndex].Path
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(d.Dir, path)
+				}
+				for _, pane := range v.viewPanes() {
+					d.configurePaneLinks(pane, path)
+				}
+			}
 			rect := Rect{X: r.X, Y: r.Y + screenY, W: viewW, H: n}
 			v.focusedGap = nil
 			if d.selectedDisclosure.gap >= 0 && d.disclosureFocused(row.fileIndex, d.selectedDisclosure.gap) {
@@ -1629,6 +1640,9 @@ func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult 
 			d.hasSelection = false
 		}
 		return EventConsumed
+	}
+	if buttons == tcell.ButtonNone && overFile {
+		hoverChanged = d.Files[fileIndex].view.HandleEvent(event) != EventIgnored || hoverChanged
 	}
 	if hoverChanged {
 		return EventConsumed

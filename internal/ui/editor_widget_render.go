@@ -494,10 +494,6 @@ type screenCell struct {
 }
 
 // The returned slice is reused by the next call.
-func (e *EditorPaneWidget) renderLineToScreen(line []rune, spans []highlight.Span, collapsed bool, ann []rune, tabW, leftCol, width int) []screenCell {
-	return e.renderLineSegmentToScreen(string(line), spans, collapsed, ann, 0, tabW, leftCol, width)
-}
-
 func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)

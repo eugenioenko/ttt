@@ -193,6 +193,9 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	linkPress := r.linkHover != nil && r.linkHover.links.pressed
 	if r.linkHover != nil {
 		r.linkHover.observeLinkInput(ev)
+		if !r.linkHover.links.active && !r.linkHover.links.pressed {
+			r.linkHover = nil
+		}
 	}
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
@@ -474,9 +477,7 @@ func (r *Root) TopOverlayWidget() Widget {
 }
 
 func (r *Root) PushOverlay(o Overlay) {
-	if r.linkHover != nil {
-		r.linkHover.clearLinkHover()
-	}
+	r.ClearEditorLinkHover()
 	r.CancelPointerCapture()
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
@@ -507,9 +508,7 @@ func (r *Root) SetFocus(w Widget) {
 	if r.Focused == w {
 		return
 	}
-	if r.linkHover != nil {
-		r.linkHover.clearLinkHover()
-	}
+	r.ClearEditorLinkHover()
 	r.chord = nil
 	if r.capturedWidget != nil {
 		r.CancelPointerCapture()

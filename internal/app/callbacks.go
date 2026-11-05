@@ -171,7 +171,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 					continue
 				}
 				if diffText, ok := g.PRDiffs[filePath]; ok {
-					a.EditorGroup.OpenDiff(filePath, diff.Parse(diffText), nil, nil, false)
+					a.EditorGroup.OpenDiffTab(path, "", filepath.Join(g.Dir, filePath), diff.Parse(diffText), nil, nil, false)
 					break
 				}
 			}
@@ -717,6 +717,7 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.OnActiveTabChange = func() {
+		app.Root.ClearEditorLinkHover()
 		if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 			findBar.OnEditorTabChange()
 		}

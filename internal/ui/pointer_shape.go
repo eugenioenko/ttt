@@ -159,6 +159,16 @@ func (g *EditorGroupWidget) PointerShapeAt(mx, my int) string {
 	return g.Editor.PointerShapeAt(mx, my)
 }
 
+func (d *CommitDetailWidget) PointerShapeAt(mx, my int) string {
+	if d.selecting {
+		return term.PointerText
+	}
+	if file, ok := d.fileAt(mx, my); ok {
+		return d.Files[file].view.PointerShapeAt(mx, my)
+	}
+	return ""
+}
+
 func (d *DiffEditorWidget) PointerShapeAt(mx, my int) string {
 	d.ensurePanes()
 	if d.extendedFetching || d.Loading {

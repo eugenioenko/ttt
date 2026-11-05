@@ -149,8 +149,45 @@ func TestEditorLinksClearThroughRoot(t *testing.T) {
 		} else {
 			r.HandleEvent(ev)
 		}
-		if e.links.active || len(e.links.hits) != 0 {
+		if e.links.active || len(e.links.hits) != 0 || r.linkHover != nil {
 			t.Fatalf("feedback survived %T", ev)
+		}
+	}
+}
+
+func TestEditorLinksPathFallback(t *testing.T) {
+	workspace := t.TempDir()
+	file := filepath.Join(t.TempDir(), "source.go")
+	g := &EditorGroupWidget{LinkWorkDir: func() string { return workspace }}
+	for _, tt := range []struct{ path, dir string }{
+		{file, filepath.Dir(file)}, {"", workspace}, {"src/source.go", workspace}, {"Preview/Title", workspace},
+	} {
+		e := linkEditor(nil, 40, 4)
+		g.configurePaneLinks(e, tt.path)
+		if e.LinkWorkDir != tt.dir {
+			t.Errorf("link directory for %q = %q, want %q", tt.path, e.LinkWorkDir, tt.dir)
+		}
+	}
+}
+
+func TestEditorLinksInsideLongToken(t *testing.T) {
+	prefix := strings.Repeat("x", 3*editorLinkLookaround) + `="`
+	url := "https://example.com/"
+	for _, tt := range []struct{ suffix, want string }{
+		{url + `"` + strings.Repeat("x", 3*editorLinkLookaround), url},
+		{url + strings.Repeat("a", 3*editorLinkLookaround), ""},
+		{url + strings.Repeat("a", 35+editorLinkLookaround-len(url)-1) + ".tail", ""},
+	} {
+		e := linkEditor([]string{prefix + tt.suffix}, 36, 4)
+		e.Viewport.LeftCol = len(prefix)
+		hoverEditorLinks(e)
+		if len(e.links.hits) == 0 && tt.want != "" {
+			t.Fatal("complete URL inside a long token was discarded")
+		}
+		for _, span := range e.links.hits {
+			if span.URL != tt.want {
+				t.Fatalf("opened a truncated URL %q, want %q", span.URL, tt.want)
+			}
 		}
 	}
 }
