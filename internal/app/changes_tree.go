@@ -260,11 +260,30 @@ func (cp *ChangesPanel) fileNodes(dir string, files []git.FileStatus, staged boo
 		}
 		return nodes
 	}
-	return compactFileTreeWithFolderID(files, makeLeaf, func(path string) string {
+	nodes := compactFileTreeWithFolderID(files, makeLeaf, func(path string) string {
 		id := workingNodeID(folderKind, dir, path, staged)
 		cp.workNodes[id] = workNodeRef{Dir: dir, Path: path, Staged: staged, Kind: folderKind, Group: group, PR: pr}
 		return id
 	}, cp.expanded)
+	if !pr {
+		attachFolderActions(nodes, staged, cp.workNodes)
+	}
+	return nodes
+}
+
+// attachFolderActions gives every folder row the same stage or unstage action
+// its files carry, so a whole directory can be staged without expanding it.
+func attachFolderActions(nodes []*widgets.TreeNode, staged bool, workNodes map[string]workNodeRef) {
+	icon, command := string(icons.Rune(icons.Add)), "stageFolder"
+	if staged {
+		icon, command = string(icons.Rune(icons.Remove)), "unstageFolder"
+	}
+	for _, node := range nodes {
+		if ref, ok := workNodes[node.ID]; ok && ref.Kind == workNodeFolder {
+			node.Actions = []widgets.Action{{Icon: icon, Command: command}}
+		}
+		attachFolderActions(node.Children, staged, workNodes)
+	}
 }
 
 func (cp *ChangesPanel) decorateFileNode(node *widgets.TreeNode, path string) {

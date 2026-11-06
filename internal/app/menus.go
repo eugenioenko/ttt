@@ -148,6 +148,15 @@ var changesContextMenuUnstaged = []ui.ContextMenuItem{
 	{Label: i18n.Text("menu.discardChanges"), Command: "changes.discard"},
 }
 
+var changesFolderContextMenuStaged = []ui.ContextMenuItem{
+	{Label: i18n.Text("menu.unstageFolder"), Command: "changes.unstageFolder"},
+}
+
+var changesFolderContextMenuUnstaged = []ui.ContextMenuItem{
+	{Label: i18n.Text("menu.stageFolder"), Command: "changes.stageFolder"},
+	{Label: i18n.Text("menu.discardFolderChanges"), Command: "changes.discardFolder"},
+}
+
 func (a *App) BuildActiveDiffViewMenu() []ui.ContextMenuItem {
 	var items []ui.ContextMenuItem
 	modeSurface := a.EditorGroup.ActiveDiffModeSurface()
