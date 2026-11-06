@@ -3063,7 +3063,19 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 }
 
 func (g *EditorGroupWidget) CancelPointerCapture() bool {
-	return g.TabBar.CancelPointerCapture()
+	canceled := g.TabBar.CancelPointerCapture()
+	t := g.activeTab()
+	if t != nil {
+		if t.Content != nil {
+			canceled = widgets.CancelPointerCapture(t.Content) || canceled
+		} else if t.Diff != nil {
+			canceled = widgets.CancelPointerCapture(t.Diff) || canceled
+		}
+	}
+	if g.Editor != nil {
+		canceled = widgets.CancelPointerCapture(g.Editor) || canceled
+	}
+	return canceled
 }
 
 func (g *EditorGroupWidget) OwnsPointerCapture() bool {
@@ -3071,6 +3083,10 @@ func (g *EditorGroupWidget) OwnsPointerCapture() bool {
 		return true
 	}
 	return g.contentOwnsPointerCapture()
+}
+
+func (g *EditorGroupWidget) PointerGestureActive() bool {
+	return g.TabBar.PointerGestureActive()
 }
 
 func (g *EditorGroupWidget) contentOwnsPointerCapture() bool {
@@ -3096,6 +3112,9 @@ func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
+	if _, ok := ev.(*tcell.EventMouse); ok && g.TabBar.PointerGestureActive() {
+		return g.TabBar.HandleEvent(ev)
+	}
 	if g.Hover != nil {
 		result := g.Hover.HandleEvent(ev)
 		if result == EventDismissed {

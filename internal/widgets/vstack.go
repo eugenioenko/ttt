@@ -178,6 +178,11 @@ func (v *VStackWidget) Render(surface Surface) {
 
 func (v *VStackWidget) HandleEvent(ev tcell.Event) EventResult {
 	for _, child := range v.Children {
+		if owner, ok := child.(PointerCaptureOwner); ok && owner.OwnsPointerCapture() {
+			return child.HandleEvent(ev)
+		}
+	}
+	for _, child := range v.Children {
 		if result := child.HandleEvent(ev); result != EventIgnored {
 			return result
 		}
