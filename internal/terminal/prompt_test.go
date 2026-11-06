@@ -149,3 +149,23 @@ func TestReadlineTrackingDoesNotClearPrograms(t *testing.T) {
 		}
 	}
 }
+
+// Captured from bash after the prompt was first drawn wrapped: every repaint
+// moves up one row and breaks the line where Readline last wrapped it.
+func TestReadlineResizeIgnoresStaleCursorUp(t *testing.T) {
+	term := newPromptTerminal(46, 12)
+	term.watchReadlinePrompt(func() bool { return true })
+	const (
+		colored = "\x1b[36m…/enko/Documents/ttt\x1b[00m \x1b[33m[fix/readline-bash-prompt-resize]\x1b[00m ➜ "
+		repaint = "\r\x1b[K\x1b[A\x1b[36m…/enko/Documents/ttt\x1b[00m \x1b[33m[fix/readline-bash-prompt-resize\r\n\r]\x1b[00m ➜ "
+	)
+	term.term.WriteString("$ echo RESIZE_READY\r\nRESIZE_READY\r\n\x1b[?2004h" + colored)
+	for _, cols := range []int{45, 43, 41, 39, 38, 40, 44, 50, 60, 30} {
+		term.resizeEmulator(cols, 12)
+		term.term.WriteString(repaint)
+		screen := term.term.String()
+		if strings.Count(screen, "enko/Documents") != 1 || !strings.Contains(screen, "RESIZE_READY\n") {
+			t.Fatalf("resize to %d lost output or duplicated the prompt:\n%s", cols, screen)
+		}
+	}
+}

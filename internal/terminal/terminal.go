@@ -32,25 +32,25 @@ const (
 type Terminal struct {
 	// cbMu serializes OnUpdate/OnExit with Close, so no callback fires after
 	// Close returns. closed is written under both cbMu and mu.
-	cbMu       sync.Mutex
-	mu         sync.Mutex
-	term       *xterm.Terminal
-	pt         pty.Pty
-	cmd        *pty.Cmd
-	cols, rows int
-	done       chan struct{}
-	waited     chan struct{}
-	started    bool
-	closed     bool
-	exited     bool
-	ptyClosed  bool
-	rawTail    []byte
-	lastRead   time.Time
-	// Readline's edit markers survive resize; unlike OSC 133 it does not
-	// announce each repaint. promptEnd also covers input below the cursor.
+	cbMu           sync.Mutex
+	mu             sync.Mutex
+	term           *xterm.Terminal
+	pt             pty.Pty
+	cmd            *pty.Cmd
+	cols, rows     int
+	done           chan struct{}
+	waited         chan struct{}
+	started        bool
+	closed         bool
+	exited         bool
+	ptyClosed      bool
+	rawTail        []byte
+	lastRead       time.Time
 	promptMarker   *xterm.Marker
 	promptCol      int
 	promptReadline bool
+	promptRedrawn  bool
+	promptRepaint  bool
 	promptEnd      *xterm.Marker
 	OnUpdate       func()
 	OnExit         func()

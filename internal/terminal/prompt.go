@@ -6,12 +6,23 @@ import (
 	xterm "github.com/eugenioenko/xterm-go"
 )
 
-// Shells that mark their prompt with OSC 133 (fish does natively) redraw it
-// on SIGWINCH by moving the cursor up as many rows as the prompt had and
-// repainting. Reflow changes that row count, so the repaint lands on the wrong
-// row and leaves a copy of the old prompt above the new one on every resize.
-// Blanking the prompt rows before the reflow keeps their count, the same
-// thing kitty and Ghostty do for a prompt that redraws itself.
+// Shells redraw their prompt on SIGWINCH by moving the cursor up as many rows
+// as the prompt had and repainting. Reflow changes that row count, so the
+// repaint lands on the wrong row and leaves a copy of the old prompt above the
+// new one on every resize. Blanking the prompt rows before the reflow keeps
+// their count, the same thing kitty and Ghostty do for a prompt that redraws
+// itself.
+//
+// OSC 133 shells (fish) mark every repaint, so their marker is single-use.
+// Bash's Readline marks nothing: its prompt is found through bracketed paste,
+// which Readline enables before PS1 and disables before running a command, and
+// the marker survives resizes. promptEnd tracks the lowest row the edit reached,
+// so input below the cursor is cleared too.
+//
+// Readline starts its SIGWINCH repaint with a CR, an erase and cursor-up moves
+// counted from the layout it drew at an older width, so they land on the wrong
+// row. After a resize the marker holds the row the repaint must start on, and
+// those moves are replaced by a jump there.
 
 func (t *Terminal) watchPromptMarks() {
 	t.term.RegisterOscHandler(133, xterm.NewOscStringHandler(func(data string) bool {
@@ -21,8 +32,6 @@ func (t *Terminal) watchPromptMarks() {
 }
 
 func (t *Terminal) watchReadlinePrompt(shellOwnsForeground func() bool) {
-	// Bash's Readline enables bracketed paste before PS1 and disables it before
-	// executing commands. Other programs can use this mode without a prompt.
 	for _, final := range []byte{'h', 'l'} {
 		t.term.RegisterCsiHandler(xterm.FunctionIdentifier{Prefix: '?', Final: final}, func(params *xterm.Params) bool {
 			for _, mode := range params.Params[:params.Length] {
@@ -30,31 +39,41 @@ func (t *Terminal) watchReadlinePrompt(shellOwnsForeground func() bool) {
 					continue
 				}
 				t.dropPromptMarker()
-				if final == 'h' && !t.term.IsAltBufferActive() && shellOwnsForeground() {
-					buf := t.term.NormalBuffer()
-					t.promptMarker = buf.AddMarker(buf.YBase + buf.Y)
-					t.promptCol = buf.X
-					t.promptReadline = true
+				// Other programs use bracketed paste without a prompt.
+				if final == 'h' && shellOwnsForeground() {
+					t.markPromptAtCursor(true)
 				}
 			}
 			return false
 		})
 	}
-	t.term.OnWriteParsed(t.trackReadlineEnd)
+	t.term.OnWriteParsed(func() {
+		if t.promptRepaint && t.term.NormalBuffer().X != 0 {
+			t.promptRepaint = false
+		}
+		t.trackReadlineEnd()
+	})
 	t.term.OnLineFeed(t.trackReadlineEnd)
-	for _, final := range []byte{'A', 'F', 'H', 'f', 'd'} {
+	t.term.RegisterCsiHandler(xterm.FunctionIdentifier{Final: 'A'}, func(*xterm.Params) bool {
+		buf := t.term.NormalBuffer()
+		if t.promptRepaint && buf.X == 0 && !t.term.IsAltBufferActive() && t.promptMarker != nil && !t.promptMarker.IsDisposed {
+			buf.Y = max(t.promptMarker.Line-buf.YBase, 0)
+			return true
+		}
+		t.trackReadlineEnd()
+		return false
+	})
+	// Record the cursor before Readline moves it back up within one write.
+	for _, final := range []byte{'F', 'H', 'f', 'd'} {
 		t.term.RegisterCsiHandler(xterm.FunctionIdentifier{Final: final}, func(*xterm.Params) bool {
 			t.trackReadlineEnd()
 			return false
 		})
 	}
 	t.term.RegisterCsiHandler(xterm.FunctionIdentifier{Final: 'J'}, func(params *xterm.Params) bool {
-		if params.Params[0] == 2 && t.promptReadline && !t.term.IsAltBufferActive() {
+		if params.Params[0] == 2 && t.promptReadline {
 			t.dropPromptMarker()
-			buf := t.term.NormalBuffer()
-			t.promptMarker = buf.AddMarker(buf.YBase + buf.Y)
-			t.promptCol = buf.X
-			t.promptReadline = true
+			t.markPromptAtCursor(true)
 		}
 		return false
 	})
@@ -66,6 +85,7 @@ func (t *Terminal) trackReadlineEnd() {
 	}
 	buf := t.term.NormalBuffer()
 	row := buf.YBase + buf.Y
+	// Clearing the screen disposes the marker set just before it.
 	if t.promptMarker == nil || t.promptMarker.IsDisposed {
 		first := row
 		for first > 0 && buf.Lines.Get(first).IsWrapped {
@@ -74,10 +94,10 @@ func (t *Terminal) trackReadlineEnd() {
 		t.promptMarker = buf.AddMarker(first)
 		t.promptCol = 0
 	}
-	if t.promptEnd != nil && !t.promptEnd.IsDisposed && t.promptEnd.Line >= row {
-		return
-	}
-	if t.promptEnd != nil {
+	if t.promptEnd != nil && !t.promptEnd.IsDisposed {
+		if t.promptEnd.Line >= row {
+			return
+		}
 		t.promptEnd.Dispose()
 	}
 	t.promptEnd = buf.AddMarker(row)
@@ -88,15 +108,22 @@ func (t *Terminal) notePromptMark(data string) {
 	switch kind {
 	case "A":
 		t.dropPromptMarker()
-		if t.term.IsAltBufferActive() || strings.Contains(";"+opts+";", ";redraw=0;") {
-			return
+		if !strings.Contains(";"+opts+";", ";redraw=0;") {
+			t.markPromptAtCursor(false)
 		}
-		buf := t.term.NormalBuffer()
-		t.promptMarker = buf.AddMarker(buf.YBase + buf.Y)
-		t.promptCol = buf.X
 	case "C", "D":
 		t.dropPromptMarker()
 	}
+}
+
+func (t *Terminal) markPromptAtCursor(readline bool) {
+	if t.term.IsAltBufferActive() {
+		return
+	}
+	buf := t.term.NormalBuffer()
+	t.promptMarker = buf.AddMarker(buf.YBase + buf.Y)
+	t.promptCol = buf.X
+	t.promptReadline = readline
 }
 
 func (t *Terminal) dropPromptMarker() {
@@ -105,6 +132,8 @@ func (t *Terminal) dropPromptMarker() {
 		t.promptMarker = nil
 	}
 	t.promptReadline = false
+	t.promptRedrawn = false
+	t.promptRepaint = false
 	if t.promptEnd != nil {
 		t.promptEnd.Dispose()
 		t.promptEnd = nil
@@ -127,11 +156,12 @@ func (t *Terminal) clearPromptForRedraw() {
 	}
 	first, last := marker.Line, cursor
 	if t.promptReadline {
-		// Readline repaints from the current logical line, but does not emit a
-		// fresh prompt marker on resize. Explicit PS1 newlines belong above it.
-		first = cursor
-		for first > marker.Line && buf.Lines.Get(first).IsWrapped {
-			first--
+		// Before the first repaint, Readline redraws from the cursor's logical
+		// line; explicit PS1 newlines above it stay. Its repaints insert their
+		// own line breaks, so afterwards the marker is the only reliable start.
+		if !t.promptRedrawn {
+			for first = cursor; first > marker.Line && buf.Lines.Get(first).IsWrapped; first-- {
+			}
 		}
 		for last+1 < buf.Lines.Length() && buf.Lines.Get(last+1).IsWrapped {
 			last++
@@ -139,16 +169,34 @@ func (t *Terminal) clearPromptForRedraw() {
 		if t.promptEnd != nil && !t.promptEnd.IsDisposed {
 			last = max(last, t.promptEnd.Line)
 		}
+	}
+	t.clearRows(first, last, marker.Line)
+	if t.promptReadline {
+		if first != marker.Line {
+			marker.Dispose()
+			t.promptMarker = buf.AddMarker(first)
+		}
+		t.promptCol = 0
+		if t.promptEnd != nil {
+			t.promptEnd.Dispose()
+			t.promptEnd = nil
+		}
+		t.promptRedrawn = true
+		t.promptRepaint = true
 		buf.Y = first - buf.YBase
 		buf.X = 0
 	}
+}
+
+func (t *Terminal) clearRows(first, last, markerLine int) {
+	buf := t.term.NormalBuffer()
 	attr := xterm.DefaultAttrData()
 	for row := first; row <= last && row < buf.Lines.Length(); row++ {
 		line := buf.Lines.Get(row)
 		// A prompt can start after output that lacked a final newline: keep
 		// that output, and the first row's wrap flag that belongs to it.
 		start := 0
-		if row == marker.Line {
+		if row == markerLine {
 			start = t.promptCol
 		}
 		line.ReplaceCells(start, line.Len, buf.GetNullCell(&attr), false)
