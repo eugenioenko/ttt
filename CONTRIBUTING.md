@@ -21,6 +21,10 @@ make lint    # gofmt check + golangci-lint run
 
 [AGENTS.md](AGENTS.md) is the detailed guide for humans and AI agents alike: architecture constraints, test layers, the debug harness, and PR expectations. [ARCHITECTURE.md](ARCHITECTURE.md) covers package boundaries.
 
+## Update About credits
+
+Run **Actions > Update Contributors > Run workflow** to refresh the About dialog's contributor and issue reporter lists. The workflow runs `make contributors` against `main` and opens or updates a PR on `auto-update-contributors` when the lists differ. Unchanged lists produce no PR. It runs only when triggered manually.
+
 ## Code style
 
 Run `make fmt` before committing. Add a comment only when missing it would cause a bug or misuse. AI-generated code tends to over-comment, so strip those comments before opening a PR.
