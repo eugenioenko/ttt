@@ -1716,32 +1716,43 @@ func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
 }
 
 func sameSaveTarget(a, b string) (bool, error) {
-	resolve := func(path string) string {
-		if resolved, err := filepath.EvalSymlinks(path); err == nil {
-			path = resolved
+	resolve := func(path string) (string, error) {
+		// Cleaning link/.. before resolving symlinks can change the destination.
+		resolved, err := filepath.EvalSymlinks(path)
+		if err == nil {
+			return filepath.Abs(resolved)
 		}
-		if abs, err := filepath.Abs(path); err == nil {
-			path = abs
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
 		}
-		return path
+		if entry, statErr := os.Lstat(path); statErr == nil && entry.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("unresolved symlink %s: %w", path, err)
+		} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
+		}
+		dir, name := filepath.Split(path)
+		if dir == "" {
+			dir = "."
+		}
+		parent, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Abs(filepath.Join(parent, name))
 	}
-	a, b = resolve(a), resolve(b)
+	a, err := resolve(a)
+	if err != nil {
+		return false, err
+	}
+	b, err = resolve(b)
+	if err != nil {
+		return false, err
+	}
 	if a == b {
 		return true, nil
 	}
 	if !strings.EqualFold(a, b) {
 		return false, nil
-	}
-	// Atomic saves split hard links; inode identity is only a fallback for case variants.
-	infoA, errA := os.Stat(a)
-	infoB, errB := os.Stat(b)
-	for _, err := range []error{errA, errB} {
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return false, err
-		}
-	}
-	if errA == nil && errB == nil {
-		return os.SameFile(infoA, infoB), nil
 	}
 	dirA, err := os.Stat(filepath.Dir(a))
 	if err != nil {
@@ -1750,6 +1761,9 @@ func sameSaveTarget(a, b string) (bool, error) {
 	dirB, err := os.Stat(filepath.Dir(b))
 	if err != nil || !os.SameFile(dirA, dirB) {
 		return false, err
+	}
+	if filepath.Base(a) == filepath.Base(b) {
+		return true, nil
 	}
 	return caseInsensitiveDir(filepath.Dir(b))
 }

@@ -50,11 +50,15 @@ func runFakePullServer(interFile bool) {
 		if path := os.Getenv(fakePullSyncLogEnv); path != "" && strings.HasPrefix(msg.Method, "textDocument/did") {
 			f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "fake pull sync log: open %s: %v\n", path, err)
 				return
 			}
 			err = json.NewEncoder(f).Encode(msg)
-			f.Close()
+			if closeErr := f.Close(); err == nil {
+				err = closeErr
+			}
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "fake pull sync log: write %s: %v\n", path, err)
 				return
 			}
 		}

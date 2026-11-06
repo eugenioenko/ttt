@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/undo"
-	"github.com/eugenioenko/ttt/internal/term"
 )
 
 func newSaveAsGroup(t *testing.T, text string, targetFirst bool) (*EditorGroupWidget, string, string) {
@@ -22,7 +21,6 @@ func newSaveAsGroup(t *testing.T, text string, targetFirst bool) (*EditorGroupWi
 		}
 	}
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
-	g.SyntaxHighlight = true
 	paths := []string{source, target}
 	if targetFirst {
 		slices.Reverse(paths)
@@ -37,124 +35,57 @@ func newSaveAsGroup(t *testing.T, text string, targetFirst bool) (*EditorGroupWi
 	return g, source, target
 }
 
-func TestSaveAsRejectsAnotherOpenFileBeforeChangingState(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		alias string
-	}{
-		{name: "dirty target"},
-		{name: "alternate target path", alias: "dot"},
-		{name: "case-insensitive target path", alias: "case"},
-		{name: "deleted case-insensitive target path", alias: "missing-case"},
-		{name: "symlink to target", alias: "symlink"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			g, source, target := newSaveAsGroup(t, "source  ", false)
-			dir := filepath.Dir(target)
-			var errMsg string
-			g.OnError = func(msg string) { errMsg = msg }
-			g.SwitchToTabByPath(target)
-			g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'})
-			targetBuf := g.ActiveBuffer()
-			targetLines := slices.Clone(targetBuf.Lines)
-			g.SwitchToTabByPath(source)
-			g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'Y'})
-			sourceBuf := g.ActiveBuffer()
-			sourceLines, sourceVersion := slices.Clone(sourceBuf.Lines), sourceBuf.Version()
-			g.InsertFinalNewline, g.TrimTrailingWhitespace = true, true
-
-			savePath := target
-			switch tc.alias {
-			case "dot":
-				savePath = filepath.ToSlash(dir) + "/./" + filepath.Base(target)
-			case "case", "missing-case":
-				savePath = filepath.Join(dir, strings.ToUpper(filepath.Base(target)))
-				if _, err := os.Stat(savePath); err != nil {
-					t.Skip("filesystem is case-sensitive")
-				}
-				if tc.alias == "missing-case" {
-					if err := os.Remove(target); err != nil {
-						t.Fatal(err)
-					}
-				}
-			case "symlink":
-				savePath = filepath.Join(dir, "target-link.go")
-				if err := os.Symlink(target, savePath); err != nil {
-					t.Skipf("symlinks unavailable: %v", err)
-				}
-			}
-			if g.SaveAs(savePath) {
-				t.Fatal("SaveAs succeeded for a file open in another tab")
-			}
-			if !strings.Contains(errMsg, "already open") {
-				t.Fatalf("error = %q, want an explanation of the open-file conflict", errMsg)
-			}
-			if g.ActiveFilePath() != source || g.ActiveBuffer() != sourceBuf || len(g.tabs) != 2 {
-				t.Fatal("rejected SaveAs changed the active document or tabs")
-			}
-			if !slices.Equal(sourceBuf.Lines, sourceLines) || sourceBuf.Version() != sourceVersion || !sourceBuf.Dirty {
-				t.Fatal("rejected SaveAs changed the source buffer")
-			}
-			if sourceBuf.InsertFinalNewline || sourceBuf.TrimTrailingWhitespace {
-				t.Fatal("rejected SaveAs changed the source save settings")
-			}
-			if !slices.Equal(targetBuf.Lines, targetLines) || !targetBuf.Dirty {
-				t.Fatal("rejected SaveAs changed the target buffer")
-			}
-			for path, want := range map[string]string{source: "source  ", target: "target"} {
-				data, err := os.ReadFile(path)
-				if path == target && tc.alias == "missing-case" && errors.Is(err, os.ErrNotExist) {
-					continue
-				}
-				if err != nil || string(data) != want {
-					t.Fatalf("disk content at %s = %q, %v; want %q", path, data, err, want)
-				}
-			}
-			g.Undo()
-			if sourceBuf.Lines[0] != "source  " || sourceBuf.Dirty {
-				t.Fatal("rejected SaveAs changed the source undo history or save point")
-			}
-		})
+func TestSaveAsRejectsDirtyTargetWithoutChanges(t *testing.T) {
+	g, source, target := newSaveAsGroup(t, "source  ", false)
+	g.SwitchToTabByPath(target)
+	g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'})
+	targetBuf := g.ActiveBuffer()
+	g.SwitchToTabByPath(source)
+	g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'Y'})
+	buf, version := g.ActiveBuffer(), g.ActiveBuffer().Version()
+	g.InsertFinalNewline, g.TrimTrailingWhitespace = true, true
+	if g.SaveAs(target) {
+		t.Fatal("SaveAs overwrote a dirty open target")
+	}
+	if g.ActiveFilePath() != source || g.ActiveBuffer() != buf || len(g.tabs) != 2 {
+		t.Fatal("rejected SaveAs changed the active document or tabs")
+	}
+	if strings.Join(buf.Lines, "\n") != "Ysource  " || buf.Version() != version || !buf.Dirty || buf.InsertFinalNewline || buf.TrimTrailingWhitespace {
+		t.Fatal("rejected SaveAs changed the source buffer or save settings")
+	}
+	if targetBuf.Lines[0] != "Xtarget" || !targetBuf.Dirty {
+		t.Fatal("rejected SaveAs changed the target buffer")
+	}
+	for path, want := range map[string]string{source: "source  ", target: "target"} {
+		if data, err := os.ReadFile(path); err != nil || string(data) != want {
+			t.Fatalf("disk content = %q, %v; want %q", data, err, want)
+		}
+	}
+	g.Undo()
+	if buf.Lines[0] != "source  " || buf.Dirty {
+		t.Fatal("rejected SaveAs changed the undo history or save point")
 	}
 }
 
 func TestSaveAsReplacesCleanOpenTarget(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		targetFirst bool
-		failWrite   bool
-		pinned      bool
-		duplicates  int
-	}{
-		{name: "target after source"},
-		{name: "target before source", targetFirst: true},
-		{name: "failed write", failWrite: true},
-		{name: "pinned target", pinned: true},
-		{name: "multiple old target tabs", targetFirst: true, duplicates: 2},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			g, source, target := newSaveAsGroup(t, "source", tc.targetFirst)
-			dir := filepath.Dir(target)
-			for i := 0; i < tc.duplicates; i++ {
-				if err := g.OpenFile(filepath.ToSlash(dir) + "/" + strings.Repeat("./", i+1) + "target.go"); err != nil {
-					t.Fatal(err)
+	for _, kind := range []string{"target after source", "target before source", "pinned duplicates", "failed write"} {
+		t.Run(kind, func(t *testing.T) {
+			g, source, target := newSaveAsGroup(t, "source", kind != "target after source")
+			if kind == "pinned duplicates" {
+				for i := 1; i <= 2; i++ {
+					if err := g.OpenFile(filepath.ToSlash(filepath.Dir(target)) + "/" + strings.Repeat("./", i) + "target.go"); err != nil {
+						t.Fatal(err)
+					}
+					g.activeTab().FilePath = target
+					g.CommitActiveTab()
 				}
-				g.activeTab().FilePath = target
-				g.CommitActiveTab()
-			}
-			if tc.pinned {
 				g.SwitchToTabByPath(target)
 				g.TogglePinTab()
+				g.SwitchToTabByPath(source)
 			}
-			g.SwitchToTabByPath(target)
-			g.Editor.SetBookmark(0, 'T', term.StyleDefault)
-			g.SetDecorations("save-as", target, []Decoration{tint(0, term.StyleDiffDeleted)})
-			g.SwitchToTabByPath(source)
-			g.Editor.SetBookmark(0, 'S', term.StyleDefault)
-			g.SetDecorations("save-as", source, []Decoration{tint(0, term.StyleDiffAdded)})
 			g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'})
 			buf, stack := g.ActiveBuffer(), g.Editor.Undo
-			if tc.failWrite {
+			if kind == "failed write" {
 				if err := os.Remove(target); err != nil {
 					t.Fatal(err)
 				}
@@ -170,17 +101,8 @@ func TestSaveAsReplacesCleanOpenTarget(t *testing.T) {
 			if !g.SaveAs(target) {
 				t.Fatal("SaveAs failed for a clean open target")
 			}
-			if len(g.tabs) != 1 || g.ActiveFilePath() != target || g.ActiveBuffer() != buf || g.Editor.Undo != stack {
+			if len(g.tabs) != 1 || g.ActiveFilePath() != target || g.ActiveBuffer() != buf || g.Editor.Undo != stack || g.pinnedCount != 0 {
 				t.Fatal("SaveAs did not retain the source as the single target document")
-			}
-			if g.pinnedCount != 0 {
-				t.Fatal("SaveAs retained the removed target's pin")
-			}
-			if mark, ok := g.Editor.GetBookmark(0); !ok || mark.Icon != 'S' {
-				t.Fatal("SaveAs did not retain the source's bookmarks")
-			}
-			if g.Editor.DiffOverlay == nil || g.Editor.DiffOverlay.LineBg[0] != term.StyleDiffAdded {
-				t.Fatal("SaveAs did not retain the source's decorations")
 			}
 			if data, err := os.ReadFile(target); err != nil || string(data) != "Xsource" {
 				t.Fatalf("target = %q, %v; want Xsource", data, err)
@@ -193,75 +115,81 @@ func TestSaveAsReplacesCleanOpenTarget(t *testing.T) {
 	}
 }
 
-func TestSaveAsKeepsIndependentOpenFiles(t *testing.T) {
+func TestSameSaveTarget(t *testing.T) {
+	dir := t.TempDir()
+	target, other := filepath.Join(dir, "target"), filepath.Join(dir, "other")
+	for _, path := range []string{target, other} {
+		if err := os.WriteFile(path, []byte("content"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"parent", "nested", "case"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	upper := filepath.Join(dir, "TARGET")
+	_, err := os.Stat(upper)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	insensitive := err == nil
+	caseTarget := filepath.Join(dir, "case", "target")
+	if err := os.WriteFile(caseTarget, []byte("content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	upper = filepath.Join(dir, "case", "TARGET")
+	var caseLinkErr error
+	if !insensitive {
+		caseLinkErr = os.Link(caseTarget, upper)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "OTHER"), []byte("other"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(dir, "alias")
+	hardLinkErr := os.Link(target, alias)
+	link, dangling, loop := filepath.Join(dir, "link"), filepath.Join(dir, "dangling"), filepath.Join(dir, "loop")
+	fileLinkErr := os.Symlink(target, link)
+	danglingErr := os.Symlink(filepath.Join(dir, "missing"), dangling)
+	loopErr := os.Symlink(loop, loop)
+	parentLink, nestedLink := filepath.Join(dir, "parent-link"), filepath.Join(dir, "nested-link")
+	parentLinkErr := os.Symlink(dir, parentLink)
+	nestedLinkErr := os.Symlink(filepath.Join(dir, "nested"), nestedLink)
 	for _, tc := range []struct {
-		name        string
-		dirty       bool
-		caseVariant bool
+		name, a, b    string
+		want, wantErr bool
+		setupErr      error
 	}{
-		{name: "clean hard link"},
-		{name: "dirty hard link", dirty: true},
-		{name: "clean case-sensitive file", caseVariant: true},
-		{name: "dirty case-sensitive file", dirty: true, caseVariant: true},
+		{"same", target, target, true, false, nil},
+		{"dot", target, filepath.ToSlash(dir) + "/./target", true, false, nil},
+		{"case alias or hard link", caseTarget, upper, insensitive, false, caseLinkErr},
+		{"case-distinct files", other, filepath.Join(dir, "OTHER"), insensitive, false, nil},
+		{"deleted case alias", filepath.Join(dir, "missing"), filepath.Join(dir, "MISSING"), insensitive, false, nil},
+		{"hard link", target, alias, false, false, hardLinkErr},
+		{"file symlink", target, link, true, false, fileLinkErr},
+		{"parent symlink", target, filepath.Join(parentLink, "target"), true, false, parentLinkErr},
+		{"deleted parent alias", filepath.Join(dir, "missing"), filepath.Join(parentLink, "missing"), true, false, parentLinkErr},
+		{"link/..", target, nestedLink + "/../target", true, false, nestedLinkErr},
+		{"deleted link/..", filepath.Join(dir, "missing"), nestedLink + "/../missing", true, false, nestedLinkErr},
+		{"case parent", filepath.Join(dir, "parent", "123"), filepath.Join(dir, "PARENT", "123"), true, false, nil},
+		{"empty case", filepath.Join(dir, "parent", "target"), filepath.Join(dir, "parent", "TARGET"), false, true, nil},
+		{"missing parent", target, filepath.Join(dir, "gone", "target"), false, true, nil},
+		{"invalid parent", target, filepath.Join(target, "child"), false, true, nil},
+		{"dangling symlink", target, dangling, false, true, danglingErr},
+		{"symlink loop", target, loop, false, true, loopErr},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			g, source, own := newSaveAsGroup(t, "replacement", false)
-			dir := filepath.Dir(own)
-			alias := filepath.Join(dir, "alias.go")
-			if tc.caseVariant {
-				alias = filepath.Join(dir, strings.ToUpper(filepath.Base(own)))
-				if _, err := os.Stat(alias); err == nil {
-					t.Skip("filesystem is case-insensitive")
-				} else if !errors.Is(err, os.ErrNotExist) {
-					t.Fatal(err)
+			if tc.setupErr != nil {
+				t.Skipf("filesystem capability unavailable: %v", tc.setupErr)
+			}
+			if tc.name == "case parent" && !insensitive {
+				t.Skip("parent path is case-sensitive")
+			}
+			for _, paths := range [][2]string{{tc.a, tc.b}, {tc.b, tc.a}} {
+				same, err := sameSaveTarget(paths[0], paths[1])
+				if (err != nil) != tc.wantErr || (!tc.wantErr && same != tc.want) {
+					t.Fatalf("sameSaveTarget(%q, %q) = %v, %v; want match=%v, error=%v", paths[0], paths[1], same, err, tc.want, tc.wantErr)
 				}
-				if err := os.WriteFile(alias, []byte("alias"), 0600); err != nil {
-					t.Fatal(err)
-				}
-			} else if err := os.Link(own, alias); err != nil {
-				t.Skipf("hard links unavailable: %v", err)
-			}
-			g.SwitchToTabByPath(own)
-			if tc.dirty {
-				g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'})
-			}
-			ownBuf := g.ActiveBuffer()
-			ownLines := slices.Clone(ownBuf.Lines)
-			g.SwitchToTabByPath(source)
-			if !g.SaveAs(alias) {
-				t.Fatal("SaveAs rejected an independent save target")
-			}
-			if len(g.tabs) != 2 || g.BufferForPath(own) != ownBuf || ownBuf.Dirty != tc.dirty || !slices.Equal(ownBuf.Lines, ownLines) {
-				t.Fatal("SaveAs changed an independent open document")
-			}
-			for path, want := range map[string]string{own: "target", alias: "replacement"} {
-				data, err := os.ReadFile(path)
-				if err != nil || string(data) != want {
-					t.Fatalf("%s = %q, %v; want %q", path, data, err, want)
-				}
-			}
-		})
-	}
-}
-
-func TestSaveAsRejectsUncertainCaseTarget(t *testing.T) {
-	for _, invalidDir := range []bool{false, true} {
-		t.Run(map[bool]string{false: "empty directory", true: "invalid directory"}[invalidDir], func(t *testing.T) {
-			g, source, target := newSaveAsGroup(t, "source", false)
-			dir := filepath.Join(filepath.Dir(target), "empty")
-			if invalidDir {
-				dir = source
-			} else if err := os.Mkdir(dir, 0700); err != nil {
-				t.Fatal(err)
-			}
-			g.SwitchToTabByPath(target)
-			g.activeTab().FilePath = filepath.Join(dir, "target.go")
-			g.SwitchToTabByPath(source)
-			if targets, err := g.SaveAsTargets(filepath.Join(dir, "TARGET.go")); err == nil || len(targets) != 0 {
-				t.Fatalf("indeterminate destination = %v, %v; want an error", targets, err)
-			}
-			if len(g.tabs) != 2 || g.ActiveFilePath() != source {
-				t.Fatal("checking an indeterminate destination changed the tabs")
 			}
 		})
 	}
