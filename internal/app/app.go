@@ -444,6 +444,9 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	if spec.Shell == "" {
 		spec.Shell = a.Settings.Terminal.Shell
 		spec.Args = a.Settings.Terminal.Args
+		if a.Settings.Terminal.ShellIntegration {
+			spec.Shell, spec.Args = terminal.IntegrateShell(spec.Shell, spec.Args)
+		}
 	}
 	if spec.Cwd == "" {
 		spec.Cwd = a.Workspace.Primary()

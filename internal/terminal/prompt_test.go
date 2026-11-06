@@ -77,3 +77,22 @@ func TestResizeKeepsOutputBeforeSameRowPrompt(t *testing.T) {
 		t.Fatalf("prompt not cleared:\n%s", screen)
 	}
 }
+
+// Captured from bash with ttt's shell integration, after the prompt was first
+// drawn wrapped: each repaint moves up from Readline's layout at an older width.
+func TestResizeKeepsOutputAboveIntegratedBashPrompt(t *testing.T) {
+	term := newPromptTerminal(46, 12)
+	const (
+		prompt  = "\x1b]133;A\a\x1b[36m…/enko/Documents/ttt\x1b[00m \x1b[33m[fix/readline-bash-prompt-resize]\x1b[00m ➜ "
+		repaint = "\r\x1b[K\x1b[A\x1b]133;A\a\x1b[36m…/enko/Documents/ttt\x1b[00m \x1b[33m[fix/readline-bash-prompt-resize\r\n\r]\x1b[00m ➜ "
+	)
+	term.term.WriteString("$ echo RESIZE_READY\r\n\x1b]133;C\aRESIZE_READY\r\n\x1b[?2004h" + prompt)
+	for _, cols := range []int{45, 43, 41, 39, 38, 40, 44, 50, 60, 30} {
+		term.resizeEmulator(cols, 12)
+		term.term.WriteString(repaint)
+		screen := term.term.String()
+		if strings.Count(screen, "enko/Documents") != 1 || !strings.Contains(screen, "RESIZE_READY\n") {
+			t.Fatalf("resize to %d lost output or duplicated the prompt:\n%s", cols, screen)
+		}
+	}
+}

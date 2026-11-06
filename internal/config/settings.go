@@ -41,19 +41,21 @@ type TerminalSettings struct {
 	Shell string `json:"shell,omitempty"`
 	// Args are passed to Shell unchanged, so a tab can run a program other than
 	// an interactive shell (e.g. Shell="pi", Args=["--model", "..."]).
-	Args           []string `json:"args,omitempty"`
-	Scrollback     int      `json:"scrollback,omitempty"`
-	SelectionStyle string   `json:"selectionStyle"`
-	CtrlVPastes    bool     `json:"ctrlVPastes"`
-	PaddingX       int      `json:"padding_x"`
+	Args             []string `json:"args,omitempty"`
+	Scrollback       int      `json:"scrollback,omitempty"`
+	SelectionStyle   string   `json:"selectionStyle"`
+	CtrlVPastes      bool     `json:"ctrlVPastes"`
+	PaddingX         int      `json:"padding_x"`
+	ShellIntegration bool     `json:"shellIntegration"`
 }
 
 func DefaultTerminalSettings() TerminalSettings {
 	return TerminalSettings{
-		Scrollback:     1000,
-		SelectionStyle: SelectionStyleBackground,
-		CtrlVPastes:    true,
-		PaddingX:       1,
+		Scrollback:       1000,
+		SelectionStyle:   SelectionStyleBackground,
+		CtrlVPastes:      true,
+		PaddingX:         1,
+		ShellIntegration: true,
 	}
 }
 
