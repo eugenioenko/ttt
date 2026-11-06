@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"runtime"
 	"time"
 	"unicode/utf8"
 
@@ -1698,7 +1697,14 @@ func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
 	var targets []int
 	for i := range g.tabs {
 		other := &g.tabs[i]
-		if i == g.active || other.Virtual || other.Buf == nil || !sameSaveTarget(other.FilePath, path) {
+		if i == g.active || other.Virtual || other.Buf == nil {
+			continue
+		}
+		same, err := sameSaveTarget(other.FilePath, path)
+		if err != nil {
+			return nil, fmt.Errorf("Cannot determine save destination %s: %w", filepath.Base(path), err)
+		}
+		if !same {
 			continue
 		}
 		if other.Buf.Dirty {
@@ -1709,7 +1715,7 @@ func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
 	return targets, nil
 }
 
-func sameSaveTarget(a, b string) bool {
+func sameSaveTarget(a, b string) (bool, error) {
 	resolve := func(path string) string {
 		if resolved, err := filepath.EvalSymlinks(path); err == nil {
 			path = resolved
@@ -1721,18 +1727,63 @@ func sameSaveTarget(a, b string) bool {
 	}
 	a, b = resolve(a), resolve(b)
 	if a == b {
-		return true
+		return true, nil
 	}
 	if !strings.EqualFold(a, b) {
-		return false
+		return false, nil
 	}
 	// Atomic saves split hard links; inode identity is only a fallback for case variants.
 	infoA, errA := os.Stat(a)
 	infoB, errB := os.Stat(b)
-	if errA == nil && errB == nil {
-		return os.SameFile(infoA, infoB)
+	for _, err := range []error{errA, errB} {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return false, err
+		}
 	}
-	return runtime.GOOS == "windows" || runtime.GOOS == "darwin"
+	if errA == nil && errB == nil {
+		return os.SameFile(infoA, infoB), nil
+	}
+	dirA, err := os.Stat(filepath.Dir(a))
+	if err != nil {
+		return false, err
+	}
+	dirB, err := os.Stat(filepath.Dir(b))
+	if err != nil || !os.SameFile(dirA, dirB) {
+		return false, err
+	}
+	return caseInsensitiveDir(filepath.Dir(b))
+}
+
+func caseInsensitiveDir(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		name := strings.ToUpper(entry.Name())
+		if name == entry.Name() {
+			name = strings.ToLower(name)
+		}
+		if name == entry.Name() {
+			continue
+		}
+		if slices.ContainsFunc(entries, func(e os.DirEntry) bool { return e.Name() == name }) {
+			return false, nil
+		}
+		original, err := entry.Info()
+		if err != nil {
+			return false, err
+		}
+		variant, err := os.Lstat(filepath.Join(dir, name))
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return os.SameFile(original, variant), nil
+	}
+	return false, fmt.Errorf("no entry reveals case sensitivity in %s", dir)
 }
 
 // movePathState moves the bookmarks and decorations kept for oldPath, or for

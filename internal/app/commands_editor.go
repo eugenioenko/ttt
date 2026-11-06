@@ -223,8 +223,20 @@ func (a *App) showSaveFileAs(onSaved func()) {
 }
 
 func (a *App) saveFileAs(path string, onSaved func()) {
+	targets, err := a.EditorGroup.SaveAsTargets(path)
+	if err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	if len(targets) > 0 {
+		// Keep the open document's URI when the requested path is an alias.
+		path, _ = a.EditorGroup.TabInfo(targets[0])
+	}
 	if a.EditorGroup.SaveAs(path) {
 		path, lang := a.editorPathLang()
+		if len(targets) > 0 {
+			a.NotifyLSPChange(path, lang, a.EditorGroup.ActiveBuffer().Lines)
+		}
 		a.afterFileSave(path, lang)
 		if onSaved != nil {
 			onSaved()

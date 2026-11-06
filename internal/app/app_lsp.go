@@ -1034,7 +1034,16 @@ func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 	}
 	text := strings.Join(lines, "\n")
 	workDir := a.lspWorkDir(path)
+	sent := make(chan struct{})
+	a.DocVersionsMu.Lock()
+	previous := a.lspSent[path]
+	a.lspSent[path] = sent
+	a.DocVersionsMu.Unlock()
 	go func() {
+		defer close(sent)
+		if previous != nil {
+			<-previous
+		}
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			return

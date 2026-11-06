@@ -243,3 +243,26 @@ func TestSaveAsKeepsIndependentOpenFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestSaveAsRejectsUncertainCaseTarget(t *testing.T) {
+	for _, invalidDir := range []bool{false, true} {
+		t.Run(map[bool]string{false: "empty directory", true: "invalid directory"}[invalidDir], func(t *testing.T) {
+			g, source, target := newSaveAsGroup(t, "source", false)
+			dir := filepath.Join(filepath.Dir(target), "empty")
+			if invalidDir {
+				dir = source
+			} else if err := os.Mkdir(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			g.SwitchToTabByPath(target)
+			g.activeTab().FilePath = filepath.Join(dir, "target.go")
+			g.SwitchToTabByPath(source)
+			if targets, err := g.SaveAsTargets(filepath.Join(dir, "TARGET.go")); err == nil || len(targets) != 0 {
+				t.Fatalf("indeterminate destination = %v, %v; want an error", targets, err)
+			}
+			if len(g.tabs) != 2 || g.ActiveFilePath() != source {
+				t.Fatal("checking an indeterminate destination changed the tabs")
+			}
+		})
+	}
+}
