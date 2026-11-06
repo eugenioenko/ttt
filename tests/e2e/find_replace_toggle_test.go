@@ -28,7 +28,7 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			h.pressKey(tcell.KeyEnter, tcell.ModNone)
 			h.pressKey(tcell.KeyHome, tcell.ModNone)
 			h.pressKey(tcell.KeyRight, tcell.ModShift)
-			cursor := find.Input.CursorPos
+			cursor, _, _ := find.Input.CursorPosition()
 			current := find.Current
 			options := find.Options
 			h.click(81, 5)
@@ -36,19 +36,20 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			if !ok {
 				t.Fatalf("toggle opened %T", h.app.Root.TopOverlayWidget())
 			}
-			if replace.SearchInput.Text != "日foo" || replace.SearchInput.CursorPos != cursor || replace.Options != options || replace.Current != current || h.app.EditorGroup.Editor.SearchActive != current {
-				t.Fatalf("find state lost: query=%q cursor=%d options=%+v current=%d", replace.SearchInput.Text, replace.SearchInput.CursorPos, replace.Options, replace.Current)
+			replaceCursor, _, _ := replace.SearchInput.CursorPosition()
+			if replace.SearchInput.Text() != "日foo" || replaceCursor != cursor || replace.Options != options || replace.Current != current || h.app.EditorGroup.Editor.SearchActive != current {
+				t.Fatalf("find state lost: query=%q cursor=%d options=%+v current=%d", replace.SearchInput.Text(), replaceCursor, replace.Options, replace.Current)
 			}
 			h.pressRune('界')
-			if replace.SearchInput.Text != "界foo" || len(replace.Matches) != 0 {
-				t.Fatalf("search selection or callback lost: %q %+v", replace.SearchInput.Text, replace.Matches)
+			if replace.SearchInput.Text() != "界foo" || len(replace.Matches) != 0 {
+				t.Fatalf("search selection or callback lost: %q %+v", replace.SearchInput.Text(), replace.Matches)
 			}
 			replace.SearchInput.SetText("日foo")
 			h.pressKey(tcell.KeyTab, tcell.ModNone)
 			pasteText(h, pasteKeys("replacement"))
 			h.click(81, 5)
 			find = h.app.Root.TopOverlayWidget().(*ui.FindBarWidget)
-			if find.Input.Text != "日foo" || find.Options != options {
+			if find.Input.Text() != "日foo" || find.Options != options {
 				t.Fatal("collapse lost query or options")
 			}
 			find.Input.SetText("foo")
@@ -57,7 +58,7 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			}
 			h.click(81, 5)
 			replace = h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
-			if replace.SearchInput.Text != "foo" || replace.ReplaceInput.Text != "replacement" || replace.Options != options {
+			if replace.SearchInput.Text() != "foo" || replace.ReplaceInput.Text() != "replacement" || replace.Options != options {
 				t.Fatal("expand lost search or replacement text or options")
 			}
 			hit := replace.ReplaceInput.ActionHits[1]
@@ -83,7 +84,7 @@ func TestFindReplaceShortcutSwitchesMode(t *testing.T) {
 	h.exec("search.find")
 	h.exec("search.replace")
 	replace = h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
-	if replace.SearchInput.Text != "query" || replace.ReplaceInput.Text != "replacement" {
+	if replace.SearchInput.Text() != "query" || replace.ReplaceInput.Text() != "replacement" {
 		t.Fatal("shortcuts lost input")
 	}
 }

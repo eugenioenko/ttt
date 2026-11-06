@@ -34,7 +34,7 @@ func TestSearchReplaceRescanPreservesUpstreamBehavior(t *testing.T) {
 					t.Setenv("PATH", t.TempDir())
 					original, expected = "foo\n", "bar\n"
 				case "empty query":
-					h.a.Search.Input.Text = ""
+					seedInputText(h.a.Search.Input, "")
 					original, expected = "foo\n", "bar\n"
 					h.a.searchReplace.scan = func(context.Context, search.Options, []string) (map[string][]search.Match, error) {
 						t.Error("empty query attempted a scan instead of using the panel snapshot")

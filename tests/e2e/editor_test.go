@@ -128,8 +128,8 @@ func TestCommandPaletteSharedWidthBindingsAndTransitions(t *testing.T) {
 	if !ok {
 		t.Fatalf("Ctrl+P opened %T, want command palette", h.app.Root.TopOverlayWidget())
 	}
-	if palette.Input.Text != ">" || len(palette.Items) != len(h.reg.List()) {
-		t.Fatalf("Ctrl+P input=%q items=%d, want > and complete registry of %d", palette.Input.Text, len(palette.Items), len(h.reg.List()))
+	if palette.Input.Text() != ">" || len(palette.Items) != len(h.reg.List()) {
+		t.Fatalf("Ctrl+P input=%q items=%d, want > and complete registry of %d", palette.Input.Text(), len(palette.Items), len(h.reg.List()))
 	}
 	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
 		t.Fatalf("Ctrl+P command palette width=%d, want 60; row=%q", got, h.screenRow(2))
@@ -151,8 +151,8 @@ func TestCommandPaletteSharedWidthBindingsAndTransitions(t *testing.T) {
 	}
 
 	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
-	if palette.Input.Text != "" {
-		t.Fatalf("file-mode input=%q, want empty", palette.Input.Text)
+	if palette.Input.Text() != "" {
+		t.Fatalf("file-mode input=%q, want empty", palette.Input.Text())
 	}
 	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
 		t.Fatalf("file palette width=%d, want 60", got)
@@ -160,8 +160,8 @@ func TestCommandPaletteSharedWidthBindingsAndTransitions(t *testing.T) {
 	h.assertContains("alpha.txt")
 
 	h.pressRune(':')
-	if palette.Input.Text != ":" {
-		t.Fatalf("go-to-line input=%q, want colon prefix", palette.Input.Text)
+	if palette.Input.Text() != ":" {
+		t.Fatalf("go-to-line input=%q, want colon prefix", palette.Input.Text())
 	}
 	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
 		t.Fatalf("go-to-line palette width=%d, want 60", got)
@@ -185,8 +185,8 @@ func TestCommandPaletteSharedWidthBindingsAndTransitions(t *testing.T) {
 	if !ok {
 		t.Fatalf("Ctrl+K P opened %T, want file search", h.app.Root.TopOverlayWidget())
 	}
-	if palette.Input.Text != "" {
-		t.Fatalf("Ctrl+K P input=%q, want empty file search", palette.Input.Text)
+	if palette.Input.Text() != "" {
+		t.Fatalf("Ctrl+K P input=%q, want empty file search", palette.Input.Text())
 	}
 	if got := paletteBorderWidth(h.screenRow(2)); got != 60 {
 		t.Fatalf("Ctrl+K P file palette width=%d, want 60", got)

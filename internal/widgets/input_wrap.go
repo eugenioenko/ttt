@@ -120,6 +120,7 @@ func (inp *InputWidget) HeightAtWidth(w int) int {
 	} else {
 		textW -= textwidth.String(inp.Config.Prefix)
 	}
+	textW -= inp.ActionsWidth()
 	if textW <= 0 {
 		return 0
 	}

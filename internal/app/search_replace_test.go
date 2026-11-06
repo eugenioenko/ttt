@@ -29,7 +29,8 @@ func newReplaceTestHarness(t *testing.T) *replaceTestHarness {
 	if err := os.WriteFile(h.path, []byte("foo\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	h.a.Search.Input.Text, h.a.Search.ReplaceInput.Text = "foo", "bar"
+	seedInputText(h.a.Search.Input, "foo")
+	seedInputText(h.a.Search.ReplaceInput, "bar")
 	h.a.Search.Groups = []ui.SearchFileGroup{{FilePath: h.path, Matches: []ui.SearchMatch{{FilePath: h.path, LineNum: 1, ColEnd: 3, LineText: "foo"}}}}
 	h.a.tasks.post = func(fn func()) error { h.deliveries = append(h.deliveries, fn); return nil }
 	h.a.searchReplace.task = NewTask[map[string][]search.Match](h.a, asynctask.TaskOptions{Run: func(fn func()) { h.work = append(h.work, fn) }})
@@ -133,26 +134,24 @@ func TestSearchReplacePreflightRejectsStaleDeliveries(t *testing.T) {
 			case "new request":
 				s.ReplaceAllFiles()
 			case "query":
-				s.Input.Text = "different"
+				seedInputText(s.Input, "different")
 			case "include":
-				s.Include.Text = "*.go"
+				seedInputText(s.Include, "*.go")
 			case "exclude":
-				s.Exclude.Text = "*.txt"
+				seedInputText(s.Exclude, "*.txt")
 			case "case":
 				s.Options.CaseSensitive = true
 			case "regex":
 				s.Options.UseRegex = true
 			case "replacement":
-				s.ReplaceInput.Text = "other"
+				seedInputText(s.ReplaceInput, "other")
 			case "workspace":
 				s.SetWorkDirs([]string{t.TempDir()})
 			case "clear":
 				h.a.ClearGlobalSearch()
 			case "round trip":
-				s.ReplaceInput.Text = "other"
-				s.ReplaceInput.OnChange("other")
-				s.ReplaceInput.Text = "bar"
-				s.ReplaceInput.OnChange("bar")
+				s.ReplaceInput.SetText("other")
+				s.ReplaceInput.SetText("bar")
 			}
 			stale()
 			if h.a.Root.HasOverlay() {
@@ -180,9 +179,9 @@ func TestSearchReplaceRevalidatesConfirmation(t *testing.T) {
 			case "shutdown":
 				h.a.CloseTasks()
 			case "query":
-				h.a.Search.Input.Text = "different"
+				seedInputText(h.a.Search.Input, "different")
 			case "replacement":
-				h.a.Search.ReplaceInput.Text = "other"
+				seedInputText(h.a.Search.ReplaceInput, "other")
 			case "new request":
 				h.a.Search.ReplaceAllFiles()
 				h.finish(t)()
@@ -280,11 +279,9 @@ func TestSearchReplaceCancellationReachesRunningScan(t *testing.T) {
 			case "new request":
 				h.a.Search.ReplaceAllFiles()
 			case "query":
-				h.a.Search.Input.Text = ""
-				h.a.Search.Input.OnChange("")
+				h.a.Search.Input.SetText("")
 			case "replacement":
-				h.a.Search.ReplaceInput.Text = "other"
-				h.a.Search.ReplaceInput.OnChange("other")
+				h.a.Search.ReplaceInput.SetText("other")
 			case "workspace":
 				h.a.Search.SetWorkDirs([]string{t.TempDir()})
 			}
@@ -312,8 +309,8 @@ func TestSearchReplaceKeepsEventLoopResponsive(t *testing.T) {
 	}
 	startListenTestEventLoop(t, a)
 	if err := runExecMain(a, func() error {
-		a.Search.Input.Text, a.Search.ReplaceInput.Text = "foo", "bar"
-		a.Search.ReplaceInput.CursorPos = 3
+		seedInputText(a.Search.Input, "foo")
+		seedInputText(a.Search.ReplaceInput, "bar")
 		a.Search.Groups = []ui.SearchFileGroup{{FilePath: "unused.txt"}}
 		a.Search.SetReplaceMode(true)
 		a.showSidebar()
@@ -342,7 +339,7 @@ func TestSearchReplaceKeepsEventLoopResponsive(t *testing.T) {
 	var text string
 	var overlay bool
 	if err := runExecMain(a, func() error {
-		text, overlay = a.Search.ReplaceInput.Text, a.Root.HasOverlay()
+		text, overlay = a.Search.ReplaceInput.Text(), a.Root.HasOverlay()
 		return nil
 	}); err != nil {
 		t.Fatal(err)

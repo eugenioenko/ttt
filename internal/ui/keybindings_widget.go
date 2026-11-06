@@ -7,6 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -21,7 +22,7 @@ type KeybindingsWidget struct {
 	OnClear     func(cmdID string)
 	OnHelp      func()
 
-	input        *InputWidget
+	input        *widgets.InputWidget
 	allItems     []keybindingEntry
 	items        []keybindingEntry
 	selected     int
@@ -63,9 +64,9 @@ func NewKeybindingsWidget(commands []command.Command) *KeybindingsWidget {
 	sort.Slice(w.allItems, func(i, j int) bool {
 		return w.allItems[i].Title < w.allItems[j].Title
 	})
-	w.input = NewInputWidget()
-	w.input.Placeholder = "Search shortcuts or commands..."
-	w.input.OnChange = func(text string) {
+	w.input = newPanelInput()
+	w.input.Config.Placeholder = "Search shortcuts or commands..."
+	w.input.Config.OnChange = func(text string) {
 		w.filter()
 	}
 	w.filter()
@@ -78,7 +79,7 @@ func (w *KeybindingsWidget) CursorPosition() (int, int, bool) {
 	if w.recording || w.focusedAction >= 0 {
 		return 0, 0, false
 	}
-	return w.input.CursorX(w.inputX), w.inputY, true
+	return w.input.CursorPosition()
 }
 
 func (w *KeybindingsWidget) Render(surface Surface) {
@@ -125,7 +126,7 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 
 	w.inputX = boxX + 1
 	w.inputY = boxY + 1
-	w.input.Render(surface, w.inputX, w.inputY, boxW-2)
+	renderPanelInput(surface, w.input, w.inputX, w.inputY, boxW-2)
 
 	for x := boxX + 1; x < boxX+boxW-1; x++ {
 		surface.SetCell(x, boxY+2, term.Cell{Ch: b.Horizontal, Style: term.StyleBorder})
@@ -348,7 +349,7 @@ func (w *KeybindingsWidget) HandleEvent(ev tcell.Event) EventResult {
 	case tcell.KeyDelete:
 		w.clearSelected()
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		if len(w.input.Text) == 0 {
+		if len(w.input.Text()) == 0 {
 			w.resetSelected()
 		} else {
 			w.focusedAction = -1
@@ -398,7 +399,7 @@ func (w *KeybindingsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 
 	if btn&tcell.Button1 != 0 {
 		if my == w.inputY {
-			result := w.input.HandleMouse(mev)
+			result := w.input.HandleEvent(mev)
 			if w.recording {
 				w.recording = false
 				w.recordCombo = ""
@@ -539,7 +540,7 @@ func (w *KeybindingsWidget) clearSelected() {
 }
 
 func (w *KeybindingsWidget) filter() {
-	query := strings.TrimSpace(w.input.Text)
+	query := strings.TrimSpace(w.input.Text())
 	w.items = nil
 
 	if query == "" {

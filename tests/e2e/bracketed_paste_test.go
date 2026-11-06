@@ -56,7 +56,7 @@ func TestBracketedPasteIntoFindBar(t *testing.T) {
 	bar := findBarWidget(t, h)
 
 	pasteText(h, pasteKeys("https://github.com/eugenioenko/ttt"))
-	if got := bar.Input.Text; got != "https://github.com/eugenioenko/ttt" {
+	if got := bar.Input.Text(); got != "https://github.com/eugenioenko/ttt" {
 		t.Fatalf("find input = %q", got)
 	}
 	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
@@ -65,7 +65,7 @@ func TestBracketedPasteIntoFindBar(t *testing.T) {
 	clipboard.DisableSystem()
 	clipboard.Set("-clipboard")
 	h.exec("editor.paste")
-	if got := bar.Input.Text; got != "https://github.com/eugenioenko/ttt-clipboard" {
+	if got := bar.Input.Text(); got != "https://github.com/eugenioenko/ttt-clipboard" {
 		t.Fatalf("find input after clipboard command = %q", got)
 	}
 	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
@@ -157,17 +157,17 @@ func TestBracketedPasteIntoReplaceBar(t *testing.T) {
 	}
 
 	pasteText(h, pasteKeys("old"))
-	if got := bar.SearchInput.Text; got != "old" {
+	if got := bar.SearchInput.Text(); got != "old" {
 		t.Fatalf("search input = %q", got)
 	}
 	h.pressKey(tcell.KeyTab, tcell.ModNone)
 	pasteText(h, pasteKeys("new"))
-	if got := bar.ReplaceInput.Text; got != "new" {
+	if got := bar.ReplaceInput.Text(); got != "new" {
 		t.Fatalf("replace input = %q", got)
 	}
 	clipboard.Set("er")
 	h.exec("editor.paste")
-	if got := bar.ReplaceInput.Text; got != "newer" {
+	if got := bar.ReplaceInput.Text(); got != "newer" {
 		t.Fatalf("replace input after clipboard command = %q", got)
 	}
 	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {

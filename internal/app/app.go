@@ -243,9 +243,9 @@ func (a *App) applySearchHighlights() {
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
-	if a.Sidebar.ActivePanel == "search" && a.Search.Input.Text != "" {
-		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
-		a.EditorGroup.SetSearch(a.Search.Input.Text, a.Search.Options, matches)
+	if a.Sidebar.ActivePanel == "search" && a.Search.Input.Text() != "" {
+		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text(), a.Search.Options)
+		a.EditorGroup.SetSearch(a.Search.Input.Text(), a.Search.Options, matches)
 	} else {
 		a.EditorGroup.Editor.RefreshSearch()
 	}
@@ -948,12 +948,6 @@ func (a *App) Paste() {
 	a.EditorGroup.Paste()
 }
 
-// widgetInputHolder is implemented by widgets that keep their own focus and
-// may hold a focused widgets.InputWidget, such as plugin panels.
-type widgetInputHolder interface {
-	FocusedInput() *widgets.InputWidget
-}
-
 // focusedWidgetInput returns the widgets.InputWidget with keyboard focus
 // inside a focused widget adapter or plugin editor tab, or nil. Copy, Cut
 // and Paste use it so clipboard commands act on that input, not the editor.
@@ -968,7 +962,7 @@ func (a *App) focusedWidgetInput() *widgets.InputWidget {
 	switch w := w.(type) {
 	case *widgets.InputWidget:
 		return w
-	case widgetInputHolder:
+	case ui.InputHolder:
 		return w.FocusedInput()
 	}
 	return nil

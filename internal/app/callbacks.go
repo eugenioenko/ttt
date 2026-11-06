@@ -178,7 +178,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		}
 		if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
 			dv.ScrollToLine(line - 1)
-			dv.ApplySearchHighlight(a.Search.Input.Text, a.Search.Options)
+			dv.ApplySearchHighlight(a.Search.Input.Text(), a.Search.Options)
 		}
 		a.Root.SetFocus(a.EditorGroup)
 		return
@@ -190,9 +190,9 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		runeCol := utf8.RuneCountInString(text[:min(col, len(text))])
 		a.EditorGroup.GoToLineCol(line, runeCol+1)
 	}
-	if a.Search.Input.Text != "" {
-		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
-		a.EditorGroup.SetSearch(a.Search.Input.Text, a.Search.Options, matches)
+	if a.Search.Input.Text() != "" {
+		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text(), a.Search.Options)
+		a.EditorGroup.SetSearch(a.Search.Input.Text(), a.Search.Options, matches)
 	}
 	a.Root.SetFocus(a.EditorGroup)
 }

@@ -81,7 +81,7 @@ func TestSearchFileRowsReserveReplaceActionsAndScrollbarForWidePaths(t *testing.
 	s := NewSearchWidget()
 	s.Icons = config.IconsNerdFont
 	s.showReplace = true
-	s.ReplaceInput.Text = "replacement"
+	seedInputText(s.ReplaceInput, "replacement")
 	s.Selected = -1
 	s.lastSelected = -1
 	s.Groups = []SearchFileGroup{{
@@ -177,7 +177,7 @@ func TestApplyBatchKeepsErrorUntilDone(t *testing.T) {
 func TestSearchStartClearsError(t *testing.T) {
 	s := NewSearchWidget()
 	s.Error = "ripgrep (rg) not found"
-	s.Input.Text = ""
+	seedInputText(s.Input, "")
 
 	s.runSearchSync()
 	if s.Error != "" {
@@ -195,7 +195,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			s := NewSearchWidget()
 			s.Icons = mode
 			s.showReplace = true
-			s.ReplaceInput.Text = "next"
+			seedInputText(s.ReplaceInput, "next")
 			s.Selected = -1
 			s.lastSelected = -1
 			s.Groups = []SearchFileGroup{{
@@ -247,7 +247,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 
 		s := NewSearchWidget()
 		s.showReplace = true
-		s.ReplaceInput.Text = "next"
+		seedInputText(s.ReplaceInput, "next")
 		s.Selected = -1
 		s.lastSelected = -1
 		s.Groups = []SearchFileGroup{{
@@ -288,7 +288,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			t.Fatalf("overridden expanded filter toggle = %q, want 'v'", got)
 		}
 
-		s.Input.Text = "old"
+		seedInputText(s.Input, "old")
 		replacedFile := ""
 		s.OnReplaceRequest = func(req SearchReplaceRequest) {
 			replacedFile = req.Paths[0] + ":" + req.Replacement

@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func (a *App) selectedSearchText() string {
@@ -21,8 +22,8 @@ func (a *App) selectedSearchText() string {
 	return text
 }
 
-func (a *App) prefillSearchInput(input *ui.InputWidget) {
-	if text := a.selectedSearchText(); text != "" && text != input.Text {
+func (a *App) prefillSearchInput(input *widgets.InputWidget) {
+	if text := a.selectedSearchText(); text != "" && text != input.Text() {
 		input.SetText(text)
 	}
 }
@@ -136,7 +137,7 @@ func (a *App) findBar() findBar {
 	return bar
 }
 
-func (a *App) prefillReplaceInput(input *ui.InputWidget) {
+func (a *App) prefillReplaceInput(input *widgets.InputWidget) {
 	if !a.EditorGroup.IsEditorActive() || a.EditorGroup.IsActiveReadOnly() {
 		return
 	}
@@ -222,8 +223,7 @@ func (a *App) linkFindReplaceBars(find *ui.FindBarWidget, replace *ui.ReplaceBar
 
 func (a *App) ClearGlobalSearch() {
 	a.Search.CancelReplacement()
-	a.Search.Input.Text = ""
-	a.Search.Input.CursorPos = 0
+	a.Search.Input.SetText("")
 	a.Search.Groups = nil
 	a.Search.FlatList = nil
 	a.Search.Selected = 0

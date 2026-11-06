@@ -6,6 +6,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 type findBarLayout struct {
@@ -84,11 +85,11 @@ func drawFindBarButton(surface Surface, x, y int, label string, limit int) (int,
 	return x, HitRegion{X: ox + start, Y: oy + y, W: x - start}
 }
 
-func renderFindBarInput(surface Surface, input *InputWidget, x, y, width int) {
+func renderFindBarInput(surface Surface, input *widgets.InputWidget, x, y, width int) {
 	actions := input.Actions
-	if width < input.actionsWidth()+4 {
+	if width < input.ActionsWidth()+4 {
 		input.Actions = nil
 	}
-	input.Render(surface.Sub(Rect{X: x, Y: y, W: width, H: 1}), 0, 0, width)
+	renderPanelInput(surface, input, x, y, width)
 	input.Actions = actions
 }

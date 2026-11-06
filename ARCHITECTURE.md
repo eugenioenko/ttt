@@ -150,7 +150,7 @@ cleanup lane, characterization evidence, and an exit condition.
 |---|---|---|---|
 | Product UI directly owns some search subprocess and filesystem discovery work | Add no new process or filesystem lifecycle to `internal/ui` | IO1 -> IO2 | UI receives typed results and emits intents through an application or service API |
 | App state and lifecycle are spread across the root `App` and feature files | Add new async state only behind an explicit owner or with a named follow-up owner | AL, AT, AP | Selected subsystems own their timers, cancellation, identities, mutation boundary, and shutdown |
-| Input, scrollbar, and diff projection behavior is duplicated | Fix shared invariants in every affected path until consolidation is complete | S1/S2, I1/I2/I3, D1-D4 | One canonical model remains for each shared contract and old paths are deleted |
+| Scrollbar and diff projection behavior is duplicated | Fix shared invariants in every affected path until consolidation is complete | S1/S2, D1-D4 | One canonical model remains for each shared contract and old paths are deleted |
 
 Direct `tcell` use in presentation packages is not listed as a violation. It is
 an explicit boundary decision below. Issue #495 is resolved by documenting and
@@ -189,6 +189,14 @@ an edit and reuses the unchanged tail once the state converges.
 `internal/ui` owns product-specific composites. A component moves to
 `internal/widgets` only when its state model and behavior can be expressed
 without importing product policy or service lifecycle.
+
+### Shared input behavior
+
+`internal/widgets.InputWidget` is the single input implementation for product
+surfaces and plugins. Product owners configure actions and callbacks and route
+focus; the input owns editing, selection, history, scrolling, rendering, and hit
+testing. Find/Replace copies text state without copying callbacks or sharing
+mutable history. The former `internal/ui.InputWidget` has been removed.
 
 ### Shared diff behavior
 
@@ -261,10 +269,8 @@ P2
 |-- [P3/P4] S1 Canonical scrollbar API
 |              `-- S2 Migrate consumers and delete duplicates
 |
-|-- [P3/P4] I1 Shared text-input state model
-|              `-- I2 Adapt internal/widgets input
-|                    `-- I3 Adapt internal/ui inputs
-|                          `-- AP Plugin/settings App owner
+|-- I1/I2/I3 Consolidated inputs (done: internal/widgets.InputWidget)
+|              `-- AP Plugin/settings App owner
 |
 |-- [P3/P4] AL LanguageFeaturesState owner
 |-- [P3/P4] AT TerminalState owner
