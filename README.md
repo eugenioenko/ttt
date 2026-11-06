@@ -60,7 +60,7 @@ scoop install ttt
 
 ### Go Install
 
-Requires [Go](https://go.dev/) 1.18 or newer:
+Requires [Go](https://go.dev/) 1.25 or newer:
 
 ```sh
 go install github.com/eugenioenko/ttt/cmd/ttt@latest
