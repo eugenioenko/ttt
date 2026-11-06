@@ -35,6 +35,21 @@ type InputConfig struct {
 	OnSubmit func(text string)
 }
 
+type inputSnapshot struct {
+	text string
+	pos  int
+}
+
+type inputGroupType int
+
+const (
+	inputGroupNone inputGroupType = iota
+	inputGroupInsert
+	inputGroupDelete
+)
+
+const maxInputUndo = 100
+
 type InputWidget struct {
 	BaseWidget
 	Config        InputConfig
@@ -58,6 +73,11 @@ type InputWidget struct {
 	drag                      InputDrag
 	textRect                  Rect
 	pointerCaptureInvalidated func()
+
+	undoStack []inputSnapshot
+	redoStack []inputSnapshot
+	groupType inputGroupType
+	lastRune  rune
 }
 
 // DefaultPrefix is the chevron shown on a borderless input when the caller
@@ -156,6 +176,9 @@ func (inp *InputWidget) SetText(t string) {
 	inp.text = t
 	inp.cursorPos = len([]rune(t))
 	inp.clearSel()
+	inp.undoStack = nil
+	inp.redoStack = nil
+	inp.breakGroup()
 	inp.notify()
 }
 
@@ -164,9 +187,6 @@ func (inp *InputWidget) ResetScroll() {
 }
 
 func (inp *InputWidget) PasteText(text string) {
-	if inp.hasSelection() {
-		inp.deleteSelection()
-	}
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	text = strings.TrimRight(text, "\n")
@@ -175,6 +195,10 @@ func (inp *InputWidget) PasteText(text string) {
 	}
 	if text == "" {
 		return
+	}
+	inp.recordEdit()
+	if inp.hasSelection() {
+		inp.deleteSelection()
 	}
 	inp.insertRunes([]rune(text))
 }
@@ -193,6 +217,9 @@ func (inp *InputWidget) insertRunes(text []rune) {
 
 func (inp *InputWidget) Clear() {
 	inp.CancelPointerCapture()
+	if inp.text != "" {
+		inp.recordEdit()
+	}
 	inp.text = ""
 	inp.cursorPos = 0
 	inp.scrollOffset = 0
@@ -413,6 +440,14 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		if ev.Modifiers()&^tcell.ModShift != 0 {
 			return EventIgnored
 		}
+		if inp.hasSelection() {
+			inp.recordEdit()
+			inp.deleteSelection()
+			inp.groupType = inputGroupInsert
+			inp.lastRune = term.KeyRune(ev)
+		} else {
+			inp.recordRuneInsert(term.KeyRune(ev))
+		}
 		inp.insertRunes([]rune{term.KeyRune(ev)})
 		return EventConsumed
 	case tcell.KeyEnter:
@@ -422,8 +457,10 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		return EventConsumed
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if inp.hasSelection() {
+			inp.recordEdit()
 			inp.deleteSelection()
 		} else if inp.cursorPos > 0 {
+			inp.recordDelete()
 			runes := []rune(inp.text)
 			newPos := inp.cursorPos - 1
 			if ctrl {
@@ -436,10 +473,12 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		return EventConsumed
 	case tcell.KeyDelete:
 		if inp.hasSelection() {
+			inp.recordEdit()
 			inp.deleteSelection()
 		} else {
 			runes := []rune(inp.text)
 			if inp.cursorPos < len(runes) {
+				inp.recordDelete()
 				end := inp.cursorPos + 1
 				if ctrl {
 					end = inp.wordRight()
@@ -450,6 +489,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyLeft:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -467,6 +507,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyRight:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -484,6 +525,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyHome:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -495,6 +537,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyEnd:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -516,6 +559,16 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		return EventConsumed
 	case tcell.KeyCtrlX:
 		inp.CutSelection()
+		return EventConsumed
+	case tcell.KeyCtrlZ:
+		if shift {
+			inp.Redo()
+		} else {
+			inp.Undo()
+		}
+		return EventConsumed
+	case tcell.KeyCtrlY:
+		inp.Redo()
 		return EventConsumed
 	}
 	return EventIgnored
@@ -563,6 +616,7 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		}
 		return EventCaptured
 	}
+	inp.breakGroup()
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < 400 && pos == inp.lastClickPos {
 		inp.clickCount++
@@ -626,7 +680,107 @@ func (inp *InputWidget) deleteSelection() {
 	inp.notify()
 }
 
+func (inp *InputWidget) pushUndo(snap inputSnapshot) {
+	if len(inp.undoStack) > 0 {
+		top := inp.undoStack[len(inp.undoStack)-1]
+		if top.text == snap.text && top.pos == snap.pos {
+			return
+		}
+	}
+	inp.undoStack = append(inp.undoStack, snap)
+	if len(inp.undoStack) > maxInputUndo {
+		inp.undoStack = inp.undoStack[len(inp.undoStack)-maxInputUndo:]
+	}
+	inp.redoStack = nil
+}
+
+func (inp *InputWidget) breakGroup() {
+	inp.groupType = inputGroupNone
+	inp.lastRune = 0
+}
+
+func (inp *InputWidget) recordEdit() {
+	inp.pushUndo(inputSnapshot{text: inp.text, pos: inp.cursorPos})
+	inp.breakGroup()
+}
+
+func (inp *InputWidget) recordRuneInsert(r rune) {
+	if (r == ' ' || r == '\t') && inp.lastRune != ' ' && inp.lastRune != '\t' {
+		inp.breakGroup()
+	}
+	if inp.groupType != inputGroupInsert {
+		inp.pushUndo(inputSnapshot{text: inp.text, pos: inp.cursorPos})
+		inp.groupType = inputGroupInsert
+	}
+	inp.lastRune = r
+}
+
+func (inp *InputWidget) recordDelete() {
+	if inp.groupType != inputGroupDelete {
+		inp.pushUndo(inputSnapshot{text: inp.text, pos: inp.cursorPos})
+		inp.groupType = inputGroupDelete
+		inp.lastRune = 0
+	}
+}
+
+func (inp *InputWidget) Undo() bool {
+	inp.breakGroup()
+	if len(inp.undoStack) == 0 {
+		return false
+	}
+	curr := inputSnapshot{text: inp.text, pos: inp.cursorPos}
+	inp.redoStack = append(inp.redoStack, curr)
+	if len(inp.redoStack) > maxInputUndo {
+		inp.redoStack = inp.redoStack[len(inp.redoStack)-maxInputUndo:]
+	}
+
+	snap := inp.undoStack[len(inp.undoStack)-1]
+	inp.undoStack = inp.undoStack[:len(inp.undoStack)-1]
+
+	inp.text = snap.text
+	runes := []rune(inp.text)
+	inp.cursorPos = snap.pos
+	if inp.cursorPos < 0 {
+		inp.cursorPos = 0
+	} else if inp.cursorPos > len(runes) {
+		inp.cursorPos = len(runes)
+	}
+	inp.clearSel()
+	inp.goalCol = -1
+	inp.notify()
+	return true
+}
+
+func (inp *InputWidget) Redo() bool {
+	inp.breakGroup()
+	if len(inp.redoStack) == 0 {
+		return false
+	}
+	curr := inputSnapshot{text: inp.text, pos: inp.cursorPos}
+	inp.undoStack = append(inp.undoStack, curr)
+	if len(inp.undoStack) > maxInputUndo {
+		inp.undoStack = inp.undoStack[len(inp.undoStack)-maxInputUndo:]
+	}
+
+	snap := inp.redoStack[len(inp.redoStack)-1]
+	inp.redoStack = inp.redoStack[:len(inp.redoStack)-1]
+
+	inp.text = snap.text
+	runes := []rune(inp.text)
+	inp.cursorPos = snap.pos
+	if inp.cursorPos < 0 {
+		inp.cursorPos = 0
+	} else if inp.cursorPos > len(runes) {
+		inp.cursorPos = len(runes)
+	}
+	inp.clearSel()
+	inp.goalCol = -1
+	inp.notify()
+	return true
+}
+
 func (inp *InputWidget) selectWordAt(pos int) {
+	inp.breakGroup()
 	if inp.Config.Mask {
 		inp.selectAll()
 		return
@@ -664,6 +818,7 @@ func (inp *InputWidget) selectWordAt(pos int) {
 }
 
 func (inp *InputWidget) selectAll() {
+	inp.breakGroup()
 	runes := []rune(inp.text)
 	if len(runes) == 0 {
 		return
@@ -692,6 +847,7 @@ func (inp *InputWidget) CutSelection() {
 		return
 	}
 	inp.CopySelection()
+	inp.recordEdit()
 	inp.deleteSelection()
 }
 
