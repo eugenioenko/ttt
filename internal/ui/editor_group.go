@@ -2549,6 +2549,14 @@ func (g *EditorGroupWidget) MoveToFileEdge(end, shift bool) {
 	}
 }
 
+func (g *EditorGroupWidget) MoveToLineEdge(end, shift bool) {
+	if e := g.keyEditor(); e != nil {
+		e.MoveToLineEdge(end, shift)
+	} else if d := g.ActiveDiffWidget(); d != nil {
+		d.KeyPane().MoveToLineEdge(end, shift)
+	}
+}
+
 func (g *EditorGroupWidget) MoveWordLeft(shift bool) {
 	if e := g.keyEditor(); e != nil {
 		e.MoveWordLeft(shift)

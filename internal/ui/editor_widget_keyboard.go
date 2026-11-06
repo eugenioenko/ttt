@@ -130,32 +130,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 		}
 	case tcell.KeyHome:
-		if multi {
-			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				runes := []rune(e.Buf.Lines[cs.Line])
-				firstNonSpace := 0
-				for firstNonSpace < len(runes) && (runes[firstNonSpace] == ' ' || runes[firstNonSpace] == '\t') {
-					firstNonSpace++
-				}
-				if cs.Col == firstNonSpace {
-					cs.Col = 0
-				} else {
-					cs.Col = firstNonSpace
-				}
-			})
-		} else {
-			e.startOrExtendSelection(shift)
-			e.SmartHome()
-		}
+		e.MoveToLineEdge(false, shift)
 	case tcell.KeyEnd:
-		if multi {
-			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				cs.Col = len([]rune(e.Buf.Lines[cs.Line]))
-			})
-		} else {
-			e.startOrExtendSelection(shift)
-			e.Cursor.Col = len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		}
+		e.MoveToLineEdge(true, shift)
 	case tcell.KeyPgUp:
 		e.startOrExtendSelection(shift)
 		if e.WordWrap {
