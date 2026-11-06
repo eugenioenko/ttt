@@ -381,6 +381,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	rootBox := widgets.NewVStackWidget(menuBar, splitPanel, statusBar)
 
 	root := ui.NewRoot(rootBox)
+	root.SetControlModifiers(controlModifiers(cfg.Settings.Keyboard.ModifierKey))
 	root.SetFocus(editorGroup)
 
 	app := &App{

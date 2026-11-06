@@ -85,6 +85,19 @@ func (a *App) ApplySettings(s config.Settings) {
 	prev := a.appliedSettings
 	a.appliedSettings = s
 	*a.Settings = s
+	a.Root.SetControlModifiers(controlModifiers(s.Keyboard.ModifierKey))
+	if a.Reg != nil {
+		for _, kb := range a.Keybindings {
+			a.Reg.SetShortcut(kb.Command, FormatKeyBinding(kb.Key, a.Root.ControlModifiers))
+		}
+		if a.PluginManager != nil {
+			for _, p := range a.PluginManager.Plugins() {
+				for _, kb := range p.PluginKeybindings {
+					a.Reg.SetShortcut(kb.Command, FormatKeyBinding(kb.Key, a.Root.ControlModifiers))
+				}
+			}
+		}
+	}
 	if !s.Welcome.IsRecentFoldersEnabled() {
 		a.clearRecentFolders()
 	}

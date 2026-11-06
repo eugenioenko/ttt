@@ -433,6 +433,18 @@ func (w WelcomeSettings) IsRecentFoldersEnabled() bool {
 	return w.RecentFolders == nil || *w.RecentFolders
 }
 
+const (
+	ModifierControl      = "control"
+	ModifierControlSuper = "control+super"
+	ModifierSuper        = "super"
+)
+
+var KeyboardModifiers = []string{ModifierControl, ModifierControlSuper, ModifierSuper}
+
+type KeyboardSettings struct {
+	ModifierKey string `json:"modifierKey"`
+}
+
 type Settings struct {
 	Version     int    `json:"version"`
 	Theme       string `json:"theme,omitempty"`
@@ -443,6 +455,7 @@ type Settings struct {
 	// the defaults on the next load.
 	Appearance   AppearanceSettings   `json:"appearance"`
 	Editor       EditorSettings       `json:"editor"`
+	Keyboard     KeyboardSettings     `json:"keyboard"`
 	QuickOpen    QuickOpenSettings    `json:"quickOpen"`
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
@@ -471,7 +484,7 @@ type Settings struct {
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "keyboard": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {
@@ -523,6 +536,7 @@ func DefaultSettings() Settings {
 		Version:      1,
 		Appearance:   DefaultAppearanceSettings(),
 		Editor:       DefaultEditorSettings(),
+		Keyboard:     KeyboardSettings{ModifierKey: ModifierControl},
 		Search:       DefaultSearchSettings(),
 		Explorer:     DefaultExplorerSettings(),
 		Sidebar:      DefaultSidebarSettings(),
@@ -544,6 +558,9 @@ func (s Settings) FormatterForExt(ext string) string {
 }
 
 func normalizeSettings(s *Settings) {
+	if !slices.Contains(KeyboardModifiers, s.Keyboard.ModifierKey) {
+		s.Keyboard.ModifierKey = ModifierControl
+	}
 	s.Editor.WordWrapColumn = max(s.Editor.WordWrapColumn, 0)
 	for language, o := range s.Editor.LanguageOverrides {
 		if o.WordWrapColumn != nil && *o.WordWrapColumn < 0 {
