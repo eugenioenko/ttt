@@ -125,3 +125,20 @@ func TestInputActionFiresOncePerPress(t *testing.T) {
 		t.Fatalf("next action press: calls=%d, want 2", calls)
 	}
 }
+
+func TestInputIgnoresRemovedActionBeforeRedraw(t *testing.T) {
+	for _, remaining := range []int{0, 1} {
+		input := NewInputWidget(InputConfig{})
+		calls := 0
+		input.Actions = []InputAction{{Label: "First", OnClick: func() { calls++ }}, {Label: "Last", OnClick: func() { calls++ }}}
+		renderWidget(input, 0, 0, 30, 1)
+		hit := input.ActionHits[1]
+		input.Actions = input.Actions[:remaining]
+		if result := input.HandleEvent(mouseClick(hit.X, hit.Y)); result != EventConsumed {
+			t.Fatalf("remaining=%d: removed action click was not consumed: %v", remaining, result)
+		}
+		if calls != 0 || input.OwnsPointerCapture() {
+			t.Fatal("removed action fired a callback or captured the press")
+		}
+	}
+}

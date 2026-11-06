@@ -690,6 +690,9 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	inp.breakGroup()
 	for i, hit := range inp.ActionHits {
 		if hit.Contains(mx, my) {
+			if i >= len(inp.Actions) {
+				return EventConsumed
+			}
 			inp.actionPressed = true
 			if inp.Actions[i].OnClick != nil {
 				inp.Actions[i].OnClick()
