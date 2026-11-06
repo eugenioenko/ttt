@@ -6,6 +6,7 @@ export default defineConfig({
   image: { service: passthroughImageService() },
   integrations: [
     starlight({
+      components: { Header: './src/components/Header.astro' },
       customCss: ['./src/styles/custom.css'],
       title: 'TTT Editor',
       favicon: '/favicon.svg',
@@ -17,6 +18,7 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/eugenioenko/ttt' },
       ],
       sidebar: [
+        { label: 'Demo', link: '/demo/' },
         {
           label: 'Getting Started',
           items: [{ autogenerate: { directory: 'getting-started' } }],
