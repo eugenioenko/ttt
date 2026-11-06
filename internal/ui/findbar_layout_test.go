@@ -84,3 +84,21 @@ func TestFindBarNarrowInputRemainsReachable(t *testing.T) {
 		}
 	}
 }
+
+func TestReplaceBarConsumesMatchCounterClick(t *testing.T) {
+	bar := NewReplaceBarWidget()
+	seedInputText(bar.SearchInput, "find")
+	bar.Matches = []FindMatch{{Len: 4}}
+	rect := Rect{X: 7, Y: 3, W: 60, H: 20}
+	bar.SetRect(rect)
+	bar.Render(NewRenderSurface(makeGrid(80, 30), rect))
+	bar.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
+	inputRect := bar.SearchInput.GetRect()
+	x, y := inputRect.X+inputRect.W+1, inputRect.Y
+	if result := bar.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone)); result != EventConsumed {
+		t.Fatalf("match counter click leaked through the bar: %v", result)
+	}
+	if bar.FocusedInput() != bar.SearchInput {
+		t.Fatal("match counter click did not focus the search row")
+	}
+}

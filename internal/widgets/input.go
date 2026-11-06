@@ -62,6 +62,7 @@ type InputWidget struct {
 	BaseWidget
 	Actions       []InputAction
 	ActionHits    []Rect
+	actionPressed bool
 	Config        InputConfig
 	text          string
 	cursorPos     int
@@ -635,10 +636,12 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 	return EventIgnored
 }
 
-func (inp *InputWidget) OwnsPointerCapture() bool               { return inp.drag.Active() }
+func (inp *InputWidget) OwnsPointerCapture() bool               { return inp.drag.Active() || inp.actionPressed }
 func (inp *InputWidget) SetPointerCaptureInvalidated(fn func()) { inp.pointerCaptureInvalidated = fn }
 func (inp *InputWidget) CancelPointerCapture() bool {
 	canceled := inp.drag.Cancel()
+	canceled = canceled || inp.actionPressed
+	inp.actionPressed = false
 	if canceled && inp.pointerCaptureInvalidated != nil {
 		inp.pointerCaptureInvalidated()
 	}
@@ -646,6 +649,13 @@ func (inp *InputWidget) CancelPointerCapture() bool {
 }
 
 func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
+	if inp.actionPressed {
+		if ev.Buttons()&tcell.Button1 == 0 {
+			inp.actionPressed = false
+			return EventConsumed
+		}
+		return EventCaptured
+	}
 	mx, my := ev.Position()
 	r := inp.GetRect()
 	if !inp.drag.Active() && (ev.Buttons()&tcell.Button1 == 0 || mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H) {
@@ -680,8 +690,12 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	inp.breakGroup()
 	for i, hit := range inp.ActionHits {
 		if hit.Contains(mx, my) {
+			inp.actionPressed = true
 			if inp.Actions[i].OnClick != nil {
 				inp.Actions[i].OnClick()
+			}
+			if inp.actionPressed {
+				return EventCaptured
 			}
 			return EventConsumed
 		}

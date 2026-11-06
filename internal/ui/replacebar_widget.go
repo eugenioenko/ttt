@@ -197,7 +197,10 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 
 			if localY == findRow && localX >= r.inputX && localX < barX+barW-1 {
 				r.focusRow = 0
-				return r.SearchInput.HandleEvent(tev)
+				if result := r.SearchInput.HandleEvent(tev); result != EventIgnored {
+					return result
+				}
+				return EventConsumed
 			}
 			if localY == replRow && localX >= r.inputX && localX < barX+barW-1 {
 				r.focusRow = 1

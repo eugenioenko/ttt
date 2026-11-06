@@ -86,9 +86,10 @@ func TestInputActionsStayWithinRenderedContent(t *testing.T) {
 				if input.PointerShapeAt(hit.X, hit.Y) != term.PointerHand {
 					t.Fatal("action did not advertise a clickable target")
 				}
-				if input.HandleEvent(mouseClick(hit.X, hit.Y)) != EventConsumed || input.OwnsPointerCapture() {
+				if input.HandleEvent(mouseClick(hit.X, hit.Y)) != EventCaptured || input.drag.Active() {
 					t.Fatal("action click started text selection")
 				}
+				input.HandleEvent(mouseRelease(hit.X, hit.Y))
 				if i == 0 && calls != 1 {
 					t.Fatal("visible action did not fire")
 				}
@@ -97,5 +98,30 @@ func TestInputActionsStayWithinRenderedContent(t *testing.T) {
 				t.Fatal("action click changed input text")
 			}
 		}
+	}
+}
+
+func TestInputActionFiresOncePerPress(t *testing.T) {
+	input := NewInputWidget(InputConfig{})
+	input.SetFocused(true)
+	calls := 0
+	input.Actions = []InputAction{{Label: "Action", OnClick: func() { calls++ }}}
+	renderWidget(input, 0, 0, 30, 1)
+	hit := input.ActionHits[0]
+	for _, x := range []int{hit.X, hit.X + 1, hit.X + 2} {
+		input.HandleEvent(mouseClick(x, hit.Y))
+	}
+	if calls != 1 || input.HasSelection() {
+		t.Fatalf("held action press: calls=%d selection=%v", calls, input.HasSelection())
+	}
+	input.HandleEvent(mouseClick(100, 100))
+	input.HandleEvent(mouseRelease(100, 100))
+	if input.OwnsPointerCapture() {
+		t.Fatal("release outside input kept action captured")
+	}
+	input.HandleEvent(mouseClick(hit.X, hit.Y))
+	input.HandleEvent(mouseRelease(hit.X, hit.Y))
+	if calls != 2 {
+		t.Fatalf("next action press: calls=%d, want 2", calls)
 	}
 }
