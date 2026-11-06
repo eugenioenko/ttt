@@ -363,3 +363,36 @@ func TestOnExitIsBoundedWhenJobKeepsSlaveOpen(t *testing.T) {
 		t.Fatal("readLoop did not finish after the last slave holder exited")
 	}
 }
+
+func TestBashIntegrationMarksUserPrompt(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available")
+	}
+	home := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	rc := "PS1='first> '\nPROMPT_COMMAND='PS1=\"rebuilt> \"'\n"
+	if err := os.WriteFile(home+"/.bashrc", []byte(rc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, args := IntegrateShell(bash, nil)
+	term, err := New(shell, 80, 24, 0, []string{"HOME=" + home, "HISTFILE=/dev/null"}, home, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	term.Run()
+	waitRaw := func(want string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for !strings.Contains(string(term.RawTail()), want) {
+			if time.Now().After(deadline) {
+				t.Fatalf("output never contained %q: %q", want, term.RawTail())
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitRaw("\x1b]133;A\arebuilt> ")
+	term.WriteString("echo integrated\r")
+	waitRaw("\x1b]133;C\aintegrated")
+}

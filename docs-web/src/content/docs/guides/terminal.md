@@ -53,7 +53,8 @@ Terminal settings in `settings.json`:
     "shell": "/bin/zsh",
     "scrollback": 1000,
     "ctrlVPastes": true,
-    "selectionStyle": "background"
+    "selectionStyle": "background",
+    "shellIntegration": true
   }
 }
 ```
@@ -65,9 +66,16 @@ Terminal settings in `settings.json`:
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V; set to `false` to pass `^V` through to the terminal program |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"` |
+| `terminal.shellIntegration` | bool | `true` | Start bash with ttt's prompt marks so resizing redraws the prompt cleanly |
 
 Set `terminal.ctrlVPastes` to `false` for shell quoted insert or Vim visual-block mode. Ctrl+Shift+V still pastes when the outer terminal reports it distinctly. Some terminals handle Ctrl+Shift+V themselves and send a bracketed paste, which also works. Terminals that encode both shortcuts as `^V` cannot distinguish them. The setting applies immediately to open terminal tabs and is available under **Settings → Terminal → Ctrl+V pastes**.
 
 Padding applies immediately to existing and new terminal tabs and is available under **Settings → Terminal → Horizontal padding**. The settings UI rejects negative values; negative values loaded from `settings.json` are treated as `0`. In narrow panels, padding is reduced equally on both sides to leave room for terminal content. Right padding separates terminal text from the scrollbar. The scrollbar takes a column at the panel edge only while visible. Full-screen programs using the alternate screen, such as btop, use that column for terminal text instead. Padding does not add vertical spacing.
+
+### Shell integration
+
+Resizing the terminal makes the shell redraw its prompt, and ttt clears the old one first so no copy is left behind. It finds the prompt through OSC 133 marks. fish sends them itself. For bash, ttt starts the shell with `bash --rcfile`, using a script that loads your `~/.bashrc` as usual and then adds the marks to `PS1` and `PS0`. Your prompt, aliases, and `PROMPT_COMMAND` keep working, including prompts that `PROMPT_COMMAND` rebuilds.
+
+The marks need bash 4.4 or newer. ttt skips the integration when `terminal.args` is set, so a custom launch such as `["-l"]` runs unchanged. Set `terminal.shellIntegration` to `false` (**Settings → Terminal → Shell integration**) to start bash plainly; it applies to new terminal tabs. Other shells start unchanged.
 
 Terminal ANSI colors are configurable via the `terminal` field in your theme file.
