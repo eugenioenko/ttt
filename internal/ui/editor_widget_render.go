@@ -228,6 +228,14 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					syntaxSpans = e.Highlighter.HighlightLineAt(e.Buf.Lines, lineIdx)
 				}
 			}
+			if !isWrapContinuation && e.conflictActionLine(lineIdx) {
+				line = []rune(conflictActions)
+				syntaxSpans = []highlight.Span{
+					{Start: 0, End: 9, Style: term.StyleGutterBookmark},
+					{Start: 10, End: 20, Style: term.StyleGutterBookmark},
+					{Start: 21, End: 27, Style: term.StyleGutterBookmark},
+				}
+			}
 
 			isCollapsedLine := e.Folds != nil && e.Folds.IsCollapsed(lineIdx)
 			var annRunes []rune
