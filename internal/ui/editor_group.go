@@ -3061,11 +3061,18 @@ func (g *EditorGroupWidget) OwnsPointerCapture() bool {
 	if g.TabBar.OwnsPointerCapture() {
 		return true
 	}
-	if t := g.activeTab(); t != nil && t.Content != nil {
+	return g.contentOwnsPointerCapture()
+}
+
+func (g *EditorGroupWidget) contentOwnsPointerCapture() bool {
+	t := g.activeTab()
+	switch {
+	case t == nil:
+		return false
+	case t.Content != nil:
 		owner, ok := t.Content.(widgets.PointerCaptureOwner)
 		return ok && owner.OwnsPointerCapture()
-	}
-	if t := g.activeTab(); t != nil && t.Diff != nil {
+	case t.Diff != nil:
 		return t.Diff.OwnsPointerCapture()
 	}
 	return g.Editor != nil && g.Editor.OwnsPointerCapture()
@@ -3101,7 +3108,7 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 	}
-	if _, isMouse := ev.(*tcell.EventMouse); !isMouse || !g.Editor.mouseDown {
+	if _, isMouse := ev.(*tcell.EventMouse); !isMouse || !g.contentOwnsPointerCapture() {
 		result := g.TabBar.HandleEvent(ev)
 		slog.Debug("editorGroup", "tabBarResult", result)
 		if result != EventIgnored {
