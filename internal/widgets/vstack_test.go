@@ -397,4 +397,19 @@ func TestVStackHandleEventRoutesToCaptureOwnerFirst(t *testing.T) {
 	if first.lastEvent != nil {
 		t.Fatal("expected first to not receive event while second owns capture")
 	}
+
+	first.lastEvent = nil
+	second.lastEvent = nil
+
+	keyEv := tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone)
+	res = vs.HandleEvent(keyEv)
+	if res != EventConsumed {
+		t.Fatalf("key event res = %v, want EventConsumed", res)
+	}
+	if first.lastEvent != keyEv {
+		t.Fatal("expected first child to receive key event during normal routing")
+	}
+	if second.lastEvent != nil {
+		t.Fatal("expected second child to not receive key event after first consumed it")
+	}
 }
