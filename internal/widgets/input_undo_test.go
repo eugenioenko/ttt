@@ -107,3 +107,26 @@ func TestWidgetInputEmptyUndoConsumed(t *testing.T) {
 		t.Fatalf("expected EventConsumed on empty redo, got %v", res)
 	}
 }
+
+func TestWidgetInputMouseClickBreaksUndoGroup(t *testing.T) {
+	inp := NewInputWidget(InputConfig{Bordered: true})
+	inp.SetFocused(true)
+	renderWidget(inp, 0, 0, 30, 3)
+
+	typeWidgetInputRunes(inp, "first")
+	if inp.Text() != "first" {
+		t.Fatalf("expected 'first', got %q", inp.Text())
+	}
+
+	// Click inside input at column 3 (after "fi")
+	inp.HandleEvent(tcell.NewEventMouse(3, 1, tcell.Button1, tcell.ModNone))
+	inp.HandleEvent(tcell.NewEventMouse(3, 1, tcell.ButtonNone, tcell.ModNone))
+
+	typeWidgetInputRunes(inp, "X")
+
+	// Undo should only undo "X", leaving "first"
+	pressWidgetKey(inp, tcell.KeyCtrlZ, tcell.ModCtrl)
+	if inp.Text() != "first" {
+		t.Fatalf("expected 'first' after undoing edit after mouse click, got %q", inp.Text())
+	}
+}

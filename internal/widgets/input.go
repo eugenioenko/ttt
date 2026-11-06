@@ -616,6 +616,7 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		}
 		return EventCaptured
 	}
+	inp.breakGroup()
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < 400 && pos == inp.lastClickPos {
 		inp.clickCount++
