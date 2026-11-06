@@ -921,6 +921,26 @@ func registerEditorCommands(app *App) {
 		Handler:  func() { app.EditorGroup.MoveToFileEdge(true, true) },
 	})
 	reg.Register(command.Command{
+		ID: "editor.goToLineStart", Title: "Go to Start of Line",
+		Keywords: []string{"editor", "navigate", "home", "beginning", "indent"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(false, false) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.goToLineEnd", Title: "Go to End of Line",
+		Keywords: []string{"editor", "navigate", "end"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(true, false) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.selectToLineStart", Title: "Select to Start of Line",
+		Keywords: []string{"editor", "selection", "home", "beginning", "indent"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(false, true) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.selectToLineEnd", Title: "Select to End of Line",
+		Keywords: []string{"editor", "selection", "end"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(true, true) },
+	})
+	reg.Register(command.Command{
 		ID: "editor.moveWordLeft", Title: "Move Word Left",
 		Keywords: []string{"editor", "navigate"},
 		Handler:  func() { app.EditorGroup.MoveWordLeft(false) },
