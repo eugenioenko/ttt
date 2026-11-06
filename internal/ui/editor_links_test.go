@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/undo"
@@ -242,7 +243,14 @@ func TestEditorFileLinkCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	probes := 0
-	e.links.detect = func(text, dir string) []linkSpan { probes++; return detectLinks(text, dir) }
+	e.ResolveFileLinks = func(paths []string, dir string, apply func(map[string]string)) {
+		resolved := make(map[string]string)
+		for _, path := range paths {
+			probes++
+			resolved[path] = ResolveFilePath(path, dir)
+		}
+		apply(resolved)
+	}
 	e.OnOpenFile = func(string, int, int) {}
 	hoverEditorLinks(e)
 	for range 3 {
@@ -265,7 +273,7 @@ func TestEditorLinksBoundedCache(t *testing.T) {
 	}
 	e := linkEditor(lines, 30, 4)
 	var visited []string
-	e.links.detect = func(s, dir string) []linkSpan { visited = append(visited, s); return detectLinks(s, dir) }
+	e.links.detect = func(s string) []linkSpan { visited = append(visited, s); return detectLinkCandidates(s) }
 	renderGrid(e)
 	if len(visited) != 0 || len(e.links.cells) != 0 {
 		t.Fatal("link work ran without Ctrl")
@@ -303,17 +311,172 @@ func TestEditorLinksBoundedCache(t *testing.T) {
 		e = linkEditor([]string{text}, 35, 4)
 		e.Viewport.LeftCol = 1_000_005
 		calls := 0
-		e.links.detect = func(s, dir string) []linkSpan {
+		e.links.detect = func(s string) []linkSpan {
 			calls++
 			if len(s) > 2*editorLinkLookaround+35 {
 				t.Fatalf("scanned %d hidden bytes", len(s))
 			}
-			return detectLinks(s, dir)
+			return detectLinkCandidates(s)
 		}
 		hoverEditorLinks(e)
 		renderGrid(e)
 		if calls != 1 || (strings.Contains(text, "tail.test") != (len(e.links.hits) > 0)) {
 			t.Fatalf("long-line detection: calls=%d hits=%d", calls, len(e.links.hits))
 		}
+	}
+}
+
+func TestEditorFileLinksAwaitResolution(t *testing.T) {
+	e := linkEditor([]string{"target.go:12:3 target.go:1 missing.go:4 https://example.com", "offscreen.go:5"}, 80, 1)
+	e.LinkWorkDir = "/source"
+	e.OnOpenFile = func(path string, line, col int) {
+		if path != "/source/target.go" || line != 12 || col != 3 {
+			t.Fatalf("file navigation = %q:%d:%d", path, line, col)
+		}
+	}
+	var deliver func(map[string]string)
+	requests := 0
+	e.ResolveFileLinks = func(paths []string, dir string, apply func(map[string]string)) {
+		requests++
+		if len(paths) != 2 || dir != "/source" {
+			t.Fatalf("visible unique candidates = %v in %q", paths, dir)
+		}
+		deliver = apply
+	}
+	hoverEditorLinks(e)
+	for range 3 {
+		renderGrid(e)
+	}
+	if requests != 1 || len(e.links.hits) == 0 {
+		t.Fatal("pending resolution repeated or hid URLs")
+	}
+	for _, span := range e.links.hits {
+		if span.IsFile {
+			t.Fatal("unresolved file became actionable")
+		}
+	}
+	deliver(map[string]string{"target.go": "/source/target.go"})
+	for _, span := range e.links.hits {
+		if span.IsFile {
+			t.Fatal("delivery restored hit targets before rendering")
+		}
+	}
+	renderGrid(e)
+	x := e.GutterWidth()
+	if span, ok := e.editorLinkAt(x, 0); !ok || !span.IsFile {
+		t.Fatal("resolved file is not actionable")
+	}
+	e.HandleEvent(tcell.NewEventMouse(x, 0, tcell.Button1, tcell.ModCtrl))
+	e.HandleEvent(tcell.NewEventMouse(x, 0, 0, tcell.ModCtrl))
+	renderGrid(e)
+	if requests != 1 || len(e.links.resolved) != 2 {
+		t.Fatal("positive or negative result was not cached")
+	}
+}
+
+func TestEditorFileLinksRetryFailedResolution(t *testing.T) {
+	e := linkEditor([]string{"target.go:12:3"}, 40, 4)
+	e.OnOpenFile = func(string, int, int) {}
+	var deliveries []func(map[string]string)
+	e.ResolveFileLinks = func(_ []string, _ string, apply func(map[string]string)) { deliveries = append(deliveries, apply) }
+	hoverEditorLinks(e)
+	deliveries[0](nil)
+	if e.links.pending || len(e.links.resolved) != 0 {
+		t.Fatal("failed resolution left pending work or cached a missing file")
+	}
+	renderGrid(e)
+	if len(deliveries) != 2 || len(e.links.hits) != 0 {
+		t.Fatal("failed resolution did not retry without enabling the file")
+	}
+	deliveries[1](map[string]string{"target.go": "/source/target.go"})
+	renderGrid(e)
+	if len(deliveries) != 2 || len(e.links.hits) == 0 {
+		t.Fatal("successful retry was not cached and made actionable")
+	}
+}
+
+func TestEditorFileLinksRejectStaleResolution(t *testing.T) {
+	for _, action := range []string{"edit", "buffer", "directory", "scroll", "resize", "wrap", "dismiss", "return"} {
+		t.Run(action, func(t *testing.T) {
+			e := linkEditor([]string{"target.go:12:3", "target.go:1"}, 40, 1)
+			e.OnOpenFile = func(string, int, int) { t.Fatal("stale file link opened") }
+			var deliveries []func(map[string]string)
+			e.ResolveFileLinks = func(_ []string, _ string, apply func(map[string]string)) { deliveries = append(deliveries, apply) }
+			hoverEditorLinks(e)
+			stale := deliveries[0]
+			switch action {
+			case "edit":
+				e.exec(&undo.InsertStringCommand{Line: 0, Col: 0, Text: "new-"})
+			case "buffer":
+				e.Buf = &buffer.Buffer{Lines: []string{"target.go:12:3"}}
+			case "directory":
+				e.LinkWorkDir = "/other"
+			case "scroll", "return":
+				e.Viewport.TopLine = 1
+			case "resize":
+				e.SetRect(Rect{W: 30, H: 1})
+			case "wrap":
+				e.WordWrap = true
+			case "dismiss":
+				e.clearLinkHover()
+			}
+			if action == "return" {
+				renderGrid(e)
+				e.Viewport.TopLine = 0
+				renderGrid(e)
+			}
+			stale(map[string]string{"target.go": "/old/target.go"})
+			renderGrid(e)
+			if len(e.links.hits) != 0 || len(e.links.resolved) != 0 {
+				t.Fatal("stale resolution restored links")
+			}
+			if action != "dismiss" {
+				deliveries[len(deliveries)-1](map[string]string{"target.go": "/latest/target.go", "new-target.go": "/latest/target.go"})
+				renderGrid(e)
+				if len(e.links.hits) == 0 {
+					t.Fatal("stale rejection prevented the current viewport from resolving")
+				}
+			}
+		})
+	}
+}
+
+func TestEditorFileLinkResolutionStaysWithinViewport(t *testing.T) {
+	lines := make([]string, 10_000)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("target%d.go:1", i)
+	}
+	e := linkEditor(lines, 30, 4)
+	e.OnOpenFile = func(string, int, int) {}
+	requests := 0
+	e.ResolveFileLinks = func(paths []string, _ string, apply func(map[string]string)) {
+		requests++
+		if len(paths) != e.Viewport.Height {
+			t.Fatalf("resolved %d candidates for %d visible rows", len(paths), e.Viewport.Height)
+		}
+		resolved := make(map[string]string)
+		for _, path := range paths {
+			visible := false
+			for i := e.Viewport.TopLine; i < e.Viewport.TopLine+e.Viewport.Height; i++ {
+				visible = visible || path == fmt.Sprintf("target%d.go", i)
+			}
+			if !visible {
+				t.Fatalf("resolved offscreen path %q", path)
+			}
+			resolved[path] = "/source/" + path
+		}
+		apply(resolved)
+	}
+	hoverEditorLinks(e)
+	for i := range 150 {
+		e.Viewport.TopLine = i * 4
+		renderGrid(e)
+		renderGrid(e)
+		if len(e.links.resolved) != e.Viewport.Height || len(e.links.memo) > linkMemoMax {
+			t.Fatal("link caches grew beyond their bounds")
+		}
+	}
+	if requests != 150 {
+		t.Fatalf("unchanged frames repeated resolution: %d requests", requests)
 	}
 }
