@@ -334,7 +334,15 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 		// r.W-1: exclude last column to avoid colliding with editor scrollbar
 		// For divY+1 (tab bar row), let the bottom panel handle clicks first
 		if freshClick && my == divY+1 && mx < r.X+r.W-1 && cs.Bottom != nil {
-			if cs.Bottom.HandleEvent(ev) == EventConsumed {
+			result := cs.Bottom.HandleEvent(ev)
+			if result == EventCaptured {
+				cs.capturedChild = cs.Bottom
+				if cs.OnBottomClick != nil {
+					cs.OnBottomClick()
+				}
+				return EventCaptured
+			}
+			if result == EventConsumed {
 				if btn&tcell.Button1 != 0 && cs.OnBottomClick != nil {
 					cs.OnBottomClick()
 				}

@@ -373,6 +373,10 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		r := sidebar.GetRect()
 		return sidebar.Visible && splitPanel.ShowLeft && r.W > 0 && r.H > 2
 	}
+	bottomPanel.Tabs.Config.PointerInteractionValid = func() bool {
+		r := bottomPanel.GetRect()
+		return contentSplit.ShowBottom && bottomPanel.Visible && r.W > 0 && r.H > 2
+	}
 
 	rootBox := widgets.NewVStackWidget(menuBar, splitPanel, statusBar)
 
