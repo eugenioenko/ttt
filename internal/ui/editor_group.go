@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime"
 	"time"
 	"unicode/utf8"
 
@@ -1657,6 +1658,11 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	if t == nil || t.Content != nil {
 		return false
 	}
+	replaceTabs, err := g.SaveAsTargets(path)
+	if err != nil {
+		g.reportError(err.Error())
+		return false
+	}
 	g.applySaveSettings(t.Buf, path)
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
@@ -1666,6 +1672,18 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	if t.Undo != nil {
 		t.Undo.MarkSaved()
 	}
+	// The target remains open through the source tab, so don't send OnFileClose.
+	for _, replaceTab := range slices.Backward(replaceTabs) {
+		g.notifyContentTabClose(g.tabs[replaceTab])
+		g.tabs = append(g.tabs[:replaceTab], g.tabs[replaceTab+1:]...)
+		if replaceTab < g.pinnedCount {
+			g.pinnedCount--
+		}
+		if replaceTab < g.active {
+			g.active--
+		}
+	}
+	t = g.activeTab()
 	g.movePathState(t.FilePath, path)
 	t.FilePath = path
 	t.IconPath = path
@@ -1674,6 +1692,47 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	g.rebuildHighlighter(t)
 	g.syncTabs()
 	return true
+}
+
+func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
+	var targets []int
+	for i := range g.tabs {
+		other := &g.tabs[i]
+		if i == g.active || other.Virtual || other.Buf == nil || !sameSaveTarget(other.FilePath, path) {
+			continue
+		}
+		if other.Buf.Dirty {
+			return nil, fmt.Errorf("Cannot save as %s: already open with unsaved changes; save or close that tab first", filepath.Base(path))
+		}
+		targets = append(targets, i)
+	}
+	return targets, nil
+}
+
+func sameSaveTarget(a, b string) bool {
+	resolve := func(path string) string {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			path = resolved
+		}
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+		return path
+	}
+	a, b = resolve(a), resolve(b)
+	if a == b {
+		return true
+	}
+	if !strings.EqualFold(a, b) {
+		return false
+	}
+	// Atomic saves split hard links; inode identity is only a fallback for case variants.
+	infoA, errA := os.Stat(a)
+	infoB, errB := os.Stat(b)
+	if errA == nil && errB == nil {
+		return os.SameFile(infoA, infoB)
+	}
+	return runtime.GOOS == "windows" || runtime.GOOS == "darwin"
 }
 
 // movePathState moves the bookmarks and decorations kept for oldPath, or for

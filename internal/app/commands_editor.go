@@ -203,6 +203,10 @@ func (a *App) showSaveFileAs(onSaved func()) {
 			return
 		}
 		path = a.saveAsPath(path)
+		if _, err := a.EditorGroup.SaveAsTargets(path); err != nil {
+			a.StatusError(err.Error())
+			return
+		}
 		if saveAsReplaces(initial, path) {
 			a.ShowConfirmDialog(
 				fmt.Sprintf("%s already exists. Replace it?", filepath.Base(path)),
