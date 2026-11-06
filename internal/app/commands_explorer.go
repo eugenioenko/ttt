@@ -1,6 +1,7 @@
 package app
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -76,6 +77,19 @@ func (a *App) ExplorerReveal() {
 	path := a.explorerNodePath()
 	a.ExplorerContextNode = nil
 	a.FileOpReveal(path)
+}
+
+func (a *App) ExplorerOpenInTerminal() {
+	path := a.explorerNodePath()
+	a.ExplorerContextNode = nil
+	if path == "" {
+		a.StatusWarn(i18n.Text("status.noFileSelected"))
+		return
+	}
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		path = filepath.Dir(path)
+	}
+	a.SpawnTerminalSpec(TerminalSpec{Cwd: path})
 }
 
 func (a *App) ExplorerRevealActiveFile() {
@@ -233,6 +247,12 @@ func registerExplorerCommands(app *App) {
 		ID: "explorer.copyAbsolutePath", Title: i18n.Text("command.explorerCopyAbsolutePath"),
 		Keywords: []string{"explorer", "file", "path", "copy", "clipboard", "absolute"},
 		Handler:  app.ExplorerCopyAbsolutePath,
+	})
+
+	reg.Register(command.Command{
+		ID: "explorer.openInTerminal", Title: i18n.Text("command.explorerOpenInTerminal"),
+		Keywords: []string{"explorer", "folder", "terminal", "shell", "cd", "open"},
+		Handler:  app.ExplorerOpenInTerminal,
 	})
 
 	reg.Register(command.Command{

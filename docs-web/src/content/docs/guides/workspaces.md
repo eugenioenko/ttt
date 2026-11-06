@@ -10,6 +10,7 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 - Directories are sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- **Open in Terminal** (`explorer.openInTerminal`, right-click menu or palette) opens a new integrated terminal in that folder, or in the file's folder
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** (`explorer.revealActiveFile`) expands the folders above the active file, selects it, and scrolls it into view without moving focus from the editor. Set `explorer.autoReveal` to `true` to do this every time the active file changes
 - A folder whose only entry is another folder is shown as one row, such as `src/main/java`, once you expand it, and that one expansion opens the whole chain. Right-click a segment of the row to act on that folder; keyboard actions on the row apply to its deepest folder. Set `explorer.compactFolders` to `false` to show each folder on its own row
