@@ -387,6 +387,16 @@
     "tags": ["lsp", "typescript", "javascript"]
   },
   {
+    "name": "lsp-typescript-native",
+    "displayName": "TypeScript 7+ Language Server",
+    "author": "danielmrdev",
+    "description": "Auto-configure TypeScript 7+'s built-in language server (tsc --lsp) for TypeScript and JavaScript; use instead of lsp-typescript",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lsp-typescript-native",
+    "version": "0.1.0",
+    "tags": ["lsp", "typescript", "javascript"]
+  },
+  {
     "name": "lsp-python",
     "displayName": "Python Language Server",
     "author": "eugenioenko",
