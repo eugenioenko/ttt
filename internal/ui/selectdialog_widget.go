@@ -9,6 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -54,7 +55,7 @@ type SelectDialogWidget struct {
 	BaseWidget
 	Commands          []command.Command
 	Items             []PaletteItem
-	Input             *InputWidget
+	Input             *widgets.InputWidget
 	Selected          int
 	scrollOffset      int
 	inputX            int
@@ -87,10 +88,10 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 		Commands: commands,
 	}
 	p.helpTopics, p.helpCommands = buildPaletteHelpItems(commands)
-	p.Input = NewInputWidget()
-	p.Input.Prefix = " "
+	p.Input = newPanelInput()
+	p.Input.Config.Prefix = " "
 	p.Input.SetText(">")
-	p.Input.OnChange = func(text string) {
+	p.Input.Config.OnChange = func(text string) {
 		p.filter()
 	}
 	p.filter()
@@ -104,7 +105,7 @@ func (p *SelectDialogWidget) SetFiles(files []PaletteFile) {
 func (p *SelectDialogWidget) Focusable() bool { return true }
 
 func (p *SelectDialogWidget) CursorPosition() (int, int, bool) {
-	return p.Input.CursorX(p.inputX), p.inputY, true
+	return p.Input.CursorPosition()
 }
 
 func calculatePaletteWidth(screenWidth int) int {
@@ -179,7 +180,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 
 	p.inputX = boxX + 1
 	p.inputY = boxY + 1
-	p.Input.Render(surface, p.inputX, p.inputY, boxW-2)
+	renderPanelInput(surface, p.Input, p.inputX, p.inputY, boxW-2)
 
 	if p.mode == paletteGoToLineMode {
 		p.visibleItems = layout.visibleItems
@@ -363,7 +364,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 
 			if my == p.inputY {
-				return p.Input.HandleMouse(mev)
+				return p.Input.HandleEvent(mev)
 			}
 
 			itemsStartY := p.boxY + 3
@@ -397,7 +398,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 	case tcell.KeyEnter:
 		if p.mode == paletteGoToLineMode {
 			if p.OnGoToLine != nil {
-				text := strings.TrimPrefix(p.Input.Text, ":")
+				text := strings.TrimPrefix(p.Input.Text(), ":")
 				if n, err := strconv.Atoi(text); err == nil {
 					if n < 1 {
 						n = 1
@@ -423,7 +424,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		p.notifySelectionChange()
 	default:
-		if kev.Key() == tcell.KeyRune && kev.Str() == "?" && p.mode == paletteCommandMode && p.Input.Text == ">" {
+		if kev.Key() == tcell.KeyRune && kev.Str() == "?" && p.mode == paletteCommandMode && p.Input.Text() == ">" {
 			p.Input.SetText("?")
 			return EventConsumed
 		}
@@ -475,7 +476,7 @@ func (p *SelectDialogWidget) notifySelectionChange() {
 }
 
 func (p *SelectDialogWidget) filter() {
-	text := p.Input.Text
+	text := p.Input.Text()
 	if strings.HasPrefix(text, ">") {
 		p.mode = paletteCommandMode
 		p.activeHelpTopic = ""

@@ -60,8 +60,8 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 			}
 			h.assertContains(tc.want)
 			fb := findBarWidget(t, h)
-			if fb.Input.Text != "cat" {
-				t.Fatalf("query = %q, want it kept", fb.Input.Text)
+			if fb.Input.Text() != "cat" {
+				t.Fatalf("query = %q, want it kept", fb.Input.Text())
 			}
 			if len(fb.Matches) != 0 {
 				t.Fatalf("content tab matches = %d, want 0", len(fb.Matches))
@@ -71,8 +71,8 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 
 			h.app.EditorGroup.SwitchTab(0)
 			h.redraw()
-			if fb.Input.Text != "cat" {
-				t.Fatalf("query after return = %q, want cat", fb.Input.Text)
+			if fb.Input.Text() != "cat" {
+				t.Fatalf("query after return = %q, want cat", fb.Input.Text())
 			}
 			if len(fb.Matches) != 3 {
 				t.Fatalf("text tab matches = %d, want 3", len(fb.Matches))

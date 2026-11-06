@@ -9,6 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -98,9 +99,9 @@ func TestSearchRefreshPreservesOptionsAndUndo(t *testing.T) {
 			h := newSearchRefreshHarness(t)
 			switch source {
 			case "global literal", "global regex":
-				h.app.Search.Input.Text = "FOO"
+				seedInputText(h.app.Search.Input, "FOO")
 				if source == "global regex" {
-					h.app.Search.Input.Text = "FO+"
+					seedInputText(h.app.Search.Input, "FO+")
 					h.app.Search.Options.UseRegex = true
 				}
 				h.app.NavigateToSearchMatch(h.app.EditorGroup.ActiveFilePath(), 1, 0)
@@ -159,7 +160,7 @@ func TestInvalidRegexDoesNotRestorePreviousSearchAfterEdit(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			h := newSearchRefreshHarness(t)
-			var input *ui.InputWidget
+			var input *widgets.InputWidget
 			var matches func() []ui.FindMatch
 			if replace {
 				h.app.OpenFindReplace()
@@ -181,8 +182,8 @@ func TestInvalidRegexDoesNotRestorePreviousSearchAfterEdit(t *testing.T) {
 				t.Fatalf("valid query matches = %+v", matches())
 			}
 			h.pressRune('[')
-			if input.Text != "foo[" || len(matches()) != 0 {
-				t.Fatalf("invalid query %q matches = %+v", input.Text, matches())
+			if input.Text() != "foo[" || len(matches()) != 0 {
+				t.Fatalf("invalid query %q matches = %+v", input.Text(), matches())
 			}
 			editor := h.app.EditorGroup.Editor
 			editor.Cursor.Line, editor.Cursor.Col = 0, 0
@@ -250,7 +251,7 @@ func testSearchRefreshAcrossTabChange(t *testing.T, source string) {
 	a.EditorGroup.SwitchToTabByPath(firstPath)
 	if source == "sidebar" {
 		a.Sidebar.SetActivePanel("search")
-		a.Search.Input.Text = "foo"
+		seedInputText(a.Search.Input, "foo")
 		a.applySearchHighlights()
 	} else {
 		pattern := "foo"

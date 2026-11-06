@@ -54,6 +54,11 @@ func (b *ButtonWidget) PointerShapeAt(mx, my int) string {
 }
 
 func (inp *InputWidget) PointerShapeAt(mx, my int) string {
+	for _, hit := range inp.ActionHits {
+		if hit.Contains(mx, my) {
+			return term.PointerHand
+		}
+	}
 	if inp.GetRect().Contains(mx, my) {
 		return term.PointerText
 	}

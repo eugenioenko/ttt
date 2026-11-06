@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -17,6 +18,7 @@ type InputConfig struct {
 	Bordered    bool       `json:"bordered"`
 	Title       string     `json:"-"`
 	Style       term.Style `json:"-"`
+	PrefixStyle term.Style `json:"-"`
 	// Mask draws each rune as • and keeps the text off the clipboard. A masked
 	// input is one line: Wrap is ignored.
 	Mask bool `json:"-"`
@@ -50,8 +52,17 @@ const (
 
 const maxInputUndo = 100
 
+type InputAction struct {
+	Label   string
+	Active  bool
+	OnClick func()
+}
+
 type InputWidget struct {
 	BaseWidget
+	Actions       []InputAction
+	ActionHits    []Rect
+	actionPressed bool
 	Config        InputConfig
 	text          string
 	cursorPos     int
@@ -230,6 +241,7 @@ func (inp *InputWidget) Clear() {
 }
 
 func (inp *InputWidget) Render(surface Surface) {
+	inp.ActionHits = nil
 	if inp.Config.Bordered {
 		inp.renderBordered(surface)
 	} else {
@@ -255,11 +267,7 @@ func (inp *InputWidget) renderBordered(surface Surface) {
 		inner.DrawText(1, 0, " "+inp.Config.Title+" ", w-1, borderStyle)
 	}
 
-	if inp.wraps() {
-		inp.renderWrapped(inner, 2, 1, w-4, h-2)
-		return
-	}
-	inp.renderText(inner, 2, 1, w-4)
+	inp.renderContent(inner, 2, 1, w-4, h-2)
 }
 
 func (inp *InputWidget) renderBorderless(surface Surface) {
@@ -277,6 +285,10 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 		prefixStyle = term.StyleBorderActive
 	}
 
+	if inp.Config.PrefixStyle != 0 {
+		prefixStyle = inp.Config.PrefixStyle
+	}
+
 	px := 0
 	for _, ch := range prefixRunes {
 		if px < w {
@@ -285,11 +297,61 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 		px += textwidth.Rune(ch)
 	}
 
-	if inp.wraps() {
-		inp.renderWrapped(inner, prefixW, 0, w-prefixW, h)
+	inp.renderContent(inner, prefixW, 0, w-prefixW, h)
+}
+
+func (inp *InputWidget) ActionsWidth() int {
+	width := 0
+	for _, action := range inp.Actions {
+		width += textwidth.String(action.Label) + 1
+	}
+	return width
+}
+
+func (inp *InputWidget) renderContent(surface Surface, x, y, w, h int) {
+	if w <= 0 || h <= 0 {
 		return
 	}
-	inp.renderText(inner, prefixW, 0, w-prefixW)
+	textW := max(w-inp.ActionsWidth(), 0)
+	if inp.wraps() {
+		inp.renderWrapped(surface, x, y, textW, h)
+	} else {
+		inp.renderText(surface, x, y, textW)
+	}
+	ox, oy := surface.Origin()
+	ax, limit := x+textW, x+w
+	inputStyle := inp.Config.Style
+	if inputStyle == 0 {
+		inputStyle = term.StyleInput
+	}
+	surface.ClearRect(ax, y, w-textW, h, inputStyle)
+	inp.ActionHits = make([]Rect, len(inp.Actions))
+	for i, action := range inp.Actions {
+		if ax >= limit {
+			break
+		}
+		style := term.StyleInputAction
+		if action.Active {
+			style = term.StyleDefault
+		}
+		end := surface.DrawText(ax, y, action.Label, limit, style)
+		inp.ActionHits[i] = Rect{X: ox + ax, Y: oy + y, W: end - ax, H: 1}
+		ax = surface.DrawText(end, y, " ", limit, inputStyle)
+	}
+}
+
+func (inp *InputWidget) CopyTextState(source *InputWidget) {
+	inp.CancelPointerCapture()
+	inp.text, inp.cursorPos = source.text, source.cursorPos
+	inp.scrollOffset, inp.rowOffset, inp.goalCol = source.scrollOffset, source.rowOffset, source.goalCol
+	inp.selStart, inp.selEnd = source.selStart, source.selEnd
+	inp.undoStack = slices.Clone(source.undoStack)
+	inp.redoStack = slices.Clone(source.redoStack)
+	inp.groupType, inp.lastRune = source.groupType, source.lastRune
+}
+
+func (inp *InputWidget) PasteClipboard() {
+	inp.PasteText(clipboard.Get())
 }
 
 func (inp *InputWidget) renderText(surface Surface, x, y, textW int) {
@@ -549,7 +611,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyCtrlV:
-		inp.pasteClipboard()
+		inp.PasteClipboard()
 		return EventConsumed
 	case tcell.KeyCtrlA:
 		inp.selectAll()
@@ -574,10 +636,12 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 	return EventIgnored
 }
 
-func (inp *InputWidget) OwnsPointerCapture() bool               { return inp.drag.Active() }
+func (inp *InputWidget) OwnsPointerCapture() bool               { return inp.drag.Active() || inp.actionPressed }
 func (inp *InputWidget) SetPointerCaptureInvalidated(fn func()) { inp.pointerCaptureInvalidated = fn }
 func (inp *InputWidget) CancelPointerCapture() bool {
 	canceled := inp.drag.Cancel()
+	canceled = canceled || inp.actionPressed
+	inp.actionPressed = false
 	if canceled && inp.pointerCaptureInvalidated != nil {
 		inp.pointerCaptureInvalidated()
 	}
@@ -585,6 +649,13 @@ func (inp *InputWidget) CancelPointerCapture() bool {
 }
 
 func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
+	if inp.actionPressed {
+		if ev.Buttons()&tcell.Button1 == 0 {
+			inp.actionPressed = false
+			return EventConsumed
+		}
+		return EventCaptured
+	}
 	mx, my := ev.Position()
 	r := inp.GetRect()
 	if !inp.drag.Active() && (ev.Buttons()&tcell.Button1 == 0 || mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H) {
@@ -617,6 +688,21 @@ func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		return EventCaptured
 	}
 	inp.breakGroup()
+	for i, hit := range inp.ActionHits {
+		if hit.Contains(mx, my) {
+			if i >= len(inp.Actions) {
+				return EventConsumed
+			}
+			inp.actionPressed = true
+			if inp.Actions[i].OnClick != nil {
+				inp.Actions[i].OnClick()
+			}
+			if inp.actionPressed {
+				return EventCaptured
+			}
+			return EventConsumed
+		}
+	}
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < 400 && pos == inp.lastClickPos {
 		inp.clickCount++
@@ -849,10 +935,6 @@ func (inp *InputWidget) CutSelection() {
 	inp.CopySelection()
 	inp.recordEdit()
 	inp.deleteSelection()
-}
-
-func (inp *InputWidget) pasteClipboard() {
-	inp.PasteText(clipboard.Get())
 }
 
 // word navigation

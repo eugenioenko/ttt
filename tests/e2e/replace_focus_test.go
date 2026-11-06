@@ -33,7 +33,7 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 	if got := editorText(h); got != "xyz" {
 		t.Fatalf("editor text = %q, want xyz", got)
 	}
-	if bar.SearchInput.Text != "a" || bar.ReplaceInput.Text != "b" {
+	if bar.SearchInput.Text() != "a" || bar.ReplaceInput.Text() != "b" {
 		t.Fatal("editor input changed the search or replacement")
 	}
 	h.pressCtrl(tcell.KeyCtrlZ)
@@ -50,15 +50,15 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 	}
 	h.pressKey(tcell.KeyEnd, tcell.ModNone)
 	h.pressRune('c')
-	if bar.SearchInput.Text != "ac" {
-		t.Fatalf("search input = %q, want ac", bar.SearchInput.Text)
+	if bar.SearchInput.Text() != "ac" {
+		t.Fatalf("search input = %q, want ac", bar.SearchInput.Text())
 	}
 	h.pressCtrl(tcell.KeyCtrlZ)
 	if got := editorText(h); got != "x" {
 		t.Fatalf("undo in search input changed editor text to %q", got)
 	}
-	if bar.SearchInput.Text != "a" {
-		t.Fatalf("undo in search input failed: got %q, want a", bar.SearchInput.Text)
+	if bar.SearchInput.Text() != "a" {
+		t.Fatalf("undo in search input failed: got %q, want a", bar.SearchInput.Text())
 	}
 	h.click(84, 6)
 	if bar.FocusedInput() != bar.ReplaceInput {
@@ -66,15 +66,15 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 	}
 	h.pressKey(tcell.KeyEnd, tcell.ModNone)
 	pasteText(h, pasteKeys("d"))
-	if bar.ReplaceInput.Text != "bd" {
-		t.Fatalf("replacement = %q, want bd", bar.ReplaceInput.Text)
+	if bar.ReplaceInput.Text() != "bd" {
+		t.Fatalf("replacement = %q, want bd", bar.ReplaceInput.Text())
 	}
 	h.pressCtrl(tcell.KeyCtrlZ)
 	if got := editorText(h); got != "x" {
 		t.Fatalf("undo in replacement input changed editor text to %q", got)
 	}
-	if bar.ReplaceInput.Text != "b" {
-		t.Fatalf("undo in replacement input failed: got %q, want b", bar.ReplaceInput.Text)
+	if bar.ReplaceInput.Text() != "b" {
+		t.Fatalf("undo in replacement input failed: got %q, want b", bar.ReplaceInput.Text())
 	}
 
 	h.click(6, 4)
@@ -83,8 +83,8 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 		t.Fatal("Ctrl+R did not refocus the existing replace bar")
 	}
 	h.pressRune('e')
-	if bar.ReplaceInput.Text != "be" {
-		t.Fatalf("replacement after Ctrl+R = %q, want be", bar.ReplaceInput.Text)
+	if bar.ReplaceInput.Text() != "be" {
+		t.Fatalf("replacement after Ctrl+R = %q, want be", bar.ReplaceInput.Text())
 	}
 	h.click(6, 4)
 	h.pressKey(tcell.KeyEscape, tcell.ModNone)

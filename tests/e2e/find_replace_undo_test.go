@@ -34,14 +34,14 @@ func TestFindUndoDoesNotMutateEditor(t *testing.T) {
 	for _, r := range "search term" {
 		h.pressRune(r)
 	}
-	if find.Input.Text != "search term" {
-		t.Fatalf("expected 'search term' in find input, got %q", find.Input.Text)
+	if find.Input.Text() != "search term" {
+		t.Fatalf("expected 'search term' in find input, got %q", find.Input.Text())
 	}
 
 	// Ctrl+Z in Find bar should undo find input, NOT the editor
 	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
-	if find.Input.Text != "search" {
-		t.Fatalf("expected 'search' after undoing ' term', got %q", find.Input.Text)
+	if find.Input.Text() != "search" {
+		t.Fatalf("expected 'search' after undoing ' term', got %q", find.Input.Text())
 	}
 	if editorText(h) != origText {
 		t.Fatalf("editor buffer was modified by Ctrl+Z in find bar! got %q, expected %q", editorText(h), origText)
@@ -49,8 +49,8 @@ func TestFindUndoDoesNotMutateEditor(t *testing.T) {
 
 	// Undo again
 	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
-	if find.Input.Text != "" {
-		t.Fatalf("expected '' after second undo, got %q", find.Input.Text)
+	if find.Input.Text() != "" {
+		t.Fatalf("expected '' after second undo, got %q", find.Input.Text())
 	}
 	if editorText(h) != origText {
 		t.Fatalf("editor buffer was modified by Ctrl+Z in find bar! got %q, expected %q", editorText(h), origText)
@@ -58,12 +58,12 @@ func TestFindUndoDoesNotMutateEditor(t *testing.T) {
 
 	// Redo with Ctrl+Y
 	h.pressKey(tcell.KeyCtrlY, tcell.ModCtrl)
-	if find.Input.Text != "search" {
-		t.Fatalf("expected 'search' after redo, got %q", find.Input.Text)
+	if find.Input.Text() != "search" {
+		t.Fatalf("expected 'search' after redo, got %q", find.Input.Text())
 	}
 	h.pressKey(tcell.KeyCtrlY, tcell.ModCtrl)
-	if find.Input.Text != "search term" {
-		t.Fatalf("expected 'search term' after redo, got %q", find.Input.Text)
+	if find.Input.Text() != "search term" {
+		t.Fatalf("expected 'search term' after redo, got %q", find.Input.Text())
 	}
 	if editorText(h) != origText {
 		t.Fatalf("editor buffer was modified by Ctrl+Y in find bar! got %q, expected %q", editorText(h), origText)
@@ -72,8 +72,8 @@ func TestFindUndoDoesNotMutateEditor(t *testing.T) {
 	// Undo back to empty
 	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
 	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
-	if find.Input.Text != "" {
-		t.Fatalf("expected empty find input, got %q", find.Input.Text)
+	if find.Input.Text() != "" {
+		t.Fatalf("expected empty find input, got %q", find.Input.Text())
 	}
 
 	// Crucial test for Issue #1377:
@@ -120,21 +120,21 @@ func TestReplaceUndoDoesNotMutateEditor(t *testing.T) {
 	for _, r := range "findme" {
 		h.pressRune(r)
 	}
-	if replace.SearchInput.Text != "findme" {
-		t.Fatalf("expected 'findme', got %q", replace.SearchInput.Text)
+	if replace.SearchInput.Text() != "findme" {
+		t.Fatalf("expected 'findme', got %q", replace.SearchInput.Text())
 	}
 
 	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
-	if replace.SearchInput.Text != "" {
-		t.Fatalf("expected '', got %q", replace.SearchInput.Text)
+	if replace.SearchInput.Text() != "" {
+		t.Fatalf("expected '', got %q", replace.SearchInput.Text())
 	}
 	if editorText(h) != origText {
 		t.Fatalf("editor was mutated by Ctrl+Z in replace bar! got %q", editorText(h))
 	}
 
 	h.pressKey(tcell.KeyCtrlY, tcell.ModCtrl)
-	if replace.SearchInput.Text != "findme" {
-		t.Fatalf("expected 'findme' after redo, got %q", replace.SearchInput.Text)
+	if replace.SearchInput.Text() != "findme" {
+		t.Fatalf("expected 'findme' after redo, got %q", replace.SearchInput.Text())
 	}
 
 	// Tab to ReplaceInput (row 1)
@@ -142,21 +142,21 @@ func TestReplaceUndoDoesNotMutateEditor(t *testing.T) {
 	for _, r := range "replaceme" {
 		h.pressRune(r)
 	}
-	if replace.ReplaceInput.Text != "replaceme" {
-		t.Fatalf("expected 'replaceme', got %q", replace.ReplaceInput.Text)
+	if replace.ReplaceInput.Text() != "replaceme" {
+		t.Fatalf("expected 'replaceme', got %q", replace.ReplaceInput.Text())
 	}
 
 	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
-	if replace.ReplaceInput.Text != "" {
-		t.Fatalf("expected '' after undo in ReplaceInput, got %q", replace.ReplaceInput.Text)
+	if replace.ReplaceInput.Text() != "" {
+		t.Fatalf("expected '' after undo in ReplaceInput, got %q", replace.ReplaceInput.Text())
 	}
 	if editorText(h) != origText {
 		t.Fatalf("editor was mutated by Ctrl+Z in ReplaceInput! got %q", editorText(h))
 	}
 
 	h.pressKey(tcell.KeyCtrlY, tcell.ModCtrl)
-	if replace.ReplaceInput.Text != "replaceme" {
-		t.Fatalf("expected 'replaceme' after redo, got %q", replace.ReplaceInput.Text)
+	if replace.ReplaceInput.Text() != "replaceme" {
+		t.Fatalf("expected 'replaceme' after redo, got %q", replace.ReplaceInput.Text())
 	}
 }
 
@@ -181,20 +181,20 @@ func TestGlobalSearchUndoDoesNotMutateEditor(t *testing.T) {
 	for _, r := range "needle" {
 		h.pressRune(r)
 	}
-	if h.app.Search.Input.Text != "needle" {
-		t.Fatalf("expected 'needle', got %q", h.app.Search.Input.Text)
+	if h.app.Search.Input.Text() != "needle" {
+		t.Fatalf("expected 'needle', got %q", h.app.Search.Input.Text())
 	}
 
 	h.pressKey(tcell.KeyCtrlZ, tcell.ModCtrl)
-	if h.app.Search.Input.Text != "" {
-		t.Fatalf("expected '' after undo in search, got %q", h.app.Search.Input.Text)
+	if h.app.Search.Input.Text() != "" {
+		t.Fatalf("expected '' after undo in search, got %q", h.app.Search.Input.Text())
 	}
 	if editorText(h) != origText {
 		t.Fatalf("editor was mutated by Ctrl+Z in sidebar search! got %q", editorText(h))
 	}
 
 	h.pressKey(tcell.KeyCtrlY, tcell.ModCtrl)
-	if h.app.Search.Input.Text != "needle" {
-		t.Fatalf("expected 'needle' after redo in search, got %q", h.app.Search.Input.Text)
+	if h.app.Search.Input.Text() != "needle" {
+		t.Fatalf("expected 'needle' after redo in search, got %q", h.app.Search.Input.Text())
 	}
 }
