@@ -71,7 +71,7 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 
 func TestOptionsMenuGroupsControls(t *testing.T) {
 	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
-	wantLabels := []string{"Editor", "Code Assist", "Appearance", "Diff Views", "Git Files", "", "Settings"}
+	wantLabels := []string{"Editor", "Code Assist", "Appearance", "Diff Views", "Git Files", "", "Theme", "Settings"}
 	var labels []string
 	for _, item := range items {
 		labels = append(labels, item.Label)
@@ -84,13 +84,13 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 			t.Errorf("category should only open a submenu: %+v", item)
 		}
 	}
-	if !items[5].IsSep || items[6].Command != "settings.openUI" {
-		t.Fatal("Settings should follow the final separator")
+	if !items[5].IsSep || items[6].Command != "theme.switch" || items[7].Command != "settings.openUI" {
+		t.Fatal("Theme and Settings should follow the final separator")
 	}
 	wantCommands := [][]string{
-		{"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
+		{"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
 		{"options.toggleLSP", "options.toggleLSPHover"},
-		{"theme.switch", "options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.borderStyle"},
+		{"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.borderStyle"},
 	}
 	for i, want := range wantCommands {
 		var commands []string
@@ -109,7 +109,7 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 	}
 	for _, item := range menuBarMenus[3] {
 		if item.Command == "theme.switch" {
-			t.Error("Theme should move from View to Appearance")
+			t.Error("Theme should move from View to Options")
 		}
 	}
 	assist := items[1].Submenu
