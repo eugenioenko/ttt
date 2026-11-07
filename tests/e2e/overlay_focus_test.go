@@ -10,7 +10,7 @@ import (
 func openAlphaWithTerminal(t *testing.T, h *testHarness) {
 	t.Helper()
 	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
-	h.app.Settings.Terminal.Shell = "C:/Program Files/Git/usr/bin/cat.exe"
+	h.app.Settings.Terminal.Shell = "/bin/cat"
 	h.exec("terminal.toggle")
 	if len(h.app.Terminals) != 1 {
 		t.Fatalf("expected 1 terminal after toggle, got %d", len(h.app.Terminals))

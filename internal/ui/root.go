@@ -518,6 +518,13 @@ func (r *Root) RemoveOverlay(w Widget) Widget {
 			if r.capturedWidget == w {
 				r.CancelPointerCapture()
 			}
+			// Overlays above w that would return focus to it inherit w's own
+			// return target, since w is about to disappear.
+			for j := i + 1; j < len(r.Overlays); j++ {
+				if r.Overlays[j].returnFocus == w {
+					r.Overlays[j].returnFocus = o.returnFocus
+				}
+			}
 			r.Overlays = append(r.Overlays[:i], r.Overlays[i+1:]...)
 			slog.Debug("root", "action", "removeOverlay", "count", len(r.Overlays))
 			return o.returnFocus
