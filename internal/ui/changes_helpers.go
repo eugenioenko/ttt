@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -22,20 +23,20 @@ type ChangesGroup struct {
 	PRHeadSHA string
 }
 
-type gitDecoration struct {
-	statuses []string
-	live     term.Style
-	staged   term.Style
+type changeDecoration struct {
+	kinds  []scm.ChangeKind
+	live   term.Style
+	staged term.Style
 }
 
-// gitDecorations is ordered least to most attention-worthy. The position also
+// changeDecorations is ordered least to most attention-worthy. The position also
 // sets the rank, so the color a folder inherits from its children stays
 // consistent with the colors themselves without a second table to keep in sync.
-var gitDecorations = []gitDecoration{
-	{statuses: []string{"A", "?", "R", "C"}, live: term.StyleSuccess, staged: term.StyleSuccessStaged},
-	{statuses: []string{"D"}, live: term.StyleDanger, staged: term.StyleDangerStaged},
-	{statuses: []string{"M"}, live: term.StyleWarning, staged: term.StyleWarningStaged},
-	{statuses: []string{"U"}, live: term.StyleGitConflict, staged: term.StyleGitConflictStaged},
+var changeDecorations = []changeDecoration{
+	{kinds: []scm.ChangeKind{scm.Added, scm.Untracked, scm.Renamed, scm.Copied}, live: term.StyleSuccess, staged: term.StyleSuccessStaged},
+	{kinds: []scm.ChangeKind{scm.Deleted}, live: term.StyleDanger, staged: term.StyleDangerStaged},
+	{kinds: []scm.ChangeKind{scm.Modified}, live: term.StyleWarning, staged: term.StyleWarningStaged},
+	{kinds: []scm.ChangeKind{scm.Conflicted}, live: term.StyleGitConflict, staged: term.StyleGitConflictStaged},
 }
 
 func StatusStyle(status string) term.Style {
@@ -43,8 +44,12 @@ func StatusStyle(status string) term.Style {
 }
 
 func GitDecorationStyle(status string, staged bool) term.Style {
-	for _, decoration := range gitDecorations {
-		if !slices.Contains(decoration.statuses, status) {
+	return ChangeStyle(git.ToChange(git.FileStatus{Status: status}).Kind, staged)
+}
+
+func ChangeStyle(kind scm.ChangeKind, staged bool) term.Style {
+	for _, decoration := range changeDecorations {
+		if !slices.Contains(decoration.kinds, kind) {
 			continue
 		}
 		if staged {
@@ -59,7 +64,7 @@ func GitDecorationStyle(status string, staged bool) term.Style {
 // pending changes in the same color. Category ordering does not depend on
 // staged-ness, so collapsing after a folder aggregation keeps its result.
 func GitDecorationLive(style term.Style) term.Style {
-	for _, decoration := range gitDecorations {
+	for _, decoration := range changeDecorations {
 		if style == decoration.staged {
 			return decoration.live
 		}
@@ -71,7 +76,7 @@ func GitDecorationLive(style term.Style) term.Style {
 // A live status outranks its dimmed staged variant, so a folder holding both a
 // staged and a pending change shows the pending one.
 func GitDecorationRank(style term.Style) int {
-	for i, decoration := range gitDecorations {
+	for i, decoration := range changeDecorations {
 		switch style {
 		case decoration.live:
 			return 2*i + 2
@@ -83,20 +88,31 @@ func GitDecorationRank(style term.Style) int {
 }
 
 func StatusBadge(status string) string {
-	switch status {
-	case "M":
+	return ChangeBadge(git.ToChange(git.FileStatus{Status: status}))
+}
+
+func ChangeBadge(change scm.Change) string {
+	switch change.Kind {
+	case scm.Modified:
 		return "M"
-	case "A":
+	case scm.Added:
 		return "A"
-	case "D":
+	case scm.Deleted:
 		return "D"
-	case "R":
+	case scm.Renamed:
 		return "R"
-	case "C":
+	case scm.Copied:
 		return "C"
-	case "?":
+	case scm.Untracked:
+		return "U"
+	case scm.TypeChanged:
+		return "T"
+	case scm.Conflicted:
+		if change.Detail != "" {
+			return change.Detail
+		}
 		return "U"
 	default:
-		return status
+		return change.Detail
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 
@@ -130,9 +131,9 @@ func (a *App) ShowChangesContextMenu(sx, sy int) {
 	openContextMenu(a, a.BuildChangesContextMenu(), sx, sy)
 }
 
-func (a *App) ShowChangesFileContextMenu(dir string, status git.FileStatus, sx, sy int) {
+func (a *App) ShowChangesFileContextMenu(dir string, status scm.Change, sx, sy int) {
 	var items []ui.ContextMenuItem
-	if status.Staged {
+	if status.Group == scm.Staged {
 		items = append(items, changesContextMenuStaged...)
 	} else {
 		items = append(items, changesContextMenuUnstaged...)
