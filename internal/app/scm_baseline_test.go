@@ -126,10 +126,10 @@ func TestProviderBaselineUnsupportedDoesNotFallBackToGit(t *testing.T) {
 
 func TestProviderBaselineCancellation(t *testing.T) {
 	repo := &baselineRepository{testSCMRepository: testSCMRepository{root: t.TempDir()}}
-	source := baselineSource{repository: repo}
+	source := repositorySource{repository: repo}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := source.read(ctx, "file.txt"); !errors.Is(err, context.Canceled) || len(repo.paths) != 0 {
+	if _, err := source.readBaseline(ctx, "file.txt"); !errors.Is(err, context.Canceled) || len(repo.paths) != 0 {
 		t.Fatalf("canceled read reached provider: %v, %v", repo.paths, err)
 	}
 }

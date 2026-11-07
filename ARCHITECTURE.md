@@ -75,24 +75,26 @@ operations and results without owning product widgets. Long-running work must
 have explicit cancellation, identity, shutdown, and stale-result behavior.
 
 `internal/scm` owns the internal provider, repository, optional staging, and
-optional working-copy baseline contracts. Git supplies the built-in adapter.
-Repository discovery, status,
-active identity, and staging use this boundary; `RepositoryState` retains async
-lifecycle ownership. Working-tree state, selection, and Explorer decorations
+optional working-copy baseline and single-change read contracts. Git supplies
+the built-in adapter. Repository discovery, status, active identity, and staging
+use this boundary; `RepositoryState` retains async lifecycle ownership. Working-tree state, selection, and Explorer decorations
 use typed SCM changes and identities. The panel retains its existing two-section
 projection; changes keep their provider group identity without requiring an
 index. Editor gutters and editable working-tree diffs read `scm.BaselineReader`;
 Git's index baseline and conflict HEAD fallback stay inside its adapter. Missing,
 ignored, and conflicted content are explicit states; failed reads are errors.
 Repository objects are captured on the main thread before background reads,
-which keep the existing cancellation and stale-result guards.
+which keep the existing cancellation and stale-result guards. Single-file
+read-only diffs use `scm.ChangeReader` through the cancellable diff-open task.
+The Changes panel passes typed changes without converting provider groups into
+Git status. Git resolves HEAD/index endpoints and supplies patch metadata for
+renames, modes, and binary changes inside its adapter.
 
 Remaining provider integration boundaries before a second provider can drive
 the complete editor:
 
-- Staged/deleted-file diffs (`callbacks.go`), aggregate Current Changes
-  (`current_changes.go`, `repository_state.go`), and history/commit details still
-  use Git endpoints and explicit Git model adapters. They need typed content,
+- Aggregate Current Changes (`current_changes.go`, `repository_state.go`)
+  and history/commit details still use Git endpoints and explicit Git model adapters. They need typed content,
   revision, conflict-stage, binary, mode, rename, and diff capabilities.
 - Discard, commit, branch, fetch/pull/push, and worktree actions still need
   optional mutation capabilities and capability-aware commands and menus.

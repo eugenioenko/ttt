@@ -22,7 +22,7 @@ func TestPluginEditorAPISeesInlineDiffHunks(t *testing.T) {
 	h.app.Repository.RefreshNow(app.RepositoryWorktree)
 	os.WriteFile(path, []byte("one\nTWO\nthree\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "code.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "code.txt", Status: "M"}), false)
 	h.redraw()
 
 	if !h.app.EditorGroup.IsInlineDiffActive() {

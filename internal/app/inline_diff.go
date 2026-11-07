@@ -8,7 +8,7 @@ import (
 
 type inlineDiffRepo struct {
 	dir, rel string
-	source   baselineSource
+	source   repositorySource
 }
 
 func (a *App) repoPathForFile(path string) (repoDir, relPath string, ok bool) {
@@ -24,19 +24,19 @@ func (a *App) repoPathForFile(path string) (repoDir, relPath string, ok bool) {
 }
 
 func (a *App) openInlineDiff(path, repoDir, relPath string) (opened, conflict bool, err error) {
-	a.EditorGroup.OpenFile(path)
-	if a.EditorGroup.ActiveFilePath() != path || !a.EditorGroup.IsEditorActive() {
-		return false, false, nil
-	}
-	source := a.Repository.baselineSource(repoDir)
+	source := a.Repository.repositorySource(repoDir)
 	ctx, cancel := context.WithTimeout(context.Background(), diffOpenTimeout)
 	defer cancel()
-	baseline, err := source.read(ctx, relPath)
+	baseline, err := source.readBaseline(ctx, relPath)
 	if baseline.Conflicted {
 		return false, true, nil
 	}
 	if err != nil {
 		return false, false, err
+	}
+	a.EditorGroup.OpenFile(path)
+	if a.EditorGroup.ActiveFilePath() != path || !a.EditorGroup.IsEditorActive() {
+		return false, false, nil
 	}
 	var base []string
 	if baseline.Exists {

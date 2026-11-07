@@ -58,7 +58,7 @@ func TestUnstagedEntryDiffsIndexAgainstWorkingTree(t *testing.T) {
 	defer h.stop()
 	path := setupPartiallyStagedFile(t, h)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "staged.txt", Status: "M"}), false)
 	d := h.app.EditorGroup.ActiveInlineDiff()
 	if d == nil || !d.Editable() {
 		t.Fatal("unstaged entry did not open an editable diff")
@@ -91,7 +91,7 @@ func TestStagedEntryDiffsHeadAgainstIndex(t *testing.T) {
 	defer h.stop()
 	setupPartiallyStagedFile(t, h)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M", Staged: true}, true, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "staged.txt", Status: "M", Staged: true}), false)
 	if h.app.EditorGroup.ActiveDiffWidget() == nil {
 		t.Fatal("staged entry did not open a diff")
 	}
@@ -119,7 +119,7 @@ func TestStagedChangesWithoutLineEditsOpenADiff(t *testing.T) {
 	}
 	harnessGit(t, h.dir, "add", "empty.txt")
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "new.txt", OldPath: "old.txt", Status: "R", Staged: true}, true, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "new.txt", OldPath: "old.txt", Status: "R", Staged: true}), false)
 	if h.app.EditorGroup.ActiveDiffWidget() == nil {
 		t.Fatal("staged rename without line edits did not open a diff")
 	}
@@ -127,7 +127,7 @@ func TestStagedChangesWithoutLineEditsOpenADiff(t *testing.T) {
 	h.assertContains("new.txt (staged)")
 	h.assertContains("kept line")
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "empty.txt", Status: "A", Staged: true}, true, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "empty.txt", Status: "A", Staged: true}), false)
 	if h.app.EditorGroup.ActiveDiffWidget() == nil {
 		t.Fatal("staged empty file did not open a diff")
 	}
@@ -140,8 +140,8 @@ func TestStagedEntryDiffsHeadAgainstIndexReadOnly(t *testing.T) {
 	defer h.stop()
 	setupPartiallyStagedFile(t, h)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, false)
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M", Staged: true}, true, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "staged.txt", Status: "M"}), false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "staged.txt", Status: "M", Staged: true}), false)
 	d := h.app.EditorGroup.ActiveDiffWidget()
 	if d == nil || d.Editable() {
 		t.Fatal("staged entry did not open a read-only diff")
@@ -164,7 +164,7 @@ func TestStagingUpdatesOpenUnstagedDiff(t *testing.T) {
 	defer h.stop()
 	setupPartiallyStagedFile(t, h)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "staged.txt", Status: "M"}), false)
 	h.app.EditorGroup.ActiveInlineDiff().SetContextMode(ui.DiffContextFullFile)
 	h.redraw()
 	h.assertContains("row 25")
@@ -197,7 +197,7 @@ func TestConflictedFileOpensWithoutADiff(t *testing.T) {
 		t.Fatal("merge did not conflict")
 	}
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "conflict.txt", Status: "U"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "conflict.txt", Status: "U"}), false)
 	h.redraw()
 	if h.app.EditorGroup.ActiveDiffWidget() != nil {
 		t.Fatal("conflicted file opened as a diff")
@@ -223,7 +223,7 @@ func TestConflictDuringAnOpenDiffClosesIt(t *testing.T) {
 	os.WriteFile(path, []byte("main side\nedited\n"), 0644)
 	h.app.RefreshChanges()
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "conflict.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "conflict.txt", Status: "M"}), false)
 	h.redraw()
 	if h.app.EditorGroup.ActiveInlineDiff() == nil {
 		t.Fatal("modified file did not open as a diff")
@@ -252,7 +252,7 @@ func TestOpenChangesExtendedOpensTheFullFile(t *testing.T) {
 	defer h.stop()
 	setupPartiallyStagedFile(t, h)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M"}, false, true)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "staged.txt", Status: "M"}), true)
 	d := h.app.EditorGroup.ActiveInlineDiff()
 	if d == nil {
 		t.Fatal("open changes did not open a diff")

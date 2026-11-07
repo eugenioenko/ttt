@@ -370,23 +370,25 @@ func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, re
 
 func (a *App) openSelectedDiff(extended bool) { a.Changes.OpenSelectedDiff(extended) }
 
-func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended bool) {
-	fullPath := filepath.Join(dir, status.Path)
-	if status.Status == "?" {
+func (a *App) OpenChangeDiff(dir string, change scm.Change, extended bool) {
+	a.cancelPendingDiff()
+	fullPath := filepath.Join(dir, change.Path)
+	working := change.Group == "" || change.Group == scm.WorkingTree
+	if working && change.Kind == scm.Untracked {
 		a.EditorGroup.OpenFile(fullPath)
 		a.FocusEditorIfEnabled()
 		return
 	}
-	if !staged && status.Status != "D" {
-		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() {
-			opened, conflict, err := a.openInlineDiff(fullPath, dir, status.Path)
-			if err != nil {
+	if working && change.Kind != scm.Deleted {
+		if info, err := os.Lstat(fullPath); err == nil && info.Mode().IsRegular() {
+			opened, conflict, err := a.openInlineDiff(fullPath, dir, change.Path)
+			if err != nil && !errors.Is(err, errors.ErrUnsupported) {
 				a.StatusError(err.Error())
 				a.FocusEditorIfEnabled()
 				return
 			}
 			if conflict {
-				a.openConflictedFile(fullPath, status.Path)
+				a.openConflictedFile(fullPath, change.Path)
 				return
 			}
 			if opened {
@@ -398,85 +400,49 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 			}
 		}
 	}
-	if staged {
-		a.openStagedDiff(dir, status, extended)
-		return
-	}
-	index, indexErr := git.ShowIndexFileContext(context.Background(), dir, status.Path)
-	// A conflicted file has no stage-0 entry, so only a failed index read
-	// needs the conflict check.
-	if indexErr != nil && git.IsUnmergedContext(context.Background(), dir, status.Path) {
-		a.openConflictedFile(fullPath, status.Path)
-		return
-	}
-	parsed, ok := parseChangeDiff(git.DiffWorktreeFile(dir, status.Path))
-	if !ok {
-		a.EditorGroup.OpenFile(fullPath)
-		a.FocusEditorIfEnabled()
-		return
-	}
-	var oldLines, newLines []string
-	if indexErr == nil {
-		oldLines = diffSideLines(index)
-	}
-	if data, err := os.ReadFile(fullPath); err == nil {
-		newLines = diffSideLines(string(data))
-	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (diff)", "", fullPath, parsed, oldLines, newLines, extended)
-	a.FocusEditorIfEnabled()
+	source := a.Repository.repositorySource(dir)
+	a.startDiffOpen(func(ctx context.Context) *diffOpenResult {
+		return readChangeDiff(ctx, source, change, extended)
+	})
 }
 
-func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
-	oldPath := status.Path
-	paths := []string{status.Path}
-	if status.OldPath != "" && status.OldPath != status.Path {
-		oldPath = status.OldPath
-		paths = []string{status.OldPath, status.Path}
+func readChangeDiff(ctx context.Context, source repositorySource, change scm.Change, extended bool) *diffOpenResult {
+	fullPath := filepath.Join(source.root, change.Path)
+	content, err := source.readChange(ctx, change)
+	if err != nil {
+		return &diffOpenResult{Canceled: errors.Is(err, context.Canceled), Warn: i18n.Format("status.couldNotOpenDiff", i18n.Args{"error": err.Error()})}
 	}
-	var newLines []string
-	if status.Status != "D" {
-		content, err := git.ShowIndexFileContext(context.Background(), dir, status.Path)
-		if err != nil && git.IsUnmergedContext(context.Background(), dir, status.Path) {
-			a.openConflictedFile(filepath.Join(dir, status.Path), status.Path)
-			return
+	if content.Conflicted {
+		return &diffOpenResult{Path: fullPath, Conflict: change.Path}
+	}
+	if content.Patch == "" {
+		message := i18n.Format("status.noDiffAvailableFor", i18n.Args{"path": change.Path})
+		if change.Group == scm.Staged {
+			message = i18n.Format("status.noStagedChangesFor", i18n.Args{"path": change.Path})
 		}
-		if err == nil {
-			newLines = diffSideLines(content)
-		}
+		return &diffOpenResult{Warn: message}
 	}
-	patch, err := git.DiffStagedFile(dir, paths...)
-	if err != nil || patch == "" {
-		a.StatusNotify(i18n.Format("status.noStagedChangesFor", i18n.Args{"path": status.Path}))
-		return
+	parsed := diff.Parse(content.Patch)
+	suffix := " (diff)"
+	if change.Group == scm.Staged {
+		suffix = " (staged)"
 	}
-	parsed := diff.Parse(patch)
-	// A rename, mode change or empty new file stages a patch with no line
-	// hunks; like VS Code, show both sides in full rather than nothing.
-	if len(parsed.Hunks) == 0 {
-		extended = true
+	var oldLines, newLines []string
+	if content.Before.Exists {
+		oldLines = diffSideLines(content.Before.Content)
 	}
-	var oldLines []string
-	if status.Status != "A" {
-		if content, err := git.ShowFile(dir, oldPath, "HEAD"); err == nil {
-			oldLines = diffSideLines(content)
-		}
+	if content.After.Exists {
+		newLines = diffSideLines(content.After.Content)
 	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", filepath.Join(dir, status.Path), parsed, oldLines, newLines, extended)
-	a.FocusEditorIfEnabled()
+	return &diffOpenResult{TabName: change.Path + suffix, Path: fullPath, Diff: parsed,
+		OldLines: oldLines, NewLines: newLines,
+		Extended: extended || len(parsed.Hunks) == 0}
 }
 
 func (a *App) openConflictedFile(fullPath, relPath string) {
 	a.EditorGroup.OpenFile(fullPath)
 	a.StatusNotify(i18n.Format("status.hasMergeConflictsOpenedWithoutADiff", i18n.Args{"relPath": relPath}))
 	a.FocusEditorIfEnabled()
-}
-
-func parseChangeDiff(text string, err error) (diff.FileDiff, bool) {
-	if err != nil || text == "" {
-		return diff.FileDiff{}, false
-	}
-	parsed := diff.Parse(text)
-	return parsed, len(parsed.Hunks) > 0
 }
 
 func diffSideLines(content string) []string {
