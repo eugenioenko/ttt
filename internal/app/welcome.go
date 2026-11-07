@@ -17,15 +17,17 @@ import (
 
 const welcomeTabID = "welcome"
 
-var welcomeFavoritesHint = i18n.Text("welcome.favoritesHint")
+func welcomeFavoritesHint() string { return i18n.Text("welcome.favoritesHint") }
 
-var welcomeCommands = []struct{ label, commandID string }{
-	{i18n.Text("welcome.openFolder"), "workspace.openFolder"},
-	{i18n.Text("welcome.cloneRepository"), "workspace.clone"},
-	{i18n.Text("general.newFile"), "file.new"},
-	{i18n.Text("welcome.openWorkspace"), "workspace.open"},
-	{i18n.Text("general.settings"), "settings.openUI"},
-	{i18n.Text("welcome.commandPalette"), "command.palette"},
+func welcomeCommands() []struct{ label, commandID string } {
+	return []struct{ label, commandID string }{
+		{i18n.Text("welcome.openFolder"), "workspace.openFolder"},
+		{i18n.Text("welcome.cloneRepository"), "workspace.clone"},
+		{i18n.Text("general.newFile"), "file.new"},
+		{i18n.Text("welcome.openWorkspace"), "workspace.open"},
+		{i18n.Text("general.settings"), "settings.openUI"},
+		{i18n.Text("welcome.commandPalette"), "command.palette"},
+	}
 }
 
 // welcomeItems lists the start actions with their shortcuts, then the
@@ -33,7 +35,7 @@ var welcomeCommands = []struct{ label, commandID string }{
 // then the recently opened folders that exist and are not favorites.
 func (a *App) welcomeItems() []welcomeItem {
 	var items []welcomeItem
-	for _, c := range welcomeCommands {
+	for _, c := range welcomeCommands() {
 		shortcut := ""
 		if cmd, ok := a.Reg.Get(c.commandID); ok {
 			shortcut = cmd.Shortcut
@@ -49,7 +51,7 @@ func (a *App) welcomeItems() []welcomeItem {
 			run:    func() { a.openFolderPath(abs) },
 			copy:   func() { a.FileOpCopyAbsolutePath(abs) },
 		}
-		if len(items) == len(welcomeCommands) {
+		if len(items) == len(welcomeCommands()) {
 			item.section = i18n.Text("general.favorites")
 			item.tight = false
 		}
@@ -109,7 +111,7 @@ func (a *App) refreshWelcome() {
 		return
 	}
 	v.items = a.welcomeItems()
-	v.note = welcomeFavoritesHint
+	v.note = welcomeFavoritesHint()
 	for _, item := range v.items {
 		if item.section == i18n.Text("general.favorites") {
 			v.note = ""

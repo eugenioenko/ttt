@@ -179,6 +179,7 @@ func (a *App) ShowLanguagePicker() {
 }
 
 func registerPaletteCommands(app *App) {
+	app.Reg.Register(command.Command{ID: "language.select", Title: i18n.Text("command.changeDisplayLanguage"), Keywords: []string{"language", "locale", "translation", "display"}, Handler: app.ShowDisplayLanguagePicker})
 	reg := app.Reg
 
 	reg.Register(command.Command{

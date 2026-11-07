@@ -218,38 +218,43 @@ func (a *App) SetGutterStyle(style string) {
 }
 
 // Display labels for the gutter and border style values in config.
-var styleLabels = map[string]string{
-	"minimal":    i18n.Text("options.minimal"),
-	"compact":    i18n.Text("options.compact"),
-	"extended":   i18n.Text("options.extended"),
-	"default":    i18n.Text("options.default"),
-	"rounded":    i18n.Text("options.rounded"),
-	"sharp":      i18n.Text("options.sharp"),
-	"double":     i18n.Text("options.double"),
-	"bold":       i18n.Text("options.bold"),
-	"ascii":      i18n.Text("options.aSCII"),
-	"none":       i18n.Text("options.none"),
-	"background": i18n.Text("options.background"),
-	"invert":     i18n.Text("options.invert"),
+func styleLabels() map[string]string {
+	return map[string]string{
+		"minimal":    i18n.Text("options.minimal"),
+		"compact":    i18n.Text("options.compact"),
+		"extended":   i18n.Text("options.extended"),
+		"default":    i18n.Text("options.default"),
+		"rounded":    i18n.Text("options.rounded"),
+		"sharp":      i18n.Text("options.sharp"),
+		"double":     i18n.Text("options.double"),
+		"bold":       i18n.Text("options.bold"),
+		"ascii":      i18n.Text("options.aSCII"),
+		"none":       i18n.Text("options.none"),
+		"background": i18n.Text("options.background"),
+		"invert":     i18n.Text("options.invert"),
+	}
 }
 
 func selectionStyleItems() []widgets.SelectItem {
+	labels := styleLabels()
 	items := make([]widgets.SelectItem, 0, len(config.SelectionStyles))
 	for _, id := range config.SelectionStyles {
-		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
+		items = append(items, widgets.SelectItem{ID: id, Label: labels[id]})
 	}
 	return items
 }
 
 func gutterStyleItems() []widgets.SelectItem {
+	labels := styleLabels()
 	items := make([]widgets.SelectItem, 0, len(config.GutterStyles))
 	for _, id := range config.GutterStyles {
-		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
+		items = append(items, widgets.SelectItem{ID: id, Label: labels[id]})
 	}
 	return items
 }
 
 func borderStyleItems() []widgets.SelectItem {
+	labels := styleLabels()
 	items := make([]widgets.SelectItem, 0, len(config.BorderStyles))
 	for _, id := range config.BorderStyles {
 		// "theme" is accepted in settings.json but behaves identically to
@@ -257,7 +262,7 @@ func borderStyleItems() []widgets.SelectItem {
 		if id == "theme" {
 			continue
 		}
-		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
+		items = append(items, widgets.SelectItem{ID: id, Label: labels[id]})
 	}
 	return items
 }

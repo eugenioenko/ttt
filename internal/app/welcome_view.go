@@ -11,24 +11,26 @@ import (
 )
 
 // Largest first; the layout takes the biggest one the tab can hold.
-var welcomeTitles = [][]string{
-	{
-		"████████╗████████╗████████╗",
-		"╚══██╔══╝╚══██╔══╝╚══██╔══╝",
-		"   ██║      ██║      ██║   ",
-		"   ██║      ██║      ██║   ",
-		"   ██║      ██║      ██║   ",
-		"   ╚═╝      ╚═╝      ╚═╝   ",
-	},
-	{
-		"┏┳┓ ┏┳┓ ┏┳┓",
-		" ┃   ┃   ┃ ",
-		" ╹   ╹   ╹ ",
-	},
-	{i18n.Text("welcome.tttEditor")},
+func welcomeTitles() [][]string {
+	return [][]string{
+		{
+			"████████╗████████╗████████╗",
+			"╚══██╔══╝╚══██╔══╝╚══██╔══╝",
+			"   ██║      ██║      ██║   ",
+			"   ██║      ██║      ██║   ",
+			"   ██║      ██║      ██║   ",
+			"   ╚═╝      ╚═╝      ╚═╝   ",
+		},
+		{
+			"┏┳┓ ┏┳┓ ┏┳┓",
+			" ┃   ┃   ┃ ",
+			" ╹   ╹   ╹ ",
+		},
+		{i18n.Text("welcome.tttEditor")},
+	}
 }
 
-var welcomeSubtitle = i18n.Text("welcome.terminalTextTool")
+func welcomeSubtitle() string { return i18n.Text("welcome.terminalTextTool") }
 
 const (
 	welcomeCopyIcon  = "⧉"
@@ -66,7 +68,7 @@ type welcomeLayout struct {
 // even for the smallest title, only the actions are shown, without headings.
 func layoutWelcome(w, h, n, tight, sections int) welcomeLayout {
 	for _, gap := range []int{1, 0} {
-		for _, title := range welcomeTitles {
+		for _, title := range welcomeTitles() {
 			if textwidth.String(title[0]) > w {
 				continue
 			}
@@ -173,7 +175,7 @@ func (v *welcomeView) Render(surface widgets.Surface) {
 		}
 		if l.subtitle {
 			y++
-			surface.DrawText((w-textwidth.String(welcomeSubtitle))/2, y, welcomeSubtitle, w, term.StyleMuted)
+			surface.DrawText((w-textwidth.String(welcomeSubtitle()))/2, y, welcomeSubtitle(), w, term.StyleMuted)
 			y++
 		}
 		y += 1 + l.gap

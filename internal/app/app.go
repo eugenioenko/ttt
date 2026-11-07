@@ -56,6 +56,7 @@ type TerminalSpec struct {
 }
 
 type App struct {
+	language      languageState
 	Root          *ui.Root
 	EditorGroup   *ui.EditorGroupWidget
 	Sidebar       *ui.SidebarWidget

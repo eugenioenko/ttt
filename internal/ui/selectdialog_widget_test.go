@@ -594,7 +594,7 @@ func TestPaletteHelpTopicKeyboardAndMouseNavigation(t *testing.T) {
 	}
 
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone))
-	if p.activeHelpTopic != "" || len(p.Items) != len(paletteHelpTopics) {
+	if p.activeHelpTopic != "" || len(p.Items) != len(paletteHelpTopics()) {
 		t.Fatal("expected Escape to return to help topics")
 	}
 

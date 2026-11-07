@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 // SupportedAPIVersion is the plugin API version this editor implements.
@@ -29,6 +31,19 @@ type Manifest struct {
 	Permissions PermissionSet `json:"permissions"`
 	Grammars    []Grammar     `json:"grammars,omitempty"`
 	Themes      []Theme       `json:"themes,omitempty"`
+	Languages   []Language    `json:"languages,omitempty"`
+}
+
+type Language struct {
+	Locale       string `json:"locale"`
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	SourceHashes string `json:"sourceHashes,omitempty"`
+	TTTVersion   string `json:"tttVersion,omitempty"`
+}
+
+func (p *Plugin) LanguageFile(path string) (string, error) {
+	return p.contributionFile(path)
 }
 
 type Theme struct {
@@ -100,7 +115,7 @@ func LoadManifest(dir string) (Manifest, error) {
 	if m.Name == "" {
 		return Manifest{}, fmt.Errorf("manifest missing required field: name")
 	}
-	if m.Entry == "" && len(m.Grammars) == 0 && len(m.Themes) == 0 {
+	if m.Entry == "" && len(m.Grammars) == 0 && len(m.Themes) == 0 && len(m.Languages) == 0 {
 		return Manifest{}, fmt.Errorf("manifest missing required field: entry")
 	}
 	for _, g := range m.Grammars {
@@ -124,6 +139,22 @@ func LoadManifest(dir string) (Manifest, error) {
 			return Manifest{}, fmt.Errorf("duplicate theme name %q", name)
 		}
 		seenThemes[name] = true
+	}
+	seenLocales := make(map[string]bool)
+	for i := range m.Languages {
+		contribution := &m.Languages[i]
+		locale, err := i18n.NormalizeLocale(contribution.Locale)
+		if err != nil || contribution.Locale == "" || locale == "en" {
+			return Manifest{}, fmt.Errorf("invalid contributed locale %q", contribution.Locale)
+		}
+		if contribution.Name == "" || !filepath.IsLocal(contribution.Path) || (contribution.SourceHashes != "" && !filepath.IsLocal(contribution.SourceHashes)) {
+			return Manifest{}, fmt.Errorf("invalid language contribution for %q", locale)
+		}
+		if seenLocales[locale] {
+			return Manifest{}, fmt.Errorf("duplicate contributed locale %q", locale)
+		}
+		contribution.Locale = locale
+		seenLocales[locale] = true
 	}
 	if err := m.Permissions.NetworkHTTP.Validate(); err != nil {
 		return Manifest{}, err

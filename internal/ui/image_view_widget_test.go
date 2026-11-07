@@ -438,7 +438,7 @@ func TestImageWidgetShowsCardWhileDecoding(t *testing.T) {
 	if out := commitFrame(t, layer, w, surface); strings.Contains(out, "a=p") {
 		t.Fatalf("first frame placed the image before the decode finished: %q", out)
 	}
-	if text := gridText(grid); !strings.Contains(text, "PNG image 16x12") || !strings.Contains(text, imageLoadingHint) || strings.Contains(text, imageCardHint) {
+	if text := gridText(grid); !strings.Contains(text, "PNG image 16x12") || !strings.Contains(text, imageLoadingHint()) || strings.Contains(text, imageCardHint()) {
 		t.Errorf("card should show the loading hint while decoding, got:\n%s", text)
 	}
 

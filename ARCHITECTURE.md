@@ -86,9 +86,14 @@ projection. `internal/widgets` contains primitives with more than one product
 or plugin consumer; it is not a destination for every visually reusable
 product surface.
 
-`internal/i18n` owns the embedded English UI catalog and named message
-interpolation. Presentation and application code resolve user-facing copy
-through it; identifiers and external service messages keep their own values.
+`internal/i18n` owns the embedded English UI catalog, immutable runtime
+catalogs, source-hash and placeholder validation, and named interpolation.
+Presentation and application code resolve user-facing copy through it;
+identifiers and external service messages keep their own values. The application
+loads the selected catalog before constructing widgets, manages language-pack
+caches and restart-based settings, and delivers background update results on
+the main thread. The plugin host owns declarative language contributions and
+bounded, commit-pinned catalog downloads; catalog updates never execute Lua.
 
 `internal/asynctask` provides terminal-independent scheduling with injected
 execution and delivery. Product widgets may use it directly; the application

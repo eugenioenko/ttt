@@ -16,10 +16,9 @@ import (
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
-var (
-	imageCardHint    = i18n.Text("imageView.unsupportedTerminal")
-	imageLoadingHint = i18n.Text("imageView.loadingPreview")
-)
+func imageCardHint() string { return i18n.Text("imageView.unsupportedTerminal") }
+
+func imageLoadingHint() string { return i18n.Text("imageView.loadingPreview") }
 
 type ImageViewWidget struct {
 	BaseWidget
@@ -105,9 +104,9 @@ func (w *ImageViewWidget) cardLines() []string {
 	if w.Err != "" {
 		return []string{name, w.Err}
 	}
-	hint := imageCardHint
+	hint := imageCardHint()
 	if w.loading {
-		hint = imageLoadingHint
+		hint = imageLoadingHint()
 	}
 	return []string{
 		name,
