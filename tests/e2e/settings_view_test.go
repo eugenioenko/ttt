@@ -88,6 +88,25 @@ func TestSettingsQuitOptions(t *testing.T) {
 	}
 }
 
+func TestSettingsExplorerUseTrash(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Sidebar", "Sidebar")
+	label := "Move deleted files to Trash"
+	if !rowHas(h, label, checkedBox) {
+		t.Fatalf("Trash should default to enabled:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, label, checkedBox)
+	h.exec("settings.apply")
+	if h.app.Settings.Explorer.UseTrash || config.LoadSettings().Explorer.UseTrash {
+		t.Fatal("useTrash=false was not applied and saved")
+	}
+	h.exec("explorer.delete")
+	h.assertContains("Permanently delete")
+	h.assertContains("This cannot be undone.")
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+}
+
 const (
 	checkedBox   = "[x]"
 	uncheckedBox = "[ ]"

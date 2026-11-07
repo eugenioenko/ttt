@@ -303,6 +303,7 @@ type ExplorerSettings struct {
 	DimStagedGitColors bool `json:"dimStagedGitColors"`
 	AutoReveal         bool `json:"autoReveal"`
 	CompactFolders     bool `json:"compactFolders"`
+	UseTrash           bool `json:"useTrash"`
 }
 
 // LegacyChevrons is the old appearance.chevrons setting, migrated into
@@ -383,6 +384,7 @@ func DefaultExplorerSettings() ExplorerSettings {
 		ShowGitIgnored:  true,
 		GitStatusColors: true,
 		CompactFolders:  true,
+		UseTrash:        true,
 	}
 }
 

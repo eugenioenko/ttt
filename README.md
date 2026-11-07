@@ -167,6 +167,7 @@ Multi-root file tree in the sidebar (Ctrl+K E). When multiple folders are open, 
 - Directories sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- Deleted files and folders go to system Trash by default. Turn off `explorer.useTrash` in **Settings > Sidebar > Files** for permanent deletion
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** expands the tree to the active file and selects it; set `explorer.autoReveal` to do it on every tab switch
 - File-type icons, colored by the theme (glyph mappings from [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)). They need a [Nerd Font](https://www.nerdfonts.com) in your terminal, so they default off; turn them on with `"appearance": { "icons": "nerd-font" }` or **Options > Appearance > Font Icons**

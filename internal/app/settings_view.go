@@ -231,6 +231,9 @@ func settingsCategories() []settingsCategory {
 		}},
 		{Title: i18n.Text("settings.sidebar"), Fields: []settingField{
 			section(i18n.Text("settings.files")),
+			{Label: i18n.Text("settings.useTrash"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Explorer.UseTrash },
+				SetBool: func(s *config.Settings, v bool) { s.Explorer.UseTrash = v }},
 			{Label: i18n.Text("settings.hiddenFiles"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.ShowHidden },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.ShowHidden = v }},

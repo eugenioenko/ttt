@@ -206,7 +206,7 @@ func TestExplorerMenuExecutionConsumesContextAfterCapturingTarget(t *testing.T) 
 						t.Fatalf("command lost the clicked ancestor target: %v", err)
 					}
 				case "delete":
-					h.assertContains("Delete pkg?")
+					h.assertContains("Move pkg to Trash?")
 					h.pressKey(tcell.KeyEscape, tcell.ModNone)
 				}
 				if h.app.Root.HasOverlay() {

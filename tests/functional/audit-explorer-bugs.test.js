@@ -25,10 +25,15 @@ describe("BUG-028: command-palette Explorer: Delete lacks the isRoot guard the r
     writeFileSync(join(dir, "file.txt"), "hi\n");
 
     tui.start(dir);
+    const configDir = join(dir, "test-config");
+    mkdirSync(configDir);
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ explorer: { useTrash: false } }));
+    tui.setEnv({ TTT_CONFIG_DIR: configDir });
     tui.exec("Show Explorer");
     tui.exec("Explorer: Delete");
     tui.press("right"); // move to "Yes" in confirm dialog
     tui.press("enter");
+    tui.waitFor("Permanently deleted");
     tui.run();
 
     // Buggy: explorerNodePath() falls back to Tree.Selected()==0 (root),
