@@ -21,7 +21,7 @@ func TestResolveShellDefault(t *testing.T) {
 func TestResolveShellWithPathSeparators(t *testing.T) {
 	paths := []string{"/bin/sh", "/usr/bin/bash", "./custom_shell"}
 	if runtime.GOOS == "windows" {
-		paths = append(paths, `C:\Windows\System32\cmd.exe`, `.\custom_shell.bat`)
+		paths = append(paths, `C:\Windows\System32\cmd.exe`, `.\custom_shell.bat`, `C:custom_shell.bat`)
 	}
 	for _, p := range paths {
 		resolved, err := resolveShell(p)

@@ -149,7 +149,7 @@ func resolveShell(shell string) (string, error) {
 	if shell == "" {
 		shell = defaultShell()
 	}
-	if !strings.ContainsAny(shell, `/\`) {
+	if !strings.ContainsAny(shell, `/\`) && filepath.VolumeName(shell) == "" {
 		if resolved, err := exec.LookPath(shell); err == nil {
 			return filepath.Abs(resolved)
 		} else {
