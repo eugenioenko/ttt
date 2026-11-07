@@ -169,7 +169,7 @@ Multi-root file tree in the sidebar (Ctrl+K E). When multiple folders are open, 
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** expands the tree to the active file and selects it; set `explorer.autoReveal` to do it on every tab switch
-- File-type icons, colored by the theme (glyph mappings from [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)). They need a [Nerd Font](https://www.nerdfonts.com) in your terminal, so they default off; turn them on with `"appearance": { "icons": "nerd-font" }` or **Options > Font Icons**
+- File-type icons, colored by the theme (glyph mappings from [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)). They need a [Nerd Font](https://www.nerdfonts.com) in your terminal, so they default off; turn them on with `"appearance": { "icons": "nerd-font" }` or **Options > Appearance > Font Icons**
 
 ### Search
 
@@ -187,7 +187,7 @@ See [Search](docs-web/src/content/docs/guides/search.md).
 
 Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 
-Working-tree files and files under expanded commits can be shown as a compact directory **Tree** or a full-path **List** (the default). The choice persists in `git.fileView`. File-type icons sit between the status letter and the file name; like the Explorer's, they follow the shared `appearance.icons` setting, need a Nerd Font, and default off — **Options > Font Icons** toggles them. Changes, commit details, and Explorer expose safe **Expand All** and **Collapse All** actions in their relevant menus.
+Working-tree files and files under expanded commits can be shown as a compact directory **Tree** or a full-path **List** (the default). The choice persists in `git.fileView`. File-type icons sit between the status letter and the file name; like the Explorer's, they follow the shared `appearance.icons` setting, need a Nerd Font, and default off — **Options > Appearance > Font Icons** toggles them. Changes, commit details, and Explorer expose safe **Expand All** and **Collapse All** actions in their relevant menus.
 
 **Staging:**
 - **Spacebar** — toggle stage/unstage on the selected file
@@ -265,7 +265,7 @@ TTT supports fully customizable themes via JSON files. Every color is themeable 
 
 Built-in themes ship with the binary, and [extra themes](docs-web/src/content/docs/guides/extra-themes.md) are available for download from the repo.
 
-Switch themes via **View > Switch Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
+Switch themes via **Options > Appearance > Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
 
 See [Themes](docs-web/src/content/docs/guides/themes.md).
 

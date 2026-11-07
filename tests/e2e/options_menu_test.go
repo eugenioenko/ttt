@@ -9,6 +9,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/ui"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 func findMenuCommand(items []ui.ContextMenuItem, command string) (ui.ContextMenuItem, bool) {
@@ -243,32 +245,23 @@ func TestOptionsMenuDynamicChecked(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
-	// Build the options menu and verify line numbers is checked
-	items := h.app.BuildOptionsMenu()
-	found := false
-	for _, item := range items {
-		if item.Command == "options.toggleLineNumbers" {
-			found = true
-			if item.Checked != 2 { // MenuChecked
-				t.Errorf("expected line numbers checked (2), got %d", item.Checked)
-			}
-		}
-	}
-	if !found {
-		t.Error("expected to find options.toggleLineNumbers in menu items")
+	item, found := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleLineNumbers")
+	if !found || item.Checked != ui.MenuChecked {
+		t.Fatalf("expected checked Line Numbers, got %+v (found=%v)", item, found)
 	}
 
-	// Toggle line numbers off
-	h.exec("options.toggleLineNumbers")
+	h.exec("menu.options")
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.assertContains("Line Numbers")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 
-	// Rebuild and verify unchecked
-	items = h.app.BuildOptionsMenu()
-	for _, item := range items {
-		if item.Command == "options.toggleLineNumbers" {
-			if item.Checked != 1 { // MenuUnchecked
-				t.Errorf("expected line numbers unchecked (1), got %d", item.Checked)
-			}
-		}
+	if h.app.Root.HasOverlay() || h.app.Settings.Editor.LineNumbers {
+		t.Fatal("choosing Line Numbers in Editor should close the menu and disable line numbers")
+	}
+	item, found = findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleLineNumbers")
+	if !found || item.Checked != ui.MenuUnchecked {
+		t.Fatalf("expected unchecked Line Numbers after toggle, got %+v (found=%v)", item, found)
 	}
 }
 
@@ -276,25 +269,18 @@ func TestOptionsMenuToggleLSPHover(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
-	items := h.app.BuildOptionsMenu()
-	lspIdx, hoverIdx := -1, -1
-	for i, item := range items {
-		switch item.Command {
-		case "options.toggleLSP":
-			lspIdx = i
-		case "options.toggleLSPHover":
-			hoverIdx = i
-		}
-	}
-	if lspIdx < 0 || hoverIdx != lspIdx+1 {
-		t.Fatalf("LSP Hover should follow LSP Code Assist: lsp=%d hover=%d", lspIdx, hoverIdx)
-	}
-	if items[hoverIdx].Label != "LSP Hover" || items[hoverIdx].Checked != ui.MenuChecked {
-		t.Fatalf("hover item = %+v, want checked LSP Hover", items[hoverIdx])
+	item, found := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleLSPHover")
+	if !found || item.Label != "Hover Information" || item.Checked != ui.MenuChecked {
+		t.Fatalf("expected checked Hover Information, got %+v (found=%v)", item, found)
 	}
 
 	h.app.ShowHover("info", 5, 5)
-	h.exec("options.toggleLSPHover")
+	h.exec("menu.options")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.assertContains("Enable Code Assist")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 
 	if h.app.Settings.LSP.IsHoverEnabled() {
 		t.Fatal("hover should be disabled after toggle")
