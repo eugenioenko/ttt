@@ -402,36 +402,41 @@ func (a *App) OpenChangeDiff(dir string, change scm.Change, extended bool) {
 	}
 	source := a.Repository.repositorySource(dir)
 	a.startDiffOpen(func(ctx context.Context) *diffOpenResult {
-		content, err := source.readChange(ctx, change)
-		if err != nil {
-			return &diffOpenResult{Canceled: ctx.Err() != nil || errors.Is(err, context.Canceled), Warn: i18n.Format("status.couldNotOpenDiff", i18n.Args{"error": err.Error()})}
-		}
-		if content.Conflicted {
-			return &diffOpenResult{Path: fullPath, Conflict: change.Path}
-		}
-		if content.Patch == "" {
-			message := i18n.Format("status.noDiffAvailableFor", i18n.Args{"path": change.Path})
-			if change.Group == scm.Staged {
-				message = i18n.Format("status.noStagedChangesFor", i18n.Args{"path": change.Path})
-			}
-			return &diffOpenResult{Warn: message}
-		}
-		parsed := diff.Parse(content.Patch)
-		suffix := " (diff)"
-		if change.Group == scm.Staged {
-			suffix = " (staged)"
-		}
-		var oldLines, newLines []string
-		if content.Before.Exists {
-			oldLines = diffSideLines(content.Before.Content)
-		}
-		if content.After.Exists {
-			newLines = diffSideLines(content.After.Content)
-		}
-		return &diffOpenResult{TabName: change.Path + suffix, Path: fullPath, Diff: parsed,
-			OldLines: oldLines, NewLines: newLines,
-			Extended: extended || len(parsed.Hunks) == 0}
+		return readChangeDiff(ctx, source, change, extended)
 	})
+}
+
+func readChangeDiff(ctx context.Context, source repositorySource, change scm.Change, extended bool) *diffOpenResult {
+	fullPath := filepath.Join(source.root, change.Path)
+	content, err := source.readChange(ctx, change)
+	if err != nil {
+		return &diffOpenResult{Canceled: errors.Is(err, context.Canceled), Warn: i18n.Format("status.couldNotOpenDiff", i18n.Args{"error": err.Error()})}
+	}
+	if content.Conflicted {
+		return &diffOpenResult{Path: fullPath, Conflict: change.Path}
+	}
+	if content.Patch == "" {
+		message := i18n.Format("status.noDiffAvailableFor", i18n.Args{"path": change.Path})
+		if change.Group == scm.Staged {
+			message = i18n.Format("status.noStagedChangesFor", i18n.Args{"path": change.Path})
+		}
+		return &diffOpenResult{Warn: message}
+	}
+	parsed := diff.Parse(content.Patch)
+	suffix := " (diff)"
+	if change.Group == scm.Staged {
+		suffix = " (staged)"
+	}
+	var oldLines, newLines []string
+	if content.Before.Exists {
+		oldLines = diffSideLines(content.Before.Content)
+	}
+	if content.After.Exists {
+		newLines = diffSideLines(content.After.Content)
+	}
+	return &diffOpenResult{TabName: change.Path + suffix, Path: fullPath, Diff: parsed,
+		OldLines: oldLines, NewLines: newLines,
+		Extended: extended || len(parsed.Hunks) == 0}
 }
 
 func (a *App) openConflictedFile(fullPath, relPath string) {

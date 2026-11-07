@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/scm"
@@ -94,5 +96,17 @@ func TestProviderChangeReadQueuedOpenCanceledByPlainFileOpen(t *testing.T) {
 	stale()
 	if a.EditorGroup.ActiveDiffWidget() != nil || diffOpenStatus(a) != "" {
 		t.Fatal("queued diff overrode a newer file open")
+	}
+}
+
+func TestProviderChangeReadTimeoutShowsWarning(t *testing.T) {
+	r := &changeReadRepository{testSCMRepository: testSCMRepository{root: t.TempDir()}}
+	a, _ := newBaselineTestApp(t, r)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer cancel()
+	result := readChangeDiff(ctx, a.Repository.repositorySource(r.root), scm.Change{Path: "file.txt", Group: scm.Staged}, false)
+	a.applyDiffOpen(a.EditorGroup.ActiveFilePath(), result)
+	if !strings.Contains(a.Status.Notification, context.DeadlineExceeded.Error()) || a.EditorGroup.ActiveDiffWidget() != nil {
+		t.Fatal("timed-out diff read did not preserve the current view and show its warning")
 	}
 }
