@@ -952,6 +952,7 @@
   "status.openedPRFiles": "Opened PR #{number}: {infoTitle} ({infoFilesCount} files)",
   "status.outputLineCopiedToClipboard": "Output line copied to clipboard",
   "status.pathAlreadyExists": "Already exists: {dest}",
+  "status.pathHasControlCharacters": "The path has control characters and was not inserted",
   "status.permalinkCopiedToClipboard": "Permalink copied to clipboard",
   "status.pluginError": "Plugin error: {error}",
   "status.pluginLoaded": "Plugin loaded: {name}",

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode"
 
 	"github.com/gdamore/tcell/v3"
 
@@ -43,8 +44,7 @@ func (a *App) handlePathDrag(ev *tcell.EventMouse) bool {
 			// The Explorer saw the press; give it the release where the press
 			// was, or it keeps the button held and drops the next click.
 			a.Root.HandleEvent(tcell.NewEventMouse(d.px, d.py, tcell.ButtonNone, tcell.ModNone))
-			if tw := a.terminalAt(mx, my); tw != nil && !a.Root.HasModalOverlay() {
-				tw.PasteText(terminalQuote(d.path, tw) + " ")
+			if tw := a.terminalAt(mx, my); tw != nil && !a.Root.HasModalOverlay() && a.pastePathInTerminal(tw, d.path) {
 				a.Root.SetFocus(a.TerminalPanel)
 			}
 		}
@@ -136,7 +136,18 @@ func (a *App) InsertExplorerPathInTerminal() {
 		return
 	}
 	a.showTerminalPanel()
+	a.pastePathInTerminal(tw, path)
+}
+
+// pastePathInTerminal refuses paths with control characters: an ESC in a file
+// name can end bracketed paste early and type the rest as keys.
+func (a *App) pastePathInTerminal(tw *ui.TerminalWidget, path string) bool {
+	if strings.ContainsFunc(path, unicode.IsControl) {
+		a.StatusWarn(i18n.Text("status.pathHasControlCharacters"))
+		return false
+	}
 	tw.PasteText(terminalQuote(path, tw) + " ")
+	return true
 }
 
 // terminalQuote quotes path for the shell running in tw.

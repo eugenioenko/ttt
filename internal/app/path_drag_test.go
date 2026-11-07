@@ -198,6 +198,13 @@ func TestWheelDuringPathDragKeepsDragging(t *testing.T) {
 	}
 }
 
+func TestPathWithControlCharactersIsNotInserted(t *testing.T) {
+	a, tw, _ := pathDragApp(t)
+	if a.pastePathInTerminal(tw, "/tmp/a\x1b[201~b") {
+		t.Fatal("a path with ESC was inserted")
+	}
+}
+
 func TestPathDropUnderModalOverlayInsertsNothing(t *testing.T) {
 	a, tw, rows := pathDragApp(t)
 	r := tw.GetRect()
