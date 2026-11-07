@@ -34,11 +34,26 @@ const (
 	Staged      ChangeGroup = "staged"
 )
 
-// Status preserves change codes, including compound conflict codes, until the
-// existing presentation consumers migrate to a backend-independent model.
+type ChangeKind string
+
+const (
+	Unknown     ChangeKind = "unknown"
+	Modified    ChangeKind = "modified"
+	Added       ChangeKind = "added"
+	Deleted     ChangeKind = "deleted"
+	Renamed     ChangeKind = "renamed"
+	Copied      ChangeKind = "copied"
+	Untracked   ChangeKind = "untracked"
+	TypeChanged ChangeKind = "type-changed"
+	Conflicted  ChangeKind = "conflicted"
+)
+
 type Change struct {
 	Path    string
 	OldPath string
-	Status  string
+	Kind    ChangeKind
 	Group   ChangeGroup
+	// Detail preserves provider diagnostics for conflicts and unknown changes.
+	// Consumers must use Kind for classification rather than parse this text.
+	Detail string
 }

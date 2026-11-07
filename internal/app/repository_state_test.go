@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,13 +86,7 @@ func (s *fakeRepositoryScheduler) latest(t *testing.T) *fakeRepositoryTimer {
 
 func repositoryResult(seq uint64, dir, revision string, files ...git.FileStatus) *RepositoryStatusResult {
 	group := changesGroup{Dir: dir, Name: filepath.Base(dir)}
-	for _, file := range files {
-		if file.Staged {
-			group.Staged = append(group.Staged, file)
-		} else {
-			group.Unstaged = append(group.Unstaged, file)
-		}
-	}
+	group.Changes = git.ToChanges(files)
 	return &RepositoryStatusResult{Seq: seq, Entries: []repositoryStatusEntry{{Group: group, Revision: revision}}}
 }
 
@@ -119,7 +114,7 @@ func TestRepositoryInvalidationBurstCoalesces(t *testing.T) {
 		return &RepositoryIdentityResult{
 			Seq:      seq,
 			FilePath: path,
-			Identity: git.RepositoryIdentity{Root: "/repo", Branch: "latest"},
+			Identity: scm.Identity{Root: "/repo", Label: "latest"},
 		}
 	}
 
@@ -175,7 +170,7 @@ func TestRepositoryIdentityBurstDuringInFlightReadWaitsForTrailingEdgeAndDropsSt
 	s, _, poster := testRepositoryState(nil, "/repo")
 	s.activeFile = "/repo/file.txt"
 	s.activeRoot = "/repo"
-	s.activeBranch = "last-good"
+	s.activeLabel = "last-good"
 	s.statusWait = time.Hour
 	firstStarted := make(chan struct{})
 	firstCanceled := make(chan struct{})
@@ -188,13 +183,13 @@ func TestRepositoryIdentityBurstDuringInFlightReadWaitsForTrailingEdgeAndDropsSt
 			return &RepositoryIdentityResult{
 				Seq:      seq,
 				FilePath: path,
-				Identity: git.RepositoryIdentity{Root: "/repo", Branch: "stale"},
+				Identity: scm.Identity{Root: "/repo", Label: "stale"},
 			}
 		}
 		return &RepositoryIdentityResult{
 			Seq:      seq,
 			FilePath: path,
-			Identity: git.RepositoryIdentity{Root: "/repo", Branch: "current"},
+			Identity: scm.Identity{Root: "/repo", Label: "current"},
 		}
 	}
 
@@ -263,7 +258,7 @@ func TestActiveRepositoryIdentityIsCachedPerFileAndClearsOutsideGit(t *testing.T
 		reads++
 		result := &RepositoryIdentityResult{Seq: seq, FilePath: path}
 		if path == nested && !fail {
-			result.Identity = git.RepositoryIdentity{Root: repo, Branch: branch}
+			result.Identity = scm.Identity{Root: repo, Label: branch}
 		} else {
 			result.Err = errors.New("not a repository")
 		}
@@ -286,8 +281,8 @@ func TestActiveRepositoryIdentityIsCachedPerFileAndClearsOutsideGit(t *testing.T
 	fail = false
 	branch = "updated"
 	s.refreshActiveIdentity()
-	if root, activeBranch := s.ActiveRepository(); root != repo || activeBranch != "updated" || reads != 3 {
-		t.Fatalf("successful refresh identity = (%q, %q), reads=%d", root, activeBranch, reads)
+	if root, activeLabel := s.ActiveRepository(); root != repo || activeLabel != "updated" || reads != 3 {
+		t.Fatalf("successful refresh identity = (%q, %q), reads=%d", root, activeLabel, reads)
 	}
 
 	s.SetActiveFile(plain)
@@ -322,13 +317,13 @@ func TestReadRepositoryIdentityUsesStableFileSymlinkIdentity(t *testing.T) {
 	if result.Seq != 7 || result.FilePath != link {
 		t.Fatalf("result identity = seq %d path %q, want seq 7 presentation path %q", result.Seq, result.FilePath, link)
 	}
-	if result.Identity.Root != repo || result.Identity.Branch != "main" {
+	if result.Identity.Root != repo || result.Identity.Label != "main" {
 		t.Fatalf("repository identity = %+v, want root %q branch main", result.Identity, repo)
 	}
 
 	missing := filepath.Join(repo, "missing", "deeper", "file.txt")
 	result = readRepositoryIdentity(context.Background(), git.Provider{}, missing, 8)
-	if result.Err != nil || result.FilePath != missing || result.Identity.Root != repo || result.Identity.Branch != "main" {
+	if result.Err != nil || result.FilePath != missing || result.Identity.Root != repo || result.Identity.Label != "main" {
 		t.Fatalf("missing-file repository identity = %+v, want presentation path %q root %q branch main", result, missing, repo)
 	}
 }
@@ -460,8 +455,8 @@ func TestRepositoryForPathUsesStableFileIdentityAndLongestNestedRoot(t *testing.
 	}
 
 	s := NewRepositoryState(nil, nil)
-	s.identities[outer] = git.RepositoryIdentity{Root: outer, Branch: "outer"}
-	s.identities[inner] = git.RepositoryIdentity{Root: inner, Branch: "inner"}
+	s.identities[outer] = scm.Identity{Root: outer, Label: "outer"}
+	s.identities[inner] = scm.Identity{Root: inner, Label: "inner"}
 	root, branch := s.RepositoryForPath(link)
 	if root != inner || branch != "inner" {
 		t.Fatalf("linked nested identity = (%q, %q), want (%q, inner)", root, branch, inner)
@@ -491,7 +486,7 @@ func TestActiveRepositoryIdentityCancelsSupersededReadAndDropsStaleGeneration(t 
 		return &RepositoryIdentityResult{
 			Seq:      seq,
 			FilePath: path,
-			Identity: git.RepositoryIdentity{Root: filepath.Dir(path), Branch: "second"},
+			Identity: scm.Identity{Root: filepath.Dir(path), Label: "second"},
 		}
 	}
 
@@ -519,7 +514,7 @@ func TestActiveRepositoryIdentityCancelsSupersededReadAndDropsStaleGeneration(t 
 	s.HandleIdentity(&RepositoryIdentityResult{
 		Seq:      firstSeq,
 		FilePath: first,
-		Identity: git.RepositoryIdentity{Root: filepath.Dir(first), Branch: "stale"},
+		Identity: scm.Identity{Root: filepath.Dir(first), Label: "stale"},
 	})
 	if root, branch := s.ActiveRepository(); root != filepath.Dir(second) || branch != "second" {
 		t.Fatalf("stale generation replaced active identity = (%q, %q)", root, branch)
@@ -570,7 +565,7 @@ func TestRepositoryInFlightInvalidationPublishesOnlyOneFollowUp(t *testing.T) {
 	}
 	release <- struct{}{}
 	s.HandleStatus(poster.await(t).(*RepositoryStatusResult))
-	if publications != 1 || cp.TotalChanges() != 1 || cp.groups[0].Unstaged[0].Path != "fresh.txt" {
+	if publications != 1 || cp.TotalChanges() != 1 || cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "fresh.txt" {
 		t.Fatalf("follow-up publish = %d, groups = %+v", publications, cp.groups)
 	}
 }
@@ -634,7 +629,7 @@ func TestRepositoryImmediateRefreshSupersedesWatcherIdentityDebounce(t *testing.
 				return &RepositoryIdentityResult{
 					Seq:      seq,
 					FilePath: path,
-					Identity: git.RepositoryIdentity{Root: "/repo", Branch: "immediate"},
+					Identity: scm.Identity{Root: "/repo", Label: "immediate"},
 				}
 			}
 			s.readStatus = func(_ context.Context, _ []string, seq uint64) *RepositoryStatusResult {
@@ -679,7 +674,7 @@ func TestRepositoryActiveFileSwitchSupersedesWatcherDebounceAndClearsImmediately
 	s, _, poster := testRepositoryState(nil, "/repo")
 	s.activeFile = "/repo/file.txt"
 	s.activeRoot = "/repo"
-	s.activeBranch = "last-good"
+	s.activeLabel = "last-good"
 	var identityReads atomic.Int32
 	s.readIdentity = func(_ context.Context, path string, seq uint64) *RepositoryIdentityResult {
 		identityReads.Add(1)
@@ -741,7 +736,7 @@ func TestRepositorySetDirsRearmsPendingIdentityDebounce(t *testing.T) {
 		return &RepositoryIdentityResult{
 			Seq:      seq,
 			FilePath: path,
-			Identity: git.RepositoryIdentity{Root: "/old", Branch: "current"},
+			Identity: scm.Identity{Root: "/old", Label: "current"},
 		}
 	}
 
@@ -788,14 +783,14 @@ func TestHiddenRepositoryMutationStillRefreshesWorkingTree(t *testing.T) {
 	if s.visible || s.pollTimer != nil {
 		t.Fatal("hidden invalidation enabled visible polling")
 	}
-	if cp.TotalChanges() != 1 || cp.groups[0].Unstaged[0].Path != "hidden.txt" {
+	if cp.TotalChanges() != 1 || cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "hidden.txt" {
 		t.Fatalf("hidden mutation was not observed: %+v", cp.groups)
 	}
 }
 
 func TestRepositoryStatusFailurePreservesLastGoodAndRetries(t *testing.T) {
 	cp := NewChangesPanel("/repo")
-	previous := changesGroup{Dir: "/repo", Name: "repo", Unstaged: []git.FileStatus{{Status: "M", Path: "kept.txt"}}}
+	previous := changesGroup{Dir: "/repo", Name: "repo", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "kept.txt"}})}
 	s, _, _ := testRepositoryState(cp, "/repo")
 	s.lastGroups["/repo"] = previous
 	s.lastRevisions["/repo"] = "head"
@@ -806,7 +801,7 @@ func TestRepositoryStatusFailurePreservesLastGoodAndRetries(t *testing.T) {
 	s.HandleStatus(&RepositoryStatusResult{Seq: 1, Entries: []repositoryStatusEntry{{
 		Group: changesGroup{Dir: "/repo", Name: "repo"}, Revision: "head", StatusErr: errors.New("index locked"),
 	}}})
-	if cp.TotalChanges() != 1 || cp.groups[0].Unstaged[0].Path != "kept.txt" {
+	if cp.TotalChanges() != 1 || cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "kept.txt" {
 		t.Fatalf("failed status replaced last good snapshot: %+v", cp.groups)
 	}
 	if s.dirty&RepositoryWorktree == 0 {
@@ -819,8 +814,8 @@ func TestRepositoryRootFailurePreservesCanonicalMultiRootOrderAndRecovers(t *tes
 	rootB := filepath.Join(t.TempDir(), "repo-b")
 	sourceA := filepath.Join(rootA, "workspace")
 	sourceB := filepath.Join(rootB, "workspace")
-	goodA := changesGroup{Dir: rootA, Name: "repo-a", Unstaged: []git.FileStatus{{Status: "M", Path: "kept-a.txt"}}}
-	goodB := changesGroup{Dir: rootB, Name: "repo-b", Unstaged: []git.FileStatus{{Status: "M", Path: "kept-b.txt"}}}
+	goodA := changesGroup{Dir: rootA, Name: "repo-a", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "kept-a.txt"}})}
+	goodB := changesGroup{Dir: rootB, Name: "repo-b", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "kept-b.txt"}})}
 	cp := NewChangesPanel(sourceB, sourceA)
 	s := NewRepositoryState(cp, []string{sourceB, sourceA})
 
@@ -842,22 +837,22 @@ func TestRepositoryRootFailurePreservesCanonicalMultiRootOrderAndRecovers(t *tes
 	if len(cp.groups) != 2 || cp.groups[0].Dir != rootB || cp.groups[1].Dir != rootA {
 		t.Fatalf("root failure changed canonical ordering: %+v", cp.groups)
 	}
-	if cp.groups[0].Unstaged[0].Path != "kept-b.txt" || cp.groups[1].Unstaged[0].Path != "kept-a.txt" {
+	if cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "kept-b.txt" || cp.groups[1].filesIn(scm.WorkingTree)[0].Path != "kept-a.txt" {
 		t.Fatalf("root failure replaced last-good groups: %+v", cp.groups)
 	}
 	if s.dirty&RepositoryWorktree == 0 {
 		t.Fatal("root failure was marked fresh")
 	}
 
-	freshA := changesGroup{Dir: rootA, Name: "repo-a", Unstaged: []git.FileStatus{{Status: "M", Path: "fresh-a.txt"}}}
-	freshB := changesGroup{Dir: rootB, Name: "repo-b", Unstaged: []git.FileStatus{{Status: "M", Path: "fresh-b.txt"}}}
+	freshA := changesGroup{Dir: rootA, Name: "repo-a", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "fresh-a.txt"}})}
+	freshB := changesGroup{Dir: rootB, Name: "repo-b", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "fresh-b.txt"}})}
 	s.requested = 3
 	s.inFlight = true
 	s.HandleStatus(&RepositoryStatusResult{Seq: 3, Entries: []repositoryStatusEntry{
 		{SourceDir: sourceB, Group: freshB, Revision: "head-b"},
 		{SourceDir: sourceA, Group: freshA, Revision: "head-a"},
 	}})
-	if len(cp.groups) != 2 || cp.groups[0].Dir != rootB || cp.groups[0].Unstaged[0].Path != "fresh-b.txt" || cp.groups[1].Dir != rootA || cp.groups[1].Unstaged[0].Path != "fresh-a.txt" {
+	if len(cp.groups) != 2 || cp.groups[0].Dir != rootB || cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "fresh-b.txt" || cp.groups[1].Dir != rootA || cp.groups[1].filesIn(scm.WorkingTree)[0].Path != "fresh-a.txt" {
 		t.Fatalf("successful retry did not recover canonical groups: %+v", cp.groups)
 	}
 	if s.dirty&RepositoryWorktree != 0 {
@@ -874,7 +869,7 @@ func TestRepositoryRootFailureDeduplicatesCanonicalRepositoryAndRecovers(t *test
 			t.Fatal(err)
 		}
 	}
-	previous := changesGroup{Dir: repo, Name: filepath.Base(repo), Unstaged: []git.FileStatus{{Status: "M", Path: "kept.txt"}}}
+	previous := changesGroup{Dir: repo, Name: filepath.Base(repo), Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "kept.txt"}})}
 	cp := NewChangesPanel(sourceA, sourceB)
 	s := NewRepositoryState(cp, []string{sourceA, sourceB})
 
@@ -892,7 +887,7 @@ func TestRepositoryRootFailureDeduplicatesCanonicalRepositoryAndRecovers(t *test
 	}
 	assertLastGood := func(stage string) {
 		t.Helper()
-		if len(cp.groups) != 1 || cp.groups[0].Dir != repo || len(cp.groups[0].Unstaged) != 1 || cp.groups[0].Unstaged[0].Path != "kept.txt" {
+		if len(cp.groups) != 1 || cp.groups[0].Dir != repo || len(cp.groups[0].filesIn(scm.WorkingTree)) != 1 || cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "kept.txt" {
 			t.Fatalf("%s groups = %+v, want one canonical last-good group", stage, cp.groups)
 		}
 		if s.dirty&RepositoryWorktree == 0 {
@@ -914,11 +909,11 @@ func TestRepositoryRootFailureDeduplicatesCanonicalRepositoryAndRecovers(t *test
 	s.HandleStatus(&RepositoryStatusResult{Seq: 3, Entries: []repositoryStatusEntry{failure(sourceB), failure(sourceA)}})
 	assertLastGood("all-sources")
 
-	fresh := changesGroup{Dir: repo, Name: filepath.Base(repo), Unstaged: []git.FileStatus{{Status: "M", Path: "fresh.txt"}}}
+	fresh := changesGroup{Dir: repo, Name: filepath.Base(repo), Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "fresh.txt"}})}
 	s.requested = 4
 	s.inFlight = true
 	s.HandleStatus(&RepositoryStatusResult{Seq: 4, Entries: []repositoryStatusEntry{{SourceDir: sourceB, Group: fresh, Revision: "new"}}})
-	if len(cp.groups) != 1 || cp.groups[0].Dir != repo || cp.groups[0].Unstaged[0].Path != "fresh.txt" {
+	if len(cp.groups) != 1 || cp.groups[0].Dir != repo || cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "fresh.txt" {
 		t.Fatalf("recovery groups = %+v, want one fresh canonical group", cp.groups)
 	}
 	if s.dirty&RepositoryWorktree != 0 {
@@ -1404,7 +1399,7 @@ func TestRepositoryRootReplacementCancelsAndSupersedesOldResult(t *testing.T) {
 		t.Fatal("replacement root status did not start")
 	}
 	s.HandleStatus(poster.await(t).(*RepositoryStatusResult))
-	if len(cp.groups) != 1 || cp.groups[0].Dir != "/new" || cp.groups[0].Unstaged[0].Path != "new.txt" {
+	if len(cp.groups) != 1 || cp.groups[0].Dir != "/new" || cp.groups[0].filesIn(scm.WorkingTree)[0].Path != "new.txt" {
 		t.Fatalf("old root result survived replacement: %+v", cp.groups)
 	}
 }
@@ -1465,7 +1460,7 @@ func TestRepositoryCloseCancelsIdentityDebounceAndInFlightRead(t *testing.T) {
 	inFlight, _, inFlightPoster := testRepositoryState(nil, "/repo")
 	inFlight.activeFile = "/repo/file.txt"
 	inFlight.activeRoot = "/repo"
-	inFlight.activeBranch = "last-good"
+	inFlight.activeLabel = "last-good"
 	inFlight.statusWait = time.Hour
 	started := make(chan struct{})
 	canceled := make(chan struct{})
@@ -1476,7 +1471,7 @@ func TestRepositoryCloseCancelsIdentityDebounceAndInFlightRead(t *testing.T) {
 		return &RepositoryIdentityResult{
 			Seq:      seq,
 			FilePath: path,
-			Identity: git.RepositoryIdentity{Root: "/repo", Branch: "late"},
+			Identity: scm.Identity{Root: "/repo", Label: "late"},
 		}
 	}
 	inFlight.InvalidateAll(RepositoryWorktree)

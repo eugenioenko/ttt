@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -15,12 +16,12 @@ const currentChangesTimeout = 30 * time.Second
 
 type currentChangesInput struct {
 	revision string
-	statuses []git.FileStatus
+	changes  []scm.Change
 	identity [32]byte
 }
 
-func newCurrentChangesInput(revision string, statuses []git.FileStatus) currentChangesInput {
-	input := currentChangesInput{revision: revision, statuses: append([]git.FileStatus(nil), statuses...)}
+func newCurrentChangesInput(revision string, changes []scm.Change) currentChangesInput {
+	input := currentChangesInput{revision: revision, changes: append([]scm.Change(nil), changes...)}
 	hash := sha256.New()
 	write := func(value []byte) {
 		var size [8]byte
@@ -29,15 +30,12 @@ func newCurrentChangesInput(revision string, statuses []git.FileStatus) currentC
 		_, _ = hash.Write(value)
 	}
 	write([]byte(revision))
-	for _, status := range statuses {
-		write([]byte(status.Status))
+	for _, status := range changes {
+		write([]byte(status.Kind))
+		write([]byte(status.Detail))
 		write([]byte(status.OldPath))
 		write([]byte(status.Path))
-		if status.Staged {
-			write([]byte{1})
-		} else {
-			write([]byte{0})
-		}
+		write([]byte(status.Group))
 	}
 	copy(input.identity[:], hash.Sum(nil))
 	return input
@@ -169,7 +167,7 @@ func (s *RepositoryState) startCurrentChanges() {
 	if !ok {
 		return
 	}
-	statuses := append([]git.FileStatus(nil), input.statuses...)
+	statuses := git.FromChanges(input.changes)
 	dir, tabID := s.currentRoot, s.currentTabID
 	epoch, request := s.currentEpoch, s.currentRequest
 	read := s.readCurrentChanges

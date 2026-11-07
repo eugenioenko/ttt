@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -405,9 +406,7 @@ func TestReadCurrentChangesFallsBackAboveDiffLimit(t *testing.T) {
 }
 
 func primeCurrentChangesInput(s *RepositoryState, dir, revision string, group changesGroup) {
-	statuses := make([]git.FileStatus, 0, len(group.Staged)+len(group.Unstaged))
-	statuses = append(statuses, group.Staged...)
-	statuses = append(statuses, group.Unstaged...)
+	statuses := group.Changes
 	s.lastGroups[dir] = group
 	s.lastRevisions[dir] = revision
 	s.currentInputs[dir] = newCurrentChangesInput(revision, statuses)
@@ -416,7 +415,7 @@ func primeCurrentChangesInput(s *RepositoryState, dir, revision string, group ch
 func TestRepositoryCurrentChangesCoalescesDropsStaleAndRetriesErrors(t *testing.T) {
 	dir := "/repo"
 	s, _, poster := testRepositoryState(nil, dir)
-	primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir, Unstaged: []git.FileStatus{{Status: "M", Path: "file.txt"}}})
+	primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir, Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "file.txt"}})})
 	started := make(chan uint64, 4)
 	release := make(chan struct{}, 4)
 	s.readCurrentChanges = func(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
@@ -434,7 +433,7 @@ func TestRepositoryCurrentChangesCoalescesDropsStaleAndRetriesErrors(t *testing.
 	epoch := s.SetCurrentChangesRoot(dir, tabID)
 	s.EnsureCurrentChanges()
 	first := <-started
-	s.currentInputs[dir] = newCurrentChangesInput("head", []git.FileStatus{{Status: "M", Path: "new-file.txt"}})
+	s.currentInputs[dir] = newCurrentChangesInput("head", git.ToChanges([]git.FileStatus{{Status: "M", Path: "new-file.txt"}}))
 	s.requestCurrentChanges()
 	s.requestCurrentChanges()
 	if s.currentRequest == first {
@@ -508,7 +507,7 @@ func TestRepositoryCurrentChangesWaitsForInFlightStatus(t *testing.T) {
 func TestRepositoryCurrentChangesIdenticalPollCoalescesWithoutStarvation(t *testing.T) {
 	dir := "/repo"
 	s, _, poster := testRepositoryState(nil, dir)
-	primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir, Unstaged: []git.FileStatus{{Status: "M", Path: "file.txt"}}})
+	primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir, Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "file.txt"}})})
 	started := make(chan uint64, 2)
 	release := make(chan struct{}, 2)
 	s.readCurrentChanges = func(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
@@ -615,7 +614,7 @@ func TestRepositoryCurrentChangesCancelsImmediatelyWhenTabCloses(t *testing.T) {
 func TestRepositoryCurrentChangesWaitsForFreshStatusAfterStatusFailure(t *testing.T) {
 	dir := "/repo"
 	s := NewRepositoryState(nil, []string{dir})
-	group := changesGroup{Dir: dir, Unstaged: []git.FileStatus{{Status: "M", Path: "kept.txt"}}}
+	group := changesGroup{Dir: dir, Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "kept.txt"}})}
 	primeCurrentChangesInput(s, dir, "head", group)
 	s.SetCurrentChangesRoot(dir, currentChangesTabID(dir))
 	s.currentInputReady = false
