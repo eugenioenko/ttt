@@ -189,3 +189,4 @@ Registry fields:
 | `tags` | no | Array of search tags for discoverability |
 | `path` | no | Subdirectory path within the repo (for monorepos) |
 | `featured` | no | Boolean, default `false`. Maintainer-curated placement in the Featured group of the Plugins tab. Set in the community registry, not the plugin manifest. |
+| `community` | no | Boolean, default `true`. Community plugins show a notice on their detail page and approval dialog asking users to review permissions and source. Repos under `github.com/eugenioenko/ttt-*` never show it. The maintainer sets `false` only for repos they trust; it is ignored for **Plugins: Install from URL**. |

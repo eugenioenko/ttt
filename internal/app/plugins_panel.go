@@ -145,6 +145,7 @@ func (pp *PluginsPanel) openInstalledDetail(name string) {
 	for _, remote := range pp.available {
 		if remote.Name == name {
 			entry.Featured = remote.Featured
+			entry.Community = remote.Community
 			break
 		}
 	}
