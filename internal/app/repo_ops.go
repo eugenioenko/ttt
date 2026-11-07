@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
 )
@@ -51,7 +52,7 @@ type RepoOpResult struct {
 // surface as a spurious failure rather than the queueing a user expects.
 func (a *App) RunRepoTask(task RepoTask) {
 	if a.runningRepoOp != "" {
-		a.StatusWarn(a.runningRepoOp + " is already running")
+		a.StatusWarn(i18n.Format("status.isAlreadyRunning", i18n.Args{"runningRepoOp": a.runningRepoOp}))
 		return
 	}
 	if len(task.Dirs) == 0 || len(task.Ops) == 0 {
@@ -86,7 +87,7 @@ func (a *App) HandleRepoOpResult(r *RepoOpResult) {
 	a.invalidateAllRepositories(repositoryResourcesForTask(r.Task))
 
 	if r.Err != nil {
-		a.StatusError(fmt.Sprintf("%s failed: %v", r.Task.Progress, r.Err))
+		a.StatusError(i18n.Format("status.failed", i18n.Args{"progress": r.Task.Progress, "err": r.Err}))
 		return
 	}
 	if r.Task.OnDone != nil {

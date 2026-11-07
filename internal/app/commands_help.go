@@ -2,47 +2,48 @@ package app
 
 import (
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 var explorerHelpEntries = []widgets.KeyValueEntry{
-	{Key: "Click", Value: "Open file in preview"},
-	{Key: "Double-click", Value: "Open file permanently"},
-	{Key: "Enter", Value: "Open file or toggle folder"},
-	{Key: "Space", Value: "Open file or toggle folder"},
-	{Key: "Shift+Enter", Value: "Open context menu"},
-	{Key: "Menu*", Value: "Open context menu (terminal-dependent)"},
-	{Key: "r", Value: "Refresh explorer"},
-	{Key: "Up / k", Value: "Move up"},
-	{Key: "Down / j", Value: "Move down"},
-	{Key: "Left / h", Value: "Collapse folder"},
-	{Key: "Right / l", Value: "Expand folder"},
+	{Key: i18n.Text("help.click"), Value: i18n.Text("help.openFileInPreview")},
+	{Key: i18n.Text("help.doubleClick"), Value: i18n.Text("help.openFilePermanently")},
+	{Key: "Enter", Value: i18n.Text("help.openFileOrToggleFolder")},
+	{Key: "Space", Value: i18n.Text("help.openFileOrToggleFolder")},
+	{Key: "Shift+Enter", Value: i18n.Text("help.openContextMenu")},
+	{Key: "Menu*", Value: i18n.Text("help.openContextMenuTerminalDependent")},
+	{Key: "r", Value: i18n.Text("help.refreshExplorer")},
+	{Key: "Up / k", Value: i18n.Text("help.moveUp")},
+	{Key: "Down / j", Value: i18n.Text("help.moveDown")},
+	{Key: "Left / h", Value: i18n.Text("help.collapseFolder")},
+	{Key: "Right / l", Value: i18n.Text("help.expandFolder")},
 }
 
 var searchHelpEntries = []widgets.KeyValueEntry{
-	{Key: "Enter", Value: "Activate selected result"},
-	{Key: "Up / k", Value: "Move up"},
-	{Key: "Down / j", Value: "Move down"},
-	{Key: "Tab", Value: "Next input field"},
-	{Key: "Shift+Tab", Value: "Previous input field"},
-	{Key: "Alt+c", Value: "Toggle case sensitivity"},
-	{Key: "Alt+r", Value: "Toggle regex mode"},
+	{Key: "Enter", Value: i18n.Text("help.activateSelectedResult")},
+	{Key: "Up / k", Value: i18n.Text("help.moveUp")},
+	{Key: "Down / j", Value: i18n.Text("help.moveDown")},
+	{Key: "Tab", Value: i18n.Text("help.nextInputField")},
+	{Key: "Shift+Tab", Value: i18n.Text("help.previousInputField")},
+	{Key: "Alt+c", Value: i18n.Text("help.toggleCaseSensitivity")},
+	{Key: "Alt+r", Value: i18n.Text("help.toggleRegexMode")},
 }
 
 var changesHelpEntries = []widgets.KeyValueEntry{
-	{Key: "Space / s", Value: "Toggle stage/unstage file"},
-	{Key: "a", Value: "Stage all files"},
-	{Key: "u", Value: "Unstage all files"},
-	{Key: "d", Value: "Discard selected file"},
-	{Key: "D", Value: "Discard all files in group"},
-	{Key: "r", Value: "Refresh changes"},
-	{Key: "o / v", Value: "Open file"},
-	{Key: "c", Value: "Open compact diff"},
-	{Key: "e", Value: "Open extended diff"},
-	{Key: "Enter", Value: "Open compact diff"},
-	{Key: "Up / k", Value: "Move up"},
-	{Key: "Down / j", Value: "Move down"},
+	{Key: "Space / s", Value: i18n.Text("help.toggleStageUnstageFile")},
+	{Key: "a", Value: i18n.Text("help.stageAllFiles")},
+	{Key: "u", Value: i18n.Text("help.unstageAllFiles")},
+	{Key: "d", Value: i18n.Text("help.discardSelectedFile")},
+	{Key: "D", Value: i18n.Text("help.discardAllFilesInGroup")},
+	{Key: "r", Value: i18n.Text("help.refreshChanges")},
+	{Key: "o / v", Value: i18n.Text("help.openFile")},
+	{Key: "c", Value: i18n.Text("help.openCompactDiff")},
+	{Key: "e", Value: i18n.Text("help.openExtendedDiff")},
+	{Key: "Enter", Value: i18n.Text("help.openCompactDiff")},
+	{Key: "Up / k", Value: i18n.Text("help.moveUp")},
+	{Key: "Down / j", Value: i18n.Text("help.moveDown")},
 }
 
 func (a *App) ShowPanelHelp(title string, entries []widgets.KeyValueEntry, description ...string) {
@@ -60,7 +61,7 @@ func (a *App) ShowPanelHelp(title string, entries []widgets.KeyValueEntry, descr
 	dialog.Borders = *a.Borders
 	dialog.SetContent(vstack)
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Close", Handler: func() { a.DismissDialog() }},
+		{Label: i18n.Text("general.closeButton"), Handler: func() { a.DismissDialog() }},
 	}
 	dialog.OnDismiss = func() { a.DismissDialog() }
 	dialog.Build()
@@ -70,8 +71,8 @@ func (a *App) ShowPanelHelp(title string, entries []widgets.KeyValueEntry, descr
 }
 
 var pluginHelpEntries = []widgets.KeyValueEntry{
-	{Key: "Enter / Space", Value: "Open the plugin actions menu (enable/disable, update, uninstall)"},
-	{Key: "⋮", Value: "Open the plugin actions menu"},
+	{Key: "Enter / Space", Value: i18n.Text("help.pluginActions")},
+	{Key: "⋮", Value: i18n.Text("help.openThePluginActionsMenu")},
 }
 
 func registerHelpCommands(app *App) {
@@ -79,39 +80,39 @@ func registerHelpCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID:       "plugin.help",
-		Title:    "Plugins: Help",
+		Title:    i18n.Text("command.pluginsHelp"),
 		Keywords: []string{"plugin", "help"},
 		Handler: func() {
-			app.ShowPanelHelp("Plugins", pluginHelpEntries,
-				"Listed plugins are community plugins. They can also be installed from a git repository URL using 'Install from URL'. For more information visit: https://tttedit.dev/guides/plugin-authoring/")
+			app.ShowPanelHelp(i18n.Text("help.plugins"), pluginHelpEntries,
+				i18n.Text("help.communityPlugins"))
 		},
 	})
 
 	reg.Register(command.Command{
 		ID:       "explorer.help",
-		Title:    "Explorer: Keyboard Shortcuts",
+		Title:    i18n.Text("command.explorerKeyboardShortcuts"),
 		Keywords: []string{"view", "help", "keybindings"},
 		Handler: func() {
-			app.ShowPanelHelp("Explorer Shortcuts", explorerHelpEntries)
+			app.ShowPanelHelp(i18n.Text("help.explorerShortcuts"), explorerHelpEntries)
 		},
 	})
 
 	reg.Register(command.Command{
 		ID:       "search.help",
-		Title:    "Search: Keyboard Shortcuts",
+		Title:    i18n.Text("command.searchKeyboardShortcuts"),
 		Keywords: []string{"search", "help", "keybindings"},
 		Handler: func() {
-			app.ShowPanelHelp("Search Shortcuts", searchHelpEntries)
+			app.ShowPanelHelp(i18n.Text("help.searchShortcuts"), searchHelpEntries)
 		},
 	})
 
 	reg.Register(command.Command{
 		ID:       "changes.help",
-		Title:    "Changes: Keyboard Shortcuts",
+		Title:    i18n.Text("command.changesKeyboardShortcuts"),
 		Keywords: []string{"git", "help", "keybindings"},
 		Handler: func() {
-			app.ShowPanelHelp("Changes Shortcuts", changesHelpEntries,
-				"Type a commit message in the input above and press Enter to commit. The commit applies to the currently selected group.")
+			app.ShowPanelHelp(i18n.Text("help.changesShortcuts"), changesHelpEntries,
+				i18n.Text("help.commitMessage"))
 		},
 	})
 }

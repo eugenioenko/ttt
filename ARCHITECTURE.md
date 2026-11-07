@@ -78,13 +78,17 @@ have explicit cancellation, identity, shutdown, and stale-result behavior.
 
 Packages: `internal/term`, `internal/render`, `internal/view`,
 `internal/textwidth`, `internal/widgets`, `internal/markdown`,
-`internal/highlight`, and `internal/asynctask`.
+`internal/highlight`, `internal/i18n`, and `internal/asynctask`.
 
 Owns screen cells, styles, terminal-width measurement, rendering, layout,
 focus, scrolling, reusable interaction primitives, and syntax-to-style
 projection. `internal/widgets` contains primitives with more than one product
 or plugin consumer; it is not a destination for every visually reusable
 product surface.
+
+`internal/i18n` owns the embedded English UI catalog and named message
+interpolation. Presentation and application code resolve user-facing copy
+through it; identifiers and external service messages keep their own values.
 
 `internal/asynctask` provides terminal-independent scheduling with injected
 execution and delivery. Product widgets may use it directly; the application

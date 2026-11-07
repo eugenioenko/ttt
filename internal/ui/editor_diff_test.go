@@ -12,6 +12,18 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func TestCollapsedDistanceLabelUsesConfiguredIcon(t *testing.T) {
+	t.Cleanup(func() { icons.Configure("", nil) })
+	if warnings := icons.Configure("", map[string]string{"ellipsis": "."}); len(warnings) != 0 {
+		t.Fatal(warnings)
+	}
+	for count, want := range map[int]string{1: " . 1 line .", 2: " . 2 lines ."} {
+		if got := collapsedDistanceLabel(count); got != want {
+			t.Fatalf("collapsedDistanceLabel(%d) = %q, want %q", count, got, want)
+		}
+	}
+}
+
 func deletedTexts(o *DiffOverlay) map[int][]string {
 	out := map[int][]string{}
 	for anchor, block := range o.Deleted {

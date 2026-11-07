@@ -55,7 +55,7 @@ Every icon must be exactly one character that is one column wide, because trees,
 
 The old `appearance.chevrons.collapsed` and `appearance.chevrons.expanded` settings are migrated to `chevron-right` and `chevron-down` on load.
 
-Plain defaults avoid East Asian *ambiguous*-width characters, which draw two columns wide in CJK-locale terminals or with `RUNEWIDTH_EASTASIAN` set. The exceptions are `dirty`, `lock`, `commit` and the symbol kinds, which have no narrow glyph that reads as well; override them if they misalign in your terminal.
+Plain defaults avoid East Asian *ambiguous*-width characters, which draw two columns wide in CJK-locale terminals or with `RUNEWIDTH_EASTASIAN` set. The exceptions are `dirty`, `lock`, `commit`, `arrow-up`, `arrow-down` and the symbol kinds, which have no narrow glyph that reads as well; override them if they misalign in your terminal.
 
 | Name | Plain | Nerd Font | Used for |
 |---|---|---|---|
@@ -66,6 +66,8 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `submenu` | `›` | `\ueab6` | Context menu item with a submenu |
 | `arrow-left` | `‹` | `\ueb6f` | Tab strip overflow, left |
 | `arrow-right` | `›` | `\ueb70` | Tab strip overflow, right |
+| `arrow-up` | `↑` | `↑` | Welcome page navigation hint |
+| `arrow-down` | `↓` | `↓` | Welcome page navigation hint |
 | `close` | `✕` | `✕` | Tab close button |
 | `dirty` | `●` | `●` | Unsaved changes marker in tabs |
 | `pinned` | `♦` | `\ueba0` | Pinned tab |
@@ -75,7 +77,9 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `remove` | `−` | `−` | Unstage actions |
 | `discard` | `✕` | `✕` | Discard changes action |
 | `replace` | `⟳` | `\ueb3d` | Replace button in the replace bar |
-| `replace-all` | `⟳` | `\ueb3c` | Replace All button in Nerd Font mode (plain mode uses “All”) |
+| `replace-all` | `⟳` | `\ueb3c` | Replace All action in global search and the editor replace bar (the bar uses “All” in plain mode) |
+| `reload` | `↻` | `↻` | Reload a file changed on disk |
+| `ellipsis` | `⋯` | `⋯` | Collapsed diff row markers |
 | `branch` | `⎇` | `\uf418` | Branch in the Changes panel |
 | `commit` | `●` | `\uf417` | Commit in commit history |
 | `function` | `ƒ` | `\uea8c` | Symbol and completion kinds |

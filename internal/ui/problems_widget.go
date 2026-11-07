@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -27,7 +28,7 @@ type ProblemsWidget struct {
 func NewProblemsWidget() *ProblemsWidget {
 	p := &ProblemsWidget{}
 	p.tree = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No problems detected",
+		EmptyText: i18n.Text("problems.noProblemsDetected"),
 		RenderItem: func(surface widgets.Surface, node *widgets.TreeNode, idx, y, w int, selected bool) {
 			p.renderLine(surface, idx, y, w, selected)
 		},

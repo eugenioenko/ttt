@@ -12,6 +12,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 const (
@@ -108,9 +110,9 @@ func (f FsAccess) Resolve(v FsVars) (dirs []string, all bool) {
 func fsPathLabel(p string) string {
 	switch p {
 	case FsWorkspace:
-		return "workspace"
+		return i18n.Text("permissions.workspace")
 	case FsAnyPath:
-		return "any path"
+		return i18n.Text("permissions.anyPath")
 	}
 	return p
 }
@@ -362,9 +364,6 @@ func (n *NetworkRPC) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// The approval dialog has room for about 24 characters of value.
-const anyDestination = "any host, even local"
-
 type PermissionSet struct {
 	PanelSidebar      bool        `json:"panel.sidebar,omitempty"`
 	PanelBottom       bool        `json:"panel.bottom,omitempty"`
@@ -467,7 +466,7 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	}
 
 	if requested.NetworkHTTP.All && !granted.NetworkHTTP.All {
-		entries = append(entries, PermissionDiffEntry{Name: "network.http", Value: anyDestination})
+		entries = append(entries, PermissionDiffEntry{Name: "network.http", Value: i18n.Text("permissions.anyDestination")})
 	} else if !granted.NetworkHTTP.All {
 		for _, h := range requested.NetworkHTTP.Hosts {
 			if !granted.NetworkHTTP.AllowsHost(h) {
@@ -639,56 +638,56 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 
 	add := func(name string, val bool) {
 		if val {
-			entries = append(entries, PermissionDiffEntry{Name: name, Value: "yes"})
+			entries = append(entries, PermissionDiffEntry{Name: name, Value: i18n.Text("permissions.yes")})
 		}
 	}
 
-	add("Sidebar panel", ps.PanelSidebar)
-	add("Bottom panel", ps.PanelBottom)
-	add("Drawer", ps.PanelDrawer)
-	add("Editor tab", ps.PanelEditor)
-	add("Commands", ps.Commands)
-	add("Keybindings", ps.Keybindings)
-	add("Read editor", ps.EditorRead)
-	add("Write editor", ps.EditorWrite)
-	add("Editor diagnostics", ps.EditorDiagnostics)
-	add("Editor bookmarks", ps.EditorBookmarks)
-	add("Editor decorations", ps.EditorDecorations)
-	add("Handle file types", ps.FileHandlers)
+	add(i18n.Text("permissions.sidebarPanel"), ps.PanelSidebar)
+	add(i18n.Text("permissions.bottomPanel"), ps.PanelBottom)
+	add(i18n.Text("permissions.drawer"), ps.PanelDrawer)
+	add(i18n.Text("permissions.editorTab"), ps.PanelEditor)
+	add(i18n.Text("permissions.commands"), ps.Commands)
+	add(i18n.Text("permissions.keybindings"), ps.Keybindings)
+	add(i18n.Text("permissions.readEditor"), ps.EditorRead)
+	add(i18n.Text("permissions.writeEditor"), ps.EditorWrite)
+	add(i18n.Text("permissions.editorDiagnostics"), ps.EditorDiagnostics)
+	add(i18n.Text("permissions.editorBookmarks"), ps.EditorBookmarks)
+	add(i18n.Text("permissions.editorDecorations"), ps.EditorDecorations)
+	add(i18n.Text("permissions.handleFileTypes"), ps.FileHandlers)
 	for _, p := range ps.FsRead.Paths {
-		entries = append(entries, PermissionDiffEntry{Name: "Read files", Value: fsPathLabel(p)})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.readFiles"), Value: fsPathLabel(p)})
 	}
 	for _, p := range ps.FsWrite.Paths {
-		entries = append(entries, PermissionDiffEntry{Name: "Write files", Value: fsPathLabel(p)})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.writeFiles"), Value: fsPathLabel(p)})
 	}
-	add("Control terminals", ps.TerminalControl)
-	add("Read terminals", ps.TerminalRead)
-	add("Environment", ps.SystemEnv)
-	add("File events", ps.EventsFile)
-	add("Editor events", ps.EventsEditor)
-	add("Plugin storage", ps.Storage)
-	add("Clipboard read", ps.ClipboardRead)
-	add("Simulate input", ps.Input)
-	add("Read screen", ps.ScreenRead)
+	add(i18n.Text("permissions.controlTerminals"), ps.TerminalControl)
+	add(i18n.Text("permissions.readTerminals"), ps.TerminalRead)
+	add(i18n.Text("permissions.environment"), ps.SystemEnv)
+	add(i18n.Text("permissions.fileEvents"), ps.EventsFile)
+	add(i18n.Text("permissions.editorEvents"), ps.EventsEditor)
+	add(i18n.Text("permissions.pluginStorage"), ps.Storage)
+	add(i18n.Text("permissions.clipboardRead"), ps.ClipboardRead)
+	add(i18n.Text("permissions.simulateInput"), ps.Input)
+	add(i18n.Text("permissions.readScreen"), ps.ScreenRead)
 
 	for _, b := range ps.SystemExec {
-		entries = append(entries, PermissionDiffEntry{Name: "Run binary", Value: b})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.runBinary"), Value: b})
 	}
 
 	if ps.NetworkHTTP.All {
-		entries = append(entries, PermissionDiffEntry{Name: "HTTP requests", Value: anyDestination})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.httpRequests"), Value: i18n.Text("permissions.anyDestination")})
 	}
 	for _, h := range ps.NetworkHTTP.Hosts {
-		entries = append(entries, PermissionDiffEntry{Name: "HTTP host", Value: h})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.httpHost"), Value: h})
 	}
 
 	for _, e := range ps.NetworkRPC.Endpoints {
-		entries = append(entries, PermissionDiffEntry{Name: "Accept commands from", Value: e})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.acceptCommandsFrom"), Value: e})
 	}
 
-	add("Settings", ps.Settings)
+	add(i18n.Text("general.settings"), ps.Settings)
 	for _, k := range ps.SettingsKeys {
-		entries = append(entries, PermissionDiffEntry{Name: "Settings key", Value: k})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.settingsKey"), Value: k})
 	}
 
 	return entries

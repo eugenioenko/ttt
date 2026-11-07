@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -31,7 +32,7 @@ func NewReplaceBarWidget() *ReplaceBarWidget {
 	r := &ReplaceBarWidget{focused: true}
 	r.SearchInput = newPanelInput()
 	r.SearchInput.Config.Prefix = ""
-	r.SearchInput.Config.Placeholder = "Search"
+	r.SearchInput.Config.Placeholder = i18n.Text("search.search")
 	r.SearchInput.Config.OnChange = func(string) {
 		r.Current = 0
 		r.search()
@@ -53,10 +54,10 @@ func NewReplaceBarWidget() *ReplaceBarWidget {
 
 	r.ReplaceInput = newPanelInput()
 	r.ReplaceInput.Config.Prefix = ""
-	r.ReplaceInput.Config.Placeholder = "Replace"
+	r.ReplaceInput.Config.Placeholder = i18n.Text("general.replace")
 	r.ReplaceInput.Actions = []widgets.InputAction{
 		{Label: string(icons.Rune(icons.Replace)), OnClick: r.replaceCurrent},
-		{Label: "All", OnClick: func() {
+		{Label: i18n.Text("search.all"), OnClick: func() {
 			if r.OnReplaceAll != nil {
 				r.OnReplaceAll(r.SearchInput.Text(), r.ReplaceInput.Text(), r.Options)
 				r.search()
@@ -102,7 +103,7 @@ func (r *ReplaceBarWidget) Render(surface Surface) {
 	if icons.ActiveIsNerd() {
 		r.ReplaceInput.Actions[1].Label = string(icons.Rune(icons.ReplaceAll))
 	} else {
-		r.ReplaceInput.Actions[1].Label = "All"
+		r.ReplaceInput.Actions[1].Label = i18n.Text("search.all")
 	}
 	r.findBarLayout = renderFindBar(surface, r.Borders, r.SearchInput.Text(), r.Current, len(r.Matches), true, r.OnToggleFind != nil)
 	renderFindBarInput(surface, r.SearchInput, r.inputX, r.barRect.Y+1, r.inputW)

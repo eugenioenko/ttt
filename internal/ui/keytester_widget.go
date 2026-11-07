@@ -3,7 +3,9 @@ package ui
 import (
 	"fmt"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -18,7 +20,7 @@ type KeyTesterWidget struct {
 
 func NewKeyTesterWidget() *KeyTesterWidget {
 	return &KeyTesterWidget{
-		lines: []string{"Press any key combination..."},
+		lines: []string{i18n.Text("keytester.pressAnyKeyCombination")},
 	}
 }
 
@@ -47,7 +49,7 @@ func (k *KeyTesterWidget) Render(surface Surface) {
 	surface.ClearRect(boxX, boxY, boxW, boxH, term.StylePaletteItem)
 	surface.DrawBorder(boxX, boxY, boxW, boxH, b, bs)
 
-	title := "Keyboard Tester"
+	title := i18n.Text("keytester.keyboardTester")
 	surface.DrawText(boxX+2, boxY, title, boxX+boxW-2, bs)
 
 	pad := 1
@@ -64,9 +66,9 @@ func (k *KeyTesterWidget) Render(surface Surface) {
 		surface.DrawText(boxX+1+pad, y, line, boxX+1+pad+contentW, style)
 	}
 
-	closeLabel := " Close (Esc) "
+	closeLabel := i18n.Text("keytester.closeEsc")
 	closeStyle := term.StyleMuted
-	closeX := boxX + boxW - 2 - pad - len([]rune(closeLabel))
+	closeX := boxX + boxW - 2 - pad - textwidth.String(closeLabel)
 	surface.DrawText(closeX, boxY+boxH-2, closeLabel, 0, closeStyle)
 }
 
@@ -151,14 +153,13 @@ func (k *KeyTesterWidget) makeLines(combo string, kev *tcell.EventKey) []string 
 		bound = k.LookupBinding(combo)
 	}
 	if bound != "" {
-		lines = append(lines, fmt.Sprintf("Bound to: %s", bound))
+		lines = append(lines, i18n.Format("keytester.boundTo", i18n.Args{"bound": bound}))
 	} else {
-		lines = append(lines, "Bound to: (none)")
+		lines = append(lines, i18n.Text("keytester.boundToNone"))
 	}
 
-	lines = append(lines, fmt.Sprintf("Key: %d  Rune: %q  Mod: %d",
-		kev.Key(), string(term.KeyRune(kev)), kev.Modifiers()))
+	lines = append(lines, i18n.Format("keytester.keyRuneMod", i18n.Args{"key": kev.Key(), "rune": fmt.Sprintf("%q", string(term.KeyRune(kev))), "modifiers": kev.Modifiers()}))
 	lines = append(lines, "")
-	lines = append(lines, "Press next key for chord, or new combo")
+	lines = append(lines, i18n.Text("keytester.pressNextKeyForChordOrNewCombo"))
 	return lines
 }

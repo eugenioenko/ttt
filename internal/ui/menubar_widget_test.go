@@ -1,6 +1,11 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/gdamore/tcell/v3"
+)
 
 func testMenuBar() *MenuBarWidget {
 	return NewMenuBarWidget([]MenuItem{{Name: "File"}, {Name: "Edit"}, {Name: "Options"}})
@@ -50,5 +55,48 @@ func TestItemAnchorXOutOfRange(t *testing.T) {
 	}
 	if got := m.ItemAnchorX(99); got != 0 {
 		t.Errorf("out-of-range index anchor = %d, want 0", got)
+	}
+}
+
+func TestMenuBarWideLabelsRenderAndClick(t *testing.T) {
+	m := NewMenuBarWidget([]MenuItem{{Name: "文件"}, {Name: "编辑"}, {Name: "Help"}})
+	r := Rect{X: 3, Y: 2, W: 40, H: 1}
+	m.SetRect(r)
+	anchor := m.ItemAnchorX(1)
+	cells := makeGrid(50, 4)
+	m.Render(NewRenderSurface(cells, r))
+	if anchor != m.ItemAnchorX(1) {
+		t.Fatal("render changed the menu anchor")
+	}
+	for i, item := range m.Items {
+		x := r.X + m.ItemAnchorX(i) + 1
+		for _, ch := range item.Name {
+			if got := cells[r.Y][x].Ch; got != ch {
+				t.Errorf("item %d column %d = %q, want %q", i, x, got, ch)
+			}
+			x += textwidth.Rune(ch)
+		}
+	}
+	selected := -1
+	m.OnSelect = func(index int) { selected = index }
+	for i, span := range m.ItemSpans() {
+		for x := span.Start; x < span.End; x++ {
+			m.HandleEvent(tcell.NewEventMouse(r.X+x, r.Y, tcell.Button1, 0))
+			if selected != i {
+				t.Fatalf("click at column %d selected %d, want %d", x, selected, i)
+			}
+			m.HandleEvent(tcell.NewEventMouse(r.X+x, r.Y, tcell.ButtonNone, 0))
+		}
+	}
+}
+
+func TestMenuBarClipsWideLabelAtEdge(t *testing.T) {
+	m := NewMenuBarWidget([]MenuItem{{Name: "文件"}})
+	cells := makeGrid(3, 1)
+	r := Rect{W: 3, H: 1}
+	m.SetRect(r)
+	m.Render(NewRenderSurface(cells, r))
+	if got := cells[0][2].Ch; got != ' ' {
+		t.Fatalf("last column = %q, want a space instead of a clipped fullwidth rune", got)
 	}
 }

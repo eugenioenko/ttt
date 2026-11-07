@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -28,10 +29,10 @@ func (a *App) applyMenuBarVisibility(visible bool) {
 // menuBarRestoreHint names both ways back to a hidden menu bar. The shortcut is
 // read from the registry so a rebound key is reported correctly.
 func (a *App) menuBarRestoreHint() string {
-	msg := "Menu bar hidden: run \"View: Toggle Menu Bar\" from the command palette to show it"
+	msg := i18n.Text("menubar.hiddenPaletteHint")
 	if a.Reg != nil {
 		if cmd, ok := a.Reg.Get(menuBarToggleCommand); ok && cmd.Shortcut != "" {
-			msg = "Menu bar hidden: press " + cmd.Shortcut + " to show it"
+			msg = i18n.Format("menubar.hiddenShortcutHint", i18n.Args{"shortcut": cmd.Shortcut})
 		}
 	}
 	return msg
