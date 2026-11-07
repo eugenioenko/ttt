@@ -38,7 +38,7 @@ type Language struct {
 	Locale       string `json:"locale"`
 	Name         string `json:"name"`
 	Path         string `json:"path"`
-	SourceHashes string `json:"sourceHashes,omitempty"`
+	SourceCommit string `json:"sourceCommit,omitempty"`
 	TTTVersion   string `json:"tttVersion,omitempty"`
 }
 
@@ -147,7 +147,7 @@ func LoadManifest(dir string) (Manifest, error) {
 		if err != nil || contribution.Locale == "" || locale == "en" {
 			return Manifest{}, fmt.Errorf("invalid contributed locale %q", contribution.Locale)
 		}
-		if contribution.Name == "" || !filepath.IsLocal(contribution.Path) || (contribution.SourceHashes != "" && !filepath.IsLocal(contribution.SourceHashes)) {
+		if contribution.Name == "" || !filepath.IsLocal(contribution.Path) || (contribution.SourceCommit != "" && !validSourceCommit(contribution.SourceCommit)) {
 			return Manifest{}, fmt.Errorf("invalid language contribution for %q", locale)
 		}
 		if seenLocales[locale] {

@@ -49,6 +49,7 @@ func (a *App) CheckLanguagePackUpdates() {
 		a.language.updates = NewTask[[]languageUpdateResult](a, asynctask.TaskOptions{})
 	}
 	version := a.Version
+	cacheDir := config.UserConfigDir()
 	a.language.updates.Schedule(func(ctx context.Context) ([]languageUpdateResult, error) {
 		client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 		var results []languageUpdateResult
@@ -56,7 +57,7 @@ func (a *App) CheckLanguagePackUpdates() {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			source := plugin.LanguageUpdateSource{Name: packs[0].Plugin, Repo: packs[0].Repo, RepoPath: packs[0].RepoPath}
+			source := plugin.LanguageUpdateSource{Name: packs[0].Plugin, Repo: packs[0].Repo, RepoPath: packs[0].RepoPath, CacheDir: cacheDir}
 			for _, pack := range packs {
 				source.Languages = append(source.Languages, plugin.Language{Locale: pack.Locale, TTTVersion: pack.TTTVersion})
 			}
@@ -98,10 +99,8 @@ func (a *App) applyLanguageUpdate(result languageUpdateResult) {
 			if pack.Plugin == name && pack.Locale == update.Locale {
 				pack.TTTVersion = update.TTTVersion
 				pack.Name = update.Name
-				pack.SourceHashes = ""
-				if update.SourceHashes != "" {
-					pack.SourceHashes = languageCachePath(name, pack.Locale+".source")
-				}
+				pack.SourceCommit = update.SourceCommit
+				pack.Source = ""
 				activeUpdated = activeUpdated || a.language.locale == pack.Locale
 			}
 		}

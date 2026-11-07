@@ -38,23 +38,23 @@ func TestFetchLanguageUpdateDownloadsOnlyPinnedLanguageData(t *testing.T) {
 		requests = append(requests, request.URL.String())
 		body := `{"sha":"` + sha + `"}`
 		if request.URL.Host == "raw.githubusercontent.com" {
-			if !strings.Contains(request.URL.Path, "/"+sha+"/") {
+			if !strings.Contains(request.URL.Path, "/"+sha+"/") && !strings.Contains(request.URL.Path, "/"+strings.Repeat("b", 40)+"/") {
 				t.Fatal("download was not pinned to a commit")
 			}
 			switch filepath.Base(request.URL.Path) {
 			case "plugin.ttt.json":
-				body = `{"entry":"never-execute.lua","permissions":{"system.exec":["sh"]},"languages":[{"locale":"es","name":"Español","path":"messages.json","sourceHashes":"source-hashes.json","tttVersion":"1.12.0"}]}`
+				body = `{"entry":"never-execute.lua","permissions":{"system.exec":["sh"]},"languages":[{"locale":"es","name":"Español","path":"messages.json","sourceCommit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","tttVersion":"1.12.0"}]}`
 			case "messages.json":
 				body = `{"general.save":"Guardar"}`
-			case "source-hashes.json":
-				body = `{}`
+			case "en.json":
+				body = `{"general.save":"Save"}`
 			default:
 				t.Fatalf("unexpected download %s", request.URL)
 			}
 		}
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 	})}
-	source := LanguageUpdateSource{Name: "spanish", Repo: "https://github.com/example/translations.git", RepoPath: "packs/es", Languages: []Language{{Locale: "es", TTTVersion: "1.11.0"}}}
+	source := LanguageUpdateSource{Name: "spanish", Repo: "https://github.com/example/translations.git", RepoPath: "packs/es", CacheDir: t.TempDir(), Languages: []Language{{Locale: "es", TTTVersion: "1.11.0"}}}
 	update, err := FetchLanguageUpdate(context.Background(), client, source, "1.12.0")
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestLanguageOnlyManifestAndPathIsolation(t *testing.T) {
 		`[{"locale":"en","name":"bad","path":"es.json"}]`,
 		`[{"locale":"../es","name":"bad","path":"es.json"}]`,
 		`[{"locale":"es","name":"bad","path":"../es.json"}]`,
-		`[{"locale":"es","name":"bad","path":"es.json","sourceHashes":"../hashes.json"}]`,
+		`[{"locale":"es","name":"bad","path":"es.json","sourceCommit":"../invalid"}]`,
 		`[{"locale":"es","name":"bad","path":"es.json"},{"locale":"es","name":"duplicate","path":"other.json"}]`,
 	} {
 		write(`{"name":"bad","languages":` + languages + `}`)

@@ -28,11 +28,11 @@ func loadDisplayLanguage(settings config.LanguageSettings) (string, error) {
 		if pack.Locale != locale {
 			continue
 		}
-		data, hashes, err := readLanguageFiles(pack)
+		data, source, err := readLanguageFiles(pack)
 		if err != nil {
 			return "en", err
 		}
-		catalog, err := i18n.ParseCatalog(data, hashes)
+		catalog, err := i18n.ParseCatalog(data, source)
 		if err != nil {
 			return "en", err
 		}
@@ -54,11 +54,13 @@ func readLanguageFiles(pack config.LanguagePackSetting) ([]byte, []byte, error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	var hashes []byte
-	if pack.SourceHashes != "" {
-		hashes, err = plugin.ReadLanguageData(languageFilePath(pack.SourceHashes))
+	var source []byte
+	if pack.SourceCommit != "" {
+		source, err = plugin.ReadLanguageSource(config.UserConfigDir(), pack.SourceCommit)
+	} else if pack.Source != "" {
+		source, err = plugin.ReadLanguageData(languageFilePath(pack.Source))
 	}
-	return data, hashes, err
+	return data, source, err
 }
 
 func languageItemsFor(settings config.LanguageSettings) []widgets.SelectItem {
@@ -149,24 +151,20 @@ func (a *App) copyPluginLanguages(p *plugin.Plugin) error {
 		if err != nil {
 			return err
 		}
-		var hashes []byte
-		if language.SourceHashes != "" {
-			path, err = p.LanguageFile(language.SourceHashes)
-			if err != nil {
-				return err
-			}
-			hashes, err = plugin.ReadLanguageData(path)
+		var source []byte
+		if language.SourceCommit != "" {
+			source, err = plugin.ReadLanguageSource(config.UserConfigDir(), language.SourceCommit)
 			if err != nil {
 				return err
 			}
 		}
-		if _, err := i18n.ParseCatalog(data, hashes); err != nil {
+		if _, err := i18n.ParseCatalog(data, source); err != nil {
 			return err
 		}
 		digest := sha256.New()
 		digest.Write(data)
 		digest.Write([]byte{0})
-		digest.Write(hashes)
+		digest.Write(source)
 		metadata, err := json.Marshal(language)
 		if err != nil {
 			return err
@@ -174,18 +172,15 @@ func (a *App) copyPluginLanguages(p *plugin.Plugin) error {
 		digest.Write(metadata)
 		pack := config.LanguagePackSetting{
 			Locale: language.Locale, Name: language.Name, Path: languageCachePath(p.Name, language.Locale),
-			TTTVersion: language.TTTVersion, Plugin: p.Name, Repo: p.Repo, RepoPath: p.RepoPath,
+			TTTVersion: language.TTTVersion, SourceCommit: language.SourceCommit, Plugin: p.Name, Repo: p.Repo, RepoPath: p.RepoPath,
 			BundleHash: hex.EncodeToString(digest.Sum(nil)),
-		}
-		if len(hashes) > 0 {
-			pack.SourceHashes = languageCachePath(p.Name, language.Locale+".source")
 		}
 		cacheReady := false
 		for _, installed := range a.Settings.Language.Packs {
 			if installed.Plugin == p.Name && installed.Locale == pack.Locale && installed.BundleHash == pack.BundleHash && installed.Repo == pack.Repo && installed.RepoPath == pack.RepoPath {
-				if cached, cachedHashes, err := readLanguageFiles(installed); err == nil {
-					if _, err := i18n.ParseCatalog(cached, cachedHashes); err == nil {
-						pack, data, hashes = installed, cached, cachedHashes
+				if cached, cachedSource, err := readLanguageFiles(installed); err == nil {
+					if _, err := i18n.ParseCatalog(cached, cachedSource); err == nil {
+						pack, data = installed, cached
 						cacheReady = true
 					}
 				}
@@ -193,9 +188,6 @@ func (a *App) copyPluginLanguages(p *plugin.Plugin) error {
 		}
 		cacheMissing = cacheMissing || !cacheReady
 		files[language.Locale+".json"] = data
-		if pack.SourceHashes != "" {
-			files[language.Locale+".source.json"] = hashes
-		}
 		contributed = append(contributed, pack)
 	}
 	next := append(kept, contributed...)

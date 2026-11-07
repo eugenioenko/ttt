@@ -1,17 +1,14 @@
 package i18n
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"testing"
 )
 
 func TestCatalogFallbackAndFreshness(t *testing.T) {
 	t.Cleanup(func() { SetCatalog(nil) })
-	hash := sha256.Sum256([]byte(english["general.save"]))
-	hashes, _ := json.Marshal(map[string]string{"general.save": hex.EncodeToString(hash[:]), "general.cancel": "outdated"})
-	catalog, err := ParseCatalog([]byte(`{"general.save":"保存","general.cancel":"取消","future.key":"future"}`), hashes)
+	source, _ := json.Marshal(map[string]string{"general.save": english["general.save"], "general.cancel": "Older English"})
+	catalog, err := ParseCatalog([]byte(`{"general.save":"保存","general.cancel":"取消","future.key":"future"}`), source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,13 +45,13 @@ func TestDecodeCatalogRejectsMalformedObjects(t *testing.T) {
 	}
 }
 
-func TestDeclaredEmptySourceHashesAreRejected(t *testing.T) {
+func TestDeclaredEmptyEnglishSourceIsRejected(t *testing.T) {
 	messages := []byte(`{"general.save":"Guardar"}`)
 	if _, err := ParseCatalog(messages, nil); err != nil {
-		t.Fatal("omitting source hashes must remain supported", err)
+		t.Fatal("omitting English source must remain supported", err)
 	}
 	if _, err := ParseCatalog(messages, []byte{}); err == nil {
-		t.Fatal("empty declared hashes bypassed freshness validation")
+		t.Fatal("empty declared source bypassed freshness validation")
 	}
 }
 

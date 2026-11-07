@@ -293,14 +293,14 @@ Install a language pack through the Plugins panel, then run **Change Display Lan
       "locale": "es",
       "name": "Español",
       "path": "languages/es.json",
-      "sourceHashes": "languages/es.source.json",
+      "source": "languages/en.json",
       "tttVersion": "1.12.0"
     }]
   }
 }
 ```
 
-`language.packs` is maintained by plugin installation. For a manual catalog, provide `locale`, `name`, and `path`; `sourceHashes` and `tttVersion` are optional. Relative paths resolve from the ttt configuration directory; absolute paths also work. Plugin-managed entries additionally store their plugin/repository identity and cache metadata; leave those fields intact. Automatic updates apply to plugin-managed packs from public GitHub repositories. Omitting `autoUpdate` means enabled; explicit `false` disables downloads. See [Language packs](/guides/plugin-authoring/#language-packs) for the file formats and version behavior.
+`language.packs` is maintained by plugin installation. For a manual catalog, provide `locale`, `name`, and `path`; `source` (a flat English catalog snapshot) and `tttVersion` are optional. Relative paths resolve from the ttt configuration directory; absolute paths also work. Plugin-managed entries additionally store `sourceCommit`, their plugin/repository identity, and cache metadata; leave those fields intact. English catalogs referenced by `sourceCommit` are cached once per commit and shared across installed languages. Automatic updates apply to plugin-managed packs from public GitHub repositories. Omitting `autoUpdate` means enabled; explicit `false` disables downloads. See [Language packs](/guides/plugin-authoring/#language-packs) for the file formats and version behavior.
 
 ## Grammars
 

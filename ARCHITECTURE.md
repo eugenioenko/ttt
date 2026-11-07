@@ -87,7 +87,7 @@ or plugin consumer; it is not a destination for every visually reusable
 product surface.
 
 `internal/i18n` owns the embedded English UI catalog, immutable runtime
-catalogs, source-hash and placeholder validation, and named interpolation.
+catalogs, English-source and placeholder validation, and named interpolation.
 Presentation and application code resolve user-facing copy through it;
 identifiers and external service messages keep their own values. The application
 loads the selected catalog before constructing widgets, manages language-pack

@@ -2,8 +2,6 @@ package i18n
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -74,16 +72,16 @@ func catalogPlaceholders(message string) []string {
 	return names
 }
 
-func ParseCatalog(data, sourceHashes []byte) (*Catalog, error) {
+func ParseCatalog(data, sourceData []byte) (*Catalog, error) {
 	messages, err := DecodeMessages(data)
 	if err != nil {
 		return nil, err
 	}
-	var hashes map[string]string
-	if sourceHashes != nil {
-		hashes, err = DecodeMessages(sourceHashes)
+	var originals map[string]string
+	if sourceData != nil {
+		originals, err = DecodeMessages(sourceData)
 		if err != nil {
-			return nil, fmt.Errorf("source hashes: %w", err)
+			return nil, fmt.Errorf("English source: %w", err)
 		}
 	}
 	valid := make(map[string]string)
@@ -92,9 +90,9 @@ func ParseCatalog(data, sourceHashes []byte) (*Catalog, error) {
 		if !known || strings.TrimSpace(translated) == "" {
 			continue
 		}
-		if hashes != nil {
-			hash := sha256.Sum256([]byte(source))
-			if hashes[id] != hex.EncodeToString(hash[:]) {
+		if originals != nil {
+			original, exists := originals[id]
+			if !exists || original != source {
 				continue
 			}
 		}

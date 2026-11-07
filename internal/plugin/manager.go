@@ -482,6 +482,11 @@ func (m *Manager) Install(repoURL, repoPath string) (*Plugin, error) {
 		return nil, fmt.Errorf("invalid plugin: %w", err)
 	}
 
+	if err := prepareLanguageSources(filepath.Dir(m.registryPath), manifest); err != nil {
+		os.RemoveAll(targetDir)
+		return nil, fmt.Errorf("prepare language source: %w", err)
+	}
+
 	return &Plugin{
 		Name:     manifest.Name,
 		Dir:      targetDir,
@@ -520,6 +525,11 @@ func (m *Manager) installFromSubdir(repoURL, repoPath string) (*Plugin, error) {
 	if err := copyDir(srcDir, targetDir); err != nil {
 		os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("copy plugin: %w", err)
+	}
+
+	if err := prepareLanguageSources(filepath.Dir(m.registryPath), manifest); err != nil {
+		os.RemoveAll(targetDir)
+		return nil, fmt.Errorf("prepare language source: %w", err)
 	}
 
 	return &Plugin{
@@ -656,15 +666,16 @@ func withinDir(parent, child string) bool {
 // PluginUpdate carries an update from Fetch, which may run off the UI goroutine,
 // to ApplyUpdate, which replaces the plugin's Lua state and must run on it.
 type PluginUpdate struct {
-	name     string
-	dir      string
-	repo     string
-	repoPath string
-	manifest Manifest
+	name      string
+	dir       string
+	repo      string
+	repoPath  string
+	manifest  Manifest
+	sourceDir string
 }
 
 func (m *Manager) PrepareUpdate(name string) *PluginUpdate {
-	u := &PluginUpdate{name: name, dir: filepath.Join(m.pluginsDir, name)}
+	u := &PluginUpdate{name: name, dir: filepath.Join(m.pluginsDir, name), sourceDir: filepath.Dir(m.registryPath)}
 	if m.registry != nil {
 		if entry := m.registry.Find(name); entry != nil {
 			u.repo, u.repoPath = entry.Repo, entry.Path
@@ -692,6 +703,9 @@ func (u *PluginUpdate) Fetch() error {
 	if err != nil {
 		return fmt.Errorf("invalid manifest after update: %w", err)
 	}
+	if err := prepareLanguageSources(u.sourceDir, manifest); err != nil {
+		return fmt.Errorf("prepare language source: %w", err)
+	}
 	u.manifest = manifest
 	return nil
 }
@@ -716,6 +730,10 @@ func (u *PluginUpdate) fetchFromSubdir() error {
 	manifest, err := LoadManifest(srcDir)
 	if err != nil {
 		return fmt.Errorf("invalid manifest after update: %w", err)
+	}
+
+	if err := prepareLanguageSources(u.sourceDir, manifest); err != nil {
+		return fmt.Errorf("prepare language source: %w", err)
 	}
 
 	os.RemoveAll(u.dir)

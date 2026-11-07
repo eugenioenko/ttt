@@ -74,8 +74,8 @@ func LanguageNeedsUpdate(editorVersion, catalogVersion string) bool {
 }
 
 type LanguageUpdateSource struct {
-	Name, Repo, RepoPath string
-	Languages            []Language
+	Name, Repo, RepoPath, CacheDir string
+	Languages                      []Language
 }
 
 type LanguageUpdate struct {
@@ -165,7 +165,7 @@ func FetchLanguageUpdate(ctx context.Context, client *http.Client, source Langua
 	available := make(map[string]Language)
 	for _, contribution := range manifest.Languages {
 		locale, err := i18n.NormalizeLocale(contribution.Locale)
-		if err != nil || contribution.Locale == "" || locale == "en" || contribution.Name == "" || !filepath.IsLocal(contribution.Path) || strings.Contains(contribution.Path, "\\") || (contribution.SourceHashes != "" && (!filepath.IsLocal(contribution.SourceHashes) || strings.Contains(contribution.SourceHashes, "\\"))) {
+		if err != nil || contribution.Locale == "" || locale == "en" || contribution.Name == "" || !filepath.IsLocal(contribution.Path) || strings.Contains(contribution.Path, "\\") || (contribution.SourceCommit != "" && !validSourceCommit(contribution.SourceCommit)) {
 			return LanguageUpdate{}, fmt.Errorf("invalid language update manifest")
 		}
 		if _, exists := available[locale]; exists {
@@ -187,20 +187,17 @@ func FetchLanguageUpdate(ctx context.Context, client *http.Client, source Langua
 		if err != nil {
 			return LanguageUpdate{}, err
 		}
-		var hashes []byte
-		if contribution.SourceHashes != "" {
-			hashes, err = fetchLanguageData(ctx, client, base+path.Join(source.RepoPath, contribution.SourceHashes))
+		var original []byte
+		if contribution.SourceCommit != "" {
+			original, err = loadLanguageSource(ctx, client, source.CacheDir, contribution.SourceCommit)
 			if err != nil {
 				return LanguageUpdate{}, err
 			}
 		}
-		if _, err := i18n.ParseCatalog(data, hashes); err != nil {
+		if _, err := i18n.ParseCatalog(data, original); err != nil {
 			return LanguageUpdate{}, err
 		}
 		result.Files[installed.Locale+".json"] = data
-		if contribution.SourceHashes != "" {
-			result.Files[installed.Locale+".source.json"] = hashes
-		}
 		result.Languages = append(result.Languages, contribution)
 	}
 	return result, nil

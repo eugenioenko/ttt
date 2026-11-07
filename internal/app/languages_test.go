@@ -54,17 +54,20 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 		t.Fatal("bad update destroyed cached pack", err)
 	}
 	write(`{"general.save":"stale translation"}`)
-	p.Manifest.Languages[0].SourceHashes = "hashes.json"
-	if err := os.WriteFile(filepath.Join(p.Dir, "hashes.json"), nil, 0644); err != nil {
+	p.Manifest.Languages[0].SourceCommit = strings.Repeat("a", 40)
+	if err := os.MkdirAll(filepath.Join(config.UserConfigDir(), "languages", "sources"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(config.UserConfigDir(), plugin.LanguageSourcePath(strings.Repeat("a", 40))), nil, 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := translated.copyPluginLanguages(p); err == nil {
-		t.Fatal("empty declared hash file was installed")
+		t.Fatal("empty declared English source was installed")
 	}
 	if _, err := loadDisplayLanguage(config.LoadSettings().Language); err != nil || i18n.Text("general.save") != "Guardar" {
-		t.Fatal("invalid hash update destroyed cached pack", err)
+		t.Fatal("invalid source update destroyed cached pack", err)
 	}
-	p.Manifest.Languages[0].SourceHashes = ""
+	p.Manifest.Languages[0].SourceCommit = ""
 	write(`{"general.save":"Guardar actualizado"}`)
 	translated.installPluginLanguages(p)
 	if _, err := loadDisplayLanguage(config.LoadSettings().Language); err != nil || i18n.Text("general.save") != "Guardar actualizado" {

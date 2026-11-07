@@ -14,7 +14,8 @@ type LanguagePackSetting struct {
 	Locale       string `json:"locale"`
 	Name         string `json:"name"`
 	Path         string `json:"path"`
-	SourceHashes string `json:"sourceHashes,omitempty"`
+	Source       string `json:"source,omitempty"`
+	SourceCommit string `json:"sourceCommit,omitempty"`
 	TTTVersion   string `json:"tttVersion,omitempty"`
 	Plugin       string `json:"plugin,omitempty"`
 	Repo         string `json:"repo,omitempty"`
