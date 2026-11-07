@@ -209,17 +209,16 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 
 ### Opening a pull request
 
-- **Features need an accepted issue first.** Link it in the PR body (`Closes #123`). Bug fixes, docs, and small cleanups can go straight to a PR.
-- **Run it.** Reproduce a bug, or try a feature, in the real binary with `--exec` or `--listen` before and after the change.
-- **One concern per PR**, under roughly 600 changed lines. Note unrelated problems you find in the PR body instead of fixing them.
-- **Title** uses conventional commits: `type(scope): description`.
-- **Body** explains why, which test covers the change, and includes a `--exec` screenshot for visible changes.
-- **Before opening:** `make test` and `make lint` pass, and comments that describe what the code does are removed.
-- **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
+- Features link an accepted issue (`Closes #123`).
+- One concern, under ~600 changed lines.
+- `make test` and `make lint` pass.
+- Title: `type(scope): description`. Body: why, which tests cover it, and before/after [screenshots](#screenshots) for visible changes.
+
+#### Screenshots
+
+- **Text:** `bin/ttt --exec '...; screenshot after.txt; quit'`.
+- **Image:** `--exec` is headless, so run a terminal in Xephyr, drive ttt with `--listen`, and grab with `ffmpeg -f x11grab`. VHS with `--listen` also works.
 
 ### Following up on a pull request
 
-- **Follow through after opening or updating a PR.** Monitor CodeRabbit and required CI checks for the latest head commit. Check pending work about every five minutes. If CodeRabbit is paused or skipped the latest changes, request a review once; avoid duplicate requests while a review is running.
-- **Address valid review findings.** Read inline threads and review summaries, including comments outside the diff. Verify each finding against the current code, fix actionable issues within the PR's scope, and add focused regression coverage where appropriate. Explain why a finding is inapplicable instead of changing code merely to satisfy the bot. Push verified fixes when authorized, then resolve the addressed threads.
-- **Follow CI to a result.** Inspect failing job logs and fix failures caused by the PR. Rerun checks when there is evidence of a transient failure. Report unrelated failures, unavailable checks, missing permissions, and external blockers explicitly; distinguish them from passing checks.
-- **Recheck after each push.** Continue until CodeRabbit has reviewed the latest changes, valid findings are addressed, and required CI passes, or report the concrete blocker and remaining work. Opening the PR alone is not completion. Approval and merge still require the user's authorization.
+Until CodeRabbit has reviewed the latest commit and required CI passes, check every five minutes. Fix each finding or reply with why it does not apply. Merging needs the user's approval.
