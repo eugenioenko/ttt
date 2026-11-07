@@ -28,7 +28,7 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(`{"menu.file":"Archivo","general.save":"Guardar","settings.general":"General (es)","options.minimal":"Mínimo","help.click":"Clic","help.openFileInPreview":"Vista previa","welcome.openFolder":"Abrir carpeta"}`)
+	write(`{"menu.file":"Archivo","general.save":"Guardar","settings.general":"General (es)","options.minimal":"Mínimo","options.background":"Fondo","help.click":"Clic","help.openFileInPreview":"Vista previa","welcome.openFolder":"Abrir carpeta"}`)
 	a.installPluginLanguages(p)
 	settings := config.LoadSettings()
 	if len(settings.Language.Packs) != 1 || settings.Language.Locale != "" {
@@ -45,8 +45,8 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 	if translated.MenuBar.Items[0].Name != "Archivo" || menuBarMenus[0][2].Label != "Guardar" {
 		t.Fatalf("menu labels were cached in English: %+v", translated.MenuBar.Items)
 	}
-	if styleLabels["minimal"] != "Mínimo" {
-		t.Fatalf("style label cached in English: %q", styleLabels["minimal"])
+	if styleLabels["minimal"] != "Mínimo" || styleLabels["background"] != "Fondo" {
+		t.Fatalf("style labels cached in English: %v", styleLabels)
 	}
 
 	if entries := explorerHelpEntries; entries[0].Key != "Clic" || entries[0].Value != "Vista previa" || entries[2].Key != "Enter" {
