@@ -265,7 +265,7 @@ TTT supports fully customizable themes via JSON files. Every color is themeable 
 
 Built-in themes ship with the binary, and [extra themes](docs-web/src/content/docs/guides/extra-themes.md) are available for download from the repo.
 
-Switch themes via **Options > Appearance > Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
+Switch themes via **Options > Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
 
 See [Themes](docs-web/src/content/docs/guides/themes.md).
 

@@ -451,7 +451,6 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
 		}},
 		{Label: i18n.Text("menu.appearance"), Submenu: []ui.ContextMenuItem{
-			{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 			{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
 			{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
 			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
@@ -462,6 +461,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
 		{Label: i18n.Text("menu.gitFiles"), Submenu: a.BuildGitFileOptions()},
 		ui.MenuSep(),
+		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 	}
 	return items
