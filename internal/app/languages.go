@@ -206,6 +206,7 @@ func (a *App) copyPluginLanguages(p *plugin.Plugin) error {
 		return err
 	}
 	a.Settings.Language.Packs = next
+	a.ensureDisplayLanguageInstalled()
 	return config.SaveSettings(*a.Settings)
 }
 
@@ -218,11 +219,15 @@ func (a *App) uninstallPluginLanguages(name string) {
 		return
 	}
 	a.Settings.Language.Packs = slices.DeleteFunc(a.Settings.Language.Packs, func(pack config.LanguagePackSetting) bool { return pack.Plugin == name })
+	a.ensureDisplayLanguageInstalled()
+	if err := config.SaveSettings(*a.Settings); err != nil {
+		a.LogOutput("error", "languages", err.Error())
+	}
+}
+
+func (a *App) ensureDisplayLanguageInstalled() {
 	if a.Settings.Language.Locale != "" && a.Settings.Language.Locale != "en" && !slices.ContainsFunc(a.Settings.Language.Packs, func(pack config.LanguagePackSetting) bool { return pack.Locale == a.Settings.Language.Locale }) {
 		a.Settings.Language.Locale = "en"
 		a.StatusNotify(i18n.Text("status.languageRestartRequired"))
-	}
-	if err := config.SaveSettings(*a.Settings); err != nil {
-		a.LogOutput("error", "languages", err.Error())
 	}
 }

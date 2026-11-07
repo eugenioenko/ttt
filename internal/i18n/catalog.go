@@ -80,7 +80,7 @@ func ParseCatalog(data, sourceHashes []byte) (*Catalog, error) {
 		return nil, err
 	}
 	var hashes map[string]string
-	if len(sourceHashes) > 0 {
+	if sourceHashes != nil {
 		hashes, err = DecodeMessages(sourceHashes)
 		if err != nil {
 			return nil, fmt.Errorf("source hashes: %w", err)

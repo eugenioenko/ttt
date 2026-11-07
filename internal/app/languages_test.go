@@ -53,6 +53,18 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 	if _, err := loadDisplayLanguage(config.LoadSettings().Language); err != nil {
 		t.Fatal("bad update destroyed cached pack", err)
 	}
+	write(`{"general.save":"stale translation"}`)
+	p.Manifest.Languages[0].SourceHashes = "hashes.json"
+	if err := os.WriteFile(filepath.Join(p.Dir, "hashes.json"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := translated.copyPluginLanguages(p); err == nil {
+		t.Fatal("empty declared hash file was installed")
+	}
+	if _, err := loadDisplayLanguage(config.LoadSettings().Language); err != nil || i18n.Text("general.save") != "Guardar" {
+		t.Fatal("invalid hash update destroyed cached pack", err)
+	}
+	p.Manifest.Languages[0].SourceHashes = ""
 	write(`{"general.save":"Guardar actualizado"}`)
 	translated.installPluginLanguages(p)
 	if _, err := loadDisplayLanguage(config.LoadSettings().Language); err != nil || i18n.Text("general.save") != "Guardar actualizado" {
@@ -114,5 +126,29 @@ func TestLanguageAutoUpdateDisabledAndMissingPack(t *testing.T) {
 	}
 	if a.MenuBar.Items[0].Name != "File" {
 		t.Fatal("missing pack did not fall back to English")
+	}
+}
+
+func TestLanguageBundleMetadataAndRemovedContribution(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil) })
+	a := buildTestApp(t, config.DefaultSettings())
+	p := &plugin.Plugin{Name: "spanish", Dir: t.TempDir(), Manifest: plugin.Manifest{
+		Languages: []plugin.Language{{Locale: "es", Name: "Español", Path: "messages.json", TTTVersion: "1.11.0"}},
+	}}
+	if err := os.WriteFile(filepath.Join(p.Dir, "messages.json"), []byte(`{"general.save":"Guardar"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	a.installPluginLanguages(p)
+	p.Manifest.Languages[0].TTTVersion = "1.12.0"
+	a.installPluginLanguages(p)
+	if a.Settings.Language.Packs[0].TTTVersion != "1.12.0" {
+		t.Fatal("unchanged messages prevented bundle metadata update")
+	}
+	a.SetDisplayLanguage("es")
+	p.Manifest.Languages = nil
+	a.installPluginLanguages(p)
+	if config.LoadSettings().Language.Locale != "en" || len(a.Settings.Language.Packs) != 0 {
+		t.Fatal("dropped contribution did not restore English selection")
 	}
 }

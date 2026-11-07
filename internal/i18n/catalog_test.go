@@ -48,6 +48,16 @@ func TestDecodeCatalogRejectsMalformedObjects(t *testing.T) {
 	}
 }
 
+func TestDeclaredEmptySourceHashesAreRejected(t *testing.T) {
+	messages := []byte(`{"general.save":"Guardar"}`)
+	if _, err := ParseCatalog(messages, nil); err != nil {
+		t.Fatal("omitting source hashes must remain supported", err)
+	}
+	if _, err := ParseCatalog(messages, []byte{}); err == nil {
+		t.Fatal("empty declared hashes bypassed freshness validation")
+	}
+}
+
 func TestNormalizeLocale(t *testing.T) {
 	for input, want := range map[string]string{"": "en", "es": "es", "zh-cn": "zh-CN", "pt-BR": "pt-BR"} {
 		if got, err := NormalizeLocale(input); err != nil || got != want {
