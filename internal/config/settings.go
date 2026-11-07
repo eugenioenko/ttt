@@ -114,6 +114,7 @@ type EditorSettings struct {
 	InsertSpaces      bool                              `json:"insertSpaces"`
 	WordWrap          bool                              `json:"wordWrap"`
 	WordWrapColumn    int                               `json:"wordWrapColumn"`
+	ScrollLines       int                               `json:"scrollLines"`
 	LanguageOverrides map[string]EditorLanguageOverride `json:"languageOverrides,omitempty"`
 	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
 	// built-in limit. Unlisted: raise it only where every line must finish, such
