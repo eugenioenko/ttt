@@ -1,8 +1,11 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -193,5 +196,78 @@ func TestFolderActionsIgnoreFileAndPullRequestRows(t *testing.T) {
 
 	if got := stagedPaths(t, dir); strings.Join(got, ",") != "" {
 		t.Fatalf("folder actions staged paths from a non-folder row: %q", got)
+	}
+}
+
+func TestFolderStagingRoutesThroughTheRepositoryProvider(t *testing.T) {
+	root := t.TempDir()
+	repo := &testSCMStaging{testSCMRepository: testSCMRepository{root: root}}
+	cp := NewChangesPanelWithProvider(&testSCMProvider{repo: repo}, root)
+	cp.OnStatusChanged = func() {}
+	cp.Tree.Config.OnSelect = nil
+	cp.SetFileView(config.GitFileViewTree)
+	cp.groups = []changesGroup{{
+		Repository: repo,
+		Dir:        root,
+		Name:       "repo",
+		Unstaged:   []git.FileStatus{{Status: "M", Path: "src/a.go"}, {Status: "M", Path: "src/deep/b.go"}},
+	}}
+	cp.buildTree()
+
+	folder := nodeWithLabel(cp.Tree.Config.Items, "src")
+	if folder == nil || !revealTreeSelection(cp.Tree, folder.ID) {
+		t.Fatalf("src folder is not selectable: %+v", folder)
+	}
+	cp.stageFolder(folder)
+	if len(repo.staged) != 1 {
+		t.Fatalf("staged through provider = %v", repo.staged)
+	}
+	slices.Sort(repo.staged[0])
+	if !reflect.DeepEqual(repo.staged[0], []string{"src/a.go", "src/deep/b.go"}) {
+		t.Fatalf("staged paths through provider = %v", repo.staged)
+	}
+
+	cp.groups = []changesGroup{{
+		Repository: repo,
+		Dir:        root,
+		Name:       "repo",
+		Staged:     []git.FileStatus{{Status: "M", Path: "src/a.go"}, {Status: "M", Path: "src/deep/b.go"}},
+	}}
+	cp.buildTree()
+	folder = nodeWithLabel(cp.Tree.Config.Items, "src")
+	cp.unstageFolder(folder)
+	if len(repo.unstaged) != 1 {
+		t.Fatalf("unstaged through provider = %v", repo.unstaged)
+	}
+	slices.Sort(repo.unstaged[0])
+	if !reflect.DeepEqual(repo.unstaged[0], []string{"src/a.go", "src/deep/b.go"}) {
+		t.Fatalf("unstaged paths through provider = %v", repo.unstaged)
+	}
+}
+
+func TestReadOnlyRepositoryKeepsFolderRowsActionless(t *testing.T) {
+	root := t.TempDir()
+	provider := &testSCMProvider{repo: testSCMRepository{root: root}}
+	cp := NewChangesPanelWithProvider(provider, root)
+	cp.Tree.Config.OnSelect = nil
+	cp.SetFileView(config.GitFileViewTree)
+	cp.groups = []changesGroup{{
+		Repository: provider.repo,
+		Dir:        root,
+		Name:       "repo",
+		Unstaged:   []git.FileStatus{{Status: "M", Path: "src/a.go"}, {Status: "M", Path: "src/deep/b.go"}},
+	}}
+	cp.buildTree()
+
+	folder := nodeWithLabel(cp.Tree.Config.Items, "src")
+	if folder == nil {
+		t.Fatal("missing folder row")
+	}
+	if len(folder.Actions) != 0 {
+		t.Fatalf("read-only folder gained actions: %+v", folder.Actions)
+	}
+	cp.stageFolder(folder)
+	if err := cp.stagePaths(root, false, "src/deep/b.go"); !errors.Is(err, errors.ErrUnsupported) {
+		t.Fatalf("unsupported staging: %v", err)
 	}
 }

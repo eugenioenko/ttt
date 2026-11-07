@@ -266,23 +266,24 @@ func (cp *ChangesPanel) fileNodes(dir string, files []git.FileStatus, staged boo
 		return id
 	}, cp.expanded)
 	if !pr {
-		attachFolderActions(nodes, staged, cp.workNodes)
+		cp.attachFolderActions(nodes, staged)
 	}
 	return nodes
 }
 
 // attachFolderActions gives every folder row the same stage or unstage action
 // its files carry, so a whole directory can be staged without expanding it.
-func attachFolderActions(nodes []*widgets.TreeNode, staged bool, workNodes map[string]workNodeRef) {
+// A repository without staging support keeps its rows actionless, like its files.
+func (cp *ChangesPanel) attachFolderActions(nodes []*widgets.TreeNode, staged bool) {
 	icon, command := string(icons.Rune(icons.Add)), "stageFolder"
 	if staged {
 		icon, command = string(icons.Rune(icons.Remove)), "unstageFolder"
 	}
 	for _, node := range nodes {
-		if ref, ok := workNodes[node.ID]; ok && ref.Kind == workNodeFolder {
+		if ref, ok := cp.workNodes[node.ID]; ok && ref.Kind == workNodeFolder && cp.supportsStaging(ref.Dir) {
 			node.Actions = []widgets.Action{{Icon: icon, Command: command}}
 		}
-		attachFolderActions(node.Children, staged, workNodes)
+		cp.attachFolderActions(node.Children, staged)
 	}
 }
 

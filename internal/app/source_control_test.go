@@ -135,7 +135,7 @@ func TestSourceControlWithoutStaging(t *testing.T) {
 	visit = func(nodes []*widgets.TreeNode) {
 		for _, node := range nodes {
 			for _, action := range node.Actions {
-				if action.Command == "stage" || action.Command == "unstage" || action.Command == "stageAll" || action.Command == "unstageAll" {
+				if action.Command == "stage" || action.Command == "unstage" || action.Command == "stageAll" || action.Command == "unstageAll" || action.Command == "stageFolder" || action.Command == "unstageFolder" {
 					t.Fatalf("unsupported action: %s", action.Command)
 				}
 			}

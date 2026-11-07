@@ -1156,7 +1156,7 @@ func (cp *ChangesPanel) stageFolder(node *widgets.TreeNode) {
 		return
 	}
 	if files := cp.folderFiles(node); len(files) > 0 {
-		cp.applied(git.Stage(ref.Dir, filePaths(files)...))
+		cp.applied(cp.stagePaths(ref.Dir, false, filePaths(files)...))
 	}
 }
 
@@ -1166,7 +1166,7 @@ func (cp *ChangesPanel) unstageFolder(node *widgets.TreeNode) {
 		return
 	}
 	if files := cp.folderFiles(node); len(files) > 0 {
-		cp.applied(git.Unstage(ref.Dir, filePaths(files)...))
+		cp.applied(cp.stagePaths(ref.Dir, true, filePaths(files)...))
 	}
 }
 
