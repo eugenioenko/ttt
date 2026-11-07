@@ -3,6 +3,8 @@ package ui
 import (
 	"slices"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/config"
 )
 
 func TestTabbedPanelMergesSavedAndLatePanelOrder(t *testing.T) {
@@ -116,5 +118,33 @@ func TestTabbedPanelFlagLastsUntilThePanelIsShown(t *testing.T) {
 	tp.SetActivePanel("changes")
 	if !dirty("changes") {
 		t.Fatal("showing a panel cleared a dirty mark that was not a flag")
+	}
+}
+
+func TestTabbedPanelTabStyle(t *testing.T) {
+	cases := []struct {
+		style string
+		want  []string
+	}{
+		{config.SidebarTabStyleLabel, []string{"Explore", "Todo"}},
+		{config.SidebarTabStyleLabelIcon, []string{"E Explore", "Todo"}},
+		{config.SidebarTabStyleIcon, []string{"E", "Todo"}},
+	}
+	for _, tc := range cases {
+		tp := NewTabbedPanel()
+		tp.AddPanel("explorer", "Explore", &mockWidget{})
+		tp.AddPanel("plugin.todo", "Todo", &mockWidget{})
+		tp.SetTabStyle(tc.style)
+		tp.SetPanelIcon("explorer", "E")
+		var got []string
+		for _, item := range tp.Tabs.Config.Items {
+			got = append(got, item.Label)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("style %q: labels = %v, want %v", tc.style, got, tc.want)
+		}
+		if tp.PanelEntries()[0].Title != "Explore" {
+			t.Errorf("style %q: panel title changed to %q", tc.style, tp.PanelEntries()[0].Title)
+		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
 )
 
@@ -24,7 +25,7 @@ func (a *App) RequestDocumentSymbols(path, lang string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if len(fallback) == 0 && lang != "" && !strings.EqualFold(lang, "plaintext") {
-			a.Symbols.SetStatus("No language server for " + lang)
+			a.Symbols.SetStatus(i18n.Format("status.noLanguageServerFor", i18n.Args{"lang": lang}))
 			return
 		}
 		a.ApplySymbols(fallback)
@@ -36,7 +37,7 @@ func (a *App) RequestDocumentSymbols(path, lang string) {
 			if len(fallback) > 0 {
 				a.ApplySymbols(fallback)
 			} else {
-				a.Symbols.SetStatus(serverCfg.Command[0] + " is not installed")
+				a.Symbols.SetStatus(i18n.Format("status.isNotInstalled", i18n.Args{"program": serverCfg.Command[0]}))
 			}
 			return
 		}
@@ -45,15 +46,16 @@ func (a *App) RequestDocumentSymbols(path, lang string) {
 	if len(fallback) > 0 {
 		a.ApplySymbols(fallback)
 	} else if !samePath || a.Symbols.Tree.ItemCount() == 0 {
-		a.Symbols.SetStatus("Loading symbols…")
+		a.Symbols.SetStatus(i18n.Text("status.loadingSymbols"))
 	}
 	workDir := a.lspWorkDir(path)
 	manager := a.LspManager
+	lines := a.lspLines(path)
 	a.scheduleSymbols(path, func(ctx context.Context) (symbolsReply, error) {
 		client, err := manager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			slog.Error("lsp client", "err", err)
-			return symbolsReply{symbols: fallback, status: "Language server unavailable"}, nil
+			return symbolsReply{symbols: fallback, status: i18n.Text("lsp.languageServerUnavailable")}, nil
 		}
 		symbols, err := readSymbolsWithRetry(ctx, func(ctx context.Context) ([]lsp.DocumentSymbol, error) {
 			return client.DocumentSymbols(ctx, FileURI(path))
@@ -65,6 +67,7 @@ func (a *App) RequestDocumentSymbols(path, lang string) {
 			slog.Error("lsp documentSymbol", "err", err)
 			return symbolsReply{symbols: fallback, status: lspStatusMessage(err)}, nil
 		}
+		runeSymbols(lines, symbols)
 		return symbolsReply{symbols: symbols}, nil
 	})
 }

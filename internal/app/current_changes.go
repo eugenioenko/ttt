@@ -13,6 +13,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
@@ -47,9 +48,9 @@ func currentChangesTabID(dir string) string {
 
 func currentChangesTitle(dir string, multiRoot bool) string {
 	if multiRoot {
-		return "Changes · " + filepath.Base(dir)
+		return i18n.Format("changes.repositoryTitle", i18n.Args{"filename": filepath.Base(dir)})
 	}
-	return "Current Changes"
+	return i18n.Text("changes.currentChanges")
 }
 
 func (a *App) selectedChangesDir() string {
@@ -72,7 +73,7 @@ func (a *App) OpenCurrentChanges() {
 		if a.Repository != nil {
 			a.Repository.RefreshNow(RepositoryWorktree)
 		}
-		a.StatusNotify("Loading repository changes…")
+		a.StatusNotify(i18n.Text("status.loadingRepositoryChanges"))
 		return
 	}
 	a.pendingCurrentChangesOpen = false
@@ -109,7 +110,7 @@ func currentChangesErrorText(err error) string {
 	if err == nil {
 		return ""
 	}
-	return "Could not refresh current changes: " + err.Error()
+	return i18n.Format("changes.couldNotRefreshCurrentChanges", i18n.Args{"error": err.Error()})
 }
 
 func readCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
@@ -489,7 +490,7 @@ func currentPresentedStatus(status string) string {
 func currentBoundaryName(boundary ui.CommitDetailBoundary) string {
 	switch boundary {
 	case ui.CommitDetailBoundaryHeadToIndex:
-		return "HEAD-to-index"
+		return i18n.Text("changes.hEADToIndex")
 	case ui.CommitDetailBoundaryConflictToWorktree:
 		return "conflict-to-worktree"
 	default:
@@ -526,25 +527,25 @@ func currentDiffStats(file diff.FileDiff) (added, deleted int) {
 
 func currentChangesSummary(files, additions, deletions, staged, unstaged, conflicts int) string {
 	if files == 0 {
-		return "Working tree clean"
+		return i18n.Text("changes.workingTreeClean")
 	}
-	fileLabel := "file"
+	fileLabel := i18n.Format("changes.fileCount", i18n.Args{"count": files})
 	if files != 1 {
-		fileLabel = "files"
+		fileLabel = i18n.Format("changes.filesCount", i18n.Args{"count": files})
 	}
-	parts := []string{fmt.Sprintf("%d %s", files, fileLabel), fmt.Sprintf("+%d −%d", additions, deletions)}
+	parts := []string{fileLabel, fmt.Sprintf("+%d −%d", additions, deletions)}
 	if staged > 0 {
-		parts = append(parts, fmt.Sprintf("%d staged", staged))
+		parts = append(parts, i18n.Format("changes.stagedCount", i18n.Args{"staged": staged}))
 	}
 	if unstaged > 0 {
-		parts = append(parts, fmt.Sprintf("%d unstaged", unstaged))
+		parts = append(parts, i18n.Format("changes.unstagedCount", i18n.Args{"unstaged": unstaged}))
 	}
 	if conflicts > 0 {
-		label := "conflict"
+		label := i18n.Format("changes.conflictCount", i18n.Args{"count": conflicts})
 		if conflicts != 1 {
-			label = "conflicts"
+			label = i18n.Format("changes.conflictsCount", i18n.Args{"count": conflicts})
 		}
-		parts = append(parts, fmt.Sprintf("%d %s", conflicts, label))
+		parts = append(parts, label)
 	}
 	return strings.Join(parts, " · ")
 }

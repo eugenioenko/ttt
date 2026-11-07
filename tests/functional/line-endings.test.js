@@ -117,6 +117,29 @@ describe("line ending detection and preservation", () => {
     expect(content.includes("\r\n")).toBe(false);
   });
 
+  it("keeps a line ending change unsaved after typing and undoing", () => {
+    dir = createTempDir();
+    const file = join(dir, "lf.txt");
+    writeFileSync(file, "aaa\nbbb\n");
+
+    tui.start(file);
+    tui.waitFor("aaa");
+
+    tui.exec("Change Line Ending");
+    tui.type("CRLF");
+    tui.press("enter");
+    tui.type("x");
+    tui.press("ctrl+z");
+    tui.press("ctrl+w");
+
+    const s0 = tui.snapshot();
+    const { snapshots } = tui.run();
+
+    // The CRLF change is not saved, so closing must still ask.
+    expect(snapshots[s0]).toMatch(/Save|Discard|Cancel/);
+    expect(readFileSync(file).toString()).toBe("aaa\nbbb\n");
+  });
+
   it("preserves CRLF endings on save", () => {
     dir = createTempDir();
     const file = join(dir, "crlf.txt");

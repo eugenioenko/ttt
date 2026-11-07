@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/diff"
@@ -31,7 +32,6 @@ type Bookmark struct {
 type EditorPaneWidget struct {
 	BaseWidget
 	lineScratch             []screenCell
-	runeScratch             []rune
 	Buf                     *buffer.Buffer
 	Cursor                  *cursor.Cursor
 	Viewport                *view.Viewport
@@ -49,12 +49,18 @@ type EditorPaneWidget struct {
 	FoldChevronCollapsed    rune
 	FoldChevronExpanded     rune
 	WordWrap                bool
+	WordWrapColumn          int
 	AutoDedent              bool
+	AutoClosing             config.AutoClosingSettings
+	autoClosing             *autoClosingState
+	autoClosingPath         string
+	plainText               bool
 	AutoIndent              bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
 	Highlighter             *highlight.Highlighter
 	SearchQuery             string
+	SearchOptions           SearchOptions
 	SearchMatches           []FindMatch
 	SearchActive            int
 	lastClickTime           int64
@@ -69,7 +75,6 @@ type EditorPaneWidget struct {
 	OnChange                func()
 	bufferDirty             bool
 	Multi                   *multicursor.MultiCursor
-	multiSearchWord         string
 	gutterHover             bool
 	gutterHoverLine         int
 	mouseDownX, mouseDownY  int
@@ -93,8 +98,15 @@ type EditorPaneWidget struct {
 	rowMap                  []editorRow
 	rowMapTop               int
 	rowMapOffset            int
+	links                   editorLinks
+	LinkWorkDir             string
+	OnOpenURL               func(string)
+	OnOpenFile              func(string, int, int)
+	OnLinkHover             func(*EditorPaneWidget)
+	ResolveFileLinks        FileLinkResolver
 	topRowOffset            int
 	topOffsetLine           int
+	wrapGoal                wrapGoal
 	phantoms                map[int]int
 	phantomGen              uint64
 	DiffOverlay             *DiffOverlay
@@ -125,6 +137,7 @@ func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewpo
 		Viewport:          vp,
 		AutoDedent:        true,
 		AutoIndent:        true,
+		AutoClosing:       config.DefaultAutoClosingSettings(),
 		ScrollbarGitMarks: true,
 		bracketColorDirty: true,
 	}
@@ -254,6 +267,19 @@ func (e *EditorPaneWidget) clampLeftCol() {
 	}
 }
 
+func (e *EditorPaneWidget) RefreshSearch() {
+	if e.SearchQuery == "" || e.Buf == nil {
+		return
+	}
+	matches, err := FindInLines(e.Buf.Lines, e.SearchQuery, e.SearchOptions)
+	if err != nil {
+		return
+	}
+	e.SearchMatches = matches
+	e.SearchActive = min(e.SearchActive, max(len(matches)-1, 0))
+	e.buildSearchIndex()
+}
+
 func (e *EditorPaneWidget) buildSearchIndex() {
 	e.searchByLine = make(map[int][]int, len(e.SearchMatches))
 	for i, m := range e.SearchMatches {
@@ -306,7 +332,7 @@ func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
 
 func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 	prevLines := len(e.Buf.Lines)
-	cmd.Apply(e.Buf)
+	e.applyAutoClosingEdit(cmd)
 	if undo.IsNoop(cmd) {
 		return
 	}
@@ -406,6 +432,10 @@ func (e *EditorPaneWidget) startOrExtendSelection(shift bool) {
 }
 
 func (e *EditorPaneWidget) pasteText(text string) {
+	if e.isMultiActive() {
+		e.multiPasteText(text)
+		return
+	}
 	if e.Selection != nil && e.Selection.Active {
 		e.deleteSelection()
 	}
@@ -438,6 +468,7 @@ func (e *EditorPaneWidget) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		return e.handleMouse(mev)
 	}
+	e.observeLinkInput(ev)
 	if kev, ok := ev.(*tcell.EventKey); ok {
 		return e.handleKey(kev)
 	}
@@ -622,30 +653,55 @@ func (e *EditorPaneWidget) expandFoldAtCursor() {
 }
 
 func (e *EditorPaneWidget) scrollViewport() {
+	e.scrollViewportTo(e.Cursor.Line, e.Cursor.Col)
+}
+
+func (e *EditorPaneWidget) scrollViewportTo(line, col int) {
+	e.scrollViewportToRange(line, col, col)
+}
+
+func (e *EditorPaneWidget) scrollViewportToRange(line, startCol, endCol int) {
+	e.ExpandFoldContaining(line)
 	l := e.layout()
-	curRow, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	targetCol := endCol
+	if endCol > startCol {
+		targetCol = endCol - 1
+	}
+	curRow, _ := l.rowOf(line, targetCol)
 	top := e.topRow(l)
+	effHeight := e.Viewport.Height
+	if !e.Embedded && !e.WordWrap && effHeight > 1 && e.Viewport.Width > 0 {
+		tabW := e.resolveTabSize()
+		if line >= 0 && line < len(e.Buf.Lines) {
+			if bufColToVisualCol(e.Buf.Lines[line], len([]rune(e.Buf.Lines[line])), tabW) > e.Viewport.Width {
+				if e.Viewport.LeftCol == 0 && e.maxWidthSeen <= e.Viewport.Width {
+					effHeight--
+				}
+			}
+		}
+	}
 	if curRow < top {
 		e.setTopRow(l, curRow)
 	}
-	if curRow >= top+e.Viewport.Height {
-		e.setTopRow(l, curRow-e.Viewport.Height+1)
+	if curRow >= top+effHeight {
+		e.setTopRow(l, curRow-effHeight+1)
 	}
 	if e.WordWrap {
 		e.Viewport.LeftCol = 0
 		return
 	}
-	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line)
+	line = e.Buf.ClampLine(line)
 	if e.Viewport.Width <= 0 {
 		e.hScrollPending = true
 		return
 	}
-	visCol := bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, e.resolveTabSize())
-	if visCol < e.Viewport.LeftCol {
-		e.Viewport.LeftCol = visCol
+	visStart := bufColToVisualCol(e.Buf.Lines[line], startCol, e.resolveTabSize())
+	visEnd := bufColToVisualCol(e.Buf.Lines[line], endCol, e.resolveTabSize())
+	if visEnd >= e.Viewport.LeftCol+e.Viewport.Width {
+		e.Viewport.LeftCol = visEnd - e.Viewport.Width + 1
 	}
-	if visCol >= e.Viewport.LeftCol+e.Viewport.Width {
-		e.Viewport.LeftCol = visCol - e.Viewport.Width + 1
+	if visStart < e.Viewport.LeftCol {
+		e.Viewport.LeftCol = visStart
 	}
 }
 

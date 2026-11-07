@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/eugenioenko/ttt/internal/workspace"
@@ -59,7 +60,7 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 	}
 
 	fp.input = widgets.NewInputWidget(widgets.InputConfig{
-		Placeholder: "Folder path",
+		Placeholder: i18n.Text("files.folderPath"),
 		OnSubmit:    submit,
 		OnChange:    func(text string) { fp.syncFromInput(text) },
 	})
@@ -68,17 +69,17 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 	// moves, so arrowing down a list would walk into each directory it passed over
 	// and rebuild the listing under the cursor.
 	fp.places = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No places",
+		EmptyText: i18n.Text("general.noPlaces"),
 		OnCommand: func(command string, node *widgets.TreeNode) {
 			if command == "activate" {
 				fp.enter(node.ID)
 			}
 		},
 	})
-	fp.places.SetItems(placeNodes(workspace.Places()))
+	fp.places.SetItems(placeNodes(a.favoriteDirs(), workspace.Places()))
 
 	fp.list = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No subdirectories",
+		EmptyText: i18n.Text("files.noSubdirectories"),
 		OnCommand: func(command string, node *widgets.TreeNode) {
 			if command == "activate" {
 				fp.enter(node.ID)
@@ -110,7 +111,7 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 
 	dialog.SetContent(widgets.NewVStackWidget(fp.input, columns))
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Cancel", Handler: func() { a.DismissDialog() }},
+		{Label: i18n.Text("general.cancelButton"), Handler: func() { a.DismissDialog() }},
 		{Label: "&" + confirmLabel, Handler: func() { submit(fp.input.Text()) }},
 	}
 	dialog.OnDismiss = func() { a.DismissDialog() }
@@ -243,10 +244,19 @@ func folderPickerNodes(entries []folderPickerEntry) []*widgets.TreeNode {
 	return nodes
 }
 
-func placeNodes(places []workspace.Place) []*widgets.TreeNode {
-	nodes := make([]*widgets.TreeNode, len(places))
-	for i, p := range places {
-		nodes[i] = &widgets.TreeNode{ID: p.Path, Label: p.Name}
+// placeNodes lists the favorites under a heading first, then a blank row and
+// every place.
+func placeNodes(favs []favoriteDir, places []workspace.Place) []*widgets.TreeNode {
+	var nodes []*widgets.TreeNode
+	if len(favs) > 0 {
+		nodes = append(nodes, &widgets.TreeNode{Label: i18n.Text("general.favorites"), Muted: true, Heading: true})
+		for _, f := range favs {
+			nodes = append(nodes, &widgets.TreeNode{ID: f.abs, Label: filepath.Base(f.abs)})
+		}
+		nodes = append(nodes, &widgets.TreeNode{Heading: true})
+	}
+	for _, p := range places {
+		nodes = append(nodes, &widgets.TreeNode{ID: p.Path, Label: p.Name})
 	}
 	return nodes
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -14,20 +15,25 @@ import (
 // the indicator without the full status sync, which the event loop runs only on
 // user input.
 func (a *App) SyncLanguageSegment() {
-	if a.EditorGroup.Editor == nil || a.EditorGroup.Editor.Highlighter == nil {
+	if a.EditorGroup.ActiveBuffer() == nil {
 		a.Status.SetSegment(view.StatusSegment{ID: "language", Side: "right", Priority: 500, Text: ""})
+		a.Status.SetSegment(view.StatusSegment{ID: "lsp", Side: "right", Priority: 501, Text: ""})
 		return
 	}
 
-	lang := a.EditorGroup.Editor.Highlighter.Language()
-	icon, iconStyle := a.lspStatusIcon(a.EditorGroup.ActiveFilePath(), lang)
-	text := lang
-	if icon != "" {
-		text += " " + icon
+	lang := i18n.Text("lsp.plainText")
+	if h := a.EditorGroup.Editor.Highlighter; h != nil {
+		lang = h.Language()
 	}
 	a.Status.SetSegment(view.StatusSegment{
 		ID: "language", Side: "right", Priority: 500,
-		Text:    text,
+		Text:    lang,
+		OnClick: a.ShowLanguagePicker,
+	})
+	icon, iconStyle := a.lspStatusIcon(a.EditorGroup.ActiveFilePath(), a.EditorGroup.ActiveLanguage())
+	a.Status.SetSegment(view.StatusSegment{
+		ID: "lsp", Side: "right", Priority: 501,
+		Text:    icon,
 		Style:   iconStyle,
 		OnClick: a.ShowOutputPanel,
 	})
@@ -61,7 +67,7 @@ func (a *App) ShowLSPServerLog() {
 	path, lang := a.editorPathLang()
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if path == "" || !ok {
-		a.StatusNotify("No language server for this file")
+		a.StatusNotify(i18n.Text("status.noLanguageServerForThisFile"))
 		return
 	}
 	a.ShowOutputPanel()
@@ -71,16 +77,16 @@ func (a *App) ShowLSPServerLog() {
 func lspStateLabel(state lsp.ServerState, binaryOK bool) string {
 	switch state {
 	case lsp.ServerReady:
-		return "running"
+		return i18n.Text("lsp.running")
 	case lsp.ServerStarting:
-		return "starting"
+		return i18n.Text("lsp.starting")
 	case lsp.ServerFailed:
-		return "failed"
+		return i18n.Text("lsp.failed")
 	}
 	if !binaryOK {
-		return "not installed"
+		return i18n.Text("lsp.notInstalled")
 	}
-	return "not started"
+	return i18n.Text("lsp.notStarted")
 }
 
 // lspIcon maps a server state to its indicator. Every icon is single-width

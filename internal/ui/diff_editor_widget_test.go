@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
@@ -184,17 +185,64 @@ func TestDiffEditorCollapsedRowIsNotCopied(t *testing.T) {
 	}
 }
 
+func TestDiffEditorSelectionPaneAcrossSearchFocus(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n-old value\n+new value\n")
+	d := NewDiffEditorWidget("test.go", fd, nil, nil, false)
+	d.SetUnified(false)
+	d.ensurePanes()
+
+	// Active selection on the right pane
+	d.right.Selection.Start(0, 0)
+	d.right.Cursor.Line, d.right.Cursor.Col = 0, len("new value")
+
+	// Search match shifts focusLeft to left pane
+	d.focusLeft = true
+
+	if got := d.SelectedText(); got != "new value" {
+		t.Fatalf("SelectedText() = %q, want %q", got, "new value")
+	}
+	if got := d.CopySelection(); got != "new value" {
+		t.Fatalf("CopySelection() = %q, want %q", got, "new value")
+	}
+	if d.right.Selection.Active {
+		t.Fatal("expected right pane selection to be cleared after CopySelection")
+	}
+}
+
+func TestDiffEditorSplitClickClearsSiblingSelection(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1,1 +1,1 @@\n-old value\n+new value\n")
+	d := NewDiffEditorWidget("test.go", fd, nil, nil, false)
+	d.SetUnified(false)
+	renderDiffEditor(d, 80, 5)
+
+	// Start selection in right pane
+	d.right.Selection.Start(0, 0)
+	d.right.Cursor.Line, d.right.Cursor.Col = 0, len("new value")
+
+	if !d.right.Selection.Active {
+		t.Fatal("expected right pane selection to be active")
+	}
+
+	// Click in left pane
+	ev := tcell.NewEventMouse(2, 1, tcell.Button1, 0)
+	d.HandleEvent(ev)
+
+	if d.right.Selection.Active {
+		t.Fatal("expected right pane selection to be cleared after clicking left pane")
+	}
+}
+
 func TestDiffEditorHunkOnlyDiffKeepsHunkNumbersAndGap(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -22,3 +22,3 @@\n line 22\n line 23\n line 24\n@@ -356,2 +356,2 @@\n line 356\n line 357\n")
 	d := NewDiffEditorWidget("test.go", fd, nil, nil, false)
 	grid := renderDiffEditor(d, 70, 8)
-	if !strings.Contains(cellRow(grid, 0), "▸ ⋯ 21 lines ⋯") {
+	if !strings.Contains(cellRow(grid, 0), string(icons.PlainChevronRight)+" ⋯ 21 lines ⋯") {
 		t.Fatalf("leading gap row:\n%s", cellRow(grid, 0))
 	}
 	if !strings.Contains(cellRow(grid, 1), "22  line 22") {
 		t.Fatalf("hunk numbers:\n%s", cellRow(grid, 1))
 	}
-	if !strings.Contains(cellRow(grid, 4), "▸ ⋯ 331 lines ⋯") {
+	if !strings.Contains(cellRow(grid, 4), string(icons.PlainChevronRight)+" ⋯ 331 lines ⋯") {
 		t.Fatalf("gap row:\n%s", cellRow(grid, 4))
 	}
 	if !strings.Contains(cellRow(grid, 5), "356  line 356") {
@@ -254,7 +302,7 @@ func TestDiffEditorCollapsedRowQuietUntilHovered(t *testing.T) {
 			if emphasized {
 				wantContent, wantGutter = term.StyleDiffCollapsedEmphasis, term.StyleDiffCollapsedEmphasis
 			}
-			if content.Style != wantContent || disclosure.Ch != '▸' || disclosure.Style != wantGutter {
+			if content.Style != wantContent || disclosure.Ch != icons.PlainChevronRight || disclosure.Style != wantGutter {
 				t.Fatalf("idle content=%+v disclosure=%+v", content, disclosure)
 			}
 			if got := d.HandleEvent(tcell.NewEventMouse(gutterW, 1, tcell.ButtonNone, 0)); got != EventConsumed {

@@ -154,6 +154,59 @@ func TestUndoStack(t *testing.T) {
 	}
 }
 
+func TestSavePointAfterBranching(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		savedText         string
+		undoCount         int
+		wantSavedAncestor bool
+	}{
+		{name: "discarded save point", savedText: "A", undoCount: 2},
+		{name: "saved ancestor", savedText: "A", undoCount: 1, wantSavedAncestor: true},
+		{name: "initial save point", undoCount: 1, wantSavedAncestor: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := &buffer.Buffer{Lines: []string{""}}
+			s := &UndoStack{}
+			insert := func(r rune) {
+				cmd := &InsertRuneCommand{Line: 0, Col: 0, Rune: r}
+				cmd.Apply(b)
+				s.Push(cmd)
+				s.BreakGroup()
+			}
+			for _, r := range tc.savedText {
+				insert(r)
+			}
+			s.MarkSaved()
+			insert('B')
+			for i := 0; i < tc.undoCount; i++ {
+				s.Undo(b)
+			}
+			insert('C')
+			if s.AtSavePoint() {
+				t.Fatal("new branch matched the old save point")
+			}
+			s.Undo(b)
+			if got := s.AtSavePoint(); got != tc.wantSavedAncestor {
+				t.Fatalf("AtSavePoint after undo = %v, want %v", got, tc.wantSavedAncestor)
+			}
+			s.Redo(b)
+			if s.AtSavePoint() {
+				t.Fatal("redo matched the old save point")
+			}
+			s.MarkSaved()
+			s.Undo(b)
+			if s.AtSavePoint() {
+				t.Fatal("undo matched the new save point")
+			}
+			s.Redo(b)
+			if !s.AtSavePoint() {
+				t.Fatal("redo did not reach the new save point")
+			}
+		})
+	}
+}
+
 func TestUndoGroupsConsecutiveInserts(t *testing.T) {
 	b := &buffer.Buffer{Lines: []string{""}}
 	s := &UndoStack{}

@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/view"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -22,6 +24,8 @@ type StatusBarWidget struct {
 	secondarySpan statusBarSpan
 }
 
+var _ widgets.PointerShaper = (*StatusBarWidget)(nil)
+
 func NewStatusBarWidget(status *view.StatusBar) *StatusBarWidget {
 	return &StatusBarWidget{Status: status}
 }
@@ -29,8 +33,16 @@ func NewStatusBarWidget(status *view.StatusBar) *StatusBarWidget {
 func (s *StatusBarWidget) Height() int { return 1 }
 
 func (s *StatusBarWidget) Render(surface Surface) {
+	s.spans = s.spans[:0]
+	s.okSpan = statusBarSpan{}
+	s.actionSpan = statusBarSpan{}
+	s.secondarySpan = statusBarSpan{}
+
 	w, _ := surface.Size()
 	st := s.Status
+	if st == nil {
+		return
+	}
 
 	for x := 0; x < w; x++ {
 		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: term.StyleStatusBar})
@@ -48,8 +60,6 @@ func (s *StatusBarWidget) Render(surface Surface) {
 		return
 	}
 
-	s.okSpan = statusBarSpan{}
-	s.spans = s.spans[:0]
 	r := s.GetRect()
 
 	x := 0
@@ -140,7 +150,7 @@ func (s *StatusBarWidget) renderNotification(surface Surface, w int) {
 			}
 		}
 	} else {
-		okLabel := " [OK] "
+		okLabel := i18n.Text("statusbar.okButton")
 		okW := textwidth.String(okLabel)
 		okX := rightX - okW
 		if okX > x+2 {
@@ -148,6 +158,34 @@ func (s *StatusBarWidget) renderNotification(surface Surface, w int) {
 			s.drawText(surface, okX, okLabel, style)
 		}
 	}
+}
+
+func (s *StatusBarWidget) PointerShapeAt(mx, my int) string {
+	r := s.GetRect()
+	if !r.Contains(mx, my) {
+		return ""
+	}
+	if s.Status == nil || s.Status.EchoText != "" {
+		return ""
+	}
+	if s.Status.IsNotificationActive() {
+		if s.okSpan.start != s.okSpan.end && mx >= s.okSpan.start && mx < s.okSpan.end {
+			return term.PointerHand
+		}
+		if s.actionSpan.start != s.actionSpan.end && mx >= s.actionSpan.start && mx < s.actionSpan.end {
+			return term.PointerHand
+		}
+		if s.secondarySpan.start != s.secondarySpan.end && mx >= s.secondarySpan.start && mx < s.secondarySpan.end {
+			return term.PointerHand
+		}
+		return ""
+	}
+	for _, span := range s.spans {
+		if mx >= span.start && mx < span.end && span.onClick != nil {
+			return term.PointerHand
+		}
+	}
+	return ""
 }
 
 func (s *StatusBarWidget) HandleEvent(ev tcell.Event) EventResult {

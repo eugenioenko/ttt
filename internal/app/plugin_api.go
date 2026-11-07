@@ -2,9 +2,11 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -307,11 +309,41 @@ func (e *PluginEditorAPI) SetSearch(pattern string, useRegex bool) {
 	}
 	opts := ui.SearchOptions{UseRegex: useRegex, CaseSensitive: true}
 	matches, _ := ui.FindInLines(buf.Lines, pattern, opts)
-	e.eg.SetSearch(pattern, matches)
+	e.eg.SetSearch(pattern, opts, matches)
 }
 
 func (e *PluginEditorAPI) ClearSearch() {
 	e.eg.ClearSearch()
+}
+
+func (e *PluginEditorAPI) DiffHunks() []plugin.DiffHunkTarget {
+	hunks, _, goTo := activeDiffHunks(e.eg)
+	if goTo == nil {
+		return nil
+	}
+	// An active diff with no change blocks returns an empty slice, not nil,
+	// so a plugin can tell "no diff here" from "a diff with no changes".
+	out := make([]plugin.DiffHunkTarget, len(hunks))
+	for i, h := range hunks {
+		out[i] = plugin.DiffHunkTarget{FilePath: h.FilePath, Kind: string(h.Kind)}
+	}
+	return out
+}
+
+func (e *PluginEditorAPI) DiffHunkAt() int {
+	_, at, _ := activeDiffHunks(e.eg)
+	return at
+}
+
+func (e *PluginEditorAPI) GoToDiffHunk(index int) error {
+	hunks, _, goTo := activeDiffHunks(e.eg)
+	if goTo == nil {
+		return fmt.Errorf("the active tab is not a diff")
+	}
+	if index < 1 || index > len(hunks) {
+		return fmt.Errorf("hunk %d out of range (1-%d)", index, len(hunks))
+	}
+	return goTo(index)
 }
 
 // PluginFilesystemAPI implements plugin.FilesystemAPI with path restrictions.
@@ -325,6 +357,20 @@ type PluginFilesystemAPI struct {
 type fsRoots struct {
 	dirs []string
 	all  bool
+}
+
+const pluginRPCDialTimeout = 10 * time.Second
+
+func dialPluginRPC(vars plugin.FsVars) func(context.Context, string) (io.ReadWriteCloser, error) {
+	return func(ctx context.Context, endpoint string) (io.ReadWriteCloser, error) {
+		ctx, cancel := context.WithTimeout(ctx, pluginRPCDialTimeout)
+		defer cancel()
+		var d net.Dialer
+		if path, ok := strings.CutPrefix(endpoint, plugin.UnixEndpointPrefix); ok {
+			return d.DialContext(ctx, "unix", vars.Expand(path))
+		}
+		return d.DialContext(ctx, "tcp", endpoint)
+	}
 }
 
 func NewPluginFilesystemAPI(allowedRoots ...string) *PluginFilesystemAPI {
@@ -496,46 +542,58 @@ func NewPluginSystemAPI() *PluginSystemAPI {
 	return &PluginSystemAPI{}
 }
 
-var dangerousArgPatterns = []string{
+var dangerousGitArgPatterns = []string{
 	"--upload-pack", "--receive-pack",
-	"--exec=", "--config=",
+	"--exec=", "--config=", "--config-env",
 	"core.fsmonitor", "core.sshCommand", "core.pager",
 	"diff.external", "merge.tool",
 }
 
+// validateArgs guards git only: git runs a config value starting with "!"
+// (an alias or helper set through -c) as a shell command. Other binaries get
+// their arguments as plain argv with no shell, so "=!" is ordinary text there.
 func (s *PluginSystemAPI) validateArgs(binary string, args []string) error {
-	base := filepath.Base(binary)
+	if !plugin.IsGitBinary(binary) {
+		return nil
+	}
 	for i, arg := range args {
 		if strings.Contains(arg, "=!") {
 			return fmt.Errorf("argument %d contains command injection pattern", i)
 		}
-
-		if base == "git" {
-			if arg == "-c" && i+1 < len(args) && strings.Contains(args[i+1], "=!") {
-				return fmt.Errorf("git -c argument contains command injection pattern")
-			}
-			for _, pattern := range dangerousArgPatterns {
-				if strings.Contains(arg, pattern) {
-					return fmt.Errorf("argument %d contains blocked pattern %q", i, pattern)
-				}
+		for _, pattern := range dangerousGitArgPatterns {
+			if strings.Contains(arg, pattern) {
+				return fmt.Errorf("argument %d contains blocked pattern %q", i, pattern)
 			}
 		}
 	}
 	return nil
 }
 
-func (s *PluginSystemAPI) Exec(binary string, args []string, stdin string) (string, string, int, error) {
+// pluginExecWaitDelay bounds how long a grandchild can hold the output pipes
+// open after the child exits or is killed, and so delay the result.
+const pluginExecWaitDelay = time.Second
+
+func (s *PluginSystemAPI) Exec(ctx context.Context, binary string, args []string, opts plugin.ExecOptions) (string, string, int, error) {
 	if err := s.validateArgs(binary, args); err != nil {
 		return "", "", -1, err
 	}
-	cmd := exec.Command(binary, args...)
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.WaitDelay = pluginExecWaitDelay
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if stdin != "" {
-		cmd.Stdin = strings.NewReader(stdin)
+	outW, errW := io.Writer(&stdout), io.Writer(&stderr)
+	if opts.Stdout != nil {
+		outW = opts.Stdout
 	}
-	err := cmd.Run()
+	if opts.Stderr != nil {
+		errW = opts.Stderr
+	}
+	if opts.Stdin != "" {
+		cmd.Stdin = strings.NewReader(opts.Stdin)
+	}
+	if len(opts.Env) > 0 {
+		cmd.Env = append(os.Environ(), opts.Env...)
+	}
+	err := runPiped(cmd, outW, errW)
 	if s.onExec != nil {
 		s.onExec()
 	}
@@ -551,6 +609,71 @@ func (s *PluginSystemAPI) Exec(binary string, args []string, stdin string) (stri
 
 func (s *PluginSystemAPI) Env(name string) string {
 	return os.Getenv(name)
+}
+
+// pluginSpawnedProcess adapts *exec.Cmd to plugin.SpawnedProcess.
+type pluginSpawnedProcess struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	stderr io.ReadCloser
+}
+
+func (p *pluginSpawnedProcess) Write(data []byte) (int, error) { return p.stdin.Write(data) }
+func (p *pluginSpawnedProcess) CloseStdin() error              { return p.stdin.Close() }
+func (p *pluginSpawnedProcess) Kill() error                    { return p.cmd.Process.Kill() }
+func (p *pluginSpawnedProcess) PID() int                       { return p.cmd.Process.Pid }
+func (p *pluginSpawnedProcess) Stdout() io.Reader              { return p.stdout }
+func (p *pluginSpawnedProcess) Stderr() io.Reader              { return p.stderr }
+
+func (p *pluginSpawnedProcess) Wait() (int, error) {
+	err := p.cmd.Wait()
+	if err == nil {
+		return 0, nil
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return exitErr.ExitCode(), nil
+	}
+	return -1, err
+}
+
+// Spawn starts binary with raw piped stdio for interactive use (agents
+// speaking JSON-RPC over stdio, REPLs, streaming tools). Same argument
+// validation as Exec applies.
+func (s *PluginSystemAPI) Spawn(binary string, args []string, opts plugin.SpawnOptions) (plugin.SpawnedProcess, error) {
+	if err := s.validateArgs(binary, args); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(binary, args...)
+	if opts.Cwd != "" {
+		cmd.Dir = opts.Cwd
+	}
+	if len(opts.Env) > 0 {
+		cmd.Env = append(os.Environ(), opts.Env...)
+	}
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		stdin.Close()
+		stdout.Close()
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
+		stderr.Close()
+		return nil, err
+	}
+	return &pluginSpawnedProcess{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}, nil
 }
 
 // PluginNetworkAPI implements plugin.NetworkAPI. Where a plugin may connect

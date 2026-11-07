@@ -20,7 +20,7 @@ func TestDiffGutterRightAlignsLineNumbers(t *testing.T) {
 
 func TestDiffLineDoesNotDrawFullwidthRuneInLastColumn(t *testing.T) {
 	e := newRowsEditor([]string{"a界"}, 10, 2)
-	cells := e.renderLineToScreen([]rune("a界"), nil, false, nil, 4, 0, 2)
+	cells := e.renderLineSegmentToScreen("a界", nil, false, nil, 0, 4, 0, 2)
 	if cells[0].ch != 'a' || cells[1].ch != ' ' {
 		t.Fatalf("last-column fullwidth rendering = %q / %q, want 'a' then a safe space", cells[0].ch, cells[1].ch)
 	}

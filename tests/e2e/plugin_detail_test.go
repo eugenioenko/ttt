@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -113,11 +112,5 @@ ttt.register({ file_handlers = ` + handlers + ` })`
 func showPluginDetail(t *testing.T, h *testHarness, entry plugin.RemoteRegistryEntry) {
 	t.Helper()
 	h.app.OpenPluginDetail(entry)
-
-	select {
-	case <-h.screen.EventQ():
-	case <-time.After(20 * time.Second):
-		t.Fatal("timed out waiting for plugin detail README result")
-	}
 	h.redraw()
 }

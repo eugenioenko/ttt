@@ -12,6 +12,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/gittest"
+	"github.com/eugenioenko/ttt/internal/jsonrpc"
 	"github.com/eugenioenko/ttt/internal/lsp"
 )
 
@@ -34,7 +35,7 @@ func TestMain(m *testing.M) {
 // runFakePullServer answers each pull with one diagnostic naming the file and
 // how many times it has been pulled, e.g. "b.go#2".
 func runFakePullServer(interFile bool) {
-	codec := lsp.NewCodec(os.Stdin, os.Stdout)
+	codec := jsonrpc.NewCodec(os.Stdin, os.Stdout)
 	pulls := map[string]int{}
 	retrigger := os.Getenv(fakePullRetriggerEnv)
 	reply := func(id json.RawMessage, result any) {

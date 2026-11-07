@@ -217,7 +217,7 @@ func TestRemovingPluginPanelsClosesItsEditorTabs(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 	p, panel := wiredImagePanel(t, h)
-	p.OpenTab("Pages", panel)
+	p.OpenTab("Pages", "Pages", panel)
 	hasTab := func() bool {
 		for i := range h.app.EditorGroup.TabCount() {
 			if path, _ := h.app.EditorGroup.TabInfo(i); path == "Pages" {

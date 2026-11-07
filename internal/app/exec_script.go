@@ -511,19 +511,26 @@ func execPanel(a *App, args string) error {
 		return invalidExec("panel requires a panel ID")
 	}
 	return runExecMain(a, func() error {
-		if !a.BottomPanel.HasPanel(id) {
+		if !a.focusBottomPanel(id) {
 			return invalidExec("panel %q not found", id)
-		}
-		a.BottomPanel.SetActivePanel(id)
-		if !a.ContentSplit.ShowBottom {
-			a.ensureUsablePanelSize()
-			a.ContentSplit.ShowBottom = true
-		}
-		if w := a.BottomPanel.ActiveWidget(); w != nil {
-			a.Root.SetFocus(w)
 		}
 		return nil
 	})
+}
+
+func (a *App) focusBottomPanel(id string) bool {
+	if !a.BottomPanel.HasPanel(id) {
+		return false
+	}
+	a.BottomPanel.SetActivePanel(id)
+	if !a.ContentSplit.ShowBottom {
+		a.ensureUsablePanelSize()
+		a.ContentSplit.ShowBottom = true
+	}
+	if w := a.BottomPanel.ActiveWidget(); w != nil {
+		a.Root.SetFocus(w)
+	}
+	return true
 }
 
 func postExecInput(a *App, event tcell.Event) error {

@@ -20,7 +20,7 @@ func NewHStackWidget(children ...Widget) *HStackWidget {
 
 func (s *HStackWidget) Height() int {
 	if s.FixedHeight > 0 {
-		return s.FixedHeight
+		return s.FixedHeight + s.BoxOverheadH()
 	}
 	return 0
 }

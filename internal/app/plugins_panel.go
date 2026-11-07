@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -37,7 +38,7 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 	}
 
 	pp.SearchInput = widgets.NewInputWidget(widgets.InputConfig{
-		Placeholder: "Search plugins",
+		Placeholder: i18n.Text("plugins.searchPlugins"),
 		OnChange: func(text string) {
 			pp.searchQuery = strings.TrimSpace(text)
 			pp.refreshAvailable()
@@ -45,7 +46,7 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 	})
 
 	pp.SearchTree = widgets.NewTreeWidget(widgets.TreeConfig{
-		EmptyText: "Loading plugins...",
+		EmptyText: i18n.Text("plugins.loadingPlugins"),
 		Indent:    1,
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			if cmd == "activate" {
@@ -63,9 +64,9 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 	pp.FeaturedTree = widgets.NewTreeWidget(pp.SearchTree.Config)
 
 	pp.InstalledTree = widgets.NewTreeWidget(widgets.TreeConfig{
-		EmptyText: "No plugins installed",
+		EmptyText: i18n.Text("plugins.emptyInstalledList"),
 		Indent:    1,
-		NodeMenu:  []widgets.MenuEntry{{Label: "Actions"}},
+		NodeMenu:  []widgets.MenuEntry{{Label: i18n.Text("plugins.actions")}},
 		MenuIcon:  string(icons.Rune(icons.More)),
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			pp.handleCommand(cmd, node)
@@ -77,10 +78,10 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 
 	pp.Dropdown = widgets.NewDropdownWidget(widgets.DropdownConfig{
 		Entries: []widgets.MenuEntry{
-			{Label: "Update All", Command: "updateAll"},
-			{Label: "Refresh", Command: "refresh"},
+			{Label: i18n.Text("plugins.updateAll"), Command: "updateAll"},
+			{Label: i18n.Text("general.refresh"), Command: "refresh"},
 			{Separator: true},
-			{Label: "Help", Command: "help"},
+			{Label: i18n.Text("general.help"), Command: "help"},
 		},
 		OnMenu: func(entries []widgets.MenuEntry, screenX, screenY int) {
 			if pp.OnDropdownMenu != nil {
@@ -90,7 +91,7 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 	})
 
 	titleLabel := widgets.NewLabelWidget(widgets.LabelConfig{
-		Text:  "Installed",
+		Text:  i18n.Text("plugins.installed"),
 		Style: term.StyleHoverBold,
 	})
 
@@ -103,7 +104,7 @@ func NewPluginsPanel(mgr *plugin.Manager) *PluginsPanel {
 
 	divSearch := widgets.NewDividerWidget(widgets.DividerConfig{})
 	divInstalled := widgets.NewDividerWidget(widgets.DividerConfig{})
-	featuredHeading := widgets.NewLabelWidget(widgets.LabelConfig{Text: "Featured", Style: term.StyleHoverBold})
+	featuredHeading := widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("plugins.featured"), Style: term.StyleHoverBold})
 	featuredHeading.Box.PaddingLeft = 1
 
 	vstack := widgets.NewVStackWidget(
@@ -303,8 +304,8 @@ func termMatches(entry plugin.RemoteRegistryEntry, t string) bool {
 
 func (pp *PluginsPanel) SetAvailable(entries []plugin.RemoteRegistryEntry) {
 	pp.available = entries
-	pp.SearchTree.Config.EmptyText = "Type to search plugins"
-	pp.FeaturedTree.Config.EmptyText = "No featured plugins"
+	pp.SearchTree.Config.EmptyText = i18n.Text("plugins.typeToSearchPlugins")
+	pp.FeaturedTree.Config.EmptyText = i18n.Text("plugins.noFeaturedPlugins")
 	pp.Refresh()
 }
 

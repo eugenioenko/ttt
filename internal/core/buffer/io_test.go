@@ -26,6 +26,33 @@ func TestLoadAndSaveFile(t *testing.T) {
 	}
 }
 
+func TestLineEndingChangedSinceLoadAndSave(t *testing.T) {
+	fname := filepath.Join(t.TempDir(), "eol.txt")
+	if err := os.WriteFile(fname, []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b := &Buffer{}
+	if err := b.LoadFile(fname); err != nil {
+		t.Fatalf("LoadFile failed: %v", err)
+	}
+	if b.LineEndingChanged() {
+		t.Fatal("LineEndingChanged after load")
+	}
+	b.LineEnding = "\r\n"
+	if !b.LineEndingChanged() {
+		t.Fatal("LineEndingChanged false after switching to CRLF")
+	}
+	if err := b.SaveFile(fname); err != nil {
+		t.Fatalf("SaveFile failed: %v", err)
+	}
+	if b.LineEndingChanged() {
+		t.Fatal("LineEndingChanged after saving")
+	}
+	if (&Buffer{LineEnding: "\n"}).LineEndingChanged() {
+		t.Fatal("an unsaved buffer with LF counts as changed")
+	}
+}
+
 func TestLoadShowTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "trailing.txt")

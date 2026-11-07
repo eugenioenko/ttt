@@ -25,12 +25,34 @@ func TestDetect(t *testing.T) {
 		{"kitty-term", map[string]string{"TERM": "xterm-kitty"}, 10, 20, Kitty},
 		{"wezterm", map[string]string{"TERM_PROGRAM": "WezTerm"}, 10, 20, Kitty},
 		{"konsole", map[string]string{"KONSOLE_VERSION": "24.0"}, 10, 20, Kitty},
+		{"falcon-program", map[string]string{"TERM_PROGRAM": "falcon"}, 10, 20, Kitty},
+		{"falcon-term", map[string]string{"TERM": "falcon"}, 10, 20, Kitty},
 		{"plain", map[string]string{"TERM": "xterm-256color"}, 10, 20, None},
 		{"empty", map[string]string{}, 10, 20, None},
 	} {
 		if got := Detect(envFrom(tc.env), tc.cellW, tc.cellH); got != tc.want {
 			t.Errorf("%s: Detect = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestDetectFalcon(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  map[string]string
+		want Protocol
+	}{
+		{"program", map[string]string{"TERM_PROGRAM": "falcon"}, Kitty},
+		{"program-case", map[string]string{"TERM_PROGRAM": "Falcon"}, Kitty},
+		{"term", map[string]string{"TERM": "xterm-falcon"}, Kitty},
+		{"tmux-blocks", map[string]string{"TERM_PROGRAM": "falcon", "TMUX": "/tmp/tmux-1"}, None},
+	} {
+		if got := Detect(envFrom(tc.env), 10, 20); got != tc.want {
+			t.Errorf("%s: Detect = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	if got := Detect(envFrom(map[string]string{"TERM_PROGRAM": "falcon"}), 0, 20); got != None {
+		t.Errorf("zero cell width: Detect = %v, want %v", got, None)
 	}
 }
 

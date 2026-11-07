@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -18,6 +19,10 @@ type PluginPanelWidget struct {
 	// autofocus asks the next render to focus the autofocus input, when
 	// FocusAutofocusInput ran before the input existed.
 	autofocus bool
+	// OnClose runs once, when the editor tab holding the panel closes.
+	OnClose func()
+	sel     panelSelection
+	fileKey string
 }
 
 func NewPluginPanelWidget(p *Plugin, renderFunc, eventFunc *lua.LFunction) *PluginPanelWidget {
@@ -44,6 +49,8 @@ func (pw *PluginPanelWidget) Render(surface widgets.Surface) {
 	if err := pw.plugin.CallRenderWith(pw.renderFunc, proxy); err != nil {
 		msg := "Plugin error: " + err.Error()
 		surface.DrawText(0, 0, msg, w, term.StyleDanger)
+		pw.sel.snapshot(surface)
+		pw.sel.highlight(surface)
 		return
 	}
 
@@ -58,10 +65,147 @@ func (pw *PluginPanelWidget) Render(surface widgets.Surface) {
 		r := pw.GetRect()
 		root.SetRect(widgets.Rect{X: r.X, Y: r.Y, W: w, H: h})
 		root.Render(surface)
+		usePluginSelection(surface)
+	}
+
+	pw.sel.snapshot(surface)
+	pw.sel.highlight(surface)
+}
+
+// The shared widgets draw selections in the editor's style; a plugin panel
+// redraws them in the plugin selection style from the plugins settings.
+func usePluginSelection(surface widgets.Surface) {
+	reader, ok := surface.(widgets.CellReader)
+	if !ok {
+		return
+	}
+	w, h := surface.Size()
+	for y := range h {
+		for x := range w {
+			c, ok := reader.CellAt(x, y)
+			if !ok {
+				continue
+			}
+			if c.Style == term.StyleSelection || c.BgStyle == term.StyleSelection {
+				if c.Style == term.StyleSelection {
+					c.Style = term.StylePluginSelection
+				}
+				if c.BgStyle == term.StyleSelection {
+					c.BgStyle = term.StylePluginSelection
+				}
+				surface.SetCell(x, y, c)
+			}
+		}
 	}
 }
 
 func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {
+	switch e := ev.(type) {
+	case *tcell.EventMouse:
+		mx, my := e.Position()
+		if e.Buttons()&tcell.Button1 != 0 && !pw.sel.pressed {
+			pw.clearTableCells()
+		}
+		owns := pw.state != nil && pw.state.root != nil && ownsDragAt(pw.state.root, mx, my)
+		if result, ok := pw.sel.track(e, pw.GetRect(), owns); ok {
+			return result
+		}
+		result := pw.dispatch(ev)
+		if result == widgets.EventCaptured {
+			pw.sel.blocked = true
+		}
+		return result
+	case *tcell.EventKey:
+		if isCopyKey(e) && pw.CopyTextSelection() {
+			return widgets.EventConsumed
+		}
+		if e.Key() == tcell.KeyEscape {
+			cleared := pw.sel.clear()
+			if pw.clearTableCells() || cleared {
+				return widgets.EventConsumed
+			}
+		}
+	}
+	return pw.dispatch(ev)
+}
+
+// CopyTextSelection copies the selected text and reports whether there was any.
+// A focused input with its own selection wins, so the copy goes to it; then a
+// table cell, whose full value is copied rather than its truncated text.
+func (pw *PluginPanelWidget) CopyTextSelection() bool {
+	if inp := pw.FocusedInput(); inp != nil && inp.HasSelection() {
+		return false
+	}
+	if text, ok := pw.tableCellText(); ok {
+		clipboard.Set(text)
+		return true
+	}
+	if !pw.sel.active {
+		return false
+	}
+	clipboard.Set(pw.sel.text())
+	pw.sel.clear()
+	return true
+}
+
+// SelectAllText selects the focused input's text, or else the panel's.
+func (pw *PluginPanelWidget) SelectAllText() {
+	pw.clearTableCells()
+	if inp := pw.FocusedInput(); inp != nil {
+		inp.SelectAll()
+		return
+	}
+	pw.sel.selectAll()
+}
+
+func (pw *PluginPanelWidget) tableCellText() (string, bool) {
+	var text string
+	var ok bool
+	pw.eachTable(func(t *widgets.TableWidget) {
+		if !ok {
+			text, ok = t.SelectedCellText()
+		}
+	})
+	return text, ok
+}
+
+func (pw *PluginPanelWidget) clearTableCells() bool {
+	cleared := false
+	pw.eachTable(func(t *widgets.TableWidget) {
+		if t.ClearCellSelection() {
+			cleared = true
+		}
+	})
+	return cleared
+}
+
+func (pw *PluginPanelWidget) eachTable(fn func(*widgets.TableWidget)) {
+	if pw.state != nil && pw.state.root != nil {
+		eachTable(pw.state.root, fn)
+	}
+}
+
+func eachTable(w widgets.Widget, fn func(*widgets.TableWidget)) {
+	switch v := w.(type) {
+	case nil:
+	case *widgets.TableWidget:
+		fn(v)
+	case widgets.ContainerWidget:
+		for _, child := range v.WidgetChildren() {
+			eachTable(child, fn)
+		}
+	}
+}
+
+func (pw *PluginPanelWidget) CancelPointerCapture() bool {
+	canceled := pw.sel.release()
+	if pw.state != nil && pw.state.root != nil {
+		canceled = widgets.CancelPointerCapture(pw.state.root) || canceled
+	}
+	return canceled
+}
+
+func (pw *PluginPanelWidget) dispatch(ev tcell.Event) widgets.EventResult {
 	if pw.state != nil && pw.state.focus != nil {
 		if result := pw.state.focus.HandleEvent(ev); result != widgets.EventIgnored {
 			return result
@@ -110,6 +254,7 @@ func (pw *PluginPanelWidget) SetFocused(focused bool) {
 	pw.focused = focused
 	if !focused {
 		pw.autofocus = false
+		pw.sel.release()
 	}
 	if pw.state != nil && pw.state.focus != nil {
 		pw.state.focus.SetActive(focused)
@@ -137,8 +282,16 @@ func (pw *PluginPanelWidget) IsFocused() bool { return pw.focused }
 
 func (pw *PluginPanelWidget) PluginName() string { return pw.plugin.Name }
 
+// PluginTabKey is the tab key of a panel a file handler opened; the editor
+// group keys the file's tab with it so ttt.close_tab and ttt.focus_tab find it.
+func (pw *PluginPanelWidget) PluginTabKey() string { return pw.fileKey }
+
 func (pw *PluginPanelWidget) Close() {
 	if pw.state != nil && pw.state.root != nil {
 		closeImages(pw.state.root)
+	}
+	if onClose := pw.OnClose; onClose != nil {
+		pw.OnClose = nil
+		onClose()
 	}
 }

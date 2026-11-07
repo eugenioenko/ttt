@@ -16,12 +16,13 @@ type EditCommand interface {
 // UndoStack manages undo and redo stacks with automatic grouping of
 // consecutive character inserts and deletes.
 type UndoStack struct {
-	undo           []EditCommand
-	redo           []EditCommand
-	grouping       bool
-	savePoint      int
-	inTransaction  bool
-	transactionIdx int
+	undo             []EditCommand
+	redo             []EditCommand
+	grouping         bool
+	savePoint        int // Undo-stack boundary; -1 means it is no longer reachable.
+	inTransaction    bool
+	transactionDepth int
+	transactionIdx   int
 	// DeleteCursorStart controls where the cursor lands after undoing a
 	// DeleteSelectionCommand. When true, cursor goes to the start of the
 	// restored text (Emacs convention); when false, to the end (default).
@@ -30,20 +31,36 @@ type UndoStack struct {
 
 func (s *UndoStack) BeginTransaction() {
 	s.grouping = false
+	if s.transactionDepth == 0 {
+		s.transactionIdx = len(s.undo)
+	}
+	s.transactionDepth++
 	s.inTransaction = true
-	s.transactionIdx = len(s.undo)
 }
 
 func (s *UndoStack) EndTransaction() {
-	if !s.inTransaction {
+	if s.transactionDepth == 0 {
 		return
 	}
-	idx := s.transactionIdx
-	s.inTransaction = false
+	s.transactionDepth--
 	s.grouping = false
-
+	if s.transactionDepth > 0 {
+		// Inner scope of a nested transaction: keep the outer transaction
+		// active and preserve its start index.
+		return
+	}
+	s.inTransaction = false
+	idx := s.transactionIdx
 	if idx >= len(s.undo) {
 		return
+	}
+	// Boundaries inside the batch disappear; boundaries at its end or in redo shift.
+	if s.savePoint > idx {
+		if s.savePoint < len(s.undo) {
+			s.savePoint = -1
+		} else {
+			s.savePoint -= len(s.undo) - idx - 1
+		}
 	}
 
 	cmds := make([]EditCommand, len(s.undo)-idx)
@@ -57,6 +74,7 @@ func (s *UndoStack) MarkSaved() {
 	s.savePoint = len(s.undo)
 }
 
+// AtSavePoint compares history boundaries, not buffer contents.
 func (s *UndoStack) AtSavePoint() bool {
 	return len(s.undo) == s.savePoint
 }
@@ -67,6 +85,10 @@ func (s *UndoStack) AtSavePoint() bool {
 func (s *UndoStack) Push(cmd EditCommand) {
 	if IsNoop(cmd) {
 		return
+	}
+	// A saved boundary in the redo history is lost when this edit discards it.
+	if s.savePoint > len(s.undo) {
+		s.savePoint = -1
 	}
 	s.redo = nil
 	if s.grouping {

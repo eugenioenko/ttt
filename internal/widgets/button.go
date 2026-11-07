@@ -5,13 +5,27 @@ import (
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
+// ButtonVariant is how a button is drawn while it is not focused.
+type ButtonVariant int
+
+const (
+	// ButtonLink draws the bare label, as core dialogs do.
+	ButtonLink ButtonVariant = iota
+	ButtonFilled
+	ButtonBracket
+	ButtonInverse
+	ButtonMuted
+)
+
 type ButtonConfig struct {
-	Label   string     `json:"label"`
-	Command string     `json:"command"`
-	Style   term.Style `json:"-"`
+	Label   string        `json:"label"`
+	Command string        `json:"command"`
+	Style   term.Style    `json:"-"`
+	Variant ButtonVariant `json:"-"`
 	Box     *BoxModel
 
 	OnClick   func()
@@ -57,8 +71,34 @@ func (b *ButtonWidget) SetLabel(label string) {
 
 func (b *ButtonWidget) Height() int { return 1 + b.BoxOverheadH() }
 func (b *ButtonWidget) Width() int {
-	w := len([]rune(b.label)) + b.BoxOverheadW()
-	return w
+	return textwidth.String(b.text()) + b.BoxOverheadW()
+}
+
+func (b *ButtonWidget) text() string {
+	if b.Config.Variant == ButtonBracket {
+		return "[" + b.label + "]"
+	}
+	return b.label
+}
+
+func (b *ButtonWidget) style() term.Style {
+	switch {
+	case b.Disabled:
+		return term.StyleMuted
+	case b.focused:
+		return term.StyleButtonFocused
+	case b.Config.Style != 0:
+		return b.Config.Style
+	}
+	switch b.Config.Variant {
+	case ButtonFilled:
+		return term.StyleButtonFilled
+	case ButtonInverse:
+		return term.StyleButtonInverse
+	case ButtonMuted:
+		return term.StyleMuted
+	}
+	return term.StyleButton
 }
 
 func (b *ButtonWidget) Focusable() bool   { return true }
@@ -66,15 +106,7 @@ func (b *ButtonWidget) SetFocused(f bool) { b.focused = f }
 func (b *ButtonWidget) IsFocused() bool   { return b.focused }
 
 func (b *ButtonWidget) Render(surface Surface) {
-	style := b.Config.Style
-	if style == 0 {
-		style = term.StyleButton
-	}
-	if b.Disabled {
-		style = term.StyleMuted
-	} else if b.focused {
-		style = term.StyleButtonFocused
-	}
+	style := b.style()
 
 	padded := b.BorderedInterior(surface)
 	pw, _ := padded.Size()
@@ -92,16 +124,27 @@ func (b *ButtonWidget) Render(surface Surface) {
 	}
 
 	x := 0
-	for _, ch := range b.label {
-		if x >= w {
+	i := 0
+	accel := b.accelIndex
+	if accel >= 0 && b.Config.Variant == ButtonBracket {
+		accel++
+	}
+	for _, ch := range b.text() {
+		rw := textwidth.Rune(ch)
+		if x+rw > w {
+			// A fullwidth rune that would cross the last column becomes a
+			// space: the terminal paints it across two columns regardless of
+			// clipping, so it would bleed past the button.
+			inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
 			break
 		}
 		cell := term.Cell{Ch: ch, Style: style}
-		if x == b.accelIndex {
+		if i == accel {
 			cell.Underline = true
 		}
 		inner.SetCell(x, 0, cell)
-		x++
+		x += rw
+		i++
 	}
 }
 

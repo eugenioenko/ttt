@@ -57,6 +57,10 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 | Ctrl+End | `editor.goToFileEnd` | Move cursor to the end of the file |
 | Ctrl+Shift+Home | `editor.selectToFileStart` | Select to the start of the file |
 | Ctrl+Shift+End | `editor.selectToFileEnd` | Select to the end of the file |
+| Home | `editor.goToLineStart` | Move cursor to the first non-space character, then to column 0 |
+| End | `editor.goToLineEnd` | Move cursor to the end of the line |
+| Shift+Home | `editor.selectToLineStart` | Select to the start of the line |
+| Shift+End | `editor.selectToLineEnd` | Select to the end of the line |
 | Ctrl+Left | `editor.moveWordLeft` | Move cursor one word left |
 | Ctrl+Right | `editor.moveWordRight` | Move cursor one word right |
 | Ctrl+Shift+Left | `editor.selectWordLeft` | Select one word left |
@@ -72,8 +76,12 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 | Ctrl+D | `multicursor.selectNext` | Select next occurrence of current word or selection |
 | Ctrl+K L | `multicursor.selectAll` | Select all occurrences at once |
 | Ctrl+K U | `multicursor.undoCursor` | Undo last cursor addition |
+| Alt+Shift+Up | `multicursor.addCursorAbove` | Add a cursor on the screen row above |
+| Alt+Shift+Down | `multicursor.addCursorBelow` | Add a cursor on the screen row below |
 | Alt+Click | *(mouse)* | Add cursor at click position |
 | Escape | *(built-in)* | Collapse to single cursor (when multiple cursors exist) |
+
+Repeated presses extend the cursor stack in that direction, keeping the original screen column across short rows. With word wrap enabled, cursors follow wrapped screen rows; folded lines are skipped.
 
 ## Code Folding
 
@@ -110,8 +118,8 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Ctrl+0 | `sidebar.focus` | Focus sidebar |
 | Alt+Shift+Left | `sidebar.narrower` | Decrease sidebar width |
 | Alt+Shift+Right | `sidebar.wider` | Increase sidebar width |
-| Alt+Shift+Up | `panel.taller` | Increase panel height |
-| Alt+Shift+Down | `panel.shorter` | Decrease panel height |
+
+`panel.taller` and `panel.shorter` remain available in the command palette and can be assigned custom shortcuts.
 
 ## Tabs
 

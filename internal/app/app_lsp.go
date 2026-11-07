@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +11,9 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -110,6 +111,7 @@ func (a *App) DismissAutocomplete() {
 	a.EditorGroup.Autocomplete = nil
 	a.CompletionItems = nil
 	a.LspCompletionItems = nil
+	a.completion.lines = nil
 }
 
 func (a *App) IsAutocompleteActive() bool {
@@ -126,11 +128,7 @@ func (a *App) resolveAndInsert(item ui.CompletionItem) {
 	}
 
 	if lspItem != nil && len(lspItem.AdditionalTextEdits) == 0 {
-		path := a.EditorGroup.ActiveFilePath()
-		lang := ""
-		if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {
-			lang = a.EditorGroup.Editor.Highlighter.Language()
-		}
+		path, lang := a.editorPathLang()
 		serverKey, _, ok := a.lspResolve(path, lang)
 		if ok {
 			workDir := a.lspWorkDir(path)
@@ -138,7 +136,10 @@ func (a *App) resolveAndInsert(item ui.CompletionItem) {
 			if err == nil {
 				resolved, err := client.ResolveCompletion(*lspItem)
 				if err == nil && resolved != nil {
-					for _, edit := range resolved.AdditionalTextEdits {
+					if resolved.TextEdit != nil {
+						lspItem = resolved
+					}
+					for _, edit := range runeTextEdits(a.completion.lines, resolved.AdditionalTextEdits) {
 						item.AdditionalEdits = append(item.AdditionalEdits, ui.AdditionalEdit{
 							StartLine: edit.Range.Start.Line,
 							StartCol:  edit.Range.Start.Character,
@@ -169,6 +170,13 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 	var startLine, startCol, endLine, endCol int
 
 	if textEdit != nil {
+		converted := *textEdit
+		lines := a.completion.lines
+		if lines == nil {
+			lines = editor.Buf.Lines
+		}
+		converted.Range = lsp.RangeToRunes(lines, converted.Range)
+		textEdit = &converted
 		text = textEdit.NewText
 		startLine = textEdit.Range.Start.Line
 		startCol = textEdit.Range.Start.Character
@@ -194,48 +202,97 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		endLine = startLine
 	}
 
-	if startLine != endLine || startCol != endCol {
-		editor.ExecCommand(&undo.DeleteSelectionCommand{
-			StartLine: startLine, StartCol: startCol,
-			EndLine: endLine, EndCol: endCol,
+	if startLine < 0 || endLine < startLine || endLine >= len(editor.Buf.Lines) {
+		return
+	}
+
+	var snippet lsp.SnippetExpansion
+	if item.InsertTextFormat == lsp.InsertTextFormatSnippet {
+		snippet = lsp.ExpandSnippet(text)
+		text = snippet.Text
+	}
+
+	// Every range refers to the text before acceptance, including edits after
+	// the completed word on the same line.
+	edits := []lsp.TextEdit{{
+		Range:   lsp.Range{Start: lsp.Position{Line: startLine, Character: startCol}, End: lsp.Position{Line: endLine, Character: endCol}},
+		NewText: text,
+	}}
+	additional := make([]lsp.TextEdit, 0, len(item.AdditionalEdits))
+	for _, edit := range item.AdditionalEdits {
+		if lines := a.completion.lines; startLine < len(lines) && startLine == endLine {
+			delta := len([]rune(editor.Buf.Lines[startLine])) - len([]rune(lines[startLine]))
+			if edit.StartLine == startLine && edit.StartCol >= a.completion.col {
+				edit.StartCol += delta
+			}
+			if edit.EndLine == startLine && edit.EndCol >= a.completion.col {
+				edit.EndCol += delta
+			}
+		}
+		additional = append(additional, lsp.TextEdit{
+			Range:   lsp.Range{Start: lsp.Position{Line: edit.StartLine, Character: edit.StartCol}, End: lsp.Position{Line: edit.EndLine, Character: edit.EndCol}},
+			NewText: edit.NewText,
 		})
 	}
-	editor.ExecCommand(&undo.InsertStringCommand{
-		Line: startLine, Col: startCol, Text: text,
-	})
-	editor.Cursor.Line = startLine
-	editor.Cursor.Col = startCol + len([]rune(text))
-
-	for i := len(item.AdditionalEdits) - 1; i >= 0; i-- {
-		edit := item.AdditionalEdits[i]
-		linesBefore := len(editor.Buf.Lines)
-
-		if edit.StartLine != edit.EndLine || edit.StartCol != edit.EndCol {
-			editor.ExecCommand(&undo.DeleteSelectionCommand{
-				StartLine: edit.StartLine, StartCol: edit.StartCol,
-				EndLine: edit.EndLine, EndCol: edit.EndCol,
-			})
+	sortTextEdits(additional)
+	orderedAdditional := slices.Clone(additional)
+	reverseSamePositionTextEdits(orderedAdditional)
+	cursor := lsp.Position{Line: startLine, Character: startCol}
+	for _, edit := range orderedAdditional {
+		end := edit.Range.End
+		if end.Line > cursor.Line || (end.Line == cursor.Line && end.Character > cursor.Character) {
+			continue
 		}
-		if edit.NewText != "" {
-			suffix := ""
-			if edit.StartLine < len(editor.Buf.Lines) {
-				runes := []rune(editor.Buf.Lines[edit.StartLine])
-				if edit.StartCol < len(runes) {
-					suffix = string(runes[edit.StartCol:])
-				}
+		replacement := strings.Split(edit.NewText, "\n")
+		if end.Line == cursor.Line {
+			cursor.Character -= end.Character
+			cursor.Character += len([]rune(replacement[len(replacement)-1]))
+			if len(replacement) == 1 {
+				cursor.Character += edit.Range.Start.Character
 			}
-			editor.ExecCommand(&undo.PasteCommand{
-				Line: edit.StartLine, Col: edit.StartCol,
-				Text: edit.NewText, Suffix: suffix,
-			})
 		}
-
-		linesAdded := len(editor.Buf.Lines) - linesBefore
-		if linesAdded != 0 && edit.StartLine <= editor.Cursor.Line {
-			editor.Cursor.Line += linesAdded
-		}
+		cursor.Line += len(replacement) - 1 - (end.Line - edit.Range.Start.Line)
 	}
-	editor.FlushOnChange()
+	if editor.Selection != nil {
+		editor.Selection.Clear()
+	}
+	if stop, ok := snippet.FirstStop(); ok {
+		stopLine, stopCol := snippetPosition(text, cursor.Line, cursor.Character, stop.Offset)
+		stopEndLine, stopEndCol := snippetPosition(text, cursor.Line, cursor.Character, stop.Offset+stop.Length)
+		if stop.Length > 0 {
+			editor.Selection.Start(stopLine, stopCol)
+			cursor.Line, cursor.Character = stopEndLine, stopEndCol
+		} else {
+			cursor.Line, cursor.Character = stopLine, stopCol
+		}
+	} else {
+		cursor.Line, cursor.Character = snippetPosition(text, cursor.Line, cursor.Character, len([]rune(text)))
+	}
+	a.applyRuneTextEdits(append(edits, additional...), &cursor)
+}
+
+// snippetPosition converts a rune offset in a snippet expansion to an absolute
+// buffer position. The first line starts at startCol; later lines start at 0.
+func snippetPosition(text string, startLine, startCol, offset int) (line, col int) {
+	if offset < 0 {
+		offset = 0
+	}
+	for _, r := range text {
+		if offset == 0 {
+			break
+		}
+		if r == '\n' {
+			line++
+			col = 0
+		} else {
+			col++
+		}
+		offset--
+	}
+	if line == 0 {
+		col += startCol
+	}
+	return startLine + line, col
 }
 
 func (a *App) charBeforeCursor() string {
@@ -279,11 +336,7 @@ func (a *App) CheckSignatureHelpTrigger(changeDone <-chan struct{}) {
 		a.DismissSignatureHelp()
 		return
 	}
-	path := a.EditorGroup.ActiveFilePath()
-	lang := ""
-	if editor.Highlighter != nil {
-		lang = editor.Highlighter.Language()
-	}
+	path, lang := a.editorPathLang()
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		return
@@ -316,12 +369,14 @@ func (a *App) RequestFormatting(path, lang string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
 	workDir := a.lspWorkDir(path)
 	tabSize, insertSpaces := a.editorTabSize()
+	version := a.editorBufferVersion()
+	buf := a.editorBuffer()
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -334,7 +389,9 @@ func (a *App) RequestFormatting(path, lang string) {
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{Edits: edits}))
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+				Path: path, Version: version, Buffer: buf, Edits: edits,
+			}))
 		}
 	}()
 }
@@ -343,15 +400,17 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
 	workDir := a.lspWorkDir(path)
 	tabSize, insertSpaces := a.editorTabSize()
+	version := a.editorBufferVersion()
+	buf := a.editorBuffer()
 	r := lsp.Range{
-		Start: lsp.Position{Line: startLine, Character: startCol},
-		End:   lsp.Position{Line: endLine, Character: endCol},
+		Start: lsp.Position{Line: startLine, Character: a.lspColumn(path, startLine, startCol)},
+		End:   lsp.Position{Line: endLine, Character: a.lspColumn(path, endLine, endCol)},
 	}
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
@@ -365,7 +424,9 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{Edits: edits}))
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+				Path: path, Version: version, Buffer: buf, Edits: edits,
+			}))
 		}
 	}()
 }
@@ -409,7 +470,7 @@ func (a *App) applyCodeActionEdit(path string, edit *lsp.WorkspaceEdit) {
 		return
 	}
 	for _, batch := range batches {
-		if URIToPath(batch.URI) == path {
+		if URIToPath(batch.URI) == path && a.EditorGroup.ActiveFilePath() == path {
 			a.ApplyTextEdits(batch.Edits)
 		}
 	}
@@ -418,7 +479,7 @@ func (a *App) applyCodeActionEdit(path string, edit *lsp.WorkspaceEdit) {
 func (a *App) workspaceTextEdits(edit *lsp.WorkspaceEdit) ([]lsp.FileEdits, bool) {
 	batches, err := edit.TextEdits()
 	if errors.Is(err, lsp.ErrFileOperations) {
-		a.StatusWarn("The language server's edit creates, renames or deletes files, which ttt does not support yet")
+		a.StatusWarn(i18n.Text("status.unsupportedWorkspaceEdit"))
 		return nil, false
 	}
 	return batches, true
@@ -428,7 +489,7 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
@@ -503,10 +564,11 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
+	col = a.lspColumn(path, line, col)
 	workDir := a.lspWorkDir(path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
@@ -535,8 +597,11 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	files := make(map[string]bool)
 	for _, batch := range batches {
 		path := URIToPath(batch.URI)
+		if err := a.EditorGroup.OpenFile(path); err != nil {
+			a.StatusWarn(err.Error())
+			continue
+		}
 		files[path] = true
-		a.EditorGroup.OpenFile(path)
 		a.ApplyTextEdits(batch.Edits)
 
 		if buf := a.EditorGroup.ActiveBuffer(); a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
@@ -548,17 +613,18 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	}
 
 	a.EditorGroup.OpenFile(currentPath)
-	a.StatusNotify(fmt.Sprintf("Renamed across %d file(s)", len(files)))
+	a.StatusNotify(i18n.Format("status.renamedAcrossFileS", i18n.Args{"filesCount": len(files)}))
 }
 
 func (a *App) RequestReferences(path, lang string, line, col int) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
+	col = a.lspColumn(path, line, col)
 	workDir := a.lspWorkDir(path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
@@ -581,18 +647,22 @@ func (a *App) RequestReferences(path, lang string, line, col int) {
 
 func (a *App) ShowReferences(locs []lsp.Location) {
 	items := make([]ui.ReferenceItem, 0, len(locs))
+	documents := make(map[string][]string)
 	for _, loc := range locs {
 		path := URIToPath(loc.URI)
+		lines, ok := documents[path]
+		if !ok {
+			lines = a.lspLines(path)
+			documents[path] = lines
+		}
 		var text string
-		if buf := a.EditorGroup.BufferForPath(path); buf != nil && loc.Range.Start.Line < len(buf.Lines) {
-			text = buf.Lines[loc.Range.Start.Line]
-		} else {
-			text = ReadLineFromFile(path, loc.Range.Start.Line)
+		if line := loc.Range.Start.Line; line >= 0 && line < len(lines) {
+			text = lines[line]
 		}
 		items = append(items, ui.ReferenceItem{
 			File: path,
 			Line: loc.Range.Start.Line,
-			Col:  loc.Range.Start.Character,
+			Col:  lsp.UTF16ToRune(text, loc.Range.Start.Character),
 			Text: strings.TrimSpace(text),
 		})
 	}
@@ -633,7 +703,7 @@ func lspStatusMessage(err error) string {
 	if len(msg) > 60 {
 		msg = msg[:60] + "…"
 	}
-	return "LSP: " + msg
+	return i18n.Format("lsp.lsp", i18n.Args{"msg": msg})
 }
 
 // EnsureLSPOpen sends didOpen for a file that became active without going
@@ -649,26 +719,92 @@ func (a *App) EnsureLSPOpen(path string) {
 	if opened {
 		return
 	}
-	lang := ""
-	if a.EditorGroup.Editor.Highlighter != nil {
-		lang = a.EditorGroup.Editor.Highlighter.Language()
-	}
+	lang := a.EditorGroup.ActiveLanguage()
 	a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
+}
+
+// editorBufferVersion is the change counter of the buffer being edited, so a
+// result computed for it can be dropped once the text has moved on.
+func (a *App) editorBufferVersion() uint64 {
+	if a.EditorGroup.Editor == nil {
+		return 0
+	}
+	return a.EditorGroup.Editor.Buf.Version()
+}
+
+// editorBuffer is the buffer instance being edited, so a formatting result
+// captured for it can be told apart from a reopened buffer of the same path.
+func (a *App) editorBuffer() *buffer.Buffer {
+	if a.EditorGroup.Editor == nil {
+		return nil
+	}
+	return a.EditorGroup.Editor.Buf
+}
+
+// applyFormattingResult applies a formatting result to the file the server
+// formatted. A result that arrives for another file, or for a buffer that
+// changed while the server was formatting, is dropped: applying it would
+// write the edits into the file the user is looking at instead (#876).
+func (a *App) applyFormattingResult(v *FormattingResult) {
+	editor := a.EditorGroup.Editor
+	if editor == nil || len(v.Edits) == 0 {
+		return
+	}
+	path, _ := a.editorPathLang()
+	if path != v.Path {
+		a.StatusWarn(i18n.Format("status.formatFileClosed", i18n.Args{"filename": filepath.Base(v.Path)}))
+		return
+	}
+	if v.Buffer == nil || editor.Buf != v.Buffer {
+		a.StatusWarn(i18n.Text("status.formatFileReopened"))
+		return
+	}
+	if editor.Buf.Version() != v.Version {
+		a.StatusWarn(i18n.Text("status.formatFileChanged"))
+		return
+	}
+	a.ApplyTextEdits(v.Edits)
 }
 
 func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
-	editor := a.EditorGroup.Editor
+	a.applyRuneTextEdits(runeTextEdits(a.EditorGroup.Editor.Buf.Lines, edits), nil)
+}
 
-	sort.Slice(edits, func(i, j int) bool {
+func sortTextEdits(edits []lsp.TextEdit) {
+	sort.SliceStable(edits, func(i, j int) bool {
 		if edits[i].Range.Start.Line != edits[j].Range.Start.Line {
 			return edits[i].Range.Start.Line > edits[j].Range.Start.Line
 		}
 		return edits[i].Range.Start.Character > edits[j].Range.Start.Character
 	})
+}
 
+// Reverse equal-position groups so descending application preserves LSP array order.
+func reverseSamePositionTextEdits(edits []lsp.TextEdit) {
+	for start := 0; start < len(edits); {
+		end := start + 1
+		for end < len(edits) && edits[end].Range.Start == edits[start].Range.Start {
+			end++
+		}
+		slices.Reverse(edits[start:end])
+		start = end
+	}
+}
+
+func (a *App) applyRuneTextEdits(edits []lsp.TextEdit, cursor *lsp.Position) {
+	editor := a.EditorGroup.Editor
+	sortTextEdits(edits)
+	reverseSamePositionTextEdits(edits)
+
+	// One undo step for the whole batch: a rename, a format or a code action
+	// is a single change, not one per edited range (#876).
+	if editor.Undo != nil {
+		editor.Undo.BeginTransaction()
+		defer editor.Undo.EndTransaction()
+	}
 	for _, edit := range edits {
 		sl, sc := edit.Range.Start.Line, edit.Range.Start.Character
 		el, ec := edit.Range.End.Line, edit.Range.End.Character
@@ -692,6 +828,10 @@ func (a *App) ApplyTextEdits(edits []lsp.TextEdit) {
 				Text: edit.NewText, Suffix: suffix,
 			})
 		}
+	}
+	if cursor != nil {
+		editor.Cursor.Line, editor.Cursor.Col = cursor.Line, cursor.Character
+		a.EditorGroup.ScrollToCursor()
 	}
 	editor.FlushOnChange()
 }
@@ -751,10 +891,11 @@ func (a *App) requestLocation(method, path, lang string, line, col int) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
+	col = a.lspColumn(path, line, col)
 	workDir := a.lspWorkDir(path)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
@@ -806,12 +947,12 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 		if _, err := exec.LookPath(serverCfg.Command[0]); err != nil {
 			if !a.LspNotified[serverKey] && a.Settings.LSP.ShouldNotifyAvailability() {
 				a.LspNotified[serverKey] = true
-				msg := fmt.Sprintf("LSP Code Assist binary is not installed for %s. Click Docs for installation instructions.", lang)
+				msg := i18n.Format("lsp.installServerHint", i18n.Args{"lang": lang})
 				anchor := serverKey
-				a.Status.SetNotificationWithAction(msg, view.NotifyWarning, 10*time.Second, "Docs", func() {
+				a.Status.SetNotificationWithAction(msg, view.NotifyWarning, 10*time.Second, i18n.Text("status.docs"), func() {
 					OpenURL("https://tttedit.dev/guides/lsp/#" + anchor)
 				})
-				a.Status.SecondaryLabel = "Don't show again"
+				a.Status.SecondaryLabel = i18n.Text("lsp.donTShowAgain")
 				a.Status.SecondaryAction = func() {
 					v := false
 					a.Settings.LSP.NotifyAvailability = &v

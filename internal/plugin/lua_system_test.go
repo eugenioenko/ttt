@@ -1,7 +1,10 @@
 package plugin
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -14,12 +17,48 @@ type mockSystemAPI struct {
 	execErr    error
 	envVars    map[string]string
 	execStdin  string
+	execEnv    []string
+	// block makes Exec wait for its context, as a running child would.
+	block bool
+	// writes go to stdout one Write at a time, before stdout.
+	writes      []string
+	started     chan struct{}
+	returned    chan struct{}
+	spawnBinary string
+	spawnArgs   []string
+	spawnOpts   SpawnOptions
+	spawnProc   *mockSpawnedProcess
+	spawnErr    error
 }
 
-func (m *mockSystemAPI) Exec(binary string, args []string, stdin string) (string, string, int, error) {
+func (m *mockSystemAPI) Exec(ctx context.Context, binary string, args []string, opts ExecOptions) (string, string, int, error) {
 	m.execBinary = binary
 	m.execArgs = args
-	m.execStdin = stdin
+	m.execStdin = opts.Stdin
+	m.execEnv = opts.Env
+	if m.returned != nil {
+		defer close(m.returned)
+	}
+	if m.started != nil {
+		close(m.started)
+	}
+	for _, chunk := range m.writes {
+		if ctx.Err() != nil {
+			return "", "", -1, nil
+		}
+		if opts.Stdout != nil {
+			opts.Stdout.Write([]byte(chunk))
+		}
+	}
+	if m.block {
+		<-ctx.Done()
+		return "", "signal: killed", -1, nil
+	}
+	if opts.Stdout != nil && opts.Stderr != nil {
+		opts.Stdout.Write([]byte(m.stdout))
+		opts.Stderr.Write([]byte(m.stderr))
+		return "", "", m.exitCode, m.execErr
+	}
 	return m.stdout, m.stderr, m.exitCode, m.execErr
 }
 
@@ -28,6 +67,23 @@ func (m *mockSystemAPI) Env(name string) string {
 		return m.envVars[name]
 	}
 	return ""
+}
+
+func (m *mockSystemAPI) Spawn(binary string, args []string, opts SpawnOptions) (SpawnedProcess, error) {
+	m.spawnBinary = binary
+	m.spawnArgs = args
+	m.spawnOpts = opts
+	if m.spawnErr != nil {
+		return nil, m.spawnErr
+	}
+	if m.spawnProc != nil {
+		return m.spawnProc, nil
+	}
+	return &mockSpawnedProcess{
+		stdin:  &bytes.Buffer{},
+		stdout: strings.NewReader(""),
+		stderr: strings.NewReader(""),
+	}, nil
 }
 
 func setupTestPluginWithSystem(perms PermissionSet, sys *mockSystemAPI) (*Plugin, func()) {

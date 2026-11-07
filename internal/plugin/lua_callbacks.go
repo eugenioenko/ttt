@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"errors"
+
 	"github.com/eugenioenko/ttt/internal/widgets"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -21,10 +23,18 @@ func (p *Plugin) CallLuaFunc(fn *lua.LFunction, args ...lua.LValue) error {
 	return err
 }
 
-func (p *Plugin) CallOnInstall() {
-	if p.InstallFunc != nil {
-		p.CallLuaFunc(p.InstallFunc)
+func (p *Plugin) CallOnInstall() error {
+	return hookError(p.CallLuaFunc(p.InstallFunc))
+}
+
+// hookError drops the Lua stack trace, which CallLuaFunc has already logged,
+// so the error reads as one line in a dialog.
+func hookError(err error) error {
+	var apiErr *lua.ApiError
+	if errors.As(err, &apiErr) && apiErr.Object != nil {
+		return errors.New(apiErr.Object.String())
 	}
+	return err
 }
 
 func TreeNodeToLua(L *lua.LState, node *widgets.TreeNode) *lua.LTable {

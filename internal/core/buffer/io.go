@@ -44,6 +44,7 @@ func (b *Buffer) SetText(text string) {
 	}
 	b.SetLines(lines)
 	b.Dirty = false
+	b.savedLineEnding = b.LineEnding
 }
 
 // SplitLines splits like bufio.ScanLines, with every line a substring of
@@ -81,8 +82,9 @@ func (b *Buffer) recordDiskInfo(info os.FileInfo) {
 
 // DiskChanged reports whether the file on disk has been modified since the
 // buffer last loaded or saved it. It returns false when there is no recorded
-// disk state (a new buffer never written to disk) or when the file no longer
-// exists — a missing file is handled by the save itself, which recreates it.
+// disk state (a new buffer never written to disk) or when stat fails. Callers
+// that need to distinguish missing files from other stat errors must check
+// those separately. Saving a missing file recreates it without a conflict.
 func (b *Buffer) DiskChanged(filename string) bool {
 	if !b.diskInfoSet {
 		return false
@@ -151,6 +153,7 @@ func (b *Buffer) SaveFile(filename string) error {
 	}
 
 	b.Dirty = false
+	b.savedLineEnding = b.LineEnding
 	if info, err := os.Stat(target); err == nil {
 		b.recordDiskInfo(info)
 	}
@@ -178,10 +181,7 @@ func (b *Buffer) CleanedLines() []string {
 }
 
 func (b *Buffer) writeLines(w io.Writer, lines []string) error {
-	eol := b.LineEnding
-	if eol == "" {
-		eol = "\n"
-	}
+	eol := effectiveLineEnding(b.LineEnding)
 	for i, line := range lines {
 		if _, err := io.WriteString(w, line); err != nil {
 			return err

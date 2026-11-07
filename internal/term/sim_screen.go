@@ -27,6 +27,7 @@ type SimScreen struct {
 	cursorX int
 	cursorY int
 	events  chan tcell.Event
+	tty     tcell.Tty
 }
 
 var _ tcell.Screen = (*SimScreen)(nil)
@@ -172,7 +173,17 @@ func (s *SimScreen) SetSize(w, h int) {
 
 func (s *SimScreen) LockRegion(int, int, int, int, bool) {}
 
-func (s *SimScreen) Tty() (tcell.Tty, bool) { return nil, false }
+func (s *SimScreen) SetTty(tty tcell.Tty) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tty = tty
+}
+
+func (s *SimScreen) Tty() (tcell.Tty, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tty, s.tty != nil
+}
 
 func (s *SimScreen) SetTitle(string)                 {}
 func (s *SimScreen) SetClipboard([]byte)             {}

@@ -24,17 +24,20 @@ func TestSplitPanelStationaryClickOnRightEdgeReachesRight(t *testing.T) {
 	x := split.DividerScreenX() + 1
 
 	split.HandleEvent(tcell.NewEventMouse(x, 3, tcell.Button1, 0))
+	if right.eventCount != 1 {
+		t.Fatalf("right panel events after press = %d, want 1", right.eventCount)
+	}
 	split.HandleEvent(tcell.NewEventMouse(x, 3, tcell.ButtonNone, 0))
 
 	if right.eventCount != 2 {
-		t.Fatalf("right panel events = %d, want replayed press and release", right.eventCount)
+		t.Fatalf("right panel events = %d, want press and release", right.eventCount)
 	}
 	if len(*resizes) != 0 {
 		t.Fatalf("stationary click resized: %v", *resizes)
 	}
 }
 
-func TestSplitPanelVerticalMoveOnRightEdgeIsNotAClick(t *testing.T) {
+func TestSplitPanelVerticalDragOnRightEdgeReachesRight(t *testing.T) {
 	split, right, resizes := newResizeTestSplit()
 	x := split.DividerScreenX() + 1
 
@@ -42,8 +45,8 @@ func TestSplitPanelVerticalMoveOnRightEdgeIsNotAClick(t *testing.T) {
 	split.HandleEvent(tcell.NewEventMouse(x, 6, tcell.Button1, 0))
 	split.HandleEvent(tcell.NewEventMouse(x, 6, tcell.ButtonNone, 0))
 
-	if right.eventCount != 0 {
-		t.Fatalf("right panel received %d events from a vertical drag", right.eventCount)
+	if right.eventCount != 3 {
+		t.Fatalf("right panel events = %d, want press, drag, and release", right.eventCount)
 	}
 	if len(*resizes) != 0 {
 		t.Fatalf("vertical-only drag resized: %v", *resizes)
@@ -53,9 +56,9 @@ func TestSplitPanelVerticalMoveOnRightEdgeIsNotAClick(t *testing.T) {
 	}
 }
 
-func TestSplitPanelHorizontalDragFromRightEdgeResizes(t *testing.T) {
+func TestSplitPanelHorizontalDragFromDividerResizes(t *testing.T) {
 	split, right, resizes := newResizeTestSplit()
-	x := split.DividerScreenX() + 1
+	x := split.DividerScreenX()
 
 	split.HandleEvent(tcell.NewEventMouse(x, 3, tcell.Button1, 0))
 	split.HandleEvent(tcell.NewEventMouse(x+4, 3, tcell.Button1, 0))

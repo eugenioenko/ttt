@@ -104,12 +104,15 @@ Available permissions include:
 | `terminal.control` | Spawn terminal tabs, send text to them, close them, and focus them |
 | `terminal.read` | Read terminal output (raw tail), visible screen text, and list open terminals |
 | `network.http` | Make HTTP requests (`true` for any destination, local services included, or a list of hosts or IPs with optional ports) |
+| `network.rpc` | Open two-way RPC connections to the listed endpoints, so the process there can drive the editor through the plugin |
 | `events.file` | Listen for file open/close/save events |
 | `events.editor` | Listen for buffer and cursor changes |
 | `settings` | Read/write editor settings |
 | `settings_keys` | Which settings keys the plugin can access (e.g. `formatters.*`) |
 | `storage` | Persist private plugin data |
 | `clipboard.read` | Read the system clipboard |
+| `input` | Simulate mouse and keyboard input |
+| `screen.read` | Read the rendered screen and editor state |
 
 ## Disabling the Plugin System
 

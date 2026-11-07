@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -177,5 +178,31 @@ func TestTitleHeightWithBoxModel(t *testing.T) {
 	// Height = 1 (title) + padding overhead
 	if h := tw.Height(); h != 3 {
 		t.Fatalf("expected Height()=3 with padding, got %d", h)
+	}
+}
+
+func TestTitleRenderFullwidth(t *testing.T) {
+	tw := NewTitleWidget(TitleConfig{Title: "タイトル", Badge: "バッジ"})
+	s := renderWidget(tw, 0, 0, 20, 1)
+
+	if row := rowText(s, 0); row != "タイトル      バッジ" {
+		t.Errorf("row = %q, want %q", row, "タイトル      バッジ")
+	}
+	for x := 0; x < 8; x += 2 {
+		if !s.cells[0][x].Bold {
+			t.Errorf("cell[0][%d]: expected bold", x)
+		}
+	}
+}
+
+func TestTitleRenderFullwidthStopsBeforeLastColumn(t *testing.T) {
+	tw := NewTitleWidget(TitleConfig{Title: "タイトル"})
+	s := renderWidget(tw, 0, 0, 7, 1)
+
+	if row := rowText(s, 0); row != "タイト" {
+		t.Errorf("row = %q, want %q", row, "タイト")
+	}
+	if ch := s.cells[0][6].Ch; textwidth.Rune(ch) > 1 {
+		t.Errorf("last column = %q, want no fullwidth rune starting there", ch)
 	}
 }

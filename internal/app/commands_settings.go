@@ -4,6 +4,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -28,7 +29,20 @@ func configuredDiffContext(contextMode string) ui.DiffContextMode {
 func (a *App) ReloadSettings() {
 	s := config.LoadSettings()
 	a.ApplySettings(s)
-	a.StatusNotify("Settings reloaded")
+	a.StatusNotify(i18n.Text("status.settingsReloaded"))
+}
+
+func (a *App) applySidebarTabStyle(style string) {
+	if a.Sidebar == nil {
+		return
+	}
+	a.Sidebar.SetTabStyle(style)
+	a.Sidebar.SetPanelIcon("explorer", string(icons.Rune(icons.PanelExplorer)))
+	a.Sidebar.SetPanelIcon("search", string(icons.Rune(icons.PanelSearch)))
+	a.Sidebar.SetPanelIcon("changes", string(icons.Rune(icons.PanelChanges)))
+	a.Sidebar.SetPanelIcon("outline", string(icons.Rune(icons.PanelOutline)))
+	a.Sidebar.SetPanelIcon("plugins", string(icons.Rune(icons.PanelPlugins)))
+	a.ApplyPluginPanelIcons()
 }
 
 func (a *App) applyIcons(ap config.AppearanceSettings) {
@@ -76,6 +90,10 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.clearRecentFolders()
 	}
 	a.refreshWelcome()
+	a.TerminalPanel.PaddingX = s.Terminal.PaddingX
+	for _, tab := range a.Terminals {
+		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
+	}
 
 	highlight.SetTimeLimit(time.Duration(s.Editor.HighlightTimeLimit) * time.Millisecond)
 	// Apply editor settings to the editor group and active editor
@@ -88,8 +106,11 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
+	a.EditorGroup.WordWrapColumn = s.Editor.WordWrapColumn
+	a.EditorGroup.LanguageOverrides = s.Editor.LanguageOverrides
 	a.EditorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
 	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
+	a.EditorGroup.SetMarkdownMaxWidth(s.Markdown.WrapWidth)
 	a.EditorGroup.SetDiffHighContrast(s.Editor.DiffHighContrast)
 	a.EditorGroup.SetDiffCollapsedEmphasis(s.Editor.DiffCollapsedEmphasis)
 	a.EditorGroup.SetDiffSigns(s.Editor.DiffSigns)
@@ -113,7 +134,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.EditorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
 		a.EditorGroup.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
 		a.EditorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
-		a.EditorGroup.Editor.WordWrap = a.EditorGroup.ActiveFileWordWrap()
+		a.EditorGroup.Editor.AutoClosing = s.Editor.AutoClosing
 		a.EditorGroup.Editor.BracketPairColorization = s.Editor.BracketPairColorization
 		if s.Editor.BracketPairColorization != prev.Editor.BracketPairColorization {
 			a.EditorGroup.Editor.InvalidateBracketColors()
@@ -125,6 +146,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	// Apply cursor style
 	if a.Screen != nil {
 		a.Screen.SetCursorStyle(term.ParseCursorStyle(s.Editor.CursorStyle))
+		a.Screen.SetPointerShapesEnabled(s.Appearance.PointerShapesEnabled())
 	}
 
 	// Apply search debounce
@@ -142,7 +164,9 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 
 	a.applyIcons(s.Appearance)
+	a.applySidebarTabStyle(s.Sidebar.TabStyle)
 	a.applyGrammarSettings(s.Editor.Grammars)
+	a.EditorGroup.ApplyFileWordWrap()
 
 	if a.Explorer != nil && (a.Explorer.Settings != s.Explorer || a.Explorer.Icons != s.Appearance.Icons) {
 		a.Explorer.Settings = s.Explorer
@@ -167,13 +191,24 @@ func (a *App) ApplySettings(s config.Settings) {
 			theme, ok = loaded, err == nil
 		}
 		if ok {
-			ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(s.Editor.TransparentBackground))
-			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground))
+			ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(s.Editor.TransparentBackground), WithEditorSelectionStyle(s.Editor.SelectionStyle), WithPluginSelectionStyle(s.Plugins.SelectionStyle))
+			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground), WithTerminalSelectionStyle(s.Terminal.SelectionStyle))
 			borders := BuildBorderSet(theme.Borders)
 			*a.Borders = borders
 			themeBorders = &borders
-			a.Renderer.Clear()
+			if a.Renderer != nil {
+				a.Renderer.Clear()
+			}
 			a.invalidateImageLayer()
+		}
+	} else if a.Palette != nil {
+		theme, ok := config.DefaultTheme(), s.Theme == ""
+		if !ok {
+			loaded, err := config.LoadTheme(s.Theme)
+			theme, ok = loaded, err == nil
+		}
+		if ok {
+			*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(s.Editor.TransparentBackground), WithTerminalSelectionStyle(s.Terminal.SelectionStyle))
 		}
 	}
 
@@ -186,7 +221,7 @@ func registerSettingsCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "settings.reload", Title: "Reload Settings",
+		ID: "settings.reload", Title: i18n.Text("command.reloadSettings"),
 		Handler: app.ReloadSettings,
 	})
 }

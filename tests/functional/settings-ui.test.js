@@ -66,9 +66,9 @@ describe("settings editor", () => {
     tui.click(12, 4); // the "Editor" tab
 
     // Tab onto Word wrap: from the clicked tab strip, the walk passes the
-    // strip and the Indentation fields first. The assertions name that row, so
+    // strip, Indentation, and Auto closing fields first. The assertions name that row, so
     // a traversal that lands elsewhere fails loudly instead of passing on a no-op.
-    for (let i = 0; i < 8; i++) tui.press("tab");
+    for (let i = 0; i < 14; i++) tui.press("tab");
     tui.press("space");
     const toggled = tui.snapshot();
 

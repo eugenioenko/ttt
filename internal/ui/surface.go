@@ -50,6 +50,17 @@ func (s *RenderSurface) SetCell(x, y int, c term.Cell) {
 	s.cells[absY][absX] = c
 }
 
+func (s *RenderSurface) CellAt(x, y int) (term.Cell, bool) {
+	if x < 0 || x >= s.clip.W || y < 0 || y >= s.clip.H {
+		return term.Cell{}, false
+	}
+	absX, absY := s.clip.X+x, s.clip.Y+y
+	if absY < 0 || absY >= len(s.cells) || absX < 0 || absX >= len(s.cells[absY]) {
+		return term.Cell{}, false
+	}
+	return s.cells[absY][absX], true
+}
+
 func (s *RenderSurface) Fill(c term.Cell) {
 	for y := 0; y < s.clip.H; y++ {
 		for x := 0; x < s.clip.W; x++ {

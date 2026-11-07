@@ -120,12 +120,16 @@ func (d *CommitDetailWidget) handleDisclosureKey(event *tcell.EventKey) bool {
 		d.selectedDisclosure = controls[index].id
 		d.keyboardDisclosure = true
 		row := controls[index].row
+		top := d.TopLine
 		if row <= d.TopLine {
 			d.TopLine = max(row-1, 0)
 		} else if row >= d.TopLine+d.viewH {
 			d.TopLine = row - d.viewH + 1
 		}
 		d.clampScroll()
+		if d.TopLine != top {
+			d.navValid = false
+		}
 		return true
 	case tcell.KeyEscape:
 		if d.keyboardDisclosure {

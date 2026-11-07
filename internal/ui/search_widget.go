@@ -8,13 +8,16 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/search"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -46,10 +49,10 @@ type DiffSearchSource struct {
 type SearchWidget struct {
 	BaseWidget
 	Icons        string
-	Input        *InputWidget
-	Include      *InputWidget
-	Exclude      *InputWidget
-	ReplaceInput *InputWidget
+	Input        *widgets.InputWidget
+	Include      *widgets.InputWidget
+	Exclude      *widgets.InputWidget
+	ReplaceInput *widgets.InputWidget
 	Options      SearchOptions
 	focusIdx     int
 	showFilters  bool
@@ -65,12 +68,13 @@ type SearchWidget struct {
 	Error        string
 	DiffSources  func() []DiffSearchSource
 	OnOpenMatch  func(path string, line, col int)
-	OnReplace    func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
-	OnReplaceAll func(allMatches map[string][]SearchMatch, replacement string, opts SearchOptions)
 	OnPreview    func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
 	OnClear      func()
 	PostBatch    func(batch *SearchBatch)
 	Debounce     Debouncer
+
+	OnReplaceRequest func(SearchReplaceRequest)
+	OnCancelReplace  func()
 	// ChevronCollapsed and ChevronExpanded mirror TreeConfig; zero means the
 	// default triangle.
 	ChevronCollapsed rune
@@ -85,6 +89,18 @@ type SearchWidget struct {
 	replaceActionW   int
 	previewActionX   int
 	previewActionW   int
+	replaceVersion   uint64
+	replacing        bool
+}
+
+type SearchReplaceRequest struct {
+	Options     search.Options
+	Replacement string
+	Paths       []string
+	Fallback    map[string][]SearchMatch
+	AllFiles    bool
+	version     uint64
+	workDirs    []string
 }
 
 type searchItem struct {
@@ -95,15 +111,15 @@ type searchItem struct {
 
 func NewSearchWidget() *SearchWidget {
 	s := &SearchWidget{}
-	s.Input = NewInputWidget()
-	s.Input.Placeholder = "Search"
-	s.Include = NewInputWidget()
-	s.Include.Placeholder = "files to include"
-	s.Exclude = NewInputWidget()
-	s.Exclude.Placeholder = "files to exclude"
-	s.ReplaceInput = NewInputWidget()
-	s.ReplaceInput.Placeholder = "Replace"
-	s.Input.OnChange = func(text string) {
+	s.Input = newPanelInput()
+	s.Input.Config.Placeholder = i18n.Text("search.search")
+	s.Include = newPanelInput()
+	s.Include.Config.Placeholder = i18n.Text("search.filesToInclude")
+	s.Exclude = newPanelInput()
+	s.Exclude.Config.Placeholder = i18n.Text("search.filesToExclude")
+	s.ReplaceInput = newPanelInput()
+	s.ReplaceInput.Config.Placeholder = i18n.Text("general.replace")
+	s.Input.Config.OnChange = func(text string) {
 		if text == "" {
 			s.runSearchSync()
 			if s.OnClear != nil {
@@ -114,9 +130,10 @@ func NewSearchWidget() *SearchWidget {
 		s.scheduleSearch()
 	}
 	onChange := func(string) { s.scheduleSearch() }
-	s.Include.OnChange = onChange
-	s.Exclude.OnChange = onChange
-	s.Input.Actions = []InputAction{
+	s.Include.Config.OnChange = onChange
+	s.Exclude.Config.OnChange = onChange
+	s.ReplaceInput.Config.OnChange = func(string) { s.CancelReplacement() }
+	s.Input.Actions = []widgets.InputAction{
 		{Label: "Aa", OnClick: func() {
 			s.Options.CaseSensitive = !s.Options.CaseSensitive
 			s.syncOptionActions()
@@ -128,8 +145,12 @@ func NewSearchWidget() *SearchWidget {
 			s.runSearchSync()
 		}},
 	}
-	s.ReplaceInput.Actions = []InputAction{
-		{Label: "⟳All", OnClick: func() {
+	s.ReplaceInput.Actions = []widgets.InputAction{
+		{Label: icons.Get(s.Icons, icons.ReplaceAll) + i18n.Text("search.all"), OnClick: func() {
+			if s.replacing {
+				s.CancelReplacement()
+				return
+			}
 			s.ReplaceAllFiles()
 		}},
 	}
@@ -144,6 +165,9 @@ func (s *SearchWidget) syncOptionActions() {
 }
 
 func (s *SearchWidget) SetReplaceMode(on bool) {
+	if s.showReplace != on {
+		s.CancelReplacement()
+	}
 	s.showReplace = on
 }
 
@@ -152,15 +176,15 @@ func (s *SearchWidget) IsReplaceMode() bool {
 }
 
 func (s *SearchWidget) ToggleReplaceMode() {
-	s.showReplace = !s.showReplace
+	s.SetReplaceMode(!s.showReplace)
 }
 
 func (s *SearchWidget) Refresh() {
 	s.runSearchSync()
 }
 
-func (s *SearchWidget) visibleInputs() []*InputWidget {
-	inputs := []*InputWidget{s.Input}
+func (s *SearchWidget) visibleInputs() []*widgets.InputWidget {
+	inputs := []*widgets.InputWidget{s.Input}
 	if s.showReplace {
 		inputs = append(inputs, s.ReplaceInput)
 	}
@@ -170,7 +194,7 @@ func (s *SearchWidget) visibleInputs() []*InputWidget {
 	return inputs
 }
 
-func (s *SearchWidget) FocusedInput() *InputWidget {
+func (s *SearchWidget) FocusedInput() *widgets.InputWidget {
 	inputs := s.visibleInputs()
 	if s.focusIdx >= 0 && s.focusIdx < len(inputs) {
 		return inputs[s.focusIdx]
@@ -179,19 +203,19 @@ func (s *SearchWidget) FocusedInput() *InputWidget {
 }
 
 func (s *SearchWidget) SetWorkDirs(dirs []string) {
-	s.WorkDirs = dirs
+	if !slices.Equal(s.WorkDirs, dirs) {
+		s.CancelReplacement()
+	}
+	s.WorkDirs = slices.Clone(dirs)
 }
 
 func (s *SearchWidget) Focusable() bool { return true }
 
 func (s *SearchWidget) CursorPosition() (int, int, bool) {
-	r := s.GetRect()
-	inp := s.FocusedInput()
-	y := s.inputY(inp)
-	return inp.CursorX(r.X), r.Y + y, true
+	return s.FocusedInput().CursorPosition()
 }
 
-func (s *SearchWidget) inputY(inp *InputWidget) int {
+func (s *SearchWidget) inputY(inp *widgets.InputWidget) int {
 	if inp == s.Input {
 		return 0
 	}
@@ -219,6 +243,7 @@ func (s *SearchWidget) stopSearch() {
 }
 
 func (s *SearchWidget) cancelSearch() {
+	s.CancelReplacement()
 	s.Debounce.Stop()
 	s.debouncing = false
 	s.stopSearch()
@@ -227,6 +252,7 @@ func (s *SearchWidget) cancelSearch() {
 }
 
 func (s *SearchWidget) scheduleSearch() {
+	s.CancelReplacement()
 	s.debouncing = true
 	s.Groups = nil
 	s.FlatList = nil
@@ -249,7 +275,7 @@ func (s *SearchWidget) scheduleSearch() {
 func (s *SearchWidget) runSearchSync() {
 	s.cancelSearch()
 	s.Error = ""
-	if s.Input.Text == "" {
+	if s.Input.Text() == "" {
 		s.Groups = nil
 		s.FlatList = nil
 		s.Selected = 0
@@ -269,7 +295,7 @@ func (s *SearchWidget) streamSearch(ctx context.Context, gen uint64) {
 	// take down the editor rather than just the search.
 	defer func() {
 		if r := recover(); r != nil {
-			s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: fmt.Sprintf("search failed: %v", r)})
+			s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failedWithPanic", i18n.Args{"r": r})})
 		}
 	}()
 
@@ -277,7 +303,7 @@ func (s *SearchWidget) streamSearch(ctx context.Context, gen uint64) {
 
 	if s.DiffSources != nil {
 		for _, ds := range s.DiffSources() {
-			matches, _ := FindInLines(ds.Lines, s.Input.Text, s.Options)
+			matches, _ := FindInLines(ds.Lines, s.Input.Text(), s.Options)
 			if len(matches) > 0 {
 				g := SearchFileGroup{
 					FilePath: ds.TabName,
@@ -331,7 +357,7 @@ func (s *SearchWidget) ApplyBatch(batch *SearchBatch) {
 
 func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]SearchFileGroup) {
 	if _, err := exec.LookPath("rg"); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "ripgrep (rg) not found"})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Text("search.ripgrepRgNotFound")})
 		return
 	}
 
@@ -342,11 +368,11 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	cmd := exec.CommandContext(ctx, "rg", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "search failed: " + err.Error()})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "search failed: " + err.Error()})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
 		return
 	}
 
@@ -452,7 +478,7 @@ func rgFailure(err error) string {
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return ""
 	}
-	return "search failed: " + err.Error()
+	return i18n.Format("search.failed", i18n.Args{"error": err.Error()})
 }
 
 func (s *SearchWidget) CollapseAll() {
@@ -482,6 +508,7 @@ func (s *SearchWidget) flatten() {
 }
 
 func (s *SearchWidget) Render(surface Surface) {
+	s.SetReplacementPending(s.replacing)
 	w, h := surface.Size()
 	s.renderWidth = w
 	s.filterToggleHit = HitRegion{}
@@ -495,7 +522,7 @@ func (s *SearchWidget) Render(surface Surface) {
 		return
 	}
 
-	s.Input.Render(surface, 0, 0, w)
+	renderPanelInput(surface, s.Input, 0, 0, w)
 	y := 1
 
 	if s.showReplace {
@@ -503,13 +530,13 @@ func (s *SearchWidget) Render(surface Surface) {
 			surface.SetCell(x, y, term.Cell{Ch: '─', Style: term.StyleBorder})
 		}
 		y++
-		s.ReplaceInput.Render(surface, 0, y, w)
+		renderPanelInput(surface, s.ReplaceInput, 0, y, w)
 		y++
 	}
 
-	filterIcon := icons.ChevronDown
+	filterIcon := icons.ChevronLeft
 	if s.showFilters {
-		filterIcon = icons.ArrowLeft
+		filterIcon = icons.ChevronDown
 	}
 	filterToggle := " " + string(icons.Rune(filterIcon)) + " "
 	filterToggleW := textwidth.String(filterToggle)
@@ -522,14 +549,14 @@ func (s *SearchWidget) Render(surface Surface) {
 	y++
 
 	if s.showFilters {
-		s.Include.Render(surface, 0, y, w)
+		renderPanelInput(surface, s.Include, 0, y, w)
 		y++
 		for x := 0; x < w; x++ {
 			surface.SetCell(x, y, term.Cell{Ch: '─', Style: term.StyleBorder})
 		}
 		y++
 
-		s.Exclude.Render(surface, 0, y, w)
+		renderPanelInput(surface, s.Exclude, 0, y, w)
 		y++
 		for x := 0; x < w; x++ {
 			surface.SetCell(x, y, term.Cell{Ch: '─', Style: term.StyleBorder})
@@ -538,6 +565,10 @@ func (s *SearchWidget) Render(surface Surface) {
 	}
 
 	startY := y
+	if s.replacing {
+		surface.DrawText(0, startY, i18n.Text("search.checkingReplacements"), w, term.StyleMuted)
+		startY++
+	}
 
 	if s.Error != "" {
 		for i, ch := range s.Error {
@@ -548,8 +579,8 @@ func (s *SearchWidget) Render(surface Surface) {
 		return
 	}
 
-	if s.Input.Text != "" && len(s.FlatList) == 0 && !s.Searching && !s.debouncing {
-		msg := "No results"
+	if s.Input.Text() != "" && len(s.FlatList) == 0 && !s.Searching && !s.debouncing {
+		msg := i18n.Text("search.noResults")
 		for i, ch := range msg {
 			if i < w {
 				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
@@ -559,7 +590,7 @@ func (s *SearchWidget) Render(surface Surface) {
 	}
 
 	if s.debouncing || s.Searching {
-		msg := "Searching..."
+		msg := i18n.Text("search.searching")
 		for i, ch := range msg {
 			if i < w {
 				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
@@ -576,7 +607,7 @@ func (s *SearchWidget) Render(surface Surface) {
 		for _, g := range s.Groups {
 			totalMatches += len(g.Matches)
 		}
-		summary := fmt.Sprintf("%d results in %d files", totalMatches, len(s.Groups))
+		summary := i18n.Format("search.resultsInFiles", i18n.Args{"totalMatches": totalMatches, "groupsCount": len(s.Groups)})
 		for i, ch := range summary {
 			if i < w {
 				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
@@ -645,7 +676,7 @@ func (s *SearchWidget) Render(surface Surface) {
 			replaceGlyph := string(icons.Rune(icons.Replace))
 			replaceW := textwidth.String(replaceGlyph)
 			right := w - 1
-			if s.showReplace && s.ReplaceInput.Text != "" {
+			if s.showReplace && s.ReplaceInput.Text() != "" {
 				right = min(right, w-4-replaceW)
 			}
 			iconPath := g.IconPath
@@ -668,7 +699,7 @@ func (s *SearchWidget) Render(surface Surface) {
 				surface.DrawText(x, y, countStr, right, mutedStyle)
 			}
 
-			if s.showReplace && s.ReplaceInput.Text != "" {
+			if s.showReplace && s.ReplaceInput.Text() != "" {
 				bx := w - 1 - replaceW
 				if bx >= 0 && bx < w-1 {
 					surface.DrawText(bx, y, replaceGlyph, w-1, mutedStyle)
@@ -728,6 +759,9 @@ func (s *SearchWidget) toggleRow() int {
 }
 
 func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
+	if result := handleInputDrag(ev, s.Input, s.ReplaceInput, s.Include, s.Exclude); result != EventIgnored {
+		return result
+	}
 	if newTop, consumed := s.scrollbar.HandleEvent(ev); consumed {
 		s.ScrollTop = newTop
 		if s.scrollbar.IsDragging() {
@@ -746,8 +780,7 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 
 			if localY == 0 {
 				s.focusIdx = 0
-				s.Input.HandleClick(mx, my)
-				return EventConsumed
+				return s.Input.HandleEvent(tev)
 			}
 
 			if s.showReplace && localY == 2 {
@@ -758,8 +791,7 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 						break
 					}
 				}
-				s.ReplaceInput.HandleClick(mx, my)
-				return EventConsumed
+				return s.ReplaceInput.HandleEvent(tev)
 			}
 
 			renderW := s.renderWidth
@@ -786,7 +818,7 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 					iy := s.inputY(inp)
 					if localY == iy {
 						s.focusIdx = i
-						return EventConsumed
+						return inp.HandleEvent(tev)
 					}
 				}
 			}
@@ -794,7 +826,7 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 			idx := s.ScrollTop + (localY - s.resultStartY)
 			if idx >= 0 && idx < len(s.FlatList) {
 				item := s.FlatList[idx]
-				if s.showReplace && s.ReplaceInput.Text != "" && item.IsFile {
+				if s.showReplace && s.ReplaceInput.Text() != "" && item.IsFile {
 					repX, repW := s.replaceActionX, s.replaceActionW
 					if repW == 0 && renderW >= 3 {
 						repX, repW = renderW-3, 2
@@ -851,6 +883,12 @@ func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 		}
 		switch tev.Key() {
+		case tcell.KeyEscape:
+			if s.replacing {
+				s.CancelReplacement()
+				return EventConsumed
+			}
+			return EventIgnored
 		case tcell.KeyTab:
 			inputs := s.visibleInputs()
 			if len(inputs) > 1 {
@@ -894,10 +932,7 @@ func (s *SearchWidget) replaceInFile(groupIdx int) {
 	if groupIdx < 0 || groupIdx >= len(s.Groups) {
 		return
 	}
-	g := s.Groups[groupIdx]
-	if s.OnReplace != nil {
-		s.OnReplace(g.FilePath, s.uncappedMatches([]string{g.FilePath}, g.Matches), s.ReplaceInput.Text, s.Options)
-	}
+	s.requestReplacement(s.Groups[groupIdx:groupIdx+1], false)
 }
 
 func (s *SearchWidget) previewFile(groupIdx int) {
@@ -906,7 +941,7 @@ func (s *SearchWidget) previewFile(groupIdx int) {
 	}
 	g := s.Groups[groupIdx]
 	if s.OnPreview != nil {
-		s.OnPreview(g.FilePath, g.Matches, s.ReplaceInput.Text, s.Options)
+		s.OnPreview(g.FilePath, g.Matches, s.ReplaceInput.Text(), s.Options)
 	}
 }
 
@@ -915,54 +950,52 @@ func (s *SearchWidget) searchOptions() search.Options {
 	return search.Options{
 		CaseSensitive: s.Options.CaseSensitive,
 		UseRegex:      s.Options.UseRegex,
-		Include:       s.Include.Text,
-		Exclude:       s.Exclude.Text,
-		Query:         s.Input.Text,
+		Include:       s.Include.Text(),
+		Exclude:       s.Exclude.Text(),
+		Query:         s.Input.Text(),
 	}
 }
 
 func (s *SearchWidget) ReplaceAllFiles() {
-	if s.OnReplaceAll == nil {
-		return
-	}
-	paths := make([]string, 0, len(s.Groups))
-	for _, g := range s.Groups {
-		paths = append(paths, g.FilePath)
-	}
-	// Re-scan without the result-list caps so every match is replaced; the
-	// panel keeps its capped list. A scan error falls back to what the panel
-	// already holds for every file. A successful scan is authoritative even
-	// for a file it now finds nothing in, so that file is left out instead
-	// of being replayed with its stale matches or counted as replaced.
-	found, err := search.FindAllMatches(context.Background(), s.searchOptions(), paths)
-	allMatches := make(map[string][]SearchMatch, len(s.Groups))
-	for _, g := range s.Groups {
-		if err != nil {
-			allMatches[g.FilePath] = g.Matches
-			continue
-		}
-		if fresh := found[filepath.Clean(g.FilePath)]; len(fresh) > 0 {
-			allMatches[g.FilePath] = fresh
-		}
-	}
-	s.OnReplaceAll(allMatches, s.ReplaceInput.Text, s.Options)
+	s.requestReplacement(s.Groups, true)
 }
 
-// uncappedMatches returns every match rg finds in the given paths, falling back
-// to the panel's capped list when the re-scan cannot run.
-func (s *SearchWidget) uncappedMatches(paths []string, fallback []SearchMatch) []SearchMatch {
-	found, err := search.FindAllMatches(context.Background(), s.searchOptions(), paths)
-	if err != nil {
-		return fallback
+func (s *SearchWidget) requestReplacement(groups []SearchFileGroup, all bool) {
+	if s.OnReplaceRequest == nil || len(groups) == 0 {
+		return
 	}
-	var all []SearchMatch
-	for _, p := range paths {
-		all = append(all, found[filepath.Clean(p)]...)
+	req := SearchReplaceRequest{
+		Options: s.searchOptions(), Replacement: s.ReplaceInput.Text(), AllFiles: all,
+		Fallback: make(map[string][]SearchMatch, len(groups)),
+		version:  s.replaceVersion, workDirs: slices.Clone(s.WorkDirs),
 	}
-	if len(all) == 0 {
-		return fallback
+	for _, g := range groups {
+		req.Paths = append(req.Paths, g.FilePath)
+		req.Fallback[g.FilePath] = slices.Clone(g.Matches)
 	}
-	return all
+	s.OnReplaceRequest(req)
+}
+
+func (s *SearchWidget) ReplacementCurrent(req SearchReplaceRequest) bool {
+	return req.version == s.replaceVersion && req.Options == s.searchOptions() &&
+		req.Replacement == s.ReplaceInput.Text() && slices.Equal(req.workDirs, s.WorkDirs)
+}
+
+func (s *SearchWidget) SetReplacementPending(pending bool) {
+	s.replacing = pending
+	if pending {
+		s.ReplaceInput.Actions[0].Label = i18n.Text("general.cancel")
+	} else {
+		s.ReplaceInput.Actions[0].Label = icons.Get(s.Icons, icons.ReplaceAll) + i18n.Text("search.all")
+	}
+}
+
+func (s *SearchWidget) CancelReplacement() {
+	s.replaceVersion++
+	s.SetReplacementPending(false)
+	if s.OnCancelReplace != nil {
+		s.OnCancelReplace()
+	}
 }
 
 func (s *SearchWidget) activateSelected() {
@@ -971,7 +1004,7 @@ func (s *SearchWidget) activateSelected() {
 	}
 	item := s.FlatList[s.Selected]
 	if item.IsFile {
-		if s.showReplace && s.ReplaceInput.Text != "" {
+		if s.showReplace && s.ReplaceInput.Text() != "" {
 			s.previewFile(item.Group)
 		} else {
 			g := &s.Groups[item.Group]
@@ -979,7 +1012,7 @@ func (s *SearchWidget) activateSelected() {
 			s.flatten()
 		}
 	} else {
-		if s.showReplace && s.ReplaceInput.Text != "" {
+		if s.showReplace && s.ReplaceInput.Text() != "" {
 			s.previewFile(item.Group)
 		} else {
 			m := s.Groups[item.Group].Matches[item.Match]
@@ -988,4 +1021,12 @@ func (s *SearchWidget) activateSelected() {
 			}
 		}
 	}
+}
+
+func (s *SearchWidget) CancelPointerCapture() bool {
+	return cancelInputDrags(s.Input, s.ReplaceInput, s.Include, s.Exclude)
+}
+
+func (s *SearchWidget) OwnsPointerCapture() bool {
+	return ownsInputDrag(s.Input, s.ReplaceInput, s.Include, s.Exclude) || s.scrollbar.IsDragging()
 }

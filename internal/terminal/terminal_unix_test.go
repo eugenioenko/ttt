@@ -10,12 +10,89 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/aymanbagabas/go-pty"
 )
 
-var jobPidRe = regexp.MustCompile(`JOBPID=(\d+)`)
+var (
+	jobPidRe = regexp.MustCompile(`JOBPID=(\d+)`)
+	promptRe = regexp.MustCompile(`[$#] $`)
+)
+
+type delayedReadPty struct {
+	pty.UnixPty
+	ready <-chan struct{}
+	delay time.Duration
+}
+
+func (p *delayedReadPty) Read(b []byte) (int, error) {
+	<-p.ready
+	if p.delay > 0 {
+		time.Sleep(p.delay)
+	}
+	return p.UnixPty.Read(b[:min(len(b), 3)])
+}
+
+func TestExitDrainsOutputBeforeCallback(t *testing.T) {
+	term, err := New("/bin/sh", 80, 24, 0, nil, "", "-c", "printf drain-end")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ready := make(chan struct{})
+	var release sync.Once
+	defer term.Close()
+	defer release.Do(func() { close(ready) })
+	term.pt = &delayedReadPty{UnixPty: term.pt.(pty.UnixPty), ready: ready}
+	exited := make(chan string, 1)
+	term.OnExit = func() { exited <- string(term.RawTail()) }
+	term.Run()
+
+	select {
+	case <-term.waited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("program never exited")
+	}
+	release.Do(func() { close(ready) })
+
+	select {
+	case got := <-exited:
+		want := "drain-end"
+		if got != want {
+			t.Fatalf("OnExit saw %d output bytes, want %d", len(got), len(want))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnExit never fired after the reader was released")
+	}
+}
+
+func TestExitKeepsDrainingWhileReaderMakesProgress(t *testing.T) {
+	term, err := New("/bin/sh", 80, 24, 0, nil, "", "-c", "printf drain-end")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer term.Close()
+	term.pt = &delayedReadPty{
+		UnixPty: term.pt.(pty.UnixPty),
+		ready:   term.waited,
+		delay:   readLoopGrace / 2,
+	}
+	exited := make(chan string, 1)
+	term.OnExit = func() { exited <- string(term.RawTail()) }
+	term.Run()
+
+	select {
+	case got := <-exited:
+		if got != "drain-end" {
+			t.Fatalf("OnExit interrupted an active drain; raw tail: %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnExit never fired after the output was drained")
+	}
+}
 
 // startShellJob runs cmdline in an interactive shell; cmdline must print
 // JOBPID=<pid> once the job is ready to be hung up.
@@ -83,6 +160,45 @@ func TestCloseHangsUpBackgroundJobs(t *testing.T) {
 	assertCloseHangsUpJob(t)
 }
 
+func TestCloseLetsProgramHandlePtyHangup(t *testing.T) {
+	if os.Getenv("TTT_TEST_PTY_HANGUP") == "1" {
+		signal.Ignore(syscall.SIGHUP)
+		_, _ = os.Stdout.WriteString("hangup-ready\n")
+		var input [1]byte
+		if _, err := os.Stdin.Read(input[:]); err == nil {
+			os.Exit(2)
+		}
+		// Cleanup after PTY EOF must finish before Close escalates to SIGKILL.
+		time.Sleep(hangupGrace / 4)
+		os.Exit(0)
+	}
+	term, err := New(os.Args[0], 80, 24, 0, []string{"TTT_TEST_PTY_HANGUP=1", "GORACE=atexit_sleep_ms=0"}, "", "-test.run=^TestCloseLetsProgramHandlePtyHangup$")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer term.Close()
+	ready := make(chan struct{}, 1)
+	term.OnUpdate = func() {
+		term.AckUpdate()
+		if strings.Contains(string(term.RawTail()), "hangup-ready\r\n") {
+			select {
+			case ready <- struct{}{}:
+			default:
+			}
+		}
+	}
+	term.Run()
+	select {
+	case <-ready:
+	case <-time.After(5 * time.Second):
+		t.Fatal("program did not become ready")
+	}
+	closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
+	if !term.cmd.ProcessState.Success() {
+		t.Fatalf("program was killed before it handled PTY hangup: %v", term.cmd.ProcessState)
+	}
+}
+
 // nohup and some CI runners start ttt with SIGHUP ignored, which children
 // inherit. The disposition must be in place before the Go runtime starts, so
 // the test reruns itself under a shell that ignores SIGHUP.
@@ -147,29 +263,61 @@ func signalStatus(pid int) string {
 	}
 	var fields []string
 	for line := range strings.Lines(string(status)) {
-		if strings.HasPrefix(line, "Sig") || strings.HasPrefix(line, "ShdPnd") || strings.HasPrefix(line, "State") {
+		if strings.HasPrefix(line, "Sig") || strings.HasPrefix(line, "ShdPnd") || strings.HasPrefix(line, "State") || strings.HasPrefix(line, "Pid:") || strings.HasPrefix(line, "NSpgid:") {
 			fields = append(fields, strings.Join(strings.Fields(line), " "))
 		}
 	}
 	return strings.Join(fields, ", ")
 }
 
+// Close loses the hangup if it lands before bash is reading at its prompt
+// again, or before the job has exec'd and dropped bash's signal handlers
+// (#1114). Wait for both.
+func waitForHangupReady(t *testing.T, term *Terminal, pid int, comm string) {
+	t.Helper()
+	marker := "JOBPID=" + strconv.Itoa(pid)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		tail := string(term.RawTail())
+		atPrompt := false
+		if i := strings.LastIndex(tail, marker); i >= 0 {
+			atPrompt = promptRe.MatchString(tail[i:])
+		}
+		if atPrompt && procComm(pid, comm) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("shell never settled with job %d running %s; output: %q", pid, comm, tail)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func procComm(pid int, comm string) bool {
+	got, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
+	return err == nil && strings.TrimSpace(string(got)) == comm
+}
+
 func assertCloseHangsUpJob(t *testing.T) {
 	t.Helper()
+	if _, err := os.Stat("/proc/self"); err != nil {
+		t.Skipf("no procfs; cannot observe the job exec: %v", err)
+	}
 	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!")
+	t.Cleanup(term.Close)
+	waitForHangupReady(t, term, pid, "sleep")
 	before := "self: " + signalStatus(os.Getpid()) + "\nshell: " + signalStatus(term.cmd.Process.Pid) + "\njob: " + signalStatus(pid)
-
-	closeWithin(t, term, readLoopGrace)
+	elapsed := closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
 
 	select {
 	case <-term.done:
 	default:
-		t.Fatal("readLoop still running after the background job was hung up")
+		t.Fatalf("readLoop still running after Close() took %v (shell: %v)\nbefore close:\n%s\nafter job: %s", elapsed, term.cmd.ProcessState, before, signalStatus(pid))
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for !processGone(pid) {
 		if time.Now().After(deadline) {
-			t.Fatalf("background job %d survived Close() (shell: %v)\nbefore close:\n%s\nafter: %s", pid, term.cmd.ProcessState, before, signalStatus(pid))
+			t.Fatalf("background job %d survived Close() taking %v (shell: %v)\nbefore close:\n%s\nafter: %s", pid, elapsed, term.cmd.ProcessState, before, signalStatus(pid))
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -178,10 +326,35 @@ func assertCloseHangsUpJob(t *testing.T) {
 func TestCloseIsBoundedWhenJobIgnoresHangup(t *testing.T) {
 	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`)
 
-	closeWithin(t, term, hangupGrace+readLoopGrace+time.Second)
+	closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
 
 	if processGone(pid) {
 		t.Fatal("expected the HUP-ignoring job to outlive Close()")
+	}
+	select {
+	case <-term.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("readLoop did not stop while the background job held the slave open")
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+}
+
+func TestOnExitIsBoundedWhenJobKeepsSlaveOpen(t *testing.T) {
+	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`)
+	defer term.Close()
+	exited := make(chan struct{})
+	term.cbMu.Lock()
+	term.OnExit = func() { close(exited) }
+	term.cbMu.Unlock()
+	term.WriteString("exit\n")
+
+	select {
+	case <-exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnExit hung with a background job holding the pty")
+	}
+	if processGone(pid) {
+		t.Fatal("expected the HUP-ignoring job to outlive the shell")
 	}
 	_ = syscall.Kill(pid, syscall.SIGKILL)
 	select {

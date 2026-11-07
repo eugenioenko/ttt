@@ -19,6 +19,10 @@ type MarkdownWidget struct {
 	wrapWidth         int
 	wrapped           []markdown.Line
 
+	doc             *markdown.Document
+	focusedDetailID int
+	focused         bool
+
 	sel      selection.Selection
 	selEnd   selection.Position
 	dragging bool
@@ -28,6 +32,47 @@ type MarkdownWidget struct {
 
 func NewMarkdownWidget() *MarkdownWidget {
 	return &MarkdownWidget{MaxWidth: 80}
+}
+
+func (m *MarkdownWidget) Focusable() bool {
+	return m.doc != nil && len(m.doc.Details()) > 0
+}
+
+func (m *MarkdownWidget) SetFocused(f bool) {
+	m.focused = f
+	if f && m.doc != nil {
+		if !m.isDetailVisible(m.focusedDetailID) {
+			if visible := m.doc.VisibleDetailIDs(); len(visible) > 0 {
+				m.focusedDetailID = visible[0]
+			} else {
+				m.focusedDetailID = 0
+			}
+		}
+	}
+}
+
+func (m *MarkdownWidget) isDetailVisible(id int) bool {
+	if id <= 0 || m.doc == nil {
+		return false
+	}
+	for _, vis := range m.doc.VisibleDetailIDs() {
+		if vis == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *MarkdownWidget) IsFocused() bool {
+	return m.focused
+}
+
+func (m *MarkdownWidget) Document() *markdown.Document {
+	return m.doc
+}
+
+func (m *MarkdownWidget) FocusedDetailID() int {
+	return m.focusedDetailID
 }
 
 func (m *MarkdownWidget) SetScrollParent(sv *ScrollViewWidget) {
@@ -44,15 +89,17 @@ func (m *MarkdownWidget) SetMaxWidth(maxWidth int) {
 }
 
 func (m *MarkdownWidget) SetContent(text string) {
-	if text == m.rawText {
+	if text == m.rawText && m.doc != nil {
 		return
 	}
 	m.rawText = text
-	m.lines = markdown.Render(text)
+	m.doc = markdown.Parse(text)
+	m.lines = m.doc.Render()
 	m.wrapWidth = 0
 	m.wrapped = nil
 	m.sel.Clear()
 	m.dragging = false
+	m.focusedDetailID = 0
 }
 
 func (m *MarkdownWidget) Height() int { return 0 }
@@ -184,6 +231,8 @@ func (m *MarkdownWidget) Render(surface Surface) {
 				}
 				if m.sel.Contains(y, col, m.selEnd.Line, m.selEnd.Col) {
 					cell.BgStyle = term.StyleSelection
+				} else if m.focused && line.Kind == markdown.KindSummary && line.DetailID == m.focusedDetailID {
+					cell.BgStyle = term.StyleSidebarSelected
 				}
 				surface.SetCell(x, y, cell)
 				x += width
@@ -196,13 +245,30 @@ func (m *MarkdownWidget) Render(surface Surface) {
 					surface.SetCell(pad, y, term.Cell{Ch: ' ', BgStyle: term.StyleSelection})
 				}
 			}
+		} else if m.focused && line.Kind == markdown.KindSummary && line.DetailID == m.focusedDetailID {
+			for pad := x; pad < w; pad++ {
+				surface.SetCell(pad, y, term.Cell{Ch: ' ', BgStyle: term.StyleSidebarSelected})
+			}
 		}
 	}
 }
 
+func (m *MarkdownWidget) isMouseInside(mx, my int) bool {
+	if m.scrollParent != nil {
+		pr := m.scrollParent.GetRect()
+		return mx >= pr.X && mx < pr.X+pr.W && my >= pr.Y && my < pr.Y+pr.H
+	}
+	r := m.GetRect()
+	return mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H
+}
+
 func (m *MarkdownWidget) mouseToContent(mx, my int) selection.Position {
-	if m.scrollParent == nil {
-		return selection.Position{}
+	if len(m.wrapped) == 0 {
+		w := m.rect.W - m.BoxOverheadW()
+		if w <= 0 {
+			w = 80
+		}
+		m.rewrap(w)
 	}
 	ox, oy := m.contentOrigin()
 	contentY := my - oy
@@ -245,17 +311,32 @@ func (m *MarkdownWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 			return EventConsumed
 		}
-	case *tcell.EventMouse:
-		if m.scrollParent == nil {
-			return EventIgnored
+		if m.doc != nil && len(m.doc.Details()) > 0 {
+			switch e.Key() {
+			case tcell.KeyTab:
+				if m.focusNextDetail(true) {
+					return EventConsumed
+				}
+			case tcell.KeyBacktab:
+				if m.focusPrevDetail(true) {
+					return EventConsumed
+				}
+			case tcell.KeyEscape:
+				if m.focusedDetailID > 0 {
+					m.focusedDetailID = 0
+					return EventConsumed
+				}
+			case tcell.KeyEnter, tcell.KeyRune:
+				if m.focusedDetailID > 0 && (e.Key() == tcell.KeyEnter || term.KeyRune(e) == ' ') {
+					m.toggleDetail(m.focusedDetailID)
+					return EventConsumed
+				}
+			}
 		}
-		btn := e.Buttons()
+	case *tcell.EventMouse:
 		mx, my := e.Position()
-
-		pr := m.scrollParent.GetRect()
-
-		inside := mx >= pr.X && mx < pr.X+pr.W &&
-			my >= pr.Y && my < pr.Y+pr.H
+		inside := m.isMouseInside(mx, my)
+		btn := e.Buttons()
 
 		if btn&tcell.Button1 != 0 {
 			pos := m.mouseToContent(mx, my)
@@ -273,11 +354,161 @@ func (m *MarkdownWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		if btn == tcell.ButtonNone && m.dragging {
 			m.dragging = false
-			if m.sel.Anchor == m.selEnd {
+			isClick := m.sel.Anchor == m.selEnd
+			if isClick {
 				m.sel.Clear()
+				if m.doc != nil && m.selEnd.Line >= 0 && m.selEnd.Line < len(m.wrapped) {
+					line := m.wrapped[m.selEnd.Line]
+					if line.Kind == markdown.KindSummary && line.DetailID > 0 {
+						m.focusedDetailID = line.DetailID
+						m.toggleDetail(line.DetailID)
+						return EventConsumed
+					}
+				}
 			}
 			return EventConsumed
 		}
 	}
 	return EventIgnored
+}
+
+// FocusNextDetail advances keyboard focus to the next visible summary without wrapping.
+// Returns true if focus advanced, false if already at the last visible summary.
+func (m *MarkdownWidget) FocusNextDetail() bool {
+	return m.focusNextDetail(false)
+}
+
+// FocusPrevDetail moves keyboard focus to the previous visible summary without wrapping.
+// Returns true if focus moved, false if already at the first visible summary.
+func (m *MarkdownWidget) FocusPrevDetail() bool {
+	return m.focusPrevDetail(false)
+}
+
+// FocusFirstDetail sets keyboard focus to the first visible summary.
+func (m *MarkdownWidget) FocusFirstDetail() bool {
+	if m.doc == nil {
+		return false
+	}
+	visible := m.doc.VisibleDetailIDs()
+	if len(visible) == 0 {
+		return false
+	}
+	m.focusedDetailID = visible[0]
+	m.ensureDetailVisible(m.focusedDetailID)
+	return true
+}
+
+// FocusLastDetail sets keyboard focus to the last visible summary.
+func (m *MarkdownWidget) FocusLastDetail() bool {
+	if m.doc == nil {
+		return false
+	}
+	visible := m.doc.VisibleDetailIDs()
+	if len(visible) == 0 {
+		return false
+	}
+	m.focusedDetailID = visible[len(visible)-1]
+	m.ensureDetailVisible(m.focusedDetailID)
+	return true
+}
+
+func (m *MarkdownWidget) focusNextDetail(wrap bool) bool {
+	if m.doc == nil {
+		return false
+	}
+	visible := m.doc.VisibleDetailIDs()
+	if len(visible) == 0 {
+		return false
+	}
+	currentIdx := -1
+	for i, id := range visible {
+		if id == m.focusedDetailID {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx < 0 {
+		m.focusedDetailID = visible[0]
+	} else if currentIdx >= len(visible)-1 {
+		if !wrap {
+			return false
+		}
+		m.focusedDetailID = visible[0]
+	} else {
+		m.focusedDetailID = visible[currentIdx+1]
+	}
+	m.ensureDetailVisible(m.focusedDetailID)
+	return true
+}
+
+func (m *MarkdownWidget) focusPrevDetail(wrap bool) bool {
+	if m.doc == nil {
+		return false
+	}
+	visible := m.doc.VisibleDetailIDs()
+	if len(visible) == 0 {
+		return false
+	}
+	currentIdx := -1
+	for i, id := range visible {
+		if id == m.focusedDetailID {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx < 0 {
+		m.focusedDetailID = visible[len(visible)-1]
+	} else if currentIdx <= 0 {
+		if !wrap {
+			return false
+		}
+		m.focusedDetailID = visible[len(visible)-1]
+	} else {
+		m.focusedDetailID = visible[currentIdx-1]
+	}
+	m.ensureDetailVisible(m.focusedDetailID)
+	return true
+}
+
+func (m *MarkdownWidget) ensureDetailVisible(detailID int) {
+	if m.scrollParent == nil {
+		return
+	}
+	y := m.detailRow(detailID)
+	if y >= 0 {
+		m.scrollParent.EnsureVisible(0, y)
+	}
+}
+
+func (m *MarkdownWidget) detailRow(detailID int) int {
+	for y, line := range m.wrapped {
+		if line.Kind == markdown.KindSummary && line.DetailID == detailID {
+			return y
+		}
+	}
+	return -1
+}
+
+func (m *MarkdownWidget) toggleDetail(detailID int) {
+	if m.doc == nil {
+		return
+	}
+	if m.doc.Toggle(detailID) {
+		m.lines = m.doc.Render()
+		m.wrapWidth = 0
+		m.wrapped = nil
+		m.sel.Clear()
+		m.clampScrollParent()
+	}
+}
+
+func (m *MarkdownWidget) clampScrollParent() {
+	if m.scrollParent == nil {
+		return
+	}
+	r := m.scrollParent.GetRect()
+	w, h := r.W-m.scrollParent.BoxOverheadW(), r.H-m.scrollParent.BoxOverheadH()
+	contentW, contentH := m.ScrollSize()
+	viewW, viewH := m.scrollParent.viewportSize(w, h, contentW, contentH)
+	m.scrollParent.clamp(contentW, contentH, viewW, viewH)
 }

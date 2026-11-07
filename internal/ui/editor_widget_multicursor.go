@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
@@ -50,7 +52,32 @@ func (e *EditorPaneWidget) collapseMulti() {
 	e.Multi.CollapseToSingle()
 	e.syncFromMulti()
 	e.Multi = nil
-	e.multiSearchWord = ""
+}
+
+func (e *EditorPaneWidget) addCursorVertical(delta int) {
+	if e.Buf == nil || len(e.Buf.Lines) == 0 {
+		return
+	}
+	e.ensureMulti()
+	e.syncToMulti()
+	// The unchanged primary preserves the goal column across short rows.
+	p := e.Multi.PrimaryCursor()
+	_, x := e.layout().rowOf(p.Line, p.Col)
+	if !e.WordWrap {
+		x = bufColToVisualCol(e.Buf.Lines[p.Line], p.Col, e.resolveTabSize())
+	}
+	i := 0
+	if delta > 0 {
+		i = len(e.Multi.Cursors) - 1
+	}
+	edge := e.Multi.Cursors[i]
+	line, col, _ := e.wrappedRowMove(edge.Line, edge.Col, delta, x)
+	if line == edge.Line && col == edge.Col {
+		return
+	}
+	e.Multi.Add(line, col)
+	e.syncFromMulti()
+	e.scrollViewportTo(line, col)
 }
 
 func (e *EditorPaneWidget) multiExecRune(r rune) {
@@ -58,13 +85,14 @@ func (e *EditorPaneWidget) multiExecRune(r rune) {
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
+		hadSelection := cs.Sel.Active
 		if cs.Sel.Active {
 			start, end := cs.Sel.Range(cs.Line, cs.Col)
 			delCmd := &undo.DeleteSelectionCommand{
 				StartLine: start.Line, StartCol: start.Col,
 				EndLine: end.Line, EndCol: end.Col,
 			}
-			delCmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(delCmd)
 			cmds = append(cmds, delCmd)
 			cs.Line = start.Line
 			cs.Col = start.Col
@@ -72,16 +100,34 @@ func (e *EditorPaneWidget) multiExecRune(r rune) {
 			e.adjustLaterCursors(i, start, end)
 		}
 		insertCol := cs.Col
-		cmd := &undo.InsertRuneCommand{Line: cs.Line, Col: insertCol, Rune: r}
-		cmd.Apply(e.Buf)
+		if !hadSelection && e.autoClosingSkip(cs.Line, cs.Col, r) {
+			cs.Col++
+			continue
+		}
+		var cmd undo.EditCommand = &undo.InsertRuneCommand{Line: cs.Line, Col: insertCol, Rune: r}
+		var close rune
+		if !hadSelection {
+			close = e.autoClosingCloser(cs.Line, cs.Col, r)
+		}
+		width := 1
+		if close != 0 {
+			cmd = &autoClosingInsertCommand{InsertStringCommand: undo.InsertStringCommand{Line: cs.Line, Col: insertCol, Text: string([]rune{r, close})}}
+			width = 2
+		}
+		e.applyAutoClosingEdit(cmd)
 		cmds = append(cmds, cmd)
+		if close != 0 {
+			e.rememberAutoClosing(cs.Line, insertCol, r, close)
+		}
 		cs.Col++
-		e.shiftLaterCursors(i, cs.Line, insertCol, 1)
+		e.shiftLaterCursors(i, cs.Line, insertCol, width)
 	}
-	if e.Undo != nil {
-		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+	if len(cmds) > 0 {
+		if e.Undo != nil {
+			e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+		}
+		e.bufferDirty = true
 	}
-	e.bufferDirty = true
 	e.syncFromMulti()
 }
 
@@ -100,7 +146,7 @@ func (e *EditorPaneWidget) multiExecTab() {
 				StartLine: start.Line, StartCol: start.Col,
 				EndLine: end.Line, EndCol: end.Col,
 			}
-			delCmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(delCmd)
 			cmds = append(cmds, delCmd)
 			cs.Line = start.Line
 			cs.Col = start.Col
@@ -109,7 +155,7 @@ func (e *EditorPaneWidget) multiExecTab() {
 		}
 		insertCol := cs.Col
 		cmd := &undo.InsertStringCommand{Line: cs.Line, Col: insertCol, Text: indent}
-		cmd.Apply(e.Buf)
+		e.applyAutoClosingEdit(cmd)
 		cmds = append(cmds, cmd)
 		cs.Col += n
 		e.shiftLaterCursors(i, cs.Line, insertCol, n)
@@ -132,7 +178,7 @@ func (e *EditorPaneWidget) multiExecBackspace() {
 				StartLine: start.Line, StartCol: start.Col,
 				EndLine: end.Line, EndCol: end.Col,
 			}
-			delCmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(delCmd)
 			cmds = append(cmds, delCmd)
 			cs.Line = start.Line
 			cs.Col = start.Col
@@ -141,16 +187,22 @@ func (e *EditorPaneWidget) multiExecBackspace() {
 			continue
 		}
 		cs.Line = e.Buf.ClampLine(cs.Line)
-		if cs.Col > 0 {
+		if e.autoClosingDelete(cs.Line, cs.Col) {
+			cmd := &undo.DeleteSelectionCommand{StartLine: cs.Line, StartCol: cs.Col - 1, EndLine: cs.Line, EndCol: cs.Col + 1}
+			e.applyAutoClosingEdit(cmd)
+			cmds = append(cmds, cmd)
+			cs.Col--
+			e.shiftLaterCursors(i, cs.Line, cs.Col, -2)
+		} else if cs.Col > 0 {
 			cmd := &undo.DeleteRuneCommand{Line: cs.Line, Col: cs.Col - 1}
-			cmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(cmd)
 			cmds = append(cmds, cmd)
 			cs.Col--
 			e.shiftLaterCursors(i, cs.Line, cs.Col, -1)
 		} else if cs.Line > 0 {
 			prevLen := len([]rune(e.Buf.Lines[cs.Line-1]))
 			cmd := &undo.JoinLineCommand{Line: cs.Line}
-			cmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(cmd)
 			cmds = append(cmds, cmd)
 			e.shiftLaterLines(i, cs.Line, -1)
 			cs.Line--
@@ -178,7 +230,7 @@ func (e *EditorPaneWidget) multiExecDelete() {
 				StartLine: start.Line, StartCol: start.Col,
 				EndLine: end.Line, EndCol: end.Col,
 			}
-			delCmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(delCmd)
 			cmds = append(cmds, delCmd)
 			cs.Line = start.Line
 			cs.Col = start.Col
@@ -190,12 +242,12 @@ func (e *EditorPaneWidget) multiExecDelete() {
 		lineLen := len([]rune(e.Buf.Lines[cs.Line]))
 		if cs.Col < lineLen {
 			cmd := &undo.DeleteRuneCommand{Line: cs.Line, Col: cs.Col}
-			cmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(cmd)
 			cmds = append(cmds, cmd)
 			e.shiftLaterCursors(i, cs.Line, cs.Col, -1)
 		} else if cs.Line < len(e.Buf.Lines)-1 {
 			cmd := &undo.JoinLineCommand{Line: cs.Line + 1}
-			cmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(cmd)
 			cmds = append(cmds, cmd)
 			e.shiftLaterLines(i, cs.Line+1, -1)
 		}
@@ -221,7 +273,7 @@ func (e *EditorPaneWidget) multiExecEnter() {
 				StartLine: start.Line, StartCol: start.Col,
 				EndLine: end.Line, EndCol: end.Col,
 			}
-			delCmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(delCmd)
 			cmds = append(cmds, delCmd)
 			cs.Line = start.Line
 			cs.Col = start.Col
@@ -234,14 +286,14 @@ func (e *EditorPaneWidget) multiExecEnter() {
 			indent = leadingWhitespace(e.Buf.Lines[cs.Line])
 		}
 		cmd := &undo.SplitLineCommand{Line: cs.Line, Col: cs.Col}
-		cmd.Apply(e.Buf)
+		e.applyAutoClosingEdit(cmd)
 		cmds = append(cmds, cmd)
 		e.shiftLaterLines(i, cs.Line, 1)
 		cs.Line++
 		cs.Col = 0
 		if len(indent) > 0 {
 			indCmd := &undo.InsertStringCommand{Line: cs.Line, Col: 0, Text: indent}
-			indCmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(indCmd)
 			cmds = append(cmds, indCmd)
 			cs.Col = len([]rune(indent))
 		}
@@ -313,22 +365,15 @@ func (e *EditorPaneWidget) SelectNextOccurrence() {
 	}
 	if word == "" {
 		e.selectWord(e.Cursor.Line, e.Cursor.Col)
-		if e.Selection.Active {
-			e.multiSearchWord = e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
-		}
 		e.ensureMulti()
 		e.syncToMulti()
 		return
-	}
-	if e.multiSearchWord == "" {
-		e.multiSearchWord = word
 	}
 	e.ensureMulti()
 	e.syncToMulti()
 	e.Multi.NormalizePrimary()
 	e.syncFromMulti()
 
-	searchWord := e.multiSearchWord
 	lastCursor := e.Multi.Cursors[len(e.Multi.Cursors)-1]
 	startLine := lastCursor.Line
 	startCol := lastCursor.Col
@@ -336,13 +381,13 @@ func (e *EditorPaneWidget) SelectNextOccurrence() {
 	for line := startLine; line < len(e.Buf.Lines)+startLine; line++ {
 		l := line % len(e.Buf.Lines)
 		runes := []rune(e.Buf.Lines[l])
-		searchRunes := []rune(searchWord)
+		searchRunes := []rune(word)
 		fromCol := 0
 		if l == startLine {
 			fromCol = startCol
 		}
 		for col := fromCol; col <= len(runes)-len(searchRunes); col++ {
-			if string(runes[col:col+len(searchRunes)]) == searchWord {
+			if string(runes[col:col+len(searchRunes)]) == word {
 				already := false
 				for _, c := range e.Multi.Cursors {
 					s, end := c.Sel.Range(c.Line, c.Col)
@@ -357,7 +402,7 @@ func (e *EditorPaneWidget) SelectNextOccurrence() {
 				sel := selection.Selection{Active: true, Anchor: selection.Position{Line: l, Col: col}}
 				e.Multi.AddWithSelection(l, col+len(searchRunes), sel)
 				e.syncFromMulti()
-				e.scrollViewport()
+				e.scrollViewportToRange(l, col, col+len(searchRunes))
 				return
 			}
 		}
@@ -381,7 +426,6 @@ func (e *EditorPaneWidget) SelectAllOccurrences() {
 	if word == "" {
 		return
 	}
-	e.multiSearchWord = word
 	e.ensureMulti()
 	e.syncToMulti()
 
@@ -406,7 +450,6 @@ func (e *EditorPaneWidget) UndoLastCursor() {
 	if !e.Multi.IsMulti() {
 		e.syncFromMulti()
 		e.Multi = nil
-		e.multiSearchWord = ""
 	} else {
 		e.syncFromMulti()
 	}
@@ -455,9 +498,282 @@ func (e *EditorPaneWidget) SplitSelectionToLines() {
 	}
 	e.Selection.Clear()
 	// Clear selections on all cursors
+
 	for i := range e.Multi.Cursors {
 		e.Multi.Cursors[i].Sel.Clear()
 	}
+	e.syncFromMulti()
+	e.scrollViewport()
+}
+
+func (e *EditorPaneWidget) normalizeClipboardCursors() {
+	e.syncToMulti()
+	e.Multi.MergeSelections()
+	e.syncFromMulti()
+}
+
+// multiCopyPieces returns selected text or the complete line for each cursor.
+func (e *EditorPaneWidget) multiCopyPieces() []string {
+	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
+		return nil
+	}
+
+	e.normalizeClipboardCursors()
+	pieces := make([]string, 0, len(e.Multi.Cursors))
+
+	for _, cs := range e.Multi.Cursors {
+		if cs.Sel.Active {
+			pieces = append(
+				pieces,
+				cs.Sel.Text(e.Buf.Lines, cs.Line, cs.Col),
+			)
+		} else if cs.Line >= 0 && cs.Line < len(e.Buf.Lines) {
+			pieces = append(pieces, e.Buf.Lines[cs.Line])
+		}
+	}
+
+	return pieces
+}
+
+// pastePieces distributes clipboard lines when their count matches
+// the number of cursors; otherwise, it repeats the full text.
+func pastePieces(text string, n int) []string {
+	if n <= 0 {
+		return nil
+	}
+	if n == 1 {
+		return []string{text}
+	}
+
+	parts := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+	if len(parts) == n {
+		return parts
+	}
+
+	pieces := make([]string, n)
+	for i := range pieces {
+		pieces[i] = text
+	}
+
+	return pieces
+}
+
+// multiPasteText inserts clipboard text at each cursor in one undo step.
+func (e *EditorPaneWidget) multiPasteText(text string) {
+	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
+		return
+	}
+
+	e.normalizeClipboardCursors()
+	pieces := pastePieces(text, len(e.Multi.Cursors))
+	var commands []undo.EditCommand
+
+	// Work from bottom to top to avoid shifting later edit positions.
+	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
+		cs := &e.Multi.Cursors[i]
+
+		if cs.Sel.Active {
+			start, end := cs.Sel.Range(cs.Line, cs.Col)
+			cmd := &undo.DeleteSelectionCommand{
+				StartLine: start.Line,
+				StartCol:  start.Col,
+				EndLine:   end.Line,
+				EndCol:    end.Col,
+			}
+			e.applyAutoClosingEdit(cmd)
+
+			if !undo.IsNoop(cmd) {
+				commands = append(commands, cmd)
+			}
+
+			cs.Line, cs.Col = start.Line, start.Col
+			cs.Sel.Clear()
+			e.adjustLaterCursors(i, start, end)
+		}
+
+		line := e.Buf.ClampLine(cs.Line)
+		runes := []rune(e.Buf.Lines[line])
+		col := cs.Col
+
+		if col < 0 {
+			col = 0
+		}
+		if col > len(runes) {
+			col = len(runes)
+		}
+
+		parts := strings.Split(pieces[i], "\n")
+
+		if len(parts) == 1 {
+			cmd := &undo.InsertStringCommand{
+				Line: line,
+				Col:  col,
+				Text: parts[0],
+			}
+			e.applyAutoClosingEdit(cmd)
+			commands = append(commands, cmd)
+			cs.Line, cs.Col = line, col+len([]rune(parts[0]))
+
+			// Shift previously processed cursors on the same line.
+			e.shiftLaterCursors(i, line, col, len([]rune(parts[0])))
+			continue
+		}
+
+		newLines := make([]string, 0, len(parts)+1)
+		newLines = append(newLines, string(runes[:col])+parts[0])
+		newLines = append(newLines, parts[1:len(parts)-1]...)
+		newLines = append(
+			newLines,
+			parts[len(parts)-1]+string(runes[col:]),
+		)
+
+		cmd := &undo.ReplaceLinesCommand{
+			Start:    line,
+			OldLines: []string{e.Buf.Lines[line]},
+			NewLines: newLines,
+		}
+		e.applyAutoClosingEdit(cmd)
+		commands = append(commands, cmd)
+
+		cs.Line = line + len(parts) - 1
+		cs.Col = len([]rune(parts[len(parts)-1]))
+
+		// Earlier insertions shift already-processed cursors down.
+		addedLines := len(parts) - 1
+		for j := i + 1; j < len(e.Multi.Cursors); j++ {
+			other := &e.Multi.Cursors[j]
+
+			if other.Line > line {
+				other.Line += addedLines
+			} else if other.Line == line && other.Col >= col {
+				other.Line += addedLines
+				other.Col = len([]rune(parts[len(parts)-1])) + other.Col - col
+			}
+		}
+	}
+
+	if len(commands) > 0 && e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: commands})
+	}
+
+	e.bufferDirty = true
+	e.syncFromMulti()
+	e.refreshFolds()
+	e.scrollViewport()
+}
+
+// adjustSelectionAnchorAfterLineDelete keeps a selection anchor
+// aligned when a line above it is removed.
+func adjustSelectionAnchorAfterLineDelete(cs *multicursor.CursorState, deletedLine int) {
+	if !cs.Sel.Active {
+		return
+	}
+
+	if cs.Sel.Anchor.Line > deletedLine {
+		cs.Sel.Anchor.Line--
+	} else if cs.Sel.Anchor.Line == deletedLine {
+		cs.Sel.Anchor.Line = deletedLine
+		cs.Sel.Anchor.Col = 0
+	}
+}
+
+// multiCut cuts selections or entire lines in one undo step.
+func (e *EditorPaneWidget) multiCut() {
+	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
+		return
+	}
+
+	e.normalizeClipboardCursors()
+	// Avoid deleting the same original line more than once.
+	seenLines := make(map[int]bool)
+	unique := make([]multicursor.CursorState, 0, len(e.Multi.Cursors))
+	newPrimary := 0
+
+	for i, cs := range e.Multi.Cursors {
+		if !cs.Sel.Active && seenLines[cs.Line] {
+			continue
+		}
+
+		if !cs.Sel.Active {
+			seenLines[cs.Line] = true
+		}
+
+		if i == e.Multi.Primary {
+			newPrimary = len(unique)
+		}
+
+		unique = append(unique, cs)
+	}
+
+	e.Multi.Cursors = unique
+	e.Multi.Primary = newPrimary
+
+	var commands []undo.EditCommand
+
+	// Process cursors from bottom to top so earlier line positions
+	// remain stable as later lines are deleted.
+	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
+		cs := &e.Multi.Cursors[i]
+
+		if cs.Sel.Active {
+			start, end := cs.Sel.Range(cs.Line, cs.Col)
+			cmd := &undo.DeleteSelectionCommand{
+				StartLine: start.Line,
+				StartCol:  start.Col,
+				EndLine:   end.Line,
+				EndCol:    end.Col,
+			}
+			e.applyAutoClosingEdit(cmd)
+
+			if !undo.IsNoop(cmd) {
+				commands = append(commands, cmd)
+			}
+
+			cs.Line, cs.Col = start.Line, start.Col
+			cs.Sel.Clear()
+			e.adjustLaterCursors(i, start, end)
+			continue
+		}
+
+		line := e.Buf.ClampLine(cs.Line)
+
+		if len(e.Buf.Lines) == 1 {
+			cmd := &undo.ReplaceLinesCommand{
+				Start:    0,
+				OldLines: []string{e.Buf.Lines[0]},
+				NewLines: []string{""},
+			}
+			e.applyAutoClosingEdit(cmd)
+			commands = append(commands, cmd)
+			cs.Line, cs.Col = 0, 0
+			continue
+		}
+
+		cmd := &undo.DeleteLineCommand{Idx: line}
+		e.applyAutoClosingEdit(cmd)
+		commands = append(commands, cmd)
+		// Adjust cursor positions and active selection anchors.
+		for j := range e.Multi.Cursors {
+			other := &e.Multi.Cursors[j]
+
+			adjustSelectionAnchorAfterLineDelete(other, line)
+
+			if other.Line > line {
+				other.Line--
+			} else if other.Line == line {
+				other.Line = e.Buf.ClampLine(line)
+				other.Col = 0
+			}
+		}
+	}
+
+	if len(commands) > 0 && e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: commands})
+	}
+
+	e.bufferDirty = true
+	e.refreshFolds()
+	e.Multi.Deduplicate()
 	e.syncFromMulti()
 	e.scrollViewport()
 }

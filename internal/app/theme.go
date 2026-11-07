@@ -13,13 +13,35 @@ import (
 )
 
 type styleMapOptions struct {
-	transparentBg bool
+	transparentBg          bool
+	editorSelectionStyle   string
+	terminalSelectionStyle string
+	pluginSelectionStyle   string
 }
 
 type StyleMapOption func(*styleMapOptions)
 
 func WithTransparentBackground(v bool) StyleMapOption {
 	return func(o *styleMapOptions) { o.transparentBg = v }
+}
+
+func WithEditorSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) { o.editorSelectionStyle = style }
+}
+
+func WithPluginSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) { o.pluginSelectionStyle = style }
+}
+
+func WithTerminalSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) { o.terminalSelectionStyle = style }
+}
+
+func WithSelectionStyle(style string) StyleMapOption {
+	return func(o *styleMapOptions) {
+		o.editorSelectionStyle = style
+		o.terminalSelectionStyle = style
+	}
 }
 
 func BuildStyleMap(theme config.ThemeConfig, opts ...StyleMapOption) term.StyleMap {
@@ -71,6 +93,7 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	}
 	m[term.StyleSelection] = base.Reverse(true)
 	m[term.StyleReverse] = base.Reverse(true)
+	m[term.StylePluginSelection] = base.Reverse(true)
 
 	if o.transparentBg {
 		if theme.CommitHeader.Bg == theme.Default.Bg {
@@ -98,7 +121,20 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleMenuBarActive, theme.Menu.Active)
 	applyStyleDef(&m, term.StyleBorder, theme.Border)
 	applyStyleDef(&m, term.StyleBorderActive, theme.BorderActive)
-	applyStyleDef(&m, term.StyleSelection, theme.Editor.Selection)
+	if o.pluginSelectionStyle == config.SelectionStyleBackground {
+		if theme.Editor.Selection.Bg != "" {
+			m[term.StylePluginSelection] = base
+		}
+		applyStyleDef(&m, term.StylePluginSelection, theme.Editor.Selection)
+	}
+	if o.editorSelectionStyle == config.SelectionStyleInvert {
+		// Keep reverse/inversion and skip the theme's selection background override.
+	} else {
+		if theme.Editor.Selection.Bg != "" {
+			m[term.StyleSelection] = base
+		}
+		applyStyleDef(&m, term.StyleSelection, theme.Editor.Selection)
+	}
 	applyStyleDef(&m, term.StyleSearchMatch, theme.Editor.SearchMatch)
 	applyStyleDef(&m, term.StyleSearchActive, theme.Editor.SearchActive)
 	applyStyleDef(&m, term.StyleBracketMatch, theme.Editor.BracketMatch)
@@ -165,6 +201,8 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleInputAction, theme.Input.Action)
 	applyStyleDef(&m, term.StyleButton, theme.Button.Item)
 	applyStyleDef(&m, term.StyleButtonFocused, theme.Button.Focused)
+	applyStyleDef(&m, term.StyleButtonFilled, theme.Button.Filled)
+	applyStyleDef(&m, term.StyleButtonInverse, theme.Button.Inverse)
 	applyStyleDef(&m, term.StyleHoverBold, theme.Hover.Bold)
 	applyStyleDef(&m, term.StyleHoverItalic, theme.Hover.Italic)
 	applyStyleDef(&m, term.StyleHoverCode, theme.Hover.Code)
@@ -333,11 +371,16 @@ func BuildTerminalPalette(theme config.ThemeConfig, opts ...StyleMapOption) ui.T
 		bg = theme.Default.Bg
 	}
 	ansi := tc.ANSIPalette()
+	selBg := tc.Selection
+	if o.terminalSelectionStyle == config.SelectionStyleInvert {
+		selBg = ""
+	}
 	p := ui.TerminalColorPalette{
-		Fg:          ui.ParseHexColor(fg),
-		Bg:          ui.ParseHexColor(bg),
-		SelectionBg: ui.ParseHexColor(tc.Selection),
-		Color256:    ui.Build256Palette(),
+		Fg:             ui.ParseHexColor(fg),
+		Bg:             ui.ParseHexColor(bg),
+		SelectionBg:    ui.ParseHexColor(selBg),
+		SelectionStyle: o.terminalSelectionStyle,
+		Color256:       ui.Build256Palette(),
 	}
 	for i, hex := range ansi {
 		p.ANSI[i] = ui.ParseHexColor(hex)

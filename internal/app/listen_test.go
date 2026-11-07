@@ -17,7 +17,7 @@ import (
 func newListenTestApp(t *testing.T) *App {
 	t.Helper()
 	a := prepareListenTestApp(t)
-	startListenTestEventLoop(t, a)
+	startListenTestEventLoop(t, a, nil)
 	return a
 }
 
@@ -40,12 +40,16 @@ func prepareListenTestApp(t *testing.T) *App {
 	return a
 }
 
-func startListenTestEventLoop(t *testing.T, a *App) {
+func startListenTestEventLoop(t *testing.T, a *App, onStartupComplete ...func()) {
 	t.Helper()
 	a.initTaskDelivery(a.Screen)
+	var onStartup func()
+	if len(onStartupComplete) > 0 {
+		onStartup = onStartupComplete[0]
+	}
 	loopDone := make(chan struct{})
 	go func() {
-		RunEventLoop(a.Screen, a.Renderer, a, a.Running, a.CloseTerminal)
+		RunEventLoop(a.Screen, a.Renderer, a, a.Running, a.CloseTerminal, onStartup)
 		close(loopDone)
 	}()
 	t.Cleanup(func() {

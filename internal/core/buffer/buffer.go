@@ -57,7 +57,10 @@ func DetectIndent(lines []string) IndentInfo {
 	bestSize := 0
 	bestCount := 0
 	for size, count := range diffs {
-		if count > bestCount {
+		// Map order is random, so break a tie by size: the smaller step, which
+		// also fits the larger one (2 and 4 -> 2), but never a one-space step
+		// over a real one, as " * " doc comment lines make those.
+		if count > bestCount || (count == bestCount && tieRank(size) < tieRank(bestSize)) {
 			bestSize = size
 			bestCount = count
 		}
@@ -68,6 +71,13 @@ func DetectIndent(lines []string) IndentInfo {
 	return IndentInfo{Size: bestSize}
 }
 
+func tieRank(size int) int {
+	if size == 1 {
+		return 9
+	}
+	return size
+}
+
 // Buffer represents a text buffer with line-based storage.
 type Buffer struct {
 	Lines                  []string
@@ -76,6 +86,9 @@ type Buffer struct {
 	ShowTrailingNewline    bool
 	TrimTrailingWhitespace bool
 	LineEnding             string // "\n" (LF) or "\r\n" (CRLF); defaults to "\n"
+	// savedLineEnding is LineEnding as last loaded or saved. Changing the line
+	// ending is not on the undo stack, so undo alone cannot tell it apart.
+	savedLineEnding string
 	// ReadOnlyOnDisk must be checked before saving: SaveFile renames over the
 	// target, which succeeds on a read-only file in a writable directory.
 	ReadOnlyOnDisk bool
@@ -147,4 +160,17 @@ func (b *Buffer) DeleteLine(idx int) {
 	}
 	b.Splice(idx, 1)
 	b.Dirty = true
+}
+
+// LineEndingChanged reports whether LineEnding differs from the file as last
+// loaded or saved.
+func (b *Buffer) LineEndingChanged() bool {
+	return effectiveLineEnding(b.LineEnding) != effectiveLineEnding(b.savedLineEnding)
+}
+
+func effectiveLineEnding(eol string) string {
+	if eol == "" {
+		return "\n"
+	}
+	return eol
 }

@@ -52,9 +52,9 @@ func TestApplyDiffOpenDoesNotStealFocusAfterNavigation(t *testing.T) {
 	group := ui.NewEditorGroupWidget(nil, 4, true, "relative")
 	origin := group.ActiveFilePath()
 	group.NewFile()
-	app := &App{EditorGroup: group, Status: view.NewStatusBar(), diffOpenGen: 3}
+	app := &App{EditorGroup: group, Status: view.NewStatusBar()}
 
-	app.ApplyDiffOpen(&DiffOpenResult{Gen: 3, Origin: origin, TabName: "late (diff)", Path: "late.txt"})
+	app.applyDiffOpen(origin, &diffOpenResult{TabName: "late (diff)", Path: "late.txt"})
 	if group.DiffWidgetByTab("late (diff)") != nil {
 		t.Fatal("late diff opened after foreground navigation")
 	}

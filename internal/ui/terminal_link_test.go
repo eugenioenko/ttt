@@ -7,6 +7,23 @@ import (
 	"testing"
 )
 
+func TestFileLineReWindowsDrive(t *testing.T) {
+	for _, path := range []string{`C:\src\main.go`, `C:/src/main.go`} {
+		match := fileLineRe.FindStringSubmatch("error: " + path + ":12:3")
+		if len(match) != 4 || match[1] != path || match[2] != "12" || match[3] != "3" {
+			t.Fatalf("Windows file reference %q parsed as %v", path, match)
+		}
+	}
+}
+
+func TestDetectLinkCandidatesPreservesUnresolvedFiles(t *testing.T) {
+	spans := detectLinkCandidates("界 missing.go:12:3 https://example.com:80/path")
+	if len(spans) != 2 || spans[0].IsFile || !spans[1].IsFile || spans[1].FilePath != "missing.go" ||
+		spans[1].StartCol != 2 || spans[1].EndCol != 17 || spans[1].Line != 12 || spans[1].Col != 3 {
+		t.Fatalf("candidates = %+v", spans)
+	}
+}
+
 func TestDetectLinks_URLs(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -252,14 +269,14 @@ func TestResolveFilePath_HomeTilde(t *testing.T) {
 	if err != nil {
 		t.Skip("cannot determine home directory")
 	}
-	result := resolveFilePath("~/", "")
+	result := ResolveFilePath("~/", "")
 	if result != home {
 		_ = result
 	}
 }
 
 func TestResolveFilePath_Empty(t *testing.T) {
-	result := resolveFilePath("", "/some/dir")
+	result := ResolveFilePath("", "/some/dir")
 	if result != "" {
 		t.Errorf("expected empty result for empty path, got %q", result)
 	}

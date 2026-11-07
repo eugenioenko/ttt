@@ -282,3 +282,336 @@ func TestMarkdownFullWidthDividerPreservesBordersAndMargins(t *testing.T) {
 		})
 	}
 }
+
+func TestMarkdownWidgetDetailsDefaultCollapsed(t *testing.T) {
+	m := NewMarkdownWidget()
+	content := `<details>
+<summary>Click for info</summary>
+
+Line 1
+Line 2
+Line 3
+Line 4
+</details>`
+	m.SetContent(content)
+	_, initialH := m.ContentSize(80)
+
+	// In collapsed state, should only have the summary line
+	if initialH != 1 {
+		t.Fatalf("expected collapsed line count 1, got %d (lines: %v)", initialH, m.wrappedTextLines())
+	}
+	if !strings.HasPrefix(m.wrapped[0].Text(), "▶ Click for info") {
+		t.Fatalf("expected summary starting with '▶ Click for info', got %q", m.wrapped[0].Text())
+	}
+}
+
+func TestMarkdownWidgetDetailsOpen(t *testing.T) {
+	m := NewMarkdownWidget()
+	content := `<details open>
+<summary>Always open</summary>
+
+Line 1
+Line 2
+Line 3
+Line 4
+</details>`
+	m.SetContent(content)
+	_, openH := m.ContentSize(80)
+
+	// In open state, summary line plus body lines
+	if openH <= 1 {
+		t.Fatalf("expected open line count > 1, got %d", openH)
+	}
+	if !strings.HasPrefix(m.wrapped[0].Text(), "▼ Always open") {
+		t.Fatalf("expected summary starting with '▼ Always open', got %q", m.wrapped[0].Text())
+	}
+}
+
+func TestMarkdownWidgetDetailsMouseToggle(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.SetRect(Rect{X: 0, Y: 0, W: 40, H: 20})
+	content := `<details>
+<summary>Toggle Me</summary>
+
+Hidden body line 1
+Hidden body line 2
+Hidden body line 3
+</details>`
+	m.SetContent(content)
+	_, initialH := m.ContentSize(40)
+	if initialH != 1 {
+		t.Fatalf("expected initial collapsed line count 1, got %d", initialH)
+	}
+
+	// Click on row 0 (press and release at x=5, y=0)
+	m.HandleEvent(tcell.NewEventMouse(5, 0, tcell.Button1, 0))
+	m.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, 0))
+
+	_, expandedH := m.ContentSize(40)
+	if expandedH <= initialH {
+		t.Fatalf("expected expanded height > initial height, got %d <= %d", expandedH, initialH)
+	}
+	if !strings.HasPrefix(m.wrapped[0].Text(), "▼ Toggle Me") {
+		t.Fatalf("expected summary marker ▼, got %q", m.wrapped[0].Text())
+	}
+
+	// Click again on row 0 to collapse
+	m.HandleEvent(tcell.NewEventMouse(5, 0, tcell.Button1, 0))
+	m.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, 0))
+
+	_, collapsedH := m.ContentSize(40)
+	if collapsedH != initialH {
+		t.Fatalf("expected collapsed height %d, got %d", initialH, collapsedH)
+	}
+	if !strings.HasPrefix(m.wrapped[0].Text(), "▶ Toggle Me") {
+		t.Fatalf("expected summary marker ▶, got %q", m.wrapped[0].Text())
+	}
+}
+
+func TestMarkdownWidgetDetailsMouseDragDoesNotToggle(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.SetRect(Rect{X: 0, Y: 0, W: 40, H: 20})
+	content := `<details>
+<summary>Drag Over Me</summary>
+
+Hidden body line 1
+</details>`
+	m.SetContent(content)
+
+	// Press at col 2, drag to col 8, release at col 8
+	m.HandleEvent(tcell.NewEventMouse(2, 0, tcell.Button1, 0))
+	m.HandleEvent(tcell.NewEventMouse(8, 0, tcell.Button1, 0))
+	m.HandleEvent(tcell.NewEventMouse(8, 0, tcell.ButtonNone, 0))
+
+	// Detail must NOT be toggled
+	if len(m.lines) != 1 || !strings.HasPrefix(m.wrapped[0].Text(), "▶ Drag Over Me") {
+		t.Fatalf("drag incorrectly toggled detail: %v", m.wrappedTextLines())
+	}
+	if !m.sel.Active {
+		t.Fatal("expected selection to remain active after dragging")
+	}
+}
+
+func TestMarkdownWidgetDetailsKeyboardNavigation(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.SetRect(Rect{X: 0, Y: 0, W: 40, H: 20})
+	content := `<details>
+<summary>First</summary>
+
+Body 1
+</details>
+
+<details>
+<summary>Second</summary>
+
+Body 2
+</details>`
+	m.SetContent(content)
+	m.rewrap(40)
+
+	if !m.Focusable() {
+		t.Fatal("expected markdown widget with details to be focusable")
+	}
+
+	// Tab to focus the first summary
+	res := m.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", 0))
+	if res != EventConsumed || m.focusedDetailID != 1 {
+		t.Fatalf("expected focusedDetailID=1, got %d (result: %v)", m.focusedDetailID, res)
+	}
+
+	// Press Enter to expand the first summary
+	res = m.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", 0))
+	if res != EventConsumed || !m.doc.IsOpen(1) {
+		t.Fatalf("expected first detail to be open after Enter")
+	}
+
+	// Tab to focus the second summary
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", 0))
+	if m.focusedDetailID != 2 {
+		t.Fatalf("expected focusedDetailID=2, got %d", m.focusedDetailID)
+	}
+
+	// Press Space to expand the second summary
+	res = m.HandleEvent(tcell.NewEventKey(tcell.KeyRune, " ", 0))
+	if res != EventConsumed || !m.doc.IsOpen(2) {
+		t.Fatalf("expected second detail to be open after Space")
+	}
+
+	// Backtab to go back to first summary
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyBacktab, "", 0))
+	if m.focusedDetailID != 1 {
+		t.Fatalf("expected focusedDetailID=1 after backtab, got %d", m.focusedDetailID)
+	}
+
+	// Escape clears focus
+	res = m.HandleEvent(tcell.NewEventKey(tcell.KeyEscape, "", 0))
+	if res != EventConsumed || m.focusedDetailID != 0 {
+		t.Fatalf("expected focusedDetailID=0 after escape, got %d", m.focusedDetailID)
+	}
+}
+
+func TestMarkdownWidgetNestedDetails(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.SetRect(Rect{X: 0, Y: 0, W: 40, H: 20})
+	content := `<details>
+<summary>Outer</summary>
+
+Outer content
+
+<details>
+<summary>Inner</summary>
+
+Inner content
+</details>
+</details>`
+	m.SetContent(content)
+	_, h0 := m.ContentSize(40)
+	if h0 != 1 {
+		t.Fatalf("expected initial line count 1, got %d", h0)
+	}
+
+	// Tab to Outer and expand it
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", 0))
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", 0))
+
+	_, h1 := m.ContentSize(40)
+	if h1 <= h0 {
+		t.Fatalf("expected h1 > h0, got %d <= %d", h1, h0)
+	}
+
+	// Now Inner is visible, Tab moves to Inner
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", 0))
+	innerID := m.focusedDetailID
+	if innerID != 2 {
+		t.Fatalf("expected focusedDetailID=2 for inner detail, got %d", innerID)
+	}
+
+	// Press Enter to expand Inner
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", 0))
+	_, h2 := m.ContentSize(40)
+	if h2 <= h1 {
+		t.Fatalf("expected h2 > h1, got %d <= %d", h2, h1)
+	}
+
+	// Collapse Outer -> all nested contents hidden
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", 0)) // focus Outer
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", 0))
+	_, h3 := m.ContentSize(40)
+	if h3 != 1 {
+		t.Fatalf("expected line count 1 when outer collapsed, got %d", h3)
+	}
+}
+
+func TestMarkdownWidgetDetailsScrollClamping(t *testing.T) {
+	m := NewMarkdownWidget()
+	content := `<details open>
+<summary>Long Section</summary>
+
+` + strings.Repeat("Line of content\n", 40) + `
+</details>`
+	m.SetContent(content)
+	sv := NewScrollViewWidget(m)
+	m.SetScrollParent(sv)
+
+	// Render in an 8-row viewport
+	renderWidget(sv, 0, 0, 40, 8)
+	if sv.lastContentH <= 8 {
+		t.Fatalf("expected overflowing content height, got %d", sv.lastContentH)
+	}
+
+	// Scroll down
+	for range 10 {
+		sv.HandleEvent(tcell.NewEventMouse(5, 5, tcell.WheelDown, 0))
+	}
+	if sv.scrollY == 0 {
+		t.Fatal("expected scrolled down scrollY > 0")
+	}
+
+	// Collapse section via mouse click at top of content (y=0)
+	m.HandleEvent(tcell.NewEventMouse(5, 0, tcell.Button1, 0))
+	m.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, 0))
+
+	// Re-render
+	renderWidget(sv, 0, 0, 40, 8)
+	if sv.lastContentH != 1 {
+		t.Fatalf("expected collapsed content height 1, got %d", sv.lastContentH)
+	}
+	if sv.scrollY != 0 {
+		t.Fatalf("expected clamped scrollY 0, got %d", sv.scrollY)
+	}
+}
+
+func TestMarkdownWidgetFocusPreservedAcrossSetFocused(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.SetContent("<details><summary>One</summary>Body 1</details>\n\n<details><summary>Two</summary>Body 2</details>")
+	m.SetFocused(true)
+
+	if m.focusedDetailID != 1 {
+		t.Fatalf("expected detail 1 initially focused, got %d", m.focusedDetailID)
+	}
+
+	m.FocusNextDetail()
+	if m.focusedDetailID != 2 {
+		t.Fatalf("expected detail 2 focused after FocusNextDetail, got %d", m.focusedDetailID)
+	}
+
+	// Losing focus (e.g. during FocusManager.Collect redraw cycle) must not clear focusedDetailID
+	m.SetFocused(false)
+	if m.IsFocused() {
+		t.Error("expected IsFocused() to be false")
+	}
+
+	m.SetFocused(true)
+	if m.focusedDetailID != 2 {
+		t.Fatalf("expected detail 2 to remain focused after regaining focus, got %d", m.focusedDetailID)
+	}
+}
+
+func TestMarkdownWidgetFocusNavigationAPI(t *testing.T) {
+	m := NewMarkdownWidget()
+	m.SetContent("<details><summary>One</summary>Body 1</details>\n\n<details><summary>Two</summary>Body 2</details>\n\n<details><summary>Three</summary>Body 3</details>")
+
+	if !m.FocusFirstDetail() || m.focusedDetailID != 1 {
+		t.Fatalf("expected FocusFirstDetail=1, got %d", m.focusedDetailID)
+	}
+
+	if !m.FocusNextDetail() || m.focusedDetailID != 2 {
+		t.Fatalf("expected FocusNextDetail=2, got %d", m.focusedDetailID)
+	}
+
+	if !m.FocusNextDetail() || m.focusedDetailID != 3 {
+		t.Fatalf("expected FocusNextDetail=3, got %d", m.focusedDetailID)
+	}
+
+	// At last detail, FocusNextDetail must return false (no wrapping)
+	if m.FocusNextDetail() {
+		t.Error("expected FocusNextDetail at last detail to return false")
+	}
+	if m.focusedDetailID != 3 {
+		t.Fatalf("expected focusedDetailID to stay 3, got %d", m.focusedDetailID)
+	}
+
+	if !m.FocusPrevDetail() || m.focusedDetailID != 2 {
+		t.Fatalf("expected FocusPrevDetail=2, got %d", m.focusedDetailID)
+	}
+
+	if !m.FocusLastDetail() || m.focusedDetailID != 3 {
+		t.Fatalf("expected FocusLastDetail=3, got %d", m.focusedDetailID)
+	}
+
+	if !m.FocusPrevDetail() || m.focusedDetailID != 2 {
+		t.Fatalf("expected FocusPrevDetail=2, got %d", m.focusedDetailID)
+	}
+
+	if !m.FocusPrevDetail() || m.focusedDetailID != 1 {
+		t.Fatalf("expected FocusPrevDetail=1, got %d", m.focusedDetailID)
+	}
+
+	// At first detail, FocusPrevDetail must return false (no wrapping)
+	if m.FocusPrevDetail() {
+		t.Error("expected FocusPrevDetail at first detail to return false")
+	}
+	if m.focusedDetailID != 1 {
+		t.Fatalf("expected focusedDetailID to stay 1, got %d", m.focusedDetailID)
+	}
+}

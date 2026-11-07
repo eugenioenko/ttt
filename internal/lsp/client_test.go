@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/jsonrpc"
 	"io"
 	"testing"
 	"time"
 )
 
-func pipeClient(t *testing.T) (*Client, *Codec) {
+func pipeClient(t *testing.T) (*Client, *jsonrpc.Codec) {
 	t.Helper()
 	clientR, serverW := io.Pipe()
 	serverR, clientW := io.Pipe()
@@ -19,20 +20,21 @@ func pipeClient(t *testing.T) (*Client, *Codec) {
 		serverW.Close()
 		clientW.Close()
 	})
-	c := &Client{
-		codec:   NewCodec(clientR, clientW),
-		nextID:  1,
-		pending: make(map[int]chan Response),
-		done:    make(chan struct{}),
-	}
-	go c.readLoop()
-	return c, NewCodec(serverR, serverW)
+	c := newClient(clientR, clientW, ClientHooks{})
+	return c, jsonrpc.NewCodec(serverR, serverW)
 }
 
-func receiveWithin(t *testing.T, codec *Codec) Response {
+func blockingReader(t *testing.T) io.Reader {
+	t.Helper()
+	r, w := io.Pipe()
+	t.Cleanup(func() { w.Close() })
+	return r
+}
+
+func receiveWithin(t *testing.T, codec *jsonrpc.Codec) jsonrpc.Message {
 	t.Helper()
 	type result struct {
-		msg Response
+		msg jsonrpc.Message
 		err error
 	}
 	ch := make(chan result, 1)
@@ -48,7 +50,7 @@ func receiveWithin(t *testing.T, codec *Codec) Response {
 		return r.msg
 	case <-time.After(5 * time.Second):
 		t.Fatal("no message from client")
-		return Response{}
+		return jsonrpc.Message{}
 	}
 }
 
@@ -59,7 +61,7 @@ func TestClientCallAndResponse(t *testing.T) {
 		if err != nil {
 			return
 		}
-		server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"status":"ok"}`)})
+		server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"status":"ok"}`)})
 	}()
 
 	result, err := c.call("test/method", map[string]string{"key": "value"})
@@ -108,19 +110,13 @@ func TestHoverContextCancellationDropsLateResponse(t *testing.T) {
 	if message.Method != "$/cancelRequest" || string(params.ID) != string(request.ID) {
 		t.Fatalf("cancellation = %s %s, want request %s", message.Method, message.Params, request.ID)
 	}
-	c.mu.Lock()
-	pending := len(c.pending)
-	c.mu.Unlock()
-	if pending != 0 {
-		t.Fatalf("cancelled request left %d pending calls", pending)
-	}
-	if err := server.Send(Reply{JSONRPC: "2.0", ID: request.ID, Result: json.RawMessage(`{"contents":"stale"}`)}); err != nil {
+	if err := server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: request.ID, Result: json.RawMessage(`{"contents":"stale"}`)}); err != nil {
 		t.Fatal(err)
 	}
 	go func() {
 		req, err := server.Receive()
 		if err == nil {
-			server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"contents":"latest"}`)})
+			server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"contents":"latest"}`)})
 		}
 	}()
 	hover, err := c.Hover("file:///test.go", 2, 3)
@@ -131,7 +127,7 @@ func TestHoverContextCancellationDropsLateResponse(t *testing.T) {
 
 func TestHoverContextAlreadyCancelledSendsNothing(t *testing.T) {
 	var output bytes.Buffer
-	c := &Client{codec: NewCodec(nil, &output)}
+	c := newClient(blockingReader(t), &output, ClientHooks{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := c.HoverContext(ctx, "file:///test.go", 0, 0); !errors.Is(err, context.Canceled) {
@@ -144,7 +140,7 @@ func TestHoverContextAlreadyCancelledSendsNothing(t *testing.T) {
 
 func TestCompletionAndSignatureHelpRespectCancellation(t *testing.T) {
 	var output bytes.Buffer
-	c := &Client{codec: NewCodec(nil, &output)}
+	c := newClient(blockingReader(t), &output, ClientHooks{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := c.Completion(ctx, "file:///test.go", 0, 0, nil); !errors.Is(err, context.Canceled) {
@@ -160,7 +156,7 @@ func TestCompletionAndSignatureHelpRespectCancellation(t *testing.T) {
 
 func TestDocumentSymbolsRespectCancellation(t *testing.T) {
 	var output bytes.Buffer
-	c := &Client{codec: NewCodec(nil, &output)}
+	c := newClient(blockingReader(t), &output, ClientHooks{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := c.DocumentSymbols(ctx, "file:///test.go"); !errors.Is(err, context.Canceled) {
@@ -241,7 +237,7 @@ func TestClientAnswersServerRequests(t *testing.T) {
 			name:      "unknown method",
 			request:   `{"jsonrpc":"2.0","id":"x","method":"window/showDocument","params":{}}`,
 			wantID:    `"x"`,
-			wantError: CodeMethodNotFound,
+			wantError: jsonrpc.CodeMethodNotFound,
 		},
 	}
 	for _, tt := range tests {
@@ -295,7 +291,7 @@ func TestClientServerRequestDoesNotResolvePendingCall(t *testing.T) {
 		if _, err := server.Receive(); err != nil {
 			return
 		}
-		server.Send(Reply{JSONRPC: "2.0", ID: call.ID, Result: json.RawMessage(`"real"`)})
+		server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: call.ID, Result: json.RawMessage(`"real"`)})
 	}()
 
 	result, err := c.call("test/method", nil)
@@ -328,14 +324,9 @@ func TestClientNotify(t *testing.T) {
 	_, serverW := io.Pipe()
 	serverR, clientW := io.Pipe()
 
-	c := &Client{
-		codec:   NewCodec(nil, clientW),
-		nextID:  1,
-		pending: make(map[int]chan Response),
-		done:    make(chan struct{}),
-	}
+	c := newClient(blockingReader(t), clientW, ClientHooks{})
 
-	serverCodec := NewCodec(serverR, serverW)
+	serverCodec := jsonrpc.NewCodec(serverR, serverW)
 
 	done := make(chan struct{})
 	go func() {
@@ -364,13 +355,7 @@ func TestClientConnectionClosed(t *testing.T) {
 	clientR, serverW := io.Pipe()
 	var buf bytes.Buffer
 
-	c := &Client{
-		codec:   NewCodec(clientR, &buf),
-		nextID:  1,
-		pending: make(map[int]chan Response),
-		done:    make(chan struct{}),
-	}
-	go c.readLoop()
+	c := newClient(clientR, &buf, ClientHooks{})
 
 	serverW.Close()
 
@@ -466,5 +451,5 @@ func TestCodeActionSendsEmptyDiagnosticsArray(t *testing.T) {
 		t.Fatalf("expected diagnostics to serialize as [], got %s", params.Context.Diagnostics)
 	}
 
-	server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")})
+	server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")})
 }

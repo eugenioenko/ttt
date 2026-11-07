@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 func (a *App) FileOpNewFile(path string, reload func()) {
@@ -18,18 +19,18 @@ func (a *App) FileOpNewFile(path string, reload func()) {
 	if err != nil || !info.IsDir() {
 		parentDir = filepath.Dir(path)
 	}
-	a.ShowInputDialog("New File", "Filename", "", func(name string) {
+	a.ShowInputDialog(i18n.Text("general.newFile"), i18n.Text("general.filename"), "", func(name string) {
 		newPath := filepath.Join(parentDir, name)
 		if _, err := os.Stat(newPath); err == nil {
-			a.StatusError(name + " already exists")
+			a.StatusError(i18n.Format("status.fileAlreadyExists", i18n.Args{"name": name}))
 			return
 		}
 		if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
-			a.StatusError("Error: " + err.Error())
+			a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 			return
 		}
 		if err := os.WriteFile(newPath, []byte{}, 0644); err != nil {
-			a.StatusError("Error: " + err.Error())
+			a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 			return
 		}
 		a.invalidateRepositoryPath(newPath, RepositoryWorktree)
@@ -48,10 +49,10 @@ func (a *App) FileOpNewFolder(path string, reload func()) {
 	if err != nil || !info.IsDir() {
 		parentDir = filepath.Dir(path)
 	}
-	a.ShowInputDialog("New Folder", "Folder name", "", func(name string) {
+	a.ShowInputDialog(i18n.Text("general.newFolder"), i18n.Text("general.folderName"), "", func(name string) {
 		newPath := filepath.Join(parentDir, name)
 		if err := os.MkdirAll(newPath, 0755); err != nil {
-			a.StatusError("Error: " + err.Error())
+			a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 			return
 		}
 		reload()
@@ -62,7 +63,7 @@ func (a *App) FileOpRename(path string, reload func()) {
 	if path == "" {
 		return
 	}
-	a.ShowInputDialog("Rename", "New name", filepath.Base(path), func(newName string) {
+	a.ShowInputDialog(i18n.Text("general.rename"), i18n.Text("general.newName"), filepath.Base(path), func(newName string) {
 		newPath := filepath.Join(filepath.Dir(path), newName)
 		if newPath == path {
 			return
@@ -70,12 +71,12 @@ func (a *App) FileOpRename(path string, reload func()) {
 		if newInfo, err := os.Stat(newPath); err == nil {
 			oldInfo, oldErr := os.Stat(path)
 			if oldErr != nil || !os.SameFile(newInfo, oldInfo) {
-				a.StatusError(newName + " already exists")
+				a.StatusError(i18n.Format("status.renamedFileAlreadyExists", i18n.Args{"newName": newName}))
 				return
 			}
 		}
 		if err := os.Rename(path, newPath); err != nil {
-			a.StatusError("Error: " + err.Error())
+			a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 			return
 		}
 		a.invalidateRepositoryPath(path, RepositoryWorktree)
@@ -90,14 +91,14 @@ func (a *App) FileOpDelete(path string, reload func()) {
 		return
 	}
 	name := filepath.Base(path)
-	a.ShowConfirmDialog("Delete "+name+"?",
-		[]string{"No", "Yes"},
+	a.ShowConfirmDialog(i18n.Format("files.delete", i18n.Args{"name": name}),
+		[]string{i18n.Text("general.no"), i18n.Text("general.yes")},
 		[]func(){
 			func() { a.DismissDialog() },
 			func() {
 				a.DismissDialog()
 				if err := os.RemoveAll(path); err != nil {
-					a.StatusError("Error: " + err.Error())
+					a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 					return
 				}
 				a.invalidateRepositoryPath(path, RepositoryWorktree)
@@ -109,23 +110,23 @@ func (a *App) FileOpDelete(path string, reload func()) {
 
 func (a *App) FileOpCopyAbsolutePath(path string) {
 	if path == "" {
-		a.StatusWarn("No file selected")
+		a.StatusWarn(i18n.Text("status.noFileSelected"))
 		return
 	}
 	clipboard.Set(path)
-	a.StatusNotify("Absolute path copied to clipboard")
+	a.StatusNotify(i18n.Text("status.absolutePathCopiedToClipboard"))
 }
 
 func (a *App) FileOpReveal(path string) {
 	if path == "" {
-		a.StatusWarn("No file selected")
+		a.StatusWarn(i18n.Text("status.noFileSelected"))
 		return
 	}
 	if err := revealInFileManager(path); err != nil {
-		a.StatusError("Could not reveal in file manager")
+		a.StatusError(i18n.Text("status.couldNotRevealInFileManager"))
 		return
 	}
-	a.StatusNotify("Revealed in file manager")
+	a.StatusNotify(i18n.Text("status.revealedInFileManager"))
 }
 
 // revealInFileManager opens the OS file manager showing path, highlighting the
@@ -163,12 +164,12 @@ func containingFolder(path string) string {
 
 func (a *App) FileOpCopyRelativePath(path string) {
 	if path == "" {
-		a.StatusWarn("No file selected")
+		a.StatusWarn(i18n.Text("status.noFileSelected"))
 		return
 	}
 	rel := a.relativePath(path)
 	clipboard.Set(rel)
-	a.StatusNotify("Relative path copied to clipboard")
+	a.StatusNotify(i18n.Text("status.relativePathCopiedToClipboard"))
 }
 
 func (a *App) FileOpRemoveRoot(path string) {

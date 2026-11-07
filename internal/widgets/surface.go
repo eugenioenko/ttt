@@ -147,6 +147,11 @@ type Surface interface {
 	Sub(r Rect) Surface
 }
 
+// CellReader reads back what was drawn, so a panel can select text on screen.
+type CellReader interface {
+	CellAt(x, y int) (term.Cell, bool)
+}
+
 // ImagePlacer stays out of Surface so virtualSurface and test doubles keep working.
 type ImagePlacer interface {
 	PlaceImage(x, y, w, h int, src *image.Source)

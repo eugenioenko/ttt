@@ -97,9 +97,11 @@ func BaseArgs(opts Options, capped bool) []string {
 // FindAllMatches runs ripgrep over paths with the result-list caps removed and
 // returns every match, keyed by absolute path. Replace All uses it so a file
 // with more than 100 matching lines, or a match past column 1000, is not left
-// half-replaced. A missing rg, a run failure, or a path with no matches yields
-// an empty map; callers fall back to the matches the panel already holds.
+// half-replaced. A successful scan omits paths that no longer match.
 func FindAllMatches(ctx context.Context, opts Options, paths []string) (map[string][]Match, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if opts.Query == "" || len(paths) == 0 {
 		return nil, nil
 	}
@@ -109,6 +111,9 @@ func FindAllMatches(ctx context.Context, opts Options, paths []string) (map[stri
 
 	matches := map[string][]Match{}
 	for _, batch := range batchPaths(paths) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		batchMatches, err := scanBatch(ctx, opts, batch)
 		if err != nil {
 			return nil, err
@@ -154,6 +159,10 @@ func scanBatch(ctx context.Context, opts Options, paths []string) (map[string][]
 	}
 
 	cmd := exec.CommandContext(ctx, "rg", args...)
+	return scanCommand(ctx, cmd)
+}
+
+func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -197,6 +206,9 @@ func scanBatch(ctx context.Context, opts Options, paths []string) (map[string][]
 		cmd.Process.Kill()
 	}
 	waitErr := cmd.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if scanErr != nil {
 		return nil, scanErr
 	}

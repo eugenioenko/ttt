@@ -1,6 +1,8 @@
 package app
 
 import (
+	"slices"
+
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
@@ -8,13 +10,25 @@ import (
 
 type taskDelivery struct{ run func() }
 
+type appTask interface {
+	Close()
+	SetPost(asynctask.Post)
+}
+
 type taskOwner struct {
-	post  asynctask.Post
-	tasks []interface {
-		Close()
-		SetPost(asynctask.Post)
-	}
+	post   asynctask.Post
+	tasks  []appTask
 	closed bool
+}
+
+func (a *App) releaseTask(task appTask) {
+	task.Close()
+	for i, registered := range a.tasks.tasks {
+		if registered == task {
+			a.tasks.tasks = slices.Delete(a.tasks.tasks, i, i+1)
+			return
+		}
+	}
 }
 
 func NewTask[T any](a *App, options asynctask.TaskOptions) *asynctask.Task[T] {

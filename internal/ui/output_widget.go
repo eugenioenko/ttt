@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -35,7 +36,7 @@ type OutputWidget struct {
 func NewOutputWidget() *OutputWidget {
 	o := &OutputWidget{autoScroll: true}
 	o.tree = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No output",
+		EmptyText: i18n.Text("output.noOutput"),
 		RenderItem: func(surface widgets.Surface, node *widgets.TreeNode, idx, y, w int, selected bool) {
 			o.renderItem(surface, idx, y, w, selected)
 		},

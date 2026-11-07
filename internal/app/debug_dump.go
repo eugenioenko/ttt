@@ -27,7 +27,9 @@ type DebugState struct {
 	Diagnostics []DebugDiagnostic  `json:"diagnostics"`
 	Output      []string           `json:"output"`
 	Terminals   []DebugTerminal    `json:"terminals,omitempty"`
-	WidgetTree  *DebugWidgetNode   `json:"widget_tree"`
+	// ActiveTerminal is the selected terminal tab, whether or not it has focus.
+	ActiveTerminal *DebugActiveTerminal `json:"active_terminal,omitempty"`
+	WidgetTree     *DebugWidgetNode     `json:"widget_tree"`
 }
 
 // DebugTerminal reports one integrated-terminal tab's raw, unparsed PTY byte
@@ -38,6 +40,13 @@ type DebugTerminal struct {
 	Cols    int    `json:"cols"`
 	Rows    int    `json:"rows"`
 	RawTail string `json:"raw_tail"`
+}
+
+// DebugActiveTerminal identifies the selected terminal tab. Index is 0-based,
+// matching the order of Terminals.
+type DebugActiveTerminal struct {
+	ID    string `json:"id"`
+	Index int    `json:"index"`
 }
 
 // DebugDiagnostic reports one diagnostic on the active editor (LSP or plugin),
@@ -242,6 +251,10 @@ func (a *App) BuildDebugState() *DebugState {
 		})
 	}
 
+	if idx := a.TerminalPanel.ActiveIndex(); idx >= 0 && idx < len(a.Terminals) {
+		state.ActiveTerminal = &DebugActiveTerminal{ID: a.Terminals[idx].ID, Index: idx}
+	}
+
 	state.WidgetTree = walkWidget(a.Root.Main)
 
 	return state
@@ -252,8 +265,11 @@ func (a *App) describeFocus() string {
 	if f == nil {
 		return ""
 	}
+	if a.Root.HasModalOverlay() {
+		return "overlay"
+	}
 	switch f.(type) {
-	case *ui.EditorPaneWidget:
+	case *ui.EditorGroupWidget, *ui.EditorPaneWidget:
 		return "editor"
 	case *ui.SidebarWidget:
 		return "sidebar"
@@ -261,6 +277,8 @@ func (a *App) describeFocus() string {
 		return "bottom_panel"
 	case *ui.SearchWidget:
 		return "search"
+	case *ui.TerminalPanelWidget, *ui.TerminalWidget:
+		return "terminal"
 	default:
 		return "other"
 	}

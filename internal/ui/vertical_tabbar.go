@@ -8,8 +8,10 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-// VerticalTabBarWidth is content (4) + border (1) + padding (1)
-const VerticalTabBarWidth = 6
+const (
+	verticalTabBarBorderX = 4
+	VerticalTabBarWidth   = verticalTabBarBorderX + 1
+)
 
 const verticalTabLabelMaxCols = 2
 
@@ -39,16 +41,12 @@ func (v *VerticalTabBar) Render(surface Surface) {
 		vertical = v.Borders.Vertical
 	}
 
-	// Clear, draw border at x=4, padding at x=5..6
-	borderX := 4
+	borderX := verticalTabBarBorderX
 	for y := 0; y < h; y++ {
 		for x := 0; x < borderX; x++ {
 			surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleDefault})
 		}
 		surface.SetCell(borderX, y, term.Cell{Ch: vertical, Style: term.StyleBorder})
-		for x := borderX + 1; x < VerticalTabBarWidth; x++ {
-			surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleDefault})
-		}
 	}
 
 	for i := 0; i < v.Count; i++ {

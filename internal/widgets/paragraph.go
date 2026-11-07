@@ -27,6 +27,10 @@ func (p *ParagraphWidget) Height() int {
 
 func (p *ParagraphWidget) Width() int { return 0 }
 
+func (p *ParagraphWidget) HeightAtWidth(w int) int {
+	return len(wrapText(p.Text, max(w-p.BoxOverheadW(), 1))) + p.BoxOverheadH()
+}
+
 func (p *ParagraphWidget) HeightForWidth(w int) int {
 	return len(wrapText(p.Text, w)) + p.BoxOverheadH()
 }

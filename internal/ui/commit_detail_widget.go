@@ -2,15 +2,18 @@ package ui
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -96,13 +99,20 @@ type commitDetailRow struct {
 	bold      bool
 	danger    bool
 	fileIndex int
+	markdown  markdown.Line
+	styles    []term.Style
 }
 
 // commitDetailVisualRow is one screen row. A file's diff is a single logical
 // row drawn by that file's diff widget; offset is the row within it.
 type commitDetailVisualRow struct {
-	row          int
-	leftStart    int
+	row         int
+	leftStart   int
+	messageEnd  int
+	messageText string
+	// prefix counts the leading runes of messageText that repeat a wrapped
+	// markdown line's indent or quote bar and have no source offset.
+	prefix       int
 	offset       int
 	continuation bool
 }
@@ -134,9 +144,16 @@ type CommitDetailWidget struct {
 	RefreshError   string
 	hasDetail      bool
 
-	Message  string
-	Metadata string
-	Files    []CommitDetailFile
+	Message      string
+	Metadata     string
+	Files        []CommitDetailFile
+	EmptyMessage string
+
+	messageSource    string
+	messageRows      []commitDetailRow
+	markdownMaxWidth int
+	messageMaxLineW  int
+	maxLeftCol       int
 
 	SyntaxHighlight    bool
 	Icons              string
@@ -169,7 +186,6 @@ type CommitDetailWidget struct {
 	maxLineW        int
 	gutterW         int
 	viewH           int
-	contentW        int
 	scrollbar       Scrollbar
 	hscrollbar      HScrollbar
 	rhscroll        HScrollbar
@@ -197,40 +213,52 @@ type CommitDetailWidget struct {
 	primaryPressed    bool
 	disclosurePressed bool
 	capturedFile      int
+	// navFile and navRow hold the position navigation last moved to. They are
+	// the answer to "where am I" only while the viewport has not moved since:
+	// the viewport alone cannot answer when the diff is shorter than the view,
+	// because TopLine stays 0 then. Any scroll clears navValid so the visible
+	// position wins again.
+	navFile  int
+	navRow   int
+	navValid bool
 
-	OnFetchContext func(fileIndex int, file CommitDetailFile)
-	OnClose        func()
+	OnFetchContext     func(fileIndex int, file CommitDetailFile)
+	OnClose            func()
+	configurePaneLinks func(*EditorPaneWidget, string)
 }
 
 func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *CommitDetailWidget {
 	return &CommitDetailWidget{
-		Dir:             dir,
-		Ref:             ref,
-		Short:           short,
-		Loading:         true,
-		Header:          "Commit message",
-		LoadingText:     fmt.Sprintf("Loading commit %s…", short),
-		SyntaxHighlight: syntaxHighlight,
-		signs:           false,
-		signsColor:      true,
-		gutterHighlight: true,
-		capturedFile:    -1,
+		Dir:              dir,
+		Ref:              ref,
+		Short:            short,
+		Loading:          true,
+		Header:           i18n.Text("changes.commitMessage"),
+		LoadingText:      i18n.Format("changes.loadingCommit", i18n.Args{"short": short}),
+		SyntaxHighlight:  syntaxHighlight,
+		signs:            false,
+		signsColor:       true,
+		gutterHighlight:  true,
+		capturedFile:     -1,
+		navFile:          -1,
+		markdownMaxWidth: 80,
 	}
 }
 
 func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidget {
 	return &CommitDetailWidget{
-		Dir:             dir,
-		Ref:             "working-tree",
-		Loading:         true,
-		Header:          "Current changes",
-		LoadingText:     "Loading current changes…",
-		CurrentChanges:  true,
-		SyntaxHighlight: syntaxHighlight,
-		signs:           false,
-		signsColor:      true,
-		gutterHighlight: true,
-		capturedFile:    -1,
+		Dir:              dir,
+		Ref:              "working-tree",
+		markdownMaxWidth: 80,
+		Loading:          true,
+		Header:           i18n.Text("changes.currentChangesHeading"),
+		LoadingText:      i18n.Text("changes.loadingCurrentChanges"),
+		CurrentChanges:   true,
+		SyntaxHighlight:  syntaxHighlight,
+		signs:            false,
+		signsColor:       true,
+		gutterHighlight:  true,
+		capturedFile:     -1,
 	}
 }
 
@@ -422,7 +450,7 @@ func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLine
 	if len(contextErr) > 0 {
 		errText = contextErr[0]
 	} else if oldLines == nil && newLines == nil {
-		errText = "Could not load full file"
+		errText = i18n.Text("changes.couldNotLoadFullFile")
 	}
 	return d.ApplyFileContextContent(fileIndex, key, oldLines, newLines, CommitDetailContentText, errText)
 }
@@ -692,6 +720,7 @@ func (d *CommitDetailWidget) rebuildRows() {
 }
 
 func (d *CommitDetailWidget) buildRows() {
+	d.navValid = false
 	d.rows = nil
 	d.visualRows = nil
 	d.visualRowsW = -1
@@ -703,7 +732,7 @@ func (d *CommitDetailWidget) buildRows() {
 
 	header := d.Header
 	if header == "" {
-		header = "Commit message"
+		header = i18n.Text("changes.commitMessage")
 	}
 	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: header, bold: true})
 	if d.Metadata != "" {
@@ -711,18 +740,7 @@ func (d *CommitDetailWidget) buildRows() {
 		d.recordWidth(d.Metadata)
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
 	}
-	message := strings.TrimRight(d.Message, "\r\n")
-	if message == "" {
-		if d.CurrentChanges {
-			message = "Working tree clean"
-		} else {
-			message = "(No commit message)"
-		}
-	}
-	for i, line := range strings.Split(message, "\n") {
-		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageRow, text: line, bold: i == 0})
-		d.recordWidth(line)
-	}
+	d.rows = append(d.rows, d.buildMessageRows()...)
 	if d.RefreshError != "" {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: d.RefreshError, danger: true})
 		d.recordWidth(d.RefreshError)
@@ -748,13 +766,13 @@ func (d *CommitDetailWidget) buildRows() {
 			var danger bool
 			switch file.FullFileState {
 			case CommitDetailFullFileIdle:
-				notice = "Full file not loaded"
+				notice = i18n.Text("changes.fullFileNotLoaded")
 			case CommitDetailFullFileLoading:
-				notice = "Loading full file…"
+				notice = i18n.Text("changes.loadingFullFile")
 			case CommitDetailFullFileFailed:
 				notice = file.FullFileErr
 				if notice == "" {
-					notice = "Could not load full file"
+					notice = i18n.Text("changes.couldNotLoadFullFile")
 				}
 				danger = true
 			}
@@ -769,23 +787,23 @@ func (d *CommitDetailWidget) buildRows() {
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: file.Error, fileIndex: fileIndex})
 			d.recordWidth(file.Error)
 		case file.ContentKind == CommitDetailContentBinary:
-			const binary = "Binary file changed"
+			binary := i18n.Text("changes.binaryFileChanged")
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: binary, fileIndex: fileIndex})
 			d.recordWidth(binary)
 		case file.ContentKind == CommitDetailContentEmpty:
-			empty := "Empty file changed"
+			empty := i18n.Text("changes.emptyFileChanged")
 			switch file.Status {
 			case "A", "?":
-				empty = "Empty file added"
+				empty = i18n.Text("changes.emptyFileAdded")
 			case "D":
-				empty = "Empty file deleted"
+				empty = i18n.Text("changes.emptyFileDeleted")
 			}
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: empty, fileIndex: fileIndex})
 			d.recordWidth(empty)
 		default:
 			v := d.fileView(file)
 			if len(v.Lines) == 0 {
-				const noChanges = "No line changes"
+				noChanges := i18n.Text("changes.noLineChanges")
 				d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noChanges, fileIndex: fileIndex})
 				d.recordWidth(noChanges)
 				continue
@@ -796,7 +814,7 @@ func (d *CommitDetailWidget) buildRows() {
 		}
 	}
 	if len(d.Files) == 0 && !d.CurrentChanges {
-		const noFiles = "No files"
+		noFiles := i18n.Text("general.noFiles")
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noFiles})
 		d.recordWidth(noFiles)
 	}
@@ -843,14 +861,14 @@ func commitDetailFileHeading(file CommitDetailFile) string {
 		return path
 	}
 	if file.Stage == CommitDetailStageConflict {
-		return fmt.Sprintf("%s  %s - conflict (%s)", StatusBadge(file.Status), path, file.ConflictCode)
+		return i18n.Format("changes.conflict", i18n.Args{"status": StatusBadge(file.Status), "path": path, "conflictCode": file.ConflictCode})
 	}
-	stage := "unstaged"
+	stage := i18n.Text("changes.unstagedState")
 	switch file.Stage {
 	case CommitDetailStageStaged:
-		stage = "staged"
+		stage = i18n.Text("changes.stagedState")
 	case CommitDetailStageMixed:
-		stage = "mixed"
+		stage = i18n.Text("changes.mixed")
 	}
 	return fmt.Sprintf("%s  %s · %s", StatusBadge(file.Status), path, stage)
 }
@@ -875,7 +893,7 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	if d.Loading {
 		loadingText := d.LoadingText
 		if loadingText == "" {
-			loadingText = fmt.Sprintf("Loading commit %s…", d.Short)
+			loadingText = i18n.Format("changes.loadingCommit", i18n.Args{"short": d.Short})
 		}
 		surface.DrawText(0, 0, loadingText, w, term.StyleMuted)
 		return
@@ -897,10 +915,6 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	d.topControl = Rect{}
 	d.stickyRect = Rect{}
 	d.stickyControl = commitDetailControl{fileIndex: -1}
-	d.contentW = leftW
-	if d.mode == DiffModeSplit {
-		d.contentW = min(leftW, rightW)
-	}
 	d.clampScroll()
 	if d.keyboardDisclosure {
 		d.reconcileDisclosure(d.disclosureRows())
@@ -927,6 +941,15 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 			n++
 		}
 		if v := d.rowView(visual.row); v != nil {
+			if d.configurePaneLinks != nil {
+				path := d.Files[row.fileIndex].Path
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(d.Dir, path)
+				}
+				for _, pane := range v.viewPanes() {
+					d.configurePaneLinks(pane, path)
+				}
+			}
 			rect := Rect{X: r.X, Y: r.Y + screenY, W: viewW, H: n}
 			v.focusedGap = nil
 			if d.selectedDisclosure.gap >= 0 && d.disclosureFocused(row.fileIndex, d.selectedDisclosure.gap) {
@@ -983,15 +1006,8 @@ func (d *CommitDetailWidget) layout(w, h int) (viewW, viewH int, showV, showH bo
 			d.visualRowsW = viewW
 		}
 		d.totalVisualRows = len(d.visualRows)
-		showH = false
-		if !d.IsWrapped() {
-			_, leftW, _, rightW := d.sideGeometry(viewW)
-			sideW := leftW
-			if d.mode == DiffModeSplit {
-				sideW = min(leftW, rightW)
-			}
-			showH = sideW > 0 && d.maxLineW > sideW
-		}
+		d.maxLeftCol = d.horizontalLimit(viewW)
+		showH = d.maxLeftCol > 0
 		newViewH := h
 		if showH {
 			newViewH--
@@ -1019,6 +1035,10 @@ func (d *CommitDetailWidget) buildVisualRows(viewW int) []commitDetailVisualRow 
 	wrap := d.IsWrapped()
 	visualRows := make([]commitDetailVisualRow, 0, len(d.rows))
 	for rowIndex, row := range d.rows {
+		if row.kind == commitDetailMessageRow {
+			visualRows = append(visualRows, d.messageVisualRows(rowIndex, row, viewW)...)
+			continue
+		}
 		if row.kind == commitDetailDiffRow {
 			v := d.rowView(rowIndex)
 			if v == nil {
@@ -1035,7 +1055,7 @@ func (d *CommitDetailWidget) buildVisualRows(viewW int) []commitDetailVisualRow 
 			case commitDetailMessageHeaderRow, commitDetailHeaderDividerRow, commitDetailSpacerRow:
 			case commitDetailHeadingRow:
 				starts = diffWrapStarts(row.text, viewW-3-fileIconPrefixWidth(d.Icons, d.Files[row.fileIndex].Path))
-			case commitDetailMetadataRow, commitDetailMessageRow:
+			case commitDetailMetadataRow:
 				starts = diffWrapStarts(row.text, viewW-2)
 			default:
 				starts = diffWrapStarts(row.text, viewW)
@@ -1073,7 +1093,7 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 	case commitDetailSpacerRow:
 		return
 	case commitDetailMessageRow:
-		d.drawTextRow(surface, 1, y, viewW-2, row.text, term.StyleCommitHeader, term.StyleCommitHeader, row.bold, visual.leftStart, rowIndex)
+		d.renderMarkdownRow(surface, rowIndex, row, visual, y, viewW)
 	case commitDetailHeadingRow:
 		d.renderHeading(surface, rowIndex, row, visual, y, viewW)
 	case commitDetailNoticeRow:
@@ -1091,15 +1111,15 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 	}
 	header := d.Header
 	if header == "" {
-		header = "Commit message"
+		header = i18n.Text("changes.commitMessage")
 	}
 	d.drawStaticText(surface, 1, y, viewW-2, header, term.StyleCommitHeader, term.StyleCommitHeader, true)
 	if len(d.Files) == 0 {
 		return
 	}
-	label := "Collapse all"
+	label := i18n.Text("changes.collapseAll")
 	if d.allFilesCollapsed() {
-		label = "Expand all"
+		label = i18n.Text("changes.expandAll")
 	}
 	controlW := textwidth.String(label)
 	controlX := viewW - controlW - 1
@@ -1184,6 +1204,9 @@ func (d *CommitDetailWidget) rowText(rowIndex int) (string, bool) {
 		return "", false
 	}
 	row := d.rows[rowIndex]
+	if row.kind == commitDetailMessageRow && row.markdown.Kind == markdown.KindDivider {
+		return "", false
+	}
 	switch row.kind {
 	case commitDetailMessageRow, commitDetailHeadingRow, commitDetailNoticeRow:
 		return row.text, true
@@ -1251,6 +1274,14 @@ func (d *CommitDetailWidget) screenToSelection(mx, my int) (pos diffSelPos, ok b
 		return diffSelPos{}, false
 	}
 	visualCol := localX - textX
+	if d.rows[rowIndex].kind == commitDetailMessageRow {
+		row := d.rows[rowIndex]
+		if !row.markdown.Kind.Wrappable() {
+			visualCol += d.LeftCol
+		}
+		col := diffSegmentVisualColToRune(text, visual.leftStart, max(0, visualCol-visual.prefixWidth()))
+		return diffSelPos{Line: rowIndex, Col: min(col, visual.messageEnd)}, true
+	}
 	if !d.IsWrapped() {
 		visualCol += d.LeftCol
 	}
@@ -1262,6 +1293,19 @@ func (d *CommitDetailWidget) selectionText() string {
 		return ""
 	}
 	return d.selection.Text(len(d.rows), d.rowText)
+}
+
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (d *CommitDetailWidget) SelectedText() string {
+	if text := d.selectionText(); text != "" {
+		return text
+	}
+	for i := range d.Files {
+		if v := d.Files[i].view; v != nil && v.hasSelection() {
+			return v.SelectedText()
+		}
+	}
+	return ""
 }
 
 func (d *CommitDetailWidget) CopySelection() string {
@@ -1364,10 +1408,19 @@ func truncateCommitDetailPath(text string, width int) string {
 
 func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect, viewW, y int) {
 	leftStart, leftW, rightStart, rightW := d.sideGeometry(viewW)
+	if leftW <= 0 || d.mode == DiffModeSplit && rightW <= 0 {
+		d.hscrollbar.X, d.hscrollbar.Y = r.X, r.Y+y
+		d.hscrollbar.Width = viewW
+		d.hscrollbar.TotalCols = viewW + d.maxLeftCol
+		d.hscrollbar.LeftCol = d.LeftCol
+		d.hscrollbar.Render(surface, 0, y)
+		d.rhscroll.TotalCols = 0
+		return
+	}
 	d.hscrollbar.X = r.X + leftStart
 	d.hscrollbar.Y = r.Y + y
 	d.hscrollbar.Width = leftW
-	d.hscrollbar.TotalCols = d.maxLineW
+	d.hscrollbar.TotalCols = leftW + d.maxLeftCol
 	d.hscrollbar.LeftCol = d.LeftCol
 	d.hscrollbar.Render(surface, leftStart, y)
 	for column := 0; column < d.gutterW; column++ {
@@ -1382,7 +1435,7 @@ func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect,
 	d.rhscroll.X = r.X + rightStart
 	d.rhscroll.Y = r.Y + y
 	d.rhscroll.Width = rightW
-	d.rhscroll.TotalCols = d.maxLineW
+	d.rhscroll.TotalCols = rightW + d.maxLeftCol
 	d.rhscroll.LeftCol = d.LeftCol
 	d.rhscroll.Render(surface, rightStart, y)
 
@@ -1403,18 +1456,11 @@ func (d *CommitDetailWidget) clampScroll() {
 	if d.TopLine > maxTop {
 		d.TopLine = maxTop
 	}
-	maxLeft := d.maxLineW - d.contentW
-	if d.IsWrapped() {
-		maxLeft = 0
-	}
-	if maxLeft < 0 {
-		maxLeft = 0
-	}
 	if d.LeftCol < 0 {
 		d.LeftCol = 0
 	}
-	if d.LeftCol > maxLeft {
-		d.LeftCol = maxLeft
+	if d.LeftCol > d.maxLeftCol {
+		d.LeftCol = d.maxLeftCol
 	}
 }
 
@@ -1424,13 +1470,14 @@ func (d *CommitDetailWidget) OwnsPointerCapture() bool {
 
 func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 	if newTop, consumed := d.scrollbar.HandleEvent(ev); consumed {
+		d.navValid = false
 		d.TopLine = newTop
 		if d.scrollbar.IsDragging() {
 			return EventCaptured
 		}
 		return EventConsumed
 	}
-	if !d.IsWrapped() {
+	if d.maxLeftCol > 0 {
 		if newLeft, consumed := d.hscrollbar.HandleEvent(ev); consumed {
 			d.LeftCol = newLeft
 			if d.hscrollbar.IsDragging() {
@@ -1473,15 +1520,16 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		default:
 			return EventIgnored
 		}
+		d.navValid = false
 		d.clampScroll()
 		return EventConsumed
 	case *tcell.EventMouse:
 		buttons := event.Buttons()
-		modifiers := event.Modifiers()
+		sideways := widgets.HorizontalWheelMod(event.Modifiers())
 		switch {
-		case buttons&tcell.WheelUp != 0 && modifiers&tcell.ModShift != 0:
+		case buttons&tcell.WheelUp != 0 && sideways:
 			d.LeftCol -= 4
-		case buttons&tcell.WheelDown != 0 && modifiers&tcell.ModShift != 0:
+		case buttons&tcell.WheelDown != 0 && sideways:
 			d.LeftCol += 4
 		case buttons&tcell.WheelUp != 0:
 			d.TopLine -= 3
@@ -1494,6 +1542,7 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		default:
 			return d.handlePointer(event)
 		}
+		d.navValid = false
 		d.clampScroll()
 		return EventConsumed
 	}
@@ -1567,6 +1616,7 @@ func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult 
 			d.hasSelection = false
 			d.clearFileSelections(fileIndex)
 			result := d.Files[fileIndex].view.HandleEvent(event)
+			d.primaryPressed = d.Files[fileIndex].view.pressed
 			if result == EventCaptured {
 				d.capturedFile = fileIndex
 				return EventCaptured
@@ -1606,6 +1656,9 @@ func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult 
 		}
 		return EventConsumed
 	}
+	if buttons == tcell.ButtonNone && overFile {
+		hoverChanged = d.Files[fileIndex].view.HandleEvent(event) != EventIgnored || hoverChanged
+	}
 	if hoverChanged {
 		return EventConsumed
 	}
@@ -1635,4 +1688,151 @@ func (d *CommitDetailWidget) updateHoveredGap(fileIndex int, overFile bool, mx, 
 
 func pointInCommitDetailRect(x, y int, rect Rect) bool {
 	return rect.W > 0 && rect.H > 0 && x >= rect.X && x < rect.X+rect.W && y >= rect.Y && y < rect.Y+rect.H
+}
+
+// Hunks lists every change block in the detail, in document order across all
+// files, including blocks inside collapsed files. A collapsed file keeps its
+// blocks listed so a jump can reveal it rather than skip its changes.
+func (d *CommitDetailWidget) Hunks() []DiffHunk {
+	var hunks []DiffHunk
+	for fileIndex, file := range d.Files {
+		v := d.fileView(&d.Files[fileIndex])
+		if v == nil {
+			continue
+		}
+		hunks = append(hunks, diffHunksInRows(v.Lines, file.Path, fileIndex)...)
+	}
+	return hunks
+}
+
+// HunkAt reports the 1-based index of the change block at or immediately
+// before the given file and row, and 0 when the position precedes the first
+// block of the first file.
+func (d *CommitDetailWidget) HunkAt(fileIndex, row int) int {
+	at := 0
+	for i, h := range d.Hunks() {
+		if h.FileIndex < fileIndex || (h.FileIndex == fileIndex && h.Row <= row) {
+			at = i + 1
+			continue
+		}
+		break
+	}
+	return at
+}
+
+// ensureVisualRows rebuilds the screen-row projection when no frame has done
+// it yet. Navigation can run from a plugin command before the next render, and
+// a stale projection would leave TopLine pointing at the wrong row.
+func (d *CommitDetailWidget) ensureVisualRows() {
+	w := d.layoutViewW
+	if w <= 0 {
+		w = max(d.GetRect().W, 0)
+	}
+	if w <= 0 || (d.visualRowsW == w && len(d.visualRows) > 0) {
+		return
+	}
+	d.visualRows = d.buildVisualRows(w)
+	d.visualRowsW = w
+	d.totalVisualRows = len(d.visualRows)
+}
+
+// viewportFileAndRow reports the file and diff row at the top of the
+// viewport. Commit Details has no single cursor across files, so the visible
+// position is the navigation position plugins and commands share.
+func (d *CommitDetailWidget) ViewportFileAndRow() (fileIndex, row int) {
+	if d.navValid && d.navFile >= 0 && d.navFile < len(d.Files) {
+		return d.navFile, d.navRow
+	}
+	d.ensureVisualRows()
+	// The sticky heading covers the top row, so the first row a reader can
+	// actually see is one below TopLine.
+	top := max(d.TopLine, 0)
+	bottom := min(top+d.viewH, len(d.visualRows))
+	for visualIndex := top + d.stickyRows(); visualIndex < bottom; visualIndex++ {
+		visual := d.visualRows[visualIndex]
+		if visual.row < 0 || visual.row >= len(d.rows) {
+			continue
+		}
+		r := d.rows[visual.row]
+		if r.kind == commitDetailDiffRow {
+			return r.fileIndex, d.diffRowAt(visual)
+		}
+	}
+	return 0, -1
+}
+
+// stickyRows reports how many screen rows the floating file heading covers.
+// Zero when the heading is not drawn, which is the case before the first frame.
+func (d *CommitDetailWidget) stickyRows() int {
+	if d.stickyRect.H > 0 {
+		return d.stickyRect.H
+	}
+	return 0
+}
+
+// diffRowAt converts a screen row into the diff row it shows. A wrapped line
+// occupies several screen rows that all point at the same diff row, so the
+// wrapped offset cannot be used as a diff row directly.
+func (d *CommitDetailWidget) diffRowAt(visual commitDetailVisualRow) int {
+	v := d.rowView(visual.row)
+	if v == nil {
+		return visual.offset
+	}
+	return v.EmbeddedDiffRowAt(visual.offset)
+}
+
+// GoToHunk reveals the file holding the 1-based change block index, moves
+// into that file's diff at the block's first row and scrolls it into view.
+func (d *CommitDetailWidget) GoToHunk(index int) error {
+	hunks := d.Hunks()
+	if index < 1 || index > len(hunks) {
+		return fmt.Errorf("hunk %d out of range (1-%d)", index, len(hunks))
+	}
+	target := hunks[index-1]
+	if target.FileIndex >= 0 && target.FileIndex < len(d.collapsedFiles) && d.collapsedFiles[target.FileIndex] {
+		d.collapsedFiles[target.FileIndex] = false
+		d.afterCollapseChange()
+	}
+	if v := d.fileView(&d.Files[target.FileIndex]); v != nil {
+		if err := v.GoToHunk(1 + indexInFile(hunks, index-1)); err != nil {
+			return err
+		}
+	}
+	d.navFile, d.navRow, d.navValid = target.FileIndex, target.Row, true
+	d.scrollToFileHunk(target.FileIndex, target.Row)
+	return nil
+}
+
+// indexInFile counts how many blocks precede flat in its own file, so the
+// per-file diff widget can address the same block with a local index.
+func indexInFile(hunks []DiffHunk, flat int) int {
+	fileIndex := hunks[flat].FileIndex
+	n := 0
+	for i := 0; i < flat; i++ {
+		if hunks[i].FileIndex == fileIndex {
+			n++
+		}
+	}
+	return n
+}
+
+func (d *CommitDetailWidget) scrollToFileHunk(fileIndex, row int) {
+	d.ensureVisualRows()
+	for visualIndex, visual := range d.visualRows {
+		if visual.row < 0 || visual.row >= len(d.rows) {
+			continue
+		}
+		r := d.rows[visual.row]
+		if r.kind != commitDetailDiffRow || r.fileIndex != fileIndex {
+			continue
+		}
+		if d.diffRowAt(visual) != row {
+			continue
+		}
+		// The target can need a sticky heading even when the previous frame did not.
+		top := max(visualIndex-1, 0)
+		d.TopLine = top
+		d.clampScroll()
+		return
+	}
 }

@@ -31,7 +31,11 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Welcome.RecentFolders = &enabled
+	s.Appearance.PointerShapes = &enabled
 	s.Terminal.Shell = "/bin/zsh"
+	s.Terminal.CtrlVPastes = false
+	s.Editor.SelectionStyle = SelectionStyleInvert
+	s.Terminal.SelectionStyle = SelectionStyleInvert
 
 	if err := SaveSettings(s); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
@@ -65,8 +69,74 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	if got.Welcome.IsRecentFoldersEnabled() {
 		t.Error("welcome.recentFolders=false did not round-trip; tri-state pointer lost")
 	}
+	if got.Appearance.PointerShapesEnabled() {
+		t.Error("appearance.pointerShapes=false did not round-trip; tri-state pointer lost")
+	}
 	if got.Terminal.Shell != "/bin/zsh" {
 		t.Errorf("shell = %q, want /bin/zsh", got.Terminal.Shell)
+	}
+	if got.Terminal.CtrlVPastes {
+		t.Error("terminal.ctrlVPastes=false did not round-trip")
+	}
+	if got.Editor.SelectionStyle != SelectionStyleInvert {
+		t.Errorf("editor.selectionStyle = %q, want %q", got.Editor.SelectionStyle, SelectionStyleInvert)
+	}
+	if got.Terminal.SelectionStyle != SelectionStyleInvert {
+		t.Errorf("terminal.selectionStyle = %q, want %q", got.Terminal.SelectionStyle, SelectionStyleInvert)
+	}
+}
+
+func TestLoadTerminalCtrlVPastes(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tt := range []struct {
+		name string
+		json string
+		want bool
+	}{
+		{"no terminal settings", `{}`, true},
+		{"existing terminal settings", `{"terminal":{"scrollback":2000}}`, true},
+		{"enabled", `{"terminal":{"ctrlVPastes":true}}`, true},
+		{"disabled", `{"terminal":{"ctrlVPastes":false}}`, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tt.json), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := LoadSettings().Terminal.CtrlVPastes; got != tt.want {
+				t.Errorf("CtrlVPastes = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTerminalPaddingSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tt := range []struct {
+		name string
+		json string
+		want int
+	}{
+		{"missing", `{}`, 1},
+		{"existing", `{"terminal":{"scrollback":2000}}`, 1},
+		{"zero", `{"terminal":{"padding_x":0}}`, 0},
+		{"custom", `{"terminal":{"padding_x":2}}`, 2},
+		{"negative", `{"terminal":{"padding_x":-1}}`, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tt.json), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			s := LoadSettings()
+			if s.Terminal.PaddingX != tt.want {
+				t.Fatalf("padding = %d, want %d", s.Terminal.PaddingX, tt.want)
+			}
+			if err := SaveSettings(s); err != nil {
+				t.Fatal(err)
+			}
+			if got := LoadSettings().Terminal.PaddingX; got != tt.want {
+				t.Fatalf("round-tripped padding = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -265,5 +335,37 @@ func TestHighlightTimeLimitIsHiddenUntilSet(t *testing.T) {
 	s.Editor.HighlightTimeLimit = 5000
 	if v := string(editorKeys(s)["highlightTimeLimit"]); v != "5000" {
 		t.Fatalf("editor.highlightTimeLimit = %q, want 5000 written once set", v)
+	}
+}
+
+func TestAppearanceSettingsPointerShapesExplicitFalseSurvives(t *testing.T) {
+	withTempConfigDir(t)
+
+	s := DefaultSettings()
+	disabled := false
+	s.Appearance.PointerShapes = &disabled
+	if err := SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	got := LoadSettings()
+	if got.Appearance.PointerShapes == nil || *got.Appearance.PointerShapes != false {
+		t.Fatalf("pointerShapes = %v, want explicit false pointer", got.Appearance.PointerShapes)
+	}
+	if got.Appearance.PointerShapesEnabled() {
+		t.Fatal("PointerShapesEnabled() returned true, want false")
+	}
+}
+
+func TestAppearanceSettingsPointerShapesMissingDefaultsToEnabled(t *testing.T) {
+	dir := withTempConfigDir(t)
+	raw := []byte(`{"version":1,"appearance":{"icons":"none"}}` + "\n")
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), raw, 0644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	got := LoadSettings()
+	if !got.Appearance.PointerShapesEnabled() {
+		t.Fatal("missing appearance.pointerShapes must default to enabled")
 	}
 }

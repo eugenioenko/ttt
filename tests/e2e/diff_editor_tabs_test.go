@@ -2,16 +2,13 @@ package e2e
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/eugenioenko/ttt/internal/app"
-	"github.com/eugenioenko/ttt/internal/core/diff"
-	"github.com/eugenioenko/ttt/internal/git"
-	"github.com/eugenioenko/ttt/internal/ui"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -25,27 +22,6 @@ func numberedLines(n int, change int, changed string) []string {
 		lines[change-1] = changed
 	}
 	return lines
-}
-
-func awaitDiffOpen(t *testing.T, h *testHarness) {
-	t.Helper()
-	deadline := time.After(10 * time.Second)
-	for {
-		select {
-		case event := <-h.screen.EventQ():
-			interrupt, ok := event.(*tcell.EventInterrupt)
-			if !ok {
-				continue
-			}
-			if result, ok := interrupt.Data().(*app.DiffOpenResult); ok {
-				h.app.ApplyDiffOpen(result)
-				h.redraw()
-				return
-			}
-		case <-deadline:
-			t.Fatal("timed out waiting for the diff to open")
-		}
-	}
 }
 
 func TestCommitDiffOpensOnTheDiffEditor(t *testing.T) {
@@ -63,7 +39,7 @@ func TestCommitDiffOpensOnTheDiffEditor(t *testing.T) {
 	harnessGit(t, h.dir, "commit", "-qam", "change line 15")
 
 	h.app.OpenCommitDiff(h.dir, "HEAD", "HEAD", git.FileStatus{Path: "code.txt", Status: "M"}, false)
-	awaitDiffOpen(t, h)
+	h.redraw()
 	dv := h.app.EditorGroup.ActiveDiffWidget()
 	if dv == nil {
 		t.Fatal("a commit diff did not open a DiffEditorWidget tab")

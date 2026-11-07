@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -22,35 +25,35 @@ func registerDebugCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID:       "debug.simulateClick",
-		Title:    "Debug: Simulate Click",
+		Title:    i18n.Text("command.debugSimulateClick"),
 		Keywords: []string{"debug", "click", "mouse", "test"},
 		Handler:  func() { app.debugSimulateClick() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "debug.runPlugin",
-		Title:    "Debug: Run Current File as Plugin",
+		Title:    i18n.Text("command.debugRunCurrentFileAsPlugin"),
 		Keywords: []string{"debug", "plugin", "lua", "test", "run"},
 		Handler:  func() { app.debugRunPlugin() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "debug.screenshot",
-		Title:    "Debug: Screenshot",
+		Title:    i18n.Text("command.debugScreenshot"),
 		Keywords: []string{"debug", "screenshot", "capture"},
 		Handler:  func() { app.debugScreenshot() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "debug.dumpState",
-		Title:    "Debug: Dump State",
+		Title:    i18n.Text("command.debugDumpState"),
 		Keywords: []string{"debug", "dump", "state", "json"},
 		Handler:  func() { app.debugDumpState() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "debug.keyboardTester",
-		Title:    "Debug: Keyboard Tester",
+		Title:    i18n.Text("command.debugKeyboardTester"),
 		Keywords: []string{"debug", "keyboard", "key", "tester", "input"},
 		Handler:  func() { app.debugKeyboardTester() },
 	})
@@ -61,13 +64,13 @@ func (a *App) debugSimulateClick() {
 		a.DismissDialog()
 		parts := strings.Fields(text)
 		if len(parts) < 2 {
-			a.Status.SetNotification("Usage: x y", view.NotifyWarning, 3*time.Second)
+			a.Status.SetNotification(i18n.Text("status.usageXY"), view.NotifyWarning, 3*time.Second)
 			return
 		}
 		x, err1 := strconv.Atoi(parts[0])
 		y, err2 := strconv.Atoi(parts[1])
 		if err1 != nil || err2 != nil {
-			a.Status.SetNotification("Invalid coordinates", view.NotifyWarning, 3*time.Second)
+			a.Status.SetNotification(i18n.Text("status.invalidCoordinates"), view.NotifyWarning, 3*time.Second)
 			return
 		}
 		go func() {
@@ -83,10 +86,10 @@ func (a *App) debugSimulateClick() {
 	})
 
 	dialog := widgets.NewDialogWidget(40)
-	dialog.Title = "Simulate Click"
+	dialog.Title = i18n.Text("debug.simulateClick")
 	dialog.Borders = *a.Borders
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Click", Handler: func() { submit(input.Text()) }},
+		{Label: i18n.Text("debug.click"), Handler: func() { submit(input.Text()) }},
 	}
 	dialog.OnDismiss = func() { a.DismissDialog() }
 	dialog.SetContent(input)
@@ -96,15 +99,23 @@ func (a *App) debugSimulateClick() {
 	a.ShowDialog(adapter)
 }
 
+func (a *App) registerDebugPlugin(p *plugin.Plugin) {
+	if old := a.PluginManager.FindPlugin(p.Name); old != nil {
+		a.ClearPluginSources(old.Name)
+		a.RemovePluginPanels(old.Name)
+	}
+	a.PluginManager.RegisterDebugPlugin(p)
+}
+
 func (a *App) debugRunPlugin() {
 	if a.PluginManager == nil || a.EditorGroup.Editor == nil {
-		a.Status.SetNotification("No active editor", view.NotifyWarning, 3*time.Second)
+		a.Status.SetNotification(i18n.Text("status.noActiveEditor"), view.NotifyWarning, 3*time.Second)
 		return
 	}
 
 	source := strings.Join(a.EditorGroup.Editor.Buf.Lines, "\n")
 	if strings.TrimSpace(source) == "" {
-		a.Status.SetNotification("Buffer is empty", view.NotifyWarning, 3*time.Second)
+		a.Status.SetNotification(i18n.Text("status.bufferIsEmpty"), view.NotifyWarning, 3*time.Second)
 		return
 	}
 
@@ -142,20 +153,25 @@ func (a *App) debugRunPlugin() {
 			FsWrite:           plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
 			SystemEnv:         true,
 			NetworkHTTP:       plugin.NetworkHTTP{All: true},
+			NetworkRPC:        plugin.NetworkRPC{All: true},
 			EventsFile:        true,
 			EventsEditor:      true,
 			Storage:           true,
 			ClipboardRead:     true,
+			Input:             true,
+			ScreenRead:        true,
+			TerminalControl:   true,
+			TerminalRead:      true,
 		},
 	}
 
 	p.StorageDir = a.PluginManager.StorageDir()
 	if err := p.InitFromSource(source); err != nil {
-		a.Status.SetNotification("Plugin error: "+err.Error(), view.NotifyError, 5*time.Second)
+		a.Status.SetNotification(i18n.Format("status.pluginError", i18n.Args{"error": err.Error()}), view.NotifyError, 5*time.Second)
 		return
 	}
 
-	a.PluginManager.RegisterDebugPlugin(p)
+	a.registerDebugPlugin(p)
 	a.WirePlugin(p)
 
 	hasSidebar := p.SidebarTitle != ""
@@ -168,7 +184,7 @@ func (a *App) debugRunPlugin() {
 		a.BottomPanel.SetActivePanel("plugin." + p.Name)
 	}
 
-	a.Status.SetNotification("Plugin loaded: "+name, view.NotifyInfo, 3*time.Second)
+	a.Status.SetNotification(i18n.Format("status.pluginLoaded", i18n.Args{"name": name}), view.NotifyInfo, 3*time.Second)
 }
 
 func (a *App) debugScreenshot() {
@@ -197,15 +213,15 @@ func (a *App) HandleDebugWriteRequest(request *DebugWriteRequest) {
 	switch request.Kind {
 	case "screenshot":
 		if err := a.DumpScreenshot(request.Path); err != nil {
-			a.Status.SetNotification("Screenshot error: "+err.Error(), view.NotifyError, 3*time.Second)
+			a.Status.SetNotification(i18n.Format("status.screenshotError", i18n.Args{"error": err.Error()}), view.NotifyError, 3*time.Second)
 		} else {
-			a.Status.SetNotification("Screenshot saved: "+request.Path, view.NotifyInfo, 3*time.Second)
+			a.Status.SetNotification(i18n.Format("status.screenshotSaved", i18n.Args{"path": request.Path}), view.NotifyInfo, 3*time.Second)
 		}
 	case "state":
 		if err := a.DumpDebugState(request.Path); err != nil {
-			a.Status.SetNotification("Dump error: "+err.Error(), view.NotifyError, 3*time.Second)
+			a.Status.SetNotification(i18n.Format("status.dumpError", i18n.Args{"error": err.Error()}), view.NotifyError, 3*time.Second)
 		} else {
-			a.Status.SetNotification("State saved: "+request.Path, view.NotifyInfo, 3*time.Second)
+			a.Status.SetNotification(i18n.Format("status.stateSaved", i18n.Args{"path": request.Path}), view.NotifyInfo, 3*time.Second)
 		}
 	}
 }
@@ -237,39 +253,17 @@ func LoadPluginFromFile(a *App, path string) {
 		return
 	}
 
-	name := strings.TrimSuffix(filepath.Base(path), ".lua")
+	manifest, granted, err := debugPluginManifest(path)
+	if err != nil {
+		a.LogOutput("error", "ttt", "--plugin "+path+": "+err.Error())
+		return
+	}
 	p := &plugin.Plugin{
-		Name:    name,
-		Dir:     filepath.Dir(path),
-		Enabled: true,
-		Manifest: plugin.Manifest{
-			Name:  name,
-			Entry: "inline",
-		},
-		Granted: plugin.PermissionSet{
-			PanelSidebar:      true,
-			PanelBottom:       true,
-			PanelDrawer:       true,
-			PanelEditor:       true,
-			Commands:          true,
-			Keybindings:       true,
-			EditorRead:        true,
-			EditorWrite:       true,
-			EditorDiagnostics: true,
-			EditorBookmarks:   true,
-			EditorDecorations: true,
-			FileHandlers:      true,
-			FsRead:            plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
-			FsWrite:           plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
-			SystemEnv:         true,
-			NetworkHTTP:       plugin.NetworkHTTP{All: true},
-			EventsFile:        true,
-			EventsEditor:      true,
-			Storage:           true,
-			Settings:          true,
-			SettingsKeys:      []string{"*"},
-			ClipboardRead:     true,
-		},
+		Name:     manifest.Name,
+		Dir:      filepath.Dir(path),
+		Enabled:  true,
+		Manifest: manifest,
+		Granted:  granted,
 	}
 
 	// Wire the settings API before init so plugins loaded via --plugin can read
@@ -283,9 +277,56 @@ func LoadPluginFromFile(a *App, path string) {
 		return
 	}
 
-	a.PluginManager.RegisterDebugPlugin(p)
+	a.registerDebugPlugin(p)
 	a.WirePlugin(p)
 	a.ensureKeyInterceptor()
 
-	slog.Info("plugin loaded from file", "path", path, "name", name)
+	slog.Info("plugin loaded from file", "path", path, "name", p.Name)
+}
+
+// debugPluginManifest uses the plugin.ttt.json next to path when there is one,
+// granting exactly what it declares; otherwise the plugin is named after the
+// file and gets every permission except system.exec, which needs a binary list.
+func debugPluginManifest(path string) (plugin.Manifest, plugin.PermissionSet, error) {
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(filepath.Join(dir, "plugin.ttt.json")); err == nil {
+		m, err := plugin.LoadManifest(dir)
+		if err != nil {
+			return plugin.Manifest{}, plugin.PermissionSet{}, err
+		}
+		return m, m.Permissions, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		// A manifest we cannot read must not fall back to the broad defaults.
+		return plugin.Manifest{}, plugin.PermissionSet{}, err
+	}
+	name := strings.TrimSuffix(filepath.Base(path), ".lua")
+	return plugin.Manifest{Name: name, Entry: "inline"}, plugin.PermissionSet{
+		PanelSidebar:      true,
+		PanelBottom:       true,
+		PanelDrawer:       true,
+		PanelEditor:       true,
+		Commands:          true,
+		Keybindings:       true,
+		EditorRead:        true,
+		EditorWrite:       true,
+		EditorDiagnostics: true,
+		EditorBookmarks:   true,
+		EditorDecorations: true,
+		FileHandlers:      true,
+		FsRead:            plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
+		FsWrite:           plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
+		SystemEnv:         true,
+		NetworkHTTP:       plugin.NetworkHTTP{All: true},
+		NetworkRPC:        plugin.NetworkRPC{All: true},
+		EventsFile:        true,
+		EventsEditor:      true,
+		Storage:           true,
+		Settings:          true,
+		SettingsKeys:      []string{"*"},
+		ClipboardRead:     true,
+		Input:             true,
+		ScreenRead:        true,
+		TerminalControl:   true,
+		TerminalRead:      true,
+	}, nil
 }

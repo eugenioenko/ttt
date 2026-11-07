@@ -1,10 +1,9 @@
 package app
 
 import (
-	"fmt"
-
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 
 	"github.com/gdamore/tcell/v3"
@@ -27,11 +26,11 @@ type DiffContentResult struct {
 func (a *App) FetchAndOpenPR(url string) {
 	owner, repo, number, err := github.ParsePRURL(url)
 	if err != nil {
-		a.StatusError("Invalid PR URL: " + err.Error())
+		a.StatusError(i18n.Format("status.invalidPRURL", i18n.Args{"error": err.Error()}))
 		return
 	}
 
-	a.StatusNotify(fmt.Sprintf("Fetching PR #%d...", number))
+	a.StatusNotify(i18n.Format("status.fetchingPR", i18n.Args{"number": number}))
 
 	go func() {
 		info, err := github.FetchPRInfo(owner, repo, number)
@@ -71,19 +70,21 @@ func (a *App) OpenPRDetail(group *ui.ChangesGroup) {
 		if diffText, ok := group.PRDiffs[f.Path]; ok && diffText != "" {
 			parsed := diff.Parse(diffText)
 			if len(parsed.Hunks) == 0 {
-				file.Error = "Empty diff for " + f.Path
+				file.Error = i18n.Format("pr.emptyDiffFor", i18n.Args{"path": f.Path})
 			} else {
 				file.Diff = parsed
 			}
 		} else {
-			file.Error = "No diff available for " + f.Path
+			file.Error = i18n.Format("pr.noDiffAvailableFor", i18n.Args{"path": f.Path})
 		}
 		files = append(files, file)
 	}
 	detail := ui.NewCommitDetailWidget(group.Dir, group.PRURL, "", a.EditorGroup.SyntaxHighlight)
-	detail.Header = "Pull request"
+	detail.Header = i18n.Text("pr.pullRequest")
+	detail.Metadata = i18n.Format("pr.fileSChanged", i18n.Args{"groupName": group.Name, "filesCount": len(files)})
+	detail.EmptyMessage = i18n.Text("pr.noPullRequestDescription")
 	a.EditorGroup.ApplyDiffDefaults(detail)
-	detail.SetDetail(fmt.Sprintf("%s\n%d file(s) changed", group.Name, len(files)), files, "")
+	detail.SetDetail(group.PRBody, files, "")
 	a.EditorGroup.OpenPluginTab(tabID, group.Name, detail)
 	a.FocusEditorIfEnabled()
 }

@@ -340,7 +340,7 @@ describe("BUG-014: replace bar swallows global keybindings", () => {
 });
 
 describe("BUG-015: find does not seed query from selection", () => {
-  it.fails("ctrl+f pre-fills the search box with the selected word", () => {
+  it("ctrl+f pre-fills the search box with the selected word", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "seed.txt", "hello world\n");
 

@@ -18,6 +18,8 @@ type CheckboxWidget struct {
 	focused bool
 }
 
+var _ PointerShaper = (*CheckboxWidget)(nil)
+
 func NewCheckboxWidget(config CheckboxConfig) *CheckboxWidget {
 	return &CheckboxWidget{Config: config}
 }
@@ -60,14 +62,7 @@ func (c *CheckboxWidget) Render(surface Surface) {
 	inner.SetCell(2, 0, term.Cell{Ch: mark, Style: style})
 	inner.SetCell(3, 0, term.Cell{Ch: ']', Style: bracket})
 
-	x := 5
-	for _, ch := range c.Config.Label {
-		if x >= w {
-			break
-		}
-		inner.SetCell(x, 0, term.Cell{Ch: ch, Style: style})
-		x++
-	}
+	inner.DrawText(5, 0, c.Config.Label, w, style)
 }
 
 func (c *CheckboxWidget) toggle() {
@@ -75,6 +70,13 @@ func (c *CheckboxWidget) toggle() {
 	if c.Config.OnChange != nil {
 		c.Config.OnChange(c.Config.Checked)
 	}
+}
+
+func (c *CheckboxWidget) PointerShapeAt(mx, my int) string {
+	if c.GetRect().Contains(mx, my) {
+		return term.PointerHand
+	}
+	return ""
 }
 
 func (c *CheckboxWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -90,8 +92,7 @@ func (c *CheckboxWidget) HandleEvent(ev tcell.Event) EventResult {
 	case *tcell.EventMouse:
 		if tev.Buttons()&tcell.Button1 != 0 {
 			mx, my := tev.Position()
-			r := c.GetRect()
-			if mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H {
+			if c.GetRect().Contains(mx, my) {
 				c.toggle()
 				return EventConsumed
 			}

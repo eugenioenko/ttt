@@ -3,6 +3,7 @@ package ui
 import (
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -11,6 +12,10 @@ func (e *EditorPaneWidget) OwnsPointerCapture() bool {
 }
 
 func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
+	e.observeLinkInput(mev)
+	if e.handleLinkMouse(mev) {
+		return EventConsumed
+	}
 	btn := mev.Buttons()
 
 	if !e.mouseDown {
@@ -19,9 +24,9 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		}
 	}
 
-	mod := mev.Modifiers()
+	sideways := widgets.HorizontalWheelMod(mev.Modifiers())
 	if btn&tcell.WheelUp != 0 {
-		if mod&tcell.ModShift != 0 {
+		if sideways {
 			e.Viewport.LeftCol -= 4
 			e.clampLeftCol()
 		} else {
@@ -30,7 +35,7 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		return EventConsumed
 	}
 	if btn&tcell.WheelDown != 0 {
-		if mod&tcell.ModShift != 0 {
+		if sideways {
 			e.Viewport.LeftCol += 4
 			e.clampLeftCol()
 		} else {
@@ -195,11 +200,16 @@ func (e *EditorPaneWidget) TextPosAt(mx, my int) (line, col int, ok bool) {
 		return 0, 0, false
 	}
 	line, col = e.mouseToPos(r, mx, my)
-	end := len([]rune(e.Buf.Lines[line]))
-	if next := e.rowAt(my - r.Y + 1); e.WordWrap && !next.isPhantom() && next.bufLine == line && next.startCol > row.startCol {
-		end = next.startCol
+	if e.WordWrap {
+		x := mx - r.X - e.GutterWidth()
+		runes := []rune(e.Buf.Lines[line])
+		if x >= e.Viewport.Width || col >= len(runes) {
+			return line, col, false
+		}
+		segment := string(runes[row.startCol : col+1])
+		return line, col, x < bufColToVisualCol(segment, col+1-row.startCol, e.resolveTabSize())
 	}
-	return line, col, col < end
+	return line, col, col < len([]rune(e.Buf.Lines[line]))
 }
 
 func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
@@ -221,12 +231,10 @@ func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
 		if segVisCol < 0 {
 			segVisCol = 0
 		}
-		startCol := 0
 		if !row.isPhantom() && row.bufLine == line {
-			startCol = row.startCol
+			return line, e.layout().colAtX(row, segVisCol)
 		}
-		segLeftCol := bufColToVisualCol(e.Buf.Lines[line], startCol, tabW)
-		col = visualColToBufCol(e.Buf.Lines[line], segLeftCol+segVisCol, tabW)
+		col = visualColToBufCol(e.Buf.Lines[line], segVisCol, tabW)
 	} else {
 		visCol := mx - r.X - gutterW + e.Viewport.LeftCol
 		if visCol < 0 {

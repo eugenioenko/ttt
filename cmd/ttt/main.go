@@ -1,12 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	"path/filepath"
@@ -73,7 +73,7 @@ type cliFlags struct {
 	debug        bool
 	listen       bool
 	stdin        bool
-	targets      bool
+	noForward    bool
 }
 
 type cliExecOutcome struct {
@@ -92,11 +92,13 @@ func parseFlags() cliFlags {
 				i++
 			}
 		case "--plugin":
+			f.noForward = true
 			if i+1 < len(args) {
 				f.pluginFile = args[i+1]
 				i++
 			}
 		case "--exec":
+			f.noForward = true
 			if i+1 < len(args) {
 				f.exec = args[i+1]
 				i++
@@ -107,23 +109,25 @@ func parseFlags() cliFlags {
 				i++
 			}
 		case "--size":
+			f.noForward = true
 			if i+1 < len(args) {
 				fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH)
 				i++
 			}
 		case "--debug":
+			f.noForward = true
 			f.debug = true
 		case "--listen":
+			f.noForward = true
 			f.listen = true
 		case "--workspace":
-			f.targets = true
+			f.noForward = true
 			i++
+		case "--new-window":
+			f.noForward = true
 		case "-":
+			f.noForward = true
 			f.stdin = true
-		default:
-			if !strings.HasPrefix(args[i], "-") {
-				f.targets = true
-			}
 		}
 	}
 	return f
@@ -174,6 +178,8 @@ func main() {
 			fmt.Printf(`ttt %s - TTT Editor, Terminal Text Tool, an IDE for your terminal
 
 Usage: ttt [options] [files/folders/URLs...]
+Set reuseWindow in settings.json to open files and add folders in a running editor.
+The integrated terminal prefers its parent editor; otherwise the newest wins.
 
 Arguments:
   files               Open one or more files
@@ -182,8 +188,7 @@ Arguments:
   .                   Open the current directory
   PR URL              Open a GitHub pull request for review
   -                   Read stdin into an untitled tab (automatic when stdin
-                      is a pipe or a redirected file and nothing else is
-                      given to open)
+                      is a pipe or a redirected file, except with --exec)
 
 Options:
   --help, -h          Show this help message
@@ -197,7 +202,10 @@ Options:
                       invalid or failed actions exit nonzero)
   --exec-split-on <s> Split --exec on <s> instead of ";" (for scripts that
                       need to send a literal semicolon)
-  --plugin <file>     Load a Lua plugin file on startup with full permissions
+  --plugin <file>     Load a Lua plugin file on startup without approval, with
+                      the name and permissions of a plugin.ttt.json next to it;
+                      without one, every permission except system.exec
+  --new-window        Start a separate editor even when reuseWindow is enabled
   --debug             Enable debug mode regardless of config setting
   --listen            Start an HTTP command server on 127.0.0.1:4242
                       (POST /exec accepts the same script format as --exec)
@@ -229,6 +237,24 @@ Docs: https://tttedit.dev
 
 	flags := parseFlags()
 	cfg := config.Load(flags.configFile)
+	stdinPiped := stdinIsPiped()
+	if cfg.Settings.ReuseWindow && !flags.noForward && !stdinPiped {
+		if files, folders := app.ForwardableTargets(); len(files) > 0 || len(folders) > 0 {
+			pid, err := app.ForwardTargets(files, folders)
+			if err == nil {
+				if pid > 0 {
+					fmt.Fprintf(os.Stderr, "opened in running editor (pid %d)\n", pid)
+				} else {
+					fmt.Fprintln(os.Stderr, "opened in running editor")
+				}
+				return
+			}
+			if !errors.Is(err, app.ErrForwardUnavailable) {
+				fmt.Fprintf(os.Stderr, "ttt: %v\n", err)
+				os.Exit(1)
+			}
+		}
+	}
 	config.ParseKeyBindings(cfg.Keybindings)
 
 	if flags.debug {
@@ -241,11 +267,9 @@ Docs: https://tttedit.dev
 	}
 	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
 
-	// Without "-", stdin is read only when nothing else was asked for: a shell
-	// loop running `ttt "$f"` must keep its input, and --exec runs from scripts
-	// and tests whose stdin is a pipe. The UI reads keys from the terminal.
+	// --exec inherits scripted stdin; only "-" explicitly consumes it.
 	var stdinText *string
-	if flags.stdin || (flags.exec == "" && !flags.targets && stdinIsPiped()) {
+	if flags.stdin || (flags.exec == "" && stdinPiped) {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ttt: reading stdin: %v\n", err)
@@ -267,8 +291,9 @@ Docs: https://tttedit.dev
 	defer screen.Fini()
 	defer handlePanic(screen)
 
-	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground))
+	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), app.WithEditorSelectionStyle(cfg.Settings.Editor.SelectionStyle), app.WithPluginSelectionStyle(cfg.Settings.Plugins.SelectionStyle))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
+	screen.SetPointerShapesEnabled(cfg.Settings.Appearance.PointerShapesEnabled())
 
 	// Route OSC 52 clipboard writes through the tty, not raw stderr
 	if tty, ok := screen.Tty(); ok {
@@ -286,6 +311,8 @@ Docs: https://tttedit.dev
 	editor, prURLs, fileTargets := app.BuildApp(&cfg, &borders)
 	editor.ApplyBorderStyle()
 	editor.Init(screen, renderer, lspManager, imageLayer)
+	stopForward := func() {}
+	defer func() { stopForward() }()
 	// Registered after handlePanic so it runs before it and before Fini: placements are deleted while the tty is still alive, on exit and crash.
 	defer func() { editor.CloseImageLayer() }()
 
@@ -315,14 +342,7 @@ Docs: https://tttedit.dev
 		// Before LoadAll, so ttt.version() is available during plugin init.
 		pluginManager.SetAppVersion(editor.Version)
 
-		pendingApprovals := pluginManager.LoadAll()
-
-		for _, reg := range pluginManager.SidebarPanels {
-			editor.Sidebar.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
-		}
-		for _, reg := range pluginManager.BottomPanels {
-			editor.BottomPanel.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
-		}
+		// Before LoadAll, so host APIs are available during plugin init.
 		pluginManager.SetEditorAPI(app.NewPluginEditorAPI(editor))
 		pluginManager.SetFilesystemAPI(func(p *plugin.Plugin) plugin.FilesystemAPI {
 			return app.NewPluginFilesystemAPIFor(p, editor.Workspace.Paths())
@@ -331,13 +351,22 @@ Docs: https://tttedit.dev
 		pluginManager.SetNetworkAPI(app.NewPluginNetworkAPI())
 		pluginManager.SetSettingsAPI(app.NewPluginSettingsAPI(editor))
 
+		pendingApprovals := pluginManager.LoadAll()
+
+		for _, reg := range pluginManager.SidebarPanels {
+			editor.Sidebar.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
+		}
+		for _, reg := range pluginManager.BottomPanels {
+			editor.BottomPanel.AddPanel(reg.ID, reg.Title, ui.NewWidgetAdapter(reg.Widget))
+		}
+
 		for _, p := range pluginManager.Plugins() {
 			p.RequestRedraw = func() {
 				screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
-			p.PostAsync = func(result *plugin.PluginAsyncResult) {
+			p.SetPostAsync(func(result *plugin.PluginAsyncResult) {
 				screen.PostEvent(tcell.NewEventInterrupt(result))
-			}
+			})
 		}
 		editor.RegisterStartupPluginCommands()
 
@@ -407,7 +436,12 @@ Docs: https://tttedit.dev
 		go app.StartListenServer(editor)
 	}
 
-	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal)
+	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
+		if cfg.Settings.ReuseWindow && flags.exec == "" {
+			stopForward = app.StartForward(editor)
+		}
+	})
+	stopForward()
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

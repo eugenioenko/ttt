@@ -1,10 +1,14 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
@@ -255,5 +259,106 @@ func TestReopeningTinyPanelResetsSize(t *testing.T) {
 	a.ensureUsablePanelSize()
 	if a.ContentSplit.BottomH != 20 || a.ContentSplit.RightW != ui.DefaultPanelWidth {
 		t.Fatalf("panel size = %dx%d, want 20x%d", a.ContentSplit.BottomH, a.ContentSplit.RightW, ui.DefaultPanelWidth)
+	}
+}
+
+func TestSidebarTabStyleAppliesAtStartupAndLive(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	settings.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	a := buildTestApp(t, settings)
+	explorerLabel := func() string {
+		for _, item := range a.Sidebar.Tabs.Config.Items {
+			if item.ID == "explorer" {
+				return item.Label
+			}
+		}
+		return ""
+	}
+	icon := string(icons.Rune(icons.PanelExplorer))
+	if got := explorerLabel(); got != icon {
+		t.Fatalf("startup label = %q, want %q", got, icon)
+	}
+
+	next := *a.Settings
+	next.Sidebar.TabStyle = config.SidebarTabStyleLabelIcon
+	a.ApplySettings(next)
+	if got, want := explorerLabel(), icon+" Explore"; got != want {
+		t.Fatalf("label after apply = %q, want %q", got, want)
+	}
+
+	next.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	next.Appearance.Icons = config.IconsNerdFont
+	a.ApplySettings(next)
+	if got, want := explorerLabel(), icons.Get(config.IconsNerdFont, icons.PanelExplorer); got != want {
+		t.Fatalf("label after icon mode change = %q, want %q", got, want)
+	}
+}
+
+func TestPluginSidebarIconFollowsIconMode(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	settings.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	a := buildTestApp(t, settings)
+	a.PluginManager = plugin.NewManager(t.TempDir(), filepath.Join(t.TempDir(), "plugins.ttt.json"))
+	a.PluginManager.SidebarPanels = []plugin.SidebarRegistration{
+		{ID: "plugin.both", Title: "Both", Icon: plugin.PanelIcon{Plain: "T", Nerd: "N"}},
+		{ID: "plugin.nerdonly", Title: "NerdOnly", Icon: plugin.PanelIcon{Nerd: "N"}},
+	}
+	a.Sidebar.AddPanel("plugin.both", "Both", a.Changes.Adapter)
+	a.Sidebar.AddPanel("plugin.nerdonly", "NerdOnly", a.Changes.Adapter)
+	labels := func() map[string]string {
+		got := map[string]string{}
+		for _, item := range a.Sidebar.Tabs.Config.Items {
+			got[item.ID] = item.Label
+		}
+		return got
+	}
+
+	next := *a.Settings
+	a.ApplySettings(next)
+	if got := labels(); got["plugin.both"] != "T" || got["plugin.nerdonly"] != "NerdOnly" {
+		t.Fatalf("plain mode labels = %v", got)
+	}
+
+	next.Appearance.Icons = config.IconsNerdFont
+	a.ApplySettings(next)
+	if got := labels(); got["plugin.both"] != "N" || got["plugin.nerdonly"] != "N" {
+		t.Fatalf("nerd mode labels = %v", got)
+	}
+}
+
+func TestApplySettingsPointerShapes(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	a := buildTestApp(t, settings)
+	sim := term.NewSimScreen()
+	a.Screen = term.NewTcellScreenFrom(sim)
+
+	if !a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should default to enabled")
+	}
+
+	next := *a.Settings
+	disabled := false
+	next.Appearance.PointerShapes = &disabled
+	a.ApplySettings(next)
+
+	if a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should be disabled after ApplySettings")
+	}
+
+	enabled := true
+	next.Appearance.PointerShapes = &enabled
+	a.ApplySettings(next)
+
+	if !a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should be enabled after ApplySettings")
 	}
 }

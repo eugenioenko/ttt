@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"encoding/json"
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -356,6 +358,42 @@ func TestDroppedPermissionIsRevoked(t *testing.T) {
 	}
 }
 
+func TestDisabledPluginUpdateRevokesDroppedPermission(t *testing.T) {
+	m, _ := newTestManager(t)
+	m.registry.AddOrUpdate("p", "", "", "", "1.0.0", PermissionSet{EditorRead: true})
+	m.registry.SetEnabled("p", false)
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	u := m.PrepareUpdate("p")
+	u.manifest = Manifest{Name: "p", Version: "2.0.0", Entry: "main.ttt.lua"}
+	m.registry.saveHook = func() error { return errors.New("simulated save error") }
+	if _, _, err := m.ApplyUpdate(u); err == nil {
+		t.Fatal("update succeeded despite a failed permission save")
+	}
+	entry := m.registry.Find("p")
+	if !entry.Permissions.EditorRead || entry.Version != "1.0.0" {
+		t.Fatalf("failed update changed registry state: %+v", entry)
+	}
+	m.registry.saveHook = nil
+	p, needsApproval, err := m.ApplyUpdate(u)
+	if err != nil || needsApproval || p == nil || p.Loaded() {
+		t.Fatalf("disabled update: plugin %v, needs approval %v, err %v", p, needsApproval, err)
+	}
+	stored, err := LoadRegistry(m.registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry = stored.Find("p")
+	if entry.Permissions.EditorRead || entry.Enabled || entry.Version != "2.0.0" {
+		t.Fatalf("updated registry retained dropped permission or enabled plugin: %+v", entry)
+	}
+	u.manifest.Permissions.EditorRead = true
+	if _, needsApproval, err := m.ApplyUpdate(u); err != nil || !needsApproval {
+		t.Fatalf("requesting the dropped permission again: needs approval %v, err %v", needsApproval, err)
+	}
+}
+
 // Denying a request for more permissions must not record them as approved:
 // enabling the plugin afterwards would load it with them.
 func TestDenyKeepsThePreviouslyApprovedPermissions(t *testing.T) {
@@ -614,6 +652,82 @@ func TestManagerAsksAgainForANetworkGrantFromBeforeLocalAccess(t *testing.T) {
 	if pending := NewManager(pluginsDir, regPath).LoadAll(); len(pending) != 0 {
 		t.Errorf("approved again but still pending after a restart: %d", len(pending))
 	}
+}
+
+// A denied plugin must not get its old network grant back. The migration
+// clears a grant from before local access was allowed, and the denial has to
+// keep it cleared (#989).
+func TestDenyingALegacyNetworkGrantDoesNotRestoreIt(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "old-listed")
+	manifest := `{"name":"old-listed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"network.http":["api.example.com"]}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// A grant from before the local-access migration: no grants version.
+	registry := `[{"name": "old-listed", "version": "1.0.0", "enabled": true, "permissions": {"network.http": ["api.example.com"]}}]`
+	if err := os.WriteFile(regPath, []byte(registry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, regPath)
+	t.Cleanup(m.Shutdown)
+
+	pending := m.LoadAll()
+	if len(pending) != 1 || pending[0].Name != "old-listed" {
+		t.Fatalf("pending = %v, want the legacy grant to be asked for again", pending)
+	}
+	if err := m.DenyPlugin(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	entry := m.registry.Find("old-listed")
+	if entry == nil {
+		t.Fatal("the denied plugin is missing from the registry")
+	}
+	if entry.Permissions.NetworkHTTP.Enabled() {
+		t.Errorf("the denied plugin kept its network grant: %+v", entry.Permissions.NetworkHTTP)
+	}
+	// Read the file without LoadRegistry's migration: the denial itself must
+	// have been persisted, not just the in-memory grant cleared.
+	savedBytes, err := os.ReadFile(regPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved []RegistryEntry
+	if err := json.Unmarshal(savedBytes, &saved); err != nil {
+		t.Fatal(err)
+	}
+	savedEntry := findRegistryEntry(saved, "old-listed")
+	if savedEntry == nil {
+		t.Fatal("the denied plugin is missing from the saved registry")
+	}
+	if savedEntry.Enabled {
+		t.Error("the denied plugin is still enabled in the saved registry")
+	}
+	if savedEntry.Permissions.NetworkHTTP.Enabled() {
+		t.Errorf("the saved registry kept the denied network grant: %+v", savedEntry.Permissions.NetworkHTTP)
+	}
+	if savedEntry.GrantsVersion != grantsVersion {
+		t.Errorf("saved grants version = %d, want %d", savedEntry.GrantsVersion, grantsVersion)
+	}
+	// A restart must neither bring the old grant back nor ask for it again.
+	again := NewManager(pluginsDir, regPath)
+	t.Cleanup(again.Shutdown)
+	if pending := again.LoadAll(); len(pending) != 0 {
+		t.Errorf("the denied plugin was asked for again after a restart: %v", pending)
+	}
+	if entry := again.registry.Find("old-listed"); entry != nil && entry.Permissions.NetworkHTTP.Enabled() {
+		t.Errorf("the old network grant came back after a restart: %+v", entry.Permissions.NetworkHTTP)
+	}
+}
+
+func findRegistryEntry(entries []RegistryEntry, name string) *RegistryEntry {
+	for i := range entries {
+		if entries[i].Name == name {
+			return &entries[i]
+		}
+	}
+	return nil
 }
 
 func TestAnAnyDestinationGrantApprovedNowIsNotAskedForAgain(t *testing.T) {
@@ -986,5 +1100,368 @@ func TestLoadAllSkipsSymlinkToFile(t *testing.T) {
 
 	if pending := m.LoadAll(); len(pending) != 0 {
 		t.Fatalf("pending = %d, want 0 for a symlink to a file", len(pending))
+	}
+}
+
+// makeRegistryUnwritable makes the registry file read-only, so it can still
+// be read but a save fails the way a permission or quota error would. A
+// privileged user can still write such a file, so the write is probed and
+// the test skipped when the filesystem does not enforce it.
+func makeRegistryUnwritable(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Chmod(path, 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0644) })
+	probe, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err == nil {
+		probe.Close()
+		t.Skip("this filesystem still allows writing a read-only file")
+	}
+}
+
+// A dropped permission is only really dropped once the reduction reaches the
+// registry on disk, so a failed save must be reported and must leave the
+// in-memory permissions retryable.
+func TestGrantReportsAFailedRegistrySave(t *testing.T) {
+	m, _ := newTestManager(t)
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registry.path)
+	entry := m.registry.Find("mixed")
+
+	granted, err := m.grant(entry, PermissionSet{Commands: true})
+	if err == nil {
+		t.Fatal("grant reported success although the registry could not be saved")
+	}
+	if granted.Commands || granted.EditorRead {
+		t.Errorf("a failed grant must not report permissions, got %+v", granted)
+	}
+	if !entry.Permissions.Commands || !entry.Permissions.EditorRead {
+		t.Errorf("a failed save must keep the in-memory permissions, got %+v", entry.Permissions)
+	}
+}
+
+// A retry after a failed save must persist the reduction: the in-memory
+// permissions must not already look like the reduced grant, or the save is
+// skipped and the dropped permission stays in the registry forever.
+func TestGrantRetriesTheSaveAfterAFailure(t *testing.T) {
+	m, _ := newTestManager(t)
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	path := m.registry.path
+	makeRegistryUnwritable(t, path)
+	entry := m.registry.Find("mixed")
+
+	if _, err := m.grant(entry, PermissionSet{Commands: true}); err == nil {
+		t.Fatal("grant reported success although the registry could not be saved")
+	}
+
+	// The registry can be written again; the retry must persist the reduction.
+	if err := os.Chmod(path, 0644); err != nil {
+		t.Fatal(err)
+	}
+	granted, err := m.grant(entry, PermissionSet{Commands: true})
+	if err != nil {
+		t.Fatalf("retry failed: %v", err)
+	}
+	if granted.EditorRead {
+		t.Errorf("retry granted the dropped permission: %+v", granted)
+	}
+	if !granted.Commands {
+		t.Errorf("retry must still grant what the manifest declares: %+v", granted)
+	}
+	stored, err := LoadRegistry(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedEntry := stored.Find("mixed")
+	if storedEntry == nil {
+		t.Fatal("plugin missing from the saved registry")
+	}
+	if storedEntry.Permissions.EditorRead {
+		t.Errorf("the dropped permission is still in the saved registry: %+v", storedEntry.Permissions)
+	}
+}
+
+// A plugin whose reduced permissions could not be persisted must not be
+// loaded: the registry on disk still grants what the manifest dropped.
+func TestLoadAllSkipsAPluginWhosePermissionsCannotBePersisted(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	manifest := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registryPath)
+
+	m.LoadAll()
+
+	if p := m.FindPlugin("mixed"); p != nil {
+		t.Errorf("plugin loaded although its reduced permissions were not persisted: %+v", p.Granted)
+	}
+}
+
+// Reloading a plugin must report a failed permission reduction instead of
+// reporting success and running the plugin with the stale grant.
+func TestReloadReportsAFailedPermissionSave(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	wide := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true,"editor.read":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(wide), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	m.LoadAll()
+	if m.FindPlugin("mixed") == nil {
+		t.Fatal("plugin not loaded before the reload")
+	}
+
+	// The manifest drops a permission, so the reload has to persist a
+	// reduction that the registry file cannot accept.
+	narrow := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(narrow), 0644); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registryPath)
+
+	if _, err := m.Reload("mixed"); err == nil {
+		t.Fatal("Reload reported success although the registry could not be saved")
+	}
+}
+
+// Applying an update must report a failed permission reduction too.
+func TestApplyUpdateReportsAFailedPermissionSave(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	wide := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true,"editor.read":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(wide), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	m.LoadAll()
+	if m.FindPlugin("mixed") == nil {
+		t.Fatal("plugin not loaded before the update")
+	}
+	old := m.FindPlugin("mixed")
+
+	// The new manifest drops a permission, so the update has to persist a
+	// reduction that the registry file cannot accept.
+	narrow := `{"name":"mixed","version":"2.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(narrow), 0644); err != nil {
+		t.Fatal(err)
+	}
+	makeRegistryUnwritable(t, m.registryPath)
+
+	u := m.PrepareUpdate("mixed")
+	manifest, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.manifest = manifest
+
+	if _, _, err := m.ApplyUpdate(u); err == nil {
+		t.Fatal("ApplyUpdate reported success although the registry could not be saved")
+	}
+	if !old.Loaded() {
+		t.Error("the running plugin was destroyed although the reduction was not persisted")
+	}
+}
+
+// Enabling a plugin must report a failed permission reduction instead of
+// reporting success and running the plugin with the stale grant.
+func TestSetEnabledReportsAFailedPermissionSave(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	dir := writePluginDir(t, pluginsDir, "mixed")
+	manifest := `{"name":"mixed","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m.registry.AddOrUpdate("mixed", "", "", "", "1.0.0", PermissionSet{Commands: true, EditorRead: true})
+	m.registry.SetEnabled("mixed", false)
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	// The manifest drops a permission. SetEnabled first saves the enabled
+	// state, then persists the permission reduction during grant. Let the
+	// initial enabled-state save succeed, but fail the reduction save.
+	saves := 0
+	m.registry.saveHook = func() error {
+		saves++
+		if saves == 2 {
+			return errors.New("simulated save error")
+		}
+		return nil
+	}
+
+	p, err := m.SetEnabled("mixed", true)
+	if err == nil {
+		t.Fatal("SetEnabled reported success although the reduced permissions could not be saved")
+	}
+	if p != nil {
+		t.Errorf("SetEnabled returned a plugin instance on failure: %+v", p)
+	}
+	if saves < 2 {
+		t.Fatalf("expected at least 2 save attempts (enabled state, then permission reduction), got %d", saves)
+	}
+	if loaded := m.FindPlugin("mixed"); loaded != nil {
+		t.Errorf("plugin loaded although its reduced permissions were not persisted: %+v", loaded.Granted)
+	}
+	if len(m.plugins) != 0 {
+		t.Errorf("expected 0 loaded plugins, got %d", len(m.plugins))
+	}
+
+	// Retrying after restoring persistence must save the reduced
+	// permissions and enable the plugin.
+	m.registry.saveHook = nil
+
+	p, err = m.SetEnabled("mixed", true)
+	if err != nil {
+		t.Fatalf("retry failed: %v", err)
+	}
+	if p == nil {
+		t.Fatal("retry succeeded but returned nil plugin")
+	}
+	if !p.Loaded() {
+		t.Error("plugin was not loaded after retry")
+	}
+	if p.Granted.EditorRead {
+		t.Errorf("retry granted the dropped permission: %+v", p.Granted)
+	}
+	if !p.Granted.Commands {
+		t.Errorf("retry must still grant what the manifest declares: %+v", p.Granted)
+	}
+	if m.FindPlugin("mixed") == nil {
+		t.Fatal("plugin not found in manager after successful retry")
+	}
+
+	stored, err := LoadRegistry(m.registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedEntry := stored.Find("mixed")
+	if storedEntry == nil {
+		t.Fatal("plugin missing from the saved registry")
+	}
+	if !storedEntry.Enabled {
+		t.Error("plugin is not marked enabled in the saved registry")
+	}
+	if storedEntry.Permissions.EditorRead {
+		t.Errorf("the dropped permission is still in the saved registry: %+v", storedEntry.Permissions)
+	}
+	if !storedEntry.Permissions.Commands {
+		t.Errorf("the kept permission is missing from the saved registry: %+v", storedEntry.Permissions)
+	}
+}
+
+func TestFailedOnInstallUndoesAFreshInstall(t *testing.T) {
+	pluginsDir := t.TempDir()
+	dir := writePluginDir(t, pluginsDir, "broken")
+	manifest := `{"name":"broken","version":"1.0.0","entry":"main.ttt.lua","permissions":{"storage":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	entry := `require("ttt").on_install(function()
+		require("ttt.storage").set("half", "done")
+		error("no write access")
+	end)`
+	if err := os.WriteFile(filepath.Join(dir, "main.ttt.lua"), []byte(entry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, filepath.Join(t.TempDir(), "registry.json"))
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+
+	err := m.ApproveAndLoad(pending[0])
+	if err == nil || !strings.Contains(err.Error(), "no write access") {
+		t.Fatalf("err = %v, want the on_install error", err)
+	}
+	if m.FindPlugin("broken") != nil {
+		t.Error("plugin loaded after its on_install failed")
+	}
+	if m.Registry().Find("broken") != nil {
+		t.Error("registry still records the failed install")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("plugin directory left behind: %v", err)
+	}
+	if path, _ := storagePath(m.StorageDir(), "broken"); path != "" {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("storage written by the failed on_install left behind: %v", err)
+		}
+	}
+}
+
+func TestRevertApprovalReportsAFailedSave(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	pluginsDir := t.TempDir()
+	dir := writePluginDir(t, pluginsDir, "p")
+	regDir := t.TempDir()
+	m := NewManager(pluginsDir, filepath.Join(regDir, "registry.json"))
+	m.LoadAll()
+	if err := os.Chmod(regDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(regDir, 0o700) })
+
+	err := m.revertApproval(&Plugin{Name: "p", Dir: dir, Manifest: Manifest{Name: "p"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "undo approval") {
+		t.Fatalf("err = %v, want the failed registry save", err)
+	}
+}
+
+// A failed on_install on re-approval keeps the plugin's files and its previous
+// grants, so the next startup asks again and reruns the hook.
+func TestFailedOnInstallRestoresThePreviousApproval(t *testing.T) {
+	pluginsDir := t.TempDir()
+	regPath := filepath.Join(t.TempDir(), "registry.json")
+	dir := writePluginDir(t, pluginsDir, "p")
+	manifest := `{"name":"p","version":"1.0.0","entry":"main.ttt.lua","permissions":{"commands":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.ttt.lua"), []byte(`require("ttt").on_install(function() error("boom") end)`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(regPath, []byte(`[{"name":"p","version":"0.9.0","enabled":true,"permissions":{}}]`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(pluginsDir, regPath)
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+
+	if err := m.ApproveAndLoad(pending[0]); err == nil {
+		t.Fatal("ApproveAndLoad succeeded although on_install failed")
+	}
+	entry := m.Registry().Find("p")
+	if entry == nil || entry.Version != "0.9.0" || entry.Permissions.Commands {
+		t.Fatalf("registry entry = %+v, want the previous approval", entry)
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("plugin directory removed: %v", err)
+	}
+	if again := NewManager(pluginsDir, regPath).LoadAll(); len(again) != 1 {
+		t.Errorf("pending on next startup = %d, want 1", len(again))
 	}
 }

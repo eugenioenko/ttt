@@ -31,6 +31,10 @@ func (s *mockSurface) ClearRect(x, y, w, h int, style term.Style)               
 func (s *mockSurface) Fill(c term.Cell)                                              {}
 func (s *mockSurface) Sub(r widgets.Rect) widgets.Surface                            { return s }
 
+func (s *mockSurface) CellAt(x, y int) (term.Cell, bool) {
+	return s.cells[[2]int{x, y}], x >= 0 && x < s.w && y >= 0 && y < s.h
+}
+
 func (s *mockSurface) DrawText(x, y int, text string, maxW int, style term.Style) int {
 	s.texts = append(s.texts, mockText{x, y, text, style})
 	limit := s.w

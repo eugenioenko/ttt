@@ -222,7 +222,7 @@ func stopClient(key string, client *Client) {
 		client.Close()
 	}
 	select {
-	case <-client.done:
+	case <-client.conn.Done():
 	case <-time.After(shutdownTimeout):
 	}
 }

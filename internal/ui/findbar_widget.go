@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"fmt"
-
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -14,7 +14,7 @@ type FindMatch struct {
 
 type FindBarWidget struct {
 	BaseWidget
-	Input             *InputWidget
+	Input             *widgets.InputWidget
 	Matches           []FindMatch
 	Current           int
 	Options           SearchOptions
@@ -25,20 +25,20 @@ type FindBarWidget struct {
 	OnDismiss         func()
 	Debounce          Debouncer
 	focused           bool
-	btnPrev           HitRegion
-	btnNext           HitRegion
-	btnClose          HitRegion
+	OnToggleReplace   func()
+	findBarLayout
 }
 
 func NewFindBarWidget() *FindBarWidget {
 	f := &FindBarWidget{focused: true}
-	f.Input = NewInputWidget()
-	f.Input.Placeholder = "Search"
-	f.Input.OnChange = func(string) {
+	f.Input = newPanelInput()
+	f.Input.Config.Prefix = ""
+	f.Input.Config.Placeholder = i18n.Text("search.search")
+	f.Input.Config.OnChange = func(string) {
 		f.Current = 0
 		f.search()
 	}
-	f.Input.Actions = []InputAction{
+	f.Input.Actions = []widgets.InputAction{
 		{Label: "Aa", OnClick: func() {
 			f.Options.CaseSensitive = !f.Options.CaseSensitive
 			f.syncActions()
@@ -62,19 +62,14 @@ func (f *FindBarWidget) syncActions() {
 	}
 }
 
-func (f *FindBarWidget) barLayout() (barX, barY, barW, barH int) {
-	r := f.GetRect()
-	barW = 40
-	if barW > r.W-4 {
-		barW = r.W - 4
-	}
-	barX = r.W - barW - 1
-	barY = 4
-	barH = 3
-	return
-}
-
 func (f *FindBarWidget) Focusable() bool { return true }
+
+func (f *FindBarWidget) FocusedInput() *widgets.InputWidget {
+	if f.focused {
+		return f.Input
+	}
+	return nil
+}
 
 func (f *FindBarWidget) Focus() {
 	f.focused = true
@@ -84,89 +79,13 @@ func (f *FindBarWidget) CursorPosition() (int, int, bool) {
 	if !f.focused {
 		return 0, 0, false
 	}
-	r := f.GetRect()
-	barX, barY, barW, _ := f.barLayout()
-	row := barY + 1
-	cx := f.Input.CursorX(barX + 1)
-	if cx >= barX+barW-1 {
-		cx = barX + barW - 2
-	}
-	return r.X + cx, r.Y + row, true
+	return f.Input.CursorPosition()
 }
 
 func (f *FindBarWidget) Render(surface Surface) {
-	sw, _ := surface.Size()
-
-	barW := 40
-	if barW > sw-4 {
-		barW = sw - 4
-	}
-	barX := sw - barW - 1
-	barY := 4
-	barH := 3
-
-	b := term.SingleBorderSet()
-	if f.Borders != nil {
-		b = *f.Borders
-	}
-	surface.DrawBorder(barX, barY, barW, barH, b, term.StyleBorder)
-
-	row := barY + 1
-
-	info := ""
-	hasMatches := f.Input.Text != "" && len(f.Matches) > 0
-	if f.Input.Text != "" {
-		info = fmt.Sprintf(" %d/%d", f.currentDisplay(), len(f.Matches))
-	}
-	navButtons := ""
-	if hasMatches {
-		navButtons = " ▲ ▼"
-	}
-	closeBtn := " ✕ "
-	suffixW := len([]rune(info)) + len([]rune(navButtons)) + len([]rune(closeBtn))
-
-	inputW := barW - 2 - suffixW
-	if inputW < 4 {
-		inputW = 4
-	}
-	f.Input.Render(surface, barX+1, row, inputW)
-
-	cx := barX + 1 + inputW
-	for _, ch := range info {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, row, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-
-	navStart := cx
-	for _, ch := range navButtons {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, row, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-	f.btnPrev = HitRegion{}
-	f.btnNext = HitRegion{}
-	if hasMatches {
-		f.btnPrev = HitRegion{X: navStart + 1, Y: row, W: 1}
-		f.btnNext = HitRegion{X: navStart + 3, Y: row, W: 1}
-	}
-	closeStart := cx
-	for _, ch := range closeBtn {
-		if cx < barX+barW-1 {
-			surface.SetCell(cx, row, term.Cell{Ch: ch, Style: term.StyleMuted})
-			cx++
-		}
-	}
-	f.btnClose = HitRegion{X: closeStart + 1, Y: row, W: 1}
-}
-
-func (f *FindBarWidget) currentDisplay() int {
-	if len(f.Matches) == 0 {
-		return 0
-	}
-	return f.Current + 1
+	f.syncActions()
+	f.findBarLayout = renderFindBar(surface, f.Borders, f.Input.Text(), f.Current, len(f.Matches), false, f.OnToggleReplace != nil)
+	renderFindBarInput(surface, f.Input, f.inputX, f.barRect.Y+1, f.inputW)
 }
 
 func (f *FindBarWidget) search() {
@@ -177,7 +96,7 @@ func (f *FindBarWidget) search() {
 
 func (f *FindBarWidget) doSearch() {
 	if f.OnSearch != nil {
-		f.Matches = f.OnSearch(f.Input.Text, f.Options)
+		f.Matches = f.OnSearch(f.Input.Text(), f.Options)
 		if len(f.Matches) > 0 {
 			if f.Current >= len(f.Matches) {
 				f.Current = 0
@@ -190,12 +109,14 @@ func (f *FindBarWidget) doSearch() {
 // Refresh re-runs the query against content that changed under the bar,
 // keeping the current match index where it still exists, without navigating.
 func (f *FindBarWidget) Refresh() {
-	if f.OnSearch == nil || f.Input.Text == "" {
+	if f.OnSearch == nil || f.Input.Text() == "" {
 		return
 	}
-	f.Matches = f.OnSearch(f.Input.Text, f.Options)
+	f.Matches = f.OnSearch(f.Input.Text(), f.Options)
 	f.Current = max(min(f.Current, len(f.Matches)-1), 0)
 }
+
+func (f *FindBarWidget) Query() string { return f.Input.Text() }
 
 func (f *FindBarWidget) CurrentMatch() int { return f.Current }
 
@@ -206,19 +127,26 @@ func (f *FindBarWidget) navigate() {
 }
 
 func (f *FindBarWidget) HandleEvent(ev tcell.Event) EventResult {
+	if result := handleInputDrag(ev, f.Input); result != EventIgnored {
+		return result
+	}
 	switch tev := ev.(type) {
 	case *tcell.EventMouse:
 		if tev.Buttons()&tcell.Button1 != 0 {
 			mx, my := tev.Position()
-			barX, barY, barW, barH := f.barLayout()
+			barX, barY, barW, barH := f.barRect.X, f.barRect.Y, f.barRect.W, f.barRect.H
 			r := f.GetRect()
 			localX := mx - r.X
 			localY := my - r.Y
 			if localY >= barY && localY < barY+barH && localX >= barX && localX < barX+barW {
 				f.focused = true
+				if f.btnToggle.Contains(mx, my) && f.OnToggleReplace != nil {
+					f.OnToggleReplace()
+					return EventConsumed
+				}
 				row := barY + 1
-				if localY == row && localX >= barX+1 && localX < barX+1+barW-2 {
-					f.Input.HandleClick(mx, my)
+				if localY == row && localX >= f.inputX && localX < f.inputX+f.inputW {
+					return f.Input.HandleEvent(tev)
 				}
 				if f.btnPrev.Contains(mx, my) {
 					if len(f.Matches) > 0 {
@@ -306,3 +234,7 @@ func (f *FindBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 
 	return EventIgnored
 }
+
+func (f *FindBarWidget) CancelPointerCapture() bool { return cancelInputDrags(f.Input) }
+
+func (f *FindBarWidget) OwnsPointerCapture() bool { return ownsInputDrag(f.Input) }

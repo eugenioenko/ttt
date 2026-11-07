@@ -494,3 +494,632 @@ func TestWrapLineWideRunes(t *testing.T) {
 		}
 	}
 }
+
+func unwrapRows(rows []Line) (string, []term.Style) {
+	var text strings.Builder
+	var styles []term.Style
+	for _, row := range rows {
+		runes := []rune(row.Text())
+		text.WriteString(string(runes[row.PrefixRunes:]))
+		styles = append(styles, FlattenStyles(row)[row.PrefixRunes:]...)
+	}
+	return text.String(), styles
+}
+
+func TestWrapLineRepeatsHang(t *testing.T) {
+	bar := Span{Text: "│ ", Style: term.StyleBorder}
+	line := Line{Kind: KindBlockquote, Hang: []Span{bar}, Spans: []Span{
+		bar,
+		{Text: "alpha beta gamma delta epsilon zeta", Style: term.StylePaletteItem},
+	}}
+	for _, width := range []int{8, 12, 20} {
+		rows := WrapLine(line, width)
+		if len(rows) < 2 {
+			t.Fatalf("width %d: expected the quote to wrap, got %q", width, textLines(rows))
+		}
+		for i, row := range rows {
+			if !strings.HasPrefix(row.Text(), "│ ") || row.Spans[0].Style != term.StyleBorder {
+				t.Errorf("width %d row %d: %q does not start with the quote bar", width, i, row.Text())
+			}
+			if w := textwidth.String(row.Text()); w > width {
+				t.Errorf("width %d row %d: %q occupies %d columns", width, i, row.Text(), w)
+			}
+			wantPrefix := 2
+			if i == 0 {
+				wantPrefix = 0
+			}
+			if row.PrefixRunes != wantPrefix {
+				t.Errorf("width %d row %d: PrefixRunes = %d, want %d", width, i, row.PrefixRunes, wantPrefix)
+			}
+		}
+		text, styles := unwrapRows(rows)
+		if text != line.Text() || !slices.Equal(styles, FlattenStyles(line)) {
+			t.Errorf("width %d: dropping the repeated prefix gives %q, want %q", width, text, line.Text())
+		}
+	}
+}
+
+func TestWrapLineHangWithWideRunes(t *testing.T) {
+	line := Line{Kind: KindListItem, Hang: []Span{{Text: "  ", Style: term.StylePaletteItem}}, Spans: []Span{
+		{Text: "• ", Style: term.StylePaletteItem},
+		{Text: "東京 大阪 名古屋 札幌 福岡", Style: term.StylePaletteItem},
+	}}
+	for _, width := range []int{4, 6, 9} {
+		rows := WrapLine(line, width)
+		for i, row := range rows {
+			if w := textwidth.String(row.Text()); w > width {
+				t.Errorf("width %d row %d: %q occupies %d columns", width, i, row.Text(), w)
+			}
+			if i > 0 && !strings.HasPrefix(row.Text(), "  ") {
+				t.Errorf("width %d row %d: %q lost its hanging indent", width, i, row.Text())
+			}
+		}
+		if text, _ := unwrapRows(rows); text != line.Text() {
+			t.Errorf("width %d: dropping the repeated prefix gives %q, want %q", width, text, line.Text())
+		}
+	}
+}
+
+func TestWrapLineKeepsTextAfterLeadingPrefix(t *testing.T) {
+	bar := Span{Text: "│ ", Style: term.StyleBorder}
+	line := Line{Kind: KindBlockquote, Hang: []Span{bar}, Spans: []Span{
+		bar,
+		{Text: "supercalifragilistic word", Style: term.StylePaletteItem},
+	}}
+	rows := WrapLine(line, 10)
+	for i, row := range rows {
+		if strings.TrimSpace(strings.TrimPrefix(row.Text(), "│ ")) == "" {
+			t.Errorf("row %d holds only the prefix: %q", i, textLines(rows))
+		}
+	}
+}
+
+func assertLines(t *testing.T, got []Line, want ...string) {
+	t.Helper()
+	if tl := textLines(got); !slices.Equal(tl, want) {
+		t.Errorf("got lines %q, want %q", tl, want)
+	}
+}
+
+func wrapAll(lines []Line, width int) []Line {
+	var rows []Line
+	for _, l := range lines {
+		if l.Kind.Wrappable() {
+			rows = append(rows, WrapLine(l, width)...)
+		} else {
+			rows = append(rows, l)
+		}
+	}
+	return rows
+}
+
+func TestRenderNestedListUnderOrderedItem(t *testing.T) {
+	assertLines(t, Render("1. top\n   - nested a\n   - nested b"),
+		"1. top", "   • nested a", "   • nested b")
+}
+
+func TestRenderThreeLevelList(t *testing.T) {
+	assertLines(t, Render("- a\n  - b\n    - c"), "• a", "  • b", "    • c")
+}
+
+func TestRenderNestedQuote(t *testing.T) {
+	assertLines(t, Render("> outer\n> > inner"), "│ outer", "│ │ inner")
+}
+
+func TestRenderListInsideQuote(t *testing.T) {
+	assertLines(t, Render("> - item"), "│ • item")
+}
+
+func TestRenderNestedListAddsNoBlankInsideParent(t *testing.T) {
+	assertLines(t, Render("1. top\n   - nested\n2. second"), "1. top", "   • nested", "2. second")
+}
+
+func TestRenderNestedQuoteThenTableSingleBlank(t *testing.T) {
+	lines := Render("> outer\n> > inner\n\n| a | b |\n|---|---|\n| 1 | 2 |")
+	if len(lines) < 4 || lines[2].Kind != KindBlank || lines[2].Text() != "" || lines[3].Kind != KindTable {
+		t.Errorf("expected one plain blank between the quote and the table, got %q", textLines(lines))
+	}
+}
+
+func TestRenderBlankInsideQuoteKeepsBar(t *testing.T) {
+	assertLines(t, Render("> ```\n> code\n> ```\n> after"), "│ code", "│", "│ after")
+}
+
+func TestRenderNoConsecutiveBlankLines(t *testing.T) {
+	input := "1. top\n   - nested a\n   - nested b\n2. second\n\nSteps continue below.\n\n" +
+		"3. starts at three\n4. four\n\n> outer\n> > inner\n\n| name | note |\n|------|------|\n| 東京 | wide |\n\n" +
+		"> - item in a quote\n\n- a\n  - b\n    - c\n\nend"
+	lines := Render(input)
+	for i := 1; i < len(lines); i++ {
+		if lines[i].Kind == KindBlank && lines[i-1].Kind == KindBlank {
+			t.Fatalf("consecutive blank lines at %d: %q", i, textLines(lines))
+		}
+	}
+}
+
+func TestRenderWrappedBulletKeepsHangingIndent(t *testing.T) {
+	rows := wrapAll(Render("- a list item long enough that it has to wrap onto a second line when narrow"), 40)
+	if len(rows) < 2 || !strings.HasPrefix(rows[0].Text(), "• ") {
+		t.Fatalf("expected a wrapped bullet item, got %q", textLines(rows))
+	}
+	for i, row := range rows {
+		if w := textwidth.String(row.Text()); w > 40 {
+			t.Errorf("row %d occupies %d columns: %q", i, w, row.Text())
+		}
+		if i > 0 && (!strings.HasPrefix(row.Text(), "  ") || strings.HasPrefix(row.Text(), "   ")) {
+			t.Errorf("row %d should start with exactly two spaces of hang: %q", i, row.Text())
+		}
+	}
+}
+
+func TestRenderWrappedTenthItemHangsFourSpaces(t *testing.T) {
+	var src strings.Builder
+	for i := 1; i <= 9; i++ {
+		src.WriteString("1. x\n")
+	}
+	src.WriteString("1. the tenth item is long enough that it has to wrap onto another row\n")
+	rows := wrapAll(Render(src.String()), 40)
+	start := slices.IndexFunc(rows, func(l Line) bool { return strings.HasPrefix(l.Text(), "10. ") })
+	if start < 0 || start+1 >= len(rows) {
+		t.Fatalf("expected a wrapped tenth item, got %q", textLines(rows))
+	}
+	for _, row := range rows[start+1:] {
+		if !strings.HasPrefix(row.Text(), "    ") || strings.HasPrefix(row.Text(), "     ") {
+			t.Errorf("continuation should start with exactly four spaces: %q", row.Text())
+		}
+	}
+}
+
+func TestRenderWrappedQuoteKeepsBar(t *testing.T) {
+	rows := wrapAll(Render("> a quote long enough that it has to wrap onto a second line when narrow"), 40)
+	if len(rows) < 2 {
+		t.Fatalf("expected the quote to wrap, got %q", textLines(rows))
+	}
+	for i, row := range rows {
+		if !strings.HasPrefix(row.Text(), "│ ") {
+			t.Errorf("row %d lost the quote bar: %q", i, row.Text())
+		}
+		if w := textwidth.String(row.Text()); w > 40 {
+			t.Errorf("row %d occupies %d columns: %q", i, w, row.Text())
+		}
+	}
+}
+
+func TestRenderHardLineBreaks(t *testing.T) {
+	assertLines(t, Render("line one  \nline two\\\nline three"), "line one", "line two", "line three")
+}
+
+func TestRenderSoftLineBreakJoinsWithSpace(t *testing.T) {
+	assertLines(t, Render("alpha\nbeta"), "alpha beta")
+}
+
+func TestRenderHardBreakInListItemKeepsHang(t *testing.T) {
+	lines := Render("- first  \n  second")
+	assertLines(t, lines, "• first", "  second")
+	hang := Line{Spans: lines[1].Hang}.Text()
+	if lines[1].Kind != KindListItem || hang != "  " {
+		t.Errorf("hard-break row should be a list item hanging by two spaces, got kind %v hang %q", lines[1].Kind, hang)
+	}
+}
+
+func TestRenderHardBreakInQuoteKeepsBar(t *testing.T) {
+	assertLines(t, Render("> first  \n> second"), "│ first", "│ second")
+}
+
+func TestRenderHardBreakInsideEmphasis(t *testing.T) {
+	lines := Render("*first  \nsecond*")
+	assertLines(t, lines, "first", "second")
+	if lines[1].Spans[0].Style != term.StyleHoverItalic {
+		t.Errorf("second row should stay italic, got style %v", lines[1].Spans[0].Style)
+	}
+}
+
+func TestRenderOrderedListKeepsStartNumber(t *testing.T) {
+	assertLines(t, Render("Steps continue below.\n\n3. starts at three\n4. four"),
+		"Steps continue below.", "", "3. starts at three", "4. four")
+}
+
+func TestRenderOrderedListStartingAtOne(t *testing.T) {
+	assertLines(t, Render("1. a\n2. b"), "1. a", "2. b")
+}
+
+func TestRenderNestedListAlignsUnderTwoDigitParent(t *testing.T) {
+	assertLines(t, Render("9. nine\n   - child of nine\n10. ten\n    - child of ten"),
+		"9. nine", "   • child of nine", "10. ten", "    • child of ten")
+}
+
+func TestRenderTableAlignsWideCells(t *testing.T) {
+	lines := Render("| name | note |\n|------|------|\n| 東京 | wide |\n| ab | narrow |")
+	var rows []string
+	for _, l := range lines {
+		if l.Kind == KindTable {
+			rows = append(rows, l.Text())
+		}
+	}
+	if len(rows) != 4 {
+		t.Fatalf("expected 4 table rows, got %q", rows)
+	}
+	col := -1
+	for _, row := range rows {
+		i := strings.IndexAny(row, "│┼")
+		if i < 0 {
+			t.Fatalf("row %q has no column separator", row)
+		}
+		at := textwidth.String(row[:i])
+		if col >= 0 && at != col {
+			t.Errorf("separator at column %d in %q, want %d: %q", at, row, col, rows)
+		}
+		col = at
+	}
+}
+
+func TestDetailsDefaultCollapsedState(t *testing.T) {
+	input := `<details>
+<summary>Click here for details</summary>
+
+Here is the hidden content:
+- bullet point 1
+- bullet point 2
+</details>`
+
+	lines := Render(input)
+	if len(lines) == 0 {
+		t.Fatal("expected rendered lines")
+	}
+	if lines[0].Text() != "▶ Click here for details" {
+		t.Fatalf("expected summary '▶ Click here for details', got %q", lines[0].Text())
+	}
+	if lines[0].Kind != KindSummary {
+		t.Fatalf("expected KindSummary, got %v", lines[0].Kind)
+	}
+	tl := textLines(lines)
+	for _, l := range tl {
+		if strings.Contains(l, "bullet point") {
+			t.Fatalf("hidden content leaked into collapsed output: %v", tl)
+		}
+	}
+
+	doc := Parse(input)
+	if len(doc.Details()) != 1 {
+		t.Fatalf("expected 1 detail block, got %d", len(doc.Details()))
+	}
+	det := doc.Details()[0]
+	if det.Open {
+		t.Fatal("detail should start collapsed")
+	}
+
+	doc.Toggle(det.ID)
+	if !det.Open {
+		t.Fatal("detail should be open after toggle")
+	}
+
+	openLines := doc.Render()
+	if openLines[0].Text() != "▼ Click here for details" {
+		t.Fatalf("expected summary '▼ Click here for details', got %q", openLines[0].Text())
+	}
+	foundBullet := false
+	for _, l := range textLines(openLines) {
+		if strings.Contains(l, "bullet point 1") {
+			foundBullet = true
+		}
+	}
+	if !foundBullet {
+		t.Fatalf("expected bullet point in open output: %v", textLines(openLines))
+	}
+}
+
+func TestDetailsOpenAttribute(t *testing.T) {
+	samples := []string{
+		`<details open>
+<summary>Open by default</summary>
+
+Expanded body text
+</details>`,
+		`<details open="open">
+<summary>Open by default</summary>
+
+Expanded body text
+</details>`,
+		`<details class="collapsible" open>
+<summary>Open by default</summary>
+
+Expanded body text
+</details>`,
+	}
+
+	for i, input := range samples {
+		lines := Render(input)
+		if lines[0].Text() != "▼ Open by default" {
+			t.Fatalf("sample %d: expected '▼ Open by default', got %q", i, lines[0].Text())
+		}
+		foundBody := false
+		for _, l := range textLines(lines) {
+			if strings.Contains(l, "Expanded body text") {
+				foundBody = true
+			}
+		}
+		if !foundBody {
+			t.Fatalf("sample %d: expected body text visible in open details: %v", i, textLines(lines))
+		}
+	}
+}
+
+func TestNestedDetails(t *testing.T) {
+	input := `<details>
+<summary>Outer</summary>
+
+Outer body
+
+<details>
+<summary>Inner</summary>
+
+Inner body
+</details>
+
+Outer after
+</details>`
+
+	doc := Parse(input)
+	if len(doc.Details()) != 2 {
+		t.Fatalf("expected 2 detail blocks, got %d", len(doc.Details()))
+	}
+	outerID := doc.Details()[0].ID
+	innerID := doc.Details()[1].ID
+
+	// 1. Both collapsed: only Outer summary is visible
+	lines := doc.Render()
+	tl := textLines(lines)
+	if len(tl) != 1 || tl[0] != "▶ Outer" {
+		t.Fatalf("expected only '▶ Outer', got %v", tl)
+	}
+
+	// 2. Expand outer: Outer body and Inner summary become visible
+	doc.Toggle(outerID)
+	lines = doc.Render()
+	tl = textLines(lines)
+	foundOuterBody := false
+	foundInnerSummary := false
+	foundInnerBody := false
+	for _, l := range tl {
+		if strings.Contains(l, "Outer body") {
+			foundOuterBody = true
+		}
+		if l == "▶ Inner" {
+			foundInnerSummary = true
+		}
+		if strings.Contains(l, "Inner body") {
+			foundInnerBody = true
+		}
+	}
+	if !foundOuterBody || !foundInnerSummary || foundInnerBody {
+		t.Fatalf("expected outer body and collapsed inner summary, got %v", tl)
+	}
+
+	// 3. Expand inner: Inner body becomes visible
+	doc.Toggle(innerID)
+	lines = doc.Render()
+	tl = textLines(lines)
+	foundInnerBody = false
+	foundInnerOpenSummary := false
+	for _, l := range tl {
+		if l == "▼ Inner" {
+			foundInnerOpenSummary = true
+		}
+		if strings.Contains(l, "Inner body") {
+			foundInnerBody = true
+		}
+	}
+	if !foundInnerOpenSummary || !foundInnerBody {
+		t.Fatalf("expected open inner summary and inner body, got %v", tl)
+	}
+
+	// 4. Collapse outer again: only Outer summary visible
+	doc.Toggle(outerID)
+	lines = doc.Render()
+	tl = textLines(lines)
+	if len(tl) != 1 || tl[0] != "▶ Outer" {
+		t.Fatalf("expected only '▶ Outer' after outer collapsed, got %v", tl)
+	}
+}
+
+func TestDetailsPreservesFencedCodeContainingHTML(t *testing.T) {
+	input := "```html\n<details>\n<summary>Code</summary>\n</details>\n```"
+	lines := Render(input)
+	for _, l := range lines {
+		if l.Kind == KindSummary {
+			t.Fatalf("fenced code block was wrongly parsed as disclosure: %v", textLines(lines))
+		}
+	}
+	tl := textLines(lines)
+	foundDetails := false
+	for _, l := range tl {
+		if strings.Contains(l, "<details>") {
+			foundDetails = true
+		}
+	}
+	if !foundDetails {
+		t.Fatalf("expected literal <details> inside code fence: %v", tl)
+	}
+}
+
+func TestDetailsIgnoresClosingTagInInlineCode(t *testing.T) {
+	input := "<details>\n<summary>More information</summary>\n\nUse `</details>` to close a section.\n\nThis should stay hidden until expanded.\n</details>"
+
+	doc := Parse(input)
+	if len(doc.Details()) != 1 {
+		t.Fatalf("expected 1 detail block, got %d", len(doc.Details()))
+	}
+	tl := textLines(doc.Render())
+	if len(tl) != 1 || tl[0] != "▶ More information" {
+		t.Fatalf("expected only '▶ More information' when collapsed, got %v", tl)
+	}
+
+	doc.Toggle(doc.Details()[0].ID)
+	tl = textLines(doc.Render())
+	want := []string{
+		"▼ More information",
+		"",
+		"Use </details> to close a section.",
+		"",
+		"This should stay hidden until expanded.",
+	}
+	if !slices.Equal(tl, want) {
+		t.Fatalf("expected %v when expanded, got %v", want, tl)
+	}
+}
+
+func TestDetailsClosesAfterEscapedBacktick(t *testing.T) {
+	input := "<details>\n<summary>More information</summary>\n\nInside.\n\\` </details> `\n\nOutside."
+
+	doc := Parse(input)
+	if len(doc.Details()) != 1 {
+		t.Fatalf("expected 1 detail block, got %d", len(doc.Details()))
+	}
+	tl := textLines(doc.Render())
+	want := []string{"▶ More information", "", "Outside."}
+	if !slices.Equal(tl, want) {
+		t.Fatalf("expected %v when collapsed, got %v", want, tl)
+	}
+}
+
+func TestDetailsPreservesOrdinaryProseWithHTML(t *testing.T) {
+	input := "Use `<details>` and <details> in prose."
+	lines := Render(input)
+	if len(lines) == 0 {
+		t.Fatal("expected lines")
+	}
+	if lines[0].Kind != KindParagraph {
+		t.Fatalf("expected KindParagraph, got %v", lines[0].Kind)
+	}
+	if !strings.Contains(lines[0].Text(), "<details>") {
+		t.Fatalf("expected literal <details> preserved in prose: %q", lines[0].Text())
+	}
+}
+
+func TestDetailsDefaultSummaryText(t *testing.T) {
+	input := "<details>\nNo summary tag provided\n</details>"
+	lines := Render(input)
+	if lines[0].Text() != "▶ Details" {
+		t.Fatalf("expected '▶ Details', got %q", lines[0].Text())
+	}
+}
+
+func TestDetailsPreservesMarkdownStylesInside(t *testing.T) {
+	input := `<details open>
+<summary><b>Styled</b> Summary</summary>
+
+### Inner Heading
+
+- list item 1
+
+` + "```go\nfunc foo() {}\n```" + `
+
+| Col1 | Col2 |
+|---|---|
+| A | B |
+</details>`
+
+	lines := Render(input)
+	foundHeading := false
+	foundListItem := false
+	foundCode := false
+	foundTable := false
+
+	for _, l := range lines {
+		if l.Kind == KindHeading && strings.Contains(l.Text(), "Inner Heading") {
+			foundHeading = true
+		}
+		if l.Kind == KindListItem && strings.Contains(l.Text(), "list item 1") {
+			foundListItem = true
+		}
+		if l.Kind == KindCode && strings.Contains(l.Text(), "func foo") {
+			foundCode = true
+		}
+		if l.Kind == KindTable {
+			foundTable = true
+		}
+	}
+
+	if !foundHeading {
+		t.Error("expected KindHeading inside open details")
+	}
+	if !foundListItem {
+		t.Error("expected KindListItem inside open details")
+	}
+	if !foundCode {
+		t.Error("expected KindCode inside open details")
+	}
+	if !foundTable {
+		t.Error("expected KindTable inside open details")
+	}
+}
+
+func TestNestedSingleLineDetailsTrailingContent(t *testing.T) {
+	input := `<details>
+<summary>Outer</summary>
+<details><summary>Inner</summary>Nested body</details>
+Trailing content inside outer
+</details>
+
+Content outside outer`
+
+	doc := Parse(input)
+	if len(doc.Details()) != 2 {
+		t.Fatalf("expected 2 details, got %d", len(doc.Details()))
+	}
+
+	// When outer is collapsed, content outside the outer section must remain visible.
+	doc.SetOpen(1, false)
+	rendered := doc.Render()
+	foundOutside := false
+	foundInside := false
+	for _, l := range rendered {
+		text := l.Text()
+		if strings.Contains(text, "Content outside outer") {
+			foundOutside = true
+		}
+		if strings.Contains(text, "Trailing content inside outer") {
+			foundInside = true
+		}
+	}
+	if !foundOutside {
+		t.Error("content outside outer details should remain visible when outer is collapsed")
+	}
+	if foundInside {
+		t.Error("content inside outer details should be hidden when outer is collapsed")
+	}
+
+	// When outer is expanded, both inside and outside content are visible.
+	doc.SetOpen(1, true)
+	renderedOpen := doc.Render()
+	foundOutsideOpen := false
+	foundInsideOpen := false
+	for _, l := range renderedOpen {
+		text := l.Text()
+		if strings.Contains(text, "Content outside outer") {
+			foundOutsideOpen = true
+		}
+		if strings.Contains(text, "Trailing content inside outer") {
+			foundInsideOpen = true
+		}
+	}
+	if !foundOutsideOpen {
+		t.Error("content outside outer details should be visible when outer is open")
+	}
+	if !foundInsideOpen {
+		t.Error("content inside outer details should be visible when outer is open")
+	}
+}
+
+func TestWrapLinePreservesDetailID(t *testing.T) {
+	line := Line{Kind: KindSummary, DetailID: 7, Spans: []Span{{Text: "▶ A summary long enough to wrap", Style: term.StyleHoverBold}}}
+	rows := WrapLine(line, 10)
+	if len(rows) < 2 {
+		t.Fatal("expected wrapped summary")
+	}
+	for _, row := range rows {
+		if row.DetailID != line.DetailID || row.Kind != KindSummary {
+			t.Fatalf("wrapped summary lost disclosure metadata: %+v", row)
+		}
+	}
+}

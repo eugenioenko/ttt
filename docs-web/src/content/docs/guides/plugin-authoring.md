@@ -50,10 +50,11 @@ Every plugin requires a `plugin.ttt.json` manifest file at the root of its direc
 | `description` | string | no       | Shown in the plugin list dialog.                    |
 | `version`     | string | no       | Semver version string.                              |
 | `author`      | string | no       | Plugin author name.                                 |
-| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars`. |
+| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars` or `themes`. |
 | `api`         | number | no       | Plugin API version the plugin targets. Defaults to `1` when omitted. The editor refuses to load plugins that target a newer API than it supports. |
 | `permissions` | object | no       | Object declaring required permissions (see [Permissions Reference](#permissions-reference)). |
 | `grammars`    | array  | no       | TextMate grammars the plugin contributes (see [Grammar plugins](#grammar-plugins)). |
+| `themes`      | array  | no       | Theme JSON files the plugin contributes (see [Theme plugins](#theme-plugins)). |
 
 ### Minimal Example
 
@@ -81,6 +82,27 @@ ttt.register({
   },
 })
 ```
+
+### Theme plugins
+
+A plugin can contribute one or more ttt theme JSON files. Theme-only plugins need no Lua entry point or permissions:
+
+```json
+{
+  "name": "my-themes",
+  "version": "0.1.0",
+  "themes": [
+    { "path": "themes/dark.json", "name": "midnight" },
+    { "path": "themes/light.json" }
+  ]
+}
+```
+
+Each entry requires a `path` relative to the plugin directory. The optional `name` defaults to the filename without its extension. Names must be unique within the plugin and must be plain filenames, without directory separators. Paths cannot escape the plugin directory, including through symlinks. Files use the [ttt theme format](/guides/themes/).
+
+The approval dialog lists every theme. After approval, ttt copies the files into `~/.config/ttt/themes/plugins/<plugin-name>/`. **Switch Theme** lists them as `plugins/<plugin-name>/<theme-name>`; these names also work in the `theme` setting. This namespace prevents collisions with other plugins and manually installed themes. Installing a plugin does not select its theme.
+
+Updating or reloading replaces the plugin's theme files, removes contributions dropped from its manifest, and refreshes an active theme immediately. Invalid source files leave the previously installed themes intact. Disabling keeps the installed themes available. Uninstalling removes them; if the active theme was removed, ttt switches to its default colors and saves that selection.
 
 ### Grammar plugins
 
@@ -176,10 +198,30 @@ Sidebar panels appear in the left sidebar alongside the file explorer. Requires 
 | Field       | Type     | Required | Description                                                             |
 |-------------|----------|----------|-------------------------------------------------------------------------|
 | `title`     | string   | yes      | Displayed as the panel's tab label.                                     |
+| `icon`      | string or table | no | Tab icon for when `sidebar.tabStyle` is `"label-icon"` or `"icon"`. See [Sidebar icons](#sidebar-icons). |
 | `render`    | function | yes      | Called each render frame. Receives a [panel proxy](#widget-api) object. |
 | `on_event`  | function | no       | Fallback handler for key/mouse events not consumed by widgets.          |
 | `actions`   | table    | no       | Array of menu entries for the panel's "..." header menu.                |
 | `on_action` | function | no       | Callback when a header menu action is selected. Receives the command string. |
+
+#### Sidebar icons
+
+Give both forms so the tab suits the user's `appearance.icons` setting. Each must be one character; Lua 5.1 has no `\u` escape, so paste the glyph or write its UTF-8 bytes:
+
+```lua
+sidebar = {
+  title = "Todo",
+  icon = { plain = "T", nerd = "\238\171\176" },
+  render = function(panel) end,
+}
+```
+
+| `appearance.icons` | `{ plain, nerd }` | `{ plain }` | `{ nerd }` | `"T"` (string) | no icon |
+|--------------------|-------------------|-------------|------------|----------------|---------|
+| `nerd-font`        | nerd              | plain       | nerd       | `T`            | title   |
+| `none`             | plain             | plain       | title      | `T`            | title   |
+
+The tab shows only its title when the plugin gives no icon, or none for the current mode. An invalid value is ignored with a warning in the Output panel, and the plugin still loads. A string is used in both modes, so don't pass a Nerd Font glyph as one: it appears as a box without the font.
 
 The `actions` array defines entries for the sidebar panel's header menu (the "..." button). Each entry uses the [menu entry format](#menu-entry-format):
 
@@ -254,6 +296,8 @@ Each file handler entry is a table with:
 ttt consults handlers only for files that would otherwise open as the binary file card. Text files and the images ttt displays natively (PNG, JPEG, GIF) always open normally. When several handlers match, a `magic` match wins over an `extensions` match; ties go to plugin load order, then registration order.
 
 `open` receives the absolute file path and a `tab` table. Set `tab.render` (and optionally `tab.on_event`) exactly as you would pass them to [`ttt.open_tab`](#tttopen_tabconfig). The tab is bound to the file: it is titled with the file name, opening the same file again switches to it without calling `open`, and the `file.open` and `file.close` events fire for it.
+
+`tab.id` is set before `open` runs: it is the tab's ID, the same absolute path. Pass it to [`ttt.focus_tab`](#tttfocus_tabid) or [`ttt.close_tab`](#tttclose_tabid) later, for example to close the viewer when its file is deleted. It is the plugin's own ID, so `ttt.open_tab` with the same `id` switches to this tab.
 
 ```lua
 local ttt = require("ttt")
@@ -598,12 +642,22 @@ Open a custom editor tab with plugin-rendered content. Requires `panel.editor` p
 
 | Parameter  | Type     | Required | Description                                       |
 |------------|----------|----------|---------------------------------------------------|
+| `id`       | string   | no       | Stable ID for the tab. Opening an ID that is already open switches to that tab and keeps its state; the new `render` is ignored. |
 | `title`    | string   | yes      | Tab title displayed in the editor tab bar.        |
 | `render`   | function | yes      | Render function. Receives a panel proxy object.   |
 | `on_event` | function | no       | Fallback handler for key/mouse events not consumed by widgets. |
+| `on_close` | function | no       | Called once after the tab closes, by the user or `ttt.close_tab`. It runs on the next main-loop tick, so it may open or close other tabs. Like `render`, it is ignored when the `id` is already open. |
+| `focus`    | boolean  | no       | Default `true`: move keyboard focus into the tab, landing on an input with `autofocus` if it has one. Pass `false` to open or switch to the tab and leave focus where it is (in a sidebar list the user is browsing, say). |
+
+Returns the tab's ID: the `id` you passed, or the title when you passed none.
+
+Focus moves even when `open_tab` runs from a click in the plugin's sidebar or bottom panel: the click does not take it back. While a dialog is open the tab opens behind it and focus stays in the dialog.
+
+Text in a plugin panel can be selected like in a terminal: dragging from one cell to another selects what the panel drew, in reading order, borders included. A click without a drag still reaches the widgets, and a widget that captures the pointer (a scrollbar) or selects its own text (`markdown`) keeps its drag. Ctrl+C copies the selection; Escape or a click clears it. Right-clicking a plugin tab shows Copy and Select All, unless a widget there, like a table row with a `node_menu`, opens its own menu.
 
 ```lua
-ttt.open_tab({
+local id = ttt.open_tab({
+  id = "preview",
   title = "Preview",
   render = function(panel)
     panel:label("Tab content here")
@@ -612,9 +666,21 @@ ttt.open_tab({
 })
 ```
 
+Without an `id`, the title is the key, and opening the same title again replaces the tab's content.
+
+### `ttt.focus_tab(id)`
+
+Switch to one of the plugin's open editor tabs by the ID `open_tab` returned (or a file handler's `tab.id`) and move keyboard focus into it, landing on an input with `autofocus` if it has one. Returns `true` if the tab is open, `false` otherwise. Like `open_tab`, it leaves focus in an open dialog. Requires `panel.editor` or `editor.file_handlers` permission.
+
+```lua
+ttt.open_tab({ id = "draft", title = "Draft", focus = false, render = render_draft })
+-- later, when the user is ready to type:
+ttt.focus_tab("draft")
+```
+
 ### `ttt.close_tab(id)`
 
-Close a plugin editor tab by its ID (string). Requires `panel.editor` permission.
+Close one of the plugin's editor tabs by the ID `open_tab` returned, or a tab its file handler opened by `tab.id`. File tabs, buffers and other plugins' tabs are never closed, even when the ID matches their path. Requires `panel.editor` or `editor.file_handlers` permission.
 
 ```lua
 ttt.close_tab("my-tab-id")
@@ -727,7 +793,7 @@ Open a native multi-file diff detail tab from a Git-style unified diff. No speci
 |-------|------|---------|-------------|
 | `diff` | string | required | Non-empty unified diff containing `diff --git` file headers. |
 | `title` | string | `"Changes"` | Tab title and view heading. |
-| `description` | string | `""` | Text displayed above the changed files. |
+| `description` | string | `""` | Markdown displayed above the changed files, using the configured Markdown wrap width. |
 | `id` | string | title | Non-empty stable ID within the plugin; opening it again refreshes the same tab. Supply an explicit ID when the title is empty. |
 
 Configuration fields must be strings; invalid configuration raises a Lua argument error. Returns the tab ID, or `nil, error` for an unavailable host or unparseable diff. Pass the returned ID to `ttt.close_tab` to close it. Native diff tabs remain usable when the plugin is unloaded.
@@ -820,15 +886,16 @@ local ok, err = fs.write(state_file, json.encode(state))
 
 Note: the plugin directory is a git clone that `Plugins: Update` pulls into, and it is deleted on uninstall — keep only regenerable state there.
 
-### `ttt.platform()` / `ttt.arch()` / `ttt.version()`
+### `ttt.platform()` / `ttt.arch()` / `ttt.version()` / `ttt.executable_path()`
 
-Return the host OS, CPU architecture, and running ttt version. No permission required.
+Return the host OS, CPU architecture, running ttt version, and the absolute path of the running ttt binary. No permission required.
 
 | Function          | Returns                                                                 |
 |-------------------|--------------------------------------------------------------------------|
 | `ttt.platform()`  | Go `GOOS` value: `"linux"`, `"darwin"`, or `"windows"`.                 |
 | `ttt.arch()`      | Go `GOARCH` value, e.g. `"amd64"`, `"arm64"`.                           |
 | `ttt.version()`   | ttt's version string, e.g. `"1.2.3"` (`"dev"` for unreleased builds).   |
+| `ttt.executable_path()` | Absolute path of the running binary, or `nil, err`. On Linux symlinks are already resolved, so a package-manager symlink yields its versioned target. |
 
 ```lua
 local ttt = require("ttt")
@@ -901,9 +968,25 @@ ttt.clear_interval(id)
 
 All of a plugin's timers are automatically stopped when the plugin is disabled, reloaded, or uninstalled — you don't need to clear them on shutdown.
 
+### `ttt.debounce(ms, callback)`
+
+Returns two functions: `run(...)` and `cancel()`. Each call to `run` restarts the timer, and `callback` runs once, `ms` milliseconds after the last call, with that call's arguments. `cancel` drops a pending call. No permission required.
+
+```lua
+local search = ttt.debounce(250, function(text)
+  fetch_results(text)
+end)
+
+panel:input({ placeholder = "Search…", on_change = search })
+```
+
+Create the debounced function once (at load time, or stored on your state), not inside `render`: each `ttt.debounce` call has its own timer.
+
 ### `ttt.on_install(callback)`
 
 Register a function that runs once when the plugin is installed (from the Plugins panel or **Plugins: Install from URL**). Use this for one-time setup like writing default settings. No permission required to register the hook; whatever the callback does is still permission-checked.
+
+If the callback raises an error, the install fails: the plugin is not loaded, and a fresh install is removed again. When the hook runs on re-approval of an already installed plugin, its previous approval is kept, so the next startup asks again and reruns the hook.
 
 ```lua
 local ttt = require("ttt")
@@ -917,6 +1000,8 @@ end)
 ### `ttt.on_uninstall(callback)`
 
 Register a cleanup function that runs when the plugin is uninstalled. Use this to remove settings, files, or other state the plugin created during its lifetime. No permission required. Tabs, drawers, panels, status items, diagnostics and decorations are closed or cleared after the callback returns, so there's no need to clean those up here.
+
+If the callback raises an error, the plugin stays installed and the user is asked whether to remove it anyway. Raise an error when cleanup did not finish, so files the plugin created outside its directory are not orphaned silently.
 
 ```lua
 local ttt = require("ttt")
@@ -941,15 +1026,21 @@ local lines = ttt.markdown("# Hello\nSome **bold** text")
 
 ### Debug helpers
 
-These drive and capture the editor for automated testing (see [Testing Plugins](/guides/plugin-testing/)). They are the Lua equivalents of the `--exec` script commands. No permission required.
+These drive and capture the editor for automated testing (see [Testing Plugins](/guides/plugin-testing/)). They are the Lua equivalents of the `--exec` script commands.
 
-| Function | Description |
-|----------|-------------|
-| `ttt.screenshot(path)` | Write the current screen (plain text) to a file. |
-| `ttt.debug(path)` | Write the editor's full state as JSON to a file (cursor, panels, widget tree, OUTPUT log). |
-| `ttt.click(x, y)` | Simulate a mouse click at screen coordinates. |
-| `ttt.drag(x1, y1, x2, y2)` | Simulate a mouse drag between two points. |
-| `ttt.quit()` | Exit the editor. |
+| Function | Permission | Description |
+|----------|------------|-------------|
+| `ttt.screenshot([path])` | `screen.read` | Return the current screen as plain text, or write it to `path` (also needs `fs.write` covering `path`). |
+| `ttt.debug([path])` | `screen.read`, `editor.read`, `terminal.read` | Return the editor's full state as JSON (cursor, buffer, panels, widget tree, OUTPUT log, terminal history), or write it to `path` (also needs `fs.write`). |
+| `ttt.click(x, y)` | `input` | Simulate a mouse click at screen coordinates. |
+| `ttt.drag(x1, y1, x2, y2)` | `input` | Simulate a mouse drag between two points. |
+| `ttt.key(combo)` | `input` | Press a key combo or chord, written as in keybindings (`"ctrl+s"`, `"ctrl+k ctrl+s"`). Raises an error for an unknown key. |
+| `ttt.type(text)` | `input` | Type text as individual key presses. LF, CRLF and CR produce Enter; CRLF produces one Enter. Other control characters follow key handling. Raises an error above 64 KiB of UTF-8 input; use automation `paste` for bulk text. |
+| `ttt.quit()` | none | Exit the editor. |
+
+Events within a key or text call are queued as one batch and handled in order after the current callback returns. Mouse clicks and drags run asynchronously and can interleave with, or arrive after, later keyboard input. When a click must finish before typing, chain acknowledged automation actions through their callbacks. Queued input is dropped if its originating plugin is disabled, unloaded or reloaded, or while a plugin approval dialog is open, so no plugin can grant permissions on the user's behalf.
+
+These calls do not report when the input has been applied. When you need to know, for example to read the screen after a key press, use [`ttt.automation`](#automation-api) instead.
 
 ### `ttt.json` Module
 
@@ -1019,6 +1110,28 @@ Return every non-overlapping match in order, as a list of `{ s = start, e = end,
 ```lua
 for _, m in ipairs(regex.compile("\\d+"):find_all("a1 b22")) do
   -- m.s, m.e: 2, 2 then 5, 6
+end
+```
+
+### `ttt.text` Module
+
+The `ttt.text` module measures text in terminal columns, the way ttt draws it. Use it instead of `#s` or `utf8.len(s)` when laying out raw cells or padding table columns: `#s` counts bytes, and a fullwidth character such as `日` is one character but takes two columns. No permission required.
+
+```lua
+local text = require("ttt.text")
+```
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `text.width(s)` | number | Columns `s` occupies. |
+| `text.truncate(s, width, [tail])` | string | `s` unchanged if it fits in `width` columns; otherwise the longest prefix that fits together with `tail` (for example `"…"`), followed by `tail`. A `tail` wider than `width` is dropped. `width` must not be negative. |
+| `text.wrap(s, width)` | table | `s` split into lines of at most `width` columns, breaking at spaces and inside words longer than a line. `\n` starts a new line. A single character wider than `width` gets a line of its own. `width` must be at least 1. |
+
+```lua
+text.width("日本語")                    -- 6
+text.truncate("日本語テキスト", 6, "…")   -- "日本…"
+for i, line in ipairs(text.wrap(message, w)) do
+  panel:text(0, i - 1, line)
 end
 ```
 
@@ -1117,7 +1230,7 @@ The argument is an array of tables, each with:
 | `key`   | string | yes      | Left column.  |
 | `value` | string | yes      | Right column. |
 
-The outer table also supports [box model fields](#box-model) for margin/padding.
+The outer table also supports [box model fields](#box-model) for margin/padding, and `muted_keys = true`, which swaps the emphasis: keys muted and values in the regular item style, like ttt's own details dialogs. Use it for a details view where the values are what matters. By default the keys stand out and the values are muted.
 
 Key-value lists are not focusable.
 
@@ -1143,13 +1256,15 @@ panel:tree({
   },
   indent = 2,
   on_select = function(node)
-    -- called when a node is activated (Enter key or double-click)
+    -- called when the selection moves to a node, and when a node is clicked
+    -- or gets Enter, even if it was already selected
   end,
   on_expand = function(node)
     -- called when a node is expanded (use it to lazy-load children)
   end,
   on_command = function(command, node)
-    -- called when a context menu command or inline action is triggered
+    -- called for context menu commands and inline actions, and with
+    -- "activate" when a leaf node is clicked or gets Enter
   end,
   node_menu = {
     { label = "Open", command = "open" },
@@ -1164,12 +1279,14 @@ panel:tree({
 |--------------|----------|---------|------------------------------------------------|
 | `items`      | table    | `{}`    | Array of [tree node tables](#tree-node-format). |
 | `indent`     | number   | `2`     | Number of spaces per nesting level.            |
-| `on_select`  | function | nil     | Callback when a node is activated (Enter or double-click). Receives the node table. |
+| `on_select`  | function | nil     | Callback when the selection moves to a node, and when a node is clicked or gets Enter, even if it was already selected. Receives the node table. |
 | `on_expand`  | function | nil     | Callback when a node is expanded (not fired on collapse — intended for lazy-loading children). Receives the node table. |
 | `on_command`   | function | nil     | Callback when a context menu command or key command is selected. Receives `(command, node)`. |
 | `node_menu`    | table    | nil     | Array of [menu entries](#menu-entry-format) for right-click context menu on nodes. |
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
+| `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
+| `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 **Keyboard navigation:** When focused, Up/Down arrows move selection, Enter activates `on_select`, Left/Right collapse/expand nodes. Shift+Enter opens the context menu on the selected node.
 
@@ -1185,10 +1302,12 @@ panel:list({
     { id = "item3", label = "Third item", muted = true },
   },
   on_select = function(node)
-    -- called when an item is activated
+    -- called when the selection moves to an item, and when an item is
+    -- clicked or gets Enter, even if it was already selected
   end,
   on_command = function(command, node)
-    -- called when a context menu command is triggered
+    -- called for context menu commands, and with "activate" when an item is
+    -- clicked or gets Enter
   end,
   node_menu = {
     { label = "Start", command = "start" },
@@ -1204,11 +1323,13 @@ panel:list({
 | Field        | Type     | Default | Description                                            |
 |--------------|----------|---------|--------------------------------------------------------|
 | `items`        | table    | `{}`    | Array of [tree node tables](#tree-node-format).        |
-| `on_select`    | function | nil     | Callback when an item is activated. Receives the node table. |
+| `on_select`    | function | nil     | Callback when the selection moves to an item, and when an item is clicked or gets Enter, even if it was already selected. Receives the node table. |
 | `on_command`   | function | nil     | Callback when a context menu command or key command is selected. Receives `(command, node)`. |
 | `node_menu`    | table    | nil     | Array of [menu entries](#menu-entry-format) for the right-click context menu. |
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
+| `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
+| `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 ### Button
 
@@ -1229,6 +1350,18 @@ panel:button({
 |------------|----------|----------|------------------------------------------------|
 | `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
+| `disabled` | boolean  | no       | Draws the button muted and ignores presses, for example while a request is in flight. |
+| `style`    | string   | no       | How the button looks when it is not focused. Default: `"filled"`. |
+
+**Button styles.** Every style draws in the focused button colors while it has focus, and muted while disabled.
+
+| Style       | Looks like | Use it for |
+|-------------|------------|------------|
+| `"filled"`  | Label on a subtle background (`button.filled` in the theme) | Most actions: toolbars, rows of commands. |
+| `"inverse"` | Label in the theme's colors swapped (`button.inverse`) | The one primary action of a form, such as Save or Create. |
+| `"bracket"` | `[Label]` | Inline actions next to fields, and themes with few colors. |
+| `"link"`    | The bare label, as ttt's own dialogs draw buttons | Places where the button is obvious from context. |
+| `"muted"`   | The label in the muted color | Secondary actions such as Cancel. |
 
 ### Checkbox
 
@@ -1283,11 +1416,16 @@ panel:input({
 | `clear_on_submit`  | boolean  | `false` | When `true`, the input text is cleared after `on_submit` fires. |
 | `wrap`             | boolean  | `false` | When `true`, long text wraps onto more rows, and the input grows up to `max_rows` and then scrolls, with an arrow at the right edge when rows are out of view. Inside a `scrollview` it wraps at the scroll view's content width, which can be wider than what is visible, so put wrapping inputs outside scroll views. Shift+Enter, Alt+Enter or Ctrl+J adds a line break (many terminals send Shift+Enter as plain Enter; the other two work in most); Enter still submits when `multiline` is disabled. Up and Down move between rows; Ctrl+Home and Ctrl+End go to the start and end of the text. |
 | `max_rows`         | number   | `5`     | The most rows a wrapping input grows to. |
-| `autofocus`        | boolean  | `false` | When `true`, the input takes focus when the plugin calls `ttt.focus_panel`. |
+| `autofocus`        | boolean  | `false` | When `true`, the input takes focus when its dialog opens, when the plugin calls `ttt.focus_panel`, and when `ttt.open_tab` or `ttt.focus_tab` focuses its tab. |
+| `border`           | boolean  | `false` | Draws a full border around the input, which highlights while it has focus. A one-line bordered input is 3 rows tall; `wrap` and `min_rows` add rows inside the border. |
+| `title`            | string   | unset   | Label drawn in the top border of a bordered input, so a form field needs no separate label. |
+| `password`         | boolean  | `false` | Shows each character as `•` and keeps the text off the clipboard. A password input is one line: `wrap` is ignored. |
 | `on_change`        | function | nil     | Called after every text change. Receives the current text (string). |
 | `on_submit`        | function | nil     | Called when Enter is pressed and `multiline` is disabled. Receives the current text (string). |
 
-The input text and cursor position are automatically preserved across re-renders.
+Drag with the left mouse button to select input text, including across wrapped rows. Double-click selects a word. The input keeps the drag when the pointer leaves its bounds; releasing the button ends it.
+
+The input text, cursor position, and selection are automatically preserved across re-renders.
 
 ### VStack
 
@@ -1314,7 +1452,7 @@ VStack is useful for grouping related widgets into sections. The child panel pro
 
 ### HStack
 
-Horizontal stack layout container. Lays out child widgets side by side. The first child grows to fill available space; remaining children get fixed width.
+Horizontal stack layout container. Lays out child widgets side by side; see below for how they share the width.
 
 ```lua
 panel:hstack({
@@ -1333,8 +1471,9 @@ panel:hstack({
 | `render` | function | yes      | Builder function that receives a child panel proxy. Call widget methods on it to add children. |
 | `gap`    | number   | no       | Horizontal gap (in columns) between children. Default: `0`. |
 | `height` | number   | no       | Fixed height in rows.                                       |
+| `align`  | string   | no       | `"left"` (default), `"center"` or `"right"`. Applies only when no child expands. |
 
-The first child in the hstack expands to fill remaining horizontal space. All subsequent children are given their natural/fixed width. This is useful for toolbar-style layouts with a label or spacer on the left and action buttons on the right.
+Children without a natural width (labels, inputs, checkboxes, tables) share the remaining horizontal space equally. Buttons, dropdowns and children with a `width` take their own width. This is useful for toolbar-style layouts with a search input on the left and action buttons on the right. When every child has its own width, `align` places the group, for example `align = "right"` for a dialog's buttons.
 
 ### ScrollView
 
@@ -1385,7 +1524,9 @@ panel:box({
 | `border_bottom` | boolean  | false   | Draw only the bottom border.                   |
 | `border_left`   | boolean  | false   | Draw only the left border.                     |
 | `border_right`  | boolean  | false   | Draw only the right border.                    |
-| `height`        | number   | 0       | Fixed height in rows. `0` means auto-size.     |
+| `height`        | number   | 0       | Fixed height in rows, borders and padding included. Margins are added outside it. `0` means auto-size. |
+| `width`         | number   | 0       | Fixed width in columns inside an `hstack`, borders and padding included. Margins are added outside it. `0` means the box grows. |
+| `title`         | string   | unset   | Label drawn in the top border, when the box has one. |
 
 Individual `border_*` flags can be combined. If `border` is true, all four sides are drawn regardless of individual flags.
 
@@ -1474,6 +1615,10 @@ panel:table({
     { label = "Name" },
     { label = "Status", width = 10 },
     { label = "Port", width = 6, align = "right" },
+    { label = "", actions = {
+      { label = "Open", command = "open" },
+      { menu = true },
+    } },
   },
   rows = {
     { "web-app", "running", "8080" },
@@ -1496,13 +1641,94 @@ panel:table({
 
 | Field          | Type     | Required | Description                                                 |
 |----------------|----------|----------|-------------------------------------------------------------|
-| `columns`      | table    | yes      | Array of column tables: `{label, width, align}`. `width` is fixed columns (omit to auto-size); `align` is `"right"` or default left. |
+| `columns`      | table    | yes      | Array of column tables: `{label, width, min_width, align, actions}`. `width` fixes a column's width (omit it to auto-size); `min_width` is the narrowest an auto-sized column gets (default: its label's width); `align` is `"right"`, `"center"` or default left. `actions` turns the column into [row actions](#row-actions). |
 | `rows`         | table    | yes      | Array of rows; each row is an array of cell strings.        |
 | `on_select`    | function | no       | Callback when the selected row changes (arrow keys, click) or Enter is pressed. Receives the 1-based row index. |
+| `on_activate`  | function | no       | Callback when a row is opened with Enter. A click only selects, so a table can drive a detail view on `on_select` and open on `on_activate`; give mouse users an [action](#row-actions) to open a row. Receives the 1-based row index. |
+| `selected`     | number   | no       | 1-based row to select. When set, the plugin controls the selection: keep it in step with `on_select`. When omitted, the table keeps its own. |
+| `row_styles`   | table    | no       | Array of [style names](#styles), one per row, for example `"muted"` for inactive items. |
+| `loading`      | boolean  | no       | Shows `Loading…` in place of the rows while there are none, or in the header while the current rows are kept. |
+| `empty`        | string   | no       | Text shown in place of the rows when there are none and `loading` is not set. |
+| `inset`        | number   | no       | Blank cells before the first column and after the last. Unlike `padding_left`/`padding_right`, the row highlight and the scrollbar still reach the edges. |
 | `on_command`   | function | no       | Callback for context menu or key commands. Receives `(command, row_index)`. |
 | `node_menu`    | table    | no       | Array of [menu entries](#menu-entry-format) for the right-click context menu on rows. |
 | `key_commands` | table    | no       | Map of single-char keys to command strings. Triggers `on_command(command, selected_row_index)`. |
 | + [box model fields](#box-model) | | | Margin and padding. |
+
+Double-clicking a data cell (not an action) highlights its text, and Ctrl+C then copies the cell's full value, even when the cell is truncated with `…`. Escape, a click elsewhere, or a render that changes or removes its row clears it.
+
+Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, Alt+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
+
+#### Row actions
+
+A column with `actions` draws the same clickable links in every row, so the row's actions are visible instead of hidden behind Enter or a right-click. Make it the last column: it then stays pinned at the right edge while the other columns scroll horizontally. Its width is the width of its labels.
+
+Each action is a table:
+
+| Field     | Type            | Description |
+|-----------|-----------------|-------------|
+| `label`   | string          | Link text. Required unless `menu` is set, where it defaults to `⋮`. |
+| `command` | string          | Passed to `on_command(command, row_index)` when the action is clicked. |
+| `menu`    | boolean or table | `true` opens `node_menu` as a dropdown below the action; an array of [menu entries](#menu-entry-format) opens those instead. Picking an entry calls `on_command(command, row_index)`. |
+| `style`   | string          | A [style name](#styles) for the label, such as `"danger"`. Actions are muted by default so they sit behind the row's data. The selected row always uses its own style. |
+
+Clicking an action selects its row first. Enter, `key_commands`, Shift+Enter and right-click work as they do without an actions column.
+
+### Tabs
+
+A row of tabs, for switching between sections of a panel or editor tab. The plugin draws the active section itself.
+
+```lua
+local current = "details"
+
+panel:tabs({
+  items = { { id = "details", label = "Details" }, { id = "keys", label = "Keys" } },
+  active = current,
+  on_change = function(id)
+    current = id
+    panel:redraw()
+  end,
+})
+if current == "keys" then
+  -- draw the keys section
+end
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `items`     | table    | yes      | Array of `{ id, label }` tables. |
+| `active`    | string   | no       | `id` of the active tab. Defaults to the first. |
+| `on_change` | function | no       | Called with the `id` of the tab the user picked. |
+| + [box model fields](#box-model) | | | Margin and padding. |
+
+### Pager
+
+Page navigation for a list that is too long to show at once, such as a server-paged API. It shows `« ‹ 21–40 of 85 › »`; the arrows that lead nowhere are muted. When it has focus, Left/Right or PgUp/PgDn move a page and Home/End go to the first or last page.
+
+```lua
+-- load_page fetches the rows at offset and sets total from the response.
+local offset, total = 0, 85
+
+panel:pager({
+  offset = offset,
+  limit = 20,
+  total = total,
+  on_change = function(new_offset)
+    offset = new_offset
+    load_page(offset)
+  end,
+})
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `offset`    | number   | yes      | 0-based index of the first item on the current page. |
+| `limit`     | number   | yes      | Items per page. |
+| `total`     | number   | yes      | Total number of items. `0` shows `No items`. |
+| `on_change` | function | no       | Called with the new 0-based offset when the user changes page. |
+| + [box model fields](#box-model) | | | Margin and padding. |
+
+The pager does not load anything itself: fetch or slice the page in `on_change` and render the rows it returns.
 
 ### Markdown
 
@@ -1528,7 +1754,7 @@ panel:markdown({ text = readme_content, margin_top = 1 })
 | `wrap_width` | number | no | Maximum column width for prose wrapping (positive integer). Overrides the global `markdown.wrapWidth` setting for this widget only. If omitted, uses the global setting. |
 | + [box model fields](#box-model) | | | Margin and padding. |
 
-Prose lines wrap at `wrap_width` when specified, or fall back to the `markdown.wrapWidth` setting (default 80). Headings, bold, italic, code spans, fenced code blocks, lists, and links are styled using the theme's styles. Text inside the widget can be selected with the mouse and copied.
+Prose lines wrap at `wrap_width` when specified, or fall back to the `markdown.wrapWidth` setting (default 80). Headings, bold, italic, code spans, fenced code blocks, lists, and links are styled using the theme's styles. Text inside the widget can be selected with the mouse and copied. HTML `<details>` and `<summary>` tags render as collapsible disclosure sections (`▶ ` / `▼ `) that start collapsed unless `<details open>` is specified. Clicking a summary or pressing `Enter` or `Space` on a focused summary toggles its section; `Tab` and `Shift+Tab` move keyboard focus between summaries, and `Escape` clears focus.
 
 ### Image
 
@@ -1673,7 +1899,7 @@ panel:cell(2, 0, "Z", { style = "danger" })   -- named style as table
 
 ### `panel:text(x, y, text, [style])`
 
-Draw a text string starting at the given position. Text is clipped to the panel width.
+Draw a text string starting at the given position. Text is clipped to the panel width. A fullwidth character takes two columns; measure with [`ttt.text`](#ttttext-module) to place what follows.
 
 ```lua
 panel:text(0, 0, "Hello World")                -- default style
@@ -1810,6 +2036,9 @@ Widget-specific events are routed automatically to the callbacks you provide:
 | Input    | Enter pressed      | `on_submit`  | Current text (string)               |
 | Dropdown | menu item selected | `on_menu`    | Command string                      |
 | Table    | row selected       | `on_select`  | Row index (number, 1-based)         |
+| Tabs     | tab picked         | `on_change`  | Tab `id` (string)                   |
+| Pager    | page changed       | `on_change`  | New offset (number, 0-based)        |
+| Table    | row opened         | `on_activate` | Row index (number, 1-based)        |
 | Table    | context menu cmd   | `on_command` | `(command_string, row_index)`       |
 | Title    | menu item selected | `on_menu`    | Command string                      |
 
@@ -1885,6 +2114,7 @@ Require the `editor.read` permission.
 | `editor.byte_to_col(text, byte)` | number                                          | Convert a 1-based **byte** offset in `text` to a 1-based **rune column**. |
 | `editor.col_to_byte(text, col)`  | number                                          | Convert a 1-based **rune column** in `text` to a 1-based **byte** offset. |
 | `editor.get_cursors()`           | table of `{line, col}`                          | All cursor positions (1-based). Returns a single-element table when no extra cursors are active. |
+| `editor.diff()`                  | `{hunks, current_hunk}` or `nil`                | The active diff's change blocks; empty `hunks` inside a diff with no changes, `nil` outside a diff. |
 
 > **Columns are runes, not bytes.** The editor — and every position in the
 > `editor.replace` and diagnostics APIs — uses 1-based **rune (visual) columns**.
@@ -1920,6 +2150,7 @@ Require the `editor.write` permission.
 | `editor.end_undo_group()`                         | Close the group; all edits since `begin` undo/redo as one operation. |
 | `editor.add_cursor(line, col)`                    | Add a cursor at position (1-based). Duplicates are ignored. |
 | `editor.clear_cursors()`                          | Collapse back to a single cursor (the primary). |
+| `editor.go_to_diff_hunk(index)`                   | Move to a change block in the active diff (1-based). Returns `true`, or `nil, err`. |
 
 All write operations go through the undo system — they can be undone with Ctrl+Z.
 
@@ -1935,6 +2166,62 @@ local line = editor.current_line()
 -- Insert text at cursor
 editor.insert(pos.line, pos.col, "// TODO: ")
 ```
+
+### Diff navigation
+
+A diff tab — a commit, a PR, a staged diff, or a view opened with
+`ttt.open_changes` — has no buffer, so the functions above return empty values
+there. Use `editor.diff()` and `editor.go_to_diff_hunk()` instead.
+
+```lua
+local editor = require("ttt.editor")
+
+local d = editor.diff()
+if d then
+  ttt.set_status_item("right", "hunks", string.format("%d/%d", d.current_hunk, #d.hunks))
+end
+```
+
+`editor.diff()` returns `nil` outside a diff. Inside a diff with no change
+blocks it returns a table with an empty `hunks` list, so a plugin can tell "no
+diff here" from "a diff with no changes".
+
+`editor.diff()` also works in an editable diff (the inline diff over a working
+tree file), where the blocks follow the file's current content.
+
+| Field           | Meaning                                                          |
+|-----------------|------------------------------------------------------------------|
+| `hunks`         | Flat, 1-based list in document order, across every file in the tab. |
+| `hunks[i].file_path` | Path of the file the block belongs to.                      |
+| `hunks[i].kind` | `"added"`, `"deleted"` or `"modified"`.                          |
+| `current_hunk`  | Block at or immediately before the navigation position; `0` before the first block. |
+
+A **block** is a contiguous run of changed lines, not a whole `@@` patch
+section, so one `@@` section can hold several blocks. Blocks stay addressable
+across wrapping, split/unified mode and collapsing, and a block inside a
+collapsed file is still listed; jumping to it expands that file. Indices are
+recomputed on each call, so read them again after the diff changes rather than
+caching them.
+
+`editor.go_to_diff_hunk(index)` reveals the file, moves to the block and
+scrolls it into view. It changes no buffer content and returns `nil, err` for an
+index out of range.
+
+Neither function wraps: going past the last block returns an error. Build the
+wrap-around you want on top of `current_hunk`:
+
+```lua
+local d = editor.diff()
+if d and #d.hunks > 0 then
+  local nextIndex = d.current_hunk + 1
+  if nextIndex > #d.hunks then nextIndex = 1 end
+  editor.go_to_diff_hunk(nextIndex)
+end
+```
+
+The palette commands `Git: Next Changed Hunk` and `Git: Previous Changed Hunk`
+share this navigation inside a diff, and keep their git-gutter behaviour in a
+normal file tab.
 
 ## Diagnostics
 
@@ -2095,6 +2382,14 @@ local all = bookmarks.get_all()   -- {{line=3, icon="★", style="success"}, ...
 
 bookmarks.clear()   -- remove every bookmark in the current file
 ```
+
+Bookmarks are shared document state, not resources owned by the plugin that last changed them. Every plugin with `editor.bookmarks` permission works with the same bookmark set for the active file:
+
+- `get` and `get_all` read the current marks, regardless of who created them.
+- `set` replaces the mark on that line, and `remove` removes the current mark.
+- `set_all` replaces the entire set, while `clear` removes every mark in the file.
+
+TTT deliberately leaves bookmarks in place when a plugin is disabled, uninstalled, updated, reloaded, or replaced by the debug runner. They belong to the document and remain until the user or an authorized plugin changes them. Because the API is shared, `set_all` and `clear` can also change marks created by other plugins; plugins that need isolated state should keep their own data rather than treating document bookmarks as private storage.
 
 ### `bookmarks.set(line, icon, style)`
 
@@ -2292,21 +2587,28 @@ Execute a command synchronously. Requires the `system.exec` permission with the 
 |-----------|--------|----------|------------------------------------------|
 | `binary`  | string | yes      | Command to execute. Must be in the `system.exec` permission allowlist. |
 | `args`    | table  | no       | Array of string arguments.               |
-| `opts`    | table  | no       | Options table. Only `stdin` is supported. |
+| `opts`    | table  | no       | Options table, see below. |
 
 **Options:**
 
-| Field   | Type   | Description                                                      |
-|---------|--------|------------------------------------------------------------------|
-| `stdin` | string | Written to the command's standard input. Nothing is written when omitted or empty. |
+| Field        | Type   | Description                                                      |
+|--------------|--------|------------------------------------------------------------------|
+| `stdin`      | string | Written to the command's standard input. Nothing is written when omitted or empty. |
+| `env`        | table  | Extra environment variables for the child, as `{NAME = "value"}`, merged over the editor's environment. |
+| `timeout_ms` | number | Kill the command after this many milliseconds. Must be positive. |
+| `max_output_bytes` | number | Kill the command once its stdout and stderr together exceed this many bytes. The result keeps the first `max_output_bytes` bytes and sets `truncated`. Must be at least 1. |
+| `on_stdout`, `on_stderr` | function | `sys.exec_async` only: receive the output in chunks as it arrives instead of in the result. See [Streaming output](#streaming-output). |
 
 **Returns** a table:
 
-| Field       | Type   | Description                                     |
-|-------------|--------|-------------------------------------------------|
-| `stdout`    | string | Standard output.                                |
-| `stderr`    | string | Standard error.                                 |
-| `exit_code` | number | Exit code (`0` for success, `-1` for exec errors). |
+| Field       | Type    | Description                                     |
+|-------------|---------|-------------------------------------------------|
+| `stdout`    | string  | Standard output.                                |
+| `stderr`    | string  | Standard error, or the error message when the command could not run, timed out or was cancelled. |
+| `exit_code` | number  | Exit code (`0` for success, `-1` for exec errors, timeouts, cancellation and truncation). |
+| `timed_out` | boolean | `true` when `timeout_ms` elapsed and the command was killed. |
+| `cancelled` | boolean | `true` when an `exec_async` handle's `cancel()` killed the command. |
+| `truncated` | boolean | `true` when the output passed `max_output_bytes` and the command was killed. `stdout` and `stderr` hold what arrived before the limit. |
 
 ```lua
 local result = sys.exec("git", {"status", "--porcelain"})
@@ -2329,7 +2631,21 @@ Prefer `stdin` over passing document text as an argument. Arguments are capped
 by the OS (`ARG_MAX`, commonly 2 MB) and are visible to every process on the
 machine via `ps`; standard input has neither limit.
 
-Arguments are validated before execution: shell-injection patterns and dangerous git flags (e.g. `--upload-pack`, `core.fsmonitor`) are rejected.
+Pass secrets such as database passwords through `env` for the same reason:
+
+```lua
+local result = sys.exec("psql", {"-h", host, "-U", user, "-c", query}, {
+  env = { PGPASSWORD = password },
+  timeout_ms = 10000,
+})
+if result.timed_out then
+  ttt.notify("Query timed out")
+end
+```
+
+`env` values are set only in the child's environment (and inherited by any process it starts). They are not set in the editor's environment and do not appear on the command line. Keys must be non-empty strings without `=` or NUL, and values must be strings or numbers. Keys that change which code the child loads are rejected: `PATH`, `LD_*` and `DYLD_*` for every binary, and `GIT_*` for `git`. An invalid `env` or `timeout_ms` raises an error.
+
+Arguments go to the binary as they are, with no shell in between, so characters like `=!`, `;` or `$` in a password, connection string or query need no escaping. Only `git` arguments are checked, because git runs some configuration values as commands: an argument containing `=!` (a shell alias set through `-c`) or a flag like `--upload-pack`, `--config-env` or `core.fsmonitor` is rejected.
 
 ### `sys.exec_async(binary, [args], [opts], callback)`
 
@@ -2341,6 +2657,8 @@ Execute a command asynchronously. The callback receives the same result table an
 | `args`     | table    | no       | Array of string arguments. May be omitted — the callback can be the second argument. |
 | `opts`     | table    | no       | Options table, same fields as `sys.exec`. Requires `args` to be passed too. |
 | `callback` | function | yes      | Receives the result table when done.         |
+
+**Returns** a handle with a `cancel()` method. Cancelling kills the command, and the callback then receives a result with `cancelled = true`. `cancel()` returns `true` if the command was still running and `false` once it has finished. Running commands are also killed when the plugin is disabled, reloaded or uninstalled; their callbacks do not run.
 
 ```lua
 sys.exec_async("docker", {"ps", "--format", "{{.Names}}"}, function(result)
@@ -2359,6 +2677,134 @@ end)
 sys.exec_async("aspell", {"pipe"}, {stdin = text}, function(result)
   -- parse result.stdout
 end)
+
+-- Cancellable:
+local query = sys.exec_async("psql", {"-c", sql}, {env = {PGPASSWORD = password}}, function(result)
+  if result.cancelled then return end
+  -- show result.stdout
+end)
+-- later, for example from a Cancel button:
+query:cancel()
+```
+
+#### Streaming output
+
+By default the whole output is collected and handed to the callback at the end, so a command that prints a lot (a large query result, a long log) holds all of it in memory first. Pass `on_stdout` and `on_stderr` to receive it as it arrives instead:
+
+```lua
+local rows, partial = {}, {}
+local query = sys.exec_async("psql", {"-At", "-c", sql}, {
+  env = {PGPASSWORD = password},
+  max_output_bytes = 50 * 1024 * 1024,
+  on_stdout = function(chunk)
+    local start = 1
+    for newline in chunk:gmatch("()\n") do
+      partial[#partial + 1] = chunk:sub(start, newline - 1)
+      rows[#rows + 1] = table.concat(partial)
+      partial = {}
+      start = newline + 1
+    end
+    partial[#partial + 1] = chunk:sub(start)
+    panel:redraw()
+  end,
+}, function(result)
+  local last = table.concat(partial)
+  if last ~= "" then
+    rows[#rows + 1] = last
+  end
+  if result.truncated then
+    ttt.notify("Showing the first 50 MB of results")
+  end
+end)
+```
+
+- Chunks end at a newline, so a line up to 64 KiB is never split across two calls. A longer line arrives in pieces of at most 64 KiB, split at a UTF-8 character boundary, so carry the text after the last newline over to the next call, as above. The last chunk may lack a trailing newline. Output without a newline arrives when the line completes or the command ends.
+- Callbacks run on the main thread, in order, and all of them before the final callback. Each stream is ordered on its own; how stdout and stderr chunks interleave is not defined.
+- ttt reads more output only after the previous chunk's callback returns. A command that prints faster than the plugin handles it waits instead of filling memory, so keep the callback quick.
+- A streamed stream is not collected: the result's `stdout` (or `stderr`) is empty. A stream without a callback is collected as usual.
+- After `cancel()`, a timeout or the plugin unloading, no more chunks are delivered. `max_output_bytes` counts streamed bytes too, and the chunks stop at the limit.
+- `sys.exec` raises an error for `on_stdout` and `on_stderr`: it blocks the main thread, so there is nowhere to deliver chunks.
+
+### `sys.request_exec(path, callback)`
+
+Ask the user to approve running one binary by absolute path. The `system.exec` allowlist matches exactly, so a plugin allowed `"psql"` runs `psql` from `PATH` but not `/opt/pg16/bin/psql`. Use this when the user points the plugin at a specific copy, for example in a setting.
+
+| Parameter  | Type     | Required | Description |
+|------------|----------|----------|-------------|
+| `path`     | string   | yes      | Absolute, clean path. Its file name must match a `system.exec` entry the plugin was granted. |
+| `callback` | function | yes      | Receives `true` if the path is granted, `false` if the user denied or dismissed the dialog. |
+
+**Returns** `true` when the request was made, or `nil, err` when the path is invalid, its file name is not in the allowlist, or another dialog is open.
+
+ttt shows its own approval dialog with the full path. Allowing it records the grant for this plugin in `plugins.ttt.json`, next to its other approvals, so it survives restarts and updates; denying records nothing. A path that is already granted calls back `true` without a dialog. The grant covers that exact path only, never other files with the same name, and stops applying if the manifest no longer lists the file name. Uninstalling the plugin removes it.
+
+Call it in response to a user action, such as saving a setting, not on every run:
+
+```lua
+local function use_binary(path)
+  sys.request_exec(path, function(granted)
+    if granted then
+      sys.exec_async(path, {"--version"}, function(result)
+        ttt.notify(result.stdout)
+      end)
+    end
+  end)
+end
+```
+
+### `sys.spawn(binary, [opts])`
+
+Spawn a long-lived child process with **raw piped stdio** — the missing
+middle between one-shot `sys.exec` and PTY-hosted `terminal.spawn`. Use it
+for interactive protocols: JSON-RPC agents over stdio, REPLs, and streaming
+tools where you exchange a conversation with the child's pipes. Requires the
+`system.exec` permission; the binary must be in the same allowlist.
+Environment variables follow the same validation and restrictions as `sys.exec`;
+invalid environments or non-function callbacks raise an error before spawning.
+
+**Options** (all optional):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `args` | table | Array of string arguments. |
+| `cwd` | string | Working directory for the child. |
+| `env` | table | Map of extra environment variables (`{NAME = "value"}`), merged onto the host environment. |
+| `on_stdout` | function | Called with each stdout chunk (`string`) on the main thread. |
+| `on_stderr` | function | Called with each stderr chunk (`string`) on the main thread. |
+| `on_exit` | function | Called once with `(exit_code, err)` when the child exits. |
+
+**Returns** a process handle on success, or `nil, error` on failure.
+
+The handle has methods:
+
+| Method | Description |
+|--------|-------------|
+| `proc:write(data)` | Queue `data` for the child's stdin. Returns `true`, or `nil, error` when the process is closed or the write queue (64 messages) is full. |
+| `proc:close_stdin()` | Close the child's stdin after all queued writes flush, so it sees EOF. |
+| `proc:kill()` | Terminate the child. |
+| `proc:pid()` | The child's process id. |
+
+Chunks arrive in arbitrary sizes — accumulate and split on your protocol's
+framing (e.g. newline-delimited JSON). Both streams are always drained even
+without callbacks, so a child can't stall on a full pipe. Spawned processes
+are killed automatically when the plugin is reloaded or unloaded.
+
+```lua
+local sys = require("ttt.system")
+
+local buf = ""
+local proc, err = sys.spawn("devin", {
+  args = {"acp"},
+  cwd = ".",
+  on_stdout = function(chunk)
+    buf = buf .. chunk
+    -- split buf on '\n' and json-decode complete lines
+  end,
+  on_exit = function(code) ttt.log("agent exited: " .. code) end,
+})
+if proc then
+  proc:write('{"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}\n')
+end
 ```
 
 ### `sys.env(name)`
@@ -2485,6 +2931,107 @@ net.post_async("https://api.example.com/data", {
   end
 end)
 ```
+
+## RPC API
+
+The `ttt.rpc` module opens a persistent JSON-RPC 2.0 connection to another process, framed with `Content-Length` headers like the Language Server Protocol. Either side can send requests and notifications, so a companion process can drive the editor through your plugin: open files, read the screen, type, or click. Requires the `network.rpc` permission.
+
+```lua
+local rpc = require("ttt.rpc")
+```
+
+The plugin always dials out; it cannot listen. The process on the other end is usually started by something else, such as an agent, a daemon, or a tool the user runs.
+
+### RPC endpoint scoping
+
+`network.rpc` lists the endpoints the plugin may connect to:
+
+```json
+"network.rpc": ["127.0.0.1:4250", "unix:~/.cache/my-hub.sock"]
+```
+
+An entry is a host or IP with a required port, or `unix:` followed by a socket path that is absolute or starts with `~` or `{config}`. `rpc.connect` must name a listed endpoint. The approval dialog shows each endpoint, because a process there can make the plugin act with every other permission it holds.
+
+### `rpc.connect(endpoint, opts, callback)`
+
+Connects in the background and calls `callback(conn, err)` on the main thread: `conn` on success, or `nil` and an error message.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `on_request` | function | `(method, params)` for a request from the peer. Its return value is the result; raising an error sends an error reply. Without it, requests get method-not-found. |
+| `on_notification` | function | `(method, params)` for a notification from the peer. |
+| `on_close` | function | `(err)` when the connection ends: `nil` when either side closed it normally, otherwise the error. |
+
+Params and results convert between JSON and Lua values as `ttt.json` does. Callbacks run on the main thread; peer request and notification handlers run in the order their messages arrived. Replies can arrive in a different order and are matched by request ID. Incoming message bodies are limited to 32 MiB and headers to 8 KiB; exceeding either limit closes the connection.
+
+### Connection methods
+
+| Method | Description |
+|--------|-------------|
+| `conn:request(method, params, [callback])` | Send a request. `callback(result, err)` receives the result, or `nil` and the peer's error message. |
+| `conn:notify(method, params)` | Queue a notification without waiting for the peer to read it. Returns `true` when accepted, or `false` and an error message when closed or the queue is full. A full queue leaves the connection open so the plugin can retry later. |
+| `conn:close()` | Close the connection. Connections also close when the plugin unloads. |
+
+Outbound frames share an ordered queue capped at 64 frames and 32 MiB, including the frame being written. A full queue rejects a notification or outgoing request; requests report the error through their callback. A reply that cannot be queued, a failed write, or a write taking longer than 10 seconds closes the connection and reports the failure through `on_close`.
+
+Incoming callbacks are limited to 256 pending messages and 32 MiB of retained message data per connection, including callbacks currently being delivered. Exceeding either limit closes the connection with an incoming-queue error. Closing a connection or unloading its plugin discards queued messages. The connect and close callbacks are delivered separately from this budget.
+
+```lua
+local rpc = require("ttt.rpc")
+
+rpc.connect("unix:~/.cache/my-hub.sock", {
+  on_request = function(method, params)
+    if method == "editor/open" then
+      ttt.open_file(params.path, params.line)
+      return { ok = true }
+    end
+    error("unknown method " .. method)
+  end,
+  on_close = function(err)
+    ttt.log("info", "hub disconnected " .. tostring(err))
+  end,
+}, function(conn, err)
+  if not conn then
+    ttt.log("error", "hub unavailable: " .. err)
+    return
+  end
+  conn:notify("hello", { version = ttt.version() })
+end)
+```
+
+## Automation API
+
+`ttt.automation` provides acknowledged actions for companion processes, such as an agent driving the editor over [`ttt.rpc`](#rpc-api). Use it when you need to know an action has been applied before doing the next thing; for input that does not need confirmation, `ttt.key`, `ttt.type`, `ttt.click` and `ttt.drag` are simpler and send their events in one batch. Call `automation.run(action, args, callback)` on the UI thread. It returns a cancellation function; `callback(result, err)` runs on the main thread after the action has been handled and redrawn. Unloading the plugin cancels outstanding automation. Already-applied changes remain available to normal undo.
+
+```lua
+local automation = require("ttt.automation")
+local cancel = automation.run("paste", "hello\nworld", function(result, err)
+  if err then ttt.log("error", err) end
+end)
+```
+
+| Action | Permission | Arguments / result |
+|--------|------------|--------------------|
+| `session` | `editor.read` | No arguments; returns PID, workspace paths, active file and ttt version. |
+| `buffer` | `editor.read` | No arguments; returns path, complete text and one-based cursor. |
+| `screenshot` | `screen.read` | No arguments; returns the screen text. |
+| `debug` | `screen.read`, `editor.read`, `terminal.read` | No arguments; returns the structured debug state, which includes buffer text and terminal history. |
+| `commands` | `commands` | No arguments; returns command IDs and titles. |
+| `command`, `exec` | `commands` | Command ID or exact command title. |
+| `open` | `commands` | JSON object string with `path`, optional one-based `line` and `readonly`. |
+| `panel`, `copy` | `commands` | Bottom panel ID, or no arguments for copy. |
+| `clipboard` | `clipboard.read` | No arguments; returns clipboard text. |
+| `click`, `rclick`, `hover` | `input` | `x y`, in zero-based screen cells. |
+| `drag` | `input` | `x1 y1 x2 y2`. |
+| `scroll` | `input` | `x y signed-count`, positive down; maximum magnitude 1000. |
+| `key` | `input` | Key combination or chord, as in keybindings. |
+| `type`, `paste` | `input` | Text input. Type sends individual key presses, mapping LF, CRLF and CR to Enter (one Enter per CRLF); other control characters follow key handling. Paste inserts literal text through the editor's undoable paste path. |
+| `wait` | `input` | Milliseconds, at most 30000. |
+| `wait-for` | `screen.read` | Screen text and optional `timeout=MS`, as in `--exec`; at most 30000 ms, default 5000. |
+
+The `type` action rejects input above 64 KiB of UTF-8 text through its callback, before applying any input. Use `paste` for larger text.
+
+Call `cancel()` to stop waiting and prevent queued events from applying. Claimed events finish handling before cancellation returns through the callback. Actions fail while plugin permission approvals are pending; synthesized input cannot approve permissions. Commands may start external work that continues after their acknowledgment; use `wait-for` or inspect state to observe its completion.
 
 ## Events API
 
@@ -2788,17 +3335,20 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `editor.file_handlers` | boolean | Present binary file types in editor tabs via `file_handlers` in `ttt.register()`. |
 | `fs.read`        | boolean \| string[] | Read files and list directories (`ttt.fs` read functions). `true` allows the workspace; an array lists the allowed paths. See [Path scoping](#path-scoping). |
 | `fs.write`       | boolean \| string[] | Write files (`ttt.fs.write`). Scoped like `fs.read`. |
-| `system.exec`    | string[] | Execute specific system commands. List each allowed binary name. |
+| `system.exec`    | string[] | Execute specific system commands. List each allowed binary name. Other copies of a listed binary need [`sys.request_exec`](#sysrequest_execpath-callback). |
 | `system.env`     | boolean  | Read environment variables (`ttt.system.env`).    |
 | `terminal.control` | boolean | Spawn terminal tabs, send text, focus tabs, and close tabs (`ttt.terminal`). Not constrained by `system.exec` or `fs.*`. |
 | `terminal.read`  | boolean  | Read raw PTY output and visible screen text, and list open terminals (`ttt.terminal`). Accesses any tab, including user tabs. |
+| `network.rpc`    | string[] | Open RPC connections to the listed endpoints (`ttt.rpc`). See [RPC endpoint scoping](#rpc-endpoint-scoping). |
 | `network.http`   | boolean \| string[] | Make outbound HTTP requests (`ttt.net`). `true` allows any destination, local services included; an array (`["api.github.com", "127.0.0.1:4250"]`) restricts requests to those hosts or IPs, each with an optional port. See [Network host scoping](#network-host-scoping). |
 | `events.file`    | boolean  | Listen for file events: `file.open`, `file.close`, `file.save`. |
 | `events.editor`  | boolean  | Listen for editor events: `editor.change`, `cursor.change`, `tab.change`. |
 | `settings`       | boolean  | Read/write editor settings (`ttt.settings`).      |
 | `settings_keys`  | string[] | Allowed settings key patterns. Use `group.*` for prefix match or exact key. |
 | `storage`        | boolean  | Persist private plugin data (`ttt.storage`).      |
-| `clipboard.read` | boolean  | Read the system clipboard (`ttt.clipboard_read`). | 
+| `clipboard.read` | boolean  | Read the system clipboard (`ttt.clipboard_read`). |
+| `input`          | boolean  | Simulate mouse and keyboard input (`ttt.click`, `ttt.drag`, `ttt.key`, `ttt.type`). |
+| `screen.read`    | boolean  | Capture the rendered screen (`ttt.screenshot`) and, with `editor.read` and `terminal.read`, the editor state (`ttt.debug`). |
 
 **Example with multiple permissions:**
 
@@ -2856,6 +3406,8 @@ local date = os.date("%Y-%m-%d") -- "2026-06-28"
 |----------|---------|-------------|
 | `crypto.random_bytes(n)` | string | `n` cryptographically secure random bytes as a hex string. `n` must be 1–1024. |
 | `crypto.uuid()` | string | Random UUID v4 (e.g. `"550e8400-e29b-41d4-a716-446655440000"`). |
+| `crypto.base64_encode(s)` | string | Standard base64 of the string `s`. |
+| `crypto.base64_decode(s)` | string, or `nil` and an error | Decodes standard base64, padded or not. Surrounding whitespace is ignored. |
 
 ```lua
 local bytes = crypto.random_bytes(16)  -- "a1b2c3d4e5f6..."  (32 hex chars)
@@ -2868,9 +3420,10 @@ local id = crypto.uuid()               -- "550e8400-e29b-41d4-a716-446655440000"
 
 | Module         | Description                    |
 |----------------|--------------------------------|
-| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
+| `ttt`          | Core module: `register`, `log`, `confirm`, `show_info`, `notify`, `set_status_item`, `remove_status_item`, `exec_command`, `list_commands`, `open_drawer`, `close_drawer`, `show_panel`, `focus_panel`, `open_tab`, `focus_tab`, `close_tab`, `open_dialog`, `close_dialog`, `open_changes`, `open_file`, `plugin_dir`, `platform`, `arch`, `version`, `set_timeout`, `set_interval`, `clear_timeout`, `clear_interval`, `debounce`, `on_install`, `on_uninstall`, `markdown`, `screenshot`, `debug`, `click`, `drag`, `quit` |
 | `ttt.json`     | JSON encode/decode             |
 | `ttt.regex`    | RE2 regular expressions        |
+| `ttt.text`     | Text width in terminal columns |
 | `ttt.editor`   | Editor buffer read/write       |
 | `ttt.diagnostics` | Publish editor diagnostics (squiggles) |
 | `ttt.bookmarks` | Manage gutter bookmarks        |

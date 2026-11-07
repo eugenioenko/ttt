@@ -3,6 +3,7 @@ package widgets
 import (
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -88,8 +89,7 @@ func (t *TitleWidget) Render(surface Surface) {
 		t.dropdown.Render(ddSurface)
 	}
 	if t.Config.Badge != "" {
-		badgeRunes := []rune(t.Config.Badge)
-		bx := maxTextW - len(badgeRunes)
+		bx := maxTextW - textwidth.String(t.Config.Badge)
 		if bx > 0 {
 			inner.DrawText(bx, 0, t.Config.Badge, maxTextW, term.StyleMuted)
 			maxTextW = bx - 1
@@ -98,11 +98,12 @@ func (t *TitleWidget) Render(surface Surface) {
 
 	x := 0
 	for _, ch := range t.Config.Title {
-		if x >= maxTextW {
+		cw := textwidth.Rune(ch)
+		if x+cw > maxTextW {
 			break
 		}
 		inner.SetCell(x, 0, term.Cell{Ch: ch, Style: style, Bold: true})
-		x++
+		x += cw
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aymanbagabas/go-pty"
 	"github.com/eugenioenko/xterm-go"
 )
 
@@ -169,6 +170,35 @@ func TestCloseConcurrentIsSafe(t *testing.T) {
 	}
 }
 
+type countingPty struct {
+	pty.Pty
+	closes atomic.Int32
+}
+
+func (p *countingPty) Close() error {
+	p.closes.Add(1)
+	return p.Pty.Close()
+}
+
+func TestClosePtyIsIdempotent(t *testing.T) {
+	pt, err := pty.New()
+	if err != nil {
+		t.Fatalf("pty.New() error: %v", err)
+	}
+	counted := &countingPty{Pty: pt}
+	term := &Terminal{pt: counted}
+
+	term.mu.Lock()
+	term.closePty()
+	term.mu.Unlock()
+
+	term.Close()
+
+	if n := counted.closes.Load(); n != 1 {
+		t.Fatalf("pty.Close() called %d times, want 1", n)
+	}
+}
+
 func TestWriteStringAndReadLoopUpdatesView(t *testing.T) {
 	term := newTestTerminal(t)
 	defer term.Close()
@@ -301,9 +331,6 @@ func TestPrimaryDeviceAttributesResponse(t *testing.T) {
 	}
 }
 
-// go-pty keeps its own copy of the slave fd open in this process, so the master
-// never reports EOF when the child dies. Detecting exit therefore has to come
-// from waiting on the process, not from the read loop erroring out.
 func TestNewPassesArgsToTheProgram(t *testing.T) {
 	term, err := New("/bin/sh", 40, 5, 1000, nil, "", "-c", "printf argv-ok")
 	if err != nil {
@@ -320,14 +347,9 @@ func TestNewPassesArgsToTheProgram(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the program never exited")
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if strings.Contains(string(term.RawTail()), "argv-ok") {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
+	if got := string(term.RawTail()); got != "argv-ok" {
+		t.Fatalf("args did not reach the program; raw tail: %q", got)
 	}
-	t.Fatalf("args did not reach the program; raw tail: %q", string(term.RawTail()))
 }
 
 func TestOnExitFiresWhenShellExits(t *testing.T) {

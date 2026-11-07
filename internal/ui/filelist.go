@@ -1,90 +1,10 @@
 package ui
 
 import (
-	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 )
-
-const walkDirMaxFiles = 100000
-
-func listWorkspaceFiles(workDirs []string) []paletteFile {
-	var files []paletteFile
-	multiRoot := len(workDirs) > 1
-	for _, workDir := range workDirs {
-		prefix := ""
-		if multiRoot {
-			prefix = filepath.Base(workDir) + string(filepath.Separator)
-		}
-		files = append(files, listDirFiles(workDir, prefix)...)
-	}
-	return files
-}
-
-func listDirFiles(workDir, prefix string) []paletteFile {
-	if _, err := exec.LookPath("rg"); err == nil {
-		if files, ok := listFilesCmdLines(workDir, prefix, "rg", "--files"); ok {
-			return files
-		}
-	}
-	if _, err := exec.LookPath("git"); err == nil {
-		if files, ok := listFilesCmdLines(workDir, prefix, "git", "ls-files", "--cached", "--others", "--exclude-standard"); ok {
-			return files
-		}
-	}
-	return listFilesWalkDir(workDir, prefix)
-}
-
-func listFilesCmdLines(workDir, prefix string, name string, args ...string) ([]paletteFile, bool) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = workDir
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, false
-	}
-	var files []paletteFile
-	for rel := range strings.SplitSeq(string(out), "\n") {
-		if rel == "" {
-			continue
-		}
-		files = append(files, paletteFile{
-			Rel: prefix + rel,
-			Abs: filepath.Join(workDir, rel),
-		})
-	}
-	return files, true
-}
-
-func listFilesWalkDir(workDir, prefix string) []paletteFile {
-	var files []paletteFile
-	filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		name := d.Name()
-		if d.IsDir() {
-			if name == ".git" || name == "node_modules" || name == ".cache" || name == "__pycache__" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.Type()&specialFileMask != 0 || d.Type()&os.ModeSymlink != 0 && isSpecialFile(path) {
-			return nil
-		}
-		rel, err := filepath.Rel(workDir, path)
-		if err != nil {
-			return nil
-		}
-		files = append(files, paletteFile{Rel: prefix + rel, Abs: path})
-		if len(files) >= walkDirMaxFiles {
-			return filepath.SkipAll
-		}
-		return nil
-	})
-	return files
-}
 
 func fileDetail(f string) string {
 	dir := filepath.Dir(f)
@@ -94,7 +14,7 @@ func fileDetail(f string) string {
 	return dir
 }
 
-func fuzzyFilterFiles(files []paletteFile, query string, maxResults int) []PaletteItem {
+func fuzzyFilterFiles(files []PaletteFile, query string, maxResults int) []PaletteItem {
 	query = strings.Join(strings.Fields(query), "")
 	if query == "" {
 		items := make([]PaletteItem, 0, min(len(files), maxResults))

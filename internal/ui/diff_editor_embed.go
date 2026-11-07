@@ -106,12 +106,7 @@ func (d *DiffEditorWidget) setHoveredGap(gap int) bool {
 }
 
 func (d *DiffEditorWidget) hasSelection() bool {
-	for _, p := range d.panes() {
-		if p.Selection.Active {
-			return true
-		}
-	}
-	return false
+	return d.selectionPane() != nil
 }
 
 func (d *DiffEditorWidget) maxTextWidth() int {
@@ -198,4 +193,22 @@ func (d *DiffEditorWidget) restoreSelection(m diffSelectionMark) bool {
 		d.focusLeft = p == d.left
 	}
 	return true
+}
+
+// EmbeddedDiffRowAt maps a screen row inside the embedded diff, counted from
+// its first row, onto the diff row it shows. A wrapped line spans several
+// screen rows that all resolve to the same diff row, so callers must not use
+// the screen row as a diff row.
+func (d *DiffEditorWidget) EmbeddedDiffRowAt(screenRow int) int {
+	d.ensurePanes()
+	lead := d.lead()
+	// Match renderEmbedded: it measures the whole embedded rect, not the
+	// pane's own half, so a narrow split draws the right pane. Measuring the
+	// pane width here would pick a different pane than the one on screen.
+	if !d.IsUnified() && (d.GetRect().W-1)/2 < 1 {
+		lead = d.right
+	}
+	line, _ := lead.layout().rowToTop(screenRow)
+	row, _ := d.diffRowForBufLine(lead, line)
+	return row
 }

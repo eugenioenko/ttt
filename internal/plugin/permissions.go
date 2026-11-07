@@ -6,11 +6,14 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 const (
@@ -107,9 +110,9 @@ func (f FsAccess) Resolve(v FsVars) (dirs []string, all bool) {
 func fsPathLabel(p string) string {
 	switch p {
 	case FsWorkspace:
-		return "workspace"
+		return i18n.Text("permissions.workspace")
 	case FsAnyPath:
-		return "any path"
+		return i18n.Text("permissions.anyPath")
 	}
 	return p
 }
@@ -287,8 +290,79 @@ func (n *NetworkHTTP) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// The approval dialog has room for about 24 characters of value.
-const anyDestination = "any host, even local"
+// NetworkRPC is the network.rpc permission: the endpoints a plugin may open
+// RPC connections to. Each is a host or IP with a required port
+// ("127.0.0.1:4250") or "unix:" and a socket path that is absolute or starts
+// with ~ or {config}.
+type NetworkRPC struct {
+	Endpoints []string
+	// All is for plugins loaded with --plugin; a manifest cannot request it.
+	All bool
+}
+
+const UnixEndpointPrefix = "unix:"
+
+func (n NetworkRPC) Enabled() bool { return n.All || len(n.Endpoints) > 0 }
+
+func (n NetworkRPC) Allows(endpoint string) bool {
+	want, err := parseRPCEndpoint(endpoint)
+	if err != nil {
+		return false
+	}
+	if n.All {
+		return true
+	}
+	for _, e := range n.Endpoints {
+		if have, err := parseRPCEndpoint(e); err == nil && have.matches(want) {
+			return true
+		}
+	}
+	return false
+}
+
+type rpcEndpoint struct {
+	socket string
+	host   hostEntry
+}
+
+func (e rpcEndpoint) matches(o rpcEndpoint) bool {
+	if e.socket != "" || o.socket != "" {
+		return e.socket == o.socket
+	}
+	return sameHost(e.host.host, o.host.host) && e.host.port == o.host.port
+}
+
+func parseRPCEndpoint(s string) (rpcEndpoint, error) {
+	if path, ok := strings.CutPrefix(s, UnixEndpointPrefix); ok {
+		if path == FsAnyPath || path == FsWorkspace || !validFsPath(path) {
+			return rpcEndpoint{}, fmt.Errorf(`network.rpc entry %q: a socket path must be absolute or start with ~ or %s`, s, FsConfig)
+		}
+		return rpcEndpoint{socket: path}, nil
+	}
+	h, err := parseHostEntry(s)
+	if err != nil || h.port == "" {
+		return rpcEndpoint{}, fmt.Errorf(`network.rpc entry %q: want a host with a port, like "127.0.0.1:4250", or a socket, like "unix:~/.cache/hub.sock"`, s)
+	}
+	return rpcEndpoint{host: h}, nil
+}
+
+func (n NetworkRPC) MarshalJSON() ([]byte, error) {
+	return json.Marshal(n.Endpoints)
+}
+
+func (n *NetworkRPC) UnmarshalJSON(data []byte) error {
+	var endpoints []string
+	if err := json.Unmarshal(data, &endpoints); err != nil {
+		return fmt.Errorf("network.rpc must be an array of endpoints: %w", err)
+	}
+	for _, e := range endpoints {
+		if _, err := parseRPCEndpoint(e); err != nil {
+			return err
+		}
+	}
+	n.Endpoints = endpoints
+	return nil
+}
 
 type PermissionSet struct {
 	PanelSidebar      bool        `json:"panel.sidebar,omitempty"`
@@ -310,12 +384,15 @@ type PermissionSet struct {
 	TerminalControl   bool        `json:"terminal.control,omitempty"`
 	TerminalRead      bool        `json:"terminal.read,omitempty"`
 	NetworkHTTP       NetworkHTTP `json:"network.http,omitempty"`
+	NetworkRPC        NetworkRPC  `json:"network.rpc,omitzero"`
 	EventsFile        bool        `json:"events.file,omitempty"`
 	EventsEditor      bool        `json:"events.editor,omitempty"`
 	Settings          bool        `json:"settings,omitempty"`
 	SettingsKeys      []string    `json:"settings_keys,omitempty"`
 	Storage           bool        `json:"storage,omitempty"`
 	ClipboardRead     bool        `json:"clipboard.read,omitempty"`
+	Input             bool        `json:"input,omitempty"`
+	ScreenRead        bool        `json:"screen.read,omitempty"`
 }
 
 type PermissionDiffEntry struct {
@@ -365,6 +442,8 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	check("settings", granted.Settings, requested.Settings)
 	check("storage", granted.Storage, requested.Storage)
 	check("clipboard.read", granted.ClipboardRead, requested.ClipboardRead)
+	check("input", granted.Input, requested.Input)
+	check("screen.read", granted.ScreenRead, requested.ScreenRead)
 
 	grantedSettingsKeys := make(map[string]bool)
 	for _, k := range granted.SettingsKeys {
@@ -387,12 +466,18 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	}
 
 	if requested.NetworkHTTP.All && !granted.NetworkHTTP.All {
-		entries = append(entries, PermissionDiffEntry{Name: "network.http", Value: anyDestination})
+		entries = append(entries, PermissionDiffEntry{Name: "network.http", Value: i18n.Text("permissions.anyDestination")})
 	} else if !granted.NetworkHTTP.All {
 		for _, h := range requested.NetworkHTTP.Hosts {
 			if !granted.NetworkHTTP.AllowsHost(h) {
 				entries = append(entries, PermissionDiffEntry{Name: "network.http", Value: h})
 			}
+		}
+	}
+
+	for _, e := range requested.NetworkRPC.Endpoints {
+		if !granted.NetworkRPC.Allows(e) {
+			entries = append(entries, PermissionDiffEntry{Name: "network.rpc", Value: e})
 		}
 	}
 
@@ -442,6 +527,8 @@ func (ps PermissionSet) Check(perm string) error {
 		allowed = ps.TerminalRead
 	case "network.http":
 		allowed = ps.NetworkHTTP.Enabled()
+	case "network.rpc":
+		allowed = ps.NetworkRPC.Enabled()
 	case "events.file":
 		allowed = ps.EventsFile
 	case "events.editor":
@@ -452,6 +539,10 @@ func (ps PermissionSet) Check(perm string) error {
 		allowed = ps.Storage
 	case "clipboard.read":
 		allowed = ps.ClipboardRead
+	case "input":
+		allowed = ps.Input
+	case "screen.read":
+		allowed = ps.ScreenRead
 	default:
 		return fmt.Errorf("unknown permission: %s", perm)
 	}
@@ -486,6 +577,54 @@ func (ps PermissionSet) CheckExec(binary string) error {
 	return fmt.Errorf("permission denied: system.exec %q", binary)
 }
 
+// CheckExecPathRequest reports whether a plugin may ask the user to approve
+// path: an absolute, clean path whose file name is one of the plugin's
+// system.exec entries.
+func (ps PermissionSet) CheckExecPathRequest(path string) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return fmt.Errorf("system.exec path %q must be absolute and clean", path)
+	}
+	// The path is shown in the approval dialog, so control characters could
+	// redraw the screen and mislead the user.
+	if strings.IndexFunc(path, unicode.IsControl) >= 0 {
+		return fmt.Errorf("system.exec path %q must not contain control characters", path)
+	}
+	name := execName(path)
+	for _, b := range ps.SystemExec {
+		if execName(b) == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("permission denied: system.exec does not list %q", filepath.Base(path))
+}
+
+// execPathsFor keeps the user-approved paths whose file name is still in
+// the declared allowlist.
+func execPathsFor(paths, declared []string) []string {
+	var out []string
+	for _, p := range paths {
+		if (PermissionSet{SystemExec: declared}).CheckExecPathRequest(p) == nil {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func execName(binary string) string {
+	name := filepath.Base(binary)
+	if runtime.GOOS == "windows" {
+		name = strings.TrimSuffix(strings.ToLower(name), ".exe")
+	}
+	return name
+}
+
+func (ps PermissionSet) CheckRPCEndpoint(endpoint string) error {
+	if ps.NetworkRPC.Allows(endpoint) {
+		return nil
+	}
+	return fmt.Errorf("permission denied: network.rpc does not list %q", endpoint)
+}
+
 // CheckURL reports whether the plugin may make an HTTP request to u.
 func (ps PermissionSet) CheckURL(u *url.URL) error {
 	if ps.NetworkHTTP.AllowsURL(u) {
@@ -499,50 +638,56 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 
 	add := func(name string, val bool) {
 		if val {
-			entries = append(entries, PermissionDiffEntry{Name: name, Value: "yes"})
+			entries = append(entries, PermissionDiffEntry{Name: name, Value: i18n.Text("permissions.yes")})
 		}
 	}
 
-	add("Sidebar panel", ps.PanelSidebar)
-	add("Bottom panel", ps.PanelBottom)
-	add("Drawer", ps.PanelDrawer)
-	add("Editor tab", ps.PanelEditor)
-	add("Commands", ps.Commands)
-	add("Keybindings", ps.Keybindings)
-	add("Read editor", ps.EditorRead)
-	add("Write editor", ps.EditorWrite)
-	add("Editor diagnostics", ps.EditorDiagnostics)
-	add("Editor bookmarks", ps.EditorBookmarks)
-	add("Editor decorations", ps.EditorDecorations)
-	add("Handle file types", ps.FileHandlers)
+	add(i18n.Text("permissions.sidebarPanel"), ps.PanelSidebar)
+	add(i18n.Text("permissions.bottomPanel"), ps.PanelBottom)
+	add(i18n.Text("permissions.drawer"), ps.PanelDrawer)
+	add(i18n.Text("permissions.editorTab"), ps.PanelEditor)
+	add(i18n.Text("permissions.commands"), ps.Commands)
+	add(i18n.Text("permissions.keybindings"), ps.Keybindings)
+	add(i18n.Text("permissions.readEditor"), ps.EditorRead)
+	add(i18n.Text("permissions.writeEditor"), ps.EditorWrite)
+	add(i18n.Text("permissions.editorDiagnostics"), ps.EditorDiagnostics)
+	add(i18n.Text("permissions.editorBookmarks"), ps.EditorBookmarks)
+	add(i18n.Text("permissions.editorDecorations"), ps.EditorDecorations)
+	add(i18n.Text("permissions.handleFileTypes"), ps.FileHandlers)
 	for _, p := range ps.FsRead.Paths {
-		entries = append(entries, PermissionDiffEntry{Name: "Read files", Value: fsPathLabel(p)})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.readFiles"), Value: fsPathLabel(p)})
 	}
 	for _, p := range ps.FsWrite.Paths {
-		entries = append(entries, PermissionDiffEntry{Name: "Write files", Value: fsPathLabel(p)})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.writeFiles"), Value: fsPathLabel(p)})
 	}
-	add("Control terminals", ps.TerminalControl)
-	add("Read terminals", ps.TerminalRead)
-	add("Environment", ps.SystemEnv)
-	add("File events", ps.EventsFile)
-	add("Editor events", ps.EventsEditor)
-	add("Plugin storage", ps.Storage)
-	add("Clipboard read", ps.ClipboardRead)
+	add(i18n.Text("permissions.controlTerminals"), ps.TerminalControl)
+	add(i18n.Text("permissions.readTerminals"), ps.TerminalRead)
+	add(i18n.Text("permissions.environment"), ps.SystemEnv)
+	add(i18n.Text("permissions.fileEvents"), ps.EventsFile)
+	add(i18n.Text("permissions.editorEvents"), ps.EventsEditor)
+	add(i18n.Text("permissions.pluginStorage"), ps.Storage)
+	add(i18n.Text("permissions.clipboardRead"), ps.ClipboardRead)
+	add(i18n.Text("permissions.simulateInput"), ps.Input)
+	add(i18n.Text("permissions.readScreen"), ps.ScreenRead)
 
 	for _, b := range ps.SystemExec {
-		entries = append(entries, PermissionDiffEntry{Name: "Run binary", Value: b})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.runBinary"), Value: b})
 	}
 
 	if ps.NetworkHTTP.All {
-		entries = append(entries, PermissionDiffEntry{Name: "HTTP requests", Value: anyDestination})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.httpRequests"), Value: i18n.Text("permissions.anyDestination")})
 	}
 	for _, h := range ps.NetworkHTTP.Hosts {
-		entries = append(entries, PermissionDiffEntry{Name: "HTTP host", Value: h})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.httpHost"), Value: h})
 	}
 
-	add("Settings", ps.Settings)
+	for _, e := range ps.NetworkRPC.Endpoints {
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.acceptCommandsFrom"), Value: e})
+	}
+
+	add(i18n.Text("general.settings"), ps.Settings)
 	for _, k := range ps.SettingsKeys {
-		entries = append(entries, PermissionDiffEntry{Name: "Settings key", Value: k})
+		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.settingsKey"), Value: k})
 	}
 
 	return entries
@@ -571,12 +716,15 @@ func IntersectPermissions(granted, declared PermissionSet) PermissionSet {
 		TerminalControl:   granted.TerminalControl && declared.TerminalControl,
 		TerminalRead:      granted.TerminalRead && declared.TerminalRead,
 		NetworkHTTP:       intersectNetwork(granted.NetworkHTTP, declared.NetworkHTTP),
+		NetworkRPC:        intersectRPC(granted.NetworkRPC, declared.NetworkRPC),
 		EventsFile:        granted.EventsFile && declared.EventsFile,
 		EventsEditor:      granted.EventsEditor && declared.EventsEditor,
 		Settings:          granted.Settings && declared.Settings,
 		SettingsKeys:      intersectStrings(granted.SettingsKeys, declared.SettingsKeys),
 		Storage:           granted.Storage && declared.Storage,
 		ClipboardRead:     granted.ClipboardRead && declared.ClipboardRead,
+		Input:             granted.Input && declared.Input,
+		ScreenRead:        granted.ScreenRead && declared.ScreenRead,
 	}
 }
 
@@ -601,6 +749,16 @@ func intersectFs(granted, declared FsAccess) FsAccess {
 		}
 	}
 	return FsAccess{Paths: paths}
+}
+
+func intersectRPC(granted, declared NetworkRPC) NetworkRPC {
+	var endpoints []string
+	for _, e := range declared.Endpoints {
+		if granted.Allows(e) {
+			endpoints = append(endpoints, e)
+		}
+	}
+	return NetworkRPC{Endpoints: endpoints}
 }
 
 func intersectNetwork(granted, declared NetworkHTTP) NetworkHTTP {

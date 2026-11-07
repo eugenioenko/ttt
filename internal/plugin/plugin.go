@@ -1,7 +1,10 @@
 package plugin
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -49,6 +52,7 @@ type Plugin struct {
 	store      *pluginStore
 
 	SidebarTitle       string
+	SidebarIcon        PanelIcon
 	SidebarMenuEntries []widgets.MenuEntry
 	sidebarMenuFunc    *lua.LFunction
 	RenderFunc         *lua.LFunction
@@ -71,13 +75,15 @@ type Plugin struct {
 	ShowContextMenu   func(entries []widgets.MenuEntry, x, y int, onCommand func(cmd string))
 	ShowInfoDialog    func(title string, entries []widgets.KeyValueEntry)
 	ShowConfirmDialog func(message string, confirmLabel string, cancelLabel string, onConfirm func())
+	RequestExecPath   func(path string, done func(granted bool)) error
 	OpenDrawer        func(panel *PluginPanelWidget, width, minWidth int, side string)
 	CloseDrawer       func()
 	// ShowPanel shows the plugin's sidebar or bottom panel, and focuses it
 	// when focus is set. It reports whether the panel is now showing.
 	ShowPanel          func(area string, focus bool) (bool, error)
-	OpenTab            func(id string, panel *PluginPanelWidget)
-	CloseTab           func(id string)
+	OpenTab            func(key, title string, panel *PluginPanelWidget)
+	FocusTab           func(key string, focus bool) bool
+	CloseTab           func(key string) bool
 	OpenDialog         func(*PluginDialogWidget, func()) bool
 	CloseDialog        func()
 	OpenChanges        func(ChangesOptions) (string, error)
@@ -89,8 +95,12 @@ type Plugin struct {
 	Terminal           TerminalAPI
 	SimulateClick      func(x, y int)
 	SimulateDrag       func(x1, y1, x2, y2 int)
-	ScreenshotToFile   func(path string) error
-	DebugDumpToFile    func(path string) error
+	SimulateKeys       func(combo string) error
+	SimulateText       func(text string) error
+	DialRPC            func(ctx context.Context, endpoint string) (io.ReadWriteCloser, error)
+	RunAutomation      func(ctx context.Context, action, args string) (json.RawMessage, error)
+	ScreenText         func() string
+	DebugState         func() (string, error)
 	QuitApp            func()
 	OpenFile           func(path string, line int, readonly bool)
 	OpenDiff           func(title string, oldLines, newLines []string, filePath string, extended bool, diffText string)
@@ -136,6 +146,10 @@ type Plugin struct {
 
 	timers      map[int]func()
 	nextTimerID int
+	execs       map[int]runningExec
+	nextExecID  int
+	rpcConns    map[*rpcConn]struct{}
+	procs       map[*pluginProc]struct{}
 }
 
 type CommandInfo struct {
@@ -170,9 +184,12 @@ func (p *Plugin) Init() error {
 	setupSystemModule(p.State, p)
 	setupTerminalModule(p.State, p)
 	setupNetModule(p.State, p)
+	setupRPCModule(p.State, p)
+	setupAutomationModule(p.State, p)
 	setupEventsModule(p.State, p)
 	setupJSONModule(p.State)
 	setupRegexModule(p.State)
+	setupTextModule(p.State)
 	setupSettingsModule(p.State, p)
 	setupStorageModule(p.State, p)
 
@@ -218,9 +235,12 @@ func (p *Plugin) InitFromSource(source string) error {
 	setupSystemModule(p.State, p)
 	setupTerminalModule(p.State, p)
 	setupNetModule(p.State, p)
+	setupRPCModule(p.State, p)
+	setupAutomationModule(p.State, p)
 	setupEventsModule(p.State, p)
 	setupJSONModule(p.State)
 	setupRegexModule(p.State)
+	setupTextModule(p.State)
 	setupSettingsModule(p.State, p)
 	setupStorageModule(p.State, p)
 
@@ -252,6 +272,12 @@ func (p *Plugin) logError(context string, err error) {
 	}
 }
 
+func (p *Plugin) SetPostAsync(post func(*PluginAsyncResult)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.PostAsync = post
+}
+
 func (p *Plugin) SafePostAsync(result *PluginAsyncResult) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -268,9 +294,12 @@ func (p *Plugin) Loaded() bool {
 
 // Destroy and Init must run on the UI goroutine, which uses p.State without a lock.
 func (p *Plugin) Destroy() {
+	p.killExecs()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.stopTimersLocked()
+	p.closeRPCConnsLocked()
+	p.killProcsLocked()
 	if p.State != nil {
 		p.State.Close()
 		p.State = nil
@@ -290,10 +319,12 @@ func (p *Plugin) Destroy() {
 	p.ShowContextMenu = nil
 	p.ShowInfoDialog = nil
 	p.ShowConfirmDialog = nil
+	p.RequestExecPath = nil
 	p.OpenDrawer = nil
 	p.CloseDrawer = nil
 	p.ShowPanel = nil
 	p.OpenTab = nil
+	p.FocusTab = nil
 	p.CloseTab = nil
 	p.OpenDialog = nil
 	p.CloseDialog = nil
@@ -303,8 +334,12 @@ func (p *Plugin) Destroy() {
 	p.Borders = nil
 	p.SimulateClick = nil
 	p.SimulateDrag = nil
-	p.ScreenshotToFile = nil
-	p.DebugDumpToFile = nil
+	p.SimulateKeys = nil
+	p.SimulateText = nil
+	p.DialRPC = nil
+	p.RunAutomation = nil
+	p.ScreenText = nil
+	p.DebugState = nil
 	p.QuitApp = nil
 	p.Notify = nil
 	p.OpenDiff = nil
@@ -398,4 +433,10 @@ func (p *Plugin) CallRenderWith(renderFunc *lua.LFunction, proxy *PanelProxy) er
 		p.logError("render", err)
 	}
 	return err
+}
+
+// tabKey scopes a plugin's tab id so it cannot collide with a file path or
+// another plugin's tab.
+func (p *Plugin) tabKey(id string) string {
+	return "plugin:" + p.Name + ":" + id
 }

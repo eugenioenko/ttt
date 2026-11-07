@@ -19,6 +19,7 @@ make bench-diff   # diff view benchmarks (BENCH_LANG=go or commit_detail)
 make bench-log    # open real 1, 128, and 256 MiB logs in the built binary, wrap off and on, plus a dirty edit in a repo: time and peak RSS
 make bench-log BENCH_LOG_SIZE=1024MiB # manual 1 GiB log benchmark
 make bench-code   # open, type, and press Enter in a 64 MiB Go file in the built binary: time and peak RSS
+make contributors # regenerate the About dialog's contributor and issue reporter lists from GitHub (needs gh, jq)
 go test ./internal/core/buffer/   # run tests for a single package
 
 # Open a multi-folder workspace
@@ -53,6 +54,7 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 
 - **`internal/git/`**: git CLI wrapper (status, staging, commit, repo discovery).
 - **`internal/github/`**: `gh` CLI wrapper for pull requests.
+- **`internal/jsonrpc/`**: JSON-RPC 2.0 with Content-Length framing: `Codec` and a bidirectional `Conn` (calls, notifications, and peer requests). Transport-agnostic; used by LSP and the plugin `ttt.rpc` module.
 - **`internal/lsp/`**: language server client (see LSP Integration).
 - **`internal/terminal/`**: integrated terminal emulator. Wraps `eugenioenko/xterm-go` for VT parsing and `aymanbagabas/go-pty` for PTY lifecycle.
 - **`internal/watcher/`**: fsnotify-based reporting of on-disk changes to open files and watched directories.
@@ -107,6 +109,7 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 - The renderer uses double-buffering (prev/curr cell grids) to minimize terminal writes.
 - `Screen` isolates terminal drawing and screen lifecycle. tcell events remain the shared presentation event model in `term`, `widgets`, `ui`, and narrow application/platform routing. Domain and service packages must not import tcell.
 - **Never hardcode colors.** All colors must go through the theme system (`internal/config/theme.go` → `StyleDef` → `term.Style` constants → `BuildStyleMap()` in `internal/app/theme.go`). Add a new `StyleDef` field to `ThemeConfig`, a `term.Style` constant, and wire it in `BuildStyleMap()`. Widgets reference `term.Style*` constants, never color values. The one exception is the integrated terminal, which uses direct RGB color rendering via `DirectColor`/`CellAttr` to support 256-color output.
+- **User-facing copy belongs in `internal/i18n/en.json`.** Use flat `area.name` keys with one dot and `general.` for labels shared with the same meaning. Read copy through `i18n.Text`, or `i18n.Format` with named placeholders (`{filename}`, `{count}`) and `i18n.Args`. Keep complete messages together so translators can reorder them; do not concatenate translated sentence fragments or use positional printf placeholders in the catalog. Preserve existing keys when changing wording. Keep icons and decorative glyphs in `internal/icons` and compose them with translated text in UI code; use named placeholders when a glyph appears inside a translated hint. Command IDs, config keys, protocol values, key notation, logs, and external error text are not translation keys. Run `go test ./internal/i18n` to validate catalog keys, references, and placeholders when changing copy.
 - **Terminal colors** are configured via the `terminal` field in `ThemeConfig` (`TerminalColors`), which holds 16 ANSI colors plus foreground/background defaults.
 - Diff tabs and each file in Commit Details use `DiffEditorWidget` (`internal/ui/diff_editor_widget.go`): editor panes over read-only buffers, with a `DiffOverlay` that tints changed lines and adds deleted, filler and gap rows. Syntax highlighting stays on top of the diff tint through `BgStyle` layering; a search match replaces the tint.
 - Editable diffs ("Open Changes" on a working-tree file) bind the same widget to the file tab's own editor pane (`editor_group_diff.go`, `diff_editor_live.go`). Deleted lines are non-buffer rows the cursor skips; in changes-only context unchanged runs hide behind a gap line (`DiffOverlay.Hidden`), separate from the user's folds, which diff panes never apply. Edits replay through `Buffer.ChangesSince` so the overlay, gaps and split alignment move with the text until the debounced recompute in `internal/app/gitgutter.go` replaces them.
@@ -129,7 +132,7 @@ Keybindings are defined in `internal/config/keybindings.go` (`DefaultKeybindings
 
 ### LSP Integration
 
-Language server support lives in `internal/lsp/`: a JSON-RPC 2.0 client over stdio with Content-Length framing and no external dependencies, one client per language, lazy-started on first use. Servers are configured under `lsp.servers` in settings (`LSPSettings` in `internal/config/settings.go`); `internal/app/app_lsp.go` wires the client into the editor.
+Language server support lives in `internal/lsp/`: a client over stdio built on `internal/jsonrpc`, with no external dependencies, one client per language, lazy-started on first use. Servers are configured under `lsp.servers` in settings (`LSPSettings` in `internal/config/settings.go`); `internal/app/app_lsp.go` wires the client into the editor.
 
 Async LSP results (completions, signature help, hover, and so on) wake the event loop with the same `PostEvent(EventInterrupt)` pattern as git blame. Document sync is full-document, not incremental.
 
@@ -188,10 +191,10 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 ```
 
 - **`--exec "commands"`** runs semicolon-separated actions after startup: `click`, `rclick`, `hover`, `drag`, `key`, `type`, `paste`, `copy`, `exec "Command Name"`, `screenshot`, `debug`, `wait`, `wait-for TEXT`, `panel ID`, `quit`. `bin/ttt --help` (`ExecScriptUsage()` in `internal/app/exec_script.go`) is the reference. Each action is acknowledged after the event loop handles and redraws it; any failure stops the script with a nonzero exit.
-- **`debug PATH`** dumps screen, cursor, buffer, focus, panels, tabs, selection, output log, terminal PTY tails, and the widget tree.
+- **`debug PATH`** dumps screen, cursor, buffer, focus, panels, tabs, selection, output log, terminal PTY tails, and the widget tree. `focus` is where keys go (`editor`, `terminal`, `sidebar`, `bottom_panel`, `search`, `overlay` while a modal dialog or drawer is open, else `other`); `active_terminal` is the selected terminal tab as `{id, index}` with a 0-based index.
 - **`--listen`** accepts the same script over `POST http://127.0.0.1:4242/exec` (loopback only), to drive an editor a person started in a real terminal: `curl -X POST --data "type hi; screenshot /tmp/s.txt" http://127.0.0.1:4242/exec`.
 - **`--size WxH`** makes layout and click coordinates deterministic.
-- **`--plugin FILE`** loads a Lua plugin with full permissions (see the Plugin API caveats).
+- **`--plugin FILE`** loads a Lua plugin without approval. A `plugin.ttt.json` next to the file sets its name and exact permissions (including `system.exec`); without one it is named after the file and gets every permission except `system.exec` (see the Plugin API caveats).
 - **`TTT_CONFIG_DIR`** overrides the config directory. Set it for scripted sessions so the real `~/.config/ttt` is not read or mutated. Headless `--exec` uses a process-local clipboard.
 
 ### Implementation patterns
@@ -213,3 +216,10 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 - **Body** explains why, which test covers the change, and includes a `--exec` screenshot for visible changes.
 - **Before opening:** `make test` and `make lint` pass, and comments that describe what the code does are removed.
 - **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
+
+### Following up on a pull request
+
+- **Follow through after opening or updating a PR.** Monitor CodeRabbit and required CI checks for the latest head commit. Check pending work about every five minutes. If CodeRabbit is paused or skipped the latest changes, request a review once; avoid duplicate requests while a review is running.
+- **Address valid review findings.** Read inline threads and review summaries, including comments outside the diff. Verify each finding against the current code, fix actionable issues within the PR's scope, and add focused regression coverage where appropriate. Explain why a finding is inapplicable instead of changing code merely to satisfy the bot. Push verified fixes when authorized, then resolve the addressed threads.
+- **Follow CI to a result.** Inspect failing job logs and fix failures caused by the PR. Rerun checks when there is evidence of a transient failure. Report unrelated failures, unavailable checks, missing permissions, and external blockers explicitly; distinguish them from passing checks.
+- **Recheck after each push.** Continue until CodeRabbit has reviewed the latest changes, valid findings are addressed, and required CI passes, or report the concrete blocker and remaining work. Opening the PR alone is not completion. Approval and merge still require the user's authorization.

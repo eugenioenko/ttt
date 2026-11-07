@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/watcher"
 
 	"github.com/gdamore/tcell/v3"
@@ -61,24 +62,33 @@ func (a *App) SyncWatched() {
 // untouched (the save path still guards against clobbering) and the user is
 // warned. The recorded disk state of a dirty buffer is deliberately not
 // updated, so the save-time conflict check keeps working.
+// A missing file is reported without changing the buffer contents.
 func (a *App) HandleFileChanged(path string) {
+	a.handleFileChanged(path, os.Stat)
+}
+
+func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
 	buf := a.EditorGroup.BufferForPath(path)
 	if buf == nil {
+		return
+	}
+	name := filepath.Base(path)
+	info, err := stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			a.StatusWarn(i18n.Format("status.wasDeletedOnDisk", i18n.Args{"name": name}))
+		} else {
+			a.StatusWarn(i18n.Format("status.failedToCheck", i18n.Args{"name": name, "error": err}))
+		}
 		return
 	}
 	if !buf.DiskChanged(path) {
 		// Our own save, or a change that doesn't affect the bytes we hold.
 		return
 	}
-	name := filepath.Base(path)
-	info, err := os.Stat(path)
-	if err != nil {
-		a.StatusWarn(name + " was deleted on disk")
-		return
-	}
 	if buf.Dirty {
-		a.StatusWarn(name + " changed on disk; you have unsaved changes")
+		a.StatusWarn(i18n.Format("status.changedOnDiskYouHaveUnsavedChanges", i18n.Args{"name": name}))
 		return
 	}
 	if limit := a.Settings.Editor.AutoReloadMaxBytes(); limit > 0 && info.Size() > limit {

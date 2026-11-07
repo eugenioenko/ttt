@@ -18,11 +18,14 @@ const (
 	Pinned Name = "pinned"
 
 	ChevronRight Name = "chevron-right"
+	ChevronLeft  Name = "chevron-left"
 	ChevronDown  Name = "chevron-down"
 	ChevronUp    Name = "chevron-up"
 	Submenu      Name = "submenu"
 	ArrowLeft    Name = "arrow-left"
 	ArrowRight   Name = "arrow-right"
+	ArrowUp      Name = "arrow-up"
+	ArrowDown    Name = "arrow-down"
 	Close        Name = "close"
 	Dirty        Name = "dirty"
 	More         Name = "more"
@@ -30,6 +33,9 @@ const (
 	Remove       Name = "remove"
 	Discard      Name = "discard"
 	Replace      Name = "replace"
+	ReplaceAll   Name = "replace-all"
+	Reload       Name = "reload"
+	Ellipsis     Name = "ellipsis"
 
 	Function  Name = "function"
 	Class     Name = "class"
@@ -42,6 +48,19 @@ const (
 	Keyword   Name = "keyword"
 	Snippet   Name = "snippet"
 	Symbol    Name = "symbol"
+
+	PanelExplorer Name = "panel-explorer"
+	PanelSearch   Name = "panel-search"
+	PanelChanges  Name = "panel-changes"
+	PanelOutline  Name = "panel-outline"
+	PanelPlugins  Name = "panel-plugins"
+)
+
+const (
+	PlainChevronRight = '›'
+	PlainChevronDown  = '⌄'
+	PlainChevronLeft  = '‹'
+	PlainChevronUp    = '⌃'
 )
 
 type glyphs struct {
@@ -55,12 +74,15 @@ var table = map[Name]glyphs{
 	Lock:   {Plain: "⚿", Nerd: ""},
 	Pinned: {Plain: "♦", Nerd: ""},
 
-	ChevronRight: {Plain: "▸", Nerd: ""},
-	ChevronDown:  {Plain: "▾", Nerd: ""},
-	ChevronUp:    {Plain: "▴", Nerd: ""},
-	Submenu:      {Plain: "›", Nerd: ""},
-	ArrowLeft:    {Plain: "◂", Nerd: ""},
-	ArrowRight:   {Plain: "▸", Nerd: ""},
+	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
+	ChevronLeft:  {Plain: string(PlainChevronLeft), Nerd: ""},
+	ChevronDown:  {Plain: string(PlainChevronDown), Nerd: ""},
+	ChevronUp:    {Plain: string(PlainChevronUp), Nerd: ""},
+	Submenu:      {Plain: string(PlainChevronRight), Nerd: ""},
+	ArrowLeft:    {Plain: string(PlainChevronLeft), Nerd: ""},
+	ArrowRight:   {Plain: string(PlainChevronRight), Nerd: ""},
+	ArrowUp:      {Plain: "↑", Nerd: "↑"},
+	ArrowDown:    {Plain: "↓", Nerd: "↓"},
 	Close:        {Plain: "✕", Nerd: "✕"},
 	Dirty:        {Plain: "●", Nerd: "●"},
 	More:         {Plain: "⋮", Nerd: "⋮"},
@@ -68,6 +90,9 @@ var table = map[Name]glyphs{
 	Remove:       {Plain: "−", Nerd: "−"},
 	Discard:      {Plain: "✕", Nerd: "✕"},
 	Replace:      {Plain: "⟳", Nerd: ""},
+	ReplaceAll:   {Plain: "⟳", Nerd: "\ueb3c"},
+	Reload:       {Plain: "↻", Nerd: "↻"},
+	Ellipsis:     {Plain: "⋯", Nerd: "⋯"},
 
 	Function:  {Plain: "ƒ", Nerd: ""},
 	Class:     {Plain: "◆", Nerd: ""},
@@ -80,6 +105,12 @@ var table = map[Name]glyphs{
 	Keyword:   {Plain: "■", Nerd: ""},
 	Snippet:   {Plain: "■", Nerd: ""},
 	Symbol:    {Plain: "•", Nerd: ""},
+
+	PanelExplorer: {Plain: "⌂", Nerd: "\ueaf0"},
+	PanelSearch:   {Plain: "⌕", Nerd: "\uea6d"},
+	PanelChanges:  {Plain: "⎇", Nerd: "\uea68"},
+	PanelOutline:  {Plain: "ƒ", Nerd: "\ueb86"},
+	PanelPlugins:  {Plain: "⧉", Nerd: "\ueae6"},
 }
 
 var (
@@ -125,3 +156,5 @@ func Rune(name Name) rune {
 }
 
 func IsNerd(mode string) bool { return mode == config.IconsNerdFont }
+
+func ActiveIsNerd() bool { return IsNerd(activeMode) }

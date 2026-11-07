@@ -272,3 +272,99 @@ func TestDropdownRightClickIgnored(t *testing.T) {
 		t.Error("right-click should not be consumed")
 	}
 }
+
+func TestDropdownIsFocusable(t *testing.T) {
+	dd := NewDropdownWidget(DropdownConfig{
+		Label:   "Menu",
+		Entries: []MenuEntry{{Label: "A", Command: "a"}},
+	})
+
+	if !dd.Focusable() {
+		t.Fatal("dropdown should be focusable")
+	}
+	if dd.IsFocused() {
+		t.Error("dropdown should not start focused")
+	}
+	dd.SetFocused(true)
+	if !dd.IsFocused() {
+		t.Error("dropdown should report focus after SetFocused(true)")
+	}
+	dd.SetFocused(false)
+	if dd.IsFocused() {
+		t.Error("dropdown should drop focus after SetFocused(false)")
+	}
+}
+
+func TestDropdownOpensMenuFromKeyboardWhenFocused(t *testing.T) {
+	called := 0
+	dd := NewDropdownWidget(DropdownConfig{
+		Label:   "Menu",
+		Entries: []MenuEntry{{Label: "A", Command: "a"}},
+		OnMenu: func(e []MenuEntry, sx, sy int) {
+			called++
+		},
+	})
+	renderWidget(dd, 5, 10, 10, 1)
+	dd.SetFocused(true)
+
+	enter := tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone)
+	if result := dd.HandleEvent(enter); result != EventConsumed {
+		t.Error("Enter on a focused dropdown should be consumed")
+	}
+	space := tcell.NewEventKey(tcell.KeyRune, " ", tcell.ModNone)
+	if result := dd.HandleEvent(space); result != EventConsumed {
+		t.Error("Space on a focused dropdown should be consumed")
+	}
+
+	if called != 2 {
+		t.Errorf("Enter and Space should each open the menu, got %d calls", called)
+	}
+}
+
+func TestDropdownIgnoresKeyboardWhenNotFocused(t *testing.T) {
+	called := false
+	dd := NewDropdownWidget(DropdownConfig{
+		Label:   "Menu",
+		Entries: []MenuEntry{{Label: "A", Command: "a"}},
+		OnMenu: func(e []MenuEntry, sx, sy int) {
+			called = true
+		},
+	})
+	renderWidget(dd, 0, 0, 10, 1)
+
+	enter := tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone)
+	if result := dd.HandleEvent(enter); result == EventConsumed {
+		t.Error("Enter on an unfocused dropdown should be ignored")
+	}
+	if called {
+		t.Error("unfocused dropdown should not fire OnMenu")
+	}
+}
+
+func TestDropdownJoinsTheFocusRing(t *testing.T) {
+	// A panel with an input, a button and a dropdown: Tab must reach the
+	// dropdown, otherwise its menu is reachable by mouse only (#1050).
+	inp := NewInputWidget(InputConfig{})
+	btn := NewButtonWidget(ButtonConfig{Label: "Go"})
+	dd := NewDropdownWidget(DropdownConfig{
+		Label:   "Pick",
+		Entries: []MenuEntry{{Label: "One", Command: "1"}},
+	})
+
+	vs := NewVStackWidget(inp, btn, dd)
+
+	fm := NewFocusManager()
+	fm.SetActive(true)
+	fm.Collect(vs)
+
+	var found bool
+	for _, item := range fm.Items() {
+		if item == Widget(dd) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("dropdown should be part of the focus ring")
+	}
+}

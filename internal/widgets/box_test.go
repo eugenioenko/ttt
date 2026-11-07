@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -79,6 +80,34 @@ func TestBoxFixedHeight(t *testing.T) {
 	h := box.Height()
 	if h != 5 {
 		t.Errorf("expected fixed height=5, got %d", h)
+	}
+}
+
+func TestBoxFixedHeightAddsMarginsOutside(t *testing.T) {
+	box := NewBoxWidget(BoxModel{MarginTop: 1, MarginBottom: 2})
+	box.FixedHeight = 3
+	box.Child = NewVStackWidget(
+		NewLabelWidget(LabelConfig{Text: "one"}),
+		NewLabelWidget(LabelConfig{Text: "two"}),
+		NewLabelWidget(LabelConfig{Text: "three"}),
+	)
+	stack := NewVStackWidget(box, NewLabelWidget(LabelConfig{Text: "after"}))
+	s := renderWidget(stack, 0, 0, 10, 10)
+	for y, want := range []string{"", "one", "two", "three", "", "", "after"} {
+		if got := rowText(s, y); got != want {
+			t.Errorf("row %d = %q, want %q", y, got, want)
+		}
+	}
+}
+
+func TestBoxFixedWidthAddsMarginsOutside(t *testing.T) {
+	box := NewBoxWidget(BoxModel{MarginLeft: 1, MarginRight: 2})
+	box.FixedWidth = 5
+	box.Child = NewLabelWidget(LabelConfig{Text: "abcde"})
+	row := NewHStackWidget(box, NewLabelWidget(LabelConfig{Text: "z"}))
+	s := renderWidget(row, 0, 0, 12, 1)
+	if got, want := rowText(s, 0), " abcde  z"; got != want {
+		t.Errorf("row = %q, want %q", got, want)
 	}
 }
 
@@ -325,5 +354,25 @@ func TestBoxDoubleBorder(t *testing.T) {
 	}
 	if s.cells[0][5].Ch != borders.Horizontal {
 		t.Errorf("expected double horizontal %c, got %c", borders.Horizontal, s.cells[0][5].Ch)
+	}
+}
+
+func TestBoxTitleSitsInTopBorder(t *testing.T) {
+	box := NewBoxWithBorder(term.SingleBorderSet())
+	box.Title = "Name"
+	box.Child = NewLabelWidget(LabelConfig{Text: "x"})
+	s := renderWidget(box, 0, 0, 20, 3)
+	if got := rowText(s, 0); !strings.HasPrefix(got, "┌ Name ─") {
+		t.Fatalf("top border = %q", got)
+	}
+}
+
+func TestBoxTitleClipsBeforeTheCorner(t *testing.T) {
+	box := NewBoxWithBorder(term.SingleBorderSet())
+	box.Title = "A very long title"
+	s := renderWidget(box, 0, 0, 10, 3)
+	got := []rune(rowText(s, 0))
+	if got[0] != '┌' || got[len(got)-1] != '┐' || !strings.HasPrefix(string(got), "┌ A very") {
+		t.Fatalf("top border = %q, want the clipped title between the corners", string(got))
 	}
 }

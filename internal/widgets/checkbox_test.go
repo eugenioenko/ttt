@@ -241,3 +241,32 @@ func TestCheckboxLabelRendered(t *testing.T) {
 		}
 	}
 }
+
+// A fullwidth rune covers two columns, so a label drawn one column per rune
+// drops every other character (#1066).
+func TestCheckboxRendersFullwidthLabel(t *testing.T) {
+	cb := NewCheckboxWidget(CheckboxConfig{Label: "チェック", Checked: true})
+
+	s := renderWidget(cb, 0, 0, 20, 1)
+
+	if got := rowText(s, 0); got != " [x] チェック" {
+		t.Errorf("row = %q, want %q", got, " [x] チェック")
+	}
+}
+
+// A fullwidth rune that would cross the last column becomes a space: the
+// terminal paints it across two columns regardless of clipping (#1066).
+func TestCheckboxFullwidthLabelStaysInsideTheEdge(t *testing.T) {
+	cb := NewCheckboxWidget(CheckboxConfig{Label: "チェック", Checked: true})
+
+	// The label starts at column 5, so only one fullwidth rune fits in eight
+	// columns.
+	s := renderWidget(cb, 0, 0, 8, 1)
+
+	if got := s.cells[0][5].Ch; got != 'チ' {
+		t.Errorf("cell 5 = %q, want the first fullwidth rune", got)
+	}
+	if got := s.cells[0][7].Ch; got != ' ' {
+		t.Errorf("cell 7 = %q, want a space where the next rune would cross the edge", got)
+	}
+}

@@ -30,7 +30,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	case tcell.KeyUp:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				if cs.Line > 0 {
+				if e.WordWrap {
+					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, -1, -1)
+				} else if cs.Line > 0 {
 					cs.Line--
 					if e.Folds != nil {
 						if r := e.Folds.ContainingFold(cs.Line); r != nil {
@@ -45,7 +47,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			})
 		} else {
 			e.startOrExtendSelection(shift)
-			if e.Cursor.Line > 0 {
+			if e.WordWrap {
+				e.moveCursorWrapped(-1)
+			} else if e.Cursor.Line > 0 {
 				e.Cursor.Line--
 				e.skipHiddenLineUp()
 				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -57,7 +61,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	case tcell.KeyDown:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				if cs.Line < len(e.Buf.Lines)-1 {
+				if e.WordWrap {
+					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, 1, -1)
+				} else if cs.Line < len(e.Buf.Lines)-1 {
 					cs.Line++
 					if e.Folds != nil {
 						if r := e.Folds.ContainingFold(cs.Line); r != nil {
@@ -72,7 +78,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			})
 		} else {
 			e.startOrExtendSelection(shift)
-			if e.Cursor.Line < len(e.Buf.Lines)-1 {
+			if e.WordWrap {
+				e.moveCursorWrapped(1)
+			} else if e.Cursor.Line < len(e.Buf.Lines)-1 {
 				e.Cursor.Line++
 				e.skipHiddenLineDown()
 				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -122,34 +130,15 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 		}
 	case tcell.KeyHome:
-		if multi {
-			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				runes := []rune(e.Buf.Lines[cs.Line])
-				firstNonSpace := 0
-				for firstNonSpace < len(runes) && (runes[firstNonSpace] == ' ' || runes[firstNonSpace] == '\t') {
-					firstNonSpace++
-				}
-				if cs.Col == firstNonSpace {
-					cs.Col = 0
-				} else {
-					cs.Col = firstNonSpace
-				}
-			})
-		} else {
-			e.startOrExtendSelection(shift)
-			e.SmartHome()
-		}
+		e.MoveToLineEdge(false, shift)
 	case tcell.KeyEnd:
-		if multi {
-			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				cs.Col = len([]rune(e.Buf.Lines[cs.Line]))
-			})
-		} else {
-			e.startOrExtendSelection(shift)
-			e.Cursor.Col = len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		}
+		e.MoveToLineEdge(true, shift)
 	case tcell.KeyPgUp:
 		e.startOrExtendSelection(shift)
+		if e.WordWrap {
+			e.moveCursorWrapped(-e.Viewport.Height)
+			break
+		}
 		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line - e.Viewport.Height)
 		e.skipHiddenLineUp()
 		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -158,6 +147,10 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 		}
 	case tcell.KeyPgDn:
 		e.startOrExtendSelection(shift)
+		if e.WordWrap {
+			e.moveCursorWrapped(e.Viewport.Height)
+			break
+		}
 		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line + e.Viewport.Height)
 		e.skipHiddenLineDown()
 		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -228,7 +221,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 						StartLine: line, StartCol: 0,
 						EndLine: line, EndCol: remove,
 					}
-					cmd.Apply(e.Buf)
+					e.applyAutoClosingEdit(cmd)
 					cmds = append(cmds, cmd)
 				}
 			}
@@ -262,7 +255,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			var cmds []undo.EditCommand
 			for line := startLine; line <= endLine; line++ {
 				cmd := &undo.InsertStringCommand{Line: line, Col: 0, Text: indent}
-				cmd.Apply(e.Buf)
+				e.applyAutoClosingEdit(cmd)
 				cmds = append(cmds, cmd)
 			}
 			if len(cmds) > 0 && e.Undo != nil {
@@ -300,7 +293,7 @@ func (e *EditorPaneWidget) execEnter() {
 
 	var cmds []undo.EditCommand
 	splitCmd := &undo.SplitLineCommand{Line: e.Cursor.Line, Col: col}
-	splitCmd.Apply(e.Buf)
+	e.applyAutoClosingEdit(splitCmd)
 	cmds = append(cmds, splitCmd)
 	e.Cursor.Line++
 	e.Cursor.Col = 0
@@ -326,16 +319,16 @@ func (e *EditorPaneWidget) execEnter() {
 		}
 		if len(newIndent) > 0 {
 			indentCmd := &undo.InsertStringCommand{Line: e.Cursor.Line, Col: 0, Text: newIndent}
-			indentCmd.Apply(e.Buf)
+			e.applyAutoClosingEdit(indentCmd)
 			cmds = append(cmds, indentCmd)
 			e.Cursor.Col = len([]rune(newIndent))
 		}
 		if extraIndent && closingBrackets[charAfter] {
 			bracketSplit := &undo.SplitLineCommand{Line: e.Cursor.Line, Col: e.Cursor.Col}
-			bracketSplit.Apply(e.Buf)
+			e.applyAutoClosingEdit(bracketSplit)
 			cmds = append(cmds, bracketSplit)
 			bracketIndent := &undo.InsertStringCommand{Line: e.Cursor.Line + 1, Col: 0, Text: indent}
-			bracketIndent.Apply(e.Buf)
+			e.applyAutoClosingEdit(bracketIndent)
 			cmds = append(cmds, bracketIndent)
 		}
 	}
@@ -351,6 +344,9 @@ func (e *EditorPaneWidget) execEnter() {
 func (e *EditorPaneWidget) execBackspace() {
 	if e.Selection != nil && e.Selection.Active {
 		e.deleteSelection()
+	} else if e.autoClosingDelete(e.Cursor.Line, e.Cursor.Col) {
+		e.exec(&undo.DeleteSelectionCommand{StartLine: e.Cursor.Line, StartCol: e.Cursor.Col - 1, EndLine: e.Cursor.Line, EndCol: e.Cursor.Col + 1})
+		e.Cursor.Col--
 	} else if e.Cursor.Col > 0 {
 		runes := []rune(e.Buf.Lines[e.Cursor.Line])
 		if e.Cursor.Col > len(runes) {
@@ -411,6 +407,17 @@ func (e *EditorPaneWidget) execRune(r rune) {
 		start, _ := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
 		e.replaceSelection(&undo.InsertRuneCommand{Line: start.Line, Col: start.Col, Rune: r})
 		e.Cursor.Col = start.Col + 1
+		return
+	}
+	if e.autoClosingSkip(e.Cursor.Line, e.Cursor.Col, r) {
+		e.Cursor.Col++
+		return
+	}
+	if close := e.autoClosingCloser(e.Cursor.Line, e.Cursor.Col, r); close != 0 {
+		line, col := e.Cursor.Line, e.Cursor.Col
+		e.exec(&autoClosingInsertCommand{InsertStringCommand: undo.InsertStringCommand{Line: line, Col: col, Text: string([]rune{r, close})}})
+		e.rememberAutoClosing(line, col, r, close)
+		e.Cursor.Col++
 		return
 	}
 	if e.AutoDedent && closingBrackets[r] {

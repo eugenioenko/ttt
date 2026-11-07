@@ -23,6 +23,7 @@ type RegistryEntry struct {
 	Version       string        `json:"version"`
 	Enabled       bool          `json:"enabled"`
 	Permissions   PermissionSet `json:"permissions"`
+	ExecPaths     []string      `json:"execPaths,omitempty"` // from sys.request_exec; outside Permissions, which is intersected with the manifest
 	GrantsVersion int           `json:"grantsVersion,omitempty"`
 }
 
@@ -35,8 +36,9 @@ func (e RegistryEntry) Title() string {
 }
 
 type Registry struct {
-	Entries []RegistryEntry
-	path    string
+	Entries  []RegistryEntry
+	path     string
+	saveHook func() error
 }
 
 func LoadRegistry(path string) (*Registry, error) {
@@ -64,6 +66,11 @@ func LoadRegistry(path string) (*Registry, error) {
 }
 
 func (r *Registry) Save() error {
+	if r.saveHook != nil {
+		if err := r.saveHook(); err != nil {
+			return err
+		}
+	}
 	data, err := json.MarshalIndent(r.Entries, "", "  ")
 	if err != nil {
 		return err

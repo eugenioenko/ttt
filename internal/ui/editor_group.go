@@ -20,6 +20,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -53,8 +54,11 @@ type Diagnostic struct {
 }
 
 type editorTab struct {
-	ID          string
-	FilePath    string
+	ID       string
+	FilePath string
+	// PluginKey identifies a plugin's tab. It is kept apart from FilePath so a
+	// file or buffer at the same path is never taken for the plugin's tab.
+	PluginKey   string
 	IconPath    string
 	Title       string
 	Buf         *buffer.Buffer
@@ -62,6 +66,7 @@ type editorTab struct {
 	Vp          *view.Viewport
 	Undo        *undo.UndoStack
 	Sel         *selection.Selection
+	autoClosing *autoClosingState
 	Multi       *multicursor.MultiCursor
 	Highlighter *highlight.Highlighter
 	Diagnostics []Diagnostic
@@ -74,6 +79,10 @@ type editorTab struct {
 	Placeholder bool
 	LineChanges []diff.LineChangeKind
 	ReadOnly    bool
+
+	LanguageSelection string
+	// Keep document lifecycle and language servers independent of the highlighting selection.
+	DetectedLanguage string
 	// Diff shows the tab's own buffer as an editable diff against its base.
 	Diff *DiffEditorWidget
 	// Annotations shows the decorations for the tab's file when it is not
@@ -92,27 +101,30 @@ type findSession struct {
 
 type EditorGroupWidget struct {
 	BaseWidget
-	TabBar           *TabBarWidget
-	Editor           *EditorPaneWidget
-	Autocomplete     *AutocompleteWidget
-	Hover            *HoverWidget
-	SignatureHelp    *SignatureHelpWidget
-	tabs             []editorTab
-	nextTabIdentity  uint64
-	active           int
-	pinnedCount      int
-	TabSize          int
-	InsertSpaces     bool
-	LineNumbers      bool
-	GutterStyle      string
-	WordWrap         bool
-	WordWrapMaxBytes int64
+	TabBar            *TabBarWidget
+	Editor            *EditorPaneWidget
+	Autocomplete      *AutocompleteWidget
+	Hover             *HoverWidget
+	SignatureHelp     *SignatureHelpWidget
+	tabs              []editorTab
+	nextTabIdentity   uint64
+	active            int
+	pinnedCount       int
+	TabSize           int
+	InsertSpaces      bool
+	LineNumbers       bool
+	GutterStyle       string
+	WordWrap          bool
+	WordWrapColumn    int
+	LanguageOverrides map[string]config.EditorLanguageOverride
+	WordWrapMaxBytes  int64
 	// editorInDiff is set while the shared editor is bound to an editable
 	// diff, which sets its word wrap from the diff's own wrap mode.
 	editorInDiff            bool
 	DiffMode                DiffMode
 	DiffContext             DiffContextMode
 	DiffWordWrap            bool
+	MarkdownMaxWidth        int
 	DiffHighContrast        bool
 	DiffCollapsedEmphasis   bool
 	DiffScrollbarGitMarks   bool
@@ -167,6 +179,11 @@ type EditorGroupWidget struct {
 	bookmarkSyncPath  string
 	OnBookmarkChanged func(path string, line int, action string, icon rune, style term.Style)
 	OnGutterClick     func(path string, line int) bool
+	LinkWorkDir       func() string
+	OnOpenURL         func(string)
+	OnOpenFileLink    func(string, int, int)
+	OnLinkHover       func(*EditorPaneWidget)
+	ResolveFileLinks  FileLinkResolver
 	// OnDiagnosticsChanged fires whenever any source's diagnostics change, so
 	// the Diagnostics panel can rebuild from DiagnosticsByPath().
 	OnDiagnosticsChanged func()
@@ -207,6 +224,7 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 
 		DiffSignsColor:      true,
 		DiffGutterHighlight: true,
+		MarkdownMaxWidth:    80,
 	}
 	tabBar.OnTabClick = func(index int) {
 		g.SwitchTab(index)
@@ -272,6 +290,65 @@ func (g *EditorGroupWidget) activeTab() *editorTab {
 		return nil
 	}
 	return &g.tabs[g.active]
+}
+
+func (g *EditorGroupWidget) ActiveLanguageSelection() string {
+	if t := g.activeTab(); t != nil {
+		return t.LanguageSelection
+	}
+	return ""
+}
+
+func (g *EditorGroupWidget) ActiveLanguage() string {
+	if t := g.activeTab(); t != nil && t.Content == nil {
+		return t.DetectedLanguage
+	}
+	return ""
+}
+
+func (g *EditorGroupWidget) SetActiveLanguage(selection string) {
+	if g.ActiveBuffer() == nil {
+		return
+	}
+	t := g.activeTab()
+	t.LanguageSelection = selection
+	t.Highlighter.Close()
+	t.Highlighter = g.tabHighlighter(t)
+	if t.autoClosing != nil {
+		t.autoClosing.syntax.Close()
+		t.autoClosing.syntax = nil
+	}
+	g.syncTabs()
+}
+
+func (g *EditorGroupWidget) tabHighlighter(t *editorTab) *highlight.Highlighter {
+	if !g.SyntaxHighlight {
+		return nil
+	}
+	switch t.LanguageSelection {
+	case "":
+		return highlight.NewForLines(t.FilePath, t.Buf.Lines)
+	case highlight.PlainText:
+		return nil
+	default:
+		return highlight.NewForLanguage(t.LanguageSelection)
+	}
+}
+
+func (g *EditorGroupWidget) rebuildHighlighter(t *editorTab) {
+	t.Highlighter.Close()
+	t.Highlighter = nil
+	t.DetectedLanguage = ""
+	if g.SyntaxHighlight {
+		t.Highlighter = highlight.NewForLines(t.FilePath, t.Buf.Lines)
+		if t.Highlighter != nil {
+			t.DetectedLanguage = t.Highlighter.Language()
+		}
+	}
+	if t.LanguageSelection != "" {
+		t.Highlighter.Close()
+		t.Highlighter = g.tabHighlighter(t)
+	}
 }
 
 func (g *EditorGroupWidget) reportError(msg string) {
@@ -385,52 +462,77 @@ func (g *EditorGroupWidget) MoveActiveTab(direction int) bool {
 	return g.MoveTab(g.active, g.active+direction)
 }
 
-func (g *EditorGroupWidget) OpenFile(path string) {
+func contentFileError(path string, content Widget) error {
+	var message string
+	switch w := content.(type) {
+	case *ImageViewWidget:
+		message = w.Err
+	case *BinaryFileWidget:
+		message = w.Err
+	}
+	if message != "" {
+		return errors.New(i18n.Format("files.cannotOpen", i18n.Args{"path": path, "message": message}))
+	}
+	return nil
+}
+
+func (g *EditorGroupWidget) OpenFile(path string) error {
 	if isSpecialFile(path) {
-		g.reportError("Cannot open " + path + ": not a regular file")
-		return
+		err := errors.New(i18n.Format("files.cannotOpenSpecialFile", i18n.Args{"path": path}))
+		g.reportError(err.Error())
+		return err
 	}
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path {
-			g.tabs[i].Preview = false
 			if g.tabs[i].Content != nil {
+				g.tabs[i].Preview = false
 				g.applyImagePrefs(g.tabs[i].Content)
 				if refresher, ok := g.tabs[i].Content.(interface{ Refresh() }); ok {
 					refresher.Refresh()
 				}
 				g.SwitchTab(i)
-				return
+				return contentFileError(path, g.tabs[i].Content)
 			}
 			if g.tabs[i].Buf != nil && !g.tabs[i].Buf.Dirty {
-				g.tabs[i].Buf.LoadFile(path)
+				if err := g.tabs[i].Buf.LoadFile(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+					err = fmt.Errorf("%s: %w", i18n.Format("editorGroup.reloadFileFailed", i18n.Args{"path": path}), err)
+					g.reportError(err.Error())
+					g.tabs[i].Preview = false
+					g.SwitchTab(i)
+					return err
+				}
 			}
+			g.tabs[i].Preview = false
 			g.SwitchTab(i)
-			return
+			return nil
 		}
 	}
 	switch kind, head := sniffFileKind(path); kind {
 	case fileKindImage:
-		g.openContentFileTab(path, NewImageViewWidget(path))
-		return
+		content := NewImageViewWidget(path)
+		g.openContentFileTab(path, content)
+		return contentFileError(path, content)
 	case fileKindBinary:
 		if g.FileHandler != nil {
 			if content := g.FileHandler(path, head); content != nil {
 				g.openContentFileTab(path, content)
 				g.fileHandled(path)
-				return
+				return nil
 			}
 		}
-		g.openContentFileTab(path, NewBinaryFileWidget(path))
-		return
+		content := NewBinaryFileWidget(path)
+		g.openContentFileTab(path, content)
+		return contentFileError(path, content)
 	}
 	newBuf := &buffer.Buffer{Lines: []string{""}, ShowTrailingNewline: g.ShowTrailingNewline}
 	ec := g.applySaveSettings(newBuf, path)
 	if err := newBuf.LoadFile(path); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			g.reportError(fmt.Sprintf("Failed to open %s: %v", path, err))
-			return
+			err = fmt.Errorf("%s: %w", i18n.Format("editorGroup.openFileFailed", i18n.Args{"path": path}), err)
+			g.reportError(err.Error())
+			return err
 		}
-		g.notify(fmt.Sprintf("New file: %s", filepath.Base(path)))
+		g.notify(i18n.Format("editorGroup.newFile", i18n.Args{"filename": filepath.Base(path)}))
 	}
 	tabSize := g.TabSize
 	useTabs := !g.InsertSpaces
@@ -462,9 +564,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 		UseTabs:  useTabs,
 		Preview:  true,
 	}
-	if g.SyntaxHighlight {
-		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
-	}
+	g.rebuildHighlighter(&newTab)
 	newTab.Annotations = g.mergedDecorations(path, newBuf, tabSize)
 	if t := g.activeTab(); g.canReplaceTab(t) && (isFileViewerTab(t) || (t.Content == nil && t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
@@ -477,6 +577,7 @@ func (g *EditorGroupWidget) OpenFile(path string) {
 	if g.OnFileOpen != nil && newTab.Highlighter != nil {
 		g.OnFileOpen(path, newTab.Highlighter.Language(), newBuf.Lines)
 	}
+	return nil
 }
 
 func isFileViewerTab(t *editorTab) bool {
@@ -595,6 +696,7 @@ func (g *EditorGroupWidget) replaceContent(i int, content Widget) {
 		closer.Close()
 	}
 	g.tabs[i].Content = content
+	g.tabs[i].PluginKey = contentPluginKey(content)
 	if i == g.active && g.focused {
 		if setter, ok := content.(interface{ SetFocused(bool) }); ok {
 			setter.SetFocused(true)
@@ -606,10 +708,11 @@ func (g *EditorGroupWidget) replaceContent(i int, content Widget) {
 func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
 	g.applyImagePrefs(content)
 	newTab := editorTab{
-		FilePath: path,
-		IconPath: path,
-		Content:  content,
-		Preview:  true,
+		FilePath:  path,
+		PluginKey: contentPluginKey(content),
+		IconPath:  path,
+		Content:   content,
+		Preview:   true,
 	}
 	if t := g.activeTab(); g.canReplaceTab(t) && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
@@ -721,6 +824,9 @@ func (g *EditorGroupWidget) OpenDiffTab(tabName, title, path string, fd diff.Fil
 }
 
 func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
+	if detail, ok := surface.(*CommitDetailWidget); ok {
+		detail.SetMarkdownMaxWidth(g.MarkdownMaxWidth)
+	}
 	surface.ApplyDefaultMode(g.DiffMode)
 	if contextSurface, ok := surface.(DiffContextSurface); ok {
 		contextSurface.ApplyDefaultContextMode(g.DiffContext)
@@ -765,6 +871,15 @@ func (g *EditorGroupWidget) SetDiffDefaults(mode DiffMode, contextMode DiffConte
 	g.DiffWordWrap = wordWrap
 	for _, surface := range g.diffSurfaces() {
 		g.ApplyDiffDefaults(surface)
+	}
+}
+
+func (g *EditorGroupWidget) SetMarkdownMaxWidth(width int) {
+	g.MarkdownMaxWidth = width
+	for _, surface := range g.diffSurfaces() {
+		if detail, ok := surface.(*CommitDetailWidget); ok {
+			detail.SetMarkdownMaxWidth(width)
+		}
 	}
 }
 
@@ -892,10 +1007,10 @@ func (g *EditorGroupWidget) SetImageRedraw(redraw func()) {
 	}
 }
 
-func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
+func (g *EditorGroupWidget) OpenPluginTab(key, title string, content Widget) {
 	g.applyFileIconMode(content)
 	for i, t := range g.tabs {
-		if t.FilePath == id {
+		if key != "" && t.PluginKey == key {
 			g.notifyContentTabClose(t)
 			t.Content = content
 			t.IconPath = ""
@@ -906,11 +1021,27 @@ func (g *EditorGroupWidget) OpenPluginTab(id, title string, content Widget) {
 		}
 	}
 	g.tabs = append(g.tabs, editorTab{
-		FilePath: id,
-		Title:    title,
-		Content:  content,
+		FilePath:  key,
+		PluginKey: key,
+		Title:     title,
+		Content:   content,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
+}
+
+// PluginTabKey returns the key of the plugin tab at index, or "" for any other tab.
+func (g *EditorGroupWidget) PluginTabKey(index int) string {
+	if index < 0 || index >= len(g.tabs) {
+		return ""
+	}
+	return g.tabs[index].PluginKey
+}
+
+func contentPluginKey(content Widget) string {
+	if k, ok := content.(interface{ PluginTabKey() string }); ok {
+		return k.PluginTabKey()
+	}
+	return ""
 }
 
 func (g *EditorGroupWidget) placeholderTab() editorTab {
@@ -932,12 +1063,20 @@ func (g *EditorGroupWidget) notifyEmpty() {
 	}
 }
 
-func (g *EditorGroupWidget) ClosePluginTab(id string) {
+// ClosePluginTab closes the plugin tab keyed key and reports whether there was one.
+func (g *EditorGroupWidget) ClosePluginTab(key string) bool {
+	if key == "" {
+		return false
+	}
+	prev := g.activeContent()
 	for i, t := range g.tabs {
-		if t.FilePath == id {
+		if t.PluginKey == key {
 			g.notifyContentTabClose(t)
 			if i < g.pinnedCount {
 				g.pinnedCount--
+			}
+			if i < g.active {
+				g.active--
 			}
 			g.tabs = append(g.tabs[:i], g.tabs[i+1:]...)
 			emptied := len(g.tabs) == 0
@@ -948,16 +1087,21 @@ func (g *EditorGroupWidget) ClosePluginTab(id string) {
 				g.active = len(g.tabs) - 1
 			}
 			g.syncTabs()
+			g.refocusAfterClose(prev)
 			if emptied {
 				g.notifyEmpty()
 			}
-			return
+			return true
 		}
 	}
+	return false
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
 	tab.Highlighter.Close()
+	if tab.autoClosing != nil {
+		tab.autoClosing.syntax.Close()
+	}
 	if tab.Diff != nil {
 		tab.Diff.Close()
 	}
@@ -976,7 +1120,7 @@ func (g *EditorGroupWidget) ReloadFile(path string) bool {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path && g.tabs[i].Buf != nil {
 			if err := g.tabs[i].Buf.LoadFile(path); err != nil {
-				g.reportError(fmt.Sprintf("Failed to reload %s: %v", path, err))
+				g.reportError(i18n.Format("editorGroup.failedToReload", i18n.Args{"path": path, "error": err}))
 				return false
 			}
 			g.tabs[i].Buf.Dirty = false
@@ -1045,12 +1189,12 @@ func (g *EditorGroupWidget) OpenDocuments() []OpenDocument {
 	var docs []OpenDocument
 	for i := range g.tabs {
 		t := &g.tabs[i]
-		if t.Content != nil || t.Buf == nil || t.Highlighter == nil || t.Virtual || t.FilePath == "" {
+		if t.Content != nil || t.Buf == nil || t.DetectedLanguage == "" || t.Virtual || t.FilePath == "" {
 			continue
 		}
 		docs = append(docs, OpenDocument{
 			Path:     t.FilePath,
-			Language: t.Highlighter.Language(),
+			Language: t.DetectedLanguage,
 			Text:     strings.Join(t.Buf.Lines, "\n"),
 		})
 	}
@@ -1062,10 +1206,10 @@ func (g *EditorGroupWidget) OpenFiles() []OpenDocument {
 	var docs []OpenDocument
 	for i := range g.tabs {
 		t := &g.tabs[i]
-		if t.Content != nil || t.Buf == nil || t.Highlighter == nil || t.Virtual || t.FilePath == "" {
+		if t.Content != nil || t.Buf == nil || t.DetectedLanguage == "" || t.Virtual || t.FilePath == "" {
 			continue
 		}
-		docs = append(docs, OpenDocument{Path: t.FilePath, Language: t.Highlighter.Language()})
+		docs = append(docs, OpenDocument{Path: t.FilePath, Language: t.DetectedLanguage})
 	}
 	return docs
 }
@@ -1107,6 +1251,21 @@ func (g *EditorGroupWidget) ActiveCommitDetailWidget() *CommitDetailWidget {
 	}
 	detail, _ := t.Content.(*CommitDetailWidget)
 	return detail
+}
+
+// TextSelectionContent is tab content that selects the text it draws.
+type TextSelectionContent interface {
+	CopyTextSelection() bool
+	SelectAllText()
+}
+
+func (g *EditorGroupWidget) ActiveTextSelection() TextSelectionContent {
+	t := g.activeTab()
+	if t == nil || t.Content == nil {
+		return nil
+	}
+	sel, _ := t.Content.(TextSelectionContent)
+	return sel
 }
 
 func (g *EditorGroupWidget) ActiveCurrentChangesWidget() *CommitDetailWidget {
@@ -1240,14 +1399,35 @@ func (g *EditorGroupWidget) SwitchTab(idx int) {
 		g.saveMultiState()
 		g.active = idx
 		g.syncTabs()
-		if g.focused {
-			if t := g.activeTab(); t != nil && t.Content != nil {
-				if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
-					setter.SetFocused(true)
-				}
-			}
+		g.focusActiveContent()
+	}
+}
+
+func (g *EditorGroupWidget) focusActiveContent() {
+	if !g.focused {
+		return
+	}
+	if t := g.activeTab(); t != nil && t.Content != nil {
+		if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
+			setter.SetFocused(true)
 		}
 	}
+}
+
+func (g *EditorGroupWidget) activeContent() Widget {
+	if t := g.activeTab(); t != nil {
+		return t.Content
+	}
+	return nil
+}
+
+func (g *EditorGroupWidget) refocusAfterClose(prev Widget) {
+	if prev != nil && prev != g.activeContent() {
+		if setter, ok := prev.(interface{ SetFocused(bool) }); ok {
+			setter.SetFocused(false)
+		}
+	}
+	g.focusActiveContent()
 }
 
 func (g *EditorGroupWidget) saveMultiState() {
@@ -1273,8 +1453,9 @@ func (g *EditorGroupWidget) CloseTab() {
 		return
 	}
 	closing := g.tabs[g.active]
-	if g.OnFileClose != nil && closing.Highlighter != nil && !closing.Virtual {
-		g.OnFileClose(closing.FilePath, closing.Highlighter.Language())
+	prev := closing.Content
+	if g.OnFileClose != nil && closing.DetectedLanguage != "" && !closing.Virtual {
+		g.OnFileClose(closing.FilePath, closing.DetectedLanguage)
 	}
 	g.notifyContentTabClose(closing)
 	if g.active < g.pinnedCount {
@@ -1289,6 +1470,7 @@ func (g *EditorGroupWidget) CloseTab() {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	g.refocusAfterClose(prev)
 	if emptied {
 		g.notifyEmpty()
 	}
@@ -1359,6 +1541,7 @@ func (g *EditorGroupWidget) HasDirtyOtherTabs() bool {
 }
 
 func (g *EditorGroupWidget) CloseAllTabs() {
+	prev := g.activeContent()
 	for i := g.pinnedCount; i < len(g.tabs); i++ {
 		g.notifyContentTabClose(g.tabs[i])
 	}
@@ -1371,12 +1554,14 @@ func (g *EditorGroupWidget) CloseAllTabs() {
 	g.tabs = kept
 	g.active = 0
 	g.syncTabs()
+	g.refocusAfterClose(prev)
 	if emptied {
 		g.notifyEmpty()
 	}
 }
 
 func (g *EditorGroupWidget) CloseAllSaved() {
+	prev := g.activeContent()
 	var kept []editorTab
 	for i := range g.tabs {
 		if i < g.pinnedCount || (g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty) {
@@ -1395,6 +1580,7 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 		g.active = len(g.tabs) - 1
 	}
 	g.syncTabs()
+	g.refocusAfterClose(prev)
 	if emptied {
 		g.notifyEmpty()
 	}
@@ -1443,7 +1629,7 @@ func (g *EditorGroupWidget) Save() bool {
 	}
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(t.FilePath); err != nil {
-		g.reportError(fmt.Sprintf("Failed to save %s: %v", t.FilePath, err))
+		g.reportError(i18n.Format("editorGroup.failedToSave", i18n.Args{"filePath": t.FilePath, "error": err}))
 		return false
 	}
 	if t.Undo != nil {
@@ -1475,7 +1661,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	g.applySaveSettings(t.Buf, path)
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
-		g.reportError(fmt.Sprintf("Failed to save %s: %v", path, err))
+		g.reportError(i18n.Format("editorGroup.savePathFailed", i18n.Args{"path": path, "error": err}))
 		return false
 	}
 	if t.Undo != nil {
@@ -1486,11 +1672,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t.IconPath = path
 	t.Virtual = false
 	t.Placeholder = false
-	if g.SyntaxHighlight {
-		t.Highlighter = highlight.NewForLines(path, t.Buf.Lines)
-	} else {
-		t.Highlighter = nil
-	}
+	g.rebuildHighlighter(t)
 	g.syncTabs()
 	return true
 }
@@ -1582,8 +1764,8 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 		if !ok {
 			continue
 		}
-		if g.OnFileClose != nil && t.Highlighter != nil {
-			g.OnFileClose(t.FilePath, t.Highlighter.Language())
+		if g.OnFileClose != nil && t.DetectedLanguage != "" {
+			g.OnFileClose(t.FilePath, t.DetectedLanguage)
 		}
 		t.FilePath = updated
 		if t.Diff != nil {
@@ -1592,13 +1774,9 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 		if t.IconPath != "" {
 			t.IconPath = updated
 		}
-		if g.SyntaxHighlight {
-			t.Highlighter = highlight.NewForLines(updated, t.Buf.Lines)
-		} else {
-			t.Highlighter = nil
-		}
-		if g.OnFileOpen != nil && t.Highlighter != nil {
-			g.OnFileOpen(updated, t.Highlighter.Language(), t.Buf.Lines)
+		g.rebuildHighlighter(t)
+		if g.OnFileOpen != nil && t.DetectedLanguage != "" {
+			g.OnFileOpen(updated, t.DetectedLanguage, t.Buf.Lines)
 		}
 		renamed = true
 	}
@@ -1616,19 +1794,13 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 	}
 	for i := range g.tabs {
 		t := &g.tabs[i]
-		if t.Content != nil || t.Buf == nil || t.FilePath == "" {
+		if t.Content != nil || t.Buf == nil || (t.FilePath == "" && t.LanguageSelection == "") {
 			continue
 		}
-		prevLang := ""
-		if t.Highlighter != nil {
-			prevLang = t.Highlighter.Language()
-		}
-		t.Highlighter = highlight.NewForLines(t.FilePath, t.Buf.Lines)
-		lang := ""
-		if t.Highlighter != nil {
-			lang = t.Highlighter.Language()
-		}
-		if lang == prevLang || t.Virtual {
+		prevLang := t.DetectedLanguage
+		g.rebuildHighlighter(t)
+		lang := t.DetectedLanguage
+		if lang == prevLang || t.Virtual || t.FilePath == "" {
 			continue
 		}
 		if g.OnFileClose != nil && prevLang != "" {
@@ -1642,10 +1814,33 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 }
 
 func (g *EditorGroupWidget) wrapsTab(t *editorTab) bool {
-	if !g.WordWrap {
-		return false
+	enabled, _ := g.tabWordWrap(t)
+	return enabled
+}
+
+func (g *EditorGroupWidget) tabWordWrap(t *editorTab) (bool, int) {
+	language := ""
+	if t != nil && t.Buf != nil {
+		language = highlight.DetectLanguageID(t.FilePath, t.Buf.Lines)
 	}
-	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes
+	s := config.EditorSettings{WordWrap: g.WordWrap, WordWrapColumn: g.WordWrapColumn, LanguageOverrides: g.LanguageOverrides}
+	enabled, column := s.ResolveWordWrap(language)
+	if !enabled {
+		return false, column
+	}
+	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes, column
+}
+
+func (g *EditorGroupWidget) ApplyFileWordWrap() {
+	t := g.activeTab()
+	if g.Editor == nil || t == nil || t.Content != nil || t.Diff != nil {
+		return
+	}
+	enabled, column := g.tabWordWrap(t)
+	if g.Editor.WordWrap != enabled || g.Editor.WordWrapColumn != column {
+		g.Editor.wrapGoal = wrapGoal{}
+	}
+	g.Editor.WordWrap, g.Editor.WordWrapColumn = enabled, column
 }
 
 // ActiveFileWordWrap reports whether the active file tab should wrap.
@@ -1687,7 +1882,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 	}
 	newBuf := &buffer.Buffer{Lines: []string{""}}
 	if err := newBuf.LoadFile(path); err != nil {
-		g.reportError(fmt.Sprintf("Failed to open %s: %v", path, err))
+		g.reportError(i18n.Format("editorGroup.failedToOpen", i18n.Args{"path": path, "error": err}))
 		return
 	}
 	tabSize := g.TabSize
@@ -1715,9 +1910,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 		UseTabs:  detected.UseTabs,
 		ReadOnly: true,
 	}
-	if g.SyntaxHighlight {
-		newTab.Highlighter = highlight.NewForLines(path, newBuf.Lines)
-	}
+	g.rebuildHighlighter(&newTab)
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -1755,9 +1948,7 @@ func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []s
 		UseTabs:  detected.UseTabs,
 		ReadOnly: true,
 	}
-	if g.SyntaxHighlight && filePath != "" {
-		newTab.Highlighter = highlight.NewForLines(filePath, newBuf.Lines)
-	}
+	g.rebuildHighlighter(&newTab)
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -1873,7 +2064,7 @@ func (g *EditorGroupWidget) Undo() {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
-		if t.Undo.AtSavePoint() {
+		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
 		g.undoRedoPostProcess()
@@ -1893,7 +2084,7 @@ func (g *EditorGroupWidget) Redo() {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
-		if t.Undo.AtSavePoint() {
+		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
 		g.undoRedoPostProcess()
@@ -1901,6 +2092,10 @@ func (g *EditorGroupWidget) Redo() {
 }
 
 func (g *EditorGroupWidget) SelectAll() {
+	if sel := g.ActiveTextSelection(); sel != nil {
+		sel.SelectAllText()
+		return
+	}
 	e := g.keyEditor()
 	if e == nil || e.Selection == nil {
 		return
@@ -1913,9 +2108,9 @@ func (g *EditorGroupWidget) SelectAll() {
 	e.Cursor.Col = len([]rune(e.Buf.Lines[lastLine]))
 }
 
-func (g *EditorGroupWidget) SetSearch(query string, matches []FindMatch) {
+func (g *EditorGroupWidget) SetSearch(query string, opts SearchOptions, matches []FindMatch) {
 	g.find = findSession{}
-	g.applySearch(query, matches)
+	g.applySearch(query, opts, matches)
 }
 
 func (g *EditorGroupWidget) SetFindSearch(query string, matches []FindMatch, opts SearchOptions) {
@@ -1925,14 +2120,15 @@ func (g *EditorGroupWidget) SetFindSearch(query string, matches []FindMatch, opt
 	}
 	g.find.matchesBuffer = g.Editor.Buf
 	g.find.matchesVersion = g.Editor.Buf.Version()
-	g.applySearch(query, matches)
+	g.applySearch(query, opts, matches)
 }
 
-func (g *EditorGroupWidget) applySearch(query string, matches []FindMatch) {
+func (g *EditorGroupWidget) applySearch(query string, opts SearchOptions, matches []FindMatch) {
 	if !g.IsEditorActive() {
 		return
 	}
 	g.Editor.SearchQuery = query
+	g.Editor.SearchOptions = opts
 	g.Editor.SearchMatches = matches
 	g.Editor.SearchActive = 0
 	g.Editor.buildSearchIndex()
@@ -2042,6 +2238,7 @@ func (g *EditorGroupWidget) ClearFindHighlights() {
 // when that tab comes back.
 func (g *EditorGroupWidget) clearSearchState() {
 	g.Editor.SearchQuery = ""
+	g.Editor.SearchOptions = SearchOptions{}
 	g.Editor.SearchMatches = nil
 	g.Editor.SearchActive = 0
 	g.Editor.searchByLine = nil
@@ -2064,7 +2261,7 @@ func (g *EditorGroupWidget) refreshFindSearch() bool {
 	}
 	g.find.matchesBuffer = g.Editor.Buf
 	g.find.matchesVersion = g.Editor.Buf.Version()
-	g.applySearch(g.find.query, matches)
+	g.applySearch(g.find.query, g.find.options, matches)
 	if len(matches) == 0 {
 		g.find.activeMatch = -1
 	} else {
@@ -2353,6 +2550,14 @@ func (g *EditorGroupWidget) MoveToFileEdge(end, shift bool) {
 	}
 }
 
+func (g *EditorGroupWidget) MoveToLineEdge(end, shift bool) {
+	if e := g.keyEditor(); e != nil {
+		e.MoveToLineEdge(end, shift)
+	} else if d := g.ActiveDiffWidget(); d != nil {
+		d.KeyPane().MoveToLineEdge(end, shift)
+	}
+}
+
 func (g *EditorGroupWidget) MoveWordLeft(shift bool) {
 	if e := g.keyEditor(); e != nil {
 		e.MoveWordLeft(shift)
@@ -2374,6 +2579,21 @@ func (g *EditorGroupWidget) DeleteWordLeft() {
 func (g *EditorGroupWidget) DeleteWordRight() {
 	if e := g.editableKeyEditor(); e != nil {
 		e.DeleteWordRight()
+	}
+}
+
+func (g *EditorGroupWidget) AddCursorAbove() {
+	g.addCursorVertical(-1)
+}
+
+func (g *EditorGroupWidget) AddCursorBelow() {
+	g.addCursorVertical(1)
+}
+
+func (g *EditorGroupWidget) addCursorVertical(delta int) {
+	if e := g.keyEditor(); e != nil {
+		e.addCursorVertical(delta)
+		g.saveMultiState()
 	}
 }
 
@@ -2494,21 +2714,69 @@ func (g *EditorGroupWidget) Copy() {
 		}
 	}
 	e := g.keyEditor()
+
+	// Copy from every cursor when multicursor mode is active.
+	if e.isMultiActive() {
+		pieces := e.multiCopyPieces()
+		if len(pieces) > 0 {
+			clipboard.Set(strings.Join(pieces, "\n"))
+		}
+		return
+	}
+
 	if e.Selection == nil || !e.Selection.Active {
-		// No selection: copy the whole current line, including a trailing
-		// newline so a paste inserts it as a full line.
+		// No selection: copy the whole current line.
 		if e.Cursor.Line >= 0 && e.Cursor.Line < len(e.Buf.Lines) {
 			clipboard.Set(e.Buf.Lines[e.Cursor.Line] + "\n")
 		}
 		return
 	}
+
 	text := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
 	clipboard.Set(text)
 }
 
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (g *EditorGroupWidget) SelectedText() string {
+	if g == nil {
+		return ""
+	}
+	t := g.activeTab()
+	if t == nil {
+		return ""
+	}
+	if dv, ok := t.Content.(*DiffEditorWidget); ok {
+		return dv.SelectedText()
+	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		return detail.SelectedText()
+	}
+	if t.Content != nil {
+		return ""
+	}
+	if t.Diff != nil {
+		return t.Diff.SelectedText()
+	}
+	e := g.keyEditor()
+	if e == nil || e.Selection == nil || !e.Selection.Active || e.Buf == nil {
+		return ""
+	}
+	return e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
+}
+
 func (g *EditorGroupWidget) Cut() {
 	t := g.activeTab()
-	if t == nil || g.editableKeyEditor() == nil {
+	e := g.editableKeyEditor()
+	if t == nil || e == nil {
+		return
+	}
+	// Cut from every cursor when multicursor mode is active.
+	if e.isMultiActive() {
+		pieces := e.multiCopyPieces()
+		if len(pieces) > 0 {
+			clipboard.Set(strings.Join(pieces, "\n"))
+		}
+		e.multiCut()
 		return
 	}
 	if t.Sel == nil || !t.Sel.Active {
@@ -2519,6 +2787,7 @@ func (g *EditorGroupWidget) Cut() {
 		}
 		return
 	}
+
 	text := t.Sel.Text(t.Buf.Lines, t.Cur.Line, t.Cur.Col)
 	clipboard.Set(text)
 	g.Editor.deleteSelection()
@@ -2566,7 +2835,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		if g.Editor.Buf != t.Buf {
 			g.Editor.maxWidthSeen = 0
 			if g.Editor.BracketPairColorization && len(t.Buf.Lines) > maxBracketColorLines {
-				g.notify("Bracket pair colorization disabled for large file")
+				g.notify(i18n.Text("editorGroup.bracketPairColorizationDisabledForLargeFile"))
 			}
 			if g.bookmarkSyncPath != "" {
 				if g.bookmarksByPath == nil {
@@ -2577,6 +2846,12 @@ func (g *EditorGroupWidget) syncTabs() {
 			g.Editor.Bookmarks = g.bookmarksByPath[t.FilePath]
 			g.bookmarkSyncPath = t.FilePath
 		}
+		if t.autoClosing == nil {
+			t.autoClosing = &autoClosingState{}
+		}
+		g.Editor.autoClosing = t.autoClosing
+		g.Editor.autoClosingPath = t.FilePath
+		g.Editor.plainText = t.LanguageSelection == highlight.PlainText
 		g.Editor.Buf = t.Buf
 		g.Editor.Cursor = t.Cur
 		g.Editor.Viewport = t.Vp
@@ -2594,8 +2869,11 @@ func (g *EditorGroupWidget) syncTabs() {
 		} else {
 			t.Highlighter.SetSyncLines(highlight.DefaultSyncLines)
 			g.Editor.SetDiffOverlay(t.Annotations)
+			if g.editorInDiff {
+				g.Editor.wrapCols = 0
+			}
 			g.editorInDiff = false
-			g.Editor.WordWrap = g.wrapsTab(t)
+			g.ApplyFileWordWrap()
 		}
 		g.Editor.buildDiagIndex()
 		g.Editor.InvalidateBracketColors()
@@ -2633,6 +2911,12 @@ func (g *EditorGroupWidget) syncTabs() {
 	}
 	g.TabBar.SetTabs(uiTabs)
 	if g.lastActiveTabID != t.ID || g.lastActiveBuf != t.Buf {
+		g.Editor.clearLinkHover()
+		if d := t.diffWidget(); d != nil {
+			for _, p := range d.viewPanes() {
+				p.clearLinkHover()
+			}
+		}
 		g.lastActiveTabID = t.ID
 		g.lastActiveBuf = t.Buf
 		if g.OnActiveTabChange != nil {
@@ -2732,6 +3016,14 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if d, ok := t.Content.(diffSignsSurface); ok {
 		d.setGutterStyle(g.GutterStyle)
 	}
+	if d := t.diffWidget(); d != nil {
+		for _, p := range d.viewPanes() {
+			g.configurePaneLinks(p, d.FilePath)
+		}
+	}
+	if detail, ok := t.Content.(*CommitDetailWidget); ok {
+		detail.configurePaneLinks = g.configurePaneLinks
+	}
 	if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)
@@ -2740,6 +3032,11 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 		t.Diff.SetRect(contentRect)
 		t.Diff.Render(contentSurface)
 	} else {
+		path := t.FilePath
+		if t.Virtual {
+			path = ""
+		}
+		g.configurePaneLinks(g.Editor, path)
 		g.Editor.SetRect(contentRect)
 		g.Editor.Render(contentSurface)
 	}
@@ -2774,11 +3071,18 @@ func (g *EditorGroupWidget) OwnsPointerCapture() bool {
 	if g.TabBar.OwnsPointerCapture() {
 		return true
 	}
-	if t := g.activeTab(); t != nil && t.Content != nil {
+	return g.contentOwnsPointerCapture()
+}
+
+func (g *EditorGroupWidget) contentOwnsPointerCapture() bool {
+	t := g.activeTab()
+	switch {
+	case t == nil:
+		return false
+	case t.Content != nil:
 		owner, ok := t.Content.(widgets.PointerCaptureOwner)
 		return ok && owner.OwnsPointerCapture()
-	}
-	if t := g.activeTab(); t != nil && t.Diff != nil {
+	case t.Diff != nil:
 		return t.Diff.OwnsPointerCapture()
 	}
 	return g.Editor != nil && g.Editor.OwnsPointerCapture()
@@ -2814,7 +3118,7 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 	}
-	if _, isMouse := ev.(*tcell.EventMouse); !isMouse || !g.Editor.mouseDown {
+	if _, isMouse := ev.(*tcell.EventMouse); !isMouse || !g.contentOwnsPointerCapture() {
 		result := g.TabBar.HandleEvent(ev)
 		slog.Debug("editorGroup", "tabBarResult", result)
 		if result != EventIgnored {

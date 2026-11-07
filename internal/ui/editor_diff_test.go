@@ -6,10 +6,23 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
 )
+
+func TestCollapsedDistanceLabelUsesConfiguredIcon(t *testing.T) {
+	t.Cleanup(func() { icons.Configure("", nil) })
+	if warnings := icons.Configure("", map[string]string{"ellipsis": "."}); len(warnings) != 0 {
+		t.Fatal(warnings)
+	}
+	for count, want := range map[int]string{1: " . 1 line .", 2: " . 2 lines ."} {
+		if got := collapsedDistanceLabel(count); got != want {
+			t.Fatalf("collapsedDistanceLabel(%d) = %q, want %q", count, got, want)
+		}
+	}
+}
 
 func deletedTexts(o *DiffOverlay) map[int][]string {
 	out := map[int][]string{}
@@ -194,7 +207,7 @@ func TestEditorRendersFillerAndGapRows(t *testing.T) {
 	if grid[4][g+1].Style != term.StyleMuted {
 		t.Errorf("gap label style = %v, want muted", grid[4][g+1].Style)
 	}
-	if got := gutterText(grid, 4, g); got != "▸" {
+	if got := gutterText(grid, 4, g); got != string(icons.PlainChevronRight) {
 		t.Errorf("gap row gutter = %q, want the expand chevron", got)
 	}
 }

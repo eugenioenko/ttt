@@ -1,12 +1,12 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
@@ -41,12 +41,7 @@ func (a *App) CloseFold() {
 }
 
 func (a *App) editorPathLang() (string, string) {
-	path := a.EditorGroup.ActiveFilePath()
-	lang := ""
-	if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Highlighter != nil {
-		lang = a.EditorGroup.Editor.Highlighter.Language()
-	}
-	return path, lang
+	return a.EditorGroup.ActiveFilePath(), a.EditorGroup.ActiveLanguage()
 }
 
 func (a *App) withEditorLSP(action func(path, lang string, line, col int)) {
@@ -65,9 +60,9 @@ func (a *App) TriggerAutocomplete() {
 	}
 	path, lang := a.editorPathLang()
 	if lang == "" {
-		a.StatusWarn("No language detected for this file")
+		a.StatusWarn(i18n.Text("status.noLanguageDetectedForThisFile"))
 	} else if _, _, ok := a.lspResolve(path, lang); !ok {
-		a.StatusWarn(lang + " language server is not configured. Add it to settings.json under lsp.servers")
+		a.StatusWarn(i18n.Format("status.configureLanguageServer", i18n.Args{"lang": lang}))
 	} else {
 		line, col := a.EditorGroup.ActiveCursor()
 		a.RequestCompletions(path, lang, line, col, "")
@@ -81,7 +76,7 @@ func (a *App) RenameSymbol() {
 	path, lang := a.editorPathLang()
 	line, col := a.EditorGroup.ActiveCursor()
 	word := a.wordAtCursor()
-	a.ShowInputDialog("Rename", "New name", word, func(newName string) {
+	a.ShowInputDialog(i18n.Text("general.rename"), i18n.Text("general.newName"), word, func(newName string) {
 		if newName != "" && newName != word {
 			a.RequestRename(path, lang, line, col, newName)
 		}
@@ -108,8 +103,8 @@ func (a *App) CloseTab() {
 		return
 	}
 	name := a.EditorGroup.ActiveFileName()
-	a.ShowConfirmDialog("Save changes to "+name+"?",
-		[]string{"Discard", "Cancel", "Save"},
+	a.ShowConfirmDialog(i18n.Format("dialog.saveChangesTo", i18n.Args{"name": name}),
+		[]string{i18n.Text("general.discard"), i18n.Text("general.cancel"), i18n.Text("general.save")},
 		[]func(){
 			func() {
 				a.DismissDialog()
@@ -134,8 +129,8 @@ func (a *App) CloseOtherTabs() {
 		a.EditorGroup.CloseOtherTabs()
 		return
 	}
-	a.ShowConfirmDialog("Other tabs have unsaved changes.",
-		[]string{"Abort", "Close Saved", "Discard All"},
+	a.ShowConfirmDialog(i18n.Text("dialog.otherTabsHaveUnsavedChanges"),
+		[]string{i18n.Text("general.abort"), i18n.Text("dialog.closeSaved"), i18n.Text("dialog.discardAll")},
 		[]func(){
 			func() { a.DismissDialog() },
 			func() {
@@ -155,8 +150,8 @@ func (a *App) CloseAllTabs() {
 		a.EditorGroup.CloseAllTabs()
 		return
 	}
-	a.ShowConfirmDialog("You have unsaved changes.",
-		[]string{"Abort", "Close Saved", "Discard All"},
+	a.ShowConfirmDialog(i18n.Text("dialog.youHaveUnsavedChanges"),
+		[]string{i18n.Text("general.abort"), i18n.Text("dialog.closeSaved"), i18n.Text("dialog.discardAll")},
 		[]func(){
 			func() { a.DismissDialog() },
 			func() {
@@ -169,6 +164,14 @@ func (a *App) CloseAllTabs() {
 			},
 		},
 	)
+}
+
+func (a *App) OpenFile() {
+	a.ShowFilePicker(i18n.Text("general.openFile"), i18n.Text("general.open"), "", func(path string) {
+		// Not validating the path here: ShowFilePicker already checks that it exists and is a regular file. OpenFile treats a missing path as a new file.
+		a.EditorGroup.OpenFile(path)
+		a.Root.SetFocus(a.EditorGroup)
+	})
 }
 
 func (a *App) NewFile() {
@@ -191,19 +194,19 @@ func (a *App) showSaveFileAs(onSaved func()) {
 	if !a.EditorGroup.IsActiveVirtual() {
 		initial = current
 	}
-	title := "Save As"
+	title := i18n.Text("dialog.saveAs")
 	if onSaved != nil {
 		title += ": " + a.EditorGroup.ActiveFileName()
 	}
-	a.ShowInputDialog(title, "Filename", initial, func(path string) {
+	a.ShowInputDialog(title, i18n.Text("general.filename"), initial, func(path string) {
 		if path == "" {
 			return
 		}
 		path = a.saveAsPath(path)
 		if saveAsReplaces(initial, path) {
 			a.ShowConfirmDialog(
-				fmt.Sprintf("%s already exists. Replace it?", filepath.Base(path)),
-				[]string{"Cancel", "Replace"},
+				i18n.Format("dialog.alreadyExistsReplaceIt", i18n.Args{"filename": filepath.Base(path)}),
+				[]string{i18n.Text("general.cancel"), i18n.Text("general.replace")},
 				[]func(){
 					func() { a.DismissDialog() },
 					func() { a.DismissDialog(); a.saveFileAs(path, onSaved) },
@@ -273,8 +276,8 @@ func (a *App) saveFile(onSaved func()) {
 	buf := a.EditorGroup.ActiveBuffer()
 	if buf != nil && !a.EditorGroup.IsActiveVirtual() && buf.ReadOnlyOnDisk {
 		a.ShowConfirmDialog(
-			fmt.Sprintf("%s is read-only. Overwrite anyway?", filepath.Base(path)),
-			[]string{"Cancel", "Overwrite"},
+			i18n.Format("dialog.isReadOnlyOverwriteAnyway", i18n.Args{"filename": filepath.Base(path)}),
+			[]string{i18n.Text("general.cancel"), i18n.Text("general.overwrite")},
 			[]func(){
 				func() { a.DismissDialog() },
 				func() { a.DismissDialog(); a.saveFileCheckingDisk(onSaved) },
@@ -290,8 +293,8 @@ func (a *App) saveFileCheckingDisk(onSaved func()) {
 	buf := a.EditorGroup.ActiveBuffer()
 	if buf != nil && !a.EditorGroup.IsActiveVirtual() && buf.DiskChanged(path) {
 		a.ShowConfirmDialog(
-			fmt.Sprintf("%s was modified on disk. Overwrite with your version?", filepath.Base(path)),
-			[]string{"Overwrite", "Cancel"},
+			i18n.Format("dialog.wasModifiedOnDiskOverwriteWithYourVersion", i18n.Args{"filename": filepath.Base(path)}),
+			[]string{i18n.Text("general.overwrite"), i18n.Text("general.cancel")},
 			[]func(){
 				func() { a.DismissDialog(); a.doSaveFile(onSaved) },
 				func() { a.DismissDialog() },
@@ -363,7 +366,7 @@ func (a *App) Quit() {
 	}
 	a.quitPending = true
 	cancel := func() { a.quitPending = false; a.DismissDialog() }
-	buttons := []string{"Cancel", "Quit"}
+	buttons := []string{i18n.Text("general.cancel"), i18n.Text("general.quit")}
 	callbacks := []func(){cancel, a.forceQuit}
 	showSaveAll := a.Settings.Editor.SaveAllOnQuit
 	if a.Settings.Editor.SaveAllOnQuitExceptUnnamed {
@@ -375,13 +378,13 @@ func (a *App) Quit() {
 		}
 	}
 	if showSaveAll {
-		buttons = append(buttons, "Save All & Quit")
+		buttons = append(buttons, i18n.Text("dialog.saveAllQuit"))
 		callbacks = append(callbacks, func() {
 			cancel()
 			a.saveAllAndQuit()
 		})
 	}
-	dialog := a.ShowConfirmDialogEx("Unsaved changes", "Press Ctrl+Q to force quit.", buttons, callbacks)
+	dialog := a.ShowConfirmDialogEx(i18n.Text("dialog.unsavedChanges"), i18n.Text("dialog.pressCtrlQToForceQuit"), buttons, callbacks)
 	dialog.OnDismiss = cancel
 }
 
@@ -427,12 +430,15 @@ func hunkStarts(changes []diff.LineChangeKind) []int {
 // current cursor line. No-op when git-gutter data is unavailable or there is no
 // following hunk.
 func (a *App) DiffNextHunk() {
+	if a.diffHunkStep(1) {
+		return
+	}
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
 	changes := a.EditorGroup.Editor.LineChanges
 	if len(changes) == 0 {
-		a.StatusNotify("No changes in this file")
+		a.StatusNotify(i18n.Text("status.noChangesInThisFile"))
 		return
 	}
 	line, _ := a.EditorGroup.ActiveCursor() // 0-based
@@ -444,7 +450,7 @@ func (a *App) DiffNextHunk() {
 		}
 	}
 	if target < 0 {
-		a.StatusNotify("No more changes below")
+		a.StatusNotify(i18n.Text("status.noMoreChangesBelow"))
 		return
 	}
 	a.EditorGroup.GoToLine(target + 1) // GoToLine is 1-based
@@ -454,12 +460,15 @@ func (a *App) DiffNextHunk() {
 // the current cursor line. No-op when git-gutter data is unavailable or there is
 // no preceding hunk.
 func (a *App) DiffPrevHunk() {
+	if a.diffHunkStep(-1) {
+		return
+	}
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
 	changes := a.EditorGroup.Editor.LineChanges
 	if len(changes) == 0 {
-		a.StatusNotify("No changes in this file")
+		a.StatusNotify(i18n.Text("status.noChangesInThisFile"))
 		return
 	}
 	line, _ := a.EditorGroup.ActiveCursor() // 0-based
@@ -472,7 +481,7 @@ func (a *App) DiffPrevHunk() {
 		}
 	}
 	if target < 0 {
-		a.StatusNotify("No more changes above")
+		a.StatusNotify(i18n.Text("status.noMoreChangesAbove"))
 		return
 	}
 	a.EditorGroup.GoToLine(target + 1) // GoToLine is 1-based
@@ -518,109 +527,109 @@ func registerEditorCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "editor.toggleDiff", Title: "Git: Toggle Inline Diff",
+		ID: "editor.toggleDiff", Title: i18n.Text("command.gitToggleInlineDiff"),
 		Keywords: []string{"git", "diff", "inline", "changes", "head", "edit"},
 		Handler:  app.ToggleInlineDiff,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.nextHunk", Title: "Git: Next Changed Hunk",
+		ID: "diff.nextHunk", Title: i18n.Text("command.gitNextChangedHunk"),
 		Keywords: []string{"git", "diff", "hunk", "change", "navigate"},
 		Handler:  app.DiffNextHunk,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.prevHunk", Title: "Git: Previous Changed Hunk",
+		ID: "diff.prevHunk", Title: i18n.Text("command.gitPreviousChangedHunk"),
 		Keywords: []string{"git", "diff", "hunk", "change", "navigate"},
 		Handler:  app.DiffPrevHunk,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.toggleWrap", Title: "Git: Toggle Diff Wrap",
+		ID: "diff.toggleWrap", Title: i18n.Text("command.gitToggleDiffWrap"),
 		Keywords: []string{"git", "diff", "wrap", "line"},
 		Handler:  app.DiffToggleWrap,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.toggleUnified", Title: "Git: Toggle Unified Diff",
+		ID: "diff.toggleUnified", Title: i18n.Text("command.gitToggleUnifiedDiff"),
 		Keywords: []string{"git", "diff", "unified", "split", "stack"},
 		Handler:  app.DiffToggleUnified,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.splitView", Title: "Git: Split Diff",
+		ID: "diff.splitView", Title: i18n.Text("command.gitSplitDiff"),
 		Keywords: []string{"git", "diff", "split", "side by side", "mode"},
 		Handler:  app.DiffUseSplitMode,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.unifiedView", Title: "Git: Unified Diff",
+		ID: "diff.unifiedView", Title: i18n.Text("command.gitUnifiedDiff"),
 		Keywords: []string{"git", "diff", "unified", "stack", "mode"},
 		Handler:  app.DiffUseUnifiedMode,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.changesOnlyView", Title: "Git: Show Changes Only",
+		ID: "diff.changesOnlyView", Title: i18n.Text("command.gitShowChangesOnly"),
 		Keywords: []string{"git", "diff", "compact", "collapsed", "context", "hunks"},
 		Handler:  app.DiffUseChangesOnlyContext,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.fullFileView", Title: "Git: Show Full File",
+		ID: "diff.fullFileView", Title: i18n.Text("command.gitShowFullFile"),
 		Keywords: []string{"git", "diff", "extended", "context", "complete", "file"},
 		Handler:  app.DiffUseFullFileContext,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.focus", Title: "View: Focus Editor",
+		ID: "editor.focus", Title: i18n.Text("command.viewFocusEditor"),
 		Keywords: []string{"editor"},
 		Handler:  app.FocusEditor,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.autocomplete", Title: "Trigger Autocomplete",
+		ID: "editor.autocomplete", Title: i18n.Text("command.triggerAutocomplete"),
 		Keywords: []string{"editor", "completion", "suggest", "intellisense"},
 		Handler:  app.TriggerAutocomplete,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.hover", Title: "Show Hover",
+		ID: "editor.hover", Title: i18n.Text("command.showHover"),
 		Keywords: []string{"editor", "tooltip", "info"},
 		Handler:  app.ShowCursorHover,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.goToDefinition", Title: "Go to Definition",
+		ID: "editor.goToDefinition", Title: i18n.Text("command.goToDefinition"),
 		Keywords: []string{"editor", "navigate", "jump"},
 		Handler:  func() { app.withEditorLSP(app.RequestDefinition) },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.goToImplementation", Title: "Go to Implementation",
+		ID: "editor.goToImplementation", Title: i18n.Text("command.goToImplementation"),
 		Keywords: []string{"editor", "navigate", "jump"},
 		Handler:  func() { app.withEditorLSP(app.RequestImplementation) },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.goToTypeDefinition", Title: "Go to Type Definition",
+		ID: "editor.goToTypeDefinition", Title: i18n.Text("command.goToTypeDefinition"),
 		Keywords: []string{"editor", "navigate", "jump"},
 		Handler:  func() { app.withEditorLSP(app.RequestTypeDefinition) },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.findReferences", Title: "Find All References",
+		ID: "editor.findReferences", Title: i18n.Text("command.findAllReferences"),
 		Keywords: []string{"editor", "navigate", "search", "usages"},
 		Handler:  func() { app.withEditorLSP(app.RequestReferences) },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.rename", Title: "Rename Symbol",
+		ID: "editor.rename", Title: i18n.Text("command.renameSymbol"),
 		Keywords: []string{"editor", "refactor"},
 		Handler:  app.RenameSymbol,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.organizeImports", Title: "Source Action: Organize Imports",
+		ID: "editor.organizeImports", Title: i18n.Text("command.sourceActionOrganizeImports"),
 		Keywords: []string{"editor", "source", "cleanup"},
 		Handler: func() {
 			path, lang := app.editorPathLang()
@@ -629,7 +638,7 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.fixAll", Title: "Source Action: Fix All",
+		ID: "editor.fixAll", Title: i18n.Text("command.sourceActionFixAll"),
 		Keywords: []string{"editor", "source", "lint", "autofix"},
 		Handler: func() {
 			path, lang := app.editorPathLang()
@@ -638,7 +647,7 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.formatDocument", Title: "Source Action: Format Document",
+		ID: "editor.formatDocument", Title: i18n.Text("command.sourceActionFormatDocument"),
 		Keywords: []string{"editor", "source", "prettier", "beautify"},
 		Handler: func() {
 			path, lang := app.editorPathLang()
@@ -647,89 +656,89 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.formatSelection", Title: "Source Action: Format Selection",
+		ID: "editor.formatSelection", Title: i18n.Text("command.sourceActionFormatSelection"),
 		Keywords: []string{"editor", "source", "prettier", "beautify"},
 		Handler:  app.FormatSelection,
 	})
 
 	reg.Register(command.Command{
-		ID: "lsp.restartServer", Title: "LSP: Server Restart",
+		ID: "lsp.restartServer", Title: i18n.Text("command.lSPServerRestart"),
 		Keywords: []string{"lsp", "language server", "restart", "reload"},
 		Handler:  app.RestartLSPServer,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.formatExternal", Title: "Format Document (External Formatter)",
+		ID: "editor.formatExternal", Title: i18n.Text("command.formatDocumentExternalFormatter"),
 		Keywords: []string{"editor", "format", "formatter", "external"},
 		Handler:  app.RunExternalFormatter,
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.next", Title: "View: Next Tab",
+		ID: "tab.next", Title: i18n.Text("command.viewNextTab"),
 		Keywords: []string{"tab", "switch"},
 		Handler:  func() { app.contextNextTab() },
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.prev", Title: "View: Previous Tab",
+		ID: "tab.prev", Title: i18n.Text("command.viewPreviousTab"),
 		Keywords: []string{"tab", "switch"},
 		Handler:  func() { app.contextPrevTab() },
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.close", Title: "View: Close Tab",
+		ID: "tab.close", Title: i18n.Text("command.viewCloseTab"),
 		Keywords: []string{"tab"},
 		Handler:  app.CloseTab,
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.closeOthers", Title: "View: Close Other Tabs",
+		ID: "tab.closeOthers", Title: i18n.Text("command.viewCloseOtherTabs"),
 		Keywords: []string{"tab"},
 		Handler:  app.CloseOtherTabs,
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.closeAll", Title: "View: Close All Tabs",
+		ID: "tab.closeAll", Title: i18n.Text("command.viewCloseAllTabs"),
 		Keywords: []string{"tab"},
 		Handler:  app.CloseAllTabs,
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.closeAllSaved", Title: "View: Close All Saved Tabs",
+		ID: "tab.closeAllSaved", Title: i18n.Text("command.viewCloseAllSavedTabs"),
 		Keywords: []string{"tab", "close", "saved"},
 		Handler:  func() { app.EditorGroup.CloseAllSaved() },
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.pin", Title: "View: Toggle Pin Tab",
+		ID: "tab.pin", Title: i18n.Text("command.viewTogglePinTab"),
 		Keywords: []string{"tab", "pin", "unpin"},
 		Handler:  func() { app.EditorGroup.TogglePinTab() },
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.moveLeft", Title: "View: Move Tab Left",
+		ID: "tab.moveLeft", Title: i18n.Text("command.viewMoveTabLeft"),
 		Keywords: []string{"tab", "reorder", "move", "left"},
 		Handler:  func() { app.EditorGroup.MoveActiveTab(-1) },
 	})
 
 	reg.Register(command.Command{
-		ID: "tab.moveRight", Title: "View: Move Tab Right",
+		ID: "tab.moveRight", Title: i18n.Text("command.viewMoveTabRight"),
 		Keywords: []string{"tab", "reorder", "move", "right"},
 		Handler:  func() { app.EditorGroup.MoveActiveTab(1) },
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.extendedView", Title: "Git: Extended Diff", Hidden: true,
+		ID: "diff.extendedView", Title: i18n.Text("command.gitExtendedDiff"), Hidden: true,
 		Handler: app.DiffUseFullFileContext,
 	})
 
 	reg.Register(command.Command{
-		ID: "diff.compactView", Title: "Git: Compact Diff", Hidden: true,
+		ID: "diff.compactView", Title: i18n.Text("command.gitCompactDiff"), Hidden: true,
 		Handler: app.DiffUseChangesOnlyContext,
 	})
 
 	reg.Register(command.Command{
-		ID: "fold.toggle", Title: "Toggle Fold",
+		ID: "fold.toggle", Title: i18n.Text("command.toggleFold"),
 		Keywords: []string{"editor", "collapse", "expand", "hide", "lines"},
 		Handler: func() {
 			if !app.EditorGroup.IsEditorActive() {
@@ -744,19 +753,19 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "fold.open", Title: "Open Fold",
+		ID: "fold.open", Title: i18n.Text("command.openFold"),
 		Keywords: []string{"editor", "expand", "show", "lines"},
 		Handler:  app.OpenFold,
 	})
 
 	reg.Register(command.Command{
-		ID: "fold.close", Title: "Close Fold",
+		ID: "fold.close", Title: i18n.Text("command.closeFold"),
 		Keywords: []string{"editor", "collapse", "hide", "lines"},
 		Handler:  app.CloseFold,
 	})
 
 	reg.Register(command.Command{
-		ID: "fold.collapseAll", Title: "Fold All",
+		ID: "fold.collapseAll", Title: i18n.Text("command.foldAll"),
 		Keywords: []string{"editor", "collapse", "expand", "hide", "lines"},
 		Handler: func() {
 			if !app.EditorGroup.IsEditorActive() {
@@ -772,7 +781,7 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "fold.expandAll", Title: "Unfold All",
+		ID: "fold.expandAll", Title: i18n.Text("command.unfoldAll"),
 		Keywords: []string{"editor", "collapse", "expand", "hide", "lines"},
 		Handler: func() {
 			if !app.EditorGroup.IsEditorActive() {
@@ -786,228 +795,323 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "file.new", Title: "New File",
+		ID: "file.open", Title: i18n.Text("general.openFile"),
+		Keywords: []string{"file", "open"},
+		Handler:  app.OpenFile,
+	})
+
+	reg.Register(command.Command{
+		ID: "file.new", Title: i18n.Text("general.newFile"),
 		Keywords: []string{"file", "create"},
 		Handler:  app.NewFile,
 	})
 
 	reg.Register(command.Command{
-		ID: "file.save", Title: "Save File",
+		ID: "file.save", Title: i18n.Text("command.saveFile"),
 		Keywords: []string{"file", "write"},
 		Handler:  app.SaveFile,
 	})
 
 	reg.Register(command.Command{
-		ID: "file.saveAs", Title: "Save As...",
+		ID: "file.saveAs", Title: i18n.Text("command.saveAs"),
 		Keywords: []string{"file", "write", "export"},
 		Handler:  app.SaveFileAs,
 	})
 
 	reg.Register(command.Command{
-		ID: "file.reloadFromDisk", Title: "Reload File from Disk",
+		ID: "file.reloadFromDisk", Title: i18n.Text("command.reloadFileFromDisk"),
 		Keywords: []string{"file", "reload", "refresh"},
 		Handler:  app.ReloadActiveFile,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.undo", Title: "Undo",
+		ID: "editor.undo", Title: i18n.Text("general.undo"),
 		Keywords: []string{"editor", "revert"},
 		Handler:  func() { app.EditorGroup.Undo() },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.redo", Title: "Redo",
+		ID: "editor.redo", Title: i18n.Text("general.redo"),
 		Keywords: []string{"editor"},
 		Handler:  func() { app.EditorGroup.Redo() },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.selectAll", Title: "Select All",
+		ID: "editor.selectAll", Title: i18n.Text("command.selectAll"),
 		Keywords: []string{"editor", "selection"},
 		Handler:  func() { app.EditorGroup.SelectAll() },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.copy", Title: "Copy",
+		ID: "editor.copy", Title: i18n.Text("general.copy"),
 		Keywords: []string{"editor", "clipboard"},
 		Handler:  app.Copy,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.cut", Title: "Cut",
+		ID: "editor.cut", Title: i18n.Text("general.cut"),
 		Keywords: []string{"editor", "clipboard"},
 		Handler:  app.Cut,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.paste", Title: "Paste",
+		ID: "editor.paste", Title: i18n.Text("general.paste"),
 		Keywords: []string{"editor", "clipboard"},
 		Handler:  app.Paste,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.moveLineUp", Title: "Move Line Up",
+		ID: "editor.moveLineUp", Title: i18n.Text("command.moveLineUp"),
 		Keywords: []string{"editor", "lines"},
 		Handler:  func() { app.EditorGroup.MoveLineUp() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.moveLineDown", Title: "Move Line Down",
+		ID: "editor.moveLineDown", Title: i18n.Text("command.moveLineDown"),
 		Keywords: []string{"editor", "lines"},
 		Handler:  func() { app.EditorGroup.MoveLineDown() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.duplicateLine", Title: "Duplicate Line",
+		ID: "editor.duplicateLine", Title: i18n.Text("command.duplicateLine"),
 		Keywords: []string{"editor", "lines", "clone"},
 		Handler:  func() { app.EditorGroup.DuplicateLine() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.deleteLine", Title: "Delete Line",
+		ID: "editor.deleteLine", Title: i18n.Text("command.deleteLine"),
 		Keywords: []string{"editor", "lines", "remove"},
 		Handler:  func() { app.EditorGroup.DeleteLine() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.joinLines", Title: "Join Lines",
+		ID: "editor.joinLines", Title: i18n.Text("command.joinLines"),
 		Keywords: []string{"editor", "lines", "merge", "combine"},
 		Handler:  func() { app.EditorGroup.JoinLines() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.insertLineBelow", Title: "Insert Line Below",
+		ID: "editor.insertLineBelow", Title: i18n.Text("command.insertLineBelow"),
 		Keywords: []string{"editor", "lines"},
 		Handler:  func() { app.EditorGroup.InsertLineBelow() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.insertLineAbove", Title: "Insert Line Above",
+		ID: "editor.insertLineAbove", Title: i18n.Text("command.insertLineAbove"),
 		Keywords: []string{"editor", "lines"},
 		Handler:  func() { app.EditorGroup.InsertLineAbove() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.toggleComment", Title: "Toggle Line Comment",
+		ID: "editor.toggleComment", Title: i18n.Text("command.toggleLineComment"),
 		Keywords: []string{"editor", "comment", "uncomment"},
 		Handler:  func() { app.EditorGroup.ToggleLineComment() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.goToFileStart", Title: "Go to Start of File",
+		ID: "editor.goToFileStart", Title: i18n.Text("command.goToStartOfFile"),
 		Keywords: []string{"editor", "navigate", "top", "beginning", "document"},
 		Handler:  func() { app.EditorGroup.MoveToFileEdge(false, false) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.goToFileEnd", Title: "Go to End of File",
+		ID: "editor.goToFileEnd", Title: i18n.Text("command.goToEndOfFile"),
 		Keywords: []string{"editor", "navigate", "bottom", "document"},
 		Handler:  func() { app.EditorGroup.MoveToFileEdge(true, false) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.selectToFileStart", Title: "Select to Start of File",
+		ID: "editor.selectToFileStart", Title: i18n.Text("command.selectToStartOfFile"),
 		Keywords: []string{"editor", "selection", "top", "beginning", "document"},
 		Handler:  func() { app.EditorGroup.MoveToFileEdge(false, true) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.selectToFileEnd", Title: "Select to End of File",
+		ID: "editor.selectToFileEnd", Title: i18n.Text("command.selectToEndOfFile"),
 		Keywords: []string{"editor", "selection", "bottom", "document"},
 		Handler:  func() { app.EditorGroup.MoveToFileEdge(true, true) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.moveWordLeft", Title: "Move Word Left",
+		ID: "editor.goToLineStart", Title: i18n.Text("command.goToStartOfLine"),
+		Keywords: []string{"editor", "navigate", "home", "beginning", "indent"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(false, false) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.goToLineEnd", Title: i18n.Text("command.goToEndOfLine"),
+		Keywords: []string{"editor", "navigate", "end"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(true, false) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.selectToLineStart", Title: i18n.Text("command.selectToStartOfLine"),
+		Keywords: []string{"editor", "selection", "home", "beginning", "indent"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(false, true) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.selectToLineEnd", Title: i18n.Text("command.selectToEndOfLine"),
+		Keywords: []string{"editor", "selection", "end"},
+		Handler:  func() { app.EditorGroup.MoveToLineEdge(true, true) },
+	})
+	reg.Register(command.Command{
+		ID: "editor.moveWordLeft", Title: i18n.Text("command.moveWordLeft"),
 		Keywords: []string{"editor", "navigate"},
 		Handler:  func() { app.EditorGroup.MoveWordLeft(false) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.moveWordRight", Title: "Move Word Right",
+		ID: "editor.moveWordRight", Title: i18n.Text("command.moveWordRight"),
 		Keywords: []string{"editor", "navigate"},
 		Handler:  func() { app.EditorGroup.MoveWordRight(false) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.selectWordLeft", Title: "Select Word Left",
+		ID: "editor.selectWordLeft", Title: i18n.Text("command.selectWordLeft"),
 		Keywords: []string{"editor", "selection"},
 		Handler:  func() { app.EditorGroup.MoveWordLeft(true) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.selectWordRight", Title: "Select Word Right",
+		ID: "editor.selectWordRight", Title: i18n.Text("command.selectWordRight"),
 		Keywords: []string{"editor", "selection"},
 		Handler:  func() { app.EditorGroup.MoveWordRight(true) },
 	})
 	reg.Register(command.Command{
-		ID: "editor.deleteWordLeft", Title: "Delete Word Left",
+		ID: "editor.deleteWordLeft", Title: i18n.Text("command.deleteWordLeft"),
 		Keywords: []string{"editor"},
 		Handler:  func() { app.EditorGroup.DeleteWordLeft() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.deleteWordRight", Title: "Delete Word Right",
+		ID: "editor.deleteWordRight", Title: i18n.Text("command.deleteWordRight"),
 		Keywords: []string{"editor"},
 		Handler:  func() { app.EditorGroup.DeleteWordRight() },
 	})
 
 	reg.Register(command.Command{
-		ID: "multicursor.selectNext", Title: "Add Next Occurrence",
+		ID: "multicursor.selectNext", Title: i18n.Text("command.addNextOccurrence"),
 		Keywords: []string{"editor", "multicursor", "selection"},
 		Handler:  func() { app.EditorGroup.SelectNextOccurrence() },
 	})
 	reg.Register(command.Command{
-		ID: "multicursor.selectAll", Title: "Select All Occurrences",
+		ID: "multicursor.addCursorAbove", Title: i18n.Text("command.addCursorAbove"),
+		Keywords: []string{"editor", "multicursor"},
+		Handler:  app.AddCursorAbove,
+	})
+	reg.Register(command.Command{
+		ID: "multicursor.addCursorBelow", Title: i18n.Text("command.addCursorBelow"),
+		Keywords: []string{"editor", "multicursor"},
+		Handler:  app.AddCursorBelow,
+	})
+	reg.Register(command.Command{
+		ID: "multicursor.selectAll", Title: i18n.Text("command.selectAllOccurrences"),
 		Keywords: []string{"editor", "multicursor", "selection"},
 		Handler:  func() { app.EditorGroup.SelectAllOccurrences() },
 	})
 	reg.Register(command.Command{
-		ID: "multicursor.undoCursor", Title: "Undo Last Cursor",
+		ID: "multicursor.undoCursor", Title: i18n.Text("command.undoLastCursor"),
 		Keywords: []string{"editor", "multicursor"},
 		Handler:  func() { app.EditorGroup.UndoLastCursor() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.splitSelectionToLines", Title: "Split Selection into Lines",
+		ID: "editor.splitSelectionToLines", Title: i18n.Text("command.splitSelectionIntoLines"),
 		Keywords: []string{"editor", "multicursor", "selection"},
 		Handler:  func() { app.EditorGroup.SplitSelectionToLines() },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.sortLinesAsc", Title: "Sort Lines Ascending",
+		ID: "editor.sortLinesAsc", Title: i18n.Text("command.sortLinesAscending"),
 		Keywords: []string{"editor", "lines", "order"},
 		Handler:  func() { app.EditorGroup.SortLinesAsc() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.sortLinesDesc", Title: "Sort Lines Descending",
+		ID: "editor.sortLinesDesc", Title: i18n.Text("command.sortLinesDescending"),
 		Keywords: []string{"editor", "lines", "order"},
 		Handler:  func() { app.EditorGroup.SortLinesDesc() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.reverseLines", Title: "Reverse Lines",
+		ID: "editor.reverseLines", Title: i18n.Text("command.reverseLines"),
 		Keywords: []string{"editor", "lines", "flip"},
 		Handler:  func() { app.EditorGroup.ReverseLines() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.uniqueLines", Title: "Unique Lines",
+		ID: "editor.uniqueLines", Title: i18n.Text("command.uniqueLines"),
 		Keywords: []string{"editor", "lines", "deduplicate", "distinct"},
 		Handler:  func() { app.EditorGroup.UniqueLines() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.trimTrailingWhitespace", Title: "Trim Trailing Whitespace",
+		ID: "editor.trimTrailingWhitespace", Title: i18n.Text("command.trimTrailingWhitespace"),
 		Keywords: []string{"editor", "lines", "whitespace", "trim", "spaces"},
 		Handler:  func() { app.EditorGroup.TrimTrailingWhitespaceLines() },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.upperCase", Title: "Transform to Uppercase",
+		ID: "editor.upperCase", Title: i18n.Text("command.transformToUppercase"),
 		Keywords: []string{"editor", "case", "capitalize"},
 		Handler:  func() { app.EditorGroup.UpperCase() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.lowerCase", Title: "Transform to Lowercase",
+		ID: "editor.lowerCase", Title: i18n.Text("command.transformToLowercase"),
 		Keywords: []string{"editor", "case"},
 		Handler:  func() { app.EditorGroup.LowerCase() },
 	})
 	reg.Register(command.Command{
-		ID: "editor.titleCase", Title: "Transform to Titlecase",
+		ID: "editor.titleCase", Title: i18n.Text("command.transformToTitlecase"),
 		Keywords: []string{"editor", "case", "capitalize"},
 		Handler:  func() { app.EditorGroup.TitleCase() },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.goToMatchingBracket", Title: "Go to Matching Bracket",
+		ID: "editor.goToMatchingBracket", Title: i18n.Text("command.goToMatchingBracket"),
 		Keywords: []string{"editor", "navigate", "parenthesis", "brace"},
 		Handler:  func() { app.EditorGroup.GoToMatchingBracket() },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.quit", Title: "Quit",
+		ID: "editor.quit", Title: i18n.Text("general.quit"),
 		Keywords: []string{"exit", "close"},
 		Handler:  app.Quit,
 	})
+}
+
+func (a *App) AddCursorAbove() {
+	a.EditorGroup.AddCursorAbove()
+}
+
+func (a *App) AddCursorBelow() {
+	a.EditorGroup.AddCursorBelow()
+}
+
+// diffHunkStep navigates change blocks inside a diff view, where the buffer
+// API and the git gutter do not apply. It reports whether it handled the key:
+// false leaves normal file tabs on their existing gutter behaviour. Stops at
+// the ends with a notification and never wraps, matching the palette command
+// contract; plugins that want wrap-around build it from editor.diff().
+func (a *App) diffHunkStep(delta int) bool {
+	hunks, at, goTo := activeDiffHunks(a.EditorGroup)
+	if goTo == nil {
+		return false
+	}
+	if len(hunks) == 0 {
+		a.StatusNotify(i18n.Text("status.noChangesInThisDiff"))
+		return true
+	}
+	target := at + delta
+	if delta > 0 && at == 0 {
+		target = 1
+	}
+	if target < 1 {
+		a.StatusNotify(i18n.Text("status.noMoreChangesAbove"))
+		return true
+	}
+	if target > len(hunks) {
+		a.StatusNotify(i18n.Text("status.noMoreChangesBelow"))
+		return true
+	}
+	if err := goTo(target); err != nil {
+		a.StatusNotify(err.Error())
+	}
+	return true
+}
+
+// activeDiffHunks resolves the diff surface that navigation and the plugin
+// API both work on. Commit Details spans files and answers as a whole, so it
+// is checked before the single-file diff widget.
+func activeDiffHunks(eg *ui.EditorGroupWidget) (hunks []ui.DiffHunk, at int, goTo func(int) error) {
+	if detail := eg.ActiveCommitDetailWidget(); detail != nil {
+		fileIndex, row := detail.ViewportFileAndRow()
+		return detail.Hunks(), detail.HunkAt(fileIndex, row), detail.GoToHunk
+	}
+	if dv := eg.ActiveDiffWidget(); dv != nil {
+		return dv.Hunks(), dv.HunkAt(dv.CursorRow()), dv.GoToHunk
+	}
+	// An editable inline diff is attached to the file tab, so it is not an
+	// ActiveDiffWidget and has to be asked for separately.
+	if dv := eg.ActiveInlineDiff(); dv != nil {
+		return dv.Hunks(), dv.HunkAt(dv.CursorRow()), dv.GoToHunk
+	}
+	return nil, 0, nil
 }

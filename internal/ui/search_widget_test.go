@@ -12,6 +12,30 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func TestSearchReplaceAllUsesConfiguredIcon(t *testing.T) {
+	t.Cleanup(func() { icons.Configure("", nil) })
+	s := NewSearchWidget()
+	s.Icons = config.IconsNerdFont
+	s.SetReplaceMode(true)
+	for _, glyph := range []string{"@", "#"} {
+		if warnings := icons.Configure(s.Icons, map[string]string{"replace-all": glyph}); len(warnings) != 0 {
+			t.Fatal(warnings)
+		}
+		s.Render(NewRenderSurface(makeGrid(40, 12), Rect{W: 40, H: 12}))
+		if got := s.ReplaceInput.Actions[0].Label; got != glyph+"All" {
+			t.Fatalf("replace all label = %q", got)
+		}
+		s.SetReplacementPending(true)
+		if got := s.ReplaceInput.Actions[0].Label; got != "Cancel" {
+			t.Fatalf("pending label = %q", got)
+		}
+		s.SetReplacementPending(false)
+		if got := s.ReplaceInput.Actions[0].Label; got != glyph+"All" {
+			t.Fatalf("restored label = %q", got)
+		}
+	}
+}
+
 func TestSearchFileRowsShowIconsAndOmitIconSpacingWhenDisabled(t *testing.T) {
 	for _, tc := range []struct {
 		mode     string
@@ -81,7 +105,7 @@ func TestSearchFileRowsReserveReplaceActionsAndScrollbarForWidePaths(t *testing.
 	s := NewSearchWidget()
 	s.Icons = config.IconsNerdFont
 	s.showReplace = true
-	s.ReplaceInput.Text = "replacement"
+	seedInputText(s.ReplaceInput, "replacement")
 	s.Selected = -1
 	s.lastSelected = -1
 	s.Groups = []SearchFileGroup{{
@@ -177,7 +201,7 @@ func TestApplyBatchKeepsErrorUntilDone(t *testing.T) {
 func TestSearchStartClearsError(t *testing.T) {
 	s := NewSearchWidget()
 	s.Error = "ripgrep (rg) not found"
-	s.Input.Text = ""
+	seedInputText(s.Input, "")
 
 	s.runSearchSync()
 	if s.Error != "" {
@@ -195,7 +219,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			s := NewSearchWidget()
 			s.Icons = mode
 			s.showReplace = true
-			s.ReplaceInput.Text = "next"
+			seedInputText(s.ReplaceInput, "next")
 			s.Selected = -1
 			s.lastSelected = -1
 			s.Groups = []SearchFileGroup{{
@@ -210,7 +234,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			grid := makeGrid(w, h)
 			s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
 
-			wantCollapsed := []rune(icons.Get(mode, icons.ChevronDown))[0]
+			wantCollapsed := []rune(icons.Get(mode, icons.ChevronLeft))[0]
 			if got := grid[s.toggleRow()][w-2].Ch; got != wantCollapsed {
 				t.Fatalf("collapsed filter toggle glyph = %q, want %q", got, wantCollapsed)
 			}
@@ -227,7 +251,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			grid = makeGrid(w, h)
 			s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
 
-			wantExpanded := []rune(icons.Get(mode, icons.ArrowLeft))[0]
+			wantExpanded := []rune(icons.Get(mode, icons.ChevronDown))[0]
 			if got := grid[s.toggleRow()][w-2].Ch; got != wantExpanded {
 				t.Fatalf("expanded filter toggle glyph = %q, want %q", got, wantExpanded)
 			}
@@ -237,7 +261,8 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 	t.Run("overrides", func(t *testing.T) {
 		warnings := icons.Configure(config.IconsNone, map[string]string{
 			"chevron-down": "v",
-			"arrow-left":   "<",
+			"chevron-left": "<",
+			"arrow-left":   "L",
 			"replace":      "R",
 		})
 		if len(warnings) != 0 {
@@ -246,7 +271,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 
 		s := NewSearchWidget()
 		s.showReplace = true
-		s.ReplaceInput.Text = "next"
+		seedInputText(s.ReplaceInput, "next")
 		s.Selected = -1
 		s.lastSelected = -1
 		s.Groups = []SearchFileGroup{{
@@ -262,8 +287,8 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 		grid := makeGrid(w, h)
 		s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
 
-		if got := grid[s.toggleRow()][w-2].Ch; got != 'v' {
-			t.Fatalf("overridden collapsed filter toggle = %q, want 'v'", got)
+		if got := grid[s.toggleRow()][w-2].Ch; got != '<' {
+			t.Fatalf("overridden collapsed filter toggle = %q, want '<'", got)
 		}
 		if got := grid[s.resultStartY][w-2].Ch; got != 'R' {
 			t.Fatalf("overridden per-file replace glyph = %q, want 'R'", got)
@@ -283,14 +308,14 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 
 		grid = makeGrid(w, h)
 		s.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
-		if got := grid[s.toggleRow()][w-2].Ch; got != '<' {
-			t.Fatalf("overridden expanded filter toggle = %q, want '<'", got)
+		if got := grid[s.toggleRow()][w-2].Ch; got != 'v' {
+			t.Fatalf("overridden expanded filter toggle = %q, want 'v'", got)
 		}
 
-		// Clicking the per-file replace control triggers OnReplace for the file group.
+		seedInputText(s.Input, "old")
 		replacedFile := ""
-		s.OnReplace = func(filePath string, _ []SearchMatch, replacement string, _ SearchOptions) {
-			replacedFile = filePath + ":" + replacement
+		s.OnReplaceRequest = func(req SearchReplaceRequest) {
+			replacedFile = req.Paths[0] + ":" + req.Replacement
 		}
 		s.HandleEvent(tcell.NewEventMouse(5+w-2, 2+s.resultStartY, tcell.Button1, tcell.ModNone))
 		if replacedFile != "/repo/main.go:next" {

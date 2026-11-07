@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -199,10 +201,10 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		cp.logPagePending = false
 		cp.lastLogDir = ""
 		if cp.logDir != r.Dir {
-			cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:error", Label: "Could not read history", Muted: true}})
+			cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:error", Label: i18n.Text("changes.couldNotReadHistory"), Muted: true}})
 		}
 		if cp.OnError != nil {
-			cp.OnError("Could not refresh commit history: " + r.Err.Error())
+			cp.OnError(i18n.Format("changes.couldNotRefreshCommitHistory", i18n.Args{"error": r.Err.Error()}))
 		}
 		if cp.OnHistoryResult != nil {
 			cp.OnHistoryResult(r.Err)
@@ -211,9 +213,9 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	}
 	name := filepath.Base(r.Dir)
 	if r.Branch != "" {
-		cp.Input.Config.Placeholder = fmt.Sprintf("Commit to %s (%s)", name, r.Branch)
+		cp.Input.Config.Placeholder = i18n.Format("changes.commitToBranch", i18n.Args{"name": name, "branch": r.Branch})
 	} else {
-		cp.Input.Config.Placeholder = fmt.Sprintf("Commit to %s", name)
+		cp.Input.Config.Placeholder = i18n.Format("changes.commitToRepository", i18n.Args{"name": name})
 	}
 
 	// Record what was open before the rebuild, so a Refresh triggered by
@@ -247,7 +249,7 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		nodes = append(nodes, historyLoadOlderNode(false, false))
 	}
 	if len(r.Entries) == 0 {
-		nodes = append(nodes, &widgets.TreeNode{ID: "history:empty", Label: "No commits", Muted: true})
+		nodes = append(nodes, &widgets.TreeNode{ID: "history:empty", Label: i18n.Text("changes.noCommits"), Muted: true})
 	}
 	cp.CommitLog.SetItems(nodes)
 	if cp.OnHistoryResult != nil {
@@ -294,11 +296,11 @@ func (cp *ChangesPanel) commitLogNode(dir string, entry git.LogEntry) *widgets.T
 }
 
 func historyLoadOlderNode(loading, retry bool) *widgets.TreeNode {
-	label := "Load older commits…"
+	label := i18n.Text("changes.loadOlderCommits")
 	if loading {
-		label = "Loading older commits…"
+		label = i18n.Text("changes.loadingOlderCommits")
 	} else if retry {
-		label = "Retry loading older commits…"
+		label = i18n.Text("changes.retryLoadingOlderCommits")
 	}
 	return &widgets.TreeNode{ID: historyLoadOlderID, Label: label, Icon: "↓", Muted: true}
 }
@@ -315,7 +317,7 @@ func (cp *ChangesPanel) applyCommitLogPage(r *CommitLogResult) {
 	if r.Err != nil {
 		cp.replaceHistoryLoadNode(false, true)
 		if cp.OnError != nil {
-			cp.OnError("Could not load older commits: " + r.Err.Error())
+			cp.OnError(i18n.Format("changes.couldNotLoadOlderCommits", i18n.Args{"error": r.Err.Error()}))
 		}
 		return
 	}
@@ -497,7 +499,7 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 			result.Canceled = true
 			return result
 		}
-		result.Err = fmt.Sprintf("Could not read commit %s", short)
+		result.Err = i18n.Format("changes.readCommitFailed", i18n.Args{"short": short})
 		return result
 	}
 	result.Message = message
@@ -516,7 +518,7 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 			result.Canceled = true
 			return result
 		}
-		result.Err = fmt.Sprintf("Could not read files for commit %s", short)
+		result.Err = i18n.Format("changes.couldNotReadFilesForCommit", i18n.Args{"short": short})
 		return result
 	}
 	result.Files = make([]ui.CommitDetailFile, 0, len(files))
@@ -528,7 +530,7 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 				result.Canceled = true
 				return result
 			}
-			detail.Error = fmt.Sprintf("Could not read diff for %s", file.Path)
+			detail.Error = i18n.Format("changes.couldNotReadDiffFor", i18n.Args{"path": file.Path})
 		} else {
 			detail.Diff = diff.Parse(diffText)
 		}
@@ -557,7 +559,7 @@ func (a *App) OpenCommitDetail(dir, ref, short string) {
 	}
 	a.wireCommitDetailContext(tabID, detail, request)
 	a.EditorGroup.ApplyDiffDefaults(detail)
-	a.EditorGroup.OpenPluginTab(tabID, "Commit "+short, detail)
+	a.EditorGroup.OpenPluginTab(tabID, i18n.Format("changes.commit", i18n.Args{"short": short}), detail)
 	a.FocusEditorIfEnabled()
 	read := func() *CommitDetailResult {
 		ctx, cancel := context.WithTimeout(request.Context, commitDetailTimeout)
@@ -626,16 +628,14 @@ func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 		return
 	}
 	if !result.AuthoredAt.IsZero() {
-		detail.Metadata = "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04:05 PM -0700")
+		detail.Metadata = i18n.Format("changes.authored", i18n.Args{"date": result.AuthoredAt.Format("Jan 2, 2006 at 3:04:05 PM -0700")})
 	} else if result.AuthoredAtUnavailable {
-		detail.Metadata = "Authored date unavailable"
+		detail.Metadata = i18n.Text("changes.authoredDateUnavailable")
 	}
 	detail.SetDetail(result.Message, result.Files, result.Err)
 }
 
-type DiffOpenResult struct {
-	Gen      int
-	Origin   string
+type diffOpenResult struct {
 	Canceled bool
 	Warn     string
 	TabName  string
@@ -648,52 +648,44 @@ type DiffOpenResult struct {
 }
 
 func (a *App) cancelPendingDiff() {
-	a.diffOpenGen++
-	if a.diffOpenCancel != nil {
-		a.diffOpenCancel()
-		a.diffOpenCancel = nil
+	if a.diffOpenTask != nil {
+		a.diffOpenTask.Stop()
 	}
 	if a.Status != nil {
 		a.setDiffOpenSegment("")
 	}
 }
 
-func (a *App) startDiffOpen(read func(context.Context) *DiffOpenResult) {
+func (a *App) startDiffOpen(read func(context.Context) *diffOpenResult) {
 	a.cancelPendingDiff()
-	gen := a.diffOpenGen
-	origin := a.EditorGroup.ActiveFilePath()
-	ctx, cancel := context.WithTimeout(context.Background(), diffOpenTimeout)
-	a.diffOpenCancel = cancel
-	if a.Screen == nil {
-		result := read(ctx)
-		cancel()
-		result.Gen = gen
-		result.Origin = origin
-		a.ApplyDiffOpen(result)
-		return
+	if a.diffOpenTask == nil {
+		a.diffOpenTask = NewTask[*diffOpenResult](a, asynctask.TaskOptions{})
 	}
-	a.setDiffOpenSegment("Opening diff…")
-	screen := a.Screen
-	go func() {
-		result := read(ctx)
-		cancel()
-		result.Gen = gen
-		result.Origin = origin
-		screen.PostEvent(tcell.NewEventInterrupt(result))
-	}()
+	origin := a.EditorGroup.ActiveFilePath()
+	a.setDiffOpenSegment(i18n.Text("changes.openingDiff"))
+	a.diffOpenTask.Schedule(func(ctx context.Context) (*diffOpenResult, error) {
+		ctx, cancel := context.WithTimeout(ctx, diffOpenTimeout)
+		defer cancel()
+		return read(ctx), nil
+	}, func(result *diffOpenResult, err error) {
+		a.setDiffOpenSegment("")
+		if err != nil {
+			a.StatusWarn(i18n.Format("status.couldNotOpenDiff", i18n.Args{"error": err.Error()}))
+			return
+		}
+		a.applyDiffOpen(origin, result)
+	})
 }
 
 func (a *App) setDiffOpenSegment(text string) {
 	a.Status.SetSegment(view.StatusSegment{ID: "diffopen", Side: "left", Priority: 160, Text: text})
 }
 
-func (a *App) ApplyDiffOpen(result *DiffOpenResult) {
-	if result == nil || result.Gen != a.diffOpenGen {
+func (a *App) applyDiffOpen(origin string, result *diffOpenResult) {
+	if result == nil {
 		return
 	}
-	a.diffOpenCancel = nil
-	a.setDiffOpenSegment("")
-	if result.Canceled || a.EditorGroup.ActiveFilePath() != result.Origin {
+	if result.Canceled || a.EditorGroup.ActiveFilePath() != origin {
 		return
 	}
 	if result.Warn != "" {

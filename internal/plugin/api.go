@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"context"
+	"io"
 	"net/url"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -84,6 +86,21 @@ type EditorAPI interface {
 
 	SetSearch(pattern string, useRegex bool)
 	ClearSearch()
+
+	// DiffHunks reports the change blocks of the active diff surface, or
+	// nil when the active tab is not a diff. HunkAt returns the 1-based
+	// block at or before the cursor, 0 when it precedes the first block.
+	DiffHunks() []DiffHunkTarget
+	DiffHunkAt() int
+	GoToDiffHunk(index int) error
+}
+
+// DiffHunkTarget is a diff change block as a plugin sees it: the file it
+// belongs to and what it does. It carries no layout coordinates, so wrapping,
+// split/unified mode and collapsed files cannot shift the target.
+type DiffHunkTarget struct {
+	FilePath string
+	Kind     string
 }
 
 type CursorPosition struct {
@@ -135,11 +152,51 @@ type TerminalAPI interface {
 	TerminalList() []TerminalInfo
 }
 
+type ExecOptions struct {
+	// Stdin is written to the child's standard input; nothing is written when empty.
+	Stdin string
+	// Env holds KEY=VALUE entries added over the editor's environment.
+	Env []string
+	// Stdout and Stderr, when set, receive the child's output instead of the
+	// returned strings. A Write may block; the child then waits for it.
+	Stdout, Stderr io.Writer
+}
+
 type SystemAPI interface {
-	// Exec runs binary with args, writing stdin to the child's standard input
-	// (nothing is written when stdin is empty).
-	Exec(binary string, args []string, stdin string) (stdout, stderr string, exitCode int, err error)
+	// Exec runs binary with args and kills the child when ctx is done.
+	Exec(ctx context.Context, binary string, args []string, opts ExecOptions) (stdout, stderr string, exitCode int, err error)
 	Env(name string) string
+	// Spawn starts binary with args and piped stdio (no PTY). The caller owns
+	// reading Stdout/Stderr to completion and must call Wait to reap the
+	// child.
+	Spawn(binary string, args []string, opts SpawnOptions) (SpawnedProcess, error)
+}
+
+// SpawnOptions carries optional parameters for SystemAPI.Spawn.
+type SpawnOptions struct {
+	Cwd string   // working directory; empty keeps the host's cwd
+	Env []string // extra "KEY=value" entries, appended to the host environment
+}
+
+// SpawnedProcess is a running child process with piped standard streams.
+// Writes go to the child's stdin; Stdout/Stderr are readable until the
+// process exits.
+type SpawnedProcess interface {
+	// Write sends data to the child's stdin.
+	Write(data []byte) (int, error)
+	// CloseStdin half-closes the pipe so the child sees EOF on stdin.
+	CloseStdin() error
+	// Kill terminates the child.
+	Kill() error
+	// PID returns the child's process id.
+	PID() int
+	// Stdout returns the child's stdout stream.
+	Stdout() io.Reader
+	// Stderr returns the child's stderr stream.
+	Stderr() io.Reader
+	// Wait blocks until the child exits and returns its exit code. It must be
+	// called exactly once, after Stdout and Stderr are drained.
+	Wait() (int, error)
 }
 
 type NetworkAPI interface {

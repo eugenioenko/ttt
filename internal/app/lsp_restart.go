@@ -1,7 +1,7 @@
 package app
 
 import (
-	"fmt"
+	"github.com/eugenioenko/ttt/internal/i18n"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -31,7 +31,7 @@ func (a *App) RestartLSPServer() {
 	path, lang := a.editorPathLang()
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if path == "" || !ok {
-		a.StatusWarn("No language server for the active file")
+		a.StatusWarn(i18n.Text("status.noLanguageServerForTheActiveFile"))
 		return
 	}
 	workDir := a.lspWorkDir(path)
@@ -40,7 +40,7 @@ func (a *App) RestartLSPServer() {
 	a.DocVersionsMu.Lock()
 	a.lspEpochs[serverKey]++
 	a.DocVersionsMu.Unlock()
-	a.StatusNotify(fmt.Sprintf("Restarting %s…", serverKey))
+	a.StatusNotify(i18n.Format("status.restarting", i18n.Args{"serverKey": serverKey}))
 	go func() {
 		a.LspManager.Stop(serverKey)
 		a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerStopped{Server: serverKey, WorkDir: workDir}))
@@ -93,10 +93,10 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 
 func (a *App) handleLSPServerRestarted(ev *LSPServerRestarted) {
 	if ev.Err != nil {
-		a.StatusWarn(fmt.Sprintf("%s failed to restart: %v", ev.Server, ev.Err))
+		a.StatusWarn(i18n.Format("status.failedToRestart", i18n.Args{"server": ev.Server, "err": ev.Err}))
 		return
 	}
-	a.StatusNotify(ev.Server + " restarted")
+	a.StatusNotify(i18n.Format("status.restarted", i18n.Args{"server": ev.Server}))
 	a.SyncLanguageSegment()
 	a.RefreshSymbols()
 	a.ScheduleDiagnosticPull(true)

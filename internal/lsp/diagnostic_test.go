@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/eugenioenko/ttt/internal/jsonrpc"
 	"testing"
 )
 
-func initializeWith(t *testing.T, serverCaps string) (*Client, *Codec, json.RawMessage) {
+func initializeWith(t *testing.T, serverCaps string) (*Client, *jsonrpc.Codec, json.RawMessage) {
 	t.Helper()
 	c, server := pipeClient(t)
 	errCh := make(chan error, 1)
@@ -18,7 +19,7 @@ func initializeWith(t *testing.T, serverCaps string) (*Client, *Codec, json.RawM
 		t.Fatalf("method = %q, want initialize", req.Method)
 	}
 	result := json.RawMessage(`{"capabilities":` + serverCaps + `}`)
-	if err := server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Result: result}); err != nil {
+	if err := server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: result}); err != nil {
 		t.Fatal(err)
 	}
 	if n := receiveWithin(t, server); n.Method != "initialized" {
@@ -78,7 +79,7 @@ func TestDiagnosticReports(t *testing.T) {
 		wantCount int
 		wantErr   bool
 		retrigger bool
-		rpcErr    *RPCError
+		rpcErr    *jsonrpc.Error
 	}{
 		{
 			name:      "full report",
@@ -102,13 +103,13 @@ func TestDiagnosticReports(t *testing.T) {
 		},
 		{
 			name:      "server cancelled with retrigger",
-			rpcErr:    &RPCError{Code: CodeServerCancelled, Message: "busy", Data: json.RawMessage(`{"retriggerRequest":true}`)},
+			rpcErr:    &jsonrpc.Error{Code: CodeServerCancelled, Message: "busy", Data: json.RawMessage(`{"retriggerRequest":true}`)},
 			wantErr:   true,
 			retrigger: true,
 		},
 		{
 			name:    "server cancelled without retrigger",
-			rpcErr:  &RPCError{Code: CodeServerCancelled, Message: "busy", Data: json.RawMessage(`{"retriggerRequest":false}`)},
+			rpcErr:  &jsonrpc.Error{Code: CodeServerCancelled, Message: "busy", Data: json.RawMessage(`{"retriggerRequest":false}`)},
 			wantErr: true,
 		},
 	}
@@ -123,14 +124,14 @@ func TestDiagnosticReports(t *testing.T) {
 				var p DocumentDiagnosticParams
 				if err := json.Unmarshal(req.Params, &p); err != nil || req.Method != "textDocument/diagnostic" ||
 					p.TextDocument.URI != "file:///a.ts" || p.Identifier != "typescript" {
-					server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Error: &RPCError{Code: -32602, Message: "bad request: " + string(req.Params)}})
+					server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Error: &jsonrpc.Error{Code: -32602, Message: "bad request: " + string(req.Params)}})
 					return
 				}
 				if tt.rpcErr != nil {
-					server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Error: tt.rpcErr})
+					server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Error: tt.rpcErr})
 					return
 				}
-				server.Send(Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(tt.result)})
+				server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(tt.result)})
 			}()
 
 			diags, ok, err := c.Diagnostic(context.Background(), "file:///a.ts")

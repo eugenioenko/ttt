@@ -6,6 +6,10 @@ REPO="eugenioenko/ttt"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
+if [ "$OS" = "linux" ] && { [ -n "${TERMUX_VERSION:-}" ] || [ "${ANDROID_ROOT:-}" = "/system" ]; }; then
+  OS="android"
+fi
+
 case "$ARCH" in
   x86_64|amd64) ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
@@ -13,12 +17,23 @@ case "$ARCH" in
 esac
 
 case "$OS" in
+  android)
+    if [ "$ARCH" != "arm64" ]; then
+      echo "Unsupported Android architecture: $ARCH (only arm64 is available)"; exit 1
+    fi
+    BINARY="ttt-android-arm64"
+    INSTALL_DIR="${INSTALL_DIR:-${PREFIX:-$HOME/.local}/bin}"
+    ;;
   linux)
     BINARY="ttt-linux-${ARCH}"
     INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
     ;;
   darwin)
     BINARY="ttt-darwin-${ARCH}"
+    INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+    ;;
+  freebsd)
+    BINARY="ttt-freebsd-${ARCH}"
     INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
     ;;
   *)

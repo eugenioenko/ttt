@@ -75,6 +75,8 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 |----------|--------|
 | Ctrl+D | Select next occurrence |
 | Ctrl+K L | Select all occurrences |
+| Alt+Shift+Up | Add cursor above |
+| Alt+Shift+Down | Add cursor below |
 | Alt+Click | Add cursor at click position |
 | Ctrl+K U | Undo last cursor addition |
 | Escape | Collapse to single cursor |
@@ -100,10 +102,10 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 | Ctrl+K C | Show changes |
 | Ctrl+0 | Focus sidebar |
 | Ctrl+K Y | Open keyboard shortcuts |
-| Alt+Shift+Up | Panel taller |
-| Alt+Shift+Down | Panel shorter |
 | Alt+Shift+Left | Sidebar narrower |
 | Alt+Shift+Right | Sidebar wider |
+
+Panel taller and Panel shorter remain available in the command palette and can be assigned custom shortcuts.
 
 ### Tabs
 

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"path/filepath"
 	"strings"
@@ -151,6 +152,7 @@ type prGroup struct {
 	Name      string
 	Files     []git.FileStatus
 	PRURL     string
+	PRBody    string
 	PRDiffs   map[string]string
 	PROwner   string
 	PRRepo    string
@@ -165,7 +167,7 @@ func (a *App) persistCommitHistoryHeight() {
 	}
 	a.State.CommitHistoryHeight = height
 	if err := config.SaveState(a.State); err != nil {
-		a.StatusError("Failed to save commit history height: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToSaveCommitHistoryHeight", i18n.Args{"error": err.Error()}))
 	}
 }
 
@@ -189,7 +191,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	}
 
 	cp.Input = widgets.NewInputWidget(widgets.InputConfig{
-		Placeholder: "Message",
+		Placeholder: i18n.Text("changes.message"),
 		Bordered:    false,
 		OnSubmit: func(text string) {
 			cp.commitFocusedGroup()
@@ -198,7 +200,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 
 	cp.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
 		Indent:             1,
-		EmptyText:          "No changes",
+		EmptyText:          i18n.Text("changes.noChanges"),
 		TruncateLeft:       true,
 		ActivateExpandable: true,
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
@@ -220,7 +222,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 
 	cp.CommitLog = widgets.NewTreeWidget(widgets.TreeConfig{
 		Indent:             1,
-		EmptyText:          "No commits",
+		EmptyText:          i18n.Text("changes.noCommits"),
 		ActivateExpandable: true,
 		OnSelect: func(_ *widgets.TreeNode) {
 			// A deferred restore belongs to the selection that existed before the
@@ -251,7 +253,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 		},
 	})
 
-	logTitle := widgets.NewTitleWidget(widgets.TitleConfig{Title: "Commit History"})
+	logTitle := widgets.NewTitleWidget(widgets.TitleConfig{Title: i18n.Text("changes.commitHistory")})
 
 	logBox := &widgets.BoxWidget{}
 	logBox.Child = cp.CommitLog
@@ -366,7 +368,7 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		cp.resetHistoryPaging()
 		cp.logCommits = make(map[string]commitFileRef)
 		cp.logFiles = make(map[string]commitFileRef)
-		cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:loading", Label: "Loading…", Muted: true}})
+		cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:loading", Label: i18n.Text("general.loading"), Muted: true}})
 	}
 	cp.lastLogDir = dir
 	cp.logGen++
@@ -550,7 +552,7 @@ func (cp *ChangesPanel) commitChildren(dir, ref, short, parentID string) []*widg
 	cp.fetchCommitFiles(dir, ref, short, parentID)
 	return []*widgets.TreeNode{{
 		ID:    parentID + loadingSuffix,
-		Label: "Loading…",
+		Label: i18n.Text("general.loading"),
 		Muted: true,
 	}}
 }
@@ -562,14 +564,14 @@ const (
 )
 
 func errorNode(parentID string) *widgets.TreeNode {
-	return &widgets.TreeNode{ID: parentID + errorSuffix, Label: "Could not read commit", Muted: true}
+	return &widgets.TreeNode{ID: parentID + errorSuffix, Label: i18n.Text("changes.readCommitFailedLabel"), Muted: true}
 }
 
 func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files []git.FileStatus) []*widgets.TreeNode {
 	if len(files) == 0 {
 		// An expandable node that opens onto nothing reads as broken. A merge
 		// that changed nothing against its first parent is the usual cause.
-		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: "No files", Muted: true}}
+		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: i18n.Text("general.noFiles"), Muted: true}}
 	}
 	makeLeaf := func(f git.FileStatus) *widgets.TreeNode {
 		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
@@ -730,7 +732,7 @@ func (cp *ChangesPanel) buildTree() {
 			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Staged: true, Kind: workNodeSection, Group: gi}
 			stagedNode := &widgets.TreeNode{
 				ID:         id,
-				Label:      fmt.Sprintf("Staged (%d)", len(g.Staged)),
+				Label:      i18n.Format("changes.stagedHeading", i18n.Args{"stagedCount": len(g.Staged)}),
 				Expandable: true,
 				Expanded:   true,
 				Muted:      true,
@@ -747,7 +749,7 @@ func (cp *ChangesPanel) buildTree() {
 			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Kind: workNodeSection, Group: gi}
 			changesNode := &widgets.TreeNode{
 				ID:         id,
-				Label:      fmt.Sprintf("Changes (%d)", len(g.Unstaged)),
+				Label:      i18n.Format("changes.changes", i18n.Args{"unstagedCount": len(g.Unstaged)}),
 				Expandable: true,
 				Expanded:   true,
 				Muted:      true,
@@ -1129,9 +1131,9 @@ func (cp *ChangesPanel) confirmDiscard(dir string, f git.FileStatus) {
 	if cp.OnConfirmDiscard == nil {
 		return
 	}
-	msg := fmt.Sprintf("Discard changes to %s? This is irreversible.", f.Path)
+	msg := i18n.Format("changes.discardChangesToThisIsIrreversible", i18n.Args{"path": f.Path})
 	if f.Status == "?" {
-		msg = fmt.Sprintf("Delete untracked file %s? This is irreversible.", f.Path)
+		msg = i18n.Format("changes.deleteUntrackedFileThisIsIrreversible", i18n.Args{"path": f.Path})
 	}
 	cp.OnConfirmDiscard(msg, func() {
 		if f.Status == "?" {
@@ -1147,7 +1149,7 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	msg := fmt.Sprintf("Discard all %d changes? This is irreversible.", len(g.Unstaged))
+	msg := i18n.Format("changes.discardAllChangesThisIsIrreversible", i18n.Args{"unstagedCount": len(g.Unstaged)})
 	cp.OnConfirmDiscard(msg, func() {
 		untracked, tracked := discardPaths(g.Unstaged)
 		err := git.DiscardUntracked(g.Dir, untracked...)
@@ -1217,6 +1219,7 @@ func (cp *ChangesPanel) toUIChangesGroup(pg *prGroup) *ui.ChangesGroup {
 		Unstaged:  pg.Files,
 		IsPR:      true,
 		PRURL:     pg.PRURL,
+		PRBody:    pg.PRBody,
 		PRDiffs:   pg.PRDiffs,
 		PROwner:   pg.PROwner,
 		PRRepo:    pg.PRRepo,
@@ -1225,12 +1228,13 @@ func (cp *ChangesPanel) toUIChangesGroup(pg *prGroup) *ui.ChangesGroup {
 	}
 }
 
-func (cp *ChangesPanel) AddPRGroup(name, url, owner, repo, baseSHA, headSHA string, files []git.FileStatus, diffs map[string]string) {
+func (cp *ChangesPanel) AddPRGroup(name, url, owner, repo, baseSHA, headSHA, body string, files []git.FileStatus, diffs map[string]string) {
 	cp.PRGroups = append(cp.PRGroups, prGroup{
 		Dir:       "pr://" + name,
 		Name:      name,
 		Files:     files,
 		PRURL:     url,
+		PRBody:    body,
 		PRDiffs:   diffs,
 		PROwner:   owner,
 		PRRepo:    repo,

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
@@ -31,6 +32,84 @@ func pressRune(t *TreeWidget, r rune) {
 }
 
 // --- Rendering tests ---
+
+func TestTreePageNavigation(t *testing.T) {
+	var selections []string
+	tree := NewTreeWidget(TreeConfig{
+		Items:    makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
+		OnSelect: func(node *TreeNode) { selections = append(selections, node.ID) },
+	})
+	renderWidget(tree, 0, 0, 20, 3)
+	for _, step := range []struct {
+		key  tcell.Key
+		want int
+	}{
+		{tcell.KeyPgDn, 3},
+		{tcell.KeyPgDn, 6},
+		{tcell.KeyPgDn, 7},
+		{tcell.KeyPgDn, 7},
+		{tcell.KeyPgUp, 4},
+		{tcell.KeyPgUp, 1},
+		{tcell.KeyPgUp, 0},
+		{tcell.KeyPgUp, 0},
+	} {
+		if result := tree.HandleEvent(tcell.NewEventKey(step.key, "", tcell.ModNone)); result != EventConsumed {
+			t.Fatalf("key %v returned %v", step.key, result)
+		}
+		renderWidget(tree, 0, 0, 20, 3)
+		if tree.selected != step.want {
+			t.Fatalf("selection = %d, want %d", tree.selected, step.want)
+		}
+		if tree.selected < tree.scrollTop || tree.selected >= tree.scrollTop+3 {
+			t.Fatalf("selection %d outside viewport starting at %d", tree.selected, tree.scrollTop)
+		}
+	}
+	if got := strings.Join(selections, ","); got != "3,6,7,4,1,0" {
+		t.Fatalf("selection callbacks = %q", got)
+	}
+}
+
+func TestTreeHomeEndNavigation(t *testing.T) {
+	var selections []string
+	tree := NewTreeWidget(TreeConfig{
+		Items:    makeTreeItems("0", "1", "2", "3", "4", "5", "6", "7"),
+		OnSelect: func(node *TreeNode) { selections = append(selections, node.ID) },
+	})
+	renderWidget(tree, 0, 0, 20, 3)
+	for _, step := range []struct {
+		key  tcell.Key
+		want int
+	}{
+		{tcell.KeyEnd, 7},
+		{tcell.KeyEnd, 7},
+		{tcell.KeyHome, 0},
+		{tcell.KeyHome, 0},
+	} {
+		if result := tree.HandleEvent(tcell.NewEventKey(step.key, "", tcell.ModNone)); result != EventConsumed {
+			t.Fatalf("key %v returned %v", step.key, result)
+		}
+		renderWidget(tree, 0, 0, 20, 3)
+		if tree.selected != step.want {
+			t.Fatalf("selection = %d, want %d", tree.selected, step.want)
+		}
+		if tree.selected < tree.scrollTop || tree.selected >= tree.scrollTop+3 {
+			t.Fatalf("selection %d outside viewport starting at %d", tree.selected, tree.scrollTop)
+		}
+	}
+	if got := strings.Join(selections, ","); got != "7,0" {
+		t.Fatalf("selection callbacks = %q", got)
+	}
+}
+
+func TestTreeNavigationEmpty(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{})
+	for _, key := range []tcell.Key{tcell.KeyPgDn, tcell.KeyPgUp, tcell.KeyHome, tcell.KeyEnd} {
+		pressKey(tree, key)
+		if tree.Selected() != nil || tree.selected != 0 {
+			t.Fatal("paging changed empty tree selection")
+		}
+	}
+}
 
 func TestTreeRenderItemPositions(t *testing.T) {
 	tree := NewTreeWidget(TreeConfig{
@@ -73,7 +152,7 @@ func TestTreeRenderIndentation(t *testing.T) {
 
 	// Root is at depth 0, so label starts at x=0 after the chevron (2 chars: chevron + space)
 	// Root has children so chevron at x=0
-	if s.cells[0][0].Ch != '▾' {
+	if s.cells[0][0].Ch != icons.PlainChevronDown {
 		t.Errorf("root should show expanded chevron, got %c", s.cells[0][0].Ch)
 	}
 
@@ -155,13 +234,13 @@ func TestTreeRenderChevrons(t *testing.T) {
 	s := renderWidget(tree, 0, 0, 30, 10)
 
 	// Row 0: collapsed node has right-pointing chevron
-	if s.cells[0][0].Ch != '▸' {
-		t.Errorf("collapsed node should show ▸, got %c", s.cells[0][0].Ch)
+	if s.cells[0][0].Ch != icons.PlainChevronRight {
+		t.Errorf("collapsed node should show the right chevron, got %c", s.cells[0][0].Ch)
 	}
 
 	// Row 1: expanded node has down-pointing chevron
-	if s.cells[1][0].Ch != '▾' {
-		t.Errorf("expanded node should show ▾, got %c", s.cells[1][0].Ch)
+	if s.cells[1][0].Ch != icons.PlainChevronDown {
+		t.Errorf("expanded node should show the down chevron, got %c", s.cells[1][0].Ch)
 	}
 
 	// Row 3: leaf node (after expanded + its child C2 at row 2) has no chevron
@@ -183,8 +262,8 @@ func TestTreeRenderExpandableNoChildren(t *testing.T) {
 	s := renderWidget(tree, 0, 0, 30, 10)
 
 	// Expandable flag without children should still show a chevron
-	if s.cells[0][0].Ch != '▸' {
-		t.Errorf("expandable node should show ▸, got %c", s.cells[0][0].Ch)
+	if s.cells[0][0].Ch != icons.PlainChevronRight {
+		t.Errorf("expandable node should show the right chevron, got %c", s.cells[0][0].Ch)
 	}
 }
 
@@ -1071,7 +1150,7 @@ func TestTreeDeeplyNested(t *testing.T) {
 	}
 
 	// L2 at depth 2 has children, chevron at x=4 (2*2), then space, then label at x=6
-	if s.cells[2][4].Ch != '▾' {
+	if s.cells[2][4].Ch != icons.PlainChevronDown {
 		t.Errorf("L2 should have chevron at x=4, got %c", s.cells[2][4].Ch)
 	}
 }
@@ -1659,7 +1738,7 @@ func TestTreeRenderCustomChevrons(t *testing.T) {
 
 	plain := NewTreeWidget(TreeConfig{Items: []*TreeNode{{ID: "d", Label: "d", Expandable: true}}})
 	s = renderWidget(plain, 0, 0, 20, 5)
-	if got := s.cells[0][0].Ch; got != '▸' {
+	if got := s.cells[0][0].Ch; got != icons.PlainChevronRight {
 		t.Errorf("unset chevron = %c, want the default", got)
 	}
 }
@@ -1723,5 +1802,162 @@ func TestTreeRevealIDScrollsBackToUnchangedSelection(t *testing.T) {
 	}
 	if tree.RevealID("missing") {
 		t.Error("RevealID returned true for an unknown id")
+	}
+}
+
+func TestTreeBadgeRightAndInset(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71"}},
+		BadgeRight: true,
+		Inset:      1,
+	})
+	tree.SetFocused(true)
+	s := renderWidget(tree, 0, 0, 20, 2)
+	got := rowText(s, 0)
+	if want := " Namespaces      71"; got != want {
+		t.Fatalf("row = %q, want %q", got, want)
+	}
+	for x, cell := range s.cells[0] {
+		if cell.Style != term.StyleSidebarSelected {
+			t.Errorf("selected row cell %d has style %v, want the full-width highlight", x, cell.Style)
+		}
+	}
+}
+
+func TestTreeRightBadgeKeepsAGapBeforeActions(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71", Actions: []Action{{Icon: "+"}}}},
+		BadgeRight: true,
+	})
+	s := renderWidget(tree, 0, 0, 20, 2)
+	if got := rowText(s, 0); !strings.Contains(got, "71 +") {
+		t.Fatalf("row = %q, want a space between the badge and the action", got)
+	}
+}
+
+func TestTreeRightBadgeNeverCoversTheRowContent(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "Namespaces", Badge: "71", Expandable: true}},
+		BadgeRight: true,
+		Inset:      4,
+	})
+	s := renderWidget(tree, 0, 0, 8, 1)
+	if got, want := rowText(s, 0), "    "+string(icons.PlainChevronRight); got != want {
+		t.Fatalf("row = %q, want %q: the chevron kept and the badge dropped", got, want)
+	}
+}
+
+func TestTreeRightBadgeLeavesOneGapAfterTheLabel(t *testing.T) {
+	tree := NewTreeWidget(TreeConfig{
+		Items:      []*TreeNode{{ID: "a", Label: "ab", Badge: "7"}},
+		BadgeRight: true,
+	})
+	s := renderWidget(tree, 0, 0, 5, 1)
+	if got, want := rowText(s, 0), "ab 7"; got != want {
+		t.Fatalf("row = %q, want %q", got, want)
+	}
+}
+
+func TestTreeRightBadgeGivesWayToTheLabel(t *testing.T) {
+	cases := []struct {
+		name, label, badge string
+		w                  int
+		want               string
+	}{
+		{"long badge is truncated, label keeps half", "order_line_items", "table · 98,213,004 rows", 22, "order_lin… table · 9…"},
+		{"short badge stays whole, label truncated", "customer_shipping_addresses", "12 rows", 22, "customer_shi… 12 rows"},
+		{"short label stays whole", "x", "a very long badge that fills the row", 22, "x a very long badge …"},
+		{"badge dropped when under three cells are left", "order_line_items", "rows", 6, "ord…"},
+	}
+	for _, tc := range cases {
+		tree := NewTreeWidget(TreeConfig{
+			Items:      []*TreeNode{{ID: "a", Label: tc.label, Badge: tc.badge}},
+			BadgeRight: true,
+		})
+		s := renderWidget(tree, 0, 0, tc.w, 1)
+		if got := rowText(s, 0); got != tc.want {
+			t.Errorf("%s: row = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestTreeReselectOnActivate(t *testing.T) {
+	for _, reselect := range []bool{false, true} {
+		selects := 0
+		tree := NewTreeWidget(TreeConfig{
+			Items:              []*TreeNode{{ID: "a", Label: "Alpha"}, {ID: "b", Label: "Beta"}},
+			OnSelect:           func(*TreeNode) { selects++ },
+			ReselectOnActivate: reselect,
+		})
+		tree.SetFocused(true)
+		renderWidget(tree, 0, 0, 20, 3)
+
+		tree.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModNone))
+		if selects != 1 {
+			t.Fatalf("reselect=%v: moving the selection should select once, got %d", reselect, selects)
+		}
+		tree.HandleEvent(mouseClick(2, 1))
+		tree.HandleEvent(mouseClick(2, 1))
+		tree.HandleEvent(mouseRelease(2, 1))
+		tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+		want := 1
+		if reselect {
+			want = 3
+		}
+		if selects != want {
+			t.Errorf("reselect=%v: a click on the selected row, held, then Enter gave %d selects, want %d", reselect, selects, want)
+		}
+	}
+}
+
+func TestTreeReselectSkipsAnEmptyTree(t *testing.T) {
+	called := false
+	tree := NewTreeWidget(TreeConfig{OnSelect: func(*TreeNode) { called = true }, ReselectOnActivate: true})
+	tree.SetFocused(true)
+	renderWidget(tree, 0, 0, 20, 3)
+	tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if called {
+		t.Fatal("Enter on an empty tree called OnSelect")
+	}
+}
+
+func TestTreeHeadingsAreNeverSelected(t *testing.T) {
+	var activated []string
+	tree := NewTreeWidget(TreeConfig{
+		Items: []*TreeNode{
+			{Label: "Favorites", Heading: true},
+			{ID: "fav", Label: "fav"},
+			{Heading: true},
+			{ID: "home", Label: "home"},
+		},
+		OnCommand: func(command string, node *TreeNode) { activated = append(activated, node.ID) },
+	})
+	renderWidget(tree, 0, 0, 20, 10)
+
+	if tree.SelectedIndex() != 1 {
+		t.Fatalf("initial selection = %d, want the first non-heading row", tree.SelectedIndex())
+	}
+	pressKey(tree, tcell.KeyUp)
+	if tree.SelectedIndex() != 1 {
+		t.Errorf("Up from the first row = %d, want it to stay on 1", tree.SelectedIndex())
+	}
+	pressKey(tree, tcell.KeyDown)
+	if tree.SelectedIndex() != 3 {
+		t.Errorf("Down = %d, want the blank heading skipped", tree.SelectedIndex())
+	}
+	pressRune(tree, 'k')
+	if tree.SelectedIndex() != 1 {
+		t.Errorf("k = %d, want the blank heading skipped", tree.SelectedIndex())
+	}
+	pressKey(tree, tcell.KeyHome)
+	if tree.SelectedIndex() != 1 {
+		t.Errorf("Home = %d, want the first non-heading row", tree.SelectedIndex())
+	}
+
+	pressKey(tree, tcell.KeyDown)
+	tree.HandleEvent(mouseClick(5, 0))
+	tree.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, tcell.ModNone))
+	if tree.SelectedIndex() != 3 || len(activated) != 0 {
+		t.Errorf("clicking a heading selected %d and activated %v, want neither", tree.SelectedIndex(), activated)
 	}
 }

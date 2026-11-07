@@ -3,6 +3,7 @@ package lsp
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/jsonrpc"
 	"os"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func TestMain(m *testing.M) {
 }
 
 func runFakeServer(mode string) {
-	codec := NewCodec(os.Stdin, os.Stdout)
+	codec := jsonrpc.NewCodec(os.Stdin, os.Stdout)
 	reply := func(id json.RawMessage, result any) {
 		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 		fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
@@ -71,7 +72,7 @@ func TestManagerStopThenStartsFreshClient(t *testing.T) {
 		t.Fatal("Stop reported no running server")
 	}
 	select {
-	case <-first.done:
+	case <-first.conn.Done():
 	default:
 		t.Fatal("Stop returned before the old read loop exited")
 	}
@@ -109,7 +110,7 @@ func TestManagerStopKillsHungServer(t *testing.T) {
 		t.Errorf("Stop took %v on a hung server", elapsed)
 	}
 	select {
-	case <-client.done:
+	case <-client.conn.Done():
 	default:
 		t.Fatal("hung server's read loop still running after Stop")
 	}

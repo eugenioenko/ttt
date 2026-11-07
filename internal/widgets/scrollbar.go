@@ -5,6 +5,13 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+// HorizontalWheelMod reports whether a vertical wheel event should scroll
+// sideways. Alt is accepted alongside Shift because many terminals reserve
+// Shift+wheel for their own scrollback and never forward it.
+func HorizontalWheelMod(mod tcell.ModMask) bool {
+	return mod&(tcell.ModShift|tcell.ModAlt) != 0
+}
+
 type scrollRange struct {
 	trackLength   int
 	contentLength int

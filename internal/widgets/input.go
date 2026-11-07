@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -15,7 +16,12 @@ type InputConfig struct {
 	Prefix      string     `json:"prefix,omitempty"`
 	Placeholder string     `json:"placeholder,omitempty"`
 	Bordered    bool       `json:"bordered"`
+	Title       string     `json:"-"`
 	Style       term.Style `json:"-"`
+	PrefixStyle term.Style `json:"-"`
+	// Mask draws each rune as • and keeps the text off the clipboard. A masked
+	// input is one line: Wrap is ignored.
+	Mask bool `json:"-"`
 	// Wrap lays the text out on as many rows as it needs, up to MaxRows
 	// (default 5), then scrolls. Shift+Enter, Alt+Enter or Ctrl+J adds a line
 	// break.
@@ -31,8 +37,32 @@ type InputConfig struct {
 	OnSubmit func(text string)
 }
 
+type inputSnapshot struct {
+	text string
+	pos  int
+}
+
+type inputGroupType int
+
+const (
+	inputGroupNone inputGroupType = iota
+	inputGroupInsert
+	inputGroupDelete
+)
+
+const maxInputUndo = 100
+
+type InputAction struct {
+	Label   string
+	Active  bool
+	OnClick func()
+}
+
 type InputWidget struct {
 	BaseWidget
+	Actions       []InputAction
+	ActionHits    []Rect
+	actionPressed bool
 	Config        InputConfig
 	text          string
 	cursorPos     int
@@ -50,6 +80,15 @@ type InputWidget struct {
 	// goalCol is the column Up and Down aim for, kept across rows shorter
 	// than it; -1 when the cursor last moved some other way.
 	goalCol int
+
+	drag                      InputDrag
+	textRect                  Rect
+	pointerCaptureInvalidated func()
+
+	undoStack []inputSnapshot
+	redoStack []inputSnapshot
+	groupType inputGroupType
+	lastRune  rune
 }
 
 // DefaultPrefix is the chevron shown on a borderless input when the caller
@@ -74,10 +113,10 @@ func NewInputWidget(config InputConfig) *InputWidget {
 // HeightAtWidth gives the height for the width a layout is about to use.
 func (inp *InputWidget) Height() int {
 	rows := 1
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		rows = min(max(inp.Config.MinRows, 1), inp.maxRows())
 	}
-	if inp.Config.Wrap && inp.wrapWidth > 0 {
+	if inp.wraps() && inp.wrapWidth > 0 {
 		rows = inp.visibleRows(inp.wrapWidth)
 	}
 	return inp.heightFor(rows)
@@ -93,9 +132,14 @@ func (inp *InputWidget) heightFor(rows int) int {
 
 func (inp *InputWidget) Width() int { return 0 }
 
-func (inp *InputWidget) Focusable() bool   { return true }
-func (inp *InputWidget) SetFocused(f bool) { inp.focused = f }
-func (inp *InputWidget) IsFocused() bool   { return inp.focused }
+func (inp *InputWidget) Focusable() bool { return true }
+func (inp *InputWidget) SetFocused(f bool) {
+	inp.focused = f
+	if !f {
+		inp.CancelPointerCapture()
+	}
+}
+func (inp *InputWidget) IsFocused() bool { return inp.focused }
 
 func (inp *InputWidget) CursorPosition() (int, int, bool) {
 	if !inp.focused {
@@ -110,11 +154,11 @@ func (inp *InputWidget) CursorPosition() (int, int, bool) {
 	} else {
 		textX += textwidth.String(inp.Config.Prefix)
 	}
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		col, row := inp.wrappedCursor()
 		return textX + col, textY + row, true
 	}
-	return textX + inp.visualOffset([]rune(inp.text), inp.cursorPos), textY, true
+	return textX + inp.visualOffset(inp.shownRunes(), inp.cursorPos), textY, true
 }
 
 // visualOffset returns how many columns the rune at index pos sits to the right
@@ -125,12 +169,27 @@ func (inp *InputWidget) visualOffset(runes []rune, pos int) int {
 	return textwidth.Runes(runes[lo:hi])
 }
 
+func (inp *InputWidget) wraps() bool { return inp.Config.Wrap && !inp.Config.Mask }
+
+// shownRunes is the text as drawn, which layout and hit testing measure.
+func (inp *InputWidget) shownRunes() []rune {
+	runes := []rune(inp.text)
+	if inp.Config.Mask {
+		return []rune(strings.Repeat("•", len(runes)))
+	}
+	return runes
+}
+
 func (inp *InputWidget) Text() string { return inp.text }
 func (inp *InputWidget) SetText(t string) {
+	inp.CancelPointerCapture()
 	inp.goalCol = -1
 	inp.text = t
 	inp.cursorPos = len([]rune(t))
 	inp.clearSel()
+	inp.undoStack = nil
+	inp.redoStack = nil
+	inp.breakGroup()
 	inp.notify()
 }
 
@@ -139,17 +198,18 @@ func (inp *InputWidget) ResetScroll() {
 }
 
 func (inp *InputWidget) PasteText(text string) {
-	if inp.hasSelection() {
-		inp.deleteSelection()
-	}
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	text = strings.TrimRight(text, "\n")
-	if !inp.Config.Wrap {
+	if !inp.wraps() {
 		text = strings.ReplaceAll(text, "\n", " ")
 	}
 	if text == "" {
 		return
+	}
+	inp.recordEdit()
+	if inp.hasSelection() {
+		inp.deleteSelection()
 	}
 	inp.insertRunes([]rune(text))
 }
@@ -167,6 +227,10 @@ func (inp *InputWidget) insertRunes(text []rune) {
 }
 
 func (inp *InputWidget) Clear() {
+	inp.CancelPointerCapture()
+	if inp.text != "" {
+		inp.recordEdit()
+	}
 	inp.text = ""
 	inp.cursorPos = 0
 	inp.scrollOffset = 0
@@ -177,6 +241,7 @@ func (inp *InputWidget) Clear() {
 }
 
 func (inp *InputWidget) Render(surface Surface) {
+	inp.ActionHits = nil
 	if inp.Config.Bordered {
 		inp.renderBordered(surface)
 	} else {
@@ -198,12 +263,11 @@ func (inp *InputWidget) renderBordered(surface Surface) {
 	bs := widgetBorders(inp.Box)
 
 	inner.DrawBorder(0, 0, w, h, bs, borderStyle)
-
-	if inp.Config.Wrap {
-		inp.renderWrapped(inner, 2, 1, w-4, h-2)
-		return
+	if inp.Config.Title != "" && w > 4 {
+		inner.DrawText(1, 0, " "+inp.Config.Title+" ", w-1, borderStyle)
 	}
-	inp.renderText(inner, 2, 1, w-4)
+
+	inp.renderContent(inner, 2, 1, w-4, h-2)
 }
 
 func (inp *InputWidget) renderBorderless(surface Surface) {
@@ -221,6 +285,10 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 		prefixStyle = term.StyleBorderActive
 	}
 
+	if inp.Config.PrefixStyle != 0 {
+		prefixStyle = inp.Config.PrefixStyle
+	}
+
 	px := 0
 	for _, ch := range prefixRunes {
 		if px < w {
@@ -229,14 +297,66 @@ func (inp *InputWidget) renderBorderless(surface Surface) {
 		px += textwidth.Rune(ch)
 	}
 
-	if inp.Config.Wrap {
-		inp.renderWrapped(inner, prefixW, 0, w-prefixW, h)
+	inp.renderContent(inner, prefixW, 0, w-prefixW, h)
+}
+
+func (inp *InputWidget) ActionsWidth() int {
+	width := 0
+	for _, action := range inp.Actions {
+		width += textwidth.String(action.Label) + 1
+	}
+	return width
+}
+
+func (inp *InputWidget) renderContent(surface Surface, x, y, w, h int) {
+	if w <= 0 || h <= 0 {
 		return
 	}
-	inp.renderText(inner, prefixW, 0, w-prefixW)
+	textW := max(w-inp.ActionsWidth(), 0)
+	if inp.wraps() {
+		inp.renderWrapped(surface, x, y, textW, h)
+	} else {
+		inp.renderText(surface, x, y, textW)
+	}
+	ox, oy := surface.Origin()
+	ax, limit := x+textW, x+w
+	inputStyle := inp.Config.Style
+	if inputStyle == 0 {
+		inputStyle = term.StyleInput
+	}
+	surface.ClearRect(ax, y, w-textW, h, inputStyle)
+	inp.ActionHits = make([]Rect, len(inp.Actions))
+	for i, action := range inp.Actions {
+		if ax >= limit {
+			break
+		}
+		style := term.StyleInputAction
+		if action.Active {
+			style = term.StyleDefault
+		}
+		end := surface.DrawText(ax, y, action.Label, limit, style)
+		inp.ActionHits[i] = Rect{X: ox + ax, Y: oy + y, W: end - ax, H: 1}
+		ax = surface.DrawText(end, y, " ", limit, inputStyle)
+	}
+}
+
+func (inp *InputWidget) CopyTextState(source *InputWidget) {
+	inp.CancelPointerCapture()
+	inp.text, inp.cursorPos = source.text, source.cursorPos
+	inp.scrollOffset, inp.rowOffset, inp.goalCol = source.scrollOffset, source.rowOffset, source.goalCol
+	inp.selStart, inp.selEnd = source.selStart, source.selEnd
+	inp.undoStack = slices.Clone(source.undoStack)
+	inp.redoStack = slices.Clone(source.redoStack)
+	inp.groupType, inp.lastRune = source.groupType, source.lastRune
+}
+
+func (inp *InputWidget) PasteClipboard() {
+	inp.PasteText(clipboard.Get())
 }
 
 func (inp *InputWidget) renderText(surface Surface, x, y, textW int) {
+	ox, oy := surface.Origin()
+	inp.textRect = Rect{X: ox + x, Y: oy + y, W: max(textW, 0), H: 1}
 	if textW <= 0 {
 		return
 	}
@@ -246,7 +366,7 @@ func (inp *InputWidget) renderText(surface Surface, x, y, textW int) {
 		style = term.StyleInput
 	}
 
-	textRunes := []rune(inp.text)
+	textRunes := inp.shownRunes()
 
 	// Scrolling is measured in columns, not runes: a window of textW columns
 	// holds fewer fullwidth runes than narrow ones.
@@ -362,12 +482,13 @@ func (inp *InputWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
+	inp.CancelPointerCapture()
 	if !inp.focused {
 		return EventIgnored
 	}
 	shift := ev.Modifiers()&tcell.ModShift != 0
 	ctrl := ev.Modifiers()&tcell.ModCtrl != 0
-	if inp.Config.Wrap {
+	if inp.wraps() {
 		if k := ev.Key(); k != tcell.KeyUp && k != tcell.KeyDown {
 			inp.goalCol = -1
 		}
@@ -381,6 +502,14 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		if ev.Modifiers()&^tcell.ModShift != 0 {
 			return EventIgnored
 		}
+		if inp.hasSelection() {
+			inp.recordEdit()
+			inp.deleteSelection()
+			inp.groupType = inputGroupInsert
+			inp.lastRune = term.KeyRune(ev)
+		} else {
+			inp.recordRuneInsert(term.KeyRune(ev))
+		}
 		inp.insertRunes([]rune{term.KeyRune(ev)})
 		return EventConsumed
 	case tcell.KeyEnter:
@@ -390,8 +519,10 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		return EventConsumed
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if inp.hasSelection() {
+			inp.recordEdit()
 			inp.deleteSelection()
 		} else if inp.cursorPos > 0 {
+			inp.recordDelete()
 			runes := []rune(inp.text)
 			newPos := inp.cursorPos - 1
 			if ctrl {
@@ -404,10 +535,12 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		return EventConsumed
 	case tcell.KeyDelete:
 		if inp.hasSelection() {
+			inp.recordEdit()
 			inp.deleteSelection()
 		} else {
 			runes := []rune(inp.text)
 			if inp.cursorPos < len(runes) {
+				inp.recordDelete()
 				end := inp.cursorPos + 1
 				if ctrl {
 					end = inp.wordRight()
@@ -418,6 +551,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyLeft:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -435,6 +569,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyRight:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -452,6 +587,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyHome:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -463,6 +599,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyEnd:
+		inp.breakGroup()
 		if shift {
 			inp.startSel()
 		}
@@ -474,7 +611,7 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyCtrlV:
-		inp.pasteClipboard()
+		inp.PasteClipboard()
 		return EventConsumed
 	case tcell.KeyCtrlA:
 		inp.selectAll()
@@ -485,54 +622,111 @@ func (inp *InputWidget) handleKey(ev *tcell.EventKey) EventResult {
 	case tcell.KeyCtrlX:
 		inp.CutSelection()
 		return EventConsumed
+	case tcell.KeyCtrlZ:
+		if shift {
+			inp.Redo()
+		} else {
+			inp.Undo()
+		}
+		return EventConsumed
+	case tcell.KeyCtrlY:
+		inp.Redo()
+		return EventConsumed
 	}
 	return EventIgnored
 }
 
+func (inp *InputWidget) OwnsPointerCapture() bool               { return inp.drag.Active() || inp.actionPressed }
+func (inp *InputWidget) SetPointerCaptureInvalidated(fn func()) { inp.pointerCaptureInvalidated = fn }
+func (inp *InputWidget) CancelPointerCapture() bool {
+	canceled := inp.drag.Cancel()
+	canceled = canceled || inp.actionPressed
+	inp.actionPressed = false
+	if canceled && inp.pointerCaptureInvalidated != nil {
+		inp.pointerCaptureInvalidated()
+	}
+	return canceled
+}
+
 func (inp *InputWidget) handleMouse(ev *tcell.EventMouse) EventResult {
-	if ev.Buttons()&tcell.Button1 == 0 {
-		return EventIgnored
+	if inp.actionPressed {
+		if ev.Buttons()&tcell.Button1 == 0 {
+			inp.actionPressed = false
+			return EventConsumed
+		}
+		return EventCaptured
 	}
 	mx, my := ev.Position()
 	r := inp.GetRect()
-	if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+	if !inp.drag.Active() && (ev.Buttons()&tcell.Button1 == 0 || mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H) {
 		return EventIgnored
 	}
-
-	textX := r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + textwidth.String(inp.Config.Prefix)
-	if inp.Config.Bordered {
-		textX = r.X + inp.Box.MarginLeft + inp.Box.PaddingLeft + 2
-	}
-	runes := []rune(inp.text)
-	pos := inp.posAtColumn(runes, mx-textX)
-	if inp.Config.Wrap {
+	pos := inp.posAtColumn(inp.shownRunes(), mx-inp.textRect.X)
+	if inp.wraps() {
 		inp.goalCol = -1
-		textY := r.Y + inp.Box.MarginTop + inp.Box.PaddingTop
-		if inp.Config.Bordered {
-			textY++
+		pos = inp.wrappedPosAt(mx-inp.textRect.X, my-inp.textRect.Y)
+	} else if inp.drag.Active() {
+		if my < inp.textRect.Y {
+			pos = 0
+		} else if my >= inp.textRect.Y+inp.textRect.H {
+			pos = len([]rune(inp.text))
+		} else if mx < inp.textRect.X {
+			pos = max(inp.scrollOffset-1, 0)
+		} else if mx >= inp.textRect.X+inp.textRect.W {
+			pos = min(pos+1, len([]rune(inp.text)))
 		}
-		pos = inp.wrappedPosAt(mx-textX, my-textY)
 	}
-
+	if inp.drag.Active() {
+		if anchor, end, moved := inp.drag.Extend(mx, my, pos); moved {
+			inp.selStart, inp.selEnd, inp.cursorPos = anchor, end, end
+			inp.lastClickTime, inp.clickCount = 0, 0
+		}
+		if ev.Buttons()&tcell.Button1 == 0 {
+			inp.drag.Cancel()
+			return EventConsumed
+		}
+		return EventCaptured
+	}
+	inp.breakGroup()
+	for i, hit := range inp.ActionHits {
+		if hit.Contains(mx, my) {
+			if i >= len(inp.Actions) {
+				return EventConsumed
+			}
+			inp.actionPressed = true
+			if inp.Actions[i].OnClick != nil {
+				inp.Actions[i].OnClick()
+			}
+			if inp.actionPressed {
+				return EventCaptured
+			}
+			return EventConsumed
+		}
+	}
 	now := time.Now().UnixMilli()
 	if now-inp.lastClickTime < 400 && pos == inp.lastClickPos {
 		inp.clickCount++
 	} else {
 		inp.clickCount = 1
 	}
-	inp.lastClickTime = now
-	inp.lastClickPos = pos
-
+	inp.lastClickTime, inp.lastClickPos = now, pos
 	if inp.clickCount == 2 {
 		inp.selectWordAt(pos)
 	} else {
 		inp.cursorPos = pos
 		inp.clearSel()
 	}
-	return EventConsumed
+	inp.drag.Begin(mx, my, inp.cursorPos)
+	return EventCaptured
 }
 
 // selection helpers
+
+// HasSelection reports whether the input has selected text.
+func (inp *InputWidget) HasSelection() bool { return inp.hasSelection() }
+
+// SelectAll selects the whole text.
+func (inp *InputWidget) SelectAll() { inp.selectAll() }
 
 func (inp *InputWidget) hasSelection() bool {
 	return inp.selStart >= 0 && inp.selStart != inp.selEnd
@@ -572,7 +766,111 @@ func (inp *InputWidget) deleteSelection() {
 	inp.notify()
 }
 
+func (inp *InputWidget) pushUndo(snap inputSnapshot) {
+	if len(inp.undoStack) > 0 {
+		top := inp.undoStack[len(inp.undoStack)-1]
+		if top.text == snap.text && top.pos == snap.pos {
+			return
+		}
+	}
+	inp.undoStack = append(inp.undoStack, snap)
+	if len(inp.undoStack) > maxInputUndo {
+		inp.undoStack = inp.undoStack[len(inp.undoStack)-maxInputUndo:]
+	}
+	inp.redoStack = nil
+}
+
+func (inp *InputWidget) breakGroup() {
+	inp.groupType = inputGroupNone
+	inp.lastRune = 0
+}
+
+func (inp *InputWidget) recordEdit() {
+	inp.pushUndo(inputSnapshot{text: inp.text, pos: inp.cursorPos})
+	inp.breakGroup()
+}
+
+func (inp *InputWidget) recordRuneInsert(r rune) {
+	if (r == ' ' || r == '\t') && inp.lastRune != ' ' && inp.lastRune != '\t' {
+		inp.breakGroup()
+	}
+	if inp.groupType != inputGroupInsert {
+		inp.pushUndo(inputSnapshot{text: inp.text, pos: inp.cursorPos})
+		inp.groupType = inputGroupInsert
+	}
+	inp.lastRune = r
+}
+
+func (inp *InputWidget) recordDelete() {
+	if inp.groupType != inputGroupDelete {
+		inp.pushUndo(inputSnapshot{text: inp.text, pos: inp.cursorPos})
+		inp.groupType = inputGroupDelete
+		inp.lastRune = 0
+	}
+}
+
+func (inp *InputWidget) Undo() bool {
+	inp.breakGroup()
+	if len(inp.undoStack) == 0 {
+		return false
+	}
+	curr := inputSnapshot{text: inp.text, pos: inp.cursorPos}
+	inp.redoStack = append(inp.redoStack, curr)
+	if len(inp.redoStack) > maxInputUndo {
+		inp.redoStack = inp.redoStack[len(inp.redoStack)-maxInputUndo:]
+	}
+
+	snap := inp.undoStack[len(inp.undoStack)-1]
+	inp.undoStack = inp.undoStack[:len(inp.undoStack)-1]
+
+	inp.text = snap.text
+	runes := []rune(inp.text)
+	inp.cursorPos = snap.pos
+	if inp.cursorPos < 0 {
+		inp.cursorPos = 0
+	} else if inp.cursorPos > len(runes) {
+		inp.cursorPos = len(runes)
+	}
+	inp.clearSel()
+	inp.goalCol = -1
+	inp.notify()
+	return true
+}
+
+func (inp *InputWidget) Redo() bool {
+	inp.breakGroup()
+	if len(inp.redoStack) == 0 {
+		return false
+	}
+	curr := inputSnapshot{text: inp.text, pos: inp.cursorPos}
+	inp.undoStack = append(inp.undoStack, curr)
+	if len(inp.undoStack) > maxInputUndo {
+		inp.undoStack = inp.undoStack[len(inp.undoStack)-maxInputUndo:]
+	}
+
+	snap := inp.redoStack[len(inp.redoStack)-1]
+	inp.redoStack = inp.redoStack[:len(inp.redoStack)-1]
+
+	inp.text = snap.text
+	runes := []rune(inp.text)
+	inp.cursorPos = snap.pos
+	if inp.cursorPos < 0 {
+		inp.cursorPos = 0
+	} else if inp.cursorPos > len(runes) {
+		inp.cursorPos = len(runes)
+	}
+	inp.clearSel()
+	inp.goalCol = -1
+	inp.notify()
+	return true
+}
+
 func (inp *InputWidget) selectWordAt(pos int) {
+	inp.breakGroup()
+	if inp.Config.Mask {
+		inp.selectAll()
+		return
+	}
 	runes := []rune(inp.text)
 	if pos < 0 || pos >= len(runes) {
 		return
@@ -606,6 +904,7 @@ func (inp *InputWidget) selectWordAt(pos int) {
 }
 
 func (inp *InputWidget) selectAll() {
+	inp.breakGroup()
 	runes := []rune(inp.text)
 	if len(runes) == 0 {
 		return
@@ -616,9 +915,9 @@ func (inp *InputWidget) selectAll() {
 }
 
 // CopySelection copies the selected text to the clipboard. It does nothing
-// when there is no selection.
+// when there is no selection or the input is masked.
 func (inp *InputWidget) CopySelection() {
-	if !inp.hasSelection() {
+	if !inp.hasSelection() || inp.Config.Mask {
 		return
 	}
 	lo, hi := inp.selRange()
@@ -627,22 +926,23 @@ func (inp *InputWidget) CopySelection() {
 }
 
 // CutSelection copies the selected text to the clipboard and removes it from
-// the input. It does nothing when there is no selection.
+// the input. It does nothing when there is no selection or the input is
+// masked.
 func (inp *InputWidget) CutSelection() {
-	if !inp.hasSelection() {
+	if !inp.hasSelection() || inp.Config.Mask {
 		return
 	}
 	inp.CopySelection()
+	inp.recordEdit()
 	inp.deleteSelection()
-}
-
-func (inp *InputWidget) pasteClipboard() {
-	inp.PasteText(clipboard.Get())
 }
 
 // word navigation
 
 func (inp *InputWidget) wordLeft() int {
+	if inp.Config.Mask {
+		return 0
+	}
 	runes := []rune(inp.text)
 	pos := inp.cursorPos - 1
 	if pos >= len(runes) {
@@ -668,6 +968,9 @@ func (inp *InputWidget) wordLeft() int {
 }
 
 func (inp *InputWidget) wordRight() int {
+	if inp.Config.Mask {
+		return len([]rune(inp.text))
+	}
 	runes := []rune(inp.text)
 	pos := inp.cursorPos
 	if pos >= len(runes) {
@@ -694,6 +997,7 @@ func isInputWordRune(r rune) bool {
 }
 
 func (inp *InputWidget) notify() {
+	inp.CancelPointerCapture()
 	if inp.Config.OnChange != nil {
 		inp.Config.OnChange(inp.text)
 	}

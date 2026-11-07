@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 func (a *App) RunExternalFormatter() {
@@ -18,11 +19,11 @@ func (a *App) RunExternalFormatter() {
 	cmd := a.formatterForFile(path)
 	if cmd == "" {
 		ext := strings.TrimPrefix(filepath.Ext(path), ".")
-		a.StatusWarn(fmt.Sprintf("No formatter configured for .%s files", ext))
+		a.StatusWarn(i18n.Format("status.noFormatterConfiguredForFiles", i18n.Args{"ext": ext}))
 		return
 	}
 	if err := a.applyExternalFormatter(cmd, path); err != nil {
-		a.StatusWarn("Format: " + err.Error())
+		a.StatusWarn(i18n.Format("status.format", i18n.Args{"error": err.Error()}))
 	}
 }
 
@@ -32,7 +33,7 @@ func (a *App) FormatExternalOnSave(path string) bool {
 		return false
 	}
 	if err := a.applyExternalFormatter(cmd, path); err != nil {
-		a.StatusWarn("Format on save: " + err.Error())
+		a.StatusWarn(i18n.Format("status.formatOnSave", i18n.Args{"error": err.Error()}))
 		return false
 	}
 	return true

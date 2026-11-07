@@ -24,6 +24,9 @@ func wrapLineSegments(runes []rune, width, tabW int) []int {
 		}
 		if visCol+advance > width && visCol > 0 {
 			segments = append(segments, i)
+			if ch == '\t' {
+				advance = tabW
+			}
 			visCol = advance
 		} else {
 			visCol += advance
@@ -49,6 +52,9 @@ func wrapLineVisualRows(line string, width, tabW int) int {
 		}
 		if visCol+advance > width && visCol > 0 {
 			rows++
+			if ch == '\t' {
+				advance = tabW
+			}
 			visCol = advance
 		} else {
 			visCol += advance

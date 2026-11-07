@@ -374,3 +374,169 @@ func TestReconcileMarkdownFullWidthDividers(t *testing.T) {
 		previous = md
 	}
 }
+
+func TestPluginDrawerMarkdownKeyboardFocusLifecycle(t *testing.T) {
+	ws := NewWidgetState()
+	p := &Plugin{Name: "test", State: lua.NewState()}
+	defer p.State.Close()
+
+	descs := []WidgetDesc{{
+		Kind:            WidgetMarkdown,
+		Key:             "markdown:0",
+		MarkdownContent: "<details><summary>Section 1</summary>Content 1</details>\n\n<details><summary>Section 2</summary>Content 2</details>",
+	}}
+
+	ws.Reconcile(descs, p)
+	ws.focus.SetActive(true)
+
+	sv := ws.items[0].(*widgets.ScrollViewWidget)
+	md := sv.Child.(*widgets.MarkdownWidget)
+
+	// ScrollView wrapping a focusable MarkdownWidget must not be in the focus ring
+	if sv.Focusable() {
+		t.Error("scrollview wrapping focusable markdown widget should not be focusable")
+	}
+	if ws.focus.ItemCount() != 1 {
+		t.Fatalf("expected 1 focusable item in ring, got %d", ws.focus.ItemCount())
+	}
+	if ws.focus.Focused() != md {
+		t.Fatalf("expected MarkdownWidget to be focused, got %T", ws.focus.Focused())
+	}
+
+	// First summary should be focused initially
+	if md.FocusedDetailID() != 1 {
+		t.Fatalf("expected focusedDetailID=1 initially, got %d", md.FocusedDetailID())
+	}
+
+	// Enter activates Section 1
+	res := ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if res != widgets.EventConsumed {
+		t.Fatalf("expected KeyEnter to be consumed, got %v", res)
+	}
+	if !md.Document().IsOpen(1) {
+		t.Fatal("expected Section 1 to be expanded after Enter")
+	}
+
+	// Tab navigates to Section 2
+	res = ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
+	if res != widgets.EventConsumed {
+		t.Fatalf("expected KeyTab to be consumed, got %v", res)
+	}
+	if md.FocusedDetailID() != 2 {
+		t.Fatalf("expected focusedDetailID=2 after Tab, got %d", md.FocusedDetailID())
+	}
+
+	// Space activates Section 2
+	res = ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyRune, " ", tcell.ModNone))
+	if res != widgets.EventConsumed {
+		t.Fatalf("expected Space to be consumed, got %v", res)
+	}
+	if !md.Document().IsOpen(2) {
+		t.Fatal("expected Section 2 to be expanded after Space")
+	}
+
+	// Shift+Tab navigates back to Section 1
+	res = ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyBacktab, "", tcell.ModNone))
+	if res != widgets.EventConsumed {
+		t.Fatalf("expected KeyBacktab to be consumed, got %v", res)
+	}
+	if md.FocusedDetailID() != 1 {
+		t.Fatalf("expected focusedDetailID=1 after Shift+Tab, got %d", md.FocusedDetailID())
+	}
+
+	// Plugin redraw / reconcile cycle: focus must survive
+	ws.Reconcile(descs, p)
+	if md.FocusedDetailID() != 1 {
+		t.Fatalf("expected focusedDetailID=1 to survive Reconcile, got %d", md.FocusedDetailID())
+	}
+	if !md.Document().IsOpen(1) {
+		t.Fatal("expected Section 1 to remain expanded across Reconcile")
+	}
+
+	// Enter collapses Section 1
+	res = ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+	if res != widgets.EventConsumed {
+		t.Fatalf("expected KeyEnter to be consumed on collapse, got %v", res)
+	}
+	if md.Document().IsOpen(1) {
+		t.Fatal("expected Section 1 to be collapsed after Enter")
+	}
+}
+
+func TestPluginDrawerMultiWidgetMarkdownFocusRing(t *testing.T) {
+	ws := NewWidgetState()
+	p := &Plugin{Name: "test", State: lua.NewState()}
+	defer p.State.Close()
+
+	descs := []WidgetDesc{
+		{Kind: WidgetButton, Key: "btn:1", Label: "Top"},
+		{Kind: WidgetMarkdown, Key: "markdown:0", MarkdownContent: "<details><summary>Sec 1</summary>Body 1</details>\n\n<details><summary>Sec 2</summary>Body 2</details>"},
+		{Kind: WidgetButton, Key: "btn:2", Label: "Bottom"},
+	}
+
+	ws.Reconcile(descs, p)
+	ws.focus.SetActive(true)
+
+	btn1 := ws.items[0].(*widgets.ButtonWidget)
+	sv := ws.items[1].(*widgets.ScrollViewWidget)
+	md := sv.Child.(*widgets.MarkdownWidget)
+	btn2 := ws.items[2].(*widgets.ButtonWidget)
+
+	// Ring must contain: btn1, md, btn2 (sv skipped)
+	if ws.focus.ItemCount() != 3 {
+		t.Fatalf("expected 3 items in ring, got %d", ws.focus.ItemCount())
+	}
+
+	// Initial focus on btn1
+	if ws.focus.Focused() != btn1 {
+		t.Fatalf("expected initial focus on btn1, got %T", ws.focus.Focused())
+	}
+
+	// Tab -> moves to md (Sec 1)
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
+	if ws.focus.Focused() != md || md.FocusedDetailID() != 1 {
+		t.Fatalf("expected md with Sec 1 focused, got %T (detail %d)", ws.focus.Focused(), md.FocusedDetailID())
+	}
+
+	// Tab -> internal advance to Sec 2
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
+	if ws.focus.Focused() != md || md.FocusedDetailID() != 2 {
+		t.Fatalf("expected md with Sec 2 focused, got %T (detail %d)", ws.focus.Focused(), md.FocusedDetailID())
+	}
+
+	// Tab -> leaves md, advances to btn2
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
+	if ws.focus.Focused() != btn2 {
+		t.Fatalf("expected btn2 focused, got %T", ws.focus.Focused())
+	}
+
+	// Tab -> wraps to btn1
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
+	if ws.focus.Focused() != btn1 {
+		t.Fatalf("expected btn1 focused after wrap, got %T", ws.focus.Focused())
+	}
+
+	// Shift+Tab -> moves backwards to btn2
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyBacktab, "", tcell.ModNone))
+	if ws.focus.Focused() != btn2 {
+		t.Fatalf("expected btn2 focused after backtab, got %T", ws.focus.Focused())
+	}
+
+	// Shift+Tab -> moves backwards to md (Sec 2, last detail)
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyBacktab, "", tcell.ModNone))
+	if ws.focus.Focused() != md || md.FocusedDetailID() != 2 {
+		t.Fatalf("expected md with Sec 2 focused on reverse entry, got %T (detail %d)", ws.focus.Focused(), md.FocusedDetailID())
+	}
+
+	// Shift+Tab -> internal retreat to Sec 1
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyBacktab, "", tcell.ModNone))
+	if ws.focus.Focused() != md || md.FocusedDetailID() != 1 {
+		t.Fatalf("expected md with Sec 1 focused, got %T (detail %d)", ws.focus.Focused(), md.FocusedDetailID())
+	}
+
+	// Shift+Tab -> leaves md, retreats to btn1
+	ws.focus.HandleEvent(tcell.NewEventKey(tcell.KeyBacktab, "", tcell.ModNone))
+	if ws.focus.Focused() != btn1 {
+		t.Fatalf("expected btn1 focused after retreating from md, got %T", ws.focus.Focused())
+	}
+}

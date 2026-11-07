@@ -450,3 +450,57 @@ func TestTerminalPermissions(t *testing.T) {
 		t.Fatalf("display entries = %+v, want two terminal rows", labels)
 	}
 }
+
+func TestNetworkRPCUnmarshalValidatesEndpoints(t *testing.T) {
+	var ps PermissionSet
+	if err := json.Unmarshal([]byte(`{"network.rpc": ["127.0.0.1:4250", "[::1]:9", "unix:~/hub.sock", "unix:{config}/hub.sock", "unix:/run/hub.sock"]}`), &ps); err != nil {
+		t.Fatal(err)
+	}
+	if len(ps.NetworkRPC.Endpoints) != 5 {
+		t.Fatalf("endpoints = %v", ps.NetworkRPC.Endpoints)
+	}
+	for _, bad := range []string{`true`, `["127.0.0.1"]`, `["unix:relative.sock"]`, `["unix:*"]`, `["unix:{workspace}"]`, `["::1:9"]`} {
+		var ps PermissionSet
+		if err := json.Unmarshal([]byte(`{"network.rpc": `+bad+`}`), &ps); err == nil {
+			t.Errorf("network.rpc %s accepted", bad)
+		}
+	}
+}
+
+func TestNetworkRPCAllows(t *testing.T) {
+	n := NetworkRPC{Endpoints: []string{"LocalHost:4250", "[::1]:9", "unix:~/hub.sock"}}
+	for _, ok := range []string{"localhost:4250", "[0:0:0:0:0:0:0:1]:9", "unix:~/hub.sock"} {
+		if !n.Allows(ok) {
+			t.Errorf("Allows(%q) = false", ok)
+		}
+	}
+	for _, no := range []string{"localhost:4251", "localhost", "127.0.0.1:4250", "unix:/home/x/hub.sock", "unix:~/other.sock"} {
+		if n.Allows(no) {
+			t.Errorf("Allows(%q) = true", no)
+		}
+	}
+}
+
+func TestNetworkRPCDiffDisplayIntersect(t *testing.T) {
+	granted := PermissionSet{NetworkRPC: NetworkRPC{Endpoints: []string{"127.0.0.1:4250"}}}
+	requested := PermissionSet{NetworkRPC: NetworkRPC{Endpoints: []string{"127.0.0.1:4250", "unix:~/hub.sock"}}}
+	diff := DiffPermissions(granted, requested)
+	if len(diff.Entries) != 1 || diff.Entries[0] != (PermissionDiffEntry{Name: "network.rpc", Value: "unix:~/hub.sock"}) {
+		t.Fatalf("diff = %v", diff.Entries)
+	}
+	if got := IntersectPermissions(granted, requested).NetworkRPC.Endpoints; len(got) != 1 || got[0] != "127.0.0.1:4250" {
+		t.Fatalf("intersect = %v", got)
+	}
+	found := false
+	for _, e := range requested.DisplayEntries() {
+		if e.Value == "unix:~/hub.sock" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("display entries omit the rpc endpoint")
+	}
+	if err := (PermissionSet{}).Check("network.rpc"); err == nil {
+		t.Fatal("network.rpc granted by an empty set")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -48,6 +49,26 @@ func TestSettingsViewReflectsCurrentValues(t *testing.T) {
 	}
 	if !rowHas(h, "Line numbers", uncheckedBox) {
 		t.Errorf("line numbers should render unchecked:\n%s", h.screenText())
+	}
+}
+
+func TestSettingsTerminalPaddingAcceptsZeroAndLiveApplies(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Terminal", "Terminal")
+	if !rowHas(h, "Horizontal padding", "❯ 1") {
+		t.Fatalf("padding should default to 1:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Horizontal padding", "❯")
+	h.pressKey(tcell.KeyEnd, tcell.ModNone)
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	h.pressRune('0')
+	h.exec("settings.apply")
+	if h.app.Settings.Terminal.PaddingX != 0 || h.app.TerminalPanel.PaddingX != 0 {
+		t.Fatalf("padding did not live-apply: settings=%d panel=%d", h.app.Settings.Terminal.PaddingX, h.app.TerminalPanel.PaddingX)
+	}
+	if got := config.LoadSettings().Terminal.PaddingX; got != 0 {
+		t.Fatalf("saved padding = %d, want 0", got)
 	}
 }
 
@@ -146,6 +167,31 @@ func TestSettingsMouseTogglesAndApplies(t *testing.T) {
 	}
 }
 
+func TestSettingsPointerShapesToggle(t *testing.T) {
+	h := openSettings(t)
+	clickRowControl(t, h, "Appearance", "Appearance")
+
+	if !rowHas(h, "Pointer shapes", checkedBox) {
+		t.Fatalf("expected Pointer shapes to be checked by default:\n%s", h.screenText())
+	}
+	if !h.app.Screen.PointerShapesEnabled() {
+		t.Fatal("screen pointer shapes should start enabled")
+	}
+
+	clickRowControl(t, h, "Pointer shapes", checkedBox)
+	if !rowHas(h, "Pointer shapes", uncheckedBox) {
+		t.Fatalf("clicking Pointer shapes checkbox did not toggle it to unchecked:\n%s", h.screenText())
+	}
+
+	clickRowControl(t, h, "Apply", "Apply")
+	if h.app.Settings.Appearance.PointerShapesEnabled() {
+		t.Error("clicking Apply did not update Settings.Appearance.PointerShapes to false")
+	}
+	if h.app.Screen.PointerShapesEnabled() {
+		t.Error("clicking Apply did not update Screen.PointerShapesEnabled to false")
+	}
+}
+
 func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Appearance", "Appearance")
@@ -158,7 +204,7 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	clickRowControl(t, h, "Default", "Default")
 
 	screen := h.screenText()
-	if !strings.Contains(screen, "▴") {
+	if !strings.Contains(screen, string(icons.PlainChevronUp)) {
 		t.Errorf("chevron should point up while open:\n%s", screen)
 	}
 	if !strings.Contains(screen, "default-dark") {
@@ -171,7 +217,7 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	if strings.Contains(screen, "dracula") {
 		t.Errorf("popup should close after picking an item:\n%s", screen)
 	}
-	if !rowHas(h, "default-dark", "▾") {
+	if !rowHas(h, "default-dark", string(icons.PlainChevronDown)) {
 		t.Errorf("select should display the picked value:\n%s", screen)
 	}
 

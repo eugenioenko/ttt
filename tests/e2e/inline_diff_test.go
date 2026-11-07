@@ -72,6 +72,71 @@ func TestOpenChangesEditsInlineDiff(t *testing.T) {
 	}
 }
 
+func TestChangesOpenFileLeavesInlineDiffAndPreservesEdits(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	path := filepath.Join(h.dir, "code.txt")
+	if err := os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	initializeHarnessRepository(t, h.dir)
+	if err := os.WriteFile(path, []byte("one\nTWO\nthree\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.RefreshChanges()
+	h.exec("sidebar.changes")
+	fileRow := -1
+	for y, row := range strings.Split(h.screenText(), "\n") {
+		if strings.Contains(row, "code.txt") {
+			fileRow = y
+			break
+		}
+	}
+	if fileRow < 0 {
+		t.Fatal("changed file missing from panel")
+	}
+	h.click(10, fileRow)
+	h.exec("changes.openDiff")
+	if !h.app.EditorGroup.IsInlineDiffActive() {
+		t.Fatal("inline diff not active")
+	}
+	h.app.EditorGroup.GoToLine(3)
+	h.exec("editor.focus")
+	h.pressKey(tcell.KeyEnd, tcell.ModNone)
+	h.pressRune('!')
+	buf := h.app.EditorGroup.ActiveBuffer()
+	line, col := h.app.EditorGroup.ActiveCursor()
+	tabCount := len(h.app.EditorGroup.TabBar.Tabs)
+
+	h.rightClick(10, fileRow)
+	menu := focusedContextMenu(t, h)
+	for i, item := range menu.Items {
+		if item.Command == "changes.openFile" {
+			menu.Selected = i
+			break
+		}
+	}
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	if h.app.EditorGroup.IsInlineDiffActive() {
+		t.Fatal("Open File left the tab in diff mode")
+	}
+	if h.app.EditorGroup.ActiveBuffer() != buf || buf.Lines[2] != "three!" || !buf.Dirty {
+		t.Fatal("Open File lost the edited buffer")
+	}
+	if gotLine, gotCol := h.app.EditorGroup.ActiveCursor(); gotLine != line || gotCol != col {
+		t.Fatalf("cursor = %d:%d, want %d:%d", gotLine, gotCol, line, col)
+	}
+	if len(h.app.EditorGroup.TabBar.Tabs) != tabCount {
+		t.Fatal("Open File created another tab")
+	}
+	h.assertNotContains("code.txt (diff)")
+	h.assertNotContains("two")
+	h.exec("editor.undo")
+	if buf.Lines[2] != "three" {
+		t.Fatal("Open File lost undo history")
+	}
+}
+
 func TestSplitInlineDiffScrollsInStep(t *testing.T) {
 	h := newTestHarness(t, 120, 20)
 	defer h.stop()
@@ -387,5 +452,60 @@ func TestReadOnlyTabKeepsMultiCursorSelection(t *testing.T) {
 	want := []string{"foo bar", "foo baz"}
 	if got := h.app.EditorGroup.Editor.Buf.Lines; !slices.Equal(got, want) {
 		t.Fatalf("typing with multiple cursors edited a read-only tab: %q", got)
+	}
+}
+
+func TestInlineDiffWrapDownSkipsDeletedRows(t *testing.T) {
+	h := newTestHarness(t, 100, 20)
+	defer h.stop()
+	path := filepath.Join(h.dir, "wrapmove.txt")
+	os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644)
+	initializeHarnessRepository(t, h.dir)
+	long := "beta " + strings.Repeat("wrapped ", 20)
+	os.WriteFile(path, []byte("alpha\n"+long+"\ngamma\n"), 0644)
+
+	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "wrapmove.txt", Status: "M"}, false, false)
+	h.exec("diff.unifiedView")
+	editor := h.app.EditorGroup.Editor
+	if !editor.WordWrap {
+		h.exec("diff.toggleWrap")
+	}
+	h.app.EditorGroup.GoToLine(1)
+	h.exec("editor.focus")
+	h.redraw()
+	if !editor.WordWrap {
+		t.Fatal("diff did not wrap")
+	}
+
+	alphaY := editor.CursorY
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.redraw()
+	if editor.Cursor.Line != 1 || editor.Cursor.Col != 0 {
+		t.Fatalf("Down from alpha moved to (%d,%d), want (1,0)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+	if editor.CursorY <= alphaY+1 {
+		t.Fatalf("cursor on screen row %d, want it past the deleted row below alpha at %d:\n%s", editor.CursorY, alphaY, h.screenText())
+	}
+	if row := h.screenRow(editor.CursorY); !strings.Contains(row, "beta wrapped") {
+		t.Fatalf("cursor row %q is not the edited line", row)
+	}
+
+	for editor.Cursor.Line == 1 {
+		y := editor.CursorY
+		h.pressKey(tcell.KeyDown, tcell.ModNone)
+		h.redraw()
+		if editor.Cursor.Line == 1 && editor.CursorY != y+1 {
+			t.Fatalf("Down inside the wrapped line moved from row %d to %d", y, editor.CursorY)
+		}
+	}
+	if editor.Cursor.Line != 2 {
+		t.Fatalf("Down past the wrapped line moved to line %d, want 2", editor.Cursor.Line)
+	}
+
+	h.pressKey(tcell.KeyUp, tcell.ModNone)
+	h.pressKey(tcell.KeyUp, tcell.ModNone)
+	h.redraw()
+	if editor.Cursor.Line != 1 || editor.Cursor.Col == 0 {
+		t.Fatalf("Up twice from gamma moved to (%d,%d), want a wrapped row of line 1", editor.Cursor.Line, editor.Cursor.Col)
 	}
 }

@@ -92,6 +92,64 @@ func TestNormalizeSettingsEmptyGutterStyle(t *testing.T) {
 	}
 }
 
+func TestNormalizeSettingsValidSelectionStyles(t *testing.T) {
+	for _, style := range SelectionStyles {
+		s := DefaultSettings()
+		s.Editor.SelectionStyle = style
+		s.Terminal.SelectionStyle = style
+		normalizeSettings(&s)
+		if s.Editor.SelectionStyle != style {
+			t.Errorf("expected editor SelectionStyle %q to be preserved, got %q", style, s.Editor.SelectionStyle)
+		}
+		if s.Terminal.SelectionStyle != style {
+			t.Errorf("expected terminal SelectionStyle %q to be preserved, got %q", style, s.Terminal.SelectionStyle)
+		}
+	}
+}
+
+func TestNormalizeSettingsInvalidSelectionStyle(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.SelectionStyle = "invalid"
+	s.Terminal.SelectionStyle = "invalid"
+	normalizeSettings(&s)
+	if s.Editor.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected invalid editor SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Editor.SelectionStyle)
+	}
+	if s.Terminal.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected invalid terminal SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Terminal.SelectionStyle)
+	}
+}
+
+func TestNormalizeSettingsEmptySelectionStyle(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.SelectionStyle = ""
+	s.Terminal.SelectionStyle = ""
+	normalizeSettings(&s)
+	if s.Editor.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected empty editor SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Editor.SelectionStyle)
+	}
+	if s.Terminal.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("expected empty terminal SelectionStyle to become %q, got %q", SelectionStyleBackground, s.Terminal.SelectionStyle)
+	}
+}
+
+func TestNormalizeSettingsPluginSelectionStyleDefaultsToInvert(t *testing.T) {
+	for _, style := range []string{"", "invalid"} {
+		s := DefaultSettings()
+		s.Plugins.SelectionStyle = style
+		normalizeSettings(&s)
+		if s.Plugins.SelectionStyle != SelectionStyleInvert {
+			t.Errorf("plugins SelectionStyle %q became %q, want %q", style, s.Plugins.SelectionStyle, SelectionStyleInvert)
+		}
+	}
+	s := DefaultSettings()
+	s.Plugins.SelectionStyle = SelectionStyleBackground
+	normalizeSettings(&s)
+	if s.Plugins.SelectionStyle != SelectionStyleBackground {
+		t.Errorf("plugins SelectionStyle %q was not preserved", SelectionStyleBackground)
+	}
+}
+
 func TestLSPSettingsIsEnabled(t *testing.T) {
 	// nil Enabled means default (true)
 	s := LSPSettings{}
@@ -130,6 +188,25 @@ func TestWelcomeSettingsRecentFoldersEnabled(t *testing.T) {
 	s.RecentFolders = &disabled
 	if s.IsRecentFoldersEnabled() {
 		t.Error("recent folders should be disabled when explicitly false")
+	}
+}
+
+func TestAppearanceSettingsPointerShapesEnabled(t *testing.T) {
+	s := AppearanceSettings{}
+	if !s.PointerShapesEnabled() {
+		t.Error("pointer shapes should default to enabled when nil")
+	}
+
+	enabled := true
+	s.PointerShapes = &enabled
+	if !s.PointerShapesEnabled() {
+		t.Error("pointer shapes should be enabled when explicitly true")
+	}
+
+	disabled := false
+	s.PointerShapes = &disabled
+	if s.PointerShapesEnabled() {
+		t.Error("pointer shapes should be disabled when explicitly false")
 	}
 }
 
@@ -246,6 +323,12 @@ func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
 
 func TestDefaultTerminalSettings(t *testing.T) {
 	ts := DefaultTerminalSettings()
+	if ts.PaddingX != 1 {
+		t.Errorf("expected PaddingX 1, got %d", ts.PaddingX)
+	}
+	if !ts.CtrlVPastes {
+		t.Error("expected CtrlVPastes true by default")
+	}
 	if ts.Scrollback != 1000 {
 		t.Errorf("expected Scrollback 1000, got %d", ts.Scrollback)
 	}
@@ -501,5 +584,36 @@ func TestWordWrapMaxBytes(t *testing.T) {
 	}
 	if _, ok := editorRaw["largeFiles"]; ok {
 		t.Errorf("settings.json contains largeFiles key for default settings: %s", string(data))
+	}
+}
+
+func TestSidebarTabStyleInvalidFallsBackToLabel(t *testing.T) {
+	s := DefaultSettings()
+	if s.Sidebar.TabStyle != SidebarTabStyleLabel {
+		t.Fatalf("default = %q", s.Sidebar.TabStyle)
+	}
+	s.Sidebar.TabStyle = "bogus"
+	normalizeSettings(&s)
+	if s.Sidebar.TabStyle != SidebarTabStyleLabel {
+		t.Errorf("normalized = %q", s.Sidebar.TabStyle)
+	}
+}
+
+func TestSettingsReuseWindowRoundTrip(t *testing.T) {
+	original := DefaultSettings()
+	original.ReuseWindow = true
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored Settings
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if !restored.ReuseWindow {
+		t.Fatal("reuseWindow did not survive round trip")
+	}
+	if _, ok := restored.Extra["reuseWindow"]; ok {
+		t.Fatal("reuseWindow was treated as an unknown setting")
 	}
 }

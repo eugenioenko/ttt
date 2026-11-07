@@ -15,15 +15,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/eugenioenko/ttt/internal/jsonrpc"
 )
 
 type Client struct {
 	cmd      *exec.Cmd
-	codec    *Codec
-	nextID   int
-	pending  map[int]chan Response
-	mu       sync.Mutex
-	done     chan struct{}
+	conn     *jsonrpc.Conn
 	closing  atomic.Bool
 	waitOnce sync.Once
 
@@ -49,6 +47,8 @@ type ClientHooks struct {
 	OnExit func()
 }
 
+const CodeServerCancelled = -32802
+
 func NewClient(command []string, workDir string, hooks ClientHooks) (*Client, error) {
 	if len(command) == 0 {
 		return nil, fmt.Errorf("empty command")
@@ -73,17 +73,21 @@ func NewClient(command []string, workDir string, hooks ClientHooks) (*Client, er
 		return nil, fmt.Errorf("start %s: %w", command[0], err)
 	}
 
-	c := &Client{
-		cmd:     cmd,
-		codec:   NewCodec(stdout, stdin),
-		nextID:  1,
-		pending: make(map[int]chan Response),
-		done:    make(chan struct{}),
-		hooks:   hooks,
-	}
+	c := newClient(stdout, stdin, hooks)
+	c.cmd = cmd
 	go c.drainStderr(stderr)
-	go c.readLoop()
 	return c, nil
+}
+
+func newClient(r io.Reader, w io.Writer, hooks ClientHooks) *Client {
+	c := &Client{hooks: hooks}
+	c.conn = jsonrpc.NewConn(r, w, jsonrpc.Options{
+		OnNotification: c.handleNotification,
+		OnRequest:      c.answer,
+		OnCancel:       c.cancelRequest,
+		OnClose:        c.handleClose,
+	})
+	return c
 }
 
 func (c *Client) log(level, message string) {
@@ -96,7 +100,7 @@ func (c *Client) log(level, message string) {
 // to start, crashes, or rejects its config explains why on stderr and nowhere
 // else, so without this the user sees only silent absence of LSP features.
 // Level is "info" because servers vary in how much routine chatter they emit
-// here; genuine failures are reported by the exit path in readLoop.
+// here; genuine failures are reported by handleClose.
 func (c *Client) drainStderr(r io.ReadCloser) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -107,88 +111,52 @@ func (c *Client) drainStderr(r io.ReadCloser) {
 	}
 }
 
-func (c *Client) readLoop() {
-	defer close(c.done)
-	for {
-		resp, err := c.codec.Receive()
-		if err != nil {
-			slog.Debug("lsp read loop exit", "err", err)
+func (c *Client) handleClose(err error) {
+	if !c.closing.Load() {
+		c.log("error", "server exited unexpectedly: "+err.Error())
+		if c.hooks.OnExit != nil {
+			c.hooks.OnExit()
+		}
+	}
+}
 
-			// Release in-flight callers before notifying. OnExit may block on a
-			// lock held by whoever is waiting on this server — Initialize, for
-			// one — and that caller cannot make progress until its request is
-			// released here.
-			c.mu.Lock()
-			for _, ch := range c.pending {
-				close(ch)
-			}
-			c.pending = make(map[int]chan Response)
-			c.mu.Unlock()
-
-			if !c.closing.Load() {
-				c.log("error", "server exited unexpectedly: "+err.Error())
-				if c.hooks.OnExit != nil {
-					c.hooks.OnExit()
-				}
-			}
-			return
-		}
-		if resp.IsNotification() {
-			slog.Debug("lsp notification", "method", resp.Method)
-			if resp.Method == "textDocument/publishDiagnostics" && c.OnDiagnostics != nil {
-				var params PublishDiagnosticsParams
-				if err := json.Unmarshal(resp.Params, &params); err == nil {
-					c.OnDiagnostics(params)
-				}
-			}
-			continue
-		}
-		if resp.IsRequest() {
-			slog.Debug("lsp server request", "method", resp.Method)
-			// Off the read loop: a server blocked writing to us may not be
-			// reading its stdin, and a reply written from here could then
-			// deadlock both sides.
-			go c.answer(resp)
-			continue
-		}
-		var id int
-		if !resp.HasID() || json.Unmarshal(resp.ID, &id) != nil {
-			continue
-		}
-		c.mu.Lock()
-		ch, ok := c.pending[id]
-		if ok {
-			delete(c.pending, id)
-		}
-		c.mu.Unlock()
-		if ok {
-			ch <- resp
+func (c *Client) handleNotification(method string, params json.RawMessage) {
+	slog.Debug("lsp notification", "method", method)
+	if method == "textDocument/publishDiagnostics" && c.OnDiagnostics != nil {
+		var p PublishDiagnosticsParams
+		if err := json.Unmarshal(params, &p); err == nil {
+			c.OnDiagnostics(p)
 		}
 	}
 }
 
 // answer replies to a server request; TypeScript 7's native server handles
 // nothing else until its requests are answered.
-func (c *Client) answer(req Response) {
-	reply := Reply{JSONRPC: "2.0", ID: req.ID}
-	switch req.Method {
+func (c *Client) answer(method string, params json.RawMessage) (any, error) {
+	slog.Debug("lsp server request", "method", method)
+	switch method {
 	case "workspace/configuration":
-		var params ConfigurationParams
-		_ = json.Unmarshal(req.Params, &params)
-		reply.Result, _ = json.Marshal(make([]any, len(params.Items)))
+		var p ConfigurationParams
+		_ = json.Unmarshal(params, &p)
+		return make([]any, len(p.Items)), nil
 	case "client/registerCapability", "client/unregisterCapability":
-		reply.Result = json.RawMessage("null")
+		return nil, nil
 	case "workspace/diagnostic/refresh":
-		reply.Result = json.RawMessage("null")
 		if c.OnDiagnosticRefresh != nil {
 			c.OnDiagnosticRefresh()
 		}
-	default:
-		reply.Error = &RPCError{Code: CodeMethodNotFound, Message: "method not supported: " + req.Method}
+		return nil, nil
 	}
-	if err := c.codec.Send(reply); err != nil {
-		slog.Debug("lsp reply failed", "method", req.Method, "err", err)
-	}
+	return nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not supported: " + method}
+}
+
+func (c *Client) cancelRequest(id int) {
+	// A server not reading stdin must not prevent cancellation from returning.
+	go func() {
+		_ = c.notify("$/cancelRequest", struct {
+			ID int `json:"id"`
+		}{ID: id})
+	}()
 }
 
 func (c *Client) call(method string, params any) (json.RawMessage, error) {
@@ -196,73 +164,21 @@ func (c *Client) call(method string, params any) (json.RawMessage, error) {
 }
 
 func (c *Client) callContext(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	c.mu.Lock()
-	id := c.nextID
-	c.nextID++
-	ch := make(chan Response, 1)
-	c.pending[id] = ch
-	c.mu.Unlock()
-
-	err := c.codec.Send(Request{
-		JSONRPC: "2.0",
-		ID:      &id,
-		Method:  method,
-		Params:  params,
-	})
-	if err != nil {
-		c.mu.Lock()
-		delete(c.pending, id)
-		c.mu.Unlock()
-		return nil, err
-	}
-
-	var resp Response
-	var ok bool
-	select {
-	case resp, ok = <-ch:
-	case <-ctx.Done():
-		c.mu.Lock()
-		delete(c.pending, id)
-		c.mu.Unlock()
-		// A server not reading stdin must not prevent cancellation from returning.
-		go func() {
-			_ = c.notify("$/cancelRequest", struct {
-				ID int `json:"id"`
-			}{ID: id})
-		}()
-		return nil, ctx.Err()
-	case <-c.done:
-		// The read loop empties the pending map when it exits, so a request
-		// registered after that point would otherwise wait out the full
-		// timeout for a reply that can never arrive.
-		c.mu.Lock()
-		delete(c.pending, id)
-		c.mu.Unlock()
-		return nil, fmt.Errorf("connection closed")
-	case <-time.After(10 * time.Second):
-		c.mu.Lock()
-		delete(c.pending, id)
-		c.mu.Unlock()
+	timeoutCtx, cancel := context.WithTimeoutCause(ctx, requestTimeout, errRequestTimeout)
+	defer cancel()
+	result, err := c.conn.Call(timeoutCtx, method, params)
+	if err != nil && ctx.Err() == nil && errors.Is(context.Cause(timeoutCtx), errRequestTimeout) {
 		return nil, fmt.Errorf("LSP request %s timed out", method)
 	}
-	if !ok {
-		return nil, fmt.Errorf("connection closed")
-	}
-	if resp.Error != nil {
-		return nil, resp.Error
-	}
-	return resp.Result, nil
+	return result, err
 }
 
+var requestTimeout = 10 * time.Second
+
+var errRequestTimeout = errors.New("lsp request timeout")
+
 func (c *Client) notify(method string, params any) error {
-	return c.codec.Send(Request{
-		JSONRPC: "2.0",
-		Method:  method,
-		Params:  params,
-	})
+	return c.conn.Notify(method, params)
 }
 
 func isNullResult(result json.RawMessage) bool {
@@ -401,7 +317,7 @@ func (c *Client) Diagnostic(ctx context.Context, uri string) (diags []Diagnostic
 var ErrRetriggerDiagnostic = errors.New("server asked to retrigger the diagnostic pull")
 
 func shouldRetrigger(err error) bool {
-	var rpcErr *RPCError
+	var rpcErr *jsonrpc.Error
 	if !errors.As(err, &rpcErr) || rpcErr.Code != CodeServerCancelled {
 		return false
 	}

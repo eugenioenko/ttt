@@ -19,6 +19,7 @@ type PRInfo struct {
 	Repo    string
 	Number  int
 	Title   string
+	Body    string
 	BaseSHA string
 	HeadSHA string
 	Files   []PRFile
@@ -63,13 +64,14 @@ func FetchPRInfo(owner, repo string, number int) (*PRInfo, error) {
 
 	cmd := exec.Command("gh", "pr", "view", numStr,
 		"--repo", repoArg,
-		"--json", "title,number,files")
+		"--json", "title,body,number,files")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("gh pr view failed: %w", err)
 	}
 	var result struct {
 		Title  string `json:"title"`
+		Body   string `json:"body"`
 		Number int    `json:"number"`
 		Files  []struct {
 			Path   string `json:"path"`
@@ -101,6 +103,7 @@ func FetchPRInfo(owner, repo string, number int) (*PRInfo, error) {
 		Repo:    repo,
 		Number:  result.Number,
 		Title:   result.Title,
+		Body:    result.Body,
 		BaseSHA: refs.BaseRefOid,
 		HeadSHA: refs.HeadRefOid,
 	}

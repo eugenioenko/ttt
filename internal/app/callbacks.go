@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"os"
 	"path/filepath"
@@ -21,47 +22,58 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func (a *App) openFileLink(path string, line, col int) {
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		a.StatusWarn(err.Error())
+		return
+	}
+	if line > 0 {
+		a.EditorGroup.GoToLineCol(line, col)
+	}
+	a.FocusEditor()
+}
+
 func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	var items []ui.ContextMenuItem
 	switch a.Sidebar.ActivePanel {
 	case "explorer":
 		items = []ui.ContextMenuItem{
-			{Label: "New File", Command: "file.new"},
-			{Label: "Add Folder", Command: "workspace.addFolder"},
-			{Label: "Refresh", Command: "explorer.refresh"},
+			{Label: i18n.Text("general.newFile"), Command: "file.new"},
+			{Label: i18n.Text("general.addFolder"), Command: "workspace.addFolder"},
+			{Label: i18n.Text("general.refresh"), Command: "explorer.refresh"},
 			ui.MenuSep(),
-			{Label: "Expand All", Command: "explorer.expandAll"},
-			{Label: "Collapse All", Command: "explorer.collapseAll"},
+			{Label: i18n.Text("general.expandAll"), Command: "explorer.expandAll"},
+			{Label: i18n.Text("general.collapseAll"), Command: "explorer.collapseAll"},
 			ui.MenuSep(),
-			{Label: "Help", Command: "explorer.help"},
+			{Label: i18n.Text("general.help"), Command: "explorer.help"},
 		}
 	case "search":
-		replaceLabel := "Replace"
+		replaceLabel := i18n.Text("general.replace")
 		if a.Search.IsReplaceMode() {
-			replaceLabel = "Search"
+			replaceLabel = i18n.Text("general.search")
 		}
 		items = []ui.ContextMenuItem{
 			{Label: replaceLabel, Command: "sidebar.searchReplace"},
 			ui.MenuSep(),
-			{Label: "Expand All", Command: "search.expandAll"},
-			{Label: "Collapse All", Command: "search.collapseAll"},
+			{Label: i18n.Text("general.expandAll"), Command: "search.expandAll"},
+			{Label: i18n.Text("general.collapseAll"), Command: "search.collapseAll"},
 			ui.MenuSep(),
-			{Label: "Clear Results", Command: "search.clear"},
+			{Label: i18n.Text("menu.clearResults"), Command: "search.clear"},
 			ui.MenuSep(),
-			{Label: "Help", Command: "search.help"},
+			{Label: i18n.Text("general.help"), Command: "search.help"},
 		}
 	case "changes":
 		items = a.BuildChangesPanelMenu()
 	case "outline":
 		items = []ui.ContextMenuItem{
-			{Label: "Refresh", Command: "sidebar.outline"},
+			{Label: i18n.Text("general.refresh"), Command: "sidebar.outline"},
 		}
 	case "plugins":
 		items = []ui.ContextMenuItem{
-			{Label: "Install from URL", Command: "plugin.install"},
-			{Label: "Refresh", Command: "plugin.refresh"},
+			{Label: i18n.Text("menu.installFromURL"), Command: "plugin.install"},
+			{Label: i18n.Text("general.refresh"), Command: "plugin.refresh"},
 			ui.MenuSep(),
-			{Label: "Help", Command: "plugin.help"},
+			{Label: i18n.Text("general.help"), Command: "plugin.help"},
 		}
 	default:
 		if a.PluginManager != nil {
@@ -87,30 +99,30 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 
 func (a *App) BuildChangesPanelMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
-		{Label: "Open Current Changes", Command: "changes.viewAll"},
+		{Label: i18n.Text("menu.openCurrentChanges"), Command: "changes.viewAll"},
 		ui.MenuSep(),
-		{Label: "Refresh", Command: "changes.refresh"},
-		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
-		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
+		{Label: i18n.Text("general.refresh"), Command: "changes.refresh"},
+		{Label: i18n.Text("menu.gitFiles"), Submenu: a.BuildChangesGitFileOptions()},
+		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
 		ui.MenuSep(),
-		{Label: "Pull", Command: "git.pull"},
-		{Label: "Push", Command: "git.push"},
-		{Label: "Sync", Command: "git.sync"},
-		{Label: "New Branch", Command: "git.newBranch"},
+		{Label: i18n.Text("menu.pull"), Command: "git.pull"},
+		{Label: i18n.Text("menu.push"), Command: "git.push"},
+		{Label: i18n.Text("menu.sync"), Command: "git.sync"},
+		{Label: i18n.Text("menu.newBranch"), Command: "git.newBranch"},
 		ui.MenuSep(),
-		{Label: "Open PR Diff", Command: "pr.openDiff"},
+		{Label: i18n.Text("menu.openPRDiff"), Command: "pr.openDiff"},
 		ui.MenuSep(),
-		{Label: "Help", Command: "changes.help"},
+		{Label: i18n.Text("general.help"), Command: "changes.help"},
 	}
 }
 
 func (a *App) BuildChangesContextMenu() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
-		{Label: "Open Current Changes", Command: "changes.viewAll"},
+		{Label: i18n.Text("menu.openCurrentChanges"), Command: "changes.viewAll"},
 		ui.MenuSep(),
-		{Label: "Refresh", Command: "changes.refresh"},
-		{Label: "Git Files", Submenu: a.BuildChangesGitFileOptions()},
-		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
+		{Label: i18n.Text("general.refresh"), Command: "changes.refresh"},
+		{Label: i18n.Text("menu.gitFiles"), Submenu: a.BuildChangesGitFileOptions()},
+		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
 	}
 }
 
@@ -167,7 +179,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		}
 		if dv := a.EditorGroup.ActiveDiffWidget(); dv != nil {
 			dv.ScrollToLine(line - 1)
-			dv.ApplySearchHighlight(a.Search.Input.Text, a.Search.Options)
+			dv.ApplySearchHighlight(a.Search.Input.Text(), a.Search.Options)
 		}
 		a.Root.SetFocus(a.EditorGroup)
 		return
@@ -179,9 +191,9 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		runeCol := utf8.RuneCountInString(text[:min(col, len(text))])
 		a.EditorGroup.GoToLineCol(line, runeCol+1)
 	}
-	if a.Search.Input.Text != "" {
-		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
-		a.EditorGroup.SetSearch(a.Search.Input.Text, matches)
+	if a.Search.Input.Text() != "" {
+		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text(), a.Search.Options)
+		a.EditorGroup.SetSearch(a.Search.Input.Text(), a.Search.Options, matches)
 	}
 	a.Root.SetFocus(a.EditorGroup)
 }
@@ -189,7 +201,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 func (a *App) PreviewSearchReplace(filePath string, matches []ui.SearchMatch, replacement string, opts ui.SearchOptions) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		a.StatusWarn("Cannot read file: " + err.Error())
+		a.StatusWarn(i18n.Format("status.cannotReadFile", i18n.Args{"error": err.Error()}))
 		return
 	}
 	lines := strings.Split(string(data), "\n")
@@ -228,12 +240,12 @@ func joinReplacedLines(lines []string, original []byte) []byte {
 
 func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, replacement string, opts ui.SearchOptions) {
 	if a.EditorGroup.IsDirtyPath(filePath) {
-		a.StatusWarn(filepath.Base(filePath) + " has unsaved changes; save it before replacing")
+		a.StatusWarn(i18n.Format("status.hasUnsavedChangesSaveItBeforeReplacing", i18n.Args{"filename": filepath.Base(filePath)}))
 		return
 	}
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		a.StatusWarn("Cannot read file: " + err.Error())
+		a.StatusWarn(i18n.Format("status.cannotReadFile", i18n.Args{"error": err.Error()}))
 		return
 	}
 	lines := strings.Split(string(data), "\n")
@@ -241,31 +253,43 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 		lines = lines[:len(lines)-1]
 	}
 	if staleSearchMatches(lines, matches) {
-		a.StatusWarn(filepath.Base(filePath) + " changed since the search; nothing replaced")
+		a.StatusWarn(i18n.Format("status.changedSinceTheSearchNothingReplaced", i18n.Args{"filename": filepath.Base(filePath)}))
 		a.Search.Refresh()
 		return
 	}
 	newLines := ui.ApplyReplacements(lines, matches, replacement, opts)
 	if err := os.WriteFile(filePath, joinReplacedLines(newLines, data), 0644); err != nil {
-		a.StatusWarn("Cannot write file: " + err.Error())
+		a.StatusWarn(i18n.Format("status.cannotWriteFile", i18n.Args{"error": err.Error()}))
 		return
 	}
 	a.invalidateRepositoryPath(filePath, RepositoryWorktree)
 	a.EditorGroup.ReloadFile(filePath)
 	a.Search.Refresh()
-	a.StatusNotify(fmt.Sprintf("Replaced %d matches in %s", len(matches), filepath.Base(filePath)))
+	a.StatusNotify(i18n.Format("status.replacedMatchesIn", i18n.Args{"matchesCount": len(matches), "filename": filepath.Base(filePath)}))
 }
 
 func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, replacement string, opts ui.SearchOptions) {
+	a.confirmSearchReplaceAll(allMatches, replacement, opts, nil)
+}
+
+func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, replacement string, opts ui.SearchOptions, current func() bool) {
 	totalFiles := len(allMatches)
 	totalMatches := 0
 	for _, m := range allMatches {
 		totalMatches += len(m)
 	}
-	msg := fmt.Sprintf("Replace %d matches across %d files? This cannot be undone.", totalMatches, totalFiles)
-	a.ShowConfirmDialog(msg, []string{"Cancel", "Replace All"}, []func(){
-		func() { a.DismissDialog() },
+	msg := i18n.Format("search.confirmReplaceAll", i18n.Args{"totalMatches": totalMatches, "totalFiles": totalFiles})
+	a.ShowConfirmDialog(msg, []string{i18n.Text("general.cancel"), i18n.Text("general.replaceAll")}, []func(){
 		func() {
+			a.DismissDialog()
+			if current != nil {
+				a.cancelSearchReplace()
+			}
+		},
+		func() {
+			if current != nil && !current() {
+				return
+			}
 			a.DismissDialog()
 			invalidatePath := ""
 			replacedMatches, replacedFiles := 0, 0
@@ -300,10 +324,10 @@ func (a *App) ApplySearchReplaceAll(allMatches map[string][]ui.SearchMatch, repl
 			}
 			a.invalidateRepositoryPath(invalidatePath, RepositoryWorktree)
 			a.Search.Refresh()
-			msg := fmt.Sprintf("Replaced %d matches across %d files", replacedMatches, replacedFiles)
+			msg := i18n.Format("search.replacedAcrossFiles", i18n.Args{"replacedMatches": replacedMatches, "replacedFiles": replacedFiles})
 			if len(skipped) > 0 {
 				sort.Strings(skipped)
-				a.StatusWarn(msg + "; skipped " + strings.Join(skipped, ", ") + " (unsaved or changed since the search)")
+				a.StatusWarn(i18n.Format("status.skippedUnsavedOrChangedSinceTheSearch", i18n.Args{"msg": msg, "items": strings.Join(skipped, ", ")}))
 				return
 			}
 			a.StatusNotify(msg)
@@ -360,7 +384,7 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 	if data, err := os.ReadFile(fullPath); err == nil {
 		newLines = diffSideLines(string(data))
 	}
-	a.EditorGroup.OpenDiff(status.Path, parsed, oldLines, newLines, extended)
+	a.EditorGroup.OpenDiffTab(status.Path+" (diff)", "", fullPath, parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
 }
 
@@ -384,7 +408,7 @@ func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
 	}
 	patch, err := git.DiffStagedFile(dir, paths...)
 	if err != nil || patch == "" {
-		a.StatusNotify(fmt.Sprintf("No staged changes for %s", status.Path))
+		a.StatusNotify(i18n.Format("status.noStagedChangesFor", i18n.Args{"path": status.Path}))
 		return
 	}
 	parsed := diff.Parse(patch)
@@ -399,13 +423,13 @@ func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
 			oldLines = diffSideLines(content)
 		}
 	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", status.Path, parsed, oldLines, newLines, extended)
+	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", filepath.Join(dir, status.Path), parsed, oldLines, newLines, extended)
 	a.FocusEditorIfEnabled()
 }
 
 func (a *App) openConflictedFile(fullPath, relPath string) {
 	a.EditorGroup.OpenFile(fullPath)
-	a.StatusNotify(fmt.Sprintf("%s has merge conflicts; opened without a diff", relPath))
+	a.StatusNotify(i18n.Format("status.hasMergeConflictsOpenedWithoutADiff", i18n.Args{"relPath": relPath}))
 	a.FocusEditorIfEnabled()
 }
 
@@ -426,22 +450,22 @@ func diffSideLines(content string) []string {
 }
 
 func (a *App) OpenCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) {
-	a.startDiffOpen(func(ctx context.Context) *DiffOpenResult {
+	a.startDiffOpen(func(ctx context.Context) *diffOpenResult {
 		return readCommitDiff(ctx, dir, ref, short, status, extended)
 	})
 }
 
-func readCommitDiff(ctx context.Context, dir, ref, short string, status git.FileStatus, extended bool) *DiffOpenResult {
+func readCommitDiff(ctx context.Context, dir, ref, short string, status git.FileStatus, extended bool) *diffOpenResult {
 	diffText, err := git.CommitFileDiffContext(ctx, dir, ref, status)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return &DiffOpenResult{Canceled: true}
+			return &diffOpenResult{Canceled: true}
 		}
-		return &DiffOpenResult{Warn: fmt.Sprintf("Could not read %s at %s", status.Path, short)}
+		return &diffOpenResult{Warn: i18n.Format("git.readFileAtCommitFailed", i18n.Args{"path": status.Path, "short": short})}
 	}
 	parsed := diff.Parse(diffText)
 	if len(parsed.Hunks) == 0 {
-		return &DiffOpenResult{Warn: fmt.Sprintf("No line changes for %s in %s", status.Path, short)}
+		return &diffOpenResult{Warn: i18n.Format("git.noLineChangesInCommit", i18n.Args{"path": status.Path, "short": short})}
 	}
 	oldPath := status.Path
 	if status.OldPath != "" {
@@ -450,12 +474,12 @@ func readCommitDiff(ctx context.Context, dir, ref, short string, status git.File
 	oldLines := gitFileLines(ctx, dir, oldPath, ref+"^")
 	newLines := gitFileLines(ctx, dir, status.Path, ref)
 	if ctx.Err() != nil {
-		return &DiffOpenResult{Canceled: true}
+		return &diffOpenResult{Canceled: true}
 	}
-	return &DiffOpenResult{
+	return &diffOpenResult{
 		TabName:  fmt.Sprintf("%s:%s (diff)", ref, status.Path),
 		Title:    fmt.Sprintf("%s @ %s", filepath.Base(status.Path), short),
-		Path:     status.Path,
+		Path:     filepath.Join(dir, status.Path),
 		Diff:     parsed,
 		OldLines: oldLines,
 		NewLines: newLines,
@@ -478,12 +502,12 @@ func gitFileLines(ctx context.Context, dir, path, ref string) []string {
 func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
 	diffText, ok := group.PRDiffs[status.Path]
 	if !ok || diffText == "" {
-		a.StatusWarn("No diff available for " + status.Path)
+		a.StatusWarn(i18n.Format("status.noDiffAvailableFor", i18n.Args{"path": status.Path}))
 		return
 	}
 	parsed := diff.Parse(diffText)
 	if len(parsed.Hunks) == 0 {
-		a.StatusWarn("Empty diff for " + status.Path)
+		a.StatusWarn(i18n.Format("status.emptyDiffFor", i18n.Args{"path": status.Path}))
 		return
 	}
 	a.EditorGroup.OpenDiff(status.Path, parsed, nil, nil, false)
@@ -539,21 +563,21 @@ func (a *App) ShowPRGroupMenu(group *ui.ChangesGroup, sx, sy int) {
 	refreshID := "pr.refresh." + name
 	closeID := "pr.close." + name
 	reg.Register(command.Command{
-		ID: refreshID, Title: "Refresh",
+		ID: refreshID, Title: i18n.Text("general.refresh"),
 		Handler: func() {
 			a.Changes.RemovePRGroup(name)
 			a.FetchAndOpenPR(url)
 		},
 	})
 	reg.Register(command.Command{
-		ID: closeID, Title: "Close",
+		ID: closeID, Title: i18n.Text("general.close"),
 		Handler: func() {
 			a.Changes.RemovePRGroup(name)
 		},
 	})
 	items := []ui.ContextMenuItem{
-		{Label: "Refresh", Command: refreshID},
-		{Label: "Close", Command: closeID},
+		{Label: i18n.Text("general.refresh"), Command: refreshID},
+		{Label: i18n.Text("general.close"), Command: closeID},
 	}
 	openContextMenu(a, items, sx, sy)
 }
@@ -561,9 +585,9 @@ func (a *App) ShowPRGroupMenu(group *ui.ChangesGroup, sx, sy int) {
 func (a *App) ShowGroupMenu(dir string, sx, sy int) {
 	reg := a.Reg
 	items := []ui.ContextMenuItem{
-		{Label: "Pull", Command: "git.pull." + dir},
-		{Label: "Push", Command: "git.push." + dir},
-		{Label: "Sync", Command: "git.sync." + dir},
+		{Label: i18n.Text("menu.pull"), Command: "git.pull." + dir},
+		{Label: i18n.Text("menu.push"), Command: "git.push." + dir},
+		{Label: i18n.Text("menu.sync"), Command: "git.sync." + dir},
 	}
 	registerDirGitCmd := func(id, title string, ops []RepoOp, progress, done string) {
 		reg.Register(command.Command{
@@ -576,16 +600,16 @@ func (a *App) ShowGroupMenu(dir string, sx, sy int) {
 			},
 		})
 	}
-	registerDirGitCmd("git.pull."+dir, "Pull", []RepoOp{OpPull}, "Pulling", "Pulled successfully")
-	registerDirGitCmd("git.push."+dir, "Push", []RepoOp{OpPush}, "Pushing", "Pushed successfully")
-	registerDirGitCmd("git.sync."+dir, "Sync", []RepoOp{OpPull, OpPush}, "Syncing", "Synced successfully")
+	registerDirGitCmd("git.pull."+dir, i18n.Text("git.pull"), []RepoOp{OpPull}, i18n.Text("git.pulling"), i18n.Text("git.pulledSuccessfully"))
+	registerDirGitCmd("git.push."+dir, i18n.Text("git.push"), []RepoOp{OpPush}, i18n.Text("git.pushing"), i18n.Text("git.pushedSuccessfully"))
+	registerDirGitCmd("git.sync."+dir, i18n.Text("git.sync"), []RepoOp{OpPull, OpPush}, i18n.Text("git.syncing"), i18n.Text("git.syncedSuccessfully"))
 	openContextMenu(a, items, sx, sy)
 }
 
 func (a *App) CommitChanges(dir string, message string) {
 	a.RunRepoTask(RepoTask{
-		Progress: "Committing",
-		Done:     "Committed: " + message,
+		Progress: i18n.Text("git.committing"),
+		Done:     i18n.Format("git.committed", i18n.Args{"message": message}),
 		Dirs:     []string{dir},
 		Ops:      []RepoOp{OpCommit(message)},
 		OnDone:   func() { a.Changes.ClearInput(dir) },
@@ -593,8 +617,8 @@ func (a *App) CommitChanges(dir string, message string) {
 }
 
 func (a *App) ConfirmDiscard(message string, onConfirm func()) {
-	a.ShowConfirmDialogEx("Discard Changes?", message,
-		[]string{"Cancel", "Discard"},
+	a.ShowConfirmDialogEx(i18n.Text("dialog.discardChanges"), message,
+		[]string{i18n.Text("general.cancel"), i18n.Text("general.discard")},
 		[]func(){
 			func() { a.DismissDialog() },
 			func() {
@@ -612,7 +636,7 @@ func registerWidgetCallbacks(app *App) {
 		idx := i
 		reg.Register(command.Command{
 			ID:    menuBarLabels[idx],
-			Title: "Menu: " + app.MenuBar.Items[idx].Name,
+			Title: i18n.Format("status.menu", i18n.Args{"name": app.MenuBar.Items[idx].Name}),
 			Handler: func() {
 				openMenuBarDropdown(app, idx)
 			},
@@ -628,9 +652,10 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	// A click that opened a dialog (a welcome or empty-Explorer action runs on
-	// the press) must leave the focus in it, or typing goes nowhere.
+	// the press) or claimed focus elsewhere must leave the focus there, or
+	// typing goes nowhere.
 	app.SplitPanel.OnLeftClick = func() {
-		if app.Root.HasOverlay() {
+		if app.Root.HasOverlay() || app.Root.FocusClaimed() {
 			return
 		}
 		reg.Execute("sidebar.focus")
@@ -693,9 +718,14 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.OnActiveTabChange = func() {
+		app.Root.ClearEditorLinkHover()
 		if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 			findBar.OnEditorTabChange()
 		}
+		if bar := app.findBar(); bar != nil && bar.Query() != "" {
+			return
+		}
+		app.applySearchHighlights()
 	}
 
 	app.EditorGroup.TabBar.OnTabClose = func(index int) {
@@ -710,37 +740,37 @@ func registerWidgetCallbacks(app *App) {
 
 	app.EditorGroup.TabBar.MoreButton.OnClick = func(sx, sy int) {
 		moreMenu := []ui.ContextMenuItem{
-			{Label: "Close All", Command: "tab.closeAll"},
-			{Label: "Close All Saved", Command: "tab.closeAllSaved"},
+			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
+			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
 		}
 		openContextMenu(app, moreMenu, sx, sy)
 	}
 
 	app.EditorGroup.TabBar.OnTabRightClick = func(index, sx, sy int) {
 		app.EditorGroup.SwitchTab(index)
-		pinLabel := "Pin Tab"
+		pinLabel := i18n.Text("menu.pinTab")
 		if app.EditorGroup.IsActiveTabPinned() {
-			pinLabel = "Unpin Tab"
+			pinLabel = i18n.Text("menu.unpinTab")
 		}
 		tabContextMenu := []ui.ContextMenuItem{
-			{Label: "Close", Shortcut: app.KeyFor("tab.close"), Command: "tab.close"},
-			{Label: "Close Others", Command: "tab.closeOthers"},
-			{Label: "Close All", Command: "tab.closeAll"},
-			{Label: "Close All Saved", Command: "tab.closeAllSaved"},
+			{Label: i18n.Text("general.close"), Shortcut: app.KeyFor("tab.close"), Command: "tab.close"},
+			{Label: i18n.Text("menu.closeOthers"), Command: "tab.closeOthers"},
+			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
+			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
 			ui.MenuSep(),
 			{Label: pinLabel, Shortcut: app.KeyFor("tab.pin"), Command: "tab.pin"},
 		}
 		if app.EditorGroup.CanMoveActiveTab(-1) {
-			tabContextMenu = append(tabContextMenu, ui.ContextMenuItem{Label: "Move Tab Left", Command: "tab.moveLeft"})
+			tabContextMenu = append(tabContextMenu, ui.ContextMenuItem{Label: i18n.Text("menu.moveTabLeft"), Command: "tab.moveLeft"})
 		}
 		if app.EditorGroup.CanMoveActiveTab(1) {
-			tabContextMenu = append(tabContextMenu, ui.ContextMenuItem{Label: "Move Tab Right", Command: "tab.moveRight"})
+			tabContextMenu = append(tabContextMenu, ui.ContextMenuItem{Label: i18n.Text("menu.moveTabRight"), Command: "tab.moveRight"})
 		}
 		tabContextMenu = append(tabContextMenu,
 			ui.MenuSep(),
-			ui.ContextMenuItem{Label: "Copy Absolute Path", Command: "file.copyAbsolutePath"},
-			ui.ContextMenuItem{Label: "Copy Relative Path", Command: "file.copyRelativePath"},
-			ui.ContextMenuItem{Label: "Reveal in Explorer", Command: "explorer.revealActiveFile"},
+			ui.ContextMenuItem{Label: i18n.Text("menu.copyAbsolutePath"), Command: "file.copyAbsolutePath"},
+			ui.ContextMenuItem{Label: i18n.Text("menu.copyRelativePath"), Command: "file.copyRelativePath"},
+			ui.ContextMenuItem{Label: i18n.Text("menu.revealInExplorer"), Command: "explorer.revealActiveFile"},
 		)
 		tabContextMenu = app.withActiveDiffViewSubmenu(tabContextMenu)
 		openContextMenu(app, tabContextMenu, sx, sy)
@@ -759,39 +789,39 @@ func registerWidgetCallbacks(app *App) {
 	app.Explorer.OnRightClick = func(node *widgets.TreeNode, sx, sy int) {
 		app.ExplorerContextNode = node
 		items := []ui.ContextMenuItem{
-			{Label: "Open", Command: "explorer.open"},
+			{Label: i18n.Text("general.open"), Command: "explorer.open"},
 			ui.MenuSep(),
-			{Label: "New File", Command: "explorer.newFile"},
-			{Label: "New Folder", Command: "explorer.newFolder"},
+			{Label: i18n.Text("general.newFile"), Command: "explorer.newFile"},
+			{Label: i18n.Text("general.newFolder"), Command: "explorer.newFolder"},
 			ui.MenuSep(),
-			{Label: "Copy Absolute Path", Command: "explorer.copyAbsolutePath"},
-			{Label: "Copy Relative Path", Command: "explorer.copyRelativePath"},
+			{Label: i18n.Text("menu.copyAbsolutePath"), Command: "explorer.copyAbsolutePath"},
+			{Label: i18n.Text("menu.copyRelativePath"), Command: "explorer.copyRelativePath"},
 			ui.MenuSep(),
-			{Label: "Reveal in File Manager", Command: "explorer.reveal"},
+			{Label: i18n.Text("menu.revealInFileManager"), Command: "explorer.reveal"},
 			ui.MenuSep(),
-			{Label: "Rename", Command: "explorer.rename"},
-			{Label: "Delete", Command: "explorer.delete"},
+			{Label: i18n.Text("general.rename"), Command: "explorer.rename"},
+			{Label: i18n.Text("general.delete"), Command: "explorer.delete"},
 			ui.MenuSep(),
-			{Label: "Expand All", Command: "explorer.expandAll"},
-			{Label: "Collapse All", Command: "explorer.collapseAll"},
+			{Label: i18n.Text("general.expandAll"), Command: "explorer.expandAll"},
+			{Label: i18n.Text("general.collapseAll"), Command: "explorer.collapseAll"},
 		}
 		openContextMenu(app, items, sx, sy)
 	}
 	app.Explorer.OnRootMenu = func(node *widgets.TreeNode, sx, sy int) {
 		app.ExplorerContextNode = node
-		favorite := ui.ContextMenuItem{Label: "Add to Favorites", Command: "welcome.addFavorite"}
+		favorite := ui.ContextMenuItem{Label: i18n.Text("menu.addToFavorites"), Command: "welcome.addFavorite"}
 		if app.favoriteIndex(node.ID) >= 0 {
-			favorite = ui.ContextMenuItem{Label: "Remove from Favorites", Command: "welcome.removeFavorite"}
+			favorite = ui.ContextMenuItem{Label: i18n.Text("menu.removeFromFavorites"), Command: "welcome.removeFavorite"}
 		}
 		items := []ui.ContextMenuItem{
-			{Label: "Refresh", Command: "explorer.refresh"},
-			{Label: "Copy Path", Command: "explorer.copyAbsolutePath"},
+			{Label: i18n.Text("general.refresh"), Command: "explorer.refresh"},
+			{Label: i18n.Text("menu.copyPath"), Command: "explorer.copyAbsolutePath"},
 			ui.MenuSep(),
 			favorite,
-			{Label: "Remove from Workspace", Command: "explorer.removeRoot"},
+			{Label: i18n.Text("menu.removeFromWorkspace"), Command: "explorer.removeRoot"},
 			ui.MenuSep(),
-			{Label: "Expand All", Command: "explorer.expandAll"},
-			{Label: "Collapse All", Command: "explorer.collapseAll"},
+			{Label: i18n.Text("general.expandAll"), Command: "explorer.expandAll"},
+			{Label: i18n.Text("general.collapseAll"), Command: "explorer.collapseAll"},
 		}
 		openContextMenu(app, items, sx, sy)
 	}
@@ -805,14 +835,15 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.DiffSources = app.DiffSearchSources
 	app.Search.OnOpenMatch = app.NavigateToSearchMatch
 	app.Search.OnPreview = app.PreviewSearchReplace
-	app.Search.OnReplace = app.ApplySearchReplace
-	app.Search.OnReplaceAll = app.ApplySearchReplaceAll
+	app.Search.OnReplaceRequest = app.startSearchReplace
+	app.Search.OnCancelReplace = app.cancelSearchReplace
 
 	app.Changes.OnRightClick = app.ShowChangesFileContextMenu
 	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
 	app.Changes.OnOpenFile = func(path string) {
 		app.EditorGroup.OpenFile(path)
+		app.EditorGroup.DisableInlineDiff(path)
 		app.FocusEditorIfEnabled()
 	}
 	app.Changes.OnOpenDiff = app.OpenChangeDiff
@@ -844,14 +875,14 @@ func registerWidgetCallbacks(app *App) {
 	app.ContentSplit.OnResizeEnd = app.finishPanelResize
 
 	app.ContentSplit.OnTopClick = func() {
-		if app.Root.HasOverlay() {
+		if app.Root.HasOverlay() || app.Root.FocusClaimed() {
 			return
 		}
 		app.Root.SetFocus(app.EditorGroup)
 	}
 
 	app.ContentSplit.OnBottomClick = func() {
-		if app.Root.HasOverlay() {
+		if app.Root.HasOverlay() || app.Root.FocusClaimed() {
 			return
 		}
 		if w := app.BottomPanel.ActiveWidget(); w != nil {
@@ -872,22 +903,41 @@ func registerWidgetCallbacks(app *App) {
 		}
 	}
 
+	app.BottomPanel.Tabs.Config.OnOverflow = func(sx, sy int) {
+		ids, titles := app.BottomPanel.HiddenTabs()
+		var items []ui.ContextMenuItem
+		for i, id := range ids {
+			panelID := id
+			commandID := "bottom.overflow." + panelID
+			items = append(items, ui.ContextMenuItem{Label: titles[i], Command: commandID})
+			reg.Register(command.Command{
+				ID:    commandID,
+				Title: titles[i],
+				Handler: func() {
+					app.BottomPanel.SetActivePanel(panelID)
+					app.FocusPanel()
+				},
+			})
+		}
+		openContextMenu(app, items, sx, sy)
+	}
+
 	app.BottomPanel.Tabs.Config.Actions = []widgets.TabAction{
 		{Icon: string(icons.Rune(icons.Add)), OnClick: func(_, _ int) {
 			reg.Execute("terminal.new")
 		}},
 		{Icon: string(icons.Rune(icons.More)), OnClick: func(sx, sy int) {
-			dock := ui.ContextMenuItem{Label: "Dock Right", Command: "panel.dockRight"}
+			dock := ui.ContextMenuItem{Label: i18n.Text("menu.dockRight"), Command: "panel.dockRight"}
 			if app.ContentSplit.Position == ui.SplitRight {
-				dock = ui.ContextMenuItem{Label: "Dock Bottom", Command: "panel.dockBottom"}
+				dock = ui.ContextMenuItem{Label: i18n.Text("menu.dockBottom"), Command: "panel.dockBottom"}
 			}
 			items := []ui.ContextMenuItem{
-				{Label: "New Terminal", Command: "terminal.new"},
+				{Label: i18n.Text("menu.newTerminal"), Command: "terminal.new"},
 				ui.MenuSep(),
-				{Label: "Close All Terminals", Command: "terminal.closeAll"},
+				{Label: i18n.Text("menu.closeAllTerminals"), Command: "terminal.closeAll"},
 				ui.MenuSep(),
 				dock,
-				{Label: "Close Panel", Command: "panel.toggle"},
+				{Label: i18n.Text("menu.closePanel"), Command: "panel.toggle"},
 			}
 			openContextMenu(app, items, sx, sy)
 		}},

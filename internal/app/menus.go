@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 
 	"github.com/gdamore/tcell/v3"
@@ -16,127 +17,135 @@ var menuBarLabels = []string{
 var menuBarMenus = [][]ui.ContextMenuItem{
 	// File
 	{
-		{Label: "New File", Command: "file.new"},
+		{Label: i18n.Text("general.newFile"), Command: "file.new"},
 		ui.MenuSep(),
-		{Label: "Save", Command: "file.save"},
-		{Label: "Save As...", Command: "file.saveAs"},
+		{Label: i18n.Text("general.save"), Command: "file.save"},
+		{Label: i18n.Text("menu.saveAs"), Command: "file.saveAs"},
 		ui.MenuSep(),
-		{Label: "Open Folder", Command: "workspace.openFolder"},
-		{Label: "Add Folder", Command: "workspace.addFolder"},
+		{Label: i18n.Text("general.openFile"), Command: "file.open"},
+		{Label: i18n.Text("general.openFolder"), Command: "workspace.openFolder"},
+		{Label: i18n.Text("general.addFolder"), Command: "workspace.addFolder"},
 		ui.MenuSep(),
-		{Label: "Open Workspace", Command: "workspace.open"},
-		{Label: "Save Workspace", Command: "workspace.save"},
-		{Label: "Close Workspace", Command: "workspace.close"},
+		{Label: i18n.Text("general.openWorkspace"), Command: "workspace.open"},
+		{Label: i18n.Text("general.saveWorkspace"), Command: "workspace.save"},
+		{Label: i18n.Text("general.closeWorkspace"), Command: "workspace.close"},
 		ui.MenuSep(),
-		{Label: "Open PR Diff", Command: "pr.openDiff"},
+		{Label: i18n.Text("menu.openPRDiff"), Command: "pr.openDiff"},
 		ui.MenuSep(),
-		{Label: "Quit", Command: "editor.quit"},
+		{Label: i18n.Text("general.quit"), Command: "editor.quit"},
 	},
 	// Edit
 	{
-		{Label: "Undo", Command: "editor.undo"},
-		{Label: "Redo", Command: "editor.redo"},
+		{Label: i18n.Text("general.undo"), Command: "editor.undo"},
+		{Label: i18n.Text("general.redo"), Command: "editor.redo"},
 		ui.MenuSep(),
-		{Label: "Cut", Command: "editor.cut"},
-		{Label: "Copy", Command: "editor.copy"},
-		{Label: "Paste", Command: "editor.paste"},
+		{Label: i18n.Text("general.cut"), Command: "editor.cut"},
+		{Label: i18n.Text("general.copy"), Command: "editor.copy"},
+		{Label: i18n.Text("general.paste"), Command: "editor.paste"},
 		ui.MenuSep(),
-		{Label: "Find", Command: "search.find"},
-		{Label: "Replace", Command: "search.replace"},
+		{Label: i18n.Text("general.find"), Command: "search.find"},
+		{Label: i18n.Text("general.replace"), Command: "search.replace"},
 	},
 	// Selection
 	{
-		{Label: "Select All", Command: "editor.selectAll"},
+		{Label: i18n.Text("menu.selectAll"), Command: "editor.selectAll"},
 		ui.MenuSep(),
-		{Label: "Add Next Occurrence", Command: "multicursor.selectNext"},
-		{Label: "Select All Occurrences", Command: "multicursor.selectAll"},
-		{Label: "Undo Last Cursor", Command: "multicursor.undoCursor"},
+		{Label: i18n.Text("menu.addCursorAbove"), Command: "multicursor.addCursorAbove"},
+		{Label: i18n.Text("menu.addCursorBelow"), Command: "multicursor.addCursorBelow"},
+		{Label: i18n.Text("menu.addNextOccurrence"), Command: "multicursor.selectNext"},
+		{Label: i18n.Text("menu.selectAllOccurrences"), Command: "multicursor.selectAll"},
+		{Label: i18n.Text("menu.undoLastCursor"), Command: "multicursor.undoCursor"},
 	},
 	// View
 	{
-		{Label: "Command Palette", Command: "command.palette"},
-		{Label: "Quick Open", Command: "file.quickOpen"},
+		{Label: i18n.Text("menu.commandPalette"), Command: "command.palette"},
+		{Label: i18n.Text("menu.quickOpen"), Command: "file.quickOpen"},
 		ui.MenuSep(),
-		{Label: "Explore", Command: "sidebar.explorer"},
-		{Label: "Find", Command: "sidebar.search"},
-		{Label: "Replace", Command: "sidebar.searchReplace"},
-		{Label: "Changes", Command: "sidebar.changes"},
-		{Label: "Outline", Command: "sidebar.outline"},
+		{Label: i18n.Text("menu.explore"), Command: "sidebar.explorer"},
+		{Label: i18n.Text("general.find"), Command: "sidebar.search"},
+		{Label: i18n.Text("general.replace"), Command: "sidebar.searchReplace"},
+		{Label: i18n.Text("menu.changes"), Command: "sidebar.changes"},
+		{Label: i18n.Text("menu.outline"), Command: "sidebar.outline"},
 		ui.MenuSep(),
-		{Label: "Toggle Sidebar", Command: "sidebar.toggle"},
-		{Label: "Toggle Terminal", Command: "terminal.toggle"},
-		{Label: "New Terminal", Command: "terminal.new"},
+		{Label: i18n.Text("menu.toggleSidebar"), Command: "sidebar.toggle"},
+		{Label: i18n.Text("menu.toggleTerminal"), Command: "terminal.toggle"},
+		{Label: i18n.Text("menu.newTerminal"), Command: "terminal.new"},
 		ui.MenuSep(),
-		{Label: "Theme", Command: "theme.switch"},
-		{Label: "Keybindings", Command: "view.keybindings"},
-		{Label: "Settings", Command: "settings.openUI"},
+		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
+		{Label: i18n.Text("menu.keybindings"), Command: "view.keybindings"},
+		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 	},
 	// Options (placeholder — replaced dynamically by openMenuBarDropdown)
 	nil,
 	// Help
 	{
-		{Label: "About", Command: "about"},
+		{Label: i18n.Text("menu.about"), Command: "about"},
 	},
 }
 
 var editorContextMenu = []ui.ContextMenuItem{
-	{Label: "Go to Definition", Command: "editor.goToDefinition"},
-	{Label: "Go to Type Definition", Command: "editor.goToTypeDefinition"},
-	{Label: "Go to Implementation", Command: "editor.goToImplementation"},
-	{Label: "Find All References", Command: "editor.findReferences"},
-	{Label: "Rename Symbol", Command: "editor.rename"},
+	{Label: i18n.Text("menu.goToDefinition"), Command: "editor.goToDefinition"},
+	{Label: i18n.Text("menu.goToTypeDefinition"), Command: "editor.goToTypeDefinition"},
+	{Label: i18n.Text("menu.goToImplementation"), Command: "editor.goToImplementation"},
+	{Label: i18n.Text("menu.findAllReferences"), Command: "editor.findReferences"},
+	{Label: i18n.Text("menu.renameSymbol"), Command: "editor.rename"},
 	ui.MenuSep(),
-	{Label: "Format Document (LSP)", Command: "editor.formatDocument"},
-	{Label: "Format Document (External)", Command: "editor.formatExternal"},
-	{Label: "Format Selection", Command: "editor.formatSelection"},
+	{Label: i18n.Text("menu.formatDocumentLSP"), Command: "editor.formatDocument"},
+	{Label: i18n.Text("menu.formatDocumentExternal"), Command: "editor.formatExternal"},
+	{Label: i18n.Text("menu.formatSelection"), Command: "editor.formatSelection"},
 	ui.MenuSep(),
-	{Label: "Undo", Command: "editor.undo"},
-	{Label: "Redo", Command: "editor.redo"},
+	{Label: i18n.Text("general.undo"), Command: "editor.undo"},
+	{Label: i18n.Text("general.redo"), Command: "editor.redo"},
 	ui.MenuSep(),
-	{Label: "Cut", Command: "editor.cut"},
-	{Label: "Copy", Command: "editor.copy"},
-	{Label: "Paste", Command: "editor.paste"},
+	{Label: i18n.Text("general.cut"), Command: "editor.cut"},
+	{Label: i18n.Text("general.copy"), Command: "editor.copy"},
+	{Label: i18n.Text("general.paste"), Command: "editor.paste"},
 	ui.MenuSep(),
-	{Label: "Select All", Command: "editor.selectAll"},
+	{Label: i18n.Text("menu.selectAll"), Command: "editor.selectAll"},
 	ui.MenuSep(),
-	{Label: "Find", Command: "search.find"},
-	{Label: "Replace", Command: "search.replace"},
-	{Label: "Go to Line", Command: "editor.goToLine"},
+	{Label: i18n.Text("general.find"), Command: "search.find"},
+	{Label: i18n.Text("general.replace"), Command: "search.replace"},
+	{Label: i18n.Text("menu.goToLine"), Command: "editor.goToLine"},
 }
 
 var diffContextMenu = []ui.ContextMenuItem{
-	{Label: "Copy", Command: "editor.copy"},
+	{Label: i18n.Text("general.copy"), Command: "editor.copy"},
 	ui.MenuSep(),
-	{Label: "Find", Command: "search.find"},
+	{Label: i18n.Text("general.find"), Command: "search.find"},
 }
 
 var commitDetailContextMenu = []ui.ContextMenuItem{
-	{Label: "Copy", Command: "editor.copy"},
+	{Label: i18n.Text("general.copy"), Command: "editor.copy"},
 	ui.MenuSep(),
-	{Label: "Expand All Files", Command: "changes.expandAllCommitDetail"},
-	{Label: "Collapse All Files", Command: "changes.collapseAllCommitDetail"},
+	{Label: i18n.Text("menu.expandAllFiles"), Command: "changes.expandAllCommitDetail"},
+	{Label: i18n.Text("menu.collapseAllFiles"), Command: "changes.collapseAllCommitDetail"},
+}
+
+var textContentContextMenu = []ui.ContextMenuItem{
+	{Label: i18n.Text("general.copy"), Command: "editor.copy"},
+	{Label: i18n.Text("menu.selectAll"), Command: "editor.selectAll"},
 }
 
 var terminalContextMenu = []ui.ContextMenuItem{
-	{Label: "Copy", Command: "editor.copy"},
-	{Label: "Paste", Command: "editor.paste"},
+	{Label: i18n.Text("general.copy"), Command: "editor.copy"},
+	{Label: i18n.Text("general.paste"), Command: "editor.paste"},
 }
 
 var changesContextMenuStaged = []ui.ContextMenuItem{
-	{Label: "Open Changes", Command: "changes.openDiff"},
-	{Label: "Open Full Diff", Command: "changes.openExtendedDiff"},
-	{Label: "Open File", Command: "changes.openFile"},
+	{Label: i18n.Text("menu.openChanges"), Command: "changes.openDiff"},
+	{Label: i18n.Text("menu.openFullDiff"), Command: "changes.openExtendedDiff"},
+	{Label: i18n.Text("general.openFile"), Command: "changes.openFile"},
 	ui.MenuSep(),
-	{Label: "Unstage", Command: "changes.unstage"},
+	{Label: i18n.Text("menu.unstage"), Command: "changes.unstage"},
 }
 
 var changesContextMenuUnstaged = []ui.ContextMenuItem{
-	{Label: "Open Changes", Command: "changes.openDiff"},
-	{Label: "Open Full Diff", Command: "changes.openExtendedDiff"},
-	{Label: "Open File", Command: "changes.openFile"},
+	{Label: i18n.Text("menu.openChanges"), Command: "changes.openDiff"},
+	{Label: i18n.Text("menu.openFullDiff"), Command: "changes.openExtendedDiff"},
+	{Label: i18n.Text("general.openFile"), Command: "changes.openFile"},
 	ui.MenuSep(),
-	{Label: "Stage", Command: "changes.stage"},
-	{Label: "Discard Changes", Command: "changes.discard"},
+	{Label: i18n.Text("menu.stage"), Command: "changes.stage"},
+	{Label: i18n.Text("menu.discardChanges"), Command: "changes.discard"},
 }
 
 func (a *App) BuildActiveDiffViewMenu() []ui.ContextMenuItem {
@@ -145,8 +154,8 @@ func (a *App) BuildActiveDiffViewMenu() []ui.ContextMenuItem {
 	contextSurface := a.EditorGroup.ActiveDiffContextSurface()
 	if modeSurface != nil {
 		items = append(items,
-			ui.ContextMenuItem{Label: "Split", Command: "diff.splitView", Checked: menuChecked(modeSurface.Mode() == ui.DiffModeSplit)},
-			ui.ContextMenuItem{Label: "Unified", Command: "diff.unifiedView", Checked: menuChecked(modeSurface.Mode() == ui.DiffModeUnified)},
+			ui.ContextMenuItem{Label: i18n.Text("menu.split"), Command: "diff.splitView", Checked: menuChecked(modeSurface.Mode() == ui.DiffModeSplit)},
+			ui.ContextMenuItem{Label: i18n.Text("menu.unified"), Command: "diff.unifiedView", Checked: menuChecked(modeSurface.Mode() == ui.DiffModeUnified)},
 		)
 	}
 	if contextSurface != nil {
@@ -154,15 +163,15 @@ func (a *App) BuildActiveDiffViewMenu() []ui.ContextMenuItem {
 			items = append(items, ui.MenuSep())
 		}
 		items = append(items,
-			ui.ContextMenuItem{Label: "Changes Only", Command: "diff.changesOnlyView", Checked: menuChecked(contextSurface.ContextMode() == ui.DiffContextChangesOnly)},
-			ui.ContextMenuItem{Label: "Full File", Command: "diff.fullFileView", Checked: menuChecked(contextSurface.ContextMode() == ui.DiffContextFullFile)},
+			ui.ContextMenuItem{Label: i18n.Text("menu.changesOnly"), Command: "diff.changesOnlyView", Checked: menuChecked(contextSurface.ContextMode() == ui.DiffContextChangesOnly)},
+			ui.ContextMenuItem{Label: i18n.Text("menu.fullFile"), Command: "diff.fullFileView", Checked: menuChecked(contextSurface.ContextMode() == ui.DiffContextFullFile)},
 		)
 	}
 	if modeSurface != nil {
 		if len(items) > 0 {
 			items = append(items, ui.MenuSep())
 		}
-		items = append(items, ui.ContextMenuItem{Label: "Wrap Lines", Command: "diff.toggleWrap", Checked: menuChecked(modeSurface.WrapMode() == ui.DiffWrapOn)})
+		items = append(items, ui.ContextMenuItem{Label: i18n.Text("menu.wrapLines"), Command: "diff.toggleWrap", Checked: menuChecked(modeSurface.WrapMode() == ui.DiffWrapOn)})
 	}
 	return items
 }
@@ -185,7 +194,7 @@ func (a *App) withActiveDiffViewSubmenu(items []ui.ContextMenuItem) []ui.Context
 	}
 	combined := make([]ui.ContextMenuItem, 0, len(items)+2)
 	combined = append(combined, items...)
-	combined = append(combined, ui.MenuSep(), ui.ContextMenuItem{Label: "Diff View", Submenu: controls})
+	combined = append(combined, ui.MenuSep(), ui.ContextMenuItem{Label: i18n.Text("menu.diffView"), Submenu: controls})
 	return combined
 }
 
@@ -238,8 +247,10 @@ func openContextMenu(app *App, items []ui.ContextMenuItem, x, y int) {
 		app.Root.PopOverlay()
 		app.restoreMenuFocus()
 		reg.Execute(cmd)
+		app.ExplorerContextNode = nil
 	}
 	menu.OnDismiss = func() {
+		app.ExplorerContextNode = nil
 		app.Root.PopOverlay()
 		app.restoreMenuFocus()
 	}
@@ -352,7 +363,12 @@ func handleRightClick(app *App, mx, my int) {
 		}
 	}
 
-	if app.EditorGroup.ActiveCommitDetailWidget() != nil {
+	if content := app.EditorGroup.ActiveTextSelection(); content != nil {
+		if w, ok := content.(ui.Widget); ok && w.HandleEvent(tcell.NewEventMouse(mx, my, tcell.Button2, 0)) != ui.EventIgnored {
+			return
+		}
+		openContextMenu(app, textContentContextMenu, mx, my)
+	} else if app.EditorGroup.ActiveCommitDetailWidget() != nil {
 		openContextMenu(app, app.withActiveDiffViewMenu(commitDetailContextMenu), mx, my)
 	} else if app.EditorGroup.ActiveDiffModeSurface() != nil || app.EditorGroup.ActiveDiffContextSurface() != nil {
 		openContextMenu(app, app.withActiveDiffViewMenu(diffContextMenu), mx, my)

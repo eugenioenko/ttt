@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
@@ -23,9 +24,10 @@ type TerminalColorPalette struct {
 	Bg term.DirectColor
 	// SelectionBg is the theme's terminal selection background; unset means the
 	// theme defines none.
-	SelectionBg term.DirectColor
-	ANSI        [16]term.DirectColor
-	Color256    [256]term.DirectColor
+	SelectionBg    term.DirectColor
+	SelectionStyle string
+	ANSI           [16]term.DirectColor
+	Color256       [256]term.DirectColor
 }
 
 type termSelPos struct {
@@ -44,7 +46,7 @@ type linkSpan struct {
 
 var (
 	urlRe      = regexp.MustCompile(`https?://[^\s)>\]'"` + "`" + `]+`)
-	fileLineRe = regexp.MustCompile(`(?:^|[\s(])([^\s:*?"<>|]+):(\d+)(?::(\d+))?`)
+	fileLineRe = regexp.MustCompile(`(?:^|[\s(])((?:[A-Za-z]:[\\/])?[^\s:*?"<>|]+):(\d+)(?::(\d+))?`)
 )
 
 // linkMemoMax bounds the per-widget link detection memo. When the memo grows
@@ -71,12 +73,14 @@ type TerminalWidget struct {
 	selAnchor  termSelPos
 	selCurrent termSelPos
 
-	OnOpenURL  func(url string)
-	OnOpenFile func(path string, line, col int)
-	WorkDir    string
-	ctrlHeld   bool
-	linkCache  map[int][]linkSpan
-	linkMemo   map[string][]linkSpan
+	OnOpenURL      func(url string)
+	OnOpenFile     func(path string, line, col int)
+	WorkDir        string
+	SelectionStyle string
+	CtrlVPastes    bool
+	ctrlHeld       bool
+	linkCache      map[int][]linkSpan
+	linkMemo       map[string][]linkSpan
 
 	// SGR button code of a held press being forwarded, or -1 when none.
 	mouseButtonHeld int
@@ -86,6 +90,7 @@ func NewTerminalWidget(t *terminal.Terminal, palette *TerminalColorPalette) *Ter
 	return &TerminalWidget{
 		Term:            t,
 		Palette:         palette,
+		CtrlVPastes:     true,
 		mouseButtonHeld: -1,
 	}
 }
@@ -143,6 +148,21 @@ func byteToRunePos(s string, byteIdx int) int {
 }
 
 func detectLinks(text string, workDir string) []linkSpan {
+	spans := detectLinkCandidates(text)
+	resolved := spans[:0]
+	for _, span := range spans {
+		if span.IsFile {
+			span.FilePath = ResolveFilePath(span.FilePath, workDir)
+			if span.FilePath == "" {
+				continue
+			}
+		}
+		resolved = append(resolved, span)
+	}
+	return resolved
+}
+
+func detectLinkCandidates(text string) []linkSpan {
 	var spans []linkSpan
 
 	for _, loc := range urlRe.FindAllStringIndex(text, -1) {
@@ -172,11 +192,6 @@ func detectLinks(text string, workDir string) []linkSpan {
 			continue
 		}
 
-		resolvedPath := resolveFilePath(filePath, workDir)
-		if resolvedPath == "" {
-			continue
-		}
-
 		spanEnd := match[5]
 		colNum := 0
 		if match[6] != -1 {
@@ -203,7 +218,7 @@ func detectLinks(text string, workDir string) []linkSpan {
 			StartCol: startCol,
 			EndCol:   endCol,
 			IsFile:   true,
-			FilePath: resolvedPath,
+			FilePath: filePath,
 			Line:     lineNum,
 			Col:      colNum,
 		})
@@ -212,7 +227,7 @@ func detectLinks(text string, workDir string) []linkSpan {
 	return spans
 }
 
-func resolveFilePath(path string, workDir string) string {
+func ResolveFilePath(path string, workDir string) string {
 	if path == "" {
 		return ""
 	}
@@ -272,11 +287,41 @@ func (tw *TerminalWidget) linksForLine(text string) []linkSpan {
 	return spans
 }
 
-func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
+func (tw *TerminalWidget) cachedLinkAt(unifiedLine, col int) *linkSpan {
+	if tw.linkCache == nil {
+		return nil
+	}
 	spans, ok := tw.linkCache[unifiedLine]
 	if !ok {
 		return nil
 	}
+	for i := range spans {
+		if col >= spans[i].StartCol && col < spans[i].EndCol {
+			return &spans[i]
+		}
+	}
+	return nil
+}
+
+func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
+	if span := tw.cachedLinkAt(unifiedLine, col); span != nil {
+		return span
+	}
+	if tw.Term == nil {
+		return nil
+	}
+	var spans []linkSpan
+	tw.Term.Snapshot(func(xt *xterm.Terminal) {
+		buf := xt.Buffer()
+		if unifiedLine >= 0 && unifiedLine < buf.Lines.Length() {
+			w := tw.GetRect().W
+			if w <= 0 {
+				w = xt.Cols()
+			}
+			lineText := extractLineText(buf, unifiedLine, w)
+			spans = tw.linksForLine(lineText)
+		}
+	})
 	for i := range spans {
 		if col >= spans[i].StartCol && col < spans[i].EndCol {
 			return &spans[i]
@@ -293,14 +338,16 @@ func (tw *TerminalWidget) IsScrolledUp() bool {
 	return tw.scrollOffset > 0
 }
 
+func (tw *TerminalWidget) ScrollbarVisible() bool {
+	return tw.Term != nil && tw.Term.ScrollbackLen() > 0
+}
+
 func (tw *TerminalWidget) Render(surface Surface) {
 	if tw.Term == nil {
 		return
 	}
 	w, h := surface.Size()
-	r := tw.GetRect()
 
-	tw.Term.AckUpdate()
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
 		cols := xt.Cols()
@@ -314,13 +361,6 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		if tw.scrollOffset > sbLen {
 			tw.scrollOffset = sbLen
 		}
-
-		showScrollbar := sbLen > 0
-		contentW := w
-		if showScrollbar {
-			contentW = w - 1
-		}
-
 		if tw.ctrlHeld {
 			tw.linkCache = make(map[int][]linkSpan)
 		} else {
@@ -333,7 +373,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			for y := 0; y < h && y < rows; y++ {
 				unifiedLine := sbLen + y
 				if tw.ctrlHeld {
-					lineText := extractLineText(buf, unifiedLine, contentW)
+					lineText := extractLineText(buf, unifiedLine, w)
 					tw.linkCache[unifiedLine] = tw.linksForLine(lineText)
 				}
 
@@ -342,7 +382,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					bl = buf.Lines.Get(unifiedLine)
 				}
 
-				for x := 0; x < contentW && x < cols; x++ {
+				for x := 0; x < w && x < cols; x++ {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
@@ -355,9 +395,10 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(unifiedLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkAt(unifiedLine, x) != nil {
+					} else if tw.cachedLinkAt(unifiedLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
+					tw.clipWideRune(&c, x, w)
 					surface.SetCell(x, y, c)
 				}
 			}
@@ -370,7 +411,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 			for screenY := 0; screenY < h; screenY++ {
 				srcLine := startLine + screenY
 				if tw.ctrlHeld {
-					lineText := extractLineText(buf, srcLine, contentW)
+					lineText := extractLineText(buf, srcLine, w)
 					tw.linkCache[srcLine] = tw.linksForLine(lineText)
 				}
 
@@ -379,7 +420,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					bl = buf.Lines.Get(srcLine)
 				}
 
-				for x := 0; x < contentW; x++ {
+				for x := 0; x < w; x++ {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
@@ -392,27 +433,37 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(srcLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkAt(srcLine, x) != nil {
+					} else if tw.cachedLinkAt(srcLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
+					tw.clipWideRune(&c, x, w)
 					surface.SetCell(x, screenY, c)
 				}
 			}
 		}
 
-		if showScrollbar {
-			topItem := sbLen - tw.scrollOffset
-			if topItem < 0 {
-				topItem = 0
-			}
-			tw.scrollbar.X = r.X + w - 1
-			tw.scrollbar.Y = r.Y
-			tw.scrollbar.Height = h
+		tw.scrollbar.TotalItems = 0
+		if sbLen > 0 {
 			tw.scrollbar.TotalItems = totalLines
-			tw.scrollbar.TopItem = topItem
-			tw.scrollbar.Render(surface, w-1, 0)
 		}
+		tw.scrollbar.TopItem = max(sbLen-tw.scrollOffset, 0)
 	})
+}
+
+func (tw *TerminalWidget) renderScrollbar(surface Surface) {
+	tw.scrollbar.X, tw.scrollbar.Y = surface.Origin()
+	_, tw.scrollbar.Height = surface.Size()
+	tw.scrollbar.Render(surface, 0, 0)
+}
+
+// clipWideRune replaces a fullwidth rune in the last content column with a
+// space. The terminal paints such a rune across two columns regardless of
+// clipping, so drawing it there would overwrite the margin to its right.
+// DrawText makes the same substitution.
+func (tw *TerminalWidget) clipWideRune(c *term.Cell, x, contentW int) {
+	if x == contentW-1 && textwidth.Rune(c.Ch) == 2 {
+		c.Ch = ' '
+	}
 }
 
 // Avoids BufferLine.LoadCell, which allocates an ExtendedAttrs per cell.
@@ -511,6 +562,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
+		tw.ctrlHeld = tev.Modifiers()&tcell.ModCtrl != 0
 		if tev.Modifiers()&tcell.ModShift != 0 {
 			_, h := tw.Term.Size()
 			switch tev.Key() {
@@ -533,7 +585,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		isPaste := (tev.Key() == tcell.KeyCtrlV) ||
 			(tev.Key() == tcell.KeyRune && (r == 'v' || r == 'V') && tev.Modifiers()&tcell.ModCtrl != 0)
-		if isPaste {
+		if isPaste && (tw.CtrlVPastes || tev.Modifiers()&tcell.ModShift != 0) {
 			text := clipboard.Get()
 			if text != "" {
 				tw.PasteText(text)
@@ -545,7 +597,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		tw.ClearSelection()
 		tw.scrollOffset = 0
-		data := keyToVT(tev)
+		data := keyToVT(tev, tw.Term.DecPrivateModes().ApplicationCursorKeys)
 		if data != "" {
 			tw.Term.WriteString(data)
 			return EventConsumed
@@ -767,6 +819,9 @@ func (tw *TerminalWidget) screenToLine(mx, my int) termSelPos {
 	col := mx - r.X
 	screenY := my - r.Y
 	unifiedLine := 0
+	if tw.Term == nil {
+		return termSelPos{Line: screenY, Col: col}
+	}
 
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
@@ -787,10 +842,11 @@ func (tw *TerminalWidget) screenToLine(mx, my int) termSelPos {
 }
 
 // highlightSelected matches the editor: the theme's terminal selection
-// background with the text color left alone. A theme with no selection color
-// falls back to swapping foreground and background.
+// background with the text color left alone. When SelectionStyle is "invert"
+// or a theme defines no selection color, it falls back to swapping foreground
+// and background.
 func (tw *TerminalWidget) highlightSelected(c *term.Cell) {
-	if tw.Palette != nil && tw.Palette.SelectionBg.Set {
+	if tw.selectionStyle() != "invert" && tw.Palette != nil && tw.Palette.SelectionBg.Set {
 		c.Bg = tw.Palette.SelectionBg
 		return
 	}
@@ -801,6 +857,16 @@ func (tw *TerminalWidget) highlightSelected(c *term.Cell) {
 	if !c.Bg.Set && tw.Palette != nil {
 		c.Bg = tw.Palette.Fg
 	}
+}
+
+func (tw *TerminalWidget) selectionStyle() string {
+	if tw.SelectionStyle != "" {
+		return tw.SelectionStyle
+	}
+	if tw.Palette != nil && tw.Palette.SelectionStyle != "" {
+		return tw.Palette.SelectionStyle
+	}
+	return "background"
 }
 
 func (tw *TerminalWidget) isCellSelected(unifiedLine, col int) bool {
@@ -890,7 +956,7 @@ func (tw *TerminalWidget) scrollDown(n int) {
 	slog.Debug("terminal scroll down", "scrollOffset", tw.scrollOffset)
 }
 
-func keyToVT(ev *tcell.EventKey) string {
+func keyToVT(ev *tcell.EventKey, applicationCursorKeys bool) string {
 	if ev.Key() == tcell.KeyRune {
 		mod := ev.Modifiers()
 		// tcell v3 reports ctrl+non-letter printables (ctrl+space, ctrl+/,
@@ -915,6 +981,11 @@ func keyToVT(ev *tcell.EventKey) string {
 		return seq
 	}
 
+	cursorPrefix := "\x1b["
+	if applicationCursorKeys && ev.Modifiers() == tcell.ModNone {
+		cursorPrefix = "\x1bO"
+	}
+
 	switch ev.Key() {
 	case tcell.KeyEnter:
 		return "\r"
@@ -927,17 +998,17 @@ func keyToVT(ev *tcell.EventKey) string {
 	case tcell.KeyEscape:
 		return "\x1b"
 	case tcell.KeyUp:
-		return "\x1b[A"
+		return cursorPrefix + "A"
 	case tcell.KeyDown:
-		return "\x1b[B"
+		return cursorPrefix + "B"
 	case tcell.KeyRight:
-		return "\x1b[C"
+		return cursorPrefix + "C"
 	case tcell.KeyLeft:
-		return "\x1b[D"
+		return cursorPrefix + "D"
 	case tcell.KeyHome:
-		return "\x1b[H"
+		return cursorPrefix + "H"
 	case tcell.KeyEnd:
-		return "\x1b[F"
+		return cursorPrefix + "F"
 	case tcell.KeyInsert:
 		return "\x1b[2~"
 	case tcell.KeyDelete:

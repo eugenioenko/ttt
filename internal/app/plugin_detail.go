@@ -1,29 +1,26 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
-
-	"github.com/gdamore/tcell/v3"
 )
-
-type pluginReadmeResult struct {
-	name    string
-	content string
-	err     error
-}
 
 type pluginDetailState struct {
 	markdown   *widgets.MarkdownWidget
 	installBtn *widgets.ButtonWidget
+	readme     *asynctask.Task[string]
 }
 
 func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
@@ -31,18 +28,18 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	md := widgets.NewMarkdownWidget()
 	md.MaxWidth = a.Settings.Markdown.WrapWidth
-	md.SetContent("Loading README...")
+	md.SetContent(i18n.Text("plugins.loadingREADME"))
 
 	installed := a.isPluginInstalled(entry.Name)
 
 	installBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
-		Label: "Install",
+		Label: i18n.Text("general.install"),
 		Style: term.StyleDefault,
 		OnClick: func() {
 			if a.PluginsPanel != nil && a.PluginsPanel.OnInstall != nil {
 				a.PluginsPanel.OnInstall(entry.Repo, entry.Path, entry.Name)
 				if state, ok := a.pluginDetailWidgets[entry.Name]; ok {
-					state.installBtn.SetLabel("Installing...")
+					state.installBtn.SetLabel(i18n.Text("plugins.installing"))
 					state.installBtn.Disabled = true
 				}
 			}
@@ -50,13 +47,8 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 	})
 
 	if installed {
-		installBtn.SetLabel("Installed")
+		installBtn.SetLabel(i18n.Text("plugins.installed"))
 		installBtn.Disabled = true
-	}
-
-	a.pluginDetailWidgets[entry.Name] = &pluginDetailState{
-		markdown:   md,
-		installBtn: installBtn,
 	}
 
 	nameLabel := widgets.NewLabelWidget(widgets.LabelConfig{
@@ -65,7 +57,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 	})
 
 	sourceBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
-		Label: "Source",
+		Label: i18n.Text("plugins.source"),
 		Style: term.StyleDefault,
 		OnClick: func() {
 			OpenURL(repoFolderURL(entry.Repo, entry.Path))
@@ -82,7 +74,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	var metaParts []string
 	if entry.Featured {
-		metaParts = append(metaParts, "Featured")
+		metaParts = append(metaParts, i18n.Text("plugins.featured"))
 	}
 	if entry.Version != "" {
 		metaParts = append(metaParts, "v"+entry.Version)
@@ -121,7 +113,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 				handlerLabels = append(handlerLabels, label)
 			}
 			headerWidgets = append(headerWidgets, widgets.NewLabelWidget(widgets.LabelConfig{
-				Text:  "Handles: " + strings.Join(handlerLabels, ", "),
+				Text:  i18n.Format("plugins.handles", i18n.Args{"items": strings.Join(handlerLabels, ", ")}),
 				Style: term.StyleMuted,
 			}))
 		}
@@ -141,34 +133,33 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 	content := widgets.NewVStackWidget(header, divider, scroll)
 	adapter := ui.NewWidgetAdapter(content)
 
+	a.cleanupPluginDetailTab(tabID)
 	a.EditorGroup.OpenPluginTab(tabID, entry.Title(), adapter)
-
-	go func() {
-		readme, err := fetchPluginReadme(entry.Repo, entry.Path)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginReadmeResult{
-			name:    entry.Name,
-			content: readme,
-			err:     err,
-		}))
-	}()
-}
-
-func (a *App) handlePluginReadmeResult(result *pluginReadmeResult) {
-	state, ok := a.pluginDetailWidgets[result.name]
-	if !ok {
-		return
+	state := &pluginDetailState{
+		markdown: md, installBtn: installBtn,
+		readme: NewTask[string](a, asynctask.TaskOptions{}),
 	}
-	if result.err != nil {
-		state.markdown.SetContent(fmt.Sprintf("Could not load README: %s", result.err))
-	} else {
-		state.markdown.SetContent(result.content)
-	}
+	a.pluginDetailWidgets[entry.Name] = state
+	state.readme.Schedule(func(ctx context.Context) (string, error) {
+		return fetchPluginReadme(ctx, entry.Repo, entry.Path)
+	}, func(content string, err error) {
+		if err != nil {
+			var missing *readmeMissingError
+			if errors.As(err, &missing) {
+				md.SetContent(i18n.Format("plugins.noDocumentation", i18n.Args{"repoURL": missing.repoURL}))
+			} else {
+				md.SetContent(i18n.Format("plugins.couldNotLoadREADME", i18n.Args{"error": err}))
+			}
+		} else {
+			md.SetContent(content)
+		}
+	})
 }
 
 func (a *App) updatePluginDetailButtons() {
 	for name, state := range a.pluginDetailWidgets {
 		if a.isPluginInstalled(name) {
-			state.installBtn.SetLabel("Installed")
+			state.installBtn.SetLabel(i18n.Text("plugins.installed"))
 			state.installBtn.Disabled = true
 		}
 	}
@@ -177,6 +168,9 @@ func (a *App) updatePluginDetailButtons() {
 func (a *App) cleanupPluginDetailTab(id string) {
 	const prefix = "plugin-detail:"
 	if name, ok := strings.CutPrefix(id, prefix); ok {
+		if state := a.pluginDetailWidgets[name]; state != nil {
+			a.releaseTask(state.readme)
+		}
 		delete(a.pluginDetailWidgets, name)
 	}
 }
@@ -190,21 +184,82 @@ func (a *App) isPluginInstalled(name string) bool {
 	return false
 }
 
-func fetchPluginReadme(repoURL, repoPath string) (string, error) {
+func fetchPluginReadme(ctx context.Context, repoURL, repoPath string) (string, error) {
 	rawURL := repoToRawReadme(repoURL, repoPath)
 	if rawURL == "" {
 		return "", fmt.Errorf("unsupported repository URL")
 	}
 
+	body, err := fetchRawReadme(ctx, rawURL)
+	if err == nil {
+		return body, nil
+	}
+
+	// A plugin README is only worth falling back from when the plugin lives in
+	// a subdirectory. At the repository root the root README *is* the plugin
+	// README, so there is nothing else to try.
+	if !isReadmeNotFound(err) || repoPath == "" {
+		if isReadmeNotFound(err) {
+			return "", &readmeMissingError{repoURL: repoURL}
+		}
+		return "", err
+	}
+
+	// The plugin directory has no README; try the repository root README
+	// before giving up. Server errors and connection failures are still
+	// reported as errors rather than silently masked.
+	rootURL := repoToRawReadme(repoURL, "")
+	if rootURL == "" || rootURL == rawURL {
+		return "", &readmeMissingError{repoURL: repoURL}
+	}
+	rootBody, rootErr := fetchRawReadme(ctx, rootURL)
+	if rootErr == nil {
+		return rootBody, nil
+	}
+	if isReadmeNotFound(rootErr) {
+		return "", &readmeMissingError{repoURL: repoURL}
+	}
+	return "", rootErr
+}
+
+// readmeFetchError is returned when the README URL responds with a non-OK
+// HTTP status. The message matches the previous error text so existing copy
+// stays intact.
+type readmeFetchError struct{ status int }
+
+func (e *readmeFetchError) Error() string {
+	return fmt.Sprintf("readme returned status %d", e.status)
+}
+
+func isReadmeNotFound(err error) bool {
+	var fetchErr *readmeFetchError
+	return errors.As(err, &fetchErr) && fetchErr.status == http.StatusNotFound
+}
+
+// readmeMissingError signals that neither the plugin README nor the
+// repository root README exists. The detail tab renders a friendly
+// documentation-unavailable message with the repository link instead of an
+// error for this case.
+type readmeMissingError struct{ repoURL string }
+
+func (e *readmeMissingError) Error() string {
+	return fmt.Sprintf("no README found for repository %s", e.repoURL)
+}
+
+func fetchRawReadme(ctx context.Context, rawURL string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(rawURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("fetch readme: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("fetch readme: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("readme returned status %d", resp.StatusCode)
+		return "", &readmeFetchError{status: resp.StatusCode}
 	}
 
 	body, err := io.ReadAll(resp.Body)

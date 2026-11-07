@@ -11,7 +11,7 @@ Settings are stored in `~/.config/ttt/settings.json`. A complete example is avai
 
 There are two ways to change settings:
 
-- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, display, on save, completion), **Appearance** (theme, window, code, markdown), **Sidebar** (explorer files and look, source control, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
+- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, auto closing, display, on save, completion), **Appearance** (theme, window, code, markdown), **Sidebar** (explorer files and look, source control, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
 - **Raw JSON** — **Settings: Open settings.json** opens the file itself. Needed for the `lsp` settings and `formatters`, neither of which is exposed in the form.
 
 Closing the settings tab with unapplied edits discards them.
@@ -25,6 +25,7 @@ Both write the same file, so you can move between them freely.
 | `version` | int | `1` | Settings file format version |
 | `theme` | string | `""` | Theme name (e.g. `"default-dark"`) |
 | `debugMode` | bool | `false` | Enable debug logging |
+| `reuseWindow` | bool | `false` | Open command-line files and add explicit folder arguments to a running editor using the same config directory, preserving existing tabs and ignoring duplicate folder paths. Bare `ttt` and `--workspace` still start a new editor. Folder forwarding requires a compatible running editor; after upgrading, restart it with the updated binary or use `--new-window`. Requires a restart. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, use the newest reachable editor. If none is reachable, start normally. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Once connected, errors exit with status 1 without trying another editor; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
 ## Appearance
 
@@ -33,6 +34,7 @@ Both write the same file, so you can move between them freely.
 | `appearance.icons` | string | `"none"` | Icons in the explorer, Changes panel, commit history and other UI glyphs such as chevrons and tab markers: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one, so this defaults off; turn it on here, in Settings > Sidebar, or via **Options > Font Icons**. Colors come from the theme's `fileIcons` section |
 | `appearance.overrides` | object | `{}` | Replace any UI glyph, keyed by icon name (see [Icon overrides](#icon-overrides)). An override wins over both the plain and Nerd Font glyph. |
 | `appearance.scrollbarGlyphs` | string | `"blocks"` | Glyphs that draw git change marks on the editor scrollbar: `"blocks"` uses the half and eighth blocks every font has, which place a mark exactly near the top or bottom of a cell and stretch one in the middle to the nearer edge; `"legacy"` adds the Symbols for Legacy Computing thin bars, which place every mark to the exact eighth of a cell. Kitty, Ghostty, WezTerm and foot draw those themselves; elsewhere the font needs them or the marks show as boxes. |
+| `appearance.pointerShapes` | bool | `true` | Change the mouse pointer shape (I-beam, hand, resize divider, dragging hand) via terminal OSC 22 sequences. Set to `false` for compatibility with terminals or multiplexers that do not support OSC 22 or if you prefer a static pointer. Mouse clicks, selection, scrolling, drag gestures, and mouse reporting remain enabled when false. |
 
 ## Icon overrides
 
@@ -42,8 +44,8 @@ Both write the same file, so you can move between them freely.
 "appearance": {
   "icons": "nerd-font",
   "overrides": {
-    "chevron-right": "▸",
-    "chevron-down": "▾",
+    "chevron-right": "›",
+    "chevron-down": "⌄",
     "close": "✕"
   }
 }
@@ -53,16 +55,19 @@ Every icon must be exactly one character that is one column wide, because trees,
 
 The old `appearance.chevrons.collapsed` and `appearance.chevrons.expanded` settings are migrated to `chevron-right` and `chevron-down` on load.
 
-Plain defaults avoid East Asian *ambiguous*-width characters, which draw two columns wide in CJK-locale terminals or with `RUNEWIDTH_EASTASIAN` set. The exceptions are `dirty`, `lock`, `commit` and the symbol kinds, which have no narrow glyph that reads as well; override them if they misalign in your terminal.
+Plain defaults avoid East Asian *ambiguous*-width characters, which draw two columns wide in CJK-locale terminals or with `RUNEWIDTH_EASTASIAN` set. The exceptions are `dirty`, `lock`, `commit`, `arrow-up`, `arrow-down` and the symbol kinds, which have no narrow glyph that reads as well; override them if they misalign in your terminal.
 
 | Name | Plain | Nerd Font | Used for |
 |---|---|---|---|
-| `chevron-right` | `▸` | `\ueab6` | Collapsed folder or group in trees, collapsed fold in the editor gutter |
-| `chevron-down` | `▾` | `\ueab4` | Expanded folder or group, expanded fold while hovering the gutter |
-| `chevron-up` | `▴` | `\ueab7` | Open select dropdown |
+| `chevron-right` | `›` | `\ueab6` | Collapsed folder or group in trees, collapsed fold in the editor gutter |
+| `chevron-down` | `⌄` | `\ueab4` | Expanded folder or group, expanded fold while hovering the gutter, expanded global search file filters |
+| `chevron-up` | `⌃` | `\ueab7` | Open select dropdown |
+| `chevron-left` | `‹` | `\ueab5` | Collapsed global search file filters |
 | `submenu` | `›` | `\ueab6` | Context menu item with a submenu |
-| `arrow-left` | `◂` | `\ueb6f` | Tab strip overflow, left |
-| `arrow-right` | `▸` | `\ueb70` | Tab strip overflow, right |
+| `arrow-left` | `‹` | `\ueb6f` | Tab strip overflow, left |
+| `arrow-right` | `›` | `\ueb70` | Tab strip overflow, right |
+| `arrow-up` | `↑` | `↑` | Welcome page navigation hint |
+| `arrow-down` | `↓` | `↓` | Welcome page navigation hint |
 | `close` | `✕` | `✕` | Tab close button |
 | `dirty` | `●` | `●` | Unsaved changes marker in tabs |
 | `pinned` | `♦` | `\ueba0` | Pinned tab |
@@ -72,6 +77,9 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `remove` | `−` | `−` | Unstage actions |
 | `discard` | `✕` | `✕` | Discard changes action |
 | `replace` | `⟳` | `\ueb3d` | Replace button in the replace bar |
+| `replace-all` | `⟳` | `\ueb3c` | Replace All action in global search and the editor replace bar (the bar uses “All” in plain mode) |
+| `reload` | `↻` | `↻` | Reload a file changed on disk |
+| `ellipsis` | `⋯` | `⋯` | Collapsed diff row markers |
 | `branch` | `⎇` | `\uf418` | Branch in the Changes panel |
 | `commit` | `●` | `\uf417` | Commit in commit history |
 | `function` | `ƒ` | `\uea8c` | Symbol and completion kinds |
@@ -85,6 +93,11 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `keyword` | `■` | `\ueb62` |  |
 | `snippet` | `■` | `\ueb66` |  |
 | `symbol` | `•` | `\ueb63` |  |
+| `panel-explorer` | `⌂` | `\ueaf0` | Explore sidebar tab, when `sidebar.tabStyle` shows icons |
+| `panel-search` | `⌕` | `\uea6d` | Find sidebar tab |
+| `panel-changes` | `⎇` | `\uea68` | Changes sidebar tab |
+| `panel-outline` | `ƒ` | `\ueb86` | Outline sidebar tab |
+| `panel-plugins` | `⧉` | `\ueae6` | Plugins sidebar tab |
 
 ## Editor
 
@@ -94,7 +107,9 @@ All editor settings are nested under the `editor` key.
 |-----|------|---------|-------------|
 | `editor.tabSize` | int | `4` | Number of spaces per indentation level |
 | `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
-| `editor.wordWrap` | bool | `false` | Wrap long lines at the editor width |
+| `editor.wordWrap` | bool | `false` | Soft-wrap long lines; the global Options toggle changes this default |
+| `editor.wordWrapColumn` | int | `0` | Maximum soft-wrap width in terminal display columns; `0` uses the available text width. Positive values cap it after gutters, scrollbars, and wrap margins. Ignored when wrapping is off; negative values normalize to `0` |
+| `editor.languageOverrides` | object | `{}` | Per-language `wordWrap` and `wordWrapColumn` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
 | `editor.largeFiles.wordWrapMaxMB` | int | `32` | Files larger than this many megabytes open without word wrap, even when `editor.wordWrap` is on. `0` removes the limit |
 | `editor.largeFiles.autoReloadMaxMB` | int | `64` | Files larger than this many megabytes show a Reload action instead of automatically reloading after disk changes. `0` removes the limit. One megabyte is 1,048,576 bytes; negative values also remove the limit |
 | `editor.diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
@@ -109,6 +124,12 @@ All editor settings are nested under the `editor` key.
 | `editor.diffScrollbarGitMarks` | bool | `false` | Mark added and deleted rows on the diff view scrollbar |
 | `editor.autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
 | `editor.autoDedent` | bool | `true` | Dedent one level when typing a closing `} ) ]` on a blank line |
+| `editor.autoClosing.brackets` | bool | `false` | Automatically insert matching `()`, `[]`, and `{}` pairs while typing |
+| `editor.autoClosing.quotes` | bool | `false` | Automatically pair single and double quotes; escaped quotes and quotes following letters, digits, or underscores stay literal |
+| `editor.autoClosing.skipClosing` | bool | `true` | Typing an automatically inserted closing bracket or quote moves past it |
+| `editor.autoClosing.deletePairs` | bool | `true` | Backspace between an empty automatically inserted pair deletes both characters |
+| `editor.autoClosing.inStrings` | bool | `false` | Allow new pairs inside strings identified by the language grammar |
+| `editor.autoClosing.plainText` | bool | `false` | Also enable pairing in plain text, unnamed buffers, and files with no recognized grammar |
 | `editor.lineNumbers` | bool | `true` | Show line numbers in the gutter |
 | `editor.cursorStyle` | string | `""` | Cursor style: `"block"`, `"underline"`, or `"bar"` |
 | `editor.formatOnSave` | bool | `false` | Auto-format the document via LSP on save |
@@ -123,8 +144,36 @@ All editor settings are nested under the `editor` key.
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
+| `editor.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
 | `editor.grammars` | array | `[]` | External TextMate grammars (see [Grammars](#grammars)) |
+
+### Language-specific wrapping
+
+Each wrap field resolves independently: language override → global setting → built-in default. The defaults are `wordWrap: false` and `wordWrapColumn: 0`.
+
+```json
+{
+  "editor": {
+    "wordWrap": true,
+    "wordWrapColumn": 0,
+    "languageOverrides": {
+      "typescript": { "wordWrapColumn": 80 },
+      "markdown": { "wordWrapColumn": 65 }
+    }
+  }
+}
+```
+
+With a global column of `80`, a Markdown override of `0` instead wraps at the pane width. Explicit `wordWrap: false` disables wrapping for that language. The global Word Wrap toggle leaves language overrides in place. Effective settings update on tab switches, language detection changes, and settings reload, without requiring LSP. Large-file safeguards still apply; diff wrapping and rendered `markdown.wrapWidth` remain separate. See [Soft Wrapping](/guides/editor/#soft-wrapping) for details.
+
+### Auto closing
+
+Bracket and quote insertion are independently opt-in. Enable `editor.autoClosing.brackets` to get bracket pairing, skipping of generated closers, and paired Backspace deletion. These settings also appear under **Editor → Auto closing** in the settings editor and apply immediately.
+
+Pairs are inserted only at the end of a line, before whitespace, or before `)`, `]`, or `}`. Selection replacement and pasted text stay literal. Backticks and selection wrapping are not included. Existing brackets and quotes are never skipped or deleted as generated pairs. Undo, redo, file reloads, and edits outside the pane clear generated-pair tracking; restored pairs are treated as existing text.
+
+String detection uses the language grammar independently of theme colors and whether syntax coloring is enabled. If multiline context is still being tokenized, new pairs are suppressed until it catches up, unless `inStrings` is enabled. Without a recognized grammar, `inStrings` has no effect. Skipping generated closing quotes works with `inStrings` disabled; escaped quotes stay literal.
 
 ## Explorer
 
@@ -135,6 +184,16 @@ All editor settings are nested under the `editor` key.
 | `explorer.gitStatusColors` | bool | `true` | Color files and folders in the file explorer by their git status (modified, new, deleted, conflicted). Colors come from the theme's `warning`, `success`, `danger`, and `conflict` colors |
 | `explorer.dimStagedGitColors` | bool | `false` | Render staged changes in a dimmed version of their status color, telling them apart from pending ones. Off by default: the Changes panel already separates staged from unstaged, and the extra shades make the explorer busier. Needs `explorer.gitStatusColors` |
 | `explorer.autoReveal` | bool | `false` | Expand the file explorer to the active file and select it whenever the active file changes. **Explorer: Reveal Active File** does the same on demand |
+| `explorer.compactFolders` | bool | `true` | Show a folder whose only entry is another folder as one row, such as `src/main/java`. Expanding the row opens the whole chain. Right-clicking a segment acts on that folder; other actions on the row apply to the deepest folder |
+
+## Quick Open
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `quickOpen.showHidden` | bool | `false` | Show dot-prefixed files and directories in Go to File |
+| `quickOpen.showGitIgnored` | bool | `false` | Show Git-ignored files in Go to File |
+
+Set these independently in **Settings > Sidebar > Quick Open**. Hidden files still respect Git ignore rules unless `showGitIgnored` is enabled; showing Git-ignored files does not include hidden paths unless `showHidden` is enabled. `.git` files and directories always stay excluded. These options do not affect Explorer or workspace text search.
 
 ## Sidebar
 
@@ -143,6 +202,7 @@ All editor settings are nested under the `editor` key.
 | `sidebar.panelOrder` | string[] | built-in order | Initial sidebar panel-header order. Unknown plugin panel IDs are retained until that plugin loads. |
 | `sidebar.width` | int | `30` | Initial sidebar width in columns. |
 | `sidebar.commitHistoryHeight` | int | proportional | Initial height of the commit history in the Changes panel, in rows. |
+| `sidebar.tabStyle` | string | `"label"` | How the Explore, Find, Changes, Outline and Plugins tabs appear: `"label"`, `"label-icon"` or `"icon"`. Glyphs follow `appearance.icons`. A plugin panel uses the [`icon` it registers](/guides/plugin-authoring/#sidebar-icons) and shows only its title without one. Also in **Settings > Sidebar > Look**. |
 
 These are starting values. Once you drag a header, resize the sidebar, the commit history, or the panel, the new layout is saved to `state.json` next to `settings.json` and takes precedence. Delete `state.json` to return to these values.
 
@@ -173,7 +233,10 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
+| `terminal.padding_x` | int | `1` | Blank columns on each side of terminal text, before the scrollbar; `0` removes both margins. Applies immediately. The settings UI rejects negative values; negative values in `settings.json` become `0`. Narrow panels reduce padding equally to preserve terminal content |
+| `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V. Set to `false` to send `^V` to the terminal program. Ctrl+Shift+V always pastes when reported distinctly by the outer terminal |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
+| `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 
 ## LSP
 
@@ -198,6 +261,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `plugins.enabled` | bool | `true` | Enable the plugin system. When `false`, no plugins are loaded and the Plugins sidebar tab is hidden. |
+| `plugins.selectionStyle` | string | `"invert"` | Selection highlight style inside plugin panels, tabs and dialogs: `"invert"` (invert foreground and background colors) or `"background"` (use theme's selection background). Inverted selections stay visible on a plugin's highlighted rows. |
 
 ## Markdown
 
@@ -273,12 +337,14 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   "debugMode": false,
   "appearance": {
     "icons": "none",
-    "scrollbarGlyphs": "blocks"
+    "scrollbarGlyphs": "blocks",
+    "pointerShapes": true
   },
   "editor": {
     "tabSize": 4,
     "insertSpaces": true,
     "wordWrap": false,
+    "wordWrapColumn": 0,
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,
@@ -302,7 +368,12 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "menuBar": true,
     "gutterStyle": "compact",
     "borderStyle": "default",
+    "selectionStyle": "background",
     "bracketPairColorization": false
+  },
+  "quickOpen": {
+    "showHidden": false,
+    "showGitIgnored": false
   },
   "search": {
     "debounce": 350
@@ -312,7 +383,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "showGitIgnored": true,
     "gitStatusColors": true,
     "dimStagedGitColors": false,
-    "autoReveal": false
+    "autoReveal": false,
+    "compactFolders": true
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]
@@ -321,8 +393,10 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "fileView": "list"
   },
   "terminal": {
+    "padding_x": 1,
     "shell": "/bin/zsh",
-    "scrollback": 1000
+    "scrollback": 1000,
+    "selectionStyle": "background"
   },
   "lsp": {
     "enabled": true,
@@ -342,7 +416,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "signatureHelp": true
   },
   "plugins": {
-    "enabled": true
+    "enabled": true,
+    "selectionStyle": "invert"
   },
   "formatters": {
     "go": "gofmt",

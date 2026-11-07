@@ -94,6 +94,8 @@ const (
 	StyleGutterBookmark
 	StyleButton
 	StyleButtonFocused
+	StyleButtonFilled
+	StyleButtonInverse
 	StyleSelectedTab
 	StyleFileIconRed
 	StyleFileIconYellow
@@ -111,6 +113,7 @@ const (
 	StyleReverse
 	StyleHide
 	StyleNote
+	StylePluginSelection
 	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
 	// tokenColors fill; see TokenStyle.
 	styleTokenBase

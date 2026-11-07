@@ -7,6 +7,41 @@ description: Core editing features in TTT.
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.
 
+Click the language name in the status bar, or run **Change Language Mode** from the command palette, to search built-in and external grammars. This works for files without a recognized extension, such as `~/.bash_aliases`. Choose **Auto Detect** to restore automatic detection, or **Plain Text** to disable syntax highlighting for the tab.
+
+The selection belongs to the current tab and stays after Save As, rename, and grammar reloads. It does not change the language server or word-wrap language overrides, and it is not saved after the tab closes. Selecting a language does not enable syntax highlighting when it is disabled in settings. The adjacent language-server indicator still opens the Output panel.
+
+## Soft Wrapping
+
+Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.
+
+Use language IDs to set different limits for code and prose:
+
+```json
+{
+  "editor": {
+    "wordWrap": true,
+    "wordWrapColumn": 0,
+    "languageOverrides": {
+      "typescript": { "wordWrapColumn": 80 },
+      "markdown": { "wordWrapColumn": 65 }
+    }
+  }
+}
+```
+
+Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping and `0` for the column). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
+
+The Options **Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
+
+The `editor.largeFiles.wordWrapMaxMB` safeguard still applies, including when a language enables wrapping. Diff views retain their separate wrap policy. `markdown.wrapWidth` controls rendered Markdown, such as hover popups and plugin widgets; raw Markdown editing uses these editor settings.
+
+## Opening Links
+
+Hold **Ctrl** while moving the mouse over the editor to underline visible HTTP/HTTPS links and existing file references such as `src/main.go:12:3`. **Ctrl+click** an underlined link to open it. File references open in ttt at the specified line and column; relative paths use the current file's directory, or the workspace folder for untitled buffers and remote PR diffs.
+
+Move outside the pane or move the mouse without Ctrl to clear the underlines. Link navigation also works when pointer shapes are disabled, and is available in diff tabs, Commit Details, and Current Changes.
+
 ## Bracket Matching
 
 Matching brackets are highlighted automatically when the cursor is on a bracket character. Press **Ctrl+K M** to jump to the matching bracket.
@@ -23,6 +58,7 @@ Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one leve
 
 - **Ctrl+F** opens the find bar with match navigation
 - **Ctrl+R** opens find and replace with replace-one and replace-all
+- Click the chevron beside the search input to toggle the replacement row. Search text, options, and replacement text are preserved when switching modes.
 - **F3 / Shift+F3** to jump between matches
 
 ## Go to Line
@@ -114,6 +150,15 @@ TTT supports `.editorconfig` files and picks up indent size automatically per fi
 - Click tabs to switch files
 - Drag sidebar and panel dividers to resize
 - Right-click for context menus
+
+In terminals that support OSC 22, the mouse pointer shows what is under it: a text pointer over editor text and plugin inputs, a hand over tabs, menu items, tree rows, and buttons, a grabbing hand while dragging a tab, and a resize pointer over dividers. Other terminals keep their usual pointer. You can opt out of pointer shape changes with `appearance.pointerShapes: false` (or via **Settings > Appearance > Window > Pointer shapes**). Mouse clicks, selection, scrolling, drag gestures, and mouse reporting continue to work normally when pointer shapes are disabled.
+
+The sidebar resize handle and resize pointer cover only the divider column. Clicks and drags in the first content column beside it go directly to the content, including plugin tabs without a gutter.
+
+Other resize allowances are intentionally retained until a separate change is requested:
+
+- Left and right drawers accept a resize drag on their border or one column outside it.
+- A bottom-docked panel also accepts a resize drag on the tab bar row immediately below its divider when the panel does not consume the press. Right-docked panels use only their divider column.
 
 ## Line Numbers
 
