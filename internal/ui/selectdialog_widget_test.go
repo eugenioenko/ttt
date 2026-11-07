@@ -680,3 +680,11 @@ func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
 		t.Fatalf("expected width-safe tail, got %q", got)
 	}
 }
+
+func TestSelectDialogWidgetFocusedInput(t *testing.T) {
+	p := NewSelectDialogWidget(nil)
+	var holder InputHolder = p
+	if holder.FocusedInput() != p.Input {
+		t.Fatalf("FocusedInput() = %v, want %v", holder.FocusedInput(), p.Input)
+	}
+}
