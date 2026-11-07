@@ -693,6 +693,8 @@
   "plugins.actions": "Actions",
   "plugins.approveExecutable": "Allow it to run {path}? Its manifest allows programs named {filename}; this approves only this file.",
   "plugins.cleanupFailed": "\"{name}\" could not clean up: {error}. Files it created outside its directory may remain.",
+  "plugins.communityApprovalNotice": "Community plugin. Review its permissions and source before allowing.",
+  "plugins.communityNotice": "Community plugin. Review its source before installing.",
   "plugins.confirmUninstall": "Confirm Uninstall",
   "plugins.couldNotLoadREADME": "Could not load README: {error}",
   "plugins.couldNotLoadRegistry": "Could not load registry",

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -92,5 +93,56 @@ func TestLoadRegistryInvalidJSON(t *testing.T) {
 	_, err := LoadRegistry(path)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
+	}
+}
+
+func TestIsMaintained(t *testing.T) {
+	no, yes := false, true
+	entries := []RemoteRegistryEntry{
+		{Name: "db", Repo: "https://github.com/someone/ttt-db", Community: &no},
+		{Name: "pdf", Repo: "https://github.com/someone/ttt-pdf", Community: &yes},
+		{Name: "save", Repo: "https://github.com/someone/ttt-save"},
+	}
+	tests := []struct {
+		repo string
+		want bool
+	}{
+		{"https://github.com/eugenioenko/ttt-plugins", true},
+		{"https://github.com/eugenioenko/ttt-vim", true},
+		{"https://github.com/EugenioEnko/ttt-plugins.git", true},
+		{"https://www.github.com/eugenioenko/ttt-plugins/", true},
+		{"https://github.com/eugenioenko-evil/ttt-plugins", false},
+		{"https://github.com/eugenioenko/../evil/ttt", false},
+		{"https://github.com/eugenioenko/other-plugin", true},
+		{"https://github.com/eugenioenko/x/../../evil/ttt", false},
+		{"https://github.com/eugenioenko/..", false},
+		{"https://github.com/eugenioenko/", false},
+		{"https://evil.com/github.com/eugenioenko/ttt-plugins", false},
+		{"https://github.com/someone/ttt-db", true},
+		{"https://github.com/someone/ttt-db.git", true},
+		{"https://github.com/someone/ttt-pdf", false},
+		{"https://github.com/someone/ttt-save", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := IsMaintained(tt.repo, entries); got != tt.want {
+			t.Errorf("IsMaintained(%q) = %v, want %v", tt.repo, got, tt.want)
+		}
+	}
+	if IsMaintained("https://github.com/someone/ttt-db", nil) {
+		t.Error("registry flag must not apply without registry entries")
+	}
+}
+
+func TestRemoteRegistryEntryCommunityDefaultsToUnset(t *testing.T) {
+	var entries []RemoteRegistryEntry
+	if err := json.Unmarshal([]byte(`[{"name":"a","repo":"r"},{"name":"b","repo":"r","community":false}]`), &entries); err != nil {
+		t.Fatal(err)
+	}
+	if entries[0].Community != nil {
+		t.Errorf("missing community = %v, want nil", *entries[0].Community)
+	}
+	if entries[1].Community == nil || *entries[1].Community {
+		t.Errorf("community:false decoded as %v", entries[1].Community)
 	}
 }

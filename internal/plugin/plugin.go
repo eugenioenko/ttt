@@ -48,6 +48,8 @@ type Plugin struct {
 	Enabled  bool
 	State    *lua.LState
 
+	InstalledFromURL bool
+
 	StorageDir string
 	store      *pluginStore
 
