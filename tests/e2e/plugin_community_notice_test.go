@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	detailNotice   = "Community plugin. Review its permissions and source before installing."
+	detailNotice   = "Community plugin. Review its source before installing."
 	approvalNotice = "Community plugin. Review its permissions"
 )
 
