@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -1658,6 +1659,11 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	if t == nil || t.Content != nil {
 		return false
 	}
+	replaceTabs, err := g.SaveAsTargets(path)
+	if err != nil {
+		g.reportError(err.Error())
+		return false
+	}
 	g.applySaveSettings(t.Buf, path)
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
@@ -1667,6 +1673,18 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	if t.Undo != nil {
 		t.Undo.MarkSaved()
 	}
+	// The target remains open through the source tab, so don't send OnFileClose.
+	for _, replaceTab := range slices.Backward(replaceTabs) {
+		g.notifyContentTabClose(g.tabs[replaceTab])
+		g.tabs = append(g.tabs[:replaceTab], g.tabs[replaceTab+1:]...)
+		if replaceTab < g.pinnedCount {
+			g.pinnedCount--
+		}
+		if replaceTab < g.active {
+			g.active--
+		}
+	}
+	t = g.activeTab()
 	g.movePathState(t.FilePath, path)
 	t.FilePath = path
 	t.IconPath = path
@@ -1675,6 +1693,120 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	g.rebuildHighlighter(t)
 	g.syncTabs()
 	return true
+}
+
+func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
+	var targets []int
+	for i := range g.tabs {
+		other := &g.tabs[i]
+		if i == g.active || other.Virtual || other.Buf == nil {
+			continue
+		}
+		same, err := sameSaveTarget(other.FilePath, path)
+		if err != nil {
+			return nil, fmt.Errorf("Cannot determine save destination %s: %w", filepath.Base(path), err)
+		}
+		if !same {
+			continue
+		}
+		if other.Buf.Dirty {
+			return nil, fmt.Errorf("Cannot save as %s: already open with unsaved changes; save or close that tab first", filepath.Base(path))
+		}
+		targets = append(targets, i)
+	}
+	return targets, nil
+}
+
+func sameSaveTarget(a, b string) (bool, error) {
+	resolve := func(path string) (string, error) {
+		// Cleaning link/.. before resolving symlinks can change the destination.
+		resolved, err := filepath.EvalSymlinks(path)
+		if err == nil {
+			return filepath.Abs(resolved)
+		}
+		if errors.Is(err, syscall.ENOTDIR) {
+			return "", nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		if entry, statErr := os.Lstat(path); statErr == nil && entry.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("unresolved symlink %s: %w", path, err)
+		} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
+		}
+		dir, name := filepath.Split(path)
+		if dir == "" {
+			dir = "."
+		}
+		parent, err := filepath.EvalSymlinks(dir)
+		// SaveFile creates only the leaf, so a missing parent cannot become an alias.
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		if err != nil {
+			return "", err
+		}
+		return filepath.Abs(filepath.Join(parent, name))
+	}
+	a, errA := resolve(a)
+	b, errB := resolve(b)
+	if (errA == nil && a == "") || (errB == nil && b == "") {
+		return false, nil
+	}
+	if err := errors.Join(errA, errB); err != nil {
+		return false, err
+	}
+	if a == b {
+		return true, nil
+	}
+	if !strings.EqualFold(a, b) {
+		return false, nil
+	}
+	dirA, err := os.Stat(filepath.Dir(a))
+	if err != nil {
+		return false, err
+	}
+	dirB, err := os.Stat(filepath.Dir(b))
+	if err != nil || !os.SameFile(dirA, dirB) {
+		return false, err
+	}
+	if filepath.Base(a) == filepath.Base(b) {
+		return true, nil
+	}
+	return caseInsensitiveDir(filepath.Dir(b))
+}
+
+func caseInsensitiveDir(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		name := strings.ToUpper(entry.Name())
+		if name == entry.Name() {
+			name = strings.ToLower(name)
+		}
+		if name == entry.Name() {
+			continue
+		}
+		if slices.ContainsFunc(entries, func(e os.DirEntry) bool { return e.Name() == name }) {
+			return false, nil
+		}
+		original, err := entry.Info()
+		if err != nil {
+			return false, err
+		}
+		variant, err := os.Lstat(filepath.Join(dir, name))
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return os.SameFile(original, variant), nil
+	}
+	return false, fmt.Errorf("no entry reveals case sensitivity in %s", dir)
 }
 
 // movePathState moves the bookmarks and decorations kept for oldPath, or for

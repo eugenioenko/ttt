@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	fakePullServerEnv = "TTT_APP_FAKE_PULL_SERVER"
+	fakePullServerEnv  = "TTT_APP_FAKE_PULL_SERVER"
+	fakePullSyncLogEnv = "TTT_APP_FAKE_PULL_SYNC_LOG"
 	// fakePullRetriggerEnv names a file whose first pull the fake server
 	// cancels with retriggerRequest.
 	fakePullRetriggerEnv = "TTT_APP_FAKE_PULL_RETRIGGER"
@@ -45,6 +46,21 @@ func runFakePullServer(interFile bool) {
 		msg, err := codec.Receive()
 		if err != nil {
 			return
+		}
+		if path := os.Getenv(fakePullSyncLogEnv); path != "" && strings.HasPrefix(msg.Method, "textDocument/did") {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "fake pull sync log: open %s: %v\n", path, err)
+				return
+			}
+			err = json.NewEncoder(f).Encode(msg)
+			if closeErr := f.Close(); err == nil {
+				err = closeErr
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "fake pull sync log: write %s: %v\n", path, err)
+				return
+			}
 		}
 		switch msg.Method {
 		case "initialize":
