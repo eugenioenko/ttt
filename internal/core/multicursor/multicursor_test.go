@@ -261,3 +261,26 @@ func TestRemovePrimaryUpdatesPrimaryIndex(t *testing.T) {
 		t.Fatalf("expected primary at line 3, got %d", mc.PrimaryCursor().Line)
 	}
 }
+
+func TestRemoveLastAfterCursorMovementOrToggle(t *testing.T) {
+	mc := New(0, 0)
+	mc.Add(2, 0)
+	mc.Add(4, 0)
+
+	// Remove middle cursor via Toggle
+	if !mc.Toggle(2, 0) {
+		t.Fatal("expected Toggle(2, 0) to remove cursor")
+	}
+	if len(mc.Cursors) != 2 {
+		t.Fatalf("expected 2 cursors, got %d", len(mc.Cursors))
+	}
+
+	// RemoveLast should remove cursor at (4, 0)
+	removed, ok := mc.RemoveLast()
+	if !ok || removed.Line != 4 {
+		t.Fatalf("expected RemoveLast to remove line 4, got line %d ok=%v", removed.Line, ok)
+	}
+	if len(mc.Cursors) != 1 {
+		t.Fatalf("expected 1 cursor remaining, got %d", len(mc.Cursors))
+	}
+}

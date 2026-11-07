@@ -61,21 +61,20 @@ func (mc *MultiCursor) AddWithSelection(line, col int, sel selection.Selection) 
 }
 
 func (mc *MultiCursor) RemoveLast() (CursorState, bool) {
-	if len(mc.history) == 0 || len(mc.Cursors) <= 1 {
-		return CursorState{}, false
-	}
-	last := mc.history[len(mc.history)-1]
-	mc.history = mc.history[:len(mc.history)-1]
-	for i, c := range mc.Cursors {
-		if c.Line == last.Line && c.Col == last.Col {
-			mc.Cursors = append(mc.Cursors[:i], mc.Cursors[i+1:]...)
-			if mc.Primary >= len(mc.Cursors) {
-				mc.Primary = len(mc.Cursors) - 1
+	for len(mc.history) > 0 && len(mc.Cursors) > 1 {
+		last := mc.history[len(mc.history)-1]
+		mc.history = mc.history[:len(mc.history)-1]
+		for i, c := range mc.Cursors {
+			if c.Line == last.Line && c.Col == last.Col {
+				mc.Cursors = append(mc.Cursors[:i], mc.Cursors[i+1:]...)
+				if mc.Primary >= len(mc.Cursors) {
+					mc.Primary = len(mc.Cursors) - 1
+				}
+				return last, true
 			}
-			return last, true
 		}
 	}
-	return last, false
+	return CursorState{}, false
 }
 
 func (mc *MultiCursor) Remove(line, col int) bool {
@@ -84,11 +83,16 @@ func (mc *MultiCursor) Remove(line, col int) bool {
 	}
 	for i, c := range mc.Cursors {
 		if c.Line == line && c.Col == col {
+			removedFromHistory := false
 			for h := len(mc.history) - 1; h >= 0; h-- {
 				if mc.history[h].Line == line && mc.history[h].Col == col {
 					mc.history = append(mc.history[:h], mc.history[h+1:]...)
+					removedFromHistory = true
 					break
 				}
+			}
+			if !removedFromHistory && len(mc.history) >= len(mc.Cursors) {
+				mc.history = mc.history[:len(mc.Cursors)-1]
 			}
 			mc.Cursors = append(mc.Cursors[:i], mc.Cursors[i+1:]...)
 			if i < mc.Primary {
