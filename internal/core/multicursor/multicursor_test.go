@@ -174,3 +174,90 @@ func TestAddWithSelection(t *testing.T) {
 		t.Error("second cursor should have active selection")
 	}
 }
+
+func TestRemoveAndToggle(t *testing.T) {
+	mc := New(1, 0)
+	mc.Add(3, 0)
+	mc.Add(5, 0)
+	if len(mc.Cursors) != 3 {
+		t.Fatalf("expected 3 cursors, got %d", len(mc.Cursors))
+	}
+
+	// Remove middle cursor (3, 0)
+	if !mc.Remove(3, 0) {
+		t.Fatal("expected Remove(3, 0) to succeed")
+	}
+	if len(mc.Cursors) != 2 {
+		t.Fatalf("expected 2 cursors, got %d", len(mc.Cursors))
+	}
+	if mc.Cursors[0].Line != 1 || mc.Cursors[1].Line != 5 {
+		t.Errorf("unexpected cursors after remove: %+v", mc.Cursors)
+	}
+
+	// Remove cursor not in set
+	if mc.Remove(99, 0) {
+		t.Fatal("expected Remove(99, 0) to return false")
+	}
+
+	// Toggle existing cursor (5, 0) -> should remove it
+	if !mc.Toggle(5, 0) {
+		t.Fatal("expected Toggle(5, 0) to return true")
+	}
+	if len(mc.Cursors) != 1 {
+		t.Fatalf("expected 1 cursor, got %d", len(mc.Cursors))
+	}
+	if mc.Cursors[0].Line != 1 {
+		t.Errorf("expected sole remaining cursor at line 1, got %d", mc.Cursors[0].Line)
+	}
+
+	// Toggle sole remaining cursor -> should leave it in place
+	if mc.Toggle(1, 0) {
+		t.Fatal("expected Toggle on sole cursor to return false")
+	}
+	if len(mc.Cursors) != 1 {
+		t.Fatalf("expected 1 cursor to remain, got %d", len(mc.Cursors))
+	}
+
+	// Toggle non-existing cursor (2, 4) -> should add it
+	if !mc.Toggle(2, 4) {
+		t.Fatal("expected Toggle on new position to return true")
+	}
+	if len(mc.Cursors) != 2 {
+		t.Fatalf("expected 2 cursors, got %d", len(mc.Cursors))
+	}
+	if mc.Cursors[1].Line != 2 || mc.Cursors[1].Col != 4 {
+		t.Errorf("expected added cursor at (2, 4), got (%d, %d)", mc.Cursors[1].Line, mc.Cursors[1].Col)
+	}
+}
+
+func TestRemovePrimaryUpdatesPrimaryIndex(t *testing.T) {
+	mc := New(1, 0)
+	mc.Add(3, 0)
+	mc.Add(5, 0)
+	// Primary is initially index 0 ((1, 0))
+	if mc.Primary != 0 {
+		t.Fatalf("expected primary 0, got %d", mc.Primary)
+	}
+	// Remove primary cursor
+	if !mc.Remove(1, 0) {
+		t.Fatal("expected Remove to succeed")
+	}
+	if mc.Primary != 0 {
+		t.Fatalf("expected primary 0 after removing index 0, got %d", mc.Primary)
+	}
+	if mc.PrimaryCursor().Line != 3 {
+		t.Fatalf("expected new primary at line 3, got %d", mc.PrimaryCursor().Line)
+	}
+
+	// Now set primary to last cursor (index 1, line 5)
+	mc.Primary = 1
+	if !mc.Remove(5, 0) {
+		t.Fatal("expected Remove to succeed")
+	}
+	if mc.Primary != 0 {
+		t.Fatalf("expected primary 0 after removing last cursor, got %d", mc.Primary)
+	}
+	if mc.PrimaryCursor().Line != 3 {
+		t.Fatalf("expected primary at line 3, got %d", mc.PrimaryCursor().Line)
+	}
+}

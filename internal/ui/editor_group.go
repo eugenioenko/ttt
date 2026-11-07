@@ -2677,6 +2677,22 @@ func (g *EditorGroupWidget) AddCursor(line, col int) {
 	g.saveMultiState()
 }
 
+func (g *EditorGroupWidget) ToggleCursor(line, col int) {
+	if !g.IsEditorActive() {
+		return
+	}
+	g.Editor.ensureMulti()
+	g.Editor.syncToMulti()
+	g.Editor.Multi.Toggle(line, col)
+	if !g.Editor.Multi.IsMulti() {
+		g.Editor.syncFromMulti()
+		g.Editor.Multi = nil
+	} else {
+		g.Editor.syncFromMulti()
+	}
+	g.saveMultiState()
+}
+
 func (g *EditorGroupWidget) GetCursors() []multicursor.CursorState {
 	if !g.IsEditorActive() || g.Editor.Multi == nil {
 		return nil
