@@ -61,21 +61,58 @@ func (mc *MultiCursor) AddWithSelection(line, col int, sel selection.Selection) 
 }
 
 func (mc *MultiCursor) RemoveLast() (CursorState, bool) {
-	if len(mc.history) == 0 || len(mc.Cursors) <= 1 {
-		return CursorState{}, false
-	}
-	last := mc.history[len(mc.history)-1]
-	mc.history = mc.history[:len(mc.history)-1]
-	for i, c := range mc.Cursors {
-		if c.Line == last.Line && c.Col == last.Col {
-			mc.Cursors = append(mc.Cursors[:i], mc.Cursors[i+1:]...)
-			if mc.Primary >= len(mc.Cursors) {
-				mc.Primary = len(mc.Cursors) - 1
+	for len(mc.history) > 0 && len(mc.Cursors) > 1 {
+		last := mc.history[len(mc.history)-1]
+		mc.history = mc.history[:len(mc.history)-1]
+		for i, c := range mc.Cursors {
+			if c.Line == last.Line && c.Col == last.Col {
+				mc.Cursors = append(mc.Cursors[:i], mc.Cursors[i+1:]...)
+				if mc.Primary >= len(mc.Cursors) {
+					mc.Primary = len(mc.Cursors) - 1
+				}
+				return last, true
 			}
-			return last, true
 		}
 	}
-	return last, false
+	return CursorState{}, false
+}
+
+func (mc *MultiCursor) Remove(line, col int) bool {
+	if len(mc.Cursors) <= 1 {
+		return false
+	}
+	for i, c := range mc.Cursors {
+		if c.Line == line && c.Col == col {
+			for h := len(mc.history) - 1; h >= 0; h-- {
+				if mc.history[h].Line == line && mc.history[h].Col == col {
+					mc.history = append(mc.history[:h], mc.history[h+1:]...)
+					break
+				}
+			}
+			mc.Cursors = append(mc.Cursors[:i], mc.Cursors[i+1:]...)
+			if i < mc.Primary {
+				mc.Primary--
+			} else if mc.Primary >= len(mc.Cursors) {
+				mc.Primary = len(mc.Cursors) - 1
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func (mc *MultiCursor) Toggle(line, col int) bool {
+	if len(mc.Cursors) > 1 {
+		for _, c := range mc.Cursors {
+			if c.Line == line && c.Col == col {
+				return mc.Remove(line, col)
+			}
+		}
+	} else if len(mc.Cursors) == 1 && mc.Cursors[0].Line == line && mc.Cursors[0].Col == col {
+		return false
+	}
+	mc.Add(line, col)
+	return true
 }
 
 func (mc *MultiCursor) CollapseToSingle() {
