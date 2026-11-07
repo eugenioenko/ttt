@@ -11,17 +11,17 @@ import (
 
 const DefaultRegistryURL = "https://raw.githubusercontent.com/eugenioenko/ttt/main/community-plugins.json"
 
-const maintainedRepoPrefix = "github.com/eugenioenko/ttt-"
+const maintainedOwner = "github.com/eugenioenko/"
 
-// IsMaintained reports whether repo needs no community notice. The prefix must
-// cover a single repo name: anything with a further "/" could climb out of the
-// owner with "..".
+// IsMaintained reports whether repo needs no community notice. The owner must be
+// followed by a single repo name: anything with a further "/" could climb out of
+// the owner with "..".
 func IsMaintained(repo string, entries []RemoteRegistryEntry) bool {
 	key := normalizeRepo(repo)
 	if key == "" {
 		return false
 	}
-	if suffix, ok := strings.CutPrefix(key, maintainedRepoPrefix); ok && suffix != "" && !strings.Contains(suffix, "/") {
+	if name, ok := strings.CutPrefix(key, maintainedOwner); ok && name != "" && name != ".." && !strings.Contains(name, "/") {
 		return true
 	}
 	for _, e := range entries {
