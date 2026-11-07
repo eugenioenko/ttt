@@ -364,7 +364,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && !status.Staged {
-				app.Changes.applied(git.Stage(dir, status.Path))
+				app.Changes.applied(app.Changes.stagePaths(dir, false, status.Path))
 			}
 		},
 	})
@@ -375,7 +375,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && status.Staged {
-				app.Changes.applied(git.Unstage(dir, status.Path))
+				app.Changes.applied(app.Changes.stagePaths(dir, true, status.Path))
 			}
 		},
 	})

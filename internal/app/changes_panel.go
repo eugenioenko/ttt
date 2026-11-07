@@ -10,6 +10,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -17,6 +18,7 @@ import (
 )
 
 type ChangesPanel struct {
+	provider  scm.Provider
 	Tree      *widgets.TreeWidget
 	Input     *widgets.InputWidget
 	CommitLog *widgets.TreeWidget
@@ -108,10 +110,11 @@ const (
 )
 
 type changesGroup struct {
-	Dir      string
-	Name     string
-	Staged   []git.FileStatus
-	Unstaged []git.FileStatus
+	Repository scm.Repository
+	Dir        string
+	Name       string
+	Staged     []git.FileStatus
+	Unstaged   []git.FileStatus
 }
 
 type workFileRef struct {
@@ -172,7 +175,12 @@ func (a *App) persistCommitHistoryHeight() {
 }
 
 func NewChangesPanel(dirs ...string) *ChangesPanel {
+	return NewChangesPanelWithProvider(git.Provider{}, dirs...)
+}
+
+func NewChangesPanelWithProvider(provider scm.Provider, dirs ...string) *ChangesPanel {
 	cp := &ChangesPanel{
+		provider:           provider,
 		Dirs:               dirs,
 		multiRoot:          len(dirs) > 1,
 		expanded:           make(map[string]bool),
@@ -325,7 +333,7 @@ func filePaths(files []git.FileStatus) []string {
 func (cp *ChangesPanel) Refresh() {
 	cp.cancelHistoryReads()
 	dirs := append([]string(nil), cp.Dirs...)
-	cp.applyWorkingTree(readChangesGroups(dirs))
+	cp.applyWorkingTree(readChangesGroups(cp.provider, dirs))
 	cp.lastLogDir = ""
 	cp.refreshCommitLog()
 }
@@ -740,6 +748,9 @@ func (cp *ChangesPanel) buildTree() {
 					{Icon: string(icons.Rune(icons.Remove)), Command: "unstageAll"},
 				},
 			}
+			if !cp.supportsStaging(g.Dir) {
+				stagedNode.Actions = nil
+			}
 			stagedNode.Children = cp.fileNodes(g.Dir, g.Staged, true, gi, false)
 			sectionNodes = append(sectionNodes, stagedNode)
 		}
@@ -757,6 +768,9 @@ func (cp *ChangesPanel) buildTree() {
 					{Icon: string(icons.Rune(icons.Discard)), Command: "discardAll"},
 					{Icon: string(icons.Rune(icons.Add)), Command: "stageAll"},
 				},
+			}
+			if !cp.supportsStaging(g.Dir) {
+				changesNode.Actions = changesNode.Actions[:1]
 			}
 			changesNode.Children = cp.fileNodes(g.Dir, g.Unstaged, false, gi, false)
 			sectionNodes = append(sectionNodes, changesNode)
@@ -838,6 +852,9 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 			{Icon: actionIcon, Command: actionCmd},
 		},
 	}
+	if !pr && !cp.supportsStaging(dir) {
+		node.Actions = nil
+	}
 	cp.decorateFileNode(node, f.Path)
 	return node
 }
@@ -911,11 +928,11 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 		cp.Tree.SetItems(cp.Tree.Config.Items)
 	case "stage":
 		if ok && !staged {
-			cp.applied(git.Stage(dir, status.Path))
+			cp.applied(cp.stagePaths(dir, false, status.Path))
 		}
 	case "unstage":
 		if ok && staged {
-			cp.applied(git.Unstage(dir, status.Path))
+			cp.applied(cp.stagePaths(dir, true, status.Path))
 		}
 	case "stageAll":
 		gi := cp.groupIndexFromNode(node)
@@ -1094,7 +1111,10 @@ func (cp *ChangesPanel) groupIndexFromNode(node *widgets.TreeNode) int {
 func (cp *ChangesPanel) stageAll() {
 	var err error
 	for _, g := range cp.groups {
-		if e := git.Stage(g.Dir, filePaths(g.Unstaged)...); e != nil && err == nil {
+		if !cp.supportsStaging(g.Dir) {
+			continue
+		}
+		if e := cp.stagePaths(g.Dir, false, filePaths(g.Unstaged)...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1104,7 +1124,10 @@ func (cp *ChangesPanel) stageAll() {
 func (cp *ChangesPanel) unstageAll() {
 	var err error
 	for _, g := range cp.groups {
-		if e := git.Unstage(g.Dir, filePaths(g.Staged)...); e != nil && err == nil {
+		if !cp.supportsStaging(g.Dir) {
+			continue
+		}
+		if e := cp.stagePaths(g.Dir, true, filePaths(g.Staged)...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1116,7 +1139,7 @@ func (cp *ChangesPanel) stageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(git.Stage(g.Dir, filePaths(g.Unstaged)...))
+	cp.applied(cp.stagePaths(g.Dir, false, filePaths(g.Unstaged)...))
 }
 
 func (cp *ChangesPanel) unstageAllInGroup(gi int) {
@@ -1124,7 +1147,7 @@ func (cp *ChangesPanel) unstageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(git.Unstage(g.Dir, filePaths(g.Staged)...))
+	cp.applied(cp.stagePaths(g.Dir, true, filePaths(g.Staged)...))
 }
 
 func (cp *ChangesPanel) confirmDiscard(dir string, f git.FileStatus) {
@@ -1287,9 +1310,9 @@ func (cp *ChangesPanel) ToggleStageSelected() {
 		return
 	}
 	if staged {
-		cp.applied(git.Unstage(dir, status.Path))
+		cp.applied(cp.stagePaths(dir, true, status.Path))
 	} else {
-		cp.applied(git.Stage(dir, status.Path))
+		cp.applied(cp.stagePaths(dir, false, status.Path))
 	}
 }
 

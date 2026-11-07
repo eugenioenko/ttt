@@ -192,13 +192,20 @@ func DiscardUntracked(dir string, paths ...string) error {
 }
 
 func runPaths(dir string, gitArgs, paths []string) error {
+	return runPathsContext(context.Background(), dir, gitArgs, paths)
+}
+
+func runPathsContext(ctx context.Context, dir string, gitArgs, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
 	args := append([]string{"-C", dir, "--literal-pathspecs"}, gitArgs...)
 	args = append(args, paths...)
-	cmd := exec.Command("git", args...)
+	cmd := gitCommandContext(ctx, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil

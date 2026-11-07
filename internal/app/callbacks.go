@@ -130,12 +130,21 @@ func (a *App) ShowChangesContextMenu(sx, sy int) {
 	openContextMenu(a, a.BuildChangesContextMenu(), sx, sy)
 }
 
-func (a *App) ShowChangesFileContextMenu(_ string, status git.FileStatus, sx, sy int) {
+func (a *App) ShowChangesFileContextMenu(dir string, status git.FileStatus, sx, sy int) {
 	var items []ui.ContextMenuItem
 	if status.Staged {
 		items = append(items, changesContextMenuStaged...)
 	} else {
 		items = append(items, changesContextMenuUnstaged...)
+	}
+	if !a.Changes.supportsStaging(dir) {
+		filtered := items[:0]
+		for _, item := range items {
+			if item.Command != "changes.stage" && item.Command != "changes.unstage" {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
 	}
 	items = append(items, ui.MenuSep())
 	items = append(items, a.BuildChangesContextMenu()...)
