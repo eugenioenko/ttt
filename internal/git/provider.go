@@ -34,15 +34,7 @@ func (r repository) Changes(ctx context.Context) ([]scm.Change, error) {
 	if err != nil {
 		return nil, err
 	}
-	changes := make([]scm.Change, 0, len(files))
-	for _, file := range files {
-		group := scm.WorkingTree
-		if file.Staged {
-			group = scm.Staged
-		}
-		changes = append(changes, scm.Change{Path: file.Path, OldPath: file.OldPath, Status: file.Status, Group: group})
-	}
-	return changes, nil
+	return ToChanges(files), nil
 }
 
 func (r repository) Revision(ctx context.Context) (string, error) {

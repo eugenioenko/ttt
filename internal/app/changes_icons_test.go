@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/scm"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -14,10 +15,9 @@ import (
 func changesIconFixture(view string) *ChangesPanel {
 	cp := NewChangesPanel("/repo")
 	cp.groups = []changesGroup{{
-		Dir:      "/repo",
-		Name:     "repo",
-		Staged:   []git.FileStatus{{Status: "A", Path: "web/app.ts"}},
-		Unstaged: []git.FileStatus{{Status: "M", Path: "cmd/main.go"}},
+		Dir:     "/repo",
+		Name:    "repo",
+		Changes: append(testSCMChanges(scm.Staged, []git.FileStatus{{Status: "A", Path: "web/app.ts"}}), testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "cmd/main.go"}})...),
 	}}
 	cp.SetFileView(view)
 	return cp

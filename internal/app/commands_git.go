@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
@@ -21,11 +22,11 @@ func (a *App) DiscardSelected() {
 		return
 	}
 	dir, status, ok := a.Changes.SelectedFile()
-	if !ok || status.Staged {
+	if !ok || status.Group == scm.Staged {
 		return
 	}
 	msg := i18n.Format("git.discardChangesToThisIsIrreversible", i18n.Args{"path": status.Path})
-	if status.Status == "?" {
+	if status.Kind == scm.Untracked {
 		msg = i18n.Format("git.deleteUntrackedFileThisIsIrreversible", i18n.Args{"path": status.Path})
 	}
 	a.ShowConfirmDialogEx(i18n.Text("dialog.discardChanges"), msg,
@@ -36,7 +37,7 @@ func (a *App) DiscardSelected() {
 			},
 			func() {
 				a.DismissDialog()
-				if status.Status == "?" {
+				if status.Kind == scm.Untracked {
 					a.Changes.applied(git.DiscardUntracked(dir, status.Path))
 				} else {
 					a.Changes.applied(git.Discard(dir, status.Path))
@@ -367,7 +368,7 @@ func registerGitCommands(app *App) {
 		Keywords: []string{"git", "changes", "add"},
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
-			if ok && !status.Staged {
+			if ok && status.Group != scm.Staged {
 				app.Changes.applied(app.Changes.stagePaths(dir, false, status.Path))
 			}
 		},
@@ -378,7 +379,7 @@ func registerGitCommands(app *App) {
 		Keywords: []string{"git", "changes", "remove"},
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
-			if ok && status.Staged {
+			if ok && status.Group == scm.Staged {
 				app.Changes.applied(app.Changes.stagePaths(dir, true, status.Path))
 			}
 		},

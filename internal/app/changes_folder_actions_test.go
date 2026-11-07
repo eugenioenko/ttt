@@ -9,6 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -61,10 +62,13 @@ func TestWorkingTreeFolderRowsCarryStageAndUnstageActions(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.SetFileView(config.GitFileViewTree)
 	cp.groups = []changesGroup{{
-		Dir:      "/repo",
-		Name:     "repo",
-		Staged:   []git.FileStatus{{Status: "M", Path: "docs/c.md"}},
-		Unstaged: []git.FileStatus{{Status: "M", Path: "src/a.go"}, {Status: "M", Path: "src/deep/b.go"}},
+		Dir:  "/repo",
+		Name: "repo",
+		Changes: []scm.Change{
+			{Kind: scm.Modified, Path: "docs/c.md", Group: scm.Staged},
+			{Kind: scm.Modified, Path: "src/a.go", Group: scm.WorkingTree},
+			{Kind: scm.Modified, Path: "src/deep/b.go", Group: scm.WorkingTree},
+		},
 	}}
 	cp.buildTree()
 

@@ -81,7 +81,7 @@ type ChangesPanel struct {
 	OnOpenPRDiff       func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
 	OnOpenPRDetail     func(group *ui.ChangesGroup)
 	OnOpenFile         func(path string)
-	OnRightClick       func(dir string, status git.FileStatus, screenX, screenY int)
+	OnRightClick       func(dir string, status scm.Change, screenX, screenY int)
 	OnRightClickFolder func(dir, path string, staged bool, screenX, screenY int)
 	OnPanelMenu        func(screenX, screenY int)
 	OnCommit           func(dir string, message string)
@@ -114,13 +114,12 @@ type changesGroup struct {
 	Repository scm.Repository
 	Dir        string
 	Name       string
-	Staged     []git.FileStatus
-	Unstaged   []git.FileStatus
+	Changes    []scm.Change
 }
 
 type workFileRef struct {
 	Dir    string
-	Status git.FileStatus
+	Status scm.Change
 	Staged bool
 	Kind   workNodeKind
 }
@@ -312,9 +311,9 @@ func (cp *ChangesPanel) applied(err error) {
 
 // paths splits a file list into the untracked ones, which are deleted outright,
 // and the rest, which are checked out from HEAD.
-func discardPaths(files []git.FileStatus) (untracked, tracked []string) {
+func discardPaths(files []scm.Change) (untracked, tracked []string) {
 	for _, f := range files {
-		if f.Status == "?" {
+		if f.Kind == scm.Untracked {
 			untracked = append(untracked, f.Path)
 		} else {
 			tracked = append(tracked, f.Path)
@@ -323,7 +322,7 @@ func discardPaths(files []git.FileStatus) (untracked, tracked []string) {
 	return untracked, tracked
 }
 
-func filePaths(files []git.FileStatus) []string {
+func filePaths(files []scm.Change) []string {
 	paths := make([]string, len(files))
 	for i, f := range files {
 		paths[i] = f.Path
@@ -582,7 +581,8 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 		// that changed nothing against its first parent is the usual cause.
 		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: i18n.Text("general.noFiles"), Muted: true}}
 	}
-	makeLeaf := func(f git.FileStatus) *widgets.TreeNode {
+	makeLeaf := func(change scm.Change) *widgets.TreeNode {
+		f := git.FromChange(change)
 		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
 		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short, Status: f}
 		node := &widgets.TreeNode{
@@ -598,11 +598,11 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 	if cp.fileView == config.GitFileViewList {
 		nodes := make([]*widgets.TreeNode, 0, len(files))
 		for _, f := range files {
-			nodes = append(nodes, makeLeaf(f))
+			nodes = append(nodes, makeLeaf(git.ToChange(f)))
 		}
 		return nodes
 	}
-	return compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded)
+	return compactFileTree("history:"+parentID, git.ToChanges(files), makeLeaf, cp.logFolderExpanded)
 }
 
 func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, extended bool) {
@@ -735,13 +735,14 @@ func (cp *ChangesPanel) buildTree() {
 
 	for gi, g := range cp.groups {
 		var sectionNodes []*widgets.TreeNode
+		stagedFiles, workingFiles := g.filesIn(scm.Staged), g.filesIn(scm.WorkingTree)
 
-		if len(g.Staged) > 0 {
+		if len(stagedFiles) > 0 {
 			id := workingNodeID(workNodeSection, g.Dir, "", true)
 			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Staged: true, Kind: workNodeSection, Group: gi}
 			stagedNode := &widgets.TreeNode{
 				ID:         id,
-				Label:      i18n.Format("changes.stagedHeading", i18n.Args{"stagedCount": len(g.Staged)}),
+				Label:      i18n.Format("changes.stagedHeading", i18n.Args{"stagedCount": len(stagedFiles)}),
 				Expandable: true,
 				Expanded:   true,
 				Muted:      true,
@@ -752,16 +753,16 @@ func (cp *ChangesPanel) buildTree() {
 			if !cp.supportsStaging(g.Dir) {
 				stagedNode.Actions = nil
 			}
-			stagedNode.Children = cp.fileNodes(g.Dir, g.Staged, true, gi, false)
+			stagedNode.Children = cp.fileNodes(g.Dir, stagedFiles, true, gi, false)
 			sectionNodes = append(sectionNodes, stagedNode)
 		}
 
-		if len(g.Unstaged) > 0 {
+		if len(workingFiles) > 0 {
 			id := workingNodeID(workNodeSection, g.Dir, "", false)
 			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Kind: workNodeSection, Group: gi}
 			changesNode := &widgets.TreeNode{
 				ID:         id,
-				Label:      i18n.Format("changes.changes", i18n.Args{"unstagedCount": len(g.Unstaged)}),
+				Label:      i18n.Format("changes.changes", i18n.Args{"unstagedCount": len(workingFiles)}),
 				Expandable: true,
 				Expanded:   true,
 				Muted:      true,
@@ -773,7 +774,7 @@ func (cp *ChangesPanel) buildTree() {
 			if !cp.supportsStaging(g.Dir) {
 				changesNode.Actions = changesNode.Actions[:1]
 			}
-			changesNode.Children = cp.fileNodes(g.Dir, g.Unstaged, false, gi, false)
+			changesNode.Children = cp.fileNodes(g.Dir, workingFiles, false, gi, false)
 			sectionNodes = append(sectionNodes, changesNode)
 		}
 
@@ -808,7 +809,7 @@ func (cp *ChangesPanel) buildTree() {
 				{Icon: string(icons.Rune(icons.More)), Command: "prGroupMenu"},
 			},
 		}
-		prRoot.Children = cp.fileNodes(pg.Dir, pg.Files, false, pi, true)
+		prRoot.Children = cp.fileNodes(pg.Dir, git.ToChanges(pg.Files), false, pi, true)
 		clearTreeActions(prRoot.Children)
 		roots = append(roots, prRoot)
 	}
@@ -819,6 +820,9 @@ func (cp *ChangesPanel) buildTree() {
 
 	cp.Tree.SetItems(roots)
 	if revealTreeSelection(cp.Tree, selected) || !selectedWasFile {
+		return
+	}
+	if group := selectedFile.Status.Group; group != "" && group != scm.WorkingTree && group != scm.Staged {
 		return
 	}
 	fallbackID := workingNodeID(selectedFile.Kind, selectedFile.Dir, selectedFile.Status.Path, !selectedFile.Staged)
@@ -832,9 +836,9 @@ func clearTreeActions(nodes []*widgets.TreeNode) {
 	}
 }
 
-func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind workNodeKind, group int, pr bool) *widgets.TreeNode {
-	icon := ui.StatusBadge(f.Status)
-	iconStyle := ui.StatusStyle(f.Status)
+func (cp *ChangesPanel) fileNode(dir string, f scm.Change, staged bool, kind workNodeKind, group int, pr bool) *widgets.TreeNode {
+	icon := ui.ChangeBadge(f)
+	iconStyle := ui.ChangeStyle(f.Kind, false)
 	actionIcon := string(icons.Rune(icons.Add))
 	actionCmd := "stage"
 	if staged {
@@ -842,6 +846,9 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 		actionCmd = "unstage"
 	}
 	id := workingNodeID(kind, dir, f.Path, staged)
+	if !pr {
+		id = workingChangeNodeID(kind, dir, f.Path, f.Group)
+	}
 	cp.workFiles[id] = workFileRef{Dir: dir, Status: f, Staged: staged, Kind: kind}
 	cp.workNodes[id] = workNodeRef{Dir: dir, Path: f.Path, Staged: staged, Kind: kind, Group: group, PR: pr}
 	node := &widgets.TreeNode{
@@ -863,7 +870,7 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 func (cp *ChangesPanel) TotalChanges() int {
 	n := 0
 	for _, g := range cp.groups {
-		n += len(g.Staged) + len(g.Unstaged)
+		n += len(g.Changes)
 	}
 	return n
 }
@@ -876,7 +883,7 @@ func (cp *ChangesPanel) commitFocusedGroup() {
 	dir := cp.selectedGroupDir()
 	if dir == "" {
 		for _, g := range cp.groups {
-			if len(g.Staged) > 0 || len(g.Unstaged) > 0 {
+			if len(g.Changes) > 0 {
 				dir = g.Dir
 				break
 			}
@@ -1086,28 +1093,28 @@ func (cp *ChangesPanel) showPanelMenu(sx, sy int) {
 	}
 }
 
-func (cp *ChangesPanel) openDiff(dir string, status git.FileStatus, staged bool, extended bool) {
+func (cp *ChangesPanel) openDiff(dir string, status scm.Change, staged bool, extended bool) {
 	for _, pg := range cp.PRGroups {
 		if pg.Dir == dir {
 			if cp.OnOpenPRDiff != nil {
 				uiGroup := cp.toUIChangesGroup(&pg)
-				cp.OnOpenPRDiff(uiGroup, status, extended)
+				cp.OnOpenPRDiff(uiGroup, git.FromChange(status), extended)
 			}
 			return
 		}
 	}
 	if cp.OnOpenDiff != nil {
-		cp.OnOpenDiff(dir, status, staged, extended)
+		cp.OnOpenDiff(dir, git.FromChange(status), staged, extended)
 	}
 }
 
-func (cp *ChangesPanel) parseFileNode(node *widgets.TreeNode) (dir string, status git.FileStatus, staged bool, ok bool) {
+func (cp *ChangesPanel) parseFileNode(node *widgets.TreeNode) (dir string, status scm.Change, staged bool, ok bool) {
 	if node == nil {
 		return
 	}
 	ref, found := cp.workFiles[node.ID]
 	if !found {
-		return "", git.FileStatus{}, false, false
+		return "", scm.Change{}, false, false
 	}
 	return ref.Dir, ref.Status, ref.Staged, true
 }
@@ -1134,8 +1141,8 @@ func (cp *ChangesPanel) folderRef(node *widgets.TreeNode) (workNodeRef, bool) {
 // folderFiles collects every file below a folder row. The tree builds all
 // children eagerly, so a collapsed folder stages and discards the same set as
 // an expanded one.
-func (cp *ChangesPanel) folderFiles(node *widgets.TreeNode) []git.FileStatus {
-	var files []git.FileStatus
+func (cp *ChangesPanel) folderFiles(node *widgets.TreeNode) []scm.Change {
+	var files []scm.Change
 	var visit func(nodes []*widgets.TreeNode)
 	visit = func(nodes []*widgets.TreeNode) {
 		for _, n := range nodes {
@@ -1156,7 +1163,7 @@ func (cp *ChangesPanel) stageFolder(node *widgets.TreeNode) {
 		return
 	}
 	if files := cp.folderFiles(node); len(files) > 0 {
-		cp.applied(git.Stage(ref.Dir, filePaths(files)...))
+		cp.applied(cp.stagePaths(ref.Dir, false, filePaths(files)...))
 	}
 }
 
@@ -1166,7 +1173,7 @@ func (cp *ChangesPanel) unstageFolder(node *widgets.TreeNode) {
 		return
 	}
 	if files := cp.folderFiles(node); len(files) > 0 {
-		cp.applied(git.Unstage(ref.Dir, filePaths(files)...))
+		cp.applied(cp.stagePaths(ref.Dir, true, filePaths(files)...))
 	}
 }
 
@@ -1208,7 +1215,7 @@ func (cp *ChangesPanel) stageAll() {
 		if !cp.supportsStaging(g.Dir) {
 			continue
 		}
-		if e := cp.stagePaths(g.Dir, false, filePaths(g.Unstaged)...); e != nil && err == nil {
+		if e := cp.stagePaths(g.Dir, false, filePaths(g.filesIn(scm.WorkingTree))...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1221,7 +1228,7 @@ func (cp *ChangesPanel) unstageAll() {
 		if !cp.supportsStaging(g.Dir) {
 			continue
 		}
-		if e := cp.stagePaths(g.Dir, true, filePaths(g.Staged)...); e != nil && err == nil {
+		if e := cp.stagePaths(g.Dir, true, filePaths(g.filesIn(scm.Staged))...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1233,7 +1240,7 @@ func (cp *ChangesPanel) stageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(cp.stagePaths(g.Dir, false, filePaths(g.Unstaged)...))
+	cp.applied(cp.stagePaths(g.Dir, false, filePaths(g.filesIn(scm.WorkingTree))...))
 }
 
 func (cp *ChangesPanel) unstageAllInGroup(gi int) {
@@ -1241,19 +1248,19 @@ func (cp *ChangesPanel) unstageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(cp.stagePaths(g.Dir, true, filePaths(g.Staged)...))
+	cp.applied(cp.stagePaths(g.Dir, true, filePaths(g.filesIn(scm.Staged))...))
 }
 
-func (cp *ChangesPanel) confirmDiscard(dir string, f git.FileStatus) {
+func (cp *ChangesPanel) confirmDiscard(dir string, f scm.Change) {
 	if cp.OnConfirmDiscard == nil {
 		return
 	}
 	msg := i18n.Format("changes.discardChangesToThisIsIrreversible", i18n.Args{"path": f.Path})
-	if f.Status == "?" {
+	if f.Kind == scm.Untracked {
 		msg = i18n.Format("changes.deleteUntrackedFileThisIsIrreversible", i18n.Args{"path": f.Path})
 	}
 	cp.OnConfirmDiscard(msg, func() {
-		if f.Status == "?" {
+		if f.Kind == scm.Untracked {
 			cp.applied(git.DiscardUntracked(dir, f.Path))
 		} else {
 			cp.applied(git.Discard(dir, f.Path))
@@ -1266,9 +1273,9 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	msg := i18n.Format("changes.discardAllChangesThisIsIrreversible", i18n.Args{"unstagedCount": len(g.Unstaged)})
+	msg := i18n.Format("changes.discardAllChangesThisIsIrreversible", i18n.Args{"unstagedCount": len(g.filesIn(scm.WorkingTree))})
 	cp.OnConfirmDiscard(msg, func() {
-		untracked, tracked := discardPaths(g.Unstaged)
+		untracked, tracked := discardPaths(g.filesIn(scm.WorkingTree))
 		err := git.DiscardUntracked(g.Dir, untracked...)
 		if e := git.Discard(g.Dir, tracked...); e != nil && err == nil {
 			err = e
@@ -1277,7 +1284,7 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 	})
 }
 
-func (cp *ChangesPanel) SelectedFile() (dir string, status git.FileStatus, ok bool) {
+func (cp *ChangesPanel) SelectedFile() (dir string, status scm.Change, ok bool) {
 	if cp.commandContext != changesWorkingTree {
 		return
 	}
@@ -1315,8 +1322,8 @@ func (cp *ChangesPanel) SelectedGroup() *ui.ChangesGroup {
 				return &ui.ChangesGroup{
 					Dir:      g.Dir,
 					Name:     g.Name,
-					Staged:   g.Staged,
-					Unstaged: g.Unstaged,
+					Staged:   git.FromChanges(g.filesIn(scm.Staged)),
+					Unstaged: git.FromChanges(g.filesIn(scm.WorkingTree)),
 				}
 			}
 		}
@@ -1385,7 +1392,7 @@ func (cp *ChangesPanel) DiscardSelected() {
 		return
 	}
 	dir, status, _, ok := cp.parseFileNode(cp.Tree.Selected())
-	if !ok || status.Staged {
+	if !ok || status.Group == scm.Staged {
 		return
 	}
 	cp.confirmDiscard(dir, status)
@@ -1460,8 +1467,8 @@ func (cp *ChangesPanel) Groups() []ui.ChangesGroup {
 		result = append(result, ui.ChangesGroup{
 			Dir:      g.Dir,
 			Name:     g.Name,
-			Staged:   g.Staged,
-			Unstaged: g.Unstaged,
+			Staged:   git.FromChanges(g.filesIn(scm.Staged)),
+			Unstaged: git.FromChanges(g.filesIn(scm.WorkingTree)),
 		})
 	}
 	for _, pg := range cp.PRGroups {

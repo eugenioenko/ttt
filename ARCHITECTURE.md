@@ -77,9 +77,12 @@ have explicit cancellation, identity, shutdown, and stale-result behavior.
 `internal/scm` owns the internal provider, repository, and optional staging
 contracts. Git supplies the built-in adapter. Repository discovery, status,
 active identity, and staging use this boundary; `RepositoryState` retains async
-lifecycle ownership. Status codes and application/UI models remain compatible
-with Git during this first migration slice. History, content/diff reads,
-discard, other mutations, and plugin registration still need migration before
+lifecycle ownership. Working-tree state, selection, and Explorer decorations
+use typed SCM changes and identities. The panel retains its existing two-section
+projection; changes keep their provider group identity without requiring an
+index. Explicit Git adapters remain at history, diff, and PR result boundaries.
+History, content/diff reads, discard, other mutations, and plugin registration
+still need migration before
 a second provider can drive the complete editor.
 
 ### Presentation kernel
