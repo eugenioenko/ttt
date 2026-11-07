@@ -37,6 +37,25 @@ type Baseline struct {
 	Conflicted bool
 }
 
+// ChangeReader optionally reads a single change using its provider group and
+// literal repository-relative paths. Missing endpoints are not read errors.
+type ChangeReader interface {
+	ReadChange(context.Context, Change) (ChangeDiff, error)
+}
+
+type FileContent struct {
+	Content string
+	Exists  bool
+}
+
+type ChangeDiff struct {
+	Before, After FileContent
+	// Patch is a unified diff, including metadata-only changes. Empty means no
+	// change; consumers must not infer absence from an empty file's content.
+	Patch      string
+	Conflicted bool
+}
+
 type Identity struct {
 	Root  string
 	Label string

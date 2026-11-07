@@ -204,7 +204,7 @@ func TestCtrlEndInEditableDiff(t *testing.T) {
 	edited[299] = "last row edited"
 	write(edited)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "code.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "code.txt", Status: "M"}), false)
 	h.exec("editor.focus")
 	h.redraw()
 	h.pressKey(tcell.KeyEnd, tcell.ModCtrl)

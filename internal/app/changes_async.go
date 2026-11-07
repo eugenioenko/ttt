@@ -613,6 +613,7 @@ func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 
 type diffOpenResult struct {
 	Canceled bool
+	Conflict string
 	Warn     string
 	TabName  string
 	Title    string
@@ -666,6 +667,10 @@ func (a *App) applyDiffOpen(origin string, result *diffOpenResult) {
 	}
 	if result.Warn != "" {
 		a.StatusWarn(result.Warn)
+		return
+	}
+	if result.Conflict != "" {
+		a.openConflictedFile(result.Path, result.Conflict)
 		return
 	}
 	a.EditorGroup.OpenDiffTab(result.TabName, result.Title, result.Path, result.Diff, result.OldLines, result.NewLines, result.Extended)

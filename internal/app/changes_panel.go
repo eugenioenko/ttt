@@ -75,7 +75,7 @@ type ChangesPanel struct {
 	fileView           string
 	icons              string
 
-	OnOpenDiff         func(dir string, status git.FileStatus, staged, extended bool)
+	OnOpenDiff         func(dir string, change scm.Change, extended bool)
 	OnOpenCommitDiff   func(dir, ref, short string, status git.FileStatus, extended bool)
 	OnOpenCommit       func(dir, ref, short string)
 	OnOpenPRDiff       func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
@@ -924,7 +924,7 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 	switch cmd {
 	case "activate":
 		if ok {
-			cp.openDiff(dir, status, staged, false)
+			cp.openDiff(dir, status, false)
 			return
 		}
 		ref, found := cp.workNodes[node.ID]
@@ -1093,7 +1093,7 @@ func (cp *ChangesPanel) showPanelMenu(sx, sy int) {
 	}
 }
 
-func (cp *ChangesPanel) openDiff(dir string, status scm.Change, staged bool, extended bool) {
+func (cp *ChangesPanel) openDiff(dir string, status scm.Change, extended bool) {
 	for _, pg := range cp.PRGroups {
 		if pg.Dir == dir {
 			if cp.OnOpenPRDiff != nil {
@@ -1104,7 +1104,7 @@ func (cp *ChangesPanel) openDiff(dir string, status scm.Change, staged bool, ext
 		}
 	}
 	if cp.OnOpenDiff != nil {
-		cp.OnOpenDiff(dir, git.FromChange(status), staged, extended)
+		cp.OnOpenDiff(dir, status, extended)
 	}
 }
 
@@ -1434,11 +1434,11 @@ func (cp *ChangesPanel) OpenSelectedDiff(extended bool) {
 	if node == nil {
 		return
 	}
-	dir, status, staged, ok := cp.parseFileNode(node)
+	dir, status, _, ok := cp.parseFileNode(node)
 	if !ok {
 		return
 	}
-	cp.openDiff(dir, status, staged, extended)
+	cp.openDiff(dir, status, extended)
 }
 
 func (cp *ChangesPanel) ActivateSelected() {

@@ -44,7 +44,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 	}
 
 	repoDir, relPath, ok := a.repoPathForFile(filePath)
-	source := a.Repository.baselineSource(repoDir)
+	source := a.Repository.repositorySource(repoDir)
 	if !ok && diffOn {
 		repo := a.inlineDiffRepos[filePath]
 		relPath, ok = repo.rel, repo.dir != ""
@@ -68,7 +68,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		a.gitGutterTask = NewTask[*gitGutterResult](a, asynctask.TaskOptions{})
 	}
 	a.gitGutterTask.Schedule(func(ctx context.Context) (*gitGutterResult, error) {
-		base, err := source.read(ctx, relPath)
+		base, err := source.readBaseline(ctx, relPath)
 		result := &gitGutterResult{Path: filePath, DiffOn: diffOn, Version: version, Lines: linesCopy, Conflict: base.Conflicted, RelPath: relPath}
 		if err != nil {
 			return result, err

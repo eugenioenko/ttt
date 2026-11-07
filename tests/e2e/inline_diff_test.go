@@ -24,7 +24,7 @@ func TestOpenChangesEditsInlineDiff(t *testing.T) {
 	h.app.Repository.RefreshNow(app.RepositoryWorktree)
 	os.WriteFile(path, []byte("one\nTWO\nthree\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "code.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "code.txt", Status: "M"}), false)
 	h.redraw()
 
 	if h.app.EditorGroup.ActiveDiffWidget() != nil {
@@ -159,7 +159,7 @@ func TestSplitInlineDiffScrollsInStep(t *testing.T) {
 	initializeHarnessRepository(t, h.dir)
 	os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "long.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "long.txt", Status: "M"}), false)
 	h.exec("diff.splitView")
 	h.app.EditorGroup.GoToLine(80)
 	h.redraw()
@@ -192,7 +192,7 @@ func TestSplitInlineDiffWrapsInStepAndCopiesFromHead(t *testing.T) {
 	initializeHarnessRepository(t, h.dir)
 	os.WriteFile(path, []byte("alpha\nbeta "+strings.Repeat("wrapped ", 12)+"\ngamma\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "wrap.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "wrap.txt", Status: "M"}), false)
 	h.exec("diff.splitView")
 	if !h.app.Settings.Editor.WordWrap {
 		h.exec("options.toggleWordWrap")
@@ -243,7 +243,7 @@ func TestInlineDiffSuspendsFoldsAndRestoresThem(t *testing.T) {
 		t.Fatal("fold did not collapse before opening the diff")
 	}
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "fold.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "fold.txt", Status: "M"}), false)
 	h.redraw()
 	h.assertContains("inner one")
 	h.exec("fold.collapseAll")
@@ -271,7 +271,7 @@ func TestInlineDiffGapRowExpands(t *testing.T) {
 	initializeHarnessRepository(t, h.dir)
 	os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "gaps.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "gaps.txt", Status: "M"}), false)
 	h.redraw()
 	h.assertContains("⋯ 16 lines ⋯")
 	if strings.Contains(h.screenText(), "row 05") {
@@ -302,7 +302,7 @@ func TestOpenChangesFocusFollowsFocusOnOpen(t *testing.T) {
 		h.app.FocusSidebar()
 		before := h.app.Root.Focused
 
-		h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "focus.txt", Status: "M"}, false, false)
+		h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "focus.txt", Status: "M"}), false)
 		h.redraw()
 		if !h.app.EditorGroup.IsInlineDiffActive() {
 			t.Fatal("inline diff not active")
@@ -333,7 +333,7 @@ func TestInlineDiffFindSurvivesRecompute(t *testing.T) {
 	h.app.Repository.RefreshNow(app.RepositoryWorktree)
 	os.WriteFile(path, []byte("foo\nbar\nbaz\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "code.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "code.txt", Status: "M"}), false)
 	h.redraw()
 	h.exec("editor.focus")
 	h.app.OpenFind()
@@ -361,7 +361,7 @@ func openSplitDiffWithHeadFocused(t *testing.T, h *testHarness, beforeHead func(
 	initializeHarnessRepository(t, h.dir)
 	os.WriteFile(path, []byte("alpha\nBETA\ngamma\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "keys.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "keys.txt", Status: "M"}), false)
 	h.exec("diff.splitView")
 	h.app.Root.SetFocus(h.app.EditorGroup)
 	h.redraw()
@@ -464,7 +464,7 @@ func TestInlineDiffWrapDownSkipsDeletedRows(t *testing.T) {
 	long := "beta " + strings.Repeat("wrapped ", 20)
 	os.WriteFile(path, []byte("alpha\n"+long+"\ngamma\n"), 0644)
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "wrapmove.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "wrapmove.txt", Status: "M"}), false)
 	h.exec("diff.unifiedView")
 	editor := h.app.EditorGroup.Editor
 	if !editor.WordWrap {
