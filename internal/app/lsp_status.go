@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -20,7 +21,7 @@ func (a *App) SyncLanguageSegment() {
 		return
 	}
 
-	lang := "Plain Text"
+	lang := i18n.Text("lsp.plainText")
 	if h := a.EditorGroup.Editor.Highlighter; h != nil {
 		lang = h.Language()
 	}
@@ -66,7 +67,7 @@ func (a *App) ShowLSPServerLog() {
 	path, lang := a.editorPathLang()
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if path == "" || !ok {
-		a.StatusNotify("No language server for this file")
+		a.StatusNotify(i18n.Text("status.noLanguageServerForThisFile"))
 		return
 	}
 	a.ShowOutputPanel()
@@ -76,16 +77,16 @@ func (a *App) ShowLSPServerLog() {
 func lspStateLabel(state lsp.ServerState, binaryOK bool) string {
 	switch state {
 	case lsp.ServerReady:
-		return "running"
+		return i18n.Text("lsp.running")
 	case lsp.ServerStarting:
-		return "starting"
+		return i18n.Text("lsp.starting")
 	case lsp.ServerFailed:
-		return "failed"
+		return i18n.Text("lsp.failed")
 	}
 	if !binaryOK {
-		return "not installed"
+		return i18n.Text("lsp.notInstalled")
 	}
-	return "not started"
+	return i18n.Text("lsp.notStarted")
 }
 
 // lspIcon maps a server state to its indicator. Every icon is single-width

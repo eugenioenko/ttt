@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/search"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -111,13 +112,13 @@ type searchItem struct {
 func NewSearchWidget() *SearchWidget {
 	s := &SearchWidget{}
 	s.Input = newPanelInput()
-	s.Input.Config.Placeholder = "Search"
+	s.Input.Config.Placeholder = i18n.Text("search.search")
 	s.Include = newPanelInput()
-	s.Include.Config.Placeholder = "files to include"
+	s.Include.Config.Placeholder = i18n.Text("search.filesToInclude")
 	s.Exclude = newPanelInput()
-	s.Exclude.Config.Placeholder = "files to exclude"
+	s.Exclude.Config.Placeholder = i18n.Text("search.filesToExclude")
 	s.ReplaceInput = newPanelInput()
-	s.ReplaceInput.Config.Placeholder = "Replace"
+	s.ReplaceInput.Config.Placeholder = i18n.Text("general.replace")
 	s.Input.Config.OnChange = func(text string) {
 		if text == "" {
 			s.runSearchSync()
@@ -145,7 +146,7 @@ func NewSearchWidget() *SearchWidget {
 		}},
 	}
 	s.ReplaceInput.Actions = []widgets.InputAction{
-		{Label: "⟳All", OnClick: func() {
+		{Label: icons.Get(s.Icons, icons.ReplaceAll) + i18n.Text("search.all"), OnClick: func() {
 			if s.replacing {
 				s.CancelReplacement()
 				return
@@ -294,7 +295,7 @@ func (s *SearchWidget) streamSearch(ctx context.Context, gen uint64) {
 	// take down the editor rather than just the search.
 	defer func() {
 		if r := recover(); r != nil {
-			s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: fmt.Sprintf("search failed: %v", r)})
+			s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failedWithPanic", i18n.Args{"r": r})})
 		}
 	}()
 
@@ -356,7 +357,7 @@ func (s *SearchWidget) ApplyBatch(batch *SearchBatch) {
 
 func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]SearchFileGroup) {
 	if _, err := exec.LookPath("rg"); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "ripgrep (rg) not found"})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Text("search.ripgrepRgNotFound")})
 		return
 	}
 
@@ -367,11 +368,11 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	cmd := exec.CommandContext(ctx, "rg", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "search failed: " + err.Error()})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: "search failed: " + err.Error()})
+		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
 		return
 	}
 
@@ -477,7 +478,7 @@ func rgFailure(err error) string {
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return ""
 	}
-	return "search failed: " + err.Error()
+	return i18n.Format("search.failed", i18n.Args{"error": err.Error()})
 }
 
 func (s *SearchWidget) CollapseAll() {
@@ -507,6 +508,7 @@ func (s *SearchWidget) flatten() {
 }
 
 func (s *SearchWidget) Render(surface Surface) {
+	s.SetReplacementPending(s.replacing)
 	w, h := surface.Size()
 	s.renderWidth = w
 	s.filterToggleHit = HitRegion{}
@@ -564,7 +566,7 @@ func (s *SearchWidget) Render(surface Surface) {
 
 	startY := y
 	if s.replacing {
-		surface.DrawText(0, startY, "Checking replacements…", w, term.StyleMuted)
+		surface.DrawText(0, startY, i18n.Text("search.checkingReplacements"), w, term.StyleMuted)
 		startY++
 	}
 
@@ -578,7 +580,7 @@ func (s *SearchWidget) Render(surface Surface) {
 	}
 
 	if s.Input.Text() != "" && len(s.FlatList) == 0 && !s.Searching && !s.debouncing {
-		msg := "No results"
+		msg := i18n.Text("search.noResults")
 		for i, ch := range msg {
 			if i < w {
 				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
@@ -588,7 +590,7 @@ func (s *SearchWidget) Render(surface Surface) {
 	}
 
 	if s.debouncing || s.Searching {
-		msg := "Searching..."
+		msg := i18n.Text("search.searching")
 		for i, ch := range msg {
 			if i < w {
 				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
@@ -605,7 +607,7 @@ func (s *SearchWidget) Render(surface Surface) {
 		for _, g := range s.Groups {
 			totalMatches += len(g.Matches)
 		}
-		summary := fmt.Sprintf("%d results in %d files", totalMatches, len(s.Groups))
+		summary := i18n.Format("search.resultsInFiles", i18n.Args{"totalMatches": totalMatches, "groupsCount": len(s.Groups)})
 		for i, ch := range summary {
 			if i < w {
 				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
@@ -982,9 +984,9 @@ func (s *SearchWidget) ReplacementCurrent(req SearchReplaceRequest) bool {
 func (s *SearchWidget) SetReplacementPending(pending bool) {
 	s.replacing = pending
 	if pending {
-		s.ReplaceInput.Actions[0].Label = "Cancel"
+		s.ReplaceInput.Actions[0].Label = i18n.Text("general.cancel")
 	} else {
-		s.ReplaceInput.Actions[0].Label = "⟳All"
+		s.ReplaceInput.Actions[0].Label = icons.Get(s.Icons, icons.ReplaceAll) + i18n.Text("search.all")
 	}
 }
 

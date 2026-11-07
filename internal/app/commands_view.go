@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -222,19 +223,19 @@ func (a *App) ShowKeybindings() {
 	}
 	w.OnHelp = func() {
 		content := widgets.NewKeyValueListWidget([]widgets.KeyValueEntry{
-			{Key: "Enter", Value: "Edit selected shortcut"},
-			{Key: "Backspace", Value: "Reset to default"},
-			{Key: "Delete", Value: "Clear shortcut"},
-			{Key: "Up / k", Value: "Move up"},
-			{Key: "Down / j", Value: "Move down"},
-			{Key: "Esc", Value: "Close"},
+			{Key: "Enter", Value: i18n.Text("keybindings.editSelectedShortcut")},
+			{Key: "Backspace", Value: i18n.Text("keybindings.resetToDefault")},
+			{Key: "Delete", Value: i18n.Text("keybindings.clearShortcut")},
+			{Key: "Up / k", Value: i18n.Text("keybindings.moveUp")},
+			{Key: "Down / j", Value: i18n.Text("keybindings.moveDown")},
+			{Key: "Esc", Value: i18n.Text("general.close")},
 		})
 		dialog := widgets.NewDialogWidget(50)
-		dialog.Title = "Keyboard Shortcuts Help"
+		dialog.Title = i18n.Text("keybindings.keyboardShortcutsHelp")
 		dialog.Borders = *a.Borders
 		dialog.SetContent(content)
 		dialog.Buttons = []widgets.DialogButton{
-			{Label: "&Close", Handler: func() {
+			{Label: i18n.Text("general.closeButton"), Handler: func() {
 				a.Root.PopOverlay()
 				a.Root.SetFocus(w)
 			}},
@@ -272,19 +273,19 @@ func registerViewCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "sidebar.toggle", Title: "View: Toggle Sidebar",
+		ID: "sidebar.toggle", Title: i18n.Text("command.viewToggleSidebar"),
 		Keywords: []string{"view", "panel", "show", "hide"},
 		Handler:  app.ToggleSidebar,
 	})
 
 	reg.Register(command.Command{
-		ID: menuBarToggleCommand, Title: "View: Toggle Menu Bar",
+		ID: menuBarToggleCommand, Title: i18n.Text("command.viewToggleMenuBar"),
 		Keywords: []string{"view", "menu", "toolbar", "show", "hide"},
 		Handler:  app.ToggleMenuBar,
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.explorer", Title: "Show Explorer",
+		ID: "sidebar.explorer", Title: i18n.Text("command.showExplorer"),
 		Keywords: []string{"view", "file", "tree", "browser"},
 		Handler: func() {
 			app.ShowPanel("explorer", app.Explorer.Adapter)
@@ -292,19 +293,19 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.search", Title: "Show Search",
+		ID: "sidebar.search", Title: i18n.Text("command.showSearch"),
 		Keywords: []string{"view", "search", "find", "grep"},
 		Handler:  app.OpenGlobalSearch,
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.searchReplace", Title: "Search and Replace in Files",
+		ID: "sidebar.searchReplace", Title: i18n.Text("command.searchAndReplaceInFiles"),
 		Keywords: []string{"view", "search", "find", "replace", "substitute"},
 		Handler:  app.ToggleSearchReplace,
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.changes", Title: "Show Changes",
+		ID: "sidebar.changes", Title: i18n.Text("command.showChanges"),
 		Keywords: []string{"view", "git", "diff", "source control"},
 		Handler: func() {
 			app.ShowPanel("changes", app.Changes.Adapter)
@@ -312,7 +313,7 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.outline", Title: "Show Outline",
+		ID: "sidebar.outline", Title: i18n.Text("command.showOutline"),
 		Keywords: []string{"view", "symbols", "structure", "functions", "browser", "headings"},
 		Handler: func() {
 			app.ShowPanel("outline", app.Symbols.Adapter)
@@ -320,7 +321,7 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.wider", Title: "View: Increase Sidebar Width",
+		ID: "sidebar.wider", Title: i18n.Text("command.viewIncreaseSidebarWidth"),
 		Keywords: []string{"view", "resize"},
 		Handler: func() {
 			app.SetSidebarWidth(app.SplitPanel.DividerPos + 1)
@@ -328,7 +329,7 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.narrower", Title: "View: Decrease Sidebar Width",
+		ID: "sidebar.narrower", Title: i18n.Text("command.viewDecreaseSidebarWidth"),
 		Keywords: []string{"view", "resize"},
 		Handler: func() {
 			if app.Sidebar.Visible {
@@ -338,37 +339,37 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.focus", Title: "View: Focus Sidebar",
+		ID: "sidebar.focus", Title: i18n.Text("command.viewFocusSidebar"),
 		Keywords: []string{"view"},
 		Handler:  app.FocusSidebar,
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.movePanelLeft", Title: "View: Move Sidebar Panel Left",
+		ID: "sidebar.movePanelLeft", Title: i18n.Text("command.viewMoveSidebarPanelLeft"),
 		Keywords: []string{"view", "sidebar", "panel", "tab", "reorder", "left"},
 		Handler:  func() { app.MoveActiveSidebarPanel(-1) },
 	})
 
 	reg.Register(command.Command{
-		ID: "sidebar.movePanelRight", Title: "View: Move Sidebar Panel Right",
+		ID: "sidebar.movePanelRight", Title: i18n.Text("command.viewMoveSidebarPanelRight"),
 		Keywords: []string{"view", "sidebar", "panel", "tab", "reorder", "right"},
 		Handler:  func() { app.MoveActiveSidebarPanel(1) },
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.toggle", Title: "View: Toggle Panel",
+		ID: "panel.toggle", Title: i18n.Text("command.viewTogglePanel"),
 		Keywords: []string{"view", "bottom", "show", "hide"},
 		Handler:  app.ToggleBottomPanel,
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.focus", Title: "View: Focus Panel",
+		ID: "panel.focus", Title: i18n.Text("command.viewFocusPanel"),
 		Keywords: []string{"view", "bottom"},
 		Handler:  app.FocusPanel,
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.show", Title: "View: Show Panel Tab",
+		ID: "panel.show", Title: i18n.Text("command.viewShowPanelTab"),
 		Keywords: []string{"view", "bottom", "tab", "switch"},
 		Handler: func() {
 			panels := app.BottomPanel.PanelEntries()
@@ -379,7 +380,7 @@ func registerViewCommands(app *App) {
 			for _, p := range panels {
 				items = append(items, widgets.SelectItem{ID: p.ID, Label: p.Title})
 			}
-			app.ShowSelectDialog("Show Panel", items, func(id string) {
+			app.ShowSelectDialog(i18n.Text("keybindings.showPanel"), items, func(id string) {
 				app.BottomPanel.SetActivePanel(id)
 				app.FocusPanel()
 			}, nil)
@@ -387,7 +388,7 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.taller", Title: "View: Increase Panel Size",
+		ID: "panel.taller", Title: i18n.Text("command.viewIncreasePanelSize"),
 		Keywords: []string{"view", "resize", "bottom", "right", "height", "width"},
 		Handler: func() {
 			if !app.ContentSplit.ShowBottom {
@@ -400,7 +401,7 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.shorter", Title: "View: Decrease Panel Size",
+		ID: "panel.shorter", Title: i18n.Text("command.viewDecreasePanelSize"),
 		Keywords: []string{"view", "resize", "bottom", "right", "height", "width"},
 		Handler: func() {
 			if !app.ContentSplit.ShowBottom {
@@ -413,67 +414,67 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.dockRight", Title: "View: Dock Panel Right",
+		ID: "panel.dockRight", Title: i18n.Text("command.viewDockPanelRight"),
 		Keywords: []string{"view", "panel", "terminal", "dock", "position", "side"},
 		Handler:  func() { app.SetPanelPosition(ui.SplitRight) },
 	})
 
 	reg.Register(command.Command{
-		ID: "panel.dockBottom", Title: "View: Dock Panel Bottom",
+		ID: "panel.dockBottom", Title: i18n.Text("command.viewDockPanelBottom"),
 		Keywords: []string{"view", "panel", "terminal", "dock", "position", "down"},
 		Handler:  func() { app.SetPanelPosition(ui.SplitBottom) },
 	})
 
 	reg.Register(command.Command{
-		ID: "focus.nextGroup", Title: "View: Focus Next Group",
+		ID: "focus.nextGroup", Title: i18n.Text("command.viewFocusNextGroup"),
 		Keywords: []string{"focus", "panel", "sidebar", "editor"},
 		Handler:  app.focusNextGroup,
 	})
 
 	reg.Register(command.Command{
-		ID: "focus.prevGroup", Title: "View: Focus Previous Group",
+		ID: "focus.prevGroup", Title: i18n.Text("command.viewFocusPreviousGroup"),
 		Keywords: []string{"focus", "panel", "sidebar", "editor"},
 		Handler:  app.focusPrevGroup,
 	})
 
 	reg.Register(command.Command{
-		ID: "focus.terminal", Title: "View: Focus Terminal",
+		ID: "focus.terminal", Title: i18n.Text("command.viewFocusTerminal"),
 		Keywords: []string{"focus", "terminal", "shell"},
 		Handler:  app.focusTerminal,
 	})
 
 	reg.Register(command.Command{
-		ID: "terminal.new", Title: "Terminal: New Terminal",
+		ID: "terminal.new", Title: i18n.Text("command.terminalNewTerminal"),
 		Keywords: []string{"terminal", "shell", "console", "bash"},
 		Handler:  app.SpawnTerminal,
 	})
 
 	reg.Register(command.Command{
-		ID: "terminal.toggle", Title: "Terminal: Toggle Terminal",
+		ID: "terminal.toggle", Title: i18n.Text("command.terminalToggleTerminal"),
 		Keywords: []string{"terminal", "shell", "console", "bash"},
 		Handler:  app.ToggleTerminal,
 	})
 
 	reg.Register(command.Command{
-		ID: "terminal.fullscreen", Title: "Terminal: Toggle Fullscreen",
+		ID: "terminal.fullscreen", Title: i18n.Text("command.terminalToggleFullscreen"),
 		Keywords: []string{"terminal", "shell", "maximize"},
 		Handler:  app.ToggleTerminalFullscreen,
 	})
 
 	reg.Register(command.Command{
-		ID: "terminal.closeAll", Title: "Terminal: Close All",
+		ID: "terminal.closeAll", Title: i18n.Text("command.terminalCloseAll"),
 		Keywords: []string{"terminal", "shell"},
 		Handler:  app.CloseAllTerminals,
 	})
 
 	reg.Register(command.Command{
-		ID: "view.keybindings", Title: "Keyboard Shortcuts",
+		ID: "view.keybindings", Title: i18n.Text("command.keyboardShortcuts"),
 		Keywords: []string{"view", "keybindings", "shortcuts", "remap", "rebind", "hotkeys"},
 		Handler:  app.ShowKeybindings,
 	})
 
 	reg.Register(command.Command{
-		ID: "about", Title: "About TTT Editor",
+		ID: "about", Title: i18n.Text("command.aboutTTTEditor"),
 		Keywords: []string{"help", "version", "info"},
 		Handler:  app.ShowAbout,
 	})

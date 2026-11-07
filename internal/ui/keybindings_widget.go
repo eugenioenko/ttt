@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
@@ -65,7 +67,7 @@ func NewKeybindingsWidget(commands []command.Command) *KeybindingsWidget {
 		return w.allItems[i].Title < w.allItems[j].Title
 	})
 	w.input = newPanelInput()
-	w.input.Config.Placeholder = "Search shortcuts or commands..."
+	w.input.Config.Placeholder = i18n.Text("keybindings.searchShortcutsOrCommands")
 	w.input.Config.OnChange = func(text string) {
 		w.filter()
 	}
@@ -170,7 +172,7 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 		surface.DrawText(boxX+2, y, item.Title, contentRight-1, style)
 
 		if isSelected && w.recording {
-			label := "Press key..."
+			label := i18n.Text("keybindings.pressKey")
 			if w.recordCombo != "" {
 				label = w.recordCombo + " ..."
 			}
@@ -197,7 +199,7 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 	surface.ClearRect(boxX+1, footerY, boxW-2, 1, term.StyleDefault)
 	ox, oy := surface.Origin()
 	if w.recording {
-		hint := "Press key combination, Enter to confirm"
+		hint := i18n.Text("keybindings.pressKeyCombinationEnterToConfirm")
 		surface.DrawText(boxX+2, footerY, hint, boxX+boxW-2, term.StyleMuted)
 	} else {
 		w.renderFooterActions(surface, footerY, ox, oy)
@@ -224,8 +226,7 @@ func (w *KeybindingsWidget) renderShortcut(surface Surface, y, contentRight int,
 		display = "* " + shortcut
 	}
 
-	detailRunes := []rune(display)
-	sx := contentRight - 1 - len(detailRunes)
+	sx := contentRight - 1 - textwidth.String(display)
 	if sx > w.boxX+1 {
 		detailStyle := term.StyleMuted
 		if style == term.StylePaletteSelected {
@@ -242,26 +243,24 @@ func (w *KeybindingsWidget) renderFooterActions(surface Surface, y, ox, oy int) 
 	}
 
 	allBtns := []footerBtn{
-		{"Cancel", &w.btnClose},
-		{"Edit", &w.btnEdit},
-		{"Reset", &w.btnReset},
-		{"Clear", &w.btnClear},
-		{"Help", &w.btnHelp},
+		{i18n.Text("general.cancel"), &w.btnClose},
+		{i18n.Text("keybindings.edit"), &w.btnEdit},
+		{i18n.Text("general.reset"), &w.btnReset},
+		{i18n.Text("general.clear"), &w.btnClear},
+		{i18n.Text("general.help"), &w.btnHelp},
 	}
 
 	// Cancel on the left
 	x := w.boxX + 2
 	btn := allBtns[0]
-	labelRunes := []rune(btn.label)
-	*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: len(labelRunes)}
 	style := term.StyleDefault
 	if w.focusedAction == 0 {
 		style = term.StylePaletteSelected
 	}
-	for _, ch := range labelRunes {
-		surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-		x++
-	}
+	limit := w.boxX + w.boxW - 2
+	end := surface.DrawText(x, y, btn.label, limit, style)
+	*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: end - x}
+	leftEnd := end
 
 	// Right-aligned actions
 	rightBtns := allBtns[1:]
@@ -270,24 +269,20 @@ func (w *KeybindingsWidget) renderFooterActions(surface Surface, y, ox, oy int) 
 		if i > 0 {
 			totalW++
 		}
-		totalW += len([]rune(btn.label))
+		totalW += textwidth.String(btn.label)
 	}
-	x = w.boxX + w.boxW - 2 - totalW
+	x = max(limit-totalW, leftEnd+1)
 	for i, btn := range rightBtns {
 		if i > 0 {
-			surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleDefault})
-			x++
+			x = surface.DrawText(x, y, " ", limit, term.StyleDefault)
 		}
-		labelRunes := []rune(btn.label)
-		*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: len(labelRunes)}
 		style := term.StyleDefault
 		if w.focusedAction == i+1 {
 			style = term.StylePaletteSelected
 		}
-		for _, ch := range labelRunes {
-			surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-			x++
-		}
+		end := surface.DrawText(x, y, btn.label, limit, style)
+		*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: end - x}
+		x = end
 	}
 }
 

@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"os"
 	"path/filepath"
 	"slices"
@@ -282,10 +283,10 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	references := ui.NewReferencesWidget()
 	output := ui.NewOutputWidget()
 	bottomPanel := ui.NewBottomPanelWidget(borders)
-	bottomPanel.AddPanel("terminal", "Terminal", terminalPanel)
-	bottomPanel.AddPanel("problems", "Diagnostics", problems)
-	bottomPanel.AddPanel("references", "References", references)
-	bottomPanel.AddPanel("output", "Output", output)
+	bottomPanel.AddPanel("terminal", i18n.Text("panel.terminal"), terminalPanel)
+	bottomPanel.AddPanel("problems", i18n.Text("panel.diagnostics"), problems)
+	bottomPanel.AddPanel("references", i18n.Text("panel.references"), references)
+	bottomPanel.AddPanel("output", i18n.Text("panel.output"), output)
 
 	contentSplit := ui.NewContentSplitWidget()
 	contentSplit.Top = editorGroup
@@ -297,12 +298,12 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	statusBar := ui.NewStatusBarWidget(status)
 
 	menuBar := ui.NewMenuBarWidget([]ui.MenuItem{
-		{Name: "File"},
-		{Name: "Edit"},
-		{Name: "Selection"},
-		{Name: "View"},
-		{Name: "Options"},
-		{Name: "Help"},
+		{Name: i18n.Text("menu.file")},
+		{Name: i18n.Text("menu.edit")},
+		{Name: i18n.Text("menu.selection")},
+		{Name: i18n.Text("menu.view")},
+		{Name: i18n.Text("menu.options")},
+		{Name: i18n.Text("general.help")},
 	})
 
 	search := ui.NewSearchWidget()
@@ -326,10 +327,10 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	explorer := NewNavigationPanel(cfg.Settings.Explorer, cfg.Settings.Appearance.Icons, ws.Paths()...)
 
 	sidebar := ui.NewSidebarWidget()
-	sidebar.AddPanel("explorer", "Explore", explorer.Adapter)
-	sidebar.AddPanel("search", "Find", search)
-	sidebar.AddPanel("changes", "Changes", changes.Adapter)
-	sidebar.AddPanel("outline", "Outline", symbols.Adapter)
+	sidebar.AddPanel("explorer", i18n.Text("panel.explore"), explorer.Adapter)
+	sidebar.AddPanel("search", i18n.Text("general.find"), search)
+	sidebar.AddPanel("changes", i18n.Text("panel.changes"), changes.Adapter)
+	sidebar.AddPanel("outline", i18n.Text("panel.outline"), symbols.Adapter)
 	if len(state.SidebarPanelOrder) > 0 {
 		sidebar.SetPanelOrder(state.SidebarPanelOrder)
 	} else {

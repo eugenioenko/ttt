@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -149,7 +150,7 @@ func (s *StatusBarWidget) renderNotification(surface Surface, w int) {
 			}
 		}
 	} else {
-		okLabel := " [OK] "
+		okLabel := i18n.Text("statusbar.okButton")
 		okW := textwidth.String(okLabel)
 		okX := rightX - okW
 		if okX > x+2 {

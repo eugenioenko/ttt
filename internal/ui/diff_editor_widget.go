@@ -12,6 +12,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 
@@ -921,7 +922,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 				surface.SetCell(x, y, term.Cell{Ch: ' '})
 			}
 		}
-		for i, ch := range "Loading..." {
+		for i, ch := range i18n.Text("general.loadingDots") {
 			if i < w {
 				surface.SetCell(i, 0, term.Cell{Ch: ch, Style: term.StyleDefault})
 			}

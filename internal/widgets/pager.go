@@ -1,8 +1,7 @@
 package widgets
 
 import (
-	"fmt"
-
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
@@ -71,10 +70,10 @@ func (p *PagerWidget) offset() int {
 func (p *PagerWidget) rangeText() string {
 	total := p.Config.Total
 	if total <= 0 {
-		return "No items"
+		return i18n.Text("pager.noItems")
 	}
 	off := p.offset()
-	return fmt.Sprintf("%d–%d of %d", off+1, min(off+p.limit(), total), total)
+	return i18n.Format("pager.range", i18n.Args{"first": off + 1, "last": min(off+p.limit(), total), "total": total})
 }
 
 // targets returns the offsets for first, previous, next and last, with -1 for

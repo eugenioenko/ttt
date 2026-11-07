@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -369,7 +369,7 @@ func (a *App) RequestFormatting(path, lang string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
@@ -400,7 +400,7 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
@@ -479,7 +479,7 @@ func (a *App) applyCodeActionEdit(path string, edit *lsp.WorkspaceEdit) {
 func (a *App) workspaceTextEdits(edit *lsp.WorkspaceEdit) ([]lsp.FileEdits, bool) {
 	batches, err := edit.TextEdits()
 	if errors.Is(err, lsp.ErrFileOperations) {
-		a.StatusWarn("The language server's edit creates, renames or deletes files, which ttt does not support yet")
+		a.StatusWarn(i18n.Text("status.unsupportedWorkspaceEdit"))
 		return nil, false
 	}
 	return batches, true
@@ -489,7 +489,7 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
@@ -564,7 +564,7 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
@@ -613,14 +613,14 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	}
 
 	a.EditorGroup.OpenFile(currentPath)
-	a.StatusNotify(fmt.Sprintf("Renamed across %d file(s)", len(files)))
+	a.StatusNotify(i18n.Format("status.renamedAcrossFileS", i18n.Args{"filesCount": len(files)}))
 }
 
 func (a *App) RequestReferences(path, lang string, line, col int) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
@@ -703,7 +703,7 @@ func lspStatusMessage(err error) string {
 	if len(msg) > 60 {
 		msg = msg[:60] + "…"
 	}
-	return "LSP: " + msg
+	return i18n.Format("lsp.lsp", i18n.Args{"msg": msg})
 }
 
 // EnsureLSPOpen sends didOpen for a file that became active without going
@@ -752,15 +752,15 @@ func (a *App) applyFormattingResult(v *FormattingResult) {
 	}
 	path, _ := a.editorPathLang()
 	if path != v.Path {
-		a.StatusWarn("Formatting result discarded: " + filepath.Base(v.Path) + " is no longer the open file")
+		a.StatusWarn(i18n.Format("status.formatFileClosed", i18n.Args{"filename": filepath.Base(v.Path)}))
 		return
 	}
 	if v.Buffer == nil || editor.Buf != v.Buffer {
-		a.StatusWarn("Formatting result discarded: the file was reopened while it was formatted")
+		a.StatusWarn(i18n.Text("status.formatFileReopened"))
 		return
 	}
 	if editor.Buf.Version() != v.Version {
-		a.StatusWarn("Formatting result discarded: the file changed while it was formatted")
+		a.StatusWarn(i18n.Text("status.formatFileChanged"))
 		return
 	}
 	a.ApplyTextEdits(v.Edits)
@@ -891,7 +891,7 @@ func (a *App) requestLocation(method, path, lang string, line, col int) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		if lang != "" {
-			a.StatusWarn(lang + " language server is not configured")
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
 		}
 		return
 	}
@@ -947,12 +947,12 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 		if _, err := exec.LookPath(serverCfg.Command[0]); err != nil {
 			if !a.LspNotified[serverKey] && a.Settings.LSP.ShouldNotifyAvailability() {
 				a.LspNotified[serverKey] = true
-				msg := fmt.Sprintf("LSP Code Assist binary is not installed for %s. Click Docs for installation instructions.", lang)
+				msg := i18n.Format("lsp.installServerHint", i18n.Args{"lang": lang})
 				anchor := serverKey
-				a.Status.SetNotificationWithAction(msg, view.NotifyWarning, 10*time.Second, "Docs", func() {
+				a.Status.SetNotificationWithAction(msg, view.NotifyWarning, 10*time.Second, i18n.Text("status.docs"), func() {
 					OpenURL("https://tttedit.dev/guides/lsp/#" + anchor)
 				})
-				a.Status.SecondaryLabel = "Don't show again"
+				a.Status.SecondaryLabel = i18n.Text("lsp.donTShowAgain")
 				a.Status.SecondaryAction = func() {
 					v := false
 					a.Settings.LSP.NotifyAvailability = &v

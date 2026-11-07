@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
@@ -20,9 +21,9 @@ func (d *CommitDetailWidget) buildMessageRows() []commitDetailRow {
 	if message == "" {
 		message = d.EmptyMessage
 		if message == "" {
-			message = "(No commit message)"
+			message = i18n.Text("changes.noCommitMessage")
 			if d.CurrentChanges {
-				message = "Working tree clean"
+				message = i18n.Text("changes.workingTreeClean")
 			}
 		}
 	}

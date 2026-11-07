@@ -4,6 +4,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
@@ -445,14 +446,14 @@ func (t *TableWidget) renderState(surface Surface, headerH, dataH int) {
 	w := t.contentW - t.inset()
 	if len(t.Config.Rows) > 0 {
 		if t.Config.Loading && w > 12 {
-			label := "Loading… "
+			label := i18n.Text("table.loading")
 			surface.DrawText(w-textwidth.String(label), 0, label, w, term.StyleMuted)
 		}
 		return
 	}
 	text := t.Config.EmptyText
 	if t.Config.Loading {
-		text = "Loading…"
+		text = i18n.Text("general.loading")
 	}
 	if text == "" || dataH <= 0 {
 		return

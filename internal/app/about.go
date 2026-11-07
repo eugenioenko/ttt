@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -39,16 +40,16 @@ func (a *App) ShowAbout() {
 		return
 	}
 	info := widgets.NewKeyValueListWidget([]widgets.KeyValueEntry{
-		{Key: "Version", Value: a.Version},
-		{Key: "Website", Value: "https://tttedit.dev"},
-		{Key: "GitHub", Value: "https://github.com/eugenioenko/ttt"},
+		{Key: i18n.Text("about.version"), Value: a.Version},
+		{Key: i18n.Text("about.website"), Value: "https://tttedit.dev"},
+		{Key: i18n.Text("about.gitHub"), Value: "https://github.com/eugenioenko/ttt"},
 	})
 	info.InvertStyles = true
 
 	divider := widgets.NewDividerWidget(widgets.DividerConfig{})
 	divider.Box.MarginTop = 1
 
-	heading := widgets.NewParagraphWidget("ttt is great because of everyone who contributes code, reports issues, and uses it")
+	heading := widgets.NewParagraphWidget(i18n.Text("about.credits"))
 	heading.Box.MarginTop = 1
 	heading.Box.MarginBottom = 1
 
@@ -65,15 +66,15 @@ func (a *App) ShowAbout() {
 		credits.FixedHeight = max(aboutCreditsMinHeight, min(aboutCreditsMaxHeight, sh-aboutDialogChromeRows))
 	}
 
-	thanks := widgets.NewParagraphWidget("Thank you!")
+	thanks := widgets.NewParagraphWidget(i18n.Text("about.thankYou"))
 	thanks.Box.MarginTop = 1
 
 	dialog := widgets.NewDialogWidget(60)
-	dialog.Title = "About TTT Editor"
+	dialog.Title = i18n.Text("about.aboutTTTEditor")
 	dialog.Borders = *a.Borders
 	dialog.SetContent(widgets.NewVStackWidget(info, divider, heading, credits, thanks))
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Close", Handler: func() { a.DismissDialog() }},
+		{Label: i18n.Text("general.closeButton"), Handler: func() { a.DismissDialog() }},
 	}
 	dialog.OnDismiss = func() { a.DismissDialog() }
 	dialog.Build()

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 
@@ -32,7 +33,7 @@ func NewFindBarWidget() *FindBarWidget {
 	f := &FindBarWidget{focused: true}
 	f.Input = newPanelInput()
 	f.Input.Config.Prefix = ""
-	f.Input.Config.Placeholder = "Search"
+	f.Input.Config.Placeholder = i18n.Text("search.search")
 	f.Input.Config.OnChange = func(string) {
 		f.Current = 0
 		f.search()

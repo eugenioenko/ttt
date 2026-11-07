@@ -4,6 +4,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -28,7 +29,7 @@ func configuredDiffContext(contextMode string) ui.DiffContextMode {
 func (a *App) ReloadSettings() {
 	s := config.LoadSettings()
 	a.ApplySettings(s)
-	a.StatusNotify("Settings reloaded")
+	a.StatusNotify(i18n.Text("status.settingsReloaded"))
 }
 
 func (a *App) applySidebarTabStyle(style string) {
@@ -220,7 +221,7 @@ func registerSettingsCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "settings.reload", Title: "Reload Settings",
+		ID: "settings.reload", Title: i18n.Text("command.reloadSettings"),
 		Handler: app.ReloadSettings,
 	})
 }

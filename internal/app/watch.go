@@ -1,10 +1,10 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/watcher"
 
 	"github.com/gdamore/tcell/v3"
@@ -77,9 +77,9 @@ func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, err
 	info, err := stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			a.StatusWarn(name + " was deleted on disk")
+			a.StatusWarn(i18n.Format("status.wasDeletedOnDisk", i18n.Args{"name": name}))
 		} else {
-			a.StatusWarn(fmt.Sprintf("Failed to check %s: %v", name, err))
+			a.StatusWarn(i18n.Format("status.failedToCheck", i18n.Args{"name": name, "error": err}))
 		}
 		return
 	}
@@ -88,7 +88,7 @@ func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, err
 		return
 	}
 	if buf.Dirty {
-		a.StatusWarn(name + " changed on disk; you have unsaved changes")
+		a.StatusWarn(i18n.Format("status.changedOnDiskYouHaveUnsavedChanges", i18n.Args{"name": name}))
 		return
 	}
 	if limit := a.Settings.Editor.AutoReloadMaxBytes(); limit > 0 && info.Size() > limit {

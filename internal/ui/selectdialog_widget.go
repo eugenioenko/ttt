@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -225,7 +226,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 	}
 	if p.mode == paletteHelpMode && p.helpQuery != "" && len(p.Items) == 0 && visibleItems > 0 {
 		y := boxY + 3
-		message := fmt.Sprintf("No help entries match %q", p.helpQuery)
+		message := i18n.Format("selectdialog.noHelpEntriesMatch", i18n.Args{"query": fmt.Sprintf("%q", p.helpQuery)})
 		surface.DrawText(boxX+2, y, message, contentRight-1, term.StyleMuted)
 	}
 
@@ -244,7 +245,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 			description := p.Items[p.Selected].Description
 			surface.DrawText(boxX+2, detailY, description, boxX+boxW-2, term.StyleMuted)
 		} else if p.helpQuery != "" {
-			surface.DrawText(boxX+2, detailY, "Try > for all commands", boxX+boxW-2, term.StyleMuted)
+			surface.DrawText(boxX+2, detailY, i18n.Text("selectdialog.tryForAllCommands"), boxX+boxW-2, term.StyleMuted)
 		}
 	}
 }

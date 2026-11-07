@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -68,7 +68,7 @@ func readCommitDetailContext(ctx context.Context, incarnation uint64, tabID, dir
 				result.Canceled = true
 				return result
 			}
-			result.Err = fmt.Sprintf("Could not load full file for %s", commitContextDisplayPath(file.Path))
+			result.Err = i18n.Format("changes.couldNotLoadFullFileFor", i18n.Args{"path": commitContextDisplayPath(file.Path)})
 		} else {
 			oldContent = content
 		}
@@ -80,7 +80,7 @@ func readCommitDetailContext(ctx context.Context, incarnation uint64, tabID, dir
 				result.Canceled = true
 				return result
 			}
-			result.Err = fmt.Sprintf("Could not load full file for %s", commitContextDisplayPath(file.Path))
+			result.Err = i18n.Format("changes.couldNotLoadFullFileFor", i18n.Args{"path": commitContextDisplayPath(file.Path)})
 		} else {
 			newContent = content
 		}

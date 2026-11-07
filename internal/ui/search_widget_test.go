@@ -12,6 +12,30 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func TestSearchReplaceAllUsesConfiguredIcon(t *testing.T) {
+	t.Cleanup(func() { icons.Configure("", nil) })
+	s := NewSearchWidget()
+	s.Icons = config.IconsNerdFont
+	s.SetReplaceMode(true)
+	for _, glyph := range []string{"@", "#"} {
+		if warnings := icons.Configure(s.Icons, map[string]string{"replace-all": glyph}); len(warnings) != 0 {
+			t.Fatal(warnings)
+		}
+		s.Render(NewRenderSurface(makeGrid(40, 12), Rect{W: 40, H: 12}))
+		if got := s.ReplaceInput.Actions[0].Label; got != glyph+"All" {
+			t.Fatalf("replace all label = %q", got)
+		}
+		s.SetReplacementPending(true)
+		if got := s.ReplaceInput.Actions[0].Label; got != "Cancel" {
+			t.Fatalf("pending label = %q", got)
+		}
+		s.SetReplacementPending(false)
+		if got := s.ReplaceInput.Actions[0].Label; got != glyph+"All" {
+			t.Fatalf("restored label = %q", got)
+		}
+	}
+}
+
 func TestSearchFileRowsShowIconsAndOmitIconSpacingWhenDisabled(t *testing.T) {
 	for _, tc := range []struct {
 		mode     string

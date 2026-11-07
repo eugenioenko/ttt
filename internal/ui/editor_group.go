@@ -20,6 +20,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -470,14 +471,14 @@ func contentFileError(path string, content Widget) error {
 		message = w.Err
 	}
 	if message != "" {
-		return fmt.Errorf("Cannot open %s: %s", path, message)
+		return errors.New(i18n.Format("files.cannotOpen", i18n.Args{"path": path, "message": message}))
 	}
 	return nil
 }
 
 func (g *EditorGroupWidget) OpenFile(path string) error {
 	if isSpecialFile(path) {
-		err := fmt.Errorf("Cannot open %s: not a regular file", path)
+		err := errors.New(i18n.Format("files.cannotOpenSpecialFile", i18n.Args{"path": path}))
 		g.reportError(err.Error())
 		return err
 	}
@@ -494,7 +495,7 @@ func (g *EditorGroupWidget) OpenFile(path string) error {
 			}
 			if g.tabs[i].Buf != nil && !g.tabs[i].Buf.Dirty {
 				if err := g.tabs[i].Buf.LoadFile(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-					err = fmt.Errorf("Failed to reload %s: %w", path, err)
+					err = fmt.Errorf("%s: %w", i18n.Format("editorGroup.reloadFileFailed", i18n.Args{"path": path}), err)
 					g.reportError(err.Error())
 					g.tabs[i].Preview = false
 					g.SwitchTab(i)
@@ -527,11 +528,11 @@ func (g *EditorGroupWidget) OpenFile(path string) error {
 	ec := g.applySaveSettings(newBuf, path)
 	if err := newBuf.LoadFile(path); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			err = fmt.Errorf("Failed to open %s: %w", path, err)
+			err = fmt.Errorf("%s: %w", i18n.Format("editorGroup.openFileFailed", i18n.Args{"path": path}), err)
 			g.reportError(err.Error())
 			return err
 		}
-		g.notify(fmt.Sprintf("New file: %s", filepath.Base(path)))
+		g.notify(i18n.Format("editorGroup.newFile", i18n.Args{"filename": filepath.Base(path)}))
 	}
 	tabSize := g.TabSize
 	useTabs := !g.InsertSpaces
@@ -1119,7 +1120,7 @@ func (g *EditorGroupWidget) ReloadFile(path string) bool {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path && g.tabs[i].Buf != nil {
 			if err := g.tabs[i].Buf.LoadFile(path); err != nil {
-				g.reportError(fmt.Sprintf("Failed to reload %s: %v", path, err))
+				g.reportError(i18n.Format("editorGroup.failedToReload", i18n.Args{"path": path, "error": err}))
 				return false
 			}
 			g.tabs[i].Buf.Dirty = false
@@ -1628,7 +1629,7 @@ func (g *EditorGroupWidget) Save() bool {
 	}
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(t.FilePath); err != nil {
-		g.reportError(fmt.Sprintf("Failed to save %s: %v", t.FilePath, err))
+		g.reportError(i18n.Format("editorGroup.failedToSave", i18n.Args{"filePath": t.FilePath, "error": err}))
 		return false
 	}
 	if t.Undo != nil {
@@ -1660,7 +1661,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	g.applySaveSettings(t.Buf, path)
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
-		g.reportError(fmt.Sprintf("Failed to save %s: %v", path, err))
+		g.reportError(i18n.Format("editorGroup.savePathFailed", i18n.Args{"path": path, "error": err}))
 		return false
 	}
 	if t.Undo != nil {
@@ -1881,7 +1882,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 	}
 	newBuf := &buffer.Buffer{Lines: []string{""}}
 	if err := newBuf.LoadFile(path); err != nil {
-		g.reportError(fmt.Sprintf("Failed to open %s: %v", path, err))
+		g.reportError(i18n.Format("editorGroup.failedToOpen", i18n.Args{"path": path, "error": err}))
 		return
 	}
 	tabSize := g.TabSize
@@ -2834,7 +2835,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		if g.Editor.Buf != t.Buf {
 			g.Editor.maxWidthSeen = 0
 			if g.Editor.BracketPairColorization && len(t.Buf.Lines) > maxBracketColorLines {
-				g.notify("Bracket pair colorization disabled for large file")
+				g.notify(i18n.Text("editorGroup.bracketPairColorizationDisabledForLargeFile"))
 			}
 			if g.bookmarkSyncPath != "" {
 				if g.bookmarksByPath == nil {

@@ -4,6 +4,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -100,7 +101,7 @@ func (a *App) ShowThemePicker() {
 	})
 
 	dialog := widgets.NewDialogWidget(50)
-	dialog.Title = "Select Theme"
+	dialog.Title = i18n.Text("options.selectTheme")
 	dialog.Borders = *a.Borders
 	dialog.SetContent(sel)
 	dialog.OnDismiss = sel.Config.OnDismiss
@@ -111,14 +112,14 @@ func (a *App) ShowThemePicker() {
 }
 
 func (a *App) ShowIndentPicker() {
-	a.showIndentDialog("File Indentation", func(useTabs bool, tabSize int) {
+	a.showIndentDialog(i18n.Text("options.fileIndentation"), func(useTabs bool, tabSize int) {
 		a.EditorGroup.SetTabSize(tabSize)
 		a.EditorGroup.SetUseTabs(useTabs)
 	})
 }
 
 func (a *App) ShowIndentSettings() {
-	a.showIndentDialog("Editor Indentation", func(useTabs bool, tabSize int) {
+	a.showIndentDialog(i18n.Text("options.editorIndentation"), func(useTabs bool, tabSize int) {
 		a.Settings.Editor.TabSize = tabSize
 		a.Settings.Editor.InsertSpaces = !useTabs
 		a.EditorGroup.TabSize = tabSize
@@ -134,7 +135,7 @@ func (a *App) ShowEolPicker() {
 		{ID: "lf", Label: "LF"},
 		{ID: "crlf", Label: "CRLF"},
 	}
-	a.ShowSelectDialog("Line Ending", items, func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.lineEnding"), items, func(id string) {
 		buf := a.EditorGroup.ActiveBuffer()
 		if buf == nil {
 			return
@@ -154,8 +155,8 @@ func (a *App) ShowLanguagePicker() {
 		return
 	}
 	items := []widgets.SelectItem{
-		{ID: "", Label: "Auto Detect"},
-		{ID: highlight.PlainText, Label: "Plain Text"},
+		{ID: "", Label: i18n.Text("options.autoDetect")},
+		{ID: highlight.PlainText, Label: i18n.Text("options.plainText")},
 	}
 	for _, language := range highlight.Languages() {
 		items = append(items, widgets.SelectItem{ID: language.ID, Label: language.Name})
@@ -165,14 +166,14 @@ func (a *App) ShowLanguagePicker() {
 			items[i].Label += " (current)"
 		}
 	}
-	a.ShowSelectDialog("Change Language Mode", items, func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.changeLanguageMode"), items, func(id string) {
 		if a.EditorGroup.ActiveBuffer() == nil {
 			return
 		}
 		a.EditorGroup.SetActiveLanguage(id)
 		a.SyncLanguageSegment()
 		if !a.EditorGroup.SyntaxHighlight {
-			a.StatusNotify("Syntax highlighting is disabled")
+			a.StatusNotify(i18n.Text("status.syntaxHighlightingIsDisabled"))
 		}
 	}, nil)
 }
@@ -181,24 +182,24 @@ func registerPaletteCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "command.palette", Title: "Command Palette",
+		ID: "command.palette", Title: i18n.Text("command.commandPalette"),
 		Handler: func() { app.OpenCommandPalette(false) },
 	})
 
 	reg.Register(command.Command{
-		ID: "file.quickOpen", Title: "Go to File",
+		ID: "file.quickOpen", Title: i18n.Text("command.goToFile"),
 		Keywords: []string{"file", "navigate", "open"},
 		Handler:  func() { app.OpenCommandPalette(true) },
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.goToLine", Title: "Go to Line",
+		ID: "editor.goToLine", Title: i18n.Text("command.goToLine"),
 		Keywords: []string{"editor", "navigate", "jump"},
 		Handler:  func() { app.OpenCommandPalette(false, ":") },
 	})
 
 	reg.Register(command.Command{
-		ID: "theme.switch", Title: "Switch Theme",
+		ID: "theme.switch", Title: i18n.Text("command.switchTheme"),
 		Keywords: []string{"preferences", "settings", "colors", "appearance"},
 		Handler:  app.ShowThemePicker,
 	})
@@ -207,43 +208,43 @@ func registerPaletteCommands(app *App) {
 	app.Status.SetSegment(view.StatusSegment{ID: "eol", Side: "right", Priority: 400, OnClick: app.ShowEolPicker})
 
 	reg.Register(command.Command{
-		ID: "editor.indentation", Title: "Change Indentation",
+		ID: "editor.indentation", Title: i18n.Text("command.changeIndentation"),
 		Keywords: []string{"editor", "preferences", "settings", "spaces", "tabs"},
 		Handler:  app.ShowIndentPicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.lineEnding", Title: "Change Line Ending",
+		ID: "editor.lineEnding", Title: i18n.Text("command.changeLineEnding"),
 		Keywords: []string{"editor", "preferences", "settings", "eol", "crlf", "lf"},
 		Handler:  app.ShowEolPicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "editor.changeLanguage", Title: "Change Language Mode",
+		ID: "editor.changeLanguage", Title: i18n.Text("command.changeLanguageMode"),
 		Keywords: []string{"language", "syntax", "highlighting", "mode", "filetype"},
 		Handler:  app.ShowLanguagePicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "settings.openUI", Title: "Settings: Open Editor Settings",
+		ID: "settings.openUI", Title: i18n.Text("command.settingsOpenEditorSettings"),
 		Keywords: []string{"preferences", "settings", "configuration", "options", "ui"},
 		Handler:  app.ShowSettings,
 	})
 
 	reg.Register(command.Command{
-		ID: "settings.apply", Title: "Settings: Apply Changes",
+		ID: "settings.apply", Title: i18n.Text("command.settingsApplyChanges"),
 		Keywords: []string{"preferences", "settings", "save"},
 		Handler:  app.ApplySettingsView,
 	})
 
 	reg.Register(command.Command{
-		ID: "settings.cancel", Title: "Settings: Discard Changes",
+		ID: "settings.cancel", Title: i18n.Text("command.settingsDiscardChanges"),
 		Keywords: []string{"preferences", "settings", "revert", "cancel", "close"},
 		Handler:  app.CancelSettingsView,
 	})
 
 	reg.Register(command.Command{
-		ID: "settings.open", Title: "Settings: Open settings.json",
+		ID: "settings.open", Title: i18n.Text("command.settingsOpenSettingsJson"),
 		Keywords: []string{"preferences", "settings", "configuration", "options"},
 		Handler: func() {
 			path := config.ConfigFilePath("settings.json")
@@ -253,7 +254,7 @@ func registerPaletteCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-		ID: "keybindings.open", Title: "Settings: Open keybindings.json",
+		ID: "keybindings.open", Title: i18n.Text("command.settingsOpenKeybindingsJson"),
 		Keywords: []string{"preferences", "settings", "hotkeys", "keymap"},
 		Handler: func() {
 			path := config.ConfigFilePath("keybindings.json")

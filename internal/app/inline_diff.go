@@ -2,9 +2,9 @@ package app
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 type inlineDiffRepo struct {
@@ -68,16 +68,16 @@ func (a *App) ToggleInlineDiff() {
 	}
 	repoDir, relPath, ok := a.repoPathForFile(path)
 	if !ok {
-		a.StatusNotify("Not in a git repository")
+		a.StatusNotify(i18n.Text("status.notInAGitRepository"))
 		return
 	}
 	opened, conflict := a.openInlineDiff(path, repoDir, relPath)
 	if conflict {
-		a.StatusNotify(fmt.Sprintf("%s has merge conflicts; no diff to show", relPath))
+		a.StatusNotify(i18n.Format("status.hasMergeConflictsNoDiffToShow", i18n.Args{"relPath": relPath}))
 		return
 	}
 	if !opened {
-		a.StatusNotify("Not in a git repository")
+		a.StatusNotify(i18n.Text("status.notInAGitRepository"))
 		return
 	}
 	a.RequestGitGutterForActiveFile()

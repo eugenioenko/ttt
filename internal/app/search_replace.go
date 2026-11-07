@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/search"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
@@ -82,7 +83,7 @@ func (a *App) startSearchReplace(req ui.SearchReplaceRequest) {
 			}
 		}
 		if len(matches) == 0 {
-			a.StatusNotify("No matches to replace")
+			a.StatusNotify(i18n.Text("status.noMatchesToReplace"))
 			return
 		}
 		opts := ui.SearchOptions{CaseSensitive: req.Options.CaseSensitive, UseRegex: req.Options.UseRegex}

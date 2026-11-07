@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 const gitGutterDelay = 500 * time.Millisecond
@@ -135,7 +135,7 @@ func (a *App) applyGitGutterResult(v *gitGutterResult) {
 	case v.DiffOn && v.Conflict:
 		if a.EditorGroup.IsInlineDiffPath(v.Path) {
 			a.EditorGroup.DisableInlineDiff(v.Path)
-			a.StatusNotify(fmt.Sprintf("%s has merge conflicts; diff closed", v.RelPath))
+			a.StatusNotify(i18n.Format("status.mergeConflictDiffClosed", i18n.Args{"path": v.RelPath}))
 		}
 	case v.DiffOn:
 		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
