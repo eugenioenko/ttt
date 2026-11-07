@@ -298,6 +298,31 @@ func TestScrollLineDefaultKeybindings(t *testing.T) {
 	}
 }
 
+func TestMouseSelectionAfterViewportScroll(t *testing.T) {
+	h := newTestHarness(t, 120, 30)
+	defer h.stop()
+	openScrollFile(t, h)
+	for range 20 {
+		h.pressKey(tcell.KeyDown, tcell.ModCtrl)
+	}
+	h.redraw()
+
+	e := h.app.EditorGroup.Editor
+	r := e.GetRect()
+	x := r.X + e.GutterWidth() + 2
+	y := r.Y + 2
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x+4, y, tcell.Button1, tcell.ModNone))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x+4, y, tcell.ButtonNone, tcell.ModNone))
+	h.redraw()
+	if !e.Selection.Active {
+		t.Fatalf("drag did not select text after viewport scroll; top=%d cursor=%+v", e.Viewport.TopLine, e.Cursor)
+	}
+	if h.app.EditorGroup.SelectedText() == "" {
+		t.Fatal("selected text is empty after viewport scroll")
+	}
+}
+
 func TestScrollLineStopsAtEdges(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
@@ -350,5 +375,23 @@ func TestScrollLineKeepsCursorAcrossFold(t *testing.T) {
 	h.exec("view.scrollLineUp")
 	if editor.Viewport.TopLine != 2 || editor.Cursor.Line != 2 {
 		t.Fatalf("scroll back moved to top %d line %d, want 2/2", editor.Viewport.TopLine, editor.Cursor.Line)
+	}
+}
+
+func TestScrollLineHidesCursorOutsideViewport(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+	placeScroll(t, h, 0, 5)
+
+	editor := h.app.EditorGroup.Editor
+	if _, _, visible := h.app.Root.CursorPosition(); !visible {
+		t.Fatal("cursor should be visible before scrolling")
+	}
+	for range 10 {
+		h.exec("view.scrollLineDown")
+	}
+	if _, _, visible := h.app.Root.CursorPosition(); visible {
+		t.Fatalf("cursor outside viewport reported visible at (%d,%d)", editor.CursorX, editor.CursorY)
 	}
 }

@@ -1353,6 +1353,10 @@ func (g *EditorGroupWidget) DiffTabSources() []DiffSearchSource {
 	return result
 }
 
+func pointInRect(x, y int, r Rect) bool {
+	return x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
+}
+
 func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	// Content tabs (settings, plugin panels) own their own cursor.
 	if t := g.activeTab(); t != nil && t.Content != nil {
@@ -1362,12 +1366,14 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	}
 	if g.IsEditorActive() {
 		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
-			return d.left.CursorX, d.left.CursorY, true
+			x, y := d.left.CursorX, d.left.CursorY
+			return x, y, pointInRect(x, y, d.left.GetRect())
 		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
-		return g.Editor.CursorX, g.Editor.CursorY, true
+		x, y := g.Editor.CursorX, g.Editor.CursorY
+		return x, y, pointInRect(x, y, g.Editor.GetRect())
 	}
 	return 0, 0, false
 }
