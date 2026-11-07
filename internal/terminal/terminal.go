@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -150,7 +151,7 @@ func resolveShell(shell string) (string, error) {
 	}
 	if !strings.ContainsAny(shell, `/\`) {
 		if resolved, err := exec.LookPath(shell); err == nil {
-			return resolved, nil
+			return filepath.Abs(resolved)
 		} else {
 			return "", err
 		}
