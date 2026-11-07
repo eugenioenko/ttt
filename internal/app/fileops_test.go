@@ -78,6 +78,37 @@ func TestFileDeleteTaskDeliveryAndShutdown(t *testing.T) {
 	}
 }
 
+func TestPermanentDeleteFinishesBeforeQuit(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	baselineTasks := len(a.tasks.tasks)
+	posted := make(chan func(), 1)
+	a.tasks.post = func(fn func()) error { posted <- fn; return nil }
+	dir := filepath.Join(t.TempDir(), "folder")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "child.txt"), []byte("delete me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	finished := false
+	a.startFileDelete(dir, false, func() { finished = true }, nil)
+	if !finished || len(a.tasks.tasks) != baselineTasks {
+		t.Fatal("permanent deletion returned with unfinished work")
+	}
+	running := true
+	a.Running = &running
+	a.Quit()
+	if running {
+		t.Fatal("quit did not complete after permanent deletion")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("quit left directory contents behind: %v", err)
+	}
+}
+
 func TestFileDeleteConfirmation(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = "" })

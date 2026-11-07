@@ -116,15 +116,17 @@ func (a *App) confirmFileDelete(path string, reload func(), moveToTrash func(con
 }
 
 func (a *App) startFileDelete(path string, useTrash bool, reload func(), moveToTrash func(context.Context, string) error) {
+	if !useTrash {
+		// RemoveAll cannot be cancelled; finish before the event loop can quit.
+		a.completeFileDelete(path, false, reload, os.RemoveAll(path))
+		return
+	}
 	task := NewTask[struct{}](a, asynctask.TaskOptions{})
 	task.Schedule(func(ctx context.Context) (struct{}, error) {
 		if err := ctx.Err(); err != nil {
 			return struct{}{}, err
 		}
-		if useTrash {
-			return struct{}{}, moveToTrash(ctx, path)
-		}
-		return struct{}{}, os.RemoveAll(path)
+		return struct{}{}, moveToTrash(ctx, path)
 	}, func(_ struct{}, err error) {
 		defer a.releaseTask(task)
 		a.completeFileDelete(path, useTrash, reload, err)
