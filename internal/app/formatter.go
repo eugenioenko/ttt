@@ -73,9 +73,16 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 	}
 
 	formatted := stdout.String()
+	if formatted == original {
+		return nil
+	}
 	formatted = strings.TrimSuffix(formatted, "\n")
 
-	if formatted == strings.TrimSuffix(original, "\n") {
+	comparison := original
+	if editor.Buf.ShowTrailingNewline {
+		comparison = strings.TrimSuffix(comparison, "\n")
+	}
+	if formatted == comparison {
 		return nil
 	}
 
