@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -1722,6 +1723,9 @@ func sameSaveTarget(a, b string) (bool, error) {
 		if err == nil {
 			return filepath.Abs(resolved)
 		}
+		if errors.Is(err, syscall.ENOTDIR) {
+			return "", nil
+		}
 		if !errors.Is(err, os.ErrNotExist) {
 			return "", err
 		}
@@ -1735,17 +1739,21 @@ func sameSaveTarget(a, b string) (bool, error) {
 			dir = "."
 		}
 		parent, err := filepath.EvalSymlinks(dir)
+		// SaveFile creates only the leaf, so a missing parent cannot become an alias.
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
 		if err != nil {
 			return "", err
 		}
 		return filepath.Abs(filepath.Join(parent, name))
 	}
-	a, err := resolve(a)
-	if err != nil {
-		return false, err
+	a, errA := resolve(a)
+	b, errB := resolve(b)
+	if (errA == nil && a == "") || (errB == nil && b == "") {
+		return false, nil
 	}
-	b, err = resolve(b)
-	if err != nil {
+	if err := errors.Join(errA, errB); err != nil {
 		return false, err
 	}
 	if a == b {

@@ -115,6 +115,34 @@ func TestSaveAsReplacesCleanOpenTarget(t *testing.T) {
 	}
 }
 
+func TestSaveAsIgnoresUnrelatedMissingParent(t *testing.T) {
+	for _, kind := range []string{"new destination", "open destination"} {
+		t.Run(kind, func(t *testing.T) {
+			g, source, target := newSaveAsGroup(t, "source", false)
+			stale := filepath.Join(t.TempDir(), "deleted", "other.go")
+			if err := g.OpenFile(stale); err != nil {
+				t.Fatal(err)
+			}
+			g.CommitActiveTab()
+			g.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'})
+			buf := g.ActiveBuffer()
+			g.SwitchToTabByPath(source)
+			if kind == "new destination" {
+				target = filepath.Join(filepath.Dir(source), "new.go")
+			}
+			if !g.SaveAs(target) {
+				t.Fatal("unrelated stale tab blocked SaveAs")
+			}
+			if g.BufferForPath(stale) != buf || !buf.Dirty || buf.Lines[0] != "X" {
+				t.Fatal("SaveAs changed the unrelated stale document")
+			}
+			if data, err := os.ReadFile(target); err != nil || string(data) != "source" {
+				t.Fatalf("destination = %q, %v; want source", data, err)
+			}
+		})
+	}
+}
+
 func TestSameSaveTarget(t *testing.T) {
 	dir := t.TempDir()
 	target, other := filepath.Join(dir, "target"), filepath.Join(dir, "other")
@@ -173,9 +201,10 @@ func TestSameSaveTarget(t *testing.T) {
 		{"deleted link/..", filepath.Join(dir, "missing"), nestedLink + "/../missing", true, false, nestedLinkErr},
 		{"case parent", filepath.Join(dir, "parent", "123"), filepath.Join(dir, "PARENT", "123"), true, false, nil},
 		{"empty case", filepath.Join(dir, "parent", "target"), filepath.Join(dir, "parent", "TARGET"), false, true, nil},
-		{"missing parent", target, filepath.Join(dir, "gone", "target"), false, true, nil},
-		{"invalid parent", target, filepath.Join(target, "child"), false, true, nil},
+		{"missing parent", target, filepath.Join(dir, "gone", "target"), false, false, nil},
+		{"invalid parent", target, filepath.Join(target, "child"), false, false, nil},
 		{"dangling symlink", target, dangling, false, true, danglingErr},
+		{"missing parent versus dangling symlink", filepath.Join(dir, "gone", "target"), dangling, false, false, danglingErr},
 		{"symlink loop", target, loop, false, true, loopErr},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
