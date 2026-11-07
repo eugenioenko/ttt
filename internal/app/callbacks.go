@@ -379,7 +379,12 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 	}
 	if !staged && status.Status != "D" {
 		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() {
-			opened, conflict := a.openInlineDiff(fullPath, dir, status.Path)
+			opened, conflict, err := a.openInlineDiff(fullPath, dir, status.Path)
+			if err != nil {
+				a.StatusError(err.Error())
+				a.FocusEditorIfEnabled()
+				return
+			}
 			if conflict {
 				a.openConflictedFile(fullPath, status.Path)
 				return
