@@ -209,39 +209,16 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 
 ### Opening a pull request
 
-- [ ] Features link an accepted issue (`Closes #123`). Fixes, docs, and small cleanups can skip this.
-- [ ] One concern, under roughly 600 changed lines. Mention unrelated problems instead of fixing them.
-- [ ] Ran it in the real binary, before and after.
-- [ ] `make test` and `make lint` pass. No comments that describe what the code does.
-- [ ] Title: `type(scope): description`.
-- [ ] Body: why, which tests cover it, and before/after [screenshots](#screenshots) for visible changes.
+- Features link an accepted issue (`Closes #123`).
+- One concern, under ~600 changed lines.
+- `make test` and `make lint` pass.
+- Title: `type(scope): description`. Body: why, which tests cover it, and before/after [screenshots](#screenshots) for visible changes.
 
 #### Screenshots
 
-Capture the same state on `main` and on your branch.
-
-- **Text:** `--exec` with `screenshot PATH`, pasted as a code block. Shows layout, not color.
-  ```sh
-  TTT_CONFIG_DIR=$(mktemp -d) bin/ttt --size 110x30 --exec 'wait-for Explore; screenshot /tmp/after.txt; quit'
-  ```
-- **Image**, when color or style changed. `--exec` is headless, so run a terminal in Xephyr and drive ttt with `--listen`:
-  ```sh
-  Xephyr :9 -screen 1400x800 -ac -br &
-  DISPLAY=:9 ghostty --window-decoration=false -e env TTT_CONFIG_DIR=$(mktemp -d) bin/ttt --listen &
-  curl -s -X POST --data '<actions>; wait-for <final text>' http://127.0.0.1:4242/exec
-  ffmpeg -loglevel error -y -draw_mouse 0 -f x11grab -video_size 1400x800 -i :9 -frames:v 1 after.png
-  ```
-  Stop these by PID; a `pkill -f` pattern can kill your own shell.
-- **VHS** also works through `--listen`, with a fixed `Sleep` before each shot.
-
-Host images on an orphan `screenshots/<topic>` branch (your fork if you lack push access) and embed the raw URLs.
+- **Text:** `bin/ttt --exec '...; screenshot after.txt; quit'`.
+- **Image:** `--exec` is headless, so run a terminal in Xephyr, drive ttt with `--listen`, and grab with `ffmpeg -f x11grab`. VHS with `--listen` also works.
 
 ### Following up on a pull request
 
-CodeRabbit reviews a few minutes after you open the PR. Keep checking, about every five minutes and after each push, until:
-
-- CodeRabbit has reviewed the latest commit. If it paused or skipped it, request a review once.
-- Every finding has an answer: fix it and resolve the thread, or reply with why it does not apply.
-- Required CI passes. Fix failures the PR caused; report unrelated ones.
-
-If you stop earlier, say what is pending. Merging needs the user's approval.
+Until CodeRabbit has reviewed the latest commit and required CI passes, check every five minutes. Fix each finding or reply with why it does not apply. Merging needs the user's approval.
