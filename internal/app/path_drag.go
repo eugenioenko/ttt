@@ -8,6 +8,7 @@ import (
 
 	"github.com/gdamore/tcell/v3"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
@@ -63,9 +64,9 @@ func (a *App) handlePathDrag(ev *tcell.EventMouse) bool {
 // saying what letting go will do.
 func (a *App) showPathDragStatus(overTerminal bool) {
 	name := filepath.Base(a.pathDrag.path)
-	text := " ⇢ Dragging " + name + " · drop it on the terminal "
+	text := " ⇢ " + i18n.Format("explorer.draggingPath", i18n.Args{"name": name}) + " "
 	if overTerminal {
-		text = " ⇣ Release to insert " + name + " "
+		text = " ⇣ " + i18n.Format("explorer.releaseToInsertPath", i18n.Args{"name": name}) + " "
 	}
 	a.Status.SetSegment(view.StatusSegment{ID: pathDragSegment, Side: "left", Priority: 300,
 		Text: text, Style: term.StylePaletteSelected})
@@ -122,12 +123,12 @@ func (a *App) InsertExplorerPathInTerminal() {
 	path := a.explorerNodePath()
 	a.ExplorerContextNode = nil
 	if !filepath.IsAbs(path) {
-		a.StatusWarn("No file selected")
+		a.StatusWarn(i18n.Text("status.noFileSelected"))
 		return
 	}
 	tw, ok := a.TerminalPanel.ActiveWidget().(*ui.TerminalWidget)
 	if !ok || len(a.Terminals) == 0 {
-		a.StatusWarn("No terminal open")
+		a.StatusWarn(i18n.Text("status.noTerminalOpen"))
 		return
 	}
 	a.showTerminalPanel()
