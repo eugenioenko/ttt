@@ -20,7 +20,7 @@ When multiple folders are open, each root is shown as a collapsible group.
 
 **Delete** moves files and folders to the system Trash by default, where you can recover them using your file manager. macOS uses Foundation's native Trash API; Windows uses the Recycle Bin. Linux and FreeBSD require the `gio` command from GLib. Android has no supported system Trash for arbitrary files. If Trash is unavailable or the operation fails, ttt reports an error without falling back to permanent deletion.
 
-To delete permanently, turn off **Move deleted files to Trash** in **Settings > Sidebar > Files**, or set `explorer.useTrash` to `false`. The confirmation then explicitly says the deletion is permanent and cannot be undone.
+To delete permanently, turn off **Move deleted files to Trash** in **Settings > Explorer > Files**, or set `explorer.useTrash` to `false`. The confirmation then explicitly says the deletion is permanent and cannot be undone.
 
 ## Quick Navigation
 

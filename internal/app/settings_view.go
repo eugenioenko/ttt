@@ -229,7 +229,7 @@ func settingsCategories() []settingsCategory {
 				GetInt: func(s *config.Settings) int { return s.Markdown.WrapWidth },
 				SetInt: func(s *config.Settings, v int) { s.Markdown.WrapWidth = v }},
 		}},
-		{Title: i18n.Text("settings.sidebar"), Fields: []settingField{
+		{Title: i18n.Text("settings.explorer"), Fields: []settingField{
 			section(i18n.Text("settings.files")),
 			{Label: i18n.Text("settings.useTrash"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.UseTrash },
@@ -246,13 +246,16 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.compactFolders"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.CompactFolders },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.CompactFolders = v }},
-			section(i18n.Text("settings.look")),
+			section(i18n.Text("settings.appearance")),
 			{Label: i18n.Text("settings.gitStatusColors"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.GitStatusColors },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.GitStatusColors = v }},
 			{Label: i18n.Text("settings.dimStagedColors"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.DimStagedGitColors },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.DimStagedGitColors = v }},
+		}},
+		{Title: i18n.Text("settings.sidebar"), Fields: []settingField{
+			section(i18n.Text("settings.look")),
 			{Label: i18n.Text("settings.tabStyle"), Kind: settingEnum, Options: sidebarTabStyleItems,
 				GetString: func(s *config.Settings) string { return s.Sidebar.TabStyle },
 				SetString: func(s *config.Settings, v string) { s.Sidebar.TabStyle = v }},

@@ -817,6 +817,7 @@
   "settings.enableCompletion": "Enable completion",
   "settings.enablePlugins": "Enable plugins",
   "settings.exceptWithUnnamedBuffers": "  Except with unnamed buffers",
+  "settings.explorer": "Explorer",
   "settings.fileView": "File view",
   "settings.files": "Files",
   "settings.focusEditorOnOpen": "Focus editor on open",
