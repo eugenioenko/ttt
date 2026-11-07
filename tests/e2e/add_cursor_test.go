@@ -84,6 +84,9 @@ func TestToggleCursorAltClick(t *testing.T) {
 	if count := h.app.EditorGroup.MultiCursorCount(); count != 2 {
 		t.Fatalf("cursor count after Alt+Click line 1 = %d, want 2", count)
 	}
+	if e.Multi == nil || len(e.Multi.Cursors) != 2 || e.Multi.Cursors[1].Line != 1 || e.Multi.Cursors[1].Col != 2 {
+		t.Fatalf("cursors after Alt+Click line 1 = %+v, want (1, 2)", e.Multi.Cursors)
+	}
 
 	// Alt+Click line 2 ('charlie') at col 3
 	line2X := r.X + gutterW + 3
@@ -92,6 +95,9 @@ func TestToggleCursorAltClick(t *testing.T) {
 	h.app.Root.HandleEvent(tcell.NewEventMouse(line2X, line2Y, tcell.ButtonNone, 0))
 	if count := h.app.EditorGroup.MultiCursorCount(); count != 3 {
 		t.Fatalf("cursor count after Alt+Click line 2 = %d, want 3", count)
+	}
+	if e.Multi == nil || len(e.Multi.Cursors) != 3 || e.Multi.Cursors[2].Line != 2 || e.Multi.Cursors[2].Col != 3 {
+		t.Fatalf("cursors after Alt+Click line 2 = %+v, want (2, 3)", e.Multi.Cursors)
 	}
 
 	// Alt+Click line 1 at col 2 again -> toggles off that cursor!

@@ -230,6 +230,37 @@ func TestRemoveAndToggle(t *testing.T) {
 	}
 }
 
+func TestRemoveCursorHistoryOrder(t *testing.T) {
+	mc := New(0, 0)
+	mc.Add(1, 0)
+	mc.Add(2, 0)
+	mc.Add(3, 0)
+	if len(mc.Cursors) != 4 {
+		t.Fatalf("expected 4 cursors, got %d", len(mc.Cursors))
+	}
+
+	// Remove cursor (2, 0) out of order
+	if !mc.Remove(2, 0) {
+		t.Fatal("expected Remove(2, 0) to succeed")
+	}
+
+	// RemoveLast should pop in reverse creation order, skipping the removed (2, 0)
+	last, ok := mc.RemoveLast()
+	if !ok || last.Line != 3 || last.Col != 0 {
+		t.Fatalf("expected RemoveLast to return (3, 0), got %+v, ok=%v", last, ok)
+	}
+
+	last, ok = mc.RemoveLast()
+	if !ok || last.Line != 1 || last.Col != 0 {
+		t.Fatalf("expected RemoveLast to return (1, 0), got %+v, ok=%v", last, ok)
+	}
+
+	// Only the root cursor (0, 0) should remain
+	if len(mc.Cursors) != 1 || mc.Cursors[0].Line != 0 || mc.Cursors[0].Col != 0 {
+		t.Fatalf("expected sole cursor at (0, 0), got %+v", mc.Cursors)
+	}
+}
+
 func TestRemovePrimaryUpdatesPrimaryIndex(t *testing.T) {
 	mc := New(1, 0)
 	mc.Add(3, 0)
