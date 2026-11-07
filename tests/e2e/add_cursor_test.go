@@ -106,6 +106,9 @@ func TestToggleCursorAltClick(t *testing.T) {
 	if count := h.app.EditorGroup.MultiCursorCount(); count != 2 {
 		t.Fatalf("cursor count after Alt+Click toggle off line 1 = %d, want 2", count)
 	}
+	if e.Multi == nil || len(e.Multi.Cursors) != 2 || e.Multi.Cursors[1].Line != 2 || e.Multi.Cursors[1].Col != 3 {
+		t.Fatalf("cursors after Alt+Click toggle off line 1 = %+v, want (2, 3) to remain", e.Multi.Cursors)
+	}
 
 	// Alt+Click line 2 at col 3 again -> toggles off line 2 cursor, leaving only the initial cursor!
 	h.app.Root.HandleEvent(tcell.NewEventMouse(line2X, line2Y, tcell.Button1, tcell.ModAlt))
