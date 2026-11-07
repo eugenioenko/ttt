@@ -1,5 +1,14 @@
 [
   {
+    "name": "auto-save",
+    "displayName": "Auto Save",
+    "author": "Fishason",
+    "description": "Save the active file automatically 1 second after you stop typing, like VS Code's afterDelay auto save",
+    "repo": "https://github.com/Fishason/ttt-auto-save",
+    "version": "0.1.0",
+    "tags": ["save", "autosave", "auto-save", "editor"]
+  },
+  {
     "name": "bookmarks",
     "featured": true,
     "displayName": "Bookmarks",
