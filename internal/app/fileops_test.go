@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -31,6 +33,51 @@ func TestContainingFolder(t *testing.T) {
 	}
 }
 
+func TestFileDeleteTaskDeliveryAndShutdown(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	for _, shutdown := range []bool{false, true} {
+		t.Run(map[bool]string{false: "delivery", true: "shutdown"}[shutdown], func(t *testing.T) {
+			a := buildTestApp(t, config.DefaultSettings())
+			t.Cleanup(a.CloseTasks)
+			baselineTasks := len(a.tasks.tasks)
+			posted := make(chan func(), 1)
+			a.tasks.post = func(fn func()) error { posted <- fn; return nil }
+			contexts := make(chan context.Context, 1)
+			reloaded := false
+			a.confirmFileDelete("note.txt", func() { reloaded = true }, func(ctx context.Context, _ string) error {
+				contexts <- ctx
+				return nil
+			})
+			a.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget).Buttons[1].Handler()
+			var apply func()
+			select {
+			case apply = <-posted:
+			case <-time.After(time.Second):
+				t.Fatal("delete task did not post completion")
+			}
+			if reloaded || a.Root.HasOverlay() {
+				t.Fatal("worker applied UI changes or left the confirmation open")
+			}
+			ctx := <-contexts
+			if shutdown {
+				a.CloseTasks()
+				if ctx.Err() != context.Canceled {
+					t.Fatal("shutdown did not cancel the delete task")
+				}
+			}
+			apply()
+			remaining := baselineTasks
+			if shutdown {
+				remaining = 0
+			}
+			if reloaded == shutdown || len(a.tasks.tasks) != remaining {
+				t.Fatalf("reload=%v, remaining tasks=%d", reloaded, len(a.tasks.tasks))
+			}
+		})
+	}
+}
+
 func TestFileDeleteConfirmation(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
@@ -55,7 +102,7 @@ func TestFileDeleteConfirmation(t *testing.T) {
 			}
 			moved := filepath.Join(t.TempDir(), "note.txt")
 			called, reloaded := false, false
-			a.confirmFileDelete(path, func() { reloaded = true }, func(got string) error {
+			a.confirmFileDelete(path, func() { reloaded = true }, func(_ context.Context, got string) error {
 				called = true
 				if got != path {
 					t.Fatalf("trash target = %q, want %q", got, path)

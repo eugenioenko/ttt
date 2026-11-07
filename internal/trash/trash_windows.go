@@ -1,6 +1,7 @@
 package trash
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"syscall"
@@ -32,18 +33,24 @@ func checkHRESULT(result uintptr) error {
 	return nil
 }
 
-func move(path string) error {
+func move(ctx context.Context, path string) error {
 	// COM apartments belong to OS threads. Do not change the caller's apartment.
 	done := make(chan error, 1)
 	go func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		done <- recycle(path)
+		done <- recycle(ctx, path)
 	}()
-	return <-done
+	// The Shell owns an in-flight operation; cancellation stops waiting for it.
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
-func recycle(path string) error {
+func recycle(ctx context.Context, path string) error {
 	const apartmentThreaded = 2
 	if err := windows.CoInitializeEx(0, apartmentThreaded); err != nil && err != windows.Errno(1) {
 		return err
@@ -82,6 +89,9 @@ func recycle(path string) error {
 	}
 	defer item.call(2)
 	if err := operation.call(18, uintptr(unsafe.Pointer(item)), 0); err != nil { // DeleteItem
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if err := operation.call(21); err != nil { // PerformOperations

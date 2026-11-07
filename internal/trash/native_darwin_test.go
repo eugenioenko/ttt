@@ -1,6 +1,7 @@
 package trash
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func nativeMoveAndLocate(t *testing.T, path string) string {
 	t.Helper()
-	trashed, err := moveMac(path)
+	trashed, err := moveMac(context.Background(), path)
 	if err != nil || trashed == "" {
 		t.Fatalf("native Trash returned %q, %v", trashed, err)
 	}

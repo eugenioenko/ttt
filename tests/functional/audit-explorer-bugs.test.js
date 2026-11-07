@@ -33,6 +33,7 @@ describe("BUG-028: command-palette Explorer: Delete lacks the isRoot guard the r
     tui.exec("Explorer: Delete");
     tui.press("right"); // move to "Yes" in confirm dialog
     tui.press("enter");
+    tui.waitFor("Permanently deleted");
     tui.run();
 
     // Buggy: explorerNodePath() falls back to Tree.Selected()==0 (root),

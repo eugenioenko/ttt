@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/trash"
@@ -88,10 +90,10 @@ func (a *App) FileOpRename(path string, reload func()) {
 }
 
 func (a *App) FileOpDelete(path string, reload func()) {
-	a.confirmFileDelete(path, reload, trash.Move)
+	a.confirmFileDelete(path, reload, trash.MoveContext)
 }
 
-func (a *App) confirmFileDelete(path string, reload func(), moveToTrash func(string) error) {
+func (a *App) confirmFileDelete(path string, reload func(), moveToTrash func(context.Context, string) error) {
 	if path == "" {
 		return
 	}
@@ -107,19 +109,33 @@ func (a *App) confirmFileDelete(path string, reload func(), moveToTrash func(str
 			func() { a.DismissDialog() },
 			func() {
 				a.DismissDialog()
-				if useTrash {
-					if err := moveToTrash(path); err != nil {
-						a.StatusError(i18n.Format("files.trashFailed", i18n.Args{"name": name, "error": err.Error()}))
+				task := NewTask[struct{}](a, asynctask.TaskOptions{})
+				task.Schedule(func(ctx context.Context) (struct{}, error) {
+					if err := ctx.Err(); err != nil {
+						return struct{}{}, err
+					}
+					if useTrash {
+						return struct{}{}, moveToTrash(ctx, path)
+					}
+					return struct{}{}, os.RemoveAll(path)
+				}, func(_ struct{}, err error) {
+					defer a.releaseTask(task)
+					if err != nil {
+						if useTrash {
+							a.StatusError(i18n.Format("files.trashFailed", i18n.Args{"name": name, "error": err.Error()}))
+						} else {
+							a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
+						}
 						return
 					}
-				} else {
-					if err := os.RemoveAll(path); err != nil {
-						a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
-						return
+					a.invalidateRepositoryPath(path, RepositoryWorktree)
+					reload()
+					if useTrash {
+						a.StatusNotify(i18n.Format("files.movedToTrash", i18n.Args{"name": name}))
+					} else {
+						a.StatusNotify(i18n.Format("files.deletedPermanently", i18n.Args{"name": name}))
 					}
-				}
-				a.invalidateRepositoryPath(path, RepositoryWorktree)
-				reload()
+				})
 			},
 		},
 	)

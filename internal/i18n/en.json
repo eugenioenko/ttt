@@ -337,6 +337,8 @@
   "files.cannotOpenSpecialFile": "Cannot open {path}: not a regular file",
   "files.delete": "Permanently delete {name}? This cannot be undone.",
   "files.moveToTrash": "Move {name} to Trash?",
+  "files.movedToTrash": "Moved {name} to Trash",
+  "files.deletedPermanently": "Permanently deleted {name}",
   "files.trashFailed": "Could not move {name} to Trash: {error}",
   "files.filePath": "File path",
   "files.folderPath": "Folder path",

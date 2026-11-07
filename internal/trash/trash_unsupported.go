@@ -3,10 +3,11 @@
 package trash
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 )
 
-func move(string) error {
+func move(context.Context, string) error {
 	return fmt.Errorf("system Trash is unavailable on %s", runtime.GOOS)
 }

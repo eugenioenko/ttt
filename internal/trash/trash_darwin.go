@@ -1,6 +1,7 @@
 package trash
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -17,13 +18,13 @@ on run argv
     return destinationURL's absoluteString() as text
 end run`
 
-func move(path string) error {
-	_, err := moveMac(path)
+func move(ctx context.Context, path string) error {
+	_, err := moveMac(ctx, path)
 	return err
 }
 
-func moveMac(path string) (string, error) {
-	output, err := run("/usr/bin/osascript", "-l", "AppleScript", "-e", macScript, path)
+func moveMac(ctx context.Context, path string) (string, error) {
+	output, err := run(ctx, "/usr/bin/osascript", "-l", "AppleScript", "-e", macScript, path)
 	if err != nil {
 		return "", err
 	}

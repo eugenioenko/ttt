@@ -11,6 +11,13 @@ import (
 )
 
 func Move(path string) error {
+	return MoveContext(context.Background(), path)
+}
+
+func MoveContext(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if path == "" || strings.IndexByte(path, 0) >= 0 {
 		return &os.PathError{Op: "trash", Path: path, Err: os.ErrInvalid}
 	}
@@ -19,7 +26,7 @@ func Move(path string) error {
 		_, err = os.Lstat(abs)
 	}
 	if err == nil {
-		err = move(abs)
+		err = move(ctx, abs)
 	}
 	if err != nil {
 		return &os.PathError{Op: "trash", Path: path, Err: err}
@@ -27,8 +34,8 @@ func Move(path string) error {
 	return nil
 }
 
-func run(name string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 	if err != nil {
