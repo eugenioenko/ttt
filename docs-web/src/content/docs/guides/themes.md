@@ -30,7 +30,7 @@ TTT ships with a collection of built-in themes:
 
 ## Switching Themes
 
-Use **View > Switch Theme** from the menu bar, or search for **Switch Theme** in the command palette (**Ctrl+P**), to open the theme picker. The picker shows a live preview of each theme as you navigate the list, so you can try them out before committing to one.
+Use **Options > Appearance > Theme** from the menu bar, or search for **Switch Theme** in the command palette (**Ctrl+P**), to open the theme picker. The picker shows a live preview of each theme as you navigate the list, so you can try them out before committing to one.
 
 ## Customizing
 

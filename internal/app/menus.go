@@ -83,7 +83,6 @@ func initMenuText() {
 			{Label: i18n.Text("menu.toggleTerminal"), Command: "terminal.toggle"},
 			{Label: i18n.Text("menu.newTerminal"), Command: "terminal.new"},
 			ui.MenuSep(),
-			{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 			{Label: i18n.Text("menu.keybindings"), Command: "view.keybindings"},
 			{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 		},

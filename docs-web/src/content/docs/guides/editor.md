@@ -32,7 +32,7 @@ Use language IDs to set different limits for code and prose:
 
 Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping and `0` for the column). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
 
-The Options **Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
+The **Options > Editor > Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
 
 The `editor.largeFiles.wordWrapMaxMB` safeguard still applies, including when a language enables wrapping. Diff views retain their separate wrap policy. `markdown.wrapWidth` controls rendered Markdown, such as hover popups and plugin widgets; raw Markdown editing uses these editor settings.
 
@@ -50,9 +50,9 @@ Bracket pair colorization is also available, rendering each nesting level in a d
 
 ## Auto Indent
 
-New lines inherit the indentation of the previous line and gain an extra level after an open `{`, `(`, `[`, or trailing `:`. This is on by default; toggle it from the Options menu (**Auto Indent**) or with the `editor.autoIndent` setting. Turn it off for plain `noautoindent` behavior, where Enter opens a column-1 line.
+New lines inherit the indentation of the previous line and gain an extra level after an open `{`, `(`, `[`, or trailing `:`. This is on by default; toggle it from **Options > Editor > Auto Indent** or with the `editor.autoIndent` setting. Turn it off for plain `noautoindent` behavior, where Enter opens a column-1 line.
 
-Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one level so it lines up with its opening line. This dedent is on by default; toggle it from the Options menu (**Auto Dedent**) or with the `editor.autoDedent` setting.
+Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one level so it lines up with its opening line. This dedent is on by default; toggle it from **Options > Editor > Auto Dedent** or with the `editor.autoDedent` setting.
 
 ## Find and Replace
 
@@ -187,4 +187,4 @@ Inline blame info for the current line is shown in the status bar, including the
 
 When enabled, diff indicators appear in the line number gutter showing added, modified, and removed lines compared to the last committed version. Toggle with the "Toggle Git Gutter" command in the command palette.
 
-When a file is taller than the editor, the same changes are marked on the vertical scrollbar in the gutter colors. Marks are placed to an eighth of a cell, and even a single changed line stays visible in a long file. Set `appearance.scrollbarGlyphs` to `"legacy"` for thin line marks if your terminal or font has the Symbols for Legacy Computing glyphs. Click a mark to scroll to that change. Turn the marks off with `editor.scrollbarGitMarks` or **Options > Scrollbar Git Marks**. Diff views can mark their changed rows too: turn on `editor.diffScrollbarGitMarks` or **Options > Diff Views > Scrollbar Git Marks**.
+When a file is taller than the editor, the same changes are marked on the vertical scrollbar in the gutter colors. Marks are placed to an eighth of a cell, and even a single changed line stays visible in a long file. Set `appearance.scrollbarGlyphs` to `"legacy"` for thin line marks if your terminal or font has the Symbols for Legacy Computing glyphs. Click a mark to scroll to that change. Turn the marks off with `editor.scrollbarGitMarks` or **Options > Editor > Scrollbar Git Marks**. Diff views can mark their changed rows too: turn on `editor.diffScrollbarGitMarks` or **Options > Diff Views > Scrollbar Git Marks**.
