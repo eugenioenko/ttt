@@ -75,7 +75,7 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 	formatted := stdout.String()
 	formatted = strings.TrimSuffix(formatted, "\n")
 
-	if formatted == original {
+	if formatted == strings.TrimSuffix(original, "\n") {
 		return nil
 	}
 
