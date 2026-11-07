@@ -106,39 +106,48 @@ func (a *App) confirmFileDelete(path string, reload func(), moveToTrash func(con
 	a.ShowConfirmDialog(message,
 		[]string{i18n.Text("general.no"), i18n.Text("general.yes")},
 		[]func(){
-			func() { a.DismissDialog() },
+			a.DismissDialog,
 			func() {
 				a.DismissDialog()
-				task := NewTask[struct{}](a, asynctask.TaskOptions{})
-				task.Schedule(func(ctx context.Context) (struct{}, error) {
-					if err := ctx.Err(); err != nil {
-						return struct{}{}, err
-					}
-					if useTrash {
-						return struct{}{}, moveToTrash(ctx, path)
-					}
-					return struct{}{}, os.RemoveAll(path)
-				}, func(_ struct{}, err error) {
-					defer a.releaseTask(task)
-					if err != nil {
-						if useTrash {
-							a.StatusError(i18n.Format("files.trashFailed", i18n.Args{"name": name, "error": err.Error()}))
-						} else {
-							a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
-						}
-						return
-					}
-					a.invalidateRepositoryPath(path, RepositoryWorktree)
-					reload()
-					if useTrash {
-						a.StatusNotify(i18n.Format("files.movedToTrash", i18n.Args{"name": name}))
-					} else {
-						a.StatusNotify(i18n.Format("files.deletedPermanently", i18n.Args{"name": name}))
-					}
-				})
+				a.startFileDelete(path, useTrash, reload, moveToTrash)
 			},
 		},
 	)
+}
+
+func (a *App) startFileDelete(path string, useTrash bool, reload func(), moveToTrash func(context.Context, string) error) {
+	task := NewTask[struct{}](a, asynctask.TaskOptions{})
+	task.Schedule(func(ctx context.Context) (struct{}, error) {
+		if err := ctx.Err(); err != nil {
+			return struct{}{}, err
+		}
+		if useTrash {
+			return struct{}{}, moveToTrash(ctx, path)
+		}
+		return struct{}{}, os.RemoveAll(path)
+	}, func(_ struct{}, err error) {
+		defer a.releaseTask(task)
+		a.completeFileDelete(path, useTrash, reload, err)
+	})
+}
+
+func (a *App) completeFileDelete(path string, useTrash bool, reload func(), err error) {
+	name := filepath.Base(path)
+	if err != nil {
+		message := i18n.Format("status.error", i18n.Args{"error": err.Error()})
+		if useTrash {
+			message = i18n.Format("files.trashFailed", i18n.Args{"name": name, "error": err.Error()})
+		}
+		a.StatusError(message)
+		return
+	}
+	a.invalidateRepositoryPath(path, RepositoryWorktree)
+	reload()
+	message := i18n.Format("files.deletedPermanently", i18n.Args{"name": name})
+	if useTrash {
+		message = i18n.Format("files.movedToTrash", i18n.Args{"name": name})
+	}
+	a.StatusNotify(message)
 }
 
 func (a *App) FileOpCopyAbsolutePath(path string) {
