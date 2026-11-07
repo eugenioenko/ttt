@@ -92,6 +92,26 @@ func TestScrollLinesUsesConfiguredStep(t *testing.T) {
 	}
 }
 
+func TestScrollPreservesColumn(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+	placeScroll(t, h, 0, 0)
+
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Col = 3
+	h.redraw()
+	half := max(1, editor.Viewport.Height/2)
+	h.exec("view.scrollDown")
+	if editor.Cursor.Line != half || editor.Cursor.Col != 3 {
+		t.Fatalf("Scroll Down moved the cursor to (%d,%d), want (%d,3)", editor.Cursor.Line, editor.Cursor.Col, half)
+	}
+	h.exec("view.scrollUp")
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 3 {
+		t.Fatalf("Scroll Up moved the cursor to (%d,%d), want (0,3)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+}
+
 func TestScrollStopsAtFileEdges(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()

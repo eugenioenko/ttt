@@ -726,7 +726,11 @@ func (e *EditorPaneWidget) ScrollRows(delta int) {
 	l := e.layout()
 	top := e.topRow(l)
 	before, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
-	e.moveCursorWrapped(delta)
+	if e.WordWrap {
+		e.moveCursorWrapped(delta)
+	} else {
+		e.moveCursorLines(delta)
+	}
 	after, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
 	top += after - before
 	if maxTop := l.total() - e.Viewport.Height; maxTop >= 0 && top > maxTop {
@@ -734,6 +738,20 @@ func (e *EditorPaneWidget) ScrollRows(delta int) {
 	}
 	e.setTopRow(l, top)
 	e.scrollViewport()
+}
+
+// moveCursorLines moves by buffer lines when wrapping is off. moveCursorWrapped
+// reports screen column 0 for unwrapped layouts, which would reset the column.
+func (e *EditorPaneWidget) moveCursorLines(delta int) {
+	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line + delta)
+	if delta < 0 {
+		e.skipHiddenLineUp()
+	} else {
+		e.skipHiddenLineDown()
+	}
+	if lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line])); e.Cursor.Col > lineLen {
+		e.Cursor.Col = lineLen
+	}
 }
 
 func (e *EditorPaneWidget) SmartHome() {
