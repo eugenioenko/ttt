@@ -30,6 +30,7 @@ describe("settings editor", () => {
       "General",
       "Editor",
       "Appearance",
+      "Explorer",
       "Sidebar",
       "Terminal",
       "Diff",

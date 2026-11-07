@@ -11,7 +11,7 @@ Settings are stored in `~/.config/ttt/settings.json`. A complete example is avai
 
 There are two ways to change settings:
 
-- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, auto closing, display, on save, completion), **Appearance** (theme, window, code, markdown), **Sidebar** (explorer files and look, source control, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
+- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, auto closing, display, on save, completion), **Appearance** (theme, window, code, markdown), **Explorer** (files and appearance), **Sidebar** (shared look, source control, quick open, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
 - **Raw JSON** — **Settings: Open settings.json** opens the file itself. Needed for the `lsp` settings and `formatters`, neither of which is exposed in the form.
 
 Closing the settings tab with unapplied edits discards them.
@@ -180,6 +180,8 @@ String detection uses the language grammar independently of theme colors and whe
 
 ## Explorer
 
+All Explorer options below are available in **Settings > Explorer**, grouped under **Files** and **Appearance**.
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
@@ -188,7 +190,7 @@ String detection uses the language grammar independently of theme colors and whe
 | `explorer.dimStagedGitColors` | bool | `false` | Render staged changes in a dimmed version of their status color, telling them apart from pending ones. Off by default: the Changes panel already separates staged from unstaged, and the extra shades make the explorer busier. Needs `explorer.gitStatusColors` |
 | `explorer.autoReveal` | bool | `false` | Expand the file explorer to the active file and select it whenever the active file changes. **Explorer: Reveal Active File** does the same on demand |
 | `explorer.compactFolders` | bool | `true` | Show a folder whose only entry is another folder as one row, such as `src/main/java`. Expanding the row opens the whole chain. Right-clicking a segment acts on that folder; other actions on the row apply to the deepest folder |
-| `explorer.useTrash` | bool | `true` | Move deleted files and folders to system Trash. Linux and FreeBSD require `gio` from GLib; Android is unsupported. Failed Trash operations report an error without deleting permanently. Set to `false` for permanent deletion with an explicit warning. Available under **Settings > Sidebar > Files** |
+| `explorer.useTrash` | bool | `true` | Move deleted files and folders to system Trash. Linux and FreeBSD require `gio` from GLib; Android is unsupported. Failed Trash operations report an error without deleting permanently. Set to `false` for permanent deletion with an explicit warning. Available under **Settings > Explorer > Files** |
 
 ## Quick Open
 
