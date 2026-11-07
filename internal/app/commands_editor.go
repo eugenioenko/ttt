@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -222,7 +223,42 @@ func (a *App) showSaveFileAs(onSaved func()) {
 	})
 }
 
+func (a *App) confirmCreateSaveDirectory(path string, retry func()) bool {
+	dir, missing := missingSaveDirectory(path)
+	if !missing {
+		return false
+	}
+	a.ShowConfirmDialog(
+		i18n.Format("dialog.createMissingFolders", i18n.Args{"directory": dir}),
+		[]string{i18n.Text("general.cancel"), i18n.Text("general.create")},
+		[]func(){
+			func() { a.DismissDialog() },
+			func() {
+				a.DismissDialog()
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					a.StatusError(err.Error())
+					return
+				}
+				retry()
+			},
+		},
+	)
+	return true
+}
+
+func missingSaveDirectory(path string) (string, bool) {
+	dir := filepath.Dir(path)
+	info, err := os.Stat(dir)
+	if err == nil {
+		return dir, false
+	}
+	return dir, errors.Is(err, os.ErrNotExist)
+}
+
 func (a *App) saveFileAs(path string, onSaved func()) {
+	if a.confirmCreateSaveDirectory(path, func() { a.saveFileAs(path, onSaved) }) {
+		return
+	}
 	targets, err := a.EditorGroup.SaveAsTargets(path)
 	if err != nil {
 		a.StatusError(err.Error())
@@ -327,6 +363,9 @@ func (a *App) doSaveFile(onSaved func()) {
 		return
 	}
 	path, lang := a.editorPathLang()
+	if a.confirmCreateSaveDirectory(path, func() { a.doSaveFile(onSaved) }) {
+		return
+	}
 	if lang != "" {
 		a.RunCodeActionsOnSave(path, lang)
 		if a.Settings.Editor.FormatOnSave {
