@@ -3,6 +3,8 @@ package terminal
 import (
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -59,9 +61,12 @@ type Terminal struct {
 // program unchanged (e.g. Shell="pi", Args=["--model", "openrouter/free"]); a
 // plain shell call site simply omits them.
 func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, args ...string) (*Terminal, error) {
-	if shell == "" {
-		shell = defaultShell()
+	resolved, err := resolveShell(shell)
+	if err != nil {
+		return nil, err
 	}
+	shell = resolved
+
 	if scrollbackMax <= 0 {
 		scrollbackMax = 1000
 	}
@@ -134,6 +139,24 @@ func defaultShell() string {
 		return shell
 	}
 	return "/bin/sh"
+}
+
+// resolveShell normalizes the shell program path. If shell contains no directory
+// separators, it is resolved against PATH using exec.LookPath so that callers
+// supplying a working directory (e.g. workspace folder on Windows) do not have
+// the shell mistakenly looked up relative to that directory.
+func resolveShell(shell string) (string, error) {
+	if shell == "" {
+		shell = defaultShell()
+	}
+	if !strings.ContainsAny(shell, `/\`) && filepath.VolumeName(shell) == "" {
+		if resolved, err := exec.LookPath(shell); err == nil {
+			return filepath.Abs(resolved)
+		} else {
+			return "", err
+		}
+	}
+	return shell, nil
 }
 
 func (t *Terminal) Run() {
