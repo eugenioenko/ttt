@@ -796,6 +796,7 @@ func registerWidgetCallbacks(app *App) {
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.copyAbsolutePath"), Command: "explorer.copyAbsolutePath"},
 			{Label: i18n.Text("menu.copyRelativePath"), Command: "explorer.copyRelativePath"},
+			{Label: i18n.Text("menu.insertPathInTerminal"), Command: "explorer.insertPathInTerminal"},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.revealInFileManager"), Command: "explorer.reveal"},
 			ui.MenuSep(),
@@ -816,6 +817,7 @@ func registerWidgetCallbacks(app *App) {
 		items := []ui.ContextMenuItem{
 			{Label: i18n.Text("general.refresh"), Command: "explorer.refresh"},
 			{Label: i18n.Text("menu.copyPath"), Command: "explorer.copyAbsolutePath"},
+			{Label: i18n.Text("menu.insertPathInTerminal"), Command: "explorer.insertPathInTerminal"},
 			ui.MenuSep(),
 			favorite,
 			{Label: i18n.Text("menu.removeFromWorkspace"), Command: "explorer.removeRoot"},

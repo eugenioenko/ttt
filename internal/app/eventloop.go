@@ -167,7 +167,7 @@ func RunEventLoop(
 		// Must run after Render/CursorPosition, else content and cursor read different Term states mid-frame.
 		resizeTerminals(app)
 		if app.Screen != nil && mouseX >= 0 && app.Screen.PointerShapesEnabled() {
-			app.Screen.SetPointerShape(app.Root.PointerShapeAt(mouseX, mouseY))
+			app.Screen.SetPointerShape(app.pointerShapeAt(mouseX, mouseY))
 		}
 	}
 
@@ -207,6 +207,10 @@ func RunEventLoop(
 	handleMouse := func(tev *tcell.EventMouse) {
 		mx, my := tev.Position()
 		mouseX, mouseY = mx, my
+		if app.handlePathDrag(tev) {
+			syncStatus()
+			return
+		}
 		btn := tev.Buttons()
 		if btn != 0 {
 			app.stopHoverTask()
