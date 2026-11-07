@@ -18,6 +18,11 @@ func (a *App) ToggleLineNumbers() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleIndentGuides() {
+	a.Settings.Editor.IndentGuides = !a.Settings.Editor.IndentGuides
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleWordWrap() {
 	a.Settings.Editor.WordWrap = !a.Settings.Editor.WordWrap
 	a.SaveAndApplySettings()
@@ -384,6 +389,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		wordWrapChecked = ui.MenuChecked
 	}
 
+	indentGuidesChecked := menuChecked(a.Settings.Editor.IndentGuides)
+
 	bracketColorChecked := ui.MenuUnchecked
 	if a.Settings.Editor.BracketPairColorization {
 		bracketColorChecked = ui.MenuChecked
@@ -428,6 +435,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 
 	items := []ui.ContextMenuItem{
 		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
+		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
 		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
@@ -511,6 +519,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleLineNumbers", Title: "Toggle Line Numbers",
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleLineNumbers,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleIndentGuides", Title: "Toggle Indent Guides",
+		Keywords: []string{"preferences", "settings", "editor", "view", "indentation"},
+		Handler:  app.ToggleIndentGuides,
 	})
 
 	reg.Register(command.Command{

@@ -17,6 +17,9 @@ func TestDefaultSettings(t *testing.T) {
 	if !s.Editor.InsertSpaces {
 		t.Fatal("expected InsertSpaces true")
 	}
+	if s.Editor.IndentGuides {
+		t.Fatal("expected IndentGuides false")
+	}
 }
 
 func TestSettingsPartialJSON(t *testing.T) {
@@ -37,6 +40,23 @@ func TestSettingsEmptyJSON(t *testing.T) {
 
 	if s.Editor.TabSize != 4 {
 		t.Fatalf("expected TabSize 4, got %d", s.Editor.TabSize)
+	}
+}
+
+func TestIndentGuidesSettingRoundTrips(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.IndentGuides = true
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded Settings
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Editor.IndentGuides {
+		t.Fatal("IndentGuides did not survive settings serialization")
 	}
 }
 

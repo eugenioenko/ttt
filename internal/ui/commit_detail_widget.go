@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"maps"
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"path/filepath"
@@ -170,6 +171,7 @@ type CommitDetailWidget struct {
 	signsColor         bool
 	gutterHighlight    bool
 	colorNumbers       bool
+	indentGuides       bool
 	chevronCollapsed   rune
 	chevronExpanded    rune
 	gutterStyle        string
@@ -338,6 +340,15 @@ func (d *CommitDetailWidget) SetDiffGutterHighlight(enabled bool) {
 	d.applyViewOptions()
 }
 
+func (d *CommitDetailWidget) SetIndentGuides(enabled bool) {
+	d.indentGuides = enabled
+	for i := range d.Files {
+		if d.Files[i].view != nil {
+			d.Files[i].view.SetIndentGuides(enabled)
+		}
+	}
+}
+
 func (d *CommitDetailWidget) SetDiffColorGutterNumbers(enabled bool) {
 	d.colorNumbers = enabled
 	d.applyViewOptions()
@@ -370,6 +381,7 @@ func (d *CommitDetailWidget) applyViewOptions() {
 		v.colorNumbers = d.colorNumbers
 		v.gapChevron = d.chevronCollapsed
 		v.minGutter = d.gutterW
+		v.SetIndentGuides(d.indentGuides)
 		v.applyOverlayOptions()
 	}
 }
@@ -600,9 +612,7 @@ func (d *CommitDetailWidget) SetCurrentChanges(message string, files []CommitDet
 		if i < len(d.collapsedFiles) {
 			state.collapsed = d.collapsedFiles[i]
 		}
-		for gap, expanded := range file.expandedGaps {
-			state.expandedGaps[gap] = expanded
-		}
+		maps.Copy(state.expandedGaps, file.expandedGaps)
 		preserved[commitDetailFileKey(file)] = state
 	}
 	topLine := d.TopLine
@@ -834,6 +844,7 @@ func (d *CommitDetailWidget) fileView(file *CommitDetailFile) *DiffEditorWidget 
 		file.view = v
 	}
 	v.SetSyntaxHighlight(d.SyntaxHighlight && file.Path != "")
+	v.SetIndentGuides(d.indentGuides)
 	v.mode = d.mode
 	v.wrapMode = d.wrapMode
 	v.focusLeft = false
@@ -1105,7 +1116,7 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 }
 
 func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) {
-	for column := 0; column < viewW; column++ {
+	for column := range viewW {
 		surface.SetCell(column, y, term.Cell{Ch: ' ', Style: term.StyleCommitHeader})
 	}
 	header := d.Header
@@ -1135,7 +1146,7 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 }
 
 func (d *CommitDetailWidget) renderHeaderDivider(surface Surface, y, viewW int) {
-	for column := 0; column < viewW; column++ {
+	for column := range viewW {
 		surface.SetCell(column, y, term.Cell{Ch: '─', Style: term.StyleBorder})
 	}
 }
@@ -1445,10 +1456,7 @@ func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect,
 }
 
 func (d *CommitDetailWidget) clampScroll() {
-	maxTop := d.totalVisualRows - d.viewH
-	if maxTop < 0 {
-		maxTop = 0
-	}
+	maxTop := max(d.totalVisualRows - d.viewH, 0)
 	if d.TopLine < 0 {
 		d.TopLine = 0
 	}
@@ -1807,7 +1815,7 @@ func (d *CommitDetailWidget) GoToHunk(index int) error {
 func indexInFile(hunks []DiffHunk, flat int) int {
 	fileIndex := hunks[flat].FileIndex
 	n := 0
-	for i := 0; i < flat; i++ {
+	for i := range flat {
 		if hunks[i].FileIndex == fileIndex {
 			n++
 		}

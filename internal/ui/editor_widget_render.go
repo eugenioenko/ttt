@@ -158,7 +158,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					bookmarkBg = bg
 				}
 			} else if !e.LineNumbers || (e.WordWrap && isWrapContinuation) {
-				for i := 0; i < gutterW; i++ {
+				for i := range gutterW {
 					surface.SetCell(i, y, term.Cell{Ch: ' ', Style: gutterStyle})
 				}
 			} else {
@@ -219,6 +219,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.WordWrap {
 				segmentByte = runeByteOffset(e.Buf.Lines[lineIdx], segStartCol)
 			}
+			segmentVisualCol := 0
+			if e.IndentGuides && e.WordWrap {
+				segmentVisualCol = bufColToVisualCol(e.Buf.Lines[lineIdx], segStartCol, tabW)
+			}
 			var syntaxSpans []highlight.Span
 			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
 			if !diffFgOverride {
@@ -245,6 +249,20 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
 			screenCells := e.renderLineSegmentToScreen(e.Buf.Lines[lineIdx][segmentByte:], syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			indentWidth, indentRunes := 0, 0
+			if e.IndentGuides {
+				indentLoop: for _, ch := range e.Buf.Lines[lineIdx] {
+					switch ch {
+						case ' ':
+							indentWidth++
+						case '\t':
+							indentWidth = ((indentWidth / tabW) + 1) * tabW
+						default:
+							break indentLoop
+					}
+					indentRunes++
+				}
+			}
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
 				lineBrackets = bracketColors[lineIdx]
@@ -350,6 +368,16 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				}
 				if hide {
 					cell.Attrs |= term.CellAttrHide
+				}
+				if e.IndentGuides && screenCells[x].bufCol >= 0 && screenCells[x].bufCol < indentRunes {
+					visualCol := leftCol + x
+					if e.WordWrap {
+						visualCol = segmentVisualCol + x
+					}
+					if visualCol < indentWidth && visualCol%tabW == 0 {
+						cell.Ch = '│'
+						cell.Style = term.StyleMuted
+					}
 				}
 				surface.SetCell(gutterW+x, y, cell)
 				if decorateLinks && inText && !hide && screenCells[x].width > 0 {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
@@ -69,7 +70,18 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 }
 
 func TestOptionsMenuSeparatesPresentationSubmenusFromCheckboxes(t *testing.T) {
-	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
+	a := buildTestApp(t, config.DefaultSettings())
+	items := a.BuildOptionsMenu()
+	foundIndentGuides := false
+	for _, item := range items {
+		if item.Label == "Indent Guides" {
+			foundIndentGuides = item.Command == "options.toggleIndentGuides" && item.Checked == ui.MenuUnchecked
+			break
+		}
+	}
+	if !foundIndentGuides {
+		t.Fatal("Options menu does not expose disabled-by-default Indent Guides toggle")
+	}
 	firstSeparator := -1
 	for i, item := range items {
 		if item.IsSep {
