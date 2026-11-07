@@ -142,6 +142,43 @@ func TestScrollRestoresGoalColumn(t *testing.T) {
 	}
 }
 
+func TestScrollGoalColumnAcrossShortLines(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	path := filepath.Join(h.dir, "goal_lines.txt")
+	content := "0123456789abcdefghij\nxx\n0123456789abcdefghij\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(path)
+	h.app.Settings.Editor.ScrollLines = 1
+
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Line, editor.Cursor.Col = 0, 10
+	h.redraw()
+	h.exec("view.scrollDown")
+	if editor.Cursor.Line != 1 || editor.Cursor.Col != 2 {
+		t.Fatalf("first down = (%d,%d), want (1,2)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+	h.exec("view.scrollDown")
+	if editor.Cursor.Line != 2 || editor.Cursor.Col != 10 {
+		t.Fatalf("second down = (%d,%d), want (2,10)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+	h.exec("view.scrollUp")
+	h.exec("view.scrollUp")
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 10 {
+		t.Fatalf("scrolling back = (%d,%d), want (0,10)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+
+	// An edit invalidates the goal: scrolling back uses the typed column.
+	h.exec("view.scrollDown")
+	h.pressRune('Z')
+	h.exec("view.scrollUp")
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 3 {
+		t.Fatalf("edit did not reset the goal: got (%d,%d), want (0,3)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+}
+
 func TestScrollUsesVisibleRowsWithFold(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
