@@ -234,6 +234,8 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 }
 
 func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget) *App {
+	locale, languageErr := loadDisplayLanguage(cfg.Settings.Language)
+	initText()
 
 	bracketStyles := ResolveBracketColorStyles(cfg.Theme.Editor.BracketColors)
 
@@ -435,6 +437,11 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.applySidebarTabStyle(cfg.Settings.Sidebar.TabStyle)
 	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)
 	app.reportGrammarErrors(grammarErrs)
+	app.language.locale = locale
+	app.language.requested = cfg.Settings.Language.Locale
+	if languageErr != nil {
+		app.LogOutput("error", "languages", languageErr.Error())
+	}
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
 	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
 	return app

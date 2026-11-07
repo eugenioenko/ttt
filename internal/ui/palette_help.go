@@ -36,49 +36,54 @@ type paletteHelpTopic struct {
 // paletteHelpTopics is a deliberately curated new-user onramp. Command titles
 // and shortcuts remain derived from the command registry and keybinding config;
 // only this small orientation layer is authored by hand and maintained here.
-var paletteHelpTopics = []paletteHelpTopic{
-	{
-		ID:              "workspace",
-		Title:           i18n.Text("help.workspaceMap"),
-		Description:     i18n.Text("help.understandFoldersTabsAndEditorGroups"),
-		CommandPrefixes: []string{"workspace.", "file.", "tab.", "focus."},
-		CommandIDs:      []string{"command.palette"},
-	},
-	{
-		ID:              "panels",
-		Title:           i18n.Text("help.sidebarAndPanels"),
-		Description:     i18n.Text("help.useExplorerSearchChangesAndOutput"),
-		CommandPrefixes: []string{"sidebar.", "panel.", "output."},
-		CommandIDs:      []string{"explorer.help", "search.help", "changes.help"},
-	},
-	{
-		ID:              "navigation",
-		Title:           i18n.Text("help.navigateFiles"),
-		Description:     i18n.Text("help.openFilesSwitchTabsAndMoveFocus"),
-		CommandPrefixes: []string{"file.", "tab.", "focus."},
-		CommandIDs:      []string{"editor.goToLine", "command.palette"},
-	},
-	{
-		ID:              "changes",
-		Title:           i18n.Text("help.reviewChanges"),
-		Description:     i18n.Text("help.reviewStageAndCommitWorkspaceChanges"),
-		CommandPrefixes: []string{"changes.", "git.", "pr."},
-		CommandIDs:      []string{"sidebar.changes", "changes.help"},
-	},
-	{
-		ID:              "terminal",
-		Title:           i18n.Text("help.integratedTerminal"),
-		Description:     i18n.Text("help.openShellsWithoutLeavingTheEditor"),
-		CommandPrefixes: []string{"terminal."},
-		CommandIDs:      []string{"focus.terminal"},
-	},
-	{
-		ID:          "chords",
-		Title:       i18n.Text("help.keybindingChords"),
-		Description: i18n.Text("help.useMultiStepChordsAndEditShortcuts"),
-		CommandIDs:  []string{"view.keybindings", "keybindings.open"},
-		ChordsOnly:  true,
-	},
+var paletteHelpTopics []paletteHelpTopic
+
+// InitText runs after loading the display language, before constructing widgets.
+func InitText() {
+	paletteHelpTopics = []paletteHelpTopic{
+		{
+			ID:              "workspace",
+			Title:           i18n.Text("help.workspaceMap"),
+			Description:     i18n.Text("help.understandFoldersTabsAndEditorGroups"),
+			CommandPrefixes: []string{"workspace.", "file.", "tab.", "focus."},
+			CommandIDs:      []string{"command.palette"},
+		},
+		{
+			ID:              "panels",
+			Title:           i18n.Text("help.sidebarAndPanels"),
+			Description:     i18n.Text("help.useExplorerSearchChangesAndOutput"),
+			CommandPrefixes: []string{"sidebar.", "panel.", "output."},
+			CommandIDs:      []string{"explorer.help", "search.help", "changes.help"},
+		},
+		{
+			ID:              "navigation",
+			Title:           i18n.Text("help.navigateFiles"),
+			Description:     i18n.Text("help.openFilesSwitchTabsAndMoveFocus"),
+			CommandPrefixes: []string{"file.", "tab.", "focus."},
+			CommandIDs:      []string{"editor.goToLine", "command.palette"},
+		},
+		{
+			ID:              "changes",
+			Title:           i18n.Text("help.reviewChanges"),
+			Description:     i18n.Text("help.reviewStageAndCommitWorkspaceChanges"),
+			CommandPrefixes: []string{"changes.", "git.", "pr."},
+			CommandIDs:      []string{"sidebar.changes", "changes.help"},
+		},
+		{
+			ID:              "terminal",
+			Title:           i18n.Text("help.integratedTerminal"),
+			Description:     i18n.Text("help.openShellsWithoutLeavingTheEditor"),
+			CommandPrefixes: []string{"terminal."},
+			CommandIDs:      []string{"focus.terminal"},
+		},
+		{
+			ID:          "chords",
+			Title:       i18n.Text("help.keybindingChords"),
+			Description: i18n.Text("help.useMultiStepChordsAndEditShortcuts"),
+			CommandIDs:  []string{"view.keybindings", "keybindings.open"},
+			ChordsOnly:  true,
+		},
+	}
 }
 
 func buildPaletteHelpItems(commands []command.Command) ([]PaletteItem, []PaletteItem) {

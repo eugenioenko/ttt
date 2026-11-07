@@ -85,6 +85,15 @@ func (a *App) ApplySettings(s config.Settings) {
 	// before calling in, so reading it here would always compare s against itself.
 	prev := a.appliedSettings
 	a.appliedSettings = s
+	if s.Language.Locale != a.language.requested {
+		a.language.requested = s.Language.Locale
+		if locale, _ := i18n.NormalizeLocale(s.Language.Locale); locale != a.language.locale {
+			a.StatusNotify(i18n.Text("status.languageRestartRequired"))
+		}
+	}
+	if !s.Language.IsAutoUpdateEnabled() && a.language.updates != nil {
+		a.language.updates.Stop()
+	}
 	*a.Settings = s
 	if !s.Welcome.IsRecentFoldersEnabled() {
 		a.clearRecentFolders()

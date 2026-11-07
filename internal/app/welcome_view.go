@@ -11,24 +11,31 @@ import (
 )
 
 // Largest first; the layout takes the biggest one the tab can hold.
-var welcomeTitles = [][]string{
-	{
-		"████████╗████████╗████████╗",
-		"╚══██╔══╝╚══██╔══╝╚══██╔══╝",
-		"   ██║      ██║      ██║   ",
-		"   ██║      ██║      ██║   ",
-		"   ██║      ██║      ██║   ",
-		"   ╚═╝      ╚═╝      ╚═╝   ",
-	},
-	{
-		"┏┳┓ ┏┳┓ ┏┳┓",
-		" ┃   ┃   ┃ ",
-		" ╹   ╹   ╹ ",
-	},
-	{i18n.Text("welcome.tttEditor")},
-}
+var (
+	welcomeTitles   [][]string
+	welcomeSubtitle string
+)
 
-var welcomeSubtitle = i18n.Text("welcome.terminalTextTool")
+func initWelcomeViewText() {
+	welcomeTitles = [][]string{
+		{
+			"████████╗████████╗████████╗",
+			"╚══██╔══╝╚══██╔══╝╚══██╔══╝",
+			"   ██║      ██║      ██║   ",
+			"   ██║      ██║      ██║   ",
+			"   ██║      ██║      ██║   ",
+			"   ╚═╝      ╚═╝      ╚═╝   ",
+		},
+		{
+			"┏┳┓ ┏┳┓ ┏┳┓",
+			" ┃   ┃   ┃ ",
+			" ╹   ╹   ╹ ",
+		},
+		{i18n.Text("welcome.tttEditor")},
+	}
+
+	welcomeSubtitle = i18n.Text("welcome.terminalTextTool")
+}
 
 const (
 	welcomeCopyIcon  = "⧉"

@@ -7,43 +7,57 @@ import (
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
-var explorerHelpEntries = []widgets.KeyValueEntry{
-	{Key: i18n.Text("help.click"), Value: i18n.Text("help.openFileInPreview")},
-	{Key: i18n.Text("help.doubleClick"), Value: i18n.Text("help.openFilePermanently")},
-	{Key: "Enter", Value: i18n.Text("help.openFileOrToggleFolder")},
-	{Key: "Space", Value: i18n.Text("help.openFileOrToggleFolder")},
-	{Key: "Shift+Enter", Value: i18n.Text("help.openContextMenu")},
-	{Key: "Menu*", Value: i18n.Text("help.openContextMenuTerminalDependent")},
-	{Key: "r", Value: i18n.Text("help.refreshExplorer")},
-	{Key: "Up / k", Value: i18n.Text("help.moveUp")},
-	{Key: "Down / j", Value: i18n.Text("help.moveDown")},
-	{Key: "Left / h", Value: i18n.Text("help.collapseFolder")},
-	{Key: "Right / l", Value: i18n.Text("help.expandFolder")},
-}
+var (
+	explorerHelpEntries []widgets.KeyValueEntry
+	searchHelpEntries   []widgets.KeyValueEntry
+	changesHelpEntries  []widgets.KeyValueEntry
+	pluginHelpEntries   []widgets.KeyValueEntry
+)
 
-var searchHelpEntries = []widgets.KeyValueEntry{
-	{Key: "Enter", Value: i18n.Text("help.activateSelectedResult")},
-	{Key: "Up / k", Value: i18n.Text("help.moveUp")},
-	{Key: "Down / j", Value: i18n.Text("help.moveDown")},
-	{Key: "Tab", Value: i18n.Text("help.nextInputField")},
-	{Key: "Shift+Tab", Value: i18n.Text("help.previousInputField")},
-	{Key: "Alt+c", Value: i18n.Text("help.toggleCaseSensitivity")},
-	{Key: "Alt+r", Value: i18n.Text("help.toggleRegexMode")},
-}
+func initHelpText() {
+	explorerHelpEntries = []widgets.KeyValueEntry{
+		{Key: i18n.Text("help.click"), Value: i18n.Text("help.openFileInPreview")},
+		{Key: i18n.Text("help.doubleClick"), Value: i18n.Text("help.openFilePermanently")},
+		{Key: "Enter", Value: i18n.Text("help.openFileOrToggleFolder")},
+		{Key: "Space", Value: i18n.Text("help.openFileOrToggleFolder")},
+		{Key: "Shift+Enter", Value: i18n.Text("help.openContextMenu")},
+		{Key: "Menu*", Value: i18n.Text("help.openContextMenuTerminalDependent")},
+		{Key: "r", Value: i18n.Text("help.refreshExplorer")},
+		{Key: "Up / k", Value: i18n.Text("help.moveUp")},
+		{Key: "Down / j", Value: i18n.Text("help.moveDown")},
+		{Key: "Left / h", Value: i18n.Text("help.collapseFolder")},
+		{Key: "Right / l", Value: i18n.Text("help.expandFolder")},
+	}
 
-var changesHelpEntries = []widgets.KeyValueEntry{
-	{Key: "Space / s", Value: i18n.Text("help.toggleStageUnstageFile")},
-	{Key: "a", Value: i18n.Text("help.stageAllFiles")},
-	{Key: "u", Value: i18n.Text("help.unstageAllFiles")},
-	{Key: "d", Value: i18n.Text("help.discardSelectedFile")},
-	{Key: "D", Value: i18n.Text("help.discardAllFilesInGroup")},
-	{Key: "r", Value: i18n.Text("help.refreshChanges")},
-	{Key: "o / v", Value: i18n.Text("help.openFile")},
-	{Key: "c", Value: i18n.Text("help.openCompactDiff")},
-	{Key: "e", Value: i18n.Text("help.openExtendedDiff")},
-	{Key: "Enter", Value: i18n.Text("help.openCompactDiff")},
-	{Key: "Up / k", Value: i18n.Text("help.moveUp")},
-	{Key: "Down / j", Value: i18n.Text("help.moveDown")},
+	searchHelpEntries = []widgets.KeyValueEntry{
+		{Key: "Enter", Value: i18n.Text("help.activateSelectedResult")},
+		{Key: "Up / k", Value: i18n.Text("help.moveUp")},
+		{Key: "Down / j", Value: i18n.Text("help.moveDown")},
+		{Key: "Tab", Value: i18n.Text("help.nextInputField")},
+		{Key: "Shift+Tab", Value: i18n.Text("help.previousInputField")},
+		{Key: "Alt+c", Value: i18n.Text("help.toggleCaseSensitivity")},
+		{Key: "Alt+r", Value: i18n.Text("help.toggleRegexMode")},
+	}
+
+	changesHelpEntries = []widgets.KeyValueEntry{
+		{Key: "Space / s", Value: i18n.Text("help.toggleStageUnstageFile")},
+		{Key: "a", Value: i18n.Text("help.stageAllFiles")},
+		{Key: "u", Value: i18n.Text("help.unstageAllFiles")},
+		{Key: "d", Value: i18n.Text("help.discardSelectedFile")},
+		{Key: "D", Value: i18n.Text("help.discardAllFilesInGroup")},
+		{Key: "r", Value: i18n.Text("help.refreshChanges")},
+		{Key: "o / v", Value: i18n.Text("help.openFile")},
+		{Key: "c", Value: i18n.Text("help.openCompactDiff")},
+		{Key: "e", Value: i18n.Text("help.openExtendedDiff")},
+		{Key: "Enter", Value: i18n.Text("help.openCompactDiff")},
+		{Key: "Up / k", Value: i18n.Text("help.moveUp")},
+		{Key: "Down / j", Value: i18n.Text("help.moveDown")},
+	}
+
+	pluginHelpEntries = []widgets.KeyValueEntry{
+		{Key: "Enter / Space", Value: i18n.Text("help.pluginActions")},
+		{Key: "⋮", Value: i18n.Text("help.openThePluginActionsMenu")},
+	}
 }
 
 func (a *App) ShowPanelHelp(title string, entries []widgets.KeyValueEntry, description ...string) {
@@ -68,11 +82,6 @@ func (a *App) ShowPanelHelp(title string, entries []widgets.KeyValueEntry, descr
 
 	adapter := ui.NewWidgetAdapter(dialog)
 	a.ShowDialog(adapter)
-}
-
-var pluginHelpEntries = []widgets.KeyValueEntry{
-	{Key: "Enter / Space", Value: i18n.Text("help.pluginActions")},
-	{Key: "⋮", Value: i18n.Text("help.openThePluginActionsMenu")},
 }
 
 func registerHelpCommands(app *App) {

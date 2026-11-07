@@ -24,6 +24,8 @@ Both write the same file, so you can move between them freely.
 |-----|------|---------|-------------|
 | `version` | int | `1` | Settings file format version |
 | `theme` | string | `""` | Theme name (e.g. `"default-dark"`) |
+| `language.locale` | string | `"en"` | Interface language, selected from installed [language packs](/guides/plugin-authoring/#language-packs). Requires restart |
+| `language.autoUpdate` | bool | `true` | Check for compatible language JSON when a newer ttt release starts; keep cached translations if offline |
 | `debugMode` | bool | `false` | Enable debug logging |
 | `reuseWindow` | bool | `false` | Open command-line files and add explicit folder arguments to a running editor using the same config directory, preserving existing tabs and ignoring duplicate folder paths. Bare `ttt` and `--workspace` still start a new editor. Folder forwarding requires a compatible running editor; after upgrading, restart it with the updated binary or use `--new-window`. Requires a restart. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, use the newest reachable editor. If none is reachable, start normally. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Once connected, errors exit with status 1 without trying another editor; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
@@ -277,6 +279,28 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `autocomplete.autoSuggest` | bool | `true` | Show completions automatically as you type |
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |
+
+## Display language
+
+Install a language pack through the Plugins panel, then run **Change Display Language** or choose **Settings → General → Display language**. Apply the setting and restart ttt. English is always available; missing or stale translations fall back to English per message.
+
+```json
+{
+  "language": {
+    "locale": "es",
+    "autoUpdate": true,
+    "packs": [{
+      "locale": "es",
+      "name": "Español",
+      "path": "languages/es.json",
+      "source": "languages/en.json",
+      "tttVersion": "1.12.0"
+    }]
+  }
+}
+```
+
+`language.packs` is maintained by plugin installation. For a manual catalog, provide `locale`, `name`, and `path`; `source` (a flat English catalog snapshot) and `tttVersion` are optional. Relative paths resolve from the ttt configuration directory; absolute paths also work. Plugin-managed entries additionally store `sourceCommit`, their plugin/repository identity, and cache metadata; leave those fields intact. English catalogs referenced by `sourceCommit` are cached once per commit and shared across installed languages. Automatic updates apply to plugin-managed packs from public GitHub repositories. Omitting `autoUpdate` means enabled; explicit `false` disables downloads. See [Language packs](/guides/plugin-authoring/#language-packs) for the file formats and version behavior.
 
 ## Grammars
 

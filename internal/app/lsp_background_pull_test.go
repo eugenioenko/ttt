@@ -29,6 +29,7 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	gittest.DisableAutoMaintenance()
+	initText()
 	os.Exit(m.Run())
 }
 
