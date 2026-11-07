@@ -440,6 +440,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.autoIndent"), Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
 			{Label: i18n.Text("menu.autoDedent"), Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
+			ui.MenuSep(),
 			{Label: i18n.Text("menu.indentation"), Command: "options.indentation"},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.gitGutter"), Command: "options.toggleGitGutter", Checked: gitGutterChecked},
