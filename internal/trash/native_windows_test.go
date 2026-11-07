@@ -7,12 +7,23 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf16"
+
+	"golang.org/x/sys/windows"
 )
 
 func nativeMoveAndLocate(t *testing.T, path string) string {
 	t.Helper()
 	pattern := filepath.Join(filepath.VolumeName(path)+`\`, "$Recycle.Bin", "*", "$I*")
 	before, _ := filepath.Glob(pattern)
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	longName := make([]uint16, 32768)
+	if n, err := windows.GetLongPathName(name, &longName[0], uint32(len(longName))); err != nil || n >= uint32(len(longName)) {
+		t.Fatalf("canonicalize source: %v", err)
+	}
+	expected := windows.UTF16ToString(longName)
 	if err := Move(path); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +51,9 @@ func nativeMoveAndLocate(t *testing.T, path string) string {
 			}
 			chars = append(chars, ch)
 		}
-		if !strings.EqualFold(string(utf16.Decode(chars)), path) {
+		original := string(utf16.Decode(chars))
+		if !strings.EqualFold(original, expected) {
+			t.Logf("recovery record %q points to %q; expected %q", info, original, expected)
 			continue
 		}
 		trashed := filepath.Join(filepath.Dir(info), "$R"+filepath.Base(info)[2:])
@@ -56,6 +69,6 @@ func nativeMoveAndLocate(t *testing.T, path string) string {
 		})
 		return trashed
 	}
-	t.Fatal("deleted item has no matching Recycle Bin recovery record")
+	t.Fatalf("deleted item %q has no matching Recycle Bin recovery record among %v", expected, infos)
 	return ""
 }

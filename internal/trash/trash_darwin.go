@@ -1,19 +1,21 @@
 package trash
 
-import "encoding/json"
+import (
+	"fmt"
+	"net/url"
+	"strings"
+)
 
-// Pass the path as data: interpolating it into JavaScript would execute filenames.
+// Pass the path as data: interpolating it into the script would execute filenames.
 // Foundation handles recovery metadata without Finder or Apple Events permission.
-const macScript = `function run(argv) {
-    ObjC.import('Foundation');
-    var error = Ref();
-    var trashed = Ref();
-    var url = $.NSURL.fileURLWithPath(argv[0]);
-    if (!$.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError(url, trashed, error)) {
-        throw new Error(ObjC.unwrap(error[0].localizedDescription));
-    }
-    return JSON.stringify(ObjC.unwrap(trashed[0].path));
-}`
+const macScript = `use framework "Foundation"
+on run argv
+    set sourceURL to current application's NSURL's fileURLWithPath:(item 1 of argv)
+    set manager to current application's NSFileManager's defaultManager()
+    set {didTrash, destinationURL, trashError} to manager's trashItemAtURL:sourceURL resultingItemURL:(reference) |error|:(reference)
+    if not didTrash then error (trashError's localizedDescription() as text)
+    return destinationURL's absoluteString() as text
+end run`
 
 func move(path string) error {
 	_, err := moveMac(path)
@@ -21,11 +23,16 @@ func move(path string) error {
 }
 
 func moveMac(path string) (string, error) {
-	output, err := run("/usr/bin/osascript", "-l", "JavaScript", "-e", macScript, path)
+	output, err := run("/usr/bin/osascript", "-l", "AppleScript", "-e", macScript, path)
 	if err != nil {
 		return "", err
 	}
-	var trashed string
-	err = json.Unmarshal(output, &trashed)
-	return trashed, err
+	destination, err := url.Parse(strings.TrimSpace(string(output)))
+	if err != nil {
+		return "", err
+	}
+	if destination.Scheme != "file" || destination.Path == "" {
+		return "", fmt.Errorf("macOS returned an invalid Trash location: %s", output)
+	}
+	return destination.Path, nil
 }
