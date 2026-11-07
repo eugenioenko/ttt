@@ -740,18 +740,13 @@ func (e *EditorPaneWidget) ScrollRows(delta int) {
 	e.scrollViewport()
 }
 
-// moveCursorLines moves by buffer lines when wrapping is off. moveCursorWrapped
-// reports screen column 0 for unwrapped layouts, which would reset the column.
+// moveCursorLines moves by visible rows when wrapping is off. moveCursorWrapped
+// cannot be used directly: rowOf reports screen column 0 for unwrapped layouts,
+// so the cursor's visual column is passed explicitly.
 func (e *EditorPaneWidget) moveCursorLines(delta int) {
-	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line + delta)
-	if delta < 0 {
-		e.skipHiddenLineUp()
-	} else {
-		e.skipHiddenLineDown()
-	}
-	if lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line])); e.Cursor.Col > lineLen {
-		e.Cursor.Col = lineLen
-	}
+	x := bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, e.resolveTabSize())
+	line, col, _ := e.wrappedRowMove(e.Cursor.Line, e.Cursor.Col, delta, x)
+	e.Cursor.Line, e.Cursor.Col = line, col
 }
 
 func (e *EditorPaneWidget) SmartHome() {

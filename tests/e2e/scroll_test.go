@@ -112,6 +112,37 @@ func TestScrollPreservesColumn(t *testing.T) {
 	}
 }
 
+func TestScrollUsesVisibleRowsWithFold(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	var b strings.Builder
+	b.WriteString("package main\n\nfunc main() {\n")
+	for range 20 {
+		b.WriteString("\ta()\n")
+	}
+	b.WriteString("}\n\n")
+	for i := range 40 {
+		fmt.Fprintf(&b, "func f%d() {}\n", i)
+	}
+	path := filepath.Join(h.dir, "scroll_fold.go")
+	if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(path)
+	h.exec("fold.collapseAll")
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Line, editor.Cursor.Col = 0, 0
+	h.redraw()
+
+	// Visible rows: 0 package, 1 blank, 2 func main, 3 closing brace,
+	// 4 blank, 5 f0, ... Half a viewport is 9 rows, which lands on line 29.
+	h.exec("view.scrollDown")
+	if editor.Cursor.Line != 29 || editor.Viewport.TopLine != 29 {
+		t.Fatalf("scroll moved to top %d line %d, want 29/29", editor.Viewport.TopLine, editor.Cursor.Line)
+	}
+}
+
 func TestScrollStopsAtFileEdges(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
