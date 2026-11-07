@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/gdamore/tcell/v3"
 )
 
 func writeTabFiles(t *testing.T, dir string, names ...string) []string {
@@ -70,22 +68,5 @@ func TestReopenClosedTabAfterCloseAllGoesNewestFirst(t *testing.T) {
 	h.exec("tab.reopenClosed")
 	if got := h.app.EditorGroup.ActiveFilePath(); got != p[0] {
 		t.Fatalf("second reopen = %q, want %q", got, p[0])
-	}
-}
-
-func TestCtrlShiftTReopensClosedTab(t *testing.T) {
-	h := newTestHarness(t, 80, 24)
-	defer h.stop()
-	p := writeTabFiles(t, h.dir, "a.txt")
-	h.app.EditorGroup.OpenFile(p[0])
-	h.exec("tab.close")
-
-	// Kitty-protocol terminals report Ctrl+Shift+T as the unshifted rune with
-	// both modifiers.
-	h.app.Root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "t", tcell.ModCtrl|tcell.ModShift))
-	h.redraw()
-
-	if got := h.app.EditorGroup.ActiveFilePath(); got != p[0] {
-		t.Fatalf("active = %q after Ctrl+Shift+T, want %q", got, p[0])
 	}
 }

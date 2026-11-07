@@ -291,7 +291,6 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "alt+.", Command: "tab.next"},
 		{Key: "alt+,", Command: "tab.prev"},
 		{Key: "ctrl+w", Command: "tab.close"},
-		{Key: "ctrl+shift+t", Command: "tab.reopenClosed"},
 		{Key: "ctrl+k enter", Command: "tab.pin"},
 		{Key: "ctrl+a", Command: "editor.selectAll"},
 		{Key: "ctrl+c", Command: "editor.copy"},
