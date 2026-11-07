@@ -112,6 +112,36 @@ func TestScrollPreservesColumn(t *testing.T) {
 	}
 }
 
+func TestScrollRestoresGoalColumn(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	path := filepath.Join(h.dir, "goal.txt")
+	if err := os.WriteFile(path, []byte("0123456789abcdefghij\nxx\nthird line\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(path)
+	h.app.Settings.Editor.ScrollLines = 1
+
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Line, editor.Cursor.Col = 0, 10
+	h.redraw()
+	h.exec("view.scrollDown")
+	if editor.Cursor.Line != 1 || editor.Cursor.Col != 2 {
+		t.Fatalf("Scroll Down moved the cursor to (%d,%d), want (1,2)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+	h.exec("view.scrollUp")
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 10 {
+		t.Fatalf("Scroll Up moved the cursor to (%d,%d), want (0,10)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+
+	h.exec("view.scrollDown")
+	h.pressKey(tcell.KeyLeft, tcell.ModNone)
+	h.exec("view.scrollUp")
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 1 {
+		t.Fatalf("cursor move did not reset the goal: got (%d,%d), want (0,1)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+}
+
 func TestScrollUsesVisibleRowsWithFold(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()

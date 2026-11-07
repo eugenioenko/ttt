@@ -744,9 +744,16 @@ func (e *EditorPaneWidget) ScrollRows(delta int) {
 // cannot be used directly: rowOf reports screen column 0 for unwrapped layouts,
 // so the cursor's visual column is passed explicitly.
 func (e *EditorPaneWidget) moveCursorLines(delta int) {
-	x := bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, e.resolveTabSize())
-	line, col, _ := e.wrappedRowMove(e.Cursor.Line, e.Cursor.Col, delta, x)
+	x := -1
+	if g := e.wrapGoal; g.ok && g.line == e.Cursor.Line && g.col == e.Cursor.Col && g.version == e.Buf.Version() {
+		x = g.x
+	}
+	if x < 0 {
+		x = bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, e.resolveTabSize())
+	}
+	line, col, x := e.wrappedRowMove(e.Cursor.Line, e.Cursor.Col, delta, x)
 	e.Cursor.Line, e.Cursor.Col = line, col
+	e.wrapGoal = wrapGoal{x: x, line: line, col: col, version: e.Buf.Version(), ok: true}
 }
 
 func (e *EditorPaneWidget) SmartHome() {
