@@ -48,5 +48,5 @@ func TestDebugStateReportsTerminalFocus(t *testing.T) {
 	check("dialog over terminal", "overlay", 1)
 
 	a.DismissDialog()
-	check("dialog dismissed", "editor", 1)
+	check("dialog dismissed", "terminal", 1)
 }
