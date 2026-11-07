@@ -943,6 +943,7 @@ func (m *Manager) Reload(name string) (*Plugin, error) {
 
 	granted := old.Granted
 	repo := old.Repo
+	repoPath := old.RepoPath
 	dir := old.Dir
 	logFn := old.Log
 
@@ -967,6 +968,7 @@ func (m *Manager) Reload(name string) (*Plugin, error) {
 		Name:     manifest.Name,
 		Dir:      dir,
 		Repo:     repo,
+		RepoPath: repoPath,
 		Manifest: manifest,
 		Granted:  granted,
 		Log:      logFn,

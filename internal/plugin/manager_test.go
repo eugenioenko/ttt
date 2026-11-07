@@ -38,6 +38,24 @@ func newTestManager(t *testing.T) (*Manager, string) {
 	return m, pluginsDir
 }
 
+func TestReloadPreservesRepositorySubdirectory(t *testing.T) {
+	m, pluginsDir := newTestManager(t)
+	writePluginDir(t, pluginsDir, "ttt-i18n-es")
+	m.registry.AddOrUpdate("ttt-i18n-es", "", "https://github.com/eugenioenko/ttt-plugins", "ttt-i18n-es", "1.0.0", PermissionSet{})
+	if err := m.registry.Save(); err != nil {
+		t.Fatal(err)
+	}
+	m.LoadAll()
+	t.Cleanup(m.Shutdown)
+	reloaded, err := m.Reload("ttt-i18n-es")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Repo != "https://github.com/eugenioenko/ttt-plugins" || reloaded.RepoPath != "ttt-i18n-es" {
+		t.Fatalf("reload lost the language pack source: repo=%q, path=%q", reloaded.Repo, reloaded.RepoPath)
+	}
+}
+
 // TestDenyPluginDeletesFreshInstall: a plugin ttt cloned into its own
 // pluginsDir with no registry entry must be removed on deny (#358).
 func TestDenyPluginDeletesFreshInstall(t *testing.T) {
