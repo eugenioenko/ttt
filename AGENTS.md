@@ -199,7 +199,7 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 
 ### Implementation patterns
 
-- **Display language**: resolve copy when constructing the UI, not in package-level variables, so the startup-selected catalog is used. Language packs contribute flat JSON catalogs through `languages` in the plugin manifest. Per-message source hashes keep changed English copy from using stale translations. The local incremental Codex CLI generator and common-language packs live in `eugenioenko/ttt-i18n`; preserve translations whose English values have not changed.
+- **Display language**: resolve copy when constructing the UI, not in package-level variables, so the startup-selected catalog is used. Language packs contribute flat JSON catalogs through `languages` in the plugin manifest. Per-message source hashes keep changed English copy from using stale translations. The local incremental Codex CLI generator and common-language packs live in `eugenioenko/ttt-plugins` (`i18n/` for maintenance, `ttt-i18n-*` for packs); preserve translations whose English values have not changed.
 
 - **Undo contract**: all buffer mutations must go through the undo system via an `EditCommand` (in `internal/core/undo/`). Never modify `Buf.Lines` directly — create or reuse a command struct so undo/redo works.
 - **Command naming**: use `domain.verbNoun` — e.g. `editor.joinLines`, `fold.toggle`, `multicursor.selectAll`.

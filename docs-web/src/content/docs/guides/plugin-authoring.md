@@ -132,7 +132,7 @@ After approval, ttt caches the files under `~/.config/ttt/languages/plugins/<plu
 
 `tttVersion` identifies the editor release the catalog targets, separately from the plugin's `version`. **Update languages on upgrade** (`language.autoUpdate`) defaults to on. When a newer ttt version starts, it checks installed packs from public GitHub repositories for a catalog targeting that version or later. The check runs in the background, downloads the manifest and JSON files from one pinned commit, and replaces the cache only after validation. It never updates or executes Lua code. Failed or unavailable updates keep the cached language; an updated active language takes effect after restarting. Versions without release numbers, such as `dev`, skip this check. Turn the setting off to manage updates manually with **Plugins: Update**.
 
-The [ttt-i18n repository](https://github.com/eugenioenko/ttt-i18n) contains common-language packs and a local Codex CLI script that translates only added or changed English messages. Third-party plugin UI copy is owned by each plugin and is not translated by these core catalogs.
+The [ttt-plugins language packs](https://github.com/eugenioenko/ttt-plugins/tree/main/i18n) include common-language packs and a local Codex CLI script that translates only added or changed English messages. Third-party plugin UI copy is owned by each plugin and is not translated by these core catalogs.
 
 ### Grammar plugins
 
