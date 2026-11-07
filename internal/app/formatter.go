@@ -76,10 +76,9 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 	if formatted == original {
 		return nil
 	}
-	formatted = strings.TrimSuffix(formatted, "\n")
-
 	comparison := original
 	if editor.Buf.ShowTrailingNewline {
+		formatted = strings.TrimSuffix(formatted, "\n")
 		comparison = strings.TrimSuffix(comparison, "\n")
 	}
 	if formatted == comparison {
