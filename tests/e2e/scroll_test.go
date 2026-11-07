@@ -237,3 +237,199 @@ func TestScrollStopsAtFileEdges(t *testing.T) {
 		t.Fatalf("Scroll Down moved past the end to %d, want %d", editor.Viewport.TopLine, first)
 	}
 }
+
+func TestScrollLineCommandsAvailable(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	for _, title := range []string{"Scroll Line Up", "Scroll Line Down"} {
+		cmd, ok := h.reg.FindByTitle(title)
+		if !ok || cmd.Hidden {
+			t.Fatalf("%q missing from command palette", title)
+		}
+	}
+}
+
+func TestScrollLineViewportOnly(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+	placeScroll(t, h, 10, 0)
+
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Col = 3
+	editor.Selection.Start(5, 0)
+	h.redraw()
+
+	// The cursor starts above the viewport and must stay there.
+	h.exec("view.scrollLineDown")
+	if editor.Viewport.TopLine != 11 {
+		t.Fatalf("Scroll Line Down moved the viewport to %d, want 11", editor.Viewport.TopLine)
+	}
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 3 {
+		t.Fatalf("Scroll Line Down moved the cursor to (%d,%d), want (0,3)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+	if !editor.Selection.Active || editor.Selection.Anchor.Line != 5 || editor.Selection.Anchor.Col != 0 {
+		t.Fatalf("Scroll Line Down changed the selection to %+v", editor.Selection)
+	}
+
+	h.exec("view.scrollLineUp")
+	if editor.Viewport.TopLine != 10 {
+		t.Fatalf("Scroll Line Up moved the viewport to %d, want 10", editor.Viewport.TopLine)
+	}
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 3 {
+		t.Fatalf("Scroll Line Up moved the cursor to (%d,%d), want (0,3)", editor.Cursor.Line, editor.Cursor.Col)
+	}
+}
+
+func TestScrollLineDefaultKeybindings(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+	placeScroll(t, h, 0, 5)
+
+	editor := h.app.EditorGroup.Editor
+	h.pressKey(tcell.KeyDown, tcell.ModCtrl)
+	if editor.Viewport.TopLine != 1 || editor.Cursor.Line != 5 {
+		t.Fatalf("Ctrl+Down moved to top %d line %d, want 1/5", editor.Viewport.TopLine, editor.Cursor.Line)
+	}
+	h.pressKey(tcell.KeyUp, tcell.ModCtrl)
+	if editor.Viewport.TopLine != 0 || editor.Cursor.Line != 5 {
+		t.Fatalf("Ctrl+Up moved to top %d line %d, want 0/5", editor.Viewport.TopLine, editor.Cursor.Line)
+	}
+}
+
+func TestMouseSelectionAfterViewportScroll(t *testing.T) {
+	h := newTestHarness(t, 120, 30)
+	defer h.stop()
+	openScrollFile(t, h)
+	for range 20 {
+		h.pressKey(tcell.KeyDown, tcell.ModCtrl)
+	}
+	h.redraw()
+
+	e := h.app.EditorGroup.Editor
+	r := e.GetRect()
+	x := r.X + e.GutterWidth() + 2
+	y := r.Y + 2
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x+4, y, tcell.Button1, tcell.ModNone))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x+4, y, tcell.ButtonNone, tcell.ModNone))
+	h.redraw()
+	if !e.Selection.Active {
+		t.Fatalf("drag did not select text after viewport scroll; top=%d cursor=%+v", e.Viewport.TopLine, e.Cursor)
+	}
+	if h.app.EditorGroup.SelectedText() == "" {
+		t.Fatal("selected text is empty after viewport scroll")
+	}
+}
+
+func TestScrollLineStopsAtEdges(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+
+	editor := h.app.EditorGroup.Editor
+	placeScroll(t, h, 0, 0)
+	h.exec("view.scrollLineUp")
+	if editor.Viewport.TopLine != 0 || editor.Cursor.Line != 0 {
+		t.Fatalf("Scroll Line Up moved to top %d line %d, want 0/0", editor.Viewport.TopLine, editor.Cursor.Line)
+	}
+
+	last := len(editor.Buf.Lines) - 1
+	placeScroll(t, h, last, 0)
+	h.exec("view.scrollLineDown")
+	if editor.Viewport.TopLine != last || editor.Cursor.Line != 0 {
+		t.Fatalf("Scroll Line Down moved to top %d line %d, want %d/0", editor.Viewport.TopLine, editor.Cursor.Line, last)
+	}
+}
+
+func TestScrollLineKeepsCursorAcrossFold(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	var b strings.Builder
+	b.WriteString("package main\n\nfunc main() {\n")
+	for range 20 {
+		b.WriteString("\ta()\n")
+	}
+	b.WriteString("}\n\n")
+	for i := range 40 {
+		fmt.Fprintf(&b, "func f%d() {}\n", i)
+	}
+	path := filepath.Join(h.dir, "scroll_line_fold.go")
+	if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(path)
+	h.exec("fold.collapseAll")
+	editor := h.app.EditorGroup.Editor
+	editor.Viewport.TopLine = 2
+	editor.Cursor.Line, editor.Cursor.Col = 2, 0
+	h.redraw()
+
+	// The closing brace is the next visible row after the collapsed body.
+	h.exec("view.scrollLineDown")
+	if editor.Viewport.TopLine != 23 || editor.Cursor.Line != 2 {
+		t.Fatalf("scroll moved to top %d line %d, want 23/2", editor.Viewport.TopLine, editor.Cursor.Line)
+	}
+	h.exec("view.scrollLineUp")
+	if editor.Viewport.TopLine != 2 || editor.Cursor.Line != 2 {
+		t.Fatalf("scroll back moved to top %d line %d, want 2/2", editor.Viewport.TopLine, editor.Cursor.Line)
+	}
+}
+
+func TestScrollLineHidesCursorOutsideViewport(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+	placeScroll(t, h, 0, 5)
+
+	editor := h.app.EditorGroup.Editor
+	if _, _, visible := h.app.Root.CursorPosition(); !visible {
+		t.Fatal("cursor should be visible before scrolling")
+	}
+	for range 10 {
+		h.exec("view.scrollLineDown")
+	}
+	if _, _, visible := h.app.Root.CursorPosition(); visible {
+		t.Fatalf("cursor outside viewport reported visible at (%d,%d)", editor.CursorX, editor.CursorY)
+	}
+}
+
+func TestScrollLineHidesCursorOnHorizontalScrollbar(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = strings.Repeat("x", 200)
+	}
+	path := filepath.Join(h.dir, "wide.txt")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(path)
+	editor := h.app.EditorGroup.Editor
+	h.redraw()
+
+	// Put the cursor one row below the text viewport, on the horizontal
+	// scrollbar row that is still inside the editor rect.
+	editor.Viewport.TopLine = 10
+	editor.Cursor.Line, editor.Cursor.Col = 10+editor.Viewport.Height, 0
+	h.redraw()
+	if x, y, visible := h.app.Root.CursorPosition(); visible {
+		t.Fatalf("cursor on scrollbar row reported visible at (%d,%d)", x, y)
+	}
+}
+
+func TestCursorHiddenInGutterWhenHorizontallyScrolled(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Line, editor.Cursor.Col = 0, 0
+	editor.Viewport.LeftCol = editor.GutterWidth() - 1
+	h.redraw()
+	if x, y, visible := h.app.Root.CursorPosition(); visible {
+		t.Fatalf("cursor in gutter reported visible at (%d,%d)", x, y)
+	}
+}

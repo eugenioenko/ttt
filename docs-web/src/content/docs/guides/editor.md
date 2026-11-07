@@ -67,6 +67,8 @@ Press **Ctrl+G** to open the Go to Line dialog.
 
 ## Scrolling
 
+**Scroll Line Up** and **Scroll Line Down** (**Ctrl+Up** / **Ctrl+Down**) move only the viewport by one visual row. The cursor and selection stay in place, so you can look at nearby text without losing your editing position.
+
 **Scroll Up** and **Scroll Down** move the viewport and cursor together. The cursor keeps its screen row, so the text follows the caret the way Vim's `Ctrl+D` does. The step is `editor.scrollLines` screen rows; `0` (the default) scrolls half the editor height.
 
 They have no default shortcut. Bind them in `keybindings.json`, for example:

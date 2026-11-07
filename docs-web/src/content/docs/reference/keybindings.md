@@ -107,6 +107,8 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Shortcut | Command | Description |
 |----------|---------|-------------|
 | Ctrl+B | `sidebar.toggle` | Toggle sidebar |
+| Ctrl+Up | `view.scrollLineUp` | Scroll viewport up one visual row |
+| Ctrl+Down | `view.scrollLineDown` | Scroll viewport down one visual row |
 | Ctrl+K B | `panel.toggle` | Toggle bottom panel |
 | Alt+Shift+M | `menubar.toggle` | Show/hide the menu bar |
 | Ctrl+K E | `sidebar.explorer` | Show file explorer |

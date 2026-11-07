@@ -1353,6 +1353,19 @@ func (g *EditorGroupWidget) DiffTabSources() []DiffSearchSource {
 	return result
 }
 
+func editorCursorVisible(e *EditorPaneWidget) bool {
+	x, y := e.CursorX, e.CursorY
+	r := e.GetRect()
+	if !r.Contains(x, y) || y >= r.Y+e.Viewport.Height {
+		return false
+	}
+	if e.WordWrap {
+		return true
+	}
+	gutter := e.GutterWidth()
+	return x >= r.X+gutter && x < r.X+gutter+e.Viewport.Width
+}
+
 func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	// Content tabs (settings, plugin panels) own their own cursor.
 	if t := g.activeTab(); t != nil && t.Content != nil {
@@ -1362,12 +1375,12 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	}
 	if g.IsEditorActive() {
 		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
-			return d.left.CursorX, d.left.CursorY, true
+			return d.left.CursorX, d.left.CursorY, editorCursorVisible(d.left)
 		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
-		return g.Editor.CursorX, g.Editor.CursorY, true
+		return g.Editor.CursorX, g.Editor.CursorY, editorCursorVisible(g.Editor)
 	}
 	return 0, 0, false
 }
@@ -2705,6 +2718,16 @@ func (g *EditorGroupWidget) MoveWordRight(shift bool) {
 func (g *EditorGroupWidget) ScrollLines(delta int) {
 	if e := g.keyEditor(); e != nil {
 		e.ScrollRows(delta)
+	}
+}
+
+func (g *EditorGroupWidget) ScrollViewportLines(delta int) {
+	if e := g.keyEditor(); e != nil {
+		if delta < 0 {
+			e.scrollUp(-delta)
+		} else {
+			e.scrollDown(delta)
+		}
 	}
 }
 

@@ -279,6 +279,8 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+f", Command: "search.find"},
 		{Key: "ctrl+r", Command: "search.replace"},
 		{Key: "ctrl+g", Command: "editor.goToLine"},
+		{Key: "ctrl+up", Command: "view.scrollLineUp"},
+		{Key: "ctrl+down", Command: "view.scrollLineDown"},
 		{Key: "ctrl+p", Command: "command.palette"},
 		{Key: "ctrl+k p", Command: "file.quickOpen"},
 		{Key: "ctrl+o", Command: "workspace.openFolder"},

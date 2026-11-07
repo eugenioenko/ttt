@@ -337,3 +337,21 @@ func TestTransformSelectionStaleAnchorBeyondLine(t *testing.T) {
 		t.Errorf("expected transformed text, got %q", e.Buf.Lines[1])
 	}
 }
+
+func TestScrollLineWithWrapKeepsCursor(t *testing.T) {
+	e := newTestEditor()
+	e.Buf.Lines = []string{"0123456789abcdefghijklmnopqrstuvwxyz", "next"}
+	e.Cursor.Line, e.Cursor.Col = 0, 3
+	e.WordWrap = true
+	e.Viewport.Width = 10
+	e.Viewport.Height = 5
+
+	before := e.topRow(e.layout())
+	e.scrollDown(1)
+	if after := e.topRow(e.layout()); after != before+1 {
+		t.Fatalf("scrollDown moved the viewport from row %d to %d, want %d", before, after, before+1)
+	}
+	if e.Cursor.Line != 0 || e.Cursor.Col != 3 {
+		t.Fatalf("scrollDown moved the cursor to (%d,%d), want (0,3)", e.Cursor.Line, e.Cursor.Col)
+	}
+}
