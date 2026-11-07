@@ -209,17 +209,44 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 
 ### Opening a pull request
 
-- **Features need an accepted issue first.** Link it in the PR body (`Closes #123`). Bug fixes, docs, and small cleanups can go straight to a PR.
-- **Run it.** Reproduce a bug, or try a feature, in the real binary with `--exec` or `--listen` before and after the change.
-- **One concern per PR**, under roughly 600 changed lines. Note unrelated problems you find in the PR body instead of fixing them.
-- **Title** uses conventional commits: `type(scope): description`.
-- **Body** explains why, which test covers the change, and includes a `--exec` screenshot for visible changes.
-- **Before opening:** `make test` and `make lint` pass, and comments that describe what the code does are removed.
-- **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
+Check every item before opening:
+
+- [ ] **Features have an accepted issue**, linked as `Closes #123`. Bug fixes, docs, and small cleanups can skip this.
+- [ ] **One concern**, under roughly 600 changed lines. Note unrelated problems in the PR body instead of fixing them.
+- [ ] **Ran it in the real binary**, before and after the change.
+- [ ] **`make test` and `make lint` pass**, and comments that describe what the code does are removed.
+- [ ] **Title** uses conventional commits: `type(scope): description`.
+- [ ] **Body** says why, which tests cover the change, that `make test` and `make lint` passed, and shows before and after [screenshots](#screenshots) for visible changes.
+
+AI-assisted PRs are welcome, but the human submitting it must have run the change and be able to explain every line.
+
+#### Screenshots
+
+Capture the same state on `main` and on your branch. Build `main` to a second binary instead of switching branches.
+
+- **Text, always.** `--exec` with `screenshot PATH`, pasted as a code block. It shows layout, not color.
+  ```sh
+  TTT_CONFIG_DIR=$(mktemp -d) bin/ttt --size 110x30 --exec 'wait-for Explore; screenshot /tmp/after.txt; quit'
+  ```
+- **Image, when color, style, or focus changed.** `--exec` is headless and draws nothing, so run a real terminal in a nested X server and drive ttt with `--listen`. Each `/exec` returns after the redraw, so grab right away; wait for the text that appears last.
+  ```sh
+  Xephyr :9 -screen 1400x800 -ac -br &
+  DISPLAY=:9 ghostty --window-decoration=false --window-width=120 --window-height=34 \
+    -e env TTT_CONFIG_DIR=$(mktemp -d) bin/ttt --listen &
+  curl -s -X POST --data 'wait-for Explore; <actions>; wait-for <final text>' http://127.0.0.1:4242/exec
+  ffmpeg -loglevel error -y -draw_mouse 0 -f x11grab -video_size 1220x734 -i :9 -frames:v 1 after.png
+  ```
+  Any X terminal works. Crop `-video_size` to the terminal window. Stop these processes by PID: a `pkill -f` pattern can match your own shell or the user's terminal.
+- **VHS** works without an X server, also through `--listen`, but needs a fixed `Sleep` before each shot.
+
+Push images to an orphan `screenshots/<topic>` branch (on your fork without push access) and embed their `raw.githubusercontent.com` URLs, before and after side by side.
 
 ### Following up on a pull request
 
-- **Follow through after opening or updating a PR.** Monitor CodeRabbit and required CI checks for the latest head commit. Check pending work about every five minutes. If CodeRabbit is paused or skipped the latest changes, request a review once; avoid duplicate requests while a review is running.
-- **Address valid review findings.** Read inline threads and review summaries, including comments outside the diff. Verify each finding against the current code, fix actionable issues within the PR's scope, and add focused regression coverage where appropriate. Explain why a finding is inapplicable instead of changing code merely to satisfy the bot. Push verified fixes when authorized, then resolve the addressed threads.
-- **Follow CI to a result.** Inspect failing job logs and fix failures caused by the PR. Rerun checks when there is evidence of a transient failure. Report unrelated failures, unavailable checks, missing permissions, and external blockers explicitly; distinguish them from passing checks.
-- **Recheck after each push.** Continue until CodeRabbit has reviewed the latest changes, valid findings are addressed, and required CI passes, or report the concrete blocker and remaining work. Opening the PR alone is not completion. Approval and merge still require the user's authorization.
+Opening the PR is not the end: CodeRabbit reviews a few minutes later. Keep going until all of these hold, checking about every five minutes and again after each push:
+
+- **CodeRabbit reviewed the latest commit.** If it paused or skipped the latest changes, request a review once.
+- **Every finding has an answer**, including review summaries and comments outside the diff. Verify it against the current code. Fix valid ones within scope, with a regression test where it fits, and resolve the thread. Otherwise reply with why it does not apply. Never leave one silent, and never change code only to satisfy the bot.
+- **Required CI passes.** Read failing logs and fix what the PR caused; rerun on evidence of a transient failure. Report unrelated failures, missing permissions, and other blockers explicitly.
+
+If you stop before that, say what is still pending. Push fixes only when authorized; approval and merge require the user.
