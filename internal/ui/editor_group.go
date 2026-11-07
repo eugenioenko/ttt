@@ -1363,13 +1363,15 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	if g.IsEditorActive() {
 		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
 			x, y := d.left.CursorX, d.left.CursorY
-			return x, y, d.left.GetRect().Contains(x, y)
+			r := d.left.GetRect()
+			return x, y, r.Contains(x, y) && y < r.Y+d.left.Viewport.Height
 		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
 		x, y := g.Editor.CursorX, g.Editor.CursorY
-		return x, y, g.Editor.GetRect().Contains(x, y)
+		r := g.Editor.GetRect()
+		return x, y, r.Contains(x, y) && y < r.Y+g.Editor.Viewport.Height
 	}
 	return 0, 0, false
 }

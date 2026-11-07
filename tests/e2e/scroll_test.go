@@ -395,3 +395,28 @@ func TestScrollLineHidesCursorOutsideViewport(t *testing.T) {
 		t.Fatalf("cursor outside viewport reported visible at (%d,%d)", editor.CursorX, editor.CursorY)
 	}
 }
+
+func TestScrollLineHidesCursorOnHorizontalScrollbar(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = strings.Repeat("x", 200)
+	}
+	path := filepath.Join(h.dir, "wide.txt")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.EditorGroup.OpenFile(path)
+	editor := h.app.EditorGroup.Editor
+	h.redraw()
+
+	// Put the cursor one row below the text viewport, on the horizontal
+	// scrollbar row that is still inside the editor rect.
+	editor.Viewport.TopLine = 10
+	editor.Cursor.Line, editor.Cursor.Col = 10+editor.Viewport.Height, 0
+	h.redraw()
+	if x, y, visible := h.app.Root.CursorPosition(); visible {
+		t.Fatalf("cursor on scrollbar row reported visible at (%d,%d)", x, y)
+	}
+}
