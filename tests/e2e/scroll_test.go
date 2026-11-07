@@ -237,21 +237,3 @@ func TestScrollStopsAtFileEdges(t *testing.T) {
 		t.Fatalf("Scroll Down moved past the end to %d, want %d", editor.Viewport.TopLine, first)
 	}
 }
-
-func TestScrollDefaultKeybindings(t *testing.T) {
-	h := newTestHarness(t, 80, 24)
-	defer h.stop()
-	openScrollFile(t, h)
-	placeScroll(t, h, 0, 0)
-
-	editor := h.app.EditorGroup.Editor
-	half := max(1, editor.Viewport.Height/2)
-	h.pressKey(tcell.KeyDown, tcell.ModCtrl)
-	if editor.Viewport.TopLine != half || editor.Cursor.Line != half {
-		t.Fatalf("Ctrl+Down moved to top %d line %d, want %d/%d", editor.Viewport.TopLine, editor.Cursor.Line, half, half)
-	}
-	h.pressKey(tcell.KeyUp, tcell.ModCtrl)
-	if editor.Viewport.TopLine != 0 || editor.Cursor.Line != 0 {
-		t.Fatalf("Ctrl+Up moved to top %d line %d, want 0/0", editor.Viewport.TopLine, editor.Cursor.Line)
-	}
-}

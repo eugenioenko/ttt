@@ -53,8 +53,6 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 
 | Shortcut | Command | Description |
 |----------|---------|-------------|
-| Ctrl+Up | `view.scrollUp` | Scroll up by `editor.scrollLines` rows; `0` scrolls half a page |
-| Ctrl+Down | `view.scrollDown` | Scroll down by `editor.scrollLines` rows; `0` scrolls half a page |
 | Ctrl+Home | `editor.goToFileStart` | Move cursor to the start of the file |
 | Ctrl+End | `editor.goToFileEnd` | Move cursor to the end of the file |
 | Ctrl+Shift+Home | `editor.selectToFileStart` | Select to the start of the file |

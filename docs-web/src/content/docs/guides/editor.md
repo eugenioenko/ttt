@@ -67,9 +67,16 @@ Press **Ctrl+G** to open the Go to Line dialog.
 
 ## Scrolling
 
-**Scroll Up** and **Scroll Down** (**Ctrl+Up** / **Ctrl+Down**) move the viewport and cursor together. The cursor keeps its screen row, so the text follows the caret the way Vim's `Ctrl+D` does. The step is `editor.scrollLines` screen rows; `0` (the default) scrolls half the editor height.
+**Scroll Up** and **Scroll Down** move the viewport and cursor together. The cursor keeps its screen row, so the text follows the caret the way Vim's `Ctrl+D` does. The step is `editor.scrollLines` screen rows; `0` (the default) scrolls half the editor height.
 
-Rebind them in `keybindings.json` if you prefer other keys.
+They have no default shortcut. Bind them in `keybindings.json`, for example:
+
+```json
+[
+  { "key": "ctrl+k up", "command": "view.scrollUp" },
+  { "key": "ctrl+k down", "command": "view.scrollDown" }
+]
+```
 
 ## Selection and Clipboard
 
