@@ -65,6 +65,12 @@ Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one leve
 
 Press **Ctrl+G** to open the Go to Line dialog.
 
+## Scrolling
+
+**Scroll Up** and **Scroll Down** (**Ctrl+Up** / **Ctrl+Down**) move the viewport and cursor together. The cursor keeps its screen row, so the text follows the caret the way Vim's `Ctrl+D` does. The step is `editor.scrollLines` screen rows; `0` (the default) scrolls half the editor height.
+
+Rebind them in `keybindings.json` if you prefer other keys.
+
 ## Selection and Clipboard
 
 - **Ctrl+A** to select all

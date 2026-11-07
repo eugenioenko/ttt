@@ -2570,6 +2570,18 @@ func (g *EditorGroupWidget) MoveWordRight(shift bool) {
 	}
 }
 
+func (g *EditorGroupWidget) ScrollLines(delta int) {
+	if e := g.keyEditor(); e != nil {
+		e.ScrollRows(delta)
+	}
+}
+
+func (g *EditorGroupWidget) ScrollHalfPage(direction int) {
+	if e := g.keyEditor(); e != nil {
+		e.ScrollRows(direction * max(1, e.Viewport.Height/2))
+	}
+}
+
 func (g *EditorGroupWidget) DeleteWordLeft() {
 	if e := g.editableKeyEditor(); e != nil {
 		e.DeleteWordLeft()
