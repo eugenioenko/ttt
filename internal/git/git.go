@@ -201,7 +201,7 @@ func runPathsContext(ctx context.Context, dir string, gitArgs, paths []string) e
 	}
 	args := append([]string{"-C", dir, "--literal-pathspecs"}, gitArgs...)
 	args = append(args, paths...)
-	cmd := gitCommandContext(ctx, args...)
+	cmd := gitMutationCommandContext(ctx, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
