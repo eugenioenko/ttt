@@ -53,6 +53,8 @@
   { "key": "ctrl+k k", "command": "editor.deleteLine" },
   { "key": "ctrl+/", "command": "editor.toggleComment" },
   { "key": "ctrl+enter", "command": "editor.insertLineBelow" },
+  { "key": "ctrl+up", "command": "view.scrollUp" },
+  { "key": "ctrl+down", "command": "view.scrollDown" },
   { "key": "ctrl+home", "command": "editor.goToFileStart" },
   { "key": "ctrl+end", "command": "editor.goToFileEnd" },
   { "key": "ctrl+shift+home", "command": "editor.selectToFileStart" },

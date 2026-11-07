@@ -719,6 +719,23 @@ func (e *EditorPaneWidget) scrollDown(n int) {
 	e.setTopRow(l, newTop)
 }
 
+// ScrollRows moves the cursor and viewport by delta screen rows. The cursor
+// keeps its screen row unless a file edge stops it, so the view follows Vim's
+// Ctrl+D rather than scrolling away from the caret.
+func (e *EditorPaneWidget) ScrollRows(delta int) {
+	l := e.layout()
+	top := e.topRow(l)
+	before, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	e.moveCursorWrapped(delta)
+	after, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	top += after - before
+	if maxTop := l.total() - e.Viewport.Height; maxTop >= 0 && top > maxTop {
+		top = maxTop
+	}
+	e.setTopRow(l, top)
+	e.scrollViewport()
+}
+
 func (e *EditorPaneWidget) SmartHome() {
 	runes := []rune(e.Buf.Lines[e.Cursor.Line])
 	firstNonSpace := 0

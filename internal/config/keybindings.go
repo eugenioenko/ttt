@@ -329,6 +329,8 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+k k", Command: "editor.deleteLine"},
 		{Key: "ctrl+/", Command: "editor.toggleComment"},
 		{Key: "ctrl+enter", Command: "editor.insertLineBelow"},
+		{Key: "ctrl+up", Command: "view.scrollUp"},
+		{Key: "ctrl+down", Command: "view.scrollDown"},
 		{Key: "ctrl+home", Command: "editor.goToFileStart"},
 		{Key: "ctrl+end", Command: "editor.goToFileEnd"},
 		{Key: "ctrl+shift+home", Command: "editor.selectToFileStart"},

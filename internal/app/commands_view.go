@@ -100,6 +100,17 @@ func (a *App) focusRegion(region string) {
 	}
 }
 
+func (a *App) ScrollUp()   { a.scrollEditor(-1) }
+func (a *App) ScrollDown() { a.scrollEditor(1) }
+
+func (a *App) scrollEditor(direction int) {
+	if lines := a.Settings.Editor.ScrollLines; lines > 0 {
+		a.EditorGroup.ScrollLines(direction * lines)
+		return
+	}
+	a.EditorGroup.ScrollHalfPage(direction)
+}
+
 func (a *App) contextNextTab() {
 	switch a.focusedRegion() {
 	case "sidebar":
@@ -342,6 +353,18 @@ func registerViewCommands(app *App) {
 		ID: "sidebar.focus", Title: i18n.Text("command.viewFocusSidebar"),
 		Keywords: []string{"view"},
 		Handler:  app.FocusSidebar,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollUp", Title: i18n.Text("command.scrollUp"),
+		Keywords: []string{"view", "scroll", "page", "half", "up"},
+		Handler:  app.ScrollUp,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollDown", Title: i18n.Text("command.scrollDown"),
+		Keywords: []string{"view", "scroll", "page", "half", "down"},
+		Handler:  app.ScrollDown,
 	})
 
 	reg.Register(command.Command{

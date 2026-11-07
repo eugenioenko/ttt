@@ -51,6 +51,7 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 
 | Shortcut | Action |
 |----------|--------|
+| Ctrl+Up / Ctrl+Down | Scroll up or down half a page (or `editor.scrollLines` rows) |
 | Ctrl+Home / Ctrl+End | Move to the start or end of the file |
 | Ctrl+Shift+Home / Ctrl+Shift+End | Select to the start or end of the file |
 | Ctrl+Left | Move word left |
