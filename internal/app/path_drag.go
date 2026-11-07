@@ -32,6 +32,10 @@ const pathDragSegment = "path-drag"
 func (a *App) handlePathDrag(ev *tcell.EventMouse) bool {
 	mx, my := ev.Position()
 	d := &a.pathDrag
+	// A wheel impulse during a drag carries no Button1 but is not a release.
+	if ev.Buttons()&(tcell.WheelUp|tcell.WheelDown|tcell.WheelLeft|tcell.WheelRight) != 0 {
+		return d.active
+	}
 	if ev.Buttons()&tcell.Button1 == 0 {
 		wasActive := d.active
 		if wasActive {
@@ -146,8 +150,8 @@ func terminalQuote(path string, tw *ui.TerminalWidget) string {
 
 // shellQuote leaves plain paths alone and quotes the rest so the shell named
 // by program reads them literally. PowerShell expands $(...) inside double
-// quotes, so it gets single quotes like a POSIX shell; cmd has no literal
-// quoting and gets double quotes.
+// quotes, so it gets single quotes like a POSIX shell; fish reads \\ and \'
+// inside single quotes; cmd has no literal quoting and gets double quotes.
 func shellQuote(path, program string) string {
 	name := strings.ToLower(strings.TrimSuffix(filepath.Base(program), ".exe"))
 	if program == "" && runtime.GOOS == "windows" {
@@ -165,6 +169,8 @@ func shellQuote(path, program string) string {
 	switch name {
 	case "pwsh", "powershell":
 		return "'" + strings.ReplaceAll(path, "'", "''") + "'"
+	case "fish":
+		return "'" + strings.NewReplacer(`\`, `\\`, "'", `\'`).Replace(path) + "'"
 	case "cmd":
 		return `"` + path + `"`
 	}

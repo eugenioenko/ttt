@@ -23,6 +23,7 @@ func TestShellQuote(t *testing.T) {
 		{"/home/u/it's.txt", "/bin/zsh", `'/home/u/it'\''s.txt'`},
 		{"/home/u/$HOME/a", "/bin/bash", "'/home/u/$HOME/a'"},
 		{`/home/u/a\b`, "/bin/bash", `'/home/u/a\b'`},
+		{`/home/u/it's a\\b`, "/usr/bin/fish", `'/home/u/it\'s a\\\\b'`},
 		{"/home/u/v1.2_final-draft+", "/bin/sh", "/home/u/v1.2_final-draft+"},
 		{`C:\Users\u\main.go`, "pwsh.exe", `C:\Users\u\main.go`},
 		{`C:\Users\u\$(calc).txt`, "powershell.exe", `'C:\Users\u\$(calc).txt'`},
@@ -183,6 +184,17 @@ func TestClickAfterPathDropReachesExplorer(t *testing.T) {
 
 	if n := a.Explorer.Tree.Selected(); n == nil || filepath.Base(n.ID) != "b.txt" {
 		t.Fatalf("selected after the click = %v, want b.txt: the Explorer still held the drag's press", n)
+	}
+}
+
+func TestWheelDuringPathDragKeepsDragging(t *testing.T) {
+	a, tw, rows := pathDragApp(t)
+	r := tw.GetRect()
+	mouse(a, 5, rows["a.txt"], tcell.Button1)
+	mouse(a, r.X+2, r.Y+2, tcell.Button1)
+	mouse(a, r.X+2, r.Y+2, tcell.WheelUp)
+	if !a.pathDrag.active {
+		t.Fatal("a wheel impulse ended the drag")
 	}
 }
 
