@@ -73,6 +73,30 @@ func TestEditorIndentGuidesFollowIndentationStops(t *testing.T) {
 	}
 }
 
+func TestEditorIndentGuidesStayConnectedAcrossBlankLines(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"        outer", "", "  ", "    inner", "", "        tail"}},
+		&cursor.Cursor{},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 6},
+	)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.SetRect(Rect{W: 20, H: 6})
+
+	grid := makeGrid(20, 6)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 6}))
+
+	g := e.GutterWidth()
+	for _, row := range []int{1, 2, 4} {
+		for _, col := range []int{0, 4} {
+			cell := grid[row][g+col]
+			if cell.Ch != '│' || cell.Style != term.StyleMuted {
+				t.Errorf("blank row %d col %d = %+v, want muted connected guide", row, col, cell)
+			}
+		}
+	}
+}
+
 func TestEditorIndentGuidesDisabledByDefault(t *testing.T) {
 	e := NewEditorPaneWidget(
 		&buffer.Buffer{Lines: []string{"    value"}},
