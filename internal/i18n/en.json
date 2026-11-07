@@ -499,7 +499,6 @@
   "keytester.keyboardTester": "Keyboard Tester",
   "keytester.pressAnyKeyCombination": "Press any key combination...",
   "keytester.pressNextKeyForChordOrNewCombo": "Press next key for chord, or new combo",
-  "language.english": "English",
   "largeFiles.discardUnsavedChangesTo": "Discard unsaved changes to {filename}?",
   "lsp.donTShowAgain": "Don't show again",
   "lsp.failed": "failed",

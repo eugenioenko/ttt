@@ -75,7 +75,7 @@ func readLanguageFiles(pack config.LanguagePackSetting) ([]byte, []byte, error) 
 }
 
 func languageItemsFor(settings config.LanguageSettings) []widgets.SelectItem {
-	items := []widgets.SelectItem{{ID: "en", Label: i18n.Text("language.english")}}
+	items := []widgets.SelectItem{{ID: "en", Label: "English"}}
 	seen := map[string]bool{"en": true}
 	for _, pack := range settings.Packs {
 		if !seen[pack.Locale] {

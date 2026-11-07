@@ -28,7 +28,7 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(`{"menu.file":"Archivo","general.save":"Guardar","settings.general":"General (es)","options.minimal":"Mínimo","options.background":"Fondo","help.click":"Clic","help.openFileInPreview":"Vista previa","welcome.openFolder":"Abrir carpeta"}`)
+	write(`{"menu.file":"Archivo","general.save":"Guardar","language.english":"Inglés","settings.general":"General (es)","options.minimal":"Mínimo","options.background":"Fondo","help.click":"Clic","help.openFileInPreview":"Vista previa","welcome.openFolder":"Abrir carpeta"}`)
 	a.installPluginLanguages(p)
 	settings := config.LoadSettings()
 	if len(settings.Language.Packs) != 1 || settings.Language.Locale != "" {
@@ -42,6 +42,9 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 		t.Fatal("selection applied before restart")
 	}
 	translated := buildTestApp(t, config.LoadSettings())
+	if items := languageItemsFor(translated.Settings.Language); items[0].Label != "English" || items[1].Label != "Español (es)" {
+		t.Fatalf("language names must stay in their native language: %v", items)
+	}
 	if translated.MenuBar.Items[0].Name != "Archivo" || menuBarMenus[0][2].Label != "Guardar" {
 		t.Fatalf("menu labels were cached in English: %+v", translated.MenuBar.Items)
 	}
