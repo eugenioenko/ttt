@@ -105,6 +105,10 @@ func (p *SelectDialogWidget) SetFiles(files []PaletteFile) {
 
 func (p *SelectDialogWidget) Focusable() bool { return true }
 
+func (p *SelectDialogWidget) FocusedInput() *widgets.InputWidget {
+	return p.Input
+}
+
 func (p *SelectDialogWidget) CursorPosition() (int, int, bool) {
 	return p.Input.CursorPosition()
 }
