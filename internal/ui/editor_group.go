@@ -1353,6 +1353,19 @@ func (g *EditorGroupWidget) DiffTabSources() []DiffSearchSource {
 	return result
 }
 
+func editorCursorVisible(e *EditorPaneWidget) bool {
+	x, y := e.CursorX, e.CursorY
+	r := e.GetRect()
+	if !r.Contains(x, y) || y >= r.Y+e.Viewport.Height {
+		return false
+	}
+	if e.WordWrap {
+		return true
+	}
+	gutter := e.GutterWidth()
+	return x >= r.X+gutter && x < r.X+gutter+e.Viewport.Width
+}
+
 func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	// Content tabs (settings, plugin panels) own their own cursor.
 	if t := g.activeTab(); t != nil && t.Content != nil {
@@ -1362,16 +1375,12 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	}
 	if g.IsEditorActive() {
 		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
-			x, y := d.left.CursorX, d.left.CursorY
-			r := d.left.GetRect()
-			return x, y, r.Contains(x, y) && y < r.Y+d.left.Viewport.Height
+			return d.left.CursorX, d.left.CursorY, editorCursorVisible(d.left)
 		}
 		if g.Editor.isMultiActive() {
 			return 0, 0, false
 		}
-		x, y := g.Editor.CursorX, g.Editor.CursorY
-		r := g.Editor.GetRect()
-		return x, y, r.Contains(x, y) && y < r.Y+g.Editor.Viewport.Height
+		return g.Editor.CursorX, g.Editor.CursorY, editorCursorVisible(g.Editor)
 	}
 	return 0, 0, false
 }

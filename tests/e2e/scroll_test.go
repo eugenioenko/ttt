@@ -420,3 +420,16 @@ func TestScrollLineHidesCursorOnHorizontalScrollbar(t *testing.T) {
 		t.Fatalf("cursor on scrollbar row reported visible at (%d,%d)", x, y)
 	}
 }
+
+func TestCursorHiddenInGutterWhenHorizontallyScrolled(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	openScrollFile(t, h)
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Line, editor.Cursor.Col = 0, 0
+	editor.Viewport.LeftCol = editor.GutterWidth() - 1
+	h.redraw()
+	if x, y, visible := h.app.Root.CursorPosition(); visible {
+		t.Fatalf("cursor in gutter reported visible at (%d,%d)", x, y)
+	}
+}
