@@ -174,3 +174,38 @@ func TestBracketedPasteIntoReplaceBar(t *testing.T) {
 		t.Fatalf("paste leaked into editor: %q", got)
 	}
 }
+
+func TestBracketedPasteIntoSelectDialog(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	h.exec("file.new")
+	h.exec("file.quickOpen")
+	dialog, ok := h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+	if !ok {
+		t.Fatalf("expected SelectDialogWidget, got %T", h.app.Root.TopOverlayWidget())
+	}
+
+	pasteText(h, pasteKeys("main.go"))
+	if got := dialog.Input.Text(); got != "main.go" {
+		t.Fatalf("dialog input = %q, want %q", got, "main.go")
+	}
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
+		t.Fatalf("paste leaked into editor: %q", got)
+	}
+
+	clipboard.DisableSystem()
+	clipboard.Set(".bak")
+	h.exec("editor.paste")
+	if got := dialog.Input.Text(); got != "main.go.bak" {
+		t.Fatalf("dialog input after clipboard command = %q, want %q", got, "main.go.bak")
+	}
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
+		t.Fatalf("clipboard command leaked into editor: %q", got)
+	}
+
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	h.app.PasteText("XYZ")
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "XYZ" {
+		t.Fatalf("editor paste after dismiss = %q, want %q", got, "XYZ")
+	}
+}
