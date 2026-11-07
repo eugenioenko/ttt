@@ -67,3 +67,20 @@ func TestNormalizeLocale(t *testing.T) {
 		}
 	}
 }
+
+func TestStoredKeyResolvesWhenUsed(t *testing.T) {
+	t.Cleanup(func() { SetCatalog(nil) })
+	SetCatalog(nil)
+	key := Key("general.save")
+	if key.Text() != "Save" {
+		t.Fatal("English lookup failed")
+	}
+	catalog, err := ParseCatalog([]byte(`{"general.save":"Guardar"}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	SetCatalog(catalog)
+	if key.Text() != "Guardar" {
+		t.Fatal("stored key cached the original language")
+	}
+}

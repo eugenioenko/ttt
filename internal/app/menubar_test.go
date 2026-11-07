@@ -21,7 +21,7 @@ func buildTestApp(t *testing.T, settings config.Settings) *App {
 }
 
 func TestOpenFileMenuItemImmediatelyPrecedesOpenFolder(t *testing.T) {
-	fileMenu := menuBarMenus()[0]
+	fileMenu := menuItems(menuBarMenus[0])
 	for i, item := range fileMenu {
 		if item.Command != "file.open" {
 			continue

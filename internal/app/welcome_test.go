@@ -70,7 +70,7 @@ func TestLayoutWelcomeShrinksTitleBeforeSpacing(t *testing.T) {
 		{40, 4, 0, 0},
 	}
 	for _, tt := range tests {
-		l := layoutWelcome(tt.w, tt.h, len(welcomeCommands()), 0, 0)
+		l := layoutWelcome(tt.w, tt.h, len(welcomeCommands), 0, 0)
 		if len(l.title) != tt.titleRows || l.gap != tt.gap {
 			t.Errorf("layoutWelcome(%d, %d): title rows %d gap %d, want %d and %d",
 				tt.w, tt.h, len(l.title), l.gap, tt.titleRows, tt.gap)

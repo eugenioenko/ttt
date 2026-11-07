@@ -133,9 +133,9 @@ func (a *App) ShowChangesContextMenu(sx, sy int) {
 func (a *App) ShowChangesFileContextMenu(_ string, status git.FileStatus, sx, sy int) {
 	var items []ui.ContextMenuItem
 	if status.Staged {
-		items = append(items, changesContextMenuStaged()...)
+		items = append(items, menuItems(changesContextMenuStaged)...)
 	} else {
-		items = append(items, changesContextMenuUnstaged()...)
+		items = append(items, menuItems(changesContextMenuUnstaged)...)
 	}
 	items = append(items, ui.MenuSep())
 	items = append(items, a.BuildChangesContextMenu()...)
@@ -632,7 +632,7 @@ func (a *App) ConfirmDiscard(message string, onConfirm func()) {
 func registerWidgetCallbacks(app *App) {
 	reg := app.Reg
 
-	for i := range menuBarMenus() {
+	for i := range menuBarMenus {
 		idx := i
 		reg.Register(command.Command{
 			ID:    menuBarLabels[idx],

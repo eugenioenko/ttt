@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
@@ -28,7 +30,7 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(`{"menu.file":"Archivo","general.save":"Guardar","settings.general":"General (es)"}`)
+	write(`{"menu.file":"Archivo","general.save":"Guardar","settings.general":"General (es)","options.minimal":"Mínimo","help.click":"Clic","help.openFileInPreview":"Vista previa","welcome.openFolder":"Abrir carpeta"}`)
 	a.installPluginLanguages(p)
 	settings := config.LoadSettings()
 	if len(settings.Language.Packs) != 1 || settings.Language.Locale != "" {
@@ -42,9 +44,24 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 		t.Fatal("selection applied before restart")
 	}
 	translated := buildTestApp(t, config.LoadSettings())
-	if translated.MenuBar.Items[0].Name != "Archivo" || menuBarMenus()[0][2].Label != "Guardar" {
+	if translated.MenuBar.Items[0].Name != "Archivo" || menuItems(menuBarMenus[0])[2].Label != "Guardar" {
 		t.Fatalf("menu labels were cached in English: %+v", translated.MenuBar.Items)
 	}
+	for _, items := range [][]widgets.SelectItem{selectionStyleItems(), gutterStyleItems()} {
+		for _, item := range items {
+			if item.ID == "minimal" && item.Label != "Mínimo" {
+				t.Fatalf("style label cached in English: %+v", item)
+			}
+		}
+	}
+	if entries := helpItems(explorerHelpEntries); entries[0].Key != "Clic" || entries[0].Value != "Vista previa" || entries[2].Key != "Enter" {
+		t.Fatalf("help table failed to resolve copy or preserved key notation incorrectly: %+v", entries)
+	}
+	translated.Reg = command.NewRegistry()
+	if items := translated.welcomeItems(); items[0].label != "Abrir carpeta" {
+		t.Fatalf("welcome copy cached in English: %+v", items[0])
+	}
+
 	if i18n.Text("general.cancel") != "Cancel" {
 		t.Fatal("missing translation did not fall back")
 	}

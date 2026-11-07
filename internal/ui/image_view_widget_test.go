@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 )
@@ -438,7 +439,7 @@ func TestImageWidgetShowsCardWhileDecoding(t *testing.T) {
 	if out := commitFrame(t, layer, w, surface); strings.Contains(out, "a=p") {
 		t.Fatalf("first frame placed the image before the decode finished: %q", out)
 	}
-	if text := gridText(grid); !strings.Contains(text, "PNG image 16x12") || !strings.Contains(text, imageLoadingHint()) || strings.Contains(text, imageCardHint()) {
+	if text := gridText(grid); !strings.Contains(text, "PNG image 16x12") || !strings.Contains(text, i18n.Text("imageView.loadingPreview")) || strings.Contains(text, i18n.Text("imageView.unsupportedTerminal")) {
 		t.Errorf("card should show the loading hint while decoding, got:\n%s", text)
 	}
 
