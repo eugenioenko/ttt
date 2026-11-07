@@ -68,7 +68,7 @@ lifecycle.
 
 Packages: `internal/scm`, `internal/git`, `internal/github`, `internal/jsonrpc`,
 `internal/lsp`, `internal/terminal`, `internal/watcher`, and
-`internal/workspace`.
+`internal/workspace`, and `internal/trash`.
 
 Owns external-process and external-state integration. Services expose typed
 operations and results without owning product widgets. Long-running work must

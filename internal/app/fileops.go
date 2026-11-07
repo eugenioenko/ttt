@@ -8,6 +8,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/trash"
 )
 
 func (a *App) FileOpNewFile(path string, reload func()) {
@@ -87,19 +88,35 @@ func (a *App) FileOpRename(path string, reload func()) {
 }
 
 func (a *App) FileOpDelete(path string, reload func()) {
+	a.confirmFileDelete(path, reload, trash.Move)
+}
+
+func (a *App) confirmFileDelete(path string, reload func(), moveToTrash func(string) error) {
 	if path == "" {
 		return
 	}
 	name := filepath.Base(path)
-	a.ShowConfirmDialog(i18n.Format("files.delete", i18n.Args{"name": name}),
+	useTrash := a.Settings.Explorer.UseTrash
+	message := i18n.Format("files.delete", i18n.Args{"name": name})
+	if useTrash {
+		message = i18n.Format("files.moveToTrash", i18n.Args{"name": name})
+	}
+	a.ShowConfirmDialog(message,
 		[]string{i18n.Text("general.no"), i18n.Text("general.yes")},
 		[]func(){
 			func() { a.DismissDialog() },
 			func() {
 				a.DismissDialog()
-				if err := os.RemoveAll(path); err != nil {
-					a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
-					return
+				if useTrash {
+					if err := moveToTrash(path); err != nil {
+						a.StatusError(i18n.Format("files.trashFailed", i18n.Args{"name": name, "error": err.Error()}))
+						return
+					}
+				} else {
+					if err := os.RemoveAll(path); err != nil {
+						a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
+						return
+					}
 				}
 				a.invalidateRepositoryPath(path, RepositoryWorktree)
 				reload()

@@ -56,7 +56,8 @@
     "gitStatusColors": true,
     "dimStagedGitColors": false,
     "autoReveal": false,
-    "compactFolders": true
+    "compactFolders": true,
+    "useTrash": true
   },
   "sidebar": {
     "tabStyle": "label"

@@ -188,6 +188,7 @@ String detection uses the language grammar independently of theme colors and whe
 | `explorer.dimStagedGitColors` | bool | `false` | Render staged changes in a dimmed version of their status color, telling them apart from pending ones. Off by default: the Changes panel already separates staged from unstaged, and the extra shades make the explorer busier. Needs `explorer.gitStatusColors` |
 | `explorer.autoReveal` | bool | `false` | Expand the file explorer to the active file and select it whenever the active file changes. **Explorer: Reveal Active File** does the same on demand |
 | `explorer.compactFolders` | bool | `true` | Show a folder whose only entry is another folder as one row, such as `src/main/java`. Expanding the row opens the whole chain. Right-clicking a segment acts on that folder; other actions on the row apply to the deepest folder |
+| `explorer.useTrash` | bool | `true` | Move deleted files and folders to system Trash. Linux and FreeBSD require `gio` from GLib; Android is unsupported. Failed Trash operations report an error without deleting permanently. Set to `false` for permanent deletion with an explicit warning. Available under **Settings > Sidebar > Files** |
 
 ## Quick Open
 
@@ -409,7 +410,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "gitStatusColors": true,
     "dimStagedGitColors": false,
     "autoReveal": false,
-    "compactFolders": true
+    "compactFolders": true,
+    "useTrash": true
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]

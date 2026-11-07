@@ -109,6 +109,33 @@ func TestLoadTerminalCtrlVPastes(t *testing.T) {
 	}
 }
 
+func TestExplorerUseTrashSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{}`, true},
+		{`{"explorer":{"showHidden":false}}`, true},
+		{`{"explorer":{"useTrash":true}}`, true},
+		{`{"explorer":{"useTrash":false}}`, false},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s := LoadSettings()
+		if s.Explorer.UseTrash != tc.want {
+			t.Fatalf("%s: useTrash = %v, want %v", tc.json, s.Explorer.UseTrash, tc.want)
+		}
+		if err := SaveSettings(s); err != nil {
+			t.Fatal(err)
+		}
+		if got := LoadSettings().Explorer.UseTrash; got != tc.want {
+			t.Fatalf("useTrash round trip = %v, want %v", got, tc.want)
+		}
+	}
+}
+
 func TestTerminalPaddingSettings(t *testing.T) {
 	dir := withTempConfigDir(t)
 	for _, tt := range []struct {
