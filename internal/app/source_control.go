@@ -48,3 +48,15 @@ func (cp *ChangesPanel) stagePaths(dir string, unstage bool, paths ...string) er
 	}
 	return staging.Stage(ctx, paths)
 }
+
+func (g changesGroup) filesIn(group scm.ChangeGroup) []scm.Change {
+	// Preserve the existing two-section projection while retaining provider
+	// group identity in each change for consumers that do not use an index.
+	var files []scm.Change
+	for _, change := range g.Changes {
+		if change.Group == group || group == scm.WorkingTree && change.Group != scm.Staged {
+			files = append(files, change)
+		}
+	}
+	return files
+}

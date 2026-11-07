@@ -42,10 +42,7 @@ func TestProviderPreservesStatusAndLiteralStaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := make([]FileStatus, 0, len(changes))
-	for _, c := range changes {
-		got = append(got, FileStatus{Path: c.Path, OldPath: c.OldPath, Status: c.Status, Staged: c.Group == scm.Staged})
-	}
+	got := FromChanges(changes)
 	if !reflect.DeepEqual(got, files) {
 		t.Fatalf("provider status changed: %v / %v", got, files)
 	}

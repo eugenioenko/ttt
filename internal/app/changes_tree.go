@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/config"
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
@@ -32,11 +32,18 @@ func workingNodeID(kind workNodeKind, dir, path string, staged bool) string {
 	return strings.Join([]string{"working", string(kind), stage, dir, path}, "\x00")
 }
 
+func workingChangeNodeID(kind workNodeKind, dir, path string, group scm.ChangeGroup) string {
+	if group == "" || group == scm.WorkingTree || group == scm.Staged {
+		return workingNodeID(kind, dir, path, group == scm.Staged)
+	}
+	return strings.Join([]string{"working", string(kind), "group", string(group), dir, path}, "\x00")
+}
+
 type filePathDir struct {
 	name  string
 	path  string
 	dirs  map[string]*filePathDir
-	files []git.FileStatus
+	files []scm.Change
 }
 
 func newFilePathDir(name, path string) *filePathDir {
@@ -46,13 +53,13 @@ func newFilePathDir(name, path string) *filePathDir {
 // compactFileTree turns Git's slash-separated paths into directory nodes.
 // Consecutive directories with no files or siblings render as one row, which
 // preserves the hierarchy without spending most of a short sidebar on folders.
-func compactFileTree(scope string, files []git.FileStatus, makeLeaf func(git.FileStatus) *widgets.TreeNode, expanded map[string]bool) []*widgets.TreeNode {
+func compactFileTree(scope string, files []scm.Change, makeLeaf func(scm.Change) *widgets.TreeNode, expanded map[string]bool) []*widgets.TreeNode {
 	return compactFileTreeWithFolderID(files, makeLeaf, func(path string) string {
 		return "folder:" + scope + ":" + path
 	}, expanded)
 }
 
-func compactFileTreeWithFolderID(files []git.FileStatus, makeLeaf func(git.FileStatus) *widgets.TreeNode, folderID func(string) string, expanded map[string]bool) []*widgets.TreeNode {
+func compactFileTreeWithFolderID(files []scm.Change, makeLeaf func(scm.Change) *widgets.TreeNode, folderID func(string) string, expanded map[string]bool) []*widgets.TreeNode {
 	root := newFilePathDir("", "")
 	for _, file := range files {
 		parts := strings.Split(file.Path, "/")
@@ -79,7 +86,7 @@ func compactFileTreeWithFolderID(files []git.FileStatus, makeLeaf func(git.FileS
 	return compactPathChildren(root, makeLeaf, folderID, expanded)
 }
 
-func compactPathChildren(dir *filePathDir, makeLeaf func(git.FileStatus) *widgets.TreeNode, folderID func(string) string, expanded map[string]bool) []*widgets.TreeNode {
+func compactPathChildren(dir *filePathDir, makeLeaf func(scm.Change) *widgets.TreeNode, folderID func(string) string, expanded map[string]bool) []*widgets.TreeNode {
 	dirNames := make([]string, 0, len(dir.dirs))
 	for name := range dir.dirs {
 		dirNames = append(dirNames, name)
@@ -112,7 +119,7 @@ func compactPathChildren(dir *filePathDir, makeLeaf func(git.FileStatus) *widget
 		})
 	}
 
-	slices.SortFunc(dir.files, func(a, b git.FileStatus) int {
+	slices.SortFunc(dir.files, func(a, b scm.Change) int {
 		return strings.Compare(a.Path, b.Path)
 	})
 	for _, file := range dir.files {
@@ -243,14 +250,14 @@ func (cp *ChangesPanel) rebuildCommitFileNodes() {
 	cp.CommitLog.SetItems(cp.CommitLog.Config.Items)
 }
 
-func (cp *ChangesPanel) fileNodes(dir string, files []git.FileStatus, staged bool, group int, pr bool) []*widgets.TreeNode {
+func (cp *ChangesPanel) fileNodes(dir string, files []scm.Change, staged bool, group int, pr bool) []*widgets.TreeNode {
 	fileKind := workNodeFile
 	folderKind := workNodeFolder
 	if pr {
 		fileKind = workNodePRFile
 		folderKind = workNodePRFolder
 	}
-	makeLeaf := func(file git.FileStatus) *widgets.TreeNode {
+	makeLeaf := func(file scm.Change) *widgets.TreeNode {
 		return cp.fileNode(dir, file, staged, fileKind, group, pr)
 	}
 	if cp.fileView == config.GitFileViewList {
@@ -265,7 +272,7 @@ func (cp *ChangesPanel) fileNodes(dir string, files []git.FileStatus, staged boo
 		cp.workNodes[id] = workNodeRef{Dir: dir, Path: path, Staged: staged, Kind: folderKind, Group: group, PR: pr}
 		return id
 	}, cp.expanded)
-	if !pr {
+	if !pr && cp.supportsStaging(dir) {
 		attachFolderActions(nodes, staged, cp.workNodes)
 	}
 	return nodes

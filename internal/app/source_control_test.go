@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -32,7 +33,7 @@ func (r testSCMRepository) Identity(context.Context) (scm.Identity, error) {
 	return scm.Identity{Root: r.root, Label: "working-change"}, nil
 }
 func (r testSCMRepository) Changes(context.Context) ([]scm.Change, error) {
-	return []scm.Change{{Path: "新規/[literal].txt", Status: "?", Group: scm.WorkingTree}, {Path: "renamed.txt", OldPath: "old.txt", Status: "R", Group: scm.Staged}}, nil
+	return []scm.Change{{Path: "新規/[literal].txt", Kind: scm.Untracked, Group: scm.WorkingTree}, {Path: "renamed.txt", OldPath: "old.txt", Kind: scm.Renamed, Group: scm.Staged}}, nil
 }
 func (r testSCMRepository) Revision(context.Context) (string, error) { return "opaque-revision", nil }
 
@@ -70,11 +71,11 @@ func TestRepositoryStateUsesInjectedSourceControl(t *testing.T) {
 	if entry.Group.Repository != repo || entry.Revision != "opaque-revision" || entry.Group.Dir != root {
 		t.Fatalf("repository identity: %+v", entry)
 	}
-	if len(entry.Group.Staged) != 1 || entry.Group.Staged[0].OldPath != "old.txt" || len(entry.Group.Unstaged) != 1 || entry.Group.Unstaged[0].Path != "新規/[literal].txt" {
+	if len(entry.Group.filesIn(scm.Staged)) != 1 || entry.Group.filesIn(scm.Staged)[0].OldPath != "old.txt" || len(entry.Group.filesIn(scm.WorkingTree)) != 1 || entry.Group.filesIn(scm.WorkingTree)[0].Path != "新規/[literal].txt" {
 		t.Fatalf("changes: %+v", entry.Group)
 	}
 	identity := state.readIdentity(context.Background(), filepath.Join(root, "file.txt"), 8)
-	if identity.Err != nil || identity.Seq != 8 || identity.Identity.Root != root || identity.Identity.Branch != "working-change" {
+	if identity.Err != nil || identity.Seq != 8 || identity.Identity.Root != root || identity.Identity.Label != "working-change" {
 		t.Fatalf("identity: %+v", identity)
 	}
 	cp.groups = []changesGroup{entry.Group}
@@ -148,4 +149,12 @@ func TestSourceControlWithoutStaging(t *testing.T) {
 			t.Fatalf("unsupported staging: %v", err)
 		}
 	}
+}
+
+func testSCMChanges(group scm.ChangeGroup, files []git.FileStatus) []scm.Change {
+	changes := git.ToChanges(files)
+	for i := range changes {
+		changes[i].Group = group
+	}
+	return changes
 }

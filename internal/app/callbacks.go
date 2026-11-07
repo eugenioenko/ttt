@@ -16,6 +16,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 
@@ -130,9 +131,9 @@ func (a *App) ShowChangesContextMenu(sx, sy int) {
 	openContextMenu(a, a.BuildChangesContextMenu(), sx, sy)
 }
 
-func (a *App) ShowChangesFileContextMenu(dir string, status git.FileStatus, sx, sy int) {
+func (a *App) ShowChangesFileContextMenu(dir string, status scm.Change, sx, sy int) {
 	var items []ui.ContextMenuItem
-	if status.Staged {
+	if status.Group == scm.Staged {
 		items = append(items, changesContextMenuStaged...)
 	} else {
 		items = append(items, changesContextMenuUnstaged...)
@@ -151,14 +152,25 @@ func (a *App) ShowChangesFileContextMenu(dir string, status git.FileStatus, sx, 
 	openContextMenu(a, items, sx, sy)
 }
 
-func (a *App) ShowChangesFolderContextMenu(_, _ string, staged bool, sx, sy int) {
+func (a *App) ShowChangesFolderContextMenu(dir, _ string, staged bool, sx, sy int) {
 	var items []ui.ContextMenuItem
 	if staged {
 		items = append(items, changesFolderContextMenuStaged...)
 	} else {
 		items = append(items, changesFolderContextMenuUnstaged...)
 	}
-	items = append(items, ui.MenuSep())
+	if !a.Changes.supportsStaging(dir) {
+		filtered := items[:0]
+		for _, item := range items {
+			if item.Command != "changes.stageFolder" && item.Command != "changes.unstageFolder" {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
+	if len(items) > 0 {
+		items = append(items, ui.MenuSep())
+	}
 	items = append(items, a.BuildChangesContextMenu()...)
 	openContextMenu(a, items, sx, sy)
 }

@@ -49,7 +49,7 @@ type RepositoryStatusResult struct {
 type RepositoryIdentityResult struct {
 	Seq      uint64
 	FilePath string
-	Identity git.RepositoryIdentity
+	Identity scm.Identity
 	Err      error
 }
 
@@ -110,11 +110,11 @@ type RepositoryState struct {
 	lastGroups    map[string]changesGroup
 	lastRevisions map[string]string
 	lastRoots     map[string]string
-	identities    map[string]git.RepositoryIdentity
+	identities    map[string]scm.Identity
 
 	activeFile     string
 	activeRoot     string
-	activeBranch   string
+	activeLabel    string
 	identitySeq    uint64
 	identityCancel context.CancelFunc
 
@@ -156,7 +156,7 @@ func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
 		lastGroups:         make(map[string]changesGroup),
 		lastRevisions:      make(map[string]string),
 		lastRoots:          make(map[string]string),
-		identities:         make(map[string]git.RepositoryIdentity),
+		identities:         make(map[string]scm.Identity),
 		currentInputs:      make(map[string]currentChangesInput),
 		readCurrentChanges: readCurrentChanges,
 	}
@@ -422,10 +422,7 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 			currentStatusFresh = true
 		}
 		if entryErr == nil {
-			statuses := make([]git.FileStatus, 0, len(group.Staged)+len(group.Unstaged))
-			statuses = append(statuses, group.Staged...)
-			statuses = append(statuses, group.Unstaged...)
-			s.currentInputs[group.Dir] = newCurrentChangesInput(revision, statuses)
+			s.currentInputs[group.Dir] = newCurrentChangesInput(revision, group.Changes)
 		}
 	}
 	s.lastGroups = nextGroups
@@ -612,14 +609,7 @@ func scanRepositoryStatus(ctx context.Context, provider scm.Provider, dirs []str
 			changes, err := repo.Changes(ctx)
 			entry.StatusErr = err
 			if err == nil {
-				for _, change := range changes {
-					file := git.FileStatus{Path: change.Path, OldPath: change.OldPath, Status: change.Status, Staged: change.Group == scm.Staged}
-					if file.Staged {
-						entry.Group.Staged = append(entry.Group.Staged, file)
-					} else {
-						entry.Group.Unstaged = append(entry.Group.Unstaged, file)
-					}
-				}
+				entry.Group.Changes = append([]scm.Change(nil), changes...)
 			}
 			entry.Revision, entry.RevisionErr = repo.Revision(ctx)
 		}
@@ -676,7 +666,7 @@ func readRepositoryIdentity(ctx context.Context, provider scm.Provider, filePath
 		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
 	}
 	identity, err := repo.Identity(ctx)
-	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: git.RepositoryIdentity{Root: identity.Root, Branch: identity.Label}, Err: err}
+	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: identity, Err: err}
 }
 
 func repositoryDiscoveryDirectory(filePath string) (string, error) {
@@ -720,13 +710,13 @@ func (s *RepositoryState) SetActiveFile(filePath string) {
 	s.identitySeq++
 	s.activeFile = filePath
 	s.activeRoot = ""
-	s.activeBranch = ""
+	s.activeLabel = ""
 	if filePath == "" {
 		return
 	}
 	if identity, ok := s.repositoryForPath(filePath); ok {
 		s.activeRoot = identity.Root
-		s.activeBranch = identity.Branch
+		s.activeLabel = identity.Label
 	}
 	s.refreshActiveIdentity()
 }
@@ -774,14 +764,14 @@ func (s *RepositoryState) HandleIdentity(result *RepositoryIdentityResult) {
 	}
 	s.identities[identity.Root] = identity
 	s.activeRoot = identity.Root
-	s.activeBranch = identity.Branch
+	s.activeLabel = identity.Label
 }
 
 func (s *RepositoryState) ActiveRepository() (string, string) {
 	if s == nil {
 		return "", ""
 	}
-	return s.activeRoot, s.activeBranch
+	return s.activeRoot, s.activeLabel
 }
 
 func (s *RepositoryState) RepositoryForPath(path string) (string, string) {
@@ -789,18 +779,18 @@ func (s *RepositoryState) RepositoryForPath(path string) (string, string) {
 	if !ok {
 		return "", ""
 	}
-	return identity.Root, identity.Branch
+	return identity.Root, identity.Label
 }
 
-func (s *RepositoryState) repositoryForPath(path string) (git.RepositoryIdentity, bool) {
+func (s *RepositoryState) repositoryForPath(path string) (scm.Identity, bool) {
 	if s == nil || path == "" {
-		return git.RepositoryIdentity{}, false
+		return scm.Identity{}, false
 	}
 	identityPath, err := s.resolvePathIdentity(path)
 	if err != nil {
-		return git.RepositoryIdentity{}, false
+		return scm.Identity{}, false
 	}
-	best := git.RepositoryIdentity{}
+	best := scm.Identity{}
 	for root, identity := range s.identities {
 		if pathWithin(root, identityPath) && len(root) > len(best.Root) {
 			best = identity
