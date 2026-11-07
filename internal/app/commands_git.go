@@ -16,6 +16,10 @@ import (
 )
 
 func (a *App) DiscardSelected() {
+	if _, _, _, isFolder := a.Changes.SelectedFolder(); isFolder {
+		a.Changes.confirmDiscardFolder(a.Changes.Tree.Selected())
+		return
+	}
 	dir, status, ok := a.Changes.SelectedFile()
 	if !ok || status.Staged {
 		return
@@ -384,6 +388,30 @@ func registerGitCommands(app *App) {
 		ID: "changes.discard", Title: i18n.Text("command.gitDiscardChanges"),
 		Keywords: []string{"git", "changes", "revert", "undo"},
 		Handler:  app.DiscardSelected,
+	})
+
+	reg.Register(command.Command{
+		ID: "changes.stageFolder", Title: i18n.Text("command.gitStageFolder"),
+		Keywords: []string{"git", "changes", "add", "folder", "directory"},
+		Handler: func() {
+			app.Changes.stageFolder(app.Changes.Tree.Selected())
+		},
+	})
+
+	reg.Register(command.Command{
+		ID: "changes.unstageFolder", Title: i18n.Text("command.gitUnstageFolder"),
+		Keywords: []string{"git", "changes", "remove", "folder", "directory"},
+		Handler: func() {
+			app.Changes.unstageFolder(app.Changes.Tree.Selected())
+		},
+	})
+
+	reg.Register(command.Command{
+		ID: "changes.discardFolder", Title: i18n.Text("command.gitDiscardFolderChanges"),
+		Keywords: []string{"git", "changes", "revert", "undo", "folder", "directory"},
+		Handler: func() {
+			app.Changes.confirmDiscardFolder(app.Changes.Tree.Selected())
+		},
 	})
 
 	registerGitCmd := func(id, title string, keywords []string, ops []RepoOp, progress, done string) {

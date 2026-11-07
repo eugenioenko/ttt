@@ -75,24 +75,25 @@ type ChangesPanel struct {
 	fileView           string
 	icons              string
 
-	OnOpenDiff       func(dir string, status git.FileStatus, staged, extended bool)
-	OnOpenCommitDiff func(dir, ref, short string, status git.FileStatus, extended bool)
-	OnOpenCommit     func(dir, ref, short string)
-	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
-	OnOpenPRDetail   func(group *ui.ChangesGroup)
-	OnOpenFile       func(path string)
-	OnRightClick     func(dir string, status git.FileStatus, screenX, screenY int)
-	OnPanelMenu      func(screenX, screenY int)
-	OnCommit         func(dir string, message string)
-	OnGroupMenu      func(dir string, screenX, screenY int)
-	OnPRGroupMenu    func(group *ui.ChangesGroup, screenX, screenY int)
-	OnRefreshPR      func(url string)
-	OnConfirmDiscard func(message string, onConfirm func())
-	OnError          func(message string)
-	OnRefreshed      func()
-	OnRefresh        func()
-	OnStatusChanged  func()
-	OnHistoryResult  func(error)
+	OnOpenDiff         func(dir string, status git.FileStatus, staged, extended bool)
+	OnOpenCommitDiff   func(dir, ref, short string, status git.FileStatus, extended bool)
+	OnOpenCommit       func(dir, ref, short string)
+	OnOpenPRDiff       func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
+	OnOpenPRDetail     func(group *ui.ChangesGroup)
+	OnOpenFile         func(path string)
+	OnRightClick       func(dir string, status git.FileStatus, screenX, screenY int)
+	OnRightClickFolder func(dir, path string, staged bool, screenX, screenY int)
+	OnPanelMenu        func(screenX, screenY int)
+	OnCommit           func(dir string, message string)
+	OnGroupMenu        func(dir string, screenX, screenY int)
+	OnPRGroupMenu      func(group *ui.ChangesGroup, screenX, screenY int)
+	OnRefreshPR        func(url string)
+	OnConfirmDiscard   func(message string, onConfirm func())
+	OnError            func(message string)
+	OnRefreshed        func()
+	OnRefresh          func()
+	OnStatusChanged    func()
+	OnHistoryResult    func(error)
 
 	PRGroups []prGroup
 }
@@ -934,6 +935,12 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 		if ok && staged {
 			cp.applied(cp.stagePaths(dir, true, status.Path))
 		}
+	case "stageFolder":
+		cp.stageFolder(node)
+	case "unstageFolder":
+		cp.unstageFolder(node)
+	case "discardFolder":
+		cp.confirmDiscardFolder(node)
 	case "stageAll":
 		gi := cp.groupIndexFromNode(node)
 		if gi >= 0 {
@@ -1051,6 +1058,12 @@ func (cp *ChangesPanel) handleMenu(node *widgets.TreeNode, sx, sy int) {
 		cp.OnRightClick(dir, status, sx, sy)
 		return
 	}
+	if ref, isFolder := cp.folderRef(node); isFolder {
+		if cp.OnRightClickFolder != nil {
+			cp.OnRightClickFolder(ref.Dir, ref.Path, ref.Staged, sx, sy)
+		}
+		return
+	}
 	if ref, found := cp.workNodes[node.ID]; found && ref.Kind == workNodePRRoot && ref.Group >= 0 && ref.Group < len(cp.PRGroups) {
 		if cp.OnPRGroupMenu != nil {
 			uiGroup := cp.toUIChangesGroup(&cp.PRGroups[ref.Group])
@@ -1106,6 +1119,87 @@ func (cp *ChangesPanel) groupIndexFromNode(node *widgets.TreeNode) int {
 		}
 	}
 	return -1
+}
+
+// folderRef reports the working-tree folder row a node names, so folder actions
+// can never run against a file row or a pull-request row.
+func (cp *ChangesPanel) folderRef(node *widgets.TreeNode) (workNodeRef, bool) {
+	if node == nil {
+		return workNodeRef{}, false
+	}
+	ref, ok := cp.workNodes[node.ID]
+	return ref, ok && !ref.PR && ref.Kind == workNodeFolder
+}
+
+// folderFiles collects every file below a folder row. The tree builds all
+// children eagerly, so a collapsed folder stages and discards the same set as
+// an expanded one.
+func (cp *ChangesPanel) folderFiles(node *widgets.TreeNode) []git.FileStatus {
+	var files []git.FileStatus
+	var visit func(nodes []*widgets.TreeNode)
+	visit = func(nodes []*widgets.TreeNode) {
+		for _, n := range nodes {
+			if file, ok := cp.workFiles[n.ID]; ok {
+				files = append(files, file.Status)
+				continue
+			}
+			visit(n.Children)
+		}
+	}
+	visit(node.Children)
+	return files
+}
+
+func (cp *ChangesPanel) stageFolder(node *widgets.TreeNode) {
+	ref, ok := cp.folderRef(node)
+	if !ok || ref.Staged {
+		return
+	}
+	if files := cp.folderFiles(node); len(files) > 0 {
+		cp.applied(git.Stage(ref.Dir, filePaths(files)...))
+	}
+}
+
+func (cp *ChangesPanel) unstageFolder(node *widgets.TreeNode) {
+	ref, ok := cp.folderRef(node)
+	if !ok || !ref.Staged {
+		return
+	}
+	if files := cp.folderFiles(node); len(files) > 0 {
+		cp.applied(git.Unstage(ref.Dir, filePaths(files)...))
+	}
+}
+
+func (cp *ChangesPanel) confirmDiscardFolder(node *widgets.TreeNode) {
+	ref, ok := cp.folderRef(node)
+	if !ok || ref.Staged || cp.OnConfirmDiscard == nil {
+		return
+	}
+	files := cp.folderFiles(node)
+	if len(files) == 0 {
+		return
+	}
+	msg := i18n.Format("changes.discardFolderChangesThisIsIrreversible", i18n.Args{"changeCount": len(files), "folder": ref.Path})
+	cp.OnConfirmDiscard(msg, func() {
+		untracked, tracked := discardPaths(files)
+		err := git.DiscardUntracked(ref.Dir, untracked...)
+		if e := git.Discard(ref.Dir, tracked...); e != nil && err == nil {
+			err = e
+		}
+		cp.applied(err)
+	})
+}
+
+// SelectedFolder reports the working-tree folder row that is selected, if any.
+func (cp *ChangesPanel) SelectedFolder() (dir, path string, staged, ok bool) {
+	if cp.commandContext != changesWorkingTree {
+		return
+	}
+	ref, ok := cp.folderRef(cp.Tree.Selected())
+	if !ok {
+		return
+	}
+	return ref.Dir, ref.Path, ref.Staged, true
 }
 
 func (cp *ChangesPanel) stageAll() {
@@ -1303,6 +1397,14 @@ func (cp *ChangesPanel) ToggleStageSelected() {
 	}
 	node := cp.Tree.Selected()
 	if node == nil {
+		return
+	}
+	if ref, isFolder := cp.folderRef(node); isFolder {
+		if ref.Staged {
+			cp.unstageFolder(node)
+		} else {
+			cp.stageFolder(node)
+		}
 		return
 	}
 	dir, status, staged, ok := cp.parseFileNode(node)
