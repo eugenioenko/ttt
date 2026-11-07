@@ -48,6 +48,51 @@ func TestCommitMessageContextCancellationKillsAndReapsProcessGroup(t *testing.T)
 	waitFakeGitExit(t, child)
 }
 
+func TestMutationCancellationAllowsLockCleanupAndBoundsUnresponsiveGit(t *testing.T) {
+	for _, ignoreTerm := range []bool{false, true} {
+		name := "cleanup"
+		if ignoreTerm {
+			name = "escalation"
+		}
+		t.Run(name, func(t *testing.T) {
+			binDir := t.TempDir()
+			lock := filepath.Join(binDir, "index.lock")
+			pidPath := filepath.Join(binDir, "parent.pid")
+			script := "#!/bin/sh\ntrap 'rm -f \"$FAKE_GIT_LOCK\"; exit 0' TERM\n: > \"$FAKE_GIT_LOCK\"\nprintf '%s' \"$$\" > \"$FAKE_GIT_PARENT\"\nwhile :; do sleep 30; done\n"
+			if ignoreTerm {
+				script = "#!/bin/sh\ntrap '' TERM\nprintf '%s' \"$$\" > \"$FAKE_GIT_PARENT\"\nexec sleep 30\n"
+			}
+			if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+			t.Setenv("FAKE_GIT_LOCK", lock)
+			t.Setenv("FAKE_GIT_PARENT", pidPath)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			errCh := make(chan error, 1)
+			go func() { errCh <- runPathsContext(ctx, binDir, []string{"add", "--"}, []string{"file.txt"}) }()
+			pid := waitFakeGitPID(t, pidPath)
+			t.Cleanup(func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+			cancel()
+			select {
+			case err := <-errCh:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("cancellation: %v", err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("mutation did not exit after cancellation")
+			}
+			if !ignoreTerm {
+				if _, err := os.Stat(lock); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("lock not cleaned up: %v", err)
+				}
+			}
+			waitFakeGitExit(t, pid)
+		})
+	}
+}
+
 func waitFakeGitPID(t *testing.T, path string) int {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)

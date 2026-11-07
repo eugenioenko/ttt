@@ -13,3 +13,7 @@ func gitCommandContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd.WaitDelay = time.Second
 	return cmd
 }
+
+func gitMutationCommandContext(ctx context.Context, args ...string) *exec.Cmd {
+	return gitCommandContext(ctx, args...)
+}

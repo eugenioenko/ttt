@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
 )
@@ -135,12 +136,20 @@ type RepositoryState struct {
 }
 
 func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
+	var provider scm.Provider = git.Provider{}
+	if changes != nil {
+		provider = changes.provider
+	}
 	return &RepositoryState{
-		changes:            changes,
-		dirs:               append([]string(nil), dirs...),
-		scheduler:          realRepositoryScheduler{},
-		readStatus:         readRepositoryStatus,
-		readIdentity:       readRepositoryIdentity,
+		changes:   changes,
+		dirs:      append([]string(nil), dirs...),
+		scheduler: realRepositoryScheduler{},
+		readStatus: func(ctx context.Context, dirs []string, seq uint64) *RepositoryStatusResult {
+			return &RepositoryStatusResult{Seq: seq, Entries: scanRepositoryStatus(ctx, provider, dirs)}
+		},
+		readIdentity: func(ctx context.Context, path string, seq uint64) *RepositoryIdentityResult {
+			return readRepositoryIdentity(ctx, provider, path, seq)
+		},
 		debounceWait:       repositoryRefreshDebounce,
 		pollWait:           repositoryPollInterval,
 		statusWait:         repositoryStatusTimeout,
@@ -582,82 +591,76 @@ func (s *RepositoryState) Close() {
 	}
 }
 
-func readRepositoryStatus(ctx context.Context, dirs []string, seq uint64) *RepositoryStatusResult {
-	return &RepositoryStatusResult{Seq: seq, Entries: scanRepositoryStatus(ctx, dirs)}
-}
-
-func scanRepositoryStatus(ctx context.Context, dirs []string) []repositoryStatusEntry {
-	dirs = expandNonGitDirsContext(ctx, dirs)
+func scanRepositoryStatus(ctx context.Context, provider scm.Provider, dirs []string) []repositoryStatusEntry {
+	dirs = expandRepositoryDirs(ctx, provider, dirs)
 	entries := make([]repositoryStatusEntry, 0, len(dirs))
 	seen := make(map[string]bool)
-	for _, dir := range dirs {
-		sourceDir := cleanAbsolutePath(dir)
-		root, rootErr := git.RepoRootWithErrorContext(ctx, dir)
-		if rootErr == nil && root != "" {
-			dir = root
+	for _, source := range dirs {
+		dir := cleanAbsolutePath(source)
+		repo, rootErr := provider.Discover(ctx, dir)
+		if rootErr == nil {
+			dir = cleanAbsolutePath(repo.Root())
 		}
-		dir = cleanAbsolutePath(dir)
 		if seen[dir] {
 			continue
 		}
 		seen[dir] = true
-		files, statusErr := git.StatusFilesContext(ctx, dir)
-		var staged, unstaged []git.FileStatus
-		if statusErr == nil {
-			for _, file := range files {
-				if file.Staged {
-					staged = append(staged, file)
-				} else {
-					unstaged = append(unstaged, file)
+		entry := repositoryStatusEntry{SourceDir: cleanAbsolutePath(source), Group: changesGroup{Dir: dir, Name: filepath.Base(dir), Repository: repo}, RootErr: rootErr}
+		if rootErr != nil {
+			entry.StatusErr, entry.RevisionErr = rootErr, rootErr
+		} else {
+			changes, err := repo.Changes(ctx)
+			entry.StatusErr = err
+			if err == nil {
+				for _, change := range changes {
+					file := git.FileStatus{Path: change.Path, OldPath: change.OldPath, Status: change.Status, Staged: change.Group == scm.Staged}
+					if file.Staged {
+						entry.Group.Staged = append(entry.Group.Staged, file)
+					} else {
+						entry.Group.Unstaged = append(entry.Group.Unstaged, file)
+					}
 				}
 			}
+			entry.Revision, entry.RevisionErr = repo.Revision(ctx)
 		}
-		revision, revisionErr := git.RevisionIdentityContext(ctx, dir)
-		entries = append(entries, repositoryStatusEntry{
-			SourceDir: sourceDir,
-			Group: changesGroup{
-				Dir:      dir,
-				Name:     filepath.Base(dir),
-				Staged:   staged,
-				Unstaged: unstaged,
-			},
-			Revision:    revision,
-			RootErr:     rootErr,
-			StatusErr:   statusErr,
-			RevisionErr: revisionErr,
-		})
+		entries = append(entries, entry)
 	}
 	return entries
 }
 
-func expandNonGitDirs(dirs []string) []string {
-	return expandNonGitDirsContext(context.Background(), dirs)
-}
-
-// expandNonGitDirsContext replaces directories that are not git repositories
-// with any immediate child directories that are. Directories that are already
-// inside a git work tree are kept as-is.
-func expandNonGitDirsContext(ctx context.Context, dirs []string) []string {
-	expanded := make([]string, 0, len(dirs))
+func expandRepositoryDirs(ctx context.Context, provider scm.Provider, dirs []string) []string {
+	var expanded []string
 	for _, dir := range dirs {
 		if ctx.Err() != nil {
-			return expanded
+			break
 		}
-		if git.IsRepoContext(ctx, dir) {
+		if _, err := provider.Discover(ctx, dir); err == nil {
 			expanded = append(expanded, dir)
 			continue
 		}
-		children := git.DiscoverChildReposContext(ctx, dir)
-		if len(children) > 0 {
-			expanded = append(expanded, children...)
-		} else {
+		children, _ := os.ReadDir(dir)
+		found := false
+		for _, child := range children {
+			if ctx.Err() != nil {
+				break
+			}
+			if !child.IsDir() || strings.HasPrefix(child.Name(), ".") {
+				continue
+			}
+			path := filepath.Join(dir, child.Name())
+			if _, err := provider.Discover(ctx, path); err == nil {
+				expanded = append(expanded, path)
+				found = true
+			}
+		}
+		if !found {
 			expanded = append(expanded, dir)
 		}
 	}
 	return expanded
 }
 
-func readRepositoryIdentity(ctx context.Context, filePath string, seq uint64) *RepositoryIdentityResult {
+func readRepositoryIdentity(ctx context.Context, provider scm.Provider, filePath string, seq uint64) *RepositoryIdentityResult {
 	if err := ctx.Err(); err != nil {
 		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
 	}
@@ -668,8 +671,12 @@ func readRepositoryIdentity(ctx context.Context, filePath string, seq uint64) *R
 	if err := ctx.Err(); err != nil {
 		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
 	}
-	identity, err := git.ReadRepositoryIdentityContext(ctx, dir)
-	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: identity, Err: err}
+	repo, err := provider.Discover(ctx, dir)
+	if err != nil {
+		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
+	}
+	identity, err := repo.Identity(ctx)
+	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: git.RepositoryIdentity{Root: identity.Root, Branch: identity.Label}, Err: err}
 }
 
 func repositoryDiscoveryDirectory(filePath string) (string, error) {

@@ -315,7 +315,7 @@ func TestReadRepositoryIdentityUsesStableFileSymlinkIdentity(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	result := readRepositoryIdentity(context.Background(), link, 7)
+	result := readRepositoryIdentity(context.Background(), git.Provider{}, link, 7)
 	if result.Err != nil {
 		t.Fatal(result.Err)
 	}
@@ -327,7 +327,7 @@ func TestReadRepositoryIdentityUsesStableFileSymlinkIdentity(t *testing.T) {
 	}
 
 	missing := filepath.Join(repo, "missing", "deeper", "file.txt")
-	result = readRepositoryIdentity(context.Background(), missing, 8)
+	result = readRepositoryIdentity(context.Background(), git.Provider{}, missing, 8)
 	if result.Err != nil || result.FilePath != missing || result.Identity.Root != repo || result.Identity.Branch != "main" {
 		t.Fatalf("missing-file repository identity = %+v, want presentation path %q root %q branch main", result, missing, repo)
 	}
@@ -967,7 +967,7 @@ func TestRepositoryScanCarriesSourceIdentityAndRootFailure(t *testing.T) {
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 	source := filepath.Join(t.TempDir(), "repo", "workspace")
 
-	entries := scanRepositoryStatus(context.Background(), []string{source})
+	entries := scanRepositoryStatus(context.Background(), git.Provider{}, []string{source})
 	if len(entries) != 1 {
 		t.Fatalf("scan entries = %d, want 1", len(entries))
 	}
@@ -1648,7 +1648,7 @@ func TestExpandNonGitDirsReplacesNonRepoWithChildren(t *testing.T) {
 		testAppGit(t, d, "init")
 	}
 
-	got := expandNonGitDirs([]string{root})
+	got := expandRepositoryDirs(context.Background(), git.Provider{}, []string{root})
 	if len(got) != 2 {
 		t.Fatalf("expandNonGitDirs = %v, want 2 child repos", got)
 	}
@@ -1665,7 +1665,7 @@ func TestExpandNonGitDirsKeepsExistingRepos(t *testing.T) {
 	repo := canonicalTestPath(t, t.TempDir())
 	testAppGit(t, repo, "init")
 
-	got := expandNonGitDirs([]string{repo})
+	got := expandRepositoryDirs(context.Background(), git.Provider{}, []string{repo})
 	if len(got) != 1 {
 		t.Fatalf("expandNonGitDirs = %v, want 1 entry", got)
 	}
@@ -1678,7 +1678,7 @@ func TestExpandNonGitDirsKeepsExistingRepos(t *testing.T) {
 
 func TestExpandNonGitDirsKeepsDirWithNoChildren(t *testing.T) {
 	root := t.TempDir()
-	got := expandNonGitDirs([]string{root})
+	got := expandRepositoryDirs(context.Background(), git.Provider{}, []string{root})
 	if len(got) != 1 || got[0] != root {
 		t.Fatalf("expandNonGitDirs = %v, want [%s]", got, root)
 	}

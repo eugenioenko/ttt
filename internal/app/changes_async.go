@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -94,36 +95,11 @@ type CommitDetailResult struct {
 	Canceled              bool
 }
 
-func readChangesGroups(dirs []string) []changesGroup {
-	dirs = expandNonGitDirs(dirs)
-	var groups []changesGroup
-	seen := make(map[string]bool)
-	for _, dir := range dirs {
-		if root := git.RepoRoot(dir); root != "" {
-			dir = root
-		}
-		if seen[dir] {
-			continue
-		}
-		seen[dir] = true
-		files, err := git.StatusFiles(dir)
-		if err != nil {
-			files = nil
-		}
-		var staged, unstaged []git.FileStatus
-		for _, f := range files {
-			if f.Staged {
-				staged = append(staged, f)
-			} else {
-				unstaged = append(unstaged, f)
-			}
-		}
-		groups = append(groups, changesGroup{
-			Dir:      dir,
-			Name:     filepath.Base(dir),
-			Staged:   staged,
-			Unstaged: unstaged,
-		})
+func readChangesGroups(provider scm.Provider, dirs []string) []changesGroup {
+	entries := scanRepositoryStatus(context.Background(), provider, dirs)
+	groups := make([]changesGroup, 0, len(entries))
+	for _, entry := range entries {
+		groups = append(groups, entry.Group)
 	}
 	return groups
 }

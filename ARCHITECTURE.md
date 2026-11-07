@@ -66,13 +66,21 @@ lifecycle.
 
 ### Services
 
-Packages: `internal/git`, `internal/github`, `internal/jsonrpc`,
+Packages: `internal/scm`, `internal/git`, `internal/github`, `internal/jsonrpc`,
 `internal/lsp`, `internal/terminal`, `internal/watcher`, and
 `internal/workspace`.
 
 Owns external-process and external-state integration. Services expose typed
 operations and results without owning product widgets. Long-running work must
 have explicit cancellation, identity, shutdown, and stale-result behavior.
+
+`internal/scm` owns the internal provider, repository, and optional staging
+contracts. Git supplies the built-in adapter. Repository discovery, status,
+active identity, and staging use this boundary; `RepositoryState` retains async
+lifecycle ownership. Status codes and application/UI models remain compatible
+with Git during this first migration slice. History, content/diff reads,
+discard, other mutations, and plugin registration still need migration before
+a second provider can drive the complete editor.
 
 ### Presentation kernel
 
