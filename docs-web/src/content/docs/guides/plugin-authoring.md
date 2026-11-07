@@ -16,7 +16,7 @@ Plugins live in one of two locations:
 
 If a plugin with the same name exists in both locations, the global one takes precedence.
 
-Each plugin is a directory containing a manifest file and one or more Lua source files:
+Each plugin is a directory containing a manifest file and Lua source files or declarative contributions:
 
 ```
 ~/.config/ttt/plugins/my-plugin/
@@ -50,11 +50,12 @@ Every plugin requires a `plugin.ttt.json` manifest file at the root of its direc
 | `description` | string | no       | Shown in the plugin list dialog.                    |
 | `version`     | string | no       | Semver version string.                              |
 | `author`      | string | no       | Plugin author name.                                 |
-| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars` or `themes`. |
+| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars`, `themes`, or `languages`. |
 | `api`         | number | no       | Plugin API version the plugin targets. Defaults to `1` when omitted. The editor refuses to load plugins that target a newer API than it supports. |
 | `permissions` | object | no       | Object declaring required permissions (see [Permissions Reference](#permissions-reference)). |
 | `grammars`    | array  | no       | TextMate grammars the plugin contributes (see [Grammar plugins](#grammar-plugins)). |
 | `themes`      | array  | no       | Theme JSON files the plugin contributes (see [Theme plugins](#theme-plugins)). |
+| `languages`   | array  | no       | Interface translation catalogs (see [Language packs](#language-packs)). |
 
 ### Minimal Example
 
@@ -103,6 +104,39 @@ Each entry requires a `path` relative to the plugin directory. The optional `nam
 The approval dialog lists every theme. After approval, ttt copies the files into `~/.config/ttt/themes/plugins/<plugin-name>/`. **Switch Theme** lists them as `plugins/<plugin-name>/<theme-name>`; these names also work in the `theme` setting. This namespace prevents collisions with other plugins and manually installed themes. Installing a plugin does not select its theme.
 
 Updating or reloading replaces the plugin's theme files, removes contributions dropped from its manifest, and refreshes an active theme immediately. Invalid source files leave the previously installed themes intact. Disabling keeps the installed themes available. Uninstalling removes them; if the active theme was removed, ttt switches to its default colors and saves that selection.
+
+### Language packs
+
+A language pack translates the core editor interface. It needs no Lua entry point or permissions:
+
+```json
+{
+  "name": "ttt-i18n-es",
+  "displayName": "Español Language Pack",
+  "version": "0.1.0",
+  "languages": [{
+    "locale": "es",
+    "name": "Español",
+    "path": "messages.json",
+    "sourceCommit": "e2c249393ab523cea4a5229640cd0c8ba641e13c",
+    "tttVersion": "1.12.0"
+  }]
+}
+```
+
+`locale` is a BCP 47 language tag, such as `es`, `pt-BR`, or `zh-TW`; `name` is its native display name. Each locale can have one installed provider. English (`en`) is built in. `path` points to a flat JSON string map using the keys from `internal/i18n/en.json`, for example `{"general.save": "Guardar"}`. Paths are relative to the plugin directory and cannot escape it, including through symlinks. Catalog files are limited to 2 MiB each. Preserve named placeholders and their occurrence counts exactly; icons belong in the editor's icon definitions.
+
+The optional `sourceCommit` identifies the full 40-character commit ID in `eugenioenko/ttt` whose `internal/i18n/en.json` was used for translation. During managed plugin installation or update, the host downloads that English catalog into `~/.config/ttt/languages/sources/<commit>.json`, or `$TTT_CONFIG_DIR/languages/sources/<commit>.json` when `TTT_CONFIG_DIR` is set. Installed languages referencing the same commit share one cached English file, which remains available offline. Initial installation fails if a required source cannot be obtained; a failed automatic update keeps the previous language cache.
+
+Copying a plugin directory manually does not download its English source. If its manifest declares `sourceCommit`, download `https://raw.githubusercontent.com/eugenioenko/ttt/<commit>/internal/i18n/en.json` into the configured source cache described above before starting ttt, replacing `<commit>` with the manifest's `sourceCommit`. If that file is missing or invalid, ttt logs an error and does not install the language contribution. A pack without `sourceCommit` does not need this file. Installing through the Plugins panel prepares any required source automatically.
+
+When loading a translation, ttt compares the original English value with its embedded English value. Changed or missing source values fall back to English per message. Missing, empty, unknown, or invalid-placeholder translations also fall back individually. Duplicate keys or malformed JSON reject a file and leave the previous installation intact. Without `sourceCommit`, missing-message and placeholder validation still apply.
+
+After approval, ttt caches the files under `~/.config/ttt/languages/plugins/<plugin-name>/`. Installing a pack adds it to **Change Display Language** and **Settings → General → Display language** without selecting it. Selection takes effect after restarting. Disabling the plugin keeps the cached language available; uninstalling removes it and selects English if necessary. Updating or reloading replaces the bundled contributions.
+
+`tttVersion` identifies the editor release the catalog targets, separately from the plugin's `version`. **Update languages on upgrade** (`language.autoUpdate`) defaults to on. When a newer ttt version starts, it checks installed packs from public GitHub repositories for a catalog targeting that version or later. The check runs in the background, downloads the manifest and JSON files from one pinned commit, and replaces the cache only after validation. It never updates or executes Lua code. Failed or unavailable updates keep the cached language; an updated active language takes effect after restarting. Versions without release numbers, such as `dev`, skip this check. Turn the setting off to manage updates manually with **Plugins: Update**.
+
+The [ttt-plugins language packs](https://github.com/eugenioenko/ttt-plugins/tree/main/i18n) include common-language packs and a local Codex CLI script that compares one shared English snapshot and translates only added or changed messages. Use `make languages` to generate and `make languages-check` to validate. Per-language ignore lists and `--ignore-keys` preserve selected translations even when their English text changes. These ignored keys are skipped during generation, retaining their existing translations as approved against the new English source. Runtime loading does not read ignore lists; placeholder validation still applies. Third-party plugin UI copy is owned by each plugin and is not translated by these core catalogs.
 
 ### Grammar plugins
 

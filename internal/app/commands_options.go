@@ -218,19 +218,23 @@ func (a *App) SetGutterStyle(style string) {
 }
 
 // Display labels for the gutter and border style values in config.
-var styleLabels = map[string]string{
-	"minimal":    i18n.Text("options.minimal"),
-	"compact":    i18n.Text("options.compact"),
-	"extended":   i18n.Text("options.extended"),
-	"default":    i18n.Text("options.default"),
-	"rounded":    i18n.Text("options.rounded"),
-	"sharp":      i18n.Text("options.sharp"),
-	"double":     i18n.Text("options.double"),
-	"bold":       i18n.Text("options.bold"),
-	"ascii":      i18n.Text("options.aSCII"),
-	"none":       i18n.Text("options.none"),
-	"background": i18n.Text("options.background"),
-	"invert":     i18n.Text("options.invert"),
+var styleLabels map[string]string
+
+func initStyleText() {
+	styleLabels = map[string]string{
+		"minimal":    i18n.Text("options.minimal"),
+		"compact":    i18n.Text("options.compact"),
+		"extended":   i18n.Text("options.extended"),
+		"default":    i18n.Text("options.default"),
+		"rounded":    i18n.Text("options.rounded"),
+		"sharp":      i18n.Text("options.sharp"),
+		"double":     i18n.Text("options.double"),
+		"bold":       i18n.Text("options.bold"),
+		"ascii":      i18n.Text("options.aSCII"),
+		"none":       i18n.Text("options.none"),
+		"background": i18n.Text("options.background"),
+		"invert":     i18n.Text("options.invert"),
+	}
 }
 
 func selectionStyleItems() []widgets.SelectItem {

@@ -225,6 +225,7 @@ func (a *App) removePlugin(name string) {
 	a.closePluginDrawerAndTabs(name)
 	a.uninstallPluginGrammars(name)
 	a.uninstallPluginThemes(name)
+	a.uninstallPluginLanguages(name)
 
 	a.resetPluginDetailButton(name)
 	if a.PluginsPanel != nil {
@@ -290,6 +291,7 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 			a.installPluginGrammars(p)
 		} else {
 			a.installPluginThemes(p)
+			a.installPluginLanguages(p)
 		}
 	}
 	if a.PluginsPanel != nil {
@@ -312,6 +314,9 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 			Key:   i18n.Text("plugins.grammar"),
 			Value: grammarLabel(g),
 		})
+	}
+	for _, language := range p.Manifest.Languages {
+		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: i18n.Text("settings.displayLanguage"), Value: language.Name + " (" + language.Locale + ")"})
 	}
 	for _, theme := range p.Manifest.Themes {
 		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: i18n.Text("plugins.theme"), Value: theme.ID()})
@@ -403,6 +408,7 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
 	a.installPluginThemes(p)
+	a.installPluginLanguages(p)
 	a.wirePluginDialogs(p)
 	a.wirePluginChanges(p)
 	id := "plugin." + p.Name

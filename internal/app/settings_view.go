@@ -65,6 +65,17 @@ func settingsCategories() []settingsCategory {
 	return []settingsCategory{
 		{Title: i18n.Text("settings.general"), Fields: []settingField{
 			section(i18n.Text("settings.startup")),
+			{Label: i18n.Text("settings.displayLanguage"), Kind: settingEnum, Restart: true, Options: languageItems,
+				GetString: func(s *config.Settings) string {
+					if s.Language.Locale == "" {
+						return "en"
+					}
+					return s.Language.Locale
+				},
+				SetString: func(s *config.Settings, v string) { s.Language.Locale = v }},
+			{Label: i18n.Text("settings.autoUpdateLanguagePacks"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Language.IsAutoUpdateEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Language.AutoUpdate = boolPtr(v) }},
 			{Label: i18n.Text("settings.reuseRunningEditor"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.ReuseWindow },
 				SetBool: func(s *config.Settings, v bool) { s.ReuseWindow = v }},

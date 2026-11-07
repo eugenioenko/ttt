@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 )
 
 //go:embed en.json
@@ -20,12 +21,21 @@ var english = func() map[string]string {
 
 type Args map[string]any
 
+var active atomic.Pointer[Catalog]
+
 func Text(id string) string {
+	if catalog := active.Load(); catalog != nil {
+		if message, ok := catalog.messages[id]; ok {
+			return message
+		}
+	}
 	if message, ok := english[id]; ok {
 		return message
 	}
 	return id
 }
+
+func SetCatalog(catalog *Catalog) { active.Store(catalog) }
 
 func Format(id string, args Args) string {
 	return interpolate(Text(id), args)
