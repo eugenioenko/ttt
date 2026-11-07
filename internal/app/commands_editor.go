@@ -248,7 +248,7 @@ func (a *App) confirmCreateSaveDirectory(path string, retry func()) bool {
 
 func missingSaveDirectory(path string) (string, bool) {
 	dir := filepath.Dir(path)
-	info, err := os.Stat(dir)
+	_, err := os.Stat(dir)
 	if err == nil {
 		return dir, false
 	}
