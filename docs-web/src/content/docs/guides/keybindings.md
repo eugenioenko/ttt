@@ -38,6 +38,8 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 | Ctrl+X | Cut |
 | Ctrl+V | Paste |
 | Ctrl+G | Go to line |
+| Ctrl+Up | Scroll line up (viewport only) |
+| Ctrl+Down | Scroll line down (viewport only) |
 | Ctrl+/ | Toggle comment |
 | Ctrl+K J | Join lines |
 | Ctrl+K K | Delete line |

@@ -100,8 +100,10 @@ func (a *App) focusRegion(region string) {
 	}
 }
 
-func (a *App) ScrollUp()   { a.scrollEditor(-1) }
-func (a *App) ScrollDown() { a.scrollEditor(1) }
+func (a *App) ScrollUp()       { a.scrollEditor(-1) }
+func (a *App) ScrollDown()     { a.scrollEditor(1) }
+func (a *App) ScrollLineUp()   { a.EditorGroup.ScrollViewportLines(-1) }
+func (a *App) ScrollLineDown() { a.EditorGroup.ScrollViewportLines(1) }
 
 func (a *App) scrollEditor(direction int) {
 	if lines := a.Settings.Editor.ScrollLines; lines > 0 {
@@ -365,6 +367,18 @@ func registerViewCommands(app *App) {
 		ID: "view.scrollDown", Title: i18n.Text("command.scrollDown"),
 		Keywords: []string{"view", "scroll", "page", "half", "down"},
 		Handler:  app.ScrollDown,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollLineUp", Title: i18n.Text("command.scrollLineUp"),
+		Keywords: []string{"view", "scroll", "line", "viewport", "up"},
+		Handler:  app.ScrollLineUp,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollLineDown", Title: i18n.Text("command.scrollLineDown"),
+		Keywords: []string{"view", "scroll", "line", "viewport", "down"},
+		Handler:  app.ScrollLineDown,
 	})
 
 	reg.Register(command.Command{

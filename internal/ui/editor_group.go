@@ -2708,6 +2708,16 @@ func (g *EditorGroupWidget) ScrollLines(delta int) {
 	}
 }
 
+func (g *EditorGroupWidget) ScrollViewportLines(delta int) {
+	if e := g.keyEditor(); e != nil {
+		if delta < 0 {
+			e.scrollUp(-delta)
+		} else {
+			e.scrollDown(delta)
+		}
+	}
+}
+
 func (g *EditorGroupWidget) ScrollHalfPage(direction int) {
 	if e := g.keyEditor(); e != nil {
 		e.ScrollRows(direction * max(1, e.Viewport.Height/2))

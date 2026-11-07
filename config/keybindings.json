@@ -3,6 +3,8 @@
   { "key": "ctrl+f", "command": "search.find" },
   { "key": "ctrl+r", "command": "search.replace" },
   { "key": "ctrl+g", "command": "editor.goToLine" },
+  { "key": "ctrl+up", "command": "view.scrollLineUp" },
+  { "key": "ctrl+down", "command": "view.scrollLineDown" },
   { "key": "ctrl+p", "command": "command.palette" },
   { "key": "ctrl+k p", "command": "file.quickOpen" },
   { "key": "ctrl+o", "command": "workspace.openFolder" },

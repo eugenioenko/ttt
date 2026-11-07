@@ -208,6 +208,8 @@
   "command.searchAndReplaceInFiles": "Search and Replace in Files",
   "command.searchKeyboardShortcuts": "Search: Keyboard Shortcuts",
   "command.scrollDown": "Scroll Down",
+  "command.scrollLineDown": "Scroll Line Down",
+  "command.scrollLineUp": "Scroll Line Up",
   "command.scrollUp": "Scroll Up",
   "command.selectAll": "Select All",
   "command.selectAllOccurrences": "Select All Occurrences",
