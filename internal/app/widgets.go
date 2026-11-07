@@ -235,6 +235,7 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 
 func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget) *App {
 	locale, languageErr := loadDisplayLanguage(cfg.Settings.Language)
+	initText()
 
 	bracketStyles := ResolveBracketColorStyles(cfg.Theme.Editor.BracketColors)
 

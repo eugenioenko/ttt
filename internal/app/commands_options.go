@@ -217,25 +217,30 @@ func (a *App) SetGutterStyle(style string) {
 	a.SaveAndApplySettings()
 }
 
-var styleLabels = map[string]i18n.Message{
-	"minimal":    i18n.Key("options.minimal"),
-	"compact":    i18n.Key("options.compact"),
-	"extended":   i18n.Key("options.extended"),
-	"default":    i18n.Key("options.default"),
-	"rounded":    i18n.Key("options.rounded"),
-	"sharp":      i18n.Key("options.sharp"),
-	"double":     i18n.Key("options.double"),
-	"bold":       i18n.Key("options.bold"),
-	"ascii":      i18n.Key("options.aSCII"),
-	"none":       i18n.Key("options.none"),
-	"background": i18n.Key("options.background"),
-	"invert":     i18n.Key("options.invert"),
+// Display labels for the gutter and border style values in config.
+var styleLabels map[string]string
+
+func initStyleText() {
+	styleLabels = map[string]string{
+		"minimal":    i18n.Text("options.minimal"),
+		"compact":    i18n.Text("options.compact"),
+		"extended":   i18n.Text("options.extended"),
+		"default":    i18n.Text("options.default"),
+		"rounded":    i18n.Text("options.rounded"),
+		"sharp":      i18n.Text("options.sharp"),
+		"double":     i18n.Text("options.double"),
+		"bold":       i18n.Text("options.bold"),
+		"ascii":      i18n.Text("options.aSCII"),
+		"none":       i18n.Text("options.none"),
+		"background": i18n.Text("options.background"),
+		"invert":     i18n.Text("options.invert"),
+	}
 }
 
 func selectionStyleItems() []widgets.SelectItem {
 	items := make([]widgets.SelectItem, 0, len(config.SelectionStyles))
 	for _, id := range config.SelectionStyles {
-		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id].Text()})
+		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
 	}
 	return items
 }
@@ -243,7 +248,7 @@ func selectionStyleItems() []widgets.SelectItem {
 func gutterStyleItems() []widgets.SelectItem {
 	items := make([]widgets.SelectItem, 0, len(config.GutterStyles))
 	for _, id := range config.GutterStyles {
-		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id].Text()})
+		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
 	}
 	return items
 }
@@ -256,7 +261,7 @@ func borderStyleItems() []widgets.SelectItem {
 		if id == "theme" {
 			continue
 		}
-		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id].Text()})
+		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
 	}
 	return items
 }

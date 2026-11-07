@@ -133,9 +133,9 @@ func (a *App) ShowChangesContextMenu(sx, sy int) {
 func (a *App) ShowChangesFileContextMenu(_ string, status git.FileStatus, sx, sy int) {
 	var items []ui.ContextMenuItem
 	if status.Staged {
-		items = append(items, menuItems(changesContextMenuStaged)...)
+		items = append(items, changesContextMenuStaged...)
 	} else {
-		items = append(items, menuItems(changesContextMenuUnstaged)...)
+		items = append(items, changesContextMenuUnstaged...)
 	}
 	items = append(items, ui.MenuSep())
 	items = append(items, a.BuildChangesContextMenu()...)

@@ -12,8 +12,19 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
+
+// Text tables are initialized after the catalog loads and before the UI is built.
+func initText() {
+	initMenuText()
+	initHelpText()
+	initStyleText()
+	initWelcomeText()
+	initWelcomeViewText()
+	ui.InitText()
+}
 
 func loadDisplayLanguage(settings config.LanguageSettings) (string, error) {
 	i18n.SetCatalog(nil)

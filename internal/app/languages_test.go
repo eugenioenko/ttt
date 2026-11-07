@@ -7,16 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
-	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
-	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil) })
+	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil); initText() })
 	a := buildTestApp(t, config.DefaultSettings())
 	if !a.Settings.Language.IsAutoUpdateEnabled() {
 		t.Fatal("auto-update must default on")
@@ -40,26 +38,22 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 		t.Fatalf("picker=%v", items)
 	}
 	a.SetDisplayLanguage("es")
-	if i18n.Text("general.save") != "Save" {
+	if i18n.Text("general.save") != "Save" || menuBarMenus[0][2].Label != "Save" {
 		t.Fatal("selection applied before restart")
 	}
 	translated := buildTestApp(t, config.LoadSettings())
-	if translated.MenuBar.Items[0].Name != "Archivo" || menuItems(menuBarMenus[0])[2].Label != "Guardar" {
+	if translated.MenuBar.Items[0].Name != "Archivo" || menuBarMenus[0][2].Label != "Guardar" {
 		t.Fatalf("menu labels were cached in English: %+v", translated.MenuBar.Items)
 	}
-	for _, items := range [][]widgets.SelectItem{selectionStyleItems(), gutterStyleItems()} {
-		for _, item := range items {
-			if item.ID == "minimal" && item.Label != "Mínimo" {
-				t.Fatalf("style label cached in English: %+v", item)
-			}
-		}
+	if styleLabels["minimal"] != "Mínimo" {
+		t.Fatalf("style label cached in English: %q", styleLabels["minimal"])
 	}
-	if entries := helpItems(explorerHelpEntries); entries[0].Key != "Clic" || entries[0].Value != "Vista previa" || entries[2].Key != "Enter" {
+
+	if entries := explorerHelpEntries; entries[0].Key != "Clic" || entries[0].Value != "Vista previa" || entries[2].Key != "Enter" {
 		t.Fatalf("help table failed to resolve copy or preserved key notation incorrectly: %+v", entries)
 	}
-	translated.Reg = command.NewRegistry()
-	if items := translated.welcomeItems(); items[0].label != "Abrir carpeta" {
-		t.Fatalf("welcome copy cached in English: %+v", items[0])
+	if welcomeCommands[0].label != "Abrir carpeta" {
+		t.Fatalf("welcome copy cached in English: %+v", welcomeCommands[0])
 	}
 
 	if i18n.Text("general.cancel") != "Cancel" {
@@ -101,7 +95,7 @@ func TestLanguagePackInstallSelectionAndRestart(t *testing.T) {
 
 func TestLanguageAutoUpdateDoesNotGetOverwrittenByOldPluginBundle(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
-	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil) })
+	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil); initText() })
 	a := buildTestApp(t, config.DefaultSettings())
 	p := &plugin.Plugin{Name: "spanish", Dir: t.TempDir(), Repo: "https://github.com/example/languages", Manifest: plugin.Manifest{
 		Languages: []plugin.Language{{Locale: "es", Name: "Español", Path: "messages.json", TTTVersion: "1.11.0"}},
@@ -130,7 +124,7 @@ func TestLanguageAutoUpdateDoesNotGetOverwrittenByOldPluginBundle(t *testing.T) 
 
 func TestLanguageAutoUpdateDisabledAndMissingPack(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
-	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil) })
+	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil); initText() })
 	settings := config.DefaultSettings()
 	settings.Language.Locale = "es"
 	settings.Language.AutoUpdate = boolPtr(false)
@@ -144,14 +138,14 @@ func TestLanguageAutoUpdateDisabledAndMissingPack(t *testing.T) {
 	if a.language.updates != nil {
 		t.Fatal("disabled update created a task")
 	}
-	if a.MenuBar.Items[0].Name != "File" {
+	if a.MenuBar.Items[0].Name != "File" || menuBarMenus[0][2].Label != "Save" {
 		t.Fatal("missing pack did not fall back to English")
 	}
 }
 
 func TestLanguageBundleMetadataAndRemovedContribution(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
-	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil) })
+	t.Cleanup(func() { config.OverrideConfigDir = ""; i18n.SetCatalog(nil); initText() })
 	a := buildTestApp(t, config.DefaultSettings())
 	p := &plugin.Plugin{Name: "spanish", Dir: t.TempDir(), Manifest: plugin.Manifest{
 		Languages: []plugin.Language{{Locale: "es", Name: "Español", Path: "messages.json", TTTVersion: "1.11.0"}},

@@ -3,7 +3,6 @@ package i18n
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -107,7 +106,78 @@ func TestCatalogReferences(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			checkCatalogReferences(file, fset, used, t.Errorf)
+			alias := ""
+			for _, spec := range file.Imports {
+				if spec.Path.Value == `"github.com/eugenioenko/ttt/internal/i18n"` {
+					alias = "i18n"
+					if spec.Name != nil {
+						alias = spec.Name.Name
+					}
+				}
+			}
+			if alias == "" {
+				return nil
+			}
+			ast.Inspect(file, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || (selector.Sel.Name != "Text" && selector.Sel.Name != "Format") {
+					return true
+				}
+				receiver, ok := selector.X.(*ast.Ident)
+				if !ok || receiver.Name != alias {
+					return true
+				}
+				position := fset.Position(call.Pos())
+				if len(call.Args) == 0 {
+					t.Errorf("%s: missing message ID", position)
+					return true
+				}
+				id, ok := stringLiteral(call.Args[0])
+				if !ok {
+					t.Errorf("%s: use a literal message ID so references can be validated", position)
+					return true
+				}
+				message, ok := english[id]
+				if !ok {
+					t.Errorf("%s: message %q is missing from en.json", position, id)
+					return true
+				}
+				used[id] = true
+				var supplied []string
+				if selector.Sel.Name == "Format" {
+					if len(call.Args) != 2 {
+						t.Errorf("%s: Format needs named arguments", position)
+						return true
+					}
+					args, ok := call.Args[1].(*ast.CompositeLit)
+					if !ok {
+						t.Errorf("%s: use an i18n.Args literal so placeholders can be validated", position)
+						return true
+					}
+					for _, element := range args.Elts {
+						pair, ok := element.(*ast.KeyValueExpr)
+						if !ok {
+							t.Errorf("%s: arguments must be named", position)
+							continue
+						}
+						name, ok := stringLiteral(pair.Key)
+						if !ok {
+							t.Errorf("%s: argument names must be literals", position)
+							continue
+						}
+						supplied = append(supplied, name)
+					}
+				}
+				slices.Sort(supplied)
+				if want := placeholders(message); !slices.Equal(supplied, want) {
+					t.Errorf("%s: %s supplies %v, catalog needs %v", position, id, supplied, want)
+				}
+				return true
+			})
 			return nil
 		})
 		if err != nil {
@@ -118,116 +188,6 @@ func TestCatalogReferences(t *testing.T) {
 		if !used[id] {
 			t.Errorf("%s is unused; remove stale copy from en.json", id)
 		}
-	}
-}
-
-func checkCatalogReferences(file *ast.File, fset *token.FileSet, used map[string]bool, report func(string, ...any)) {
-	alias := ""
-	for _, spec := range file.Imports {
-		if spec.Path.Value == `"github.com/eugenioenko/ttt/internal/i18n"` {
-			alias = "i18n"
-			if spec.Name != nil {
-				alias = spec.Name.Name
-			}
-		}
-	}
-	if alias == "" {
-		return
-	}
-	ast.Inspect(file, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || (selector.Sel.Name != "Text" && selector.Sel.Name != "Format" && selector.Sel.Name != "Key") {
-			return true
-		}
-		receiver, ok := selector.X.(*ast.Ident)
-		if !ok || receiver.Name != alias {
-			return true
-		}
-		position := fset.Position(call.Pos())
-		if len(call.Args) == 0 {
-			report("%s: missing message ID", position)
-			return true
-		}
-		id, ok := stringLiteral(call.Args[0])
-		if !ok {
-			report("%s: use a literal message ID so references can be validated", position)
-			return true
-		}
-		message, ok := english[id]
-		if !ok {
-			report("%s: message %q is missing from en.json", position, id)
-			return true
-		}
-		used[id] = true
-		var supplied []string
-		if selector.Sel.Name == "Format" {
-			if len(call.Args) != 2 {
-				report("%s: Format needs named arguments", position)
-				return true
-			}
-			args, ok := call.Args[1].(*ast.CompositeLit)
-			if !ok {
-				report("%s: use an i18n.Args literal so placeholders can be validated", position)
-				return true
-			}
-			for _, element := range args.Elts {
-				pair, ok := element.(*ast.KeyValueExpr)
-				if !ok {
-					report("%s: arguments must be named", position)
-					continue
-				}
-				name, ok := stringLiteral(pair.Key)
-				if !ok {
-					report("%s: argument names must be literals", position)
-					continue
-				}
-				supplied = append(supplied, name)
-			}
-		}
-		slices.Sort(supplied)
-		if want := placeholders(message); !slices.Equal(supplied, want) {
-			report("%s: %s supplies %v, catalog needs %v", position, id, supplied, want)
-		}
-		return true
-	})
-}
-
-func TestStoredKeyReferences(t *testing.T) {
-	for _, tt := range []struct {
-		name, source, wantError string
-	}{
-		{"valid table", `var labels = map[string]i18n.Message{"save": i18n.Key("general.save")}`, ""},
-		{"missing table key", `var labels = map[string]i18n.Message{"save": i18n.Key("missing.message")}`, "missing from en.json"},
-		{"dynamic key", `var label = i18n.Key(key)`, "literal message ID"},
-		{"unformatted key", `var label = i18n.Key("status.failedToOpenTerminal")`, "catalog needs [error]"},
-		{"missing direct key", `var label = i18n.Text("missing.message")`, "missing from en.json"},
-		{"missing format argument", `var label = i18n.Format("status.failedToOpenTerminal", i18n.Args{})`, "catalog needs [error]"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			fset := token.NewFileSet()
-			file, err := parser.ParseFile(fset, "table.go", `package example
-import "github.com/eugenioenko/ttt/internal/i18n"
-`+tt.source, parser.SkipObjectResolution)
-			if err != nil {
-				t.Fatal(err)
-			}
-			used := map[string]bool{}
-			var errors []string
-			checkCatalogReferences(file, fset, used, func(format string, args ...any) {
-				errors = append(errors, fmt.Sprintf(format, args...))
-			})
-			if tt.wantError == "" {
-				if len(errors) != 0 || !used["general.save"] {
-					t.Fatalf("used=%v errors=%v", used, errors)
-				}
-			} else if len(errors) != 1 || !strings.Contains(errors[0], tt.wantError) {
-				t.Fatalf("errors=%v, want %q", errors, tt.wantError)
-			}
-		})
 	}
 }
 

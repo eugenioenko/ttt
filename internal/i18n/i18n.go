@@ -21,12 +21,6 @@ var english = func() map[string]string {
 
 type Args map[string]any
 
-type Message struct{ id string }
-
-func Key(id string) Message { return Message{id: id} }
-
-func (m Message) Text() string { return Text(m.id) }
-
 var active atomic.Pointer[Catalog]
 
 func Text(id string) string {

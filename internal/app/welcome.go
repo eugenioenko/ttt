@@ -17,16 +17,22 @@ import (
 
 const welcomeTabID = "welcome"
 
-var welcomeCommands = []struct {
-	label     i18n.Message
-	commandID string
-}{
-	{i18n.Key("welcome.openFolder"), "workspace.openFolder"},
-	{i18n.Key("welcome.cloneRepository"), "workspace.clone"},
-	{i18n.Key("general.newFile"), "file.new"},
-	{i18n.Key("welcome.openWorkspace"), "workspace.open"},
-	{i18n.Key("general.settings"), "settings.openUI"},
-	{i18n.Key("welcome.commandPalette"), "command.palette"},
+var (
+	welcomeFavoritesHint string
+	welcomeCommands      []struct{ label, commandID string }
+)
+
+func initWelcomeText() {
+	welcomeFavoritesHint = i18n.Text("welcome.favoritesHint")
+
+	welcomeCommands = []struct{ label, commandID string }{
+		{i18n.Text("welcome.openFolder"), "workspace.openFolder"},
+		{i18n.Text("welcome.cloneRepository"), "workspace.clone"},
+		{i18n.Text("general.newFile"), "file.new"},
+		{i18n.Text("welcome.openWorkspace"), "workspace.open"},
+		{i18n.Text("general.settings"), "settings.openUI"},
+		{i18n.Text("welcome.commandPalette"), "command.palette"},
+	}
 }
 
 // welcomeItems lists the start actions with their shortcuts, then the
@@ -39,7 +45,7 @@ func (a *App) welcomeItems() []welcomeItem {
 		if cmd, ok := a.Reg.Get(c.commandID); ok {
 			shortcut = cmd.Shortcut
 		}
-		items = append(items, welcomeItem{label: c.label.Text(), detail: shortcut, run: func() { a.Reg.Execute(c.commandID) }})
+		items = append(items, welcomeItem{label: c.label, detail: shortcut, run: func() { a.Reg.Execute(c.commandID) }})
 	}
 	for _, fav := range a.favoriteDirs() {
 		abs := fav.abs
@@ -110,7 +116,7 @@ func (a *App) refreshWelcome() {
 		return
 	}
 	v.items = a.welcomeItems()
-	v.note = i18n.Text("welcome.favoritesHint")
+	v.note = welcomeFavoritesHint
 	for _, item := range v.items {
 		if item.section == i18n.Text("general.favorites") {
 			v.note = ""
