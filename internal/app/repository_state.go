@@ -47,10 +47,11 @@ type RepositoryStatusResult struct {
 }
 
 type RepositoryIdentityResult struct {
-	Seq      uint64
-	FilePath string
-	Identity scm.Identity
-	Err      error
+	Seq        uint64
+	FilePath   string
+	Identity   scm.Identity
+	Repository scm.Repository
+	Err        error
 }
 
 type RepositoryInvalidationRequest struct {
@@ -77,10 +78,12 @@ func (realRepositoryScheduler) AfterFunc(d time.Duration, f func()) repositoryTi
 }
 
 type RepositoryState struct {
-	changes  *ChangesPanel
-	explorer *NavigationPanel
-	dirs     []string
-	poster   eventPoster
+	provider     scm.Provider
+	repositories map[string]scm.Repository
+	changes      *ChangesPanel
+	explorer     *NavigationPanel
+	dirs         []string
+	poster       eventPoster
 
 	scheduler    repositoryScheduler
 	readStatus   func(context.Context, []string, uint64) *RepositoryStatusResult
@@ -141,9 +144,11 @@ func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
 		provider = changes.provider
 	}
 	return &RepositoryState{
-		changes:   changes,
-		dirs:      append([]string(nil), dirs...),
-		scheduler: realRepositoryScheduler{},
+		provider:     provider,
+		repositories: make(map[string]scm.Repository),
+		changes:      changes,
+		dirs:         append([]string(nil), dirs...),
+		scheduler:    realRepositoryScheduler{},
 		readStatus: func(ctx context.Context, dirs []string, seq uint64) *RepositoryStatusResult {
 			return &RepositoryStatusResult{Seq: seq, Entries: scanRepositoryStatus(ctx, provider, dirs)}
 		},
@@ -666,7 +671,7 @@ func readRepositoryIdentity(ctx context.Context, provider scm.Provider, filePath
 		return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Err: err}
 	}
 	identity, err := repo.Identity(ctx)
-	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: identity, Err: err}
+	return &RepositoryIdentityResult{Seq: seq, FilePath: filePath, Identity: identity, Repository: repo, Err: err}
 }
 
 func repositoryDiscoveryDirectory(filePath string) (string, error) {
@@ -763,6 +768,9 @@ func (s *RepositoryState) HandleIdentity(result *RepositoryIdentityResult) {
 		return
 	}
 	s.identities[identity.Root] = identity
+	if result.Repository != nil {
+		s.repositories[identity.Root] = result.Repository
+	}
 	s.activeRoot = identity.Root
 	s.activeLabel = identity.Label
 }

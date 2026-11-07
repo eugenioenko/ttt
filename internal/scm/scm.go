@@ -22,6 +22,21 @@ type Staging interface {
 	Unstage(context.Context, []string) error
 }
 
+// BaselineReader optionally supplies the comparison content for working-copy
+// edits. Providers choose the baseline; paths are literal and repository-relative.
+// Read failures must be errors; Exists=false means the baseline is missing.
+type BaselineReader interface {
+	ReadBaseline(context.Context, string) (Baseline, error)
+}
+
+type Baseline struct {
+	Content string
+	Exists  bool
+	Ignored bool
+	// Conflicted content is a fallback for markers, never an editable diff base.
+	Conflicted bool
+}
+
 type Identity struct {
 	Root  string
 	Label string
