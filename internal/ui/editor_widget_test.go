@@ -40,6 +40,80 @@ func TestEditorRender(t *testing.T) {
 	}
 }
 
+func TestEditorIndentGuidesFollowIndentationStops(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"        value", "\t\tvalue", "   value"}},
+		&cursor.Cursor{},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 3},
+	)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.SetRect(Rect{W: 20, H: 3})
+
+	grid := makeGrid(20, 3)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 3}))
+
+	g := e.GutterWidth()
+	for _, row := range []int{0, 1} {
+		for _, col := range []int{0, 4} {
+			cell := grid[row][g+col]
+			if cell.Ch != '│' || cell.Style != term.StyleMuted {
+				t.Errorf("row %d col %d = %+v, want muted guide", row, col, cell)
+			}
+		}
+	}
+	if got := grid[0][g+8].Ch; got != 'v' {
+		t.Errorf("content after indentation = %q, want 'v'", got)
+	}
+	if got := grid[2][g+0].Ch; got != '│' {
+		t.Errorf("partial indentation guide = %q, want guide at first stop", got)
+	}
+	if got := grid[2][g+3].Ch; got != 'v' {
+		t.Errorf("content after partial indentation = %q, want 'v'", got)
+	}
+}
+
+func TestEditorIndentGuidesStayConnectedAcrossBlankLines(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"        outer", "", "  ", "    inner", "", "        tail"}},
+		&cursor.Cursor{},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 6},
+	)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.SetRect(Rect{W: 20, H: 6})
+
+	grid := makeGrid(20, 6)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 6}))
+
+	g := e.GutterWidth()
+	for _, row := range []int{1, 2, 4} {
+		for _, col := range []int{0, 4} {
+			cell := grid[row][g+col]
+			if cell.Ch != '│' || cell.Style != term.StyleMuted {
+				t.Errorf("blank row %d col %d = %+v, want muted connected guide", row, col, cell)
+			}
+		}
+	}
+}
+
+func TestEditorIndentGuidesDisabledByDefault(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"    value"}},
+		&cursor.Cursor{},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 1},
+	)
+	e.TabSize = 4
+	e.SetRect(Rect{W: 20, H: 1})
+
+	grid := makeGrid(20, 1)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 1}))
+
+	if got := grid[0][e.GutterWidth()].Ch; got != ' ' {
+		t.Fatalf("first indentation cell = %q, want unchanged whitespace", got)
+	}
+}
+
 func TestEditorArrowKeys(t *testing.T) {
 	e := newTestEditor()
 	e.SetRect(Rect{X: 0, Y: 0, W: 20, H: 10})

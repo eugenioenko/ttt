@@ -69,6 +69,26 @@ func TestDiffEditorDefaultsRemainInheritedUntilViewOverride(t *testing.T) {
 	}
 }
 
+func TestDiffEditorIndentGuidesRenderInUnifiedPane(t *testing.T) {
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-        old\n+        new\n")
+	d := NewDiffEditorWidget("test.go", fd, nil, nil, false)
+	d.SetMode(DiffModeUnified)
+	d.SetIndentGuides(true)
+
+	grid := renderDiffEditor(d, 60, 6)
+	row := diffEditorRowOf(grid, "new")
+	if row < 0 {
+		t.Fatal("unified diff does not render the added line")
+	}
+	g := d.unified.GutterWidth()
+	for _, col := range []int{0, 4} {
+		cell := grid[row][g+col]
+		if cell.Ch != '│' || cell.Style != term.StyleMuted {
+			t.Errorf("row %d col %d = %+v, want muted guide", row, col, cell)
+		}
+	}
+}
+
 func TestDiffEditorDelayedFetcherHonorsInheritedFullContext(t *testing.T) {
 	d := NewDiffEditorWidget("test.go", diff.FileDiff{}, nil, nil, false)
 	d.ApplyDefaultContextMode(DiffContextFullFile)

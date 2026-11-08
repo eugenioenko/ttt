@@ -12,6 +12,58 @@ import (
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
+type indentGuideBlankSpan struct {
+	start, end, width int
+}
+
+func indentGuideIndent(line string, tabWidth int) (width, runes int, blank bool) {
+	blank = true
+	for _, ch := range line {
+		switch ch {
+		case ' ':
+			width++
+		case '\t':
+			width = ((width / tabWidth) + 1) * tabWidth
+		default:
+			blank = false
+			return width, runes, blank
+		}
+		runes++
+	}
+	return width, runes, blank
+}
+
+func indentGuideBlankWidth(lines []string, line, tabWidth int, spans *[]indentGuideBlankSpan) int {
+	for _, span := range *spans {
+		if line >= span.start && line <= span.end {
+			return span.width
+		}
+	}
+
+	start, end := line, line
+	above, below := 0, 0
+	for start > 0 {
+		width, _, blank := indentGuideIndent(lines[start-1], tabWidth)
+		if !blank {
+			above = width
+			break
+		}
+		start--
+	}
+	for end+1 < len(lines) {
+		width, _, blank := indentGuideIndent(lines[end+1], tabWidth)
+		if !blank {
+			below = width
+			break
+		}
+		end++
+	}
+
+	width := max(above, below)
+	*spans = append(*spans, indentGuideBlankSpan{start: start, end: end, width: width})
+	return width
+}
+
 func (e *EditorPaneWidget) Render(surface Surface) {
 	e.syncDiffOverlay()
 	if e.Highlighter != nil && e.Buf != nil {
@@ -109,6 +161,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.rowMapOffset = e.topOffset()
 	decorateLinks := e.beginLinkFrame()
 	topRow := e.topRow(layout)
+	var indentGuideSpans []indentGuideBlankSpan
 
 	// A pane narrowed to a shared wrap width leaves columns past its text
 	// that the row loop does not draw.
@@ -158,7 +211,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					bookmarkBg = bg
 				}
 			} else if !e.LineNumbers || (e.WordWrap && isWrapContinuation) {
-				for i := 0; i < gutterW; i++ {
+				for i := range gutterW {
 					surface.SetCell(i, y, term.Cell{Ch: ' ', Style: gutterStyle})
 				}
 			} else {
@@ -219,6 +272,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.WordWrap {
 				segmentByte = runeByteOffset(e.Buf.Lines[lineIdx], segStartCol)
 			}
+			segmentVisualCol := 0
+			if e.IndentGuides && e.WordWrap {
+				segmentVisualCol = bufColToVisualCol(e.Buf.Lines[lineIdx], segStartCol, tabW)
+			}
 			var syntaxSpans []highlight.Span
 			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
 			if !diffFgOverride {
@@ -245,6 +302,13 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
 			screenCells := e.renderLineSegmentToScreen(e.Buf.Lines[lineIdx][segmentByte:], syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			indentWidth, indentRunes, blankLine := 0, 0, false
+			if e.IndentGuides {
+				indentWidth, indentRunes, blankLine = indentGuideIndent(e.Buf.Lines[lineIdx], tabW)
+				if blankLine {
+					indentWidth = indentGuideBlankWidth(e.Buf.Lines, lineIdx, tabW, &indentGuideSpans)
+				}
+			}
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
 				lineBrackets = bracketColors[lineIdx]
@@ -350,6 +414,16 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				}
 				if hide {
 					cell.Attrs |= term.CellAttrHide
+				}
+				if e.IndentGuides && (blankLine || (screenCells[x].bufCol >= 0 && screenCells[x].bufCol < indentRunes)) {
+					visualCol := leftCol + x
+					if e.WordWrap {
+						visualCol = segmentVisualCol + x
+					}
+					if visualCol < indentWidth && visualCol%tabW == 0 {
+						cell.Ch = '│'
+						cell.Style = term.StyleMuted
+					}
 				}
 				surface.SetCell(gutterW+x, y, cell)
 				if decorateLinks && inText && !hide && screenCells[x].width > 0 {

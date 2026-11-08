@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"time"
 	"unicode/utf8"
@@ -115,6 +116,7 @@ type EditorGroupWidget struct {
 	TabSize           int
 	InsertSpaces      bool
 	LineNumbers       bool
+	IndentGuides      bool
 	GutterStyle       string
 	WordWrap          bool
 	WordWrapColumn    int
@@ -840,6 +842,9 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	surface.ApplyDefaultWrapMode(wrapMode)
 	surface.SetDiffHighContrast(g.DiffHighContrast)
 	surface.SetDiffCollapsedEmphasis(g.DiffCollapsedEmphasis)
+	if guides, ok := surface.(indentGuideSurface); ok {
+		guides.SetIndentGuides(g.IndentGuides)
+	}
 	if d, ok := surface.(diffSignsSurface); ok {
 		d.SetDiffSigns(g.DiffSigns)
 		d.SetDiffSignsColor(g.DiffSignsColor)
@@ -852,6 +857,22 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	if m, ok := surface.(scrollMarkSurface); ok {
 		m.SetDiffScrollMarks(g.DiffScrollbarGitMarks, g.LegacyScrollbarGlyphs)
 	}
+}
+
+func (g *EditorGroupWidget) SetIndentGuides(enabled bool) {
+	g.IndentGuides = enabled
+	if g.Editor != nil {
+		g.Editor.IndentGuides = enabled
+	}
+	for _, surface := range g.diffSurfaces() {
+		if guides, ok := surface.(indentGuideSurface); ok {
+			guides.SetIndentGuides(enabled)
+		}
+	}
+}
+
+type indentGuideSurface interface {
+	SetIndentGuides(bool)
 }
 
 func (g *EditorGroupWidget) SetFileIconMode(mode string) {
@@ -1899,9 +1920,7 @@ func (g *EditorGroupWidget) movePathState(oldPath, newPath string) {
 			moved[np] = b
 		}
 	}
-	for p, b := range moved {
-		g.bookmarksByPath[p] = b
-	}
+	maps.Copy(g.bookmarksByPath, moved)
 }
 
 // RenamePath repoints open tabs after a path is renamed on disk. oldPath may be
@@ -2363,10 +2382,7 @@ func (g *EditorGroupWidget) PlaceCursor(line, col int) bool {
 	g.Editor.Cursor.Col = 0
 	if col > 1 {
 		lineLen := len([]rune(g.Editor.Buf.Lines[bufLine]))
-		c := col - 1
-		if c > lineLen {
-			c = lineLen
-		}
+		c := min(col-1, lineLen)
 		g.Editor.Cursor.Col = c
 	}
 	return true
@@ -2387,10 +2403,7 @@ func (g *EditorGroupWidget) GoToLine(line int) {
 	}
 	if h > 0 {
 		margin := h / 3
-		top := bufLine - margin
-		if top < 0 {
-			top = 0
-		}
+		top := max(bufLine-margin, 0)
 		g.Editor.Viewport.TopLine = top
 	}
 	g.Editor.scrollViewport()
@@ -2405,10 +2418,7 @@ func (g *EditorGroupWidget) GoToLineCol(line, col int) {
 		return
 	}
 	lineLen := len([]rune(g.Editor.Buf.Lines[g.Editor.Cursor.Line]))
-	c := col - 1
-	if c > lineLen {
-		c = lineLen
-	}
+	c := min(col-1, lineLen)
 	g.Editor.Cursor.Col = c
 	g.Editor.scrollViewport()
 }
@@ -2613,10 +2623,7 @@ func (g *EditorGroupWidget) ReplaceMatch(match FindMatch, replacement string) {
 		return
 	}
 	runes := []rune(g.Editor.Buf.Lines[match.Line])
-	endCol := match.Col + match.Len
-	if endCol > len(runes) {
-		endCol = len(runes)
-	}
+	endCol := min(match.Col+match.Len, len(runes))
 	g.Editor.exec(&undo.DeleteSelectionCommand{
 		StartLine: match.Line, StartCol: match.Col,
 		EndLine: match.Line, EndCol: endCol,
@@ -2636,8 +2643,8 @@ func (g *EditorGroupWidget) ReplaceAll(query, replacement string, opts SearchOpt
 		return
 	}
 	matches, _ := FindInLines(g.Editor.Buf.Lines, query, opts)
-	for i := len(matches) - 1; i >= 0; i-- {
-		g.ReplaceMatch(matches[i], replacement)
+	for _, match := range slices.Backward(matches) {
+		g.ReplaceMatch(match, replacement)
 	}
 }
 

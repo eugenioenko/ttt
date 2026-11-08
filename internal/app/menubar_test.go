@@ -88,7 +88,7 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 		t.Fatal("Theme and Settings should follow the final separator")
 	}
 	wantCommands := [][]string{
-		{"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
+		{"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
 		{"options.toggleLSP", "options.toggleLSPHover"},
 		{"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.borderStyle"},
 	}
