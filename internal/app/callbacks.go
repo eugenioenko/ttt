@@ -691,9 +691,6 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.Sidebar.OnPanelChange = func(id string) {
-		if id == appsPanelID && len(app.apps) == 0 {
-			app.AddApp()
-		}
 		if id == "search" {
 			app.applySearchHighlights()
 		} else {

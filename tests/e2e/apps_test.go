@@ -158,13 +158,22 @@ func TestDirFallsBackToWorkspaceWithoutAFile(t *testing.T) {
 	}
 }
 
-func TestEmptyAppsDialogCanSaveAndCancel(t *testing.T) {
+func TestEmptyAppsOffersAddButtonWithoutOpeningDialog(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 	h.exec("sidebar.apps")
 	h.assertContains("Add App")
+	if h.app.Root.HasOverlay() {
+		t.Fatal("opening empty Apps must not open a dialog")
+	}
+	if h.app.Root.Focused != h.app.Apps.Adapter {
+		t.Fatal("empty Apps did not receive focus")
+	}
+	list := h.app.Apps.Adapter.Inner().(*widgets.VStackWidget)
+	button := list.Children[3].(*widgets.ButtonWidget).GetRect()
+	h.click(button.X+1, button.Y)
 	if !h.app.Root.HasOverlay() {
-		t.Fatal("empty apps must open the add dialog")
+		t.Fatal("Add App button did not open the dialog")
 	}
 	adapter := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter)
 	if h.app.Root.Focused != adapter {
@@ -175,6 +184,10 @@ func TestEmptyAppsDialogCanSaveAndCancel(t *testing.T) {
 		t.Fatal("cancel added an app")
 	}
 	h.exec("sidebar.apps")
+	if h.app.Root.HasOverlay() {
+		t.Fatal("reopening empty Apps must not open a dialog")
+	}
+	h.exec("apps.add")
 	adapter = h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter)
 	dialog := adapter.Inner().(*widgets.DialogWidget)
 	content := dialog.Content.(*widgets.VStackWidget)

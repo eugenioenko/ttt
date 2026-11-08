@@ -223,9 +223,6 @@ func (a *App) ShowApps() {
 	if !a.Sidebar.Visible {
 		a.ShowSidebar()
 	}
-	if len(a.apps) == 0 {
-		a.AddApp()
-	}
 	if !a.Root.HasOverlay() {
 		a.Root.SetFocus(a.Apps.Adapter)
 	}
