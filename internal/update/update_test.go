@@ -107,6 +107,22 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
+func TestIsDevelopmentVersion(t *testing.T) {
+	for _, version := range []string{"dev", "v1.0.0-12-gabc", "v1.0.0-rc.1-12-gabc-dirty", "v1.0.0-dirty", "abc1234", ""} {
+		if !IsDevelopmentVersion(version) {
+			t.Errorf("%q was treated as a release", version)
+		}
+		if method, err := CurrentMethod(version); err != nil || method.Kind != Dev {
+			t.Errorf("%q method = %+v, %v", version, method, err)
+		}
+	}
+	for _, version := range []string{"1.0.0", "v1.0.0", "v1.0.0-rc.1", "v1.0.0+build.1"} {
+		if IsDevelopmentVersion(version) {
+			t.Errorf("%q was treated as a development build", version)
+		}
+	}
+}
+
 func TestAssetName(t *testing.T) {
 	for _, goos := range []string{"linux", "darwin", "freebsd", "android", "windows"} {
 		for _, arch := range []string{"amd64", "arm64"} {

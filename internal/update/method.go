@@ -67,7 +67,7 @@ func DetectMethod(exePath string, info *debug.BuildInfo) Method {
 }
 
 func CurrentMethod(version string) (Method, error) {
-	if version == "dev" {
+	if IsDevelopmentVersion(version) {
 		return Method{Kind: Dev}, nil
 	}
 	exe, err := os.Executable()

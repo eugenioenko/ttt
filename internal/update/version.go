@@ -8,6 +8,16 @@ import (
 
 var versionPattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$`)
 
+var describeSuffix = regexp.MustCompile(`-[0-9]+-g[0-9a-f]+(?:-dirty)?$`)
+
+func IsDevelopmentVersion(version string) bool {
+	if version == "dev" || describeSuffix.MatchString(version) || strings.HasSuffix(version, "-dirty") {
+		return true
+	}
+	_, err := CompareVersions(version, "0.0.0")
+	return err != nil
+}
+
 func CompareVersions(a, b string) (int, error) {
 	parse := func(s string) ([]string, error) {
 		if s == "dev" {

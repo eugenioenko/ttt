@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,27 +9,45 @@ import (
 	"github.com/eugenioenko/ttt/internal/update"
 )
 
-func restart(method update.Kind) (int, error) {
-	current, err := os.Executable()
+type restartTarget struct{ launch, stable string }
+
+func captureRestartTarget(original string) (restartTarget, error) {
+	launch, err := absoluteLauncher(original)
 	if err != nil {
-		return 1, err
+		launch, err = os.Executable()
+		if err != nil {
+			return restartTarget{}, err
+		}
+		launch, err = filepath.Abs(launch)
+		if err != nil {
+			return restartTarget{}, err
+		}
 	}
-	path, err := restartPath(method, os.Args[0], current)
+	stable, _ := absoluteLauncher("ttt")
+	return restartTarget{launch: launch, stable: stable}, nil
+}
+
+func absoluteLauncher(command string) (string, error) {
+	path, err := exec.LookPath(command)
+	// The parent already launched this command; retain its relative PATH entry.
+	if err != nil && !errors.Is(err, exec.ErrDot) {
+		return "", err
+	}
+	return filepath.Abs(path)
+}
+
+func (t restartTarget) restart(method update.Kind) (int, error) {
+	path, err := t.path(method)
 	if err != nil {
 		return 1, err
 	}
 	return restartProcess(path, os.Args, os.Environ())
 }
 
-func restartPath(method update.Kind, original, current string) (string, error) {
-	if method == update.Homebrew || method == update.Scoop {
-		if path, err := exec.LookPath("ttt"); err == nil {
-			return filepath.EvalSymlinks(path)
-		}
-	}
-	path, err := exec.LookPath(original)
-	if err != nil {
-		path = current
+func (t restartTarget) path(method update.Kind) (string, error) {
+	path := t.launch
+	if (method == update.Homebrew || method == update.Scoop) && t.stable != "" {
+		path = t.stable
 	}
 	return filepath.EvalSymlinks(path)
 }

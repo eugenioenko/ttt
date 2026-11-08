@@ -40,7 +40,7 @@ func TestUpdateDialogResults(t *testing.T) {
 		{"available", "v1.0.0", "v2.0.0", "ttt v2.0.0 is available (you have v1.0.0).", update.Binary},
 		{"nix", "v1.0.0", "v2.0.0", "Update ttt through your Nix configuration", update.Nix},
 		{"dev", "dev", "v2.0.0", "This is a development build.", update.Binary},
-		{"git describe", "v1.0.0-12-gabc", "v2.0.0", "This is a development build.", update.Dev},
+		{"git describe", "v1.0.0-12-gabc", "v1.0.0", "This is a development build.", update.Binary},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := updateHarness(t, tc.kind)

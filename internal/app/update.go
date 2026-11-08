@@ -131,8 +131,7 @@ func (a *App) checkLatestUpdate() {
 		}
 		s.method = detected
 		current := version
-		if _, err := update.CompareVersions(version, "0.0.0"); err != nil {
-			// Builds tagged with git describe hashes have no release identity to compare.
+		if update.IsDevelopmentVersion(version) {
 			s.method.Kind = update.Dev
 			current = "dev"
 		}
@@ -140,9 +139,6 @@ func (a *App) checkLatestUpdate() {
 		if err != nil {
 			a.showUpdateCheckError(err)
 			return
-		}
-		if version == "dev" {
-			s.method.Kind = update.Dev
 		}
 		if cmp >= 0 {
 			a.showUpdateState(i18n.Format("update.latest", i18n.Args{"version": displayVersion(version)}), "", []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.closeButton"))})

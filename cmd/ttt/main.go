@@ -175,9 +175,13 @@ func main() {
 	}()
 	restartRequested := false
 	var restartMethod update.Kind
+	restartLaunch, restartErr := captureRestartTarget(os.Args[0])
 	defer func() {
 		if restartRequested {
-			code, err := restart(restartMethod)
+			code, err := 1, restartErr
+			if err == nil {
+				code, err = restartLaunch.restart(restartMethod)
+			}
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				code = 1
