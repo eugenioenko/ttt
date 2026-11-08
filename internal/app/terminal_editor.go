@@ -38,6 +38,7 @@ func (a *App) releaseEditorTerminal(id string) bool {
 		return false
 	}
 	a.EditorTerminals[idx].Term.Close()
+	a.forgetAppTerminal(id)
 	a.EditorTerminals = slices.Delete(a.EditorTerminals, idx, idx+1)
 	return true
 }

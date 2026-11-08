@@ -9,6 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"reflect"
 	"time"
 )
 
@@ -42,12 +43,17 @@ func (a *App) applySidebarTabStyle(style string) {
 	a.Sidebar.SetPanelIcon("changes", string(icons.Rune(icons.PanelChanges)))
 	a.Sidebar.SetPanelIcon("outline", string(icons.Rune(icons.PanelOutline)))
 	a.Sidebar.SetPanelIcon("plugins", string(icons.Rune(icons.PanelPlugins)))
+	a.Sidebar.SetPanelIcon(appsPanelID, string(icons.Rune(icons.PanelApps)))
 	a.ApplyPluginPanelIcons()
 }
 
 func (a *App) applyIcons(ap config.AppearanceSettings) {
 	for _, warning := range icons.Configure(ap.Icons, ap.Overrides) {
 		a.LogOutput("warn", "settings", warning)
+	}
+	if a.Apps != nil {
+		a.Apps.mode = ap.Icons
+		a.Apps.Filter(a.Apps.SearchInput.Text())
 	}
 	collapsed, expanded := icons.Rune(icons.ChevronRight), icons.Rune(icons.ChevronDown)
 	var trees []*widgets.TreeWidget
@@ -100,10 +106,16 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	a.refreshWelcome()
 	a.TerminalPanel.PaddingX = s.Terminal.PaddingX
+	if a.Reg != nil && a.Sidebar != nil && !reflect.DeepEqual(prev.Applications, s.Applications) {
+		a.syncApps()
+	}
 	for _, tab := range a.allTerminals() {
 		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
 		if tab.Tab != nil {
 			tab.Tab.PaddingX = s.Terminal.PaddingX
+			if tab.Widget.PaddingX != nil {
+				tab.Tab.PaddingX = max(*tab.Widget.PaddingX, 0)
+			}
 		}
 	}
 

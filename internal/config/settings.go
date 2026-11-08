@@ -40,6 +40,20 @@ const (
 	SelectionStyleInvert     = "invert"
 )
 
+type Application struct {
+	Name        string   `json:"name"`
+	CommandText string   `json:"command-text,omitempty"`
+	Command     string   `json:"command"`
+	Args        []string `json:"args,omitempty"`
+	Cwd         string   `json:"cwd,omitempty"`
+	Icon        string   `json:"icon,omitempty"`
+	PaddingX    *int     `json:"padding_x,omitempty"`
+	OpenWith    bool     `json:"openWith,omitempty"`
+	// Location is "editor" (the default) or "panel".
+	Location string `json:"location,omitempty"`
+	KeepOpen bool   `json:"keepOpen,omitempty"`
+}
+
 type TerminalSettings struct {
 	Shell string `json:"shell,omitempty"`
 	// Args are passed to Shell unchanged, so a tab can run a program other than
@@ -478,9 +492,10 @@ type Settings struct {
 	Image        ImageSettings        `json:"image"`
 	// Plugins is safe: each field's zero value (a nil *bool, an empty string)
 	// means its default, so the zero value and "unset" mean the same thing.
-	Plugins    PluginSettings    `json:"plugins,omitzero"`
-	Welcome    WelcomeSettings   `json:"welcome,omitzero"`
-	Formatters map[string]string `json:"formatters,omitempty"`
+	Plugins      PluginSettings    `json:"plugins,omitzero"`
+	Welcome      WelcomeSettings   `json:"welcome,omitzero"`
+	Formatters   map[string]string `json:"formatters,omitempty"`
+	Applications []Application     `json:"applications,omitempty"`
 	// Extra holds top-level keys that are not part of the core schema — chiefly
 	// plugin-namespaced settings (e.g. "vim"). Without this, json.Unmarshal into
 	// the struct would silently drop them, making ttt.settings.get/set unusable
@@ -493,7 +508,7 @@ type Settings struct {
 var knownSettingsKeys = map[string]bool{
 	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "applications": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {

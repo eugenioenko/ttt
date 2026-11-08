@@ -111,6 +111,7 @@ type EditorGroupWidget struct {
 	tabs              []editorTab
 	nextTabIdentity   uint64
 	active            int
+	lastDocumentPath  string
 	pinnedCount       int
 	closedTabs        []closedTab
 	TabSize           int
@@ -2101,6 +2102,28 @@ func (g *EditorGroupWidget) ActiveFilePath() string {
 	return ""
 }
 
+// RecentDocumentPath is the active tab's file or, when the active tab is not a
+// file on disk (an untitled buffer, a plugin or terminal tab), the file tab
+// that was active last, while it is still open.
+func (g *EditorGroupWidget) RecentDocumentPath() string {
+	if path := documentPath(g.activeTab()); path != "" {
+		return path
+	}
+	for i := range g.tabs {
+		if path := documentPath(&g.tabs[i]); path != "" && path == g.lastDocumentPath {
+			return path
+		}
+	}
+	return ""
+}
+
+func documentPath(t *editorTab) string {
+	if t == nil || t.Content != nil || t.Buf == nil || t.Virtual {
+		return ""
+	}
+	return t.FilePath
+}
+
 func (g *EditorGroupWidget) IsActiveVirtual() bool {
 	if t := g.activeTab(); t != nil {
 		return t.Virtual
@@ -3099,6 +3122,9 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.TabBar.SetTabs(nil)
 		return
 	}
+	if path := documentPath(t); path != "" {
+		g.lastDocumentPath = path
+	}
 	if t.Content == nil {
 		if g.Editor.Buf != t.Buf {
 			g.Editor.maxWidthSeen = 0
@@ -3166,7 +3192,12 @@ func (g *EditorGroupWidget) syncTabs() {
 		if ts.Diff != nil {
 			name += " (diff)"
 		}
+		icon := ""
+		if provider, ok := ts.Content.(interface{ TabIcon(string) string }); ok {
+			icon = provider.TabIcon(g.TabBar.Icons)
+		}
 		uiTabs = append(uiTabs, Tab{
+			Icon:     icon,
 			ID:       ts.ID,
 			Name:     name,
 			FilePath: ts.IconPath,

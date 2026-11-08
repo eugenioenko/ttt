@@ -167,6 +167,12 @@ func (t *Terminal) Run() {
 	go t.readLoop()
 }
 
+func (t *Terminal) Exited() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.exited
+}
+
 func (t *Terminal) waitLoop() {
 	if t.cmd == nil {
 		close(t.waited)

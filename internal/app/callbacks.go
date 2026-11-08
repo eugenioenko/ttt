@@ -69,6 +69,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 		items = []ui.ContextMenuItem{
 			{Label: i18n.Text("general.refresh"), Command: "sidebar.outline"},
 		}
+	case appsPanelID:
+		items = []ui.ContextMenuItem{{Label: i18n.Text("apps.add"), Command: "apps.add"}}
 	case "plugins":
 		items = []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.installFromURL"), Command: "plugin.install"},
@@ -798,6 +800,7 @@ func registerWidgetCallbacks(app *App) {
 		app.ExplorerContextNode = node
 		items := []ui.ContextMenuItem{
 			{Label: i18n.Text("general.open"), Command: "explorer.open"},
+			app.appsOpenWithMenu(),
 			ui.MenuSep(),
 			{Label: i18n.Text("general.newFile"), Command: "explorer.newFile"},
 			{Label: i18n.Text("general.newFolder"), Command: "explorer.newFolder"},
@@ -824,6 +827,7 @@ func registerWidgetCallbacks(app *App) {
 		}
 		items := []ui.ContextMenuItem{
 			{Label: i18n.Text("general.refresh"), Command: "explorer.refresh"},
+			app.appsOpenWithMenu(),
 			{Label: i18n.Text("menu.copyPath"), Command: "explorer.copyAbsolutePath"},
 			{Label: i18n.Text("menu.openInTerminal"), Command: "explorer.openInTerminal"},
 			ui.MenuSep(),

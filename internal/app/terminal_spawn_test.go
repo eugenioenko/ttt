@@ -4,8 +4,10 @@ package app
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/command"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -350,5 +352,131 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 	waitForUpdate("second-wave", true)
 	if cols, _ := dev.Size(); cols != wide-1 {
 		t.Fatalf("inactive terminal width = %d, want %d with scrollbar", cols, wide-1)
+	}
+}
+
+func TestAppRerunsAfterExitAndRetainsPreviousOutput(t *testing.T) {
+	for _, location := range []string{"editor", "panel"} {
+		t.Run(location, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Reg = command.NewRegistry()
+			s := *a.Settings
+			s.Applications = []config.Application{{Name: "tests", Command: "/bin/sh", Args: []string{"-c", "printf 'retained-output\\n'; read line"}, Location: location, KeepOpen: true}}
+			a.ApplySettings(s)
+			key := appLaunchKey{name: "tests"}
+			a.LaunchApp("tests")
+			firstID := a.appTerminals[key]
+			first := a.terminalByID(firstID)
+			if first == nil {
+				t.Fatal("first launch did not create a terminal")
+			}
+			t.Cleanup(func() { a.CloseTerminal(firstID) })
+			waitForTerminalOutput(t, first.Term, "retained-output")
+			a.LaunchApp("tests")
+			if a.appTerminals[key] != firstID {
+				t.Fatal("running app was not reused")
+			}
+			first.Term.WriteString("finish\n")
+			deadline := time.Now().Add(3 * time.Second)
+			for !first.Term.Exited() && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if !first.Term.Exited() {
+				t.Fatal("first run did not exit")
+			}
+			a.LaunchApp("tests")
+			secondID := a.appTerminals[key]
+			if secondID == firstID || a.terminalByID(secondID) == nil {
+				t.Fatal("launching a finished app did not start a new run")
+			}
+			t.Cleanup(func() { a.CloseTerminal(secondID) })
+			if a.terminalByID(firstID) == nil || !strings.Contains(first.Term.ScreenText(), "retained-output") {
+				t.Fatal("rerunning discarded the first output tab")
+			}
+			a.CloseTerminal(firstID)
+			a.LaunchApp("tests")
+			if a.appTerminals[key] != secondID {
+				t.Fatal("closing the old output tab forgot the current run")
+			}
+		})
+	}
+}
+
+func TestAppPaddingIsPerTerminalAndSurvivesGlobalChanges(t *testing.T) {
+	for _, placement := range []string{"editor", "bottom", "right"} {
+		t.Run(placement, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Reg = command.NewRegistry()
+			a.Renderer = &render.Renderer{}
+			a.Root.SetSize(140, 40)
+			if placement == "right" {
+				a.ContentSplit.Position = ui.SplitRight
+			}
+			a.Root.Render(a.Renderer.NextFrame(140, 40))
+			zero, two := 0, 2
+			location := "editor"
+			if placement != "editor" {
+				location = "panel"
+			}
+			s := *a.Settings
+			s.Terminal.PaddingX = 3
+			s.Applications = []config.Application{
+				{Name: "zero", Command: "/bin/cat", Location: location, PaddingX: &zero},
+				{Name: "two", Command: "/bin/cat", Location: location, PaddingX: &two},
+				{Name: "default", Command: "/bin/cat", Location: location},
+			}
+			a.ApplySettings(s)
+			var ids []string
+			for _, name := range []string{"zero", "two", "default"} {
+				a.LaunchApp(name)
+				id := a.appTerminals[appLaunchKey{name: name}]
+				if id == "" {
+					t.Fatalf("%s did not launch", name)
+				}
+				ids = append(ids, id)
+				t.Cleanup(func() { a.CloseTerminal(id) })
+			}
+			regular, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat", InEditor: placement == "editor"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { a.CloseTerminal(regular) })
+			ids = append(ids, regular)
+			check := func(width, height int, want []int) {
+				t.Helper()
+				a.Root.SetSize(width, height)
+				for i, id := range ids {
+					if err := a.FocusTerminal(id); err != nil {
+						t.Fatal(err)
+					}
+					a.Root.Render(a.Renderer.NextFrame(width, height))
+					resizeTerminals(a)
+					tt := a.terminalByID(id)
+					content := tt.Widget.GetRect()
+					area := a.TerminalPanel.GetRect()
+					strip := ui.VerticalTabBarWidth
+					if tt.Tab != nil {
+						area = tt.Tab.GetRect()
+						strip = 0
+					}
+					left, right := content.X-area.X-strip, area.X+area.W-content.X-content.W
+					if left != want[i] || right != want[i] {
+						t.Fatalf("%s padding=(%d,%d),want %d", tt.Label, left, right, want[i])
+					}
+					if cols, rows := tt.Term.Size(); cols != content.W || rows != content.H {
+						t.Fatalf("%s PTY=%dx%d,content=%+v", tt.Label, cols, rows, content)
+					}
+				}
+			}
+			check(140, 40, []int{0, 2, 1, 3})
+			check(120, 35, []int{0, 2, 1, 3})
+			s = *a.Settings
+			s.Terminal.PaddingX = 4
+			s.Applications = slices.Clone(s.Applications)
+			updated := 0
+			s.Applications[1].PaddingX = &updated
+			a.ApplySettings(s)
+			check(140, 40, []int{0, 0, 1, 4})
+		})
 	}
 }

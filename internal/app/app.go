@@ -58,6 +58,10 @@ type TerminalSpec struct {
 	// the editor tab's title.
 	Label    string
 	InEditor bool
+	// KeepOpen leaves the tab, with the program's last output, after it exits.
+	KeepOpen bool
+	// Nil uses the global padding; a pointer to zero disables padding.
+	PaddingX *int
 }
 
 type App struct {
@@ -85,6 +89,12 @@ type App struct {
 	Palette       *ui.TerminalColorPalette
 	TerminalPanel *ui.TerminalPanelWidget
 	Terminals     []TerminalTab
+	Apps          *AppsPanel
+	apps          []config.Application
+	appCommandIDs []string
+	appsSearch    *asynctask.Task[[]config.Application]
+	// appTerminals maps an app name to the terminal it last launched.
+	appTerminals map[appLaunchKey]string
 	// EditorTerminals live in editor tabs. They are kept apart from Terminals,
 	// whose order matches the terminal panel's tabs.
 	EditorTerminals []TerminalTab
@@ -448,16 +458,21 @@ func (a *App) SpawnTerminal() {
 // Shell inherits both from the global terminal settings.
 func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw := ui.NewTerminalWidget(nil, a.Palette)
+	paddingX := a.Settings.Terminal.PaddingX
+	if spec.PaddingX != nil {
+		paddingX = max(*spec.PaddingX, 0)
+		tw.PaddingX = &paddingX
+	}
 	var tab *ui.TerminalTabWidget
 	var content ui.Rect
 	if spec.InEditor {
 		tab = ui.NewTerminalTabWidget(tw)
-		tab.PaddingX = a.Settings.Terminal.PaddingX
+		tab.PaddingX = paddingX
 		tab.SetRect(a.EditorGroup.ContentRect())
 		content = tab.ContentRect()
 	} else {
 		r := a.ContentSplit.BottomRect()
-		content = a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, false)
+		content = a.TerminalPanel.ContentRectFor(tw, ui.Rect{W: r.W, H: r.H - 2}, false)
 	}
 	cols, rows := content.W, content.H
 	if cols <= 0 {
@@ -511,6 +526,10 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	t.OnExit = func() {
+		if spec.KeepOpen {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+			return
+		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(panelID))
 	}
 	t.Run()
@@ -614,6 +633,7 @@ func (a *App) CloseTerminal(panelID string) {
 		return
 	}
 	a.Terminals[idx].Term.Close()
+	a.forgetAppTerminal(panelID)
 	a.Terminals = append(a.Terminals[:idx], a.Terminals[idx+1:]...)
 	a.TerminalPanel.RemoveTerminal(idx)
 
@@ -644,6 +664,7 @@ func (a *App) CloseAllTerminals() {
 	}
 	for _, tt := range terms {
 		tt.Term.Close()
+		a.forgetAppTerminal(tt.ID)
 	}
 	a.hideBottomPanelIfTerminalActive()
 }

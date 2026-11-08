@@ -100,6 +100,7 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `panel-changes` | `⎇` | `\uea68` | Changes sidebar tab |
 | `panel-outline` | `ƒ` | `\ueb86` | Outline sidebar tab |
 | `panel-plugins` | `⧉` | `\ueae6` | Plugins sidebar tab |
+| `panel-apps` | `⏵` | `\U000f003b` | Apps sidebar tab |
 
 ## Editor
 
@@ -332,6 +333,38 @@ ttt embeds TextMate grammars for over 120 languages. `editor.grammars` adds more
 Entries earlier in the list take precedence over later ones, and all of them take precedence over the embedded grammars, so an entry whose file types match a built-in language replaces it. Grammars can include each other across sources: an embedded Markdown grammar highlights a fenced block with an external grammar, and an external grammar can include an embedded one. A grammar file that is missing or invalid is skipped and reported in the Output panel.
 
 Plugins can contribute grammars too. Installing one copies its grammar files into `~/.config/ttt/grammars/` and adds entries here (see [Grammar plugins](/guides/plugin-authoring/#grammar-plugins)).
+
+## Applications
+
+Programs to launch from the **Apps** sidebar tab. An empty Apps tab shows an **Add App** button; the dialog opens only when you choose Add App from the button, palette or menu. Apps are saved in `settings.json`. Each app row has a **⋮ → Remove App** action that removes its definition, palette entry and Explorer shortcut. Running terminals stay open; if saving the removal fails, the definition remains available. Use the search field above the list to filter by name; typing is debounced. Each app gets a command palette entry that can be bound to a key. Its title is `App: <command-text>` when provided, otherwise `App: <name>`. The `App:` category prefix is added automatically; leave it out of `command-text`. The app list, Open with picker and terminal tab continue to use `name`. An app opens in a terminal, as an editor tab by default. Launching an app that is still running focuses its tab. Once it exits, launching it again starts a new run and preserves any retained output tab. Apps that use `{file}` have a separate terminal for each file, shared with Explorer and the current-file picker. Enable **Show in Explorer Open with** to add the app to the right-click menu for files and folders, including workspace roots. Open with uses the clicked path without changing the current file tab; each app/path pair has its own terminal. The menu also has **Add App**, with Open with enabled by default.
+
+To open the current document independently of Explorer selection, run **File: Open Current File With…** from the command palette, search for an app by its configured name, and press Enter. This picker lists all configured apps; `openWith` only controls Explorer submenu shortcuts. It uses the current saved file path (or the last file tab when an app tab is in front). When no saved document is available, the app still launches and file-dependent arguments are omitted. External apps read the file on disk; this does not save unsaved edits automatically.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `applications[].name` | string | — | Name shown in the Apps tab and used as the tab title. Must be unique. |
+| `applications[].command-text` | string | `name` | Optional palette label, such as `"Preview Markdown"`. The palette shows `App: Preview Markdown`; blank values use `App: <name>`. The `App:` prefix is automatic. The command ID remains `apps.run:<name>` and existing keybindings keep working. |
+| `applications[].command` | string | — | Executable name or path, such as `"ttt"` or a full path containing spaces. This is always passed directly to the process launcher; put arguments in `args`. |
+| `applications[].args` | string[] | omitted | Optional ordered arguments. Each array entry is one argument, with `{file}`, `{dir}` and `{workspace}` replaced as literal paths. Entries containing `{file}` are omitted when no file can be resolved; static arguments keep their order. Missing or empty `args` launches the executable without arguments. Shell syntax requires an explicit shell, such as `"command": "sh", "args": ["-c", "make test \| tee results.txt"]`. |
+| `applications[].icon` | string | Apps icon | Optional glyph shown as-is beside the app name and on its editor tab. This is the only per-app icon setting; choose a glyph supported by your terminal font. If omitted, the default Apps icon follows the plain/Nerd Font setting. |
+| `applications[].openWith` | bool | `false` | Include the app in Explorer’s **Open with** submenu. |
+| `applications[].cwd` | string | workspace root | Working directory. Accepts the same placeholders, unquoted. |
+| `applications[].location` | string | `"editor"` | `"editor"` opens the app as an editor tab, `"panel"` in the docked terminal. |
+| `applications[].padding_x` | int | `1` | Number of character columns on each side of this app’s terminal content, in either editor tabs or the dock. Set `0` for no padding. This overrides global `terminal.padding_x` for the app and applies to its existing terminals when settings are reloaded. |
+| `applications[].keepOpen` | bool | `false` | Keep the tab and its output after the program exits. When omitted from JSON, the tab closes when the program exits. The Add App dialog enables this option by default. |
+
+**Example:**
+
+```json
+{
+  "applications": [
+    { "name": "edamame", "command": "edamame", "args": ["{file}"], "command-text": "Preview Markdown", "icon": "E", "openWith": true },
+    { "name": "lazygit", "command": "lazygit", "cwd": "{workspace}" },
+    { "name": "btop", "command": "btop", "location": "panel" },
+    { "name": "tests", "command": "make", "args": ["test"], "keepOpen": true }
+  ]
+}
+```
 
 ## Formatters
 

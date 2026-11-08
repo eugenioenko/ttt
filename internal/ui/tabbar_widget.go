@@ -32,6 +32,7 @@ type tabSpan struct {
 
 type Tab struct {
 	ID       string
+	Icon     string
 	Name     string
 	FilePath string
 	Dirty    bool
@@ -123,6 +124,9 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 		pinned:     tab.Pinned,
 	}
 	glyph, iconStyle := FileIconForPath(t.Icons, tab.FilePath)
+	if tab.Icon != "" {
+		glyph, iconStyle = tab.Icon, term.StyleDefault
+	}
 	label.iconStart = textwidth.String(label.text)
 	label.iconWidth = textwidth.String(glyph)
 	label.iconStyle = iconStyle
