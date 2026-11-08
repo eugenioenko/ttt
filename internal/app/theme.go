@@ -117,6 +117,11 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StylePaletteItem, theme.Dialog.Item)
 	applyStyleDef(&m, term.StylePaletteSelected, theme.Dialog.Selected)
 	applyStyleDef(&m, term.StyleLineNumber, theme.Editor.LineNumber)
+	indentGuide := theme.Editor.IndentGuide
+	if indentGuide.Fg == "" {
+		indentGuide.Fg = theme.Editor.LineNumber.Fg
+	}
+	applyStyleDef(&m, term.StyleIndentGuide, indentGuide)
 	applyStyleDef(&m, term.StyleMenuBar, theme.Menu.Item)
 	applyStyleDef(&m, term.StyleMenuBarActive, theme.Menu.Active)
 	applyStyleDef(&m, term.StyleBorder, theme.Border)

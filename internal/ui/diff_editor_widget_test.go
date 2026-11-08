@@ -83,8 +83,8 @@ func TestDiffEditorIndentGuidesRenderInUnifiedPane(t *testing.T) {
 	g := d.unified.GutterWidth()
 	for _, col := range []int{0, 4} {
 		cell := grid[row][g+col]
-		if cell.Ch != '│' || cell.Style != term.StyleMuted {
-			t.Errorf("row %d col %d = %+v, want muted guide", row, col, cell)
+		if cell.Ch != '│' || cell.Style != term.StyleIndentGuide {
+			t.Errorf("row %d col %d = %+v, want indent guide", row, col, cell)
 		}
 	}
 }
