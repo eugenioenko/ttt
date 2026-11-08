@@ -147,6 +147,46 @@ func TestDialogRenderTitle(t *testing.T) {
 	}
 }
 
+func TestDialogKeepsFooterVisibleWhenContentIsTooTall(t *testing.T) {
+	input := NewInputWidget(InputConfig{})
+	columns := NewHStackWidget(NewLabelWidget(LabelConfig{Text: "Places"}))
+	columns.FixedHeight = 12
+	content := NewVStackWidget(input, columns)
+	content.Gap = 1
+	dialog := NewDialogWidget(64)
+	dialog.Title = "Open Folder"
+	dialog.SetContent(content)
+	clicked := 0
+	dialog.Buttons = []DialogButton{
+		{Label: "Cancel"},
+		{Label: "Open", Handler: func() { clicked++ }},
+	}
+	dialog.Build()
+
+	for _, height := range []int{24, 20, 12, 24} {
+		surface := renderWidget(dialog, 0, 0, 100, height)
+		if !surfaceHasText(surface, "Cancel") || !surfaceHasText(surface, "Open") {
+			t.Fatalf("height %d: footer buttons are not visible", height)
+		}
+		footer := dialog.footer.GetRect()
+		if footer.Y+footer.H > dialog.boxY+dialog.boxH-1 {
+			t.Fatalf("height %d: footer extends below the dialog", height)
+		}
+		if r := columns.GetRect(); r.Y != input.GetRect().Y+input.GetRect().H+1 || r.Y+r.H >= footer.Y {
+			t.Fatalf("height %d: lists overlap the input gap or footer: %+v", height, r)
+		}
+		if height == 24 && columns.GetRect().H != 12 {
+			t.Fatalf("height %d: listing shrank despite available space", height)
+		}
+		button := dialog.footer.Children[1].GetRect()
+		dialog.HandleEvent(tcell.NewEventMouse(button.X, button.Y, tcell.Button1, tcell.ModNone))
+		dialog.HandleEvent(tcell.NewEventMouse(button.X, button.Y, tcell.ButtonNone, tcell.ModNone))
+	}
+	if clicked != 4 {
+		t.Fatalf("Open activated %d times, want 4", clicked)
+	}
+}
+
 func TestDialogRenderBorderCorners(t *testing.T) {
 	d := NewDialogWidget(30)
 	d.Title = "Test"
