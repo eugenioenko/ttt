@@ -10,14 +10,13 @@
   "apps.commandHint": "Executable or shell command",
   "apps.cwd": "Working folder",
   "apps.duplicateName": "Apps: skipped a second app named \"{name}\"",
-  "apps.icon": "Plain icon",
-  "apps.inPanel": "Open in the bottom panel",
+  "apps.icon": "Icon",
+  "apps.inPanel": "Open in the docked terminal",
   "apps.invalidEntry": "Apps: skipped an entry without a name or a command",
   "apps.keepOpen": "Keep output open after exit",
   "apps.name": "Name",
   "apps.nameTaken": "An app with this name already exists",
   "apps.needsFile": "{name} needs an open file",
-  "apps.nerdIcon": "Nerd Font icon",
   "apps.noMatches": "No matching apps",
   "apps.openWith": "Show in Explorer Open with",
   "apps.required": "Enter a name and command",
@@ -95,7 +94,6 @@
   "command.addCursorBelow": "Add Cursor Below",
   "command.addNextOccurrence": "Add Next Occurrence",
   "command.appsOpenWith": "Explorer: Open with {name}",
-  "command.appsRun": "Apps: Run {name}",
   "command.changeBorderStyle": "Change Border Style",
   "command.changeDiffContext": "Change Diff Context",
   "command.changeDiffViewMode": "Change Diff View Mode",
@@ -1075,5 +1073,7 @@
   "apps.invalidArgs": "Arguments must be a JSON array of strings",
   "apps.openCurrentFileWith": "Open Current File With…",
   "apps.openWithNeedsFile": "Open a saved file before using Open with",
-  "command.openCurrentFileWith": "File: Open Current File With…"
+  "command.openCurrentFileWith": "File: Open Current File With…",
+  "apps.commandText": "Palette entry",
+  "apps.commandTextHint": "Uses app name when blank"
 }

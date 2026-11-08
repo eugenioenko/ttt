@@ -33,6 +33,8 @@ type AppsPanel struct {
 	OnSearch    func(string)
 	apps        []config.Application
 	mode        string
+	content     *widgets.VStackWidget
+	addButton   *widgets.ButtonWidget
 }
 
 func NewAppsPanel() *AppsPanel {
@@ -51,30 +53,34 @@ func NewAppsPanel() *AppsPanel {
 	})
 	p.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
 		EmptyText: i18n.Text("apps.noMatches"),
+		Inset:     1,
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			if cmd == "activate" && node != nil && p.OnLaunch != nil {
 				p.OnLaunch(node.ID)
 			}
 		},
 	})
-	add := widgets.NewButtonWidget(widgets.ButtonConfig{Label: i18n.Text("apps.add"), OnClick: func() {
+	p.addButton = widgets.NewButtonWidget(widgets.ButtonConfig{Label: i18n.Text("apps.add"), OnClick: func() {
 		if p.OnAdd != nil {
 			p.OnAdd()
 		}
 	}})
-	p.Adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.SearchInput, p.Tree, add))
+	p.content = widgets.NewVStackWidget(p.SearchInput, widgets.NewDividerWidget(widgets.DividerConfig{}), p.Tree, p.addButton)
+	p.Adapter = ui.NewWidgetAdapter(p.content)
 	return p
 }
 
 func (p *AppsPanel) SetApps(apps []config.Application) {
 	p.apps = apps
 	p.Filter(p.SearchInput.Text())
+	p.content.Children = p.content.Children[:3]
+	if len(apps) == 0 {
+		p.content.Children = append(p.content.Children, p.addButton)
+	}
+	p.Adapter.RebuildFocus()
 }
 
 func appIcon(app config.Application, mode string) string {
-	if icons.IsNerd(mode) && app.NerdIcon != "" {
-		return app.NerdIcon
-	}
 	if app.Icon != "" {
 		return app.Icon
 	}
@@ -161,12 +167,16 @@ func (a *App) syncApps() {
 	a.appCommandIDs = a.appCommandIDs[:0]
 	for _, app := range apps {
 		name := app.Name
+		title := strings.TrimSpace(app.CommandText)
+		if title == "" {
+			title = name
+		}
 		id := appCommandIDPrefix + name
 		a.Reg.Register(command.Command{
 			ID:       id,
-			Title:    i18n.Format("command.appsRun", i18n.Args{"name": name}),
+			Title:    title,
 			Shortcut: shortcuts[id],
-			Keywords: []string{"apps", "run", "launch", "open"},
+			Keywords: []string{"apps", "run", "launch", "open", name},
 			Handler:  func() { a.LaunchApp(name) },
 		})
 		a.appCommandIDs = append(a.appCommandIDs, id)
@@ -197,7 +207,14 @@ func (a *App) ShowApps() {
 }
 
 func (a *App) LaunchApp(name string) {
-	a.launchApp(name, a.EditorGroup.RecentDocumentPath(), false)
+	idx := slices.IndexFunc(a.apps, func(app config.Application) bool { return app.Name == name })
+	if idx >= 0 {
+		file := a.EditorGroup.RecentDocumentPath()
+		if a.EditorGroup.IsEditorActive() && a.EditorGroup.IsActiveVirtual() {
+			file = ""
+		}
+		a.launchApp(name, file, appNeedsFile(a.apps[idx]))
+	}
 }
 
 type appLaunchKey struct{ name, path string }
@@ -297,6 +314,6 @@ func (a *App) launchApp(name, file string, explicit bool) {
 	}
 	a.appTerminals[key] = id
 	if tt := a.terminalByID(id); tt != nil && tt.Tab != nil {
-		tt.Tab.Icon, tt.Tab.NerdIcon = app.Icon, app.NerdIcon
+		tt.Tab.Icon = app.Icon
 	}
 }

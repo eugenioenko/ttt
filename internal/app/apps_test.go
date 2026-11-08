@@ -247,3 +247,28 @@ func TestAppArgsExpandOnceAndNeedFile(t *testing.T) {
 		t.Fatalf("empty direct args=%+v", spec)
 	}
 }
+
+func TestAppsCommandTextUsesNameAsFallbackAndKeepsIdentity(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	a.Reg = command.NewRegistry()
+	var builtinRan bool
+	a.Reg.Register(command.Command{ID: "existing.preview", Title: "Preview Markdown", Handler: func() { builtinRan = true }})
+	for _, tc := range []struct{ text, want string }{{"Preview Markdown", "Preview Markdown"}, {"  Preview Markdown  ", "Preview Markdown"}, {"", "edamame"}, {"  ", "edamame"}} {
+		a.Settings.Applications = []config.Application{{Name: "edamame", Command: "edamame {file}", CommandText: tc.text}}
+		a.syncApps()
+		cmd, ok := a.Reg.Get("apps.run:edamame")
+		if !ok || cmd.Title != tc.want {
+			t.Fatalf("command text %q: %+v", tc.text, cmd)
+		}
+		if !slices.Contains(cmd.Keywords, "edamame") {
+			t.Fatal("custom palette title lost app-name search")
+		}
+		if node := a.Apps.Tree.Config.Items[0]; node.ID != "edamame" || node.Label != "edamame" {
+			t.Fatalf("palette title changed app identity: %+v", node)
+		}
+	}
+	a.Reg.Execute("existing.preview")
+	if !builtinRan {
+		t.Fatal("custom palette title replaced another command")
+	}
+}

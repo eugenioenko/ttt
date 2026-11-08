@@ -196,7 +196,7 @@ func TestEmptyAppsDialogCanSaveAndCancel(t *testing.T) {
 		h.pressRune(r)
 	}
 	input(4).SetText("V")
-	input(5).SetText("N")
+	input(5).SetText("Preview Markdown")
 	content.Children[8].(*widgets.CheckboxWidget).Config.Checked = true
 	dialog.Buttons[1].Handler()
 	h.redraw()
@@ -204,7 +204,7 @@ func TestEmptyAppsDialogCanSaveAndCancel(t *testing.T) {
 		t.Fatal("successful save kept the dialog open")
 	}
 	apps := config.LoadSettings().Applications
-	if len(apps) != 1 || apps[0].Name != "viewer" || apps[0].Command != "echo {file}" || apps[0].Icon != "V" || apps[0].NerdIcon != "N" || !apps[0].OpenWith {
+	if len(apps) != 1 || apps[0].CommandText != "Preview Markdown" || apps[0].Name != "viewer" || apps[0].Command != "echo {file}" || apps[0].Icon != "V" || !apps[0].OpenWith || !apps[0].KeepOpen {
 		t.Fatalf("saved apps: %+v", apps)
 	}
 	if _, ok := h.reg.Get("apps.openWith:viewer"); !ok {
@@ -224,7 +224,7 @@ func TestExplorerOpenWithUsesClickedPathAndReusesOnlyThatTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := filepath.Join(h.dir, "out.txt")
-	applyApps(h, config.Application{Name: "viewer", Command: "printf '%s|%s|%s' {file} {dir} {workspace} > " + out + "; sleep 30", OpenWith: true, Icon: "V", NerdIcon: "N"})
+	applyApps(h, config.Application{Name: "viewer", Command: "printf '%s|%s|%s' {file} {dir} {workspace} > " + out + "; sleep 30", OpenWith: true, Icon: "V"})
 	if err := h.app.EditorGroup.OpenFile(active); err != nil {
 		t.Fatal(err)
 	}
@@ -264,8 +264,8 @@ func TestExplorerOpenWithUsesClickedPathAndReusesOnlyThatTarget(t *testing.T) {
 	h.app.ApplySettings(s)
 	h.redraw()
 	tabs := h.app.EditorGroup.TabBar.Tabs
-	if tabs[len(tabs)-1].Icon != "N" || h.app.Apps.Tree.Config.Items[0].Icon != "N" {
-		t.Fatalf("Nerd icon not applied: %+v", tabs)
+	if tabs[len(tabs)-1].Icon != "V" || h.app.Apps.Tree.Config.Items[0].Icon != "V" {
+		t.Fatalf("custom icon changed with font mode: %+v", tabs)
 	}
 }
 
@@ -417,4 +417,48 @@ func TestOpenCurrentFileWithCanCancelAndConfigureEmptyList(t *testing.T) {
 	if len(apps) != 2 || !slices.Equal(apps[1].Args, []string{"{file}"}) {
 		t.Fatalf("saved args=%+v", apps)
 	}
+}
+
+func TestCustomAppPaletteEntryOpensEachCurrentDocument(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX test program")
+	}
+	h := newTestHarness(t, 110, 32)
+	defer h.stop()
+	defer func() {
+		for _, entry := range h.app.EditorTerminals {
+			entry.Term.Close()
+		}
+	}()
+	applyApps(h, config.Application{Name: "edamame", Command: "/bin/sh", Args: []string{"-c", `printf '%s\n' "$1"; sleep 30`, "sh", "{file}"}, CommandText: "Preview Markdown"})
+	for i, name := range []string{"alpha.txt", "beta.txt"} {
+		file := filepath.Join(h.dir, name)
+		if err := h.app.EditorGroup.OpenFile(file); err != nil {
+			t.Fatal(err)
+		}
+		h.app.OpenCommandPalette(false)
+		h.redraw()
+		for _, r := range "Preview Markdown" {
+			h.pressRune(r)
+		}
+		h.pressKey(tcell.KeyEnter, 0)
+		if len(h.app.EditorTerminals) != i+1 {
+			t.Fatal("custom palette command reused another document's app")
+		}
+		entry := h.app.EditorTerminals[i]
+		waitForRawTail(t, entry.Term, file)
+		if entry.Label != "edamame" {
+			t.Fatalf("app label=%q", entry.Label)
+		}
+	}
+	h.exec("apps.run:edamame")
+	if len(h.app.EditorTerminals) != 2 {
+		t.Fatal("same app/file opened another terminal")
+	}
+	h.exec("file.new")
+	h.exec("apps.run:edamame")
+	if len(h.app.EditorTerminals) != 2 {
+		t.Fatal("untitled document opened the previous file's app")
+	}
+	h.assertContains("edamame needs an open file")
 }

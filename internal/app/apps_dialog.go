@@ -42,9 +42,9 @@ func (a *App) showAddApp(openWith bool) {
 	args := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Format("apps.argsHint", i18n.Args{"file": "{file}"})})
 	cwd := widgets.NewInputWidget(widgets.InputConfig{Placeholder: "{workspace}"})
 	icon := widgets.NewInputWidget(widgets.InputConfig{})
-	nerdIcon := widgets.NewInputWidget(widgets.InputConfig{})
+	commandText := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.commandTextHint")})
 	panel := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.inPanel")})
-	keepOpen := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.keepOpen")})
+	keepOpen := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.keepOpen"), Checked: true})
 	explorer := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.openWith"), Checked: openWith})
 	errorLabel := widgets.NewLabelWidget(widgets.LabelConfig{Style: term.StyleDanger})
 	row := func(text string, input *widgets.InputWidget) widgets.Widget {
@@ -56,7 +56,8 @@ func (a *App) showAddApp(openWith bool) {
 	}
 	content := widgets.NewVStackWidget(
 		row(i18n.Text("apps.name"), name), row(i18n.Text("apps.command"), command), row(i18n.Text("apps.args"), args), row(i18n.Text("apps.cwd"), cwd),
-		row(i18n.Text("apps.icon"), icon), row(i18n.Text("apps.nerdIcon"), nerdIcon),
+		row(i18n.Text("apps.icon"), icon),
+		row(i18n.Text("apps.commandText"), commandText),
 		panel, keepOpen, explorer, errorLabel,
 	)
 	dialog := widgets.NewDialogWidget(66)
@@ -67,7 +68,8 @@ func (a *App) showAddApp(openWith bool) {
 	dialog.Buttons = []widgets.DialogButton{
 		{Label: i18n.Text("general.cancelButton"), Handler: a.DismissDialog},
 		{Label: i18n.Text("general.add"), Handler: func() {
-			app := config.Application{Name: strings.TrimSpace(name.Text()), Command: strings.TrimSpace(command.Text()), Cwd: cwd.Text(), Icon: icon.Text(), NerdIcon: nerdIcon.Text(), OpenWith: explorer.Config.Checked, KeepOpen: keepOpen.Config.Checked}
+			app := config.Application{Name: strings.TrimSpace(name.Text()), Command: strings.TrimSpace(command.Text()), Cwd: cwd.Text(), Icon: icon.Text(), OpenWith: explorer.Config.Checked, KeepOpen: keepOpen.Config.Checked}
+			app.CommandText = strings.TrimSpace(commandText.Text())
 			if app.Name == "" || app.Command == "" {
 				errorLabel.Config.Text = i18n.Text("apps.required")
 				return
