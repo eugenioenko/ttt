@@ -137,7 +137,18 @@ func (tp *TerminalPanelWidget) DividerScreenX() int {
 }
 
 func (tp *TerminalPanelWidget) ContentRect(r Rect, scrollbar bool) Rect {
-	return terminalContentRect(tp.areaRect(r), tp.PaddingX, scrollbar)
+	return tp.ContentRectFor(nil, r, scrollbar)
+}
+
+func (tp *TerminalPanelWidget) ContentRectFor(tw *TerminalWidget, r Rect, scrollbar bool) Rect {
+	return terminalContentRect(tp.areaRect(r), tp.paddingX(tw), scrollbar)
+}
+
+func (tp *TerminalPanelWidget) paddingX(tw *TerminalWidget) int {
+	if tw != nil && tw.PaddingX != nil {
+		return max(*tw.PaddingX, 0)
+	}
+	return tp.PaddingX
 }
 
 func (tp *TerminalPanelWidget) areaRect(r Rect) Rect {
@@ -177,7 +188,7 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 	areaSurface := surface.Sub(Rect{X: stripW, W: area.W, H: h})
 	active := tp.widgets[tp.active]
 	if tw, ok := active.(*TerminalWidget); ok {
-		renderTerminalArea(areaSurface, area, tw, tp.PaddingX)
+		renderTerminalArea(areaSurface, area, tw, tp.paddingX(tw))
 		return
 	}
 	content := terminalContentRect(area, tp.PaddingX, false)

@@ -397,7 +397,7 @@ func TestAppearanceSettingsPointerShapesMissingDefaultsToEnabled(t *testing.T) {
 	}
 }
 
-func TestApplicationArgsRoundTripPreservesExecutionMode(t *testing.T) {
+func TestApplicationArgsRoundTrip(t *testing.T) {
 	for _, args := range [][]string{nil, {}, {"{file}", "--preview"}} {
 		app := Application{Name: "viewer", Command: "viewer", Args: args}
 		data, err := json.Marshal(app)
@@ -408,7 +408,7 @@ func TestApplicationArgsRoundTripPreservesExecutionMode(t *testing.T) {
 		if err := json.Unmarshal(data, &got); err != nil {
 			t.Fatal(err)
 		}
-		if (got.Args == nil) != (args == nil) || !slices.Equal(got.Args, args) {
+		if !slices.Equal(got.Args, args) {
 			t.Fatalf("round trip %s changed args: %v", data, got.Args)
 		}
 	}

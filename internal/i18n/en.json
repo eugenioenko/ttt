@@ -7,7 +7,7 @@
   "about.website": "Website",
   "apps.add": "Add App",
   "apps.command": "Command",
-  "apps.commandHint": "Executable or shell command",
+  "apps.commandHint": "Executable name or path",
   "apps.cwd": "Working folder",
   "apps.duplicateName": "Apps: skipped a second app named \"{name}\"",
   "apps.icon": "Icon",
@@ -1074,5 +1074,10 @@
   "command.openCurrentFileWith": "File: Open Current File With…",
   "apps.commandText": "Palette entry",
   "apps.commandTextHint": "Uses app name when blank",
-  "command.appsRun": "App: {name}"
+  "command.appsRun": "App: {name}",
+  "apps.paddingX": "Side padding",
+  "apps.invalidPadding": "Side padding must be zero or a positive integer",
+  "apps.remove": "Remove App",
+  "apps.removeFailed": "Could not remove {name}: {error}",
+  "apps.removed": "Removed app {name}"
 }

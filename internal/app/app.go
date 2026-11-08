@@ -60,6 +60,8 @@ type TerminalSpec struct {
 	InEditor bool
 	// KeepOpen leaves the tab, with the program's last output, after it exits.
 	KeepOpen bool
+	// Nil uses the global padding; a pointer to zero disables padding.
+	PaddingX *int
 }
 
 type App struct {
@@ -456,16 +458,21 @@ func (a *App) SpawnTerminal() {
 // Shell inherits both from the global terminal settings.
 func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw := ui.NewTerminalWidget(nil, a.Palette)
+	paddingX := a.Settings.Terminal.PaddingX
+	if spec.PaddingX != nil {
+		paddingX = max(*spec.PaddingX, 0)
+		tw.PaddingX = &paddingX
+	}
 	var tab *ui.TerminalTabWidget
 	var content ui.Rect
 	if spec.InEditor {
 		tab = ui.NewTerminalTabWidget(tw)
-		tab.PaddingX = a.Settings.Terminal.PaddingX
+		tab.PaddingX = paddingX
 		tab.SetRect(a.EditorGroup.ContentRect())
 		content = tab.ContentRect()
 	} else {
 		r := a.ContentSplit.BottomRect()
-		content = a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, false)
+		content = a.TerminalPanel.ContentRectFor(tw, ui.Rect{W: r.W, H: r.H - 2}, false)
 	}
 	cols, rows := content.W, content.H
 	if cols <= 0 {

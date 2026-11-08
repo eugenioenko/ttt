@@ -56,8 +56,10 @@ const linkMemoMax = 512
 
 type TerminalWidget struct {
 	BaseWidget
-	Term         *terminal.Terminal
-	Palette      *TerminalColorPalette
+	Term    *terminal.Terminal
+	Palette *TerminalColorPalette
+	// Nil inherits the terminal panel's padding.
+	PaddingX     *int
 	focused      bool
 	scrollOffset int
 	scrollbar    Scrollbar

@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -31,6 +30,7 @@ type AppsPanel struct {
 	OnLaunch    func(name string)
 	OnAdd       func()
 	OnSearch    func(string)
+	OnRowMenu   func(name string, x, y int)
 	apps        []config.Application
 	mode        string
 	content     *widgets.VStackWidget
@@ -53,13 +53,21 @@ func NewAppsPanel() *AppsPanel {
 	})
 	p.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
 		EmptyText: i18n.Text("apps.noMatches"),
-		Inset:     1,
+		Indent:    1,
+		NodeMenu:  []widgets.MenuEntry{{Label: i18n.Text("apps.remove"), Command: "remove"}},
+		MenuIcon:  string(icons.Rune(icons.More)),
+		OnMenu: func(_ []widgets.MenuEntry, node *widgets.TreeNode, x, y int) {
+			if node != nil && p.OnRowMenu != nil {
+				p.OnRowMenu(node.ID, x, y)
+			}
+		},
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
 			if cmd == "activate" && node != nil && p.OnLaunch != nil {
 				p.OnLaunch(node.ID)
 			}
 		},
 	})
+	p.Tree.Box.PaddingLeft = 1
 	p.addButton = widgets.NewButtonWidget(widgets.ButtonConfig{Label: i18n.Text("apps.add"), OnClick: func() {
 		if p.OnAdd != nil {
 			p.OnAdd()
@@ -148,6 +156,7 @@ func (a *App) syncApps() {
 		a.Apps.OnLaunch = a.LaunchApp
 		a.Apps.OnAdd = a.AddApp
 		a.Apps.OnSearch = a.scheduleAppsSearch
+		a.Apps.OnRowMenu = a.ShowAppMenu
 	}
 	if a.appsSearch != nil {
 		a.appsSearch.Stop()
@@ -156,6 +165,19 @@ func (a *App) syncApps() {
 	a.apps = apps
 	a.Apps.mode = a.Settings.Appearance.Icons
 	a.Apps.SetApps(apps)
+	for key, id := range a.appTerminals {
+		idx := slices.IndexFunc(apps, func(app config.Application) bool { return app.Name == key.name })
+		if idx < 0 {
+			continue
+		}
+		if tt := a.terminalByID(id); tt != nil {
+			padding := appPaddingX(apps[idx])
+			tt.Widget.PaddingX = &padding
+			if tt.Tab != nil {
+				tt.Tab.PaddingX = padding
+			}
+		}
+	}
 
 	shortcuts := make(map[string]string, len(a.appCommandIDs))
 	for _, id := range a.appCommandIDs {
@@ -180,6 +202,9 @@ func (a *App) syncApps() {
 			Handler:  func() { a.LaunchApp(name) },
 		})
 		a.appCommandIDs = append(a.appCommandIDs, id)
+		removeID := "apps.remove:" + name
+		a.Reg.Register(command.Command{ID: removeID, Title: i18n.Text("apps.remove"), Shortcut: shortcuts[removeID], Hidden: true, Handler: func() { a.RemoveApp(name) }})
+		a.appCommandIDs = append(a.appCommandIDs, removeID)
 		if app.OpenWith {
 			id = "apps.openWith:" + name
 			a.Reg.Register(command.Command{ID: id, Title: i18n.Format("command.appsOpenWith", i18n.Args{"name": name}), Shortcut: shortcuts[id], Hidden: true, Handler: func() { a.ExplorerOpenWith(name) }})
@@ -296,7 +321,7 @@ func (a *App) launchApp(name, file string, explicit bool) {
 			dir = file
 		}
 	}
-	spec := appTerminalSpec(app, file, dir, workspace, runtime.GOOS)
+	spec := appTerminalSpec(app, file, dir, workspace)
 	if strings.TrimSpace(spec.Shell) == "" {
 		a.StatusError(i18n.Text("apps.invalidEntry"))
 		return

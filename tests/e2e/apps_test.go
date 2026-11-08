@@ -83,7 +83,8 @@ func TestLaunchAppQuotesPlaceholdersAndReusesItsTab(t *testing.T) {
 	out := filepath.Join(h.dir, "out.txt")
 	applyApps(h, config.Application{
 		Name:     "echo",
-		Command:  "printf '%s|%s' {file} {dir} > " + out + "; sleep 30",
+		Command:  "/bin/sh",
+		Args:     []string{"-c", `printf '%s|%s' "$1" "$2" > "$3"; sleep 30`, "sh", "{file}", "{dir}", out},
 		KeepOpen: true,
 	})
 
@@ -118,8 +119,8 @@ func TestLaunchAppFromAnotherAppTabUsesTheLastFile(t *testing.T) {
 	file := filepath.Join(h.dir, "alpha.txt")
 	out := filepath.Join(h.dir, "out.txt")
 	applyApps(h,
-		config.Application{Name: "first", Command: "sleep 30"},
-		config.Application{Name: "second", Command: "printf '%s' {file} > " + out + "; sleep 30"},
+		config.Application{Name: "first", Command: "/bin/sh", Args: []string{"-c", "sleep 30"}},
+		config.Application{Name: "second", Command: "/bin/sh", Args: []string{"-c", `printf '%s' "$1" > "$2"; sleep 30`, "sh", "{file}", out}},
 	)
 	if err := h.app.EditorGroup.OpenFile(file); err != nil {
 		t.Fatal(err)
@@ -145,7 +146,7 @@ func TestDirFallsBackToWorkspaceWithoutAFile(t *testing.T) {
 	defer h.stop()
 
 	out := filepath.Join(h.dir, "out.txt")
-	applyApps(h, config.Application{Name: "browse", Command: "printf '%s' {dir} > " + out + "; sleep 30"})
+	applyApps(h, config.Application{Name: "browse", Command: "/bin/sh", Args: []string{"-c", `printf '%s' "$1" > "$2"; sleep 30`, "sh", "{dir}", out}})
 	h.app.EditorGroup.CloseAllTabs()
 	h.exec("apps.run:browse")
 	if len(h.app.EditorTerminals) != 1 {
@@ -187,19 +188,20 @@ func TestEmptyAppsDialogCanSaveAndCancel(t *testing.T) {
 		h.pressRune(r)
 	}
 	h.pressKey(tcell.KeyTab, 0)
-	for _, r := range "echo {file}" {
+	for _, r := range "echo" {
 		h.pressRune(r)
 	}
+	input(2).SetText(`["{file}"]`)
 	input(4).SetText("V")
 	input(5).SetText("Preview Markdown")
-	content.Children[8].(*widgets.CheckboxWidget).Config.Checked = true
+	content.Children[9].(*widgets.CheckboxWidget).Config.Checked = true
 	dialog.Buttons[1].Handler()
 	h.redraw()
 	if h.app.Root.HasOverlay() {
 		t.Fatal("successful save kept the dialog open")
 	}
 	apps := config.LoadSettings().Applications
-	if len(apps) != 1 || apps[0].CommandText != "Preview Markdown" || apps[0].Name != "viewer" || apps[0].Command != "echo {file}" || apps[0].Icon != "V" || !apps[0].OpenWith || !apps[0].KeepOpen {
+	if len(apps) != 1 || apps[0].CommandText != "Preview Markdown" || apps[0].Name != "viewer" || apps[0].Command != "echo" || !slices.Equal(apps[0].Args, []string{"{file}"}) || apps[0].PaddingX == nil || *apps[0].PaddingX != 1 || apps[0].Icon != "V" || !apps[0].OpenWith || !apps[0].KeepOpen {
 		t.Fatalf("saved apps: %+v", apps)
 	}
 	if _, ok := h.reg.Get("apps.openWith:viewer"); !ok {
@@ -219,7 +221,7 @@ func TestExplorerOpenWithUsesClickedPathAndReusesOnlyThatTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := filepath.Join(h.dir, "out.txt")
-	applyApps(h, config.Application{Name: "viewer", Command: "printf '%s|%s|%s' {file} {dir} {workspace} > " + out + "; sleep 30", OpenWith: true, Icon: "V"})
+	applyApps(h, config.Application{Name: "viewer", Command: "/bin/sh", Args: []string{"-c", `printf '%s|%s|%s' "$1" "$2" "$3" > "$4"; sleep 30`, "sh", "{file}", "{dir}", "{workspace}", out}, OpenWith: true, Icon: "V"})
 	if err := h.app.EditorGroup.OpenFile(active); err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +276,7 @@ func TestExplorerOpenWithCanAddAnAppWhenEmpty(t *testing.T) {
 	h.pressKey(tcell.KeyEnter, 0)
 	h.assertContains("Add App")
 	dialog := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget)
-	if !dialog.Content.(*widgets.VStackWidget).Children[8].(*widgets.CheckboxWidget).Config.Checked {
+	if !dialog.Content.(*widgets.VStackWidget).Children[9].(*widgets.CheckboxWidget).Config.Checked {
 		t.Fatal("adding from Open with must enable Explorer integration")
 	}
 }
@@ -382,7 +384,7 @@ func TestOpenCurrentFileWithCanCancelAndConfigureEmptyList(t *testing.T) {
 	h.exec("apps.openCurrentFileWith")
 	h.assertContains("Add App")
 	dialog := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget)
-	if !dialog.Content.(*widgets.VStackWidget).Children[8].(*widgets.CheckboxWidget).Config.Checked {
+	if !dialog.Content.(*widgets.VStackWidget).Children[9].(*widgets.CheckboxWidget).Config.Checked {
 		t.Fatal("new app did not enable Open with")
 	}
 	h.pressKey(tcell.KeyEscape, 0)
@@ -405,12 +407,17 @@ func TestOpenCurrentFileWithCanCancelAndConfigureEmptyList(t *testing.T) {
 	h.redraw()
 	h.assertContains("Arguments must be a JSON array of strings")
 	input(2).SetText(`["{file}"]`)
+	input(6).SetText("-1")
+	dialog.Buttons[1].Handler()
+	h.redraw()
+	h.assertContains("Side padding must be zero or a positive integer")
+	input(6).SetText("0")
 	dialog.Buttons[1].Handler()
 	if h.app.Root.HasOverlay() {
 		t.Fatal("valid arguments kept add dialog open")
 	}
 	apps := config.LoadSettings().Applications
-	if len(apps) != 2 || !slices.Equal(apps[1].Args, []string{"{file}"}) {
+	if len(apps) != 2 || !slices.Equal(apps[1].Args, []string{"{file}"}) || apps[1].PaddingX == nil || *apps[1].PaddingX != 0 {
 		t.Fatalf("saved args=%+v", apps)
 	}
 }
@@ -493,5 +500,91 @@ func TestAppWithoutFileOmitsOnlyFileArgsAndKeepsStaticFlags(t *testing.T) {
 	h.pressKey(tcell.KeyEnter, 0)
 	if len(h.app.EditorTerminals) != 2 || h.app.EditorGroup.ActiveTerminalTab() != h.app.EditorTerminals[0].Tab {
 		t.Fatal("no-file picker did not reuse the app started without a file")
+	}
+}
+
+func TestAppsRowMoreRemovesSettingsAndCommands(t *testing.T) {
+	h := newTestHarness(t, 110, 32)
+	defer h.stop()
+	applyApps(h, config.Application{Name: "first", Command: "echo", OpenWith: true}, config.Application{Name: "second", Command: "echo"})
+	h.exec("sidebar.apps")
+	removeFirst := func() {
+		t.Helper()
+		y := h.app.Apps.Tree.GetRect().Y
+		x := displayColumnOf(h.screenRow(y), "⋮")
+		if x < 0 {
+			t.Fatalf("row More menu missing: %q", h.screenRow(y))
+		}
+		h.click(x, y)
+		h.assertContains("Remove App")
+		h.pressKey(tcell.KeyEnter, 0)
+	}
+	removeFirst()
+	apps := config.LoadSettings().Applications
+	if len(apps) != 1 || apps[0].Name != "second" {
+		t.Fatalf("saved apps=%+v", apps)
+	}
+	for _, id := range []string{"apps.run:first", "apps.openWith:first", "apps.remove:first"} {
+		if _, ok := h.reg.Get(id); ok {
+			t.Fatalf("removed app retained %s", id)
+		}
+	}
+	if nodes := h.app.Apps.Tree.Config.Items; len(nodes) != 1 || nodes[0].ID != "second" {
+		t.Fatalf("remaining apps=%+v", nodes)
+	}
+	removeFirst()
+	if len(config.LoadSettings().Applications) != 0 {
+		t.Fatal("last app was not removed from settings")
+	}
+	if len(h.app.Apps.Tree.Config.Items) != 0 || !h.app.Sidebar.HasPanel("apps") {
+		t.Fatal("last removal lost the empty Apps panel")
+	}
+	h.assertContains("Add App")
+}
+
+func TestRemoveAppSaveFailureKeepsDefinitionAndCommands(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	applyApps(h, config.Application{Name: "viewer", Command: "echo", OpenWith: true})
+	h.exec("sidebar.apps")
+	if err := os.Mkdir(config.ConfigFilePath("settings.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	h.app.Apps.OnRowMenu("viewer", 5, 6)
+	h.redraw()
+	h.pressKey(tcell.KeyEnter, 0)
+	h.assertContains("Could not remove viewer")
+	if len(h.app.Settings.Applications) != 1 || len(h.app.Apps.Tree.Config.Items) != 1 {
+		t.Fatal("failed save removed the app")
+	}
+	for _, id := range []string{"apps.run:viewer", "apps.openWith:viewer", "apps.remove:viewer"} {
+		if _, ok := h.reg.Get(id); !ok {
+			t.Fatalf("failed removal lost %s", id)
+		}
+	}
+}
+
+func TestRemovingAppLeavesItsRunningTerminalOpen(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX test program")
+	}
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	applyApps(h, config.Application{Name: "viewer", Command: "/bin/cat"})
+	h.exec("apps.run:viewer")
+	if len(h.app.EditorTerminals) != 1 {
+		t.Fatal("app did not launch")
+	}
+	entry := h.app.EditorTerminals[0]
+	defer entry.Term.Close()
+	h.exec("sidebar.apps")
+	h.app.Apps.OnRowMenu("viewer", 5, 6)
+	h.redraw()
+	h.pressKey(tcell.KeyEnter, 0)
+	if len(h.app.EditorTerminals) != 1 || h.app.EditorTerminals[0].ID != entry.ID {
+		t.Fatal("removing definition closed its terminal")
+	}
+	if _, ok := h.reg.Get("apps.run:viewer"); ok {
+		t.Fatal("removed app is still launchable")
 	}
 }

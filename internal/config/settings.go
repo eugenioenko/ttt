@@ -47,23 +47,11 @@ type Application struct {
 	Args        []string `json:"args,omitempty"`
 	Cwd         string   `json:"cwd,omitempty"`
 	Icon        string   `json:"icon,omitempty"`
+	PaddingX    *int     `json:"padding_x,omitempty"`
 	OpenWith    bool     `json:"openWith,omitempty"`
 	// Location is "editor" (the default) or "panel".
 	Location string `json:"location,omitempty"`
 	KeepOpen bool   `json:"keepOpen,omitempty"`
-}
-
-func (a Application) MarshalJSON() ([]byte, error) {
-	type application Application
-	var args *[]string
-	if a.Args != nil {
-		args = &a.Args
-	}
-	// An explicit empty array still selects direct execution after a round trip.
-	return json.Marshal(struct {
-		application
-		Args *[]string `json:"args,omitempty"`
-	}{application(a), args})
 }
 
 type TerminalSettings struct {

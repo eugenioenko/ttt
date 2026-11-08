@@ -113,6 +113,9 @@ func (a *App) ApplySettings(s config.Settings) {
 		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
 		if tab.Tab != nil {
 			tab.Tab.PaddingX = s.Terminal.PaddingX
+			if tab.Widget.PaddingX != nil {
+				tab.Tab.PaddingX = max(*tab.Widget.PaddingX, 0)
+			}
 		}
 	}
 

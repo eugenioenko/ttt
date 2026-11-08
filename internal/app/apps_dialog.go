@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -43,6 +44,8 @@ func (a *App) showAddApp(openWith bool) {
 	cwd := widgets.NewInputWidget(widgets.InputConfig{Placeholder: "{workspace}"})
 	icon := widgets.NewInputWidget(widgets.InputConfig{})
 	commandText := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.commandTextHint")})
+	padding := widgets.NewInputWidget(widgets.InputConfig{})
+	padding.SetText("1")
 	panel := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.inPanel")})
 	keepOpen := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.keepOpen"), Checked: true})
 	explorer := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.openWith"), Checked: openWith})
@@ -58,6 +61,7 @@ func (a *App) showAddApp(openWith bool) {
 		row(i18n.Text("apps.name"), name), row(i18n.Text("apps.command"), command), row(i18n.Text("apps.args"), args), row(i18n.Text("apps.cwd"), cwd),
 		row(i18n.Text("apps.icon"), icon),
 		row(i18n.Text("apps.commandText"), commandText),
+		row(i18n.Text("apps.paddingX"), padding),
 		panel, keepOpen, explorer, errorLabel,
 	)
 	dialog := widgets.NewDialogWidget(66)
@@ -74,6 +78,16 @@ func (a *App) showAddApp(openWith bool) {
 				errorLabel.Config.Text = i18n.Text("apps.required")
 				return
 			}
+			paddingX := 1
+			if text := strings.TrimSpace(padding.Text()); text != "" {
+				value, err := strconv.Atoi(text)
+				if err != nil || value < 0 {
+					errorLabel.Config.Text = i18n.Text("apps.invalidPadding")
+					return
+				}
+				paddingX = value
+			}
+			app.PaddingX = &paddingX
 			if text := strings.TrimSpace(args.Text()); text != "" {
 				if err := json.Unmarshal([]byte(text), &app.Args); err != nil || app.Args == nil {
 					errorLabel.Config.Text = i18n.Text("apps.invalidArgs")

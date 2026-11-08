@@ -1,8 +1,6 @@
 package app
 
 import (
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,46 +11,23 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf16"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 )
 
-func TestAppTerminalSpecUsesPlatformShell(t *testing.T) {
-	for _, goos := range []string{"linux", "darwin", "windows"} {
-		t.Run(goos, func(t *testing.T) {
-			file := `C:\it's {dir}\文 $x & 100%.txt`
-			app := config.Application{Name: "viewer", Command: "viewer {file} {dir} {workspace}", Cwd: "{dir}", Location: "panel", KeepOpen: true}
-			spec := appTerminalSpec(app, file, "folder", "root", goos)
-			if spec.Cwd != "folder" || spec.InEditor || !spec.KeepOpen || spec.Label != "viewer" {
-				t.Fatalf("spec = %+v", spec)
-			}
-			script := spec.Args[len(spec.Args)-1]
-			if goos == "windows" {
-				if spec.Shell != "powershell.exe" || !slices.Equal(spec.Args[:3], []string{"-NoLogo", "-NoProfile", "-EncodedCommand"}) {
-					t.Fatalf("Windows spec = %+v", spec)
-				}
-				data, err := base64.StdEncoding.DecodeString(script)
-				if err != nil {
-					t.Fatal(err)
-				}
-				units := make([]uint16, len(data)/2)
-				for i := range units {
-					units[i] = binary.LittleEndian.Uint16(data[2*i:])
-				}
-				script = string(utf16.Decode(units))
-				if script != `viewer "${env:TTT_APP_FILE}" "${env:TTT_APP_DIR}" "${env:TTT_APP_WORKSPACE}"` {
-					t.Fatalf("script = %q", script)
-				}
-			} else if spec.Shell != "/bin/sh" || script != `viewer "${TTT_APP_FILE}" "${TTT_APP_DIR}" "${TTT_APP_WORKSPACE}"` {
-				t.Fatalf("POSIX spec = %+v", spec)
-			}
-			if !slices.Contains(spec.Env, "TTT_APP_FILE="+file) {
-				t.Fatalf("path not preserved: %v", spec.Env)
-			}
-		})
+func TestAppTerminalSpecPassesExecutableAndOrderedArgs(t *testing.T) {
+	app := config.Application{Name: "viewer", Command: `C:\Program Files\viewer.exe`, Args: []string{"--mode", "preview", "{file}", "--readonly", "{dir}", "{workspace}"}, Cwd: "{dir}", Location: "panel", KeepOpen: true}
+	file := `C:\it's {dir}\文 $x & 100%.txt`
+	spec := appTerminalSpec(app, file, "folder", "root")
+	want := []string{"--mode", "preview", file, "--readonly", "folder", "root"}
+	if spec.Shell != app.Command || !slices.Equal(spec.Args, want) || spec.Cwd != "folder" || spec.InEditor || !spec.KeepOpen || spec.Label != "viewer" || spec.PaddingX == nil || *spec.PaddingX != 1 {
+		t.Fatalf("spec=%+v", spec)
+	}
+	app.Args = nil
+	if spec := appTerminalSpec(app, "", "folder", "root"); spec.Shell != app.Command || len(spec.Args) != 0 {
+		t.Fatalf("bare command=%+v", spec)
 	}
 }
 
@@ -61,49 +36,36 @@ func TestAppCommandPassesLiteralPathsToNativeProgram(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := `"$TTT_APP_TEST_EXE" -test.run=^TestAppCommandArgumentsHelper$ -- --new-window {file} {dir} {workspace}`
-	if runtime.GOOS == "windows" {
-		command = `& $env:TTT_APP_TEST_EXE '-test.run=^TestAppCommandArgumentsHelper$' -- --new-window {file} {dir} {workspace}`
-	}
 	paths := []string{`C:\it's {dir}\文 $x & 100%.txt`, `C:\a space\folder`, `C:\workspace`}
 	if runtime.GOOS != "windows" {
 		paths = []string{`/tmp/it's {dir}/文 "$x"; & 100%.txt`, "/tmp/a space/folder", "/tmp/workspace"}
 	}
-	for _, mode := range []string{"shell", "args"} {
-		t.Run(mode, func(t *testing.T) {
-			for _, hasFile := range []bool{true, false} {
-				t.Run(fmt.Sprintf("file=%t", hasFile), func(t *testing.T) {
-					app := config.Application{Command: command}
-					if mode == "args" {
-						app.Command = exe
-						app.Args = []string{"-test.run=^TestAppCommandArgumentsHelper$", "--", "--new-window", "{file}", "{dir}", "{workspace}"}
-					}
-					file := paths[0]
-					want := append([]string{"--new-window"}, paths...)
-					if !hasFile {
-						file = ""
-						want = append([]string{"--new-window"}, paths[1:]...)
-					}
-					spec := appTerminalSpec(app, file, paths[1], paths[2], runtime.GOOS)
-					out := filepath.Join(t.TempDir(), "args.json")
-					cmd := exec.Command(spec.Shell, spec.Args...)
-					cmd.Env = append(os.Environ(), spec.Env...)
-					cmd.Env = append(cmd.Env, "TTT_APP_TEST_HELPER=1", "TTT_APP_TEST_EXE="+exe, "TTT_APP_TEST_OUT="+out)
-					if data, err := cmd.CombinedOutput(); err != nil {
-						t.Fatalf("launch: %v\n%s", err, data)
-					}
-					data, err := os.ReadFile(out)
-					if err != nil {
-						t.Fatal(err)
-					}
-					var got []string
-					if err := json.Unmarshal(data, &got); err != nil {
-						t.Fatal(err)
-					}
-					if !slices.Equal(got, want) {
-						t.Fatalf("arguments=%q,want %q", got, want)
-					}
-				})
+	for _, hasFile := range []bool{true, false} {
+		t.Run(fmt.Sprintf("file=%t", hasFile), func(t *testing.T) {
+			app := config.Application{Command: exe, Args: []string{"-test.run=^TestAppCommandArgumentsHelper$", "--", "--new-window", "{file}", "{dir}", "{workspace}"}}
+			file := paths[0]
+			want := append([]string{"--new-window"}, paths...)
+			if !hasFile {
+				file = ""
+				want = append([]string{"--new-window"}, paths[1:]...)
+			}
+			spec := appTerminalSpec(app, file, paths[1], paths[2])
+			out := filepath.Join(t.TempDir(), "args.json")
+			cmd := exec.Command(spec.Shell, spec.Args...)
+			cmd.Env = append(os.Environ(), "TTT_APP_TEST_HELPER=1", "TTT_APP_TEST_OUT="+out)
+			if data, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("launch: %v\n%s", err, data)
+			}
+			data, err := os.ReadFile(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, want) {
+				t.Fatalf("arguments=%q,want %q", got, want)
 			}
 		})
 	}
@@ -214,7 +176,7 @@ func TestAppsReloadPreservesShortcutLabels(t *testing.T) {
 	a.Reg = command.NewRegistry()
 	a.Settings.Applications = []config.Application{{Name: "viewer", Command: "echo", OpenWith: true}}
 	a.syncApps()
-	ids := []string{"apps.run:viewer", "apps.openWith:viewer"}
+	ids := []string{"apps.run:viewer", "apps.openWith:viewer", "apps.remove:viewer"}
 	for _, id := range ids {
 		a.Reg.SetShortcut(id, "Ctrl+K X")
 	}
@@ -239,16 +201,14 @@ func TestAppsReloadPreservesShortcutLabels(t *testing.T) {
 
 func TestAppArgsExpandOnceAndTrackFile(t *testing.T) {
 	app := config.Application{Command: "{workspace}/viewer", Args: []string{"--file={file}", "{dir}"}, Cwd: "{dir}"}
-	for _, goos := range []string{"linux", "windows"} {
-		spec := appTerminalSpec(app, "it's {dir}.md", "folder", "root", goos)
-		if spec.Shell != "root/viewer" || !slices.Equal(spec.Args, []string{"--file=it's {dir}.md", "folder"}) || spec.Cwd != "folder" {
-			t.Fatalf("spec=%+v", spec)
-		}
+	spec := appTerminalSpec(app, "it's {dir}.md", "folder", "root")
+	if spec.Shell != "root/viewer" || !slices.Equal(spec.Args, []string{"--file=it's {dir}.md", "folder"}) || spec.Cwd != "folder" {
+		t.Fatalf("spec=%+v", spec)
 	}
 	if !appUsesFile(app) {
 		t.Fatal("file placeholder in args was ignored")
 	}
-	missing := appTerminalSpec(app, "", "folder", "root", "windows")
+	missing := appTerminalSpec(app, "", "folder", "root")
 	if !slices.Equal(missing.Args, []string{"folder"}) {
 		t.Fatalf("unresolved file argument was retained: %v", missing.Args)
 	}
@@ -256,7 +216,7 @@ func TestAppArgsExpandOnceAndTrackFile(t *testing.T) {
 	if appUsesFile(app) {
 		t.Fatal("empty args require a file")
 	}
-	spec := appTerminalSpec(app, "", "folder", "root", "windows")
+	spec = appTerminalSpec(app, "", "folder", "root")
 	if spec.Shell != "root/viewer" || len(spec.Args) != 0 {
 		t.Fatalf("empty direct args=%+v", spec)
 	}
