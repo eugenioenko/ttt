@@ -605,4 +605,18 @@ func TestRemovingAppLeavesItsRunningTerminalOpen(t *testing.T) {
 	if _, ok := h.reg.Get("apps.run:viewer"); ok {
 		t.Fatal("removed app is still launchable")
 	}
+	applyApps(h, config.Application{Name: "viewer", Command: "/bin/sh", Args: []string{"-c", "printf replacement; exec cat"}})
+	h.exec("apps.run:viewer")
+	if len(h.app.EditorTerminals) != 2 || h.app.EditorTerminals[1].ID == entry.ID {
+		t.Fatal("re-added app reused the removed definition's terminal")
+	}
+	defer h.app.EditorTerminals[1].Term.Close()
+	replacementTerm := h.app.EditorTerminals[1].Term
+	deadline := time.Now().Add(3 * time.Second)
+	for !strings.Contains(replacementTerm.ScreenText(), "replacement") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !strings.Contains(replacementTerm.ScreenText(), "replacement") || entry.Term.Exited() {
+		t.Fatal("new definition did not run independently of the retained terminal")
+	}
 }

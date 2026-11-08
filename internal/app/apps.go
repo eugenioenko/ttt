@@ -178,6 +178,7 @@ func (a *App) syncApps() {
 	for key, id := range a.appTerminals {
 		idx := slices.IndexFunc(apps, func(app config.Application) bool { return app.Name == key.name })
 		if idx < 0 {
+			delete(a.appTerminals, key)
 			continue
 		}
 		if tt := a.terminalByID(id); tt != nil {
