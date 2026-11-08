@@ -1,4 +1,4 @@
-package app
+package git
 
 import (
 	"context"

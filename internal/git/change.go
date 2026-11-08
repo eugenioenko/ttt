@@ -59,8 +59,12 @@ func ToChanges(files []FileStatus) []scm.Change {
 		return nil
 	}
 	changes := make([]scm.Change, 0, len(files))
-	for _, file := range files {
-		changes = append(changes, ToChange(file))
+	for _, item := range normalizeChangeStatuses(files) {
+		change := ToChange(item.status)
+		if item.conflictCode != "" {
+			change.Detail = item.conflictCode
+		}
+		changes = append(changes, change)
 	}
 	return changes
 }

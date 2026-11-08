@@ -1,6 +1,6 @@
 //go:build windows
 
-package app
+package git
 
 import (
 	"bytes"

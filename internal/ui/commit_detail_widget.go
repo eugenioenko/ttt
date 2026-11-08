@@ -21,12 +21,13 @@ import (
 // the order Git reports them; a failed or hunk-less diff still gets a heading
 // and an explanatory row so a touched path never silently disappears.
 type CommitDetailFile struct {
-	Status      string
-	Path        string
-	OldPath     string
-	Stage       CommitDetailStage
-	Boundary    CommitDetailBoundary
-	IndexStages []byte
+	Status          string
+	Path            string
+	OldPath         string
+	Stage           CommitDetailStage
+	Boundary        CommitDetailBoundary
+	Group           string
+	ConflictSources []string
 	// ConflictCode marks a two-way resolution view between the preferred
 	// available conflict stage and the worktree, not a full three-way merge view.
 	ConflictCode string
@@ -482,7 +483,7 @@ func (d *CommitDetailWidget) ApplyFileContextContent(fileIndex int, key string, 
 func CommitDetailContextKey(file CommitDetailFile) string { return commitDetailFileKey(file) }
 
 func commitDetailFileKey(file CommitDetailFile) string {
-	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + file.ConflictCode + "\x00" + string(file.IndexStages)
+	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + file.ConflictCode + "\x00" + strconv.Quote(file.Group) + "\x00" + fmt.Sprintf("%q", file.ConflictSources)
 }
 
 func (d *CommitDetailWidget) IsWrapped() bool { return d.wrapMode == DiffWrapOn }

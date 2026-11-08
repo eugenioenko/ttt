@@ -1,6 +1,6 @@
 //go:build linux || darwin || freebsd
 
-package app
+package git
 
 import (
 	"bytes"
