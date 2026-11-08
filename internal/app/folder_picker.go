@@ -255,6 +255,7 @@ func placeNodes(favs []favoriteDir, places []workspace.Place) []*widgets.TreeNod
 		}
 		nodes = append(nodes, &widgets.TreeNode{Heading: true})
 	}
+	nodes = append(nodes, &widgets.TreeNode{Label: i18n.Text("general.places"), Muted: true, Heading: true})
 	for _, p := range places {
 		nodes = append(nodes, &widgets.TreeNode{ID: p.Path, Label: p.Name})
 	}
