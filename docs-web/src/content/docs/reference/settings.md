@@ -334,12 +334,15 @@ Plugins can contribute grammars too. Installing one copies its grammar files int
 
 ## Applications
 
-Programs to launch from the **Apps** sidebar tab, which appears once at least one app is configured. Each app also gets a command palette entry, **Apps: Run <name>**, that can be bound to a key. An app opens in a terminal, as an editor tab by default. Running an app that is still open focuses its tab instead of starting it again.
+Programs to launch from the **Apps** sidebar tab. Opening an empty Apps tab shows **Add App**; the same dialog is available from the list and its menu. Apps are saved in `settings.json`. Use the search field above the list to filter by name; typing is debounced. Each app also gets a command palette entry, **Apps: Run <name>**, that can be bound to a key. An app opens in a terminal, as an editor tab by default. Running an app that is still open focuses its tab instead of starting it again. Enable **Show in Explorer Open with** to add the app to the right-click menu for files and folders, including workspace roots. Open with uses the clicked path without changing the current file tab; each app/path pair has its own terminal. The menu also has **Add App**, with Open with enabled by default.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `applications[].name` | string | — | Name shown in the Apps tab and used as the tab title. Must be unique. |
-| `applications[].command` | string | — | Command run with `sh -c`. `{file}` is the active file (or, when an app or other non-file tab is in front, the file tab used last), `{dir}` its folder (the workspace root when no file is open) and `{workspace}` the workspace root; ttt quotes each path, so do not add quotes around them. An app that uses `{file}` needs an open file. |
+| `applications[].command` | string | — | Command run with `sh -c` on Unix or Windows PowerShell (`powershell.exe -NoProfile`) on Windows. Use the corresponding shell syntax. `{file}` is the active file (or, when an app or other non-file tab is in front, the file tab used last), `{dir}` its folder (the workspace root when no file is open) and `{workspace}` the workspace root; ttt quotes each path, so do not add quotes around them. From Explorer, `{file}` is the clicked file or folder, `{dir}` is that folder or the file’s parent, and `{workspace}` is its workspace root. From the Apps tab, an app that uses `{file}` needs an open file. |
+| `applications[].icon` | string | Apps play icon | Plain icon shown beside the app name and on its editor tab. |
+| `applications[].nerdIcon` | string | plain icon | Icon used when `appearance.icons` is `"nerd-font"`; falls back to the plain icon. |
+| `applications[].openWith` | bool | `false` | Include the app in Explorer’s **Open with** submenu. |
 | `applications[].cwd` | string | workspace root | Working directory. Accepts the same placeholders, unquoted. |
 | `applications[].location` | string | `"editor"` | `"editor"` opens the app as an editor tab, `"panel"` in the terminal panel. |
 | `applications[].keepOpen` | bool | `false` | Keep the tab and its output after the program exits. By default the tab closes when the program exits. |
@@ -349,7 +352,7 @@ Programs to launch from the **Apps** sidebar tab, which appears once at least on
 ```json
 {
   "applications": [
-    { "name": "edamame", "command": "edamame {file}" },
+    { "name": "edamame", "command": "edamame {file}", "icon": "E", "nerdIcon": "\uea7b", "openWith": true },
     { "name": "lazygit", "command": "lazygit", "cwd": "{workspace}" },
     { "name": "btop", "command": "btop", "location": "panel" },
     { "name": "tests", "command": "make test", "keepOpen": true }

@@ -3,6 +3,11 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 	"strings"
 	"testing"
 	"time"
@@ -35,8 +40,8 @@ func TestAppsTabFollowsSettings(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 
-	if h.app.Sidebar.HasPanel("apps") {
-		t.Fatal("the Apps tab must stay hidden with no apps configured")
+	if !h.app.Sidebar.HasPanel("apps") {
+		t.Fatal("the empty Apps tab must remain discoverable")
 	}
 
 	applyApps(h,
@@ -55,8 +60,8 @@ func TestAppsTabFollowsSettings(t *testing.T) {
 	}
 
 	applyApps(h)
-	if h.app.Sidebar.HasPanel("apps") {
-		t.Fatal("removing every app must remove the Apps tab")
+	if !h.app.Sidebar.HasPanel("apps") {
+		t.Fatal("removing every app must keep the empty Apps tab")
 	}
 	if _, ok := h.reg.Get("apps.run:viewer"); ok {
 		t.Fatal("a removed app's command must be unregistered")
@@ -64,6 +69,9 @@ func TestAppsTabFollowsSettings(t *testing.T) {
 }
 
 func TestLaunchAppQuotesPlaceholdersAndReusesItsTab(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell command")
+	}
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 
@@ -105,6 +113,9 @@ func TestLaunchAppQuotesPlaceholdersAndReusesItsTab(t *testing.T) {
 }
 
 func TestLaunchAppFromAnotherAppTabUsesTheLastFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell command")
+	}
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 
@@ -131,6 +142,9 @@ func TestLaunchAppFromAnotherAppTabUsesTheLastFile(t *testing.T) {
 }
 
 func TestDirFallsBackToWorkspaceWithoutAFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell command")
+	}
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 
@@ -144,5 +158,153 @@ func TestDirFallsBackToWorkspaceWithoutAFile(t *testing.T) {
 	defer h.app.EditorTerminals[0].Term.Close()
 	if got, want := waitForFile(t, out), h.app.Workspace.Primary(); got != want {
 		t.Fatalf("{dir} = %q, want the workspace %q", got, want)
+	}
+}
+
+func TestEmptyAppsDialogCanSaveAndCancel(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.exec("sidebar.apps")
+	h.assertContains("Add App")
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("empty apps must open the add dialog")
+	}
+	adapter := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+	if h.app.Root.Focused != adapter {
+		t.Fatal("dialog lost keyboard focus")
+	}
+	h.pressKey(tcell.KeyEscape, 0)
+	if h.app.Root.HasOverlay() || len(h.app.Settings.Applications) != 0 {
+		t.Fatal("cancel added an app")
+	}
+	h.exec("sidebar.apps")
+	adapter = h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+	dialog := adapter.Inner().(*widgets.DialogWidget)
+	content := dialog.Content.(*widgets.VStackWidget)
+	input := func(index int) *widgets.InputWidget {
+		return content.Children[index].(*widgets.HStackWidget).Children[1].(*widgets.InputWidget)
+	}
+	dialog.Buttons[1].Handler()
+	h.redraw()
+	h.assertContains("Enter a name and command")
+	for _, r := range "viewer" {
+		h.pressRune(r)
+	}
+	h.pressKey(tcell.KeyTab, 0)
+	for _, r := range "echo {file}" {
+		h.pressRune(r)
+	}
+	input(3).SetText("V")
+	input(4).SetText("N")
+	content.Children[7].(*widgets.CheckboxWidget).Config.Checked = true
+	dialog.Buttons[1].Handler()
+	h.redraw()
+	if h.app.Root.HasOverlay() {
+		t.Fatal("successful save kept the dialog open")
+	}
+	apps := config.LoadSettings().Applications
+	if len(apps) != 1 || apps[0].Name != "viewer" || apps[0].Command != "echo {file}" || apps[0].Icon != "V" || apps[0].NerdIcon != "N" || !apps[0].OpenWith {
+		t.Fatalf("saved apps: %+v", apps)
+	}
+	if _, ok := h.reg.Get("apps.openWith:viewer"); !ok {
+		t.Fatal("save did not register Open with")
+	}
+}
+
+func TestExplorerOpenWithUsesClickedPathAndReusesOnlyThatTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell command")
+	}
+	h := newTestHarness(t, 110, 32)
+	defer h.stop()
+	active := filepath.Join(h.dir, "alpha.txt")
+	target := filepath.Join(h.dir, "it's {dir} here.txt")
+	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(h.dir, "out.txt")
+	applyApps(h, config.Application{Name: "viewer", Command: "printf '%s|%s|%s' {file} {dir} {workspace} > " + out + "; sleep 30", OpenWith: true, Icon: "V", NerdIcon: "N"})
+	if err := h.app.EditorGroup.OpenFile(active); err != nil {
+		t.Fatal(err)
+	}
+	h.app.Explorer.OnRightClick(&widgets.TreeNode{ID: target}, 3, 6)
+	h.redraw()
+	h.assertContains("Open with")
+	h.pressKey(tcell.KeyDown, 0)
+	h.pressKey(tcell.KeyRight, 0)
+	h.assertContains("V viewer")
+	h.pressKey(tcell.KeyEnter, 0)
+	defer func() {
+		for _, tt := range h.app.EditorTerminals {
+			tt.Term.Close()
+		}
+	}()
+	if got, want := waitForFile(t, out), target+"|"+h.dir+"|"+h.dir; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if h.app.ExplorerContextNode != nil {
+		t.Fatal("retained context target")
+	}
+	if h.app.EditorGroup.RecentDocumentPath() != active {
+		t.Fatal("Open with changed the current file")
+	}
+	h.app.ExplorerContextNode = &widgets.TreeNode{ID: target}
+	h.exec("apps.openWith:viewer")
+	if len(h.app.EditorTerminals) != 1 {
+		t.Fatal("same target must reuse its tab")
+	}
+	h.app.ExplorerContextNode = &widgets.TreeNode{ID: active}
+	h.exec("apps.openWith:viewer")
+	if len(h.app.EditorTerminals) != 2 {
+		t.Fatal("different target must start its own app")
+	}
+	s := *h.app.Settings
+	s.Appearance.Icons = config.IconsNerdFont
+	h.app.ApplySettings(s)
+	h.redraw()
+	tabs := h.app.EditorGroup.TabBar.Tabs
+	if tabs[len(tabs)-1].Icon != "N" || h.app.Apps.Tree.Config.Items[0].Icon != "N" {
+		t.Fatalf("Nerd icon not applied: %+v", tabs)
+	}
+}
+
+func TestExplorerOpenWithCanAddAnAppWhenEmpty(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.app.Explorer.OnRightClick(&widgets.TreeNode{ID: filepath.Join(h.dir, "alpha.txt")}, 3, 6)
+	h.redraw()
+	h.pressKey(tcell.KeyDown, 0)
+	h.pressKey(tcell.KeyRight, 0)
+	h.pressKey(tcell.KeyEnter, 0)
+	h.assertContains("Add App")
+	dialog := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget)
+	if !dialog.Content.(*widgets.VStackWidget).Children[7].(*widgets.CheckboxWidget).Config.Checked {
+		t.Fatal("adding from Open with must enable Explorer integration")
+	}
+}
+
+func TestAddAppDuplicateAndSaveFailureLeaveSettingsUntouched(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	applyApps(h, config.Application{Name: "existing", Command: "echo"})
+	h.app.AddApp()
+	dialog := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget)
+	content := dialog.Content.(*widgets.VStackWidget)
+	name := content.Children[0].(*widgets.HStackWidget).Children[1].(*widgets.InputWidget)
+	command := content.Children[1].(*widgets.HStackWidget).Children[1].(*widgets.InputWidget)
+	name.SetText("existing")
+	command.SetText("echo")
+	dialog.Buttons[1].Handler()
+	h.redraw()
+	h.assertContains("An app with this name already exists")
+	name.SetText("new")
+	if err := os.Mkdir(config.ConfigFilePath("settings.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dialog.Buttons[1].Handler()
+	h.redraw()
+	h.assertContains("Could not save app")
+	if !h.app.Root.HasOverlay() || len(h.app.Settings.Applications) != 1 {
+		t.Fatal("failed save changed settings or dismissed dialog")
 	}
 }

@@ -89,8 +89,9 @@ type App struct {
 	Apps          *AppsPanel
 	apps          []config.Application
 	appCommandIDs []string
+	appsSearch    *asynctask.Task[[]config.Application]
 	// appTerminals maps an app name to the terminal it last launched.
-	appTerminals map[string]string
+	appTerminals map[appLaunchKey]string
 	// EditorTerminals live in editor tabs. They are kept apart from Terminals,
 	// whose order matches the terminal panel's tabs.
 	EditorTerminals []TerminalTab
@@ -618,6 +619,7 @@ func (a *App) CloseTerminal(panelID string) {
 		return
 	}
 	a.Terminals[idx].Term.Close()
+	a.forgetAppTerminal(panelID)
 	a.Terminals = append(a.Terminals[:idx], a.Terminals[idx+1:]...)
 	a.TerminalPanel.RemoveTerminal(idx)
 
@@ -648,6 +650,7 @@ func (a *App) CloseAllTerminals() {
 	}
 	for _, tt := range terms {
 		tt.Term.Close()
+		a.forgetAppTerminal(tt.ID)
 	}
 	a.hideBottomPanelIfTerminalActive()
 }

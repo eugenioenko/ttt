@@ -51,6 +51,10 @@ func (a *App) applyIcons(ap config.AppearanceSettings) {
 	for _, warning := range icons.Configure(ap.Icons, ap.Overrides) {
 		a.LogOutput("warn", "settings", warning)
 	}
+	if a.Apps != nil {
+		a.Apps.mode = ap.Icons
+		a.Apps.Filter(a.Apps.SearchInput.Text())
+	}
 	collapsed, expanded := icons.Rune(icons.ChevronRight), icons.Rune(icons.ChevronDown)
 	var trees []*widgets.TreeWidget
 	if a.Explorer != nil {

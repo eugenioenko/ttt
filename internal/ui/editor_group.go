@@ -3130,7 +3130,12 @@ func (g *EditorGroupWidget) syncTabs() {
 		if ts.Diff != nil {
 			name += " (diff)"
 		}
+		icon := ""
+		if provider, ok := ts.Content.(interface{ TabIcon(string) string }); ok {
+			icon = provider.TabIcon(g.TabBar.Icons)
+		}
 		uiTabs = append(uiTabs, Tab{
+			Icon:     icon,
 			ID:       ts.ID,
 			Name:     name,
 			FilePath: ts.IconPath,

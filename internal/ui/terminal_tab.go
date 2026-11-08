@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
@@ -11,9 +12,21 @@ type TerminalTabWidget struct {
 	BaseWidget
 	Terminal *TerminalWidget
 	PaddingX int
+	Icon     string
+	NerdIcon string
 	// OnClose runs when the editor group discards the tab. It must release the
 	// terminal without closing the tab again: the group is mid-close.
 	OnClose func()
+}
+
+func (t *TerminalTabWidget) TabIcon(mode string) string {
+	if icons.IsNerd(mode) && t.NerdIcon != "" {
+		return t.NerdIcon
+	}
+	if t.Icon != "" {
+		return t.Icon
+	}
+	return icons.Get(mode, icons.PanelApps)
 }
 
 func NewTerminalTabWidget(tw *TerminalWidget) *TerminalTabWidget {

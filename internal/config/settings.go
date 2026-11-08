@@ -37,13 +37,13 @@ const (
 	SelectionStyleInvert     = "invert"
 )
 
-// Application is a program the Apps sidebar tab runs in a terminal. Command
-// runs through sh -c after {file}, {dir} and {workspace} are replaced with
-// shell-quoted paths.
 type Application struct {
-	Name    string `json:"name"`
-	Command string `json:"command"`
-	Cwd     string `json:"cwd,omitempty"`
+	Name     string `json:"name"`
+	Command  string `json:"command"`
+	Cwd      string `json:"cwd,omitempty"`
+	Icon     string `json:"icon,omitempty"`
+	NerdIcon string `json:"nerdIcon,omitempty"`
+	OpenWith bool   `json:"openWith,omitempty"`
 	// Location is "editor" (the default) or "panel".
 	Location string `json:"location,omitempty"`
 	KeepOpen bool   `json:"keepOpen,omitempty"`
