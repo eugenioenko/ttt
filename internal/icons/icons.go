@@ -112,7 +112,7 @@ var table = map[Name]glyphs{
 	PanelChanges:  {Plain: "⎇", Nerd: "\uea68"},
 	PanelOutline:  {Plain: "ƒ", Nerd: "\ueb86"},
 	PanelPlugins:  {Plain: "⧉", Nerd: "\ueae6"},
-	PanelApps:     {Plain: "⏵", Nerd: "\ueb44"},
+	PanelApps:     {Plain: "⏵", Nerd: "\U000f003b"},
 }
 
 var (
