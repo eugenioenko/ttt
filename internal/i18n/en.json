@@ -11,6 +11,7 @@
   "apps.cwd": "Working folder",
   "apps.duplicateName": "Apps: skipped a second app named \"{name}\"",
   "apps.icon": "Icon",
+  "apps.iconHint": "Optional icon",
   "apps.inPanel": "Open in the docked terminal",
   "apps.invalidEntry": "Apps: skipped an entry without a name or a command",
   "apps.keepOpen": "Keep output open after exit",

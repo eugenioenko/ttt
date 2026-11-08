@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -170,7 +171,11 @@ func TestEmptyAppsOffersAddButtonWithoutOpeningDialog(t *testing.T) {
 		t.Fatal("empty Apps did not receive focus")
 	}
 	list := h.app.Apps.Adapter.Inner().(*widgets.VStackWidget)
+	empty := list.Children[2].(*widgets.LabelWidget)
 	button := list.Children[3].(*widgets.ButtonWidget).GetRect()
+	if empty.Config.Style != term.StyleMuted || button.Y != empty.GetRect().Y+1 {
+		t.Fatal("Add App must sit directly below the muted empty message")
+	}
 	h.click(button.X+1, button.Y)
 	if !h.app.Root.HasOverlay() {
 		t.Fatal("Add App button did not open the dialog")

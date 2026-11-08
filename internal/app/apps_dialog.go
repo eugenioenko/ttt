@@ -42,7 +42,7 @@ func (a *App) showAddApp(openWith bool) {
 	command := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.commandHint")})
 	args := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Format("apps.argsHint", i18n.Args{"file": "{file}"})})
 	cwd := widgets.NewInputWidget(widgets.InputConfig{Placeholder: "{workspace}"})
-	icon := widgets.NewInputWidget(widgets.InputConfig{})
+	icon := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.iconHint")})
 	commandText := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.commandTextHint")})
 	padding := widgets.NewInputWidget(widgets.InputConfig{})
 	padding.SetText("1")

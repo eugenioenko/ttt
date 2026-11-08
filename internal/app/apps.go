@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -35,6 +36,7 @@ type AppsPanel struct {
 	mode        string
 	content     *widgets.VStackWidget
 	addButton   *widgets.ButtonWidget
+	emptyLabel  *widgets.LabelWidget
 }
 
 func NewAppsPanel() *AppsPanel {
@@ -68,6 +70,8 @@ func NewAppsPanel() *AppsPanel {
 		},
 	})
 	p.Tree.Box.PaddingLeft = 1
+	p.emptyLabel = widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("apps.noMatches"), Style: term.StyleMuted})
+	p.emptyLabel.Box.PaddingLeft = 1
 	p.addButton = widgets.NewButtonWidget(widgets.ButtonConfig{Label: i18n.Text("apps.add"), OnClick: func() {
 		if p.OnAdd != nil {
 			p.OnAdd()
@@ -75,17 +79,13 @@ func NewAppsPanel() *AppsPanel {
 	}})
 	p.content = widgets.NewVStackWidget(p.SearchInput, widgets.NewDividerWidget(widgets.DividerConfig{}), p.Tree, p.addButton)
 	p.Adapter = ui.NewWidgetAdapter(p.content)
+	p.SetApps(nil)
 	return p
 }
 
 func (p *AppsPanel) SetApps(apps []config.Application) {
 	p.apps = apps
 	p.Filter(p.SearchInput.Text())
-	p.content.Children = p.content.Children[:3]
-	if len(apps) == 0 {
-		p.content.Children = append(p.content.Children, p.addButton)
-	}
-	p.Adapter.RebuildFocus()
 }
 
 func appIcon(app config.Application, mode string) string {
@@ -116,6 +116,16 @@ func (p *AppsPanel) setFilteredApps(apps []config.Application) {
 		nodes = append(nodes, &widgets.TreeNode{ID: app.Name, Label: app.Name, Icon: appIcon(app, p.mode)})
 	}
 	p.Tree.SetItems(nodes)
+	p.content.Children = p.content.Children[:2]
+	if len(nodes) == 0 {
+		p.content.Children = append(p.content.Children, p.emptyLabel)
+	} else {
+		p.content.Children = append(p.content.Children, p.Tree)
+	}
+	if len(p.apps) == 0 {
+		p.content.Children = append(p.content.Children, p.addButton)
+	}
+	p.Adapter.RebuildFocus()
 }
 
 func (a *App) scheduleAppsSearch(query string) {
