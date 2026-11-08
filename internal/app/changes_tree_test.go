@@ -284,7 +284,7 @@ func TestCommitFileTreeFoldersToggleAndBulkStatePersists(t *testing.T) {
 	cp.SetFileView(config.GitFileViewTree)
 	const ref = "0123456789012345678901234567890123456789"
 	commitID := "commit:" + ref
-	files := []git.FileStatus{{Status: "M", Path: "pkg/history/one.go"}, {Status: "A", Path: "pkg/history/two.go"}}
+	files := []scm.Change{{Kind: scm.Modified, Path: "pkg/history/one.go"}, {Kind: scm.Added, Path: "pkg/history/two.go"}}
 	cp.commitFiles["/repo\x00"+ref] = files
 	cp.logCommits[commitID] = commitFileRef{Dir: "/repo", Ref: ref, Short: ref[:7]}
 	commit := &widgets.TreeNode{ID: commitID, Label: "files", Expanded: true, Children: cp.commitFileNodes("/repo", ref, ref[:7], commitID, files)}

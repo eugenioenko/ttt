@@ -79,7 +79,7 @@ func TestChangesIconSwitchPreservesSelection(t *testing.T) {
 func TestCommitFileNodesCarryFileIcons(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.SetIcons(config.IconsNerdFont)
-	nodes := cp.commitFileNodes("/repo", "abc", "abc", "commit:abc", []git.FileStatus{{Status: "D", Path: "docs/guide.md"}})
+	nodes := cp.commitFileNodes("/repo", "abc", "abc", "commit:abc", []scm.Change{{Kind: scm.Deleted, Path: "docs/guide.md"}})
 	if len(nodes) != 1 || nodes[0].Icon != "D" || nodes[0].LabelIcon != fileicons.ForFile("guide.md").Glyph {
 		t.Fatalf("commit file row = %+v, want status D with the markdown icon", nodes)
 	}

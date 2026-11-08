@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/diff"
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/scm"
@@ -73,7 +73,7 @@ type CommitFilesResult struct {
 	Ref      string
 	Short    string
 	NodeID   string
-	Files    []git.FileStatus
+	Files    []scm.Change
 	Err      error
 	Canceled bool
 }
@@ -283,7 +283,7 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 }
 
 func (cp *ChangesPanel) commitLogNode(dir string, entry scm.HistoryEntry) *widgets.TreeNode {
-	id := "commit:" + entry.Ref
+	id := historyCommitNodeID(entry.Ref)
 	cp.logCommits[id] = commitFileRef{Dir: dir, Ref: entry.Ref, Short: entry.Label}
 	node := &widgets.TreeNode{ID: id, Label: entry.Message, Icon: icons.Get(cp.icons, icons.Commit), Badge: entry.Label, Expandable: true}
 	if cp.logExpanded[commitLogStateKey(dir, id)] {
@@ -330,7 +330,7 @@ func (cp *ChangesPanel) applyCommitLogPage(r *CommitLogResult) {
 	}
 	firstAddedID := ""
 	for _, entry := range r.Entries {
-		id := "commit:" + entry.Ref
+		id := historyCommitNodeID(entry.Ref)
 		if _, exists := cp.logCommits[id]; exists {
 			continue
 		}
@@ -364,8 +364,7 @@ func (cp *ChangesPanel) replaceHistoryLoadNode(loading, retry bool) {
 }
 
 // commitFileParent extracts only the stable parent identity from a commit-file
-// node ID. The path after the hash may itself contain colons, so it remains
-// opaque; full Git object IDs cannot contain the separator.
+// node ID. Revision identities are escaped independently of literal paths.
 func commitFileParent(id string) (parentID, ref string, ok bool) {
 	rest, ok := strings.CutPrefix(id, "cfile:commit:")
 	if !ok {
@@ -375,7 +374,11 @@ func commitFileParent(id string) (parentID, ref string, ok bool) {
 	if !ok || ref == "" {
 		return "", "", false
 	}
-	return "commit:" + ref, ref, true
+	decoded, err := url.QueryUnescape(ref)
+	if err != nil {
+		return "", "", false
+	}
+	return "commit:" + ref, decoded, true
 }
 
 // selectLogNode selects a node by ID, reporting whether it was there to select.
@@ -383,10 +386,17 @@ func (cp *ChangesPanel) selectLogNode(id string) bool {
 	return revealTreeSelection(cp.CommitLog, id)
 }
 
-func readCommitFiles(ctx context.Context, request uint64, dir, ref, short, nodeID string) *CommitFilesResult {
-	files, err := git.CommitFilesContext(ctx, dir, ref)
+func readCommitFiles(ctx context.Context, request uint64, source repositorySource, ref, short, nodeID string) *CommitFilesResult {
+	reader, err := source.revisionReader(ctx)
+	var files []scm.Change
+	if err == nil {
+		files, err = reader.RevisionChanges(ctx, ref)
+	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	return &CommitFilesResult{
-		Request: request, Dir: dir, Ref: ref, Short: short, NodeID: nodeID, Files: files, Err: err,
+		Request: request, Dir: source.root, Ref: ref, Short: short, NodeID: nodeID, Files: files, Err: err,
 		Canceled: errors.Is(err, context.Canceled),
 	}
 }
@@ -432,9 +442,10 @@ func (cp *ChangesPanel) fetchCommitFiles(dir, ref, short, nodeID string) {
 	requestID := cp.commitFilesNext
 	ctx, cancel := context.WithTimeout(context.Background(), commitFilesTimeout)
 	cp.commitFilesPending[key] = commitFilesRequest{ID: requestID, Cancel: cancel}
+	source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
 	screen := cp.Screen
 	go func() {
-		result := readCommitFiles(ctx, requestID, dir, ref, short, nodeID)
+		result := readCommitFiles(ctx, requestID, source, ref, short, nodeID)
 		cancel()
 		screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -489,9 +500,18 @@ func commitDetailTabID(dir, ref string) string {
 	return "commit:" + dir + "\x00" + ref
 }
 
-func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short string) *CommitDetailResult {
-	result := &CommitDetailResult{Incarnation: incarnation, Dir: dir, Ref: ref, Short: short}
-	message, err := git.CommitMessageContext(ctx, dir, ref)
+func readCommitDetail(ctx context.Context, incarnation uint64, source repositorySource, ref, short string) *CommitDetailResult {
+	result := &CommitDetailResult{Incarnation: incarnation, Dir: source.root, Ref: ref, Short: short}
+	reader, err := source.revisionReader(ctx)
+	if err != nil {
+		result.Err = i18n.Format("changes.readCommitFailed", i18n.Args{"short": short})
+		result.Canceled = errors.Is(err, context.Canceled)
+		return result
+	}
+	revision, err := reader.ReadRevision(ctx, ref)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			result.Canceled = true
@@ -500,17 +520,14 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 		result.Err = i18n.Format("changes.readCommitFailed", i18n.Args{"short": short})
 		return result
 	}
-	result.Message = message
-	result.AuthoredAt, err = git.CommitAuthoredAtContext(ctx, dir, ref)
-	if errors.Is(err, context.Canceled) {
-		result.Canceled = true
-		return result
-	}
-	if err != nil {
-		result.AuthoredAtUnavailable = true
-	}
+	result.Message = revision.Message
+	result.AuthoredAt = revision.AuthoredAt
+	result.AuthoredAtUnavailable = revision.AuthoredAtUnavailable
 
-	files, err := git.CommitFilesContext(ctx, dir, ref)
+	files, err := reader.RevisionChanges(ctx, ref)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			result.Canceled = true
@@ -521,8 +538,11 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 	}
 	result.Files = make([]ui.CommitDetailFile, 0, len(files))
 	for _, file := range files {
-		detail := ui.CommitDetailFile{Status: file.Status, Path: file.Path, OldPath: file.OldPath}
-		diffText, err := git.CommitFileDiffContext(ctx, dir, ref, file)
+		detail := ui.CommitDetailFile{Status: ui.ChangeBadge(file), Path: file.Path, OldPath: file.OldPath, Group: string(file.Group)}
+		diffText, err := reader.ReadRevisionPatch(ctx, ref, file)
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				result.Canceled = true
@@ -549,6 +569,7 @@ func (a *App) OpenCommitDetail(dir, ref, short string) {
 		return
 	}
 
+	source := a.Repository.repositorySource(dir)
 	request := a.beginCommitDetailRequest(tabID)
 	detail := ui.NewCommitDetailWidget(dir, ref, short, a.EditorGroup.SyntaxHighlight)
 	detail.Incarnation = request.Incarnation
@@ -562,7 +583,7 @@ func (a *App) OpenCommitDetail(dir, ref, short string) {
 	read := func() *CommitDetailResult {
 		ctx, cancel := context.WithTimeout(request.Context, commitDetailTimeout)
 		defer cancel()
-		return readCommitDetail(ctx, request.Incarnation, dir, ref, short)
+		return readCommitDetail(ctx, request.Incarnation, source, ref, short)
 	}
 	if a.Screen == nil {
 		a.ApplyCommitDetail(read())
@@ -698,3 +719,5 @@ func (a *App) applyDiffOpen(origin string, result *diffOpenResult) {
 	a.EditorGroup.OpenDiffTab(result.TabName, result.Title, result.Path, result.Diff, result.OldLines, result.NewLines, result.Extended)
 	a.FocusEditorIfEnabled()
 }
+
+func historyCommitNodeID(ref string) string { return "commit:" + url.QueryEscape(ref) }

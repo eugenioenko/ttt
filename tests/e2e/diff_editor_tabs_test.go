@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"os"
 	"path/filepath"
@@ -38,7 +39,7 @@ func TestCommitDiffOpensOnTheDiffEditor(t *testing.T) {
 	write(numberedLines(30, 15, "CHANGED 15"))
 	harnessGit(t, h.dir, "commit", "-qam", "change line 15")
 
-	h.app.OpenCommitDiff(h.dir, "HEAD", "HEAD", git.FileStatus{Path: "code.txt", Status: "M"}, false)
+	h.app.OpenCommitDiff(h.dir, "HEAD", "HEAD", scm.Change{Path: "code.txt", Kind: scm.Modified}, false)
 	h.redraw()
 	dv := h.app.EditorGroup.ActiveDiffWidget()
 	if dv == nil {

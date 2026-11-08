@@ -31,7 +31,7 @@ func TestReadCommitDiffBuildsAnImmutableFileView(t *testing.T) {
 		t.Fatalf("commit files = %+v, err = %v", files, err)
 	}
 
-	result := readCommitDiff(context.Background(), dir, ref, ref[:7], files[0], false)
+	result := readCommitDiff(context.Background(), testRevisionSource(dir), ref, ref[:7], git.ToChange(files[0]), false)
 	if result.Canceled || result.Warn != "" || len(result.Diff.Hunks) == 0 {
 		t.Fatalf("commit diff result = %+v", result)
 	}
@@ -44,7 +44,7 @@ func TestReadCommitDiffBuildsAnImmutableFileView(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if result := readCommitDiff(canceled, dir, ref, ref[:7], files[0], false); !result.Canceled {
+	if result := readCommitDiff(canceled, testRevisionSource(dir), ref, ref[:7], git.ToChange(files[0]), false); !result.Canceled {
 		t.Fatalf("canceled commit diff result = %+v", result)
 	}
 }
@@ -282,4 +282,8 @@ func TestApplyCommitDetailUsesRepositoryHashIdentityAndPreciseTimestamp(t *testi
 	if detail.Loading || detail.Metadata != "Authored Aug 22, 2026 at 3:14:15 AM -0400" {
 		t.Fatalf("applied detail loading=%v metadata=%q", detail.Loading, detail.Metadata)
 	}
+}
+
+func testRevisionSource(root string) repositorySource {
+	return repositorySource{root: root, provider: git.Provider{}}
 }

@@ -10,8 +10,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -33,12 +33,13 @@ type CommitDetailContextResult struct {
 }
 
 func (a *App) wireCommitDetailContext(tabID string, detail *ui.CommitDetailWidget, request commitDetailRequest) {
+	source := a.Repository.repositorySource(detail.Dir)
 	detail.OnFetchContext = func(fileIndex int, file ui.CommitDetailFile) {
-		dir, ref := detail.Dir, detail.Ref
+		ref := detail.Ref
 		read := func() *CommitDetailContextResult {
 			ctx, cancel := context.WithTimeout(request.Context, commitDetailContextTimeout)
 			defer cancel()
-			return readCommitDetailContext(ctx, request.Incarnation, tabID, dir, ref, fileIndex, file)
+			return readCommitDetailContext(ctx, request.Incarnation, tabID, source, ref, fileIndex, file)
 		}
 		if a.Screen == nil {
 			a.ApplyCommitDetailContext(read())
@@ -51,43 +52,26 @@ func (a *App) wireCommitDetailContext(tabID string, detail *ui.CommitDetailWidge
 	}
 }
 
-func readCommitDetailContext(ctx context.Context, incarnation uint64, tabID, dir, ref string, fileIndex int, file ui.CommitDetailFile) *CommitDetailContextResult {
+func readCommitDetailContext(ctx context.Context, incarnation uint64, tabID string, source repositorySource, ref string, fileIndex int, file ui.CommitDetailFile) *CommitDetailContextResult {
 	result := &CommitDetailContextResult{
-		Incarnation: incarnation, TabID: tabID, Dir: dir, Ref: ref, FileIndex: fileIndex,
+		Incarnation: incarnation, TabID: tabID, Dir: source.root, Ref: ref, FileIndex: fileIndex,
 		FileKey: ui.CommitDetailContextKey(file),
 	}
-	oldPath := file.Path
-	if file.OldPath != "" {
-		oldPath = file.OldPath
+	reader, err := source.revisionReader(ctx)
+	var content scm.RevisionContent
+	if err == nil {
+		content, err = reader.ReadRevisionContent(ctx, ref, file.Path, file.OldPath)
 	}
-	var oldContent, newContent []byte
-	if file.Status != "A" {
-		content, err := git.ShowFileBytesContext(ctx, dir, oldPath, ref+"^")
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				result.Canceled = true
-				return result
-			}
-			result.Err = i18n.Format("changes.couldNotLoadFullFileFor", i18n.Args{"path": commitContextDisplayPath(file.Path)})
-		} else {
-			oldContent = content
-		}
+	if ctx.Err() != nil {
+		err = ctx.Err()
 	}
-	if file.Status != "D" {
-		content, err := git.ShowFileBytesContext(ctx, dir, file.Path, ref)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				result.Canceled = true
-				return result
-			}
-			result.Err = i18n.Format("changes.couldNotLoadFullFileFor", i18n.Args{"path": commitContextDisplayPath(file.Path)})
-		} else {
-			newContent = content
-		}
-	}
-	if result.Err != "" {
+	if err != nil {
+		result.Canceled = errors.Is(err, context.Canceled)
+		result.Err = i18n.Format("changes.couldNotLoadFullFileFor", i18n.Args{"path": commitContextDisplayPath(file.Path)})
 		return result
 	}
+	oldContent, newContent := []byte(content.Before.Content), []byte(content.After.Content)
+
 	if isBinaryCommitContent(oldContent) || isBinaryCommitContent(newContent) {
 		result.ContentKind = ui.CommitDetailContentBinary
 		return result
@@ -96,10 +80,10 @@ func readCommitDetailContext(ctx context.Context, incarnation uint64, tabID, dir
 		result.ContentKind = ui.CommitDetailContentEmpty
 		return result
 	}
-	if file.Status != "A" {
+	if content.Before.Exists {
 		result.OldLines = splitCommitDetailLines(string(oldContent))
 	}
-	if file.Status != "D" {
+	if content.After.Exists {
 		result.NewLines = splitCommitDetailLines(string(newContent))
 	}
 	return result
