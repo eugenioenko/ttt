@@ -25,6 +25,7 @@ jobs:
     outputs:
       runtime: ${{ steps.changes.outputs.runtime }}
       docs_web: ${{ steps.changes.outputs.docs_web }}
+      native_trash: ${{ steps.changes.outputs.native_trash }}
       reason: ${{ steps.changes.outputs.reason }}
     steps:
       - name: Checkout
@@ -45,12 +46,14 @@ jobs:
           changed_files=$(mktemp)
           runtime=false
           docs_web=false
+          native_trash=false
           reason="documentation-only pull request"
 
           if [[ "$EVENT_NAME" != "pull_request" ]]; then
             git show --format= --no-renames --name-only -z HEAD > "$changed_files"
             runtime=true
             docs_web=true
+            native_trash=true
             reason="pushes to main run the full contract"
           else
             git diff --no-renames --name-only -z --diff-filter=ACMRD "$BASE_SHA...$HEAD_SHA" > "$changed_files"
@@ -58,9 +61,11 @@ jobs:
             if [[ "$FORCE_FULL" == "true" ]]; then
               runtime=true
               docs_web=true
+              native_trash=true
               reason="ci:full requests every lane"
             elif [[ ! -s "$changed_files" ]]; then
               runtime=true
+              native_trash=true
               reason="no changed files were detected, so CI failed closed"
             else
               while IFS= read -r -d '' path; do
@@ -72,6 +77,12 @@ jobs:
                     ;;
                   *)
                     runtime=true
+                    # internal/trash imports no other ttt package. Add any package it starts importing.
+                    case "$path" in
+                      internal/trash/*|go.mod|go.sum|.github/workflows/ci.yml)
+                        native_trash=true
+                        ;;
+                    esac
                     ;;
                 esac
               done < "$changed_files"
@@ -85,6 +96,7 @@ jobs:
           {
             echo "runtime=$runtime"
             echo "docs_web=$docs_web"
+            echo "native_trash=$native_trash"
             echo "reason=$reason"
           } >> "$GITHUB_OUTPUT"
 
@@ -96,6 +108,7 @@ jobs:
             echo "| classify | true | blocking |"
             echo "| vet, lint, test | $runtime | blocking |"
             echo "| docs | $docs_web | blocking when selected |"
+            echo "| native-trash | $native_trash | blocking when selected |"
             echo "| test-race | $runtime | blocking when selected |"
             echo "| functional-tests | $runtime | blocking when selected |"
             echo "| integration-tests | $runtime | blocking when selected |"
@@ -181,7 +194,7 @@ jobs:
 
   native-trash:
     needs: classify
-    if: needs.classify.outputs.runtime == 'true'
+    if: needs.classify.outputs.native_trash == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -529,6 +542,7 @@ jobs:
       CLASSIFY_RESULT: ${{ needs.classify.result }}
       RUNTIME: ${{ needs.classify.outputs.runtime }}
       DOCS_WEB: ${{ needs.classify.outputs.docs_web }}
+      NATIVE_TRASH: ${{ needs.classify.outputs.native_trash }}
       VET_RESULT: ${{ needs.vet.result }}
       LINT_RESULT: ${{ needs.lint.result }}
       TEST_RESULT: ${{ needs.test.result }}
@@ -562,7 +576,7 @@ jobs:
           require_result lint "$RUNTIME" "$LINT_RESULT"
           require_result test "$RUNTIME" "$TEST_RESULT"
           require_result docs "$DOCS_WEB" "$DOCS_RESULT"
-          require_result native-trash "$RUNTIME" "$NATIVE_TRASH_RESULT"
+          require_result native-trash "$NATIVE_TRASH" "$NATIVE_TRASH_RESULT"
 
           {
             echo "## Fast contract"
