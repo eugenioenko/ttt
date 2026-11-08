@@ -114,6 +114,45 @@ func TestEditorIndentGuidesDisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestEditorIndentGuidesSkipSecondaryCursor(t *testing.T) {
+	e := newRowsEditor([]string{"    a", "    b"}, 20, 2)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.Cursor.Line, e.Cursor.Col = 0, 4
+	e.ensureMulti()
+	e.Multi.Add(1, 0)
+	e.syncFromMulti()
+
+	grid := renderGrid(e)
+	g := e.GutterWidth()
+
+	// Line 0 col 0 should be an indent guide
+	if c := grid[0][g+0]; c.Ch != '│' || c.Style != term.StyleIndentGuide {
+		t.Fatalf("row 0 col 0 = %+v, want indent guide", c)
+	}
+	// Line 1 col 0 has a secondary cursor and must preserve StyleReverse
+	if c := grid[1][g+0]; c.Style != term.StyleReverse {
+		t.Fatalf("row 1 col 0 = %+v, want secondary cursor with StyleReverse", c)
+	}
+}
+
+func TestEditorIndentGuidesSkipSearchMatches(t *testing.T) {
+	e := newRowsEditor([]string{"    a", "    b"}, 20, 2)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.SearchMatches = []FindMatch{
+		{Line: 1, Col: 0, Len: 1},
+	}
+	e.SearchActive = -1
+	e.buildSearchIndex()
+	grid := renderGrid(e)
+	g := e.GutterWidth()
+
+	if c := grid[1][g+0]; c.Style != term.StyleSearchMatch {
+		t.Fatalf("row 1 col 0 = %+v, want search match style, got %+v", c, c.Style)
+	}
+}
+
 func TestEditorArrowKeys(t *testing.T) {
 	e := newTestEditor()
 	e.SetRect(Rect{X: 0, Y: 0, W: 20, H: 10})
