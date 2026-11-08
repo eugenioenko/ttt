@@ -77,7 +77,7 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 		return nil
 	}
 	comparison := original
-	if editor.Buf.ShowTrailingNewline {
+	if editor.Buf.ShowTrailingNewline || editor.Buf.InsertFinalNewline {
 		formatted = strings.TrimSuffix(formatted, "\n")
 		comparison = strings.TrimSuffix(comparison, "\n")
 	}
