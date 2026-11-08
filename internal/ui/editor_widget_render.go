@@ -48,11 +48,13 @@ func indentGuideBlankWidth(lines []string, line, tabWidth int, spans *[]indentGu
 
 	start, end := line, line
 	above, below := 0, 0
+	aboveFound, belowFound := false, false
 	lowest := max(line-indentGuideMaxScanLines, 0)
 	for start > lowest {
 		width, _, blank := indentGuideIndent(lines[start-1], tabWidth)
 		if !blank {
 			above = width
+			aboveFound = true
 			break
 		}
 		start--
@@ -62,14 +64,50 @@ func indentGuideBlankWidth(lines []string, line, tabWidth int, spans *[]indentGu
 		width, _, blank := indentGuideIndent(lines[end+1], tabWidth)
 		if !blank {
 			below = width
+			belowFound = true
 			break
 		}
 		end++
 	}
 
-	width := max(above, below)
-	*spans = append(*spans, indentGuideBlankSpan{start: start, end: end, width: width})
-	return width
+	// Cache only the lines whose own bounded scan resolves to the same width.
+	// A blank run can be longer than the scan bound, so the span scanned from
+	// one line can reach past the point where that line's nearest non-blank
+	// neighbour drops out of the window; carrying the width across those lines
+	// would draw guides that a direct scan of the line would not.
+	lo, hi := line, line
+	if aboveFound {
+		lo = start
+	}
+	if belowFound {
+		hi = end
+	}
+
+	addSpan := func(from, to, width int) {
+		if from <= to {
+			*spans = append(*spans, indentGuideBlankSpan{start: from, end: to, width: width})
+		}
+	}
+	switch {
+	case aboveFound && belowFound:
+		// Each side only holds within indentGuideMaxScanLines of its
+		// neighbour, so the run splits into at most three spans.
+		aboveEnd := start - 1 + indentGuideMaxScanLines
+		belowStart := end + 1 - indentGuideMaxScanLines
+		addSpan(lo, min(hi, belowStart-1), above)
+		addSpan(max(lo, belowStart), min(hi, aboveEnd), max(above, below))
+		addSpan(max(lo, aboveEnd+1), hi, below)
+		return max(above, below)
+	case aboveFound:
+		addSpan(lo, hi, above)
+		return above
+	case belowFound:
+		addSpan(lo, hi, below)
+		return below
+	default:
+		addSpan(line, line, 0)
+		return 0
+	}
 }
 
 func (e *EditorPaneWidget) Render(surface Surface) {

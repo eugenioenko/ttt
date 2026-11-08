@@ -132,6 +132,54 @@ func TestIndentGuideBlankScanUsesNearestSideWithinBound(t *testing.T) {
 	}
 }
 
+func TestIndentGuideBlankScanDoesNotExtendWidthsPastTheBound(t *testing.T) {
+	// One indented non-blank line, then a blank run longer than the scan
+	// bound: lines within reach keep the width, lines past it resolve to 0,
+	// and cached spans must not leak the width across the boundary no matter
+	// which line is scanned first.
+	lines := make([]string, 2*indentGuideMaxScanLines+3)
+	lines[0] = "    top"
+
+	want := map[int]int{
+		1:                           4,
+		2:                           4,
+		indentGuideMaxScanLines - 1: 4,
+		indentGuideMaxScanLines:     4,
+		indentGuideMaxScanLines + 1: 0,
+	}
+	for _, order := range [][]int{
+		{1, 2, indentGuideMaxScanLines - 1, indentGuideMaxScanLines, indentGuideMaxScanLines + 1},
+		{indentGuideMaxScanLines + 1, indentGuideMaxScanLines, indentGuideMaxScanLines - 1, 2, 1},
+	} {
+		var spans []indentGuideBlankSpan
+		for _, line := range order {
+			if got := indentGuideBlankWidth(lines, line, 4, &spans); got != want[line] {
+				t.Fatalf("order %v: blank line %d = %d, want %d", order, line, got, want[line])
+			}
+		}
+	}
+}
+
+func TestIndentGuideBlankScanSplitsLongRunsByNearestSide(t *testing.T) {
+	lines := make([]string, 601)
+	lines[0] = "    top"
+	lines[600] = "  bottom"
+
+	var spans []indentGuideBlankSpan
+	cases := []struct{ line, want int }{
+		{1, 4},   // only the top is in reach
+		{88, 4},  // both sides in reach, the wider top wins
+		{512, 4}, // the top is exactly at the scan bound
+		{513, 2}, // the top is out of reach, the bottom wins
+		{599, 2}, // only the bottom is in reach
+	}
+	for _, c := range cases {
+		if got := indentGuideBlankWidth(lines, c.line, 4, &spans); got != c.want {
+			t.Fatalf("blank line %d = %d, want %d", c.line, got, c.want)
+		}
+	}
+}
+
 func TestEditorIndentGuidesDisabledByDefault(t *testing.T) {
 	e := NewEditorPaneWidget(
 		&buffer.Buffer{Lines: []string{"    value"}},
