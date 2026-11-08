@@ -17,6 +17,9 @@ const count = Number(process.env.COUNT ?? 3);
 const benchTime = process.env.BENCH_TIME ?? '5x';
 const logBenchTime = process.env.LOG_BENCH_TIME ?? '1x';
 const marker = '<!-- ttt-editor-benchmarks -->';
+const baseLabel = process.env.BASE_LABEL || 'Base';
+const headLabel = process.env.HEAD_LABEL || 'PR';
+const headName = process.env.HEAD_LABEL || 'this PR';
 const suites = [
   { name: 'Editor', title: 'Editor', file: 'tests/e2e/editor_bench_test.go' },
   { name: 'Diff', title: 'Diff views', file: 'tests/e2e/diff_bench_test.go' },
@@ -30,8 +33,8 @@ const fixtures = 'tests/e2e/testdata/bench';
 if (!process.env.BASE_DIR) throw new Error('BASE_DIR must name the base checkout');
 if (!Number.isInteger(count) || count < 1) throw new Error(`COUNT must be a positive integer, got ${count}`);
 
-// A base that predates a suite is measured with the PR's scenarios for it. A
-// base without the editor suite also takes the PR's harness and fixtures.
+// A base that predates a suite is measured with the head's scenarios for it. A
+// base without the editor suite also takes the head's harness and fixtures.
 const overlaid = suites.filter((suite) => !fs.existsSync(path.join(baseDir, suite.file)));
 for (const suite of overlaid) {
   fs.mkdirSync(path.dirname(path.join(baseDir, suite.file)), { recursive: true });
@@ -106,7 +109,7 @@ const percent = (next, previous) => {
 };
 
 try {
-  console.error('building base and PR benchmark binaries...');
+  console.error('building base and head benchmark binaries...');
   compile(sides.base);
   compile(sides.head);
   for (let pass = 0; pass < count; pass++) {
@@ -123,7 +126,7 @@ try {
     `Comparing \`${short(process.env.BASE_SHA, 'base')}\` with \`${short(process.env.HEAD_SHA, 'PR')}\` on the same runner: ` +
       `fastest of ${count} alternating passes at ${benchTime} each, \`-short\` (2,000-line large file).` +
       (overlaid.length
-        ? ` The base predates ${overlaid.map((suite) => `\`Benchmark${suite.name}\``).join(' and ')}, so it was measured with the PR's scenarios.`
+        ? ` The base predates ${overlaid.map((suite) => `\`Benchmark${suite.name}\``).join(' and ')}, so it was measured with ${headName}'s scenarios.`
         : ''),
     '',
     'Allocated bytes measure total allocation per operation, not peak or retained RAM.',
@@ -144,7 +147,7 @@ try {
     compared += names.length;
     lines.push('', `### ${suite.title}`, '');
     if (names.length) {
-      // Geometric mean of PR/base ratios: every benchmark weighs the same however
+      // Geometric mean of head/base ratios: every benchmark weighs the same however
       // long it runs. Zero on both sides is no change; zero on one side has no ratio.
       const geomean = (field) => {
         const ratios = names
@@ -162,7 +165,7 @@ try {
           '<details>',
           '<summary>Click here to see benchmark details</summary>',
           '',
-          '| Benchmark | Base | PR | Time change | Base peak RSS | PR peak RSS | Peak RSS change |',
+          `| Benchmark | ${baseLabel} | ${headLabel} | Time change | ${baseLabel} peak RSS | ${headLabel} peak RSS | Peak RSS change |`,
           '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
         );
         for (const name of names) {
@@ -181,7 +184,7 @@ try {
           '<details>',
           '<summary>Click here to see benchmark details</summary>',
           '',
-          '| Benchmark | Base | PR | Time change | Base allocs | PR allocs | Allocation change |',
+          `| Benchmark | ${baseLabel} | ${headLabel} | Time change | ${baseLabel} allocs | ${headLabel} allocs | Allocation change |`,
           '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
         );
         for (const name of names) {
@@ -194,7 +197,7 @@ try {
         }
         lines.push(
           '',
-          '| Benchmark | Base allocated bytes | PR allocated bytes | Change |',
+          `| Benchmark | ${baseLabel} allocated bytes | ${headLabel} allocated bytes | Change |`,
           '| --- | ---: | ---: | ---: |',
         );
         for (const name of names) {
@@ -205,7 +208,7 @@ try {
         lines.push('', '</details>');
       }
     }
-    if (added.length) lines.push('', `New in this PR: ${added.map((name) => `\`${name}\``).join(', ')}.`);
+    if (added.length) lines.push('', `New in ${headName}: ${added.map((name) => `\`${name}\``).join(', ')}.`);
   }
   if (compared === 0) throw new Error('no benchmark ran on both sides');
   lines.push('', '_Timing changes are informational because shared CI runners are noisy; a benchmark error still fails the job._', '');
