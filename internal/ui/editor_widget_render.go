@@ -347,7 +347,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineSegmentToScreen(e.Buf.Lines[lineIdx][segmentByte:], syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
 			indentWidth, indentRunes, blankLine := 0, 0, false
 			if e.IndentGuides {
 				indentWidth, indentRunes, blankLine = indentGuideIndent(e.Buf.Lines[lineIdx], tabW)
@@ -614,6 +614,14 @@ type screenCell struct {
 }
 
 // The returned slice is reused by the next call.
+func rowText(line string, startByte int, r editorRow) string {
+	text := line[startByte:]
+	if r.nextCol > 0 {
+		return text[:runeByteOffset(text, r.nextCol-r.startCol)]
+	}
+	return text
+}
+
 func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)

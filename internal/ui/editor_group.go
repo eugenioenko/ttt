@@ -120,6 +120,7 @@ type EditorGroupWidget struct {
 	GutterStyle       string
 	WordWrap          bool
 	WordWrapColumn    int
+	WordWrapBreak     string
 	LanguageOverrides map[string]config.EditorLanguageOverride
 	WordWrapMaxBytes  int64
 	// editorInDiff is set while the shared editor is bound to an editable
@@ -2054,21 +2055,22 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 }
 
 func (g *EditorGroupWidget) wrapsTab(t *editorTab) bool {
-	enabled, _ := g.tabWordWrap(t)
+	enabled, _, _ := g.tabWordWrap(t)
 	return enabled
 }
 
-func (g *EditorGroupWidget) tabWordWrap(t *editorTab) (bool, int) {
+func (g *EditorGroupWidget) tabWordWrap(t *editorTab) (enabled bool, column int, words bool) {
 	language := ""
 	if t != nil && t.Buf != nil {
 		language = highlight.DetectLanguageID(t.FilePath, t.Buf.Lines)
 	}
-	s := config.EditorSettings{WordWrap: g.WordWrap, WordWrapColumn: g.WordWrapColumn, LanguageOverrides: g.LanguageOverrides}
-	enabled, column := s.ResolveWordWrap(language)
+	s := config.EditorSettings{WordWrap: g.WordWrap, WordWrapColumn: g.WordWrapColumn, WordWrapBreak: g.WordWrapBreak, LanguageOverrides: g.LanguageOverrides}
+	enabled, column = s.ResolveWordWrap(language)
+	words = s.ResolveWordWrapBreak(language) == config.WordWrapBreakWord
 	if !enabled {
-		return false, column
+		return false, column, words
 	}
-	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes, column
+	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes, column, words
 }
 
 func (g *EditorGroupWidget) ApplyFileWordWrap() {
@@ -2076,11 +2078,11 @@ func (g *EditorGroupWidget) ApplyFileWordWrap() {
 	if g.Editor == nil || t == nil || t.Content != nil || t.Diff != nil {
 		return
 	}
-	enabled, column := g.tabWordWrap(t)
-	if g.Editor.WordWrap != enabled || g.Editor.WordWrapColumn != column {
+	enabled, column, words := g.tabWordWrap(t)
+	if g.Editor.WordWrap != enabled || g.Editor.WordWrapColumn != column || g.Editor.WrapWords != words {
 		g.Editor.wrapGoal = wrapGoal{}
 	}
-	g.Editor.WordWrap, g.Editor.WordWrapColumn = enabled, column
+	g.Editor.WordWrap, g.Editor.WordWrapColumn, g.Editor.WrapWords = enabled, column, words
 }
 
 // ActiveFileWordWrap reports whether the active file tab should wrap.

@@ -60,3 +60,42 @@ func TestWordWrapNegativeColumns(t *testing.T) {
 		t.Fatalf("negative columns not normalized: %+v", s.Editor)
 	}
 }
+
+func TestWordWrapBreakOverrides(t *testing.T) {
+	s := DefaultSettings()
+	if err := json.Unmarshal([]byte(`{"editor":{"languageOverrides":{"log":{"wordWrapBreak":"character"},"go":{},"bad":{"wordWrapBreak":"nope"}}}}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	normalizeSettings(&s)
+	for _, tc := range []struct{ language, want string }{
+		{"log", WordWrapBreakCharacter}, {"go", WordWrapBreakWord}, {"bad", WordWrapBreakWord}, {"", WordWrapBreakWord},
+	} {
+		if got := s.Editor.ResolveWordWrapBreak(tc.language); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.language, got, tc.want)
+		}
+	}
+	if s.Editor.LanguageOverrides["bad"].WordWrapBreak != "" {
+		t.Fatal("invalid override not cleared")
+	}
+
+	s = DefaultSettings()
+	if err := json.Unmarshal([]byte(`{"editor":{"wordWrapBreak":"character","languageOverrides":{"markdown":{"wordWrapBreak":"word"}}}}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	normalizeSettings(&s)
+	if got := s.Editor.ResolveWordWrapBreak("go"); got != WordWrapBreakCharacter {
+		t.Fatalf("global character: got %q", got)
+	}
+	if got := s.Editor.ResolveWordWrapBreak("markdown"); got != WordWrapBreakWord {
+		t.Fatalf("markdown override: got %q", got)
+	}
+
+	s = DefaultSettings()
+	if err := json.Unmarshal([]byte(`{"editor":{"wordWrapBreak":"bogus"}}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	normalizeSettings(&s)
+	if s.Editor.WordWrapBreak != WordWrapBreakWord {
+		t.Fatalf("invalid global not normalized: %q", s.Editor.WordWrapBreak)
+	}
+}

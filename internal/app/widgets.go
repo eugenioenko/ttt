@@ -247,6 +247,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
 	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
 	editorGroup.WordWrapColumn = cfg.Settings.Editor.WordWrapColumn
+	editorGroup.WordWrapBreak = cfg.Settings.Editor.WordWrapBreak
 	editorGroup.LanguageOverrides = cfg.Settings.Editor.LanguageOverrides
 	editorGroup.WordWrapMaxBytes = cfg.Settings.Editor.WordWrapMaxBytes()
 	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)

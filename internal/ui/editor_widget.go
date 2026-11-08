@@ -51,6 +51,7 @@ type EditorPaneWidget struct {
 	FoldChevronExpanded     rune
 	WordWrap                bool
 	WordWrapColumn          int
+	WrapWords               bool
 	AutoDedent              bool
 	AutoClosing             config.AutoClosingSettings
 	autoClosing             *autoClosingState
