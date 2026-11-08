@@ -3,6 +3,7 @@ package ui
 import (
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/cursor"
+	"github.com/eugenioenko/ttt/internal/core/multicursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -94,6 +95,36 @@ func TestEditorIndentGuidesStayConnectedAcrossBlankLines(t *testing.T) {
 				t.Errorf("blank row %d col %d = %+v, want connected indent guide", row, col, cell)
 			}
 		}
+	}
+}
+
+func TestEditorIndentGuidesSkipCursorAndSearchCells(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"    a", "    b", "    c"}},
+		&cursor.Cursor{Line: 0, Col: 4},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 3},
+	)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.Multi = multicursor.New(0, 4)
+	e.Multi.Add(1, 0)
+	e.SearchMatches = []FindMatch{{Line: 2, Col: 0, Len: 1}}
+	e.SearchActive = 0
+	e.buildSearchIndex()
+	e.SetRect(Rect{W: 20, H: 3})
+
+	grid := makeGrid(20, 3)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 3}))
+
+	g := e.GutterWidth()
+	if cell := grid[1][g]; cell.Ch != ' ' || cell.Style != term.StyleReverse {
+		t.Errorf("secondary cursor at indent stop = %+v, want reverse-styled space", cell)
+	}
+	if cell := grid[2][g]; cell.Ch != ' ' || cell.Style != term.StyleSearchActive {
+		t.Errorf("search match at indent stop = %+v, want search-styled space", cell)
+	}
+	if cell := grid[0][g]; cell.Ch != '│' || cell.Style != term.StyleIndentGuide {
+		t.Errorf("plain indent stop = %+v, want indent guide", cell)
 	}
 }
 

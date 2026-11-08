@@ -415,7 +415,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				if hide {
 					cell.Attrs |= term.CellAttrHide
 				}
-				if e.IndentGuides && (blankLine || (screenCells[x].bufCol >= 0 && screenCells[x].bufCol < indentRunes)) {
+				if e.IndentGuides && cell.Style != term.StyleReverse && !isSearchHighlight && (blankLine || (screenCells[x].bufCol >= 0 && screenCells[x].bufCol < indentRunes)) {
 					visualCol := leftCol + x
 					if e.WordWrap {
 						visualCol = segmentVisualCol + x
