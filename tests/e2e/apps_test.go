@@ -87,11 +87,6 @@ func TestLaunchAppQuotesPlaceholdersAndReusesItsTab(t *testing.T) {
 		KeepOpen: true,
 	})
 
-	h.exec("apps.run:echo")
-	if len(h.app.EditorTerminals) != 0 {
-		t.Fatal("an app using {file} must not launch without an open file")
-	}
-
 	if err := h.app.EditorGroup.OpenFile(file); err != nil {
 		t.Fatal(err)
 	}
@@ -322,10 +317,10 @@ func TestOpenCurrentFileWithSearchIgnoresExplorerAndSharesTargetTab(t *testing.T
 		config.Application{Name: "unrelated", Command: "false"},
 	)
 	h.exec("apps.openCurrentFileWith")
-	if h.app.Root.HasOverlay() {
-		t.Fatal("unsaved document opened a picker")
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("no-file picker did not open")
 	}
-	h.assertContains("Open a saved file")
+	h.pressKey(tcell.KeyEscape, 0)
 	file := filepath.Join(h.dir, "alpha.txt")
 	if err := h.app.EditorGroup.OpenFile(file); err != nil {
 		t.Fatal(err)
@@ -377,9 +372,10 @@ func TestOpenCurrentFileWithCanCancelAndConfigureEmptyList(t *testing.T) {
 	}
 	h.exec("file.new")
 	h.exec("apps.openCurrentFileWith")
-	if h.app.Root.HasOverlay() {
-		t.Fatal("untitled document reused the previous file")
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("untitled document did not open Add App")
 	}
+	h.pressKey(tcell.KeyEscape, 0)
 	if err := h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt")); err != nil {
 		t.Fatal(err)
 	}
@@ -457,8 +453,45 @@ func TestCustomAppPaletteEntryOpensEachCurrentDocument(t *testing.T) {
 	}
 	h.exec("file.new")
 	h.exec("apps.run:edamame")
-	if len(h.app.EditorTerminals) != 2 {
-		t.Fatal("untitled document opened the previous file's app")
+	if len(h.app.EditorTerminals) != 3 {
+		t.Fatal("untitled document did not start the app without a file")
 	}
-	h.assertContains("edamame needs an open file")
+}
+
+func TestAppWithoutFileOmitsOnlyFileArgsAndKeepsStaticFlags(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX test program")
+	}
+	h := newTestHarness(t, 110, 32)
+	defer h.stop()
+	defer func() {
+		for _, entry := range h.app.EditorTerminals {
+			entry.Term.Close()
+		}
+	}()
+	applyApps(h, config.Application{Name: "ttt", Command: "/bin/sh", Args: []string{"-c", `printf 'argc=%s|flag=%s|file=%s' "$#" "$1" "$2"; sleep 30`, "sh", "--new-window", "{file}"}})
+	file := filepath.Join(h.dir, "alpha.txt")
+	if err := h.app.EditorGroup.OpenFile(file); err != nil {
+		t.Fatal(err)
+	}
+	h.exec("file.new")
+	h.exec("apps.run:ttt")
+	if len(h.app.EditorTerminals) != 1 {
+		t.Fatal("app did not launch without a file")
+	}
+	waitForRawTail(t, h.app.EditorTerminals[0].Term, "argc=1|flag=--new-window|file=")
+	if err := h.app.EditorGroup.OpenFile(file); err != nil {
+		t.Fatal(err)
+	}
+	h.exec("apps.run:ttt")
+	if len(h.app.EditorTerminals) != 2 {
+		t.Fatal("resolved file did not get its own terminal")
+	}
+	waitForRawTail(t, h.app.EditorTerminals[1].Term, "argc=2|flag=--new-window|file="+file)
+	h.exec("file.new")
+	h.exec("apps.openCurrentFileWith")
+	h.pressKey(tcell.KeyEnter, 0)
+	if len(h.app.EditorTerminals) != 2 || h.app.EditorGroup.ActiveTerminalTab() != h.app.EditorTerminals[0].Tab {
+		t.Fatal("no-file picker did not reuse the app started without a file")
+	}
 }

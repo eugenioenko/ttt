@@ -18,9 +18,12 @@ func appTerminalSpec(app config.Application, file, dir, workspace, goos string) 
 	}
 	if app.Args != nil {
 		spec.Shell = plain.Replace(app.Command)
-		spec.Args = make([]string, len(app.Args))
-		for i, arg := range app.Args {
-			spec.Args[i] = plain.Replace(arg)
+		spec.Args = make([]string, 0, len(app.Args))
+		for _, arg := range app.Args {
+			if file == "" && strings.Contains(arg, "{file}") {
+				continue
+			}
+			spec.Args = append(spec.Args, plain.Replace(arg))
 		}
 		return spec
 	}
@@ -28,6 +31,9 @@ func appTerminalSpec(app config.Application, file, dir, workspace, goos string) 
 	if goos == "windows" {
 		spec.Shell = "powershell.exe"
 		fileVar, dirVar, workspaceVar = `"${env:TTT_APP_FILE}"`, `"${env:TTT_APP_DIR}"`, `"${env:TTT_APP_WORKSPACE}"`
+	}
+	if file == "" {
+		fileVar = ""
 	}
 	// Expand environment references rather than path text: neither shell reparses
 	// quotes, metacharacters or placeholder-looking text in a path as code.

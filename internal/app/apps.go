@@ -213,7 +213,7 @@ func (a *App) LaunchApp(name string) {
 		if a.EditorGroup.IsEditorActive() && a.EditorGroup.IsActiveVirtual() {
 			file = ""
 		}
-		a.launchApp(name, file, appNeedsFile(a.apps[idx]))
+		a.launchApp(name, file, appUsesFile(a.apps[idx]))
 	}
 }
 
@@ -227,10 +227,6 @@ func (a *App) OpenCurrentFileWith() {
 	if a.EditorGroup.IsEditorActive() && a.EditorGroup.IsActiveVirtual() {
 		file = ""
 	}
-	if file == "" {
-		a.StatusWarn(i18n.Text("apps.openWithNeedsFile"))
-		return
-	}
 	var items []widgets.SelectItem
 	for _, app := range a.apps {
 		items = append(items, widgets.SelectItem{ID: app.Name, Label: appIcon(app, a.Settings.Appearance.Icons) + " " + app.Name})
@@ -242,7 +238,7 @@ func (a *App) OpenCurrentFileWith() {
 	a.ShowSelectDialog(i18n.Text("apps.openCurrentFileWith"), items, func(name string) { a.launchApp(name, file, true) }, nil)
 }
 
-func appNeedsFile(app config.Application) bool {
+func appUsesFile(app config.Application) bool {
 	if strings.Contains(app.Command, "{file}") || strings.Contains(app.Cwd, "{file}") {
 		return true
 	}
@@ -286,10 +282,6 @@ func (a *App) launchApp(name, file string, explicit bool) {
 		a.FocusTerminal(id)
 		return
 	}
-	if file == "" && appNeedsFile(app) {
-		a.StatusError(i18n.Format("apps.needsFile", i18n.Args{"name": name}))
-		return
-	}
 	workspace := a.Workspace.Primary()
 	if folder := a.Workspace.FolderForFile(file); folder != nil {
 		workspace = folder.Path
@@ -305,6 +297,10 @@ func (a *App) launchApp(name, file string, explicit bool) {
 		}
 	}
 	spec := appTerminalSpec(app, file, dir, workspace, runtime.GOOS)
+	if strings.TrimSpace(spec.Shell) == "" {
+		a.StatusError(i18n.Text("apps.invalidEntry"))
+		return
+	}
 	id, err := a.SpawnTerminalSpec(spec)
 	if err != nil {
 		return

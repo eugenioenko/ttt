@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,9 +61,9 @@ func TestAppCommandPassesLiteralPathsToNativeProgram(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := `"$TTT_APP_TEST_EXE" -test.run=^TestAppCommandArgumentsHelper$ -- {file} {dir} {workspace}`
+	command := `"$TTT_APP_TEST_EXE" -test.run=^TestAppCommandArgumentsHelper$ -- --new-window {file} {dir} {workspace}`
 	if runtime.GOOS == "windows" {
-		command = `& $env:TTT_APP_TEST_EXE '-test.run=^TestAppCommandArgumentsHelper$' -- {file} {dir} {workspace}`
+		command = `& $env:TTT_APP_TEST_EXE '-test.run=^TestAppCommandArgumentsHelper$' -- --new-window {file} {dir} {workspace}`
 	}
 	paths := []string{`C:\it's {dir}\文 $x & 100%.txt`, `C:\a space\folder`, `C:\workspace`}
 	if runtime.GOOS != "windows" {
@@ -70,33 +71,42 @@ func TestAppCommandPassesLiteralPathsToNativeProgram(t *testing.T) {
 	}
 	for _, mode := range []string{"shell", "args"} {
 		t.Run(mode, func(t *testing.T) {
-			app := config.Application{Command: command}
-			if mode == "args" {
-				app.Command = exe
-				app.Args = []string{"-test.run=^TestAppCommandArgumentsHelper$", "--", "{file}", "{dir}", "{workspace}"}
-			}
-			spec := appTerminalSpec(app, paths[0], paths[1], paths[2], runtime.GOOS)
-			out := filepath.Join(t.TempDir(), "args.json")
-			cmd := exec.Command(spec.Shell, spec.Args...)
-			cmd.Env = append(os.Environ(), spec.Env...)
-			cmd.Env = append(cmd.Env, "TTT_APP_TEST_HELPER=1", "TTT_APP_TEST_EXE="+exe, "TTT_APP_TEST_OUT="+out)
-			if data, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("launch: %v\n%s", err, data)
-			}
-			data, err := os.ReadFile(out)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var got []string
-			if err := json.Unmarshal(data, &got); err != nil {
-				t.Fatal(err)
-			}
-			if !slices.Equal(got, paths) {
-				t.Fatalf("arguments=%q,want %q", got, paths)
+			for _, hasFile := range []bool{true, false} {
+				t.Run(fmt.Sprintf("file=%t", hasFile), func(t *testing.T) {
+					app := config.Application{Command: command}
+					if mode == "args" {
+						app.Command = exe
+						app.Args = []string{"-test.run=^TestAppCommandArgumentsHelper$", "--", "--new-window", "{file}", "{dir}", "{workspace}"}
+					}
+					file := paths[0]
+					want := append([]string{"--new-window"}, paths...)
+					if !hasFile {
+						file = ""
+						want = append([]string{"--new-window"}, paths[1:]...)
+					}
+					spec := appTerminalSpec(app, file, paths[1], paths[2], runtime.GOOS)
+					out := filepath.Join(t.TempDir(), "args.json")
+					cmd := exec.Command(spec.Shell, spec.Args...)
+					cmd.Env = append(os.Environ(), spec.Env...)
+					cmd.Env = append(cmd.Env, "TTT_APP_TEST_HELPER=1", "TTT_APP_TEST_EXE="+exe, "TTT_APP_TEST_OUT="+out)
+					if data, err := cmd.CombinedOutput(); err != nil {
+						t.Fatalf("launch: %v\n%s", err, data)
+					}
+					data, err := os.ReadFile(out)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var got []string
+					if err := json.Unmarshal(data, &got); err != nil {
+						t.Fatal(err)
+					}
+					if !slices.Equal(got, want) {
+						t.Fatalf("arguments=%q,want %q", got, want)
+					}
+				})
 			}
 		})
 	}
-
 }
 
 func TestAppCommandArgumentsHelper(t *testing.T) {
@@ -227,7 +237,7 @@ func TestAppsReloadPreservesShortcutLabels(t *testing.T) {
 	}
 }
 
-func TestAppArgsExpandOnceAndNeedFile(t *testing.T) {
+func TestAppArgsExpandOnceAndTrackFile(t *testing.T) {
 	app := config.Application{Command: "{workspace}/viewer", Args: []string{"--file={file}", "{dir}"}, Cwd: "{dir}"}
 	for _, goos := range []string{"linux", "windows"} {
 		spec := appTerminalSpec(app, "it's {dir}.md", "folder", "root", goos)
@@ -235,11 +245,15 @@ func TestAppArgsExpandOnceAndNeedFile(t *testing.T) {
 			t.Fatalf("spec=%+v", spec)
 		}
 	}
-	if !appNeedsFile(app) {
+	if !appUsesFile(app) {
 		t.Fatal("file placeholder in args was ignored")
 	}
+	missing := appTerminalSpec(app, "", "folder", "root", "windows")
+	if !slices.Equal(missing.Args, []string{"folder"}) {
+		t.Fatalf("unresolved file argument was retained: %v", missing.Args)
+	}
 	app.Args = []string{}
-	if appNeedsFile(app) {
+	if appUsesFile(app) {
 		t.Fatal("empty args require a file")
 	}
 	spec := appTerminalSpec(app, "", "folder", "root", "windows")
