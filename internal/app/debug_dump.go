@@ -27,7 +27,8 @@ type DebugState struct {
 	Diagnostics []DebugDiagnostic  `json:"diagnostics"`
 	Output      []string           `json:"output"`
 	Terminals   []DebugTerminal    `json:"terminals,omitempty"`
-	// ActiveTerminal is the selected terminal tab, whether or not it has focus.
+	// ActiveTerminal prefers the focused terminal, then a selected editor
+	// terminal, then the selected panel terminal.
 	ActiveTerminal *DebugActiveTerminal `json:"active_terminal,omitempty"`
 	WidgetTree     *DebugWidgetNode     `json:"widget_tree"`
 }
@@ -35,11 +36,12 @@ type DebugState struct {
 // DebugTerminal reports one integrated-terminal tab's raw, unparsed PTY byte
 // tail, so a terminal-emulation bug can be diagnosed from ground truth.
 type DebugTerminal struct {
-	ID      string `json:"id"`
-	Label   string `json:"label,omitempty"`
-	Cols    int    `json:"cols"`
-	Rows    int    `json:"rows"`
-	RawTail string `json:"raw_tail"`
+	ID       string `json:"id"`
+	Label    string `json:"label,omitempty"`
+	Location string `json:"location"`
+	Cols     int    `json:"cols"`
+	Rows     int    `json:"rows"`
+	RawTail  string `json:"raw_tail"`
 }
 
 // DebugActiveTerminal identifies the selected terminal tab. Index is 0-based,
@@ -240,19 +242,27 @@ func (a *App) BuildDebugState() *DebugState {
 		}
 	}
 
-	for _, tt := range a.Terminals {
+	activeTerminal := a.focusedTerminalWidget()
+	if activeTerminal == nil {
+		if tab := a.EditorGroup.ActiveTerminalTab(); tab != nil {
+			activeTerminal = tab.Terminal
+		} else {
+			activeTerminal, _ = a.TerminalPanel.ActiveWidget().(*ui.TerminalWidget)
+		}
+	}
+	for i, tt := range a.allTerminals() {
 		cols, rows := tt.Term.Size()
 		state.Terminals = append(state.Terminals, DebugTerminal{
-			ID:      tt.ID,
-			Label:   tt.Label,
-			Cols:    cols,
-			Rows:    rows,
-			RawTail: strconv.Quote(string(tt.Term.RawTail())),
+			ID:       tt.ID,
+			Label:    tt.Label,
+			Location: tt.location(),
+			Cols:     cols,
+			Rows:     rows,
+			RawTail:  strconv.Quote(string(tt.Term.RawTail())),
 		})
-	}
-
-	if idx := a.TerminalPanel.ActiveIndex(); idx >= 0 && idx < len(a.Terminals) {
-		state.ActiveTerminal = &DebugActiveTerminal{ID: a.Terminals[idx].ID, Index: idx}
+		if tt.Widget == activeTerminal {
+			state.ActiveTerminal = &DebugActiveTerminal{ID: tt.ID, Index: i}
+		}
 	}
 
 	state.WidgetTree = walkWidget(a.Root.Main)
@@ -268,8 +278,13 @@ func (a *App) describeFocus() string {
 	if a.Root.HasModalOverlay() {
 		return "overlay"
 	}
-	switch f.(type) {
-	case *ui.EditorGroupWidget, *ui.EditorPaneWidget:
+	switch f := f.(type) {
+	case *ui.EditorGroupWidget:
+		if f.ActiveTerminalTab() != nil {
+			return "terminal"
+		}
+		return "editor"
+	case *ui.EditorPaneWidget:
 		return "editor"
 	case *ui.SidebarWidget:
 		return "sidebar"

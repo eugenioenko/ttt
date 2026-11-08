@@ -504,8 +504,15 @@ func NewPluginTerminalAPI(a *App) *PluginTerminalAPI {
 	return &PluginTerminalAPI{app: a}
 }
 
-func (t *PluginTerminalAPI) TerminalSpawn(shell string, args, env []string, cwd, label string) (string, error) {
-	return t.app.SpawnTerminalSpec(TerminalSpec{Shell: shell, Args: args, Env: env, Cwd: cwd, Label: label})
+func (t *PluginTerminalAPI) TerminalSpawn(spec plugin.TerminalSpawnSpec) (string, error) {
+	return t.app.SpawnTerminalSpec(TerminalSpec{
+		Shell:    spec.Shell,
+		Args:     spec.Args,
+		Env:      spec.Env,
+		Cwd:      spec.Cwd,
+		Label:    spec.Label,
+		InEditor: spec.Location == plugin.TerminalLocationEditor,
+	})
 }
 
 func (t *PluginTerminalAPI) TerminalSend(id, text string) error {

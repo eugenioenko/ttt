@@ -40,6 +40,8 @@ type TerminalTab struct {
 	Label  string
 	Term   *terminal.Terminal
 	Widget *ui.TerminalWidget
+	// Tab is set when the terminal lives in an editor tab instead of the panel.
+	Tab *ui.TerminalTabWidget
 }
 
 // TerminalSpec describes the program one terminal tab runs. The zero value
@@ -51,8 +53,10 @@ type TerminalSpec struct {
 	// inherited; these are appended).
 	Env []string
 	Cwd string
-	// Label is a short badge for the strip ("pi", "lg") and the tab record.
-	Label string
+	// Label is a short badge for the strip ("pi", "lg") and the tab record, or
+	// the editor tab's title.
+	Label    string
+	InEditor bool
 }
 
 type App struct {
@@ -80,6 +84,9 @@ type App struct {
 	Palette       *ui.TerminalColorPalette
 	TerminalPanel *ui.TerminalPanelWidget
 	Terminals     []TerminalTab
+	// EditorTerminals live in editor tabs. They are kept apart from Terminals,
+	// whose order matches the terminal panel's tabs.
+	EditorTerminals []TerminalTab
 	// TerminalSeq is monotonic so a closed-and-reopened tab never reuses an id
 	// (plugin handles key off it).
 	TerminalSeq            int
@@ -433,8 +440,18 @@ func (a *App) SpawnTerminal() {
 // names a Shell supplies its own Args (empty = run the program bare); an empty
 // Shell inherits both from the global terminal settings.
 func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
-	r := a.ContentSplit.BottomRect()
-	content := a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, false)
+	tw := ui.NewTerminalWidget(nil, a.Palette)
+	var tab *ui.TerminalTabWidget
+	var content ui.Rect
+	if spec.InEditor {
+		tab = ui.NewTerminalTabWidget(tw)
+		tab.PaddingX = a.Settings.Terminal.PaddingX
+		tab.SetRect(a.EditorGroup.ContentRect())
+		content = tab.ContentRect()
+	} else {
+		r := a.ContentSplit.BottomRect()
+		content = a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, false)
+	}
 	cols, rows := content.W, content.H
 	if cols <= 0 {
 		cols = 80
@@ -461,7 +478,7 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 		return "", err
 	}
 
-	tw := ui.NewTerminalWidget(t, a.Palette)
+	tw.Term = t
 	tw.WorkDir = spec.Cwd
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
 	tw.OnOpenURL = OpenURL
@@ -469,14 +486,19 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 
 	panelID := fmt.Sprintf("terminal-%d", a.TerminalSeq)
 	a.TerminalSeq++
-	a.Terminals = append(a.Terminals, TerminalTab{ID: panelID, Label: spec.Label, Term: t, Widget: tw})
-	a.TerminalPanel.AddTerminalLabeled(tw, spec.Label)
-	a.BottomPanel.SetActivePanel("terminal")
+	entry := TerminalTab{ID: panelID, Label: spec.Label, Term: t, Widget: tw, Tab: tab}
+	if tab != nil {
+		a.openEditorTerminal(entry, spec)
+	} else {
+		a.Terminals = append(a.Terminals, entry)
+		a.TerminalPanel.AddTerminalLabeled(tw, spec.Label)
+		a.BottomPanel.SetActivePanel("terminal")
 
-	if !a.ContentSplit.ShowBottom {
-		a.ContentSplit.ShowBottom = true
+		if !a.ContentSplit.ShowBottom {
+			a.ContentSplit.ShowBottom = true
+		}
+		a.Root.SetFocus(a.TerminalPanel)
 	}
-	a.Root.SetFocus(a.TerminalPanel)
 
 	t.OnUpdate = func() {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
@@ -506,31 +528,31 @@ func checkTerminalDir(dir string) error {
 // SendToTerminal writes text into a tab's PTY. Actions run on the main thread,
 // so no extra synchronisation is needed.
 func (a *App) SendToTerminal(id, text string) error {
-	for _, tt := range a.Terminals {
-		if tt.ID == id {
-			tt.Term.WriteString(text)
-			return nil
-		}
+	if tt := a.terminalByID(id); tt != nil {
+		tt.Term.WriteString(text)
+		return nil
 	}
 	return fmt.Errorf("no terminal %q", id)
 }
 
 // TerminalTail returns the last maxBytes of a tab's raw PTY output.
 func (a *App) TerminalTail(id string, maxBytes int) (string, error) {
-	for _, tt := range a.Terminals {
-		if tt.ID == id {
-			raw := tt.Term.RawTail()
-			if maxBytes > 0 && len(raw) > maxBytes {
-				raw = raw[len(raw)-maxBytes:]
-			}
-			return string(raw), nil
+	if tt := a.terminalByID(id); tt != nil {
+		raw := tt.Term.RawTail()
+		if maxBytes > 0 && len(raw) > maxBytes {
+			raw = raw[len(raw)-maxBytes:]
 		}
+		return string(raw), nil
 	}
 	return "", fmt.Errorf("no terminal %q", id)
 }
 
-// FocusTerminal reveals the terminal panel and selects the tab.
+// FocusTerminal reveals the terminal's tab and focuses it.
 func (a *App) FocusTerminal(id string) error {
+	if a.focusEditorTerminal(id) {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		return nil
+	}
 	idx := -1
 	for i, tt := range a.Terminals {
 		if tt.ID == id {
@@ -553,25 +575,27 @@ func (a *App) FocusTerminal(id string) error {
 
 // TerminalScreen returns the visible screen of one tab as plain text.
 func (a *App) TerminalScreen(id string) (string, error) {
-	for _, tt := range a.Terminals {
-		if tt.ID == id {
-			return tt.Term.ScreenText(), nil
-		}
+	if tt := a.terminalByID(id); tt != nil {
+		return tt.Term.ScreenText(), nil
 	}
 	return "", fmt.Errorf("terminal %q not found", id)
 }
 
 // ListTerminals reports the open tabs to a plugin.
 func (a *App) ListTerminals() []plugin.TerminalInfo {
-	out := make([]plugin.TerminalInfo, 0, len(a.Terminals))
-	for _, tt := range a.Terminals {
+	terms := a.allTerminals()
+	out := make([]plugin.TerminalInfo, 0, len(terms))
+	for _, tt := range terms {
 		cols, rows := tt.Term.Size()
-		out = append(out, plugin.TerminalInfo{ID: tt.ID, Label: tt.Label, Cols: cols, Rows: rows})
+		out = append(out, plugin.TerminalInfo{ID: tt.ID, Label: tt.Label, Cols: cols, Rows: rows, Location: tt.location()})
 	}
 	return out
 }
 
 func (a *App) CloseTerminal(panelID string) {
+	if a.closeEditorTerminal(panelID) {
+		return
+	}
 	idx := -1
 	for i, tt := range a.Terminals {
 		if tt.ID == panelID {
@@ -878,6 +902,10 @@ func (a *App) focusedTerminalWidget() *ui.TerminalWidget {
 		}
 	} else if tw, ok := a.Root.Focused.(*ui.TerminalWidget); ok {
 		return tw
+	} else if g, ok := a.Root.Focused.(*ui.EditorGroupWidget); ok {
+		if tab := g.ActiveTerminalTab(); tab != nil {
+			return tab.Terminal
+		}
 	}
 	return nil
 }

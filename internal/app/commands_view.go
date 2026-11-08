@@ -487,6 +487,12 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "terminal.newInEditor", Title: i18n.Text("command.terminalNewEditorTerminal"),
+		Keywords: []string{"terminal", "shell", "console", "tab", "editor"},
+		Handler:  app.SpawnEditorTerminal,
+	})
+
+	reg.Register(command.Command{
 		ID: "terminal.toggle", Title: i18n.Text("command.terminalToggleTerminal"),
 		Keywords: []string{"terminal", "shell", "console", "bash"},
 		Handler:  app.ToggleTerminal,

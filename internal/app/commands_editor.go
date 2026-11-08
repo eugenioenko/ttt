@@ -362,7 +362,7 @@ func (a *App) afterFileSave(path, lang string) {
 }
 
 func (a *App) forceQuit() {
-	for _, tt := range a.Terminals {
+	for _, tt := range a.allTerminals() {
 		tt.Term.Close()
 	}
 	*a.Running = false

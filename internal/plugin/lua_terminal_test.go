@@ -9,11 +9,12 @@ import (
 )
 
 type mockTerminalAPI struct {
-	shell string
-	args  []string
-	env   []string
-	cwd   string
-	label string
+	shell    string
+	args     []string
+	env      []string
+	cwd      string
+	label    string
+	location string
 
 	sentID   string
 	sentText string
@@ -26,8 +27,8 @@ type mockTerminalAPI struct {
 	spawnErr error
 }
 
-func (m *mockTerminalAPI) TerminalSpawn(shell string, args, env []string, cwd, label string) (string, error) {
-	m.shell, m.args, m.env, m.cwd, m.label = shell, args, env, cwd, label
+func (m *mockTerminalAPI) TerminalSpawn(spec TerminalSpawnSpec) (string, error) {
+	m.shell, m.args, m.env, m.cwd, m.label, m.location = spec.Shell, spec.Args, spec.Env, spec.Cwd, spec.Label, spec.Location
 	if m.spawnErr != nil {
 		return "", m.spawnErr
 	}
@@ -111,6 +112,42 @@ func TestTerminalSpawnPassesTheSpec(t *testing.T) {
 	}
 }
 
+func TestTerminalSpawnLocation(t *testing.T) {
+	for _, tt := range []struct {
+		location, want, err string
+	}{
+		{"", "", ""},
+		{"panel", "panel", ""},
+		{"editor", "editor", ""},
+		{"sidebar", "", `terminal.spawn: location must be "panel" or "editor"`},
+	} {
+		t.Run(tt.location, func(t *testing.T) {
+			mock := &mockTerminalAPI{location: "unset"}
+			p, cleanup := setupTestPluginWithTerminal(PermissionSet{TerminalControl: true}, mock)
+			defer cleanup()
+			p.State.SetGlobal("location", lua.LString(tt.location))
+			if err := p.State.DoString(`
+				local term = require("ttt.terminal")
+				_G.id, _G.err = term.spawn{shell = "edamame", args = {"README.md"}, location = location}
+			`); err != nil {
+				t.Fatalf("lua: %v", err)
+			}
+			if tt.err != "" {
+				if got := p.State.GetGlobal("err").String(); got != tt.err {
+					t.Fatalf("err = %q, want %q", got, tt.err)
+				}
+				if mock.location != "unset" {
+					t.Fatal("an invalid location must not spawn")
+				}
+				return
+			}
+			if mock.location != tt.want {
+				t.Fatalf("location = %q, want %q", mock.location, tt.want)
+			}
+		})
+	}
+}
+
 func TestTerminalSpawnErrorIsReturned(t *testing.T) {
 	mock := &mockTerminalAPI{spawnErr: errors.New("boom")}
 	p, cleanup := setupTestPluginWithTerminal(
@@ -138,7 +175,7 @@ func TestTerminalSpawnErrorIsReturned(t *testing.T) {
 func TestTerminalSendReadFocusList(t *testing.T) {
 	mock := &mockTerminalAPI{
 		tail:  "pane tail",
-		infos: []TerminalInfo{{ID: "terminal-0", Label: "pi", Cols: 80, Rows: 24}},
+		infos: []TerminalInfo{{ID: "terminal-0", Label: "pi", Location: "editor", Cols: 80, Rows: 24}},
 	}
 	p, cleanup := setupTestPluginWithTerminal(
 		PermissionSet{TerminalControl: true, TerminalRead: true},
@@ -157,6 +194,7 @@ func TestTerminalSendReadFocusList(t *testing.T) {
 		_G.first_id = list[1].id
 		_G.first_label = list[1].label
 		_G.first_cols = list[1].cols
+		_G.first_location = list[1].location
 	`)
 	if err != nil {
 		t.Fatalf("lua: %v", err)
@@ -184,6 +222,9 @@ func TestTerminalSendReadFocusList(t *testing.T) {
 	}
 	if int(p.State.GetGlobal("first_cols").(lua.LNumber)) != 80 {
 		t.Errorf("list cols = %v", p.State.GetGlobal("first_cols"))
+	}
+	if got := p.State.GetGlobal("first_location").String(); got != "editor" {
+		t.Errorf("list location = %q", got)
 	}
 }
 

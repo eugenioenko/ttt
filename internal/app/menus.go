@@ -82,6 +82,7 @@ func initMenuText() {
 			{Label: i18n.Text("menu.toggleSidebar"), Command: "sidebar.toggle"},
 			{Label: i18n.Text("menu.toggleTerminal"), Command: "terminal.toggle"},
 			{Label: i18n.Text("menu.newTerminal"), Command: "terminal.new"},
+			{Label: i18n.Text("menu.newEditorTerminal"), Command: "terminal.newInEditor"},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.keybindings"), Command: "view.keybindings"},
 			{Label: i18n.Text("general.settings"), Command: "settings.openUI"},

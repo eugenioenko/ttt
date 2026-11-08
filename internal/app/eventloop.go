@@ -468,6 +468,7 @@ func RunEventLoop(
 }
 
 func resizeTerminals(app *App) {
+	app.resizeEditorTerminals()
 	if !app.ContentSplit.ShowBottom {
 		return
 	}
