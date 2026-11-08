@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -74,6 +76,97 @@ func TestFormatterPreservesRealFinalNewlineChanges(t *testing.T) {
 			got, err := os.ReadFile(path)
 			if err != nil || string(got) != want {
 				t.Fatalf("formatter newline change was lost: got %q, want %q, error %v", got, want, err)
+			}
+		})
+	}
+}
+
+func TestFormatterAppendedNewlineHonorsSavePolicy(t *testing.T) {
+	if _, err := exec.LookPath("awk"); err != nil {
+		t.Skip("test formatter requires awk")
+	}
+	for _, show := range []bool{false, true} {
+		for _, insert := range []bool{false, true} {
+			t.Run(fmt.Sprintf("show=%v/insert=%v", show, insert), func(t *testing.T) {
+				settings := config.DefaultSettings()
+				settings.Editor.ShowTrailingNewline = &show
+				settings.Editor.InsertFinalNewline = insert
+				a := buildTestApp(t, settings)
+				t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+				path := filepath.Join(t.TempDir(), "README.md")
+				text := "# README\n\nText.\n"
+				if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				a.EditorGroup.OpenFile(path)
+				buf := a.EditorGroup.ActiveBuffer()
+				lines, version := slices.Clone(buf.Lines), buf.Version()
+				changes := 0
+				a.EditorGroup.Editor.OnChange = func() { changes++ }
+				if err := a.applyExternalFormatter("awk 1", path); err != nil {
+					t.Fatal(err)
+				}
+				wantEdit := !show && !insert
+				wantChanges := 0
+				if wantEdit {
+					wantChanges = 1
+				}
+				if (buf.Version() != version) != wantEdit || buf.Dirty != wantEdit || changes != wantChanges {
+					t.Fatalf("newline-only formatting: lines=%q, versionChanged=%v, dirty=%v, changes=%d; wantEdit=%v", buf.Lines, buf.Version() != version, buf.Dirty, changes, wantEdit)
+				}
+				if !wantEdit && !slices.Equal(buf.Lines, lines) {
+					t.Fatalf("formatter inserted a visible trailing line: %q -> %q", lines, buf.Lines)
+				}
+				version = buf.Version()
+				if err := a.applyExternalFormatter("awk 1", path); err != nil {
+					t.Fatal(err)
+				}
+				if buf.Version() != version {
+					t.Fatal("repeated formatting emitted another edit")
+				}
+			})
+		}
+	}
+}
+
+func TestFormatterPreservesAdditionalFinalNewlines(t *testing.T) {
+	if _, err := exec.LookPath("printf"); err != nil {
+		t.Skip("test formatter requires printf")
+	}
+	for _, newlines := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("newlines=%d", newlines), func(t *testing.T) {
+			settings := config.DefaultSettings()
+			show := false
+			settings.Editor.ShowTrailingNewline = &show
+			settings.Editor.InsertFinalNewline = true
+			a := buildTestApp(t, settings)
+			t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+			path := filepath.Join(t.TempDir(), "README.md")
+			if err := os.WriteFile(path, []byte("foo\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			a.EditorGroup.OpenFile(path)
+			formatter := "printf bar" + strings.Repeat("\\n", newlines)
+			if err := a.applyExternalFormatter(formatter, path); err != nil {
+				t.Fatal(err)
+			}
+			if !a.EditorGroup.Save() {
+				t.Fatal("save failed")
+			}
+			want := "bar" + strings.Repeat("\n", newlines)
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != want {
+				t.Fatalf("formatter final newlines were lost: got %q, want %q, error %v", got, want, err)
+			}
+			buf := a.EditorGroup.ActiveBuffer()
+			version := buf.Version()
+			changes := 0
+			a.EditorGroup.Editor.OnChange = func() { changes++ }
+			if err := a.applyExternalFormatter(formatter, path); err != nil {
+				t.Fatal(err)
+			}
+			if buf.Version() != version || buf.Dirty || changes != 0 {
+				t.Fatalf("formatting after save emitted another edit: lines=%q, dirty=%v, changes=%d", buf.Lines, buf.Dirty, changes)
 			}
 		})
 	}
