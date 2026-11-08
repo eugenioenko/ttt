@@ -106,15 +106,19 @@ func TestPlaceNodesKeepsPlacesAndFavorites(t *testing.T) {
 		return labels, ids
 	}
 
-	if got, _ := nodeFields(placeNodes(nil, places)); !slices.Equal(got, []string{"Home", "Documents"}) {
-		t.Fatalf("without favorites = %v, want every place", got)
+	gotLabels, gotIDs := nodeFields(placeNodes(nil, places))
+	if !slices.Equal(gotLabels, []string{"Places", "Home", "Documents"}) {
+		t.Errorf("without favorites = %v, want Places heading and every place", gotLabels)
+	}
+	if !slices.Equal(gotIDs, []string{"", "/home/u", "/home/u/Documents"}) {
+		t.Errorf("ids without favorites = %v, heading must have no ID", gotIDs)
 	}
 
-	gotLabels, gotIDs := nodeFields(placeNodes([]favoriteDir{{path: "~/repos/ttt", abs: "/home/u/repos/ttt"}}, places))
-	if !slices.Equal(gotLabels, []string{"Favorites", "ttt", "", "Home", "Documents"}) {
+	gotLabels, gotIDs = nodeFields(placeNodes([]favoriteDir{{path: "~/repos/ttt", abs: "/home/u/repos/ttt"}}, places))
+	if !slices.Equal(gotLabels, []string{"Favorites", "ttt", "", "Places", "Home", "Documents"}) {
 		t.Errorf("labels = %v", gotLabels)
 	}
-	if !slices.Equal(gotIDs, []string{"", "/home/u/repos/ttt", "", "/home/u", "/home/u/Documents"}) {
+	if !slices.Equal(gotIDs, []string{"", "/home/u/repos/ttt", "", "", "/home/u", "/home/u/Documents"}) {
 		t.Errorf("ids = %v, headings must have no ID", gotIDs)
 	}
 }
