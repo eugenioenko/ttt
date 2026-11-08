@@ -746,6 +746,8 @@ func registerWidgetCallbacks(app *App) {
 		moreMenu := []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
 			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: app.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed"},
 		}
 		openContextMenu(app, moreMenu, sx, sy)
 	}

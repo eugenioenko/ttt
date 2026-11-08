@@ -111,6 +111,7 @@ type EditorGroupWidget struct {
 	nextTabIdentity   uint64
 	active            int
 	pinnedCount       int
+	closedTabs        []closedTab
 	TabSize           int
 	InsertSpaces      bool
 	LineNumbers       bool
@@ -1468,6 +1469,7 @@ func (g *EditorGroupWidget) CloseTab() {
 	}
 	closing := g.tabs[g.active]
 	prev := closing.Content
+	g.rememberClosed(closing)
 	if g.OnFileClose != nil && closing.DetectedLanguage != "" && !closing.Virtual {
 		g.OnFileClose(closing.FilePath, closing.DetectedLanguage)
 	}
@@ -1490,6 +1492,53 @@ func (g *EditorGroupWidget) CloseTab() {
 	}
 }
 
+const maxClosedTabs = 20
+
+type closedTab struct {
+	path      string
+	line, col int
+}
+
+// rememberClosed records a closed file tab for ReopenClosedTab. Tabs without a
+// file on disk to reopen (plugin, virtual, diff and placeholder tabs) are skipped.
+func (g *EditorGroupWidget) rememberClosed(tab editorTab) {
+	if tab.FilePath == "" || tab.PluginKey != "" || tab.Virtual || tab.Placeholder || tab.Diff != nil {
+		return
+	}
+	c := closedTab{path: tab.FilePath}
+	if tab.Cur != nil {
+		c.line, c.col = tab.Cur.Line, tab.Cur.Col
+	}
+	g.closedTabs = slices.DeleteFunc(g.closedTabs, func(o closedTab) bool { return o.path == c.path })
+	g.closedTabs = append(g.closedTabs, c)
+	if len(g.closedTabs) > maxClosedTabs {
+		g.closedTabs = g.closedTabs[1:]
+	}
+}
+
+// ReopenClosedTab reopens the most recently closed file tab at its cursor
+// position. Files deleted since are skipped, since OpenFile would start a new
+// empty file in their place. It reports whether a tab was reopened.
+func (g *EditorGroupWidget) ReopenClosedTab() bool {
+	for len(g.closedTabs) > 0 {
+		c := g.closedTabs[len(g.closedTabs)-1]
+		g.closedTabs = g.closedTabs[:len(g.closedTabs)-1]
+		if info, err := os.Stat(c.path); err != nil || info.IsDir() {
+			continue
+		}
+		if g.OpenFile(c.path) != nil {
+			continue
+		}
+		if t := g.activeTab(); t != nil && t.Preview {
+			t.Preview = false
+			g.syncTabs()
+		}
+		g.GoToLineCol(c.line+1, c.col+1)
+		return true
+	}
+	return false
+}
+
 func (g *EditorGroupWidget) CloseOtherTabs() {
 	t := g.activeTab()
 	if t == nil || len(g.tabs) <= 1 {
@@ -1502,6 +1551,7 @@ func (g *EditorGroupWidget) CloseOtherTabs() {
 			kept = append(kept, tab)
 			continue
 		}
+		g.rememberClosed(tab)
 		g.notifyContentTabClose(tab)
 	}
 	g.tabs = kept
@@ -1530,6 +1580,7 @@ func (g *EditorGroupWidget) CloseOtherSaved() {
 			kept = append(kept, g.tabs[i])
 			continue
 		}
+		g.rememberClosed(g.tabs[i])
 		g.notifyContentTabClose(g.tabs[i])
 	}
 	g.tabs = kept
@@ -1557,6 +1608,7 @@ func (g *EditorGroupWidget) HasDirtyOtherTabs() bool {
 func (g *EditorGroupWidget) CloseAllTabs() {
 	prev := g.activeContent()
 	for i := g.pinnedCount; i < len(g.tabs); i++ {
+		g.rememberClosed(g.tabs[i])
 		g.notifyContentTabClose(g.tabs[i])
 	}
 	kept := slices.Clone(g.tabs[:g.pinnedCount])
@@ -1582,6 +1634,7 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 			kept = append(kept, g.tabs[i])
 			continue
 		}
+		g.rememberClosed(g.tabs[i])
 		g.notifyContentTabClose(g.tabs[i])
 	}
 	emptied := len(kept) == 0
