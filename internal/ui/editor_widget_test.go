@@ -97,6 +97,41 @@ func TestEditorIndentGuidesStayConnectedAcrossBlankLines(t *testing.T) {
 	}
 }
 
+func TestIndentGuideBlankScanIsBounded(t *testing.T) {
+	lines := make([]string, 3*indentGuideMaxScanLines)
+	lines[0] = "    top"
+	lines[len(lines)-1] = "    bottom"
+	line := len(lines) / 2
+
+	var spans []indentGuideBlankSpan
+	if width := indentGuideBlankWidth(lines, line, 4, &spans); width != 0 {
+		t.Fatalf("blank line %d far from any non-blank line = %d, want 0", line, width)
+	}
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(spans))
+	}
+	if spans[0].start < line-indentGuideMaxScanLines || spans[0].end > line+indentGuideMaxScanLines {
+		t.Fatalf("span [%d,%d] exceeds the %d-line scan bound around line %d",
+			spans[0].start, spans[0].end, indentGuideMaxScanLines, line)
+	}
+}
+
+func TestIndentGuideBlankScanUsesNearestSideWithinBound(t *testing.T) {
+	lines := make([]string, 2000)
+	lines[0] = "        top"
+
+	var spans []indentGuideBlankSpan
+	// Exactly indentGuideMaxScanLines above the non-blank first line.
+	if got := indentGuideBlankWidth(lines, indentGuideMaxScanLines, 4, &spans); got != 8 {
+		t.Fatalf("blank line at the scan bound = %d, want 8", got)
+	}
+	// One line further: the top is out of reach and no other side resolves.
+	spans = nil
+	if got := indentGuideBlankWidth(lines, indentGuideMaxScanLines+1, 4, &spans); got != 0 {
+		t.Fatalf("blank line past the scan bound = %d, want 0", got)
+	}
+}
+
 func TestEditorIndentGuidesDisabledByDefault(t *testing.T) {
 	e := NewEditorPaneWidget(
 		&buffer.Buffer{Lines: []string{"    value"}},

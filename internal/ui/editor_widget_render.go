@@ -33,6 +33,12 @@ func indentGuideIndent(line string, tabWidth int) (width, runes int, blank bool)
 	return width, runes, blank
 }
 
+// indentGuideMaxScanLines bounds the blank-run scan: a side further than this
+// from any non-blank line counts as unresolved and contributes indent 0.
+// Without the bound a file that is mostly blank lines made every frame scan
+// the whole run (see #1429).
+const indentGuideMaxScanLines = 512
+
 func indentGuideBlankWidth(lines []string, line, tabWidth int, spans *[]indentGuideBlankSpan) int {
 	for _, span := range *spans {
 		if line >= span.start && line <= span.end {
@@ -42,7 +48,8 @@ func indentGuideBlankWidth(lines []string, line, tabWidth int, spans *[]indentGu
 
 	start, end := line, line
 	above, below := 0, 0
-	for start > 0 {
+	lowest := max(line-indentGuideMaxScanLines, 0)
+	for start > lowest {
 		width, _, blank := indentGuideIndent(lines[start-1], tabWidth)
 		if !blank {
 			above = width
@@ -50,7 +57,8 @@ func indentGuideBlankWidth(lines []string, line, tabWidth int, spans *[]indentGu
 		}
 		start--
 	}
-	for end+1 < len(lines) {
+	highest := min(line+indentGuideMaxScanLines, len(lines)-1)
+	for end < highest {
 		width, _, blank := indentGuideIndent(lines[end+1], tabWidth)
 		if !blank {
 			below = width
