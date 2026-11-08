@@ -77,9 +77,18 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 		return nil
 	}
 	comparison := original
-	if editor.Buf.ShowTrailingNewline || editor.Buf.InsertFinalNewline {
+	if editor.Buf.ShowTrailingNewline {
 		formatted = strings.TrimSuffix(formatted, "\n")
 		comparison = strings.TrimSuffix(comparison, "\n")
+	} else if editor.Buf.InsertFinalNewline {
+		// Save adds a newline only when the buffer has no trailing empty line.
+		// Keep multiple newlines intact so their blank lines survive saving.
+		if !strings.HasSuffix(formatted, "\n\n") {
+			formatted = strings.TrimSuffix(formatted, "\n")
+		}
+		if !strings.HasSuffix(comparison, "\n\n") {
+			comparison = strings.TrimSuffix(comparison, "\n")
+		}
 	}
 	if formatted == comparison {
 		return nil
