@@ -69,6 +69,9 @@ func TestExplorerDecomposedFilenameNavigation(t *testing.T) {
 	if got := h.app.EditorGroup.ActiveFilePath(); got != path {
 		t.Fatalf("opened %q, want original path %q", got, path)
 	}
+	if row := h.screenRow(h.app.EditorGroup.TabBar.GetRect().Y + 1); !strings.Contains(row, "e\u0301lastique.txt") {
+		t.Fatalf("decomposed filename missing from tab: %q", row)
+	}
 	if got := h.app.EditorGroup.Editor.Buf.Lines[0]; got != "original file contents" {
 		t.Fatalf("opened wrong content: %q", got)
 	}
