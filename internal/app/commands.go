@@ -25,6 +25,7 @@ func RegisterCommands(app *App) {
 	registerDebugCommands(app)
 	registerWidgetCallbacks(app)
 	RegisterEscapeDismissers(app)
+	app.syncApps()
 }
 
 func (a *App) RebindKeys() {

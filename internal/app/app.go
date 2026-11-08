@@ -57,6 +57,8 @@ type TerminalSpec struct {
 	// the editor tab's title.
 	Label    string
 	InEditor bool
+	// KeepOpen leaves the tab, with the program's last output, after it exits.
+	KeepOpen bool
 }
 
 type App struct {
@@ -84,6 +86,11 @@ type App struct {
 	Palette       *ui.TerminalColorPalette
 	TerminalPanel *ui.TerminalPanelWidget
 	Terminals     []TerminalTab
+	Apps          *AppsPanel
+	apps          []config.Application
+	appCommandIDs []string
+	// appTerminals maps an app name to the terminal it last launched.
+	appTerminals map[string]string
 	// EditorTerminals live in editor tabs. They are kept apart from Terminals,
 	// whose order matches the terminal panel's tabs.
 	EditorTerminals []TerminalTab
@@ -504,6 +511,10 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	t.OnExit = func() {
+		if spec.KeepOpen {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+			return
+		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(panelID))
 	}
 	t.Run()

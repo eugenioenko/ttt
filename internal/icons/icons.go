@@ -54,6 +54,7 @@ const (
 	PanelChanges  Name = "panel-changes"
 	PanelOutline  Name = "panel-outline"
 	PanelPlugins  Name = "panel-plugins"
+	PanelApps     Name = "panel-apps"
 )
 
 const (
@@ -111,6 +112,7 @@ var table = map[Name]glyphs{
 	PanelChanges:  {Plain: "⎇", Nerd: "\uea68"},
 	PanelOutline:  {Plain: "ƒ", Nerd: "\ueb86"},
 	PanelPlugins:  {Plain: "⧉", Nerd: "\ueae6"},
+	PanelApps:     {Plain: "⏵", Nerd: "\ueb44"},
 }
 
 var (

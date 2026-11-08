@@ -334,6 +334,12 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "sidebar.apps", Title: i18n.Text("command.showApps"),
+		Keywords: []string{"view", "apps", "applications", "launch", "programs"},
+		Handler:  app.ShowApps,
+	})
+
+	reg.Register(command.Command{
 		ID: "sidebar.wider", Title: i18n.Text("command.viewIncreaseSidebarWidth"),
 		Keywords: []string{"view", "resize"},
 		Handler: func() {

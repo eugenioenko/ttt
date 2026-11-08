@@ -100,6 +100,7 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `panel-changes` | `⎇` | `\uea68` | Changes sidebar tab |
 | `panel-outline` | `ƒ` | `\ueb86` | Outline sidebar tab |
 | `panel-plugins` | `⧉` | `\ueae6` | Plugins sidebar tab |
+| `panel-apps` | `⏵` | `\ueb44` | Apps sidebar tab |
 
 ## Editor
 
@@ -330,6 +331,31 @@ ttt embeds TextMate grammars for over 120 languages. `editor.grammars` adds more
 Entries earlier in the list take precedence over later ones, and all of them take precedence over the embedded grammars, so an entry whose file types match a built-in language replaces it. Grammars can include each other across sources: an embedded Markdown grammar highlights a fenced block with an external grammar, and an external grammar can include an embedded one. A grammar file that is missing or invalid is skipped and reported in the Output panel.
 
 Plugins can contribute grammars too. Installing one copies its grammar files into `~/.config/ttt/grammars/` and adds entries here (see [Grammar plugins](/guides/plugin-authoring/#grammar-plugins)).
+
+## Applications
+
+Programs to launch from the **Apps** sidebar tab, which appears once at least one app is configured. Each app also gets a command palette entry, **Apps: Run <name>**, that can be bound to a key. An app opens in a terminal, as an editor tab by default. Running an app that is still open focuses its tab instead of starting it again.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `applications[].name` | string | — | Name shown in the Apps tab and used as the tab title. Must be unique. |
+| `applications[].command` | string | — | Command run with `sh -c`. `{file}` is the active file, `{dir}` its folder and `{workspace}` the workspace root; ttt quotes each path, so do not add quotes around them. An app that uses `{file}` or `{dir}` needs an open file. |
+| `applications[].cwd` | string | workspace root | Working directory. Accepts the same placeholders, unquoted. |
+| `applications[].location` | string | `"editor"` | `"editor"` opens the app as an editor tab, `"panel"` in the terminal panel. |
+| `applications[].keepOpen` | bool | `false` | Keep the tab and its output after the program exits. By default the tab closes when the program exits. |
+
+**Example:**
+
+```json
+{
+  "applications": [
+    { "name": "edamame", "command": "edamame {file}" },
+    { "name": "lazygit", "command": "lazygit", "cwd": "{workspace}" },
+    { "name": "btop", "command": "btop", "location": "panel" },
+    { "name": "tests", "command": "make test", "keepOpen": true }
+  ]
+}
+```
 
 ## Formatters
 

@@ -2027,6 +2027,16 @@ func (g *EditorGroupWidget) ActiveFilePath() string {
 	return ""
 }
 
+// ActiveDocumentPath is the active tab's file, or "" when the tab is not a
+// file on disk (an untitled buffer, a plugin or terminal tab).
+func (g *EditorGroupWidget) ActiveDocumentPath() string {
+	t := g.activeTab()
+	if t == nil || t.Content != nil || t.Buf == nil || t.Virtual {
+		return ""
+	}
+	return t.FilePath
+}
+
 func (g *EditorGroupWidget) IsActiveVirtual() bool {
 	if t := g.activeTab(); t != nil {
 		return t.Virtual
