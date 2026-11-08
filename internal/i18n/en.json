@@ -313,6 +313,7 @@
   "debug.simulateClick": "Simulate Click",
   "dialog.alreadyExistsReplaceIt": "{filename} already exists. Replace it?",
   "dialog.closeSaved": "Close Saved",
+  "dialog.createMissingFolders": "The folder {directory} does not exist. Create it and save the file?",
   "dialog.discardAll": "Discard All",
   "dialog.discardChanges": "Discard Changes?",
   "dialog.isReadOnlyOverwriteAnyway": "{filename} is read-only. Overwrite anyway?",
