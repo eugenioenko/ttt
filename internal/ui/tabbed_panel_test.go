@@ -148,3 +148,31 @@ func TestTabbedPanelTabStyle(t *testing.T) {
 		}
 	}
 }
+
+func TestTabbedPanelFlagPreservesDirtyState(t *testing.T) {
+	for _, order := range []string{"dirty then flag", "flag then dirty", "clear while flagged"} {
+		t.Run(order, func(t *testing.T) {
+			tp := NewTabbedPanel()
+			tp.AddPanel("explorer", "Explore", &mockWidget{})
+			tp.AddPanel("changes", "Changes", &mockWidget{})
+			if order == "flag then dirty" {
+				tp.FlagPanel("changes")
+				tp.SetPanelDirty("changes", true)
+			} else {
+				tp.SetPanelDirty("changes", true)
+				tp.FlagPanel("changes")
+			}
+			if order == "clear while flagged" {
+				tp.SetPanelDirty("changes", false)
+			}
+			if item := tp.Tabs.Config.Items[1]; !item.Dirty || !item.Flagged {
+				t.Fatalf("flagged panel lost its indicator: %+v", item)
+			}
+			tp.SetActivePanel("changes")
+			item := tp.Tabs.Config.Items[1]
+			if item.Flagged || item.Dirty != (order != "clear while flagged") {
+				t.Fatalf("selecting the panel cleared independent dirty state: %+v", item)
+			}
+		})
+	}
+}

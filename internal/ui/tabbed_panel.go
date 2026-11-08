@@ -24,6 +24,7 @@ type TabbedPanel struct {
 	panels         []panelEntry
 	preferredOrder []string
 	flagged        map[string]bool
+	dirty          map[string]bool
 	tabStyle       string
 	panelIcons     map[string]string
 }
@@ -193,6 +194,7 @@ func (tp *TabbedPanel) MoveActivePanel(dir int) bool {
 func (tp *TabbedPanel) RemovePanel(id string) {
 	for i, p := range tp.panels {
 		if p.ID == id {
+			delete(tp.dirty, id)
 			tp.panels = append(tp.panels[:i], tp.panels[i+1:]...)
 			if tp.ActivePanel == id {
 				if len(tp.panels) > 0 {
@@ -321,7 +323,14 @@ func (tp *TabbedPanel) PanelEntries() []PanelInfo {
 }
 
 func (tp *TabbedPanel) SetPanelDirty(id string, dirty bool) {
-	tp.Tabs.SetDirty(id, dirty)
+	if !tp.HasPanel(id) {
+		return
+	}
+	if tp.dirty == nil {
+		tp.dirty = make(map[string]bool)
+	}
+	tp.dirty[id] = dirty
+	tp.syncTabs()
 }
 
 // FlagPanel marks an inactive panel's tab until the panel is next shown.
@@ -333,14 +342,12 @@ func (tp *TabbedPanel) FlagPanel(id string) {
 		tp.flagged = map[string]bool{}
 	}
 	tp.flagged[id] = true
-	tp.Tabs.SetDirty(id, true)
 	tp.syncTabs()
 }
 
 func (tp *TabbedPanel) unflag(id string) {
 	if tp.flagged[id] {
 		delete(tp.flagged, id)
-		tp.Tabs.SetDirty(id, false)
 		tp.syncTabs()
 	}
 }
@@ -350,26 +357,24 @@ func (tp *TabbedPanel) HiddenTabs() ([]string, []string) {
 	for _, idx := range tp.Tabs.HiddenTabs() {
 		if idx >= 0 && idx < len(tp.panels) {
 			ids = append(ids, tp.panels[idx].ID)
-			titles = append(titles, tp.tabLabel(tp.panels[idx]))
+			label := tp.panels[idx].Title
+			if tp.tabStyle == config.SidebarTabStyleLabelIcon {
+				label = tp.tabLabel(tp.panels[idx])
+			}
+			titles = append(titles, label)
 		}
 	}
 	return ids, titles
 }
 
 func (tp *TabbedPanel) syncTabs() {
-	dirty := make(map[string]bool)
-	for _, item := range tp.Tabs.Config.Items {
-		if item.Dirty {
-			dirty[item.ID] = true
-		}
-	}
 	items := make([]widgets.TabItem, len(tp.panels))
 	for i, p := range tp.panels {
 		items[i] = widgets.TabItem{
 			ID:      p.ID,
 			Label:   tp.tabLabel(p),
 			Active:  p.ID == tp.ActivePanel,
-			Dirty:   dirty[p.ID],
+			Dirty:   tp.dirty[p.ID] || tp.flagged[p.ID],
 			Flagged: tp.flagged[p.ID],
 		}
 	}
