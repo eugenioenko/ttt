@@ -101,21 +101,24 @@ renames, modes, and binary changes inside its adapter.
 and immutable snapshot anchors. Git validates its full object IDs internally;
 pagination, cancellation, and selection restoration remain panel-owned.
 
-Remaining provider integration boundaries before a second provider can drive
-the complete editor:
+`scm.RevisionReader` supplies revision metadata, typed changed paths, patches,
+and separately requested full-file endpoints. Git resolves first-parent, root,
+rename/copy, and missing endpoints in its adapter. Historical content stays lazy;
+request ownership, cancellation, incarnation guards, and per-file retry remain
+in the application. Revision IDs are opaque, including in history tree identity.
 
-- Commit details still use Git endpoints and explicit Git model adapters.
-  They need typed revision identities, history reads, and full-file expansion.
-  Current Changes retains its staged/unstaged presentation projection; fully
-  provider-defined sections, labels, and actions remain a presentation follow-up.
-- Discard, commit, branch, fetch/pull/push, and worktree actions still need
-  optional mutation capabilities and capability-aware commands and menus.
-- Blame, ignore enumeration, GitHub PRs, and workspace repository detection
-  retain Git-specific integrations. Provider-neutral features need capabilities;
-  Git-specific features need gating.
-- Provider selection and Lua plugin registration, permissions, lifecycle, and
-  change invalidation are not yet exposed. Public plugin APIs and Jujutsu
-  integration follow the remaining internal migrations.
+Remaining integration work before exposing another provider:
+
+- Keep Git mutation commands Git-specific and gate them by the selected provider.
+  Providers will contribute their own actions through the future host action API.
+- Git-derived enumeration, blame, GitHub PRs/permalinks, and Git worktree tools
+  remain Git-specific. Gate these outside Git; introduce a shared contract only
+  when a second provider needs one. Preserve ordinary file browsing outside Git.
+- Provider presentation retains its compatible staged/unstaged projection and
+  command identifiers. Provider-defined groups, labels, and actions are follow-ups.
+- Provider selection, workspace discovery integration, and Lua registration,
+  permissions, cancellation/unload, invalidation, and colocated-repository policy
+  remain host integration work. Public plugin APIs and Jujutsu come afterward.
 
 ### Presentation kernel
 

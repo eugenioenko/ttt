@@ -31,6 +31,7 @@ func TestClosingCommitDetailCancelsItsGitProcess(t *testing.T) {
 	group := ui.NewEditorGroupWidget(nil, 4, true, "relative")
 	sim := term.NewSimScreen()
 	app := &App{
+		Repository:  NewRepositoryState(nil, nil),
 		EditorGroup: group,
 		Screen:      term.NewTcellScreenFrom(sim),
 		Settings:    &config.Settings{},
@@ -73,7 +74,7 @@ func TestClosingCommitDetailCancelsItsFullFileGitProcess(t *testing.T) {
 
 	group := ui.NewEditorGroupWidget(nil, 4, true, "relative")
 	sim := term.NewSimScreen()
-	app := &App{EditorGroup: group, Screen: term.NewTcellScreenFrom(sim), Settings: &config.Settings{}}
+	app := &App{Repository: NewRepositoryState(nil, nil), EditorGroup: group, Screen: term.NewTcellScreenFrom(sim), Settings: &config.Settings{}}
 	ref := strings.Repeat("c", 40)
 	tabID := commitDetailTabID("/repo", ref)
 	request := app.beginCommitDetailRequest(tabID)
