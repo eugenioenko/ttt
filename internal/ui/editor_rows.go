@@ -143,7 +143,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 			slot = i
 			break
 		}
-		if c.key.wrap == key.wrap && c.key.width == key.width && c.key.tabW == key.tabW {
+		if c.key.wrap == key.wrap && c.key.words == key.words && c.key.width == key.width && c.key.tabW == key.tabW {
 			l.memo = c.memo
 			slot = i
 			break

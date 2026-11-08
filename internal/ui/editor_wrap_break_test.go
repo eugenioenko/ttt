@@ -36,6 +36,9 @@ func TestWordWrapBreakRendersWholeWords(t *testing.T) {
 	if want := []string{"hello wo", "rld foo", "next"}; !slices.Equal(rows[:3], want) {
 		t.Fatalf("character rows = %q, want %q", rows[:3], want)
 	}
+	if total := e.layout().total(); total != 3 {
+		t.Fatalf("character layout reused word-mode row counts: total = %d, want 3", total)
+	}
 }
 
 func TestWordWrapBreakLanguageOverride(t *testing.T) {
