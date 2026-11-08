@@ -21,8 +21,7 @@ import (
 )
 
 // Commit history and detail reads run off the event loop and apply their widget
-// state after returning through it. Working-tree refresh remains synchronous so
-// command-triggered Git mutations preserve their existing exec lifecycle.
+// state after returning through it.
 
 // eventPoster is the one thing the panel needs from the screen: a way to hand a
 // finished read back to the event loop. Narrow so a test can stand in for it.
@@ -56,11 +55,11 @@ type CommitLogResult struct {
 	Gen         int
 	Dir         string
 	Branch      string
-	Anchor      git.ObjectID
+	Anchor      string
 	Offset      int
 	Append      bool
 	HasMore     bool
-	Entries     []git.LogEntry
+	Entries     []scm.HistoryEntry
 	Err         error
 	Unavailable bool
 	Canceled    bool
@@ -104,44 +103,67 @@ func readChangesGroups(provider scm.Provider, dirs []string) []changesGroup {
 	return groups
 }
 
-func readCommitLog(ctx context.Context, dir string, gen int) *CommitLogResult {
-	if !git.IsRepoContext(ctx, dir) {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return &CommitLogResult{Gen: gen, Dir: dir, Err: ctxErr, Canceled: errors.Is(ctxErr, context.Canceled)}
+func readCommitLog(ctx context.Context, source repositorySource, gen int) *CommitLogResult {
+	result := &CommitLogResult{Gen: gen, Dir: source.root}
+	repo, err := source.resolve(ctx)
+	if err != nil {
+		result.Unavailable = errors.Is(err, scm.ErrNotRepository)
+		if !result.Unavailable {
+			result.Err = err
 		}
-		return &CommitLogResult{Gen: gen, Dir: dir, Unavailable: true}
+		result.Canceled = errors.Is(err, context.Canceled)
+		return result
 	}
-	anchor, err := git.RevisionObjectIDContext(ctx, dir)
-	if errors.Is(err, context.Canceled) {
-		return &CommitLogResult{Gen: gen, Dir: dir, Canceled: true}
+	reader, ok := repo.(scm.HistoryReader)
+	if !ok {
+		result.Unavailable = true
+		return result
+	}
+	page, err := reader.ReadHistory(ctx, scm.HistoryRequest{Limit: commitLogInitialLimit})
+	if ctx.Err() != nil {
+		err = ctx.Err()
 	}
 	if err != nil {
-		return &CommitLogResult{Gen: gen, Dir: dir, Err: err}
+		result.Err = err
+		result.Canceled = errors.Is(err, context.Canceled)
+		return result
 	}
-	page, err := git.LogPageContext(ctx, dir, anchor, 0, commitLogInitialLimit)
-	if errors.Is(err, context.Canceled) {
-		return &CommitLogResult{Gen: gen, Dir: dir, Canceled: true}
+	identity, err := repo.Identity(ctx)
+	if ctx.Err() != nil {
+		err = ctx.Err()
 	}
 	if err != nil {
-		return &CommitLogResult{Gen: gen, Dir: dir, Err: err}
+		result.Err = err
+		result.Canceled = errors.Is(err, context.Canceled)
+		return result
 	}
-	branch, branchErr := git.BranchNameContext(ctx, dir)
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return &CommitLogResult{Gen: gen, Dir: dir, Err: ctxErr, Canceled: errors.Is(ctxErr, context.Canceled)}
-	}
-	if branchErr != nil {
-		return &CommitLogResult{Gen: gen, Dir: dir, Err: branchErr}
-	}
-	return &CommitLogResult{Gen: gen, Dir: dir, Branch: branch, Anchor: anchor, HasMore: page.HasMore, Entries: page.Entries}
+	result.Branch, result.Anchor, result.Entries, result.HasMore = identity.Label, page.Anchor, page.Entries, page.HasMore
+	return result
 }
 
-func readCommitLogPage(ctx context.Context, dir string, anchor git.ObjectID, offset, gen int) *CommitLogResult {
-	page, err := git.LogPageContext(ctx, dir, anchor, offset, commitLogPageSize)
-	return &CommitLogResult{
-		Gen: gen, Dir: dir, Anchor: anchor, Offset: offset, Append: true,
-		HasMore: page.HasMore, Entries: page.Entries, Err: err,
-		Canceled: errors.Is(err, context.Canceled),
+func readCommitLogPage(ctx context.Context, source repositorySource, anchor string, offset, gen int) *CommitLogResult {
+	result := &CommitLogResult{Gen: gen, Dir: source.root, Anchor: anchor, Offset: offset, Append: true}
+	repo, err := source.resolve(ctx)
+	if err == nil {
+		reader, ok := repo.(scm.HistoryReader)
+		if !ok {
+			err = errors.ErrUnsupported
+		} else {
+			var page scm.HistoryPage
+			page, err = reader.ReadHistory(ctx, scm.HistoryRequest{Anchor: anchor, Offset: offset, Limit: commitLogPageSize})
+			if err == nil && page.Anchor != anchor {
+				err = fmt.Errorf("history snapshot changed during pagination")
+			}
+			if err == nil {
+				result.Entries, result.HasMore = page.Entries, page.HasMore
+			}
+		}
 	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	result.Err, result.Canceled = err, errors.Is(err, context.Canceled)
+	return result
 }
 
 // ApplyCommitLog rebuilds the commit log from a finished read.
@@ -260,13 +282,13 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	cp.CommitLog.SetSelectedIndex(0)
 }
 
-func (cp *ChangesPanel) commitLogNode(dir string, entry git.LogEntry) *widgets.TreeNode {
+func (cp *ChangesPanel) commitLogNode(dir string, entry scm.HistoryEntry) *widgets.TreeNode {
 	id := "commit:" + entry.Ref
-	cp.logCommits[id] = commitFileRef{Dir: dir, Ref: entry.Ref, Short: entry.Hash}
-	node := &widgets.TreeNode{ID: id, Label: entry.Message, Icon: icons.Get(cp.icons, icons.Commit), Badge: entry.Hash, Expandable: true}
+	cp.logCommits[id] = commitFileRef{Dir: dir, Ref: entry.Ref, Short: entry.Label}
+	node := &widgets.TreeNode{ID: id, Label: entry.Message, Icon: icons.Get(cp.icons, icons.Commit), Badge: entry.Label, Expandable: true}
 	if cp.logExpanded[commitLogStateKey(dir, id)] {
 		node.Expanded = true
-		node.Children = cp.commitChildren(dir, entry.Ref, entry.Hash, id)
+		node.Children = cp.commitChildren(dir, entry.Ref, entry.Label, id)
 	}
 	return node
 }

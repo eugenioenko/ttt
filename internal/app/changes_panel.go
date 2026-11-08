@@ -26,7 +26,7 @@ type ChangesPanel struct {
 	Split     *ui.ContentSplitWidget
 	Dirs      []string
 	// Screen is how a finished background read gets back onto the event loop.
-	// With no screen the panel reads git inline instead — see changes_async.go.
+	// With no screen the panel reads history inline instead — see changes_async.go.
 	Screen eventPoster
 
 	groups     []changesGroup
@@ -43,7 +43,7 @@ type ChangesPanel struct {
 	// Refresh clears the guard while the rendered log stays put.
 	logDir string
 	// Every appended page is tied to one immutable full HEAD snapshot.
-	logAnchor      git.ObjectID
+	logAnchor      string
 	logOffset      int
 	logHasMore     bool
 	logPagePending bool
@@ -382,17 +382,18 @@ func (cp *ChangesPanel) refreshCommitLog() {
 	cp.logGen++
 	gen := cp.logGen
 	cp.cancelLogRead()
+	source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		result := readCommitLog(ctx, dir, gen)
+		result := readCommitLog(ctx, source, gen)
 		cancel()
 		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		result := readCommitLog(ctx, dir, gen)
+		result := readCommitLog(ctx, source, gen)
 		cancel()
 		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -446,17 +447,18 @@ func (cp *ChangesPanel) loadOlderHistory() {
 	cp.logPagePending = true
 	cp.replaceHistoryLoadNode(true, false)
 	dir, anchor, offset, gen := cp.logDir, cp.logAnchor, cp.logOffset, cp.logGen
+	source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		result := readCommitLogPage(ctx, source, anchor, offset, gen)
 		cancel()
 		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		result := readCommitLogPage(ctx, source, anchor, offset, gen)
 		cancel()
 		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()

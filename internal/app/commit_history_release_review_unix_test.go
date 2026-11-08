@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -157,7 +156,7 @@ func TestCanceledCommitHistoryPageReapsItsGitProcess(t *testing.T) {
 	panel.Screen = term.NewTcellScreenFrom(sim)
 	panel.logDir = "/repo"
 	panel.lastLogDir = "/repo"
-	panel.logAnchor = git.ObjectID(strings.Repeat("a", 40))
+	panel.logAnchor = strings.Repeat("a", 40)
 	panel.logOffset = 10
 	panel.logHasMore = true
 	panel.logGen = 9

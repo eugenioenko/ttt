@@ -1,9 +1,15 @@
 package scm
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrNotRepository = errors.New("not a source control repository")
 
 type Provider interface {
 	// A successful discovery returns a repository with an absolute root.
+	// ErrNotRepository means no supported repository was found; other failures remain errors.
 	Discover(context.Context, string) (Repository, error)
 }
 

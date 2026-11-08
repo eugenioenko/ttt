@@ -99,7 +99,7 @@ func TestLoadOlderHistoryDoesNotReplaceActiveRefreshCancellation(t *testing.T) {
 	cp.Screen = term.NewTcellScreenFrom(term.NewSimScreen())
 	cp.logDir = "/repo"
 	cp.lastLogDir = "/repo"
-	cp.logAnchor = git.ObjectID(strings.Repeat("a", 40))
+	cp.logAnchor = strings.Repeat("a", 40)
 	cp.logOffset = 10
 	cp.logHasMore = true
 	cp.logGen = 1
