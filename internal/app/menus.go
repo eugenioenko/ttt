@@ -90,6 +90,7 @@ func initMenuText() {
 		nil,
 		// Help
 		{
+			{Label: i18n.Text("update.checkForUpdates"), Command: "update.check"},
 			{Label: i18n.Text("menu.about"), Command: "about"},
 		},
 	}

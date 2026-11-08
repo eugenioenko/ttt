@@ -23,6 +23,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/update"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -172,6 +173,18 @@ func main() {
 			os.Exit(exitCode)
 		}
 	}()
+	restartRequested := false
+	defer func() {
+		if restartRequested {
+			code, err := restart()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				code = 1
+			}
+			exitCode = code
+		}
+	}()
+	update.CleanupOldExecutable()
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
@@ -444,6 +457,7 @@ Docs: https://tttedit.dev
 		}
 	})
 	stopForward()
+	restartRequested = editor.RestartRequested
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

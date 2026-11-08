@@ -369,21 +369,29 @@ func (a *App) forceQuit() {
 }
 
 func (a *App) Quit() {
-	if a.quitPending {
-		a.forceQuit()
+	if a.updateDialog != nil && a.updateDialog.updating {
 		return
 	}
+	if a.quitPending {
+		a.quitAction()
+		return
+	}
+	a.quitWithAction(a.forceQuit)
+}
+
+func (a *App) quitWithAction(onQuit func()) {
 	if !a.EditorGroup.AnyDirty() {
-		a.forceQuit()
+		onQuit()
 		return
 	}
 	if a.Root.HasOverlay() {
 		return
 	}
 	a.quitPending = true
-	cancel := func() { a.quitPending = false; a.DismissDialog() }
+	a.quitAction = onQuit
+	cancel := func() { a.quitPending = false; a.quitAction = nil; a.DismissDialog() }
 	buttons := []string{i18n.Text("general.cancel"), i18n.Text("general.quit")}
-	callbacks := []func(){cancel, a.forceQuit}
+	callbacks := []func(){cancel, onQuit}
 	showSaveAll := a.Settings.Editor.SaveAllOnQuit
 	if a.Settings.Editor.SaveAllOnQuitExceptUnnamed {
 		for i := 0; i < a.EditorGroup.TabCount(); i++ {
@@ -397,14 +405,14 @@ func (a *App) Quit() {
 		buttons = append(buttons, i18n.Text("dialog.saveAllQuit"))
 		callbacks = append(callbacks, func() {
 			cancel()
-			a.saveAllAndQuit()
+			a.saveAllAndQuit(onQuit)
 		})
 	}
 	dialog := a.ShowConfirmDialogEx(i18n.Text("dialog.unsavedChanges"), i18n.Text("dialog.pressCtrlQToForceQuit"), buttons, callbacks)
 	dialog.OnDismiss = cancel
 }
 
-func (a *App) saveAllAndQuit() {
+func (a *App) saveAllAndQuit(onQuit func()) {
 	if a.Root.HasOverlay() {
 		return
 	}
@@ -422,11 +430,11 @@ func (a *App) saveAllAndQuit() {
 		}
 	}
 	if next < 0 {
-		a.forceQuit()
+		onQuit()
 		return
 	}
 	a.EditorGroup.SwitchTab(next)
-	a.saveFile(a.saveAllAndQuit)
+	a.saveFile(func() { a.saveAllAndQuit(onQuit) })
 }
 
 // hunkStarts returns the buffer-line indices (0-based) at which each diff hunk
