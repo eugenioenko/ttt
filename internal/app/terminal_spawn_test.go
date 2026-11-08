@@ -290,7 +290,9 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 	a.Renderer = &render.Renderer{}
 	a.Root.SetSize(120, 40)
 	a.ContentSplit.ShowBottom = true
-	updates := make(chan struct{}, 16)
+	updates := make(chan string)
+	updateHandled := make(chan struct{})
+	stopUpdates := make(chan struct{})
 	for i := 0; i < 2; i++ {
 		dev, err := terminal.New("/bin/cat", 80, 24, 1000, nil, "")
 		if err != nil {
@@ -298,13 +300,25 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 		}
 		t.Cleanup(dev.Close)
 		if i == 0 {
-			dev.OnUpdate = func() { updates <- struct{}{} }
+			dev.OnUpdate = func() {
+				select {
+				case updates <- string(dev.RawTail()):
+				case <-stopUpdates:
+					return
+				}
+				// Keep the reader paused until the frame has rearmed this notification.
+				select {
+				case <-updateHandled:
+				case <-stopUpdates:
+				}
+			}
 		}
 		widget := ui.NewTerminalWidget(dev, a.Palette)
 		a.Terminals = append(a.Terminals, TerminalTab{Term: dev, Widget: widget})
 		a.TerminalPanel.AddTerminal(widget)
 		dev.Run()
 	}
+	t.Cleanup(func() { close(stopUpdates) })
 	redraw := func() {
 		a.Root.Render(a.Renderer.NextFrame(120, 40))
 		resizeTerminals(a)
@@ -318,10 +332,11 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 		defer timeout.Stop()
 		for {
 			select {
-			case <-updates:
+			case raw := <-updates:
 				redraw()
-				// Wakeups coalesce, so a callback-time tail can miss output already drawn.
-				if strings.Contains(string(dev.RawTail()), text) && (!scrollback || dev.ScrollbackLen() > 0) {
+				updateHandled <- struct{}{}
+				if strings.Contains(raw, text) && (!scrollback || dev.ScrollbackLen() > 0) {
+					redraw()
 					return
 				}
 			case <-timeout.C:
