@@ -108,6 +108,7 @@ type App struct {
 	quitPending            bool
 	quitAction             func()
 	RestartRequested       bool
+	RestartMethod          update.Kind
 	Updates                UpdateService
 	UpdateMethod           *update.Method
 	updateDialog           *updateDialogState

@@ -174,9 +174,10 @@ func main() {
 		}
 	}()
 	restartRequested := false
+	var restartMethod update.Kind
 	defer func() {
 		if restartRequested {
-			code, err := restart()
+			code, err := restart(restartMethod)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				code = 1
@@ -458,6 +459,7 @@ Docs: https://tttedit.dev
 	})
 	stopForward()
 	restartRequested = editor.RestartRequested
+	restartMethod = editor.RestartMethod
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

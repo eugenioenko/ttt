@@ -6,11 +6,40 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/update"
 )
+
+func TestRestartPath(t *testing.T) {
+	dir := t.TempDir()
+	name := "ttt"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	stable := filepath.Join(dir, name)
+	old := filepath.Join(dir, "old-"+name)
+	for _, path := range []string{stable, old} {
+		if err := os.WriteFile(path, []byte("executable"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+	for _, method := range []update.Kind{update.Homebrew, update.Scoop, update.Binary, update.GoInstall} {
+		want := old
+		if method == update.Homebrew || method == update.Scoop {
+			want = stable
+		}
+		path, err := restartPath(method, old, old)
+		if err != nil || path != want {
+			t.Fatalf("method %v: %q, %v; want %q", method, path, err, want)
+		}
+	}
+}
 
 func TestRestartProcess(t *testing.T) {
 	path, err := os.Executable()

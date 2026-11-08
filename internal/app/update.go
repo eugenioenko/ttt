@@ -205,9 +205,11 @@ func (a *App) applyUpdate() {
 }
 
 func (a *App) restartAfterUpdate() {
+	method := a.updateDialog.method.Kind
 	a.closeUpdateDialog()
 	a.quitWithAction(func() {
 		a.RestartRequested = true
+		a.RestartMethod = method
 		a.forceQuit()
 	})
 }
