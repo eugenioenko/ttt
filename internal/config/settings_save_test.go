@@ -396,3 +396,20 @@ func TestAppearanceSettingsPointerShapesMissingDefaultsToEnabled(t *testing.T) {
 		t.Fatal("missing appearance.pointerShapes must default to enabled")
 	}
 }
+
+func TestApplicationArgsRoundTripPreservesExecutionMode(t *testing.T) {
+	for _, args := range [][]string{nil, {}, {"{file}", "--preview"}} {
+		app := Application{Name: "viewer", Command: "viewer", Args: args}
+		data, err := json.Marshal(app)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got Application
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if (got.Args == nil) != (args == nil) || !slices.Equal(got.Args, args) {
+			t.Fatalf("round trip %s changed args: %v", data, got.Args)
+		}
+	}
+}

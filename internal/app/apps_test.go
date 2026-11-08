@@ -68,25 +68,35 @@ func TestAppCommandPassesLiteralPathsToNativeProgram(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		paths = []string{`/tmp/it's {dir}/文 "$x"; & 100%.txt`, "/tmp/a space/folder", "/tmp/workspace"}
 	}
-	spec := appTerminalSpec(config.Application{Command: command}, paths[0], paths[1], paths[2], runtime.GOOS)
-	out := filepath.Join(t.TempDir(), "args.json")
-	cmd := exec.Command(spec.Shell, spec.Args...)
-	cmd.Env = append(os.Environ(), spec.Env...)
-	cmd.Env = append(cmd.Env, "TTT_APP_TEST_HELPER=1", "TTT_APP_TEST_EXE="+exe, "TTT_APP_TEST_OUT="+out)
-	if data, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("shell: %v\n%s", err, data)
+	for _, mode := range []string{"shell", "args"} {
+		t.Run(mode, func(t *testing.T) {
+			app := config.Application{Command: command}
+			if mode == "args" {
+				app.Command = exe
+				app.Args = []string{"-test.run=^TestAppCommandArgumentsHelper$", "--", "{file}", "{dir}", "{workspace}"}
+			}
+			spec := appTerminalSpec(app, paths[0], paths[1], paths[2], runtime.GOOS)
+			out := filepath.Join(t.TempDir(), "args.json")
+			cmd := exec.Command(spec.Shell, spec.Args...)
+			cmd.Env = append(os.Environ(), spec.Env...)
+			cmd.Env = append(cmd.Env, "TTT_APP_TEST_HELPER=1", "TTT_APP_TEST_EXE="+exe, "TTT_APP_TEST_OUT="+out)
+			if data, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("launch: %v\n%s", err, data)
+			}
+			data, err := os.ReadFile(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, paths) {
+				t.Fatalf("arguments=%q,want %q", got, paths)
+			}
+		})
 	}
-	data, err := os.ReadFile(out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(got, paths) {
-		t.Fatalf("arguments = %q, want %q", got, paths)
-	}
+
 }
 
 func TestAppCommandArgumentsHelper(t *testing.T) {
@@ -186,5 +196,54 @@ func TestAppsSearchSubmitUsesCurrentQueryBeforeDebounce(t *testing.T) {
 	p.SearchInput.Config.OnSubmit("beta")
 	if launched != "Beta" {
 		t.Fatalf("launched %q instead of current search result", launched)
+	}
+}
+
+func TestAppsReloadPreservesShortcutLabels(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	a.Reg = command.NewRegistry()
+	a.Settings.Applications = []config.Application{{Name: "viewer", Command: "echo", OpenWith: true}}
+	a.syncApps()
+	ids := []string{"apps.run:viewer", "apps.openWith:viewer"}
+	for _, id := range ids {
+		a.Reg.SetShortcut(id, "Ctrl+K X")
+	}
+	a.Settings.Applications = append(a.Settings.Applications, config.Application{Name: "other", Command: "echo"})
+	a.syncApps()
+	for _, id := range ids {
+		cmd, _ := a.Reg.Get(id)
+		if cmd.Shortcut != "Ctrl+K X" {
+			t.Fatalf("%s lost shortcut", id)
+		}
+	}
+	cmd, _ := a.Reg.Get("apps.run:other")
+	if cmd.Shortcut != "" {
+		t.Fatal("new command inherited another app's shortcut")
+	}
+	for _, cmd := range a.Reg.List() {
+		if strings.HasPrefix(cmd.ID, "apps.openWith:") {
+			t.Fatal("Explorer-only command exposed in palette")
+		}
+	}
+}
+
+func TestAppArgsExpandOnceAndNeedFile(t *testing.T) {
+	app := config.Application{Command: "{workspace}/viewer", Args: []string{"--file={file}", "{dir}"}, Cwd: "{dir}"}
+	for _, goos := range []string{"linux", "windows"} {
+		spec := appTerminalSpec(app, "it's {dir}.md", "folder", "root", goos)
+		if spec.Shell != "root/viewer" || !slices.Equal(spec.Args, []string{"--file=it's {dir}.md", "folder"}) || spec.Cwd != "folder" {
+			t.Fatalf("spec=%+v", spec)
+		}
+	}
+	if !appNeedsFile(app) {
+		t.Fatal("file placeholder in args was ignored")
+	}
+	app.Args = []string{}
+	if appNeedsFile(app) {
+		t.Fatal("empty args require a file")
+	}
+	spec := appTerminalSpec(app, "", "folder", "root", "windows")
+	if spec.Shell != "root/viewer" || len(spec.Args) != 0 {
+		t.Fatalf("empty direct args=%+v", spec)
 	}
 }

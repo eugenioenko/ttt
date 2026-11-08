@@ -10,10 +10,19 @@ import (
 )
 
 func appTerminalSpec(app config.Application, file, dir, workspace, goos string) TerminalSpec {
+	plain := strings.NewReplacer("{file}", file, "{dir}", dir, "{workspace}", workspace)
 	spec := TerminalSpec{
 		Shell: "/bin/sh", Label: app.Name, InEditor: app.Location != "panel", KeepOpen: app.KeepOpen,
-		Cwd: strings.NewReplacer("{file}", file, "{dir}", dir, "{workspace}", workspace).Replace(app.Cwd),
+		Cwd: plain.Replace(app.Cwd),
 		Env: []string{"TTT_APP_FILE=" + file, "TTT_APP_DIR=" + dir, "TTT_APP_WORKSPACE=" + workspace},
+	}
+	if app.Args != nil {
+		spec.Shell = plain.Replace(app.Command)
+		spec.Args = make([]string, len(app.Args))
+		for i, arg := range app.Args {
+			spec.Args[i] = plain.Replace(arg)
+		}
+		return spec
 	}
 	fileVar, dirVar, workspaceVar := `"${TTT_APP_FILE}"`, `"${TTT_APP_DIR}"`, `"${TTT_APP_WORKSPACE}"`
 	if goos == "windows" {

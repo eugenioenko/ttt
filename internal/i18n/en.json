@@ -7,7 +7,7 @@
   "about.website": "Website",
   "apps.add": "Add App",
   "apps.command": "Command",
-  "apps.commandHint": "Program and arguments",
+  "apps.commandHint": "Executable or shell command",
   "apps.cwd": "Working folder",
   "apps.duplicateName": "Apps: skipped a second app named \"{name}\"",
   "apps.icon": "Plain icon",
@@ -1069,5 +1069,11 @@
   "welcome.selectEnterOpenCCopyPath": "{navigation} select   {openKey} open   {copyKey} copy path",
   "welcome.terminalTextTool": "Terminal Text Tool",
   "welcome.tttEditor": "TTT Editor",
-  "welcome.welcome": "Welcome"
+  "welcome.welcome": "Welcome",
+  "apps.args": "Arguments",
+  "apps.argsHint": "Optional: [\"{file}\"]",
+  "apps.invalidArgs": "Arguments must be a JSON array of strings",
+  "apps.openCurrentFileWith": "Open Current File With…",
+  "apps.openWithNeedsFile": "Open a saved file before using Open with",
+  "command.openCurrentFileWith": "File: Open Current File With…"
 }

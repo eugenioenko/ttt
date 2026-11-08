@@ -339,7 +339,8 @@ func registerViewCommands(app *App) {
 		Handler:  app.ShowApps,
 	})
 	reg.Register(command.Command{ID: "apps.add", Title: i18n.Text("apps.add"), Handler: app.AddApp})
-	reg.Register(command.Command{ID: "apps.addOpenWith", Title: i18n.Text("apps.add"), Handler: app.AddOpenWithApp})
+	reg.Register(command.Command{ID: "apps.addOpenWith", Hidden: true, Handler: app.AddOpenWithApp})
+	reg.Register(command.Command{ID: "apps.openCurrentFileWith", Title: i18n.Text("command.openCurrentFileWith"), Keywords: []string{"file", "open", "apps", "preview", "external"}, Handler: app.OpenCurrentFileWith})
 
 	reg.Register(command.Command{
 		ID: "sidebar.wider", Title: i18n.Text("command.viewIncreaseSidebarWidth"),

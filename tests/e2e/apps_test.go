@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -194,9 +195,9 @@ func TestEmptyAppsDialogCanSaveAndCancel(t *testing.T) {
 	for _, r := range "echo {file}" {
 		h.pressRune(r)
 	}
-	input(3).SetText("V")
-	input(4).SetText("N")
-	content.Children[7].(*widgets.CheckboxWidget).Config.Checked = true
+	input(4).SetText("V")
+	input(5).SetText("N")
+	content.Children[8].(*widgets.CheckboxWidget).Config.Checked = true
 	dialog.Buttons[1].Handler()
 	h.redraw()
 	if h.app.Root.HasOverlay() {
@@ -278,7 +279,7 @@ func TestExplorerOpenWithCanAddAnAppWhenEmpty(t *testing.T) {
 	h.pressKey(tcell.KeyEnter, 0)
 	h.assertContains("Add App")
 	dialog := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget)
-	if !dialog.Content.(*widgets.VStackWidget).Children[7].(*widgets.CheckboxWidget).Config.Checked {
+	if !dialog.Content.(*widgets.VStackWidget).Children[8].(*widgets.CheckboxWidget).Config.Checked {
 		t.Fatal("adding from Open with must enable Explorer integration")
 	}
 }
@@ -306,5 +307,114 @@ func TestAddAppDuplicateAndSaveFailureLeaveSettingsUntouched(t *testing.T) {
 	h.assertContains("Could not save app")
 	if !h.app.Root.HasOverlay() || len(h.app.Settings.Applications) != 1 {
 		t.Fatal("failed save changed settings or dismissed dialog")
+	}
+}
+
+func TestOpenCurrentFileWithSearchIgnoresExplorerAndSharesTargetTab(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX test program")
+	}
+	h := newTestHarness(t, 110, 32)
+	defer h.stop()
+	out := filepath.Join(h.dir, "current.txt")
+	applyApps(h,
+		config.Application{Name: "edamame", Command: "/bin/sh", Args: []string{"-c", `printf '%s' "$1" > "$2"; sleep 30`, "sh", "{file}", out}},
+		config.Application{Name: "unrelated", Command: "false"},
+	)
+	h.exec("apps.openCurrentFileWith")
+	if h.app.Root.HasOverlay() {
+		t.Fatal("unsaved document opened a picker")
+	}
+	h.assertContains("Open a saved file")
+	file := filepath.Join(h.dir, "alpha.txt")
+	if err := h.app.EditorGroup.OpenFile(file); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(h.dir, "beta.txt")
+	h.app.Explorer.Tree.SelectByID(other)
+	h.app.OpenCommandPalette(false)
+	h.redraw()
+	for _, r := range "Open Current File With" {
+		h.pressRune(r)
+	}
+	h.pressKey(tcell.KeyEnter, 0)
+	h.assertContains("Open Current File With")
+	h.assertContains("edamame")
+	h.assertContains("unrelated")
+	for _, r := range "edam" {
+		h.pressRune(r)
+	}
+	if strings.Contains(h.screenText(), "unrelated") {
+		t.Fatal("search did not filter other apps")
+	}
+	h.pressKey(tcell.KeyEnter, 0)
+	if len(h.app.EditorTerminals) != 1 {
+		t.Fatal("picker did not launch its selected app")
+	}
+	defer h.app.EditorTerminals[0].Term.Close()
+	if got := waitForFile(t, out); got != file {
+		t.Fatalf("opened %q instead of current document %q", got, file)
+	}
+	if h.app.EditorGroup.RecentDocumentPath() != file {
+		t.Fatal("picker changed current document")
+	}
+	s := *h.app.Settings
+	s.Applications = slices.Clone(s.Applications)
+	s.Applications[0].OpenWith = true
+	h.app.ApplySettings(s)
+	h.app.ExplorerContextNode = &widgets.TreeNode{ID: file}
+	h.exec("apps.openWith:edamame")
+	if len(h.app.EditorTerminals) != 1 {
+		t.Fatal("Explorer did not reuse the app/current-file terminal")
+	}
+}
+
+func TestOpenCurrentFileWithCanCancelAndConfigureEmptyList(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	if err := h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt")); err != nil {
+		t.Fatal(err)
+	}
+	h.exec("file.new")
+	h.exec("apps.openCurrentFileWith")
+	if h.app.Root.HasOverlay() {
+		t.Fatal("untitled document reused the previous file")
+	}
+	if err := h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt")); err != nil {
+		t.Fatal(err)
+	}
+	h.exec("apps.openCurrentFileWith")
+	h.assertContains("Add App")
+	dialog := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget)
+	if !dialog.Content.(*widgets.VStackWidget).Children[8].(*widgets.CheckboxWidget).Config.Checked {
+		t.Fatal("new app did not enable Open with")
+	}
+	h.pressKey(tcell.KeyEscape, 0)
+	applyApps(h, config.Application{Name: "edamame", Command: "echo", Args: []string{"{file}"}, OpenWith: true})
+	h.exec("apps.openCurrentFileWith")
+	h.pressKey(tcell.KeyEscape, 0)
+	if h.app.Root.HasOverlay() || len(h.app.EditorTerminals) != 0 {
+		t.Fatal("cancelling picker launched an app")
+	}
+	h.app.AddApp()
+	dialog = h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter).Inner().(*widgets.DialogWidget)
+	content := dialog.Content.(*widgets.VStackWidget)
+	input := func(i int) *widgets.InputWidget {
+		return content.Children[i].(*widgets.HStackWidget).Children[1].(*widgets.InputWidget)
+	}
+	input(0).SetText("viewer")
+	input(1).SetText("viewer")
+	input(2).SetText(`"{file}"`)
+	dialog.Buttons[1].Handler()
+	h.redraw()
+	h.assertContains("Arguments must be a JSON array of strings")
+	input(2).SetText(`["{file}"]`)
+	dialog.Buttons[1].Handler()
+	if h.app.Root.HasOverlay() {
+		t.Fatal("valid arguments kept add dialog open")
+	}
+	apps := config.LoadSettings().Applications
+	if len(apps) != 2 || !slices.Equal(apps[1].Args, []string{"{file}"}) {
+		t.Fatalf("saved args=%+v", apps)
 	}
 }

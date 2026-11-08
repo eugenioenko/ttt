@@ -9,7 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
-	"slices"
+	"reflect"
 	"time"
 )
 
@@ -106,7 +106,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	a.refreshWelcome()
 	a.TerminalPanel.PaddingX = s.Terminal.PaddingX
-	if a.Reg != nil && a.Sidebar != nil && !slices.Equal(prev.Applications, s.Applications) {
+	if a.Reg != nil && a.Sidebar != nil && !reflect.DeepEqual(prev.Applications, s.Applications) {
 		a.syncApps()
 	}
 	for _, tab := range a.allTerminals() {

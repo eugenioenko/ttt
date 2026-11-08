@@ -151,7 +151,11 @@ func (a *App) syncApps() {
 	a.Apps.mode = a.Settings.Appearance.Icons
 	a.Apps.SetApps(apps)
 
+	shortcuts := make(map[string]string, len(a.appCommandIDs))
 	for _, id := range a.appCommandIDs {
+		if cmd, ok := a.Reg.Get(id); ok {
+			shortcuts[id] = cmd.Shortcut
+		}
 		a.Reg.Unregister(id)
 	}
 	a.appCommandIDs = a.appCommandIDs[:0]
@@ -161,13 +165,14 @@ func (a *App) syncApps() {
 		a.Reg.Register(command.Command{
 			ID:       id,
 			Title:    i18n.Format("command.appsRun", i18n.Args{"name": name}),
+			Shortcut: shortcuts[id],
 			Keywords: []string{"apps", "run", "launch", "open"},
 			Handler:  func() { a.LaunchApp(name) },
 		})
 		a.appCommandIDs = append(a.appCommandIDs, id)
 		if app.OpenWith {
 			id = "apps.openWith:" + name
-			a.Reg.Register(command.Command{ID: id, Title: i18n.Format("command.appsOpenWith", i18n.Args{"name": name}), Handler: func() { a.ExplorerOpenWith(name) }})
+			a.Reg.Register(command.Command{ID: id, Title: i18n.Format("command.appsOpenWith", i18n.Args{"name": name}), Shortcut: shortcuts[id], Hidden: true, Handler: func() { a.ExplorerOpenWith(name) }})
 			a.appCommandIDs = append(a.appCommandIDs, id)
 		}
 	}
@@ -196,6 +201,36 @@ func (a *App) LaunchApp(name string) {
 }
 
 type appLaunchKey struct{ name, path string }
+
+func (a *App) OpenCurrentFileWith() {
+	if a.Root.HasOverlay() {
+		return
+	}
+	file := a.EditorGroup.RecentDocumentPath()
+	if a.EditorGroup.IsEditorActive() && a.EditorGroup.IsActiveVirtual() {
+		file = ""
+	}
+	if file == "" {
+		a.StatusWarn(i18n.Text("apps.openWithNeedsFile"))
+		return
+	}
+	var items []widgets.SelectItem
+	for _, app := range a.apps {
+		items = append(items, widgets.SelectItem{ID: app.Name, Label: appIcon(app, a.Settings.Appearance.Icons) + " " + app.Name})
+	}
+	if len(items) == 0 {
+		a.AddOpenWithApp()
+		return
+	}
+	a.ShowSelectDialog(i18n.Text("apps.openCurrentFileWith"), items, func(name string) { a.launchApp(name, file, true) }, nil)
+}
+
+func appNeedsFile(app config.Application) bool {
+	if strings.Contains(app.Command, "{file}") || strings.Contains(app.Cwd, "{file}") {
+		return true
+	}
+	return slices.ContainsFunc(app.Args, func(arg string) bool { return strings.Contains(arg, "{file}") })
+}
 
 func (a *App) ExplorerOpenWith(name string) {
 	path := a.explorerNodePath()
@@ -234,7 +269,7 @@ func (a *App) launchApp(name, file string, explicit bool) {
 		a.FocusTerminal(id)
 		return
 	}
-	if file == "" && (strings.Contains(app.Command, "{file}") || strings.Contains(app.Cwd, "{file}")) {
+	if file == "" && appNeedsFile(app) {
 		a.StatusError(i18n.Format("apps.needsFile", i18n.Args{"name": name}))
 		return
 	}

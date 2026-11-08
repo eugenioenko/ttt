@@ -41,15 +41,29 @@ const (
 )
 
 type Application struct {
-	Name     string `json:"name"`
-	Command  string `json:"command"`
-	Cwd      string `json:"cwd,omitempty"`
-	Icon     string `json:"icon,omitempty"`
-	NerdIcon string `json:"nerdIcon,omitempty"`
-	OpenWith bool   `json:"openWith,omitempty"`
+	Name     string   `json:"name"`
+	Command  string   `json:"command"`
+	Args     []string `json:"args,omitempty"`
+	Cwd      string   `json:"cwd,omitempty"`
+	Icon     string   `json:"icon,omitempty"`
+	NerdIcon string   `json:"nerdIcon,omitempty"`
+	OpenWith bool     `json:"openWith,omitempty"`
 	// Location is "editor" (the default) or "panel".
 	Location string `json:"location,omitempty"`
 	KeepOpen bool   `json:"keepOpen,omitempty"`
+}
+
+func (a Application) MarshalJSON() ([]byte, error) {
+	type application Application
+	var args *[]string
+	if a.Args != nil {
+		args = &a.Args
+	}
+	// An explicit empty array still selects direct execution after a round trip.
+	return json.Marshal(struct {
+		application
+		Args *[]string `json:"args,omitempty"`
+	}{application(a), args})
 }
 
 type TerminalSettings struct {

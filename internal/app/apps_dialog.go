@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 
@@ -38,6 +39,7 @@ func (a *App) showAddApp(openWith bool) {
 	}
 	name := widgets.NewInputWidget(widgets.InputConfig{})
 	command := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.commandHint")})
+	args := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Format("apps.argsHint", i18n.Args{"file": "{file}"})})
 	cwd := widgets.NewInputWidget(widgets.InputConfig{Placeholder: "{workspace}"})
 	icon := widgets.NewInputWidget(widgets.InputConfig{})
 	nerdIcon := widgets.NewInputWidget(widgets.InputConfig{})
@@ -53,7 +55,7 @@ func (a *App) showAddApp(openWith bool) {
 		return r
 	}
 	content := widgets.NewVStackWidget(
-		row(i18n.Text("apps.name"), name), row(i18n.Text("apps.command"), command), row(i18n.Text("apps.cwd"), cwd),
+		row(i18n.Text("apps.name"), name), row(i18n.Text("apps.command"), command), row(i18n.Text("apps.args"), args), row(i18n.Text("apps.cwd"), cwd),
 		row(i18n.Text("apps.icon"), icon), row(i18n.Text("apps.nerdIcon"), nerdIcon),
 		panel, keepOpen, explorer, errorLabel,
 	)
@@ -69,6 +71,12 @@ func (a *App) showAddApp(openWith bool) {
 			if app.Name == "" || app.Command == "" {
 				errorLabel.Config.Text = i18n.Text("apps.required")
 				return
+			}
+			if text := strings.TrimSpace(args.Text()); text != "" {
+				if err := json.Unmarshal([]byte(text), &app.Args); err != nil || app.Args == nil {
+					errorLabel.Config.Text = i18n.Text("apps.invalidArgs")
+					return
+				}
 			}
 			if slices.ContainsFunc(a.apps, func(existing config.Application) bool { return existing.Name == app.Name }) {
 				errorLabel.Config.Text = i18n.Text("apps.nameTaken")
