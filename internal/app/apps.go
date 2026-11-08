@@ -174,7 +174,7 @@ func (a *App) syncApps() {
 		id := appCommandIDPrefix + name
 		a.Reg.Register(command.Command{
 			ID:       id,
-			Title:    title,
+			Title:    i18n.Format("command.appsRun", i18n.Args{"name": title}),
 			Shortcut: shortcuts[id],
 			Keywords: []string{"apps", "run", "launch", "open", name},
 			Handler:  func() { a.LaunchApp(name) },

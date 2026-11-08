@@ -434,7 +434,7 @@ func TestCustomAppPaletteEntryOpensEachCurrentDocument(t *testing.T) {
 		}
 		h.app.OpenCommandPalette(false)
 		h.redraw()
-		for _, r := range "Preview Markdown" {
+		for _, r := range "App: Preview Markdown" {
 			h.pressRune(r)
 		}
 		h.pressKey(tcell.KeyEnter, 0)

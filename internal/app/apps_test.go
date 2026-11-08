@@ -266,12 +266,12 @@ func TestAppsCommandTextUsesNameAsFallbackAndKeepsIdentity(t *testing.T) {
 	a := buildTestApp(t, config.DefaultSettings())
 	a.Reg = command.NewRegistry()
 	var builtinRan bool
-	a.Reg.Register(command.Command{ID: "existing.preview", Title: "Preview Markdown", Handler: func() { builtinRan = true }})
+	a.Reg.Register(command.Command{ID: "existing.preview", Title: "App: Preview Markdown", Handler: func() { builtinRan = true }})
 	for _, tc := range []struct{ text, want string }{{"Preview Markdown", "Preview Markdown"}, {"  Preview Markdown  ", "Preview Markdown"}, {"", "edamame"}, {"  ", "edamame"}} {
 		a.Settings.Applications = []config.Application{{Name: "edamame", Command: "edamame {file}", CommandText: tc.text}}
 		a.syncApps()
 		cmd, ok := a.Reg.Get("apps.run:edamame")
-		if !ok || cmd.Title != tc.want {
+		if !ok || cmd.Title != "App: "+tc.want {
 			t.Fatalf("command text %q: %+v", tc.text, cmd)
 		}
 		if !slices.Contains(cmd.Keywords, "edamame") {

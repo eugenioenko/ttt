@@ -1073,5 +1073,6 @@
   "apps.openCurrentFileWith": "Open Current File With…",
   "command.openCurrentFileWith": "File: Open Current File With…",
   "apps.commandText": "Palette entry",
-  "apps.commandTextHint": "Uses app name when blank"
+  "apps.commandTextHint": "Uses app name when blank",
+  "command.appsRun": "App: {name}"
 }
