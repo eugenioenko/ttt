@@ -22,6 +22,22 @@ func TestTcellScreen_SetCellWritesRune(t *testing.T) {
 	}
 }
 
+func TestTcellScreen_SetCellWritesCompleteGrapheme(t *testing.T) {
+	sim := NewSimScreen()
+	sim.SetSize(4, 1)
+	screen := NewTcellScreenFrom(sim)
+	for _, text := range []string{"e\u0301", "q\u0301", "e\u0300", "e"} {
+		screen.SetCell(0, 0, Cell{Ch: rune(text[0]), Text: text})
+		if got, _, width := sim.Get(0, 0); got != text || width != 1 {
+			t.Fatalf("SetCell(%q) = %q, width %d", text, got, width)
+		}
+	}
+	screen.SetCell(0, 0, Cell{Ch: 'e'})
+	if got, _, _ := sim.Get(0, 0); got != "e" {
+		t.Fatalf("plain cell retained combining mark: %q", got)
+	}
+}
+
 func TestTcellScreen_SetCellASCIIDoesNotAllocate(t *testing.T) {
 	sim := NewSimScreen()
 	sim.SetSize(4, 1)

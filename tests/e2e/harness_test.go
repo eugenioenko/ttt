@@ -35,7 +35,7 @@ func displayColumnOf(row, label string) int {
 	if byteOffset < 0 {
 		return -1
 	}
-	return textwidth.String(row[:byteOffset])
+	return textwidth.GraphemeWidth(row[:byteOffset])
 }
 
 func newTestHarness(t testing.TB, w, h int) *testHarness {
@@ -213,7 +213,7 @@ func rowString(cells []term.SimCell) string {
 			continue
 		}
 		line.WriteString(sc.Str)
-		if textwidth.String(sc.Str) > 1 {
+		if textwidth.GraphemeWidth(sc.Str) > 1 {
 			x++
 		}
 	}
