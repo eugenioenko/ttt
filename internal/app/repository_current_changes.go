@@ -7,7 +7,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/gdamore/tcell/v3"
 )
@@ -167,8 +166,8 @@ func (s *RepositoryState) startCurrentChanges() {
 	if !ok {
 		return
 	}
-	statuses := git.FromChanges(input.changes)
-	dir, tabID := s.currentRoot, s.currentTabID
+	source := s.repositorySource(s.currentRoot)
+	tabID := s.currentTabID
 	epoch, request := s.currentEpoch, s.currentRequest
 	read := s.readCurrentChanges
 	ctx, cancel := context.WithTimeout(context.Background(), currentChangesTimeout)
@@ -178,14 +177,14 @@ func (s *RepositoryState) startCurrentChanges() {
 	s.currentInFlightIdentity = input.identity
 	s.currentRefreshAgain = false
 	if s.poster == nil {
-		result := read(ctx, dir, input.revision, tabID, epoch, request, statuses)
+		result := read(ctx, source, input.revision, tabID, epoch, request, input.changes)
 		cancel()
 		s.HandleCurrentChanges(result)
 		return
 	}
 	poster := s.poster
 	go func() {
-		result := read(ctx, dir, input.revision, tabID, epoch, request, statuses)
+		result := read(ctx, source, input.revision, tabID, epoch, request, input.changes)
 		cancel()
 		_ = poster.PostEvent(tcell.NewEventInterrupt(result))
 	}()

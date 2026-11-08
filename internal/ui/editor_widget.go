@@ -43,6 +43,7 @@ type EditorPaneWidget struct {
 	TabSize                 int
 	UseTabs                 bool
 	LineNumbers             bool
+	IndentGuides            bool
 	GutterStyle             string
 	LegacyScrollbarGlyphs   bool
 	ScrollbarGitMarks       bool
@@ -50,6 +51,7 @@ type EditorPaneWidget struct {
 	FoldChevronExpanded     rune
 	WordWrap                bool
 	WordWrapColumn          int
+	WrapWords               bool
 	AutoDedent              bool
 	AutoClosing             config.AutoClosingSettings
 	autoClosing             *autoClosingState
@@ -236,10 +238,7 @@ func (e *EditorPaneWidget) computeMaxLineWidth() int {
 	tabW := e.resolveTabSize()
 	maxW := 0
 	topLine := e.Viewport.TopLine
-	botLine := topLine + e.Viewport.Height
-	if botLine > len(e.Buf.Lines) {
-		botLine = len(e.Buf.Lines)
-	}
+	botLine := min(topLine+e.Viewport.Height, len(e.Buf.Lines))
 	for i := topLine; i < botLine; i++ {
 		lw := bufColToVisualCol(e.Buf.Lines[i], len([]rune(e.Buf.Lines[i])), tabW)
 		if lw > maxW {
@@ -446,10 +445,7 @@ func (e *EditorPaneWidget) pasteText(text string) {
 		e.Cursor.Col += len([]rune(lines[0]))
 	} else {
 		currentLine := []rune(e.Buf.Lines[e.Cursor.Line])
-		col := e.Cursor.Col
-		if col > len(currentLine) {
-			col = len(currentLine)
-		}
+		col := min(e.Cursor.Col, len(currentLine))
 		suffix := string(currentLine[col:])
 		e.exec(&undo.PasteCommand{
 			Line:   e.Cursor.Line,
@@ -534,11 +530,8 @@ func (e *EditorPaneWidget) indentUnit() string {
 
 func (e *EditorPaneWidget) dedentForCloser() {
 	runes := []rune(e.Buf.Lines[e.Cursor.Line])
-	col := e.Cursor.Col
-	if col > len(runes) {
-		col = len(runes)
-	}
-	for i := 0; i < col; i++ {
+	col := min(e.Cursor.Col, len(runes))
+	for i := range col {
 		if runes[i] != ' ' && runes[i] != '\t' {
 			return
 		}

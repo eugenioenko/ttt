@@ -273,6 +273,145 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$REPORT_FILE" >/dev/null
           fi
 
+  binary-size:
+    name: "Binary size (informational, not required)"
+    needs: classify
+    if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Check out base commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .size-base
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Compare binary sizes
+        id: size
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          THRESHOLD_KB: "256"
+        run: |
+          set -euo pipefail
+
+          LDFLAGS="-s -w -X main.version=size-check"
+          TARGETS="linux:amd64 darwin:amd64 darwin:arm64 windows:amd64"
+
+          build_targets() {
+            local src_dir="$1" out_dir="$2"
+            mkdir -p "$out_dir"
+            for target in $TARGETS; do
+              os="${target%%:*}"
+              arch="${target##*:}"
+              ext=""
+              [[ "$os" == "windows" ]] && ext=".exe"
+              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+                go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o "$out_dir/ttt-${os}-${arch}${ext}" ./cmd/ttt
+            done
+          }
+
+          echo "Building base binaries..."
+          (cd .size-base && build_targets . "$GITHUB_WORKSPACE/.size-out/base")
+
+          echo "Building PR binaries..."
+          build_targets . .size-out/head
+
+          marker="<!-- ttt-binary-size -->"
+          threshold_bytes=$((THRESHOLD_KB * 1024))
+          exceeded=false
+
+          {
+            echo "$marker"
+            echo "## Binary size"
+            echo ""
+            echo "Comparing \`${BASE_SHA:0:12}\` (base) with \`${HEAD_SHA:0:12}\` (PR). Threshold: **${THRESHOLD_KB} KB**."
+            echo ""
+            echo "| Target | Base | PR | Delta | % |"
+            echo "| --- | ---: | ---: | ---: | ---: |"
+          } > "$RUNNER_TEMP/size-report.md"
+
+          for target in $TARGETS; do
+            os="${target%%:*}"
+            arch="${target##*:}"
+            ext=""
+            [[ "$os" == "windows" ]] && ext=".exe"
+            name="ttt-${os}-${arch}${ext}"
+
+            base_size=$(stat --format=%s ".size-out/base/$name")
+            head_size=$(stat --format=%s ".size-out/head/$name")
+            delta=$((head_size - base_size))
+            if [ "$base_size" -gt 0 ]; then
+              pct=$(awk "BEGIN { printf \"%.1f\", ($delta / $base_size) * 100 }")
+            else
+              pct="n/a"
+            fi
+
+            fmt_base=$(awk "BEGIN { printf \"%.2f MB\", $base_size / 1000000 }")
+            fmt_head=$(awk "BEGIN { printf \"%.2f MB\", $head_size / 1000000 }")
+            if [ "$delta" -ge 0 ]; then
+              fmt_delta="+$(awk "BEGIN { printf \"%.0f KB\", $delta / 1000 }")"
+            else
+              fmt_delta="$(awk "BEGIN { printf \"%.0f KB\", $delta / 1000 }")"
+            fi
+
+            if [ "$delta" -gt "$threshold_bytes" ]; then
+              warn=" :warning:"
+              exceeded=true
+            elif [ "$delta" -lt "-$threshold_bytes" ]; then
+              warn=" :arrow_down:"
+            else
+              warn=""
+            fi
+
+            echo "| ${os}/${arch} | $fmt_base | $fmt_head | ${fmt_delta}${warn} | ${pct}% |" >> "$RUNNER_TEMP/size-report.md"
+          done
+
+          if [ "$exceeded" = true ]; then
+            echo "" >> "$RUNNER_TEMP/size-report.md"
+            echo "> :warning: **Binary size increased by more than ${THRESHOLD_KB} KB on at least one target.** If this is expected (new dependency, embedded asset), note it in the PR description." >> "$RUNNER_TEMP/size-report.md"
+          fi
+
+          cat "$RUNNER_TEMP/size-report.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/size-report.md"
+
+          echo "exceeded=$exceeded" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update PR size comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.type == "Bot" and (.body | contains("<!-- ttt-binary-size -->"))) | .id' | head -n 1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/size-report.md" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/size-report.md" >/dev/null
+          fi
+
+      - name: Fail on threshold breach
+        if: steps.size.outputs.exceeded == 'true'
+        run: |
+          echo "::warning::Binary size increased by more than ${{ env.THRESHOLD_KB || '256' }} KB. This job is informational and does not block merge."
+          exit 1
+
   docs:
     needs: classify
     if: needs.classify.outputs.docs_web == 'true'

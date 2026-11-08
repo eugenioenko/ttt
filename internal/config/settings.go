@@ -11,6 +11,7 @@ var (
 	GutterStyles        = []string{"minimal", "compact", "extended"}
 	BorderStyles        = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
 	DiffModes           = []string{"split", "unified"}
+	WordWrapBreaks      = []string{WordWrapBreakWord, WordWrapBreakCharacter}
 	DiffContexts        = []string{"changes", "full"}
 	GitFileViews        = []string{"tree", "list"}
 	IconModes           = []string{IconsNerdFont, IconsNone}
@@ -20,6 +21,8 @@ var (
 )
 
 const (
+	WordWrapBreakWord        = "word"
+	WordWrapBreakCharacter   = "character"
 	DiffModeSplit            = "split"
 	DiffModeUnified          = "unified"
 	DiffContextChanges       = "changes"
@@ -126,6 +129,8 @@ type EditorSettings struct {
 	InsertSpaces      bool                              `json:"insertSpaces"`
 	WordWrap          bool                              `json:"wordWrap"`
 	WordWrapColumn    int                               `json:"wordWrapColumn"`
+	WordWrapBreak     string                            `json:"wordWrapBreak"`
+	IndentGuides      bool                              `json:"indentGuides"`
 	ScrollLines       int                               `json:"scrollLines"`
 	LanguageOverrides map[string]EditorLanguageOverride `json:"languageOverrides,omitempty"`
 	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
@@ -182,8 +187,9 @@ func DefaultAutoClosingSettings() AutoClosingSettings {
 }
 
 type EditorLanguageOverride struct {
-	WordWrap       *bool `json:"wordWrap,omitempty"`
-	WordWrapColumn *int  `json:"wordWrapColumn,omitempty"`
+	WordWrap       *bool  `json:"wordWrap,omitempty"`
+	WordWrapColumn *int   `json:"wordWrapColumn,omitempty"`
+	WordWrapBreak  string `json:"wordWrapBreak,omitempty"`
 }
 
 func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
@@ -197,6 +203,17 @@ func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
 		}
 	}
 	return enabled, max(column, 0)
+}
+
+func (e EditorSettings) ResolveWordWrapBreak(languageID string) string {
+	mode := e.WordWrapBreak
+	if o, ok := e.LanguageOverrides[languageID]; ok && languageID != "" && o.WordWrapBreak != "" {
+		mode = o.WordWrapBreak
+	}
+	if !slices.Contains(WordWrapBreaks, mode) {
+		return WordWrapBreakWord
+	}
+	return mode
 }
 
 type LargeFileSettings struct {
@@ -279,6 +296,7 @@ func DefaultEditorSettings() EditorSettings {
 		AutoClosing:             DefaultAutoClosingSettings(),
 		TabSize:                 4,
 		InsertSpaces:            true,
+		WordWrapBreak:           WordWrapBreakWord,
 		DiffMode:                DiffModeSplit,
 		DiffContext:             DiffContextChanges,
 		DiffSignsColor:          true,
@@ -562,12 +580,18 @@ func (s Settings) FormatterForExt(ext string) string {
 
 func normalizeSettings(s *Settings) {
 	s.Editor.WordWrapColumn = max(s.Editor.WordWrapColumn, 0)
+	if !slices.Contains(WordWrapBreaks, s.Editor.WordWrapBreak) {
+		s.Editor.WordWrapBreak = WordWrapBreakWord
+	}
 	for language, o := range s.Editor.LanguageOverrides {
 		if o.WordWrapColumn != nil && *o.WordWrapColumn < 0 {
 			column := 0
 			o.WordWrapColumn = &column
-			s.Editor.LanguageOverrides[language] = o
 		}
+		if o.WordWrapBreak != "" && !slices.Contains(WordWrapBreaks, o.WordWrapBreak) {
+			o.WordWrapBreak = ""
+		}
+		s.Editor.LanguageOverrides[language] = o
 	}
 	if !slices.Contains(GutterStyles, s.Editor.GutterStyle) {
 		s.Editor.GutterStyle = "compact"

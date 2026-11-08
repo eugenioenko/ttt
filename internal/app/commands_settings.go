@@ -122,12 +122,14 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.SetFileIconMode(s.Appearance.Icons)
 	a.EditorGroup.InsertSpaces = s.Editor.InsertSpaces
 	a.EditorGroup.LineNumbers = s.Editor.LineNumbers
+	a.EditorGroup.SetIndentGuides(s.Editor.IndentGuides)
 	a.EditorGroup.GutterStyle = s.Editor.GutterStyle
 	a.EditorGroup.InsertFinalNewline = s.Editor.InsertFinalNewline
 	a.EditorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
 	a.EditorGroup.WordWrapColumn = s.Editor.WordWrapColumn
+	a.EditorGroup.WordWrapBreak = s.Editor.WordWrapBreak
 	a.EditorGroup.LanguageOverrides = s.Editor.LanguageOverrides
 	a.EditorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
 	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
@@ -150,6 +152,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	if a.EditorGroup.Editor != nil {
 		a.EditorGroup.Editor.TabSize = s.Editor.TabSize
 		a.EditorGroup.Editor.LineNumbers = s.Editor.LineNumbers
+		a.EditorGroup.Editor.IndentGuides = s.Editor.IndentGuides
 		a.EditorGroup.Editor.GutterStyle = s.Editor.GutterStyle
 		a.EditorGroup.Editor.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
 		a.EditorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()

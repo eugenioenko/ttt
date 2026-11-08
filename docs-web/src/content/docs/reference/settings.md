@@ -112,8 +112,9 @@ All editor settings are nested under the `editor` key.
 | `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
 | `editor.wordWrap` | bool | `false` | Soft-wrap long lines; the global Options toggle changes this default |
 | `editor.wordWrapColumn` | int | `0` | Maximum soft-wrap width in terminal display columns; `0` uses the available text width. Positive values cap it after gutters, scrollbars, and wrap margins. Ignored when wrapping is off; negative values normalize to `0` |
+| `editor.wordWrapBreak` | string | `"word"` | Where soft-wrapped rows end: `"word"` keeps words and identifiers whole, breaking after spaces and punctuation; `"character"` breaks wherever the row fills. Unknown values use `"word"` |
 | `editor.scrollLines` | int | `0` | Screen rows the Scroll Up/Down commands move the viewport and cursor; `0` scrolls half the editor height |
-| `editor.languageOverrides` | object | `{}` | Per-language `wordWrap` and `wordWrapColumn` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
+| `editor.languageOverrides` | object | `{}` | Per-language `wordWrap`, `wordWrapColumn`, and `wordWrapBreak` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
 | `editor.largeFiles.wordWrapMaxMB` | int | `32` | Files larger than this many megabytes open without word wrap, even when `editor.wordWrap` is on. `0` removes the limit |
 | `editor.largeFiles.autoReloadMaxMB` | int | `64` | Files larger than this many megabytes show a Reload action instead of automatically reloading after disk changes. `0` removes the limit. One megabyte is 1,048,576 bytes; negative values also remove the limit |
 | `editor.diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
@@ -154,7 +155,7 @@ All editor settings are nested under the `editor` key.
 
 ### Language-specific wrapping
 
-Each wrap field resolves independently: language override → global setting → built-in default. The defaults are `wordWrap: false` and `wordWrapColumn: 0`.
+Each wrap field resolves independently: language override → global setting → built-in default. The defaults are `wordWrap: false`, `wordWrapColumn: 0`, and `wordWrapBreak: "word"`.
 
 ```json
 {
@@ -163,7 +164,8 @@ Each wrap field resolves independently: language override → global setting →
     "wordWrapColumn": 0,
     "languageOverrides": {
       "typescript": { "wordWrapColumn": 80 },
-      "markdown": { "wordWrapColumn": 65 }
+      "markdown": { "wordWrapColumn": 65 },
+      "log": { "wordWrapBreak": "character" }
     }
   }
 }

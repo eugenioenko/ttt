@@ -1,6 +1,6 @@
 //go:build !linux && !darwin && !freebsd && !windows
 
-package app
+package git
 
 import (
 	"context"

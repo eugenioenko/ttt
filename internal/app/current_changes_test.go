@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/eugenioenko/ttt/internal/scm"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
@@ -55,7 +55,7 @@ func TestReadCurrentChangesUsesRawStatusIdentityForWorkingTreeShapes(t *testing.
 	write(rawPath, []byte("path content\n"))
 
 	revision := git.RevisionIdentity(dir)
-	result := readCurrentChanges(context.Background(), dir, revision, currentChangesTabID(dir), 7, 11, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, revision, currentChangesTabID(dir), 7, 11, currentChangesStatuses(t, dir))
 	if result.Err != nil {
 		t.Fatal(result.Err)
 	}
@@ -115,7 +115,7 @@ func TestReadCurrentChangesSupportsTypedCopyIdentity(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "copy.txt"), []byte("hello\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1,
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1,
 		[]git.FileStatus{{Status: "C", OldPath: "initial.txt", Path: "copy.txt", Staged: true}})
 	if result.Err != nil || len(result.Files) != 1 || result.Files[0].Status != "C" || result.Files[0].OldPath != "initial.txt" {
 		t.Fatalf("copy result=%+v", result)
@@ -133,7 +133,7 @@ func TestReadCurrentChangesHandlesAddedFilesWithFurtherWorkingTreeChanges(t *tes
 		t.Fatal(err)
 	}
 
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if result.Err != nil || len(result.Files) != 2 {
 		t.Fatalf("added mixed result=%+v", result)
 	}
@@ -159,7 +159,7 @@ func TestReadCurrentChangesIntentToAddUsesEmptyIndexBoundary(t *testing.T) {
 	}
 	testAppGit(t, dir, "add", "-N", "--", "intent.txt")
 
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if result.Err != nil || len(result.Files) != 1 {
 		t.Fatalf("intent-to-add result=%+v", result)
 	}
@@ -191,12 +191,12 @@ func TestReadCurrentChangesFingerprintIncludesStageIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	revision := git.RevisionIdentity(dir)
-	unstaged := readCurrentChanges(context.Background(), dir, revision, currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	unstaged := readGitCurrentChanges(context.Background(), dir, revision, currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if unstaged.Err != nil {
 		t.Fatal(unstaged.Err)
 	}
 	testAppGit(t, dir, "add", "initial.txt")
-	staged := readCurrentChanges(context.Background(), dir, revision, currentChangesTabID(dir), 1, 2, currentChangesStatuses(t, dir))
+	staged := readGitCurrentChanges(context.Background(), dir, revision, currentChangesTabID(dir), 1, 2, currentChangesStatuses(t, dir))
 	if staged.Err != nil {
 		t.Fatal(staged.Err)
 	}
@@ -209,10 +209,10 @@ func TestReadCurrentChangesUnmergedModifyDeleteShapesUseOneSection(t *testing.T)
 	for _, tc := range []struct {
 		name        string
 		otherDelete bool
-		stages      []byte
+		stages      []string
 	}{
-		{name: "UD", otherDelete: true, stages: []byte{1, 2}},
-		{name: "DU", otherDelete: false, stages: []byte{1, 3}},
+		{name: "UD", otherDelete: true, stages: []string{"1", "2"}},
+		{name: "DU", otherDelete: false, stages: []string{"1", "3"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := testAppRepository(t)
@@ -241,7 +241,7 @@ func TestReadCurrentChangesUnmergedModifyDeleteShapesUseOneSection(t *testing.T)
 				t.Fatal("merge unexpectedly succeeded")
 			}
 
-			result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+			result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 			if result.Err != nil {
 				t.Fatal(result.Err)
 			}
@@ -252,60 +252,14 @@ func TestReadCurrentChangesUnmergedModifyDeleteShapesUseOneSection(t *testing.T)
 			if file.Status != "U" || file.Stage != ui.CommitDetailStageConflict || file.Boundary != ui.CommitDetailBoundaryConflictToWorktree || file.ConflictCode != tc.name {
 				t.Fatalf("%s conflict identity = %+v", tc.name, file)
 			}
-			if string(file.IndexStages) != string(tc.stages) {
-				t.Fatalf("%s index stages = %v, want %v", tc.name, file.IndexStages, tc.stages)
+			if strings.Join(file.ConflictSources, "") != strings.Join(tc.stages, "") {
+				t.Fatalf("%s index stages = %v, want %v", tc.name, file.ConflictSources, tc.stages)
 			}
 			if lines := file.Diff.AllLines(); len(lines) != 0 {
 				t.Fatalf("%s preferred conflict side differs from the worktree: %+v", tc.name, lines)
 			}
 			if !strings.Contains(result.Summary, "1 conflict") || strings.Contains(result.Summary, "staged") || strings.Contains(result.Summary, "unstaged") {
 				t.Fatalf("%s conflict summary = %q", tc.name, result.Summary)
-			}
-		})
-	}
-}
-
-func TestNormalizeCurrentChangeStatusesMapsEveryPorcelainConflictShape(t *testing.T) {
-	for _, code := range []string{"DD", "AU", "UD", "UA", "DU", "AA", "UU"} {
-		t.Run(code, func(t *testing.T) {
-			statuses := []git.FileStatus{
-				{Status: code[:1], Path: "conflict.txt", Staged: true},
-				{Status: code[1:], Path: "conflict.txt", Staged: false},
-			}
-			normalized := normalizeCurrentChangeStatuses(statuses)
-			if len(normalized) != 1 || normalized[0].conflictCode != code || normalized[0].status.Status != "U" || normalized[0].status.Staged {
-				t.Fatalf("normalize %s = %+v", code, normalized)
-			}
-		})
-	}
-
-	ordinary := normalizeCurrentChangeStatuses([]git.FileStatus{
-		{Status: "M", Path: "mixed.txt", Staged: true},
-		{Status: "M", Path: "mixed.txt", Staged: false},
-	})
-	if len(ordinary) != 2 || ordinary[0].conflictCode != "" || ordinary[1].conflictCode != "" || !ordinary[0].status.Staged || ordinary[1].status.Staged {
-		t.Fatalf("ordinary mixed path was normalized as a conflict: %+v", ordinary)
-	}
-}
-
-func TestPreferredConflictEntryUsesOursThenTheirsThenBase(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		stages []int
-		want   int
-	}{
-		{name: "ours", stages: []int{1, 3, 2}, want: 2},
-		{name: "theirs", stages: []int{1, 3}, want: 3},
-		{name: "base", stages: []int{1}, want: 1},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			entries := make([]git.IndexEntry, len(tc.stages))
-			for i, stage := range tc.stages {
-				entries[i].Stage = stage
-			}
-			entry, ok := preferredConflictEntry(entries)
-			if !ok || entry.Stage != tc.want {
-				t.Fatalf("preferred stage for %v = %d, %v; want %d", tc.stages, entry.Stage, ok, tc.want)
 			}
 		})
 	}
@@ -346,7 +300,7 @@ func TestReadCurrentChangesCancelsDuringDiffGeneration(t *testing.T) {
 	ctx := &cancelAfterErrChecksContext{Context: context.Background(), cancelAt: 50}
 	statuses := currentChangesStatuses(t, dir)
 	revision := git.RevisionIdentity(dir)
-	result := readCurrentChanges(ctx, dir, revision, currentChangesTabID(dir), 1, 1, statuses)
+	result := readGitCurrentChanges(ctx, dir, revision, currentChangesTabID(dir), 1, 1, statuses)
 	if !result.Canceled || !errors.Is(result.Err, context.Canceled) {
 		t.Fatalf("diff generation cancellation result = %+v", result)
 	}
@@ -395,7 +349,7 @@ func TestReadCurrentChangesFallsBackAboveDiffLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if result.Err != nil || len(result.Files) != 1 {
 		t.Fatalf("large fallback result=%+v", result)
 	}
@@ -418,7 +372,8 @@ func TestRepositoryCurrentChangesCoalescesDropsStaleAndRetriesErrors(t *testing.
 	primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir, Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "file.txt"}})})
 	started := make(chan uint64, 4)
 	release := make(chan struct{}, 4)
-	s.readCurrentChanges = func(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(ctx context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		started <- request
 		select {
 		case <-release:
@@ -449,14 +404,16 @@ func TestRepositoryCurrentChangesCoalescesDropsStaleAndRetriesErrors(t *testing.
 		t.Fatalf("fresh result was not applied once: epoch=%d applied=%d", epoch, applied.Load())
 	}
 
-	s.readCurrentChanges = func(_ context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(_ context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		return &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request, Err: errors.New("index locked")}
 	}
 	s.requestCurrentChanges()
 	if !s.HandleCurrentChanges(poster.await(t).(*CurrentChangesResult)) || !s.currentDirty || applied.Load() != 2 {
 		t.Fatalf("error was not visible and retryable: dirty=%v applied=%d", s.currentDirty, applied.Load())
 	}
-	s.readCurrentChanges = func(_ context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(_ context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		return &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request, Fingerprint: "fresh", Summary: "recovered"}
 	}
 	s.currentInputReady = true
@@ -480,7 +437,8 @@ func TestRepositoryCurrentChangesWaitsForInFlightStatus(t *testing.T) {
 		<-release
 		return repositoryResult(seq, dir, "head", git.FileStatus{Status: "M", Path: "file.txt"})
 	}
-	s.readCurrentChanges = func(_ context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(_ context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		return &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request, Fingerprint: "fresh"}
 	}
 	var applied atomic.Int32
@@ -510,7 +468,8 @@ func TestRepositoryCurrentChangesIdenticalPollCoalescesWithoutStarvation(t *test
 	primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir, Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "file.txt"}})})
 	started := make(chan uint64, 2)
 	release := make(chan struct{}, 2)
-	s.readCurrentChanges = func(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(ctx context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		started <- request
 		select {
 		case <-release:
@@ -548,7 +507,8 @@ func TestRepositoryCurrentChangesCancelsOnCloseAndRootSupersession(t *testing.T)
 		primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir})
 	}
 	oldCanceled := make(chan struct{})
-	s.readCurrentChanges = func(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(ctx context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		if dir == "/old" {
 			<-ctx.Done()
 			close(oldCanceled)
@@ -573,7 +533,8 @@ func TestRepositoryCurrentChangesCancelsOnCloseAndRootSupersession(t *testing.T)
 	}
 
 	canceled := make(chan struct{})
-	s.readCurrentChanges = func(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(ctx context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		<-ctx.Done()
 		close(canceled)
 		return &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request, Err: ctx.Err(), Canceled: true}
@@ -592,7 +553,8 @@ func TestRepositoryCurrentChangesCancelsImmediatelyWhenTabCloses(t *testing.T) {
 	s, _, _ := testRepositoryState(nil, dir)
 	primeCurrentChangesInput(s, dir, "head", changesGroup{Dir: dir})
 	canceled := make(chan struct{})
-	s.readCurrentChanges = func(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(ctx context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		<-ctx.Done()
 		close(canceled)
 		return &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request, Err: ctx.Err(), Canceled: true}
@@ -623,7 +585,8 @@ func TestRepositoryCurrentChangesWaitsForFreshStatusAfterStatusFailure(t *testin
 	s.dirty = RepositoryWorktree | RepositoryCurrentChanges
 	var reads atomic.Int32
 	var reported atomic.Int32
-	s.readCurrentChanges = func(_ context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	s.readCurrentChanges = func(_ context.Context, source repositorySource, revision, tabID string, epoch, request uint64, changes []scm.Change) *CurrentChangesResult {
+		dir := source.root
 		reads.Add(1)
 		return &CurrentChangesResult{Dir: dir, TabID: tabID, Epoch: epoch, Request: request, Fingerprint: "unexpected"}
 	}
@@ -644,4 +607,8 @@ func TestRepositoryCurrentChangesWaitsForFreshStatusAfterStatusFailure(t *testin
 	if reads.Load() != 0 || reported.Load() != 1 || s.currentInputReady || !s.currentDirty {
 		t.Fatalf("failed status state: reads=%d reported=%d ready=%v dirty=%v", reads.Load(), reported.Load(), s.currentInputReady, s.currentDirty)
 	}
+}
+
+func readGitCurrentChanges(ctx context.Context, dir, revision, tabID string, epoch, request uint64, statuses []git.FileStatus) *CurrentChangesResult {
+	return readCurrentChanges(ctx, repositorySource{root: dir, provider: git.Provider{}}, revision, tabID, epoch, request, git.ToChanges(statuses))
 }

@@ -437,6 +437,12 @@ func (d *DiffEditorWidget) setGutterStyle(style string) {
 	}
 }
 
+func (d *DiffEditorWidget) SetIndentGuides(enabled bool) {
+	for _, p := range d.viewPanes() {
+		p.IndentGuides = enabled
+	}
+}
+
 func (d *DiffEditorWidget) SetDiffCollapsedEmphasis(enabled bool) {
 	d.emphasizeGaps = enabled
 	d.applyOverlayOptions()
@@ -917,8 +923,8 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 	r := d.GetRect()
 	d.ensurePanes()
 	if d.Loading {
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
+		for y := range h {
+			for x := range w {
 				surface.SetCell(x, y, term.Cell{Ch: ' '})
 			}
 		}
@@ -974,7 +980,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 		d.wrapKey = wk
 		d.left.wrapCols, d.right.wrapCols = 0, 0
 	}
-	for pass := 0; pass < 3; pass++ {
+	for range 3 {
 		widths := [2]int{d.left.Viewport.Width, d.right.Viewport.Width}
 		d.alignSplit()
 		lead.Render(surfaceFor(lead))
@@ -994,7 +1000,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 			break
 		}
 	}
-	for y := 0; y < h; y++ {
+	for y := range h {
 		surface.SetCell(divider, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 	}
 }

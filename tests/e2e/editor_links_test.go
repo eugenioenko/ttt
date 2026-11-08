@@ -111,7 +111,7 @@ func TestEditorFileLinksInSecondaryRepositoryDiff(t *testing.T) {
 			case "commit":
 				runHistoryGit(t, repo, "add", ".")
 				runHistoryGit(t, repo, "commit", "-qm", "change")
-				h.app.OpenCommitDiff(repo, "HEAD", "HEAD", status, true)
+				h.app.OpenCommitDiff(repo, "HEAD", "HEAD", git.ToChange(status), true)
 			}
 			h.ctrlClickText("target.txt:2:3")
 			g := h.app.EditorGroup

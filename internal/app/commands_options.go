@@ -19,6 +19,11 @@ func (a *App) ToggleLineNumbers() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleIndentGuides() {
+	a.Settings.Editor.IndentGuides = !a.Settings.Editor.IndentGuides
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleWordWrap() {
 	a.Settings.Editor.WordWrap = !a.Settings.Editor.WordWrap
 	a.SaveAndApplySettings()
@@ -266,6 +271,13 @@ func borderStyleItems() []widgets.SelectItem {
 	return items
 }
 
+func wordWrapBreakItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.WordWrapBreakWord, Label: i18n.Text("settings.wordWrapBreakWord")},
+		{ID: config.WordWrapBreakCharacter, Label: i18n.Text("settings.wordWrapBreakCharacter")},
+	}
+}
+
 func diffModeItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
 		{ID: config.DiffModeSplit, Label: i18n.Text("menu.split")},
@@ -389,6 +401,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		wordWrapChecked = ui.MenuChecked
 	}
 
+	indentGuidesChecked := menuChecked(a.Settings.Editor.IndentGuides)
+
 	bracketColorChecked := ui.MenuUnchecked
 	if a.Settings.Editor.BracketPairColorization {
 		bracketColorChecked = ui.MenuChecked
@@ -435,6 +449,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: i18n.Text("menu.editor"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.wordWrap"), Command: "options.toggleWordWrap", Checked: wordWrapChecked},
 			{Label: i18n.Text("menu.lineNumbers"), Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
+			{Label: i18n.Text("menu.indentGuides"), Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 			{Label: i18n.Text("menu.syntaxHighlight"), Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
 			{Label: i18n.Text("menu.bracketColors"), Command: "options.toggleBracketColors", Checked: bracketColorChecked},
 			ui.MenuSep(),
@@ -525,6 +540,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleLineNumbers", Title: i18n.Text("command.toggleLineNumbers"),
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleLineNumbers,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleIndentGuides", Title: i18n.Text("options.toggleIndentGuides"),
+		Keywords: []string{"preferences", "settings", "editor", "view", "indentation"},
+		Handler:  app.ToggleIndentGuides,
 	})
 
 	reg.Register(command.Command{

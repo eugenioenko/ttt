@@ -220,7 +220,7 @@ func TestGitScrollMarksUseVisualRowsUnderWordWrap(t *testing.T) {
 	editor.LineChanges = []diff.LineChangeKind{diff.LineModified, 0, diff.LineAdded}
 
 	got := editor.gitScrollMarks(editor.rowLayout(5))
-	firstLineRows := wrapLineVisualRows(editor.Buf.Lines[0], 5, editor.resolveTabSize())
+	firstLineRows := wrapLineVisualRows(editor.Buf.Lines[0], 5, editor.resolveTabSize(), false)
 	want := []ScrollMark{
 		{Item: 0, Count: firstLineRows, Style: term.StyleScrollMarkModified, Rank: 2},
 		{Item: firstLineRows + 1, Count: 1, Style: term.StyleScrollMarkAdded, Rank: 1},

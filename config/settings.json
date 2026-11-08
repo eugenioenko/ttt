@@ -19,6 +19,8 @@
     "insertSpaces": true,
     "wordWrap": false,
     "wordWrapColumn": 0,
+    "wordWrapBreak": "word",
+    "indentGuides": false,
     "scrollLines": 0,
     "diffMode": "split",
     "diffContext": "changes",

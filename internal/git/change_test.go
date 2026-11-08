@@ -24,3 +24,11 @@ func TestChangeConversionPreservesGitStatusIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestChangeConversionRetainsBothConflictActionGroups(t *testing.T) {
+	statuses := []FileStatus{{Path: "conflict.txt", Status: "U", Staged: true}, {Path: "conflict.txt", Status: "D"}}
+	changes := ToChanges(statuses)
+	if len(changes) != 2 || changes[0].Group != scm.Staged || changes[1].Group != scm.WorkingTree {
+		t.Fatalf("conflict staging actions lost: %+v", changes)
+	}
+}

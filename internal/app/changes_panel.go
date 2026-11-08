@@ -26,7 +26,7 @@ type ChangesPanel struct {
 	Split     *ui.ContentSplitWidget
 	Dirs      []string
 	// Screen is how a finished background read gets back onto the event loop.
-	// With no screen the panel reads git inline instead — see changes_async.go.
+	// With no screen the panel reads history inline instead — see changes_async.go.
 	Screen eventPoster
 
 	groups     []changesGroup
@@ -43,13 +43,13 @@ type ChangesPanel struct {
 	// Refresh clears the guard while the rendered log stays put.
 	logDir string
 	// Every appended page is tied to one immutable full HEAD snapshot.
-	logAnchor      git.ObjectID
+	logAnchor      string
 	logOffset      int
 	logHasMore     bool
 	logPagePending bool
 	// commitFiles caches a commit's file list. A commit's contents never
 	// change, so an entry can never go stale — only numerous, hence the bound.
-	commitFiles      map[string][]git.FileStatus
+	commitFiles      map[string][]scm.Change
 	commitFilesOrder []string
 	// commitFilesPending marks reads already in flight, so repeated expands of
 	// one commit do not each start their own git process.
@@ -76,7 +76,7 @@ type ChangesPanel struct {
 	icons              string
 
 	OnOpenDiff         func(dir string, change scm.Change, extended bool)
-	OnOpenCommitDiff   func(dir, ref, short string, status git.FileStatus, extended bool)
+	OnOpenCommitDiff   func(dir, ref, short string, status scm.Change, extended bool)
 	OnOpenCommit       func(dir, ref, short string)
 	OnOpenPRDiff       func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
 	OnOpenPRDetail     func(group *ui.ChangesGroup)
@@ -143,11 +143,10 @@ type workFolderStateKey struct {
 // to without parsing path content out of the node ID.
 type commitFileRef struct {
 	Dir string
-	// Ref is the full hash, which is what git is asked with and what the tab
-	// key is built from. Short is only ever shown to the reader.
+	// Ref is opaque revision identity. Short is presentation-only.
 	Ref    string
 	Short  string
-	Status git.FileStatus
+	Status scm.Change
 }
 
 type prGroup struct {
@@ -184,7 +183,7 @@ func NewChangesPanelWithProvider(provider scm.Provider, dirs ...string) *Changes
 		Dirs:               dirs,
 		multiRoot:          len(dirs) > 1,
 		expanded:           make(map[string]bool),
-		commitFiles:        make(map[string][]git.FileStatus),
+		commitFiles:        make(map[string][]scm.Change),
 		logCommits:         make(map[string]commitFileRef),
 		logFiles:           make(map[string]commitFileRef),
 		logExpanded:        make(map[string]bool),
@@ -382,17 +381,18 @@ func (cp *ChangesPanel) refreshCommitLog() {
 	cp.logGen++
 	gen := cp.logGen
 	cp.cancelLogRead()
+	source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		result := readCommitLog(ctx, dir, gen)
+		result := readCommitLog(ctx, source, gen)
 		cancel()
 		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		result := readCommitLog(ctx, dir, gen)
+		result := readCommitLog(ctx, source, gen)
 		cancel()
 		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -446,17 +446,18 @@ func (cp *ChangesPanel) loadOlderHistory() {
 	cp.logPagePending = true
 	cp.replaceHistoryLoadNode(true, false)
 	dir, anchor, offset, gen := cp.logDir, cp.logAnchor, cp.logOffset, cp.logGen
+	source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		result := readCommitLogPage(ctx, source, anchor, offset, gen)
 		cancel()
 		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		result := readCommitLogPage(ctx, source, anchor, offset, gen)
 		cancel()
 		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -510,7 +511,7 @@ func commitLogStateKey(dir, nodeID string) string {
 // would otherwise grow one entry per commit ever opened, without limit.
 const commitFilesCacheMax = 256
 
-func (cp *ChangesPanel) cacheCommitFiles(key string, files []git.FileStatus) {
+func (cp *ChangesPanel) cacheCommitFiles(key string, files []scm.Change) {
 	if _, exists := cp.commitFiles[key]; !exists {
 		cp.commitFilesOrder = append(cp.commitFilesOrder, key)
 	}
@@ -553,7 +554,8 @@ func (cp *ChangesPanel) commitChildren(dir, ref, short, parentID string) []*widg
 	if cp.Screen == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), commitFilesTimeout)
 		defer cancel()
-		r := readCommitFiles(ctx, 0, dir, ref, short, parentID)
+		source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
+		r := readCommitFiles(ctx, 0, source, ref, short, parentID)
 		cp.recordCommitFiles(r)
 		return cp.childrenFor(r)
 	}
@@ -575,21 +577,21 @@ func errorNode(parentID string) *widgets.TreeNode {
 	return &widgets.TreeNode{ID: parentID + errorSuffix, Label: i18n.Text("changes.readCommitFailedLabel"), Muted: true}
 }
 
-func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files []git.FileStatus) []*widgets.TreeNode {
+func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files []scm.Change) []*widgets.TreeNode {
 	if len(files) == 0 {
 		// An expandable node that opens onto nothing reads as broken. A merge
 		// that changed nothing against its first parent is the usual cause.
 		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: i18n.Text("general.noFiles"), Muted: true}}
 	}
 	makeLeaf := func(change scm.Change) *widgets.TreeNode {
-		f := git.FromChange(change)
+		f := change
 		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
 		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short, Status: f}
 		node := &widgets.TreeNode{
 			ID:           id,
 			Label:        f.Path,
-			Icon:         ui.StatusBadge(f.Status),
-			IconStyle:    ui.StatusStyle(f.Status),
+			Icon:         ui.ChangeBadge(f),
+			IconStyle:    ui.ChangeStyle(f.Kind, false),
 			TruncateLeft: true,
 		}
 		cp.decorateFileNode(node, f.Path)
@@ -598,11 +600,11 @@ func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files 
 	if cp.fileView == config.GitFileViewList {
 		nodes := make([]*widgets.TreeNode, 0, len(files))
 		for _, f := range files {
-			nodes = append(nodes, makeLeaf(git.ToChange(f)))
+			nodes = append(nodes, makeLeaf(f))
 		}
 		return nodes
 	}
-	return compactFileTree("history:"+parentID, git.ToChanges(files), makeLeaf, cp.logFolderExpanded)
+	return compactFileTree("history:"+parentID, files, makeLeaf, cp.logFolderExpanded)
 }
 
 func (cp *ChangesPanel) openCommitFile(node *widgets.TreeNode, extended bool) {

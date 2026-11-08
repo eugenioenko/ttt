@@ -13,7 +13,11 @@ import (
 type editorRow struct {
 	bufLine  int
 	startCol int
-	phantom  int
+	// nextCol is where the following wrapped row of the same line starts, or 0
+	// on a line's last row: a word-wrapped row ends before the edge, so drawing
+	// must stop there rather than fill the width.
+	nextCol int
+	phantom int
 }
 
 func (r editorRow) isPhantom() bool { return r.phantom >= 0 }
@@ -26,6 +30,7 @@ var singleSegment = []int{0}
 type rowLayout struct {
 	lines    []string
 	wrap     bool
+	words    bool
 	width    int
 	tabW     int
 	visible  []int
@@ -54,6 +59,7 @@ type rowLayoutKey struct {
 	visN       int
 	phantomGen uint64
 	wrap       bool
+	words      bool
 	width      int
 	tabW       int
 }
@@ -100,6 +106,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	}
 	if e.WordWrap {
 		key.width = width
+		key.words = e.WrapWords
 	}
 	for _, c := range e.layoutCache {
 		if c != nil && c.key == key {
@@ -114,6 +121,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	l := &rowLayout{
 		lines:   e.Buf.Lines,
 		wrap:    e.WordWrap,
+		words:   key.words,
 		width:   width,
 		tabW:    key.tabW,
 		visible: visible,
@@ -135,7 +143,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 			slot = i
 			break
 		}
-		if c.key.wrap == key.wrap && c.key.width == key.width && c.key.tabW == key.tabW {
+		if c.key.wrap == key.wrap && c.key.words == key.words && c.key.width == key.width && c.key.tabW == key.tabW {
 			l.memo = c.memo
 			slot = i
 			break
@@ -165,7 +173,7 @@ func (l *rowLayout) lineRows(line int, prev []lineRowsMemo, delta int) int {
 			return prev[i].rows
 		}
 	}
-	rows := wrapLineVisualRows(text, l.width, l.tabW)
+	rows := wrapLineVisualRows(text, l.width, l.tabW, l.words)
 	l.memo[line] = lineRowsMemo{text: text, rows: rows}
 	return rows
 }
@@ -334,7 +342,7 @@ func (l *rowLayout) segments(line int) []int {
 		return singleSegment
 	}
 	if l.wrap && line >= 0 && line < l.n() {
-		return wrapLineSegments([]rune(l.lines[line]), l.width, l.tabW)
+		return wrapLineSegments(l.lines[line], l.width, l.tabW, l.words)
 	}
 	return singleSegment
 }
@@ -346,7 +354,7 @@ func (l *rowLayout) phantomSegments(line, k int) []int {
 	if !l.wrap || k >= len(block) {
 		return singleSegment
 	}
-	return wrapLineSegments([]rune(block[k].Text), l.width, l.tabW)
+	return wrapLineSegments(block[k].Text, l.width, l.tabW, l.words)
 }
 
 func (l *rowLayout) phantomRows(line int) int {
@@ -365,7 +373,7 @@ func (l *rowLayout) phantomAt(line, offset int) (editorRow, bool) {
 	for k := 0; k < l.phantoms[line]; k++ {
 		segs := l.phantomSegments(line, k)
 		if offset < len(segs) {
-			return editorRow{bufLine: line, startCol: segs[offset], phantom: k}, true
+			return editorRow{bufLine: line, startCol: segs[offset], nextCol: nextSegment(segs, offset), phantom: k}, true
 		}
 		offset -= len(segs)
 	}
@@ -531,8 +539,9 @@ func (l *rowLayout) appendRows(out []editorRow, topLine, offset, h int) []editor
 	}
 	emitBlock := func(line int) bool {
 		for k := 0; k < l.phantoms[line]; k++ {
-			for _, seg := range l.phantomSegments(line, k) {
-				if emit(editorRow{bufLine: line, startCol: seg, phantom: k}) {
+			segs := l.phantomSegments(line, k)
+			for i, seg := range segs {
+				if emit(editorRow{bufLine: line, startCol: seg, nextCol: nextSegment(segs, i), phantom: k}) {
 					return true
 				}
 			}
@@ -540,8 +549,9 @@ func (l *rowLayout) appendRows(out []editorRow, topLine, offset, h int) []editor
 		if line >= l.n() {
 			return false
 		}
-		for _, seg := range l.segments(line) {
-			if emit(editorRow{bufLine: line, startCol: seg, phantom: -1}) {
+		segs := l.segments(line)
+		for i, seg := range segs {
+			if emit(editorRow{bufLine: line, startCol: seg, nextCol: nextSegment(segs, i), phantom: -1}) {
 				return true
 			}
 		}
@@ -582,7 +592,14 @@ func (l *rowLayout) rowInBlock(line, offset int) editorRow {
 		}
 		idx = len(segs) - 1
 	}
-	return editorRow{bufLine: line, startCol: segs[idx], phantom: -1}
+	return editorRow{bufLine: line, startCol: segs[idx], nextCol: nextSegment(segs, idx), phantom: -1}
+}
+
+func nextSegment(segs []int, i int) int {
+	if i+1 < len(segs) {
+		return segs[i+1]
+	}
+	return 0
 }
 
 func (e *EditorPaneWidget) topOffset() int {

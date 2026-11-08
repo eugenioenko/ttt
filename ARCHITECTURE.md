@@ -68,7 +68,7 @@ lifecycle.
 
 Packages: `internal/scm`, `internal/git`, `internal/github`, `internal/jsonrpc`,
 `internal/lsp`, `internal/terminal`, `internal/watcher`,
-`internal/workspace`, and `internal/trash`.
+`internal/workspace`, `internal/trash`, and `internal/update`.
 
 Owns external-process and external-state integration. Services expose typed
 operations and results without owning product widgets. Long-running work must
@@ -86,24 +86,39 @@ ignored, and conflicted content are explicit states; failed reads are errors.
 Repository objects are captured on the main thread before background reads,
 which keep the existing cancellation and stale-result guards. Single-file
 read-only diffs use `scm.ChangeReader` through the cancellable diff-open task.
+Aggregate Current Changes also consumes typed changes through this capability;
+Git conflict-side selection, conflict detail, and verified working-file reads
+stay in the Git service. A provider can identify a shared conflict resolution
+view for aggregate deduplication without removing sidebar action groups.
+Provider groups and opaque conflict-side identities
+participate in aggregate refresh and per-file view identity. The existing
+`RepositoryState` owner retains cancellation, coalescing, and stale-result guards.
 The Changes panel passes typed changes without converting provider groups into
 Git status. Git resolves HEAD/index endpoints and supplies patch metadata for
 renames, modes, and binary changes inside its adapter.
 
-Remaining provider integration boundaries before a second provider can drive
-the complete editor:
+`scm.HistoryReader` supplies the paged history list with opaque entry identities
+and immutable snapshot anchors. Git validates its full object IDs internally;
+pagination, cancellation, and selection restoration remain panel-owned.
 
-- Aggregate Current Changes (`current_changes.go`, `repository_state.go`)
-  and history/commit details still use Git endpoints and explicit Git model adapters. They need typed content,
-  revision, conflict-stage, binary, mode, rename, and diff capabilities.
-- Discard, commit, branch, fetch/pull/push, and worktree actions still need
-  optional mutation capabilities and capability-aware commands and menus.
-- Blame, ignore enumeration, GitHub PRs, and workspace repository detection
-  retain Git-specific integrations. Provider-neutral features need capabilities;
-  Git-specific features need gating.
-- Provider selection and Lua plugin registration, permissions, lifecycle, and
-  change invalidation are not yet exposed. Public plugin APIs and Jujutsu
-  integration follow the remaining internal migrations.
+`scm.RevisionReader` supplies revision metadata, typed changed paths, patches,
+and separately requested full-file endpoints. Git resolves first-parent, root,
+rename/copy, and missing endpoints in its adapter. Historical content stays lazy;
+request ownership, cancellation, incarnation guards, and per-file retry remain
+in the application. Revision IDs are opaque, including in history tree identity.
+
+Remaining integration work before exposing another provider:
+
+- Keep Git mutation commands Git-specific and gate them by the selected provider.
+  Providers will contribute their own actions through the future host action API.
+- Git-derived enumeration, blame, GitHub PRs/permalinks, and Git worktree tools
+  remain Git-specific. Gate these outside Git; introduce a shared contract only
+  when a second provider needs one. Preserve ordinary file browsing outside Git.
+- Provider presentation retains its compatible staged/unstaged projection and
+  command identifiers. Provider-defined groups, labels, and actions are follow-ups.
+- Provider selection, workspace discovery integration, and Lua registration,
+  permissions, cancellation/unload, invalidation, and colocated-repository policy
+  remain host integration work. Public plugin APIs and Jujutsu come afterward.
 
 ### Presentation kernel
 

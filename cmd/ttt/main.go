@@ -23,6 +23,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/update"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -166,12 +167,31 @@ func initSimulationScreen(w, h int) *term.TcellScreen {
 }
 
 func main() {
+	buildInfo, _ := debug.ReadBuildInfo()
+	version = update.ResolveVersion(version, buildInfo)
 	exitCode := 0
 	defer func() {
 		if exitCode != 0 {
 			os.Exit(exitCode)
 		}
 	}()
+	restartRequested := false
+	var restartMethod update.Kind
+	restartLaunch, restartErr := captureRestartTarget(os.Args[0])
+	defer func() {
+		if restartRequested {
+			code, err := 1, restartErr
+			if err == nil {
+				code, err = restartLaunch.restart(restartMethod)
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				code = 1
+			}
+			exitCode = code
+		}
+	}()
+	update.CleanupOldExecutable()
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
@@ -434,7 +454,8 @@ Docs: https://tttedit.dev
 
 	if flags.listen {
 		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddress()+" (POST /exec)")
-		go app.StartListenServer(editor)
+		stopListen := app.StartListenServer(editor)
+		defer stopListen()
 	}
 
 	editor.CheckLanguagePackUpdates()
@@ -444,6 +465,8 @@ Docs: https://tttedit.dev
 		}
 	})
 	stopForward()
+	restartRequested = editor.RestartRequested
+	restartMethod = editor.RestartMethod
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

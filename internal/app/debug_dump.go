@@ -27,7 +27,8 @@ type DebugState struct {
 	Diagnostics []DebugDiagnostic  `json:"diagnostics"`
 	Output      []string           `json:"output"`
 	Terminals   []DebugTerminal    `json:"terminals,omitempty"`
-	// ActiveTerminal is the selected terminal tab, whether or not it has focus.
+	// ActiveTerminal prefers the focused terminal, then a selected editor
+	// terminal, then the selected panel terminal.
 	ActiveTerminal *DebugActiveTerminal `json:"active_terminal,omitempty"`
 	WidgetTree     *DebugWidgetNode     `json:"widget_tree"`
 }
@@ -241,7 +242,15 @@ func (a *App) BuildDebugState() *DebugState {
 		}
 	}
 
-	for _, tt := range a.allTerminals() {
+	activeTerminal := a.focusedTerminalWidget()
+	if activeTerminal == nil {
+		if tab := a.EditorGroup.ActiveTerminalTab(); tab != nil {
+			activeTerminal = tab.Terminal
+		} else {
+			activeTerminal, _ = a.TerminalPanel.ActiveWidget().(*ui.TerminalWidget)
+		}
+	}
+	for i, tt := range a.allTerminals() {
 		cols, rows := tt.Term.Size()
 		state.Terminals = append(state.Terminals, DebugTerminal{
 			ID:       tt.ID,
@@ -251,10 +260,9 @@ func (a *App) BuildDebugState() *DebugState {
 			Rows:     rows,
 			RawTail:  strconv.Quote(string(tt.Term.RawTail())),
 		})
-	}
-
-	if idx := a.TerminalPanel.ActiveIndex(); idx >= 0 && idx < len(a.Terminals) {
-		state.ActiveTerminal = &DebugActiveTerminal{ID: a.Terminals[idx].ID, Index: idx}
+		if tt.Widget == activeTerminal {
+			state.ActiveTerminal = &DebugActiveTerminal{ID: tt.ID, Index: i}
+		}
 	}
 
 	state.WidgetTree = walkWidget(a.Root.Main)

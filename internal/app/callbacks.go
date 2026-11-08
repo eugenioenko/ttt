@@ -455,14 +455,22 @@ func diffSideLines(content string) []string {
 	return lines
 }
 
-func (a *App) OpenCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) {
+func (a *App) OpenCommitDiff(dir, ref, short string, status scm.Change, extended bool) {
+	source := a.Repository.repositorySource(dir)
 	a.startDiffOpen(func(ctx context.Context) *diffOpenResult {
-		return readCommitDiff(ctx, dir, ref, short, status, extended)
+		return readCommitDiff(ctx, source, ref, short, status, extended)
 	})
 }
 
-func readCommitDiff(ctx context.Context, dir, ref, short string, status git.FileStatus, extended bool) *diffOpenResult {
-	diffText, err := git.CommitFileDiffContext(ctx, dir, ref, status)
+func readCommitDiff(ctx context.Context, source repositorySource, ref, short string, status scm.Change, extended bool) *diffOpenResult {
+	reader, err := source.revisionReader(ctx)
+	if err != nil {
+		return &diffOpenResult{Canceled: errors.Is(err, context.Canceled), Warn: i18n.Format("git.readFileAtCommitFailed", i18n.Args{"path": status.Path, "short": short})}
+	}
+	diffText, err := reader.ReadRevisionPatch(ctx, ref, status)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return &diffOpenResult{Canceled: true}
@@ -473,36 +481,30 @@ func readCommitDiff(ctx context.Context, dir, ref, short string, status git.File
 	if len(parsed.Hunks) == 0 {
 		return &diffOpenResult{Warn: i18n.Format("git.noLineChangesInCommit", i18n.Args{"path": status.Path, "short": short})}
 	}
-	oldPath := status.Path
-	if status.OldPath != "" {
-		oldPath = status.OldPath
-	}
-	oldLines := gitFileLines(ctx, dir, oldPath, ref+"^")
-	newLines := gitFileLines(ctx, dir, status.Path, ref)
+	content, err := reader.ReadRevisionContent(ctx, ref, status.Path, status.OldPath)
 	if ctx.Err() != nil {
 		return &diffOpenResult{Canceled: true}
 	}
+	if err != nil {
+		return &diffOpenResult{Warn: i18n.Format("git.readFileAtCommitFailed", i18n.Args{"path": status.Path, "short": short})}
+	}
+	var oldLines, newLines []string
+	if content.Before.Exists {
+		oldLines = splitCurrentChangesLines([]byte(content.Before.Content))
+	}
+	if content.After.Exists {
+		newLines = splitCurrentChangesLines([]byte(content.After.Content))
+	}
+
 	return &diffOpenResult{
 		TabName:  fmt.Sprintf("%s:%s (diff)", ref, status.Path),
 		Title:    fmt.Sprintf("%s @ %s", filepath.Base(status.Path), short),
-		Path:     filepath.Join(dir, status.Path),
+		Path:     filepath.Join(source.root, status.Path),
 		Diff:     parsed,
 		OldLines: oldLines,
 		NewLines: newLines,
 		Extended: extended,
 	}
-}
-
-func gitFileLines(ctx context.Context, dir, path, ref string) []string {
-	content, err := git.ShowFileContext(ctx, dir, path, ref)
-	if err != nil {
-		return nil
-	}
-	lines := strings.Split(content, "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
 }
 
 func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
@@ -751,6 +753,8 @@ func registerWidgetCallbacks(app *App) {
 		moreMenu := []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
 			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: app.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed"},
 		}
 		openContextMenu(app, moreMenu, sx, sy)
 	}

@@ -40,6 +40,202 @@ func TestEditorRender(t *testing.T) {
 	}
 }
 
+func TestEditorIndentGuidesFollowIndentationStops(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"        value", "\t\tvalue", "   value"}},
+		&cursor.Cursor{},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 3},
+	)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.SetRect(Rect{W: 20, H: 3})
+
+	grid := makeGrid(20, 3)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 3}))
+
+	g := e.GutterWidth()
+	for _, row := range []int{0, 1} {
+		for _, col := range []int{0, 4} {
+			cell := grid[row][g+col]
+			if cell.Ch != '│' || cell.Style != term.StyleIndentGuide {
+				t.Errorf("row %d col %d = %+v, want indent guide", row, col, cell)
+			}
+		}
+	}
+	if got := grid[0][g+8].Ch; got != 'v' {
+		t.Errorf("content after indentation = %q, want 'v'", got)
+	}
+	if got := grid[2][g+0].Ch; got != '│' {
+		t.Errorf("partial indentation guide = %q, want guide at first stop", got)
+	}
+	if got := grid[2][g+3].Ch; got != 'v' {
+		t.Errorf("content after partial indentation = %q, want 'v'", got)
+	}
+}
+
+func TestEditorIndentGuidesStayConnectedAcrossBlankLines(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"        outer", "", "  ", "    inner", "", "        tail"}},
+		&cursor.Cursor{},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 6},
+	)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.SetRect(Rect{W: 20, H: 6})
+
+	grid := makeGrid(20, 6)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 6}))
+
+	g := e.GutterWidth()
+	for _, row := range []int{1, 2, 4} {
+		for _, col := range []int{0, 4} {
+			cell := grid[row][g+col]
+			if cell.Ch != '│' || cell.Style != term.StyleIndentGuide {
+				t.Errorf("blank row %d col %d = %+v, want connected indent guide", row, col, cell)
+			}
+		}
+	}
+}
+
+func TestIndentGuideBlankScanIsBounded(t *testing.T) {
+	lines := make([]string, 3*indentGuideMaxScanLines)
+	lines[0] = "    top"
+	lines[len(lines)-1] = "    bottom"
+	line := len(lines) / 2
+
+	var spans []indentGuideBlankSpan
+	if width := indentGuideBlankWidth(lines, line, 4, &spans); width != 0 {
+		t.Fatalf("blank line %d far from any non-blank line = %d, want 0", line, width)
+	}
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(spans))
+	}
+	if spans[0].start < line-indentGuideMaxScanLines || spans[0].end > line+indentGuideMaxScanLines {
+		t.Fatalf("span [%d,%d] exceeds the %d-line scan bound around line %d",
+			spans[0].start, spans[0].end, indentGuideMaxScanLines, line)
+	}
+}
+
+func TestIndentGuideBlankScanUsesNearestSideWithinBound(t *testing.T) {
+	lines := make([]string, 2000)
+	lines[0] = "        top"
+
+	var spans []indentGuideBlankSpan
+	// Exactly indentGuideMaxScanLines above the non-blank first line.
+	if got := indentGuideBlankWidth(lines, indentGuideMaxScanLines, 4, &spans); got != 8 {
+		t.Fatalf("blank line at the scan bound = %d, want 8", got)
+	}
+	// One line further: the top is out of reach and no other side resolves.
+	spans = nil
+	if got := indentGuideBlankWidth(lines, indentGuideMaxScanLines+1, 4, &spans); got != 0 {
+		t.Fatalf("blank line past the scan bound = %d, want 0", got)
+	}
+}
+
+func TestIndentGuideBlankScanDoesNotExtendWidthsPastTheBound(t *testing.T) {
+	// One indented non-blank line, then a blank run longer than the scan
+	// bound: lines within reach keep the width, lines past it resolve to 0,
+	// and cached spans must not leak the width across the boundary no matter
+	// which line is scanned first.
+	lines := make([]string, 2*indentGuideMaxScanLines+3)
+	lines[0] = "    top"
+
+	want := map[int]int{
+		1:                           4,
+		2:                           4,
+		indentGuideMaxScanLines - 1: 4,
+		indentGuideMaxScanLines:     4,
+		indentGuideMaxScanLines + 1: 0,
+	}
+	for _, order := range [][]int{
+		{1, 2, indentGuideMaxScanLines - 1, indentGuideMaxScanLines, indentGuideMaxScanLines + 1},
+		{indentGuideMaxScanLines + 1, indentGuideMaxScanLines, indentGuideMaxScanLines - 1, 2, 1},
+	} {
+		var spans []indentGuideBlankSpan
+		for _, line := range order {
+			if got := indentGuideBlankWidth(lines, line, 4, &spans); got != want[line] {
+				t.Fatalf("order %v: blank line %d = %d, want %d", order, line, got, want[line])
+			}
+		}
+	}
+}
+
+func TestIndentGuideBlankScanSplitsLongRunsByNearestSide(t *testing.T) {
+	lines := make([]string, 601)
+	lines[0] = "    top"
+	lines[600] = "  bottom"
+
+	var spans []indentGuideBlankSpan
+	cases := []struct{ line, want int }{
+		{1, 4},   // only the top is in reach
+		{88, 4},  // both sides in reach, the wider top wins
+		{512, 4}, // the top is exactly at the scan bound
+		{513, 2}, // the top is out of reach, the bottom wins
+		{599, 2}, // only the bottom is in reach
+	}
+	for _, c := range cases {
+		if got := indentGuideBlankWidth(lines, c.line, 4, &spans); got != c.want {
+			t.Fatalf("blank line %d = %d, want %d", c.line, got, c.want)
+		}
+	}
+}
+
+func TestEditorIndentGuidesDisabledByDefault(t *testing.T) {
+	e := NewEditorPaneWidget(
+		&buffer.Buffer{Lines: []string{"    value"}},
+		&cursor.Cursor{},
+		&view.Viewport{TopLine: 0, LeftCol: 0, Width: 20, Height: 1},
+	)
+	e.TabSize = 4
+	e.SetRect(Rect{W: 20, H: 1})
+
+	grid := makeGrid(20, 1)
+	e.Render(NewRenderSurface(grid, Rect{W: 20, H: 1}))
+
+	if got := grid[0][e.GutterWidth()].Ch; got != ' ' {
+		t.Fatalf("first indentation cell = %q, want unchanged whitespace", got)
+	}
+}
+
+func TestEditorIndentGuidesSkipSecondaryCursor(t *testing.T) {
+	e := newRowsEditor([]string{"    a", "    b"}, 20, 2)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.Cursor.Line, e.Cursor.Col = 0, 4
+	e.ensureMulti()
+	e.Multi.Add(1, 0)
+	e.syncFromMulti()
+
+	grid := renderGrid(e)
+	g := e.GutterWidth()
+
+	// Line 0 col 0 should be an indent guide
+	if c := grid[0][g+0]; c.Ch != '│' || c.Style != term.StyleIndentGuide {
+		t.Fatalf("row 0 col 0 = %+v, want indent guide", c)
+	}
+	// Line 1 col 0 has a secondary cursor and must preserve StyleReverse
+	if c := grid[1][g+0]; c.Style != term.StyleReverse {
+		t.Fatalf("row 1 col 0 = %+v, want secondary cursor with StyleReverse", c)
+	}
+}
+
+func TestEditorIndentGuidesSkipSearchMatches(t *testing.T) {
+	e := newRowsEditor([]string{"    a", "    b"}, 20, 2)
+	e.TabSize = 4
+	e.IndentGuides = true
+	e.SearchMatches = []FindMatch{
+		{Line: 1, Col: 0, Len: 1},
+	}
+	e.SearchActive = -1
+	e.buildSearchIndex()
+	grid := renderGrid(e)
+	g := e.GutterWidth()
+
+	if c := grid[1][g+0]; c.Style != term.StyleSearchMatch {
+		t.Fatalf("row 1 col 0 = %+v, want search match style, got %+v", c, c.Style)
+	}
+}
+
 func TestEditorArrowKeys(t *testing.T) {
 	e := newTestEditor()
 	e.SetRect(Rect{X: 0, Y: 0, W: 20, H: 10})

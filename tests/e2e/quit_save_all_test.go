@@ -228,6 +228,8 @@ func TestQuitSaveAllSaveGuards(t *testing.T) {
 			case "unnamed failure":
 				h.typeText(filepath.Join(h.dir, "missing", "scratch.txt"))
 				h.pressKey(tcell.KeyEnter, tcell.ModNone)
+				h.assertContains("does not exist")
+				clickRowControl(t, h, "Cancel", "Cancel")
 			case "replace":
 				h.typeText(path)
 				h.pressKey(tcell.KeyEnter, tcell.ModNone)

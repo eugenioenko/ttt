@@ -78,3 +78,15 @@ func (s repositorySource) readChange(ctx context.Context, change scm.Change) (sc
 	}
 	return result, err
 }
+
+func (s repositorySource) revisionReader(ctx context.Context) (scm.RevisionReader, error) {
+	repo, err := s.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reader, ok := repo.(scm.RevisionReader)
+	if !ok {
+		return nil, errors.ErrUnsupported
+	}
+	return reader, nil
+}

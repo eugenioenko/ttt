@@ -52,6 +52,8 @@ func RepoRootContext(ctx context.Context, dir string) string {
 // retain a previously verified repository identity and retry.
 func RepoRootWithErrorContext(ctx context.Context, dir string) (string, error) {
 	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--show-toplevel")
+	// Discovery classifies Git failure text in one locale.
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {

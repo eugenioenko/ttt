@@ -226,10 +226,7 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 	if len(colors) == 0 {
 		colors = []string{"yellow", "magenta", "blue"}
 	}
-	n := len(colors)
-	if n > len(bracketColorSlots) {
-		n = len(bracketColorSlots)
-	}
+	n := min(len(colors), len(bracketColorSlots))
 	return bracketColorSlots[:n]
 }
 
@@ -243,12 +240,14 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup := ui.NewEditorGroupWidget(borders, cfg.Settings.Editor.TabSize, cfg.Settings.Editor.LineNumbers, cfg.Settings.Editor.GutterStyle)
 	editorGroup.SetFileIconMode(cfg.Settings.Appearance.Icons)
 	editorGroup.InsertSpaces = cfg.Settings.Editor.InsertSpaces
+	editorGroup.SetIndentGuides(cfg.Settings.Editor.IndentGuides)
 	editorGroup.InsertFinalNewline = cfg.Settings.Editor.InsertFinalNewline
 	editorGroup.ShowTrailingNewline = cfg.Settings.Editor.IsShowTrailingNewlineEnabled()
 	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
 	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
 	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
 	editorGroup.WordWrapColumn = cfg.Settings.Editor.WordWrapColumn
+	editorGroup.WordWrapBreak = cfg.Settings.Editor.WordWrapBreak
 	editorGroup.LanguageOverrides = cfg.Settings.Editor.LanguageOverrides
 	editorGroup.WordWrapMaxBytes = cfg.Settings.Editor.WordWrapMaxBytes()
 	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
@@ -457,9 +456,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 // keep a correct cursor and an unscrolled view instead.
 func (a *App) ApplyFileTargets(targets []FileTarget) {
 	active := a.EditorGroup.ActiveFilePath()
-	for i := len(targets) - 1; i >= 0; i-- {
-		if targets[i].Line > 0 && targets[i].Path == active {
-			a.EditorGroup.GoToLineCol(targets[i].Line, targets[i].Col)
+	for _, target := range slices.Backward(targets) {
+		if target.Line > 0 && target.Path == active {
+			a.EditorGroup.GoToLineCol(target.Line, target.Col)
 			return
 		}
 	}

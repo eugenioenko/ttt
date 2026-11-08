@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"time"
 	"unicode/utf8"
@@ -112,12 +113,15 @@ type EditorGroupWidget struct {
 	active            int
 	lastDocumentPath  string
 	pinnedCount       int
+	closedTabs        []closedTab
 	TabSize           int
 	InsertSpaces      bool
 	LineNumbers       bool
+	IndentGuides      bool
 	GutterStyle       string
 	WordWrap          bool
 	WordWrapColumn    int
+	WordWrapBreak     string
 	LanguageOverrides map[string]config.EditorLanguageOverride
 	WordWrapMaxBytes  int64
 	// editorInDiff is set while the shared editor is bound to an editable
@@ -840,6 +844,9 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	surface.ApplyDefaultWrapMode(wrapMode)
 	surface.SetDiffHighContrast(g.DiffHighContrast)
 	surface.SetDiffCollapsedEmphasis(g.DiffCollapsedEmphasis)
+	if guides, ok := surface.(indentGuideSurface); ok {
+		guides.SetIndentGuides(g.IndentGuides)
+	}
 	if d, ok := surface.(diffSignsSurface); ok {
 		d.SetDiffSigns(g.DiffSigns)
 		d.SetDiffSignsColor(g.DiffSignsColor)
@@ -852,6 +859,22 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	if m, ok := surface.(scrollMarkSurface); ok {
 		m.SetDiffScrollMarks(g.DiffScrollbarGitMarks, g.LegacyScrollbarGlyphs)
 	}
+}
+
+func (g *EditorGroupWidget) SetIndentGuides(enabled bool) {
+	g.IndentGuides = enabled
+	if g.Editor != nil {
+		g.Editor.IndentGuides = enabled
+	}
+	for _, surface := range g.diffSurfaces() {
+		if guides, ok := surface.(indentGuideSurface); ok {
+			guides.SetIndentGuides(enabled)
+		}
+	}
+}
+
+type indentGuideSurface interface {
+	SetIndentGuides(bool)
 }
 
 func (g *EditorGroupWidget) SetFileIconMode(mode string) {
@@ -1492,6 +1515,7 @@ func (g *EditorGroupWidget) CloseTab() {
 	}
 	closing := g.tabs[g.active]
 	prev := closing.Content
+	g.rememberClosed(closing)
 	if g.OnFileClose != nil && closing.DetectedLanguage != "" && !closing.Virtual {
 		g.OnFileClose(closing.FilePath, closing.DetectedLanguage)
 	}
@@ -1514,6 +1538,53 @@ func (g *EditorGroupWidget) CloseTab() {
 	}
 }
 
+const maxClosedTabs = 20
+
+type closedTab struct {
+	path      string
+	line, col int
+}
+
+// rememberClosed records a closed file tab for ReopenClosedTab. Tabs without a
+// file on disk to reopen (plugin, virtual, diff and placeholder tabs) are skipped.
+func (g *EditorGroupWidget) rememberClosed(tab editorTab) {
+	if tab.FilePath == "" || tab.PluginKey != "" || tab.Virtual || tab.Placeholder || tab.Diff != nil {
+		return
+	}
+	c := closedTab{path: tab.FilePath}
+	if tab.Cur != nil {
+		c.line, c.col = tab.Cur.Line, tab.Cur.Col
+	}
+	g.closedTabs = slices.DeleteFunc(g.closedTabs, func(o closedTab) bool { return o.path == c.path })
+	g.closedTabs = append(g.closedTabs, c)
+	if len(g.closedTabs) > maxClosedTabs {
+		g.closedTabs = g.closedTabs[1:]
+	}
+}
+
+// ReopenClosedTab reopens the most recently closed file tab at its cursor
+// position. Files deleted since are skipped, since OpenFile would start a new
+// empty file in their place. It reports whether a tab was reopened.
+func (g *EditorGroupWidget) ReopenClosedTab() bool {
+	for len(g.closedTabs) > 0 {
+		c := g.closedTabs[len(g.closedTabs)-1]
+		g.closedTabs = g.closedTabs[:len(g.closedTabs)-1]
+		if info, err := os.Stat(c.path); err != nil || info.IsDir() {
+			continue
+		}
+		if g.OpenFile(c.path) != nil {
+			continue
+		}
+		if t := g.activeTab(); t != nil && t.Preview {
+			t.Preview = false
+			g.syncTabs()
+		}
+		g.GoToLineCol(c.line+1, c.col+1)
+		return true
+	}
+	return false
+}
+
 func (g *EditorGroupWidget) CloseOtherTabs() {
 	t := g.activeTab()
 	if t == nil || len(g.tabs) <= 1 {
@@ -1526,6 +1597,7 @@ func (g *EditorGroupWidget) CloseOtherTabs() {
 			kept = append(kept, tab)
 			continue
 		}
+		g.rememberClosed(tab)
 		g.notifyContentTabClose(tab)
 	}
 	g.tabs = kept
@@ -1554,6 +1626,7 @@ func (g *EditorGroupWidget) CloseOtherSaved() {
 			kept = append(kept, g.tabs[i])
 			continue
 		}
+		g.rememberClosed(g.tabs[i])
 		g.notifyContentTabClose(g.tabs[i])
 	}
 	g.tabs = kept
@@ -1581,6 +1654,7 @@ func (g *EditorGroupWidget) HasDirtyOtherTabs() bool {
 func (g *EditorGroupWidget) CloseAllTabs() {
 	prev := g.activeContent()
 	for i := g.pinnedCount; i < len(g.tabs); i++ {
+		g.rememberClosed(g.tabs[i])
 		g.notifyContentTabClose(g.tabs[i])
 	}
 	kept := slices.Clone(g.tabs[:g.pinnedCount])
@@ -1606,6 +1680,7 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 			kept = append(kept, g.tabs[i])
 			continue
 		}
+		g.rememberClosed(g.tabs[i])
 		g.notifyContentTabClose(g.tabs[i])
 	}
 	emptied := len(kept) == 0
@@ -1870,9 +1945,7 @@ func (g *EditorGroupWidget) movePathState(oldPath, newPath string) {
 			moved[np] = b
 		}
 	}
-	for p, b := range moved {
-		g.bookmarksByPath[p] = b
-	}
+	maps.Copy(g.bookmarksByPath, moved)
 }
 
 // RenamePath repoints open tabs after a path is renamed on disk. oldPath may be
@@ -1983,21 +2056,22 @@ func (g *EditorGroupWidget) RefreshHighlighters() {
 }
 
 func (g *EditorGroupWidget) wrapsTab(t *editorTab) bool {
-	enabled, _ := g.tabWordWrap(t)
+	enabled, _, _ := g.tabWordWrap(t)
 	return enabled
 }
 
-func (g *EditorGroupWidget) tabWordWrap(t *editorTab) (bool, int) {
+func (g *EditorGroupWidget) tabWordWrap(t *editorTab) (enabled bool, column int, words bool) {
 	language := ""
 	if t != nil && t.Buf != nil {
 		language = highlight.DetectLanguageID(t.FilePath, t.Buf.Lines)
 	}
-	s := config.EditorSettings{WordWrap: g.WordWrap, WordWrapColumn: g.WordWrapColumn, LanguageOverrides: g.LanguageOverrides}
-	enabled, column := s.ResolveWordWrap(language)
+	s := config.EditorSettings{WordWrap: g.WordWrap, WordWrapColumn: g.WordWrapColumn, WordWrapBreak: g.WordWrapBreak, LanguageOverrides: g.LanguageOverrides}
+	enabled, column = s.ResolveWordWrap(language)
+	words = s.ResolveWordWrapBreak(language) == config.WordWrapBreakWord
 	if !enabled {
-		return false, column
+		return false, column, words
 	}
-	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes, column
+	return g.WordWrapMaxBytes <= 0 || t == nil || t.Buf == nil || t.Buf.DiskSize() <= g.WordWrapMaxBytes, column, words
 }
 
 func (g *EditorGroupWidget) ApplyFileWordWrap() {
@@ -2005,11 +2079,11 @@ func (g *EditorGroupWidget) ApplyFileWordWrap() {
 	if g.Editor == nil || t == nil || t.Content != nil || t.Diff != nil {
 		return
 	}
-	enabled, column := g.tabWordWrap(t)
-	if g.Editor.WordWrap != enabled || g.Editor.WordWrapColumn != column {
+	enabled, column, words := g.tabWordWrap(t)
+	if g.Editor.WordWrap != enabled || g.Editor.WordWrapColumn != column || g.Editor.WrapWords != words {
 		g.Editor.wrapGoal = wrapGoal{}
 	}
-	g.Editor.WordWrap, g.Editor.WordWrapColumn = enabled, column
+	g.Editor.WordWrap, g.Editor.WordWrapColumn, g.Editor.WrapWords = enabled, column, words
 }
 
 // ActiveFileWordWrap reports whether the active file tab should wrap.
@@ -2356,10 +2430,7 @@ func (g *EditorGroupWidget) PlaceCursor(line, col int) bool {
 	g.Editor.Cursor.Col = 0
 	if col > 1 {
 		lineLen := len([]rune(g.Editor.Buf.Lines[bufLine]))
-		c := col - 1
-		if c > lineLen {
-			c = lineLen
-		}
+		c := min(col-1, lineLen)
 		g.Editor.Cursor.Col = c
 	}
 	return true
@@ -2380,10 +2451,7 @@ func (g *EditorGroupWidget) GoToLine(line int) {
 	}
 	if h > 0 {
 		margin := h / 3
-		top := bufLine - margin
-		if top < 0 {
-			top = 0
-		}
+		top := max(bufLine-margin, 0)
 		g.Editor.Viewport.TopLine = top
 	}
 	g.Editor.scrollViewport()
@@ -2398,10 +2466,7 @@ func (g *EditorGroupWidget) GoToLineCol(line, col int) {
 		return
 	}
 	lineLen := len([]rune(g.Editor.Buf.Lines[g.Editor.Cursor.Line]))
-	c := col - 1
-	if c > lineLen {
-		c = lineLen
-	}
+	c := min(col-1, lineLen)
 	g.Editor.Cursor.Col = c
 	g.Editor.scrollViewport()
 }
@@ -2606,10 +2671,7 @@ func (g *EditorGroupWidget) ReplaceMatch(match FindMatch, replacement string) {
 		return
 	}
 	runes := []rune(g.Editor.Buf.Lines[match.Line])
-	endCol := match.Col + match.Len
-	if endCol > len(runes) {
-		endCol = len(runes)
-	}
+	endCol := min(match.Col+match.Len, len(runes))
 	g.Editor.exec(&undo.DeleteSelectionCommand{
 		StartLine: match.Line, StartCol: match.Col,
 		EndLine: match.Line, EndCol: endCol,
@@ -2629,8 +2691,8 @@ func (g *EditorGroupWidget) ReplaceAll(query, replacement string, opts SearchOpt
 		return
 	}
 	matches, _ := FindInLines(g.Editor.Buf.Lines, query, opts)
-	for i := len(matches) - 1; i >= 0; i-- {
-		g.ReplaceMatch(matches[i], replacement)
+	for _, match := range slices.Backward(matches) {
+		g.ReplaceMatch(match, replacement)
 	}
 }
 
