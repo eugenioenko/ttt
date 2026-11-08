@@ -2,6 +2,9 @@ package git
 
 import (
 	"context"
+	"errors"
+	"os/exec"
+	"strings"
 
 	"github.com/eugenioenko/ttt/internal/scm"
 )
@@ -17,6 +20,10 @@ var _ scm.Staging = repository{}
 func (Provider) Discover(ctx context.Context, dir string) (scm.Repository, error) {
 	root, err := RepoRootWithErrorContext(ctx, dir)
 	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && (strings.Contains(string(exit.Stderr), "not a git repository") || strings.Contains(string(exit.Stderr), "must be run in a work tree")) {
+			return nil, errors.Join(scm.ErrNotRepository, err)
+		}
 		return nil, err
 	}
 	return repository{root: root}, nil

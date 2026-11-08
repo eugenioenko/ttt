@@ -97,10 +97,14 @@ The Changes panel passes typed changes without converting provider groups into
 Git status. Git resolves HEAD/index endpoints and supplies patch metadata for
 renames, modes, and binary changes inside its adapter.
 
+`scm.HistoryReader` supplies the paged history list with opaque entry identities
+and immutable snapshot anchors. Git validates its full object IDs internally;
+pagination, cancellation, and selection restoration remain panel-owned.
+
 Remaining provider integration boundaries before a second provider can drive
 the complete editor:
 
-- History/commit details still use Git endpoints and explicit Git model adapters.
+- Commit details still use Git endpoints and explicit Git model adapters.
   They need typed revision identities, history reads, and full-file expansion.
   Current Changes retains its staged/unstaged presentation projection; fully
   provider-defined sections, labels, and actions remain a presentation follow-up.

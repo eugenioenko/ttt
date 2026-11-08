@@ -90,7 +90,7 @@ func TestCommitHistoryIconsFollowIconMode(t *testing.T) {
 	cp.logCommits = make(map[string]commitFileRef)
 	cp.CommitLog.SetItems([]*widgets.TreeNode{
 		{ID: "branch", Icon: icons.Get(cp.icons, icons.Branch)},
-		cp.commitLogNode("/repo", git.LogEntry{Ref: "abc", Hash: "abc", Message: "msg"}),
+		cp.commitLogNode("/repo", scm.HistoryEntry{Ref: "abc", Label: "abc", Message: "msg"}),
 	})
 
 	cp.SetIcons(config.IconsNerdFont)
@@ -98,7 +98,7 @@ func TestCommitHistoryIconsFollowIconMode(t *testing.T) {
 	if items[0].Icon != "" || items[1].Icon != "" {
 		t.Errorf("nerd font icons = %q, %q", items[0].Icon, items[1].Icon)
 	}
-	if got := cp.commitLogNode("/repo", git.LogEntry{Ref: "def", Hash: "def"}).Icon; got != "" {
+	if got := cp.commitLogNode("/repo", scm.HistoryEntry{Ref: "def", Label: "def"}).Icon; got != "" {
 		t.Errorf("new commit row icon = %q, want nerd font glyph", got)
 	}
 
