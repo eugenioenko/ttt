@@ -143,3 +143,23 @@ func TestCurrentChangesWorkerUsesCapturedRepository(t *testing.T) {
 		t.Fatalf("worker did not use captured provider: %+v", result)
 	}
 }
+
+func TestCurrentChangesOnlyDeduplicatesExplicitConflictViews(t *testing.T) {
+	r := &currentChangesRepository{testSCMRepository: testSCMRepository{root: t.TempDir()}}
+	content := scm.ChangeDiff{Conflicted: true, ConflictSources: []string{"left", "right"}, Before: scm.FileContent{Content: "before\n", Exists: true}, After: scm.FileContent{Content: "resolved\n", Exists: true}}
+	r.read = func(context.Context, scm.Change) (scm.ChangeDiff, error) { return content, nil }
+	changes := []scm.Change{{Path: "file.txt", Group: "first"}, {Path: "file.txt", Group: "second"}}
+	source := repositorySource{root: r.root, repository: r}
+	read := func() *CurrentChangesResult {
+		return readCurrentChanges(context.Background(), source, "revision", "tab", 1, 1, changes)
+	}
+	result := read()
+	if result.Err != nil || len(result.Files) != 2 {
+		t.Fatalf("distinct provider groups collapsed without opt-in: %+v", result)
+	}
+	content.ConflictID = "shared resolution"
+	result = read()
+	if result.Err != nil || len(result.Files) != 1 || !strings.Contains(result.Summary, "1 conflict") {
+		t.Fatalf("shared resolution was not projected once: %+v", result)
+	}
+}

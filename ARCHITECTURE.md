@@ -87,8 +87,10 @@ Repository objects are captured on the main thread before background reads,
 which keep the existing cancellation and stale-result guards. Single-file
 read-only diffs use `scm.ChangeReader` through the cancellable diff-open task.
 Aggregate Current Changes also consumes typed changes through this capability;
-Git conflict-side selection, porcelain normalization, and verified working-file
-reads stay in the Git service. Provider groups and opaque conflict-side identities
+Git conflict-side selection, conflict detail, and verified working-file reads
+stay in the Git service. A provider can identify a shared conflict resolution
+view for aggregate deduplication without removing sidebar action groups.
+Provider groups and opaque conflict-side identities
 participate in aggregate refresh and per-file view identity. The existing
 `RepositoryState` owner retains cancellation, coalescing, and stale-result guards.
 The Changes panel passes typed changes without converting provider groups into

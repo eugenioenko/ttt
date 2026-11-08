@@ -60,7 +60,7 @@ func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workin
 			return workingTreeFile{}, &workingTreePathError{Path: filepath.Join(root, path), Kind: workingTreePathSymlinkComponent}
 		}
 		if info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 {
-			return workingTreeFile{}, &workingTreePathError{Path: filepath.Join(root, path), Kind: workingTreePathDirectory}
+			return workingTreeFile{Kind: workingTreeFileMissing}, nil
 		}
 	}
 

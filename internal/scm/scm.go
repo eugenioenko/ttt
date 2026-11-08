@@ -56,6 +56,9 @@ type ChangeDiff struct {
 	Patch          string
 	Conflicted     bool
 	ConflictDetail string
+	// ConflictID opts into one aggregate resolution view for this path and ID,
+	// even when the conflict is reported in multiple action groups.
+	ConflictID string
 	// ConflictSources are opaque identities of the available conflict sides.
 	// Consumers use them for invalidation, never to select provider revisions.
 	ConflictSources []string

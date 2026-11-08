@@ -30,6 +30,12 @@ func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workin
 			if errors.Is(openErr, unix.ENOENT) {
 				return workingTreeFile{Kind: workingTreeFileMissing}, nil
 			}
+			if errors.Is(openErr, unix.ENOTDIR) {
+				var st unix.Stat_t
+				if statErr := unix.Fstatat(dirfd, part, &st, unix.AT_SYMLINK_NOFOLLOW); statErr == nil && st.Mode&unix.S_IFMT == unix.S_IFREG {
+					return workingTreeFile{Kind: workingTreeFileMissing}, nil
+				}
+			}
 			return workingTreeFile{}, classifyWorkingTreeOpenError(filepath.Join(root, path), workingTreePathSymlinkComponent, openErr)
 		}
 		if closeErr := unix.Close(dirfd); closeErr != nil {

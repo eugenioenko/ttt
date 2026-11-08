@@ -28,6 +28,7 @@ type CommitDetailFile struct {
 	Boundary        CommitDetailBoundary
 	Group           string
 	ConflictSources []string
+	ConflictID      string
 	// ConflictCode marks a two-way resolution view between the preferred
 	// available conflict stage and the worktree, not a full three-way merge view.
 	ConflictCode string
@@ -483,7 +484,7 @@ func (d *CommitDetailWidget) ApplyFileContextContent(fileIndex int, key string, 
 func CommitDetailContextKey(file CommitDetailFile) string { return commitDetailFileKey(file) }
 
 func commitDetailFileKey(file CommitDetailFile) string {
-	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + file.ConflictCode + "\x00" + strconv.Quote(file.Group) + "\x00" + fmt.Sprintf("%q", file.ConflictSources)
+	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + file.ConflictCode + "\x00" + strconv.Quote(file.Group) + "\x00" + fmt.Sprintf("%q", file.ConflictSources) + "\x00" + strconv.Quote(file.ConflictID)
 }
 
 func (d *CommitDetailWidget) IsWrapped() bool { return d.wrapMode == DiffWrapOn }

@@ -67,9 +67,6 @@ func (r repository) ReadChange(ctx context.Context, change scm.Change) (scm.Chan
 			}
 		}
 		result.After = index
-	} else if change.Kind == scm.Deleted {
-		// A deleted endpoint can have an ancestor replaced by a file.
-		result.Before = index
 	} else {
 		result.Before = index
 		working, readErr := readWorkingTreeFileContext(ctx, r.root, change.Path)
@@ -82,7 +79,7 @@ func (r repository) ReadChange(ctx context.Context, change scm.Change) (scm.Chan
 				return result, readErr
 			}
 		} else {
-			if !working.Exists {
+			if !working.Exists && change.Kind != scm.Deleted {
 				return result, fmt.Errorf("working tree path disappeared: %q", change.Path)
 			}
 			result.After = scm.FileContent{Content: string(working.Content), Exists: working.Exists}
@@ -129,7 +126,7 @@ func readChangeContent(mode, object string, read func() (string, error)) (scm.Fi
 }
 
 func (r repository) readConflictChange(ctx context.Context, change scm.Change, entries []IndexEntry) (scm.ChangeDiff, error) {
-	result := scm.ChangeDiff{Conflicted: true, ConflictDetail: change.Detail}
+	result := scm.ChangeDiff{Conflicted: true, ConflictID: "index", ConflictDetail: conflictCodeFromEntries(entries)}
 	for _, entry := range entries {
 		result.ConflictSources = append(result.ConflictSources, strconv.Itoa(entry.Stage))
 	}

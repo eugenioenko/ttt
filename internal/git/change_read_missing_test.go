@@ -80,3 +80,20 @@ func TestReadChangeDeletedChildOfReplacedDirectory(t *testing.T) {
 		t.Fatalf("deleted child: %+v err=%v", got, err)
 	}
 }
+
+func TestReadChangeStaleDeletionReadsRestoredContent(t *testing.T) {
+	dir := setupTestRepo(t)
+	path := "file.txt"
+	if err := os.WriteFile(filepath.Join(dir, path), []byte("before\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, dir, "add", ".")
+	gitRun(t, dir, "commit", "-qm", "initial")
+	if err := os.WriteFile(filepath.Join(dir, path), []byte("restored\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := (repository{root: dir}).ReadChange(context.Background(), scm.Change{Path: path, Kind: scm.Deleted, Group: scm.WorkingTree})
+	if err != nil || got.After.Content != "restored\n" || !got.After.Exists {
+		t.Fatalf("restored endpoint omitted: %+v err=%v", got, err)
+	}
+}

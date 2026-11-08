@@ -130,6 +130,7 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 		result.Err = errors.ErrUnsupported
 		return result
 	}
+	seenConflicts := make(map[string]struct{})
 	for _, change := range changes {
 		if err := ctx.Err(); err != nil {
 			result.Err = err
@@ -144,6 +145,13 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 			result.Err = fmt.Errorf("read change for %q: %w", change.Path, err)
 			result.Canceled = errors.Is(err, context.Canceled)
 			return result
+		}
+		if content.Conflicted && content.ConflictID != "" {
+			key := fmt.Sprintf("%q/%q", change.Path, content.ConflictID)
+			if _, seen := seenConflicts[key]; seen {
+				continue
+			}
+			seenConflicts[key] = struct{}{}
 		}
 		paths[change.Path] = struct{}{}
 		stage := ui.CommitDetailStageUnstaged
@@ -210,6 +218,7 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 			writeFingerprint([]byte(side))
 		}
 		writeFingerprint([]byte(content.ConflictDetail))
+		writeFingerprint([]byte(content.ConflictID))
 		writeFingerprint([]byte(fmt.Sprintf("%t/%t", content.Before.Exists, content.After.Exists)))
 		writeFingerprint(oldContent)
 		writeFingerprint(newContent)
@@ -217,7 +226,7 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 
 		file := ui.CommitDetailFile{
 			Status: presentedStatus, Path: change.Path, OldPath: presentedOldPath, Stage: stage, Boundary: boundary,
-			Group: string(change.Group), ConflictSources: append([]string(nil), content.ConflictSources...), ConflictCode: content.ConflictDetail,
+			Group: string(change.Group), ConflictID: content.ConflictID, ConflictSources: append([]string(nil), content.ConflictSources...), ConflictCode: content.ConflictDetail,
 		}
 		switch {
 		case isBinaryContent(oldContent) || isBinaryContent(newContent):
