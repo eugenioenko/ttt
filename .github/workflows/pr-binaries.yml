@@ -1,0 +1,122 @@
+name: PR binaries
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+    # Keep in sync with pr-binaries-prepare.yml.
+    paths-ignore:
+      - "docs-web/**"
+      - README.md
+      - AGENTS.md
+      - ARCHITECTURE.md
+      - LICENSE
+      - "workflows/*.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-binaries-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25"
+  RETENTION_DAYS: 14
+
+jobs:
+  build:
+    name: Build PR binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build
+        run: |
+          set -euo pipefail
+
+          for target in linux-amd64 darwin-amd64 darwin-arm64 windows-amd64; do
+            os="${target%-*}"
+            arch="${target#*-}"
+            ext=""
+            [[ "$os" == "windows" ]] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags="-s -w -X main.version=pr-${PR_NUMBER}-${HEAD_SHA:0:12}" \
+              -o "dist/$target/ttt$ext" ./cmd/ttt
+          done
+
+      - name: Upload Linux x64
+        id: linux-amd64
+        uses: actions/upload-artifact@v7
+        with:
+          name: ttt-pr-${{ github.event.pull_request.number }}-linux-amd64
+          path: dist/linux-amd64/ttt
+          if-no-files-found: error
+          overwrite: true
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: Upload macOS Intel
+        id: darwin-amd64
+        uses: actions/upload-artifact@v7
+        with:
+          name: ttt-pr-${{ github.event.pull_request.number }}-darwin-amd64
+          path: dist/darwin-amd64/ttt
+          if-no-files-found: error
+          overwrite: true
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: Upload macOS Apple Silicon
+        id: darwin-arm64
+        uses: actions/upload-artifact@v7
+        with:
+          name: ttt-pr-${{ github.event.pull_request.number }}-darwin-arm64
+          path: dist/darwin-arm64/ttt
+          if-no-files-found: error
+          overwrite: true
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: Upload Windows x64
+        id: windows-amd64
+        uses: actions/upload-artifact@v7
+        with:
+          name: ttt-pr-${{ github.event.pull_request.number }}-windows-amd64
+          path: dist/windows-amd64/ttt.exe
+          if-no-files-found: error
+          overwrite: true
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: Write download links to the run summary
+        env:
+          LINUX_AMD64_URL: ${{ steps.linux-amd64.outputs.artifact-url }}
+          DARWIN_AMD64_URL: ${{ steps.darwin-amd64.outputs.artifact-url }}
+          DARWIN_ARM64_URL: ${{ steps.darwin-arm64.outputs.artifact-url }}
+          WINDOWS_AMD64_URL: ${{ steps.windows-amd64.outputs.artifact-url }}
+        run: |
+          {
+            echo "## Binaries"
+            echo
+            echo "Built from \`${HEAD_SHA:0:12}\`. Links expire after $RETENTION_DAYS days."
+            echo
+            echo "| Platform | Download |"
+            echo "| --- | --- |"
+            echo "| Linux x64 | [ttt-pr-$PR_NUMBER-linux-amd64]($LINUX_AMD64_URL) |"
+            echo "| macOS Apple Silicon | [ttt-pr-$PR_NUMBER-darwin-arm64]($DARWIN_ARM64_URL) |"
+            echo "| macOS Intel | [ttt-pr-$PR_NUMBER-darwin-amd64]($DARWIN_AMD64_URL) |"
+            echo "| Windows x64 | [ttt-pr-$PR_NUMBER-windows-amd64]($WINDOWS_AMD64_URL) |"
+            echo
+            echo "Downloads need a GitHub sign-in and arrive as zips. On Linux and macOS, run \`chmod +x ttt\` after unzipping. These binaries run this pull request's code, so only run them if you trust it."
+          } >> "$GITHUB_STEP_SUMMARY"
