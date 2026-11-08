@@ -100,6 +100,9 @@ func TestPlaceNodesKeepsPlacesAndFavorites(t *testing.T) {
 	places := []workspace.Place{{Name: "Home", Path: "/home/u"}, {Name: "Documents", Path: "/home/u/Documents"}}
 	nodeFields := func(nodes []*widgets.TreeNode) (labels, ids []string) {
 		for _, n := range nodes {
+			if n.Label == "Places" && (!n.Heading || !n.Muted) {
+				t.Errorf("Places must be a muted heading, got %+v", n)
+			}
 			labels = append(labels, n.Label)
 			ids = append(ids, n.ID)
 		}
