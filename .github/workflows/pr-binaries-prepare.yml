@@ -1,0 +1,66 @@
+name: PR binaries prepare
+
+# Fork pull_request runs get a read-only token, so this workflow uses pull_request_target.
+# It holds a write token and must never check out or run pull request code.
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+    # Keep in sync with pr-binaries.yml.
+    paths-ignore:
+      - "docs-web/**"
+      - README.md
+      - AGENTS.md
+      - ARCHITECTURE.md
+      - LICENSE
+      - "workflows/*.md"
+
+permissions:
+  actions: write
+  pull-requests: write
+
+concurrency:
+  group: pr-binaries-prepare-${{ github.event.pull_request.number }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Post or reset the binaries comment
+        run: |
+          set -euo pipefail
+
+          {
+            echo "<!-- ttt-pr-binaries -->"
+            echo "## Binaries"
+            echo
+            echo "Waiting for the build of \`${HEAD_SHA:0:12}\`. Download links appear here when it finishes."
+          } > "$RUNNER_TEMP/comment.md"
+
+          ids="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- ttt-pr-binaries -->"))) | .id')"
+          id="${ids%%$'\n'*}"
+          if [[ -n "$id" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          fi
+
+      - name: Delete binaries from older commits
+        run: |
+          set -euo pipefail
+
+          # Keep in sync with the targets in pr-binaries.yml.
+          for target in linux-amd64 darwin-amd64 darwin-arm64 windows-amd64; do
+            ids="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=ttt-pr-$PR_NUMBER-$target&per_page=100" \
+              --jq '.artifacts[] | select(.workflow_run.head_sha != env.HEAD_SHA) | .id')"
+            for id in $ids; do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+            done
+          done
