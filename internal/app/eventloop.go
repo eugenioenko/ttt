@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"log/slog"
 	"time"
 
@@ -56,9 +57,9 @@ func RunEventLoop(
 		filePath := app.EditorGroup.ActiveFilePath()
 		cursorCount := app.EditorGroup.MultiCursorCount()
 
-		posText := fmt.Sprintf("Ln %d, Col %d", line+1, col+1)
+		posText := i18n.Format("status.lnCol", i18n.Args{"line": line + 1, "column": col + 1})
 		if cursorCount > 1 {
-			posText += fmt.Sprintf(" (%d cursors)", cursorCount)
+			posText += i18n.Format("status.cursors", i18n.Args{"cursorCount": cursorCount})
 		}
 		app.Status.SetSegment(view.StatusSegment{ID: "position", Side: "right", Priority: 100, Text: posText})
 
@@ -86,9 +87,9 @@ func RunEventLoop(
 			tabSize = app.Settings.Editor.TabSize
 			useTabs = !app.Settings.Editor.InsertSpaces
 		}
-		indentLabel := "Spaces"
+		indentLabel := i18n.Text("status.spaces")
 		if useTabs {
-			indentLabel = "Tab Size"
+			indentLabel = i18n.Text("status.tabSize")
 		}
 		app.Status.SetSegment(view.StatusSegment{ID: "indent", Side: "right", Priority: 200, Text: fmt.Sprintf("%s: %d", indentLabel, tabSize)})
 
@@ -309,7 +310,7 @@ func RunEventLoop(
 					case *tcell.EventMouse:
 						handleMouse(event)
 					default:
-						execErr = failedExec("unsupported input event %T", v.Event)
+						execErr = failedExec(i18n.Text("status.unsupportedInputEventT"), v.Event)
 					}
 					execRequest = v.Lifecycle
 				}
@@ -357,7 +358,7 @@ func RunEventLoop(
 				if len(v.Locations) > 0 {
 					app.ShowReferences(v.Locations)
 				} else {
-					app.StatusNotify("No references found")
+					app.StatusNotify(i18n.Text("status.noReferencesFound"))
 				}
 			case *FormattingResult:
 				app.applyFormattingResult(v)
@@ -413,7 +414,7 @@ func RunEventLoop(
 				app.Search.ApplyBatch(v)
 			case *DiffContentResult:
 				if v.Err != nil {
-					app.StatusError("Failed to fetch file content: " + v.Err.Error())
+					app.StatusError(i18n.Format("status.failedToFetchFileContent", i18n.Args{"error": v.Err.Error()}))
 					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
 						dv.FailLoading()
 					}
@@ -436,7 +437,7 @@ func RunEventLoop(
 				app.handleRemoteRegistryResult(v)
 			case *PrFetchResult:
 				if v.Err != nil {
-					app.StatusError("PR fetch failed: " + v.Err.Error())
+					app.StatusError(i18n.Format("status.prFetchFailed", i18n.Args{"error": v.Err.Error()}))
 				} else {
 					var files []git.FileStatus
 					for _, f := range v.Info.Files {
@@ -445,7 +446,7 @@ func RunEventLoop(
 							Path:   f.Path,
 						})
 					}
-					groupName := fmt.Sprintf("PR #%d: %s", v.Info.Number, v.Info.Title)
+					groupName := i18n.Format("status.pr", i18n.Args{"number": v.Info.Number, "infoTitle": v.Info.Title})
 					app.Changes.AddPRGroup(groupName, v.URL, v.Info.Owner, v.Info.Repo, v.Info.BaseSHA, v.Info.HeadSHA, v.Info.Body, files, v.Diffs)
 					app.Sidebar.SetActivePanel("changes")
 					if !app.Sidebar.Visible {
@@ -453,7 +454,7 @@ func RunEventLoop(
 					}
 					app.Root.SetFocus(app.Changes.Adapter)
 					app.Sidebar.SetPanelDirty("changes", app.Changes.TotalChanges() > 0)
-					app.StatusNotify(fmt.Sprintf("Opened PR #%d: %s (%d files)", v.Info.Number, v.Info.Title, len(v.Info.Files)))
+					app.StatusNotify(i18n.Format("status.openedPRFiles", i18n.Args{"number": v.Info.Number, "infoTitle": v.Info.Title, "infoFilesCount": len(v.Info.Files)}))
 				}
 			}
 			if !skipRedraw {

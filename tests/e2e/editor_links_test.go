@@ -100,13 +100,14 @@ func TestEditorFileLinksInSecondaryRepositoryDiff(t *testing.T) {
 			switch kind {
 			case "staged":
 				runHistoryGit(t, repo, "add", ".")
-				h.app.OpenChangeDiff(repo, status, true, true)
+				status.Staged = true
+				h.app.OpenChangeDiff(repo, git.ToChange(status), true)
 			case "deleted":
 				if err := os.Remove(source); err != nil {
 					t.Fatal(err)
 				}
 				status.Status = "D"
-				h.app.OpenChangeDiff(repo, status, false, true)
+				h.app.OpenChangeDiff(repo, git.ToChange(status), true)
 			case "commit":
 				runHistoryGit(t, repo, "add", ".")
 				runHistoryGit(t, repo, "commit", "-qm", "change")

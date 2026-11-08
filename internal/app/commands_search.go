@@ -7,7 +7,9 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func (a *App) selectedSearchText() string {
@@ -21,8 +23,8 @@ func (a *App) selectedSearchText() string {
 	return text
 }
 
-func (a *App) prefillSearchInput(input *ui.InputWidget) {
-	if text := a.selectedSearchText(); text != "" && text != input.Text {
+func (a *App) prefillSearchInput(input *widgets.InputWidget) {
+	if text := a.selectedSearchText(); text != "" && text != input.Text() {
 		input.SetText(text)
 	}
 }
@@ -70,7 +72,7 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
 			a.EditorGroup.ClearSearch()
-			a.StatusWarn("Invalid regex: " + err.Error())
+			a.StatusWarn(i18n.Format("status.invalidRegex", i18n.Args{"error": err.Error()}))
 			return nil
 		}
 		a.EditorGroup.SetFindSearch(query, matches, opts)
@@ -136,7 +138,7 @@ func (a *App) findBar() findBar {
 	return bar
 }
 
-func (a *App) prefillReplaceInput(input *ui.InputWidget) {
+func (a *App) prefillReplaceInput(input *widgets.InputWidget) {
 	if !a.EditorGroup.IsEditorActive() || a.EditorGroup.IsActiveReadOnly() {
 		return
 	}
@@ -169,7 +171,7 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
 			a.EditorGroup.ClearSearch()
-			a.StatusWarn("Invalid regex: " + err.Error())
+			a.StatusWarn(i18n.Format("status.invalidRegex", i18n.Args{"error": err.Error()}))
 			return nil
 		}
 		a.EditorGroup.SetSearch(query, opts, matches)
@@ -222,8 +224,7 @@ func (a *App) linkFindReplaceBars(find *ui.FindBarWidget, replace *ui.ReplaceBar
 
 func (a *App) ClearGlobalSearch() {
 	a.Search.CancelReplacement()
-	a.Search.Input.Text = ""
-	a.Search.Input.CursorPos = 0
+	a.Search.Input.SetText("")
 	a.Search.Groups = nil
 	a.Search.FlatList = nil
 	a.Search.Selected = 0
@@ -235,49 +236,49 @@ func registerSearchCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "search.find", Title: "Find",
+		ID: "search.find", Title: i18n.Text("general.find"),
 		Keywords: []string{"search", "find", "locate"},
 		Handler:  app.OpenFind,
 	})
 
 	reg.Register(command.Command{
-		ID: "search.findNext", Title: "Find Next",
+		ID: "search.findNext", Title: i18n.Text("command.findNext"),
 		Keywords: []string{"search", "find"},
 		Handler:  func() { app.refreshFind(); app.EditorGroup.FindNext() },
 	})
 
 	reg.Register(command.Command{
-		ID: "search.findPrev", Title: "Find Previous",
+		ID: "search.findPrev", Title: i18n.Text("command.findPrevious"),
 		Keywords: []string{"search", "find"},
 		Handler:  func() { app.refreshFind(); app.EditorGroup.FindPrev() },
 	})
 
 	reg.Register(command.Command{
-		ID: "search.clearFind", Title: "Clear Find Highlights",
+		ID: "search.clearFind", Title: i18n.Text("command.clearFindHighlights"),
 		Keywords: []string{"search", "find"},
 		Handler:  func() { app.EditorGroup.ClearSearch() },
 	})
 
 	reg.Register(command.Command{
-		ID: "search.replace", Title: "Find and Replace",
+		ID: "search.replace", Title: i18n.Text("command.findAndReplace"),
 		Keywords: []string{"search", "find", "replace", "substitute"},
 		Handler:  app.OpenFindReplace,
 	})
 
 	reg.Register(command.Command{
-		ID: "search.expandAll", Title: "Expand All Search Results",
+		ID: "search.expandAll", Title: i18n.Text("command.expandAllSearchResults"),
 		Keywords: []string{"search"},
 		Handler:  func() { app.Search.ExpandAll() },
 	})
 
 	reg.Register(command.Command{
-		ID: "search.collapseAll", Title: "Collapse All Search Results",
+		ID: "search.collapseAll", Title: i18n.Text("command.collapseAllSearchResults"),
 		Keywords: []string{"search"},
 		Handler:  func() { app.Search.CollapseAll() },
 	})
 
 	reg.Register(command.Command{
-		ID: "search.clear", Title: "Clear Search Results",
+		ID: "search.clear", Title: i18n.Text("command.clearSearchResults"),
 		Keywords: []string{"search"},
 		Handler:  app.ClearGlobalSearch,
 	})

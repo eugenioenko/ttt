@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/eugenioenko/xterm-go"
@@ -162,7 +163,7 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 	r := tp.GetRect()
 
 	if len(tp.widgets) == 0 {
-		msg := "No terminals. Press + to create one."
+		msg := i18n.Text("terminalPanel.noTerminalsPressToCreateOne")
 		x := 1
 		for _, ch := range msg {
 			if x >= w {

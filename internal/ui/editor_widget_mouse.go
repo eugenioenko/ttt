@@ -85,8 +85,13 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		if isAlt && !e.mouseDown {
 			e.ensureMulti()
 			e.syncToMulti()
-			e.Multi.Add(line, col)
-			e.syncFromMulti()
+			e.Multi.Toggle(line, col)
+			if !e.Multi.IsMulti() {
+				e.syncFromMulti()
+				e.Multi = nil
+			} else {
+				e.syncFromMulti()
+			}
 			e.scrollViewport()
 			return EventCaptured
 		}

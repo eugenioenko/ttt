@@ -56,7 +56,7 @@ func TestBracketedPasteIntoFindBar(t *testing.T) {
 	bar := findBarWidget(t, h)
 
 	pasteText(h, pasteKeys("https://github.com/eugenioenko/ttt"))
-	if got := bar.Input.Text; got != "https://github.com/eugenioenko/ttt" {
+	if got := bar.Input.Text(); got != "https://github.com/eugenioenko/ttt" {
 		t.Fatalf("find input = %q", got)
 	}
 	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
@@ -65,7 +65,7 @@ func TestBracketedPasteIntoFindBar(t *testing.T) {
 	clipboard.DisableSystem()
 	clipboard.Set("-clipboard")
 	h.exec("editor.paste")
-	if got := bar.Input.Text; got != "https://github.com/eugenioenko/ttt-clipboard" {
+	if got := bar.Input.Text(); got != "https://github.com/eugenioenko/ttt-clipboard" {
 		t.Fatalf("find input after clipboard command = %q", got)
 	}
 	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
@@ -157,20 +157,55 @@ func TestBracketedPasteIntoReplaceBar(t *testing.T) {
 	}
 
 	pasteText(h, pasteKeys("old"))
-	if got := bar.SearchInput.Text; got != "old" {
+	if got := bar.SearchInput.Text(); got != "old" {
 		t.Fatalf("search input = %q", got)
 	}
 	h.pressKey(tcell.KeyTab, tcell.ModNone)
 	pasteText(h, pasteKeys("new"))
-	if got := bar.ReplaceInput.Text; got != "new" {
+	if got := bar.ReplaceInput.Text(); got != "new" {
 		t.Fatalf("replace input = %q", got)
 	}
 	clipboard.Set("er")
 	h.exec("editor.paste")
-	if got := bar.ReplaceInput.Text; got != "newer" {
+	if got := bar.ReplaceInput.Text(); got != "newer" {
 		t.Fatalf("replace input after clipboard command = %q", got)
 	}
 	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
 		t.Fatalf("paste leaked into editor: %q", got)
+	}
+}
+
+func TestBracketedPasteIntoSelectDialog(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+	h.exec("file.new")
+	h.exec("file.quickOpen")
+	dialog, ok := h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+	if !ok {
+		t.Fatalf("expected SelectDialogWidget, got %T", h.app.Root.TopOverlayWidget())
+	}
+
+	pasteText(h, pasteKeys("main.go"))
+	if got := dialog.Input.Text(); got != "main.go" {
+		t.Fatalf("dialog input = %q, want %q", got, "main.go")
+	}
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
+		t.Fatalf("paste leaked into editor: %q", got)
+	}
+
+	clipboard.DisableSystem()
+	clipboard.Set(".bak")
+	h.exec("editor.paste")
+	if got := dialog.Input.Text(); got != "main.go.bak" {
+		t.Fatalf("dialog input after clipboard command = %q, want %q", got, "main.go.bak")
+	}
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "" {
+		t.Fatalf("clipboard command leaked into editor: %q", got)
+	}
+
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	h.app.PasteText("XYZ")
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "XYZ" {
+		t.Fatalf("editor paste after dismiss = %q, want %q", got, "XYZ")
 	}
 }

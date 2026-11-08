@@ -24,6 +24,8 @@ const (
 	Submenu      Name = "submenu"
 	ArrowLeft    Name = "arrow-left"
 	ArrowRight   Name = "arrow-right"
+	ArrowUp      Name = "arrow-up"
+	ArrowDown    Name = "arrow-down"
 	Close        Name = "close"
 	Dirty        Name = "dirty"
 	More         Name = "more"
@@ -32,6 +34,8 @@ const (
 	Discard      Name = "discard"
 	Replace      Name = "replace"
 	ReplaceAll   Name = "replace-all"
+	Reload       Name = "reload"
+	Ellipsis     Name = "ellipsis"
 
 	Function  Name = "function"
 	Class     Name = "class"
@@ -77,6 +81,8 @@ var table = map[Name]glyphs{
 	Submenu:      {Plain: string(PlainChevronRight), Nerd: ""},
 	ArrowLeft:    {Plain: string(PlainChevronLeft), Nerd: ""},
 	ArrowRight:   {Plain: string(PlainChevronRight), Nerd: ""},
+	ArrowUp:      {Plain: "↑", Nerd: "↑"},
+	ArrowDown:    {Plain: "↓", Nerd: "↓"},
 	Close:        {Plain: "✕", Nerd: "✕"},
 	Dirty:        {Plain: "●", Nerd: "●"},
 	More:         {Plain: "⋮", Nerd: "⋮"},
@@ -85,6 +91,8 @@ var table = map[Name]glyphs{
 	Discard:      {Plain: "✕", Nerd: "✕"},
 	Replace:      {Plain: "⟳", Nerd: ""},
 	ReplaceAll:   {Plain: "⟳", Nerd: "\ueb3c"},
+	Reload:       {Plain: "↻", Nerd: "↻"},
+	Ellipsis:     {Plain: "⋯", Nerd: "⋯"},
 
 	Function:  {Plain: "ƒ", Nerd: ""},
 	Class:     {Plain: "◆", Nerd: ""},

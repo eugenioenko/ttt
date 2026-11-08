@@ -11,7 +11,9 @@ import (
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -93,36 +95,11 @@ type CommitDetailResult struct {
 	Canceled              bool
 }
 
-func readChangesGroups(dirs []string) []changesGroup {
-	dirs = expandNonGitDirs(dirs)
-	var groups []changesGroup
-	seen := make(map[string]bool)
-	for _, dir := range dirs {
-		if root := git.RepoRoot(dir); root != "" {
-			dir = root
-		}
-		if seen[dir] {
-			continue
-		}
-		seen[dir] = true
-		files, err := git.StatusFiles(dir)
-		if err != nil {
-			files = nil
-		}
-		var staged, unstaged []git.FileStatus
-		for _, f := range files {
-			if f.Staged {
-				staged = append(staged, f)
-			} else {
-				unstaged = append(unstaged, f)
-			}
-		}
-		groups = append(groups, changesGroup{
-			Dir:      dir,
-			Name:     filepath.Base(dir),
-			Staged:   staged,
-			Unstaged: unstaged,
-		})
+func readChangesGroups(provider scm.Provider, dirs []string) []changesGroup {
+	entries := scanRepositoryStatus(context.Background(), provider, dirs)
+	groups := make([]changesGroup, 0, len(entries))
+	for _, entry := range entries {
+		groups = append(groups, entry.Group)
 	}
 	return groups
 }
@@ -200,10 +177,10 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		cp.logPagePending = false
 		cp.lastLogDir = ""
 		if cp.logDir != r.Dir {
-			cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:error", Label: "Could not read history", Muted: true}})
+			cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:error", Label: i18n.Text("changes.couldNotReadHistory"), Muted: true}})
 		}
 		if cp.OnError != nil {
-			cp.OnError("Could not refresh commit history: " + r.Err.Error())
+			cp.OnError(i18n.Format("changes.couldNotRefreshCommitHistory", i18n.Args{"error": r.Err.Error()}))
 		}
 		if cp.OnHistoryResult != nil {
 			cp.OnHistoryResult(r.Err)
@@ -212,9 +189,9 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 	}
 	name := filepath.Base(r.Dir)
 	if r.Branch != "" {
-		cp.Input.Config.Placeholder = fmt.Sprintf("Commit to %s (%s)", name, r.Branch)
+		cp.Input.Config.Placeholder = i18n.Format("changes.commitToBranch", i18n.Args{"name": name, "branch": r.Branch})
 	} else {
-		cp.Input.Config.Placeholder = fmt.Sprintf("Commit to %s", name)
+		cp.Input.Config.Placeholder = i18n.Format("changes.commitToRepository", i18n.Args{"name": name})
 	}
 
 	// Record what was open before the rebuild, so a Refresh triggered by
@@ -248,7 +225,7 @@ func (cp *ChangesPanel) ApplyCommitLog(r *CommitLogResult) {
 		nodes = append(nodes, historyLoadOlderNode(false, false))
 	}
 	if len(r.Entries) == 0 {
-		nodes = append(nodes, &widgets.TreeNode{ID: "history:empty", Label: "No commits", Muted: true})
+		nodes = append(nodes, &widgets.TreeNode{ID: "history:empty", Label: i18n.Text("changes.noCommits"), Muted: true})
 	}
 	cp.CommitLog.SetItems(nodes)
 	if cp.OnHistoryResult != nil {
@@ -295,11 +272,11 @@ func (cp *ChangesPanel) commitLogNode(dir string, entry git.LogEntry) *widgets.T
 }
 
 func historyLoadOlderNode(loading, retry bool) *widgets.TreeNode {
-	label := "Load older commits…"
+	label := i18n.Text("changes.loadOlderCommits")
 	if loading {
-		label = "Loading older commits…"
+		label = i18n.Text("changes.loadingOlderCommits")
 	} else if retry {
-		label = "Retry loading older commits…"
+		label = i18n.Text("changes.retryLoadingOlderCommits")
 	}
 	return &widgets.TreeNode{ID: historyLoadOlderID, Label: label, Icon: "↓", Muted: true}
 }
@@ -316,7 +293,7 @@ func (cp *ChangesPanel) applyCommitLogPage(r *CommitLogResult) {
 	if r.Err != nil {
 		cp.replaceHistoryLoadNode(false, true)
 		if cp.OnError != nil {
-			cp.OnError("Could not load older commits: " + r.Err.Error())
+			cp.OnError(i18n.Format("changes.couldNotLoadOlderCommits", i18n.Args{"error": r.Err.Error()}))
 		}
 		return
 	}
@@ -498,7 +475,7 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 			result.Canceled = true
 			return result
 		}
-		result.Err = fmt.Sprintf("Could not read commit %s", short)
+		result.Err = i18n.Format("changes.readCommitFailed", i18n.Args{"short": short})
 		return result
 	}
 	result.Message = message
@@ -517,7 +494,7 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 			result.Canceled = true
 			return result
 		}
-		result.Err = fmt.Sprintf("Could not read files for commit %s", short)
+		result.Err = i18n.Format("changes.couldNotReadFilesForCommit", i18n.Args{"short": short})
 		return result
 	}
 	result.Files = make([]ui.CommitDetailFile, 0, len(files))
@@ -529,7 +506,7 @@ func readCommitDetail(ctx context.Context, incarnation uint64, dir, ref, short s
 				result.Canceled = true
 				return result
 			}
-			detail.Error = fmt.Sprintf("Could not read diff for %s", file.Path)
+			detail.Error = i18n.Format("changes.couldNotReadDiffFor", i18n.Args{"path": file.Path})
 		} else {
 			detail.Diff = diff.Parse(diffText)
 		}
@@ -558,7 +535,7 @@ func (a *App) OpenCommitDetail(dir, ref, short string) {
 	}
 	a.wireCommitDetailContext(tabID, detail, request)
 	a.EditorGroup.ApplyDiffDefaults(detail)
-	a.EditorGroup.OpenPluginTab(tabID, "Commit "+short, detail)
+	a.EditorGroup.OpenPluginTab(tabID, i18n.Format("changes.commit", i18n.Args{"short": short}), detail)
 	a.FocusEditorIfEnabled()
 	read := func() *CommitDetailResult {
 		ctx, cancel := context.WithTimeout(request.Context, commitDetailTimeout)
@@ -627,15 +604,16 @@ func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 		return
 	}
 	if !result.AuthoredAt.IsZero() {
-		detail.Metadata = "Authored " + result.AuthoredAt.Format("Jan 2, 2006 at 3:04:05 PM -0700")
+		detail.Metadata = i18n.Format("changes.authored", i18n.Args{"date": result.AuthoredAt.Format("Jan 2, 2006 at 3:04:05 PM -0700")})
 	} else if result.AuthoredAtUnavailable {
-		detail.Metadata = "Authored date unavailable"
+		detail.Metadata = i18n.Text("changes.authoredDateUnavailable")
 	}
 	detail.SetDetail(result.Message, result.Files, result.Err)
 }
 
 type diffOpenResult struct {
 	Canceled bool
+	Conflict string
 	Warn     string
 	TabName  string
 	Title    string
@@ -661,7 +639,7 @@ func (a *App) startDiffOpen(read func(context.Context) *diffOpenResult) {
 		a.diffOpenTask = NewTask[*diffOpenResult](a, asynctask.TaskOptions{})
 	}
 	origin := a.EditorGroup.ActiveFilePath()
-	a.setDiffOpenSegment("Opening diff…")
+	a.setDiffOpenSegment(i18n.Text("changes.openingDiff"))
 	a.diffOpenTask.Schedule(func(ctx context.Context) (*diffOpenResult, error) {
 		ctx, cancel := context.WithTimeout(ctx, diffOpenTimeout)
 		defer cancel()
@@ -669,7 +647,7 @@ func (a *App) startDiffOpen(read func(context.Context) *diffOpenResult) {
 	}, func(result *diffOpenResult, err error) {
 		a.setDiffOpenSegment("")
 		if err != nil {
-			a.StatusWarn("Could not open diff: " + err.Error())
+			a.StatusWarn(i18n.Format("status.couldNotOpenDiff", i18n.Args{"error": err.Error()}))
 			return
 		}
 		a.applyDiffOpen(origin, result)
@@ -689,6 +667,10 @@ func (a *App) applyDiffOpen(origin string, result *diffOpenResult) {
 	}
 	if result.Warn != "" {
 		a.StatusWarn(result.Warn)
+		return
+	}
+	if result.Conflict != "" {
+		a.openConflictedFile(result.Path, result.Conflict)
 		return
 	}
 	a.EditorGroup.OpenDiffTab(result.TabName, result.Title, result.Path, result.Diff, result.OldLines, result.NewLines, result.Extended)

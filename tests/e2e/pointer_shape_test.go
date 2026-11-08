@@ -68,6 +68,15 @@ func TestPointerShapeFollowsTabDragAndEndsOnRelease(t *testing.T) {
 	if got := root.PointerShapeAt(textX, pane.Y+3); got != term.PointerGrabbing {
 		t.Fatalf("dragging over the editor = %q, want %q", got, term.PointerGrabbing)
 	}
+	if got := root.PointerShapeAt(1, pane.Y+3); got != term.PointerGrabbing {
+		t.Fatalf("dragging over the sidebar = %q, want %q", got, term.PointerGrabbing)
+	}
+	if got := root.PointerShapeAt(10, 0); got != term.PointerGrabbing {
+		t.Fatalf("dragging over the menu bar = %q, want %q", got, term.PointerGrabbing)
+	}
+	if got := root.PointerShapeAt(10, 29); got != term.PointerGrabbing {
+		t.Fatalf("dragging over the status bar = %q, want %q", got, term.PointerGrabbing)
+	}
 	root.HandleEvent(tcell.NewEventMouse(textX, pane.Y+3, tcell.ButtonNone, 0))
 	h.redraw()
 	if got := root.PointerShapeAt(textX, pane.Y+3); got != term.PointerText {

@@ -48,6 +48,7 @@ func TestNerdGlyphsAreSingleRune(t *testing.T) {
 // kept because no narrow glyph reads as well.
 var ambiguousDefaults = map[Name]bool{
 	Commit: true, Lock: true, Dirty: true,
+	ArrowUp: true, ArrowDown: true,
 	Class: true, Interface: true, Module: true, Constant: true, Variable: true,
 	String: true, Keyword: true, Snippet: true, Symbol: true,
 }

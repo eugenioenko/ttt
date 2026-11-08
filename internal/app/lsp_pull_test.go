@@ -105,3 +105,28 @@ func TestDidChangeWaitsForThePreviousSend(t *testing.T) {
 		t.Fatal("didChange never sent after the previous notification")
 	}
 }
+
+func TestDidSaveWaitsForThePreviousSend(t *testing.T) {
+	a, path := missingGoServerApp(t)
+	previous := make(chan struct{})
+	a.lspSent[path] = previous
+	a.NotifyLSPSave(path, "go", []string{"package a"})
+	a.DocVersionsMu.Lock()
+	sent := a.lspSent[path]
+	a.DocVersionsMu.Unlock()
+	if sent == previous {
+		close(previous)
+		t.Fatal("save was not added to the document's notification queue")
+	}
+	select {
+	case <-sent:
+		t.Fatal("save was sent before the pending change")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(previous)
+	select {
+	case <-sent:
+	case <-time.After(5 * time.Second):
+		t.Fatal("save was not sent after the pending change")
+	}
+}

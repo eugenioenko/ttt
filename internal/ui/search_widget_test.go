@@ -12,6 +12,30 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func TestSearchReplaceAllUsesConfiguredIcon(t *testing.T) {
+	t.Cleanup(func() { icons.Configure("", nil) })
+	s := NewSearchWidget()
+	s.Icons = config.IconsNerdFont
+	s.SetReplaceMode(true)
+	for _, glyph := range []string{"@", "#"} {
+		if warnings := icons.Configure(s.Icons, map[string]string{"replace-all": glyph}); len(warnings) != 0 {
+			t.Fatal(warnings)
+		}
+		s.Render(NewRenderSurface(makeGrid(40, 12), Rect{W: 40, H: 12}))
+		if got := s.ReplaceInput.Actions[0].Label; got != glyph+"All" {
+			t.Fatalf("replace all label = %q", got)
+		}
+		s.SetReplacementPending(true)
+		if got := s.ReplaceInput.Actions[0].Label; got != "Cancel" {
+			t.Fatalf("pending label = %q", got)
+		}
+		s.SetReplacementPending(false)
+		if got := s.ReplaceInput.Actions[0].Label; got != glyph+"All" {
+			t.Fatalf("restored label = %q", got)
+		}
+	}
+}
+
 func TestSearchFileRowsShowIconsAndOmitIconSpacingWhenDisabled(t *testing.T) {
 	for _, tc := range []struct {
 		mode     string
@@ -81,7 +105,7 @@ func TestSearchFileRowsReserveReplaceActionsAndScrollbarForWidePaths(t *testing.
 	s := NewSearchWidget()
 	s.Icons = config.IconsNerdFont
 	s.showReplace = true
-	s.ReplaceInput.Text = "replacement"
+	seedInputText(s.ReplaceInput, "replacement")
 	s.Selected = -1
 	s.lastSelected = -1
 	s.Groups = []SearchFileGroup{{
@@ -177,7 +201,7 @@ func TestApplyBatchKeepsErrorUntilDone(t *testing.T) {
 func TestSearchStartClearsError(t *testing.T) {
 	s := NewSearchWidget()
 	s.Error = "ripgrep (rg) not found"
-	s.Input.Text = ""
+	seedInputText(s.Input, "")
 
 	s.runSearchSync()
 	if s.Error != "" {
@@ -195,7 +219,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			s := NewSearchWidget()
 			s.Icons = mode
 			s.showReplace = true
-			s.ReplaceInput.Text = "next"
+			seedInputText(s.ReplaceInput, "next")
 			s.Selected = -1
 			s.lastSelected = -1
 			s.Groups = []SearchFileGroup{{
@@ -247,7 +271,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 
 		s := NewSearchWidget()
 		s.showReplace = true
-		s.ReplaceInput.Text = "next"
+		seedInputText(s.ReplaceInput, "next")
 		s.Selected = -1
 		s.lastSelected = -1
 		s.Groups = []SearchFileGroup{{
@@ -288,7 +312,7 @@ func TestSearchFilterToggleAndPerFileReplaceFollowIconModeAndOverrides(t *testin
 			t.Fatalf("overridden expanded filter toggle = %q, want 'v'", got)
 		}
 
-		s.Input.Text = "old"
+		seedInputText(s.Input, "old")
 		replacedFile := ""
 		s.OnReplaceRequest = func(req SearchReplaceRequest) {
 			replacedFile = req.Paths[0] + ":" + req.Replacement

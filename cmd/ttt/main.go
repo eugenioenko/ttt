@@ -16,6 +16,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
@@ -371,7 +372,7 @@ Docs: https://tttedit.dev
 		editor.RegisterStartupPluginCommands()
 
 		pluginsPanel := app.NewPluginsPanel(pluginManager)
-		editor.Sidebar.AddPanel("plugins", "Plugins", pluginsPanel.Adapter)
+		editor.Sidebar.AddPanel("plugins", i18n.Text("plugins.plugins"), pluginsPanel.Adapter)
 		editor.WirePluginsPanel(pluginsPanel)
 
 		go func() {
@@ -436,6 +437,7 @@ Docs: https://tttedit.dev
 		go app.StartListenServer(editor)
 	}
 
+	editor.CheckLanguagePackUpdates()
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
 		if cfg.Settings.ReuseWindow && flags.exec == "" {
 			stopForward = app.StartForward(editor)

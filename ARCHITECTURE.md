@@ -66,25 +66,65 @@ lifecycle.
 
 ### Services
 
-Packages: `internal/git`, `internal/github`, `internal/jsonrpc`,
-`internal/lsp`, `internal/terminal`, `internal/watcher`, and
-`internal/workspace`.
+Packages: `internal/scm`, `internal/git`, `internal/github`, `internal/jsonrpc`,
+`internal/lsp`, `internal/terminal`, `internal/watcher`,
+`internal/workspace`, and `internal/trash`.
 
 Owns external-process and external-state integration. Services expose typed
 operations and results without owning product widgets. Long-running work must
 have explicit cancellation, identity, shutdown, and stale-result behavior.
 
+`internal/scm` owns the internal provider, repository, optional staging, and
+optional working-copy baseline and single-change read contracts. Git supplies
+the built-in adapter. Repository discovery, status, active identity, and staging
+use this boundary; `RepositoryState` retains async lifecycle ownership. Working-tree state, selection, and Explorer decorations
+use typed SCM changes and identities. The panel retains its existing two-section
+projection; changes keep their provider group identity without requiring an
+index. Editor gutters and editable working-tree diffs read `scm.BaselineReader`;
+Git's index baseline and conflict HEAD fallback stay inside its adapter. Missing,
+ignored, and conflicted content are explicit states; failed reads are errors.
+Repository objects are captured on the main thread before background reads,
+which keep the existing cancellation and stale-result guards. Single-file
+read-only diffs use `scm.ChangeReader` through the cancellable diff-open task.
+The Changes panel passes typed changes without converting provider groups into
+Git status. Git resolves HEAD/index endpoints and supplies patch metadata for
+renames, modes, and binary changes inside its adapter.
+
+Remaining provider integration boundaries before a second provider can drive
+the complete editor:
+
+- Aggregate Current Changes (`current_changes.go`, `repository_state.go`)
+  and history/commit details still use Git endpoints and explicit Git model adapters. They need typed content,
+  revision, conflict-stage, binary, mode, rename, and diff capabilities.
+- Discard, commit, branch, fetch/pull/push, and worktree actions still need
+  optional mutation capabilities and capability-aware commands and menus.
+- Blame, ignore enumeration, GitHub PRs, and workspace repository detection
+  retain Git-specific integrations. Provider-neutral features need capabilities;
+  Git-specific features need gating.
+- Provider selection and Lua plugin registration, permissions, lifecycle, and
+  change invalidation are not yet exposed. Public plugin APIs and Jujutsu
+  integration follow the remaining internal migrations.
+
 ### Presentation kernel
 
 Packages: `internal/term`, `internal/render`, `internal/view`,
 `internal/textwidth`, `internal/widgets`, `internal/markdown`,
-`internal/highlight`, and `internal/asynctask`.
+`internal/highlight`, `internal/i18n`, and `internal/asynctask`.
 
 Owns screen cells, styles, terminal-width measurement, rendering, layout,
 focus, scrolling, reusable interaction primitives, and syntax-to-style
 projection. `internal/widgets` contains primitives with more than one product
 or plugin consumer; it is not a destination for every visually reusable
 product surface.
+
+`internal/i18n` owns the embedded English UI catalog, immutable runtime
+catalogs, English-source and placeholder validation, and named interpolation.
+Presentation and application code resolve user-facing copy through it;
+identifiers and external service messages keep their own values. The application
+loads the selected catalog before constructing widgets, manages language-pack
+caches and restart-based settings, and delivers background update results on
+the main thread. The plugin host owns declarative language contributions and
+bounded, commit-pinned catalog downloads; catalog updates never execute Lua.
 
 `internal/asynctask` provides terminal-independent scheduling with injected
 execution and delivery. Product widgets may use it directly; the application
@@ -150,7 +190,7 @@ cleanup lane, characterization evidence, and an exit condition.
 |---|---|---|---|
 | Product UI directly owns some search subprocess and filesystem discovery work | Add no new process or filesystem lifecycle to `internal/ui` | IO1 -> IO2 | UI receives typed results and emits intents through an application or service API |
 | App state and lifecycle are spread across the root `App` and feature files | Add new async state only behind an explicit owner or with a named follow-up owner | AL, AT, AP | Selected subsystems own their timers, cancellation, identities, mutation boundary, and shutdown |
-| Input, scrollbar, and diff projection behavior is duplicated | Fix shared invariants in every affected path until consolidation is complete | S1/S2, I1/I2/I3, D1-D4 | One canonical model remains for each shared contract and old paths are deleted |
+| Scrollbar and diff projection behavior is duplicated | Fix shared invariants in every affected path until consolidation is complete | S1/S2, D1-D4 | One canonical model remains for each shared contract and old paths are deleted |
 
 Direct `tcell` use in presentation packages is not listed as a violation. It is
 an explicit boundary decision below. Issue #495 is resolved by documenting and
@@ -189,6 +229,14 @@ an edit and reuses the unchanged tail once the state converges.
 `internal/ui` owns product-specific composites. A component moves to
 `internal/widgets` only when its state model and behavior can be expressed
 without importing product policy or service lifecycle.
+
+### Shared input behavior
+
+`internal/widgets.InputWidget` is the single input implementation for product
+surfaces and plugins. Product owners configure actions and callbacks and route
+focus; the input owns editing, selection, history, scrolling, rendering, and hit
+testing. Find/Replace copies text state without copying callbacks or sharing
+mutable history. The former `internal/ui.InputWidget` has been removed.
 
 ### Shared diff behavior
 
@@ -261,10 +309,8 @@ P2
 |-- [P3/P4] S1 Canonical scrollbar API
 |              `-- S2 Migrate consumers and delete duplicates
 |
-|-- [P3/P4] I1 Shared text-input state model
-|              `-- I2 Adapt internal/widgets input
-|                    `-- I3 Adapt internal/ui inputs
-|                          `-- AP Plugin/settings App owner
+|-- I1/I2/I3 Consolidated inputs (done: internal/widgets.InputWidget)
+|              `-- AP Plugin/settings App owner
 |
 |-- [P3/P4] AL LanguageFeaturesState owner
 |-- [P3/P4] AT TerminalState owner

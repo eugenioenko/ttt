@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -11,14 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
-)
-
-const (
-	imageCardHint    = "Graphics preview is not supported in this terminal yet."
-	imageLoadingHint = "Loading preview..."
 )
 
 type ImageViewWidget struct {
@@ -64,9 +59,9 @@ func (w *ImageViewWidget) Refresh() {
 	if err != nil {
 		w.dropData()
 		if os.IsNotExist(err) {
-			w.Err = "File not found."
+			w.Err = i18n.Text("imageView.fileNotFound")
 		} else {
-			w.Err = fmt.Sprintf("Cannot read file: %v", err)
+			w.Err = i18n.Format("imageView.cannotReadFile", i18n.Args{"error": err})
 		}
 		return
 	}
@@ -77,13 +72,13 @@ func (w *ImageViewWidget) Refresh() {
 	w.dataSize, w.dataMod = fi.Size(), fi.ModTime()
 	f, err := os.Open(w.FilePath)
 	if err != nil {
-		w.Err = fmt.Sprintf("Cannot read file: %v", err)
+		w.Err = i18n.Format("imageView.cannotReadFile", i18n.Args{"error": err})
 		return
 	}
 	defer f.Close()
 	cfg, format, err := image.DecodeConfig(f)
 	if err != nil {
-		w.Err = fmt.Sprintf("Not a readable image: %v", err)
+		w.Err = i18n.Format("imageView.notAReadableImage", i18n.Args{"error": err})
 		return
 	}
 	w.Format = strings.ToUpper(format)
@@ -105,14 +100,14 @@ func (w *ImageViewWidget) cardLines() []string {
 	if w.Err != "" {
 		return []string{name, w.Err}
 	}
-	hint := imageCardHint
+	hint := i18n.Text("imageView.unsupportedTerminal")
 	if w.loading {
-		hint = imageLoadingHint
+		hint = i18n.Text("imageView.loadingPreview")
 	}
 	return []string{
 		name,
-		fmt.Sprintf("%s image %dx%d", w.Format, w.WidthPx, w.HeightPx),
-		fmt.Sprintf("%s on disk", formatFileSize(w.Size)),
+		i18n.Format("imageView.imageX", i18n.Args{"format": w.Format, "widthPx": w.WidthPx, "heightPx": w.HeightPx}),
+		i18n.Format("imageView.onDisk", i18n.Args{"size": formatFileSize(w.Size)}),
 		hint,
 	}
 }
@@ -124,7 +119,7 @@ func (w *ImageViewWidget) loadData() bool {
 		data, err := tttimage.ReadFile(w.FilePath)
 		if err != nil {
 			w.readFailed = true
-			w.Err = fmt.Sprintf("Not a readable image: %v", err)
+			w.Err = i18n.Format("imageView.notAReadableImage", i18n.Args{"error": err})
 			return false
 		}
 		w.data = string(data)
@@ -153,7 +148,7 @@ func (w *ImageViewWidget) placeImage(surface Surface) bool {
 		return true
 	}
 	if err := w.image.Err(); err != "" {
-		w.Err = "Not a readable image: " + err
+		w.Err = i18n.Format("imageView.notAReadableImage", i18n.Args{"error": err})
 	} else {
 		w.loading = w.image.Decoding()
 	}

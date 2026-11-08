@@ -120,6 +120,7 @@ func (inp *InputWidget) HeightAtWidth(w int) int {
 	} else {
 		textW -= textwidth.String(inp.Config.Prefix)
 	}
+	textW -= inp.ActionsWidth()
 	if textW <= 0 {
 		return 0
 	}
@@ -245,15 +246,27 @@ func (inp *InputWidget) handleWrappedKey(ev *tcell.EventKey) (EventResult, bool)
 		if !inp.Config.Multiline && mods&(tcell.ModShift|tcell.ModAlt) == 0 {
 			return EventIgnored, false
 		}
+		inp.recordEdit()
+		if inp.hasSelection() {
+			inp.deleteSelection()
+		}
 		inp.insertRunes([]rune{'\n'})
 		return EventConsumed, true
 	case tcell.KeyCtrlJ:
+		inp.recordEdit()
+		if inp.hasSelection() {
+			inp.deleteSelection()
+		}
 		inp.insertRunes([]rune{'\n'})
 		return EventConsumed, true
 	case tcell.KeyRune:
 		// Legacy terminals send Alt+Enter as ESC CR, which tcell reports as
 		// Alt+Ctrl+M.
 		if mods&(tcell.ModAlt|tcell.ModCtrl) == tcell.ModAlt|tcell.ModCtrl && strings.EqualFold(ev.Str(), "m") {
+			inp.recordEdit()
+			if inp.hasSelection() {
+				inp.deleteSelection()
+			}
 			inp.insertRunes([]rune{'\n'})
 			return EventConsumed, true
 		}
@@ -299,6 +312,7 @@ func (inp *InputWidget) handleWrappedKey(ev *tcell.EventKey) (EventResult, bool)
 }
 
 func (inp *InputWidget) moveCursor(pos int, extend bool) {
+	inp.breakGroup()
 	if extend {
 		inp.startSel()
 	}

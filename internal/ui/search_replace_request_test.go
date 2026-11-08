@@ -8,8 +8,10 @@ import (
 
 func TestSearchReplaceRequestSnapshotsAndInvalidation(t *testing.T) {
 	s := NewSearchWidget()
-	s.Input.Text, s.ReplaceInput.Text = "foo", "bar"
-	s.Include.Text, s.Exclude.Text = "*.go", "vendor/**"
+	seedInputText(s.Input, "foo")
+	seedInputText(s.ReplaceInput, "bar")
+	seedInputText(s.Include, "*.go")
+	seedInputText(s.Exclude, "vendor/**")
 	s.Options = SearchOptions{CaseSensitive: true, UseRegex: true}
 	s.SetWorkDirs([]string{"/repo"})
 	s.Groups = []SearchFileGroup{{FilePath: "/repo/a.go", Matches: []SearchMatch{{LineText: "foo"}}}}
@@ -22,10 +24,8 @@ func TestSearchReplaceRequestSnapshotsAndInvalidation(t *testing.T) {
 		!req.Options.CaseSensitive || !req.Options.UseRegex || !req.AllFiles || !s.ReplacementCurrent(req) {
 		t.Fatalf("request did not snapshot inputs: %+v", req)
 	}
-	s.ReplaceInput.Text = "other"
-	s.ReplaceInput.OnChange("other")
-	s.ReplaceInput.Text = "bar"
-	s.ReplaceInput.OnChange("bar")
+	s.ReplaceInput.SetText("other")
+	s.ReplaceInput.SetText("bar")
 	if s.ReplacementCurrent(req) {
 		t.Fatal("returning to the original text revived a stale request")
 	}

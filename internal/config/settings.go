@@ -115,6 +115,7 @@ type EditorSettings struct {
 	WordWrap          bool                              `json:"wordWrap"`
 	WordWrapColumn    int                               `json:"wordWrapColumn"`
 	IndentGuides      bool                              `json:"indentGuides"`
+	ScrollLines       int                               `json:"scrollLines"`
 	LanguageOverrides map[string]EditorLanguageOverride `json:"languageOverrides,omitempty"`
 	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
 	// built-in limit. Unlisted: raise it only where every line must finish, such
@@ -303,6 +304,7 @@ type ExplorerSettings struct {
 	DimStagedGitColors bool `json:"dimStagedGitColors"`
 	AutoReveal         bool `json:"autoReveal"`
 	CompactFolders     bool `json:"compactFolders"`
+	UseTrash           bool `json:"useTrash"`
 }
 
 // LegacyChevrons is the old appearance.chevrons setting, migrated into
@@ -383,6 +385,7 @@ func DefaultExplorerSettings() ExplorerSettings {
 		ShowGitIgnored:  true,
 		GitStatusColors: true,
 		CompactFolders:  true,
+		UseTrash:        true,
 	}
 }
 
@@ -435,10 +438,11 @@ func (w WelcomeSettings) IsRecentFoldersEnabled() bool {
 }
 
 type Settings struct {
-	Version     int    `json:"version"`
-	Theme       string `json:"theme,omitempty"`
-	DebugMode   bool   `json:"debugMode,omitempty"`
-	ReuseWindow bool   `json:"reuseWindow,omitempty"`
+	Version     int              `json:"version"`
+	Theme       string           `json:"theme,omitempty"`
+	DebugMode   bool             `json:"debugMode,omitempty"`
+	ReuseWindow bool             `json:"reuseWindow,omitempty"`
+	Language    LanguageSettings `json:"language,omitzero"`
 	// These sections must NOT use omitzero: their defaults are non-zero, so an
 	// all-false/all-zero section would be omitted on save and silently revert to
 	// the defaults on the next load.
@@ -470,7 +474,7 @@ type Settings struct {
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
-	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true,
+	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"log/slog"
 	"net/url"
 	"os"
@@ -55,6 +56,7 @@ type TerminalSpec struct {
 }
 
 type App struct {
+	language      languageState
 	Root          *ui.Root
 	EditorGroup   *ui.EditorGroupWidget
 	Sidebar       *ui.SidebarWidget
@@ -243,9 +245,9 @@ func (a *App) applySearchHighlights() {
 	if !a.EditorGroup.IsEditorActive() {
 		return
 	}
-	if a.Sidebar.ActivePanel == "search" && a.Search.Input.Text != "" {
-		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text, a.Search.Options)
-		a.EditorGroup.SetSearch(a.Search.Input.Text, a.Search.Options, matches)
+	if a.Sidebar.ActivePanel == "search" && a.Search.Input.Text() != "" {
+		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text(), a.Search.Options)
+		a.EditorGroup.SetSearch(a.Search.Input.Text(), a.Search.Options, matches)
 	} else {
 		a.EditorGroup.Editor.RefreshSearch()
 	}
@@ -296,7 +298,7 @@ func (a *App) persistSidebarLayout() {
 	}
 	a.State = next
 	if err := config.SaveState(a.State); err != nil {
-		a.StatusError("Failed to save sidebar layout: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToSaveSidebarLayout", i18n.Args{"error": err.Error()}))
 	}
 }
 
@@ -314,7 +316,7 @@ func (a *App) SetPanelPosition(pos ui.SplitPosition) {
 	}
 	a.State.PanelPosition = name
 	if err := config.SaveState(a.State); err != nil {
-		a.StatusError("Failed to save panel position: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToSavePanelPosition", i18n.Args{"error": err.Error()}))
 	}
 }
 
@@ -391,7 +393,7 @@ func (a *App) persistPanelSize() {
 	}
 	a.State = next
 	if err := config.SaveState(a.State); err != nil {
-		a.StatusError("Failed to save panel size: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToSavePanelSize", i18n.Args{"error": err.Error()}))
 	}
 }
 
@@ -448,14 +450,14 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	if spec.Cwd == "" {
 		spec.Cwd = a.Workspace.Primary()
 	} else if err := checkTerminalDir(spec.Cwd); err != nil {
-		a.StatusError("Failed to open terminal: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToOpenTerminal", i18n.Args{"error": err.Error()}))
 		return "", err
 	}
 	env := slices.Concat(spec.Env, []string{forwardSocketEnv + "=" + a.forwardSocket})
 	t, err := terminal.New(spec.Shell, cols, rows, a.Settings.Terminal.Scrollback, env, spec.Cwd, spec.Args...)
 	if err != nil {
 		slog.Error("terminal.New", "err", err)
-		a.StatusError("Failed to open terminal: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToOpenTerminal", i18n.Args{"error": err.Error()}))
 		return "", err
 	}
 
@@ -948,12 +950,6 @@ func (a *App) Paste() {
 	a.EditorGroup.Paste()
 }
 
-// widgetInputHolder is implemented by widgets that keep their own focus and
-// may hold a focused widgets.InputWidget, such as plugin panels.
-type widgetInputHolder interface {
-	FocusedInput() *widgets.InputWidget
-}
-
 // focusedWidgetInput returns the widgets.InputWidget with keyboard focus
 // inside a focused widget adapter or plugin editor tab, or nil. Copy, Cut
 // and Paste use it so clipboard commands act on that input, not the editor.
@@ -968,7 +964,7 @@ func (a *App) focusedWidgetInput() *widgets.InputWidget {
 	switch w := w.(type) {
 	case *widgets.InputWidget:
 		return w
-	case widgetInputHolder:
+	case ui.InputHolder:
 		return w.FocusedInput()
 	}
 	return nil
@@ -1035,7 +1031,7 @@ func (a *App) DismissDialog() {
 }
 
 func (a *App) ShowInputDialog(title, placeholder, initial string, onSubmit func(string)) {
-	a.ShowInputDialogEx(title, placeholder, initial, "Save", onSubmit)
+	a.ShowInputDialogEx(title, placeholder, initial, i18n.Text("general.save"), onSubmit)
 }
 
 func (a *App) ShowInputDialogEx(title, placeholder, initial, confirmLabel string, onSubmit func(string)) {
@@ -1056,7 +1052,7 @@ func (a *App) ShowInputDialogEx(title, placeholder, initial, confirmLabel string
 	dialog.Borders = *a.Borders
 	dialog.SetContent(input)
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Cancel", Handler: func() { a.DismissDialog() }},
+		{Label: i18n.Text("general.cancelButton"), Handler: func() { a.DismissDialog() }},
 		{Label: "&" + confirmLabel, Handler: func() {
 			if input.Text() != "" {
 				a.DismissDialog()
@@ -1084,7 +1080,7 @@ func (a *App) ShowInfoDialogEx(title string, entries []widgets.KeyValueEntry, in
 	dialog.Borders = *a.Borders
 	dialog.SetContent(content)
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Close", Handler: func() { a.DismissDialog() }},
+		{Label: i18n.Text("general.closeButton"), Handler: func() { a.DismissDialog() }},
 	}
 	dialog.OnDismiss = func() { a.DismissDialog() }
 	dialog.Build()
@@ -1128,7 +1124,7 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		leftMatches, err := ui.FindInLines(dv.LeftLines(), query, opts)
 		if err != nil {
-			a.StatusWarn("Invalid regex: " + err.Error())
+			a.StatusWarn(i18n.Format("status.invalidRegex", i18n.Args{"error": err.Error()}))
 			return nil
 		}
 		rightMatches, _ := ui.FindInLines(dv.RightLines(), query, opts)

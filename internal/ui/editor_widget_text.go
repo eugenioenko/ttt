@@ -74,6 +74,42 @@ func (e *EditorPaneWidget) MoveToFileEdge(end, shift bool) {
 	e.scrollViewport()
 }
 
+// With multiple cursors shift is ignored and their selections are cleared,
+// matching the arrow keys.
+func (e *EditorPaneWidget) MoveToLineEdge(end, shift bool) {
+	if e.Buf == nil || len(e.Buf.Lines) == 0 {
+		return
+	}
+	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line)
+	if e.isMultiActive() {
+		e.multiMoveAll(func(cs *multicursor.CursorState) {
+			runes := []rune(e.Buf.Lines[cs.Line])
+			if end {
+				cs.Col = len(runes)
+				return
+			}
+			firstNonSpace := 0
+			for firstNonSpace < len(runes) && (runes[firstNonSpace] == ' ' || runes[firstNonSpace] == '\t') {
+				firstNonSpace++
+			}
+			if cs.Col == firstNonSpace {
+				cs.Col = 0
+			} else {
+				cs.Col = firstNonSpace
+			}
+		})
+	} else {
+		e.startOrExtendSelection(shift)
+		if end {
+			e.Cursor.Col = len([]rune(e.Buf.Lines[e.Cursor.Line]))
+		} else {
+			e.SmartHome()
+		}
+	}
+	e.clampCursor()
+	e.scrollViewport()
+}
+
 func (e *EditorPaneWidget) MoveWordLeft(shift bool) {
 	if e.isMultiActive() && !shift {
 		e.multiMoveAll(func(cs *multicursor.CursorState) {

@@ -1,10 +1,10 @@
 package widgets
 
 import (
-	"fmt"
 	stdimage "image"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
@@ -188,9 +188,9 @@ func (w *ImageWidget) fallbackText() string {
 	if w.info == "" {
 		cfg, format, err := stdimage.DecodeConfig(strings.NewReader(w.Config.Data))
 		if err != nil {
-			w.info = "Image: " + err.Error()
+			w.info = i18n.Format("image.image", i18n.Args{"error": err.Error()})
 		} else {
-			w.info = fmt.Sprintf("%s image %dx%d", strings.ToUpper(format), cfg.Width, cfg.Height)
+			w.info = i18n.Format("image.imageX", i18n.Args{"format": strings.ToUpper(format), "width": cfg.Width, "height": cfg.Height})
 		}
 	}
 	return w.info

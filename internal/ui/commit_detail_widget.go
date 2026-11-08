@@ -3,6 +3,7 @@ package ui
 import (
 	"maps"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"path/filepath"
 	"strconv"
@@ -234,8 +235,8 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 		Ref:              ref,
 		Short:            short,
 		Loading:          true,
-		Header:           "Commit message",
-		LoadingText:      fmt.Sprintf("Loading commit %s…", short),
+		Header:           i18n.Text("changes.commitMessage"),
+		LoadingText:      i18n.Format("changes.loadingCommit", i18n.Args{"short": short}),
 		SyntaxHighlight:  syntaxHighlight,
 		signs:            false,
 		signsColor:       true,
@@ -252,8 +253,8 @@ func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidg
 		Ref:              "working-tree",
 		markdownMaxWidth: 80,
 		Loading:          true,
-		Header:           "Current changes",
-		LoadingText:      "Loading current changes…",
+		Header:           i18n.Text("changes.currentChangesHeading"),
+		LoadingText:      i18n.Text("changes.loadingCurrentChanges"),
 		CurrentChanges:   true,
 		SyntaxHighlight:  syntaxHighlight,
 		signs:            false,
@@ -461,7 +462,7 @@ func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLine
 	if len(contextErr) > 0 {
 		errText = contextErr[0]
 	} else if oldLines == nil && newLines == nil {
-		errText = "Could not load full file"
+		errText = i18n.Text("changes.couldNotLoadFullFile")
 	}
 	return d.ApplyFileContextContent(fileIndex, key, oldLines, newLines, CommitDetailContentText, errText)
 }
@@ -741,7 +742,7 @@ func (d *CommitDetailWidget) buildRows() {
 
 	header := d.Header
 	if header == "" {
-		header = "Commit message"
+		header = i18n.Text("changes.commitMessage")
 	}
 	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: header, bold: true})
 	if d.Metadata != "" {
@@ -775,13 +776,13 @@ func (d *CommitDetailWidget) buildRows() {
 			var danger bool
 			switch file.FullFileState {
 			case CommitDetailFullFileIdle:
-				notice = "Full file not loaded"
+				notice = i18n.Text("changes.fullFileNotLoaded")
 			case CommitDetailFullFileLoading:
-				notice = "Loading full file…"
+				notice = i18n.Text("changes.loadingFullFile")
 			case CommitDetailFullFileFailed:
 				notice = file.FullFileErr
 				if notice == "" {
-					notice = "Could not load full file"
+					notice = i18n.Text("changes.couldNotLoadFullFile")
 				}
 				danger = true
 			}
@@ -796,23 +797,23 @@ func (d *CommitDetailWidget) buildRows() {
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: file.Error, fileIndex: fileIndex})
 			d.recordWidth(file.Error)
 		case file.ContentKind == CommitDetailContentBinary:
-			const binary = "Binary file changed"
+			binary := i18n.Text("changes.binaryFileChanged")
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: binary, fileIndex: fileIndex})
 			d.recordWidth(binary)
 		case file.ContentKind == CommitDetailContentEmpty:
-			empty := "Empty file changed"
+			empty := i18n.Text("changes.emptyFileChanged")
 			switch file.Status {
 			case "A", "?":
-				empty = "Empty file added"
+				empty = i18n.Text("changes.emptyFileAdded")
 			case "D":
-				empty = "Empty file deleted"
+				empty = i18n.Text("changes.emptyFileDeleted")
 			}
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: empty, fileIndex: fileIndex})
 			d.recordWidth(empty)
 		default:
 			v := d.fileView(file)
 			if len(v.Lines) == 0 {
-				const noChanges = "No line changes"
+				noChanges := i18n.Text("changes.noLineChanges")
 				d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noChanges, fileIndex: fileIndex})
 				d.recordWidth(noChanges)
 				continue
@@ -823,7 +824,7 @@ func (d *CommitDetailWidget) buildRows() {
 		}
 	}
 	if len(d.Files) == 0 && !d.CurrentChanges {
-		const noFiles = "No files"
+		noFiles := i18n.Text("general.noFiles")
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noFiles})
 		d.recordWidth(noFiles)
 	}
@@ -871,14 +872,14 @@ func commitDetailFileHeading(file CommitDetailFile) string {
 		return path
 	}
 	if file.Stage == CommitDetailStageConflict {
-		return fmt.Sprintf("%s  %s - conflict (%s)", StatusBadge(file.Status), path, file.ConflictCode)
+		return i18n.Format("changes.conflict", i18n.Args{"status": StatusBadge(file.Status), "path": path, "conflictCode": file.ConflictCode})
 	}
-	stage := "unstaged"
+	stage := i18n.Text("changes.unstagedState")
 	switch file.Stage {
 	case CommitDetailStageStaged:
-		stage = "staged"
+		stage = i18n.Text("changes.stagedState")
 	case CommitDetailStageMixed:
-		stage = "mixed"
+		stage = i18n.Text("changes.mixed")
 	}
 	return fmt.Sprintf("%s  %s · %s", StatusBadge(file.Status), path, stage)
 }
@@ -903,7 +904,7 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	if d.Loading {
 		loadingText := d.LoadingText
 		if loadingText == "" {
-			loadingText = fmt.Sprintf("Loading commit %s…", d.Short)
+			loadingText = i18n.Format("changes.loadingCommit", i18n.Args{"short": d.Short})
 		}
 		surface.DrawText(0, 0, loadingText, w, term.StyleMuted)
 		return
@@ -1121,15 +1122,15 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 	}
 	header := d.Header
 	if header == "" {
-		header = "Commit message"
+		header = i18n.Text("changes.commitMessage")
 	}
 	d.drawStaticText(surface, 1, y, viewW-2, header, term.StyleCommitHeader, term.StyleCommitHeader, true)
 	if len(d.Files) == 0 {
 		return
 	}
-	label := "Collapse all"
+	label := i18n.Text("changes.collapseAll")
 	if d.allFilesCollapsed() {
-		label = "Expand all"
+		label = i18n.Text("changes.expandAll")
 	}
 	controlW := textwidth.String(label)
 	controlX := viewW - controlW - 1

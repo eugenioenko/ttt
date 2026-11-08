@@ -368,3 +368,48 @@ func TestVStackEmptyHandleEventReturnsIgnored(t *testing.T) {
 		t.Error("empty VStack should return EventIgnored")
 	}
 }
+
+type testCaptureOwnerWidget struct {
+	fixedWidget
+	owns      bool
+	lastEvent tcell.Event
+}
+
+func (c *testCaptureOwnerWidget) OwnsPointerCapture() bool { return c.owns }
+func (c *testCaptureOwnerWidget) HandleEvent(ev tcell.Event) EventResult {
+	c.lastEvent = ev
+	return EventConsumed
+}
+
+func TestVStackHandleEventRoutesToCaptureOwnerFirst(t *testing.T) {
+	first := &testCaptureOwnerWidget{owns: false}
+	second := &testCaptureOwnerWidget{owns: true}
+	vs := NewVStackWidget(first, second)
+
+	ev := tcell.NewEventMouse(5, 5, tcell.Button1, 0)
+	res := vs.HandleEvent(ev)
+	if res != EventConsumed {
+		t.Fatalf("res = %v, want EventConsumed", res)
+	}
+	if second.lastEvent != ev {
+		t.Fatal("expected second (capture owner) to receive event")
+	}
+	if first.lastEvent != nil {
+		t.Fatal("expected first to not receive event while second owns capture")
+	}
+
+	first.lastEvent = nil
+	second.lastEvent = nil
+
+	keyEv := tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone)
+	res = vs.HandleEvent(keyEv)
+	if res != EventConsumed {
+		t.Fatalf("key event res = %v, want EventConsumed", res)
+	}
+	if first.lastEvent != keyEv {
+		t.Fatal("expected first child to receive key event during normal routing")
+	}
+	if second.lastEvent != nil {
+		t.Fatal("expected second child to not receive key event after first consumed it")
+	}
+}

@@ -1,11 +1,13 @@
 package app
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 func (a *App) explorerReload() {
@@ -41,22 +43,22 @@ func (a *App) ExplorerDelete() {
 func (a *App) CopyAbsolutePath() {
 	path := a.activeFilePath()
 	if path == "" {
-		a.StatusWarn("No file open")
+		a.StatusWarn(i18n.Text("status.noFileOpen"))
 		return
 	}
 	clipboard.Set(path)
-	a.StatusNotify("Absolute path copied to clipboard")
+	a.StatusNotify(i18n.Text("status.absolutePathCopiedToClipboard"))
 }
 
 func (a *App) CopyRelativePath() {
 	path := a.activeFilePath()
 	if path == "" {
-		a.StatusWarn("No file open")
+		a.StatusWarn(i18n.Text("status.noFileOpen"))
 		return
 	}
 	rel := a.relativePath(path)
 	clipboard.Set(rel)
-	a.StatusNotify("Relative path copied to clipboard")
+	a.StatusNotify(i18n.Text("status.relativePathCopiedToClipboard"))
 }
 
 func (a *App) ExplorerCopyAbsolutePath() {
@@ -77,10 +79,23 @@ func (a *App) ExplorerReveal() {
 	a.FileOpReveal(path)
 }
 
+func (a *App) ExplorerOpenInTerminal() {
+	path := a.explorerNodePath()
+	a.ExplorerContextNode = nil
+	if path == "" {
+		a.StatusWarn(i18n.Text("status.noFileSelected"))
+		return
+	}
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		path = filepath.Dir(path)
+	}
+	a.SpawnTerminalSpec(TerminalSpec{Cwd: path})
+}
+
 func (a *App) ExplorerRevealActiveFile() {
 	path := a.revealableActiveFile()
 	if path == "" {
-		a.StatusWarn("No file open")
+		a.StatusWarn(i18n.Text("status.noFileOpen"))
 		return
 	}
 	a.Sidebar.SetActivePanel("explorer")
@@ -88,7 +103,7 @@ func (a *App) ExplorerRevealActiveFile() {
 		a.ShowSidebar()
 	}
 	if !a.Explorer.RevealPath(path) {
-		a.StatusWarn("File is not in the explorer")
+		a.StatusWarn(i18n.Text("status.fileIsNotInTheExplorer"))
 	}
 }
 
@@ -157,91 +172,97 @@ func registerExplorerCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "explorer.refresh", Title: "Explorer: Refresh",
+		ID: "explorer.refresh", Title: i18n.Text("command.explorerRefresh"),
 		Keywords: []string{"view", "file", "reload"},
 		Handler:  func() { app.Explorer.Reload() },
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.expandAll", Title: "Explorer: Expand All",
+		ID: "explorer.expandAll", Title: i18n.Text("command.explorerExpandAll"),
 		Keywords: []string{"view", "file", "tree", "folder", "expand"},
 		Handler:  app.Explorer.ExpandAll,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.collapseAll", Title: "Explorer: Collapse All",
+		ID: "explorer.collapseAll", Title: i18n.Text("command.explorerCollapseAll"),
 		Keywords: []string{"view", "file", "tree", "folder", "collapse"},
 		Handler:  app.Explorer.CollapseAll,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.open", Title: "Explorer: Toggle Node",
+		ID: "explorer.open", Title: i18n.Text("command.explorerToggleNode"),
 		Keywords: []string{"view", "file"},
 		Handler:  app.ExplorerOpen,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.newFile", Title: "Explorer: New File",
+		ID: "explorer.newFile", Title: i18n.Text("command.explorerNewFile"),
 		Keywords: []string{"view", "file", "create"},
 		Handler:  app.ExplorerNewFile,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.newFolder", Title: "Explorer: New Folder",
+		ID: "explorer.newFolder", Title: i18n.Text("command.explorerNewFolder"),
 		Keywords: []string{"view", "file", "create", "directory"},
 		Handler:  app.ExplorerNewFolder,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.rename", Title: "Explorer: Rename",
+		ID: "explorer.rename", Title: i18n.Text("command.explorerRename"),
 		Keywords: []string{"view", "file"},
 		Handler:  app.ExplorerRename,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.delete", Title: "Explorer: Delete",
+		ID: "explorer.delete", Title: i18n.Text("command.explorerDelete"),
 		Keywords: []string{"view", "file", "remove"},
 		Handler:  app.ExplorerDelete,
 	})
 
 	reg.Register(command.Command{
-		ID: "file.copyAbsolutePath", Title: "File: Copy Absolute Path",
+		ID: "file.copyAbsolutePath", Title: i18n.Text("command.fileCopyAbsolutePath"),
 		Keywords: []string{"file", "path", "copy", "clipboard", "absolute"},
 		Handler:  app.CopyAbsolutePath,
 	})
 
 	reg.Register(command.Command{
-		ID: "file.copyRelativePath", Title: "File: Copy Relative Path",
+		ID: "file.copyRelativePath", Title: i18n.Text("command.fileCopyRelativePath"),
 		Keywords: []string{"file", "path", "copy", "clipboard", "relative"},
 		Handler:  app.CopyRelativePath,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.reveal", Title: "Explorer: Reveal in File Manager",
+		ID: "explorer.reveal", Title: i18n.Text("command.explorerRevealInFileManager"),
 		Keywords: []string{"explorer", "file", "reveal", "manager", "folder", "finder", "open"},
 		Handler:  app.ExplorerReveal,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.revealActiveFile", Title: "Explorer: Reveal Active File",
+		ID: "explorer.revealActiveFile", Title: i18n.Text("command.explorerRevealActiveFile"),
 		Keywords: []string{"explorer", "file", "reveal", "locate", "sync", "tree", "select"},
 		Handler:  app.ExplorerRevealActiveFile,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.copyAbsolutePath", Title: "Explorer: Copy Absolute Path",
+		ID: "explorer.copyAbsolutePath", Title: i18n.Text("command.explorerCopyAbsolutePath"),
 		Keywords: []string{"explorer", "file", "path", "copy", "clipboard", "absolute"},
 		Handler:  app.ExplorerCopyAbsolutePath,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.copyRelativePath", Title: "Explorer: Copy Relative Path",
+		ID: "explorer.openInTerminal", Title: i18n.Text("command.explorerOpenInTerminal"),
+		Keywords: []string{"explorer", "folder", "terminal", "shell", "cd", "open"},
+		Handler:  app.ExplorerOpenInTerminal,
+	})
+
+	reg.Register(command.Command{
+		ID: "explorer.copyRelativePath", Title: i18n.Text("command.explorerCopyRelativePath"),
 		Keywords: []string{"explorer", "file", "path", "copy", "clipboard", "relative"},
 		Handler:  app.ExplorerCopyRelativePath,
 	})
 
 	reg.Register(command.Command{
-		ID: "explorer.removeRoot", Title: "Explorer: Remove Folder from Workspace",
+		ID: "explorer.removeRoot", Title: i18n.Text("command.explorerRemoveFolderFromWorkspace"),
 		Keywords: []string{"explorer", "workspace", "folder", "remove"},
 		Handler:  app.ExplorerRemoveRoot,
 	})

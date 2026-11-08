@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -355,9 +356,9 @@ const explorerActionPrefix = "command:"
 
 func emptyExplorerNodes() []*widgets.TreeNode {
 	return []*widgets.TreeNode{
-		{Label: "No folder open", Muted: true},
-		{ID: explorerActionPrefix + "workspace.openFolder", Label: "Open Folder…"},
-		{ID: explorerActionPrefix + "workspace.clone", Label: "Clone Repository…"},
+		{Label: i18n.Text("explorer.noFolderOpen"), Muted: true},
+		{ID: explorerActionPrefix + "workspace.openFolder", Label: i18n.Text("explorer.openFolder")},
+		{ID: explorerActionPrefix + "workspace.clone", Label: i18n.Text("explorer.cloneRepository")},
 	}
 }
 

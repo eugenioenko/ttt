@@ -4,6 +4,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -28,7 +29,7 @@ func configuredDiffContext(contextMode string) ui.DiffContextMode {
 func (a *App) ReloadSettings() {
 	s := config.LoadSettings()
 	a.ApplySettings(s)
-	a.StatusNotify("Settings reloaded")
+	a.StatusNotify(i18n.Text("status.settingsReloaded"))
 }
 
 func (a *App) applySidebarTabStyle(style string) {
@@ -84,6 +85,15 @@ func (a *App) ApplySettings(s config.Settings) {
 	// before calling in, so reading it here would always compare s against itself.
 	prev := a.appliedSettings
 	a.appliedSettings = s
+	if s.Language.Locale != a.language.requested {
+		a.language.requested = s.Language.Locale
+		if locale, _ := i18n.NormalizeLocale(s.Language.Locale); locale != a.language.locale {
+			a.StatusNotify(i18n.Text("status.languageRestartRequired"))
+		}
+	}
+	if !s.Language.IsAutoUpdateEnabled() && a.language.updates != nil {
+		a.language.updates.Stop()
+	}
 	*a.Settings = s
 	if !s.Welcome.IsRecentFoldersEnabled() {
 		a.clearRecentFolders()
@@ -222,7 +232,7 @@ func registerSettingsCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "settings.reload", Title: "Reload Settings",
+		ID: "settings.reload", Title: i18n.Text("command.reloadSettings"),
 		Handler: app.ReloadSettings,
 	})
 }

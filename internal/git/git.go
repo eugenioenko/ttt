@@ -192,13 +192,20 @@ func DiscardUntracked(dir string, paths ...string) error {
 }
 
 func runPaths(dir string, gitArgs, paths []string) error {
+	return runPathsContext(context.Background(), dir, gitArgs, paths)
+}
+
+func runPathsContext(ctx context.Context, dir string, gitArgs, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
 	args := append([]string{"-C", dir, "--literal-pathspecs"}, gitArgs...)
 	args = append(args, paths...)
-	cmd := exec.Command("git", args...)
+	cmd := gitMutationCommandContext(ctx, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
@@ -827,22 +834,25 @@ func TreeEntryContext(ctx context.Context, dir, revision, path string) (TreeEntr
 
 // DiffWorktreeFile diffs the index against the working tree.
 func DiffWorktreeFile(dir, path string) (string, error) {
-	return diffPaths(dir, nil, path)
+	return diffPaths(context.Background(), dir, nil, path)
 }
 
 // DiffStagedFile diffs HEAD against the index. Pass the old and new path of a
 // staged rename to get a rename diff.
 func DiffStagedFile(dir string, paths ...string) (string, error) {
-	return diffPaths(dir, []string{"--cached", "-M"}, paths...)
+	return diffPaths(context.Background(), dir, []string{"--cached", "-M"}, paths...)
 }
 
-func diffPaths(dir string, flags []string, paths ...string) (string, error) {
+func diffPaths(ctx context.Context, dir string, flags []string, paths ...string) (string, error) {
 	args := append([]string{"-C", dir, "--literal-pathspecs", "diff"}, flags...)
 	args = append(args, "--")
 	for _, p := range paths {
 		args = append(args, filepath.Join(dir, p))
 	}
-	out, err := gitCommandContext(context.Background(), args...).Output()
+	out, err := gitCommandContext(ctx, args...).Output()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
 	if err != nil {
 		return "", err
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -28,7 +29,7 @@ func TestSearchBarInputDrag(t *testing.T) {
 			h.exec("file.new")
 			pasteText(h, pasteKeys("abcdef"))
 			h.exec(command)
-			var input *ui.InputWidget
+			var input *widgets.InputWidget
 			switch bar := h.app.Root.TopOverlayWidget().(type) {
 			case *ui.FindBarWidget:
 				input = bar.Input
@@ -42,8 +43,8 @@ func TestSearchBarInputDrag(t *testing.T) {
 				t.Fatal("drag did not leave a selection and release capture")
 			}
 			h.pressRune('X')
-			if input.Text != "Xdef" {
-				t.Fatalf("query=%q", input.Text)
+			if input.Text() != "Xdef" {
+				t.Fatalf("query=%q", input.Text())
 			}
 			if got := editorText(h); got != "abcdef" {
 				t.Fatalf("drag edited buffer: %q", got)
@@ -93,7 +94,7 @@ func TestWorkspaceSearchInputDragStaysInInput(t *testing.T) {
 	h.exec("file.new")
 	h.exec("sidebar.search")
 	input := h.app.Search.Input
-	input.OnChange = nil
+	input.Config.OnChange = nil
 	input.SetText("abcdef")
 	h.redraw()
 	x, y := -1, -1
@@ -110,12 +111,12 @@ func TestWorkspaceSearchInputDragStaysInInput(t *testing.T) {
 	h.app.FocusEditor()
 	inputDrag(h, x, y, x+3, y)
 	h.pressRune('X')
-	if input.Text != "Xdef" {
-		t.Fatalf("search input=%q", input.Text)
+	if input.Text() != "Xdef" {
+		t.Fatalf("search input=%q", input.Text())
 	}
 	inputDrag(h, x+1, y, 100, y)
 	h.pressRune('Y')
-	if input.Text != "XY" || editorText(h) != "" || h.app.EditorGroup.Editor.Selection.Active {
+	if input.Text() != "XY" || editorText(h) != "" || h.app.EditorGroup.Editor.Selection.Active {
 		t.Fatal("input drag leaked into editor")
 	}
 	if h.app.Sidebar.GetRect().W != width {

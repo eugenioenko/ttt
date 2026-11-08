@@ -5,7 +5,22 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/icons"
 )
+
+func TestWelcomeNavigationHintUsesConfiguredIcons(t *testing.T) {
+	t.Cleanup(func() { icons.Configure("", nil) })
+	if warnings := icons.Configure("", map[string]string{"arrow-up": "u", "arrow-down": "d"}); len(warnings) != 0 {
+		t.Fatal(warnings)
+	}
+	if got := welcomeNavigationHint(false); got != "ud select   enter open" {
+		t.Fatalf("navigation hint = %q", got)
+	}
+	if got := welcomeNavigationHint(true); got != "ud select   enter open   c copy path" {
+		t.Fatalf("copy hint = %q", got)
+	}
+}
 
 func TestPushRecent(t *testing.T) {
 	got := pushRecent([]string{"/a", "/b", "/c"}, []string{"/c", "/d"})

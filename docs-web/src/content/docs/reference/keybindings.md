@@ -57,6 +57,10 @@ You can open your keybindings file from the command palette (**Ctrl+P**) with **
 | Ctrl+End | `editor.goToFileEnd` | Move cursor to the end of the file |
 | Ctrl+Shift+Home | `editor.selectToFileStart` | Select to the start of the file |
 | Ctrl+Shift+End | `editor.selectToFileEnd` | Select to the end of the file |
+| Home | `editor.goToLineStart` | Move cursor to the first non-space character, then to column 0 |
+| End | `editor.goToLineEnd` | Move cursor to the end of the line |
+| Shift+Home | `editor.selectToLineStart` | Select to the start of the line |
+| Shift+End | `editor.selectToLineEnd` | Select to the end of the line |
 | Ctrl+Left | `editor.moveWordLeft` | Move cursor one word left |
 | Ctrl+Right | `editor.moveWordRight` | Move cursor one word right |
 | Ctrl+Shift+Left | `editor.selectWordLeft` | Select one word left |
@@ -103,6 +107,8 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Shortcut | Command | Description |
 |----------|---------|-------------|
 | Ctrl+B | `sidebar.toggle` | Toggle sidebar |
+| Ctrl+Up | `view.scrollLineUp` | Scroll viewport up one visual row |
+| Ctrl+Down | `view.scrollLineDown` | Scroll viewport down one visual row |
 | Ctrl+K B | `panel.toggle` | Toggle bottom panel |
 | Alt+Shift+M | `menubar.toggle` | Show/hide the menu bar |
 | Ctrl+K E | `sidebar.explorer` | Show file explorer |

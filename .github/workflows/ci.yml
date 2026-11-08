@@ -179,6 +179,29 @@ jobs:
       - name: Test
         run: go test ./...
 
+  native-trash:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Test native Trash and recovery
+        env:
+          TTT_TEST_TRASH: "1"
+        run: go test -count=1 -v ./internal/trash
+
   bench-editor:
     name: Base vs PR editor, diff, and log benchmarks
     needs: classify
@@ -359,7 +382,7 @@ jobs:
     uses: ./.github/workflows/lsp-tests.yml
 
   fast-contract:
-    needs: [classify, vet, lint, test, docs]
+    needs: [classify, vet, lint, test, docs, native-trash]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -371,6 +394,7 @@ jobs:
       LINT_RESULT: ${{ needs.lint.result }}
       TEST_RESULT: ${{ needs.test.result }}
       DOCS_RESULT: ${{ needs.docs.result }}
+      NATIVE_TRASH_RESULT: ${{ needs.native-trash.result }}
     steps:
       - name: Verify fast contract
         run: |
@@ -399,6 +423,7 @@ jobs:
           require_result lint "$RUNTIME" "$LINT_RESULT"
           require_result test "$RUNTIME" "$TEST_RESULT"
           require_result docs "$DOCS_WEB" "$DOCS_RESULT"
+          require_result native-trash "$RUNTIME" "$NATIVE_TRASH_RESULT"
 
           {
             echo "## Fast contract"
@@ -410,6 +435,7 @@ jobs:
             echo "| lint | $LINT_RESULT |"
             echo "| test | $TEST_RESULT |"
             echo "| docs | $DOCS_RESULT |"
+            echo "| native-trash | $NATIVE_TRASH_RESULT |"
             echo
             echo "This contract proves classification plus the selected deterministic build, test, lint, and docs checks. It does not replace the broad binary, PTY, race, or real-LSP lanes."
           } >> "$GITHUB_STEP_SUMMARY"

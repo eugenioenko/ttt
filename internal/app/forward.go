@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/jsonrpc"
 )
 
@@ -165,17 +166,17 @@ func sendForwardRequest(conn net.Conn, files []FileTarget, folders []string) (in
 func StartForward(a *App) (stop func()) {
 	dir := forwardDirectory()
 	if err := os.Mkdir(dir, 0700); err != nil && !errors.Is(err, os.ErrExist) {
-		a.StatusError(fmt.Sprintf("forward: create directory: %v", err))
+		a.StatusError(i18n.Format("status.forwardCreateDirectory", i18n.Args{"error": err}))
 		return func() {}
 	}
 	if err := checkForwardDir(dir); err != nil {
-		a.StatusError(fmt.Sprintf("forward: check directory: %v", err))
+		a.StatusError(i18n.Format("status.forwardCheckDirectory", i18n.Args{"error": err}))
 		return func() {}
 	}
 	path := filepath.Join(dir, forwardSocketName(time.Now(), os.Getpid()))
 	ln, err := net.Listen("unix", path)
 	if err != nil {
-		a.StatusError(fmt.Sprintf("forward: listen: %v", err))
+		a.StatusError(i18n.Format("status.forwardListen", i18n.Args{"error": err}))
 		return func() {}
 	}
 	a.forwardSocket = path

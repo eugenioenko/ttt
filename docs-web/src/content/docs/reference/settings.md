@@ -11,7 +11,7 @@ Settings are stored in `~/.config/ttt/settings.json`. A complete example is avai
 
 There are two ways to change settings:
 
-- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, auto closing, display, on save, completion), **Appearance** (theme, window, code, markdown), **Sidebar** (explorer files and look, source control, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
+- **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, auto closing, display, on save, completion), **Appearance** (theme, window, code, markdown), **Explorer** (files and appearance), **Sidebar** (shared look, source control, quick open, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
 - **Raw JSON** — **Settings: Open settings.json** opens the file itself. Needed for the `lsp` settings and `formatters`, neither of which is exposed in the form.
 
 Closing the settings tab with unapplied edits discards them.
@@ -24,6 +24,8 @@ Both write the same file, so you can move between them freely.
 |-----|------|---------|-------------|
 | `version` | int | `1` | Settings file format version |
 | `theme` | string | `""` | Theme name (e.g. `"default-dark"`) |
+| `language.locale` | string | `"en"` | Interface language, selected from installed [language packs](/guides/plugin-authoring/#language-packs). Requires restart |
+| `language.autoUpdate` | bool | `true` | Check for compatible language JSON when a newer ttt release starts; keep cached translations if offline |
 | `debugMode` | bool | `false` | Enable debug logging |
 | `reuseWindow` | bool | `false` | Open command-line files and add explicit folder arguments to a running editor using the same config directory, preserving existing tabs and ignoring duplicate folder paths. Bare `ttt` and `--workspace` still start a new editor. Folder forwarding requires a compatible running editor; after upgrading, restart it with the updated binary or use `--new-window`. Requires a restart. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, use the newest reachable editor. If none is reachable, start normally. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Once connected, errors exit with status 1 without trying another editor; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
@@ -31,7 +33,7 @@ Both write the same file, so you can move between them freely.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `appearance.icons` | string | `"none"` | Icons in the explorer, Changes panel, commit history and other UI glyphs such as chevrons and tab markers: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one, so this defaults off; turn it on here, in Settings > Sidebar, or via **Options > Font Icons**. Colors come from the theme's `fileIcons` section |
+| `appearance.icons` | string | `"none"` | Icons in the explorer, Changes panel, commit history and other UI glyphs such as chevrons and tab markers: `"nerd-font"` or `"none"`. The glyphs need a [Nerd Font](https://www.nerdfonts.com) in your terminal and show as boxes without one, so this defaults off; turn it on here, in Settings > Sidebar, or via **Options > Appearance > Font Icons**. Colors come from the theme's `fileIcons` section |
 | `appearance.overrides` | object | `{}` | Replace any UI glyph, keyed by icon name (see [Icon overrides](#icon-overrides)). An override wins over both the plain and Nerd Font glyph. |
 | `appearance.scrollbarGlyphs` | string | `"blocks"` | Glyphs that draw git change marks on the editor scrollbar: `"blocks"` uses the half and eighth blocks every font has, which place a mark exactly near the top or bottom of a cell and stretch one in the middle to the nearer edge; `"legacy"` adds the Symbols for Legacy Computing thin bars, which place every mark to the exact eighth of a cell. Kitty, Ghostty, WezTerm and foot draw those themselves; elsewhere the font needs them or the marks show as boxes. |
 | `appearance.pointerShapes` | bool | `true` | Change the mouse pointer shape (I-beam, hand, resize divider, dragging hand) via terminal OSC 22 sequences. Set to `false` for compatibility with terminals or multiplexers that do not support OSC 22 or if you prefer a static pointer. Mouse clicks, selection, scrolling, drag gestures, and mouse reporting remain enabled when false. |
@@ -55,7 +57,7 @@ Every icon must be exactly one character that is one column wide, because trees,
 
 The old `appearance.chevrons.collapsed` and `appearance.chevrons.expanded` settings are migrated to `chevron-right` and `chevron-down` on load.
 
-Plain defaults avoid East Asian *ambiguous*-width characters, which draw two columns wide in CJK-locale terminals or with `RUNEWIDTH_EASTASIAN` set. The exceptions are `dirty`, `lock`, `commit` and the symbol kinds, which have no narrow glyph that reads as well; override them if they misalign in your terminal.
+Plain defaults avoid East Asian *ambiguous*-width characters, which draw two columns wide in CJK-locale terminals or with `RUNEWIDTH_EASTASIAN` set. The exceptions are `dirty`, `lock`, `commit`, `arrow-up`, `arrow-down` and the symbol kinds, which have no narrow glyph that reads as well; override them if they misalign in your terminal.
 
 | Name | Plain | Nerd Font | Used for |
 |---|---|---|---|
@@ -66,6 +68,8 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `submenu` | `›` | `\ueab6` | Context menu item with a submenu |
 | `arrow-left` | `‹` | `\ueb6f` | Tab strip overflow, left |
 | `arrow-right` | `›` | `\ueb70` | Tab strip overflow, right |
+| `arrow-up` | `↑` | `↑` | Welcome page navigation hint |
+| `arrow-down` | `↓` | `↓` | Welcome page navigation hint |
 | `close` | `✕` | `✕` | Tab close button |
 | `dirty` | `●` | `●` | Unsaved changes marker in tabs |
 | `pinned` | `♦` | `\ueba0` | Pinned tab |
@@ -75,7 +79,9 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `remove` | `−` | `−` | Unstage actions |
 | `discard` | `✕` | `✕` | Discard changes action |
 | `replace` | `⟳` | `\ueb3d` | Replace button in the replace bar |
-| `replace-all` | `⟳` | `\ueb3c` | Replace All button in Nerd Font mode (plain mode uses “All”) |
+| `replace-all` | `⟳` | `\ueb3c` | Replace All action in global search and the editor replace bar (the bar uses “All” in plain mode) |
+| `reload` | `↻` | `↻` | Reload a file changed on disk |
+| `ellipsis` | `⋯` | `⋯` | Collapsed diff row markers |
 | `branch` | `⎇` | `\uf418` | Branch in the Changes panel |
 | `commit` | `●` | `\uf417` | Commit in commit history |
 | `function` | `ƒ` | `\uea8c` | Symbol and completion kinds |
@@ -105,6 +111,7 @@ All editor settings are nested under the `editor` key.
 | `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
 | `editor.wordWrap` | bool | `false` | Soft-wrap long lines; the global Options toggle changes this default |
 | `editor.wordWrapColumn` | int | `0` | Maximum soft-wrap width in terminal display columns; `0` uses the available text width. Positive values cap it after gutters, scrollbars, and wrap margins. Ignored when wrapping is off; negative values normalize to `0` |
+| `editor.scrollLines` | int | `0` | Screen rows the Scroll Up/Down commands move the viewport and cursor; `0` scrolls half the editor height |
 | `editor.languageOverrides` | object | `{}` | Per-language `wordWrap` and `wordWrapColumn` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
 | `editor.largeFiles.wordWrapMaxMB` | int | `32` | Files larger than this many megabytes open without word wrap, even when `editor.wordWrap` is on. `0` removes the limit |
 | `editor.largeFiles.autoReloadMaxMB` | int | `64` | Files larger than this many megabytes show a Reload action instead of automatically reloading after disk changes. `0` removes the limit. One megabyte is 1,048,576 bytes; negative values also remove the limit |
@@ -173,6 +180,8 @@ String detection uses the language grammar independently of theme colors and whe
 
 ## Explorer
 
+All Explorer options below are available in **Settings > Explorer**, grouped under **Files** and **Appearance**.
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `explorer.showHidden` | bool | `true` | Show hidden files (dot-prefixed) in the file explorer |
@@ -181,6 +190,7 @@ String detection uses the language grammar independently of theme colors and whe
 | `explorer.dimStagedGitColors` | bool | `false` | Render staged changes in a dimmed version of their status color, telling them apart from pending ones. Off by default: the Changes panel already separates staged from unstaged, and the extra shades make the explorer busier. Needs `explorer.gitStatusColors` |
 | `explorer.autoReveal` | bool | `false` | Expand the file explorer to the active file and select it whenever the active file changes. **Explorer: Reveal Active File** does the same on demand |
 | `explorer.compactFolders` | bool | `true` | Show a folder whose only entry is another folder as one row, such as `src/main/java`. Expanding the row opens the whole chain. Right-clicking a segment acts on that folder; other actions on the row apply to the deepest folder |
+| `explorer.useTrash` | bool | `true` | Move deleted files and folders to system Trash. Linux and FreeBSD require `gio` from GLib; Android is unsupported. Failed Trash operations report an error without deleting permanently. Set to `false` for permanent deletion with an explicit warning. Available under **Settings > Explorer > Files** |
 
 ## Quick Open
 
@@ -273,6 +283,28 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `autocomplete.autoSuggest` | bool | `true` | Show completions automatically as you type |
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |
+
+## Display language
+
+Install a language pack through the Plugins panel, then run **Change Display Language** or choose **Settings → General → Display language**. Apply the setting and restart ttt. English is always available; missing or stale translations fall back to English per message.
+
+```json
+{
+  "language": {
+    "locale": "es",
+    "autoUpdate": true,
+    "packs": [{
+      "locale": "es",
+      "name": "Español",
+      "path": "languages/es.json",
+      "source": "languages/en.json",
+      "tttVersion": "1.12.0"
+    }]
+  }
+}
+```
+
+`language.packs` is maintained by plugin installation. For a manual catalog, provide `locale`, `name`, and `path`; `source` (a flat English catalog snapshot) and `tttVersion` are optional. Relative paths resolve from the ttt configuration directory; absolute paths also work. Plugin-managed entries additionally store `sourceCommit`, their plugin/repository identity, and cache metadata; leave those fields intact. English catalogs referenced by `sourceCommit` are cached once per commit and shared across installed languages. Automatic updates apply to plugin-managed packs from public GitHub repositories. Omitting `autoUpdate` means enabled; explicit `false` disables downloads. See [Language packs](/guides/plugin-authoring/#language-packs) for the file formats and version behavior.
 
 ## Grammars
 
@@ -380,7 +412,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "gitStatusColors": true,
     "dimStagedGitColors": false,
     "autoReveal": false,
-    "compactFolders": true
+    "compactFolders": true,
+    "useTrash": true
   },
   "sidebar": {
     "panelOrder": ["explorer", "search", "changes", "outline"]

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -24,8 +25,8 @@ func (a *App) showIndentDialog(title string, onApply func(useTabs bool, tabSize 
 	styleTab := widgets.NewTabsWidget(widgets.TabsConfig{
 		Align: "center",
 		Items: []widgets.TabItem{
-			{ID: "spaces", Label: "Spaces"},
-			{ID: "tabs", Label: "Tabs"},
+			{ID: "spaces", Label: i18n.Text("options.spaces")},
+			{ID: "tabs", Label: i18n.Text("options.tabs")},
 		},
 	})
 	if useTabs {
@@ -65,10 +66,10 @@ func (a *App) showIndentDialog(title string, onApply func(useTabs bool, tabSize 
 	dialog.Borders = *a.Borders
 	dialog.SetContent(content)
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Cancel", Handler: func() {
+		{Label: i18n.Text("general.cancelButton"), Handler: func() {
 			a.DismissDialog()
 		}},
-		{Label: "A&uto", Handler: func() {
+		{Label: i18n.Text("options.aUto"), Handler: func() {
 			if a.EditorGroup.Editor != nil && a.EditorGroup.Editor.Buf != nil {
 				info := buffer.DetectIndent(a.EditorGroup.Editor.Buf.Lines)
 				ut := info.UseTabs
@@ -80,7 +81,7 @@ func (a *App) showIndentDialog(title string, onApply func(useTabs bool, tabSize 
 				onApply(ut, ts)
 			}
 		}},
-		{Label: "&Apply", Handler: func() {
+		{Label: i18n.Text("general.applyButton"), Handler: func() {
 			ut := styleTab.ActiveID() == "tabs"
 			ts := tabSize
 			for _, s := range indentSizes {

@@ -109,6 +109,7 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 - The renderer uses double-buffering (prev/curr cell grids) to minimize terminal writes.
 - `Screen` isolates terminal drawing and screen lifecycle. tcell events remain the shared presentation event model in `term`, `widgets`, `ui`, and narrow application/platform routing. Domain and service packages must not import tcell.
 - **Never hardcode colors.** All colors must go through the theme system (`internal/config/theme.go` → `StyleDef` → `term.Style` constants → `BuildStyleMap()` in `internal/app/theme.go`). Add a new `StyleDef` field to `ThemeConfig`, a `term.Style` constant, and wire it in `BuildStyleMap()`. Widgets reference `term.Style*` constants, never color values. The one exception is the integrated terminal, which uses direct RGB color rendering via `DirectColor`/`CellAttr` to support 256-color output.
+- **User-facing copy belongs in `internal/i18n/en.json`.** Use flat `area.name` keys with one dot and `general.` for labels shared with the same meaning. Read copy through `i18n.Text`, or `i18n.Format` with named placeholders (`{filename}`, `{count}`) and `i18n.Args`. Keep complete messages together so translators can reorder them; do not concatenate translated sentence fragments or use positional printf placeholders in the catalog. Preserve existing keys when changing wording. Keep icons and decorative glyphs in `internal/icons` and compose them with translated text in UI code; use named placeholders when a glyph appears inside a translated hint. Native language names, command IDs, config keys, protocol values, key notation, logs, and external error text are not translation keys. Run `go test ./internal/i18n` to validate catalog keys, references, and placeholders when changing copy.
 - **Terminal colors** are configured via the `terminal` field in `ThemeConfig` (`TerminalColors`), which holds 16 ANSI colors plus foreground/background defaults.
 - Diff tabs and each file in Commit Details use `DiffEditorWidget` (`internal/ui/diff_editor_widget.go`): editor panes over read-only buffers, with a `DiffOverlay` that tints changed lines and adds deleted, filler and gap rows. Syntax highlighting stays on top of the diff tint through `BgStyle` layering; a search match replaces the tint.
 - Editable diffs ("Open Changes" on a working-tree file) bind the same widget to the file tab's own editor pane (`editor_group_diff.go`, `diff_editor_live.go`). Deleted lines are non-buffer rows the cursor skips; in changes-only context unchanged runs hide behind a gap line (`DiffOverlay.Hidden`), separate from the user's folds, which diff panes never apply. Edits replay through `Buffer.ChangesSince` so the overlay, gaps and split alignment move with the text until the debounced recompute in `internal/app/gitgutter.go` replaces them.
@@ -198,6 +199,8 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 
 ### Implementation patterns
 
+- **Display language**: load the selected catalog before constructing the app. Initialize translated tables once in the startup text initialization (`initText` in app, `InitText` in ui); keep their normal string and widget types. Selection changes require a restart. Language packs contribute flat JSON catalogs through `languages` in the plugin manifest. Compare the shared English snapshot by message value; `sourceCommit` references the English catalog used by a pack so ttt can reject stale messages. The local incremental Codex CLI generator and common-language packs live in `eugenioenko/ttt-plugins` (`i18n/` for maintenance, `ttt-i18n-*` for packs); preserve translations whose English values have not changed.
+
 - **Undo contract**: all buffer mutations must go through the undo system via an `EditCommand` (in `internal/core/undo/`). Never modify `Buf.Lines` directly — create or reuse a command struct so undo/redo works.
 - **Command naming**: use `domain.verbNoun` — e.g. `editor.joinLines`, `fold.toggle`, `multicursor.selectAll`.
 - **Selection operations**: check `Selection.Active` first. Use `Selection.Range(cursor.Line, cursor.Col)` for bounds. Convention: if no selection, operate on all lines (for line-based commands) or no-op (for text transforms).
@@ -208,17 +211,16 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 
 ### Opening a pull request
 
-- **Features need an accepted issue first.** Link it in the PR body (`Closes #123`). Bug fixes, docs, and small cleanups can go straight to a PR.
-- **Run it.** Reproduce a bug, or try a feature, in the real binary with `--exec` or `--listen` before and after the change.
-- **One concern per PR**, under roughly 600 changed lines. Note unrelated problems you find in the PR body instead of fixing them.
-- **Title** uses conventional commits: `type(scope): description`.
-- **Body** explains why, which test covers the change, and includes a `--exec` screenshot for visible changes.
-- **Before opening:** `make test` and `make lint` pass, and comments that describe what the code does are removed.
-- **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
+- Features link an accepted issue (`Closes #123`).
+- One concern, under ~600 changed lines.
+- `make test` and `make lint` pass.
+- Title: `type(scope): description`. Body: why, which tests cover it, and before/after [screenshots](#screenshots) for visible changes.
+
+#### Screenshots
+
+- **Text:** `bin/ttt --exec '...; screenshot after.txt; quit'`.
+- **Image:** `--exec` is headless, so run a terminal in Xephyr, drive ttt with `--listen`, and grab with `ffmpeg -f x11grab`. VHS with `--listen` also works.
 
 ### Following up on a pull request
 
-- **Follow through after opening or updating a PR.** Monitor CodeRabbit and required CI checks for the latest head commit. Check pending work about every five minutes. If CodeRabbit is paused or skipped the latest changes, request a review once; avoid duplicate requests while a review is running.
-- **Address valid review findings.** Read inline threads and review summaries, including comments outside the diff. Verify each finding against the current code, fix actionable issues within the PR's scope, and add focused regression coverage where appropriate. Explain why a finding is inapplicable instead of changing code merely to satisfy the bot. Push verified fixes when authorized, then resolve the addressed threads.
-- **Follow CI to a result.** Inspect failing job logs and fix failures caused by the PR. Rerun checks when there is evidence of a transient failure. Report unrelated failures, unavailable checks, missing permissions, and external blockers explicitly; distinguish them from passing checks.
-- **Recheck after each push.** Continue until CodeRabbit has reviewed the latest changes, valid findings are addressed, and required CI passes, or report the concrete blocker and remaining work. Opening the PR alone is not completion. Approval and merge still require the user's authorization.
+Until CodeRabbit has reviewed the latest commit and required CI passes, check every five minutes. Fix each finding or reply with why it does not apply. Merging needs the user's approval.

@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -176,7 +177,7 @@ func (a *App) ToggleSyntaxHighlight() {
 	enabled := !a.Settings.Editor.IsSyntaxHighlightEnabled()
 	a.Settings.Editor.SyntaxHighlight = &enabled
 	a.SaveAndApplySettings()
-	a.StatusNotify("Restart to apply syntax highlight changes")
+	a.StatusNotify(i18n.Text("status.restartToApplySyntaxHighlightChanges"))
 }
 
 func (a *App) ToggleBracketPairColorization() {
@@ -222,19 +223,23 @@ func (a *App) SetGutterStyle(style string) {
 }
 
 // Display labels for the gutter and border style values in config.
-var styleLabels = map[string]string{
-	"minimal":    "Minimal",
-	"compact":    "Compact",
-	"extended":   "Extended",
-	"default":    "Default",
-	"rounded":    "Rounded",
-	"sharp":      "Sharp",
-	"double":     "Double",
-	"bold":       "Bold",
-	"ascii":      "ASCII",
-	"none":       "None",
-	"background": "Background",
-	"invert":     "Invert",
+var styleLabels map[string]string
+
+func initStyleText() {
+	styleLabels = map[string]string{
+		"minimal":    i18n.Text("options.minimal"),
+		"compact":    i18n.Text("options.compact"),
+		"extended":   i18n.Text("options.extended"),
+		"default":    i18n.Text("options.default"),
+		"rounded":    i18n.Text("options.rounded"),
+		"sharp":      i18n.Text("options.sharp"),
+		"double":     i18n.Text("options.double"),
+		"bold":       i18n.Text("options.bold"),
+		"ascii":      i18n.Text("options.aSCII"),
+		"none":       i18n.Text("options.none"),
+		"background": i18n.Text("options.background"),
+		"invert":     i18n.Text("options.invert"),
+	}
 }
 
 func selectionStyleItems() []widgets.SelectItem {
@@ -268,20 +273,20 @@ func borderStyleItems() []widgets.SelectItem {
 
 func diffModeItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
-		{ID: config.DiffModeSplit, Label: "Split"},
-		{ID: config.DiffModeUnified, Label: "Unified"},
+		{ID: config.DiffModeSplit, Label: i18n.Text("menu.split")},
+		{ID: config.DiffModeUnified, Label: i18n.Text("menu.unified")},
 	}
 }
 
 func diffContextItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
-		{ID: config.DiffContextChanges, Label: "Changes Only"},
-		{ID: config.DiffContextFull, Label: "Full File"},
+		{ID: config.DiffContextChanges, Label: i18n.Text("menu.changesOnly")},
+		{ID: config.DiffContextFull, Label: i18n.Text("menu.fullFile")},
 	}
 }
 
 func (a *App) ShowGutterStylePicker() {
-	a.ShowSelectDialog("Gutter Style", gutterStyleItems(), func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.gutterStyle"), gutterStyleItems(), func(id string) {
 		a.SetGutterStyle(id)
 	}, nil)
 }
@@ -325,7 +330,7 @@ func (a *App) applyBorderStyle(themeBorders *term.BorderSet) {
 }
 
 func (a *App) ShowBorderStylePicker() {
-	a.ShowSelectDialog("Border Style", borderStyleItems(), func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.borderStyle"), borderStyleItems(), func(id string) {
 		a.SetBorderStyle(id)
 	}, nil)
 }
@@ -344,7 +349,7 @@ func (a *App) ShowEditorSelectionStylePicker() {
 	if a.Root.HasOverlay() {
 		return
 	}
-	a.ShowSelectDialog("Editor Selection Style", selectionStyleItems(), func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.editorSelectionStyle"), selectionStyleItems(), func(id string) {
 		a.SetEditorSelectionStyle(id)
 	}, nil)
 }
@@ -353,13 +358,13 @@ func (a *App) ShowTerminalSelectionStylePicker() {
 	if a.Root.HasOverlay() {
 		return
 	}
-	a.ShowSelectDialog("Terminal Selection Style", selectionStyleItems(), func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.terminalSelectionStyle"), selectionStyleItems(), func(id string) {
 		a.SetTerminalSelectionStyle(id)
 	}, nil)
 }
 
 func (a *App) ShowDiffViewModePicker() {
-	a.ShowSelectDialog("Diff View Mode", diffModeItems(), func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.diffViewMode"), diffModeItems(), func(id string) {
 		if id == config.DiffModeUnified {
 			a.UseUnifiedDiffByDefault()
 			return
@@ -369,7 +374,7 @@ func (a *App) ShowDiffViewModePicker() {
 }
 
 func (a *App) ShowDiffContextPicker() {
-	a.ShowSelectDialog("Diff Context", diffContextItems(), func(id string) {
+	a.ShowSelectDialog(i18n.Text("options.diffContext"), diffContextItems(), func(id string) {
 		if id == config.DiffContextFull {
 			a.UseFullFileDiffByDefault()
 			return
@@ -434,29 +439,38 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	fontIconsChecked := menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)
 
 	items := []ui.ContextMenuItem{
-		{Label: "Line Numbers", Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
-		{Label: "Indent Guides", Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
-		{Label: "Word Wrap", Command: "options.toggleWordWrap", Checked: wordWrapChecked},
-		{Label: "Auto Indent", Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
-		{Label: "Auto Dedent", Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
-		{Label: "Syntax Highlight", Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
-		{Label: "Bracket Colors", Command: "options.toggleBracketColors", Checked: bracketColorChecked},
-		{Label: "LSP Code Assist", Command: "options.toggleLSP", Checked: lspChecked},
-		{Label: "LSP Hover", Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
-		{Label: "Git Gutter", Command: "options.toggleGitGutter", Checked: gitGutterChecked},
-		{Label: "Scrollbar Git Marks", Command: "options.toggleScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.IsScrollbarGitMarksEnabled())},
-		{Label: "Font Icons", Command: "options.toggleFontIcons", Checked: fontIconsChecked},
-		{Label: "Menu Bar", Command: menuBarToggleCommand, Checked: menuBarChecked},
-		{Label: "Transparent BG", Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
+		{Label: i18n.Text("menu.editor"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.wordWrap"), Command: "options.toggleWordWrap", Checked: wordWrapChecked},
+			{Label: i18n.Text("menu.lineNumbers"), Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
+      {Label: i18n.Text("menu.indentGuides"), Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
+			{Label: i18n.Text("menu.syntaxHighlight"), Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
+			{Label: i18n.Text("menu.bracketColors"), Command: "options.toggleBracketColors", Checked: bracketColorChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.autoIndent"), Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
+			{Label: i18n.Text("menu.autoDedent"), Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.indentation"), Command: "options.indentation"},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.gitGutter"), Command: "options.toggleGitGutter", Checked: gitGutterChecked},
+			{Label: i18n.Text("menu.scrollbarGitMarks"), Command: "options.toggleScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.IsScrollbarGitMarksEnabled())},
+		}},
+		{Label: i18n.Text("menu.codeAssist"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
+			{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
+		}},
+		{Label: i18n.Text("menu.appearance"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
+			{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
+			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
+			{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
+		}},
+		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
+		{Label: i18n.Text("menu.gitFiles"), Submenu: a.BuildGitFileOptions()},
 		ui.MenuSep(),
-		{Label: "Diff Views", Submenu: a.BuildDiffViewOptions()},
-		{Label: "Git Files", Submenu: a.BuildGitFileOptions()},
-		ui.MenuSep(),
-		{Label: "Gutter Style", Command: "options.gutterStyle"},
-		{Label: "Border Style", Command: "options.borderStyle"},
-		{Label: "Indentation", Command: "options.indentation"},
-		ui.MenuSep(),
-		{Label: "Settings", Command: "settings.openUI"},
+		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
+		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 	}
 	return items
 }
@@ -470,20 +484,20 @@ func menuChecked(checked bool) int {
 
 func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
-		{Label: "Split", Command: "options.useSplitDiff", Checked: menuChecked(a.Settings.Editor.DiffMode != config.DiffModeUnified)},
-		{Label: "Unified", Command: "options.useUnifiedDiff", Checked: menuChecked(a.Settings.Editor.DiffMode == config.DiffModeUnified)},
+		{Label: i18n.Text("menu.split"), Command: "options.useSplitDiff", Checked: menuChecked(a.Settings.Editor.DiffMode != config.DiffModeUnified)},
+		{Label: i18n.Text("menu.unified"), Command: "options.useUnifiedDiff", Checked: menuChecked(a.Settings.Editor.DiffMode == config.DiffModeUnified)},
 		ui.MenuSep(),
-		{Label: "Changes Only", Command: "options.useChangesOnlyDiff", Checked: menuChecked(a.Settings.Editor.DiffContext != config.DiffContextFull)},
-		{Label: "Full File", Command: "options.useFullFileDiff", Checked: menuChecked(a.Settings.Editor.DiffContext == config.DiffContextFull)},
+		{Label: i18n.Text("menu.changesOnly"), Command: "options.useChangesOnlyDiff", Checked: menuChecked(a.Settings.Editor.DiffContext != config.DiffContextFull)},
+		{Label: i18n.Text("menu.fullFile"), Command: "options.useFullFileDiff", Checked: menuChecked(a.Settings.Editor.DiffContext == config.DiffContextFull)},
 		ui.MenuSep(),
-		{Label: "Wrap Lines", Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
-		{Label: "High Contrast", Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
-		{Label: "Gutter Signs", Command: "options.toggleDiffSigns", Checked: menuChecked(a.Settings.Editor.DiffSigns)},
-		{Label: "Colored Gutter Signs", Command: "options.toggleDiffSignsColor", Checked: menuChecked(a.Settings.Editor.DiffSignsColor)},
-		{Label: "Gutter Highlight", Command: "options.toggleDiffGutterHighlight", Checked: menuChecked(a.Settings.Editor.DiffGutterHighlight)},
-		{Label: "Colored Gutter Numbers", Command: "options.toggleDiffColorGutterNumbers", Checked: menuChecked(a.Settings.Editor.DiffColorGutterNumbers)},
-		{Label: "Emphasize Collapsed Rows", Command: "options.toggleDiffCollapsedEmphasis", Checked: menuChecked(a.Settings.Editor.DiffCollapsedEmphasis)},
-		{Label: "Scrollbar Git Marks", Command: "options.toggleDiffScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.DiffScrollbarGitMarks)},
+		{Label: i18n.Text("menu.wrapLines"), Command: "options.toggleDiffWordWrap", Checked: menuChecked(a.Settings.Editor.DiffWordWrap)},
+		{Label: i18n.Text("menu.highContrast"), Command: "options.toggleDiffHighContrast", Checked: menuChecked(a.Settings.Editor.DiffHighContrast)},
+		{Label: i18n.Text("menu.gutterSigns"), Command: "options.toggleDiffSigns", Checked: menuChecked(a.Settings.Editor.DiffSigns)},
+		{Label: i18n.Text("menu.coloredGutterSigns"), Command: "options.toggleDiffSignsColor", Checked: menuChecked(a.Settings.Editor.DiffSignsColor)},
+		{Label: i18n.Text("menu.gutterHighlight"), Command: "options.toggleDiffGutterHighlight", Checked: menuChecked(a.Settings.Editor.DiffGutterHighlight)},
+		{Label: i18n.Text("menu.coloredGutterNumbers"), Command: "options.toggleDiffColorGutterNumbers", Checked: menuChecked(a.Settings.Editor.DiffColorGutterNumbers)},
+		{Label: i18n.Text("menu.emphasizeCollapsedRows"), Command: "options.toggleDiffCollapsedEmphasis", Checked: menuChecked(a.Settings.Editor.DiffCollapsedEmphasis)},
+		{Label: i18n.Text("menu.scrollbarGitMarks"), Command: "options.toggleDiffScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.DiffScrollbarGitMarks)},
 	}
 }
 
@@ -497,12 +511,12 @@ func (a *App) BuildChangesGitFileOptions() []ui.ContextMenuItem {
 
 func (a *App) buildGitFileOptions(expandCommand, collapseCommand string) []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
-		{Label: "Tree", Command: "options.useGitFileTree", Checked: menuChecked(a.Settings.Git.FileView == config.GitFileViewTree)},
-		{Label: "List", Command: "options.useGitFileList", Checked: menuChecked(a.Settings.Git.FileView != config.GitFileViewTree)},
-		{Label: "File Icons", Command: "options.toggleFontIcons", Checked: menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)},
+		{Label: i18n.Text("menu.tree"), Command: "options.useGitFileTree", Checked: menuChecked(a.Settings.Git.FileView == config.GitFileViewTree)},
+		{Label: i18n.Text("menu.list"), Command: "options.useGitFileList", Checked: menuChecked(a.Settings.Git.FileView != config.GitFileViewTree)},
+		{Label: i18n.Text("menu.fileIcons"), Command: "options.toggleFontIcons", Checked: menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)},
 		ui.MenuSep(),
-		{Label: "Expand All", Command: expandCommand},
-		{Label: "Collapse All", Command: collapseCommand},
+		{Label: i18n.Text("general.expandAll"), Command: expandCommand},
+		{Label: i18n.Text("general.collapseAll"), Command: collapseCommand},
 	}
 }
 
@@ -510,210 +524,210 @@ func registerOptionsCommands(app *App) {
 	reg := app.Reg
 
 	reg.Register(command.Command{
-		ID: "options.toggleSyntaxHighlight", Title: "Toggle Syntax Highlight",
+		ID: "options.toggleSyntaxHighlight", Title: i18n.Text("command.toggleSyntaxHighlight"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "performance"},
 		Handler:  app.ToggleSyntaxHighlight,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleLineNumbers", Title: "Toggle Line Numbers",
+		ID: "options.toggleLineNumbers", Title: i18n.Text("command.toggleLineNumbers"),
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleLineNumbers,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleIndentGuides", Title: "Toggle Indent Guides",
+    ID: "options.toggleIndentGuides", Title: i18n.Text("options.toggleIndentGuides"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "indentation"},
 		Handler:  app.ToggleIndentGuides,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleWordWrap", Title: "Toggle Word Wrap",
+		ID: "options.toggleWordWrap", Title: i18n.Text("command.toggleWordWrap"),
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleWordWrap,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.diffViewMode", Title: "Change Diff View Mode",
+		ID: "options.diffViewMode", Title: i18n.Text("command.changeDiffViewMode"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "split", "unified", "mode"},
 		Handler:  app.ShowDiffViewModePicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.diffContext", Title: "Change Diff Context",
+		ID: "options.diffContext", Title: i18n.Text("command.changeDiffContext"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "changes", "full", "context"},
 		Handler:  app.ShowDiffContextPicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.useSplitDiff", Title: "Use Split Diff by Default",
+		ID: "options.useSplitDiff", Title: i18n.Text("command.useSplitDiffByDefault"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "split", "default"},
 		Handler:  app.UseSplitDiffByDefault,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.useUnifiedDiff", Title: "Use Unified Diff by Default",
+		ID: "options.useUnifiedDiff", Title: i18n.Text("command.useUnifiedDiffByDefault"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "unified", "default"},
 		Handler:  app.UseUnifiedDiffByDefault,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.useChangesOnlyDiff", Title: "Show Changes Only by Default",
+		ID: "options.useChangesOnlyDiff", Title: i18n.Text("command.showChangesOnlyByDefault"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "compact", "context", "default"},
 		Handler:  app.UseChangesOnlyDiffByDefault,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.useFullFileDiff", Title: "Show Full File Diff by Default",
+		ID: "options.useFullFileDiff", Title: i18n.Text("command.showFullFileDiffByDefault"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "extended", "context", "default"},
 		Handler:  app.UseFullFileDiffByDefault,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffWordWrap", Title: "Toggle Diff Word Wrap Default",
+		ID: "options.toggleDiffWordWrap", Title: i18n.Text("command.toggleDiffWordWrapDefault"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "wrap", "default"},
 		Handler:  app.ToggleDiffWordWrapDefault,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffHighContrast", Title: "Toggle High Contrast Diffs",
+		ID: "options.toggleDiffHighContrast", Title: i18n.Text("command.toggleHighContrastDiffs"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "contrast", "color", "accessibility"},
 		Handler:  app.ToggleDiffHighContrast,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffSigns", Title: "Toggle Diff Gutter Signs",
+		ID: "options.toggleDiffSigns", Title: i18n.Text("command.toggleDiffGutterSigns"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "plus", "minus", "signs"},
 		Handler:  app.ToggleDiffSigns,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffSignsColor", Title: "Toggle Colored Diff Gutter Signs",
+		ID: "options.toggleDiffSignsColor", Title: i18n.Text("command.toggleColoredDiffGutterSigns"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "plus", "minus", "signs", "color"},
 		Handler:  app.ToggleDiffSignsColor,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffGutterHighlight", Title: "Toggle Diff Gutter Highlight",
+		ID: "options.toggleDiffGutterHighlight", Title: i18n.Text("command.toggleDiffGutterHighlight"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "line numbers", "highlight", "color"},
 		Handler:  app.ToggleDiffGutterHighlight,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffColorGutterNumbers", Title: "Toggle Colored Diff Gutter Numbers",
+		ID: "options.toggleDiffColorGutterNumbers", Title: i18n.Text("command.toggleColoredDiffGutterNumbers"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "gutter", "line numbers", "color"},
 		Handler:  app.ToggleDiffColorGutterNumbers,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffCollapsedEmphasis", Title: "Toggle Collapsed Diff Row Emphasis",
+		ID: "options.toggleDiffCollapsedEmphasis", Title: i18n.Text("command.toggleCollapsedDiffRowEmphasis"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "collapsed", "omitted", "visibility"},
 		Handler:  app.ToggleDiffCollapsedEmphasis,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleDiffScrollbarGitMarks", Title: "Toggle Diff Scrollbar Git Marks",
+		ID: "options.toggleDiffScrollbarGitMarks", Title: i18n.Text("command.toggleDiffScrollbarGitMarks"),
 		Keywords: []string{"preferences", "settings", "git", "diff", "scrollbar", "marks", "changes"},
 		Handler:  app.ToggleDiffScrollbarGitMarks,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.useGitFileTree", Title: "View Git Files as Tree",
+		ID: "options.useGitFileTree", Title: i18n.Text("command.viewGitFilesAsTree"),
 		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "tree"},
 		Handler:  app.UseTreeGitFileView,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.useGitFileList", Title: "View Git Files as List",
+		ID: "options.useGitFileList", Title: i18n.Text("command.viewGitFilesAsList"),
 		Keywords: []string{"preferences", "settings", "git", "changes", "history", "files", "flat", "list"},
 		Handler:  app.UseListGitFileView,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleFontIcons", Title: "Toggle Font Icons",
+		ID: "options.toggleFontIcons", Title: i18n.Text("command.toggleFontIcons"),
 		Keywords: []string{"preferences", "settings", "explorer", "git", "files", "icons", "nerd font"},
 		Handler:  app.ToggleFileIcons,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleAutoIndent", Title: "Toggle Auto Indent",
+		ID: "options.toggleAutoIndent", Title: i18n.Text("command.toggleAutoIndent"),
 		Keywords: []string{"preferences", "settings", "editor", "indentation", "indent"},
 		Handler:  app.ToggleAutoIndent,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleAutoDedent", Title: "Toggle Auto Dedent",
+		ID: "options.toggleAutoDedent", Title: i18n.Text("command.toggleAutoDedent"),
 		Keywords: []string{"preferences", "settings", "editor", "indentation", "dedent", "bracket"},
 		Handler:  app.ToggleAutoDedent,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleShowTrailingNewline", Title: "Toggle Show Trailing Newline",
+		ID: "options.toggleShowTrailingNewline", Title: i18n.Text("command.toggleShowTrailingNewline"),
 		Keywords: []string{"preferences", "settings", "editor", "newline", "trailing", "phantom"},
 		Handler:  app.ToggleShowTrailingNewline,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleBracketColors", Title: "Toggle Bracket Pair Colorization",
+		ID: "options.toggleBracketColors", Title: i18n.Text("command.toggleBracketPairColorization"),
 		Handler: app.ToggleBracketPairColorization,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleTransparentBackground", Title: "Toggle Transparent Background",
+		ID: "options.toggleTransparentBackground", Title: i18n.Text("command.toggleTransparentBackground"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "background", "transparent", "terminal"},
 		Handler:  app.ToggleTransparentBackground,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleLSP", Title: "Toggle LSP",
+		ID: "options.toggleLSP", Title: i18n.Text("command.toggleLSP"),
 		Keywords: []string{"preferences", "settings", "language", "server", "autocomplete"},
 		Handler:  app.ToggleLSP,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleLSPHover", Title: "Toggle LSP Hover",
+		ID: "options.toggleLSPHover", Title: i18n.Text("command.toggleLSPHover"),
 		Keywords: []string{"preferences", "settings", "language", "server", "hover", "mouse", "tooltip"},
 		Handler:  app.ToggleLSPHover,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleGitGutter", Title: "Toggle Git Gutter",
+		ID: "options.toggleGitGutter", Title: i18n.Text("command.toggleGitGutter"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "git"},
 		Handler:  app.ToggleGitGutter,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.toggleScrollbarGitMarks", Title: "Toggle Scrollbar Git Marks",
+		ID: "options.toggleScrollbarGitMarks", Title: i18n.Text("command.toggleScrollbarGitMarks"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "git", "scrollbar", "marks", "changes"},
 		Handler:  app.ToggleScrollbarGitMarks,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.gutterStyle", Title: "Change Gutter Style",
+		ID: "options.gutterStyle", Title: i18n.Text("command.changeGutterStyle"),
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ShowGutterStylePicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.borderStyle", Title: "Change Border Style",
+		ID: "options.borderStyle", Title: i18n.Text("command.changeBorderStyle"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "borders", "rounded", "sharp"},
 		Handler:  app.ShowBorderStylePicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.editorSelectionStyle", Title: "Change Editor Selection Style",
+		ID: "options.editorSelectionStyle", Title: i18n.Text("command.changeEditorSelectionStyle"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "selection", "invert", "highlight"},
 		Handler:  app.ShowEditorSelectionStylePicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.terminalSelectionStyle", Title: "Change Terminal Selection Style",
+		ID: "options.terminalSelectionStyle", Title: i18n.Text("command.changeTerminalSelectionStyle"),
 		Keywords: []string{"preferences", "settings", "terminal", "view", "selection", "invert", "highlight"},
 		Handler:  app.ShowTerminalSelectionStylePicker,
 	})
 
 	reg.Register(command.Command{
-		ID: "options.indentation", Title: "Editor Indentation",
+		ID: "options.indentation", Title: i18n.Text("command.editorIndentation"),
 		Keywords: []string{"preferences", "settings", "editor", "indentation", "tabs", "spaces"},
 		Handler:  app.ShowIndentSettings,
 	})

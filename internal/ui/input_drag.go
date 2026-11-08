@@ -1,8 +1,12 @@
 package ui
 
-import "github.com/gdamore/tcell/v3"
+import (
+	"github.com/eugenioenko/ttt/internal/widgets"
 
-func handleInputDrag(ev tcell.Event, inputs ...*InputWidget) EventResult {
+	"github.com/gdamore/tcell/v3"
+)
+
+func handleInputDrag(ev tcell.Event, inputs ...*widgets.InputWidget) EventResult {
 	if _, key := ev.(*tcell.EventKey); key {
 		cancelInputDrags(inputs...)
 	}
@@ -10,13 +14,13 @@ func handleInputDrag(ev tcell.Event, inputs ...*InputWidget) EventResult {
 	if ok {
 		for _, input := range inputs {
 			if input != nil && input.OwnsPointerCapture() {
-				return input.HandleMouse(mouse)
+				return input.HandleEvent(mouse)
 			}
 		}
 	}
 	return EventIgnored
 }
-func cancelInputDrags(inputs ...*InputWidget) bool {
+func cancelInputDrags(inputs ...*widgets.InputWidget) bool {
 	canceled := false
 	for _, input := range inputs {
 		if input != nil {
@@ -26,7 +30,7 @@ func cancelInputDrags(inputs ...*InputWidget) bool {
 	return canceled
 }
 
-func ownsInputDrag(inputs ...*InputWidget) bool {
+func ownsInputDrag(inputs ...*widgets.InputWidget) bool {
 	for _, input := range inputs {
 		if input != nil && input.OwnsPointerCapture() {
 			return true

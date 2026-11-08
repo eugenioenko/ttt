@@ -20,6 +20,7 @@
     "wordWrap": false,
     "wordWrapColumn": 0,
     "indentGuides": false,
+    "scrollLines": 0,
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,
@@ -56,7 +57,8 @@
     "gitStatusColors": true,
     "dimStagedGitColors": false,
     "autoReveal": false,
-    "compactFolders": true
+    "compactFolders": true,
+    "useTrash": true
   },
   "sidebar": {
     "tabStyle": "label"

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -27,18 +28,18 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	md := widgets.NewMarkdownWidget()
 	md.MaxWidth = a.Settings.Markdown.WrapWidth
-	md.SetContent("Loading README...")
+	md.SetContent(i18n.Text("plugins.loadingREADME"))
 
 	installed := a.isPluginInstalled(entry.Name)
 
 	installBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
-		Label: "Install",
+		Label: i18n.Text("general.install"),
 		Style: term.StyleDefault,
 		OnClick: func() {
 			if a.PluginsPanel != nil && a.PluginsPanel.OnInstall != nil {
 				a.PluginsPanel.OnInstall(entry.Repo, entry.Path, entry.Name)
 				if state, ok := a.pluginDetailWidgets[entry.Name]; ok {
-					state.installBtn.SetLabel("Installing...")
+					state.installBtn.SetLabel(i18n.Text("plugins.installing"))
 					state.installBtn.Disabled = true
 				}
 			}
@@ -46,7 +47,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 	})
 
 	if installed {
-		installBtn.SetLabel("Installed")
+		installBtn.SetLabel(i18n.Text("plugins.installed"))
 		installBtn.Disabled = true
 	}
 
@@ -56,7 +57,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 	})
 
 	sourceBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
-		Label: "Source",
+		Label: i18n.Text("plugins.source"),
 		Style: term.StyleDefault,
 		OnClick: func() {
 			OpenURL(repoFolderURL(entry.Repo, entry.Path))
@@ -73,7 +74,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	var metaParts []string
 	if entry.Featured {
-		metaParts = append(metaParts, "Featured")
+		metaParts = append(metaParts, i18n.Text("plugins.featured"))
 	}
 	if entry.Version != "" {
 		metaParts = append(metaParts, "v"+entry.Version)
@@ -97,6 +98,12 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 		headerWidgets = append(headerWidgets, tagsLabel)
 	}
 
+	if !a.isMaintainedRepo(entry.Repo) {
+		notice := widgets.NewParagraphWidget(i18n.Text("plugins.communityNotice"))
+		notice.Style = term.StyleWarning
+		headerWidgets = append(headerWidgets, notice)
+	}
+
 	if installed {
 		if p := a.PluginManager.FindPlugin(entry.Name); p != nil && len(p.FileHandlers) > 0 {
 			handlerLabels := make([]string, 0, len(p.FileHandlers))
@@ -112,7 +119,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 				handlerLabels = append(handlerLabels, label)
 			}
 			headerWidgets = append(headerWidgets, widgets.NewLabelWidget(widgets.LabelConfig{
-				Text:  "Handles: " + strings.Join(handlerLabels, ", "),
+				Text:  i18n.Format("plugins.handles", i18n.Args{"items": strings.Join(handlerLabels, ", ")}),
 				Style: term.StyleMuted,
 			}))
 		}
@@ -145,9 +152,9 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 		if err != nil {
 			var missing *readmeMissingError
 			if errors.As(err, &missing) {
-				md.SetContent("No documentation is available for this plugin.\n\nRepository: " + missing.repoURL)
+				md.SetContent(i18n.Format("plugins.noDocumentation", i18n.Args{"repoURL": missing.repoURL}))
 			} else {
-				md.SetContent(fmt.Sprintf("Could not load README: %s", err))
+				md.SetContent(i18n.Format("plugins.couldNotLoadREADME", i18n.Args{"error": err}))
 			}
 		} else {
 			md.SetContent(content)
@@ -158,7 +165,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 func (a *App) updatePluginDetailButtons() {
 	for name, state := range a.pluginDetailWidgets {
 		if a.isPluginInstalled(name) {
-			state.installBtn.SetLabel("Installed")
+			state.installBtn.SetLabel(i18n.Text("plugins.installed"))
 			state.installBtn.Disabled = true
 		}
 	}
@@ -172,6 +179,14 @@ func (a *App) cleanupPluginDetailTab(id string) {
 		}
 		delete(a.pluginDetailWidgets, name)
 	}
+}
+
+func (a *App) isMaintainedRepo(repo string) bool {
+	var entries []plugin.RemoteRegistryEntry
+	if a.PluginsPanel != nil {
+		entries = a.PluginsPanel.available
+	}
+	return plugin.IsMaintained(repo, entries)
 }
 
 func (a *App) isPluginInstalled(name string) bool {

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
@@ -111,7 +112,7 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 		if icons.IsNerd(t.Icons) {
 			prefix += icons.Get(t.Icons, icons.Lock) + " "
 		} else {
-			suffix = " (readonly)"
+			suffix = i18n.Text("tabbar.readonly")
 		}
 	}
 	label := tabLabelLayout{
@@ -353,10 +354,7 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 		if dragged && from != to && t.OnTabReorder != nil {
 			t.OnTabReorder(from, to)
 		}
-		if dragged {
-			return EventConsumed
-		}
-		return EventIgnored
+		return EventConsumed
 	}
 	if t.drag.Active() && btn&tcell.Button1 != 0 {
 		if !t.validateGestureSource() {
@@ -520,6 +518,10 @@ func (t *TabBarWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (t *TabBarWidget) OwnsPointerCapture() bool {
+	return t.validateGestureSource()
+}
+
+func (t *TabBarWidget) PointerGestureActive() bool {
 	return t.validateGestureSource()
 }
 

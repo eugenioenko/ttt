@@ -170,13 +170,13 @@ func TestPaletteBackspace(t *testing.T) {
 	// Initial text is ">", type "sp" → ">sp"
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "s", 0))
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "p", 0))
-	if p.Input.Text != ">sp" {
-		t.Fatalf("expected text '>sp', got '%s'", p.Input.Text)
+	if p.Input.Text() != ">sp" {
+		t.Fatalf("expected text '>sp', got '%s'", p.Input.Text())
 	}
 
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyBackspace2, "", 0))
-	if p.Input.Text != ">s" {
-		t.Fatalf("expected text '>s' after backspace, got '%s'", p.Input.Text)
+	if p.Input.Text() != ">s" {
+		t.Fatalf("expected text '>s' after backspace, got '%s'", p.Input.Text())
 	}
 }
 
@@ -537,8 +537,8 @@ func TestPaletteSharedWidthAcrossModeTransitionsAndReopen(t *testing.T) {
 
 	reopened := NewSelectDialogWidget(helpTestCommands())
 	renderPaletteAt(reopened, 200, 50)
-	if reopened.Input.Text != ">" || reopened.boxX != 70 || reopened.boxW != 60 {
-		t.Fatalf("reopened command palette = input:%q x:%d width:%d", reopened.Input.Text, reopened.boxX, reopened.boxW)
+	if reopened.Input.Text() != ">" || reopened.boxX != 70 || reopened.boxW != 60 {
+		t.Fatalf("reopened command palette = input:%q x:%d width:%d", reopened.Input.Text(), reopened.boxX, reopened.boxW)
 	}
 }
 
@@ -546,8 +546,8 @@ func TestPaletteHelpStartsWithOrientationTopics(t *testing.T) {
 	p := NewSelectDialogWidget(helpTestCommands())
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "?", tcell.ModNone))
 
-	if p.mode != paletteHelpMode || p.Input.Text != "?" {
-		t.Fatalf("expected question-mark help mode, got mode=%d input=%q", p.mode, p.Input.Text)
+	if p.mode != paletteHelpMode || p.Input.Text() != "?" {
+		t.Fatalf("expected question-mark help mode, got mode=%d input=%q", p.mode, p.Input.Text())
 	}
 	if len(p.Items) == 0 {
 		t.Fatal("expected orientation topics")
@@ -678,5 +678,13 @@ func TestPaletteHelpNoMatchesRendersGuidance(t *testing.T) {
 func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
 	if got := TruncateLeft("prefix界界", 4); got != "…界" {
 		t.Fatalf("expected width-safe tail, got %q", got)
+	}
+}
+
+func TestSelectDialogWidgetFocusedInput(t *testing.T) {
+	p := NewSelectDialogWidget(nil)
+	var holder InputHolder = p
+	if holder.FocusedInput() != p.Input {
+		t.Fatalf("FocusedInput() = %v, want %v", holder.FocusedInput(), p.Input)
 	}
 }
