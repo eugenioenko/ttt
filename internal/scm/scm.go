@@ -50,10 +50,18 @@ type FileContent struct {
 
 type ChangeDiff struct {
 	Before, After FileContent
-	// Patch is a unified diff, including metadata-only changes. Empty means no
-	// change; consumers must not infer absence from an empty file's content.
-	Patch      string
-	Conflicted bool
+	// Patch is a unified diff, including metadata-only changes. Conflicted
+	// results may omit it: the endpoints describe a provider-selected two-way
+	// resolution view. Otherwise empty means no change; an empty file may exist.
+	Patch          string
+	Conflicted     bool
+	ConflictDetail string
+	// ConflictID opts into one aggregate resolution view for this path and ID,
+	// even when the conflict is reported in multiple action groups.
+	ConflictID string
+	// ConflictSources are opaque identities of the available conflict sides.
+	// Consumers use them for invalidation, never to select provider revisions.
+	ConflictSources []string
 }
 
 type Identity struct {

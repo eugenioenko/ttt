@@ -134,7 +134,7 @@ type RepositoryState struct {
 	currentAppliedFingerprint string
 	currentInputs             map[string]currentChangesInput
 	currentInputReady         bool
-	readCurrentChanges        func(context.Context, string, string, string, uint64, uint64, []git.FileStatus) *CurrentChangesResult
+	readCurrentChanges        func(context.Context, repositorySource, string, string, uint64, uint64, []scm.Change) *CurrentChangesResult
 	currentChangesHandler     func(*CurrentChangesResult)
 }
 

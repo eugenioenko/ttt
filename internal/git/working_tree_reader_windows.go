@@ -1,6 +1,6 @@
 //go:build windows
 
-package app
+package git
 
 import (
 	"bytes"
@@ -50,6 +50,9 @@ func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workin
 		current = filepath.Join(current, part)
 		handle, info, openErr := openWindowsWorkingTreePath(current, windows.FILE_READ_ATTRIBUTES)
 		if openErr != nil {
+			if errors.Is(openErr, windows.ERROR_FILE_NOT_FOUND) || errors.Is(openErr, windows.ERROR_PATH_NOT_FOUND) {
+				return workingTreeFile{Kind: workingTreeFileMissing}, nil
+			}
 			return workingTreeFile{}, classifyWindowsWorkingTreeOpenError(filepath.Join(root, path), openErr)
 		}
 		handles = append(handles, handle)
@@ -57,7 +60,7 @@ func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workin
 			return workingTreeFile{}, &workingTreePathError{Path: filepath.Join(root, path), Kind: workingTreePathSymlinkComponent}
 		}
 		if info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 {
-			return workingTreeFile{}, &workingTreePathError{Path: filepath.Join(root, path), Kind: workingTreePathDirectory}
+			return workingTreeFile{Kind: workingTreeFileMissing}, nil
 		}
 	}
 

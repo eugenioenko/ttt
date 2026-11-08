@@ -86,6 +86,13 @@ ignored, and conflicted content are explicit states; failed reads are errors.
 Repository objects are captured on the main thread before background reads,
 which keep the existing cancellation and stale-result guards. Single-file
 read-only diffs use `scm.ChangeReader` through the cancellable diff-open task.
+Aggregate Current Changes also consumes typed changes through this capability;
+Git conflict-side selection, conflict detail, and verified working-file reads
+stay in the Git service. A provider can identify a shared conflict resolution
+view for aggregate deduplication without removing sidebar action groups.
+Provider groups and opaque conflict-side identities
+participate in aggregate refresh and per-file view identity. The existing
+`RepositoryState` owner retains cancellation, coalescing, and stale-result guards.
 The Changes panel passes typed changes without converting provider groups into
 Git status. Git resolves HEAD/index endpoints and supplies patch metadata for
 renames, modes, and binary changes inside its adapter.
@@ -93,9 +100,10 @@ renames, modes, and binary changes inside its adapter.
 Remaining provider integration boundaries before a second provider can drive
 the complete editor:
 
-- Aggregate Current Changes (`current_changes.go`, `repository_state.go`)
-  and history/commit details still use Git endpoints and explicit Git model adapters. They need typed content,
-  revision, conflict-stage, binary, mode, rename, and diff capabilities.
+- History/commit details still use Git endpoints and explicit Git model adapters.
+  They need typed revision identities, history reads, and full-file expansion.
+  Current Changes retains its staged/unstaged presentation projection; fully
+  provider-defined sections, labels, and actions remain a presentation follow-up.
 - Discard, commit, branch, fetch/pull/push, and worktree actions still need
   optional mutation capabilities and capability-aware commands and menus.
 - Blame, ignore enumeration, GitHub PRs, and workspace repository detection

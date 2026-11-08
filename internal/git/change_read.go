@@ -3,8 +3,9 @@ package git
 import (
 	"context"
 	"errors"
-	"os"
+	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/scm"
@@ -30,8 +31,7 @@ func (r repository) ReadChange(ctx context.Context, change scm.Change) (scm.Chan
 	}
 	for _, entry := range entries {
 		if entry.Stage != 0 {
-			result.Conflicted = true
-			return result, nil
+			return r.readConflictChange(ctx, change, entries)
 		}
 	}
 	index := scm.FileContent{}
@@ -69,28 +69,20 @@ func (r repository) ReadChange(ctx context.Context, change scm.Change) (scm.Chan
 		result.After = index
 	} else {
 		result.Before = index
-		path := filepath.Join(r.root, change.Path)
-		info, err := os.Lstat(path)
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			err = nil
-		case err != nil:
-			return result, err
-		case info.Mode()&os.ModeSymlink != 0:
-			result.After.Content, err = os.Readlink(path)
-			result.After.Exists = err == nil
-		case info.Mode().IsRegular():
-			var data []byte
-			data, err = os.ReadFile(path)
-			result.After = scm.FileContent{Content: string(data), Exists: err == nil}
-		case info.IsDir() && len(entries) != 0 && entries[0].Mode == "160000":
-			workingGitlink = true
-			result.After = index
-		default:
-			return result, errors.ErrUnsupported
-		}
-		if err != nil {
-			return result, err
+		working, readErr := readWorkingTreeFileContext(ctx, r.root, change.Path)
+		if readErr != nil {
+			var pathErr *workingTreePathError
+			if errors.As(readErr, &pathErr) && pathErr.Kind == workingTreePathDirectory && len(entries) != 0 && entries[0].Mode == "160000" {
+				workingGitlink = true
+				result.After = index
+			} else {
+				return result, readErr
+			}
+		} else {
+			if !working.Exists && change.Kind != scm.Deleted {
+				return result, fmt.Errorf("working tree path disappeared: %q", change.Path)
+			}
+			result.After = scm.FileContent{Content: string(working.Content), Exists: working.Exists}
 		}
 	}
 	flags := []string{"--no-ext-diff", "--no-textconv", "--submodule=short", "-M"}
@@ -131,4 +123,34 @@ func readChangeContent(mode, object string, read func() (string, error)) (scm.Fi
 	}
 	content, err := read()
 	return scm.FileContent{Content: content, Exists: err == nil}, err
+}
+
+func (r repository) readConflictChange(ctx context.Context, change scm.Change, entries []IndexEntry) (scm.ChangeDiff, error) {
+	result := scm.ChangeDiff{Conflicted: true, ConflictID: "index", ConflictDetail: conflictCodeFromEntries(entries)}
+	for _, entry := range entries {
+		result.ConflictSources = append(result.ConflictSources, strconv.Itoa(entry.Stage))
+	}
+	entry, ok := preferredConflictEntry(entries)
+	if !ok {
+		return result, fmt.Errorf("unmerged path has no conflict endpoint")
+	}
+	var err error
+	result.Before, err = readChangeContent(entry.Mode, entry.Object, func() (string, error) {
+		data, err := ShowIndexFileBytesContext(ctx, r.root, change.Path, entry.Stage)
+		return string(data), err
+	})
+	if err != nil {
+		return result, err
+	}
+	working, err := readWorkingTreeFileContext(ctx, r.root, change.Path)
+	if err != nil {
+		var pathErr *workingTreePathError
+		if errors.As(err, &pathErr) && pathErr.Kind == workingTreePathDirectory && entry.Mode == "160000" {
+			result.After = scm.FileContent{Exists: true}
+			return result, nil
+		}
+		return result, err
+	}
+	result.After = scm.FileContent{Content: string(working.Content), Exists: working.Exists}
+	return result, ctx.Err()
 }

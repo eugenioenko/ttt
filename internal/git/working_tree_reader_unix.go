@@ -1,6 +1,6 @@
 //go:build linux || darwin || freebsd
 
-package app
+package git
 
 import (
 	"bytes"
@@ -27,6 +27,15 @@ func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workin
 		}
 		next, openErr := unix.Openat(dirfd, part, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 		if openErr != nil {
+			if errors.Is(openErr, unix.ENOENT) {
+				return workingTreeFile{Kind: workingTreeFileMissing}, nil
+			}
+			if errors.Is(openErr, unix.ENOTDIR) {
+				var st unix.Stat_t
+				if statErr := unix.Fstatat(dirfd, part, &st, unix.AT_SYMLINK_NOFOLLOW); statErr == nil && st.Mode&unix.S_IFMT == unix.S_IFREG {
+					return workingTreeFile{Kind: workingTreeFileMissing}, nil
+				}
+			}
 			return workingTreeFile{}, classifyWorkingTreeOpenError(filepath.Join(root, path), workingTreePathSymlinkComponent, openErr)
 		}
 		if closeErr := unix.Close(dirfd); closeErr != nil {

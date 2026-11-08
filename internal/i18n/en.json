@@ -44,7 +44,6 @@
   "changes.fileCount": "{count} file",
   "changes.filesCount": "{count} files",
   "changes.fullFileNotLoaded": "Full file not loaded",
-  "changes.hEADToIndex": "HEAD-to-index",
   "changes.loadOlderCommits": "Load older commits…",
   "changes.loadingCommit": "Loading commit {short}…",
   "changes.loadingCurrentChanges": "Loading current changes…",
