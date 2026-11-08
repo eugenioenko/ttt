@@ -15,6 +15,8 @@ The selection belongs to the current tab and stays after Save As, rename, and gr
 
 Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.
 
+`editor.wordWrapBreak` chooses where a row ends. The default, `"word"`, ends a row after a space or after `.`, `,`, `;`, `/`, `|`, `&`, `?` and closing brackets, before an opening bracket, or next to a wide character, so words and identifiers stay whole. A space at the edge stays on its row instead of starting the next one, and a token wider than the row breaks at the character that overflows. `"character"` fills every row and breaks wherever the width runs out.
+
 Use language IDs to set different limits for code and prose:
 
 ```json
@@ -24,13 +26,14 @@ Use language IDs to set different limits for code and prose:
     "wordWrapColumn": 0,
     "languageOverrides": {
       "typescript": { "wordWrapColumn": 80 },
-      "markdown": { "wordWrapColumn": 65 }
+      "markdown": { "wordWrapColumn": 65 },
+      "log": { "wordWrapBreak": "character" }
     }
   }
 }
 ```
 
-Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping and `0` for the column). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
+Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping, `0` for the column, and `"word"` for the break). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
 
 The **Options > Editor > Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
 

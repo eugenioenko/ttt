@@ -271,6 +271,13 @@ func borderStyleItems() []widgets.SelectItem {
 	return items
 }
 
+func wordWrapBreakItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.WordWrapBreakWord, Label: i18n.Text("settings.wordWrapBreakWord")},
+		{ID: config.WordWrapBreakCharacter, Label: i18n.Text("settings.wordWrapBreakCharacter")},
+	}
+}
+
 func diffModeItems() []widgets.SelectItem {
 	return []widgets.SelectItem{
 		{ID: config.DiffModeSplit, Label: i18n.Text("menu.split")},

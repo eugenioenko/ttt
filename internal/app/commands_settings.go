@@ -120,6 +120,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
 	a.EditorGroup.WordWrapColumn = s.Editor.WordWrapColumn
+	a.EditorGroup.WordWrapBreak = s.Editor.WordWrapBreak
 	a.EditorGroup.LanguageOverrides = s.Editor.LanguageOverrides
 	a.EditorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
 	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
