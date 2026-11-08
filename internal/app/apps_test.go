@@ -62,7 +62,7 @@ func TestAppCommandPassesLiteralPathsToNativeProgram(t *testing.T) {
 	}
 	command := `"$TTT_APP_TEST_EXE" -test.run=^TestAppCommandArgumentsHelper$ -- {file} {dir} {workspace}`
 	if runtime.GOOS == "windows" {
-		command = `& $env:TTT_APP_TEST_EXE -test.run=^TestAppCommandArgumentsHelper$ -- {file} {dir} {workspace}`
+		command = `& $env:TTT_APP_TEST_EXE '-test.run=^TestAppCommandArgumentsHelper$' -- {file} {dir} {workspace}`
 	}
 	paths := []string{`C:\it's {dir}\文 $x & 100%.txt`, `C:\a space\folder`, `C:\workspace`}
 	if runtime.GOOS != "windows" {
