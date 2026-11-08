@@ -3,6 +3,7 @@ package update
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 )
@@ -54,7 +55,9 @@ func DetectMethod(exePath string, info *debug.BuildInfo) Method {
 			if resolved, err := filepath.EvalSymlinks(bin); err == nil {
 				bin = resolved
 			}
-			if filepath.Clean(filepath.Dir(exePath)) == filepath.Clean(bin) {
+			dir := filepath.Clean(filepath.Dir(exePath))
+			bin = filepath.Clean(bin)
+			if dir == bin || runtime.GOOS == "windows" && strings.EqualFold(dir, bin) {
 				m.Kind = GoInstall
 				break
 			}

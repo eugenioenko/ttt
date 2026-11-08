@@ -138,6 +138,7 @@ func TestDetectMethod(t *testing.T) {
 		{filepath.Join(root, "custom-bin", "ttt"), info, GoInstall},
 		{filepath.Join(root, "go", "bin", "ttt"), info, GoInstall},
 		{filepath.Join(root, "go", "bin", "ttt"), nil, Binary},
+		{filepath.Join(root, "go", "bin", "ttt"), &debug.BuildInfo{Main: debug.Module{Version: "(devel)"}}, Binary},
 		{"/usr/local/bin/ttt", info, Binary},
 	} {
 		if got := DetectMethod(tc.path, tc.info); got.Kind != tc.want {
@@ -147,6 +148,12 @@ func TestDetectMethod(t *testing.T) {
 	method, err := CurrentMethod("dev")
 	if err != nil || method.Kind != Dev {
 		t.Fatalf("dev method = %v, %v", method, err)
+	}
+	if runtime.GOOS == "windows" {
+		t.Setenv("GOBIN", strings.ToUpper(filepath.Join(root, "custom-bin")))
+		if got := DetectMethod(filepath.Join(root, "custom-bin", "ttt.exe"), info); got.Kind != GoInstall {
+			t.Fatalf("case-insensitive GOBIN: %+v", got)
+		}
 	}
 	bin := filepath.Join(root, "Cellar", "ttt", "bin", "ttt")
 	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
