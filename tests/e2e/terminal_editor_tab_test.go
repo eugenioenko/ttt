@@ -65,7 +65,9 @@ func TestEditorTerminalTabTakesKeysAndFollowsItsTab(t *testing.T) {
 	var info *plugin.TerminalInfo
 	for _, ti := range h.app.ListTerminals() {
 		if ti.ID == entry.ID {
-			info = &ti
+			found := ti
+			info = &found
+			break
 		}
 	}
 	if info == nil || info.Location != plugin.TerminalLocationEditor {

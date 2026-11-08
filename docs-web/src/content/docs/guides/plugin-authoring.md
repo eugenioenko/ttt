@@ -779,7 +779,7 @@ local ok, err = term.close(id)              -- terminates child process and remo
 | `term.close(id)` | `terminal.control` | Terminates the terminal child process, closes the PTY, and removes its tab (from the terminal panel or the editor). Returns `true` on success, or `nil, err`. |
 | `term.read(id, [max_bytes])` | `terminal.read` | Returns the retained raw PTY stream output (including ANSI escape sequences and command echo) up to `max_bytes` (capped at 64 KB; passing `0` or omitting returns all retained bytes). Returns `string` on success, or `nil, err`. |
 | `term.screen(id)` | `terminal.read` | Returns the current visible screen content as plain text lines separated by `\n` with trailing blanks trimmed. Automatically selects the active buffer (including alternate screen buffer when full-screen TUIs like vim or agents run). Contains no ANSI escape codes, making it ideal for regex pattern matching. Returns `string` on success, or `nil, err`. |
-| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, location = "panel" | "editor", cols = number, rows = number }, … }`. Returns an empty table if none are open. |
+| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, location = "panel" \| "editor", cols = number, rows = number }, … }`. Returns an empty table if none are open. |
 
 #### Raw Tail vs. Screen Text
 
