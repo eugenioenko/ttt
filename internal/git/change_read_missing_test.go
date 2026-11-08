@@ -57,3 +57,26 @@ func TestReadChangeMissingParentIsMissingEndpoint(t *testing.T) {
 		})
 	}
 }
+
+func TestReadChangeDeletedChildOfReplacedDirectory(t *testing.T) {
+	dir := setupTestRepo(t)
+	path := "parent/file.txt"
+	if err := os.Mkdir(filepath.Join(dir, "parent"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, path), []byte("before\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, dir, "add", ".")
+	gitRun(t, dir, "commit", "-qm", "nested file")
+	if err := os.RemoveAll(filepath.Join(dir, "parent")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "parent"), []byte("replacement\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := (repository{root: dir}).ReadChange(context.Background(), scm.Change{Path: path, Kind: scm.Deleted, Group: scm.WorkingTree})
+	if err != nil || !got.Before.Exists || got.Before.Content != "before\n" || got.After.Exists || !strings.Contains(got.Patch, "deleted file mode") {
+		t.Fatalf("deleted child: %+v err=%v", got, err)
+	}
+}
