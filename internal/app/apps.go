@@ -121,23 +121,21 @@ func (a *App) LaunchApp(name string) {
 		return
 	}
 
-	file := a.EditorGroup.ActiveDocumentPath()
+	file := a.EditorGroup.RecentDocumentPath()
 	if file != "" {
 		if abs, err := filepath.Abs(file); err == nil {
 			file = abs
 		}
 	}
-	needsFile := strings.Contains(app.Command, "{file}") || strings.Contains(app.Command, "{dir}") ||
-		strings.Contains(app.Cwd, "{file}") || strings.Contains(app.Cwd, "{dir}")
-	if needsFile && file == "" {
+	if file == "" && (strings.Contains(app.Command, "{file}") || strings.Contains(app.Cwd, "{file}")) {
 		a.StatusError(i18n.Format("apps.needsFile", i18n.Args{"name": name}))
 		return
 	}
-	dir := ""
+	workspace := a.Workspace.Primary()
+	dir := workspace
 	if file != "" {
 		dir = filepath.Dir(file)
 	}
-	workspace := a.Workspace.Primary()
 	quoted := strings.NewReplacer("{file}", shellQuote(file), "{dir}", shellQuote(dir), "{workspace}", shellQuote(workspace))
 	plain := strings.NewReplacer("{file}", file, "{dir}", dir, "{workspace}", workspace)
 

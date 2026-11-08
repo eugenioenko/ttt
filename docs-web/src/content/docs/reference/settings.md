@@ -339,7 +339,7 @@ Programs to launch from the **Apps** sidebar tab, which appears once at least on
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `applications[].name` | string | — | Name shown in the Apps tab and used as the tab title. Must be unique. |
-| `applications[].command` | string | — | Command run with `sh -c`. `{file}` is the active file, `{dir}` its folder and `{workspace}` the workspace root; ttt quotes each path, so do not add quotes around them. An app that uses `{file}` or `{dir}` needs an open file. |
+| `applications[].command` | string | — | Command run with `sh -c`. `{file}` is the active file (or, when an app or other non-file tab is in front, the file tab used last), `{dir}` its folder (the workspace root when no file is open) and `{workspace}` the workspace root; ttt quotes each path, so do not add quotes around them. An app that uses `{file}` needs an open file. |
 | `applications[].cwd` | string | workspace root | Working directory. Accepts the same placeholders, unquoted. |
 | `applications[].location` | string | `"editor"` | `"editor"` opens the app as an editor tab, `"panel"` in the terminal panel. |
 | `applications[].keepOpen` | bool | `false` | Keep the tab and its output after the program exits. By default the tab closes when the program exits. |

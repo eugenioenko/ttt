@@ -110,6 +110,7 @@ type EditorGroupWidget struct {
 	tabs              []editorTab
 	nextTabIdentity   uint64
 	active            int
+	lastDocumentPath  string
 	pinnedCount       int
 	TabSize           int
 	InsertSpaces      bool
@@ -2027,10 +2028,22 @@ func (g *EditorGroupWidget) ActiveFilePath() string {
 	return ""
 }
 
-// ActiveDocumentPath is the active tab's file, or "" when the tab is not a
-// file on disk (an untitled buffer, a plugin or terminal tab).
-func (g *EditorGroupWidget) ActiveDocumentPath() string {
-	t := g.activeTab()
+// RecentDocumentPath is the active tab's file or, when the active tab is not a
+// file on disk (an untitled buffer, a plugin or terminal tab), the file tab
+// that was active last, while it is still open.
+func (g *EditorGroupWidget) RecentDocumentPath() string {
+	if path := documentPath(g.activeTab()); path != "" {
+		return path
+	}
+	for i := range g.tabs {
+		if path := documentPath(&g.tabs[i]); path != "" && path == g.lastDocumentPath {
+			return path
+		}
+	}
+	return ""
+}
+
+func documentPath(t *editorTab) string {
 	if t == nil || t.Content != nil || t.Buf == nil || t.Virtual {
 		return ""
 	}
@@ -3046,6 +3059,9 @@ func (g *EditorGroupWidget) syncTabs() {
 	if t == nil {
 		g.TabBar.SetTabs(nil)
 		return
+	}
+	if path := documentPath(t); path != "" {
+		g.lastDocumentPath = path
 	}
 	if t.Content == nil {
 		if g.Editor.Buf != t.Buf {

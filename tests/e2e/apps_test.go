@@ -95,12 +95,54 @@ func TestLaunchAppQuotesPlaceholdersAndReusesItsTab(t *testing.T) {
 		t.Fatalf("command saw %q, want %q", waitForFile(t, out), want)
 	}
 
-	h.app.EditorGroup.OpenFile(file)
 	h.exec("apps.run:echo")
 	if len(h.app.EditorTerminals) != 1 {
 		t.Fatal("running an app again must focus its tab, not open a second one")
 	}
 	if h.app.EditorGroup.ActiveTerminalTab() != h.app.EditorTerminals[0].Tab {
 		t.Fatal("running an app again must focus its tab")
+	}
+}
+
+func TestLaunchAppFromAnotherAppTabUsesTheLastFile(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+
+	file := filepath.Join(h.dir, "alpha.txt")
+	out := filepath.Join(h.dir, "out.txt")
+	applyApps(h,
+		config.Application{Name: "first", Command: "sleep 30"},
+		config.Application{Name: "second", Command: "printf '%s' {file} > " + out + "; sleep 30"},
+	)
+	if err := h.app.EditorGroup.OpenFile(file); err != nil {
+		t.Fatal(err)
+	}
+	h.exec("apps.run:first")
+	h.exec("apps.run:second")
+	for _, tt := range h.app.EditorTerminals {
+		defer tt.Term.Close()
+	}
+	if len(h.app.EditorTerminals) != 2 {
+		t.Fatalf("editor terminals = %d, want 2", len(h.app.EditorTerminals))
+	}
+	if got := waitForFile(t, out); got != file {
+		t.Fatalf("{file} = %q, want the file active before the first app, %q", got, file)
+	}
+}
+
+func TestDirFallsBackToWorkspaceWithoutAFile(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+
+	out := filepath.Join(h.dir, "out.txt")
+	applyApps(h, config.Application{Name: "browse", Command: "printf '%s' {dir} > " + out + "; sleep 30"})
+	h.app.EditorGroup.CloseAllTabs()
+	h.exec("apps.run:browse")
+	if len(h.app.EditorTerminals) != 1 {
+		t.Fatal("an app using only {dir} must launch without an open file")
+	}
+	defer h.app.EditorTerminals[0].Term.Close()
+	if got, want := waitForFile(t, out), h.app.Workspace.Primary(); got != want {
+		t.Fatalf("{dir} = %q, want the workspace %q", got, want)
 	}
 }
