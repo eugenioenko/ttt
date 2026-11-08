@@ -100,7 +100,7 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `panel-changes` | `⎇` | `\uea68` | Changes sidebar tab |
 | `panel-outline` | `ƒ` | `\ueb86` | Outline sidebar tab |
 | `panel-plugins` | `⧉` | `\ueae6` | Plugins sidebar tab |
-| `panel-apps` | `⏵` | `\ueb44` | Apps sidebar tab |
+| `panel-apps` | `⏵` | `\U000f003b` | Apps sidebar tab |
 
 ## Editor
 
