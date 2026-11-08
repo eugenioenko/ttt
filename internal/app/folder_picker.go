@@ -108,12 +108,8 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 	columns.FixedHeight = folderPickerRows
 	columns.Gap = 1
 
-	// Add 1-row padding (MenuSep) between input and the columns
-	content := widgets.NewVStackWidget(
-		fp.input,
-		widgets.NewMenuSep(),
-		columns,
-	)
+	content := widgets.NewVStackWidget(fp.input, columns)
+	content.Gap = 1
 	dialog.SetContent(content)
 	dialog.Buttons = []widgets.DialogButton{
 		{Label: "&Cancel", Handler: func() { a.DismissDialog() }},
