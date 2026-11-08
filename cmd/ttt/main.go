@@ -452,7 +452,8 @@ Docs: https://tttedit.dev
 
 	if flags.listen {
 		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddress()+" (POST /exec)")
-		go app.StartListenServer(editor)
+		stopListen := app.StartListenServer(editor)
+		defer stopListen()
 	}
 
 	editor.CheckLanguagePackUpdates()
