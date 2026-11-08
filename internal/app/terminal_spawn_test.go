@@ -355,6 +355,53 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 	}
 }
 
+func TestAppRerunsAfterExitAndRetainsPreviousOutput(t *testing.T) {
+	for _, location := range []string{"editor", "panel"} {
+		t.Run(location, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Reg = command.NewRegistry()
+			s := *a.Settings
+			s.Applications = []config.Application{{Name: "tests", Command: "/bin/sh", Args: []string{"-c", "printf 'retained-output\\n'; read line"}, Location: location, KeepOpen: true}}
+			a.ApplySettings(s)
+			key := appLaunchKey{name: "tests"}
+			a.LaunchApp("tests")
+			firstID := a.appTerminals[key]
+			first := a.terminalByID(firstID)
+			if first == nil {
+				t.Fatal("first launch did not create a terminal")
+			}
+			t.Cleanup(func() { a.CloseTerminal(firstID) })
+			waitForTerminalOutput(t, first.Term, "retained-output")
+			a.LaunchApp("tests")
+			if a.appTerminals[key] != firstID {
+				t.Fatal("running app was not reused")
+			}
+			first.Term.WriteString("finish\n")
+			deadline := time.Now().Add(3 * time.Second)
+			for !first.Term.Exited() && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if !first.Term.Exited() {
+				t.Fatal("first run did not exit")
+			}
+			a.LaunchApp("tests")
+			secondID := a.appTerminals[key]
+			if secondID == firstID || a.terminalByID(secondID) == nil {
+				t.Fatal("launching a finished app did not start a new run")
+			}
+			t.Cleanup(func() { a.CloseTerminal(secondID) })
+			if a.terminalByID(firstID) == nil || !strings.Contains(first.Term.ScreenText(), "retained-output") {
+				t.Fatal("rerunning discarded the first output tab")
+			}
+			a.CloseTerminal(firstID)
+			a.LaunchApp("tests")
+			if a.appTerminals[key] != secondID {
+				t.Fatal("closing the old output tab forgot the current run")
+			}
+		})
+	}
+}
+
 func TestAppPaddingIsPerTerminalAndSurvivesGlobalChanges(t *testing.T) {
 	for _, placement := range []string{"editor", "bottom", "right"} {
 		t.Run(placement, func(t *testing.T) {

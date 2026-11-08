@@ -310,9 +310,11 @@ func (a *App) launchApp(name, file string, explicit bool) {
 	if explicit {
 		key.path = file
 	}
-	if id, ok := a.appTerminals[key]; ok && a.terminalByID(id) != nil {
-		a.FocusTerminal(id)
-		return
+	if id, ok := a.appTerminals[key]; ok {
+		if tt := a.terminalByID(id); tt != nil && !tt.Term.Exited() {
+			a.FocusTerminal(id)
+			return
+		}
 	}
 	workspace := a.Workspace.Primary()
 	if folder := a.Workspace.FolderForFile(file); folder != nil {
