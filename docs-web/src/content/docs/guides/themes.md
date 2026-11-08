@@ -122,7 +122,7 @@ Below is a complete theme file showing every configurable section. Ordinary colo
       "fg": "#75715e"
     },
     "indentGuide": {
-      "fg": "#49483e"
+      "fg": "#6a6656"
     },
     "activeLine": {
       "bg": "#3e3d32"
