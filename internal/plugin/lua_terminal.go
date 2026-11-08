@@ -7,7 +7,7 @@ import (
 // setupTerminalModule exposes the terminal surface to Lua:
 //
 //	local term = require("ttt.terminal")
-//	local id, err = term.spawn{ shell = "pi", args = {"--model", "…"}, cwd = ".", label = "pi" }
+//	local id, err = term.spawn{ shell = "pi", args = {"--model", "…"}, cwd = ".", label = "pi", location = "editor" }
 //	term.send(id, "review this\n")
 //	local tail = term.read(id, 4000)   -- raw PTY bytes, ANSI included
 //	term.focus(id)
@@ -52,7 +52,7 @@ func termField(L *lua.LState, tbl *lua.LTable, key string) string {
 	return ""
 }
 
-// termSpawn{ shell = "pi", args = {...}, cwd = "...", label = "pi" } -> id, err
+// termSpawn{ shell = "pi", args = {...}, cwd = "...", label = "pi", location = "editor" } -> id, err
 func termSpawn(p *Plugin) lua.LGFunction {
 	return func(L *lua.LState) int {
 		if p.Terminal == nil {
@@ -79,13 +79,20 @@ func termSpawn(p *Plugin) lua.LGFunction {
 				env = append(env, v.String())
 			})
 		}
-		id, err := p.Terminal.TerminalSpawn(
-			termField(L, spec, "shell"),
-			args,
-			env,
-			termField(L, spec, "cwd"),
-			termField(L, spec, "label"),
-		)
+		location := termField(L, spec, "location")
+		switch location {
+		case "", TerminalLocationPanel, TerminalLocationEditor:
+		default:
+			return termErr(L, `terminal.spawn: location must be "panel" or "editor"`)
+		}
+		id, err := p.Terminal.TerminalSpawn(TerminalSpawnSpec{
+			Shell:    termField(L, spec, "shell"),
+			Args:     args,
+			Env:      env,
+			Cwd:      termField(L, spec, "cwd"),
+			Label:    termField(L, spec, "label"),
+			Location: location,
+		})
 		if err != nil {
 			return termErr(L, err.Error())
 		}
@@ -185,6 +192,7 @@ func termList(p *Plugin) lua.LGFunction {
 			entry := L.NewTable()
 			L.SetField(entry, "id", lua.LString(t.ID))
 			L.SetField(entry, "label", lua.LString(t.Label))
+			L.SetField(entry, "location", lua.LString(t.Location))
 			L.SetField(entry, "cols", lua.LNumber(t.Cols))
 			L.SetField(entry, "rows", lua.LNumber(t.Rows))
 			tbl.Append(entry)

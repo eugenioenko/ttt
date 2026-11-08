@@ -1366,6 +1366,29 @@ func editorCursorVisible(e *EditorPaneWidget) bool {
 	return x >= r.X+gutter && x < r.X+gutter+e.Viewport.Width
 }
 
+func (g *EditorGroupWidget) WantsRawKeys() bool {
+	rk, ok := g.activeContent().(RawKeyConsumer)
+	return ok && rk.WantsRawKeys()
+}
+
+func (g *EditorGroupWidget) ActiveTerminalTab() *TerminalTabWidget {
+	tt, _ := g.activeContent().(*TerminalTabWidget)
+	return tt
+}
+
+func (g *EditorGroupWidget) FocusPluginTab(key string) bool {
+	if key == "" {
+		return false
+	}
+	for i, t := range g.tabs {
+		if t.PluginKey == key {
+			g.SwitchTab(i)
+			return true
+		}
+	}
+	return false
+}
+
 func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 	// Content tabs (settings, plugin panels) own their own cursor.
 	if t := g.activeTab(); t != nil && t.Content != nil {
@@ -3172,25 +3195,32 @@ func (g *EditorGroupWidget) scheduleFolds() {
 	})
 }
 
+const editorTabBarH = 3
+
+// ContentRect is the screen rect below the tab bar that tab content fills.
+func (g *EditorGroupWidget) ContentRect() Rect {
+	r := g.GetRect()
+	return Rect{X: r.X, Y: r.Y + editorTabBarH, W: r.W, H: max(r.H-editorTabBarH, 0)}
+}
+
 func (g *EditorGroupWidget) Render(surface Surface) {
 	g.scheduleFolds()
 	g.syncTabs()
 	w, h := surface.Size()
 	r := g.GetRect()
 
-	const tabBarH = 3
-	if w <= 0 || h <= tabBarH {
+	if w <= 0 || h <= editorTabBarH {
 		g.TabBar.InvalidatePointerInteraction()
 		return
 	}
 
-	g.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: tabBarH})
-	tabSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: tabBarH})
+	g.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: editorTabBarH})
+	tabSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: editorTabBarH})
 	g.TabBar.Render(tabSurface)
 
-	contentH := h - tabBarH
-	contentRect := Rect{X: r.X, Y: r.Y + tabBarH, W: r.W, H: contentH}
-	contentSurface := surface.Sub(Rect{X: 0, Y: tabBarH, W: w, H: contentH})
+	contentH := h - editorTabBarH
+	contentRect := g.ContentRect()
+	contentSurface := surface.Sub(Rect{X: 0, Y: editorTabBarH, W: w, H: contentH})
 
 	t := g.activeTab()
 	if t == nil {

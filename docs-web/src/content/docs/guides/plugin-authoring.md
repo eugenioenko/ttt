@@ -740,6 +740,11 @@ local id, err = term.spawn{
 }
 if not id then error(err) end
 
+-- Or open it as an editor tab, here a markdown editor on the active file
+-- (ttt.editor requires editor.read). The tab is titled after label, or the program.
+local editor = require("ttt.editor")
+term.spawn{ shell = "edamame", args = {editor.file_path()}, location = "editor" }
+
 -- 2. Send input to the terminal (requires terminal.control)
 term.send(id, "Review the staged diff\n")   -- writes to PTY stdin; trailing newline acts as Enter
 
@@ -754,11 +759,11 @@ end
 
 -- 5. List all open terminal tabs (requires terminal.read)
 for _, t in ipairs(term.list()) do
-  ttt.log(string.format("Tab %s [%s] %dx%d", t.id, t.label, t.cols, t.rows))
+  ttt.log(string.format("Tab %s [%s] in %s %dx%d", t.id, t.label, t.location, t.cols, t.rows))
 end
 
 -- 6. Focus the terminal tab (requires terminal.control)
-term.focus(id)                              -- reveals the bottom panel and selects this tab
+term.focus(id)                              -- reveals the panel or editor tab and focuses it
 
 -- 7. Close the terminal tab (requires terminal.control)
 local ok, err = term.close(id)              -- terminates child process and removes tab
@@ -768,13 +773,13 @@ local ok, err = term.close(id)              -- terminates child process and remo
 
 | Function | Permission | Description |
 |---|---|---|
-| `term.spawn(spec)` | `terminal.control` | Spawns a new terminal tab running the specified program. `spec` is a table containing `shell` (string), `args` (array of strings), `cwd` (string), `label` (string, up to 2 characters displayed in tab strip), and `env` (map of `KEY = "val"` or array of `"KEY=val"` strings). Returns `id` (string) on success, or `nil, err`. |
+| `term.spawn(spec)` | `terminal.control` | Spawns a new terminal tab running the specified program. `spec` is a table containing `shell` (string), `args` (array of strings), `cwd` (string), `label` (string; the panel's tab strip shows up to 2 characters, an editor tab shows all of it), `env` (map of `KEY = "val"` or array of `"KEY=val"` strings), and `location` (`"panel"`, the default, for a terminal panel tab, or `"editor"` for an editor tab titled `label` or the program name). Returns `id` (string) on success, or `nil, err`. |
 | `term.send(id, text)` | `terminal.control` | Writes input string to the terminal's PTY. Pass a trailing `\n` or `\r` to submit commands. Returns `true` on success, or `nil, err`. |
-| `term.focus(id)` | `terminal.control` | Reveals the bottom panel (if hidden) and switches active tab focus to the specified terminal. Returns `true` on success, or `nil, err`. |
-| `term.close(id)` | `terminal.control` | Terminates the terminal child process, closes the PTY, and removes the tab from the terminal panel. Returns `true` on success, or `nil, err`. |
+| `term.focus(id)` | `terminal.control` | Selects the terminal's tab and focuses it, revealing the bottom panel first for a panel terminal. Returns `true` on success, or `nil, err`. |
+| `term.close(id)` | `terminal.control` | Terminates the terminal child process, closes the PTY, and removes its tab (from the terminal panel or the editor). Returns `true` on success, or `nil, err`. |
 | `term.read(id, [max_bytes])` | `terminal.read` | Returns the retained raw PTY stream output (including ANSI escape sequences and command echo) up to `max_bytes` (capped at 64 KB; passing `0` or omitting returns all retained bytes). Returns `string` on success, or `nil, err`. |
 | `term.screen(id)` | `terminal.read` | Returns the current visible screen content as plain text lines separated by `\n` with trailing blanks trimmed. Automatically selects the active buffer (including alternate screen buffer when full-screen TUIs like vim or agents run). Contains no ANSI escape codes, making it ideal for regex pattern matching. Returns `string` on success, or `nil, err`. |
-| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, cols = number, rows = number }, … }`. Returns an empty table if none are open. |
+| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, location = "panel" | "editor", cols = number, rows = number }, … }`. Returns an empty table if none are open. |
 
 #### Raw Tail vs. Screen Text
 

@@ -100,8 +100,11 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	a.refreshWelcome()
 	a.TerminalPanel.PaddingX = s.Terminal.PaddingX
-	for _, tab := range a.Terminals {
+	for _, tab := range a.allTerminals() {
 		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
+		if tab.Tab != nil {
+			tab.Tab.PaddingX = s.Terminal.PaddingX
+		}
 	}
 
 	highlight.SetTimeLimit(time.Duration(s.Editor.HighlightTimeLimit) * time.Millisecond)

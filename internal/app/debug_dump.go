@@ -35,11 +35,12 @@ type DebugState struct {
 // DebugTerminal reports one integrated-terminal tab's raw, unparsed PTY byte
 // tail, so a terminal-emulation bug can be diagnosed from ground truth.
 type DebugTerminal struct {
-	ID      string `json:"id"`
-	Label   string `json:"label,omitempty"`
-	Cols    int    `json:"cols"`
-	Rows    int    `json:"rows"`
-	RawTail string `json:"raw_tail"`
+	ID       string `json:"id"`
+	Label    string `json:"label,omitempty"`
+	Location string `json:"location"`
+	Cols     int    `json:"cols"`
+	Rows     int    `json:"rows"`
+	RawTail  string `json:"raw_tail"`
 }
 
 // DebugActiveTerminal identifies the selected terminal tab. Index is 0-based,
@@ -240,14 +241,15 @@ func (a *App) BuildDebugState() *DebugState {
 		}
 	}
 
-	for _, tt := range a.Terminals {
+	for _, tt := range a.allTerminals() {
 		cols, rows := tt.Term.Size()
 		state.Terminals = append(state.Terminals, DebugTerminal{
-			ID:      tt.ID,
-			Label:   tt.Label,
-			Cols:    cols,
-			Rows:    rows,
-			RawTail: strconv.Quote(string(tt.Term.RawTail())),
+			ID:       tt.ID,
+			Label:    tt.Label,
+			Location: tt.location(),
+			Cols:     cols,
+			Rows:     rows,
+			RawTail:  strconv.Quote(string(tt.Term.RawTail())),
 		})
 	}
 
@@ -268,8 +270,13 @@ func (a *App) describeFocus() string {
 	if a.Root.HasModalOverlay() {
 		return "overlay"
 	}
-	switch f.(type) {
-	case *ui.EditorGroupWidget, *ui.EditorPaneWidget:
+	switch f := f.(type) {
+	case *ui.EditorGroupWidget:
+		if f.ActiveTerminalTab() != nil {
+			return "terminal"
+		}
+		return "editor"
+	case *ui.EditorPaneWidget:
 		return "editor"
 	case *ui.SidebarWidget:
 		return "sidebar"
