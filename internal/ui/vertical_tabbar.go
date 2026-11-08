@@ -22,9 +22,10 @@ type VerticalTabBar struct {
 	// Labels are optional per-tab badges (e.g. "pi", "sh"). The strip is 4
 	// content cells wide, so longer labels are truncated here; the full label
 	// lives on the tab (app.TerminalTab.Label) for tooling and the debug dump.
-	Labels   []string
-	OnSelect func(index int)
-	Borders  *term.BorderSet
+	Labels       []string
+	OnSelect     func(index int)
+	OnRightClick func(index, screenX, screenY int)
+	Borders      *term.BorderSet
 }
 
 func NewVerticalTabBar() *VerticalTabBar {
@@ -88,12 +89,20 @@ func (v *VerticalTabBar) HandleEvent(ev tcell.Event) EventResult {
 	if !ok {
 		return EventIgnored
 	}
+	mx, my := mev.Position()
+	r := v.GetRect()
+	ly := my - r.Y
+
+	if mev.Buttons()&tcell.Button2 != 0 {
+		if ly >= 0 && ly < v.Count && v.OnRightClick != nil {
+			v.OnRightClick(ly, mx, my)
+			return EventConsumed
+		}
+		return EventIgnored
+	}
 	if mev.Buttons()&tcell.Button1 == 0 {
 		return EventIgnored
 	}
-	_, my := mev.Position()
-	r := v.GetRect()
-	ly := my - r.Y
 
 	if ly >= 0 && ly < v.Count && v.OnSelect != nil {
 		v.OnSelect(ly)

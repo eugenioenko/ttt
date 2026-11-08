@@ -937,6 +937,16 @@ func registerWidgetCallbacks(app *App) {
 		openContextMenu(app, items, sx, sy)
 	}
 
+	app.TerminalPanel.TabBar.OnRightClick = func(index, sx, sy int) {
+		app.TerminalPanel.SetActive(index)
+		app.Root.SetFocus(app.TerminalPanel)
+		items := []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.closeTerminal"), Command: "terminal.close"},
+			{Label: i18n.Text("menu.closeAllTerminals"), Command: "terminal.closeAll"},
+		}
+		openContextMenu(app, items, sx, sy)
+	}
+
 	app.BottomPanel.Tabs.Config.Actions = []widgets.TabAction{
 		{Icon: string(icons.Rune(icons.Add)), OnClick: func(_, _ int) {
 			reg.Execute("terminal.new")
@@ -949,6 +959,7 @@ func registerWidgetCallbacks(app *App) {
 			items := []ui.ContextMenuItem{
 				{Label: i18n.Text("menu.newTerminal"), Command: "terminal.new"},
 				ui.MenuSep(),
+				{Label: i18n.Text("menu.closeTerminal"), Command: "terminal.close"},
 				{Label: i18n.Text("menu.closeAllTerminals"), Command: "terminal.closeAll"},
 				ui.MenuSep(),
 				dock,
