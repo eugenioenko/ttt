@@ -137,8 +137,41 @@ func TestAssetName(t *testing.T) {
 	}
 }
 
+func TestResolveVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name, injected, installed, want string
+	}{
+		{"injected release", "v2.0.0", "v1.0.0", "v2.0.0"},
+		{"injected development build", "v1.0.0-12-gabc", "v1.0.0", "v1.0.0-12-gabc"},
+		{"installed release", "dev", "v1.0.0", "v1.0.0"},
+		{"installed prerelease", "dev", "v1.0.0-rc.1", "v1.0.0-rc.1"},
+		{"local build", "dev", "(devel)", "dev"},
+		{"missing module version", "dev", "", "dev"},
+		{"development module version", "dev", "v1.0.0-12-gabc", "dev"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			info := &debug.BuildInfo{Main: debug.Module{Path: "github.com/eugenioenko/ttt", Version: tc.installed}}
+			if got := ResolveVersion(tc.injected, info); got != tc.want {
+				t.Fatalf("version = %q, want %q", got, tc.want)
+			}
+		})
+	}
+	for _, info := range []*debug.BuildInfo{
+		nil,
+		{Main: debug.Module{Path: "another/module", Version: "v1.0.0"}},
+		{Main: debug.Module{Path: "github.com/eugenioenko/ttt", Version: "v1.0.0", Replace: &debug.Module{Path: "../ttt"}}},
+	} {
+		if got := ResolveVersion("dev", info); got != "dev" {
+			t.Fatalf("unexpected installed version for %+v: %q", info, got)
+		}
+	}
+}
+
 func TestDetectMethod(t *testing.T) {
-	root := t.TempDir()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("GOBIN", filepath.Join(root, "custom-bin"))
 	t.Setenv("GOPATH", filepath.Join(root, "go"))
 	info := &debug.BuildInfo{Main: debug.Module{Version: "v1.0.0"}}

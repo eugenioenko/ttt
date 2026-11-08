@@ -23,7 +23,13 @@ func captureRestartTarget(original string) (restartTarget, error) {
 			return restartTarget{}, err
 		}
 	}
-	stable, _ := absoluteLauncher("ttt")
+	stable, err := exec.LookPath("ttt")
+	if err == nil {
+		stable, err = filepath.Abs(stable)
+	}
+	if err != nil {
+		stable = ""
+	}
 	return restartTarget{launch: launch, stable: stable}, nil
 }
 

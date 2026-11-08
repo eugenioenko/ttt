@@ -15,8 +15,17 @@ import (
 	"github.com/eugenioenko/ttt/internal/update"
 )
 
+func restartTestDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func TestRestartPath(t *testing.T) {
-	dir := t.TempDir()
+	dir := restartTestDir(t)
 	name := "ttt"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
@@ -46,7 +55,7 @@ func TestRestartPath(t *testing.T) {
 }
 
 func TestRestartTargetSurvivesReplacementAndRelativePATH(t *testing.T) {
-	dir := t.TempDir()
+	dir := restartTestDir(t)
 	t.Chdir(dir)
 	t.Setenv("PATH", "bin")
 	if err := os.Mkdir("bin", 0o755); err != nil {
@@ -83,7 +92,7 @@ func TestRestartTargetSurvivesReplacementAndRelativePATH(t *testing.T) {
 }
 
 func TestRestartTargetPreservesLaunchSymlink(t *testing.T) {
-	dir := t.TempDir()
+	dir := restartTestDir(t)
 	old, latest, link := filepath.Join(dir, "old"), filepath.Join(dir, "latest"), filepath.Join(dir, "ttt")
 	if runtime.GOOS == "windows" {
 		old, latest, link = old+".exe", latest+".exe", link+".exe"
@@ -121,7 +130,7 @@ func TestRestartAfterReplacingRunningExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
+	dir := restartTestDir(t)
 	bin := filepath.Join(dir, "bin")
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
@@ -184,7 +193,7 @@ func TestRestartProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
+	dir := restartTestDir(t)
 	cmd := exec.Command(path, "-test.run=^TestRestartHelper$", "--", "file with spaces.txt")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "TTT_RESTART_STAGE=launch", "TTT_RESTART_DIR="+dir)

@@ -3,12 +3,25 @@ package update
 import (
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"strings"
 )
 
 var versionPattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$`)
 
 var describeSuffix = regexp.MustCompile(`-[0-9]+-g[0-9a-f]+(?:-dirty)?$`)
+
+// ResolveVersion uses the installed module version when no release version was injected.
+func ResolveVersion(injected string, info *debug.BuildInfo) string {
+	if injected != "dev" {
+		return injected
+	}
+	if info != nil && info.Main.Path == "github.com/eugenioenko/ttt" &&
+		info.Main.Replace == nil && !IsDevelopmentVersion(info.Main.Version) {
+		return info.Main.Version
+	}
+	return injected
+}
 
 func IsDevelopmentVersion(version string) bool {
 	if version == "dev" || describeSuffix.MatchString(version) || strings.HasSuffix(version, "-dirty") {

@@ -167,6 +167,8 @@ func initSimulationScreen(w, h int) *term.TcellScreen {
 }
 
 func main() {
+	buildInfo, _ := debug.ReadBuildInfo()
+	version = update.ResolveVersion(version, buildInfo)
 	exitCode := 0
 	defer func() {
 		if exitCode != 0 {
