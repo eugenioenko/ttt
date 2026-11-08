@@ -1,11 +1,11 @@
 package ui
 
 import (
-	"maps"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"time"
 	"unicode/utf8"
@@ -2382,7 +2382,7 @@ func (g *EditorGroupWidget) PlaceCursor(line, col int) bool {
 	g.Editor.Cursor.Col = 0
 	if col > 1 {
 		lineLen := len([]rune(g.Editor.Buf.Lines[bufLine]))
-		c := min(col - 1, lineLen)
+		c := min(col-1, lineLen)
 		g.Editor.Cursor.Col = c
 	}
 	return true
@@ -2403,7 +2403,7 @@ func (g *EditorGroupWidget) GoToLine(line int) {
 	}
 	if h > 0 {
 		margin := h / 3
-		top := max(bufLine - margin, 0)
+		top := max(bufLine-margin, 0)
 		g.Editor.Viewport.TopLine = top
 	}
 	g.Editor.scrollViewport()
@@ -2418,7 +2418,7 @@ func (g *EditorGroupWidget) GoToLineCol(line, col int) {
 		return
 	}
 	lineLen := len([]rune(g.Editor.Buf.Lines[g.Editor.Cursor.Line]))
-	c := min(col - 1, lineLen)
+	c := min(col-1, lineLen)
 	g.Editor.Cursor.Col = c
 	g.Editor.scrollViewport()
 }
@@ -2623,7 +2623,7 @@ func (g *EditorGroupWidget) ReplaceMatch(match FindMatch, replacement string) {
 		return
 	}
 	runes := []rune(g.Editor.Buf.Lines[match.Line])
-	endCol := min(match.Col + match.Len, len(runes))
+	endCol := min(match.Col+match.Len, len(runes))
 	g.Editor.exec(&undo.DeleteSelectionCommand{
 		StartLine: match.Line, StartCol: match.Col,
 		EndLine: match.Line, EndCol: endCol,

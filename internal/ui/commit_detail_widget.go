@@ -1,10 +1,10 @@
 package ui
 
 import (
-	"maps"
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"maps"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -1457,7 +1457,7 @@ func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect,
 }
 
 func (d *CommitDetailWidget) clampScroll() {
-	maxTop := max(d.totalVisualRows - d.viewH, 0)
+	maxTop := max(d.totalVisualRows-d.viewH, 0)
 	if d.TopLine < 0 {
 		d.TopLine = 0
 	}

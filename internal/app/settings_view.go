@@ -143,7 +143,7 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.lineNumbers"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.LineNumbers },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.LineNumbers = v }},
-      {Label: i18n.Text("settings.indentGuides"), Kind: settingBool,
+			{Label: i18n.Text("settings.indentGuides"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IndentGuides },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.IndentGuides = v }},
 			{Label: i18n.Text("settings.showTrailingNewline"), Kind: settingBool,

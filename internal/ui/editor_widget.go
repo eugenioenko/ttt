@@ -237,7 +237,7 @@ func (e *EditorPaneWidget) computeMaxLineWidth() int {
 	tabW := e.resolveTabSize()
 	maxW := 0
 	topLine := e.Viewport.TopLine
-	botLine := min(topLine + e.Viewport.Height, len(e.Buf.Lines))
+	botLine := min(topLine+e.Viewport.Height, len(e.Buf.Lines))
 	for i := topLine; i < botLine; i++ {
 		lw := bufColToVisualCol(e.Buf.Lines[i], len([]rune(e.Buf.Lines[i])), tabW)
 		if lw > maxW {

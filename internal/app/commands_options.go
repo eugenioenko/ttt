@@ -442,7 +442,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: i18n.Text("menu.editor"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.wordWrap"), Command: "options.toggleWordWrap", Checked: wordWrapChecked},
 			{Label: i18n.Text("menu.lineNumbers"), Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
-      {Label: i18n.Text("menu.indentGuides"), Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
+			{Label: i18n.Text("menu.indentGuides"), Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
 			{Label: i18n.Text("menu.syntaxHighlight"), Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
 			{Label: i18n.Text("menu.bracketColors"), Command: "options.toggleBracketColors", Checked: bracketColorChecked},
 			ui.MenuSep(),
@@ -536,7 +536,7 @@ func registerOptionsCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
-    ID: "options.toggleIndentGuides", Title: i18n.Text("options.toggleIndentGuides"),
+		ID: "options.toggleIndentGuides", Title: i18n.Text("options.toggleIndentGuides"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "indentation"},
 		Handler:  app.ToggleIndentGuides,
 	})
