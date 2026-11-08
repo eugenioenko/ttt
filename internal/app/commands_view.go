@@ -521,5 +521,10 @@ func registerViewCommands(app *App) {
 		Keywords: []string{"help", "version", "info"},
 		Handler:  app.ShowAbout,
 	})
+	reg.Register(command.Command{
+		ID: "update.check", Title: i18n.Text("update.checkForUpdates"),
+		Keywords: []string{"help", "version", "update", "upgrade"},
+		Handler:  app.CheckForUpdates,
+	})
 
 }

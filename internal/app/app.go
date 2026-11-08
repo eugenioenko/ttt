@@ -25,6 +25,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/update"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/watcher"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -112,6 +113,12 @@ type App struct {
 	Reg                    *command.Registry
 	Running                *bool
 	quitPending            bool
+	quitAction             func()
+	RestartRequested       bool
+	RestartMethod          update.Kind
+	Updates                UpdateService
+	UpdateMethod           *update.Method
+	updateDialog           *updateDialogState
 	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
 	largeFiles             largeFileState
