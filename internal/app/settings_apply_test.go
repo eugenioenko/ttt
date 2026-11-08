@@ -157,7 +157,7 @@ func TestToggleIndentGuidesPersistsAndAppliesToEditorAndDiff(t *testing.T) {
 	guides := 0
 	for _, row := range grid {
 		for _, cell := range row {
-			if cell.Ch == '│' && cell.Style == term.StyleMuted {
+			if cell.Ch == '│' && cell.Style == term.StyleIndentGuide {
 				guides++
 			}
 		}

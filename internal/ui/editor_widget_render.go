@@ -422,7 +422,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					}
 					if visualCol < indentWidth && visualCol%tabW == 0 {
 						cell.Ch = '│'
-						cell.Style = term.StyleMuted
+						cell.Style = term.StyleIndentGuide
 					}
 				}
 				surface.SetCell(gutterW+x, y, cell)

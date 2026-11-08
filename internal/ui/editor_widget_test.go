@@ -57,8 +57,8 @@ func TestEditorIndentGuidesFollowIndentationStops(t *testing.T) {
 	for _, row := range []int{0, 1} {
 		for _, col := range []int{0, 4} {
 			cell := grid[row][g+col]
-			if cell.Ch != '│' || cell.Style != term.StyleMuted {
-				t.Errorf("row %d col %d = %+v, want muted guide", row, col, cell)
+			if cell.Ch != '│' || cell.Style != term.StyleIndentGuide {
+				t.Errorf("row %d col %d = %+v, want indent guide", row, col, cell)
 			}
 		}
 	}
@@ -90,8 +90,8 @@ func TestEditorIndentGuidesStayConnectedAcrossBlankLines(t *testing.T) {
 	for _, row := range []int{1, 2, 4} {
 		for _, col := range []int{0, 4} {
 			cell := grid[row][g+col]
-			if cell.Ch != '│' || cell.Style != term.StyleMuted {
-				t.Errorf("blank row %d col %d = %+v, want muted connected guide", row, col, cell)
+			if cell.Ch != '│' || cell.Style != term.StyleIndentGuide {
+				t.Errorf("blank row %d col %d = %+v, want connected indent guide", row, col, cell)
 			}
 		}
 	}
