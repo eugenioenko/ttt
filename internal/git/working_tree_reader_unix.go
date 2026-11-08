@@ -27,6 +27,9 @@ func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workin
 		}
 		next, openErr := unix.Openat(dirfd, part, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 		if openErr != nil {
+			if errors.Is(openErr, unix.ENOENT) {
+				return workingTreeFile{Kind: workingTreeFileMissing}, nil
+			}
 			return workingTreeFile{}, classifyWorkingTreeOpenError(filepath.Join(root, path), workingTreePathSymlinkComponent, openErr)
 		}
 		if closeErr := unix.Close(dirfd); closeErr != nil {
