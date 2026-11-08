@@ -290,7 +290,7 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 	a.Renderer = &render.Renderer{}
 	a.Root.SetSize(120, 40)
 	a.ContentSplit.ShowBottom = true
-	updates := make(chan string, 16)
+	updates := make(chan struct{}, 16)
 	for i := 0; i < 2; i++ {
 		dev, err := terminal.New("/bin/cat", 80, 24, 1000, nil, "")
 		if err != nil {
@@ -298,7 +298,7 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 		}
 		t.Cleanup(dev.Close)
 		if i == 0 {
-			dev.OnUpdate = func() { updates <- string(dev.RawTail()) }
+			dev.OnUpdate = func() { updates <- struct{}{} }
 		}
 		widget := ui.NewTerminalWidget(dev, a.Palette)
 		a.Terminals = append(a.Terminals, TerminalTab{Term: dev, Widget: widget})
@@ -318,9 +318,10 @@ func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
 		defer timeout.Stop()
 		for {
 			select {
-			case raw := <-updates:
+			case <-updates:
 				redraw()
-				if strings.Contains(raw, text) && (!scrollback || dev.ScrollbackLen() > 0) {
+				// Wakeups coalesce, so a callback-time tail can miss output already drawn.
+				if strings.Contains(string(dev.RawTail()), text) && (!scrollback || dev.ScrollbackLen() > 0) {
 					return
 				}
 			case <-timeout.C:
