@@ -305,7 +305,7 @@ jobs:
               ext=""
               [[ "$os" == "windows" ]] && ext=".exe"
               CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-                go build -ldflags="$LDFLAGS" -o "$out_dir/ttt-${os}-${arch}${ext}" ./cmd/ttt
+                go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o "$out_dir/ttt-${os}-${arch}${ext}" ./cmd/ttt
             done
           }
 
