@@ -160,13 +160,18 @@ func TestPanelInputShortcutModifierPreservesFallback(t *testing.T) {
 func TestPanelSelectionShortcutModifierCopy(t *testing.T) {
 	clipboard.DisableSystem()
 	pw, _ := newTextPanel(t)
-	allowed := tcell.ModMeta
+	allowed := tcell.ModCtrl | tcell.ModMeta
 	pw.plugin.ControlModifiers = &allowed
-	pw.SelectAllText()
-	clipboard.Set("unchanged")
-	pw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "c", tcell.ModMeta))
-	if !strings.Contains(clipboard.Get(), "alpha beta") {
-		t.Fatal("panel selection did not copy with Super+C")
+	for _, key := range []*tcell.EventKey{
+		tcell.NewEventKey(tcell.KeyRune, "c", tcell.ModMeta),
+		tcell.NewEventKey(tcell.KeyRune, "C", tcell.ModCtrl|tcell.ModShift),
+	} {
+		pw.SelectAllText()
+		clipboard.Set("unchanged")
+		pw.HandleEvent(key)
+		if !strings.Contains(clipboard.Get(), "alpha beta") {
+			t.Fatalf("panel selection did not copy with %s", key.Name())
+		}
 	}
 }
 

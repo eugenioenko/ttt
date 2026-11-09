@@ -47,5 +47,18 @@ func ControlModifierHeld(mod tcell.ModMask, modifiers *tcell.ModMask) bool {
 
 func ControlKeyMatches(ev *tcell.EventKey, key tcell.Key, modifiers *tcell.ModMask) bool {
 	normalized := ControlKeyEvent(ev, modifiers)
-	return normalized != nil && normalized.Key() == key
+	if normalized == nil {
+		return false
+	}
+	if normalized.Key() == key {
+		return true
+	}
+	if normalized.Key() != tcell.KeyRune || normalized.Modifiers()&tcell.ModCtrl == 0 {
+		return false
+	}
+	r := KeyRune(normalized)
+	if r >= 'A' && r <= 'Z' {
+		r += 'a' - 'A'
+	}
+	return r >= 'a' && r <= 'z' && key == tcell.KeyCtrlA+tcell.Key(r-'a')
 }
