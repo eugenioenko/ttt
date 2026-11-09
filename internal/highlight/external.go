@@ -21,6 +21,9 @@ type grammarRef struct {
 	scopeName  string
 	language   string
 	languageID string
+	// borrowedName marks a language name taken from the scope suffix that
+	// selects a different embedded grammar; it is shown but never looked up.
+	borrowedName bool
 }
 
 type grammarCatalog struct {
@@ -102,8 +105,10 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 		if ref.language == "" {
 			ref.language = g.Name
 		}
+		suffixTaken := namesOtherEmbedded(shortName, g.ScopeName)
 		if ref.language == "" {
 			ref.language = shortName
+			ref.borrowedName = suffixTaken
 		}
 		ref.languageID = strings.ToLower(strings.TrimSpace(ref.language))
 		if info, ok := grammars.InfoForScope(g.ScopeName); ok && ext.Language == "" {
@@ -117,8 +122,12 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 		for _, ft := range types {
 			addRef(fileTypes, strings.TrimPrefix(ft, "."), ref)
 		}
-		addRef(languages, ref.language, ref)
-		addRef(languages, shortName, ref)
+		if !ref.borrowedName {
+			addRef(languages, ref.language, ref)
+		}
+		if !suffixTaken {
+			addRef(languages, shortName, ref)
+		}
 		for _, ft := range types {
 			addRef(languages, strings.TrimPrefix(ft, "."), ref)
 		}
@@ -130,6 +139,17 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 	catalog = next
 	catalogMu.Unlock()
 	return errs
+}
+
+// namesOtherEmbedded reports whether name selects a different embedded grammar.
+// A scope's last segment is only a guess at its language name: source.emacs.lisp
+// must not take "lisp" from Common Lisp.
+func namesOtherEmbedded(name, scopeName string) bool {
+	info, ok := grammars.InfoForID(name)
+	if !ok {
+		info, ok = grammars.InfoForAlias(name)
+	}
+	return ok && info.ScopeName != scopeName
 }
 
 func addRef(m map[string]grammarRef, key string, ref grammarRef) {
@@ -211,7 +231,7 @@ func (c *grammarCatalog) forLanguage(lang string) (grammarRef, bool) {
 		return refFromInfo(info), true
 	}
 	for _, ref := range c.external {
-		if ref.languageID == key {
+		if ref.languageID == key && !ref.borrowedName {
 			return ref, true
 		}
 	}
