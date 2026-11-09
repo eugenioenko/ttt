@@ -155,3 +155,30 @@ func TestClearingExternalGrammarsRestoresEmbedded(t *testing.T) {
 		t.Error("a.foo still highlighted after clearing")
 	}
 }
+
+func TestExternalGrammarScopeSuffixKeepsEmbeddedLanguageNames(t *testing.T) {
+	elisp := `{"scopeName": "source.emacs.lisp", "name": "Emacs Lisp", "patterns": []}`
+	if errs := setExternal(t, ExternalGrammar{
+		Path:      writeGrammar(t, "emacs-lisp.json", elisp),
+		Language:  "Emacs Lisp",
+		FileTypes: []string{"el", "elisp", "emacs-lisp"},
+	}); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	for lang, want := range map[string]string{
+		"lisp":       "Common Lisp",
+		"elisp":      "Emacs Lisp",
+		"emacs-lisp": "Emacs Lisp",
+		"Emacs Lisp": "Emacs Lisp",
+	} {
+		h := NewForLanguage(lang)
+		if h == nil {
+			t.Errorf("NewForLanguage(%q) = nil, want %s", lang, want)
+		} else if h.Language() != want {
+			t.Errorf("NewForLanguage(%q) language = %q, want %q", lang, h.Language(), want)
+		}
+	}
+	if h := New("init.el"); h == nil || h.Language() != "Emacs Lisp" {
+		t.Errorf("init.el did not use the external grammar")
+	}
+}

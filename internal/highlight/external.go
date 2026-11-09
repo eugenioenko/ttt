@@ -118,7 +118,9 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 			addRef(fileTypes, strings.TrimPrefix(ft, "."), ref)
 		}
 		addRef(languages, ref.language, ref)
-		addRef(languages, shortName, ref)
+		if !namesOtherEmbedded(shortName, g.ScopeName) {
+			addRef(languages, shortName, ref)
+		}
 		for _, ft := range types {
 			addRef(languages, strings.TrimPrefix(ft, "."), ref)
 		}
@@ -130,6 +132,17 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 	catalog = next
 	catalogMu.Unlock()
 	return errs
+}
+
+// namesOtherEmbedded reports whether name selects a different embedded grammar.
+// A scope's last segment is only a guess at its language name: source.emacs.lisp
+// must not take "lisp" from Common Lisp.
+func namesOtherEmbedded(name, scopeName string) bool {
+	info, ok := grammars.InfoForID(name)
+	if !ok {
+		info, ok = grammars.InfoForAlias(name)
+	}
+	return ok && info.ScopeName != scopeName
 }
 
 func addRef(m map[string]grammarRef, key string, ref grammarRef) {
