@@ -24,6 +24,13 @@ func TestRenderPlainText(t *testing.T) {
 	}
 }
 
+func TestRenderBackslashEscapesAsLiterals(t *testing.T) {
+	lines := Render(`\# a\_b \*c\* \` + "`" + `d\` + "`")
+	if got, want := lines[0].Text(), "# a_b *c* `d`"; got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
 func TestRenderInlineCode(t *testing.T) {
 	lines := Render("use `fmt.Println` here")
 	if lines[0].Text() != "use fmt.Println here" {

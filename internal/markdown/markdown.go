@@ -13,6 +13,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	gmtext "github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 type LineKind int
@@ -454,7 +455,11 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, segs *inlineLines) {
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 		switch c := child.(type) {
 		case *ast.Text:
-			txt := string(c.Value(r.src))
+			value := c.Value(r.src)
+			if !c.IsRaw() {
+				value = util.UnescapePunctuations(value)
+			}
+			txt := string(value)
 			if txt != "" {
 				segs.add(Span{Text: txt, Style: style})
 			}

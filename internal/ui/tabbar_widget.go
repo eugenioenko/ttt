@@ -3,6 +3,7 @@ package ui
 import (
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -23,7 +24,11 @@ type tabLabelLayout struct {
 	iconStart  int
 	iconWidth  int
 	iconStyle  term.Style
+	fullName   string
+	cut        bool
 }
+
+const tabNameMaxWidth = 32
 
 type tabSpan struct {
 	start, end int
@@ -32,15 +37,16 @@ type tabSpan struct {
 }
 
 type Tab struct {
-	ID       string
-	Icon     string
-	Name     string
-	FilePath string
-	Dirty    bool
-	Active   bool
-	Closable bool
-	Pinned   bool
-	ReadOnly bool
+	ID         string
+	Icon       string
+	Name       string
+	ViewSuffix string // Included in Name, but kept outside the width cap.
+	FilePath   string
+	Dirty      bool
+	Active     bool
+	Closable   bool
+	Pinned     bool
+	ReadOnly   bool
 }
 
 type TabDragAutoScrollTick struct {
@@ -99,7 +105,8 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 }
 
 func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
-	name := filepath.Base(tab.Name)
+	fullName := filepath.Base(tab.Name)
+	name := textwidth.TruncateGraphemes(strings.TrimSuffix(fullName, tab.ViewSuffix), tabNameMaxWidth, "…") + tab.ViewSuffix
 	prefix := " "
 	suffix := ""
 	dirtyStart := 0
@@ -123,6 +130,8 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 		dirtyStart: dirtyStart,
 		dirtyWidth: dirtyWidth,
 		pinned:     tab.Pinned,
+		fullName:   fullName,
+		cut:        name != fullName,
 	}
 	glyph, iconStyle := FileIconForPath(t.Icons, tab.FilePath)
 	if tab.Icon != "" {
@@ -500,6 +509,30 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 		t.lastClickTime = now
 	}
 	return EventConsumed
+}
+
+// CutTabAt reports the tab under the screen position (mx, my) whose name was
+// cut at the last Render, with its full name and the screen cell its label row
+// starts at.
+func (t *TabBarWidget) CutTabAt(mx, my int) (index int, fullName string, anchorX, anchorY int, ok bool) {
+	r := t.GetRect()
+	if !r.Contains(mx, my) || t.drag.Active() {
+		return -1, "", 0, 0, false
+	}
+	innerLeft := r.X + t.renderArrowW
+	if mx < innerLeft || mx >= r.X+t.renderInnerRight {
+		return -1, "", 0, 0, false
+	}
+	localX := mx - innerLeft + t.ScrollOffset
+	for i, s := range t.tabSpans {
+		if localX >= s.start && localX < s.end {
+			if !s.label.cut {
+				return -1, "", 0, 0, false
+			}
+			return i, s.label.fullName, max(innerLeft+s.start-t.ScrollOffset, innerLeft), r.Y + 1, true
+		}
+	}
+	return -1, "", 0, 0, false
 }
 
 func (t *TabBarWidget) effectiveDropTarget(target int) int {
