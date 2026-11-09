@@ -189,7 +189,12 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 			}
 			labelX = x + 3
 		}
-		surface.DrawText(labelX, row, it.Label, x+menuW-1, style)
+		// Submenu labels stop before the chevron and its padding cell.
+		labelEnd := x + menuW - 1
+		if len(it.Submenu) > 0 && menuW >= 3 {
+			labelEnd = x + menuW - 3
+		}
+		surface.DrawText(labelX, row, it.Label, labelEnd, style)
 
 		if it.Shortcut != "" {
 			shortStyle := term.StyleMuted
@@ -201,7 +206,11 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 				shortEnd -= 2
 			}
 			sx := shortEnd - textwidth.String(it.Shortcut)
-			surface.DrawText(sx, row, it.Shortcut, x+menuW-1, shortStyle)
+			// Omit the shortcut rather than let it overwrite a clipped label.
+			labelUsed := min(labelX+textwidth.String(it.Label), labelEnd)
+			if sx > labelUsed {
+				surface.DrawText(sx, row, it.Shortcut, x+menuW-1, shortStyle)
+			}
 		}
 		if len(it.Submenu) > 0 && menuW >= 3 {
 			chevron := []rune(icons.Get(c.Icons, icons.Submenu))

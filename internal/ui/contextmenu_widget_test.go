@@ -362,3 +362,35 @@ func TestContextMenuSubmenuChevronFollowsIconMode(t *testing.T) {
 		})
 	}
 }
+
+func TestContextMenuClippedSubmenuLabelKeepsChevronPadding(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label:   "Open With",
+		Submenu: []ContextMenuItem{{Label: "Editor"}},
+	}}, 0, 0)
+
+	const w = 10
+	cells := renderContextMenu(menu, w, 5)
+	menuW := w
+	chevron := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != chevron {
+		t.Fatalf("submenu chevron at col %d = %q, want %q", menuW-3, got, chevron)
+	}
+	if got := cells[1][menuW-2].Ch; got != ' ' {
+		t.Errorf("cell before right border = %q, want padding space; label overran the padding", got)
+	}
+}
+
+func TestContextMenuClippedShortcutDoesNotOverwriteLabel(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label:    "Open With",
+		Shortcut: "ctrl+k o",
+		Submenu:  []ContextMenuItem{{Label: "Editor"}},
+	}}, 0, 0)
+
+	const w = 22
+	cells := renderContextMenu(menu, w, 5)
+	if got := gridRow(cells, 1, w); !strings.Contains(got, "Open With") {
+		t.Errorf("label overwritten by shortcut in clipped menu: %q", got)
+	}
+}
