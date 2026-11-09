@@ -1,10 +1,12 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -27,7 +29,7 @@ func TestKeyboardModifierStartupAndLiveApply(t *testing.T) {
 		mask        tcell.ModMask
 	}{
 		{config.ModifierSuper, "Super+Alt+J", tcell.ModMeta},
-		{config.ModifierControlSuper, "Ctrl/Super+Alt+J", tcell.ModCtrl | tcell.ModMeta},
+		{config.ModifierControlSuper, "Mod+Alt+J", tcell.ModCtrl | tcell.ModMeta},
 		{config.ModifierControl, "Ctrl+Alt+J", tcell.ModCtrl},
 	} {
 		s.Keyboard.ModifierKey = tc.mode
@@ -46,6 +48,50 @@ func TestKeyboardModifierStartupAndLiveApply(t *testing.T) {
 		a.Root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "j", tcell.ModMeta|tcell.ModAlt))
 		if (fired > before) != (tc.mask&tcell.ModMeta != 0) {
 			t.Fatal("custom binding did not follow live setting")
+		}
+	}
+}
+
+func TestKeyboardModifierRefreshSkipsUnboundShortcuts(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	s := config.DefaultSettings()
+	a := buildTestApp(t, s)
+	a.Reg = command.NewRegistry()
+	a.Keybindings = []config.KeyBinding{
+		{Key: "ctrl+alt+j", Command: "test.valid"},
+		{Key: "", Command: "test.empty"},
+		{Key: "invalid+j", Command: "test.invalid"},
+		{Key: "invalid+j", Command: "test.valid"},
+	}
+	p := &plugin.Plugin{Name: "shortcuts", Enabled: true, PluginKeybindings: []plugin.PluginKeybinding{
+		{Key: "ctrl+alt+h", Command: "test.pluginValid"},
+		{Key: "", Command: "test.pluginEmpty"},
+		{Key: "invalid+h", Command: "test.pluginInvalid"},
+		{Key: "invalid+h", Command: "test.pluginValid"},
+	}}
+	for _, id := range []string{"test.valid", "test.empty", "test.invalid", "test.pluginValid", "test.pluginEmpty", "test.pluginInvalid"} {
+		a.Reg.Register(command.Command{ID: id})
+	}
+	a.RebindKeys()
+	a.PluginManager = plugin.NewManager(t.TempDir(), filepath.Join(t.TempDir(), "plugins.json"))
+	a.PluginManager.RegisterDebugPlugin(p)
+	a.registerPluginCommandsAndKeys(p)
+	for _, mode := range []string{config.ModifierControl, config.ModifierControlSuper, config.ModifierSuper} {
+		s.Keyboard.ModifierKey = mode
+		a.ApplySettings(s)
+		for id, want := range map[string]string{
+			"test.valid":         FormatKeyBinding("ctrl+alt+j", a.Root.ControlModifiers),
+			"test.pluginValid":   FormatKeyBinding("ctrl+alt+h", a.Root.ControlModifiers),
+			"test.empty":         "",
+			"test.invalid":       "",
+			"test.pluginEmpty":   "",
+			"test.pluginInvalid": "",
+		} {
+			cmd, _ := a.Reg.Get(id)
+			if cmd.Shortcut != want {
+				t.Errorf("mode %s: %s shortcut = %q, want %q", mode, id, cmd.Shortcut, want)
+			}
 		}
 	}
 }

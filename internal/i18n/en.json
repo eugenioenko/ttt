@@ -521,6 +521,8 @@
   "keybindings.edit": "Edit",
   "keybindings.editSelectedShortcut": "Edit selected shortcut",
   "keybindings.keyboardShortcutsHelp": "Keyboard Shortcuts Help",
+  "keybindings.modifierEither": "Ctrl or Super",
+  "keybindings.modifierSuper": "Command (⌘) on macOS",
   "keybindings.moveDown": "Move down",
   "keybindings.moveUp": "Move up",
   "keybindings.pressKey": "Press key...",

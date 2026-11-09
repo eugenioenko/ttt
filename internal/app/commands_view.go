@@ -237,6 +237,8 @@ func (a *App) ShowKeybindings() {
 	}
 	w.OnHelp = func() {
 		content := widgets.NewKeyValueListWidget([]widgets.KeyValueEntry{
+			{Key: "Mod", Value: i18n.Text("keybindings.modifierEither")},
+			{Key: "Super", Value: i18n.Text("keybindings.modifierSuper")},
 			{Key: "Enter", Value: i18n.Text("keybindings.editSelectedShortcut")},
 			{Key: "Backspace", Value: i18n.Text("keybindings.resetToDefault")},
 			{Key: "Delete", Value: i18n.Text("keybindings.clearShortcut")},

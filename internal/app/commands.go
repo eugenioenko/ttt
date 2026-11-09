@@ -71,7 +71,7 @@ func FormatKeyBinding(key string, modifiers tcell.ModMask) string {
 			if strings.EqualFold(t, "ctrl") && modifiers&tcell.ModMeta != 0 {
 				tokens[j] = "Super"
 				if modifiers&tcell.ModCtrl != 0 {
-					tokens[j] = "Ctrl/Super"
+					tokens[j] = "Mod"
 				}
 			} else if t == "backtick" {
 				tokens[j] = "`"

@@ -45,6 +45,8 @@ Both write the same file, so you can move between them freely.
 }
 ```
 
+Shortcut labels use `Ctrl`, `Mod` (Ctrl or Super), or `Super` for these modes on every OS. The keybindings file continues to use `ctrl+…` for the configured modifier; for example, `ctrl+s` displays as `Mod+S` in `"control+super"` mode or `Super+S` in `"super"` mode.
+
 The terminal must forward the Super/Cmd shortcuts to TTT. Ordinary keys sent to the integrated terminal keep their original modifiers; registered force shortcuts, such as terminal toggle, use the setting even when the terminal has focus. Plugin key interception retains its existing behavior.
 
 ## Appearance
