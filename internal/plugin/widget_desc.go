@@ -109,6 +109,7 @@ type WidgetDesc struct {
 	KeyCommands   map[rune]string
 
 	BadgeRight bool
+	ActiveID   string
 
 	Label        string
 	OnClick      func()

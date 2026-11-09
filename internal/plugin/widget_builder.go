@@ -145,6 +145,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			tw.RestoreExpandedSilent(expanded)
 			tw.SetSelectedIndex(savedIdx)
 			tw.Config.BadgeRight, tw.Config.Inset = desc.BadgeRight, desc.Inset
+			tw.SetActiveID(desc.ActiveID)
 			wireTreeCallbacks(tw, desc, p)
 		}
 	case WidgetButton:
@@ -449,6 +450,7 @@ func createTreeWidget(desc WidgetDesc, p *Plugin) *widgets.TreeWidget {
 		TruncateLeft:  desc.TruncateLeft,
 		BadgeRight:    desc.BadgeRight,
 		Inset:         desc.Inset,
+		ActiveID:      desc.ActiveID,
 	})
 	wireTreeCallbacks(tw, desc, p)
 	applyBoxModel(&tw.Box, desc)
@@ -463,6 +465,7 @@ func createListWidget(desc WidgetDesc, p *Plugin) *widgets.TreeWidget {
 		TruncateLeft:  desc.TruncateLeft,
 		BadgeRight:    desc.BadgeRight,
 		Inset:         desc.Inset,
+		ActiveID:      desc.ActiveID,
 	})
 	wireTreeCallbacks(tw, desc, p)
 	applyBoxModel(&tw.Box, desc)
