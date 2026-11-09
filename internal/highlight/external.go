@@ -21,6 +21,9 @@ type grammarRef struct {
 	scopeName  string
 	language   string
 	languageID string
+	// borrowedName marks a language name taken from the scope suffix that
+	// selects a different embedded grammar; it is shown but never looked up.
+	borrowedName bool
 }
 
 type grammarCatalog struct {
@@ -102,8 +105,10 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 		if ref.language == "" {
 			ref.language = g.Name
 		}
+		suffixTaken := namesOtherEmbedded(shortName, g.ScopeName)
 		if ref.language == "" {
 			ref.language = shortName
+			ref.borrowedName = suffixTaken
 		}
 		ref.languageID = strings.ToLower(strings.TrimSpace(ref.language))
 		if info, ok := grammars.InfoForScope(g.ScopeName); ok && ext.Language == "" {
@@ -117,8 +122,10 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 		for _, ft := range types {
 			addRef(fileTypes, strings.TrimPrefix(ft, "."), ref)
 		}
-		addRef(languages, ref.language, ref)
-		if !namesOtherEmbedded(shortName, g.ScopeName) {
+		if !ref.borrowedName {
+			addRef(languages, ref.language, ref)
+		}
+		if !suffixTaken {
 			addRef(languages, shortName, ref)
 		}
 		for _, ft := range types {
@@ -224,7 +231,7 @@ func (c *grammarCatalog) forLanguage(lang string) (grammarRef, bool) {
 		return refFromInfo(info), true
 	}
 	for _, ref := range c.external {
-		if ref.languageID == key {
+		if ref.languageID == key && !ref.borrowedName {
 			return ref, true
 		}
 	}

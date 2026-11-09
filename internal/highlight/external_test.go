@@ -182,3 +182,23 @@ func TestExternalGrammarScopeSuffixKeepsEmbeddedLanguageNames(t *testing.T) {
 		t.Errorf("init.el did not use the external grammar")
 	}
 }
+
+func TestNamelessExternalGrammarKeepsEmbeddedLanguageNames(t *testing.T) {
+	nameless := `{"scopeName": "source.emacs.lisp", "patterns": []}`
+	if errs := setExternal(t, ExternalGrammar{
+		Path:      writeGrammar(t, "emacs-lisp.json", nameless),
+		FileTypes: []string{"el"},
+	}); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if h := NewForLanguage("lisp"); h == nil || h.Language() != "Common Lisp" {
+		t.Errorf("NewForLanguage(lisp) did not keep Common Lisp")
+	}
+	h := New("init.el")
+	if h == nil {
+		t.Fatal("init.el did not use the external grammar")
+	}
+	if h.Language() != "lisp" {
+		t.Errorf("language = %q, want the scope suffix as its display name", h.Language())
+	}
+}
