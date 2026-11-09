@@ -320,7 +320,8 @@ func TestGenerateCurrentChangesReplacementPreservesEndpointsAndCancellation(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	added, deleted := currentDiffStats(diff.Parse(generated))
+	parsed := diff.Parse(generated)
+	added, deleted := parsed.Stats()
 	if added != 2 || deleted != 2 {
 		t.Fatalf("replacement stats = +%d -%d", added, deleted)
 	}
@@ -353,7 +354,7 @@ func TestReadCurrentChangesFallsBackAboveDiffLimit(t *testing.T) {
 	if result.Err != nil || len(result.Files) != 1 {
 		t.Fatalf("large fallback result=%+v", result)
 	}
-	added, deleted := currentDiffStats(result.Files[0].Diff)
+	added, deleted := result.Files[0].Diff.Stats()
 	if added != lines || deleted != lines {
 		t.Fatalf("large fallback stats = +%d -%d", added, deleted)
 	}
