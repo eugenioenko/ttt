@@ -59,3 +59,31 @@ func TestRenderKeepsHTMLInsideCode(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderImageAltIgnoresDataAlt(t *testing.T) {
+	got := textLines(Render(`<div><img data-alt="placeholder" alt="correct"></div>`))
+	if len(got) != 1 || got[0] != "correct" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRenderImageAltKeepsEncodedTags(t *testing.T) {
+	got := textLines(Render(`<div><img alt="Use &lt;b&gt;"></div>`))
+	if len(got) != 1 || got[0] != "Use <b>" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRenderHTMLBlockKeepsLiteralComparisons(t *testing.T) {
+	got := textLines(Render(`<div>1 < 2 > 1 and <span title="a > b">x</span></div>`))
+	if len(got) != 1 || got[0] != "1 < 2 > 1 and x" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRenderInlineCommentHidesMarkupInside(t *testing.T) {
+	got := textLines(Render(`before <!-- <br> <img alt="hidden"> --> after`))
+	if len(got) != 1 || got[0] != "before  after" {
+		t.Fatalf("got %q", got)
+	}
+}

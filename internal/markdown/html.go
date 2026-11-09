@@ -12,8 +12,11 @@ import (
 var (
 	htmlCommentRegex = regexp.MustCompile(`(?s)<!--.*?-->`)
 	htmlBreakRegex   = regexp.MustCompile(`(?i)<br\s*/?>`)
-	htmlImageRegex   = regexp.MustCompile(`(?i)<img\b[^>]*>`)
-	htmlAltRegex     = regexp.MustCompile(`(?i)\balt\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	htmlImageRegex   = regexp.MustCompile(`(?i)<img\b(?:[^>"']|"[^"]*"|'[^']*')*>`)
+	htmlAltRegex     = regexp.MustCompile(`(?i)(?:^|\s)alt\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	// A tag needs a name right after < so literal comparisons like 1 < 2 > 1
+	// survive; quoted attribute values may contain >.
+	htmlTagNameRegex = regexp.MustCompile(`</?[A-Za-z][A-Za-z0-9-]*(?:\s(?:[^>"']|"[^"]*"|'[^']*')*)?/?>`)
 	// Parse consumes real disclosures before goldmark runs, so a details or
 	// summary tag that reaches an HTML block is literal text (for example one
 	// inside a multiline code span) and must stay visible.
@@ -27,19 +30,21 @@ func stripTag(tag string) string {
 	return ""
 }
 
-func imageAlt(tag string) string {
+// rawImageAlt keeps entities encoded, so stripHTML can remove tags before
+// decoding once and an encoded "&lt;b&gt;" in alt text survives.
+func rawImageAlt(tag string) string {
 	m := htmlAltRegex.FindStringSubmatch(tag)
 	if m == nil {
 		return ""
 	}
-	return html.UnescapeString(m[1] + m[2])
+	return m[1] + m[2]
 }
 
 func stripHTML(raw string) string {
 	s := htmlCommentRegex.ReplaceAllString(raw, "")
 	s = htmlBreakRegex.ReplaceAllString(s, "\n")
-	s = htmlImageRegex.ReplaceAllStringFunc(s, imageAlt)
-	s = htmlTagRegex.ReplaceAllStringFunc(s, stripTag)
+	s = htmlImageRegex.ReplaceAllStringFunc(s, rawImageAlt)
+	s = htmlTagNameRegex.ReplaceAllStringFunc(s, stripTag)
 	return html.UnescapeString(s)
 }
 
@@ -71,11 +76,14 @@ func (r *renderer) renderRawHTML(n *ast.RawHTML, style term.Style, segs *inlineL
 		raw.Write(seg.Value(r.src))
 	}
 	tag := raw.String()
+	if strings.HasPrefix(tag, "<!--") {
+		return
+	}
 	switch {
-	case htmlBreakRegex.MatchString(tag):
+	case htmlBreakRegex.FindString(tag) == tag:
 		*segs = append(*segs, nil)
-	case htmlImageRegex.MatchString(tag):
-		if alt := imageAlt(tag); alt != "" {
+	case htmlImageRegex.FindString(tag) == tag:
+		if alt := html.UnescapeString(rawImageAlt(tag)); alt != "" {
 			segs.add(Span{Text: alt, Style: style})
 		}
 	}
