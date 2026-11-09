@@ -644,6 +644,14 @@ func (a *App) CloseTerminal(panelID string) {
 	}
 }
 
+func (a *App) CloseActiveTerminal() {
+	idx := a.TerminalPanel.ActiveIndex()
+	if idx < 0 || idx >= len(a.Terminals) {
+		return
+	}
+	a.CloseTerminal(a.Terminals[idx].ID)
+}
+
 // hideBottomPanelIfTerminalActive collapses the bottom panel once the last
 // terminal is gone, so `exit` in the shell closes the panel instead of leaving
 // a dead one on screen. The panel also hosts Problems, References and Output,

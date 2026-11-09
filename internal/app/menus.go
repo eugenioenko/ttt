@@ -366,6 +366,12 @@ func handleRightClick(app *App, mx, my int) {
 		}
 	}
 
+	if app.terminalStripContains(mx, my) {
+		if app.TerminalPanel.TabBar.HandleEvent(tcell.NewEventMouse(mx, my, tcell.Button2, 0)) != ui.EventIgnored {
+			return
+		}
+	}
+
 	tabR := app.EditorGroup.TabBar.GetRect()
 	if my >= tabR.Y && my < tabR.Y+tabR.H {
 		ev := tcell.NewEventMouse(mx, my, tcell.Button2, 0)
@@ -398,6 +404,18 @@ func handleRightClick(app *App, mx, my int) {
 	} else {
 		openEditorContextMenu(app, mx, my)
 	}
+}
+
+// The strip keeps its last rect while the panel is hidden or showing another
+// tab, so only trust it while terminal tabs are actually on screen.
+func (a *App) terminalStripContains(mx, my int) bool {
+	if a.ContentSplit == nil || !a.ContentSplit.ShowBottom || a.BottomPanel == nil || a.BottomPanel.ActivePanel != "terminal" {
+		return false
+	}
+	if a.TerminalPanel == nil || a.TerminalPanel.Count() == 0 {
+		return false
+	}
+	return a.TerminalPanel.TabBar.GetRect().Contains(mx, my)
 }
 
 // openEditorContextMenu shows the editor right-click menu, appending any items
