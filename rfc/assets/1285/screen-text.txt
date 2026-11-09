@@ -1,0 +1,122 @@
+# TTT --exec tab-bar text at 6457ab1a
+# First four screen rows; full captures are retained with the local experiments.
+
+adaptive-200-full-middle
+  File   Edit   Selection   View   Options   Help
+ ╭───────────────────────────────────────────────╮
+ │ authentication-provider.integration.test.ts ✕ │ authentication-consumer.integration.test.ts  application-configuration.d.ts  项目配置与部署操作说明.md  README.md  main.go                        ⋮
+╭╯                                               ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+
+adaptive-200-proposed-middle
+  File   Edit   Selection   View   Options   Help
+ ╭───────────────────────────────────────────────╮
+ │ authentication-provider.integration.test.ts ✕ │ authentication-consumer.integration.test.ts  application-configuration.d.ts  项目配置与部署操作说明.md  README.md  main.go                        ⋮
+╭╯                                               ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+
+adaptive-60-full-middle
+  File   Edit   Selection   View   Options   Help
+    ╭───────────────────────────────────────────────
+    │ authentication-provider.integration.test.ts ✕  ›   ⋮
+╭───╯                                               ───────╮
+
+adaptive-60-proposed-middle
+  File   Edit   Selection   View   Options   Help
+    ╭──────────────────────╮
+    │ auth…prov….test.ts ✕ │ auth…cons….test.ts  app ›   ⋮
+╭───╯                      ╰───────────────────────────────╮
+
+cut-strategies-limit18-end
+  File   Edit   Selection   View   Options   Help
+    ╭──────────────────────╮
+    │ authentication-pr… ✕ │ authentication-co…  application-confi…  项目配置与部署操…  READ ›   ⋮
+╭───╯                      ╰───────────────────────────────────────────────────────────────────────╮
+
+cut-strategies-limit18-extension
+  File   Edit   Selection   View   Options   Help
+    ╭──────────────────────╮
+    │ authentic….test.ts ✕ │ authentic….test.ts  application-….d.ts  项目配置与部署….md  REA ›   ⋮
+╭───╯                      ╰───────────────────────────────────────────────────────────────────────╮
+
+cut-strategies-limit18-middle
+  File   Edit   Selection   View   Options   Help
+    ╭──────────────────────╮
+    │ authentic….test.ts ✕ │ authentic….test.ts  applicati…ion.d.ts  项目配置…作说明.md  REA ›   ⋮
+╭───╯                      ╰───────────────────────────────────────────────────────────────────────╮
+
+directories-100-full-middle
+  File   Edit   Selection   View   Options   Help
+ ╭────────────╮
+ │ index.ts ✕ │ index.ts  README.md  main.go                                                     ⋮
+╭╯            ╰────────────────────────────────────────────────────────────────────────────────────╮
+
+directories-100-proposed-middle
+  File   Edit   Selection   View   Options   Help
+ ╭────────────────╮
+ │ A/…/index.ts ✕ │ B/…/index.ts  README.md  main.go                                             ⋮
+╭╯                ╰────────────────────────────────────────────────────────────────────────────────╮
+
+fixed-limits-limit10-middle
+  File   Edit   Selection   View   Options   Help
+ ╭──────────────╮
+ │ authe…t.ts ✕ │ authe…t.ts  appli…d.ts  项目…明.md  README.md  main.go                         ⋮
+╭╯              ╰──────────────────────────────────────────────────────────────────────────────────╮
+
+fixed-limits-limit12-middle
+  File   Edit   Selection   View   Options   Help
+ ╭────────────────╮
+ │ authen…st.ts ✕ │ authen…st.ts  applic….d.ts  项目配…明.md  README.md  main.go                 ⋮
+╭╯                ╰────────────────────────────────────────────────────────────────────────────────╮
+
+fixed-limits-limit18-middle
+  File   Edit   Selection   View   Options   Help
+    ╭──────────────────────╮
+    │ authentic….test.ts ✕ │ authentic….test.ts  applicati…ion.d.ts  项目配置…作说明.md  REA ›   ⋮
+╭───╯                      ╰───────────────────────────────────────────────────────────────────────╮
+
+fixed-limits-limit24-middle
+  File   Edit   Selection   View   Options   Help
+    ╭────────────────────────────╮
+    │ authenticati…ion.test.ts ✕ │ authenticati…ion.test.ts  application-…ration.d.ts  项目  ›   ⋮
+╭───╯                            ╰─────────────────────────────────────────────────────────────────╮
+
+fixed-limits-limit8-middle
+  File   Edit   Selection   View   Options   Help
+ ╭────────────╮
+ │ auth….ts ✕ │ auth….ts  appl….ts  项目….md  READ….md  main.go                                  ⋮
+╭╯            ╰────────────────────────────────────────────────────────────────────────────────────╮
+
+single-100-full-middle
+  File   Edit   Selection   View   Options   Help
+ ╭───────────────────────────────────────────────╮
+ │ authentication-provider.integration.test.ts ✕ │                                               ⋮
+╭╯                                               ╰─────────────────────────────────────────────────╮
+
+single-100-proposed-middle
+  File   Edit   Selection   View   Options   Help
+ ╭───────────────────────────────────────────────╮
+ │ authentication-provider.integration.test.ts ✕ │                                               ⋮
+╭╯                                               ╰─────────────────────────────────────────────────╮
+
+states-nerd-full-middle
+  File   Edit   Selection   View   Options   Help
+    ╭───────────────╮
+    │ ●  main.go  │  󰈙 deployment-instructions-readonly.txt   项目配置与部署操作说明.md     ⋮
+╭───╯               ╰──────────────────────────────────────────────────────────────────────────────╮
+
+states-nerd-proposed-middle
+  File   Edit   Selection   View   Options   Help
+ ╭───────────────╮
+ │ ●  main.go  │  󰈙 deployment…adonly.txt   项目配置与…作说明.md   applicatio…ation.d.ts    ⋮
+╭╯               ╰─────────────────────────────────────────────────────────────────────────────────╮
+
+states-plain-full-middle
+  File   Edit   Selection   View   Options   Help
+    ╭─────────────╮
+    │ ● main.go ♦ │ deployment-instructions-readonly.txt (readonly)  项目配置与部署操作说明. ›   ⋮
+╭───╯             ╰────────────────────────────────────────────────────────────────────────────────╮
+
+states-plain-proposed-middle
+  File   Edit   Selection   View   Options   Help
+ ╭─────────────╮
+ │ ● main.go ♦ │ deployment…donly.txt (readonly)  项目配置与…作说明.md  applicatio…tion.d.ts     ⋮
+╭╯             ╰───────────────────────────────────────────────────────────────────────────────────╮
