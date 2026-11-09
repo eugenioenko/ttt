@@ -279,7 +279,7 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	// which is what lets a key interceptor claim them while editing.
 	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
 		for _, gk := range r.ForceKeys {
-			if key := controlKeyEvent(kev, r.ControlModifiers); key != nil && matchKey(key, gk) {
+			if key := term.ControlKeyEvent(kev, &r.ControlModifiers); key != nil && matchKey(key, gk) {
 				gk.Handler()
 				return EventConsumed
 			}
@@ -412,7 +412,7 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 }
 
 func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
-	kev = controlKeyEvent(kev, r.ControlModifiers)
+	kev = term.ControlKeyEvent(kev, &r.ControlModifiers)
 	if kev == nil {
 		r.chord = nil
 		return EventIgnored
@@ -453,7 +453,7 @@ func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
 }
 
 func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
-	kev = controlKeyEvent(kev, r.ControlModifiers)
+	kev = term.ControlKeyEvent(kev, &r.ControlModifiers)
 	if kev == nil {
 		return EventIgnored
 	}
@@ -538,6 +538,9 @@ func (r *Root) RemoveOverlay(w Widget) {
 // pane routes through here, and blurring it first would discard transient state
 // such as an open dropdown.
 func (r *Root) SetFocus(w Widget) {
+	if adapter, ok := w.(*WidgetAdapter); ok {
+		adapter.ControlModifiers = &r.ControlModifiers
+	}
 	if r.Focused == w {
 		return
 	}

@@ -23,7 +23,7 @@ type KeybindingsWidget struct {
 	OnReset          func(cmdID string)
 	OnClear          func(cmdID string)
 	OnHelp           func()
-	ControlModifiers tcell.ModMask
+	ControlModifiers *tcell.ModMask
 
 	input        *widgets.InputWidget
 	allItems     []keybindingEntry
@@ -288,6 +288,7 @@ func (w *KeybindingsWidget) renderFooterActions(surface Surface, y, ox, oy int) 
 }
 
 func (w *KeybindingsWidget) HandleEvent(ev tcell.Event) EventResult {
+	w.input.ControlModifiers = w.ControlModifiers
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		return w.handleMouse(mev)
 	}
@@ -456,7 +457,7 @@ func (w *KeybindingsWidget) handleRecordKey(kev *tcell.EventKey) EventResult {
 		return EventConsumed
 	}
 
-	kev = controlKeyEvent(kev, w.ControlModifiers)
+	kev = term.ControlKeyEvent(kev, w.ControlModifiers)
 	if kev == nil {
 		return EventConsumed
 	}

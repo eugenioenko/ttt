@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/gdamore/tcell/v3"
 	"github.com/gdamore/tcell/v3/vt"
@@ -76,5 +77,34 @@ func TestKeyboardModifierClipboard(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestKeyboardModifierQuitHint(t *testing.T) {
+	for _, tc := range []struct{ mode, binding, hint string }{
+		{"control", "ctrl+q", "Press Ctrl+Q to force quit."},
+		{"control+super", "ctrl+q", "Press Mod+Q to force quit."},
+		{"super", "ctrl+q", "Press Super+Q to force quit."},
+		{"super", "alt+q", "Press Alt+Q to force quit."},
+		{"super", "", ""},
+	} {
+		t.Run(tc.mode+"/"+tc.binding, func(t *testing.T) {
+			h := newTestHarness(t, 100, 28)
+			defer h.stop()
+			s := *h.app.Settings
+			s.Keyboard.ModifierKey = tc.mode
+			h.app.ApplySettings(s)
+			h.app.Keybindings = []config.KeyBinding{{Key: tc.binding, Command: "editor.quit"}}
+			h.app.RebindKeys()
+			h.exec("file.new")
+			h.typeText("dirty")
+			h.exec("editor.quit")
+			h.assertContains("Unsaved changes")
+			if tc.hint != "" {
+				h.assertContains(tc.hint)
+			} else if strings.Contains(h.screenText(), "to force quit") {
+				t.Fatal("unbound quit must not show a shortcut hint")
+			}
+		})
 	}
 }

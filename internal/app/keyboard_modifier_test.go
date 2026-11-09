@@ -52,6 +52,23 @@ func TestKeyboardModifierStartupAndLiveApply(t *testing.T) {
 	}
 }
 
+func TestKeyboardModifierCommandLinePreservesHookEvent(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	s := config.DefaultSettings()
+	s.Keyboard.ModifierKey = config.ModifierSuper
+	a := buildTestApp(t, s)
+	w := a.ShowCommandLine(":", nil, nil, nil)
+	w.Input().SetText("alpha beta")
+	key := tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModMeta)
+	var seen *tcell.EventKey
+	w.OnKey = func(ev *tcell.EventKey) bool { seen = ev; return false }
+	a.Root.HandleEvent(key)
+	if seen != key || !w.Input().HasSelection() {
+		t.Fatal("command-line hook must receive the original event and the input must accept Super+A")
+	}
+}
+
 func TestKeyboardModifierRefreshSkipsUnboundShortcuts(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = "" })

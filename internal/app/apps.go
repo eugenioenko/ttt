@@ -163,6 +163,7 @@ func (a *App) validApps() []config.Application {
 func (a *App) syncApps() {
 	if a.Apps == nil {
 		a.Apps = NewAppsPanel()
+		a.Apps.SearchInput.ControlModifiers = &a.Root.ControlModifiers
 		a.Apps.OnLaunch = a.LaunchApp
 		a.Apps.OnAdd = a.AddApp
 		a.Apps.OnSearch = a.scheduleAppsSearch

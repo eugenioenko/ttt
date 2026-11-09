@@ -37,6 +37,9 @@ func (ws *WidgetState) Reconcile(descs []WidgetDesc, p *Plugin) *widgets.VStackW
 	ws.keys = newKeys
 	ws.items = newWidgets
 	ws.root = widgets.NewVStackWidget(newWidgets...)
+	if p != nil {
+		widgets.SetControlModifiers(ws.root, p.ControlModifiers)
+	}
 	ws.focus.Collect(ws.root)
 	return ws.root
 }

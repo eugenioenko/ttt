@@ -23,8 +23,11 @@ type HoverWidget struct {
 	numLines int
 }
 
-func NewHoverWidget(text string, x, y int) *HoverWidget {
+func NewHoverWidget(text string, x, y int, modifiers ...*tcell.ModMask) *HoverWidget {
 	md := widgets.NewMarkdownWidget()
+	if len(modifiers) > 0 {
+		md.ControlModifiers = modifiers[0]
+	}
 	md.MaxWidth = hoverMaxWidth
 	md.FillStyle = term.StylePaletteItem
 	md.Box.PaddingLeft = 1

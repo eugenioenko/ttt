@@ -116,7 +116,7 @@ func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {
 		}
 		return result
 	case *tcell.EventKey:
-		if isCopyKey(e) && pw.CopyTextSelection() {
+		if isCopyKey(e, pw.plugin) && pw.CopyTextSelection() {
 			return widgets.EventConsumed
 		}
 		if e.Key() == tcell.KeyEscape {

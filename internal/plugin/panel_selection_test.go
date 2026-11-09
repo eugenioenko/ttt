@@ -137,6 +137,39 @@ func newInputPanel(t *testing.T) (*PluginPanelWidget, *mockSurface) {
 	return pw, surface
 }
 
+func TestPanelInputShortcutModifierPreservesFallback(t *testing.T) {
+	pw, surface := newInputPanel(t)
+	allowed := tcell.ModMeta
+	pw.plugin.ControlModifiers = &allowed
+	pw.Render(surface)
+	pw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModMeta))
+	if !pw.FocusedInput().HasSelection() {
+		t.Fatal("plugin input did not accept Super+A")
+	}
+	seen := ""
+	pw.eventFunc = pw.plugin.State.NewFunction(func(L *lua.LState) int {
+		seen = L.CheckTable(1).RawGetString("rune").String()
+		return 0
+	})
+	pw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "k", tcell.ModMeta))
+	if seen != "k" {
+		t.Fatal("fallback callback did not receive the original printable key")
+	}
+}
+
+func TestPanelSelectionShortcutModifierCopy(t *testing.T) {
+	clipboard.DisableSystem()
+	pw, _ := newTextPanel(t)
+	allowed := tcell.ModMeta
+	pw.plugin.ControlModifiers = &allowed
+	pw.SelectAllText()
+	clipboard.Set("unchanged")
+	pw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "c", tcell.ModMeta))
+	if !strings.Contains(clipboard.Get(), "alpha beta") {
+		t.Fatal("panel selection did not copy with Super+C")
+	}
+}
+
 func TestPanelLeavesInputDragsToTheInput(t *testing.T) {
 	pw, surface := newInputPanel(t)
 	pw.SetRect(widgets.Rect{W: 30, H: 3})

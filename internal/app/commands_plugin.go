@@ -407,6 +407,7 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 }
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
+	p.ControlModifiers = &a.Root.ControlModifiers
 	a.installPluginThemes(p)
 	a.installPluginLanguages(p)
 	a.wirePluginDialogs(p)

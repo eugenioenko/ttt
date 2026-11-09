@@ -338,7 +338,7 @@
   "dialog.discardChanges": "Discard Changes?",
   "dialog.isReadOnlyOverwriteAnyway": "{filename} is read-only. Overwrite anyway?",
   "dialog.otherTabsHaveUnsavedChanges": "Other tabs have unsaved changes.",
-  "dialog.pressCtrlQToForceQuit": "Press Ctrl+Q to force quit.",
+  "dialog.pressCtrlQToForceQuit": "Press {shortcut} to force quit.",
   "dialog.saveAllQuit": "Save All & Quit",
   "dialog.saveAs": "Save As",
   "dialog.saveChangesTo": "Save changes to {name}?",

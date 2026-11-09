@@ -2057,6 +2057,8 @@ The plugin panel manages its own focus system. When the plugin panel is focused:
 
 Labels, titles, and key-value lists are not focusable. If your panel has only non-focusable widgets and raw cells, all events go directly to `on_event`.
 
+Built-in input editing and Markdown copy shortcuts follow [`keyboard.modifierKey`](/reference/settings/#keyboard), including live changes. Plugin key interceptors, fallback `on_event` handlers, and command-line `on_key` hooks continue to receive the original key events.
+
 ## Event Handling
 
 There are two levels of event handling:

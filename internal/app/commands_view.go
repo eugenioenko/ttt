@@ -174,7 +174,7 @@ func (a *App) ShowKeybindings() {
 	}
 
 	w := ui.NewKeybindingsWidget(a.Reg.List())
-	w.ControlModifiers = a.Root.ControlModifiers
+	w.ControlModifiers = &a.Root.ControlModifiers
 	w.Borders = a.Borders
 	w.GetShortcut = func(cmdID string) string {
 		for _, kb := range a.Keybindings {

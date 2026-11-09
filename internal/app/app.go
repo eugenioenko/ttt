@@ -722,7 +722,7 @@ func (a *App) checkMouseHover(mx, my int) {
 
 func (a *App) ShowHover(text string, anchorX, anchorY int) {
 	if text != "" {
-		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY)
+		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY, &a.Root.ControlModifiers)
 	}
 }
 
@@ -1170,6 +1170,7 @@ func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callb
 
 func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 	findBar := ui.NewFindBarWidget()
+	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		leftMatches, err := ui.FindInLines(dv.LeftLines(), query, opts)

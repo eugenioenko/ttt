@@ -7,6 +7,7 @@ import (
 
 type WidgetAdapter struct {
 	BaseWidget
+	ControlModifiers          *tcell.ModMask
 	W                         widgets.Widget
 	focus                     *widgets.FocusManager
 	popups                    []widgets.PopupRenderer
@@ -153,6 +154,9 @@ func (a *WidgetAdapter) CursorPosition() (int, int, bool) {
 }
 
 func (a *WidgetAdapter) HandleEvent(ev tcell.Event) EventResult {
+	if a.ControlModifiers != nil {
+		widgets.SetControlModifiers(a.W, a.ControlModifiers)
+	}
 	if tev, ok := ev.(*tcell.EventMouse); ok && a.capturedWidget != nil {
 		result := a.capturedWidget.HandleEvent(ev)
 		if tev.Buttons() == tcell.ButtonNone {
