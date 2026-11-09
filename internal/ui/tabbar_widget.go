@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
@@ -112,8 +113,8 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 	dirtyWidth := 0
 	if tab.Dirty {
 		dirtyGlyph := string(icons.Rune(icons.Dirty))
-		dirtyStart = textwidth.String(prefix)
-		dirtyWidth = textwidth.String(dirtyGlyph)
+		dirtyStart = textwidth.GraphemeWidth(prefix)
+		dirtyWidth = textwidth.GraphemeWidth(dirtyGlyph)
 		prefix += dirtyGlyph + " "
 	}
 	if tab.ReadOnly {
@@ -136,8 +137,8 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 	if tab.Icon != "" {
 		glyph, iconStyle = tab.Icon, term.StyleDefault
 	}
-	label.iconStart = textwidth.String(label.text)
-	label.iconWidth = textwidth.String(glyph)
+	label.iconStart = textwidth.GraphemeWidth(label.text)
+	label.iconWidth = textwidth.GraphemeWidth(glyph)
 	label.iconStyle = iconStyle
 	if glyph != "" {
 		label.text += glyph + " "
@@ -154,27 +155,36 @@ func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 	return label
 }
 
-// drawTabLabel draws a tab label from x, advancing by each rune's display width
+// drawTabLabel draws a tab label from x, advancing by each grapheme's display width
 // and clipping to the scrollable inner zone. The dirty and pinned markers keep
 // their own styles so they stay visible against the tab background.
 func drawTabLabel(surface Surface, x, innerLeft, innerRight int, label tabLabelLayout, mode string, style term.Style) {
 	pinnedGlyph := icons.Get(mode, icons.Pinned)
 	labelX := 0
-	for _, ch := range label.text {
+	clusters := textwidth.Graphemes(label.text)
+	for clusters.Next() {
+		text, w := clusters.Value(), clusters.Width()
+		if w == 0 {
+			text, w = "◌"+text, 1
+		}
 		chStyle := style
 		bgStyle := term.StyleDefault
 		if label.dirty && label.dirtyWidth > 0 && labelX >= label.dirtyStart && labelX < label.dirtyStart+label.dirtyWidth {
 			chStyle = term.StyleWarning
-		} else if label.pinned && string(ch) == pinnedGlyph {
+		} else if label.pinned && text == pinnedGlyph {
 			chStyle = term.StyleMuted
 		}
-		w := textwidth.Rune(ch)
 		if label.iconWidth > 0 && labelX >= label.iconStart && labelX < label.iconStart+label.iconWidth {
 			chStyle = label.iconStyle
 			bgStyle = style
 		}
 		if x >= innerLeft && x+w <= innerRight {
-			surface.SetCell(x, 1, term.Cell{Ch: ch, Style: chStyle, BgStyle: bgStyle})
+			ch, size := utf8.DecodeRuneInString(text)
+			cell := term.Cell{Ch: ch, Style: chStyle, BgStyle: bgStyle}
+			if size < len(text) {
+				cell.Text = text
+			}
+			surface.SetCell(x, 1, cell)
 		}
 		x += w
 		labelX += w
@@ -201,7 +211,7 @@ func (t *TabBarWidget) Render(surface Surface) {
 	activeIdx := -1
 	for i, tab := range t.Tabs {
 		label := t.tabLabelParts(tab)
-		labelW := textwidth.String(label.text)
+		labelW := textwidth.GraphemeWidth(label.text)
 		spanW := labelW
 		if tab.Active {
 			spanW += 2

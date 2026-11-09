@@ -238,7 +238,7 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 		default:
 			file.Diff = fileDiff
 			file = ui.CommitDetailFileWithContent(file, oldLines, newLines)
-			added, deleted := currentDiffStats(file.Diff)
+			added, deleted := file.Diff.Stats()
 			additions += added
 			deletions += deleted
 		}
@@ -289,18 +289,6 @@ func splitCurrentChangesLines(content []byte) []string {
 		lines = lines[:len(lines)-1]
 	}
 	return lines
-}
-
-func currentDiffStats(file diff.FileDiff) (added, deleted int) {
-	for _, line := range file.AllLines() {
-		if line.Left.Kind == diff.Deleted {
-			deleted++
-		}
-		if line.Right.Kind == diff.Added {
-			added++
-		}
-	}
-	return added, deleted
 }
 
 func currentChangesSummary(files, additions, deletions, staged, unstaged, conflicts int) string {

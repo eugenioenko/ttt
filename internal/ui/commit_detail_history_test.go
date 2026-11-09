@@ -132,8 +132,8 @@ func TestCommitDetailWholeFullwidthHeadingRowTogglesAtNarrowWidth(t *testing.T) 
 		Path: "資料/界面.txt",
 		Diff: diff.Parse("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"),
 	}}, "")
-	detail.SetRect(Rect{X: 7, Y: 4, W: 12, H: 8})
-	detail.Render(NewRenderSurface(makeGrid(12, 8), Rect{X: 7, Y: 4, W: 12, H: 8}))
+	detail.SetRect(Rect{X: 7, Y: 4, W: 12, H: 12})
+	detail.Render(NewRenderSurface(makeGrid(12, 12), Rect{X: 7, Y: 4, W: 12, H: 12}))
 	if len(detail.fileControls) == 0 || detail.fileControls[0].rect.W != 12 {
 		t.Fatalf("heading hit region = %+v, want whole 12-column row", detail.fileControls)
 	}

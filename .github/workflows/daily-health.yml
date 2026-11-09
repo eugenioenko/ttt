@@ -1,0 +1,202 @@
+name: Daily health
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: daily-health
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.25"
+  SIZE_BUDGET_MB: "20"
+  SIZE_HEADROOM_WARN_MB: "1"
+
+jobs:
+  report:
+    name: main vs latest release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MARKER: "<!-- ttt-daily-health -->"
+    steps:
+      - name: Find the latest release and the report issue
+        id: state
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          issue="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100" \
+            --jq '.[] | select(.pull_request == null and .user.login == "github-actions[bot]" and (.body // "" | contains(env.MARKER))) | .number' | head -n 1)"
+
+          skip=false
+          if [[ -n "$issue" && "$EVENT_NAME" == "schedule" ]]; then
+            body="$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue" --jq .body)"
+            if [[ "$body" == *"<!-- state: $HEAD_SHA $tag -->"* ]]; then
+              skip=true
+              echo "main and the latest release are unchanged since the last report."
+            fi
+          fi
+
+          {
+            echo "tag=$tag"
+            echo "issue=$issue"
+            echo "skip=$skip"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out main
+        if: steps.state.outputs.skip != 'true'
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check out the latest release
+        if: steps.state.outputs.skip != 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.state.outputs.tag }}
+          path: .bench-base
+          persist-credentials: false
+
+      - name: Set up Go
+        if: steps.state.outputs.skip != 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Compare binary sizes
+        id: size
+        if: steps.state.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          TAG: ${{ steps.state.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          budget_bytes=$((SIZE_BUDGET_MB * 1000000))
+          warn_bytes=$((SIZE_HEADROOM_WARN_MB * 1000000))
+          mb() { awk "BEGIN { printf \"%.2f MB\", $1 / 1000000 }"; }
+          kb() { awk "BEGIN { printf \"%+.0f KB\", $1 / 1000 }"; }
+
+          {
+            echo "## Binary size"
+            echo
+            echo "\`main\` built with the release flags, compared with the binaries published in $TAG. Budget: **${SIZE_BUDGET_MB} MB**."
+            echo
+            echo "| Target | $TAG | main | Change | % | Headroom |"
+            echo "| --- | ---: | ---: | ---: | ---: | ---: |"
+          } > "$RUNNER_TEMP/size.md"
+
+          low=false
+          for name in ttt-linux-amd64 ttt-darwin-amd64 ttt-darwin-arm64 ttt-windows-amd64.exe; do
+            target="${name#ttt-}"
+            target="${target%.exe}"
+            # Same flags as release.yml, including the version string, so sizes compare like for like.
+            CGO_ENABLED=0 GOOS="${target%-*}" GOARCH="${target#*-}" \
+              go build -ldflags="-s -w -X main.version=$TAG" -o "$RUNNER_TEMP/$name" ./cmd/ttt
+
+            release_size="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+              --jq ".assets[] | select(.name == \"$name\") | .size")"
+            main_size="$(stat --format=%s "$RUNNER_TEMP/$name")"
+            headroom=$((budget_bytes - main_size))
+
+            if [[ -n "$release_size" ]]; then
+              delta=$((main_size - release_size))
+              pct="$(awk "BEGIN { printf \"%+.1f%%\", ($delta / $release_size) * 100 }")"
+              release_cell="$(mb "$release_size")"
+              delta_cell="$(kb "$delta")"
+            else
+              pct="n/a"
+              release_cell="not published"
+              delta_cell="n/a"
+            fi
+
+            warn=""
+            if [[ "$headroom" -lt "$warn_bytes" ]]; then
+              warn=" :warning:"
+              low=true
+            fi
+            echo "| ${target/-//} | $release_cell | $(mb "$main_size") | $delta_cell | $pct | $(mb "$headroom")$warn |" >> "$RUNNER_TEMP/size.md"
+          done
+
+          if [[ "$low" == "true" ]]; then
+            echo >> "$RUNNER_TEMP/size.md"
+            echo "> :warning: **At least one target is within ${SIZE_HEADROOM_WARN_MB} MB of the ${SIZE_BUDGET_MB} MB budget.**" >> "$RUNNER_TEMP/size.md"
+          fi
+
+          cat "$RUNNER_TEMP/size.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare benchmarks
+        id: bench
+        if: steps.state.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          BASE_DIR: ${{ github.workspace }}/.bench-base
+          BASE_SHA: ${{ steps.state.outputs.tag }}
+          HEAD_SHA: ${{ github.sha }}
+          BASE_LABEL: ${{ steps.state.outputs.tag }}
+          HEAD_LABEL: main
+          COUNT: "3"
+          BENCH_TIME: 5x
+          LOG_BENCH_TIME: 1x
+          REPORT_FILE: ${{ runner.temp }}/bench.md
+        run: node scripts/bench-compare.mjs
+
+      - name: Update the report issue
+        if: ${{ !cancelled() && steps.state.outputs.skip != 'true' }}
+        env:
+          TAG: ${{ steps.state.outputs.tag }}
+          ISSUE: ${{ steps.state.outputs.issue }}
+          HEAD_SHA: ${{ github.sha }}
+          SIZE_OUTCOME: ${{ steps.size.outcome }}
+          BENCH_OUTCOME: ${{ steps.bench.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "$MARKER"
+            echo "<!-- state: $HEAD_SHA $TAG -->"
+            echo "Daily comparison of \`main\` with the latest release, updated in place by the [Daily health](https://github.com/$GITHUB_REPOSITORY/actions/workflows/daily-health.yml) workflow."
+            echo
+            echo "Last run: $(date -u '+%b %-d, %Y %H:%M UTC') on [\`${HEAD_SHA:0:12}\`](https://github.com/$GITHUB_REPOSITORY/commit/$HEAD_SHA). [Workflow run]($RUN_URL)."
+            echo
+            if [[ "$SIZE_OUTCOME" == "success" ]]; then
+              cat "$RUNNER_TEMP/size.md"
+            else
+              echo "## Binary size"
+              echo
+              echo "The size comparison failed. See the [workflow run]($RUN_URL)."
+            fi
+            echo
+            if [[ "$BENCH_OUTCOME" == "success" && -s "$RUNNER_TEMP/bench.md" ]]; then
+              cat "$RUNNER_TEMP/bench.md"
+            else
+              echo "## Editor, diff, and log benchmarks"
+              echo
+              echo "The benchmark comparison failed. See the [workflow run]($RUN_URL)."
+            fi
+          } > "$RUNNER_TEMP/issue.md"
+
+          title="Daily health: main vs $TAG"
+          if [[ -n "$ISSUE" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/$ISSUE" -f title="$title" -F body=@"$RUNNER_TEMP/issue.md" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues" -f title="$title" -F body=@"$RUNNER_TEMP/issue.md" --jq .html_url
+          fi
+
+      - name: Fail when a comparison failed
+        if: steps.size.outcome == 'failure' || steps.bench.outcome == 'failure'
+        run: |
+          echo "::error::A comparison failed; the report issue says which."
+          exit 1

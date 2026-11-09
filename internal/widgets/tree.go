@@ -523,23 +523,23 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 			labelStyle = node.LabelStyle
 		}
 	}
-	labelRunes := []rune(node.Label)
+	label := node.Label
 	badgeW := 0
 	if t.Config.BadgeRight && node.Badge != "" {
 		gap := 0
 		if len(node.Actions) > 0 {
 			gap = 1
 		}
-		badgeW = rightBadgeWidth(maxX-x, textwidth.Runes(labelRunes), textwidth.String(node.Badge), gap)
+		badgeW = rightBadgeWidth(maxX-x, textwidth.GraphemeWidth(label), textwidth.String(node.Badge), gap)
 		if badgeW > 0 {
 			maxX -= badgeW + gap
 		}
 	}
 	if t.Config.TruncateLeft || node.TruncateLeft {
-		labelRunes = truncateRunesLeft(labelRunes, maxX-x)
+		label = truncateLabelLeft(label, maxX-x)
 	}
 	node.labelX = t.contentX + x
-	x = drawRunesClipped(surface, x, y, maxX, labelRunes, labelStyle)
+	x = drawLabelClipped(surface, x, y, maxX, label, labelStyle)
 
 	if node.Badge != "" && !t.Config.BadgeRight {
 		x++

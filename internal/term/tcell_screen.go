@@ -85,7 +85,7 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 		if c.Attrs&CellAttrBlink != 0 {
 			s = s.Blink(true)
 		}
-		t.scr.Put(x, y, runeString(c.Ch), s)
+		t.scr.Put(x, y, c.text(), s)
 		return
 	}
 	s := t.styleMap[c.Style]
@@ -137,13 +137,20 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 			// the displayed background is the terminal's default foreground.
 			s = s.Reverse(reverse)
 			t.scr.Put(x, y, " ", s)
-			if textwidth.Rune(c.Ch) == 2 {
+			if textwidth.GraphemeWidth(c.text()) == 2 {
 				t.scr.Put(x+1, y, " ", s)
 			}
 			return
 		}
 	}
-	t.scr.Put(x, y, runeString(c.Ch), s)
+	t.scr.Put(x, y, c.text(), s)
+}
+
+func (c Cell) text() string {
+	if c.Text != "" {
+		return c.Text
+	}
+	return runeString(c.Ch)
 }
 
 func (t *TcellScreen) Show() {
