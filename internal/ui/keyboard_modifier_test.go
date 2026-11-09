@@ -102,6 +102,20 @@ func TestKeyboardModifierInputAndOutput(t *testing.T) {
 			}
 		}
 	}
+	group := NewEditorGroupWidget(nil, 4, true, "relative")
+	group.ControlModifiers = &root.ControlModifiers
+	tabInput := widgets.NewInputWidget(widgets.InputConfig{})
+	tabAdapter := NewWidgetAdapter(widgets.NewVStackWidget(tabInput))
+	tabAdapter.SetRect(Rect{W: 60, H: 5})
+	tabAdapter.Render(NewRenderSurface(makeGrid(60, 5), Rect{W: 60, H: 5}))
+	group.OpenPluginTab("input", "Input", tabAdapter)
+	root.SetFocus(group)
+	root.SetControlModifiers(tcell.ModMeta)
+	tabInput.SetText("editor tab input")
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModMeta))
+	if !tabInput.HasSelection() {
+		t.Fatal("input in an editor tab did not inherit the shortcut modifier")
+	}
 }
 
 func TestKeyboardModifierChordAndRawKeys(t *testing.T) {

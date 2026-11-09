@@ -3466,6 +3466,9 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventIgnored
 	}
 	if t.Content != nil {
+		if adapter, ok := t.Content.(*WidgetAdapter); ok {
+			adapter.ControlModifiers = g.ControlModifiers
+		}
 		if result := t.Content.HandleEvent(ev); result != EventIgnored {
 			return result
 		}
