@@ -23,6 +23,8 @@ func initHelpText() {
 		{Key: "Shift+Enter", Value: i18n.Text("help.openContextMenu")},
 		{Key: "Menu*", Value: i18n.Text("help.openContextMenuTerminalDependent")},
 		{Key: "r", Value: i18n.Text("help.refreshExplorer")},
+		{Key: "/", Value: i18n.Text("explorer.searchInFolders")},
+		{Key: "Esc", Value: i18n.Text("help.closeExplorerSearch")},
 		{Key: "Up / k", Value: i18n.Text("help.moveUp")},
 		{Key: "Down / j", Value: i18n.Text("help.moveDown")},
 		{Key: "Left / h", Value: i18n.Text("help.collapseFolder")},

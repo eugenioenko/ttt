@@ -263,7 +263,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `search.debounce` | int | `350` | Milliseconds to debounce global search input |
+| `search.debounce` | int | `350` | Milliseconds to debounce global search and explorer filter input |
 
 ## Plugins
 

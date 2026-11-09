@@ -416,6 +416,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	app.setExplorerSearchDebounce(cfg.Settings.Search.Debounce)
 	app.diagPull = NewTask[pulledDiagnostics](app, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
 	app.diagBackground = make(map[string]*asynctask.Task[[]backgroundPull])
 	app.Repository = NewRepositoryState(changes, ws.Paths())

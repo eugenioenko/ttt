@@ -9,6 +9,7 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 
 - Directories are sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
+- Press **/** in the explorer or choose **Search in Folders** from its More menu (`explorer.find`) to focus a filter input. It searches loaded file and folder names across all roots and keeps parent folders visible for context. **Up/Down** navigate matches, **Enter** opens the selection, and **Esc** or **✕** clears the filter and hides the input; use quick open to search the whole workspace
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
 - **Open in Terminal** (`explorer.openInTerminal`, right-click menu or palette) opens a new integrated terminal in that folder, or in the file's folder
 - Sidebar actions button for **Refresh** and **New File**
