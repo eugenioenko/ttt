@@ -45,7 +45,7 @@ func TestCurrentChangesConsumesProviderGroupsAndEndpoints(t *testing.T) {
 	if ui.CommitDetailContextKey(first) == ui.CommitDetailContextKey(samePath) {
 		t.Fatal("provider groups collapsed")
 	}
-	added, deleted := currentDiffStats(first.Diff)
+	added, deleted := first.Diff.Stats()
 	if added != 1 || deleted != 1 || !strings.Contains(result.Summary, "1 file") {
 		t.Fatalf("provider content or summary lost: %+v", result)
 	}
@@ -70,7 +70,7 @@ func TestCurrentChangesProviderMetadataAndLargeFallback(t *testing.T) {
 		t.Fatalf("result=%+v", result)
 	}
 	file := result.Files[0]
-	added, deleted := currentDiffStats(file.Diff)
+	added, deleted := file.Diff.Stats()
 	if added != 2001 || deleted != 2001 || file.ConflictCode != "provider conflict" || !reflect.DeepEqual(file.ConflictSources, content.ConflictSources) {
 		t.Fatalf("conflict metadata or bounded replacement lost: +%d -%d %+v", added, deleted, file)
 	}

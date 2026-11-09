@@ -89,6 +89,7 @@ const (
 	commitDetailMessageHeaderRow commitDetailRowKind = iota
 	commitDetailHeaderDividerRow
 	commitDetailMetadataRow
+	commitDetailSummaryRow
 	commitDetailMessageRow
 	commitDetailSpacerRow
 	commitDetailHeadingRow
@@ -752,6 +753,11 @@ func (d *CommitDetailWidget) buildRows() {
 		d.recordWidth(d.Metadata)
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
 	}
+	if summary := d.summaryText(); summary != "" {
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSummaryRow, text: summary})
+		d.recordWidth(summary)
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
+	}
 	d.rows = append(d.rows, d.buildMessageRows()...)
 	if d.RefreshError != "" {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: d.RefreshError, danger: true})
@@ -1103,6 +1109,8 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 		d.renderHeaderDivider(surface, y, viewW)
 	case commitDetailMetadataRow:
 		d.drawTextRow(surface, 1, y, viewW-2, row.text, term.StyleMuted, term.StyleCommitHeader, false, visual.leftStart, rowIndex)
+	case commitDetailSummaryRow:
+		d.renderSummary(surface, y, viewW)
 	case commitDetailSpacerRow:
 		return
 	case commitDetailMessageRow:
@@ -1188,6 +1196,9 @@ func (d *CommitDetailWidget) renderHeading(surface Surface, rowIndex int, row co
 		}
 	}
 	d.drawTextRow(surface, textX, y, viewW-textX, row.text, headingStyle, bg, row.bold, visual.leftStart, rowIndex)
+	if !visual.continuation && row.fileIndex >= 0 && row.fileIndex < len(d.Files) {
+		d.renderFileStats(surface, &d.Files[row.fileIndex], textX, y, viewW, row.text, bg)
+	}
 }
 
 func (d *CommitDetailWidget) drawStaticText(surface Surface, x, y, width int, text string, style, bg term.Style, bold bool) {
