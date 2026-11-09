@@ -46,6 +46,60 @@ func TestContextMenuCheckedStateControlsIndicatorLayout(t *testing.T) {
 	}
 }
 
+func TestContextMenuSubmenuChevronHasPaddingBeforeBorder(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label:   "Open With",
+		Submenu: []ContextMenuItem{{Label: "Editor"}},
+	}}, 0, 0)
+
+	menuW := menu.menuWidth()
+	cells := renderContextMenu(menu, 40, 5)
+	want := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != want {
+		t.Errorf("submenu chevron at col %d = %q, want %q", menuW-3, got, want)
+	}
+	if got := cells[1][menuW-2].Ch; got != ' ' {
+		t.Errorf("cell before right border = %q, want padding space", got)
+	}
+}
+
+func TestContextMenuSubmenuChevronKeepsShortcutsIntact(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{
+		{Label: "Open With", Shortcut: "ctrl+k o", Submenu: []ContextMenuItem{{Label: "Editor"}}},
+		{Label: "Copy Path", Shortcut: "ctrl+k c"},
+	}, 0, 0)
+
+	menuW := menu.menuWidth()
+	cells := renderContextMenu(menu, 40, 6)
+	chevron := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != chevron {
+		t.Fatalf("submenu chevron at col %d = %q, want %q", menuW-3, got, chevron)
+	}
+	if got := gridRow(cells, 1, menuW); !strings.Contains(got, "ctrl+k o") {
+		t.Errorf("submenu row lost its shortcut: %q", got)
+	}
+	if got := cells[2][menuW-3].Ch; got != 'c' {
+		t.Errorf("sibling row shortcut moved: col %d = %q, want 'c'", menuW-3, got)
+	}
+}
+
+func TestContextMenuLongLabelDoesNotReachSubmenuChevron(t *testing.T) {
+	long := "Open With Some Extremely Long Label Text"
+	menu := NewContextMenuWidget([]ContextMenuItem{
+		{Label: long, Shortcut: "ctrl+k o", Submenu: []ContextMenuItem{{Label: "Editor"}}},
+	}, 0, 0)
+
+	menuW := menu.menuWidth()
+	cells := renderContextMenu(menu, 60, 5)
+	chevron := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != chevron {
+		t.Fatalf("submenu chevron at col %d = %q, want %q", menuW-3, got, chevron)
+	}
+	if got := gridRow(cells, 1, menuW-1); !strings.Contains(got, long) || !strings.Contains(got, "ctrl+k o") {
+		t.Errorf("label or shortcut truncated or overwritten: %q", got)
+	}
+}
+
 func TestContextMenuWidthUsesTerminalColumns(t *testing.T) {
 	menu := NewContextMenuWidget([]ContextMenuItem{{
 		Label:    "界界界界界",
