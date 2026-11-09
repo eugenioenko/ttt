@@ -1,6 +1,7 @@
 package textwidth
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/clipperhouse/displaywidth"
@@ -106,6 +107,29 @@ func TestTruncate(t *testing.T) {
 		}
 		if String(got) > 32 {
 			t.Errorf("%s: width %d exceeds 32", c.name, String(got))
+		}
+	}
+}
+
+func TestTruncateGraphemes(t *testing.T) {
+	family := "👨‍👩‍👧"
+	flag := "🇯🇵"
+	cases := []struct {
+		name, in, want string
+	}{
+		{"short", "main.go", "main.go"},
+		{"ascii matches Truncate", "abcdefghijklmnopqrstuvwxyz0123456", "abcdefghijklmnopqrstuvwxyz01234…"},
+		{"zwj sequence kept whole", strings.Repeat(family, 20), strings.Repeat(family, 15) + "…"},
+		{"flag kept whole", strings.Repeat(flag, 20), strings.Repeat(flag, 15) + "…"},
+		{"combining mark stays with its base", strings.Repeat("é", 40), strings.Repeat("é", 31) + "…"},
+	}
+	for _, c := range cases {
+		got := TruncateGraphemes(c.in, 32, "…")
+		if got != c.want {
+			t.Errorf("%s: TruncateGraphemes = %q, want %q", c.name, got, c.want)
+		}
+		if GraphemeWidth(got) > 32 {
+			t.Errorf("%s: width %d exceeds 32", c.name, GraphemeWidth(got))
 		}
 	}
 }

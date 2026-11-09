@@ -856,3 +856,14 @@ func TestTabBarCutsLongNamesAndReportsFullName(t *testing.T) {
 		t.Fatal("pointer below the tab bar must not report a hover")
 	}
 }
+
+func TestTabBarCutsLongNamesBetweenGraphemes(t *testing.T) {
+	family := "👨‍👩‍👧"
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{{Name: strings.Repeat(family, 20) + ".txt", Active: true}})
+	label := tb.tabLabelParts(tb.Tabs[0]).text
+	want := strings.Repeat(family, 15) + "…"
+	if !strings.Contains(label, want) || strings.Contains(label, want[:len(want)-len("…")]+family) {
+		t.Fatalf("tab label = %q, want the name cut to %q", label, want)
+	}
+}

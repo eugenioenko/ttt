@@ -106,7 +106,7 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 
 func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 	fullName := filepath.Base(tab.Name)
-	name := textwidth.Truncate(strings.TrimSuffix(fullName, tab.ViewSuffix), tabNameMaxWidth, "…") + tab.ViewSuffix
+	name := textwidth.TruncateGraphemes(strings.TrimSuffix(fullName, tab.ViewSuffix), tabNameMaxWidth, "…") + tab.ViewSuffix
 	prefix := " "
 	suffix := ""
 	dirtyStart := 0

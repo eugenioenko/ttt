@@ -99,3 +99,27 @@ func GraphemeWidth(s string) int {
 	}
 	return w
 }
+
+// TruncateGraphemes is Truncate measured with GraphemeWidth, for surfaces that
+// draw whole graphemes. It never splits a grapheme, so a ZWJ sequence or flag
+// is either kept whole or dropped.
+func TruncateGraphemes(s string, width int, tail string) string {
+	if GraphemeWidth(s) <= width {
+		return s
+	}
+	tailW := GraphemeWidth(tail)
+	if tailW > width {
+		tail, tailW = "", 0
+	}
+	w, end := 0, 0
+	clusters := Graphemes(s)
+	for clusters.Next() {
+		cw := max(1, clusters.Width())
+		if w+cw > width-tailW {
+			break
+		}
+		w += cw
+		end += len(clusters.Value())
+	}
+	return s[:end] + tail
+}
