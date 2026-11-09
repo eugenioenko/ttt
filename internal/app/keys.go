@@ -77,6 +77,10 @@ func comboToTcell(combo config.KeyCombo) (tcell.Key, tcell.ModMask, rune) {
 			}
 			return tcell.KeyRune, mod, '`'
 		}
+		// tcell (legacy key mode) reports Shift+Tab as KeyBacktab with ModShift stripped.
+		if combo.KeyName == "Tab" && combo.Shift {
+			return tcell.KeyBacktab, mod &^ tcell.ModShift, 0
+		}
 		key := canonicalKeyToTcell[combo.KeyName]
 		return key, mod, 0
 	}
