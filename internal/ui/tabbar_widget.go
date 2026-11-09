@@ -3,6 +3,7 @@ package ui
 import (
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
@@ -35,15 +36,16 @@ type tabSpan struct {
 }
 
 type Tab struct {
-	ID       string
-	Icon     string
-	Name     string
-	FilePath string
-	Dirty    bool
-	Active   bool
-	Closable bool
-	Pinned   bool
-	ReadOnly bool
+	ID         string
+	Icon       string
+	Name       string
+	ViewSuffix string // Included in Name, but kept outside the width cap.
+	FilePath   string
+	Dirty      bool
+	Active     bool
+	Closable   bool
+	Pinned     bool
+	ReadOnly   bool
 }
 
 type TabDragAutoScrollTick struct {
@@ -103,7 +105,7 @@ func (t *TabBarWidget) tabLabel(tab Tab) string {
 
 func (t *TabBarWidget) tabLabelParts(tab Tab) tabLabelLayout {
 	fullName := filepath.Base(tab.Name)
-	name := textwidth.Truncate(fullName, tabNameMaxWidth, "…")
+	name := textwidth.Truncate(strings.TrimSuffix(fullName, tab.ViewSuffix), tabNameMaxWidth, "…") + tab.ViewSuffix
 	prefix := " "
 	suffix := ""
 	dirtyStart := 0

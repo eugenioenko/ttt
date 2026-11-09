@@ -3189,23 +3189,33 @@ func (g *EditorGroupWidget) syncTabs() {
 		if ts.Title != "" {
 			name = ts.Title
 		}
+		viewSuffix := ""
 		if ts.Diff != nil {
-			name += " (diff)"
+			viewSuffix = " (diff)"
+			name += viewSuffix
+		} else if ts.Title == "" && ts.diffWidget() != nil {
+			switch filepath.Base(ts.FilePath) {
+			case filepath.Base(ts.IconPath) + " (diff)":
+				viewSuffix = " (diff)"
+			case filepath.Base(ts.IconPath) + " (staged)":
+				viewSuffix = " (staged)"
+			}
 		}
 		icon := ""
 		if provider, ok := ts.Content.(interface{ TabIcon(string) string }); ok {
 			icon = provider.TabIcon(g.TabBar.Icons)
 		}
 		uiTabs = append(uiTabs, Tab{
-			Icon:     icon,
-			ID:       ts.ID,
-			Name:     name,
-			FilePath: ts.IconPath,
-			Active:   i == g.active,
-			Dirty:    dirty,
-			Closable: closable,
-			Pinned:   i < g.pinnedCount,
-			ReadOnly: ts.ReadOnly || (ts.Buf != nil && ts.Buf.ReadOnlyOnDisk),
+			Icon:       icon,
+			ID:         ts.ID,
+			Name:       name,
+			ViewSuffix: viewSuffix,
+			FilePath:   ts.IconPath,
+			Active:     i == g.active,
+			Dirty:      dirty,
+			Closable:   closable,
+			Pinned:     i < g.pinnedCount,
+			ReadOnly:   ts.ReadOnly || (ts.Buf != nil && ts.Buf.ReadOnlyOnDisk),
 		})
 	}
 	g.TabBar.SetTabs(uiTabs)
