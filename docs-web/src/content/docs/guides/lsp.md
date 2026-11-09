@@ -291,6 +291,21 @@ To add file extensions to an existing server, override the full entry with the a
 
 The optional `languages` field is for servers that handle multiple file types requiring different `languageId` values. It maps file extensions to language IDs. Without the `languages` field, the server key is used as the language ID and files are matched by their syntax highlighter name.
 
+Matching by highlighter name depends on which grammar highlights the file, and that can change: `.el` files show as `Common Lisp` unless the `lang-emacs-lisp` grammar plugin is installed. List the server's file extensions in `languages` so it starts regardless of the grammar:
+
+```json
+{
+  "lsp": {
+    "servers": {
+      "elisp": {
+        "command": ["your-elisp-server"],
+        "languages": { ".el": "elisp" }
+      }
+    }
+  }
+}
+```
+
 The server is started lazily on first use and shut down when the editor exits. Run **LSP: Server Restart** from the command palette to restart the server for the current file, for example after it hangs or after installing a dependency it caches. Its diagnostics are cleared and every open file it handles is reopened in the new server.
 
 ## Server Status
