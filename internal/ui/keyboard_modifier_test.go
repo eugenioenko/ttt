@@ -109,6 +109,9 @@ func TestKeyboardModifierInputAndOutput(t *testing.T) {
 	tabAdapter.SetRect(Rect{W: 60, H: 5})
 	tabAdapter.Render(NewRenderSurface(makeGrid(60, 5), Rect{W: 60, H: 5}))
 	group.OpenPluginTab("input", "Input", tabAdapter)
+	if tabInput.ControlModifiers != &root.ControlModifiers {
+		t.Fatal("editor tab did not bind the setting when opened")
+	}
 	root.SetFocus(group)
 	root.SetControlModifiers(tcell.ModMeta)
 	tabInput.SetText("editor tab input")

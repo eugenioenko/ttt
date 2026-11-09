@@ -539,7 +539,7 @@ func (r *Root) RemoveOverlay(w Widget) {
 // such as an open dropdown.
 func (r *Root) SetFocus(w Widget) {
 	if adapter, ok := w.(*WidgetAdapter); ok {
-		adapter.ControlModifiers = &r.ControlModifiers
+		adapter.SetControlModifiers(&r.ControlModifiers)
 	}
 	if r.Focused == w {
 		return
