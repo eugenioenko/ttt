@@ -126,6 +126,7 @@ func DefaultLSPSettings() LSPSettings {
 
 type EditorSettings struct {
 	AutoClosing AutoClosingSettings `json:"autoClosing"`
+	PreviewTabs *bool               `json:"previewTabs,omitempty"`
 
 	TabSize           int                               `json:"tabSize"`
 	InsertSpaces      bool                              `json:"insertSpaces"`
@@ -291,6 +292,12 @@ func megabytes(mb *int, def int) int64 {
 		return (1 << 63) - 1
 	}
 	return int64(n) << 20
+}
+
+// PreviewTabsEnabled reports whether files open as preview tabs (VS Code's
+// workbench.editor.enablePreview). Enabled by default.
+func (e EditorSettings) PreviewTabsEnabled() bool {
+	return e.PreviewTabs == nil || *e.PreviewTabs
 }
 
 func DefaultEditorSettings() EditorSettings {

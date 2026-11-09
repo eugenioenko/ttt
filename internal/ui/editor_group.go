@@ -568,7 +568,7 @@ func (g *EditorGroupWidget) OpenFile(path string) error {
 		Folds:    folds,
 		TabSize:  tabSize,
 		UseTabs:  useTabs,
-		Preview:  true,
+		Preview:  config.LoadSettings().Editor.PreviewTabsEnabled(),
 	}
 	g.rebuildHighlighter(&newTab)
 	newTab.Annotations = g.mergedDecorations(path, newBuf, tabSize)
@@ -718,7 +718,7 @@ func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
 		PluginKey: contentPluginKey(content),
 		IconPath:  path,
 		Content:   content,
-		Preview:   true,
+		Preview:   config.LoadSettings().Editor.PreviewTabsEnabled(),
 	}
 	if t := g.activeTab(); g.canReplaceTab(t) && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
