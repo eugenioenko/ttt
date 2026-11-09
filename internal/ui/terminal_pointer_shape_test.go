@@ -38,7 +38,7 @@ func TestTerminalWidgetPointerShape_LinksAndModifiers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tw.ctrlHeld = tt.ctrlHeld
+			tw.linkModifierHeld = tt.ctrlHeld
 			if got := tw.PointerShapeAt(tt.x, tt.y); got != tt.want {
 				t.Errorf("PointerShapeAt(%d, %d, ctrl=%v) = %q, want %q", tt.x, tt.y, tt.ctrlHeld, got, tt.want)
 			}
@@ -60,12 +60,12 @@ func TestTerminalWidgetPointerShape_Scrollbar(t *testing.T) {
 	}
 
 	// Scrollbar area retains neutral default shape even if link spans reach or ctrl is held
-	tw.ctrlHeld = true
+	tw.linkModifierHeld = true
 	if got := tw.PointerShapeAt(29, 2); got != term.PointerDefault {
 		t.Errorf("over scrollbar with ctrl = %q, want %q", got, term.PointerDefault)
 	}
 
-	tw.ctrlHeld = false
+	tw.linkModifierHeld = false
 	if got := tw.PointerShapeAt(29, 2); got != term.PointerDefault {
 		t.Errorf("over scrollbar without ctrl = %q, want %q", got, term.PointerDefault)
 	}
@@ -133,18 +133,18 @@ func TestTerminalPanelWidgetPointerShape_Routing(t *testing.T) {
 	}
 
 	// 2. Over scrollbar (x=59)
-	tw.ctrlHeld = true
+	tw.linkModifierHeld = true
 	if got := tp.PointerShapeAt(59, 3); got != term.PointerDefault {
 		t.Errorf("scrollbar with ctrl = %q, want %q", got, term.PointerDefault)
 	}
 
 	// 3. Over terminal link (tw.X=6, col=4 -> x=10, y=3)
-	tw.ctrlHeld = false
+	tw.linkModifierHeld = false
 	if got := tp.PointerShapeAt(10, 3); got != term.PointerDefault {
 		t.Errorf("terminal link without ctrl = %q, want %q", got, term.PointerDefault)
 	}
 
-	tw.ctrlHeld = true
+	tw.linkModifierHeld = true
 	if got := tp.PointerShapeAt(10, 3); got != term.PointerHand {
 		t.Errorf("terminal link with ctrl = %q, want %q", got, term.PointerHand)
 	}
@@ -198,7 +198,7 @@ func TestRootPointerShapeWithTerminalPanelAndOverlay(t *testing.T) {
 	tw.linkCache = map[int][]linkSpan{
 		2: {{StartCol: 5, EndCol: 25, URL: "https://example.com"}},
 	}
-	tw.ctrlHeld = true
+	tw.linkModifierHeld = true
 	tp.AddTerminal(tw)
 
 	root := NewRoot(tp)
@@ -237,7 +237,7 @@ func TestTerminalWidgetRenderDoesNotTakeNestedSnapshot(t *testing.T) {
 
 	tw := NewTerminalWidget(termDev, &TerminalColorPalette{})
 	tw.SetRect(Rect{W: 40, H: 10})
-	tw.ctrlHeld = false
+	tw.linkModifierHeld = false
 
 	cells := make([][]term.Cell, 10)
 	for y := range cells {

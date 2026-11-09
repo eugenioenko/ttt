@@ -488,6 +488,7 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw.Term = t
 	tw.WorkDir = spec.Cwd
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
+	tw.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 	tw.OnOpenURL = OpenURL
 	tw.OnOpenFile = a.openFileLink
 

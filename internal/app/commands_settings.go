@@ -9,6 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 	"reflect"
 	"time"
 )
@@ -130,6 +131,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	for _, tab := range a.allTerminals() {
 		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
+		tab.Widget.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 		if tab.Tab != nil {
 			tab.Tab.PaddingX = s.Terminal.PaddingX
 			if tab.Widget.PaddingX != nil {
