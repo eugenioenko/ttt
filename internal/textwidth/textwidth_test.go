@@ -86,3 +86,26 @@ func TestEastAsianOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestTruncate(t *testing.T) {
+	exact := "abcdefghijklmnopqrstuvwxyz012345"
+	cases := []struct {
+		name, in, want string
+	}{
+		{"empty", "", ""},
+		{"short", "main.go", "main.go"},
+		{"exactly the width", exact, exact},
+		{"one over", exact + "6", "abcdefghijklmnopqrstuvwxyz01234…"},
+		{"wide rune straddling the cut", "abcdefghijklmnopqrstuvwxyz0123漢字", "abcdefghijklmnopqrstuvwxyz0123…"},
+		{"wide rune fitting before the cut", "abcdefghijklmnopqrstuvwxyz012漢字", "abcdefghijklmnopqrstuvwxyz012漢…"},
+	}
+	for _, c := range cases {
+		got := Truncate(c.in, 32, "…")
+		if got != c.want {
+			t.Errorf("%s: Truncate(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+		if String(got) > 32 {
+			t.Errorf("%s: width %d exceeds 32", c.name, String(got))
+		}
+	}
+}

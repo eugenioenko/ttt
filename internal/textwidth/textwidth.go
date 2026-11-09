@@ -62,3 +62,26 @@ func Runes(runes []rune) int {
 	}
 	return w
 }
+
+// Truncate cuts s to at most width columns, ending it with tail when it is cut.
+// A wide rune that would straddle the cut is dropped rather than split.
+func Truncate(s string, width int, tail string) string {
+	if String(s) <= width {
+		return s
+	}
+	tailW := String(tail)
+	if tailW > width {
+		tail, tailW = "", 0
+	}
+	runes := []rune(s)
+	w, end := 0, 0
+	for end < len(runes) {
+		rw := Rune(runes[end])
+		if w+rw > width-tailW {
+			break
+		}
+		w += rw
+		end++
+	}
+	return string(runes[:end]) + tail
+}

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/fileicons"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
@@ -810,5 +812,47 @@ func TestTabBarDirtyMarkerPreservesFileIconAndPinnedStyling(t *testing.T) {
 		if grid[1][x].Style != term.StyleActiveTab {
 			t.Fatalf("tab label col %d (%q) style = %v, want StyleActiveTab", x, grid[1][x].Ch, grid[1][x].Style)
 		}
+	}
+}
+
+func TestTabBarCutsLongNamesAndReportsFullName(t *testing.T) {
+	long := `PR #1452: "feat(terminal): close a single terminal from the tab context menu"`
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{
+		{Name: "main.go", Active: true, Closable: true},
+		{Name: long},
+	})
+	tb.SetRect(Rect{X: 2, Y: 5, W: 120, H: 3})
+	grid := makeGrid(120, 3)
+	tb.Render(NewRenderSurface(grid, Rect{W: 120, H: 3}))
+
+	row := strings.TrimRight(gridRow(grid, 1, 120), " ")
+	cut := `PR #1452: "feat(terminal): clos…`
+	if !strings.HasSuffix(row, cut) {
+		t.Fatalf("tab row = %q, want it to end with %q", row, cut)
+	}
+	if strings.Contains(row, "close a single") {
+		t.Fatalf("long name was not cut: %q", row)
+	}
+
+	start := 2 + textwidth.String(row[:strings.Index(row, "PR #")])
+	index, name, ax, ay, ok := tb.CutTabAt(start+3, 6)
+	if !ok || index != 1 || name != long {
+		t.Fatalf("CutTabAt = (%d, %q, %v), want (1, %q, true)", index, name, ok, long)
+	}
+	if ay != 6 || ax >= start {
+		t.Fatalf("anchor = (%d, %d), want x before %d on row 6", ax, ay, start)
+	}
+	if i, _, _, _, _ := tb.CutTabAt(ax, ay); i != 1 {
+		t.Fatalf("anchor x %d is not on the cut tab", ax)
+	}
+	if i, _, _, _, _ := tb.CutTabAt(ax-1, ay); i == 1 {
+		t.Fatalf("anchor x %d is not the cut tab's first column", ax)
+	}
+	if _, _, _, _, ok := tb.CutTabAt(4, 6); ok {
+		t.Fatal("uncut tab must not report a hover")
+	}
+	if _, _, _, _, ok := tb.CutTabAt(2+start+3, 9); ok {
+		t.Fatal("pointer below the tab bar must not report a hover")
 	}
 }

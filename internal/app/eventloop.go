@@ -214,16 +214,7 @@ func RunEventLoop(
 		}
 		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
 		app.EditorGroup.SignatureHelp = nil
-		// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
-		if tev.Modifiers()&tcell.ModCtrl != 0 && app.EditorGroup.GetRect().Contains(mx, my) {
-			app.DismissHover()
-		} else if app.EditorGroup.Hover == nil {
-			if btn == 0 {
-				app.checkMouseHover(mx, my)
-			}
-		} else if !app.isMouseOverHover(mx, my) && !app.EditorGroup.Hover.IsDragging() {
-			app.DismissHover()
-		}
+		app.TrackMouseHover(tev)
 		app.Root.HandleEvent(tev)
 		app.FlushEditorOnChange()
 		syncStatus()
