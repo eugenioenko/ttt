@@ -1,9 +1,52 @@
 package widgets
 
 import (
+	"unicode/utf8"
+
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
+
+func drawLabelClipped(surface Surface, x, y, maxX int, label string, style term.Style) int {
+	fits := x+textwidth.GraphemeWidth(label) <= maxX
+	clusters := textwidth.Graphemes(label)
+	for clusters.Next() {
+		text, w := clusters.Value(), clusters.Width()
+		if w == 0 {
+			// An unattached mark needs a visible base or tcell drops it.
+			text, w = "◌"+text, 1
+		}
+		if !fits && x < maxX && x+w >= maxX {
+			surface.SetCell(x, y, term.Cell{Ch: '…', Style: style})
+			return x + 1
+		}
+		if x+w > maxX {
+			break
+		}
+		ch, size := utf8.DecodeRuneInString(text)
+		cell := term.Cell{Ch: ch, Style: style}
+		if size < len(text) {
+			cell.Text = text
+		}
+		surface.SetCell(x, y, cell)
+		x += w
+	}
+	return x
+}
+
+func truncateLabelLeft(label string, avail int) string {
+	w := textwidth.GraphemeWidth(label)
+	if avail <= 0 || w <= avail {
+		return label
+	}
+	clusters := textwidth.Graphemes(label)
+	start := 0
+	for clusters.Next() && w > avail-1 {
+		start += len(clusters.Value())
+		w -= max(1, clusters.Width())
+	}
+	return "…" + label[start:]
+}
 
 // drawTextWidthAware draws text starting at x, advancing by each rune's display
 // width. maxW is an absolute column limit (0 means "the surface edge"). A
