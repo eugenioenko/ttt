@@ -16,6 +16,8 @@ func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
 			a.Root.SetFocus(g)
 		}
 	}
+	g.OnEmpty = func() { a.editorGroupEmpty(g) }
+	a.wireEditorTabDrag(g)
 	g.RelatedGroups = a.editorGroups
 	g.OpenFileElsewhere = func(path string) bool {
 		if g.BufferForPath(path) != nil {
@@ -57,50 +59,31 @@ func (a *App) splitEditor(position ui.SplitPosition) {
 	}
 	a.FlushEditorOnChange()
 	left := a.EditorGroup
-	right := newEditorGroup(a.Settings, a.Borders, left.BracketColorStyles)
-	right.SetChevrons(left.ChevronCollapsed, left.ChevronExpanded)
-	right.SetImageCellSize(a.imageCellW, a.imageCellH)
-	right.SetImageRedraw(left.ImageRedraw)
-	right.TabBar.OnTabClose = left.TabBar.OnTabClose
-	right.TabBar.OnTabUnpin = left.TabBar.OnTabUnpin
-	right.TabBar.OnTabRightClick = left.TabBar.OnTabRightClick
-	right.TabBar.MoreButton.OnClick = left.TabBar.MoreButton.OnClick
-	right.TabBar.PostDragAutoScrollTick = left.TabBar.PostDragAutoScrollTick
-	right.Editor.PostDragAutoScrollTick = left.Editor.PostDragAutoScrollTick
-	right.Editor.OnChange = left.Editor.OnChange
-	right.OnError = left.OnError
-	right.OnNotify = left.OnNotify
-	right.OnFileOpen = left.OnFileOpen
-	right.OnFileClose = left.OnFileClose
-	right.OnContentTabClose = left.OnContentTabClose
-	right.OnDiagnosticsChanged = left.OnDiagnosticsChanged
-	right.FileHandler = left.FileHandler
-	right.OnFileHandled = left.OnFileHandled
-	right.LinkWorkDir = left.LinkWorkDir
-	right.OnOpenURL = left.OnOpenURL
-	right.OnOpenFileLink = left.OnOpenFileLink
-	right.OnLinkHover = left.OnLinkHover
-	right.ResolveFileLinks = left.ResolveFileLinks
-	right.OnBookmarkChanged = left.OnBookmarkChanged
-	right.OnGutterClick = left.OnGutterClick
-	right.OnEmpty = left.OnEmpty
-	right.OnActiveTabChange = a.editorTabChanged
-	a.wireEditorGroupActivation(right)
-	if !left.CloneActiveTabTo(right) {
-		left.MoveActiveTabTo(right)
-	}
+	right := a.newEditorGroupLike(left)
+	left.CloneActiveTabTo(right)
 	a.EditorSplit.SplitGroup(left, right, position)
 	a.activateEditorGroup(right)
 	a.FocusEditor()
 }
 
-func (a *App) CloseEditorSplit() {
+func (a *App) CloseEditorSplit() { a.removeEditorGroup(a.EditorGroup, true) }
+
+func (a *App) editorGroupEmpty(group *ui.EditorGroupWidget) {
+	if len(a.editorGroups()) > 1 {
+		a.removeEditorGroup(group, false)
+		return
+	}
+	if a.welcomeWhenEmpty && len(a.Workspace.Paths()) == 0 {
+		a.ShowEmptyState()
+	}
+}
+
+func (a *App) removeEditorGroup(closing *ui.EditorGroupWidget, merge bool) {
 	if a.Root.HasOverlay() || a.EditorSplit == nil || len(a.editorGroups()) < 2 {
 		return
 	}
 	a.FlushEditorOnChange()
 	a.Root.CancelPointerCapture()
-	closing := a.EditorGroup
 	groups := a.editorGroups()
 	var keep *ui.EditorGroupWidget
 	for i, group := range groups {
@@ -110,8 +93,11 @@ func (a *App) CloseEditorSplit() {
 		}
 	}
 	a.activateEditorGroup(keep)
-	keep.DiscardDuplicateViews(closing)
-	keep.MergeTabsFrom(closing)
+	closing.OnEmpty = nil
+	if merge {
+		keep.DiscardDuplicateViews(closing)
+		keep.MergeTabsFrom(closing)
+	}
 	a.EditorSplit.RemoveGroup(closing)
 	closing.OnEmpty, closing.OnActivate, closing.OpenFileElsewhere = nil, nil, nil
 	closing.CloseAllTabs()
@@ -142,4 +128,36 @@ func (a *App) focusEditorDirection(dx, dy int) {
 	if next := a.EditorSplit.Neighbor(a.EditorGroup, dx, dy); next != nil {
 		a.Root.SetFocus(next)
 	}
+}
+
+func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidget {
+	right := newEditorGroup(a.Settings, a.Borders, left.BracketColorStyles)
+	right.SetChevrons(left.ChevronCollapsed, left.ChevronExpanded)
+	right.SetImageCellSize(a.imageCellW, a.imageCellH)
+	right.SetImageRedraw(left.ImageRedraw)
+	right.TabBar.OnTabClose = left.TabBar.OnTabClose
+	right.TabBar.OnTabUnpin = left.TabBar.OnTabUnpin
+	right.TabBar.OnTabRightClick = left.TabBar.OnTabRightClick
+	right.TabBar.MoreButton.OnClick = left.TabBar.MoreButton.OnClick
+	right.TabBar.PostDragAutoScrollTick = left.TabBar.PostDragAutoScrollTick
+	right.Editor.PostDragAutoScrollTick = left.Editor.PostDragAutoScrollTick
+	right.Editor.OnChange = left.Editor.OnChange
+	right.OnError = left.OnError
+	right.OnNotify = left.OnNotify
+	right.OnFileOpen = left.OnFileOpen
+	right.OnFileClose = left.OnFileClose
+	right.OnContentTabClose = left.OnContentTabClose
+	right.OnDiagnosticsChanged = left.OnDiagnosticsChanged
+	right.FileHandler = left.FileHandler
+	right.OnFileHandled = left.OnFileHandled
+	right.LinkWorkDir = left.LinkWorkDir
+	right.OnOpenURL = left.OnOpenURL
+	right.OnOpenFileLink = left.OnOpenFileLink
+	right.OnLinkHover = left.OnLinkHover
+	right.ResolveFileLinks = left.ResolveFileLinks
+	right.OnBookmarkChanged = left.OnBookmarkChanged
+	right.OnGutterClick = left.OnGutterClick
+	right.OnActiveTabChange = a.editorTabChanged
+	a.wireEditorGroupActivation(right)
+	return right
 }

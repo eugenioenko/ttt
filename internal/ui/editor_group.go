@@ -171,6 +171,7 @@ type EditorGroupWidget struct {
 	OnActivate        func()
 	OpenFileElsewhere func(string) bool
 	RelatedGroups     func() []*EditorGroupWidget
+	DropTarget        bool
 	lastActiveTabID   string
 	lastActiveBuf     *buffer.Buffer
 	// EmptyStateID names a content tab that stands in for the placeholder:
@@ -3226,7 +3227,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			dirty = ts.Buf.Dirty
 		}
 		isEmptyState := g.EmptyStateID != "" && ts.FilePath == g.EmptyStateID
-		closable := !(len(g.tabs) == 1 && (g.isUntouchedPlaceholder(&ts) || isEmptyState))
+		closable := len(g.relatedGroups()) > 1 || !(len(g.tabs) == 1 && (g.isUntouchedPlaceholder(&ts) || isEmptyState))
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title
@@ -3365,6 +3366,15 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	g.TabBar.GroupActive = g.focused
 	g.Editor.Passive = g.TabBar.ShowGroupFocus && !g.focused
 	g.TabBar.Render(tabSurface)
+	if g.DropTarget {
+		borders := term.SingleBorderSet()
+		if g.Borders != nil {
+			borders = *g.Borders
+		}
+		for x := 0; x < w; x++ {
+			tabSurface.SetCell(x, 0, term.Cell{Ch: borders.Horizontal, Style: term.StyleBorderActive})
+		}
+	}
 
 	contentH := h - editorTabBarH
 	contentRect := g.ContentRect()

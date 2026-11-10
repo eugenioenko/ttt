@@ -742,17 +742,13 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.TabBar.MoreButton.OnClick = func(sx, sy int) {
-		moreMenu := []ui.ContextMenuItem{
-			{Label: i18n.Text("command.splitEditor"), Command: "editor.split"},
-			{Label: i18n.Text("command.splitEditorDown"), Command: "editor.splitDown"},
-			{Label: i18n.Text("command.closeSplit"), Command: "editor.closeSplit"},
-			{Label: i18n.Text("command.equalizeGroups"), Command: "editor.equalizeGroups"},
+		moreMenu := append(app.editorGroupMenu(), []ui.ContextMenuItem{
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
 			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: app.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed"},
-		}
+		}...)
 		openContextMenu(app, moreMenu, sx, sy)
 	}
 
@@ -764,6 +760,7 @@ func registerWidgetCallbacks(app *App) {
 		}
 		tabContextMenu := []ui.ContextMenuItem{
 			{Label: i18n.Text("general.close"), Shortcut: app.KeyFor("tab.close"), Command: "tab.close"},
+
 			{Label: i18n.Text("menu.closeOthers"), Command: "tab.closeOthers"},
 			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
 			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
@@ -782,16 +779,14 @@ func registerWidgetCallbacks(app *App) {
 			ui.ContextMenuItem{Label: i18n.Text("menu.copyRelativePath"), Command: "file.copyRelativePath"},
 			ui.ContextMenuItem{Label: i18n.Text("menu.revealInExplorer"), Command: "explorer.revealActiveFile"},
 		)
+		tabContextMenu = append(tabContextMenu, ui.MenuSep(),
+			ui.ContextMenuItem{Label: i18n.Text("command.openEditorToSide"), Command: "editor.openToSide"},
+			ui.ContextMenuItem{Label: i18n.Text("command.moveEditorToOtherGroup"), Command: "editor.moveToOtherGroup"})
 		tabContextMenu = app.withActiveDiffViewSubmenu(tabContextMenu)
 		openContextMenu(app, tabContextMenu, sx, sy)
 	}
 
 	app.Explorer.OnAction = func(id string) { reg.Execute(id) }
-	app.EditorGroup.OnEmpty = func() {
-		if app.welcomeWhenEmpty && len(app.Workspace.Paths()) == 0 {
-			app.ShowEmptyState()
-		}
-	}
 	app.Explorer.OnOpenFile = func(path string) {
 		app.EditorGroup.OpenFile(path)
 		app.FocusEditorIfEnabled()
@@ -801,6 +796,7 @@ func registerWidgetCallbacks(app *App) {
 		items := []ui.ContextMenuItem{
 			{Label: i18n.Text("general.open"), Command: "explorer.open"},
 			app.appsOpenWithMenu(),
+			{Label: i18n.Text("command.openEditorToSide"), Command: "explorer.openToSide"},
 			ui.MenuSep(),
 			{Label: i18n.Text("general.newFile"), Command: "explorer.newFile"},
 			{Label: i18n.Text("general.newFolder"), Command: "explorer.newFolder"},

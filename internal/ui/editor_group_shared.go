@@ -62,7 +62,7 @@ func (g *EditorGroupWidget) cloneTabTo(index int, target *EditorGroupWidget) boo
 			return true
 		}
 	}
-	t.Preview = false
+	t.Preview, t.Placeholder = false, false
 	clone := *t
 	cur, vp, sel := *t.Cur, *t.Vp, *t.Sel
 	clone.ID = ""

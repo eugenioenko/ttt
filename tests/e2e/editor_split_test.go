@@ -7,6 +7,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -223,4 +224,78 @@ func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
 	for len(h.app.EditorSplit.Groups()) > 1 {
 		h.exec("editor.closeSplit")
 	}
+}
+
+func TestEditorSplitDragAcrossGroups(t *testing.T) {
+	for _, command := range []string{"editor.split", "editor.splitDown"} {
+		t.Run(command, func(t *testing.T) {
+			h := newTestHarness(t, 160, 44)
+			defer h.stop()
+			left := h.app.EditorGroup
+			alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
+			left.OpenFile(alpha)
+			left.CommitActiveTab()
+			left.OpenFile(beta)
+			h.exec(command)
+			right := h.app.EditorGroup
+			h.app.Root.SetFocus(left)
+			left.SwitchToTabByPath(alpha)
+			h.redraw()
+			r := left.TabBar.GetRect()
+			x, y := r.X+4, r.Y+1
+			dest := right.Editor.GetRect()
+			dx, dy := dest.X+4, dest.Y+2
+			if command == "editor.splitDown" {
+				dx = x
+			}
+			h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, 0))
+			h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.Button1, 0))
+			h.redraw()
+			if !right.DropTarget {
+				t.Fatal("drag did not mark the destination group")
+			}
+			h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.ButtonNone, 0))
+			h.flushOnChange()
+			h.redraw()
+			if h.app.EditorGroup != right || right.ActiveFilePath() != alpha || left.BufferForPath(alpha) != nil || right.DropTarget {
+				t.Fatal("dropping the tab did not transfer it to the destination")
+			}
+			h.app.Root.SetFocus(left)
+			h.exec("editor.moveToOtherGroup")
+			if len(h.app.EditorSplit.Groups()) != 1 || right.TabCount() != 2 || h.app.Root.Focused != right {
+				t.Fatal("moving the last tab did not remove the empty group and deduplicate views")
+			}
+		})
+	}
+}
+
+func TestEditorSplitOpenToSideAndCloseLastView(t *testing.T) {
+	h := newTestHarness(t, 140, 32)
+	defer h.stop()
+	left := h.app.EditorGroup
+	alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
+	left.OpenFile(alpha)
+	h.exec("editor.openToSide")
+	right := h.app.EditorGroup
+	if left.ActiveBuffer() != right.ActiveBuffer() || len(h.app.EditorSplit.Groups()) != 2 {
+		t.Fatal("Open to the Side did not share the document")
+	}
+	h.pressRune('x')
+	h.exec("tab.close")
+	if len(h.app.EditorSplit.Groups()) != 1 || h.app.Root.HasOverlay() || !left.ActiveBuffer().Dirty {
+		t.Fatal("closing one shared view lost the document or kept an empty group")
+	}
+	h.app.ExplorerContextNode = &widgets.TreeNode{ID: beta}
+	h.exec("explorer.openToSide")
+	if h.app.EditorGroup.ActiveFilePath() != beta || left.ActiveFilePath() != alpha {
+		t.Fatal("Explorer Open to the Side replaced the original document")
+	}
+	h.exec("editor.closeSplit")
+	left.SwitchToTabByPath(alpha)
+	h.app.Root.SetFocus(left)
+	h.exec("tab.close")
+	if !h.app.Root.HasOverlay() {
+		t.Fatal("closing the last dirty view did not ask to save")
+	}
+	h.pressKey(tcell.KeyEscape, 0)
 }

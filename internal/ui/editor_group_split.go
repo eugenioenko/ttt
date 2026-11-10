@@ -12,6 +12,13 @@ func (g *EditorGroupWidget) MoveActiveTabTo(target *EditorGroupWidget) {
 	target.saveMultiState()
 	tab := g.tabs[g.active]
 	tab.Preview = false
+	existing := -1
+	for i := range target.tabs {
+		if tab.Buf != nil && target.tabs[i].Buf == tab.Buf {
+			existing = i
+			break
+		}
+	}
 	pinned := g.active < g.pinnedCount
 	if pinned {
 		g.pinnedCount--
@@ -22,13 +29,24 @@ func (g *EditorGroupWidget) MoveActiveTabTo(target *EditorGroupWidget) {
 		}
 		target.bookmarksByPath[tab.FilePath] = g.Editor.Bookmarks
 	}
+	if existing >= 0 {
+		g.notifyContentTabClose(tab)
+	}
 	g.tabs = slices.Delete(g.tabs, g.active, g.active+1)
-	if len(g.tabs) == 0 {
+	emptied := len(g.tabs) == 0
+	if emptied {
 		g.tabs = []editorTab{g.placeholderTab()}
 	}
 	g.active = min(g.active, len(g.tabs)-1)
 	g.syncTabs()
 
+	if existing >= 0 {
+		target.SwitchTab(existing)
+		if emptied {
+			g.notifyEmpty()
+		}
+		return
+	}
 	if len(target.tabs) == 1 && target.isUntouchedPlaceholder(target.activeTab()) {
 		target.tabs = nil
 		target.pinnedCount = 0
@@ -41,6 +59,9 @@ func (g *EditorGroupWidget) MoveActiveTabTo(target *EditorGroupWidget) {
 	target.tabs = slices.Insert(target.tabs, index, tab)
 	target.active = index
 	target.syncTabs()
+	if emptied {
+		g.notifyEmpty()
+	}
 }
 
 func (g *EditorGroupWidget) MergeTabsFrom(source *EditorGroupWidget) {
