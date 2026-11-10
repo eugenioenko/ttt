@@ -45,6 +45,23 @@ func NewTcellScreen() (*TcellScreen, error) {
 	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, nil
 }
 
+// NewTerminfoScreenFromTty initializes a tcell screen using tty while routing
+// replies to registered OSC 4/10/11 queries away from the keyboard input stream.
+func NewTerminfoScreenFromTty(tty tcell.Tty) (*TcellScreen, *OSCReader, error) {
+	osc := NewOSCReader(tty)
+	s, err := tcell.NewTerminfoScreenFromTty(OSCTty{Tty: tty, Reader: osc})
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.Init(); err != nil {
+		return nil, nil, err
+	}
+	s.EnableMouse()
+	s.EnablePaste()
+	s.EnableFocus()
+	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, osc, nil
+}
+
 func NewTcellScreenFrom(s tcell.Screen) *TcellScreen {
 	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}
 }

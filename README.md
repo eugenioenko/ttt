@@ -286,6 +286,8 @@ TTT supports Lua plugins that add sidebar panels, bottom panel tabs, commands, a
 
 **Creating** — plugins are Lua scripts with a `plugin.ttt.json` manifest. See the [Plugin Authoring Guide](docs-web/src/content/docs/guides/plugin-authoring.md).
 
+The optional `terminal.palette` plugin permission exposes `ttt.terminal.palette()`. It starts one asynchronous terminal-color query only when called; TTT does not poll the terminal at startup or periodically. Since the TTY API cannot cancel a blocked write, shutdown does not wait for an in-flight palette query; in the rare case that the operating system leaves that write blocked, its goroutine may remain until the write returns.
+
 See [Plugins](docs-web/src/content/docs/guides/plugins.md).
 
 ## Configuration

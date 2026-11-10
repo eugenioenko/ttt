@@ -383,6 +383,7 @@ type PermissionSet struct {
 	SystemEnv         bool        `json:"system.env,omitempty"`
 	TerminalControl   bool        `json:"terminal.control,omitempty"`
 	TerminalRead      bool        `json:"terminal.read,omitempty"`
+	TerminalPalette   bool        `json:"terminal.palette,omitempty"`
 	NetworkHTTP       NetworkHTTP `json:"network.http,omitempty"`
 	NetworkRPC        NetworkRPC  `json:"network.rpc,omitzero"`
 	EventsFile        bool        `json:"events.file,omitempty"`
@@ -437,6 +438,7 @@ func DiffPermissions(granted, requested PermissionSet) PermissionDiff {
 	check("system.env", granted.SystemEnv, requested.SystemEnv)
 	check("terminal.control", granted.TerminalControl, requested.TerminalControl)
 	check("terminal.read", granted.TerminalRead, requested.TerminalRead)
+	check("terminal.palette", granted.TerminalPalette, requested.TerminalPalette)
 	check("events.file", granted.EventsFile, requested.EventsFile)
 	check("events.editor", granted.EventsEditor, requested.EventsEditor)
 	check("settings", granted.Settings, requested.Settings)
@@ -525,6 +527,8 @@ func (ps PermissionSet) Check(perm string) error {
 		allowed = ps.TerminalControl
 	case "terminal.read":
 		allowed = ps.TerminalRead
+	case "terminal.palette":
+		allowed = ps.TerminalPalette
 	case "network.http":
 		allowed = ps.NetworkHTTP.Enabled()
 	case "network.rpc":
@@ -662,6 +666,7 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 	}
 	add(i18n.Text("permissions.controlTerminals"), ps.TerminalControl)
 	add(i18n.Text("permissions.readTerminals"), ps.TerminalRead)
+	add(i18n.Text("permissions.readTerminalPalette"), ps.TerminalPalette)
 	add(i18n.Text("permissions.environment"), ps.SystemEnv)
 	add(i18n.Text("permissions.fileEvents"), ps.EventsFile)
 	add(i18n.Text("permissions.editorEvents"), ps.EventsEditor)
@@ -715,6 +720,7 @@ func IntersectPermissions(granted, declared PermissionSet) PermissionSet {
 		SystemEnv:         granted.SystemEnv && declared.SystemEnv,
 		TerminalControl:   granted.TerminalControl && declared.TerminalControl,
 		TerminalRead:      granted.TerminalRead && declared.TerminalRead,
+		TerminalPalette:   granted.TerminalPalette && declared.TerminalPalette,
 		NetworkHTTP:       intersectNetwork(granted.NetworkHTTP, declared.NetworkHTTP),
 		NetworkRPC:        intersectRPC(granted.NetworkRPC, declared.NetworkRPC),
 		EventsFile:        granted.EventsFile && declared.EventsFile,

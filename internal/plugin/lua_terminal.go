@@ -32,10 +32,43 @@ func setupTerminalModule(L *lua.LState, p *Plugin) {
 			L.SetField(mod, "screen", L.NewFunction(termScreen(p)))
 			L.SetField(mod, "list", L.NewFunction(termList(p)))
 		}
+		if p.Granted.TerminalPalette {
+			L.SetField(mod, "palette", L.NewFunction(termPalette(p)))
+			L.SetField(mod, "request_palette", L.NewFunction(termRequestPalette(p)))
+		}
 		L.Push(mod)
 		return 1
 	}
 	L.PreloadModule("ttt.terminal", loader)
+}
+
+func termRequestPalette(p *Plugin) lua.LGFunction {
+	return func(L *lua.LState) int {
+		if p.Terminal == nil {
+			return termErr(L, "terminal API not available")
+		}
+		p.Terminal.RequestTerminalPalette()
+		L.Push(lua.LTrue)
+		return 1
+	}
+}
+
+func termPalette(p *Plugin) lua.LGFunction {
+	return func(L *lua.LState) int {
+		if p.Terminal == nil {
+			return termErr(L, "terminal API not available")
+		}
+		status, colors := p.Terminal.TerminalPalette()
+		result := L.NewTable()
+		L.SetField(result, "status", lua.LString(status))
+		palette := L.NewTable()
+		for code, value := range colors {
+			L.SetField(palette, code, lua.LString(value))
+		}
+		L.SetField(result, "colors", palette)
+		L.Push(result)
+		return 1
+	}
 }
 
 func termErr(L *lua.LState, msg string) int {

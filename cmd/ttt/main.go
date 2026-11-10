@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"path/filepath"
@@ -52,9 +54,6 @@ func handlePanic(screen *term.TcellScreen) {
 	r := recover()
 	if r == nil {
 		return
-	}
-	if screen != nil {
-		screen.Fini()
 	}
 	stack := debug.Stack()
 	crashMsg := fmt.Sprintf("ttt crashed: %v\n\n%s", r, stack)
@@ -145,15 +144,131 @@ func stdinIsPiped() bool {
 	return info.Mode()&os.ModeNamedPipe != 0 || info.Mode().IsRegular()
 }
 
-func initTerminalScreen(listen bool) *term.TcellScreen {
-	screen, err := term.NewTcellScreen()
+type terminalPalette struct {
+	mu      sync.RWMutex
+	colors  map[string]string
+	status  string
+	pending bool
+	queued  bool
+	start   func()
+}
+
+const terminalPaletteQueryCount = 20
+
+func (p *terminalPalette) Snapshot() (string, map[string]string) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	colors := make(map[string]string, len(p.colors))
+	for k, v := range p.colors {
+		colors[k] = v
+	}
+	status := p.status
+	if status == "" {
+		status = "pending"
+	}
+	return status, colors
+}
+
+func (p *terminalPalette) Request() {
+	p.mu.Lock()
+	if p.start == nil {
+		p.mu.Unlock()
+		return
+	}
+	if p.pending {
+		p.queued = true
+		p.mu.Unlock()
+		return
+	}
+	p.pending = true
+	p.status = "pending"
+	p.colors = make(map[string]string)
+	p.mu.Unlock()
+	p.start()
+}
+
+const terminalPaletteQueryTimeout = 350 * time.Millisecond
+
+type terminalColorQuerier interface {
+	Query(string, time.Duration) <-chan term.OSCReply
+}
+
+// captureTerminalPalette queries serially: OSC color replies carry no request ID,
+// so concurrent queries cannot be associated reliably with their requests.
+func captureTerminalPalette(ctx context.Context, osc terminalColorQuerier, palette *terminalPalette) {
+	defer func() {
+		palette.mu.Lock()
+		restart := palette.queued && ctx.Err() == nil
+		palette.queued = false
+		if restart {
+			palette.colors = make(map[string]string)
+			palette.status = "pending"
+		} else {
+			palette.pending = false
+		}
+		if !restart && palette.status == "pending" {
+			if len(palette.colors) == 0 {
+				palette.status = "unavailable"
+			} else {
+				palette.status = "partial"
+			}
+		}
+		palette.mu.Unlock()
+		if restart {
+			palette.start()
+		}
+	}()
+	codes := []string{"10", "11", "12", "17", "4;0", "4;1", "4;2", "4;3", "4;4", "4;5", "4;6", "4;7", "4;8", "4;9", "4;10", "4;11", "4;12", "4;13", "4;14", "4;15"}
+	done := 0
+	for _, code := range codes {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case reply := <-osc.Query(code, terminalPaletteQueryTimeout):
+			palette.mu.Lock()
+			if reply.Err == nil {
+				palette.colors[code] = reply.Payload
+			}
+			if done+1 == terminalPaletteQueryCount {
+				switch len(palette.colors) {
+				case 0:
+					palette.status = "unavailable"
+				case terminalPaletteQueryCount:
+					palette.status = "complete"
+				default:
+					palette.status = "partial"
+				}
+			}
+			palette.mu.Unlock()
+		}
+		done++
+	}
+}
+
+func initTerminalScreen(listen bool) (*term.TcellScreen, *terminalPalette, context.CancelFunc, *term.OSCReader) {
+	tty, err := tcell.NewDevTty()
 	if err != nil {
 		if listen {
 			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
 		}
 		panic(err)
 	}
-	return screen
+	screen, osc, err := term.NewTerminfoScreenFromTty(tty)
+	if err != nil {
+		if listen {
+			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
+		}
+		panic(err)
+	}
+	palette := &terminalPalette{colors: make(map[string]string), status: "unavailable"}
+	ctx, cancel := context.WithCancel(context.Background())
+	palette.start = func() { go captureTerminalPalette(ctx, osc, palette) }
+	return screen, palette, cancel, osc
 }
 
 func initSimulationScreen(w, h int) *term.TcellScreen {
@@ -303,14 +418,25 @@ Docs: https://tttedit.dev
 	}
 
 	var screen *term.TcellScreen
+	var capturedPalette *terminalPalette
+	var stopPalette context.CancelFunc
+	var oscReader *term.OSCReader
 	if flags.exec != "" {
 		clipboard.DisableSystem()
 		screen = initSimulationScreen(flags.sizeW, flags.sizeH)
 	} else {
-		screen = initTerminalScreen(flags.listen)
+		screen, capturedPalette, stopPalette, oscReader = initTerminalScreen(flags.listen)
 	}
-	defer screen.Fini()
 	defer handlePanic(screen)
+	if stopPalette != nil {
+		defer func() {
+			stopPalette()
+			screen.Fini()
+			oscReader.Close()
+		}()
+	} else {
+		defer screen.Fini()
+	}
 
 	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), app.WithEditorSelectionStyle(cfg.Settings.Editor.SelectionStyle), app.WithPluginSelectionStyle(cfg.Settings.Plugins.SelectionStyle))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
@@ -338,6 +464,9 @@ Docs: https://tttedit.dev
 	defer func() { editor.CloseImageLayer() }()
 
 	editor.Version = version
+	if capturedPalette != nil {
+		editor.TerminalPalette = capturedPalette
+	}
 	editor.Keybindings = cfg.Keybindings
 	editor.Reg = cmdRegistry
 	running := true

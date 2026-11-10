@@ -504,6 +504,19 @@ func NewPluginTerminalAPI(a *App) *PluginTerminalAPI {
 	return &PluginTerminalAPI{app: a}
 }
 
+func (t *PluginTerminalAPI) TerminalPalette() (string, map[string]string) {
+	if t.app.TerminalPalette == nil {
+		return "unavailable", map[string]string{}
+	}
+	return t.app.TerminalPalette.Snapshot()
+}
+
+func (t *PluginTerminalAPI) RequestTerminalPalette() {
+	if t.app.TerminalPalette != nil {
+		t.app.TerminalPalette.Request()
+	}
+}
+
 func (t *PluginTerminalAPI) TerminalSpawn(spec plugin.TerminalSpawnSpec) (string, error) {
 	return t.app.SpawnTerminalSpec(TerminalSpec{
 		Shell:    spec.Shell,

@@ -148,9 +148,11 @@ type TerminalSpawnSpec struct {
 }
 
 // TerminalAPI is the host's terminal surface for plugins. Spawn/send/focus are
-// gated by `terminal.control`, read/list by `terminal.read`; every call runs on
-// the main thread.
+// gated by `terminal.control`, read/list by `terminal.read`, and palette access
+// by `terminal.palette`; every call runs on the main thread.
 type TerminalAPI interface {
+	TerminalPalette() (string, map[string]string)
+	RequestTerminalPalette()
 	// TerminalSpawn opens a terminal tab for a program and returns its id.
 	TerminalSpawn(spec TerminalSpawnSpec) (string, error)
 	// TerminalSend writes text to a tab's PTY (a trailing newline is the
