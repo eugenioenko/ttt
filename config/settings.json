@@ -74,7 +74,8 @@
     "scrollback": 1000,
     "selectionStyle": "background",
     "ctrlVPastes": true,
-    "padding_x": 1
+    "padding_x": 1,
+    "shellIntegration": true
   },
   "lsp": {
     "saveOnRename": false,
