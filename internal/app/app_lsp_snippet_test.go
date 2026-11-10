@@ -87,7 +87,7 @@ func TestInsertCompletionSnippetWithNewlines(t *testing.T) {
 		InsertTextFormat: lsp.InsertTextFormatSnippet,
 	}, nil)
 
-	want := []string{"<div>", "  ", "</div>"}
+	want := []string{"<div>", "  ", "</div>", ""}
 	if len(editor.Buf.Lines) != len(want) {
 		t.Fatalf("lines = %#v, want %#v", editor.Buf.Lines, want)
 	}

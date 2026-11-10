@@ -39,7 +39,7 @@ func (b *Buffer) SetText(text string) {
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
-	if b.ShowTrailingNewline && (len(lines) == 0 || lines[len(lines)-1] != "") {
+	if b.ShowTrailingNewline && (strings.HasSuffix(text, "\n") || lines[len(lines)-1] != "") {
 		lines = append(lines, "")
 	}
 	b.SetLines(lines)
