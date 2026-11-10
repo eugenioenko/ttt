@@ -95,8 +95,8 @@ func languageItemsFor(settings config.LanguageSettings) []widgets.SelectItem {
 	return items
 }
 
-func languageItems() []widgets.SelectItem {
-	return languageItemsFor(config.LoadSettings().Language)
+func languageItems(s *config.Settings) []widgets.SelectItem {
+	return languageItemsFor(s.Language)
 }
 
 func (a *App) ShowDisplayLanguagePicker() {

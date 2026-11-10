@@ -169,3 +169,32 @@ func TestLanguageBundleMetadataAndRemovedContribution(t *testing.T) {
 		t.Fatal("dropped contribution did not restore English selection")
 	}
 }
+
+func TestDisplayLanguageOptionsUseAppliedSettings(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	onDisk := config.DefaultSettings()
+	onDisk.Language.Packs = []config.LanguagePackSetting{{Plugin: "french", Locale: "fr", Name: "Français"}}
+	if err := config.SaveSettings(onDisk); err != nil {
+		t.Fatal(err)
+	}
+	applied := config.DefaultSettings()
+	applied.Language.Packs = []config.LanguagePackSetting{{Plugin: "spanish", Locale: "es", Name: "Español"}}
+
+	for _, category := range settingsCategories() {
+		for _, field := range category.Fields {
+			if field.Label != i18n.Text("settings.displayLanguage") {
+				continue
+			}
+			ids := []string{}
+			for _, item := range field.Options(&applied) {
+				ids = append(ids, item.ID)
+			}
+			if strings.Join(ids, ",") != "en,es" {
+				t.Fatalf("display language options = %v, want the applied packs [en es]", ids)
+			}
+			return
+		}
+	}
+	t.Fatal("display language field not found")
+}
