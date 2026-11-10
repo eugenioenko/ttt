@@ -2689,6 +2689,10 @@ func (g *EditorGroupWidget) ReplaceMatch(match FindMatch, replacement string) {
 	if match.Line < 0 || match.Line >= len(g.Editor.Buf.Lines) {
 		return
 	}
+	if g.Editor.Undo != nil {
+		g.Editor.Undo.BeginTransaction()
+		defer g.Editor.Undo.EndTransaction()
+	}
 	runes := []rune(g.Editor.Buf.Lines[match.Line])
 	endCol := min(match.Col+match.Len, len(runes))
 	g.Editor.exec(&undo.DeleteSelectionCommand{
@@ -2710,6 +2714,10 @@ func (g *EditorGroupWidget) ReplaceAll(query, replacement string, opts SearchOpt
 		return
 	}
 	matches, _ := FindInLines(g.Editor.Buf.Lines, query, opts)
+	if g.Editor.Undo != nil {
+		g.Editor.Undo.BeginTransaction()
+		defer g.Editor.Undo.EndTransaction()
+	}
 	for _, match := range slices.Backward(matches) {
 		g.ReplaceMatch(match, replacement)
 	}
