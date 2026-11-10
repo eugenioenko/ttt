@@ -543,6 +543,7 @@ type Diagnostic struct {
 	Severity int    `json:"severity,omitempty"`
 	Source   string `json:"source,omitempty"`
 	Message  string `json:"message"`
+	Code     any    `json:"code,omitempty"`
 }
 
 func (m *MarkupContent) UnmarshalJSON(data []byte) error {

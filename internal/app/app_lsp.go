@@ -594,26 +594,25 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	if !ok || len(batches) == 0 {
 		return
 	}
-	filesCount := a.applyWorkspaceEditBatches(batches, true)
+	filesCount, _ := a.applyWorkspaceEditBatches(batches, true)
 	a.StatusNotify(i18n.Format("status.renamedAcrossFileS", i18n.Args{"filesCount": filesCount}))
 }
 
-func (a *App) applyWorkspaceTextEdits(edit *lsp.WorkspaceEdit, saveOnRename bool) int {
-	batches, ok := a.workspaceTextEdits(edit)
-	if !ok || len(batches) == 0 {
-		return 0
-	}
-	return a.applyWorkspaceEditBatches(batches, saveOnRename)
-}
-
-func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bool) int {
+func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bool) (int, bool) {
 	currentPath := a.EditorGroup.ActiveFilePath()
 
 	files := make(map[string]bool)
+	allApplied := true
 	for _, batch := range batches {
 		path := URIToPath(batch.URI)
 		if err := a.EditorGroup.OpenFile(path); err != nil {
 			a.StatusWarn(err.Error())
+			allApplied = false
+			continue
+		}
+		if !a.EditorGroup.IsEditorActive() || a.EditorGroup.ActiveBuffer() == nil {
+			a.StatusWarn(i18n.Text("status.workspaceEditNotApplied"))
+			allApplied = false
 			continue
 		}
 		files[path] = true
@@ -628,14 +627,19 @@ func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bo
 	}
 
 	a.EditorGroup.OpenFile(currentPath)
-	return len(files)
+	return len(files), allApplied
 }
 
-func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdit) int {
+func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdit) bool {
 	if a.EditorGroup.ActiveFilePath() != path {
-		return 0
+		return false
 	}
-	return a.applyWorkspaceTextEdits(edit, false)
+	batches, ok := a.workspaceTextEdits(edit)
+	if !ok || len(batches) == 0 {
+		return false
+	}
+	_, allApplied := a.applyWorkspaceEditBatches(batches, false)
+	return allApplied
 }
 
 func (a *App) RequestInteractiveCodeActions() {
@@ -701,6 +705,7 @@ func (a *App) codeActionDiagnostics(path, server string, requestRange lsp.Range)
 			Severity: int(d.Severity),
 			Source:   d.Source,
 			Message:  d.Message,
+			Code:     d.Code,
 		})
 	}
 	return diagnostics
@@ -787,7 +792,10 @@ func (a *App) HandleCodeActionsResult(result *CodeActionsResult) {
 	a.ShowSelectDialog(i18n.Text("command.codeActions"), items, func(id string) {
 		if action, ok := actions[id]; ok && a.EditorGroup.ActiveFilePath() == result.Path &&
 			a.editorBuffer() == result.Buffer && result.Buffer.Version() == result.Version {
-			if action.Edit != nil && a.applyInteractiveCodeActionEdit(result.Path, action.Edit) > 0 {
+			if action.Edit != nil {
+				if !a.applyInteractiveCodeActionEdit(result.Path, action.Edit) {
+					return
+				}
 				a.StatusNotify(i18n.Text("status.codeActionApplied"))
 			}
 			if action.Command != nil {

@@ -866,14 +866,20 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 
 	lspManager.OnApplyEdit = func(_ string, edit lsp.WorkspaceEdit) lsp.ApplyWorkspaceEditResult {
 		result := make(chan lsp.ApplyWorkspaceEditResult, 1)
-		if err := screen.PostEvent(tcell.NewEventInterrupt(&LSPApplyEditRequest{Edit: edit, Result: result})); err != nil {
+		lifecycle := newExecRequestLifecycle()
+		request := &LSPApplyEditRequest{Edit: edit, Result: result, Lifecycle: lifecycle}
+		if err := screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
 			return lsp.ApplyWorkspaceEditResult{FailureReason: err.Error()}
 		}
 		select {
 		case applied := <-result:
 			return applied
 		case <-time.After(10 * time.Second):
-			return lsp.ApplyWorkspaceEditResult{FailureReason: "timed out waiting to apply workspace edit"}
+			if lifecycle.cancel() {
+				return lsp.ApplyWorkspaceEditResult{FailureReason: "timed out waiting to apply workspace edit"}
+			}
+			// The UI claimed the request, so let its edit finish and report the result.
+			return <-result
 		}
 	}
 

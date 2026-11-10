@@ -354,8 +354,14 @@ func RunEventLoop(
 					app.StatusNotify(i18n.Text("status.codeActionCompleted"))
 				}
 			case *LSPApplyEditRequest:
+				if !v.Lifecycle.claim() {
+					break
+				}
 				batches, ok := app.workspaceTextEdits(&v.Edit)
-				applied := ok && len(batches) > 0 && app.applyWorkspaceEditBatches(batches, false) > 0
+				applied := false
+				if ok && len(batches) > 0 {
+					_, applied = app.applyWorkspaceEditBatches(batches, false)
+				}
 				result := lsp.ApplyWorkspaceEditResult{Applied: applied}
 				if !applied {
 					result.FailureReason = i18n.Text("status.workspaceEditNotApplied")

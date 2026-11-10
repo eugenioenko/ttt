@@ -66,8 +66,9 @@ type CodeActionCommandResult struct {
 }
 
 type LSPApplyEditRequest struct {
-	Edit   lsp.WorkspaceEdit
-	Result chan lsp.ApplyWorkspaceEditResult
+	Edit      lsp.WorkspaceEdit
+	Result    chan lsp.ApplyWorkspaceEditResult
+	Lifecycle *execRequestLifecycle
 }
 
 func FileURI(path string) string { return lsp.FileURI(path) }
@@ -141,6 +142,7 @@ func LspToUIDiagnostics(diags []lsp.Diagnostic, lines []string) []ui.Diagnostic 
 			Severity:  ui.DiagnosticSeverity(d.Severity),
 			Message:   d.Message,
 			Source:    d.Source,
+			Code:      d.Code,
 		}
 	}
 	return result

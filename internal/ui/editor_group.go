@@ -53,6 +53,7 @@ type Diagnostic struct {
 	Style     term.Style
 	Message   string
 	Source    string
+	Code      any
 }
 
 type editorTab struct {

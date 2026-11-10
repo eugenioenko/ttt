@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 )
 
 func workspaceEditTestApp(t *testing.T, files map[string]string) (*App, string) {
@@ -54,6 +56,97 @@ func bufferText(t *testing.T, a *App, path string) string {
 		t.Fatalf("no buffer for %s", path)
 	}
 	return strings.Join(buf.Lines, "\n")
+}
+
+func TestCanceledQueuedLSPApplyEditIsNotApplied(t *testing.T) {
+	a := newListenTestApp(t)
+	path := filepath.Join(t.TempDir(), "main.go")
+	const original = "original"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runExecMain(a, func() error { return a.EditorGroup.OpenFile(path) }); err != nil {
+		t.Fatal(err)
+	}
+	before := strings.Join(a.EditorGroup.BufferForPath(path).Lines, "\n")
+
+	release, blockerDone := holdExecEventLoop(t, a)
+	request := &LSPApplyEditRequest{
+		Edit: lsp.WorkspaceEdit{Changes: map[string][]lsp.TextEdit{
+			FileURI(path): {{
+				Range:   lsp.Range{Start: lsp.Position{}, End: lsp.Position{Character: len(original)}},
+				NewText: "changed",
+			}},
+		}},
+		Result:    make(chan lsp.ApplyWorkspaceEditResult, 1),
+		Lifecycle: newExecRequestLifecycle(),
+	}
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
+		t.Fatal(err)
+	}
+	if !request.Lifecycle.cancel() {
+		t.Fatal("queued request was claimed before cancellation")
+	}
+
+	close(release)
+	if err := <-blockerDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := runExecMain(a, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(a.EditorGroup.BufferForPath(path).Lines, "\n"); got != before {
+		t.Fatalf("buffer = %q, want canceled edit to leave it unchanged (%q)", got, before)
+	}
+}
+
+func TestLSPApplyEditReportsFailureWhenAnyBatchFails(t *testing.T) {
+	a := newListenTestApp(t)
+	path := filepath.Join(t.TempDir(), "main.go")
+	const original = "original\n"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runExecMain(a, func() error { return a.EditorGroup.OpenFile(path) }); err != nil {
+		t.Fatal(err)
+	}
+
+	edit := decodeWorkspaceEdit(t, `{"documentChanges":[`+
+		renameEdit(FileURI(path), 0, 0, 8, "first")+","+
+		renameEdit(FileURI(path), 0, 0, 5, "done")+","+
+		renameEdit(FileURI(t.TempDir()), 0, 0, 0, "ignored")+`]}`)
+
+	batches, ok := a.workspaceTextEdits(edit)
+	if !ok {
+		t.Fatal("workspace text edits were rejected")
+	}
+	filesCount, allApplied := a.applyWorkspaceEditBatches(batches, false)
+	if filesCount != 1 {
+		t.Fatalf("distinct file count = %d, want 1 for repeated batches on one file", filesCount)
+	}
+	if allApplied {
+		t.Fatal("allApplied = true, want false when one batch cannot open its file")
+	}
+
+	request := &LSPApplyEditRequest{
+		Edit:      *edit,
+		Result:    make(chan lsp.ApplyWorkspaceEditResult, 1),
+		Lifecycle: newExecRequestLifecycle(),
+	}
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case result := <-request.Result:
+		if result.Applied {
+			t.Fatal("LSP apply-edit result reports Applied=true when a batch failed")
+		}
+		if result.FailureReason == "" {
+			t.Fatal("LSP apply-edit failure has no reason")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for LSP apply-edit result")
+	}
 }
 
 func TestRenameAppliesDocumentChanges(t *testing.T) {
@@ -154,13 +247,21 @@ func TestApplicableCodeActionsFiltersUnsupportedActions(t *testing.T) {
 func TestCodeActionDiagnosticsUseLSPSourcesAndUTF16(t *testing.T) {
 	a := completionTestApp(t, "main.go", "😀 missing\n")
 	path := a.EditorGroup.ActiveFilePath()
-	a.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource("go"), path, []ui.Diagnostic{{
-		StartLine: 0, StartCol: 2, EndLine: 0, EndCol: 9,
-		Severity: ui.DiagError, Source: "compiler", Message: "undefined: missing",
-	}, {
-		StartLine: 0, StartCol: 8, EndLine: 0, EndCol: 9,
-		Severity: ui.DiagWarning, Source: "compiler", Message: "outside selection",
-	}})
+	var lspDiags []lsp.Diagnostic
+	if err := json.Unmarshal([]byte(`[{
+		"range":{"start":{"line":0,"character":3},"end":{"line":0,"character":10}},
+		"severity":1,"source":"compiler","message":"undefined: missing","code":"E042"
+	},{
+		"range":{"start":{"line":0,"character":9},"end":{"line":0,"character":10}},
+		"severity":2,"source":"compiler","message":"outside selection","code":42
+	}]`), &lspDiags); err != nil {
+		t.Fatal(err)
+	}
+	storedDiags := LspToUIDiagnostics(lspDiags, a.EditorGroup.ActiveBuffer().Lines)
+	if storedDiags[1].Code != float64(42) {
+		t.Fatalf("stored numeric diagnostic code = %#v, want 42", storedDiags[1].Code)
+	}
+	a.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource("go"), path, storedDiags)
 	a.EditorGroup.SetDiagnosticsSource("plugin:test", path, []ui.Diagnostic{{
 		StartLine: 0, StartCol: 0, EndLine: 0, EndCol: 1,
 		Severity: ui.DiagWarning, Source: "plugin", Message: "not for gopls",
@@ -179,6 +280,9 @@ func TestCodeActionDiagnosticsUseLSPSourcesAndUTF16(t *testing.T) {
 	}
 	if got[0].Source != "compiler" || got[0].Message != "undefined: missing" {
 		t.Fatalf("diagnostic = %+v, want source and message preserved", got[0])
+	}
+	if got[0].Code != "E042" {
+		t.Fatalf("diagnostic code = %#v, want the server-provided code", got[0].Code)
 	}
 }
 
@@ -249,6 +353,61 @@ func TestCodeActionPickerAppliesWorkspaceEdits(t *testing.T) {
 	}
 	if got := a.Status.Notification; got != "Code action applied" {
 		t.Errorf("notification = %q, want code action confirmation", got)
+	}
+}
+
+func TestInteractiveCodeActionEditFailsWhenAnyBatchCannotApply(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"main.go": "call()\n",
+	})
+	mainPath := filepath.Join(dir, "main.go")
+	a.EditorGroup.OpenFile(mainPath)
+	edit := &lsp.WorkspaceEdit{DocumentChanges: []lsp.DocumentChange{
+		{
+			TextDocument: lsp.VersionedTextDocumentIdentifier{URI: FileURI(mainPath)},
+			Edits:        []lsp.TextEdit{utf16Edit(0, 0, 4, "run")},
+		},
+		{
+			TextDocument: lsp.VersionedTextDocumentIdentifier{URI: FileURI(t.TempDir())},
+			Edits:        []lsp.TextEdit{utf16Edit(0, 0, 0, "ignored")},
+		},
+	}}
+
+	if a.applyInteractiveCodeActionEdit(mainPath, edit) {
+		t.Fatal("partially applied code action reported full success")
+	}
+	if got := strings.Join(a.EditorGroup.BufferForPath(mainPath).Lines, "\n"); got != "run()\n" {
+		t.Fatalf("main.go = %q, want first batch to have applied before the failure", got)
+	}
+}
+
+func TestWorkspaceEditViewerBatchIsNotCountedAsApplied(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"main.go": "call()\n",
+	})
+	mainPath := filepath.Join(dir, "main.go")
+	viewerPath := filepath.Join(dir, "data.bin")
+	if err := os.WriteFile(viewerPath, []byte{0, 1, 2}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.EditorGroup.OpenFile(mainPath)
+
+	filesCount, allApplied := a.applyWorkspaceEditBatches([]lsp.FileEdits{
+		{URI: FileURI(mainPath), Edits: []lsp.TextEdit{utf16Edit(0, 0, 4, "run")}},
+		{URI: FileURI(viewerPath), Edits: []lsp.TextEdit{utf16Edit(0, 0, 0, "ignored")}},
+	}, false)
+
+	if filesCount != 1 {
+		t.Fatalf("distinct applied file count = %d, want 1", filesCount)
+	}
+	if allApplied {
+		t.Fatal("viewer batch was skipped but workspace edit reported complete success")
+	}
+	if got := strings.Join(a.EditorGroup.BufferForPath(mainPath).Lines, "\n"); got != "run()\n" {
+		t.Fatalf("main.go = %q, want successful text batch to apply", got)
+	}
+	if a.EditorGroup.ActiveFilePath() != mainPath {
+		t.Fatalf("active file = %q, want original file restored", a.EditorGroup.ActiveFilePath())
 	}
 }
 
