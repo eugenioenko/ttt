@@ -126,8 +126,12 @@ func assertEditorDividerSkipsTabs(t *testing.T, h *testHarness, x int) {
 	for _, group := range h.app.EditorSplit.Groups() {
 		tabs := group.TabBar.GetRect()
 		for y := tabs.Y; y < tabs.Y+tabs.H; y++ {
-			if cells[y*width+x].Str != " " {
-				t.Fatalf("divider crossed tab bar at (%d, %d)", x, y)
+			want := " "
+			if y == tabs.Y+tabs.H-1 {
+				want = string(h.app.Borders.TopTee)
+			}
+			if got := cells[y*width+x].Str; got != want {
+				t.Fatalf("divider at (%d, %d) = %q, want %q", x, y, got, want)
 			}
 			if h.app.Root.PointerShapeAt(x, y) == term.PointerEWResize {
 				t.Fatalf("tab-bar gap showed a resize pointer at (%d, %d)", x, y)
