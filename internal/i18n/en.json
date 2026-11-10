@@ -5,6 +5,7 @@
   "session.saveFailed": "Could not save workspace tabs: {error}",
   "session.restoreFailed": "Could not restore workspace tabs: {error}",
   "session.cleanupFailed": "Could not clean saved workspace tabs: {error}",
+  "command.explorerOpenToSide": "Explorer: Open to the Side",
   "status.failedToSaveEditorLayout": "Failed to save editor layout: {error}",
   "command.openEditorToSide": "Open to the Side",
   "command.moveEditorToOtherGroup": "Move to Other Group",

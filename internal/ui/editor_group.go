@@ -90,9 +90,10 @@ type editorTab struct {
 	Diff *DiffEditorWidget
 	// Annotations shows the decorations for the tab's file when it is not
 	// showing a diff.
-	Annotations *DiffOverlay
-	viewVersion uint64
-	viewText    string
+	Annotations    *DiffOverlay
+	viewVersion    uint64
+	viewText       string
+	viewAnchorText string
 }
 
 // findSession keeps the editor query after its bar closes and tracks which buffer version the matches describe.
@@ -1177,6 +1178,10 @@ func (g *EditorGroupWidget) ReloadFile(path string) bool {
 				g.tabs[i].Folds.SetRanges(fold.ComputeIndentRanges(g.tabs[i].Buf.Lines))
 			}
 			g.clampCursor(&g.tabs[i])
+			if g.tabs[i].Highlighter != nil {
+				g.tabs[i].Highlighter.SyncBuffer(g.tabs[i].Buf)
+			}
+			g.syncDocumentViews(&g.tabs[i])
 			if i == g.active {
 				g.syncTabs()
 			}
@@ -1672,7 +1677,7 @@ func (g *EditorGroupWidget) HasDirtyOtherTabs() bool {
 		if i == g.active {
 			continue
 		}
-		if g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty {
+		if g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty && !g.otherDocumentView(g.tabs[i]) {
 			return true
 		}
 	}
@@ -1729,7 +1734,7 @@ func (g *EditorGroupWidget) CloseAllSaved() {
 
 func (g *EditorGroupWidget) HasDirtyTabs() bool {
 	for i := range g.tabs {
-		if g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty {
+		if g.tabs[i].Buf != nil && g.tabs[i].Buf.Dirty && !g.otherDocumentView(g.tabs[i]) {
 			return true
 		}
 	}
@@ -1832,6 +1837,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t.Virtual = false
 	t.Placeholder = false
 	g.rebuildHighlighter(t)
+	g.adoptSaveAsViews(t, path)
 	g.syncTabs()
 	g.SyncDocumentViews()
 	return true
@@ -1855,6 +1861,23 @@ func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
 			return nil, fmt.Errorf("Cannot save as %s: already open with unsaved changes; save or close that tab first", filepath.Base(path))
 		}
 		targets = append(targets, i)
+	}
+	for _, peer := range g.relatedGroups() {
+		if peer == g {
+			continue
+		}
+		for _, other := range peer.tabs {
+			if other.Buf == nil || other.Virtual || other.Buf == g.activeTab().Buf {
+				continue
+			}
+			same, err := sameSaveTarget(other.FilePath, path)
+			if err != nil {
+				return nil, err
+			}
+			if same && other.Buf.Dirty {
+				return nil, fmt.Errorf("Cannot save as %s: already open with unsaved changes; save or close that tab first", filepath.Base(path))
+			}
+		}
 	}
 	return targets, nil
 }
@@ -2050,6 +2073,7 @@ func (g *EditorGroupWidget) RenamePath(oldPath, newPath string) bool {
 		if g.OnFileOpen != nil && t.DetectedLanguage != "" {
 			g.OnFileOpen(updated, t.DetectedLanguage, t.Buf.Lines)
 		}
+		g.syncDocumentViews(t)
 		renamed = true
 	}
 	if renamed {

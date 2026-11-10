@@ -276,7 +276,7 @@ func joinReplacedLines(lines []string, original []byte) []byte {
 }
 
 func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, replacement string, opts ui.SearchOptions) {
-	if a.EditorGroup.IsDirtyPath(filePath) {
+	if a.isEditorPathDirty(filePath) {
 		a.StatusWarn(i18n.Format("status.hasUnsavedChangesSaveItBeforeReplacing", i18n.Args{"filename": filepath.Base(filePath)}))
 		return
 	}
@@ -300,7 +300,7 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 		return
 	}
 	a.invalidateRepositoryPath(filePath, RepositoryWorktree)
-	a.EditorGroup.ReloadFile(filePath)
+	a.reloadFile(filePath)
 	a.Search.Refresh()
 	a.StatusNotify(i18n.Format("status.replacedMatchesIn", i18n.Args{"matchesCount": len(matches), "filename": filepath.Base(filePath)}))
 }
@@ -332,7 +332,7 @@ func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, re
 			replacedMatches, replacedFiles := 0, 0
 			var skipped []string
 			for filePath, matches := range allMatches {
-				if a.EditorGroup.IsDirtyPath(filePath) {
+				if a.isEditorPathDirty(filePath) {
 					skipped = append(skipped, filepath.Base(filePath))
 					continue
 				}
@@ -357,7 +357,7 @@ func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, re
 				if invalidatePath == "" {
 					invalidatePath = filePath
 				}
-				a.EditorGroup.ReloadFile(filePath)
+				a.reloadFile(filePath)
 			}
 			a.invalidateRepositoryPath(invalidatePath, RepositoryWorktree)
 			a.Search.Refresh()

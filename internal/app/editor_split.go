@@ -1,6 +1,9 @@
 package app
 
-import "github.com/eugenioenko/ttt/internal/ui"
+import (
+	"github.com/eugenioenko/ttt/internal/ui"
+	"strings"
+)
 
 func (a *App) editorGroups() []*ui.EditorGroupWidget {
 	if a.EditorSplit == nil {
@@ -160,4 +163,35 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.OnActiveTabChange = a.editorTabChanged
 	a.wireEditorGroupActivation(right)
 	return right
+}
+
+func (a *App) isEditorPathDirty(path string) bool {
+	for _, group := range a.editorGroups() {
+		if group.IsDirtyPath(path) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) openEditorFiles() []ui.OpenDocument {
+	var files []ui.OpenDocument
+	seen := map[string]bool{}
+	for _, group := range a.editorGroups() {
+		for _, file := range group.OpenFiles() {
+			if !seen[file.Path] {
+				seen[file.Path] = true
+				files = append(files, file)
+			}
+		}
+	}
+	return files
+}
+
+func (a *App) openEditorDocuments() []ui.OpenDocument {
+	docs := a.openEditorFiles()
+	for i := range docs {
+		docs[i].Text = strings.Join(a.lspLines(docs[i].Path), "\n")
+	}
+	return docs
 }
