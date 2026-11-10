@@ -3,6 +3,8 @@ package app
 import (
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -136,6 +138,8 @@ func (a *App) focusEditorDirection(dx, dy int) {
 
 func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidget {
 	right := newEditorGroup(a.Settings, a.Borders, left.BracketColorStyles)
+	right.FoldTask = NewTask[[]fold.Range](a, asynctask.TaskOptions{})
+	right.FoldDelay = NewTask[struct{}](a, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
 	right.ControlModifiers = left.ControlModifiers
 	right.SetChevrons(left.ChevronCollapsed, left.ChevronExpanded)
 	right.SetImageCellSize(a.imageCellW, a.imageCellH)

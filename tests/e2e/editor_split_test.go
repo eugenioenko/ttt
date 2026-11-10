@@ -46,6 +46,49 @@ func TestEditorSplitUntitledBuffersAreIndependentAndNumbered(t *testing.T) {
 	}
 }
 
+func TestEditorSplitMiddleClickClosesClickedGroupTab(t *testing.T) {
+	for _, clickLeft := range []bool{false, true} {
+		t.Run(map[bool]string{false: "right", true: "left"}[clickLeft], func(t *testing.T) {
+			h := newTestHarness(t, 140, 32)
+			defer h.stop()
+			left := h.app.EditorGroup
+			if err := left.OpenFile(filepath.Join(h.dir, "alpha.txt")); err != nil {
+				t.Fatal(err)
+			}
+			h.exec("editor.split")
+			right := h.app.EditorGroup
+			if err := right.OpenFile(filepath.Join(h.dir, "beta.txt")); err != nil {
+				t.Fatal(err)
+			}
+			clicked, keep := right, left
+			if clickLeft {
+				clicked, keep = left, right
+			}
+			h.app.Root.SetFocus(keep)
+			h.redraw()
+			path := keep.ActiveFilePath()
+			r := clicked.TabBar.GetRect()
+			h.app.Root.HandleEvent(tcell.NewEventMouse(r.X+4, r.Y+1, tcell.Button3, 0))
+			h.app.Root.HandleEvent(tcell.NewEventMouse(r.X+4, r.Y+1, tcell.ButtonNone, 0))
+			h.redraw()
+			if len(h.app.EditorSplit.Groups()) != 1 || h.app.EditorGroup != keep || keep.TabCount() != 1 || keep.ActiveFilePath() != path {
+				t.Fatal("middle-click closed a tab in the wrong editor group")
+			}
+		})
+	}
+}
+
+func TestEditorOpenToSideIgnoresNonTextTabs(t *testing.T) {
+	h := newTestHarness(t, 140, 32)
+	defer h.stop()
+	group := h.app.EditorGroup
+	group.OpenPluginTab("form", "Form", widgets.NewInputWidget(widgets.InputConfig{}))
+	h.exec("editor.openToSide")
+	if len(h.app.EditorSplit.Groups()) != 1 || h.app.EditorGroup != group || group.ActiveFilePath() != "form" {
+		t.Fatal("Open to the Side created an empty split for a non-text tab")
+	}
+}
+
 func TestEditorSplitUntitledPlaceholderLifecycle(t *testing.T) {
 	for _, state := range []string{"untouched", "edited", "undone", "saved"} {
 		t.Run(state, func(t *testing.T) {

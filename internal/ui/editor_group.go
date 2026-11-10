@@ -1863,13 +1863,13 @@ func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
 		}
 		same, err := sameSaveTarget(other.FilePath, path)
 		if err != nil {
-			return nil, fmt.Errorf("Cannot determine save destination %s: %w", filepath.Base(path), err)
+			return nil, errors.New(i18n.Format("editorGroup.saveDestinationFailed", i18n.Args{"filename": filepath.Base(path), "error": err.Error()}))
 		}
 		if !same {
 			continue
 		}
 		if other.Buf.Dirty {
-			return nil, fmt.Errorf("Cannot save as %s: already open with unsaved changes; save or close that tab first", filepath.Base(path))
+			return nil, errors.New(i18n.Format("editorGroup.saveDestinationDirty", i18n.Args{"filename": filepath.Base(path)}))
 		}
 		targets = append(targets, i)
 	}
@@ -1883,10 +1883,10 @@ func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
 			}
 			same, err := sameSaveTarget(other.FilePath, path)
 			if err != nil {
-				return nil, err
+				return nil, errors.New(i18n.Format("editorGroup.saveDestinationFailed", i18n.Args{"filename": filepath.Base(path), "error": err.Error()}))
 			}
 			if same && other.Buf.Dirty {
-				return nil, fmt.Errorf("Cannot save as %s: already open with unsaved changes; save or close that tab first", filepath.Base(path))
+				return nil, errors.New(i18n.Format("editorGroup.saveDestinationDirty", i18n.Args{"filename": filepath.Base(path)}))
 			}
 		}
 	}
@@ -3520,7 +3520,7 @@ func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
-	if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons()&(tcell.Button1|tcell.Button2) != 0 {
+	if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons()&(tcell.Button1|tcell.Button2|tcell.Button3) != 0 {
 		x, y := mouse.Position()
 		if g.GetRect().Contains(x, y) && g.OnActivate != nil {
 			g.OnActivate()

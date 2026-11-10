@@ -94,3 +94,12 @@ func TestSharedDocumentSaveAsGuardsOtherGroup(t *testing.T) {
 		t.Fatal("Save As left duplicate or independent destination views")
 	}
 }
+
+func TestClonedDocumentDoesNotInheritPlaceholderPin(t *testing.T) {
+	source := newRenameGroup(t, filepath.Join(t.TempDir(), "file.txt"), "text")
+	target := NewEditorGroupWidget(nil, 4, true, "relative")
+	target.TogglePinTab()
+	if !source.CloneActiveTabTo(target) || target.TabCount() != 1 || target.IsActiveTabPinned() {
+		t.Fatal("cloned document inherited the replaced placeholder's pin")
+	}
+}

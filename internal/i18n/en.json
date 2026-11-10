@@ -5,6 +5,8 @@
   "session.saveFailed": "Could not save workspace tabs: {error}",
   "session.restoreFailed": "Could not restore workspace tabs: {error}",
   "session.cleanupFailed": "Could not clean saved workspace tabs: {error}",
+  "editorGroup.saveDestinationFailed": "Cannot determine save destination {filename}: {error}",
+  "editorGroup.saveDestinationDirty": "Cannot save as {filename}: already open with unsaved changes; save or close that tab first",
   "settings.highlightActiveGroupBorder": "Highlight active split",
   "command.explorerOpenToSide": "Split: Open Explorer File to the Side",
   "command.openEditorToSide": "Split: Open to the Side",
