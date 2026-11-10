@@ -734,7 +734,7 @@ func (g *EditorGroupWidget) canReplaceTab(t *editorTab) bool {
 	if t == nil || g.IsActiveTabPinned() {
 		return false
 	}
-	if t.Preview {
+	if t.Preview && config.LoadSettings().Editor.PreviewTabsEnabled() {
 		return true
 	}
 	return len(g.tabs) == 1 && g.isUntouchedPlaceholder(t)
