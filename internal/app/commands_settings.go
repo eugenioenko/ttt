@@ -203,6 +203,9 @@ func (a *App) ApplySettings(s config.Settings) {
 
 	// Apply search debounce
 	a.Search.Debounce.DelayMs = s.Search.Debounce
+	if s.Search.Debounce != prev.Search.Debounce {
+		a.setExplorerSearchDebounce(s.Search.Debounce)
+	}
 	a.Search.Icons = s.Appearance.Icons
 	if s.LSP.IsHoverEnabled() != prev.LSP.IsHoverEnabled() || s.LSP.IsEnabled() != prev.LSP.IsEnabled() {
 		a.DismissHover()

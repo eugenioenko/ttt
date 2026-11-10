@@ -39,6 +39,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	switch a.Sidebar.ActivePanel {
 	case "explorer":
 		items = []ui.ContextMenuItem{
+			{Label: i18n.Text("explorer.searchInFolders"), Command: "explorer.find"},
+			ui.MenuSep(),
 			{Label: i18n.Text("general.newFile"), Command: "file.new"},
 			{Label: i18n.Text("general.addFolder"), Command: "workspace.addFolder"},
 			{Label: i18n.Text("general.refresh"), Command: "explorer.refresh"},

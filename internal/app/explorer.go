@@ -17,6 +17,7 @@ import (
 )
 
 type NavigationPanel struct {
+	Search   *ui.ExplorerSearchWidget
 	Tree     *widgets.TreeWidget
 	Adapter  *ui.WidgetAdapter
 	Settings config.ExplorerSettings
@@ -105,7 +106,8 @@ func NewNavigationPanel(settings config.ExplorerSettings, icons string, paths ..
 	}
 	tree.SetItems(items)
 
-	n.Adapter = ui.NewWidgetAdapter(tree)
+	n.Search = ui.NewExplorerSearchWidget(tree, icons)
+	n.Adapter = ui.NewWidgetAdapter(n.Search)
 	return n
 }
 
