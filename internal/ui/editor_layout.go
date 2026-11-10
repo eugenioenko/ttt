@@ -230,6 +230,12 @@ func (e *EditorLayoutWidget) renderJunctions(surface Surface) {
 		b.Cross = b.LeftTee
 	}
 	r, joins := e.GetRect(), map[int]int{}
+	for _, gap := range e.dividerGaps {
+		y := gap.Y + gap.H - 1
+		if e.dividerVisibleAt(gap.X, y+1) {
+			surface.SetCell(gap.X-r.X, y-r.Y, term.Cell{Ch: b.TopTee, Style: term.StyleBorder})
+		}
+	}
 	for _, group := range e.First.Groups() {
 		gr := group.GetRect()
 		if e.Split.Position == SplitRight {
