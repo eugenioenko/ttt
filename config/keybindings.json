@@ -6,6 +6,7 @@
   { "key": "ctrl+up", "command": "view.scrollLineUp" },
   { "key": "ctrl+down", "command": "view.scrollLineDown" },
   { "key": "ctrl+p", "command": "command.palette" },
+  { "key": "ctrl+k", "command": "terminal.sendNextKey" },
   { "key": "ctrl+k p", "command": "file.quickOpen" },
   { "key": "ctrl+o", "command": "workspace.openFolder" },
   { "key": "ctrl+n", "command": "file.new" },

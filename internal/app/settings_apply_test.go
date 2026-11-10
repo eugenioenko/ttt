@@ -113,7 +113,7 @@ func TestCommitToCoversEveryField(t *testing.T) {
 	for _, cat := range settingsCategories() {
 		for _, f := range cat.Fields {
 			switch f.Kind {
-			case settingSection:
+			case settingSection, settingShortcut:
 			case settingBool:
 				if f.GetBool == nil || f.SetBool == nil {
 					t.Errorf("%s → %s: bool field missing an accessor", cat.Title, f.Label)

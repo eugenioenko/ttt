@@ -168,12 +168,19 @@ func (a *App) FocusPanel() {
 }
 
 func (a *App) ShowKeybindings() {
+	a.showKeybindings("")
+}
+
+func (a *App) showKeybindings(commandID string) {
 	defaults := make(map[string]string)
 	for _, kb := range config.DefaultKeybindings() {
 		defaults[kb.Command] = FormatKeyBinding(kb.Key, a.Root.ControlModifiers)
 	}
 
 	w := ui.NewKeybindingsWidget(a.Reg.List())
+	if cmd, ok := a.Reg.Get(commandID); ok {
+		w.SetFilter(cmd.Title)
+	}
 	w.ControlModifiers = &a.Root.ControlModifiers
 	w.Borders = a.Borders
 	w.GetShortcut = func(cmdID string) string {
@@ -496,6 +503,11 @@ func registerViewCommands(app *App) {
 		ID: "terminal.new", Title: i18n.Text("command.terminalNewTerminal"),
 		Keywords: []string{"terminal", "shell", "console", "bash"},
 		Handler:  app.SpawnTerminal,
+	})
+	reg.Register(command.Command{
+		ID: "terminal.sendNextKey", Title: i18n.Text("command.terminalSendNextKey"),
+		Keywords: []string{"terminal", "key", "shortcut", "forward"},
+		Handler:  app.SendNextTerminalKey,
 	})
 
 	reg.Register(command.Command{

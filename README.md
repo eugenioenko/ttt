@@ -242,7 +242,9 @@ Built-in terminal emulator. Press Ctrl+T to toggle the terminal panel, or Alt+T 
 - **Ctrl+K T** to spawn a new terminal tab; multiple tabs with a vertical inner tab bar on the left edge
 - Full VT escape sequence support via [`eugenioenko/xterm-go`](https://github.com/eugenioenko/xterm-go) (a maintained fork of [`gitpod-io/xterm-go`](https://github.com/gitpod-io/xterm-go)) and PTY management via [`aymanbagabas/go-pty`](https://github.com/aymanbagabas/go-pty)
 - True color (24-bit) and 256-color rendering
-- When the terminal is focused, all keys go to the PTY except force keys (Ctrl+T, Alt+T, Ctrl+Q, Ctrl+P, Ctrl+K P, Ctrl+B, F6)
+- Reserved TTT shortcuts and chords work while the terminal is focused. **Ctrl+K P** opens Quick Open; **Ctrl+K Ctrl+P** sends Ctrl+P to the terminal. **Ctrl+K Ctrl+K** sends Ctrl+K for shell kill-line.
+- **Terminal: Send Next Key** is bound to **Ctrl+K** and can be rebound in **Settings → General → Keyboard**, beside the modifier preference. Plain or Shift-only continuations complete TTT chords; a Ctrl/Alt/Super combination goes directly to the terminal, bypassing TTT shortcuts and local clipboard handling. Clicking, changing focus, or closing the terminal cancels forwarding.
+- Enable **Forward shortcuts to terminal** in that same Keyboard section (`terminal.forwardShortcuts`, default `false`) to pass reserved shortcuts and chord prefixes directly to terminal programs. Terminal-local copy/paste behavior keeps its existing settings.
 - Terminal shell and scrollback are configurable in `settings.json`; ANSI colors are theme-configurable via the `terminal` field in `theme.json`
 
 See [Integrated Terminal](docs-web/src/content/docs/guides/terminal.md).

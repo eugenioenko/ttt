@@ -24,6 +24,12 @@ func (a *App) SpawnEditorTerminal() {
 	a.SpawnTerminalSpec(TerminalSpec{InEditor: true})
 }
 
+func (a *App) SendNextTerminalKey() {
+	if tw := a.focusedTerminalWidget(); tw != nil && !a.Root.HasOverlay() {
+		a.Root.SendNextTerminalKey(tw)
+	}
+}
+
 func (a *App) openEditorTerminal(entry TerminalTab, spec TerminalSpec) {
 	id := entry.ID
 	entry.Tab.OnClose = func() { a.releaseEditorTerminal(id) }

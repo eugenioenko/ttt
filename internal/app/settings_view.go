@@ -28,12 +28,14 @@ const (
 	settingEnum
 	// settingSection is a heading row that groups the fields below it.
 	settingSection
+	settingShortcut
 )
 
 type settingField struct {
 	Label   string
 	Kind    settingKind
 	Restart bool
+	Command string
 	Options func(*config.Settings) []widgets.SelectItem
 	// Min is the smallest accepted value for settingInt. Fields whose json tag
 	// carries omitempty must set Min >= 1, since a stored 0 would be dropped on
@@ -93,6 +95,10 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.shortcutModifier"), Kind: settingEnum, Options: fixedOptions(keyboardModifierItems),
 				GetString: func(s *config.Settings) string { return s.Keyboard.ModifierKey },
 				SetString: func(s *config.Settings, v string) { s.Keyboard.ModifierKey = v }},
+			{Label: i18n.Text("settings.forwardTerminalShortcuts"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Terminal.ForwardShortcuts },
+				SetBool: func(s *config.Settings, v bool) { s.Terminal.ForwardShortcuts = v }},
+			{Label: i18n.Text("settings.sendNextTerminalKey"), Kind: settingShortcut, Command: "terminal.sendNextKey"},
 			section(i18n.Text("settings.plugins")),
 			{Label: i18n.Text("settings.enablePlugins"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Plugins.IsEnabled() },
@@ -422,6 +428,7 @@ type settingsView struct {
 	status     *widgets.LabelWidget
 	inputs     []func() string
 	selects    []*widgets.SelectWidget
+	shortcuts  []func()
 }
 
 // commitTo copies the fields this form owns out of the working copy and onto s,
@@ -433,7 +440,7 @@ func (v *settingsView) commitTo(s *config.Settings) {
 	for _, cat := range v.categories {
 		for _, f := range cat.Fields {
 			switch f.Kind {
-			case settingSection:
+			case settingSection, settingShortcut:
 			case settingBool:
 				f.SetBool(s, f.GetBool(&v.working))
 			case settingInt:
@@ -557,6 +564,20 @@ func (v *settingsView) buildRow(category string, f settingField) *widgets.HStack
 		control = v.boolControl(f)
 	case settingEnum:
 		control = v.enumControl(f)
+	case settingShortcut:
+		button := widgets.NewButtonWidget(widgets.ButtonConfig{
+			OnClick: func() { v.app.showKeybindings(f.Command) },
+		})
+		refresh := func() {
+			label := v.app.KeyFor(f.Command)
+			if label == "" {
+				label = i18n.Text("settings.setShortcut")
+			}
+			button.SetLabel(label)
+		}
+		refresh()
+		v.shortcuts = append(v.shortcuts, refresh)
+		control = button
 	default:
 		control = v.textControl(category, f)
 	}
@@ -565,6 +586,14 @@ func (v *settingsView) buildRow(category string, f settingField) *widgets.HStack
 	row.Gap = 2
 	row.FixedHeight = 1
 	return row
+}
+
+func (a *App) refreshSettingsShortcuts() {
+	if a.settingsView != nil {
+		for _, refresh := range a.settingsView.shortcuts {
+			refresh()
+		}
+	}
 }
 
 func (v *settingsView) boolControl(f settingField) widgets.Widget {

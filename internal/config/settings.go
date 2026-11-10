@@ -62,6 +62,7 @@ type TerminalSettings struct {
 	Scrollback       int      `json:"scrollback,omitempty"`
 	SelectionStyle   string   `json:"selectionStyle"`
 	CtrlVPastes      bool     `json:"ctrlVPastes"`
+	ForwardShortcuts bool     `json:"forwardShortcuts"`
 	PaddingX         int      `json:"padding_x"`
 	ShellIntegration bool     `json:"shellIntegration"`
 }

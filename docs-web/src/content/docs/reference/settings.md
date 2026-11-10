@@ -53,6 +53,8 @@ The terminal must forward the Super/Cmd shortcuts to TTT. Ordinary keys sent to 
 
 Lua plugin key hooks receive enabled Super/Cmd shortcuts as Ctrl shortcuts in `"control+super"` and `"super"` modes, so existing Ctrl handlers work without plugin changes. For example, Super+R is reported as `key = "Ctrl-R", mod = "ctrl"`. Physical Ctrl events still reach Lua hooks in every mode. See the [plugin event modifier rules](/guides/plugin-authoring/#focus-and-keyboard-navigation) for details.
 
+**General → Keyboard** also contains **Forward shortcuts to terminal** (`terminal.forwardShortcuts`, default `false`) and the editable **Send next key to terminal** binding (`terminal.sendNextKey`, default Ctrl+K). With TTT priority, Ctrl+K P runs the TTT chord, while Ctrl+K Ctrl+P sends Ctrl+P directly to the terminal. Enabling direct forwarding passes the first Ctrl+K and other reserved shortcuts to the terminal instead. See [Shortcut forwarding](/guides/terminal/#shortcut-forwarding).
+
 ## Appearance
 
 | Key | Type | Default | Description |
@@ -268,6 +270,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
 | `terminal.padding_x` | int | `1` | Blank columns on each side of terminal text, before the scrollbar; `0` removes both margins. Applies immediately. The settings UI rejects negative values; negative values in `settings.json` become `0`. Narrow panels reduce padding equally to preserve terminal content |
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V. Set to `false` to send `^V` to the terminal program. Ctrl+Shift+V always pastes when reported distinctly by the outer terminal |
+| `terminal.forwardShortcuts` | bool | `false` | Forward reserved TTT shortcuts and chord prefixes directly to the focused terminal. When false, TTT takes priority and Ctrl+K forwards the next modified key while plain/Shift-only continuations complete TTT chords. Applies immediately; available in General → Keyboard beside the editable forwarding shortcut |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 | `terminal.shellIntegration` | bool | `true` | Start bash with an rcfile that loads `~/.bashrc` and adds OSC 133 prompt marks, so resizing redraws the prompt without leaving copies. Needs bash 4.4+; skipped when `terminal.args` is set. Applies to new terminal tabs |
@@ -485,6 +488,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "padding_x": 1,
     "shell": "/bin/zsh",
     "scrollback": 1000,
+    "forwardShortcuts": false,
     "selectionStyle": "background"
   },
   "lsp": {

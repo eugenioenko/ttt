@@ -46,14 +46,17 @@ func TestEditorTerminalTabTakesKeysAndFollowsItsTab(t *testing.T) {
 		t.Fatalf("PTY is %dx%d, tab content is %dx%d", cols, rows, c.W, c.H)
 	}
 
-	// ctrl+k starts a chord in the editor; the terminal must get it raw instead.
-	h.pressCtrl(tcell.KeyCtrlK)
 	for _, r := range "typed" {
 		h.pressRune(r)
 	}
 	waitForRawTail(t, entry.Term, "typed")
 	if len(h.app.Terminals) != 0 {
-		t.Fatal("ctrl+k t reached the chord table instead of the PTY")
+		t.Fatal("ordinary terminal typing unexpectedly opened another terminal")
+	}
+	h.pressCtrl(tcell.KeyCtrlK)
+	h.pressKey(tcell.KeyEnter, 0)
+	if !h.app.EditorGroup.IsActiveTabPinned() {
+		t.Fatal("ctrl+k enter must pin the focused terminal tab")
 	}
 
 	h.pressCtrl(tcell.KeyCtrlT)

@@ -159,7 +159,10 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 |----------|---------|-------------|
 | Ctrl+T | `terminal.toggle` | Toggle terminal (half screen) |
 | Alt+T | `terminal.fullscreen` | Toggle terminal fullscreen |
+| Ctrl+K | `terminal.sendNextKey` | Forward the next modified key to the focused terminal; plain and Shift-only continuations complete TTT chords |
 | Ctrl+K T | `terminal.new` | New terminal tab |
+
+For example, **Ctrl+K P** opens Quick Open, while **Ctrl+K Ctrl+P** sends Ctrl+P to the terminal. Rebind **Send next key to terminal** under **Settings → General → Keyboard**. Enable **Forward shortcuts to terminal** there to pass shortcuts directly instead. See [Shortcut forwarding](/guides/terminal/#shortcut-forwarding).
 
 ## Menu Bar
 

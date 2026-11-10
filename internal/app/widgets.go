@@ -384,6 +384,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 
 	root := ui.NewRoot(rootBox)
 	root.SetControlModifiers(controlModifiers(cfg.Settings.Keyboard.ModifierKey))
+	root.SetForwardShortcuts(cfg.Settings.Terminal.ForwardShortcuts)
 	editorGroup.ControlModifiers = &root.ControlModifiers
 	output.ControlModifiers = &root.ControlModifiers
 	for _, input := range []*widgets.InputWidget{search.Input, search.Include, search.Exclude, search.ReplaceInput, changes.Input} {
