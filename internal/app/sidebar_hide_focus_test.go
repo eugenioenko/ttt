@@ -1,9 +1,11 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
@@ -42,5 +44,18 @@ func TestHideSidebarKeepsFocusOutsideSidebar(t *testing.T) {
 	a.ToggleSidebar()
 	if a.Root.Focused != want {
 		t.Fatalf("focus = %T, want unchanged %T", a.Root.Focused, want)
+	}
+}
+
+func TestHideSidebarMovesFocusFromPluginsInstalledTree(t *testing.T) {
+	a := sidebarFocusTestApp(t)
+	dir := t.TempDir()
+	a.PluginsPanel = NewPluginsPanel(plugin.NewManager(filepath.Join(dir, "plugins"), filepath.Join(dir, "registry.json")))
+	a.ShowPanel("plugins", a.PluginsPanel.Adapter)
+	// Where the plugin row menu returns focus.
+	a.Root.SetFocus(a.PluginsPanel.InstalledTree)
+	a.ToggleSidebar()
+	if a.Root.Focused != a.EditorGroup {
+		t.Fatalf("focus = %T, want editor", a.Root.Focused)
 	}
 }

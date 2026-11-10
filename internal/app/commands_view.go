@@ -33,7 +33,9 @@ func (a *App) ToggleTerminalFullscreen() {
 
 func (a *App) focusedRegion() string {
 	f := a.Root.Focused
-	if f == a.Sidebar || f == a.Sidebar.ActiveWidget() {
+	// Plugin row menu restores focus to InstalledTree, not the panel adapter.
+	inPlugins := a.PluginsPanel != nil && f == a.PluginsPanel.InstalledTree
+	if f == a.Sidebar || f == a.Sidebar.ActiveWidget() || inPlugins {
 		return "sidebar"
 	}
 	if f == a.BottomPanel || f == a.BottomPanel.ActiveWidget() {
