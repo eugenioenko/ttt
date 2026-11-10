@@ -13,7 +13,7 @@ Sessions are kept outside the project under the config directory's `sessions/` f
 
 ## Split Editors
 
-Use the editor tab bar's **More** menu to choose **Split in Half** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Splitting keeps the current file visible in both groups. The views share text, undo history, and save state, with independent cursors, selections, and scrolling.
+Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Splitting keeps the current file visible in both groups. The views share text, undo history, and save state, with independent cursors, selections, and scrolling.
 
 Drag a tab into another group, or choose **Move to Other Group** from More. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Opening a file normally uses the active group, including when the same document is already open elsewhere.
 

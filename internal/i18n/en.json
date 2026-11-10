@@ -15,7 +15,7 @@
   "command.focusEditorRight": "View: Focus Editor Group Right",
   "command.focusEditorUp": "View: Focus Editor Group Above",
   "command.focusEditorDown": "View: Focus Editor Group Below",
-  "command.splitEditor": "Split in Half",
+  "command.splitEditor": "Split Right",
   "command.closeSplit": "Close Split",
   "about.aboutTTTEditor": "About TTT Editor",
   "about.credits": "ttt is great because of everyone who contributes code, reports issues, and uses it",
