@@ -122,5 +122,5 @@ func (a *App) editorGroupMenu() []ui.ContextMenuItem {
 func registerEditorGroupCommands(a *App) {
 	a.Reg.Register(command.Command{ID: "editor.openToSide", Title: i18n.Text("command.openEditorToSide"), Handler: a.OpenEditorToSide})
 	a.Reg.Register(command.Command{ID: "editor.moveToOtherGroup", Title: i18n.Text("command.moveEditorToOtherGroup"), Handler: a.MoveEditorToOtherGroup})
-	a.Reg.Register(command.Command{ID: "explorer.openToSide", Title: i18n.Text("command.openEditorToSide"), Handler: a.ExplorerOpenToSide})
+	a.Reg.Register(command.Command{ID: "explorer.openToSide", Title: i18n.Text("command.explorerOpenToSide"), Handler: a.ExplorerOpenToSide})
 }

@@ -115,7 +115,10 @@ func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, err
 func (a *App) reloadFile(path string) {
 	reloaded := false
 	for _, group := range a.editorGroups() {
-		reloaded = group.ReloadFile(path) || reloaded
+		if group.ReloadFile(path) {
+			reloaded = true
+			break
+		}
 	}
 	if !reloaded {
 		return

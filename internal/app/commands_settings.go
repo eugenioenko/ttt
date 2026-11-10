@@ -106,7 +106,9 @@ func (a *App) applyIcons(ap config.AppearanceSettings) {
 		a.Search.ChevronExpanded = expanded
 	}
 	if a.EditorGroup != nil {
-		a.EditorGroup.SetChevrons(collapsed, expanded)
+		for _, group := range a.editorGroups() {
+			group.SetChevrons(collapsed, expanded)
+		}
 	}
 }
 
@@ -173,53 +175,11 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 
 	highlight.SetTimeLimit(time.Duration(s.Editor.HighlightTimeLimit) * time.Millisecond)
-	// Apply editor settings to the editor group and active editor
-	a.EditorGroup.TabSize = s.Editor.TabSize
-	a.EditorGroup.SetFileIconMode(s.Appearance.Icons)
-	a.EditorGroup.InsertSpaces = s.Editor.InsertSpaces
-	a.EditorGroup.LineNumbers = s.Editor.LineNumbers
-	a.EditorGroup.SetIndentGuides(s.Editor.IndentGuides)
-	a.EditorGroup.GutterStyle = s.Editor.GutterStyle
-	a.EditorGroup.InsertFinalNewline = s.Editor.InsertFinalNewline
-	a.EditorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
-	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
-	a.EditorGroup.WordWrap = s.Editor.WordWrap
-	a.EditorGroup.PreviewTabs = s.Editor.PreviewTabsEnabled()
-	a.EditorGroup.WordWrapColumn = s.Editor.WordWrapColumn
-	a.EditorGroup.WordWrapBreak = s.Editor.WordWrapBreak
-	a.EditorGroup.LanguageOverrides = s.Editor.LanguageOverrides
-	a.EditorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
-	a.EditorGroup.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
-	a.EditorGroup.SetMarkdownMaxWidth(s.Markdown.WrapWidth)
-	a.EditorGroup.SetDiffHighContrast(s.Editor.DiffHighContrast)
-	a.EditorGroup.SetDiffCollapsedEmphasis(s.Editor.DiffCollapsedEmphasis)
-	a.EditorGroup.SetDiffSigns(s.Editor.DiffSigns)
-	a.EditorGroup.SetDiffSignsColor(s.Editor.DiffSignsColor)
-	a.EditorGroup.SetDiffGutterHighlight(s.Editor.DiffGutterHighlight)
-	a.EditorGroup.SetDiffColorGutterNumbers(s.Editor.DiffColorGutterNumbers)
-	a.EditorGroup.SetDiffScrollMarks(s.Editor.DiffScrollbarGitMarks, s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy)
-	a.EditorGroup.BracketPairColorization = s.Editor.BracketPairColorization
-	a.EditorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
-	a.EditorGroup.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)
-	a.EditorGroup.SetImageProtocol(s.Image.Protocol)
+	for _, group := range a.editorGroups() {
+		applyEditorGroupSettings(group, s, prev)
+	}
 	if a.Sidebar != nil {
 		a.Sidebar.SetPanelOrder(s.Sidebar.PanelOrder)
-	}
-
-	if a.EditorGroup.Editor != nil {
-		a.EditorGroup.Editor.TabSize = s.Editor.TabSize
-		a.EditorGroup.Editor.LineNumbers = s.Editor.LineNumbers
-		a.EditorGroup.Editor.IndentGuides = s.Editor.IndentGuides
-		a.EditorGroup.Editor.GutterStyle = s.Editor.GutterStyle
-		a.EditorGroup.Editor.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
-		a.EditorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
-		a.EditorGroup.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
-		a.EditorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
-		a.EditorGroup.Editor.AutoClosing = s.Editor.AutoClosing
-		a.EditorGroup.Editor.BracketPairColorization = s.Editor.BracketPairColorization
-		if s.Editor.BracketPairColorization != prev.Editor.BracketPairColorization {
-			a.EditorGroup.Editor.InvalidateBracketColors()
-		}
 	}
 
 	a.applyMenuBarVisibility(s.Editor.IsMenuBarVisible())
@@ -242,7 +202,9 @@ func (a *App) ApplySettings(s config.Settings) {
 
 	if s.Editor.IsGitGutterEnabled() != prev.Editor.IsGitGutterEnabled() {
 		if !s.Editor.IsGitGutterEnabled() && a.EditorGroup.Editor != nil {
-			a.EditorGroup.Editor.LineChanges = nil
+			for _, group := range a.editorGroups() {
+				group.Editor.LineChanges = nil
+			}
 		}
 		a.RequestGitGutterForActiveFile()
 	}
@@ -250,7 +212,9 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.applyIcons(s.Appearance)
 	a.applySidebarTabStyle(s.Sidebar.TabStyle)
 	a.applyGrammarSettings(s.Editor.Grammars)
-	a.EditorGroup.ApplyFileWordWrap()
+	for _, group := range a.editorGroups() {
+		group.ApplyFileWordWrap()
+	}
 
 	if a.Explorer != nil && (a.Explorer.Settings != s.Explorer || a.Explorer.Icons != s.Appearance.Icons) {
 		a.Explorer.Settings = s.Explorer
@@ -309,4 +273,50 @@ func registerSettingsCommands(app *App) {
 		ID: "settings.reload", Title: i18n.Text("command.reloadSettings"),
 		Handler: app.ReloadSettings,
 	})
+}
+
+func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settings) {
+	group.TabSize = s.Editor.TabSize
+	group.SetFileIconMode(s.Appearance.Icons)
+	group.InsertSpaces = s.Editor.InsertSpaces
+	group.LineNumbers = s.Editor.LineNumbers
+	group.SetIndentGuides(s.Editor.IndentGuides)
+	group.GutterStyle = s.Editor.GutterStyle
+	group.InsertFinalNewline = s.Editor.InsertFinalNewline
+	group.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
+	group.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
+	group.WordWrap = s.Editor.WordWrap
+	group.WordWrapColumn = s.Editor.WordWrapColumn
+	group.WordWrapBreak = s.Editor.WordWrapBreak
+	group.LanguageOverrides = s.Editor.LanguageOverrides
+	group.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
+	group.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
+	group.SetMarkdownMaxWidth(s.Markdown.WrapWidth)
+	group.SetDiffHighContrast(s.Editor.DiffHighContrast)
+	group.SetDiffCollapsedEmphasis(s.Editor.DiffCollapsedEmphasis)
+	group.SetDiffSigns(s.Editor.DiffSigns)
+	group.SetDiffSignsColor(s.Editor.DiffSignsColor)
+	group.SetDiffGutterHighlight(s.Editor.DiffGutterHighlight)
+	group.SetDiffColorGutterNumbers(s.Editor.DiffColorGutterNumbers)
+	group.SetDiffScrollMarks(s.Editor.DiffScrollbarGitMarks, s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy)
+	group.BracketPairColorization = s.Editor.BracketPairColorization
+	group.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
+	group.ApplyUndoDeleteCursorStart(s.Editor.UndoDeleteCursorStart)
+	group.SetImageProtocol(s.Image.Protocol)
+
+	if group.Editor != nil {
+		group.Editor.TabSize = s.Editor.TabSize
+		group.Editor.LineNumbers = s.Editor.LineNumbers
+		group.Editor.IndentGuides = s.Editor.IndentGuides
+		group.Editor.GutterStyle = s.Editor.GutterStyle
+		group.Editor.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
+		group.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
+		group.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
+		group.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
+		group.Editor.AutoClosing = s.Editor.AutoClosing
+		group.Editor.BracketPairColorization = s.Editor.BracketPairColorization
+		if s.Editor.BracketPairColorization != prev.Editor.BracketPairColorization {
+			group.Editor.InvalidateBracketColors()
+		}
+	}
 }

@@ -299,3 +299,34 @@ func TestEditorSplitOpenToSideAndCloseLastView(t *testing.T) {
 	}
 	h.pressKey(tcell.KeyEscape, 0)
 }
+
+func TestEditorSplitReloadSettingsAndSharedUndo(t *testing.T) {
+	h := newTestHarness(t, 140, 32)
+	defer h.stop()
+	path := filepath.Join(h.dir, "alpha.txt")
+	left := h.app.EditorGroup
+	left.OpenFile(path)
+	h.exec("editor.split")
+	right := h.app.EditorGroup
+	if err := os.WriteFile(path, []byte("external\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.HandleFileChanged(path)
+	h.redraw()
+	if right.ActiveBuffer().Lines[0] != "external" || left.Editor.Undo != right.Editor.Undo {
+		t.Fatal("external reload split the shared document or undo history")
+	}
+	h.pressRune('x')
+	h.app.Root.SetFocus(left)
+	h.exec("editor.undo")
+	if right.ActiveBuffer().Lines[0] != "external" || left.ActiveBuffer().Dirty {
+		t.Fatal("undo in the other group did not restore the reloaded document")
+	}
+	s := *h.app.Settings
+	s.Editor.LineNumbers = false
+	s.Editor.IndentGuides = true
+	h.app.ApplySettings(s)
+	if left.Editor.LineNumbers || right.Editor.LineNumbers || !left.Editor.IndentGuides || !right.Editor.IndentGuides {
+		t.Fatal("live settings were applied to only one group")
+	}
+}

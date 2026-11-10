@@ -90,9 +90,12 @@ func (t *editorTab) rememberView() {
 		return
 	}
 	t.viewVersion = t.Buf.Version()
-	t.viewText = ""
+	t.viewText, t.viewAnchorText = "", ""
 	if t.Cur.Line >= 0 && t.Cur.Line < len(t.Buf.Lines) {
 		t.viewText = t.Buf.Lines[t.Cur.Line]
+	}
+	if t.Sel != nil && t.Sel.Active && t.Sel.Anchor.Line >= 0 && t.Sel.Anchor.Line < len(t.Buf.Lines) {
+		t.viewAnchorText = t.Buf.Lines[t.Sel.Anchor.Line]
 	}
 }
 
@@ -146,6 +149,7 @@ func (g *EditorGroupWidget) syncSharedTab(t *editorTab) {
 	g.clampCursor(t)
 	if t.Sel != nil && t.Sel.Active {
 		t.Sel.Anchor.Line = max(0, min(t.Sel.Anchor.Line, len(t.Buf.Lines)-1))
+		t.Sel.Anchor.Col = remapSharedColumn(t.Sel.Anchor.Col, t.viewAnchorText, t.Buf.Lines[t.Sel.Anchor.Line])
 		t.Sel.Anchor.Col = max(0, min(t.Sel.Anchor.Col, len([]rune(t.Buf.Lines[t.Sel.Anchor.Line]))))
 	}
 	if t.Highlighter != nil {
@@ -161,8 +165,9 @@ func (g *EditorGroupWidget) syncSharedTab(t *editorTab) {
 	}
 }
 
-func (g *EditorGroupWidget) SyncDocumentViews() {
-	source := g.activeTab()
+func (g *EditorGroupWidget) SyncDocumentViews() { g.syncDocumentViews(g.activeTab()) }
+
+func (g *EditorGroupWidget) syncDocumentViews(source *editorTab) {
 	if source == nil || source.Buf == nil {
 		return
 	}
@@ -177,6 +182,9 @@ func (g *EditorGroupWidget) SyncDocumentViews() {
 				continue
 			}
 			identityChanged := t.FilePath != source.FilePath || t.LanguageSelection != source.LanguageSelection
+			if t.FilePath != source.FilePath {
+				peer.movePathState(t.FilePath, source.FilePath)
+			}
 			t.FilePath, t.IconPath, t.Virtual = source.FilePath, source.IconPath, source.Virtual
 			t.Undo, t.ReadOnly = source.Undo, source.ReadOnly
 			t.LanguageSelection, t.DetectedLanguage = source.LanguageSelection, source.DetectedLanguage
@@ -208,4 +216,57 @@ func (g *EditorGroupWidget) DiscardDuplicateViews(source *EditorGroupWidget) {
 	}
 	source.active = min(source.active, len(source.tabs)-1)
 	source.syncTabs()
+}
+
+func (g *EditorGroupWidget) adoptSaveAsViews(source *editorTab, path string) {
+	for _, peer := range g.relatedGroups() {
+		if peer == g {
+			continue
+		}
+		adopted := false
+		for i := range peer.tabs {
+			t := &peer.tabs[i]
+			if t.Buf == nil || t.Buf == source.Buf || t.Virtual {
+				continue
+			}
+			if same, err := sameSaveTarget(t.FilePath, path); err == nil && same {
+				t.Buf, t.Undo = source.Buf, source.Undo
+				adopted = true
+				peer.clampCursor(t)
+				peer.rebuildHighlighter(t)
+				t.rememberView()
+			}
+		}
+		if adopted {
+			peer.deduplicateDocumentViews()
+		}
+	}
+}
+
+func (g *EditorGroupWidget) deduplicateDocumentViews() {
+	seen := map[*buffer.Buffer]bool{}
+	if active := g.activeTab(); active != nil && active.Buf != nil {
+		seen[active.Buf] = true
+	}
+	var remove []int
+	for i, tab := range g.tabs {
+		if i == g.active || tab.Buf == nil {
+			continue
+		}
+		if seen[tab.Buf] {
+			remove = append(remove, i)
+		} else {
+			seen[tab.Buf] = true
+		}
+	}
+	for _, i := range slices.Backward(remove) {
+		g.notifyContentTabClose(g.tabs[i])
+		g.tabs = slices.Delete(g.tabs, i, i+1)
+		if i < g.pinnedCount {
+			g.pinnedCount--
+		}
+		if i < g.active {
+			g.active--
+		}
+	}
 }

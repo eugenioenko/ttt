@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -69,5 +70,27 @@ func TestSharedDocumentCloseKeepsLanguageAndSaveAsUpdatesBoth(t *testing.T) {
 	right.CloseTab()
 	if closed != 1 {
 		t.Fatalf("document closes = %d, want one", closed)
+	}
+}
+
+func TestSharedDocumentSaveAsGuardsOtherGroup(t *testing.T) {
+	left, right := sharedTestGroups(t)
+	path := filepath.Join(t.TempDir(), "destination.txt")
+	if err := os.WriteFile(path, []byte("destination\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := right.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	right.Editor.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "x", 0))
+	if left.SaveAs(path) {
+		t.Fatal("Save As replaced an unsaved document in another group")
+	}
+	right.Undo()
+	if !left.SaveAs(path) {
+		t.Fatal("Save As could not replace a clean destination")
+	}
+	if right.TabCount() != 1 || right.ActiveBuffer() != left.ActiveBuffer() || right.Editor.Undo != left.Editor.Undo {
+		t.Fatal("Save As left duplicate or independent destination views")
 	}
 }
