@@ -28,6 +28,7 @@ type OSCReader struct {
 	candidate       []byte
 	want            map[string]chan OSCReply
 	closed          bool
+	readFailed      bool
 }
 
 func NewOSCReader(tty tcell.Tty) *OSCReader {
@@ -43,7 +44,7 @@ func (o *OSCReader) Query(code string, timeout time.Duration) <-chan OSCReply {
 		return out
 	}
 	o.mu.Lock()
-	if o.closed {
+	if o.closed || o.readFailed {
 		o.mu.Unlock()
 		out <- OSCReply{Code: code, Err: io.ErrClosedPipe}
 		return out
@@ -96,7 +97,7 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 	}
 	if err != nil {
 		o.mu.Lock()
-		o.closed = true
+		o.readFailed = true
 		for code, ch := range o.want {
 			delete(o.want, code)
 			ch <- OSCReply{Code: code, Err: err}

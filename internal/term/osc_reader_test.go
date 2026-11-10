@@ -165,7 +165,7 @@ func TestOSCReaderSplitEscapeDoesNotDelayInput(t *testing.T) {
 	}
 }
 
-func TestOSCReaderDuplicateQueryAndEOFCompletePending(t *testing.T) {
+func TestOSCReaderDuplicateQueryAndEOFCompletePendingWithoutBlockingCleanupWrites(t *testing.T) {
 	tty := &oscTestTty{mockTty: &mockTty{}}
 	reader := NewOSCReader(tty)
 	first := reader.Query("10", time.Second)
@@ -182,6 +182,12 @@ func TestOSCReaderDuplicateQueryAndEOFCompletePending(t *testing.T) {
 	}
 	if r := <-reader.Query("11", time.Second); r.Err != io.ErrClosedPipe {
 		t.Fatalf("query after close = %v", r.Err)
+	}
+	if _, err := (OSCTty{Tty: tty, Reader: reader}).Write([]byte("reset")); err != nil {
+		t.Fatalf("cleanup write after read failure = %v, want nil", err)
+	}
+	if got, want := tty.buf.String(), "\x1b]10;?\x1b\\\x1b]10;?\x1b\\reset"; got != want {
+		t.Fatalf("cleanup writes = %q, want %q", got, want)
 	}
 }
 
