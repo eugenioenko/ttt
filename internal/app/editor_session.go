@@ -9,6 +9,8 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func (a *App) editorSessionKey() string {
@@ -28,7 +30,32 @@ func (a *App) editorSessionKey() string {
 }
 
 func (a *App) editorSessionTabs() []config.EditorTabState {
-	return a.EditorGroup.SessionTabs()
+	var tabs []config.EditorTabState
+	seen := map[string]int{}
+	var collect func(ui.Widget)
+	collect = func(w ui.Widget) {
+		if group, ok := w.(*ui.EditorGroupWidget); ok {
+			for _, tab := range group.SessionTabs() {
+				tab.Active = tab.Active && group == a.EditorGroup
+				if i, exists := seen[tab.Path]; exists {
+					pinned := tabs[i].Pinned || tab.Pinned
+					if tab.Active {
+						tabs[i] = tab
+					}
+					tabs[i].Pinned = pinned
+					continue
+				}
+				seen[tab.Path] = len(tabs)
+				tabs = append(tabs, tab)
+			}
+		} else if container, ok := w.(widgets.ContainerWidget); ok {
+			for _, child := range container.WidgetChildren() {
+				collect(child)
+			}
+		}
+	}
+	collect(a.ContentSplit.Top)
+	return tabs
 }
 
 func (a *App) persistEditorSession() {

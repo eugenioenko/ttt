@@ -9,6 +9,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/render"
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
@@ -82,5 +84,33 @@ func TestEditorSessionRestoresTabsPositionsAndPins(t *testing.T) {
 	cleaned.forceQuit()
 	if tabs, err := config.LoadEditorSession(cleaned.sessionWorkspaceKey); err != nil || len(tabs) != 0 || cleaned.EditorGroup.ActiveFilePath() != first {
 		t.Fatal("clear closed open tabs or recreated the session on exit")
+	}
+}
+
+func TestEditorSessionCollectsMountedGroupsAndPrefersActiveView(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	dir := t.TempDir()
+	path := filepath.Join(dir, "shared.txt")
+	if err := os.WriteFile(path, []byte("hello world\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	a := sessionTestApp(t, dir, true)
+	first := a.EditorGroup
+	if err := first.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	first.TogglePinTab()
+	second := ui.NewEditorGroupWidget(a.Borders, 4, true, "relative")
+	if err := second.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	second.GoToLineCol(1, 5)
+	a.EditorGroup = second
+	a.ContentSplit.Top = widgets.NewHStackWidget(first, second)
+	a.persistEditorSession()
+	tabs, err := config.LoadEditorSession(a.sessionWorkspaceKey)
+	if err != nil || len(tabs) != 1 || !tabs[0].Active || !tabs[0].Pinned || tabs[0].Col != 4 {
+		t.Fatalf("mounted group snapshot = %+v, %v", tabs, err)
 	}
 }
