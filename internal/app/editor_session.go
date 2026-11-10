@@ -36,6 +36,11 @@ func (a *App) editorSessionTabs() []config.EditorTabState {
 	collect = func(w ui.Widget) {
 		if group, ok := w.(*ui.EditorGroupWidget); ok {
 			for _, tab := range group.SessionTabs() {
+				path, err := filepath.Abs(tab.Path)
+				if err != nil {
+					continue
+				}
+				tab.Path = path
 				tab.Active = tab.Active && group == a.EditorGroup
 				if i, exists := seen[tab.Path]; exists {
 					pinned := tabs[i].Pinned || tab.Pinned

@@ -114,3 +114,24 @@ func TestEditorSessionCollectsMountedGroupsAndPrefersActiveView(t *testing.T) {
 		t.Fatalf("mounted group snapshot = %+v, %v", tabs, err)
 	}
 }
+
+func TestEditorSessionRestoresRelativeSaveAsPaths(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	dir := t.TempDir()
+	t.Chdir(dir)
+	a := sessionTestApp(t, dir, true)
+	a.EditorGroup.NewFileFromText("draft")
+	if !a.EditorGroup.SaveAs("relative.txt") {
+		t.Fatal("relative Save As failed")
+	}
+	a.persistEditorSession()
+	abs := filepath.Join(dir, "relative.txt")
+	tabs, err := config.LoadEditorSession(a.sessionWorkspaceKey)
+	if err != nil || len(tabs) != 1 || tabs[0].Path != abs {
+		t.Fatalf("saved relative path = %+v, %v", tabs, err)
+	}
+	if restored := sessionTestApp(t, dir, true); restored.EditorGroup.ActiveFilePath() != abs {
+		t.Fatal("relative Save As was not restored")
+	}
+}
