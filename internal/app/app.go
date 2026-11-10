@@ -947,6 +947,7 @@ func openURLCommand(rawURL, platform string) *exec.Cmd {
 }
 
 func (a *App) FlushEditorOnChange() {
+	a.EditorGroup.SyncDocumentViews()
 	if a.EditorGroup.Editor != nil {
 		a.EditorGroup.Editor.FlushOnChange()
 	}

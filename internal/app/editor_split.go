@@ -16,16 +16,13 @@ func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
 			a.Root.SetFocus(g)
 		}
 	}
+	g.RelatedGroups = a.editorGroups
 	g.OpenFileElsewhere = func(path string) bool {
+		if g.BufferForPath(path) != nil {
+			return false
+		}
 		for _, other := range a.editorGroups() {
-			if other != g && other.BufferForPath(path) != nil {
-				a.activateEditorGroup(other)
-				other.SwitchToTabByPath(path)
-				if _, focused := a.Root.Focused.(*ui.EditorGroupWidget); focused {
-					a.FocusEditor()
-				} else {
-					a.FocusEditorIfEnabled()
-				}
+			if other != g && g.OpenSharedFileFrom(other, path) {
 				return true
 			}
 		}
@@ -42,6 +39,9 @@ func (a *App) activateEditorGroup(g *ui.EditorGroupWidget) {
 	a.DismissHover()
 	a.DismissSignatureHelp()
 	a.Root.ClearEditorLinkHover()
+	if a.EditorGroup.Editor.Undo != nil {
+		a.EditorGroup.Editor.Undo.BreakGroup()
+	}
 	a.EditorGroup = g
 	if g.OnActiveTabChange != nil {
 		g.OnActiveTabChange()
@@ -83,7 +83,9 @@ func (a *App) SplitEditor() {
 	right.OnEmpty = left.OnEmpty
 	right.OnActiveTabChange = a.editorTabChanged
 	a.wireEditorGroupActivation(right)
-	left.MoveActiveTabTo(right)
+	if !left.CloneActiveTabTo(right) {
+		left.MoveActiveTabTo(right)
+	}
 	a.EditorSplit.SetPanels(left, right)
 	a.EditorSplit.ShowBottom = true
 	a.EditorSplit.RightW = max((a.EditorSplit.GetRect().W-1)/2, 1)
@@ -100,6 +102,7 @@ func (a *App) CloseEditorSplit() {
 	keep := a.EditorGroup
 	for _, group := range a.editorGroups() {
 		if group != keep {
+			keep.DiscardDuplicateViews(group)
 			keep.MergeTabsFrom(group)
 			group.OnActivate = nil
 			group.OpenFileElsewhere = nil

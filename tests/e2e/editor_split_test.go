@@ -30,9 +30,9 @@ func TestEditorSplitMoreMenuAndEditing(t *testing.T) {
 			chooseEditorMore(t, h, "Split in Half")
 			right := h.app.EditorGroup
 			if left == right || !h.app.EditorSplit.ShowBottom || right.ActiveBuffer() != buf || right.Editor.Undo != stack {
-				t.Fatal("split did not move the active tab with its buffer and undo history")
+				t.Fatal("split did not share the active document and undo history")
 			}
-			if left.ActiveFilePath() != alpha || right.ActiveFilePath() != beta {
+			if left.ActiveFilePath() != beta || right.ActiveFilePath() != beta {
 				t.Fatal("split lost the open files")
 			}
 			if left.GetRect().Y != right.GetRect().Y || left.GetRect().H != right.GetRect().H {
@@ -46,6 +46,7 @@ func TestEditorSplitMoreMenuAndEditing(t *testing.T) {
 				t.Fatalf("undo after moving tab = %q", buf.Lines[0])
 			}
 			h.pressRune('R')
+			left.SwitchToTabByPath(alpha)
 			r := left.Editor.GetRect()
 			h.click(r.X+left.Editor.GutterWidth(), r.Y)
 			h.pressRune('L')
@@ -118,10 +119,13 @@ func TestEditorSplitExistingFileAndQuit(t *testing.T) {
 	if err := left.OpenFile(path); err != nil {
 		t.Fatal(err)
 	}
-	if h.app.EditorGroup != right || left.BufferForPath(path) != nil {
-		t.Fatal("opening an existing file created a second buffer")
+	if h.app.EditorGroup != left || left.BufferForPath(path) != right.ActiveBuffer() {
+		t.Fatal("opening an existing file did not share its buffer in the focused group")
 	}
 	h.app.Root.SetFocus(left)
+	if err := left.OpenFile(filepath.Join(h.dir, "beta.txt")); err != nil {
+		t.Fatal(err)
+	}
 	h.exec("editor.quit")
 	if !h.app.Root.HasOverlay() || !*h.app.Running {
 		t.Fatal("quit ignored unsaved edits in the inactive group")

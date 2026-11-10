@@ -99,7 +99,7 @@ func (a *App) FormatSelection() {
 }
 
 func (a *App) CloseTab() {
-	if !a.EditorGroup.IsDirty() {
+	if !a.EditorGroup.IsDirty() || a.EditorGroup.HasOtherDocumentView() {
 		a.EditorGroup.CloseTab()
 		return
 	}
