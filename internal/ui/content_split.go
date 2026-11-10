@@ -21,6 +21,7 @@ type ContentSplitWidget struct {
 	Bottom                    Widget
 	Position                  SplitPosition
 	FullHeightRight           bool
+	HideBottomDivider         bool
 	ShowBottom                bool
 	BottomH                   int
 	RightW                    int
@@ -187,6 +188,9 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	bottomH := bottomRect.H
 	divY := h - bottomH - 1
 	topH := divY
+	if cs.HideBottomDivider {
+		topH++
+	}
 
 	if cs.RightBorderStartY != nil {
 		*cs.RightBorderStartY = min(topH, 2)
@@ -205,8 +209,10 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	}
 
 	// Horizontal divider
-	for x := 0; x < w; x++ {
-		surface.SetCell(x, divY, term.Cell{Ch: b.Horizontal, Style: bs})
+	if !cs.HideBottomDivider {
+		for x := 0; x < w; x++ {
+			surface.SetCell(x, divY, term.Cell{Ch: b.Horizontal, Style: bs})
+		}
 	}
 
 	// Bottom content
@@ -365,7 +371,7 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventCaptured
 		}
 
-		if freshClick && my == divY && mx < r.X+r.W-1 {
+		if freshClick && my == divY && mx < r.X+r.W-1 && !cs.HideBottomDivider {
 			cs.dragging = true
 			return EventCaptured
 		}
@@ -442,6 +448,9 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 	if !cs.ShowBottom || cs.Bottom == nil || cs.Position == SplitRight {
 		return -1
 	}
+	if cs.HideBottomDivider {
+		return cs.BottomRect().Y
+	}
 	return cs.BottomRect().Y - 1
 }
 
@@ -491,7 +500,11 @@ func (cs *ContentSplitWidget) TopContentHeight() int {
 	if !cs.ShowBottom || cs.Bottom == nil || cs.Position == SplitRight {
 		return r.H
 	}
-	return max(cs.BottomRect().Y-r.Y-1, 0)
+	height := cs.BottomRect().Y - r.Y
+	if !cs.HideBottomDivider {
+		height--
+	}
+	return max(height, 0)
 }
 
 func (cs *ContentSplitWidget) endDrag() {
