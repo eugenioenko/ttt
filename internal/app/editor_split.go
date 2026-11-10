@@ -1,8 +1,10 @@
 package app
 
 import (
-	"github.com/eugenioenko/ttt/internal/ui"
 	"strings"
+
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
 
 func (a *App) editorGroups() []*ui.EditorGroupWidget {
@@ -142,8 +144,9 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.TabBar.OnTabUnpin = left.TabBar.OnTabUnpin
 	right.TabBar.OnTabRightClick = left.TabBar.OnTabRightClick
 	right.TabBar.MoreButton.OnClick = left.TabBar.MoreButton.OnClick
-	right.TabBar.PostDragAutoScrollTick = left.TabBar.PostDragAutoScrollTick
-	right.Editor.PostDragAutoScrollTick = left.Editor.PostDragAutoScrollTick
+	if left.TabBar.PostDragAutoScrollTick != nil {
+		a.wireEditorAutoScroll(right)
+	}
 	right.Editor.OnChange = left.Editor.OnChange
 	right.OnError = left.OnError
 	right.OnNotify = left.OnNotify
@@ -194,4 +197,13 @@ func (a *App) openEditorDocuments() []ui.OpenDocument {
 		docs[i].Text = strings.Join(a.lspLines(docs[i].Path), "\n")
 	}
 	return docs
+}
+
+func (a *App) wireEditorAutoScroll(group *ui.EditorGroupWidget) {
+	group.TabBar.PostDragAutoScrollTick = func(generation uint64) {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Target: group.TabBar, Generation: generation}))
+	}
+	group.Editor.PostDragAutoScrollTick = func(generation uint64) {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Target: group.Editor, Generation: generation}))
+	}
 }

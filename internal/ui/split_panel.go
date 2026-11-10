@@ -190,9 +190,11 @@ func (s *SplitPanelWidget) renderRightBorderJunction(surface Surface, r Rect, w,
 	if !ok {
 		return
 	}
-	y := provider.BorderJunctions().RightY - r.Y
-	if y >= 0 && y < h-1 {
-		surface.SetCell(w-1, y, term.Cell{Ch: b.RightTee, Style: bs})
+	for _, screenY := range provider.BorderJunctions().RightY {
+		y := screenY - r.Y
+		if y >= 0 && y < h-1 {
+			surface.SetCell(w-1, y, term.Cell{Ch: b.RightTee, Style: bs})
+		}
 	}
 }
 

@@ -310,8 +310,9 @@ All keybindings are customizable via [`keybindings.json`](config/keybindings.jso
 
 Set [`keyboard.modifierKey`](docs-web/src/content/docs/reference/settings.md#keyboard) to `"control+super"` to also accept Super/Cmd for Ctrl shortcuts, or `"super"` to use Super/Cmd instead. The default is `"control"`. Binding definitions stay unchanged, and the terminal must forward the shortcuts.
 
-Use the editor tab bar’s **More** menu to split right or down (up to four groups), close a split, or equalize group sizes. Split views share the document and undo history, with independent cursors and scrolling. **Ctrl+K Left/Right/Up/Down** focuses the group in that direction; **F6** and **Shift+F6** cycle groups, the sidebar, and the panel.
+Use the editor tab bar’s **More** menu to split right or down (up to four groups), close a split, or equalize group sizes. Split views share the document and undo history, with independent cursors and scrolling. **Ctrl+K Left/Right/Up/Down** focuses the group in that direction; **F6** and **Shift+F6** cycle groups, the sidebar, and the panel. Drag tabs between groups, or use **Open to the Side** in the Explorer or tab menu. Closing the last tab removes its group; **Close Split** merges its remaining tabs into a neighbor.
 
+Workspace layouts, divider positions, and file views are remembered when reopening the workspace without explicit file arguments.
 
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 

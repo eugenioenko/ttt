@@ -50,6 +50,7 @@ type Tab struct {
 }
 
 type TabDragAutoScrollTick struct {
+	Target     *TabBarWidget
 	Generation uint64
 }
 

@@ -11,6 +11,18 @@ On exit, the current text-file tab list replaces the remembered list for that wo
 
 Sessions are kept outside the project under the config directory's `sessions/` folder, with at most 128 tabs per session and 32 sessions. Sessions unused for 30 days are removed, and missing or non-regular files are skipped during restoration. **Session: Clear Saved Tabs** removes saved sessions without closing open files and pauses session saving until the next launch.
 
+## Split Editors
+
+Use the editor tab bar's **More** menu to choose **Split in Half** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Splitting keeps the current file visible in both groups. The views share text, undo history, and save state, with independent cursors, selections, and scrolling.
+
+Drag a tab into another group, or choose **Move to Other Group** from More. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Opening a file normally uses the active group, including when the same document is already open elsewhere.
+
+Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group's tab and border are highlighted. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
+
+Drag dividers to resize groups. **Equalize Editor Groups** balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
+
+When reopening a workspace without explicit file arguments, ttt restores its arrangement, divider proportions, file tabs, cursor and scroll positions, and active group. Untitled buffers and plugin tabs are excluded from layout restoration.
+
 ## Syntax Highlighting
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.
@@ -86,8 +98,8 @@ They have no default shortcut. Bind them in `keybindings.json`, for example:
 
 ```json
 [
-  { "key": "ctrl+k up", "command": "view.scrollUp" },
-  { "key": "ctrl+k down", "command": "view.scrollDown" }
+  { "key": "ctrl+k pgup", "command": "view.scrollUp" },
+  { "key": "ctrl+k pgdn", "command": "view.scrollDown" }
 ]
 ```
 

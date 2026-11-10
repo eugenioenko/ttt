@@ -164,6 +164,7 @@ func (e *EditorLayoutWidget) Render(surface Surface) {
 	child := e.child()
 	child.SetRect(e.GetRect())
 	child.Render(surface)
+	e.renderJunctions(surface)
 }
 
 func (e *EditorLayoutWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -185,10 +186,14 @@ func (e *EditorLayoutWidget) SetPointerCaptureInvalidated(fn func()) {
 }
 
 func (e *EditorLayoutWidget) BorderJunctions() borderJunctions {
-	junctions := borderJunctions{BottomX: [4]int{-1, -1, -1, -1}, RightY: -1}
-	r, index := e.GetRect(), 0
+	junctions := borderJunctions{BottomX: [4]int{-1, -1, -1, -1}, RightY: [4]int{-1, -1, -1, -1}}
+	r, index, rightIndex := e.GetRect(), 0, 0
 	for _, g := range e.Groups() {
 		gr := g.GetRect()
+		if gr.X+gr.W == r.X+r.W && gr.Y > r.Y && rightIndex < len(junctions.RightY) {
+			junctions.RightY[rightIndex] = gr.Y - 1
+			rightIndex++
+		}
 		if gr.Y+gr.H == r.Y+r.H && gr.X > r.X && index < len(junctions.BottomX) {
 			junctions.BottomX[index] = gr.X - 1
 			index++
@@ -206,4 +211,57 @@ func (e *EditorLayoutWidget) axisUnits(axis SplitPosition) int {
 		return first + second
 	}
 	return max(first, second)
+}
+
+func (e *EditorLayoutWidget) renderJunctions(surface Surface) {
+	if e.Split == nil {
+		return
+	}
+	b := term.SingleBorderSet()
+	if e.Borders != nil {
+		b = *e.Borders
+	}
+	if b.Cross == 0 {
+		b.Cross = b.LeftTee
+	}
+	r, joins := e.GetRect(), map[int]int{}
+	for _, group := range e.First.Groups() {
+		gr := group.GetRect()
+		if e.Split.Position == SplitRight {
+			if gr.X+gr.W == e.First.GetRect().X+e.First.GetRect().W && gr.Y > r.Y {
+				joins[gr.Y-1] |= 1
+			}
+		} else if gr.Y+gr.H == e.First.GetRect().Y+e.First.GetRect().H && gr.X > r.X {
+			joins[gr.X-1] |= 1
+		}
+	}
+	for _, group := range e.Second.Groups() {
+		gr := group.GetRect()
+		if e.Split.Position == SplitRight {
+			if gr.X == e.Second.GetRect().X && gr.Y > r.Y {
+				joins[gr.Y-1] |= 2
+			}
+		} else if gr.Y == e.Second.GetRect().Y && gr.X > r.X {
+			joins[gr.X-1] |= 2
+		}
+	}
+	for coordinate, sides := range joins {
+		glyph := b.Cross
+		x, y := e.Split.DividerScreenX()-r.X, coordinate-r.Y
+		if e.Split.Position == SplitRight {
+			if sides == 1 {
+				glyph = b.RightTee
+			} else if sides == 2 {
+				glyph = b.LeftTee
+			}
+		} else {
+			x, y = coordinate-r.X, e.Split.DividerScreenY()-r.Y
+			if sides == 1 {
+				glyph = b.BottomTee
+			} else if sides == 2 {
+				glyph = b.TopTee
+			}
+		}
+		surface.SetCell(x, y, term.Cell{Ch: glyph, Style: term.StyleBorder})
+	}
 }
