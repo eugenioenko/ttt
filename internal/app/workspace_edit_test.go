@@ -116,11 +116,18 @@ func TestLSPApplyEditReportsFailureWhenAnyBatchFails(t *testing.T) {
 		renameEdit(FileURI(path), 0, 0, 5, "done")+","+
 		renameEdit(FileURI(t.TempDir()), 0, 0, 0, "ignored")+`]}`)
 
-	batches, ok := a.workspaceTextEdits(edit)
-	if !ok {
-		t.Fatal("workspace text edits were rejected")
+	var filesCount int
+	var allApplied bool
+	if err := runExecMain(a, func() error {
+		batches, ok := a.workspaceTextEdits(edit)
+		if !ok {
+			return fmt.Errorf("workspace text edits were rejected")
+		}
+		filesCount, allApplied = a.applyWorkspaceEditBatches(batches, false)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
-	filesCount, allApplied := a.applyWorkspaceEditBatches(batches, false)
 	if filesCount != 1 {
 		t.Fatalf("distinct file count = %d, want 1 for repeated batches on one file", filesCount)
 	}
