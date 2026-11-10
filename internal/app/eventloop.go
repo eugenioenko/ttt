@@ -292,9 +292,17 @@ func RunEventLoop(
 					closeTerminal(v)
 				}
 			case *ui.TabDragAutoScrollTick:
-				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
+				target := v.Target
+				if target == nil {
+					target = app.EditorGroup.TabBar
+				}
+				target.HandleDragAutoScrollTick(v.Generation)
 			case *ui.EditorDragAutoScrollTick:
-				app.EditorGroup.Editor.HandleDragAutoScrollTick(v.Generation)
+				target := v.Target
+				if target == nil {
+					target = app.EditorGroup.Editor
+				}
+				target.HandleDragAutoScrollTick(v.Generation)
 			case *execInputRequest:
 				if v.Lifecycle.claim() {
 					switch event := v.Event.(type) {

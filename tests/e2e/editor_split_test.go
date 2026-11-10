@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -221,6 +222,29 @@ func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
 	if delta := leftTop.GetRect().H - leftBottom.GetRect().H; delta < -1 || delta > 1 {
 		t.Fatal("equalizing did not balance row heights")
 	}
+	cells, width, _ := h.screen.GetContents()
+	crossX, crossY := leftTop.GetRect().X+leftTop.GetRect().W, leftTop.GetRect().Y+leftTop.GetRect().H
+	if cells[crossY*width+crossX].Str != string(h.app.Borders.Cross) {
+		t.Fatal("grid dividers did not meet at a themed intersection")
+	}
+	groupCount, activeCount := 0, 0
+	var inspect func(*app.DebugWidgetNode)
+	inspect = func(node *app.DebugWidgetNode) {
+		if node.Type == "EditorGroup" {
+			groupCount++
+			if node.Props["active_group"] == true {
+				activeCount++
+			}
+		}
+		for _, child := range node.Children {
+			inspect(child)
+		}
+	}
+	inspect(h.app.BuildDebugState().WidgetTree)
+	if groupCount != 4 || activeCount != 1 {
+		t.Fatalf("debug reported %d groups, %d active", groupCount, activeCount)
+	}
+
 	for len(h.app.EditorSplit.Groups()) > 1 {
 		h.exec("editor.closeSplit")
 	}

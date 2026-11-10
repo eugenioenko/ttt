@@ -780,12 +780,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		screen.PostEvent(tcell.NewEventInterrupt(nil))
 	})
 	a.RefreshImageCellSize()
-	a.EditorGroup.TabBar.PostDragAutoScrollTick = func(generation uint64) {
-		screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Generation: generation}))
-	}
-	a.EditorGroup.Editor.PostDragAutoScrollTick = func(generation uint64) {
-		screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Generation: generation}))
-	}
+	a.wireEditorAutoScroll(a.EditorGroup)
 	highlight.SetStepScheduler(func() {
 		screen.PostEvent(tcell.NewEventInterrupt(&highlightStep{}))
 	})

@@ -26,6 +26,7 @@ type BorderChars struct {
 	BottomTee   string `json:"bottomTee"`
 	LeftTee     string `json:"leftTee"`
 	RightTee    string `json:"rightTee"`
+	Cross       string `json:"cross,omitempty"`
 }
 
 type TabStyles struct {
