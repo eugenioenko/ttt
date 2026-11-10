@@ -301,6 +301,27 @@ type CodeAction struct {
 	Diagnostics []Diagnostic    `json:"diagnostics,omitempty"`
 }
 
+// UnmarshalJSON accepts both a CodeAction and a bare Command, as the LSP
+// result type is (Command | CodeAction)[].
+func (a *CodeAction) UnmarshalJSON(data []byte) error {
+	type plain CodeAction
+	var probe struct {
+		Command json.RawMessage `json:"command"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return err
+	}
+	if len(probe.Command) > 0 && probe.Command[0] == '"' {
+		var cmd Command
+		if err := json.Unmarshal(data, &cmd); err != nil {
+			return err
+		}
+		*a = CodeAction{Title: cmd.Title, Command: &cmd}
+		return nil
+	}
+	return json.Unmarshal(data, (*plain)(a))
+}
+
 type Command struct {
 	Title     string            `json:"title"`
 	Command   string            `json:"command"`
