@@ -779,9 +779,9 @@ func registerWidgetCallbacks(app *App) {
 			ui.ContextMenuItem{Label: i18n.Text("menu.copyRelativePath"), Command: "file.copyRelativePath"},
 			ui.ContextMenuItem{Label: i18n.Text("menu.revealInExplorer"), Command: "explorer.revealActiveFile"},
 		)
-		tabContextMenu = append(tabContextMenu, ui.MenuSep(),
-			ui.ContextMenuItem{Label: i18n.Text("command.openEditorToSide"), Command: "editor.openToSide"},
-			ui.ContextMenuItem{Label: i18n.Text("command.moveEditorToOtherGroup"), Command: "editor.moveToOtherGroup"})
+		if app.EditorGroup.IsEditorActive() {
+			tabContextMenu = append(tabContextMenu, ui.ContextMenuItem{Label: i18n.Text("command.openEditorToSide"), Command: "editor.openToSide"})
+		}
 		tabContextMenu = app.withActiveDiffViewSubmenu(tabContextMenu)
 		openContextMenu(app, tabContextMenu, sx, sy)
 	}
