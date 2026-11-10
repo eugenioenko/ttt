@@ -243,6 +243,10 @@ func (a *App) HideSidebar() {
 }
 
 func (a *App) hideSidebar() {
+	// Else keys keep going to the hidden panel. Checked before Visible flips.
+	if a.focusedRegion() == "sidebar" {
+		a.FocusEditor()
+	}
 	a.Sidebar.InvalidatePointerInteraction()
 	a.Sidebar.Visible = false
 	a.SplitPanel.ShowLeft = false
