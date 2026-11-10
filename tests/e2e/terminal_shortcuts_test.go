@@ -3,6 +3,7 @@ package e2e
 import (
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -32,6 +33,17 @@ func TestTerminalShortcutForwarding(t *testing.T) {
 			if !h.app.Root.HasOverlay() {
 				t.Fatal("forwarding must apply only once")
 			}
+			palette, ok := h.app.Root.Focused.(*ui.SelectDialogWidget)
+			if !ok {
+				t.Fatal("command palette did not take focus")
+			}
+			palette.OnExecute("terminal.sendNextKey")
+			if !h.app.Root.AwaitingTerminalKey() {
+				t.Fatal("palette command did not restore terminal focus and arm forwarding")
+			}
+			h.pressRune('t')
+			waitForRawTail(t, dev, "\x10t")
+			h.pressCtrl(tcell.KeyCtrlP)
 			h.pressKey(tcell.KeyEscape, 0)
 
 			before := len(h.app.Terminals)

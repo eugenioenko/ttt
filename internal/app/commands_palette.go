@@ -15,6 +15,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	if a.Root.HasModalOverlay() {
 		return
 	}
+	previousFocus := a.Root.Focused
 	palette := ui.NewSelectDialogWidget(a.Reg.List())
 	palette.Input.ControlModifiers = &a.Root.ControlModifiers
 	palette.Borders = a.Borders
@@ -35,6 +36,9 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	}
 	palette.OnExecute = func(id string) {
 		a.DismissDialog()
+		if id == "terminal.sendNextKey" && previousFocus != nil {
+			a.Root.SetFocus(previousFocus)
+		}
 		a.Reg.Execute(id)
 	}
 	palette.OnOpenFile = func(absPath string) {
