@@ -157,6 +157,7 @@ type EditorGroupWidget struct {
 	ShowTrailingNewline     bool
 	TrimTrailingWhitespace  bool
 	UndoDeleteCursorStart   bool
+	HighlightActiveBorder   bool
 	Borders                 *term.BorderSet
 	OnFileOpen              func(path, lang string, lines []string)
 	OnFileChange            func(path, lang, text string)
@@ -3386,9 +3387,10 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 
 	g.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: editorTabBarH})
 	tabSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: editorTabBarH})
-	g.TabBar.ShowGroupFocus = len(g.relatedGroups()) > 1
+	split := len(g.relatedGroups()) > 1
+	g.TabBar.ShowGroupFocus = split && g.HighlightActiveBorder
 	g.TabBar.GroupActive = g.focused
-	g.Editor.Passive = g.TabBar.ShowGroupFocus && !g.focused
+	g.Editor.Passive = split && !g.focused
 	g.TabBar.Render(tabSurface)
 	if g.DropTarget {
 		borders := term.SingleBorderSet()

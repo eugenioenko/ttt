@@ -276,6 +276,7 @@ func registerSettingsCommands(app *App) {
 }
 
 func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settings) {
+	group.HighlightActiveBorder = s.Appearance.HighlightActiveGroupBorder
 	group.TabSize = s.Editor.TabSize
 	group.SetFileIconMode(s.Appearance.Icons)
 	group.InsertSpaces = s.Editor.InsertSpaces
