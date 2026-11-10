@@ -32,6 +32,9 @@ func (a *App) OpenEditorToSide() {
 	}
 	a.FlushEditorOnChange()
 	source := a.EditorGroup
+	if !source.IsEditorActive() {
+		return
+	}
 	target := a.editorSideGroup()
 	if target != nil && source.CloneActiveTabTo(target) {
 		a.Root.SetFocus(target)

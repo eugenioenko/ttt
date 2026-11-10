@@ -77,6 +77,7 @@ func (g *EditorGroupWidget) cloneTabTo(index int, target *EditorGroupWidget) boo
 	if len(target.tabs) == 1 && target.isUntouchedPlaceholder(target.activeTab()) {
 		target.notifyContentTabClose(*target.activeTab())
 		target.tabs = nil
+		target.pinnedCount = 0
 	}
 	clone.Annotations = target.mergedDecorations(clone.FilePath, clone.Buf, clone.TabSize)
 	target.tabs = append(target.tabs, clone)

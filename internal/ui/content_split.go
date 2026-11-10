@@ -297,7 +297,11 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 			if cs.Position == SplitRight {
 				size = cs.constrainedRightWidth(r.W, r.X+r.W-mx-1)
 			} else {
-				size = cs.constrainedBottomHeight(r.H, r.Y+r.H-my-1)
+				offset := 1
+				if cs.HideBottomDivider {
+					offset = 0
+				}
+				size = cs.constrainedBottomHeight(r.H, r.Y+r.H-my-offset)
 			}
 			cs.BottomRatio = 0
 			if cs.OnResize != nil {
