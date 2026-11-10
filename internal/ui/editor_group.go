@@ -91,6 +91,8 @@ type editorTab struct {
 	// Annotations shows the decorations for the tab's file when it is not
 	// showing a diff.
 	Annotations *DiffOverlay
+	viewVersion uint64
+	viewText    string
 }
 
 // findSession keeps the editor query after its bar closes and tracks which buffer version the matches describe.
@@ -168,6 +170,7 @@ type EditorGroupWidget struct {
 	OnActiveTabChange func()
 	OnActivate        func()
 	OpenFileElsewhere func(string) bool
+	RelatedGroups     func() []*EditorGroupWidget
 	lastActiveTabID   string
 	lastActiveBuf     *buffer.Buffer
 	// EmptyStateID names a content tab that stands in for the placeholder:
@@ -334,6 +337,7 @@ func (g *EditorGroupWidget) SetActiveLanguage(selection string) {
 		t.autoClosing.syntax = nil
 	}
 	g.syncTabs()
+	g.SyncDocumentViews()
 }
 
 func (g *EditorGroupWidget) tabHighlighter(t *editorTab) *highlight.Highlighter {
@@ -1138,6 +1142,9 @@ func (g *EditorGroupWidget) ClosePluginTab(key string) bool {
 }
 
 func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
+	if !g.otherDocumentView(tab) && g.OnFileClose != nil && tab.DetectedLanguage != "" && !tab.Virtual {
+		g.OnFileClose(tab.FilePath, tab.DetectedLanguage)
+	}
 	tab.Highlighter.Close()
 	if tab.autoClosing != nil {
 		tab.autoClosing.syntax.Close()
@@ -1537,9 +1544,6 @@ func (g *EditorGroupWidget) CloseTab() {
 	closing := g.tabs[g.active]
 	prev := closing.Content
 	g.rememberClosed(closing)
-	if g.OnFileClose != nil && closing.DetectedLanguage != "" && !closing.Virtual {
-		g.OnFileClose(closing.FilePath, closing.DetectedLanguage)
-	}
 	g.notifyContentTabClose(closing)
 	if g.active < g.pinnedCount {
 		g.pinnedCount--
@@ -1772,6 +1776,7 @@ func (g *EditorGroupWidget) Save() bool {
 		t.Undo.MarkSaved()
 	}
 	g.syncTabs()
+	g.SyncDocumentViews()
 	return true
 }
 
@@ -1827,6 +1832,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t.Placeholder = false
 	g.rebuildHighlighter(t)
 	g.syncTabs()
+	g.SyncDocumentViews()
 	return true
 }
 
@@ -1834,7 +1840,7 @@ func (g *EditorGroupWidget) SaveAsTargets(path string) ([]int, error) {
 	var targets []int
 	for i := range g.tabs {
 		other := &g.tabs[i]
-		if i == g.active || other.Virtual || other.Buf == nil {
+		if i == g.active || other.Virtual || other.Buf == nil || other.Buf == g.activeTab().Buf {
 			continue
 		}
 		same, err := sameSaveTarget(other.FilePath, path)
@@ -3211,6 +3217,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		}
 		g.Editor.UseTabs = t.UseTabs
 		g.Editor.ReadOnly = t.ReadOnly
+		t.rememberView()
 	}
 	var uiTabs []Tab
 	for i, ts := range g.tabs {
