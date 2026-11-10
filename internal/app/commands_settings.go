@@ -131,6 +131,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	a.EditorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	a.EditorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	a.EditorGroup.WordWrap = s.Editor.WordWrap
+	a.EditorGroup.PreviewTabs = s.Editor.PreviewTabsEnabled()
 	a.EditorGroup.WordWrapColumn = s.Editor.WordWrapColumn
 	a.EditorGroup.WordWrapBreak = s.Editor.WordWrapBreak
 	a.EditorGroup.LanguageOverrides = s.Editor.LanguageOverrides

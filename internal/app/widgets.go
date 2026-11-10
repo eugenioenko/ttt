@@ -242,6 +242,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.InsertSpaces = cfg.Settings.Editor.InsertSpaces
 	editorGroup.SetIndentGuides(cfg.Settings.Editor.IndentGuides)
 	editorGroup.InsertFinalNewline = cfg.Settings.Editor.InsertFinalNewline
+	editorGroup.PreviewTabs = cfg.Settings.Editor.PreviewTabsEnabled()
 	editorGroup.ShowTrailingNewline = cfg.Settings.Editor.IsShowTrailingNewlineEnabled()
 	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
 	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
