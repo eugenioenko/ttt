@@ -2098,8 +2098,8 @@ For key and mouse events not consumed by widgets, the `on_event` function receiv
                      -- "Backspace", "Delete", "Home", "End", "PgUp", "PgDn",
                      -- or the character itself ("a", "A", "1", "/", etc.)
   rune = "a",        -- only set for printable character keys
-  mod = "ctrl",      -- "ctrl", "alt", "shift", joined with "+" when combined
-                     -- (e.g. "ctrl+shift"); nil when no modifier is held
+  mod = "ctrl",      -- "ctrl", "alt", "shift", "super", joined in that order with "+"
+                     -- (e.g. "ctrl+shift" or "shift+super"); nil when no modifier is held
 }
 ```
 

@@ -80,6 +80,30 @@ func TestEventToLuaKeyEventCombinedModifiers(t *testing.T) {
 	}
 }
 
+func TestEventToLuaPreservesSuper(t *testing.T) {
+	L := lua.NewState()
+	defer L.Close()
+
+	for _, tc := range []struct {
+		mods tcell.ModMask
+		want string
+	}{
+		{tcell.ModMeta, "super"},
+		{tcell.ModCtrl | tcell.ModMeta, "ctrl+super"},
+		{tcell.ModCtrl | tcell.ModAlt | tcell.ModShift | tcell.ModMeta, "ctrl+alt+shift+super"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			tbl := eventToLua(L, tcell.NewEventKey(tcell.KeyRune, "u", tc.mods))
+			if got := tbl.RawGetString("mod").String(); got != tc.want {
+				t.Fatalf("mod = %q, want %q", got, tc.want)
+			}
+			if tbl.RawGetString("key").String() != "u" || tbl.RawGetString("rune").String() != "u" {
+				t.Fatal("modifier conversion changed the original key")
+			}
+		})
+	}
+}
+
 // foldCtrlEvent canonicalises ctrl+space onto KeyNUL and ctrl+/ onto KeyUS.
 // Neither has a tcell.KeyNames entry, so without keyName a plugin sees both as
 // "unknown" and cannot tell set-mark from undo.

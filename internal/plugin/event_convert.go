@@ -56,6 +56,9 @@ func keyEventToLua(L *lua.LState, e *tcell.EventKey) *lua.LTable {
 	if e.Modifiers()&tcell.ModShift != 0 {
 		mods = append(mods, "shift")
 	}
+	if e.Modifiers()&tcell.ModMeta != 0 {
+		mods = append(mods, "super")
+	}
 	if len(mods) > 0 {
 		L.SetField(tbl, "mod", lua.LString(strings.Join(mods, "+")))
 	}
