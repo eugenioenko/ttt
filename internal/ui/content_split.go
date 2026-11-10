@@ -446,8 +446,11 @@ func (cs *ContentSplitWidget) DividerScreenX() int {
 }
 
 func (cs *ContentSplitWidget) BorderJunctions() borderJunctions {
-	junctions := borderJunctions{BottomX: [2]int{-1, -1}, RightY: -1}
+	junctions := borderJunctions{BottomX: [4]int{-1, -1, -1, -1}, RightY: -1}
 	if !cs.ShowBottom || cs.Bottom == nil {
+		if provider, ok := cs.Top.(borderJunctionProvider); ok {
+			return provider.BorderJunctions()
+		}
 		if divider, ok := cs.Top.(dividerXProvider); ok {
 			junctions.BottomX[0] = divider.DividerScreenX()
 		}

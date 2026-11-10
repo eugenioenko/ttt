@@ -3,10 +3,10 @@ package app
 import "github.com/eugenioenko/ttt/internal/ui"
 
 func (a *App) editorGroups() []*ui.EditorGroupWidget {
-	if a.EditorSplit == nil || !a.EditorSplit.ShowBottom {
+	if a.EditorSplit == nil {
 		return []*ui.EditorGroupWidget{a.EditorGroup}
 	}
-	return []*ui.EditorGroupWidget{a.EditorSplit.Top.(*ui.EditorGroupWidget), a.EditorSplit.Bottom.(*ui.EditorGroupWidget)}
+	return a.EditorSplit.Groups()
 }
 
 func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
@@ -48,8 +48,11 @@ func (a *App) activateEditorGroup(g *ui.EditorGroupWidget) {
 	}
 }
 
-func (a *App) SplitEditor() {
-	if a.Root.HasOverlay() || a.EditorSplit.ShowBottom {
+func (a *App) SplitEditor()     { a.splitEditor(ui.SplitRight) }
+func (a *App) SplitEditorDown() { a.splitEditor(ui.SplitBottom) }
+
+func (a *App) splitEditor(position ui.SplitPosition) {
+	if a.Root.HasOverlay() || len(a.editorGroups()) >= ui.MaxEditorGroups {
 		return
 	}
 	a.FlushEditorOnChange()
@@ -86,43 +89,57 @@ func (a *App) SplitEditor() {
 	if !left.CloneActiveTabTo(right) {
 		left.MoveActiveTabTo(right)
 	}
-	a.EditorSplit.SetPanels(left, right)
-	a.EditorSplit.ShowBottom = true
-	a.EditorSplit.RightW = max((a.EditorSplit.GetRect().W-1)/2, 1)
+	a.EditorSplit.SplitGroup(left, right, position)
 	a.activateEditorGroup(right)
 	a.FocusEditor()
 }
 
 func (a *App) CloseEditorSplit() {
-	if a.Root.HasOverlay() || a.EditorSplit == nil || !a.EditorSplit.ShowBottom {
+	if a.Root.HasOverlay() || a.EditorSplit == nil || len(a.editorGroups()) < 2 {
 		return
 	}
 	a.FlushEditorOnChange()
 	a.Root.CancelPointerCapture()
-	keep := a.EditorGroup
-	for _, group := range a.editorGroups() {
-		if group != keep {
-			keep.DiscardDuplicateViews(group)
-			keep.MergeTabsFrom(group)
-			group.OnActivate = nil
-			group.OpenFileElsewhere = nil
-			group.OnEmpty = nil
-			group.CloseAllTabs()
-			if group.FoldTask != nil {
-				a.releaseTask(group.FoldTask)
-			}
-			if group.FoldDelay != nil {
-				a.releaseTask(group.FoldDelay)
-			}
+	closing := a.EditorGroup
+	groups := a.editorGroups()
+	var keep *ui.EditorGroupWidget
+	for i, group := range groups {
+		if group == closing {
+			keep = groups[(i+len(groups)-1)%len(groups)]
+			break
 		}
 	}
-	a.EditorSplit.SetPanels(keep, nil)
-	a.EditorSplit.ShowBottom = false
+	a.activateEditorGroup(keep)
+	keep.DiscardDuplicateViews(closing)
+	keep.MergeTabsFrom(closing)
+	a.EditorSplit.RemoveGroup(closing)
+	closing.OnEmpty, closing.OnActivate, closing.OpenFileElsewhere = nil, nil, nil
+	closing.CloseAllTabs()
+	if closing.FoldTask != nil {
+		a.releaseTask(closing.FoldTask)
+	}
+	if closing.FoldDelay != nil {
+		a.releaseTask(closing.FoldDelay)
+	}
 	a.FocusEditor()
 }
 
 func (a *App) focusEditorAfterClick() {
 	if !a.Root.HasOverlay() && !a.Root.FocusClaimed() {
 		a.FocusEditor()
+	}
+}
+
+func (a *App) EqualizeEditorGroups() { a.EditorSplit.Equalize() }
+func (a *App) FocusEditorLeft()      { a.focusEditorDirection(-1, 0) }
+func (a *App) FocusEditorRight()     { a.focusEditorDirection(1, 0) }
+func (a *App) FocusEditorUp()        { a.focusEditorDirection(0, -1) }
+func (a *App) FocusEditorDown()      { a.focusEditorDirection(0, 1) }
+func (a *App) focusEditorDirection(dx, dy int) {
+	if a.Root.HasOverlay() {
+		return
+	}
+	if next := a.EditorSplit.Neighbor(a.EditorGroup, dx, dy); next != nil {
+		a.Root.SetFocus(next)
 	}
 }
