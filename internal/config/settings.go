@@ -369,9 +369,10 @@ type AppearanceSettings struct {
 
 func DefaultAppearanceSettings() AppearanceSettings {
 	return AppearanceSettings{
-		Icons:           IconsNone,
-		ScrollbarGlyphs: ScrollbarGlyphsBlocks,
-		PointerShapes:   boolPtr(true),
+		Icons:                      IconsNone,
+		ScrollbarGlyphs:            ScrollbarGlyphsBlocks,
+		PointerShapes:              boolPtr(true),
+		HighlightActiveGroupBorder: true,
 	}
 }
 

@@ -69,7 +69,7 @@ Lua plugin key hooks receive enabled Super/Cmd shortcuts as Ctrl shortcuts in `"
 | `appearance.overrides` | object | `{}` | Replace any UI glyph, keyed by icon name (see [Icon overrides](#icon-overrides)). An override wins over both the plain and Nerd Font glyph. |
 | `appearance.scrollbarGlyphs` | string | `"blocks"` | Glyphs that draw git change marks on the editor scrollbar: `"blocks"` uses the half and eighth blocks every font has, which place a mark exactly near the top or bottom of a cell and stretch one in the middle to the nearer edge; `"legacy"` adds the Symbols for Legacy Computing thin bars, which place every mark to the exact eighth of a cell. Kitty, Ghostty, WezTerm and foot draw those themselves; elsewhere the font needs them or the marks show as boxes. |
 | `appearance.pointerShapes` | bool | `true` | Change the mouse pointer shape (I-beam, hand, resize divider, dragging hand) via terminal OSC 22 sequences. Set to `false` for compatibility with terminals or multiplexers that do not support OSC 22 or if you prefer a static pointer. Mouse clicks, selection, scrolling, drag gestures, and mouse reporting remain enabled when false. |
-| `appearance.highlightActiveGroupBorder` | bool | `false` | Highlight the active editor group’s border when editors are split. Changes apply immediately. Also in **Settings > Appearance > Window**. |
+| `appearance.highlightActiveGroupBorder` | bool | `true` | Highlight the active editor group’s border when editors are split. Changes apply immediately. Also in **Settings > Appearance > Window**. |
 
 ## Icon overrides
 
@@ -444,7 +444,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "icons": "none",
     "scrollbarGlyphs": "blocks",
     "pointerShapes": true,
-    "highlightActiveGroupBorder": false
+    "highlightActiveGroupBorder": true
   },
   "editor": {
     "tabSize": 4,

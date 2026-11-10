@@ -451,12 +451,12 @@ func TestSettingsActiveGroupBorderHighlightToggle(t *testing.T) {
 	h := openSettings(t)
 	defer h.stop()
 	clickRowControl(t, h, "Appearance", "Appearance")
-	if !rowHas(h, "Highlight active group border", uncheckedBox) {
-		t.Fatal("active group border highlighting should start off")
+	if !rowHas(h, "Highlight active group border", checkedBox) {
+		t.Fatal("active group border highlighting should start on")
 	}
-	clickRowControl(t, h, "Highlight active group border", uncheckedBox)
+	clickRowControl(t, h, "Highlight active group border", checkedBox)
 	clickRowControl(t, h, "Apply", "Apply")
-	if !h.app.Settings.Appearance.HighlightActiveGroupBorder || !config.LoadSettings().Appearance.HighlightActiveGroupBorder {
+	if h.app.Settings.Appearance.HighlightActiveGroupBorder || config.LoadSettings().Appearance.HighlightActiveGroupBorder {
 		t.Fatal("settings form did not apply and save the border highlight preference")
 	}
 }
