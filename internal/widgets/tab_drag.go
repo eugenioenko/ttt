@@ -7,11 +7,17 @@ type TabDragState struct {
 	targetIndex  int
 	sourceID     string
 	pressX       int
+	pressY       int
 	active       bool
 	dragging     bool
 }
 
 func (d *TabDragState) Begin(index int, sourceID string, screenX int) {
+	d.BeginAt(index, sourceID, screenX, 0)
+}
+
+func (d *TabDragState) BeginAt(index int, sourceID string, screenX, screenY int) {
+	d.pressY = screenY
 	d.pressedIndex = index
 	d.targetIndex = index
 	d.sourceID = sourceID
@@ -25,6 +31,10 @@ func (d *TabDragState) SetSourceIndex(index int) {
 }
 
 func (d *TabDragState) Update(screenX, targetIndex int) bool {
+	return d.UpdateAt(screenX, 0, targetIndex)
+}
+
+func (d *TabDragState) UpdateAt(screenX, screenY, targetIndex int) bool {
 	if !d.active {
 		return false
 	}
@@ -32,6 +42,7 @@ func (d *TabDragState) Update(screenX, targetIndex int) bool {
 	if distance < 0 {
 		distance = -distance
 	}
+	distance = max(distance, screenY-d.pressY, d.pressY-screenY)
 	if !d.dragging && distance >= TabDragThreshold {
 		d.dragging = true
 	}
