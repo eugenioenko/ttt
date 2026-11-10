@@ -24,6 +24,21 @@ func (a *App) SpawnEditorTerminal() {
 	a.SpawnTerminalSpec(TerminalSpec{InEditor: true})
 }
 
+func (a *App) SendNextTerminalKey() {
+	if tw := a.focusedTerminalWidget(); tw != nil && !a.Root.HasOverlay() {
+		a.Root.SendNextTerminalKey(tw)
+	}
+}
+
+func (a *App) ToggleTerminalShortcutForwarding() {
+	a.Root.SetForwardShortcuts(!a.Root.ForwardShortcuts)
+	if a.Root.ForwardShortcuts {
+		a.StatusNotify(i18n.Text("status.terminalShortcutsForwarded"))
+	} else {
+		a.StatusNotify(i18n.Text("status.tttShortcutsPrioritized"))
+	}
+}
+
 func (a *App) openEditorTerminal(entry TerminalTab, spec TerminalSpec) {
 	id := entry.ID
 	entry.Tab.OnClose = func() { a.releaseEditorTerminal(id) }

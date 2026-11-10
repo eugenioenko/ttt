@@ -74,6 +74,7 @@
     "scrollback": 1000,
     "selectionStyle": "background",
     "ctrlVPastes": true,
+    "forwardShortcuts": false,
     "padding_x": 1,
     "shellIntegration": true
   },

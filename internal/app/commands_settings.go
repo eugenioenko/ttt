@@ -103,6 +103,9 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	*a.Settings = s
 	a.Root.SetControlModifiers(controlModifiers(s.Keyboard.ModifierKey))
+	if prev.Terminal.ForwardShortcuts != s.Terminal.ForwardShortcuts {
+		a.Root.SetForwardShortcuts(s.Terminal.ForwardShortcuts)
+	}
 	if a.Reg != nil {
 		for _, kb := range a.Keybindings {
 			if len(kb.Steps) == 0 {
@@ -121,6 +124,7 @@ func (a *App) ApplySettings(s config.Settings) {
 			}
 		}
 	}
+	a.refreshSettingsShortcuts()
 	if !s.Welcome.IsRecentFoldersEnabled() {
 		a.clearRecentFolders()
 	}

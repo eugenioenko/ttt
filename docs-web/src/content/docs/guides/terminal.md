@@ -26,13 +26,30 @@ Plugins can open a program in an editor tab with `term.spawn{ shell = "program",
 
 - Full VT escape sequence support via `eugenioenko/xterm-go` and PTY management via `aymanbagabas/go-pty`
 - True color (24-bit) and 256-color rendering with direct RGB color support
-- When the terminal is focused, keys go to the PTY except local clipboard shortcuts and force keys: Ctrl+T, Alt+T, Ctrl+Q, Ctrl+P, Ctrl+K P, Ctrl+B
+- Reserved TTT shortcuts and configured chords take priority while the terminal is focused; other keys go through the terminal's local clipboard handling and then to the PTY
 - Scrollback buffer with mouse wheel scrolling (3 lines), Shift+PgUp/PgDn (half page), and a draggable scrollbar
 - Click the terminal content area to focus it; any keypress snaps back to the live view when scrolled up
 
 With [`keyboard.modifierKey`](/reference/settings/#keyboard) set to `"control+super"` or `"super"`, Super+V also pastes and Super+C copies selected terminal text. Super is Command (⌘) on macOS. Super+C without a selection does nothing; Ctrl+C still copies selected text or sends an interrupt when nothing is selected. Super+V pastes even when `terminal.ctrlVPastes` is `false`, so Ctrl+V can remain available to terminal programs.
 
 Ctrl+click opens URLs and file links in terminal output. When Super shortcuts are enabled, Super+click also opens links, shows the link cursor and underline, and permits local text selection when the terminal program captures the mouse. The outer terminal must report the modifier. These settings apply live to both panel terminals and editor terminal tabs; other shell key and mouse encodings keep their original modifiers.
+
+## Shortcut forwarding
+
+**Settings → General → Keyboard** contains both **Forward shortcuts to terminal** and the editable **Send next key to terminal** shortcut, beside **Shortcut modifier**. The shortcut is stored in `keybindings.json` as `terminal.sendNextKey`, with **Ctrl+K** as its default. It follows the selected Ctrl/Mod/Super preference.
+
+With the terminal focused, press **Ctrl+K**, then:
+
+- A plain or Shift-only key completes a TTT chord: **Ctrl+K P** opens Quick Open, **Ctrl+K T** creates a terminal, and **Ctrl+K Shift+P** also opens Quick Open.
+- A Ctrl/Alt/Super combination is sent directly to the terminal using its normal key encoding: **Ctrl+K Ctrl+P** sends Ctrl+P for shell history, **Ctrl+K Ctrl+B** sends the tmux prefix, and **Ctrl+K Ctrl+K** sends Ctrl+K for shell kill-line. This bypasses reserved TTT shortcuts and terminal-local copy/paste handling once.
+
+Clicking, changing focus or tabs, opening a dialog, or closing the terminal cancels forwarding. The command does nothing outside a focused terminal. Running **Terminal: Send Next Key** from the command palette forwards the next key without starting a chord.
+
+Custom bindings with a modified second key after the forwarding prefix are overridden only while the terminal is focused. Rebind the forwarding command or use another prefix for those chords. Editor chord matching is unchanged.
+
+`terminal.forwardShortcuts` defaults to `false`, giving reserved TTT shortcuts and chords priority. Enable it to pass those shortcuts directly to the terminal, including the first Ctrl+K. Terminal-local clipboard and scrolling behavior remains unchanged. Use the mouse menus to access TTT commands while direct forwarding is enabled. Changes apply immediately to panel and editor terminals.
+
+**Ctrl+F6** (**Terminal: Toggle Shortcut Forwarding**, `terminal.toggleShortcutForwarding`) switches the mode for the current TTT session without changing the saved default and shows a short status notification. It applies to all terminals in that session and resets on restart. Unrelated settings changes keep the current mode; changing the forwarding default applies that new value immediately. The shortcut remains active while terminal forwarding is enabled so you can toggle back. It follows the selected Ctrl/Mod/Super preference and can be rebound in the keybindings editor. The command is also available from the command palette.
 
 ## Bottom Panel
 
@@ -53,6 +70,7 @@ Terminal settings in `settings.json`:
     "shell": "/bin/zsh",
     "scrollback": 1000,
     "ctrlVPastes": true,
+    "forwardShortcuts": false,
     "selectionStyle": "background",
     "shellIntegration": true
   }
@@ -64,6 +82,7 @@ Terminal settings in `settings.json`:
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
 | `terminal.padding_x` | int | `1` | Blank columns on each side of the terminal; `0` removes both margins |
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V; set to `false` to pass `^V` through to the terminal program |
+| `terminal.forwardShortcuts` | bool | `false` | Forward reserved TTT shortcuts and chord prefixes to the terminal. Available under General → Keyboard; applies immediately |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"` |
 | `terminal.shellIntegration` | bool | `true` | Start bash with ttt's prompt marks so resizing redraws the prompt cleanly |

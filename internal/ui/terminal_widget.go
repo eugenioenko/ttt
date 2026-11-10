@@ -81,6 +81,7 @@ type TerminalWidget struct {
 	SelectionStyle   string
 	CtrlVPastes      bool
 	SuperShortcuts   bool
+	sendNextKey      bool
 	linkModifierHeld bool
 	linkCache        map[int][]linkSpan
 	linkMemo         map[string][]linkSpan
@@ -100,7 +101,21 @@ func NewTerminalWidget(t *terminal.Terminal, palette *TerminalColorPalette) *Ter
 
 func (tw *TerminalWidget) Focusable() bool { return true }
 
-func (tw *TerminalWidget) SetFocused(f bool) { tw.focused = f }
+func (tw *TerminalWidget) SetFocused(f bool) {
+	tw.focused = f
+	if !f {
+		tw.sendNextKey = false
+	}
+}
+
+func (tw *TerminalWidget) SendKey(ev *tcell.EventKey) {
+	if tw.Term == nil {
+		return
+	}
+	tw.ClearSelection()
+	tw.scrollOffset = 0
+	tw.Term.WriteString(keyToVT(ev, tw.Term.DecPrivateModes().ApplicationCursorKeys))
+}
 
 func (tw *TerminalWidget) WantsRawKeys() bool { return tw.focused }
 

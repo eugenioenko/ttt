@@ -150,8 +150,14 @@ func TestKeyboardModifierChordAndRawKeys(t *testing.T) {
 	terminal := &rawKeysWidget{}
 	root.SetFocus(terminal)
 	root.HandleEvent(metaK)
-	if terminal.lastEvent != metaK {
-		t.Fatal("terminal did not receive original event")
+	root.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "e", 0))
+	if fired != 2 || terminal.eventCount != 0 {
+		t.Fatal("Super chord did not run while the terminal was focused")
+	}
+	unbound := tcell.NewEventKey(tcell.KeyRune, "x", tcell.ModMeta)
+	root.HandleEvent(unbound)
+	if terminal.lastEvent != unbound {
+		t.Fatal("terminal did not receive the original unbound event")
 	}
 	force := false
 	root.AddForceKey(tcell.KeyCtrlK, tcell.ModCtrl, 0, func() { force = true })

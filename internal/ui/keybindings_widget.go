@@ -78,6 +78,11 @@ func NewKeybindingsWidget(commands []command.Command) *KeybindingsWidget {
 
 func (w *KeybindingsWidget) Focusable() bool { return true }
 
+func (w *KeybindingsWidget) SetFilter(text string) {
+	w.input.SetText(text)
+	w.filter()
+}
+
 func (w *KeybindingsWidget) CursorPosition() (int, int, bool) {
 	if w.recording || w.focusedAction >= 0 {
 		return 0, 0, false

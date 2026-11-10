@@ -35,10 +35,15 @@ describe("settings editor", () => {
       "Terminal",
       "Diff",
       "Enable plugins",
+      "Keyboard",
+      "Forward shortcuts to terminal",
+      "Send next key to terminal",
       "Apply",
     ]) {
       expect(snapshots[s0]).toContain(want);
     }
+    expect(snapshots[s0]).toMatch(/Forward shortcuts to terminal\s+\[ \]/);
+    expect(snapshots[s0]).toMatch(/Send next key to terminal\s+Ctrl\+K/);
   });
 
   it("shows current values", () => {

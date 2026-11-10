@@ -17,10 +17,12 @@ type Overlay struct {
 }
 
 type GlobalKeyBinding struct {
-	Key     tcell.Key
-	Mod     tcell.ModMask
-	Rune    rune
-	Handler func()
+	Key             tcell.Key
+	Mod             tcell.ModMask
+	Rune            rune
+	Handler         func()
+	TerminalOnly    bool
+	WhileForwarding bool
 }
 
 type ChordKeyBinding struct {
@@ -46,6 +48,8 @@ type Root struct {
 	chord            *chordState
 	KeyInterceptor   func(ev *tcell.EventKey) bool
 	ControlModifiers tcell.ModMask
+	ForwardShortcuts bool
+	nextTerminalKey  *TerminalWidget
 	OnRightClick     func(mx, my int)
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
@@ -112,11 +116,20 @@ func (r *Root) AddForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler fu
 	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler})
 }
 
+func (r *Root) AddTerminalForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
+	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler, TerminalOnly: true})
+}
+
+func (r *Root) AddTerminalToggleKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
+	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler, TerminalOnly: true, WhileForwarding: true})
+}
+
 func (r *Root) AddChordKey(steps []GlobalKeyBinding, handler func()) {
 	r.ChordKeys = append(r.ChordKeys, ChordKeyBinding{Steps: steps, Handler: handler})
 }
 
 func (r *Root) ClearKeys() {
+	r.cancelTerminalKey()
 	r.GlobalKeys = nil
 	r.ForceKeys = nil
 	r.ChordKeys = nil
@@ -125,8 +138,36 @@ func (r *Root) ClearKeys() {
 
 func (r *Root) SetControlModifiers(modifiers tcell.ModMask) {
 	if r.ControlModifiers != modifiers {
+		r.cancelTerminalKey()
 		r.ControlModifiers = modifiers
 		r.chord = nil
+	}
+}
+
+func (r *Root) SetForwardShortcuts(forward bool) {
+	r.cancelTerminalKey()
+	r.chord = nil
+	r.ForwardShortcuts = forward
+}
+
+func (r *Root) SendNextTerminalKey(tw *TerminalWidget) {
+	r.cancelTerminalKey()
+	r.chord = nil
+	if tw != nil && tw.focused && tw.Term != nil && !tw.Term.Exited() {
+		tw.sendNextKey = true
+		r.nextTerminalKey = tw
+	}
+}
+
+func (r *Root) AwaitingTerminalKey() bool {
+	tw := r.nextTerminalKey
+	return tw != nil && tw.sendNextKey && tw.focused && tw.Term != nil && !tw.Term.Exited()
+}
+
+func (r *Root) cancelTerminalKey() {
+	if r.nextTerminalKey != nil {
+		r.nextTerminalKey.sendNextKey = false
+		r.nextTerminalKey = nil
 	}
 }
 
@@ -272,6 +313,38 @@ func (r *Root) hasOverlayWidget(w Widget) bool {
 
 func (r *Root) dispatch(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
+	if r.nextTerminalKey != nil {
+		if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons() != tcell.ButtonNone {
+			r.cancelTerminalKey()
+			r.chord = nil
+		}
+		if !r.AwaitingTerminalKey() {
+			r.cancelTerminalKey()
+			r.chord = nil
+		} else if isKey {
+			// Plain continuations retain TTT chords; modified keys bypass all handlers.
+			if r.chord != nil && kev.Modifiers()&(tcell.ModCtrl|tcell.ModMeta|tcell.ModAlt) == 0 {
+				keys := []*tcell.EventKey{kev}
+				if kev.Key() == tcell.KeyRune && kev.Modifiers() == tcell.ModShift {
+					keys = append(keys, tcell.NewEventKey(tcell.KeyRune, kev.Str(), 0))
+				}
+				for _, chordKey := range keys {
+					for _, ci := range r.chord.candidates {
+						chord := r.ChordKeys[ci]
+						if r.chord.stepIdx < len(chord.Steps) && matchKeyChord(chordKey, chord.Steps[r.chord.stepIdx]) {
+							r.cancelTerminalKey()
+							return r.handleChord(chordKey)
+						}
+					}
+				}
+			}
+			tw := r.nextTerminalKey
+			r.cancelTerminalKey()
+			r.chord = nil
+			tw.SendKey(kev)
+			return EventConsumed
+		}
+	}
 	// ForceKeys punch through two things that would otherwise swallow them: a
 	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
 	// unsaved-changes dialog). With neither present nothing is swallowing keys,
@@ -279,8 +352,17 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	// which is what lets a key interceptor claim them while editing.
 	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
 		for _, gk := range r.ForceKeys {
+			if gk.TerminalOnly && r.HasOverlay() {
+				continue
+			}
+			if r.ForwardShortcuts && !r.HasOverlay() && !gk.WhileForwarding {
+				continue
+			}
 			if key := term.ControlKeyEvent(kev, &r.ControlModifiers); key != nil && matchKey(key, gk) {
 				gk.Handler()
+				if r.AwaitingTerminalKey() {
+					r.handleChord(kev)
+				}
 				return EventConsumed
 			}
 		}
@@ -300,8 +382,10 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 		return r.handleMouse(ev)
 	}
 
-	// The terminal gets every non-force key, chord prefixes included.
 	if r.rawKeysFocused() {
+		if !r.ForwardShortcuts && r.handleChord(kev) == EventConsumed {
+			return EventConsumed
+		}
 		return r.Focused.HandleEvent(kev)
 	}
 
@@ -504,6 +588,8 @@ func (r *Root) TopOverlayWidget() Widget {
 }
 
 func (r *Root) PushOverlay(o Overlay) {
+	r.cancelTerminalKey()
+	r.chord = nil
 	r.ClearEditorLinkHover()
 	r.CancelPointerCapture()
 	r.Overlays = append(r.Overlays, o)
@@ -544,6 +630,7 @@ func (r *Root) SetFocus(w Widget) {
 	if r.Focused == w {
 		return
 	}
+	r.cancelTerminalKey()
 	r.ClearEditorLinkHover()
 	r.chord = nil
 	if r.capturedWidget != nil {
