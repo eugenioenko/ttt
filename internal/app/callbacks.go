@@ -747,13 +747,7 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.TabBar.MoreButton.OnClick = func(sx, sy int) {
-		moreMenu := []ui.ContextMenuItem{
-			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
-			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
-			ui.MenuSep(),
-			{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: app.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed"},
-		}
-		openContextMenu(app, moreMenu, sx, sy)
+		openContextMenu(app, app.tabMoreMenu(), sx, sy)
 	}
 
 	app.EditorGroup.TabBar.OnTabRightClick = func(index, sx, sy int) {
@@ -967,5 +961,14 @@ func registerWidgetCallbacks(app *App) {
 			}
 			openContextMenu(app, items, sx, sy)
 		}},
+	}
+}
+
+func (a *App) tabMoreMenu() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: a.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed", Disabled: !a.EditorGroup.HasClosedTabs()},
+		ui.MenuSep(),
+		{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
+		{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
 	}
 }

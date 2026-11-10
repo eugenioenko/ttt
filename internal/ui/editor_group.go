@@ -1566,6 +1566,8 @@ func (g *EditorGroupWidget) rememberClosed(tab editorTab) {
 	}
 }
 
+func (g *EditorGroupWidget) HasClosedTabs() bool { return len(g.closedTabs) > 0 }
+
 // ReopenClosedTab reopens the most recently closed file tab at its cursor
 // position. Files deleted since are skipped, since OpenFile would start a new
 // empty file in their place. It reports whether a tab was reopened.
