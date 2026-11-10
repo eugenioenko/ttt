@@ -12,6 +12,94 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func TestEditorSplitUntitledBuffersAreIndependentAndNumbered(t *testing.T) {
+	h := newTestHarness(t, 160, 44)
+	defer h.stop()
+	h.exec("editor.split")
+	h.exec("editor.splitDown")
+	h.exec("editor.splitDown")
+	groups := h.app.EditorSplit.Groups()
+	if len(groups) != 4 {
+		t.Fatalf("groups = %d, want 4", len(groups))
+	}
+	for i, want := range []string{"untitled", "untitled-2", "untitled-3", "untitled-4"} {
+		group := groups[i]
+		if group.TabCount() != 1 || group.ActiveFilePath() != want {
+			t.Fatalf("group %d: tabs %d, name %q, want one %q", i, group.TabCount(), group.ActiveFilePath(), want)
+		}
+		for _, other := range groups[:i] {
+			if group.ActiveBuffer() == other.ActiveBuffer() || group.Editor.Undo == other.Editor.Undo {
+				t.Fatal("new split shared a buffer or undo history")
+			}
+		}
+	}
+	h.typeText("only here")
+	for _, group := range groups[:3] {
+		if group.ActiveBuffer().Lines[0] != "" {
+			t.Fatal("typing in one untitled changed another group")
+		}
+	}
+	h.app.Root.SetFocus(groups[0])
+	h.exec("file.new")
+	if groups[0].ActiveFilePath() != "untitled-5" {
+		t.Fatalf("new file reused another group's name: %q", groups[0].ActiveFilePath())
+	}
+}
+
+func TestEditorSplitUntitledPlaceholderLifecycle(t *testing.T) {
+	for _, state := range []string{"untouched", "edited", "undone", "saved"} {
+		t.Run(state, func(t *testing.T) {
+			h := newTestHarness(t, 140, 32)
+			defer h.stop()
+			h.exec("editor.splitDown")
+			group := h.app.EditorGroup
+			buf := group.ActiveBuffer()
+			if state != "untouched" {
+				h.typeText("draft")
+			}
+			if state == "undone" {
+				h.exec("editor.undo")
+				if buf.Dirty || buf.Lines[0] != "" {
+					t.Fatal("undo did not return the document to its initial clean contents")
+				}
+			}
+			if state == "saved" && !group.SaveAs(filepath.Join(h.dir, "draft.txt")) {
+				t.Fatal("could not save untitled document")
+			}
+			originalPath := group.ActiveFilePath()
+			path := filepath.Join(h.dir, "alpha.txt")
+			if err := group.OpenFile(path); err != nil {
+				t.Fatal(err)
+			}
+			if group.ActiveFilePath() != path {
+				t.Fatal("opened file did not become active")
+			}
+			if state == "untouched" {
+				if group.TabCount() != 1 || group.BufferForPath(originalPath) != nil {
+					t.Fatal("opening a file kept the untouched placeholder")
+				}
+			} else if group.TabCount() != 2 || group.BufferForPath(originalPath) != buf {
+				t.Fatal("opening a file replaced a document that had been edited")
+			}
+		})
+	}
+}
+
+func TestEditorOpenUntitledToSideSharesOnlyWhenRequested(t *testing.T) {
+	h := newTestHarness(t, 140, 32)
+	defer h.stop()
+	left := h.app.EditorGroup
+	h.exec("editor.openToSide")
+	right := h.app.EditorGroup
+	if len(h.app.EditorSplit.Groups()) != 2 || right.TabCount() != 1 || right.ActiveBuffer() != left.ActiveBuffer() || right.ActiveFilePath() != left.ActiveFilePath() {
+		t.Fatal("Open to the Side did not share the untitled document")
+	}
+	h.typeText("shared")
+	if left.ActiveBuffer().Lines[0] != "shared" {
+		t.Fatal("explicit untitled views did not share edits")
+	}
+}
+
 func TestEditorSplitMoreMenuAndEditing(t *testing.T) {
 	for _, closeRight := range []bool{false, true} {
 		t.Run(map[bool]string{false: "close from left", true: "close from right"}[closeRight], func(t *testing.T) {
@@ -31,8 +119,14 @@ func TestEditorSplitMoreMenuAndEditing(t *testing.T) {
 			buf, stack := left.ActiveBuffer(), left.Editor.Undo
 			chooseEditorMore(t, h, "Split Right")
 			right := h.app.EditorGroup
-			if left == right || len(h.app.EditorSplit.Groups()) < 2 || right.ActiveBuffer() != buf || right.Editor.Undo != stack {
-				t.Fatal("split did not share the active document and undo history")
+			if left == right || len(h.app.EditorSplit.Groups()) < 2 || right.ActiveBuffer() == buf || right.Editor.Undo == stack || right.ActiveBuffer().Lines[0] != "" {
+				t.Fatal("split did not create an independent empty document")
+			}
+			if err := right.OpenFile(beta); err != nil {
+				t.Fatal(err)
+			}
+			if right.TabCount() != 1 || right.ActiveBuffer() != buf || right.Editor.Undo != stack {
+				t.Fatal("opening the shared document did not replace the empty placeholder")
 			}
 			if left.ActiveFilePath() != beta || right.ActiveFilePath() != beta {
 				t.Fatal("split lost the open files")
@@ -150,6 +244,9 @@ func TestEditorSplitExistingFileAndQuit(t *testing.T) {
 	}
 	h.exec("editor.split")
 	right := h.app.EditorGroup
+	if err := right.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
 	h.pressRune('x')
 	h.app.Root.SetFocus(left)
 	if err := left.OpenFile(path); err != nil {
@@ -360,7 +457,7 @@ func TestEditorSplitReloadSettingsAndSharedUndo(t *testing.T) {
 	path := filepath.Join(h.dir, "alpha.txt")
 	left := h.app.EditorGroup
 	left.OpenFile(path)
-	h.exec("editor.split")
+	h.exec("editor.openToSide")
 	right := h.app.EditorGroup
 	if err := os.WriteFile(path, []byte("external\n"), 0644); err != nil {
 		t.Fatal(err)

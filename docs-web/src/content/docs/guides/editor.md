@@ -13,9 +13,9 @@ Sessions are kept outside the project under the config directory's `sessions/` f
 
 ## Split Editors
 
-Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Splitting keeps the current file visible in both groups. The views share text, undo history, and save state, with independent cursors, selections, and scrolling.
+Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Each new group starts with an independent untitled document, numbered across the workspace. Opening a file replaces that untouched placeholder; once edited, the untitled document stays in its own tab.
 
-Drag a tab into another group, or run **Split: Move to Other Group** from the command palette. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
+Drag a tab into another group, or run **Split: Move to Other Group** from the command palette. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Views of the same document share text, undo history, and save state, with independent cursors, selections, and scrolling. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
 
 Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group’s border is highlighted by default; turn off **Highlight active split** in **Settings > Appearance > Window** to disable it. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
 
