@@ -91,7 +91,8 @@ func (a *App) wireEditorTabDrag(group *ui.EditorGroupWidget) {
 				return true
 			}
 		}
-		return !group.TabBar.GetRect().Contains(x, y)
+		tabs := group.TabBar.GetRect()
+		return y < tabs.Y || y >= tabs.Y+tabs.H
 	}
 }
 
