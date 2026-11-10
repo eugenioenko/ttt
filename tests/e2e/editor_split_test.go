@@ -86,8 +86,20 @@ func TestEditorSplitDivider(t *testing.T) {
 	layout := h.app.EditorSplit
 	split := layout.Split
 	x, y := split.DividerScreenX(), split.GetRect().Y+4
-	if h.app.Root.PointerShapeAt(x, y) != term.PointerEWResize {
-		t.Fatal("divider did not show the resize pointer")
+	assertEditorDividerSkipsTabs(t, h, x)
+	tabs := layout.Groups()[0].TabBar.GetRect()
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, tabs.Y+1, tcell.Button1, 0))
+	if split.OwnsPointerCapture() {
+		t.Fatal("tab-bar gap captured a resize drag")
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, 0))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, 0))
+	h.redraw()
+	if split.DividerScreenX() != x {
+		t.Fatal("dragging the tab-bar gap resized the split")
+	}
+	if shape := h.app.Root.PointerShapeAt(x, y); shape != term.PointerEWResize {
+		t.Fatalf("divider did not show the resize pointer: %q", shape)
 	}
 	for _, event := range []*tcell.EventMouse{
 		tcell.NewEventMouse(x, y, tcell.Button1, 0),
@@ -100,10 +112,27 @@ func TestEditorSplitDivider(t *testing.T) {
 	if split.DividerScreenX() != x+12 || split.OwnsPointerCapture() {
 		t.Fatalf("divider ended at %d, want %d, captured %v", split.DividerScreenX(), x+12, split.OwnsPointerCapture())
 	}
+	assertEditorDividerSkipsTabs(t, h, split.DividerScreenX())
 	h.exec("editor.closeSplit")
 	h.redraw()
 	if len(layout.Groups()) != 1 || layout.Group.GetRect().W != layout.GetRect().W {
 		t.Fatal("closing split did not restore the full editor width")
+	}
+}
+
+func assertEditorDividerSkipsTabs(t *testing.T, h *testHarness, x int) {
+	t.Helper()
+	cells, width, _ := h.screen.GetContents()
+	for _, group := range h.app.EditorSplit.Groups() {
+		tabs := group.TabBar.GetRect()
+		for y := tabs.Y; y < tabs.Y+tabs.H; y++ {
+			if cells[y*width+x].Str != " " {
+				t.Fatalf("divider crossed tab bar at (%d, %d)", x, y)
+			}
+			if h.app.Root.PointerShapeAt(x, y) == term.PointerEWResize {
+				t.Fatalf("tab-bar gap showed a resize pointer at (%d, %d)", x, y)
+			}
+		}
 	}
 }
 
@@ -227,6 +256,7 @@ func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
 	if cells[crossY*width+crossX].Str != string(h.app.Borders.Cross) {
 		t.Fatal("grid dividers did not meet at a themed intersection")
 	}
+	assertEditorDividerSkipsTabs(t, h, crossX)
 	groupCount, activeCount := 0, 0
 	var inspect func(*app.DebugWidgetNode)
 	inspect = func(node *app.DebugWidgetNode) {
