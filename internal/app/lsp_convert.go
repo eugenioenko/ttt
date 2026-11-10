@@ -52,12 +52,18 @@ type CodeActionResult struct {
 }
 
 type CodeActionsResult struct {
-	Path    string
-	Server  string
-	Version uint64
+	Path        string
+	Server      string
+	Version     uint64
+	Buffer      *buffer.Buffer
+	OpenBuffers map[string]codeActionBufferSnapshot
+	Actions     []lsp.CodeAction
+	Err         error
+}
+
+type codeActionBufferSnapshot struct {
 	Buffer  *buffer.Buffer
-	Actions []lsp.CodeAction
-	Err     error
+	Version uint64
 }
 
 type CodeActionCommandResult struct {

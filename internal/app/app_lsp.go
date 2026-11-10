@@ -610,7 +610,7 @@ func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bo
 			allApplied = false
 			continue
 		}
-		if !a.EditorGroup.IsEditorActive() || a.EditorGroup.ActiveBuffer() == nil {
+		if !a.EditorGroup.IsActiveEditableFile(path) {
 			a.StatusWarn(i18n.Text("status.workspaceEditNotApplied"))
 			allApplied = false
 			continue
@@ -630,7 +630,7 @@ func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bo
 	return len(files), allApplied
 }
 
-func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdit) bool {
+func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdit, openBuffers map[string]codeActionBufferSnapshot) bool {
 	if a.EditorGroup.ActiveFilePath() != path {
 		return false
 	}
@@ -638,8 +638,27 @@ func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdi
 	if !ok || len(batches) == 0 {
 		return false
 	}
+	for _, batch := range batches {
+		batchPath := URIToPath(batch.URI)
+		captured, wasOpen := openBuffers[batchPath]
+		current := a.EditorGroup.BufferForPath(batchPath)
+		if (!wasOpen && current != nil) ||
+			(wasOpen && (current != captured.Buffer || current == nil || current.Version() != captured.Version)) {
+			return false
+		}
+	}
 	_, allApplied := a.applyWorkspaceEditBatches(batches, false)
 	return allApplied
+}
+
+func (a *App) snapshotCodeActionBuffers() map[string]codeActionBufferSnapshot {
+	snapshots := make(map[string]codeActionBufferSnapshot)
+	for _, path := range a.EditorGroup.OpenFilePaths() {
+		if buf := a.EditorGroup.BufferForPath(path); buf != nil {
+			snapshots[path] = codeActionBufferSnapshot{Buffer: buf, Version: buf.Version()}
+		}
+	}
+	return snapshots
 }
 
 func (a *App) RequestInteractiveCodeActions() {
@@ -664,6 +683,7 @@ func (a *App) RequestInteractiveCodeActions() {
 		return
 	}
 	version := buf.Version()
+	openBuffers := a.snapshotCodeActionBuffers()
 	r := a.currentCodeActionRange(path)
 	diagnostics := a.codeActionDiagnostics(path, serverKey, r)
 	workDir := a.lspWorkDir(path)
@@ -671,19 +691,20 @@ func (a *App) RequestInteractiveCodeActions() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
-				Path: path, Server: serverKey, Version: version, Buffer: buf, Err: err,
+				Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers, Err: err,
 			}))
 			return
 		}
 		actions, err := client.CodeActionWithDiagnostics(FileURI(path), r, nil, diagnostics)
 		if err != nil {
 			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
-				Path: path, Server: serverKey, Version: version, Buffer: buf, Err: err,
+				Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers, Err: err,
 			}))
 			return
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
-			Path: path, Server: serverKey, Version: version, Buffer: buf, Actions: applicableCodeActions(actions),
+			Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers,
+			Actions: applicableCodeActions(actions),
 		}))
 	}()
 }
@@ -793,7 +814,7 @@ func (a *App) HandleCodeActionsResult(result *CodeActionsResult) {
 		if action, ok := actions[id]; ok && a.EditorGroup.ActiveFilePath() == result.Path &&
 			a.editorBuffer() == result.Buffer && result.Buffer.Version() == result.Version {
 			if action.Edit != nil {
-				if !a.applyInteractiveCodeActionEdit(result.Path, action.Edit) {
+				if !a.applyInteractiveCodeActionEdit(result.Path, action.Edit, result.OpenBuffers) {
 					return
 				}
 				a.StatusNotify(i18n.Text("status.codeActionApplied"))

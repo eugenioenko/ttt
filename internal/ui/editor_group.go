@@ -1261,6 +1261,12 @@ func (g *EditorGroupWidget) IsEditorActive() bool {
 	return t != nil && t.Content == nil
 }
 
+func (g *EditorGroupWidget) IsActiveEditableFile(path string) bool {
+	t := g.activeTab()
+	return t != nil && t.FilePath == path && t.PluginKey == "" && t.Content == nil &&
+		t.Buf != nil && !t.Virtual && !t.Placeholder && t.Diff == nil && !t.ReadOnly
+}
+
 func (g *EditorGroupWidget) ActiveDiffWidget() *DiffEditorWidget {
 	t := g.activeTab()
 	if t == nil || t.Content == nil {

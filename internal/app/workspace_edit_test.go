@@ -328,7 +328,7 @@ func TestCodeActionPickerAppliesWorkspaceEdits(t *testing.T) {
 	}}
 
 	a.HandleCodeActionsResult(&CodeActionsResult{
-		Path: mainPath, Buffer: buf, Version: buf.Version(),
+		Path: mainPath, Buffer: buf, Version: buf.Version(), OpenBuffers: a.snapshotCodeActionBuffers(),
 		Actions: []lsp.CodeAction{{Title: "Rename helper", Edit: edit}},
 	})
 
@@ -380,11 +380,94 @@ func TestInteractiveCodeActionEditFailsWhenAnyBatchCannotApply(t *testing.T) {
 		},
 	}}
 
-	if a.applyInteractiveCodeActionEdit(mainPath, edit) {
+	if a.applyInteractiveCodeActionEdit(mainPath, edit, a.snapshotCodeActionBuffers()) {
 		t.Fatal("partially applied code action reported full success")
 	}
 	if got := strings.Join(a.EditorGroup.BufferForPath(mainPath).Lines, "\n"); got != "run()\n" {
 		t.Fatalf("main.go = %q, want first batch to have applied before the failure", got)
+	}
+}
+
+func TestCodeActionRejectsEditWhenAffectedOpenBufferWasReplaced(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"main.go": "call()\n",
+		"util.go": "func old()\n",
+	})
+	mainPath, utilPath := filepath.Join(dir, "main.go"), filepath.Join(dir, "util.go")
+	a.EditorGroup.OpenFile(mainPath)
+	a.EditorGroup.CommitActiveTab()
+	a.EditorGroup.OpenFile(utilPath)
+	a.EditorGroup.CommitActiveTab()
+	a.EditorGroup.OpenFile(mainPath)
+	mainBuffer := a.EditorGroup.BufferForPath(mainPath)
+	utilBuffer := a.EditorGroup.BufferForPath(utilPath)
+	snapshots := a.snapshotCodeActionBuffers()
+	edit := &lsp.WorkspaceEdit{Changes: map[string][]lsp.TextEdit{
+		FileURI(mainPath): {utf16Edit(0, 0, 4, "run")},
+		FileURI(utilPath): {utf16Edit(0, 5, 8, "new")},
+	}}
+
+	a.EditorGroup.SwitchToTabByPath(utilPath)
+	a.EditorGroup.CloseTab()
+	a.EditorGroup.OpenFile(utilPath)
+	replacement := a.EditorGroup.BufferForPath(utilPath)
+	if replacement == utilBuffer {
+		t.Fatal("reopened utility file retained the original buffer identity")
+	}
+	if replacement.Version() != snapshots[utilPath].Version {
+		t.Fatalf("replacement version = %d, want captured version %d to isolate identity check",
+			replacement.Version(), snapshots[utilPath].Version)
+	}
+	a.EditorGroup.SwitchToTabByPath(mainPath)
+
+	result := &CodeActionsResult{
+		Path: mainPath, Buffer: mainBuffer, Version: mainBuffer.Version(), OpenBuffers: snapshots,
+		Actions: []lsp.CodeAction{{Title: "Rename helper", Edit: edit}},
+	}
+	if a.EditorGroup.ActiveFilePath() != result.Path || a.editorBuffer() != result.Buffer || result.Buffer.Version() != result.Version {
+		t.Fatalf("preconditions failed: path=%q/%q buffer=%p/%p version=%d/%d",
+			a.EditorGroup.ActiveFilePath(), result.Path, a.editorBuffer(), result.Buffer, result.Buffer.Version(), result.Version)
+	}
+	a.HandleCodeActionsResult(result)
+	overlay, ok := a.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+	if !ok {
+		t.Fatal("code action picker did not open")
+	}
+	dialog := overlay.W.(*widgets.DialogWidget)
+	selectWidget := dialog.Content.(*widgets.SelectWidget)
+	selectWidget.Config.OnSelect("0")
+
+	if got := strings.Join(mainBuffer.Lines, "\n"); got != "call()\n" {
+		t.Fatalf("main.go = %q, want action rejected before any batch applies", got)
+	}
+	if got := strings.Join(replacement.Lines, "\n"); got != "func old()\n" {
+		t.Fatalf("replacement util.go = %q, want unchanged text", got)
+	}
+}
+
+func TestCodeActionRejectsEditWhenAffectedOpenBufferChanged(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"main.go": "call()\n",
+		"util.go": "func old()\n",
+	})
+	mainPath, utilPath := filepath.Join(dir, "main.go"), filepath.Join(dir, "util.go")
+	a.EditorGroup.OpenFile(mainPath)
+	a.EditorGroup.CommitActiveTab()
+	a.EditorGroup.OpenFile(utilPath)
+	a.EditorGroup.CommitActiveTab()
+	a.EditorGroup.OpenFile(mainPath)
+	edit := &lsp.WorkspaceEdit{Changes: map[string][]lsp.TextEdit{
+		FileURI(mainPath): {utf16Edit(0, 0, 4, "run")},
+		FileURI(utilPath): {utf16Edit(0, 5, 8, "new")},
+	}}
+	snapshots := a.snapshotCodeActionBuffers()
+	a.EditorGroup.BufferForPath(utilPath).SetLines([]string{"func changed()"})
+
+	if a.applyInteractiveCodeActionEdit(mainPath, edit, snapshots) {
+		t.Fatal("changed affected buffer was accepted")
+	}
+	if got := strings.Join(a.EditorGroup.BufferForPath(mainPath).Lines, "\n"); got != "call()\n" {
+		t.Fatalf("main.go = %q, want stale action rejected before any batch applies", got)
 	}
 }
 
@@ -415,6 +498,33 @@ func TestWorkspaceEditViewerBatchIsNotCountedAsApplied(t *testing.T) {
 	}
 	if a.EditorGroup.ActiveFilePath() != mainPath {
 		t.Fatalf("active file = %q, want original file restored", a.EditorGroup.ActiveFilePath())
+	}
+}
+
+func TestWorkspaceEditCannotApplyToPluginSnapshot(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"main.go":   "call()\n",
+		"plugin.go": "source file\n",
+	})
+	mainPath := filepath.Join(dir, "main.go")
+	pluginPath := filepath.Join(dir, "plugin.go")
+	a.EditorGroup.OpenFile(mainPath)
+	a.EditorGroup.OpenPluginTab(pluginPath, "Plugin snapshot", ui.NewCommitDetailWidget(dir, "ref", "abcdef0", false))
+	activePath := a.EditorGroup.ActiveFilePath()
+
+	filesCount, allApplied := a.applyWorkspaceEditBatches([]lsp.FileEdits{{
+		URI:   FileURI(pluginPath),
+		Edits: []lsp.TextEdit{utf16Edit(0, 0, 6, "edited")},
+	}}, false)
+
+	if filesCount != 0 || allApplied {
+		t.Fatalf("workspace edit result = (%d, %v), want no applied files and incomplete result", filesCount, allApplied)
+	}
+	if a.EditorGroup.ActiveFilePath() != activePath {
+		t.Fatalf("active file = %q, want original active path restored", a.EditorGroup.ActiveFilePath())
+	}
+	if a.EditorGroup.BufferForPath(pluginPath) != nil {
+		t.Fatal("workspace edit opened a text buffer over the plugin snapshot")
 	}
 }
 
