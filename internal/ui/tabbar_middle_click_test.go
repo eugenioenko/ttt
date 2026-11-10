@@ -65,3 +65,35 @@ func TestTabBarMiddleDragClosesOnlyFirstTab(t *testing.T) {
 		t.Fatalf("closed = %v, want [0]", closed)
 	}
 }
+
+func TestTabBarMiddleClickOnArrowClosesNothing(t *testing.T) {
+	var closed []int
+	tb := NewTabBarWidget()
+	tb.OnTabClose = func(i int) { closed = append(closed, i) }
+	var tabs []Tab
+	for _, n := range []string{"a.go", "b.go", "c.go", "d.go", "e.go", "f.go"} {
+		tabs = append(tabs, Tab{Name: n, Closable: true})
+	}
+	tabs[len(tabs)-1].Active = true
+	tb.SetTabs(tabs)
+	tb.SetRect(Rect{W: 24, H: 3})
+	tb.Render(NewRenderSurface(makeGrid(24, 3), Rect{W: 24, H: 3}))
+	if !tb.hasOverflowLeft {
+		t.Fatal("setup: want left overflow")
+	}
+	tb.HandleEvent(tcell.NewEventMouse(1, 1, tcell.Button3, tcell.ModNone))
+	if len(closed) != 0 {
+		t.Fatalf("closed = %v, want none", closed)
+	}
+}
+
+func TestTabBarMiddleClickStaleSpansDoesNotPanic(t *testing.T) {
+	var closed []int
+	tb := newMiddleClickTabBar(&closed)
+	x := tabLabelX(t, tb, "c.go")
+	tb.SetTabs([]Tab{{Name: "a.go", Active: true, Closable: true}})
+	tb.HandleEvent(tcell.NewEventMouse(x, 1, tcell.Button3, tcell.ModNone))
+	if len(closed) != 0 {
+		t.Fatalf("closed = %v, want none", closed)
+	}
+}

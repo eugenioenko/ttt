@@ -429,11 +429,14 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	// Fresh press only, else dragging with the button held closes every tab it passes.
-	if btn&tcell.Button3 != 0 && prevBtn&tcell.Button3 == 0 && t.OnTabClose != nil {
+	// Arrow columns excluded: they hit-test to tabs scrolled out of view.
+	inTabZone := mx >= r.X+arrowW && mx < r.X+t.renderInnerRight
+	if btn&tcell.Button3 != 0 && prevBtn&tcell.Button3 == 0 && t.OnTabClose != nil && inTabZone {
 		localX := mx - r.X - arrowW + t.ScrollOffset
 		for i, s := range t.tabSpans {
 			if localX >= s.start && localX < s.end {
-				if !t.Tabs[i].Pinned {
+				// Spans are from last Render; SetTabs may have shrunk Tabs since.
+				if i < len(t.Tabs) && !t.Tabs[i].Pinned {
 					t.OnTabClose(i)
 				}
 				return EventConsumed
