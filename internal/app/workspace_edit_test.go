@@ -11,7 +11,9 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -380,7 +382,7 @@ func TestInteractiveCodeActionEditFailsWhenAnyBatchCannotApply(t *testing.T) {
 		},
 	}}
 
-	if a.applyInteractiveCodeActionEdit(mainPath, edit, a.snapshotCodeActionBuffers()) {
+	if _, ok := a.applyInteractiveCodeActionEdit(mainPath, edit, a.snapshotCodeActionBuffers()); ok {
 		t.Fatal("partially applied code action reported full success")
 	}
 	if got := strings.Join(a.EditorGroup.BufferForPath(mainPath).Lines, "\n"); got != "run()\n" {
@@ -463,7 +465,7 @@ func TestCodeActionRejectsEditWhenAffectedOpenBufferChanged(t *testing.T) {
 	snapshots := a.snapshotCodeActionBuffers()
 	a.EditorGroup.BufferForPath(utilPath).SetLines([]string{"func changed()"})
 
-	if a.applyInteractiveCodeActionEdit(mainPath, edit, snapshots) {
+	if _, ok := a.applyInteractiveCodeActionEdit(mainPath, edit, snapshots); ok {
 		t.Fatal("changed affected buffer was accepted")
 	}
 	if got := strings.Join(a.EditorGroup.BufferForPath(mainPath).Lines, "\n"); got != "call()\n" {
@@ -597,5 +599,115 @@ func TestPickCodeActionEditSkipsFileOperations(t *testing.T) {
 	}
 	if got := pickCodeActionEdit([]lsp.CodeAction{{Edit: empty}}); got != nil {
 		t.Errorf("picked %+v, want nothing", got)
+	}
+}
+
+func TestCodeActionsResultRunsCommandWithEmptyEdit(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"main.go": "call()\n",
+	})
+	sim := term.NewSimScreen()
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sim.Fini)
+	a.Screen = term.NewTcellScreenFrom(sim)
+	a.LspManager = lsp.NewManager(&config.LSPSettings{})
+
+	mainPath := filepath.Join(dir, "main.go")
+	a.EditorGroup.OpenFile(mainPath)
+	mainBuffer := a.EditorGroup.BufferForPath(mainPath)
+	snapshots := a.snapshotCodeActionBuffers()
+
+	result := &CodeActionsResult{
+		Path: mainPath, Buffer: mainBuffer, Version: mainBuffer.Version(), OpenBuffers: snapshots,
+		Server: "test-server",
+		Actions: []lsp.CodeAction{{
+			Title:   "Empty edit with command",
+			Edit:    &lsp.WorkspaceEdit{},
+			Command: &lsp.Command{Command: "custom.action"},
+		}},
+	}
+
+	a.HandleCodeActionsResult(result)
+	overlay, ok := a.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+	if !ok {
+		t.Fatal("code action picker did not open")
+	}
+	dialog := overlay.W.(*widgets.DialogWidget)
+	selectWidget := dialog.Content.(*widgets.SelectWidget)
+	selectWidget.Config.OnSelect("0")
+
+	if a.Status.Notification == i18n.Text("status.codeActionApplied") {
+		t.Fatalf("notification = %q, want empty edit not to notify codeActionApplied", a.Status.Notification)
+	}
+
+	select {
+	case ev := <-sim.EventQ():
+		interrupt, ok := ev.(*tcell.EventInterrupt)
+		if !ok {
+			t.Fatalf("expected EventInterrupt, got %T", ev)
+		}
+		cmdResult, ok := interrupt.Data().(*CodeActionCommandResult)
+		if !ok {
+			t.Fatalf("expected CodeActionCommandResult, got %T", interrupt.Data())
+		}
+		if !cmdResult.Notify {
+			t.Fatal("cmdResult.Notify = false, want true for empty edit")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for command execution")
+	}
+}
+
+func TestCodeActionsResultPreventsCommandOnUnsupportedEdit(t *testing.T) {
+	a, dir := workspaceEditTestApp(t, map[string]string{
+		"main.go": "call()\n",
+	})
+	sim := term.NewSimScreen()
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sim.Fini)
+	a.Screen = term.NewTcellScreenFrom(sim)
+	a.LspManager = lsp.NewManager(&config.LSPSettings{})
+
+	mainPath := filepath.Join(dir, "main.go")
+	a.EditorGroup.OpenFile(mainPath)
+	mainBuffer := a.EditorGroup.BufferForPath(mainPath)
+	snapshots := a.snapshotCodeActionBuffers()
+
+	unsupportedEdit := decodeWorkspaceEdit(t, `{"documentChanges":[{"kind":"create","uri":"file:///new.go"}]}`)
+
+	result := &CodeActionsResult{
+		Path: mainPath, Buffer: mainBuffer, Version: mainBuffer.Version(), OpenBuffers: snapshots,
+		Server: "test-server",
+		Actions: []lsp.CodeAction{{
+			Title:   "Unsupported edit with command",
+			Edit:    unsupportedEdit,
+			Command: &lsp.Command{Command: "custom.action"},
+		}},
+	}
+
+	a.HandleCodeActionsResult(result)
+	overlay, ok := a.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+	if !ok {
+		t.Fatal("code action picker did not open")
+	}
+	dialog := overlay.W.(*widgets.DialogWidget)
+	selectWidget := dialog.Content.(*widgets.SelectWidget)
+	selectWidget.Config.OnSelect("0")
+
+	if a.Status.Notification == i18n.Text("status.codeActionApplied") {
+		t.Fatalf("notification = %q, want unsupported edit rejected", a.Status.Notification)
+	}
+	if a.Status.Notification != i18n.Text("status.unsupportedWorkspaceEdit") {
+		t.Fatalf("notification = %q, want unsupportedWorkspaceEdit warning", a.Status.Notification)
+	}
+
+	select {
+	case ev := <-sim.EventQ():
+		t.Fatalf("unexpected event from command execution: %+v", ev)
+	case <-time.After(50 * time.Millisecond):
 	}
 }

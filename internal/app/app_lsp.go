@@ -630,13 +630,16 @@ func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bo
 	return len(files), allApplied
 }
 
-func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdit, openBuffers map[string]codeActionBufferSnapshot) bool {
+func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdit, openBuffers map[string]codeActionBufferSnapshot) (bool, bool) {
 	if a.EditorGroup.ActiveFilePath() != path {
-		return false
+		return false, false
 	}
 	batches, ok := a.workspaceTextEdits(edit)
-	if !ok || len(batches) == 0 {
-		return false
+	if !ok {
+		return false, false
+	}
+	if len(batches) == 0 {
+		return false, true
 	}
 	for _, batch := range batches {
 		batchPath := URIToPath(batch.URI)
@@ -644,11 +647,11 @@ func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdi
 		current := a.EditorGroup.BufferForPath(batchPath)
 		if (!wasOpen && current != nil) ||
 			(wasOpen && (current != captured.Buffer || current == nil || current.Version() != captured.Version)) {
-			return false
+			return false, false
 		}
 	}
-	_, allApplied := a.applyWorkspaceEditBatches(batches, false)
-	return allApplied
+	filesCount, allApplied := a.applyWorkspaceEditBatches(batches, false)
+	return filesCount > 0 && allApplied, allApplied
 }
 
 func (a *App) snapshotCodeActionBuffers() map[string]codeActionBufferSnapshot {
@@ -813,14 +816,19 @@ func (a *App) HandleCodeActionsResult(result *CodeActionsResult) {
 	a.ShowSelectDialog(i18n.Text("command.codeActions"), items, func(id string) {
 		if action, ok := actions[id]; ok && a.EditorGroup.ActiveFilePath() == result.Path &&
 			a.editorBuffer() == result.Buffer && result.Buffer.Version() == result.Version {
+			applied := false
 			if action.Edit != nil {
-				if !a.applyInteractiveCodeActionEdit(result.Path, action.Edit, result.OpenBuffers) {
+				var ok bool
+				applied, ok = a.applyInteractiveCodeActionEdit(result.Path, action.Edit, result.OpenBuffers)
+				if !ok {
 					return
 				}
-				a.StatusNotify(i18n.Text("status.codeActionApplied"))
+				if applied {
+					a.StatusNotify(i18n.Text("status.codeActionApplied"))
+				}
 			}
 			if action.Command != nil {
-				a.executeCodeActionCommand(result.Server, result.Path, *action.Command, action.Edit == nil)
+				a.executeCodeActionCommand(result.Server, result.Path, *action.Command, !applied)
 			}
 		}
 	}, nil)
