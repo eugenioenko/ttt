@@ -20,6 +20,7 @@ type ContentSplitWidget struct {
 	Top                       Widget
 	Bottom                    Widget
 	Position                  SplitPosition
+	FullHeightRight           bool
 	ShowBottom                bool
 	BottomH                   int
 	RightW                    int
@@ -114,7 +115,11 @@ func (cs *ContentSplitWidget) BottomRect() Rect {
 func (cs *ContentSplitWidget) bottomRect(r Rect) Rect {
 	if cs.Position == SplitRight {
 		width := cs.constrainedRightWidth(r.W, cs.requestedRightWidth(r.W))
-		return Rect{X: r.X + r.W - width, Y: r.Y + 1, W: width, H: max(r.H-1, 0)}
+		header := 1
+		if cs.FullHeightRight {
+			header = 0
+		}
+		return Rect{X: r.X + r.W - width, Y: r.Y + header, W: width, H: max(r.H-header, 0)}
 	}
 	height := cs.constrainedBottomHeight(r.H, cs.requestedBottomHeight(r.H))
 	return Rect{X: r.X, Y: r.Y + r.H - height, W: max(r.W, 0), H: height}
@@ -237,17 +242,21 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 		}
 	}
 
-	surface.SetCell(divX, 0, term.Cell{Ch: b.TopLeft, Style: bs})
-	for x := divX + 1; x < w; x++ {
-		surface.SetCell(x, 0, term.Cell{Ch: b.Horizontal, Style: bs})
+	startY := 0
+	if !cs.FullHeightRight {
+		surface.SetCell(divX, 0, term.Cell{Ch: b.TopLeft, Style: bs})
+		for x := divX + 1; x < w; x++ {
+			surface.SetCell(x, 0, term.Cell{Ch: b.Horizontal, Style: bs})
+		}
+		startY = 1
 	}
-	for y := 1; y < h; y++ {
+	for y := startY; y < h; y++ {
 		surface.SetCell(divX, y, term.Cell{Ch: b.Vertical, Style: bs})
 	}
 
-	if cs.Bottom != nil && rightW > 0 && h > 1 {
+	if cs.Bottom != nil && rightW > 0 && bottomRect.H > 0 {
 		cs.Bottom.SetRect(bottomRect)
-		cs.Bottom.Render(surface.Sub(Rect{X: divX + 1, Y: 1, W: rightW, H: h - 1}))
+		cs.Bottom.Render(surface.Sub(Rect{X: divX + 1, Y: bottomRect.Y - r.Y, W: rightW, H: bottomRect.H}))
 		if divider, ok := cs.Bottom.(dividerYProvider); ok {
 			y := divider.DividerScreenY() - r.Y
 			if y >= 0 && y < h {
@@ -439,10 +448,16 @@ func (cs *ContentSplitWidget) DividerScreenX() int {
 func (cs *ContentSplitWidget) BorderJunctions() borderJunctions {
 	junctions := borderJunctions{BottomX: [2]int{-1, -1}, RightY: -1}
 	if !cs.ShowBottom || cs.Bottom == nil {
+		if divider, ok := cs.Top.(dividerXProvider); ok {
+			junctions.BottomX[0] = divider.DividerScreenX()
+		}
 		return junctions
 	}
 	if cs.Position == SplitRight {
 		junctions.BottomX[0] = cs.DividerScreenX()
+		if divider, ok := cs.Top.(dividerXProvider); ok {
+			junctions.BottomX[1] = divider.DividerScreenX()
+		}
 		if divider, ok := cs.Bottom.(dividerYProvider); ok {
 			junctions.RightY = divider.DividerScreenY()
 		}
@@ -548,4 +563,10 @@ func (cs *ContentSplitWidget) OwnsPointerCapture() bool {
 		}
 	}
 	return false
+}
+
+func (cs *ContentSplitWidget) SetPanels(top, bottom Widget) {
+	cs.InvalidatePointerInteraction()
+	cs.Top, cs.Bottom = top, bottom
+	cs.SetPointerCaptureInvalidated(cs.pointerCaptureInvalidated)
 }

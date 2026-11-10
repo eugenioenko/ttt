@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/watcher"
 
@@ -51,7 +52,11 @@ func (a *App) SyncWatched() {
 	if a.Watcher == nil {
 		return
 	}
-	a.Watcher.Sync(a.EditorGroup.OpenFilePaths())
+	var paths []string
+	for _, group := range a.editorGroups() {
+		paths = append(paths, group.OpenFilePaths()...)
+	}
+	a.Watcher.Sync(paths)
 	if a.Explorer != nil {
 		a.Watcher.SyncDirs(a.Explorer.WatchedDirs())
 	}
@@ -69,7 +74,12 @@ func (a *App) HandleFileChanged(path string) {
 
 func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
-	buf := a.EditorGroup.BufferForPath(path)
+	var buf *buffer.Buffer
+	for _, group := range a.editorGroups() {
+		if buf = group.BufferForPath(path); buf != nil {
+			break
+		}
+	}
 	if buf == nil {
 		return
 	}
@@ -103,7 +113,11 @@ func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, err
 }
 
 func (a *App) reloadFile(path string) {
-	if !a.EditorGroup.ReloadFile(path) {
+	reloaded := false
+	for _, group := range a.editorGroups() {
+		reloaded = group.ReloadFile(path) || reloaded
+	}
+	if !reloaded {
 		return
 	}
 	delete(a.largeFiles.stale, path)

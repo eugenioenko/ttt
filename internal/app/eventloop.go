@@ -381,7 +381,9 @@ func RunEventLoop(
 				if len(v.Diagnostics) > 0 {
 					lines = app.lspLines(v.Path)
 				}
-				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
+				for _, group := range app.editorGroups() {
+					group.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
+				}
 			case *LSPDiagnosticRefresh:
 				app.handleDiagnosticRefresh(v.Server)
 			case *LSPServerStopped:

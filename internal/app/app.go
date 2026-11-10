@@ -66,7 +66,8 @@ type TerminalSpec struct {
 type App struct {
 	language        languageState
 	Root            *ui.Root
-	EditorGroup     *ui.EditorGroupWidget
+	EditorGroup     *ui.EditorGroupWidget // Follows activation so commands target the group receiving keys.
+	EditorSplit *ui.ContentSplitWidget
 	Sidebar         *ui.SidebarWidget
 	SplitPanel      *ui.SplitPanelWidget
 	ContentSplit    *ui.ContentSplitWidget

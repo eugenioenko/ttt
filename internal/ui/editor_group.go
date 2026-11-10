@@ -166,6 +166,8 @@ type EditorGroupWidget struct {
 	// takes its place.
 	OnEmpty           func()
 	OnActiveTabChange func()
+	OnActivate        func()
+	OpenFileElsewhere func(string) bool
 	lastActiveTabID   string
 	lastActiveBuf     *buffer.Buffer
 	// EmptyStateID names a content tab that stands in for the placeholder:
@@ -288,6 +290,9 @@ func (g *EditorGroupWidget) Focusable() bool { return true }
 
 func (g *EditorGroupWidget) SetFocused(focused bool) {
 	g.focused = focused
+	if focused && g.OnActivate != nil {
+		g.OnActivate()
+	}
 	if t := g.activeTab(); t != nil && t.Content != nil {
 		if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
 			setter.SetFocused(focused)
@@ -487,6 +492,9 @@ func contentFileError(path string, content Widget) error {
 }
 
 func (g *EditorGroupWidget) OpenFile(path string) error {
+	if g.OpenFileElsewhere != nil && g.OpenFileElsewhere(path) {
+		return nil
+	}
 	if isSpecialFile(path) {
 		err := errors.New(i18n.Format("files.cannotOpenSpecialFile", i18n.Args{"path": path}))
 		g.reportError(err.Error())
@@ -3456,6 +3464,12 @@ func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
+	if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons()&(tcell.Button1|tcell.Button2) != 0 {
+		x, y := mouse.Position()
+		if g.GetRect().Contains(x, y) && g.OnActivate != nil {
+			g.OnActivate()
+		}
+	}
 	if _, ok := ev.(*tcell.EventMouse); ok && g.TabBar.PointerGestureActive() {
 		return g.TabBar.HandleEvent(ev)
 	}
