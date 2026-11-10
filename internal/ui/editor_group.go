@@ -53,6 +53,7 @@ type Diagnostic struct {
 	Style     term.Style
 	Message   string
 	Source    string
+	Code      any
 }
 
 type editorTab struct {
@@ -1262,6 +1263,12 @@ func (g *EditorGroupWidget) IsDirtyPath(path string) bool {
 func (g *EditorGroupWidget) IsEditorActive() bool {
 	t := g.activeTab()
 	return t != nil && t.Content == nil
+}
+
+func (g *EditorGroupWidget) IsActiveEditableFile(path string) bool {
+	t := g.activeTab()
+	return t != nil && t.FilePath == path && t.PluginKey == "" && t.Content == nil &&
+		t.Buf != nil && !t.Virtual && !t.Placeholder && t.Diff == nil && !t.ReadOnly
 }
 
 func (g *EditorGroupWidget) ActiveDiffWidget() *DiffEditorWidget {
@@ -2592,6 +2599,10 @@ func (g *EditorGroupWidget) DiagnosticsByPath() map[string][]Diagnostic {
 		}
 	}
 	return merged
+}
+
+func (g *EditorGroupWidget) DiagnosticsForSource(source, path string) []Diagnostic {
+	return append([]Diagnostic(nil), g.diagSources[source][path]...)
 }
 
 // ClearDiagnosticsSource removes all diagnostics published by source and

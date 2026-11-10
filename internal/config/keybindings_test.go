@@ -116,10 +116,17 @@ func TestDefaultKeybindingsParse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultKeybindings should parse without error: %v", err)
 	}
+	foundCodeActions := false
 	for _, b := range kb {
 		if len(b.Steps) == 0 {
 			t.Fatalf("binding %q has no steps after parsing", b.Key)
 		}
+		if b.Key == "ctrl+." && b.Command == "editor.codeActions" {
+			foundCodeActions = true
+		}
+	}
+	if !foundCodeActions {
+		t.Fatal("default keybindings should map ctrl+. to editor.codeActions")
 	}
 }
 

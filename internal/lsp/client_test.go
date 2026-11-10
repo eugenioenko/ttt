@@ -441,7 +441,8 @@ func TestCodeActionSendsEmptyDiagnosticsArray(t *testing.T) {
 	// null diagnostics field with -32602.
 	var params struct {
 		Context struct {
-			Diagnostics json.RawMessage `json:"diagnostics"`
+			Diagnostics json.RawMessage       `json:"diagnostics"`
+			TriggerKind CodeActionTriggerKind `json:"triggerKind"`
 		} `json:"context"`
 	}
 	if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -450,6 +451,101 @@ func TestCodeActionSendsEmptyDiagnosticsArray(t *testing.T) {
 	if string(params.Context.Diagnostics) != "[]" {
 		t.Fatalf("expected diagnostics to serialize as [], got %s", params.Context.Diagnostics)
 	}
+	if params.Context.TriggerKind != CodeActionInvoked {
+		t.Fatalf("trigger kind = %d, want invoked", params.Context.TriggerKind)
+	}
 
 	server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")})
+}
+
+func TestCodeActionSendsDiagnostics(t *testing.T) {
+	c, server := pipeClient(t)
+	want := []Diagnostic{{
+		Range: Range{
+			Start: Position{Line: 2, Character: 3},
+			End:   Position{Line: 2, Character: 7},
+		},
+		Severity: 1,
+		Source:   "compiler",
+		Message:  "undefined: missing",
+	}}
+	go func() {
+		_, _ = c.CodeActionWithDiagnostics("file:///a.go", Range{}, nil, want)
+	}()
+
+	req := receiveWithin(t, server)
+	var params CodeActionParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if len(params.Context.Diagnostics) != 1 || params.Context.Diagnostics[0] != want[0] {
+		t.Fatalf("diagnostics = %+v, want %+v", params.Context.Diagnostics, want)
+	}
+	server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")})
+}
+
+func TestCodeActionParsesGoplsCommand(t *testing.T) {
+	c, server := pipeClient(t)
+	done := make(chan []CodeAction, 1)
+	go func() {
+		actions, _ := c.CodeAction("file:///a.go", Range{}, nil)
+		done <- actions
+	}()
+	req := receiveWithin(t, server)
+	server.Send(jsonrpc.Reply{
+		JSONRPC: "2.0", ID: req.ID,
+		Result: json.RawMessage(`[{"title":"Extract variable","kind":"refactor.extract.variable","command":{"title":"Extract variable","command":"gopls.apply_fix","arguments":[{"Fix":"extract_variable"}]}}]`),
+	})
+	select {
+	case actions := <-done:
+		if len(actions) != 1 || actions[0].Command == nil {
+			t.Fatalf("actions = %+v, want a command-bearing action", actions)
+		}
+		cmd := actions[0].Command
+		if cmd.Command != "gopls.apply_fix" || len(cmd.Arguments) != 1 || string(cmd.Arguments[0]) != `{"Fix":"extract_variable"}` {
+			t.Fatalf("command = %+v, want gopls apply_fix with arguments", cmd)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("CodeAction did not return")
+	}
+}
+
+func TestExecuteCommandRequest(t *testing.T) {
+	c, server := pipeClient(t)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.ExecuteCommand("gopls.apply_fix", []json.RawMessage{json.RawMessage(`{"Fix":"extract_variable"}`)})
+	}()
+	req := receiveWithin(t, server)
+	if req.Method != "workspace/executeCommand" {
+		t.Fatalf("method = %q, want workspace/executeCommand", req.Method)
+	}
+	var params ExecuteCommandParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if params.Command != "gopls.apply_fix" || len(params.Arguments) != 1 {
+		t.Fatalf("params = %+v, want gopls.apply_fix with one argument", params)
+	}
+	server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("null")})
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWorkspaceApplyEditUsesHandler(t *testing.T) {
+	c, _ := pipeClient(t)
+	c.OnApplyEdit = func(edit WorkspaceEdit) ApplyWorkspaceEditResult {
+		if len(edit.Changes) != 1 {
+			t.Errorf("workspace edit = %+v, want one file change", edit)
+		}
+		return ApplyWorkspaceEditResult{Applied: true}
+	}
+	result, err := c.answer("workspace/applyEdit", json.RawMessage(`{"edit":{"changes":{"file:///a.go":[]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := result.(ApplyWorkspaceEditResult); !ok || !got.Applied {
+		t.Fatalf("result = %#v, want applied result", result)
+	}
 }

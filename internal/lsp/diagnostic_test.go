@@ -37,7 +37,12 @@ func TestInitializeAdvertisesPullDiagnostics(t *testing.T) {
 		Capabilities struct {
 			TextDocument struct {
 				Diagnostic *DiagnosticClientCapabilities `json:"diagnostic"`
+				CodeAction *CodeActionClientCapabilities `json:"codeAction"`
 			} `json:"textDocument"`
+			Workspace struct {
+				ApplyEdit      bool                              `json:"applyEdit"`
+				ExecuteCommand *ExecuteCommandClientCapabilities `json:"executeCommand"`
+			} `json:"workspace"`
 		} `json:"capabilities"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -49,6 +54,13 @@ func TestInitializeAdvertisesPullDiagnostics(t *testing.T) {
 	}
 	if d.RelatedDocumentSupport {
 		t.Error("client claims relatedDocumentSupport")
+	}
+	codeAction := p.Capabilities.TextDocument.CodeAction
+	if codeAction == nil || codeAction.CodeActionLiteralSupport == nil {
+		t.Fatalf("initialize params carry no codeAction literal support: %s", params)
+	}
+	if !p.Capabilities.Workspace.ApplyEdit || p.Capabilities.Workspace.ExecuteCommand == nil {
+		t.Fatalf("initialize params do not advertise workspace edit/command support: %s", params)
 	}
 }
 

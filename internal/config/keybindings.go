@@ -310,6 +310,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+k t", Command: "terminal.new"},
 		{Key: "ctrl+k s", Command: "file.saveAs"},
 		{Key: "ctrl+u", Command: "editor.autocomplete"},
+		{Key: "ctrl+.", Command: "editor.codeActions"},
 		{Key: "ctrl+k i", Command: "editor.hover"},
 		{Key: "f2", Command: "editor.rename"},
 		{Key: "f12", Command: "editor.goToDefinition"},

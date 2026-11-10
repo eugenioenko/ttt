@@ -34,6 +34,7 @@ type Manager struct {
 	stateMu sync.Mutex
 
 	OnDiagnostics func(server string, params PublishDiagnosticsParams)
+	OnApplyEdit   func(server string, edit WorkspaceEdit) ApplyWorkspaceEditResult
 	// OnDiagnosticRefresh is called off the UI goroutine.
 	OnDiagnosticRefresh func(server string)
 
@@ -119,6 +120,12 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 		if m.OnDiagnostics != nil {
 			m.OnDiagnostics(key, params)
 		}
+	}
+	client.OnApplyEdit = func(edit WorkspaceEdit) ApplyWorkspaceEditResult {
+		if m.OnApplyEdit != nil {
+			return m.OnApplyEdit(key, edit)
+		}
+		return ApplyWorkspaceEditResult{FailureReason: "workspace edits are not supported"}
 	}
 	client.OnDiagnosticRefresh = func() {
 		if m.OnDiagnosticRefresh != nil {

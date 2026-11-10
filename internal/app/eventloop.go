@@ -345,6 +345,28 @@ func RunEventLoop(
 				app.ApplyWorkspaceEdit(v.Edit)
 			case *CodeActionResult:
 				app.applyCodeActionEdit(v.Path, v.Edit)
+			case *CodeActionsResult:
+				app.HandleCodeActionsResult(v)
+			case *CodeActionCommandResult:
+				if v.Err != nil {
+					app.StatusWarn(v.Err.Error())
+				} else if v.Notify {
+					app.StatusNotify(i18n.Text("status.codeActionCompleted"))
+				}
+			case *LSPApplyEditRequest:
+				if !v.Lifecycle.claim() {
+					break
+				}
+				batches, ok := app.workspaceTextEdits(&v.Edit)
+				applied := false
+				if ok && len(batches) > 0 {
+					_, applied = app.applyWorkspaceEditBatches(batches, false)
+				}
+				result := lsp.ApplyWorkspaceEditResult{Applied: applied}
+				if !applied {
+					result.FailureReason = i18n.Text("status.workspaceEditNotApplied")
+				}
+				v.Result <- result
 			case *ReferencesResult:
 				if len(v.Locations) > 0 {
 					app.ShowReferences(v.Locations)

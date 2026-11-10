@@ -857,6 +857,25 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.LogOutputAsync(level, "lsp:"+server, message)
 	}
 
+	lspManager.OnApplyEdit = func(_ string, edit lsp.WorkspaceEdit) lsp.ApplyWorkspaceEditResult {
+		result := make(chan lsp.ApplyWorkspaceEditResult, 1)
+		lifecycle := newExecRequestLifecycle()
+		request := &LSPApplyEditRequest{Edit: edit, Result: result, Lifecycle: lifecycle}
+		if err := screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
+			return lsp.ApplyWorkspaceEditResult{FailureReason: err.Error()}
+		}
+		select {
+		case applied := <-result:
+			return applied
+		case <-time.After(10 * time.Second):
+			if lifecycle.cancel() {
+				return lsp.ApplyWorkspaceEditResult{FailureReason: "timed out waiting to apply workspace edit"}
+			}
+			// The UI claimed the request, so let its edit finish and report the result.
+			return <-result
+		}
+	}
+
 	// A server can die at any time; waking the loop redraws the status bar so
 	// the indicator does not keep claiming the server is up.
 	lspManager.OnStateChange = func() {

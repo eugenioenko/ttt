@@ -32,6 +32,7 @@
   { "key": "ctrl+k t", "command": "terminal.new" },
   { "key": "ctrl+k s", "command": "file.saveAs" },
   { "key": "ctrl+u", "command": "editor.autocomplete" },
+  { "key": "ctrl+.", "command": "editor.codeActions" },
   { "key": "ctrl+k i", "command": "editor.hover" },
   { "key": "f2", "command": "editor.rename" },
   { "key": "f12", "command": "editor.goToDefinition" },
