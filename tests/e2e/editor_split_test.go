@@ -248,7 +248,7 @@ func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
 	if h.app.EditorGroup != leftBottom {
 		t.Fatal("directional focus chord did not reach the left group")
 	}
-	if !leftBottom.TabBar.GroupActive || rightBottom.TabBar.GroupActive || rightTop.TabBar.ShowGroupFocus {
+	if !leftBottom.TabBar.GroupActive || rightBottom.TabBar.GroupActive || !rightTop.TabBar.ShowGroupFocus {
 		t.Fatal("active group indication did not follow focus")
 	}
 	h.exec("editor.equalizeGroups")
@@ -426,11 +426,14 @@ func TestEditorSplitBorderHighlightIsOptionalAndLeavesTabNamesAlone(t *testing.T
 		}
 	}
 	check(left, term.StyleBorder)
+	check(right, term.StyleBorderActive)
+	s := *h.app.Settings
+	s.Appearance.HighlightActiveGroupBorder = false
+	h.app.ApplySettings(s)
 	check(right, term.StyleBorder)
 	if !left.Editor.Passive || right.Editor.Passive {
 		t.Fatal("turning border highlighting off changed active-line ownership")
 	}
-	s := *h.app.Settings
 	s.Appearance.HighlightActiveGroupBorder = true
 	h.app.ApplySettings(s)
 	check(left, term.StyleBorder)

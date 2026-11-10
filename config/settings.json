@@ -5,7 +5,7 @@
     "icons": "none",
     "scrollbarGlyphs": "blocks",
     "pointerShapes": true,
-    "highlightActiveGroupBorder": false
+    "highlightActiveGroupBorder": true
   },
   "editor": {
     "autoClosing": {
