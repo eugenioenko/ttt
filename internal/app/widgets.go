@@ -368,6 +368,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		RootBox:             rootBox,
 		EditorGroup:         editorGroup,
 		EditorSplit:         editorSplit,
+		restoreEditorLayout: len(openFiles) == 0,
 		Sidebar:             sidebar,
 		SplitPanel:          splitPanel,
 		ContentSplit:        contentSplit,

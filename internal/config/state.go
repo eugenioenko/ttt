@@ -6,14 +6,15 @@ import (
 )
 
 type State struct {
-	PanelPosition       string   `json:"panelPosition,omitempty"`
-	SidebarWidth        int      `json:"sidebarWidth,omitempty"`
-	SidebarHidden       bool     `json:"sidebarHidden,omitempty"`
-	SidebarPanelOrder   []string `json:"sidebarPanelOrder,omitempty"`
-	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
-	PanelHeight         int      `json:"panelHeight,omitempty"`
-	PanelWidth          int      `json:"panelWidth,omitempty"`
-	RecentFolders       []string `json:"recentFolders,omitempty"`
+	EditorLayouts       map[string]*EditorLayoutState `json:"editorLayouts,omitempty"`
+	PanelPosition       string                        `json:"panelPosition,omitempty"`
+	SidebarWidth        int                           `json:"sidebarWidth,omitempty"`
+	SidebarHidden       bool                          `json:"sidebarHidden,omitempty"`
+	SidebarPanelOrder   []string                      `json:"sidebarPanelOrder,omitempty"`
+	CommitHistoryHeight int                           `json:"commitHistoryHeight,omitempty"`
+	PanelHeight         int                           `json:"panelHeight,omitempty"`
+	PanelWidth          int                           `json:"panelWidth,omitempty"`
+	RecentFolders       []string                      `json:"recentFolders,omitempty"`
 }
 
 func LoadState() State {

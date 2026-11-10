@@ -105,7 +105,10 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 	highlight.SetStepScheduler(func() {})
 	t.Cleanup(func() {
 		editor.CloseTasks()
-		editor.EditorGroup.CloseAllTabs()
+		for _, group := range editor.EditorSplit.Groups() {
+			group.OnEmpty = nil
+			group.CloseAllTabs()
+		}
 		highlight.SetStepScheduler(nil)
 	})
 	h2.redraw()
