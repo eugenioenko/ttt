@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -592,6 +594,19 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	if !ok || len(batches) == 0 {
 		return
 	}
+	filesCount := a.applyWorkspaceEditBatches(batches, true)
+	a.StatusNotify(i18n.Format("status.renamedAcrossFileS", i18n.Args{"filesCount": filesCount}))
+}
+
+func (a *App) applyWorkspaceTextEdits(edit *lsp.WorkspaceEdit, saveOnRename bool) int {
+	batches, ok := a.workspaceTextEdits(edit)
+	if !ok || len(batches) == 0 {
+		return 0
+	}
+	return a.applyWorkspaceEditBatches(batches, saveOnRename)
+}
+
+func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bool) int {
 	currentPath := a.EditorGroup.ActiveFilePath()
 
 	files := make(map[string]bool)
@@ -604,7 +619,7 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 		files[path] = true
 		a.ApplyTextEdits(batch.Edits)
 
-		if buf := a.EditorGroup.ActiveBuffer(); a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
+		if buf := a.EditorGroup.ActiveBuffer(); saveOnRename && a.Settings.LSP.SaveOnRename && buf != nil && !buf.ReadOnlyOnDisk {
 			if a.EditorGroup.Save() {
 				_, lang := a.editorPathLang()
 				a.afterFileSave(path, lang)
@@ -613,7 +628,184 @@ func (a *App) ApplyWorkspaceEdit(edit *lsp.WorkspaceEdit) {
 	}
 
 	a.EditorGroup.OpenFile(currentPath)
-	a.StatusNotify(i18n.Format("status.renamedAcrossFileS", i18n.Args{"filesCount": len(files)}))
+	return len(files)
+}
+
+func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdit) int {
+	if a.EditorGroup.ActiveFilePath() != path {
+		return 0
+	}
+	return a.applyWorkspaceTextEdits(edit, false)
+}
+
+func (a *App) RequestInteractiveCodeActions() {
+	if !a.EditorGroup.IsEditorActive() {
+		a.StatusWarn(i18n.Text("status.noActiveEditor"))
+		return
+	}
+	path, lang := a.editorPathLang()
+	if path == "" {
+		a.StatusWarn(i18n.Text("status.noFileOpen"))
+		return
+	}
+	serverKey, _, ok := a.lspResolve(path, lang)
+	if !ok {
+		if lang != "" {
+			a.StatusWarn(i18n.Format("status.languageServerIsNotConfigured", i18n.Args{"lang": lang}))
+		}
+		return
+	}
+	buf := a.editorBuffer()
+	if buf == nil {
+		return
+	}
+	version := buf.Version()
+	r := a.currentCodeActionRange(path)
+	diagnostics := a.codeActionDiagnostics(path, serverKey, r)
+	workDir := a.lspWorkDir(path)
+	go func() {
+		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
+		if err != nil {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+				Path: path, Server: serverKey, Version: version, Buffer: buf, Err: err,
+			}))
+			return
+		}
+		actions, err := client.CodeActionWithDiagnostics(FileURI(path), r, nil, diagnostics)
+		if err != nil {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+				Path: path, Server: serverKey, Version: version, Buffer: buf, Err: err,
+			}))
+			return
+		}
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+			Path: path, Server: serverKey, Version: version, Buffer: buf, Actions: applicableCodeActions(actions),
+		}))
+	}()
+}
+
+func (a *App) codeActionDiagnostics(path, server string, requestRange lsp.Range) []lsp.Diagnostic {
+	uiDiags := append(
+		a.EditorGroup.DiagnosticsForSource(lspDiagnosticsSource(server), path),
+		a.EditorGroup.DiagnosticsForSource(lspPullDiagnosticsSource(server), path)...,
+	)
+	diagnostics := make([]lsp.Diagnostic, 0, len(uiDiags))
+	for _, d := range uiDiags {
+		start := lsp.Position{Line: d.StartLine, Character: a.lspColumn(path, d.StartLine, d.StartCol)}
+		end := lsp.Position{Line: d.EndLine, Character: a.lspColumn(path, d.EndLine, d.EndCol)}
+		if !lspRangesIntersect(lsp.Range{Start: start, End: end}, requestRange) {
+			continue
+		}
+		diagnostics = append(diagnostics, lsp.Diagnostic{
+			Range:    lsp.Range{Start: start, End: end},
+			Severity: int(d.Severity),
+			Source:   d.Source,
+			Message:  d.Message,
+		})
+	}
+	return diagnostics
+}
+
+func lspRangesIntersect(a, b lsp.Range) bool {
+	compare := func(a, b lsp.Position) int {
+		if a.Line < b.Line {
+			return -1
+		}
+		if a.Line > b.Line {
+			return 1
+		}
+		if a.Character < b.Character {
+			return -1
+		}
+		if a.Character > b.Character {
+			return 1
+		}
+		return 0
+	}
+	if compare(a.Start, a.End) == 0 {
+		return compare(b.Start, a.Start) <= 0 && compare(a.Start, b.End) < 0
+	}
+	if compare(b.Start, b.End) == 0 {
+		return compare(a.Start, b.Start) <= 0 && compare(b.Start, a.End) < 0
+	}
+	return compare(a.Start, b.End) < 0 && compare(b.Start, a.End) < 0
+}
+
+func (a *App) currentCodeActionRange(path string) lsp.Range {
+	line, col := a.EditorGroup.ActiveCursor()
+	startLine, startCol := line, col
+	endLine, endCol := line, col
+	if active, sl, sc, el, ec := a.EditorGroup.ActiveSelection(); active {
+		startLine, startCol, endLine, endCol = sl, sc, el, ec
+	}
+	return lsp.Range{
+		Start: lsp.Position{Line: startLine, Character: a.lspColumn(path, startLine, startCol)},
+		End:   lsp.Position{Line: endLine, Character: a.lspColumn(path, endLine, endCol)},
+	}
+}
+
+func applicableCodeActions(actions []lsp.CodeAction) []lsp.CodeAction {
+	var applicable []lsp.CodeAction
+	for _, action := range actions {
+		if action.Edit == nil && (action.Command == nil || action.Command.Command == "") {
+			continue
+		}
+		if action.Edit == nil {
+			applicable = append(applicable, action)
+			continue
+		}
+		batches, err := action.Edit.TextEdits()
+		if len(batches) > 0 || errors.Is(err, lsp.ErrFileOperations) ||
+			action.Command != nil && action.Command.Command != "" {
+			applicable = append(applicable, action)
+		}
+	}
+	return applicable
+}
+
+func (a *App) HandleCodeActionsResult(result *CodeActionsResult) {
+	if result == nil || result.Path != a.EditorGroup.ActiveFilePath() ||
+		result.Buffer != a.editorBuffer() || result.Buffer == nil || result.Version != result.Buffer.Version() {
+		return
+	}
+	if result.Err != nil {
+		a.StatusWarn(result.Err.Error())
+		return
+	}
+	if len(result.Actions) == 0 {
+		a.StatusNotify(i18n.Text("status.noCodeActionsAvailable"))
+		return
+	}
+
+	items := make([]widgets.SelectItem, len(result.Actions))
+	actions := make(map[string]lsp.CodeAction, len(result.Actions))
+	for i, action := range result.Actions {
+		id := strconv.Itoa(i)
+		items[i] = widgets.SelectItem{ID: id, Label: action.Title}
+		actions[id] = action
+	}
+	a.ShowSelectDialog(i18n.Text("command.codeActions"), items, func(id string) {
+		if action, ok := actions[id]; ok && a.EditorGroup.ActiveFilePath() == result.Path &&
+			a.editorBuffer() == result.Buffer && result.Buffer.Version() == result.Version {
+			if action.Edit != nil && a.applyInteractiveCodeActionEdit(result.Path, action.Edit) > 0 {
+				a.StatusNotify(i18n.Text("status.codeActionApplied"))
+			}
+			if action.Command != nil {
+				a.executeCodeActionCommand(result.Server, result.Path, *action.Command, action.Edit == nil)
+			}
+		}
+	}, nil)
+}
+
+func (a *App) executeCodeActionCommand(server, path string, command lsp.Command, notify bool) {
+	workDir := a.lspWorkDir(path)
+	go func() {
+		client, err := a.LspManager.ClientForLanguage(server, workDir)
+		if err == nil {
+			err = client.ExecuteCommand(command.Command, command.Arguments)
+		}
+		a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionCommandResult{Err: err, Notify: notify}))
+	}()
 }
 
 func (a *App) RequestReferences(path, lang string, line, col int) {

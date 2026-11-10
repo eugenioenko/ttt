@@ -51,6 +51,25 @@ type CodeActionResult struct {
 	Edit *lsp.WorkspaceEdit
 }
 
+type CodeActionsResult struct {
+	Path    string
+	Server  string
+	Version uint64
+	Buffer  *buffer.Buffer
+	Actions []lsp.CodeAction
+	Err     error
+}
+
+type CodeActionCommandResult struct {
+	Err    error
+	Notify bool
+}
+
+type LSPApplyEditRequest struct {
+	Edit   lsp.WorkspaceEdit
+	Result chan lsp.ApplyWorkspaceEditResult
+}
+
 func FileURI(path string) string { return lsp.FileURI(path) }
 
 func URIToPath(uri string) string { return lsp.URIToPath(uri) }

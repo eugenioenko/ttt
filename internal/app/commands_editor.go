@@ -692,6 +692,12 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "editor.codeActions", Title: i18n.Text("command.codeActions"),
+		Keywords: []string{"editor", "lsp", "refactor", "quick fix"},
+		Handler:  app.RequestInteractiveCodeActions,
+	})
+
+	reg.Register(command.Command{
 		ID: "editor.organizeImports", Title: i18n.Text("command.sourceActionOrganizeImports"),
 		Keywords: []string{"editor", "source", "cleanup"},
 		Handler: func() {

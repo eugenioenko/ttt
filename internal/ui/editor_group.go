@@ -2588,6 +2588,10 @@ func (g *EditorGroupWidget) DiagnosticsByPath() map[string][]Diagnostic {
 	return merged
 }
 
+func (g *EditorGroupWidget) DiagnosticsForSource(source, path string) []Diagnostic {
+	return append([]Diagnostic(nil), g.diagSources[source][path]...)
+}
+
 // ClearDiagnosticsSource removes all diagnostics published by source and
 // recomputes every path it touched.
 func (g *EditorGroupWidget) ClearDiagnosticsSource(source string) {

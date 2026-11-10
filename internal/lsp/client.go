@@ -34,6 +34,7 @@ type Client struct {
 
 	OnDiagnostics       func(params PublishDiagnosticsParams)
 	OnDiagnosticRefresh func()
+	OnApplyEdit         func(edit WorkspaceEdit) ApplyWorkspaceEditResult
 }
 
 // ClientHooks are passed to NewClient rather than assigned afterwards: the
@@ -139,6 +140,15 @@ func (c *Client) answer(method string, params json.RawMessage) (any, error) {
 		var p ConfigurationParams
 		_ = json.Unmarshal(params, &p)
 		return make([]any, len(p.Items)), nil
+	case "workspace/applyEdit":
+		var p ApplyWorkspaceEditParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, fmt.Errorf("parse workspace/applyEdit params: %w", err)
+		}
+		if c.OnApplyEdit == nil {
+			return ApplyWorkspaceEditResult{FailureReason: "workspace edits are not supported"}, nil
+		}
+		return c.OnApplyEdit(p.Edit), nil
 	case "client/registerCapability", "client/unregisterCapability":
 		return nil, nil
 	case "workspace/diagnostic/refresh":
@@ -203,9 +213,21 @@ func (c *Client) Initialize(rootURI string) error {
 				DocumentSymbol: &DocumentSymbolClientCapabilities{
 					HierarchicalDocumentSymbolSupport: true,
 				},
+				CodeAction: &CodeActionClientCapabilities{
+					CodeActionLiteralSupport: &CodeActionLiteralSupport{
+						CodeActionKind: CodeActionKindCapabilities{ValueSet: []string{
+							"", "quickfix", "refactor", "refactor.extract", "refactor.inline",
+							"refactor.rewrite", "source", "source.organizeImports", "source.fixAll",
+						}},
+					},
+				},
 				Diagnostic: &DiagnosticClientCapabilities{},
 			},
 			Workspace: &WorkspaceClientCapabilities{
+				ApplyEdit: true,
+				ExecuteCommand: &ExecuteCommandClientCapabilities{
+					DynamicRegistration: false,
+				},
 				Diagnostics: &DiagnosticWorkspaceClientCapabilities{RefreshSupport: true},
 			},
 		},
@@ -432,10 +454,21 @@ func (c *Client) locationRequest(method, uri string, line, col int) ([]Location,
 }
 
 func (c *Client) CodeAction(uri string, r Range, kinds []string) ([]CodeAction, error) {
+	return c.CodeActionWithDiagnostics(uri, r, kinds, nil)
+}
+
+func (c *Client) CodeActionWithDiagnostics(uri string, r Range, kinds []string, diagnostics []Diagnostic) ([]CodeAction, error) {
+	if diagnostics == nil {
+		diagnostics = []Diagnostic{}
+	}
 	result, err := c.call("textDocument/codeAction", CodeActionParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Range:        r,
-		Context:      CodeActionContext{Diagnostics: []Diagnostic{}, Only: kinds},
+		Context: CodeActionContext{
+			Diagnostics: diagnostics,
+			Only:        kinds,
+			TriggerKind: CodeActionInvoked,
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -448,6 +481,13 @@ func (c *Client) CodeAction(uri string, r Range, kinds []string) ([]CodeAction, 
 		return nil, fmt.Errorf("parse codeAction result: %w", err)
 	}
 	return actions, nil
+}
+
+func (c *Client) ExecuteCommand(command string, arguments []json.RawMessage) error {
+	_, err := c.call("workspace/executeCommand", ExecuteCommandParams{
+		Command: command, Arguments: arguments,
+	})
+	return err
 }
 
 func (c *Client) Rename(uri string, line, col int, newName string) (*WorkspaceEdit, error) {

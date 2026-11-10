@@ -102,6 +102,7 @@ func initMenuText() {
 		{Label: i18n.Text("menu.goToImplementation"), Command: "editor.goToImplementation"},
 		{Label: i18n.Text("menu.findAllReferences"), Command: "editor.findReferences"},
 		{Label: i18n.Text("menu.renameSymbol"), Command: "editor.rename"},
+		{Label: i18n.Text("menu.codeActions"), Command: "editor.codeActions"},
 		ui.MenuSep(),
 		{Label: i18n.Text("menu.formatDocumentLSP"), Command: "editor.formatDocument"},
 		{Label: i18n.Text("menu.formatDocumentExternal"), Command: "editor.formatExternal"},
