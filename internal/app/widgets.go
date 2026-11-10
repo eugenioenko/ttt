@@ -463,6 +463,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	if cfg.SettingsError != nil {
 		app.StatusWarn(i18n.Format("settings.loadFailed", i18n.Args{"error": cfg.SettingsError.Error()}))
 	}
+	app.restoreSessionOnStartup = len(openFiles) == 0
 	return app
 }
 

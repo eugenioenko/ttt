@@ -22,6 +22,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 
 	s := DefaultSettings()
 	s.Editor.TabSize = 7
+	s.Editor.RestoreTabs = true
 	s.Editor.WordWrap = true
 	s.Sidebar.PanelOrder = []string{"changes", "plugin.todo", "explorer"}
 	s.Sidebar.Width = 22
@@ -42,6 +43,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 
 	got := LoadSettings()
+	if !got.Editor.RestoreTabs {
+		t.Error("editor.restoreTabs did not round-trip")
+	}
 	if got.Editor.TabSize != 7 {
 		t.Errorf("tabSize = %d, want 7", got.Editor.TabSize)
 	}

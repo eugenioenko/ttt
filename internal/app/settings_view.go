@@ -71,6 +71,9 @@ func settingsCategories() []settingsCategory {
 	return []settingsCategory{
 		{Title: i18n.Text("settings.general"), Fields: []settingField{
 			section(i18n.Text("settings.startup")),
+			{Label: i18n.Text("session.restoreTabs"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.RestoreTabs },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.RestoreTabs = v }},
 			{Label: i18n.Text("settings.displayLanguage"), Kind: settingEnum, Restart: true, Options: languageItems,
 				GetString: func(s *config.Settings) string {
 					if s.Language.Locale == "" {
