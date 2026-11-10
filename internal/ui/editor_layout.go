@@ -231,10 +231,30 @@ func (e *EditorLayoutWidget) renderJunctions(surface Surface) {
 		b.Cross = b.LeftTee
 	}
 	r, joins := e.GetRect(), map[int]int{}
-	for _, gap := range e.dividerGaps {
-		y := gap.Y + gap.H - 1
-		if e.dividerVisibleAt(gap.X, y+1) {
-			surface.SetCell(gap.X-r.X, y-r.Y, term.Cell{Ch: b.TopTee, Style: term.StyleBorder})
+	if e.Split.Position == SplitRight {
+		tabJoins := map[int]uint8{}
+		for _, group := range e.Groups() {
+			if side := e.dividerSide(group); side != 0 {
+				tabs := group.TabBar.GetRect()
+				tabJoins[tabs.Y+tabs.H-1] |= side
+			}
+		}
+		x := e.Split.DividerScreenX()
+		for y, sides := range tabJoins {
+			glyph := b.TopTee
+			if e.dividerVisibleAt(x, y-1) {
+				glyph = b.Cross
+				if sides == 1 {
+					glyph = b.RightTee
+				} else if sides == 2 {
+					glyph = b.LeftTee
+				}
+			} else if sides == 1 {
+				glyph = b.TopRight
+			} else if sides == 2 {
+				glyph = b.TopLeft
+			}
+			surface.SetCell(x-r.X, y-r.Y, term.Cell{Ch: glyph, Style: term.StyleBorder})
 		}
 	}
 	if e.Split.HideBottomDivider {
@@ -287,17 +307,34 @@ func (e *EditorLayoutWidget) renderDividerGaps(surface Surface) {
 		return
 	}
 	r, dividerX := e.GetRect(), e.Split.DividerScreenX()
+	tabSides := make([]uint8, max(r.H, 0))
 	for _, group := range e.Groups() {
-		gr, tabs := group.GetRect(), group.TabBar.GetRect()
-		if gr.X != dividerX+1 && gr.X+gr.W != dividerX {
+		side := e.dividerSide(group)
+		if side == 0 {
 			continue
 		}
-		gap := Rect{X: dividerX, Y: tabs.Y, W: 1, H: tabs.H}
-		e.dividerGaps = append(e.dividerGaps, gap)
-		for y := max(gap.Y, r.Y); y < min(gap.Y+gap.H, r.Y+r.H); y++ {
-			surface.SetCell(dividerX-r.X, y-r.Y, term.Cell{Ch: ' ', Style: term.StyleDefault})
+		tabs := group.TabBar.GetRect()
+		for y := max(tabs.Y, r.Y); y < min(tabs.Y+tabs.H, r.Y+r.H); y++ {
+			tabSides[y-r.Y] |= side
 		}
 	}
+	for y, sides := range tabSides {
+		if sides == 3 {
+			e.dividerGaps = append(e.dividerGaps, Rect{X: dividerX, Y: y + r.Y, W: 1, H: 1})
+			surface.SetCell(dividerX-r.X, y, term.Cell{Ch: ' ', Style: term.StyleDefault})
+		}
+	}
+}
+
+func (e *EditorLayoutWidget) dividerSide(group *EditorGroupWidget) uint8 {
+	r, x := group.GetRect(), e.Split.DividerScreenX()
+	if r.X+r.W == x {
+		return 1
+	}
+	if r.X == x+1 {
+		return 2
+	}
+	return 0
 }
 
 func (e *EditorLayoutWidget) dividerVisibleAt(x, y int) bool {

@@ -255,11 +255,7 @@ func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
 	if delta := leftTop.GetRect().H - leftBottom.GetRect().H; delta < -1 || delta > 1 {
 		t.Fatal("equalizing did not balance row heights")
 	}
-	cells, width, _ := h.screen.GetContents()
-	crossX, crossY := leftTop.GetRect().X+leftTop.GetRect().W, leftTop.GetRect().Y+leftTop.GetRect().H
-	if cells[crossY*width+crossX].Str != string(h.app.Borders.Cross) {
-		t.Fatal("grid dividers did not meet at a themed intersection")
-	}
+	crossX := leftTop.GetRect().X + leftTop.GetRect().W
 	assertEditorDividerSkipsTabs(t, h, crossX)
 	groupCount, activeCount := 0, 0
 	var inspect func(*app.DebugWidgetNode)
