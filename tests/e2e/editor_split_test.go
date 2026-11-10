@@ -215,7 +215,7 @@ func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
 	if h.app.EditorGroup != leftBottom {
 		t.Fatal("directional focus chord did not reach the left group")
 	}
-	if !leftBottom.TabBar.GroupActive || rightBottom.TabBar.GroupActive || !rightTop.TabBar.ShowGroupFocus {
+	if !leftBottom.TabBar.GroupActive || rightBottom.TabBar.GroupActive || rightTop.TabBar.ShowGroupFocus {
 		t.Fatal("active group indication did not follow focus")
 	}
 	h.exec("editor.equalizeGroups")
@@ -370,5 +370,45 @@ func TestEditorSplitInheritsKeyboardModifierPreference(t *testing.T) {
 	h.pressKey(tcell.KeyLeft, tcell.ModCtrl)
 	if _, col := h.app.EditorGroup.ActiveCursor(); col != 4 {
 		t.Fatalf("new group did not follow changed modifier preference: col %d", col)
+	}
+}
+
+func TestEditorSplitBorderHighlightIsOptionalAndLeavesTabNamesAlone(t *testing.T) {
+	h := newTestHarness(t, 160, 42)
+	defer h.stop()
+	left := h.app.EditorGroup
+	h.exec("editor.split")
+	right := h.app.EditorGroup
+	check := func(group *ui.EditorGroupWidget, border term.Style) {
+		t.Helper()
+		cells := h.renderer.NextFrame(h.app.Root.Width, h.app.Root.Height)
+		h.app.Root.Render(cells)
+		r := group.TabBar.GetRect()
+		if cells[r.Y][r.X].Style != border {
+			t.Fatalf("tab border style = %v, want %v", cells[r.Y][r.X].Style, border)
+		}
+		if cells[r.Y+1][r.X+2].Style != term.StyleActiveTab {
+			t.Fatal("split focus changed the tab name background")
+		}
+	}
+	check(left, term.StyleBorder)
+	check(right, term.StyleBorder)
+	if !left.Editor.Passive || right.Editor.Passive {
+		t.Fatal("turning border highlighting off changed active-line ownership")
+	}
+	s := *h.app.Settings
+	s.Appearance.HighlightActiveGroupBorder = true
+	h.app.ApplySettings(s)
+	check(left, term.StyleBorder)
+	check(right, term.StyleBorderActive)
+	h.app.Root.SetFocus(left)
+	check(left, term.StyleBorderActive)
+	check(right, term.StyleBorder)
+	h.exec("editor.splitDown")
+	check(h.app.EditorGroup, term.StyleBorderActive)
+	s.Appearance.HighlightActiveGroupBorder = false
+	h.app.ApplySettings(s)
+	for _, group := range h.app.EditorSplit.Groups() {
+		check(group, term.StyleBorder)
 	}
 }

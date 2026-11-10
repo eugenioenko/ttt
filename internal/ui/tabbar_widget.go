@@ -210,13 +210,9 @@ func (t *TabBarWidget) Render(surface Surface) {
 	if t.Borders != nil {
 		b = *t.Borders
 	}
-	bs, labelStyle := term.StyleBorder, term.StyleActiveTab
-	if t.ShowGroupFocus {
-		if t.GroupActive {
-			bs, labelStyle = term.StyleBorderActive, term.StyleSelectedTab
-		} else {
-			labelStyle = term.StyleInactiveTab
-		}
+	bs := term.StyleBorder
+	if t.ShowGroupFocus && t.GroupActive {
+		bs = term.StyleBorderActive
 	}
 
 	// Compute spans: active tab needs 2 extra cols for │ │ side borders
@@ -315,7 +311,7 @@ func (t *TabBarWidget) Render(surface Surface) {
 			if sx >= innerLeft && sx < innerRight {
 				surface.SetCell(sx, 1, term.Cell{Ch: b.Vertical, Style: bs})
 			}
-			drawTabLabel(surface, sx+1, innerLeft, innerRight, s.label, t.Icons, labelStyle)
+			drawTabLabel(surface, sx+1, innerLeft, innerRight, s.label, t.Icons, term.StyleActiveTab)
 			if ex-1 >= innerLeft && ex-1 < innerRight {
 				surface.SetCell(ex-1, 1, term.Cell{Ch: b.Vertical, Style: bs})
 			}

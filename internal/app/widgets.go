@@ -477,6 +477,7 @@ func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarge
 
 func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles []term.Style) *ui.EditorGroupWidget {
 	editorGroup := ui.NewEditorGroupWidget(borders, s.Editor.TabSize, s.Editor.LineNumbers, s.Editor.GutterStyle)
+	editorGroup.HighlightActiveBorder = s.Appearance.HighlightActiveGroupBorder
 	editorGroup.SetFileIconMode(s.Appearance.Icons)
 	editorGroup.InsertSpaces = s.Editor.InsertSpaces
 	editorGroup.SetIndentGuides(s.Editor.IndentGuides)

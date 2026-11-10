@@ -17,7 +17,7 @@ Use the editor tab bar's **More** menu to choose **Split Right** (side by side) 
 
 Drag a tab into another group, or choose **Move to Other Group** from More. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Opening a file normally uses the active group, including when the same document is already open elsewhere.
 
-Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group's tab and border are highlighted. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
+Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. To highlight the active group’s border, enable **Highlight active group border** in **Settings > Appearance > Window**; it is off by default. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
 
 Drag dividers to resize groups. **Equalize Editor Groups** balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
 
