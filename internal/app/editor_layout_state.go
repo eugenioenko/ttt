@@ -32,6 +32,9 @@ func (a *App) snapshotEditorLayout(node *ui.EditorLayoutWidget) *config.EditorLa
 		First: a.snapshotEditorLayout(node.First), Second: a.snapshotEditorLayout(node.Second)}
 }
 
+// TODO: Extract tab/session restoration into a separate, configurable feature
+// for both single-group and split layouts. Define bounded workspace history,
+// stale-file cleanup, and a way to clear saved sessions before shipping it.
 func (a *App) persistEditorLayout() {
 	if a.restoringEditorLayout || a.EditorSplit == nil {
 		return
