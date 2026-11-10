@@ -104,34 +104,79 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 	if len(dst) == 0 {
 		return 0, nil
 	}
-	for len(o.ready) == 0 {
-		var input [1024]byte
-		n, err := o.tty.Read(input[:])
-		if n > 0 {
-			o.observe(input[:n])
+	for {
+		o.mu.Lock()
+		if len(o.ready) > 0 {
+			n := copy(dst, o.ready)
+			o.ready = o.ready[n:]
+			o.mu.Unlock()
+			return n, nil
 		}
-		if err != nil {
-			o.mu.Lock()
-			o.readFailed = true
-			if o.candidateCode == "" && !o.discarding {
-				o.ready = append(o.ready, o.candidate...)
-			}
+		passthrough := len(o.want) == 0 && o.candidateCode == "" && !o.discarding
+		if passthrough && len(o.candidate) > 0 {
+			o.ready = append(o.ready, o.candidate...)
 			o.candidate = nil
-			o.candidateCode = ""
-			o.discarding = false
-			for code, ch := range o.want {
-				delete(o.want, code)
-				ch <- OSCReply{Code: code, Err: err}
+		}
+		o.mu.Unlock()
+		if passthrough {
+			o.mu.Lock()
+			if len(o.ready) > 0 {
+				n := copy(dst, o.ready)
+				o.ready = o.ready[n:]
+				o.mu.Unlock()
+				return n, nil
 			}
 			o.mu.Unlock()
+		}
+		n, err := o.tty.Read(dst)
+		if n > 0 {
+			o.mu.Lock()
+			passthrough = len(o.want) == 0 && o.candidateCode == "" && !o.discarding && len(o.candidate) == 0
+			o.mu.Unlock()
+			if passthrough {
+				if err != nil {
+					o.readError(err)
+				}
+				return n, err
+			}
+			o.observe(dst[:n])
+		}
+		if err != nil {
+			o.readError(err)
+			o.mu.Lock()
 			if len(o.ready) == 0 {
+				o.mu.Unlock()
 				return 0, err
 			}
+			o.mu.Unlock()
+		}
+		if n > 0 {
+			o.mu.Lock()
+			if len(o.ready) > 0 {
+				ready := copy(dst, o.ready)
+				o.ready = o.ready[ready:]
+				o.mu.Unlock()
+				return ready, nil
+			}
+			o.mu.Unlock()
 		}
 	}
-	n := copy(dst, o.ready)
-	o.ready = o.ready[n:]
-	return n, nil
+}
+
+func (o *OSCReader) readError(err error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.readFailed = true
+	if o.candidateCode == "" && !o.discarding {
+		o.ready = append(o.ready, o.candidate...)
+	}
+	o.candidate = nil
+	o.candidateCode = ""
+	o.discarding = false
+	for code, ch := range o.want {
+		delete(o.want, code)
+		ch <- OSCReply{Code: code, Err: err}
+	}
 }
 
 // observe withholds matching color replies from tcell so a fragmented OSC cannot

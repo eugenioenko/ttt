@@ -188,6 +188,33 @@ type streamedReadTty struct {
 	reads chan []byte
 }
 
+func TestOSCReaderPassesStandaloneEscapeThroughWithoutQuery(t *testing.T) {
+	tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+	reader := NewOSCReader(tty)
+	result := make(chan struct {
+		bytes string
+		err   error
+	}, 1)
+	go func() {
+		buf := make([]byte, 8)
+		n, err := reader.Read(buf)
+		result <- struct {
+			bytes string
+			err   error
+		}{string(buf[:n]), err}
+	}()
+	tty.reads <- []byte("\x1b")
+	select {
+	case got := <-result:
+		if got.bytes != "\x1b" || got.err != nil {
+			t.Fatalf("standalone escape = %q, %v", got.bytes, got.err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("standalone escape was buffered without an active palette query")
+	}
+	close(tty.reads)
+}
+
 func (t *streamedReadTty) Read(p []byte) (int, error) {
 	data, ok := <-t.reads
 	if !ok {
