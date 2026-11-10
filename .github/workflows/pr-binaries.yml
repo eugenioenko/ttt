@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for target in linux-amd64 darwin-amd64 darwin-arm64 windows-amd64; do
+          for target in linux-amd64 linux-386 darwin-amd64 darwin-arm64 windows-amd64; do
             os="${target%-*}"
             arch="${target#*-}"
             ext=""
@@ -95,6 +95,16 @@ jobs:
         with:
           name: ttt-pr-${{ github.event.pull_request.number }}-windows-amd64
           path: dist/windows-amd64/ttt.exe
+          if-no-files-found: error
+          overwrite: true
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      # The live preview at live.tttedit.dev runs this build in a 32-bit x86 emulator.
+      - name: Upload Linux x86 for the live preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: ttt-pr-${{ github.event.pull_request.number }}-linux-386
+          path: dist/linux-386/ttt
           if-no-files-found: error
           overwrite: true
           retention-days: ${{ env.RETENTION_DAYS }}
