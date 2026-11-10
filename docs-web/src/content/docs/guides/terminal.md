@@ -26,9 +26,13 @@ Plugins can open a program in an editor tab with `term.spawn{ shell = "program",
 
 - Full VT escape sequence support via `eugenioenko/xterm-go` and PTY management via `aymanbagabas/go-pty`
 - True color (24-bit) and 256-color rendering with direct RGB color support
-- When the terminal is focused, all keys go to the PTY except force keys: Ctrl+T, Alt+T, Ctrl+Q, Ctrl+P, Ctrl+K P, Ctrl+B
+- When the terminal is focused, keys go to the PTY except local clipboard shortcuts and force keys: Ctrl+T, Alt+T, Ctrl+Q, Ctrl+P, Ctrl+K P, Ctrl+B
 - Scrollback buffer with mouse wheel scrolling (3 lines), Shift+PgUp/PgDn (half page), and a draggable scrollbar
 - Click the terminal content area to focus it; any keypress snaps back to the live view when scrolled up
+
+With [`keyboard.modifierKey`](/reference/settings/#keyboard) set to `"control+super"` or `"super"`, Super+V also pastes and Super+C copies selected terminal text. Super is Command (⌘) on macOS. Super+C without a selection does nothing; Ctrl+C still copies selected text or sends an interrupt when nothing is selected. Super+V pastes even when `terminal.ctrlVPastes` is `false`, so Ctrl+V can remain available to terminal programs.
+
+Ctrl+click opens URLs and file links in terminal output. When Super shortcuts are enabled, Super+click also opens links, shows the link cursor and underline, and permits local text selection when the terminal program captures the mouse. The outer terminal must report the modifier. These settings apply live to both panel terminals and editor terminal tabs; other shell key and mouse encodings keep their original modifiers.
 
 ## Bottom Panel
 

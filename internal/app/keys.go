@@ -6,6 +6,17 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func controlModifiers(mode string) tcell.ModMask {
+	switch mode {
+	case config.ModifierSuper:
+		return tcell.ModMeta
+	case config.ModifierControlSuper:
+		return tcell.ModCtrl | tcell.ModMeta
+	default:
+		return tcell.ModCtrl
+	}
+}
+
 var canonicalKeyToTcell = map[string]tcell.Key{
 	"Escape":    tcell.KeyEscape,
 	"Enter":     tcell.KeyEnter,

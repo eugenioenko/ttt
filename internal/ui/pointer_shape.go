@@ -267,7 +267,7 @@ func (tw *TerminalWidget) PointerShapeAt(mx, my int) string {
 	if !r.Contains(mx, my) {
 		return ""
 	}
-	if tw.ctrlHeld {
+	if tw.linkModifierHeld {
 		pos := tw.screenToLine(mx, my)
 		if tw.linkAt(pos.Line, pos.Col) != nil {
 			return term.PointerHand

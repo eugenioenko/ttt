@@ -8,6 +8,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -231,5 +232,72 @@ func TestTerminalWidget_CtrlVPastes(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestTerminalWidget_SuperClipboard(t *testing.T) {
+	clipboard.DisableSystem()
+	dev, err := terminal.New("/bin/sh", 80, 24, 0, nil, "", "-c",
+		"stty raw -echo; printf super-clipboard-ready; exec cat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dev.Close()
+	updated := newUpdateChan(dev)
+	dev.Run()
+	waitFor(t, updated, func() bool { return strings.Contains(string(dev.RawTail()), "super-clipboard-ready") })
+	tw := NewTerminalWidget(dev, nil)
+	tw.SuperShortcuts = true
+	for _, bracketed := range []bool{false, true} {
+		mode := "\x1b[?2004l"
+		if bracketed {
+			mode = "\x1b[?2004h"
+		}
+		beforeMode := len(dev.RawTail())
+		dev.WriteString(mode)
+		waitFor(t, updated, func() bool {
+			return len(dev.RawTail()) >= beforeMode+len(mode) && dev.DecPrivateModes().BracketedPasteMode == bracketed
+		})
+		for _, ctrlVPastes := range []bool{false, true} {
+			for _, shifted := range []bool{false, true} {
+				tw.CtrlVPastes = ctrlVPastes
+				clipboard.Set("super-paste-payload")
+				mod := tcell.ModMeta
+				if shifted {
+					mod |= tcell.ModShift
+				}
+				before := len(dev.RawTail())
+				tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "v", mod))
+				tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, ".", 0))
+				waitFor(t, updated, func() bool { return len(dev.RawTail()) > before && strings.HasSuffix(string(dev.RawTail()), ".") })
+				want := "super-paste-payload"
+				if bracketed {
+					want = "\x1b[200~" + want + "\x1b[201~"
+				}
+				if got := string(dev.RawTail()[before:]); got != want+"." {
+					t.Fatalf("bracketed=%t ctrlVPastes=%t shifted=%t: PTY received %q, want %q", bracketed, ctrlVPastes, shifted, got, want+".")
+				}
+			}
+		}
+	}
+	dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[Hcopy-source") })
+	for _, mod := range []tcell.ModMask{tcell.ModCtrl, tcell.ModMeta} {
+		tw.hasSelection = true
+		tw.selAnchor = termSelPos{Line: 0, Col: 0}
+		tw.selCurrent = termSelPos{Line: 0, Col: 11}
+		clipboard.Set("unchanged")
+		tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "c", mod))
+		if got := clipboard.Get(); got != "copy-source" || tw.HasSelection() {
+			t.Fatalf("copy with modifier %v: clipboard=%q selected=%t", mod, got, tw.HasSelection())
+		}
+	}
+	before := len(dev.RawTail())
+	tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "c", tcell.ModMeta))
+	tw.HandleEvent(tcell.NewEventKey(tcell.KeyCtrlC, "", tcell.ModCtrl))
+	tw.HandleEvent(tcell.NewEventKey(tcell.KeyCtrlZ, "", tcell.ModCtrl))
+	tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, ".", 0))
+	waitFor(t, updated, func() bool { return len(dev.RawTail()) > before && strings.HasSuffix(string(dev.RawTail()), ".") })
+	if got := string(dev.RawTail()[before:]); got != "\x03\x1a." {
+		t.Fatalf("copy without selection and shell controls: PTY received %q, want %q", got, "\x03\x1a.")
 	}
 }

@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -217,24 +216,10 @@ func (a *App) closeEventLoopDone() {
 func (a *App) KeyFor(cmd string) string {
 	for _, kb := range a.Keybindings {
 		if kb.Command == cmd {
-			return formatKeyDisplay(kb.Key)
+			return FormatKeyBinding(kb.Key, controlModifiers(a.Settings.Keyboard.ModifierKey))
 		}
 	}
 	return ""
-}
-
-func formatKeyDisplay(key string) string {
-	parts := strings.Fields(key)
-	for i, part := range parts {
-		tokens := strings.Split(part, "+")
-		for j, tok := range tokens {
-			if len(tok) > 0 {
-				tokens[j] = strings.ToUpper(tok[:1]) + tok[1:]
-			}
-		}
-		parts[i] = strings.Join(tokens, "+")
-	}
-	return strings.Join(parts, " ")
 }
 
 func (a *App) ShowSidebar() {
@@ -503,6 +488,7 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw.Term = t
 	tw.WorkDir = spec.Cwd
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
+	tw.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 	tw.OnOpenURL = OpenURL
 	tw.OnOpenFile = a.openFileLink
 
@@ -736,7 +722,7 @@ func (a *App) checkMouseHover(mx, my int) {
 
 func (a *App) ShowHover(text string, anchorX, anchorY int) {
 	if text != "" {
-		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY)
+		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY, &a.Root.ControlModifiers)
 	}
 }
 
@@ -1184,6 +1170,7 @@ func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callb
 
 func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 	findBar := ui.NewFindBarWidget()
+	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		leftMatches, err := ui.FindInLines(dv.LeftLines(), query, opts)

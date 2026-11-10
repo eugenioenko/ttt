@@ -245,6 +245,14 @@ func TestCommandLineOnKeyConsumes(t *testing.T) {
 	`); err != nil {
 		t.Fatalf("event shape: %v", err)
 	}
+	mask := tcell.ModCtrl
+	p.ControlModifiers = &mask
+	for _, mode := range []tcell.ModMask{tcell.ModCtrl, tcell.ModMeta, tcell.ModCtrl | tcell.ModMeta} {
+		mask = mode
+		if got := rec.onKey(tcell.NewEventKey(tcell.KeyRune, "s", tcell.ModMeta)); got != (mode&tcell.ModMeta != 0) {
+			t.Fatalf("Super+S consumed = %v in mode %v", got, mode)
+		}
+	}
 }
 
 func TestCommandLineOnKeyAbsentIsNil(t *testing.T) {

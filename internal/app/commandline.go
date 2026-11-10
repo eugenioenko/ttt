@@ -19,6 +19,7 @@ func (a *App) ShowCommandLine(prefix string, onChange, onSubmit func(string), on
 	}
 
 	w := ui.NewCommandLineWidget(prefix)
+	w.Input().ControlModifiers = &a.Root.ControlModifiers
 	w.Borders = a.Borders
 	w.OnChange = onChange
 	w.OnSubmit = func(text string) {

@@ -406,7 +406,7 @@ func (m *Manager) DispatchKeyEvent(ev *tcell.EventKey) bool {
 		if p.State == nil || len(p.EventListeners["key.press"]) == 0 {
 			continue
 		}
-		tbl := keyEventToLua(p.State, ev)
+		tbl := keyEventToLua(p.State, ev, p.ControlModifiers)
 		if p.DispatchKeyEvent(tbl) {
 			return true
 		}

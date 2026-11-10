@@ -40,6 +40,33 @@ func TestReconcileCreatesWidgets(t *testing.T) {
 	}
 }
 
+func TestReconcileBindsModifierReferencesToLeaves(t *testing.T) {
+	mask := tcell.ModCtrl
+	p := &Plugin{ControlModifiers: &mask}
+	state := NewWidgetState()
+	descs := []WidgetDesc{{Kind: WidgetVStack, Children: []WidgetDesc{
+		{Kind: WidgetInput, Key: "input"},
+		{Kind: WidgetMarkdown, Key: "markdown", MarkdownContent: "text"},
+	}}}
+	state.Reconcile(descs, p)
+	children := state.items[0].(*widgets.VStackWidget).Children
+	input := children[0].(*widgets.InputWidget)
+	markdown := children[1].(*widgets.ScrollViewWidget).Child.(*widgets.MarkdownWidget)
+	if input.ControlModifiers != &mask || markdown.ControlModifiers != &mask {
+		t.Fatal("new controls did not receive the shared setting")
+	}
+	mask = tcell.ModMeta
+	if *input.ControlModifiers != tcell.ModMeta || *markdown.ControlModifiers != tcell.ModMeta {
+		t.Fatal("controls did not observe the live setting without reconciliation")
+	}
+	other := tcell.ModCtrl | tcell.ModMeta
+	p.ControlModifiers = &other
+	state.Reconcile(descs, p)
+	if input.ControlModifiers != &other || markdown.ControlModifiers != &other {
+		t.Fatal("reused controls did not receive the updated setting reference")
+	}
+}
+
 func TestReconcilePreservesTreeState(t *testing.T) {
 	ws := NewWidgetState()
 	p := &Plugin{Name: "test", State: lua.NewState()}

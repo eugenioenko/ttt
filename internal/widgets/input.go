@@ -60,6 +60,8 @@ type InputAction struct {
 
 type InputWidget struct {
 	BaseWidget
+	ControlModifiers *tcell.ModMask
+
 	Actions       []InputAction
 	ActionHits    []Rect
 	actionPressed bool
@@ -474,7 +476,14 @@ func lastOffsetFitting(runes []rune, w int) int {
 func (inp *InputWidget) HandleEvent(ev tcell.Event) EventResult {
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
-		return inp.handleKey(tev)
+		// Legacy Alt+Enter is encoded as Alt+Ctrl+M, independent of shortcut preferences.
+		if inp.wraps() && tev.Key() == tcell.KeyRune && tev.Modifiers()&(tcell.ModAlt|tcell.ModCtrl) == tcell.ModAlt|tcell.ModCtrl && strings.EqualFold(tev.Str(), "m") {
+			return inp.handleKey(tev)
+		}
+		if key := term.ControlKeyEvent(tev, inp.ControlModifiers); key != nil {
+			return inp.handleKey(key)
+		}
+		return EventIgnored
 	case *tcell.EventMouse:
 		return inp.handleMouse(tev)
 	}
