@@ -25,6 +25,7 @@ func DefaultStyleMap() StyleMap {
 // TcellScreen implements the Screen interface using tcell.
 type TcellScreen struct {
 	scr      tcell.Screen
+	osc      *OSCReader
 	styleMap StyleMap
 	// Called on every mouse event; only a change is written to the tty.
 	pointerShape         string
@@ -59,7 +60,7 @@ func NewTerminfoScreenFromTty(tty tcell.Tty) (*TcellScreen, *OSCReader, error) {
 	s.EnableMouse()
 	s.EnablePaste()
 	s.EnableFocus()
-	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, osc, nil
+	return &TcellScreen{scr: s, osc: osc, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, osc, nil
 }
 
 func NewTcellScreenFrom(s tcell.Screen) *TcellScreen {
@@ -186,6 +187,9 @@ func (t *TcellScreen) PollEvent() tcell.Event {
 }
 
 func (t *TcellScreen) Fini() {
+	if t.osc != nil {
+		t.osc.BeginShutdown()
+	}
 	if t.pointerShapesEnabled && t.pointerShape != "" && t.pointerShape != "default" {
 		t.SetPointerShape("default")
 	}

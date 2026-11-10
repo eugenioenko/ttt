@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gdamore/tcell/v3"
@@ -19,20 +20,27 @@ type OSCReply struct {
 	Err     error
 }
 
-// OSCReader observes only replies for registered color queries. Other input is
-// streamed to tcell unchanged; only a candidate reply is buffered, up to oscReplyMax.
+// OSCReader captures color replies and withholds them from tcell. Non-color input
+// is streamed unchanged; a candidate OSC response is bounded by oscReplyMax.
 type OSCReader struct {
-	tty             tcell.Tty
-	mu              sync.Mutex
-	readMu, writeMu sync.Mutex
-	candidate       []byte
-	want            map[string]chan OSCReply
-	closed          bool
-	readFailed      bool
+	tty           tcell.Tty
+	mu            sync.Mutex
+	readMu        sync.Mutex
+	writeGate     chan struct{}
+	shutdown      chan struct{}
+	shutdownOnce  sync.Once
+	candidate     []byte
+	candidateCode string
+	discarding    bool
+	ready         []byte
+	want          map[string]chan OSCReply
+	closed        bool
+	readFailed    bool
+	shuttingDown  atomic.Bool
 }
 
 func NewOSCReader(tty tcell.Tty) *OSCReader {
-	return &OSCReader{tty: tty, want: make(map[string]chan OSCReply)}
+	return &OSCReader{tty: tty, want: make(map[string]chan OSCReply), writeGate: make(chan struct{}, 1), shutdown: make(chan struct{})}
 }
 
 func (o *OSCReader) Query(code string, timeout time.Duration) <-chan OSCReply {
@@ -44,7 +52,7 @@ func (o *OSCReader) Query(code string, timeout time.Duration) <-chan OSCReply {
 		return out
 	}
 	o.mu.Lock()
-	if o.closed || o.readFailed {
+	if o.closed || o.readFailed || o.shuttingDown.Load() {
 		o.mu.Unlock()
 		out <- OSCReply{Code: code, Err: io.ErrClosedPipe}
 		return out
@@ -62,6 +70,11 @@ func (o *OSCReader) Query(code string, timeout time.Duration) <-chan OSCReply {
 		if o.want[code] == out {
 			delete(o.want, code)
 			out <- OSCReply{Code: code, Err: fmt.Errorf("OSC %s timeout", code)}
+			if o.candidateCode == code {
+				o.candidate = nil
+				o.candidateCode = ""
+				o.discarding = true
+			}
 		}
 		o.mu.Unlock()
 	}()
@@ -91,31 +104,55 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 	if len(dst) == 0 {
 		return 0, nil
 	}
-	n, err := o.tty.Read(dst)
-	if n > 0 {
-		o.observe(dst[:n])
-	}
-	if err != nil {
-		o.mu.Lock()
-		o.readFailed = true
-		for code, ch := range o.want {
-			delete(o.want, code)
-			ch <- OSCReply{Code: code, Err: err}
+	for len(o.ready) == 0 {
+		var input [1024]byte
+		n, err := o.tty.Read(input[:])
+		if n > 0 {
+			o.observe(input[:n])
 		}
-		o.mu.Unlock()
+		if err != nil {
+			o.mu.Lock()
+			o.readFailed = true
+			if o.candidateCode == "" && !o.discarding {
+				o.ready = append(o.ready, o.candidate...)
+			}
+			o.candidate = nil
+			o.candidateCode = ""
+			o.discarding = false
+			for code, ch := range o.want {
+				delete(o.want, code)
+				ch <- OSCReply{Code: code, Err: err}
+			}
+			o.mu.Unlock()
+			if len(o.ready) == 0 {
+				return 0, err
+			}
+		}
 	}
-	return n, err
+	n := copy(dst, o.ready)
+	o.ready = o.ready[n:]
+	return n, nil
 }
 
-// observe never changes or delays the bytes returned to tcell. Its only retained
-// state is a bounded candidate OSC response, independent of the input buffer.
+// observe withholds matching color replies from tcell so a fragmented OSC cannot
+// be mistaken for keyboard input by tcell's shorter escape-sequence timeout.
 func (o *OSCReader) observe(in []byte) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	for _, b := range in {
+		if o.discarding {
+			o.candidate = append(o.candidate, b)
+			if containsOSCTerminator(o.candidate) || len(o.candidate) > oscReplyMax {
+				o.candidate = nil
+				o.discarding = false
+			}
+			continue
+		}
 		if len(o.candidate) == 0 {
 			if b == '\x1b' {
 				o.candidate = append(o.candidate, b)
+			} else {
+				o.ready = append(o.ready, b)
 			}
 			continue
 		}
@@ -123,42 +160,80 @@ func (o *OSCReader) observe(in []byte) {
 			if b == ']' {
 				o.candidate = append(o.candidate, b)
 			} else if b == '\x1b' {
+				o.ready = append(o.ready, o.candidate[0])
 				o.candidate[0] = b
 			} else {
+				o.ready = append(o.ready, o.candidate[0], b)
 				o.candidate = nil
 			}
 			continue
 		}
 		o.candidate = append(o.candidate, b)
 		if len(o.candidate) > oscReplyMax {
+			if o.candidateCode == "" {
+				o.ready = append(o.ready, o.candidate...)
+			}
 			o.candidate = nil
+			o.candidateCode = ""
 			continue
 		}
-		if end, term := oscEnd(o.candidate); end >= 0 {
-			o.accept(o.candidate[2:end])
+		if end, _ := oscEnd(o.candidate); end >= 0 {
+			if o.candidateCode != "" && o.accept(o.candidate[2:end], o.candidateCode) {
+				o.candidate = nil
+				o.candidateCode = ""
+				continue
+			}
+			o.ready = append(o.ready, o.candidate...)
 			o.candidate = nil
-			_ = term
+			o.candidateCode = ""
+		} else if o.candidateCode == "" {
+			var possible bool
+			o.candidateCode, possible = o.matchingQuery(o.candidate)
+			if o.candidateCode == "" && !possible && len(o.candidate) > 2 {
+				o.ready = append(o.ready, o.candidate...)
+				o.candidate = nil
+			}
 		} else if !o.isCandidate(o.candidate) {
+			o.ready = append(o.ready, o.candidate...)
 			o.candidate = nil
+			o.candidateCode = ""
 		}
 	}
 }
 
-func (o *OSCReader) isCandidate(b []byte) bool {
-	if len(b) < 3 {
-		return true
-	}
-	body := string(b[2:])
-	for code := range o.want {
-		prefix := code + ";"
-		if strings.HasPrefix(prefix, body) || strings.HasPrefix(body, prefix) {
+func containsOSCTerminator(b []byte) bool {
+	for i, c := range b {
+		if c == 7 || (c == '\x1b' && i+1 < len(b) && b[i+1] == '\\') {
 			return true
 		}
 	}
 	return false
 }
 
-func (o *OSCReader) accept(seq []byte) bool {
+func (o *OSCReader) matchingQuery(b []byte) (string, bool) {
+	if len(b) < 3 || b[0] != '\x1b' || b[1] != ']' {
+		return "", true
+	}
+	body := string(b[2:])
+	for code := range o.want {
+		prefix := code + ";"
+		if strings.HasPrefix(body, prefix) {
+			return code, true
+		}
+		if strings.HasPrefix(prefix, body) {
+			return "", true
+		}
+	}
+	return "", false
+}
+
+func (o *OSCReader) isCandidate(b []byte) bool {
+	body := string(b[2:])
+	prefix := o.candidateCode + ";"
+	return strings.HasPrefix(prefix, body) || strings.HasPrefix(body, prefix)
+}
+
+func (o *OSCReader) accept(seq []byte, expectedCode string) bool {
 	fields := bytes.SplitN(seq, []byte(";"), 2)
 	if len(fields) != 2 {
 		return false
@@ -171,18 +246,18 @@ func (o *OSCReader) accept(seq []byte) bool {
 		}
 		key, payload = "4;"+string(parts[0]), string(parts[1])
 	}
-	if key != "10" && key != "11" && key != "12" && key != "17" && !strings.HasPrefix(key, "4;") {
-		return false
-	}
-	if !strings.Contains(payload, ":") {
+	if key != expectedCode {
 		return false
 	}
 	ch := o.want[key]
-	if ch == nil {
-		return false
+	if ch != nil {
+		delete(o.want, key)
+		if !strings.Contains(payload, ":") {
+			ch <- OSCReply{Code: key, Err: fmt.Errorf("invalid OSC color response")}
+		} else {
+			ch <- OSCReply{Code: key, Payload: payload}
+		}
 	}
-	delete(o.want, key)
-	ch <- OSCReply{Code: key, Payload: payload}
 	return true
 }
 
@@ -206,8 +281,15 @@ type OSCTty struct {
 func (t OSCTty) Read(p []byte) (int, error) { return t.Reader.Read(p) }
 
 func (t OSCTty) Write(p []byte) (int, error) {
-	t.Reader.writeMu.Lock()
-	defer t.Reader.writeMu.Unlock()
+	if t.Reader.shuttingDown.Load() {
+		return t.writeDuringShutdown(p)
+	}
+	select {
+	case t.Reader.writeGate <- struct{}{}:
+		defer func() { <-t.Reader.writeGate }()
+	case <-t.Reader.shutdown:
+		return t.writeDuringShutdown(p)
+	}
 	t.Reader.mu.Lock()
 	closed := t.Reader.closed
 	t.Reader.mu.Unlock()
@@ -217,8 +299,26 @@ func (t OSCTty) Write(p []byte) (int, error) {
 	return t.Tty.Write(p)
 }
 
+func (t OSCTty) writeDuringShutdown(p []byte) (int, error) {
+	t.Reader.mu.Lock()
+	closed := t.Reader.closed
+	t.Reader.mu.Unlock()
+	if closed {
+		return 0, io.ErrClosedPipe
+	}
+	return t.Tty.Write(p)
+}
+
+// BeginShutdown allows tcell reset writes to proceed without waiting for a
+// palette query whose TTY write is blocked.
+func (o *OSCReader) BeginShutdown() {
+	o.shuttingDown.Store(true)
+	o.shutdownOnce.Do(func() { close(o.shutdown) })
+}
+
 // Close prevents subsequent palette queries and writes after screen shutdown.
 func (o *OSCReader) Close() {
+	o.BeginShutdown()
 	o.mu.Lock()
 	o.closed = true
 	for code, ch := range o.want {

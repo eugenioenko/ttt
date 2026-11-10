@@ -225,6 +225,20 @@ func TestSetPointerShapeEmitsOSC22AndCaches(t *testing.T) {
 	}
 }
 
+func TestTcellScreenFiniBeginsOSCShutdown(t *testing.T) {
+	sim := NewSimScreen()
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	reader := NewOSCReader(&mockTty{})
+	screen := NewTcellScreenFrom(sim)
+	screen.osc = reader
+	screen.Fini()
+	if !reader.shuttingDown.Load() {
+		t.Fatal("Fini did not enable shutdown writes")
+	}
+}
+
 func TestSetPointerShapesDisabledFromStartupEmitsNoOSC22(t *testing.T) {
 	sim := NewSimScreen()
 	mtty := &mockTty{}
