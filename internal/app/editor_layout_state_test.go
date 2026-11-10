@@ -50,8 +50,14 @@ func TestEditorLayoutRestoresWorkspaceViewsAndRatios(t *testing.T) {
 	left.TogglePinTab()
 	a.SplitEditor()
 	right := a.EditorGroup
+	if err := right.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
 	a.SplitEditorDown()
 	bottom := a.EditorGroup
+	if err := bottom.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
 	left.GoToLineCol(50, 4)
 	left.Editor.Viewport.TopLine = 45
 	right.GoToLineCol(8, 2)

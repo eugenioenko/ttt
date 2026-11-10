@@ -65,7 +65,6 @@ func (a *App) splitEditor(position ui.SplitPosition) {
 	a.FlushEditorOnChange()
 	left := a.EditorGroup
 	right := a.newEditorGroupLike(left)
-	left.CloneActiveTabTo(right)
 	a.EditorSplit.SplitGroup(left, right, position)
 	a.activateEditorGroup(right)
 	a.FocusEditor()
@@ -166,6 +165,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.OnGutterClick = left.OnGutterClick
 	right.OnActiveTabChange = a.editorTabChanged
 	a.wireEditorGroupActivation(right)
+	right.NameUntitledPlaceholder()
 	return right
 }
 

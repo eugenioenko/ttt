@@ -760,12 +760,19 @@ func (g *EditorGroupWidget) canReplaceTab(t *editorTab) bool {
 }
 
 func (g *EditorGroupWidget) isUntouchedPlaceholder(t *editorTab) bool {
-	return t != nil && t.Placeholder && t.Buf != nil && !t.Buf.Dirty &&
+	return t != nil && t.Placeholder && t.Buf != nil && !t.Buf.Dirty && t.Buf.Version() == 0 &&
 		len(t.Buf.Lines) <= 1 && (len(t.Buf.Lines) == 0 || t.Buf.Lines[0] == "")
 }
 
+func (g *EditorGroupWidget) NameUntitledPlaceholder() {
+	if t := g.activeTab(); g.isUntouchedPlaceholder(t) {
+		t.FilePath = g.nextUntitledName(t)
+		g.syncTabs()
+	}
+}
+
 func (g *EditorGroupWidget) NewFile() {
-	name := g.nextUntitledName()
+	name := g.nextUntitledName(nil)
 	g.tabs = append(g.tabs, editorTab{
 		FilePath: name,
 		Buf:      &buffer.Buffer{Lines: []string{""}},
@@ -795,16 +802,19 @@ func (g *EditorGroupWidget) NewFileFromText(text string) {
 		g.syncTabs()
 		return
 	}
-	tab.FilePath = g.nextUntitledName()
+	tab.FilePath = g.nextUntitledName(nil)
 	g.tabs = append(g.tabs, tab)
 	g.SwitchTab(len(g.tabs) - 1)
 }
 
-func (g *EditorGroupWidget) nextUntitledName() string {
+func (g *EditorGroupWidget) nextUntitledName(exclude *editorTab) string {
 	taken := make(map[string]bool)
-	for _, t := range g.tabs {
-		if t.Virtual {
-			taken[t.FilePath] = true
+	for _, group := range append([]*EditorGroupWidget{g}, g.relatedGroups()...) {
+		for i := range group.tabs {
+			t := &group.tabs[i]
+			if t != exclude && t.Virtual {
+				taken[t.FilePath] = true
+			}
 		}
 	}
 	if !taken["untitled"] {
@@ -1093,7 +1103,7 @@ func contentPluginKey(content Widget) string {
 
 func (g *EditorGroupWidget) placeholderTab() editorTab {
 	return editorTab{
-		FilePath:    "untitled",
+		FilePath:    g.nextUntitledName(nil),
 		Buf:         &buffer.Buffer{Lines: []string{""}},
 		Cur:         &cursor.Cursor{},
 		Vp:          &view.Viewport{},
