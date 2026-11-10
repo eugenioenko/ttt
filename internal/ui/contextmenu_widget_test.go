@@ -308,3 +308,34 @@ func TestContextMenuSubmenuChevronFollowsIconMode(t *testing.T) {
 		})
 	}
 }
+
+func TestContextMenuDisabledItemsCannotBeSelectedOrExecuted(t *testing.T) {
+	var commands []string
+	menu := NewContextMenuWidget([]ContextMenuItem{
+		{Label: "Off", Command: "off", Disabled: true},
+		MenuSep(),
+		{Label: "On", Command: "on"},
+	}, 0, 0)
+	menu.OnExec = func(command string) { commands = append(commands, command) }
+	if menu.Selected != 2 {
+		t.Fatalf("initial selection = %d, want the first enabled item", menu.Selected)
+	}
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyUp, "", tcell.ModNone))
+	if menu.Selected != 2 {
+		t.Fatalf("keyboard moved onto a disabled item: selected = %d", menu.Selected)
+	}
+
+	cells := renderContextMenu(menu, 40, 10)
+	if got := cells[1][2].Style; got != term.StyleMuted {
+		t.Errorf("disabled label style = %v, want muted", got)
+	}
+	menu.firstEvent = false
+	menu.HandleEvent(tcell.NewEventMouse(3, 1, tcell.Button1, tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventMouse(3, 1, tcell.ButtonNone, tcell.ModNone))
+	if len(commands) != 0 {
+		t.Fatalf("clicking a disabled item executed %v", commands)
+	}
+	if got := menu.PointerShapeAt(3, 1); got != term.PointerDefault {
+		t.Errorf("pointer over disabled item = %q, want default", got)
+	}
+}
