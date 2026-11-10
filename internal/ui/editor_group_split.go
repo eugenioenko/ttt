@@ -69,10 +69,10 @@ func (g *EditorGroupWidget) MergeTabsFrom(source *EditorGroupWidget) {
 		return
 	}
 	activeBuf, activeContent := g.activeTab().Buf, g.activeTab().Content
-	count := source.TabCount()
-	for range count {
-		source.SwitchTab(0)
-		if source.isUntouchedPlaceholder(source.activeTab()) {
+	for i := 0; i < source.TabCount(); {
+		source.SwitchTab(i)
+		if source.isUntouchedPlaceholder(source.activeTab()) && !source.IsActiveTabPinned() {
+			i++
 			continue
 		}
 		source.MoveActiveTabTo(g)
