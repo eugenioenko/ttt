@@ -7,6 +7,8 @@ description: Core editing features in TTT.
 
 To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). Saving happens on exit and before changing workspaces. Explicit file arguments take precedence over restoration. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
 
+On exit, the current text-file tab list replaces the remembered list for that workspace, including when you started with explicit file arguments. Closing all text-file tabs clears that workspace's saved list, so closed tabs do not return on the next launch.
+
 Sessions are kept outside the project under the config directory's `sessions/` folder, with at most 128 tabs per session and 32 sessions. Sessions unused for 30 days are removed, and missing or non-regular files are skipped during restoration. **Session: Clear Saved Tabs** removes saved sessions without closing open files and pauses session saving until the next launch.
 
 ## Syntax Highlighting

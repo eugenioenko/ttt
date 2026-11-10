@@ -130,9 +130,6 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.language.updates.Stop()
 	}
 	*a.Settings = s
-	if s.Editor.RestoreTabs && !prev.Editor.RestoreTabs {
-		a.sessionSavingPaused = false
-	}
 	a.Root.SetControlModifiers(controlModifiers(s.Keyboard.ModifierKey))
 	if prev.Terminal.ForwardShortcuts != s.Terminal.ForwardShortcuts {
 		a.Root.SetForwardShortcuts(s.Terminal.ForwardShortcuts)

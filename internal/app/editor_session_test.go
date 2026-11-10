@@ -59,13 +59,13 @@ func TestEditorSessionRestoresTabsPositionsAndPins(t *testing.T) {
 	if line, col := g.ActiveCursor(); line != 49 || col != 3 || g.Editor.Viewport.TopLine != 45 {
 		t.Fatalf("restored cursor %d:%d, scroll %d", line, col, g.Editor.Viewport.TopLine)
 	}
-	if disabled := sessionTestApp(t, dir, false); disabled.EditorGroup.TabCount() != 1 || disabled.EditorGroup.ActiveFilePath() == first {
+	if disabled := sessionTestApp(t, dir, false); disabled.EditorGroup.TabCount() != 1 || disabled.EditorGroup.ActiveFilePath() != "untitled" {
 		t.Fatal("disabled setting restored tabs")
 	}
 	if explicit := sessionTestApp(t, dir, true, FileTarget{Path: second}); explicit.EditorGroup.TabCount() != 1 || explicit.EditorGroup.ActiveFilePath() != second {
 		t.Fatal("saved session overrode explicit file arguments")
 	}
-	if other := sessionTestApp(t, t.TempDir(), true); other.EditorGroup.ActiveFilePath() == first {
+	if other := sessionTestApp(t, t.TempDir(), true); other.EditorGroup.TabCount() != 1 || other.EditorGroup.ActiveFilePath() != "untitled" {
 		t.Fatal("another workspace inherited saved tabs")
 	}
 	if err := os.Remove(second); err != nil {
@@ -76,6 +76,9 @@ func TestEditorSessionRestoresTabsPositionsAndPins(t *testing.T) {
 		t.Fatalf("missing file was not cleaned: %+v, %v", tabs, err)
 	}
 	cleaned.ClearEditorSessions()
+	s := *cleaned.Settings
+	s.Editor.WordWrap = true
+	cleaned.ApplySettings(s)
 	cleaned.forceQuit()
 	if tabs, err := config.LoadEditorSession(cleaned.sessionWorkspaceKey); err != nil || len(tabs) != 0 || cleaned.EditorGroup.ActiveFilePath() != first {
 		t.Fatal("clear closed open tabs or recreated the session on exit")
