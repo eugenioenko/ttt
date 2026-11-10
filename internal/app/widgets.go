@@ -383,6 +383,12 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	rootBox := widgets.NewVStackWidget(menuBar, splitPanel, statusBar)
 
 	root := ui.NewRoot(rootBox)
+	root.SetControlModifiers(controlModifiers(cfg.Settings.Keyboard.ModifierKey))
+	editorGroup.ControlModifiers = &root.ControlModifiers
+	output.ControlModifiers = &root.ControlModifiers
+	for _, input := range []*widgets.InputWidget{search.Input, search.Include, search.Exclude, search.ReplaceInput, changes.Input} {
+		input.ControlModifiers = &root.ControlModifiers
+	}
 	root.SetFocus(editorGroup)
 
 	app := &App{

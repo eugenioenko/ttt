@@ -447,7 +447,13 @@ func (a *App) quitWithAction(onQuit func()) {
 			a.saveAllAndQuit(onQuit)
 		})
 	}
-	dialog := a.ShowConfirmDialogEx(i18n.Text("dialog.unsavedChanges"), i18n.Text("dialog.pressCtrlQToForceQuit"), buttons, callbacks)
+	hint := ""
+	if a.Reg != nil {
+		if cmd, ok := a.Reg.Get("editor.quit"); ok && cmd.Shortcut != "" {
+			hint = i18n.Format("dialog.pressCtrlQToForceQuit", i18n.Args{"shortcut": cmd.Shortcut})
+		}
+	}
+	dialog := a.ShowConfirmDialogEx(i18n.Text("dialog.unsavedChanges"), hint, buttons, callbacks)
 	dialog.OnDismiss = cancel
 }
 

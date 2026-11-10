@@ -75,14 +75,15 @@ type TerminalWidget struct {
 	selAnchor  termSelPos
 	selCurrent termSelPos
 
-	OnOpenURL      func(url string)
-	OnOpenFile     func(path string, line, col int)
-	WorkDir        string
-	SelectionStyle string
-	CtrlVPastes    bool
-	ctrlHeld       bool
-	linkCache      map[int][]linkSpan
-	linkMemo       map[string][]linkSpan
+	OnOpenURL        func(url string)
+	OnOpenFile       func(path string, line, col int)
+	WorkDir          string
+	SelectionStyle   string
+	CtrlVPastes      bool
+	SuperShortcuts   bool
+	linkModifierHeld bool
+	linkCache        map[int][]linkSpan
+	linkMemo         map[string][]linkSpan
 
 	// SGR button code of a held press being forwarded, or -1 when none.
 	mouseButtonHeld int
@@ -102,6 +103,10 @@ func (tw *TerminalWidget) Focusable() bool { return true }
 func (tw *TerminalWidget) SetFocused(f bool) { tw.focused = f }
 
 func (tw *TerminalWidget) WantsRawKeys() bool { return tw.focused }
+
+func (tw *TerminalWidget) superShortcut(mod tcell.ModMask) bool {
+	return tw.SuperShortcuts && mod&(tcell.ModMeta|tcell.ModCtrl|tcell.ModAlt|tcell.ModHyper) == tcell.ModMeta
+}
 
 func (tw *TerminalWidget) PasteText(text string) {
 	if tw.Term == nil || text == "" {
@@ -363,7 +368,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		if tw.scrollOffset > sbLen {
 			tw.scrollOffset = sbLen
 		}
-		if tw.ctrlHeld {
+		if tw.linkModifierHeld {
 			tw.linkCache = make(map[int][]linkSpan)
 		} else {
 			tw.linkCache = nil
@@ -374,7 +379,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		if tw.scrollOffset == 0 {
 			for y := 0; y < h && y < rows; y++ {
 				unifiedLine := sbLen + y
-				if tw.ctrlHeld {
+				if tw.linkModifierHeld {
 					lineText := extractLineText(buf, unifiedLine, w)
 					tw.linkCache[unifiedLine] = tw.linksForLine(lineText)
 				}
@@ -412,7 +417,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 
 			for screenY := 0; screenY < h; screenY++ {
 				srcLine := startLine + screenY
-				if tw.ctrlHeld {
+				if tw.linkModifierHeld {
 					lineText := extractLineText(buf, srcLine, w)
 					tw.linkCache[srcLine] = tw.linksForLine(lineText)
 				}
@@ -564,7 +569,8 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
-		tw.ctrlHeld = tev.Modifiers()&tcell.ModCtrl != 0
+		super := tw.superShortcut(tev.Modifiers())
+		tw.linkModifierHeld = tev.Modifiers()&tcell.ModCtrl != 0 || super
 		if tev.Modifiers()&tcell.ModShift != 0 {
 			_, h := tw.Term.Size()
 			switch tev.Key() {
@@ -579,15 +585,15 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 
 		r := term.KeyRune(tev)
 		isCopy := (tev.Key() == tcell.KeyCtrlC) ||
-			(tev.Key() == tcell.KeyRune && (r == 'c' || r == 'C') && tev.Modifiers()&tcell.ModCtrl != 0)
-		if isCopy && tw.hasSelection {
+			(tev.Key() == tcell.KeyRune && (r == 'c' || r == 'C') && (tev.Modifiers()&tcell.ModCtrl != 0 || super))
+		if isCopy && (tw.hasSelection || super) {
 			tw.CopySelection()
 			return EventConsumed
 		}
 
 		isPaste := (tev.Key() == tcell.KeyCtrlV) ||
-			(tev.Key() == tcell.KeyRune && (r == 'v' || r == 'V') && tev.Modifiers()&tcell.ModCtrl != 0)
-		if isPaste && (tw.CtrlVPastes || tev.Modifiers()&tcell.ModShift != 0) {
+			(tev.Key() == tcell.KeyRune && (r == 'v' || r == 'V') && (tev.Modifiers()&tcell.ModCtrl != 0 || super))
+		if isPaste && (super || tw.CtrlVPastes || tev.Modifiers()&tcell.ModShift != 0) {
 			text := clipboard.Get()
 			if text != "" {
 				tw.PasteText(text)
@@ -605,7 +611,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 	case *tcell.EventMouse:
-		tw.ctrlHeld = tev.Modifiers()&tcell.ModCtrl != 0
+		tw.linkModifierHeld = tev.Modifiers()&tcell.ModCtrl != 0 || tw.superShortcut(tev.Modifiers())
 
 		if newTop, consumed := tw.scrollbar.HandleEvent(ev); consumed {
 			if newTop >= tw.scrollbar.TotalItems-tw.scrollbar.Height {
@@ -645,7 +651,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 
-		if btn&tcell.Button1 != 0 && tw.ctrlHeld {
+		if btn&tcell.Button1 != 0 && tw.linkModifierHeld {
 			pos := tw.screenToLine(mx, my)
 			if link := tw.linkAt(pos.Line, pos.Col); link != nil {
 				if link.IsFile && tw.OnOpenFile != nil {
@@ -658,7 +664,7 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 			// No link: ctrl+click is a ttt-level affordance, not forwarded.
 		}
 
-		if mouseReporting && !tw.ctrlHeld {
+		if mouseReporting && !tw.linkModifierHeld {
 			if code, ok := sgrButtonCode(btn); ok {
 				held := tw.mouseButtonHeld == code
 				if !held || dm.MouseTrackingMode == "DRAG" || dm.MouseTrackingMode == "ANY" {

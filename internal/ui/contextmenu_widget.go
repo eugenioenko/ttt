@@ -14,6 +14,7 @@ type ContextMenuItem struct {
 	Shortcut string
 	Command  string
 	IsSep    bool
+	Disabled bool
 	Checked  int // 0 = no indicator, 1 = unchecked, 2 = checked
 	Submenu  []ContextMenuItem
 }
@@ -26,6 +27,8 @@ const (
 func MenuSep() ContextMenuItem {
 	return ContextMenuItem{IsSep: true}
 }
+
+func (it ContextMenuItem) selectable() bool { return !it.IsSep && !it.Disabled }
 
 type ContextMenuWidget struct {
 	BaseWidget
@@ -53,7 +56,7 @@ var _ widgets.PointerShaper = (*ContextMenuWidget)(nil)
 func NewContextMenuWidget(items []ContextMenuItem, x, y int) *ContextMenuWidget {
 	sel := 0
 	for i, it := range items {
-		if !it.IsSep {
+		if it.selectable() {
 			sel = i
 			break
 		}
@@ -177,7 +180,9 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 		}
 
 		style := term.StylePaletteItem
-		if i == c.Selected {
+		if it.Disabled {
+			style = term.StyleMuted
+		} else if i == c.Selected {
 			style = term.StylePaletteSelected
 		}
 
@@ -198,7 +203,7 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 
 		if it.Shortcut != "" {
 			shortStyle := term.StyleMuted
-			if i == c.Selected {
+			if i == c.Selected && !it.Disabled {
 				shortStyle = style
 			}
 			shortEnd := x + menuW - 2
@@ -252,7 +257,7 @@ func (c *ContextMenuWidget) PointerShapeAt(mx, my int) string {
 		return term.PointerDefault
 	}
 	it := menu.Items[itemIdx]
-	if it.IsSep {
+	if !it.selectable() {
 		return term.PointerDefault
 	}
 	if it.Command != "" || len(it.Submenu) > 0 {
@@ -293,7 +298,7 @@ func (c *ContextMenuWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 			return EventConsumed
 		case tcell.KeyEnter:
-			if active.Selected >= 0 && active.Selected < len(active.Items) && !active.Items[active.Selected].IsSep {
+			if active.Selected >= 0 && active.Selected < len(active.Items) && active.Items[active.Selected].selectable() {
 				if active.openSelectedSubmenu() {
 					return EventConsumed
 				}
@@ -329,7 +334,7 @@ func (c *ContextMenuWidget) HandleEvent(ev tcell.Event) EventResult {
 			itemIdx := my - menu.GetRect().Y - 1
 			c.pressedMenu = nil
 			c.pressedItem = -1
-			if itemIdx >= 0 && itemIdx < len(menu.Items) && !menu.Items[itemIdx].IsSep {
+			if itemIdx >= 0 && itemIdx < len(menu.Items) && menu.Items[itemIdx].selectable() {
 				menu.selectItem(itemIdx)
 				c.pressedMenu = menu
 				c.pressedItem = itemIdx
@@ -362,7 +367,7 @@ func (c *ContextMenuWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventConsumed
 			}
 			itemIdx := my - menu.GetRect().Y - 1
-			if itemIdx >= 0 && itemIdx < len(menu.Items) && !menu.Items[itemIdx].IsSep {
+			if itemIdx >= 0 && itemIdx < len(menu.Items) && menu.Items[itemIdx].selectable() {
 				menu.selectItem(itemIdx)
 				menu.openSelectedSubmenu()
 			}
@@ -428,7 +433,7 @@ func (c *ContextMenuWidget) moveSelection(dir int) {
 	next := c.Selected
 	for i := 0; i < n; i++ {
 		next = (next + dir + n) % n
-		if !c.Items[next].IsSep {
+		if c.Items[next].selectable() {
 			c.Selected = next
 			c.Submenu = nil
 			return

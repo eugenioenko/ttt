@@ -22,6 +22,29 @@ func linkEditor(lines []string, w, h int) *EditorPaneWidget {
 	return e
 }
 
+func TestEditorLinksShortcutModifier(t *testing.T) {
+	e := linkEditor([]string{"https://example.com"}, 40, 5)
+	allowed := tcell.ModCtrl
+	e.ControlModifiers = &allowed
+	opened := false
+	e.OnOpenURL = func(string) { opened = true }
+	for _, mask := range []tcell.ModMask{tcell.ModCtrl, tcell.ModCtrl | tcell.ModMeta, tcell.ModMeta} {
+		allowed = mask
+		for _, physical := range []tcell.ModMask{tcell.ModCtrl, tcell.ModMeta, tcell.ModCtrl | tcell.ModMeta} {
+			opened = false
+			x, y := e.GutterWidth()+1, 0
+			e.HandleEvent(tcell.NewEventMouse(x, y, 0, physical))
+			renderGrid(e)
+			e.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, physical))
+			want := mask&physical != 0 && physical != tcell.ModCtrl|tcell.ModMeta
+			if opened != want {
+				t.Fatalf("allowed=%v physical=%v: opened=%t, want %t", mask, physical, opened, want)
+			}
+			e.HandleEvent(tcell.NewEventMouse(x, y, 0, physical))
+		}
+	}
+}
+
 func hoverEditorLinks(e *EditorPaneWidget) [][]term.Cell {
 	renderGrid(e)
 	r := e.GetRect()

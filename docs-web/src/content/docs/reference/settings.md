@@ -29,6 +29,30 @@ Both write the same file, so you can move between them freely.
 | `debugMode` | bool | `false` | Enable debug logging |
 | `reuseWindow` | bool | `false` | Open command-line files and add explicit folder arguments to a running editor using the same config directory, preserving existing tabs and ignoring duplicate folder paths. Bare `ttt` and `--workspace` still start a new editor. Folder forwarding requires a compatible running editor; after upgrading, restart it with the updated binary or use `--new-window`. Requires a restart. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, use the newest reachable editor. If none is reachable, start normally. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Once connected, errors exit with status 1 without trying another editor; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
+## Keyboard
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `keyboard.modifierKey` | string | `"control"` | Modifier for registered `ctrl+…` shortcuts, including user and plugin bindings: `"control"` uses Ctrl, `"control+super"` accepts either Ctrl or Super/Cmd, and `"super"` uses Super/Cmd instead of Ctrl. Applies live; binding definitions stay unchanged. |
+
+`"control+super"` means either modifier, not both pressed together. On macOS, Super is Command (⌘). Chords retain their unmodified continuation keys: `ctrl+k e` becomes Cmd+K followed by E in `"super"` mode. Change this setting under **General → Keyboard** in the settings editor, or in JSON:
+
+```json
+{
+  "keyboard": {
+    "modifierKey": "control+super"
+  }
+}
+```
+
+Shortcut labels use `Ctrl`, `Mod` (Ctrl or Super), or `Super` for these modes on every OS. The keybindings file continues to use `ctrl+…` for the configured modifier; for example, `ctrl+s` displays as `Mod+S` in `"control+super"` mode or `Super+S` in `"super"` mode.
+
+The same preference applies to text-field editing shortcuts (selection, copy/cut/paste, undo/redo, and word movement/deletion), copying from Markdown and Output views, and the modifier used to follow editor links and dismiss hover popups. The force-quit dialog shows the configured quit shortcut. These controls update live, including open dialogs and plugin widgets.
+
+The terminal must forward the Super/Cmd shortcuts to TTT. Ordinary keys sent to the integrated terminal keep their original modifiers; registered force shortcuts, such as terminal toggle, use the setting even when the terminal has focus. In `"control+super"` and `"super"` modes, terminal clipboard shortcuts also accept Super+C/V, and terminal links accept Super+click. Existing Ctrl behavior and `terminal.ctrlVPastes` remain unchanged; Super+V always pastes when enabled.
+
+Lua plugin key hooks receive enabled Super/Cmd shortcuts as Ctrl shortcuts in `"control+super"` and `"super"` modes, so existing Ctrl handlers work without plugin changes. For example, Super+R is reported as `key = "Ctrl-R", mod = "ctrl"`. Physical Ctrl events still reach Lua hooks in every mode. See the [plugin event modifier rules](/guides/plugin-authoring/#focus-and-keyboard-navigation) for details.
+
 ## Appearance
 
 | Key | Type | Default | Description |

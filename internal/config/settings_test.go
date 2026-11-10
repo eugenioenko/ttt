@@ -22,6 +22,36 @@ func TestDefaultSettings(t *testing.T) {
 	}
 }
 
+func TestKeyboardModifierSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, value := range []string{"", "invalid", ModifierControl, ModifierControlSuper, ModifierSuper} {
+		t.Run(value, func(t *testing.T) {
+			s := DefaultSettings()
+			s.Keyboard.ModifierKey = value
+			if err := SaveSettings(s); err != nil {
+				t.Fatal(err)
+			}
+			got := LoadSettings()
+			want := value
+			if !slices.Contains(KeyboardModifiers, want) {
+				want = ModifierControl
+			}
+			if got.Keyboard.ModifierKey != want {
+				t.Fatalf("modifierKey = %q, want %q", got.Keyboard.ModifierKey, want)
+			}
+			if _, ok := got.Extra["keyboard"]; ok {
+				t.Fatal("keyboard was treated as plugin settings")
+			}
+		})
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadSettings().Keyboard.ModifierKey; got != ModifierControl {
+		t.Fatalf("missing keyboard settings = %q", got)
+	}
+}
+
 func TestSettingsPartialJSON(t *testing.T) {
 	s := DefaultSettings()
 	json.Unmarshal([]byte(`{"editor": {"tabSize": 2}}`), &s)

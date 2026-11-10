@@ -45,6 +45,9 @@
     "saveAllOnQuit": false,
     "saveAllOnQuitExceptUnnamed": false
   },
+  "keyboard": {
+    "modifierKey": "control"
+  },
   "quickOpen": {
     "showHidden": false,
     "showGitIgnored": false

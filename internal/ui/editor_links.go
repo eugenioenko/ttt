@@ -69,6 +69,7 @@ func (g *EditorGroupWidget) configurePaneLinks(e *EditorPaneWidget, path string)
 		dir = g.LinkWorkDir()
 	}
 	e.LinkWorkDir = dir
+	e.ControlModifiers = g.ControlModifiers
 	e.OnOpenURL, e.OnOpenFile, e.OnLinkHover = g.OnOpenURL, g.OnOpenFileLink, g.OnLinkHover
 	e.ResolveFileLinks = g.ResolveFileLinks
 }
@@ -104,11 +105,11 @@ func (e *EditorPaneWidget) observeLinkInput(ev tcell.Event) {
 		if ev.Buttons()&tcell.Button1 == 0 {
 			e.links.pressed = false
 		}
-		if ev.Modifiers()&tcell.ModCtrl == 0 || ev.Modifiers()&tcell.ModAlt != 0 || !e.GetRect().Contains(x, y) {
+		if !term.ControlModifierHeld(ev.Modifiers(), e.ControlModifiers) || ev.Modifiers()&tcell.ModAlt != 0 || !e.GetRect().Contains(x, y) {
 			e.clearLinkHover()
 		}
 	case *tcell.EventKey:
-		if ev.Modifiers()&tcell.ModCtrl == 0 {
+		if !term.ControlModifierHeld(ev.Modifiers(), e.ControlModifiers) {
 			e.links.pressed = false
 			e.clearLinkHover()
 		}
@@ -299,7 +300,7 @@ func (e *EditorPaneWidget) handleLinkMouse(ev *tcell.EventMouse) bool {
 		return true
 	}
 	x, y := ev.Position()
-	if ev.Modifiers()&tcell.ModCtrl == 0 || ev.Modifiers()&tcell.ModAlt != 0 ||
+	if !term.ControlModifierHeld(ev.Modifiers(), e.ControlModifiers) || ev.Modifiers()&tcell.ModAlt != 0 ||
 		!e.GetRect().Contains(x, y) || e.mouseDown {
 		return false
 	}

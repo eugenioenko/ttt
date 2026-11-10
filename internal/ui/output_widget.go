@@ -26,6 +26,8 @@ type OutputLine struct {
 }
 
 type OutputWidget struct {
+	ControlModifiers *tcell.ModMask
+
 	Lines      []OutputLine
 	nodes      []*widgets.TreeNode
 	seq        int
@@ -55,7 +57,7 @@ func (o *OutputWidget) SetBoxModel(bm widgets.BoxModel) { o.tree.SetBoxModel(bm)
 func (o *OutputWidget) Render(surface Surface)          { o.tree.Render(surface) }
 
 func (o *OutputWidget) HandleEvent(ev tcell.Event) EventResult {
-	if kev, ok := ev.(*tcell.EventKey); ok && kev.Key() == tcell.KeyCtrlC {
+	if kev, ok := ev.(*tcell.EventKey); ok && term.ControlKeyMatches(kev, tcell.KeyCtrlC, o.ControlModifiers) {
 		if o.CopySelected() {
 			return EventConsumed
 		}
