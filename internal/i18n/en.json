@@ -7,7 +7,6 @@
   "session.cleanupFailed": "Could not clean saved workspace tabs: {error}",
   "settings.highlightActiveGroupBorder": "Highlight active split",
   "command.explorerOpenToSide": "Split: Open Explorer File to the Side",
-  "status.failedToSaveEditorLayout": "Failed to save editor layout: {error}",
   "command.openEditorToSide": "Split: Open to the Side",
   "command.moveEditorToOtherGroup": "Split: Move to Other Group",
   "command.splitEditorDown": "Split: Down",

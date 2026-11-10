@@ -312,8 +312,6 @@ Set [`keyboard.modifierKey`](docs-web/src/content/docs/reference/settings.md#key
 
 Use the editor tab bar’s **More** menu to split right or down (up to four groups), or close a split. Each new group starts with an independent, numbered untitled document; opening a file replaces the untouched placeholder. The command palette groups split actions under **Split:**, including **Split: Equalize Sizes** and **Split: Move to Other Group**. Views of the same document share text and undo history, with independent cursors and scrolling. **Ctrl+K Left/Right/Up/Down** focuses the group in that direction; **F6** and **Shift+F6** cycle groups, the sidebar, and the panel. Drag tabs between groups, or use **Open to the Side** in the Explorer or tab menu. Closing the last tab removes its group; **Close Split** merges its remaining tabs into a neighbor.
 
-Workspace layouts, divider positions, and file views are remembered when reopening the workspace without explicit file arguments.
-
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 
 ## Testing

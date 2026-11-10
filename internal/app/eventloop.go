@@ -42,7 +42,6 @@ func RunEventLoop(
 	}
 	defer app.CloseTasks()
 	defer app.persistEditorSession()
-	defer app.persistEditorLayout()
 
 	lastGutterFile := ""
 	lastGutterRepo := ""
