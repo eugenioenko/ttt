@@ -90,7 +90,7 @@ func settingsCategories() []settingsCategory {
 				GetBool: func(s *config.Settings) bool { return s.Welcome.IsRecentFoldersEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Welcome.RecentFolders = boolPtr(v) }},
 			section(i18n.Text("settings.keyboard")),
-			{Label: i18n.Text("settings.shortcutModifier"), Kind: settingEnum, Options: keyboardModifierItems,
+			{Label: i18n.Text("settings.shortcutModifier"), Kind: settingEnum, Options: fixedOptions(keyboardModifierItems),
 				GetString: func(s *config.Settings) string { return s.Keyboard.ModifierKey },
 				SetString: func(s *config.Settings, v string) { s.Keyboard.ModifierKey = v }},
 			section(i18n.Text("settings.plugins")),
