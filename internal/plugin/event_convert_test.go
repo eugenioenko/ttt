@@ -12,7 +12,7 @@ func TestEventToLuaKeyEvent(t *testing.T) {
 	defer L.Close()
 
 	ev := tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModNone)
-	tbl := eventToLua(L, ev)
+	tbl := eventToLua(L, ev, nil)
 	if tbl == nil {
 		t.Fatal("expected non-nil table")
 	}
@@ -30,7 +30,7 @@ func TestEventToLuaKeyEventSpecial(t *testing.T) {
 	defer L.Close()
 
 	ev := tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone)
-	tbl := eventToLua(L, ev)
+	tbl := eventToLua(L, ev, nil)
 	if tbl == nil {
 		t.Fatal("expected non-nil table")
 	}
@@ -46,7 +46,7 @@ func TestEventToLuaKeyEventModNilWhenNone(t *testing.T) {
 	defer L.Close()
 
 	ev := tcell.NewEventKey(tcell.KeyRune, "r", tcell.ModNone)
-	tbl := eventToLua(L, ev)
+	tbl := eventToLua(L, ev, nil)
 
 	mod := tbl.RawGetString("mod")
 	if mod != lua.LNil {
@@ -59,7 +59,7 @@ func TestEventToLuaKeyEventCtrl(t *testing.T) {
 	defer L.Close()
 
 	ev := tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModCtrl)
-	tbl := eventToLua(L, ev)
+	tbl := eventToLua(L, ev, nil)
 
 	mod := tbl.RawGetString("mod").String()
 	if mod != "ctrl" {
@@ -72,7 +72,7 @@ func TestEventToLuaKeyEventCombinedModifiers(t *testing.T) {
 	defer L.Close()
 
 	ev := tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModCtrl|tcell.ModShift)
-	tbl := eventToLua(L, ev)
+	tbl := eventToLua(L, ev, nil)
 
 	mod := tbl.RawGetString("mod").String()
 	if mod != "ctrl+shift" {
@@ -93,7 +93,7 @@ func TestEventToLuaPreservesSuper(t *testing.T) {
 		{tcell.ModCtrl | tcell.ModAlt | tcell.ModShift | tcell.ModMeta, "ctrl+alt+shift+super"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
-			tbl := eventToLua(L, tcell.NewEventKey(tcell.KeyRune, "u", tc.mods))
+			tbl := eventToLua(L, tcell.NewEventKey(tcell.KeyRune, "u", tc.mods), nil)
 			if got := tbl.RawGetString("mod").String(); got != tc.want {
 				t.Fatalf("mod = %q, want %q", got, tc.want)
 			}
@@ -137,7 +137,7 @@ func TestEventToLuaReportsFoldedCtrlKeys(t *testing.T) {
 	defer L.Close()
 
 	ev := tcell.NewEventKey(tcell.KeyUS, "", tcell.ModCtrl)
-	tbl := eventToLua(L, ev)
+	tbl := eventToLua(L, ev, nil)
 
 	if key := tbl.RawGetString("key").String(); key != "Ctrl-/" {
 		t.Errorf("expected key=Ctrl-/, got %s", key)
@@ -149,7 +149,7 @@ func TestEventToLuaMouseEvent(t *testing.T) {
 	defer L.Close()
 
 	ev := tcell.NewEventMouse(5, 10, tcell.Button1, tcell.ModNone)
-	tbl := eventToLua(L, ev)
+	tbl := eventToLua(L, ev, nil)
 	if tbl == nil {
 		t.Fatal("expected non-nil table")
 	}

@@ -49,7 +49,9 @@ Shortcut labels use `Ctrl`, `Mod` (Ctrl or Super), or `Super` for these modes on
 
 The same preference applies to text-field editing shortcuts (selection, copy/cut/paste, undo/redo, and word movement/deletion), copying from Markdown and Output views, and the modifier used to follow editor links and dismiss hover popups. The force-quit dialog shows the configured quit shortcut. These controls update live, including open dialogs and plugin widgets.
 
-The terminal must forward the Super/Cmd shortcuts to TTT. Ordinary keys sent to the integrated terminal keep their original modifiers; registered force shortcuts, such as terminal toggle, use the setting even when the terminal has focus. In `"control+super"` and `"super"` modes, terminal clipboard shortcuts also accept Super+C/V, and terminal links accept Super+click. Existing Ctrl behavior and `terminal.ctrlVPastes` remain unchanged; Super+V always pastes when enabled. Plugin key interception retains its existing behavior.
+The terminal must forward the Super/Cmd shortcuts to TTT. Ordinary keys sent to the integrated terminal keep their original modifiers; registered force shortcuts, such as terminal toggle, use the setting even when the terminal has focus. In `"control+super"` and `"super"` modes, terminal clipboard shortcuts also accept Super+C/V, and terminal links accept Super+click. Existing Ctrl behavior and `terminal.ctrlVPastes` remain unchanged; Super+V always pastes when enabled.
+
+Lua plugin key hooks receive enabled Super/Cmd shortcuts as Ctrl shortcuts in `"control+super"` and `"super"` modes, so existing Ctrl handlers work without plugin changes. For example, Super+R is reported as `key = "Ctrl-R", mod = "ctrl"`. Physical Ctrl events still reach Lua hooks in every mode. See the [plugin event modifier rules](/guides/plugin-authoring/#focus-and-keyboard-navigation) for details.
 
 ## Appearance
 

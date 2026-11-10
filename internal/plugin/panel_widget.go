@@ -219,7 +219,7 @@ func (pw *PluginPanelWidget) dispatch(ev tcell.Event) widgets.EventResult {
 	}
 
 	if pw.eventFunc != nil && pw.plugin.State != nil {
-		tbl := eventToLua(pw.plugin.State, ev)
+		tbl := eventToLua(pw.plugin.State, ev, pw.plugin.ControlModifiers)
 		if tbl != nil {
 			pw.plugin.CallLuaFunc(pw.eventFunc, tbl)
 		}

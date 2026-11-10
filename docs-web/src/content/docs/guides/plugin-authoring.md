@@ -2057,7 +2057,9 @@ The plugin panel manages its own focus system. When the plugin panel is focused:
 
 Labels, titles, and key-value lists are not focusable. If your panel has only non-focusable widgets and raw cells, all events go directly to `on_event`.
 
-Built-in input editing and Markdown copy shortcuts follow [`keyboard.modifierKey`](/reference/settings/#keyboard), including live changes. Plugin key interceptors, fallback `on_event` handlers, and command-line `on_key` hooks continue to receive the original key events.
+Built-in input editing and Markdown copy shortcuts follow [`keyboard.modifierKey`](/reference/settings/#keyboard), including live changes. Lua key interceptors (`key.press`), fallback `on_event` handlers, and command-line `on_key` hooks also follow this setting: in `super` and `control+super` modes, Super/Cmd shortcuts are reported as Ctrl shortcuts. For example, Super+R arrives as `{ key = "Ctrl-R", mod = "ctrl" }`, so existing Ctrl handlers work without changes.
+
+These handlers cannot distinguish Ctrl from Super in those modes. Physical Ctrl events remain available to Lua hooks in every mode; in `control` mode, Super is reported as `mod = "super"`. Holding Ctrl and Super together preserves both modifiers. Native event routing and terminal input retain the original events.
 
 ## Event Handling
 
@@ -3124,6 +3126,8 @@ File and editor callbacks receive the file path of the affected file as their si
 **Returning `true` consumes the key** — the editor never sees it. Returning `false` (or nothing) lets it through to normal handling.
 
 Note that control keys set **both** fields: `ctrl+d` arrives as `{ key = "Ctrl-D", mod = "ctrl" }`. Match on `key`, and check `mod` only when you need to distinguish (for example `"j"` from `alt+j`).
+
+In `super` and `control+super` keyboard modes, Super+D produces the same Ctrl-D event. This conversion also applies to panel `on_event` and command-line `on_key` callbacks; see [Focus and Keyboard Navigation](#focus-and-keyboard-navigation) for the modifier rules.
 
 ```lua
 local events = require("ttt.events")

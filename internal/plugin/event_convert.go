@@ -8,10 +8,10 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-func eventToLua(L *lua.LState, ev tcell.Event) *lua.LTable {
+func eventToLua(L *lua.LState, ev tcell.Event, modifiers *tcell.ModMask) *lua.LTable {
 	switch e := ev.(type) {
 	case *tcell.EventKey:
-		return keyEventToLua(L, e)
+		return keyEventToLua(L, e, modifiers)
 	case *tcell.EventMouse:
 		return mouseEventToLua(L, e)
 	}
@@ -35,7 +35,11 @@ func keyName(k tcell.Key) string {
 	return "unknown"
 }
 
-func keyEventToLua(L *lua.LState, e *tcell.EventKey) *lua.LTable {
+func keyEventToLua(L *lua.LState, e *tcell.EventKey, modifiers *tcell.ModMask) *lua.LTable {
+	// Keys excluded from native shortcut matching still reach Lua hooks.
+	if normalized := term.ControlKeyEvent(e, modifiers); normalized != nil {
+		e = normalized
+	}
 	tbl := L.NewTable()
 	L.SetField(tbl, "type", lua.LString("key"))
 

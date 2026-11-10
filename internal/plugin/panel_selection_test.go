@@ -137,7 +137,7 @@ func newInputPanel(t *testing.T) (*PluginPanelWidget, *mockSurface) {
 	return pw, surface
 }
 
-func TestPanelInputShortcutModifierPreservesFallback(t *testing.T) {
+func TestPanelInputShortcutModifierNormalizesFallback(t *testing.T) {
 	pw, surface := newInputPanel(t)
 	allowed := tcell.ModMeta
 	pw.plugin.ControlModifiers = &allowed
@@ -146,14 +146,14 @@ func TestPanelInputShortcutModifierPreservesFallback(t *testing.T) {
 	if !pw.FocusedInput().HasSelection() {
 		t.Fatal("plugin input did not accept Super+A")
 	}
-	seen := ""
+	var seen *lua.LTable
 	pw.eventFunc = pw.plugin.State.NewFunction(func(L *lua.LState) int {
-		seen = L.CheckTable(1).RawGetString("rune").String()
+		seen = L.CheckTable(1)
 		return 0
 	})
 	pw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "k", tcell.ModMeta))
-	if seen != "k" {
-		t.Fatal("fallback callback did not receive the original printable key")
+	if seen == nil || seen.RawGetString("key").String() != "Ctrl-K" || seen.RawGetString("mod").String() != "ctrl" || seen.RawGetString("rune") != lua.LNil {
+		t.Fatal("fallback callback did not receive the enabled Super key as Ctrl-K")
 	}
 }
 
