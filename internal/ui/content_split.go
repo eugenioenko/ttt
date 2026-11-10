@@ -31,6 +31,7 @@ type ContentSplitWidget struct {
 	Borders                   *term.BorderSet
 	OnResize                  func(height int)
 	OnResizeEnd               func()
+	DividerVisible            func(x, y int) bool
 	OnBottomClick             func()
 	OnTopClick                func()
 	RightBorderStartY         *int
@@ -318,9 +319,12 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 	if cs.ShowBottom && cs.Position == SplitRight {
 		divX := cs.BottomRect().X - 1
 
-		if freshClick && mx == divX {
-			cs.dragging = true
-			return EventCaptured
+		if mx == divX {
+			if freshClick && cs.OverDivider(mx, my) {
+				cs.dragging = true
+				return EventCaptured
+			}
+			return EventIgnored
 		}
 
 		if mx > divX && cs.Bottom != nil {
@@ -411,6 +415,9 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 // OverDivider reports whether the pointer is on the panel's divider: a row
 // when the panel is docked at the bottom, a column when it is docked right.
 func (cs *ContentSplitWidget) OverDivider(mx, my int) bool {
+	if cs.DividerVisible != nil && !cs.DividerVisible(mx, my) {
+		return false
+	}
 	r := cs.GetRect()
 	if cs.Position == SplitRight {
 		if !cs.ShowBottom || cs.Bottom == nil || my < r.Y || my >= r.Y+r.H {

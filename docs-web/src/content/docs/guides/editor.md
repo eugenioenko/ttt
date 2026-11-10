@@ -19,7 +19,7 @@ Drag a tab into another group, or choose **Move to Other Group** from More. **Op
 
 Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. To highlight the active group’s border, enable **Highlight active group border** in **Settings > Appearance > Window**; it is off by default. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
 
-Drag dividers to resize groups. **Equalize Editor Groups** balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
+Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Equalize Editor Groups** balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
 
 When reopening a workspace without explicit file arguments, ttt restores its arrangement, divider proportions, file tabs, cursor and scroll positions, and active group. Untitled buffers and plugin tabs are excluded from layout restoration.
 

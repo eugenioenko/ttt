@@ -19,6 +19,7 @@ type EditorLayoutWidget struct {
 	Borders     *term.BorderSet
 	OnChanged   func()
 	invalidated func()
+	dividerGaps []Rect
 }
 
 func NewEditorLayoutWidget(group *EditorGroupWidget, borders *term.BorderSet) *EditorLayoutWidget {
@@ -164,6 +165,7 @@ func (e *EditorLayoutWidget) Render(surface Surface) {
 	child := e.child()
 	child.SetRect(e.GetRect())
 	child.Render(surface)
+	e.renderDividerGaps(surface)
 	e.renderJunctions(surface)
 }
 
@@ -182,6 +184,9 @@ func (e *EditorLayoutWidget) InvalidatePointerInteraction() bool {
 }
 func (e *EditorLayoutWidget) SetPointerCaptureInvalidated(fn func()) {
 	e.invalidated = fn
+	if e.Split != nil {
+		e.Split.DividerVisible = e.dividerVisibleAt
+	}
 	widgets.SetPointerCaptureInvalidated(e.child(), fn)
 }
 
@@ -264,4 +269,32 @@ func (e *EditorLayoutWidget) renderJunctions(surface Surface) {
 		}
 		surface.SetCell(x, y, term.Cell{Ch: glyph, Style: term.StyleBorder})
 	}
+}
+
+func (e *EditorLayoutWidget) renderDividerGaps(surface Surface) {
+	e.dividerGaps = e.dividerGaps[:0]
+	if e.Split == nil || e.Split.Position != SplitRight {
+		return
+	}
+	r, dividerX := e.GetRect(), e.Split.DividerScreenX()
+	for _, group := range e.Groups() {
+		gr, tabs := group.GetRect(), group.TabBar.GetRect()
+		if gr.X != dividerX+1 && gr.X+gr.W != dividerX {
+			continue
+		}
+		gap := Rect{X: dividerX, Y: tabs.Y, W: 1, H: tabs.H}
+		e.dividerGaps = append(e.dividerGaps, gap)
+		for y := max(gap.Y, r.Y); y < min(gap.Y+gap.H, r.Y+r.H); y++ {
+			surface.SetCell(dividerX-r.X, y-r.Y, term.Cell{Ch: ' ', Style: term.StyleDefault})
+		}
+	}
+}
+
+func (e *EditorLayoutWidget) dividerVisibleAt(x, y int) bool {
+	for _, gap := range e.dividerGaps {
+		if gap.Contains(x, y) {
+			return false
+		}
+	}
+	return true
 }
