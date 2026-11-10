@@ -354,3 +354,21 @@ func TestEditorSplitReloadSettingsAndSharedUndo(t *testing.T) {
 		t.Fatal("live settings were applied to only one group")
 	}
 }
+
+func TestEditorSplitInheritsKeyboardModifierPreference(t *testing.T) {
+	h := newTestHarness(t, 140, 32)
+	defer h.stop()
+	h.app.Root.SetControlModifiers(tcell.ModMeta)
+	h.exec("editor.split")
+	h.typeText("one two")
+	h.pressKey(tcell.KeyLeft, tcell.ModMeta)
+	if _, col := h.app.EditorGroup.ActiveCursor(); col != 4 {
+		t.Fatalf("word movement in the new group ignored Super preference: col %d", col)
+	}
+	h.app.Root.SetControlModifiers(tcell.ModCtrl)
+	h.pressKey(tcell.KeyEnd, 0)
+	h.pressKey(tcell.KeyLeft, tcell.ModCtrl)
+	if _, col := h.app.EditorGroup.ActiveCursor(); col != 4 {
+		t.Fatalf("new group did not follow changed modifier preference: col %d", col)
+	}
+}
