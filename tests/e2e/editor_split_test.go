@@ -29,7 +29,7 @@ func TestEditorSplitMoreMenuAndEditing(t *testing.T) {
 			h.app.FocusEditor()
 			h.pressRune('R')
 			buf, stack := left.ActiveBuffer(), left.Editor.Undo
-			chooseEditorMore(t, h, "Split in Half")
+			chooseEditorMore(t, h, "Split Right")
 			right := h.app.EditorGroup
 			if left == right || len(h.app.EditorSplit.Groups()) < 2 || right.ActiveBuffer() != buf || right.Editor.Undo != stack {
 				t.Fatal("split did not share the active document and undo history")
