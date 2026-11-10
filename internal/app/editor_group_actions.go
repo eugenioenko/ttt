@@ -105,16 +105,12 @@ func (a *App) editorGroupMenu() []ui.ContextMenuItem {
 	var items []ui.ContextMenuItem
 	if len(a.editorGroups()) < ui.MaxEditorGroups {
 		items = append(items,
-			ui.ContextMenuItem{Label: i18n.Text("command.splitEditor"), Command: "editor.split"},
-			ui.ContextMenuItem{Label: i18n.Text("command.splitEditorDown"), Command: "editor.splitDown"})
+			ui.ContextMenuItem{Label: i18n.Text("menu.splitRight"), Command: "editor.split"},
+			ui.ContextMenuItem{Label: i18n.Text("menu.splitDown"), Command: "editor.splitDown"})
 	}
-	items = append(items,
-		ui.ContextMenuItem{Label: i18n.Text("command.openEditorToSide"), Command: "editor.openToSide"})
 	if len(a.editorGroups()) > 1 {
 		items = append(items,
-			ui.ContextMenuItem{Label: i18n.Text("command.moveEditorToOtherGroup"), Command: "editor.moveToOtherGroup"},
-			ui.ContextMenuItem{Label: i18n.Text("command.closeSplit"), Command: "editor.closeSplit"},
-			ui.ContextMenuItem{Label: i18n.Text("command.equalizeGroups"), Command: "editor.equalizeGroups"})
+			ui.ContextMenuItem{Label: i18n.Text("menu.closeSplit"), Command: "editor.closeSplit"})
 	}
 	return items
 }

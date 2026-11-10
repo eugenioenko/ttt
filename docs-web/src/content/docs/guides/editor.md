@@ -15,11 +15,11 @@ Sessions are kept outside the project under the config directory's `sessions/` f
 
 Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Splitting keeps the current file visible in both groups. The views share text, undo history, and save state, with independent cursors, selections, and scrolling.
 
-Drag a tab into another group, or choose **Move to Other Group** from More. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Opening a file normally uses the active group, including when the same document is already open elsewhere.
+Drag a tab into another group, or run **Split: Move to Other Group** from the command palette. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
 
 Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group’s border is highlighted by default; turn off **Highlight active split** in **Settings > Appearance > Window** to disable it. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
 
-Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Equalize Editor Groups** balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
+Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Split: Equalize Sizes** in the command palette balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
 
 When reopening a workspace without explicit file arguments, ttt restores its arrangement, divider proportions, file tabs, cursor and scroll positions, and active group. Untitled buffers and plugin tabs are excluded from layout restoration.
 
