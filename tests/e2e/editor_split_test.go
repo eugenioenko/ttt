@@ -29,7 +29,7 @@ func TestEditorSplitMoreMenuAndEditing(t *testing.T) {
 			buf, stack := left.ActiveBuffer(), left.Editor.Undo
 			chooseEditorMore(t, h, "Split in Half")
 			right := h.app.EditorGroup
-			if left == right || !h.app.EditorSplit.ShowBottom || right.ActiveBuffer() != buf || right.Editor.Undo != stack {
+			if left == right || len(h.app.EditorSplit.Groups()) < 2 || right.ActiveBuffer() != buf || right.Editor.Undo != stack {
 				t.Fatal("split did not share the active document and undo history")
 			}
 			if left.ActiveFilePath() != beta || right.ActiveFilePath() != beta {
@@ -61,7 +61,7 @@ func TestEditorSplitMoreMenuAndEditing(t *testing.T) {
 				h.exec("focus.prevGroup")
 			}
 			chooseEditorMore(t, h, "Close Split")
-			if h.app.EditorSplit.ShowBottom || h.app.EditorGroup.TabCount() != 2 {
+			if len(h.app.EditorSplit.Groups()) > 1 || h.app.EditorGroup.TabCount() != 2 {
 				t.Fatal("closing split did not merge both groups")
 			}
 			if h.app.EditorGroup.BufferForPath(alpha).Lines[0] != "La" || h.app.EditorGroup.BufferForPath(beta).Lines[0] != "Rb" {
@@ -81,7 +81,8 @@ func TestEditorSplitDivider(t *testing.T) {
 	defer h.stop()
 	h.exec("editor.split")
 	h.redraw()
-	split := h.app.EditorSplit
+	layout := h.app.EditorSplit
+	split := layout.Split
 	x, y := split.DividerScreenX(), split.GetRect().Y+4
 	if h.app.Root.PointerShapeAt(x, y) != term.PointerEWResize {
 		t.Fatal("divider did not show the resize pointer")
@@ -99,7 +100,7 @@ func TestEditorSplitDivider(t *testing.T) {
 	}
 	h.exec("editor.closeSplit")
 	h.redraw()
-	if split.Bottom != nil || split.Top.GetRect().W != split.GetRect().W {
+	if len(layout.Groups()) != 1 || layout.Group.GetRect().W != layout.GetRect().W {
 		t.Fatal("closing split did not restore the full editor width")
 	}
 }
@@ -155,8 +156,71 @@ func chooseEditorMore(t *testing.T, h *testHarness, label string) {
 	r := h.app.EditorGroup.TabBar.MoreButton.GetRect()
 	h.click(r.X+1, r.Y)
 	menu, ok := h.app.Root.Focused.(*ui.ContextMenuWidget)
-	if !ok || menu.Items[0].Label != label {
+	if !ok {
+		t.Fatalf("More menu = %T", h.app.Root.Focused)
+	}
+	index := -1
+	for i, item := range menu.Items {
+		if item.Label == label {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
 		t.Fatalf("More menu = %T, want first item %q", h.app.Root.Focused, label)
 	}
+	for menu.Selected != index {
+		h.pressKey(tcell.KeyDown, 0)
+	}
 	h.pressKey(tcell.KeyEnter, 0)
+}
+
+func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
+	h := newTestHarness(t, 180, 50)
+	defer h.stop()
+	leftTop := h.app.EditorGroup
+	h.exec("editor.split")
+	rightTop := h.app.EditorGroup
+	h.exec("editor.splitDown")
+	rightBottom := h.app.EditorGroup
+	h.exec("focus.editorLeft")
+	if h.app.EditorGroup != leftTop {
+		t.Fatal("left focus did not reach the adjacent group")
+	}
+	h.exec("editor.splitDown")
+	leftBottom := h.app.EditorGroup
+	if len(h.app.EditorSplit.Groups()) != 4 {
+		t.Fatal("split did not create four groups")
+	}
+	h.exec("editor.split")
+	if len(h.app.EditorSplit.Groups()) != 4 {
+		t.Fatal("group limit was not enforced")
+	}
+	h.exec("focus.editorUp")
+	if h.app.EditorGroup != leftTop {
+		t.Fatal("up focus did not reach the adjacent group")
+	}
+	h.exec("focus.editorRight")
+	if h.app.EditorGroup != rightTop {
+		t.Fatal("right focus did not reach the adjacent group")
+	}
+	h.exec("focus.editorDown")
+	if h.app.EditorGroup != rightBottom {
+		t.Fatal("down focus did not reach the adjacent group")
+	}
+	h.pressCtrl(tcell.KeyCtrlK)
+	h.pressKey(tcell.KeyLeft, 0)
+	if h.app.EditorGroup != leftBottom {
+		t.Fatal("directional focus chord did not reach the left group")
+	}
+	if !leftBottom.TabBar.GroupActive || rightBottom.TabBar.GroupActive || !rightTop.TabBar.ShowGroupFocus {
+		t.Fatal("active group indication did not follow focus")
+	}
+	h.exec("editor.equalizeGroups")
+	if delta := leftTop.GetRect().H - leftBottom.GetRect().H; delta < -1 || delta > 1 {
+		t.Fatal("equalizing did not balance row heights")
+	}
+	for len(h.app.EditorSplit.Groups()) > 1 {
+		h.exec("editor.closeSplit")
+	}
 }

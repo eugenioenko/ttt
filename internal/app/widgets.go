@@ -260,12 +260,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	bottomPanel.AddPanel("output", i18n.Text("panel.output"), output)
 
 	contentSplit := ui.NewContentSplitWidget()
-	editorSplit := ui.NewContentSplitWidget()
-	editorSplit.Top = editorGroup
-	editorSplit.Position = ui.SplitRight
-	editorSplit.FullHeightRight = true
-	editorSplit.MinRightW = 20
-	editorSplit.Borders = borders
+	editorSplit := ui.NewEditorLayoutWidget(editorGroup, borders)
 	contentSplit.Top = editorSplit
 	contentSplit.Bottom = bottomPanel
 	contentSplit.Borders = borders

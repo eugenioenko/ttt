@@ -21,8 +21,12 @@ In-app shortcut labels use `Ctrl` in Control mode, `Mod` (Ctrl or Super) in Both
 | Ctrl+P | `command.palette` | Open command palette |
 | Ctrl+K P | `file.quickOpen` | Quick open file |
 | Escape | *(built-in)* | Dismiss overlay / collapse cursors / focus the editor |
-| F6 | `focus.nextGroup` | Focus next group (editor → panel → sidebar) |
+| F6 | `focus.nextGroup` | Focus next editor group, sidebar, or panel |
 | Shift+F6 | `focus.prevGroup` | Focus previous group |
+| Ctrl+K Left | `focus.editorLeft` | Focus editor group left |
+| Ctrl+K Right | `focus.editorRight` | Focus editor group right |
+| Ctrl+K Up | `focus.editorUp` | Focus editor group up |
+| Ctrl+K Down | `focus.editorDown` | Focus editor group down |
 
 ## File
 

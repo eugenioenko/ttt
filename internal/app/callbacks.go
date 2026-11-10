@@ -728,9 +728,6 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.wireEditorGroupActivation(app.EditorGroup)
-	app.EditorSplit.OnResize = func(width int) { app.EditorSplit.RightW = width }
-	app.EditorSplit.OnTopClick = app.focusEditorAfterClick
-	app.EditorSplit.OnBottomClick = app.focusEditorAfterClick
 
 	app.EditorGroup.OnActiveTabChange = app.editorTabChanged
 
@@ -745,12 +742,11 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.TabBar.MoreButton.OnClick = func(sx, sy int) {
-		splitLabel, splitCommand := i18n.Text("command.splitEditor"), "editor.split"
-		if app.EditorSplit.ShowBottom {
-			splitLabel, splitCommand = i18n.Text("command.closeSplit"), "editor.closeSplit"
-		}
 		moreMenu := []ui.ContextMenuItem{
-			{Label: splitLabel, Command: splitCommand},
+			{Label: i18n.Text("command.splitEditor"), Command: "editor.split"},
+			{Label: i18n.Text("command.splitEditorDown"), Command: "editor.splitDown"},
+			{Label: i18n.Text("command.closeSplit"), Command: "editor.closeSplit"},
+			{Label: i18n.Text("command.equalizeGroups"), Command: "editor.equalizeGroups"},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
 			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},

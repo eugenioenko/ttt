@@ -3361,6 +3361,9 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 
 	g.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: editorTabBarH})
 	tabSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: editorTabBarH})
+	g.TabBar.ShowGroupFocus = len(g.relatedGroups()) > 1
+	g.TabBar.GroupActive = g.focused
+	g.Editor.Passive = g.TabBar.ShowGroupFocus && !g.focused
 	g.TabBar.Render(tabSurface)
 
 	contentH := h - editorTabBarH
