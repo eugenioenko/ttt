@@ -137,6 +137,7 @@ func (a *App) focusEditorDirection(dx, dy int) {
 
 func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidget {
 	right := newEditorGroup(a.Settings, a.Borders, left.BracketColorStyles)
+	right.ControlModifiers = left.ControlModifiers
 	right.SetChevrons(left.ChevronCollapsed, left.ChevronExpanded)
 	right.SetImageCellSize(a.imageCellW, a.imageCellH)
 	right.SetImageRedraw(left.ImageRedraw)
