@@ -67,6 +67,7 @@ func (e *EditorLayoutWidget) SplitGroup(group, next *EditorGroupWidget, position
 	leaf.Group = nil
 	s := NewContentSplitWidget()
 	s.Position, s.FullHeightRight, s.ShowBottom = position, true, true
+	s.HideBottomDivider = true
 	s.Borders, s.MinRightW, s.MinTopH, s.MinBottomH = e.Borders, 20, 6, 6
 	s.Top, s.Bottom = leaf.First, leaf.Second
 	s.RightW, s.BottomH, s.BottomRatio = 0, 0, 0.5
@@ -195,7 +196,7 @@ func (e *EditorLayoutWidget) BorderJunctions() borderJunctions {
 	r, index, rightIndex := e.GetRect(), 0, 0
 	for _, g := range e.Groups() {
 		gr := g.GetRect()
-		if gr.X+gr.W == r.X+r.W && gr.Y > r.Y && rightIndex < len(junctions.RightY) {
+		if gr.X+gr.W == r.X+r.W && gr.Y > r.Y && rightIndex < len(junctions.RightY) && !e.Split.HideBottomDivider {
 			junctions.RightY[rightIndex] = gr.Y - 1
 			rightIndex++
 		}
@@ -235,6 +236,9 @@ func (e *EditorLayoutWidget) renderJunctions(surface Surface) {
 		if e.dividerVisibleAt(gap.X, y+1) {
 			surface.SetCell(gap.X-r.X, y-r.Y, term.Cell{Ch: b.TopTee, Style: term.StyleBorder})
 		}
+	}
+	if e.Split.HideBottomDivider {
+		return
 	}
 	for _, group := range e.First.Groups() {
 		gr := group.GetRect()
