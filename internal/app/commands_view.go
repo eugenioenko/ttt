@@ -509,6 +509,11 @@ func registerViewCommands(app *App) {
 		Keywords: []string{"terminal", "key", "shortcut", "forward"},
 		Handler:  app.SendNextTerminalKey,
 	})
+	reg.Register(command.Command{
+		ID: "terminal.toggleShortcutForwarding", Title: i18n.Text("command.terminalToggleShortcutForwarding"),
+		Keywords: []string{"terminal", "key", "shortcut", "forward", "toggle"},
+		Handler:  app.ToggleTerminalShortcutForwarding,
+	})
 
 	reg.Register(command.Command{
 		ID: "terminal.newInEditor", Title: i18n.Text("command.terminalNewEditorTerminal"),

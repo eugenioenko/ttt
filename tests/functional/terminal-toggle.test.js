@@ -47,6 +47,21 @@ describe("terminal toggle", () => {
 });
 
 describe("terminal key routing", () => {
+  it("toggles session forwarding with ctrl+f6 and shows a status message", () => {
+    dir = createTempDir();
+    const file = createTempFile(dir, "mode.txt", "Editor content");
+    tui.start(file);
+    tui.waitFor("mode.txt");
+    tui.press("ctrl+t");
+    tui.press("ctrl+f6");
+    const forwarded = tui.snapshot();
+    tui.press("ctrl+f6");
+    const prioritized = tui.snapshot();
+    const { snapshots } = tui.run();
+    expect(snapshots[forwarded]).toContain("Shortcuts forwarded to terminal");
+    expect(snapshots[prioritized]).toContain("TTT shortcuts take priority");
+  });
+
   it("should run configured chords from the terminal", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "keys.txt", "Editor content");

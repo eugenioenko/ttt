@@ -44,3 +44,36 @@ func TestTerminalShortcutSettingsStartupAndLiveApply(t *testing.T) {
 		t.Fatalf("found %d keyboard controls, want setting and shortcut", entries)
 	}
 }
+
+func TestTerminalShortcutSessionToggle(t *testing.T) {
+	for _, saved := range []bool{false, true} {
+		s := config.DefaultSettings()
+		s.Terminal.ForwardShortcuts = saved
+		a := buildTestApp(t, s)
+		a.ToggleTerminalShortcutForwarding()
+		wantNotice := i18n.Text("status.terminalShortcutsForwarded")
+		if saved {
+			wantNotice = i18n.Text("status.tttShortcutsPrioritized")
+		}
+		if a.Status.Notification != wantNotice {
+			t.Fatalf("toggle notice = %q, want %q", a.Status.Notification, wantNotice)
+		}
+		if a.Root.ForwardShortcuts == saved || a.Settings.Terminal.ForwardShortcuts != saved {
+			t.Fatal("toggle must change current state without changing the saved default")
+		}
+		s.Editor.WordWrap = !s.Editor.WordWrap
+		a.ApplySettings(s)
+		if a.Root.ForwardShortcuts == saved {
+			t.Fatal("unrelated settings reset the session override")
+		}
+		next := buildTestApp(t, *a.Settings)
+		if next.Root.ForwardShortcuts != saved {
+			t.Fatal("new session did not restore the saved default")
+		}
+		s.Terminal.ForwardShortcuts = !saved
+		a.ApplySettings(s)
+		if a.Root.ForwardShortcuts != s.Terminal.ForwardShortcuts {
+			t.Fatal("changed saved default did not apply")
+		}
+	}
+}

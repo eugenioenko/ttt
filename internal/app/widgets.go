@@ -450,6 +450,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	}
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
 	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
+	app.appliedSettings.Terminal.ForwardShortcuts = cfg.Settings.Terminal.ForwardShortcuts
 	return app
 }
 

@@ -84,6 +84,7 @@
   { "key": "alt+t", "command": "terminal.fullscreen" },
   { "key": "f6", "command": "focus.nextGroup" },
   { "key": "shift+f6", "command": "focus.prevGroup" },
+  { "key": "ctrl+f6", "command": "terminal.toggleShortcutForwarding" },
   { "key": "f10", "command": "menu.file" },
   { "key": "alt+f", "command": "menu.file" },
   { "key": "alt+e", "command": "menu.edit" },

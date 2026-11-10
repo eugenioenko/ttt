@@ -106,6 +106,24 @@ func TestTerminalPrefixDoesNotCaptureOverlayKeys(t *testing.T) {
 	}
 }
 
+func TestTerminalForwardingToggleShortcut(t *testing.T) {
+	root := NewRoot(&passThroughWidget{})
+	terminal := &rawKeysWidget{}
+	root.SetFocus(terminal)
+	root.AddTerminalToggleKey(tcell.KeyRune, tcell.ModAlt, 'r', func() {
+		root.SetForwardShortcuts(!root.ForwardShortcuts)
+	})
+	key := tcell.NewEventKey(tcell.KeyRune, "r", tcell.ModAlt)
+	root.HandleEvent(key)
+	if !root.ForwardShortcuts {
+		t.Fatal("shortcut did not enable forwarding")
+	}
+	root.HandleEvent(key)
+	if root.ForwardShortcuts || terminal.eventCount != 0 {
+		t.Fatal("toggle shortcut must also work while forwarding")
+	}
+}
+
 func TestTerminalForwardingCancellation(t *testing.T) {
 	dev, err := terminal.New("/bin/cat", 80, 24, 0, nil, "")
 	if err != nil {

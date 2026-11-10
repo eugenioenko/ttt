@@ -30,6 +30,15 @@ func (a *App) SendNextTerminalKey() {
 	}
 }
 
+func (a *App) ToggleTerminalShortcutForwarding() {
+	a.Root.SetForwardShortcuts(!a.Root.ForwardShortcuts)
+	if a.Root.ForwardShortcuts {
+		a.StatusNotify(i18n.Text("status.terminalShortcutsForwarded"))
+	} else {
+		a.StatusNotify(i18n.Text("status.tttShortcutsPrioritized"))
+	}
+}
+
 func (a *App) openEditorTerminal(entry TerminalTab, spec TerminalSpec) {
 	id := entry.ID
 	entry.Tab.OnClose = func() { a.releaseEditorTerminal(id) }

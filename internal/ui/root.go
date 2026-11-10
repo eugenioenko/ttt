@@ -17,11 +17,12 @@ type Overlay struct {
 }
 
 type GlobalKeyBinding struct {
-	Key          tcell.Key
-	Mod          tcell.ModMask
-	Rune         rune
-	Handler      func()
-	TerminalOnly bool
+	Key             tcell.Key
+	Mod             tcell.ModMask
+	Rune            rune
+	Handler         func()
+	TerminalOnly    bool
+	WhileForwarding bool
 }
 
 type ChordKeyBinding struct {
@@ -117,6 +118,10 @@ func (r *Root) AddForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler fu
 
 func (r *Root) AddTerminalForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
 	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler, TerminalOnly: true})
+}
+
+func (r *Root) AddTerminalToggleKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
+	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler, TerminalOnly: true, WhileForwarding: true})
 }
 
 func (r *Root) AddChordKey(steps []GlobalKeyBinding, handler func()) {
@@ -345,9 +350,12 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	// unsaved-changes dialog). With neither present nothing is swallowing keys,
 	// so they are left to handleGlobalKeys below like any other binding --
 	// which is what lets a key interceptor claim them while editing.
-	if isKey && ((r.rawKeysFocused() && !r.ForwardShortcuts) || r.HasOverlay()) {
+	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
 		for _, gk := range r.ForceKeys {
 			if gk.TerminalOnly && r.HasOverlay() {
+				continue
+			}
+			if r.ForwardShortcuts && !r.HasOverlay() && !gk.WhileForwarding {
 				continue
 			}
 			if key := term.ControlKeyEvent(kev, &r.ControlModifiers); key != nil && matchKey(key, gk) {

@@ -49,6 +49,8 @@ Custom bindings with a modified second key after the forwarding prefix are overr
 
 `terminal.forwardShortcuts` defaults to `false`, giving reserved TTT shortcuts and chords priority. Enable it to pass those shortcuts directly to the terminal, including the first Ctrl+K. Terminal-local clipboard and scrolling behavior remains unchanged. Use the mouse menus to access TTT commands while direct forwarding is enabled. Changes apply immediately to panel and editor terminals.
 
+**Ctrl+F6** (**Terminal: Toggle Shortcut Forwarding**, `terminal.toggleShortcutForwarding`) switches the mode for the current TTT session without changing the saved default and shows a short status notification. It applies to all terminals in that session and resets on restart. Unrelated settings changes keep the current mode; changing the forwarding default applies that new value immediately. The shortcut remains active while terminal forwarding is enabled so you can toggle back. It follows the selected Ctrl/Mod/Super preference and can be rebound in the keybindings editor. The command is also available from the command palette.
+
 ## Bottom Panel
 
 Toggle the bottom panel with **Ctrl+K B**. It contains three tabs:

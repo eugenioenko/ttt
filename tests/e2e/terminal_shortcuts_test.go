@@ -20,6 +20,7 @@ func TestTerminalShortcutForwarding(t *testing.T) {
 				entry = h.app.EditorTerminals
 			}
 			dev := entry[0].Term
+			terminalFocus := h.app.Root.Focused
 			defer dev.Close()
 			waitForRawTail(t, dev, "e2e-forward-ready")
 
@@ -44,7 +45,15 @@ func TestTerminalShortcutForwarding(t *testing.T) {
 			h.pressRune('t')
 			waitForRawTail(t, dev, "\x10t")
 			h.pressCtrl(tcell.KeyCtrlP)
-			h.pressKey(tcell.KeyEscape, 0)
+			palette = h.app.Root.Focused.(*ui.SelectDialogWidget)
+			palette.OnExecute("terminal.toggleShortcutForwarding")
+			if !h.app.Root.ForwardShortcuts || h.app.Root.Focused != terminalFocus || h.app.Settings.Terminal.ForwardShortcuts {
+				t.Fatal("session toggle must preserve terminal focus and the saved default")
+			}
+			h.pressKey(tcell.KeyF6, tcell.ModCtrl)
+			if h.app.Root.ForwardShortcuts {
+				t.Fatal("Ctrl+F6 did not toggle back while direct forwarding was enabled")
+			}
 
 			before := len(h.app.Terminals)
 			h.pressCtrl(tcell.KeyCtrlK)

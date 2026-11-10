@@ -28,15 +28,16 @@ func (kb *KeyBinding) IsChord() bool {
 
 // ForceKeyCommands are checked even when a raw key consumer (e.g. terminal) has focus.
 var ForceKeyCommands = map[string]bool{
-	"terminal.sendNextKey": true,
-	"terminal.toggle":      true,
-	"terminal.fullscreen":  true,
-	"editor.quit":          true,
-	"command.palette":      true,
-	"file.quickOpen":       true,
-	"sidebar.toggle":       true,
-	"focus.nextGroup":      true,
-	"focus.prevGroup":      true,
+	"terminal.sendNextKey":              true,
+	"terminal.toggleShortcutForwarding": true,
+	"terminal.toggle":                   true,
+	"terminal.fullscreen":               true,
+	"editor.quit":                       true,
+	"command.palette":                   true,
+	"file.quickOpen":                    true,
+	"sidebar.toggle":                    true,
+	"focus.nextGroup":                   true,
+	"focus.prevGroup":                   true,
 }
 
 func ParseKeyBindings(bindings []KeyBinding) error {
@@ -361,6 +362,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "alt+t", Command: "terminal.fullscreen"},
 		{Key: "f6", Command: "focus.nextGroup"},
 		{Key: "shift+f6", Command: "focus.prevGroup"},
+		{Key: "ctrl+f6", Command: "terminal.toggleShortcutForwarding"},
 		{Key: "f10", Command: "menu.file"},
 		{Key: "alt+f", Command: "menu.file"},
 		{Key: "alt+e", Command: "menu.edit"},
