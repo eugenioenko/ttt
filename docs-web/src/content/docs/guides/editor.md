@@ -21,8 +21,6 @@ Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active gro
 
 Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Split: Equalize Sizes** in the command palette balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
 
-When reopening a workspace without explicit file arguments, ttt restores its arrangement, divider proportions, file tabs, cursor and scroll positions, and active group. Untitled buffers and plugin tabs are excluded from layout restoration.
-
 ## Syntax Highlighting
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.

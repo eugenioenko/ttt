@@ -17,7 +17,6 @@ type EditorLayoutWidget struct {
 	Second      *EditorLayoutWidget
 	Split       *ContentSplitWidget
 	Borders     *term.BorderSet
-	OnChanged   func()
 	invalidated func()
 	dividerGaps []Rect
 }
@@ -79,16 +78,8 @@ func (e *EditorLayoutWidget) SplitGroup(group, next *EditorGroupWidget, position
 		s.BottomRatio = float64(size) / float64(max(total, 1))
 		s.RightW, s.BottomH = 0, 0
 	}
-	s.OnResizeEnd = func() {
-		if e.OnChanged != nil {
-			e.OnChanged()
-		}
-	}
 	leaf.Split = s
 	e.SetPointerCaptureInvalidated(e.invalidated)
-	if e.OnChanged != nil {
-		e.OnChanged()
-	}
 	return true
 }
 
@@ -109,13 +100,9 @@ func (e *EditorLayoutWidget) RemoveGroup(group *EditorGroupWidget) bool {
 		return false
 	}
 	e.InvalidatePointerInteraction()
-	invalidated, changed := e.invalidated, e.OnChanged
+	invalidated := e.invalidated
 	e.remove(group)
-	e.OnChanged = changed
 	e.SetPointerCaptureInvalidated(invalidated)
-	if changed != nil {
-		changed()
-	}
 	return true
 }
 
@@ -130,9 +117,6 @@ func (e *EditorLayoutWidget) Equalize() {
 		}
 	}
 	equalize(e)
-	if e.OnChanged != nil {
-		e.OnChanged()
-	}
 }
 
 func (e *EditorLayoutWidget) Neighbor(group *EditorGroupWidget, dx, dy int) *EditorGroupWidget {
