@@ -974,6 +974,7 @@ func (a *App) tabMoreMenu() []ui.ContextMenuItem {
 }
 
 func (app *App) editorTabChanged() {
+	app.persistEditorLayout()
 	app.Root.ClearEditorLinkHover()
 	if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 		findBar.OnEditorTabChange()

@@ -15,3 +15,19 @@ func (g *EditorGroupWidget) SessionTabs() []config.EditorTabState {
 	}
 	return tabs
 }
+
+func (g *EditorGroupWidget) SessionViews() []config.EditorViewState {
+	g.saveMultiState()
+	var views []config.EditorViewState
+	for i := range g.tabs {
+		t := &g.tabs[i]
+		if t.Content != nil || t.Buf == nil || t.Virtual || t.FilePath == "" {
+			continue
+		}
+		views = append(views, config.EditorViewState{
+			Path: t.FilePath, Line: t.Cur.Line, Col: t.Cur.Col,
+			TopLine: t.Vp.TopLine, LeftCol: t.Vp.LeftCol, Pinned: i < g.pinnedCount, Active: i == g.active,
+		})
+	}
+	return views
+}
