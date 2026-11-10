@@ -19,6 +19,7 @@ type StatusBarWidget struct {
 	BaseWidget
 	Status        *view.StatusBar
 	spans         []statusBarSpan
+	rightSegs     []*view.StatusSegment
 	okSpan        statusBarSpan
 	actionSpan    statusBarSpan
 	secondarySpan statusBarSpan
@@ -83,23 +84,27 @@ func (s *StatusBarWidget) Render(surface Surface) {
 		x += s.drawText(surface, x, "  ", term.StyleStatusBar)
 	}
 
-	rightSegs := st.RightSegments()
-	rightStr := ""
+	rightSegs := s.rightSegs[:0]
+	for _, seg := range st.RightSegments() {
+		if seg.Text != "" {
+			rightSegs = append(rightSegs, seg)
+		}
+	}
+	s.rightSegs = rightSegs
+	rightW := 1
 	for i, seg := range rightSegs {
 		if i > 0 {
-			rightStr += "   "
+			rightW += textwidth.String(segmentGap(seg))
 		}
-		rightStr += seg.Text
+		rightW += textwidth.String(seg.Text)
 	}
-	rightStr += " "
 
-	rx := w - textwidth.String(rightStr)
+	rx := w - rightW
 	if rx > x {
 		pos := rx
 		for i, seg := range rightSegs {
 			if i > 0 {
-				s.drawText(surface, pos, "   ", term.StyleStatusBar)
-				pos += 3
+				pos += s.drawText(surface, pos, segmentGap(seg), term.StyleStatusBar)
 			}
 			style := seg.Style
 			if style == 0 {
@@ -112,6 +117,13 @@ func (s *StatusBarWidget) Render(surface Surface) {
 			}
 		}
 	}
+}
+
+func segmentGap(seg *view.StatusSegment) string {
+	if seg.Attached {
+		return " "
+	}
+	return "   "
 }
 
 func (s *StatusBarWidget) renderNotification(surface Surface, w int) {

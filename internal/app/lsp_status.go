@@ -32,7 +32,7 @@ func (a *App) SyncLanguageSegment() {
 	})
 	icon, iconStyle := a.lspStatusIcon(a.EditorGroup.ActiveFilePath(), a.EditorGroup.ActiveLanguage())
 	a.Status.SetSegment(view.StatusSegment{
-		ID: "lsp", Side: "right", Priority: 501,
+		ID: "lsp", Side: "right", Priority: 501, Attached: true,
 		Text:    icon,
 		Style:   iconStyle,
 		OnClick: a.ShowOutputPanel,
