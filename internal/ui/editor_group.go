@@ -121,6 +121,7 @@ type EditorGroupWidget struct {
 	IndentGuides      bool
 	GutterStyle       string
 	WordWrap          bool
+	PreviewTabs       bool
 	WordWrapColumn    int
 	WordWrapBreak     string
 	LanguageOverrides map[string]config.EditorLanguageOverride
@@ -233,6 +234,7 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 		DiffSignsColor:      true,
 		DiffGutterHighlight: true,
 		MarkdownMaxWidth:    80,
+		PreviewTabs:         true,
 	}
 	tabBar.OnTabClick = func(index int) {
 		g.SwitchTab(index)
@@ -570,7 +572,7 @@ func (g *EditorGroupWidget) OpenFile(path string) error {
 		Folds:    folds,
 		TabSize:  tabSize,
 		UseTabs:  useTabs,
-		Preview:  true,
+		Preview:  g.PreviewTabs,
 	}
 	g.rebuildHighlighter(&newTab)
 	newTab.Annotations = g.mergedDecorations(path, newBuf, tabSize)
@@ -720,7 +722,7 @@ func (g *EditorGroupWidget) openContentFileTab(path string, content Widget) {
 		PluginKey: contentPluginKey(content),
 		IconPath:  path,
 		Content:   content,
-		Preview:   true,
+		Preview:   g.PreviewTabs,
 	}
 	if t := g.activeTab(); g.canReplaceTab(t) && (t.Content != nil || (t.Buf != nil && !t.Buf.Dirty)) {
 		g.notifyContentTabClose(*t)
@@ -736,7 +738,7 @@ func (g *EditorGroupWidget) canReplaceTab(t *editorTab) bool {
 	if t == nil || g.IsActiveTabPinned() {
 		return false
 	}
-	if t.Preview {
+	if t.Preview && g.PreviewTabs {
 		return true
 	}
 	return len(g.tabs) == 1 && g.isUntouchedPlaceholder(t)

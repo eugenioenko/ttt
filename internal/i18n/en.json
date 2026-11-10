@@ -817,6 +817,7 @@
   "settings.autoClosing": "Auto closing",
   "settings.autoDedent": "Auto dedent",
   "settings.autoIndent": "Auto indent",
+"settings.previewTabs": "Preview tabs",
   "settings.autoUpdateLanguagePacks": "Update languages on upgrade",
   "settings.barBlinking": "Bar (blinking)",
   "settings.barSteady": "Bar (steady)",

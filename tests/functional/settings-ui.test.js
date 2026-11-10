@@ -17,6 +17,15 @@ function openEditor() {
   return file;
 }
 
+function checkboxCell(screen, label) {
+  const lines = screen.split("\n");
+  const y = lines.findIndex((line) => line.includes(label));
+  if (y < 0) throw new Error(`no "${label}" row on screen`);
+  const x = lines[y].indexOf("[", lines[y].indexOf(label) + label.length);
+  if (x < 0) throw new Error(`no checkbox on the "${label}" row`);
+  return { x: x + 1, y };
+}
+
 describe("settings editor", () => {
   it("opens as an editor tab with every category", () => {
     openEditor();
@@ -66,16 +75,17 @@ describe("settings editor", () => {
   // the round trip: that Apply writes settings.json and a freshly built form
   // reads the value back.
   it("persists a toggled setting through settings.json", () => {
-    openEditor();
-
+    const file = openEditor();
     tui.exec("Settings: Open Editor Settings");
     tui.click(12, 4); // the "Editor" tab
+    const form = tui.snapshot();
+    const wordWrap = checkboxCell(tui.run().snapshots[form], "Word wrap");
 
-    // Tab onto Word wrap: from the clicked tab strip, the walk passes the
-    // strip, Indentation, and Auto closing fields first. The assertions name that row, so
-    // a traversal that lands elsewhere fails loudly instead of passing on a no-op.
-    for (let i = 0; i < 14; i++) tui.press("tab");
-    tui.press("space");
+    tui.start(file);
+    tui.waitFor("alpha");
+    tui.exec("Settings: Open Editor Settings");
+    tui.click(12, 4);
+    tui.click(wordWrap.x, wordWrap.y);
     const toggled = tui.snapshot();
 
     tui.exec("Settings: Apply Changes");
