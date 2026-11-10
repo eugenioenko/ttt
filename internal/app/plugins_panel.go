@@ -311,6 +311,7 @@ func (pp *PluginsPanel) SetAvailable(entries []plugin.RemoteRegistryEntry) {
 }
 
 func (a *App) WirePluginsPanel(pp *PluginsPanel) {
+	pp.SearchInput.ControlModifiers = &a.Root.ControlModifiers
 	a.PluginsPanel = pp
 	pp.OnInstall = a.PluginInstallFromURL
 	pp.OnUninstall = a.PluginUninstallByName

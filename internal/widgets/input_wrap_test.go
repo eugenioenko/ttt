@@ -25,6 +25,18 @@ func surfaceRows(s *testSurface) []string {
 	return rows
 }
 
+func TestWrappingInputLegacyAltEnterWithSuperShortcuts(t *testing.T) {
+	mask := tcell.ModMeta
+	input := NewInputWidget(InputConfig{Wrap: true})
+	input.ControlModifiers = &mask
+	input.SetFocused(true)
+	input.SetText("alpha")
+	input.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "m", tcell.ModAlt|tcell.ModCtrl))
+	if input.Text() != "alpha\n" {
+		t.Fatalf("legacy Alt+Enter changed with Super shortcuts: %q", input.Text())
+	}
+}
+
 func TestWrapInputRowsBreaksAtSpacesAndNewlines(t *testing.T) {
 	for _, tc := range []struct {
 		text  string

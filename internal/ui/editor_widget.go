@@ -102,6 +102,7 @@ type EditorPaneWidget struct {
 	rowMapOffset            int
 	links                   editorLinks
 	LinkWorkDir             string
+	ControlModifiers        *tcell.ModMask
 	OnOpenURL               func(string)
 	OnOpenFile              func(string, int, int)
 	OnLinkHover             func(*EditorPaneWidget)

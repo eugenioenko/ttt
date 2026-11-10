@@ -63,6 +63,7 @@ func (a *App) OpenFind() {
 
 func (a *App) newFindBar() *ui.FindBarWidget {
 	findBar := ui.NewFindBarWidget()
+	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		if !a.EditorGroup.IsEditorActive() {
@@ -166,6 +167,8 @@ func (a *App) OpenFindReplace() {
 
 func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 	bar := ui.NewReplaceBarWidget()
+	bar.SearchInput.ControlModifiers = &a.Root.ControlModifiers
+	bar.ReplaceInput.ControlModifiers = &a.Root.ControlModifiers
 	bar.Borders = a.Borders
 	bar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)

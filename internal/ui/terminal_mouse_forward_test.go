@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -135,6 +137,41 @@ func TestTerminalWidget_CtrlClickStaysLocalEvenWithMouseReporting(t *testing.T) 
 	}
 	if !tw.hasSelection {
 		t.Error("expected ctrl+click with no link to start local selection even though mouse reporting is enabled")
+	}
+}
+
+func TestTerminalWidget_SuperClickLinks(t *testing.T) {
+	dev, err := terminal.New("/bin/cat", 80, 24, 0, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dev.Close()
+	dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("https://example.com\x1b[?1006h\x1b[?1000h") })
+	tw := NewTerminalWidget(dev, nil)
+	tw.SetRect(Rect{W: 80, H: 24})
+	opened := ""
+	tw.OnOpenURL = func(url string) { opened = url }
+	for _, enabled := range []bool{true, false, true} {
+		tw.SuperShortcuts = enabled
+		tw.ClearSelection()
+		opened = ""
+		tw.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, tcell.ModMeta))
+		wantPointer := term.PointerDefault
+		if enabled {
+			wantPointer = term.PointerHand
+		}
+		if got := tw.PointerShapeAt(5, 0); got != wantPointer {
+			t.Fatalf("enabled=%t: pointer=%q, want %q", enabled, got, wantPointer)
+		}
+		tw.HandleEvent(tcell.NewEventMouse(5, 0, tcell.Button1, tcell.ModMeta))
+		if (opened == "https://example.com") != enabled {
+			t.Fatalf("enabled=%t: opened %q", enabled, opened)
+		}
+		tw.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, tcell.ModMeta))
+	}
+	tw.HandleEvent(tcell.NewEventMouse(5, 3, tcell.Button1, tcell.ModMeta))
+	if !tw.HasSelection() || tw.mouseButtonHeld != -1 {
+		t.Fatal("Super+click without a link must start local selection instead of forwarding mouse input")
 	}
 }
 

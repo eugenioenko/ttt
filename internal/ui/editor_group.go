@@ -186,6 +186,7 @@ type EditorGroupWidget struct {
 	OnBookmarkChanged func(path string, line int, action string, icon rune, style term.Style)
 	OnGutterClick     func(path string, line int) bool
 	LinkWorkDir       func() string
+	ControlModifiers  *tcell.ModMask
 	OnOpenURL         func(string)
 	OnOpenFileLink    func(string, int, int)
 	OnLinkHover       func(*EditorPaneWidget)
@@ -1033,6 +1034,9 @@ func (g *EditorGroupWidget) SetImageRedraw(redraw func()) {
 }
 
 func (g *EditorGroupWidget) OpenPluginTab(key, title string, content Widget) {
+	if adapter, ok := content.(*WidgetAdapter); ok {
+		adapter.SetControlModifiers(g.ControlModifiers)
+	}
 	g.applyFileIconMode(content)
 	for i, t := range g.tabs {
 		if key != "" && t.PluginKey == key {

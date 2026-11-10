@@ -9,6 +9,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 	"reflect"
 	"time"
 )
@@ -101,6 +102,25 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.language.updates.Stop()
 	}
 	*a.Settings = s
+	a.Root.SetControlModifiers(controlModifiers(s.Keyboard.ModifierKey))
+	if a.Reg != nil {
+		for _, kb := range a.Keybindings {
+			if len(kb.Steps) == 0 {
+				continue
+			}
+			a.Reg.SetShortcut(kb.Command, FormatKeyBinding(kb.Key, a.Root.ControlModifiers))
+		}
+		if a.PluginManager != nil {
+			for _, p := range a.PluginManager.Plugins() {
+				for _, kb := range p.PluginKeybindings {
+					if _, err := config.ParseKeyString(kb.Key); err != nil {
+						continue
+					}
+					a.Reg.SetShortcut(kb.Command, FormatKeyBinding(kb.Key, a.Root.ControlModifiers))
+				}
+			}
+		}
+	}
 	if !s.Welcome.IsRecentFoldersEnabled() {
 		a.clearRecentFolders()
 	}
@@ -111,6 +131,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	}
 	for _, tab := range a.allTerminals() {
 		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
+		tab.Widget.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 		if tab.Tab != nil {
 			tab.Tab.PaddingX = s.Terminal.PaddingX
 			if tab.Widget.PaddingX != nil {

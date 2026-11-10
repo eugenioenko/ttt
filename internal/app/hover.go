@@ -9,6 +9,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/lsp"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -109,7 +110,7 @@ func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
 	mx, my := ev.Position()
 	btn := ev.Buttons()
 	// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
-	if ev.Modifiers()&tcell.ModCtrl != 0 && a.EditorGroup.GetRect().Contains(mx, my) {
+	if term.ControlModifierHeld(ev.Modifiers(), &a.Root.ControlModifiers) && a.EditorGroup.GetRect().Contains(mx, my) {
 		a.DismissHover()
 	} else if btn == 0 && a.checkTabHover(mx, my) {
 		return

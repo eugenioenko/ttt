@@ -16,6 +16,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		return
 	}
 	palette := ui.NewSelectDialogWidget(a.Reg.List())
+	palette.Input.ControlModifiers = &a.Root.ControlModifiers
 	palette.Borders = a.Borders
 	palette.Icons = a.Settings.Appearance.Icons
 	files := workspace.ListFiles(a.Workspace.Paths(), workspace.FileVisibility{

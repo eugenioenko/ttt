@@ -148,6 +148,38 @@ func TestTerminalCtrlVPastesAppliesToExistingAndNewTabs(t *testing.T) {
 	}
 }
 
+func TestTerminalSuperShortcutsApplyToExistingAndNewTabs(t *testing.T) {
+	a := spawnTestApp(t)
+	a.Renderer = &render.Renderer{}
+	s := *a.Settings
+	s.Keyboard.ModifierKey = config.ModifierControlSuper
+	a.ApplySettings(s)
+	spawn := func(inEditor bool) {
+		t.Helper()
+		id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat", InEditor: inEditor})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { a.CloseTerminal(id) })
+		if !a.terminalByID(id).Widget.SuperShortcuts {
+			t.Fatal("new terminal ignored the shortcut modifier")
+		}
+	}
+	spawn(false)
+	spawn(true)
+	for _, mode := range []string{config.ModifierControl, config.ModifierControlSuper, config.ModifierSuper} {
+		s.Keyboard.ModifierKey = mode
+		a.ApplySettings(s)
+		for _, tab := range a.allTerminals() {
+			if got, want := tab.Widget.SuperShortcuts, mode != config.ModifierControl; got != want {
+				t.Errorf("mode=%s terminal=%s: SuperShortcuts=%t, want %t", mode, tab.ID, got, want)
+			}
+		}
+	}
+	spawn(false)
+	spawn(true)
+}
+
 func TestTerminalPaddingAppliesToSpawnResizeAndSettings(t *testing.T) {
 	for name, position := range map[string]ui.SplitPosition{"bottom": ui.SplitBottom, "right": ui.SplitRight} {
 		t.Run(name, func(t *testing.T) {

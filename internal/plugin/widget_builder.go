@@ -253,6 +253,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 	case WidgetMarkdown:
 		if sv, ok := w.(*widgets.ScrollViewWidget); ok {
 			if md, ok := sv.Child.(*widgets.MarkdownWidget); ok {
+				md.ControlModifiers = widgetModifiers(p)
 				maxWidth := 80
 				if p != nil && p.Markdown.WrapWidth > 0 {
 					maxWidth = p.Markdown.WrapWidth
@@ -648,6 +649,7 @@ func syncInputValue(iw *widgets.InputWidget, desc WidgetDesc) {
 }
 
 func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, p *Plugin) {
+	iw.ControlModifiers = widgetModifiers(p)
 	iw.Config.Bordered, iw.Config.Title, iw.Config.Mask = desc.Border, desc.BoxTitle, desc.Password
 	if desc.Border && p != nil && p.Borders != nil {
 		iw.Box.Borders = *p.Borders
@@ -687,6 +689,7 @@ func createProgressWidget(desc WidgetDesc) *widgets.ProgressWidget {
 
 func createMarkdownWidget(desc WidgetDesc, p *Plugin) *widgets.ScrollViewWidget {
 	md := widgets.NewMarkdownWidget()
+	md.ControlModifiers = widgetModifiers(p)
 	md.FullWidthDividers = desc.FullWidthDividers
 	maxWidth := 80
 	if p != nil && p.Markdown.WrapWidth > 0 {
@@ -702,6 +705,13 @@ func createMarkdownWidget(desc WidgetDesc, p *Plugin) *widgets.ScrollViewWidget 
 	sv.Follow = desc.Follow
 	md.SetScrollParent(sv)
 	return sv
+}
+
+func widgetModifiers(p *Plugin) *tcell.ModMask {
+	if p == nil {
+		return nil
+	}
+	return p.ControlModifiers
 }
 
 func createTableWidget(desc WidgetDesc, p *Plugin) *widgets.TableWidget {
