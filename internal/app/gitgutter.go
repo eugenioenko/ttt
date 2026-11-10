@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
@@ -166,7 +167,7 @@ func blobLines(content string, showTrailingNewline bool) []string {
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
-	if showTrailingNewline && lines[len(lines)-1] != "" {
+	if showTrailingNewline && (strings.HasSuffix(content, "\n") || lines[len(lines)-1] != "") {
 		lines = append(lines, "")
 	}
 	return lines
