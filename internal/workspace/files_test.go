@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,7 +41,7 @@ func TestFileVisibilityAcrossListingBackends(t *testing.T) {
 	backends := []struct {
 		name string
 		path string
-		list func(string, string, FileVisibility) []File
+		list func(context.Context, string, string, FileVisibility) []File
 	}{
 		{"rg", os.Getenv("PATH"), listDirFiles},
 		{"git", gitOnly, listDirFiles},
@@ -68,7 +69,7 @@ func TestFileVisibilityAcrossListingBackends(t *testing.T) {
 							}
 						}
 						var got []string
-						for _, file := range backend.list(dir, "", FileVisibility{hidden, ignored}) {
+						for _, file := range backend.list(context.Background(), dir, "", FileVisibility{hidden, ignored}) {
 							got = append(got, filepath.ToSlash(file.Rel))
 							if !filepath.IsAbs(file.Abs) {
 								t.Fatalf("file path is not absolute: %q", file.Abs)
@@ -94,7 +95,7 @@ func TestListFilesWorkspacePrefixes(t *testing.T) {
 		}
 	}
 	for _, roots := range [][]string{dirs[:1], dirs} {
-		files := ListFiles(roots, FileVisibility{})
+		files := ListFiles(context.Background(), roots, FileVisibility{})
 		if len(files) != len(roots) {
 			t.Fatalf("got %d files for %d roots", len(files), len(roots))
 		}
@@ -110,6 +111,21 @@ func TestListFilesWorkspacePrefixes(t *testing.T) {
 	}
 }
 
+func TestCancelledFileListingReturnsNoFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if files := ListFiles(ctx, []string{dir}, FileVisibility{}); len(files) != 0 {
+		t.Fatalf("cancelled listing returned %v", files)
+	}
+	if files := listFilesWalkDir(ctx, dir, "", FileVisibility{ShowGitIgnored: true}); len(files) != 0 {
+		t.Fatalf("cancelled walk returned %v", files)
+	}
+}
+
 func TestEmptyRipgrepResultDoesNotFallBack(t *testing.T) {
 	if _, err := exec.LookPath("rg"); err != nil {
 		t.Skip("ripgrep not installed")
@@ -120,7 +136,7 @@ func TestEmptyRipgrepResultDoesNotFallBack(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if files := ListFiles([]string{dir}, FileVisibility{}); len(files) != 0 {
+	if files := ListFiles(context.Background(), []string{dir}, FileVisibility{}); len(files) != 0 {
 		t.Fatalf("ignore rules bypassed: %v", files)
 	}
 }
@@ -145,7 +161,7 @@ func TestListFilesWalkDirDependencyExclusions(t *testing.T) {
 	}
 
 	// Default visibility (ShowGitIgnored=false) must exclude node_modules and __pycache__ (including nested)
-	defaultFiles := listFilesWalkDir(dir, "", FileVisibility{ShowGitIgnored: false})
+	defaultFiles := listFilesWalkDir(context.Background(), dir, "", FileVisibility{ShowGitIgnored: false})
 	var defaultRels []string
 	for _, f := range defaultFiles {
 		defaultRels = append(defaultRels, filepath.ToSlash(f.Rel))
@@ -155,7 +171,7 @@ func TestListFilesWalkDirDependencyExclusions(t *testing.T) {
 	}
 
 	// ShowGitIgnored=true must include files under node_modules and __pycache__
-	allFiles := listFilesWalkDir(dir, "", FileVisibility{ShowGitIgnored: true})
+	allFiles := listFilesWalkDir(context.Background(), dir, "", FileVisibility{ShowGitIgnored: true})
 	var allRels []string
 	for _, f := range allFiles {
 		allRels = append(allRels, filepath.ToSlash(f.Rel))
