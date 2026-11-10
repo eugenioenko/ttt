@@ -8,7 +8,6 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
-	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
@@ -20,15 +19,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	palette.Input.ControlModifiers = &a.Root.ControlModifiers
 	palette.Borders = a.Borders
 	palette.Icons = a.Settings.Appearance.Icons
-	files := workspace.ListFiles(a.Workspace.Paths(), workspace.FileVisibility{
-		ShowHidden:     a.Settings.QuickOpen.ShowHidden,
-		ShowGitIgnored: a.Settings.QuickOpen.ShowGitIgnored,
-	})
-	items := make([]ui.PaletteFile, len(files))
-	for i, file := range files {
-		items[i] = ui.PaletteFile{Rel: file.Rel, Abs: file.Abs}
-	}
-	palette.SetFiles(items)
+	a.prepareQuickOpen(palette)
 	if len(initialText) > 0 {
 		palette.Input.SetText(initialText[0])
 	} else if fileMode {

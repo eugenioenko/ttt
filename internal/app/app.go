@@ -181,6 +181,7 @@ type App struct {
 	eventLoopCloseOnce    sync.Once
 	eventLoopDone         chan struct{}
 	tasks                 taskOwner
+	quickOpen             *quickOpenState
 	fileLinks             *asynctask.Task[map[string]string]
 	resolveFileLink       func(string, string) string
 	searchReplace         searchReplaceState
@@ -1101,6 +1102,10 @@ func (a *App) ClosePluginDrawer() {
 }
 
 func (a *App) DismissDialog() {
+	if a.quickOpen != nil && a.Root.TopOverlayWidget() == a.quickOpen.palette {
+		a.releaseTask(a.quickOpen.task)
+		a.quickOpen = nil
+	}
 	a.approvalDialog = nil
 	a.Root.PopOverlay()
 	a.FocusEditor()
