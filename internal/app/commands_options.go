@@ -9,9 +9,18 @@ import (
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
-func (a *App) SaveAndApplySettings() {
-	config.SaveSettings(*a.Settings)
+func (a *App) SaveAndApplySettings() bool {
+	saved := a.persistSettings()
 	a.ApplySettings(*a.Settings)
+	return saved
+}
+
+func (a *App) persistSettings() bool {
+	if err := config.SaveSettings(*a.Settings); err != nil {
+		a.StatusWarn(i18n.Format("settings.saveFailed", i18n.Args{"error": err.Error()}))
+		return false
+	}
+	return true
 }
 
 func (a *App) ToggleLineNumbers() {

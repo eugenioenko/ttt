@@ -29,7 +29,11 @@ func configuredDiffContext(contextMode string) ui.DiffContextMode {
 }
 
 func (a *App) ReloadSettings() {
-	s := config.LoadSettings()
+	s, err := config.ReadSettings()
+	if err != nil {
+		a.StatusWarn(i18n.Format("settings.loadFailed", i18n.Args{"error": err.Error()}))
+		return
+	}
 	a.ApplySettings(s)
 	a.StatusNotify(i18n.Text("status.settingsReloaded"))
 }

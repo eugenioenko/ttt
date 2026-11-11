@@ -2,7 +2,9 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 )
 
@@ -679,17 +681,40 @@ func normalizeSettings(s *Settings) {
 }
 
 func LoadSettings() Settings {
+	s, _ := ReadSettings()
+	return s
+}
+
+func ReadSettings() (Settings, error) {
+	for _, dir := range configPaths() {
+		s, err := readSettingsFile(filepath.Join(dir, "settings.json"))
+		if !os.IsNotExist(err) {
+			return s, err
+		}
+	}
 	s := DefaultSettings()
-	paths := configPaths()
-	if data, err := readFirst(paths, "settings.json"); err == nil {
-		json.Unmarshal(data, &s)
+	normalizeSettings(&s)
+	return s, nil
+}
+
+func readSettingsFile(path string) (Settings, error) {
+	s := DefaultSettings()
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if err = json.Unmarshal(data, &s); err != nil {
+			err = fmt.Errorf("%s: %w", path, err)
+			s = DefaultSettings()
+		}
 	}
 	normalizeSettings(&s)
-	return s
+	return s, err
 }
 
 func SaveSettings(s Settings) error {
 	path := ConfigFilePath("settings.json")
+	if _, err := readSettingsFile(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
