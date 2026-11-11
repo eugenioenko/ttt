@@ -10,9 +10,8 @@ import (
 )
 
 func (a *App) SaveAndApplySettings() bool {
-	saved := a.persistSettings()
 	a.ApplySettings(*a.Settings)
-	return saved
+	return a.persistSettings()
 }
 
 func (a *App) persistSettings() bool {
@@ -185,8 +184,9 @@ func (a *App) ToggleShowTrailingNewline() {
 func (a *App) ToggleSyntaxHighlight() {
 	enabled := !a.Settings.Editor.IsSyntaxHighlightEnabled()
 	a.Settings.Editor.SyntaxHighlight = &enabled
-	a.SaveAndApplySettings()
-	a.StatusNotify(i18n.Text("status.restartToApplySyntaxHighlightChanges"))
+	if a.SaveAndApplySettings() {
+		a.StatusNotify(i18n.Text("status.restartToApplySyntaxHighlightChanges"))
+	}
 }
 
 func (a *App) ToggleBracketPairColorization() {
