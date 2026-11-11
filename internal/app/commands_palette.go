@@ -26,11 +26,17 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		palette.Input.SetText("")
 	}
 	palette.OnExecute = func(id string) {
-		a.DismissDialog()
+		a.dismissDialog()
+		// Reveal the editor only after dispatch: fullscreen toggles need the
+		// original panel geometry to decide whether to hide or maximize it.
+		a.Root.SetFocus(a.EditorGroup)
 		if (id == "terminal.sendNextKey" || id == "terminal.toggleShortcutForwarding" || id == "terminal.close") && previousFocus != nil {
 			a.Root.SetFocus(previousFocus)
 		}
 		a.Reg.Execute(id)
+		if a.Root.Focused == a.EditorGroup {
+			a.FocusEditor()
+		}
 	}
 	palette.OnOpenFile = func(absPath string) {
 		a.DismissDialog()

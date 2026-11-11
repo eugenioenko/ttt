@@ -95,3 +95,18 @@ func TestEditorFocusHidesMaximizedPanelOnTinyScreen(t *testing.T) {
 		t.Fatal("tiny screen did not reveal editor")
 	}
 }
+
+func TestPaletteFullscreenCommandSeesMaximizedLayout(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.app.Settings.Terminal.Shell = "/bin/cat"
+	h.exec("terminal.fullscreen")
+	t.Cleanup(h.app.Terminals[0].Term.Close)
+	h.app.OpenCommandPalette(false)
+	dialog := h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+	dialog.OnExecute("terminal.fullscreen")
+	h.redraw()
+	if h.app.ContentSplit.ShowBottom || h.app.Root.Focused != h.app.EditorGroup {
+		t.Fatal("palette fullscreen toggle re-maximized the panel instead of hiding it")
+	}
+}

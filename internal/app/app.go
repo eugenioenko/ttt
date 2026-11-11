@@ -1130,13 +1130,17 @@ func (a *App) ClosePluginDrawer() {
 }
 
 func (a *App) DismissDialog() {
+	a.dismissDialog()
+	a.FocusEditor()
+}
+
+func (a *App) dismissDialog() {
 	if a.quickOpen != nil && a.Root.TopOverlayWidget() == a.quickOpen.palette {
 		a.releaseTask(a.quickOpen.task)
 		a.quickOpen = nil
 	}
 	a.approvalDialog = nil
 	a.Root.PopOverlay()
-	a.FocusEditor()
 }
 
 func (a *App) ShowInputDialog(title, placeholder, initial string, onSubmit func(string)) {
