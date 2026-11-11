@@ -398,6 +398,8 @@ To open the current document independently of Explorer selection, run **File: Op
 
 External code formatters configured per file extension. Each formatter receives the buffer content via stdin and must write the formatted output to stdout. Use `{file}` as a placeholder for the file path (needed by formatters like prettier for filetype detection).
 
+If a formatter produces empty output for a nonempty document, ttt rejects the result and reports a formatting error instead of replacing the document with empty text. This also applies when final-newline handling makes the output empty.
+
 When `editor.formatOnSave` is `true`, external formatters take priority over LSP formatting. If no external formatter is configured for the file type, LSP formatting is used as a fallback.
 
 | Key | Type | Default | Description |
