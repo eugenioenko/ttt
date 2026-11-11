@@ -377,6 +377,7 @@
   "files.noFilesOrFolders": "No files or folders",
   "files.noSubdirectories": "No subdirectories",
   "files.trashFailed": "Could not move {name} to Trash: {error}",
+  "formatter.emptyOutput": "Formatter produced no output for a nonempty document",
   "general.abort": "Abort",
   "general.add": "Add",
   "general.addFolder": "Add Folder",

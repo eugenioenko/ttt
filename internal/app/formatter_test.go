@@ -13,6 +13,76 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/undo"
 )
 
+func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
+	if _, err := exec.LookPath("true"); err != nil {
+		t.Skip("test formatter requires true")
+	}
+	for _, mode := range []string{"manual", "save"} {
+		t.Run(mode, func(t *testing.T) {
+			settings := config.DefaultSettings()
+			settings.Formatters = map[string]string{"js": "true"}
+			settings.Editor.FormatOnSave = mode == "save"
+			disabled := false
+			settings.LSP.Enabled = &disabled
+			a := buildTestApp(t, settings)
+			t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+			path := filepath.Join(t.TempDir(), "t.js")
+			original := "banana\napple\n"
+			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.EditorGroup.OpenFile(path); err != nil {
+				t.Fatal(err)
+			}
+			editor := a.EditorGroup.Editor
+			editor.ExecCommand(&undo.InsertStringCommand{Line: 0, Col: 0, Text: "zz"})
+			editor.FlushOnChange()
+			version := editor.Buf.Version()
+			wantDisk := original
+			if mode == "save" {
+				a.SaveFile()
+				wantDisk = "zz" + original
+			} else {
+				a.RunExternalFormatter()
+			}
+			if got := strings.Join(editor.Buf.Lines, "\n"); got != "zz"+original {
+				t.Errorf("buffer = %q, want %q", got, "zz"+original)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil || string(data) != wantDisk {
+				t.Errorf("saved file = %q, error = %v, want %q", data, err, wantDisk)
+			}
+			if editor.Buf.Version() != version || editor.Buf.Dirty != (mode == "manual") {
+				t.Errorf("rejected output changed buffer state: version %d -> %d, dirty=%v", version, editor.Buf.Version(), editor.Buf.Dirty)
+			}
+			if !strings.Contains(a.Status.Notification, "no output") {
+				t.Errorf("missing formatter warning: %q", a.Status.Notification)
+			}
+			a.EditorGroup.Undo()
+			if got := strings.Join(editor.Buf.Lines, "\n"); got != original {
+				t.Errorf("undo = %q, want the user's edit undone to %q", got, original)
+			}
+		})
+	}
+}
+
+func TestEmptyFormatterOutputForEmptyDocument(t *testing.T) {
+	if _, err := exec.LookPath("true"); err != nil {
+		t.Skip("test formatter requires true")
+	}
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+	a.EditorGroup.NewFile()
+	buf := a.EditorGroup.ActiveBuffer()
+	version := buf.Version()
+	if err := a.applyExternalFormatter("true", "empty.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(buf.Lines, []string{""}) || buf.Version() != version || buf.Dirty {
+		t.Fatalf("empty document changed: lines=%q, version=%d, dirty=%v", buf.Lines, buf.Version(), buf.Dirty)
+	}
+}
+
 func TestUnchangedFormatterDoesNotEmitAnotherEdit(t *testing.T) {
 	if _, err := exec.LookPath("cat"); err != nil {
 		t.Skip("test formatter requires cat")

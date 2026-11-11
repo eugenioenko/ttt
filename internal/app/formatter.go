@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +76,9 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 	formatted := stdout.String()
 	if formatted == original {
 		return nil
+	}
+	if formatted == "" {
+		return errors.New(i18n.Text("formatter.emptyOutput"))
 	}
 	comparison := original
 	if editor.Buf.ShowTrailingNewline {
