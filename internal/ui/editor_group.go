@@ -3327,6 +3327,8 @@ func (g *EditorGroupWidget) scheduleFolds() {
 
 const editorTabBarH = 3
 
+const MinEditorGroupHeight = editorTabBarH + 1
+
 // ContentRect is the screen rect below the tab bar that tab content fills.
 func (g *EditorGroupWidget) ContentRect() Rect {
 	r := g.GetRect()
@@ -3339,7 +3341,7 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := g.GetRect()
 
-	if w <= 0 || h <= editorTabBarH {
+	if w <= 0 || h < MinEditorGroupHeight {
 		g.TabBar.InvalidatePointerInteraction()
 		return
 	}

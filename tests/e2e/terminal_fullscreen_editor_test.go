@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -85,14 +86,30 @@ func TestFocusOnOpenDisabledPreservesMaximizedPanel(t *testing.T) {
 }
 
 func TestEditorFocusHidesMaximizedPanelOnTinyScreen(t *testing.T) {
-	h := newTestHarness(t, 80, 7)
+	for height := 7; height <= 12; height++ {
+		t.Run(fmt.Sprint(height), func(t *testing.T) {
+			h := newTestHarness(t, 80, height)
+			defer h.stop()
+			h.app.NewFileFromText("VISIBLE")
+			h.app.ContentSplit.ShowBottom = true
+			h.app.ContentSplit.BottomH = h.app.ContentSplit.GetRect().H - 1
+			h.app.FocusEditor()
+			h.redraw()
+			h.assertContains("VISIBLE")
+		})
+	}
+}
+
+func TestEditorFocusRestoresAlmostMaximizedPanel(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
 	defer h.stop()
+	h.app.NewFileFromText("VISIBLE")
 	h.app.ContentSplit.ShowBottom = true
-	h.app.ContentSplit.BottomH = h.app.ContentSplit.GetRect().H - 1
-	h.app.FocusEditor()
-	h.redraw()
-	if h.app.ContentSplit.ShowBottom {
-		t.Fatal("tiny screen did not reveal editor")
+	for remaining := 1; remaining <= 3; remaining++ {
+		h.app.ContentSplit.BottomH = h.app.ContentSplit.GetRect().H - 1 - remaining
+		h.app.FocusEditor()
+		h.redraw()
+		h.assertContains("VISIBLE")
 	}
 }
 

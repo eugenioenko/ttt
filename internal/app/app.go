@@ -342,11 +342,10 @@ func (a *App) SetPanelPosition(pos ui.SplitPosition) {
 func (a *App) FocusEditor() {
 	if split := a.ContentSplit; split != nil && split.ShowBottom && split.Position == ui.SplitBottom {
 		height := split.GetRect().H
-		if height > 0 && split.BottomRect().H >= height-1 {
-			if height <= 4 {
+		if height > 0 && height-split.BottomRect().H-1 < ui.MinEditorGroupHeight {
+			split.BottomH = height / 2
+			if height-split.BottomRect().H-1 < ui.MinEditorGroupHeight {
 				split.ShowBottom = false
-			} else {
-				a.ensureUsablePanelSize()
 			}
 			resizeTerminals(a)
 		}
