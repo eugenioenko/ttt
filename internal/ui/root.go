@@ -12,8 +12,9 @@ import (
 )
 
 type Overlay struct {
-	Widget Widget
-	Modal  bool
+	Widget      Widget
+	Modal       bool
+	returnFocus Widget
 }
 
 type GlobalKeyBinding struct {
@@ -592,8 +593,16 @@ func (r *Root) PushOverlay(o Overlay) {
 	r.chord = nil
 	r.ClearEditorLinkHover()
 	r.CancelPointerCapture()
+	o.returnFocus = r.Focused
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
+}
+
+func (r *Root) OverlayReturnFocus() Widget {
+	if len(r.Overlays) == 0 {
+		return nil
+	}
+	return r.Overlays[len(r.Overlays)-1].returnFocus
 }
 
 func (r *Root) PopOverlay() {
@@ -601,6 +610,7 @@ func (r *Root) PopOverlay() {
 		if r.capturedWidget == r.TopOverlayWidget() {
 			r.CancelPointerCapture()
 		}
+		r.Overlays[len(r.Overlays)-1] = Overlay{}
 		r.Overlays = r.Overlays[:len(r.Overlays)-1]
 		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
 	}
@@ -613,7 +623,14 @@ func (r *Root) RemoveOverlay(w Widget) {
 			if r.capturedWidget == w {
 				r.CancelPointerCapture()
 			}
-			r.Overlays = append(r.Overlays[:i], r.Overlays[i+1:]...)
+			for j := i + 1; j < len(r.Overlays); j++ {
+				if r.Overlays[j].returnFocus == w {
+					r.Overlays[j].returnFocus = o.returnFocus
+				}
+			}
+			copy(r.Overlays[i:], r.Overlays[i+1:])
+			r.Overlays[len(r.Overlays)-1] = Overlay{}
+			r.Overlays = r.Overlays[:len(r.Overlays)-1]
 			slog.Debug("root", "action", "removeOverlay", "count", len(r.Overlays))
 			return
 		}

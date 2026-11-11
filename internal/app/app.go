@@ -1131,8 +1131,13 @@ func (a *App) ClosePluginDrawer() {
 }
 
 func (a *App) DismissDialog() {
+	previous := a.Root.OverlayReturnFocus()
 	a.dismissDialog()
-	a.FocusEditor()
+	if previous != nil {
+		a.Root.SetFocus(previous)
+	} else {
+		a.FocusEditor()
+	}
 }
 
 func (a *App) dismissDialog() {

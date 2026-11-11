@@ -20,6 +20,8 @@ Invoking **Ctrl+K F** or **Ctrl+K R** prefills the search query from the active 
 
 Use **Ctrl+K R** to open the sidebar search and replace panel. This lets you find and replace text across all files in the workspace.
 
+Cancelling the Replace All confirmation returns focus to the search panel and preserves the active input field.
+
 ## Find in File
 
 - **Ctrl+F** opens the inline find bar
