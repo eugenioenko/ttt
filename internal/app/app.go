@@ -83,7 +83,7 @@ type App struct {
 	imageCellW      int
 	imageCellH      int
 	Settings        *config.Settings
-	settingsPath    string
+	settingsPaths   []string
 	customSettings  bool
 	State           config.State
 	Workspace       *workspace.Workspace

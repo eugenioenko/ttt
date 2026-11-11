@@ -162,6 +162,43 @@ func TestUnrelatedSaveDoesNotRecreateSettingsDirectory(t *testing.T) {
 	}
 }
 
+func TestSaveAsNewHigherPrioritySettingsAppliesBeforeToggle(t *testing.T) {
+	previous := config.OverrideConfigDir
+	config.OverrideConfigDir = ""
+	t.Cleanup(func() { config.OverrideConfigDir = previous })
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adjacent := filepath.Join(filepath.Dir(exe), "config")
+	if err := os.Mkdir(adjacent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(adjacent) })
+	defaultPath := config.ConfigFilePath("settings.json")
+	if err := os.WriteFile(defaultPath, []byte(`{"editor":{"tabSize":7}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := buildTestApp(t, config.LoadSettings())
+	t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+	path := filepath.Join(adjacent, "settings.json")
+	a.NewFileFromText(`{"editor":{"tabSize":2},"vim":{"enabled":true}}`)
+	a.saveFileAs(path, nil)
+	if a.Settings.Editor.TabSize != 2 {
+		t.Errorf("new settings file not applied: tabSize=%d", a.Settings.Editor.TabSize)
+	}
+	a.ToggleWordWrap()
+	disk, err := config.ReadSettings()
+	var vim map[string]bool
+	decodeErr := json.Unmarshal(disk.Extra["vim"], &vim)
+	if err != nil || decodeErr != nil || disk.Editor.TabSize != 2 || !disk.Editor.WordWrap || !vim["enabled"] {
+		t.Errorf("toggle overwrote new settings: tabSize=%d wrap=%v vim=%s, error %v", disk.Editor.TabSize, disk.Editor.WordWrap, disk.Extra["vim"], err)
+	}
+}
+
 func settingsSaveApp(t *testing.T) (*App, string) {
 	t.Helper()
 	previous := config.OverrideConfigDir

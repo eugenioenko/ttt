@@ -231,12 +231,14 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 }
 
 func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget) *App {
-	settingsPath := cfg.SettingsFile
-	if settingsPath == "" {
-		settingsPath = config.ConfigFilePath("settings.json")
+	settingsPaths := []string{cfg.SettingsFile}
+	if cfg.SettingsFile == "" {
+		settingsPaths = append(config.SettingsPaths(), config.ConfigFilePath("settings.json"))
 	}
-	if absolute, err := filepath.Abs(settingsPath); err == nil {
-		settingsPath = absolute
+	for i, path := range settingsPaths {
+		if absolute, err := filepath.Abs(path); err == nil {
+			settingsPaths[i] = absolute
+		}
 	}
 	locale, languageErr := loadDisplayLanguage(cfg.Settings.Language)
 	initText()
@@ -417,7 +419,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		Status:              status,
 		Borders:             borders,
 		Settings:            &cfg.Settings,
-		settingsPath:        settingsPath,
+		settingsPaths:       settingsPaths,
 		customSettings:      cfg.SettingsFile != "",
 		State:               state,
 		Workspace:           ws,

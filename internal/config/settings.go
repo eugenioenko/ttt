@@ -686,8 +686,8 @@ func LoadSettings() Settings {
 }
 
 func ReadSettings() (Settings, error) {
-	for _, dir := range configPaths() {
-		s, err := ReadSettingsFile(filepath.Join(dir, "settings.json"))
+	for _, path := range SettingsPaths() {
+		s, err := ReadSettingsFile(path)
 		if !os.IsNotExist(err) {
 			return s, err
 		}
@@ -695,6 +695,14 @@ func ReadSettings() (Settings, error) {
 	s := DefaultSettings()
 	normalizeSettings(&s)
 	return s, nil
+}
+
+func SettingsPaths() []string {
+	paths := configPaths()
+	for i, dir := range paths {
+		paths[i] = filepath.Join(dir, "settings.json")
+	}
+	return paths
 }
 
 func ReadSettingsFile(path string) (Settings, error) {

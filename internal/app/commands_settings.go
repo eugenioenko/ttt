@@ -32,7 +32,7 @@ func (a *App) ReloadSettings() {
 	var s config.Settings
 	var err error
 	if a.customSettings {
-		s, err = config.ReadSettingsFile(a.settingsPath)
+		s, err = config.ReadSettingsFile(a.settingsPaths[0])
 	} else {
 		s, err = config.ReadSettings()
 	}
@@ -45,8 +45,13 @@ func (a *App) ReloadSettings() {
 }
 
 func (a *App) reloadSavedSettings(path string) {
-	if a.settingsPath != "" && samePath(path, a.settingsPath) {
-		a.ReloadSettings()
+	for _, candidate := range a.settingsPaths {
+		if samePath(path, candidate) {
+			if a.customSettings || samePath(path, config.ConfigFilePath("settings.json")) {
+				a.ReloadSettings()
+			}
+			return
+		}
 	}
 }
 

@@ -20,7 +20,7 @@ Closing the settings tab with unapplied edits discards them.
 
 With the default configuration, both edit the same file. Close and reopen an existing settings form after changing the raw JSON so its draft reflects the saved values.
 
-With `--config`, open the selected file directly to edit it. Saving it or running **Reload Settings** applies that custom file. **Settings: Open settings.json** still opens the default file, and the form and Options toggles still write to the default file. Saving the default file does not reload the custom configuration, so reopening the form shows the active custom settings rather than those saved edits. Use the custom file directly to avoid overwriting the default settings with changes from the form or toggles.
+When `--config` selects a file other than the default settings file, open the selected file directly to edit it. Saving it or running **Reload Settings** applies that custom file. **Settings: Open settings.json** still opens the default file, and the form and Options toggles still write to the default file. Saving the default file does not reload the custom configuration, so reopening the form shows the active custom settings rather than those saved edits. Use the custom file directly to avoid overwriting the default settings with changes from the form or toggles. If `--config` selects the default settings path itself, both use that same file.
 
 Automatic reload matches the configured path; use **Reload Settings** when editing it through a different symlink alias.
 
