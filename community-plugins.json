@@ -185,6 +185,16 @@
     "tags": ["sqlite", "sqlite3", "database", "sql"]
   },
   {
+    "name": "terminal-theme",
+    "displayName": "Terminal Theme",
+    "author": "danielmrdev",
+    "description": "Generate a TTT theme snapshot from the palette of the terminal running TTT",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "terminal-theme",
+    "version": "0.1.0",
+    "tags": ["terminal", "theme", "appearance", "colors"]
+  },
+  {
     "name": "theme-catppuccin-mocha",
     "displayName": "Catppuccin Mocha Theme",
     "author": "salmonumbrella",
