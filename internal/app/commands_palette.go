@@ -15,6 +15,15 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		return
 	}
 	previousFocus := a.Root.Focused
+	previousEditorTerminalID := ""
+	if focused := a.focusedTerminalWidget(); focused != nil {
+		for _, terminal := range a.EditorTerminals {
+			if terminal.Widget == focused {
+				previousEditorTerminalID = terminal.ID
+				break
+			}
+		}
+	}
 	palette := ui.NewSelectDialogWidget(a.Reg.List())
 	palette.Input.ControlModifiers = &a.Root.ControlModifiers
 	palette.Borders = a.Borders
@@ -33,7 +42,12 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		if (id == "terminal.sendNextKey" || id == "terminal.toggleShortcutForwarding" || id == "terminal.close") && previousFocus != nil {
 			a.Root.SetFocus(previousFocus)
 		}
-		a.Reg.Execute(id)
+		if id == "terminal.close" && previousEditorTerminalID != "" {
+			// The editor group survives terminal exits; never close its replacement tab.
+			a.CloseTerminal(previousEditorTerminalID)
+		} else {
+			a.Reg.Execute(id)
+		}
 		if a.Root.Focused == a.EditorGroup {
 			a.FocusEditor()
 		}

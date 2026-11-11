@@ -1138,10 +1138,10 @@ func (a *App) DismissDialog() {
 	if !restore {
 		return
 	}
-	if previous != nil {
-		a.Root.SetFocus(previous)
-	} else {
+	if previous == nil || previous == a.EditorGroup {
 		a.FocusEditor()
+	} else {
+		a.Root.SetFocus(previous)
 	}
 }
 

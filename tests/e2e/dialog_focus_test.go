@@ -135,3 +135,49 @@ func TestCancelDialogDoesNotRefocusClosedTerminalPanel(t *testing.T) {
 		t.Fatal("cancel restored focus to the closed terminal panel")
 	}
 }
+
+func TestCancelPaletteDialogRevealsEditor(t *testing.T) {
+	h := newTestHarness(t, 100, 24)
+	defer h.stop()
+	h.app.NewFileFromText("VISIBLE")
+	h.app.Settings.Terminal.Shell = "/bin/cat"
+	h.exec("terminal.fullscreen")
+	t.Cleanup(h.app.Terminals[0].Term.Close)
+	h.app.OpenCommandPalette(false)
+	palette := h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+	palette.OnExecute("editor.indentation")
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	h.assertContains("VISIBLE")
+}
+
+func TestPaletteCloseKeepsOpeningEditorTerminalTarget(t *testing.T) {
+	for _, changed := range []string{"exit", "switch"} {
+		t.Run(changed, func(t *testing.T) {
+			h := newTestHarness(t, 100, 24)
+			defer h.stop()
+			panelID := openPanelTerminals(t, h, 1)[0]
+			for range 2 {
+				h.exec("terminal.newInEditor")
+				t.Cleanup(h.app.EditorTerminals[len(h.app.EditorTerminals)-1].Term.Close)
+			}
+			otherID, openingID := h.app.EditorTerminals[0].ID, h.app.EditorTerminals[1].ID
+			h.app.OpenCommandPalette(false)
+			palette := h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+			if changed == "exit" {
+				h.app.CloseTerminal(openingID)
+			} else if err := h.app.FocusTerminal(otherID); err != nil {
+				t.Fatal(err)
+			}
+			palette.OnExecute("terminal.close")
+			terms := h.app.ListTerminals()
+			if len(terms) != 2 {
+				t.Fatalf("close removed a replacement terminal: %+v", terms)
+			}
+			for _, id := range []string{panelID, otherID} {
+				if err := h.app.SendToTerminal(id, "still-running\n"); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
