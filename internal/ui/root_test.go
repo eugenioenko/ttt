@@ -428,6 +428,30 @@ type rawKeysWidget struct {
 	mockWidget
 }
 
+func TestEditorChordSkipsRawKeysButWorksInEditor(t *testing.T) {
+	root := NewRoot(&mockWidget{})
+	terminal := &rawKeysWidget{mockWidget{focusable: true}}
+	root.SetFocus(terminal)
+	fired := 0
+	root.AddEditorChordKey([]GlobalKeyBinding{
+		{Key: tcell.KeyCtrlL, Mod: tcell.ModCtrl},
+		{Key: tcell.KeyRune, Rune: 'f'},
+	}, func() { fired++ })
+	prefix := makeKeyEvent(tcell.KeyCtrlL, tcell.ModCtrl)
+	continuation := tcell.NewEventKey(tcell.KeyRune, "f", 0)
+	root.HandleEvent(prefix)
+	root.HandleEvent(continuation)
+	if fired != 0 || terminal.eventCount != 2 {
+		t.Fatalf("raw keys captured: fired=%d events=%d", fired, terminal.eventCount)
+	}
+	root.SetFocus(&mockWidget{focusable: true})
+	root.HandleEvent(prefix)
+	root.HandleEvent(continuation)
+	if fired != 1 {
+		t.Fatal("editor chord did not run with editor focus")
+	}
+}
+
 func (w *rawKeysWidget) WantsRawKeys() bool { return true }
 
 func TestRawKeyConsumerRunsConfiguredChords(t *testing.T) {
