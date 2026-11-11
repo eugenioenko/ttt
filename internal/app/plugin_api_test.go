@@ -402,6 +402,33 @@ func TestPluginFilesystemAPI_MissingExactFileGrantCreatesAfterParentAppears(t *t
 	}
 }
 
+func TestPluginFilesystemAPI_MissingGrantUnderSymlinkedAncestorCanBeCreated(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "workspace")
+	linkedWorkspace := filepath.Join(base, "workspace-link")
+	if err := os.Mkdir(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(workspace, linkedWorkspace); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	grant := filepath.Join(linkedWorkspace, "later", "file.txt")
+	p := &plugin.Plugin{Granted: plugin.PermissionSet{
+		FsRead:  plugin.FsAccess{Paths: []string{grant}},
+		FsWrite: plugin.FsAccess{Paths: []string{grant}},
+	}}
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, nil))
+	if err := os.Mkdir(filepath.Join(workspace, "later"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.WriteFile(grant, "created"); err != nil {
+		t.Fatalf("create file beneath symlinked grant ancestor: %v", err)
+	}
+	if got, err := api.ReadFile(grant); err != nil || got != "created" {
+		t.Errorf("read created file = %q, %v; want %q", got, err, "created")
+	}
+}
+
 func TestPluginFilesystemAPI_MissingGrantThatBecomesDirectoryAllowsDescendants(t *testing.T) {
 	base := t.TempDir()
 	granted := filepath.Join(base, "future")
@@ -1200,6 +1227,37 @@ func TestOpenGrantedRootRejectsReplacementAfterValidation(t *testing.T) {
 	}
 	if err == nil {
 		t.Fatal("opened replaced grant root")
+	}
+}
+
+func TestVerifyExactFileGrantRejectsReplacementDuringConstruction(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "granted.txt")
+	outside := filepath.Join(base, "outside.txt")
+	if err := os.WriteFile(granted, []byte("granted"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := os.Stat(granted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(granted); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, granted); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	if err := verifyExactFileGrant(root, granted, filepath.Base(granted), observed); err == nil {
+		t.Fatal("accepted a replacement symlink as the exact-file grant")
 	}
 }
 

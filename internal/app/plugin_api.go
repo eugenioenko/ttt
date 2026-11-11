@@ -407,6 +407,9 @@ func (cache *fsRootCache) rootForGrant(path string) fsRoot {
 		anchor := cache.rootForAnchor(path, grant)
 		root.root = anchor.root
 		root.err = anchor.err
+		if root.err == nil && grant.kind == fsExactFileGrant && grant.fileInfo != nil {
+			root.err = verifyExactFileGrant(root.root, path, grant.fileLeaf, grant.fileInfo)
+		}
 	}
 	return root
 }
@@ -493,6 +496,7 @@ type fsGrantPath struct {
 	canonical       string
 	anchor          string
 	fileLeaf        string
+	fileInfo        os.FileInfo
 	pendingRelative string
 	kind            fsGrantKind
 	anchorInfo      os.FileInfo
@@ -525,12 +529,11 @@ func describeGrantedPath(path string) (fsGrantPath, error) {
 				anchorInfo: anchorInfo,
 			}, nil
 		}
-		anchor, anchorInfo, anchorErr := nearestGrantAnchor(path)
+		anchor, pendingRelative, anchorInfo, anchorErr := nearestGrantAnchor(path)
 		if anchorErr != nil {
 			return fsGrantPath{canonical: canonical}, anchorErr
 		}
-		pendingRelative, relErr := filepath.Rel(anchor, path)
-		if relErr != nil || filepath.IsAbs(pendingRelative) || pendingRelative == "." || pendingRelative == ".." || strings.HasPrefix(pendingRelative, ".."+string(filepath.Separator)) {
+		if filepath.IsAbs(pendingRelative) || pendingRelative == "." || pendingRelative == ".." || strings.HasPrefix(pendingRelative, ".."+string(filepath.Separator)) {
 			return fsGrantPath{canonical: canonical}, fmt.Errorf("invalid pending grant path %q", path)
 		}
 		return fsGrantPath{
@@ -556,27 +559,55 @@ func describeGrantedPath(path string) (fsGrantPath, error) {
 		canonical:  canonical,
 		anchor:     anchor,
 		fileLeaf:   filepath.Base(canonical),
+		fileInfo:   info,
 		kind:       fsExactFileGrant,
 		anchorInfo: anchorInfo,
 	}, nil
 }
 
-func nearestGrantAnchor(path string) (string, os.FileInfo, error) {
+func nearestGrantAnchor(path string) (string, string, os.FileInfo, error) {
 	for candidate := filepath.Dir(path); ; candidate = filepath.Dir(candidate) {
-		info, err := os.Lstat(candidate)
-		if err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-			if resolved, resolveErr := filepath.EvalSymlinks(candidate); resolveErr == nil && resolved == candidate {
-				return candidate, info, nil
+		info, err := os.Stat(candidate)
+		if err == nil && info.IsDir() {
+			canonical, resolveErr := filepath.EvalSymlinks(candidate)
+			if resolveErr != nil {
+				return "", "", nil, resolveErr
 			}
+			canonicalInfo, statErr := os.Stat(canonical)
+			if statErr != nil {
+				return "", "", nil, statErr
+			}
+			if !canonicalInfo.IsDir() || !os.SameFile(info, canonicalInfo) {
+				return "", "", nil, fmt.Errorf("granted directory %q changed while resolving", candidate)
+			}
+			pendingRelative, relErr := filepath.Rel(candidate, path)
+			if relErr != nil {
+				return "", "", nil, relErr
+			}
+			return canonical, pendingRelative, canonicalInfo, nil
 		}
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return "", nil, err
+			return "", "", nil, err
 		}
 		parent := filepath.Dir(candidate)
 		if parent == candidate {
-			return "", nil, fmt.Errorf("no existing directory anchor for grant %q", path)
+			return "", "", nil, fmt.Errorf("no existing directory anchor for grant %q", path)
 		}
 	}
+}
+
+func verifyExactFileGrant(root *os.Root, path, leaf string, expected os.FileInfo) error {
+	if expected == nil {
+		return fmt.Errorf("missing observed file identity for grant %q", path)
+	}
+	actual, err := root.Lstat(leaf)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(expected, actual) {
+		return fmt.Errorf("granted file %q changed while opening", path)
+	}
+	return nil
 }
 
 func canonicalGrantedRoot(path string) (string, os.FileInfo, error) {
