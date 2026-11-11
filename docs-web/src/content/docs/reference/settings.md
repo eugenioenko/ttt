@@ -16,6 +16,8 @@ There are two ways to change settings:
 - **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, auto closing, display, on save, completion), **Appearance** (theme, window, code, markdown), **Explorer** (files and appearance), **Sidebar** (shared look, source control, quick open, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
 - **Raw JSON** — **Settings: Open settings.json** opens the file itself. Needed for the `lsp` settings and `formatters`, neither of which is exposed in the form.
 
+Apply saves only values changed in the form. Changes made through Options, theme selection, or Reload Settings while the form is open are preserved for untouched fields. If both change the same field, the form edit wins. After a successful Apply, the controls refresh to the merged settings.
+
 Closing the settings tab with unapplied edits discards them.
 
 Both write the same file, so you can move between them freely.

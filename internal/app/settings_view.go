@@ -426,30 +426,35 @@ func cursorStyleItems() []widgets.SelectItem {
 type settingsView struct {
 	app        *App
 	working    config.Settings
+	baseline   config.Settings
 	categories []settingsCategory
 	adapter    *ui.WidgetAdapter
 	status     *widgets.LabelWidget
 	inputs     []func() string
 	selects    []*widgets.SelectWidget
 	shortcuts  []func()
+	refresh    []func()
 }
 
-// commitTo copies the fields this form owns out of the working copy and onto s,
-// leaving everything else on s untouched. Assigning the whole working struct
-// would also write back its snapshot of settings the form never shows, undoing
-// anything changed elsewhere — a theme picked from the palette, an Options
-// toggle — while the tab sat open.
+// Only changed form values override live settings; untouched fields may have
+// changed through an Options toggle, theme selection, or settings reload.
 func (v *settingsView) commitTo(s *config.Settings) {
 	for _, cat := range v.categories {
 		for _, f := range cat.Fields {
 			switch f.Kind {
 			case settingSection, settingShortcut:
 			case settingBool:
-				f.SetBool(s, f.GetBool(&v.working))
+				if value := f.GetBool(&v.working); value != f.GetBool(&v.baseline) {
+					f.SetBool(s, value)
+				}
 			case settingInt:
-				f.SetInt(s, f.GetInt(&v.working))
+				if value := f.GetInt(&v.working); value != f.GetInt(&v.baseline) {
+					f.SetInt(s, value)
+				}
 			default:
-				f.SetString(s, f.GetString(&v.working))
+				if value := f.GetString(&v.working); value != f.GetString(&v.baseline) {
+					f.SetString(s, value)
+				}
 			}
 		}
 	}
@@ -474,7 +479,7 @@ func (a *App) ShowSettings() {
 		return
 	}
 
-	v := &settingsView{app: a, working: *a.Settings, categories: settingsCategories()}
+	v := &settingsView{app: a, working: *a.Settings, baseline: *a.Settings, categories: settingsCategories()}
 	a.settingsView = v
 
 	tabItems := make([]widgets.TabItem, 0, len(v.categories))
@@ -600,10 +605,12 @@ func (a *App) refreshSettingsShortcuts() {
 }
 
 func (v *settingsView) boolControl(f settingField) widgets.Widget {
-	return widgets.NewCheckboxWidget(widgets.CheckboxConfig{
+	checkbox := widgets.NewCheckboxWidget(widgets.CheckboxConfig{
 		Checked:  f.GetBool(&v.working),
 		OnChange: func(checked bool) { f.SetBool(&v.working, checked) },
 	})
+	v.refresh = append(v.refresh, func() { checkbox.Config.Checked = f.GetBool(&v.working) })
+	return checkbox
 }
 
 func (v *settingsView) enumControl(f settingField) widgets.Widget {
@@ -620,6 +627,7 @@ func (v *settingsView) enumControl(f settingField) widgets.Widget {
 	v.selects = append(v.selects, sel)
 	sel.FixedWidth = settingsControlCols
 	sel.SetSelectedID(f.GetString(&v.working))
+	v.refresh = append(v.refresh, func() { sel.SetSelectedID(f.GetString(&v.working)) })
 	return sel
 }
 
@@ -637,6 +645,13 @@ func (v *settingsView) textControl(category string, f settingField) widgets.Widg
 	// is affordance enough for a one-line field.
 	inp := widgets.NewInputWidget(widgets.InputConfig{})
 	inp.SetText(current)
+	v.refresh = append(v.refresh, func() {
+		if f.Kind == settingInt {
+			inp.SetText(strconv.Itoa(f.GetInt(&v.working)))
+		} else {
+			inp.SetText(f.GetString(&v.working))
+		}
+	})
 
 	// Returns a description of the offending field, or "" when the value is good.
 	v.inputs = append(v.inputs, func() string {
@@ -675,6 +690,10 @@ func (v *settingsView) apply() {
 		return
 	}
 	v.working = *v.app.Settings
+	v.baseline = v.working
+	for _, refresh := range v.refresh {
+		refresh()
+	}
 	v.setStatus(i18n.Text("settings.settingsApplied"))
 }
 
