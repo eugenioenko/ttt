@@ -1097,13 +1097,16 @@ func (a *App) ClosePluginDrawer() {
 	if a.pluginDrawer == nil {
 		return
 	}
+	restore := a.Root.Focused == a.pluginDrawer
 	prev := a.Root.RemoveOverlay(a.pluginDrawer)
 	a.pluginDrawer = nil
 	if a.pluginDrawerPanel != nil {
 		a.pluginDrawerPanel.Close()
 		a.pluginDrawerPanel = nil
 	}
-	a.restoreFocus(prev)
+	if restore {
+		a.restoreFocus(prev)
+	}
 }
 
 func (a *App) DismissDialog() {
