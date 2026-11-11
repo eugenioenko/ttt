@@ -172,7 +172,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 	if e.hScrollPending {
 		e.hScrollPending = false
-		e.scrollViewport()
+		if !e.scrollFollowsLead {
+			e.scrollViewport()
+		}
 	}
 
 	layout := e.layout()

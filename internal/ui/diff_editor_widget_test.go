@@ -464,20 +464,21 @@ func TestDiffEditorSplitFollowerScrollsWithLead(t *testing.T) {
 }
 
 func TestDiffResizePreservesHostScroll(t *testing.T) {
-	for _, embedded := range []bool{false, true} {
-		t.Run(fmt.Sprint(embedded), func(t *testing.T) {
+	for _, mode := range []string{"split", "pending", "embedded"} {
+		t.Run(mode, func(t *testing.T) {
 			lines := make([]string, 30)
 			for i := range lines {
 				lines[i] = fmt.Sprintf("line %d", i)
 			}
 			d := NewDiffEditorWidget("test.txt", diff.FileDiff{}, lines, lines, true)
-			if embedded {
+			if mode == "embedded" {
 				d.setEmbedded()
 			}
 			renderDiffEditor(d, 60, 10)
 			d.follower().Cursor.Line = 6
+			d.follower().hScrollPending = mode == "pending"
 			want := 0
-			if embedded {
+			if mode == "embedded" {
 				d.lead().Cursor.Line = 6
 				want = 2
 				grid := make([][]term.Cell, 3)
