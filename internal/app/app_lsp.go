@@ -134,9 +134,7 @@ func (a *App) resolveAndInsert(item ui.CompletionItem) {
 		path, lang := a.editorPathLang()
 		serverKey, _, ok := a.lspResolve(path, lang)
 		if ok {
-			workDir := a.lspWorkDir(path)
-			client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-			if err == nil {
+			if client := a.LspManager.ReadyClient(serverKey); client != nil {
 				resolved, err := client.ResolveCompletion(*lspItem)
 				if err == nil && resolved != nil {
 					if resolved.TextEdit != nil {
@@ -442,9 +440,8 @@ func (a *App) RunCodeActionsOnSave(path, lang string) {
 	if !ok {
 		return
 	}
-	workDir := a.lspWorkDir(path)
-	client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-	if err != nil {
+	client := a.LspManager.ReadyClient(serverKey)
+	if client == nil {
 		return
 	}
 	lineCount := 0
@@ -547,10 +544,9 @@ func (a *App) FormatOnSave(path, lang string) {
 	if !ok {
 		return
 	}
-	workDir := a.lspWorkDir(path)
 	tabSize, insertSpaces := a.editorTabSize()
-	client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-	if err != nil {
+	client := a.LspManager.ReadyClient(serverKey)
+	if client == nil {
 		return
 	}
 	edits, err := client.Formatting(FileURI(path), tabSize, insertSpaces)

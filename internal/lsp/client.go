@@ -196,7 +196,11 @@ func isNullResult(result json.RawMessage) bool {
 }
 
 func (c *Client) Initialize(rootURI string) error {
-	result, err := c.call("initialize", InitializeParams{
+	return c.initialize(context.Background(), rootURI)
+}
+
+func (c *Client) initialize(ctx context.Context, rootURI string) error {
+	result, err := c.callContext(ctx, "initialize", InitializeParams{
 		ProcessID: os.Getpid(),
 		RootURI:   rootURI,
 		Capabilities: ClientCapabilities{
