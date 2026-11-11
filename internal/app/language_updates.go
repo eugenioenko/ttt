@@ -105,7 +105,7 @@ func (a *App) applyLanguageUpdate(result languageUpdateResult) {
 			}
 		}
 	}
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	if err := a.saveSettings(*a.Settings); err != nil {
 		a.LogOutput("error", "languages", err.Error())
 	}
 	if activeUpdated {

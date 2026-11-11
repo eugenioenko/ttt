@@ -123,7 +123,7 @@ func isPlainName(name string) bool {
 
 func (a *App) saveGrammarSettings(entries []config.GrammarSetting) {
 	a.Settings.Editor.Grammars = entries
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	if err := a.saveSettings(*a.Settings); err != nil {
 		a.LogOutput("error", "grammars", "save settings: "+err.Error())
 	}
 	a.reloadGrammars(entries)

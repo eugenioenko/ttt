@@ -19,7 +19,7 @@ func (a *App) RemoveApp(name string) {
 	if len(s.Applications) == len(a.Settings.Applications) {
 		return
 	}
-	if err := config.SaveSettings(s); err != nil {
+	if err := a.saveSettings(s); err != nil {
 		a.StatusError(i18n.Format("apps.removeFailed", i18n.Args{"name": name, "error": err.Error()}))
 		return
 	}

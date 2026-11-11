@@ -20,7 +20,9 @@ Apply saves only values changed in the form. Changes made through Options, theme
 
 Closing the settings tab with unapplied edits discards them.
 
-Both write the same file, so you can move between them freely.
+Saving the JSON only saves the file. Run **Reload Settings** to apply manual edits before making further settings changes through the form or Options. Without reloading, subsequent settings writes use the current in-memory configuration.
+
+When `--config` selects a custom file, **Settings: Open settings.json**, **Reload Settings**, the settings form, Options toggles, favorites, and plugin settings writes all use that file. The default settings file is left untouched. Other configuration files, such as keybindings and themes, keep their usual locations.
 
 ## Top-level
 
