@@ -106,6 +106,7 @@ type App struct {
 	TerminalSeq            int
 	forwardSocket          string // UI goroutine only, including listener startup and shutdown.
 	LspManager             *lsp.Manager
+	lookupCodeActionClient func(string, string) (codeActionCommandClient, error)
 	DocVersionsMu          sync.Mutex
 	DocVersions            map[string]int
 	CompletionItems        []ui.CompletionItem
