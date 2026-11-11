@@ -73,7 +73,7 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 		return fmt.Errorf("%s", msg)
 	}
 
-	formatted := stdout.String()
+	formatted := strings.ReplaceAll(stdout.String(), "\r\n", "\n")
 	if formatted == original {
 		return nil
 	}

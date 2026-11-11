@@ -19,6 +19,8 @@ func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
 		{"save empty", "save", "true"},
 		{"manual newline", "manual", "printf \\n"},
 		{"save newline", "save", "printf \\n"},
+		{"manual CRLF", "manual", "printf \\r\\n"},
+		{"save CRLF", "save", "printf \\r\\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := exec.LookPath(strings.Fields(tc.command)[0]); err != nil {
@@ -73,7 +75,7 @@ func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
 }
 
 func TestEmptyFormatterOutputForEmptyDocument(t *testing.T) {
-	for _, command := range []string{"true", "printf \\n"} {
+	for _, command := range []string{"true", "printf \\n", "printf \\r\\n"} {
 		t.Run(command, func(t *testing.T) {
 			if _, err := exec.LookPath(strings.Fields(command)[0]); err != nil {
 				t.Skipf("test formatter unavailable: %v", err)
@@ -219,41 +221,43 @@ func TestFormatterPreservesAdditionalFinalNewlines(t *testing.T) {
 	if _, err := exec.LookPath("printf"); err != nil {
 		t.Skip("test formatter requires printf")
 	}
-	for _, newlines := range []int{1, 2, 3} {
-		t.Run(fmt.Sprintf("newlines=%d", newlines), func(t *testing.T) {
-			settings := config.DefaultSettings()
-			show := false
-			settings.Editor.ShowTrailingNewline = &show
-			settings.Editor.InsertFinalNewline = true
-			a := buildTestApp(t, settings)
-			t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
-			path := filepath.Join(t.TempDir(), "README.md")
-			if err := os.WriteFile(path, []byte("foo\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			a.EditorGroup.OpenFile(path)
-			formatter := "printf bar" + strings.Repeat("\\n", newlines)
-			if err := a.applyExternalFormatter(formatter, path); err != nil {
-				t.Fatal(err)
-			}
-			if !a.EditorGroup.Save() {
-				t.Fatal("save failed")
-			}
-			want := "bar" + strings.Repeat("\n", newlines)
-			got, err := os.ReadFile(path)
-			if err != nil || string(got) != want {
-				t.Fatalf("formatter final newlines were lost: got %q, want %q, error %v", got, want, err)
-			}
-			buf := a.EditorGroup.ActiveBuffer()
-			version := buf.Version()
-			changes := 0
-			a.EditorGroup.Editor.OnChange = func() { changes++ }
-			if err := a.applyExternalFormatter(formatter, path); err != nil {
-				t.Fatal(err)
-			}
-			if buf.Version() != version || buf.Dirty || changes != 0 {
-				t.Fatalf("formatting after save emitted another edit: lines=%q, dirty=%v, changes=%d", buf.Lines, buf.Dirty, changes)
-			}
-		})
+	for _, ending := range []string{"\n", "\r\n"} {
+		for _, newlines := range []int{1, 2, 3} {
+			t.Run(fmt.Sprintf("ending=%q/newlines=%d", ending, newlines), func(t *testing.T) {
+				settings := config.DefaultSettings()
+				show := false
+				settings.Editor.ShowTrailingNewline = &show
+				settings.Editor.InsertFinalNewline = true
+				a := buildTestApp(t, settings)
+				t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+				path := filepath.Join(t.TempDir(), "README.md")
+				if err := os.WriteFile(path, []byte("foo"+ending), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				a.EditorGroup.OpenFile(path)
+				formatter := "printf bar" + strings.Repeat(strings.ReplaceAll(strings.ReplaceAll(ending, "\r", "\\r"), "\n", "\\n"), newlines)
+				if err := a.applyExternalFormatter(formatter, path); err != nil {
+					t.Fatal(err)
+				}
+				if !a.EditorGroup.Save() {
+					t.Fatal("save failed")
+				}
+				want := "bar" + strings.Repeat(ending, newlines)
+				got, err := os.ReadFile(path)
+				if err != nil || string(got) != want {
+					t.Fatalf("formatter final newlines were lost: got %q, want %q, error %v", got, want, err)
+				}
+				buf := a.EditorGroup.ActiveBuffer()
+				version := buf.Version()
+				changes := 0
+				a.EditorGroup.Editor.OnChange = func() { changes++ }
+				if err := a.applyExternalFormatter(formatter, path); err != nil {
+					t.Fatal(err)
+				}
+				if buf.Version() != version || buf.Dirty || changes != 0 {
+					t.Fatalf("formatting after save emitted another edit: lines=%q, dirty=%v, changes=%d", buf.Lines, buf.Dirty, changes)
+				}
+			})
+		}
 	}
 }
