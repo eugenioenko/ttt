@@ -22,7 +22,7 @@ func (a *App) applyMenuBarVisibility(visible bool) {
 	a.MenuBar.Selected = -1
 	a.RootBox.Children = []widgets.Widget{a.SplitPanel, a.StatusBar}
 	if a.Root != nil && a.Root.Focused == a.MenuBar {
-		a.Root.SetFocus(a.EditorGroup)
+		a.FocusEditor()
 	}
 }
 

@@ -44,7 +44,7 @@ func (a *App) openEditorTerminal(entry TerminalTab, spec TerminalSpec) {
 	entry.Tab.OnClose = func() { a.releaseEditorTerminal(id) }
 	a.EditorTerminals = append(a.EditorTerminals, entry)
 	a.EditorGroup.OpenPluginTab(editorTerminalKey(id), editorTerminalTitle(spec), entry.Tab)
-	a.Root.SetFocus(a.EditorGroup)
+	a.FocusEditor()
 }
 
 func (a *App) releaseEditorTerminal(id string) bool {
@@ -74,7 +74,7 @@ func (a *App) focusEditorTerminal(id string) bool {
 	if !a.EditorGroup.FocusPluginTab(editorTerminalKey(id)) {
 		return false
 	}
-	a.Root.SetFocus(a.EditorGroup)
+	a.FocusEditor()
 	return true
 }
 

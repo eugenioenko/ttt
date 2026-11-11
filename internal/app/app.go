@@ -340,12 +340,23 @@ func (a *App) SetPanelPosition(pos ui.SplitPosition) {
 }
 
 func (a *App) FocusEditor() {
+	if split := a.ContentSplit; split != nil && split.ShowBottom && split.Position == ui.SplitBottom {
+		height := split.GetRect().H
+		if height > 0 && split.BottomRect().H >= height-1 {
+			if height <= 4 {
+				split.ShowBottom = false
+			} else {
+				a.ensureUsablePanelSize()
+			}
+			resizeTerminals(a)
+		}
+	}
 	a.Root.SetFocus(a.EditorGroup)
 }
 
 func (a *App) FocusEditorIfEnabled() {
 	if a.Settings.Editor.FocusOnOpen {
-		a.Root.SetFocus(a.EditorGroup)
+		a.FocusEditor()
 	}
 }
 
@@ -838,12 +849,12 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.Problems.OnNavigate = func(file string, line, col int) {
 		a.EditorGroup.OpenFile(file)
 		a.EditorGroup.GoToLine(line + 1)
-		a.Root.SetFocus(a.EditorGroup)
+		a.FocusEditor()
 	}
 	a.References.OnNavigate = func(file string, line, col int) {
 		a.EditorGroup.OpenFile(file)
 		a.EditorGroup.GoToLine(line + 1)
-		a.Root.SetFocus(a.EditorGroup)
+		a.FocusEditor()
 	}
 	a.EditorGroup.Editor.OnChange = func() {
 		path, lang := a.editorPathLang()

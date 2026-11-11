@@ -14,6 +14,8 @@ TTT includes a built-in terminal emulator. Press **Ctrl+T** to toggle the termin
 - Multiple terminal tabs with a vertical inner tab bar on the left edge
 - Close all terminals from the panel actions menu
 
+Opening or focusing an editor tab while the bottom terminal is maximized restores a split view so the focused tab is visible. On a screen too short for both, it hides the panel. Normal split sizes and right-docked panels are preserved.
+
 ## Editor Tabs
 
 Choose **Terminal: New Terminal in Editor** from the command palette, or **New Terminal in Editor** from the View menu, to open a terminal alongside your file tabs. Closing its editor tab stops the program; when the program exits, its tab closes too.

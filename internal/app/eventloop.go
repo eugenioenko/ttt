@@ -338,7 +338,7 @@ func RunEventLoop(
 					}
 					pos := lsp.PositionToRunes(app.lspLines(path), loc.Range.Start)
 					app.EditorGroup.GoToLineCol(pos.Line+1, pos.Character+1)
-					app.Root.SetFocus(app.EditorGroup)
+					app.FocusEditor()
 					syncStatus()
 				}
 			case *RenameResult:

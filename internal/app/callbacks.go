@@ -218,7 +218,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 			dv.ScrollToLine(line - 1)
 			dv.ApplySearchHighlight(a.Search.Input.Text(), a.Search.Options)
 		}
-		a.Root.SetFocus(a.EditorGroup)
+		a.FocusEditor()
 		return
 	}
 	a.EditorGroup.OpenFile(path)
@@ -232,7 +232,7 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		matches, _ := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, a.Search.Input.Text(), a.Search.Options)
 		a.EditorGroup.SetSearch(a.Search.Input.Text(), a.Search.Options, matches)
 	}
-	a.Root.SetFocus(a.EditorGroup)
+	a.FocusEditor()
 }
 
 func (a *App) PreviewSearchReplace(filePath string, matches []ui.SearchMatch, replacement string, opts ui.SearchOptions) {
@@ -247,7 +247,7 @@ func (a *App) PreviewSearchReplace(filePath string, matches []ui.SearchMatch, re
 	}
 	fd := ui.BuildReplaceDiff(filepath.Base(filePath), lines, matches, replacement, opts)
 	a.EditorGroup.OpenDiff(filePath, fd, nil, nil, false)
-	a.Root.SetFocus(a.EditorGroup)
+	a.FocusEditor()
 }
 
 // staleSearchMatches reports whether any match's line no longer reads as it did
@@ -724,7 +724,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Symbols.OnReveal = revealSymbol
 	app.Symbols.OnJump = func(line, col int) {
 		revealSymbol(line, col)
-		app.Root.SetFocus(app.EditorGroup)
+		app.FocusEditor()
 	}
 
 	app.EditorGroup.OnActiveTabChange = func() {
@@ -889,7 +889,7 @@ func registerWidgetCallbacks(app *App) {
 		if app.Root.HasOverlay() || app.Root.FocusClaimed() {
 			return
 		}
-		app.Root.SetFocus(app.EditorGroup)
+		app.FocusEditor()
 	}
 
 	app.ContentSplit.OnBottomClick = func() {

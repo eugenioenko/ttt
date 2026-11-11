@@ -171,18 +171,18 @@ func (a *App) OpenFile() {
 	a.ShowFilePicker(i18n.Text("general.openFile"), i18n.Text("general.open"), "", func(path string) {
 		// Not validating the path here: ShowFilePicker already checks that it exists and is a regular file. OpenFile treats a missing path as a new file.
 		a.EditorGroup.OpenFile(path)
-		a.Root.SetFocus(a.EditorGroup)
+		a.FocusEditor()
 	})
 }
 
 func (a *App) NewFile() {
 	a.EditorGroup.NewFile()
-	a.Root.SetFocus(a.EditorGroup)
+	a.FocusEditor()
 }
 
 func (a *App) NewFileFromText(text string) {
 	a.EditorGroup.NewFileFromText(text)
-	a.Root.SetFocus(a.EditorGroup)
+	a.FocusEditor()
 }
 
 func (a *App) SaveFileAs() {
