@@ -7,6 +7,8 @@ sidebar:
 
 Settings are stored in `~/.config/ttt/settings.json`. A complete example is available at [`config/settings.json`](https://github.com/eugenioenko/ttt/blob/main/config/settings.json) in the repository.
 
+If `settings.json` cannot be parsed, ttt reports the error and preserves the file. Startup uses defaults, while a failed **Reload Settings** keeps your current settings. Settings writes are blocked until the file is valid. Fix the file and run **Reload Settings** before making further changes; toggles can still affect the current session when saving fails.
+
 ## Editing settings
 
 There are two ways to change settings:

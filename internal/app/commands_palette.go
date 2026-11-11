@@ -84,7 +84,7 @@ func (a *App) ShowThemePicker() {
 			}
 			applyTheme(theme)
 			a.Settings.Theme = name
-			config.SaveSettings(*a.Settings)
+			a.persistSettings()
 		},
 		OnDismiss: func() {
 			a.DismissDialog()
@@ -122,7 +122,7 @@ func (a *App) ShowIndentSettings() {
 		a.EditorGroup.InsertSpaces = !useTabs
 		a.EditorGroup.SetTabSize(tabSize)
 		a.EditorGroup.SetUseTabs(useTabs)
-		config.SaveSettings(*a.Settings)
+		a.persistSettings()
 	})
 }
 

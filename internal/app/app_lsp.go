@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/i18n"
@@ -1193,7 +1192,7 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 				a.Status.SecondaryAction = func() {
 					v := false
 					a.Settings.LSP.NotifyAvailability = &v
-					config.SaveSettings(*a.Settings)
+					a.persistSettings()
 				}
 				time.AfterFunc(10*time.Second, func() {
 					a.Screen.PostEvent(tcell.NewEventInterrupt(nil))

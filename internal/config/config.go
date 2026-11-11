@@ -12,9 +12,10 @@ import (
 )
 
 type AppConfig struct {
-	Keybindings []KeyBinding
-	Settings    Settings
-	Theme       ThemeConfig
+	Keybindings   []KeyBinding
+	Settings      Settings
+	SettingsError error
+	Theme         ThemeConfig
 }
 
 func Load(settingsFile string) AppConfig {
@@ -33,11 +34,9 @@ func Load(settingsFile string) AppConfig {
 	}
 
 	if settingsFile != "" {
-		if data, err := os.ReadFile(settingsFile); err == nil {
-			json.Unmarshal(data, &cfg.Settings)
-		}
-	} else if data, err := readFirst(paths, "settings.json"); err == nil {
-		json.Unmarshal(data, &cfg.Settings)
+		cfg.Settings, cfg.SettingsError = readSettingsFile(settingsFile)
+	} else {
+		cfg.Settings, cfg.SettingsError = ReadSettings()
 	}
 
 	if cfg.Settings.Theme != "" {
@@ -48,8 +47,6 @@ func Load(settingsFile string) AppConfig {
 			json.Unmarshal(data, &cfg.Theme)
 		}
 	}
-
-	normalizeSettings(&cfg.Settings)
 
 	cfg.Theme.ResolveColors()
 

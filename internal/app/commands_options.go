@@ -9,9 +9,17 @@ import (
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
-func (a *App) SaveAndApplySettings() {
-	config.SaveSettings(*a.Settings)
+func (a *App) SaveAndApplySettings() bool {
 	a.ApplySettings(*a.Settings)
+	return a.persistSettings()
+}
+
+func (a *App) persistSettings() bool {
+	if err := config.SaveSettings(*a.Settings); err != nil {
+		a.StatusWarn(i18n.Format("settings.saveFailed", i18n.Args{"error": err.Error()}))
+		return false
+	}
+	return true
 }
 
 func (a *App) ToggleLineNumbers() {
@@ -176,8 +184,9 @@ func (a *App) ToggleShowTrailingNewline() {
 func (a *App) ToggleSyntaxHighlight() {
 	enabled := !a.Settings.Editor.IsSyntaxHighlightEnabled()
 	a.Settings.Editor.SyntaxHighlight = &enabled
-	a.SaveAndApplySettings()
-	a.StatusNotify(i18n.Text("status.restartToApplySyntaxHighlightChanges"))
+	if a.SaveAndApplySettings() {
+		a.StatusNotify(i18n.Text("status.restartToApplySyntaxHighlightChanges"))
+	}
 }
 
 func (a *App) ToggleBracketPairColorization() {

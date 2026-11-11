@@ -670,7 +670,10 @@ func (v *settingsView) apply() {
 		return
 	}
 	v.commitTo(v.app.Settings)
-	v.app.SaveAndApplySettings()
+	if !v.app.SaveAndApplySettings() {
+		v.setStatus(i18n.Text("settings.notSaved"))
+		return
+	}
 	v.working = *v.app.Settings
 	v.setStatus(i18n.Text("settings.settingsApplied"))
 }
