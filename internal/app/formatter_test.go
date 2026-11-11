@@ -8,10 +8,73 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 )
+
+func TestFormatterTimeoutPreservesEdits(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("test formatter requires sh")
+	}
+	for _, mode := range []string{"manual", "save"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := t.TempDir()
+			formatter := filepath.Join(dir, "formatter.sh")
+			if err := os.WriteFile(formatter, []byte("printf partial\nprintf diagnostic >&2\nsleep 8\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			settings := config.DefaultSettings()
+			settings.Formatters = map[string]string{"js": "sh " + formatter}
+			settings.Editor.FormatOnSave = mode == "save"
+			disabled := false
+			settings.LSP.Enabled = &disabled
+			a := buildTestApp(t, settings)
+			t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+			path := filepath.Join(dir, "t.js")
+			original := "banana\napple\n"
+			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.EditorGroup.OpenFile(path); err != nil {
+				t.Fatal(err)
+			}
+			editor := a.EditorGroup.Editor
+			editor.ExecCommand(&undo.InsertStringCommand{Line: 0, Col: 0, Text: "zz"})
+			editor.FlushOnChange()
+			version := editor.Buf.Version()
+			start := time.Now()
+			wantDisk := original
+			if mode == "save" {
+				a.SaveFile()
+				wantDisk = "zz" + original
+			} else {
+				a.RunExternalFormatter()
+			}
+			if elapsed := time.Since(start); elapsed < 5*time.Second || elapsed > 7*time.Second {
+				t.Errorf("formatter returned after %s, want a five-second timeout", elapsed)
+			}
+			if got := strings.Join(editor.Buf.Lines, "\n"); got != "zz"+original {
+				t.Errorf("buffer = %q, want %q", got, "zz"+original)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil || string(data) != wantDisk {
+				t.Errorf("saved file = %q, error = %v, want %q", data, err, wantDisk)
+			}
+			if editor.Buf.Version() != version || editor.Buf.Dirty != (mode == "manual") {
+				t.Errorf("timeout changed buffer state: version %d -> %d, dirty=%v", version, editor.Buf.Version(), editor.Buf.Dirty)
+			}
+			if !strings.Contains(a.Status.Notification, "Formatter timed out after 5 seconds") {
+				t.Errorf("missing timeout warning: %q", a.Status.Notification)
+			}
+			a.EditorGroup.Undo()
+			if got := strings.Join(editor.Buf.Lines, "\n"); got != original {
+				t.Errorf("undo = %q, want %q", got, original)
+			}
+		})
+	}
+}
 
 func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
 	for _, tc := range []struct{ name, mode, command string }{

@@ -400,6 +400,8 @@ External code formatters configured per file extension. Each formatter receives 
 
 If a formatter produces empty output for a nonempty document, ttt rejects the result and reports a formatting error instead of replacing the document with empty text. This also applies when final-newline handling makes the output empty.
 
+External formatting runs synchronously with a five-second timeout. If the formatter times out, ttt stops it, discards any partial output, and shows a warning. Format on save continues saving your edits without formatting or falling back to LSP formatting.
+
 When `editor.formatOnSave` is `true`, external formatters take priority over LSP formatting. If no external formatter is configured for the file type, LSP formatting is used as a fallback.
 
 | Key | Type | Default | Description |
