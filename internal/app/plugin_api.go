@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,7 +13,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -348,15 +351,80 @@ func (e *PluginEditorAPI) GoToDiffHunk(index int) error {
 
 // PluginFilesystemAPI implements plugin.FilesystemAPI with path restrictions.
 type PluginFilesystemAPI struct {
-	read    fsRoots
-	write   fsRoots
-	vars    plugin.FsVars
-	onWrite func(path string)
+	read      fsRoots
+	write     fsRoots
+	vars      plugin.FsVars
+	onWrite   func(path string)
+	mu        sync.RWMutex
+	closed    bool
+	closeOnce sync.Once
+	closeErr  error
+}
+
+type fsGrantKind uint8
+
+const (
+	fsDirectoryGrant fsGrantKind = iota
+	fsExactFileGrant
+	fsPendingGrant
+)
+
+type fsRoot struct {
+	path            string
+	canonical       string
+	fileLeaf        string
+	pendingRelative string
+	kind            fsGrantKind
+	root            *os.Root
+	err             error
 }
 
 type fsRoots struct {
-	dirs []string
-	all  bool
+	roots []fsRoot
+	all   bool
+}
+
+type fsRootAnchor struct {
+	root *os.Root
+	info os.FileInfo
+	err  error
+}
+
+type fsRootCache struct {
+	anchorsByPath map[string]fsRootAnchor
+}
+
+func (cache *fsRootCache) rootForGrant(path string) fsRoot {
+	grant, err := describeGrantedPath(path)
+	root := fsRoot{
+		canonical:       grant.canonical,
+		fileLeaf:        grant.fileLeaf,
+		pendingRelative: grant.pendingRelative,
+		kind:            grant.kind,
+		err:             err,
+	}
+	if err == nil {
+		anchor := cache.rootForAnchor(path, grant)
+		root.root = anchor.root
+		root.err = anchor.err
+	}
+	return root
+}
+
+func (cache *fsRootCache) rootForAnchor(path string, grant fsGrantPath) fsRootAnchor {
+	anchor, ok := cache.anchorsByPath[grant.anchor]
+	if !ok {
+		anchor.root, anchor.err = openGrantedRoot(path, grant.anchor, grant.anchorInfo)
+		if anchor.err == nil {
+			anchor.info = grant.anchorInfo
+		}
+		cache.anchorsByPath[grant.anchor] = anchor
+		return anchor
+	}
+	if anchor.err == nil && !os.SameFile(grant.anchorInfo, anchor.info) {
+		anchor.err = fmt.Errorf("granted root %q changed while sharing", path)
+	}
+	return anchor
 }
 
 const pluginRPCDialTimeout = 10 * time.Second
@@ -374,7 +442,7 @@ func dialPluginRPC(vars plugin.FsVars) func(context.Context, string) (io.ReadWri
 }
 
 func NewPluginFilesystemAPI(allowedRoots ...string) *PluginFilesystemAPI {
-	roots := newFsRoots(allowedRoots, false)
+	roots := newFsRootsCached(allowedRoots, false, &fsRootCache{})
 	return &PluginFilesystemAPI{read: roots, write: roots}
 }
 
@@ -383,90 +451,449 @@ func NewPluginFilesystemAPIFor(p *plugin.Plugin, workspace []string) *PluginFile
 	if home, err := os.UserHomeDir(); err == nil {
 		vars.Home = home
 	}
+	cache := &fsRootCache{}
 	roots := func(access plugin.FsAccess) fsRoots {
 		dirs, all := access.Resolve(vars)
 		if p.Dir != "" {
 			dirs = append(dirs, p.Dir)
 		}
-		return newFsRoots(dirs, all)
+		return newFsRootsCached(dirs, all, cache)
 	}
 	return &PluginFilesystemAPI{read: roots(p.Granted.FsRead), write: roots(p.Granted.FsWrite), vars: vars}
 }
 
-func newFsRoots(dirs []string, all bool) fsRoots {
-	resolved := make([]string, 0, len(dirs))
-	for _, root := range dirs {
-		abs, err := filepath.Abs(root)
+func newFsRootsCached(dirs []string, all bool, cache *fsRootCache) fsRoots {
+	if all {
+		return fsRoots{all: true}
+	}
+	if cache.anchorsByPath == nil {
+		cache.anchorsByPath = make(map[string]fsRootAnchor)
+	}
+	roots := make([]fsRoot, 0, len(dirs)*2)
+	for _, path := range dirs {
+		abs, err := filepath.Abs(path)
 		if err != nil {
 			continue
 		}
 		abs = filepath.Clean(abs)
-		resolved = append(resolved, abs)
-		// check resolves symlinks in the requested path, so a root under a symlink (macOS /tmp and
-		// /var) must also be allowed in resolved form, or the workspace denies its own files.
-		if real, err := filepath.EvalSymlinks(abs); err == nil && real != abs {
-			resolved = append(resolved, real)
+		root := cache.rootForGrant(abs)
+		root.path = abs
+		roots = append(roots, root)
+		// openRoot resolves symlinks in requested paths, so keep both the granted path and
+		// resolved path mapped to same handle (macOS /tmp and /var are symlinks).
+		if root.canonical != abs {
+			root.path = root.canonical
+			roots = append(roots, root)
 		}
 	}
-	return fsRoots{dirs: resolved, all: all}
+	return fsRoots{roots: roots, all: all}
 }
 
-func (r fsRoots) openRoot(path string) (*os.Root, string, string, error) {
+type fsGrantPath struct {
+	canonical       string
+	anchor          string
+	fileLeaf        string
+	pendingRelative string
+	kind            fsGrantKind
+	anchorInfo      os.FileInfo
+}
+
+func describeGrantedPath(path string) (fsGrantPath, error) {
+	canonical, info, err := canonicalGrantedRoot(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fsGrantPath{canonical: canonical}, err
+		}
+		if _, lstatErr := os.Lstat(path); lstatErr == nil {
+			return fsGrantPath{canonical: canonical}, err
+		}
+		parent := filepath.Dir(path)
+		if resolvedParent, resolveErr := filepath.EvalSymlinks(parent); resolveErr == nil && resolvedParent != parent {
+			canonical = filepath.Join(resolvedParent, filepath.Base(path))
+			anchorInfo, statErr := os.Stat(resolvedParent)
+			if statErr != nil {
+				return fsGrantPath{canonical: canonical}, statErr
+			}
+			if !anchorInfo.IsDir() {
+				return fsGrantPath{canonical: canonical}, fmt.Errorf("granted file parent %q is not a directory", resolvedParent)
+			}
+			return fsGrantPath{
+				canonical:  canonical,
+				anchor:     resolvedParent,
+				fileLeaf:   filepath.Base(canonical),
+				kind:       fsExactFileGrant,
+				anchorInfo: anchorInfo,
+			}, nil
+		}
+		anchor, anchorInfo, anchorErr := nearestGrantAnchor(path)
+		if anchorErr != nil {
+			return fsGrantPath{canonical: canonical}, anchorErr
+		}
+		pendingRelative, relErr := filepath.Rel(anchor, path)
+		if relErr != nil || filepath.IsAbs(pendingRelative) || pendingRelative == "." || pendingRelative == ".." || strings.HasPrefix(pendingRelative, ".."+string(filepath.Separator)) {
+			return fsGrantPath{canonical: canonical}, fmt.Errorf("invalid pending grant path %q", path)
+		}
+		return fsGrantPath{
+			canonical:       path,
+			anchor:          anchor,
+			pendingRelative: pendingRelative,
+			kind:            fsPendingGrant,
+			anchorInfo:      anchorInfo,
+		}, nil
+	}
+	if info != nil && info.IsDir() {
+		return fsGrantPath{canonical: canonical, anchor: canonical, kind: fsDirectoryGrant, anchorInfo: info}, nil
+	}
+	anchor := filepath.Dir(canonical)
+	anchorInfo, err := os.Stat(anchor)
+	if err != nil {
+		return fsGrantPath{canonical: canonical}, err
+	}
+	if !anchorInfo.IsDir() {
+		return fsGrantPath{canonical: canonical}, fmt.Errorf("granted file parent %q is not a directory", anchor)
+	}
+	return fsGrantPath{
+		canonical:  canonical,
+		anchor:     anchor,
+		fileLeaf:   filepath.Base(canonical),
+		kind:       fsExactFileGrant,
+		anchorInfo: anchorInfo,
+	}, nil
+}
+
+func nearestGrantAnchor(path string) (string, os.FileInfo, error) {
+	for candidate := filepath.Dir(path); ; candidate = filepath.Dir(candidate) {
+		info, err := os.Lstat(candidate)
+		if err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+			if resolved, resolveErr := filepath.EvalSymlinks(candidate); resolveErr == nil && resolved == candidate {
+				return candidate, info, nil
+			}
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return "", nil, err
+		}
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			return "", nil, fmt.Errorf("no existing directory anchor for grant %q", path)
+		}
+	}
+}
+
+func canonicalGrantedRoot(path string) (string, os.FileInfo, error) {
+	original, err := os.Stat(path)
+	if err != nil {
+		return path, nil, err
+	}
+	canonical := path
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		canonical = resolved
+	}
+	return canonical, original, nil
+}
+
+func openGrantedRoot(path, canonical string, original os.FileInfo) (*os.Root, error) {
+	root, err := os.OpenRoot(canonical)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := root.Stat(".")
+	if err == nil && !os.SameFile(original, opened) {
+		err = fmt.Errorf("granted root %q changed while opening", path)
+	}
+	if err != nil {
+		_ = root.Close()
+		return nil, err
+	}
+	return root, nil
+}
+
+func openGrantedChildRoot(parent *os.Root, component string, observed os.FileInfo) (*os.Root, error) {
+	root, err := parent.OpenRoot(component)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := root.Stat(".")
+	if err == nil && !os.SameFile(observed, opened) {
+		err = fmt.Errorf("granted path component %q changed while opening", component)
+	}
+	if err != nil {
+		_ = root.Close()
+		return nil, err
+	}
+	return root, nil
+}
+
+func resolveDanglingSymlink(path string) (string, error) {
+	seen := make(map[string]struct{})
+	for {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return resolved, nil
+		}
+		info, err := os.Lstat(path)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			parent, err := filepath.EvalSymlinks(filepath.Dir(path))
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(parent, filepath.Base(path)), nil
+		}
+		if _, ok := seen[path]; ok {
+			return "", fmt.Errorf("symlink loop at %q", path)
+		}
+		seen[path] = struct{}{}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = filepath.Clean(target)
+	}
+}
+
+type resolvedFSPath struct {
+	root      *os.Root
+	relative  string
+	path      string
+	kind      fsGrantKind
+	temporary bool
+}
+
+func (grant fsRoot) openPendingRoot(relative, path string) (resolvedFSPath, error) {
+	components := strings.Split(filepath.ToSlash(grant.pendingRelative), "/")
+	current := grant.root
+	owned := false
+	cleanup := true
+	defer func() {
+		if cleanup && owned {
+			_ = current.Close()
+		}
+	}()
+
+	for i, component := range components {
+		if component == "" || component == "." || component == ".." {
+			return resolvedFSPath{}, fmt.Errorf("invalid pending grant component %q", component)
+		}
+		observed, err := current.Lstat(component)
+		if err != nil {
+			if i == len(components)-1 && errors.Is(err, os.ErrNotExist) {
+				if relative != "." {
+					return resolvedFSPath{}, fmt.Errorf("access denied: pending grant %q is not a directory", grant.path)
+				}
+				cleanup = false
+				return resolvedFSPath{root: current, relative: component, path: path, kind: fsExactFileGrant, temporary: owned}, nil
+			}
+			return resolvedFSPath{}, err
+		}
+		if observed.Mode()&os.ModeSymlink != 0 {
+			return resolvedFSPath{}, fmt.Errorf("access denied: pending grant component %q is a symlink", component)
+		}
+		if i != len(components)-1 && !observed.IsDir() {
+			return resolvedFSPath{}, fmt.Errorf("pending grant component %q is not a directory", component)
+		}
+		if i == len(components)-1 && !observed.IsDir() {
+			if relative != "." {
+				return resolvedFSPath{}, fmt.Errorf("access denied: pending grant %q is not a directory", grant.path)
+			}
+			cleanup = false
+			return resolvedFSPath{root: current, relative: component, path: path, kind: fsExactFileGrant, temporary: owned}, nil
+		}
+
+		next, err := openGrantedChildRoot(current, component, observed)
+		if err != nil {
+			return resolvedFSPath{}, err
+		}
+		if owned {
+			if err := current.Close(); err != nil {
+				_ = next.Close()
+				return resolvedFSPath{}, err
+			}
+		}
+		current, owned = next, true
+		if i == len(components)-1 {
+			cleanup = false
+			return resolvedFSPath{root: current, relative: relative, path: path, kind: fsDirectoryGrant, temporary: true}, nil
+		}
+	}
+	return resolvedFSPath{}, fmt.Errorf("invalid pending grant %q", grant.path)
+}
+
+func (r fsRoots) openRoot(path string) (resolvedFSPath, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("invalid path: %w", err)
+		return resolvedFSPath{}, fmt.Errorf("invalid path: %w", err)
 	}
-	clean := filepath.Clean(abs)
+	original := filepath.Clean(abs)
+	clean := original
 	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
 		clean = resolved
 	} else if info, err := os.Lstat(clean); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		// A dangling symlink: writing through it would create its target, wherever that is.
-		return nil, "", "", fmt.Errorf("access denied: path %q is a dangling symlink", path)
+		if !r.all {
+			// A dangling symlink: writing through it would create its target, wherever that is.
+			return resolvedFSPath{}, fmt.Errorf("access denied: path %q is a dangling symlink", path)
+		}
+		clean, err = resolveDanglingSymlink(clean)
+		if err != nil {
+			return resolvedFSPath{}, fmt.Errorf("invalid path: %w", err)
+		}
 	} else if resolved, err := filepath.EvalSymlinks(filepath.Dir(clean)); err == nil {
 		clean = filepath.Join(resolved, filepath.Base(clean))
 	}
 
-	selectedRoot := ""
-	selectedRelative := ""
 	if r.all {
 		volumeRoot := string(os.PathSeparator)
 		if volume := filepath.VolumeName(clean); volume != "" {
 			volumeRoot = volume + string(os.PathSeparator)
 		}
-		selectedRoot = volumeRoot
-		selectedRelative, err = filepath.Rel(volumeRoot, clean)
-		if err != nil || filepath.IsAbs(selectedRelative) {
-			return nil, "", "", fmt.Errorf("invalid path: %q", path)
+		relative, err := filepath.Rel(volumeRoot, clean)
+		if err != nil || filepath.IsAbs(relative) {
+			return resolvedFSPath{}, fmt.Errorf("invalid path: %q", path)
 		}
-	} else {
-		for _, root := range r.dirs {
-			relative, err := filepath.Rel(root, clean)
+		root, err := os.OpenRoot(volumeRoot)
+		if err != nil {
+			return resolvedFSPath{}, err
+		}
+		return resolvedFSPath{root: root, relative: relative, path: clean, temporary: true}, nil
+	}
+
+	findRoot := func(candidate string) (*fsRoot, string) {
+		var selected *fsRoot
+		selectedRelative := ""
+		for i := range r.roots {
+			root := &r.roots[i]
+			relative, err := filepath.Rel(root.path, candidate)
 			if err != nil || filepath.IsAbs(relative) || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 				continue
 			}
-			if selectedRoot == "" || len(root) < len(selectedRoot) {
-				selectedRoot, selectedRelative = root, relative
+			if root.kind == fsExactFileGrant {
+				if relative != "." {
+					continue
+				}
+				relative = root.fileLeaf
+			}
+			if selected == nil || len(root.path) < len(selected.path) {
+				selected, selectedRelative = root, relative
 			}
 		}
+		return selected, selectedRelative
 	}
-	if selectedRoot == "" {
-		return nil, "", "", fmt.Errorf("access denied: path %q is outside allowed directories", path)
+
+	selectedRoot, relative := findRoot(clean)
+	resolved := clean
+	if selectedRoot == nil {
+		selectedRoot, relative = findRoot(original)
+		resolved = original
 	}
-	root, err := os.OpenRoot(selectedRoot)
+	if selectedRoot == nil {
+		return resolvedFSPath{}, fmt.Errorf("access denied: path %q is outside allowed directories", path)
+	}
+	if selectedRoot.err != nil {
+		return resolvedFSPath{}, selectedRoot.err
+	}
+	if selectedRoot.kind == fsPendingGrant {
+		return selectedRoot.openPendingRoot(relative, resolved)
+	}
+	return resolvedFSPath{root: selectedRoot.root, relative: relative, path: resolved, kind: selectedRoot.kind}, nil
+}
+
+func (f *PluginFilesystemAPI) Close() error {
+	f.closeOnce.Do(func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.closed = true
+		seen := make(map[*os.Root]struct{})
+		var errs []error
+		for _, roots := range []fsRoots{f.read, f.write} {
+			for _, root := range roots.roots {
+				if root.root == nil {
+					continue
+				}
+				if _, ok := seen[root.root]; ok {
+					continue
+				}
+				seen[root.root] = struct{}{}
+				if err := root.root.Close(); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+		f.closeErr = errors.Join(errs...)
+	})
+	return f.closeErr
+}
+
+func (p resolvedFSPath) openExactFile(flag int) (*os.File, error) {
+	if flag != os.O_RDONLY && flag != os.O_WRONLY {
+		return nil, fmt.Errorf("unsupported exact file open flags %d", flag)
+	}
+	info, err := p.root.Lstat(p.relative)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
-	return root, selectedRelative, clean, nil
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("access denied: exact file %q is a symlink", p.path)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("access denied: exact file %q is a directory", p.path)
+	}
+	file, err := p.root.OpenFile(p.relative, flag, 0)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := file.Stat()
+	if err != nil || !os.SameFile(info, opened) {
+		_ = file.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("exact file %q changed while opening", p.path)
+	}
+	return file, nil
+}
+
+func (p resolvedFSPath) openExactFileForWrite() (*os.File, error) {
+	file, err := p.openExactFile(os.O_WRONLY)
+	if !errors.Is(err, os.ErrNotExist) {
+		return file, err
+	}
+	file, err = p.root.OpenFile(p.relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, os.ErrExist) {
+		return p.openExactFile(os.O_WRONLY)
+	}
+	return file, err
 }
 
 func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.closed {
+		return "", os.ErrClosed
+	}
 	path = f.vars.Expand(path)
-	root, relative, _, err := f.read.openRoot(path)
+	resolved, err := f.read.openRoot(path)
 	if err != nil {
 		return "", err
 	}
-	defer root.Close()
-	data, err := root.ReadFile(relative)
+	if resolved.temporary {
+		defer resolved.root.Close()
+	}
+	if resolved.kind == fsExactFileGrant {
+		file, err := resolved.openExactFile(os.O_RDONLY)
+		if err != nil {
+			return "", err
+		}
+		data, readErr := io.ReadAll(file)
+		closeErr := file.Close()
+		if readErr != nil {
+			return "", readErr
+		}
+		if closeErr != nil {
+			return "", closeErr
+		}
+		return string(data), nil
+	}
+	data, err := resolved.root.ReadFile(resolved.relative)
 	if err != nil {
 		return "", err
 	}
@@ -474,41 +901,94 @@ func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
 }
 
 func (f *PluginFilesystemAPI) WriteFile(path, content string) error {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.closed {
+		return os.ErrClosed
+	}
 	path = f.vars.Expand(path)
-	root, relative, resolved, err := f.write.openRoot(path)
+	resolved, err := f.write.openRoot(path)
 	if err != nil {
 		return err
 	}
-	err = root.WriteFile(relative, []byte(content), 0644)
-	closeErr := root.Close()
+	if resolved.kind == fsExactFileGrant {
+		file, openErr := resolved.openExactFileForWrite()
+		if openErr != nil {
+			err = openErr
+		} else {
+			err = file.Truncate(0)
+			if err == nil {
+				_, err = file.Seek(0, io.SeekStart)
+			}
+			if err == nil {
+				var written int
+				written, err = io.WriteString(file, content)
+				if err == nil && written != len(content) {
+					err = io.ErrShortWrite
+				}
+			}
+			if closeErr := file.Close(); err == nil {
+				err = closeErr
+			}
+		}
+	} else {
+		err = resolved.root.WriteFile(resolved.relative, []byte(content), 0644)
+	}
+	var closeErr error
+	if resolved.temporary {
+		closeErr = resolved.root.Close()
+	}
 	if err != nil {
 		return err
 	}
 	if f.onWrite != nil {
-		f.onWrite(resolved)
+		f.onWrite(resolved.path)
 	}
 	return closeErr
 }
 
 func (f *PluginFilesystemAPI) FileExists(path string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.closed {
+		return false
+	}
 	path = f.vars.Expand(path)
-	root, relative, _, err := f.read.openRoot(path)
+	resolved, err := f.read.openRoot(path)
 	if err != nil {
 		return false
 	}
-	defer root.Close()
-	_, err = root.Stat(relative)
+	if resolved.temporary {
+		defer resolved.root.Close()
+	}
+	if resolved.kind == fsExactFileGrant {
+		info, err := resolved.root.Lstat(resolved.relative)
+		return err == nil && info.Mode()&os.ModeSymlink == 0
+	}
+	_, err = resolved.root.Stat(resolved.relative)
 	return err == nil
 }
 
 func (f *PluginFilesystemAPI) ListDir(path string) ([]plugin.FileEntry, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.closed {
+		return nil, os.ErrClosed
+	}
 	path = f.vars.Expand(path)
-	root, relative, _, err := f.read.openRoot(path)
+	resolved, err := f.read.openRoot(path)
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
-	directory, err := root.Open(relative)
+	if resolved.temporary {
+		defer resolved.root.Close()
+	}
+	var directory *os.File
+	if resolved.kind == fsExactFileGrant {
+		directory, err = resolved.openExactFile(os.O_RDONLY)
+	} else {
+		directory, err = resolved.root.Open(resolved.relative)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -524,6 +1004,7 @@ func (f *PluginFilesystemAPI) ListDir(path string) ([]plugin.FileEntry, error) {
 	for i, entry := range entries {
 		result[i] = plugin.FileEntry{Name: entry.Name(), IsDir: entry.IsDir()}
 	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
 }
 

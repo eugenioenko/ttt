@@ -296,6 +296,18 @@ func (p *Plugin) Loaded() bool {
 	return p.State != nil
 }
 
+// SetFilesystemAPI replaces the current filesystem API and closes it if supported.
+func (p *Plugin) SetFilesystemAPI(api FilesystemAPI) {
+	closeFilesystemAPI(p.Filesystem)
+	p.Filesystem = api
+}
+
+func closeFilesystemAPI(api FilesystemAPI) {
+	if closer, ok := api.(interface{ Close() error }); ok {
+		_ = closer.Close()
+	}
+}
+
 // Destroy and Init must run on the UI goroutine, which uses p.State without a lock.
 func (p *Plugin) Destroy() {
 	p.killExecs()
@@ -308,6 +320,8 @@ func (p *Plugin) Destroy() {
 		p.State.Close()
 		p.State = nil
 	}
+	closeFilesystemAPI(p.Filesystem)
+	p.Filesystem = nil
 	p.Enabled = false
 	p.RenderFunc = nil
 	p.EventFunc = nil
