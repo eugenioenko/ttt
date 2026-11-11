@@ -97,6 +97,9 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 	if formatted == comparison {
 		return nil
 	}
+	if formatted == "" {
+		return errors.New(i18n.Text("formatter.emptyOutput"))
+	}
 
 	lastLine := len(editor.Buf.Lines) - 1
 	lastCol := len([]rune(editor.Buf.Lines[lastLine]))

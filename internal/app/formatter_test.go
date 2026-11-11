@@ -14,13 +14,19 @@ import (
 )
 
 func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
-	if _, err := exec.LookPath("true"); err != nil {
-		t.Skip("test formatter requires true")
-	}
-	for _, mode := range []string{"manual", "save"} {
-		t.Run(mode, func(t *testing.T) {
+	for _, tc := range []struct{ name, mode, command string }{
+		{"manual empty", "manual", "true"},
+		{"save empty", "save", "true"},
+		{"manual newline", "manual", "printf \\n"},
+		{"save newline", "save", "printf \\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := exec.LookPath(strings.Fields(tc.command)[0]); err != nil {
+				t.Skipf("test formatter unavailable: %v", err)
+			}
+			mode := tc.mode
 			settings := config.DefaultSettings()
-			settings.Formatters = map[string]string{"js": "true"}
+			settings.Formatters = map[string]string{"js": tc.command}
 			settings.Editor.FormatOnSave = mode == "save"
 			disabled := false
 			settings.LSP.Enabled = &disabled
@@ -55,7 +61,7 @@ func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
 			if editor.Buf.Version() != version || editor.Buf.Dirty != (mode == "manual") {
 				t.Errorf("rejected output changed buffer state: version %d -> %d, dirty=%v", version, editor.Buf.Version(), editor.Buf.Dirty)
 			}
-			if !strings.Contains(a.Status.Notification, "no output") {
+			if !strings.Contains(a.Status.Notification, "empty output") {
 				t.Errorf("missing formatter warning: %q", a.Status.Notification)
 			}
 			a.EditorGroup.Undo()
@@ -67,19 +73,29 @@ func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
 }
 
 func TestEmptyFormatterOutputForEmptyDocument(t *testing.T) {
-	if _, err := exec.LookPath("true"); err != nil {
-		t.Skip("test formatter requires true")
-	}
-	a := buildTestApp(t, config.DefaultSettings())
-	t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
-	a.EditorGroup.NewFile()
-	buf := a.EditorGroup.ActiveBuffer()
-	version := buf.Version()
-	if err := a.applyExternalFormatter("true", "empty.txt"); err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(buf.Lines, []string{""}) || buf.Version() != version || buf.Dirty {
-		t.Fatalf("empty document changed: lines=%q, version=%d, dirty=%v", buf.Lines, buf.Version(), buf.Dirty)
+	for _, command := range []string{"true", "printf \\n"} {
+		t.Run(command, func(t *testing.T) {
+			if _, err := exec.LookPath(strings.Fields(command)[0]); err != nil {
+				t.Skipf("test formatter unavailable: %v", err)
+			}
+			a := buildTestApp(t, config.DefaultSettings())
+			t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+			path := filepath.Join(t.TempDir(), "empty.txt")
+			if err := os.WriteFile(path, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.EditorGroup.OpenFile(path); err != nil {
+				t.Fatal(err)
+			}
+			buf := a.EditorGroup.ActiveBuffer()
+			version := buf.Version()
+			if err := a.applyExternalFormatter(command, path); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(buf.Lines, []string{""}) || buf.Version() != version || buf.Dirty {
+				t.Fatalf("empty document changed: lines=%q, version=%d, dirty=%v", buf.Lines, buf.Version(), buf.Dirty)
+			}
+		})
 	}
 }
 
