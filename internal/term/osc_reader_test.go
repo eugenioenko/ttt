@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -224,31 +225,34 @@ func (t *streamedReadTty) Read(p []byte) (int, error) {
 }
 
 func TestOSCReaderDiscardsIncompleteReplyOnQueryTimeout(t *testing.T) {
-	tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
-	reader := NewOSCReader(tty)
-	reply := reader.Query("10", 25*time.Millisecond)
-	readResult := make(chan struct {
-		bytes string
-		err   error
-	}, 1)
-	go func() {
-		buf := make([]byte, 64)
-		n, err := reader.Read(buf)
-		readResult <- struct {
+	synctest.Test(t, func(t *testing.T) {
+		tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+		reader := NewOSCReader(tty)
+		reply := reader.Query("10", 25*time.Millisecond)
+		readResult := make(chan struct {
 			bytes string
 			err   error
-		}{string(buf[:n]), err}
-	}()
-	tty.reads <- []byte("\x1b]10;rgb:aa/")
-	if result := <-reply; result.Err == nil {
-		t.Fatal("expected the incomplete palette query to time out")
-	}
-	tty.reads <- []byte("bb/cc\x07z")
-	result := <-readResult
-	if result.err != nil || result.bytes != "z" {
-		t.Fatalf("input after timed-out OSC = %q, %v; want only trailing key z", result.bytes, result.err)
-	}
-	close(tty.reads)
+		}, 1)
+		go func() {
+			buf := make([]byte, 64)
+			n, err := reader.Read(buf)
+			readResult <- struct {
+				bytes string
+				err   error
+			}{string(buf[:n]), err}
+		}()
+		tty.reads <- []byte("\x1b]10;rgb:aa/")
+		synctest.Wait()
+		if result := <-reply; result.Err == nil {
+			t.Fatal("expected the incomplete palette query to time out")
+		}
+		tty.reads <- []byte("bb/cc\x07z")
+		result := <-readResult
+		if result.err != nil || result.bytes != "z" {
+			t.Fatalf("input after timed-out OSC = %q, %v; want only trailing key z", result.bytes, result.err)
+		}
+		close(tty.reads)
+	})
 }
 
 func TestOSCReaderDuplicateQueryAndEOFCompletePendingWithoutBlockingCleanupWrites(t *testing.T) {
@@ -344,5 +348,137 @@ func TestOSCTtyShutdownResetBypassesBlockedPaletteWrite(t *testing.T) {
 	case <-queryDone:
 	case <-time.After(time.Second):
 		t.Fatal("palette query did not finish after its write was released")
+	}
+}
+
+func TestOSCReaderEscapeDuringQuery(t *testing.T) {
+	for _, timeout := range []time.Duration{time.Second, time.Millisecond} {
+		t.Run(timeout.String(), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+				defer close(tty.reads)
+				reader := NewOSCReader(tty)
+				reader.Query("10", timeout)
+				result := make(chan string, 1)
+				go func() { buf := make([]byte, 64); n, _ := reader.Read(buf); result <- string(buf[:n]) }()
+				tty.reads <- []byte("\x1b")
+				synctest.Wait()
+				time.Sleep(50 * time.Millisecond)
+				synctest.Wait()
+				select {
+				case got := <-result:
+					if got != "\x1b" {
+						t.Fatalf("Escape = %q", got)
+					}
+				default:
+					t.Fatal("Escape remained buffered during or after query timeout")
+				}
+			})
+		})
+	}
+}
+
+func TestOSCReaderTimeoutBeforeFullPrefix(t *testing.T) {
+	for _, prefix := range []string{"\x1b]", "\x1b]1", "\x1b]10"} {
+		t.Run(prefix, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+				defer close(tty.reads)
+				reader := NewOSCReader(tty)
+				reply := reader.Query("10", 25*time.Millisecond)
+				result := make(chan string, 1)
+				go func() { buf := make([]byte, 64); n, _ := reader.Read(buf); result <- string(buf[:n]) }()
+				tty.reads <- []byte(prefix)
+				synctest.Wait()
+				<-reply
+				tty.reads <- []byte("\x1b]10;rgb:aa/"[len(prefix):])
+				synctest.Wait()
+				time.Sleep(150 * time.Millisecond)
+				tty.reads <- []byte("bb/cc\x07z")
+				if got := <-result; got != "z" {
+					t.Fatalf("timed-out reply leaked: %q", got)
+				}
+			})
+		})
+	}
+}
+
+func TestOSCReaderRecoversFromTruncatedReply(t *testing.T) {
+	for _, input := range []string{"hello", "abc", "\x1b[A", "\x1b"} {
+		t.Run(input, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+				defer close(tty.reads)
+				reader := NewOSCReader(tty)
+				reply := reader.Query("10", 25*time.Millisecond)
+				result := make(chan string, 1)
+				go func() { buf := make([]byte, 64); n, _ := reader.Read(buf); result <- string(buf[:n]) }()
+				tty.reads <- []byte("\x1b]10;rgb:aa/")
+				synctest.Wait()
+				<-reply
+				time.Sleep(400 * time.Millisecond)
+				tty.reads <- []byte(input)
+				if got := <-result; got != input {
+					t.Fatalf("typing after truncated reply = %q, want %q", got, input)
+				}
+			})
+		})
+	}
+}
+
+func TestOSCReaderTimeoutAtStringTerminator(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+		defer close(tty.reads)
+		reader := NewOSCReader(tty)
+		reply := reader.Query("10", 25*time.Millisecond)
+		result := make(chan string, 1)
+		go func() { buf := make([]byte, 64); n, _ := reader.Read(buf); result <- string(buf[:n]) }()
+		tty.reads <- []byte("\x1b]10;rgb:aa/bb/cc\x1b")
+		synctest.Wait()
+		<-reply
+		tty.reads <- []byte("\\z")
+		if got := <-result; got != "z" {
+			t.Fatalf("split terminator = %q", got)
+		}
+	})
+}
+
+func TestOSCReaderEscapeRecoversBeforeDiscardDeadline(t *testing.T) {
+	for _, input := range []string{"\x1b[A", "\x1b"} {
+		t.Run(input, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+				defer close(tty.reads)
+				reader := NewOSCReader(tty)
+				reply := reader.Query("10", 25*time.Millisecond)
+				result := make(chan string, 2)
+				go func() {
+					buf := make([]byte, 64)
+					for range 2 {
+						n, _ := reader.Read(buf)
+						result <- string(buf[:n])
+					}
+				}()
+				tty.reads <- []byte("\x1b]10;rgb:aa/")
+				synctest.Wait()
+				<-reply
+				tty.reads <- []byte(input)
+				time.Sleep(50 * time.Millisecond)
+				synctest.Wait()
+				select {
+				case got := <-result:
+					if got != input {
+						t.Fatalf("recovery key = %q, want %q", got, input)
+					}
+				default:
+					t.Fatal("Escape did not interrupt reply recovery")
+				}
+				tty.reads <- []byte("z")
+				if got := <-result; got != "z" {
+					t.Fatalf("next Read lost input: %q", got)
+				}
+			})
+		})
 	}
 }

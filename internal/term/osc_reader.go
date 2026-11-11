@@ -12,7 +12,16 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-const oscReplyMax = 4096
+const (
+	oscReplyMax        = 4096
+	oscEscapeTimeout   = 20 * time.Millisecond
+	oscRecoveryTimeout = 350 * time.Millisecond
+)
+
+type oscReadResult struct {
+	data []byte
+	err  error
+}
 
 type OSCReply struct {
 	Code    string
@@ -26,6 +35,10 @@ type OSCReader struct {
 	tty           tcell.Tty
 	mu            sync.Mutex
 	readMu        sync.Mutex
+	readResult    chan oscReadResult
+	readErr       error
+	wake          chan struct{}
+	inputDeadline time.Time
 	writeGate     chan struct{}
 	shutdown      chan struct{}
 	shutdownOnce  sync.Once
@@ -40,7 +53,7 @@ type OSCReader struct {
 }
 
 func NewOSCReader(tty tcell.Tty) *OSCReader {
-	return &OSCReader{tty: tty, want: make(map[string]chan OSCReply), writeGate: make(chan struct{}, 1), shutdown: make(chan struct{})}
+	return &OSCReader{tty: tty, want: make(map[string]chan OSCReply), writeGate: make(chan struct{}, 1), shutdown: make(chan struct{}), wake: make(chan struct{}, 1)}
 }
 
 func (o *OSCReader) Query(code string, timeout time.Duration) <-chan OSCReply {
@@ -62,22 +75,27 @@ func (o *OSCReader) Query(code string, timeout time.Duration) <-chan OSCReply {
 	}
 	o.want[code] = out
 	o.mu.Unlock()
-	go func() {
-		timer := time.NewTimer(timeout)
-		defer timer.Stop()
-		<-timer.C
+	time.AfterFunc(timeout, func() {
 		o.mu.Lock()
+		defer o.mu.Unlock()
 		if o.want[code] == out {
 			delete(o.want, code)
 			out <- OSCReply{Code: code, Err: fmt.Errorf("OSC %s timeout", code)}
-			if o.candidateCode == code {
+			// A timeout can precede the semicolon that identifies a reply's code.
+			partialPrefix := len(o.candidate) >= 2 && strings.HasPrefix(string(o.candidate), "\x1b]") && strings.HasPrefix(code+";", string(o.candidate[2:]))
+			if o.candidateCode == code || partialPrefix {
+				trailingEscape := len(o.candidate) > 0 && o.candidate[len(o.candidate)-1] == '\x1b'
 				o.candidate = nil
+				if trailingEscape {
+					o.candidate = []byte{'\x1b'}
+				}
 				o.candidateCode = ""
 				o.discarding = true
+				o.inputDeadline = time.Now().Add(oscRecoveryTimeout)
+				o.signalRead()
 			}
 		}
-		o.mu.Unlock()
-	}()
+	})
 	query := "\x1b]" + base + ";?\x1b\\"
 	if base == "4" {
 		query = "\x1b]4;" + parts[1] + ";?\x1b\\"
@@ -106,61 +124,81 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 	}
 	for {
 		o.mu.Lock()
+		o.expireInput()
 		if len(o.ready) > 0 {
 			n := copy(dst, o.ready)
 			o.ready = o.ready[n:]
 			o.mu.Unlock()
 			return n, nil
 		}
-		passthrough := len(o.want) == 0 && o.candidateCode == "" && !o.discarding
-		if passthrough && len(o.candidate) > 0 {
-			o.ready = append(o.ready, o.candidate...)
-			o.candidate = nil
-		}
+		deadline, closed := o.inputDeadline, o.closed
 		o.mu.Unlock()
-		if passthrough {
-			o.mu.Lock()
-			if len(o.ready) > 0 {
-				n := copy(dst, o.ready)
-				o.ready = o.ready[n:]
-				o.mu.Unlock()
-				return n, nil
-			}
-			o.mu.Unlock()
+		if o.readErr != nil {
+			err := o.readErr
+			o.readErr = nil
+			return 0, err
 		}
-		n, err := o.tty.Read(dst)
-		if n > 0 {
-			o.mu.Lock()
-			passthrough = len(o.want) == 0 && o.candidateCode == "" && !o.discarding && len(o.candidate) == 0
-			o.mu.Unlock()
-			if passthrough {
-				if err != nil {
-					o.readError(err)
-				}
-				return n, err
-			}
-			o.observe(dst[:n])
+		if closed {
+			return 0, io.ErrClosedPipe
 		}
-		if err != nil {
-			o.readError(err)
-			o.mu.Lock()
-			if len(o.ready) == 0 {
-				o.mu.Unlock()
-				return 0, err
-			}
-			o.mu.Unlock()
+		// Keep at most one TTY read in flight. A timer may return Escape while that
+		// read is still blocked; the next Read must consume its result, not race it.
+		if o.readResult == nil {
+			result := make(chan oscReadResult, 1)
+			o.readResult = result
+			go func() {
+				buf := make([]byte, 4096)
+				n, err := o.tty.Read(buf)
+				result <- oscReadResult{data: buf[:n], err: err}
+			}()
 		}
-		if n > 0 {
-			o.mu.Lock()
-			if len(o.ready) > 0 {
-				ready := copy(dst, o.ready)
-				o.ready = o.ready[ready:]
-				o.mu.Unlock()
-				return ready, nil
+		var timer *time.Timer
+		var timeout <-chan time.Time
+		if !deadline.IsZero() {
+			timer = time.NewTimer(time.Until(deadline))
+			timeout = timer.C
+		}
+		select {
+		case result := <-o.readResult:
+			o.readResult = nil
+			o.observe(result.data)
+			if result.err != nil {
+				o.readError(result.err)
+				o.readErr = result.err
 			}
-			o.mu.Unlock()
+		case <-o.wake:
+		case <-timeout:
+		}
+		if timer != nil {
+			timer.Stop()
 		}
 	}
+}
+
+func (o *OSCReader) signalRead() {
+	select {
+	case o.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (o *OSCReader) resetCandidate() {
+	o.candidate = nil
+	o.candidateCode = ""
+	o.discarding = false
+	o.inputDeadline = time.Time{}
+}
+
+func (o *OSCReader) expireInput() {
+	if o.inputDeadline.IsZero() || time.Now().Before(o.inputDeadline) {
+		return
+	}
+	if len(o.candidate) == 1 && o.candidate[0] == '\x1b' {
+		o.ready = append(o.ready, '\x1b')
+	}
+	// Late OSC tails and keys have no distinguishing marker. Bound recovery so
+	// a missing terminator cannot consume keyboard input indefinitely.
+	o.resetCandidate()
 }
 
 func (o *OSCReader) readError(err error) {
@@ -170,9 +208,7 @@ func (o *OSCReader) readError(err error) {
 	if o.candidateCode == "" && !o.discarding {
 		o.ready = append(o.ready, o.candidate...)
 	}
-	o.candidate = nil
-	o.candidateCode = ""
-	o.discarding = false
+	o.resetCandidate()
 	for code, ch := range o.want {
 		delete(o.want, code)
 		ch <- OSCReply{Code: code, Err: err}
@@ -184,17 +220,33 @@ func (o *OSCReader) readError(err error) {
 func (o *OSCReader) observe(in []byte) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	o.expireInput()
 	for _, b := range in {
-		if o.discarding {
-			o.candidate = append(o.candidate, b)
-			if containsOSCTerminator(o.candidate) || len(o.candidate) > oscReplyMax {
-				o.candidate = nil
-				o.discarding = false
-			}
+		if len(o.want) == 0 && len(o.candidate) == 0 && !o.discarding {
+			o.ready = append(o.ready, b)
 			continue
+		}
+		if o.discarding {
+			if len(o.candidate) == 1 && o.candidate[0] == '\x1b' && b != '\\' {
+				o.resetCandidate()
+				o.candidate = []byte{'\x1b'}
+				o.inputDeadline = time.Now().Add(oscEscapeTimeout)
+			} else {
+				if b == '\x1b' {
+					o.candidate = []byte{b}
+					o.inputDeadline = time.Now().Add(oscEscapeTimeout)
+				} else {
+					o.candidate = append(o.candidate, b)
+					if containsOSCTerminator(o.candidate) || len(o.candidate) > oscReplyMax {
+						o.resetCandidate()
+					}
+				}
+				continue
+			}
 		}
 		if len(o.candidate) == 0 {
 			if b == '\x1b' {
+				o.inputDeadline = time.Now().Add(oscEscapeTimeout)
 				o.candidate = append(o.candidate, b)
 			} else {
 				o.ready = append(o.ready, b)
@@ -203,13 +255,15 @@ func (o *OSCReader) observe(in []byte) {
 		}
 		if len(o.candidate) == 1 {
 			if b == ']' {
+				o.inputDeadline = time.Now().Add(2 * oscRecoveryTimeout)
 				o.candidate = append(o.candidate, b)
 			} else if b == '\x1b' {
 				o.ready = append(o.ready, o.candidate[0])
 				o.candidate[0] = b
+				o.inputDeadline = time.Now().Add(oscEscapeTimeout)
 			} else {
 				o.ready = append(o.ready, o.candidate[0], b)
-				o.candidate = nil
+				o.resetCandidate()
 			}
 			continue
 		}
@@ -218,30 +272,26 @@ func (o *OSCReader) observe(in []byte) {
 			if o.candidateCode == "" {
 				o.ready = append(o.ready, o.candidate...)
 			}
-			o.candidate = nil
-			o.candidateCode = ""
+			o.resetCandidate()
 			continue
 		}
 		if end, _ := oscEnd(o.candidate); end >= 0 {
 			if o.candidateCode != "" && o.accept(o.candidate[2:end], o.candidateCode) {
-				o.candidate = nil
-				o.candidateCode = ""
+				o.resetCandidate()
 				continue
 			}
 			o.ready = append(o.ready, o.candidate...)
-			o.candidate = nil
-			o.candidateCode = ""
+			o.resetCandidate()
 		} else if o.candidateCode == "" {
 			var possible bool
 			o.candidateCode, possible = o.matchingQuery(o.candidate)
 			if o.candidateCode == "" && !possible && len(o.candidate) > 2 {
 				o.ready = append(o.ready, o.candidate...)
-				o.candidate = nil
+				o.resetCandidate()
 			}
 		} else if !o.isCandidate(o.candidate) {
 			o.ready = append(o.ready, o.candidate...)
-			o.candidate = nil
-			o.candidateCode = ""
+			o.resetCandidate()
 		}
 	}
 }
@@ -366,6 +416,8 @@ func (o *OSCReader) Close() {
 	o.BeginShutdown()
 	o.mu.Lock()
 	o.closed = true
+	o.resetCandidate()
+	o.signalRead()
 	for code, ch := range o.want {
 		delete(o.want, code)
 		ch <- OSCReply{Code: code, Err: io.ErrClosedPipe}
