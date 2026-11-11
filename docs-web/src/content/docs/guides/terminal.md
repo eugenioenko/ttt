@@ -26,9 +26,11 @@ Plugins can open a program in an editor tab with `term.spawn{ shell = "program",
 
 - Full VT escape sequence support via `eugenioenko/xterm-go` and PTY management via `aymanbagabas/go-pty`
 - True color (24-bit) and 256-color rendering with direct RGB color support
-- Reserved TTT shortcuts and configured chords take priority while the terminal is focused; other keys go through the terminal's local clipboard handling and then to the PTY
+- Reserved TTT shortcuts and global chords take priority while the terminal is focused; editor-scoped chords are excluded so they cannot edit a hidden file. Other keys go through the terminal's local clipboard handling and then to the PTY. Prefixes used only by editor commands, such as Ctrl+L, reach the shell normally.
 - Scrollback buffer with mouse wheel scrolling (3 lines), Shift+PgUp/PgDn (half page), and a draggable scrollbar
 - Click the terminal content area to focus it; any keypress snaps back to the live view when scrolled up
+
+Custom plugin commands remain global. A plugin binding to a built-in editor command follows that command's editor scope; TTT does not infer the scope of arbitrary Lua handlers.
 
 With [`keyboard.modifierKey`](/reference/settings/#keyboard) set to `"control+super"` or `"super"`, Super+V also pastes and Super+C copies selected terminal text. Super is Command (⌘) on macOS. Super+C without a selection does nothing; Ctrl+C still copies selected text or sends an interrupt when nothing is selected. Super+V pastes even when `terminal.ctrlVPastes` is `false`, so Ctrl+V can remain available to terminal programs.
 
@@ -40,7 +42,7 @@ Ctrl+click opens URLs and file links in terminal output. When Super shortcuts ar
 
 With the terminal focused, press **Ctrl+K**, then:
 
-- A plain or Shift-only key completes a TTT chord: **Ctrl+K P** opens Quick Open, **Ctrl+K T** creates a terminal, and **Ctrl+K Shift+P** also opens Quick Open.
+- A plain or Shift-only key completes a global TTT chord: **Ctrl+K P** opens Quick Open, **Ctrl+K T** creates a terminal, and **Ctrl+K Shift+P** also opens Quick Open. If it only matches an editor command, the continuation is sent to the terminal instead; for example, **Ctrl+K K** sends `k` without deleting a line in the editor.
 - A Ctrl/Alt/Super combination is sent directly to the terminal using its normal key encoding: **Ctrl+K Ctrl+P** sends Ctrl+P for shell history, **Ctrl+K Ctrl+B** sends the tmux prefix, and **Ctrl+K Ctrl+K** sends Ctrl+K for shell kill-line. This bypasses reserved TTT shortcuts and terminal-local copy/paste handling once.
 
 Clicking, changing focus or tabs, opening a dialog, or closing the terminal cancels forwarding. The command does nothing outside a focused terminal. Running **Terminal: Send Next Key** from the command palette forwards the next key without starting a chord.

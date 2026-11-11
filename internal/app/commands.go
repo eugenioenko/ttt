@@ -50,9 +50,7 @@ func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBind
 				key, mod, rn := comboToTcell(step)
 				steps[i] = ui.GlobalKeyBinding{Key: key, Mod: mod, Rune: rn}
 			}
-			root.AddChordKey(steps, func() {
-				reg.Execute(cmdID)
-			})
+			bindCommandChord(root, reg, steps, cmdID)
 		} else {
 			key, mod, rn := comboToTcell(kb.Steps[0])
 			handler := func() { reg.Execute(cmdID) }
@@ -68,6 +66,33 @@ func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBind
 			}
 		}
 	}
+}
+
+func bindCommandChord(root *ui.Root, reg *command.Registry, steps []ui.GlobalKeyBinding, cmdID string) {
+	handler := func() { reg.Execute(cmdID) }
+	if editorChordCommand(cmdID) {
+		root.AddEditorChordKey(steps, handler)
+	} else {
+		root.AddChordKey(steps, handler)
+	}
+}
+
+func editorChordCommand(id string) bool {
+	if id == "editor.focus" || id == "editor.quit" {
+		return false
+	}
+	domain, _, _ := strings.Cut(id, ".")
+	switch domain {
+	case "editor", "multicursor", "fold", "diff":
+		return true
+	}
+	switch id {
+	case "file.save", "file.saveAs", "file.reloadFromDisk", "search.find", "search.replace", "search.findNext", "search.findPrev", "search.clearFind":
+		return true
+	case "view.scrollUp", "view.scrollDown", "view.scrollLineUp", "view.scrollLineDown":
+		return true
+	}
+	return false
 }
 
 func FormatKeyBinding(key string, modifiers tcell.ModMask) string {

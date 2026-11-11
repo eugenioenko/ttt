@@ -819,9 +819,7 @@ func (a *App) registerPluginCommandsAndKeys(p *plugin.Plugin) {
 				key, mod, rn := comboToTcell(step)
 				tcellSteps[i] = ui.GlobalKeyBinding{Key: key, Mod: mod, Rune: rn}
 			}
-			a.Root.AddChordKey(tcellSteps, func() {
-				a.Reg.Execute(cmdID)
-			})
+			bindCommandChord(a.Root, a.Reg, tcellSteps, cmdID)
 		} else {
 			key, mod, rn := comboToTcell(steps[0])
 			a.Root.AddGlobalKey(key, mod, rn, func() {

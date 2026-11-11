@@ -26,8 +26,9 @@ type GlobalKeyBinding struct {
 }
 
 type ChordKeyBinding struct {
-	Steps   []GlobalKeyBinding
-	Handler func()
+	Steps      []GlobalKeyBinding
+	Handler    func()
+	EditorOnly bool
 }
 
 type chordState struct {
@@ -126,6 +127,10 @@ func (r *Root) AddTerminalToggleKey(key tcell.Key, mod tcell.ModMask, rn rune, h
 
 func (r *Root) AddChordKey(steps []GlobalKeyBinding, handler func()) {
 	r.ChordKeys = append(r.ChordKeys, ChordKeyBinding{Steps: steps, Handler: handler})
+}
+
+func (r *Root) AddEditorChordKey(steps []GlobalKeyBinding, handler func()) {
+	r.ChordKeys = append(r.ChordKeys, ChordKeyBinding{Steps: steps, Handler: handler, EditorOnly: true})
 }
 
 func (r *Root) ClearKeys() {
@@ -496,6 +501,7 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 }
 
 func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
+	editorAllowed := !r.rawKeysFocused()
 	kev = term.ControlKeyEvent(kev, &r.ControlModifiers)
 	if kev == nil {
 		r.chord = nil
@@ -505,6 +511,9 @@ func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
 		var next []int
 		for _, ci := range r.chord.candidates {
 			chord := r.ChordKeys[ci]
+			if chord.EditorOnly && !editorAllowed {
+				continue
+			}
 			if r.chord.stepIdx < len(chord.Steps) && matchKeyChord(kev, chord.Steps[r.chord.stepIdx]) {
 				if r.chord.stepIdx+1 == len(chord.Steps) {
 					r.chord = nil
@@ -524,6 +533,9 @@ func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
 
 	var candidates []int
 	for i, chord := range r.ChordKeys {
+		if chord.EditorOnly && !editorAllowed {
+			continue
+		}
 		if len(chord.Steps) > 1 && matchKeyChord(kev, chord.Steps[0]) {
 			candidates = append(candidates, i)
 		}
