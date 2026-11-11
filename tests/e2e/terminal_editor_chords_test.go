@@ -11,23 +11,28 @@ import (
 func TestTerminalChordsDoNotEditHiddenBuffer(t *testing.T) {
 	for _, location := range []string{"terminal.toggle", "terminal.newInEditor"} {
 		for _, tc := range []struct {
-			name   string
-			prefix tcell.Key
-			key    rune
-			bytes  string
+			name    string
+			prefix  tcell.Key
+			key     rune
+			bytes   string
+			command string
 		}{
-			{"delete", tcell.KeyCtrlK, 'k', "k!"},
-			{"join", tcell.KeyCtrlK, 'j', "j!"},
-			{"sort", tcell.KeyCtrlK, 'o', "o!"},
-			{"multicursor", tcell.KeyCtrlK, 'l', "l!"},
-			{"format", tcell.KeyCtrlL, 'e', "\x0ce!"},
-			{"lsp format", tcell.KeyCtrlL, 'f', "\x0cf!"},
-			{"remapped delete", tcell.KeyCtrlG, 'x', "\x07x!"},
+			{"delete", tcell.KeyCtrlK, 'k', "k!", "editor.deleteLine"},
+			{"join", tcell.KeyCtrlK, 'j', "j!", "editor.deleteLine"},
+			{"sort", tcell.KeyCtrlK, 'o', "o!", "editor.deleteLine"},
+			{"multicursor", tcell.KeyCtrlK, 'l', "l!", "editor.deleteLine"},
+			{"format", tcell.KeyCtrlL, 'e', "\x0ce!", "editor.deleteLine"},
+			{"lsp format", tcell.KeyCtrlL, 'f', "\x0cf!", "editor.deleteLine"},
+			{"remapped delete", tcell.KeyCtrlG, 'x', "\x07x!", "editor.deleteLine"},
+			{"scroll up", tcell.KeyCtrlG, 'x', "\x07x!", "view.scrollUp"},
+			{"scroll down", tcell.KeyCtrlG, 'x', "\x07x!", "view.scrollDown"},
+			{"scroll line up", tcell.KeyCtrlG, 'x', "\x07x!", "view.scrollLineUp"},
+			{"scroll line down", tcell.KeyCtrlG, 'x', "\x07x!", "view.scrollLineDown"},
 		} {
 			t.Run(location+"/"+tc.name, func(t *testing.T) {
 				h := newTestHarness(t, 100, 30)
 				defer h.stop()
-				h.app.Keybindings = append(config.DefaultKeybindings(), config.KeyBinding{Key: "ctrl+g x", Command: "editor.deleteLine"})
+				h.app.Keybindings = append(config.DefaultKeybindings(), config.KeyBinding{Key: "ctrl+g x", Command: tc.command})
 				h.app.RebindKeys()
 				original := "zebra\napple\npear"
 				h.app.NewFileFromText(original)

@@ -89,6 +89,8 @@ func editorChordCommand(id string) bool {
 	switch id {
 	case "file.save", "file.saveAs", "file.reloadFromDisk", "search.find", "search.replace", "search.findNext", "search.findPrev", "search.clearFind":
 		return true
+	case "view.scrollUp", "view.scrollDown", "view.scrollLineUp", "view.scrollLineDown":
+		return true
 	}
 	return false
 }

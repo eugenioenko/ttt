@@ -30,6 +30,8 @@ Plugins can open a program in an editor tab with `term.spawn{ shell = "program",
 - Scrollback buffer with mouse wheel scrolling (3 lines), Shift+PgUp/PgDn (half page), and a draggable scrollbar
 - Click the terminal content area to focus it; any keypress snaps back to the live view when scrolled up
 
+Custom plugin commands remain global. A plugin binding to a built-in editor command follows that command's editor scope; TTT does not infer the scope of arbitrary Lua handlers.
+
 With [`keyboard.modifierKey`](/reference/settings/#keyboard) set to `"control+super"` or `"super"`, Super+V also pastes and Super+C copies selected terminal text. Super is Command (⌘) on macOS. Super+C without a selection does nothing; Ctrl+C still copies selected text or sends an interrupt when nothing is selected. Super+V pastes even when `terminal.ctrlVPastes` is `false`, so Ctrl+V can remain available to terminal programs.
 
 Ctrl+click opens URLs and file links in terminal output. When Super shortcuts are enabled, Super+click also opens links, shows the link cursor and underline, and permits local text selection when the terminal program captures the mouse. The outer terminal must report the modifier. These settings apply live to both panel terminals and editor terminal tabs; other shell key and mouse encodings keep their original modifiers.
