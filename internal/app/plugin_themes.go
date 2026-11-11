@@ -61,7 +61,7 @@ func (a *App) refreshPluginTheme(name string) {
 	s := *a.Settings
 	if _, err := config.LoadTheme(s.Theme); err != nil {
 		s.Theme = ""
-		if err := config.SaveSettings(s); err != nil {
+		if err := a.saveSettings(s); err != nil {
 			a.LogOutput("error", "themes", "save settings: "+err.Error())
 		}
 	}

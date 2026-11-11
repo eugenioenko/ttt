@@ -208,15 +208,15 @@ func tildePath(abs string) string {
 // a.Settings whole would also write this window's layout over whatever another
 // ttt window saved.
 func (a *App) saveFavorites(favs []string, msg string) {
-	disk, err := config.ReadSettings()
-	if err != nil {
+	disk, err := a.readSettings()
+	if err != nil && !os.IsNotExist(err) {
 		a.StatusError(i18n.Format("status.failedToSaveFavorites", i18n.Args{"error": err.Error()}))
 		return
 	}
 	a.Settings.Welcome.Favorites = favs
 	a.refreshWelcome()
 	disk.Welcome.Favorites = favs
-	if err := config.SaveSettings(disk); err != nil {
+	if err := a.saveSettings(disk); err != nil {
 		a.StatusError(i18n.Format("status.failedToSaveFavorites", i18n.Args{"error": err.Error()}))
 		return
 	}

@@ -15,7 +15,7 @@ func (a *App) SaveAndApplySettings() bool {
 }
 
 func (a *App) persistSettings() bool {
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	if err := a.saveSettings(*a.Settings); err != nil {
 		a.StatusWarn(i18n.Format("settings.saveFailed", i18n.Args{"error": err.Error()}))
 		return false
 	}

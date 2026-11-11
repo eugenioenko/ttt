@@ -829,7 +829,7 @@ func (s *PluginSettingsAPI) Set(key string, value any) error {
 	if err := json.Unmarshal(data, s.app.Settings); err != nil {
 		return err
 	}
-	return config.SaveSettings(*s.app.Settings)
+	return s.app.saveSettings(*s.app.Settings)
 }
 
 func (s *PluginSettingsAPI) settingsMap() map[string]any {

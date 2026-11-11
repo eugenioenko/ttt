@@ -103,7 +103,7 @@ func (a *App) showAddApp(openWith bool) {
 			}
 			s := *a.Settings
 			s.Applications = append(slices.Clone(s.Applications), app)
-			if err := config.SaveSettings(s); err != nil {
+			if err := a.saveSettings(s); err != nil {
 				errorLabel.Config.Text = i18n.Format("apps.saveFailed", i18n.Args{"error": err.Error()})
 				return
 			}

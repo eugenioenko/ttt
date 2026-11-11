@@ -114,7 +114,7 @@ func (a *App) SetDisplayLanguage(locale string) {
 	}
 	s := *a.Settings
 	s.Language.Locale = normalized
-	if err := config.SaveSettings(s); err != nil {
+	if err := a.saveSettings(s); err != nil {
 		a.StatusError(err.Error())
 		return
 	}
@@ -210,7 +210,7 @@ func (a *App) copyPluginLanguages(p *plugin.Plugin) error {
 	}
 	a.Settings.Language.Packs = next
 	a.ensureDisplayLanguageInstalled()
-	return config.SaveSettings(*a.Settings)
+	return a.saveSettings(*a.Settings)
 }
 
 func (a *App) uninstallPluginLanguages(name string) {
@@ -223,7 +223,7 @@ func (a *App) uninstallPluginLanguages(name string) {
 	}
 	a.Settings.Language.Packs = slices.DeleteFunc(a.Settings.Language.Packs, func(pack config.LanguagePackSetting) bool { return pack.Plugin == name })
 	a.ensureDisplayLanguageInstalled()
-	if err := config.SaveSettings(*a.Settings); err != nil {
+	if err := a.saveSettings(*a.Settings); err != nil {
 		a.LogOutput("error", "languages", err.Error())
 	}
 }

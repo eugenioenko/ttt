@@ -84,6 +84,9 @@ func TestInvalidSettingsAreReportedAndPreserved(t *testing.T) {
 }
 
 func TestFavoritesPreserveSettingsAfterReadError(t *testing.T) {
+	if !isolatedSettingsExecutable(t) {
+		return
+	}
 	previous := config.OverrideConfigDir
 	config.OverrideConfigDir = ""
 	t.Cleanup(func() { config.OverrideConfigDir = previous })

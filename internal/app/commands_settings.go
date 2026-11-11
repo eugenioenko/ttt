@@ -28,8 +28,32 @@ func configuredDiffContext(contextMode string) ui.DiffContextMode {
 	return ui.DiffContextChangesOnly
 }
 
+func (a *App) settingsFilePath() string {
+	if a.settingsFile != "" {
+		return a.settingsFile
+	}
+	return config.ConfigFilePath("settings.json")
+}
+
+func (a *App) readSettings() (config.Settings, error) {
+	if a.settingsFile != "" {
+		return config.ReadSettingsFile(a.settingsFilePath())
+	}
+	return config.ReadSettings()
+}
+
+func (a *App) saveSettings(s config.Settings) error {
+	return config.SaveSettingsFile(a.settingsFilePath(), s)
+}
+
+func (a *App) OpenSettingsFile() {
+	path := a.settingsFilePath()
+	config.EnsureConfigFile(path, "{}\n")
+	a.EditorGroup.OpenFile(path)
+}
+
 func (a *App) ReloadSettings() {
-	s, err := config.ReadSettings()
+	s, err := a.readSettings()
 	if err != nil {
 		a.StatusWarn(i18n.Format("settings.loadFailed", i18n.Args{"error": err.Error()}))
 		return

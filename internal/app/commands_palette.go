@@ -243,11 +243,7 @@ func registerPaletteCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "settings.open", Title: i18n.Text("command.settingsOpenSettingsJson"),
 		Keywords: []string{"preferences", "settings", "configuration", "options"},
-		Handler: func() {
-			path := config.ConfigFilePath("settings.json")
-			config.EnsureConfigFile(path, "{}\n")
-			app.EditorGroup.OpenFile(path)
-		},
+		Handler:  app.OpenSettingsFile,
 	})
 
 	reg.Register(command.Command{

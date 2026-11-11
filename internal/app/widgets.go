@@ -231,6 +231,12 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 }
 
 func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget) *App {
+	settingsFile := cfg.SettingsFile
+	if settingsFile != "" {
+		if absolute, err := filepath.Abs(settingsFile); err == nil {
+			settingsFile = absolute
+		}
+	}
 	locale, languageErr := loadDisplayLanguage(cfg.Settings.Language)
 	initText()
 
@@ -410,6 +416,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		Status:              status,
 		Borders:             borders,
 		Settings:            &cfg.Settings,
+		settingsFile:        settingsFile,
 		State:               state,
 		Workspace:           ws,
 		Palette:             BuildTerminalPalettePtr(cfg.Theme, WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), WithTerminalSelectionStyle(cfg.Settings.Terminal.SelectionStyle)),
