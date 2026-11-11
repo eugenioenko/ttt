@@ -388,6 +388,7 @@ func (a *App) doSaveFile(onSaved func()) {
 }
 
 func (a *App) afterFileSave(path, lang string) {
+	a.reloadSavedSettings(path)
 	if lang != "" {
 		a.NotifyLSPSave(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.ScheduleDiagnosticPull(true)

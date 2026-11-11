@@ -10,6 +10,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
+	"os"
 	"reflect"
 	"time"
 )
@@ -36,6 +37,17 @@ func (a *App) ReloadSettings() {
 	}
 	a.ApplySettings(s)
 	a.StatusNotify(i18n.Text("status.settingsReloaded"))
+}
+
+func (a *App) reloadSavedSettings(path string) {
+	saved, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	settings, err := os.Stat(config.ConfigFilePath("settings.json"))
+	if err == nil && os.SameFile(saved, settings) {
+		a.ReloadSettings()
+	}
 }
 
 func (a *App) applySidebarTabStyle(style string) {

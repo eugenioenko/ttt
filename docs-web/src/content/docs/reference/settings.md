@@ -7,14 +7,14 @@ sidebar:
 
 Settings are stored in `~/.config/ttt/settings.json`. A complete example is available at [`config/settings.json`](https://github.com/eugenioenko/ttt/blob/main/config/settings.json) in the repository.
 
-If `settings.json` cannot be parsed, ttt reports the error and preserves the file. Startup uses defaults, while a failed **Reload Settings** keeps your current settings. Settings writes are blocked until the file is valid. Fix the file and run **Reload Settings** before making further changes; toggles can still affect the current session when saving fails.
+If `settings.json` cannot be parsed, ttt reports the error and preserves the file. Startup uses defaults, while a failed reload keeps your current settings. Settings writes are blocked until the file is valid. Fix and save the file in ttt, or run **Reload Settings** after fixing it externally; toggles can still affect the current session when saving fails.
 
 ## Editing settings
 
 There are two ways to change settings:
 
 - **Settings editor** — **View → Settings**, **Ctrl+K ,**, or **Settings: Open Editor Settings** from the command palette (**Ctrl+P**). Opens a form in an editor tab, grouped into tabs by area, with headed sections inside each: **General** (plugins, debugging), **Editor** (indentation, auto closing, display, on save, completion), **Appearance** (theme, window, code, markdown), **Explorer** (files and appearance), **Sidebar** (shared look, source control, quick open, search), **Terminal** and **Diff**. It opens on General. Edits are held until you press **Apply** (also available as **Settings: Apply Changes**), which writes `settings.json` and live-applies everything that does not require a restart. **Cancel** (also **Settings: Discard Changes**) closes the tab and drops them. Rows marked *(restart)* only take effect on next launch.
-- **Raw JSON** — **Settings: Open settings.json** opens the file itself. Needed for the `lsp` settings and `formatters`, neither of which is exposed in the form.
+- **Raw JSON** — **Settings: Open settings.json** opens the file itself. Saving this file reloads settings and live-applies changes that do not require a restart. Invalid JSON is saved for further editing, but leaves the current settings active and reports the error. Needed for the `lsp` settings and `formatters`, neither of which is exposed in the form.
 
 Closing the settings tab with unapplied edits discards them.
 
