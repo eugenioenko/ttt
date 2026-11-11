@@ -378,6 +378,7 @@
   "files.noSubdirectories": "No subdirectories",
   "files.trashFailed": "Could not move {name} to Trash: {error}",
   "formatter.emptyOutput": "Formatter produced empty output for a nonempty document",
+  "formatter.timeout": "Formatter timed out after {seconds} seconds",
   "general.abort": "Abort",
   "general.add": "Add",
   "general.addFolder": "Add Folder",
