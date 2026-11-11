@@ -10,7 +10,6 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
-	"os"
 	"reflect"
 	"time"
 )
@@ -30,7 +29,13 @@ func configuredDiffContext(contextMode string) ui.DiffContextMode {
 }
 
 func (a *App) ReloadSettings() {
-	s, err := config.ReadSettings()
+	var s config.Settings
+	var err error
+	if a.customSettings {
+		s, err = config.ReadSettingsFile(a.settingsPath)
+	} else {
+		s, err = config.ReadSettings()
+	}
 	if err != nil {
 		a.StatusWarn(i18n.Format("settings.loadFailed", i18n.Args{"error": err.Error()}))
 		return
@@ -40,12 +45,7 @@ func (a *App) ReloadSettings() {
 }
 
 func (a *App) reloadSavedSettings(path string) {
-	saved, err := os.Stat(path)
-	if err != nil {
-		return
-	}
-	settings, err := os.Stat(config.ConfigFilePath("settings.json"))
-	if err == nil && os.SameFile(saved, settings) {
+	if a.settingsPath != "" && samePath(path, a.settingsPath) {
 		a.ReloadSettings()
 	}
 }

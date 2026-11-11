@@ -18,7 +18,9 @@ There are two ways to change settings:
 
 Closing the settings tab with unapplied edits discards them.
 
-Both write the same file, so you can move between them freely.
+Both edit the same file. Close and reopen an existing settings form after changing the raw JSON so its draft reflects the saved values.
+
+Saving a file selected with `--config` also reloads that file. Automatic reload matches the configured path; use **Reload Settings** when editing it through a different symlink alias.
 
 ## Top-level
 

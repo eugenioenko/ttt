@@ -687,7 +687,7 @@ func LoadSettings() Settings {
 
 func ReadSettings() (Settings, error) {
 	for _, dir := range configPaths() {
-		s, err := readSettingsFile(filepath.Join(dir, "settings.json"))
+		s, err := ReadSettingsFile(filepath.Join(dir, "settings.json"))
 		if !os.IsNotExist(err) {
 			return s, err
 		}
@@ -697,7 +697,7 @@ func ReadSettings() (Settings, error) {
 	return s, nil
 }
 
-func readSettingsFile(path string) (Settings, error) {
+func ReadSettingsFile(path string) (Settings, error) {
 	s := DefaultSettings()
 	data, err := os.ReadFile(path)
 	if err == nil {
@@ -712,7 +712,7 @@ func readSettingsFile(path string) (Settings, error) {
 
 func SaveSettings(s Settings) error {
 	path := ConfigFilePath("settings.json")
-	if _, err := readSettingsFile(path); err != nil && !os.IsNotExist(err) {
+	if _, err := ReadSettingsFile(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	data, err := json.MarshalIndent(s, "", "  ")

@@ -83,6 +83,8 @@ type App struct {
 	imageCellW      int
 	imageCellH      int
 	Settings        *config.Settings
+	settingsPath    string
+	customSettings  bool
 	State           config.State
 	Workspace       *workspace.Workspace
 	Palette         *ui.TerminalColorPalette

@@ -14,15 +14,17 @@ import (
 type AppConfig struct {
 	Keybindings   []KeyBinding
 	Settings      Settings
+	SettingsFile  string
 	SettingsError error
 	Theme         ThemeConfig
 }
 
 func Load(settingsFile string) AppConfig {
 	cfg := AppConfig{
-		Keybindings: DefaultKeybindings(),
-		Settings:    DefaultSettings(),
-		Theme:       DefaultTheme(),
+		Keybindings:  DefaultKeybindings(),
+		Settings:     DefaultSettings(),
+		SettingsFile: settingsFile,
+		Theme:        DefaultTheme(),
 	}
 
 	paths := configPaths()
@@ -34,7 +36,7 @@ func Load(settingsFile string) AppConfig {
 	}
 
 	if settingsFile != "" {
-		cfg.Settings, cfg.SettingsError = readSettingsFile(settingsFile)
+		cfg.Settings, cfg.SettingsError = ReadSettingsFile(settingsFile)
 	} else {
 		cfg.Settings, cfg.SettingsError = ReadSettings()
 	}

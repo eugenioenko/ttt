@@ -9,10 +9,11 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func TestSavingSettingsAppliesBeforeNextSettingsWrite(t *testing.T) {
-	for _, mode := range []string{"save", "save-as", "relative", "symlink", "form", "unrelated"} {
+	for _, mode := range []string{"save", "save-as", "relative", "form", "unrelated"} {
 		t.Run(mode, func(t *testing.T) {
 			a, path := settingsSaveApp(t)
 			savedPath := path
@@ -25,11 +26,6 @@ func TestSavingSettingsAppliesBeforeNextSettingsWrite(t *testing.T) {
 				savedPath, err = filepath.Rel(cwd, path)
 				if err != nil {
 					t.Fatal(err)
-				}
-			case "symlink":
-				savedPath = filepath.Join(t.TempDir(), "linked.json")
-				if err := os.Symlink(path, savedPath); err != nil {
-					t.Skipf("symlinks unavailable: %v", err)
 				}
 			case "unrelated":
 				savedPath = filepath.Join(t.TempDir(), "settings.json")
@@ -116,6 +112,53 @@ func TestFailedSettingsSaveDoesNotApplyEdits(t *testing.T) {
 	a.doSaveFile(nil)
 	if !a.EditorGroup.ActiveBuffer().Dirty || a.Settings.Editor.TabSize != 7 {
 		t.Errorf("failed save applied settings: dirty=%v tabSize=%d", a.EditorGroup.ActiveBuffer().Dirty, a.Settings.Editor.TabSize)
+	}
+}
+
+func TestCustomSettingsSaveAndReload(t *testing.T) {
+	previous := config.OverrideConfigDir
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = previous })
+	defaultPath := filepath.Join(config.OverrideConfigDir, "settings.json")
+	original := `{"editor":{"tabSize":6}}`
+	if err := os.WriteFile(defaultPath, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	custom := filepath.Join(t.TempDir(), "custom.json")
+	if err := os.WriteFile(custom, []byte(`{"editor":{"tabSize":7}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Load(custom)
+	borders := BuildBorderSet(cfg.Theme.Borders)
+	a := BuildAppFromConfig(&cfg, &borders, workspace.New(nil), nil)
+	t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+	if err := a.EditorGroup.OpenFile(custom); err != nil {
+		t.Fatal(err)
+	}
+	replaceSettingsBuffer(a, `{"editor":{"tabSize":2}}`)
+	a.SaveFile()
+	if a.Settings.Editor.TabSize != 2 {
+		t.Errorf("custom save did not apply: tabSize=%d", a.Settings.Editor.TabSize)
+	}
+	a.ReloadSettings()
+	if a.Settings.Editor.TabSize != 2 {
+		t.Errorf("reload read the default file: tabSize=%d", a.Settings.Editor.TabSize)
+	}
+	data, err := os.ReadFile(defaultPath)
+	if err != nil || string(data) != original {
+		t.Errorf("custom save changed the default file: %q, error %v", data, err)
+	}
+}
+
+func TestUnrelatedSaveDoesNotRecreateSettingsDirectory(t *testing.T) {
+	a, path := settingsSaveApp(t)
+	if err := os.RemoveAll(filepath.Dir(path)); err != nil {
+		t.Fatal(err)
+	}
+	a.NewFileFromText("ordinary file")
+	a.saveFileAs(filepath.Join(t.TempDir(), "ordinary.txt"), nil)
+	if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Errorf("ordinary save recreated settings directory: %v", err)
 	}
 }
 
