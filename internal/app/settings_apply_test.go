@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -82,7 +83,7 @@ func TestSidebarDraggedClosedRestoresUsableWidth(t *testing.T) {
 // Assigning the whole working struct instead would roll them back.
 func TestCommitToLeavesUnownedSettingsAlone(t *testing.T) {
 	opened := config.DefaultSettings()
-	v := &settingsView{working: opened, categories: settingsCategories()}
+	v := &settingsView{working: opened, baseline: opened, categories: settingsCategories()}
 	v.working.Editor.TabSize = 7
 
 	live := opened
@@ -112,7 +113,7 @@ func TestCommitToCoversEveryField(t *testing.T) {
 	for _, cat := range settingsCategories() {
 		for _, f := range cat.Fields {
 			switch f.Kind {
-			case settingSection:
+			case settingSection, settingShortcut:
 			case settingBool:
 				if f.GetBool == nil || f.SetBool == nil {
 					t.Errorf("%s → %s: bool field missing an accessor", cat.Title, f.Label)
@@ -127,6 +128,45 @@ func TestCommitToCoversEveryField(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestToggleIndentGuidesPersistsAndAppliesToEditorAndDiff(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	a := buildTestApp(t, config.DefaultSettings())
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-        old\n+        new\n")
+	a.EditorGroup.OpenDiffTab("diff", "Diff", "test.go", fd, nil, nil, false)
+	a.ToggleIndentGuides()
+
+	if !a.Settings.Editor.IndentGuides || !a.EditorGroup.Editor.IndentGuides {
+		t.Fatal("indent guides were not enabled on the editor")
+	}
+	d := a.EditorGroup.ActiveDiffWidget()
+	if d == nil {
+		t.Fatal("diff tab was not active")
+	}
+	const width, height = 60, 6
+	grid := make([][]term.Cell, height)
+	for y := range grid {
+		grid[y] = make([]term.Cell, width)
+	}
+	d.SetRect(ui.Rect{W: width, H: height})
+	d.Render(ui.NewRenderSurface(grid, ui.Rect{W: width, H: height}))
+	guides := 0
+	for _, row := range grid {
+		for _, cell := range row {
+			if cell.Ch == '│' && cell.Style == term.StyleIndentGuide {
+				guides++
+			}
+		}
+	}
+	if guides < 2 {
+		t.Fatalf("diff pane rendered %d indent guides, want at least 2", guides)
+	}
+	if !config.LoadSettings().Editor.IndentGuides {
+		t.Fatal("indent guides were not persisted")
 	}
 }
 

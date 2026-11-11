@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -187,7 +189,7 @@ func TestQuitSaveAllCancellation(t *testing.T) {
 }
 
 func TestQuitSaveAllSaveGuards(t *testing.T) {
-	for _, guard := range []string{"disk change", "read only", "named failure", "unnamed failure", "replace"} {
+	for _, guard := range []string{"disk change", "read only", "named failure", "unnamed failure", "unnamed failure long path", "replace"} {
 		t.Run(guard, func(t *testing.T) {
 			h := newTestHarness(t, 100, 28)
 			defer h.stop()
@@ -207,7 +209,7 @@ func TestQuitSaveAllSaveGuards(t *testing.T) {
 				if err := os.Mkdir(path, 0755); err != nil {
 					t.Fatal(err)
 				}
-			case "unnamed failure", "replace":
+			case "unnamed failure", "unnamed failure long path", "replace":
 				h.exec("file.new")
 				h.typeText("scratch")
 			}
@@ -225,9 +227,38 @@ func TestQuitSaveAllSaveGuards(t *testing.T) {
 				h.pressRune('c')
 			case "named failure":
 				h.pressRune('o')
-			case "unnamed failure":
-				h.typeText(filepath.Join(h.dir, "missing", "scratch.txt"))
+			case "unnamed failure", "unnamed failure long path":
+				dir := filepath.Join(h.dir, "missing")
+				if guard == "unnamed failure long path" {
+					// The space before the suffix forces "does not exist" across rows.
+					dir = filepath.Join(h.dir, "long temporary directory "+strings.Repeat("x", 40))
+				}
+				buf := h.app.EditorGroup.ActiveBuffer()
+				h.typeText(filepath.Join(dir, "scratch.txt"))
 				h.pressKey(tcell.KeyEnter, tcell.ModNone)
+				adapter, ok := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+				if !ok {
+					t.Fatalf("expected a missing-directory dialog, got %T", h.app.Root.TopOverlayWidget())
+				}
+				dialog, ok := adapter.Inner().(*widgets.DialogWidget)
+				if !ok {
+					t.Fatalf("expected DialogWidget, got %T", adapter.Inner())
+				}
+				message, ok := dialog.Content.(*widgets.ParagraphWidget)
+				if !ok {
+					t.Fatalf("expected a dialog message, got %T", dialog.Content)
+				}
+				want := "The folder " + dir + " does not exist. Create it and save the file?"
+				if message.Text != want {
+					t.Fatalf("missing-directory message = %q, want %q", message.Text, want)
+				}
+				if guard == "unnamed failure long path" && strings.Contains(h.screenText(), "does not exist") {
+					t.Fatal("long-path fixture must split the missing-directory phrase across rows")
+				}
+				clickRowControl(t, h, "Cancel", "Cancel")
+				if h.app.EditorGroup.ActiveBuffer() != buf || !h.app.EditorGroup.IsDirty() || strings.Join(buf.Lines, "\n") != "scratch" {
+					t.Fatal("cancelling the missing-directory prompt must preserve the dirty buffer and its contents")
+				}
 			case "replace":
 				h.typeText(path)
 				h.pressKey(tcell.KeyEnter, tcell.ModNone)

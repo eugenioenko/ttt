@@ -16,7 +16,7 @@ Plugins live in one of two locations:
 
 If a plugin with the same name exists in both locations, the global one takes precedence.
 
-Each plugin is a directory containing a manifest file and one or more Lua source files:
+Each plugin is a directory containing a manifest file and Lua source files or declarative contributions:
 
 ```
 ~/.config/ttt/plugins/my-plugin/
@@ -50,11 +50,12 @@ Every plugin requires a `plugin.ttt.json` manifest file at the root of its direc
 | `description` | string | no       | Shown in the plugin list dialog.                    |
 | `version`     | string | no       | Semver version string.                              |
 | `author`      | string | no       | Plugin author name.                                 |
-| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars` or `themes`. |
+| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars`, `themes`, or `languages`. |
 | `api`         | number | no       | Plugin API version the plugin targets. Defaults to `1` when omitted. The editor refuses to load plugins that target a newer API than it supports. |
 | `permissions` | object | no       | Object declaring required permissions (see [Permissions Reference](#permissions-reference)). |
 | `grammars`    | array  | no       | TextMate grammars the plugin contributes (see [Grammar plugins](#grammar-plugins)). |
 | `themes`      | array  | no       | Theme JSON files the plugin contributes (see [Theme plugins](#theme-plugins)). |
+| `languages`   | array  | no       | Interface translation catalogs (see [Language packs](#language-packs)). |
 
 ### Minimal Example
 
@@ -103,6 +104,39 @@ Each entry requires a `path` relative to the plugin directory. The optional `nam
 The approval dialog lists every theme. After approval, ttt copies the files into `~/.config/ttt/themes/plugins/<plugin-name>/`. **Switch Theme** lists them as `plugins/<plugin-name>/<theme-name>`; these names also work in the `theme` setting. This namespace prevents collisions with other plugins and manually installed themes. Installing a plugin does not select its theme.
 
 Updating or reloading replaces the plugin's theme files, removes contributions dropped from its manifest, and refreshes an active theme immediately. Invalid source files leave the previously installed themes intact. Disabling keeps the installed themes available. Uninstalling removes them; if the active theme was removed, ttt switches to its default colors and saves that selection.
+
+### Language packs
+
+A language pack translates the core editor interface. It needs no Lua entry point or permissions:
+
+```json
+{
+  "name": "ttt-i18n-es",
+  "displayName": "Español Language Pack",
+  "version": "0.1.0",
+  "languages": [{
+    "locale": "es",
+    "name": "Español",
+    "path": "messages.json",
+    "sourceCommit": "e2c249393ab523cea4a5229640cd0c8ba641e13c",
+    "tttVersion": "1.12.0"
+  }]
+}
+```
+
+`locale` is a BCP 47 language tag, such as `es`, `pt-BR`, or `zh-TW`; `name` is its native display name. Each locale can have one installed provider. English (`en`) is built in. `path` points to a flat JSON string map using the keys from `internal/i18n/en.json`, for example `{"general.save": "Guardar"}`. Paths are relative to the plugin directory and cannot escape it, including through symlinks. Catalog files are limited to 2 MiB each. Preserve named placeholders and their occurrence counts exactly; icons belong in the editor's icon definitions.
+
+The optional `sourceCommit` identifies the full 40-character commit ID in `eugenioenko/ttt` whose `internal/i18n/en.json` was used for translation. During managed plugin installation or update, the host downloads that English catalog into `~/.config/ttt/languages/sources/<commit>.json`, or `$TTT_CONFIG_DIR/languages/sources/<commit>.json` when `TTT_CONFIG_DIR` is set. Installed languages referencing the same commit share one cached English file, which remains available offline. Initial installation fails if a required source cannot be obtained; a failed automatic update keeps the previous language cache.
+
+Copying a plugin directory manually does not download its English source. If its manifest declares `sourceCommit`, download `https://raw.githubusercontent.com/eugenioenko/ttt/<commit>/internal/i18n/en.json` into the configured source cache described above before starting ttt, replacing `<commit>` with the manifest's `sourceCommit`. If that file is missing or invalid, ttt logs an error and does not install the language contribution. A pack without `sourceCommit` does not need this file. Installing through the Plugins panel prepares any required source automatically.
+
+When loading a translation, ttt compares the original English value with its embedded English value. Changed or missing source values fall back to English per message. Missing, empty, unknown, or invalid-placeholder translations also fall back individually. Duplicate keys or malformed JSON reject a file and leave the previous installation intact. Without `sourceCommit`, missing-message and placeholder validation still apply.
+
+After approval, ttt caches the files under `~/.config/ttt/languages/plugins/<plugin-name>/`. Installing a pack adds it to **Change Display Language** and **Settings → General → Display language** without selecting it. Selection takes effect after restarting. Disabling the plugin keeps the cached language available; uninstalling removes it and selects English if necessary. Updating or reloading replaces the bundled contributions.
+
+`tttVersion` identifies the editor release the catalog targets, separately from the plugin's `version`. **Update languages on upgrade** (`language.autoUpdate`) defaults to on. When a newer ttt version starts, it checks installed packs from public GitHub repositories for a catalog targeting that version or later. The check runs in the background, downloads the manifest and JSON files from one pinned commit, and replaces the cache only after validation. It never updates or executes Lua code. Failed or unavailable updates keep the cached language; an updated active language takes effect after restarting. Versions without release numbers, such as `dev`, skip this check. Turn the setting off to manage updates manually with **Plugins: Update**.
+
+The [ttt-plugins language packs](https://github.com/eugenioenko/ttt-plugins/tree/main/i18n) include common-language packs and a local Codex CLI script that compares one shared English snapshot and translates only added or changed messages. Use `make languages` to generate and `make languages-check` to validate. Per-language ignore lists and `--ignore-keys` preserve selected translations even when their English text changes. These ignored keys are skipped during generation, retaining their existing translations as approved against the new English source. Runtime loading does not read ignore lists; placeholder validation still applies. Third-party plugin UI copy is owned by each plugin and is not translated by these core catalogs.
 
 ### Grammar plugins
 
@@ -706,6 +740,11 @@ local id, err = term.spawn{
 }
 if not id then error(err) end
 
+-- Or open it as an editor tab, here a markdown editor on the active file
+-- (ttt.editor requires editor.read). The tab is titled after label, or the program.
+local editor = require("ttt.editor")
+term.spawn{ shell = "edamame", args = {editor.file_path()}, location = "editor" }
+
 -- 2. Send input to the terminal (requires terminal.control)
 term.send(id, "Review the staged diff\n")   -- writes to PTY stdin; trailing newline acts as Enter
 
@@ -720,11 +759,11 @@ end
 
 -- 5. List all open terminal tabs (requires terminal.read)
 for _, t in ipairs(term.list()) do
-  ttt.log(string.format("Tab %s [%s] %dx%d", t.id, t.label, t.cols, t.rows))
+  ttt.log(string.format("Tab %s [%s] in %s %dx%d", t.id, t.label, t.location, t.cols, t.rows))
 end
 
 -- 6. Focus the terminal tab (requires terminal.control)
-term.focus(id)                              -- reveals the bottom panel and selects this tab
+term.focus(id)                              -- reveals the panel or editor tab and focuses it
 
 -- 7. Close the terminal tab (requires terminal.control)
 local ok, err = term.close(id)              -- terminates child process and removes tab
@@ -734,13 +773,17 @@ local ok, err = term.close(id)              -- terminates child process and remo
 
 | Function | Permission | Description |
 |---|---|---|
-| `term.spawn(spec)` | `terminal.control` | Spawns a new terminal tab running the specified program. `spec` is a table containing `shell` (string), `args` (array of strings), `cwd` (string), `label` (string, up to 2 characters displayed in tab strip), and `env` (map of `KEY = "val"` or array of `"KEY=val"` strings). Returns `id` (string) on success, or `nil, err`. |
+| `term.spawn(spec)` | `terminal.control` | Spawns a new terminal tab running the specified program. `spec` is a table containing `shell` (string), `args` (array of strings), `cwd` (string), `label` (string; the panel's tab strip shows up to 2 characters, an editor tab shows all of it), `env` (map of `KEY = "val"` or array of `"KEY=val"` strings), and `location` (`"panel"`, the default, for a terminal panel tab, or `"editor"` for an editor tab titled `label` or the program name). Returns `id` (string) on success, or `nil, err`. |
 | `term.send(id, text)` | `terminal.control` | Writes input string to the terminal's PTY. Pass a trailing `\n` or `\r` to submit commands. Returns `true` on success, or `nil, err`. |
-| `term.focus(id)` | `terminal.control` | Reveals the bottom panel (if hidden) and switches active tab focus to the specified terminal. Returns `true` on success, or `nil, err`. |
-| `term.close(id)` | `terminal.control` | Terminates the terminal child process, closes the PTY, and removes the tab from the terminal panel. Returns `true` on success, or `nil, err`. |
+| `term.focus(id)` | `terminal.control` | Selects the terminal's tab and focuses it, revealing the bottom panel first for a panel terminal. Returns `true` on success, or `nil, err`. |
+| `term.close(id)` | `terminal.control` | Terminates the terminal child process, closes the PTY, and removes its tab (from the terminal panel or the editor). Returns `true` on success, or `nil, err`. |
 | `term.read(id, [max_bytes])` | `terminal.read` | Returns the retained raw PTY stream output (including ANSI escape sequences and command echo) up to `max_bytes` (capped at 64 KB; passing `0` or omitting returns all retained bytes). Returns `string` on success, or `nil, err`. |
 | `term.screen(id)` | `terminal.read` | Returns the current visible screen content as plain text lines separated by `\n` with trailing blanks trimmed. Automatically selects the active buffer (including alternate screen buffer when full-screen TUIs like vim or agents run). Contains no ANSI escape codes, making it ideal for regex pattern matching. Returns `string` on success, or `nil, err`. |
-| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, cols = number, rows = number }, … }`. Returns an empty table if none are open. |
+| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, location = "panel" \| "editor", cols = number, rows = number }, … }`. Returns an empty table if none are open. |
+| `term.request_palette()` | `terminal.palette` | Starts a fresh asynchronous serial capture of OSC 10/11/12/17 and OSC 4 indices 0–15. Returns `true`; requests during a capture coalesce into one additional capture after it finishes. A later call after completion starts a fresh capture, allowing plugin reload to reflect changed terminal colors. |
+| `term.palette()` | `terminal.palette` | Reads `{ status = "pending" \| "unavailable" \| "partial" \| "complete", colors = { ["10"] = color, ["11"] = color, ["4;0"] = color, … } }` without starting or restarting capture. No polling or terminal query occurs from reads. Each of the 20 serial queries has a 350 ms timeout, so an unresponsive terminal can take up to about 7 seconds to settle. Missing replies do not erase colors already captured. OSC replies have no request ID, so an unusually late reply may be mistaken for a later query of the same color. Cancellation stops further queries on shutdown, but cannot interrupt an OS-level TTY write already blocked; that goroutine may outlive shutdown until the write returns. This permission grants access only to captured color values, not terminal history or PTY output. |
+
+During palette queries, a lone Escape is held for at most 20 ms before reaching tcell's normal key parser, provided no partial reply is already buffered. Escape following a partial matching reply is ambiguous with the start of its terminator: it can remain buffered through the query timeout and the subsequent 350 ms recovery window, and may combine with the next key. If a reply is truncated, TTT suppresses its remaining bytes for at most another 350 ms after the query timeout, or until a terminator or a new non-terminating Escape sequence arrives. This bounds keyboard suppression when the terminal never finishes a reply. Text typed during that recovery window can be indistinguishable from a reply tail; tails arriving after recovery may instead reach the normal input parser.
 
 #### Raw Tail vs. Screen Text
 
@@ -1286,6 +1329,7 @@ panel:tree({
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
 | `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
+| `active` | string | `nil` | `id` of the item to mark as current, like the Explorer's open file. It stays highlighted when the widget is not focused, unlike the keyboard selection, which only shows while focused. Omit it to mark nothing. |
 | `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 **Keyboard navigation:** When focused, Up/Down arrows move selection, Enter activates `on_select`, Left/Right collapse/expand nodes. Shift+Enter opens the context menu on the selected node.
@@ -1329,6 +1373,7 @@ panel:list({
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
 | `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
+| `active` | string | `nil` | `id` of the item to mark as current, like the Explorer's open file. It stays highlighted when the widget is not focused, unlike the keyboard selection, which only shows while focused. Omit it to mark nothing. |
 | `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 ### Button
@@ -2016,6 +2061,10 @@ The plugin panel manages its own focus system. When the plugin panel is focused:
 
 Labels, titles, and key-value lists are not focusable. If your panel has only non-focusable widgets and raw cells, all events go directly to `on_event`.
 
+Built-in input editing and Markdown copy shortcuts follow [`keyboard.modifierKey`](/reference/settings/#keyboard), including live changes. Lua key interceptors (`key.press`), fallback `on_event` handlers, and command-line `on_key` hooks also follow this setting: in `super` and `control+super` modes, Super/Cmd shortcuts are reported as Ctrl shortcuts. For example, Super+R arrives as `{ key = "Ctrl-R", mod = "ctrl" }`, so existing Ctrl handlers work without changes.
+
+These handlers cannot distinguish Ctrl from Super in those modes. Physical Ctrl events remain available to Lua hooks in every mode; in `control` mode, Super is reported as `mod = "super"`. Holding Ctrl and Super together preserves both modifiers. Native event routing and terminal input retain the original events.
+
 ## Event Handling
 
 There are two levels of event handling:
@@ -2055,8 +2104,8 @@ For key and mouse events not consumed by widgets, the `on_event` function receiv
                      -- "Backspace", "Delete", "Home", "End", "PgUp", "PgDn",
                      -- or the character itself ("a", "A", "1", "/", etc.)
   rune = "a",        -- only set for printable character keys
-  mod = "ctrl",      -- "ctrl", "alt", "shift", joined with "+" when combined
-                     -- (e.g. "ctrl+shift"); nil when no modifier is held
+  mod = "ctrl",      -- "ctrl", "alt", "shift", "super", joined in that order with "+"
+                     -- (e.g. "ctrl+shift" or "shift+super"); nil when no modifier is held
 }
 ```
 
@@ -3082,6 +3131,8 @@ File and editor callbacks receive the file path of the affected file as their si
 
 Note that control keys set **both** fields: `ctrl+d` arrives as `{ key = "Ctrl-D", mod = "ctrl" }`. Match on `key`, and check `mod` only when you need to distinguish (for example `"j"` from `alt+j`).
 
+In `super` and `control+super` keyboard modes, Super+D produces the same Ctrl-D event. This conversion also applies to panel `on_event` and command-line `on_key` callbacks; see [Focus and Keyboard Navigation](#focus-and-keyboard-navigation) for the modifier rules.
+
 ```lua
 local events = require("ttt.events")
 
@@ -3339,6 +3390,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `system.env`     | boolean  | Read environment variables (`ttt.system.env`).    |
 | `terminal.control` | boolean | Spawn terminal tabs, send text, focus tabs, and close tabs (`ttt.terminal`). Not constrained by `system.exec` or `fs.*`. |
 | `terminal.read`  | boolean  | Read raw PTY output and visible screen text, and list open terminals (`ttt.terminal`). Accesses any tab, including user tabs. |
+| `terminal.palette` | boolean | Request and read captured terminal color values (`ttt.terminal.request_palette`, `ttt.terminal.palette`); does not grant access to terminal tabs or PTY output. |
 | `network.rpc`    | string[] | Open RPC connections to the listed endpoints (`ttt.rpc`). See [RPC endpoint scoping](#rpc-endpoint-scoping). |
 | `network.http`   | boolean \| string[] | Make outbound HTTP requests (`ttt.net`). `true` allows any destination, local services included; an array (`["api.github.com", "127.0.0.1:4250"]`) restricts requests to those hosts or IPs, each with an optional port. See [Network host scoping](#network-host-scoping). |
 | `events.file`    | boolean  | Listen for file events: `file.open`, `file.close`, `file.save`. |

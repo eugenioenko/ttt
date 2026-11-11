@@ -109,7 +109,9 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 	columns.FixedHeight = folderPickerRows
 	columns.Gap = 1
 
-	dialog.SetContent(widgets.NewVStackWidget(fp.input, columns))
+	content := widgets.NewVStackWidget(fp.input, columns)
+	content.Gap = 1
+	dialog.SetContent(content)
 	dialog.Buttons = []widgets.DialogButton{
 		{Label: i18n.Text("general.cancelButton"), Handler: func() { a.DismissDialog() }},
 		{Label: "&" + confirmLabel, Handler: func() { submit(fp.input.Text()) }},
@@ -255,6 +257,7 @@ func placeNodes(favs []favoriteDir, places []workspace.Place) []*widgets.TreeNod
 		}
 		nodes = append(nodes, &widgets.TreeNode{Heading: true})
 	}
+	nodes = append(nodes, &widgets.TreeNode{Label: i18n.Text("general.places"), Muted: true, Heading: true})
 	for _, p := range places {
 		nodes = append(nodes, &widgets.TreeNode{ID: p.Path, Label: p.Name})
 	}

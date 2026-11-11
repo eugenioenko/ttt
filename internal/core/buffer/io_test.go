@@ -84,6 +84,49 @@ func TestLoadNoShowTrailingNewline(t *testing.T) {
 	}
 }
 
+func TestLoadSavePreservesTrailingNewlines(t *testing.T) {
+	for _, ending := range []struct{ name, value string }{{"LF", "\n"}, {"CRLF", "\r\n"}} {
+		for _, tc := range []struct {
+			name string
+			text string
+		}{
+			{"empty", ""},
+			{"final newline", "a\n"},
+			{"one trailing blank", "a\n\n"},
+			{"two trailing blanks", "a\n\n\n"},
+			{"newline only", "\n"},
+			{"blank lines only", "\n\n\n"},
+		} {
+			t.Run(ending.name+"/"+tc.name, func(t *testing.T) {
+				content := strings.ReplaceAll(tc.text, "\n", ending.value)
+				path := filepath.Join(t.TempDir(), "trailing.txt")
+				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				for cycle := range 3 {
+					b := &Buffer{ShowTrailingNewline: true, InsertFinalNewline: true}
+					if err := b.LoadFile(path); err != nil {
+						t.Fatal(err)
+					}
+					if want := strings.Split(tc.text, "\n"); !slices.Equal(b.Lines, want) {
+						t.Fatalf("cycle %d: loaded %q, want %q", cycle, b.Lines, want)
+					}
+					if err := b.SaveFile(path); err != nil {
+						t.Fatal(err)
+					}
+					data, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if string(data) != content {
+						t.Fatalf("cycle %d: saved %q, want %q", cycle, data, content)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestShowTrailingNewlineDoesNotAffectSave(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "save.txt")

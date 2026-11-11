@@ -33,7 +33,9 @@ func (a *App) ToggleTerminalFullscreen() {
 
 func (a *App) focusedRegion() string {
 	f := a.Root.Focused
-	if f == a.Sidebar || f == a.Sidebar.ActiveWidget() {
+	// Plugin row menu restores focus to InstalledTree, not the panel adapter.
+	inPlugins := a.PluginsPanel != nil && f == a.PluginsPanel.InstalledTree
+	if f == a.Sidebar || f == a.Sidebar.ActiveWidget() || inPlugins {
 		return "sidebar"
 	}
 	if f == a.BottomPanel || f == a.BottomPanel.ActiveWidget() {
@@ -100,6 +102,19 @@ func (a *App) focusRegion(region string) {
 	}
 }
 
+func (a *App) ScrollUp()       { a.scrollEditor(-1) }
+func (a *App) ScrollDown()     { a.scrollEditor(1) }
+func (a *App) ScrollLineUp()   { a.EditorGroup.ScrollViewportLines(-1) }
+func (a *App) ScrollLineDown() { a.EditorGroup.ScrollViewportLines(1) }
+
+func (a *App) scrollEditor(direction int) {
+	if lines := a.Settings.Editor.ScrollLines; lines > 0 {
+		a.EditorGroup.ScrollLines(direction * lines)
+		return
+	}
+	a.EditorGroup.ScrollHalfPage(direction)
+}
+
 func (a *App) contextNextTab() {
 	switch a.focusedRegion() {
 	case "sidebar":
@@ -155,17 +170,25 @@ func (a *App) FocusPanel() {
 }
 
 func (a *App) ShowKeybindings() {
+	a.showKeybindings("")
+}
+
+func (a *App) showKeybindings(commandID string) {
 	defaults := make(map[string]string)
 	for _, kb := range config.DefaultKeybindings() {
-		defaults[kb.Command] = FormatKeyBinding(kb.Key)
+		defaults[kb.Command] = FormatKeyBinding(kb.Key, a.Root.ControlModifiers)
 	}
 
 	w := ui.NewKeybindingsWidget(a.Reg.List())
+	if cmd, ok := a.Reg.Get(commandID); ok {
+		w.SetFilter(cmd.Title)
+	}
+	w.ControlModifiers = &a.Root.ControlModifiers
 	w.Borders = a.Borders
 	w.GetShortcut = func(cmdID string) string {
 		for _, kb := range a.Keybindings {
 			if kb.Command == cmdID {
-				return FormatKeyBinding(kb.Key)
+				return FormatKeyBinding(kb.Key, a.Root.ControlModifiers)
 			}
 		}
 		return ""
@@ -223,6 +246,8 @@ func (a *App) ShowKeybindings() {
 	}
 	w.OnHelp = func() {
 		content := widgets.NewKeyValueListWidget([]widgets.KeyValueEntry{
+			{Key: "Mod", Value: i18n.Text("keybindings.modifierEither")},
+			{Key: "Super", Value: i18n.Text("keybindings.modifierSuper")},
 			{Key: "Enter", Value: i18n.Text("keybindings.editSelectedShortcut")},
 			{Key: "Backspace", Value: i18n.Text("keybindings.resetToDefault")},
 			{Key: "Delete", Value: i18n.Text("keybindings.clearShortcut")},
@@ -321,6 +346,15 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "sidebar.apps", Title: i18n.Text("command.showApps"),
+		Keywords: []string{"view", "apps", "applications", "launch", "programs"},
+		Handler:  app.ShowApps,
+	})
+	reg.Register(command.Command{ID: "apps.add", Title: i18n.Text("apps.add"), Handler: app.AddApp})
+	reg.Register(command.Command{ID: "apps.addOpenWith", Hidden: true, Handler: app.AddOpenWithApp})
+	reg.Register(command.Command{ID: "apps.openCurrentFileWith", Title: i18n.Text("command.openCurrentFileWith"), Keywords: []string{"file", "open", "apps", "preview", "external"}, Handler: app.OpenCurrentFileWith})
+
+	reg.Register(command.Command{
 		ID: "sidebar.wider", Title: i18n.Text("command.viewIncreaseSidebarWidth"),
 		Keywords: []string{"view", "resize"},
 		Handler: func() {
@@ -342,6 +376,30 @@ func registerViewCommands(app *App) {
 		ID: "sidebar.focus", Title: i18n.Text("command.viewFocusSidebar"),
 		Keywords: []string{"view"},
 		Handler:  app.FocusSidebar,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollUp", Title: i18n.Text("command.scrollUp"),
+		Keywords: []string{"view", "scroll", "page", "half", "up"},
+		Handler:  app.ScrollUp,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollDown", Title: i18n.Text("command.scrollDown"),
+		Keywords: []string{"view", "scroll", "page", "half", "down"},
+		Handler:  app.ScrollDown,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollLineUp", Title: i18n.Text("command.scrollLineUp"),
+		Keywords: []string{"view", "scroll", "line", "viewport", "up"},
+		Handler:  app.ScrollLineUp,
+	})
+
+	reg.Register(command.Command{
+		ID: "view.scrollLineDown", Title: i18n.Text("command.scrollLineDown"),
+		Keywords: []string{"view", "scroll", "line", "viewport", "down"},
+		Handler:  app.ScrollLineDown,
 	})
 
 	reg.Register(command.Command{
@@ -448,6 +506,22 @@ func registerViewCommands(app *App) {
 		Keywords: []string{"terminal", "shell", "console", "bash"},
 		Handler:  app.SpawnTerminal,
 	})
+	reg.Register(command.Command{
+		ID: "terminal.sendNextKey", Title: i18n.Text("command.terminalSendNextKey"),
+		Keywords: []string{"terminal", "key", "shortcut", "forward"},
+		Handler:  app.SendNextTerminalKey,
+	})
+	reg.Register(command.Command{
+		ID: "terminal.toggleShortcutForwarding", Title: i18n.Text("command.terminalToggleShortcutForwarding"),
+		Keywords: []string{"terminal", "key", "shortcut", "forward", "toggle"},
+		Handler:  app.ToggleTerminalShortcutForwarding,
+	})
+
+	reg.Register(command.Command{
+		ID: "terminal.newInEditor", Title: i18n.Text("command.terminalNewEditorTerminal"),
+		Keywords: []string{"terminal", "shell", "console", "tab", "editor"},
+		Handler:  app.SpawnEditorTerminal,
+	})
 
 	reg.Register(command.Command{
 		ID: "terminal.toggle", Title: i18n.Text("command.terminalToggleTerminal"),
@@ -459,6 +533,12 @@ func registerViewCommands(app *App) {
 		ID: "terminal.fullscreen", Title: i18n.Text("command.terminalToggleFullscreen"),
 		Keywords: []string{"terminal", "shell", "maximize"},
 		Handler:  app.ToggleTerminalFullscreen,
+	})
+
+	reg.Register(command.Command{
+		ID: "terminal.close", Title: i18n.Text("command.terminalClose"),
+		Keywords: []string{"terminal", "shell", "kill"},
+		Handler:  app.CloseActiveTerminal,
 	})
 
 	reg.Register(command.Command{
@@ -477,6 +557,11 @@ func registerViewCommands(app *App) {
 		ID: "about", Title: i18n.Text("command.aboutTTTEditor"),
 		Keywords: []string{"help", "version", "info"},
 		Handler:  app.ShowAbout,
+	})
+	reg.Register(command.Command{
+		ID: "update.check", Title: i18n.Text("update.checkForUpdates"),
+		Keywords: []string{"help", "version", "update", "upgrade"},
+		Handler:  app.CheckForUpdates,
 	})
 
 }

@@ -7,7 +7,7 @@ Beyond the built-in themes, there are 78 extra themes available covering a wide 
 
 ## Installation
 
-To install a theme, download the `.json` file and place it in `~/.config/ttt/themes/`. TTT will pick it up automatically in the theme picker (open it from the command palette or **View > Switch Theme**).
+To install a theme, download the `.json` file and place it in `~/.config/ttt/themes/`. TTT will pick it up automatically in the theme picker (open it from the command palette or **Options > Theme**).
 
 Each theme below shows a code (e.g. `19-synthwave`). Use it to download directly:
 

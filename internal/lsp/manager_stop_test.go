@@ -34,6 +34,10 @@ func runFakeServer(mode string) {
 		}
 		switch msg.Method {
 		case "initialize":
+			if mode == "initialize-hang" {
+				fmt.Fprintln(os.Stderr, "initializing")
+				continue
+			}
 			reply(msg.ID, map[string]any{"capabilities": map[string]any{}})
 		case "shutdown":
 			if mode == "hang" {

@@ -100,7 +100,8 @@ ttt.register({
     tui.start("--plugin", plugin, dir);
     tui.setSize(80, 20);
     tui.click(27, 2);
-    tui.click(29, 5);
+    tui.press("arrow_up");
+    tui.press("enter");
     tui.click(29, 2);
     const mixed = tui.snapshot();
     tui.press("arrow_down");

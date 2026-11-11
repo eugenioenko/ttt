@@ -9,6 +9,17 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func TestCommitDetailLeavesModifiedKeysForShortcuts(t *testing.T) {
+	d := twoHunkDetail()
+	renderDetail(d, 60, 8)
+	d.handleDisclosureKey(tcell.NewEventKey(tcell.KeyTab, "", 0))
+	for _, mod := range []tcell.ModMask{tcell.ModCtrl, tcell.ModAlt, tcell.ModMeta} {
+		if d.handleDisclosureKey(tcell.NewEventKey(tcell.KeyEnter, "", mod)) {
+			t.Fatalf("modified Enter with %v activated a plain-key disclosure", mod)
+		}
+	}
+}
+
 func TestCommitDetailKeyboardDisclosures(t *testing.T) {
 	for _, mode := range []DiffMode{DiffModeSplit, DiffModeUnified} {
 		for _, wrap := range []DiffWrapMode{DiffWrapOff, DiffWrapOn} {

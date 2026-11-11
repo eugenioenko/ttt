@@ -17,6 +17,39 @@ func TestDefaultSettings(t *testing.T) {
 	if !s.Editor.InsertSpaces {
 		t.Fatal("expected InsertSpaces true")
 	}
+	if s.Editor.IndentGuides {
+		t.Fatal("expected IndentGuides false")
+	}
+}
+
+func TestKeyboardModifierSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, value := range []string{"", "invalid", ModifierControl, ModifierControlSuper, ModifierSuper} {
+		t.Run(value, func(t *testing.T) {
+			s := DefaultSettings()
+			s.Keyboard.ModifierKey = value
+			if err := SaveSettings(s); err != nil {
+				t.Fatal(err)
+			}
+			got := LoadSettings()
+			want := value
+			if !slices.Contains(KeyboardModifiers, want) {
+				want = ModifierControl
+			}
+			if got.Keyboard.ModifierKey != want {
+				t.Fatalf("modifierKey = %q, want %q", got.Keyboard.ModifierKey, want)
+			}
+			if _, ok := got.Extra["keyboard"]; ok {
+				t.Fatal("keyboard was treated as plugin settings")
+			}
+		})
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadSettings().Keyboard.ModifierKey; got != ModifierControl {
+		t.Fatalf("missing keyboard settings = %q", got)
+	}
 }
 
 func TestSettingsPartialJSON(t *testing.T) {
@@ -37,6 +70,23 @@ func TestSettingsEmptyJSON(t *testing.T) {
 
 	if s.Editor.TabSize != 4 {
 		t.Fatalf("expected TabSize 4, got %d", s.Editor.TabSize)
+	}
+}
+
+func TestIndentGuidesSettingRoundTrips(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.IndentGuides = true
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded Settings
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Editor.IndentGuides {
+		t.Fatal("IndentGuides did not survive settings serialization")
 	}
 }
 

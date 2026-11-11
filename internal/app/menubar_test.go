@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -68,32 +69,52 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 	}
 }
 
-func TestOptionsMenuSeparatesPresentationSubmenusFromCheckboxes(t *testing.T) {
+func TestOptionsMenuGroupsControls(t *testing.T) {
 	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
-	firstSeparator := -1
-	for i, item := range items {
-		if item.IsSep {
-			firstSeparator = i
-			break
+	wantLabels := []string{"Editor", "Code Assist", "Appearance", "Diff Views", "Git Files", "", "Theme", "Settings"}
+	var labels []string
+	for _, item := range items {
+		labels = append(labels, item.Label)
+	}
+	if !slices.Equal(labels, wantLabels) {
+		t.Fatalf("Options labels = %v, want %v", labels, wantLabels)
+	}
+	for _, item := range items[:5] {
+		if len(item.Submenu) == 0 || item.Command != "" || item.Checked != 0 {
+			t.Errorf("category should only open a submenu: %+v", item)
 		}
-		if item.Checked == 0 {
-			t.Fatalf("checkbox group item %q has no checked indicator", item.Label)
+	}
+	if !items[5].IsSep || items[6].Command != "theme.switch" || items[7].Command != "settings.openUI" {
+		t.Fatal("Theme and Settings should follow the final separator")
+	}
+	wantCommands := [][]string{
+		{"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
+		{"options.toggleLSP", "options.toggleLSPHover"},
+		{"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.borderStyle"},
+	}
+	for i, want := range wantCommands {
+		var commands []string
+		for _, item := range items[i].Submenu {
+			commands = append(commands, item.Command)
+			if len(item.Submenu) != 0 || (item.Command == "" && !item.IsSep) {
+				t.Errorf("unexpected nested or inactive control: %+v", item)
+			}
+			if strings.HasPrefix(item.Command, "options.toggle") && item.Checked == 0 {
+				t.Errorf("toggle %q has no checked indicator", item.Label)
+			}
+		}
+		if !slices.Equal(commands, want) {
+			t.Errorf("%s commands = %v, want %v", items[i].Label, commands, want)
 		}
 	}
-	if firstSeparator < 0 || firstSeparator+3 >= len(items) {
-		t.Fatalf("options menu has no presentation section: %+v", items)
+	for _, item := range menuBarMenus[3] {
+		if item.Command == "theme.switch" {
+			t.Error("Theme should move from View to Options")
+		}
 	}
-	if items[firstSeparator+1].Label != "Diff Views" || len(items[firstSeparator+1].Submenu) == 0 {
-		t.Fatalf("first presentation item = %+v", items[firstSeparator+1])
-	}
-	if items[firstSeparator+2].Label != "Git Files" || len(items[firstSeparator+2].Submenu) == 0 {
-		t.Fatalf("second presentation item = %+v", items[firstSeparator+2])
-	}
-	if !items[firstSeparator+3].IsSep {
-		t.Fatalf("presentation section is not followed by a separator: %+v", items[firstSeparator+3])
-	}
-	if items[firstSeparator+1].Checked != 0 || items[firstSeparator+2].Checked != 0 {
-		t.Fatal("presentation submenus should not reserve checkbox indicators")
+	assist := items[1].Submenu
+	if assist[0].Label != "Enable Code Assist" || assist[1].Label != "Hover Information" {
+		t.Fatalf("Code Assist labels = %+v", assist)
 	}
 }
 

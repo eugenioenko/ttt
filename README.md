@@ -166,10 +166,12 @@ Multi-root file tree in the sidebar (Ctrl+K E). When multiple folders are open, 
 
 - Directories sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
+- Press **/** in the explorer or choose **Search in Folders** from its More menu (`explorer.find`) to focus a filter input. It searches loaded file and folder names across all roots and keeps parent folders visible for context. **Up/Down** navigate matches, **Enter** opens the selection, and **Esc** or **✕** clears the filter and hides the input; use quick open to search the whole workspace
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- Deleted files and folders go to system Trash by default. Turn off `explorer.useTrash` in **Settings > Explorer > Files** for permanent deletion
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** expands the tree to the active file and selects it; set `explorer.autoReveal` to do it on every tab switch
-- File-type icons, colored by the theme (glyph mappings from [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)). They need a [Nerd Font](https://www.nerdfonts.com) in your terminal, so they default off; turn them on with `"appearance": { "icons": "nerd-font" }` or **Options > Font Icons**
+- File-type icons, colored by the theme (glyph mappings from [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)). They need a [Nerd Font](https://www.nerdfonts.com) in your terminal, so they default off; turn them on with `"appearance": { "icons": "nerd-font" }` or **Options > Appearance > Font Icons**
 
 ### Search
 
@@ -187,7 +189,7 @@ See [Search](docs-web/src/content/docs/guides/search.md).
 
 Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 
-Working-tree files and files under expanded commits can be shown as a compact directory **Tree** or a full-path **List** (the default). The choice persists in `git.fileView`. File-type icons sit between the status letter and the file name; like the Explorer's, they follow the shared `appearance.icons` setting, need a Nerd Font, and default off — **Options > Font Icons** toggles them. Changes, commit details, and Explorer expose safe **Expand All** and **Collapse All** actions in their relevant menus.
+Working-tree files and files under expanded commits can be shown as a compact directory **Tree** or a full-path **List** (the default). The choice persists in `git.fileView`. File-type icons sit between the status letter and the file name; like the Explorer's, they follow the shared `appearance.icons` setting, need a Nerd Font, and default off — **Options > Appearance > Font Icons** toggles them. Changes, commit details, and Explorer expose safe **Expand All** and **Collapse All** actions in their relevant menus.
 
 **Staging:**
 - **Spacebar** — toggle stage/unstage on the selected file
@@ -241,7 +243,10 @@ Built-in terminal emulator. Press Ctrl+T to toggle the terminal panel, or Alt+T 
 - **Ctrl+K T** to spawn a new terminal tab; multiple tabs with a vertical inner tab bar on the left edge
 - Full VT escape sequence support via [`eugenioenko/xterm-go`](https://github.com/eugenioenko/xterm-go) (a maintained fork of [`gitpod-io/xterm-go`](https://github.com/gitpod-io/xterm-go)) and PTY management via [`aymanbagabas/go-pty`](https://github.com/aymanbagabas/go-pty)
 - True color (24-bit) and 256-color rendering
-- When the terminal is focused, all keys go to the PTY except force keys (Ctrl+T, Alt+T, Ctrl+Q, Ctrl+P, Ctrl+K P, Ctrl+B, F6)
+- Reserved TTT shortcuts and chords work while the terminal is focused. **Ctrl+K P** opens Quick Open; **Ctrl+K Ctrl+P** sends Ctrl+P to the terminal. **Ctrl+K Ctrl+K** sends Ctrl+K for shell kill-line.
+- **Terminal: Send Next Key** is bound to **Ctrl+K** and can be rebound in **Settings → General → Keyboard**, beside the modifier preference. Plain or Shift-only continuations complete TTT chords; a Ctrl/Alt/Super combination goes directly to the terminal, bypassing TTT shortcuts and local clipboard handling. Clicking, changing focus, or closing the terminal cancels forwarding.
+- Enable **Forward shortcuts to terminal** in that same Keyboard section (`terminal.forwardShortcuts`, default `false`) to pass reserved shortcuts and chord prefixes directly to terminal programs. Terminal-local copy/paste behavior keeps its existing settings.
+- **Ctrl+F6** (**Terminal: Toggle Shortcut Forwarding**) changes the mode for the current TTT session without saving a new default and shows a short status notification. It is also available from the command palette.
 - Terminal shell and scrollback are configurable in `settings.json`; ANSI colors are theme-configurable via the `terminal` field in `theme.json`
 
 See [Integrated Terminal](docs-web/src/content/docs/guides/terminal.md).
@@ -265,7 +270,7 @@ TTT supports fully customizable themes via JSON files. Every color is themeable 
 
 Built-in themes ship with the binary, and [extra themes](docs-web/src/content/docs/guides/extra-themes.md) are available for download from the repo.
 
-Switch themes via **View > Switch Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
+Switch themes via **Options > Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
 
 See [Themes](docs-web/src/content/docs/guides/themes.md).
 
@@ -280,6 +285,8 @@ TTT supports Lua plugins that add sidebar panels, bottom panel tabs, commands, a
 **Managing** — click an installed plugin to enable/disable it; **↑** to update, **×** to uninstall, **Plugins: Reload** for live reload during development. To disable the plugin system entirely: `"plugins": { "enabled": false }`.
 
 **Creating** — plugins are Lua scripts with a `plugin.ttt.json` manifest. See the [Plugin Authoring Guide](docs-web/src/content/docs/guides/plugin-authoring.md).
+
+The optional `terminal.palette` plugin permission exposes `ttt.terminal.request_palette()` to start an asynchronous terminal-color query and `ttt.terminal.palette()` to read its snapshot. TTT does not poll the terminal at startup or periodically. Since the TTY API cannot cancel a blocked write, shutdown does not wait for an in-flight palette query; in the rare case that the operating system leaves that write blocked, its goroutine may remain until the write returns.
 
 See [Plugins](docs-web/src/content/docs/guides/plugins.md).
 
@@ -300,6 +307,8 @@ See [Settings reference](docs-web/src/content/docs/reference/settings.md) for ev
 ## Keybindings
 
 All keybindings are customizable via [`keybindings.json`](config/keybindings.json). Chord sequences (e.g. `ctrl+k e`) are supported. Open your keybindings file with **Ctrl+K Y**, or press **Ctrl+P** and type `?` to browse shortcuts in-app.
+
+Set [`keyboard.modifierKey`](docs-web/src/content/docs/reference/settings.md#keyboard) to `"control+super"` to also accept Super/Cmd for Ctrl shortcuts, or `"super"` to use Super/Cmd instead. The default is `"control"`. Binding definitions stay unchanged, and the terminal must forward the shortcuts.
 
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 

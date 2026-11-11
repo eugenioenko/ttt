@@ -28,13 +28,15 @@ const (
 	settingEnum
 	// settingSection is a heading row that groups the fields below it.
 	settingSection
+	settingShortcut
 )
 
 type settingField struct {
 	Label   string
 	Kind    settingKind
 	Restart bool
-	Options func() []widgets.SelectItem
+	Command string
+	Options func(*config.Settings) []widgets.SelectItem
 	// Min is the smallest accepted value for settingInt. Fields whose json tag
 	// carries omitempty must set Min >= 1, since a stored 0 would be dropped on
 	// save and silently revert to the default on the next load.
@@ -57,6 +59,10 @@ type settingsCategory struct {
 
 func boolPtr(b bool) *bool { return &b }
 
+func fixedOptions(items func() []widgets.SelectItem) func(*config.Settings) []widgets.SelectItem {
+	return func(*config.Settings) []widgets.SelectItem { return items() }
+}
+
 func section(title string) settingField { return settingField{Label: title, Kind: settingSection} }
 
 // LSP servers and the formatters map are deliberately absent: both are
@@ -65,6 +71,17 @@ func settingsCategories() []settingsCategory {
 	return []settingsCategory{
 		{Title: i18n.Text("settings.general"), Fields: []settingField{
 			section(i18n.Text("settings.startup")),
+			{Label: i18n.Text("settings.displayLanguage"), Kind: settingEnum, Restart: true, Options: languageItems,
+				GetString: func(s *config.Settings) string {
+					if s.Language.Locale == "" {
+						return "en"
+					}
+					return s.Language.Locale
+				},
+				SetString: func(s *config.Settings, v string) { s.Language.Locale = v }},
+			{Label: i18n.Text("settings.autoUpdateLanguagePacks"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Language.IsAutoUpdateEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Language.AutoUpdate = boolPtr(v) }},
 			{Label: i18n.Text("settings.reuseRunningEditor"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.ReuseWindow },
 				SetBool: func(s *config.Settings, v bool) { s.ReuseWindow = v }},
@@ -74,11 +91,19 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.recentFolderHistory"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Welcome.IsRecentFoldersEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Welcome.RecentFolders = boolPtr(v) }},
+			section(i18n.Text("settings.keyboard")),
+			{Label: i18n.Text("settings.shortcutModifier"), Kind: settingEnum, Options: fixedOptions(keyboardModifierItems),
+				GetString: func(s *config.Settings) string { return s.Keyboard.ModifierKey },
+				SetString: func(s *config.Settings, v string) { s.Keyboard.ModifierKey = v }},
+			{Label: i18n.Text("settings.forwardTerminalShortcuts"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Terminal.ForwardShortcuts },
+				SetBool: func(s *config.Settings, v bool) { s.Terminal.ForwardShortcuts = v }},
+			{Label: i18n.Text("settings.sendNextTerminalKey"), Kind: settingShortcut, Command: "terminal.sendNextKey"},
 			section(i18n.Text("settings.plugins")),
 			{Label: i18n.Text("settings.enablePlugins"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Plugins.IsEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Plugins.Enabled = boolPtr(v) }},
-			{Label: i18n.Text("settings.selectionStyle"), Kind: settingEnum, Options: selectionStyleItems,
+			{Label: i18n.Text("settings.selectionStyle"), Kind: settingEnum, Options: fixedOptions(selectionStyleItems),
 				GetString: func(s *config.Settings) string { return s.Plugins.SelectionStyle },
 				SetString: func(s *config.Settings, v string) { s.Plugins.SelectionStyle = v }},
 			section(i18n.Text("settings.debugging")),
@@ -100,6 +125,9 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.autoDedent"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsAutoDedentEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.AutoDedent = boolPtr(v) }},
+			{Label: i18n.Text("settings.previewTabs"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.PreviewTabsEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.PreviewTabs = boolPtr(v) }},
 			section(i18n.Text("settings.autoClosing")),
 			{Label: i18n.Text("settings.autoCloseBrackets"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.AutoClosing.Brackets },
@@ -126,9 +154,18 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.wrapColumn0PaneWidth"), Kind: settingInt, Min: 0,
 				GetInt: func(s *config.Settings) int { return s.Editor.WordWrapColumn },
 				SetInt: func(s *config.Settings, v int) { s.Editor.WordWrapColumn = v }},
+			{Label: i18n.Text("settings.wordWrapBreak"), Kind: settingEnum, Options: fixedOptions(wordWrapBreakItems),
+				GetString: func(s *config.Settings) string { return s.Editor.WordWrapBreak },
+				SetString: func(s *config.Settings, v string) { s.Editor.WordWrapBreak = v }},
+			{Label: i18n.Text("settings.scrollLines"), Kind: settingInt, Min: 0,
+				GetInt: func(s *config.Settings) int { return s.Editor.ScrollLines },
+				SetInt: func(s *config.Settings, v int) { s.Editor.ScrollLines = v }},
 			{Label: i18n.Text("settings.lineNumbers"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.LineNumbers },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.LineNumbers = v }},
+			{Label: i18n.Text("settings.indentGuides"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.IndentGuides },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.IndentGuides = v }},
 			{Label: i18n.Text("settings.showTrailingNewline"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsShowTrailingNewlineEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.ShowTrailingNewline = boolPtr(v) }},
@@ -169,7 +206,7 @@ func settingsCategories() []settingsCategory {
 		}},
 		{Title: i18n.Text("settings.appearance"), Fields: []settingField{
 			section(i18n.Text("settings.theme")),
-			{Label: i18n.Text("settings.theme"), Kind: settingEnum, Options: themeItems,
+			{Label: i18n.Text("settings.theme"), Kind: settingEnum, Options: fixedOptions(themeItems),
 				GetString: func(s *config.Settings) string { return s.Theme },
 				SetString: func(s *config.Settings, v string) { s.Theme = v }},
 			{Label: i18n.Text("settings.transparentBackground"), Kind: settingBool,
@@ -182,7 +219,7 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.pointerShapes"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Appearance.PointerShapesEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Appearance.PointerShapes = boolPtr(v) }},
-			{Label: i18n.Text("settings.borderStyle"), Kind: settingEnum, Options: borderStyleItems,
+			{Label: i18n.Text("settings.borderStyle"), Kind: settingEnum, Options: fixedOptions(borderStyleItems),
 				GetString: func(s *config.Settings) string { return s.Editor.BorderStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.BorderStyle = v }},
 			section(i18n.Text("settings.code")),
@@ -192,13 +229,13 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.bracketPairColors"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.BracketPairColorization },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.BracketPairColorization = v }},
-			{Label: i18n.Text("settings.cursorStyle"), Kind: settingEnum, Options: cursorStyleItems,
+			{Label: i18n.Text("settings.cursorStyle"), Kind: settingEnum, Options: fixedOptions(cursorStyleItems),
 				GetString: func(s *config.Settings) string { return s.Editor.CursorStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.CursorStyle = v }},
-			{Label: i18n.Text("settings.selectionStyle"), Kind: settingEnum, Options: selectionStyleItems,
+			{Label: i18n.Text("settings.selectionStyle"), Kind: settingEnum, Options: fixedOptions(selectionStyleItems),
 				GetString: func(s *config.Settings) string { return s.Editor.SelectionStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.SelectionStyle = v }},
-			{Label: i18n.Text("settings.gutterStyle"), Kind: settingEnum, Options: gutterStyleItems,
+			{Label: i18n.Text("settings.gutterStyle"), Kind: settingEnum, Options: fixedOptions(gutterStyleItems),
 				GetString: func(s *config.Settings) string { return s.Editor.GutterStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.GutterStyle = v }},
 			{Label: i18n.Text("settings.gitGutter"), Kind: settingBool,
@@ -207,7 +244,7 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.scrollbarGitMarks"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsScrollbarGitMarksEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.ScrollbarGitMarks = boolPtr(v) }},
-			{Label: i18n.Text("settings.scrollbarGlyphs"), Kind: settingEnum, Options: scrollbarGlyphItems,
+			{Label: i18n.Text("settings.scrollbarGlyphs"), Kind: settingEnum, Options: fixedOptions(scrollbarGlyphItems),
 				GetString: func(s *config.Settings) string { return s.Appearance.ScrollbarGlyphs },
 				SetString: func(s *config.Settings, v string) { s.Appearance.ScrollbarGlyphs = v }},
 			section(i18n.Text("settings.markdown")),
@@ -215,8 +252,11 @@ func settingsCategories() []settingsCategory {
 				GetInt: func(s *config.Settings) int { return s.Markdown.WrapWidth },
 				SetInt: func(s *config.Settings, v int) { s.Markdown.WrapWidth = v }},
 		}},
-		{Title: i18n.Text("settings.sidebar"), Fields: []settingField{
+		{Title: i18n.Text("settings.explorer"), Fields: []settingField{
 			section(i18n.Text("settings.files")),
+			{Label: i18n.Text("settings.useTrash"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Explorer.UseTrash },
+				SetBool: func(s *config.Settings, v bool) { s.Explorer.UseTrash = v }},
 			{Label: i18n.Text("settings.hiddenFiles"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.ShowHidden },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.ShowHidden = v }},
@@ -229,17 +269,20 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.compactFolders"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.CompactFolders },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.CompactFolders = v }},
-			section(i18n.Text("settings.look")),
+			section(i18n.Text("settings.appearance")),
 			{Label: i18n.Text("settings.gitStatusColors"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.GitStatusColors },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.GitStatusColors = v }},
 			{Label: i18n.Text("settings.dimStagedColors"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Explorer.DimStagedGitColors },
 				SetBool: func(s *config.Settings, v bool) { s.Explorer.DimStagedGitColors = v }},
-			{Label: i18n.Text("settings.tabStyle"), Kind: settingEnum, Options: sidebarTabStyleItems,
+		}},
+		{Title: i18n.Text("settings.sidebar"), Fields: []settingField{
+			section(i18n.Text("settings.look")),
+			{Label: i18n.Text("settings.tabStyle"), Kind: settingEnum, Options: fixedOptions(sidebarTabStyleItems),
 				GetString: func(s *config.Settings) string { return s.Sidebar.TabStyle },
 				SetString: func(s *config.Settings, v string) { s.Sidebar.TabStyle = v }},
-			{Label: i18n.Text("settings.icons"), Kind: settingEnum, Options: iconModeItems,
+			{Label: i18n.Text("settings.icons"), Kind: settingEnum, Options: fixedOptions(iconModeItems),
 				GetString: func(s *config.Settings) string { return s.Appearance.Icons },
 				SetString: func(s *config.Settings, v string) { s.Appearance.Icons = v }},
 			{Label: i18n.Text("settings.chevronCollapsed"), Kind: settingString,
@@ -249,7 +292,7 @@ func settingsCategories() []settingsCategory {
 				GetString: func(s *config.Settings) string { return s.Appearance.Overrides["chevron-down"] },
 				SetString: func(s *config.Settings, v string) { setIconOverride(s, "chevron-down", v) }},
 			section(i18n.Text("settings.sourceControl")),
-			{Label: i18n.Text("settings.fileView"), Kind: settingEnum, Options: gitFileViewItems,
+			{Label: i18n.Text("settings.fileView"), Kind: settingEnum, Options: fixedOptions(gitFileViewItems),
 				GetString: func(s *config.Settings) string { return s.Git.FileView },
 				SetString: func(s *config.Settings, v string) { s.Git.FileView = v }},
 			section(i18n.Text("settings.quickOpen")),
@@ -274,18 +317,21 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.shell"), Kind: settingString, Restart: true,
 				GetString: func(s *config.Settings) string { return s.Terminal.Shell },
 				SetString: func(s *config.Settings, v string) { s.Terminal.Shell = v }},
+			{Label: i18n.Text("settings.shellIntegration"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Terminal.ShellIntegration },
+				SetBool: func(s *config.Settings, v bool) { s.Terminal.ShellIntegration = v }},
 			{Label: i18n.Text("settings.scrollback"), Kind: settingInt, Restart: true, Min: 1,
 				GetInt: func(s *config.Settings) int { return s.Terminal.Scrollback },
 				SetInt: func(s *config.Settings, v int) { s.Terminal.Scrollback = v }},
-			{Label: i18n.Text("settings.selectionStyle"), Kind: settingEnum, Options: selectionStyleItems,
+			{Label: i18n.Text("settings.selectionStyle"), Kind: settingEnum, Options: fixedOptions(selectionStyleItems),
 				GetString: func(s *config.Settings) string { return s.Terminal.SelectionStyle },
 				SetString: func(s *config.Settings, v string) { s.Terminal.SelectionStyle = v }},
 		}},
 		{Title: i18n.Text("settings.diff"), Fields: []settingField{
-			{Label: i18n.Text("settings.diffMode"), Kind: settingEnum, Options: diffModeItems,
+			{Label: i18n.Text("settings.diffMode"), Kind: settingEnum, Options: fixedOptions(diffModeItems),
 				GetString: func(s *config.Settings) string { return s.Editor.DiffMode },
 				SetString: func(s *config.Settings, v string) { s.Editor.DiffMode = v }},
-			{Label: i18n.Text("settings.diffContext"), Kind: settingEnum, Options: diffContextItems,
+			{Label: i18n.Text("settings.diffContext"), Kind: settingEnum, Options: fixedOptions(diffContextItems),
 				GetString: func(s *config.Settings) string { return s.Editor.DiffContext },
 				SetString: func(s *config.Settings, v string) { s.Editor.DiffContext = v }},
 			{Label: i18n.Text("settings.diffWordWrap"), Kind: settingBool,
@@ -313,6 +359,14 @@ func settingsCategories() []settingsCategory {
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffScrollbarGitMarks },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffScrollbarGitMarks = v }},
 		}},
+	}
+}
+
+func keyboardModifierItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.ModifierControl, Label: i18n.Text("settings.modifierControl")},
+		{ID: config.ModifierControlSuper, Label: i18n.Text("settings.modifierControlSuper")},
+		{ID: config.ModifierSuper, Label: i18n.Text("settings.modifierSuper")},
 	}
 }
 
@@ -372,29 +426,35 @@ func cursorStyleItems() []widgets.SelectItem {
 type settingsView struct {
 	app        *App
 	working    config.Settings
+	baseline   config.Settings
 	categories []settingsCategory
 	adapter    *ui.WidgetAdapter
 	status     *widgets.LabelWidget
 	inputs     []func() string
 	selects    []*widgets.SelectWidget
+	shortcuts  []func()
+	refresh    []func()
 }
 
-// commitTo copies the fields this form owns out of the working copy and onto s,
-// leaving everything else on s untouched. Assigning the whole working struct
-// would also write back its snapshot of settings the form never shows, undoing
-// anything changed elsewhere — a theme picked from the palette, an Options
-// toggle — while the tab sat open.
+// Only changed form values override live settings; untouched fields may have
+// changed through an Options toggle, theme selection, or settings reload.
 func (v *settingsView) commitTo(s *config.Settings) {
 	for _, cat := range v.categories {
 		for _, f := range cat.Fields {
 			switch f.Kind {
-			case settingSection:
+			case settingSection, settingShortcut:
 			case settingBool:
-				f.SetBool(s, f.GetBool(&v.working))
+				if value := f.GetBool(&v.working); value != f.GetBool(&v.baseline) {
+					f.SetBool(s, value)
+				}
 			case settingInt:
-				f.SetInt(s, f.GetInt(&v.working))
+				if value := f.GetInt(&v.working); value != f.GetInt(&v.baseline) {
+					f.SetInt(s, value)
+				}
 			default:
-				f.SetString(s, f.GetString(&v.working))
+				if value := f.GetString(&v.working); value != f.GetString(&v.baseline) {
+					f.SetString(s, value)
+				}
 			}
 		}
 	}
@@ -419,7 +479,7 @@ func (a *App) ShowSettings() {
 		return
 	}
 
-	v := &settingsView{app: a, working: *a.Settings, categories: settingsCategories()}
+	v := &settingsView{app: a, working: *a.Settings, baseline: *a.Settings, categories: settingsCategories()}
 	a.settingsView = v
 
 	tabItems := make([]widgets.TabItem, 0, len(v.categories))
@@ -512,6 +572,20 @@ func (v *settingsView) buildRow(category string, f settingField) *widgets.HStack
 		control = v.boolControl(f)
 	case settingEnum:
 		control = v.enumControl(f)
+	case settingShortcut:
+		button := widgets.NewButtonWidget(widgets.ButtonConfig{
+			OnClick: func() { v.app.showKeybindings(f.Command) },
+		})
+		refresh := func() {
+			label := v.app.KeyFor(f.Command)
+			if label == "" {
+				label = i18n.Text("settings.setShortcut")
+			}
+			button.SetLabel(label)
+		}
+		refresh()
+		v.shortcuts = append(v.shortcuts, refresh)
+		control = button
 	default:
 		control = v.textControl(category, f)
 	}
@@ -522,17 +596,27 @@ func (v *settingsView) buildRow(category string, f settingField) *widgets.HStack
 	return row
 }
 
+func (a *App) refreshSettingsShortcuts() {
+	if a.settingsView != nil {
+		for _, refresh := range a.settingsView.shortcuts {
+			refresh()
+		}
+	}
+}
+
 func (v *settingsView) boolControl(f settingField) widgets.Widget {
-	return widgets.NewCheckboxWidget(widgets.CheckboxConfig{
+	checkbox := widgets.NewCheckboxWidget(widgets.CheckboxConfig{
 		Checked:  f.GetBool(&v.working),
 		OnChange: func(checked bool) { f.SetBool(&v.working, checked) },
 	})
+	v.refresh = append(v.refresh, func() { checkbox.Config.Checked = f.GetBool(&v.working) })
+	return checkbox
 }
 
 func (v *settingsView) enumControl(f settingField) widgets.Widget {
 	var sel *widgets.SelectWidget
 	sel = widgets.NewSelectWidget(widgets.SelectConfig{
-		Items:       f.Options(),
+		Items:       f.Options(&v.working),
 		Collapsible: true,
 		OnOpen:      func() { v.closeSelectsExcept(sel) },
 		OnSelect: func(id string) {
@@ -543,6 +627,7 @@ func (v *settingsView) enumControl(f settingField) widgets.Widget {
 	v.selects = append(v.selects, sel)
 	sel.FixedWidth = settingsControlCols
 	sel.SetSelectedID(f.GetString(&v.working))
+	v.refresh = append(v.refresh, func() { sel.SetSelectedID(f.GetString(&v.working)) })
 	return sel
 }
 
@@ -560,6 +645,13 @@ func (v *settingsView) textControl(category string, f settingField) widgets.Widg
 	// is affordance enough for a one-line field.
 	inp := widgets.NewInputWidget(widgets.InputConfig{})
 	inp.SetText(current)
+	v.refresh = append(v.refresh, func() {
+		if f.Kind == settingInt {
+			inp.SetText(strconv.Itoa(f.GetInt(&v.working)))
+		} else {
+			inp.SetText(f.GetString(&v.working))
+		}
+	})
 
 	// Returns a description of the offending field, or "" when the value is good.
 	v.inputs = append(v.inputs, func() string {
@@ -593,8 +685,15 @@ func (v *settingsView) apply() {
 		return
 	}
 	v.commitTo(v.app.Settings)
-	v.app.SaveAndApplySettings()
+	if !v.app.SaveAndApplySettings() {
+		v.setStatus(i18n.Text("settings.notSaved"))
+		return
+	}
 	v.working = *v.app.Settings
+	v.baseline = v.working
+	for _, refresh := range v.refresh {
+		refresh()
+	}
 	v.setStatus(i18n.Text("settings.settingsApplied"))
 }
 

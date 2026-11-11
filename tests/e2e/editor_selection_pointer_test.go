@@ -82,7 +82,7 @@ func TestDiffSelectionKeepsTextPointerOverTabBar(t *testing.T) {
 	h := newTestHarness(t, 100, 45)
 	defer h.stop()
 	setupPartiallyStagedFile(t, h)
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "staged.txt", Status: "M", Staged: true}, true, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "staged.txt", Status: "M", Staged: true}), false)
 	h.redraw()
 	d := h.app.EditorGroup.ActiveDiffWidget()
 	if d == nil {

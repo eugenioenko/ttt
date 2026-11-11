@@ -29,7 +29,7 @@ func textTruncate(L *lua.LState) int {
 	if width < 0 {
 		L.ArgError(2, "width must not be negative")
 	}
-	L.Push(lua.LString(truncateToWidth(s, width, L.OptString(3, ""))))
+	L.Push(lua.LString(textwidth.Truncate(s, width, L.OptString(3, ""))))
 	return 1
 }
 
@@ -45,19 +45,6 @@ func textWrap(L *lua.LState) int {
 	}
 	L.Push(tbl)
 	return 1
-}
-
-func truncateToWidth(s string, width int, tail string) string {
-	if textwidth.String(s) <= width {
-		return s
-	}
-	tailW := textwidth.String(tail)
-	if tailW > width {
-		tail, tailW = "", 0
-	}
-	runes := []rune(s)
-	end := fitRunes(runes, width-tailW)
-	return string(runes[:end]) + tail
 }
 
 // fitRunes returns how many leading runes fit in width columns.

@@ -15,6 +15,8 @@ The selection belongs to the current tab and stays after Save As, rename, and gr
 
 Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.
 
+`editor.wordWrapBreak` chooses where a row ends. The default, `"word"`, ends a row after a space or after `.`, `,`, `;`, `/`, `|`, `&`, `?` and closing brackets, before an opening bracket, or next to a wide character, so words and identifiers stay whole. A space at the edge stays on its row instead of starting the next one, and a token wider than the row breaks at the character that overflows. `"character"` fills every row and breaks wherever the width runs out.
+
 Use language IDs to set different limits for code and prose:
 
 ```json
@@ -24,15 +26,16 @@ Use language IDs to set different limits for code and prose:
     "wordWrapColumn": 0,
     "languageOverrides": {
       "typescript": { "wordWrapColumn": 80 },
-      "markdown": { "wordWrapColumn": 65 }
+      "markdown": { "wordWrapColumn": 65 },
+      "log": { "wordWrapBreak": "character" }
     }
   }
 }
 ```
 
-Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping and `0` for the column). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
+Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping, `0` for the column, and `"word"` for the break). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
 
-The Options **Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
+The **Options > Editor > Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
 
 The `editor.largeFiles.wordWrapMaxMB` safeguard still applies, including when a language enables wrapping. Diff views retain their separate wrap policy. `markdown.wrapWidth` controls rendered Markdown, such as hover popups and plugin widgets; raw Markdown editing uses these editor settings.
 
@@ -50,9 +53,9 @@ Bracket pair colorization is also available, rendering each nesting level in a d
 
 ## Auto Indent
 
-New lines inherit the indentation of the previous line and gain an extra level after an open `{`, `(`, `[`, or trailing `:`. This is on by default; toggle it from the Options menu (**Auto Indent**) or with the `editor.autoIndent` setting. Turn it off for plain `noautoindent` behavior, where Enter opens a column-1 line.
+New lines inherit the indentation of the previous line and gain an extra level after an open `{`, `(`, `[`, or trailing `:`. This is on by default; toggle it from **Options > Editor > Auto Indent** or with the `editor.autoIndent` setting. Turn it off for plain `noautoindent` behavior, where Enter opens a column-1 line.
 
-Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one level so it lines up with its opening line. This dedent is on by default; toggle it from the Options menu (**Auto Dedent**) or with the `editor.autoDedent` setting.
+Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one level so it lines up with its opening line. This dedent is on by default; toggle it from **Options > Editor > Auto Dedent** or with the `editor.autoDedent` setting.
 
 ## Find and Replace
 
@@ -64,6 +67,21 @@ Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one leve
 ## Go to Line
 
 Press **Ctrl+G** to open the Go to Line dialog.
+
+## Scrolling
+
+**Scroll Line Up** and **Scroll Line Down** (**Ctrl+Up** / **Ctrl+Down**) move only the viewport by one visual row. The cursor and selection stay in place, so you can look at nearby text without losing your editing position.
+
+**Scroll Up** and **Scroll Down** move the viewport and cursor together. The cursor keeps its screen row, so the text follows the caret the way Vim's `Ctrl+D` does. The step is `editor.scrollLines` screen rows; `0` (the default) scrolls half the editor height.
+
+They have no default shortcut. Bind them in `keybindings.json`, for example:
+
+```json
+[
+  { "key": "ctrl+k up", "command": "view.scrollUp" },
+  { "key": "ctrl+k down", "command": "view.scrollDown" }
+]
+```
 
 ## Selection and Clipboard
 
@@ -172,4 +190,4 @@ Inline blame info for the current line is shown in the status bar, including the
 
 When enabled, diff indicators appear in the line number gutter showing added, modified, and removed lines compared to the last committed version. Toggle with the "Toggle Git Gutter" command in the command palette.
 
-When a file is taller than the editor, the same changes are marked on the vertical scrollbar in the gutter colors. Marks are placed to an eighth of a cell, and even a single changed line stays visible in a long file. Set `appearance.scrollbarGlyphs` to `"legacy"` for thin line marks if your terminal or font has the Symbols for Legacy Computing glyphs. Click a mark to scroll to that change. Turn the marks off with `editor.scrollbarGitMarks` or **Options > Scrollbar Git Marks**. Diff views can mark their changed rows too: turn on `editor.diffScrollbarGitMarks` or **Options > Diff Views > Scrollbar Git Marks**.
+When a file is taller than the editor, the same changes are marked on the vertical scrollbar in the gutter colors. Marks are placed to an eighth of a cell, and even a single changed line stays visible in a long file. Set `appearance.scrollbarGlyphs` to `"legacy"` for thin line marks if your terminal or font has the Symbols for Legacy Computing glyphs. Click a mark to scroll to that change. Turn the marks off with `editor.scrollbarGitMarks` or **Options > Editor > Scrollbar Git Marks**. Diff views can mark their changed rows too: turn on `editor.diffScrollbarGitMarks` or **Options > Diff Views > Scrollbar Git Marks**.

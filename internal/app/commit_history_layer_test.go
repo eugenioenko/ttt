@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -30,7 +31,7 @@ func TestReadCommitDiffBuildsAnImmutableFileView(t *testing.T) {
 		t.Fatalf("commit files = %+v, err = %v", files, err)
 	}
 
-	result := readCommitDiff(context.Background(), dir, ref, ref[:7], files[0], false)
+	result := readCommitDiff(context.Background(), testRevisionSource(dir), ref, ref[:7], git.ToChange(files[0]), false)
 	if result.Canceled || result.Warn != "" || len(result.Diff.Hunks) == 0 {
 		t.Fatalf("commit diff result = %+v", result)
 	}
@@ -43,7 +44,7 @@ func TestReadCommitDiffBuildsAnImmutableFileView(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if result := readCommitDiff(canceled, dir, ref, ref[:7], files[0], false); !result.Canceled {
+	if result := readCommitDiff(canceled, testRevisionSource(dir), ref, ref[:7], git.ToChange(files[0]), false); !result.Canceled {
 		t.Fatalf("canceled commit diff result = %+v", result)
 	}
 }
@@ -60,11 +61,11 @@ func TestApplyDiffOpenDoesNotStealFocusAfterNavigation(t *testing.T) {
 	}
 }
 
-func historyEntries(prefix string, start, count int) []git.LogEntry {
-	entries := make([]git.LogEntry, 0, count)
+func historyEntries(prefix string, start, count int) []scm.HistoryEntry {
+	entries := make([]scm.HistoryEntry, 0, count)
 	for index := start; index < start+count; index++ {
 		ref := fmt.Sprintf("%040x", index+1)
-		entries = append(entries, git.LogEntry{Ref: ref, Hash: ref[:7], Message: fmt.Sprintf("%s %d", prefix, index)})
+		entries = append(entries, scm.HistoryEntry{Ref: ref, Label: ref[:7], Message: fmt.Sprintf("%s %d", prefix, index)})
 	}
 	return entries
 }
@@ -72,7 +73,7 @@ func historyEntries(prefix string, start, count int) []git.LogEntry {
 func TestReadCommitLogAllowsOnlyVerifiedUnbornEmptyHistory(t *testing.T) {
 	dir := t.TempDir()
 	testAppGit(t, dir, "init", "-q", "-b", "main")
-	result := readCommitLog(context.Background(), dir, 1)
+	result := readCommitLog(context.Background(), repositorySource{root: dir, provider: git.Provider{}}, 1)
 	if result.Err != nil || result.Canceled || result.Branch != "main" || len(result.Entries) != 0 {
 		t.Fatalf("unborn history result = %+v, want empty successful main history", result)
 	}
@@ -80,7 +81,7 @@ func TestReadCommitLogAllowsOnlyVerifiedUnbornEmptyHistory(t *testing.T) {
 
 func TestReadCommitLogMarksNonRepositoryUnavailable(t *testing.T) {
 	dir := t.TempDir()
-	result := readCommitLog(context.Background(), dir, 7)
+	result := readCommitLog(context.Background(), repositorySource{root: dir, provider: git.Provider{}}, 7)
 	if result.Gen != 7 || result.Dir != dir || !result.Unavailable || result.Err != nil || result.Canceled {
 		t.Fatalf("non-repository history result = %+v, want unavailable", result)
 	}
@@ -91,9 +92,9 @@ func TestCommitLogRestoresSelectionByFullHashAfterAsyncRebuild(t *testing.T) {
 	dir := "/repo"
 	cp.logGen = 1
 	cp.lastLogDir = dir
-	cp.ApplyCommitLog(&CommitLogResult{Gen: 1, Dir: dir, Branch: "main", Entries: []git.LogEntry{
-		{Ref: strings.Repeat("a", 40), Hash: "aaaaaaa", Message: "selected"},
-		{Ref: strings.Repeat("b", 40), Hash: "bbbbbbb", Message: "older"},
+	cp.ApplyCommitLog(&CommitLogResult{Gen: 1, Dir: dir, Branch: "main", Entries: []scm.HistoryEntry{
+		{Ref: strings.Repeat("a", 40), Label: "aaaaaaa", Message: "selected"},
+		{Ref: strings.Repeat("b", 40), Label: "bbbbbbb", Message: "older"},
 	}})
 	selectedID := "commit:" + strings.Repeat("a", 40)
 	if !cp.selectLogNode(selectedID) {
@@ -102,10 +103,10 @@ func TestCommitLogRestoresSelectionByFullHashAfterAsyncRebuild(t *testing.T) {
 
 	cp.logGen = 2
 	cp.lastLogDir = dir
-	cp.ApplyCommitLog(&CommitLogResult{Gen: 2, Dir: dir, Branch: "main", Entries: []git.LogEntry{
-		{Ref: strings.Repeat("c", 40), Hash: "ccccccc", Message: "newest"},
-		{Ref: strings.Repeat("a", 40), Hash: "aaaaaaa", Message: "selected"},
-		{Ref: strings.Repeat("b", 40), Hash: "bbbbbbb", Message: "older"},
+	cp.ApplyCommitLog(&CommitLogResult{Gen: 2, Dir: dir, Branch: "main", Entries: []scm.HistoryEntry{
+		{Ref: strings.Repeat("c", 40), Label: "ccccccc", Message: "newest"},
+		{Ref: strings.Repeat("a", 40), Label: "aaaaaaa", Message: "selected"},
+		{Ref: strings.Repeat("b", 40), Label: "bbbbbbb", Message: "older"},
 	}})
 	if got := cp.CommitLog.Selected(); got == nil || got.ID != selectedID {
 		t.Fatalf("selection after prepend = %#v, want %s", got, selectedID)
@@ -118,7 +119,7 @@ func TestCommitLogExpansionIdentityIncludesRepository(t *testing.T) {
 	cp.logExpanded[commitLogStateKey("/first", "commit:"+ref)] = true
 	cp.logGen = 1
 	cp.lastLogDir = "/second"
-	cp.ApplyCommitLog(&CommitLogResult{Gen: 1, Dir: "/second", Entries: []git.LogEntry{{Ref: ref, Hash: "aaaaaaa", Message: "same object"}}})
+	cp.ApplyCommitLog(&CommitLogResult{Gen: 1, Dir: "/second", Entries: []scm.HistoryEntry{{Ref: ref, Label: "aaaaaaa", Message: "same object"}}})
 	if node := cp.commitNode("commit:" + ref); node == nil || node.Expanded {
 		t.Fatalf("second repository inherited expansion: %#v", node)
 	}
@@ -129,7 +130,7 @@ func TestCommitLogDropsStaleGenerationAndShowsFirstLoadError(t *testing.T) {
 	cp.logGen = 2
 	cp.lastLogDir = "/new"
 	cp.CommitLog.SetItems(nil)
-	cp.ApplyCommitLog(&CommitLogResult{Gen: 1, Dir: "/old", Entries: []git.LogEntry{{Ref: strings.Repeat("a", 40), Hash: "aaaaaaa", Message: "stale"}}})
+	cp.ApplyCommitLog(&CommitLogResult{Gen: 1, Dir: "/old", Entries: []scm.HistoryEntry{{Ref: strings.Repeat("a", 40), Label: "aaaaaaa", Message: "stale"}}})
 	if cp.CommitLog.ItemCount() != 0 {
 		t.Fatal("stale history result changed the tree")
 	}
@@ -145,7 +146,7 @@ func TestCommitLogDropsStaleGenerationAndShowsFirstLoadError(t *testing.T) {
 
 func TestCommitHistoryPaginationAppendsOnceAndPreservesReaderState(t *testing.T) {
 	cp := NewChangesPanel()
-	dir, anchor := "/repo", git.ObjectID(strings.Repeat("f", 40))
+	dir, anchor := "/repo", strings.Repeat("f", 40)
 	cp.logGen, cp.lastLogDir = 1, dir
 	cp.ApplyCommitLog(&CommitLogResult{
 		Gen: 1, Dir: dir, Branch: "main", Anchor: anchor, Entries: historyEntries("initial", 0, 10), HasMore: true,
@@ -194,7 +195,7 @@ func TestCommitHistoryPaginationAppendsOnceAndPreservesReaderState(t *testing.T)
 
 func TestCommitHistoryPageFailureRetainsRowsAndRetries(t *testing.T) {
 	cp := NewChangesPanel()
-	dir, anchor := "/repo", git.ObjectID(strings.Repeat("a", 40))
+	dir, anchor := "/repo", strings.Repeat("a", 40)
 	cp.logGen, cp.lastLogDir = 4, dir
 	cp.ApplyCommitLog(&CommitLogResult{Gen: 4, Dir: dir, Anchor: anchor, Entries: historyEntries("good", 0, 10), HasMore: true})
 	good := append([]*widgets.TreeNode(nil), cp.CommitLog.Config.Items[:len(cp.CommitLog.Config.Items)-1]...)
@@ -225,12 +226,12 @@ func TestCommitHistoryPageFailureRetainsRowsAndRetries(t *testing.T) {
 
 func TestCommitHistoryPageDropsStaleRewriteAndRootResults(t *testing.T) {
 	cp := NewChangesPanel()
-	dir, anchor := "/one", git.ObjectID(strings.Repeat("1", 40))
+	dir, anchor := "/one", strings.Repeat("1", 40)
 	cp.logGen, cp.lastLogDir = 7, dir
 	cp.ApplyCommitLog(&CommitLogResult{Gen: 7, Dir: dir, Anchor: anchor, Entries: historyEntries("one", 0, 10), HasMore: true})
 	cp.logPagePending = true
 	cp.ApplyCommitLog(&CommitLogResult{
-		Gen: 7, Dir: dir, Anchor: git.ObjectID(strings.Repeat("2", 40)), Offset: 10, Append: true, Entries: historyEntries("rewrite", 10, 1),
+		Gen: 7, Dir: dir, Anchor: strings.Repeat("2", 40), Offset: 10, Append: true, Entries: historyEntries("rewrite", 10, 1),
 	})
 	if cp.logOffset != 10 || !cp.logPagePending {
 		t.Fatal("mismatched anchor changed the active page request")
@@ -248,7 +249,7 @@ func TestCommitHistoryPageDropsStaleRewriteAndRootResults(t *testing.T) {
 
 	cp.lastLogDir = "/two"
 	cp.ApplyCommitLog(&CommitLogResult{
-		Gen: 8, Dir: "/two", Anchor: git.ObjectID(strings.Repeat("3", 40)), Entries: historyEntries("two", 100, 1),
+		Gen: 8, Dir: "/two", Anchor: strings.Repeat("3", 40), Entries: historyEntries("two", 100, 1),
 	})
 	if cp.logDir != "/two" || cp.logAnchor == anchor || cp.commitNode("commit:"+historyEntries("one", 0, 1)[0].Ref) != nil {
 		t.Fatal("second root inherited first-root pagination state")
@@ -281,4 +282,8 @@ func TestApplyCommitDetailUsesRepositoryHashIdentityAndPreciseTimestamp(t *testi
 	if detail.Loading || detail.Metadata != "Authored Aug 22, 2026 at 3:14:15 AM -0400" {
 		t.Fatalf("applied detail loading=%v metadata=%q", detail.Loading, detail.Metadata)
 	}
+}
+
+func testRevisionSource(root string) repositorySource {
+	return repositorySource{root: root, provider: git.Provider{}}
 }

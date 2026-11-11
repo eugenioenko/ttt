@@ -129,6 +129,9 @@ func (a *App) pluginInstall() {
 	a.ShowInputDialogEx(i18n.Text("plugins.installPlugin"), i18n.Text("plugins.repositoryURL"), "", i18n.Text("general.install"), func(repoURL string) {
 		go func() {
 			p, err := a.PluginManager.Install(repoURL, "")
+			if p != nil {
+				p.InstalledFromURL = true
+			}
 			a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
 				plugin: p,
 				err:    err,
@@ -222,6 +225,7 @@ func (a *App) removePlugin(name string) {
 	a.closePluginDrawerAndTabs(name)
 	a.uninstallPluginGrammars(name)
 	a.uninstallPluginThemes(name)
+	a.uninstallPluginLanguages(name)
 
 	a.resetPluginDetailButton(name)
 	if a.PluginsPanel != nil {
@@ -287,6 +291,7 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 			a.installPluginGrammars(p)
 		} else {
 			a.installPluginThemes(p)
+			a.installPluginLanguages(p)
 		}
 	}
 	if a.PluginsPanel != nil {
@@ -310,14 +315,28 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 			Value: grammarLabel(g),
 		})
 	}
+	for _, language := range p.Manifest.Languages {
+		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: i18n.Text("settings.displayLanguage"), Value: language.Name + " (" + language.Locale + ")"})
+	}
 	for _, theme := range p.Manifest.Themes {
 		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: i18n.Text("plugins.theme"), Value: theme.ID()})
 	}
 
-	content := widgets.NewWrappingKeyValueListWidget(kvEntries)
-	content.InvertStyles = true
+	permissions := widgets.NewWrappingKeyValueListWidget(kvEntries)
+	permissions.InvertStyles = true
+	var content widgets.Widget = permissions
+	maintained := a.isMaintainedRepo(p.Repo)
+	if p.InstalledFromURL {
+		maintained = plugin.IsMaintained(p.Repo, nil)
+	}
+	if !maintained {
+		notice := widgets.NewParagraphWidget(i18n.Text("plugins.communityApprovalNotice"))
+		notice.Style = term.StyleWarning
+		notice.Box.PaddingTop = 1
+		content = widgets.NewVStackWidget(permissions, notice)
+	}
 
-	dialog := widgets.NewDialogWidget(max(50, content.NaturalWidth()+4))
+	dialog := widgets.NewDialogWidget(max(50, permissions.NaturalWidth()+4))
 	dialog.Title = i18n.Format("plugins.requests", i18n.Args{"manifestTitle": p.Manifest.Title()})
 	dialog.Borders = *a.Borders
 	dialog.SetContent(content)
@@ -388,7 +407,9 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 }
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
+	p.ControlModifiers = &a.Root.ControlModifiers
 	a.installPluginThemes(p)
+	a.installPluginLanguages(p)
 	a.wirePluginDialogs(p)
 	a.wirePluginChanges(p)
 	id := "plugin." + p.Name
@@ -798,16 +819,14 @@ func (a *App) registerPluginCommandsAndKeys(p *plugin.Plugin) {
 				key, mod, rn := comboToTcell(step)
 				tcellSteps[i] = ui.GlobalKeyBinding{Key: key, Mod: mod, Rune: rn}
 			}
-			a.Root.AddChordKey(tcellSteps, func() {
-				a.Reg.Execute(cmdID)
-			})
+			bindCommandChord(a.Root, a.Reg, tcellSteps, cmdID)
 		} else {
 			key, mod, rn := comboToTcell(steps[0])
 			a.Root.AddGlobalKey(key, mod, rn, func() {
 				a.Reg.Execute(cmdID)
 			})
 		}
-		a.Reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key))
+		a.Reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key, a.Root.ControlModifiers))
 	}
 }
 

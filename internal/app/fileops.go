@@ -1,13 +1,16 @@
 package app
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/trash"
 )
 
 func (a *App) FileOpNewFile(path string, reload func()) {
@@ -87,25 +90,66 @@ func (a *App) FileOpRename(path string, reload func()) {
 }
 
 func (a *App) FileOpDelete(path string, reload func()) {
+	a.confirmFileDelete(path, reload, trash.MoveContext)
+}
+
+func (a *App) confirmFileDelete(path string, reload func(), moveToTrash func(context.Context, string) error) {
 	if path == "" {
 		return
 	}
 	name := filepath.Base(path)
-	a.ShowConfirmDialog(i18n.Format("files.delete", i18n.Args{"name": name}),
+	useTrash := a.Settings.Explorer.UseTrash
+	message := i18n.Format("files.delete", i18n.Args{"name": name})
+	if useTrash {
+		message = i18n.Format("files.moveToTrash", i18n.Args{"name": name})
+	}
+	a.ShowConfirmDialog(message,
 		[]string{i18n.Text("general.no"), i18n.Text("general.yes")},
 		[]func(){
-			func() { a.DismissDialog() },
+			a.DismissDialog,
 			func() {
 				a.DismissDialog()
-				if err := os.RemoveAll(path); err != nil {
-					a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
-					return
-				}
-				a.invalidateRepositoryPath(path, RepositoryWorktree)
-				reload()
+				a.startFileDelete(path, useTrash, reload, moveToTrash)
 			},
 		},
 	)
+}
+
+func (a *App) startFileDelete(path string, useTrash bool, reload func(), moveToTrash func(context.Context, string) error) {
+	if !useTrash {
+		// RemoveAll cannot be cancelled; finish before the event loop can quit.
+		a.completeFileDelete(path, false, reload, os.RemoveAll(path))
+		return
+	}
+	task := NewTask[struct{}](a, asynctask.TaskOptions{})
+	task.Schedule(func(ctx context.Context) (struct{}, error) {
+		if err := ctx.Err(); err != nil {
+			return struct{}{}, err
+		}
+		return struct{}{}, moveToTrash(ctx, path)
+	}, func(_ struct{}, err error) {
+		defer a.releaseTask(task)
+		a.completeFileDelete(path, useTrash, reload, err)
+	})
+}
+
+func (a *App) completeFileDelete(path string, useTrash bool, reload func(), err error) {
+	name := filepath.Base(path)
+	if err != nil {
+		message := i18n.Format("status.error", i18n.Args{"error": err.Error()})
+		if useTrash {
+			message = i18n.Format("files.trashFailed", i18n.Args{"name": name, "error": err.Error()})
+		}
+		a.StatusError(message)
+		return
+	}
+	a.invalidateRepositoryPath(path, RepositoryWorktree)
+	reload()
+	message := i18n.Format("files.deletedPermanently", i18n.Args{"name": name})
+	if useTrash {
+		message = i18n.Format("files.movedToTrash", i18n.Args{"name": name})
+	}
+	a.StatusNotify(message)
 }
 
 func (a *App) FileOpCopyAbsolutePath(path string) {

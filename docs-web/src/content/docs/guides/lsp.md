@@ -291,7 +291,22 @@ To add file extensions to an existing server, override the full entry with the a
 
 The optional `languages` field is for servers that handle multiple file types requiring different `languageId` values. It maps file extensions to language IDs. Without the `languages` field, the server key is used as the language ID and files are matched by their syntax highlighter name.
 
-The server is started lazily on first use and shut down when the editor exits. Run **LSP: Server Restart** from the command palette to restart the server for the current file, for example after it hangs or after installing a dependency it caches. Its diagnostics are cleared and every open file it handles is reopened in the new server.
+Matching by highlighter name depends on which grammar highlights the file, and that can change: `.el` files show as `Common Lisp` unless the `lang-emacs-lisp` grammar plugin is installed. List the server's file extensions in `languages` so it starts regardless of the grammar:
+
+```json
+{
+  "lsp": {
+    "servers": {
+      "elisp": {
+        "command": ["your-elisp-server"],
+        "languages": { ".el": "elisp" }
+      }
+    }
+  }
+}
+```
+
+The server is started lazily on first use and shut down when the editor exits. Initialization runs in the background without blocking typing. While a server is starting, save-time LSP formatting and code actions are skipped. A failed server stays failed until you explicitly restart it, so each keystroke does not trigger another startup attempt. Run **LSP: Server Restart** from the command palette to restart the server for the current file, for example after it hangs or after installing a dependency it caches. Its diagnostics are cleared and every open file it handles is reopened in the new server.
 
 ## Server Status
 
@@ -409,7 +424,7 @@ All LSP settings are nested under `lsp.*` in `settings.json`. Autocomplete setti
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `lsp.enabled` | boolean | `true` | Enable or disable LSP support entirely |
-| `lsp.hover` | boolean | `true` | Show hover information when the mouse rests over code (toggle from the Options menu, **LSP Hover**). Ctrl+K I works either way |
+| `lsp.hover` | boolean | `true` | Show hover information when the mouse rests over code (toggle from **Options > Code Assist > Hover Information**). Ctrl+K I works either way |
 | `lsp.hoverDelay` | number | `500` | Delay in milliseconds before showing hover info |
 | `lsp.saveOnRename` | boolean | `false` | Auto-save files affected by a rename |
 | `lsp.codeActionsOnSave` | string[] | `[]` | Code actions to run before each save |

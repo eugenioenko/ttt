@@ -19,6 +19,9 @@
     "insertSpaces": true,
     "wordWrap": false,
     "wordWrapColumn": 0,
+    "wordWrapBreak": "word",
+    "indentGuides": false,
+    "scrollLines": 0,
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,
@@ -42,6 +45,9 @@
     "saveAllOnQuit": false,
     "saveAllOnQuitExceptUnnamed": false
   },
+  "keyboard": {
+    "modifierKey": "control"
+  },
   "quickOpen": {
     "showHidden": false,
     "showGitIgnored": false
@@ -55,7 +61,8 @@
     "gitStatusColors": true,
     "dimStagedGitColors": false,
     "autoReveal": false,
-    "compactFolders": true
+    "compactFolders": true,
+    "useTrash": true
   },
   "sidebar": {
     "tabStyle": "label"
@@ -67,7 +74,9 @@
     "scrollback": 1000,
     "selectionStyle": "background",
     "ctrlVPastes": true,
-    "padding_x": 1
+    "forwardShortcuts": false,
+    "padding_x": 1,
+    "shellIntegration": true
   },
   "lsp": {
     "saveOnRename": false,

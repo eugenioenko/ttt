@@ -79,6 +79,21 @@ func TestSetDiagnosticsWrapsLspSource(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsForSourceReturnsOnlyRequestedSource(t *testing.T) {
+	g, path := openTabWithFile(t, "hello world")
+	g.SetDiagnosticsSource("lsp:go", path, []Diagnostic{{Message: "go diagnostic"}})
+	g.SetDiagnosticsSource("plugin:test", path, []Diagnostic{{Message: "plugin diagnostic"}})
+
+	got := g.DiagnosticsForSource("lsp:go", path)
+	if len(got) != 1 || got[0].Message != "go diagnostic" {
+		t.Fatalf("diagnostics = %+v, want only gopls diagnostic", got)
+	}
+	got[0].Message = "modified"
+	if original := g.DiagnosticsForSource("lsp:go", path)[0].Message; original != "go diagnostic" {
+		t.Fatalf("source diagnostics were aliased: %q", original)
+	}
+}
+
 func TestCustomStyleFlowsToDiagStyleAt(t *testing.T) {
 	g, path := openTabWithFile(t, "hello world")
 

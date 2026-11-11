@@ -28,14 +28,16 @@ func (kb *KeyBinding) IsChord() bool {
 
 // ForceKeyCommands are checked even when a raw key consumer (e.g. terminal) has focus.
 var ForceKeyCommands = map[string]bool{
-	"terminal.toggle":     true,
-	"terminal.fullscreen": true,
-	"editor.quit":         true,
-	"command.palette":     true,
-	"file.quickOpen":      true,
-	"sidebar.toggle":      true,
-	"focus.nextGroup":     true,
-	"focus.prevGroup":     true,
+	"terminal.sendNextKey":              true,
+	"terminal.toggleShortcutForwarding": true,
+	"terminal.toggle":                   true,
+	"terminal.fullscreen":               true,
+	"editor.quit":                       true,
+	"command.palette":                   true,
+	"file.quickOpen":                    true,
+	"sidebar.toggle":                    true,
+	"focus.nextGroup":                   true,
+	"focus.prevGroup":                   true,
 }
 
 func ParseKeyBindings(bindings []KeyBinding) error {
@@ -279,7 +281,10 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+f", Command: "search.find"},
 		{Key: "ctrl+r", Command: "search.replace"},
 		{Key: "ctrl+g", Command: "editor.goToLine"},
+		{Key: "ctrl+up", Command: "view.scrollLineUp"},
+		{Key: "ctrl+down", Command: "view.scrollLineDown"},
 		{Key: "ctrl+p", Command: "command.palette"},
+		{Key: "ctrl+k", Command: "terminal.sendNextKey"},
 		{Key: "ctrl+k p", Command: "file.quickOpen"},
 		{Key: "ctrl+o", Command: "workspace.openFolder"},
 		{Key: "ctrl+n", Command: "file.new"},
@@ -305,6 +310,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+k t", Command: "terminal.new"},
 		{Key: "ctrl+k s", Command: "file.saveAs"},
 		{Key: "ctrl+u", Command: "editor.autocomplete"},
+		{Key: "ctrl+.", Command: "editor.codeActions"},
 		{Key: "ctrl+k i", Command: "editor.hover"},
 		{Key: "f2", Command: "editor.rename"},
 		{Key: "f12", Command: "editor.goToDefinition"},
@@ -357,6 +363,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "alt+t", Command: "terminal.fullscreen"},
 		{Key: "f6", Command: "focus.nextGroup"},
 		{Key: "shift+f6", Command: "focus.prevGroup"},
+		{Key: "ctrl+f6", Command: "terminal.toggleShortcutForwarding"},
 		{Key: "f10", Command: "menu.file"},
 		{Key: "alt+f", Command: "menu.file"},
 		{Key: "alt+e", Command: "menu.edit"},

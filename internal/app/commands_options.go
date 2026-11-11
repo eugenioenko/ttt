@@ -9,13 +9,26 @@ import (
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
-func (a *App) SaveAndApplySettings() {
-	config.SaveSettings(*a.Settings)
+func (a *App) SaveAndApplySettings() bool {
 	a.ApplySettings(*a.Settings)
+	return a.persistSettings()
+}
+
+func (a *App) persistSettings() bool {
+	if err := config.SaveSettings(*a.Settings); err != nil {
+		a.StatusWarn(i18n.Format("settings.saveFailed", i18n.Args{"error": err.Error()}))
+		return false
+	}
+	return true
 }
 
 func (a *App) ToggleLineNumbers() {
 	a.Settings.Editor.LineNumbers = !a.Settings.Editor.LineNumbers
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleIndentGuides() {
+	a.Settings.Editor.IndentGuides = !a.Settings.Editor.IndentGuides
 	a.SaveAndApplySettings()
 }
 
@@ -171,8 +184,9 @@ func (a *App) ToggleShowTrailingNewline() {
 func (a *App) ToggleSyntaxHighlight() {
 	enabled := !a.Settings.Editor.IsSyntaxHighlightEnabled()
 	a.Settings.Editor.SyntaxHighlight = &enabled
-	a.SaveAndApplySettings()
-	a.StatusNotify(i18n.Text("status.restartToApplySyntaxHighlightChanges"))
+	if a.SaveAndApplySettings() {
+		a.StatusNotify(i18n.Text("status.restartToApplySyntaxHighlightChanges"))
+	}
 }
 
 func (a *App) ToggleBracketPairColorization() {
@@ -218,19 +232,23 @@ func (a *App) SetGutterStyle(style string) {
 }
 
 // Display labels for the gutter and border style values in config.
-var styleLabels = map[string]string{
-	"minimal":    i18n.Text("options.minimal"),
-	"compact":    i18n.Text("options.compact"),
-	"extended":   i18n.Text("options.extended"),
-	"default":    i18n.Text("options.default"),
-	"rounded":    i18n.Text("options.rounded"),
-	"sharp":      i18n.Text("options.sharp"),
-	"double":     i18n.Text("options.double"),
-	"bold":       i18n.Text("options.bold"),
-	"ascii":      i18n.Text("options.aSCII"),
-	"none":       i18n.Text("options.none"),
-	"background": i18n.Text("options.background"),
-	"invert":     i18n.Text("options.invert"),
+var styleLabels map[string]string
+
+func initStyleText() {
+	styleLabels = map[string]string{
+		"minimal":    i18n.Text("options.minimal"),
+		"compact":    i18n.Text("options.compact"),
+		"extended":   i18n.Text("options.extended"),
+		"default":    i18n.Text("options.default"),
+		"rounded":    i18n.Text("options.rounded"),
+		"sharp":      i18n.Text("options.sharp"),
+		"double":     i18n.Text("options.double"),
+		"bold":       i18n.Text("options.bold"),
+		"ascii":      i18n.Text("options.aSCII"),
+		"none":       i18n.Text("options.none"),
+		"background": i18n.Text("options.background"),
+		"invert":     i18n.Text("options.invert"),
+	}
 }
 
 func selectionStyleItems() []widgets.SelectItem {
@@ -260,6 +278,13 @@ func borderStyleItems() []widgets.SelectItem {
 		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
 	}
 	return items
+}
+
+func wordWrapBreakItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.WordWrapBreakWord, Label: i18n.Text("settings.wordWrapBreakWord")},
+		{ID: config.WordWrapBreakCharacter, Label: i18n.Text("settings.wordWrapBreakCharacter")},
+	}
 }
 
 func diffModeItems() []widgets.SelectItem {
@@ -385,6 +410,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		wordWrapChecked = ui.MenuChecked
 	}
 
+	indentGuidesChecked := menuChecked(a.Settings.Editor.IndentGuides)
+
 	bracketColorChecked := ui.MenuUnchecked
 	if a.Settings.Editor.BracketPairColorization {
 		bracketColorChecked = ui.MenuChecked
@@ -428,27 +455,37 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	fontIconsChecked := menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)
 
 	items := []ui.ContextMenuItem{
-		{Label: i18n.Text("menu.lineNumbers"), Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
-		{Label: i18n.Text("menu.wordWrap"), Command: "options.toggleWordWrap", Checked: wordWrapChecked},
-		{Label: i18n.Text("menu.autoIndent"), Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
-		{Label: i18n.Text("menu.autoDedent"), Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
-		{Label: i18n.Text("menu.syntaxHighlight"), Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
-		{Label: i18n.Text("menu.bracketColors"), Command: "options.toggleBracketColors", Checked: bracketColorChecked},
-		{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
-		{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
-		{Label: i18n.Text("menu.gitGutter"), Command: "options.toggleGitGutter", Checked: gitGutterChecked},
-		{Label: i18n.Text("menu.scrollbarGitMarks"), Command: "options.toggleScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.IsScrollbarGitMarksEnabled())},
-		{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
-		{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
-		{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
-		ui.MenuSep(),
+		{Label: i18n.Text("menu.editor"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.wordWrap"), Command: "options.toggleWordWrap", Checked: wordWrapChecked},
+			{Label: i18n.Text("menu.lineNumbers"), Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
+			{Label: i18n.Text("menu.indentGuides"), Command: "options.toggleIndentGuides", Checked: indentGuidesChecked},
+			{Label: i18n.Text("menu.syntaxHighlight"), Command: "options.toggleSyntaxHighlight", Checked: syntaxChecked},
+			{Label: i18n.Text("menu.bracketColors"), Command: "options.toggleBracketColors", Checked: bracketColorChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.autoIndent"), Command: "options.toggleAutoIndent", Checked: autoIndentChecked},
+			{Label: i18n.Text("menu.autoDedent"), Command: "options.toggleAutoDedent", Checked: autoDedentChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.indentation"), Command: "options.indentation"},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.gitGutter"), Command: "options.toggleGitGutter", Checked: gitGutterChecked},
+			{Label: i18n.Text("menu.scrollbarGitMarks"), Command: "options.toggleScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.IsScrollbarGitMarksEnabled())},
+		}},
+		{Label: i18n.Text("menu.codeAssist"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
+			{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
+		}},
+		{Label: i18n.Text("menu.appearance"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
+			{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
+			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
+			{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
+		}},
 		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
 		{Label: i18n.Text("menu.gitFiles"), Submenu: a.BuildGitFileOptions()},
 		ui.MenuSep(),
-		{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
-		{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
-		{Label: i18n.Text("menu.indentation"), Command: "options.indentation"},
-		ui.MenuSep(),
+		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 	}
 	return items
@@ -512,6 +549,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleLineNumbers", Title: i18n.Text("command.toggleLineNumbers"),
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ToggleLineNumbers,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleIndentGuides", Title: i18n.Text("options.toggleIndentGuides"),
+		Keywords: []string{"preferences", "settings", "editor", "view", "indentation"},
+		Handler:  app.ToggleIndentGuides,
 	})
 
 	reg.Register(command.Command{

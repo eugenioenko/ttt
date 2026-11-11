@@ -4,7 +4,6 @@ import (
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
-	"github.com/eugenioenko/xterm-go"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -138,18 +137,23 @@ func (tp *TerminalPanelWidget) DividerScreenX() int {
 }
 
 func (tp *TerminalPanelWidget) ContentRect(r Rect, scrollbar bool) Rect {
-	available := max(r.W-VerticalTabBarWidth, 0)
-	if scrollbar {
-		available = max(available-1, 0)
+	return tp.ContentRectFor(nil, r, scrollbar)
+}
+
+func (tp *TerminalPanelWidget) ContentRectFor(tw *TerminalWidget, r Rect, scrollbar bool) Rect {
+	return terminalContentRect(tp.areaRect(r), tp.paddingX(tw), scrollbar)
+}
+
+func (tp *TerminalPanelWidget) paddingX(tw *TerminalWidget) int {
+	if tw != nil && tw.PaddingX != nil {
+		return max(*tw.PaddingX, 0)
 	}
-	// Preserve xterm's minimum width; clamp before doubling to avoid overflow.
-	padding := min(max(tp.PaddingX, 0), max(available-xterm.MinimumCols, 0)/2)
-	return Rect{
-		X: r.X + min(VerticalTabBarWidth, max(r.W, 0)) + padding,
-		Y: r.Y,
-		W: available - 2*padding,
-		H: max(r.H, 0),
-	}
+	return tp.PaddingX
+}
+
+func (tp *TerminalPanelWidget) areaRect(r Rect) Rect {
+	stripW := min(VerticalTabBarWidth, max(r.W, 0))
+	return Rect{X: r.X + stripW, Y: r.Y, W: r.W - stripW, H: r.H}
 }
 
 func (tp *TerminalPanelWidget) syncTabBar() {
@@ -176,38 +180,19 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 	}
 
 	stripW := min(VerticalTabBarWidth, max(w, 0))
-	active := tp.widgets[tp.active]
-	tw, isTerminal := active.(*TerminalWidget)
-	if isTerminal && tw.Term != nil {
-		tw.Term.AckUpdate()
-	}
-	showScrollbar := isTerminal && tw.ScrollbarVisible()
-	content := tp.ContentRect(Rect{X: r.X, Y: r.Y, W: w, H: h}, showScrollbar)
-
 	tp.TabBar.Borders = tp.Borders
 	tp.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: stripW, H: h})
 	tp.TabBar.Render(surface.Sub(Rect{X: 0, Y: 0, W: stripW, H: h}))
-	contentX := content.X - r.X
-	blank := term.Cell{Ch: ' ', Style: term.StyleDefault}
-	if isTerminal && tw.Palette != nil {
-		blank.Direct = true
-		blank.Fg = tw.Palette.Fg
-		blank.Bg = tw.Palette.Bg
-	}
-	surface.Sub(Rect{X: stripW, W: contentX - stripW, H: h}).Fill(blank)
-	rightX := contentX + content.W
-	surface.Sub(Rect{X: rightX, W: max(w-rightX, 0), H: h}).Fill(blank)
 
-	active.SetRect(content)
-	if content.W > 0 && content.H > 0 {
-		active.Render(surface.Sub(Rect{X: content.X - r.X, Y: 0, W: content.W, H: content.H}))
+	area := tp.areaRect(Rect{X: r.X, Y: r.Y, W: w, H: h})
+	areaSurface := surface.Sub(Rect{X: stripW, W: area.W, H: h})
+	active := tp.widgets[tp.active]
+	if tw, ok := active.(*TerminalWidget); ok {
+		renderTerminalArea(areaSurface, area, tw, tp.paddingX(tw))
+		return
 	}
-	if isTerminal {
-		tw.scrollbar.Height = 0
-		if showScrollbar && content.W > 0 && content.H > 0 {
-			tw.renderScrollbar(surface.Sub(Rect{X: w - 1, W: 1, H: h}))
-		}
-	}
+	content := terminalContentRect(area, tp.PaddingX, false)
+	renderPaddedContent(areaSurface, area, content, active, term.Cell{Ch: ' ', Style: term.StyleDefault})
 }
 
 func (tp *TerminalPanelWidget) HandleEvent(ev tcell.Event) EventResult {
@@ -233,15 +218,8 @@ func (tp *TerminalPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 			if w == nil {
 				return EventIgnored
 			}
-			if tw, ok := w.(*TerminalWidget); ok && tw.scrollbar.Visible() && mx == tw.scrollbar.X {
-				return w.HandleEvent(ev)
-			}
-			r = w.GetRect()
-			if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
-				if mev.Buttons()&tcell.Button1 != 0 {
-					return EventConsumed
-				}
-				return EventIgnored
+			if result, stop := terminalMouseOutsideContent(w, mev); stop {
+				return result
 			}
 		}
 	}

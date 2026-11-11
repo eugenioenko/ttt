@@ -23,7 +23,7 @@ func TestReleaseContractMixedChangeKeepsIndexBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if result.Err != nil {
 		t.Fatal(result.Err)
 	}
@@ -62,7 +62,7 @@ func TestReleaseContractIntentToAddRenders(t *testing.T) {
 		t.Fatal(err)
 	}
 	testAppGit(t, dir, "add", "-N", "--", "intent.txt")
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if result.Err != nil || len(result.Files) != 1 {
 		t.Fatalf("intent-to-add result = %+v", result)
 	}
@@ -91,7 +91,7 @@ func TestReadCurrentChangesCoversUntrackedStagedDeletedRenameCopyAndConflictShap
 	}
 	testAppGit(t, dir, "mv", "rename.txt", "renamed.txt")
 
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if result.Err != nil {
 		t.Fatal(result.Err)
 	}
@@ -109,7 +109,7 @@ func TestReadCurrentChangesCoversUntrackedStagedDeletedRenameCopyAndConflictShap
 	copyPath := filepath.Join(dir, "copy.txt")
 	write("copy.txt", "initial\n")
 	testAppGit(t, dir, "add", "copy.txt")
-	copyResult := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 2, 2,
+	copyResult := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 2, 2,
 		[]git.FileStatus{{Status: "C", OldPath: "initial.txt", Path: "copy.txt", Staged: true}})
 	if copyResult.Err != nil || len(copyResult.Files) != 1 || copyResult.Files[0].OldPath != "initial.txt" {
 		t.Fatalf("copy boundary=%+v path=%s", copyResult, copyPath)
@@ -132,7 +132,7 @@ func TestReadCurrentChangesPreservesUnmergedIndexStages(t *testing.T) {
 		t.Fatal("merge unexpectedly succeeded")
 	}
 
-	result := readCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
+	result := readGitCurrentChanges(context.Background(), dir, git.RevisionIdentity(dir), currentChangesTabID(dir), 1, 1, currentChangesStatuses(t, dir))
 	if result.Err != nil || len(result.Files) != 1 {
 		t.Fatalf("conflict result=%+v", result)
 	}
@@ -140,7 +140,7 @@ func TestReadCurrentChangesPreservesUnmergedIndexStages(t *testing.T) {
 	if file.Status != "U" || file.Stage != ui.CommitDetailStageConflict || file.Boundary != ui.CommitDetailBoundaryConflictToWorktree || file.ConflictCode != "UU" {
 		t.Fatalf("conflict identity=%+v", file)
 	}
-	if string(file.IndexStages) != string([]byte{1, 2, 3}) {
-		t.Fatalf("conflict stages = %v", file.IndexStages)
+	if strings.Join(file.ConflictSources, "") != "123" {
+		t.Fatalf("conflict stages = %v", file.ConflictSources)
 	}
 }

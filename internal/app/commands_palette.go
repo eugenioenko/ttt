@@ -8,25 +8,18 @@ import (
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
-	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	if a.Root.HasModalOverlay() {
 		return
 	}
+	previousFocus := a.Root.Focused
 	palette := ui.NewSelectDialogWidget(a.Reg.List())
+	palette.Input.ControlModifiers = &a.Root.ControlModifiers
 	palette.Borders = a.Borders
 	palette.Icons = a.Settings.Appearance.Icons
-	files := workspace.ListFiles(a.Workspace.Paths(), workspace.FileVisibility{
-		ShowHidden:     a.Settings.QuickOpen.ShowHidden,
-		ShowGitIgnored: a.Settings.QuickOpen.ShowGitIgnored,
-	})
-	items := make([]ui.PaletteFile, len(files))
-	for i, file := range files {
-		items[i] = ui.PaletteFile{Rel: file.Rel, Abs: file.Abs}
-	}
-	palette.SetFiles(items)
+	a.prepareQuickOpen(palette)
 	if len(initialText) > 0 {
 		palette.Input.SetText(initialText[0])
 	} else if fileMode {
@@ -34,6 +27,9 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	}
 	palette.OnExecute = func(id string) {
 		a.DismissDialog()
+		if (id == "terminal.sendNextKey" || id == "terminal.toggleShortcutForwarding") && previousFocus != nil {
+			a.Root.SetFocus(previousFocus)
+		}
 		a.Reg.Execute(id)
 	}
 	palette.OnOpenFile = func(absPath string) {
@@ -90,7 +86,7 @@ func (a *App) ShowThemePicker() {
 			}
 			applyTheme(theme)
 			a.Settings.Theme = name
-			config.SaveSettings(*a.Settings)
+			a.persistSettings()
 		},
 		OnDismiss: func() {
 			a.DismissDialog()
@@ -128,7 +124,7 @@ func (a *App) ShowIndentSettings() {
 		a.EditorGroup.InsertSpaces = !useTabs
 		a.EditorGroup.SetTabSize(tabSize)
 		a.EditorGroup.SetUseTabs(useTabs)
-		config.SaveSettings(*a.Settings)
+		a.persistSettings()
 	})
 }
 
@@ -181,6 +177,7 @@ func (a *App) ShowLanguagePicker() {
 }
 
 func registerPaletteCommands(app *App) {
+	app.Reg.Register(command.Command{ID: "language.select", Title: i18n.Text("command.changeDisplayLanguage"), Keywords: []string{"language", "locale", "translation", "display"}, Handler: app.ShowDisplayLanguagePicker})
 	reg := app.Reg
 
 	reg.Register(command.Command{

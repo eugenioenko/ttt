@@ -1,9 +1,12 @@
 package app
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/i18n"
@@ -11,6 +14,20 @@ import (
 
 func (a *App) explorerReload() {
 	a.Explorer.Reload()
+}
+
+func (a *App) setExplorerSearchDebounce(delayMs int) {
+	search := a.Explorer.Search
+	if search.Debounce != nil {
+		a.releaseTask(search.Debounce)
+	}
+	search.Debounce = NewTask[struct{}](a, asynctask.TaskOptions{Delay: time.Duration(delayMs) * time.Millisecond})
+	search.RefreshSearch()
+}
+
+func (a *App) ExplorerFind() {
+	a.ShowPanel("explorer", a.Explorer.Adapter)
+	a.Explorer.Search.ShowSearch()
 }
 
 func (a *App) ExplorerOpen() {
@@ -76,6 +93,19 @@ func (a *App) ExplorerReveal() {
 	path := a.explorerNodePath()
 	a.ExplorerContextNode = nil
 	a.FileOpReveal(path)
+}
+
+func (a *App) ExplorerOpenInTerminal() {
+	path := a.explorerNodePath()
+	a.ExplorerContextNode = nil
+	if path == "" {
+		a.StatusWarn(i18n.Text("status.noFileSelected"))
+		return
+	}
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		path = filepath.Dir(path)
+	}
+	a.SpawnTerminalSpec(TerminalSpec{Cwd: path})
 }
 
 func (a *App) ExplorerRevealActiveFile() {
@@ -156,6 +186,11 @@ func (a *App) relativePath(absPath string) string {
 
 func registerExplorerCommands(app *App) {
 	reg := app.Reg
+	reg.Register(command.Command{
+		ID: "explorer.find", Title: i18n.Text("command.explorerFind"),
+		Keywords: []string{"explorer", "search", "filter", "folder", "find"},
+		Handler:  app.ExplorerFind,
+	})
 
 	reg.Register(command.Command{
 		ID: "explorer.refresh", Title: i18n.Text("command.explorerRefresh"),
@@ -233,6 +268,12 @@ func registerExplorerCommands(app *App) {
 		ID: "explorer.copyAbsolutePath", Title: i18n.Text("command.explorerCopyAbsolutePath"),
 		Keywords: []string{"explorer", "file", "path", "copy", "clipboard", "absolute"},
 		Handler:  app.ExplorerCopyAbsolutePath,
+	})
+
+	reg.Register(command.Command{
+		ID: "explorer.openInTerminal", Title: i18n.Text("command.explorerOpenInTerminal"),
+		Keywords: []string{"explorer", "folder", "terminal", "shell", "cd", "open"},
+		Handler:  app.ExplorerOpenInTerminal,
 	})
 
 	reg.Register(command.Command{

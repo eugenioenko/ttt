@@ -2,7 +2,9 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 )
 
@@ -11,6 +13,7 @@ var (
 	GutterStyles        = []string{"minimal", "compact", "extended"}
 	BorderStyles        = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
 	DiffModes           = []string{"split", "unified"}
+	WordWrapBreaks      = []string{WordWrapBreakWord, WordWrapBreakCharacter}
 	DiffContexts        = []string{"changes", "full"}
 	GitFileViews        = []string{"tree", "list"}
 	IconModes           = []string{IconsNerdFont, IconsNone}
@@ -20,6 +23,8 @@ var (
 )
 
 const (
+	WordWrapBreakWord        = "word"
+	WordWrapBreakCharacter   = "character"
 	DiffModeSplit            = "split"
 	DiffModeUnified          = "unified"
 	DiffContextChanges       = "changes"
@@ -37,23 +42,40 @@ const (
 	SelectionStyleInvert     = "invert"
 )
 
+type Application struct {
+	Name        string   `json:"name"`
+	CommandText string   `json:"command-text,omitempty"`
+	Command     string   `json:"command"`
+	Args        []string `json:"args,omitempty"`
+	Cwd         string   `json:"cwd,omitempty"`
+	Icon        string   `json:"icon,omitempty"`
+	PaddingX    *int     `json:"padding_x,omitempty"`
+	OpenWith    bool     `json:"openWith,omitempty"`
+	// Location is "editor" (the default) or "panel".
+	Location string `json:"location,omitempty"`
+	KeepOpen bool   `json:"keepOpen,omitempty"`
+}
+
 type TerminalSettings struct {
 	Shell string `json:"shell,omitempty"`
 	// Args are passed to Shell unchanged, so a tab can run a program other than
 	// an interactive shell (e.g. Shell="pi", Args=["--model", "..."]).
-	Args           []string `json:"args,omitempty"`
-	Scrollback     int      `json:"scrollback,omitempty"`
-	SelectionStyle string   `json:"selectionStyle"`
-	CtrlVPastes    bool     `json:"ctrlVPastes"`
-	PaddingX       int      `json:"padding_x"`
+	Args             []string `json:"args,omitempty"`
+	Scrollback       int      `json:"scrollback,omitempty"`
+	SelectionStyle   string   `json:"selectionStyle"`
+	CtrlVPastes      bool     `json:"ctrlVPastes"`
+	ForwardShortcuts bool     `json:"forwardShortcuts"`
+	PaddingX         int      `json:"padding_x"`
+	ShellIntegration bool     `json:"shellIntegration"`
 }
 
 func DefaultTerminalSettings() TerminalSettings {
 	return TerminalSettings{
-		Scrollback:     1000,
-		SelectionStyle: SelectionStyleBackground,
-		CtrlVPastes:    true,
-		PaddingX:       1,
+		Scrollback:       1000,
+		SelectionStyle:   SelectionStyleBackground,
+		CtrlVPastes:      true,
+		PaddingX:         1,
+		ShellIntegration: true,
 	}
 }
 
@@ -109,11 +131,15 @@ func DefaultLSPSettings() LSPSettings {
 
 type EditorSettings struct {
 	AutoClosing AutoClosingSettings `json:"autoClosing"`
+	PreviewTabs *bool               `json:"previewTabs,omitempty"`
 
 	TabSize           int                               `json:"tabSize"`
 	InsertSpaces      bool                              `json:"insertSpaces"`
 	WordWrap          bool                              `json:"wordWrap"`
 	WordWrapColumn    int                               `json:"wordWrapColumn"`
+	WordWrapBreak     string                            `json:"wordWrapBreak"`
+	IndentGuides      bool                              `json:"indentGuides"`
+	ScrollLines       int                               `json:"scrollLines"`
 	LanguageOverrides map[string]EditorLanguageOverride `json:"languageOverrides,omitempty"`
 	// HighlightTimeLimit caps tokenizing one line, in milliseconds; 0 keeps the
 	// built-in limit. Unlisted: raise it only where every line must finish, such
@@ -169,8 +195,9 @@ func DefaultAutoClosingSettings() AutoClosingSettings {
 }
 
 type EditorLanguageOverride struct {
-	WordWrap       *bool `json:"wordWrap,omitempty"`
-	WordWrapColumn *int  `json:"wordWrapColumn,omitempty"`
+	WordWrap       *bool  `json:"wordWrap,omitempty"`
+	WordWrapColumn *int   `json:"wordWrapColumn,omitempty"`
+	WordWrapBreak  string `json:"wordWrapBreak,omitempty"`
 }
 
 func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
@@ -184,6 +211,17 @@ func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
 		}
 	}
 	return enabled, max(column, 0)
+}
+
+func (e EditorSettings) ResolveWordWrapBreak(languageID string) string {
+	mode := e.WordWrapBreak
+	if o, ok := e.LanguageOverrides[languageID]; ok && languageID != "" && o.WordWrapBreak != "" {
+		mode = o.WordWrapBreak
+	}
+	if !slices.Contains(WordWrapBreaks, mode) {
+		return WordWrapBreakWord
+	}
+	return mode
 }
 
 type LargeFileSettings struct {
@@ -261,11 +299,18 @@ func megabytes(mb *int, def int) int64 {
 	return int64(n) << 20
 }
 
+// PreviewTabsEnabled reports whether files open as preview tabs (VS Code's
+// workbench.editor.enablePreview). Enabled by default.
+func (e EditorSettings) PreviewTabsEnabled() bool {
+	return e.PreviewTabs == nil || *e.PreviewTabs
+}
+
 func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
 		AutoClosing:             DefaultAutoClosingSettings(),
 		TabSize:                 4,
 		InsertSpaces:            true,
+		WordWrapBreak:           WordWrapBreakWord,
 		DiffMode:                DiffModeSplit,
 		DiffContext:             DiffContextChanges,
 		DiffSignsColor:          true,
@@ -302,6 +347,7 @@ type ExplorerSettings struct {
 	DimStagedGitColors bool `json:"dimStagedGitColors"`
 	AutoReveal         bool `json:"autoReveal"`
 	CompactFolders     bool `json:"compactFolders"`
+	UseTrash           bool `json:"useTrash"`
 }
 
 // LegacyChevrons is the old appearance.chevrons setting, migrated into
@@ -382,6 +428,7 @@ func DefaultExplorerSettings() ExplorerSettings {
 		ShowGitIgnored:  true,
 		GitStatusColors: true,
 		CompactFolders:  true,
+		UseTrash:        true,
 	}
 }
 
@@ -433,16 +480,30 @@ func (w WelcomeSettings) IsRecentFoldersEnabled() bool {
 	return w.RecentFolders == nil || *w.RecentFolders
 }
 
+const (
+	ModifierControl      = "control"
+	ModifierControlSuper = "control+super"
+	ModifierSuper        = "super"
+)
+
+var KeyboardModifiers = []string{ModifierControl, ModifierControlSuper, ModifierSuper}
+
+type KeyboardSettings struct {
+	ModifierKey string `json:"modifierKey"`
+}
+
 type Settings struct {
-	Version     int    `json:"version"`
-	Theme       string `json:"theme,omitempty"`
-	DebugMode   bool   `json:"debugMode,omitempty"`
-	ReuseWindow bool   `json:"reuseWindow,omitempty"`
+	Version     int              `json:"version"`
+	Theme       string           `json:"theme,omitempty"`
+	DebugMode   bool             `json:"debugMode,omitempty"`
+	ReuseWindow bool             `json:"reuseWindow,omitempty"`
+	Language    LanguageSettings `json:"language,omitzero"`
 	// These sections must NOT use omitzero: their defaults are non-zero, so an
 	// all-false/all-zero section would be omitted on save and silently revert to
 	// the defaults on the next load.
 	Appearance   AppearanceSettings   `json:"appearance"`
 	Editor       EditorSettings       `json:"editor"`
+	Keyboard     KeyboardSettings     `json:"keyboard"`
 	QuickOpen    QuickOpenSettings    `json:"quickOpen"`
 	Search       SearchSettings       `json:"search"`
 	Explorer     ExplorerSettings     `json:"explorer"`
@@ -456,9 +517,10 @@ type Settings struct {
 	Image        ImageSettings        `json:"image"`
 	// Plugins is safe: each field's zero value (a nil *bool, an empty string)
 	// means its default, so the zero value and "unset" mean the same thing.
-	Plugins    PluginSettings    `json:"plugins,omitzero"`
-	Welcome    WelcomeSettings   `json:"welcome,omitzero"`
-	Formatters map[string]string `json:"formatters,omitempty"`
+	Plugins      PluginSettings    `json:"plugins,omitzero"`
+	Welcome      WelcomeSettings   `json:"welcome,omitzero"`
+	Formatters   map[string]string `json:"formatters,omitempty"`
+	Applications []Application     `json:"applications,omitempty"`
 	// Extra holds top-level keys that are not part of the core schema — chiefly
 	// plugin-namespaced settings (e.g. "vim"). Without this, json.Unmarshal into
 	// the struct would silently drop them, making ttt.settings.get/set unusable
@@ -469,9 +531,9 @@ type Settings struct {
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
-	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true,
+	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "applications": true, "keyboard": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {
@@ -523,6 +585,7 @@ func DefaultSettings() Settings {
 		Version:      1,
 		Appearance:   DefaultAppearanceSettings(),
 		Editor:       DefaultEditorSettings(),
+		Keyboard:     KeyboardSettings{ModifierKey: ModifierControl},
 		Search:       DefaultSearchSettings(),
 		Explorer:     DefaultExplorerSettings(),
 		Sidebar:      DefaultSidebarSettings(),
@@ -544,13 +607,22 @@ func (s Settings) FormatterForExt(ext string) string {
 }
 
 func normalizeSettings(s *Settings) {
+	if !slices.Contains(KeyboardModifiers, s.Keyboard.ModifierKey) {
+		s.Keyboard.ModifierKey = ModifierControl
+	}
 	s.Editor.WordWrapColumn = max(s.Editor.WordWrapColumn, 0)
+	if !slices.Contains(WordWrapBreaks, s.Editor.WordWrapBreak) {
+		s.Editor.WordWrapBreak = WordWrapBreakWord
+	}
 	for language, o := range s.Editor.LanguageOverrides {
 		if o.WordWrapColumn != nil && *o.WordWrapColumn < 0 {
 			column := 0
 			o.WordWrapColumn = &column
-			s.Editor.LanguageOverrides[language] = o
 		}
+		if o.WordWrapBreak != "" && !slices.Contains(WordWrapBreaks, o.WordWrapBreak) {
+			o.WordWrapBreak = ""
+		}
+		s.Editor.LanguageOverrides[language] = o
 	}
 	if !slices.Contains(GutterStyles, s.Editor.GutterStyle) {
 		s.Editor.GutterStyle = "compact"
@@ -609,17 +681,40 @@ func normalizeSettings(s *Settings) {
 }
 
 func LoadSettings() Settings {
+	s, _ := ReadSettings()
+	return s
+}
+
+func ReadSettings() (Settings, error) {
+	for _, dir := range configPaths() {
+		s, err := readSettingsFile(filepath.Join(dir, "settings.json"))
+		if !os.IsNotExist(err) {
+			return s, err
+		}
+	}
 	s := DefaultSettings()
-	paths := configPaths()
-	if data, err := readFirst(paths, "settings.json"); err == nil {
-		json.Unmarshal(data, &s)
+	normalizeSettings(&s)
+	return s, nil
+}
+
+func readSettingsFile(path string) (Settings, error) {
+	s := DefaultSettings()
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if err = json.Unmarshal(data, &s); err != nil {
+			err = fmt.Errorf("%s: %w", path, err)
+			s = DefaultSettings()
+		}
 	}
 	normalizeSettings(&s)
-	return s
+	return s, err
 }
 
 func SaveSettings(s Settings) error {
 	path := ConfigFilePath("settings.json")
+	if _, err := readSettingsFile(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err

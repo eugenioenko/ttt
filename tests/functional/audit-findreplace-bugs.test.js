@@ -98,7 +98,7 @@ describe("BUG-011: Replace All ignores case-sensitive toggle", () => {
 });
 
 describe("BUG-012: Replace All is not a single undo step", () => {
-  it.fails("one undo fully reverts a replace-all", () => {
+  it("one undo fully reverts a replace-all", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "undoall.txt", "cat cat cat\ndog\ncat\n");
 
@@ -116,9 +116,6 @@ describe("BUG-012: Replace All is not a single undo step", () => {
     tui.press("ctrl+s");
     tui.run();
 
-    // Buggy behavior: each of the 4 replacements pushes 2 ungrouped undo
-    // commands (8 undos to revert); one undo leaves " dog dog" — a state
-    // the user never saw.
     expect(readFile(file)).toBe("cat cat cat\ndog\ncat\n");
   });
 });

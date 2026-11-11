@@ -66,13 +66,59 @@ lifecycle.
 
 ### Services
 
-Packages: `internal/git`, `internal/github`, `internal/jsonrpc`,
-`internal/lsp`, `internal/terminal`, `internal/watcher`, and
-`internal/workspace`.
+Packages: `internal/scm`, `internal/git`, `internal/github`, `internal/jsonrpc`,
+`internal/lsp`, `internal/terminal`, `internal/watcher`,
+`internal/workspace`, `internal/trash`, and `internal/update`.
 
 Owns external-process and external-state integration. Services expose typed
 operations and results without owning product widgets. Long-running work must
 have explicit cancellation, identity, shutdown, and stale-result behavior.
+
+`internal/scm` owns the internal provider, repository, optional staging, and
+optional working-copy baseline and single-change read contracts. Git supplies
+the built-in adapter. Repository discovery, status, active identity, and staging
+use this boundary; `RepositoryState` retains async lifecycle ownership. Working-tree state, selection, and Explorer decorations
+use typed SCM changes and identities. The panel retains its existing two-section
+projection; changes keep their provider group identity without requiring an
+index. Editor gutters and editable working-tree diffs read `scm.BaselineReader`;
+Git's index baseline and conflict HEAD fallback stay inside its adapter. Missing,
+ignored, and conflicted content are explicit states; failed reads are errors.
+Repository objects are captured on the main thread before background reads,
+which keep the existing cancellation and stale-result guards. Single-file
+read-only diffs use `scm.ChangeReader` through the cancellable diff-open task.
+Aggregate Current Changes also consumes typed changes through this capability;
+Git conflict-side selection, conflict detail, and verified working-file reads
+stay in the Git service. A provider can identify a shared conflict resolution
+view for aggregate deduplication without removing sidebar action groups.
+Provider groups and opaque conflict-side identities
+participate in aggregate refresh and per-file view identity. The existing
+`RepositoryState` owner retains cancellation, coalescing, and stale-result guards.
+The Changes panel passes typed changes without converting provider groups into
+Git status. Git resolves HEAD/index endpoints and supplies patch metadata for
+renames, modes, and binary changes inside its adapter.
+
+`scm.HistoryReader` supplies the paged history list with opaque entry identities
+and immutable snapshot anchors. Git validates its full object IDs internally;
+pagination, cancellation, and selection restoration remain panel-owned.
+
+`scm.RevisionReader` supplies revision metadata, typed changed paths, patches,
+and separately requested full-file endpoints. Git resolves first-parent, root,
+rename/copy, and missing endpoints in its adapter. Historical content stays lazy;
+request ownership, cancellation, incarnation guards, and per-file retry remain
+in the application. Revision IDs are opaque, including in history tree identity.
+
+Remaining integration work before exposing another provider:
+
+- Keep Git mutation commands Git-specific and gate them by the selected provider.
+  Providers will contribute their own actions through the future host action API.
+- Git-derived enumeration, blame, GitHub PRs/permalinks, and Git worktree tools
+  remain Git-specific. Gate these outside Git; introduce a shared contract only
+  when a second provider needs one. Preserve ordinary file browsing outside Git.
+- Provider presentation retains its compatible staged/unstaged projection and
+  command identifiers. Provider-defined groups, labels, and actions are follow-ups.
+- Provider selection, workspace discovery integration, and Lua registration,
+  permissions, cancellation/unload, invalidation, and colocated-repository policy
+  remain host integration work. Public plugin APIs and Jujutsu come afterward.
 
 ### Presentation kernel
 
@@ -86,9 +132,14 @@ projection. `internal/widgets` contains primitives with more than one product
 or plugin consumer; it is not a destination for every visually reusable
 product surface.
 
-`internal/i18n` owns the embedded English UI catalog and named message
-interpolation. Presentation and application code resolve user-facing copy
-through it; identifiers and external service messages keep their own values.
+`internal/i18n` owns the embedded English UI catalog, immutable runtime
+catalogs, English-source and placeholder validation, and named interpolation.
+Presentation and application code resolve user-facing copy through it;
+identifiers and external service messages keep their own values. The application
+loads the selected catalog before constructing widgets, manages language-pack
+caches and restart-based settings, and delivers background update results on
+the main thread. The plugin host owns declarative language contributions and
+bounded, commit-pinned catalog downloads; catalog updates never execute Lua.
 
 `internal/asynctask` provides terminal-independent scheduling with injected
 execution and delivery. Product widgets may use it directly; the application

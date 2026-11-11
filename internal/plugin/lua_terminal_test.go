@@ -9,25 +9,28 @@ import (
 )
 
 type mockTerminalAPI struct {
-	shell string
-	args  []string
-	env   []string
-	cwd   string
-	label string
+	shell    string
+	args     []string
+	env      []string
+	cwd      string
+	label    string
+	location string
 
-	sentID   string
-	sentText string
-	tail     string
-	tailMax  int
-	screen   string
-	focused  string
-	closed   string
-	infos    []TerminalInfo
-	spawnErr error
+	sentID        string
+	sentText      string
+	tail          string
+	tailMax       int
+	screen        string
+	focused       string
+	closed        string
+	infos         []TerminalInfo
+	spawnErr      error
+	paletteStatus string
+	paletteColors map[string]string
 }
 
-func (m *mockTerminalAPI) TerminalSpawn(shell string, args, env []string, cwd, label string) (string, error) {
-	m.shell, m.args, m.env, m.cwd, m.label = shell, args, env, cwd, label
+func (m *mockTerminalAPI) TerminalSpawn(spec TerminalSpawnSpec) (string, error) {
+	m.shell, m.args, m.env, m.cwd, m.label, m.location = spec.Shell, spec.Args, spec.Env, spec.Cwd, spec.Label, spec.Location
 	if m.spawnErr != nil {
 		return "", m.spawnErr
 	}
@@ -59,6 +62,10 @@ func (m *mockTerminalAPI) TerminalFocus(id string) error {
 }
 
 func (m *mockTerminalAPI) TerminalList() []TerminalInfo { return m.infos }
+func (m *mockTerminalAPI) TerminalPalette() (string, map[string]string) {
+	return m.paletteStatus, m.paletteColors
+}
+func (m *mockTerminalAPI) RequestTerminalPalette() {}
 
 func setupTestPluginWithTerminal(perms PermissionSet, api *mockTerminalAPI) (*Plugin, func()) {
 	p, cleanup := newTestPluginBase(perms)
@@ -111,6 +118,42 @@ func TestTerminalSpawnPassesTheSpec(t *testing.T) {
 	}
 }
 
+func TestTerminalSpawnLocation(t *testing.T) {
+	for _, tt := range []struct {
+		location, want, err string
+	}{
+		{"", "", ""},
+		{"panel", "panel", ""},
+		{"editor", "editor", ""},
+		{"sidebar", "", `terminal.spawn: location must be "panel" or "editor"`},
+	} {
+		t.Run(tt.location, func(t *testing.T) {
+			mock := &mockTerminalAPI{location: "unset"}
+			p, cleanup := setupTestPluginWithTerminal(PermissionSet{TerminalControl: true}, mock)
+			defer cleanup()
+			p.State.SetGlobal("location", lua.LString(tt.location))
+			if err := p.State.DoString(`
+				local term = require("ttt.terminal")
+				_G.id, _G.err = term.spawn{shell = "edamame", args = {"README.md"}, location = location}
+			`); err != nil {
+				t.Fatalf("lua: %v", err)
+			}
+			if tt.err != "" {
+				if got := p.State.GetGlobal("err").String(); got != tt.err {
+					t.Fatalf("err = %q, want %q", got, tt.err)
+				}
+				if mock.location != "unset" {
+					t.Fatal("an invalid location must not spawn")
+				}
+				return
+			}
+			if mock.location != tt.want {
+				t.Fatalf("location = %q, want %q", mock.location, tt.want)
+			}
+		})
+	}
+}
+
 func TestTerminalSpawnErrorIsReturned(t *testing.T) {
 	mock := &mockTerminalAPI{spawnErr: errors.New("boom")}
 	p, cleanup := setupTestPluginWithTerminal(
@@ -138,7 +181,7 @@ func TestTerminalSpawnErrorIsReturned(t *testing.T) {
 func TestTerminalSendReadFocusList(t *testing.T) {
 	mock := &mockTerminalAPI{
 		tail:  "pane tail",
-		infos: []TerminalInfo{{ID: "terminal-0", Label: "pi", Cols: 80, Rows: 24}},
+		infos: []TerminalInfo{{ID: "terminal-0", Label: "pi", Location: "editor", Cols: 80, Rows: 24}},
 	}
 	p, cleanup := setupTestPluginWithTerminal(
 		PermissionSet{TerminalControl: true, TerminalRead: true},
@@ -157,6 +200,7 @@ func TestTerminalSendReadFocusList(t *testing.T) {
 		_G.first_id = list[1].id
 		_G.first_label = list[1].label
 		_G.first_cols = list[1].cols
+		_G.first_location = list[1].location
 	`)
 	if err != nil {
 		t.Fatalf("lua: %v", err)
@@ -184,6 +228,9 @@ func TestTerminalSendReadFocusList(t *testing.T) {
 	}
 	if int(p.State.GetGlobal("first_cols").(lua.LNumber)) != 80 {
 		t.Errorf("list cols = %v", p.State.GetGlobal("first_cols"))
+	}
+	if got := p.State.GetGlobal("first_location").String(); got != "editor" {
+		t.Errorf("list location = %q", got)
 	}
 }
 
@@ -220,5 +267,35 @@ func TestTerminalPermissionsOmitTheFunctions(t *testing.T) {
 	}
 	if ctl.State.GetGlobal("has_spawn") != lua.LTrue {
 		t.Fatal("spawn must be present with terminal.control")
+	}
+}
+
+func TestTerminalPaletteUsesDedicatedPermission(t *testing.T) {
+	api := &mockTerminalAPI{paletteStatus: "partial", paletteColors: map[string]string{"10": "rgb:aaaa/bbbb/cccc"}}
+	for _, tc := range []struct {
+		name  string
+		perms PermissionSet
+		want  bool
+	}{
+		{"palette grant", PermissionSet{TerminalPalette: true}, true},
+		{"terminal read alone", PermissionSet{TerminalRead: true}, false},
+		{"denied", PermissionSet{}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, cleanup := setupTestPluginWithTerminal(tc.perms, api)
+			defer cleanup()
+			if err := p.State.DoString(`local t = require("ttt.terminal"); _G.has_palette=t.palette~=nil; _G.has_request=t.request_palette~=nil; if t.palette then local p=t.palette(); _G.status=p.status; _G.color=p.colors["10"] end`); err != nil {
+				t.Fatal(err)
+			}
+			if (p.State.GetGlobal("has_palette") == lua.LTrue) != tc.want {
+				t.Fatalf("palette available = %v, want %v", p.State.GetGlobal("has_palette"), tc.want)
+			}
+			if (p.State.GetGlobal("has_request") == lua.LTrue) != tc.want {
+				t.Fatalf("request_palette available = %v, want %v", p.State.GetGlobal("has_request"), tc.want)
+			}
+			if tc.want && (p.State.GetGlobal("status").String() != "partial" || p.State.GetGlobal("color").String() != "rgb:aaaa/bbbb/cccc") {
+				t.Fatalf("palette snapshot status=%v color=%v", p.State.GetGlobal("status"), p.State.GetGlobal("color"))
+			}
+		})
 	}
 }

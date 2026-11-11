@@ -23,6 +23,10 @@ func (r *Registry) Register(cmd Command) {
 	r.commands[cmd.ID] = cmd
 }
 
+func (r *Registry) Unregister(id string) {
+	delete(r.commands, id)
+}
+
 func (r *Registry) Execute(id string) bool {
 	cmd, ok := r.commands[id]
 	if !ok {

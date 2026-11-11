@@ -6,6 +6,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
 
 func RegisterCommands(app *App) {
@@ -25,6 +26,7 @@ func RegisterCommands(app *App) {
 	registerDebugCommands(app)
 	registerWidgetCallbacks(app)
 	RegisterEscapeDismissers(app)
+	app.syncApps()
 }
 
 func (a *App) RebindKeys() {
@@ -32,6 +34,7 @@ func (a *App) RebindKeys() {
 	a.Reg.ClearAllShortcuts()
 	config.ParseKeyBindings(a.Keybindings)
 	BindKeys(a.Root, a.Reg, a.Keybindings)
+	a.refreshSettingsShortcuts()
 }
 
 func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBinding) {
@@ -40,33 +43,69 @@ func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBind
 			continue
 		}
 		cmdID := kb.Command
-		reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key))
+		reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key, root.ControlModifiers))
 		if kb.IsChord() {
 			steps := make([]ui.GlobalKeyBinding, len(kb.Steps))
 			for i, step := range kb.Steps {
 				key, mod, rn := comboToTcell(step)
 				steps[i] = ui.GlobalKeyBinding{Key: key, Mod: mod, Rune: rn}
 			}
-			root.AddChordKey(steps, func() {
-				reg.Execute(cmdID)
-			})
+			bindCommandChord(root, reg, steps, cmdID)
 		} else {
 			key, mod, rn := comboToTcell(kb.Steps[0])
 			handler := func() { reg.Execute(cmdID) }
 			root.AddGlobalKey(key, mod, rn, handler)
 			if config.ForceKeyCommands[cmdID] {
-				root.AddForceKey(key, mod, rn, handler)
+				if cmdID == "terminal.toggleShortcutForwarding" {
+					root.AddTerminalToggleKey(key, mod, rn, handler)
+				} else if cmdID == "terminal.sendNextKey" {
+					root.AddTerminalForceKey(key, mod, rn, handler)
+				} else {
+					root.AddForceKey(key, mod, rn, handler)
+				}
 			}
 		}
 	}
 }
 
-func FormatKeyBinding(key string) string {
+func bindCommandChord(root *ui.Root, reg *command.Registry, steps []ui.GlobalKeyBinding, cmdID string) {
+	handler := func() { reg.Execute(cmdID) }
+	if editorChordCommand(cmdID) {
+		root.AddEditorChordKey(steps, handler)
+	} else {
+		root.AddChordKey(steps, handler)
+	}
+}
+
+func editorChordCommand(id string) bool {
+	if id == "editor.focus" || id == "editor.quit" {
+		return false
+	}
+	domain, _, _ := strings.Cut(id, ".")
+	switch domain {
+	case "editor", "multicursor", "fold", "diff":
+		return true
+	}
+	switch id {
+	case "file.save", "file.saveAs", "file.reloadFromDisk", "search.find", "search.replace", "search.findNext", "search.findPrev", "search.clearFind":
+		return true
+	case "view.scrollUp", "view.scrollDown", "view.scrollLineUp", "view.scrollLineDown":
+		return true
+	}
+	return false
+}
+
+func FormatKeyBinding(key string, modifiers tcell.ModMask) string {
 	parts := strings.Fields(key)
 	for i, part := range parts {
 		tokens := strings.Split(part, "+")
 		for j, t := range tokens {
-			if t == "backtick" {
+			if strings.EqualFold(t, "ctrl") && modifiers&tcell.ModMeta != 0 {
+				tokens[j] = "Super"
+				if modifiers&tcell.ModCtrl != 0 {
+					tokens[j] = "Mod"
+				}
+			} else if t == "backtick" {
 				tokens[j] = "`"
 			} else if len(t) > 0 {
 				tokens[j] = strings.ToUpper(t[:1]) + t[1:]

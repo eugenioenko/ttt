@@ -63,6 +63,8 @@ type SelectDialogWidget struct {
 	inputY            int
 	mode              paletteMode
 	files             []PaletteFile
+	filesRequested    bool
+	filesLoading      bool
 	helpTopics        []PaletteItem
 	helpCommands      []PaletteItem
 	activeHelpTopic   string
@@ -71,6 +73,7 @@ type SelectDialogWidget struct {
 	OnOpenFile        func(path string)
 	OnGoToLine        func(line int)
 	OnDismiss         func()
+	OnRequestFiles    func()
 	OnSelectionChange func(id string)
 	Borders           *term.BorderSet
 	Icons             string
@@ -101,9 +104,17 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 
 func (p *SelectDialogWidget) SetFiles(files []PaletteFile) {
 	p.files = files
+	p.filesLoading = false
+	if p.mode == paletteFileMode {
+		p.filter()
+	}
 }
 
 func (p *SelectDialogWidget) Focusable() bool { return true }
+
+func (p *SelectDialogWidget) FocusedInput() *widgets.InputWidget {
+	return p.Input
+}
 
 func (p *SelectDialogWidget) CursorPosition() (int, int, bool) {
 	return p.Input.CursorPosition()
@@ -129,6 +140,9 @@ func (p *SelectDialogWidget) calculateLayout(sw, sh int) selectDialogLayout {
 			chromeRows += 2
 		}
 		itemRows := len(p.Items)
+		if p.mode == paletteFileMode && p.filesLoading {
+			itemRows = 1
+		}
 		if p.mode == paletteHelpMode && p.helpQuery != "" && itemRows == 0 {
 			itemRows = 1
 		}
@@ -223,6 +237,9 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 
 		surface.ClearRect(boxX+1, y, contentRight-boxX-1, 1, style)
 		p.renderItemRow(surface, y, contentRight, item, style, idx == p.Selected)
+	}
+	if p.mode == paletteFileMode && p.filesLoading && visibleItems > 0 {
+		surface.DrawText(boxX+2, boxY+3, i18n.Text("general.loading"), contentRight-1, term.StyleMuted)
 	}
 	if p.mode == paletteHelpMode && p.helpQuery != "" && len(p.Items) == 0 && visibleItems > 0 {
 		y := boxY + 3
@@ -496,6 +513,11 @@ func (p *SelectDialogWidget) filter() {
 	} else {
 		p.mode = paletteFileMode
 		p.activeHelpTopic = ""
+		if !p.filesRequested && p.OnRequestFiles != nil {
+			p.filesRequested = true
+			p.filesLoading = true
+			p.OnRequestFiles()
+		}
 		p.filterFiles(text)
 	}
 	p.notifySelectionChange()

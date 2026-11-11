@@ -2,14 +2,19 @@ package app
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/i18n"
 )
+
+const formatterTimeout = 5 * time.Second
 
 func (a *App) RunExternalFormatter() {
 	if !a.EditorGroup.IsEditorActive() {
@@ -23,7 +28,7 @@ func (a *App) RunExternalFormatter() {
 		return
 	}
 	if err := a.applyExternalFormatter(cmd, path); err != nil {
-		a.StatusWarn(i18n.Format("status.format", i18n.Args{"error": err.Error()}))
+		a.StatusWarn(i18n.Format("status.format", i18n.Args{"error": formatterErrorMessage(err)}))
 	}
 }
 
@@ -33,10 +38,18 @@ func (a *App) FormatExternalOnSave(path string) bool {
 		return false
 	}
 	if err := a.applyExternalFormatter(cmd, path); err != nil {
-		a.StatusWarn(i18n.Format("status.formatOnSave", i18n.Args{"error": err.Error()}))
-		return false
+		a.StatusWarn(i18n.Format("status.formatOnSave", i18n.Args{"error": formatterErrorMessage(err)}))
+		// A timeout must continue saving, not start another formatter through LSP.
+		return errors.Is(err, context.DeadlineExceeded)
 	}
 	return true
+}
+
+func formatterErrorMessage(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return i18n.Format("formatter.timeout", i18n.Args{"seconds": int(formatterTimeout / time.Second)})
+	}
+	return err.Error()
 }
 
 func (a *App) formatterForFile(path string) string {
@@ -58,13 +71,21 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 		return fmt.Errorf("empty formatter command")
 	}
 
-	cmd := exec.Command(parts[0], parts[1:]...)
+	ctx, cancel := context.WithTimeout(context.Background(), formatterTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+	configureFormatterProcess(cmd)
+	// Detached descendants must not keep the output pipes open indefinitely.
+	cmd.WaitDelay = 100 * time.Millisecond
 	cmd.Stdin = strings.NewReader(original)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = err.Error()
@@ -72,11 +93,32 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 		return fmt.Errorf("%s", msg)
 	}
 
-	formatted := stdout.String()
-	formatted = strings.TrimSuffix(formatted, "\n")
-
+	formatted := strings.ReplaceAll(stdout.String(), "\r\n", "\n")
 	if formatted == original {
 		return nil
+	}
+	if formatted == "" {
+		return errors.New(i18n.Text("formatter.emptyOutput"))
+	}
+	comparison := original
+	if editor.Buf.ShowTrailingNewline {
+		formatted = strings.TrimSuffix(formatted, "\n")
+		comparison = strings.TrimSuffix(comparison, "\n")
+	} else if editor.Buf.InsertFinalNewline {
+		// Save adds a newline only when the buffer has no trailing empty line.
+		// Keep multiple newlines intact so their blank lines survive saving.
+		if !strings.HasSuffix(formatted, "\n\n") {
+			formatted = strings.TrimSuffix(formatted, "\n")
+		}
+		if !strings.HasSuffix(comparison, "\n\n") {
+			comparison = strings.TrimSuffix(comparison, "\n")
+		}
+	}
+	if formatted == comparison {
+		return nil
+	}
+	if formatted == "" {
+		return errors.New(i18n.Text("formatter.emptyOutput"))
 	}
 
 	lastLine := len(editor.Buf.Lines) - 1

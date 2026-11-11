@@ -98,6 +98,12 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 		headerWidgets = append(headerWidgets, tagsLabel)
 	}
 
+	if !a.isMaintainedRepo(entry.Repo) {
+		notice := widgets.NewParagraphWidget(i18n.Text("plugins.communityNotice"))
+		notice.Style = term.StyleWarning
+		headerWidgets = append(headerWidgets, notice)
+	}
+
 	if installed {
 		if p := a.PluginManager.FindPlugin(entry.Name); p != nil && len(p.FileHandlers) > 0 {
 			handlerLabels := make([]string, 0, len(p.FileHandlers))
@@ -173,6 +179,14 @@ func (a *App) cleanupPluginDetailTab(id string) {
 		}
 		delete(a.pluginDetailWidgets, name)
 	}
+}
+
+func (a *App) isMaintainedRepo(repo string) bool {
+	var entries []plugin.RemoteRegistryEntry
+	if a.PluginsPanel != nil {
+		entries = a.PluginsPanel.available
+	}
+	return plugin.IsMaintained(repo, entries)
 }
 
 func (a *App) isPluginInstalled(name string) bool {

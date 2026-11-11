@@ -53,6 +53,20 @@ func (f *FileDiff) AllLines() []DiffLine {
 	return lines
 }
 
+func (f *FileDiff) Stats() (added, deleted int) {
+	for _, h := range f.Hunks {
+		for _, line := range h.Lines {
+			if line.Left.Kind == Deleted {
+				deleted++
+			}
+			if line.Right.Kind == Added {
+				added++
+			}
+		}
+	}
+	return added, deleted
+}
+
 func FullDiffLines(oldLines, newLines []string) []DiffLine {
 	lines, _ := FullDiffLinesContext(context.Background(), oldLines, newLines)
 	return lines

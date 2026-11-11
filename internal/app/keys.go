@@ -6,6 +6,17 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func controlModifiers(mode string) tcell.ModMask {
+	switch mode {
+	case config.ModifierSuper:
+		return tcell.ModMeta
+	case config.ModifierControlSuper:
+		return tcell.ModCtrl | tcell.ModMeta
+	default:
+		return tcell.ModCtrl
+	}
+}
+
 var canonicalKeyToTcell = map[string]tcell.Key{
 	"Escape":    tcell.KeyEscape,
 	"Enter":     tcell.KeyEnter,
@@ -76,6 +87,10 @@ func comboToTcell(combo config.KeyCombo) (tcell.Key, tcell.ModMask, rune) {
 				return tcell.KeyNUL, mod, 0
 			}
 			return tcell.KeyRune, mod, '`'
+		}
+		// tcell (legacy key mode) reports Shift+Tab as KeyBacktab with ModShift stripped.
+		if combo.KeyName == "Tab" && combo.Shift {
+			return tcell.KeyBacktab, mod &^ tcell.ModShift, 0
 		}
 		key := canonicalKeyToTcell[combo.KeyName]
 		return key, mod, 0

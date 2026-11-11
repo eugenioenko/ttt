@@ -16,12 +16,14 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/update"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -50,9 +52,6 @@ func handlePanic(screen *term.TcellScreen) {
 	r := recover()
 	if r == nil {
 		return
-	}
-	if screen != nil {
-		screen.Fini()
 	}
 	stack := debug.Stack()
 	crashMsg := fmt.Sprintf("ttt crashed: %v\n\n%s", r, stack)
@@ -143,15 +142,22 @@ func stdinIsPiped() bool {
 	return info.Mode()&os.ModeNamedPipe != 0 || info.Mode().IsRegular()
 }
 
-func initTerminalScreen(listen bool) *term.TcellScreen {
-	screen, err := term.NewTcellScreen()
+func initTerminalScreen(listen bool) (*term.TcellScreen, *app.TerminalPalette, *term.OSCReader) {
+	tty, err := tcell.NewDevTty()
 	if err != nil {
 		if listen {
 			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
 		}
 		panic(err)
 	}
-	return screen
+	screen, osc, err := term.NewTerminfoScreenFromTty(tty)
+	if err != nil {
+		if listen {
+			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
+		}
+		panic(err)
+	}
+	return screen, app.NewTerminalPalette(osc), osc
 }
 
 func initSimulationScreen(w, h int) *term.TcellScreen {
@@ -165,12 +171,31 @@ func initSimulationScreen(w, h int) *term.TcellScreen {
 }
 
 func main() {
+	buildInfo, _ := debug.ReadBuildInfo()
+	version = update.ResolveVersion(version, buildInfo)
 	exitCode := 0
 	defer func() {
 		if exitCode != 0 {
 			os.Exit(exitCode)
 		}
 	}()
+	restartRequested := false
+	var restartMethod update.Kind
+	restartLaunch, restartErr := captureRestartTarget(os.Args[0])
+	defer func() {
+		if restartRequested {
+			code, err := 1, restartErr
+			if err == nil {
+				code, err = restartLaunch.restart(restartMethod)
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				code = 1
+			}
+			exitCode = code
+		}
+	}()
+	update.CleanupOldExecutable()
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
@@ -282,14 +307,24 @@ Docs: https://tttedit.dev
 	}
 
 	var screen *term.TcellScreen
+	var capturedPalette *app.TerminalPalette
+	var oscReader *term.OSCReader
 	if flags.exec != "" {
 		clipboard.DisableSystem()
 		screen = initSimulationScreen(flags.sizeW, flags.sizeH)
 	} else {
-		screen = initTerminalScreen(flags.listen)
+		screen, capturedPalette, oscReader = initTerminalScreen(flags.listen)
 	}
-	defer screen.Fini()
 	defer handlePanic(screen)
+	if capturedPalette != nil {
+		defer func() {
+			capturedPalette.Close()
+			screen.Fini()
+			oscReader.Close()
+		}()
+	} else {
+		defer screen.Fini()
+	}
 
 	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), app.WithEditorSelectionStyle(cfg.Settings.Editor.SelectionStyle), app.WithPluginSelectionStyle(cfg.Settings.Plugins.SelectionStyle))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
@@ -317,6 +352,9 @@ Docs: https://tttedit.dev
 	defer func() { editor.CloseImageLayer() }()
 
 	editor.Version = version
+	if capturedPalette != nil {
+		editor.TerminalPalette = capturedPalette
+	}
 	editor.Keybindings = cfg.Keybindings
 	editor.Reg = cmdRegistry
 	running := true
@@ -371,7 +409,7 @@ Docs: https://tttedit.dev
 		editor.RegisterStartupPluginCommands()
 
 		pluginsPanel := app.NewPluginsPanel(pluginManager)
-		editor.Sidebar.AddPanel("plugins", "Plugins", pluginsPanel.Adapter)
+		editor.Sidebar.AddPanel("plugins", i18n.Text("plugins.plugins"), pluginsPanel.Adapter)
 		editor.WirePluginsPanel(pluginsPanel)
 
 		go func() {
@@ -433,15 +471,19 @@ Docs: https://tttedit.dev
 
 	if flags.listen {
 		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddress()+" (POST /exec)")
-		go app.StartListenServer(editor)
+		stopListen := app.StartListenServer(editor)
+		defer stopListen()
 	}
 
+	editor.CheckLanguagePackUpdates()
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
 		if cfg.Settings.ReuseWindow && flags.exec == "" {
 			stopForward = app.StartForward(editor)
 		}
 	})
 	stopForward()
+	restartRequested = editor.RestartRequested
+	restartMethod = editor.RestartMethod
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

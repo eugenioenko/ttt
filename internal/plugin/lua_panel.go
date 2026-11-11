@@ -368,6 +368,9 @@ func panelTreeWidget(L *lua.LState) int {
 		desc.TruncateLeft = true
 	}
 	desc.BadgeRight = L.GetField(tbl, "badge_right") == lua.LTrue
+	if v, ok := L.GetField(tbl, "active").(lua.LString); ok {
+		desc.ActiveID = string(v)
+	}
 	if v, ok := L.GetField(tbl, "inset").(lua.LNumber); ok {
 		desc.Inset = int(v)
 	}
@@ -408,6 +411,9 @@ func panelListWidget(L *lua.LState) int {
 		desc.TruncateLeft = true
 	}
 	desc.BadgeRight = L.GetField(tbl, "badge_right") == lua.LTrue
+	if v, ok := L.GetField(tbl, "active").(lua.LString); ok {
+		desc.ActiveID = string(v)
+	}
 	if v, ok := L.GetField(tbl, "inset").(lua.LNumber); ok {
 		desc.Inset = int(v)
 	}

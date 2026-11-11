@@ -145,6 +145,7 @@ func (pp *PluginsPanel) openInstalledDetail(name string) {
 	for _, remote := range pp.available {
 		if remote.Name == name {
 			entry.Featured = remote.Featured
+			entry.Community = remote.Community
 			break
 		}
 	}
@@ -310,6 +311,7 @@ func (pp *PluginsPanel) SetAvailable(entries []plugin.RemoteRegistryEntry) {
 }
 
 func (a *App) WirePluginsPanel(pp *PluginsPanel) {
+	pp.SearchInput.ControlModifiers = &a.Root.ControlModifiers
 	a.PluginsPanel = pp
 	pp.OnInstall = a.PluginInstallFromURL
 	pp.OnUninstall = a.PluginUninstallByName

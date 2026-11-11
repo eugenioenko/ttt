@@ -5,10 +5,39 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
 const DefaultRegistryURL = "https://raw.githubusercontent.com/eugenioenko/ttt/main/community-plugins.json"
+
+const maintainedOwner = "github.com/eugenioenko/"
+
+// IsMaintained reports whether repo needs no community notice. The owner must be
+// followed by a single repo name: anything with a further "/" could climb out of
+// the owner with "..".
+func IsMaintained(repo string, entries []RemoteRegistryEntry) bool {
+	key := normalizeRepo(repo)
+	if key == "" {
+		return false
+	}
+	if name, ok := strings.CutPrefix(key, maintainedOwner); ok && name != "" && name != ".." && !strings.Contains(name, "/") {
+		return true
+	}
+	for _, e := range entries {
+		if e.Community != nil && !*e.Community && normalizeRepo(e.Repo) == key {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeRepo(repo string) string {
+	repo = strings.ToLower(strings.TrimSpace(repo))
+	repo = strings.TrimPrefix(repo, "https://")
+	repo = strings.TrimPrefix(repo, "www.")
+	return strings.TrimSuffix(strings.TrimRight(repo, "/"), ".git")
+}
 
 type RemoteRegistryEntry struct {
 	Name        string   `json:"name"`
@@ -20,6 +49,7 @@ type RemoteRegistryEntry struct {
 	Tags        []string `json:"tags,omitempty"`
 	Path        string   `json:"path,omitempty"`
 	Featured    bool     `json:"featured,omitempty"`
+	Community   *bool    `json:"community,omitempty"`
 }
 
 // Title is the human-facing name shown in the registry UI: DisplayName when the

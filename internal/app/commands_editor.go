@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -203,6 +204,10 @@ func (a *App) showSaveFileAs(onSaved func()) {
 			return
 		}
 		path = a.saveAsPath(path)
+		if _, err := a.EditorGroup.SaveAsTargets(path); err != nil {
+			a.StatusError(err.Error())
+			return
+		}
 		if saveAsReplaces(initial, path) {
 			a.ShowConfirmDialog(
 				i18n.Format("dialog.alreadyExistsReplaceIt", i18n.Args{"filename": filepath.Base(path)}),
@@ -218,9 +223,56 @@ func (a *App) showSaveFileAs(onSaved func()) {
 	})
 }
 
+func (a *App) confirmCreateSaveDirectory(path string, retry func()) bool {
+	dir, missing := missingSaveDirectory(path)
+	if !missing {
+		return false
+	}
+	a.ShowConfirmDialog(
+		i18n.Format("dialog.createMissingFolders", i18n.Args{"directory": dir}),
+		[]string{i18n.Text("general.cancel"), i18n.Text("general.create")},
+		[]func(){
+			func() { a.DismissDialog() },
+			func() {
+				a.DismissDialog()
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					a.StatusError(err.Error())
+					return
+				}
+				retry()
+			},
+		},
+	)
+	return true
+}
+
+func missingSaveDirectory(path string) (string, bool) {
+	dir := filepath.Dir(path)
+	_, err := os.Stat(dir)
+	if err == nil {
+		return dir, false
+	}
+	return dir, errors.Is(err, os.ErrNotExist)
+}
+
 func (a *App) saveFileAs(path string, onSaved func()) {
+	if a.confirmCreateSaveDirectory(path, func() { a.saveFileAs(path, onSaved) }) {
+		return
+	}
+	targets, err := a.EditorGroup.SaveAsTargets(path)
+	if err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	if len(targets) > 0 {
+		// Keep the open document's URI when the requested path is an alias.
+		path, _ = a.EditorGroup.TabInfo(targets[0])
+	}
 	if a.EditorGroup.SaveAs(path) {
 		path, lang := a.editorPathLang()
+		if len(targets) > 0 {
+			a.NotifyLSPChange(path, lang, a.EditorGroup.ActiveBuffer().Lines)
+		}
 		a.afterFileSave(path, lang)
 		if onSaved != nil {
 			onSaved()
@@ -311,6 +363,9 @@ func (a *App) doSaveFile(onSaved func()) {
 		return
 	}
 	path, lang := a.editorPathLang()
+	if a.confirmCreateSaveDirectory(path, func() { a.doSaveFile(onSaved) }) {
+		return
+	}
 	if lang != "" {
 		a.RunCodeActionsOnSave(path, lang)
 		if a.Settings.Editor.FormatOnSave {
@@ -346,28 +401,36 @@ func (a *App) afterFileSave(path, lang string) {
 }
 
 func (a *App) forceQuit() {
-	for _, tt := range a.Terminals {
+	for _, tt := range a.allTerminals() {
 		tt.Term.Close()
 	}
 	*a.Running = false
 }
 
 func (a *App) Quit() {
-	if a.quitPending {
-		a.forceQuit()
+	if a.updateDialog != nil && a.updateDialog.updating {
 		return
 	}
+	if a.quitPending {
+		a.quitAction()
+		return
+	}
+	a.quitWithAction(a.forceQuit)
+}
+
+func (a *App) quitWithAction(onQuit func()) {
 	if !a.EditorGroup.AnyDirty() {
-		a.forceQuit()
+		onQuit()
 		return
 	}
 	if a.Root.HasOverlay() {
 		return
 	}
 	a.quitPending = true
-	cancel := func() { a.quitPending = false; a.DismissDialog() }
+	a.quitAction = onQuit
+	cancel := func() { a.quitPending = false; a.quitAction = nil; a.DismissDialog() }
 	buttons := []string{i18n.Text("general.cancel"), i18n.Text("general.quit")}
-	callbacks := []func(){cancel, a.forceQuit}
+	callbacks := []func(){cancel, onQuit}
 	showSaveAll := a.Settings.Editor.SaveAllOnQuit
 	if a.Settings.Editor.SaveAllOnQuitExceptUnnamed {
 		for i := 0; i < a.EditorGroup.TabCount(); i++ {
@@ -381,14 +444,20 @@ func (a *App) Quit() {
 		buttons = append(buttons, i18n.Text("dialog.saveAllQuit"))
 		callbacks = append(callbacks, func() {
 			cancel()
-			a.saveAllAndQuit()
+			a.saveAllAndQuit(onQuit)
 		})
 	}
-	dialog := a.ShowConfirmDialogEx(i18n.Text("dialog.unsavedChanges"), i18n.Text("dialog.pressCtrlQToForceQuit"), buttons, callbacks)
+	hint := ""
+	if a.Reg != nil {
+		if cmd, ok := a.Reg.Get("editor.quit"); ok && cmd.Shortcut != "" {
+			hint = i18n.Format("dialog.pressCtrlQToForceQuit", i18n.Args{"shortcut": cmd.Shortcut})
+		}
+	}
+	dialog := a.ShowConfirmDialogEx(i18n.Text("dialog.unsavedChanges"), hint, buttons, callbacks)
 	dialog.OnDismiss = cancel
 }
 
-func (a *App) saveAllAndQuit() {
+func (a *App) saveAllAndQuit(onQuit func()) {
 	if a.Root.HasOverlay() {
 		return
 	}
@@ -406,11 +475,11 @@ func (a *App) saveAllAndQuit() {
 		}
 	}
 	if next < 0 {
-		a.forceQuit()
+		onQuit()
 		return
 	}
 	a.EditorGroup.SwitchTab(next)
-	a.saveFile(a.saveAllAndQuit)
+	a.saveFile(func() { a.saveAllAndQuit(onQuit) })
 }
 
 // hunkStarts returns the buffer-line indices (0-based) at which each diff hunk
@@ -629,6 +698,12 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "editor.codeActions", Title: i18n.Text("command.codeActions"),
+		Keywords: []string{"editor", "lsp", "refactor", "quick fix"},
+		Handler:  app.RequestInteractiveCodeActions,
+	})
+
+	reg.Register(command.Command{
 		ID: "editor.organizeImports", Title: i18n.Text("command.sourceActionOrganizeImports"),
 		Keywords: []string{"editor", "source", "cleanup"},
 		Handler: func() {
@@ -689,6 +764,12 @@ func registerEditorCommands(app *App) {
 		ID: "tab.close", Title: i18n.Text("command.viewCloseTab"),
 		Keywords: []string{"tab"},
 		Handler:  app.CloseTab,
+	})
+
+	reg.Register(command.Command{
+		ID: "tab.reopenClosed", Title: i18n.Text("command.viewReopenClosedTab"),
+		Keywords: []string{"tab", "reopen", "restore", "undo", "close"},
+		Handler:  func() { app.EditorGroup.ReopenClosedTab() },
 	})
 
 	reg.Register(command.Command{

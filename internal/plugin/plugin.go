@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -48,6 +49,8 @@ type Plugin struct {
 	Enabled  bool
 	State    *lua.LState
 
+	InstalledFromURL bool
+
 	StorageDir string
 	store      *pluginStore
 
@@ -67,6 +70,7 @@ type Plugin struct {
 
 	Commands          []PluginCommand
 	PluginKeybindings []PluginKeybinding
+	ControlModifiers  *tcell.ModMask
 	FileHandlers      []FileHandler
 
 	RequestRedraw     func()

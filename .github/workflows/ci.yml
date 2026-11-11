@@ -25,6 +25,7 @@ jobs:
     outputs:
       runtime: ${{ steps.changes.outputs.runtime }}
       docs_web: ${{ steps.changes.outputs.docs_web }}
+      native_trash: ${{ steps.changes.outputs.native_trash }}
       reason: ${{ steps.changes.outputs.reason }}
     steps:
       - name: Checkout
@@ -45,12 +46,14 @@ jobs:
           changed_files=$(mktemp)
           runtime=false
           docs_web=false
+          native_trash=false
           reason="documentation-only pull request"
 
           if [[ "$EVENT_NAME" != "pull_request" ]]; then
             git show --format= --no-renames --name-only -z HEAD > "$changed_files"
             runtime=true
             docs_web=true
+            native_trash=true
             reason="pushes to main run the full contract"
           else
             git diff --no-renames --name-only -z --diff-filter=ACMRD "$BASE_SHA...$HEAD_SHA" > "$changed_files"
@@ -58,9 +61,11 @@ jobs:
             if [[ "$FORCE_FULL" == "true" ]]; then
               runtime=true
               docs_web=true
+              native_trash=true
               reason="ci:full requests every lane"
             elif [[ ! -s "$changed_files" ]]; then
               runtime=true
+              native_trash=true
               reason="no changed files were detected, so CI failed closed"
             else
               while IFS= read -r -d '' path; do
@@ -72,6 +77,12 @@ jobs:
                     ;;
                   *)
                     runtime=true
+                    # internal/trash imports no other ttt package. Add any package it starts importing.
+                    case "$path" in
+                      internal/trash/*|go.mod|go.sum|.github/workflows/ci.yml)
+                        native_trash=true
+                        ;;
+                    esac
                     ;;
                 esac
               done < "$changed_files"
@@ -85,6 +96,7 @@ jobs:
           {
             echo "runtime=$runtime"
             echo "docs_web=$docs_web"
+            echo "native_trash=$native_trash"
             echo "reason=$reason"
           } >> "$GITHUB_OUTPUT"
 
@@ -96,6 +108,7 @@ jobs:
             echo "| classify | true | blocking |"
             echo "| vet, lint, test | $runtime | blocking |"
             echo "| docs | $docs_web | blocking when selected |"
+            echo "| native-trash | $native_trash | blocking when selected |"
             echo "| test-race | $runtime | blocking when selected |"
             echo "| functional-tests | $runtime | blocking when selected |"
             echo "| integration-tests | $runtime | blocking when selected |"
@@ -179,6 +192,46 @@ jobs:
       - name: Test
         run: go test ./...
 
+  native-apps:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Test Windows app commands and literal path arguments
+        run: go test -count=1 -v ./internal/app -run 'TestAppTerminalSpec|TestAppCommand'
+
+  native-trash:
+    needs: classify
+    if: needs.classify.outputs.native_trash == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Test native Trash and recovery
+        env:
+          TTT_TEST_TRASH: "1"
+        run: go test -count=1 -v ./internal/trash
+
   bench-editor:
     name: Base vs PR editor, diff, and log benchmarks
     needs: classify
@@ -232,6 +285,145 @@ jobs:
           else
             gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$REPORT_FILE" >/dev/null
           fi
+
+  binary-size:
+    name: "Binary size (informational, not required)"
+    needs: classify
+    if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Check out base commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .size-base
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Compare binary sizes
+        id: size
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          THRESHOLD_KB: "256"
+        run: |
+          set -euo pipefail
+
+          LDFLAGS="-s -w -X main.version=size-check"
+          TARGETS="linux:amd64 darwin:amd64 darwin:arm64 windows:amd64"
+
+          build_targets() {
+            local src_dir="$1" out_dir="$2"
+            mkdir -p "$out_dir"
+            for target in $TARGETS; do
+              os="${target%%:*}"
+              arch="${target##*:}"
+              ext=""
+              [[ "$os" == "windows" ]] && ext=".exe"
+              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+                go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o "$out_dir/ttt-${os}-${arch}${ext}" ./cmd/ttt
+            done
+          }
+
+          echo "Building base binaries..."
+          (cd .size-base && build_targets . "$GITHUB_WORKSPACE/.size-out/base")
+
+          echo "Building PR binaries..."
+          build_targets . .size-out/head
+
+          marker="<!-- ttt-binary-size -->"
+          threshold_bytes=$((THRESHOLD_KB * 1024))
+          exceeded=false
+
+          {
+            echo "$marker"
+            echo "## Binary size"
+            echo ""
+            echo "Comparing \`${BASE_SHA:0:12}\` (base) with \`${HEAD_SHA:0:12}\` (PR). Threshold: **${THRESHOLD_KB} KB**."
+            echo ""
+            echo "| Target | Base | PR | Delta | % |"
+            echo "| --- | ---: | ---: | ---: | ---: |"
+          } > "$RUNNER_TEMP/size-report.md"
+
+          for target in $TARGETS; do
+            os="${target%%:*}"
+            arch="${target##*:}"
+            ext=""
+            [[ "$os" == "windows" ]] && ext=".exe"
+            name="ttt-${os}-${arch}${ext}"
+
+            base_size=$(stat --format=%s ".size-out/base/$name")
+            head_size=$(stat --format=%s ".size-out/head/$name")
+            delta=$((head_size - base_size))
+            if [ "$base_size" -gt 0 ]; then
+              pct=$(awk "BEGIN { printf \"%.1f\", ($delta / $base_size) * 100 }")
+            else
+              pct="n/a"
+            fi
+
+            fmt_base=$(awk "BEGIN { printf \"%.2f MB\", $base_size / 1000000 }")
+            fmt_head=$(awk "BEGIN { printf \"%.2f MB\", $head_size / 1000000 }")
+            if [ "$delta" -ge 0 ]; then
+              fmt_delta="+$(awk "BEGIN { printf \"%.0f KB\", $delta / 1000 }")"
+            else
+              fmt_delta="$(awk "BEGIN { printf \"%.0f KB\", $delta / 1000 }")"
+            fi
+
+            if [ "$delta" -gt "$threshold_bytes" ]; then
+              warn=" :warning:"
+              exceeded=true
+            elif [ "$delta" -lt "-$threshold_bytes" ]; then
+              warn=" :arrow_down:"
+            else
+              warn=""
+            fi
+
+            echo "| ${os}/${arch} | $fmt_base | $fmt_head | ${fmt_delta}${warn} | ${pct}% |" >> "$RUNNER_TEMP/size-report.md"
+          done
+
+          if [ "$exceeded" = true ]; then
+            echo "" >> "$RUNNER_TEMP/size-report.md"
+            echo "> :warning: **Binary size increased by more than ${THRESHOLD_KB} KB on at least one target.** If this is expected (new dependency, embedded asset), note it in the PR description." >> "$RUNNER_TEMP/size-report.md"
+          fi
+
+          cat "$RUNNER_TEMP/size-report.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/size-report.md"
+
+          echo "exceeded=$exceeded" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update PR size comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.type == "Bot" and (.body | contains("<!-- ttt-binary-size -->"))) | .id' | head -n 1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/size-report.md" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/size-report.md" >/dev/null
+          fi
+
+      - name: Fail on threshold breach
+        if: steps.size.outputs.exceeded == 'true'
+        run: |
+          echo "::warning::Binary size increased by more than ${{ env.THRESHOLD_KB || '256' }} KB. This job is informational and does not block merge."
+          exit 1
 
   docs:
     needs: classify
@@ -359,7 +551,7 @@ jobs:
     uses: ./.github/workflows/lsp-tests.yml
 
   fast-contract:
-    needs: [classify, vet, lint, test, docs]
+    needs: [classify, vet, lint, test, docs, native-trash]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -367,10 +559,12 @@ jobs:
       CLASSIFY_RESULT: ${{ needs.classify.result }}
       RUNTIME: ${{ needs.classify.outputs.runtime }}
       DOCS_WEB: ${{ needs.classify.outputs.docs_web }}
+      NATIVE_TRASH: ${{ needs.classify.outputs.native_trash }}
       VET_RESULT: ${{ needs.vet.result }}
       LINT_RESULT: ${{ needs.lint.result }}
       TEST_RESULT: ${{ needs.test.result }}
       DOCS_RESULT: ${{ needs.docs.result }}
+      NATIVE_TRASH_RESULT: ${{ needs.native-trash.result }}
     steps:
       - name: Verify fast contract
         run: |
@@ -399,6 +593,7 @@ jobs:
           require_result lint "$RUNTIME" "$LINT_RESULT"
           require_result test "$RUNTIME" "$TEST_RESULT"
           require_result docs "$DOCS_WEB" "$DOCS_RESULT"
+          require_result native-trash "$NATIVE_TRASH" "$NATIVE_TRASH_RESULT"
 
           {
             echo "## Fast contract"
@@ -410,6 +605,7 @@ jobs:
             echo "| lint | $LINT_RESULT |"
             echo "| test | $TEST_RESULT |"
             echo "| docs | $DOCS_RESULT |"
+            echo "| native-trash | $NATIVE_TRASH_RESULT |"
             echo
             echo "This contract proves classification plus the selected deterministic build, test, lint, and docs checks. It does not replace the broad binary, PTY, race, or real-LSP lanes."
           } >> "$GITHUB_STEP_SUMMARY"

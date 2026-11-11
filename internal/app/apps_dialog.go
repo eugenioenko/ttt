@@ -1,0 +1,119 @@
+package app
+
+import (
+	"encoding/json"
+	"slices"
+	"strconv"
+	"strings"
+
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
+)
+
+func (a *App) appsOpenWithMenu() ui.ContextMenuItem {
+	var items []ui.ContextMenuItem
+	for _, app := range a.apps {
+		if app.OpenWith {
+			items = append(items, ui.ContextMenuItem{Label: appIcon(app, a.Settings.Appearance.Icons) + " " + app.Name, Command: "apps.openWith:" + app.Name})
+		}
+	}
+	if len(items) > 0 {
+		items = append(items, ui.MenuSep())
+	}
+	items = append(items, ui.ContextMenuItem{Label: i18n.Text("apps.add"), Command: "apps.addOpenWith"})
+	return ui.ContextMenuItem{Label: i18n.Text("menu.openWith"), Submenu: items}
+}
+
+func (a *App) AddApp() { a.showAddApp(false) }
+
+func (a *App) AddOpenWithApp() {
+	a.ExplorerContextNode = nil
+	a.showAddApp(true)
+}
+
+func (a *App) showAddApp(openWith bool) {
+	if a.Root.HasOverlay() {
+		return
+	}
+	name := widgets.NewInputWidget(widgets.InputConfig{})
+	command := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.commandHint")})
+	args := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Format("apps.argsHint", i18n.Args{"file": "{file}"})})
+	cwd := widgets.NewInputWidget(widgets.InputConfig{Placeholder: "{workspace}"})
+	icon := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.iconHint")})
+	commandText := widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("apps.commandTextHint")})
+	padding := widgets.NewInputWidget(widgets.InputConfig{})
+	padding.SetText("1")
+	panel := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.inPanel")})
+	keepOpen := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.keepOpen"), Checked: true})
+	explorer := widgets.NewCheckboxWidget(widgets.CheckboxConfig{Label: i18n.Text("apps.openWith"), Checked: openWith})
+	errorLabel := widgets.NewLabelWidget(widgets.LabelConfig{Style: term.StyleDanger})
+	row := func(text string, input *widgets.InputWidget) widgets.Widget {
+		label := widgets.NewLabelWidget(widgets.LabelConfig{Text: text})
+		label.FixedWidth = 16
+		r := widgets.NewHStackWidget(label, input)
+		r.FixedHeight = 1
+		return r
+	}
+	content := widgets.NewVStackWidget(
+		row(i18n.Text("apps.name"), name), row(i18n.Text("apps.command"), command), row(i18n.Text("apps.args"), args), row(i18n.Text("apps.cwd"), cwd),
+		row(i18n.Text("apps.icon"), icon),
+		row(i18n.Text("apps.commandText"), commandText),
+		row(i18n.Text("apps.paddingX"), padding),
+		panel, keepOpen, explorer, errorLabel,
+	)
+	dialog := widgets.NewDialogWidget(66)
+	dialog.Title = i18n.Text("apps.add")
+	dialog.Borders = *a.Borders
+	dialog.SetContent(content)
+	dialog.OnDismiss = a.DismissDialog
+	dialog.Buttons = []widgets.DialogButton{
+		{Label: i18n.Text("general.cancelButton"), Handler: a.DismissDialog},
+		{Label: i18n.Text("general.add"), Handler: func() {
+			app := config.Application{Name: strings.TrimSpace(name.Text()), Command: strings.TrimSpace(command.Text()), Cwd: cwd.Text(), Icon: icon.Text(), OpenWith: explorer.Config.Checked, KeepOpen: keepOpen.Config.Checked}
+			app.CommandText = strings.TrimSpace(commandText.Text())
+			if app.Name == "" || app.Command == "" {
+				errorLabel.Config.Text = i18n.Text("apps.required")
+				return
+			}
+			paddingX := 1
+			if text := strings.TrimSpace(padding.Text()); text != "" {
+				value, err := strconv.Atoi(text)
+				if err != nil || value < 0 {
+					errorLabel.Config.Text = i18n.Text("apps.invalidPadding")
+					return
+				}
+				paddingX = value
+			}
+			app.PaddingX = &paddingX
+			if text := strings.TrimSpace(args.Text()); text != "" {
+				if err := json.Unmarshal([]byte(text), &app.Args); err != nil || app.Args == nil {
+					errorLabel.Config.Text = i18n.Text("apps.invalidArgs")
+					return
+				}
+			}
+			if slices.ContainsFunc(a.apps, func(existing config.Application) bool { return existing.Name == app.Name }) {
+				errorLabel.Config.Text = i18n.Text("apps.nameTaken")
+				return
+			}
+			if panel.Config.Checked {
+				app.Location = "panel"
+			}
+			s := *a.Settings
+			s.Applications = append(slices.Clone(s.Applications), app)
+			if err := config.SaveSettings(s); err != nil {
+				errorLabel.Config.Text = i18n.Format("apps.saveFailed", i18n.Args{"error": err.Error()})
+				return
+			}
+			a.ApplySettings(s)
+			a.DismissDialog()
+			a.Apps.SearchInput.SetText("")
+			a.Apps.Filter("")
+			a.ShowApps()
+		}},
+	}
+	dialog.Build()
+	a.ShowDialog(ui.NewWidgetAdapter(dialog))
+}

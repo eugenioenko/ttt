@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/terminal"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/update"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/watcher"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -40,6 +40,8 @@ type TerminalTab struct {
 	Label  string
 	Term   *terminal.Terminal
 	Widget *ui.TerminalWidget
+	// Tab is set when the terminal lives in an editor tab instead of the panel.
+	Tab *ui.TerminalTabWidget
 }
 
 // TerminalSpec describes the program one terminal tab runs. The zero value
@@ -51,39 +53,60 @@ type TerminalSpec struct {
 	// inherited; these are appended).
 	Env []string
 	Cwd string
-	// Label is a short badge for the strip ("pi", "lg") and the tab record.
-	Label string
+	// Label is a short badge for the strip ("pi", "lg") and the tab record, or
+	// the editor tab's title.
+	Label    string
+	InEditor bool
+	// KeepOpen leaves the tab, with the program's last output, after it exits.
+	KeepOpen bool
+	// Nil uses the global padding; a pointer to zero disables padding.
+	PaddingX *int
 }
 
 type App struct {
-	Root          *ui.Root
-	EditorGroup   *ui.EditorGroupWidget
-	Sidebar       *ui.SidebarWidget
-	SplitPanel    *ui.SplitPanelWidget
-	ContentSplit  *ui.ContentSplitWidget
-	BottomPanel   *ui.BottomPanelWidget
-	Search        *ui.SearchWidget
-	MenuBar       *ui.MenuBarWidget
-	RootBox       *widgets.VStackWidget
-	StatusBar     *ui.StatusBarWidget
-	Status        *view.StatusBar
-	Borders       *term.BorderSet
-	Screen        *term.TcellScreen
-	Renderer      *render.Renderer
-	ImageLayer    *image.Layer
-	imageCellW    int
-	imageCellH    int
-	Settings      *config.Settings
-	State         config.State
-	Workspace     *workspace.Workspace
-	Palette       *ui.TerminalColorPalette
+	language        languageState
+	Root            *ui.Root
+	EditorGroup     *ui.EditorGroupWidget
+	Sidebar         *ui.SidebarWidget
+	SplitPanel      *ui.SplitPanelWidget
+	ContentSplit    *ui.ContentSplitWidget
+	BottomPanel     *ui.BottomPanelWidget
+	Search          *ui.SearchWidget
+	MenuBar         *ui.MenuBarWidget
+	RootBox         *widgets.VStackWidget
+	StatusBar       *ui.StatusBarWidget
+	Status          *view.StatusBar
+	Borders         *term.BorderSet
+	Screen          *term.TcellScreen
+	Renderer        *render.Renderer
+	ImageLayer      *image.Layer
+	imageCellW      int
+	imageCellH      int
+	Settings        *config.Settings
+	State           config.State
+	Workspace       *workspace.Workspace
+	Palette         *ui.TerminalColorPalette
+	TerminalPalette interface {
+		Snapshot() (string, map[string]string)
+		Request()
+	}
 	TerminalPanel *ui.TerminalPanelWidget
 	Terminals     []TerminalTab
+	Apps          *AppsPanel
+	apps          []config.Application
+	appCommandIDs []string
+	appsSearch    *asynctask.Task[[]config.Application]
+	// appTerminals maps an app name to the terminal it last launched.
+	appTerminals map[appLaunchKey]string
+	// EditorTerminals live in editor tabs. They are kept apart from Terminals,
+	// whose order matches the terminal panel's tabs.
+	EditorTerminals []TerminalTab
 	// TerminalSeq is monotonic so a closed-and-reopened tab never reuses an id
 	// (plugin handles key off it).
 	TerminalSeq            int
 	forwardSocket          string // UI goroutine only, including listener startup and shutdown.
 	LspManager             *lsp.Manager
+	lookupCodeActionClient func(string, string) (codeActionCommandClient, error)
 	DocVersionsMu          sync.Mutex
 	DocVersions            map[string]int
 	CompletionItems        []ui.CompletionItem
@@ -104,6 +127,12 @@ type App struct {
 	Reg                    *command.Registry
 	Running                *bool
 	quitPending            bool
+	quitAction             func()
+	RestartRequested       bool
+	RestartMethod          update.Kind
+	Updates                UpdateService
+	UpdateMethod           *update.Method
+	updateDialog           *updateDialogState
 	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
 	largeFiles             largeFileState
@@ -157,6 +186,7 @@ type App struct {
 	eventLoopCloseOnce    sync.Once
 	eventLoopDone         chan struct{}
 	tasks                 taskOwner
+	quickOpen             *quickOpenState
 	fileLinks             *asynctask.Task[map[string]string]
 	resolveFileLink       func(string, string) string
 	searchReplace         searchReplaceState
@@ -192,24 +222,10 @@ func (a *App) closeEventLoopDone() {
 func (a *App) KeyFor(cmd string) string {
 	for _, kb := range a.Keybindings {
 		if kb.Command == cmd {
-			return formatKeyDisplay(kb.Key)
+			return FormatKeyBinding(kb.Key, controlModifiers(a.Settings.Keyboard.ModifierKey))
 		}
 	}
 	return ""
-}
-
-func formatKeyDisplay(key string) string {
-	parts := strings.Fields(key)
-	for i, part := range parts {
-		tokens := strings.Split(part, "+")
-		for j, tok := range tokens {
-			if len(tok) > 0 {
-				tokens[j] = strings.ToUpper(tok[:1]) + tok[1:]
-			}
-		}
-		parts[i] = strings.Join(tokens, "+")
-	}
-	return strings.Join(parts, " ")
 }
 
 func (a *App) ShowSidebar() {
@@ -233,6 +249,10 @@ func (a *App) HideSidebar() {
 }
 
 func (a *App) hideSidebar() {
+	// Else keys keep going to the hidden panel. Checked before Visible flips.
+	if a.focusedRegion() == "sidebar" {
+		a.FocusEditor()
+	}
 	a.Sidebar.InvalidatePointerInteraction()
 	a.Sidebar.Visible = false
 	a.SplitPanel.ShowLeft = false
@@ -432,8 +452,23 @@ func (a *App) SpawnTerminal() {
 // names a Shell supplies its own Args (empty = run the program bare); an empty
 // Shell inherits both from the global terminal settings.
 func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
-	r := a.ContentSplit.BottomRect()
-	content := a.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, false)
+	tw := ui.NewTerminalWidget(nil, a.Palette)
+	paddingX := a.Settings.Terminal.PaddingX
+	if spec.PaddingX != nil {
+		paddingX = max(*spec.PaddingX, 0)
+		tw.PaddingX = &paddingX
+	}
+	var tab *ui.TerminalTabWidget
+	var content ui.Rect
+	if spec.InEditor {
+		tab = ui.NewTerminalTabWidget(tw)
+		tab.PaddingX = paddingX
+		tab.SetRect(a.EditorGroup.ContentRect())
+		content = tab.ContentRect()
+	} else {
+		r := a.ContentSplit.BottomRect()
+		content = a.TerminalPanel.ContentRectFor(tw, ui.Rect{W: r.W, H: r.H - 2}, false)
+	}
 	cols, rows := content.W, content.H
 	if cols <= 0 {
 		cols = 80
@@ -445,6 +480,9 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	if spec.Shell == "" {
 		spec.Shell = a.Settings.Terminal.Shell
 		spec.Args = a.Settings.Terminal.Args
+		if a.Settings.Terminal.ShellIntegration {
+			spec.Shell, spec.Args = terminal.IntegrateShell(spec.Shell, spec.Args)
+		}
 	}
 	if spec.Cwd == "" {
 		spec.Cwd = a.Workspace.Primary()
@@ -460,27 +498,37 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 		return "", err
 	}
 
-	tw := ui.NewTerminalWidget(t, a.Palette)
+	tw.Term = t
 	tw.WorkDir = spec.Cwd
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
+	tw.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 	tw.OnOpenURL = OpenURL
 	tw.OnOpenFile = a.openFileLink
 
 	panelID := fmt.Sprintf("terminal-%d", a.TerminalSeq)
 	a.TerminalSeq++
-	a.Terminals = append(a.Terminals, TerminalTab{ID: panelID, Label: spec.Label, Term: t, Widget: tw})
-	a.TerminalPanel.AddTerminalLabeled(tw, spec.Label)
-	a.BottomPanel.SetActivePanel("terminal")
+	entry := TerminalTab{ID: panelID, Label: spec.Label, Term: t, Widget: tw, Tab: tab}
+	if tab != nil {
+		a.openEditorTerminal(entry, spec)
+	} else {
+		a.Terminals = append(a.Terminals, entry)
+		a.TerminalPanel.AddTerminalLabeled(tw, spec.Label)
+		a.BottomPanel.SetActivePanel("terminal")
 
-	if !a.ContentSplit.ShowBottom {
-		a.ContentSplit.ShowBottom = true
+		if !a.ContentSplit.ShowBottom {
+			a.ContentSplit.ShowBottom = true
+		}
+		a.Root.SetFocus(a.TerminalPanel)
 	}
-	a.Root.SetFocus(a.TerminalPanel)
 
 	t.OnUpdate = func() {
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	t.OnExit = func() {
+		if spec.KeepOpen {
+			a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+			return
+		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(panelID))
 	}
 	t.Run()
@@ -505,31 +553,31 @@ func checkTerminalDir(dir string) error {
 // SendToTerminal writes text into a tab's PTY. Actions run on the main thread,
 // so no extra synchronisation is needed.
 func (a *App) SendToTerminal(id, text string) error {
-	for _, tt := range a.Terminals {
-		if tt.ID == id {
-			tt.Term.WriteString(text)
-			return nil
-		}
+	if tt := a.terminalByID(id); tt != nil {
+		tt.Term.WriteString(text)
+		return nil
 	}
 	return fmt.Errorf("no terminal %q", id)
 }
 
 // TerminalTail returns the last maxBytes of a tab's raw PTY output.
 func (a *App) TerminalTail(id string, maxBytes int) (string, error) {
-	for _, tt := range a.Terminals {
-		if tt.ID == id {
-			raw := tt.Term.RawTail()
-			if maxBytes > 0 && len(raw) > maxBytes {
-				raw = raw[len(raw)-maxBytes:]
-			}
-			return string(raw), nil
+	if tt := a.terminalByID(id); tt != nil {
+		raw := tt.Term.RawTail()
+		if maxBytes > 0 && len(raw) > maxBytes {
+			raw = raw[len(raw)-maxBytes:]
 		}
+		return string(raw), nil
 	}
 	return "", fmt.Errorf("no terminal %q", id)
 }
 
-// FocusTerminal reveals the terminal panel and selects the tab.
+// FocusTerminal reveals the terminal's tab and focuses it.
 func (a *App) FocusTerminal(id string) error {
+	if a.focusEditorTerminal(id) {
+		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		return nil
+	}
 	idx := -1
 	for i, tt := range a.Terminals {
 		if tt.ID == id {
@@ -552,25 +600,27 @@ func (a *App) FocusTerminal(id string) error {
 
 // TerminalScreen returns the visible screen of one tab as plain text.
 func (a *App) TerminalScreen(id string) (string, error) {
-	for _, tt := range a.Terminals {
-		if tt.ID == id {
-			return tt.Term.ScreenText(), nil
-		}
+	if tt := a.terminalByID(id); tt != nil {
+		return tt.Term.ScreenText(), nil
 	}
 	return "", fmt.Errorf("terminal %q not found", id)
 }
 
 // ListTerminals reports the open tabs to a plugin.
 func (a *App) ListTerminals() []plugin.TerminalInfo {
-	out := make([]plugin.TerminalInfo, 0, len(a.Terminals))
-	for _, tt := range a.Terminals {
+	terms := a.allTerminals()
+	out := make([]plugin.TerminalInfo, 0, len(terms))
+	for _, tt := range terms {
 		cols, rows := tt.Term.Size()
-		out = append(out, plugin.TerminalInfo{ID: tt.ID, Label: tt.Label, Cols: cols, Rows: rows})
+		out = append(out, plugin.TerminalInfo{ID: tt.ID, Label: tt.Label, Cols: cols, Rows: rows, Location: tt.location()})
 	}
 	return out
 }
 
 func (a *App) CloseTerminal(panelID string) {
+	if a.closeEditorTerminal(panelID) {
+		return
+	}
 	idx := -1
 	for i, tt := range a.Terminals {
 		if tt.ID == panelID {
@@ -582,6 +632,7 @@ func (a *App) CloseTerminal(panelID string) {
 		return
 	}
 	a.Terminals[idx].Term.Close()
+	a.forgetAppTerminal(panelID)
 	a.Terminals = append(a.Terminals[:idx], a.Terminals[idx+1:]...)
 	a.TerminalPanel.RemoveTerminal(idx)
 
@@ -590,6 +641,14 @@ func (a *App) CloseTerminal(panelID string) {
 	} else {
 		a.Root.SetFocus(a.TerminalPanel)
 	}
+}
+
+func (a *App) CloseActiveTerminal() {
+	idx := a.TerminalPanel.ActiveIndex()
+	if idx < 0 || idx >= len(a.Terminals) {
+		return
+	}
+	a.CloseTerminal(a.Terminals[idx].ID)
 }
 
 // hideBottomPanelIfTerminalActive collapses the bottom panel once the last
@@ -612,6 +671,7 @@ func (a *App) CloseAllTerminals() {
 	}
 	for _, tt := range terms {
 		tt.Term.Close()
+		a.forgetAppTerminal(tt.ID)
 	}
 	a.hideBottomPanelIfTerminalActive()
 }
@@ -675,7 +735,7 @@ func (a *App) checkMouseHover(mx, my int) {
 
 func (a *App) ShowHover(text string, anchorX, anchorY int) {
 	if text != "" {
-		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY)
+		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY, &a.Root.ControlModifiers)
 	}
 }
 
@@ -803,6 +863,25 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.LogOutputAsync(level, "lsp:"+server, message)
 	}
 
+	lspManager.OnApplyEdit = func(_ string, edit lsp.WorkspaceEdit) lsp.ApplyWorkspaceEditResult {
+		result := make(chan lsp.ApplyWorkspaceEditResult, 1)
+		lifecycle := newExecRequestLifecycle()
+		request := &LSPApplyEditRequest{Edit: edit, Result: result, Lifecycle: lifecycle}
+		if err := screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
+			return lsp.ApplyWorkspaceEditResult{FailureReason: err.Error()}
+		}
+		select {
+		case applied := <-result:
+			return applied
+		case <-time.After(10 * time.Second):
+			if lifecycle.cancel() {
+				return lsp.ApplyWorkspaceEditResult{FailureReason: "timed out waiting to apply workspace edit"}
+			}
+			// The UI claimed the request, so let its edit finish and report the result.
+			return <-result
+		}
+	}
+
 	// A server can die at any time; waking the loop redraws the status bar so
 	// the indicator does not keep claiming the server is up.
 	lspManager.OnStateChange = func() {
@@ -877,6 +956,10 @@ func (a *App) focusedTerminalWidget() *ui.TerminalWidget {
 		}
 	} else if tw, ok := a.Root.Focused.(*ui.TerminalWidget); ok {
 		return tw
+	} else if g, ok := a.Root.Focused.(*ui.EditorGroupWidget); ok {
+		if tab := g.ActiveTerminalTab(); tab != nil {
+			return tab.Terminal
+		}
 	}
 	return nil
 }
@@ -1024,6 +1107,10 @@ func (a *App) ClosePluginDrawer() {
 }
 
 func (a *App) DismissDialog() {
+	if a.quickOpen != nil && a.Root.TopOverlayWidget() == a.quickOpen.palette {
+		a.releaseTask(a.quickOpen.task)
+		a.quickOpen = nil
+	}
 	a.approvalDialog = nil
 	a.restoreFocus(a.Root.PopOverlay())
 }
@@ -1147,6 +1234,7 @@ func (a *App) ShowConfirmDialogEx(title, message string, buttons []string, callb
 
 func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 	findBar := ui.NewFindBarWidget()
+	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		leftMatches, err := ui.FindInLines(dv.LeftLines(), query, opts)

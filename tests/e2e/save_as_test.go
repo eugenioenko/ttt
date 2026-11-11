@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -88,6 +89,53 @@ func TestSaveAsSameFileDoesNotAsk(t *testing.T) {
 
 	if len(h.app.Root.Overlays) != 0 {
 		t.Fatalf("expected no dialog when saving to the file's own path, got %d overlays", len(h.app.Root.Overlays))
+	}
+}
+
+func TestSaveAsRefusesDirtyOpenTarget(t *testing.T) {
+	for _, when := range []string{"before", "during"} {
+		t.Run(when+" confirmation", func(t *testing.T) {
+			h := newTestHarness(t, 80, 24)
+			defer h.stop()
+			h.app.EditorGroup.OnError = h.app.StatusError
+			source, target := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
+			if err := h.app.EditorGroup.OpenFile(target); err != nil {
+				t.Fatal(err)
+			}
+			h.app.EditorGroup.CommitActiveTab()
+			if when == "before" {
+				h.pressRune('X')
+			}
+			targetBuf, targetUndo := h.app.EditorGroup.ActiveBuffer(), h.app.EditorGroup.Editor.Undo
+			if err := h.app.EditorGroup.OpenFile(source); err != nil {
+				t.Fatal(err)
+			}
+			h.exec("file.saveAs")
+			h.pressKey(tcell.KeyCtrlA, tcell.ModCtrl)
+			h.typeText(target)
+			h.pressKey(tcell.KeyEnter, tcell.ModNone)
+			if when == "during" {
+				h.assertContains("already exists")
+				edit := &undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'}
+				edit.Apply(targetBuf)
+				targetUndo.Push(edit)
+				h.pressKey(tcell.KeyRight, tcell.ModNone)
+				h.pressKey(tcell.KeyEnter, tcell.ModNone)
+			}
+			h.assertContains("already open")
+			if h.app.Root.HasOverlay() {
+				t.Fatal("SaveAs left a confirmation for a target with unsaved changes")
+			}
+			if h.app.EditorGroup.ActiveFilePath() != source || len(h.app.EditorGroup.OpenFilePaths()) != 2 {
+				t.Fatal("SaveAs changed the source document's identity")
+			}
+			if got := readFile(t, target); got != "b" {
+				t.Fatalf("SaveAs overwrote the open target: %q", got)
+			}
+			if targetBuf.Lines[0] != "Xb" || !targetBuf.Dirty {
+				t.Fatal("SaveAs discarded the target's unsaved edits")
+			}
+		})
 	}
 }
 

@@ -25,6 +25,7 @@ func DefaultStyleMap() StyleMap {
 // TcellScreen implements the Screen interface using tcell.
 type TcellScreen struct {
 	scr      tcell.Screen
+	osc      *OSCReader
 	styleMap StyleMap
 	// Called on every mouse event; only a change is written to the tty.
 	pointerShape         string
@@ -43,6 +44,23 @@ func NewTcellScreen() (*TcellScreen, error) {
 	s.EnablePaste()
 	s.EnableFocus()
 	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, nil
+}
+
+// NewTerminfoScreenFromTty initializes a tcell screen using tty while routing
+// replies to registered OSC 4/10/11 queries away from the keyboard input stream.
+func NewTerminfoScreenFromTty(tty tcell.Tty) (*TcellScreen, *OSCReader, error) {
+	osc := NewOSCReader(tty)
+	s, err := tcell.NewTerminfoScreenFromTty(OSCTty{Tty: tty, Reader: osc})
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.Init(); err != nil {
+		return nil, nil, err
+	}
+	s.EnableMouse()
+	s.EnablePaste()
+	s.EnableFocus()
+	return &TcellScreen{scr: s, osc: osc, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, osc, nil
 }
 
 func NewTcellScreenFrom(s tcell.Screen) *TcellScreen {
@@ -85,7 +103,7 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 		if c.Attrs&CellAttrBlink != 0 {
 			s = s.Blink(true)
 		}
-		t.scr.Put(x, y, runeString(c.Ch), s)
+		t.scr.Put(x, y, c.text(), s)
 		return
 	}
 	s := t.styleMap[c.Style]
@@ -137,13 +155,20 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 			// the displayed background is the terminal's default foreground.
 			s = s.Reverse(reverse)
 			t.scr.Put(x, y, " ", s)
-			if textwidth.Rune(c.Ch) == 2 {
+			if textwidth.GraphemeWidth(c.text()) == 2 {
 				t.scr.Put(x+1, y, " ", s)
 			}
 			return
 		}
 	}
-	t.scr.Put(x, y, runeString(c.Ch), s)
+	t.scr.Put(x, y, c.text(), s)
+}
+
+func (c Cell) text() string {
+	if c.Text != "" {
+		return c.Text
+	}
+	return runeString(c.Ch)
 }
 
 func (t *TcellScreen) Show() {
@@ -162,6 +187,9 @@ func (t *TcellScreen) PollEvent() tcell.Event {
 }
 
 func (t *TcellScreen) Fini() {
+	if t.osc != nil {
+		t.osc.BeginShutdown()
+	}
 	if t.pointerShapesEnabled && t.pointerShape != "" && t.pointerShape != "default" {
 		t.SetPointerShape("default")
 	}

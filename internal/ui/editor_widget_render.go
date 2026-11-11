@@ -12,6 +12,104 @@ import (
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
 
+type indentGuideBlankSpan struct {
+	start, end, width int
+}
+
+func indentGuideIndent(line string, tabWidth int) (width, runes int, blank bool) {
+	blank = true
+	for _, ch := range line {
+		switch ch {
+		case ' ':
+			width++
+		case '\t':
+			width = ((width / tabWidth) + 1) * tabWidth
+		default:
+			blank = false
+			return width, runes, blank
+		}
+		runes++
+	}
+	return width, runes, blank
+}
+
+// indentGuideMaxScanLines bounds the blank-run scan: a side further than this
+// from any non-blank line counts as unresolved and contributes indent 0.
+// Without the bound a file that is mostly blank lines made every frame scan
+// the whole run (see #1429).
+const indentGuideMaxScanLines = 512
+
+func indentGuideBlankWidth(lines []string, line, tabWidth int, spans *[]indentGuideBlankSpan) int {
+	for _, span := range *spans {
+		if line >= span.start && line <= span.end {
+			return span.width
+		}
+	}
+
+	start, end := line, line
+	above, below := 0, 0
+	aboveFound, belowFound := false, false
+	lowest := max(line-indentGuideMaxScanLines, 0)
+	for start > lowest {
+		width, _, blank := indentGuideIndent(lines[start-1], tabWidth)
+		if !blank {
+			above = width
+			aboveFound = true
+			break
+		}
+		start--
+	}
+	highest := min(line+indentGuideMaxScanLines, len(lines)-1)
+	for end < highest {
+		width, _, blank := indentGuideIndent(lines[end+1], tabWidth)
+		if !blank {
+			below = width
+			belowFound = true
+			break
+		}
+		end++
+	}
+
+	// Cache only the lines whose own bounded scan resolves to the same width.
+	// A blank run can be longer than the scan bound, so the span scanned from
+	// one line can reach past the point where that line's nearest non-blank
+	// neighbour drops out of the window; carrying the width across those lines
+	// would draw guides that a direct scan of the line would not.
+	lo, hi := line, line
+	if aboveFound {
+		lo = start
+	}
+	if belowFound {
+		hi = end
+	}
+
+	addSpan := func(from, to, width int) {
+		if from <= to {
+			*spans = append(*spans, indentGuideBlankSpan{start: from, end: to, width: width})
+		}
+	}
+	switch {
+	case aboveFound && belowFound:
+		// Each side only holds within indentGuideMaxScanLines of its
+		// neighbour, so the run splits into at most three spans.
+		aboveEnd := start - 1 + indentGuideMaxScanLines
+		belowStart := end + 1 - indentGuideMaxScanLines
+		addSpan(lo, min(hi, belowStart-1), above)
+		addSpan(max(lo, belowStart), min(hi, aboveEnd), max(above, below))
+		addSpan(max(lo, aboveEnd+1), hi, below)
+		return max(above, below)
+	case aboveFound:
+		addSpan(lo, hi, above)
+		return above
+	case belowFound:
+		addSpan(lo, hi, below)
+		return below
+	default:
+		addSpan(line, line, 0)
+		return 0
+	}
+}
+
 func (e *EditorPaneWidget) Render(surface Surface) {
 	e.syncDiffOverlay()
 	if e.Highlighter != nil && e.Buf != nil {
@@ -109,6 +207,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	e.rowMapOffset = e.topOffset()
 	decorateLinks := e.beginLinkFrame()
 	topRow := e.topRow(layout)
+	var indentGuideSpans []indentGuideBlankSpan
 
 	// A pane narrowed to a shared wrap width leaves columns past its text
 	// that the row loop does not draw.
@@ -158,7 +257,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					bookmarkBg = bg
 				}
 			} else if !e.LineNumbers || (e.WordWrap && isWrapContinuation) {
-				for i := 0; i < gutterW; i++ {
+				for i := range gutterW {
 					surface.SetCell(i, y, term.Cell{Ch: ' ', Style: gutterStyle})
 				}
 			} else {
@@ -219,6 +318,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.WordWrap {
 				segmentByte = runeByteOffset(e.Buf.Lines[lineIdx], segStartCol)
 			}
+			segmentVisualCol := 0
+			if e.IndentGuides && e.WordWrap {
+				segmentVisualCol = bufColToVisualCol(e.Buf.Lines[lineIdx], segStartCol, tabW)
+			}
 			var syntaxSpans []highlight.Span
 			diffFg, diffFgOverride, diffFgFull := e.diffLineFg(lineIdx)
 			if !diffFgOverride {
@@ -244,7 +347,14 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineSegmentToScreen(e.Buf.Lines[lineIdx][segmentByte:], syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			indentWidth, indentRunes, blankLine := 0, 0, false
+			if e.IndentGuides {
+				indentWidth, indentRunes, blankLine = indentGuideIndent(e.Buf.Lines[lineIdx], tabW)
+				if blankLine {
+					indentWidth = indentGuideBlankWidth(e.Buf.Lines, lineIdx, tabW, &indentGuideSpans)
+				}
+			}
 			var lineBrackets []bracketColorEntry
 			if bracketColors != nil && lineIdx < len(bracketColors) {
 				lineBrackets = bracketColors[lineIdx]
@@ -350,6 +460,16 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				}
 				if hide {
 					cell.Attrs |= term.CellAttrHide
+				}
+				if e.IndentGuides && !isSearchHighlight && cell.Style != term.StyleReverse && (blankLine || (screenCells[x].bufCol >= 0 && screenCells[x].bufCol < indentRunes)) {
+					visualCol := leftCol + x
+					if e.WordWrap {
+						visualCol = segmentVisualCol + x
+					}
+					if visualCol < indentWidth && visualCol%tabW == 0 {
+						cell.Ch = '│'
+						cell.Style = term.StyleIndentGuide
+					}
 				}
 				surface.SetCell(gutterW+x, y, cell)
 				if decorateLinks && inText && !hide && screenCells[x].width > 0 {
@@ -494,6 +614,14 @@ type screenCell struct {
 }
 
 // The returned slice is reused by the next call.
+func rowText(line string, startByte int, r editorRow) string {
+	text := line[startByte:]
+	if r.nextCol > 0 {
+		return text[:runeByteOffset(text, r.nextCol-r.startCol)]
+	}
+	return text
+}
+
 func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)

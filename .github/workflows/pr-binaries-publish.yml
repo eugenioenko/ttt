@@ -1,0 +1,109 @@
+name: PR binaries publish
+
+# This workflow holds a write token and must never check out or run pull request code.
+# It must not download the artifacts either.
+on:
+  workflow_run:
+    workflows: ["PR binaries"]
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  publish:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publish download links
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+        run: |
+          set -euo pipefail
+
+          # A fork run waiting for approval reports action_required.
+          if [[ "$CONCLUSION" == "action_required" || -z "$HEAD_OWNER" ]]; then
+            echo "Nothing to publish."
+            exit 0
+          fi
+
+          # Forks control their build run, so only GitHub's record of the PR head picks the PR.
+          # Fork runs have an empty pull_requests list, so the lookup goes through the branch.
+          pr="$(gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" -f state=open -f base=main -f head="$HEAD_OWNER:$HEAD_BRANCH" -F per_page=100 \
+            --jq 'first(.[] | select(.head.sha == env.HEAD_SHA and .head.repo.full_name == env.HEAD_REPO) | .number)')"
+          if [[ -z "$pr" ]]; then
+            echo "No open pull request has this commit at its head."
+            exit 0
+          fi
+
+          rows=""
+          expires=""
+          complete=true
+          for entry in "linux-amd64:Linux x64" "darwin-arm64:macOS Apple Silicon" "darwin-amd64:macOS Intel" "windows-amd64:Windows x64"; do
+            target="${entry%%:*}"
+            label="${entry#*:}"
+            name="ttt-pr-$pr-$target"
+            info="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=$name" \
+              --jq 'first(.artifacts[] | select(.expired | not) | "\(.id) \(.expires_at)")')"
+            if [[ -z "$info" ]]; then
+              complete=false
+              continue
+            fi
+            id="${info%% *}"
+            expires="${info#* }"
+            rows+="| $label | [$name]($RUN_URL/artifacts/$id) |"$'\n'
+          done
+
+          preview_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=ttt-pr-$pr-linux-386" \
+            --jq 'first(.artifacts[] | select(.expired | not) | .id)')"
+
+          if [[ "$CONCLUSION" == "success" && "$complete" == "true" ]]; then
+            state=success
+            description="Downloads for Linux, macOS, and Windows"
+          else
+            state=failure
+            description="The build did not finish"
+          fi
+
+          {
+            echo "<!-- ttt-pr-binaries -->"
+            echo "## Binaries"
+            echo
+            if [[ "$state" == "success" ]]; then
+              echo "Built from \`${HEAD_SHA:0:12}\`. Links expire on $(date -u -d "$expires" '+%b %-d, %Y')."
+              echo
+              if [[ -n "$preview_id" ]]; then
+                echo "**[Try it in the browser](https://live.tttedit.dev/?artifact=$preview_id)** (emulated): runs this build in 32-bit Linux emulated inside the page, with no download or sign-in. It is much slower than a native build and is meant for quick checks of behavior and UI, not performance or terminal compatibility. Startup takes up to a minute."
+                echo
+              fi
+              echo "| Platform | Download |"
+              echo "| --- | --- |"
+              printf '%s' "$rows"
+              echo
+              echo "Downloads need a GitHub sign-in and arrive as zips. On Linux and macOS, run \`chmod +x ttt\` after unzipping. These binaries run this pull request's code, so only run them if you trust it."
+            else
+              echo "The build of \`${HEAD_SHA:0:12}\` did not finish. See the [workflow run]($RUN_URL)."
+            fi
+          } > "$RUNNER_TEMP/comment.md"
+
+          ids="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$pr/comments?per_page=100" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- ttt-pr-binaries -->"))) | .id')"
+          id="${ids%%$'\n'*}"
+          if [[ -n "$id" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          fi
+
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state="$state" -f context="PR binaries" -f target_url="$RUN_URL" -f description="$description" >/dev/null

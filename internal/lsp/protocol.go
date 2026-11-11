@@ -44,7 +44,13 @@ type ClientCapabilities struct {
 }
 
 type WorkspaceClientCapabilities struct {
-	Diagnostics *DiagnosticWorkspaceClientCapabilities `json:"diagnostics,omitempty"`
+	ApplyEdit      bool                                   `json:"applyEdit,omitempty"`
+	ExecuteCommand *ExecuteCommandClientCapabilities      `json:"executeCommand,omitempty"`
+	Diagnostics    *DiagnosticWorkspaceClientCapabilities `json:"diagnostics,omitempty"`
+}
+
+type ExecuteCommandClientCapabilities struct {
+	DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
 }
 
 type DiagnosticWorkspaceClientCapabilities struct {
@@ -55,7 +61,20 @@ type TextDocumentClientCapabilities struct {
 	Completion         *CompletionClientCapabilities         `json:"completion,omitempty"`
 	PublishDiagnostics *PublishDiagnosticsClientCapabilities `json:"publishDiagnostics,omitempty"`
 	DocumentSymbol     *DocumentSymbolClientCapabilities     `json:"documentSymbol,omitempty"`
+	CodeAction         *CodeActionClientCapabilities         `json:"codeAction,omitempty"`
 	Diagnostic         *DiagnosticClientCapabilities         `json:"diagnostic,omitempty"`
+}
+
+type CodeActionClientCapabilities struct {
+	CodeActionLiteralSupport *CodeActionLiteralSupport `json:"codeActionLiteralSupport,omitempty"`
+}
+
+type CodeActionLiteralSupport struct {
+	CodeActionKind CodeActionKindCapabilities `json:"codeActionKind"`
+}
+
+type CodeActionKindCapabilities struct {
+	ValueSet []string `json:"valueSet"`
 }
 
 type DiagnosticClientCapabilities struct {
@@ -254,9 +273,18 @@ func (e *WorkspaceEdit) TextEdits() ([]FileEdits, error) {
 }
 
 type CodeActionContext struct {
-	Diagnostics []Diagnostic `json:"diagnostics"`
-	Only        []string     `json:"only,omitempty"`
+	Diagnostics []Diagnostic          `json:"diagnostics"`
+	Only        []string              `json:"only,omitempty"`
+	TriggerKind CodeActionTriggerKind `json:"triggerKind,omitempty"`
 }
+
+type CodeActionTriggerKind int
+
+const (
+	CodeActionInvoked CodeActionTriggerKind = iota + 1
+	CodeActionAutomatic
+	CodeActionTriggerCharacter
+)
 
 type CodeActionParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
@@ -265,10 +293,54 @@ type CodeActionParams struct {
 }
 
 type CodeAction struct {
-	Title       string         `json:"title"`
-	Kind        string         `json:"kind,omitempty"`
-	Edit        *WorkspaceEdit `json:"edit,omitempty"`
-	Diagnostics []Diagnostic   `json:"diagnostics,omitempty"`
+	Title       string          `json:"title"`
+	Kind        string          `json:"kind,omitempty"`
+	Edit        *WorkspaceEdit  `json:"edit,omitempty"`
+	Command     *Command        `json:"command,omitempty"`
+	Data        json.RawMessage `json:"data,omitempty"`
+	Diagnostics []Diagnostic    `json:"diagnostics,omitempty"`
+}
+
+// UnmarshalJSON accepts both a CodeAction and a bare Command, as the LSP
+// result type is (Command | CodeAction)[].
+func (a *CodeAction) UnmarshalJSON(data []byte) error {
+	type plain CodeAction
+	var probe struct {
+		Command json.RawMessage `json:"command"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return err
+	}
+	if len(probe.Command) > 0 && probe.Command[0] == '"' {
+		var cmd Command
+		if err := json.Unmarshal(data, &cmd); err != nil {
+			return err
+		}
+		*a = CodeAction{Title: cmd.Title, Command: &cmd}
+		return nil
+	}
+	return json.Unmarshal(data, (*plain)(a))
+}
+
+type Command struct {
+	Title     string            `json:"title"`
+	Command   string            `json:"command"`
+	Arguments []json.RawMessage `json:"arguments,omitempty"`
+}
+
+type ExecuteCommandParams struct {
+	Command   string            `json:"command"`
+	Arguments []json.RawMessage `json:"arguments,omitempty"`
+}
+
+type ApplyWorkspaceEditParams struct {
+	Label string        `json:"label,omitempty"`
+	Edit  WorkspaceEdit `json:"edit"`
+}
+
+type ApplyWorkspaceEditResult struct {
+	Applied       bool   `json:"applied"`
+	FailureReason string `json:"failureReason,omitempty"`
 }
 
 type CompletionTriggerKind int
@@ -471,6 +543,7 @@ type Diagnostic struct {
 	Severity int    `json:"severity,omitempty"`
 	Source   string `json:"source,omitempty"`
 	Message  string `json:"message"`
+	Code     any    `json:"code,omitempty"`
 }
 
 func (m *MarkupContent) UnmarshalJSON(data []byte) error {

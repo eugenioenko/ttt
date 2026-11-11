@@ -51,6 +51,32 @@ type CodeActionResult struct {
 	Edit *lsp.WorkspaceEdit
 }
 
+type CodeActionsResult struct {
+	Path        string
+	Server      string
+	Version     uint64
+	Buffer      *buffer.Buffer
+	OpenBuffers map[string]codeActionBufferSnapshot
+	Actions     []lsp.CodeAction
+	Err         error
+}
+
+type codeActionBufferSnapshot struct {
+	Buffer  *buffer.Buffer
+	Version uint64
+}
+
+type CodeActionCommandResult struct {
+	Err    error
+	Notify bool
+}
+
+type LSPApplyEditRequest struct {
+	Edit      lsp.WorkspaceEdit
+	Result    chan lsp.ApplyWorkspaceEditResult
+	Lifecycle *execRequestLifecycle
+}
+
 func FileURI(path string) string { return lsp.FileURI(path) }
 
 func URIToPath(uri string) string { return lsp.URIToPath(uri) }
@@ -122,6 +148,7 @@ func LspToUIDiagnostics(diags []lsp.Diagnostic, lines []string) []ui.Diagnostic 
 			Severity:  ui.DiagnosticSeverity(d.Severity),
 			Message:   d.Message,
 			Source:    d.Source,
+			Code:      d.Code,
 		}
 	}
 	return result

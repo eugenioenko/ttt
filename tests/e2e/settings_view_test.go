@@ -27,7 +27,7 @@ func TestSettingsViewOpensAsTab(t *testing.T) {
 	screen := h.screenText()
 	for _, want := range []string{
 		"Settings",
-		"General", "Editor", "Appearance", "Sidebar", "Terminal", "Diff",
+		"General", "Editor", "Appearance", "Explorer", "Sidebar", "Terminal", "Diff",
 		"Plugins", "Enable plugins",
 		"Cancel", "Apply",
 	} {
@@ -86,6 +86,43 @@ func TestSettingsQuitOptions(t *testing.T) {
 	if !h.app.Settings.Editor.SaveAllOnQuit || !h.app.Settings.Editor.SaveAllOnQuitExceptUnnamed {
 		t.Fatal("quit options were not applied")
 	}
+}
+
+func TestSettingsExplorerUseTrash(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Explorer", "Explorer")
+	for _, row := range []struct{ label, state string }{
+		{"Hidden files", checkedBox},
+		{"Git-ignored files", checkedBox},
+		{"Reveal active file", uncheckedBox},
+		{"Compact folders", checkedBox},
+		{"Git status colors", checkedBox},
+		{"Dim staged colors", uncheckedBox},
+	} {
+		if !rowHas(h, row.label, row.state) {
+			t.Fatalf("Explorer is missing %q with state %q:\n%s", row.label, row.state, h.screenText())
+		}
+	}
+	label := "Move deleted files to Trash"
+	if !rowHas(h, label, checkedBox) {
+		t.Fatalf("Trash should default to enabled:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, label, checkedBox)
+	h.exec("settings.apply")
+	if h.app.Settings.Explorer.UseTrash || config.LoadSettings().Explorer.UseTrash {
+		t.Fatal("useTrash=false was not applied and saved")
+	}
+	h.exec("explorer.delete")
+	h.assertContains("Permanently delete")
+	h.assertContains("This cannot be undone.")
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Sidebar", "Sidebar")
+	if strings.Contains(h.screenText(), label) {
+		t.Fatal("Trash setting still appears under Sidebar")
+	}
+	h.assertContains("Tab style")
 }
 
 const (

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -32,6 +31,7 @@ func TestClosingCommitDetailCancelsItsGitProcess(t *testing.T) {
 	group := ui.NewEditorGroupWidget(nil, 4, true, "relative")
 	sim := term.NewSimScreen()
 	app := &App{
+		Repository:  NewRepositoryState(nil, nil),
 		EditorGroup: group,
 		Screen:      term.NewTcellScreenFrom(sim),
 		Settings:    &config.Settings{},
@@ -74,7 +74,7 @@ func TestClosingCommitDetailCancelsItsFullFileGitProcess(t *testing.T) {
 
 	group := ui.NewEditorGroupWidget(nil, 4, true, "relative")
 	sim := term.NewSimScreen()
-	app := &App{EditorGroup: group, Screen: term.NewTcellScreenFrom(sim), Settings: &config.Settings{}}
+	app := &App{Repository: NewRepositoryState(nil, nil), EditorGroup: group, Screen: term.NewTcellScreenFrom(sim), Settings: &config.Settings{}}
 	ref := strings.Repeat("c", 40)
 	tabID := commitDetailTabID("/repo", ref)
 	request := app.beginCommitDetailRequest(tabID)
@@ -157,7 +157,7 @@ func TestCanceledCommitHistoryPageReapsItsGitProcess(t *testing.T) {
 	panel.Screen = term.NewTcellScreenFrom(sim)
 	panel.logDir = "/repo"
 	panel.lastLogDir = "/repo"
-	panel.logAnchor = git.ObjectID(strings.Repeat("a", 40))
+	panel.logAnchor = strings.Repeat("a", 40)
 	panel.logOffset = 10
 	panel.logHasMore = true
 	panel.logGen = 9

@@ -43,6 +43,7 @@ type EditorPaneWidget struct {
 	TabSize                 int
 	UseTabs                 bool
 	LineNumbers             bool
+	IndentGuides            bool
 	GutterStyle             string
 	LegacyScrollbarGlyphs   bool
 	ScrollbarGitMarks       bool
@@ -50,6 +51,7 @@ type EditorPaneWidget struct {
 	FoldChevronExpanded     rune
 	WordWrap                bool
 	WordWrapColumn          int
+	WrapWords               bool
 	AutoDedent              bool
 	AutoClosing             config.AutoClosingSettings
 	autoClosing             *autoClosingState
@@ -100,6 +102,7 @@ type EditorPaneWidget struct {
 	rowMapOffset            int
 	links                   editorLinks
 	LinkWorkDir             string
+	ControlModifiers        *tcell.ModMask
 	OnOpenURL               func(string)
 	OnOpenFile              func(string, int, int)
 	OnLinkHover             func(*EditorPaneWidget)
@@ -236,10 +239,7 @@ func (e *EditorPaneWidget) computeMaxLineWidth() int {
 	tabW := e.resolveTabSize()
 	maxW := 0
 	topLine := e.Viewport.TopLine
-	botLine := topLine + e.Viewport.Height
-	if botLine > len(e.Buf.Lines) {
-		botLine = len(e.Buf.Lines)
-	}
+	botLine := min(topLine+e.Viewport.Height, len(e.Buf.Lines))
 	for i := topLine; i < botLine; i++ {
 		lw := bufColToVisualCol(e.Buf.Lines[i], len([]rune(e.Buf.Lines[i])), tabW)
 		if lw > maxW {
@@ -446,10 +446,7 @@ func (e *EditorPaneWidget) pasteText(text string) {
 		e.Cursor.Col += len([]rune(lines[0]))
 	} else {
 		currentLine := []rune(e.Buf.Lines[e.Cursor.Line])
-		col := e.Cursor.Col
-		if col > len(currentLine) {
-			col = len(currentLine)
-		}
+		col := min(e.Cursor.Col, len(currentLine))
 		suffix := string(currentLine[col:])
 		e.exec(&undo.PasteCommand{
 			Line:   e.Cursor.Line,
@@ -534,11 +531,8 @@ func (e *EditorPaneWidget) indentUnit() string {
 
 func (e *EditorPaneWidget) dedentForCloser() {
 	runes := []rune(e.Buf.Lines[e.Cursor.Line])
-	col := e.Cursor.Col
-	if col > len(runes) {
-		col = len(runes)
-	}
-	for i := 0; i < col; i++ {
+	col := min(e.Cursor.Col, len(runes))
+	for i := range col {
 		if runes[i] != ' ' && runes[i] != '\t' {
 			return
 		}
@@ -717,6 +711,43 @@ func (e *EditorPaneWidget) scrollDown(n int) {
 		newTop = total - 1
 	}
 	e.setTopRow(l, newTop)
+}
+
+// ScrollRows moves the cursor and viewport by delta screen rows. The cursor
+// keeps its screen row unless a file edge stops it, so the view follows Vim's
+// Ctrl+D rather than scrolling away from the caret.
+func (e *EditorPaneWidget) ScrollRows(delta int) {
+	l := e.layout()
+	top := e.topRow(l)
+	before, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	if e.WordWrap {
+		e.moveCursorWrapped(delta)
+	} else {
+		e.moveCursorLines(delta)
+	}
+	after, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	top += after - before
+	if maxTop := l.total() - e.Viewport.Height; maxTop >= 0 && top > maxTop {
+		top = maxTop
+	}
+	e.setTopRow(l, top)
+	e.scrollViewport()
+}
+
+// moveCursorLines moves by visible rows when wrapping is off. moveCursorWrapped
+// cannot be used directly: rowOf reports screen column 0 for unwrapped layouts,
+// so the cursor's visual column is passed explicitly.
+func (e *EditorPaneWidget) moveCursorLines(delta int) {
+	x := -1
+	if g := e.wrapGoal; g.ok && g.line == e.Cursor.Line && g.col == e.Cursor.Col && g.version == e.Buf.Version() {
+		x = g.x
+	}
+	if x < 0 {
+		x = bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, e.resolveTabSize())
+	}
+	line, col, x := e.wrappedRowMove(e.Cursor.Line, e.Cursor.Col, delta, x)
+	e.Cursor.Line, e.Cursor.Col = line, col
+	e.wrapGoal = wrapGoal{x: x, line: line, col: col, version: e.Buf.Version(), ok: true}
 }
 
 func (e *EditorPaneWidget) SmartHome() {

@@ -214,16 +214,7 @@ func RunEventLoop(
 		}
 		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
 		app.EditorGroup.SignatureHelp = nil
-		// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
-		if tev.Modifiers()&tcell.ModCtrl != 0 && app.EditorGroup.GetRect().Contains(mx, my) {
-			app.DismissHover()
-		} else if app.EditorGroup.Hover == nil {
-			if btn == 0 {
-				app.checkMouseHover(mx, my)
-			}
-		} else if !app.isMouseOverHover(mx, my) && !app.EditorGroup.Hover.IsDragging() {
-			app.DismissHover()
-		}
+		app.TrackMouseHover(tev)
 		app.Root.HandleEvent(tev)
 		app.FlushEditorOnChange()
 		syncStatus()
@@ -354,6 +345,28 @@ func RunEventLoop(
 				app.ApplyWorkspaceEdit(v.Edit)
 			case *CodeActionResult:
 				app.applyCodeActionEdit(v.Path, v.Edit)
+			case *CodeActionsResult:
+				app.HandleCodeActionsResult(v)
+			case *CodeActionCommandResult:
+				if v.Err != nil {
+					app.StatusWarn(v.Err.Error())
+				} else if v.Notify {
+					app.StatusNotify(i18n.Text("status.codeActionCompleted"))
+				}
+			case *LSPApplyEditRequest:
+				if !v.Lifecycle.claim() {
+					break
+				}
+				batches, ok := app.workspaceTextEdits(&v.Edit)
+				applied := false
+				if ok && len(batches) > 0 {
+					_, applied = app.applyWorkspaceEditBatches(batches, false)
+				}
+				result := lsp.ApplyWorkspaceEditResult{Applied: applied}
+				if !applied {
+					result.FailureReason = i18n.Text("status.workspaceEditNotApplied")
+				}
+				v.Result <- result
 			case *ReferencesResult:
 				if len(v.Locations) > 0 {
 					app.ShowReferences(v.Locations)
@@ -468,13 +481,14 @@ func RunEventLoop(
 }
 
 func resizeTerminals(app *App) {
+	app.resizeEditorTerminals()
 	if !app.ContentSplit.ShowBottom {
 		return
 	}
 	r := app.ContentSplit.BottomRect()
 	for _, tt := range app.Terminals {
 		tt.Term.AckUpdate()
-		content := app.TerminalPanel.ContentRect(ui.Rect{W: r.W, H: r.H - 2}, tt.Widget.ScrollbarVisible())
+		content := app.TerminalPanel.ContentRectFor(tt.Widget, ui.Rect{W: r.W, H: r.H - 2}, tt.Widget.ScrollbarVisible())
 		if content.W > 0 && content.H > 0 {
 			tt.Term.Resize(content.W, content.H)
 		}

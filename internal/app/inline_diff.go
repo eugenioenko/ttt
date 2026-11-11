@@ -3,12 +3,12 @@ package app
 import (
 	"context"
 
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 type inlineDiffRepo struct {
 	dir, rel string
+	source   repositorySource
 }
 
 func (a *App) repoPathForFile(path string) (repoDir, relPath string, ok bool) {
@@ -23,38 +23,37 @@ func (a *App) repoPathForFile(path string) (repoDir, relPath string, ok bool) {
 	return repoDir, relPath, ok
 }
 
-func (a *App) indexLines(path, repoDir, relPath string) ([]string, error) {
-	showTrailing := false
-	if buf := a.EditorGroup.BufferForPath(path); buf != nil {
-		showTrailing = buf.ShowTrailingNewline
+func (a *App) openInlineDiff(path, repoDir, relPath string) (opened, conflict bool, err error) {
+	source := a.Repository.repositorySource(repoDir)
+	ctx, cancel := context.WithTimeout(context.Background(), diffOpenTimeout)
+	defer cancel()
+	baseline, err := source.readBaseline(ctx, relPath)
+	if baseline.Conflicted {
+		return false, true, nil
 	}
-	content, err := git.ShowIndexFileContext(context.Background(), repoDir, relPath)
 	if err != nil {
-		return nil, err
+		return false, false, err
 	}
-	return blobLines(content, showTrailing), nil
-}
-
-// openInlineDiff opens path in diff mode against its staged version. A file
-// with merge conflicts has no single staged version: it stays open without a
-// diff and conflict reports why. Only a failed index read pays for that check.
-func (a *App) openInlineDiff(path, repoDir, relPath string) (opened, conflict bool) {
 	a.EditorGroup.OpenFile(path)
 	if a.EditorGroup.ActiveFilePath() != path || !a.EditorGroup.IsEditorActive() {
-		return false, false
+		return false, false, nil
 	}
-	base, err := a.indexLines(path, repoDir, relPath)
-	if err != nil && git.IsUnmergedContext(context.Background(), repoDir, relPath) {
-		return false, true
+	var base []string
+	if baseline.Exists {
+		showTrailing := false
+		if buf := a.EditorGroup.BufferForPath(path); buf != nil {
+			showTrailing = buf.ShowTrailingNewline
+		}
+		base = blobLines(baseline.Content, showTrailing)
 	}
 	if !a.EditorGroup.EnableInlineDiff(path, base) {
-		return false, false
+		return false, false, nil
 	}
 	if a.inlineDiffRepos == nil {
 		a.inlineDiffRepos = make(map[string]inlineDiffRepo)
 	}
-	a.inlineDiffRepos[path] = inlineDiffRepo{dir: repoDir, rel: relPath}
-	return true, false
+	a.inlineDiffRepos[path] = inlineDiffRepo{dir: repoDir, rel: relPath, source: source}
+	return true, false, nil
 }
 
 func (a *App) ToggleInlineDiff() {
@@ -71,7 +70,11 @@ func (a *App) ToggleInlineDiff() {
 		a.StatusNotify(i18n.Text("status.notInAGitRepository"))
 		return
 	}
-	opened, conflict := a.openInlineDiff(path, repoDir, relPath)
+	opened, conflict, err := a.openInlineDiff(path, repoDir, relPath)
+	if err != nil {
+		a.StatusError(err.Error())
+		return
+	}
 	if conflict {
 		a.StatusNotify(i18n.Format("status.hasMergeConflictsNoDiffToShow", i18n.Args{"relPath": relPath}))
 		return
@@ -91,8 +94,7 @@ func (a *App) onChangesRefreshed() {
 		a.pendingCurrentChangesOpen = false
 		a.OpenCurrentChanges()
 	}
-	// Staging, unstaging and commits move the index that an open working-tree
-	// diff and the git gutter are based on.
+	// Repository changes can move the baseline of open diffs and gutter markers.
 	if a.EditorGroup != nil && (a.EditorGroup.IsInlineDiffActive() || a.Settings.Editor.IsGitGutterEnabled()) {
 		a.RequestGitGutterForActiveFile()
 	}

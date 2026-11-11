@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -23,8 +24,7 @@ func TestWrapLineSegments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runes := []rune(tt.line)
-			got := wrapLineSegments(runes, tt.width, tt.tabW)
+			got := wrapLineSegments(tt.line, tt.width, tt.tabW, false)
 			if len(got) != len(tt.expected) {
 				t.Fatalf("expected %d segments, got %d: %v", len(tt.expected), len(got), got)
 			}
@@ -54,7 +54,7 @@ func TestWrapLineVisualRows(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := wrapLineVisualRows(tt.line, tt.width, 4)
+			got := wrapLineVisualRows(tt.line, tt.width, 4, false)
 			if got != tt.expected {
 				t.Errorf("expected %d visual rows, got %d", tt.expected, got)
 			}
@@ -66,14 +66,48 @@ func TestWrapLineVisualRowsMatchesSegments(t *testing.T) {
 	lines := []string{
 		"", "hello", "1234567890", "가나다라마바", "a가b나c다d", "😀😀😀x", "éééé",
 		"\tab\tcd", "ab\t\t가", "\xff\xfeab", strings.Repeat("x가", 20),
+		"the quick brown fox", "a  b   c", "foo.bar(baz, qux)", "x\ty z\tw", "word 가나다 word",
 	}
-	for _, line := range lines {
-		for width := 1; width <= 12; width++ {
-			want := len(wrapLineSegments([]rune(line), width, 4))
-			if got := wrapLineVisualRows(line, width, 4); got != want {
-				t.Errorf("wrapLineVisualRows(%q, %d) = %d, want %d", line, width, got, want)
+	for _, words := range []bool{false, true} {
+		for _, line := range lines {
+			for width := 1; width <= 12; width++ {
+				want := len(wrapLineSegments(line, width, 4, words))
+				if got := wrapLineVisualRows(line, width, 4, words); got != want {
+					t.Errorf("wrapLineVisualRows(%q, %d, words=%v) = %d, want %d", line, width, words, got, want)
+				}
 			}
 		}
+	}
+}
+
+func TestWrapLineSegmentsWords(t *testing.T) {
+	tests := []struct {
+		name  string
+		line  string
+		width int
+		want  []int
+	}{
+		{"breaks after the space", "hello world", 8, []int{0, 6}},
+		{"space at the edge hangs", "abcd efgh", 4, []int{0, 5}},
+		{"extra spaces start the next row", "abcd  efgh", 4, []int{0, 5, 6}},
+		{"long word falls back to characters", "abcdefghij", 4, []int{0, 4, 8}},
+		{"long word after a short one", "ab cdefghij", 4, []int{0, 3, 7}},
+		{"after punctuation", "foo.bar.baz", 8, []int{0, 8}},
+		{"before an open bracket", "callme(arg)", 8, []int{0, 6}},
+		{"between wide runes", "ab 가나다라", 6, []int{0, 4}},
+		{"break after a tab", "ab cd\tx", 4, []int{0, 3, 6}},
+		{"closing run stays together", "ab(cd))", 6, []int{0, 2}},
+		{"opening run stays together", "ab((cd", 4, []int{0, 2}},
+		{"comma and space break once", "aa, bb", 4, []int{0, 4}},
+		{"wide rune keeps its punctuation", "가나)", 4, []int{0, 1}},
+		{"fits", "hello world", 11, []int{0}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := wrapLineSegments(tt.line, tt.width, 4, true); !slices.Equal(got, tt.want) {
+				t.Fatalf("wrapLineSegments(%q, %d) = %v, want %v", tt.line, tt.width, got, tt.want)
+			}
+		})
 	}
 }
 

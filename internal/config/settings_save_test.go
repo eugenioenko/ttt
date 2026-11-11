@@ -109,6 +109,33 @@ func TestLoadTerminalCtrlVPastes(t *testing.T) {
 	}
 }
 
+func TestExplorerUseTrashSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{}`, true},
+		{`{"explorer":{"showHidden":false}}`, true},
+		{`{"explorer":{"useTrash":true}}`, true},
+		{`{"explorer":{"useTrash":false}}`, false},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s := LoadSettings()
+		if s.Explorer.UseTrash != tc.want {
+			t.Fatalf("%s: useTrash = %v, want %v", tc.json, s.Explorer.UseTrash, tc.want)
+		}
+		if err := SaveSettings(s); err != nil {
+			t.Fatal(err)
+		}
+		if got := LoadSettings().Explorer.UseTrash; got != tc.want {
+			t.Fatalf("useTrash round trip = %v, want %v", got, tc.want)
+		}
+	}
+}
+
 func TestTerminalPaddingSettings(t *testing.T) {
 	dir := withTempConfigDir(t)
 	for _, tt := range []struct {
@@ -367,5 +394,22 @@ func TestAppearanceSettingsPointerShapesMissingDefaultsToEnabled(t *testing.T) {
 	got := LoadSettings()
 	if !got.Appearance.PointerShapesEnabled() {
 		t.Fatal("missing appearance.pointerShapes must default to enabled")
+	}
+}
+
+func TestApplicationArgsRoundTrip(t *testing.T) {
+	for _, args := range [][]string{nil, {}, {"{file}", "--preview"}} {
+		app := Application{Name: "viewer", Command: "viewer", Args: args}
+		data, err := json.Marshal(app)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got Application
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(got.Args, args) {
+			t.Fatalf("round trip %s changed args: %v", data, got.Args)
+		}
 	}
 }

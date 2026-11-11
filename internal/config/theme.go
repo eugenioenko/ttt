@@ -74,6 +74,7 @@ type DiagnosticStyles struct {
 
 type EditorStyles struct {
 	LineNumber    StyleDef         `json:"lineNumber"`
+	IndentGuide   StyleDef         `json:"indentGuide,omitempty"`
 	ActiveLine    StyleDef         `json:"activeLine"`
 	Selection     StyleDef         `json:"selection"`
 	SearchMatch   StyleDef         `json:"searchMatch"`

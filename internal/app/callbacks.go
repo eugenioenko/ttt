@@ -16,6 +16,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 
@@ -38,6 +39,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 	switch a.Sidebar.ActivePanel {
 	case "explorer":
 		items = []ui.ContextMenuItem{
+			{Label: i18n.Text("explorer.searchInFolders"), Command: "explorer.find"},
+			ui.MenuSep(),
 			{Label: i18n.Text("general.newFile"), Command: "file.new"},
 			{Label: i18n.Text("general.addFolder"), Command: "workspace.addFolder"},
 			{Label: i18n.Text("general.refresh"), Command: "explorer.refresh"},
@@ -68,6 +71,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 		items = []ui.ContextMenuItem{
 			{Label: i18n.Text("general.refresh"), Command: "sidebar.outline"},
 		}
+	case appsPanelID:
+		items = []ui.ContextMenuItem{{Label: i18n.Text("apps.add"), Command: "apps.add"}}
 	case "plugins":
 		items = []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.installFromURL"), Command: "plugin.install"},
@@ -130,14 +135,46 @@ func (a *App) ShowChangesContextMenu(sx, sy int) {
 	openContextMenu(a, a.BuildChangesContextMenu(), sx, sy)
 }
 
-func (a *App) ShowChangesFileContextMenu(_ string, status git.FileStatus, sx, sy int) {
+func (a *App) ShowChangesFileContextMenu(dir string, status scm.Change, sx, sy int) {
 	var items []ui.ContextMenuItem
-	if status.Staged {
+	if status.Group == scm.Staged {
 		items = append(items, changesContextMenuStaged...)
 	} else {
 		items = append(items, changesContextMenuUnstaged...)
 	}
+	if !a.Changes.supportsStaging(dir) {
+		filtered := items[:0]
+		for _, item := range items {
+			if item.Command != "changes.stage" && item.Command != "changes.unstage" {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
 	items = append(items, ui.MenuSep())
+	items = append(items, a.BuildChangesContextMenu()...)
+	openContextMenu(a, items, sx, sy)
+}
+
+func (a *App) ShowChangesFolderContextMenu(dir, _ string, staged bool, sx, sy int) {
+	var items []ui.ContextMenuItem
+	if staged {
+		items = append(items, changesFolderContextMenuStaged...)
+	} else {
+		items = append(items, changesFolderContextMenuUnstaged...)
+	}
+	if !a.Changes.supportsStaging(dir) {
+		filtered := items[:0]
+		for _, item := range items {
+			if item.Command != "changes.stageFolder" && item.Command != "changes.unstageFolder" {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
+	if len(items) > 0 {
+		items = append(items, ui.MenuSep())
+	}
 	items = append(items, a.BuildChangesContextMenu()...)
 	openContextMenu(a, items, sx, sy)
 }
@@ -337,18 +374,25 @@ func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, re
 
 func (a *App) openSelectedDiff(extended bool) { a.Changes.OpenSelectedDiff(extended) }
 
-func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended bool) {
-	fullPath := filepath.Join(dir, status.Path)
-	if status.Status == "?" {
+func (a *App) OpenChangeDiff(dir string, change scm.Change, extended bool) {
+	a.cancelPendingDiff()
+	fullPath := filepath.Join(dir, change.Path)
+	working := change.Group == "" || change.Group == scm.WorkingTree
+	if working && change.Kind == scm.Untracked {
 		a.EditorGroup.OpenFile(fullPath)
 		a.FocusEditorIfEnabled()
 		return
 	}
-	if !staged && status.Status != "D" {
-		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() {
-			opened, conflict := a.openInlineDiff(fullPath, dir, status.Path)
+	if working && change.Kind != scm.Deleted {
+		if info, err := os.Lstat(fullPath); err == nil && info.Mode().IsRegular() {
+			opened, conflict, err := a.openInlineDiff(fullPath, dir, change.Path)
+			if err != nil && !errors.Is(err, errors.ErrUnsupported) {
+				a.StatusError(err.Error())
+				a.FocusEditorIfEnabled()
+				return
+			}
 			if conflict {
-				a.openConflictedFile(fullPath, status.Path)
+				a.openConflictedFile(fullPath, change.Path)
 				return
 			}
 			if opened {
@@ -360,85 +404,49 @@ func (a *App) OpenChangeDiff(dir string, status git.FileStatus, staged, extended
 			}
 		}
 	}
-	if staged {
-		a.openStagedDiff(dir, status, extended)
-		return
-	}
-	index, indexErr := git.ShowIndexFileContext(context.Background(), dir, status.Path)
-	// A conflicted file has no stage-0 entry, so only a failed index read
-	// needs the conflict check.
-	if indexErr != nil && git.IsUnmergedContext(context.Background(), dir, status.Path) {
-		a.openConflictedFile(fullPath, status.Path)
-		return
-	}
-	parsed, ok := parseChangeDiff(git.DiffWorktreeFile(dir, status.Path))
-	if !ok {
-		a.EditorGroup.OpenFile(fullPath)
-		a.FocusEditorIfEnabled()
-		return
-	}
-	var oldLines, newLines []string
-	if indexErr == nil {
-		oldLines = diffSideLines(index)
-	}
-	if data, err := os.ReadFile(fullPath); err == nil {
-		newLines = diffSideLines(string(data))
-	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (diff)", "", fullPath, parsed, oldLines, newLines, extended)
-	a.FocusEditorIfEnabled()
+	source := a.Repository.repositorySource(dir)
+	a.startDiffOpen(func(ctx context.Context) *diffOpenResult {
+		return readChangeDiff(ctx, source, change, extended)
+	})
 }
 
-func (a *App) openStagedDiff(dir string, status git.FileStatus, extended bool) {
-	oldPath := status.Path
-	paths := []string{status.Path}
-	if status.OldPath != "" && status.OldPath != status.Path {
-		oldPath = status.OldPath
-		paths = []string{status.OldPath, status.Path}
+func readChangeDiff(ctx context.Context, source repositorySource, change scm.Change, extended bool) *diffOpenResult {
+	fullPath := filepath.Join(source.root, change.Path)
+	content, err := source.readChange(ctx, change)
+	if err != nil {
+		return &diffOpenResult{Canceled: errors.Is(err, context.Canceled), Warn: i18n.Format("status.couldNotOpenDiff", i18n.Args{"error": err.Error()})}
 	}
-	var newLines []string
-	if status.Status != "D" {
-		content, err := git.ShowIndexFileContext(context.Background(), dir, status.Path)
-		if err != nil && git.IsUnmergedContext(context.Background(), dir, status.Path) {
-			a.openConflictedFile(filepath.Join(dir, status.Path), status.Path)
-			return
+	if content.Conflicted {
+		return &diffOpenResult{Path: fullPath, Conflict: change.Path}
+	}
+	if content.Patch == "" {
+		message := i18n.Format("status.noDiffAvailableFor", i18n.Args{"path": change.Path})
+		if change.Group == scm.Staged {
+			message = i18n.Format("status.noStagedChangesFor", i18n.Args{"path": change.Path})
 		}
-		if err == nil {
-			newLines = diffSideLines(content)
-		}
+		return &diffOpenResult{Warn: message}
 	}
-	patch, err := git.DiffStagedFile(dir, paths...)
-	if err != nil || patch == "" {
-		a.StatusNotify(i18n.Format("status.noStagedChangesFor", i18n.Args{"path": status.Path}))
-		return
+	parsed := diff.Parse(content.Patch)
+	suffix := " (diff)"
+	if change.Group == scm.Staged {
+		suffix = " (staged)"
 	}
-	parsed := diff.Parse(patch)
-	// A rename, mode change or empty new file stages a patch with no line
-	// hunks; like VS Code, show both sides in full rather than nothing.
-	if len(parsed.Hunks) == 0 {
-		extended = true
+	var oldLines, newLines []string
+	if content.Before.Exists {
+		oldLines = diffSideLines(content.Before.Content)
 	}
-	var oldLines []string
-	if status.Status != "A" {
-		if content, err := git.ShowFile(dir, oldPath, "HEAD"); err == nil {
-			oldLines = diffSideLines(content)
-		}
+	if content.After.Exists {
+		newLines = diffSideLines(content.After.Content)
 	}
-	a.EditorGroup.OpenDiffTab(status.Path+" (staged)", "", filepath.Join(dir, status.Path), parsed, oldLines, newLines, extended)
-	a.FocusEditorIfEnabled()
+	return &diffOpenResult{TabName: change.Path + suffix, Path: fullPath, Diff: parsed,
+		OldLines: oldLines, NewLines: newLines,
+		Extended: extended || len(parsed.Hunks) == 0}
 }
 
 func (a *App) openConflictedFile(fullPath, relPath string) {
 	a.EditorGroup.OpenFile(fullPath)
 	a.StatusNotify(i18n.Format("status.hasMergeConflictsOpenedWithoutADiff", i18n.Args{"relPath": relPath}))
 	a.FocusEditorIfEnabled()
-}
-
-func parseChangeDiff(text string, err error) (diff.FileDiff, bool) {
-	if err != nil || text == "" {
-		return diff.FileDiff{}, false
-	}
-	parsed := diff.Parse(text)
-	return parsed, len(parsed.Hunks) > 0
 }
 
 func diffSideLines(content string) []string {
@@ -449,14 +457,22 @@ func diffSideLines(content string) []string {
 	return lines
 }
 
-func (a *App) OpenCommitDiff(dir, ref, short string, status git.FileStatus, extended bool) {
+func (a *App) OpenCommitDiff(dir, ref, short string, status scm.Change, extended bool) {
+	source := a.Repository.repositorySource(dir)
 	a.startDiffOpen(func(ctx context.Context) *diffOpenResult {
-		return readCommitDiff(ctx, dir, ref, short, status, extended)
+		return readCommitDiff(ctx, source, ref, short, status, extended)
 	})
 }
 
-func readCommitDiff(ctx context.Context, dir, ref, short string, status git.FileStatus, extended bool) *diffOpenResult {
-	diffText, err := git.CommitFileDiffContext(ctx, dir, ref, status)
+func readCommitDiff(ctx context.Context, source repositorySource, ref, short string, status scm.Change, extended bool) *diffOpenResult {
+	reader, err := source.revisionReader(ctx)
+	if err != nil {
+		return &diffOpenResult{Canceled: errors.Is(err, context.Canceled), Warn: i18n.Format("git.readFileAtCommitFailed", i18n.Args{"path": status.Path, "short": short})}
+	}
+	diffText, err := reader.ReadRevisionPatch(ctx, ref, status)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return &diffOpenResult{Canceled: true}
@@ -467,36 +483,30 @@ func readCommitDiff(ctx context.Context, dir, ref, short string, status git.File
 	if len(parsed.Hunks) == 0 {
 		return &diffOpenResult{Warn: i18n.Format("git.noLineChangesInCommit", i18n.Args{"path": status.Path, "short": short})}
 	}
-	oldPath := status.Path
-	if status.OldPath != "" {
-		oldPath = status.OldPath
-	}
-	oldLines := gitFileLines(ctx, dir, oldPath, ref+"^")
-	newLines := gitFileLines(ctx, dir, status.Path, ref)
+	content, err := reader.ReadRevisionContent(ctx, ref, status.Path, status.OldPath)
 	if ctx.Err() != nil {
 		return &diffOpenResult{Canceled: true}
 	}
+	if err != nil {
+		return &diffOpenResult{Warn: i18n.Format("git.readFileAtCommitFailed", i18n.Args{"path": status.Path, "short": short})}
+	}
+	var oldLines, newLines []string
+	if content.Before.Exists {
+		oldLines = splitCurrentChangesLines([]byte(content.Before.Content))
+	}
+	if content.After.Exists {
+		newLines = splitCurrentChangesLines([]byte(content.After.Content))
+	}
+
 	return &diffOpenResult{
 		TabName:  fmt.Sprintf("%s:%s (diff)", ref, status.Path),
 		Title:    fmt.Sprintf("%s @ %s", filepath.Base(status.Path), short),
-		Path:     filepath.Join(dir, status.Path),
+		Path:     filepath.Join(source.root, status.Path),
 		Diff:     parsed,
 		OldLines: oldLines,
 		NewLines: newLines,
 		Extended: extended,
 	}
-}
-
-func gitFileLines(ctx context.Context, dir, path, ref string) []string {
-	content, err := git.ShowFileContext(ctx, dir, path, ref)
-	if err != nil {
-		return nil
-	}
-	lines := strings.Split(content, "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
 }
 
 func (a *App) OpenPRDiff(group *ui.ChangesGroup, status git.FileStatus, extended bool) {
@@ -739,11 +749,7 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.EditorGroup.TabBar.MoreButton.OnClick = func(sx, sy int) {
-		moreMenu := []ui.ContextMenuItem{
-			{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
-			{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
-		}
-		openContextMenu(app, moreMenu, sx, sy)
+		openContextMenu(app, app.tabMoreMenu(), sx, sy)
 	}
 
 	app.EditorGroup.TabBar.OnTabRightClick = func(index, sx, sy int) {
@@ -790,6 +796,7 @@ func registerWidgetCallbacks(app *App) {
 		app.ExplorerContextNode = node
 		items := []ui.ContextMenuItem{
 			{Label: i18n.Text("general.open"), Command: "explorer.open"},
+			app.appsOpenWithMenu(),
 			ui.MenuSep(),
 			{Label: i18n.Text("general.newFile"), Command: "explorer.newFile"},
 			{Label: i18n.Text("general.newFolder"), Command: "explorer.newFolder"},
@@ -798,6 +805,7 @@ func registerWidgetCallbacks(app *App) {
 			{Label: i18n.Text("menu.copyRelativePath"), Command: "explorer.copyRelativePath"},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.revealInFileManager"), Command: "explorer.reveal"},
+			{Label: i18n.Text("menu.openInTerminal"), Command: "explorer.openInTerminal"},
 			ui.MenuSep(),
 			{Label: i18n.Text("general.rename"), Command: "explorer.rename"},
 			{Label: i18n.Text("general.delete"), Command: "explorer.delete"},
@@ -815,7 +823,9 @@ func registerWidgetCallbacks(app *App) {
 		}
 		items := []ui.ContextMenuItem{
 			{Label: i18n.Text("general.refresh"), Command: "explorer.refresh"},
+			app.appsOpenWithMenu(),
 			{Label: i18n.Text("menu.copyPath"), Command: "explorer.copyAbsolutePath"},
+			{Label: i18n.Text("menu.openInTerminal"), Command: "explorer.openInTerminal"},
 			ui.MenuSep(),
 			favorite,
 			{Label: i18n.Text("menu.removeFromWorkspace"), Command: "explorer.removeRoot"},
@@ -839,6 +849,7 @@ func registerWidgetCallbacks(app *App) {
 	app.Search.OnCancelReplace = app.cancelSearchReplace
 
 	app.Changes.OnRightClick = app.ShowChangesFileContextMenu
+	app.Changes.OnRightClickFolder = app.ShowChangesFolderContextMenu
 	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
 	app.Changes.OnOpenFile = func(path string) {
@@ -922,6 +933,16 @@ func registerWidgetCallbacks(app *App) {
 		openContextMenu(app, items, sx, sy)
 	}
 
+	app.TerminalPanel.TabBar.OnRightClick = func(index, sx, sy int) {
+		app.TerminalPanel.SetActive(index)
+		app.Root.SetFocus(app.TerminalPanel)
+		items := []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.closeTerminal"), Command: "terminal.close"},
+			{Label: i18n.Text("menu.closeAllTerminals"), Command: "terminal.closeAll"},
+		}
+		openContextMenu(app, items, sx, sy)
+	}
+
 	app.BottomPanel.Tabs.Config.Actions = []widgets.TabAction{
 		{Icon: string(icons.Rune(icons.Add)), OnClick: func(_, _ int) {
 			reg.Execute("terminal.new")
@@ -934,6 +955,7 @@ func registerWidgetCallbacks(app *App) {
 			items := []ui.ContextMenuItem{
 				{Label: i18n.Text("menu.newTerminal"), Command: "terminal.new"},
 				ui.MenuSep(),
+				{Label: i18n.Text("menu.closeTerminal"), Command: "terminal.close"},
 				{Label: i18n.Text("menu.closeAllTerminals"), Command: "terminal.closeAll"},
 				ui.MenuSep(),
 				dock,
@@ -941,5 +963,14 @@ func registerWidgetCallbacks(app *App) {
 			}
 			openContextMenu(app, items, sx, sy)
 		}},
+	}
+}
+
+func (a *App) tabMoreMenu() []ui.ContextMenuItem {
+	return []ui.ContextMenuItem{
+		{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: a.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed", Disabled: !a.EditorGroup.HasClosedTabs()},
+		ui.MenuSep(),
+		{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
+		{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
 	}
 }

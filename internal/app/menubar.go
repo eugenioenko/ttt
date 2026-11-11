@@ -41,8 +41,8 @@ func (a *App) menuBarRestoreHint() string {
 func (a *App) ToggleMenuBar() {
 	visible := !a.Settings.Editor.IsMenuBarVisible()
 	a.Settings.Editor.MenuBar = boolPtr(visible)
-	a.SaveAndApplySettings()
 	if !visible {
 		a.StatusNotify(a.menuBarRestoreHint())
 	}
+	a.SaveAndApplySettings()
 }

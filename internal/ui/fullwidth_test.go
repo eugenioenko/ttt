@@ -121,7 +121,7 @@ func TestVisualColRoundTrip(t *testing.T) {
 
 func TestWrapLineSegmentsFullwidth(t *testing.T) {
 	// Width 6 fits exactly three fullwidth runes per visual row.
-	segments := wrapLineSegments([]rune("가나다라마바"), 6, 4)
+	segments := wrapLineSegments("가나다라마바", 6, 4, false)
 	want := []int{0, 3}
 	if len(segments) != len(want) {
 		t.Fatalf("segments = %v, want %v", segments, want)
@@ -136,7 +136,7 @@ func TestWrapLineSegmentsFullwidth(t *testing.T) {
 // A fullwidth rune must never be split across two visual rows: with an odd
 // width the last column of the row stays empty instead.
 func TestWrapLineSegmentsNeverSplitsFullwidthRune(t *testing.T) {
-	segments := wrapLineSegments([]rune("가나다라"), 5, 4)
+	segments := wrapLineSegments("가나다라", 5, 4, false)
 	if len(segments) != 2 || segments[1] != 2 {
 		t.Fatalf("segments = %v, want [0 2] (two runes fit in 5 columns)", segments)
 	}

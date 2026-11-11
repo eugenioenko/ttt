@@ -226,14 +226,13 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 	if len(colors) == 0 {
 		colors = []string{"yellow", "magenta", "blue"}
 	}
-	n := len(colors)
-	if n > len(bracketColorSlots) {
-		n = len(bracketColorSlots)
-	}
+	n := min(len(colors), len(bracketColorSlots))
 	return bracketColorSlots[:n]
 }
 
 func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget) *App {
+	locale, languageErr := loadDisplayLanguage(cfg.Settings.Language)
+	initText()
 
 	bracketStyles := ResolveBracketColorStyles(cfg.Theme.Editor.BracketColors)
 
@@ -241,12 +240,15 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup := ui.NewEditorGroupWidget(borders, cfg.Settings.Editor.TabSize, cfg.Settings.Editor.LineNumbers, cfg.Settings.Editor.GutterStyle)
 	editorGroup.SetFileIconMode(cfg.Settings.Appearance.Icons)
 	editorGroup.InsertSpaces = cfg.Settings.Editor.InsertSpaces
+	editorGroup.SetIndentGuides(cfg.Settings.Editor.IndentGuides)
 	editorGroup.InsertFinalNewline = cfg.Settings.Editor.InsertFinalNewline
+	editorGroup.PreviewTabs = cfg.Settings.Editor.PreviewTabsEnabled()
 	editorGroup.ShowTrailingNewline = cfg.Settings.Editor.IsShowTrailingNewlineEnabled()
 	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
 	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
 	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
 	editorGroup.WordWrapColumn = cfg.Settings.Editor.WordWrapColumn
+	editorGroup.WordWrapBreak = cfg.Settings.Editor.WordWrapBreak
 	editorGroup.LanguageOverrides = cfg.Settings.Editor.LanguageOverrides
 	editorGroup.WordWrapMaxBytes = cfg.Settings.Editor.WordWrapMaxBytes()
 	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
@@ -382,6 +384,13 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	rootBox := widgets.NewVStackWidget(menuBar, splitPanel, statusBar)
 
 	root := ui.NewRoot(rootBox)
+	root.SetControlModifiers(controlModifiers(cfg.Settings.Keyboard.ModifierKey))
+	root.SetForwardShortcuts(cfg.Settings.Terminal.ForwardShortcuts)
+	editorGroup.ControlModifiers = &root.ControlModifiers
+	output.ControlModifiers = &root.ControlModifiers
+	for _, input := range []*widgets.InputWidget{search.Input, search.Include, search.Exclude, search.ReplaceInput, changes.Input} {
+		input.ControlModifiers = &root.ControlModifiers
+	}
 	root.SetFocus(editorGroup)
 
 	app := &App{
@@ -415,6 +424,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	app.setExplorerSearchDebounce(cfg.Settings.Search.Debounce)
 	app.diagPull = NewTask[pulledDiagnostics](app, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
 	app.diagBackground = make(map[string]*asynctask.Task[[]backgroundPull])
 	app.Repository = NewRepositoryState(changes, ws.Paths())
@@ -435,8 +445,17 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.applySidebarTabStyle(cfg.Settings.Sidebar.TabStyle)
 	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)
 	app.reportGrammarErrors(grammarErrs)
+	app.language.locale = locale
+	app.language.requested = cfg.Settings.Language.Locale
+	if languageErr != nil {
+		app.LogOutput("error", "languages", languageErr.Error())
+	}
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
 	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
+	app.appliedSettings.Terminal.ForwardShortcuts = cfg.Settings.Terminal.ForwardShortcuts
+	if cfg.SettingsError != nil {
+		app.StatusWarn(i18n.Format("settings.loadFailed", i18n.Args{"error": cfg.SettingsError.Error()}))
+	}
 	return app
 }
 
@@ -450,9 +469,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 // keep a correct cursor and an unscrolled view instead.
 func (a *App) ApplyFileTargets(targets []FileTarget) {
 	active := a.EditorGroup.ActiveFilePath()
-	for i := len(targets) - 1; i >= 0; i-- {
-		if targets[i].Line > 0 && targets[i].Path == active {
-			a.EditorGroup.GoToLineCol(targets[i].Line, targets[i].Col)
+	for _, target := range slices.Backward(targets) {
+		if target.Line > 0 && target.Path == active {
+			a.EditorGroup.GoToLineCol(target.Line, target.Col)
 			return
 		}
 	}

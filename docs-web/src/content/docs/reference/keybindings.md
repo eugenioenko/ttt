@@ -9,6 +9,10 @@ All keybindings can be customized in `~/.config/ttt/keybindings.json`. See [`con
 
 You can open your keybindings file from the command palette (**Ctrl+P**) with **Preferences: Open Keyboard Shortcuts**, or press **Ctrl+K Y**.
 
+The tables show the unchanged `ctrl+…` definitions. Set [`keyboard.modifierKey`](/reference/settings/#keyboard) to `"control+super"` to also accept Super/Cmd, or `"super"` to use Super/Cmd instead of Ctrl. This applies to custom Ctrl bindings too; the terminal must forward the shortcuts.
+
+In-app shortcut labels use `Ctrl` in Control mode, `Mod` (Ctrl or Super) in Both mode, and `Super` in Super mode, consistently on every OS. Super is Command (⌘) on macOS. Keep writing `ctrl+…` in `keybindings.json`; `Mod` and `Super` are display labels, not modifier names accepted by the file.
+
 ## General
 
 | Shortcut | Command | Description |
@@ -107,6 +111,8 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Shortcut | Command | Description |
 |----------|---------|-------------|
 | Ctrl+B | `sidebar.toggle` | Toggle sidebar |
+| Ctrl+Up | `view.scrollLineUp` | Scroll viewport up one visual row |
+| Ctrl+Down | `view.scrollLineDown` | Scroll viewport down one visual row |
 | Ctrl+K B | `panel.toggle` | Toggle bottom panel |
 | Alt+Shift+M | `menubar.toggle` | Show/hide the menu bar |
 | Ctrl+K E | `sidebar.explorer` | Show file explorer |
@@ -153,7 +159,13 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 |----------|---------|-------------|
 | Ctrl+T | `terminal.toggle` | Toggle terminal (half screen) |
 | Alt+T | `terminal.fullscreen` | Toggle terminal fullscreen |
+| Ctrl+K | `terminal.sendNextKey` | Forward the next modified key to the focused terminal; plain and Shift-only continuations complete TTT chords |
+| Ctrl+F6 | `terminal.toggleShortcutForwarding` | Toggle forwarding for the current TTT session without changing the saved default |
 | Ctrl+K T | `terminal.new` | New terminal tab |
+
+For example, **Ctrl+K P** opens Quick Open, while **Ctrl+K Ctrl+P** sends Ctrl+P to the terminal. Rebind **Send next key to terminal** under **Settings → General → Keyboard**. Enable **Forward shortcuts to terminal** there to pass shortcuts directly instead. See [Shortcut forwarding](/guides/terminal/#shortcut-forwarding).
+
+**Ctrl+F6** toggles forwarding for the current TTT session and shows a short status notification. It works in both modes so you can always switch back, and it leaves the saved `terminal.forwardShortcuts` default unchanged. Restarting restores that default. This binding follows the selected Ctrl/Mod/Super preference and can be changed in the keybindings editor.
 
 ## Menu Bar
 

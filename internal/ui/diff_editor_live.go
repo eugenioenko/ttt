@@ -82,6 +82,7 @@ func (d *DiffEditorWidget) bind(e *EditorPaneWidget) {
 	d.unified, d.right = e, e
 	e.WordWrap = d.IsWrapped()
 	e.WordWrapColumn = 0
+	e.WrapWords = false
 	e.Folds = nil
 	if o := d.liveOverlay(); e.DiffOverlay != o {
 		e.SetDiffOverlay(o)
@@ -402,6 +403,11 @@ func (d *DiffEditorWidget) trackLiveEdits() bool {
 	prevVer := d.liveVer
 	cs, exact := d.takeChanges()
 	if len(cs) == 0 {
+		if !exact && d.liveVer != prevVer {
+			// A formatter can replace the whole buffer without changing its text.
+			// Replaying that replacement on the overlay would mark every line added.
+			d.buildLiveOverlays()
+		}
 		return false
 	}
 	d.liveExpand = d.liveExpand[:0]

@@ -32,8 +32,8 @@ func eastAsianOptions(env string) displaywidth.Options {
 // and fullwidth runes, 1 for everything else.
 //
 // Zero-width runes (control characters, combining marks) report 1 rather than
-// 0: ttt renders one cell per rune and never folds a rune into the preceding
-// cell, so a 0 here would stall column advance and overwrite the previous cell.
+// 0: rune-based surfaces never fold a rune into the preceding cell, so a 0
+// here would stall column advance and overwrite the previous cell.
 func Rune(r rune) int {
 	if options.Rune(r) > 1 {
 		return 2
@@ -43,9 +43,8 @@ func Rune(r rune) int {
 
 // String returns the number of terminal columns s occupies.
 //
-// It sums Rune rather than calling displaywidth.String because ttt draws text
-// rune by rune into its own cell grid; measuring by grapheme cluster would
-// report a width the renderer never produces.
+// It sums Rune for surfaces that draw rune by rune. Surfaces that store complete
+// graphemes in their cells must use GraphemeWidth instead.
 func String(s string) int {
 	w := 0
 	for _, r := range s {
@@ -61,4 +60,66 @@ func Runes(runes []rune) int {
 		w += Rune(r)
 	}
 	return w
+}
+
+// Truncate cuts s to at most width columns, ending it with tail when it is cut.
+// A wide rune that would straddle the cut is dropped rather than split.
+func Truncate(s string, width int, tail string) string {
+	if String(s) <= width {
+		return s
+	}
+	tailW := String(tail)
+	if tailW > width {
+		tail, tailW = "", 0
+	}
+	runes := []rune(s)
+	w, end := 0, 0
+	for end < len(runes) {
+		rw := Rune(runes[end])
+		if w+rw > width-tailW {
+			break
+		}
+		w += rw
+		end++
+	}
+	return string(runes[:end]) + tail
+}
+
+// Graphemes is for surfaces that store a complete grapheme in each cell.
+// Rune, String and Runes retain the editor's per-rune layout contract.
+func Graphemes(s string) displaywidth.Graphemes[string] {
+	return options.StringGraphemes(s)
+}
+
+func GraphemeWidth(s string) int {
+	w := 0
+	clusters := Graphemes(s)
+	for clusters.Next() {
+		w += max(1, clusters.Width())
+	}
+	return w
+}
+
+// TruncateGraphemes is Truncate measured with GraphemeWidth, for surfaces that
+// draw whole graphemes. It never splits a grapheme, so a ZWJ sequence or flag
+// is either kept whole or dropped.
+func TruncateGraphemes(s string, width int, tail string) string {
+	if GraphemeWidth(s) <= width {
+		return s
+	}
+	tailW := GraphemeWidth(tail)
+	if tailW > width {
+		tail, tailW = "", 0
+	}
+	w, end := 0, 0
+	clusters := Graphemes(s)
+	for clusters.Next() {
+		cw := max(1, clusters.Width())
+		if w+cw > width-tailW {
+			break
+		}
+		w += cw
+		end += len(clusters.Value())
+	}
+	return s[:end] + tail
 }

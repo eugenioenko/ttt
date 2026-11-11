@@ -33,6 +33,9 @@ type StatusSegment struct {
 	Text     string
 	Style    term.Style
 	OnClick  func()
+	// Attached sits one column after the previous segment instead of a full
+	// separator, so it reads as part of it.
+	Attached bool
 	// Owner groups segments for RemoveSegmentsByOwner, for example
 	// "plugin:<name>" for a plugin's status items. Empty for core segments.
 	Owner string
@@ -66,6 +69,7 @@ func (s *StatusBar) SetSegment(seg StatusSegment) {
 	if existing, ok := s.segments[seg.ID]; ok {
 		existing.Text = seg.Text
 		existing.Style = seg.Style
+		existing.Attached = seg.Attached
 		if seg.OnClick != nil {
 			existing.OnClick = seg.OnClick
 		}

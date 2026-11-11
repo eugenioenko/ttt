@@ -17,15 +17,22 @@ import (
 
 const welcomeTabID = "welcome"
 
-var welcomeFavoritesHint = i18n.Text("welcome.favoritesHint")
+var (
+	welcomeFavoritesHint string
+	welcomeCommands      []struct{ label, commandID string }
+)
 
-var welcomeCommands = []struct{ label, commandID string }{
-	{i18n.Text("welcome.openFolder"), "workspace.openFolder"},
-	{i18n.Text("welcome.cloneRepository"), "workspace.clone"},
-	{i18n.Text("general.newFile"), "file.new"},
-	{i18n.Text("welcome.openWorkspace"), "workspace.open"},
-	{i18n.Text("general.settings"), "settings.openUI"},
-	{i18n.Text("welcome.commandPalette"), "command.palette"},
+func initWelcomeText() {
+	welcomeFavoritesHint = i18n.Text("welcome.favoritesHint")
+
+	welcomeCommands = []struct{ label, commandID string }{
+		{i18n.Text("welcome.openFolder"), "workspace.openFolder"},
+		{i18n.Text("welcome.cloneRepository"), "workspace.clone"},
+		{i18n.Text("general.newFile"), "file.new"},
+		{i18n.Text("welcome.openWorkspace"), "workspace.open"},
+		{i18n.Text("general.settings"), "settings.openUI"},
+		{i18n.Text("welcome.commandPalette"), "command.palette"},
+	}
 }
 
 // welcomeItems lists the start actions with their shortcuts, then the
@@ -201,9 +208,13 @@ func tildePath(abs string) string {
 // a.Settings whole would also write this window's layout over whatever another
 // ttt window saved.
 func (a *App) saveFavorites(favs []string, msg string) {
+	disk, err := config.ReadSettings()
+	if err != nil {
+		a.StatusError(i18n.Format("status.failedToSaveFavorites", i18n.Args{"error": err.Error()}))
+		return
+	}
 	a.Settings.Welcome.Favorites = favs
 	a.refreshWelcome()
-	disk := config.LoadSettings()
 	disk.Welcome.Favorites = favs
 	if err := config.SaveSettings(disk); err != nil {
 		a.StatusError(i18n.Format("status.failedToSaveFavorites", i18n.Args{"error": err.Error()}))

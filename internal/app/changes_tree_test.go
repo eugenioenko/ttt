@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/scm"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,7 +44,7 @@ func nodeWithID(nodes []*widgets.TreeNode, id string) *widgets.TreeNode {
 }
 
 func TestCompactFileTreeHandlesEmptySingleDeepAndDuplicateBasenames(t *testing.T) {
-	makeLeaf := func(file git.FileStatus) *widgets.TreeNode {
+	makeLeaf := func(file scm.Change) *widgets.TreeNode {
 		return &widgets.TreeNode{ID: file.Path, Label: file.Path}
 	}
 	if nodes := compactFileTree("test", nil, makeLeaf, nil); len(nodes) != 0 {
@@ -55,7 +56,7 @@ func TestCompactFileTreeHandlesEmptySingleDeepAndDuplicateBasenames(t *testing.T
 		{Path: "one/shared.go"},
 		{Path: "two/deep/nested/shared.go"},
 	}
-	nodes := compactFileTree("test", files, makeLeaf, nil)
+	nodes := compactFileTree("test", git.ToChanges(files), makeLeaf, nil)
 	if nodeWithLabel(nodes, "README.md") == nil || nodeWithLabel(nodes, "two/deep/nested") == nil {
 		t.Fatalf("tree lost root or compact deep path: %+v", nodes)
 	}
@@ -90,9 +91,9 @@ func TestWorkingNodeIdentityIsInjectiveAndStable(t *testing.T) {
 func TestGitFileViewSwitchPreservesFileSelection(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.groups = []changesGroup{{
-		Dir:      "/repo",
-		Name:     "repo",
-		Unstaged: []git.FileStatus{{Status: "M", Path: "deep/nested/file.go"}},
+		Dir:     "/repo",
+		Name:    "repo",
+		Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "deep/nested/file.go"}}),
 	}}
 	cp.SetFileView(config.GitFileViewTree)
 	fileID := workingNodeID(workNodeFile, "/repo", "deep/nested/file.go", false)
@@ -114,7 +115,7 @@ func TestWorkingTreeSelectionAndFolderStateSurviveStageMove(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.SetFileView(config.GitFileViewTree)
 	file := git.FileStatus{Status: "M", Path: "src/nested/file.go"}
-	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Unstaged: []git.FileStatus{file}}}
+	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{file})}}
 	cp.buildTree()
 	folder := nodeWithLabel(cp.Tree.Config.Items, "src/nested")
 	leaf := nodeWithLabel(cp.Tree.Config.Items, "file.go")
@@ -122,7 +123,7 @@ func TestWorkingTreeSelectionAndFolderStateSurviveStageMove(t *testing.T) {
 		t.Fatal("test setup did not build working tree")
 	}
 	file.Staged = true
-	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Staged: []git.FileStatus{file}}}
+	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Changes: testSCMChanges(scm.Staged, []git.FileStatus{file})}}
 	cp.buildTree()
 	folder = nodeWithLabel(cp.Tree.Config.Items, "src/nested")
 	if got := cp.Tree.Selected(); got == nil || got.Label != "file.go" {
@@ -137,7 +138,7 @@ func TestWorkingTreeSelectionAndFolderStateSurviveStageMove(t *testing.T) {
 	cp.Tree.SelectByID(cp.Tree.Config.Items[0].ID)
 	cp.saveExpanded()
 	file.Staged = false
-	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Unstaged: []git.FileStatus{file}}}
+	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{file})}}
 	cp.buildTree()
 	folder = nodeWithLabel(cp.Tree.Config.Items, "src/nested")
 	if folder == nil || folder.Expanded {
@@ -155,7 +156,7 @@ func TestWorkingFileSelectionNeverCrossesIntoPRFileOnStageMove(t *testing.T) {
 			for i := 0; i < 128; i++ {
 				file.Staged = false
 				cp.PRGroups = nil
-				cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Unstaged: []git.FileStatus{file}}}
+				cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{file})}}
 				cp.buildTree()
 				workingID := workingNodeID(workNodeFile, "/repo", file.Path, false)
 				if !revealTreeSelection(cp.Tree, workingID) {
@@ -163,7 +164,7 @@ func TestWorkingFileSelectionNeverCrossesIntoPRFileOnStageMove(t *testing.T) {
 				}
 
 				file.Staged = true
-				cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Staged: []git.FileStatus{file}}}
+				cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Changes: testSCMChanges(scm.Staged, []git.FileStatus{file})}}
 				cp.PRGroups = []prGroup{{Dir: "/repo", Name: "pull request", Files: []git.FileStatus{file}}}
 				cp.buildTree()
 				wantID := workingNodeID(workNodeFile, "/repo", file.Path, true)
@@ -183,7 +184,7 @@ func TestWorkingFileSelectionNeverCrossesIntoPRFileOnStageMove(t *testing.T) {
 					t.Fatalf("iteration %d: working selection acquired PR context", i)
 				}
 				dir, status, ok := cp.SelectedFile()
-				if !ok || dir != "/repo" || status.Path != file.Path || !status.Staged {
+				if !ok || dir != "/repo" || status.Path != file.Path || status.Group != scm.Staged {
 					t.Fatalf("iteration %d: selected file = dir %q status %+v ok %v", i, dir, status, ok)
 				}
 				group := cp.SelectedGroup()
@@ -205,7 +206,7 @@ func TestWorkingFileSelectionNeverCrossesIntoPRFileOnStageMove(t *testing.T) {
 func TestFolderNodesNeverResolveAsFilesOrExecuteFileActions(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.SetFileView(config.GitFileViewTree)
-	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Unstaged: []git.FileStatus{{Status: "R", Path: "src/file:name.go", OldPath: "old/file:name.go"}}}}
+	cp.groups = []changesGroup{{Dir: "/repo", Name: "repo", Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "R", Path: "src/file:name.go", OldPath: "old/file:name.go"}})}}
 	cp.buildTree()
 	folder := nodeWithLabel(cp.Tree.Config.Items, "src")
 	if folder == nil {
@@ -220,7 +221,7 @@ func TestFolderNodesNeverResolveAsFilesOrExecuteFileActions(t *testing.T) {
 		t.Fatalf("rename/colon path identity was not preserved: status=%+v ok=%v", status, ok)
 	}
 	opened := false
-	cp.OnOpenDiff = func(string, git.FileStatus, bool, bool) { opened = true }
+	cp.OnOpenDiff = func(string, scm.Change, bool) { opened = true }
 	cp.handleCommand("activate", folder)
 	if opened {
 		t.Fatal("folder activation executed a file action")
@@ -283,7 +284,7 @@ func TestCommitFileTreeFoldersToggleAndBulkStatePersists(t *testing.T) {
 	cp.SetFileView(config.GitFileViewTree)
 	const ref = "0123456789012345678901234567890123456789"
 	commitID := "commit:" + ref
-	files := []git.FileStatus{{Status: "M", Path: "pkg/history/one.go"}, {Status: "A", Path: "pkg/history/two.go"}}
+	files := []scm.Change{{Kind: scm.Modified, Path: "pkg/history/one.go"}, {Kind: scm.Added, Path: "pkg/history/two.go"}}
 	cp.commitFiles["/repo\x00"+ref] = files
 	cp.logCommits[commitID] = commitFileRef{Dir: "/repo", Ref: ref, Short: ref[:7]}
 	commit := &widgets.TreeNode{ID: commitID, Label: "files", Expanded: true, Children: cp.commitFileNodes("/repo", ref, ref[:7], commitID, files)}
