@@ -463,6 +463,41 @@ func TestDiffEditorSplitFollowerScrollsWithLead(t *testing.T) {
 	}
 }
 
+func TestDiffResizePreservesHostScroll(t *testing.T) {
+	for _, embedded := range []bool{false, true} {
+		t.Run(fmt.Sprint(embedded), func(t *testing.T) {
+			lines := make([]string, 30)
+			for i := range lines {
+				lines[i] = fmt.Sprintf("line %d", i)
+			}
+			d := NewDiffEditorWidget("test.txt", diff.FileDiff{}, lines, lines, true)
+			if embedded {
+				d.setEmbedded()
+			}
+			renderDiffEditor(d, 60, 10)
+			d.follower().Cursor.Line = 6
+			want := 0
+			if embedded {
+				d.lead().Cursor.Line = 6
+				want = 2
+				grid := make([][]term.Cell, 3)
+				for i := range grid {
+					grid[i] = make([]term.Cell, 60)
+				}
+				r := Rect{W: 60, H: 3}
+				d.renderEmbedded(NewRenderSurface(grid, r), r, want, 0)
+			} else {
+				renderDiffEditor(d, 60, 3)
+			}
+			for _, p := range []*EditorPaneWidget{d.lead(), d.follower()} {
+				if top := p.topRow(p.layout()); top != want {
+					t.Errorf("pane top=%d, want host row %d", top, want)
+				}
+			}
+		})
+	}
+}
+
 func TestDiffEditorSplitWrapUsesFullSymmetricWidth(t *testing.T) {
 	long := strings.Repeat("wrapme ", 30)
 	old := []string{long, "a"}

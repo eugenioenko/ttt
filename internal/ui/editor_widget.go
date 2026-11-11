@@ -119,7 +119,8 @@ type EditorPaneWidget struct {
 	Passive bool
 	// Embedded panes are drawn inside a host that owns scrolling, so they draw
 	// no scrollbars of their own.
-	Embedded bool
+	Embedded          bool
+	scrollFollowsLead bool
 	// NoWrapMargin wraps at the full text width; wrapCols caps it, so the
 	// two panes of a split diff wrap at the same column.
 	NoWrapMargin bool

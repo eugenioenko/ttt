@@ -980,6 +980,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 		d.wrapKey = wk
 		d.left.wrapCols, d.right.wrapCols = 0, 0
 	}
+	follow.scrollFollowsLead = true
 	for range 3 {
 		widths := [2]int{d.left.Viewport.Width, d.right.Viewport.Width}
 		d.alignSplit()
@@ -1000,6 +1001,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 			break
 		}
 	}
+	follow.scrollFollowsLead = false
 	for y := range h {
 		surface.SetCell(divider, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 	}

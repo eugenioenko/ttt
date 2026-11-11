@@ -147,7 +147,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 	editorW = e.wrapTextWidth(max(editorW, 1))
 
-	if h < e.Viewport.Height {
+	if !e.Embedded && !e.scrollFollowsLead && h < e.Viewport.Height {
 		previous := e.layout()
 		row, _ := previous.rowOf(e.Cursor.Line, e.Cursor.Col)
 		top := e.topRow(previous)
