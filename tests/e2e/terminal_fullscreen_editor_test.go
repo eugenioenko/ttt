@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -90,7 +91,9 @@ func TestEditorFocusHidesMaximizedPanelOnTinyScreen(t *testing.T) {
 		t.Run(fmt.Sprint(height), func(t *testing.T) {
 			h := newTestHarness(t, 80, height)
 			defer h.stop()
-			h.app.NewFileFromText("VISIBLE")
+			h.app.NewFileFromText("VISIBLE" + strings.Repeat("x", 200))
+			h.redraw()
+			h.redraw()
 			h.app.ContentSplit.ShowBottom = true
 			h.app.ContentSplit.BottomH = h.app.ContentSplit.GetRect().H - 1
 			h.app.FocusEditor()
@@ -98,6 +101,27 @@ func TestEditorFocusHidesMaximizedPanelOnTinyScreen(t *testing.T) {
 			h.assertContains("VISIBLE")
 		})
 	}
+}
+
+func TestTinyPanelCanBeFocusedAfterRevealingEditor(t *testing.T) {
+	h := newTestHarness(t, 80, 8)
+	defer h.stop()
+	h.app.Settings.Terminal.Shell = "/bin/cat"
+	h.exec("terminal.fullscreen")
+	terminal := h.app.Terminals[0]
+	t.Cleanup(terminal.Term.Close)
+	height := h.app.ContentSplit.BottomH
+	h.app.FocusEditor()
+	if h.app.ContentSplit.BottomH != height {
+		t.Error("hiding panel changed its saved height")
+	}
+	h.exec("panel.focus")
+	if err := h.app.SendToTerminal(terminal.ID, "PTYVISIBLE\n"); err != nil {
+		t.Fatal(err)
+	}
+	waitForRawTail(t, terminal.Term, "PTYVISIBLE")
+	h.redraw()
+	h.assertContains("PTYVISIBLE")
 }
 
 func TestEditorFocusRestoresAlmostMaximizedPanel(t *testing.T) {

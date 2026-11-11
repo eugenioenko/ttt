@@ -124,9 +124,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	tabW := e.resolveTabSize()
 
 	editorW := w - gutterW
-	showHScrollbar := !e.Embedded && !e.WordWrap && maxLineW > editorW
+	showHScrollbar := h > 1 && !e.Embedded && !e.WordWrap && maxLineW > editorW
 	if showHScrollbar {
 		h--
+	} else {
+		e.hscrollbar = HScrollbar{}
 	}
 
 	if e.hasFolds() {

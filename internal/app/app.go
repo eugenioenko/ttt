@@ -343,9 +343,11 @@ func (a *App) FocusEditor() {
 	if split := a.ContentSplit; split != nil && split.ShowBottom && split.Position == ui.SplitBottom {
 		height := split.GetRect().H
 		if height > 0 && height-split.BottomRect().H-1 < ui.MinEditorGroupHeight {
+			previousHeight := split.BottomH
 			split.BottomH = height / 2
 			if height-split.BottomRect().H-1 < ui.MinEditorGroupHeight {
 				split.ShowBottom = false
+				split.BottomH = previousHeight
 			}
 			resizeTerminals(a)
 		}
