@@ -604,7 +604,7 @@ func verifyExactFileGrant(root *os.Root, path, leaf string, expected os.FileInfo
 	if err != nil {
 		return err
 	}
-	if !os.SameFile(expected, actual) {
+	if actual.Mode()&os.ModeSymlink != 0 || !os.SameFile(expected, actual) {
 		return fmt.Errorf("granted file %q changed while opening", path)
 	}
 	return nil
