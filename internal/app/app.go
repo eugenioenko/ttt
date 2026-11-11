@@ -149,6 +149,7 @@ type App struct {
 	PluginManager          *plugin.Manager
 	PendingPluginApprovals []*plugin.Plugin
 	approvalDialog         ui.Widget
+	dialogReturnFocus      []ui.Widget
 	// PendingFileTargets holds cursor positions parsed from `path:line[:col]`
 	// arguments. They are applied after the first render, once the viewport
 	// has a real height to scroll against.
@@ -1077,6 +1078,7 @@ func (a *App) PasteText(text string) {
 }
 
 func (a *App) ShowDialog(w ui.Widget) {
+	a.dialogReturnFocus = append(a.dialogReturnFocus, a.Root.Focused)
 	a.Root.PushOverlay(ui.Overlay{Widget: w, Modal: true})
 	a.Root.SetFocus(w)
 }
@@ -1113,6 +1115,14 @@ func (a *App) DismissDialog() {
 	}
 	a.approvalDialog = nil
 	a.Root.PopOverlay()
+	if n := len(a.dialogReturnFocus); n > 0 {
+		previous := a.dialogReturnFocus[n-1]
+		a.dialogReturnFocus = a.dialogReturnFocus[:n-1]
+		if previous != nil {
+			a.Root.SetFocus(previous)
+			return
+		}
+	}
 	a.FocusEditor()
 }
 

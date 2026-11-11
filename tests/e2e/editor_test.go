@@ -193,6 +193,25 @@ func TestCommandPaletteSharedWidthBindingsAndTransitions(t *testing.T) {
 	}
 }
 
+func TestCommandPaletteDismissRestoresOpeningFocus(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.app.FocusSidebar()
+	previousFocus := h.app.Root.Focused
+	before := strings.Join(h.app.EditorGroup.ActiveBuffer().Lines, "\n")
+	h.pressCtrl(tcell.KeyCtrlP)
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+
+	if h.app.Root.Focused != previousFocus {
+		t.Fatalf("focus after dismiss = %T, want opening widget %T", h.app.Root.Focused, previousFocus)
+	}
+	h.pressRune('Q')
+	if got := strings.Join(h.app.EditorGroup.ActiveBuffer().Lines, "\n"); got != before {
+		t.Fatalf("typing after dismiss edited the file: contents = %q, want %q", got, before)
+	}
+}
+
 func TestCommandPaletteHelpOrientsThenNavigates(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
