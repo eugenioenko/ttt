@@ -151,3 +151,32 @@ func TestPaletteFullscreenCommandSeesMaximizedLayout(t *testing.T) {
 		t.Fatal("palette fullscreen toggle re-maximized the panel instead of hiding it")
 	}
 }
+
+func TestRestoredEditorKeepsNavigationTargetVisible(t *testing.T) {
+	for _, scrollAway := range []bool{false, true} {
+		t.Run(fmt.Sprint(scrollAway), func(t *testing.T) {
+			h := newTestHarness(t, 80, 12)
+			defer h.stop()
+			lines := make([]string, 30)
+			for i := range lines {
+				lines[i] = fmt.Sprintf("line%02d", i+1)
+			}
+			h.app.NewFileFromText(strings.Join(lines, "\n"))
+			h.redraw()
+			h.app.Settings.Terminal.Shell = "/bin/cat"
+			h.exec("terminal.fullscreen")
+			t.Cleanup(h.app.Terminals[0].Term.Close)
+			h.app.EditorGroup.GoToLine(15)
+			if scrollAway {
+				h.app.EditorGroup.Editor.Viewport.TopLine = 0
+			}
+			h.app.FocusEditor()
+			h.redraw()
+			if scrollAway {
+				h.assertContains("line01")
+			} else {
+				h.assertContains("line15")
+			}
+		})
+	}
+}

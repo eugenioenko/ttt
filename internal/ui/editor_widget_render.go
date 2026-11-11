@@ -147,6 +147,15 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	}
 	editorW = e.wrapTextWidth(max(editorW, 1))
 
+	if h < e.Viewport.Height {
+		previous := e.layout()
+		row, _ := previous.rowOf(e.Cursor.Line, e.Cursor.Col)
+		top := e.topRow(previous)
+		line := e.Buf.ClampLine(e.Cursor.Line)
+		col := bufColToVisualCol(e.Buf.Lines[line], e.Cursor.Col, tabW)
+		inColumns := e.WordWrap || (col >= e.Viewport.LeftCol && col < e.Viewport.LeftCol+e.Viewport.Width)
+		e.hScrollPending = e.hScrollPending || (inColumns && row >= top && row < top+e.Viewport.Height)
+	}
 	if e.Viewport.Width != editorW {
 		e.wrapGoal = wrapGoal{}
 		if e.WordWrap && !e.Embedded && e.WordWrapColumn > 0 && e.Viewport.Width > 0 {
