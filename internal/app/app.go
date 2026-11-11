@@ -1131,8 +1131,13 @@ func (a *App) ClosePluginDrawer() {
 }
 
 func (a *App) DismissDialog() {
+	restore := a.Root.Focused == a.Root.TopOverlayWidget()
 	previous := a.Root.OverlayReturnFocus()
 	a.dismissDialog()
+	// A pane closing asynchronously may already have moved focus elsewhere.
+	if !restore {
+		return
+	}
 	if previous != nil {
 		a.Root.SetFocus(previous)
 	} else {
@@ -1157,6 +1162,7 @@ func (a *App) ShowInputDialogEx(title, placeholder, initial, confirmLabel string
 	submit := func(text string) {
 		if text != "" {
 			a.DismissDialog()
+			a.FocusEditor()
 			onSubmit(text)
 		}
 	}
@@ -1173,10 +1179,7 @@ func (a *App) ShowInputDialogEx(title, placeholder, initial, confirmLabel string
 	dialog.Buttons = []widgets.DialogButton{
 		{Label: i18n.Text("general.cancelButton"), Handler: func() { a.DismissDialog() }},
 		{Label: "&" + confirmLabel, Handler: func() {
-			if input.Text() != "" {
-				a.DismissDialog()
-				onSubmit(input.Text())
-			}
+			submit(input.Text())
 		}},
 	}
 	dialog.OnDismiss = func() { a.DismissDialog() }

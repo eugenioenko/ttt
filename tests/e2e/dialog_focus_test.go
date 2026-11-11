@@ -123,3 +123,15 @@ func TestPaletteNavigationStillFocusesEditor(t *testing.T) {
 		})
 	}
 }
+
+func TestCancelDialogDoesNotRefocusClosedTerminalPanel(t *testing.T) {
+	h := newTestHarness(t, 100, 24)
+	defer h.stop()
+	panelID := openPanelTerminals(t, h, 1)[0]
+	h.app.OpenCommandPalette(false)
+	h.app.CloseTerminal(panelID)
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	if h.app.Root.Focused != h.app.EditorGroup || h.app.ContentSplit.ShowBottom {
+		t.Fatal("cancel restored focus to the closed terminal panel")
+	}
+}
