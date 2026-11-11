@@ -16,15 +16,17 @@ type mockTerminalAPI struct {
 	label    string
 	location string
 
-	sentID   string
-	sentText string
-	tail     string
-	tailMax  int
-	screen   string
-	focused  string
-	closed   string
-	infos    []TerminalInfo
-	spawnErr error
+	sentID        string
+	sentText      string
+	tail          string
+	tailMax       int
+	screen        string
+	focused       string
+	closed        string
+	infos         []TerminalInfo
+	spawnErr      error
+	paletteStatus string
+	paletteColors map[string]string
 }
 
 func (m *mockTerminalAPI) TerminalSpawn(spec TerminalSpawnSpec) (string, error) {
@@ -60,6 +62,10 @@ func (m *mockTerminalAPI) TerminalFocus(id string) error {
 }
 
 func (m *mockTerminalAPI) TerminalList() []TerminalInfo { return m.infos }
+func (m *mockTerminalAPI) TerminalPalette() (string, map[string]string) {
+	return m.paletteStatus, m.paletteColors
+}
+func (m *mockTerminalAPI) RequestTerminalPalette() {}
 
 func setupTestPluginWithTerminal(perms PermissionSet, api *mockTerminalAPI) (*Plugin, func()) {
 	p, cleanup := newTestPluginBase(perms)
@@ -261,5 +267,35 @@ func TestTerminalPermissionsOmitTheFunctions(t *testing.T) {
 	}
 	if ctl.State.GetGlobal("has_spawn") != lua.LTrue {
 		t.Fatal("spawn must be present with terminal.control")
+	}
+}
+
+func TestTerminalPaletteUsesDedicatedPermission(t *testing.T) {
+	api := &mockTerminalAPI{paletteStatus: "partial", paletteColors: map[string]string{"10": "rgb:aaaa/bbbb/cccc"}}
+	for _, tc := range []struct {
+		name  string
+		perms PermissionSet
+		want  bool
+	}{
+		{"palette grant", PermissionSet{TerminalPalette: true}, true},
+		{"terminal read alone", PermissionSet{TerminalRead: true}, false},
+		{"denied", PermissionSet{}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, cleanup := setupTestPluginWithTerminal(tc.perms, api)
+			defer cleanup()
+			if err := p.State.DoString(`local t = require("ttt.terminal"); _G.has_palette=t.palette~=nil; _G.has_request=t.request_palette~=nil; if t.palette then local p=t.palette(); _G.status=p.status; _G.color=p.colors["10"] end`); err != nil {
+				t.Fatal(err)
+			}
+			if (p.State.GetGlobal("has_palette") == lua.LTrue) != tc.want {
+				t.Fatalf("palette available = %v, want %v", p.State.GetGlobal("has_palette"), tc.want)
+			}
+			if (p.State.GetGlobal("has_request") == lua.LTrue) != tc.want {
+				t.Fatalf("request_palette available = %v, want %v", p.State.GetGlobal("has_request"), tc.want)
+			}
+			if tc.want && (p.State.GetGlobal("status").String() != "partial" || p.State.GetGlobal("color").String() != "rgb:aaaa/bbbb/cccc") {
+				t.Fatalf("palette snapshot status=%v color=%v", p.State.GetGlobal("status"), p.State.GetGlobal("color"))
+			}
+		})
 	}
 }

@@ -103,6 +103,7 @@ Available permissions include:
 | `system.env` | Read environment variables |
 | `terminal.control` | Spawn terminal tabs, send text to them, close them, and focus them |
 | `terminal.read` | Read terminal output (raw tail), visible screen text, and list open terminals |
+| `terminal.palette` | Request and read the hosting terminal's color palette without access to terminal output |
 | `network.http` | Make HTTP requests (`true` for any destination, local services included, or a list of hosts or IPs with optional ports) |
 | `network.rpc` | Open two-way RPC connections to the listed endpoints, so the process there can drive the editor through the plugin |
 | `events.file` | Listen for file open/close/save events |

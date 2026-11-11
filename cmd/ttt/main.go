@@ -53,9 +53,6 @@ func handlePanic(screen *term.TcellScreen) {
 	if r == nil {
 		return
 	}
-	if screen != nil {
-		screen.Fini()
-	}
 	stack := debug.Stack()
 	crashMsg := fmt.Sprintf("ttt crashed: %v\n\n%s", r, stack)
 	crashPath := config.ConfigFilePath("crash.log")
@@ -145,15 +142,22 @@ func stdinIsPiped() bool {
 	return info.Mode()&os.ModeNamedPipe != 0 || info.Mode().IsRegular()
 }
 
-func initTerminalScreen(listen bool) *term.TcellScreen {
-	screen, err := term.NewTcellScreen()
+func initTerminalScreen(listen bool) (*term.TcellScreen, *app.TerminalPalette, *term.OSCReader) {
+	tty, err := tcell.NewDevTty()
 	if err != nil {
 		if listen {
 			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
 		}
 		panic(err)
 	}
-	return screen
+	screen, osc, err := term.NewTerminfoScreenFromTty(tty)
+	if err != nil {
+		if listen {
+			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
+		}
+		panic(err)
+	}
+	return screen, app.NewTerminalPalette(osc), osc
 }
 
 func initSimulationScreen(w, h int) *term.TcellScreen {
@@ -303,14 +307,24 @@ Docs: https://tttedit.dev
 	}
 
 	var screen *term.TcellScreen
+	var capturedPalette *app.TerminalPalette
+	var oscReader *term.OSCReader
 	if flags.exec != "" {
 		clipboard.DisableSystem()
 		screen = initSimulationScreen(flags.sizeW, flags.sizeH)
 	} else {
-		screen = initTerminalScreen(flags.listen)
+		screen, capturedPalette, oscReader = initTerminalScreen(flags.listen)
 	}
-	defer screen.Fini()
 	defer handlePanic(screen)
+	if capturedPalette != nil {
+		defer func() {
+			capturedPalette.Close()
+			screen.Fini()
+			oscReader.Close()
+		}()
+	} else {
+		defer screen.Fini()
+	}
 
 	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), app.WithEditorSelectionStyle(cfg.Settings.Editor.SelectionStyle), app.WithPluginSelectionStyle(cfg.Settings.Plugins.SelectionStyle))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
@@ -338,6 +352,9 @@ Docs: https://tttedit.dev
 	defer func() { editor.CloseImageLayer() }()
 
 	editor.Version = version
+	if capturedPalette != nil {
+		editor.TerminalPalette = capturedPalette
+	}
 	editor.Keybindings = cfg.Keybindings
 	editor.Reg = cmdRegistry
 	running := true

@@ -735,6 +735,7 @@
   "permissions.readFiles": "Read files",
   "permissions.readScreen": "Read screen",
   "permissions.readTerminals": "Read terminals",
+  "permissions.readTerminalPalette": "Read terminal color palette",
   "permissions.runBinary": "Run binary",
   "permissions.settingsKey": "Settings key",
   "permissions.sidebarPanel": "Sidebar panel",

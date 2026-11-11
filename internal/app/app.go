@@ -64,28 +64,32 @@ type TerminalSpec struct {
 }
 
 type App struct {
-	language      languageState
-	Root          *ui.Root
-	EditorGroup   *ui.EditorGroupWidget
-	Sidebar       *ui.SidebarWidget
-	SplitPanel    *ui.SplitPanelWidget
-	ContentSplit  *ui.ContentSplitWidget
-	BottomPanel   *ui.BottomPanelWidget
-	Search        *ui.SearchWidget
-	MenuBar       *ui.MenuBarWidget
-	RootBox       *widgets.VStackWidget
-	StatusBar     *ui.StatusBarWidget
-	Status        *view.StatusBar
-	Borders       *term.BorderSet
-	Screen        *term.TcellScreen
-	Renderer      *render.Renderer
-	ImageLayer    *image.Layer
-	imageCellW    int
-	imageCellH    int
-	Settings      *config.Settings
-	State         config.State
-	Workspace     *workspace.Workspace
-	Palette       *ui.TerminalColorPalette
+	language        languageState
+	Root            *ui.Root
+	EditorGroup     *ui.EditorGroupWidget
+	Sidebar         *ui.SidebarWidget
+	SplitPanel      *ui.SplitPanelWidget
+	ContentSplit    *ui.ContentSplitWidget
+	BottomPanel     *ui.BottomPanelWidget
+	Search          *ui.SearchWidget
+	MenuBar         *ui.MenuBarWidget
+	RootBox         *widgets.VStackWidget
+	StatusBar       *ui.StatusBarWidget
+	Status          *view.StatusBar
+	Borders         *term.BorderSet
+	Screen          *term.TcellScreen
+	Renderer        *render.Renderer
+	ImageLayer      *image.Layer
+	imageCellW      int
+	imageCellH      int
+	Settings        *config.Settings
+	State           config.State
+	Workspace       *workspace.Workspace
+	Palette         *ui.TerminalColorPalette
+	TerminalPalette interface {
+		Snapshot() (string, map[string]string)
+		Request()
+	}
 	TerminalPanel *ui.TerminalPanelWidget
 	Terminals     []TerminalTab
 	Apps          *AppsPanel
