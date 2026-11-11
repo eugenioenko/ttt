@@ -27,7 +27,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	}
 	palette.OnExecute = func(id string) {
 		a.DismissDialog()
-		if (id == "terminal.sendNextKey" || id == "terminal.toggleShortcutForwarding") && previousFocus != nil {
+		if (id == "terminal.sendNextKey" || id == "terminal.toggleShortcutForwarding" || id == "terminal.close") && previousFocus != nil {
 			a.Root.SetFocus(previousFocus)
 		}
 		a.Reg.Execute(id)

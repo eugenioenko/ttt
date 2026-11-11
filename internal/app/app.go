@@ -644,6 +644,14 @@ func (a *App) CloseTerminal(panelID string) {
 }
 
 func (a *App) CloseActiveTerminal() {
+	if focused := a.focusedTerminalWidget(); focused != nil {
+		for _, terminal := range a.EditorTerminals {
+			if terminal.Widget == focused {
+				a.CloseTerminal(terminal.ID)
+				return
+			}
+		}
+	}
 	idx := a.TerminalPanel.ActiveIndex()
 	if idx < 0 || idx >= len(a.Terminals) {
 		return

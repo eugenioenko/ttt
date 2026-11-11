@@ -1,8 +1,10 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -21,6 +23,46 @@ func openPanelTerminals(t *testing.T, h *testHarness, n int) []string {
 		t.Cleanup(tt.Term.Close)
 	}
 	return ids
+}
+
+func TestCloseTerminalTargetsFocusedLocation(t *testing.T) {
+	for _, location := range []string{"editor", "panel"} {
+		for _, palette := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/palette=%v", location, palette), func(t *testing.T) {
+				h := newTestHarness(t, 100, 30)
+				defer h.stop()
+				panelID := openPanelTerminals(t, h, 1)[0]
+				h.app.HideBottomPanel()
+				h.exec("terminal.newInEditor")
+				editor := h.app.EditorTerminals[0]
+				t.Cleanup(editor.Term.Close)
+				closed, remaining := editor.ID, panelID
+				if location == "panel" {
+					if err := h.app.FocusTerminal(panelID); err != nil {
+						t.Fatal(err)
+					}
+					closed, remaining = panelID, editor.ID
+				}
+				if palette {
+					h.app.OpenCommandPalette(false)
+					dialog := h.app.Root.TopOverlayWidget().(*ui.SelectDialogWidget)
+					dialog.OnExecute("terminal.close")
+				} else {
+					h.exec("terminal.close")
+				}
+				terms := h.app.ListTerminals()
+				if len(terms) != 1 || terms[0].ID != remaining {
+					t.Fatalf("closed wrong terminal: remaining=%+v, want %s", terms, remaining)
+				}
+				if err := h.app.SendToTerminal(closed, "closed"); err == nil {
+					t.Error("closed terminal still accepts input")
+				}
+				if err := h.app.SendToTerminal(remaining, "still-running\n"); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
 }
 
 func terminalIDs(h *testHarness) []string {

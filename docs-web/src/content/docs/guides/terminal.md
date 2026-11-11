@@ -18,6 +18,8 @@ TTT includes a built-in terminal emulator. Press **Ctrl+T** to toggle the termin
 
 Choose **Terminal: New Terminal in Editor** from the command palette, or **New Terminal in Editor** from the View menu, to open a terminal alongside your file tabs. Closing its editor tab stops the program; when the program exits, its tab closes too.
 
+**Terminal: Close Terminal** closes the focused editor terminal when you are using one. Otherwise it closes the selected panel terminal. Running it through the command palette keeps the terminal target from before the palette opened.
+
 While the terminal tab is focused, tab-switching shortcuts go to the program. Use the mouse, command palette, or quick open to switch tabs. **Ctrl+T** still toggles the terminal panel. **Terminal: Close All** closes panel terminals only, and editor terminal tabs are not restored after restarting TTT.
 
 Plugins can open a program in an editor tab with `term.spawn{ shell = "program", location = "editor" }`. See the [terminal plugin API](./plugin-authoring/#tttterminal-module).
