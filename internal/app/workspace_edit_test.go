@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -602,6 +604,13 @@ func TestPickCodeActionEditSkipsFileOperations(t *testing.T) {
 	}
 }
 
+type recordingCodeActionClient struct{ commands []lsp.Command }
+
+func (c *recordingCodeActionClient) ExecuteCommand(command string, arguments []json.RawMessage) error {
+	c.commands = append(c.commands, lsp.Command{Command: command, Arguments: arguments})
+	return nil
+}
+
 func TestCodeActionsResultRunsCommandWithEmptyEdit(t *testing.T) {
 	a, dir := workspaceEditTestApp(t, map[string]string{
 		"main.go": "call()\n",
@@ -612,21 +621,30 @@ func TestCodeActionsResultRunsCommandWithEmptyEdit(t *testing.T) {
 	}
 	t.Cleanup(sim.Fini)
 	a.Screen = term.NewTcellScreenFrom(sim)
-	a.LspManager = lsp.NewManager(&config.LSPSettings{})
+	client := &recordingCodeActionClient{}
+	var gotServer, gotWorkDir string
+	a.lookupCodeActionClient = func(server, workDir string) (codeActionCommandClient, error) {
+		gotServer, gotWorkDir = server, workDir
+		return client, nil
+	}
 
 	mainPath := filepath.Join(dir, "main.go")
 	a.EditorGroup.OpenFile(mainPath)
 	mainBuffer := a.EditorGroup.BufferForPath(mainPath)
 	snapshots := a.snapshotCodeActionBuffers()
 
+	wantCommand := lsp.Command{
+		Command:   "custom.action",
+		Arguments: []json.RawMessage{json.RawMessage(`{"uri":"file:///main.go","line":3}`), json.RawMessage(`"selected"`)},
+	}
+	wantWorkDir := a.lspWorkDir(mainPath)
 	result := &CodeActionsResult{
 		Path: mainPath, Buffer: mainBuffer, Version: mainBuffer.Version(), OpenBuffers: snapshots,
 		Server: "test-server",
-		Actions: []lsp.CodeAction{{
-			Title:   "Empty edit with command",
-			Edit:    &lsp.WorkspaceEdit{},
-			Command: &lsp.Command{Command: "custom.action"},
-		}},
+		Actions: []lsp.CodeAction{
+			{Title: "Other command", Command: &lsp.Command{Command: "other.action"}},
+			{Title: "Empty edit with command", Edit: &lsp.WorkspaceEdit{}, Command: &wantCommand},
+		},
 	}
 
 	a.HandleCodeActionsResult(result)
@@ -636,28 +654,40 @@ func TestCodeActionsResultRunsCommandWithEmptyEdit(t *testing.T) {
 	}
 	dialog := overlay.W.(*widgets.DialogWidget)
 	selectWidget := dialog.Content.(*widgets.SelectWidget)
-	selectWidget.Config.OnSelect("0")
+	synctest.Test(t, func(t *testing.T) {
+		selectWidget.Config.OnSelect("1")
+		synctest.Wait()
 
-	if a.Status.Notification == i18n.Text("status.codeActionApplied") {
-		t.Fatalf("notification = %q, want empty edit not to notify codeActionApplied", a.Status.Notification)
-	}
+		if a.Status.Notification == i18n.Text("status.codeActionApplied") {
+			t.Fatalf("notification = %q, want empty edit not to notify codeActionApplied", a.Status.Notification)
+		}
 
-	select {
-	case ev := <-sim.EventQ():
-		interrupt, ok := ev.(*tcell.EventInterrupt)
-		if !ok {
-			t.Fatalf("expected EventInterrupt, got %T", ev)
+		select {
+		case ev := <-sim.EventQ():
+			interrupt, ok := ev.(*tcell.EventInterrupt)
+			if !ok {
+				t.Fatalf("expected EventInterrupt, got %T", ev)
+			}
+			cmdResult, ok := interrupt.Data().(*CodeActionCommandResult)
+			if !ok {
+				t.Fatalf("expected CodeActionCommandResult, got %T", interrupt.Data())
+			}
+			if cmdResult.Err != nil {
+				t.Fatalf("command failed: %v", cmdResult.Err)
+			}
+			if !cmdResult.Notify {
+				t.Fatal("cmdResult.Notify = false, want true for empty edit")
+			}
+		default:
+			t.Fatal("command execution did not post a result")
 		}
-		cmdResult, ok := interrupt.Data().(*CodeActionCommandResult)
-		if !ok {
-			t.Fatalf("expected CodeActionCommandResult, got %T", interrupt.Data())
+		if gotServer != "test-server" || gotWorkDir != wantWorkDir {
+			t.Fatalf("client lookup = (%q, %q), want (%q, %q)", gotServer, gotWorkDir, "test-server", wantWorkDir)
 		}
-		if !cmdResult.Notify {
-			t.Fatal("cmdResult.Notify = false, want true for empty edit")
+		if !reflect.DeepEqual(client.commands, []lsp.Command{wantCommand}) {
+			t.Fatalf("executed commands = %+v, want %+v", client.commands, wantCommand)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for command execution")
-	}
+	})
 }
 
 func TestCodeActionsResultPreventsCommandOnUnsupportedEdit(t *testing.T) {
@@ -670,7 +700,12 @@ func TestCodeActionsResultPreventsCommandOnUnsupportedEdit(t *testing.T) {
 	}
 	t.Cleanup(sim.Fini)
 	a.Screen = term.NewTcellScreenFrom(sim)
-	a.LspManager = lsp.NewManager(&config.LSPSettings{})
+	client := &recordingCodeActionClient{}
+	lookups := 0
+	a.lookupCodeActionClient = func(string, string) (codeActionCommandClient, error) {
+		lookups++
+		return client, nil
+	}
 
 	mainPath := filepath.Join(dir, "main.go")
 	a.EditorGroup.OpenFile(mainPath)
@@ -696,18 +731,24 @@ func TestCodeActionsResultPreventsCommandOnUnsupportedEdit(t *testing.T) {
 	}
 	dialog := overlay.W.(*widgets.DialogWidget)
 	selectWidget := dialog.Content.(*widgets.SelectWidget)
-	selectWidget.Config.OnSelect("0")
+	synctest.Test(t, func(t *testing.T) {
+		selectWidget.Config.OnSelect("0")
+		synctest.Wait()
 
-	if a.Status.Notification == i18n.Text("status.codeActionApplied") {
-		t.Fatalf("notification = %q, want unsupported edit rejected", a.Status.Notification)
-	}
-	if a.Status.Notification != i18n.Text("status.unsupportedWorkspaceEdit") {
-		t.Fatalf("notification = %q, want unsupportedWorkspaceEdit warning", a.Status.Notification)
-	}
+		if a.Status.Notification == i18n.Text("status.codeActionApplied") {
+			t.Fatalf("notification = %q, want unsupported edit rejected", a.Status.Notification)
+		}
+		if a.Status.Notification != i18n.Text("status.unsupportedWorkspaceEdit") {
+			t.Fatalf("notification = %q, want unsupportedWorkspaceEdit warning", a.Status.Notification)
+		}
 
-	select {
-	case ev := <-sim.EventQ():
-		t.Fatalf("unexpected event from command execution: %+v", ev)
-	case <-time.After(50 * time.Millisecond):
-	}
+		select {
+		case ev := <-sim.EventQ():
+			t.Fatalf("unexpected event from command execution: %+v", ev)
+		default:
+		}
+		if lookups != 0 || len(client.commands) != 0 {
+			t.Fatalf("unsupported edit dispatched a command: lookups=%d, commands=%+v", lookups, client.commands)
+		}
+	})
 }

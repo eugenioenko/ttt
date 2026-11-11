@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"os/exec"
@@ -834,10 +835,21 @@ func (a *App) HandleCodeActionsResult(result *CodeActionsResult) {
 	}, nil)
 }
 
+type codeActionCommandClient interface {
+	ExecuteCommand(string, []json.RawMessage) error
+}
+
+func (a *App) codeActionClient(server, workDir string) (codeActionCommandClient, error) {
+	if a.lookupCodeActionClient != nil {
+		return a.lookupCodeActionClient(server, workDir)
+	}
+	return a.LspManager.ClientForLanguage(server, workDir)
+}
+
 func (a *App) executeCodeActionCommand(server, path string, command lsp.Command, notify bool) {
 	workDir := a.lspWorkDir(path)
 	go func() {
-		client, err := a.LspManager.ClientForLanguage(server, workDir)
+		client, err := a.codeActionClient(server, workDir)
 		if err == nil {
 			err = client.ExecuteCommand(command.Command, command.Arguments)
 		}
