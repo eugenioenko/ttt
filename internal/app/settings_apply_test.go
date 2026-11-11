@@ -83,7 +83,7 @@ func TestSidebarDraggedClosedRestoresUsableWidth(t *testing.T) {
 // Assigning the whole working struct instead would roll them back.
 func TestCommitToLeavesUnownedSettingsAlone(t *testing.T) {
 	opened := config.DefaultSettings()
-	v := &settingsView{working: opened, categories: settingsCategories()}
+	v := &settingsView{working: opened, baseline: opened, categories: settingsCategories()}
 	v.working.Editor.TabSize = 7
 
 	live := opened
