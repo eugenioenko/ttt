@@ -955,7 +955,7 @@ func registerWidgetCallbacks(app *App) {
 			items := []ui.ContextMenuItem{
 				{Label: i18n.Text("menu.newTerminal"), Command: "terminal.new"},
 				ui.MenuSep(),
-				{Label: i18n.Text("menu.closeTerminal"), Command: "terminal.close"},
+				{Label: i18n.Text("menu.closeTerminal"), Command: "terminal.closePanel"},
 				{Label: i18n.Text("menu.closeAllTerminals"), Command: "terminal.closeAll"},
 				ui.MenuSep(),
 				dock,

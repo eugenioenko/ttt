@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -62,6 +63,31 @@ func TestCloseTerminalTargetsFocusedLocation(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestPanelMenuClosesPanelTerminalFromEditorFocus(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	panelID := openPanelTerminals(t, h, 1)[0]
+	h.exec("terminal.newInEditor")
+	editor := h.app.EditorTerminals[0]
+	t.Cleanup(editor.Term.Close)
+	h.app.BottomPanel.Tabs.Config.Actions[1].OnClick(80, 15)
+	menu := focusedContextMenu(t, h)
+	for i, item := range menu.Items {
+		if item.Label == i18n.Text("menu.closeTerminal") {
+			menu.Selected = i
+			break
+		}
+	}
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	terms := h.app.ListTerminals()
+	if len(terms) != 1 || terms[0].ID != editor.ID {
+		t.Fatalf("panel menu closed wrong terminal: %+v", terms)
+	}
+	if err := h.app.SendToTerminal(panelID, "closed"); err == nil {
+		t.Error("closed panel terminal still accepts input")
 	}
 }
 

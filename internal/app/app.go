@@ -652,6 +652,10 @@ func (a *App) CloseActiveTerminal() {
 			}
 		}
 	}
+	a.ClosePanelTerminal()
+}
+
+func (a *App) ClosePanelTerminal() {
 	idx := a.TerminalPanel.ActiveIndex()
 	if idx < 0 || idx >= len(a.Terminals) {
 		return

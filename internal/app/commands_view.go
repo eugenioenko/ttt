@@ -541,6 +541,8 @@ func registerViewCommands(app *App) {
 		Handler:  app.CloseActiveTerminal,
 	})
 
+	reg.Register(command.Command{ID: "terminal.closePanel", Hidden: true, Handler: app.ClosePanelTerminal})
+
 	reg.Register(command.Command{
 		ID: "terminal.closeAll", Title: i18n.Text("command.terminalCloseAll"),
 		Keywords: []string{"terminal", "shell"},
