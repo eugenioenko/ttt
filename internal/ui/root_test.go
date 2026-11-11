@@ -122,7 +122,7 @@ func TestRootClickWorksAfterAMenuOpenedByAClickClosesWithTheKeyboard(t *testing.
 			opened++
 			menu := NewContextMenuWidget([]ContextMenuItem{{Label: "New", Command: "new"}}, 0, 1)
 			menu.OnExec = func(string) { root.PopOverlay() }
-			menu.OnDismiss = root.PopOverlay
+			menu.OnDismiss = func() { root.PopOverlay() }
 			root.PushOverlay(Overlay{Widget: menu, Modal: true})
 		}
 		x := bar.ItemSpans()[0].Start
@@ -153,7 +153,7 @@ func TestRootGivesTheReleaseToMainWhenAPassThroughOverlayIgnoredThePress(t *test
 	bar.OnSelect = func(int) {
 		opened++
 		menu := NewContextMenuWidget([]ContextMenuItem{{Label: "New", Command: "new"}}, 0, 1)
-		menu.OnDismiss = root.PopOverlay
+		menu.OnDismiss = func() { root.PopOverlay() }
 		root.PushOverlay(Overlay{Widget: menu, Modal: true})
 	}
 	x := bar.ItemSpans()[0].Start
@@ -494,5 +494,25 @@ func TestRawKeyConsumerRunsConfiguredChords(t *testing.T) {
 	root.HandleEvent(unbound)
 	if terminal.lastEvent != unbound || terminal.eventCount != 3 {
 		t.Fatal("unbound Ctrl+K must reach the terminal unchanged")
+	}
+}
+
+func TestRemoveLowerOverlayKeepsReturnFocusOfOverlayAbove(t *testing.T) {
+	main := &mockWidget{}
+	origin := &mockWidget{focusable: true}
+	drawer := &mockWidget{focusable: true}
+	dialog := &mockWidget{focusable: true}
+
+	root := NewRoot(main)
+	root.SetFocus(origin)
+	root.PushOverlay(Overlay{Widget: drawer})
+	root.SetFocus(drawer)
+	root.PushOverlay(Overlay{Widget: dialog, Modal: true})
+
+	if got := root.RemoveOverlay(drawer); got != origin {
+		t.Fatalf("RemoveOverlay(drawer) returned %v, want origin", got)
+	}
+	if got := root.PopOverlay(); got != origin {
+		t.Fatalf("PopOverlay() returned %v, want origin after drawer removal", got)
 	}
 }
