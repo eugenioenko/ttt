@@ -423,9 +423,6 @@ func (a *App) quitWithAction(onQuit func()) {
 		onQuit()
 		return
 	}
-	if a.Root.HasOverlay() {
-		return
-	}
 	a.quitPending = true
 	a.quitAction = onQuit
 	cancel := func() { a.quitPending = false; a.quitAction = nil; a.DismissDialog() }
@@ -444,7 +441,7 @@ func (a *App) quitWithAction(onQuit func()) {
 		buttons = append(buttons, i18n.Text("dialog.saveAllQuit"))
 		callbacks = append(callbacks, func() {
 			cancel()
-			a.saveAllAndQuit(onQuit)
+			a.saveAllAndQuit(onQuit, a.Root.TopOverlayWidget())
 		})
 	}
 	hint := ""
@@ -457,8 +454,8 @@ func (a *App) quitWithAction(onQuit func()) {
 	dialog.OnDismiss = cancel
 }
 
-func (a *App) saveAllAndQuit(onQuit func()) {
-	if a.Root.HasOverlay() {
+func (a *App) saveAllAndQuit(onQuit func(), previousOverlay ui.Widget) {
+	if a.Root.TopOverlayWidget() != previousOverlay {
 		return
 	}
 	next := -1
@@ -479,7 +476,7 @@ func (a *App) saveAllAndQuit(onQuit func()) {
 		return
 	}
 	a.EditorGroup.SwitchTab(next)
-	a.saveFile(func() { a.saveAllAndQuit(onQuit) })
+	a.saveFile(func() { a.saveAllAndQuit(onQuit, previousOverlay) })
 }
 
 // hunkStarts returns the buffer-line indices (0-based) at which each diff hunk
