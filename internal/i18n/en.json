@@ -266,6 +266,8 @@
   "command.terminalCloseAll": "Terminal: Close All",
   "command.terminalNewEditorTerminal": "Terminal: New Terminal in Editor",
   "command.terminalNewTerminal": "Terminal: New Terminal",
+  "command.terminalNext": "Terminal: Next Terminal",
+  "command.terminalPrev": "Terminal: Previous Terminal",
   "command.terminalSendNextKey": "Terminal: Send Next Key",
   "command.terminalToggleFullscreen": "Terminal: Toggle Fullscreen",
   "command.terminalToggleShortcutForwarding": "Terminal: Toggle Shortcut Forwarding",

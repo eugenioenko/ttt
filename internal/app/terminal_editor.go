@@ -39,6 +39,29 @@ func (a *App) ToggleTerminalShortcutForwarding() {
 	}
 }
 
+func (a *App) NextTerminal() {
+	a.switchTerminal(1)
+}
+
+func (a *App) PrevTerminal() {
+	a.switchTerminal(-1)
+}
+
+func (a *App) switchTerminal(delta int) {
+	count := a.TerminalPanel.Count()
+	if count == 0 {
+		return
+	}
+	index := (a.TerminalPanel.ActiveIndex() + delta + count) % count
+	a.TerminalPanel.SetActive(index)
+	if !a.ContentSplit.ShowBottom {
+		a.ensureUsablePanelSize()
+		a.showTerminalPanel()
+	}
+	a.BottomPanel.SetActivePanel("terminal")
+	a.Root.SetFocus(a.TerminalPanel)
+}
+
 func (a *App) openEditorTerminal(entry TerminalTab, spec TerminalSpec) {
 	id := entry.ID
 	entry.Tab.OnClose = func() { a.releaseEditorTerminal(id) }

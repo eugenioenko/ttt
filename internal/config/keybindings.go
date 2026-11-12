@@ -31,6 +31,8 @@ var ForceKeyCommands = map[string]bool{
 	"terminal.sendNextKey":              true,
 	"terminal.toggleShortcutForwarding": true,
 	"terminal.toggle":                   true,
+	"terminal.next":                     true,
+	"terminal.prev":                     true,
 	"terminal.fullscreen":               true,
 	"editor.quit":                       true,
 	"command.palette":                   true,
