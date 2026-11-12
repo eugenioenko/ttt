@@ -12,6 +12,7 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
 	h.exec("file.new")
+	editorRect := h.app.EditorGroup.Editor.GetRect()
 	h.pressCtrl(tcell.KeyCtrlR)
 	bar, ok := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
 	if !ok {
@@ -21,7 +22,7 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 	h.pressKey(tcell.KeyTab, tcell.ModNone)
 	h.pressRune('b')
 
-	h.click(6, 4)
+	h.click(editorRect.X+6, editorRect.Y+2)
 	if bar.FocusedInput() != nil {
 		t.Fatal("replace bar kept input focus after clicking the editor")
 	}
@@ -77,7 +78,7 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 		t.Fatalf("undo in replacement input failed: got %q, want b", bar.ReplaceInput.Text())
 	}
 
-	h.click(6, 4)
+	h.click(editorRect.X+6, editorRect.Y+2)
 	h.pressCtrl(tcell.KeyCtrlR)
 	if h.app.Root.TopOverlayWidget() != bar || len(h.app.Root.Overlays) != 1 || bar.FocusedInput() != bar.ReplaceInput {
 		t.Fatal("Ctrl+R did not refocus the existing replace bar")
@@ -86,7 +87,7 @@ func TestReplaceBarEditorFocus(t *testing.T) {
 	if bar.ReplaceInput.Text() != "be" {
 		t.Fatalf("replacement after Ctrl+R = %q, want be", bar.ReplaceInput.Text())
 	}
-	h.click(6, 4)
+	h.click(editorRect.X+6, editorRect.Y+2)
 	h.pressKey(tcell.KeyEscape, tcell.ModNone)
 	if h.app.Root.HasOverlay() {
 		t.Fatal("Escape in the editor did not dismiss the replace bar")
