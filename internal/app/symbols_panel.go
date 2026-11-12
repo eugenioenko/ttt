@@ -36,8 +36,9 @@ func NewSymbolsPanel() *SymbolsPanel {
 	// Indent 3 keeps leaf labels visually nested past their parent's label
 	// (leaves render no chevron, so indent 2 would align them with it).
 	sp.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
-		Indent:    3,
-		EmptyText: i18n.Text("lsp.noSymbols"),
+		Indent:             3,
+		EmptyText:          i18n.Text("lsp.noSymbols"),
+		ActivateExpandable: true,
 		OnSelect: func(node *widgets.TreeNode) {
 			sp.notify(node, sp.OnReveal)
 		},
