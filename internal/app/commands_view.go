@@ -507,6 +507,16 @@ func registerViewCommands(app *App) {
 		Handler:  app.SpawnTerminal,
 	})
 	reg.Register(command.Command{
+		ID: "terminal.next", Title: i18n.Text("command.terminalNext"),
+		Keywords: []string{"terminal", "shell", "tab", "next"},
+		Handler:  app.NextTerminal,
+	})
+	reg.Register(command.Command{
+		ID: "terminal.prev", Title: i18n.Text("command.terminalPrev"),
+		Keywords: []string{"terminal", "shell", "tab", "previous"},
+		Handler:  app.PrevTerminal,
+	})
+	reg.Register(command.Command{
 		ID: "terminal.sendNextKey", Title: i18n.Text("command.terminalSendNextKey"),
 		Keywords: []string{"terminal", "key", "shortcut", "forward"},
 		Handler:  app.SendNextTerminalKey,
