@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -14,6 +15,59 @@ func requireRipgrep(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("rg"); err != nil {
 		t.Skip("ripgrep not installed")
+	}
+}
+
+func TestSearchCaseSensitivity(t *testing.T) {
+	requireRipgrep(t)
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	path := filepath.Join(t.TempDir(), "cases.txt")
+	if err := os.WriteFile(path, []byte("combobox\nComboBox\nCOMBOBOX\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, capped := range []bool{true, false} {
+		for _, useRegex := range []bool{false, true} {
+			for _, caseSensitive := range []bool{false, true} {
+				for _, tc := range []struct {
+					query     string
+					exactLine int
+				}{
+					{"combobox", 1},
+					{"ComboBox", 2},
+					{"COMBOBOX", 3},
+					{"Combobox", 0},
+				} {
+					name := fmt.Sprintf("capped=%t/regex=%t/caseSensitive=%t/query=%s", capped, useRegex, caseSensitive, tc.query)
+					t.Run(name, func(t *testing.T) {
+						pattern := tc.query
+						if useRegex {
+							pattern = "^" + tc.query + "$"
+						}
+						opts := Options{Query: pattern, CaseSensitive: caseSensitive, UseRegex: useRegex}
+						args := append(BaseArgs(opts, capped), path)
+						ctx := context.Background()
+						found, err := scanCommand(ctx, exec.CommandContext(ctx, "rg", args...))
+						if err != nil {
+							t.Fatal(err)
+						}
+						var lines []int
+						for _, match := range found[path] {
+							lines = append(lines, match.LineNum)
+						}
+						want := []int{1, 2, 3}
+						if caseSensitive {
+							want = nil
+							if tc.exactLine != 0 {
+								want = []int{tc.exactLine}
+							}
+						}
+						if !slices.Equal(lines, want) {
+							t.Fatalf("matched lines = %v, want %v", lines, want)
+						}
+					})
+				}
+			}
+		}
 	}
 }
 

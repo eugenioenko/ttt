@@ -74,7 +74,7 @@ func BaseArgs(opts Options, capped bool) []string {
 	if opts.CaseSensitive {
 		args = append(args, "--case-sensitive")
 	} else {
-		args = append(args, "--smart-case")
+		args = append(args, "--ignore-case")
 	}
 	if !opts.UseRegex {
 		args = append(args, "--fixed-strings")
