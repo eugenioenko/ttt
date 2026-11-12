@@ -25,7 +25,7 @@ func TestSettingsLoadErrorsAndRecovery(t *testing.T) {
 			if cfg.SettingsError == nil {
 				t.Errorf("Load(%q) ignored invalid settings", file)
 			}
-			if cfg.Settings.Theme != "" || cfg.Settings.Editor.TabSize != DefaultSettings().Editor.TabSize {
+			if cfg.Settings.Theme != DefaultSettings().Theme || cfg.Settings.Editor.TabSize != DefaultSettings().Editor.TabSize {
 				t.Errorf("failed load applied partial settings: %+v", cfg.Settings.Editor)
 			}
 		}

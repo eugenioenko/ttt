@@ -494,7 +494,7 @@ type KeyboardSettings struct {
 
 type Settings struct {
 	Version     int              `json:"version"`
-	Theme       string           `json:"theme,omitempty"`
+	Theme       string           `json:"theme"`
 	DebugMode   bool             `json:"debugMode,omitempty"`
 	ReuseWindow bool             `json:"reuseWindow,omitempty"`
 	Language    LanguageSettings `json:"language,omitzero"`
@@ -583,6 +583,7 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 func DefaultSettings() Settings {
 	return Settings{
 		Version:      1,
+		Theme:        "default-dark",
 		Appearance:   DefaultAppearanceSettings(),
 		Editor:       DefaultEditorSettings(),
 		Keyboard:     KeyboardSettings{ModifierKey: ModifierControl},

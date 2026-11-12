@@ -100,7 +100,7 @@ func TestFloatingDropdownAnchorsToTopRow(t *testing.T) {
 	h.exec("menubar.toggle")
 	h.exec("menu.view")
 
-	if row := h.screenRow(0); !strings.ContainsRune(row, '╭') {
+	if row := h.screenRow(0); !strings.ContainsRune(row, h.app.Borders.TopLeft) {
 		t.Errorf("dropdown should start on row 0 when the bar is hidden, got %q", row)
 	}
 }

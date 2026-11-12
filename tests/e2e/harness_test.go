@@ -73,7 +73,9 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 	config.ParseKeyBindings(cfg.Keybindings)
 
 	screen := term.NewTcellScreenFrom(sim)
-	screen.SetStyleMap(app.BuildStyleMap(cfg.Theme))
+	previousTokenTheme := highlight.CurrentTokenTheme()
+	app.ApplyThemeStyles(screen, cfg.Theme)
+	t.Cleanup(func() { highlight.SetTokenTheme(previousTokenTheme) })
 
 	borders := app.BuildBorderSet(cfg.Theme.Borders)
 

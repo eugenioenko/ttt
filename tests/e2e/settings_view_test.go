@@ -233,34 +233,36 @@ func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Appearance", "Appearance")
 
-	// The theme select shows "Default" until it is opened.
-	if strings.Contains(h.screenText(), "default-dark") {
+	if !rowHas(h, "default-dark", string(icons.PlainChevronDown)) {
+		t.Fatalf("select should display the default theme:\n%s", h.screenText())
+	}
+	if strings.Contains(h.screenText(), "default-light") {
 		t.Fatal("theme list visible before the select was opened")
 	}
 
-	clickRowControl(t, h, "Default", "Default")
+	clickRowControl(t, h, "default-dark", "default-dark")
 
 	screen := h.screenText()
 	if !strings.Contains(screen, string(icons.PlainChevronUp)) {
 		t.Errorf("chevron should point up while open:\n%s", screen)
 	}
-	if !strings.Contains(screen, "default-dark") {
+	if !strings.Contains(screen, "default-light") {
 		t.Fatalf("expected the theme list in the open popup:\n%s", screen)
 	}
 
 	// Picking an item closes the popup and updates the displayed value.
-	clickRowControl(t, h, "default-dark", "default-dark")
+	clickRowControl(t, h, "default-light", "default-light")
 	screen = h.screenText()
 	if strings.Contains(screen, "dracula") {
 		t.Errorf("popup should close after picking an item:\n%s", screen)
 	}
-	if !rowHas(h, "default-dark", string(icons.PlainChevronDown)) {
+	if !rowHas(h, "default-light", string(icons.PlainChevronDown)) {
 		t.Errorf("select should display the picked value:\n%s", screen)
 	}
 
 	h.exec("settings.apply")
-	if h.app.Settings.Theme != "default-dark" {
-		t.Errorf("theme = %q, want default-dark", h.app.Settings.Theme)
+	if h.app.Settings.Theme != "default-light" {
+		t.Errorf("theme = %q, want default-light", h.app.Settings.Theme)
 	}
 }
 
