@@ -6,6 +6,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestMarkdownSymbolsNesting(t *testing.T) {
@@ -155,5 +157,22 @@ func TestSymbolIconsFollowIconMode(t *testing.T) {
 	sp.SetIcons(config.IconsNone)
 	if parent.Icon != "◆" {
 		t.Errorf("icon after switching back = %q", parent.Icon)
+	}
+}
+
+func TestSymbolsPanelEnterOnSectionJumpsWithoutCollapsing(t *testing.T) {
+	sp := NewSymbolsPanel()
+	var jumped []int
+	sp.OnJump = func(line, col int) { jumped = append(jumped, line) }
+	sp.SetSymbols(markdownSymbols([]string{"# Title", "text", "## Section"}))
+	sp.Tree.SetSelectedIndex(0)
+
+	sp.Tree.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
+
+	if len(jumped) != 1 || jumped[0] != 0 {
+		t.Fatalf("expected a jump to line 0, got %v", jumped)
+	}
+	if !sp.Tree.FlatList()[0].Expanded || sp.Tree.ItemCount() != 2 {
+		t.Fatal("activating a section collapsed it")
 	}
 }
