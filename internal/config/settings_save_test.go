@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
-	"sync/atomic"
 	"testing"
 )
 
@@ -209,68 +208,56 @@ func TestSaveSettingsWritesValidJSON(t *testing.T) {
 
 func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
 	dir := withTempConfigDir(t)
-	if err := SaveSettings(DefaultSettings()); err != nil {
+	path := filepath.Join(dir, "settings.json")
+	oldSettings := DefaultSettings()
+	oldSettings.Editor.TabSize = 3
+	oldData, err := json.Marshal(oldSettings)
+	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "settings.json")
-	stop := make(chan struct{})
-	errors := make(chan error, 1)
-	var started sync.WaitGroup
-	var saving atomic.Bool
-	var readsDuringSaves atomic.Int64
-	var readers sync.WaitGroup
-	for range 4 {
-		readers.Add(1)
-		started.Add(1)
-		go func() {
-			defer readers.Done()
-			started.Done()
-			for {
-				select {
-				case <-stop:
-					return
-				default:
-				}
-				data, err := os.ReadFile(path)
-				if saving.Load() {
-					readsDuringSaves.Add(1)
-				}
-				if err == nil {
-					var value map[string]any
-					err = json.Unmarshal(data, &value)
-				}
-				if err != nil {
-					select {
-					case errors <- err:
-					default:
-					}
-					return
-				}
-			}
-		}()
+	if err := os.WriteFile(path, oldData, 0o644); err != nil {
+		t.Fatal(err)
 	}
-	started.Wait()
-	saving.Store(true)
-	for i := range 40 {
-		s := DefaultSettings()
-		s.Editor.TabSize = i + 1
-		if err := SaveSettings(s); err != nil {
-			close(stop)
-			readers.Wait()
-			t.Fatalf("save %d: %v", i, err)
+	newSettings := DefaultSettings()
+	newSettings.Editor.TabSize = 9
+	newData, err := json.Marshal(newSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged := make(chan struct{})
+	continueRename := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(continueRename) }) }
+	defer release()
+	saveDone := make(chan error, 1)
+	go func() {
+		saveDone <- writeFileAtomicallyWithRename(path, newData, 0o644, func(from, to string) error {
+			close(staged)
+			<-continueRename
+			return os.Rename(from, to)
+		})
+	}()
+	<-staged
+	assertTabSize := func(want int) {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read settings: %v", err)
+		}
+		var got Settings
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("settings are invalid JSON: %v", err)
+		}
+		if got.Editor.TabSize != want {
+			t.Fatalf("tabSize = %d, want %d", got.Editor.TabSize, want)
 		}
 	}
-	saving.Store(false)
-	close(stop)
-	readers.Wait()
-	if readsDuringSaves.Load() == 0 {
-		t.Fatal("no reader completed a read during the save loop")
+	assertTabSize(oldSettings.Editor.TabSize)
+	release()
+	if err := <-saveDone; err != nil {
+		t.Fatalf("save settings: %v", err)
 	}
-	select {
-	case err := <-errors:
-		t.Fatalf("reader observed an invalid settings file: %v", err)
-	default:
-	}
+	assertTabSize(newSettings.Editor.TabSize)
 }
 
 func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {

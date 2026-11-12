@@ -730,6 +730,10 @@ func SaveSettings(s Settings) error {
 }
 
 func writeFileAtomically(path string, data []byte, mode os.FileMode) (err error) {
+	return writeFileAtomicallyWithRename(path, data, mode, os.Rename)
+}
+
+func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, rename func(string, string) error) (err error) {
 	path, err = resolveSettingsWritePath(path)
 	if err != nil {
 		return err
@@ -754,6 +758,12 @@ func writeFileAtomically(path string, data []byte, mode os.FileMode) (err error)
 			_ = os.Remove(tmpPath)
 		}
 	}()
+	if preserveMode {
+		if err = preserveSettingsFileAccess(path, tmpPath); err != nil {
+			_ = tmp.Close()
+			return err
+		}
+	}
 
 	if _, err = tmp.Write(data); err != nil {
 		_ = tmp.Close()
@@ -767,7 +777,7 @@ func writeFileAtomically(path string, data []byte, mode os.FileMode) (err error)
 		return err
 	}
 	for attempt := 0; ; attempt++ {
-		err = os.Rename(tmpPath, path)
+		err = rename(tmpPath, path)
 		if err == nil {
 			tmpPath = ""
 			return nil
