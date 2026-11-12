@@ -235,7 +235,7 @@ func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
 		saveDone <- writeFileAtomicallyWithRename(path, newData, 0o644, func(from, to string) error {
 			close(staged)
 			<-continueRename
-			return os.Rename(from, to)
+			return renameSettingsFile(from, to)
 		})
 	}()
 	<-staged

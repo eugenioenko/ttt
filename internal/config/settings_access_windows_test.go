@@ -74,7 +74,7 @@ func TestWindowsSettingsReplacementConcurrentReaders(t *testing.T) {
 				default:
 				}
 				startedSaving := saving.Load()
-				contents, err := os.ReadFile(path)
+				contents, err := readSettingsFileBytes(path)
 				if err == nil {
 					var settings Settings
 					err = json.Unmarshal(contents, &settings)

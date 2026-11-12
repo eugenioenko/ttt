@@ -705,7 +705,7 @@ func ReadSettings() (Settings, error) {
 
 func readSettingsFile(path string) (Settings, error) {
 	s := DefaultSettings()
-	data, err := os.ReadFile(path)
+	data, err := readSettingsFileBytes(path)
 	if err == nil {
 		if err = json.Unmarshal(data, &s); err != nil {
 			err = fmt.Errorf("%s: %w", path, err)
@@ -730,7 +730,7 @@ func SaveSettings(s Settings) error {
 }
 
 func writeFileAtomically(path string, data []byte, mode os.FileMode) (err error) {
-	return writeFileAtomicallyWithRename(path, data, mode, os.Rename)
+	return writeFileAtomicallyWithRename(path, data, mode, renameSettingsFile)
 }
 
 func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, rename func(string, string) error) (err error) {
