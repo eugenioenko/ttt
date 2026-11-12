@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sync"
 	"testing"
@@ -264,7 +265,11 @@ func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {
 	dir := withTempConfigDir(t)
 	target := filepath.Join(dir, "settings-target.json")
 	link := filepath.Join(dir, "settings.json")
-	if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
+	targetMode := os.FileMode(0o644)
+	if runtime.GOOS != "windows" {
+		targetMode = 0o600
+	}
+	if err := os.WriteFile(target, []byte(`{}`), targetMode); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, link); err != nil {
@@ -283,8 +288,8 @@ func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := targetInfo.Mode().Perm(); got != 0o600 {
-		t.Errorf("target permissions = %o, want 600", got)
+	if runtime.GOOS != "windows" && targetInfo.Mode().Perm() != 0o600 {
+		t.Errorf("target permissions = %o, want 600", targetInfo.Mode().Perm())
 	}
 	data, err := os.ReadFile(target)
 	if err != nil {
