@@ -216,6 +216,8 @@ Bottom panels appear in the bottom panel alongside the terminal. Requires the `p
 
 Plugins can register commands that appear in the command palette. Requires the `commands` permission.
 
+The palette automatically displays commands as `Plugin Name: Command Title`, using the manifest `displayName` or the registered plugin name. Existing prefixes using a colon, dash, or pipe (ignoring case and surrounding whitespace) are preserved. Command IDs and registered titles remain unchanged; palette search matches both the display title and original title.
+
 Each command entry is a table with:
 
 | Field     | Type     | Required | Description                              |

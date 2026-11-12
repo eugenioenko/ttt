@@ -634,3 +634,30 @@ func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
 		t.Fatalf("expected width-safe tail, got %q", got)
 	}
 }
+
+func TestPalettePluginDisplayTitle(t *testing.T) {
+	commands := []command.Command{
+		{ID: "demo.open", Title: "Open Dashboard", DisplayTitle: "My Plugin: Open Dashboard", Shortcut: "Alt+J"},
+		{ID: "core.refresh", Title: "Refresh"},
+	}
+	p := NewSelectDialogWidget(commands)
+	for _, query := range []string{"", "My Plugin", "Open Dashboard", "My Plugin: Open Dashboard"} {
+		p.filterCommands(query)
+		if len(p.Items) == 0 || p.Items[0].Label != "My Plugin: Open Dashboard" || p.Items[0].ID != "demo.open" || p.Items[0].Detail != "Alt+J" {
+			t.Fatalf("query %q: %+v", query, p.Items)
+		}
+		if p.Selected != 0 {
+			t.Fatal("selection not reset")
+		}
+	}
+	p.filterCommands("Refresh")
+	if len(p.Items) != 1 || p.Items[0].Label != "Refresh" {
+		t.Fatalf("core: %+v", p.Items)
+	}
+	_, help := buildPaletteHelpItems(commands)
+	for _, item := range help {
+		if item.ID == "demo.open" && (item.Label != "My Plugin: Open Dashboard" || !strings.Contains(strings.Join(item.searchText, " "), "My Plugin")) {
+			t.Fatalf("help: %+v", item)
+		}
+	}
+}

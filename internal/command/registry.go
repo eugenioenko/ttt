@@ -3,12 +3,20 @@ package command
 import "sort"
 
 type Command struct {
-	ID       string
-	Title    string
-	Shortcut string
-	Keywords []string
-	Handler  func()
-	Hidden   bool
+	ID           string
+	Title        string
+	DisplayTitle string
+	Shortcut     string
+	Keywords     []string
+	Handler      func()
+	Hidden       bool
+}
+
+func (c Command) PaletteTitle() string {
+	if c.DisplayTitle != "" {
+		return c.DisplayTitle
+	}
+	return c.Title
 }
 
 type Registry struct {

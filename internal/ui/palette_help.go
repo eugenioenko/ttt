@@ -96,10 +96,10 @@ func buildPaletteHelpItems(commands []command.Command) ([]PaletteItem, []Palette
 	items := make([]PaletteItem, 0, len(commands))
 	for _, cmd := range commands {
 		description := paletteCommandDescription(cmd.ID)
-		searchText := []string{cmd.Title, cmd.ID, cmd.Shortcut, description}
+		searchText := []string{cmd.PaletteTitle(), cmd.Title, cmd.ID, cmd.Shortcut, description}
 		searchText = append(searchText, cmd.Keywords...)
 		items = append(items, PaletteItem{
-			Label:       cmd.Title,
+			Label:       cmd.PaletteTitle(),
 			Detail:      cmd.Shortcut,
 			ID:          cmd.ID,
 			Description: description,
