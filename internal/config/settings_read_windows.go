@@ -5,25 +5,12 @@ package config
 import (
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"golang.org/x/sys/windows"
 )
 
 func readSettingsFileBytes(path string) ([]byte, error) {
-	path, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-	if !strings.HasPrefix(path, `\\?\`) {
-		if strings.HasPrefix(path, `\\`) {
-			path = `\\?\UNC\` + strings.TrimPrefix(path, `\\`)
-		} else {
-			path = `\\?\` + path
-		}
-	}
-	name, err := windows.UTF16PtrFromString(path)
+	name, err := settingsLongPathName(path)
 	if err != nil {
 		return nil, err
 	}
