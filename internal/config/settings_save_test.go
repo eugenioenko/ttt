@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -214,11 +215,16 @@ func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
 	path := filepath.Join(dir, "settings.json")
 	stop := make(chan struct{})
 	errors := make(chan error, 1)
+	var started sync.WaitGroup
+	var saving atomic.Bool
+	var readsDuringSaves atomic.Int64
 	var readers sync.WaitGroup
 	for range 4 {
 		readers.Add(1)
+		started.Add(1)
 		go func() {
 			defer readers.Done()
+			started.Done()
 			for {
 				select {
 				case <-stop:
@@ -226,6 +232,9 @@ func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
 				default:
 				}
 				data, err := os.ReadFile(path)
+				if saving.Load() {
+					readsDuringSaves.Add(1)
+				}
 				if err == nil {
 					var value map[string]any
 					err = json.Unmarshal(data, &value)
@@ -240,6 +249,8 @@ func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
 			}
 		}()
 	}
+	started.Wait()
+	saving.Store(true)
 	for i := range 40 {
 		s := DefaultSettings()
 		s.Editor.TabSize = i + 1
@@ -249,8 +260,12 @@ func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
 			t.Fatalf("save %d: %v", i, err)
 		}
 	}
+	saving.Store(false)
 	close(stop)
 	readers.Wait()
+	if readsDuringSaves.Load() == 0 {
+		t.Fatal("no reader completed a read during the save loop")
+	}
 	select {
 	case err := <-errors:
 		t.Fatalf("reader observed an invalid settings file: %v", err)
@@ -268,7 +283,9 @@ func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	if err := SaveSettings(DefaultSettings()); err != nil {
+	want := DefaultSettings()
+	want.Editor.TabSize = 7
+	if err := SaveSettings(want); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Lstat(link)
@@ -282,24 +299,65 @@ func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {
 	if got := targetInfo.Mode().Perm(); got != 0o600 {
 		t.Errorf("target permissions = %o, want 600", got)
 	}
-	if _, err := os.ReadFile(link); err != nil {
-		t.Errorf("settings symlink target is unreadable: %v", err)
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Editor.TabSize != want.Editor.TabSize {
+		t.Errorf("target tabSize = %d, want %d", got.Editor.TabSize, want.Editor.TabSize)
+	}
+}
+
+func TestSaveSettingsThroughDanglingSymlink(t *testing.T) {
+	dir := withTempConfigDir(t)
+	target := filepath.Join(dir, "settings-target.json")
+	link := filepath.Join(dir, "settings.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	want := DefaultSettings()
+	want.Editor.TabSize = 9
+	if err := SaveSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings symlink was replaced: info=%v err=%v", info, err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Editor.TabSize != want.Editor.TabSize {
+		t.Errorf("target tabSize = %d, want %d", got.Editor.TabSize, want.Editor.TabSize)
 	}
 }
 
 func TestSaveSettingsFailureLeavesExistingFileUntouched(t *testing.T) {
 	dir := withTempConfigDir(t)
 	path := filepath.Join(dir, "settings.json")
-	want := []byte(`{}`)
-	if err := os.WriteFile(path, want, 0o640); err != nil {
+	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFileAtomically(filepath.Join(dir, "missing", "settings.json"), []byte(`{"ok":true}`), 0o644); err == nil {
-		t.Fatal("write to missing parent unexpectedly succeeded")
+	want := []byte("preserve me")
+	sentinel := filepath.Join(path, "sentinel")
+	if err := os.WriteFile(sentinel, want, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	got, err := os.ReadFile(path)
+	if err := writeFileAtomically(path, []byte(`{"ok":true}`), 0o644); err == nil {
+		t.Fatal("rename over existing directory unexpectedly succeeded")
+	}
+	got, err := os.ReadFile(sentinel)
 	if err != nil || string(got) != string(want) {
-		t.Fatalf("existing settings changed after failed write: %q, err=%v", got, err)
+		t.Fatalf("existing destination changed after failed write: %q, err=%v", got, err)
 	}
 }
 
