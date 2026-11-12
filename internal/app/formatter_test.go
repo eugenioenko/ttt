@@ -345,3 +345,28 @@ func TestFormatterFilePlaceholderPreservesSpaces(t *testing.T) {
 		t.Fatalf("formatter output = %q, want %q", got, want)
 	}
 }
+
+func TestFormatterFilePlaceholderWithEmptyPathKeepsStdin(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("test formatter requires sh")
+	}
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+	path := filepath.Join(t.TempDir(), "input.txt")
+	if err := os.WriteFile(path, []byte("stdin content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	argsFile := filepath.Join(t.TempDir(), "args.sh")
+	if err := os.WriteFile(argsFile, []byte("printf '%s:%s' \"$#\" \"$1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.applyExternalFormatter("sh "+argsFile+" {file}", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(a.EditorGroup.ActiveBuffer().Lines, "\n"), "0:"; got != want {
+		t.Fatalf("formatter output = %q, want %q (no empty path argument)", got, want)
+	}
+}
