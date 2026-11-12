@@ -442,13 +442,12 @@ func TestReferenceSettingsMatchesDefaults(t *testing.T) {
 	}
 
 	s := DefaultSettings()
-	s.Theme = "default-dark"
 	generated, _ := json.MarshalIndent(s, "", "  ")
 	generated = append(generated, '\n')
 
 	if string(generated) != string(refData) {
 		t.Errorf("config/settings.json is out of date with DefaultSettings().\n"+
-			"Regenerate it by running DefaultSettings() with theme='default-dark' and saving the output.\n"+
+			"Regenerate it by running DefaultSettings() and saving the output.\n"+
 			"Got %d bytes, want %d bytes", len(refData), len(generated))
 	}
 }
