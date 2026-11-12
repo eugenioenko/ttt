@@ -70,8 +70,8 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
-	Branch: {Plain: "⎇", Nerd: "\uf418"},
-	Commit: {Plain: "●", Nerd: ""},
+	Branch: {Plain: "⎇", Nerd: "\ue702"},
+	Commit: {Plain: "●", Nerd: "\ueafc"},
 	Lock:   {Plain: "⚿", Nerd: ""},
 	Pinned: {Plain: "♦", Nerd: ""},
 
