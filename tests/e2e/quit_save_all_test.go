@@ -318,9 +318,68 @@ func TestQuitWithOpenOverlay(t *testing.T) {
 			if *h.app.Running != tc.dirty {
 				t.Fatalf("running = %v, want %v", *h.app.Running, tc.dirty)
 			}
-			if tc.dirty && (len(h.app.Root.Overlays) != 1 || h.app.Root.Overlays[0].Widget != overlay) {
-				t.Fatal("dirty sessions must keep the current overlay without stacking quit confirmation")
+			if tc.dirty {
+				h.assertContains("Unsaved changes")
+				if len(h.app.Root.Overlays) != 2 || h.app.Root.Overlays[0].Widget != overlay {
+					t.Fatal("quit confirmation must appear above the existing overlay")
+				}
+				h.pressKey(tcell.KeyEscape, tcell.ModNone)
+				if h.app.Root.TopOverlayWidget() != overlay || h.app.Root.Focused != overlay {
+					t.Fatal("canceling quit must restore the existing overlay and focus")
+				}
 			}
 		})
+	}
+}
+
+func TestQuitWithSearchOverlayOpen(t *testing.T) {
+	for _, key := range []tcell.Key{tcell.KeyCtrlF, tcell.KeyCtrlR, tcell.KeyCtrlP} {
+		for _, action := range []string{"force", "save"} {
+			t.Run(tcell.KeyNames[key]+"/"+action, func(t *testing.T) {
+				h := newTestHarness(t, 120, 30)
+				defer h.stop()
+				h.app.Settings.Editor.SaveAllOnQuit = true
+				h.exec("file.new")
+				if key == tcell.KeyCtrlP {
+					h.typeText("unsaved scratch")
+				}
+				h.pressCtrl(key)
+				bar := h.app.Root.TopOverlayWidget()
+				input := bar.(ui.InputHolder).FocusedInput()
+				h.typeText("needle")
+				query := input.Text()
+				if key != tcell.KeyCtrlP {
+					r := h.app.EditorGroup.Editor.GetRect()
+					h.click(r.X+6, r.Y+2)
+					h.typeText("unsaved scratch")
+				}
+				h.pressCtrl(tcell.KeyCtrlQ)
+				h.assertContains("Unsaved changes")
+				if !*h.app.Running || !h.app.Root.HasModalOverlay() {
+					t.Fatal("Ctrl+Q must ask before discarding the dirty buffer")
+				}
+				h.pressKey(tcell.KeyEscape, tcell.ModNone)
+				if !*h.app.Running || h.app.Root.TopOverlayWidget() != bar || input.Text() != query || editorText(h) != "unsaved scratch" {
+					t.Fatal("canceling quit must preserve the buffer and search overlay")
+				}
+				h.pressCtrl(tcell.KeyCtrlQ)
+				h.assertContains("Unsaved changes")
+				if action == "force" {
+					h.pressCtrl(tcell.KeyCtrlQ)
+				} else {
+					h.pressRune('s')
+					h.assertContains("Save As")
+					path := filepath.Join(h.dir, "saved-scratch.txt")
+					h.typeText(path)
+					h.pressKey(tcell.KeyEnter, tcell.ModNone)
+					if got := readFile(t, path); strings.TrimSpace(got) != "unsaved scratch" {
+						t.Fatalf("saved text = %q", got)
+					}
+				}
+				if *h.app.Running {
+					t.Fatal("confirmed quit did not exit")
+				}
+			})
+		}
 	}
 }
