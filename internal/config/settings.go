@@ -755,6 +755,10 @@ func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, r
 	tmpPath := tmp.Name()
 	defer func() {
 		if tmpPath != "" {
+			var retained *retainedSettingsTempError
+			if errors.As(err, &retained) {
+				return
+			}
 			_ = os.Remove(tmpPath)
 		}
 	}()
@@ -788,6 +792,17 @@ func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, r
 		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
 	}
 }
+
+type retainedSettingsTempError struct {
+	path string
+	err  error
+}
+
+func (e *retainedSettingsTempError) Error() string {
+	return fmt.Sprintf("settings replacement failed; staged data retained at %s: %v", e.path, e.err)
+}
+
+func (e *retainedSettingsTempError) Unwrap() error { return e.err }
 
 func resolveSettingsWritePath(path string) (string, error) {
 	for range 255 {

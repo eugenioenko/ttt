@@ -3,19 +3,45 @@
 package config
 
 import (
-	"errors"
+	"io"
 	"os"
-	"time"
+	"path/filepath"
+	"strings"
 
 	"golang.org/x/sys/windows"
 )
 
 func readSettingsFileBytes(path string) ([]byte, error) {
-	for attempt := 0; ; attempt++ {
-		data, err := os.ReadFile(path)
-		if err == nil || !errors.Is(err, windows.ERROR_SHARING_VIOLATION) || attempt == 4 {
-			return data, err
-		}
-		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
 	}
+	if !strings.HasPrefix(path, `\\?\`) {
+		if strings.HasPrefix(path, `\\`) {
+			path = `\\?\UNC\` + strings.TrimPrefix(path, `\\`)
+		} else {
+			path = `\\?\` + path
+		}
+	}
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, err
+	}
+	handle, err := windows.CreateFile(name, windows.GENERIC_READ,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+	}
+	file := os.NewFile(uintptr(handle), path)
+	if file == nil {
+		_ = windows.CloseHandle(handle)
+		return nil, &os.PathError{Op: "open", Path: path, Err: windows.ERROR_INVALID_HANDLE}
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, &os.PathError{Op: "read", Path: path, Err: err}
+	}
+	return data, nil
 }

@@ -238,7 +238,11 @@ func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
 			return renameSettingsFile(from, to)
 		})
 	}()
-	<-staged
+	select {
+	case <-staged:
+	case err := <-saveDone:
+		t.Fatalf("settings save failed before staging: %v", err)
+	}
 	assertTabSize := func(want int) {
 		t.Helper()
 		data, err := os.ReadFile(path)

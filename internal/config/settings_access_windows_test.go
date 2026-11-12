@@ -93,7 +93,13 @@ func TestWindowsSettingsReplacementConcurrentReaders(t *testing.T) {
 			}
 		}()
 	}
-	<-started
+	select {
+	case <-started:
+	case err := <-errors:
+		close(stop)
+		readers.Wait()
+		t.Fatalf("reader failed before startup completed: %v", err)
+	}
 	saving.Store(true)
 	for i := range 80 {
 		settings := DefaultSettings()
