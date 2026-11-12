@@ -95,10 +95,10 @@ func TestCommitHistoryIconsFollowIconMode(t *testing.T) {
 
 	cp.SetIcons(config.IconsNerdFont)
 	items := cp.CommitLog.Config.Items
-	if items[0].Icon != "" || items[1].Icon != "" {
+	if items[0].Icon != "\ue702" || items[1].Icon != "\ueafc" {
 		t.Errorf("nerd font icons = %q, %q", items[0].Icon, items[1].Icon)
 	}
-	if got := cp.commitLogNode("/repo", scm.HistoryEntry{Ref: "def", Label: "def"}).Icon; got != "" {
+	if got := cp.commitLogNode("/repo", scm.HistoryEntry{Ref: "def", Label: "def"}).Icon; got != "\ueafc" {
 		t.Errorf("new commit row icon = %q, want nerd font glyph", got)
 	}
 
