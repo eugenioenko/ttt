@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 )
 
@@ -202,6 +203,103 @@ func TestSaveSettingsWritesValidJSON(t *testing.T) {
 	var probe map[string]any
 	if err := json.Unmarshal(data, &probe); err != nil {
 		t.Errorf("settings.json is not valid JSON: %v", err)
+	}
+}
+
+func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
+	dir := withTempConfigDir(t)
+	if err := SaveSettings(DefaultSettings()); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "settings.json")
+	stop := make(chan struct{})
+	errors := make(chan error, 1)
+	var readers sync.WaitGroup
+	for range 4 {
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				data, err := os.ReadFile(path)
+				if err == nil {
+					var value map[string]any
+					err = json.Unmarshal(data, &value)
+				}
+				if err != nil {
+					select {
+					case errors <- err:
+					default:
+					}
+					return
+				}
+			}
+		}()
+	}
+	for i := range 40 {
+		s := DefaultSettings()
+		s.Editor.TabSize = i + 1
+		if err := SaveSettings(s); err != nil {
+			close(stop)
+			readers.Wait()
+			t.Fatalf("save %d: %v", i, err)
+		}
+	}
+	close(stop)
+	readers.Wait()
+	select {
+	case err := <-errors:
+		t.Fatalf("reader observed an invalid settings file: %v", err)
+	default:
+	}
+}
+
+func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {
+	dir := withTempConfigDir(t)
+	target := filepath.Join(dir, "settings-target.json")
+	link := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := SaveSettings(DefaultSettings()); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings symlink was replaced: info=%v err=%v", info, err)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := targetInfo.Mode().Perm(); got != 0o600 {
+		t.Errorf("target permissions = %o, want 600", got)
+	}
+	if _, err := os.ReadFile(link); err != nil {
+		t.Errorf("settings symlink target is unreadable: %v", err)
+	}
+}
+
+func TestSaveSettingsFailureLeavesExistingFileUntouched(t *testing.T) {
+	dir := withTempConfigDir(t)
+	path := filepath.Join(dir, "settings.json")
+	want := []byte(`{}`)
+	if err := os.WriteFile(path, want, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomically(filepath.Join(dir, "missing", "settings.json"), []byte(`{"ok":true}`), 0o644); err == nil {
+		t.Fatal("write to missing parent unexpectedly succeeded")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("existing settings changed after failed write: %q, err=%v", got, err)
 	}
 }
 
