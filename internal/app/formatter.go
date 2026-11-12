@@ -65,10 +65,12 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 
 	original := strings.Join(editor.Buf.Lines, "\n")
 
-	expanded := strings.ReplaceAll(cmdStr, "{file}", filePath)
-	parts := strings.Fields(expanded)
+	parts := strings.Fields(cmdStr)
 	if len(parts) == 0 {
 		return fmt.Errorf("empty formatter command")
+	}
+	for i := range parts {
+		parts[i] = strings.ReplaceAll(parts[i], "{file}", filePath)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), formatterTimeout)
