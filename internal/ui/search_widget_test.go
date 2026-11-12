@@ -9,8 +9,56 @@ import (
 	"github.com/eugenioenko/ttt/internal/fileicons"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
+
+func TestSearchInputChevronFollowsFocus(t *testing.T) {
+	s := NewSearchWidget()
+	s.SetReplaceMode(true)
+	s.showFilters = true
+	s.SetRect(Rect{W: 40, H: 12})
+	inputs := []*widgets.InputWidget{s.Input, s.ReplaceInput, s.Include, s.Exclude}
+	check := func(active *widgets.InputWidget) {
+		t.Helper()
+		grid := makeGrid(40, 12)
+		s.Render(NewRenderSurface(grid, s.GetRect()))
+		for _, input := range inputs {
+			want := term.StyleBorder
+			if input == active {
+				want = term.StyleBorderActive
+			}
+			r := input.GetRect()
+			if got := grid[r.Y][r.X+1]; got.Ch != '❯' || got.Style != want {
+				t.Fatalf("input %q chevron = %+v, want style %v", input.Config.Placeholder, got, want)
+			}
+			if input.IsFocused() != (input == active) {
+				t.Fatalf("input %q focus = %t", input.Config.Placeholder, input.IsFocused())
+			}
+		}
+	}
+	check(nil)
+	s.SetFocused(true)
+	check(s.Input)
+	for _, input := range inputs[1:] {
+		s.HandleEvent(tcell.NewEventKey(tcell.KeyTab, "", tcell.ModNone))
+		check(input)
+	}
+	s.HandleEvent(tcell.NewEventKey(tcell.KeyBacktab, "", tcell.ModNone))
+	check(s.Include)
+	s.SetFocused(false)
+	check(nil)
+	s.SetFocused(true)
+	check(s.Include)
+	r := s.ReplaceInput.GetRect()
+	s.HandleEvent(tcell.NewEventMouse(r.X+4, r.Y, tcell.Button1, tcell.ModNone))
+	s.HandleEvent(tcell.NewEventMouse(r.X+4, r.Y, tcell.ButtonNone, tcell.ModNone))
+	check(s.ReplaceInput)
+	s.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "x", tcell.ModNone))
+	if s.ReplaceInput.Text() != "x" {
+		t.Fatal("typing did not reach the focused replacement input")
+	}
+}
 
 func TestSearchReplaceAllUsesConfiguredIcon(t *testing.T) {
 	t.Cleanup(func() { icons.Configure("", nil) })
