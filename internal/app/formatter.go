@@ -65,15 +65,21 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 
 	original := strings.Join(editor.Buf.Lines, "\n")
 
-	expanded := strings.ReplaceAll(cmdStr, "{file}", filePath)
-	parts := strings.Fields(expanded)
-	if len(parts) == 0 {
+	parts := strings.Fields(cmdStr)
+	args := parts[:0]
+	for _, part := range parts {
+		part = strings.ReplaceAll(part, "{file}", filePath)
+		if part != "" {
+			args = append(args, part)
+		}
+	}
+	if len(args) == 0 {
 		return fmt.Errorf("empty formatter command")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), formatterTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	configureFormatterProcess(cmd)
 	// Detached descendants must not keep the output pipes open indefinitely.
 	cmd.WaitDelay = 100 * time.Millisecond
