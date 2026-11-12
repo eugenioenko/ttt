@@ -9,7 +9,7 @@ import (
 )
 
 func TestGetResolvesByMode(t *testing.T) {
-	if got := Get(config.IconsNerdFont, Branch); got != "" {
+	if got := Get(config.IconsNerdFont, Branch); got != "\ue702" {
 		t.Errorf("nerd branch = %q", got)
 	}
 	for _, mode := range []string{config.IconsNone, ""} {
