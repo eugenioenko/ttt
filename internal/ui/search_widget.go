@@ -54,6 +54,7 @@ type SearchWidget struct {
 	Exclude      *widgets.InputWidget
 	ReplaceInput *widgets.InputWidget
 	Options      SearchOptions
+	focused      bool
 	focusIdx     int
 	showFilters  bool
 	showReplace  bool
@@ -111,14 +112,10 @@ type searchItem struct {
 
 func NewSearchWidget() *SearchWidget {
 	s := &SearchWidget{}
-	s.Input = newPanelInput()
-	s.Input.Config.Placeholder = i18n.Text("search.search")
-	s.Include = newPanelInput()
-	s.Include.Config.Placeholder = i18n.Text("search.filesToInclude")
-	s.Exclude = newPanelInput()
-	s.Exclude.Config.Placeholder = i18n.Text("search.filesToExclude")
-	s.ReplaceInput = newPanelInput()
-	s.ReplaceInput.Config.Placeholder = i18n.Text("general.replace")
+	s.Input = widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("search.search")})
+	s.Include = widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("search.filesToInclude")})
+	s.Exclude = widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("search.filesToExclude")})
+	s.ReplaceInput = widgets.NewInputWidget(widgets.InputConfig{Placeholder: i18n.Text("general.replace")})
 	s.Input.Config.OnChange = func(text string) {
 		if text == "" {
 			s.runSearchSync()
@@ -169,6 +166,7 @@ func (s *SearchWidget) SetReplaceMode(on bool) {
 		s.CancelReplacement()
 	}
 	s.showReplace = on
+	s.syncInputFocus()
 }
 
 func (s *SearchWidget) IsReplaceMode() bool {
@@ -210,6 +208,21 @@ func (s *SearchWidget) SetWorkDirs(dirs []string) {
 }
 
 func (s *SearchWidget) Focusable() bool { return true }
+
+func (s *SearchWidget) SetFocused(focused bool) {
+	s.focused = focused
+	s.syncInputFocus()
+}
+
+func (s *SearchWidget) syncInputFocus() {
+	active := s.FocusedInput()
+	for _, input := range []*widgets.InputWidget{s.Input, s.ReplaceInput, s.Include, s.Exclude} {
+		focused := s.focused && input == active
+		if input.IsFocused() != focused {
+			input.SetFocused(focused)
+		}
+	}
+}
 
 func (s *SearchWidget) CursorPosition() (int, int, bool) {
 	return s.FocusedInput().CursorPosition()
@@ -759,6 +772,7 @@ func (s *SearchWidget) toggleRow() int {
 }
 
 func (s *SearchWidget) HandleEvent(ev tcell.Event) EventResult {
+	defer s.syncInputFocus()
 	if result := handleInputDrag(ev, s.Input, s.ReplaceInput, s.Include, s.Exclude); result != EventIgnored {
 		return result
 	}

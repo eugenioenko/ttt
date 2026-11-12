@@ -27,6 +27,9 @@ func TestSearchInputFocusWithFindOverlay(t *testing.T) {
 			r := h.app.Search.Input.GetRect()
 			h.click(r.X+2, r.Y)
 			h.typeText("global")
+			if !h.app.Search.Input.IsFocused() {
+				t.Fatal("global search input did not receive widget focus")
+			}
 			pasteText(h, pasteKeys(" pasted"))
 			if got := h.app.Search.Input.Text(); got != "global pasted" {
 				t.Fatalf("global search input = %q, want global pasted (focus %T)", got, h.app.Root.Focused)
@@ -40,6 +43,9 @@ func TestSearchInputFocusWithFindOverlay(t *testing.T) {
 
 			er := h.app.EditorGroup.Editor.GetRect()
 			h.click(er.X+6, er.Y+2)
+			if h.app.Search.Input.IsFocused() {
+				t.Fatal("global search input stayed focused after clicking the editor")
+			}
 			h.pressRune('x')
 			if got := editorText(h); got != "x" {
 				t.Fatalf("editor input after clicking back = %q, want x", got)
