@@ -1,6 +1,7 @@
 package clipboard
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -8,7 +9,10 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
+
+const clipboardTimeout = time.Second
 
 var (
 	content   string
@@ -51,7 +55,10 @@ func writeSystemClipboard(s string) {
 	}
 
 	if name, args := findCopyCmd(); name != "" {
-		c := exec.Command(name, args...)
+		ctx, cancel := context.WithTimeout(context.Background(), clipboardTimeout)
+		defer cancel()
+		c := exec.CommandContext(ctx, name, args...)
+		c.WaitDelay = 100 * time.Millisecond
 		c.Stdin = strings.NewReader(s)
 		c.Run()
 	}
@@ -62,7 +69,11 @@ func readSystemClipboard() string {
 	if name == "" {
 		return ""
 	}
-	out, err := exec.Command(name, args...).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), clipboardTimeout)
+	defer cancel()
+	c := exec.CommandContext(ctx, name, args...)
+	c.WaitDelay = 100 * time.Millisecond
+	out, err := c.Output()
 	if err != nil {
 		return ""
 	}
