@@ -5,6 +5,7 @@ import (
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
+	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 )
 
@@ -218,22 +219,94 @@ func (e *EditorPaneWidget) DeleteWordRight() {
 // transformSelection replaces the selected text with the result of applying fn.
 // It preserves the selection after transformation.
 func (e *EditorPaneWidget) transformSelection(fn func(string) string) {
+	if e.isMultiActive() {
+		e.multiTransformSelections(fn)
+		return
+	}
 	if e.Selection == nil || !e.Selection.Active {
 		return
 	}
-	text := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
-	if text == "" {
-		return
-	}
-	transformed := fn(text)
-	if transformed == text {
-		return
-	}
-
 	start, end := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
+	cmd, start, newEnd := e.transformRange(start, end, fn)
+	if cmd == nil {
+		return
+	}
 
 	if e.Undo != nil {
 		e.Undo.BreakGroup()
+	}
+	e.exec(cmd)
+
+	e.Selection.Start(start.Line, start.Col)
+	e.Cursor.Line = newEnd.Line
+	e.Cursor.Col = newEnd.Col
+	e.clampCursor()
+	e.scrollViewport()
+}
+
+func (e *EditorPaneWidget) multiTransformSelections(fn func(string) string) {
+	e.normalizeClipboardCursors()
+	prevLines := len(e.Buf.Lines)
+	var cmds []undo.EditCommand
+	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
+		cs := &e.Multi.Cursors[i]
+		if !cs.Sel.Active {
+			continue
+		}
+		start, end := cs.Sel.Range(cs.Line, cs.Col)
+		cmd, start, newEnd := e.transformRange(start, end, fn)
+		if cmd == nil {
+			continue
+		}
+		e.applyAutoClosingEdit(cmd)
+		cmds = append(cmds, cmd)
+		cs.Sel.Start(start.Line, start.Col)
+		cs.Line, cs.Col = newEnd.Line, newEnd.Col
+
+		// Later selections start at or after end, so only positions on
+		// end.Line shift by columns.
+		shift := func(line, col *int) {
+			if *line == end.Line {
+				*col += newEnd.Col - end.Col
+			}
+			if *line >= end.Line {
+				*line += newEnd.Line - end.Line
+			}
+		}
+		for j := i + 1; j < len(e.Multi.Cursors); j++ {
+			later := &e.Multi.Cursors[j]
+			shift(&later.Line, &later.Col)
+			shift(&later.Sel.Anchor.Line, &later.Sel.Anchor.Col)
+		}
+	}
+	if len(cmds) > 0 {
+		if e.Undo != nil {
+			e.Undo.BreakGroup()
+			e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+		}
+		e.bufferDirty = true
+		if len(e.Buf.Lines) != prevLines {
+			e.refreshFolds()
+		}
+	}
+	e.syncFromMulti()
+	e.scrollViewport()
+}
+
+// transformRange returns a nil command when fn leaves the text unchanged.
+// The returned start is clamped to the line; newEnd is where the replaced text ends.
+func (e *EditorPaneWidget) transformRange(start, end selection.Position, fn func(string) string) (*undo.ReplaceLinesCommand, selection.Position, selection.Position) {
+	if start.Line < 0 || end.Line >= len(e.Buf.Lines) {
+		return nil, start, end
+	}
+	sel := selection.Selection{Active: true, Anchor: start}
+	text := sel.Text(e.Buf.Lines, end.Line, end.Col)
+	if text == "" {
+		return nil, start, end
+	}
+	transformed := fn(text)
+	if transformed == text {
+		return nil, start, end
 	}
 
 	oldLines := make([]string, end.Line-start.Line+1)
@@ -263,26 +336,18 @@ func (e *EditorPaneWidget) transformSelection(fn func(string) string) {
 		}
 	}
 
+	newEnd := selection.Position{Line: start.Line + len(tLines) - 1}
+	if len(tLines) == 1 {
+		newEnd.Col = startCol + len([]rune(tLines[0]))
+	} else {
+		newEnd.Col = len([]rune(tLines[len(tLines)-1]))
+	}
 	cmd := &undo.ReplaceLinesCommand{
 		Start:    start.Line,
 		OldLines: oldLines,
 		NewLines: newLines,
 	}
-	e.exec(cmd)
-
-	newEndLine := start.Line + len(tLines) - 1
-	var newEndCol int
-	if len(tLines) == 1 {
-		newEndCol = startCol + len([]rune(tLines[0]))
-	} else {
-		newEndCol = len([]rune(tLines[len(tLines)-1]))
-	}
-
-	e.Selection.Start(start.Line, startCol)
-	e.Cursor.Line = newEndLine
-	e.Cursor.Col = newEndCol
-	e.clampCursor()
-	e.scrollViewport()
+	return cmd, selection.Position{Line: start.Line, Col: startCol}, newEnd
 }
 
 func (e *EditorPaneWidget) UpperCase() {

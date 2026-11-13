@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe("BUG-006: case transforms under multicursor only affect primary cursor", () => {
-  it.fails("Transform to Uppercase applies to all selected occurrences", () => {
+  it("Transform to Uppercase applies to all selected occurrences", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "upper.txt", FOO_LINES);
 
