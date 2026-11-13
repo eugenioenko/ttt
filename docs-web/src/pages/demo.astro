@@ -1,0 +1,39 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+---
+
+<StarlightPage frontmatter={{ title: 'Demo', description: 'Try TTT Editor in your browser.', template: 'splash', tableOfContents: false, pagefind: false, pagination: false }}>
+  <section id="demo-page" aria-label="TTT playground">
+    <div class="demo-shell">
+      <iframe id="demo-frame" src="/playground/index.html" title="Interactive TTT editor" allow="clipboard-read; clipboard-write"></iframe>
+    </div>
+    <footer class="demo-footer">
+      <p><strong>Limited demo.</strong> Explore and edit ttt’s source. Edits reset on reload. Git, LSP, plugins, and the shell require the desktop editor. <span class="focus-hint">F6 returns focus to navigation.</span></p>
+    </footer>
+  </section>
+</StarlightPage>
+
+<script>
+  window.addEventListener('message', (event) => {
+    const frame = document.getElementById('demo-frame') as HTMLIFrameElement;
+    if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+    if (event.data?.type === 'ttt-focus-docs') {
+      (document.querySelector('.demo-link') as HTMLAnchorElement)?.focus();
+    } else if (event.data?.type === 'ttt-demo-width' && Number.isFinite(event.data.width) && event.data.width > 0) {
+      const shell = document.querySelector('.demo-shell') as HTMLElement;
+      const insetWidth = shell.offsetWidth - frame.clientWidth;
+      document.getElementById('demo-page')?.style.setProperty('--demo-width', `${event.data.width + insetWidth}px`);
+    }
+  });
+</script>
+
+<style>
+  :global(body:has(#demo-page)) { overflow: hidden; }
+  #demo-page { position: fixed; inset: var(--sl-nav-height) 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 1.5rem; background: var(--sl-color-bg); }
+  .demo-shell { display: flex; flex-direction: column; width: min(100%, var(--demo-width, 1100px)); min-height: 0; max-height: 100%; padding: 0.75rem; border: 1px solid var(--sl-color-gray-5); border-radius: 0.6rem; overflow: hidden; background-color: #1f1f1f; }
+  .demo-footer { flex-shrink: 0; width: min(100%, var(--demo-width, 1100px)); margin: 0; }
+  .demo-footer p { margin: 0; font-size: 0.75rem; line-height: 1.5; color: var(--sl-color-gray-2); }
+  .focus-hint { white-space: nowrap; }
+  iframe { display: block; flex: 0 1 750px; height: 750px; min-height: 0; width: 100%; border: 0; margin: 0; }
+  @media (max-width: 40rem) { #demo-page { padding: 0.5rem; } }
+</style>

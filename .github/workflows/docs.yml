@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'docs-web/**'
   workflow_dispatch:
 
 permissions:
@@ -23,6 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
       - uses: pnpm/action-setup@v4
         with:
           version: 11
@@ -39,7 +41,9 @@ jobs:
 
       - name: Build docs
         working-directory: docs-web
-        run: pnpm build
+        run: |
+          pnpm test:playground
+          pnpm build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
