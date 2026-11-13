@@ -37,6 +37,8 @@ When `--config` selects a custom file, **Settings: Open settings.json**, **Reloa
 
 ## Keyboard
 
+For terminal setup, see [Command Key on macOS](/guides/macos-command-key/).
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `keyboard.modifierKey` | string | `"control"` | Modifier for registered `ctrl+…` shortcuts, including user and plugin bindings: `"control"` uses Ctrl, `"control+super"` accepts either Ctrl or Super/Cmd, and `"super"` uses Super/Cmd instead of Ctrl. Applies live; binding definitions stay unchanged. |
