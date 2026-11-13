@@ -287,6 +287,7 @@ func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settin
 	group.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	group.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	group.WordWrap = s.Editor.WordWrap
+	group.PreviewTabs = s.Editor.PreviewTabsEnabled()
 	group.WordWrapColumn = s.Editor.WordWrapColumn
 	group.WordWrapBreak = s.Editor.WordWrapBreak
 	group.LanguageOverrides = s.Editor.LanguageOverrides

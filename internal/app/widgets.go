@@ -481,6 +481,7 @@ func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles [
 	editorGroup.InsertSpaces = s.Editor.InsertSpaces
 	editorGroup.SetIndentGuides(s.Editor.IndentGuides)
 	editorGroup.InsertFinalNewline = s.Editor.InsertFinalNewline
+	editorGroup.PreviewTabs = s.Editor.PreviewTabsEnabled()
 	editorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
 	editorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
 	editorGroup.SyntaxHighlight = s.Editor.IsSyntaxHighlightEnabled()

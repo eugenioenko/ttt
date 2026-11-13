@@ -19,7 +19,7 @@ func (a *App) editorGroups() []*ui.EditorGroupWidget {
 func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
 	g.OnActivate = func() {
 		a.activateEditorGroup(g)
-		if !a.Root.HasOverlay() {
+		if !a.Root.HasModalOverlay() {
 			a.Root.SetFocus(g)
 		}
 	}
@@ -117,7 +117,7 @@ func (a *App) removeEditorGroup(closing *ui.EditorGroupWidget, merge bool) {
 }
 
 func (a *App) focusEditorAfterClick() {
-	if !a.Root.HasOverlay() && !a.Root.FocusClaimed() {
+	if !a.Root.HasModalOverlay() && !a.Root.FocusClaimed() {
 		a.FocusEditor()
 	}
 }
