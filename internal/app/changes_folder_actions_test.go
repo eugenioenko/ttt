@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 )
 
 func writeFolderRepoFile(t *testing.T, dir, rel, body string) {
@@ -133,26 +134,42 @@ func TestStagedFolderRowUnstagesEveryFileBelowIt(t *testing.T) {
 	}
 }
 
-func TestFolderDiscardConfirmsAndTouchesOnlyThatFolder(t *testing.T) {
+func TestDiscardKeyConfirmsAndTouchesOnlySelectedFolder(t *testing.T) {
 	dir := folderActionRepo(t)
 	cp := NewChangesPanel(dir)
 	cp.SetFileView(config.GitFileViewTree)
 	cp.Refresh()
 
 	var messages []string
+	var confirm func()
 	cp.OnConfirmDiscard = func(message string, onConfirm func()) {
 		messages = append(messages, message)
-		onConfirm()
+		confirm = onConfirm
 	}
 	folder := nodeWithLabel(cp.Tree.Config.Items, "src")
 	if folder == nil || !revealTreeSelection(cp.Tree, folder.ID) {
 		t.Fatalf("src folder is not selectable: %+v", folder)
 	}
-	cp.confirmDiscardFolder(folder)
+	cp.Tree.SetFocused(true)
+	before := runTreeGit(t, dir, "diff")
+	if cp.Tree.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "d", tcell.ModNone)) == widgets.EventIgnored {
+		t.Fatal("discard key was not handled")
+	}
 
 	if len(messages) != 1 || !strings.Contains(messages[0], "src") || !strings.Contains(messages[0], "irreversible") {
 		t.Fatalf("confirm messages = %q", messages)
 	}
+	if got := runTreeGit(t, dir, "diff"); got != before {
+		t.Fatal("tracked files changed before confirmation")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "src/untracked.go")); err != nil {
+		t.Fatalf("untracked file changed before confirmation: %v", err)
+	}
+	if confirm == nil {
+		t.Fatal("missing discard confirmation callback")
+	}
+	confirm()
+
 	if body, err := os.ReadFile(filepath.Join(dir, "src/a.go")); err != nil || string(body) != "a\n" {
 		t.Fatalf("src/a.go = %q, %v", body, err)
 	}
@@ -164,6 +181,28 @@ func TestFolderDiscardConfirmsAndTouchesOnlyThatFolder(t *testing.T) {
 	}
 	if body, err := os.ReadFile(filepath.Join(dir, "docs/c.md")); err != nil || string(body) != "c changed\n" {
 		t.Fatalf("docs/c.md outside the folder was touched: %q, %v", body, err)
+	}
+}
+
+func TestDiscardKeyIgnoresStagedFolder(t *testing.T) {
+	cp := NewChangesPanel("/repo")
+	cp.SetFileView(config.GitFileViewTree)
+	cp.groups = []changesGroup{{
+		Dir:     "/repo",
+		Name:    "repo",
+		Changes: []scm.Change{{Kind: scm.Modified, Path: "src/a.go", Group: scm.Staged}},
+	}}
+	cp.buildTree()
+	cp.OnConfirmDiscard = func(string, func()) {
+		t.Fatal("staged folder offered discard confirmation")
+	}
+	folder := nodeWithLabel(cp.Tree.Config.Items, "src")
+	if folder == nil || !revealTreeSelection(cp.Tree, folder.ID) {
+		t.Fatalf("staged src folder is not selectable: %+v", folder)
+	}
+	cp.Tree.SetFocused(true)
+	if cp.Tree.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "d", tcell.ModNone)) == widgets.EventIgnored {
+		t.Fatal("discard key was not handled")
 	}
 }
 
