@@ -782,10 +782,10 @@ func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, r
 			tmpPath = ""
 			return nil
 		}
-		if runtime.GOOS != "windows" || !isWindowsRenameRetryable(err) || attempt == 4 {
+		if runtime.GOOS != "windows" || !isWindowsRenameRetryable(err) || attempt == 19 {
 			return err
 		}
-		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
 }
 
