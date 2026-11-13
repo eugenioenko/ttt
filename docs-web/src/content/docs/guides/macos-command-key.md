@@ -27,10 +27,25 @@ For chords, release the modifier before an unmodified second key: **Ctrl+K E** b
 
 ## Ghostty
 
-Ghostty reserves some Command shortcuts for its own actions. Add the following to your [Ghostty configuration](https://ghostty.org/docs/config). On macOS, supported locations include `~/.config/ghostty/config` and `~/Library/Application Support/com.mitchellh.ghostty/config`; newer versions also use the filename `config.ghostty`. Edit the file you already use.
+Ghostty binds **Cmd+A** to its own terminal selection. Start with the setup tested in [PR #1280](https://github.com/eugenioenko/ttt/pull/1280): add this line to your [Ghostty configuration](https://ghostty.org/docs/config).
 
 ```ini
 keybind = super+a=unbind
+```
+
+On macOS, supported configuration locations include `~/.config/ghostty/config` and `~/Library/Application Support/com.mitchellh.ghostty/config`; newer versions also use the filename `config.ghostty`. Edit the file you already use, then reload Ghostty's configuration with **Cmd+Shift+,**. If the binding still behaves as before, restart Ghostty after saving your work.
+
+With Command enabled in TTT, **Cmd+A** should now select the editor's entire document. This `unbind` setup was tested with TTT in Ghostty on macOS in #1280.
+
+[`unbind`](https://ghostty.org/docs/config/keybind) removes Ghostty's action for a key so the key can reach the application. `ignore` discards the input instead. The `unconsumed:` prefix runs a terminal action while also sending the key, so it is not a replacement for removing an unwanted terminal action.
+
+### Additional shortcuts
+
+:::note[Suggested mappings — not tested with TTT in Ghostty]
+The additional mappings below extend the Cmd+A setup. They were not part of the Ghostty testing in #1280. Add only the shortcuts you want to forward, reload Ghostty's configuration, and check each one in TTT.
+:::
+
+```ini
 keybind = super+c=unbind
 keybind = super+v=unbind
 keybind = super+x=unbind
@@ -42,11 +57,7 @@ keybind = super+k=unbind
 keybind = super+l=unbind
 ```
 
-Reload Ghostty's configuration with **Cmd+Shift+,**. If a binding still behaves as before, restart Ghostty after saving your work.
-
-[`unbind`](https://ghostty.org/docs/config/keybind) removes Ghostty's action for a key so the key can reach the application. `ignore` discards the input instead. The `unconsumed:` prefix runs a terminal action while also sending the key, so it is not a replacement for removing an unwanted terminal action.
-
-### Explicit forwarding
+### Explicit forwarding fallback
 
 If removing a binding does not deliver the expected key, Ghostty can send an explicit sequence. For Cmd+A, replace its `unbind` line with:
 
@@ -54,7 +65,7 @@ If removing a binding does not deliver the expected key, Ghostty can send an exp
 keybind = super+a=csi:97;9u
 ```
 
-Use one mapping per shortcut. Both Cmd+A approaches were tested in Ghostty on macOS in [the original selection PR](https://github.com/eugenioenko/ttt/pull/1280); TTT now uses the modifier preference above to enable Cmd throughout the interface.
+Use one mapping per shortcut. This Cmd+A fallback was also tested in [PR #1280](https://github.com/eugenioenko/ttt/pull/1280); start with `unbind` above and use the explicit mapping only if needed.
 
 The [`csi` action](https://ghostty.org/docs/config/keybind/reference#csi) adds the escape-sequence prefix. In `97;9u`, `97` identifies `a` and `9` encodes Super/Command. The [sequence table below](#explicit-key-sequences) covers other common shortcuts.
 
@@ -140,9 +151,9 @@ These mappings configure the terminal that runs TTT. TTT's **Forward shortcuts t
 
 Start TTT directly in the configured terminal first, outside tmux or another multiplexer. With the editor focused:
 
-1. Press **Cmd+P** if you forwarded it. TTT's command palette should open. Press Escape to close it.
-2. Open a scratch file, type a few words, and press **Cmd+A**. The editor text should be selected, without selecting the terminal's surrounding cells.
-3. Press **Cmd+K**, release it, then **E**. The File Explorer should open.
+1. Open a scratch file, type a few words, and press **Cmd+A**. The editor text should be selected, without selecting the terminal's surrounding cells.
+2. If you also forwarded **Cmd+P**, press it. TTT's command palette should open. Press Escape to close it.
+3. If you also forwarded **Cmd+K**, press it, release it, then press **E**. The File Explorer should open.
 
 If a shortcut still triggers a terminal action, check for a conflicting or later terminal binding and reload its configuration. If it reaches TTT but does nothing, check **Shortcut modifier** and your custom TTT bindings. If it works directly but fails inside a multiplexer, that layer also needs to preserve the extended key sequences.
 
