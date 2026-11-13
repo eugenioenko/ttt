@@ -2320,12 +2320,15 @@ func (g *EditorGroupWidget) AnyDirty() bool {
 	return false
 }
 
-func (g *EditorGroupWidget) undoRedoPostProcess() {
+func (g *EditorGroupWidget) undoRedoPostProcess(reveal bool) {
 	if g.Editor.Folds != nil {
 		g.Editor.refreshFolds()
 		g.Editor.ExpandFoldContaining(g.Editor.Cursor.Line)
 	}
 	g.Editor.bufferDirty = true
+	if reveal {
+		g.Editor.scrollViewport()
+	}
 }
 
 func (g *EditorGroupWidget) Undo() {
@@ -2340,14 +2343,15 @@ func (g *EditorGroupWidget) Undo() {
 		g.Editor.collapseMulti()
 	}
 	if t.Undo != nil {
-		if pos := t.Undo.Undo(t.Buf); pos != nil {
+		pos := t.Undo.Undo(t.Buf)
+		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
 		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
-		g.undoRedoPostProcess()
+		g.undoRedoPostProcess(pos != nil)
 	}
 }
 
@@ -2360,14 +2364,15 @@ func (g *EditorGroupWidget) Redo() {
 		g.Editor.collapseMulti()
 	}
 	if t.Undo != nil {
-		if pos := t.Undo.Redo(t.Buf); pos != nil {
+		pos := t.Undo.Redo(t.Buf)
+		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line
 			g.Editor.Cursor.Col = pos.Col
 		}
 		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
-		g.undoRedoPostProcess()
+		g.undoRedoPostProcess(pos != nil)
 	}
 }
 
