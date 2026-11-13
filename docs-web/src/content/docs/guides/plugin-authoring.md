@@ -1397,10 +1397,24 @@ panel:button({
 
 | Field      | Type     | Required | Description                                    |
 |------------|----------|----------|------------------------------------------------|
-| `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
+| `label`    | string   | see below | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
+| `spans`    | table    | see below | Styled runs: `{ {text = "12", style = "success"}, {text = " 3", style = "danger"} }`. Replaces `label` when non-empty. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
 | `disabled` | boolean  | no       | Draws the button muted and ignores presses, for example while a request is in flight. |
 | `style`    | string   | no       | How the button looks when it is not focused. Default: `"filled"`. |
+
+Either `label` or `spans` must be given. A `spans` entry's `style` is a [named style](#styles); an unknown name keeps the button's own style for that run, and `text` entries are skipped when empty. While the button is focused or disabled it keeps its own focus/disabled colors, so span colors apply only to an unfocused, enabled button. `"bracket"` draws the spans inside `[...]`. Span updates on reconcile keep the button instance, so focus and callbacks survive; accelerators (`&`) apply to `label` only.
+
+```lua
+panel:button({
+  spans = {
+    { text = "12", style = "success" },
+    { text = " 1", style = "warning" },
+    { text = " 3", style = "danger" },
+  },
+  on_click = function() end,
+})
+```
 
 **Button styles.** Every style draws in the focused button colors while it has focus, and muted while disabled.
 

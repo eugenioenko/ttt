@@ -21,12 +21,24 @@ const (
 	ButtonMuted
 )
 
+// ButtonSpan is one styled run of a button's text. Style is a theme style
+// name resolved by the caller (plugin layer); zero keeps the button's own
+// style for that run.
+type ButtonSpan struct {
+	Text  string
+	Style term.Style
+}
+
 type ButtonConfig struct {
 	Label   string        `json:"label"`
 	Command string        `json:"command"`
 	Style   term.Style    `json:"-"`
 	Variant ButtonVariant `json:"-"`
-	Box     *BoxModel
+	// Spans, when non-empty, replaces the plain label with styled runs.
+	// Label stays as the plain-text fallback and is ignored while spans
+	// are set.
+	Spans []ButtonSpan `json:"-"`
+	Box   *BoxModel
 
 	OnClick   func()
 	OnCommand func(command string)
@@ -37,6 +49,7 @@ type ButtonWidget struct {
 	Config     ButtonConfig
 	Disabled   bool
 	label      string
+	spans      []ButtonSpan
 	accelIndex int
 	accelRune  rune
 	focused    bool
@@ -50,6 +63,7 @@ func NewButtonWidget(config ButtonConfig) *ButtonWidget {
 		b.Box.PaddingLeft = 1
 		b.Box.PaddingRight = 1
 	}
+	b.spans = append([]ButtonSpan(nil), config.Spans...)
 	idx := strings.IndexByte(config.Label, '&')
 	if idx >= 0 && idx < len(config.Label)-1 {
 		runes := []rune(config.Label)
@@ -65,12 +79,36 @@ func NewButtonWidget(config ButtonConfig) *ButtonWidget {
 
 func (b *ButtonWidget) SetLabel(label string) {
 	b.label = label
+	b.spans = nil
 	b.accelIndex = -1
 	b.accelRune = 0
 }
 
+// SetSpans replaces the styled runs and drops the plain label, keeping the
+// button focused state and callbacks untouched.
+func (b *ButtonWidget) SetSpans(spans []ButtonSpan) {
+	b.spans = append([]ButtonSpan(nil), spans...)
+	b.label = ""
+	b.accelIndex = -1
+	b.accelRune = 0
+}
+
+// HasSpans reports whether the button renders styled runs instead of the
+// plain label.
+func (b *ButtonWidget) HasSpans() bool { return len(b.spans) > 0 }
+
 func (b *ButtonWidget) Height() int { return 1 + b.BoxOverheadH() }
 func (b *ButtonWidget) Width() int {
+	if b.HasSpans() {
+		w := 0
+		for _, s := range b.spans {
+			w += textwidth.String(s.Text)
+		}
+		if b.Config.Variant == ButtonBracket {
+			w += 2
+		}
+		return w + b.BoxOverheadW()
+	}
 	return textwidth.String(b.text()) + b.BoxOverheadW()
 }
 
@@ -123,6 +161,11 @@ func (b *ButtonWidget) Render(surface Surface) {
 		return
 	}
 
+	if b.HasSpans() {
+		b.renderSpans(inner, w)
+		return
+	}
+
 	x := 0
 	i := 0
 	accel := b.accelIndex
@@ -145,6 +188,42 @@ func (b *ButtonWidget) Render(surface Surface) {
 		inner.SetCell(x, 0, cell)
 		x += rw
 		i++
+	}
+}
+
+// renderSpans draws the styled runs. Focused and disabled buttons keep their
+// own background: span styles apply only to an unfocused, enabled button.
+func (b *ButtonWidget) renderSpans(inner Surface, w int) {
+	base := b.style()
+	spanStyle := func(s term.Style) term.Style {
+		if b.Disabled || b.focused || s == 0 {
+			return base
+		}
+		return s
+	}
+	reserve := 0
+	if b.Config.Variant == ButtonBracket {
+		reserve = 1
+	}
+	x := 0
+	if reserve == 1 && w > 0 {
+		inner.SetCell(0, 0, term.Cell{Ch: '[', Style: base})
+		x = 1
+	}
+	for _, span := range b.spans {
+		st := spanStyle(span.Style)
+		for _, ch := range span.Text {
+			rw := textwidth.Rune(ch)
+			if x+rw > w-reserve {
+				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: base})
+				return
+			}
+			inner.SetCell(x, 0, term.Cell{Ch: ch, Style: st})
+			x += rw
+		}
+	}
+	if reserve == 1 && x < w {
+		inner.SetCell(x, 0, term.Cell{Ch: ']', Style: base})
 	}
 }
 

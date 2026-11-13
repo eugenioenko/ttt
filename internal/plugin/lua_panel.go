@@ -435,6 +435,9 @@ func panelButtonWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "label"); v != lua.LNil {
 		desc.Label = v.String()
 	}
+	if spans, ok := L.GetField(tbl, "spans").(*lua.LTable); ok {
+		desc.Spans = parseButtonSpans(L, spans)
+	}
 	if fn, ok := L.GetField(tbl, "on_click").(*lua.LFunction); ok {
 		desc.OnClick = proxy.wrapSimpleCallback(fn)
 	}
@@ -444,6 +447,31 @@ func panelButtonWidget(L *lua.LState) int {
 	parseBoxModel(L, tbl, &desc)
 	proxy.appendDesc(WidgetButton, desc)
 	return 0
+}
+
+// parseButtonSpans reads {{text = "...", style = "name"}, ...}. An unknown
+// style name keeps the button's own style for that run.
+func parseButtonSpans(L *lua.LState, tbl *lua.LTable) []widgets.ButtonSpan {
+	var spans []widgets.ButtonSpan
+	l := tbl.Len()
+	for i := 1; i <= l; i++ {
+		entry, ok := tbl.RawGetInt(i).(*lua.LTable)
+		if !ok {
+			continue
+		}
+		text := lua.LVAsString(L.GetField(entry, "text"))
+		if text == "" {
+			continue
+		}
+		span := widgets.ButtonSpan{Text: text}
+		if v := L.GetField(entry, "style"); v != lua.LNil {
+			if mapped, ok := StyleByName(lua.LVAsString(v)); ok {
+				span.Style = mapped
+			}
+		}
+		spans = append(spans, span)
+	}
+	return spans
 }
 
 var buttonVariants = map[string]widgets.ButtonVariant{
