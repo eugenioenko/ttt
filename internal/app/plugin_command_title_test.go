@@ -21,6 +21,19 @@ func TestPluginCommandTitle(t *testing.T) {
 		{"my-plugin", "My Plugin", "", "my-plugin | Refresh", "my-plugin | Refresh"},
 		{"my-plugin", "My Plugin", "", "My Plugin - Refresh", "My Plugin - Refresh"},
 		{"my-plugin", "My Plugin", "", "My Plugins: Refresh", "My Plugin: My Plugins: Refresh"},
+		{"demo", "Kit", "", "kit: Open", "kit: Open"},
+		{"demo", "kit", "", "Kit: Open", "Kit: Open"},
+		{"demo", "Kit", "", " kit  - Open ", " kit  - Open "},
+		{"demo", "kit", "", "\tKit – Open\t", "\tKit – Open\t"},
+		{"demo", "Kit", "", "kit — Open", "kit — Open"},
+		{"demo", "kit", "", "Kit | Open", "Kit | Open"},
+		{"demo", "ſync", "", "Sync: Open", "Sync: Open"},
+		{"demo", "Sync", "", "ſync: Open", "ſync: Open"},
+		{"Kit", "Demo", "", "kit: Open", "kit: Open"},
+		{"demo", "Demo", "Kit", "kit: Open", "kit: Open"},
+		{"demo", "Kit", "", "kits: Open", "Kit: kits: Open"},
+		{"demo", "kit", "", "Kit Open", "kit: Kit Open"},
+		{"demo", "kit", "", "K", "kit: K"},
 	} {
 		t.Run(tt.want, func(t *testing.T) {
 			p := &plugin.Plugin{Name: tt.name, Manifest: plugin.Manifest{Name: tt.manifest, DisplayName: tt.display}}
