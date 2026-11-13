@@ -560,6 +560,7 @@ func pastePieces(text string, n int) []string {
 
 // multiPasteText inserts clipboard text at each cursor in one undo step.
 func (e *EditorPaneWidget) multiPasteText(text string) {
+	version := e.Buf.Version()
 	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
@@ -658,6 +659,7 @@ func (e *EditorPaneWidget) multiPasteText(text string) {
 
 	e.bufferDirty = true
 	e.syncFromMulti()
+	e.remapFolds(version)
 	e.refreshFolds()
 	e.scrollViewport()
 }
@@ -682,6 +684,7 @@ func (e *EditorPaneWidget) multiCut() {
 	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
+	version := e.Buf.Version()
 
 	e.normalizeClipboardCursors()
 	// Avoid deleting the same original line more than once.
@@ -772,6 +775,7 @@ func (e *EditorPaneWidget) multiCut() {
 	}
 
 	e.bufferDirty = true
+	e.remapFolds(version)
 	e.refreshFolds()
 	e.Multi.Deduplicate()
 	e.syncFromMulti()
