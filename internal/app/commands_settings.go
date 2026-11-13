@@ -303,6 +303,7 @@ func (a *App) ApplySettings(s config.Settings) {
 
 func registerSettingsCommands(app *App) {
 	reg := app.Reg
+	reg.Register(command.Command{ID: "session.clear", Title: i18n.Text("session.clearCommand"), Handler: app.ClearEditorSessions})
 
 	reg.Register(command.Command{
 		ID: "settings.reload", Title: i18n.Text("command.reloadSettings"),

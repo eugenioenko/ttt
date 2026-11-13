@@ -164,6 +164,7 @@ func (a *App) SaveWorkspace() {
 			a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 		} else {
 			a.Workspace.FilePath = abs
+			a.updateEditorSessionWorkspace()
 			a.invalidateRepositoryPath(abs, RepositoryWorktree)
 			a.StatusNotify(i18n.Format("status.workspaceSaved", i18n.Args{"abs": abs}))
 		}

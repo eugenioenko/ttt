@@ -172,6 +172,7 @@ All editor settings are nested under the `editor` key.
 | `editor.formatOnSave` | bool | `false` | Auto-format the document via LSP on save |
 | `editor.saveAllOnQuit` | bool | `false` | Add **Save All & Quit** to the **Unsaved changes** dialog. Saves modified named buffers first, then prompts **Save As** for each modified unnamed buffer. Cancelling or failing a save stops quitting; files already saved remain saved. Also in **Settings > Editor > On quit**. |
 | `editor.saveAllOnQuitExceptUnnamed` | bool | `false` | Hide **Save All & Quit** whenever an unnamed buffer is open, even if it is unmodified. Only applies when `editor.saveAllOnQuit` is enabled. |
+| `editor.restoreTabs` | bool | `false` | Save file tabs, pins, active tab, cursors, and scroll positions on exit, separately for each folder set or `.ttt` workspace. Restore when opening that workspace without explicit file arguments. Also in **Settings > General > Startup**. |
 | `editor.insertFinalNewline` | bool | `true` | Ensure files end with a newline on load and save |
 | `editor.trimTrailingWhitespace` | bool | `false` | Remove trailing whitespace from lines on save |
 | `editor.focusOnOpen` | bool | `false` | Focus the editor when opening a file |

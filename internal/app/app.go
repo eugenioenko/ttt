@@ -170,8 +170,11 @@ type App struct {
 	pendingCurrentChangesOpen bool
 	// appliedSettings is the last value ApplySettings acted on. Callers routinely
 	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
-	appliedSettings config.Settings
-	loadedGrammars  []config.GrammarSetting
+	appliedSettings         config.Settings
+	loadedGrammars          []config.GrammarSetting
+	restoreSessionOnStartup bool
+	sessionWorkspaceKey     string
+	sessionSavingPaused     bool
 	// welcomeIsEmptyState is set while the welcome page stands in for an
 	// empty editor, as opposed to being opened from Help.
 	welcomeIsEmptyState bool
@@ -678,6 +681,7 @@ func (a *App) CloseAllTerminals() {
 }
 
 func (a *App) refreshWorkspaceWidgets() {
+	a.updateEditorSessionWorkspace()
 	paths := a.Workspace.Paths()
 	a.RememberRecentFolders()
 	wasEmpty := len(a.Explorer.Roots) == 0

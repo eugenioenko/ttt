@@ -401,6 +401,7 @@ func (a *App) afterFileSave(path, lang string) {
 }
 
 func (a *App) forceQuit() {
+	a.persistEditorSession()
 	for _, tt := range a.allTerminals() {
 		tt.Term.Close()
 	}

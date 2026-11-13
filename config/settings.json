@@ -43,7 +43,8 @@
     "bracketPairColorization": false,
     "transparentBackground": false,
     "saveAllOnQuit": false,
-    "saveAllOnQuitExceptUnnamed": false
+    "saveAllOnQuitExceptUnnamed": false,
+    "restoreTabs": false
   },
   "keyboard": {
     "modifierKey": "control"

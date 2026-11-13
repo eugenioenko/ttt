@@ -1,4 +1,10 @@
 {
+  "session.restoreTabs": "Restore workspace tabs",
+  "session.clearCommand": "Session: Clear Saved Tabs",
+  "session.cleared": "Saved tabs cleared. Session saving resumes next time ttt starts.",
+  "session.saveFailed": "Could not save workspace tabs: {error}",
+  "session.restoreFailed": "Could not restore workspace tabs: {error}",
+  "session.cleanupFailed": "Could not clean saved workspace tabs: {error}",
   "about.aboutTTTEditor": "About TTT Editor",
   "about.credits": "ttt is great because of everyone who contributes code, reports issues, and uses it",
   "about.gitHub": "GitHub",
