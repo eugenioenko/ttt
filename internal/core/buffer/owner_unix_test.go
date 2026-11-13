@@ -118,15 +118,20 @@ func TestSaveAsNewFileUsesNewFileOwnership(t *testing.T) {
 	if err := b.SaveFile(dest); err != nil {
 		t.Fatal(err)
 	}
-	if uid, gid := ownerOf(t, dest); uid != uint32(os.Geteuid()) || gid != uint32(os.Getegid()) {
-		t.Errorf("new file owner = %d:%d, want %d:%d", uid, gid, os.Geteuid(), os.Getegid())
+	control := filepath.Join(dir, "control.txt")
+	if err := os.WriteFile(control, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wantUID, wantGID := ownerOf(t, control)
+	if uid, gid := ownerOf(t, dest); uid != wantUID || gid != wantGID {
+		t.Errorf("new file owner = %d:%d, want %d:%d like any new file in the directory", uid, gid, wantUID, wantGID)
 	}
 }
 
 func TestSaveWritesInPlaceWhenOwnerCannotBeKept(t *testing.T) {
 	group := otherGroup(t)
-	chown = func(string, int, int) error { return &os.PathError{Op: "chown", Err: syscall.EPERM} }
-	t.Cleanup(func() { chown = os.Chown })
+	chown = func(*os.File, int, int) error { return &os.PathError{Op: "chown", Err: syscall.EPERM} }
+	t.Cleanup(func() { chown = (*os.File).Chown })
 
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "shared.txt")
@@ -228,5 +233,77 @@ func TestWriteInPlaceLeavesNoRecoveryCopyWhenTargetIsNotWritable(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(fname); string(data) != "old\n" {
 		t.Errorf("file changed to %q", data)
+	}
+}
+
+func TestSaveDoesNotFollowSwappedTempPath(t *testing.T) {
+	group := otherGroup(t)
+	dir := t.TempDir()
+	victim := filepath.Join(t.TempDir(), "victim.txt")
+	if err := os.WriteFile(victim, []byte("private\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(victim, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "shared.txt")
+	if err := os.WriteFile(target, []byte("old\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chown(target, -1, group); err != nil {
+		t.Fatal(err)
+	}
+	// Once the temp file belongs to the target's owner, that owner can swap
+	// its path for a symlink before the save finishes.
+	chown = func(f *os.File, uid, gid int) error {
+		err := f.Chown(uid, gid)
+		os.Remove(f.Name())
+		if linkErr := os.Symlink(victim, f.Name()); linkErr != nil {
+			t.Fatal(linkErr)
+		}
+		return err
+	}
+	t.Cleanup(func() { chown = (*os.File).Chown })
+
+	b := &Buffer{Lines: []string{"new", ""}}
+	_ = b.SaveFile(target)
+	info, err := os.Stat(victim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("save changed an unrelated file's mode to %o through the temp path", info.Mode().Perm())
+	}
+	if data, _ := os.ReadFile(victim); string(data) != "private\n" {
+		t.Errorf("save changed an unrelated file to %q", data)
+	}
+}
+
+func TestCheckSameFileDetectsReplacement(t *testing.T) {
+	dir := t.TempDir()
+	fname := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(fname, []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(fname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := checkSameFile(f, fname); err != nil {
+		t.Fatalf("unreplaced file: %v", err)
+	}
+	other := filepath.Join(dir, "other.txt")
+	if err := os.WriteFile(other, []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(other, fname); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkSameFile(f, fname); err == nil {
+		t.Error("expected an error once another file was renamed over the path")
 	}
 }

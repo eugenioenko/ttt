@@ -4,4 +4,4 @@ package buffer
 
 import "os"
 
-func keepOwner(string, os.FileInfo) error { return nil }
+func keepOwner(*os.File, os.FileInfo) error { return nil }

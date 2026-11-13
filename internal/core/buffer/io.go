@@ -146,20 +146,22 @@ func (b *Buffer) SaveFile(filename string) error {
 		tmp.Close()
 		return err
 	}
+	// Once keepOwner hands the file to the target's owner, they can replace
+	// tmpName, so metadata changes go through the descriptor, never the path.
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	inPlace := statErr == nil && keepOwner(tmp, orig) != nil
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if statErr == nil && keepOwner(tmpName, orig) != nil {
+	if inPlace {
 		if err := writeInPlace(target, tmpName); err != nil {
 			return err
 		}
-	} else {
-		if err := os.Chmod(tmpName, mode); err != nil {
-			return err
-		}
-		if err := os.Rename(tmpName, target); err != nil {
-			return err
-		}
+	} else if err := os.Rename(tmpName, target); err != nil {
+		return err
 	}
 
 	b.Dirty = false
@@ -179,16 +181,24 @@ func writeInPlace(target, src string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(target, os.O_WRONLY, 0)
+	out, err := os.OpenFile(target, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
-	recovery, err := copyToTemp(target, "."+filepath.Base(target)+".ttt-recovery-*")
+	recovery, err := copyToTemp(out, filepath.Dir(target), "."+filepath.Base(target)+".ttt-recovery-*")
 	if err != nil {
 		out.Close()
 		return err
 	}
+	if err := checkSameFile(out, target); err != nil {
+		out.Close()
+		os.Remove(recovery)
+		return err
+	}
 	err = out.Truncate(0)
+	if err == nil {
+		_, err = out.Seek(0, io.SeekStart)
+	}
 	if err == nil {
 		_, err = io.Copy(out, in)
 	}
@@ -205,13 +215,8 @@ func writeInPlace(target, src string) error {
 	return nil
 }
 
-func copyToTemp(name, pattern string) (string, error) {
-	in, err := os.Open(name)
-	if err != nil {
-		return "", err
-	}
-	defer in.Close()
-	out, err := os.CreateTemp(filepath.Dir(name), pattern)
+func copyToTemp(in *os.File, dir, pattern string) (string, error) {
+	out, err := os.CreateTemp(dir, pattern)
 	if err != nil {
 		return "", err
 	}
@@ -227,6 +232,21 @@ func copyToTemp(name, pattern string) (string, error) {
 		return "", err
 	}
 	return out.Name(), nil
+}
+
+func checkSameFile(f *os.File, name string) error {
+	open, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	cur, err := os.Stat(name)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(open, cur) {
+		return fmt.Errorf("%s was replaced while saving", name)
+	}
+	return nil
 }
 
 // CleanedLines returns a copy of Lines with the save-time cleanups applied.
