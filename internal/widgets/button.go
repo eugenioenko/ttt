@@ -215,7 +215,12 @@ func (b *ButtonWidget) renderSpans(inner Surface, w int) {
 		for _, ch := range span.Text {
 			rw := textwidth.Rune(ch)
 			if x+rw > w-reserve {
-				inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: base})
+				if x < w-reserve {
+					inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: base})
+				}
+				if reserve == 1 && w > 0 {
+					inner.SetCell(w-1, 0, term.Cell{Ch: ']', Style: base})
+				}
 				return
 			}
 			inner.SetCell(x, 0, term.Cell{Ch: ch, Style: st})

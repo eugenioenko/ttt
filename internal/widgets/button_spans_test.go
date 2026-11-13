@@ -94,3 +94,18 @@ func TestButtonSetSpansDropsLabel(t *testing.T) {
 		t.Fatal("SetLabel should drop the spans")
 	}
 }
+
+func TestButtonSpansBracketClippingKeepsClosingBracket(t *testing.T) {
+	btn := NewButtonWidget(ButtonConfig{
+		Variant: ButtonBracket,
+		Spans:   []ButtonSpan{{Text: "abc", Style: term.StyleSuccess}},
+	})
+	// 6 columns: padding 1 each side leaves an inner width of 4 — "abc" does
+	// not fit next to the reserved closing-bracket column, so it clips to
+	// "[ab]" and still draws the "]".
+	s := renderWidget(btn, 0, 0, 6, 1)
+	row := []rune(surfaceRowText(s, 0))
+	if got := string(row[1:5]); got != "[ab]" {
+		t.Errorf("expected clipped %q, got %q", "[ab]", string(row))
+	}
+}
