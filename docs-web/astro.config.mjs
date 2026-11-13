@@ -32,6 +32,7 @@ export default defineConfig({
             { label: 'LSP', link: '/guides/lsp/' },
             { label: 'Themes', link: '/guides/themes/' },
             { label: 'Extra Themes', link: '/guides/extra-themes/' },
+            { label: 'Languages', link: '/guides/languages/' },
             { label: 'Keybindings', link: '/guides/keybindings/' },
             { label: 'Plugins', link: '/guides/plugins/' },
             { label: 'Plugin Authoring', link: '/guides/plugin-authoring/' },

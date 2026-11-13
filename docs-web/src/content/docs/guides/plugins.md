@@ -13,6 +13,10 @@ Because it depends on plugin API additions from ttt 1.1.0 (the key interceptor's
 
 Install it from the **Plugins** sidebar tab by searching for "vim", or run **Plugins: Install from URL** with `https://github.com/eugenioenko/ttt-vim`. Once loaded it starts in Normal mode and shows the current mode in the status bar.
 
+## Language Packs
+
+Language packs translate TTT's menus, commands, settings, and dialogs. Install a pack from the Plugins panel, choose **Change Display Language**, and restart TTT. See [Languages](/guides/languages/) for available packs and update behavior.
+
 ## Installing Plugins
 
 ### From the Plugins Panel
