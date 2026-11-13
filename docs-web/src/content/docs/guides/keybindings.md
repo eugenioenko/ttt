@@ -7,6 +7,10 @@ All keybindings are customizable via `keybindings.json`. A complete example is a
 
 You can open your keybindings file directly from the command palette (**Ctrl+P**) with **Preferences: Open Keyboard Shortcuts**, or press **Ctrl+K Y**.
 
+## Using Command on macOS
+
+TTT can accept Cmd in place of Ctrl, or accept either modifier. Your terminal must also forward the shortcuts. See [Command Key on macOS](/guides/macos-command-key/) for TTT settings, Ghostty configuration, suggested Kitty and WezTerm configurations, and troubleshooting.
+
 ## Default Keybindings
 
 ### General
