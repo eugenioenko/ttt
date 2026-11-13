@@ -24,6 +24,7 @@ func (e *EditorPaneWidget) syncFromMulti() {
 	p := e.Multi.PrimaryCursor()
 	e.Cursor.Line = p.Line
 	e.Cursor.Col = p.Col
+	e.Cursor.Goal = p.Goal
 	if e.Selection != nil {
 		*e.Selection = p.Sel
 	}
@@ -36,6 +37,7 @@ func (e *EditorPaneWidget) syncToMulti() {
 	c := &e.Multi.Cursors[e.Multi.Primary]
 	c.Line = e.Cursor.Line
 	c.Col = e.Cursor.Col
+	c.Goal = e.Cursor.Goal
 	if e.Selection != nil {
 		c.Sel = *e.Selection
 	}

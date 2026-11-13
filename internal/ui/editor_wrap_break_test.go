@@ -21,7 +21,7 @@ func TestWordWrapBreakRendersWholeWords(t *testing.T) {
 		t.Fatalf("click past a short row = %d/%d, want 0/5", e.Cursor.Line, e.Cursor.Col)
 	}
 	e.Cursor.Col = 0
-	e.moveCursorWrapped(1)
+	e.moveCursorRows(1)
 	if e.Cursor.Col != 6 {
 		t.Fatalf("Down moved to %d, want 6", e.Cursor.Col)
 	}

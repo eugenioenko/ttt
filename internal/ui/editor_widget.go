@@ -109,7 +109,7 @@ type EditorPaneWidget struct {
 	ResolveFileLinks        FileLinkResolver
 	topRowOffset            int
 	topOffsetLine           int
-	wrapGoal                wrapGoal
+	goalContext             cursorGoalContext
 	phantoms                map[int]int
 	phantomGen              uint64
 	DiffOverlay             *DiffOverlay
@@ -720,11 +720,7 @@ func (e *EditorPaneWidget) ScrollRows(delta int) {
 	l := e.layout()
 	top := e.topRow(l)
 	before, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
-	if e.WordWrap {
-		e.moveCursorWrapped(delta)
-	} else {
-		e.moveCursorLines(delta)
-	}
+	e.moveCursorRows(delta)
 	after, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
 	top += after - before
 	if maxTop := l.total() - e.Viewport.Height; maxTop >= 0 && top > maxTop {
@@ -732,22 +728,6 @@ func (e *EditorPaneWidget) ScrollRows(delta int) {
 	}
 	e.setTopRow(l, top)
 	e.scrollViewport()
-}
-
-// moveCursorLines moves by visible rows when wrapping is off. moveCursorWrapped
-// cannot be used directly: rowOf reports screen column 0 for unwrapped layouts,
-// so the cursor's visual column is passed explicitly.
-func (e *EditorPaneWidget) moveCursorLines(delta int) {
-	x := -1
-	if g := e.wrapGoal; g.ok && g.line == e.Cursor.Line && g.col == e.Cursor.Col && g.version == e.Buf.Version() {
-		x = g.x
-	}
-	if x < 0 {
-		x = bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, e.resolveTabSize())
-	}
-	line, col, x := e.wrappedRowMove(e.Cursor.Line, e.Cursor.Col, delta, x)
-	e.Cursor.Line, e.Cursor.Col = line, col
-	e.wrapGoal = wrapGoal{x: x, line: line, col: col, version: e.Buf.Version(), ok: true}
 }
 
 func (e *EditorPaneWidget) SmartHome() {

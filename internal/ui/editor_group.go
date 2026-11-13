@@ -2095,9 +2095,6 @@ func (g *EditorGroupWidget) ApplyFileWordWrap() {
 		return
 	}
 	enabled, column, words := g.tabWordWrap(t)
-	if g.Editor.WordWrap != enabled || g.Editor.WordWrapColumn != column || g.Editor.WrapWords != words {
-		g.Editor.wrapGoal = wrapGoal{}
-	}
 	g.Editor.WordWrap, g.Editor.WordWrapColumn, g.Editor.WrapWords = enabled, column, words
 }
 
@@ -2381,6 +2378,7 @@ func (g *EditorGroupWidget) SelectAll() {
 		return
 	}
 	e.collapseMulti()
+	e.ResetCursorGoal()
 	g.saveMultiState()
 	e.Selection.Start(0, 0)
 	lastLine := len(e.Buf.Lines) - 1
@@ -2433,6 +2431,7 @@ func (g *EditorGroupWidget) PlaceCursor(line, col int) bool {
 	if !g.IsEditorActive() {
 		return false
 	}
+	g.Editor.ResetCursorGoal()
 	if line < 1 {
 		line = 1
 	}
@@ -2669,6 +2668,7 @@ func (g *EditorGroupWidget) FindNext() {
 	if len(g.Editor.SearchMatches) == 0 {
 		return
 	}
+	g.Editor.ResetCursorGoal()
 	cur := g.Editor.SearchActive
 	if refreshed {
 		cur = -1
@@ -2731,6 +2731,7 @@ func (g *EditorGroupWidget) FindPrev() {
 	if len(g.Editor.SearchMatches) == 0 {
 		return
 	}
+	g.Editor.ResetCursorGoal()
 	cur := g.Editor.SearchActive
 	if refreshed {
 		cur = 0

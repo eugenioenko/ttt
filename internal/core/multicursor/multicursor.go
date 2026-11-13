@@ -4,12 +4,14 @@ import (
 	"cmp"
 	"sort"
 
+	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 )
 
 type CursorState struct {
 	Line, Col int
 	Sel       selection.Selection
+	Goal      cursor.Goal
 }
 
 type MultiCursor struct {
