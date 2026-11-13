@@ -107,6 +107,8 @@ Updating or reloading replaces the plugin's theme files, removes contributions d
 
 ### Language packs
 
+To install a pack or change the interface language, see the [Languages guide](/guides/languages/).
+
 A language pack translates the core editor interface. It needs no Lua entry point or permissions:
 
 ```json
