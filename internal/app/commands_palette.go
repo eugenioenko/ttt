@@ -60,11 +60,12 @@ func (a *App) ShowThemePicker() {
 	originalStyleMap := a.Screen.GetStyleMap()
 	originalTokenTheme := highlight.CurrentTokenTheme()
 	originalPalette := *a.Palette
+	originalBorders := *a.Borders
 	applyTheme := func(theme config.ThemeConfig) {
 		ApplyThemeStyles(a.Screen, theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground), WithEditorSelectionStyle(a.Settings.Editor.SelectionStyle), WithPluginSelectionStyle(a.Settings.Plugins.SelectionStyle))
 		*a.Palette = BuildTerminalPalette(theme, WithTransparentBackground(a.Settings.Editor.TransparentBackground), WithTerminalSelectionStyle(a.Settings.Terminal.SelectionStyle))
-		*a.Borders = BuildBorderSet(theme.Borders)
-		a.ApplyBorderStyle()
+		borders := BuildBorderSet(theme.Borders)
+		a.applyBorderStyle(&borders)
 		a.Renderer.Clear()
 		a.invalidateImageLayer()
 	}
@@ -93,6 +94,7 @@ func (a *App) ShowThemePicker() {
 			a.Screen.SetStyleMap(originalStyleMap)
 			highlight.SetTokenTheme(originalTokenTheme)
 			*a.Palette = originalPalette
+			*a.Borders = originalBorders
 			a.Renderer.Clear()
 			a.invalidateImageLayer()
 		},
