@@ -24,6 +24,7 @@ Behavior that looks like a bug but is intended, or was reviewed and won't be fix
 | Opening a file while the terminal is maximized focuses the editor without restoring the layout. | Maximizing is an explicit layout choice; restoring it is up to the user. | #1528 |
 | Turning on word wrap leaves `⋯` fold markers visible (folding is disabled under wrap). | Cosmetic. | #1496 (finding 25) |
 | Multi-cursor Backspace at line start / Delete at line end collapses to one cursor. | Deferred, not prioritized. Can be reopened. | #1496 (finding 1) |
+| Cursor movement and Backspace step through joined emoji (👨‍👩‍👧‍👦, skin-tone sequences) one piece at a time instead of as a single character. | Edge case. Fixing it means moving by grapheme cluster across cursor, delete and width code. Won't fix until requested. The `it.fails` test in `tests/functional/audit-grapheme-bugs.test.js` keeps documenting it. | BUG-009 (2026-07 audit) |
 
 ## Not reported (expected or out of scope)
 
