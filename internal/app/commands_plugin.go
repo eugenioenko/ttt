@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
@@ -804,11 +805,13 @@ func pluginCommandTitle(p *plugin.Plugin, title string) string {
 		return title
 	}
 	trimmed := strings.TrimSpace(title)
+	titleRunes := []rune(trimmed)
 	for _, alias := range []string{name, strings.TrimSpace(p.Name), strings.TrimSpace(p.Manifest.Name)} {
-		if alias == "" || len(trimmed) < len(alias) || !strings.EqualFold(trimmed[:len(alias)], alias) {
+		prefixLen := utf8.RuneCountInString(alias)
+		if prefixLen == 0 || len(titleRunes) < prefixLen || !strings.EqualFold(string(titleRunes[:prefixLen]), alias) {
 			continue
 		}
-		rest := strings.TrimSpace(trimmed[len(alias):])
+		rest := strings.TrimSpace(string(titleRunes[prefixLen:]))
 		if strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "-") || strings.HasPrefix(rest, "–") || strings.HasPrefix(rest, "—") || strings.HasPrefix(rest, "|") {
 			return title
 		}
