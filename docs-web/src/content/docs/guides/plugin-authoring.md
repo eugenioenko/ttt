@@ -1394,6 +1394,7 @@ panel:button({
 | Field      | Type     | Required | Description                                    |
 |------------|----------|----------|------------------------------------------------|
 | `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
+| `spans`    | table    | no       | Optional array of `{text, style}` segments replacing the visible label. Text is literal (no `&` accelerators); styles are named text styles such as `success`, `muted`, and `danger`. Segment colors retain the button background, including focus; disabled buttons render all segments muted. Keep `label` as a plain-text fallback. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
 | `disabled` | boolean  | no       | Draws the button muted and ignores presses, for example while a request is in flight. |
 | `style`    | string   | no       | How the button looks when it is not focused. Default: `"filled"`. |

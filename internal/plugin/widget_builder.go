@@ -600,6 +600,7 @@ func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 }
 
 func wireButtonCallback(bw *widgets.ButtonWidget, desc WidgetDesc, _ *Plugin) {
+	bw.Config.Spans = desc.ButtonSpans
 	if desc.OnClick != nil {
 		bw.Config.OnClick = desc.OnClick
 	}

@@ -23,6 +23,7 @@ const (
 
 type ButtonConfig struct {
 	Label   string        `json:"label"`
+	Spans   []ButtonSpan  `json:"-"`
 	Command string        `json:"command"`
 	Style   term.Style    `json:"-"`
 	Variant ButtonVariant `json:"-"`
@@ -30,6 +31,11 @@ type ButtonConfig struct {
 
 	OnClick   func()
 	OnCommand func(command string)
+}
+
+type ButtonSpan struct {
+	Text  string
+	Style term.Style
 }
 
 type ButtonWidget struct {
@@ -75,10 +81,18 @@ func (b *ButtonWidget) Width() int {
 }
 
 func (b *ButtonWidget) text() string {
-	if b.Config.Variant == ButtonBracket {
-		return "[" + b.label + "]"
+	label := b.label
+	if len(b.Config.Spans) > 0 {
+		var text strings.Builder
+		for _, span := range b.Config.Spans {
+			text.WriteString(span.Text)
+		}
+		label = text.String()
 	}
-	return b.label
+	if b.Config.Variant == ButtonBracket {
+		return "[" + label + "]"
+	}
+	return label
 }
 
 func (b *ButtonWidget) style() term.Style {
@@ -126,6 +140,18 @@ func (b *ButtonWidget) Render(surface Surface) {
 	x := 0
 	i := 0
 	accel := b.accelIndex
+	var spanStyles []term.Style
+	if len(b.Config.Spans) > 0 {
+		accel = -1
+		if b.Config.Variant == ButtonBracket {
+			spanStyles = append(spanStyles, style)
+		}
+		for _, span := range b.Config.Spans {
+			for range span.Text {
+				spanStyles = append(spanStyles, span.Style)
+			}
+		}
+	}
 	if accel >= 0 && b.Config.Variant == ButtonBracket {
 		accel++
 	}
@@ -139,6 +165,9 @@ func (b *ButtonWidget) Render(surface Surface) {
 			break
 		}
 		cell := term.Cell{Ch: ch, Style: style}
+		if !b.Disabled && i < len(spanStyles) && spanStyles[i] != 0 {
+			cell.Style, cell.BgStyle = spanStyles[i], style
+		}
 		if i == accel {
 			cell.Underline = true
 		}
@@ -166,7 +195,7 @@ func (b *ButtonWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventConsumed
 			}
 		}
-		if b.accelRune != 0 && e.Key() == tcell.KeyRune {
+		if len(b.Config.Spans) == 0 && b.accelRune != 0 && e.Key() == tcell.KeyRune {
 			if unicode.ToLower(term.KeyRune(e)) == unicode.ToLower(b.accelRune) {
 				b.trigger()
 				return EventConsumed

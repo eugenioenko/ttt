@@ -34,6 +34,34 @@ func TestButtonRenderLabel(t *testing.T) {
 	}
 }
 
+func TestButtonSpans(t *testing.T) {
+	b := NewButtonWidget(ButtonConfig{Label: "fallback", Variant: ButtonFilled, Spans: []ButtonSpan{
+		{Text: "CI "}, {Text: "✓界", Style: term.StyleSuccess}, {Text: " ✕2", Style: term.StyleDanger},
+	}})
+	if b.Width() != 11 {
+		t.Fatalf("width = %d, want 11", b.Width())
+	}
+	for _, focused := range []bool{false, true} {
+		b.SetFocused(focused)
+		s := renderWidget(b, 0, 0, 14, 1)
+		if s.cells[0][4].Style != term.StyleSuccess || s.cells[0][8].Style != term.StyleDanger {
+			t.Fatalf("colored spans lost (focused=%v): %+v", focused, s.cells[0])
+		}
+		if s.cells[0][4].BgStyle != b.style() {
+			t.Fatal("span must keep button background")
+		}
+	}
+	s := renderWidget(b, 0, 0, 7, 1)
+	if s.cells[0][5].Ch != ' ' {
+		t.Fatal("wide rune must not cross the padding boundary")
+	}
+	b.Disabled = true
+	s = renderWidget(b, 0, 0, 14, 1)
+	if s.cells[0][4].Style != term.StyleMuted || s.cells[0][4].BgStyle != 0 {
+		t.Fatal("disabled spans must be muted")
+	}
+}
+
 func TestButtonAcceleratorUnderline(t *testing.T) {
 	btn := NewButtonWidget(ButtonConfig{Label: "&Save"})
 	s := renderWidget(btn, 0, 0, 20, 1)

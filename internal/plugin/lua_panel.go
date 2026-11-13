@@ -435,6 +435,16 @@ func panelButtonWidget(L *lua.LState) int {
 	if v := L.GetField(tbl, "label"); v != lua.LNil {
 		desc.Label = v.String()
 	}
+	if spans, ok := L.GetField(tbl, "spans").(*lua.LTable); ok {
+		spans.ForEach(func(_, value lua.LValue) {
+			if span, ok := value.(*lua.LTable); ok {
+				style, _ := StyleByName(lua.LVAsString(L.GetField(span, "style")))
+				desc.ButtonSpans = append(desc.ButtonSpans, widgets.ButtonSpan{
+					Text: lua.LVAsString(L.GetField(span, "text")), Style: style,
+				})
+			}
+		})
+	}
 	if fn, ok := L.GetField(tbl, "on_click").(*lua.LFunction); ok {
 		desc.OnClick = proxy.wrapSimpleCallback(fn)
 	}
