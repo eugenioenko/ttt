@@ -33,6 +33,7 @@ These are suggestions, not rules. They help avoid duplicated and wasted effort.
 - **Say you're on it.** Leave a short comment such as "I'll take this" so others know it is taken.
 - **One at a time.** Work on one issue, and wait until its PR is merged before picking up the next. Reviews go faster, and other contributors get a chance at the good first issues.
 - **Reproduce first.** For bugs, start with a failing test on the latest `main` that shows the problem, then fix it.
+- **Address review feedback.** When CodeRabbit reviews your PR, go through each finding: fix it, or reply explaining why it does not apply. Push fixes until CI passes and CodeRabbit has reviewed your latest commit, so the maintainer reviews a PR that is already clean.
 
 ## Code style
 
