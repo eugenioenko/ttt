@@ -482,3 +482,76 @@ func TestOSCReaderEscapeRecoversBeforeDiscardDeadline(t *testing.T) {
 		})
 	}
 }
+
+type zeroByteReadTty struct {
+	*mockTty
+	readCalls int
+}
+
+func (t *zeroByteReadTty) Read(p []byte) (int, error) {
+	t.readCalls++
+	return 0, nil
+}
+
+func TestOSCReaderReadReturnsZeroOnUnderlyingZeroByteRead(t *testing.T) {
+	tty := &zeroByteReadTty{mockTty: &mockTty{}}
+	reader := NewOSCReader(tty)
+	buf := make([]byte, 64)
+	n, err := reader.Read(buf)
+	if n != 0 || err != nil {
+		t.Fatalf("Read = (%d, %v), want (0, nil)", n, err)
+	}
+	if tty.readCalls != 1 {
+		t.Fatalf("underlying Read called %d times, want 1", tty.readCalls)
+	}
+}
+
+func TestOSCTtyDrainUnblocksReader(t *testing.T) {
+	stop := make(chan struct{})
+	tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte)}
+	defer close(tty.reads)
+	reader := NewOSCReader(tty)
+	wrapper := OSCTty{Tty: tty, Reader: reader}
+
+	done := make(chan struct{})
+	var readN int
+	var readErr error
+	go func() {
+		buf := make([]byte, 64)
+		readN, readErr = wrapper.Read(buf)
+		close(done)
+	}()
+
+	// Wait for Read to start
+	time.Sleep(10 * time.Millisecond)
+
+	if err := wrapper.Drain(); err != nil {
+		t.Fatalf("Drain failed: %v", err)
+	}
+
+	select {
+	case <-done:
+		if readN != 0 || readErr != nil {
+			t.Fatalf("drained Read = (%d, %v), want (0, nil)", readN, readErr)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("wrapper.Read hung after Drain")
+	}
+
+	_ = stop
+}
+
+func TestOSCReaderDrainPreventsSubsequentReads(t *testing.T) {
+	tty := &zeroByteReadTty{mockTty: &mockTty{}}
+	reader := NewOSCReader(tty)
+	reader.Drain()
+
+	buf := make([]byte, 64)
+	n, err := reader.Read(buf)
+	if n != 0 || err != nil {
+		t.Fatalf("Read after Drain = (%d, %v), want (0, nil)", n, err)
+	}
+	if tty.readCalls != 0 {
+		t.Fatalf("underlying Read called %d times after Drain, want 0", tty.readCalls)
+	}
+}

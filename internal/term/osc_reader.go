@@ -48,6 +48,7 @@ type OSCReader struct {
 	ready         []byte
 	want          map[string]chan OSCReply
 	closed        bool
+	drained       bool
 	readFailed    bool
 	shuttingDown  atomic.Bool
 }
@@ -131,7 +132,7 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 			o.mu.Unlock()
 			return n, nil
 		}
-		deadline, closed := o.inputDeadline, o.closed
+		deadline, closed, drained := o.inputDeadline, o.closed, o.drained
 		o.mu.Unlock()
 		if o.readErr != nil {
 			err := o.readErr
@@ -140,6 +141,9 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 		}
 		if closed {
 			return 0, io.ErrClosedPipe
+		}
+		if drained {
+			return 0, nil
 		}
 		// Keep at most one TTY read in flight. A timer may return Escape while that
 		// read is still blocked; the next Read must consume its result, not race it.
@@ -165,6 +169,17 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 			if result.err != nil {
 				o.readError(result.err)
 				o.readErr = result.err
+			} else if len(result.data) == 0 {
+				o.mu.Lock()
+				o.expireInput()
+				if len(o.ready) > 0 {
+					n := copy(dst, o.ready)
+					o.ready = o.ready[n:]
+					o.mu.Unlock()
+					return n, nil
+				}
+				o.mu.Unlock()
+				return 0, nil
 			}
 		case <-o.wake:
 		case <-timeout:
@@ -375,6 +390,11 @@ type OSCTty struct {
 
 func (t OSCTty) Read(p []byte) (int, error) { return t.Reader.Read(p) }
 
+func (t OSCTty) Drain() error {
+	t.Reader.Drain()
+	return t.Tty.Drain()
+}
+
 func (t OSCTty) Write(p []byte) (int, error) {
 	if t.Reader.shuttingDown.Load() {
 		return t.writeDuringShutdown(p)
@@ -409,6 +429,15 @@ func (t OSCTty) writeDuringShutdown(p []byte) (int, error) {
 func (o *OSCReader) BeginShutdown() {
 	o.shuttingDown.Store(true)
 	o.shutdownOnce.Do(func() { close(o.shutdown) })
+}
+
+// Drain unblocks active and subsequent reads once terminal shutdown or draining begins.
+func (o *OSCReader) Drain() {
+	o.mu.Lock()
+	o.drained = true
+	o.resetCandidate()
+	o.signalRead()
+	o.mu.Unlock()
 }
 
 // Close prevents subsequent palette queries and writes after screen shutdown.

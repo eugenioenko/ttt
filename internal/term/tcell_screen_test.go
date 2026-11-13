@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v3"
 	"github.com/gdamore/tcell/v3/color"
@@ -342,5 +343,44 @@ func TestSetPointerShapesReenableResumesWithoutStaleCache(t *testing.T) {
 	ts.SetPointerShape("text")
 	if mtty.buf.Len() > 0 {
 		t.Fatalf("re-enabled cache failed to suppress repeated shape: %q", mtty.buf.String())
+	}
+}
+
+type winMockTty struct {
+	mockTty
+	stopQ chan struct{}
+}
+
+func (w *winMockTty) Drain() error {
+	select {
+	case <-w.stopQ:
+	default:
+		close(w.stopQ)
+	}
+	return nil
+}
+
+func (w *winMockTty) Read(p []byte) (int, error) {
+	select {
+	case <-w.stopQ:
+		return 0, nil
+	}
+}
+
+func TestTerminfoScreenFiniWithWindowsDrainedTty(t *testing.T) {
+	tty := &winMockTty{stopQ: make(chan struct{})}
+	screen, _, err := NewTerminfoScreenFromTty(tty, tcell.OptNegotiation(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		screen.Fini()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("screen.Fini hung when Tty.Drain yields 0-byte reads (Windows console shutdown)")
 	}
 }
