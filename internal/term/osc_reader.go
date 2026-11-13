@@ -269,14 +269,15 @@ func (o *OSCReader) observe(in []byte) {
 			continue
 		}
 		if len(o.candidate) == 1 {
-			if b == ']' {
+			switch b {
+			case ']':
 				o.inputDeadline = time.Now().Add(2 * oscRecoveryTimeout)
 				o.candidate = append(o.candidate, b)
-			} else if b == '\x1b' {
+			case '\x1b':
 				o.ready = append(o.ready, o.candidate[0])
 				o.candidate[0] = b
 				o.inputDeadline = time.Now().Add(oscEscapeTimeout)
-			} else {
+			default:
 				o.ready = append(o.ready, o.candidate[0], b)
 				o.resetCandidate()
 			}
@@ -390,6 +391,16 @@ type OSCTty struct {
 
 func (t OSCTty) Read(p []byte) (int, error) { return t.Reader.Read(p) }
 
+func (t OSCTty) Start() error {
+	if err := t.Tty.Start(); err != nil {
+		return err
+	}
+	if t.Reader != nil {
+		t.Reader.clearDrained()
+	}
+	return nil
+}
+
 func (t OSCTty) Drain() error {
 	t.Reader.Drain()
 	return t.Tty.Drain()
@@ -437,6 +448,12 @@ func (o *OSCReader) Drain() {
 	o.drained = true
 	o.resetCandidate()
 	o.signalRead()
+	o.mu.Unlock()
+}
+
+func (o *OSCReader) clearDrained() {
+	o.mu.Lock()
+	o.drained = false
 	o.mu.Unlock()
 }
 

@@ -361,12 +361,8 @@ func (w *winMockTty) Drain() error {
 }
 
 func (w *winMockTty) Read(p []byte) (int, error) {
-	select {
-	case <-w.stopQ:
-		return 0, nil
-	default:
-		return 0, io.EOF
-	}
+	<-w.stopQ
+	return 0, nil
 }
 
 func TestTerminfoScreenFiniWithWindowsDrainedTty(t *testing.T) {
