@@ -2,6 +2,7 @@ package diff
 
 import (
 	"context"
+	"fmt"
 	"testing"
 )
 
@@ -290,5 +291,44 @@ func TestParseHunkHeaderWithoutCount(t *testing.T) {
 	}
 	if l := fd.Hunks[1].Lines[0]; l.Left.Num != 5 || l.Right.Num != 5 {
 		t.Fatalf("context line = %+v, want old and new line 5", l)
+	}
+}
+
+func TestGenerateNearbyEditWithInsertion(t *testing.T) {
+	var old []string
+	for i := 0; i < 40; i++ {
+		old = append(old, fmt.Sprintf("line %d", i))
+	}
+	new := append([]string{}, old[:25]...)
+	new = append(new, "line 25 changed", "line 26", "line 27", "inserted")
+	new = append(new, old[28:]...)
+
+	var added, deleted []string
+	for _, h := range Parse(Generate(old, new, "f.txt")).Hunks {
+		for _, dl := range h.Lines {
+			if dl.Right.Kind == Added {
+				added = append(added, dl.Right.Text)
+			}
+			if dl.Left.Kind == Deleted {
+				deleted = append(deleted, dl.Left.Text)
+			}
+		}
+	}
+	if fmt.Sprint(added) != "[line 25 changed inserted]" || fmt.Sprint(deleted) != "[line 25]" {
+		t.Errorf("added %q, deleted %q", added, deleted)
+	}
+}
+
+func TestGenerateEditNearEndWithAppendedLine(t *testing.T) {
+	var old []string
+	for i := 0; i < 10; i++ {
+		old = append(old, fmt.Sprintf("line %d", i))
+	}
+	new := append([]string{}, old...)
+	new[5] = "line 5 changed"
+	new = append(new, "extra")
+
+	if hunks := Parse(Generate(old, new, "f.txt")).Hunks; len(hunks) != 1 {
+		t.Errorf("want 1 hunk, got %d", len(hunks))
 	}
 }
