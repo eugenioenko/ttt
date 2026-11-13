@@ -668,7 +668,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	fs.onWrite = func(path string) {
 		a.postRepositoryInvalidation(path, RepositoryWorktree)
 	}
-	p.Filesystem = fs
+	p.SetFilesystemAPI(fs)
 	p.DialRPC = dialPluginRPC(fs.vars)
 	p.RunAutomation = func(ctx context.Context, action, args string) (json.RawMessage, error) {
 		return a.runPluginAutomation(ctx, p, action, args)
