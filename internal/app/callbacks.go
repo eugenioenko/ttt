@@ -558,6 +558,7 @@ func (a *App) fetchPRFileContent(dv *ui.DiffEditorWidget, owner, repo, baseSHA, 
 			fetchErr = err
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(&DiffContentResult{
+			Widget:   dv,
 			TabName:  tabName,
 			OldLines: oldLines,
 			NewLines: newLines,
