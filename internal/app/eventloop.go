@@ -437,18 +437,7 @@ func RunEventLoop(
 			case *ui.SearchBatch:
 				app.Search.ApplyBatch(v)
 			case *DiffContentResult:
-				if v.Err != nil {
-					app.StatusError(i18n.Format("status.failedToFetchFileContent", i18n.Args{"error": v.Err.Error()}))
-					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
-						dv.FailLoading()
-					}
-				} else {
-					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
-						dv.SetOldLines(v.OldLines)
-						dv.SetNewLines(v.NewLines)
-						dv.FinishLoading()
-					}
-				}
+				app.applyDiffContent(v)
 			case *plugin.PluginAsyncResult:
 				if v.Callback != nil {
 					v.Callback()

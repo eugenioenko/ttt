@@ -563,10 +563,13 @@ func readCommitDetail(ctx context.Context, incarnation uint64, source repository
 func (a *App) OpenCommitDetail(dir, ref, short string) {
 	a.cancelPendingDiff()
 	tabID := commitDetailTabID(dir, ref)
-	if a.EditorGroup.CommitDetailWidgetByTab(tabID) != nil {
-		a.EditorGroup.SwitchToTabByPath(tabID)
-		a.FocusEditorIfEnabled()
-		return
+	for _, group := range a.editorGroups() {
+		if group.CommitDetailWidgetByTab(tabID) != nil {
+			a.activateEditorGroup(group)
+			group.SwitchToTabByPath(tabID)
+			a.FocusEditorIfEnabled()
+			return
+		}
 	}
 
 	source := a.Repository.repositorySource(dir)
@@ -636,14 +639,24 @@ func (a *App) ShutdownGitReads() {
 	}
 }
 
+func (a *App) commitDetailForResult(tabID, dir, ref string, incarnation uint64) *ui.CommitDetailWidget {
+	for _, group := range a.editorGroups() {
+		detail := group.CommitDetailWidgetByTab(tabID)
+		if detail != nil && detail.Dir == dir && detail.Ref == ref && detail.Incarnation == incarnation {
+			return detail
+		}
+	}
+	return nil
+}
+
 // ApplyCommitDetail fills only the still-open incarnation whose repository and
 // full hash match the result. Closing the tab while Git runs supersedes it.
 func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 	if result == nil || result.Canceled {
 		return
 	}
-	detail := a.EditorGroup.CommitDetailWidgetByTab(commitDetailTabID(result.Dir, result.Ref))
-	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref || detail.Incarnation != result.Incarnation {
+	detail := a.commitDetailForResult(commitDetailTabID(result.Dir, result.Ref), result.Dir, result.Ref, result.Incarnation)
+	if detail == nil {
 		return
 	}
 	if !result.AuthoredAt.IsZero() {
