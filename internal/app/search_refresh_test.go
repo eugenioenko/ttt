@@ -93,6 +93,74 @@ func TestReplaceBarMatchesFollowEdits(t *testing.T) {
 	}
 }
 
+func TestReplaceBarAdvancesPastReplacementContainingQuery(t *testing.T) {
+	for _, tc := range []struct {
+		name, replacement string
+		want              []string
+		next              ui.FindMatch
+	}{
+		{"contains query", "foofoo", []string{"foofoo Bar foofoo", "foofoobar FOO"}, ui.FindMatch{Line: 1, Col: 10, Len: 3}},
+		{"ends with query", "xfoo", []string{"xfoo Bar xfoo", "xfoobar FOO"}, ui.FindMatch{Line: 1, Col: 8, Len: 3}},
+		{"no query", "X", []string{"X Bar X", "Xbar FOO"}, ui.FindMatch{Line: 1, Col: 5, Len: 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newSearchRefreshHarness(t)
+			editor := h.app.EditorGroup.Editor
+			editor.Buf.SetText("foo Bar foo\nfoobar FOO\n")
+
+			h.app.OpenFindReplace()
+			bar, ok := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
+			if !ok {
+				t.Fatal("replace bar did not open")
+			}
+			for _, r := range "foo" {
+				h.pressRune(r)
+			}
+			h.pressKey(tcell.KeyTab, tcell.ModNone)
+			for _, r := range tc.replacement {
+				h.pressRune(r)
+			}
+			for range 3 {
+				h.pressKey(tcell.KeyEnter, tcell.ModNone)
+			}
+
+			if !reflect.DeepEqual(editor.Buf.Lines[:2], tc.want) {
+				t.Fatalf("buffer = %q, want %q", editor.Buf.Lines[:2], tc.want)
+			}
+			if got := bar.Matches[bar.Current]; got != tc.next {
+				t.Fatalf("current match = %+v, want %+v", got, tc.next)
+			}
+			if editor.Cursor.Line != tc.next.Line || editor.Cursor.Col != tc.next.Col {
+				t.Fatalf("cursor = %d:%d, want %d:%d", editor.Cursor.Line, editor.Cursor.Col, tc.next.Line, tc.next.Col)
+			}
+		})
+	}
+}
+
+func TestReplaceBarWrapsToFirstMatchAfterLastReplace(t *testing.T) {
+	h := newSearchRefreshHarness(t)
+	editor := h.app.EditorGroup.Editor
+
+	h.app.OpenFindReplace()
+	bar := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
+	for _, r := range "foo" {
+		h.pressRune(r)
+	}
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyTab, tcell.ModNone)
+	for _, r := range "foofoo" {
+		h.pressRune(r)
+	}
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+
+	if editor.Buf.Lines[0] != "foo bar" || editor.Buf.Lines[1] != "foofoo baz" {
+		t.Fatalf("buffer = %q, want the second foo replaced", editor.Buf.Lines)
+	}
+	if want := (ui.FindMatch{Line: 0, Col: 0, Len: 3}); bar.Matches[bar.Current] != want {
+		t.Fatalf("current match = %+v, want %+v", bar.Matches[bar.Current], want)
+	}
+}
+
 func TestSearchRefreshPreservesOptionsAndUndo(t *testing.T) {
 	for _, source := range []string{"global literal", "global regex", "plugin literal", "plugin regex"} {
 		t.Run(source, func(t *testing.T) {
