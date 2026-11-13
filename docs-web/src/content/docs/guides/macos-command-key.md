@@ -27,19 +27,29 @@ For chords, release the modifier before an unmodified second key: **Ctrl+K E** b
 
 ## Ghostty
 
-Ghostty binds **Cmd+A** to its own terminal selection. Start with the setup tested in [PR #1280](https://github.com/eugenioenko/ttt/pull/1280): add this line to your [Ghostty configuration](https://ghostty.org/docs/config).
+To let TTT handle Command shortcuts, you can clear Ghostty's keybindings in one step. Add this to your [Ghostty configuration](https://ghostty.org/docs/config):
+
+```ini
+keybind = clear
+```
+
+Ghostty's [`keybind = clear`](https://ghostty.org/docs/config/reference#keybind) removes all bindings defined up to that point, including its defaults. Place it after any bindings you want removed. Any bindings defined afterward remain active, so put shortcuts you want Ghostty to keep after this line.
+
+This also removes Ghostty's shortcuts for copy/paste, windows, tabs, quitting, and reloading configuration. Use Ghostty's menus for those actions, or add back the specific bindings you need. The change affects every program running in that Ghostty configuration. TTT still needs **Control or Super (Cmd)** or **Super (Cmd)** enabled as described above.
+
+On macOS, supported configuration locations include `~/.config/ghostty/config` and `~/Library/Application Support/com.mitchellh.ghostty/config`; newer versions also use the filename `config.ghostty`. Edit the file you already use, then reload through Ghostty's menu or restart Ghostty after saving your work. After clearing bindings, the default **Cmd+Shift+,** reload shortcut is no longer available unless you add it back.
+
+### Forward individual shortcuts instead
+
+If you want to keep Ghostty's other shortcuts, remove the `keybind = clear` line and unbind only selected keys. For example, Ghostty normally uses **Cmd+A** for terminal selection. This setup was tested in [PR #1280](https://github.com/eugenioenko/ttt/pull/1280):
 
 ```ini
 keybind = super+a=unbind
 ```
 
-On macOS, supported configuration locations include `~/.config/ghostty/config` and `~/Library/Application Support/com.mitchellh.ghostty/config`; newer versions also use the filename `config.ghostty`. Edit the file you already use, then reload Ghostty's configuration with **Cmd+Shift+,**. If the binding still behaves as before, restart Ghostty after saving your work.
-
-With Command enabled in TTT, **Cmd+A** should now select the editor's entire document. This `unbind` setup was tested with TTT in Ghostty on macOS in #1280.
+Reload Ghostty's configuration. With Command enabled in TTT, **Cmd+A** should now select the editor's entire document.
 
 [`unbind`](https://ghostty.org/docs/config/keybind) removes Ghostty's action for a key so the key can reach the application. `ignore` discards the input instead. The `unconsumed:` prefix runs a terminal action while also sending the key, so it is not a replacement for removing an unwanted terminal action.
-
-### Additional shortcuts
 
 :::note[Suggested mappings — not tested with TTT in Ghostty]
 The additional mappings below extend the Cmd+A setup. They were not part of the Ghostty testing in #1280. Add only the shortcuts you want to forward, reload Ghostty's configuration, and check each one in TTT.
@@ -59,13 +69,13 @@ keybind = super+l=unbind
 
 ### Explicit forwarding fallback
 
-If removing a binding does not deliver the expected key, Ghostty can send an explicit sequence. For Cmd+A, replace its `unbind` line with:
+If clearing or unbinding does not deliver the expected key, Ghostty can send an explicit sequence. For Cmd+A, add this after `keybind = clear`, or replace its individual `unbind` line:
 
 ```ini
 keybind = super+a=csi:97;9u
 ```
 
-Use one mapping per shortcut. This Cmd+A fallback was also tested in [PR #1280](https://github.com/eugenioenko/ttt/pull/1280); start with `unbind` above and use the explicit mapping only if needed.
+Use one mapping per shortcut. This Cmd+A fallback was also tested in [PR #1280](https://github.com/eugenioenko/ttt/pull/1280); use the explicit mapping only if needed.
 
 The [`csi` action](https://ghostty.org/docs/config/keybind/reference#csi) adds the escape-sequence prefix. In `97;9u`, `97` identifies `a` and `9` encodes Super/Command. The [sequence table below](#explicit-key-sequences) covers other common shortcuts.
 
@@ -143,7 +153,7 @@ For example, Ghostty's Cmd+S mapping is `keybind = super+s=csi:115;9u`.
 
 Terminal configuration applies to other programs running in that terminal too. Forward only the shortcuts you want TTT to own. Forwarding Cmd+C and Cmd+V moves copy/paste handling from the outer terminal to the running application; forwarding Cmd+K or Cmd+L replaces terminal actions such as clearing the screen or scrollback.
 
-The examples leave **Cmd+Q**, **Cmd+W**, **Cmd+T**, and **Cmd+N** with the terminal. You can release them too, but they will then reach TTT rather than quitting the terminal or managing its windows and tabs. Keep another terminal shortcut or its menus available for those actions.
+The individual-key examples leave **Cmd+Q**, **Cmd+W**, **Cmd+T**, and **Cmd+N** with the terminal. Ghostty's `keybind = clear` removes those bindings too. Keep the terminal's menus available or define replacement bindings after `clear` for the terminal actions you need.
 
 These mappings configure the terminal that runs TTT. TTT's **Forward shortcuts to terminal** setting controls the next step: whether TTT sends its reserved shortcuts to its own integrated terminal. See [integrated terminal shortcut forwarding](/guides/terminal/#shortcut-forwarding).
 
