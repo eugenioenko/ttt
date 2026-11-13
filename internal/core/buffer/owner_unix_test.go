@@ -44,6 +44,18 @@ func otherGroup(t *testing.T) int {
 	return 0
 }
 
+// plainDir returns a temp directory whose new files get the process's own
+// group, even when TMPDIR is setgid, so a target in another group always
+// needs an ownership change.
+func plainDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func dirNames(t *testing.T, dir string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
@@ -59,7 +71,7 @@ func dirNames(t *testing.T, dir string) []string {
 
 func TestSaveKeepsGroup(t *testing.T) {
 	group := otherGroup(t)
-	dir := t.TempDir()
+	dir := plainDir(t)
 	fname := filepath.Join(dir, "shared.txt")
 	if err := os.WriteFile(fname, []byte("old\n"), 0o640); err != nil {
 		t.Fatal(err)
@@ -133,7 +145,7 @@ func TestSaveWritesInPlaceWhenOwnerCannotBeKept(t *testing.T) {
 	chown = func(*os.File, int, int) error { return &os.PathError{Op: "chown", Err: syscall.EPERM} }
 	t.Cleanup(func() { chown = (*os.File).Chown })
 
-	dir := t.TempDir()
+	dir := plainDir(t)
 	fname := filepath.Join(dir, "shared.txt")
 	if err := os.WriteFile(fname, []byte("old contents\n"), 0o664); err != nil {
 		t.Fatal(err)
@@ -238,7 +250,7 @@ func TestWriteInPlaceLeavesNoRecoveryCopyWhenTargetIsNotWritable(t *testing.T) {
 
 func TestSaveDoesNotFollowSwappedTempPath(t *testing.T) {
 	group := otherGroup(t)
-	dir := t.TempDir()
+	dir := plainDir(t)
 	victim := filepath.Join(t.TempDir(), "victim.txt")
 	if err := os.WriteFile(victim, []byte("private\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -258,7 +270,9 @@ func TestSaveDoesNotFollowSwappedTempPath(t *testing.T) {
 	}
 	// Once the temp file belongs to the target's owner, that owner can swap
 	// its path for a symlink before the save finishes.
+	swapped := false
 	chown = func(f *os.File, uid, gid int) error {
+		swapped = true
 		err := f.Chown(uid, gid)
 		os.Remove(f.Name())
 		if linkErr := os.Symlink(victim, f.Name()); linkErr != nil {
@@ -270,6 +284,9 @@ func TestSaveDoesNotFollowSwappedTempPath(t *testing.T) {
 
 	b := &Buffer{Lines: []string{"new", ""}}
 	_ = b.SaveFile(target)
+	if !swapped {
+		t.Fatal("the save never changed the temp file's owner, so nothing was swapped")
+	}
 	info, err := os.Stat(victim)
 	if err != nil {
 		t.Fatal(err)
@@ -310,7 +327,7 @@ func TestCheckSameFileDetectsReplacement(t *testing.T) {
 
 func TestInPlaceSaveKeepsTempFilePrivate(t *testing.T) {
 	group := otherGroup(t)
-	dir := t.TempDir()
+	dir := plainDir(t)
 	target := filepath.Join(dir, "secret.txt")
 	if err := os.WriteFile(target, []byte("old\n"), 0o640); err != nil {
 		t.Fatal(err)
@@ -334,6 +351,9 @@ func TestInPlaceSaveKeepsTempFilePrivate(t *testing.T) {
 	b := &Buffer{Lines: []string{"new", ""}}
 	if err := b.SaveFile(target); err != nil {
 		t.Fatal(err)
+	}
+	if temp == nil {
+		t.Fatal("the save never tried to change the temp file's owner")
 	}
 	defer temp.Close()
 	info, err := temp.Stat()
