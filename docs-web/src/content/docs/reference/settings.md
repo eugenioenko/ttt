@@ -142,8 +142,8 @@ All editor settings are nested under the `editor` key.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `editor.tabSize` | int | `4` | Number of spaces per indentation level |
-| `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation |
+| `editor.tabSize` | int | `4` | Number of spaces per indentation level. Requires restart |
+| `editor.insertSpaces` | bool | `true` | Use spaces instead of tabs for indentation. Requires restart |
 | `editor.wordWrap` | bool | `false` | Soft-wrap long lines; the global Options toggle changes this default |
 | `editor.wordWrapColumn` | int | `0` | Maximum soft-wrap width in terminal display columns; `0` uses the available text width. Positive values cap it after gutters, scrollbars, and wrap margins. Ignored when wrapping is off; negative values normalize to `0` |
 | `editor.wordWrapBreak` | string | `"word"` | Where soft-wrapped rows end: `"word"` keeps words and identifiers whole, breaking after spaces and punctuation; `"character"` breaks wherever the row fills. Unknown values use `"word"` |
