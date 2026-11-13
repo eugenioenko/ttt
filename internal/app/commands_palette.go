@@ -1,6 +1,8 @@
 package app
 
 import (
+	"slices"
+
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/highlight"
@@ -16,6 +18,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	}
 	previousFocus := a.Root.Focused
 	palette := ui.NewSelectDialogWidget(a.Reg.List())
+	palette.SetRecentCommands(a.State.RecentCommands)
 	palette.Input.ControlModifiers = &a.Root.ControlModifiers
 	palette.Borders = a.Borders
 	palette.Icons = a.Settings.Appearance.Icons
@@ -30,6 +33,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		if (id == "terminal.sendNextKey" || id == "terminal.toggleShortcutForwarding") && previousFocus != nil {
 			a.Root.SetFocus(previousFocus)
 		}
+		a.rememberRecentCommand(id)
 		a.Reg.Execute(id)
 	}
 	palette.OnOpenFile = func(absPath string) {
@@ -46,6 +50,23 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		a.DismissDialog()
 	}
 	a.ShowDialog(palette)
+}
+
+const maxRecentCommands = 10
+
+// rememberRecentCommand merges into the list on disk, so another ttt window's
+// commands are kept.
+func (a *App) rememberRecentCommand(id string) {
+	disk := config.LoadState()
+	recent := pushRecent(disk.RecentCommands, []string{id}, maxRecentCommands)
+	a.State.RecentCommands = recent
+	if slices.Equal(recent, disk.RecentCommands) {
+		return
+	}
+	disk.RecentCommands = recent
+	if err := config.SaveState(disk); err != nil {
+		a.StatusError(i18n.Format("status.failedToSaveRecentCommands", i18n.Args{"error": err.Error()}))
+	}
 }
 
 func (a *App) ShowThemePicker() {

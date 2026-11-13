@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -713,5 +714,58 @@ func TestPalettePluginDisplayTitle(t *testing.T) {
 		if item.ID == "demo.open" && (item.Label != "My Plugin: Open Dashboard" || !strings.Contains(strings.Join(item.searchText, " "), "My Plugin")) {
 			t.Fatalf("help: %+v", item)
 		}
+	}
+}
+
+func paletteItemIDs(p *SelectDialogWidget) []string {
+	ids := make([]string, len(p.Items))
+	for i, item := range p.Items {
+		ids[i] = item.ID
+	}
+	return ids
+}
+
+func TestPaletteRecentCommandsLeadUnfilteredList(t *testing.T) {
+	p := NewSelectDialogWidget(testCommands())
+	p.Selected = 2
+	p.SetRecentCommands([]string{"sidebar.toggle", "plugin.unloaded", "file.open", "sidebar.toggle"})
+
+	want := []string{"sidebar.toggle", "file.open", "file.save", "editor.split"}
+	if got := paletteItemIDs(p); !slices.Equal(got, want) {
+		t.Fatalf("unfiltered order = %v, want %v", got, want)
+	}
+	if p.Selected != 0 {
+		t.Fatalf("selected = %d, want the most recent command at 0", p.Selected)
+	}
+
+	p.SetRecentCommands(nil)
+	want = []string{"file.save", "file.open", "editor.split", "sidebar.toggle"}
+	if got := paletteItemIDs(p); !slices.Equal(got, want) {
+		t.Fatalf("order without recent commands = %v, want %v", got, want)
+	}
+}
+
+func TestPaletteRecentCommandsDoNotReorderQueryResults(t *testing.T) {
+	plain := NewSelectDialogWidget(testCommands())
+	recent := NewSelectDialogWidget(testCommands())
+	recent.SetRecentCommands([]string{"file.open", "sidebar.toggle"})
+
+	for _, query := range []string{"file", "e", "toggle"} {
+		plain.filterCommands(query)
+		recent.filterCommands(query)
+		if got, want := paletteItemIDs(recent), paletteItemIDs(plain); !slices.Equal(got, want) {
+			t.Fatalf("query %q order = %v, want fuzzy order %v", query, got, want)
+		}
+	}
+}
+
+func TestPaletteRecentCommandsLeaveOtherModesAlone(t *testing.T) {
+	p := NewSelectDialogWidget(testCommands())
+	p.Input.SetText("?")
+	topics := paletteItemIDs(p)
+
+	p.SetRecentCommands([]string{"sidebar.toggle"})
+	if got := paletteItemIDs(p); p.mode != paletteHelpMode || !slices.Equal(got, topics) {
+		t.Fatalf("help mode=%v items=%v, want help topics %v", p.mode, got, topics)
 	}
 }

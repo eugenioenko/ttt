@@ -67,6 +67,7 @@ type SelectDialogWidget struct {
 	filesLoading      bool
 	helpTopics        []PaletteItem
 	helpCommands      []PaletteItem
+	recentCommands    []string
 	activeHelpTopic   string
 	helpQuery         string
 	OnExecute         func(id string)
@@ -100,6 +101,13 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 	}
 	p.filter()
 	return p
+}
+
+func (p *SelectDialogWidget) SetRecentCommands(ids []string) {
+	p.recentCommands = ids
+	if p.mode == paletteCommandMode {
+		p.filter()
+	}
 }
 
 func (p *SelectDialogWidget) SetFiles(files []PaletteFile) {
@@ -592,7 +600,7 @@ func filterPaletteHelpCandidates(query string, candidates []PaletteItem) []Palet
 func (p *SelectDialogWidget) filterCommands(query string) {
 	p.Items = nil
 	if query == "" {
-		for _, cmd := range p.Commands {
+		for _, cmd := range p.commandsRecentFirst() {
 			p.Items = append(p.Items, PaletteItem{
 				Label:  cmd.PaletteTitle(),
 				Detail: cmd.Shortcut,
@@ -639,6 +647,32 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 	}
 	p.Selected = 0
 	p.scrollOffset = 0
+}
+
+func (p *SelectDialogWidget) commandsRecentFirst() []command.Command {
+	if len(p.recentCommands) == 0 {
+		return p.Commands
+	}
+	ordered := make([]command.Command, 0, len(p.Commands))
+	recent := make(map[string]bool, len(p.recentCommands))
+	for _, id := range p.recentCommands {
+		if recent[id] {
+			continue
+		}
+		for _, cmd := range p.Commands {
+			if cmd.ID == id {
+				ordered = append(ordered, cmd)
+				recent[id] = true
+				break
+			}
+		}
+	}
+	for _, cmd := range p.Commands {
+		if !recent[cmd.ID] {
+			ordered = append(ordered, cmd)
+		}
+	}
+	return ordered
 }
 
 func (p *SelectDialogWidget) filterFiles(query string) {

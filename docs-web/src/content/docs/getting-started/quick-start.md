@@ -49,6 +49,8 @@ git diff | ttt                  # opens piped output in an unsaved tab (or: ttt 
 
 Press **Ctrl+P** to open command mode with a `>` prefix and the complete command registry. Press **Ctrl+K P** to search workspace files. At either palette's initial prompt, type `?` to browse orientation topics for the workspace, panels, navigation, changes, terminal, and keybinding chords; continue typing to search the help entries, or use `>` when you want the complete command list.
 
+The last 10 commands you ran from the palette are listed first, most recent first, and the rest follow alphabetically. Typing a query ranks commands by match alone. ttt keeps this history in `state.json` next to `settings.json`.
+
 ## Configuration
 
 Config files live in `~/.config/ttt/`:

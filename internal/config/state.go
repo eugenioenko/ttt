@@ -14,6 +14,7 @@ type State struct {
 	PanelHeight         int      `json:"panelHeight,omitempty"`
 	PanelWidth          int      `json:"panelWidth,omitempty"`
 	RecentFolders       []string `json:"recentFolders,omitempty"`
+	RecentCommands      []string `json:"recentCommands,omitempty"`
 }
 
 func LoadState() State {
