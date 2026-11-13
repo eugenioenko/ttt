@@ -148,11 +148,15 @@ func (b *Buffer) SaveFile(filename string) error {
 	}
 	// Once keepOwner hands the file to the target's owner, they can replace
 	// tmpName, so metadata changes go through the descriptor, never the path.
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
+	// The mode is applied only after the group is right, so the temp file never
+	// lets the saver's own group read it.
 	inPlace := statErr == nil && keepOwner(tmp, orig) != nil
+	if !inPlace {
+		if err := tmp.Chmod(mode); err != nil {
+			tmp.Close()
+			return err
+		}
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}

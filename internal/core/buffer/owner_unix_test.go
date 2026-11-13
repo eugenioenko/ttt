@@ -307,3 +307,40 @@ func TestCheckSameFileDetectsReplacement(t *testing.T) {
 		t.Error("expected an error once another file was renamed over the path")
 	}
 }
+
+func TestInPlaceSaveKeepsTempFilePrivate(t *testing.T) {
+	group := otherGroup(t)
+	dir := t.TempDir()
+	target := filepath.Join(dir, "secret.txt")
+	if err := os.WriteFile(target, []byte("old\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chown(target, -1, group); err != nil {
+		t.Fatal(err)
+	}
+	var temp *os.File
+	chown = func(f *os.File, _, _ int) error {
+		var err error
+		if temp, err = os.Open(f.Name()); err != nil {
+			t.Fatal(err)
+		}
+		return &os.PathError{Op: "chown", Err: syscall.EPERM}
+	}
+	t.Cleanup(func() { chown = (*os.File).Chown })
+
+	b := &Buffer{Lines: []string{"new", ""}}
+	if err := b.SaveFile(target); err != nil {
+		t.Fatal(err)
+	}
+	defer temp.Close()
+	info, err := temp.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("temp file holding the new contents had mode %o, want 600", info.Mode().Perm())
+	}
+}
