@@ -594,7 +594,7 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 	if query == "" {
 		for _, cmd := range p.Commands {
 			p.Items = append(p.Items, PaletteItem{
-				Label:  cmd.Title,
+				Label:  cmd.PaletteTitle(),
 				Detail: cmd.Shortcut,
 				ID:     cmd.ID,
 			})
@@ -607,6 +607,9 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 		var matches []scored
 		for _, cmd := range p.Commands {
 			bestOk, bestScore := fuzzyMatch(query, cmd.Title)
+			if ok, score := fuzzyMatch(query, cmd.PaletteTitle()); ok && (!bestOk || score > bestScore) {
+				bestOk, bestScore = true, score
+			}
 			for _, kw := range cmd.Keywords {
 				if ok, score := fuzzyMatch(query, kw); ok {
 					penalized := score / 2
@@ -619,7 +622,7 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 			if bestOk {
 				matches = append(matches, scored{
 					item: PaletteItem{
-						Label:  cmd.Title,
+						Label:  cmd.PaletteTitle(),
 						Detail: cmd.Shortcut,
 						ID:     cmd.ID,
 					},

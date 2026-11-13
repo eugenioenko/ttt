@@ -762,8 +762,10 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			}
 			cmd := entry.Command
 			a.Reg.Register(command.Command{
-				ID:    cmd,
-				Title: entry.Label,
+				ID:           cmd,
+				Title:        entry.Label,
+				DisplayTitle: pluginCommandTitle(p, entry.Label),
+				Keywords:     []string{p.Manifest.DisplayName, p.Name, p.Manifest.Name},
 				Handler: func() {
 					p.CallSidebarAction(cmd)
 				},
@@ -790,14 +792,40 @@ func (a *App) wirePluginLog(p *plugin.Plugin) {
 	}
 }
 
+func pluginCommandTitle(p *plugin.Plugin, title string) string {
+	name := strings.TrimSpace(p.Manifest.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(p.Name)
+	}
+	if name == "" {
+		name = strings.TrimSpace(p.Manifest.Name)
+	}
+	if name == "" {
+		return title
+	}
+	trimmed := strings.TrimSpace(title)
+	for _, alias := range []string{name, strings.TrimSpace(p.Name), strings.TrimSpace(p.Manifest.Name)} {
+		if alias == "" || len(trimmed) < len(alias) || !strings.EqualFold(trimmed[:len(alias)], alias) {
+			continue
+		}
+		rest := strings.TrimSpace(trimmed[len(alias):])
+		if strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "-") || strings.HasPrefix(rest, "–") || strings.HasPrefix(rest, "—") || strings.HasPrefix(rest, "|") {
+			return title
+		}
+	}
+	return name + ": " + trimmed
+}
+
 func (a *App) registerPluginCommandsAndKeys(p *plugin.Plugin) {
 	for _, cmd := range p.Commands {
 		handler := cmd.Handler
 		cmdID := cmd.ID
 		plugName := p.Name
 		a.Reg.Register(command.Command{
-			ID:    cmd.ID,
-			Title: cmd.Title,
+			ID:           cmd.ID,
+			Title:        cmd.Title,
+			DisplayTitle: pluginCommandTitle(p, cmd.Title),
+			Keywords:     []string{p.Manifest.DisplayName, p.Name, p.Manifest.Name},
 			Handler: func() {
 				if err := handler(); err != nil {
 					slog.Error("plugin command error", "plugin", plugName, "command", cmdID, "error", err)
