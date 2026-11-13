@@ -804,11 +804,17 @@ func pluginCommandTitle(p *plugin.Plugin, title string) string {
 		return title
 	}
 	trimmed := strings.TrimSpace(title)
+	trimmedRunes := []rune(trimmed)
 	for _, alias := range []string{name, strings.TrimSpace(p.Name), strings.TrimSpace(p.Manifest.Name)} {
-		if alias == "" || len(trimmed) < len(alias) || !strings.EqualFold(trimmed[:len(alias)], alias) {
+		alias = strings.TrimSpace(alias)
+		if alias == "" || len(trimmedRunes) < len([]rune(alias)) {
 			continue
 		}
-		rest := strings.TrimSpace(trimmed[len(alias):])
+		aliasRunes := []rune(alias)
+		if !strings.EqualFold(string(trimmedRunes[:len(aliasRunes)]), alias) {
+			continue
+		}
+		rest := strings.TrimSpace(string(trimmedRunes[len(aliasRunes):]))
 		if strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "-") || strings.HasPrefix(rest, "–") || strings.HasPrefix(rest, "—") || strings.HasPrefix(rest, "|") {
 			return title
 		}
