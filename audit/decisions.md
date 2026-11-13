@@ -14,6 +14,7 @@ Behavior that looks like a bug but is intended, or was reviewed and won't be fix
 | End on a soft-wrapped line moves to the end of the logical line. | Logical-line navigation. | #1496 |
 | Custom `tab` / `shift+tab` bindings don't fire while the editor is focused. | The editor owns indent and outdent. Bindings work from other focus targets. | #1496 |
 | The explorer filter only searches loaded (expanded) folders. | Documented. | #1470 |
+| Layout at extremely narrow widths (around 30 columns or less), such as dialog buttons being cut off. | Not a supported terminal size; ttt doesn't target mobile terminals. | BUG-039 (2026-07 audit) |
 | Undoing an edit on a folded header line unfolds the region. | Unfolding shows the user that something inside the fold changed. | BUG-024 (2026-07 audit) |
 | The tab bar's overflow chevrons (◀ ▶) switch to the previous/next tab instead of scrolling the strip. | Tabs are navigated one at a time; the strip doesn't scroll on its own. | BUG-016 (2026-07 audit) |
 
