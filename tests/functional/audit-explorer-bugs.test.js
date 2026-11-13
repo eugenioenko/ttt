@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("BUG-028: command-palette Explorer: Delete lacks the isRoot guard the right-click menu has", () => {
-  it.fails("Explorer: Delete with the root selected does not disk-remove the root folder", () => {
+  it("Explorer: Delete with the root selected does not disk-remove the root folder", () => {
     dir = createTempDir();
     mkdirSync(join(dir, "sub"));
     writeFileSync(join(dir, "file.txt"), "hi\n");
@@ -31,13 +31,14 @@ describe("BUG-028: command-palette Explorer: Delete lacks the isRoot guard the r
     tui.setEnv({ TTT_CONFIG_DIR: configDir });
     tui.exec("Show Explorer");
     tui.exec("Explorer: Delete");
+    // Without the guard these confirm the dialog and wipe the workspace.
     tui.press("right"); // move to "Yes" in confirm dialog
     tui.press("enter");
-    tui.waitFor("Permanently deleted");
+    tui.elapse(500);
     tui.run();
 
-    // Buggy: explorerNodePath() falls back to Tree.Selected()==0 (root),
-    // and os.RemoveAll wipes the whole workspace.
+    // Fixed: explorer.delete refuses a workspace root before showing the
+    // confirmation, so nothing is removed from disk.
     expect(existsSync(dir)).toBe(true);
     expect(existsSync(join(dir, "file.txt"))).toBe(true);
   });

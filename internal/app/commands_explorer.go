@@ -53,7 +53,12 @@ func (a *App) ExplorerRename() {
 }
 
 func (a *App) ExplorerDelete() {
-	a.FileOpDelete(a.explorerNodePath(), a.explorerReload)
+	path := a.explorerNodePath()
+	if a.Explorer.isRootPath(path) {
+		a.StatusWarn(i18n.Text("status.cannotDeleteWorkspaceRoot"))
+		return
+	}
+	a.FileOpDelete(path, a.explorerReload)
 }
 
 func (a *App) CopyAbsolutePath() {
@@ -212,8 +217,9 @@ func registerExplorerCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID: "explorer.open", Title: i18n.Text("command.explorerToggleNode"),
-		Keywords: []string{"view", "file"},
-		Handler:  app.ExplorerOpen,
+		Keywords:      []string{"view", "file"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerOpen,
 	})
 
 	reg.Register(command.Command{
@@ -230,14 +236,16 @@ func registerExplorerCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID: "explorer.rename", Title: i18n.Text("command.explorerRename"),
-		Keywords: []string{"view", "file"},
-		Handler:  app.ExplorerRename,
+		Keywords:      []string{"view", "file"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerRename,
 	})
 
 	reg.Register(command.Command{
 		ID: "explorer.delete", Title: i18n.Text("command.explorerDelete"),
-		Keywords: []string{"view", "file", "remove"},
-		Handler:  app.ExplorerDelete,
+		Keywords:      []string{"view", "file", "remove"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerDelete,
 	})
 
 	reg.Register(command.Command{
@@ -254,8 +262,9 @@ func registerExplorerCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID: "explorer.reveal", Title: i18n.Text("command.explorerRevealInFileManager"),
-		Keywords: []string{"explorer", "file", "reveal", "manager", "folder", "finder", "open"},
-		Handler:  app.ExplorerReveal,
+		Keywords:      []string{"explorer", "file", "reveal", "manager", "folder", "finder", "open"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerReveal,
 	})
 
 	reg.Register(command.Command{
@@ -266,20 +275,23 @@ func registerExplorerCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID: "explorer.copyAbsolutePath", Title: i18n.Text("command.explorerCopyAbsolutePath"),
-		Keywords: []string{"explorer", "file", "path", "copy", "clipboard", "absolute"},
-		Handler:  app.ExplorerCopyAbsolutePath,
+		Keywords:      []string{"explorer", "file", "path", "copy", "clipboard", "absolute"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerCopyAbsolutePath,
 	})
 
 	reg.Register(command.Command{
 		ID: "explorer.openInTerminal", Title: i18n.Text("command.explorerOpenInTerminal"),
-		Keywords: []string{"explorer", "folder", "terminal", "shell", "cd", "open"},
-		Handler:  app.ExplorerOpenInTerminal,
+		Keywords:      []string{"explorer", "folder", "terminal", "shell", "cd", "open"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerOpenInTerminal,
 	})
 
 	reg.Register(command.Command{
 		ID: "explorer.copyRelativePath", Title: i18n.Text("command.explorerCopyRelativePath"),
-		Keywords: []string{"explorer", "file", "path", "copy", "clipboard", "relative"},
-		Handler:  app.ExplorerCopyRelativePath,
+		Keywords:      []string{"explorer", "file", "path", "copy", "clipboard", "relative"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerCopyRelativePath,
 	})
 
 	reg.Register(command.Command{

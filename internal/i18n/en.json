@@ -956,6 +956,7 @@
   "settings.wrapWidth": "Wrap width",
   "status.absolutePathCopiedToClipboard": "Absolute path copied to clipboard",
   "status.bufferIsEmpty": "Buffer is empty",
+  "status.cannotDeleteWorkspaceRoot": "The workspace root cannot be deleted; remove the folder from the workspace instead",
   "status.cannotOpenFile": "Cannot open file {abs}: {error}",
   "status.cannotOpenFileNotARegularFile": "Cannot open file: not a regular file: {abs}",
   "status.cannotOpenFilePathIsADirectory": "Cannot open file: path is a directory: {abs}",
