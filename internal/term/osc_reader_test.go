@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -640,5 +641,62 @@ func TestOSCTtyDrainStopStartResumesReading(t *testing.T) {
 	}
 	if got := string(buf[:n]); got != "hello" {
 		t.Fatalf("Read after Start = %q, want %q", got, "hello")
+	}
+}
+
+type interruptedReadTty struct {
+	*mockTty
+	started chan struct{}
+	reads   chan oscReadResult
+}
+
+func (t *interruptedReadTty) Read(p []byte) (int, error) {
+	t.started <- struct{}{}
+	r := <-t.reads
+	return copy(p, r.data), r.err
+}
+
+func TestOSCTtyRestartDiscardsReadInterruptedByDrain(t *testing.T) {
+	tty := &interruptedReadTty{mockTty: &mockTty{}, started: make(chan struct{}, 2), reads: make(chan oscReadResult)}
+	wrapper := OSCTty{Tty: tty, Reader: NewOSCReader(tty)}
+	buf := make([]byte, 64)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := wrapper.Read(buf)
+		done <- err
+	}()
+	select {
+	case <-tty.started:
+	case <-time.After(time.Second):
+		t.Fatal("underlying Read did not start")
+	}
+	if err := wrapper.Drain(); err != nil {
+		t.Fatalf("Drain failed: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("drained Read error = %v, want nil", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Read hung after Drain")
+	}
+	tty.reads <- oscReadResult{err: os.ErrDeadlineExceeded}
+
+	if err := wrapper.Stop(); err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+	if err := wrapper.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	go func() { tty.reads <- oscReadResult{data: []byte("hello")} }()
+	n, err := wrapper.Read(buf)
+	if err != nil {
+		t.Fatalf("Read after restart = %v, want input from the new session", err)
+	}
+	if got := string(buf[:n]); got != "hello" {
+		t.Fatalf("Read after restart = %q, want %q", got, "hello")
 	}
 }

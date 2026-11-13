@@ -396,7 +396,7 @@ func (t OSCTty) Start() error {
 		return err
 	}
 	if t.Reader != nil {
-		t.Reader.clearDrained()
+		t.Reader.resumeAfterDrain()
 	}
 	return nil
 }
@@ -451,9 +451,22 @@ func (o *OSCReader) Drain() {
 	o.mu.Unlock()
 }
 
-func (o *OSCReader) clearDrained() {
+// resumeAfterDrain discards the previous session's in-flight read, whose result
+// is usually the interruption Drain caused and would stop tcell's restarted input loop.
+func (o *OSCReader) resumeAfterDrain() {
+	o.mu.Lock()
+	drained := o.drained
+	o.mu.Unlock()
+	if !drained {
+		return
+	}
+	o.readMu.Lock()
+	o.readResult = nil
+	o.readErr = nil
+	o.readMu.Unlock()
 	o.mu.Lock()
 	o.drained = false
+	o.readFailed = false
 	o.mu.Unlock()
 }
 
