@@ -48,9 +48,9 @@ func NewTcellScreen() (*TcellScreen, error) {
 
 // NewTerminfoScreenFromTty initializes a tcell screen using tty while routing
 // replies to registered OSC 4/10/11 queries away from the keyboard input stream.
-func NewTerminfoScreenFromTty(tty tcell.Tty) (*TcellScreen, *OSCReader, error) {
+func NewTerminfoScreenFromTty(tty tcell.Tty, opts ...tcell.TerminfoScreenOption) (*TcellScreen, *OSCReader, error) {
 	osc := NewOSCReader(tty)
-	s, err := tcell.NewTerminfoScreenFromTty(OSCTty{Tty: tty, Reader: osc})
+	s, err := tcell.NewTerminfoScreenFromTty(OSCTty{Tty: tty, Reader: osc}, opts...)
 	if err != nil {
 		return nil, nil, err
 	}
