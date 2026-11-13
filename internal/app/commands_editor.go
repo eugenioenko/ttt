@@ -483,7 +483,7 @@ func (a *App) saveAllAndQuit(onQuit func(), previousOverlay ui.Widget) {
 			if group != a.EditorGroup && group.AnyDirty() {
 				a.activateEditorGroup(group)
 				a.FocusEditor()
-				a.saveAllAndQuit(onQuit)
+				a.saveAllAndQuit(onQuit, previousOverlay)
 				return
 			}
 		}

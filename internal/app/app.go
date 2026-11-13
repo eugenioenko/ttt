@@ -67,7 +67,7 @@ type App struct {
 	language        languageState
 	Root            *ui.Root
 	EditorGroup     *ui.EditorGroupWidget // Follows activation so commands target the group receiving keys.
-	EditorSplit *ui.EditorLayoutWidget
+	EditorSplit     *ui.EditorLayoutWidget
 	Sidebar         *ui.SidebarWidget
 	SplitPanel      *ui.SplitPanelWidget
 	ContentSplit    *ui.ContentSplitWidget
