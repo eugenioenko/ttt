@@ -85,6 +85,7 @@ type Buffer struct {
 	InsertFinalNewline     bool
 	ShowTrailingNewline    bool
 	TrimTrailingWhitespace bool
+	UTF8BOM                bool   // file signature, excluded from Lines
 	LineEnding             string // "\n" (LF) or "\r\n" (CRLF); defaults to "\n"
 	// savedLineEnding is LineEnding as last loaded or saved. Changing the line
 	// ending is not on the undo stack, so undo alone cannot tell it apart.

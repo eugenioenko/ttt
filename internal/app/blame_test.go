@@ -128,6 +128,27 @@ func TestBlameDirtyStateRefreshesAfterSave(t *testing.T) {
 	}
 }
 
+func TestBlameUTF8BOMPreservesUneditedFirstLineAuthor(t *testing.T) {
+	h := newBlameTestHarness(t)
+	a := h.a
+	path := a.EditorGroup.ActiveFilePath()
+	repo := filepath.Dir(path)
+	if err := os.WriteFile(path, []byte("\ufeffone\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runTreeGit(t, repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-qam", "add BOM")
+	if !a.EditorGroup.ReloadFile(path) {
+		t.Fatal("reload failed")
+	}
+	a.Repository.RefreshNow(RepositoryWorktree)
+	a.EditorGroup.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 1, Col: 0, Rune: 'X'})
+	a.SyncBlame()
+	settleBlame(t, h)
+	if !strings.Contains(blameText(a), "Test") {
+		t.Fatalf("editing another line cleared the BOM file's first-line author: %q", blameText(a))
+	}
+}
+
 func TestBlameRepositoryChangesRefreshSamePosition(t *testing.T) {
 	h := newBlameTestHarness(t)
 	a := h.a

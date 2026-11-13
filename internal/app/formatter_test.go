@@ -137,6 +137,61 @@ func TestEmptyFormatterOutputPreservesEdits(t *testing.T) {
 	}
 }
 
+func TestFormatterPreservesUTF8BOMMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name, original, command, want string
+		wantErr                       bool
+	}{
+		{"plain file", "one\n", "printf \\357\\273\\277two\\n", "two\n", false},
+		{"bom file", "\ufeffone\n", "printf \\357\\273\\277two\\n", "\ufefftwo\n", false},
+		{"formatter omits signature", "\ufeffone\n", "printf two\\n", "\ufefftwo\n", false},
+		{"unchanged", "\ufeffone\n", "cat", "\ufeffone\n", false},
+		{"bom only file", "\ufeff", "cat", "\ufeff", false},
+		{"second feff", "\ufeff\ufeffone\n", "sed s/one/two/", "\ufeff\ufefftwo\n", false},
+		{"interior feff", "\ufeffone\ufeffx\n", "sed s/one/two/", "\ufefftwo\ufeffx\n", false},
+		{"signature only", "\ufeffone\n", "printf \\357\\273\\277", "\ufeffone\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := exec.LookPath(strings.Fields(tc.command)[0]); err != nil {
+				t.Skipf("test formatter unavailable: %v", err)
+			}
+			a := buildTestApp(t, config.DefaultSettings())
+			t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+			path := filepath.Join(t.TempDir(), "bom.txt")
+			if err := os.WriteFile(path, []byte(tc.original), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.EditorGroup.OpenFile(path); err != nil {
+				t.Fatal(err)
+			}
+			buf := a.EditorGroup.ActiveBuffer()
+			version := buf.Version()
+			for range 2 {
+				err := a.applyExternalFormatter(tc.command, path)
+				if (err != nil) != tc.wantErr {
+					t.Fatalf("formatter error = %v, want error %v", err, tc.wantErr)
+				}
+				if tc.want == tc.original && (buf.Version() != version || buf.Dirty) {
+					t.Fatal("unchanged or rejected formatting modified the buffer")
+				}
+				if buf.UTF8BOM != strings.HasPrefix(tc.original, "\ufeff") {
+					t.Fatal("formatter changed the file's BOM metadata")
+				}
+				if !a.EditorGroup.Save() {
+					t.Fatal("save failed")
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(data) != tc.want {
+					t.Fatalf("formatted file = %x, want %x", data, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestEmptyFormatterOutputForEmptyDocument(t *testing.T) {
 	for _, command := range []string{"true", "printf \\n", "printf \\r\\n"} {
 		t.Run(command, func(t *testing.T) {

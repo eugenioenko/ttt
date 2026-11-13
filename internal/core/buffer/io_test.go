@@ -26,6 +26,98 @@ func TestLoadAndSaveFile(t *testing.T) {
 	}
 }
 
+func TestUTF8BOMLoadSave(t *testing.T) {
+	for _, tc := range []struct {
+		name, content string
+		lines         []string
+	}{
+		{"plain", "one\ntwo\n", []string{"one", "two", ""}},
+		{"bom lf", "\ufeffone\ntwo\n", []string{"one", "two", ""}},
+		{"bom crlf", "\ufeffone\r\ntwo\r\n", []string{"one", "two", ""}},
+		{"bom no final newline", "\ufeffone", []string{"one", ""}},
+		{"bom crlf no final newline", "\ufeffone\r\ntwo", []string{"one", "two", ""}},
+		{"bom only", "\ufeff", []string{""}},
+		{"interior feff", "one\ufefftwo\n\ufeffthree", []string{"one\ufefftwo", "\ufeffthree", ""}},
+		{"strip one bom", "\ufeff\ufeffone", []string{"\ufeffone", ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "bom.txt")
+			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			b := &Buffer{ShowTrailingNewline: true, InsertFinalNewline: strings.HasSuffix(tc.content, "\n")}
+			for range 2 {
+				if err := b.LoadFile(path); err != nil {
+					t.Fatal(err)
+				}
+				if !slices.Equal(b.Lines, tc.lines) {
+					t.Fatalf("loaded lines = %q, want %q", b.Lines, tc.lines)
+				}
+				if b.Dirty {
+					t.Fatal("loading marked the buffer dirty")
+				}
+				if err := b.SaveFile(path); err != nil {
+					t.Fatal(err)
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(data) != tc.content {
+					t.Fatalf("saved bytes = %x, want %x", data, tc.content)
+				}
+			}
+		})
+	}
+}
+
+func TestSetTextResetsUTF8BOM(t *testing.T) {
+	b := &Buffer{}
+	path := filepath.Join(t.TempDir(), "bom.txt")
+	for _, text := range []string{"\ufeffone", "two", "\ufeff", "", "\ufeffthree"} {
+		b.SetText(text)
+		if got, want := b.Lines[0], strings.TrimPrefix(text, "\ufeff"); got != want {
+			t.Fatalf("SetText(%q): first line = %q, want %q", text, got, want)
+		}
+		if err := b.SaveFile(path); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != text {
+			t.Fatalf("SetText(%q): saved bytes = %x", text, data)
+		}
+	}
+}
+
+func TestReloadFileResetsUTF8BOM(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bom.txt")
+	b := &Buffer{}
+	for _, text := range []string{"\ufeffone", "two"} {
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.LoadFile(path); err != nil {
+			t.Fatal(err)
+		}
+		if b.UTF8BOM != strings.HasPrefix(text, "\ufeff") {
+			t.Fatalf("LoadFile(%q): UTF8BOM = %v", text, b.UTF8BOM)
+		}
+		if err := b.SaveFile(path); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != text {
+			t.Fatalf("reloaded file saved as %x, want %x", data, text)
+		}
+	}
+}
+
 func TestLineEndingChangedSinceLoadAndSave(t *testing.T) {
 	fname := filepath.Join(t.TempDir(), "eol.txt")
 	if err := os.WriteFile(fname, []byte("one\ntwo\n"), 0o644); err != nil {
