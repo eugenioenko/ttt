@@ -2,7 +2,9 @@ package term
 
 import (
 	"bytes"
+	"errors"
 	"io"
+	"os"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -186,7 +188,8 @@ func TestOSCReaderWithholdsColorReplyFragmentedBeyondTcellTimeout(t *testing.T) 
 
 type streamedReadTty struct {
 	*mockTty
-	reads chan []byte
+	reads   chan []byte
+	started chan struct{}
 }
 
 func TestOSCReaderPassesStandaloneEscapeThroughWithoutQuery(t *testing.T) {
@@ -217,6 +220,13 @@ func TestOSCReaderPassesStandaloneEscapeThroughWithoutQuery(t *testing.T) {
 }
 
 func (t *streamedReadTty) Read(p []byte) (int, error) {
+	if t.started != nil {
+		select {
+		case <-t.started:
+		default:
+			close(t.started)
+		}
+	}
 	data, ok := <-t.reads
 	if !ok {
 		return 0, io.EOF
@@ -480,5 +490,213 @@ func TestOSCReaderEscapeRecoversBeforeDiscardDeadline(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+type zeroByteReadTty struct {
+	*mockTty
+	readCalls int
+}
+
+func (t *zeroByteReadTty) Read(p []byte) (int, error) {
+	t.readCalls++
+	return 0, nil
+}
+
+func TestOSCReaderReadReturnsZeroOnUnderlyingZeroByteRead(t *testing.T) {
+	tty := &zeroByteReadTty{mockTty: &mockTty{}}
+	reader := NewOSCReader(tty)
+	buf := make([]byte, 64)
+	n, err := reader.Read(buf)
+	if n != 0 || err != nil {
+		t.Fatalf("Read = (%d, %v), want (0, nil)", n, err)
+	}
+	if tty.readCalls != 1 {
+		t.Fatalf("underlying Read called %d times, want 1", tty.readCalls)
+	}
+}
+
+func TestOSCTtyDrainUnblocksReader(t *testing.T) {
+	started := make(chan struct{})
+	tty := &streamedReadTty{mockTty: &mockTty{}, reads: make(chan []byte), started: started}
+	defer close(tty.reads)
+	reader := NewOSCReader(tty)
+	wrapper := OSCTty{Tty: tty, Reader: reader}
+
+	done := make(chan struct{})
+	var readN int
+	var readErr error
+	go func() {
+		buf := make([]byte, 64)
+		readN, readErr = wrapper.Read(buf)
+		close(done)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("wrapper.Read did not start")
+	}
+
+	if err := wrapper.Drain(); err != nil {
+		t.Fatalf("Drain failed: %v", err)
+	}
+
+	select {
+	case <-done:
+		if readN != 0 || readErr != nil {
+			t.Fatalf("drained Read = (%d, %v), want (0, nil)", readN, readErr)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("wrapper.Read hung after Drain")
+	}
+}
+
+func TestOSCReaderDrainPreventsSubsequentReads(t *testing.T) {
+	tty := &zeroByteReadTty{mockTty: &mockTty{}}
+	reader := NewOSCReader(tty)
+	reader.Drain()
+
+	buf := make([]byte, 64)
+	n, err := reader.Read(buf)
+	if n != 0 || err != nil {
+		t.Fatalf("Read after Drain = (%d, %v), want (0, nil)", n, err)
+	}
+	if tty.readCalls != 0 {
+		t.Fatalf("underlying Read called %d times after Drain, want 0", tty.readCalls)
+	}
+}
+
+type lifecycleTestTty struct {
+	*mockTty
+	reads      chan []byte
+	startCalls int
+	stopCalls  int
+	drainCalls int
+	startErr   error
+}
+
+func (t *lifecycleTestTty) Start() error {
+	t.startCalls++
+	return t.startErr
+}
+
+func (t *lifecycleTestTty) Stop() error {
+	t.stopCalls++
+	return nil
+}
+
+func (t *lifecycleTestTty) Drain() error {
+	t.drainCalls++
+	return nil
+}
+
+func (t *lifecycleTestTty) Read(p []byte) (int, error) {
+	data, ok := <-t.reads
+	if !ok {
+		return 0, io.EOF
+	}
+	return copy(p, data), nil
+}
+
+func TestOSCTtyDrainStopStartResumesReading(t *testing.T) {
+	tty := &lifecycleTestTty{
+		mockTty:  &mockTty{},
+		reads:    make(chan []byte, 1),
+		startErr: errors.New("start failed"),
+	}
+	reader := NewOSCReader(tty)
+	wrapper := OSCTty{Tty: tty, Reader: reader}
+
+	if err := wrapper.Drain(); err != nil {
+		t.Fatalf("Drain failed: %v", err)
+	}
+
+	// Verify failed Start preserves error and keeps drained state
+	if err := wrapper.Start(); err == nil || err.Error() != "start failed" {
+		t.Fatalf("Start error = %v, want 'start failed'", err)
+	}
+	buf := make([]byte, 64)
+	n, err := wrapper.Read(buf)
+	if n != 0 || err != nil {
+		t.Fatalf("Read while drained after failed Start = (%d, %v), want (0, nil)", n, err)
+	}
+
+	// Stop
+	if err := wrapper.Stop(); err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+
+	// Start succeeds and clears drained state
+	tty.startErr = nil
+	if err := wrapper.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Read receives input again
+	tty.reads <- []byte("hello")
+	n, err = wrapper.Read(buf)
+	if err != nil {
+		t.Fatalf("Read after Start failed: %v", err)
+	}
+	if got := string(buf[:n]); got != "hello" {
+		t.Fatalf("Read after Start = %q, want %q", got, "hello")
+	}
+}
+
+type interruptedReadTty struct {
+	*mockTty
+	started chan struct{}
+	reads   chan oscReadResult
+}
+
+func (t *interruptedReadTty) Read(p []byte) (int, error) {
+	t.started <- struct{}{}
+	r := <-t.reads
+	return copy(p, r.data), r.err
+}
+
+func TestOSCTtyRestartDiscardsReadInterruptedByDrain(t *testing.T) {
+	tty := &interruptedReadTty{mockTty: &mockTty{}, started: make(chan struct{}, 2), reads: make(chan oscReadResult)}
+	wrapper := OSCTty{Tty: tty, Reader: NewOSCReader(tty)}
+	buf := make([]byte, 64)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := wrapper.Read(buf)
+		done <- err
+	}()
+	select {
+	case <-tty.started:
+	case <-time.After(time.Second):
+		t.Fatal("underlying Read did not start")
+	}
+	if err := wrapper.Drain(); err != nil {
+		t.Fatalf("Drain failed: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("drained Read error = %v, want nil", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Read hung after Drain")
+	}
+	tty.reads <- oscReadResult{err: os.ErrDeadlineExceeded}
+
+	if err := wrapper.Stop(); err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+	if err := wrapper.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	go func() { tty.reads <- oscReadResult{data: []byte("hello")} }()
+	n, err := wrapper.Read(buf)
+	if err != nil {
+		t.Fatalf("Read after restart = %v, want input from the new session", err)
+	}
+	if got := string(buf[:n]); got != "hello" {
+		t.Fatalf("Read after restart = %q, want %q", got, "hello")
 	}
 }
