@@ -105,7 +105,10 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 	highlight.SetStepScheduler(func() {})
 	t.Cleanup(func() {
 		editor.CloseTasks()
-		editor.EditorGroup.CloseAllTabs()
+		for _, group := range editor.EditorSplit.Groups() {
+			group.OnEmpty = nil
+			group.CloseAllTabs()
+		}
 		highlight.SetStepScheduler(nil)
 	})
 	h2.redraw()
@@ -136,9 +139,7 @@ func (h *testHarness) redraw() {
 }
 
 func (h *testHarness) flushOnChange() {
-	if h.app.EditorGroup.Editor != nil {
-		h.app.EditorGroup.Editor.FlushOnChange()
-	}
+	h.app.FlushEditorOnChange()
 }
 
 func (h *testHarness) pressKey(key tcell.Key, mod tcell.ModMask) {

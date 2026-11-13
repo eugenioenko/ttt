@@ -50,11 +50,14 @@ type Tab struct {
 }
 
 type TabDragAutoScrollTick struct {
+	Target     *TabBarWidget
 	Generation uint64
 }
 
 type TabBarWidget struct {
 	BaseWidget
+	ShowGroupFocus            bool
+	GroupActive               bool
 	Icons                     string
 	Tabs                      []Tab
 	Borders                   *term.BorderSet
@@ -64,6 +67,9 @@ type TabBarWidget struct {
 	OnTabClose                func(index int)
 	OnTabUnpin                func(index int)
 	OnTabReorder              func(from, to int)
+	OnTabDrag                 func(index, x, y int)
+	OnTabDrop                 func(index, x, y int) bool
+	OnTabDragCancel           func()
 	NormalizeDropTarget       func(from, to int) int
 	PostDragAutoScrollTick    func(generation uint64)
 	PointerInteractionValid   func() bool
@@ -84,6 +90,7 @@ type TabBarWidget struct {
 	lastClickTime             int64
 	drag                      widgets.TabDragState
 	dragPointerX              int
+	dragPointerY              int
 	autoScrollTimer           *time.Timer
 	autoScrollGeneration      uint64
 	autoScrollDirection       int
@@ -204,6 +211,9 @@ func (t *TabBarWidget) Render(surface Surface) {
 		b = *t.Borders
 	}
 	bs := term.StyleBorder
+	if t.ShowGroupFocus && t.GroupActive {
+		bs = term.StyleBorderActive
+	}
 
 	// Compute spans: active tab needs 2 extra cols for │ │ side borders
 	spans := make([]tabSpan, len(t.Tabs))
@@ -374,6 +384,12 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventIgnored
 		}
 		from, to, dragged := t.drag.End()
+		if dragged && t.OnTabDrop != nil && t.OnTabDrop(from, mx, my) {
+			return EventConsumed
+		}
+		if t.OnTabDragCancel != nil {
+			t.OnTabDragCancel()
+		}
 		if dragged && from != to && t.OnTabReorder != nil {
 			t.OnTabReorder(from, to)
 		}
@@ -383,10 +399,13 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 		if !t.validateGestureSource() {
 			return EventIgnored
 		}
-		if t.drag.Update(mx, t.effectiveDropTarget(t.dropTargetAt(mx))) {
-			t.dragPointerX = mx
+		if t.drag.UpdateAt(mx, my, t.effectiveDropTarget(t.dropTargetAt(mx))) {
+			t.dragPointerX, t.dragPointerY = mx, my
+			if t.OnTabDrag != nil {
+				t.OnTabDrag(t.drag.From(), mx, my)
+			}
 			t.scrollDragOnce(mx)
-			t.drag.Update(mx, t.effectiveDropTarget(t.dropTargetAt(mx)))
+			t.drag.UpdateAt(mx, my, t.effectiveDropTarget(t.dropTargetAt(mx)))
 			t.updateAutoScrollZone(mx)
 			t.closeDownX = -1
 			return EventCaptured
@@ -510,7 +529,7 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 				t.OnTabClick(i)
 			}
 			if t.OnTabReorder != nil {
-				t.drag.Begin(i, tabIdentity(t.Tabs[i]), mx)
+				t.drag.BeginAt(i, tabIdentity(t.Tabs[i]), mx, my)
 				return EventCaptured
 			}
 			return EventConsumed
@@ -565,6 +584,9 @@ func (t *TabBarWidget) CancelPointerCapture() bool {
 	t.cancelAutoScroll()
 	active := t.drag.Active()
 	if active {
+		if t.OnTabDragCancel != nil {
+			t.OnTabDragCancel()
+		}
 		t.drag.Cancel()
 	}
 	t.wasPressed = false
@@ -750,11 +772,18 @@ func (t *TabBarWidget) HandleDragAutoScrollTick(generation uint64) bool {
 		t.cancelAutoScroll()
 		return false
 	}
-	t.drag.Update(t.dragPointerX, t.effectiveDropTarget(t.dropTargetAt(t.dragPointerX)))
+	t.drag.UpdateAt(t.dragPointerX, t.dragPointerY, t.effectiveDropTarget(t.dropTargetAt(t.dragPointerX)))
 	if t.dragScrollDirection(t.dragPointerX) != t.autoScrollDirection {
 		t.updateAutoScrollZone(t.dragPointerX)
 	} else {
 		t.armAutoScrollTick(generation)
 	}
 	return true
+}
+
+func (t *TabBarWidget) DropIndexAt(x, y int) int {
+	if !t.GetRect().Contains(x, y) {
+		return -1
+	}
+	return t.dropTargetAt(x)
 }

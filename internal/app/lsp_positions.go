@@ -10,8 +10,10 @@ import (
 
 // Call on the UI thread; async requests keep this immutable text snapshot.
 func (a *App) lspLines(path string) []string {
-	if buf := a.EditorGroup.BufferForPath(path); buf != nil {
-		return slices.Clone(buf.Lines)
+	for _, group := range a.editorGroups() {
+		if buf := group.BufferForPath(path); buf != nil {
+			return slices.Clone(buf.Lines)
+		}
 	}
 	text, err := os.ReadFile(path)
 	if err != nil {

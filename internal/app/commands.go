@@ -11,6 +11,7 @@ import (
 
 func RegisterCommands(app *App) {
 	registerViewCommands(app)
+	registerEditorGroupCommands(app)
 	registerEditorCommands(app)
 	registerSearchCommands(app)
 	registerPaletteCommands(app)

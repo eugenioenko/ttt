@@ -29,6 +29,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	s.Sidebar.CommitHistoryHeight = 17
 	s.Git.FileView = GitFileViewTree
 	s.Appearance.Icons = IconsNone
+	s.Appearance.HighlightActiveGroupBorder = false
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Welcome.RecentFolders = &enabled
@@ -63,6 +64,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Git.FileView != GitFileViewTree {
 		t.Errorf("git.fileView = %q, want %q", got.Git.FileView, GitFileViewTree)
+	}
+	if got.Appearance.HighlightActiveGroupBorder {
+		t.Error("appearance.highlightActiveGroupBorder did not round-trip")
 	}
 	if got.Appearance.Icons != IconsNone {
 		t.Errorf("appearance.icons = %q; \"none\" did not round-trip", got.Appearance.Icons)

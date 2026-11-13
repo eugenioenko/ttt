@@ -243,44 +243,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	bracketStyles := ResolveBracketColorStyles(cfg.Theme.Editor.BracketColors)
 
 	highlight.SetTimeLimit(time.Duration(cfg.Settings.Editor.HighlightTimeLimit) * time.Millisecond)
-	editorGroup := ui.NewEditorGroupWidget(borders, cfg.Settings.Editor.TabSize, cfg.Settings.Editor.LineNumbers, cfg.Settings.Editor.GutterStyle)
-	editorGroup.SetFileIconMode(cfg.Settings.Appearance.Icons)
-	editorGroup.InsertSpaces = cfg.Settings.Editor.InsertSpaces
-	editorGroup.SetIndentGuides(cfg.Settings.Editor.IndentGuides)
-	editorGroup.InsertFinalNewline = cfg.Settings.Editor.InsertFinalNewline
-	editorGroup.PreviewTabs = cfg.Settings.Editor.PreviewTabsEnabled()
-	editorGroup.ShowTrailingNewline = cfg.Settings.Editor.IsShowTrailingNewlineEnabled()
-	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
-	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
-	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
-	editorGroup.WordWrapColumn = cfg.Settings.Editor.WordWrapColumn
-	editorGroup.WordWrapBreak = cfg.Settings.Editor.WordWrapBreak
-	editorGroup.LanguageOverrides = cfg.Settings.Editor.LanguageOverrides
-	editorGroup.WordWrapMaxBytes = cfg.Settings.Editor.WordWrapMaxBytes()
-	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
-	editorGroup.DiffContext = configuredDiffContext(cfg.Settings.Editor.DiffContext)
-	editorGroup.DiffWordWrap = cfg.Settings.Editor.DiffWordWrap
-	editorGroup.SetMarkdownMaxWidth(cfg.Settings.Markdown.WrapWidth)
-	editorGroup.DiffHighContrast = cfg.Settings.Editor.DiffHighContrast
-	editorGroup.DiffCollapsedEmphasis = cfg.Settings.Editor.DiffCollapsedEmphasis
-	editorGroup.DiffSigns = cfg.Settings.Editor.DiffSigns
-	editorGroup.DiffSignsColor = cfg.Settings.Editor.DiffSignsColor
-	editorGroup.DiffGutterHighlight = cfg.Settings.Editor.DiffGutterHighlight
-	editorGroup.DiffColorGutterNumbers = cfg.Settings.Editor.DiffColorGutterNumbers
-	editorGroup.DiffScrollbarGitMarks = cfg.Settings.Editor.DiffScrollbarGitMarks
-	editorGroup.LegacyScrollbarGlyphs = cfg.Settings.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
-	editorGroup.ApplyFileWordWrap()
-	editorGroup.Editor.AutoDedent = cfg.Settings.Editor.IsAutoDedentEnabled()
-	editorGroup.Editor.AutoIndent = cfg.Settings.Editor.IsAutoIndentEnabled()
-	editorGroup.Editor.AutoClosing = cfg.Settings.Editor.AutoClosing
-	editorGroup.Editor.LegacyScrollbarGlyphs = cfg.Settings.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
-	editorGroup.Editor.ScrollbarGitMarks = cfg.Settings.Editor.IsScrollbarGitMarksEnabled()
-	editorGroup.UndoDeleteCursorStart = cfg.Settings.Editor.UndoDeleteCursorStart
-	editorGroup.BracketPairColorization = cfg.Settings.Editor.BracketPairColorization
-	editorGroup.Editor.BracketPairColorization = cfg.Settings.Editor.BracketPairColorization
-	editorGroup.SetImageProtocol(cfg.Settings.Image.Protocol)
-	editorGroup.BracketColorStyles = bracketStyles
-	editorGroup.Editor.BracketColorStyles = bracketStyles
+	editorGroup := newEditorGroup(&cfg.Settings, borders, bracketStyles)
 	grammarErrs := loadGrammarSettings(cfg.Settings.Editor.Grammars)
 	_, _ = openFileTargets(editorGroup, openFiles)
 
@@ -297,7 +260,8 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	bottomPanel.AddPanel("output", i18n.Text("panel.output"), output)
 
 	contentSplit := ui.NewContentSplitWidget()
-	contentSplit.Top = editorGroup
+	editorSplit := ui.NewEditorLayoutWidget(editorGroup, borders)
+	contentSplit.Top = editorSplit
 	contentSplit.Bottom = bottomPanel
 	contentSplit.Borders = borders
 	contentSplit.ShowBottom = false
@@ -403,6 +367,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		Root:                root,
 		RootBox:             rootBox,
 		EditorGroup:         editorGroup,
+		EditorSplit:         editorSplit,
 		Sidebar:             sidebar,
 		SplitPanel:          splitPanel,
 		ContentSplit:        contentSplit,
@@ -507,4 +472,47 @@ func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarge
 		}
 	}
 	return opened, errors.Join(failures...)
+}
+
+func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles []term.Style) *ui.EditorGroupWidget {
+	editorGroup := ui.NewEditorGroupWidget(borders, s.Editor.TabSize, s.Editor.LineNumbers, s.Editor.GutterStyle)
+	editorGroup.HighlightActiveBorder = s.Appearance.HighlightActiveGroupBorder
+	editorGroup.SetFileIconMode(s.Appearance.Icons)
+	editorGroup.InsertSpaces = s.Editor.InsertSpaces
+	editorGroup.SetIndentGuides(s.Editor.IndentGuides)
+	editorGroup.InsertFinalNewline = s.Editor.InsertFinalNewline
+	editorGroup.PreviewTabs = s.Editor.PreviewTabsEnabled()
+	editorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
+	editorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
+	editorGroup.SyntaxHighlight = s.Editor.IsSyntaxHighlightEnabled()
+	editorGroup.WordWrap = s.Editor.WordWrap
+	editorGroup.WordWrapColumn = s.Editor.WordWrapColumn
+	editorGroup.WordWrapBreak = s.Editor.WordWrapBreak
+	editorGroup.LanguageOverrides = s.Editor.LanguageOverrides
+	editorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
+	editorGroup.DiffMode = configuredDiffMode(s.Editor.DiffMode)
+	editorGroup.DiffContext = configuredDiffContext(s.Editor.DiffContext)
+	editorGroup.DiffWordWrap = s.Editor.DiffWordWrap
+	editorGroup.SetMarkdownMaxWidth(s.Markdown.WrapWidth)
+	editorGroup.DiffHighContrast = s.Editor.DiffHighContrast
+	editorGroup.DiffCollapsedEmphasis = s.Editor.DiffCollapsedEmphasis
+	editorGroup.DiffSigns = s.Editor.DiffSigns
+	editorGroup.DiffSignsColor = s.Editor.DiffSignsColor
+	editorGroup.DiffGutterHighlight = s.Editor.DiffGutterHighlight
+	editorGroup.DiffColorGutterNumbers = s.Editor.DiffColorGutterNumbers
+	editorGroup.DiffScrollbarGitMarks = s.Editor.DiffScrollbarGitMarks
+	editorGroup.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
+	editorGroup.ApplyFileWordWrap()
+	editorGroup.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
+	editorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
+	editorGroup.Editor.AutoClosing = s.Editor.AutoClosing
+	editorGroup.Editor.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
+	editorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
+	editorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
+	editorGroup.BracketPairColorization = s.Editor.BracketPairColorization
+	editorGroup.Editor.BracketPairColorization = s.Editor.BracketPairColorization
+	editorGroup.SetImageProtocol(s.Image.Protocol)
+	editorGroup.BracketColorStyles = bracketStyles
+	editorGroup.Editor.BracketColorStyles = bracketStyles
+	return editorGroup
 }

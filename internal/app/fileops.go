@@ -84,7 +84,9 @@ func (a *App) FileOpRename(path string, reload func()) {
 		}
 		a.invalidateRepositoryPath(path, RepositoryWorktree)
 		a.invalidateRepositoryPath(newPath, RepositoryWorktree)
-		a.EditorGroup.RenamePath(path, newPath)
+		for _, group := range a.editorGroups() {
+			group.RenamePath(path, newPath)
+		}
 		reload()
 	})
 }

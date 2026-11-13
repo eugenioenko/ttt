@@ -4,7 +4,8 @@
   "appearance": {
     "icons": "none",
     "scrollbarGlyphs": "blocks",
-    "pointerShapes": true
+    "pointerShapes": true,
+    "highlightActiveGroupBorder": true
   },
   "editor": {
     "autoClosing": {

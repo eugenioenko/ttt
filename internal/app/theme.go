@@ -324,6 +324,7 @@ func BuildBorderSet(bc config.BorderChars) term.BorderSet {
 		BottomTee:   firstRune(bc.BottomTee, d.BottomTee),
 		LeftTee:     firstRune(bc.LeftTee, d.LeftTee),
 		RightTee:    firstRune(bc.RightTee, d.RightTee),
+		Cross:       firstRune(bc.Cross, d.Cross),
 	}
 }
 

@@ -34,8 +34,8 @@ type dividerYProvider interface {
 }
 
 type borderJunctions struct {
-	BottomX [2]int
-	RightY  int
+	BottomX [4]int
+	RightY  [4]int
 }
 
 type borderJunctionProvider interface {

@@ -11,6 +11,16 @@ On exit, the current text-file tab list replaces the remembered list for that wo
 
 Sessions are kept outside the project under the config directory's `sessions/` folder, with at most 128 tabs per session and 32 sessions. Sessions unused for 30 days are removed, and missing or non-regular files are skipped during restoration. **Session: Clear Saved Tabs** removes saved sessions without closing open files and pauses session saving until the next launch.
 
+## Split Editors
+
+Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Each new group starts with an independent untitled document, numbered across the workspace. Opening a file replaces that untouched placeholder; once edited, the untitled document stays in its own tab.
+
+Drag a tab into another group, or run **Split: Move to Other Group** from the command palette. **Open to the Side**, in the Explorer and text-tab context menu, opens a file beside the current view. Views of the same document share text, undo history, and save state, with independent cursors, selections, and scrolling. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
+
+Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group’s border is highlighted by default; turn off **Highlight active split** in **Settings > Appearance > Window** to disable it. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
+
+Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Split: Equalize Sizes** in the command palette balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
+
 ## Syntax Highlighting
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.
@@ -86,8 +96,8 @@ They have no default shortcut. Bind them in `keybindings.json`, for example:
 
 ```json
 [
-  { "key": "ctrl+k up", "command": "view.scrollUp" },
-  { "key": "ctrl+k down", "command": "view.scrollDown" }
+  { "key": "ctrl+k pgup", "command": "view.scrollUp" },
+  { "key": "ctrl+k pgdn", "command": "view.scrollDown" }
 ]
 ```
 

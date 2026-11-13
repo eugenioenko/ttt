@@ -107,18 +107,28 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 }
 
 func (a *App) applyGitGutterResult(v *gitGutterResult) {
-	a.EditorGroup.SetLineChanges(v.Path, v.Changes)
+	for _, group := range a.editorGroups() {
+		group.SetLineChanges(v.Path, v.Changes)
+	}
 	switch {
 	case v.DiffOn && v.Conflict:
 		a.closeConflictedInlineDiff(v)
 	case v.DiffOn:
-		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
+		for _, group := range a.editorGroups() {
+			group.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
+		}
 	}
 }
 
 func (a *App) closeConflictedInlineDiff(v *gitGutterResult) {
-	if a.EditorGroup.IsInlineDiffPath(v.Path) {
-		a.EditorGroup.DisableInlineDiff(v.Path)
+	closed := false
+	for _, group := range a.editorGroups() {
+		if group.IsInlineDiffPath(v.Path) {
+			group.DisableInlineDiff(v.Path)
+			closed = true
+		}
+	}
+	if closed {
 		a.StatusNotify(i18n.Format("status.mergeConflictDiffClosed", i18n.Args{"path": v.RelPath}))
 	}
 }
