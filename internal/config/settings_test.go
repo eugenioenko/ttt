@@ -666,3 +666,18 @@ func TestSettingsReuseWindowRoundTrip(t *testing.T) {
 		t.Fatal("reuseWindow was treated as an unknown setting")
 	}
 }
+
+func TestSystemPluginDirectorySetting(t *testing.T) {
+	withTempConfigDir(t)
+	s := DefaultSettings()
+	if s.Plugins.SystemDir != "" {
+		t.Fatal("system plugins must be opt-in")
+	}
+	s.Plugins.SystemDir = filepath.Join(t.TempDir(), "shared-plugins")
+	if err := SaveSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadSettings().Plugins.SystemDir; got != s.Plugins.SystemDir {
+		t.Fatalf("systemDir = %q, want %q", got, s.Plugins.SystemDir)
+	}
+}

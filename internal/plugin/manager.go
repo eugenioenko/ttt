@@ -3,7 +3,6 @@ package plugin
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -45,12 +44,15 @@ type BottomRegistration struct {
 }
 
 type Manager struct {
-	plugins      []*Plugin
-	registry     *Registry
-	pluginsDir   string
-	registryPath string
-	storageDir   string
-	extraDirs    []string
+	plugins          []*Plugin
+	registry         *Registry
+	pluginsDir       string
+	registryPath     string
+	storageDir       string
+	extraDirs        []string
+	systemDir        string
+	systemRegistry   *Registry
+	OnDiscoveryError func(path string, err error)
 
 	SidebarPanels []SidebarRegistration
 	BottomPanels  []BottomRegistration
@@ -76,18 +78,24 @@ func NewManager(pluginsDir, registryPath string, extraDirs ...string) *Manager {
 // isLinkedDir reports whether path is a symlink resolving to a directory
 // outside pluginDir, so a linked plugin loads once instead of twice or not
 // at all.
-func isLinkedDir(path, pluginDir string) bool {
+func isLinkedDir(path, pluginDir string) (bool, error) {
 	info, err := os.Stat(path)
-	if err != nil || !info.IsDir() {
-		return false
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.IsDir() {
+		return false, nil
 	}
 	real, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return false
+		return false, err
 	}
 	realDir, err := filepath.EvalSymlinks(pluginDir)
 	if err != nil {
-		realDir = pluginDir
+		return false, err
 	}
 	// Resolve both sides to absolute paths. EvalSymlinks keeps a relative path
 	// relative unless a symlink target is absolute, and filepath.Rel rejects a
@@ -95,14 +103,14 @@ func isLinkedDir(path, pluginDir string) bool {
 	// an internal link.
 	realAbs, err := filepath.Abs(real)
 	if err != nil {
-		return true
+		return false, err
 	}
 	realDirAbs, err := filepath.Abs(realDir)
 	if err != nil {
-		return true
+		return false, err
 	}
 	rel, err := filepath.Rel(realDirAbs, realAbs)
-	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)), nil
 }
 
 func (m *Manager) LoadAll() []*Plugin {
@@ -115,32 +123,14 @@ func (m *Manager) LoadAll() []*Plugin {
 		reg = &Registry{path: regPath}
 	}
 	m.registry = reg
+	m.loadSystemRegistry()
 
 	var needsApproval []*Plugin
 	seen := map[string]bool{}
 
-	dirs := append([]string{m.pluginsDir}, m.extraDirs...)
+	dirs := m.pluginDirs()
 	for _, pluginDir := range dirs {
-		entries, err := os.ReadDir(pluginDir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			dir := filepath.Join(pluginDir, entry.Name())
-			if !entry.IsDir() {
-				// entry.IsDir reports the link's own type, so a symlinked
-				// plugin dir needs its target checked instead.
-				if entry.Type()&fs.ModeSymlink == 0 || !isLinkedDir(dir, pluginDir) {
-					continue
-				}
-			}
-
-			manifest, err := LoadManifest(dir)
-			if err != nil {
-				slog.Warn("skip plugin", "dir", entry.Name(), "error", err)
-				continue
-			}
-
+		for dir, manifest := range m.pluginManifests(pluginDir) {
 			if seen[manifest.Name] {
 				continue
 			}
@@ -152,7 +142,18 @@ func (m *Manager) LoadAll() []*Plugin {
 				Manifest: manifest,
 			}
 
-			regEntry := m.registry.Find(manifest.Name)
+			if err := m.rememberSource(dir, manifest.Name); err != nil {
+				m.discoveryError(dir, err)
+				continue
+			}
+			if entry := m.registry.Find(manifest.Name); entry != nil && !entry.Enabled {
+				continue
+			}
+			regEntry, err := m.approvalFor(dir, manifest)
+			if err != nil {
+				m.discoveryError(dir, err)
+				continue
+			}
 			if regEntry == nil {
 				needsApproval = append(needsApproval, p)
 				continue
@@ -187,6 +188,9 @@ func (m *Manager) LoadAll() []*Plugin {
 			// can use them, matching the ApproveAndLoad path.
 			m.wireAPIs(p)
 			if err := m.initPlugin(p); err != nil {
+				if m.isSystemPlugin(dir) {
+					m.discoveryError(dir, err)
+				}
 				continue
 			}
 
@@ -251,6 +255,7 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 		p.Manifest.Permissions,
 	)
 	if entry := m.registry.Find(p.Manifest.Name); entry != nil {
+		entry.SystemManaged = m.isSystemPlugin(p.Dir)
 		entry.ExecPaths = execPathsFor(entry.ExecPaths, p.Manifest.Permissions.SystemExec)
 		p.Granted.SystemExec = slices.Concat(p.Granted.SystemExec, entry.ExecPaths)
 	}
@@ -573,6 +578,9 @@ func copyDir(src, dst string) error {
 // whatever the plugin created outside its directory in place, so the caller
 // decides whether to remove the plugin anyway.
 func (m *Manager) RunUninstallHook(name string) error {
+	if m.IsSystemPlugin(name) {
+		return systemManagedError()
+	}
 	p := m.FindPlugin(name)
 	if p == nil {
 		return nil
@@ -581,6 +589,9 @@ func (m *Manager) RunUninstallHook(name string) error {
 }
 
 func (m *Manager) Uninstall(name string) error {
+	if m.IsSystemPlugin(name) {
+		return systemManagedError()
+	}
 	for i, p := range m.plugins {
 		if p.Name == name {
 			p.Destroy()
@@ -648,7 +659,10 @@ func (m *Manager) DenyPlugin(p *Plugin) error {
 	if entry != nil {
 		approved = IntersectPermissions(entry.Permissions, p.Manifest.Permissions)
 	}
+	inherited := entry != nil && entry.SystemApproval
 	m.registry.AddOrUpdate(p.Manifest.Name, p.Manifest.DisplayName, p.Repo, p.RepoPath, p.Manifest.Version, approved)
+	m.registry.Find(p.Manifest.Name).SystemApproval = inherited
+	m.registry.Find(p.Manifest.Name).SystemManaged = m.isSystemPlugin(p.Dir)
 	m.registry.SetEnabled(p.Manifest.Name, false)
 	return m.registry.Save()
 }
@@ -666,6 +680,7 @@ func withinDir(parent, child string) bool {
 // PluginUpdate carries an update from Fetch, which may run off the UI goroutine,
 // to ApplyUpdate, which replaces the plugin's Lua state and must run on it.
 type PluginUpdate struct {
+	err       error
 	name      string
 	dir       string
 	repo      string
@@ -676,6 +691,9 @@ type PluginUpdate struct {
 
 func (m *Manager) PrepareUpdate(name string) *PluginUpdate {
 	u := &PluginUpdate{name: name, dir: filepath.Join(m.pluginsDir, name), sourceDir: filepath.Dir(m.registryPath)}
+	if m.IsSystemPlugin(name) {
+		u.err = systemManagedError()
+	}
 	if m.registry != nil {
 		if entry := m.registry.Find(name); entry != nil {
 			u.repo, u.repoPath = entry.Repo, entry.Path
@@ -687,6 +705,9 @@ func (m *Manager) PrepareUpdate(name string) *PluginUpdate {
 func (u *PluginUpdate) Name() string { return u.name }
 
 func (u *PluginUpdate) Fetch() error {
+	if u.err != nil {
+		return u.err
+	}
 	if _, err := os.Stat(u.dir); os.IsNotExist(err) {
 		return fmt.Errorf("plugin %q not found", u.name)
 	}
@@ -819,24 +840,16 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 		return nil, nil
 	}
 
-	dir := filepath.Join(m.pluginsDir, name)
-	manifest, err := LoadManifest(dir)
-	if err != nil {
-		for _, extra := range m.extraDirs {
-			d := filepath.Join(extra, name)
-			if mf, e := LoadManifest(d); e == nil {
-				dir, manifest, err = d, mf, nil
-				break
-			}
-		}
-	}
+	dir, manifest, err := m.findManifest(name)
 	if err != nil {
 		return nil, err
 	}
-
-	regEntry := m.registry.Find(name)
+	regEntry, err := m.approvalFor(dir, manifest)
+	if err != nil {
+		return nil, err
+	}
 	if regEntry == nil {
-		return nil, fmt.Errorf("plugin %q not in registry", name)
+		return &Plugin{Name: manifest.Name, Dir: dir, Manifest: manifest}, nil
 	}
 
 	idx := slices.IndexFunc(m.plugins, func(p *Plugin) bool { return p.Name == name })
@@ -889,6 +902,10 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 func (m *Manager) grant(entry *RegistryEntry, declared PermissionSet) (PermissionSet, error) {
 	granted := IntersectPermissions(entry.Permissions, declared)
 	paths := execPathsFor(entry.ExecPaths, granted.SystemExec)
+	if entry.SystemApproval {
+		granted.SystemExec = slices.Concat(granted.SystemExec, paths)
+		return granted, nil
+	}
 	if !reflect.DeepEqual(granted, entry.Permissions) || len(paths) != len(entry.ExecPaths) {
 		previous, previousPaths := entry.Permissions, entry.ExecPaths
 		entry.Permissions, entry.ExecPaths = granted, paths
@@ -955,7 +972,16 @@ func (m *Manager) Reload(name string) (*Plugin, error) {
 		return nil, fmt.Errorf("reload manifest: %w", err)
 	}
 
-	if regEntry := m.registry.Find(name); regEntry != nil {
+	regEntry, err := m.approvalFor(dir, manifest)
+	if err != nil {
+		m.plugins = append(m.plugins[:idx], m.plugins[idx+1:]...)
+		return nil, err
+	}
+	if local := m.registry.Find(name); regEntry == nil && local != nil && local.SystemApproval {
+		m.plugins = append(m.plugins[:idx], m.plugins[idx+1:]...)
+		return nil, fmt.Errorf("plugin %q requires approval", name)
+	}
+	if regEntry != nil {
 		reduced, err := m.grant(regEntry, manifest.Permissions)
 		if err != nil {
 			m.plugins = append(m.plugins[:idx], m.plugins[idx+1:]...)

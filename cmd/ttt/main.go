@@ -366,6 +366,10 @@ Docs: https://tttedit.dev
 	pluginsDir := filepath.Join(filepath.Dir(registryPath), "plugins")
 	localPluginsDir := filepath.Join(editor.Workspace.Primary(), "plugins")
 	pluginManager := plugin.NewManager(pluginsDir, registryPath, localPluginsDir)
+	pluginManager.SetSystemDir(cfg.Settings.Plugins.SystemDir)
+	pluginManager.OnDiscoveryError = func(path string, err error) {
+		editor.StatusError(i18n.Format("plugins.discoveryFailed", i18n.Args{"path": path, "error": err.Error()}))
+	}
 	editor.PluginManager = pluginManager
 	defer pluginManager.Shutdown()
 

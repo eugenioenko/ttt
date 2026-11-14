@@ -1,4 +1,8 @@
 {
+  "plugins.systemDirAbsolute": "System plugin directory must be an absolute path.",
+  "plugins.systemManaged": "System plugins are managed by your administrator. You can disable this plugin for your account.",
+  "settings.systemPluginDirectory": "System plugin folder",
+  "plugins.discoveryFailed": "Could not load plugins from {path}: {error}",
   "session.restoreTabs": "Restore workspace tabs",
   "session.clearCommand": "Session: Clear Saved Tabs",
   "session.cleared": "Saved tabs cleared. Session saving resumes next time ttt starts.",
