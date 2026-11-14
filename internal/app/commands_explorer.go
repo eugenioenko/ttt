@@ -282,9 +282,8 @@ func registerExplorerCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID: "explorer.openInTerminal", Title: i18n.Text("command.explorerOpenInTerminal"),
-		Keywords:      []string{"explorer", "folder", "terminal", "shell", "cd", "open"},
-		PaletteHidden: true,
-		Handler:       app.ExplorerOpenInTerminal,
+		Keywords: []string{"explorer", "folder", "terminal", "shell", "cd", "open"},
+		Handler:  app.ExplorerOpenInTerminal,
 	})
 
 	reg.Register(command.Command{

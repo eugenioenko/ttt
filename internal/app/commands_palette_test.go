@@ -16,10 +16,10 @@ var paletteHiddenExplorerCommands = []string{
 	"explorer.reveal",
 	"explorer.copyAbsolutePath",
 	"explorer.copyRelativePath",
-	"explorer.openInTerminal",
 }
 
 var paletteVisibleExplorerCommands = []string{
+	"explorer.openInTerminal",
 	"explorer.newFile",
 	"explorer.newFolder",
 	"explorer.expandAll",
@@ -74,7 +74,7 @@ func TestPaletteHiddenCommandsAreOutOfThePaletteButStillListedAndRunnable(t *tes
 	}
 }
 
-func TestSelectionIndependentExplorerCommandsStayInThePalette(t *testing.T) {
+func TestVisibleExplorerCommandsStayInThePalette(t *testing.T) {
 	a := explorerCommandApp(t)
 
 	paletteIDs := commandIDs(paletteCommands(a.Reg))
