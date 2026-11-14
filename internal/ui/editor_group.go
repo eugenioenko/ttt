@@ -3179,6 +3179,9 @@ func (g *EditorGroupWidget) syncTabs() {
 	if path := documentPath(t); path != "" {
 		g.lastDocumentPath = path
 	}
+	if t.Content != nil || g.Editor.Buf != t.Buf {
+		g.Editor.goalContext = cursorGoalContext{}
+	}
 	if t.Content == nil {
 		if g.Editor.Buf != t.Buf {
 			g.Editor.maxWidthSeen = 0

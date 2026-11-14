@@ -27,6 +27,46 @@ func newGoalGroup(t *testing.T, text string) *EditorGroupWidget {
 	return g
 }
 
+func TestCursorGoalContextReleasedOnTabChange(t *testing.T) {
+	for name, change := range map[string]func(*EditorGroupWidget){
+		"new tab":         (*EditorGroupWidget).NewFile,
+		"close tab":       (*EditorGroupWidget).CloseTab,
+		"close all":       (*EditorGroupWidget).CloseAllTabs,
+		"close all saved": (*EditorGroupWidget).CloseAllSaved,
+		"switch tab":      func(g *EditorGroupWidget) { g.SwitchTab(0) },
+		"content tab": func(g *EditorGroupWidget) {
+			g.OpenPluginTab("goal-test", "Goal test", NewSelectDialogWidget(nil))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			g := NewEditorGroupWidget(nil, 4, false, "extended")
+			t.Cleanup(g.CloseAllTabs)
+			g.NewFile()
+			g.NewFile()
+			e := g.Editor
+			e.Buf.SetText("abcdefghij\nxy\nabcdefghij")
+			e.Buf.Dirty = false
+			e.Cursor.Col = 4
+			pressWrapKey(e, tcell.KeyDown, 0)
+			if e.goalContext.buffer != e.Buf {
+				t.Fatal("vertical movement did not record the buffer")
+			}
+			change(g)
+			if e.goalContext.buffer != nil {
+				t.Fatal("tab change retained the previous buffer in the cursor goal context")
+			}
+		})
+	}
+}
+
+func TestCursorGoalSurvivesSyncOfSameTab(t *testing.T) {
+	g := newGoalGroup(t, "abcdefghij\nxy\nabcdefghij")
+	t.Cleanup(g.CloseAllTabs)
+	g.syncTabs()
+	pressWrapKey(g.Editor, tcell.KeyDown, 0)
+	assertCursor(t, g.Editor, 2, 4)
+}
+
 func TestVerticalGoalResetsAfterSelectAll(t *testing.T) {
 	g := newGoalGroup(t, "abcdefghij\nxy")
 	g.SelectAll()
