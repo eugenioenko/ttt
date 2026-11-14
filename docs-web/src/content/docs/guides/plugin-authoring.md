@@ -178,8 +178,8 @@ A grammar whose file types match a built-in language replaces it, and other gram
 
 ### Loading
 
-1. On startup, ttt scans `~/.config/ttt/plugins/` and `<workspace-root>/plugins/` for directories containing `plugin.ttt.json`.
-2. For each plugin, the manifest is parsed and permissions are compared against the user's stored approvals in `~/.config/ttt/plugins.ttt.json`.
+1. On startup, ttt scans `~/.config/ttt/plugins/`, `<workspace-root>/plugins/`, and the optional `plugins.systemDir`, in that order, for directories containing `plugin.ttt.json`.
+2. For each plugin, the manifest is parsed and permissions are compared against the user's stored approvals in `~/.config/ttt/plugins.ttt.json`. System plugins can also inherit administrator approvals from `<plugins.systemDir>/plugins.ttt.json`; see [system-wide installation and approval](/guides/plugins/#system-wide-installation-and-approval). Disabling remains per user.
 3. If the plugin has been approved and its permissions haven't changed, it loads immediately: a sandboxed Lua VM is created, the entry file is executed, and `ttt.register()` wires up the panels.
 4. If the plugin is new or its permissions have changed since approval, an approval dialog appears showing the requested permissions. The user can Allow or Cancel.
 

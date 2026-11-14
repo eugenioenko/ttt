@@ -78,12 +78,39 @@ Run **Plugins: Reload** from the command palette to reload a plugin without rest
 
 ## Plugin Locations
 
-Plugins can live in two locations:
+Plugins can live in three locations:
 
-- **Global:** `~/.config/ttt/plugins/<plugin-name>/` — available in all sessions
+- **User:** `~/.config/ttt/plugins/<plugin-name>/` — available in all sessions for that user
 - **Workspace-local:** `<workspace-root>/plugins/<plugin-name>/` — scoped to a specific project
 
-If a plugin with the same name exists in both locations, the global one takes precedence.
+- **System:** `<plugins.systemDir>/<plugin-name>/` — shared across users, when configured
+
+For duplicate names, the order is user, workspace, then system. The first copy wins, including when that plugin is disabled for the user.
+
+### System-wide Installation and Approval
+
+Set an absolute directory in `settings.json`, then restart TTT:
+
+```json
+{
+  "plugins": {
+    "systemDir": "/usr/share/ttt/plugins"
+  }
+}
+```
+
+The default is empty, so system discovery is opt-in. Missing or unreadable configured directories, invalid manifests, and invalid shared approval files produce a status message and an entry in Output.
+
+Administrators can approve shared plugins once so users do not see permission prompts:
+
+1. Start TTT with a separate staging configuration, for example `TTT_CONFIG_DIR=/path/to/staging ttt`.
+2. Install the intended plugins there and approve their permissions through the normal dialogs.
+3. Deploy the contents of `/path/to/staging/plugins/` to the system plugin directory, and copy `/path/to/staging/plugins.ttt.json` into that same system plugin directory.
+4. Make the deployed plugins and approval file readable by users and writable only by administrators. Include symlink targets in those protections.
+
+TTT reads this shared registry without modifying it. An enabled admin approval covers only a plugin loaded from the system directory; a same-named user or workspace copy must have its own approval. Without a matching approval, or when permissions expand beyond it, the usual user approval dialog appears. Updating the shared registry allows administrators to approve new permissions for everyone. Shared approval changes take effect when TTT restarts; inherited grants are not copied into personal approvals.
+
+Users can disable and re-enable shared plugins independently. Explicit user approvals remain personal, and plugin storage stays in each user's configuration directory. System plugin updates and removal are managed by the administrator; TTT directs users to disable them instead.
 
 ## Permissions
 

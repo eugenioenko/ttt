@@ -202,6 +202,10 @@ func (a *App) ClearPluginSources(name string) {
 }
 
 func (a *App) doPluginUninstall(name string) {
+	if a.PluginManager.IsSystemPlugin(name) {
+		a.StatusWarn(i18n.Text("plugins.systemManaged"))
+		return
+	}
 	if err := a.PluginManager.RunUninstallHook(name); err != nil {
 		a.ShowConfirmDialogEx(i18n.Text("plugins.uninstallFailed"), i18n.Format("plugins.cleanupFailed", i18n.Args{"name": name, "error": err.Error()}), []string{i18n.Text("general.cancel"), i18n.Text("plugins.removeAnyway")}, []func(){
 			func() { a.DismissDialog() },
