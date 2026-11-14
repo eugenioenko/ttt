@@ -53,6 +53,7 @@ type Root struct {
 	ForwardShortcuts bool
 	nextTerminalKey  *TerminalWidget
 	OnRightClick     func(mx, my int)
+	OnMouseMove      func(mx, my int) bool
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
 	capturedWidget   Widget
@@ -266,6 +267,12 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		r.focusClaimed = false
 	}
 	r.button1Held = held
+	if mev.Buttons() == tcell.ButtonNone && !released && !linkPress && !r.HasOverlay() && !r.PointerCaptureActive() && r.OnMouseMove != nil {
+		x, y := mev.Position()
+		if r.OnMouseMove(x, y) {
+			return EventConsumed
+		}
+	}
 	if linkPress {
 		if released {
 			r.pressTarget = nil

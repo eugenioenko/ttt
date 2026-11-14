@@ -35,6 +35,13 @@ func (e *EditorLayoutWidget) child() Widget {
 func (e *EditorLayoutWidget) WidgetChildren() []Widget { return []Widget{e.child()} }
 func (e *EditorLayoutWidget) Focusable() bool          { return false }
 
+func (e *EditorLayoutWidget) TopBorder() (int, bool) {
+	if e.Group != nil {
+		return e.Group.TabBar.topBorder()
+	}
+	return e.First.TopBorder()
+}
+
 func (e *EditorLayoutWidget) Groups() []*EditorGroupWidget {
 	if e.Group != nil {
 		return []*EditorGroupWidget{e.Group}
@@ -219,8 +226,9 @@ func (e *EditorLayoutWidget) renderJunctions(surface Surface) {
 		tabJoins := map[int]uint8{}
 		for _, group := range e.Groups() {
 			if side := e.dividerSide(group); side != 0 {
-				tabs := group.TabBar.GetRect()
-				tabJoins[tabs.Y+tabs.H-1] |= side
+				if y, ok := group.TabBar.baselineY(); ok {
+					tabJoins[y] |= side
+				}
 			}
 		}
 		x := e.Split.DividerScreenX()
@@ -322,6 +330,9 @@ func (e *EditorLayoutWidget) dividerSide(group *EditorGroupWidget) uint8 {
 }
 
 func (e *EditorLayoutWidget) dividerVisibleAt(x, y int) bool {
+	if !e.GetRect().Contains(x, y) {
+		return false
+	}
 	for _, gap := range e.dividerGaps {
 		if gap.Contains(x, y) {
 			return false

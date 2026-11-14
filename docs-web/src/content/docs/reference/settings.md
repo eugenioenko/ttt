@@ -187,6 +187,7 @@ All editor settings are nested under the `editor` key.
 | `editor.scrollbarGitMarks` | bool | `true` | Mark git changes on the editor's vertical scrollbar. Needs `editor.gitGutter` |
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
 | `editor.transparentBackground` | bool | `false` | Leave the theme's background unset so the terminal's own background shows through. Also toggled from **Options → Transparent BG** |
+| `editor.tabBarStyle` | string | `"extended"` | Editor tab bar: `"extended"` (3 rows), `"hidden"` (border only, 1), or `"auto-hide"` (border only; expands to 3 rows after 50 ms over the top edge, hides after 100 ms outside a one-cell margin). Tabs and keyboard commands stay available. Changes apply immediately in **Settings > Appearance > Window** or **Options > Appearance > Tab Bar Style**. |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
@@ -480,6 +481,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "syntaxHighlight": true,
     "gitGutter": true,
     "menuBar": true,
+    "tabBarStyle": "extended",
     "gutterStyle": "compact",
     "borderStyle": "default",
     "selectionStyle": "background",

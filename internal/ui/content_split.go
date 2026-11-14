@@ -35,7 +35,6 @@ type ContentSplitWidget struct {
 	DividerVisible            func(x, y int) bool
 	OnBottomClick             func()
 	OnTopClick                func()
-	RightBorderStartY         *int
 	dragging                  bool
 	wasPressed                bool
 	capturedChild             Widget
@@ -73,6 +72,17 @@ func NewContentSplitWidget() *ContentSplitWidget {
 }
 
 func (cs *ContentSplitWidget) Focusable() bool { return false }
+
+func (cs *ContentSplitWidget) TopBorder() (int, bool) {
+	if cs.ShowBottom && cs.Bottom != nil && cs.Position == SplitRight {
+		return 0, true
+	}
+	offset, corner := 2, true
+	if provider, ok := cs.Top.(topBorderProvider); ok {
+		offset, corner = provider.TopBorder()
+	}
+	return min(offset, cs.TopContentHeight()), corner
+}
 
 func (cs *ContentSplitWidget) constrainedBottomHeight(totalH, requested int) int {
 	if totalH <= 1 {
@@ -161,9 +171,6 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 		if cs.capturedChild == cs.Bottom {
 			cs.capturedChild = nil
 		}
-		if cs.RightBorderStartY != nil {
-			*cs.RightBorderStartY = 2
-		}
 		if cs.Top != nil && w > 0 && h > 0 {
 			cs.Top.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: r.H})
 			cs.Top.Render(surface)
@@ -190,10 +197,6 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 	topH := divY
 	if cs.HideBottomDivider {
 		topH++
-	}
-
-	if cs.RightBorderStartY != nil {
-		*cs.RightBorderStartY = min(topH, 2)
 	}
 
 	// Top content
@@ -234,10 +237,6 @@ func (cs *ContentSplitWidget) renderRight(surface Surface, r Rect, w, h int, b t
 	rightW := bottomRect.W
 	divX := w - rightW - 1
 	topW := divX
-
-	if cs.RightBorderStartY != nil {
-		*cs.RightBorderStartY = 0
-	}
 
 	if cs.Top != nil && topW > 0 {
 		cs.Top.SetRect(Rect{X: r.X, Y: r.Y, W: topW, H: r.H})

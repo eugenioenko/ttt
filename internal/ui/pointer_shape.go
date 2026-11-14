@@ -100,6 +100,9 @@ func (m *MenuBarWidget) PointerShapeAt(mx, my int) string {
 }
 
 func (t *TabBarWidget) PointerShapeAt(mx, my int) string {
+	if !t.hasTabs() {
+		return ""
+	}
 	if t.drag.Dragging() {
 		return term.PointerGrabbing
 	}

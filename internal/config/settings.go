@@ -10,6 +10,7 @@ import (
 
 // Validated by normalizeSettings and used to populate the settings UI pickers.
 var (
+	TabBarStyles        = []string{"extended", "hidden", "auto-hide"}
 	GutterStyles        = []string{"minimal", "compact", "extended"}
 	BorderStyles        = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
 	DiffModes           = []string{"split", "unified"}
@@ -167,6 +168,7 @@ type EditorSettings struct {
 	ScrollbarGitMarks       *bool              `json:"scrollbarGitMarks,omitempty"`
 	AutoDedent              *bool              `json:"autoDedent,omitempty"`
 	AutoIndent              *bool              `json:"autoIndent,omitempty"`
+	TabBarStyle             string             `json:"tabBarStyle,omitempty"`
 	GutterStyle             string             `json:"gutterStyle,omitempty"`
 	BorderStyle             string             `json:"borderStyle,omitempty"`
 	BracketPairColorization bool               `json:"bracketPairColorization"`
@@ -320,6 +322,7 @@ func DefaultEditorSettings() EditorSettings {
 		LineNumbers:             true,
 		SelectionStyle:          SelectionStyleBackground,
 		InsertFinalNewline:      true,
+		TabBarStyle:             "extended",
 		GutterStyle:             "compact",
 		BorderStyle:             "default",
 		BracketPairColorization: false,
@@ -628,6 +631,9 @@ func normalizeSettings(s *Settings) {
 			o.WordWrapBreak = ""
 		}
 		s.Editor.LanguageOverrides[language] = o
+	}
+	if !slices.Contains(TabBarStyles, s.Editor.TabBarStyle) {
+		s.Editor.TabBarStyle = "extended"
 	}
 	if !slices.Contains(GutterStyles, s.Editor.GutterStyle) {
 		s.Editor.GutterStyle = "compact"

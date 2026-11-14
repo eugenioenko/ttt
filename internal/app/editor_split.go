@@ -113,6 +113,12 @@ func (a *App) removeEditorGroup(closing *ui.EditorGroupWidget, merge bool) {
 	if closing.FoldDelay != nil {
 		a.releaseTask(closing.FoldDelay)
 	}
+	if closing.TabBar.AutoShowTask != nil {
+		a.releaseTask(closing.TabBar.AutoShowTask)
+	}
+	if closing.TabBar.AutoHideTask != nil {
+		a.releaseTask(closing.TabBar.AutoHideTask)
+	}
 	a.FocusEditor()
 }
 
@@ -140,6 +146,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right := newEditorGroup(a.Settings, a.Borders, left.BracketColorStyles)
 	right.FoldTask = NewTask[[]fold.Range](a, asynctask.TaskOptions{})
 	right.FoldDelay = NewTask[struct{}](a, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
+	a.wireEditorTabAutoHide(right)
 	right.ControlModifiers = left.ControlModifiers
 	right.SetChevrons(left.ChevronCollapsed, left.ChevronExpanded)
 	right.SetImageCellSize(a.imageCellW, a.imageCellH)

@@ -13,11 +13,11 @@ func TestSplitGroupOwnsAndReleasesFoldTasks(t *testing.T) {
 	t.Cleanup(a.CloseTasks)
 	count := len(a.tasks.tasks)
 	a.SplitEditor()
-	if a.EditorGroup.FoldTask == nil || a.EditorGroup.FoldDelay == nil || len(a.tasks.tasks) != count+2 {
-		t.Fatal("split group did not register its own fold computation and delay tasks")
+	if a.EditorGroup.FoldTask == nil || a.EditorGroup.FoldDelay == nil || a.EditorGroup.TabBar.AutoShowTask == nil || a.EditorGroup.TabBar.AutoHideTask == nil || len(a.tasks.tasks) != count+4 {
+		t.Fatal("split group did not register its own fold and tab auto-hide tasks")
 	}
 	a.CloseEditorSplit()
 	if len(a.tasks.tasks) != count {
-		t.Fatal("closing the group leaked its fold tasks")
+		t.Fatal("closing the group leaked its fold or tab auto-hide tasks")
 	}
 }

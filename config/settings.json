@@ -39,6 +39,7 @@
     "insertFinalNewline": true,
     "trimTrailingWhitespace": false,
     "focusOnOpen": false,
+    "tabBarStyle": "extended",
     "gutterStyle": "compact",
     "borderStyle": "default",
     "bracketPairColorization": false,
