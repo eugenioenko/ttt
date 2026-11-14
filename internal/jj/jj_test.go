@@ -503,24 +503,38 @@ func TestMergeReadsAlignWithFirstParent(t *testing.T) {
 
 func TestBaselineMarksConflictedParent(t *testing.T) {
 	dir := jjtest.Init(t)
-	jjtest.Write(t, dir, "f.txt", "base\n")
+	jjtest.Write(t, dir, "f.txt", "a\nb\nc\nd\nbase\n")
 	jjtest.Run(t, dir, "describe", "-m", "base")
 	jjtest.Run(t, dir, "new", "-m", "left")
-	jjtest.Write(t, dir, "f.txt", "left\n")
+	jjtest.Write(t, dir, "f.txt", "a\nb\nc\nd\nleft\n")
 	jjtest.Run(t, dir, "new", "-m", "right", `description(substring:"base")`)
-	jjtest.Write(t, dir, "f.txt", "right\n")
+	jjtest.Write(t, dir, "f.txt", "a\nb\nc\nd\nright\n")
 	jjtest.Run(t, dir, "new", "-m", "merge", `description(substring:"left")`, `description(substring:"right")`)
 	jjtest.Run(t, dir, "new")
-	jjtest.Write(t, dir, "f.txt", "resolved\n")
+	jjtest.Write(t, dir, "f.txt", "a\nb\nc\nd\nresolved\n")
 
 	repo := discover(t, dir)
-	changes, err := repo.Changes(context.Background())
+	ctx := context.Background()
+	changes, err := repo.Changes(ctx)
 	if err != nil || len(changes) != 1 || changes[0].Kind != scm.Modified {
 		t.Fatalf("working copy should resolve the parent's conflict: %#v, %v", changes, err)
 	}
-	base, err := repo.ReadBaseline(context.Background(), "f.txt")
+	base, err := repo.ReadBaseline(ctx, "f.txt")
 	if err != nil || !base.Conflicted {
 		t.Fatalf("baseline from a conflicted parent = %#v, %v", base, err)
+	}
+
+	if err := os.Remove(filepath.Join(dir, "f.txt")); err != nil {
+		t.Fatal(err)
+	}
+	jjtest.Write(t, dir, "moved.txt", "a\nb\nc\nd\nleft\n")
+	changes, err = repo.Changes(ctx)
+	if err != nil || len(changes) != 1 || changes[0].Kind != scm.Renamed || changes[0].OldPath != "f.txt" {
+		t.Fatalf("rename out of a conflicted parent: %#v, %v", changes, err)
+	}
+	base, err = repo.ReadBaseline(ctx, "moved.txt")
+	if err != nil || !base.Exists || !base.Conflicted {
+		t.Fatalf("baseline renamed from a conflicted parent = %#v, %v", base, err)
 	}
 }
 

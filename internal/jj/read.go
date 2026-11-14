@@ -33,16 +33,16 @@ func (r repository) ReadBaseline(ctx context.Context, path string) (scm.Baseline
 	if err != nil {
 		return scm.Baseline{}, err
 	}
+	basePath := path
 	content, err := r.fileAt(ctx, parent, path)
 	if err != nil {
 		return scm.Baseline{}, err
 	}
 	if !content.Exists && parent != "" {
-		source, err := r.copySource(ctx, path)
-		if err != nil {
+		if basePath, err = r.copySource(ctx, path); err != nil {
 			return scm.Baseline{}, err
 		}
-		if content, err = r.fileAt(ctx, parent, source); err != nil {
+		if content, err = r.fileAt(ctx, parent, basePath); err != nil {
 			return scm.Baseline{}, err
 		}
 	}
@@ -52,8 +52,8 @@ func (r repository) ReadBaseline(ctx context.Context, path string) (scm.Baseline
 	}
 	// A parent's conflict is materialized as markers, which must never become
 	// an editable diff base even when the working copy has resolved it.
-	if !conflicted && parent != "" {
-		if conflicted, err = r.conflicted(ctx, parent, path); err != nil {
+	if !conflicted && parent != "" && basePath != "" {
+		if conflicted, err = r.conflicted(ctx, parent, basePath); err != nil {
 			return scm.Baseline{}, err
 		}
 	}
