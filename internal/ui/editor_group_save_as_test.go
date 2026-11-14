@@ -97,6 +97,9 @@ func TestSaveAsReplacesCleanOpenTarget(t *testing.T) {
 				}
 				return
 			}
+			for i := range g.tabs {
+				g.tabs[i].DetectedLanguage = "go"
+			}
 			g.OnFileClose = func(path, _ string) { t.Errorf("SaveAs closed a document that stays open: %s", path) }
 			if !g.SaveAs(target) {
 				t.Fatal("SaveAs failed for a clean open target")
