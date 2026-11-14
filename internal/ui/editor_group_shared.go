@@ -213,6 +213,15 @@ func (g *EditorGroupWidget) adoptSaveAsViews(source *editorTab, path string) {
 			}
 			if same, err := sameSaveTarget(t.FilePath, path); err == nil && same {
 				t.Buf, t.Undo = source.Buf, source.Undo
+				t.Sel.Active = false
+				t.Multi = nil
+				if t.autoClosing != nil {
+					t.autoClosing.syntax.Close()
+					t.autoClosing = nil
+				}
+				buf := t.Buf
+				t.Folds = fold.NewState()
+				t.Folds.SetPending(func() []fold.Range { return fold.ComputeIndentRanges(buf.Lines) })
 				adopted = true
 				peer.clampCursor(t)
 				peer.rebuildHighlighter(t)

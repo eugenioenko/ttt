@@ -3,8 +3,10 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -152,5 +154,31 @@ func TestCloningKeepsAnEditedThenUndonePlaceholder(t *testing.T) {
 	}
 	if !source.CloneActiveTabTo(target) || target.TabCount() != 2 || target.tabs[0].Buf != buf {
 		t.Fatal("cloning discarded a placeholder the user had edited")
+	}
+}
+
+func TestSharedSaveAsResetsReplacedViewState(t *testing.T) {
+	left, right := sharedTestGroups(t)
+	path := filepath.Join(t.TempDir(), "target.go")
+	if err := os.WriteFile(path, []byte("root\n"+strings.Repeat(" child\n", 9)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := right.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	right.GoToLineCol(10, 3)
+	right.Editor.Selection.Active = true
+	right.Editor.Selection.Anchor.Line, right.Editor.Selection.Anchor.Col = 9, 4
+	right.activeTab().Folds.SetRanges([]fold.Range{{StartLine: 0, EndLine: 9}})
+	right.activeTab().Folds.Collapse(0)
+	if !left.SaveAs(path) {
+		t.Fatal("Save As failed")
+	}
+	right.activeTab().Folds.Resolve()
+	if right.activeTab().Folds.FoldAt(0) != nil || right.Editor.Selection.Active {
+		t.Fatal("replaced view retained folds or a selection from the previous document")
+	}
+	if right.Editor.Cursor.Line >= len(right.ActiveBuffer().Lines) {
+		t.Fatal("replaced view retained a cursor outside the new document")
 	}
 }
