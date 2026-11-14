@@ -479,6 +479,26 @@ func TestMergeReadsAlignWithFirstParent(t *testing.T) {
 	if err != nil || diff.Before.Content != "g\n" || !strings.Contains(diff.Patch, "+right") {
 		t.Fatalf("second-parent file against first parent: before=%q patch=%q err=%v", diff.Before.Content, diff.Patch, err)
 	}
+
+	jjtest.Run(t, dir, "commit", "-m", "merge")
+	merge := strings.TrimSpace(jjtest.Run(t, dir, "log", "--no-graph", "-r", "@-", "-T", "commit_id"))
+	change := scm.Change{Path: "f.txt", Kind: scm.Modified, Group: scm.WorkingTree}
+	patch, err := repo.ReadRevisionPatch(ctx, merge, change)
+	if err != nil || !strings.Contains(patch, "-one\n+ONE") || strings.Contains(patch, "+left") {
+		t.Fatalf("merge revision patch = %q, %v", patch, err)
+	}
+	content, err := repo.ReadRevisionContent(ctx, merge, "f.txt", "")
+	if err != nil || content.Before.Content != "one\ntwo\nthree\nleft\n" || content.After.Content != "ONE\ntwo\nthree\nleft\n" {
+		t.Fatalf("merge revision content = %#v, %v", content, err)
+	}
+	patch, err = repo.ReadRevisionPatch(ctx, merge, scm.Change{Path: "g.txt", Kind: scm.Modified, Group: scm.WorkingTree})
+	if err != nil || !strings.Contains(patch, "+right") {
+		t.Fatalf("second-parent revision patch = %q, %v", patch, err)
+	}
+	content, err = repo.ReadRevisionContent(ctx, merge, "g.txt", "")
+	if err != nil || content.Before.Content != "g\n" || content.After.Content != "g\nright\n" {
+		t.Fatalf("second-parent revision content = %#v, %v", content, err)
+	}
 }
 
 func TestBaselineMarksConflictedParent(t *testing.T) {
