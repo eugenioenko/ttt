@@ -39,6 +39,17 @@ function createJJRepo(dir, ...initArgs) {
   return dir;
 }
 
+// Two commits on one file, then a further edit in the working copy.
+function createHistoryRepo(dir) {
+  jj(dir, "git", "init");
+  writeFileSync(join(dir, "tracked.txt"), "alpha\nbeta\ngamma\n", "utf8");
+  jj(dir, "commit", "-m", "initial commit");
+  writeFileSync(join(dir, "tracked.txt"), "alpha\nBETA\ngamma\n", "utf8");
+  jj(dir, "commit", "-m", "uppercase beta");
+  writeFileSync(join(dir, "tracked.txt"), "alpha\nBETA\nGAMMA\n", "utf8");
+  return dir;
+}
+
 let dir;
 
 beforeAll(() => {
@@ -108,6 +119,44 @@ describe.skipIf(!available)("jj changes panel", () => {
     tui.run();
     expect(readFile(join(dir, "tracked.txt"))).toBe("original\n");
     expect(existsSync(join(dir, "added.txt"))).toBe(false);
+  });
+
+  it("opens a working-copy change as a diff against the parent", () => {
+    dir = createTempDir();
+    createHistoryRepo(dir);
+
+    tui.start(dir);
+    tui.exec("Show Changes");
+    tui.waitFor("Changes (1)");
+    tui.press("down");
+    tui.exec("Git: Open Changes");
+    tui.waitFor("tracked.txt (diff)");
+    const opened = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[opened]).toMatch(/3\s+gamma\s+│\s+3\s+GAMMA/);
+    expect(snapshots[opened]).toMatch(/2\s+BETA\s+│\s+2\s+BETA/);
+  });
+
+  it("opens a commit from history with its message and diff", () => {
+    dir = createTempDir();
+    createHistoryRepo(dir);
+
+    tui.start(dir);
+    tui.exec("Show Changes");
+    tui.waitFor("uppercase beta");
+    tui.press("tab");
+    tui.press("tab");
+    tui.press("down");
+    tui.press("enter");
+    tui.waitFor("1 file · +1 −1");
+    const detail = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[detail]).toMatch(/Commit [k-z]{8}/);
+    expect(snapshots[detail]).toContain("uppercase beta");
+    expect(snapshots[detail]).toMatch(/Authored [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+    expect(snapshots[detail]).toMatch(/2\s+beta\s+│\s+2\s+BETA/);
   });
 
   it("keeps git-only commands out of a colocated workspace", () => {
