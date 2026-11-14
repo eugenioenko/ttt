@@ -15,7 +15,7 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		return
 	}
 	previousFocus := a.Root.Focused
-	palette := ui.NewSelectDialogWidget(a.Reg.List())
+	palette := ui.NewSelectDialogWidget(paletteCommands(a.Reg))
 	palette.Input.ControlModifiers = &a.Root.ControlModifiers
 	palette.Borders = a.Borders
 	palette.Icons = a.Settings.Appearance.Icons
@@ -46,6 +46,21 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 		a.DismissDialog()
 	}
 	a.ShowDialog(palette)
+}
+
+// paletteCommands feeds the command palette. PaletteHidden commands act on the
+// explorer selection, which the palette cannot show, so they stay out of it
+// while Registry.List() keeps them for the keybindings editor and plugins.
+func paletteCommands(reg *command.Registry) []command.Command {
+	all := reg.List()
+	cmds := make([]command.Command, 0, len(all))
+	for _, cmd := range all {
+		if cmd.PaletteHidden {
+			continue
+		}
+		cmds = append(cmds, cmd)
+	}
+	return cmds
 }
 
 func (a *App) ShowThemePicker() {

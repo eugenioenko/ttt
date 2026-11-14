@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/i18n"
 )
@@ -83,7 +84,11 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 	configureFormatterProcess(cmd)
 	// Detached descendants must not keep the output pipes open indefinitely.
 	cmd.WaitDelay = 100 * time.Millisecond
-	cmd.Stdin = strings.NewReader(original)
+	input := original
+	if editor.Buf.UTF8BOM {
+		input = buffer.UTF8ByteOrderMark + input
+	}
+	cmd.Stdin = strings.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -99,7 +104,12 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 		return fmt.Errorf("%s", msg)
 	}
 
-	formatted := strings.ReplaceAll(stdout.String(), "\r\n", "\n")
+	formatted := stdout.String()
+	// Without BOM metadata, an existing leading U+FEFF is editable text.
+	if editor.Buf.UTF8BOM || !strings.HasPrefix(original, buffer.UTF8ByteOrderMark) {
+		formatted = strings.TrimPrefix(formatted, buffer.UTF8ByteOrderMark)
+	}
+	formatted = strings.ReplaceAll(formatted, "\r\n", "\n")
 	if formatted == original {
 		return nil
 	}

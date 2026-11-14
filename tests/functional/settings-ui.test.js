@@ -64,10 +64,10 @@ describe("settings editor", () => {
 
     const { snapshots } = tui.run();
     // One row per setting: label left, control right.
-    expect(snapshots[s0]).toMatch(/Insert spaces\s+\[x\]/);
+    expect(snapshots[s0]).toMatch(/Insert spaces \(restart\)\s+\[x\]/);
     expect(snapshots[s0]).toMatch(/Word wrap\s+\[ \]/);
     expect(snapshots[s0]).toContain("Tab size");
-    expect(snapshots[s0]).toMatch(/Tab size\s+❯ 4/);
+    expect(snapshots[s0]).toMatch(/Tab size \(restart\)\s+❯ 4/);
   });
 
   // Deferral itself is an app-state assertion and lives in the e2e suite

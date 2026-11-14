@@ -1393,7 +1393,12 @@ func (cp *ChangesPanel) DiscardSelected() {
 	if cp.commandContext != changesWorkingTree {
 		return
 	}
-	dir, status, _, ok := cp.parseFileNode(cp.Tree.Selected())
+	node := cp.Tree.Selected()
+	if _, ok := cp.folderRef(node); ok {
+		cp.confirmDiscardFolder(node)
+		return
+	}
+	dir, status, _, ok := cp.parseFileNode(node)
 	if !ok || status.Group == scm.Staged {
 		return
 	}

@@ -759,6 +759,8 @@ func (g *EditorGroupWidget) NewFile() {
 		Undo:     g.newUndoStack(),
 		Sel:      &selection.Selection{},
 		Virtual:  true,
+		TabSize:  g.TabSize,
+		UseTabs:  !g.InsertSpaces,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -773,6 +775,8 @@ func (g *EditorGroupWidget) NewFileFromText(text string) {
 		Undo:    g.newUndoStack(),
 		Sel:     &selection.Selection{},
 		Virtual: true,
+		TabSize: g.TabSize,
+		UseTabs: !g.InsertSpaces,
 	}
 	if t := g.activeTab(); len(g.tabs) == 1 && g.isUntouchedPlaceholder(t) {
 		tab.FilePath = t.FilePath
@@ -2320,8 +2324,9 @@ func (g *EditorGroupWidget) AnyDirty() bool {
 	return false
 }
 
-func (g *EditorGroupWidget) undoRedoPostProcess(reveal bool) {
+func (g *EditorGroupWidget) undoRedoPostProcess(version uint64, reveal bool) {
 	if g.Editor.Folds != nil {
+		g.Editor.remapFolds(version)
 		g.Editor.refreshFolds()
 		g.Editor.ExpandFoldContaining(g.Editor.Cursor.Line)
 	}
@@ -2343,6 +2348,7 @@ func (g *EditorGroupWidget) Undo() {
 		g.Editor.collapseMulti()
 	}
 	if t.Undo != nil {
+		version := t.Buf.Version()
 		pos := t.Undo.Undo(t.Buf)
 		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line
@@ -2351,7 +2357,7 @@ func (g *EditorGroupWidget) Undo() {
 		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
-		g.undoRedoPostProcess(pos != nil)
+		g.undoRedoPostProcess(version, pos != nil)
 	}
 }
 
@@ -2364,6 +2370,7 @@ func (g *EditorGroupWidget) Redo() {
 		g.Editor.collapseMulti()
 	}
 	if t.Undo != nil {
+		version := t.Buf.Version()
 		pos := t.Undo.Redo(t.Buf)
 		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line
@@ -2372,7 +2379,7 @@ func (g *EditorGroupWidget) Redo() {
 		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
-		g.undoRedoPostProcess(pos != nil)
+		g.undoRedoPostProcess(version, pos != nil)
 	}
 }
 

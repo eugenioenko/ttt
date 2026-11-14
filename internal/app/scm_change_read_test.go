@@ -99,6 +99,23 @@ func TestProviderChangeReadQueuedOpenCanceledByPlainFileOpen(t *testing.T) {
 	}
 }
 
+func TestReadChangeDiffReportsBinaryContent(t *testing.T) {
+	r := &changeReadRepository{testSCMRepository: testSCMRepository{root: t.TempDir()}, result: scm.ChangeDiff{
+		Before: scm.FileContent{Content: "old\x00bin\n", Exists: true},
+		After:  scm.FileContent{Content: "new\x00bin\n", Exists: true},
+		Patch:  "diff --git a/bin.dat b/bin.dat\nindex 0000000..1111111 100644\nBinary files a/bin.dat and b/bin.dat differ\n",
+	}}
+	a, _ := newBaselineTestApp(t, r)
+	result := readChangeDiff(context.Background(), a.Repository.repositorySource(r.root), scm.Change{Path: "bin.dat", Kind: scm.Modified}, false)
+	if result == nil || result.Warn == "" || result.OldLines != nil || result.NewLines != nil {
+		t.Fatalf("binary change = %+v, want a warning with no diff lines", result)
+	}
+	a.applyDiffOpen(a.EditorGroup.ActiveFilePath(), result)
+	if a.EditorGroup.ActiveDiffWidget() != nil || !strings.Contains(a.Status.Notification, "Binary") {
+		t.Fatal("binary change opened a diff view or did not notify")
+	}
+}
+
 func TestProviderChangeReadTimeoutShowsWarning(t *testing.T) {
 	r := &changeReadRepository{testSCMRepository: testSCMRepository{root: t.TempDir()}}
 	a, _ := newBaselineTestApp(t, r)

@@ -138,10 +138,24 @@ func (r *ReplaceBarWidget) CurrentMatch() int { return r.Current }
 
 func (r *ReplaceBarWidget) replaceCurrent() {
 	r.Refresh()
-	if len(r.Matches) > 0 && r.OnReplace != nil {
-		r.OnReplace(r.Matches[r.Current], r.ReplaceInput.Text())
-		r.search()
+	if len(r.Matches) == 0 || r.OnReplace == nil {
+		return
 	}
+	match, replacement := r.Matches[r.Current], r.ReplaceInput.Text()
+	r.OnReplace(match, replacement)
+	if r.OnSearch == nil {
+		return
+	}
+	r.Matches = r.OnSearch(r.SearchInput.Text(), r.Options)
+	r.Current = 0
+	end := match.Col + len([]rune(replacement))
+	for i, m := range r.Matches {
+		if m.Line > match.Line || m.Line == match.Line && m.Col >= end {
+			r.Current = i
+			break
+		}
+	}
+	r.navigate()
 }
 
 func (r *ReplaceBarWidget) navigate() {

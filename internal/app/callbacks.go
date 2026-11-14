@@ -426,6 +426,9 @@ func readChangeDiff(ctx context.Context, source repositorySource, change scm.Cha
 		}
 		return &diffOpenResult{Warn: message}
 	}
+	if isBinaryContent([]byte(content.Before.Content)) || isBinaryContent([]byte(content.After.Content)) {
+		return &diffOpenResult{Warn: i18n.Text("changes.binaryFileChanged")}
+	}
 	parsed := diff.Parse(content.Patch)
 	suffix := " (diff)"
 	if change.Group == scm.Staged {
