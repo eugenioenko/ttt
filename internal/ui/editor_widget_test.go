@@ -4,9 +4,11 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
+	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
+	"strings"
 	"testing"
 
 	"github.com/gdamore/tcell/v3"
@@ -531,6 +533,34 @@ func TestTransformSelectionStaleAnchorBeyondLine(t *testing.T) {
 
 	if e.Buf.Lines[1][:2] != "WO" {
 		t.Errorf("expected transformed text, got %q", e.Buf.Lines[1])
+	}
+}
+
+func TestTransformSelectionAppliesAtEveryCursor(t *testing.T) {
+	e := newMultiCursorEditor([]string{"ab ab", "ab"}, [][2]int{{0, 2}, {0, 5}, {1, 2}})
+	e.Undo = &undo.UndoStack{}
+	for i := range e.Multi.Cursors {
+		cs := &e.Multi.Cursors[i]
+		cs.Sel.Start(cs.Line, cs.Col-2)
+	}
+	e.syncFromMulti()
+
+	// A length-changing transform checks that later selections on the same line shift.
+	e.transformSelection(func(s string) string { return s + s })
+
+	if got, want := strings.Join(e.Buf.Lines, "\n"), "abab abab\nabab"; got != want {
+		t.Fatalf("buffer = %q, want %q", got, want)
+	}
+	for i, want := range [][4]int{{0, 0, 0, 4}, {0, 5, 0, 9}, {1, 0, 1, 4}} {
+		cs := e.Multi.Cursors[i]
+		got := [4]int{cs.Sel.Anchor.Line, cs.Sel.Anchor.Col, cs.Line, cs.Col}
+		if !cs.Sel.Active || got != want {
+			t.Fatalf("cursor %d = %v (active %v), want %v", i, got, cs.Sel.Active, want)
+		}
+	}
+	e.Undo.Undo(e.Buf)
+	if got := strings.Join(e.Buf.Lines, "\n"); got != "ab ab\nab" {
+		t.Fatalf("one undo = %q, want original text", got)
 	}
 }
 
