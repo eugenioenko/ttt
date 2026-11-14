@@ -53,6 +53,7 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 **Services**: external-process and external-state integration, exposing typed operations and results without owning widgets.
 
 - **`internal/git/`**: git CLI wrapper (status, staging, commit, repo discovery).
+- **`internal/jj/`**: Jujutsu CLI adapter for the `internal/scm` provider contracts. `scm.Providers` tries jj before git, so colocated workspaces use jj.
 - **`internal/github/`**: `gh` CLI wrapper for pull requests.
 - **`internal/jsonrpc/`**: JSON-RPC 2.0 with Content-Length framing: `Codec` and a bidirectional `Conn` (calls, notifications, and peer requests). Transport-agnostic; used by LSP and the plugin `ttt.rpc` module.
 - **`internal/lsp/`**: language server client (see LSP Integration).
