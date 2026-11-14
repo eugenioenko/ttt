@@ -71,6 +71,19 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
     nix run nixpkgs#ttt
     ```
   </TabItem>
+  <TabItem label="FreeBSD">
+    Available in the [FreeBSD Ports Collection](https://www.freshports.org/editors/ttt):
+
+    ```sh
+    pkg install ttt-editor
+    ```
+
+    Or build from the ports tree:
+
+    ```sh
+    cd /usr/ports/editors/ttt && make install clean
+    ```
+  </TabItem>
 </Tabs>
 
 ## Download Binary

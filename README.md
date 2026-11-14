@@ -53,6 +53,14 @@ Or install directly from the repo flake (tracks the development branch):
 nix run github:eugenioenko/ttt
 ```
 
+### [FreeBSD](https://www.freshports.org/editors/ttt)
+
+```sh
+pkg install ttt-editor
+```
+
+Or build from the ports tree: `cd /usr/ports/editors/ttt && make install clean`.
+
 ### Quick Install Windows (scoop)
 ```sh
 scoop install ttt
