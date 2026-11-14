@@ -21,8 +21,8 @@ In-app shortcut labels use `Ctrl` in Control mode, `Mod` (Ctrl or Super) in Both
 | Ctrl+P | `command.palette` | Open command palette |
 | Ctrl+K P | `file.quickOpen` | Quick open file |
 | Escape | *(built-in)* | Dismiss overlay / collapse cursors / focus the editor |
-| F6 | `focus.nextGroup` | Focus next group (editor → panel → sidebar) |
-| Shift+F6 | `focus.prevGroup` | Focus previous group |
+| F6 | `focus.nextGroup` | Focus next group (editor → sidebar → bottom panel → editor; hidden groups are skipped) |
+| Shift+F6 | `focus.prevGroup` | Focus previous group (reverse order) |
 
 ## File
 
@@ -134,6 +134,7 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 | Alt+. | `tab.next` | Next tab |
 | Alt+, | `tab.prev` | Previous tab |
 | Ctrl+W | `tab.close` | Close tab |
+| Ctrl+K Enter | `tab.pin` | Pin or unpin tab |
 
 ## LSP
 
@@ -141,6 +142,7 @@ In find/replace dialogs, use Alt+C to toggle case sensitivity and Alt+R (or Alt+
 |----------|---------|-------------|
 | Ctrl+U | `editor.autocomplete` | Trigger autocomplete |
 | Ctrl+K I | `editor.hover` | Hover info |
+| Ctrl+. | `editor.codeActions` | Code actions |
 | F2 | `editor.rename` | Rename symbol |
 | F12 | `editor.goToDefinition` | Go to definition |
 | Shift+F12 | `editor.goToImplementation` | Go to implementation |

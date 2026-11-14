@@ -170,6 +170,8 @@ All editor settings are nested under the `editor` key.
 | `editor.autoClosing.inStrings` | bool | `false` | Allow new pairs inside strings identified by the language grammar |
 | `editor.autoClosing.plainText` | bool | `false` | Also enable pairing in plain text, unnamed buffers, and files with no recognized grammar |
 | `editor.lineNumbers` | bool | `true` | Show line numbers in the gutter |
+| `editor.indentGuides` | bool | `false` | Draw vertical guides at each indentation level |
+| `editor.showTrailingNewline` | bool | `true` | Show an empty last line when the file ends with a newline |
 | `editor.cursorStyle` | string | `""` | Cursor style: `"block"`, `"underline"`, or `"bar"` |
 | `editor.formatOnSave` | bool | `false` | Auto-format the document via LSP on save |
 | `editor.saveAllOnQuit` | bool | `false` | Add **Save All & Quit** to the **Unsaved changes** dialog. Saves modified named buffers first, then prompts **Save As** for each modified unnamed buffer. Cancelling or failing a save stops quitting; files already saved remain saved. Also in **Settings > Editor > On quit**. |
@@ -178,10 +180,12 @@ All editor settings are nested under the `editor` key.
 | `editor.insertFinalNewline` | bool | `true` | Ensure files end with a newline on load and save |
 | `editor.trimTrailingWhitespace` | bool | `false` | Remove trailing whitespace from lines on save |
 | `editor.focusOnOpen` | bool | `false` | Focus the editor when opening a file |
+| `editor.previewTabs` | bool | `true` | Open files in a preview tab that the next opened file replaces, until the tab is kept, for example by pinning it or opening the file again; when off, every opened file gets its own tab |
 | `editor.syntaxHighlight` | bool | `true` | Enable syntax highlighting |
 | `editor.gitGutter` | bool | `true` | Show git change indicators in the gutter, compared against the staged version of the file (the git index) |
 | `editor.scrollbarGitMarks` | bool | `true` | Mark git changes on the editor's vertical scrollbar. Needs `editor.gitGutter` |
 | `editor.menuBar` | bool | `true` | Show the menu bar row at the top of the window |
+| `editor.transparentBackground` | bool | `false` | Leave the theme's background unset so the terminal's own background shows through. Also toggled from **Options → Transparent BG** |
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
@@ -277,6 +281,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
+| `terminal.args` | string[] | omitted | Arguments passed to `terminal.shell` unchanged, for example to run a program instead of an interactive shell. Setting it skips `terminal.shellIntegration` |
 | `terminal.padding_x` | int | `1` | Blank columns on each side of terminal text, before the scrollbar; `0` removes both margins. Applies immediately. The settings UI rejects negative values; negative values in `settings.json` become `0`. Narrow panels reduce padding equally to preserve terminal content |
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V. Set to `false` to send `^V` to the terminal program. Ctrl+Shift+V always pastes when reported distinctly by the outer terminal |
 | `terminal.forwardShortcuts` | bool | `false` | Forward reserved TTT shortcuts and chord prefixes directly to the focused terminal. When false, TTT takes priority and Ctrl+K forwards the next modified key while plain/Shift-only continuations complete TTT chords. Applies immediately; available in General → Keyboard beside the editable forwarding shortcut |
