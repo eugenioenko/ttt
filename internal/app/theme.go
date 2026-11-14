@@ -313,6 +313,13 @@ func firstRune(s string, fallback rune) rune {
 
 func BuildBorderSet(bc config.BorderChars) term.BorderSet {
 	d := term.SingleBorderSet()
+	cross := d.Cross
+	for _, preset := range []term.BorderSet{term.DoubleBorderSet(), term.BoldBorderSet(), term.AsciiBorderSet(), term.NoneBorderSet()} {
+		if firstRune(bc.Horizontal, d.Horizontal) == preset.Horizontal && firstRune(bc.Vertical, d.Vertical) == preset.Vertical {
+			cross = preset.Cross
+			break
+		}
+	}
 	return term.BorderSet{
 		Horizontal:  firstRune(bc.Horizontal, d.Horizontal),
 		Vertical:    firstRune(bc.Vertical, d.Vertical),
@@ -324,7 +331,7 @@ func BuildBorderSet(bc config.BorderChars) term.BorderSet {
 		BottomTee:   firstRune(bc.BottomTee, d.BottomTee),
 		LeftTee:     firstRune(bc.LeftTee, d.LeftTee),
 		RightTee:    firstRune(bc.RightTee, d.RightTee),
-		Cross:       firstRune(bc.Cross, d.Cross),
+		Cross:       firstRune(bc.Cross, cross),
 	}
 }
 
