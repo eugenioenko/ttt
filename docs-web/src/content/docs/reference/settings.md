@@ -312,6 +312,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `plugins.enabled` | bool | `true` | Enable the plugin system. When `false`, no plugins are loaded and the Plugins sidebar tab is hidden. |
+| `plugins.systemDir` | string | `""` | Optional absolute path to administrator-managed plugins. User and workspace plugins take precedence. Shared approvals are read from `plugins.ttt.json` inside this directory; disabling remains per user. Requires restart. |
 | `plugins.selectionStyle` | string | `"invert"` | Selection highlight style inside plugin panels, tabs and dialogs: `"invert"` (invert foreground and background colors) or `"background"` (use theme's selection background). Inverted selections stay visible on a plugin's highlighted rows. |
 
 ## Markdown

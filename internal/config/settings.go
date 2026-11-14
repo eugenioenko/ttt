@@ -434,6 +434,7 @@ func DefaultExplorerSettings() ExplorerSettings {
 }
 
 type PluginSettings struct {
+	SystemDir      string `json:"systemDir,omitempty"`
 	Enabled        *bool  `json:"enabled,omitempty"`
 	SelectionStyle string `json:"selectionStyle,omitempty"`
 }

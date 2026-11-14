@@ -16,15 +16,16 @@ const (
 )
 
 type RegistryEntry struct {
-	Name          string        `json:"name"`
-	DisplayName   string        `json:"displayName,omitempty"`
-	Repo          string        `json:"repo,omitempty"`
-	Path          string        `json:"path,omitempty"`
-	Version       string        `json:"version"`
-	Enabled       bool          `json:"enabled"`
-	Permissions   PermissionSet `json:"permissions"`
-	ExecPaths     []string      `json:"execPaths,omitempty"` // from sys.request_exec; outside Permissions, which is intersected with the manifest
-	GrantsVersion int           `json:"grantsVersion,omitempty"`
+	SystemApproval bool          `json:"systemApproval,omitempty"`
+	Name           string        `json:"name"`
+	DisplayName    string        `json:"displayName,omitempty"`
+	Repo           string        `json:"repo,omitempty"`
+	Path           string        `json:"path,omitempty"`
+	Version        string        `json:"version"`
+	Enabled        bool          `json:"enabled"`
+	Permissions    PermissionSet `json:"permissions"`
+	ExecPaths      []string      `json:"execPaths,omitempty"` // from sys.request_exec; outside Permissions, which is intersected with the manifest
+	GrantsVersion  int           `json:"grantsVersion,omitempty"`
 }
 
 // Title is the human-facing name: DisplayName when set, else the unique Name.
@@ -120,6 +121,7 @@ func (r *Registry) AddOrUpdate(name, displayName, repo, path, version string, pe
 		entry.Permissions = perms
 		entry.Enabled = true
 		entry.GrantsVersion = grantsVersion
+		entry.SystemApproval = false
 		return
 	}
 	r.Entries = append(r.Entries, RegistryEntry{
