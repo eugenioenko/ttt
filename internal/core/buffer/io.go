@@ -2,6 +2,7 @@ package buffer
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -104,7 +105,9 @@ func (b *Buffer) DiskSize() int64 { return b.diskSize }
 // temporary file in the same directory, fsyncs it, then renames it over the
 // target. This guarantees the file on disk is always either the complete old
 // or complete new content, never a truncated partial write. The target's
-// permissions are preserved; symlinks are followed so the link is kept intact.
+// permissions, owner and group are preserved; symlinks are followed so the
+// link is kept intact. When the owner or group can't be given to a new file,
+// the target is overwritten in place instead (see writeInPlace).
 func (b *Buffer) SaveFile(filename string) error {
 	lines := b.CleanedLines()
 
@@ -117,8 +120,9 @@ func (b *Buffer) SaveFile(filename string) error {
 
 	dir := filepath.Dir(target)
 	mode := os.FileMode(0644)
-	if info, err := os.Stat(target); err == nil {
-		mode = info.Mode().Perm()
+	orig, statErr := os.Stat(target)
+	if statErr == nil {
+		mode = orig.Mode().Perm()
 	}
 
 	tmp, err := os.CreateTemp(dir, ".ttt-*.tmp")
@@ -142,13 +146,25 @@ func (b *Buffer) SaveFile(filename string) error {
 		tmp.Close()
 		return err
 	}
+	// Once keepOwner hands the file to the target's owner, they can replace
+	// tmpName, so metadata changes go through the descriptor, never the path.
+	// The mode is applied only after the group is right, so the temp file never
+	// lets the saver's own group read it.
+	inPlace := statErr == nil && keepOwner(tmp, orig) != nil
+	if !inPlace {
+		if err := tmp.Chmod(mode); err != nil {
+			tmp.Close()
+			return err
+		}
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmpName, mode); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, target); err != nil {
+	if inPlace {
+		if err := writeInPlace(target, tmpName); err != nil {
+			return err
+		}
+	} else if err := os.Rename(tmpName, target); err != nil {
 		return err
 	}
 
@@ -156,6 +172,83 @@ func (b *Buffer) SaveFile(filename string) error {
 	b.savedLineEnding = b.LineEnding
 	if info, err := os.Stat(target); err == nil {
 		b.recordDiskInfo(info)
+	}
+	return nil
+}
+
+// writeInPlace overwrites target with the contents of src without replacing the
+// file, so its owner and group stay. A recovery copy of target's old contents is
+// made first and kept if the overwrite fails partway.
+func writeInPlace(target, src string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(target, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	recovery, err := copyToTemp(out, filepath.Dir(target), "."+filepath.Base(target)+".ttt-recovery-*")
+	if err != nil {
+		out.Close()
+		return err
+	}
+	if err := checkSameFile(out, target); err != nil {
+		out.Close()
+		os.Remove(recovery)
+		return err
+	}
+	err = out.Truncate(0)
+	if err == nil {
+		_, err = out.Seek(0, io.SeekStart)
+	}
+	if err == nil {
+		_, err = io.Copy(out, in)
+	}
+	if err == nil {
+		err = out.Sync()
+	}
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return fmt.Errorf("%w (the previous contents are saved in %s)", err, recovery)
+	}
+	os.Remove(recovery)
+	return nil
+}
+
+func copyToTemp(in *os.File, dir, pattern string) (string, error) {
+	out, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(out, in)
+	if err == nil {
+		err = out.Sync()
+	}
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		os.Remove(out.Name())
+		return "", err
+	}
+	return out.Name(), nil
+}
+
+func checkSameFile(f *os.File, name string) error {
+	open, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	cur, err := os.Stat(name)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(open, cur) {
+		return fmt.Errorf("%s was replaced while saving", name)
 	}
 	return nil
 }
