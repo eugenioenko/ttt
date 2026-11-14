@@ -149,6 +149,10 @@ func (g *EditorGroupWidget) syncSharedTab(t *editorTab) {
 	pos.Col = remapSharedColumn(pos.Col, t.viewText, t.Buf.Lines[pos.Line])
 	t.Cur.Line, t.Cur.Col = pos.Line, pos.Col
 	g.clampCursor(t)
+	t.Multi = nil
+	if g.activeTab() == t {
+		g.Editor.Multi = nil
+	}
 	if t.Sel != nil && t.Sel.Active {
 		t.Sel.Anchor.Line = max(0, min(t.Sel.Anchor.Line, len(t.Buf.Lines)-1))
 		t.Sel.Anchor.Col = remapSharedColumn(t.Sel.Anchor.Col, t.viewAnchorText, t.Buf.Lines[t.Sel.Anchor.Line])

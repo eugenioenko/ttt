@@ -182,3 +182,40 @@ func TestSharedSaveAsResetsReplacedViewState(t *testing.T) {
 		t.Fatal("replaced view retained a cursor outside the new document")
 	}
 }
+
+func TestPeerEditsClearSecondaryCursorsInChangedViews(t *testing.T) {
+	for _, inactive := range []bool{false, true} {
+		name := "active tab"
+		if inactive {
+			name = "inactive tab"
+		}
+		t.Run(name, func(t *testing.T) {
+			left, right := sharedTestGroups(t)
+			path := left.ActiveFilePath()
+			left.AddCursor(2, 3)
+			if left.MultiCursorCount() != 2 {
+				t.Fatal("secondary cursor was not added")
+			}
+			if inactive {
+				left.NewFileFromText("unrelated\ntext")
+				left.AddCursor(1, 1)
+			}
+			otherMulti := left.Editor.Multi
+			right.Editor.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", 0))
+			right.SyncDocumentViews()
+			if inactive {
+				if left.Editor.Multi != otherMulti || left.MultiCursorCount() != 2 {
+					t.Fatal("a peer edit changed cursors in an unrelated active tab")
+				}
+				left.SwitchToTabByPath(path)
+			}
+			if left.Editor.Multi != nil || left.activeTab().Multi != nil {
+				t.Fatal("the changed view retained stale secondary cursors")
+			}
+			left.Editor.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "z", 0))
+			if strings.Count(strings.Join(left.ActiveBuffer().Lines, "\n"), "z") != 1 {
+				t.Fatal("the next edit used stale secondary cursor positions")
+			}
+		})
+	}
+}
