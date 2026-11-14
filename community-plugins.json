@@ -251,7 +251,7 @@
     "author": "Steve Greenley",
     "description": "VS Code-style braille minimap of the active buffer in a right-docked panel",
     "repo": "https://github.com/SteveGreenley/ttt-minimap",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "tags": ["minimap", "overview", "braille", "navigation", "scroll"]
   },
   {
