@@ -2,11 +2,14 @@ package e2e
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -113,6 +116,13 @@ func TestSettingsExplorerUseTrash(t *testing.T) {
 	if h.app.Settings.Explorer.UseTrash || config.LoadSettings().Explorer.UseTrash {
 		t.Fatal("useTrash=false was not applied and saved")
 	}
+	// explorer.delete refuses the workspace root, so target a file inside it.
+	// The name is short enough for the whole warning to stay on one row.
+	shortName := filepath.Join(h.dir, "x")
+	if err := os.WriteFile(shortName, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.ExplorerContextNode = &widgets.TreeNode{ID: shortName}
 	h.exec("explorer.delete")
 	h.assertContains("Permanently delete")
 	h.assertContains("This cannot be undone.")

@@ -331,7 +331,7 @@ func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
 }
 
 func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
-	prevLines := len(e.Buf.Lines)
+	version, prevLines := e.Buf.Version(), len(e.Buf.Lines)
 	e.applyAutoClosingEdit(cmd)
 	if undo.IsNoop(cmd) {
 		return
@@ -340,12 +340,33 @@ func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 		e.Undo.Push(cmd)
 	}
 	e.bufferDirty = true
-	if len(e.Buf.Lines) != prevLines {
+	e.refreshFoldsAfterEdit(version, prevLines)
+}
+
+const asyncFoldLines = 50_000
+
+func (e *EditorPaneWidget) refreshFoldsAfterEdit(version uint64, prevLines int) {
+	if e.remapFolds(version) || len(e.Buf.Lines) != prevLines {
 		e.refreshFolds()
 	}
 }
 
-const asyncFoldLines = 50_000
+func (e *EditorPaneWidget) remapFolds(version uint64) bool {
+	if e.Folds == nil || !e.Folds.HasCollapsedFolds() || version == e.Buf.Version() {
+		return false
+	}
+	shifted := false
+	if !e.Buf.ChangesSince(version, func(c buffer.Change) {
+		if c.Removed != c.Added {
+			e.Folds.ShiftCollapsed(c.Start, c.Removed, c.Added)
+			shifted = true
+		}
+	}) {
+		e.Folds.ExpandAll()
+		return true
+	}
+	return shifted
+}
 
 func (e *EditorPaneWidget) refreshFolds() {
 	if e.Folds == nil {

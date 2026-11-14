@@ -202,6 +202,26 @@ func TestCollapsedDiffEmphasisSettingLivesInDiff(t *testing.T) {
 	}
 }
 
+func TestIndentationSettingsRequireRestart(t *testing.T) {
+	want := map[string]bool{"Tab size": false, "Insert spaces": false}
+	for _, category := range settingsCategories() {
+		for _, field := range category.Fields {
+			if _, ok := want[field.Label]; !ok {
+				continue
+			}
+			want[field.Label] = true
+			if !field.Restart {
+				t.Errorf("%s → %s is not marked as requiring a restart", category.Title, field.Label)
+			}
+		}
+	}
+	for label, found := range want {
+		if !found {
+			t.Errorf("%s field not found", label)
+		}
+	}
+}
+
 func TestShowSettingsReopenPreservesPendingWorkingView(t *testing.T) {
 	a := buildTestApp(t, config.DefaultSettings())
 	a.EditorGroup.OnContentTabClose = func(id string) {

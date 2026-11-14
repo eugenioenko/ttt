@@ -28,6 +28,17 @@ var foldSample = []string{
 	"}",
 }
 
+func TestCollapsedFoldFollowsBatchWithUnchangedLineCount(t *testing.T) {
+	e := newFoldedEditor(1, foldSample...)
+	e.ExecCommand(&undo.BatchCommand{Commands: []undo.EditCommand{
+		&undo.InsertLineCommand{Idx: 0, Text: ""},
+		&undo.DeleteLineCommand{Idx: 5},
+	}})
+	if !e.Folds.IsCollapsed(2) || e.Folds.IsCollapsed(1) {
+		t.Fatal("the inner fold should follow its header through the batch")
+	}
+}
+
 func TestMoveLineDownCarriesFoldedBody(t *testing.T) {
 	e := newFoldedEditor(1, foldSample...)
 

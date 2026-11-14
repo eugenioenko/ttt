@@ -116,10 +116,10 @@ func settingsCategories() []settingsCategory {
 		}},
 		{Title: i18n.Text("settings.editor"), Fields: []settingField{
 			section(i18n.Text("settings.indentation")),
-			{Label: i18n.Text("settings.tabSize"), Kind: settingInt, Min: 1,
+			{Label: i18n.Text("settings.tabSize"), Kind: settingInt, Restart: true, Min: 1,
 				GetInt: func(s *config.Settings) int { return s.Editor.TabSize },
 				SetInt: func(s *config.Settings, v int) { s.Editor.TabSize = v }},
-			{Label: i18n.Text("settings.insertSpaces"), Kind: settingBool,
+			{Label: i18n.Text("settings.insertSpaces"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.InsertSpaces },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.InsertSpaces = v }},
 			{Label: i18n.Text("settings.autoIndent"), Kind: settingBool,

@@ -246,6 +246,15 @@
     "tags": ["mcp", "ai", "agents", "automation"]
   },
   {
+    "name": "ttt-minimap",
+    "displayName": "Minimap",
+    "author": "Steve Greenley",
+    "description": "VS Code-style braille minimap of the active buffer in a right-docked panel",
+    "repo": "https://github.com/SteveGreenley/ttt-minimap",
+    "version": "0.1.0",
+    "tags": ["minimap", "overview", "braille", "navigation", "scroll"]
+  },
+  {
     "name": "vim",
     "featured": true,
     "displayName": "Vim Mode",

@@ -25,6 +25,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 
 	shift := mods&tcell.ModShift != 0
 	multi := e.isMultiActive()
+	version, prevLines := e.Buf.Version(), len(e.Buf.Lines)
 
 	switch kev.Key() {
 	case tcell.KeyUp:
@@ -270,6 +271,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 		return EventIgnored
 	}
 
+	if multi {
+		e.refreshFoldsAfterEdit(version, prevLines)
+	}
 	e.clampCursor()
 	e.scrollViewport()
 	return EventConsumed
@@ -290,6 +294,7 @@ func (e *EditorPaneWidget) execEnter() {
 		col = lineLen
 	}
 	line := e.Buf.Lines[e.Cursor.Line]
+	version := e.Buf.Version()
 
 	var cmds []undo.EditCommand
 	splitCmd := &undo.SplitLineCommand{Line: e.Cursor.Line, Col: col}
@@ -336,6 +341,7 @@ func (e *EditorPaneWidget) execEnter() {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
 	e.bufferDirty = true
+	e.remapFolds(version)
 	e.refreshFolds()
 }
 

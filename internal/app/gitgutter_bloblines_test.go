@@ -30,6 +30,10 @@ func TestBlobLinesSplitsLikeBuffer(t *testing.T) {
 		{"empty show trailing", "", true, []string{""}},
 		{"lone cr last line", "one\ntwo\r", false, []string{"one", "two"}},
 		{"empty", "", false, []string{""}},
+		{"bom", "\ufeffone\ntwo\n", false, []string{"one", "two"}},
+		{"bom show trailing", "\ufeffone\r\ntwo\r\n", true, []string{"one", "two", ""}},
+		{"bom only", "\ufeff", true, []string{""}},
+		{"interior feff", "one\ufefftwo", false, []string{"one\ufefftwo"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := blobLines(tc.content, tc.showTrailing)

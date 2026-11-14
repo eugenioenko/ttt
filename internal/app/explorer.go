@@ -115,6 +115,10 @@ func (n *NavigationPanel) isRoot(node *widgets.TreeNode) bool {
 	return slices.Contains(n.Roots, node.ID)
 }
 
+func (n *NavigationPanel) isRootPath(path string) bool {
+	return slices.Contains(n.Roots, path)
+}
+
 func (n *NavigationPanel) SetActiveFile(path string) {
 	n.Tree.SetActiveID(path)
 }
