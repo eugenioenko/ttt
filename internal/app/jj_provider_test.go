@@ -178,17 +178,21 @@ func TestGitOnlyGuardSeesWorkspacesInitializedAfterRefresh(t *testing.T) {
 	}
 }
 
-func TestGitOnlyGuardSeesWorkspacesInitializedAfterRefresh(t *testing.T) {
-	dir := folderActionRepo(t)
-	a := &App{Changes: NewChangesPanel(dir)}
-	a.Changes.Refresh()
-	if a.isJJDir(dir) {
-		t.Fatal("git repository reported as jj")
+func TestStagingKeysExplainJJHasNoStagingArea(t *testing.T) {
+	dir := jjChangesRepo(t)
+	cp := NewChangesPanel(dir)
+	cp.Refresh()
+	var errs []string
+	cp.OnError = func(msg string) { errs = append(errs, msg) }
+	section := nodeWithLabel(cp.Tree.Config.Items, i18n.Format("changes.changes", i18n.Args{"unstagedCount": 2}))
+	if section == nil || !revealTreeSelection(cp.Tree, section.Children[0].ID) {
+		t.Fatal("no jj file row to select")
 	}
-	jjtest.Require(t)
-	jjtest.Isolate(t)
-	jjtest.Run(t, dir, "git", "init", "--colocate")
-	if !a.isJJDir(dir) {
-		t.Fatal("cached git repository hid a newly colocated jj workspace")
+	cp.ToggleStageSelected()
+	if want := i18n.Text("status.notAvailableInJJRepositories"); len(errs) != 1 || errs[0] != want {
+		t.Fatalf("errors = %q, want %q", errs, want)
+	}
+	if got := cp.TotalChanges(); got != 2 {
+		t.Fatalf("changes after staging key = %d", got)
 	}
 }

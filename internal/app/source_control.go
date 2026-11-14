@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/jj"
 	"github.com/eugenioenko/ttt/internal/scm"
 )
@@ -85,6 +86,9 @@ func (cp *ChangesPanel) stagePaths(dir string, unstage bool, paths ...string) er
 	}
 	staging, ok := repo.(scm.Staging)
 	if !ok {
+		if jj.IsRepository(repo) {
+			return errors.New(i18n.Text("status.notAvailableInJJRepositories"))
+		}
 		return errors.ErrUnsupported
 	}
 	if unstage {
