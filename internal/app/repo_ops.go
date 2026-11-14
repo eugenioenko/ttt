@@ -1,10 +1,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/jj"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
 )
@@ -15,19 +17,51 @@ import (
 type RepoOp struct {
 	Name string
 	Run  func(dir string) error
+	// GitOnly ops run the git CLI directly. They skip jj workspaces, where a
+	// colocated .git would otherwise let them mutate the repository behind jj.
+	GitOnly bool
 }
 
 var (
-	OpPull = RepoOp{Name: "pull", Run: git.Pull}
-	OpPush = RepoOp{Name: "push", Run: git.Push}
+	OpPull = RepoOp{Name: "pull", Run: git.Pull, GitOnly: true}
+	OpPush = RepoOp{Name: "push", Run: git.Push, GitOnly: true}
 )
 
 func OpCommit(message string) RepoOp {
-	return RepoOp{Name: "commit", Run: func(dir string) error { return git.Commit(dir, message) }}
+	return RepoOp{Name: "commit", Run: func(dir string) error { return git.Commit(dir, message) }, GitOnly: true}
 }
 
 func OpCreateBranch(name string) RepoOp {
-	return RepoOp{Name: "branch", Run: func(dir string) error { return git.CheckoutNewBranch(dir, name) }}
+	return RepoOp{Name: "branch", Run: func(dir string) error { return git.CheckoutNewBranch(dir, name) }, GitOnly: true}
+}
+
+// isJJDir discovers afresh rather than trusting the panel's cached repository,
+// which predates a jj workspace initialized since the last refresh.
+func (a *App) isJJDir(dir string) bool {
+	if a.Changes.provider != nil {
+		if repo, err := a.Changes.provider.Discover(context.Background(), dir); err == nil {
+			return jj.IsRepository(repo)
+		}
+	}
+	return jj.IsRepository(a.Changes.repository(dir))
+}
+
+func (a *App) withoutJJDirs(task RepoTask) RepoTask {
+	gitOnly := false
+	for _, op := range task.Ops {
+		gitOnly = gitOnly || op.GitOnly
+	}
+	if !gitOnly {
+		return task
+	}
+	dirs := make([]string, 0, len(task.Dirs))
+	for _, dir := range task.Dirs {
+		if !a.isJJDir(dir) {
+			dirs = append(dirs, dir)
+		}
+	}
+	task.Dirs = dirs
+	return task
 }
 
 // RepoTask is a unit of background source-control work.
@@ -56,6 +90,10 @@ func (a *App) RunRepoTask(task RepoTask) {
 		return
 	}
 	if len(task.Dirs) == 0 || len(task.Ops) == 0 {
+		return
+	}
+	if task = a.withoutJJDirs(task); len(task.Dirs) == 0 {
+		a.StatusWarn(i18n.Text("status.notAvailableInJJRepositories"))
 		return
 	}
 

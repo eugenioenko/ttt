@@ -247,7 +247,7 @@ func (a *App) NewBranchDialog() {
 	dirs := make([]string, 0, len(groups))
 	seen := make(map[string]bool)
 	for _, group := range groups {
-		if group.IsPR {
+		if group.IsPR || a.isJJDir(group.Dir) {
 			continue
 		}
 		dir := git.RepoRoot(group.Dir)

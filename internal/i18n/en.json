@@ -1043,6 +1043,7 @@
   "status.noSymbols": "No symbols",
   "status.notADirectory": "Not a directory: {abs}",
   "status.notAGitRepository": "Not a git repository",
+  "status.notAvailableInJJRepositories": "Not available in jj repositories",
   "status.notInAGitRepository": "Not in a git repository",
   "status.openedPRFiles": "Opened PR #{number}: {infoTitle} ({infoFilesCount} files)",
   "status.outputLineCopiedToClipboard": "Output line copied to clipboard",

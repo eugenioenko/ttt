@@ -142,3 +142,53 @@ func TestJJDiscardOfCopyKeepsSourceEdits(t *testing.T) {
 		t.Fatalf("copy kept: %v", err)
 	}
 }
+
+func TestGitOnlyRepoOpsSkipJJWorkspaces(t *testing.T) {
+	jjDir := jjChangesRepo(t, "--colocate")
+	gitDir := folderActionRepo(t)
+	a := &App{Changes: NewChangesPanel(jjDir, gitDir)}
+	a.Changes.Refresh()
+
+	for _, op := range []RepoOp{OpPull, OpPush, OpCommit("m"), OpCreateBranch("b")} {
+		task := a.withoutJJDirs(RepoTask{Dirs: []string{jjDir, gitDir}, Ops: []RepoOp{op}})
+		if len(task.Dirs) != 1 || task.Dirs[0] != gitDir {
+			t.Fatalf("%s dirs = %q", op.Name, task.Dirs)
+		}
+	}
+	if task := a.withoutJJDirs(RepoTask{Dirs: []string{jjDir}, Ops: []RepoOp{a.Changes.commitOp(jjDir, "m")}}); len(task.Dirs) != 1 {
+		t.Fatalf("jj commit was filtered: %q", task.Dirs)
+	}
+	if !a.isJJDir(filepath.Join(jjDir, "src")) {
+		t.Fatal("subdirectory of an undiscovered jj workspace is not jj")
+	}
+}
+
+func TestGitOnlyGuardSeesWorkspacesInitializedAfterRefresh(t *testing.T) {
+	dir := folderActionRepo(t)
+	a := &App{Changes: NewChangesPanel(dir)}
+	a.Changes.Refresh()
+	if a.isJJDir(dir) {
+		t.Fatal("git repository reported as jj")
+	}
+	jjtest.Require(t)
+	jjtest.Isolate(t)
+	jjtest.Run(t, dir, "git", "init", "--colocate")
+	if !a.isJJDir(dir) {
+		t.Fatal("cached git repository hid a newly colocated jj workspace")
+	}
+}
+
+func TestGitOnlyGuardSeesWorkspacesInitializedAfterRefresh(t *testing.T) {
+	dir := folderActionRepo(t)
+	a := &App{Changes: NewChangesPanel(dir)}
+	a.Changes.Refresh()
+	if a.isJJDir(dir) {
+		t.Fatal("git repository reported as jj")
+	}
+	jjtest.Require(t)
+	jjtest.Isolate(t)
+	jjtest.Run(t, dir, "git", "init", "--colocate")
+	if !a.isJJDir(dir) {
+		t.Fatal("cached git repository hid a newly colocated jj workspace")
+	}
+}
