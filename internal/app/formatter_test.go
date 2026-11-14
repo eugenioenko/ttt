@@ -192,6 +192,56 @@ func TestFormatterPreservesUTF8BOMMetadata(t *testing.T) {
 	}
 }
 
+func TestFormatterPreservesEditableLeadingFEFF(t *testing.T) {
+	for _, tc := range []struct{ command, word string }{
+		{"cat", "one"},
+		{"sed s/one/two/", "two"},
+	} {
+		for _, count := range []int{1, 2} {
+			t.Run(fmt.Sprintf("%s/leading=%d", tc.command, count), func(t *testing.T) {
+				if _, err := exec.LookPath(strings.Fields(tc.command)[0]); err != nil {
+					t.Skipf("test formatter unavailable: %v", err)
+				}
+				a := buildTestApp(t, config.DefaultSettings())
+				t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+				path := filepath.Join(t.TempDir(), "plain.txt")
+				if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if err := a.EditorGroup.OpenFile(path); err != nil {
+					t.Fatal(err)
+				}
+				editor := a.EditorGroup.Editor
+				prefix := strings.Repeat("\ufeff", count)
+				editor.ExecCommand(&undo.InsertStringCommand{Line: 0, Col: 0, Text: prefix})
+				editor.FlushOnChange()
+				version := editor.Buf.Version()
+				changes := 0
+				editor.OnChange = func() { changes++ }
+				if err := a.applyExternalFormatter(tc.command, path); err != nil {
+					t.Fatal(err)
+				}
+				if editor.Buf.UTF8BOM || editor.Buf.Lines[0] != prefix+tc.word {
+					t.Fatalf("editable prefix changed: line=%q, BOM=%v", editor.Buf.Lines[0], editor.Buf.UTF8BOM)
+				}
+				if tc.command == "cat" && (editor.Buf.Version() != version || !editor.Buf.Dirty || changes != 0) {
+					t.Fatal("passthrough formatter emitted an edit or changed dirty state")
+				}
+				if !a.EditorGroup.Save() {
+					t.Fatal("save failed")
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if want := prefix + tc.word + "\n"; string(data) != want {
+					t.Fatalf("saved bytes = %x, want %x", data, want)
+				}
+			})
+		}
+	}
+}
+
 func TestEmptyFormatterOutputForEmptyDocument(t *testing.T) {
 	for _, command := range []string{"true", "printf \\n", "printf \\r\\n"} {
 		t.Run(command, func(t *testing.T) {

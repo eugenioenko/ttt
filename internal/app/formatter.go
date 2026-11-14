@@ -104,7 +104,11 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 		return fmt.Errorf("%s", msg)
 	}
 
-	formatted := strings.TrimPrefix(stdout.String(), buffer.UTF8ByteOrderMark)
+	formatted := stdout.String()
+	// Without BOM metadata, an existing leading U+FEFF is editable text.
+	if editor.Buf.UTF8BOM || !strings.HasPrefix(original, buffer.UTF8ByteOrderMark) {
+		formatted = strings.TrimPrefix(formatted, buffer.UTF8ByteOrderMark)
+	}
 	formatted = strings.ReplaceAll(formatted, "\r\n", "\n")
 	if formatted == original {
 		return nil
