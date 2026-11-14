@@ -35,7 +35,15 @@ curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | I
 
 Set `INSTALL_DIR` on `sh` so the installer receives it.
 
-### [Arch Linux (AUR)](https://aur.archlinux.org/packages/ttt)
+### Arch Linux (AUR)
+
+[`ttt-bin`](https://aur.archlinux.org/packages/ttt-bin) installs the prebuilt release binary:
+
+```sh
+yay -S ttt-bin
+```
+
+Or build from source with [`ttt`](https://aur.archlinux.org/packages/ttt):
 
 ```sh
 yay -S ttt
