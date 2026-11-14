@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -58,6 +59,25 @@ func TestJumpBookmarkWrapsAtBothEnds(t *testing.T) {
 	}
 	if !g.JumpBookmark(-1) || g.Editor.Cursor.Line != 2 {
 		t.Fatalf("previous bookmark from the first = %d, want it to wrap to 2", g.Editor.Cursor.Line)
+	}
+}
+
+func TestJumpBookmarkExpandsCollapsedFold(t *testing.T) {
+	e := newEditorWithLines(foldSample...)
+	e.Folds = fold.NewState()
+	e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
+	e.Folds.Toggle(1)
+	e.SetBookmark(2, '*', term.StyleDefault)
+	e.Cursor.Line = 0
+
+	if !e.JumpBookmark(1) {
+		t.Fatal("jump found no bookmark")
+	}
+	if e.Folds.IsCollapsed(1) {
+		t.Fatal("fold hiding the bookmark was not expanded")
+	}
+	if e.Cursor.Line != 2 {
+		t.Fatalf("cursor line = %d, want the bookmarked line 2", e.Cursor.Line)
 	}
 }
 

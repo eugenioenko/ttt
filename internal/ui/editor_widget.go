@@ -281,6 +281,7 @@ func (e *EditorPaneWidget) JumpBookmark(delta int) bool {
 	e.Cursor.Line = target
 	e.Cursor.Col = 0
 	e.revealGapRow = e.DiffOverlay != nil
+	e.ExpandFoldContaining(target)
 	e.EnsureCursorVisible()
 	return true
 }
