@@ -987,6 +987,7 @@
   "status.failedToSaveFavorites": "Failed to save favorites: {error}",
   "status.failedToSavePanelPosition": "Failed to save panel position: {error}",
   "status.failedToSavePanelSize": "Failed to save panel size: {error}",
+  "status.failedToSaveRecentCommands": "Failed to save recent commands: {error}",
   "status.failedToSaveRecentFolders": "Failed to save recent folders: {error}",
   "status.failedToSaveSidebarLayout": "Failed to save sidebar layout: {error}",
   "status.failedToSaveSidebarOrder": "Failed to save sidebar order: {error}",

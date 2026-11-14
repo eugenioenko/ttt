@@ -50,6 +50,7 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 		SidebarWidth:        30,
 		SidebarPanelOrder:   []string{"changes", "explorer", "search"},
 		CommitHistoryHeight: 15,
+		RecentCommands:      []string{"sidebar.toggle", "file.save"},
 	}
 	if err := SaveState(want); err != nil {
 		t.Fatalf("SaveState: %v", err)
@@ -66,5 +67,8 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 	}
 	if got.CommitHistoryHeight != want.CommitHistoryHeight {
 		t.Errorf("CommitHistoryHeight = %d, want %d", got.CommitHistoryHeight, want.CommitHistoryHeight)
+	}
+	if !slices.Equal(got.RecentCommands, want.RecentCommands) {
+		t.Errorf("RecentCommands = %v, want %v", got.RecentCommands, want.RecentCommands)
 	}
 }

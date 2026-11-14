@@ -231,6 +231,7 @@ See [Git Integration](docs-web/src/content/docs/guides/git.md).
 ### Command Palette
 
 - **Ctrl+P** — opens the command palette with all available commands
+- The last 10 commands run from the palette are listed first, most recent first
 - **Ctrl+K P** — opens quick file open (searches all files across workspace folders)
 - Type `>` in quick-open mode to switch to command mode; delete the `>` to switch back
 - Type `?` to browse searchable help for panels, navigation, and key chords

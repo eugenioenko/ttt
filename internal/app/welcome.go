@@ -288,16 +288,16 @@ func (a *App) RemoveFavorite() {
 
 const maxRecentFolders = 10
 
-// pushRecent puts paths at the front of recent, most recent first, without
+// pushRecent puts items at the front of recent, most recent first, without
 // duplicates.
-func pushRecent(recent, paths []string) []string {
-	out := slices.Clone(paths)
-	for _, p := range recent {
-		if !slices.Contains(out, p) {
-			out = append(out, p)
+func pushRecent(recent, items []string, limit int) []string {
+	out := slices.Clone(items)
+	for _, item := range recent {
+		if !slices.Contains(out, item) {
+			out = append(out, item)
 		}
 	}
-	return out[:min(len(out), maxRecentFolders)]
+	return out[:min(len(out), limit)]
 }
 
 // RememberRecentFolders records the open folders for the welcome page. It
@@ -312,7 +312,7 @@ func (a *App) RememberRecentFolders() {
 		return
 	}
 	disk := config.LoadState()
-	recent := pushRecent(disk.RecentFolders, paths)
+	recent := pushRecent(disk.RecentFolders, paths, maxRecentFolders)
 	a.State.RecentFolders = recent
 	if slices.Equal(recent, disk.RecentFolders) {
 		return
