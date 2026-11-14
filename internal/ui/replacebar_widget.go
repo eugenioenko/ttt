@@ -136,6 +136,14 @@ func (r *ReplaceBarWidget) Query() string { return r.SearchInput.Text() }
 
 func (r *ReplaceBarWidget) CurrentMatch() int { return r.Current }
 
+func (r *ReplaceBarWidget) NavigateMatch(delta int) {
+	if len(r.Matches) == 0 {
+		return
+	}
+	r.Current = (r.Current + delta + len(r.Matches)) % len(r.Matches)
+	r.navigate()
+}
+
 func (r *ReplaceBarWidget) replaceCurrent() {
 	r.Refresh()
 	if len(r.Matches) > 0 && r.OnReplace != nil {
@@ -173,17 +181,11 @@ func (r *ReplaceBarWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 
 			if r.btnPrev.Contains(mx, my) {
-				if len(r.Matches) > 0 {
-					r.Current = (r.Current - 1 + len(r.Matches)) % len(r.Matches)
-					r.navigate()
-				}
+				r.NavigateMatch(-1)
 				return EventConsumed
 			}
 			if r.btnNext.Contains(mx, my) {
-				if len(r.Matches) > 0 {
-					r.Current = (r.Current + 1) % len(r.Matches)
-					r.navigate()
-				}
+				r.NavigateMatch(1)
 				return EventConsumed
 			}
 			if r.btnClose.Contains(mx, my) {
@@ -233,29 +235,20 @@ func (r *ReplaceBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 		return EventConsumed
 	case tcell.KeyEnter:
 		if r.focusRow == 0 {
-			if len(r.Matches) > 0 {
-				if kev.Modifiers()&tcell.ModShift != 0 {
-					r.Current = (r.Current - 1 + len(r.Matches)) % len(r.Matches)
-				} else {
-					r.Current = (r.Current + 1) % len(r.Matches)
-				}
-				r.navigate()
+			if kev.Modifiers()&tcell.ModShift != 0 {
+				r.NavigateMatch(-1)
+			} else {
+				r.NavigateMatch(1)
 			}
 		} else {
 			r.replaceCurrent()
 		}
 		return EventConsumed
 	case tcell.KeyUp:
-		if len(r.Matches) > 0 {
-			r.Current = (r.Current - 1 + len(r.Matches)) % len(r.Matches)
-			r.navigate()
-		}
+		r.NavigateMatch(-1)
 		return EventConsumed
 	case tcell.KeyDown:
-		if len(r.Matches) > 0 {
-			r.Current = (r.Current + 1) % len(r.Matches)
-			r.navigate()
-		}
+		r.NavigateMatch(1)
 		return EventConsumed
 	}
 
@@ -290,7 +283,7 @@ func (r *ReplaceBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 		return EventConsumed
 	}
 
-	return EventConsumed
+	return EventIgnored
 }
 
 func (r *ReplaceBarWidget) CancelPointerCapture() bool {
