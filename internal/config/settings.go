@@ -1,11 +1,17 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"syscall"
+	"time"
 )
 
 // Validated by normalizeSettings and used to populate the settings UI pickers.
@@ -701,7 +707,7 @@ func ReadSettings() (Settings, error) {
 
 func ReadSettingsFile(path string) (Settings, error) {
 	s := DefaultSettings()
-	data, err := os.ReadFile(path)
+	data, err := readSettingsFileBytes(path)
 	if err == nil {
 		if err = json.Unmarshal(data, &s); err != nil {
 			err = fmt.Errorf("%s: %w", path, err)
@@ -725,7 +731,127 @@ func SaveSettingsFile(path string, s Settings) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0644)
+	return writeFileAtomically(path, data, 0o644)
+}
+
+func writeFileAtomically(path string, data []byte, mode os.FileMode) (err error) {
+	return writeFileAtomicallyWithRename(path, data, mode, renameSettingsFile)
+}
+
+func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, rename func(string, string) error) (err error) {
+	path, err = resolveSettingsWritePath(path)
+	if err != nil {
+		return err
+	}
+
+	preserveMode := false
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+		preserveMode = true
+	} else if !os.IsNotExist(statErr) {
+		return statErr
+	}
+
+	dir := filepath.Dir(path)
+	tmp, err := createSettingsTempFile(dir, filepath.Base(path), mode, preserveMode)
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if tmpPath != "" {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if preserveMode {
+		if err = preserveSettingsFileAccess(path, tmpPath); err != nil {
+			_ = tmp.Close()
+			return err
+		}
+	}
+
+	if _, err = tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err = tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	for attempt := 0; ; attempt++ {
+		err = rename(tmpPath, path)
+		if err == nil {
+			tmpPath = ""
+			return nil
+		}
+		if runtime.GOOS != "windows" || !isWindowsRenameRetryable(err) || attempt == 19 {
+			return err
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+func resolveSettingsWritePath(path string) (string, error) {
+	for range 255 {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return resolved, nil
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return path, nil
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = filepath.Clean(target)
+	}
+	return "", fmt.Errorf("too many symlinks resolving settings path")
+}
+
+func createSettingsTempFile(dir, base string, mode os.FileMode, preserveMode bool) (*os.File, error) {
+	for range 100 {
+		var suffix [12]byte
+		if _, err := rand.Read(suffix[:]); err != nil {
+			return nil, err
+		}
+		name := filepath.Join(dir, "."+base+"-"+hex.EncodeToString(suffix[:])+".tmp")
+		file, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+		if os.IsExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if preserveMode {
+			if err := file.Chmod(mode); err != nil {
+				_ = file.Close()
+				_ = os.Remove(name)
+				return nil, err
+			}
+		}
+		return file, nil
+	}
+	return nil, fmt.Errorf("could not create temporary settings file")
+}
+
+func isWindowsRenameRetryable(err error) bool {
+	return errors.Is(err, syscall.Errno(5)) || errors.Is(err, syscall.Errno(32))
 }
 
 func boolPtr(b bool) *bool { return &b }

@@ -206,6 +206,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: Test settings replacement on Windows
+        run: go test -count=1 ./internal/config -run 'TestSaveSettingsConcurrentReadersSeeValidJSON|TestSaveSettingsPreservesWindowsDACL|TestWindowsSettingsReplacementConcurrentReaders'
+
       - name: Test Windows app commands and literal path arguments
         run: go test -count=1 -v ./internal/app -run 'TestAppTerminalSpec|TestAppCommand'
 

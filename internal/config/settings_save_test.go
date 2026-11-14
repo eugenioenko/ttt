@@ -5,7 +5,9 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"sync"
 	"testing"
 )
 
@@ -206,6 +208,156 @@ func TestSaveSettingsWritesValidJSON(t *testing.T) {
 	var probe map[string]any
 	if err := json.Unmarshal(data, &probe); err != nil {
 		t.Errorf("settings.json is not valid JSON: %v", err)
+	}
+}
+
+func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
+	dir := withTempConfigDir(t)
+	path := filepath.Join(dir, "settings.json")
+	oldSettings := DefaultSettings()
+	oldSettings.Editor.TabSize = 3
+	oldData, err := json.Marshal(oldSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, oldData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	newSettings := DefaultSettings()
+	newSettings.Editor.TabSize = 9
+	newData, err := json.Marshal(newSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged := make(chan struct{})
+	continueRename := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(continueRename) }) }
+	defer release()
+	saveDone := make(chan error, 1)
+	go func() {
+		saveDone <- writeFileAtomicallyWithRename(path, newData, 0o644, func(from, to string) error {
+			close(staged)
+			<-continueRename
+			return renameSettingsFile(from, to)
+		})
+	}()
+	select {
+	case <-staged:
+	case err := <-saveDone:
+		t.Fatalf("settings save failed before staging: %v", err)
+	}
+	assertTabSize := func(want int) {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read settings: %v", err)
+		}
+		var got Settings
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("settings are invalid JSON: %v", err)
+		}
+		if got.Editor.TabSize != want {
+			t.Fatalf("tabSize = %d, want %d", got.Editor.TabSize, want)
+		}
+	}
+	assertTabSize(oldSettings.Editor.TabSize)
+	release()
+	if err := <-saveDone; err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	assertTabSize(newSettings.Editor.TabSize)
+}
+
+func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {
+	dir := withTempConfigDir(t)
+	target := filepath.Join(dir, "settings-target.json")
+	link := filepath.Join(dir, "settings.json")
+	targetMode := os.FileMode(0o644)
+	if runtime.GOOS != "windows" {
+		targetMode = 0o600
+	}
+	if err := os.WriteFile(target, []byte(`{}`), targetMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	want := DefaultSettings()
+	want.Editor.TabSize = 7
+	if err := SaveSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings symlink was replaced: info=%v err=%v", info, err)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && targetInfo.Mode().Perm() != 0o600 {
+		t.Errorf("target permissions = %o, want 600", targetInfo.Mode().Perm())
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Editor.TabSize != want.Editor.TabSize {
+		t.Errorf("target tabSize = %d, want %d", got.Editor.TabSize, want.Editor.TabSize)
+	}
+}
+
+func TestSaveSettingsThroughDanglingSymlink(t *testing.T) {
+	dir := withTempConfigDir(t)
+	target := filepath.Join(dir, "settings-target.json")
+	link := filepath.Join(dir, "settings.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	want := DefaultSettings()
+	want.Editor.TabSize = 9
+	if err := SaveSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings symlink was replaced: info=%v err=%v", info, err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Editor.TabSize != want.Editor.TabSize {
+		t.Errorf("target tabSize = %d, want %d", got.Editor.TabSize, want.Editor.TabSize)
+	}
+}
+
+func TestSaveSettingsFailureLeavesExistingFileUntouched(t *testing.T) {
+	dir := withTempConfigDir(t)
+	path := filepath.Join(dir, "settings.json")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("preserve me")
+	sentinel := filepath.Join(path, "sentinel")
+	if err := os.WriteFile(sentinel, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomically(path, []byte(`{"ok":true}`), 0o644); err == nil {
+		t.Fatal("rename over existing directory unexpectedly succeeded")
+	}
+	got, err := os.ReadFile(sentinel)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("existing destination changed after failed write: %q, err=%v", got, err)
 	}
 }
 
