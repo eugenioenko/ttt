@@ -278,6 +278,9 @@ func (e *EditorPaneWidget) JumpBookmark(delta int) bool {
 			}
 		}
 	}
+	if e.Selection != nil {
+		e.Selection.Clear()
+	}
 	e.Cursor.Line = target
 	e.Cursor.Col = 0
 	e.revealGapRow = e.DiffOverlay != nil
