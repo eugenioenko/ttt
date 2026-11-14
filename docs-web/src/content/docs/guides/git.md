@@ -116,3 +116,5 @@ jj has no staging area, so the panel shows a single **Changes** section:
 - The status bar shows the working-copy commit's bookmarks, or its change ID when it has none
 
 Staging, pull, push, sync, and new branch are git operations and are not available in jj workspaces.
+
+Symbolic links in past commits show as empty files in history diffs, because the jj CLI cannot print a link's target. Links in the working copy show their target.
