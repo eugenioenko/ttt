@@ -1,12 +1,15 @@
 package e2e
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/jjtest"
+	"github.com/eugenioenko/ttt/internal/scm"
 )
 
 func initializeHarnessJJRepository(t *testing.T, dir string) {
@@ -73,4 +76,32 @@ func TestJJChangesPanelRendersWithoutStaging(t *testing.T) {
 	h.assertNotContains("Staged")
 	h.assertContains("Changes (1)")
 	h.assertContains("Not available in jj repositories")
+}
+
+func TestJJRenamedFileDiffsAgainstItsSource(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	jjtest.Write(t, h.dir, "old.txt", "one\ntwo\nthree\nfour\nfive\n")
+	initializeHarnessJJRepository(t, h.dir)
+	if err := os.Remove(filepath.Join(h.dir, "old.txt")); err != nil {
+		t.Fatal(err)
+	}
+	newPath := filepath.Join(h.dir, "new.txt")
+	jjtest.Write(t, h.dir, "new.txt", "ONE\ntwo\nthree\nfour\nfive\n")
+
+	changes := h.gutterFor(newPath)
+	want := []diff.LineChangeKind{diff.LineModified, diff.LineUnchanged, diff.LineUnchanged, diff.LineUnchanged, diff.LineUnchanged}
+	if len(changes) < len(want) || !slices.Equal(changes[:len(want)], want) {
+		t.Fatalf("renamed file gutter = %v, want %v", changes, want)
+	}
+
+	h.app.OpenChangeDiff(h.dir, scm.Change{Path: "new.txt", OldPath: "old.txt", Kind: scm.Renamed, Group: scm.WorkingTree}, false)
+	h.redraw()
+	if !h.app.EditorGroup.IsInlineDiffActive() {
+		t.Fatal("inline diff not active")
+	}
+	h.assertContains("ONE")
+	if screen := h.screenText(); !strings.Contains(screen, "one") || strings.Count(screen, "two") != 2 {
+		t.Fatalf("renamed file diff should show only the first line as changed:\n%s", screen)
+	}
 }

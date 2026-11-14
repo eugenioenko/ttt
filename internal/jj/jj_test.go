@@ -267,6 +267,10 @@ func TestReadBaselineAndChange(t *testing.T) {
 	if err != nil || base.Exists || !base.Ignored {
 		t.Fatalf("ignored baseline = %#v, %v", base, err)
 	}
+	base, err = repo.ReadBaseline(ctx, "moved.txt")
+	if err != nil || !base.Exists || base.Content != "moved\n" || base.Ignored {
+		t.Fatalf("renamed baseline = %#v, %v", base, err)
+	}
 
 	diff, err := repo.ReadChange(ctx, scm.Change{Path: "edit.txt", Kind: scm.Modified, Group: scm.WorkingTree})
 	if err != nil {

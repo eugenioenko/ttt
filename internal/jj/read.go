@@ -37,6 +37,15 @@ func (r repository) ReadBaseline(ctx context.Context, path string) (scm.Baseline
 	if err != nil {
 		return scm.Baseline{}, err
 	}
+	if !content.Exists && parent != "" {
+		source, err := r.copySource(ctx, path)
+		if err != nil {
+			return scm.Baseline{}, err
+		}
+		if content, err = r.fileAt(ctx, parent, source); err != nil {
+			return scm.Baseline{}, err
+		}
+	}
 	conflicted, err := r.conflicted(ctx, "@", path)
 	if err != nil {
 		return scm.Baseline{}, err
@@ -53,6 +62,21 @@ func (r repository) ReadBaseline(ctx context.Context, path string) (scm.Baseline
 		base.Ignored, err = r.ignored(ctx, path)
 	}
 	return base, err
+}
+
+// copySource returns the parent path a renamed or copied working-copy file
+// came from, so its baseline matches the rename the Changes list reports.
+func (r repository) copySource(ctx context.Context, path string) (string, error) {
+	changes, err := r.Changes(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, change := range changes {
+		if change.Path == path && change.OldPath != "" {
+			return change.OldPath, nil
+		}
+	}
+	return "", nil
 }
 
 func (r repository) conflicted(ctx context.Context, rev, path string) (bool, error) {
