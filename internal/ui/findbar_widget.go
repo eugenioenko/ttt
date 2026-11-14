@@ -120,6 +120,14 @@ func (f *FindBarWidget) Query() string { return f.Input.Text() }
 
 func (f *FindBarWidget) CurrentMatch() int { return f.Current }
 
+func (f *FindBarWidget) NavigateMatch(delta int) {
+	if len(f.Matches) == 0 {
+		return
+	}
+	f.Current = (f.Current + delta + len(f.Matches)) % len(f.Matches)
+	f.navigate()
+}
+
 func (f *FindBarWidget) navigate() {
 	if f.OnNavigate != nil && len(f.Matches) > 0 {
 		f.OnNavigate(f.Matches[f.Current])
@@ -149,16 +157,10 @@ func (f *FindBarWidget) HandleEvent(ev tcell.Event) EventResult {
 					return f.Input.HandleEvent(tev)
 				}
 				if f.btnPrev.Contains(mx, my) {
-					if len(f.Matches) > 0 {
-						f.Current = (f.Current - 1 + len(f.Matches)) % len(f.Matches)
-						f.navigate()
-					}
+					f.NavigateMatch(-1)
 				}
 				if f.btnNext.Contains(mx, my) {
-					if len(f.Matches) > 0 {
-						f.Current = (f.Current + 1) % len(f.Matches)
-						f.navigate()
-					}
+					f.NavigateMatch(1)
 				}
 				if f.btnClose.Contains(mx, my) {
 					if f.OnDismiss != nil {
@@ -194,20 +196,14 @@ func (f *FindBarWidget) handleKey(kev *tcell.EventKey) EventResult {
 		}
 		return EventConsumed
 	case tcell.KeyEnter, tcell.KeyDown:
-		if len(f.Matches) > 0 {
-			if kev.Modifiers()&tcell.ModShift != 0 {
-				f.Current = (f.Current - 1 + len(f.Matches)) % len(f.Matches)
-			} else {
-				f.Current = (f.Current + 1) % len(f.Matches)
-			}
-			f.navigate()
+		if kev.Modifiers()&tcell.ModShift != 0 {
+			f.NavigateMatch(-1)
+		} else {
+			f.NavigateMatch(1)
 		}
 		return EventConsumed
 	case tcell.KeyUp:
-		if len(f.Matches) > 0 {
-			f.Current = (f.Current - 1 + len(f.Matches)) % len(f.Matches)
-			f.navigate()
-		}
+		f.NavigateMatch(-1)
 		return EventConsumed
 	}
 
