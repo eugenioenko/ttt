@@ -2834,6 +2834,19 @@ func (g *EditorGroupWidget) TrimTrailingWhitespaceLines() {
 	}
 }
 
+func (g *EditorGroupWidget) ToggleBookmark() {
+	if e := g.editableKeyEditor(); e != nil {
+		e.ToggleBookmark()
+	}
+}
+
+func (g *EditorGroupWidget) JumpBookmark(delta int) bool {
+	if e := g.keyEditor(); e != nil {
+		return e.JumpBookmark(delta)
+	}
+	return false
+}
+
 func (g *EditorGroupWidget) MoveToFileEdge(end, shift bool) {
 	if e := g.keyEditor(); e != nil {
 		e.MoveToFileEdge(end, shift)

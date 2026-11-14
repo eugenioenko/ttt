@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 
@@ -227,6 +229,60 @@ func (e *EditorPaneWidget) GetAllBookmarks() map[int]Bookmark {
 func (e *EditorPaneWidget) ClearBookmarks() {
 	e.Bookmarks = nil
 	e.fireBookmarkChange(-1, "clear", Bookmark{})
+}
+
+// ToggleBookmark adds a bookmark to the cursor line or removes the one there.
+func (e *EditorPaneWidget) ToggleBookmark() {
+	line := e.Cursor.Line
+	if !e.validBookmarkLine(line) {
+		return
+	}
+	if _, ok := e.GetBookmark(line); ok {
+		e.RemoveBookmark(line)
+		return
+	}
+	e.SetBookmark(line, icons.Rune(icons.Bookmark), term.StyleGutterBookmark)
+}
+
+// JumpBookmark moves the cursor to the next bookmark (delta > 0) or the
+// previous one, wrapping at either end, and reports whether any bookmark was
+// reachable.
+func (e *EditorPaneWidget) JumpBookmark(delta int) bool {
+	if delta == 0 {
+		return false
+	}
+	lines := make([]int, 0, len(e.Bookmarks))
+	for line := range e.Bookmarks {
+		if e.validBookmarkLine(line) {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return false
+	}
+	sort.Ints(lines)
+	target := lines[0]
+	if delta > 0 {
+		for _, line := range lines {
+			if line > e.Cursor.Line {
+				target = line
+				break
+			}
+		}
+	} else {
+		target = lines[len(lines)-1]
+		for _, line := range slices.Backward(lines) {
+			if line < e.Cursor.Line {
+				target = line
+				break
+			}
+		}
+	}
+	e.Cursor.Line = target
+	e.Cursor.Col = 0
+	e.revealGapRow = e.DiffOverlay != nil
+	e.EnsureCursorVisible()
+	return true
 }
 
 func (e *EditorPaneWidget) fireBookmarkChange(line int, action string, b Bookmark) {

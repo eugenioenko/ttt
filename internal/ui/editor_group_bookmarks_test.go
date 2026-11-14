@@ -26,6 +26,51 @@ func openBookmarkFiles(t *testing.T) (g *EditorGroupWidget, a, b string) {
 	return g, a, b
 }
 
+func TestToggleBookmarkCommand(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	g.OpenFile(a)
+	g.Editor.Cursor.Line = 2
+
+	g.ToggleBookmark()
+	if _, ok := g.Editor.GetBookmark(2); !ok {
+		t.Fatal("toggle did not add a bookmark")
+	}
+
+	g.ToggleBookmark()
+	if _, ok := g.Editor.GetBookmark(2); ok {
+		t.Fatal("toggle did not remove the bookmark")
+	}
+}
+
+func TestJumpBookmarkWrapsAtBothEnds(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	g.OpenFile(a)
+	g.Editor.ClearBookmarks()
+	g.Editor.SetBookmark(0, '*', term.StyleDefault)
+	g.Editor.SetBookmark(2, '*', term.StyleDefault)
+
+	g.Editor.Cursor.Line = 1
+	if !g.JumpBookmark(1) || g.Editor.Cursor.Line != 2 {
+		t.Fatalf("next bookmark from line 1 = %d, want 2", g.Editor.Cursor.Line)
+	}
+	if !g.JumpBookmark(1) || g.Editor.Cursor.Line != 0 {
+		t.Fatalf("next bookmark from the last = %d, want it to wrap to 0", g.Editor.Cursor.Line)
+	}
+	if !g.JumpBookmark(-1) || g.Editor.Cursor.Line != 2 {
+		t.Fatalf("previous bookmark from the first = %d, want it to wrap to 2", g.Editor.Cursor.Line)
+	}
+}
+
+func TestJumpBookmarkWithoutBookmarksReportsNothing(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	g.OpenFile(a)
+	g.Editor.ClearBookmarks()
+
+	if g.JumpBookmark(1) {
+		t.Fatal("jump reported a bookmark in an unmarked file")
+	}
+}
+
 func TestBookmarksFollowInactiveTabRename(t *testing.T) {
 	g, a, _ := openBookmarkFiles(t)
 	renamed := filepath.Join(filepath.Dir(a), "renamed.txt")
