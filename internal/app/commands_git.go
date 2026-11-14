@@ -37,11 +37,7 @@ func (a *App) DiscardSelected() {
 			},
 			func() {
 				a.DismissDialog()
-				if status.Kind == scm.Untracked {
-					a.Changes.applied(git.DiscardUntracked(dir, status.Path))
-				} else {
-					a.Changes.applied(git.Discard(dir, status.Path))
-				}
+				a.Changes.applied(a.Changes.discardChanges(dir, []scm.Change{status}))
 			},
 		},
 	)

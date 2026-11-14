@@ -1,12 +1,15 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/jj"
 	"github.com/eugenioenko/ttt/internal/jjtest"
+	"github.com/eugenioenko/ttt/internal/scm"
 )
 
 func jjChangesRepo(t *testing.T, initArgs ...string) string {
@@ -70,5 +73,72 @@ func TestChangesPanelKeepsGitRepositoriesOnGit(t *testing.T) {
 	cp.Refresh()
 	if len(cp.groups) != 1 || cp.groups[0].Repository == nil || jj.IsRepository(cp.groups[0].Repository) {
 		t.Fatalf("git repository discovered as %#v", cp.groups)
+	}
+}
+
+func TestChangesPanelCommitsAndDiscardsThroughJJ(t *testing.T) {
+	dir := jjChangesRepo(t)
+	cp := NewChangesPanel(dir)
+	cp.Refresh()
+
+	cp.applied(cp.discardChanges(dir, []scm.Change{{Path: "new.txt", Kind: scm.Added, Group: scm.WorkingTree}}))
+	if _, err := os.Stat(filepath.Join(dir, "new.txt")); !os.IsNotExist(err) {
+		t.Fatalf("discard kept the added file: %v", err)
+	}
+	if got := cp.TotalChanges(); got != 1 {
+		t.Fatalf("changes after discard = %d", got)
+	}
+
+	if err := cp.commitOp(dir, "from the box").Run(dir); err != nil {
+		t.Fatal(err)
+	}
+	cp.Refresh()
+	if got := cp.TotalChanges(); got != 0 {
+		t.Fatalf("changes after commit = %d", got)
+	}
+	if first := cp.CommitLog.Config.Items[1].Label; !strings.Contains(first, "from the box") {
+		t.Fatalf("latest history entry = %q", first)
+	}
+}
+
+func TestChangesPanelDiscardsGitChangesThroughGit(t *testing.T) {
+	dir := folderActionRepo(t)
+	cp := NewChangesPanel(dir)
+	cp.Refresh()
+	err := cp.discardChanges(dir, []scm.Change{
+		{Path: "src/a.go", Kind: scm.Modified, Group: scm.WorkingTree},
+		{Path: "src/untracked.go", Kind: scm.Untracked, Group: scm.WorkingTree},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "src/a.go")); string(data) != "a\n" {
+		t.Fatalf("tracked file = %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "src/untracked.go")); !os.IsNotExist(err) {
+		t.Fatalf("untracked file kept: %v", err)
+	}
+	if op := cp.commitOp(dir, "msg"); op.Name != "commit" {
+		t.Fatalf("git commit op = %+v", op)
+	}
+}
+
+func TestJJDiscardOfCopyKeepsSourceEdits(t *testing.T) {
+	dir := jjtest.Init(t)
+	jjtest.Write(t, dir, "src.txt", "source\n")
+	jjtest.Run(t, dir, "commit", "-m", "base")
+	jjtest.Write(t, dir, "src.txt", "source edited\n")
+	jjtest.Write(t, dir, "copy.txt", "source\n")
+	cp := NewChangesPanel(dir)
+	cp.Refresh()
+	err := cp.discardChanges(dir, []scm.Change{{Path: "copy.txt", OldPath: "src.txt", Kind: scm.Copied, Group: scm.WorkingTree}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "src.txt")); string(data) != "source edited\n" {
+		t.Fatalf("copy discard reverted its source: %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "copy.txt")); !os.IsNotExist(err) {
+		t.Fatalf("copy kept: %v", err)
 	}
 }

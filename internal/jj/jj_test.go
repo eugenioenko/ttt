@@ -81,6 +81,15 @@ func stubLookPath(t *testing.T, err error) {
 	t.Cleanup(func() { lookPath = original })
 }
 
+func pathExists(t *testing.T, path string) bool {
+	t.Helper()
+	found, err := exists(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return found
+}
+
 func TestDiscoverFindsNearestWorkspace(t *testing.T) {
 	stubLookPath(t, nil)
 	root := realTempDir(t)
@@ -374,6 +383,45 @@ func TestReadsWorkWithoutConfiguredIdentity(t *testing.T) {
 	repo := discover(t, dir)
 	if _, err := repo.Changes(context.Background()); err != nil {
 		t.Fatalf("changes without user.name/user.email: %v", err)
+	}
+}
+
+func TestCommitAndDiscard(t *testing.T) {
+	dir := jjtest.Init(t)
+	jjtest.Write(t, dir, "keep.txt", "keep\n")
+	jjtest.Write(t, dir, "old.txt", "old\n")
+	jjtest.Run(t, dir, "commit", "-m", "base")
+	jjtest.Write(t, dir, "keep.txt", "changed\n")
+	jjtest.Write(t, dir, "added.txt", "added\n")
+	if err := os.Rename(filepath.Join(dir, "old.txt"), filepath.Join(dir, "new.txt")); err != nil {
+		t.Fatal(err)
+	}
+	repo := discover(t, dir)
+	ctx := context.Background()
+
+	if err := repo.Discard(ctx, []string{"added.txt", "old.txt", "new.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if pathExists(t, filepath.Join(dir, "added.txt")) || pathExists(t, filepath.Join(dir, "new.txt")) || !pathExists(t, filepath.Join(dir, "old.txt")) {
+		t.Fatal("discard did not remove the added file and restore the rename")
+	}
+	changes, err := repo.Changes(ctx)
+	if err != nil || !reflect.DeepEqual(changes, []scm.Change{{Path: "keep.txt", Kind: scm.Modified, Group: scm.WorkingTree}}) {
+		t.Fatalf("changes after discard = %#v, %v", changes, err)
+	}
+
+	if err := repo.Commit(ctx, "-starts with a dash\n\nbody"); err != nil {
+		t.Fatalf("commit without configured identity: %v", err)
+	}
+	if changes, err = repo.Changes(ctx); err != nil || len(changes) != 0 {
+		t.Fatalf("changes after commit = %#v, %v", changes, err)
+	}
+	page, err := repo.ReadHistory(ctx, scm.HistoryRequest{Limit: 1})
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].Message != "-starts with a dash" {
+		t.Fatalf("history after commit = %#v, %v", page, err)
+	}
+	if err := repo.Discard(ctx, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
