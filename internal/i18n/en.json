@@ -369,6 +369,8 @@
   "editorGroup.openFileFailed": "Failed to open {path}",
   "editorGroup.reloadFileFailed": "Failed to reload {path}",
   "editorGroup.savePathFailed": "Failed to save {path}: {error}",
+  "editorGroup.saveRecoveryKept": "{error} (the previous contents are saved in {path})",
+  "editorGroup.saveTargetReplaced": "{path} was replaced while saving",
   "explorer.cloneRepository": "Clone Repository…",
   "explorer.noFolderOpen": "No folder open",
   "explorer.openFolder": "Open Folder…",
