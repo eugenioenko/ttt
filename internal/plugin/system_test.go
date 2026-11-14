@@ -194,3 +194,53 @@ func TestSystemDiscoveryErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestSystemPluginManifestIdentityAfterDisable(t *testing.T) {
+	system, _ := systemPluginFixture(t)
+	dir := filepath.Join(system, "vendor-shared")
+	if err := os.Rename(filepath.Join(system, "shared"), dir); err != nil {
+		t.Fatal(err)
+	}
+	user := t.TempDir()
+	m := systemManager(t, user, system)
+	if pending := m.LoadAll(); len(pending) != 0 || m.FindPlugin("shared") == nil {
+		t.Fatal("renamed system plugin did not load")
+	}
+	if _, err := m.SetEnabled("shared", false); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := storagePath(m.storageDir, "shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(storage), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(storage, []byte(`{"saved":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	restarted := systemManager(t, user, system)
+	restarted.LoadAll()
+	for _, manager := range []*Manager{m, restarted} {
+		if !manager.IsSystemPlugin("shared") {
+			t.Fatal("disabled system plugin lost its identity")
+		}
+		if err := manager.Uninstall("shared"); err == nil {
+			t.Fatal("uninstall bypassed system guard")
+		}
+		if err := manager.PrepareUpdate("shared").Fetch(); err == nil {
+			t.Fatal("update bypassed system guard")
+		}
+		entry := manager.registry.Find("shared")
+		if entry == nil || entry.Enabled {
+			t.Fatal("blocked uninstall changed user state")
+		}
+		if saved, err := os.ReadFile(storage); err != nil || string(saved) != `{"saved":true}` {
+			t.Fatal("blocked uninstall deleted user storage")
+		}
+		p, err := manager.SetEnabled("shared", true)
+		if err != nil || p == nil || !p.Loaded() || p.Dir != dir {
+			t.Fatalf("re-enable: plugin=%v error=%v", p, err)
+		}
+	}
+}

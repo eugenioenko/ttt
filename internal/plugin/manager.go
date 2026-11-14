@@ -3,7 +3,6 @@ package plugin
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -125,32 +124,7 @@ func (m *Manager) LoadAll() []*Plugin {
 
 	dirs := m.pluginDirs()
 	for _, pluginDir := range dirs {
-		entries, err := os.ReadDir(pluginDir)
-		if err != nil {
-			if pluginDir == m.systemDir {
-				m.discoveryError(pluginDir, err)
-			}
-			continue
-		}
-		for _, entry := range entries {
-			dir := filepath.Join(pluginDir, entry.Name())
-			if !entry.IsDir() {
-				// entry.IsDir reports the link's own type, so a symlinked
-				// plugin dir needs its target checked instead.
-				if entry.Type()&fs.ModeSymlink == 0 || !isLinkedDir(dir, pluginDir) {
-					continue
-				}
-			}
-
-			manifest, err := LoadManifest(dir)
-			if err != nil {
-				slog.Warn("skip plugin", "dir", entry.Name(), "error", err)
-				if pluginDir == m.systemDir {
-					m.discoveryError(dir, err)
-				}
-				continue
-			}
-
+		for dir, manifest := range m.pluginManifests(pluginDir) {
 			if seen[manifest.Name] {
 				continue
 			}
@@ -854,21 +828,10 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 		return nil, nil
 	}
 
-	dir := filepath.Join(m.pluginsDir, name)
-	manifest, err := LoadManifest(dir)
-	if err != nil {
-		for _, extra := range m.pluginDirs()[1:] {
-			d := filepath.Join(extra, name)
-			if mf, e := LoadManifest(d); e == nil {
-				dir, manifest, err = d, mf, nil
-				break
-			}
-		}
-	}
+	dir, manifest, err := m.findManifest(name)
 	if err != nil {
 		return nil, err
 	}
-
 	regEntry, err := m.approvalFor(dir, manifest)
 	if err != nil {
 		return nil, err

@@ -88,13 +88,8 @@ func (m *Manager) IsSystemPlugin(name string) bool {
 	if p := m.FindPlugin(name); p != nil {
 		return m.isSystemPlugin(p.Dir)
 	}
-	for _, root := range m.pluginDirs() {
-		dir := filepath.Join(root, name)
-		if _, err := LoadManifest(dir); err == nil {
-			return m.isSystemPlugin(dir)
-		}
-	}
-	return false
+	dir, _, err := m.findManifest(name)
+	return err == nil && m.isSystemPlugin(dir)
 }
 
 func systemManagedError() error {
