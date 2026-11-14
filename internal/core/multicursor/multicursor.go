@@ -4,12 +4,14 @@ import (
 	"cmp"
 	"sort"
 
+	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 )
 
 type CursorState struct {
 	Line, Col int
 	Sel       selection.Selection
+	Goal      cursor.Goal
 }
 
 type MultiCursor struct {
@@ -140,7 +142,7 @@ func (mc *MultiCursor) Sort() {
 		return a.Col < b.Col
 	})
 	for i, c := range mc.Cursors {
-		if c.Line == p.Line && c.Col == p.Col {
+		if c == p {
 			mc.Primary = i
 			break
 		}
@@ -162,6 +164,7 @@ func (mc *MultiCursor) MergeSelections() {
 	type cursorRange struct {
 		start, end        selection.Position
 		primary, reversed bool
+		source            CursorState
 	}
 	ranges := make([]cursorRange, 0, len(mc.Cursors))
 	for i, c := range mc.Cursors {
@@ -172,6 +175,7 @@ func (mc *MultiCursor) MergeSelections() {
 		ranges = append(ranges, cursorRange{
 			start: start, end: end, primary: i == mc.Primary,
 			reversed: start != end && c.Line == start.Line && c.Col == start.Col,
+			source:   c,
 		})
 	}
 	sort.SliceStable(ranges, func(i, j int) bool {
@@ -192,6 +196,7 @@ func (mc *MultiCursor) MergeSelections() {
 				}
 				if current.primary {
 					last.primary, last.reversed = true, current.reversed
+					last.source = current.source
 				}
 				continue
 			}
@@ -209,6 +214,11 @@ func (mc *MultiCursor) MergeSelections() {
 			if r.reversed {
 				c.Line, c.Col, c.Sel.Anchor = r.start.Line, r.start.Col, r.end
 			}
+		}
+		sameSelection := c.Sel.Active == r.source.Sel.Active &&
+			(!c.Sel.Active || c.Sel.Anchor == r.source.Sel.Anchor)
+		if c.Line == r.source.Line && c.Col == r.source.Col && sameSelection {
+			c.Goal = r.source.Goal
 		}
 		if r.primary {
 			mc.Primary = i
@@ -241,6 +251,7 @@ func (mc *MultiCursor) Deduplicate() {
 	mc.Primary = 0
 	for i, c := range mc.Cursors {
 		if c.Line == p.Line && c.Col == p.Col {
+			mc.Cursors[i] = p
 			mc.Primary = i
 			break
 		}

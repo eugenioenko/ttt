@@ -31,8 +31,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	case tcell.KeyUp:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
+				x := e.goalColumn(cs.Line, cs.Col, &cs.Goal)
 				if e.WordWrap {
-					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, -1, -1)
+					cs.Line, cs.Col, x = e.wrappedRowMove(cs.Line, cs.Col, -1, x)
 				} else if cs.Line > 0 {
 					cs.Line--
 					if e.Folds != nil {
@@ -40,30 +41,24 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 							cs.Line = r.StartLine
 						}
 					}
-					lineLen := len([]rune(e.Buf.Lines[cs.Line]))
-					if cs.Col > lineLen {
-						cs.Col = lineLen
-					}
+					cs.Col = visualColToBufCol(e.Buf.Lines[cs.Line], x, e.resolveTabSize())
 				}
+				cs.Goal.Remember(cs.Line, cs.Col, x)
 			})
 		} else {
 			e.startOrExtendSelection(shift)
 			if e.WordWrap {
-				e.moveCursorWrapped(-1)
-			} else if e.Cursor.Line > 0 {
-				e.Cursor.Line--
-				e.skipHiddenLineUp()
-				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-				if e.Cursor.Col > lineLen {
-					e.Cursor.Col = lineLen
-				}
+				e.moveCursorRows(-1)
+			} else {
+				e.moveCursorUnwrapped(-1)
 			}
 		}
 	case tcell.KeyDown:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
+				x := e.goalColumn(cs.Line, cs.Col, &cs.Goal)
 				if e.WordWrap {
-					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, 1, -1)
+					cs.Line, cs.Col, x = e.wrappedRowMove(cs.Line, cs.Col, 1, x)
 				} else if cs.Line < len(e.Buf.Lines)-1 {
 					cs.Line++
 					if e.Folds != nil {
@@ -71,26 +66,20 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 							cs.Line = e.Buf.ClampLine(r.EndLine + 1)
 						}
 					}
-					lineLen := len([]rune(e.Buf.Lines[cs.Line]))
-					if cs.Col > lineLen {
-						cs.Col = lineLen
-					}
+					cs.Col = visualColToBufCol(e.Buf.Lines[cs.Line], x, e.resolveTabSize())
 				}
+				cs.Goal.Remember(cs.Line, cs.Col, x)
 			})
 		} else {
 			e.startOrExtendSelection(shift)
 			if e.WordWrap {
-				e.moveCursorWrapped(1)
-			} else if e.Cursor.Line < len(e.Buf.Lines)-1 {
-				e.Cursor.Line++
-				e.skipHiddenLineDown()
-				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-				if e.Cursor.Col > lineLen {
-					e.Cursor.Col = lineLen
-				}
+				e.moveCursorRows(1)
+			} else {
+				e.moveCursorUnwrapped(1)
 			}
 		}
 	case tcell.KeyLeft:
+		e.ResetCursorGoal()
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
 				if cs.Col > 0 {
@@ -110,6 +99,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 		}
 	case tcell.KeyRight:
+		e.ResetCursorGoal()
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
 				lineLen := len([]rune(e.Buf.Lines[cs.Line]))
@@ -137,27 +127,17 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	case tcell.KeyPgUp:
 		e.startOrExtendSelection(shift)
 		if e.WordWrap {
-			e.moveCursorWrapped(-e.Viewport.Height)
+			e.moveCursorRows(-e.Viewport.Height)
 			break
 		}
-		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line - e.Viewport.Height)
-		e.skipHiddenLineUp()
-		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		if e.Cursor.Col > lineLen {
-			e.Cursor.Col = lineLen
-		}
+		e.moveCursorUnwrapped(-e.Viewport.Height)
 	case tcell.KeyPgDn:
 		e.startOrExtendSelection(shift)
 		if e.WordWrap {
-			e.moveCursorWrapped(e.Viewport.Height)
+			e.moveCursorRows(e.Viewport.Height)
 			break
 		}
-		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line + e.Viewport.Height)
-		e.skipHiddenLineDown()
-		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		if e.Cursor.Col > lineLen {
-			e.Cursor.Col = lineLen
-		}
+		e.moveCursorUnwrapped(e.Viewport.Height)
 	case tcell.KeyEnter:
 		if e.ReadOnly {
 			return EventConsumed

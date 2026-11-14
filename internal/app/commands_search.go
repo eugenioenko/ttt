@@ -80,6 +80,7 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 		return matches
 	}
 	findBar.OnNavigate = func(match ui.FindMatch) {
+		a.EditorGroup.Editor.ResetCursorGoal()
 		a.EditorGroup.SetSearchActive(findBar.Current)
 		a.EditorGroup.Editor.Selection.Clear()
 		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
@@ -200,6 +201,7 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 		return matches
 	}
 	bar.OnNavigate = func(match ui.FindMatch) {
+		a.EditorGroup.Editor.ResetCursorGoal()
 		a.EditorGroup.SetSearchActive(bar.Current)
 		a.EditorGroup.Editor.Selection.Clear()
 		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
