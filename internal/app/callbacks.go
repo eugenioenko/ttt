@@ -624,7 +624,7 @@ func (a *App) CommitChanges(dir string, message string) {
 		Progress: i18n.Text("git.committing"),
 		Done:     i18n.Format("git.committed", i18n.Args{"message": message}),
 		Dirs:     []string{dir},
-		Ops:      []RepoOp{OpCommit(message)},
+		Ops:      []RepoOp{a.Changes.commitOp(dir, message)},
 		OnDone:   func() { a.Changes.ClearInput(dir) },
 	})
 }

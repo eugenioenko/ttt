@@ -28,6 +28,18 @@ type Staging interface {
 	Unstage(context.Context, []string) error
 }
 
+// Committer optionally records every working-copy change as a new revision
+// with the given message. Providers with staging use their own commit path.
+type Committer interface {
+	Commit(context.Context, string) error
+}
+
+// Discarder optionally reverts literal repository-relative paths to their
+// baseline, including removing added files and restoring renamed sources.
+type Discarder interface {
+	Discard(context.Context, []string) error
+}
+
 // BaselineReader optionally supplies the comparison content for working-copy
 // edits. Providers choose the baseline; paths are literal and repository-relative.
 // Read failures must be errors; Exists=false means the baseline is missing.
