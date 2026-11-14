@@ -111,4 +111,42 @@ describe("toggle line comment", () => {
     const content = readFile(file);
     expect(content).toContain('# print("hello")');
   });
+
+  it("uses # prefix for Makefiles", () => {
+    dir = createTempDir();
+    const file = join(dir, "Makefile");
+    writeFileSync(file, "all:\n\techo hi\n");
+
+    tui.start(file);
+    tui.waitFor("all:");
+
+    tui.press("ctrl+a");
+    tui.exec("Toggle Line Comment");
+
+    tui.press("ctrl+s");
+
+    tui.run();
+
+    expect(readFile(file)).toBe("# all:\n\t# echo hi\n");
+  });
+
+  it("closes HTML comments and removes both ends again", () => {
+    dir = createTempDir();
+    const file = join(dir, "page.html");
+    writeFileSync(file, "<p>one</p>\n<p>two</p>\n");
+
+    tui.start(file);
+    tui.waitFor("<p>one</p>");
+
+    tui.press("ctrl+a");
+    tui.exec("Toggle Line Comment");
+    tui.press("ctrl+s");
+    tui.waitFor("<!-- <p>two</p> -->");
+    tui.exec("Toggle Line Comment");
+    tui.press("ctrl+s");
+
+    tui.run();
+
+    expect(readFile(file)).toBe("<p>one</p>\n<p>two</p>\n");
+  });
 });
