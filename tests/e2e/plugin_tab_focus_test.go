@@ -131,3 +131,32 @@ func TestPluginOpenTabFocusFalseAndFocusTab(t *testing.T) {
 		t.Fatalf("typed %q after focus_tab, want ok (focus %T)", got, h.app.Root.Focused)
 	}
 }
+
+func TestPluginTabOperationsFindInactiveSplit(t *testing.T) {
+	h := newTestHarness(t, 140, 36)
+	defer h.stop()
+	p := loadFormsPlugin(t, h)
+	h.exec("forms.open")
+	owner := h.app.EditorGroup
+	h.exec("editor.split")
+	if err := p.State.DoString(`found = require("ttt").focus_tab("form")`); err != nil {
+		t.Fatal(err)
+	}
+	h.redraw()
+	if p.State.GetGlobal("found") != lua.LTrue || h.app.EditorGroup != owner {
+		t.Fatal("focus_tab did not reach the owning split")
+	}
+	typeInto(h, "ok")
+	if got := typedText(p); got != "ok" {
+		t.Fatalf("typed %q, want ok", got)
+	}
+	h.exec("editor.splitDown")
+	h.app.RemovePluginPanels("forms")
+	for _, group := range h.app.EditorSplit.Groups() {
+		for i := range group.TabCount() {
+			if group.PluginTabKey(i) == "plugin:forms:form" {
+				t.Fatal("plugin cleanup left an inactive tab")
+			}
+		}
+	}
+}

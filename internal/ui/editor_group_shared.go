@@ -265,3 +265,23 @@ func (g *EditorGroupWidget) deduplicateDocumentViews() {
 		}
 	}
 }
+
+func (g *EditorGroupWidget) DiscardDuplicateViews(source *EditorGroupWidget) {
+	for i := len(source.tabs) - 1; i >= 0; i-- {
+		for _, keep := range g.tabs {
+			if keep.Buf != nil && keep.Buf == source.tabs[i].Buf {
+				source.notifyContentTabClose(source.tabs[i])
+				source.tabs = slices.Delete(source.tabs, i, i+1)
+				if i < source.pinnedCount {
+					source.pinnedCount--
+				}
+				break
+			}
+		}
+	}
+	if len(source.tabs) == 0 {
+		source.tabs = []editorTab{source.placeholderTab()}
+	}
+	source.active = min(source.active, len(source.tabs)-1)
+	source.syncTabs()
+}

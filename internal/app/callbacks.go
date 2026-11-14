@@ -276,7 +276,7 @@ func joinReplacedLines(lines []string, original []byte) []byte {
 }
 
 func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, replacement string, opts ui.SearchOptions) {
-	if a.EditorGroup.IsDirtyPath(filePath) {
+	if a.isEditorPathDirty(filePath) {
 		a.StatusWarn(i18n.Format("status.hasUnsavedChangesSaveItBeforeReplacing", i18n.Args{"filename": filepath.Base(filePath)}))
 		return
 	}
@@ -300,7 +300,7 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 		return
 	}
 	a.invalidateRepositoryPath(filePath, RepositoryWorktree)
-	a.EditorGroup.ReloadFile(filePath)
+	a.reloadFile(filePath)
 	a.Search.Refresh()
 	a.StatusNotify(i18n.Format("status.replacedMatchesIn", i18n.Args{"matchesCount": len(matches), "filename": filepath.Base(filePath)}))
 }
@@ -332,7 +332,7 @@ func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, re
 			replacedMatches, replacedFiles := 0, 0
 			var skipped []string
 			for filePath, matches := range allMatches {
-				if a.EditorGroup.IsDirtyPath(filePath) {
+				if a.isEditorPathDirty(filePath) {
 					skipped = append(skipped, filepath.Base(filePath))
 					continue
 				}
@@ -357,7 +357,7 @@ func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, re
 				if invalidatePath == "" {
 					invalidatePath = filePath
 				}
-				a.EditorGroup.ReloadFile(filePath)
+				a.reloadFile(filePath)
 			}
 			a.invalidateRepositoryPath(invalidatePath, RepositoryWorktree)
 			a.Search.Refresh()
@@ -561,6 +561,7 @@ func (a *App) fetchPRFileContent(dv *ui.DiffEditorWidget, owner, repo, baseSHA, 
 			fetchErr = err
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(&DiffContentResult{
+			Widget:   dv,
 			TabName:  tabName,
 			OldLines: oldLines,
 			NewLines: newLines,
@@ -730,16 +731,9 @@ func registerWidgetCallbacks(app *App) {
 		app.Root.SetFocus(app.EditorGroup)
 	}
 
-	app.EditorGroup.OnActiveTabChange = func() {
-		app.Root.ClearEditorLinkHover()
-		if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
-			findBar.OnEditorTabChange()
-		}
-		if bar := app.findBar(); bar != nil && bar.Query() != "" {
-			return
-		}
-		app.applySearchHighlights()
-	}
+	app.wireEditorGroupActivation(app.EditorGroup)
+
+	app.EditorGroup.OnActiveTabChange = app.editorTabChanged
 
 	app.EditorGroup.TabBar.OnTabClose = func(index int) {
 		app.EditorGroup.SwitchTab(index)
@@ -786,11 +780,6 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.Explorer.OnAction = func(id string) { reg.Execute(id) }
-	app.EditorGroup.OnEmpty = func() {
-		if app.welcomeWhenEmpty && len(app.Workspace.Paths()) == 0 {
-			app.ShowEmptyState()
-		}
-	}
 	app.Explorer.OnOpenFile = func(path string) {
 		app.EditorGroup.OpenFile(path)
 		app.FocusEditorIfEnabled()
@@ -888,12 +877,7 @@ func registerWidgetCallbacks(app *App) {
 	app.ContentSplit.OnResize = app.resizePanel
 	app.ContentSplit.OnResizeEnd = app.finishPanelResize
 
-	app.ContentSplit.OnTopClick = func() {
-		if app.Root.HasModalOverlay() || app.Root.FocusClaimed() {
-			return
-		}
-		app.Root.SetFocus(app.EditorGroup)
-	}
+	app.ContentSplit.OnTopClick = app.focusEditorAfterClick
 
 	app.ContentSplit.OnBottomClick = func() {
 		if app.Root.HasModalOverlay() || app.Root.FocusClaimed() {
@@ -970,10 +954,23 @@ func registerWidgetCallbacks(app *App) {
 }
 
 func (a *App) tabMoreMenu() []ui.ContextMenuItem {
-	return []ui.ContextMenuItem{
+	items := []ui.ContextMenuItem{
 		{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: a.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed", Disabled: !a.EditorGroup.HasClosedTabs()},
 		ui.MenuSep(),
 		{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
 		{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
+		ui.MenuSep(),
 	}
+	return append(items, a.editorGroupMenu()...)
+}
+
+func (app *App) editorTabChanged() {
+	app.Root.ClearEditorLinkHover()
+	if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
+		findBar.OnEditorTabChange()
+	}
+	if bar := app.findBar(); bar != nil && bar.Query() != "" {
+		return
+	}
+	app.applySearchHighlights()
 }

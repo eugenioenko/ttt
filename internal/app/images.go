@@ -28,7 +28,9 @@ func (a *App) RefreshImageCellSize() {
 	}
 	a.imageCellW, a.imageCellH = w, h
 	if a.EditorGroup != nil {
-		a.EditorGroup.SetImageCellSize(w, h)
+		for _, group := range a.editorGroups() {
+			group.SetImageCellSize(w, h)
+		}
 	}
 }
 

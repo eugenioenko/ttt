@@ -114,8 +114,8 @@ func (a *App) ApplyCommitDetailContext(result *CommitDetailContextResult) {
 	if result == nil || result.Canceled {
 		return
 	}
-	detail := a.EditorGroup.CommitDetailWidgetByTab(result.TabID)
-	if detail == nil || detail.Dir != result.Dir || detail.Ref != result.Ref || detail.Incarnation != result.Incarnation {
+	detail := a.commitDetailForResult(result.TabID, result.Dir, result.Ref, result.Incarnation)
+	if detail == nil {
 		return
 	}
 	applied := detail.ApplyFileContextContent(result.FileIndex, result.FileKey, result.OldLines, result.NewLines, result.ContentKind, result.Err)

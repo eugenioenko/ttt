@@ -51,8 +51,10 @@ func (a *App) RestartLSPServer() {
 // posted is already queued ahead of this event and is cleared here rather than
 // landing after the restart.
 func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
-	a.EditorGroup.ClearDiagnosticsSource(lspDiagnosticsSource(ev.Server))
-	a.EditorGroup.ClearDiagnosticsSource(lspPullDiagnosticsSource(ev.Server))
+	for _, group := range a.editorGroups() {
+		group.ClearDiagnosticsSource(lspDiagnosticsSource(ev.Server))
+		group.ClearDiagnosticsSource(lspPullDiagnosticsSource(ev.Server))
+	}
 	type openDoc struct {
 		uri, langID, text string
 		inFlight          <-chan struct{}
@@ -60,7 +62,7 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 	var docs []openDoc
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
-	for _, d := range a.EditorGroup.OpenDocuments() {
+	for _, d := range a.openEditorDocuments() {
 		key, langID, ok := a.lspResolve(d.Path, d.Language)
 		if !ok || key != ev.Server {
 			continue

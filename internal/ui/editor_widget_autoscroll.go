@@ -5,6 +5,7 @@ import "time"
 const editorDragAutoScrollDelay = 50 * time.Millisecond
 
 type EditorDragAutoScrollTick struct {
+	Target     *EditorPaneWidget
 	Generation uint64
 }
 

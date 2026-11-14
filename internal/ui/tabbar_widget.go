@@ -50,11 +50,14 @@ type Tab struct {
 }
 
 type TabDragAutoScrollTick struct {
+	Target     *TabBarWidget
 	Generation uint64
 }
 
 type TabBarWidget struct {
 	BaseWidget
+	ShowGroupFocus            bool
+	GroupActive               bool
 	Icons                     string
 	Tabs                      []Tab
 	Borders                   *term.BorderSet
@@ -204,6 +207,9 @@ func (t *TabBarWidget) Render(surface Surface) {
 		b = *t.Borders
 	}
 	bs := term.StyleBorder
+	if t.ShowGroupFocus && t.GroupActive {
+		bs = term.StyleBorderActive
+	}
 
 	// Compute spans: active tab needs 2 extra cols for │ │ side borders
 	spans := make([]tabSpan, len(t.Tabs))
@@ -757,4 +763,9 @@ func (t *TabBarWidget) HandleDragAutoScrollTick(generation uint64) bool {
 		t.armAutoScrollTick(generation)
 	}
 	return true
+}
+
+func (t *TabBarWidget) baselineY() (int, bool) {
+	r := t.GetRect()
+	return r.Y + r.H - 1, r.H > 0
 }

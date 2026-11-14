@@ -14,7 +14,7 @@ type largeFileState struct {
 
 func (a *App) SyncReloadSegment() {
 	for path := range a.largeFiles.stale {
-		buf := a.EditorGroup.BufferForPath(path)
+		buf := a.editorBufferForPath(path)
 		if buf == nil || !buf.DiskChanged(path) {
 			delete(a.largeFiles.stale, path)
 		}

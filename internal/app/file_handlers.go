@@ -49,11 +49,15 @@ func (a *App) SyncFileHandlerTabs() {
 		if owner.Loaded() && owner.Enabled {
 			continue
 		}
-		a.EditorGroup.ShowBinaryCard(path)
+		for _, group := range a.editorGroups() {
+			group.ShowBinaryCard(path)
+		}
 		a.closeFileHandlerTab(path)
 		released = true
 	}
 	if released {
-		a.EditorGroup.RetryFileHandlers()
+		for _, group := range a.editorGroups() {
+			group.RetryFileHandlers()
+		}
 	}
 }
