@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/fold"
+	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -78,6 +79,63 @@ func TestJumpBookmarkExpandsCollapsedFold(t *testing.T) {
 	}
 	if e.Cursor.Line != 2 {
 		t.Fatalf("cursor line = %d, want the bookmarked line 2", e.Cursor.Line)
+	}
+}
+
+func TestBookmarksShiftWithInsertedLines(t *testing.T) {
+	e := newEditorWithLines("a", "b", "c")
+	e.SetBookmark(1, 'B', term.StyleDefault)
+	e.SetBookmark(2, 'C', term.StyleDefault)
+	bookmarks := e.Bookmarks
+
+	e.ExecCommand(&undo.InsertLineCommand{Idx: 0, Text: "new"})
+
+	if _, ok := e.Bookmarks[1]; ok {
+		t.Fatal("a bookmark stayed on the line number of an unrelated line")
+	}
+	if b, ok := bookmarks[2]; !ok || b.Icon != 'B' {
+		t.Fatalf("bookmark for old line 1 = %+v, want it at 2 on the same map", b)
+	}
+	if _, ok := bookmarks[3]; !ok {
+		t.Fatal("bookmark for old line 2 was not shifted to 3")
+	}
+}
+
+func TestBookmarksOnDeletedLinesAreDropped(t *testing.T) {
+	e := newEditorWithLines("a", "b", "c", "d")
+	e.SetBookmark(1, 'B', term.StyleDefault)
+	e.SetBookmark(2, 'C', term.StyleDefault)
+	e.SetBookmark(3, 'D', term.StyleDefault)
+
+	e.ExecCommand(&undo.DeleteLineCommand{Idx: 1})
+
+	if len(e.Bookmarks) != 2 {
+		t.Fatalf("bookmarks = %v, want the deleted line's bookmark dropped", e.Bookmarks)
+	}
+	if b, ok := e.Bookmarks[1]; !ok || b.Icon != 'C' {
+		t.Fatalf("bookmark at 1 = %+v, want the one from old line 2", b)
+	}
+	if b, ok := e.Bookmarks[2]; !ok || b.Icon != 'D' {
+		t.Fatalf("bookmark at 2 = %+v, want the one from old line 3", b)
+	}
+}
+
+func TestBookmarksMergeWhenLinesCollapse(t *testing.T) {
+	e := newEditorWithLines("a", "b", "c", "d")
+	e.SetBookmark(1, 'B', term.StyleDefault)
+	e.SetBookmark(2, 'C', term.StyleDefault)
+
+	e.ExecCommand(&undo.ReplaceLinesCommand{
+		Start:    1,
+		OldLines: []string{"b", "c"},
+		NewLines: []string{"bc"},
+	})
+
+	if len(e.Bookmarks) != 1 {
+		t.Fatalf("bookmarks = %v, want colliding bookmarks merged", e.Bookmarks)
+	}
+	if b, ok := e.Bookmarks[1]; !ok || b.Icon != 'B' {
+		t.Fatalf("bookmark at 1 = %+v, want the earliest bookmark to win", b)
 	}
 }
 

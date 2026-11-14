@@ -403,6 +403,7 @@ func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 	}
 	e.bufferDirty = true
 	e.refreshFoldsAfterEdit(version, prevLines)
+	e.remapBookmarks(version)
 }
 
 const asyncFoldLines = 50_000
@@ -428,6 +429,25 @@ func (e *EditorPaneWidget) remapFolds(version uint64) bool {
 		return true
 	}
 	return shifted
+}
+
+// remapBookmarks replays the edits since version over the bookmarks in place,
+// so shared references to the map stay valid. A bookmark on a deleted line is
+// dropped, and bookmarks that collapse onto one line keep the earliest.
+func (e *EditorPaneWidget) remapBookmarks(version uint64) {
+	if len(e.Bookmarks) == 0 || version == e.Buf.Version() {
+		return
+	}
+	if !e.Buf.ChangesSince(version, func(c buffer.Change) {
+		if c.Added == 0 {
+			for line := c.Start; line < c.Start+c.Removed; line++ {
+				delete(e.Bookmarks, line)
+			}
+		}
+		shiftKeys(e.Bookmarks, c, func(a, _ Bookmark) Bookmark { return a })
+	}) {
+		clear(e.Bookmarks)
+	}
 }
 
 func (e *EditorPaneWidget) refreshFolds() {
