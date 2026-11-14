@@ -66,7 +66,7 @@ lifecycle.
 
 ### Services
 
-Packages: `internal/scm`, `internal/git`, `internal/github`, `internal/jsonrpc`,
+Packages: `internal/scm`, `internal/git`, `internal/jj`, `internal/github`, `internal/jsonrpc`,
 `internal/lsp`, `internal/terminal`, `internal/watcher`,
 `internal/workspace`, `internal/trash`, and `internal/update`.
 
@@ -107,18 +107,27 @@ rename/copy, and missing endpoints in its adapter. Historical content stays lazy
 request ownership, cancellation, incarnation guards, and per-file retry remain
 in the application. Revision IDs are opaque, including in history tree identity.
 
-Remaining integration work before exposing another provider:
+`internal/jj` is the second built-in adapter. `scm.Providers` discovers with
+jj before Git, so a colocated workspace is presented through jj, while a nearer
+`.git` or a missing `jj` binary leaves the directory to Git. Optional
+`scm.Committer` and `scm.Discarder` contracts carry the commit box and discard
+actions for providers without staging; Git keeps its own paths. jj queries pass
+`--ignore-working-copy` except those that must see current files: the change
+list, the single-change patch, and the ignored-file check snapshot the working
+copy as any jj command does.
 
-- Keep Git mutation commands Git-specific and gate them by the selected provider.
-  Providers will contribute their own actions through the future host action API.
+Remaining integration work:
+
+- Git mutation commands (pull, push, sync, new branch) run the git CLI directly
+  and skip jj workspaces through `RepoOp.GitOnly`. Providers will contribute
+  their own actions through the future host action API.
 - Git-derived enumeration, blame, GitHub PRs/permalinks, and Git worktree tools
-  remain Git-specific. Gate these outside Git; introduce a shared contract only
-  when a second provider needs one. Preserve ordinary file browsing outside Git.
+  remain Git-specific. Introduce a shared contract only when a provider needs one.
 - Provider presentation retains its compatible staged/unstaged projection and
   command identifiers. Provider-defined groups, labels, and actions are follow-ups.
-- Provider selection, workspace discovery integration, and Lua registration,
-  permissions, cancellation/unload, invalidation, and colocated-repository policy
-  remain host integration work. Public plugin APIs and Jujutsu come afterward.
+- Lua registration, permissions, cancellation/unload, and invalidation for
+  plugin-supplied providers remain host integration work before public plugin
+  APIs.
 
 ### Presentation kernel
 

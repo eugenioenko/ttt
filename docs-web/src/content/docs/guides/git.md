@@ -101,3 +101,18 @@ The line number area displays diff indicators that show which lines have been ad
 ## Git Blame
 
 The status bar shows inline blame info for the current line: author, relative time, and commit summary.
+
+## Jujutsu (jj)
+
+TTT also works with [Jujutsu](https://jj-vcs.github.io/jj/) repositories. When a folder is inside a jj workspace and the `jj` binary is on your `PATH`, the changes panel, diffs, commit history, explorer colors, and gutter use jj instead of git. A colocated workspace, which has both `.jj` and `.git`, uses jj. No jj configuration is required.
+
+jj has no staging area, so the panel shows a single **Changes** section:
+
+- The working-copy commit's changes are listed, including files with recorded conflicts
+- The commit input runs `jj commit`, which records every change and starts a new empty change on top
+- **`d`**, **`D`**, and **Discard** run `jj restore`, which you can revert with `jj undo`
+- Commit history lists the ancestors of the working-copy commit, labeled with their change IDs
+- The gutter and diffs compare against the working-copy parent
+- The status bar shows the working-copy commit's bookmarks, or its change ID when it has none
+
+Staging, pull, push, sync, and new branch are git operations and are not available in jj workspaces.
