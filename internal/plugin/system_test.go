@@ -100,8 +100,8 @@ func TestSystemApprovalDoesNotAuthorizeOverrides(t *testing.T) {
 			if err := restarted.ApproveAndLoad(pending[0]); err != nil {
 				t.Fatal(err)
 			}
-			if restarted.registry.Find("shared").SystemApproval {
-				t.Fatal("explicit approval still marked inherited")
+			if entry := restarted.registry.Find("shared"); entry.SystemApproval || entry.SystemManaged {
+				t.Fatal("approved override still marked inherited or system-managed")
 			}
 		})
 	}
@@ -242,5 +242,106 @@ func TestSystemPluginManifestIdentityAfterDisable(t *testing.T) {
 		if err != nil || p == nil || !p.Loaded() || p.Dir != dir {
 			t.Fatalf("re-enable: plugin=%v error=%v", p, err)
 		}
+	}
+}
+
+func TestSystemPluginBrokenManifestPreservesUserState(t *testing.T) {
+	for _, approval := range []string{"admin", "personal"} {
+		t.Run(approval, func(t *testing.T) {
+			system, sharedRegistry := systemPluginFixture(t)
+			if approval == "personal" {
+				if err := os.Remove(sharedRegistry); err != nil {
+					t.Fatal(err)
+				}
+			}
+			user := t.TempDir()
+			m := systemManager(t, user, system)
+			pending := m.LoadAll()
+			if approval == "personal" {
+				if len(pending) != 1 {
+					t.Fatalf("pending=%v", pending)
+				}
+				if err := m.ApproveAndLoad(pending[0]); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := m.SetEnabled("shared", false); err != nil {
+				t.Fatal(err)
+			}
+			storage, err := storagePath(m.storageDir, "shared")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Dir(storage), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(storage, []byte(`{"saved":true}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			registry, err := os.ReadFile(m.registryPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(system, "shared", "plugin.ttt.json"), []byte("invalid"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			restarted := systemManager(t, user, system)
+			restarted.LoadAll()
+			for _, manager := range []*Manager{m, restarted} {
+				if err := manager.Uninstall("shared"); err == nil {
+					t.Fatal("broken system plugin could be uninstalled")
+				}
+				if err := manager.PrepareUpdate("shared").Fetch(); err == nil {
+					t.Fatal("broken system plugin could be updated")
+				}
+				if data, err := os.ReadFile(m.registryPath); err != nil || !bytes.Equal(data, registry) {
+					t.Fatal("registry changed")
+				}
+				if data, err := os.ReadFile(storage); err != nil || string(data) != `{"saved":true}` {
+					t.Fatal("storage changed")
+				}
+			}
+		})
+	}
+}
+
+func TestSystemSymlinkInspectionErrors(t *testing.T) {
+	for _, kind := range []string{"missing", "internal", "loop", "unreadable"} {
+		t.Run(kind, func(t *testing.T) {
+			system := t.TempDir()
+			link := filepath.Join(system, "link")
+			target := filepath.Join(system, "missing")
+			if kind == "internal" {
+				target = writePluginDir(t, system, "shared")
+			}
+			if kind == "loop" {
+				target = link
+			}
+			if kind == "unreadable" {
+				private := t.TempDir()
+				target = writePluginDir(t, private, "shared")
+				if err := os.Chmod(private, 0); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(private, 0755) })
+				if _, err := os.Stat(target); !os.IsPermission(err) {
+					t.Skip("directory permissions are not enforced")
+				}
+			}
+			if err := os.Symlink(target, link); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+			m := systemManager(t, t.TempDir(), system)
+			var failures []string
+			m.OnDiscoveryError = func(path string, err error) { failures = append(failures, path) }
+			m.LoadAll()
+			if kind == "loop" || kind == "unreadable" {
+				if len(failures) != 1 || failures[0] != link {
+					t.Fatalf("inspection failures=%v", failures)
+				}
+			} else if len(failures) != 0 {
+				t.Fatalf("intentional exclusion reported: %v", failures)
+			}
+		})
 	}
 }

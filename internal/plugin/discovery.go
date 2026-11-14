@@ -23,7 +23,14 @@ func (m *Manager) pluginManifests(pluginDir string) iter.Seq2[string, Manifest] 
 			if !entry.IsDir() {
 				// entry.IsDir reports the link's own type, so a symlinked
 				// plugin dir needs its target checked instead.
-				if entry.Type()&fs.ModeSymlink == 0 || !isLinkedDir(dir, pluginDir) {
+				if entry.Type()&fs.ModeSymlink == 0 {
+					continue
+				}
+				linked, err := isLinkedDir(dir, pluginDir)
+				if err != nil && pluginDir == m.systemDir {
+					m.discoveryError(dir, err)
+				}
+				if !linked {
 					continue
 				}
 			}

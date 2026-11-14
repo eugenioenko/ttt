@@ -16,6 +16,7 @@ const (
 )
 
 type RegistryEntry struct {
+	SystemManaged  bool          `json:"systemManaged,omitempty"`
 	SystemApproval bool          `json:"systemApproval,omitempty"`
 	Name           string        `json:"name"`
 	DisplayName    string        `json:"displayName,omitempty"`

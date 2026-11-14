@@ -78,18 +78,24 @@ func NewManager(pluginsDir, registryPath string, extraDirs ...string) *Manager {
 // isLinkedDir reports whether path is a symlink resolving to a directory
 // outside pluginDir, so a linked plugin loads once instead of twice or not
 // at all.
-func isLinkedDir(path, pluginDir string) bool {
+func isLinkedDir(path, pluginDir string) (bool, error) {
 	info, err := os.Stat(path)
-	if err != nil || !info.IsDir() {
-		return false
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.IsDir() {
+		return false, nil
 	}
 	real, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return false
+		return false, err
 	}
 	realDir, err := filepath.EvalSymlinks(pluginDir)
 	if err != nil {
-		realDir = pluginDir
+		return false, err
 	}
 	// Resolve both sides to absolute paths. EvalSymlinks keeps a relative path
 	// relative unless a symlink target is absolute, and filepath.Rel rejects a
@@ -97,14 +103,14 @@ func isLinkedDir(path, pluginDir string) bool {
 	// an internal link.
 	realAbs, err := filepath.Abs(real)
 	if err != nil {
-		return true
+		return false, err
 	}
 	realDirAbs, err := filepath.Abs(realDir)
 	if err != nil {
-		return true
+		return false, err
 	}
 	rel, err := filepath.Rel(realDirAbs, realAbs)
-	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)), nil
 }
 
 func (m *Manager) LoadAll() []*Plugin {
@@ -136,6 +142,10 @@ func (m *Manager) LoadAll() []*Plugin {
 				Manifest: manifest,
 			}
 
+			if err := m.rememberSource(dir, manifest.Name); err != nil {
+				m.discoveryError(dir, err)
+				continue
+			}
 			if entry := m.registry.Find(manifest.Name); entry != nil && !entry.Enabled {
 				continue
 			}
@@ -245,6 +255,7 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 		p.Manifest.Permissions,
 	)
 	if entry := m.registry.Find(p.Manifest.Name); entry != nil {
+		entry.SystemManaged = m.isSystemPlugin(p.Dir)
 		entry.ExecPaths = execPathsFor(entry.ExecPaths, p.Manifest.Permissions.SystemExec)
 		p.Granted.SystemExec = slices.Concat(p.Granted.SystemExec, entry.ExecPaths)
 	}
@@ -651,6 +662,7 @@ func (m *Manager) DenyPlugin(p *Plugin) error {
 	inherited := entry != nil && entry.SystemApproval
 	m.registry.AddOrUpdate(p.Manifest.Name, p.Manifest.DisplayName, p.Repo, p.RepoPath, p.Manifest.Version, approved)
 	m.registry.Find(p.Manifest.Name).SystemApproval = inherited
+	m.registry.Find(p.Manifest.Name).SystemManaged = m.isSystemPlugin(p.Dir)
 	m.registry.SetEnabled(p.Manifest.Name, false)
 	return m.registry.Save()
 }

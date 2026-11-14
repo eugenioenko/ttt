@@ -52,6 +52,9 @@ func (m *Manager) loadSystemRegistry() {
 }
 
 func (m *Manager) approvalFor(dir string, manifest Manifest) (*RegistryEntry, error) {
+	if err := m.rememberSource(dir, manifest.Name); err != nil {
+		return nil, err
+	}
 	local := m.registry.Find(manifest.Name)
 	var personal *RegistryEntry
 	if local != nil && !local.SystemApproval {
@@ -73,6 +76,7 @@ func (m *Manager) approvalFor(dir string, manifest Manifest) (*RegistryEntry, er
 		m.registry.AddOrUpdate(manifest.Name, manifest.DisplayName, "", "", manifest.Version, PermissionSet{})
 		local = m.registry.Find(manifest.Name)
 		local.SystemApproval = true
+		local.SystemManaged = true
 		if err := m.registry.Save(); err != nil {
 			m.registry.Remove(manifest.Name)
 			return nil, err
@@ -89,9 +93,33 @@ func (m *Manager) IsSystemPlugin(name string) bool {
 		return m.isSystemPlugin(p.Dir)
 	}
 	dir, _, err := m.findManifest(name)
-	return err == nil && m.isSystemPlugin(dir)
+	if err == nil {
+		return m.isSystemPlugin(dir)
+	}
+	// Failed discovery must not turn an administrator-managed plugin into a
+	// personal installation and let uninstall delete its user state.
+	if m.registry != nil {
+		if entry := m.registry.Find(name); entry != nil {
+			return entry.SystemManaged
+		}
+	}
+	return false
 }
 
 func systemManagedError() error {
 	return errors.New(i18n.Text("plugins.systemManaged"))
+}
+
+func (m *Manager) rememberSource(dir, name string) error {
+	entry := m.registry.Find(name)
+	if entry == nil || entry.SystemManaged == m.isSystemPlugin(dir) {
+		return nil
+	}
+	previous := entry.SystemManaged
+	entry.SystemManaged = m.isSystemPlugin(dir)
+	if err := m.registry.Save(); err != nil {
+		entry.SystemManaged = previous
+		return err
+	}
+	return nil
 }
