@@ -759,6 +759,8 @@ func (g *EditorGroupWidget) NewFile() {
 		Undo:     g.newUndoStack(),
 		Sel:      &selection.Selection{},
 		Virtual:  true,
+		TabSize:  g.TabSize,
+		UseTabs:  !g.InsertSpaces,
 	})
 	g.SwitchTab(len(g.tabs) - 1)
 }
@@ -773,6 +775,8 @@ func (g *EditorGroupWidget) NewFileFromText(text string) {
 		Undo:    g.newUndoStack(),
 		Sel:     &selection.Selection{},
 		Virtual: true,
+		TabSize: g.TabSize,
+		UseTabs: !g.InsertSpaces,
 	}
 	if t := g.activeTab(); len(g.tabs) == 1 && g.isUntouchedPlaceholder(t) {
 		tab.FilePath = t.FilePath
