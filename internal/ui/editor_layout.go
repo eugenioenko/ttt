@@ -3,12 +3,13 @@ package ui
 import (
 	"math"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
-const MaxEditorGroups = 4
+const MaxEditorGroups = config.MaxEditorGroups
 
 type EditorLayoutWidget struct {
 	BaseWidget
