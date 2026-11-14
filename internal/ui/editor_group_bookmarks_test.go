@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/fold"
+	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -24,6 +26,127 @@ func openBookmarkFiles(t *testing.T) (g *EditorGroupWidget, a, b string) {
 	g.Editor.SetBookmark(1, '*', term.StyleDefault)
 	g.OpenFile(b)
 	return g, a, b
+}
+
+func TestToggleBookmarkCommand(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	g.OpenFile(a)
+	g.Editor.Cursor.Line = 2
+
+	g.ToggleBookmark()
+	if _, ok := g.Editor.GetBookmark(2); !ok {
+		t.Fatal("toggle did not add a bookmark")
+	}
+
+	g.ToggleBookmark()
+	if _, ok := g.Editor.GetBookmark(2); ok {
+		t.Fatal("toggle did not remove the bookmark")
+	}
+}
+
+func TestJumpBookmarkWrapsAtBothEnds(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	g.OpenFile(a)
+	g.Editor.ClearBookmarks()
+	g.Editor.SetBookmark(0, '*', term.StyleDefault)
+	g.Editor.SetBookmark(2, '*', term.StyleDefault)
+
+	g.Editor.Cursor.Line = 1
+	if !g.JumpBookmark(1) || g.Editor.Cursor.Line != 2 {
+		t.Fatalf("next bookmark from line 1 = %d, want 2", g.Editor.Cursor.Line)
+	}
+	if !g.JumpBookmark(1) || g.Editor.Cursor.Line != 0 {
+		t.Fatalf("next bookmark from the last = %d, want it to wrap to 0", g.Editor.Cursor.Line)
+	}
+	if !g.JumpBookmark(-1) || g.Editor.Cursor.Line != 2 {
+		t.Fatalf("previous bookmark from the first = %d, want it to wrap to 2", g.Editor.Cursor.Line)
+	}
+}
+
+func TestJumpBookmarkExpandsCollapsedFold(t *testing.T) {
+	e := newEditorWithLines(foldSample...)
+	e.Folds = fold.NewState()
+	e.Folds.SetRanges(fold.ComputeIndentRanges(e.Buf.Lines))
+	e.Folds.Toggle(1)
+	e.SetBookmark(2, '*', term.StyleDefault)
+	e.Cursor.Line = 0
+
+	if !e.JumpBookmark(1) {
+		t.Fatal("jump found no bookmark")
+	}
+	if e.Folds.IsCollapsed(1) {
+		t.Fatal("fold hiding the bookmark was not expanded")
+	}
+	if e.Cursor.Line != 2 {
+		t.Fatalf("cursor line = %d, want the bookmarked line 2", e.Cursor.Line)
+	}
+}
+
+func TestBookmarksShiftWithInsertedLines(t *testing.T) {
+	e := newEditorWithLines("a", "b", "c")
+	e.SetBookmark(1, 'B', term.StyleDefault)
+	e.SetBookmark(2, 'C', term.StyleDefault)
+	bookmarks := e.Bookmarks
+
+	e.ExecCommand(&undo.InsertLineCommand{Idx: 0, Text: "new"})
+
+	if _, ok := e.Bookmarks[1]; ok {
+		t.Fatal("a bookmark stayed on the line number of an unrelated line")
+	}
+	if b, ok := bookmarks[2]; !ok || b.Icon != 'B' {
+		t.Fatalf("bookmark for old line 1 = %+v, want it at 2 on the same map", b)
+	}
+	if _, ok := bookmarks[3]; !ok {
+		t.Fatal("bookmark for old line 2 was not shifted to 3")
+	}
+}
+
+func TestBookmarksOnDeletedLinesAreDropped(t *testing.T) {
+	e := newEditorWithLines("a", "b", "c", "d")
+	e.SetBookmark(1, 'B', term.StyleDefault)
+	e.SetBookmark(2, 'C', term.StyleDefault)
+	e.SetBookmark(3, 'D', term.StyleDefault)
+
+	e.ExecCommand(&undo.DeleteLineCommand{Idx: 1})
+
+	if len(e.Bookmarks) != 2 {
+		t.Fatalf("bookmarks = %v, want the deleted line's bookmark dropped", e.Bookmarks)
+	}
+	if b, ok := e.Bookmarks[1]; !ok || b.Icon != 'C' {
+		t.Fatalf("bookmark at 1 = %+v, want the one from old line 2", b)
+	}
+	if b, ok := e.Bookmarks[2]; !ok || b.Icon != 'D' {
+		t.Fatalf("bookmark at 2 = %+v, want the one from old line 3", b)
+	}
+}
+
+func TestBookmarksMergeWhenLinesCollapse(t *testing.T) {
+	e := newEditorWithLines("a", "b", "c", "d")
+	e.SetBookmark(1, 'B', term.StyleDefault)
+	e.SetBookmark(2, 'C', term.StyleDefault)
+
+	e.ExecCommand(&undo.ReplaceLinesCommand{
+		Start:    1,
+		OldLines: []string{"b", "c"},
+		NewLines: []string{"bc"},
+	})
+
+	if len(e.Bookmarks) != 1 {
+		t.Fatalf("bookmarks = %v, want colliding bookmarks merged", e.Bookmarks)
+	}
+	if b, ok := e.Bookmarks[1]; !ok || b.Icon != 'B' {
+		t.Fatalf("bookmark at 1 = %+v, want the earliest bookmark to win", b)
+	}
+}
+
+func TestJumpBookmarkWithoutBookmarksReportsNothing(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	g.OpenFile(a)
+	g.Editor.ClearBookmarks()
+
+	if g.JumpBookmark(1) {
+		t.Fatal("jump reported a bookmark in an unmarked file")
+	}
 }
 
 func TestBookmarksFollowInactiveTabRename(t *testing.T) {

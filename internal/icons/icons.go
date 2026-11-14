@@ -12,10 +12,11 @@ import (
 type Name string
 
 const (
-	Branch Name = "branch"
-	Commit Name = "commit"
-	Lock   Name = "lock"
-	Pinned Name = "pinned"
+	Branch   Name = "branch"
+	Commit   Name = "commit"
+	Lock     Name = "lock"
+	Pinned   Name = "pinned"
+	Bookmark Name = "bookmark"
 
 	ChevronRight Name = "chevron-right"
 	ChevronLeft  Name = "chevron-left"
@@ -70,10 +71,11 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
-	Branch: {Plain: "⎇", Nerd: "\ue702"},
-	Commit: {Plain: "●", Nerd: "\ueafc"},
-	Lock:   {Plain: "⚿", Nerd: ""},
-	Pinned: {Plain: "♦", Nerd: ""},
+	Branch:   {Plain: "⎇", Nerd: "\ue702"},
+	Commit:   {Plain: "●", Nerd: "\ueafc"},
+	Lock:     {Plain: "⚿", Nerd: ""},
+	Pinned:   {Plain: "♦", Nerd: ""},
+	Bookmark: {Plain: "⚑", Nerd: "\uf02e"},
 
 	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
 	ChevronLeft:  {Plain: string(PlainChevronLeft), Nerd: ""},

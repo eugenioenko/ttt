@@ -485,7 +485,7 @@ func (a *App) saveAllAndQuit(onQuit func(), previousOverlay ui.Widget) {
 // is the first line of that run.
 func hunkStarts(changes []diff.LineChangeKind) []int {
 	var starts []int
-	for i := 0; i < len(changes); i++ {
+	for i := range changes {
 		if changes[i] != diff.LineUnchanged && (i == 0 || changes[i-1] == diff.LineUnchanged) {
 			starts = append(starts, i)
 		}
@@ -832,6 +832,24 @@ func registerEditorCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "bookmark.toggle", Title: i18n.Text("command.toggleBookmark"),
+		Keywords: []string{"editor", "bookmark", "mark", "line"},
+		Handler:  app.ToggleBookmark,
+	})
+
+	reg.Register(command.Command{
+		ID: "bookmark.next", Title: i18n.Text("command.nextBookmark"),
+		Keywords: []string{"editor", "bookmark", "navigate", "jump", "next"},
+		Handler:  app.NextBookmark,
+	})
+
+	reg.Register(command.Command{
+		ID: "bookmark.previous", Title: i18n.Text("command.previousBookmark"),
+		Keywords: []string{"editor", "bookmark", "navigate", "jump", "previous"},
+		Handler:  app.PreviousBookmark,
+	})
+
+	reg.Register(command.Command{
 		ID: "fold.open", Title: i18n.Text("command.openFold"),
 		Keywords: []string{"editor", "expand", "show", "lines"},
 		Handler:  app.OpenFold,
@@ -1134,6 +1152,27 @@ func registerEditorCommands(app *App) {
 		Keywords: []string{"exit", "close"},
 		Handler:  app.Quit,
 	})
+}
+
+func (a *App) ToggleBookmark() {
+	a.EditorGroup.ToggleBookmark()
+}
+
+func (a *App) NextBookmark() {
+	a.bookmarkStep(1)
+}
+
+func (a *App) PreviousBookmark() {
+	a.bookmarkStep(-1)
+}
+
+func (a *App) bookmarkStep(delta int) {
+	if !a.EditorGroup.IsEditorActive() {
+		return
+	}
+	if !a.EditorGroup.JumpBookmark(delta) {
+		a.StatusNotify(i18n.Text("status.noBookmarks"))
+	}
 }
 
 func (a *App) AddCursorAbove() {
