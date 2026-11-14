@@ -205,7 +205,7 @@ func TestVerticalGoalAcrossMixedMoves(t *testing.T) {
 	assertCursor(t, e, 0, 4)
 }
 
-func TestMultiCursorVerticalGoals(t *testing.T) {
+func TestMultiCursorVerticalGoalsSurviveCopy(t *testing.T) {
 	for _, wrap := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nowrap", true: "wrap"}[wrap], func(t *testing.T) {
 			e := newEditorWithLines("abcdefghij", "xy", "abcdefghij", "abcdefghij", "xy", "abcdefghij")
@@ -213,6 +213,8 @@ func TestMultiCursorVerticalGoals(t *testing.T) {
 			e.Cursor.Col = 4
 			e.Multi = &multicursor.MultiCursor{Cursors: []multicursor.CursorState{{Line: 0, Col: 4}, {Line: 3, Col: 7}}}
 			pressWrapKey(e, tcell.KeyDown, 0)
+			e.Multi.Cursors[1].Sel.Start(4, 1)
+			e.multiCopyPieces()
 			pressWrapKey(e, tcell.KeyDown, 0)
 			assertAddedCursors(t, e, [2]int{2, 4}, [2]int{5, 7})
 			pressWrapKey(e, tcell.KeyUp, 0)
@@ -220,6 +222,21 @@ func TestMultiCursorVerticalGoals(t *testing.T) {
 			pressWrapKey(e, tcell.KeyRight, 0)
 			pressWrapKey(e, tcell.KeyUp, 0)
 			assertAddedCursors(t, e, [2]int{0, 2}, [2]int{3, 2})
+		})
+	}
+}
+
+func TestMultiCursorDeduplicationPreservesPrimaryGoal(t *testing.T) {
+	for _, wrap := range []bool{false, true} {
+		t.Run(map[bool]string{false: "nowrap", true: "wrap"}[wrap], func(t *testing.T) {
+			e := newMultiCursorEditor([]string{"abcdefghij", "xy", "abcdefghij"}, [][2]int{{0, 4}, {0, 7}})
+			e.WordWrap, e.Viewport.Width = wrap, 20
+			e.Multi.Primary = 1
+			e.syncFromMulti()
+			pressWrapKey(e, tcell.KeyDown, 0)
+			assertAddedCursors(t, e, [2]int{1, 2})
+			pressWrapKey(e, tcell.KeyDown, 0)
+			assertCursor(t, e, 2, 7)
 		})
 	}
 }

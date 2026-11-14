@@ -70,6 +70,25 @@ func TestMergeSelections(t *testing.T) {
 	}
 }
 
+func TestMergeSelectionsResetsGoalWhenSelectionChanges(t *testing.T) {
+	mc := &MultiCursor{
+		Cursors: []CursorState{
+			{Line: 0, Col: 2, Sel: selection.Selection{Active: true, Anchor: selection.Position{Line: 0, Col: 0}}},
+			{Line: 0, Col: 4, Sel: selection.Selection{Active: true, Anchor: selection.Position{Line: 0, Col: 1}}},
+		},
+		Primary: 1,
+	}
+	mc.Cursors[1].Goal.Remember(0, 4, 9)
+	mc.MergeSelections()
+	p := mc.PrimaryCursor()
+	if p.Line != 0 || p.Col != 4 || p.Sel.Anchor.Col != 0 {
+		t.Fatalf("merged cursor = %+v, want selection (0,0)-(0,4)", p)
+	}
+	if got := p.Goal.Column(0, 4, 4); got != 4 {
+		t.Fatalf("goal after selection changed = %d, want 4", got)
+	}
+}
+
 func TestNewMultiCursor(t *testing.T) {
 	mc := New(5, 10)
 	if len(mc.Cursors) != 1 {
