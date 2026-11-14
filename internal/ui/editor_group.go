@@ -1761,7 +1761,7 @@ func (g *EditorGroupWidget) Save() bool {
 	}
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(t.FilePath); err != nil {
-		g.reportError(i18n.Format("editorGroup.failedToSave", i18n.Args{"filePath": t.FilePath, "error": err}))
+		g.reportError(i18n.Format("editorGroup.failedToSave", i18n.Args{"filePath": t.FilePath, "error": saveErrorText(err)}))
 		return false
 	}
 	if t.Undo != nil {
@@ -1785,6 +1785,20 @@ func (g *EditorGroupWidget) applySaveSettings(buf *buffer.Buffer, path string) c
 	return ec
 }
 
+// saveErrorText is the user-facing text of a save error, with the buffer's
+// recovery and replacement errors translated.
+func saveErrorText(err error) string {
+	var recovery *buffer.RecoveryError
+	if errors.As(err, &recovery) {
+		return i18n.Format("editorGroup.saveRecoveryKept", i18n.Args{"error": saveErrorText(recovery.Err), "path": recovery.Path})
+	}
+	var replaced *buffer.ReplacedError
+	if errors.As(err, &replaced) {
+		return i18n.Format("editorGroup.saveTargetReplaced", i18n.Args{"path": replaced.Path})
+	}
+	return err.Error()
+}
+
 func (g *EditorGroupWidget) SaveAs(path string) bool {
 	t := g.activeTab()
 	if t == nil || t.Content != nil {
@@ -1798,7 +1812,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	g.applySaveSettings(t.Buf, path)
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(path); err != nil {
-		g.reportError(i18n.Format("editorGroup.savePathFailed", i18n.Args{"path": path, "error": err}))
+		g.reportError(i18n.Format("editorGroup.savePathFailed", i18n.Args{"path": path, "error": saveErrorText(err)}))
 		return false
 	}
 	if t.Undo != nil {

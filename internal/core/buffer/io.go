@@ -216,10 +216,33 @@ func writeInPlace(target, src string) error {
 		err = closeErr
 	}
 	if err != nil {
-		return fmt.Errorf("%w (the previous contents are saved in %s)", err, recovery)
+		return &RecoveryError{Path: recovery, Err: err}
 	}
 	os.Remove(recovery)
 	return nil
+}
+
+// RecoveryError is returned when an in-place save fails after the previous
+// contents of the file were copied to Path.
+type RecoveryError struct {
+	Path string
+	Err  error
+}
+
+func (e *RecoveryError) Error() string {
+	return fmt.Sprintf("%v (the previous contents are saved in %s)", e.Err, e.Path)
+}
+
+func (e *RecoveryError) Unwrap() error { return e.Err }
+
+// ReplacedError is returned when another file replaced Path while it was being
+// saved in place, so nothing was written.
+type ReplacedError struct {
+	Path string
+}
+
+func (e *ReplacedError) Error() string {
+	return fmt.Sprintf("%s was replaced while saving", e.Path)
 }
 
 func copyToTemp(in *os.File, dir, pattern string) (string, error) {
@@ -251,7 +274,7 @@ func checkSameFile(f *os.File, name string) error {
 		return err
 	}
 	if !os.SameFile(open, cur) {
-		return fmt.Errorf("%s was replaced while saving", name)
+		return &ReplacedError{Path: name}
 	}
 	return nil
 }
