@@ -1162,6 +1162,10 @@ func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
 	if !g.otherDocumentView(tab) && g.OnFileClose != nil && tab.DetectedLanguage != "" && !tab.Virtual {
 		g.OnFileClose(tab.FilePath, tab.DetectedLanguage)
 	}
+	g.releaseTabResources(tab)
+}
+
+func (g *EditorGroupWidget) releaseTabResources(tab editorTab) {
 	tab.Highlighter.Close()
 	if tab.autoClosing != nil {
 		tab.autoClosing.syntax.Close()
@@ -1850,7 +1854,7 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	}
 	// The target remains open through the source tab, so don't send OnFileClose.
 	for _, replaceTab := range slices.Backward(replaceTabs) {
-		g.notifyContentTabClose(g.tabs[replaceTab])
+		g.releaseTabResources(g.tabs[replaceTab])
 		g.tabs = append(g.tabs[:replaceTab], g.tabs[replaceTab+1:]...)
 		if replaceTab < g.pinnedCount {
 			g.pinnedCount--

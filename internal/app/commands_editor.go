@@ -270,7 +270,10 @@ func (a *App) saveFileAs(path string, onSaved func()) {
 	}
 	if a.EditorGroup.SaveAs(path) {
 		path, lang := a.editorPathLang()
-		if len(targets) > 0 {
+		a.DocVersionsMu.Lock()
+		_, opened := a.DocVersions[path]
+		a.DocVersionsMu.Unlock()
+		if len(targets) > 0 || opened {
 			a.NotifyLSPChange(path, lang, a.EditorGroup.ActiveBuffer().Lines)
 		}
 		a.afterFileSave(path, lang)
