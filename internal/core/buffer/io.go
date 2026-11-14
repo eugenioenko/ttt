@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const UTF8ByteOrderMark = "\ufeff"
+
 // LoadFile loads a file into the buffer, replacing its contents.
 func (b *Buffer) LoadFile(filename string) error {
 	f, err := os.Open(filename)
@@ -35,6 +37,7 @@ func (b *Buffer) LoadFile(filename string) error {
 // SetText replaces the buffer's contents with text, as loading a file with
 // that content would, and leaves the buffer clean.
 func (b *Buffer) SetText(text string) {
+	text, b.UTF8BOM = strings.CutPrefix(text, UTF8ByteOrderMark)
 	b.LineEnding = detectLineEnding(text)
 	lines := SplitLines(text)
 	if len(lines) == 0 {
@@ -274,6 +277,11 @@ func (b *Buffer) CleanedLines() []string {
 }
 
 func (b *Buffer) writeLines(w io.Writer, lines []string) error {
+	if b.UTF8BOM {
+		if _, err := io.WriteString(w, UTF8ByteOrderMark); err != nil {
+			return err
+		}
+	}
 	eol := effectiveLineEnding(b.LineEnding)
 	for i, line := range lines {
 		if _, err := io.WriteString(w, line); err != nil {
