@@ -35,7 +35,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		a.gitGutterTask.Stop()
 	}
 	gutterOn := a.Settings.Editor.IsGitGutterEnabled()
-	diffOn := a.EditorGroup.IsInlineDiffPath(filePath)
+	diffOn := a.isInlineDiffPath(filePath)
 	if !gutterOn && !diffOn {
 		return
 	}
@@ -147,7 +147,7 @@ func (a *App) ScheduleGitGutter() {
 		a.gitGutterTask.Stop()
 	}
 	path := a.EditorGroup.ActiveFilePath()
-	diffOn := a.EditorGroup.IsInlineDiffPath(path)
+	diffOn := a.isInlineDiffPath(path)
 	if a.EditorGroup.ActiveBuffer() == nil || path == "" || a.EditorGroup.IsActiveVirtual() || (!a.Settings.Editor.IsGitGutterEnabled() && !diffOn) {
 		return
 	}

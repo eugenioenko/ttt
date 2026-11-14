@@ -50,7 +50,7 @@ func (g *EditorGroupWidget) MoveActiveTabTo(target *EditorGroupWidget) {
 		}
 		return
 	}
-	if len(target.tabs) == 1 && target.isUntouchedPlaceholder(target.activeTab()) {
+	if len(target.tabs) == 1 && !target.IsActiveTabPinned() && target.isUntouchedPlaceholder(target.activeTab()) {
 		target.tabs = nil
 		target.pinnedCount = 0
 	}

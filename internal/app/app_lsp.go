@@ -654,7 +654,7 @@ func (a *App) snapshotCodeActionBuffers() map[string]codeActionBufferSnapshot {
 	snapshots := make(map[string]codeActionBufferSnapshot)
 	for _, group := range a.editorGroups() {
 		for _, path := range group.OpenFilePaths() {
-			if buf := group.BufferForPath(path); buf != nil {
+			if buf := a.editorBufferForPath(path); buf != nil {
 				snapshots[path] = codeActionBufferSnapshot{Buffer: buf, Version: buf.Version()}
 			}
 		}

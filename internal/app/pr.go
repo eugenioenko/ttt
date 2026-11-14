@@ -26,19 +26,21 @@ type DiffContentResult struct {
 
 func (a *App) applyDiffContent(result *DiffContentResult) {
 	for _, group := range a.editorGroups() {
-		dv := group.DiffWidgetByTab(result.TabName)
-		if dv == nil || dv != result.Widget {
-			continue
+		for i := range group.TabCount() {
+			dv, ok := group.TabContent(i).(*ui.DiffEditorWidget)
+			if !ok || dv != result.Widget {
+				continue
+			}
+			if result.Err != nil {
+				dv.FailLoading()
+				a.StatusError(i18n.Format("status.failedToFetchFileContent", i18n.Args{"error": result.Err.Error()}))
+			} else {
+				dv.SetOldLines(result.OldLines)
+				dv.SetNewLines(result.NewLines)
+				dv.FinishLoading()
+			}
+			return
 		}
-		if result.Err != nil {
-			dv.FailLoading()
-			a.StatusError(i18n.Format("status.failedToFetchFileContent", i18n.Args{"error": result.Err.Error()}))
-		} else {
-			dv.SetOldLines(result.OldLines)
-			dv.SetNewLines(result.NewLines)
-			dv.FinishLoading()
-		}
-		return
 	}
 }
 

@@ -98,7 +98,10 @@ func (a *App) removeEditorGroup(closing *ui.EditorGroupWidget, merge bool) {
 			break
 		}
 	}
-	a.activateEditorGroup(keep)
+	wasActive := closing == a.EditorGroup
+	if wasActive {
+		a.activateEditorGroup(keep)
+	}
 	closing.OnEmpty = nil
 	if merge {
 		keep.DiscardDuplicateViews(closing)
@@ -113,7 +116,9 @@ func (a *App) removeEditorGroup(closing *ui.EditorGroupWidget, merge bool) {
 	if closing.FoldDelay != nil {
 		a.releaseTask(closing.FoldDelay)
 	}
-	a.FocusEditor()
+	if wasActive {
+		a.FocusEditor()
+	}
 }
 
 func (a *App) focusEditorAfterClick() {
@@ -224,4 +229,13 @@ func (a *App) editorBufferForPath(path string) *buffer.Buffer {
 		}
 	}
 	return nil
+}
+
+func (a *App) isInlineDiffPath(path string) bool {
+	for _, group := range a.editorGroups() {
+		if group.IsInlineDiffPath(path) {
+			return true
+		}
+	}
+	return false
 }

@@ -40,7 +40,7 @@ func (g *EditorGroupWidget) CloneActiveTabTo(target *EditorGroupWidget) bool {
 
 func (g *EditorGroupWidget) OpenSharedFileFrom(source *EditorGroupWidget, path string) bool {
 	for i := range source.tabs {
-		if source.tabs[i].FilePath == path && source.tabs[i].Content == nil {
+		if source.tabs[i].FilePath == path && source.tabs[i].Content == nil && !source.tabs[i].ReadOnly {
 			return source.cloneTabTo(i, g)
 		}
 	}
@@ -284,4 +284,15 @@ func (g *EditorGroupWidget) DiscardDuplicateViews(source *EditorGroupWidget) {
 	}
 	source.active = min(source.active, len(source.tabs)-1)
 	source.syncTabs()
+}
+
+func (g *EditorGroupWidget) otherContentView(tab editorTab) bool {
+	for _, group := range g.relatedGroups() {
+		for _, other := range group.tabs {
+			if other.Content != nil && other.FilePath == tab.FilePath && (group != g || other.ID != tab.ID) {
+				return true
+			}
+		}
+	}
+	return false
 }

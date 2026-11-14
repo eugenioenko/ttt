@@ -181,9 +181,14 @@ func (a *App) ShowChangesFolderContextMenu(dir, _ string, staged bool, sx, sy in
 
 func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 	seen := map[string]bool{}
-	sources := a.EditorGroup.DiffTabSources()
-	for _, s := range sources {
-		seen[s.TabName] = true
+	var sources []ui.DiffSearchSource
+	for _, group := range append([]*ui.EditorGroupWidget{a.EditorGroup}, a.editorGroups()...) {
+		for _, source := range group.DiffTabSources() {
+			if !seen[source.TabName] {
+				seen[source.TabName] = true
+				sources = append(sources, source)
+			}
+		}
 	}
 	for _, g := range a.Changes.Groups() {
 		if !g.IsPR {
@@ -202,7 +207,7 @@ func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 
 func (a *App) NavigateToSearchMatch(path string, line, col int) {
 	if strings.HasSuffix(path, " (diff)") {
-		if !a.EditorGroup.SwitchToTabByPath(path) {
+		if !a.switchToDiffTab(path) {
 			filePath := strings.TrimSuffix(path, " (diff)")
 			for _, g := range a.Changes.Groups() {
 				if !g.IsPR {
@@ -973,4 +978,17 @@ func (app *App) editorTabChanged() {
 		return
 	}
 	app.applySearchHighlights()
+}
+
+func (a *App) switchToDiffTab(path string) bool {
+	if a.EditorGroup.SwitchToTabByPath(path) {
+		return true
+	}
+	for _, group := range a.editorGroups() {
+		if group.DiffWidgetByTab(path) != nil {
+			a.activateEditorGroup(group)
+			return group.SwitchToTabByPath(path)
+		}
+	}
+	return false
 }

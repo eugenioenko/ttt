@@ -1179,7 +1179,7 @@ func (g *EditorGroupWidget) releaseTabResources(tab editorTab) {
 	if closer, ok := tab.Content.(interface{ Close() }); ok {
 		closer.Close()
 	}
-	if g.OnContentTabClose != nil {
+	if g.OnContentTabClose != nil && !g.otherContentView(tab) {
 		g.OnContentTabClose(tab.FilePath)
 	}
 }
