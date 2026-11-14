@@ -4,8 +4,16 @@ import (
 	"context"
 	"errors"
 
+	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/jj"
 	"github.com/eugenioenko/ttt/internal/scm"
 )
+
+// jj comes first so a colocated workspace, which also has a .git directory,
+// is presented through jj.
+func defaultSCMProvider() scm.Provider {
+	return scm.Providers{jj.Provider{}, git.Provider{}}
+}
 
 func (cp *ChangesPanel) repository(dir string) scm.Repository {
 	for _, group := range cp.groups {

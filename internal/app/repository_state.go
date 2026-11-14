@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
@@ -139,7 +138,7 @@ type RepositoryState struct {
 }
 
 func NewRepositoryState(changes *ChangesPanel, dirs []string) *RepositoryState {
-	var provider scm.Provider = git.Provider{}
+	provider := defaultSCMProvider()
 	if changes != nil {
 		provider = changes.provider
 	}

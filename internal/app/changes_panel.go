@@ -174,7 +174,7 @@ func (a *App) persistCommitHistoryHeight() {
 }
 
 func NewChangesPanel(dirs ...string) *ChangesPanel {
-	return NewChangesPanelWithProvider(git.Provider{}, dirs...)
+	return NewChangesPanelWithProvider(defaultSCMProvider(), dirs...)
 }
 
 func NewChangesPanelWithProvider(provider scm.Provider, dirs ...string) *ChangesPanel {
