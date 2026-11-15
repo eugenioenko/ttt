@@ -178,7 +178,7 @@ func (e *EditorLayoutWidget) InvalidatePointerInteraction() bool {
 func (e *EditorLayoutWidget) SetPointerCaptureInvalidated(fn func()) {
 	e.invalidated = fn
 	if e.Split != nil {
-		e.Split.DividerVisible = e.dividerVisibleAt
+		e.Split.DividerHitTest = e.dividerVisibleAt
 	}
 	widgets.SetPointerCaptureInvalidated(e.child(), fn)
 }
@@ -265,6 +265,9 @@ func (e *EditorLayoutWidget) renderDividerGaps(surface Surface) {
 			continue
 		}
 		tabs := group.TabBar.GetRect()
+		if tabs.Y != r.Y {
+			continue
+		}
 		for y := max(tabs.Y, r.Y); y < min(tabs.Y+tabs.H, r.Y+r.H); y++ {
 			tabSides[y-r.Y] |= side
 		}
@@ -290,6 +293,17 @@ func (e *EditorLayoutWidget) dividerSide(group *EditorGroupWidget) uint8 {
 
 func (e *EditorLayoutWidget) dividerVisibleAt(x, y int) bool {
 	if !e.GetRect().Contains(x, y) {
+		return false
+	}
+	if e.Split != nil && e.Split.Position == SplitBottom {
+		for _, group := range e.Second.Groups() {
+			if group.GetRect().Y == e.Second.GetRect().Y && group.GetRect().Contains(x, y) && group.TabBar.baselineHit(x, y) {
+				return true
+			}
+		}
+		return false
+	}
+	if e.Split == nil || x != e.Split.DividerScreenX() {
 		return false
 	}
 	for _, gap := range e.dividerGaps {

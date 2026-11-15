@@ -821,3 +821,25 @@ func (t *TabBarWidget) baselineY() (int, bool) {
 	r := t.GetRect()
 	return r.Y + r.H - 1, r.H > 0
 }
+
+func (t *TabBarWidget) baselineHit(x, y int) bool {
+	r := t.GetRect()
+	baseline, ok := t.baselineY()
+	if !ok || y != baseline || !r.Contains(x, y) {
+		return false
+	}
+	if t.hasTabs() {
+		localX := x - r.X
+		for _, span := range t.tabSpans {
+			if !span.active {
+				continue
+			}
+			start := span.start - t.ScrollOffset + t.renderArrowW
+			end := span.end - t.ScrollOffset + t.renderArrowW
+			if localX >= max(start, t.renderArrowW) && localX < min(end, t.renderInnerRight) {
+				return false
+			}
+		}
+	}
+	return true
+}
