@@ -5,11 +5,19 @@ package config
 import (
 	"io"
 	"os"
+	"sync"
 
 	"golang.org/x/sys/windows"
 )
 
+// MoveFileEx can reject replacement while our readers hold the destination,
+// even with FILE_SHARE_DELETE. Keep those handles out of the rename window.
+var settingsFileMu sync.RWMutex
+
 func readSettingsFileBytes(path string) ([]byte, error) {
+	settingsFileMu.RLock()
+	defer settingsFileMu.RUnlock()
+
 	name, err := settingsLongPathName(path)
 	if err != nil {
 		return nil, err

@@ -1270,6 +1270,10 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 }
 
 func (a *App) ShowSelectDialog(title string, items []widgets.SelectItem, onSelect func(id string), onChange func(id string)) {
+	a.showSelectDialog(title, items, "", onSelect, onChange)
+}
+
+func (a *App) showSelectDialog(title string, items []widgets.SelectItem, selected string, onSelect func(id string), onChange func(id string)) {
 	sel := widgets.NewSelectWidget(widgets.SelectConfig{
 		Items:       items,
 		ShowDivider: true,
@@ -1280,6 +1284,9 @@ func (a *App) ShowSelectDialog(title string, items []widgets.SelectItem, onSelec
 		OnChange:  onChange,
 		OnDismiss: func() { a.DismissDialog() },
 	})
+	if selected != "" {
+		sel.SetSelectedID(selected)
+	}
 
 	dialog := widgets.NewDialogWidget(50)
 	dialog.Title = title
