@@ -3411,12 +3411,11 @@ func (g *EditorGroupWidget) scheduleFolds() {
 	})
 }
 
-const editorTabBarH = 3
-
 // ContentRect is the screen rect below the tab bar that tab content fills.
 func (g *EditorGroupWidget) ContentRect() Rect {
 	r := g.GetRect()
-	return Rect{X: r.X, Y: r.Y + editorTabBarH, W: r.W, H: max(r.H-editorTabBarH, 0)}
+	height := g.TabBar.Height()
+	return Rect{X: r.X, Y: r.Y + height, W: r.W, H: max(r.H-height, 0)}
 }
 
 func (g *EditorGroupWidget) Render(surface Surface) {
@@ -3424,14 +3423,15 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	g.syncTabs()
 	w, h := surface.Size()
 	r := g.GetRect()
+	tabBarH := g.TabBar.Height()
 
-	if w <= 0 || h <= editorTabBarH {
+	if w <= 0 || h <= tabBarH {
 		g.TabBar.InvalidatePointerInteraction()
 		return
 	}
 
-	g.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: editorTabBarH})
-	tabSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: editorTabBarH})
+	g.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: tabBarH})
+	tabSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: tabBarH})
 	split := len(g.relatedGroups()) > 1
 	g.TabBar.ShowGroupFocus = split && g.HighlightActiveBorder
 	g.TabBar.GroupActive = g.focused
@@ -3447,9 +3447,9 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 		}
 	}
 
-	contentH := h - editorTabBarH
+	contentH := h - tabBarH
 	contentRect := g.ContentRect()
-	contentSurface := surface.Sub(Rect{X: 0, Y: editorTabBarH, W: w, H: contentH})
+	contentSurface := surface.Sub(Rect{X: 0, Y: tabBarH, W: w, H: contentH})
 
 	t := g.activeTab()
 	if t == nil {

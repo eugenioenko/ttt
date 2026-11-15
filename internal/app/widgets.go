@@ -339,7 +339,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	splitPanel.ShowLeft = sidebar.Visible
 	splitPanel.RightBorderStartY = 2
 	editorGroup.TabBar.PointerInteractionValid = func() bool {
-		return contentSplit.TopContentHeight() > 3
+		return contentSplit.TopContentHeight() > editorGroup.TabBar.Height()
 	}
 	sidebar.Tabs.Config.PointerInteractionValid = func() bool {
 		r := sidebar.GetRect()
@@ -395,6 +395,8 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	root.OnMouseMove = app.updateAutoHiddenTabs
+	app.wireEditorTabAutoHide(editorGroup)
 	app.setExplorerSearchDebounce(cfg.Settings.Search.Debounce)
 	app.diagPull = NewTask[pulledDiagnostics](app, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
 	app.diagBackground = make(map[string]*asynctask.Task[[]backgroundPull])
@@ -475,6 +477,7 @@ func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarge
 
 func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles []term.Style) *ui.EditorGroupWidget {
 	editorGroup := ui.NewEditorGroupWidget(borders, s.Editor.TabSize, s.Editor.LineNumbers, s.Editor.GutterStyle)
+	editorGroup.TabBar.SetStyle(s.Editor.TabBarStyle)
 	editorGroup.HighlightActiveBorder = s.Appearance.HighlightActiveGroupBorder
 	editorGroup.SetFileIconMode(s.Appearance.Icons)
 	editorGroup.InsertSpaces = s.Editor.InsertSpaces

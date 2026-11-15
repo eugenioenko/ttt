@@ -23,6 +23,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	withTempConfigDir(t)
 
 	s := DefaultSettings()
+	s.Editor.TabBarStyle = "auto-hide"
 	s.Editor.TabSize = 7
 	s.Editor.RestoreTabs = true
 	s.Editor.WordWrap = true
@@ -47,6 +48,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	got := LoadSettings()
 	if !got.Editor.RestoreTabs {
 		t.Error("editor.restoreTabs did not round-trip")
+	}
+	if got.Editor.TabBarStyle != "auto-hide" {
+		t.Errorf("tabBarStyle = %q, want auto-hide", got.Editor.TabBarStyle)
 	}
 	if got.Editor.TabSize != 7 {
 		t.Errorf("tabSize = %d, want 7", got.Editor.TabSize)

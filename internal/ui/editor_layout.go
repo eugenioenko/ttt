@@ -37,7 +37,7 @@ func (e *EditorLayoutWidget) Focusable() bool          { return false }
 
 func (e *EditorLayoutWidget) TopBorder() (int, bool) {
 	if e.Group != nil {
-		return 2, true
+		return e.Group.TabBar.topBorder()
 	}
 	return e.First.TopBorder()
 }

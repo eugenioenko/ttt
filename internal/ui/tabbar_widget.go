@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -56,6 +57,13 @@ type TabDragAutoScrollTick struct {
 
 type TabBarWidget struct {
 	BaseWidget
+	Style                     string
+	autoHideExpanded          bool
+	autoHideWantExpanded      bool
+	AutoShowTask              *asynctask.Task[bool]
+	AutoHideTask              *asynctask.Task[bool]
+	AutoHideBlocked           func() bool
+	OnAutoHideChange          func()
 	ShowGroupFocus            bool
 	GroupActive               bool
 	Icons                     string
@@ -201,7 +209,7 @@ func drawTabLabel(surface Surface, x, innerLeft, innerRight int, label tabLabelL
 func (t *TabBarWidget) Render(surface Surface) {
 	t.validateGestureSource()
 	w, h := surface.Size()
-	if w <= 0 || h < 3 {
+	if w <= 0 || h < t.Height() {
 		t.ClearRenderedGeometry()
 		return
 	}
@@ -213,6 +221,14 @@ func (t *TabBarWidget) Render(surface Surface) {
 	bs := term.StyleBorder
 	if t.ShowGroupFocus && t.GroupActive {
 		bs = term.StyleBorderActive
+	}
+
+	if !t.hasTabs() {
+		t.ClearRenderedGeometry()
+		for x := 0; x < w; x++ {
+			surface.SetCell(x, 0, term.Cell{Ch: b.Horizontal, Style: bs})
+		}
+		return
 	}
 
 	// Compute spans: active tab needs 2 extra cols for │ │ side borders
@@ -357,13 +373,16 @@ func (t *TabBarWidget) Render(surface Surface) {
 	}
 
 	if x := t.dropIndicatorX(); x >= innerLeft && x < innerRight {
-		for y := 0; y < 3; y++ {
+		for y := 0; y < t.Height(); y++ {
 			surface.SetCell(x, y, term.Cell{Ch: '│', Style: term.StyleBorderActive})
 		}
 	}
 }
 
 func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
+	if !t.hasTabs() {
+		return EventIgnored
+	}
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
 		return EventIgnored
@@ -617,10 +636,14 @@ func (t *TabBarWidget) ClearRenderedGeometry() {
 	t.hasOverflowLeft = false
 	t.hasOverflowRight = false
 	t.totalTabWidth = 0
+	if t.MoreButton != nil {
+		t.MoreButton.SetRect(Rect{})
+	}
 	t.CancelPointerCapture()
 }
 
 func (t *TabBarWidget) InvalidatePointerInteraction() bool {
+	t.cancelAutoHide()
 	active := t.drag.Active()
 	t.ClearRenderedGeometry()
 	return active
