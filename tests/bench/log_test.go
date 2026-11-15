@@ -146,7 +146,7 @@ func BenchmarkLog(b *testing.B) {
 	if err := os.WriteFile(filepath.Join(logConfigDir, "settings.json"), []byte(`{"editor":{"largeFiles":{"logModeMinMB":0}}}`), 0o644); err != nil {
 		b.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(wrapConfigDir, "settings.json"), []byte(`{"editor":{"wordWrap":true,"largeFiles":{"logModeMinMB":false,"wordWrapMaxMB":0}}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(wrapConfigDir, "settings.json"), []byte(`{"editor":{"wordWrap":true,"largeFiles":{"logModeMinMB":false}}}`), 0o644); err != nil {
 		b.Fatal(err)
 	}
 	openScript := "wait-for " + logMarker + "; quit"
