@@ -64,6 +64,20 @@ undo, folds, multicursors, and diff algorithms. Domain code must not start
 processes, access terminal state, render widgets, or coordinate application
 lifecycle.
 
+`internal/filewrite` is a shared filesystem primitive used by buffer and config.
+It owns temporary-file staging, sync, close, replacement, and cleanup, and imports
+only the standard library. Callers own serialization and streaming, symlink
+resolution, metadata, retries, and recovery policy; buffer does not depend on config.
+Settings retain replacement-only saves, including Windows DACL preservation,
+replacement-friendly reads, and bounded sharing-error retries. Their Windows
+replacement keeps the existing extended-path `MoveFileEx` wrapper: a native
+concurrent-reader run exhausted retries with `os.Rename`, so equivalence has not
+been established. Document saves
+retain Unix owner/group preservation and their in-place recovery fallback.
+On Windows, document saves still use ordinary reads and a single replacement
+attempt, without settings' DACL preservation or sharing guarantees. Consolidation
+does not add those guarantees or prevent concurrent read/modify/write lost updates.
+
 ### Services
 
 Packages: `internal/scm`, `internal/git`, `internal/jj`, `internal/github`, `internal/jsonrpc`,
