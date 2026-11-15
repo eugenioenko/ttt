@@ -47,7 +47,7 @@ func TestStagedReplacement(t *testing.T) {
 					staged.Discard()
 				} else {
 					err = staged.Commit(func(from, to string) error {
-						if _, err := staged.File.Stat(); !errors.Is(err, os.ErrClosed) {
+						if err := staged.File.Close(); !errors.Is(err, os.ErrClosed) {
 							t.Fatalf("file still open at replacement: %v", err)
 						}
 						if failure == "replace" {
@@ -71,7 +71,7 @@ func TestStagedReplacement(t *testing.T) {
 			if got, err := os.ReadFile(target); err != nil || string(got) != want {
 				t.Fatalf("destination = %q, %v; want %q", got, err, want)
 			}
-			if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
+			if err := file.Close(); !errors.Is(err, os.ErrClosed) {
 				t.Fatalf("temporary descriptor leaked: %v", err)
 			}
 			entries, err := os.ReadDir(dir)

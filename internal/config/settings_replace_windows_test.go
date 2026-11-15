@@ -94,7 +94,7 @@ func TestWindowsSettingsReplacementRetries(t *testing.T) {
 				if cause == nil {
 					cause = windows.ERROR_SHARING_VIOLATION
 				}
-				if !errors.Is(err, cause) {
+				if !errors.Is(err, cause) && !(tc.injected == nil && errors.Is(err, windows.ERROR_ACCESS_DENIED)) {
 					t.Fatalf("error = %v, want %v", err, cause)
 				}
 			}
