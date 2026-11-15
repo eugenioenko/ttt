@@ -119,6 +119,23 @@ class PublishReportsTest(unittest.TestCase):
                 self.run.update(event=event, conclusion=conclusion)
                 self.assertEqual(self.publish(), [])
 
+    def test_oversized_benchmark_does_not_block_valid_size_report(self):
+        archives = []
+        for name, marker in publisher.REPORTS:
+            data = io.BytesIO()
+            body = marker + "\n" + ("x" * publisher.MAX_REPORT_BYTES if name == "editor-bench" else "size results")
+            with zipfile.ZipFile(data, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr(f"{name}.md", body)
+            archives.append(data.getvalue())
+        with patch.object(publisher, "api", side_effect=self.api), \
+             patch.object(publisher.subprocess, "check_output", side_effect=archives), \
+             patch.object(publisher.subprocess, "run") as write, \
+             patch("sys.stdout", new_callable=io.StringIO) as output:
+            publisher.publish("eugenioenko/ttt", self.run)
+            write.assert_called_once()
+            self.assertIn("size results", json.loads(write.call_args.kwargs["input"])["body"])
+            self.assertIn("::warning::Rejected invalid editor-bench artifact", output.getvalue())
+
     def test_archive_is_read_as_text_without_extraction(self):
         marker = publisher.REPORTS[0][1]
         body = marker + "\n$(touch /tmp/should-not-run) `uname`"
