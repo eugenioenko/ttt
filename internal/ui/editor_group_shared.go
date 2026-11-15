@@ -75,7 +75,7 @@ func (g *EditorGroupWidget) cloneTabTo(index int, target *EditorGroupWidget) boo
 	target.rebuildHighlighter(&clone)
 	clone.rememberView()
 	placeholder := target.activeTab()
-	if len(target.tabs) == 1 && target.isUntouchedPlaceholder(placeholder) && placeholder.Buf.Version() == 0 {
+	if len(target.tabs) == 1 && !target.IsActiveTabPinned() && target.isUntouchedPlaceholder(placeholder) && placeholder.Buf.Version() == 0 {
 		target.notifyContentTabClose(*target.activeTab())
 		target.tabs = nil
 		target.pinnedCount = 0

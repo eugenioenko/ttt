@@ -33,11 +33,15 @@ func TestCodeActionSnapshotUsesSelectedBufferAcrossGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	working := a.EditorGroup
+	workingBuffer := working.ActiveBuffer()
 	a.SplitEditor()
 	a.EditorGroup.OpenFileReadOnly(path, "Snapshot")
+	if a.EditorGroup.ActiveBuffer() == workingBuffer {
+		t.Fatal("read-only peer must have a separate snapshot buffer")
+	}
 	a.Root.SetFocus(working)
-	if got := a.snapshotCodeActionBuffers()[path].Buffer; got != a.editorBufferForPath(path) {
-		t.Fatal("snapshot selected a different buffer than code-action validation")
+	if got := a.snapshotCodeActionBuffers()[path].Buffer; got != workingBuffer {
+		t.Fatal("snapshot did not retain the independently captured working buffer")
 	}
 }
 
