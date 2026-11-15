@@ -44,7 +44,7 @@ func (a *App) restoreEditorSessionLayout(saved *config.EditorLayoutState) {
 			next := a.newEditorGroupLike(node.Group)
 			a.EditorSplit.SplitGroup(node.Group, next, position)
 			node.Split.BottomRatio = state.Ratio
-			if state.Ratio < 0.05 || state.Ratio > 0.95 {
+			if state.Ratio <= 0 || state.Ratio >= 1 {
 				node.Split.BottomRatio = 0.5
 			}
 			restore(node.First, state.First)

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
@@ -121,5 +122,33 @@ func TestEditorSessionRestoresEmptySplitsWithoutUntitledContents(t *testing.T) {
 				t.Fatal("restored empty groups shared an untitled buffer or name")
 			}
 		}
+	}
+}
+
+func TestEditorSessionRestoresExtremeDividerRatios(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	for _, tc := range []struct {
+		name   string
+		ratio  float64
+		height int
+	}{{"small lower group", 0.0375, 6}, {"small upper group", 0.975, 153}} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			a := sessionTestApp(t, dir, true)
+			a.SplitEditorDown()
+			a.EditorSplit.Split.BottomRatio = tc.ratio
+			a.forceQuit()
+			restored := sessionTestApp(t, dir, true)
+			restored.Root.SetSize(120, 163)
+			var renderer render.Renderer
+			restored.Root.Render(renderer.NextFrame(120, 163))
+			if got := restored.EditorSplit.Split.BottomRatio; got != tc.ratio {
+				t.Fatalf("restored ratio %v, want %v", got, tc.ratio)
+			}
+			if got := restored.editorGroups()[1].GetRect().H; got != tc.height {
+				t.Fatalf("lower group height %d, want %d", got, tc.height)
+			}
+		})
 	}
 }
