@@ -13,7 +13,7 @@ Sessions are kept outside the project under the config directory's `sessions/` f
 
 ## Split Editors
 
-Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to four editor groups, including a grid. Each new group starts with an independent untitled document, numbered across the workspace. Opening a file replaces that untouched placeholder; once edited, the untitled document stays in its own tab.
+Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to 16 editor groups, including a grid. Each new group starts with an independent untitled document, numbered across the workspace. Opening a file replaces that untouched placeholder; once edited, the untitled document stays in its own tab.
 
 Views of the same document share text, undo history, and save state, with independent cursors, selections, and scrolling. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
 

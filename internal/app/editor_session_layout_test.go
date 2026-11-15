@@ -103,14 +103,14 @@ func TestEditorSessionRestoresEmptySplitsWithoutUntitledContents(t *testing.T) {
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
 	dir := t.TempDir()
 	a := sessionTestApp(t, dir, true)
-	a.SplitEditor()
-	a.SplitEditorDown()
-	a.SplitEditorDown()
+	for i := 1; i < config.MaxEditorGroups; i++ {
+		a.SplitEditorDown()
+	}
 	a.EditorGroup.NewFileFromText("unsaved text")
 	a.forceQuit()
 	restored := sessionTestApp(t, dir, true)
 	groups := restored.editorGroups()
-	if len(groups) != 4 {
+	if len(groups) != config.MaxEditorGroups {
 		t.Fatal("empty split layout was discarded")
 	}
 	for i, group := range groups {
