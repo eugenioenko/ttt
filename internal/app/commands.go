@@ -11,6 +11,7 @@ import (
 
 func RegisterCommands(app *App) {
 	registerViewCommands(app)
+	registerEditorGroupCommands(app)
 	registerEditorCommands(app)
 	registerSearchCommands(app)
 	registerPaletteCommands(app)
@@ -119,6 +120,7 @@ func FormatKeyBinding(key string, modifiers tcell.ModMask) string {
 
 func RegisterEscapeDismissers(app *App) {
 	app.Root.EscapeDismissers = []func() bool{
+		app.cancelEditorTabDrag,
 		func() bool {
 			// Escape also cancels a suggestion still on its way, so it only
 			// consumes the key when a popup was showing.

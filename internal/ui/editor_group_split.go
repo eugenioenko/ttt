@@ -45,6 +45,9 @@ func (g *EditorGroupWidget) MoveActiveTabTo(target *EditorGroupWidget) {
 
 	if existing >= 0 {
 		target.SwitchTab(existing)
+		if pinned && !target.IsActiveTabPinned() {
+			target.TogglePinTab()
+		}
 		if emptied {
 			g.notifyEmpty()
 		}
@@ -59,6 +62,7 @@ func (g *EditorGroupWidget) MoveActiveTabTo(target *EditorGroupWidget) {
 		index = target.pinnedCount
 		target.pinnedCount++
 	}
+	tab.ID = ""
 	target.tabs = slices.Insert(target.tabs, index, tab)
 	target.active = index
 	target.syncTabs()

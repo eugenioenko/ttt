@@ -1,4 +1,8 @@
 {
+  "menu.openToSide": "Open to the Side",
+  "command.explorerOpenToSide": "Split: Open Explorer File to the Side",
+  "command.moveEditorToOtherGroup": "Split: Move to Other Group",
+  "command.openEditorToSide": "Split: Open to the Side",
   "settings.highlightActiveGroupBorder": "Highlight active split",
   "menu.closeSplit": "Close Split",
   "menu.splitDown": "Split Down",

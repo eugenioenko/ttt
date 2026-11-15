@@ -58,3 +58,29 @@ func TestContentViewsReleaseEachWidgetAndNotifyLastClose(t *testing.T) {
 		t.Fatal("last view did not release its widget and document exactly once")
 	}
 }
+
+func TestMovedTabsKeepStateAndReceiveUniqueDestinationIDs(t *testing.T) {
+	source := NewEditorGroupWidget(nil, 4, true, "compact")
+	target := NewEditorGroupWidget(nil, 4, true, "compact")
+	source.NewFileFromText("source")
+	target.NewFileFromText("target")
+	source.TogglePinTab()
+	buf, stack, cur := source.ActiveBuffer(), source.Editor.Undo, source.Editor.Cursor
+	source.MoveActiveTabTo(target)
+	if target.ActiveBuffer() != buf || target.Editor.Undo != stack || target.Editor.Cursor != cur || !target.IsActiveTabPinned() {
+		t.Fatal("moving the tab lost its document, view or pin")
+	}
+	if target.TabCount() != 2 || target.tabs[0].ID == target.tabs[1].ID {
+		t.Fatal("moved tabs have conflicting destination identities")
+	}
+}
+
+func TestMovingPinnedViewPinsExistingDestinationView(t *testing.T) {
+	source, target := sharedTestGroups(t)
+	source.TogglePinTab()
+	buf := target.ActiveBuffer()
+	source.MoveActiveTabTo(target)
+	if target.TabCount() != 1 || target.ActiveBuffer() != buf || !target.IsActiveTabPinned() {
+		t.Fatal("deduplicating a moved view lost its document or pin")
+	}
+}
