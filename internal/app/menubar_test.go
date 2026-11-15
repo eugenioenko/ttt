@@ -71,7 +71,7 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 
 func TestOptionsMenuGroupsControls(t *testing.T) {
 	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
-	wantLabels := []string{"Editor", "Markdown", "Code Assist", "Appearance", "Diff Views", "Git Files", "", "Theme", "Settings"}
+	wantLabels := []string{"Appearance", "Editor", "Code Assist", "Diff Views", "Git Files", "Markdown", "", "Settings", "Theme"}
 	var labels []string
 	for _, item := range items {
 		labels = append(labels, item.Label)
@@ -84,14 +84,14 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 			t.Errorf("category should only open a submenu: %+v", item)
 		}
 	}
-	if !items[6].IsSep || items[7].Command != "theme.switch" || items[8].Command != "settings.openUI" {
-		t.Fatal("Theme and Settings should follow the final separator")
+	if !items[6].IsSep || items[7].Command != "settings.openUI" || items[8].Command != "theme.switch" {
+		t.Fatal("Settings and Theme should follow the final separator")
 	}
-	wantCommands := [][]string{
-		{"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
-		{"options.markdownWordWrap", "options.markdownWrapWidth"},
-		{"options.toggleLSP", "options.toggleLSPHover"},
-		{"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.tabBarStyle", "options.borderStyle"},
+	wantCommands := map[int][]string{
+		0: {"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.tabBarStyle", "options.borderStyle"},
+		2: {"options.toggleLSP", "options.toggleLSPHover"},
+		1: {"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
+		5: {"options.markdownWordWrap", "options.markdownWrapWidth"},
 	}
 	for i, want := range wantCommands {
 		var commands []string

@@ -251,6 +251,7 @@ func TestOptionsMenuDynamicChecked(t *testing.T) {
 	}
 
 	h.exec("menu.options")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
 	h.pressKey(tcell.KeyRight, tcell.ModNone)
 	h.assertContains("Line Numbers")
 	h.pressKey(tcell.KeyDown, tcell.ModNone)

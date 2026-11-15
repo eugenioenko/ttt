@@ -477,6 +477,15 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	fontIconsChecked := menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)
 
 	items := []ui.ContextMenuItem{
+		{Label: i18n.Text("menu.appearance"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
+			{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
+			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
+			{Label: i18n.Text("menu.tabBarStyle"), Command: "options.tabBarStyle"},
+			{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
+		}},
 		{Label: i18n.Text("menu.editor"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.wordWrap"), Command: "options.toggleWordWrap", Checked: wordWrapChecked},
 			{Label: i18n.Text("menu.lineNumbers"), Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
@@ -492,28 +501,19 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("menu.gitGutter"), Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 			{Label: i18n.Text("menu.scrollbarGitMarks"), Command: "options.toggleScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.IsScrollbarGitMarksEnabled())},
 		}},
-		{Label: i18n.Text("settings.markdown"), Submenu: []ui.ContextMenuItem{
-			{Label: i18n.Text("markdown.wordWrapMenu"), Command: "options.markdownWordWrap"},
-			{Label: i18n.Text("markdown.wrapWidthMenu"), Command: "options.markdownWrapWidth"},
-		}},
 		{Label: i18n.Text("menu.codeAssist"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
 			{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
 		}},
-		{Label: i18n.Text("menu.appearance"), Submenu: []ui.ContextMenuItem{
-			{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
-			{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
-			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
-			ui.MenuSep(),
-			{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
-			{Label: i18n.Text("menu.tabBarStyle"), Command: "options.tabBarStyle"},
-			{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
-		}},
 		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
 		{Label: i18n.Text("menu.gitFiles"), Submenu: a.BuildGitFileOptions()},
+		{Label: i18n.Text("settings.markdown"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("markdown.wordWrapMenu"), Command: "options.markdownWordWrap"},
+			{Label: i18n.Text("markdown.wrapWidthMenu"), Command: "options.markdownWrapWidth"},
+		}},
 		ui.MenuSep(),
-		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
+		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 	}
 	return items
 }
