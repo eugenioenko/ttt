@@ -114,10 +114,35 @@ class PublishReportsTest(unittest.TestCase):
         self.assertEqual(len(self.publish()), 1)
 
     def test_non_pr_and_unfinished_runs_are_ignored(self):
-        for event, conclusion in (("push", "success"), ("pull_request", "action_required"), ("pull_request", "cancelled")):
+        for event, conclusion in (("push", "success"), ("pull_request", "action_required")):
             with self.subTest(event=event, conclusion=conclusion):
                 self.run.update(event=event, conclusion=conclusion)
                 self.assertEqual(self.publish(), [])
+
+    def test_missing_reports_finish_current_placeholders(self):
+        self.artifacts = []
+        for conclusion in ("failure", "cancelled", "success"):
+            with self.subTest(conclusion=conclusion):
+                self.run["conclusion"] = conclusion
+                self.comments = [
+                    {"id": index, "user": {"login": "github-actions[bot]"},
+                     "body": f"{marker}\n<!-- ttt-report-pending:{self.run['head_sha']} -->\nWaiting"}
+                    for index, (_, marker) in enumerate(publisher.REPORTS, 10)
+                ]
+                calls = self.publish()
+                self.assertEqual(len(calls), 2)
+                for call in calls:
+                    self.assertIn("PATCH", call.args[0])
+                    body = json.loads(call.kwargs["input"])["body"]
+                    self.assertIn("CI finished without a usable report", body)
+                    self.assertIn(f"<!-- ttt-report-complete:{self.run['head_sha']} -->", body)
+                    self.assertNotIn("ttt-report-pending", body)
+
+    def test_missing_reports_leave_other_commits_placeholders_alone(self):
+        self.artifacts = []
+        self.comments = [{"id": 10, "user": {"login": "github-actions[bot]"},
+                          "body": publisher.REPORTS[0][1] + "\n<!-- ttt-report-pending:old-head -->"}]
+        self.assertEqual(self.publish(), [])
 
     def test_invalid_benchmark_does_not_block_valid_size_report(self):
         for invalid in ("oversized", "corrupt", "unsupported compression"):
