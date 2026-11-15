@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 	"path/filepath"
@@ -183,5 +184,62 @@ func TestEditorSplitDragCancellationClearsDestination(t *testing.T) {
 	h.pressKey(tcell.KeyEscape, 0)
 	if right.DropTarget || h.app.Root.PointerCaptureActive() || left.TabCount() != 1 || right.TabCount() != 1 {
 		t.Fatal("cancellation left a highlight, capture or moved tab")
+	}
+}
+
+type rawEscapeContent struct {
+	ui.BaseWidget
+	escapes int
+}
+
+func (w *rawEscapeContent) Render(ui.Surface)  {}
+func (w *rawEscapeContent) WantsRawKeys() bool { return true }
+func (w *rawEscapeContent) Focusable() bool    { return true }
+func (w *rawEscapeContent) HandleEvent(ev tcell.Event) ui.EventResult {
+	if key, ok := ev.(*tcell.EventKey); ok && key.Key() == tcell.KeyEscape {
+		w.escapes++
+		return ui.EventConsumed
+	}
+	return ui.EventIgnored
+}
+
+func TestRawKeyTabDragEscapeCancelsWithoutForwarding(t *testing.T) {
+	for _, forward := range []bool{false, true} {
+		t.Run(map[bool]string{false: "reserved shortcuts", true: "forward shortcuts"}[forward], func(t *testing.T) {
+			h := newTestHarness(t, 140, 32)
+			defer h.stop()
+			left := h.app.EditorGroup
+			raw := &rawEscapeContent{}
+			left.OpenPluginTab("raw", "Terminal", raw)
+			left.CloseOtherTabs()
+			h.exec("editor.split")
+			right := h.app.EditorGroup
+			h.app.Root.SetFocus(left)
+			h.app.Root.SetForwardShortcuts(forward)
+			h.pressKey(tcell.KeyEscape, 0)
+			if raw.escapes != 1 {
+				t.Fatal("normal Escape did not reach raw content")
+			}
+			src, dest := left.TabBar.GetRect(), right.Editor.GetRect()
+			h.app.Root.HandleEvent(tcell.NewEventMouse(src.X+4, src.Y+1, tcell.Button1, 0))
+			h.app.Root.HandleEvent(tcell.NewEventMouse(dest.X+4, dest.Y+1, tcell.Button1, 0))
+			h.redraw()
+			if !right.DropTarget || !h.app.Root.PointerCaptureActive() {
+				t.Fatal("raw tab drag did not start")
+			}
+			h.pressKey(tcell.KeyEscape, 0)
+			if right.DropTarget || h.app.Root.PointerCaptureActive() || raw.escapes != 1 {
+				t.Fatal("Escape was forwarded instead of cancelling the raw tab drag")
+			}
+			h.app.Root.HandleEvent(tcell.NewEventMouse(dest.X+4, dest.Y+1, tcell.ButtonNone, 0))
+			if left.TabCount() != 1 || left.TabContent(0) != raw || right.ActiveBuffer() == nil {
+				t.Fatal("mouse release transferred the cancelled tab")
+			}
+			h.app.Root.SetFocus(left)
+			h.pressKey(tcell.KeyEscape, 0)
+			if raw.escapes != 2 {
+				t.Fatal("normal Escape was swallowed after cancellation")
+			}
+		})
 	}
 }

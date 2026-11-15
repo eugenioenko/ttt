@@ -117,13 +117,3 @@ func registerEditorGroupCommands(a *App) {
 	a.Reg.Register(command.Command{ID: "editor.moveToOtherGroup", Title: i18n.Text("command.moveEditorToOtherGroup"), Handler: a.MoveEditorToOtherGroup})
 	a.Reg.Register(command.Command{ID: "explorer.openToSide", Title: i18n.Text("command.explorerOpenToSide"), Handler: a.ExplorerOpenToSide})
 }
-
-func (a *App) cancelEditorTabDrag() bool {
-	for _, group := range a.editorGroups() {
-		if group.TabBar.PointerGestureActive() {
-			a.Root.CancelPointerCapture()
-			return true
-		}
-	}
-	return false
-}
