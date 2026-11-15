@@ -119,22 +119,31 @@ class PublishReportsTest(unittest.TestCase):
                 self.run.update(event=event, conclusion=conclusion)
                 self.assertEqual(self.publish(), [])
 
-    def test_oversized_benchmark_does_not_block_valid_size_report(self):
-        archives = []
-        for name, marker in publisher.REPORTS:
-            data = io.BytesIO()
-            body = marker + "\n" + ("x" * publisher.MAX_REPORT_BYTES if name == "editor-bench" else "size results")
-            with zipfile.ZipFile(data, "w", zipfile.ZIP_DEFLATED) as archive:
-                archive.writestr(f"{name}.md", body)
-            archives.append(data.getvalue())
-        with patch.object(publisher, "api", side_effect=self.api), \
-             patch.object(publisher.subprocess, "check_output", side_effect=archives), \
-             patch.object(publisher.subprocess, "run") as write, \
-             patch("sys.stdout", new_callable=io.StringIO) as output:
-            publisher.publish("eugenioenko/ttt", self.run)
-            write.assert_called_once()
-            self.assertIn("size results", json.loads(write.call_args.kwargs["input"])["body"])
-            self.assertIn("::warning::Rejected invalid editor-bench artifact", output.getvalue())
+    def test_invalid_benchmark_does_not_block_valid_size_report(self):
+        for invalid in ("oversized", "corrupt", "unsupported compression"):
+            with self.subTest(invalid=invalid):
+                archives = []
+                for name, marker in publisher.REPORTS:
+                    data = io.BytesIO()
+                    is_benchmark = name == "editor-bench"
+                    body = marker + "\n" + ("x" * publisher.MAX_REPORT_BYTES if is_benchmark and invalid == "oversized" else "results")
+                    compression = zipfile.ZIP_BZIP2 if is_benchmark and invalid == "unsupported compression" else zipfile.ZIP_DEFLATED
+                    with zipfile.ZipFile(data, "w", compression) as archive:
+                        archive.writestr(f"{name}.md", body)
+                    payload = bytearray(data.getvalue())
+                    if is_benchmark and invalid == "corrupt":
+                        # The first DEFLATE block uses the reserved block type.
+                        payload[30 + len(f"{name}.md")] |= 0x06
+                    archives.append(bytes(payload))
+                with patch.object(publisher, "api", side_effect=self.api), \
+                     patch.object(publisher.subprocess, "check_output", side_effect=archives), \
+                     patch.object(publisher.subprocess, "run") as write, \
+                     patch("sys.stdout", new_callable=io.StringIO) as output:
+                    publisher.publish("eugenioenko/ttt", self.run)
+                    write.assert_called_once()
+                    body = json.loads(write.call_args.kwargs["input"])["body"]
+                    self.assertTrue(body.startswith(publisher.REPORTS[1][1] + "\nresults"))
+                    self.assertIn("::warning::Rejected invalid editor-bench artifact", output.getvalue())
 
     def test_archive_is_read_as_text_without_extraction(self):
         marker = publisher.REPORTS[0][1]
