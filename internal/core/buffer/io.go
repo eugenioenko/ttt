@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/eugenioenko/ttt/internal/filewrite"
 )
 
 const UTF8ByteOrderMark = "\ufeff"
@@ -121,53 +123,45 @@ func (b *Buffer) SaveFile(filename string) error {
 		target = resolved
 	}
 
-	dir := filepath.Dir(target)
 	mode := os.FileMode(0644)
 	orig, statErr := os.Stat(target)
 	if statErr == nil {
 		mode = orig.Mode().Perm()
 	}
 
-	tmp, err := os.CreateTemp(dir, ".ttt-*.tmp")
+	staged, err := filewrite.Stage(target, 0o600, func(tmp *os.File) error {
+		w := bufio.NewWriter(tmp)
+		if err := b.writeLines(w, lines); err != nil {
+			return err
+		}
+		return w.Flush()
+	})
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
-	// Best-effort cleanup if we bail out before the rename succeeds.
-	defer os.Remove(tmpName)
-
-	w := bufio.NewWriter(tmp)
-	if err := b.writeLines(w, lines); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := w.Flush(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
+	defer staged.Discard()
+	tmp := staged.File
 	// Once keepOwner hands the file to the target's owner, they can replace
-	// tmpName, so metadata changes go through the descriptor, never the path.
+	// the temporary path, so metadata changes go through the descriptor, never the path.
 	// The mode is applied only after the group is right, so the temp file never
 	// lets the saver's own group read it.
 	inPlace := statErr == nil && keepOwner(tmp, orig) != nil
 	if !inPlace {
 		if err := tmp.Chmod(mode); err != nil {
-			tmp.Close()
 			return err
 		}
 	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
+	replace := os.Rename
 	if inPlace {
-		if err := writeInPlace(target, tmpName); err != nil {
-			return err
+		replace = func(from, to string) error {
+			if err := writeInPlace(to, from); err != nil {
+				return err
+			}
+			_ = os.Remove(from)
+			return nil
 		}
-	} else if err := os.Rename(tmpName, target); err != nil {
+	}
+	if err := staged.Commit(replace); err != nil {
 		return err
 	}
 
