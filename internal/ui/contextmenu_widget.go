@@ -232,7 +232,7 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 	if childX+childW > sw {
 		childX = x - childW + 1
 	}
-	childY := y + 1 + c.submenuIndex
+	childY := y + c.submenuIndex
 	if childY+childH > sh {
 		childY = sh - childH
 	}
