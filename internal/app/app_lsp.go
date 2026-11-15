@@ -640,7 +640,7 @@ func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdi
 	for _, batch := range batches {
 		batchPath := URIToPath(batch.URI)
 		captured, wasOpen := openBuffers[batchPath]
-		current := a.EditorGroup.BufferForPath(batchPath)
+		current := a.editorBufferForPath(batchPath)
 		if (!wasOpen && current != nil) ||
 			(wasOpen && (current != captured.Buffer || current == nil || current.Version() != captured.Version)) {
 			return false, false
@@ -652,9 +652,11 @@ func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdi
 
 func (a *App) snapshotCodeActionBuffers() map[string]codeActionBufferSnapshot {
 	snapshots := make(map[string]codeActionBufferSnapshot)
-	for _, path := range a.EditorGroup.OpenFilePaths() {
-		if buf := a.EditorGroup.BufferForPath(path); buf != nil {
-			snapshots[path] = codeActionBufferSnapshot{Buffer: buf, Version: buf.Version()}
+	for _, group := range a.editorGroups() {
+		for _, path := range group.OpenFilePaths() {
+			if buf := a.editorBufferForPath(path); buf != nil {
+				snapshots[path] = codeActionBufferSnapshot{Buffer: buf, Version: buf.Version()}
+			}
 		}
 	}
 	return snapshots

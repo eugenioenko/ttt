@@ -109,8 +109,9 @@ func TestClonedDocumentDoesNotInheritPlaceholderPin(t *testing.T) {
 	source := newRenameGroup(t, filepath.Join(t.TempDir(), "file.txt"), "text")
 	target := NewEditorGroupWidget(nil, 4, true, "relative")
 	target.TogglePinTab()
-	if !source.CloneActiveTabTo(target) || target.TabCount() != 1 || target.IsActiveTabPinned() {
-		t.Fatal("cloned document inherited the replaced placeholder's pin")
+	placeholder := target.ActiveBuffer()
+	if !source.CloneActiveTabTo(target) || target.TabCount() != 2 || target.IsActiveTabPinned() || target.pinnedCount != 1 || target.tabs[0].Buf != placeholder {
+		t.Fatal("shared open discarded the pinned placeholder or inherited its pin")
 	}
 }
 

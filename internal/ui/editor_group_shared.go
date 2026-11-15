@@ -40,7 +40,7 @@ func (g *EditorGroupWidget) CloneActiveTabTo(target *EditorGroupWidget) bool {
 
 func (g *EditorGroupWidget) OpenSharedFileFrom(source *EditorGroupWidget, path string) bool {
 	for i := range source.tabs {
-		if source.tabs[i].FilePath == path && source.tabs[i].Content == nil {
+		if source.tabs[i].FilePath == path && source.tabs[i].Content == nil && !source.tabs[i].ReadOnly {
 			return source.cloneTabTo(i, g)
 		}
 	}
@@ -75,7 +75,7 @@ func (g *EditorGroupWidget) cloneTabTo(index int, target *EditorGroupWidget) boo
 	target.rebuildHighlighter(&clone)
 	clone.rememberView()
 	placeholder := target.activeTab()
-	if len(target.tabs) == 1 && target.isUntouchedPlaceholder(placeholder) && placeholder.Buf.Version() == 0 {
+	if len(target.tabs) == 1 && !target.IsActiveTabPinned() && target.isUntouchedPlaceholder(placeholder) && placeholder.Buf.Version() == 0 {
 		target.notifyContentTabClose(*target.activeTab())
 		target.tabs = nil
 		target.pinnedCount = 0
@@ -264,4 +264,35 @@ func (g *EditorGroupWidget) deduplicateDocumentViews() {
 			g.active--
 		}
 	}
+}
+
+func (g *EditorGroupWidget) DiscardDuplicateViews(source *EditorGroupWidget) {
+	for i := len(source.tabs) - 1; i >= 0; i-- {
+		for _, keep := range g.tabs {
+			if keep.Buf != nil && keep.Buf == source.tabs[i].Buf {
+				source.notifyContentTabClose(source.tabs[i])
+				source.tabs = slices.Delete(source.tabs, i, i+1)
+				if i < source.pinnedCount {
+					source.pinnedCount--
+				}
+				break
+			}
+		}
+	}
+	if len(source.tabs) == 0 {
+		source.tabs = []editorTab{source.placeholderTab()}
+	}
+	source.active = min(source.active, len(source.tabs)-1)
+	source.syncTabs()
+}
+
+func (g *EditorGroupWidget) otherContentView(tab editorTab) bool {
+	for _, group := range g.relatedGroups() {
+		for _, other := range group.tabs {
+			if other.Content != nil && other.FilePath == tab.FilePath && (group != g || other.ID != tab.ID) {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -35,7 +35,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		a.gitGutterTask.Stop()
 	}
 	gutterOn := a.Settings.Editor.IsGitGutterEnabled()
-	diffOn := a.EditorGroup.IsInlineDiffPath(filePath)
+	diffOn := a.isInlineDiffPath(filePath)
 	if !gutterOn && !diffOn {
 		return
 	}
@@ -59,7 +59,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 	copy(linesCopy, bufferLines)
 	showTrailing := false
 	var version uint64
-	if buf := a.EditorGroup.BufferForPath(filePath); buf != nil {
+	if buf := a.editorBufferForPath(filePath); buf != nil {
 		showTrailing = buf.ShowTrailingNewline
 		version = buf.Version()
 	}
@@ -106,18 +106,28 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 }
 
 func (a *App) applyGitGutterResult(v *gitGutterResult) {
-	a.EditorGroup.SetLineChanges(v.Path, v.Changes)
+	for _, group := range a.editorGroups() {
+		group.SetLineChanges(v.Path, v.Changes)
+	}
 	switch {
 	case v.DiffOn && v.Conflict:
 		a.closeConflictedInlineDiff(v)
 	case v.DiffOn:
-		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
+		for _, group := range a.editorGroups() {
+			group.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
+		}
 	}
 }
 
 func (a *App) closeConflictedInlineDiff(v *gitGutterResult) {
-	if a.EditorGroup.IsInlineDiffPath(v.Path) {
-		a.EditorGroup.DisableInlineDiff(v.Path)
+	closed := false
+	for _, group := range a.editorGroups() {
+		if group.IsInlineDiffPath(v.Path) {
+			group.DisableInlineDiff(v.Path)
+			closed = true
+		}
+	}
+	if closed {
 		a.StatusNotify(i18n.Format("status.mergeConflictDiffClosed", i18n.Args{"path": v.RelPath}))
 	}
 }
@@ -137,7 +147,7 @@ func (a *App) ScheduleGitGutter() {
 		a.gitGutterTask.Stop()
 	}
 	path := a.EditorGroup.ActiveFilePath()
-	diffOn := a.EditorGroup.IsInlineDiffPath(path)
+	diffOn := a.isInlineDiffPath(path)
 	if a.EditorGroup.ActiveBuffer() == nil || path == "" || a.EditorGroup.IsActiveVirtual() || (!a.Settings.Editor.IsGitGutterEnabled() && !diffOn) {
 		return
 	}

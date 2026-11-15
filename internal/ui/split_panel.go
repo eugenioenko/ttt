@@ -15,6 +15,10 @@ const DefaultSidebarWidth = 30
 // reopening at an unusably small width after being dragged nearly closed.
 const MinSidebarWidth = 15
 
+type topBorderProvider interface {
+	TopBorder() (offset int, corner bool)
+}
+
 type SplitPanelWidget struct {
 	BaseWidget
 	Left                      Widget
@@ -121,11 +125,13 @@ func (s *SplitPanelWidget) Render(surface Surface) {
 	}
 
 	// Right border — starts at RightBorderStartY to skip tab bar area
-	rbStart := s.RightBorderStartY
-	if rbStart == 0 {
+	rbStart, corner := s.rightBorder()
+	if corner && rbStart == 0 {
+		surface.SetCell(divX, 0, term.Cell{Ch: b.TopTee, Style: bs})
 		surface.SetCell(w-1, 0, term.Cell{Ch: b.TopRight, Style: bs})
 		rbStart = 1
-	} else if rbStart > 0 && rbStart < h-1 {
+	} else if corner && rbStart > 0 && rbStart < h-1 {
+		surface.SetCell(divX, rbStart, term.Cell{Ch: b.LeftTee, Style: bs})
 		surface.SetCell(w-1, rbStart, term.Cell{Ch: b.TopRight, Style: bs})
 		rbStart++
 	}
@@ -156,12 +162,12 @@ func (s *SplitPanelWidget) renderSinglePanel(surface Surface, w, h int, b term.B
 	}
 
 	// Side borders — start at RightBorderStartY
-	borderStart := s.RightBorderStartY
-	if borderStart == 0 {
+	borderStart, corner := s.rightBorder()
+	if corner && borderStart == 0 {
 		surface.SetCell(0, 0, term.Cell{Ch: b.TopLeft, Style: bs})
 		surface.SetCell(w-1, 0, term.Cell{Ch: b.TopRight, Style: bs})
 		borderStart = 1
-	} else if borderStart > 0 && borderStart < h-1 {
+	} else if corner && borderStart > 0 && borderStart < h-1 {
 		surface.SetCell(0, borderStart, term.Cell{Ch: b.TopLeft, Style: bs})
 		surface.SetCell(w-1, borderStart, term.Cell{Ch: b.TopRight, Style: bs})
 		borderStart++
@@ -171,6 +177,13 @@ func (s *SplitPanelWidget) renderSinglePanel(surface Surface, w, h int, b term.B
 		surface.SetCell(w-1, y, term.Cell{Ch: b.Vertical, Style: bs})
 	}
 	s.renderRightBorderJunction(surface, r, w, h, b, bs)
+}
+
+func (s *SplitPanelWidget) rightBorder() (int, bool) {
+	if provider, ok := s.Right.(topBorderProvider); ok {
+		return provider.TopBorder()
+	}
+	return s.RightBorderStartY, true
 }
 
 func (s *SplitPanelWidget) renderBottomJunction(surface Surface, screenX, w, h int, b term.BorderSet, bs term.Style) {
@@ -190,9 +203,11 @@ func (s *SplitPanelWidget) renderRightBorderJunction(surface Surface, r Rect, w,
 	if !ok {
 		return
 	}
-	y := provider.BorderJunctions().RightY - r.Y
-	if y >= 0 && y < h-1 {
-		surface.SetCell(w-1, y, term.Cell{Ch: b.RightTee, Style: bs})
+	for _, screenY := range provider.BorderJunctions().RightY {
+		y := screenY - r.Y
+		if y >= 0 && y < h-1 {
+			surface.SetCell(w-1, y, term.Cell{Ch: b.RightTee, Style: bs})
+		}
 	}
 }
 

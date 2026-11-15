@@ -99,7 +99,7 @@ func (a *App) FormatSelection() {
 }
 
 func (a *App) CloseTab() {
-	if !a.EditorGroup.IsDirty() {
+	if !a.EditorGroup.IsDirty() || a.EditorGroup.HasOtherDocumentView() {
 		a.EditorGroup.CloseTab()
 		return
 	}
@@ -270,7 +270,10 @@ func (a *App) saveFileAs(path string, onSaved func()) {
 	}
 	if a.EditorGroup.SaveAs(path) {
 		path, lang := a.editorPathLang()
-		if len(targets) > 0 {
+		a.DocVersionsMu.Lock()
+		_, opened := a.DocVersions[path]
+		a.DocVersionsMu.Unlock()
+		if len(targets) > 0 || opened {
 			a.NotifyLSPChange(path, lang, a.EditorGroup.ActiveBuffer().Lines)
 		}
 		a.afterFileSave(path, lang)
@@ -420,7 +423,11 @@ func (a *App) Quit() {
 }
 
 func (a *App) quitWithAction(onQuit func()) {
-	if !a.EditorGroup.AnyDirty() {
+	dirty := false
+	for _, group := range a.editorGroups() {
+		dirty = dirty || group.AnyDirty()
+	}
+	if !dirty {
 		onQuit()
 		return
 	}
@@ -431,10 +438,12 @@ func (a *App) quitWithAction(onQuit func()) {
 	callbacks := []func(){cancel, onQuit}
 	showSaveAll := a.Settings.Editor.SaveAllOnQuit
 	if a.Settings.Editor.SaveAllOnQuitExceptUnnamed {
-		for i := 0; i < a.EditorGroup.TabCount(); i++ {
-			if a.EditorGroup.IsTabUnnamed(i) {
-				showSaveAll = false
-				break
+		for _, group := range a.editorGroups() {
+			for i := 0; i < group.TabCount(); i++ {
+				if group.IsTabUnnamed(i) {
+					showSaveAll = false
+					break
+				}
 			}
 		}
 	}
@@ -473,6 +482,14 @@ func (a *App) saveAllAndQuit(onQuit func(), previousOverlay ui.Widget) {
 		}
 	}
 	if next < 0 {
+		for _, group := range a.editorGroups() {
+			if group != a.EditorGroup && group.AnyDirty() {
+				a.activateEditorGroup(group)
+				a.FocusEditor()
+				a.saveAllAndQuit(onQuit, previousOverlay)
+				return
+			}
+		}
 		onQuit()
 		return
 	}

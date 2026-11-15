@@ -108,7 +108,7 @@ func (a *App) cancelBackgroundPull(path, lang string) {
 }
 
 func (a *App) handleDiagnosticRefresh(server string) {
-	for _, d := range a.EditorGroup.OpenFiles() {
+	for _, d := range a.openEditorFiles() {
 		if key, _, ok := a.lspResolve(d.Path, d.Language); ok && key == server {
 			delete(a.lastPulled, d.Path)
 		}
@@ -135,7 +135,7 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 	workDir := ""
 	a.DocVersionsMu.Lock()
 	epoch := a.lspEpochs[server]
-	for _, d := range a.EditorGroup.OpenFiles() {
+	for _, d := range a.openEditorFiles() {
 		if d.Path == exclude {
 			continue
 		}
@@ -246,6 +246,8 @@ func (a *App) setPulledDiagnostics(server string, key pullKey, res pulledDiagnos
 		return false
 	}
 	a.lastPulled[key.path] = key
-	a.EditorGroup.SetDiagnosticsSource(lspPullDiagnosticsSource(server), key.path, LspToUIDiagnostics(res.diags, a.lspLines(key.path)))
+	for _, group := range a.editorGroups() {
+		group.SetDiagnosticsSource(lspPullDiagnosticsSource(server), key.path, LspToUIDiagnostics(res.diags, a.lspLines(key.path)))
+	}
 	return true
 }

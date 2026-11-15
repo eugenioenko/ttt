@@ -359,18 +359,20 @@ type LegacyChevrons struct {
 }
 
 type AppearanceSettings struct {
-	Icons           string            `json:"icons"`
-	Overrides       map[string]string `json:"overrides,omitempty"`
-	Chevrons        *LegacyChevrons   `json:"chevrons,omitempty"`
-	ScrollbarGlyphs string            `json:"scrollbarGlyphs"`
-	PointerShapes   *bool             `json:"pointerShapes,omitempty"`
+	Icons                      string            `json:"icons"`
+	Overrides                  map[string]string `json:"overrides,omitempty"`
+	Chevrons                   *LegacyChevrons   `json:"chevrons,omitempty"`
+	ScrollbarGlyphs            string            `json:"scrollbarGlyphs"`
+	PointerShapes              *bool             `json:"pointerShapes,omitempty"`
+	HighlightActiveGroupBorder bool              `json:"highlightActiveGroupBorder"`
 }
 
 func DefaultAppearanceSettings() AppearanceSettings {
 	return AppearanceSettings{
-		Icons:           IconsNone,
-		ScrollbarGlyphs: ScrollbarGlyphsBlocks,
-		PointerShapes:   boolPtr(true),
+		Icons:                      IconsNone,
+		ScrollbarGlyphs:            ScrollbarGlyphsBlocks,
+		PointerShapes:              boolPtr(true),
+		HighlightActiveGroupBorder: true,
 	}
 }
 

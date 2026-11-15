@@ -55,7 +55,9 @@ func (a *App) applyGrammarSettings(list []config.GrammarSetting) {
 func (a *App) reloadGrammars(list []config.GrammarSetting) {
 	a.loadedGrammars = slices.Clone(list)
 	a.reportGrammarErrors(loadGrammarSettings(list))
-	a.EditorGroup.RefreshHighlighters()
+	for _, group := range a.editorGroups() {
+		group.RefreshHighlighters()
+	}
 }
 
 // installPluginGrammars copies the plugin's grammars into the config grammars

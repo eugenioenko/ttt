@@ -157,6 +157,7 @@ type EditorGroupWidget struct {
 	ShowTrailingNewline     bool
 	TrimTrailingWhitespace  bool
 	UndoDeleteCursorStart   bool
+	HighlightActiveBorder   bool
 	Borders                 *term.BorderSet
 	OnFileOpen              func(path, lang string, lines []string)
 	OnFileChange            func(path, lang, text string)
@@ -169,6 +170,8 @@ type EditorGroupWidget struct {
 	// takes its place.
 	OnEmpty           func()
 	OnActiveTabChange func()
+	OnActivate        func()
+	OpenFileElsewhere func(string) bool
 	// RelatedGroups includes this group and all peers sharing its buffers.
 	RelatedGroups   func() []*EditorGroupWidget
 	lastActiveTabID string
@@ -293,6 +296,9 @@ func (g *EditorGroupWidget) Focusable() bool { return true }
 
 func (g *EditorGroupWidget) SetFocused(focused bool) {
 	g.focused = focused
+	if focused && g.OnActivate != nil {
+		g.OnActivate()
+	}
 	if t := g.activeTab(); t != nil && t.Content != nil {
 		if setter, ok := t.Content.(interface{ SetFocused(bool) }); ok {
 			setter.SetFocused(focused)
@@ -493,6 +499,9 @@ func contentFileError(path string, content Widget) error {
 }
 
 func (g *EditorGroupWidget) OpenFile(path string) error {
+	if g.OpenFileElsewhere != nil && g.OpenFileElsewhere(path) {
+		return nil
+	}
 	if isSpecialFile(path) {
 		err := errors.New(i18n.Format("files.cannotOpenSpecialFile", i18n.Args{"path": path}))
 		g.reportError(err.Error())
@@ -751,12 +760,19 @@ func (g *EditorGroupWidget) canReplaceTab(t *editorTab) bool {
 }
 
 func (g *EditorGroupWidget) isUntouchedPlaceholder(t *editorTab) bool {
-	return t != nil && t.Placeholder && t.Buf != nil && !t.Buf.Dirty &&
+	return t != nil && t.Placeholder && t.Buf != nil && !t.Buf.Dirty && t.Buf.Version() == 0 &&
 		len(t.Buf.Lines) <= 1 && (len(t.Buf.Lines) == 0 || t.Buf.Lines[0] == "")
 }
 
+func (g *EditorGroupWidget) NameUntitledPlaceholder() {
+	if t := g.activeTab(); g.isUntouchedPlaceholder(t) {
+		t.FilePath = g.nextUntitledName(t)
+		g.syncTabs()
+	}
+}
+
 func (g *EditorGroupWidget) NewFile() {
-	name := g.nextUntitledName()
+	name := g.nextUntitledName(nil)
 	g.tabs = append(g.tabs, editorTab{
 		FilePath: name,
 		Buf:      &buffer.Buffer{Lines: []string{""}},
@@ -790,16 +806,19 @@ func (g *EditorGroupWidget) NewFileFromText(text string) {
 		g.syncTabs()
 		return
 	}
-	tab.FilePath = g.nextUntitledName()
+	tab.FilePath = g.nextUntitledName(nil)
 	g.tabs = append(g.tabs, tab)
 	g.SwitchTab(len(g.tabs) - 1)
 }
 
-func (g *EditorGroupWidget) nextUntitledName() string {
+func (g *EditorGroupWidget) nextUntitledName(exclude *editorTab) string {
 	taken := make(map[string]bool)
-	for _, t := range g.tabs {
-		if t.Virtual {
-			taken[t.FilePath] = true
+	for _, group := range append([]*EditorGroupWidget{g}, g.relatedGroups()...) {
+		for i := range group.tabs {
+			t := &group.tabs[i]
+			if t != exclude && t.Virtual {
+				taken[t.FilePath] = true
+			}
 		}
 	}
 	if !taken["untitled"] {
@@ -1088,7 +1107,7 @@ func contentPluginKey(content Widget) string {
 
 func (g *EditorGroupWidget) placeholderTab() editorTab {
 	return editorTab{
-		FilePath:    "untitled",
+		FilePath:    g.nextUntitledName(nil),
 		Buf:         &buffer.Buffer{Lines: []string{""}},
 		Cur:         &cursor.Cursor{},
 		Vp:          &view.Viewport{},
@@ -1160,7 +1179,7 @@ func (g *EditorGroupWidget) releaseTabResources(tab editorTab) {
 	if closer, ok := tab.Content.(interface{ Close() }); ok {
 		closer.Close()
 	}
-	if g.OnContentTabClose != nil {
+	if g.OnContentTabClose != nil && !g.otherContentView(tab) {
 		g.OnContentTabClose(tab.FilePath)
 	}
 }
@@ -3277,7 +3296,7 @@ func (g *EditorGroupWidget) syncTabs() {
 			dirty = ts.Buf.Dirty
 		}
 		isEmptyState := g.EmptyStateID != "" && ts.FilePath == g.EmptyStateID
-		closable := !(len(g.tabs) == 1 && (g.isUntouchedPlaceholder(&ts) || isEmptyState))
+		closable := len(g.relatedGroups()) > 1 || !(len(g.tabs) == 1 && (g.isUntouchedPlaceholder(&ts) || isEmptyState))
 		name := ts.FilePath
 		if ts.Title != "" {
 			name = ts.Title
@@ -3412,6 +3431,10 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 
 	g.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: r.W, H: editorTabBarH})
 	tabSurface := surface.Sub(Rect{X: 0, Y: 0, W: w, H: editorTabBarH})
+	split := len(g.relatedGroups()) > 1
+	g.TabBar.ShowGroupFocus = split && g.HighlightActiveBorder
+	g.TabBar.GroupActive = g.focused
+	g.Editor.Passive = split && !g.focused
 	g.TabBar.Render(tabSurface)
 
 	contentH := h - editorTabBarH
@@ -3522,6 +3545,12 @@ func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
+	if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons()&(tcell.Button1|tcell.Button2|tcell.Button3) != 0 {
+		x, y := mouse.Position()
+		if g.GetRect().Contains(x, y) && g.OnActivate != nil {
+			g.OnActivate()
+		}
+	}
 	if _, ok := ev.(*tcell.EventMouse); ok && g.TabBar.PointerGestureActive() {
 		return g.TabBar.HandleEvent(ev)
 	}
