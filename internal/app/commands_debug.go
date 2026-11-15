@@ -227,7 +227,7 @@ func (a *App) HandleDebugWriteRequest(request *DebugWriteRequest) {
 }
 
 func (a *App) debugKeyboardTester() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	kt := ui.NewKeyTesterWidget()

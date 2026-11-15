@@ -187,7 +187,7 @@ func (a *App) ShowEolPicker() {
 }
 
 func (a *App) ShowLanguagePicker() {
-	if a.Root.HasOverlay() || a.EditorGroup.ActiveBuffer() == nil {
+	if a.Root.HasModalOverlay() || a.EditorGroup.ActiveBuffer() == nil {
 		return
 	}
 	items := []widgets.SelectItem{

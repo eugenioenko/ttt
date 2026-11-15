@@ -43,6 +43,11 @@ func TestMarkdownOptionsOpenOverFindAndReplace(t *testing.T) {
 				if len(h.app.Root.Overlays) != 2 || !h.app.Root.HasModalOverlay() {
 					t.Fatal("Markdown picker should open above the search bar")
 				}
+				dialog := h.app.Root.TopOverlayWidget()
+				h.exec(tc.command)
+				if len(h.app.Root.Overlays) != 2 || h.app.Root.TopOverlayWidget() != dialog {
+					t.Fatal("repeated command should not open another Markdown picker")
+				}
 				h.pressKey(tcell.KeyEscape, tcell.ModNone)
 				if len(h.app.Root.Overlays) != 1 || h.app.Root.TopOverlayWidget() != searchBar || h.app.Root.HasModalOverlay() {
 					t.Fatal("dismissing the Markdown picker should preserve the search bar")

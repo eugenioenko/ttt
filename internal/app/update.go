@@ -43,7 +43,7 @@ func (d *updateDialogWidget) Render(surface widgets.Surface) {
 }
 
 func (a *App) CheckForUpdates() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	s := &updateDialogState{dialog: widgets.NewDialogWidget(76), service: a.Updates}
