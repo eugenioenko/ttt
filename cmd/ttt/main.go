@@ -290,7 +290,7 @@ Docs: https://tttedit.dev
 	if logFile != nil {
 		defer logFile.Close()
 	}
-	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
+	slog.Info("starting", "version", version, "debugMode", cfg.Settings.DebugMode)
 
 	// --exec inherits scripted stdin; only "-" explicitly consumes it.
 	var stdinText *string
