@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -91,11 +92,17 @@ func TestInactiveGroupRemovalPreservesActiveGroupAndFocus(t *testing.T) {
 func TestMergedSameNameDiffsReceiveTheirOwnResults(t *testing.T) {
 	a, owner, other := splitResultApp()
 	owner.OpenDiff("file.txt", diff.FileDiff{}, nil, nil, false)
-	other.OpenDiff("file.txt", diff.FileDiff{}, nil, nil, false)
+	other.OpenDiff("file.txt", diff.FileDiff{}, nil, nil, true)
 	target := other.ActiveDiffWidget()
 	target.Loading = true
 	owner.MergeTabsFrom(other)
 	a.applyDiffContent(&DiffContentResult{Widget: target, TabName: "file.txt (diff)", OldLines: []string{"old"}, NewLines: []string{"new"}})
+	if !slices.Contains(target.LeftLines(), "old") || !slices.Contains(target.RightLines(), "new") {
+		t.Fatal("retained diff did not receive both content snapshots")
+	}
+	if slices.Contains(owner.ActiveDiffWidget().LeftLines(), "old") || slices.Contains(owner.ActiveDiffWidget().RightLines(), "new") {
+		t.Fatal("content was delivered to the same-named sibling")
+	}
 	if target.Loading {
 		t.Fatal("same-name tab shadowed the retained widget's result")
 	}
