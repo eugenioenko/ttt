@@ -277,6 +277,7 @@ func TestOptionsMenuToggleLSPHover(t *testing.T) {
 	h.app.ShowHover("info", 5, 5)
 	h.exec("menu.options")
 	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
 	h.pressKey(tcell.KeyRight, tcell.ModNone)
 	h.assertContains("Enable Code Assist")
 	h.pressKey(tcell.KeyDown, tcell.ModNone)

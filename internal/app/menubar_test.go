@@ -71,7 +71,7 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 
 func TestOptionsMenuGroupsControls(t *testing.T) {
 	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
-	wantLabels := []string{"Editor", "Code Assist", "Appearance", "Diff Views", "Git Files", "", "Theme", "Settings"}
+	wantLabels := []string{"Editor", "Markdown", "Code Assist", "Appearance", "Diff Views", "Git Files", "", "Theme", "Settings"}
 	var labels []string
 	for _, item := range items {
 		labels = append(labels, item.Label)
@@ -79,16 +79,17 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 	if !slices.Equal(labels, wantLabels) {
 		t.Fatalf("Options labels = %v, want %v", labels, wantLabels)
 	}
-	for _, item := range items[:5] {
+	for _, item := range items[:6] {
 		if len(item.Submenu) == 0 || item.Command != "" || item.Checked != 0 {
 			t.Errorf("category should only open a submenu: %+v", item)
 		}
 	}
-	if !items[5].IsSep || items[6].Command != "theme.switch" || items[7].Command != "settings.openUI" {
+	if !items[6].IsSep || items[7].Command != "theme.switch" || items[8].Command != "settings.openUI" {
 		t.Fatal("Theme and Settings should follow the final separator")
 	}
 	wantCommands := [][]string{
 		{"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
+		{"options.markdownWordWrap", "options.markdownWrapWidth"},
 		{"options.toggleLSP", "options.toggleLSPHover"},
 		{"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.tabBarStyle", "options.borderStyle"},
 	}
@@ -112,7 +113,7 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 			t.Error("Theme should move from View to Options")
 		}
 	}
-	assist := items[1].Submenu
+	assist := items[2].Submenu
 	if assist[0].Label != "Enable Code Assist" || assist[1].Label != "Hover Information" {
 		t.Fatalf("Code Assist labels = %+v", assist)
 	}

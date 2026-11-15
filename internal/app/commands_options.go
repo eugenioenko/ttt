@@ -492,6 +492,10 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("menu.gitGutter"), Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 			{Label: i18n.Text("menu.scrollbarGitMarks"), Command: "options.toggleScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.IsScrollbarGitMarksEnabled())},
 		}},
+		{Label: i18n.Text("settings.markdown"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("markdown.wordWrapMenu"), Command: "options.markdownWordWrap"},
+			{Label: i18n.Text("markdown.wrapWidthMenu"), Command: "options.markdownWrapWidth"},
+		}},
 		{Label: i18n.Text("menu.codeAssist"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
 			{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
@@ -561,6 +565,16 @@ func (a *App) buildGitFileOptions(expandCommand, collapseCommand string) []ui.Co
 
 func registerOptionsCommands(app *App) {
 	reg := app.Reg
+	reg.Register(command.Command{
+		ID: "options.markdownWordWrap", Title: i18n.Text("markdown.wordWrapTitle"),
+		Keywords: []string{"preferences", "settings", "editor", "override"},
+		Handler:  app.ShowMarkdownWordWrapPicker,
+	})
+	reg.Register(command.Command{
+		ID: "options.markdownWrapWidth", Title: i18n.Text("markdown.wrapWidthTitle"),
+		Keywords: []string{"preferences", "settings", "editor", "override", "column"},
+		Handler:  app.ShowMarkdownWrapWidthPicker,
+	})
 
 	reg.Register(command.Command{
 		ID: "options.toggleSyntaxHighlight", Title: i18n.Text("command.toggleSyntaxHighlight"),
