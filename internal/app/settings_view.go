@@ -26,6 +26,7 @@ const (
 	settingInt
 	settingString
 	settingEnum
+	settingMarkdownWrapWidth
 	// settingSection is a heading row that groups the fields below it.
 	settingSection
 	settingShortcut
@@ -209,6 +210,12 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.focusEditorOnOpen"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.FocusOnOpen },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.FocusOnOpen = v }},
+		}},
+		{Title: i18n.Text("settings.markdown"), Fields: []settingField{
+			{Label: i18n.Text("settings.wordWrap"), Kind: settingEnum, Options: fixedOptions(markdownWordWrapItems),
+				GetString: markdownWordWrap, SetString: setMarkdownWordWrap},
+			{Label: i18n.Text("settings.wrapWidth"), Kind: settingMarkdownWrapWidth,
+				GetString: markdownWrapWidth, SetString: setMarkdownWrapWidth},
 		}},
 		{Title: i18n.Text("settings.appearance"), Fields: []settingField{
 			section(i18n.Text("settings.theme")),
@@ -584,6 +591,8 @@ func (v *settingsView) buildRow(category string, f settingField) *widgets.HStack
 		control = v.boolControl(f)
 	case settingEnum:
 		control = v.enumControl(f)
+	case settingMarkdownWrapWidth:
+		control = v.markdownWrapWidthControl(category, f)
 	case settingShortcut:
 		button := widgets.NewButtonWidget(widgets.ButtonConfig{
 			OnClick: func() { v.app.showKeybindings(f.Command) },

@@ -250,6 +250,54 @@ func TestContextMenuKeyboardNavigatesSubmenu(t *testing.T) {
 	}
 }
 
+func TestContextMenuSubmenuRowAlignment(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		x, y    int
+		index   int
+		wantRow int
+	}{
+		{name: "first item at top", x: 2, y: 0, index: 0, wantRow: 1},
+		{name: "later item", x: 2, y: 2, index: 1, wantRow: 4},
+		{name: "opens left", x: 36, y: 2, index: 1, wantRow: 4},
+		{name: "bottom clamped", x: 2, y: 12, index: 1, wantRow: 12},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items := []ContextMenuItem{{Label: "First"}, {Label: "Second"}}
+			items[tc.index].Submenu = []ContextMenuItem{
+				{Label: "Child", Command: "child"},
+				{Label: "Other", Command: "other"},
+			}
+			menu := NewContextMenuWidget(items, tc.x, tc.y)
+			menu.firstEvent = false
+			var executed string
+			menu.OnExec = func(command string) { executed = command }
+			renderContextMenu(menu, 50, 15)
+			parent := menu.GetRect()
+			menu.HandleEvent(tcell.NewEventMouse(parent.X+2, parent.Y+1+tc.index, tcell.ButtonNone, tcell.ModNone))
+			cells := renderContextMenu(menu, 50, 15)
+			if menu.Submenu == nil {
+				t.Fatal("hover should open a submenu")
+			}
+			child := menu.Submenu.GetRect()
+			if child.Y+1 != tc.wantRow {
+				t.Fatalf("first submenu item row = %d, want %d", child.Y+1, tc.wantRow)
+			}
+			if got := cellRow(cells, tc.wantRow); !strings.Contains(got, "Child") {
+				t.Fatalf("submenu item missing from row %d: %q", tc.wantRow, got)
+			}
+			if child.Y < 0 || child.Y+child.H > 15 {
+				t.Fatalf("submenu bounds %+v escape surface", child)
+			}
+			menu.HandleEvent(tcell.NewEventMouse(child.X+2, tc.wantRow, tcell.Button1, tcell.ModNone))
+			menu.HandleEvent(tcell.NewEventMouse(child.X+2, tc.wantRow, tcell.ButtonNone, tcell.ModNone))
+			if executed != "child" {
+				t.Fatalf("click on first submenu item executed %q, want child", executed)
+			}
+		})
+	}
+}
+
 func TestContextMenuFullwidthSubmenuFlipsAndKeepsMouseBounds(t *testing.T) {
 	var executed string
 	menu := NewContextMenuWidget([]ContextMenuItem{{

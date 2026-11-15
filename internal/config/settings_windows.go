@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sys/windows"
@@ -35,7 +36,14 @@ func preserveSettingsFileAccess(source, destination string) error {
 	return windows.SetNamedSecurityInfo(destination, windows.SE_FILE_OBJECT, securityInfo, nil, nil, dacl, nil)
 }
 
+// MoveFileEx can reject replacement while our readers hold the destination,
+// even with FILE_SHARE_DELETE. Keep those handles out of the rename window.
+var settingsFileMu sync.RWMutex
+
 func readSettingsFileBytes(path string) ([]byte, error) {
+	settingsFileMu.RLock()
+	defer settingsFileMu.RUnlock()
+
 	name, err := settingsLongPathName(path)
 	if err != nil {
 		return nil, err
@@ -89,6 +97,9 @@ func isWindowsRenameRetryable(err error) bool {
 }
 
 func renameSettingsFile(oldPath, newPath string) error {
+	settingsFileMu.Lock()
+	defer settingsFileMu.Unlock()
+
 	oldName, err := settingsLongPathName(oldPath)
 	if err != nil {
 		return err

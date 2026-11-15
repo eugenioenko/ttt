@@ -196,6 +196,8 @@ All editor settings are nested under the `editor` key.
 
 ### Language-specific wrapping
 
+**Options > Markdown** and **Settings > Markdown** expose the Markdown `wordWrap` and `wordWrapColumn` overrides. Word Wrap offers Use Editor Default, On, and Off. Wrap Width offers Use Editor Default, Pane Width (`0`), and Custom (a positive column limit). These settings control Markdown source editing; rendered Markdown still uses `markdown.wrapWidth`.
+
 Each wrap field resolves independently: language override → global setting → built-in default. The defaults are `wordWrap: false`, `wordWrapColumn: 0`, and `wordWrapBreak: "word"`.
 
 ```json
