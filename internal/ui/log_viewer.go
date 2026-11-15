@@ -111,6 +111,9 @@ func (v *LogViewerWidget) row(offset int64) logfile.Row {
 }
 
 func (v *LogViewerWidget) selectMove(shift bool) {
+	if shift {
+		v.Following = false
+	}
 	if shift && !v.Selecting {
 		v.Anchor = v.Cursor
 	}
@@ -139,6 +142,7 @@ func (v *LogViewerWidget) edge(end, shift bool) {
 func (v *LogViewerWidget) MoveToFileEdge(end, shift bool) { v.edge(end, shift) }
 
 func (v *LogViewerWidget) SelectAll() {
+	v.Following = false
 	v.Anchor = logfile.Position{}
 	v.Selecting = true
 	v.Cursor = logfile.Position{Offset: v.Source.Progress().Size}
@@ -242,7 +246,7 @@ func (v *LogViewerWidget) move(n int, shift bool) {
 		v.top = v.Source.Previous(v.Cursor.Offset, max(v.height-1, 0))
 		v.load()
 	}
-	v.Following = row.Next >= v.Source.Progress().Size
+	v.Following = !shift && row.Next >= v.Source.Progress().Size
 	v.revealColumn()
 }
 

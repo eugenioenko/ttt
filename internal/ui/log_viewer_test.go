@@ -156,6 +156,31 @@ func TestLogViewerClickCopyAndDrag(t *testing.T) {
 	}
 }
 
+func TestLogViewerSelectionPausesFollowing(t *testing.T) {
+	for _, action := range []string{"select all", "shift left", "shift down"} {
+		t.Run(action, func(t *testing.T) {
+			v := testLogViewer(t, "first\nsecond\n", 40, 5)
+			v.Render(NewRenderSurface(makeGrid(40, 5), Rect{W: 40, H: 5}))
+			v.MoveToFileEdge(true, false)
+			switch action {
+			case "select all":
+				v.SelectAll()
+			case "shift left":
+				v.HandleEvent(tcell.NewEventKey(tcell.KeyLeft, "", tcell.ModShift))
+			case "shift down":
+				v.MoveToFileEdge(false, false)
+				v.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModShift))
+			}
+			start, end := v.Selection()
+			v.RefreshProgress(false)
+			gotStart, gotEnd := v.Selection()
+			if v.Following || !v.Selecting || start != gotStart || end != gotEnd {
+				t.Fatal("progress resumed following and discarded the selection")
+			}
+		})
+	}
+}
+
 func TestOpenInEditorKeepsCommittedLogTab(t *testing.T) {
 	v := testLogViewer(t, "log content\n", 40, 5)
 	path := v.Source.(*logfile.File).Path()
