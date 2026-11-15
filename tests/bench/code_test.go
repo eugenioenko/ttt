@@ -69,7 +69,7 @@ func BenchmarkCode(b *testing.B) {
 	}
 	binary := buildTTT(b)
 	configDir := b.TempDir()
-	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), []byte(`{"lsp":{"enabled":false},"editor":{"gitGutter":false}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), []byte(`{"lsp":{"enabled":false},"editor":{"gitGutter":false,"largeFiles":{"logModeMinMB":false}}}`), 0o644); err != nil {
 		b.Fatal(err)
 	}
 	path := codeFile(b, dir, 64)

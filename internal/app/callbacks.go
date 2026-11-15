@@ -14,6 +14,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/core/logfile"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
 	"github.com/eugenioenko/ttt/internal/scm"
@@ -206,6 +207,16 @@ func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 }
 
 func (a *App) NavigateToSearchMatch(path string, line, col int) {
+	a.navigateToSearchMatch(path, line, col, nil)
+}
+func (a *App) NavigateToSearchResult(match ui.SearchMatch) {
+	var offset *int64
+	if match.HasByteOffset {
+		offset = &match.ByteOffset
+	}
+	a.navigateToSearchMatch(match.FilePath, match.LineNum, match.ColStart, offset)
+}
+func (a *App) navigateToSearchMatch(path string, line, col int, offset *int64) {
 	if strings.HasSuffix(path, " (diff)") {
 		if !a.switchToDiffTab(path) {
 			filePath := strings.TrimSuffix(path, " (diff)")
@@ -227,6 +238,27 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		return
 	}
 	a.EditorGroup.OpenFile(path)
+	if lv := a.logMode().active(); lv != nil {
+		off, ok := int64(0), false
+		if offset != nil {
+			off, ok = *offset, true
+		} else {
+			off, ok = lv.file.OffsetForLine(line - 1)
+		}
+		if ok {
+			rows, _ := lv.file.ReadRows(off, 1)
+			runeCol := 0
+			if len(rows) > 0 {
+				text := rows[0].Text
+				runeCol = utf8.RuneCountInString(text[:min(col, len(text))])
+			}
+			lv.viewer.Navigate(logfile.Match{Offset: off, Col: runeCol})
+		} else {
+			a.StatusNotify(i18n.Text("logMode.searchLineNotIndexed"))
+		}
+		a.Root.SetFocus(a.EditorGroup)
+		return
+	}
 	a.EditorGroup.GoToLine(line)
 	if a.EditorGroup.IsEditorActive() {
 		text := a.EditorGroup.Editor.Buf.Lines[a.EditorGroup.Editor.Cursor.Line]
@@ -798,6 +830,7 @@ func registerWidgetCallbacks(app *App) {
 			{Label: i18n.Text("general.open"), Command: "explorer.open"},
 			app.appsOpenWithMenu(),
 			{Label: i18n.Text("menu.openToSide"), Command: "explorer.openToSide", Disabled: node.Expandable},
+			{Label: i18n.Text("logMode.open"), Command: "explorer.openInLogMode", Disabled: node.Expandable},
 			ui.MenuSep(),
 			{Label: i18n.Text("general.newFile"), Command: "explorer.newFile"},
 			{Label: i18n.Text("general.newFolder"), Command: "explorer.newFolder"},
@@ -844,7 +877,7 @@ func registerWidgetCallbacks(app *App) {
 		app.Screen.PostEvent(tcell.NewEventInterrupt(batch))
 	}
 	app.Search.DiffSources = app.DiffSearchSources
-	app.Search.OnOpenMatch = app.NavigateToSearchMatch
+	app.Search.OnOpenMatch = app.NavigateToSearchResult
 	app.Search.OnPreview = app.PreviewSearchReplace
 	app.Search.OnReplaceRequest = app.startSearchReplace
 	app.Search.OnCancelReplace = app.cancelSearchReplace
@@ -975,6 +1008,11 @@ func (a *App) tabMoreMenu() []ui.ContextMenuItem {
 
 func (app *App) editorTabChanged() {
 	app.Root.ClearEditorLinkHover()
+	if app.logMode().active() != nil {
+		if bar, ok := app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget); ok && bar.OnToggleFind != nil {
+			bar.OnToggleFind()
+		}
+	}
 	if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 		findBar.OnEditorTabChange()
 	}

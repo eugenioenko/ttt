@@ -182,6 +182,10 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.Sidebar.SetPanelOrder(s.Sidebar.PanelOrder)
 	}
 
+	for _, lv := range a.logMode().views {
+		lv.viewer.LineNumbers = s.Editor.LineNumbers
+		lv.viewer.TabSize = s.Editor.TabSize
+	}
 	a.applyMenuBarVisibility(s.Editor.IsMenuBarVisible())
 
 	// Apply cursor style

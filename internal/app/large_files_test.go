@@ -92,6 +92,10 @@ func TestStaleReloadActionTracksTabsAndReloads(t *testing.T) {
 		t.Fatal("returning to the stale tab did not restore its reload action")
 	}
 	segment.OnClick()
+	if !a.Root.HasOverlay() {
+		t.Fatal("reload actions did not open")
+	}
+	a.Root.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", 0))
 	if reloadSegment(a) != nil || a.EditorGroup.ActiveBuffer().Lines[0] != "updated" {
 		t.Fatal("clicking Reload did not load the new contents and clear the action")
 	}

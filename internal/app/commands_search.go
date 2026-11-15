@@ -56,7 +56,9 @@ func (a *App) OpenFind() {
 		return
 	}
 	findBar := a.newFindBar()
-	a.linkFindReplaceBars(findBar, a.newReplaceBar())
+	if a.logMode().active() == nil {
+		a.linkFindReplaceBars(findBar, a.newReplaceBar())
+	}
 	a.prefillFindBar(findBar)
 	a.ShowFindBar(findBar)
 }
@@ -66,6 +68,10 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
+		if lv := a.logMode().active(); lv != nil {
+			return a.logMode().search(lv, query, opts, false)
+		}
+		findBar.Progress = ""
 		if !a.EditorGroup.IsEditorActive() {
 			a.EditorGroup.SetFindSearch(query, nil, opts)
 			return nil
@@ -80,6 +86,13 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 		return matches
 	}
 	findBar.OnNavigate = func(match ui.FindMatch) {
+		if lv := a.logMode().active(); lv != nil {
+			if findBar.Current >= 0 && findBar.Current < len(lv.result.Matches) {
+				lv.current = findBar.Current
+				lv.viewer.Navigate(lv.result.Matches[findBar.Current])
+			}
+			return
+		}
 		a.EditorGroup.Editor.ResetCursorGoal()
 		a.EditorGroup.SetSearchActive(findBar.Current)
 		a.EditorGroup.Editor.Selection.Clear()
@@ -90,9 +103,16 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 	}
 	findBar.OnDismiss = func() {
 		a.DismissDialog()
-		a.EditorGroup.ClearFindHighlights()
+		if a.logMode().active() == nil {
+			a.EditorGroup.ClearFindHighlights()
+		}
 	}
 	findBar.OnEditorTabChange = func() {
+		if a.logMode().active() != nil {
+			findBar.OnToggleReplace = nil
+		} else if findBar.OnToggleReplace == nil {
+			a.linkFindReplaceBars(findBar, a.newReplaceBar())
+		}
 		findBar.Current = 0
 		findBar.Refresh()
 		a.EditorGroup.SetSearchActive(findBar.Current)
@@ -170,6 +190,11 @@ func (a *App) prefillReplaceInput(input *widgets.InputWidget) {
 }
 
 func (a *App) OpenFindReplace() {
+	if a.logMode().active() != nil {
+		a.StatusNotify(i18n.Text("logMode.readOnly"))
+		a.OpenFind()
+		return
+	}
 	if a.Root.HasOverlay() {
 		if bar, ok := a.Root.TopOverlayWidget().(*ui.ReplaceBarWidget); ok {
 			a.prefillReplaceInput(bar.SearchInput)
@@ -224,6 +249,9 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 
 func (a *App) linkFindReplaceBars(find *ui.FindBarWidget, replace *ui.ReplaceBarWidget) {
 	find.OnToggleReplace = func() {
+		if a.logMode().active() != nil {
+			return
+		}
 		find.Debounce.Stop()
 		replace.SearchInput.CopyTextState(find.Input)
 		replace.Options, replace.Current = find.Options, find.Current
@@ -235,6 +263,9 @@ func (a *App) linkFindReplaceBars(find *ui.FindBarWidget, replace *ui.ReplaceBar
 		a.ShowFindBar(replace)
 	}
 	replace.OnToggleFind = func() {
+		if a.logMode().active() != nil {
+			find.OnToggleReplace = nil
+		}
 		find.Input.CopyTextState(replace.SearchInput)
 		find.Options, find.Current = replace.Options, replace.Current
 		find.Matches = replace.Matches

@@ -54,11 +54,16 @@ func RunEventLoop(
 
 	syncStatus := func() {
 		app.syncRepositoryObservation()
+		app.logMode().syncStatus()
+		app.SyncReloadSegment()
 		line, col := app.EditorGroup.ActiveCursor()
 		filePath := app.EditorGroup.ActiveFilePath()
 		cursorCount := app.EditorGroup.MultiCursorCount()
 
 		posText := i18n.Format("status.lnCol", i18n.Args{"line": line + 1, "column": col + 1})
+		if lv := app.logMode().active(); lv != nil && line < 0 {
+			posText = i18n.Format("logMode.bytePosition", i18n.Args{"offset": lv.viewer.Cursor.Offset, "column": col + 1})
+		}
 		if cursorCount > 1 {
 			posText += i18n.Format("status.cursors", i18n.Args{"cursorCount": cursorCount})
 		}
@@ -95,6 +100,11 @@ func RunEventLoop(
 		app.Status.SetSegment(view.StatusSegment{ID: "indent", Side: "right", Priority: 200, Text: fmt.Sprintf("%s: %d", indentLabel, tabSize)})
 
 		app.SyncLanguageSegment()
+		if app.logMode().active() != nil {
+			app.Status.RemoveSegment("indent")
+			app.Status.RemoveSegment("eol")
+			app.Status.RemoveSegment("language")
+		}
 
 		repoDir := app.SyncRepositoryBranch()
 

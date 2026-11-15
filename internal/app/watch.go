@@ -56,7 +56,7 @@ func (a *App) SyncWatched() {
 	for _, group := range a.editorGroups() {
 		paths = append(paths, group.OpenFilePaths()...)
 	}
-	a.Watcher.Sync(paths)
+	a.Watcher.Sync(append(paths, a.logMode().paths()...))
 	if a.Explorer != nil {
 		a.Watcher.SyncDirs(a.Explorer.WatchedDirs())
 	}
@@ -74,6 +74,8 @@ func (a *App) HandleFileChanged(path string) {
 
 func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
+	a.logMode().refresh(path)
+
 	var buf *buffer.Buffer
 	for _, group := range a.editorGroups() {
 		if buf = group.BufferForPath(path); buf != nil {
@@ -127,6 +129,7 @@ func (a *App) reloadFile(path string) {
 	a.SyncReloadSegment()
 	a.RequestGitGutterForActiveFile()
 	a.RefreshSymbols()
+	a.SyncReloadSegment()
 }
 
 // HandleExplorerDirChanged re-reads the explorer tree after its backing

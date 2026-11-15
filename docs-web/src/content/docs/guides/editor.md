@@ -77,6 +77,18 @@ Hold **Ctrl** while moving the mouse over the editor to underline visible HTTP/H
 
 Move outside the pane or move the mouse without Ctrl to clear the underlines. Link navigation also works when pointer shapes are disabled, and is available in diff tabs, Commit Details, and Current Changes.
 
+## Log Mode
+
+Text files over 64 MiB open in **log mode**, a read-only viewer that reads visible lines from disk. Use **Open in Log Mode** in the command palette or a file's Explorer context menu for smaller files. Set `editor.largeFiles.logModeMinMB` to another size, `0` for every text file, or `false` for manual activation only. Existing editor tabs keep their mode; images, binary files, and diff views keep their usual viewers.
+
+**Ctrl+End** reads the tail immediately and follows appended lines. Scrolling up or pressing Page Up pauses following; Ctrl+End resumes. The **LOG** status item shows following and indexing progress. Click it, or run **Open in Editor**, to confirm loading the file into an editable tab. Large loads warn about time and memory use.
+
+**Ctrl+F** searches the whole file in the background, including lines beyond the current index. **F3 / Shift+F3** move between matches. The find bar shows search progress; queries stop at 10,000 matches with a notice to refine the query. **Go to Line** works on indexed lines and reports when a requested line is not indexed yet.
+
+Select with the mouse, Shift and navigation keys, or Ctrl+A. Ctrl+C copies up to 4 MiB, with a notice when capped. Each displayed line is capped at 1 MiB and marked when truncated; search still scans its full text. Long lines scroll horizontally. Log mode has no editing, undo, word wrap, highlighting, folds, language-server work, or git gutter. Truncating or replacing the file resets the view with a notice.
+
+For large editor files that changed on disk, the **Reload** status item offers **Reload** and **Open in Log Mode**. Files already open for editing never switch modes automatically.
+
 ## Bracket Matching
 
 Matching brackets are highlighted automatically when the cursor is on a bracket character. Press **Ctrl+K M** to jump to the matching bracket.

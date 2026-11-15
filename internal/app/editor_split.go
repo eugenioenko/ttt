@@ -28,7 +28,7 @@ func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
 	a.wireEditorTabDrag(g)
 	g.RelatedGroups = a.editorGroups
 	g.OpenFileElsewhere = func(path string) bool {
-		if g.BufferForPath(path) != nil {
+		if g.BufferForPath(path) != nil || g.HasLogTab(path) {
 			return false
 		}
 		for _, other := range a.editorGroups() {
@@ -173,6 +173,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.OnContentTabClose = left.OnContentTabClose
 	right.OnDiagnosticsChanged = left.OnDiagnosticsChanged
 	right.FileHandler = left.FileHandler
+	right.TextFileHandler = left.TextFileHandler
 	right.OnFileHandled = left.OnFileHandled
 	right.LinkWorkDir = left.LinkWorkDir
 	right.OnOpenURL = left.OnOpenURL

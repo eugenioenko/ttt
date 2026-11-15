@@ -245,7 +245,6 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	highlight.SetTimeLimit(time.Duration(cfg.Settings.Editor.HighlightTimeLimit) * time.Millisecond)
 	editorGroup := newEditorGroup(&cfg.Settings, borders, bracketStyles)
 	grammarErrs := loadGrammarSettings(cfg.Settings.Editor.Grammars)
-	_, _ = openFileTargets(editorGroup, openFiles)
 
 	terminalPanel := ui.NewTerminalPanelWidget()
 	terminalPanel.Borders = borders
@@ -408,6 +407,8 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	// changes its diagnostics.
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
 	app.EditorGroup.FileHandler = app.openWithFileHandler
+	app.EditorGroup.TextFileHandler = app.logMode().autoViewer
+	_, _ = openFileTargets(editorGroup, openFiles)
 	app.EditorGroup.OnFileHandled = app.fileHandlerTabOpened
 	app.EditorGroup.LinkWorkDir = app.Workspace.Primary
 	app.EditorGroup.OnOpenURL = OpenURL

@@ -24,11 +24,13 @@ type Options struct {
 
 // Match is one ripgrep match.
 type Match struct {
-	FilePath string
-	LineNum  int
-	ColStart int
-	ColEnd   int
-	LineText string
+	ByteOffset    int64
+	HasByteOffset bool
+	FilePath      string
+	LineNum       int
+	ColStart      int
+	ColEnd        int
+	LineText      string
 }
 
 // RgMessage is one line of ripgrep's --json output.
@@ -39,10 +41,11 @@ type RgMessage struct {
 
 // RgMatchData is the payload of an RgMessage.
 type RgMatchData struct {
-	Path       RgText       `json:"path"`
-	Lines      RgText       `json:"lines"`
-	LineNumber int          `json:"line_number"`
-	Submatches []RgSubmatch `json:"submatches"`
+	AbsoluteOffset int64        `json:"absolute_offset"`
+	Path           RgText       `json:"path"`
+	Lines          RgText       `json:"lines"`
+	LineNumber     int          `json:"line_number"`
+	Submatches     []RgSubmatch `json:"submatches"`
 }
 
 // RgText is a text field of ripgrep's --json output.
@@ -191,11 +194,13 @@ func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error)
 		lineText := strings.TrimRight(msg.Data.Lines.Text, "\n\r")
 		for _, sub := range msg.Data.Submatches {
 			matches[absPath] = append(matches[absPath], Match{
-				FilePath: absPath,
-				LineNum:  msg.Data.LineNumber,
-				ColStart: sub.Start,
-				ColEnd:   sub.End,
-				LineText: lineText,
+				FilePath:      absPath,
+				ByteOffset:    msg.Data.AbsoluteOffset,
+				HasByteOffset: true,
+				LineNum:       msg.Data.LineNumber,
+				ColStart:      sub.Start,
+				ColEnd:        sub.End,
+				LineText:      lineText,
 			})
 		}
 	}
