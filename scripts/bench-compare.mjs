@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Compares editor, diff, and log benchmarks between a base checkout (BASE_DIR)
 // and this one on the same machine, alternating passes, and writes a Markdown
-// report with one table per suite.
+// report with a summary table and collapsible results per suite.
 //
 //   BASE_DIR=../ttt-main node scripts/bench-compare.mjs
 
@@ -125,6 +125,8 @@ try {
     '',
     `Comparing \`${short(process.env.BASE_SHA, 'base')}\` with \`${short(process.env.HEAD_SHA, 'PR')}\` on the same runner. Lower values are better.`,
   ];
+  const summaryRows = [];
+  const details = [];
   let compared = 0;
   for (const suite of suites) {
     const base = sides.base.results[suite.name] ?? {};
@@ -133,25 +135,27 @@ try {
     const added = Object.keys(head).filter((name) => !base[name]);
     if (names.length === 0 && added.length === 0) continue;
     compared += names.length;
-    lines.push('', `### ${suite.title}`, '');
+    // Geometric mean of head/base ratios: every benchmark weighs the same however
+    // long it runs. Zero on both sides is no change; zero on one side has no ratio.
+    const geomean = (field) => {
+      const ratios = names
+        .map((name) => [base[name][field], head[name][field]])
+        .filter(([before, after]) => (before > 0) === (after > 0))
+        .map(([before, after]) => (before > 0 ? after / before : 1));
+      if (ratios.length === 0) return '**n/a**';
+      const mean = Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length);
+      return `**${percent(mean, 1)}**`;
+    };
+    summaryRows.push(
+      `| ${suite.title} | ${geomean('ns')} | ` +
+        (suite.process
+          ? `— | — | ${geomean('rss')} |`
+          : `${geomean('bytes')} | ${geomean('allocs')} | — |`),
+    );
+    details.push('', '<details>', `<summary>${suite.title}</summary>`);
     if (names.length) {
-      // Geometric mean of head/base ratios: every benchmark weighs the same however
-      // long it runs. Zero on both sides is no change; zero on one side has no ratio.
-      const geomean = (field) => {
-        const ratios = names
-          .map((name) => [base[name][field], head[name][field]])
-          .filter(([before, after]) => (before > 0) === (after > 0))
-          .map(([before, after]) => (before > 0 ? after / before : 1));
-        if (ratios.length === 0) return '**n/a**';
-        const mean = Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length);
-        return `**${percent(mean, 1)}**`;
-      };
       if (suite.process) {
-        lines.push(
-          `Geometric-mean change: time ${geomean('ns')}, peak RSS ${geomean('rss')}.`,
-          '',
-          '<details>',
-          '<summary>Click here to see benchmark details</summary>',
+        details.push(
           '',
           `| Benchmark | ${baseLabel} | ${headLabel} | Time change | ${baseLabel} peak RSS | ${headLabel} peak RSS | Peak RSS change |`,
           '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
@@ -159,18 +163,13 @@ try {
         for (const name of names) {
           const before = base[name];
           const after = head[name];
-          lines.push(
+          details.push(
             `| ${name} | ${duration(before.ns)} | ${duration(after.ns)} | ${percent(after.ns, before.ns)} | ` +
               `${memory(before.rss)} | ${memory(after.rss)} | ${percent(after.rss, before.rss)} |`,
           );
         }
-        lines.push('', '</details>');
       } else {
-        lines.push(
-          `Geometric-mean change: time ${geomean('ns')}, allocated bytes ${geomean('bytes')}, allocations ${geomean('allocs')}.`,
-          '',
-          '<details>',
-          '<summary>Click here to see benchmark details</summary>',
+        details.push(
           '',
           `| Benchmark | ${baseLabel} | ${headLabel} | Time change | ${baseLabel} allocs | ${headLabel} allocs | Allocation change |`,
           '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
@@ -178,12 +177,12 @@ try {
         for (const name of names) {
           const before = base[name];
           const after = head[name];
-          lines.push(
+          details.push(
             `| ${name} | ${duration(before.ns)} | ${duration(after.ns)} | ${percent(after.ns, before.ns)} | ` +
               `${before.allocs} | ${after.allocs} | ${percent(after.allocs, before.allocs)} |`,
           );
         }
-        lines.push(
+        details.push(
           '',
           `| Benchmark | ${baseLabel} allocated bytes | ${headLabel} allocated bytes | Change |`,
           '| --- | ---: | ---: | ---: |',
@@ -191,14 +190,23 @@ try {
         for (const name of names) {
           const before = base[name];
           const after = head[name];
-          lines.push(`| ${name} | ${memory(before.bytes)} | ${memory(after.bytes)} | ${percent(after.bytes, before.bytes)} |`);
+          details.push(`| ${name} | ${memory(before.bytes)} | ${memory(after.bytes)} | ${percent(after.bytes, before.bytes)} |`);
         }
-        lines.push('', '</details>');
       }
     }
-    if (added.length) lines.push('', `New in ${headName}: ${added.map((name) => `\`${name}\``).join(', ')}.`);
+    if (added.length) details.push('', `New in ${headName}: ${added.map((name) => `\`${name}\``).join(', ')}.`);
+    details.push('', '</details>');
   }
   if (compared === 0) throw new Error('no benchmark ran on both sides');
+  lines.push(
+    '',
+    'Geometric-mean changes across comparable benchmarks:',
+    '',
+    '| Suite | Time | Allocated bytes | Allocations | Peak RSS |',
+    '| --- | ---: | ---: | ---: | ---: |',
+    ...summaryRows,
+    ...details,
+  );
   if (overlaid.length) {
     lines.push('', `The base predates ${overlaid.map((suite) => `\`Benchmark${suite.name}\``).join(' and ')}, so it was measured with ${headName}'s scenarios.`);
   }
