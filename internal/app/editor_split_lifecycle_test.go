@@ -10,19 +10,19 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 )
 
-func TestSplitGroupOwnsAndReleasesFoldTasks(t *testing.T) {
+func TestSplitGroupOwnsAndReleasesViewTasks(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
 	a := buildTestApp(t, config.DefaultSettings())
 	t.Cleanup(a.CloseTasks)
 	count := len(a.tasks.tasks)
 	a.SplitEditor()
-	if a.EditorGroup.FoldTask == nil || a.EditorGroup.FoldDelay == nil || len(a.tasks.tasks) != count+2 {
-		t.Fatal("split group did not register its own fold tasks")
+	if a.EditorGroup.FoldTask == nil || a.EditorGroup.FoldDelay == nil || a.EditorGroup.TabBar.AutoShowTask == nil || a.EditorGroup.TabBar.AutoHideTask == nil || len(a.tasks.tasks) != count+4 {
+		t.Fatal("split group did not register its own fold and tab visibility tasks")
 	}
 	a.CloseEditorSplit()
 	if len(a.tasks.tasks) != count {
-		t.Fatal("closing the group leaked its fold tasks")
+		t.Fatal("closing the group leaked its fold or tab visibility tasks")
 	}
 }
 

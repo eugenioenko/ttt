@@ -246,6 +246,8 @@ func initStyleText() {
 		"bold":       i18n.Text("options.bold"),
 		"ascii":      i18n.Text("options.aSCII"),
 		"none":       i18n.Text("options.none"),
+		"hidden":     i18n.Text("options.hidden"),
+		"auto-hide":  i18n.Text("options.autoHide"),
 		"background": i18n.Text("options.background"),
 		"invert":     i18n.Text("options.invert"),
 	}
@@ -254,6 +256,14 @@ func initStyleText() {
 func selectionStyleItems() []widgets.SelectItem {
 	items := make([]widgets.SelectItem, 0, len(config.SelectionStyles))
 	for _, id := range config.SelectionStyles {
+		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
+	}
+	return items
+}
+
+func tabBarStyleItems() []widgets.SelectItem {
+	items := make([]widgets.SelectItem, 0, len(config.TabBarStyles))
+	for _, id := range config.TabBarStyles {
 		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
 	}
 	return items
@@ -305,6 +315,18 @@ func (a *App) ShowGutterStylePicker() {
 	a.ShowSelectDialog(i18n.Text("options.gutterStyle"), gutterStyleItems(), func(id string) {
 		a.SetGutterStyle(id)
 	}, nil)
+}
+
+func (a *App) ShowTabBarStylePicker() {
+	if a.Root.HasOverlay() {
+		return
+	}
+	a.ShowSelectDialog(i18n.Text("settings.tabBarStyle"), tabBarStyleItems(), a.SetTabBarStyle, nil)
+}
+
+func (a *App) SetTabBarStyle(style string) {
+	a.Settings.Editor.TabBarStyle = style
+	a.SaveAndApplySettings()
 }
 
 func (a *App) SetBorderStyle(style string) {
@@ -480,6 +502,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
+			{Label: i18n.Text("menu.tabBarStyle"), Command: "options.tabBarStyle"},
 			{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
 		}},
 		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
@@ -722,6 +745,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.gutterStyle", Title: i18n.Text("command.changeGutterStyle"),
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ShowGutterStylePicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.tabBarStyle", Title: i18n.Text("command.changeTabBarStyle"),
+		Keywords: []string{"preferences", "settings", "editor", "view", "tabs", "appearance"},
+		Handler:  app.ShowTabBarStylePicker,
 	})
 
 	reg.Register(command.Command{

@@ -25,6 +25,16 @@ Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active gro
 
 Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Split: Equalize Sizes** in the command palette balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
 
+## Tab bar styles
+
+Choose **Tab Bar Style** under **Settings > Appearance > Window** or **Options > Appearance**. The setting applies immediately to every editor group, with or without splits:
+
+- **Extended** (default): the three-row tab strip.
+- **Hidden**: a one-row divider that gives the editor two extra rows. Tabs still exist, and keyboard and command-palette tab actions keep working.
+- **Auto-hide**: the divider expands to Extended when the pointer stays on its top edge for 50 ms. It hides 100 ms after the pointer leaves the strip and its one-cell grace area. Menus and drags keep the header open.
+
+The setting is stored as `editor.tabBarStyle`. Hidden headers have no tab or More-button mouse targets.
+
 ## Syntax Highlighting
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.

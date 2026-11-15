@@ -1,4 +1,9 @@
 {
+  "command.changeTabBarStyle": "Change Tab Bar Style",
+  "menu.tabBarStyle": "Tab Bar Style",
+  "settings.tabBarStyle": "Tab bar style",
+  "options.autoHide": "Auto-hide",
+  "options.hidden": "Hidden",
   "menu.openToSide": "Open to the Side",
   "command.explorerOpenToSide": "Split: Open Explorer File to the Side",
   "command.moveEditorToOtherGroup": "Split: Move to Other Group",
