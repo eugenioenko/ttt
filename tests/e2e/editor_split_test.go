@@ -235,6 +235,9 @@ func assertEditorDividerSkipsTabs(t *testing.T, h *testHarness, x int) {
 	cells, width, _ := h.screen.GetContents()
 	for _, group := range h.app.EditorSplit.Groups() {
 		tabs := group.TabBar.GetRect()
+		if tabs.Y != h.app.EditorSplit.GetRect().Y {
+			continue
+		}
 		for y := tabs.Y; y < tabs.Y+tabs.H; y++ {
 			want := " "
 			if y == tabs.Y+tabs.H-1 {
@@ -538,5 +541,59 @@ func TestEditorSplitGroupLimit(t *testing.T) {
 	h.exec("editor.splitDown")
 	if got := len(h.app.EditorSplit.Groups()); got != 16 {
 		t.Fatalf("groups = %d, want 16", got)
+	}
+}
+
+func TestEditorSplitHorizontalDragFollowsVisibleBorder(t *testing.T) {
+	for _, style := range []string{"extended", "hidden", "auto-hide"} {
+		t.Run(style, func(t *testing.T) {
+			h := newTestHarness(t, 140, 44)
+			defer h.stop()
+			h.exec("editor.split")
+			h.exec("editor.splitDown")
+			layout := h.app.EditorSplit.Second
+			bottom := layout.Second.Group
+			for _, group := range h.app.EditorSplit.Groups() {
+				group.TabBar.SetStyle(style)
+			}
+			h.redraw()
+			tabs := bottom.TabBar.GetRect()
+			x, y := tabs.X+tabs.W-6, tabs.Y+tabs.H-1
+			if got := h.app.Root.PointerShapeAt(x, y); got != term.PointerNSResize {
+				t.Fatalf("visible border pointer = %q, want vertical resize", got)
+			}
+			if tabs.H > 1 {
+				if h.app.Root.PointerShapeAt(x, tabs.Y) == term.PointerNSResize {
+					t.Fatal("invisible header boundary is still a resize target")
+				}
+				for _, row := range []int{tabs.Y + 1, y} {
+					h.click(tabs.X+3, row)
+					if layout.Split.OwnsPointerCapture() || h.app.EditorGroup != bottom {
+						t.Fatal("tab click started a resize or failed to activate its group")
+					}
+				}
+			}
+			h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, 0))
+			if !layout.Split.Dragging() {
+				t.Fatal("visible border press did not start resizing")
+			}
+			for _, target := range []int{y, y + 3, y - 2} {
+				h.app.Root.HandleEvent(tcell.NewEventMouse(x, target, tcell.Button1, 0))
+				h.redraw()
+				tabs = bottom.TabBar.GetRect()
+				if got := tabs.Y + tabs.H - 1; got != target {
+					t.Fatalf("border jumped to row %d, want pointer row %d", got, target)
+				}
+			}
+			h.app.Root.HandleEvent(tcell.NewEventMouse(x, y-2, tcell.ButtonNone, 0))
+			if h.app.Root.PointerCaptureActive() {
+				t.Fatal("divider retained capture after release")
+			}
+			for _, group := range h.app.EditorSplit.Groups() {
+				if group.Editor.Selection.Active {
+					t.Fatal("resizing selected editor text")
+				}
+			}
+		})
 	}
 }
