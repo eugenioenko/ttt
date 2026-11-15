@@ -328,6 +328,9 @@ func DefaultEditorSettings() EditorSettings {
 		GutterStyle:             "compact",
 		BorderStyle:             "default",
 		BracketPairColorization: false,
+		LanguageOverrides: map[string]EditorLanguageOverride{
+			"markdown": {WordWrap: boolPtr(true)},
+		},
 	}
 }
 

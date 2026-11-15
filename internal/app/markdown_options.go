@@ -54,11 +54,8 @@ func setMarkdownOverride(s *config.Settings, override config.EditorLanguageOverr
 	if overrides == nil {
 		overrides = make(map[string]config.EditorLanguageOverride)
 	}
-	if override == (config.EditorLanguageOverride{}) {
-		delete(overrides, "markdown")
-	} else {
-		overrides["markdown"] = override
-	}
+	// An empty entry preserves explicit inheritance when loading built-in overrides.
+	overrides["markdown"] = override
 	s.Editor.LanguageOverrides = overrides
 }
 
