@@ -34,10 +34,6 @@ func TestWordWrapOverridesRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(loaded.Editor.LanguageOverrides, s.Editor.LanguageOverrides) {
 		t.Fatal("round trip lost explicit values or omitted fields")
 	}
-	defaults := DefaultEditorSettings()
-	if enabled, column := defaults.ResolveWordWrap("markdown"); enabled || column != 0 {
-		t.Fatalf("defaults = %v/%d", enabled, column)
-	}
 	for _, input := range []string{`{"wordWrap":true}`, `{"wordWrap":true,"languageOverrides":{}}`} {
 		var e EditorSettings
 		if err := json.Unmarshal([]byte(input), &e); err != nil {
@@ -46,6 +42,56 @@ func TestWordWrapOverridesRoundTrip(t *testing.T) {
 		if enabled, column := e.ResolveWordWrap("markdown"); !enabled || column != 0 {
 			t.Fatalf("legacy config = %v/%d", enabled, column)
 		}
+	}
+}
+
+func TestDefaultMarkdownWordWrap(t *testing.T) {
+	editor := DefaultEditorSettings()
+	if enabled, column := editor.ResolveWordWrap("markdown"); !enabled || column != 0 {
+		t.Fatalf("Markdown defaults = %v/%d, want true/0", enabled, column)
+	}
+	if enabled, _ := editor.ResolveWordWrap("go"); enabled {
+		t.Fatal("Markdown default enabled wrapping for Go")
+	}
+	editor.WordWrapColumn = 90
+	editor.WordWrapBreak = WordWrapBreakCharacter
+	if enabled, column := editor.ResolveWordWrap("markdown"); !enabled || column != 90 {
+		t.Fatalf("Markdown wrapping = %v/%d, want true/90", enabled, column)
+	}
+	if got := editor.ResolveWordWrapBreak("markdown"); got != WordWrapBreakCharacter {
+		t.Fatalf("Markdown break mode = %q, want inherited character mode", got)
+	}
+}
+
+func TestMarkdownWordWrapDefaultPreservesExistingOverrides(t *testing.T) {
+	wrapColumn := 75
+	for _, tc := range []struct {
+		name    string
+		input   string
+		want    EditorLanguageOverride
+		enabled bool
+		column  int
+	}{
+		{name: "missing overrides", input: `{"editor":{"wordWrap":false}}`, want: EditorLanguageOverride{WordWrap: boolPtr(true)}, enabled: true},
+		{name: "other language only", input: `{"editor":{"languageOverrides":{"go":{"wordWrap":true}}}}`, want: EditorLanguageOverride{WordWrap: boolPtr(true)}, enabled: true},
+		{name: "explicit off", input: `{"editor":{"languageOverrides":{"markdown":{"wordWrap":false}}}}`, want: EditorLanguageOverride{WordWrap: boolPtr(false)}},
+		{name: "explicit inheritance", input: `{"editor":{"languageOverrides":{"markdown":{}}}}`},
+		{name: "width only", input: `{"editor":{"languageOverrides":{"markdown":{"wordWrapColumn":75}}}}`, want: EditorLanguageOverride{WordWrapColumn: &wrapColumn}, column: 75},
+		{name: "existing enabled and width", input: `{"editor":{"languageOverrides":{"markdown":{"wordWrap":true,"wordWrapColumn":75}}}}`, want: EditorLanguageOverride{WordWrap: boolPtr(true), WordWrapColumn: &wrapColumn}, enabled: true, column: 75},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := withTempConfigDir(t)
+			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.input), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			settings := LoadSettings()
+			if got := settings.Editor.LanguageOverrides["markdown"]; !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Markdown override = %+v, want %+v", got, tc.want)
+			}
+			if enabled, column := settings.Editor.ResolveWordWrap("markdown"); enabled != tc.enabled || column != tc.column {
+				t.Fatalf("Markdown wrapping = %v/%d, want %v/%d", enabled, column, tc.enabled, tc.column)
+			}
+		})
 	}
 }
 

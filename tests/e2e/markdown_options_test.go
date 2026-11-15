@@ -16,9 +16,11 @@ func TestMarkdownOptionsApplyAndRestoreInheritance(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.app.EditorGroup.OpenFile(path)
+	if !h.app.EditorGroup.Editor.WordWrap || h.app.Settings.Editor.WordWrap {
+		t.Fatal("Markdown should wrap by default independently of global wrapping")
+	}
 	h.exec("options.markdownWordWrap")
 	h.assertContains("Use Editor Default")
-	h.pressKey(tcell.KeyDown, tcell.ModNone)
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 	if !h.app.EditorGroup.Editor.WordWrap || h.app.Settings.Editor.WordWrap {
 		t.Fatal("Markdown wrapping did not apply independently of global wrapping")
@@ -57,6 +59,9 @@ func TestMarkdownOptionsApplyAndRestoreInheritance(t *testing.T) {
 	if o := h.app.Settings.Editor.LanguageOverrides["markdown"]; o.WordWrap == nil || *o.WordWrap {
 		t.Fatal("picker did not start on current On value or save explicit Off")
 	}
+	if enabled, _ := config.LoadSettings().Editor.ResolveWordWrap("markdown"); enabled {
+		t.Fatal("explicit Off did not survive reloading settings")
+	}
 	h.exec("options.markdownWordWrap")
 	h.pressKey(tcell.KeyUp, tcell.ModNone)
 	h.pressKey(tcell.KeyUp, tcell.ModNone)
@@ -70,8 +75,12 @@ func TestMarkdownOptionsApplyAndRestoreInheritance(t *testing.T) {
 	h.exec("options.markdownWrapWidth")
 	h.pressKey(tcell.KeyUp, tcell.ModNone)
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
-	if _, ok := config.LoadSettings().Editor.LanguageOverrides["markdown"]; ok {
-		t.Fatal("restoring both defaults left a Markdown override")
+	loaded = config.LoadSettings()
+	if o, ok := loaded.Editor.LanguageOverrides["markdown"]; !ok || o != (config.EditorLanguageOverride{}) {
+		t.Fatal("restoring inheritance did not preserve an empty Markdown entry")
+	}
+	if enabled, column := loaded.Editor.ResolveWordWrap("markdown"); enabled || column != 0 {
+		t.Fatalf("restored editor defaults = %v/%d, want false/0", enabled, column)
 	}
 }
 

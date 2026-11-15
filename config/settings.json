@@ -23,6 +23,11 @@
     "wordWrapBreak": "word",
     "indentGuides": false,
     "scrollLines": 0,
+    "languageOverrides": {
+      "markdown": {
+        "wordWrap": true
+      }
+    },
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,
