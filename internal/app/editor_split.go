@@ -25,6 +25,7 @@ func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
 		}
 	}
 	g.OnEmpty = func() { a.editorGroupEmpty(g) }
+	a.wireEditorTabDrag(g)
 	g.RelatedGroups = a.editorGroups
 	g.OpenFileElsewhere = func(path string) bool {
 		if g.BufferForPath(path) != nil {

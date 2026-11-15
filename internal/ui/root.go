@@ -388,6 +388,11 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 		return r.handleMouse(ev)
 	}
 
+	if kev.Key() == tcell.KeyEscape && r.PointerCaptureActive() {
+		r.CancelPointerCapture()
+		return EventConsumed
+	}
+
 	if r.rawKeysFocused() {
 		if !r.ForwardShortcuts && r.handleChord(kev) == EventConsumed {
 			return EventConsumed

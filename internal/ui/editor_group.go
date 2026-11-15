@@ -172,6 +172,7 @@ type EditorGroupWidget struct {
 	OnActiveTabChange func()
 	OnActivate        func()
 	OpenFileElsewhere func(string) bool
+	DropTarget        bool
 	// RelatedGroups includes this group and all peers sharing its buffers.
 	RelatedGroups   func() []*EditorGroupWidget
 	lastActiveTabID string
@@ -3436,6 +3437,15 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	g.TabBar.GroupActive = g.focused
 	g.Editor.Passive = split && !g.focused
 	g.TabBar.Render(tabSurface)
+	if g.DropTarget {
+		borders := term.SingleBorderSet()
+		if g.Borders != nil {
+			borders = *g.Borders
+		}
+		for x := 0; x < w; x++ {
+			tabSurface.SetCell(x, 0, term.Cell{Ch: borders.Horizontal, Style: term.StyleBorderActive})
+		}
+	}
 
 	contentH := h - editorTabBarH
 	contentRect := g.ContentRect()

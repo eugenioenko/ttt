@@ -17,6 +17,10 @@ Use the editor tab bar's **More** menu to choose **Split Right** (side by side) 
 
 Views of the same document share text, undo history, and save state, with independent cursors, selections, and scrolling. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
 
+Drag a tab into another group to move it, dropping between tab titles to choose its position or over the editor to append it. Pins, unsaved edits, undo history, and the view position move with the tab. Moving a document already open in the destination keeps one view; moving the last tab removes the empty group. Press **Escape** to cancel a drag. **Split: Move to Other Group** is also available in the command palette.
+
+Use **Open to the Side** in a text-tab or Explorer context menu to open another view, creating a right split when only one group exists. Text views share the document and undo history while keeping independent cursors and scrolling. The command palette also provides **Split: Open to the Side** and **Split: Open Explorer File to the Side**. **Split Right** and **Split Down** continue to create independent untitled documents.
+
 Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group’s border is highlighted by default; turn off **Highlight active split** in **Settings > Appearance > Window** to disable it. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
 
 Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Split: Equalize Sizes** in the command palette balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
