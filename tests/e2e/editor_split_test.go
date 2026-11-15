@@ -340,10 +340,6 @@ func TestEditorSplitFourGroupsAndDirectionalFocus(t *testing.T) {
 	if len(h.app.EditorSplit.Groups()) != 4 {
 		t.Fatal("split did not create four groups")
 	}
-	h.exec("editor.split")
-	if len(h.app.EditorSplit.Groups()) != 4 {
-		t.Fatal("group limit was not enforced")
-	}
 	h.exec("focus.editorUp")
 	if h.app.EditorGroup != leftTop {
 		t.Fatal("up focus did not reach the adjacent group")
@@ -521,5 +517,26 @@ func TestEditorSplitBorderHighlightIsOptionalAndLeavesTabNamesAlone(t *testing.T
 	h.app.ApplySettings(s)
 	for _, group := range h.app.EditorSplit.Groups() {
 		check(group, term.StyleBorder)
+	}
+}
+
+func TestEditorSplitGroupLimit(t *testing.T) {
+	h := newTestHarness(t, 240, 100)
+	defer h.stop()
+	for count := 1; count < ui.MaxEditorGroups; count *= 2 {
+		for _, group := range h.app.EditorSplit.Groups() {
+			h.app.Root.SetFocus(group)
+			r := group.GetRect()
+			if r.W >= 2*r.H {
+				h.exec("editor.split")
+			} else {
+				h.exec("editor.splitDown")
+			}
+		}
+	}
+	h.exec("editor.split")
+	h.exec("editor.splitDown")
+	if got := len(h.app.EditorSplit.Groups()); got != 16 {
+		t.Fatalf("groups = %d, want 16", got)
 	}
 }
