@@ -13,3 +13,7 @@ func readSettingsFileBytes(path string) ([]byte, error) {
 func replaceSettingsFile(from, to string, rename func(string, string) error) error {
 	return rename(from, to)
 }
+
+func renameSettingsFile(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
+}

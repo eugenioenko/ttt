@@ -78,7 +78,7 @@ func TestWindowsSettingsReplacementRetries(t *testing.T) {
 				if tc.injected != nil {
 					return &os.LinkError{Op: "rename", Old: from, New: to, Err: tc.injected}
 				}
-				return os.Rename(from, to)
+				return renameSettingsFile(from, to)
 			})
 			if attempts != tc.attempts {
 				t.Fatalf("attempts = %d, want %d; err=%v", attempts, tc.attempts, err)

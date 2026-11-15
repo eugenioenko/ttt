@@ -87,3 +87,15 @@ func replaceSettingsFile(from, to string, rename func(string, string) error) err
 func isWindowsRenameRetryable(err error) bool {
 	return errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.ERROR_SHARING_VIOLATION)
 }
+
+func renameSettingsFile(oldPath, newPath string) error {
+	oldName, err := settingsLongPathName(oldPath)
+	if err != nil {
+		return err
+	}
+	newName, err := settingsLongPathName(newPath)
+	if err != nil {
+		return err
+	}
+	return windows.MoveFileEx(oldName, newName, windows.MOVEFILE_REPLACE_EXISTING)
+}

@@ -740,7 +740,7 @@ func SaveSettingsFile(path string, s Settings) error {
 }
 
 func writeFileAtomically(path string, data []byte, mode os.FileMode) (err error) {
-	return writeFileAtomicallyWithRename(path, data, mode, os.Rename)
+	return writeFileAtomicallyWithRename(path, data, mode, renameSettingsFile)
 }
 
 func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, rename func(string, string) error) (err error) {
