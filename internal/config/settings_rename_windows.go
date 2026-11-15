@@ -5,6 +5,9 @@ package config
 import "golang.org/x/sys/windows"
 
 func renameSettingsFile(oldPath, newPath string) error {
+	settingsFileMu.Lock()
+	defer settingsFileMu.Unlock()
+
 	oldName, err := settingsLongPathName(oldPath)
 	if err != nil {
 		return err
