@@ -318,7 +318,7 @@ func (a *App) ShowGutterStylePicker() {
 }
 
 func (a *App) ShowTabBarStylePicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	a.ShowSelectDialog(i18n.Text("settings.tabBarStyle"), tabBarStyleItems(), a.SetTabBarStyle, nil)
@@ -384,7 +384,7 @@ func (a *App) SetTerminalSelectionStyle(style string) {
 }
 
 func (a *App) ShowEditorSelectionStylePicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	a.ShowSelectDialog(i18n.Text("options.editorSelectionStyle"), selectionStyleItems(), func(id string) {
@@ -393,7 +393,7 @@ func (a *App) ShowEditorSelectionStylePicker() {
 }
 
 func (a *App) ShowTerminalSelectionStylePicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	a.ShowSelectDialog(i18n.Text("options.terminalSelectionStyle"), selectionStyleItems(), func(id string) {

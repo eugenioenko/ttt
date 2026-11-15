@@ -544,7 +544,7 @@ While the command line is open it consumes **all** keys. In particular, a plugin
 
 #### `ttt.command_line.show(config)`
 
-Open the command line and move focus to it. If one is already open, it is replaced rather than stacked. The call is a no-op while another overlay (a dialog, the command palette, a menu) is up.
+Open the command line and move focus to it. If one is already open, it is replaced rather than stacked. The call is a no-op while another modal overlay (a dialog, the command palette, a menu) is up. Non-modal Find and Replace bars remain open underneath the command line.
 
 | Field       | Type     | Description                                                        |
 |-------------|----------|--------------------------------------------------------------------|
@@ -815,7 +815,7 @@ Open a modal dialog built with the same widgets as plugin panels. No special per
 | `on_event` | function | none | Fallback event handler. |
 | `on_close` | function | none | Called after Escape or `close_dialog`, with focus restored. Not called during plugin teardown. |
 
-Returns `true` when opened, or `false` if another overlay is already open or the host is not wired. Escape closes the dialog. `close_dialog` closes only the calling plugin's dialog. Disabling, reloading, or uninstalling the plugin also closes it. An input with `autofocus = true` receives keyboard focus on opening; Tab and Shift+Tab navigate its widgets.
+Returns `true` when opened, or `false` if another modal overlay is already open or the host is not wired. Non-modal Find and Replace bars do not block opening the dialog and remain open when it closes. Escape closes the dialog. `close_dialog` closes only the calling plugin's dialog. Disabling, reloading, or uninstalling the plugin also closes it. An input with `autofocus = true` receives keyboard focus on opening; Tab and Shift+Tab navigate its widgets.
 
 ```lua
 local message = ""

@@ -254,7 +254,7 @@ func (a *App) LaunchApp(name string) {
 type appLaunchKey struct{ name, path string }
 
 func (a *App) OpenCurrentFileWith() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	file := a.EditorGroup.RecentDocumentPath()

@@ -154,7 +154,29 @@ func TestCommandLineShowReplacesInsteadOfStacking(t *testing.T) {
 	}
 }
 
-func TestCommandLineNotShownOverAnotherOverlay(t *testing.T) {
+func TestCommandLineOpensOverFindAndReplace(t *testing.T) {
+	for _, search := range []string{"search.find", "search.replace"} {
+		t.Run(search, func(t *testing.T) {
+			h := newTestHarness(t, 100, 30)
+			defer h.stop()
+			h.exec("file.new")
+			h.exec(search)
+			searchBar := h.app.Root.TopOverlayWidget()
+			if w := h.app.ShowCommandLine(":", nil, nil, nil); w == nil {
+				t.Fatal("search bar blocked the command line")
+			}
+			if len(h.app.Root.Overlays) != 2 || !h.app.Root.HasModalOverlay() {
+				t.Fatal("command line should open above the search bar")
+			}
+			h.pressKey(tcell.KeyEscape, tcell.ModNone)
+			if len(h.app.Root.Overlays) != 1 || h.app.Root.TopOverlayWidget() != searchBar || h.app.Root.HasModalOverlay() {
+				t.Fatal("dismissing the command line should preserve the search bar")
+			}
+		})
+	}
+}
+
+func TestCommandLineNotShownOverAnotherModalOverlay(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
@@ -162,7 +184,7 @@ func TestCommandLineNotShownOverAnotherOverlay(t *testing.T) {
 	h.exec("command.palette")
 
 	if w := h.app.ShowCommandLine(":", nil, nil, nil); w != nil {
-		t.Fatal("expected ShowCommandLine to decline while another overlay is up")
+		t.Fatal("expected ShowCommandLine to decline while another modal overlay is up")
 	}
 	if h.app.CommandLineActive() {
 		t.Fatal("expected no command line")
