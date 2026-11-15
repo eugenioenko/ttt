@@ -390,6 +390,7 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	}
 
 	groupMap := map[string]int{}
+	offsets := search.DiskOffsets{}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
 	first := true
@@ -433,12 +434,13 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 
 		lineText := msg.Data.Lines.Text
 		lineText = strings.TrimRight(lineText, "\n\r")
+		offset, hasOffset := offsets.Resolve(absPath, msg.Data.AbsoluteOffset)
 
 		for _, sub := range msg.Data.Submatches {
 			match := SearchMatch{
 				FilePath:      absPath,
-				ByteOffset:    msg.Data.AbsoluteOffset,
-				HasByteOffset: true,
+				ByteOffset:    offset,
+				HasByteOffset: hasOffset,
 				LineNum:       msg.Data.LineNumber,
 				ColStart:      sub.Start,
 				ColEnd:        sub.End,

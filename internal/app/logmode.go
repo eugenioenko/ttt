@@ -181,6 +181,7 @@ func (l *logModeState) progress(lv *logView) {
 		l.extendSearch(lv)
 	}
 	l.syncStatus()
+	a.syncPositionStatus()
 }
 
 func (l *logModeState) paths() []string {
@@ -364,6 +365,7 @@ func (l *logModeState) applySearch(lv *logView, version uint64, result logfile.S
 			lv.viewer.Navigate(result.Matches[0])
 		}
 	}
+	a.syncPositionStatus()
 	if done && result.Limited {
 		a.StatusNotify(i18n.Text("logMode.searchLimited"))
 	}

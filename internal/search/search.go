@@ -175,6 +175,7 @@ func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error)
 	}
 
 	matches := map[string][]Match{}
+	offsets := DiskOffsets{}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
 	for scanner.Scan() {
@@ -192,11 +193,12 @@ func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error)
 		}
 		absPath = filepath.Clean(absPath)
 		lineText := strings.TrimRight(msg.Data.Lines.Text, "\n\r")
+		offset, hasOffset := offsets.Resolve(absPath, msg.Data.AbsoluteOffset)
 		for _, sub := range msg.Data.Submatches {
 			matches[absPath] = append(matches[absPath], Match{
 				FilePath:      absPath,
-				ByteOffset:    msg.Data.AbsoluteOffset,
-				HasByteOffset: true,
+				ByteOffset:    offset,
+				HasByteOffset: hasOffset,
 				LineNum:       msg.Data.LineNumber,
 				ColStart:      sub.Start,
 				ColEnd:        sub.End,

@@ -517,3 +517,60 @@ func TestLogTabSwitchKeepsFindReadOnly(t *testing.T) {
 		t.Fatal("text tab did not restore replacement controls")
 	}
 }
+
+func TestLogSearchNavigationUsesRawBytesAndStopsOnOpenError(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	path := filepath.Join(t.TempDir(), "invalid.log")
+	if err := os.WriteFile(path, []byte("\xffabcneedle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.logMode().open(path)
+	lv := a.logMode().active()
+	a.NavigateToSearchResult(ui.SearchMatch{FilePath: path, ColStart: 4, HasByteOffset: true})
+	if lv.viewer.Cursor.Col != 4 {
+		t.Fatalf("invalid UTF-8 changed raw byte coordinates: %+v", lv.viewer.Cursor)
+	}
+	before := lv.viewer.Cursor
+	a.NavigateToSearchResult(ui.SearchMatch{FilePath: path + ".missing", ByteOffset: 99, ColStart: 2, HasByteOffset: true})
+	if lv.viewer.Cursor != before {
+		t.Fatal("failed open navigated the previous log instead")
+	}
+}
+
+func TestLogProgressUpdatesPositionStatus(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	path := logFixture(t, 100)
+	a.logMode().open(path)
+	lv := a.logMode().active()
+	waitLogIndex(t, lv)
+	lv.viewer.MoveToFileEdge(true, false)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString("appended\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.HandleFileChanged(path)
+	waitLogIndex(t, lv)
+	a.logMode().progress(lv)
+	assertPosition := func(want string) {
+		t.Helper()
+		for _, segment := range a.Status.RightSegments() {
+			if segment.ID == "position" && segment.Text == want {
+				return
+			}
+		}
+		t.Fatalf("position was not refreshed to %q", want)
+	}
+	assertPosition("Ln 12, Col 9")
+	a.OpenFind()
+	bar := a.Root.TopOverlayWidget().(*ui.FindBarWidget)
+	bar.Input.SetText("log entry")
+	a.logMode().search(lv, "log entry", ui.SearchOptions{}, false)
+	assertPosition("Ln 1, Col 1")
+}

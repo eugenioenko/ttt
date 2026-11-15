@@ -149,3 +149,30 @@ func TestSearchFromRescansOnlyTheLastIncompleteLine(t *testing.T) {
 		})
 	}
 }
+
+type cancelCountingContext struct {
+	context.Context
+	checks int
+}
+
+func (c *cancelCountingContext) Err() error {
+	c.checks++
+	if c.checks > 1 {
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestCountRunesCancelsDuringLongMatch(t *testing.T) {
+	path := writeFile(t, strings.Repeat("界", 10000))
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	ctx := &cancelCountingContext{Context: context.Background()}
+	n, err := countRunes(ctx, f, 0, 30000)
+	if err != context.Canceled || n >= 10000 {
+		t.Fatalf("counting continued after cancellation: %d, %v", n, err)
+	}
+}

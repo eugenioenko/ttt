@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/core/logfile"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -157,7 +158,7 @@ func TestLogViewerClickCopyAndDrag(t *testing.T) {
 }
 
 func TestLogViewerSelectionPausesFollowing(t *testing.T) {
-	for _, action := range []string{"select all", "shift left", "shift down"} {
+	for _, action := range []string{"select all", "shift left", "shift down", "wheel down"} {
 		t.Run(action, func(t *testing.T) {
 			v := testLogViewer(t, "first\nsecond\n", 40, 5)
 			v.Render(NewRenderSurface(makeGrid(40, 5), Rect{W: 40, H: 5}))
@@ -167,6 +168,9 @@ func TestLogViewerSelectionPausesFollowing(t *testing.T) {
 				v.SelectAll()
 			case "shift left":
 				v.HandleEvent(tcell.NewEventKey(tcell.KeyLeft, "", tcell.ModShift))
+			case "wheel down":
+				v.SelectAll()
+				v.HandleEvent(tcell.NewEventMouse(10, 1, tcell.WheelDown, 0))
 			case "shift down":
 				v.MoveToFileEdge(false, false)
 				v.HandleEvent(tcell.NewEventKey(tcell.KeyDown, "", tcell.ModShift))
@@ -194,5 +198,41 @@ func TestOpenInEditorKeepsCommittedLogTab(t *testing.T) {
 	g.OpenFile(other)
 	if !g.SwitchToTabByPath(path) {
 		t.Fatal("opening another file replaced the confirmed editor tab")
+	}
+}
+
+func TestLogViewerCappedWindowKeepsDestinationVisible(t *testing.T) {
+	line := strings.Repeat("x", logfile.MaxLineBytes) + "\n"
+	v := testLogViewer(t, strings.Repeat(line, 4)+"actual tail\n", 60, 12)
+	render := func() [][]term.Cell {
+		grid := makeGrid(60, 12)
+		v.Render(NewRenderSurface(grid, Rect{W: 60, H: 12}))
+		return grid
+	}
+	render()
+	v.MoveToFileEdge(true, false)
+	if grid := render(); !strings.Contains(gridText(grid), "actual tail") {
+		t.Fatal("capped read window excluded the tail")
+	}
+	v.Navigate(logfile.Match{Offset: int64(2 * len(line)), Col: 20})
+	render()
+	if _, _, visible := v.CursorPosition(); !visible {
+		t.Fatal("capped context window excluded the search destination")
+	}
+}
+
+func TestLogViewerHighlightsAfterHorizontalScroll(t *testing.T) {
+	v := testLogViewer(t, strings.Repeat("x", 4096)+"needle\n", 60, 5)
+	for col := 0; col < 2000; col += 2 {
+		v.Matches = append(v.Matches, logfile.Match{Col: col, Len: 1})
+	}
+	v.Matches = append(v.Matches, logfile.Match{Col: 4096, Len: 6})
+	grid := makeGrid(60, 5)
+	v.Render(NewRenderSurface(grid, Rect{W: 60, H: 5}))
+	v.Navigate(v.Matches[len(v.Matches)-1])
+	v.Render(NewRenderSurface(grid, Rect{W: 60, H: 5}))
+	x, y, visible := v.CursorPosition()
+	if !visible || grid[y][x].Ch != 'n' || grid[y][x].Style != term.StyleSearchMatch {
+		t.Fatal("horizontal scrolling lost the visible match highlight")
 	}
 }

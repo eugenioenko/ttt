@@ -252,3 +252,29 @@ func TestPreviousSkipsIndexedLongLinesWithoutInventingOffsets(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshReindexesSameSizeRewrite(t *testing.T) {
+	path := writeFile(t, "a\nb\n")
+	lf := openIndexed(t, path)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("abc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed := info.ModTime().Add(time.Second)
+	if err := os.Chtimes(path, changed, changed); err != nil {
+		t.Fatal(err)
+	}
+	if err := lf.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	waitIndexed(t, lf)
+	if _, ok := lf.OffsetForLine(1); ok || !lf.TakeReplaced() {
+		t.Fatal("equal-size rewrite retained the old line index")
+	}
+	if got := lf.ReadLines(0, 2); len(got) != 1 || got[0] != "abc" {
+		t.Fatalf("rewritten lines = %q", got)
+	}
+}

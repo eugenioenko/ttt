@@ -79,6 +79,22 @@ func (v *LogViewerWidget) load() {
 	v.rows = rows
 }
 
+func (v *LogViewerWidget) loadDestination(offset int64) {
+	v.load()
+	for _, row := range v.rows {
+		if row.Offset == offset {
+			return
+		}
+	}
+	v.top = offset
+	v.load()
+}
+
+func (v *LogViewerWidget) loadTail() {
+	v.top = v.Source.Tail(max(v.height, 1))
+	v.loadDestination(v.Source.Tail(1))
+}
+
 func (v *LogViewerWidget) RefreshProgress(reset bool) {
 	if reset {
 		v.left = 0
@@ -126,8 +142,7 @@ func (v *LogViewerWidget) edge(end, shift bool) {
 	v.Following = end && !shift
 	v.left = 0
 	if end {
-		v.top = v.Source.Tail(max(v.height, 1))
-		v.load()
+		v.loadTail()
 		if len(v.rows) > 0 {
 			r := v.rows[len(v.rows)-1]
 			v.Cursor = logfile.Position{Offset: r.Offset, Col: utf8.RuneCountInString(r.Text)}
@@ -182,7 +197,7 @@ func (v *LogViewerWidget) Navigate(match logfile.Match) {
 	v.Selecting = false
 	v.Cursor = logfile.Position{Offset: match.Offset, Col: match.Col}
 	v.top = v.Source.Previous(match.Offset, max(v.height/3, 0))
-	v.load()
+	v.loadDestination(match.Offset)
 	if row := v.row(match.Offset); match.Col > utf8.RuneCountInString(row.Text) && row.Truncated {
 		v.notice(i18n.Text("logMode.matchPastLimit"))
 	}
@@ -221,7 +236,7 @@ func (v *LogViewerWidget) scroll(n int) {
 	v.load()
 	if n > 0 && len(v.rows) > 0 {
 		last := v.rows[len(v.rows)-1]
-		v.Following = last.Next >= v.Source.Progress().Size
+		v.Following = !v.Selecting && last.Next >= v.Source.Progress().Size
 	}
 }
 
@@ -244,7 +259,7 @@ func (v *LogViewerWidget) move(n int, shift bool) {
 	}
 	if len(v.rows) > 0 && v.Cursor.Offset > v.rows[len(v.rows)-1].Offset {
 		v.top = v.Source.Previous(v.Cursor.Offset, max(v.height-1, 0))
-		v.load()
+		v.loadDestination(v.Cursor.Offset)
 	}
 	v.Following = !shift && row.Next >= v.Source.Progress().Size
 	v.revealColumn()
@@ -273,9 +288,10 @@ func (v *LogViewerWidget) Render(surface Surface) {
 	v.textWidth = max(w-v.gutter-1, 1)
 	v.height = max(h, 1)
 	if v.Following {
-		v.top = v.Source.Tail(v.height)
+		v.loadTail()
+	} else {
+		v.load()
 	}
-	v.load()
 	for _, row := range v.rows {
 		width := 0
 		for _, r := range row.Text {
@@ -291,8 +307,7 @@ func (v *LogViewerWidget) Render(surface Surface) {
 		h = max(h-1, 1)
 		v.height = h
 		if v.Following {
-			v.top = v.Source.Tail(h)
-			v.load()
+			v.loadTail()
 		}
 	}
 	if !v.started {
@@ -313,24 +328,25 @@ func (v *LogViewerWidget) Render(surface Surface) {
 		if v.LineNumbers && known {
 			surface.DrawText(0, y, fmt.Sprintf("%*d ", v.gutter-1, base+y+1), v.gutter, term.StyleLineNumber)
 		}
-		col := 0
+		col, matchIndex := 0, 0
+		matches := matchesByOffset[row.Offset]
 		for i, r := range []rune(row.Text) {
 			width := textwidth.Rune(r)
 			if r == '\t' {
 				width = max(v.TabSize, 1) - col%max(v.TabSize, 1)
 			}
 			x := v.gutter + col - v.left
-			style := term.StyleDefault
-			for _, match := range matchesByOffset[row.Offset] {
-				if match.Offset == row.Offset && i >= match.Col && i < match.Col+match.Len {
-					style = term.StyleSearchMatch
-					break
-				}
-			}
-			if v.selected(row.Offset, i) {
-				style = term.StyleSelection
-			}
 			if x >= v.gutter && x < v.gutter+v.textWidth {
+				style := term.StyleDefault
+				for matchIndex < len(matches) && matches[matchIndex].Col+matches[matchIndex].Len <= i {
+					matchIndex++
+				}
+				if matchIndex < len(matches) && matches[matchIndex].Col <= i {
+					style = term.StyleSearchMatch
+				}
+				if v.selected(row.Offset, i) {
+					style = term.StyleSelection
+				}
 				if r == '\t' {
 					width = surface.DrawText(x, y, strings.Repeat(" ", width), v.gutter+v.textWidth, style) - x
 				} else if width > 0 {

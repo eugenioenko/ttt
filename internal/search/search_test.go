@@ -277,3 +277,33 @@ func TestFindAllMatchesBatchesLongPathLists(t *testing.T) {
 		t.Fatalf("files = %d, want %d", len(found), len(paths))
 	}
 }
+
+func TestSearchDiskByteOffsets(t *testing.T) {
+	requireRipgrep(t)
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	for _, tc := range []struct {
+		name, text string
+		offset     int64
+		valid      bool
+	}{
+		{"utf8", "head\nneedle\n", 5, true},
+		{"utf8-bom", "\xef\xbb\xbfhead\nneedle\n", 8, true},
+		{"utf8-bom-first-line", "\xef\xbb\xbfneedle\n", 3, true},
+		{"utf16", "\xff\xfeh\x00\n\x00n\x00e\x00e\x00d\x00l\x00e\x00\n\x00", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "encoded.log")
+			if err := os.WriteFile(path, []byte(tc.text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			found, err := FindAllMatches(context.Background(), Options{Query: "needle"}, []string{path})
+			if err != nil || len(found[path]) != 1 {
+				t.Fatalf("search = %v, %v", found, err)
+			}
+			m := found[path][0]
+			if m.HasByteOffset != tc.valid || tc.valid && m.ByteOffset != tc.offset {
+				t.Fatalf("disk coordinates = %+v", m)
+			}
+		})
+	}
+}

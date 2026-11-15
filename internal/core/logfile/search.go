@@ -124,8 +124,16 @@ func (lf *File) SearchFrom(ctx context.Context, re *regexp.Regexp, start int64, 
 					result.Limited = true
 					return result, nil
 				}
-				colBase += countRunes(f, colOffset, start)
-				result.Matches = append(result.Matches, Match{Offset: lineStart, Col: colBase, Len: countRunes(f, start, end)})
+				prefix, err := countRunes(ctx, f, colOffset, start)
+				if err != nil {
+					return result, err
+				}
+				length, err := countRunes(ctx, f, start, end)
+				if err != nil {
+					return result, err
+				}
+				colBase += prefix
+				result.Matches = append(result.Matches, Match{Offset: lineStart, Col: colBase, Len: length})
 				colOffset = start
 			}
 			previousEnd = end
@@ -221,12 +229,20 @@ func (r *searchLineReader) ReadRune() (rune, int, error) {
 	return ch, width, nil
 }
 
-func countRunes(f *os.File, start, end int64) int {
+func countRunes(ctx context.Context, f *os.File, start, end int64) (int, error) {
 	reader := bufio.NewReaderSize(io.NewSectionReader(f, start, max(end-start, 0)), 4096)
 	n := 0
 	for {
+		if n%4096 == 0 {
+			if err := ctx.Err(); err != nil {
+				return n, err
+			}
+		}
 		if _, _, err := reader.ReadRune(); err != nil {
-			return n
+			if errors.Is(err, io.EOF) {
+				return n, nil
+			}
+			return n, err
 		}
 		n++
 	}

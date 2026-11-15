@@ -45,6 +45,7 @@ type File struct {
 	onProgress                func()
 	mu                        sync.Mutex
 	f                         *os.File
+	modified                  time.Time
 	gen                       uint64
 	marks                     []int64
 	longLines                 []longLine
@@ -57,11 +58,18 @@ type File struct {
 }
 
 func Open(path string, onProgress func()) (*File, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("not a regular file")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	info, err := f.Stat()
+	info, err = f.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		f.Close()
 		if err == nil {
@@ -69,7 +77,7 @@ func Open(path string, onProgress func()) (*File, error) {
 		}
 		return nil, err
 	}
-	lf := &File{path: path, f: f, onProgress: onProgress, marks: []int64{0}, size: info.Size()}
+	lf := &File{path: path, f: f, onProgress: onProgress, marks: []int64{0}, size: info.Size(), modified: info.ModTime()}
 	lf.startLocked()
 	return lf, nil
 }
@@ -113,7 +121,11 @@ func (lf *File) Refresh() error {
 		lf.mu.Unlock()
 		return err
 	}
-	if !os.SameFile(opened, info) || info.Size() < max(lf.size, lf.scanned) {
+	if !info.Mode().IsRegular() {
+		lf.mu.Unlock()
+		return errors.New("not a regular file")
+	}
+	if !os.SameFile(opened, info) || info.Size() < max(lf.size, lf.scanned) || info.Size() == lf.size && !info.ModTime().Equal(lf.modified) {
 		f, err := os.Open(lf.path)
 		if err != nil {
 			lf.mu.Unlock()
@@ -126,7 +138,7 @@ func (lf *File) Refresh() error {
 		lf.running = false
 		lf.replaced = true
 	}
-	lf.size = info.Size()
+	lf.size, lf.modified = info.Size(), info.ModTime()
 	lf.cache = nil
 	if !lf.running && (lf.scanned < lf.size || lf.replaced) {
 		lf.startLocked()
@@ -456,4 +468,22 @@ func displayLine(b []byte) string {
 		return string(b)
 	}
 	return string(bytes.Runes(b))
+}
+
+func (lf *File) ColumnForByte(offset int64, column int) (int, error) {
+	data := make([]byte, min(max(column, 0), MaxLineBytes))
+	lf.mu.Lock()
+	defer lf.mu.Unlock()
+	if lf.closed {
+		return 0, os.ErrClosed
+	}
+	n, err := lf.f.ReadAt(data, offset)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, err
+	}
+	col := utf8.RuneCount(data[:n])
+	if column > MaxLineBytes {
+		col++
+	}
+	return col, nil
 }

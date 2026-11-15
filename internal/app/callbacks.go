@@ -237,7 +237,9 @@ func (a *App) navigateToSearchMatch(path string, line, col int, offset *int64) {
 		a.Root.SetFocus(a.EditorGroup)
 		return
 	}
-	a.EditorGroup.OpenFile(path)
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		return
+	}
 	if lv := a.logMode().active(); lv != nil {
 		off, ok := int64(0), false
 		if offset != nil {
@@ -246,11 +248,10 @@ func (a *App) navigateToSearchMatch(path string, line, col int, offset *int64) {
 			off, ok = lv.file.OffsetForLine(line - 1)
 		}
 		if ok {
-			rows, _ := lv.file.ReadRows(off, 1)
-			runeCol := 0
-			if len(rows) > 0 {
-				text := rows[0].Text
-				runeCol = utf8.RuneCountInString(text[:min(col, len(text))])
+			runeCol, err := lv.file.ColumnForByte(off, col)
+			if err != nil {
+				a.StatusWarn(i18n.Format("logMode.readFailed", i18n.Args{"error": err.Error()}))
+				return
 			}
 			lv.viewer.Navigate(logfile.Match{Offset: off, Col: runeCol})
 		} else {

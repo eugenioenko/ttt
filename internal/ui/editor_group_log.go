@@ -53,6 +53,7 @@ func (g *EditorGroupWidget) detachLogEditor() {
 	if g.FoldDelay != nil {
 		g.FoldDelay.Stop()
 	}
+	g.foldBuf = nil
 	e.mouseDown = false
 	e.cancelDragAutoScroll()
 	e.Buf = &buffer.Buffer{Lines: []string{""}}

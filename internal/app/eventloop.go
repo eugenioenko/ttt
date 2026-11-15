@@ -56,18 +56,8 @@ func RunEventLoop(
 		app.syncRepositoryObservation()
 		app.logMode().syncStatus()
 		app.SyncReloadSegment()
-		line, col := app.EditorGroup.ActiveCursor()
+		line, col := app.syncPositionStatus()
 		filePath := app.EditorGroup.ActiveFilePath()
-		cursorCount := app.EditorGroup.MultiCursorCount()
-
-		posText := i18n.Format("status.lnCol", i18n.Args{"line": line + 1, "column": col + 1})
-		if lv := app.logMode().active(); lv != nil && line < 0 {
-			posText = i18n.Format("logMode.bytePosition", i18n.Args{"offset": lv.viewer.Cursor.Offset, "column": col + 1})
-		}
-		if cursorCount > 1 {
-			posText += i18n.Format("status.cursors", i18n.Args{"cursorCount": cursorCount})
-		}
-		app.Status.SetSegment(view.StatusSegment{ID: "position", Side: "right", Priority: 100, Text: posText})
 
 		app.Status.SetSegment(view.StatusSegment{ID: "encoding", Side: "right", Priority: 300, Text: "UTF-8"})
 
@@ -503,4 +493,19 @@ func resizeTerminals(app *App) {
 			tt.Term.Resize(content.W, content.H)
 		}
 	}
+}
+
+func (a *App) syncPositionStatus() (line, col int) {
+	line, col = a.EditorGroup.ActiveCursor()
+	cursorCount := a.EditorGroup.MultiCursorCount()
+
+	posText := i18n.Format("status.lnCol", i18n.Args{"line": line + 1, "column": col + 1})
+	if lv := a.logMode().active(); lv != nil && line < 0 {
+		posText = i18n.Format("logMode.bytePosition", i18n.Args{"offset": lv.viewer.Cursor.Offset, "column": col + 1})
+	}
+	if cursorCount > 1 {
+		posText += i18n.Format("status.cursors", i18n.Args{"cursorCount": cursorCount})
+	}
+	a.Status.SetSegment(view.StatusSegment{ID: "position", Side: "right", Priority: 100, Text: posText})
+	return line, col
 }
