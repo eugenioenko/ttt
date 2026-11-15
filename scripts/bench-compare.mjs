@@ -121,21 +121,9 @@ try {
   const short = (sha, fallback) => (sha ? sha.slice(0, 12) : fallback);
   const lines = [
     marker,
-    '## Editor, diff, and log benchmarks',
+    '## Performance benchmarks',
     '',
-    `Comparing \`${short(process.env.BASE_SHA, 'base')}\` with \`${short(process.env.HEAD_SHA, 'PR')}\` on the same runner: ` +
-      `fastest of ${count} alternating passes at ${benchTime} each, \`-short\` (2,000-line large file).` +
-      (overlaid.length
-        ? ` The base predates ${overlaid.map((suite) => `\`Benchmark${suite.name}\``).join(' and ')}, so it was measured with ${headName}'s scenarios.`
-        : ''),
-    '',
-    'Allocated bytes measure total allocation per operation, not peak or retained RAM.',
-    '',
-    `Logs are opened by each side's built \`ttt\` binary, ${logBenchTime} per pass, timed from launch until the first frame shows the log; \`_wrap\` rows start with word wrap on, and \`_edit\` opens a log committed to git, types a character, and moves down 20 lines. ` +
-      'Time includes process startup, so the 1 MiB case is mostly startup; peak RSS is the process\'s maximum resident memory. ' +
-      'The 1, 128, and 256 MiB fixtures are generated once outside timing and shared across both checkouts, so reads may use the OS file cache.',
-    '',
-    'Code files open a 64 MiB Go file, this repository\'s sources repeated, with LSP and the git gutter off; `_type` also types 20 characters and `_enter` presses Enter 10 times before quitting.',
+    `Comparing \`${short(process.env.BASE_SHA, 'base')}\` with \`${short(process.env.HEAD_SHA, 'PR')}\` on the same runner. Lower values are better.`,
   ];
   let compared = 0;
   for (const suite of suites) {
@@ -211,6 +199,9 @@ try {
     if (added.length) lines.push('', `New in ${headName}: ${added.map((name) => `\`${name}\``).join(', ')}.`);
   }
   if (compared === 0) throw new Error('no benchmark ran on both sides');
+  if (overlaid.length) {
+    lines.push('', `The base predates ${overlaid.map((suite) => `\`Benchmark${suite.name}\``).join(' and ')}, so it was measured with ${headName}'s scenarios.`);
+  }
   lines.push('', '_Timing changes are informational because shared CI runners are noisy; a benchmark error still fails the job._', '');
 
   const report = lines.join('\n');

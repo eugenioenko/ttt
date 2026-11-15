@@ -184,6 +184,9 @@ jobs:
       - name: Build
         run: go build ./...
 
+      - name: Test PR report publisher
+        run: python3 -B -m unittest discover -s scripts -p 'test_publish_pr_reports.py'
+
       - name: Cross-build Android and Windows ARM64
         run: |
           CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -o "$RUNNER_TEMP/ttt-android-arm64" ./cmd/ttt
@@ -246,9 +249,6 @@ jobs:
     if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Check out PR head
         uses: actions/checkout@v7
@@ -279,20 +279,13 @@ jobs:
           REPORT_FILE: ${{ runner.temp }}/editor-bench.md
         run: node scripts/bench-compare.mjs
 
-      - name: Create or update PR benchmark comment
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPORT_FILE: ${{ runner.temp }}/editor-bench.md
-        run: |
-          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.user.type == "Bot" and (.body | contains("<!-- ttt-editor-benchmarks -->"))) | .id' | head -n 1)"
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$REPORT_FILE" >/dev/null
-          else
-            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$REPORT_FILE" >/dev/null
-          fi
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v7
+        with:
+          name: editor-bench-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/editor-bench.md
+          if-no-files-found: error
+          retention-days: 14
 
   binary-size:
     name: "Binary size (informational, not required)"
@@ -300,9 +293,6 @@ jobs:
     if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Check out PR head
         uses: actions/checkout@v7
@@ -413,19 +403,13 @@ jobs:
 
           echo "exceeded=$exceeded" >> "$GITHUB_OUTPUT"
 
-      - name: Create or update PR size comment
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.user.type == "Bot" and (.body | contains("<!-- ttt-binary-size -->"))) | .id' | head -n 1)"
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/size-report.md" >/dev/null
-          else
-            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/size-report.md" >/dev/null
-          fi
+      - name: Upload binary size report
+        uses: actions/upload-artifact@v7
+        with:
+          name: size-report-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/size-report.md
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Fail on threshold breach
         if: steps.size.outputs.exceeded == 'true'
