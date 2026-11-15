@@ -83,8 +83,7 @@ func TestAutoHideTabsStayOpenForMenuAndDrag(t *testing.T) {
 		t.Fatal("dragging a tab collapsed the source header")
 	}
 	move(r.X+20, r.Y+8, tcell.ButtonNone)
-	move(0, 0, tcell.ButtonNone)
 	if group.TabBar.GetRect().H != 1 {
-		t.Fatal("header remained open after the tab drag ended")
+		t.Fatal("header remained open after release without another mouse move")
 	}
 }

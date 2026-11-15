@@ -287,6 +287,10 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	}
 	if released {
 		r.releasePressTarget(ev, receiver, modal)
+		if r.OnMouseMove != nil && !r.HasOverlay() && !r.PointerCaptureActive() {
+			x, y := mev.Position()
+			r.OnMouseMove(x, y)
+		}
 	}
 	return result
 }
