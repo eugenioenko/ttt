@@ -348,8 +348,7 @@ func (e *EditorPaneWidget) InsertLineAbove() {
 func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 	prefix = "//"
 	if e.Highlighter != nil {
-		lang := highlight.CanonicalLanguageID(e.Highlighter.LanguageID())
-		switch lang {
+		switch e.commentLanguage() {
 		case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
 			"elixir", "fish", "gdscript", "gherkin", "graphql", "julia", "make",
 			"mojo", "nix", "nushell", "perl", "powershell", "puppet", "python",
@@ -378,6 +377,15 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 		}
 	}
 	return prefix, ""
+}
+
+// commentLanguage returns the canonical language ID that refines comment
+// classification, or "" without a highlighter.
+func (e *EditorPaneWidget) commentLanguage() string {
+	if e.Highlighter == nil {
+		return ""
+	}
+	return highlight.CanonicalLanguageID(e.Highlighter.LanguageID())
 }
 
 // escapeXMLCommentText spells every character that may not appear inside an
@@ -458,8 +466,10 @@ func commentSyntaxNests(prefix, postfix string) bool {
 // line. Nesting syntax balances to depth zero only at the end of the line, so an
 // outer wrapper with inner closers still counts, but delimiters quoted in a
 // string, character, or quoted-string literal do not nest; non-nesting syntax
-// requires the first closer to end the line.
-func isWholeLineComment(text, prefix, postfix string) bool {
+// requires the first closer to end the line. Quoted strings are OCaml-only: Coq
+// shares the delimiters but has no {| |} literal, so there the brace is comment
+// text and (* {| *) is a complete comment.
+func isWholeLineComment(text, prefix, postfix, lang string) bool {
 	if !commentSyntaxNests(prefix, postfix) {
 		rest := text[len(prefix):]
 		closer := strings.Index(rest, postfix)
@@ -485,7 +495,7 @@ func isWholeLineComment(text, prefix, postfix string) bool {
 			} else {
 				i++
 			}
-		case text[i] == '{':
+		case text[i] == '{' && lang == "ocaml":
 			if next, ok := skipQuotedString(text, i); ok {
 				i = next
 			} else {
@@ -600,7 +610,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		commented := hasCommentPrefix(trimmed, prefix)
 		if commented && postfix != "" {
 			// Uncomment only when a single wrapper covers the whole line.
-			commented = isWholeLineComment(trimmed, prefix, postfix)
+			commented = isWholeLineComment(trimmed, prefix, postfix, e.commentLanguage())
 		}
 		if !commented {
 			allCommented = false

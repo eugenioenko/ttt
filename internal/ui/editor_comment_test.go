@@ -41,6 +41,11 @@ func newCommentEditor(t *testing.T, filename string, lines []string, line, col i
 	if h == nil {
 		t.Fatalf("no highlighter for %s", filename)
 	}
+	return newCommentEditorWith(t, h, lines, line, col)
+}
+
+func newCommentEditorWith(t *testing.T, h *highlight.Highlighter, lines []string, line, col int) *EditorPaneWidget {
+	t.Helper()
 	e := NewEditorPaneWidget(
 		&buffer.Buffer{Lines: lines},
 		&cursor.Cursor{Line: line, Col: col},
@@ -153,6 +158,23 @@ func TestToggleLineCommentRoundTripsQuotedString(t *testing.T) {
 	e.ToggleLineComment()
 	if got := e.Buf.Lines[0]; got != original {
 		t.Fatalf("unwrapped line = %q, want %q", got, original)
+	}
+}
+
+// Coq shares OCaml's comment delimiters but has no quoted-string literal, so
+// the "{|" inside the wrapper is comment text and the closer still ends the
+// line: toggling must remove the wrapper instead of adding a second one.
+func TestToggleLineCommentCoqKeepsBracePipeInComment(t *testing.T) {
+	// .v is also claimed by other grammars, so select Coq by language ID.
+	h := highlight.NewForLanguage("coq")
+	if h == nil {
+		t.Fatal("no highlighter for coq")
+	}
+	e := newCommentEditorWith(t, h, []string{"(* {| *)"}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "{|"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
 	}
 }
 
