@@ -285,7 +285,7 @@ func (e *EditorPaneWidget) JumpBookmark(delta int) bool {
 	e.Cursor.Col = 0
 	if e.isMultiActive() {
 		e.syncToMulti()
-		e.Multi.Sort()
+		e.Multi.Deduplicate()
 	}
 	e.revealGapRow = e.DiffOverlay != nil
 	for e.Folds != nil && e.Folds.IsLineHidden(e.Cursor.Line) {
