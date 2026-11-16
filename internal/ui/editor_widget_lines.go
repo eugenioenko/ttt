@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/fold"
@@ -393,6 +394,32 @@ func unescapeHTMLCommentDelimiters(text string) string {
 	return strings.ReplaceAll(text, "--&gt;", "-->")
 }
 
+// isWordCommentPrefix reports whether prefix is a keyword rather than a
+// punctuation delimiter, such as Batch's REM. Word prefixes are matched
+// case-insensitively and only as a whole word, so REMOVE_ME=1 is code.
+func isWordCommentPrefix(prefix string) bool {
+	if prefix == "" {
+		return false
+	}
+	for _, r := range prefix {
+		if !unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasCommentPrefix(trimmed, prefix string) bool {
+	if !isWordCommentPrefix(prefix) {
+		return strings.HasPrefix(trimmed, prefix)
+	}
+	if len(trimmed) < len(prefix) || !strings.EqualFold(trimmed[:len(prefix)], prefix) {
+		return false
+	}
+	rest := trimmed[len(prefix):]
+	return rest == "" || rest[0] == ' ' || rest[0] == '\t'
+}
+
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
 	prefix, postfix := e.commentSyntax()
@@ -417,7 +444,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		if trimmed == "" {
 			continue
 		}
-		commented := strings.HasPrefix(trimmed, prefix)
+		commented := hasCommentPrefix(trimmed, prefix)
 		if commented && postfix != "" {
 			// Uncomment only when a single pair wraps the whole line: the first
 			// closer must end it, so text between separate pairs stays active.

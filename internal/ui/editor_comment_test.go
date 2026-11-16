@@ -34,11 +34,11 @@ func TestCommentSyntaxResolvesShellAliasToHash(t *testing.T) {
 	}
 }
 
-func newHTMLCommentEditor(t *testing.T, lines []string, line, col int) *EditorPaneWidget {
+func newCommentEditor(t *testing.T, filename string, lines []string, line, col int) *EditorPaneWidget {
 	t.Helper()
-	h := highlight.New("a.html")
+	h := highlight.New(filename)
 	if h == nil {
-		t.Fatal("no highlighter for a.html")
+		t.Fatalf("no highlighter for %s", filename)
 	}
 	e := NewEditorPaneWidget(
 		&buffer.Buffer{Lines: lines},
@@ -53,7 +53,7 @@ func newHTMLCommentEditor(t *testing.T, lines []string, line, col int) *EditorPa
 // it and toggling back off must restore the line exactly.
 func TestToggleLineCommentEscapesInlineHTMLComments(t *testing.T) {
 	const original = "<!-- a -->hello<!-- b -->"
-	e := newHTMLCommentEditor(t, []string{original}, 0, 0)
+	e := newCommentEditor(t, "a.html", []string{original}, 0, 0)
 
 	e.ToggleLineComment()
 	if got, want := e.Buf.Lines[0], "<!-- &lt;!-- a --&gt;hello&lt;!-- b --&gt; -->"; got != want {
@@ -70,7 +70,7 @@ func TestToggleLineCommentEscapesInlineHTMLComments(t *testing.T) {
 // comment pair, and the second toggle restores both original lines.
 func TestToggleLineCommentEscapesMixedSelection(t *testing.T) {
 	original := []string{"<!-- a -->", "<div>hello</div>"}
-	e := newHTMLCommentEditor(t, append([]string(nil), original...), 1, len([]rune(original[1])))
+	e := newCommentEditor(t, "a.html", append([]string(nil), original...), 1, len([]rune(original[1])))
 	e.Selection = &selection.Selection{}
 	e.Selection.Start(0, 0)
 
@@ -87,5 +87,41 @@ func TestToggleLineCommentEscapesMixedSelection(t *testing.T) {
 		if e.Buf.Lines[i] != original[i] {
 			t.Fatalf("unwrapped line %d = %q, want %q", i, e.Buf.Lines[i], original[i])
 		}
+	}
+}
+
+// Batch's REM is a keyword, so an identifier that merely starts with it is code
+// and must get wrapped instead of being uncommented.
+func TestToggleLineCommentKeepsWordPrefixIdentifiers(t *testing.T) {
+	const original = "REMOVE_ME=1"
+	e := newCommentEditor(t, "a.bat", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "REM REMOVE_ME=1"; got != want {
+		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("unwrapped line = %q, want %q", got, original)
+	}
+}
+
+func TestToggleLineCommentMatchesWordPrefixCaseInsensitively(t *testing.T) {
+	tests := []struct {
+		name, line, want string
+	}{
+		{"lowercase prefix", "rem note", "note"},
+		{"prefix alone", "REM", ""},
+		{"prefix inside identifier", "REMOTE", "REM REMOTE"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newCommentEditor(t, "a.bat", []string{tt.line}, 0, 0)
+			e.ToggleLineComment()
+			if got := e.Buf.Lines[0]; got != tt.want {
+				t.Fatalf("toggled line = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
