@@ -105,6 +105,23 @@ func TestToggleLineCommentRecognizesNestedComments(t *testing.T) {
 	}
 }
 
+// A delimiter quoted in a string literal is text, not nesting, so a quoted
+// opener must not make the wrapper look unbalanced and wrap the line twice.
+func TestToggleLineCommentIgnoresDelimitersInStringLiterals(t *testing.T) {
+	const original = `let opener = "(*" in opener`
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], `(* let opener = "(*" in opener *)`; got != want {
+		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("unwrapped line = %q, want %q", got, original)
+	}
+}
+
 // Pre-existing entity text must survive a wrap/unwrap round trip: unescaping
 // has to reverse only what the wrapper itself encoded.
 func TestToggleLineCommentPreservesEntityText(t *testing.T) {

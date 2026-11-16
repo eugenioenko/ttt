@@ -439,8 +439,9 @@ func commentSyntaxNests(prefix, postfix string) bool {
 
 // isWholeLineComment reports whether text is one comment wrapping the whole
 // line. Nesting syntax balances to depth zero only at the end of the line, so an
-// outer wrapper with inner closers still counts; non-nesting syntax requires the
-// first closer to end the line.
+// outer wrapper with inner closers still counts, but delimiters quoted in a
+// string literal do not nest; non-nesting syntax requires the first closer to
+// end the line.
 func isWholeLineComment(text, prefix, postfix string) bool {
 	if !commentSyntaxNests(prefix, postfix) {
 		rest := text[len(prefix):]
@@ -459,11 +460,28 @@ func isWholeLineComment(text, prefix, postfix string) bool {
 				return i+len(postfix) == len(text)
 			}
 			i += len(postfix)
+		case text[i] == '"':
+			i = skipStringLiteral(text, i)
 		default:
 			i++
 		}
 	}
 	return false
+}
+
+// skipStringLiteral returns the index just past the string literal that opens
+// at i. Comment delimiters inside a literal are text, not nesting, so the scan
+// must jump over it; an unterminated literal runs to the end of the line.
+func skipStringLiteral(text string, i int) int {
+	for i++; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '"':
+			return i + 1
+		}
+	}
+	return len(text)
 }
 
 func hasCommentPrefix(trimmed, prefix string) bool {
