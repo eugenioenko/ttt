@@ -156,6 +156,23 @@ func TestToggleLineCommentEscapesDoubleHyphenRuns(t *testing.T) {
 	}
 }
 
+// A cursor between two adjacent hyphens sits inside one encoded run, so it must
+// land after the first &#45; entity rather than inside it.
+func TestToggleLineCommentMovesCursorPastEncodedHyphenRun(t *testing.T) {
+	const original = "a--b"
+	e := newCommentEditor(t, "a.xml", []string{original}, 0, 2)
+
+	e.ToggleLineComment()
+	escaped := escapeXMLCommentText(original)
+	if got, want := e.Buf.Lines[0], "<!-- "+escaped+" -->"; got != want {
+		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+	wantCol := len([]rune("<!-- " + escaped[:strings.Index(escaped, "&#45;")+len("&#45;")]))
+	if e.Cursor.Col != wantCol {
+		t.Fatalf("cursor col = %d, want %d (just past the first encoded hyphen)", e.Cursor.Col, wantCol)
+	}
+}
+
 // Batch's REM is a keyword, so an identifier that merely starts with it is code
 // and must get wrapped instead of being uncommented.
 func TestToggleLineCommentKeepsWordPrefixIdentifiers(t *testing.T) {

@@ -390,17 +390,33 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 // and "-->" delimiters, the "--" run XML forbids, and guarantees no two
 // literal hyphens stay adjacent in the output.
 func escapeXMLCommentText(text string) string {
+	return escapeXMLCommentTextPrefix(text, len(text))
+}
+
+// escapeXMLCommentTextPrefix encodes text as escapeXMLCommentText does but
+// stops after the first end bytes, using the whole line as context: a hyphen
+// run straddling end is still a run, so a cursor inside it moves past every
+// encoded hyphen before it instead of landing inside an entity.
+func escapeXMLCommentTextPrefix(text string, end int) string {
 	var b strings.Builder
-	b.Grow(len(text) + 8)
-	for i := 0; i < len(text); {
+	b.Grow(end + 8)
+	for i := 0; i < len(text) && i < end; {
 		switch {
 		case text[i] == '&':
 			b.WriteString("&amp;")
 			i++
-		case text[i] == '-' && i+1 < len(text) && text[i+1] == '-':
-			for i < len(text) && text[i] == '-' {
-				b.WriteString("&#45;")
+		case text[i] == '-':
+			j := i
+			for j < len(text) && text[j] == '-' {
+				j++
+			}
+			if j-i < 2 {
+				b.WriteByte('-')
 				i++
+				continue
+			}
+			for ; i < j && i < end; i++ {
+				b.WriteString("&#45;")
 			}
 		default:
 			b.WriteByte(text[i])
@@ -602,7 +618,9 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 				if escaped := escapeXMLCommentText(e.Buf.Lines[l]); escaped != e.Buf.Lines[l] {
 					if l == e.Cursor.Line {
 						c := min(e.Cursor.Col, len(runes))
-						cursorDelta += len([]rune(escapeXMLCommentText(string(runes[:c])))) - c
+						line := string(runes)
+						end := len(string(runes[:c]))
+						cursorDelta += len([]rune(escapeXMLCommentTextPrefix(line, end))) - c
 					}
 					replace := &undo.ReplaceLinesCommand{
 						Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{escaped},
