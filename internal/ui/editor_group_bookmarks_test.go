@@ -139,6 +139,26 @@ func TestBookmarksMergeWhenLinesCollapse(t *testing.T) {
 	}
 }
 
+func TestBookmarksSurviveUndoGroupLongerThanChangeLog(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	g.OpenFile(a)
+	g.Editor.SetBookmark(2, 'C', term.StyleDefault)
+	g.Editor.Cursor.Line = 0
+	g.Editor.Cursor.Col = 0
+	for range 65 {
+		g.Editor.execRune('x')
+	}
+
+	g.Undo()
+
+	if got := g.Editor.Buf.Lines[0]; got != "one" {
+		t.Fatalf("undo left line 0 = %q, want the original text", got)
+	}
+	if b, ok := g.Editor.GetBookmark(2); !ok || b.Icon != 'C' {
+		t.Fatalf("bookmark on an untouched line = %+v, want it kept at line 2", b)
+	}
+}
+
 func TestJumpBookmarkWithoutBookmarksReportsNothing(t *testing.T) {
 	g, a, _ := openBookmarkFiles(t)
 	g.OpenFile(a)

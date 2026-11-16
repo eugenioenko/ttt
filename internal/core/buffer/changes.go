@@ -19,6 +19,15 @@ type changeLog struct {
 // methods.
 func (b *Buffer) Version() uint64 { return b.log.version }
 
+// OldestReplayVersion returns the oldest version ChangesSince can still replay
+// from; changes made before it have left the log.
+func (b *Buffer) OldestReplayVersion() uint64 {
+	if b.log.version <= changeLogSize {
+		return 0
+	}
+	return b.log.version - changeLogSize
+}
+
 // ChangesSince calls fn, oldest first, for each change made after version v.
 // It returns false when v is too old to replay; the caller must then treat the
 // whole buffer as changed.

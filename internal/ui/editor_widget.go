@@ -283,6 +283,10 @@ func (e *EditorPaneWidget) JumpBookmark(delta int) bool {
 	}
 	e.Cursor.Line = target
 	e.Cursor.Col = 0
+	if e.isMultiActive() {
+		e.syncToMulti()
+		e.Multi.Sort()
+	}
 	e.revealGapRow = e.DiffOverlay != nil
 	for e.Folds != nil && e.Folds.IsLineHidden(e.Cursor.Line) {
 		e.ExpandFoldContaining(e.Cursor.Line)
@@ -438,6 +442,12 @@ func (e *EditorPaneWidget) remapBookmarks(version uint64) {
 	if len(e.Bookmarks) == 0 || version == e.Buf.Version() {
 		return
 	}
+	if oldest := e.Buf.OldestReplayVersion(); version < oldest {
+		// An undo batch can be longer than the change log. Replaying the
+		// retained tail still moves bookmarks on lines the missing prefix
+		// never touched, so leave those in place rather than dropping all.
+		version = oldest
+	}
 	if !e.Buf.ChangesSince(version, func(c buffer.Change) {
 		if c.Added == 0 {
 			for line := c.Start; line < c.Start+c.Removed; line++ {
@@ -446,7 +456,7 @@ func (e *EditorPaneWidget) remapBookmarks(version uint64) {
 		}
 		shiftKeys(e.Bookmarks, c, func(a, _ Bookmark) Bookmark { return a })
 	}) {
-		clear(e.Bookmarks)
+		return
 	}
 }
 
