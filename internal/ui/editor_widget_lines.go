@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/highlight"
 )
 
 func (e *EditorPaneWidget) MoveLineUp() {
@@ -345,7 +346,7 @@ func (e *EditorPaneWidget) InsertLineAbove() {
 func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 	prefix = "//"
 	if e.Highlighter != nil {
-		lang := strings.ToLower(e.Highlighter.LanguageID())
+		lang := highlight.CanonicalLanguageID(e.Highlighter.LanguageID())
 		switch lang {
 		case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
 			"elixir", "fish", "gdscript", "gherkin", "graphql", "julia", "make",
