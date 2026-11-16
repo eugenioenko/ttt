@@ -130,7 +130,7 @@ describe("toggle line comment", () => {
     expect(content.split("\n")[0]).toBe("<div>hello</div>");
   });
 
-  it("does not unwrap separate comment pairs as one comment", () => {
+  it("escapes separate comment pairs when wrapping", () => {
     dir = createTempDir();
     const file = join(dir, "test.html");
     writeFileSync(file, "<!-- a -->hello<!-- b -->\n");
@@ -145,7 +145,9 @@ describe("toggle line comment", () => {
     tui.run();
 
     const content = readFile(file);
-    expect(content.split("\n")[0]).toBe("<!-- <!-- a -->hello<!-- b --> -->");
+    expect(content.split("\n")[0]).toBe(
+      "<!-- &lt;!-- a --&gt;hello&lt;!-- b --&gt; -->",
+    );
   });
 
   it("uses # prefix for Python files", () => {

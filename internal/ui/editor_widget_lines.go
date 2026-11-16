@@ -378,6 +378,21 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 	return prefix, ""
 }
 
+// escapeHTMLCommentDelimiters spells existing "<!--" and "-->" sequences as
+// entities so a new <!-- ... --> wrapper contains no closer that would end it
+// early. HTML comments cannot nest and have no backslash escape, so entities
+// are the only reversible spelling; unescapeHTMLCommentDelimiters restores the
+// text when the comment is toggled back off.
+func escapeHTMLCommentDelimiters(text string) string {
+	text = strings.ReplaceAll(text, "<!--", "&lt;!--")
+	return strings.ReplaceAll(text, "-->", "--&gt;")
+}
+
+func unescapeHTMLCommentDelimiters(text string) string {
+	text = strings.ReplaceAll(text, "&lt;!--", "<!--")
+	return strings.ReplaceAll(text, "--&gt;", "-->")
+}
+
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
 	prefix, postfix := e.commentSyntax()
@@ -468,13 +483,40 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 						}
 					}
 				}
+				if prefix == "<!--" {
+					if unescaped := unescapeHTMLCommentDelimiters(e.Buf.Lines[l]); unescaped != e.Buf.Lines[l] {
+						if l == e.Cursor.Line {
+							line := []rune(e.Buf.Lines[l])
+							c := max(0, min(e.Cursor.Col+cursorDelta, len(line)))
+							cursorDelta += len([]rune(unescapeHTMLCommentDelimiters(string(line[:c])))) - c
+						}
+						replace := &undo.ReplaceLinesCommand{
+							Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{unescaped},
+						}
+						replace.Apply(e.Buf)
+						cmds = append(cmds, replace)
+					}
+				}
 			}
 		} else {
+			if prefix == "<!--" {
+				if escaped := escapeHTMLCommentDelimiters(e.Buf.Lines[l]); escaped != e.Buf.Lines[l] {
+					if l == e.Cursor.Line {
+						c := min(e.Cursor.Col, len(runes))
+						cursorDelta += len([]rune(escapeHTMLCommentDelimiters(string(runes[:c])))) - c
+					}
+					replace := &undo.ReplaceLinesCommand{
+						Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{escaped},
+					}
+					replace.Apply(e.Buf)
+					cmds = append(cmds, replace)
+				}
+			}
 			cmd := &undo.InsertStringCommand{Line: l, Col: indent, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
 			if l == e.Cursor.Line {
-				cursorDelta = prefixLen + 1
+				cursorDelta += prefixLen + 1
 			}
 			if postfix != "" {
 				endCol := len([]rune(strings.TrimRight(e.Buf.Lines[l], " \t")))
