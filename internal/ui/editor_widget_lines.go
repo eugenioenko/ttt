@@ -402,10 +402,13 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		if trimmed == "" {
 			continue
 		}
-		commented := strings.HasPrefix(trimmed, prefix) &&
-			len([]rune(trimmed)) >= prefixLen+postfixLen
+		commented := strings.HasPrefix(trimmed, prefix)
 		if commented && postfix != "" {
-			commented = strings.HasSuffix(trimmed, postfix)
+			// Uncomment only when a single pair wraps the whole line: the first
+			// closer must end it, so text between separate pairs stays active.
+			rest := trimmed[prefixLen:]
+			closer := strings.Index(rest, postfix)
+			commented = closer >= 0 && closer+postfixLen == len(rest)
 		}
 		if !commented {
 			allCommented = false
