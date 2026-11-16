@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/fold"
@@ -456,8 +457,8 @@ func commentSyntaxNests(prefix, postfix string) bool {
 // isWholeLineComment reports whether text is one comment wrapping the whole
 // line. Nesting syntax balances to depth zero only at the end of the line, so an
 // outer wrapper with inner closers still counts, but delimiters quoted in a
-// string literal do not nest; non-nesting syntax requires the first closer to
-// end the line.
+// string, character, or quoted-string literal do not nest; non-nesting syntax
+// requires the first closer to end the line.
 func isWholeLineComment(text, prefix, postfix string) bool {
 	if !commentSyntaxNests(prefix, postfix) {
 		rest := text[len(prefix):]
@@ -478,6 +479,18 @@ func isWholeLineComment(text, prefix, postfix string) bool {
 			i += len(postfix)
 		case text[i] == '"':
 			i = skipStringLiteral(text, i)
+		case text[i] == '\'':
+			if next, ok := skipCharLiteral(text, i); ok {
+				i = next
+			} else {
+				i++
+			}
+		case text[i] == '{':
+			if next, ok := skipQuotedString(text, i); ok {
+				i = next
+			} else {
+				i++
+			}
 		default:
 			i++
 		}
@@ -498,6 +511,55 @@ func skipStringLiteral(text string, i int) int {
 		}
 	}
 	return len(text)
+}
+
+// skipCharLiteral returns the index just past the character literal opening at
+// i, and false when text[i] does not open one. A quote character such as '"'
+// must be skipped first, or it would be mistaken for a string opener. OCaml
+// also spells type variables with a bare quote, so the closing quote is
+// required before this counts as a literal.
+func skipCharLiteral(text string, i int) (int, bool) {
+	j := i + 1
+	if j >= len(text) {
+		return i, false
+	}
+	if text[j] == '\\' {
+		j++
+		if j >= len(text) {
+			return i, false
+		}
+	}
+	_, size := utf8.DecodeRuneInString(text[j:])
+	j += size
+	if j < len(text) && text[j] == '\'' {
+		return j + 1, true
+	}
+	return i, false
+}
+
+// skipQuotedString returns the index just past the OCaml quoted string literal
+// that opens at i, and false when text[i] does not open one. The id before the
+// opening "|" must repeat in the closing "|id}", and a literal with no closer
+// runs to the end of the line. Quotes inside a quoted string are text, so the
+// literal is skipped whole before they can be read as string openers.
+func skipQuotedString(text string, i int) (int, bool) {
+	j := i + 1
+	for j < len(text) && isQuotedStringIDByte(text[j]) {
+		j++
+	}
+	if j >= len(text) || text[j] != '|' {
+		return i, false
+	}
+	closer := "|" + text[i+1:j] + "}"
+	end := strings.Index(text[j+1:], closer)
+	if end < 0 {
+		return len(text), true
+	}
+	return j + 1 + end + len(closer), true
+}
+
+func isQuotedStringIDByte(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }
 
 func hasCommentPrefix(trimmed, prefix string) bool {

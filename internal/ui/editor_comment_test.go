@@ -122,6 +122,40 @@ func TestToggleLineCommentIgnoresDelimitersInStringLiterals(t *testing.T) {
 	}
 }
 
+// A quote character in a character literal is not a string opener, so the
+// wrapper must be recognized as balanced and wrap the line only once.
+func TestToggleLineCommentRoundTripsCharLiteralQuote(t *testing.T) {
+	const original = `let quote = '"'`
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], `(* let quote = '"' *)`; got != want {
+		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("unwrapped line = %q, want %q", got, original)
+	}
+}
+
+// A quote inside an OCaml quoted string is text, so the literal must be skipped
+// whole and the wrapper recognized as balanced on the next toggle.
+func TestToggleLineCommentRoundTripsQuotedString(t *testing.T) {
+	const original = `let text = {| " |}`
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], `(* let text = {| " |} *)`; got != want {
+		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("unwrapped line = %q, want %q", got, original)
+	}
+}
+
 // Pre-existing entity text must survive a wrap/unwrap round trip: unescaping
 // has to reverse only what the wrapper itself encoded.
 func TestToggleLineCommentPreservesEntityText(t *testing.T) {
