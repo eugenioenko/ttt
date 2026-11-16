@@ -176,6 +176,21 @@ func TestToggleLineCommentRejectsDigitLeadingQuotedStringID(t *testing.T) {
 	}
 }
 
+// A non-ASCII lowercase id opens a quoted string, so its quotes stay comment
+// text and the wrapper is still removed.
+func TestToggleLineCommentRecognizesUTF8QuotedStringID(t *testing.T) {
+	const original = "(* {é|\"|é} *)"
+	if _, ok := skipQuotedString(original, strings.Index(original, "{")); !ok {
+		t.Fatalf("skipQuotedString(%q) did not report a quoted string", original)
+	}
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "{é|\"|é}"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
 // Coq shares OCaml's comment delimiters but has no quoted-string literal, so
 // the "{|" inside the wrapper is comment text and the closer still ends the
 // line: toggling must remove the wrapper instead of adding a second one.

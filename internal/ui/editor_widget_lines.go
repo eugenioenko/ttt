@@ -551,13 +551,17 @@ func skipCharLiteral(text string, i int) (int, bool) {
 // that opens at i, and false when text[i] does not open one. The id before the
 // opening "|" must repeat in the closing "|id}", and a literal with no closer
 // runs to the end of the line. Quotes inside a quoted string are text, so the
-// literal is skipped whole before they can be read as string openers. OCaml
-// delimits ids as lowercase letters and underscores only, so {1| is not a
-// literal opener and must not swallow the rest of the line.
+// literal is skipped whole before they can be read as string openers. Ids are
+// lowercase letters and underscores only, so {1| is not a literal opener and
+// must not swallow the rest of the line.
 func skipQuotedString(text string, i int) (int, bool) {
 	j := i + 1
-	for j < len(text) && isQuotedStringIDByte(text[j]) {
-		j++
+	for j < len(text) {
+		r, size := utf8.DecodeRuneInString(text[j:])
+		if !isQuotedStringIDRune(r) {
+			break
+		}
+		j += size
 	}
 	if j >= len(text) || text[j] != '|' {
 		return i, false
@@ -570,8 +574,8 @@ func skipQuotedString(text string, i int) (int, bool) {
 	return j + 1 + end + len(closer), true
 }
 
-func isQuotedStringIDByte(c byte) bool {
-	return c == '_' || c >= 'a' && c <= 'z'
+func isQuotedStringIDRune(r rune) bool {
+	return r == '_' || unicode.IsLower(r)
 }
 
 func hasCommentPrefix(trimmed, prefix string) bool {
