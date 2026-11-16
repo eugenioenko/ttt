@@ -576,8 +576,22 @@ func skipQuotedString(text string, i int) (int, bool) {
 	return end, true
 }
 
+// isQuotedStringIDRune accepts OCaml's quoted-string id characters: lowercase
+// ASCII, the lowercase letters of Latin-9, and underscore. Other scripts are not
+// id characters, so {α| is not a literal opener and its later "*)' stays visible
+// to the comment scan.
 func isQuotedStringIDRune(r rune) bool {
-	return r == '_' || unicode.IsLower(r)
+	if r == '_' || r >= 'a' && r <= 'z' {
+		return true
+	}
+	if r >= 0xDF && r <= 0xFF && r != 0xF7 {
+		return true
+	}
+	switch r {
+	case 'œ', 'š', 'ž':
+		return true
+	}
+	return false
 }
 
 // findQuotedStringCloser returns the original byte index just past the closing

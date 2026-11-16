@@ -191,6 +191,21 @@ func TestToggleLineCommentRecognizesUTF8QuotedStringID(t *testing.T) {
 	}
 }
 
+// Greek letters are not quoted-string id characters, so "{α|" does not open a
+// literal: the wrapper's closer is seen and removed instead of being swallowed.
+func TestToggleLineCommentTreatsGreekDelimiterAsCommentText(t *testing.T) {
+	const original = "(* {α| *)"
+	if _, ok := skipQuotedString(original, strings.Index(original, "{")); ok {
+		t.Fatalf("skipQuotedString(%q) reported a quoted string", original)
+	}
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "{α|"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
 // The same id may open composed and close decomposed; the closer still ends the
 // literal, so the wrapper is removed instead of nested.
 func TestToggleLineCommentMatchesNormalizedQuotedStringID(t *testing.T) {
