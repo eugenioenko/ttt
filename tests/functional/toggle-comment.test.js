@@ -146,7 +146,7 @@ describe("toggle line comment", () => {
 
     const content = readFile(file);
     expect(content.split("\n")[0]).toBe(
-      "<!-- &lt;!-- a --&gt;hello&lt;!-- b --&gt; -->",
+      "<!-- <!&#45;&#45; a &#45;&#45;>hello<!&#45;&#45; b &#45;&#45;> -->",
     );
   });
 

@@ -379,22 +379,39 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 	return prefix, ""
 }
 
-// escapeHTMLCommentDelimiters spells existing "<!--" and "-->" sequences as
-// entities so a new <!-- ... --> wrapper contains no closer that would end it
-// early. HTML comments cannot nest and have no backslash escape, so entities
-// are the only spelling; the ampersand is escaped first so pre-existing entity
-// text such as &amp;lt;!-- is not decoded by the unwrap pass. That makes the
-// transformation reversible: unescapeHTMLCommentDelimiters restores the line
-// exactly when the comment is toggled back off.
-func escapeHTMLCommentDelimiters(text string) string {
-	text = strings.ReplaceAll(text, "&", "&amp;")
-	text = strings.ReplaceAll(text, "<!--", "&lt;!--")
-	return strings.ReplaceAll(text, "-->", "--&gt;")
+// escapeXMLCommentText spells every character that may not appear inside an
+// XML comment as an entity, so wrapping the result in <!-- ... --> can neither
+// close early nor form an invalid "--" run. Comments cannot nest and have no
+// backslash escape, so entities are the only spelling. "&" is encoded too, so
+// pre-existing entity text such as &amp;lt;!-- is not decoded by the unwrap
+// pass: unescapeXMLCommentText reverses exactly what this encoded.
+//
+// Every hyphen of a run of two or more is encoded, which covers the "<!--"
+// and "-->" delimiters, the "--" run XML forbids, and guarantees no two
+// literal hyphens stay adjacent in the output.
+func escapeXMLCommentText(text string) string {
+	var b strings.Builder
+	b.Grow(len(text) + 8)
+	for i := 0; i < len(text); {
+		switch {
+		case text[i] == '&':
+			b.WriteString("&amp;")
+			i++
+		case text[i] == '-' && i+1 < len(text) && text[i+1] == '-':
+			for i < len(text) && text[i] == '-' {
+				b.WriteString("&#45;")
+				i++
+			}
+		default:
+			b.WriteByte(text[i])
+			i++
+		}
+	}
+	return b.String()
 }
 
-func unescapeHTMLCommentDelimiters(text string) string {
-	text = strings.ReplaceAll(text, "--&gt;", "-->")
-	text = strings.ReplaceAll(text, "&lt;!--", "<!--")
+func unescapeXMLCommentText(text string) string {
+	text = strings.ReplaceAll(text, "&#45;", "-")
 	return strings.ReplaceAll(text, "&amp;", "&")
 }
 
@@ -548,11 +565,11 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 					}
 				}
 				if prefix == "<!--" {
-					if unescaped := unescapeHTMLCommentDelimiters(e.Buf.Lines[l]); unescaped != e.Buf.Lines[l] {
+					if unescaped := unescapeXMLCommentText(e.Buf.Lines[l]); unescaped != e.Buf.Lines[l] {
 						if l == e.Cursor.Line {
 							line := []rune(e.Buf.Lines[l])
 							c := max(0, min(e.Cursor.Col+cursorDelta, len(line)))
-							cursorDelta += len([]rune(unescapeHTMLCommentDelimiters(string(line[:c])))) - c
+							cursorDelta += len([]rune(unescapeXMLCommentText(string(line[:c])))) - c
 						}
 						replace := &undo.ReplaceLinesCommand{
 							Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{unescaped},
@@ -564,10 +581,10 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			}
 		} else {
 			if prefix == "<!--" {
-				if escaped := escapeHTMLCommentDelimiters(e.Buf.Lines[l]); escaped != e.Buf.Lines[l] {
+				if escaped := escapeXMLCommentText(e.Buf.Lines[l]); escaped != e.Buf.Lines[l] {
 					if l == e.Cursor.Line {
 						c := min(e.Cursor.Col, len(runes))
-						cursorDelta += len([]rune(escapeHTMLCommentDelimiters(string(runes[:c])))) - c
+						cursorDelta += len([]rune(escapeXMLCommentText(string(runes[:c])))) - c
 					}
 					replace := &undo.ReplaceLinesCommand{
 						Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{escaped},

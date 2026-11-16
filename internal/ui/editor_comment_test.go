@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
@@ -56,8 +57,11 @@ func TestToggleLineCommentEscapesInlineHTMLComments(t *testing.T) {
 	e := newCommentEditor(t, "a.html", []string{original}, 0, 0)
 
 	e.ToggleLineComment()
-	if got, want := e.Buf.Lines[0], "<!-- &lt;!-- a --&gt;hello&lt;!-- b --&gt; -->"; got != want {
+	if got, want := e.Buf.Lines[0], "<!-- <!&#45;&#45; a &#45;&#45;>hello<!&#45;&#45; b &#45;&#45;> -->"; got != want {
 		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+	if strings.Contains(e.Buf.Lines[0][len("<!-- "):len(e.Buf.Lines[0])-len(" -->")], "--") {
+		t.Fatalf("wrapped content = %q, contains a raw -- run", e.Buf.Lines[0])
 	}
 
 	e.ToggleLineComment()
@@ -75,7 +79,7 @@ func TestToggleLineCommentEscapesMixedSelection(t *testing.T) {
 	e.Selection.Start(0, 0)
 
 	e.ToggleLineComment()
-	want := []string{"<!-- &lt;!-- a --&gt; -->", "<!-- <div>hello</div> -->"}
+	want := []string{"<!-- <!&#45;&#45; a &#45;&#45;> -->", "<!-- <div>hello</div> -->"}
 	for i := range want {
 		if e.Buf.Lines[i] != want[i] {
 			t.Fatalf("wrapped line %d = %q, want %q", i, e.Buf.Lines[i], want[i])
@@ -108,13 +112,30 @@ func TestToggleLineCommentPreservesEntityText(t *testing.T) {
 	e := newCommentEditor(t, "a.html", []string{original}, 0, 0)
 
 	e.ToggleLineComment()
-	if got, want := e.Buf.Lines[0], "<!-- &amp;amp;lt;!-- &amp;nbsp; -->"; got != want {
+	if got, want := e.Buf.Lines[0], "<!-- &amp;amp;lt;!&#45;&#45; &amp;nbsp; -->"; got != want {
 		t.Fatalf("wrapped line = %q, want %q", got, want)
 	}
 
 	e.ToggleLineComment()
 	if got := e.Buf.Lines[0]; got != original {
 		t.Fatalf("round-tripped line = %q, want %q", got, original)
+	}
+}
+
+// An unpaired "--" run is invalid inside an XML comment but is not a
+// delimiter, so it must be encoded too and restored verbatim on unwrap.
+func TestToggleLineCommentEscapesDoubleHyphenRuns(t *testing.T) {
+	const original = "a--b --- c - d"
+	e := newCommentEditor(t, "a.xml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "<!-- a&#45;&#45;b &#45;&#45;&#45; c - d -->"; got != want {
+		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("unwrapped line = %q, want %q", got, original)
 	}
 }
 
