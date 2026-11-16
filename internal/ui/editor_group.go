@@ -2330,6 +2330,7 @@ func (g *EditorGroupWidget) undoRedoPostProcess(version uint64, reveal bool) {
 		g.Editor.refreshFolds()
 		g.Editor.ExpandFoldContaining(g.Editor.Cursor.Line)
 	}
+	g.Editor.remapBookmarks(version)
 	g.Editor.bufferDirty = true
 	if reveal {
 		g.Editor.scrollViewport()
