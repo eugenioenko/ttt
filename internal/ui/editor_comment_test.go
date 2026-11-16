@@ -90,6 +90,17 @@ func TestToggleLineCommentEscapesMixedSelection(t *testing.T) {
 	}
 }
 
+// OCaml comments nest, so inner closers must not stop an outer wrapper from
+// being recognized as commented.
+func TestToggleLineCommentRecognizesNestedComments(t *testing.T) {
+	e := newCommentEditor(t, "a.ml", []string{"(* outer (* inner *) *)"}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "outer (* inner *)"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
 // Pre-existing entity text must survive a wrap/unwrap round trip: unescaping
 // has to reverse only what the wrapper itself encoded.
 func TestToggleLineCommentPreservesEntityText(t *testing.T) {

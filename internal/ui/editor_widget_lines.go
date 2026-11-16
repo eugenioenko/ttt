@@ -413,6 +413,42 @@ func isWordCommentPrefix(prefix string) bool {
 	return true
 }
 
+// commentSyntaxNests reports whether an opener inside a comment starts a
+// nested comment, as OCaml's (* ... *) does. Other paired syntaxes end at the
+// first closer, so text after a separate pair is not commented.
+func commentSyntaxNests(prefix, postfix string) bool {
+	return prefix == "(*" && postfix == "*)"
+}
+
+// isWholeLineComment reports whether text is one comment wrapping the whole
+// line. Nesting syntax balances to depth zero only at the end of the line, so an
+// outer wrapper with inner closers still counts; non-nesting syntax requires the
+// first closer to end the line.
+func isWholeLineComment(text, prefix, postfix string) bool {
+	if !commentSyntaxNests(prefix, postfix) {
+		rest := text[len(prefix):]
+		closer := strings.Index(rest, postfix)
+		return closer >= 0 && closer+len(postfix) == len(rest)
+	}
+	depth := 0
+	for i := 0; i < len(text); {
+		switch {
+		case strings.HasPrefix(text[i:], prefix):
+			depth++
+			i += len(prefix)
+		case strings.HasPrefix(text[i:], postfix):
+			depth--
+			if depth == 0 {
+				return i+len(postfix) == len(text)
+			}
+			i += len(postfix)
+		default:
+			i++
+		}
+	}
+	return false
+}
+
 func hasCommentPrefix(trimmed, prefix string) bool {
 	if !isWordCommentPrefix(prefix) {
 		return strings.HasPrefix(trimmed, prefix)
@@ -450,11 +486,8 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		}
 		commented := hasCommentPrefix(trimmed, prefix)
 		if commented && postfix != "" {
-			// Uncomment only when a single pair wraps the whole line: the first
-			// closer must end it, so text between separate pairs stays active.
-			rest := trimmed[prefixLen:]
-			closer := strings.Index(rest, postfix)
-			commented = closer >= 0 && closer+postfixLen == len(rest)
+			// Uncomment only when a single wrapper covers the whole line.
+			commented = isWholeLineComment(trimmed, prefix, postfix)
 		}
 		if !commented {
 			allCommented = false
