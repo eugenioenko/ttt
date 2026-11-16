@@ -191,6 +191,21 @@ func TestToggleLineCommentRecognizesUTF8QuotedStringID(t *testing.T) {
 	}
 }
 
+// The same id may open composed and close decomposed; the closer still ends the
+// literal, so the wrapper is removed instead of nested.
+func TestToggleLineCommentMatchesNormalizedQuotedStringID(t *testing.T) {
+	const original = "(* {é|\"|e\u0301} *)"
+	if _, ok := skipQuotedString(original, strings.Index(original, "{")); !ok {
+		t.Fatalf("skipQuotedString(%q) did not report a quoted string", original)
+	}
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "{é|\"|e\u0301}"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
 // Coq shares OCaml's comment delimiters but has no quoted-string literal, so
 // the "{|" inside the wrapper is comment text and the closer still ends the
 // line: toggling must remove the wrapper instead of adding a second one.

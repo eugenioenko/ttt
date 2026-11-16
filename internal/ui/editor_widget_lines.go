@@ -7,6 +7,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/undo"
@@ -549,9 +551,10 @@ func skipCharLiteral(text string, i int) (int, bool) {
 
 // skipQuotedString returns the index just past the OCaml quoted string literal
 // that opens at i, and false when text[i] does not open one. The id before the
-// opening "|" must repeat in the closing "|id}", and a literal with no closer
-// runs to the end of the line. Quotes inside a quoted string are text, so the
-// literal is skipped whole before they can be read as string openers. Ids are
+// opening "|" must repeat (up to Unicode normalization) in the closing "|id}",
+// and a literal with no closer runs to the end of the line. Quotes inside a
+// quoted string are text, so the literal is skipped whole before they can be
+// read as string openers. Ids are
 // lowercase letters and underscores only, so {1| is not a literal opener and
 // must not swallow the rest of the line.
 func skipQuotedString(text string, i int) (int, bool) {
@@ -566,16 +569,64 @@ func skipQuotedString(text string, i int) (int, bool) {
 	if j >= len(text) || text[j] != '|' {
 		return i, false
 	}
-	closer := "|" + text[i+1:j] + "}"
-	end := strings.Index(text[j+1:], closer)
+	end := findQuotedStringCloser(text, j+1, text[i+1:j])
 	if end < 0 {
 		return len(text), true
 	}
-	return j + 1 + end + len(closer), true
+	return end, true
 }
 
 func isQuotedStringIDRune(r rune) bool {
 	return r == '_' || unicode.IsLower(r)
+}
+
+// findQuotedStringCloser returns the original byte index just past the closing
+// "|id}" for the opener id, or -1. Ids are compared in NFC because the same id
+// can be spelled composed (é) or decomposed (e + combining acute) and OCaml
+// treats the lexer-normalized forms alike; normalizing must not leak into the
+// returned offsets, which slice the untouched line.
+func findQuotedStringCloser(text string, from int, id string) int {
+	want := norm.NFC.String(id)
+	for p := from; p < len(text); {
+		skip := strings.IndexByte(text[p:], '|')
+		if skip < 0 {
+			return -1
+		}
+		p += skip
+		if n, ok := matchQuotedStringID(text[p+1:], want); ok && p+1+n < len(text) && text[p+1+n] == '}' {
+			return p + 1 + n + 1
+		}
+		p++
+	}
+	return -1
+}
+
+// matchQuotedStringID returns how many bytes of s hold an id whose NFC form is
+// want. It consumes whole clusters so a combining mark stays with its base rune
+// and the prefix's normalized form is always the normalization of the prefix.
+func matchQuotedStringID(s, want string) (int, bool) {
+	for i := 0; ; {
+		got := norm.NFC.String(s[:i])
+		if got == want {
+			return i, true
+		}
+		if i >= len(s) || !strings.HasPrefix(want, got) {
+			return 0, false
+		}
+		i += runeClusterLen(s[i:])
+	}
+}
+
+func runeClusterLen(s string) int {
+	i := 0
+	for i < len(s) {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if i > 0 && !unicode.Is(unicode.Mn, r) && !unicode.Is(unicode.Mc, r) && !unicode.Is(unicode.Me, r) {
+			break
+		}
+		i += size
+	}
+	return i
 }
 
 func hasCommentPrefix(trimmed, prefix string) bool {
