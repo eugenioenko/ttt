@@ -161,6 +161,21 @@ func TestToggleLineCommentRoundTripsQuotedString(t *testing.T) {
 	}
 }
 
+// OCaml quoted-string ids are lowercase letters and underscores, so "{1|" does
+// not open a literal and must not hide the wrapper's closer.
+func TestToggleLineCommentRejectsDigitLeadingQuotedStringID(t *testing.T) {
+	const original = "(* {1| *)"
+	if _, ok := skipQuotedString(original, strings.Index(original, "{")); ok {
+		t.Fatalf("skipQuotedString(%q) reported a quoted string", original)
+	}
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "{1|"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
 // Coq shares OCaml's comment delimiters but has no quoted-string literal, so
 // the "{|" inside the wrapper is comment text and the closer still ends the
 // line: toggling must remove the wrapper instead of adding a second one.
