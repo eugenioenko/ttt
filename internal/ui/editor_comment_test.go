@@ -90,6 +90,23 @@ func TestToggleLineCommentEscapesMixedSelection(t *testing.T) {
 	}
 }
 
+// Pre-existing entity text must survive a wrap/unwrap round trip: unescaping
+// has to reverse only what the wrapper itself encoded.
+func TestToggleLineCommentPreservesEntityText(t *testing.T) {
+	const original = "&amp;lt;!-- &nbsp;"
+	e := newCommentEditor(t, "a.html", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "<!-- &amp;amp;lt;!-- &amp;nbsp; -->"; got != want {
+		t.Fatalf("wrapped line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("round-tripped line = %q, want %q", got, original)
+	}
+}
+
 // Batch's REM is a keyword, so an identifier that merely starts with it is code
 // and must get wrapped instead of being uncommented.
 func TestToggleLineCommentKeepsWordPrefixIdentifiers(t *testing.T) {

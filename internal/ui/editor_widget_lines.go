@@ -382,16 +382,20 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 // escapeHTMLCommentDelimiters spells existing "<!--" and "-->" sequences as
 // entities so a new <!-- ... --> wrapper contains no closer that would end it
 // early. HTML comments cannot nest and have no backslash escape, so entities
-// are the only reversible spelling; unescapeHTMLCommentDelimiters restores the
-// text when the comment is toggled back off.
+// are the only spelling; the ampersand is escaped first so pre-existing entity
+// text such as &amp;lt;!-- is not decoded by the unwrap pass. That makes the
+// transformation reversible: unescapeHTMLCommentDelimiters restores the line
+// exactly when the comment is toggled back off.
 func escapeHTMLCommentDelimiters(text string) string {
+	text = strings.ReplaceAll(text, "&", "&amp;")
 	text = strings.ReplaceAll(text, "<!--", "&lt;!--")
 	return strings.ReplaceAll(text, "-->", "--&gt;")
 }
 
 func unescapeHTMLCommentDelimiters(text string) string {
+	text = strings.ReplaceAll(text, "--&gt;", "-->")
 	text = strings.ReplaceAll(text, "&lt;!--", "<!--")
-	return strings.ReplaceAll(text, "--&gt;", "-->")
+	return strings.ReplaceAll(text, "&amp;", "&")
 }
 
 // isWordCommentPrefix reports whether prefix is a keyword rather than a
