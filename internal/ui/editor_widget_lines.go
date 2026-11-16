@@ -456,8 +456,16 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 					}
 					del.Apply(e.Buf)
 					cmds = append(cmds, del)
-					if l == e.Cursor.Line && e.Cursor.Col > postStart {
-						cursorDelta -= postRemoveLen
+					if l == e.Cursor.Line {
+						// Compare in post-prefix coordinates; a cursor inside the
+						// removed suffix collapses to its start.
+						transformed := e.Cursor.Col + cursorDelta
+						switch {
+						case transformed >= postStart+postRemoveLen:
+							cursorDelta -= postRemoveLen
+						case transformed >= postStart:
+							cursorDelta = postStart - e.Cursor.Col
+						}
 					}
 				}
 			}
