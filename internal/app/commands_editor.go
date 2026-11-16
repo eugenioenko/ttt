@@ -485,7 +485,7 @@ func (a *App) saveAllAndQuit(onQuit func(), previousOverlay ui.Widget) {
 // is the first line of that run.
 func hunkStarts(changes []diff.LineChangeKind) []int {
 	var starts []int
-	for i := range changes {
+	for i := 0; i < len(changes); i++ {
 		if changes[i] != diff.LineUnchanged && (i == 0 || changes[i-1] == diff.LineUnchanged) {
 			starts = append(starts, i)
 		}
