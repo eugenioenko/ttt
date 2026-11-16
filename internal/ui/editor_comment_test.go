@@ -191,6 +191,21 @@ func TestToggleLineCommentRecognizesUTF8QuotedStringID(t *testing.T) {
 	}
 }
 
+// A decomposed id is scanned as combining marks and validated after NFC, so a
+// decomposed opener still opens the literal that its composed closer ends.
+func TestToggleLineCommentRecognizesDecomposedQuotedStringID(t *testing.T) {
+	const original = "(* {e\u0301|\"|é} *)"
+	if _, ok := skipQuotedString(original, strings.Index(original, "{")); !ok {
+		t.Fatalf("skipQuotedString(%q) did not report a quoted string", original)
+	}
+	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "{e\u0301|\"|é}"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
 // Greek letters are not quoted-string id characters, so "{α|" does not open a
 // literal: the wrapper's closer is seen and removed instead of being swallowed.
 func TestToggleLineCommentTreatsGreekDelimiterAsCommentText(t *testing.T) {

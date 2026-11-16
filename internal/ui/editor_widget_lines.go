@@ -553,15 +553,16 @@ func skipCharLiteral(text string, i int) (int, bool) {
 // that opens at i, and false when text[i] does not open one. The id before the
 // opening "|" must repeat (up to Unicode normalization) in the closing "|id}",
 // and a literal with no closer runs to the end of the line. Quotes inside a
-// quoted string are text, so the literal is skipped whole before they can be
 // read as string openers. Ids are
 // lowercase letters and underscores only, so {1| is not a literal opener and
-// must not swallow the rest of the line.
+// must not swallow the rest of the line. Combining marks are scanned with the
+// id and the whole id is validated after NFC, so a decomposed é opens the same
+// literal as a composed one. Byte indices stay in the original line.
 func skipQuotedString(text string, i int) (int, bool) {
 	j := i + 1
 	for j < len(text) {
 		r, size := utf8.DecodeRuneInString(text[j:])
-		if !isQuotedStringIDRune(r) {
+		if !isQuotedStringIDRune(r) && !isCombiningMark(r) {
 			break
 		}
 		j += size
@@ -569,7 +570,11 @@ func skipQuotedString(text string, i int) (int, bool) {
 	if j >= len(text) || text[j] != '|' {
 		return i, false
 	}
-	end := findQuotedStringCloser(text, j+1, text[i+1:j])
+	id := text[i+1 : j]
+	if !isQuotedStringID(norm.NFC.String(id)) {
+		return i, false
+	}
+	end := findQuotedStringCloser(text, j+1, id)
 	if end < 0 {
 		return len(text), true
 	}
@@ -592,6 +597,21 @@ func isQuotedStringIDRune(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// isQuotedStringID reports whether a normalized id is made of id characters
+// only; the raw bytes may also carry combining marks, which NFC folds away.
+func isQuotedStringID(id string) bool {
+	for _, r := range id {
+		if !isQuotedStringIDRune(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isCombiningMark(r rune) bool {
+	return unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Mc, r) || unicode.Is(unicode.Me, r)
 }
 
 // findQuotedStringCloser returns the original byte index just past the closing
@@ -635,7 +655,7 @@ func runeClusterLen(s string) int {
 	i := 0
 	for i < len(s) {
 		r, size := utf8.DecodeRuneInString(s[i:])
-		if i > 0 && !unicode.Is(unicode.Mn, r) && !unicode.Is(unicode.Mc, r) && !unicode.Is(unicode.Me, r) {
+		if i > 0 && !isCombiningMark(r) {
 			break
 		}
 		i += size
