@@ -15,7 +15,7 @@ import (
 
 const (
 	settingsTabID       = "settings"
-	settingsLabelCols   = 30
+	settingsLabelCols   = 34
 	settingsControlCols = 34
 )
 
