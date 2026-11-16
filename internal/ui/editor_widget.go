@@ -728,7 +728,11 @@ func (e *EditorPaneWidget) skipFoldUp() {
 }
 
 func (e *EditorPaneWidget) EnsureCursorVisible() {
-	e.skipHiddenLineDown()
+	// A hidden range behind a diff gap would carry the cursor past a line the
+	// caller asked for with revealGapRow; the diff reveals that line instead.
+	if !e.revealGapRow {
+		e.skipHiddenLineDown()
+	}
 	e.scrollViewport()
 }
 
