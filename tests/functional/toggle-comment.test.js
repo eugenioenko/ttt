@@ -94,6 +94,42 @@ describe("toggle line comment", () => {
     expect(lines[2]).toBe("line3");
   });
 
+  it("wraps HTML lines with prefix and postfix", () => {
+    dir = createTempDir();
+    const file = join(dir, "test.html");
+    writeFileSync(file, "<div>hello</div>\n");
+
+    tui.start(file);
+    tui.waitFor("hello");
+
+    tui.exec("Toggle Line Comment");
+
+    tui.press("ctrl+s");
+
+    tui.run();
+
+    const content = readFile(file);
+    expect(content.split("\n")[0]).toBe("<!-- <div>hello</div> -->");
+  });
+
+  it("unwraps commented HTML lines", () => {
+    dir = createTempDir();
+    const file = join(dir, "test.html");
+    writeFileSync(file, "<!-- <div>hello</div> -->\n");
+
+    tui.start(file);
+    tui.waitFor("hello");
+
+    tui.exec("Toggle Line Comment");
+
+    tui.press("ctrl+s");
+
+    tui.run();
+
+    const content = readFile(file);
+    expect(content.split("\n")[0]).toBe("<div>hello</div>");
+  });
+
   it("uses # prefix for Python files", () => {
     dir = createTempDir();
     const file = join(dir, "test.py");

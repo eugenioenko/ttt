@@ -338,25 +338,50 @@ func (e *EditorPaneWidget) InsertLineAbove() {
 	e.scrollViewport()
 }
 
-func (e *EditorPaneWidget) commentPrefix() string {
-	prefix := "//"
+// commentSyntax returns the delimiters used to comment a single line. A
+// non-empty postfix marks a language whose comments need both delimiters on
+// the same line, such as HTML's <!-- ... -->; otherwise the comment runs to the
+// end of the line and postfix is empty.
+func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
+	prefix = "//"
 	if e.Highlighter != nil {
-		lang := strings.ToLower(e.Highlighter.Language())
+		lang := strings.ToLower(e.Highlighter.LanguageID())
 		switch lang {
-		case "python", "ruby", "bash", "shell", "yaml", "toml", "elixir":
+		case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
+			"elixir", "fish", "gdscript", "gherkin", "graphql", "julia", "make",
+			"mojo", "nix", "nushell", "perl", "powershell", "puppet", "python",
+			"r", "ruby", "shellscript", "systemd", "toml", "yaml":
 			prefix = "#"
-		case "lua", "sql":
+		case "elm", "haskell", "lean", "lua", "plsql", "sql", "vhdl":
 			prefix = "--"
-		case "html", "xml":
-			prefix = "<!--"
+		case "angular-html", "html", "html-derivative", "xml":
+			return "<!--", "-->"
+		case "css", "less", "scss":
+			return "/*", "*/"
+		case "coq", "ocaml":
+			return "(*", "*)"
+		case "jinja":
+			return "{#", "#}"
+		case "smalltalk":
+			return "\"", "\""
+		case "ahk", "clojure", "common-lisp", "fennel", "hy", "reg", "scheme":
+			prefix = ";"
+		case "bat":
+			prefix = "REM"
+		case "erlang", "tex":
+			prefix = "%"
+		case "vb":
+			prefix = "'"
 		}
 	}
-	return prefix
+	return prefix, ""
 }
 
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
-	prefix := e.commentPrefix()
+	prefix, postfix := e.commentSyntax()
+	prefixLen := len([]rune(prefix))
+	postfixLen := len([]rune(postfix))
 
 	startLine, endLine := e.Cursor.Line, e.Cursor.Line
 	if e.Selection != nil && e.Selection.Active {
@@ -372,11 +397,16 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 
 	allCommented := true
 	for l := startLine; l <= endLine; l++ {
-		trimmed := strings.TrimLeft(e.Buf.Lines[l], " \t")
+		trimmed := strings.TrimRight(strings.TrimLeft(e.Buf.Lines[l], " \t"), " \t")
 		if trimmed == "" {
 			continue
 		}
-		if !strings.HasPrefix(trimmed, prefix) {
+		commented := strings.HasPrefix(trimmed, prefix) &&
+			len([]rune(trimmed)) >= prefixLen+postfixLen
+		if commented && postfix != "" {
+			commented = strings.HasSuffix(trimmed, postfix)
+		}
+		if !commented {
 			allCommented = false
 			break
 		}
@@ -394,7 +424,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		indent := len(runes) - len([]rune(trimmed))
 
 		if allCommented {
-			removeLen := len([]rune(prefix))
+			removeLen := prefixLen
 			if indent+removeLen < len(runes) && runes[indent+removeLen] == ' ' {
 				removeLen++
 			}
@@ -407,12 +437,38 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			if l == e.Cursor.Line {
 				cursorDelta = -removeLen
 			}
+			if postfix != "" {
+				tail := []rune(strings.TrimRight(e.Buf.Lines[l], " \t"))
+				postStart := len(tail) - postfixLen
+				postRemoveLen := postfixLen
+				if postStart > 0 && tail[postStart-1] == ' ' {
+					postStart--
+					postRemoveLen++
+				}
+				if postStart >= 0 {
+					del := &undo.DeleteSelectionCommand{
+						StartLine: l, StartCol: postStart,
+						EndLine: l, EndCol: postStart + postRemoveLen,
+					}
+					del.Apply(e.Buf)
+					cmds = append(cmds, del)
+					if l == e.Cursor.Line && e.Cursor.Col > postStart {
+						cursorDelta -= postRemoveLen
+					}
+				}
+			}
 		} else {
 			cmd := &undo.InsertStringCommand{Line: l, Col: indent, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
 			if l == e.Cursor.Line {
-				cursorDelta = len([]rune(prefix)) + 1
+				cursorDelta = prefixLen + 1
+			}
+			if postfix != "" {
+				endCol := len([]rune(strings.TrimRight(e.Buf.Lines[l], " \t")))
+				add := &undo.InsertStringCommand{Line: l, Col: endCol, Text: " " + postfix}
+				add.Apply(e.Buf)
+				cmds = append(cmds, add)
 			}
 		}
 	}
