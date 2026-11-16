@@ -343,7 +343,7 @@ func (e *EditorPaneWidget) commentPrefix() string {
 	if e.Highlighter != nil {
 		lang := strings.ToLower(e.Highlighter.Language())
 		switch lang {
-		case "python", "ruby", "bash", "shell", "yaml", "toml":
+		case "python", "ruby", "bash", "shell", "yaml", "toml", "elixir":
 			prefix = "#"
 		case "lua", "sql":
 			prefix = "--"
