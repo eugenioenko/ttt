@@ -377,7 +377,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && status.Group == scm.Staged {
-				app.Changes.applied(app.Changes.stagePaths(dir, true, status.Path))
+				app.Changes.applied(app.Changes.stagePaths(dir, true, unstagePaths(status)...))
 			}
 		},
 	})
