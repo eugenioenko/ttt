@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
@@ -246,13 +247,21 @@ func (a *App) PreviewSearchReplace(filePath string, matches []ui.SearchMatch, re
 		a.StatusWarn(i18n.Format("status.cannotReadFile", i18n.Args{"error": err.Error()}))
 		return
 	}
-	lines := strings.Split(string(data), "\n")
+	fd := ui.BuildReplaceDiff(filepath.Base(filePath), splitSearchLines(data), matches, replacement, opts)
+	a.EditorGroup.OpenDiff(filePath, fd, nil, nil, false)
+	a.Root.SetFocus(a.EditorGroup)
+}
+
+// splitSearchLines reads file bytes into lines the way rg reports them: a
+// UTF-8 BOM stays out of the first line, matching Buffer.Lines, and a trailing
+// newline does not produce a phantom last line.
+func splitSearchLines(data []byte) []string {
+	text, _ := strings.CutPrefix(string(data), buffer.UTF8ByteOrderMark)
+	lines := strings.Split(text, "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
-	fd := ui.BuildReplaceDiff(filepath.Base(filePath), lines, matches, replacement, opts)
-	a.EditorGroup.OpenDiff(filePath, fd, nil, nil, false)
-	a.Root.SetFocus(a.EditorGroup)
+	return lines
 }
 
 // staleSearchMatches reports whether any match's line no longer reads as it did
@@ -271,11 +280,15 @@ func staleSearchMatches(lines []string, matches []ui.SearchMatch) bool {
 	return false
 }
 
-// joinReplacedLines ends the text with a newline only if the original did.
+// joinReplacedLines preserves the original's UTF-8 BOM and ends the text with
+// a newline only if the original did.
 func joinReplacedLines(lines []string, original []byte) []byte {
 	text := strings.Join(lines, "\n")
 	if strings.HasSuffix(string(original), "\n") {
 		text += "\n"
+	}
+	if strings.HasPrefix(string(original), buffer.UTF8ByteOrderMark) {
+		text = buffer.UTF8ByteOrderMark + text
 	}
 	return []byte(text)
 }
@@ -290,10 +303,7 @@ func (a *App) ApplySearchReplace(filePath string, matches []ui.SearchMatch, repl
 		a.StatusWarn(i18n.Format("status.cannotReadFile", i18n.Args{"error": err.Error()}))
 		return
 	}
-	lines := strings.Split(string(data), "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
+	lines := splitSearchLines(data)
 	if staleSearchMatches(lines, matches) {
 		a.StatusWarn(i18n.Format("status.changedSinceTheSearchNothingReplaced", i18n.Args{"filename": filepath.Base(filePath)}))
 		a.Search.Refresh()
@@ -345,10 +355,7 @@ func (a *App) confirmSearchReplaceAll(allMatches map[string][]ui.SearchMatch, re
 				if err != nil {
 					continue
 				}
-				lines := strings.Split(string(data), "\n")
-				if len(lines) > 0 && lines[len(lines)-1] == "" {
-					lines = lines[:len(lines)-1]
-				}
+				lines := splitSearchLines(data)
 				if staleSearchMatches(lines, matches) {
 					skipped = append(skipped, filepath.Base(filePath))
 					continue

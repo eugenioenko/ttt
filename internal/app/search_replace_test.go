@@ -254,6 +254,39 @@ func TestSearchReplacePreflightPreservesWriteChecks(t *testing.T) {
 	}
 }
 
+// rg strips a UTF-8 BOM from the reported line text and offsets, so the
+// replace path has to treat it as file metadata rather than line content.
+func TestSearchReplaceAppliesInsideUTF8BOMFile(t *testing.T) {
+	h := newReplaceTestHarness(t)
+	if err := os.WriteFile(h.path, []byte("\ufefffoo bar\nfoo baz\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	h.a.searchReplace.scan = func(context.Context, search.Options, []string) (map[string][]search.Match, error) {
+		return map[string][]search.Match{h.path: {
+			{FilePath: h.path, LineNum: 1, ColStart: 0, ColEnd: 3, LineText: "foo bar"},
+			{FilePath: h.path, LineNum: 2, ColStart: 0, ColEnd: 3, LineText: "foo baz"},
+		}}, nil
+	}
+	h.a.Search.ReplaceAllFiles()
+	h.finish(t)()
+	h.dialog(t).Buttons[1].Handler()
+	data, err := os.ReadFile(h.path)
+	if err != nil || string(data) != "\ufeffbar bar\nbar baz\n" {
+		t.Fatalf("replaced content = %q, %v", data, err)
+	}
+}
+
+func TestSearchReplaceLinesKeepUTF8BOMAsMetadata(t *testing.T) {
+	data := []byte("\ufefffoo bar\nfoo baz\n")
+	lines := splitSearchLines(data)
+	if len(lines) != 2 || lines[0] != "foo bar" || lines[1] != "foo baz" {
+		t.Fatalf("splitSearchLines = %q", lines)
+	}
+	if got := joinReplacedLines([]string{"Q bar", "Q baz"}, data); string(got) != "\ufeffQ bar\nQ baz\n" {
+		t.Fatalf("joinReplacedLines = %q", got)
+	}
+}
+
 func TestSearchReplaceCancellationReachesRunningScan(t *testing.T) {
 	for _, action := range []string{"cancel", "shutdown", "new request", "query", "replacement", "workspace"} {
 		t.Run(action, func(t *testing.T) {
