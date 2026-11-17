@@ -82,6 +82,7 @@ func (e *EditorPaneWidget) addCursorVertical(delta int) {
 
 func (e *EditorPaneWidget) multiExecRune(r rune) {
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	e.syncToMulti()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -137,6 +138,7 @@ func (e *EditorPaneWidget) multiExecRune(r rune) {
 // character is applied across cursors.
 func (e *EditorPaneWidget) multiExecTab() {
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	e.syncToMulti()
 	indent := e.indentUnit()
 	n := len([]rune(indent))
@@ -173,6 +175,7 @@ func (e *EditorPaneWidget) multiExecTab() {
 
 func (e *EditorPaneWidget) multiExecBackspace() {
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	e.syncToMulti()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -227,6 +230,7 @@ func (e *EditorPaneWidget) multiExecBackspace() {
 
 func (e *EditorPaneWidget) multiExecDelete() {
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	e.syncToMulti()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -272,6 +276,7 @@ func (e *EditorPaneWidget) multiExecDelete() {
 
 func (e *EditorPaneWidget) multiExecEnter() {
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	e.syncToMulti()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -571,6 +576,7 @@ func pastePieces(text string, n int) []string {
 // multiPasteText inserts clipboard text at each cursor in one undo step.
 func (e *EditorPaneWidget) multiPasteText(text string) {
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
@@ -696,6 +702,7 @@ func (e *EditorPaneWidget) multiCut() {
 		return
 	}
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 
 	e.normalizeClipboardCursors()
 	// Avoid deleting the same original line more than once.

@@ -343,6 +343,7 @@ func (e *EditorPaneWidget) execEnter() {
 	e.bufferDirty = true
 	e.remapFolds(version)
 	e.refreshFolds()
+	e.remapBookmarks(version)
 }
 
 // execBackspace deletes the selection, the previous character (with soft-tab

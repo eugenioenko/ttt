@@ -2350,6 +2350,7 @@ func (g *EditorGroupWidget) Undo() {
 	}
 	if t.Undo != nil {
 		version := t.Buf.Version()
+		defer t.Buf.PinChanges(version).Release()
 		pos := t.Undo.Undo(t.Buf)
 		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line
@@ -2372,6 +2373,7 @@ func (g *EditorGroupWidget) Redo() {
 	}
 	if t.Undo != nil {
 		version := t.Buf.Version()
+		defer t.Buf.PinChanges(version).Release()
 		pos := t.Undo.Redo(t.Buf)
 		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line

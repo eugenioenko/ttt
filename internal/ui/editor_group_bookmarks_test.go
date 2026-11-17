@@ -159,6 +159,43 @@ func TestBookmarksSurviveUndoGroupLongerThanChangeLog(t *testing.T) {
 	}
 }
 
+func TestBookmarksFollowBatchedSplitsLongerThanChangeLog(t *testing.T) {
+	lines := make([]string, 200)
+	for i := range lines {
+		lines[i] = "text"
+	}
+	e := newEditorWithLines(lines...)
+	e.SetBookmark(90, 'B', term.StyleDefault)
+
+	var cmds []undo.EditCommand
+	for i := range 65 {
+		cmds = append(cmds, &undo.SplitLineCommand{Line: i, Col: 0})
+	}
+	e.ExecCommand(&undo.BatchCommand{Commands: cmds})
+
+	if b, ok := e.GetBookmark(155); !ok || b.Icon != 'B' {
+		t.Fatalf("bookmark at 155 = %+v (found %v), want the one from line 90; bookmarks %v", b, ok, e.Bookmarks)
+	}
+}
+
+func TestBookmarksFollowRepeatedEnterSplits(t *testing.T) {
+	lines := make([]string, 200)
+	for i := range lines {
+		lines[i] = "text"
+	}
+	e := newEditorWithLines(lines...)
+	e.SetBookmark(90, 'B', term.StyleDefault)
+	e.Cursor.Line = 0
+
+	for range 65 {
+		e.execEnter()
+	}
+
+	if b, ok := e.GetBookmark(155); !ok || b.Icon != 'B' {
+		t.Fatalf("bookmark at 155 = %+v (found %v), want the one from line 90; bookmarks %v", b, ok, e.Bookmarks)
+	}
+}
+
 func TestJumpBookmarkWithoutBookmarksReportsNothing(t *testing.T) {
 	g, a, _ := openBookmarkFiles(t)
 	g.OpenFile(a)

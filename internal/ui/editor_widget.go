@@ -401,6 +401,7 @@ func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
 
 func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 	version, prevLines := e.Buf.Version(), len(e.Buf.Lines)
+	defer e.Buf.PinChanges(version).Release()
 	e.applyAutoClosingEdit(cmd)
 	if undo.IsNoop(cmd) {
 		return

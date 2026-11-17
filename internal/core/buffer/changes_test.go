@@ -71,6 +71,53 @@ func TestSetLinesAndLoadRecordAWholeBufferChange(t *testing.T) {
 	}
 }
 
+func TestPinnedChangesReplayBeyondTheRing(t *testing.T) {
+	b := &Buffer{Lines: []string{"a"}}
+	v := b.Version()
+	pin := b.PinChanges(v)
+	for range changeLogSize + 1 {
+		b.InsertLine(0, "x")
+	}
+
+	if got := b.OldestReplayVersion(); got != v {
+		t.Fatalf("oldest replayable version = %d, want the pinned %d", got, v)
+	}
+	if changes := changesSince(t, b, v); len(changes) != changeLogSize+1 {
+		t.Fatalf("replayed %d changes, want all %d", len(changes), changeLogSize+1)
+	}
+
+	pin.Release()
+	if b.ChangesSince(v, func(Change) {}) {
+		t.Fatal("changes older than the released log replayed")
+	}
+}
+
+func TestReleasingAPinKeepsTheNewerOnes(t *testing.T) {
+	b := &Buffer{Lines: []string{"a"}}
+	oldest := b.PinChanges(b.Version())
+	for range changeLogSize + 1 {
+		b.InsertLine(0, "x")
+	}
+	mid := b.Version()
+	newer := b.PinChanges(mid)
+	for range changeLogSize + 1 {
+		b.InsertLine(0, "y")
+	}
+
+	oldest.Release()
+	if changes := changesSince(t, b, mid); len(changes) != changeLogSize+1 {
+		t.Fatalf("replayed %d changes for the remaining pin, want %d", len(changes), changeLogSize+1)
+	}
+	if b.ChangesSince(mid-1, func(Change) {}) {
+		t.Fatal("changes released by the older pin replayed")
+	}
+
+	newer.Release()
+	if b.ChangesSince(mid, func(Change) {}) {
+		t.Fatal("changes replayed after every pin was released")
+	}
+}
+
 func TestChangesSinceAnOldVersionFails(t *testing.T) {
 	b := &Buffer{Lines: []string{"a"}}
 	v := b.Version()
