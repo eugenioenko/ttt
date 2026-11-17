@@ -15,7 +15,7 @@ import (
 
 const (
 	settingsTabID       = "settings"
-	settingsLabelCols   = 30
+	settingsLabelCols   = 34
 	settingsControlCols = 34
 )
 
@@ -180,10 +180,10 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.formatOnSave"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.FormatOnSave },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.FormatOnSave = v }},
-			{Label: i18n.Text("settings.insertFinalNewline"), Kind: settingBool,
+			{Label: i18n.Text("settings.insertFinalNewline"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.InsertFinalNewline },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.InsertFinalNewline = v }},
-			{Label: i18n.Text("settings.trimTrailingWhitespace"), Kind: settingBool,
+			{Label: i18n.Text("settings.trimTrailingWhitespace"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.TrimTrailingWhitespace },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.TrimTrailingWhitespace = v }},
 			section(i18n.Text("settings.onQuit")),
