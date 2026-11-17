@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -76,7 +77,15 @@ func BaseArgs(opts Options, capped bool) []string {
 	} else {
 		args = append(args, "--ignore-case")
 	}
-	if !opts.UseRegex {
+	if opts.UseRegex {
+		// Without --crlf, ".", "\s" and negated classes match the "\r" of a CRLF
+		// line ending, so a replacement would strip it (#1652). rg rejects a
+		// literal "\r" under --crlf, so a query that asks for one keeps the old
+		// mode.
+		if !spellsCarriageReturn(opts.Query) {
+			args = append(args, "--crlf")
+		}
+	} else {
 		args = append(args, "--fixed-strings")
 	}
 	for _, g := range strings.Split(opts.Include, ",") {
@@ -92,6 +101,57 @@ func BaseArgs(opts Options, capped bool) []string {
 		}
 	}
 	return append(args, "--", opts.Query)
+}
+
+// spellsCarriageReturn reports whether a regex query writes "\r" itself: a raw
+// CR, \r, or a \x, \u or \U escape for U+000D. An escaped backslash (\\r) does
+// not count.
+func spellsCarriageReturn(query string) bool {
+	for i := 0; i < len(query); i++ {
+		switch query[i] {
+		case '\r':
+			return true
+		case '\\':
+			if i+1 == len(query) {
+				return false
+			}
+			i++
+			switch query[i] {
+			case 'r':
+				return true
+			case 'x':
+				if hexEscapeIsCR(query[i+1:], 2) {
+					return true
+				}
+			case 'u':
+				if hexEscapeIsCR(query[i+1:], 4) {
+					return true
+				}
+			case 'U':
+				if hexEscapeIsCR(query[i+1:], 8) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// hexEscapeIsCR reports whether rest starts with the hex digits of a \x, \u or
+// \U escape, either digits long or in braces, that encode U+000D.
+func hexEscapeIsCR(rest string, digits int) bool {
+	hex := ""
+	if strings.HasPrefix(rest, "{") {
+		end := strings.IndexByte(rest, '}')
+		if end < 0 {
+			return false
+		}
+		hex = rest[1:end]
+	} else if len(rest) >= digits {
+		hex = rest[:digits]
+	}
+	n, err := strconv.ParseUint(hex, 16, 32)
+	return err == nil && n == '\r'
 }
 
 // FindAllMatches runs ripgrep over paths with the result-list caps removed and

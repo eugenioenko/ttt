@@ -277,3 +277,74 @@ func TestFindAllMatchesBatchesLongPathLists(t *testing.T) {
 		t.Fatalf("files = %d, want %d", len(found), len(paths))
 	}
 }
+
+// A regex match must stop before the "\r" of a CRLF line ending, or Replace in
+// Files writes the line back with a bare LF (#1652).
+func TestFindAllMatchesRegexExcludesCRLF(t *testing.T) {
+	requireRipgrep(t)
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	path := filepath.Join(t.TempDir(), "crlf.txt")
+	if err := os.WriteFile(path, []byte("foo bar\r\nkeep me\r\nfoo baz\r\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"ba.*", []string{"bar", "baz"}},
+		{"ba[^x]*", []string{"bar", "baz"}},
+		{`ba[^\n]*`, []string{"bar", "baz"}},
+		{`ba[^\n]+`, []string{"bar", "baz"}},
+		{`ba[^\n ]*`, []string{"bar", "baz"}},
+		{`ba[^ \n\t]+`, []string{"bar", "baz"}},
+		{`r\s*$`, []string{"r"}},
+		{`r[\s]*$`, []string{"r"}},
+		{`ba\w\s*`, []string{"bar", "baz"}},
+		{"ba.$", []string{"bar", "baz"}},
+		{"bar$", []string{"bar"}},
+		{`r\s`, nil},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			found, err := FindAllMatches(context.Background(), Options{Query: tc.query, UseRegex: true}, []string{path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, m := range found[filepath.Clean(path)] {
+				if m.ColEnd > len(m.LineText) {
+					t.Fatalf("match [%d:%d] runs past line %q into its line ending", m.ColStart, m.ColEnd, m.LineText)
+				}
+				got = append(got, m.LineText[m.ColStart:m.ColEnd])
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("matched %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// rg rejects a literal "\r" under --crlf, so a regex that asks for "\r" (to find
+// or strip CRLF endings) must still run and find the CRLF lines.
+func TestFindAllMatchesRegexCarriageReturnQuery(t *testing.T) {
+	requireRipgrep(t)
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	path := filepath.Join(t.TempDir(), "crlf.txt")
+	if err := os.WriteFile(path, []byte("foo bar\r\nkeep me\nfoo baz\r\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{`\r$`, `[\r]`, `\x0d`, `\x{D}`, `\u000d`, "\r", `x|\r$`, `[x\r]`, `[ \t\r]+$`, `[\r\n]`, `\r|\n`, `ba(?:.|\r)*`} {
+		t.Run(query, func(t *testing.T) {
+			found, err := FindAllMatches(context.Background(), Options{Query: query, UseRegex: true}, []string{path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var lines []int
+			for _, m := range found[filepath.Clean(path)] {
+				lines = append(lines, m.LineNum)
+			}
+			if !slices.Equal(lines, []int{1, 3}) {
+				t.Fatalf("matched lines %v, want [1 3]", lines)
+			}
+		})
+	}
+}
