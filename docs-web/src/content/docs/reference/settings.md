@@ -152,6 +152,7 @@ All editor settings are nested under the `editor` key.
 | `editor.languageOverrides` | object | `{"markdown":{"wordWrap":true}}` | Per-language `wordWrap`, `wordWrapColumn`, and `wordWrapBreak` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
 | `editor.largeFiles.wordWrapMaxMB` | int | `32` | Files larger than this many megabytes open without word wrap, even when `editor.wordWrap` is on. `0` removes the limit |
 | `editor.largeFiles.autoReloadMaxMB` | int | `64` | Files larger than this many megabytes show a Reload action instead of automatically reloading after disk changes. `0` removes the limit. One megabyte is 1,048,576 bytes; negative values also remove the limit |
+| `editor.largeFiles.logModeMinMB` | int or `false` | `64` | Text files larger than this many megabytes open in log mode. `0` opens every text file in log mode; `false` turns automatic log mode off. One megabyte is 1,048,576 bytes |
 | `editor.diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
 | `editor.diffContext` | string | `"changes"` | Default diff context: `"changes"` or `"full"` |
 | `editor.diffWordWrap` | bool | `false` | Wrap long lines in diff views |

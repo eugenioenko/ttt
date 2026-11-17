@@ -230,8 +230,9 @@ func (e EditorSettings) ResolveWordWrapBreak(languageID string) string {
 }
 
 type LargeFileSettings struct {
-	WordWrapMaxMB   *int `json:"wordWrapMaxMB,omitempty"`
-	AutoReloadMaxMB *int `json:"autoReloadMaxMB,omitempty"`
+	WordWrapMaxMB   *int         `json:"wordWrapMaxMB,omitempty"`
+	AutoReloadMaxMB *int         `json:"autoReloadMaxMB,omitempty"`
+	LogModeMinMB    *MBThreshold `json:"logModeMinMB,omitempty"`
 }
 
 // Path is relative to the config directory unless absolute.

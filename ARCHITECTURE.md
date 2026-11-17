@@ -450,3 +450,16 @@ app_ui_loc=$(for package_path in internal/app internal/ui; do rg --files "$packa
 internal_loc=$(rg --files internal -g '*.go' -g '!*_test.go' | xargs wc -l | tail -1 | awk '{print $1}')
 awk -v numerator="$app_ui_loc" -v denominator="$internal_loc" 'BEGIN { printf "app_ui=%d internal=%d percent=%.1f\n", numerator, denominator, 100*numerator/denominator }'
 ```
+
+### Log mode
+
+`internal/core/logfile` owns bounded disk reads, a sparse line index, append and
+rotation tracking, and cancellable whole-file search. Like buffer file I/O, it
+has no terminal or widget dependencies. `ui.LogViewerWidget` consumes the
+`LogSource` read interface and owns only navigation, selection, and rendering.
+The application `logModeState` owns each tab's reader, search task, progress
+delivery, watcher updates, and shutdown. Sessions are keyed by viewer identity,
+so the same path in multiple groups has independent navigation and lifecycle.
+Progress and search results are delivered through the application's task queue;
+closed sessions reject queued results. Closing a tab releases its search task
+and reader, and application shutdown closes all remaining sessions.

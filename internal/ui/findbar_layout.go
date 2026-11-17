@@ -15,7 +15,7 @@ type findBarLayout struct {
 	btnToggle, btnPrev, btnNext, btnClose HitRegion
 }
 
-func renderFindBar(surface Surface, borders *term.BorderSet, query string, current, matches int, expanded, toggle bool) findBarLayout {
+func renderFindBar(surface Surface, borders *term.BorderSet, query string, current, matches int, expanded, toggle bool, progress string) findBarLayout {
 	sw, _ := surface.Size()
 	w := max(min(40, sw-4), 0)
 	l := findBarLayout{barRect: Rect{X: sw - w - 1, Y: 4, W: w, H: 3}}
@@ -48,6 +48,7 @@ func renderFindBar(surface Surface, borders *term.BorderSet, query string, curre
 			display = current + 1
 		}
 		info = fmt.Sprintf(" %d/%d", display, matches)
+		info += progress
 	}
 	nav := ""
 	if matches > 0 || expanded {

@@ -126,3 +126,30 @@ func TestLargeFileWithCollapsedFoldRecomputesAtOnce(t *testing.T) {
 		t.Fatal("folds not recomputed on the edit while one was collapsed")
 	}
 }
+
+func TestLogTabDoesNotPreventPendingFoldsOnReturn(t *testing.T) {
+	var runs, deliveries []func()
+	path := filepath.Join(t.TempDir(), "a.go")
+	g := newRenameGroup(t, path, "func a() {\n\tx := 1\n}\n")
+	g.CommitActiveTab()
+	g.FoldTask = asynctask.New[[]fold.Range](asynctask.TaskOptions{Run: func(fn func()) { runs = append(runs, fn) }},
+		func(fn func()) error { deliveries = append(deliveries, fn); return nil })
+	defer g.FoldTask.Close()
+	g.scheduleFolds()
+	v := testLogViewer(t, "log\n", 40, 5)
+	g.OpenLogTab(filepath.Join(t.TempDir(), "log.txt"), v)
+	if !g.SwitchToTabByPath(path) {
+		t.Fatal("editor tab was replaced")
+	}
+	g.scheduleFolds()
+	if len(runs) != 2 {
+		t.Fatalf("returning to the editor did not reschedule folds: %d tasks", len(runs))
+	}
+	runs[1]()
+	for _, deliver := range deliveries {
+		deliver()
+	}
+	if g.Editor.Folds.Pending() || g.Editor.Folds.FoldAt(0) == nil {
+		t.Fatal("returning from a log left folds pending")
+	}
+}

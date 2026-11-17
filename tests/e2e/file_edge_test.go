@@ -160,6 +160,7 @@ func TestCtrlEndRevealsAWrappedLastLine(t *testing.T) {
 	openFileEdgeFixture(t, h, "wrap.txt", numberedFile(100)+last)
 	h.app.EditorGroup.WordWrap = true
 	ed := h.app.EditorGroup.Editor
+	h.app.EditorGroup.WordWrap = true
 	ed.WordWrap = true
 	h.redraw()
 

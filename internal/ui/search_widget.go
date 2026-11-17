@@ -68,7 +68,7 @@ type SearchWidget struct {
 	Searching    bool
 	Error        string
 	DiffSources  func() []DiffSearchSource
-	OnOpenMatch  func(path string, line, col int)
+	OnOpenMatch  func(SearchMatch)
 	OnPreview    func(filePath string, matches []SearchMatch, replacement string, opts SearchOptions)
 	OnClear      func()
 	PostBatch    func(batch *SearchBatch)
@@ -390,6 +390,7 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	}
 
 	groupMap := map[string]int{}
+	offsets := search.DiskOffsets{}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
 	first := true
@@ -433,14 +434,17 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 
 		lineText := msg.Data.Lines.Text
 		lineText = strings.TrimRight(lineText, "\n\r")
+		offset, hasOffset := offsets.Resolve(absPath, msg.Data.AbsoluteOffset)
 
 		for _, sub := range msg.Data.Submatches {
 			match := SearchMatch{
-				FilePath: absPath,
-				LineNum:  msg.Data.LineNumber,
-				ColStart: sub.Start,
-				ColEnd:   sub.End,
-				LineText: lineText,
+				FilePath:      absPath,
+				ByteOffset:    offset,
+				HasByteOffset: hasOffset,
+				LineNum:       msg.Data.LineNumber,
+				ColStart:      sub.Start,
+				ColEnd:        sub.End,
+				LineText:      lineText,
 			}
 
 			idx, ok := groupMap[absPath]
@@ -1031,7 +1035,7 @@ func (s *SearchWidget) activateSelected() {
 		} else {
 			m := s.Groups[item.Group].Matches[item.Match]
 			if s.OnOpenMatch != nil {
-				s.OnOpenMatch(m.FilePath, m.LineNum, m.ColStart)
+				s.OnOpenMatch(m)
 			}
 		}
 	}

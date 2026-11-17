@@ -48,12 +48,16 @@ func (a *App) initTaskDelivery(screen *term.TcellScreen) {
 			return screen.PostEvent(tcell.NewEventInterrupt(&taskDelivery{run: run}))
 		}
 	}
+	if a.logs != nil {
+		a.logs.setPost(a.tasks.post)
+	}
 	for _, task := range a.tasks.tasks {
 		task.SetPost(a.tasks.post)
 	}
 }
 
 func (a *App) CloseTasks() {
+	a.logMode().close()
 	a.tasks.closed = true
 	for _, task := range a.tasks.tasks {
 		task.Close()

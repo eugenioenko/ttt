@@ -208,6 +208,7 @@ type App struct {
 	// lastPulled holds the document state behind each path's applied pull.
 	// UI goroutine only.
 	lastPulled map[string]pullKey
+	logs       *logModeState
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {

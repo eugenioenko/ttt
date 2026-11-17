@@ -16,6 +16,7 @@ type FindBarWidget struct {
 	BaseWidget
 	Input             *widgets.InputWidget
 	Matches           []FindMatch
+	Progress          string
 	Current           int
 	Options           SearchOptions
 	Borders           *term.BorderSet
@@ -84,7 +85,7 @@ func (f *FindBarWidget) CursorPosition() (int, int, bool) {
 
 func (f *FindBarWidget) Render(surface Surface) {
 	f.syncActions()
-	f.findBarLayout = renderFindBar(surface, f.Borders, f.Input.Text(), f.Current, len(f.Matches), false, f.OnToggleReplace != nil)
+	f.findBarLayout = renderFindBar(surface, f.Borders, f.Input.Text(), f.Current, len(f.Matches), false, f.OnToggleReplace != nil, f.Progress)
 	renderFindBarInput(surface, f.Input, f.inputX, f.barRect.Y+1, f.inputW)
 }
 
