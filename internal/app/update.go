@@ -153,7 +153,7 @@ func (a *App) checkLatestUpdate() {
 		case update.Nix:
 			message += "\n" + i18n.Text("update.nix")
 		default:
-			buttons = []widgets.DialogButton{{Label: i18n.Text("update.updateButton"), Handler: a.applyUpdate}, a.updateCloseButton(i18n.Text("general.cancelButton"))}
+			buttons = []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.cancelButton")), {Label: i18n.Text("update.updateButton"), Handler: a.applyUpdate}}
 		}
 		a.showUpdateState(message, release.Notes, buttons)
 	})
@@ -172,7 +172,7 @@ func (a *App) applyUpdate() {
 		return
 	}
 	s.updating = true
-	a.showUpdateState(i18n.Text("update.updating"), "", []widgets.DialogButton{{Label: i18n.Text("update.updateButton")}, {Label: i18n.Text("general.cancelButton")}})
+	a.showUpdateState(i18n.Text("update.updating"), "", []widgets.DialogButton{{Label: i18n.Text("general.cancelButton")}, {Label: i18n.Text("update.updateButton")}})
 	for _, child := range s.dialog.WidgetChildren() {
 		if footer, ok := child.(*widgets.HStackWidget); ok {
 			for _, button := range footer.Children {
