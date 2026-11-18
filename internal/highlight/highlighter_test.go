@@ -124,8 +124,8 @@ func TestHighlightGitCommitMessage(t *testing.T) {
 			if h == nil {
 				t.Fatal("expected Git commit message highlighter")
 			}
-			if got := h.Language(); got != "Git Commit Message" {
-				t.Fatalf("language = %q, want Git Commit Message", got)
+			if got := h.Language(); got != "Git Commit" {
+				t.Fatalf("language = %q, want Git Commit", got)
 			}
 			allComment(t, h.HighlightLineAt(lines, 4), lines[4], "commit instructions")
 			for _, tc := range []struct {
