@@ -332,7 +332,7 @@ func TestFindAllMatchesRegexCarriageReturnQuery(t *testing.T) {
 	if err := os.WriteFile(path, []byte("foo bar\r\nkeep me\nfoo baz\r\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	for _, query := range []string{`\r$`, `[\r]`, `\x0d`, `\x{D}`, `\u000d`, "\r", `x|\r$`, `[x\r]`, `[ \t\r]+$`, `[\r\n]`, `\r|\n`, `ba(?:.|\r)*`} {
+	for _, query := range []string{`\r$`, `[\r]`, `\x0d`, `\x{D}`, `\u000d`, "\r", `x|\r$`, `[x\r]`, `[ \t\r]+$`, `[\r\n]`, `\r|\n`, `ba(?:.|\r)*`, "\\\r"} {
 		t.Run(query, func(t *testing.T) {
 			found, err := FindAllMatches(context.Background(), Options{Query: query, UseRegex: true}, []string{path})
 			if err != nil {

@@ -117,7 +117,7 @@ func spellsCarriageReturn(query string) bool {
 			}
 			i++
 			switch query[i] {
-			case 'r':
+			case 'r', '\r':
 				return true
 			case 'x':
 				if hexEscapeIsCR(query[i+1:], 2) {
