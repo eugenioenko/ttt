@@ -70,6 +70,11 @@ func (a *App) startSearchReplace(req ui.SearchReplaceRequest) {
 			a.cancelSearchReplace()
 			return
 		}
+		if errors.Is(err, search.ErrRecordTooLarge) {
+			a.cancelSearchReplace()
+			a.StatusNotify(i18n.Text("search.recordLimitReached"))
+			return
+		}
 		matches := make(map[string][]ui.SearchMatch)
 		for _, path := range req.Paths {
 			ms := found[filepath.Clean(path)]

@@ -4,10 +4,9 @@
 package search
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -172,12 +171,15 @@ func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error)
 	}
 
 	matches := map[string][]Match{}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
-	for scanner.Scan() {
-		var msg RgMessage
-		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
-			continue
+	reader := NewMessageReader(stdout)
+	var readErr error
+	for {
+		msg, err := reader.Next()
+		if err != nil {
+			if err != io.EOF {
+				readErr = err
+			}
+			break
 		}
 		if msg.Type != "match" {
 			continue
@@ -199,8 +201,7 @@ func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error)
 			})
 		}
 	}
-	scanErr := scanner.Err()
-	if scanErr != nil {
+	if readErr != nil {
 		// rg can still be blocked writing to the pipe, so stop it before
 		// waiting; otherwise cmd.Wait blocks forever.
 		cmd.Process.Kill()
@@ -209,8 +210,8 @@ func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if scanErr != nil {
-		return nil, scanErr
+	if readErr != nil {
+		return nil, readErr
 	}
 	var exitErr *exec.ExitError
 	if errors.As(waitErr, &exitErr) && exitErr.ExitCode() == 1 {

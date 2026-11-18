@@ -1,11 +1,10 @@
 package ui
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -62,6 +61,7 @@ type SearchWidget struct {
 	FlatList     []searchItem
 	Selected     int
 	lastSelected int
+	lastVisibleH int
 	ScrollTop    int
 	scrollbar    Scrollbar
 	WorkDirs     []string
@@ -304,15 +304,14 @@ func (s *SearchWidget) runSearchSync() {
 }
 
 func (s *SearchWidget) streamSearch(ctx context.Context, gen uint64) {
+	var groups []SearchFileGroup
 	// streamSearch runs on its own goroutine, where an unrecovered panic would
 	// take down the editor rather than just the search.
 	defer func() {
 		if r := recover(); r != nil {
-			s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failedWithPanic", i18n.Args{"r": r})})
+			s.sendBatch(&SearchBatch{Gen: gen, Groups: groups, Done: true, Error: i18n.Format("search.failedWithPanic", i18n.Args{"r": r})})
 		}
 	}()
-
-	var groups []SearchFileGroup
 
 	if s.DiffSources != nil {
 		for _, ds := range s.DiffSources() {
@@ -370,7 +369,7 @@ func (s *SearchWidget) ApplyBatch(batch *SearchBatch) {
 
 func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]SearchFileGroup) {
 	if _, err := exec.LookPath("rg"); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Text("search.ripgrepRgNotFound")})
+		s.sendBatch(&SearchBatch{Gen: gen, Groups: *groups, Done: true, Error: i18n.Text("search.ripgrepRgNotFound")})
 		return
 	}
 
@@ -381,27 +380,29 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	cmd := exec.CommandContext(ctx, "rg", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
+		s.sendBatch(&SearchBatch{Gen: gen, Groups: *groups, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		s.sendBatch(&SearchBatch{Gen: gen, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
+		s.sendBatch(&SearchBatch{Gen: gen, Groups: *groups, Done: true, Error: i18n.Format("search.failed", i18n.Args{"error": err.Error()})})
 		return
 	}
 
 	groupMap := map[string]int{}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
+	reader := search.NewMessageReader(stdout)
+	var readErr error
 	first := true
 	lastFlush := time.Now()
 	dirty := false
 	const flushInterval = 100 * time.Millisecond
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		var msg search.RgMessage
-		if err := json.Unmarshal([]byte(line), &msg); err != nil {
-			continue
+	for {
+		msg, err := reader.Next()
+		if err != nil {
+			if err != io.EOF {
+				readErr = err
+			}
+			break
 		}
 
 		if msg.Type == "end" {
@@ -468,12 +469,15 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 		}
 	}
 
-	if scanner.Err() != nil {
+	if readErr != nil {
 		cmd.Process.Kill()
 	}
 	waitErr := cmd.Wait()
 	if ctx.Err() != nil {
 		return
+	}
+	if readErr != nil {
+		waitErr = readErr
 	}
 
 	snapshot := make([]SearchFileGroup, len(*groups))
@@ -486,6 +490,9 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 func rgFailure(err error) string {
 	if err == nil {
 		return ""
+	}
+	if errors.Is(err, search.ErrRecordTooLarge) {
+		return i18n.Text("search.recordLimitReached")
 	}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
@@ -584,12 +591,15 @@ func (s *SearchWidget) Render(surface Surface) {
 	}
 
 	if s.Error != "" {
-		for i, ch := range s.Error {
-			if i < w {
-				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
-			}
+		if len(s.Groups) > 0 {
+			surface.DrawText(0, startY, i18n.Text("search.partialResults"), w, term.StyleMuted)
+			startY++
 		}
-		return
+		surface.DrawText(0, startY, s.Error, w, term.StyleMuted)
+		startY++
+		if len(s.Groups) == 0 {
+			return
+		}
 	}
 
 	if s.Input.Text() != "" && len(s.FlatList) == 0 && !s.Searching && !s.debouncing {
@@ -639,13 +649,16 @@ func (s *SearchWidget) Render(surface Surface) {
 		return
 	}
 
-	if s.Selected != s.lastSelected {
+	if s.Selected != s.lastSelected || visibleH != s.lastVisibleH {
 		s.lastSelected = s.Selected
-		if s.Selected < s.ScrollTop {
-			s.ScrollTop = s.Selected
-		}
-		if s.Selected >= s.ScrollTop+visibleH {
-			s.ScrollTop = s.Selected - visibleH + 1
+		s.lastVisibleH = visibleH
+		if s.Selected >= 0 && s.Selected < len(s.FlatList) {
+			if s.Selected < s.ScrollTop {
+				s.ScrollTop = s.Selected
+			}
+			if s.Selected >= s.ScrollTop+visibleH {
+				s.ScrollTop = s.Selected - visibleH + 1
+			}
 		}
 	}
 

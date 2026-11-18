@@ -1,17 +1,84 @@
 package ui
 
 import (
+	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/fileicons"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/search"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
+
+func TestSearchStreamsLongMatchingLines(t *testing.T) {
+	if _, err := exec.LookPath("rg"); err != nil {
+		t.Skip("ripgrep not installed")
+	}
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fixture.txt")
+	longLine := "asdf" + strings.Repeat("x", 2*1024*1024)
+	if err := os.WriteFile(path, []byte(longLine+"\nafter asdf\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSearchWidget()
+	s.SetWorkDirs([]string{dir})
+	seedInputText(s.Input, "asdf")
+	s.Searching = true
+	var done bool
+	s.PostBatch = func(batch *SearchBatch) {
+		s.ApplyBatch(batch)
+		done = batch.Done
+	}
+	s.streamSearch(context.Background(), s.searchGen)
+	if !done || s.Searching || s.Error != "" {
+		t.Fatalf("search completion: done=%t searching=%t error=%q", done, s.Searching, s.Error)
+	}
+	if len(s.Groups) != 1 || len(s.Groups[0].Matches) != 2 {
+		t.Fatalf("expected both matches in one file, got %d groups", len(s.Groups))
+	}
+	for i, want := range []SearchMatch{
+		{FilePath: path, LineNum: 1, ColStart: 0, ColEnd: 4, LineText: longLine},
+		{FilePath: path, LineNum: 2, ColStart: 6, ColEnd: 10, LineText: "after asdf"},
+	} {
+		if s.Groups[0].Matches[i] != want {
+			t.Errorf("match %d has incorrect path, line, columns, or text", i)
+		}
+	}
+}
+
+func TestSearchRecordLimitPreservesEarlierMatches(t *testing.T) {
+	if _, err := exec.LookPath("rg"); err != nil {
+		t.Skip("ripgrep not installed")
+	}
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fixture.txt")
+	content := "first asdf\n" + strings.Repeat("x", search.MaxRecordBytes) + "asdf\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSearchWidget()
+	s.SetWorkDirs([]string{dir})
+	seedInputText(s.Input, "asdf")
+	s.Searching = true
+	s.PostBatch = s.ApplyBatch
+	s.streamSearch(context.Background(), s.searchGen)
+	if s.Searching || s.Error != "16 MiB record limit reached" {
+		t.Fatalf("search completion: searching=%t error=%q", s.Searching, s.Error)
+	}
+	if len(s.Groups) != 1 || len(s.Groups[0].Matches) != 1 || s.Groups[0].Matches[0].LineText != "first asdf" {
+		t.Fatal("expected the first match to survive the record limit")
+	}
+}
 
 func TestSearchInputChevronFollowsFocus(t *testing.T) {
 	s := NewSearchWidget()
@@ -216,6 +283,106 @@ func TestApplyBatchSurfacesError(t *testing.T) {
 	}
 	if s.Searching {
 		t.Error("expected Searching to be cleared")
+	}
+}
+
+func TestSearchPartialResultsRemainVisibleAndClickable(t *testing.T) {
+	s := NewSearchWidget()
+	s.SetRect(Rect{W: 80, H: 12})
+	seedInputText(s.Input, "asdf")
+	s.Searching = true
+	s.ApplyBatch(&SearchBatch{
+		Gen: s.searchGen, Done: true, Error: "search failed: signal: killed",
+		Groups: []SearchFileGroup{{
+			FilePath: "/repo/fixture.txt", RelPath: "fixture.txt", Expanded: true,
+			Matches: []SearchMatch{{
+				FilePath: "/repo/fixture.txt", LineNum: 3, ColStart: 6, ColEnd: 10, LineText: "found asdf",
+			}},
+		}},
+	})
+	grid := makeGrid(80, 12)
+	s.Render(NewRenderSurface(grid, s.GetRect()))
+	screen := detailTestText(grid)
+	for _, want := range []string{"Results may be incomplete", "search failed: signal: killed", "1 results in 1 files", "fixture.txt", "3: found asdf"} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("screen missing %q:\n%s", want, screen)
+		}
+	}
+	if s.Searching || strings.Contains(screen, "No results") {
+		t.Fatal("failed search with partial results has an incorrect completion state")
+	}
+	opened := false
+	s.OnOpenMatch = func(path string, line, col int) {
+		opened = true
+		if path != "/repo/fixture.txt" || line != 3 || col != 6 {
+			t.Errorf("opened %s:%d:%d, want /repo/fixture.txt:3:6", path, line, col)
+		}
+	}
+	s.HandleEvent(tcell.NewEventMouse(5, s.resultStartY+1, tcell.Button1, tcell.ModNone))
+	if !opened {
+		t.Fatal("partial result could not be opened")
+	}
+}
+
+func TestSearchErrorKeepsSelectionVisibleWhenViewportShrinks(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		selected int
+		wantTop  int
+	}{
+		{name: "last visible row", selected: 6, wantTop: 1},
+		{name: "selection still fits", selected: 5, wantTop: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSearchWidget()
+			s.SetRect(Rect{W: 80, H: 12})
+			seedInputText(s.Input, "asdf")
+			s.Groups = []SearchFileGroup{{RelPath: "fixture.txt", Expanded: true}}
+			for i := 0; i < 12; i++ {
+				s.Groups[0].Matches = append(s.Groups[0].Matches, SearchMatch{LineNum: i + 1, LineText: "asdf"})
+			}
+			s.flatten()
+			s.Searching = true
+			s.Selected = tc.selected
+			render := func() {
+				s.Render(NewRenderSurface(makeGrid(80, 12), s.GetRect()))
+			}
+			render()
+			if s.ScrollTop != 0 || s.resultStartY != 5 {
+				t.Fatalf("initial layout: top=%d startY=%d", s.ScrollTop, s.resultStartY)
+			}
+			s.ApplyBatch(&SearchBatch{Gen: s.searchGen, Groups: s.Groups, Done: true, Error: "search failed"})
+			render()
+			if s.ScrollTop != tc.wantTop || s.Selected != tc.selected || s.resultStartY != 6 {
+				t.Fatalf("error layout: top=%d selected=%d startY=%d", s.ScrollTop, s.Selected, s.resultStartY)
+			}
+			s.Selected = 0
+			render()
+			s.HandleEvent(tcell.NewEventMouse(5, 8, tcell.WheelDown, tcell.ModNone))
+			top := s.ScrollTop
+			render()
+			if top == 0 || s.ScrollTop != top {
+				t.Fatalf("redraw reset wheel scrolling: before=%d after=%d", top, s.ScrollTop)
+			}
+		})
+	}
+}
+
+func TestSearchKeepsDiffResultsWhenRipgrepUnavailable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	s := NewSearchWidget()
+	s.SetWorkDirs([]string{t.TempDir()})
+	seedInputText(s.Input, "asdf")
+	s.DiffSources = func() []DiffSearchSource {
+		return []DiffSearchSource{{TabName: "diff.txt", Lines: []string{"asdf"}}}
+	}
+	s.PostBatch = s.ApplyBatch
+	s.streamSearch(context.Background(), s.searchGen)
+	if s.Error != "ripgrep (rg) not found" {
+		t.Fatalf("Error = %q, want missing ripgrep error", s.Error)
+	}
+	if len(s.Groups) != 1 || s.Groups[0].FilePath != "diff.txt" || len(s.Groups[0].Matches) != 1 {
+		t.Fatal("diff results were lost when disk search failed")
 	}
 }
 
