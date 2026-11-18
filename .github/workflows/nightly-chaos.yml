@@ -1,0 +1,334 @@
+name: Nightly Chaos
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Number of chaos iterations"
+        required: false
+        default: "5000"
+        type: string
+      events:
+        description: "Random events per iteration"
+        required: false
+        default: "500"
+        type: string
+      seed:
+        description: "Base seed (empty = random)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-chaos
+  cancel-in-progress: false
+
+jobs:
+  chaos:
+    if: github.repository == 'eugenioenko/ttt'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      exit_code: ${{ steps.chaos.outputs.exit_code }}
+      iterations: ${{ steps.chaos.outputs.iterations }}
+      events: ${{ steps.chaos.outputs.events }}
+      crash_count: ${{ steps.summary.outputs.crash_count }}
+      base_seed: ${{ steps.summary.outputs.base_seed }}
+      artifact: chaos-report-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build chaos Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: tests/chaos/Dockerfile
+          tags: ttt-chaos
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run chaos monkey
+        id: chaos
+        env:
+          ITERATIONS: ${{ inputs.iterations || '5000' }}
+          EVENTS: ${{ inputs.events || '500' }}
+          SEED: ${{ inputs.seed }}
+        run: |
+          set -uo pipefail
+
+          if [[ ! "$ITERATIONS" =~ ^[1-9][0-9]{0,6}$ ]]; then
+            echo "::error::iterations must be a positive integer"
+            exit 1
+          fi
+          if [[ ! "$EVENTS" =~ ^[1-9][0-9]{0,5}$ ]]; then
+            echo "::error::events must be a positive integer"
+            exit 1
+          fi
+          seed_args=()
+          if [[ -n "$SEED" ]]; then
+            if [[ ! "$SEED" =~ ^-?[0-9]{1,19}$ ]]; then
+              echo "::error::seed must be an integer"
+              exit 1
+            fi
+            seed_args=(-e "CHAOS_SEED=$SEED")
+          fi
+          echo "iterations=$ITERATIONS" >> "$GITHUB_OUTPUT"
+          echo "events=$EVENTS" >> "$GITHUB_OUTPUT"
+
+          mkdir -p chaos-output
+          set +e
+          # timeout leaves room for the report steps before the job-level limit.
+          timeout 45m docker run --rm \
+            -e CHAOS_ITERATIONS="$ITERATIONS" \
+            -e CHAOS_EVENTS="$EVENTS" \
+            "${seed_args[@]}" \
+            -v "$PWD/chaos-output:/output" \
+            --entrypoint /chaos-test ttt-chaos \
+            -test.run TestChaosMonkey -test.v -test.timeout 0 2>&1 | tee chaos-output/chaos.log
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize run
+        id: summary
+        if: always() && steps.chaos.outputs.exit_code != ''
+        env:
+          EXIT_CODE: ${{ steps.chaos.outputs.exit_code }}
+          ITERATIONS: ${{ steps.chaos.outputs.iterations }}
+          EVENTS: ${{ steps.chaos.outputs.events }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          crash_files=(chaos-output/crash-*.json)
+          crash_count=${#crash_files[@]}
+
+          base_seed=$(grep -oE 'base seed: -?[0-9]+' chaos-output/chaos.log | tail -n 1 | grep -oE -- '-?[0-9]+$' || true)
+          if [[ -z "$base_seed" ]] && (( crash_count > 0 )); then
+            # Iteration i runs with seed baseSeed+i, so any crash file recovers the base seed.
+            name=$(basename "${crash_files[0]}")
+            if [[ "$name" =~ ^crash-(-?[0-9]+)-([0-9]+)\.json$ ]]; then
+              base_seed=$(( BASH_REMATCH[1] - BASH_REMATCH[2] ))
+            fi
+          fi
+
+          if [[ "$EXIT_CODE" == "0" ]]; then
+            result="passed"
+          elif (( crash_count > 0 )); then
+            result="failed: $crash_count crash(es)"
+          else
+            result="failed: exit code $EXIT_CODE without a crash report"
+          fi
+
+          {
+            echo "## Chaos monkey"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Result | $result |"
+            echo "| Iterations | $ITERATIONS |"
+            echo "| Events per iteration | $EVENTS |"
+            echo "| Base seed | ${base_seed:-unknown} |"
+            echo "| Commit | \`$COMMIT_SHA\` |"
+            echo "| Crashes | $crash_count |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "crash_count=$crash_count"
+            echo "base_seed=$base_seed"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload crash reports
+        if: always() && steps.chaos.outputs.exit_code != '' && steps.chaos.outputs.exit_code != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: chaos-report-${{ github.run_attempt }}
+          path: |
+            chaos-output/crash-*.json
+            chaos-output/chaos.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Fail on crash
+        if: steps.chaos.outputs.exit_code != '0'
+        env:
+          EXIT_CODE: ${{ steps.chaos.outputs.exit_code }}
+        run: |
+          echo "::error::chaos monkey exited with code $EXIT_CODE"
+          exit 1
+
+  report:
+    needs: chaos
+    if: always() && needs.chaos.outputs.exit_code != '' && needs.chaos.outputs.exit_code != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - name: Download crash reports
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.chaos.outputs.artifact }}
+          path: report
+
+      - name: Open or update chaos issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EXIT_CODE: ${{ needs.chaos.outputs.exit_code }}
+          ITERATIONS: ${{ needs.chaos.outputs.iterations }}
+          EVENTS: ${{ needs.chaos.outputs.events }}
+          BASE_SEED: ${{ needs.chaos.outputs.base_seed }}
+          ARTIFACT: ${{ needs.chaos.outputs.artifact }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          max_groups=5
+          max_seeds=20
+
+          gh label create chaos --color B60205 \
+            --description "Crash found by the chaos monkey" 2>/dev/null || true
+
+          open_issues=$(mktemp)
+          gh issue list --label chaos --state open --limit 200 --json number,body > "$open_issues"
+
+          find_issue() {
+            jq -r --arg marker "<!-- chaos-key: $1 -->" \
+              'map(select(.body | contains($marker))) | first | .number // empty' "$open_issues"
+          }
+
+          file_issue() {
+            local key=$1 title=$2 body_file=$3 comment_file=$4 number
+            number=$(find_issue "$key")
+            if [[ -n "$number" ]]; then
+              echo "Commenting on existing issue #$number"
+              gh issue comment "$number" --body-file "$comment_file"
+            else
+              echo "Opening new issue: $title"
+              gh issue create --label chaos --title "$title" --body-file "$body_file"
+            fi
+          }
+
+          run_details() {
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$COMMIT_SHA\` |"
+            echo "| Run | $RUN_URL |"
+            echo "| Iterations x events | $ITERATIONS x $EVENTS |"
+            echo "| Base seed | ${BASE_SEED:-unknown} |"
+          }
+
+          crash_files=(report/crash-*.json)
+
+          if (( ${#crash_files[@]} == 0 )); then
+            # A Go fatal error (for example concurrent map writes), a hang hitting the
+            # timeout, or an OOM kill ends the process before a crash report is written.
+            body=$(mktemp)
+            comment=$(mktemp)
+            {
+              echo "The chaos monkey exited with code $EXIT_CODE without writing a crash report."
+              echo "This usually means an unrecoverable Go fatal error, a hang that hit the timeout, or the process being killed."
+              echo
+              run_details
+              echo
+              echo "<details><summary>Log tail</summary>"
+              echo
+              echo "~~~~"
+              tail -n 80 report/chaos.log 2>/dev/null || echo "(log unavailable)"
+              echo "~~~~"
+              echo
+              echo "</details>"
+            } > "$comment"
+            { echo "<!-- chaos-key: abnormal-exit -->"; cat "$comment"; } > "$body"
+            file_issue abnormal-exit "Chaos monkey: abnormal exit without crash report" "$body" "$comment"
+            exit 0
+          fi
+
+          entries=$(mktemp)
+          for f in "${crash_files[@]}"; do
+            name=$(basename "$f")
+            [[ "$name" =~ ^crash-(-?[0-9]+)-([0-9]+)\.json$ ]] || continue
+            jq -c --arg file "$name" --arg seed "${BASH_REMATCH[1]}" --arg iter "${BASH_REMATCH[2]}" \
+              '{file: $file, seed: $seed, iteration: ($iter | tonumber), panic: (.panic // ""), stack: (.stack // "")}' \
+              "$f" >> "$entries"
+          done
+
+          # Addresses in panic messages vary between runs, so they are masked for grouping.
+          groups=$(mktemp)
+          jq -s -c '
+            map(. + {key_text: (.panic | gsub("0x[0-9a-fA-F]+"; "0x?"))})
+            | group_by(.key_text)
+            | sort_by(-length)
+            | .[]
+            | sort_by(.iteration)
+          ' "$entries" > "$groups"
+
+          total_groups=$(wc -l < "$groups")
+          if (( total_groups > max_groups )); then
+            echo "::warning::$total_groups distinct panics; filing issues for the $max_groups most frequent"
+          fi
+
+          head -n "$max_groups" "$groups" | while IFS= read -r group; do
+            key=$(jq -r '.[0].key_text' <<< "$group" | sha256sum | cut -c1-16)
+            panic=$(jq -r '.[0].panic' <<< "$group" | head -c 2000)
+            first_line=$(printf '%s\n' "$panic" | head -n 1 | cut -c1-100)
+            count=$(jq 'length' <<< "$group")
+            first_file=$(jq -r '.[0].file' <<< "$group")
+
+            details=$(mktemp)
+            {
+              echo "**Panic**"
+              echo
+              echo "~~~~"
+              printf '%s\n' "$panic"
+              echo "~~~~"
+              echo
+              run_details
+              echo "| Crashes with this panic | $count |"
+              echo
+              echo "**Seeds**"
+              echo
+              jq -r --argjson n "$max_seeds" \
+                '.[:$n][] | "- seed `\(.seed)` at iteration \(.iteration) (`\(.file)`)"' <<< "$group"
+              if (( count > max_seeds )); then
+                echo "- ...and $(( count - max_seeds )) more in the artifact"
+              fi
+              echo
+              echo "**Replay** (the artifact expires after 30 days)"
+              echo
+              echo '```sh'
+              echo "gh run download $RUN_ID -R $GH_REPO -n $ARTIFACT -D chaos-output"
+              echo "CHAOS_REPLAY=chaos-output/$first_file make chaos-replay"
+              echo '```'
+              echo
+              echo "<details><summary>Stack trace (first crash)</summary>"
+              echo
+              echo "~~~~"
+              jq -r '.[0].stack' <<< "$group" | head -c 8000
+              echo
+              echo "~~~~"
+              echo
+              echo "</details>"
+            } > "$details"
+
+            body=$(mktemp)
+            comment=$(mktemp)
+            { echo "<!-- chaos-key: $key -->"; echo "The nightly chaos monkey hit a panic."; echo; cat "$details"; } > "$body"
+            { echo "Seen again."; echo; cat "$details"; } > "$comment"
+
+            file_issue "$key" "Chaos monkey: $first_line" "$body" "$comment"
+          done
