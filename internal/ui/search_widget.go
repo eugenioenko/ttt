@@ -61,6 +61,7 @@ type SearchWidget struct {
 	FlatList     []searchItem
 	Selected     int
 	lastSelected int
+	lastVisibleH int
 	ScrollTop    int
 	scrollbar    Scrollbar
 	WorkDirs     []string
@@ -648,13 +649,16 @@ func (s *SearchWidget) Render(surface Surface) {
 		return
 	}
 
-	if s.Selected != s.lastSelected {
+	if s.Selected != s.lastSelected || visibleH != s.lastVisibleH {
 		s.lastSelected = s.Selected
-		if s.Selected < s.ScrollTop {
-			s.ScrollTop = s.Selected
-		}
-		if s.Selected >= s.ScrollTop+visibleH {
-			s.ScrollTop = s.Selected - visibleH + 1
+		s.lastVisibleH = visibleH
+		if s.Selected >= 0 && s.Selected < len(s.FlatList) {
+			if s.Selected < s.ScrollTop {
+				s.ScrollTop = s.Selected
+			}
+			if s.Selected >= s.ScrollTop+visibleH {
+				s.ScrollTop = s.Selected - visibleH + 1
+			}
 		}
 	}
 

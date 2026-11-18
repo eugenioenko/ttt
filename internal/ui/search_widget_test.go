@@ -324,6 +324,50 @@ func TestSearchPartialResultsRemainVisibleAndClickable(t *testing.T) {
 	}
 }
 
+func TestSearchErrorKeepsSelectionVisibleWhenViewportShrinks(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		selected int
+		wantTop  int
+	}{
+		{name: "last visible row", selected: 6, wantTop: 1},
+		{name: "selection still fits", selected: 5, wantTop: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSearchWidget()
+			s.SetRect(Rect{W: 80, H: 12})
+			seedInputText(s.Input, "asdf")
+			s.Groups = []SearchFileGroup{{RelPath: "fixture.txt", Expanded: true}}
+			for i := 0; i < 12; i++ {
+				s.Groups[0].Matches = append(s.Groups[0].Matches, SearchMatch{LineNum: i + 1, LineText: "asdf"})
+			}
+			s.flatten()
+			s.Searching = true
+			s.Selected = tc.selected
+			render := func() {
+				s.Render(NewRenderSurface(makeGrid(80, 12), s.GetRect()))
+			}
+			render()
+			if s.ScrollTop != 0 || s.resultStartY != 5 {
+				t.Fatalf("initial layout: top=%d startY=%d", s.ScrollTop, s.resultStartY)
+			}
+			s.ApplyBatch(&SearchBatch{Gen: s.searchGen, Groups: s.Groups, Done: true, Error: "search failed"})
+			render()
+			if s.ScrollTop != tc.wantTop || s.Selected != tc.selected || s.resultStartY != 6 {
+				t.Fatalf("error layout: top=%d selected=%d startY=%d", s.ScrollTop, s.Selected, s.resultStartY)
+			}
+			s.Selected = 0
+			render()
+			s.HandleEvent(tcell.NewEventMouse(5, 8, tcell.WheelDown, tcell.ModNone))
+			top := s.ScrollTop
+			render()
+			if top == 0 || s.ScrollTop != top {
+				t.Fatalf("redraw reset wheel scrolling: before=%d after=%d", top, s.ScrollTop)
+			}
+		})
+	}
+}
+
 func TestSearchKeepsDiffResultsWhenRipgrepUnavailable(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	s := NewSearchWidget()
