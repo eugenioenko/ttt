@@ -635,6 +635,14 @@ func describeKeyCombo(kev *tcell.EventKey) string {
 	var parts []string
 
 	mod := kev.Modifiers()
+	key := kev.Key()
+	// Legacy terminals send ctrl+/ as 0x1F, which tcell reports as "_" or
+	// KeyUS. Record it as "ctrl+/", the form the key matcher folds to.
+	if folded, ok := foldCtrlEvent(kev); (ok && folded == tcell.KeyUS) || key == tcell.KeyUS {
+		mod |= tcell.ModCtrl
+		key = tcell.KeyRune
+		kev = tcell.NewEventKey(tcell.KeyRune, "/", mod)
+	}
 	if mod&tcell.ModCtrl != 0 {
 		parts = append(parts, "ctrl")
 	}
@@ -645,7 +653,6 @@ func describeKeyCombo(kev *tcell.EventKey) string {
 		parts = append(parts, "alt")
 	}
 
-	key := kev.Key()
 	if name := specialKeyName(key); name != "" {
 		parts = append(parts, name)
 	} else if key == tcell.KeyRune {
