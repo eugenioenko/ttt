@@ -27,6 +27,7 @@ docs-web/dist/
 .DS_Store
 *.log
 docs-web/.astro/
+docs-web/public/playground/
 chaos-output/
 
 # Nix

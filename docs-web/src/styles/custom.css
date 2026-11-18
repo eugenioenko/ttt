@@ -5,6 +5,11 @@
   --sl-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
+.page > header.header {
+  background-color: #1f1f1f;
+  border-bottom: none;
+}
+
 /* Make hero full-width single column */
 .hero {
   grid-template-columns: 1fr !important;

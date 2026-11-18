@@ -2,13 +2,20 @@
   "name": "docs-web",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "dev": "pnpm build:playground && astro dev",
+    "build": "pnpm build:playground && astro build",
+    "build:playground": "node scripts/build-playground.mjs",
+    "test:playground": "node --test playground/*.test.js",
     "preview": "astro preview"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.39.2",
+    "@zenfs/core": "^2.7.7",
     "astro": "^6.3.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.7"
   }
 }
