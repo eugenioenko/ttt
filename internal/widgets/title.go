@@ -101,6 +101,9 @@ func (t *TitleWidget) Render(surface Surface) {
 	x := 0
 	for _, ch := range t.Config.Title {
 		rw := textwidth.Rune(ch)
+		if x >= maxTextW {
+			break
+		}
 		if x+rw > maxTextW {
 			// A fullwidth rune that would cross the last column becomes a
 			// space: the terminal paints it across two columns regardless of
