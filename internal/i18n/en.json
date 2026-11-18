@@ -854,6 +854,8 @@
   "search.filesToExclude": "files to exclude",
   "search.filesToInclude": "files to include",
   "search.noResults": "No results",
+  "search.partialResults": "Results may be incomplete",
+  "search.recordLimitReached": "16 MiB record limit reached",
   "search.replacedAcrossFiles": "Replaced {replacedMatches} matches across {replacedFiles} files",
   "search.resultsInFiles": "{totalMatches} results in {groupsCount} files",
   "search.ripgrepRgNotFound": "ripgrep (rg) not found",
