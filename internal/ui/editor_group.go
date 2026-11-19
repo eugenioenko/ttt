@@ -173,6 +173,7 @@ type EditorGroupWidget struct {
 	OnActivate        func()
 	OpenFileElsewhere func(string) bool
 	DropTarget        bool
+	DropZone          EditorDropZone
 	// RelatedGroups includes this group and all peers sharing its buffers.
 	RelatedGroups   func() []*EditorGroupWidget
 	lastActiveTabID string
@@ -3437,7 +3438,7 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	g.TabBar.GroupActive = g.focused
 	g.Editor.Passive = split && !g.focused
 	g.TabBar.Render(tabSurface)
-	if g.DropTarget {
+	if g.effectiveDropZone() == EditorDropCenter {
 		borders := term.SingleBorderSet()
 		if g.Borders != nil {
 			borders = *g.Borders
@@ -3503,6 +3504,8 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 		g.Hover.Borders = g.Borders
 		g.Hover.Render(surface)
 	}
+
+	g.renderDropPreview(contentSurface)
 }
 
 func (g *EditorGroupWidget) CancelPointerCapture() bool {

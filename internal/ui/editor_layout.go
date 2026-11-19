@@ -64,13 +64,36 @@ func (e *EditorLayoutWidget) leaf(group *EditorGroupWidget) *EditorLayoutWidget 
 }
 
 func (e *EditorLayoutWidget) SplitGroup(group, next *EditorGroupWidget, position SplitPosition) bool {
+	return e.splitGroup(group, next, position, false)
+}
+
+func (e *EditorLayoutWidget) SplitGroupAt(group, next *EditorGroupWidget, zone EditorDropZone) bool {
+	switch zone {
+	case EditorDropLeft:
+		return e.splitGroup(group, next, SplitRight, true)
+	case EditorDropRight:
+		return e.splitGroup(group, next, SplitRight, false)
+	case EditorDropTop:
+		return e.splitGroup(group, next, SplitBottom, true)
+	case EditorDropBottom:
+		return e.splitGroup(group, next, SplitBottom, false)
+	default:
+		return false
+	}
+}
+
+func (e *EditorLayoutWidget) splitGroup(group, next *EditorGroupWidget, position SplitPosition, before bool) bool {
 	leaf := e.leaf(group)
 	if leaf == nil || len(e.Groups()) >= MaxEditorGroups {
 		return false
 	}
 	e.InvalidatePointerInteraction()
-	leaf.First = NewEditorLayoutWidget(group, e.Borders)
-	leaf.Second = NewEditorLayoutWidget(next, e.Borders)
+	first, second := group, next
+	if before {
+		first, second = next, group
+	}
+	leaf.First = NewEditorLayoutWidget(first, e.Borders)
+	leaf.Second = NewEditorLayoutWidget(second, e.Borders)
 	leaf.Group = nil
 	s := NewContentSplitWidget()
 	s.Position, s.FullHeightRight, s.ShowBottom = position, true, true
