@@ -10,12 +10,12 @@ import (
 )
 
 func TestAutoSurroundSelection(t *testing.T) {
-	for _, pair := range []string{"()", "[]", "{}", "\"\"", "''", "``", "**", "«»"} {
+	for _, pair := range []string{"()", "[]", "{}", "\"\"", "''", "``", "**", "%%", "«»"} {
 		for _, text := range []string{"word", "界🙂", "one\n界🙂", "one\n"} {
 			for _, reversed := range []bool{false, true} {
 				e := autoClosingEditor(t, text, "plain.txt", 0)
 				e.AutoClosing = config.AutoClosingSettings{}
-				e.AutoSurround.ExtraPairs = []config.SurroundingPair{{"*", "*"}, {"«", "»"}}
+				e.AutoSurround.ExtraPairs = []config.SurroundingPair{{"*", "*"}, {"%", "%"}, {"«", "»"}}
 				end := selection.Position{Line: len(e.Buf.Lines) - 1, Col: len([]rune(e.Buf.Lines[len(e.Buf.Lines)-1]))}
 				e.Selection.Start(0, 0)
 				e.Cursor.Line, e.Cursor.Col = end.Line, end.Col
@@ -120,6 +120,42 @@ func TestAutoSurroundMultiCursor(t *testing.T) {
 		e.Undo.Undo(e.Buf)
 		if got := strings.Join(e.Buf.Lines, "\n"); got != "word word\nword " {
 			t.Fatalf("undo = %q", got)
+		}
+	}
+}
+
+func TestAutoSurroundOverlappingCursors(t *testing.T) {
+	for _, reversed := range []bool{false, true} {
+		e := autoClosingEditor(t, "abcd tail", "plain.txt", 4)
+		e.Selection.Start(0, 0)
+		if reversed {
+			e.Selection.Anchor.Col = 4
+			e.Cursor.Col = 0
+		}
+		e.ensureMulti()
+		e.Multi.Add(0, 2)
+		e.Multi.AddWithSelection(0, 9, selection.Selection{Active: true, Anchor: selection.Position{Line: 0, Col: 5}})
+		typeAutoClosing(e, "(")
+		if e.Buf.Lines[0] != "(abcd) (tail)" {
+			t.Fatalf("reversed %v: got %q", reversed, e.Buf.Lines[0])
+		}
+		if len(e.Multi.Cursors) != 2 {
+			t.Fatalf("cursors = %+v", e.Multi.Cursors)
+		}
+		for i, word := range []string{"abcd", "tail"} {
+			cs := e.Multi.Cursors[i]
+			if got := cs.Sel.Text(e.Buf.Lines, cs.Line, cs.Col); got != word {
+				t.Fatalf("selection = %q, want %q", got, word)
+			}
+		}
+		typeAutoClosing(e, "(")
+		if e.Buf.Lines[0] != "((abcd)) ((tail))" {
+			t.Fatalf("repeat = %q", e.Buf.Lines[0])
+		}
+		e.Undo.Undo(e.Buf)
+		e.Undo.Undo(e.Buf)
+		if e.Buf.Lines[0] != "abcd tail" {
+			t.Fatalf("undo = %q", e.Buf.Lines[0])
 		}
 	}
 }

@@ -224,7 +224,7 @@ Selection wrapping is enabled by default, including in plain text and with synta
 
 Turn off **Editor → Surround selected text**, or set `editor.autoSurround.enabled` to `false`, to disable wrapping. This is independent of auto-closing while typing without a selection.
 
-Advanced settings can add pairs globally or per language. Empty `extraPairs` is omitted from saved settings. Each pair must contain exactly two single, non-whitespace characters; multi-character delimiters are rejected. To produce Markdown `**word**`, add `["*", "*"]` and press `*` twice.
+Advanced settings can add pairs globally or per language. Characters such as `*` and `%` are opt-in because they have language-specific uses (Markdown emphasis and Batch variable expansion), and otherwise keep their ordinary selection-replacement behavior. Empty `extraPairs` is omitted from saved settings. Each pair must contain exactly two single, non-whitespace characters; multi-character delimiters are rejected. To produce Markdown `**word**`, add `["*", "*"]` and press `*` twice.
 
 ```json
 {

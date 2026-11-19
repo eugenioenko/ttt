@@ -84,6 +84,9 @@ func (e *EditorPaneWidget) addCursorVertical(delta int) {
 
 func (e *EditorPaneWidget) multiExecRune(r rune) {
 	e.syncToMulti()
+	if e.AutoSurround.Closer(r) != 0 {
+		e.Multi.MergeSelections()
+	}
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
