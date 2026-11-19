@@ -123,3 +123,25 @@ func waitFakeGitExit(t *testing.T, pid int) {
 	defer syscall.Kill(pid, syscall.SIGKILL)
 	t.Fatalf("fake git process %d is still alive", pid)
 }
+
+func TestStatusDoesNotTakeOptionalLocks(t *testing.T) {
+	binDir := t.TempDir()
+	argsPath := filepath.Join(binDir, "args")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FAKE_GIT_ARGS\"\n"
+	if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+	t.Setenv("FAKE_GIT_ARGS", argsPath)
+
+	if _, err := StatusFilesContext(context.Background(), "/repo"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := strings.Fields(string(got)); len(args) < 2 || args[0] != "--no-optional-locks" || args[1] != "-C" {
+		t.Fatalf("git status args = %q, want --no-optional-locks first", args)
+	}
+}
