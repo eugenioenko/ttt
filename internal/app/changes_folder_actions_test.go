@@ -238,3 +238,38 @@ func TestFolderActionsIgnoreFileAndPullRequestRows(t *testing.T) {
 		t.Fatalf("folder actions staged paths from a non-folder row: %q", got)
 	}
 }
+
+func TestUnstagingRenameAlsoUnstagesOldPath(t *testing.T) {
+	for _, action := range []string{"file", "folder", "all"} {
+		t.Run(action, func(t *testing.T) {
+			dir := folderActionRepo(t)
+			runTreeGit(t, dir, "add", "-A")
+			runTreeGit(t, dir, "commit", "-qm", "changes")
+			runTreeGit(t, dir, "mv", "docs/c.md", "src/renamed.md")
+			cp := NewChangesPanel(dir)
+			cp.SetFileView(config.GitFileViewTree)
+			cp.Refresh()
+
+			switch action {
+			case "file":
+				node := nodeWithLabel(cp.Tree.Config.Items, "renamed.md")
+				if node == nil || !revealTreeSelection(cp.Tree, node.ID) {
+					t.Fatalf("renamed file is not selectable: %+v", node)
+				}
+				cp.ToggleStageSelected()
+			case "folder":
+				node := nodeWithLabel(cp.Tree.Config.Items, "src")
+				if node == nil || !revealTreeSelection(cp.Tree, node.ID) {
+					t.Fatalf("staged src folder is not selectable: %+v", node)
+				}
+				cp.ToggleStageSelected()
+			case "all":
+				cp.unstageAll()
+			}
+
+			if got := runTreeGit(t, dir, "diff", "--cached", "--name-status"); got != "" {
+				t.Fatalf("staged after unstaging rename = %q, want nothing", got)
+			}
+		})
+	}
+}
