@@ -149,7 +149,7 @@ All editor settings are nested under the `editor` key.
 | `editor.wordWrapColumn` | int | `0` | Maximum soft-wrap width in terminal display columns; `0` uses the available text width. Positive values cap it after gutters, scrollbars, and wrap margins. Ignored when wrapping is off; negative values normalize to `0` |
 | `editor.wordWrapBreak` | string | `"word"` | Where soft-wrapped rows end: `"word"` keeps words and identifiers whole, breaking after spaces and punctuation; `"character"` breaks wherever the row fills. Unknown values use `"word"` |
 | `editor.scrollLines` | int | `0` | Screen rows the Scroll Up/Down commands move the viewport and cursor; `0` scrolls half the editor height |
-| `editor.languageOverrides` | object | `{"markdown":{"wordWrap":true}}` | Per-language `wordWrap`, `wordWrapColumn`, and `wordWrapBreak` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
+| `editor.languageOverrides` | object | `{"markdown":{"wordWrap":true}}` | Per-language `autoSurround`, `wordWrap`, `wordWrapColumn`, and `wordWrapBreak` overrides keyed by language ID, such as `typescript`, `markdown`, or `go`. Each omitted field inherits its global value; explicit `false` and `0` override it. Does not require LSP |
 | `editor.largeFiles.wordWrapMaxMB` | int | `32` | Files larger than this many megabytes open without word wrap, even when `editor.wordWrap` is on. `0` removes the limit |
 | `editor.largeFiles.autoReloadMaxMB` | int | `64` | Files larger than this many megabytes show a Reload action instead of automatically reloading after disk changes. `0` removes the limit. One megabyte is 1,048,576 bytes; negative values also remove the limit |
 | `editor.diffMode` | string | `"split"` | Default diff layout: `"split"` or `"unified"` |
@@ -164,6 +164,8 @@ All editor settings are nested under the `editor` key.
 | `editor.diffScrollbarGitMarks` | bool | `false` | Mark added and deleted rows on the diff view scrollbar |
 | `editor.autoIndent` | bool | `true` | Inherit the previous line's indent on Enter, plus one level after `{ ( [ :` (turn off for `noautoindent` behavior) |
 | `editor.autoDedent` | bool | `true` | Dedent one level when typing a closing `} ) ]` on a blank line |
+| `editor.autoSurround.enabled` | bool | `true` | Wrap selected text when typing an opening bracket, quote, or backtick; keeps the inner text selected |
+| `editor.autoSurround.extraPairs` | array | omitted | Additional single-character `[opening, closing]` pairs; language extras add to global extras |
 | `editor.autoClosing.brackets` | bool | `false` | Automatically insert matching `()`, `[]`, and `{}` pairs while typing |
 | `editor.autoClosing.quotes` | bool | `false` | Automatically pair single and double quotes; escaped quotes and quotes following letters, digits, or underscores stay literal |
 | `editor.autoClosing.skipClosing` | bool | `true` | Typing an automatically inserted closing bracket or quote moves past it |
@@ -216,11 +218,43 @@ Each wrap field resolves independently: language override → global setting →
 
 With a global column of `80`, a Markdown override of `0` instead wraps at the pane width. Explicit `wordWrap: false` disables wrapping for that language. The global Word Wrap toggle leaves language overrides in place. Effective settings update on tab switches, language detection changes, and settings reload, without requiring LSP. Large-file safeguards still apply; diff wrapping and rendered `markdown.wrapWidth` remain separate. See [Soft Wrapping](/guides/editor/#soft-wrapping) for details.
 
+### Auto surround
+
+Selection wrapping is enabled by default, including in plain text and with syntax highlighting disabled. Typing `(`, `[`, `{`, a single or double quote, or a backtick wraps a nonempty selection with its matching pair. The inner text stays selected: pressing `(` twice produces `((word))`. Multiline and multiple selections are supported, and each keypress is one undo step. Other characters replace the selection as usual.
+
+Turn off **Editor → Surround selected text**, or set `editor.autoSurround.enabled` to `false`, to disable wrapping. This is independent of auto-closing while typing without a selection.
+
+Advanced settings can add pairs globally or per language. Empty `extraPairs` is omitted from saved settings. Each pair must contain exactly two single, non-whitespace characters; multi-character delimiters are rejected. To produce Markdown `**word**`, add `["*", "*"]` and press `*` twice.
+
+```json
+{
+  "editor": {
+    "autoSurround": {
+      "enabled": true,
+      "extraPairs": [["«", "»"]]
+    },
+    "languageOverrides": {
+      "markdown": {
+        "autoSurround": { "extraPairs": [["*", "*"], ["_", "_"]] }
+      },
+      "bat": {
+        "autoSurround": { "extraPairs": [["%", "%"]] }
+      },
+      "go": {
+        "autoSurround": { "enabled": false }
+      }
+    }
+  }
+}
+```
+
+A language override inherits `enabled` unless explicitly set. Its extra pairs add to global extras; when extra pairs share an opener, the last language entry wins, followed by the last global entry. Built-in pairs cannot be replaced. Overrides use the selected language, or the detected language when selection is automatic, including `bat` for `.bat` and `.cmd` files.
+
 ### Auto closing
 
 Bracket and quote insertion are independently opt-in. Enable `editor.autoClosing.brackets` to get bracket pairing, skipping of generated closers, and paired Backspace deletion. These settings also appear under **Editor → Auto closing** in the settings editor and apply immediately.
 
-Pairs are inserted only at the end of a line, before whitespace, or before `)`, `]`, or `}`. Selection replacement and pasted text stay literal. Backticks and selection wrapping are not included. Existing brackets and quotes are never skipped or deleted as generated pairs. Undo, redo, file reloads, and edits outside the pane clear generated-pair tracking; restored pairs are treated as existing text.
+Pairs are inserted only at the end of a line, before whitespace, or before `)`, `]`, or `}`. Pasted text stays literal. Selection wrapping is controlled separately by `autoSurround`. Backticks are not auto-closed. Existing brackets and quotes are never skipped or deleted as generated pairs. Undo, redo, file reloads, and edits outside the pane clear generated-pair tracking; restored pairs are treated as existing text.
 
 String detection uses the language grammar independently of theme colors and whether syntax coloring is enabled. If multiline context is still being tokenized, new pairs are suppressed until it catches up, unless `inStrings` is enabled. Without a recognized grammar, `inStrings` has no effect. Skipping generated closing quotes works with `inStrings` disabled; escaped quotes stay literal.
 

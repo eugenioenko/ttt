@@ -133,8 +133,9 @@ func DefaultLSPSettings() LSPSettings {
 }
 
 type EditorSettings struct {
-	AutoClosing AutoClosingSettings `json:"autoClosing"`
-	PreviewTabs *bool               `json:"previewTabs,omitempty"`
+	AutoClosing  AutoClosingSettings  `json:"autoClosing"`
+	AutoSurround AutoSurroundSettings `json:"autoSurround"`
+	PreviewTabs  *bool                `json:"previewTabs,omitempty"`
 
 	TabSize           int                               `json:"tabSize"`
 	InsertSpaces      bool                              `json:"insertSpaces"`
@@ -200,9 +201,10 @@ func DefaultAutoClosingSettings() AutoClosingSettings {
 }
 
 type EditorLanguageOverride struct {
-	WordWrap       *bool  `json:"wordWrap,omitempty"`
-	WordWrapColumn *int   `json:"wordWrapColumn,omitempty"`
-	WordWrapBreak  string `json:"wordWrapBreak,omitempty"`
+	AutoSurround   *AutoSurroundSettings `json:"autoSurround,omitempty"`
+	WordWrap       *bool                 `json:"wordWrap,omitempty"`
+	WordWrapColumn *int                  `json:"wordWrapColumn,omitempty"`
+	WordWrapBreak  string                `json:"wordWrapBreak,omitempty"`
 }
 
 func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
@@ -313,6 +315,7 @@ func (e EditorSettings) PreviewTabsEnabled() bool {
 func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
 		AutoClosing:             DefaultAutoClosingSettings(),
+		AutoSurround:            AutoSurroundSettings{Enabled: boolPtr(true)},
 		TabSize:                 4,
 		InsertSpaces:            true,
 		WordWrapBreak:           WordWrapBreakWord,

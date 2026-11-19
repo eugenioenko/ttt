@@ -292,6 +292,8 @@ func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settin
 	group.WordWrapColumn = s.Editor.WordWrapColumn
 	group.WordWrapBreak = s.Editor.WordWrapBreak
 	group.LanguageOverrides = s.Editor.LanguageOverrides
+	group.AutoSurround = s.Editor.AutoSurround
+	group.ApplyFileAutoSurround()
 	group.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
 	group.SetDiffDefaults(configuredDiffMode(s.Editor.DiffMode), configuredDiffContext(s.Editor.DiffContext), s.Editor.DiffWordWrap)
 	group.SetMarkdownMaxWidth(s.Markdown.WrapWidth)

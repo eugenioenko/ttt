@@ -128,6 +128,7 @@ type EditorGroupWidget struct {
 	WordWrapColumn    int
 	WordWrapBreak     string
 	LanguageOverrides map[string]config.EditorLanguageOverride
+	AutoSurround      config.AutoSurroundSettings
 	WordWrapMaxBytes  int64
 	// editorInDiff is set while the shared editor is bound to an editable
 	// diff, which sets its word wrap from the diff's own wrap mode.
@@ -3258,6 +3259,7 @@ func (g *EditorGroupWidget) syncTabs() {
 		g.Editor.autoClosing = t.autoClosing
 		g.Editor.autoClosingPath = t.FilePath
 		g.Editor.plainText = t.LanguageSelection == highlight.PlainText
+		g.ApplyFileAutoSurround()
 		g.Editor.Buf = t.Buf
 		g.Editor.Cursor = t.Cur
 		g.Editor.Viewport = t.Vp
