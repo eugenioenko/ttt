@@ -47,3 +47,27 @@ func TestFindAllMatchesOffsetsDriveReplacement(t *testing.T) {
 		}
 	}
 }
+
+// rg strips a UTF-8 BOM from the reported line text and offsets, so callers
+// must feed ApplyReplacements lines with the BOM already treated as metadata.
+func TestFindAllMatchesOffsetsDriveReplacementInBOMFile(t *testing.T) {
+	requireRipgrep(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bom.txt")
+	if err := os.WriteFile(path, []byte("\ufefffoo bar\nfoo baz\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := search.FindAllMatches(context.Background(), search.Options{Query: "foo"}, []string{path})
+	if err != nil {
+		t.Fatalf("FindAllMatches: %v", err)
+	}
+	ms := found[filepath.Clean(path)]
+	if len(ms) != 2 || ms[0].LineText != "foo bar" {
+		t.Fatalf("matches = %+v", ms)
+	}
+	replaced := ApplyReplacements([]string{"foo bar", "foo baz"}, ms, "Q", SearchOptions{})
+	if replaced[0] != "Q bar" || replaced[1] != "Q baz" {
+		t.Fatalf("replaced = %q, want %q", replaced, []string{"Q bar", "Q baz"})
+	}
+}
