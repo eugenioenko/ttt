@@ -183,6 +183,39 @@ func TestExternalGrammarScopeSuffixKeepsEmbeddedLanguageNames(t *testing.T) {
 	}
 }
 
+func TestCanonicalLanguageIDResolvesAliasesAndScopes(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"shellscript", "shellscript"},
+		{"Shell", "shellscript"},
+		{"sh", "shellscript"},
+		{"source.shell", "shellscript"},
+		{"  Bash ", "shellscript"},
+		{"no-such-language", "no-such-language"},
+	} {
+		if got := CanonicalLanguageID(tc.in); got != tc.want {
+			t.Errorf("CanonicalLanguageID(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCanonicalLanguageIDResolvesExternalLanguageName(t *testing.T) {
+	custom := `{"scopeName": "source.custom-shell", "name": "Custom Shell", "patterns": []}`
+	if errs := setExternal(t, ExternalGrammar{
+		Path:      writeGrammar(t, "custom-shell.json", custom),
+		Language:  "Shell",
+		FileTypes: []string{"csh"},
+	}); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	h := New("a.csh")
+	if h == nil || h.Language() != "Shell" {
+		t.Fatalf("a.csh highlighter = %v, want the configured display name Shell", h)
+	}
+	if got := CanonicalLanguageID(h.LanguageID()); got != "shellscript" {
+		t.Errorf("canonical ID of language %q = %q, want shellscript", h.LanguageID(), got)
+	}
+}
+
 func TestNamelessExternalGrammarKeepsEmbeddedLanguageNames(t *testing.T) {
 	nameless := `{"scopeName": "source.emacs.lisp", "patterns": []}`
 	if errs := setExternal(t, ExternalGrammar{
