@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -129,6 +130,55 @@ func TestGetPathNestedValue(t *testing.T) {
 	}
 }
 
+func trackPluginFilesystemAPI(t *testing.T, api *PluginFilesystemAPI) *PluginFilesystemAPI {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Errorf("close plugin filesystem API: %v", err)
+		}
+	})
+	return api
+}
+
+func exactFileGrantAPI(t *testing.T, path string) *PluginFilesystemAPI {
+	t.Helper()
+	p := &plugin.Plugin{Granted: plugin.PermissionSet{
+		FsRead:  plugin.FsAccess{Paths: []string{path}},
+		FsWrite: plugin.FsAccess{Paths: []string{path}},
+	}}
+	return trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, nil))
+}
+
+func TestPluginFilesystemAPIClose(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(root))
+
+	if err := api.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := api.ReadFile(path); err == nil {
+		t.Error("read succeeded after closing filesystem API")
+	}
+	if err := api.Close(); err != nil {
+		t.Errorf("second close: %v", err)
+	}
+
+	p := &plugin.Plugin{Granted: plugin.PermissionSet{
+		FsRead: plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
+	}}
+	allAPI := trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, nil))
+	if err := allAPI.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := allAPI.ReadFile(path); !errors.Is(err, os.ErrClosed) {
+		t.Errorf("unrestricted read after close error = %v; want %v", err, os.ErrClosed)
+	}
+}
+
 func TestPluginFilesystemAPI_PathRestriction(t *testing.T) {
 	tmpDir := t.TempDir()
 	allowed := filepath.Join(tmpDir, "workspace")
@@ -139,7 +189,7 @@ func TestPluginFilesystemAPI_PathRestriction(t *testing.T) {
 	os.MkdirAll(forbidden, 0755)
 	os.WriteFile(filepath.Join(forbidden, "key.pem"), []byte("secret"), 0644)
 
-	api := NewPluginFilesystemAPI(allowed)
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(allowed))
 
 	t.Run("read allowed", func(t *testing.T) {
 		content, err := api.ReadFile(filepath.Join(allowed, "test.txt"))
@@ -216,6 +266,386 @@ func TestPluginFilesystemAPI_PathRestriction(t *testing.T) {
 	})
 }
 
+func TestPluginFilesystemAPI_ExactFileGrantsShareParentRoot(t *testing.T) {
+	base := t.TempDir()
+	paths := []string{filepath.Join(base, "first.txt"), filepath.Join(base, "second.txt")}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	p := &plugin.Plugin{Granted: plugin.PermissionSet{
+		FsRead:  plugin.FsAccess{Paths: paths},
+		FsWrite: plugin.FsAccess{Paths: paths},
+	}}
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, nil))
+	if api.read.roots[0].root != api.read.roots[1].root {
+		t.Fatal("sibling exact-file grants opened separate parent roots")
+	}
+}
+
+func TestPluginFilesystemAPI_ListDirSortsEntries(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"z.txt", "a.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(root))
+	entries, err := api.ListDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(entries))
+	for i, entry := range entries {
+		got[i] = entry.Name
+	}
+	if !slices.Equal(got, []string{"a.txt", "z.txt"}) {
+		t.Errorf("ListDir entries = %v, want [a.txt z.txt]", got)
+	}
+}
+
+func TestPluginFilesystemAPI_ExactFileGrant(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "granted.txt")
+	sibling := filepath.Join(base, "sibling.txt")
+	if err := os.WriteFile(granted, []byte("original"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sibling, []byte("sibling"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	api := exactFileGrantAPI(t, granted)
+	if got, err := api.ReadFile(granted); err != nil || got != "original" {
+		t.Fatalf("read exact grant = %q, %v; want %q", got, err, "original")
+	}
+	if !api.FileExists(granted) {
+		t.Fatal("exact file grant does not exist")
+	}
+	if err := api.WriteFile(granted, "updated"); err != nil {
+		t.Fatalf("write exact grant: %v", err)
+	}
+	if got, err := os.ReadFile(granted); err != nil || string(got) != "updated" {
+		t.Errorf("exact grant after write = %q, %v; want %q", got, err, "updated")
+	}
+	if _, err := api.ReadFile(sibling); err == nil {
+		t.Error("sibling file was accessible through exact file grant")
+	}
+	if _, err := api.ReadFile(filepath.Join(granted, "child.txt")); err == nil {
+		t.Error("descendant path was accessible through exact file grant")
+	}
+}
+
+func TestPluginFilesystemAPI_MissingExactFileGrantCanCreateOnlyGrantedPath(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "new.txt")
+	sibling := filepath.Join(base, "sibling.txt")
+	if err := os.WriteFile(sibling, []byte("sibling"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	api := exactFileGrantAPI(t, granted)
+	if api.FileExists(granted) {
+		t.Fatal("missing exact grant exists before write")
+	}
+	resolved, err := api.write.openRoot(granted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.temporary {
+		t.Fatal("exact missing-file operation marked its cached parent root temporary")
+	}
+	if err := api.WriteFile(granted, "created"); err != nil {
+		t.Fatalf("create exact grant: %v", err)
+	}
+	if got, err := api.ReadFile(granted); err != nil || got != "created" {
+		t.Fatalf("read created exact grant = %q, %v; want %q", got, err, "created")
+	}
+	if !api.FileExists(granted) {
+		t.Error("created exact file grant does not exist")
+	}
+	if err := api.WriteFile(sibling, "changed"); err == nil {
+		t.Error("sibling file was writable through missing exact file grant")
+	}
+	if got, err := os.ReadFile(sibling); err != nil || string(got) != "sibling" {
+		t.Errorf("sibling after denied write = %q, %v; want %q", got, err, "sibling")
+	}
+}
+
+func TestPluginFilesystemAPI_MissingExactFileGrantCreatesAfterParentAppears(t *testing.T) {
+	base := t.TempDir()
+	parent := filepath.Join(base, "future-parent")
+	granted := filepath.Join(parent, "new.txt")
+	api := exactFileGrantAPI(t, granted)
+
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sibling := filepath.Join(parent, "sibling.txt")
+	if err := os.WriteFile(sibling, []byte("sibling"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.WriteFile(granted, "created"); err != nil {
+		t.Fatalf("create exact grant after parent appears: %v", err)
+	}
+	if got, err := api.ReadFile(granted); err != nil || got != "created" {
+		t.Errorf("read created exact grant = %q, %v; want %q", got, err, "created")
+	}
+	if err := api.WriteFile(sibling, "changed"); err == nil {
+		t.Error("sibling was writable through missing exact-file grant")
+	}
+	if got, err := os.ReadFile(sibling); err != nil || string(got) != "sibling" {
+		t.Errorf("sibling after denied write = %q, %v; want %q", got, err, "sibling")
+	}
+}
+
+func TestPluginFilesystemAPI_MissingGrantUnderSymlinkedAncestorCanBeCreated(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "workspace")
+	linkedWorkspace := filepath.Join(base, "workspace-link")
+	if err := os.Mkdir(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(workspace, linkedWorkspace); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	grant := filepath.Join(linkedWorkspace, "later", "file.txt")
+	p := &plugin.Plugin{Granted: plugin.PermissionSet{
+		FsRead:  plugin.FsAccess{Paths: []string{grant}},
+		FsWrite: plugin.FsAccess{Paths: []string{grant}},
+	}}
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, nil))
+	if err := os.Mkdir(filepath.Join(workspace, "later"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.WriteFile(grant, "created"); err != nil {
+		t.Fatalf("create file beneath symlinked grant ancestor: %v", err)
+	}
+	if got, err := api.ReadFile(grant); err != nil || got != "created" {
+		t.Errorf("read created file = %q, %v; want %q", got, err, "created")
+	}
+}
+
+func TestPluginFilesystemAPI_MissingGrantThatBecomesDirectoryAllowsDescendants(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "future")
+	sibling := filepath.Join(base, "sibling.txt")
+	if err := os.WriteFile(sibling, []byte("sibling"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	api := exactFileGrantAPI(t, granted)
+	if err := os.Mkdir(granted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(granted, "child.txt")
+	if err := os.WriteFile(child, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := api.ReadFile(child); err != nil || got != "inside" {
+		t.Errorf("read descendant of materialized grant = %q, %v; want %q", got, err, "inside")
+	}
+	if !api.FileExists(child) || !api.FileExists(granted) {
+		t.Error("FileExists did not recognize the materialized grant or its child")
+	}
+	if entries, err := api.ListDir(granted); err != nil || len(entries) != 1 || entries[0].Name != "child.txt" {
+		t.Errorf("ListDir materialized grant = %v, %v; want [child.txt]", entries, err)
+	}
+	written := filepath.Join(granted, "written.txt")
+	if err := api.WriteFile(written, "written"); err != nil {
+		t.Errorf("write descendant of materialized grant: %v", err)
+	} else if got, err := api.ReadFile(written); err != nil || got != "written" {
+		t.Errorf("read written descendant = %q, %v; want %q", got, err, "written")
+	}
+	if _, err := api.ReadFile(sibling); err == nil {
+		t.Error("sibling outside materialized grant was accessible")
+	}
+}
+
+func TestPluginFilesystemAPI_MissingGrantCanChangeFromFileToDirectory(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "future")
+	sibling := filepath.Join(base, "sibling.txt")
+	if err := os.WriteFile(sibling, []byte("sibling"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	api := exactFileGrantAPI(t, granted)
+	if err := api.WriteFile(granted, "first file"); err != nil {
+		t.Fatalf("create missing grant as file: %v", err)
+	}
+	if err := os.Remove(granted); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(granted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(granted, "child.txt")
+	if err := os.WriteFile(child, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := api.ReadFile(child); err != nil || got != "inside" {
+		t.Errorf("read descendant after missing grant changes from file to directory = %q, %v; want %q", got, err, "inside")
+	}
+	if _, err := api.ReadFile(sibling); err == nil {
+		t.Error("sibling outside materialized grant was accessible")
+	}
+}
+
+func TestPluginFilesystemAPI_MissingParentGrantThatBecomesDirectoryAllowsDescendants(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "future-parent", "future")
+	api := exactFileGrantAPI(t, granted)
+
+	child := filepath.Join(granted, "child.txt")
+	sibling := filepath.Join(base, "future-parent", "sibling.txt")
+	if err := os.MkdirAll(granted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(child, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sibling, []byte("sibling"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := api.ReadFile(child); err != nil || got != "inside" {
+		t.Errorf("read descendant after missing parents materialize = %q, %v; want %q", got, err, "inside")
+	}
+	if _, err := api.ReadFile(sibling); err == nil {
+		t.Error("sibling outside materialized grant was accessible")
+	}
+}
+
+func TestPluginFilesystemAPI_MissingGrantUnderSymlinkedParentDoesNotGrantDescendants(t *testing.T) {
+	base := t.TempDir()
+	outside := t.TempDir()
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	granted := filepath.Join(link, "future")
+	api := exactFileGrantAPI(t, granted)
+
+	if err := os.Mkdir(granted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(granted, "secret.txt")
+	if err := os.WriteFile(secret, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := api.ReadFile(secret); err == nil {
+		t.Errorf("read through newly materialized grant with symlinked parent = %q, want denial", got)
+	}
+}
+
+func TestPluginFilesystemAPI_MissingGrantRejectsInsertedIntermediateSymlink(t *testing.T) {
+	base := t.TempDir()
+	sibling := filepath.Join(base, "sibling")
+	granted := filepath.Join(base, "future-parent", "future")
+	api := exactFileGrantAPI(t, granted)
+	if err := os.MkdirAll(filepath.Join(sibling, "future"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(sibling, "future", "secret.txt")
+	if err := os.WriteFile(secret, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sibling, filepath.Join(base, "future-parent")); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+
+	if got, err := api.ReadFile(filepath.Join(granted, "secret.txt")); err == nil {
+		t.Errorf("read through inserted intermediate symlink to sibling = %q, want denial", got)
+	}
+}
+
+func TestPluginFilesystemAPI_MissingGrantRejectsInsertedLeafSymlink(t *testing.T) {
+	base := t.TempDir()
+	sibling := filepath.Join(base, "sibling")
+	granted := filepath.Join(base, "future")
+	api := exactFileGrantAPI(t, granted)
+	if err := os.Mkdir(sibling, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(sibling, "secret.txt")
+	if err := os.WriteFile(secret, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sibling, granted); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+
+	if got, err := api.ReadFile(filepath.Join(granted, "secret.txt")); err == nil {
+		t.Errorf("read through inserted leaf symlink to sibling = %q, want denial", got)
+	}
+}
+
+func TestPluginFilesystemAPI_ExactFileGrantRejectsLeafSymlinkReplacement(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "granted.txt")
+	sibling := filepath.Join(base, "sibling.txt")
+	if err := os.WriteFile(granted, []byte("authorized"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sibling, []byte("sibling secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	api := exactFileGrantAPI(t, granted)
+	if got, err := api.ReadFile(granted); err != nil || got != "authorized" {
+		t.Fatalf("read exact grant before replacement = %q, %v; want %q", got, err, "authorized")
+	}
+	if err := os.Remove(granted); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sibling, granted); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if got, err := api.ReadFile(granted); err == nil {
+		t.Errorf("read through replaced exact grant = %q, want an error", got)
+	}
+	if api.FileExists(granted) {
+		t.Error("FileExists followed replaced exact grant symlink")
+	}
+	if err := api.WriteFile(granted, "overwritten"); err == nil {
+		t.Error("write through replaced exact grant succeeded")
+	}
+	if got, err := os.ReadFile(sibling); err != nil || string(got) != "sibling secret" {
+		t.Errorf("sibling after symlink replacement = %q, %v; want %q", got, err, "sibling secret")
+	}
+}
+
+func TestPluginFilesystemAPI_ExactFileGrantRejectsDirectoryReplacement(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "granted.txt")
+	if err := os.WriteFile(granted, []byte("authorized"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	api := exactFileGrantAPI(t, granted)
+	if err := os.Remove(granted); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(granted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(granted, "secret.txt"), []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if entries, err := api.ListDir(granted); err == nil {
+		t.Errorf("ListDir through replaced exact-file grant returned %v, want an error", entries)
+	}
+}
+
 func TestPluginFilesystemAPI_MultipleRoots(t *testing.T) {
 	tmpDir := t.TempDir()
 	root1 := filepath.Join(tmpDir, "project")
@@ -227,7 +657,7 @@ func TestPluginFilesystemAPI_MultipleRoots(t *testing.T) {
 		os.WriteFile(filepath.Join(d, "file.txt"), []byte("data"), 0644)
 	}
 
-	api := NewPluginFilesystemAPI(root1, root2)
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(root1, root2))
 
 	if _, err := api.ReadFile(filepath.Join(root1, "file.txt")); err != nil {
 		t.Errorf("root1 should be accessible: %v", err)
@@ -253,7 +683,7 @@ func TestPluginFilesystemAPI_SymlinkEscape(t *testing.T) {
 		t.Skip("symlinks not supported")
 	}
 
-	api := NewPluginFilesystemAPI(allowed)
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(allowed))
 
 	_, err := api.ReadFile(filepath.Join(symlink, "key.pem"))
 	if err == nil {
@@ -275,6 +705,10 @@ func TestPluginFilesystemAPI_FinalSymlinkEscape(t *testing.T) {
 	if err := os.Symlink(secret, link); err != nil {
 		t.Skip("symlinks not supported")
 	}
+	dirLink := filepath.Join(allowed, "secrets-link")
+	if err := os.Symlink(secrets, dirLink); err != nil {
+		t.Fatal(err)
+	}
 	dangling := filepath.Join(allowed, "new.pem")
 	planted := filepath.Join(secrets, "planted.pem")
 	if err := os.Symlink(planted, dangling); err != nil {
@@ -285,13 +719,19 @@ func TestPluginFilesystemAPI_FinalSymlinkEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	api := NewPluginFilesystemAPI(allowed)
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(allowed))
 
 	if _, err := api.ReadFile(link); err == nil {
 		t.Error("read through a final symlink to an outside file was allowed")
 	}
 	if err := api.WriteFile(link, "overwritten"); err == nil {
 		t.Error("write through a final symlink to an outside file was allowed")
+	}
+	if api.FileExists(link) {
+		t.Error("exists accepted a final symlink to an outside file")
+	}
+	if _, err := api.ListDir(dirLink); err == nil {
+		t.Error("list through a final symlink to an outside directory was allowed")
 	}
 	if data, _ := os.ReadFile(secret); string(data) != "secret" {
 		t.Errorf("outside file was modified: %q", data)
@@ -552,7 +992,7 @@ func TestPluginFilesystemAPI_SymlinkedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fs := NewPluginFilesystemAPI(link)
+	fs := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(link))
 	if got, err := fs.ReadFile(filepath.Join(link, "file.txt")); err != nil || got != "hi" {
 		t.Errorf("read through the symlinked root = %q, %v", got, err)
 	}
@@ -586,7 +1026,7 @@ func TestPluginFilesystemAPIFor_ScopedPaths(t *testing.T) {
 		FsRead:  plugin.FsAccess{Paths: []string{"~/.local/state/omarchy"}},
 		FsWrite: plugin.FsAccess{Paths: []string{"{config}/themes"}},
 	}}
-	fs := NewPluginFilesystemAPIFor(p, []string{workspace})
+	fs := trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, []string{workspace}))
 
 	if got, err := fs.ReadFile("~/.local/state/omarchy/colors.toml"); err != nil || got != `background = "#000000"` {
 		t.Errorf("read the granted path = %q, %v", got, err)
@@ -624,7 +1064,7 @@ func TestPluginFilesystemAPIFor_AnyPathAndWorkspace(t *testing.T) {
 		FsRead:  plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
 		FsWrite: plugin.FsAccess{Paths: []string{plugin.FsWorkspace}},
 	}}
-	fs := NewPluginFilesystemAPIFor(p, []string{workspace})
+	fs := trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, []string{workspace}))
 
 	if _, err := fs.ReadFile(filepath.Join(outside, "f.txt")); err != nil {
 		t.Errorf("* must allow reading any path: %v", err)
@@ -731,5 +1171,245 @@ func TestPluginNetworkAPI_RedirectsStayOnTheAllowedHosts(t *testing.T) {
 	want := []string{"public.example/elsewhere", "public.example/moved", "mirror.example/new"}
 	if !slices.Equal(paths, want) {
 		t.Errorf("requests = %v, want %v", paths, want)
+	}
+}
+
+func TestPluginFilesystemAPIFor_AnyPathWritesThroughDanglingSymlink(t *testing.T) {
+	workspace := t.TempDir()
+	outside := t.TempDir()
+	target := filepath.Join(outside, "created.txt")
+	link := filepath.Join(workspace, "link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	p := &plugin.Plugin{Granted: plugin.PermissionSet{
+		FsRead:  plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
+		FsWrite: plugin.FsAccess{Paths: []string{plugin.FsAnyPath}},
+	}}
+	fs := trackPluginFilesystemAPI(t, NewPluginFilesystemAPIFor(p, []string{workspace}))
+	if _, err := fs.ReadFile(link); err == nil {
+		t.Error("read through wildcard dangling symlink succeeded before its target existed")
+	}
+	if err := fs.WriteFile(link, "created"); err != nil {
+		t.Fatalf("write through wildcard dangling symlink: %v", err)
+	}
+	if got, err := fs.ReadFile(link); err != nil || got != "created" {
+		t.Errorf("read through wildcard symlink = %q, %v; want %q", got, err, "created")
+	}
+}
+
+func TestOpenGrantedRootRejectsReplacementAfterValidation(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "root")
+	moved := filepath.Join(base, "moved-root")
+	outside := filepath.Join(base, "outside")
+	for _, dir := range []string{root, outside} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	canonical, original, err := canonicalGrantedRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(root, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, root); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+
+	handle, err := openGrantedRoot(root, canonical, original)
+	if handle != nil {
+		_ = handle.Close()
+	}
+	if err == nil {
+		t.Fatal("opened replaced grant root")
+	}
+}
+
+func TestVerifyExactFileGrantRejectsReplacementDuringConstruction(t *testing.T) {
+	base := t.TempDir()
+	granted := filepath.Join(base, "granted.txt")
+	outside := filepath.Join(base, "outside.txt")
+	if err := os.WriteFile(granted, []byte("granted"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := os.Stat(granted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(granted); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, granted); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	if err := verifyExactFileGrant(root, granted, filepath.Base(granted), observed); err == nil {
+		t.Fatal("accepted a replacement symlink as the exact-file grant")
+	}
+}
+
+func TestOpenGrantedRootRejectsReplacedComponent(t *testing.T) {
+	base := t.TempDir()
+	parent, err := os.OpenRoot(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parent.Close()
+	if err := os.Mkdir(filepath.Join(base, "component"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := parent.Lstat("component")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(base, "component"), filepath.Join(base, "moved")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(base, "component"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := openGrantedChildRoot(parent, "component", observed)
+	if root != nil {
+		_ = root.Close()
+	}
+	if err == nil {
+		t.Fatal("opened replaced pending-grant component")
+	}
+}
+
+func TestPluginFilesystemAPI_GrantedRootReplacement(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "root")
+	moved := filepath.Join(base, "moved-root")
+	outside := filepath.Join(base, "outside")
+	for _, dir := range []string{root, outside} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "value.txt"), []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "value.txt"), []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(root))
+	if err := os.Rename(root, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, root); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+
+	got, err := api.ReadFile(filepath.Join(root, "value.txt"))
+	if err != nil || got != "inside" {
+		t.Fatalf("read through replaced grant root = %q, %v; want original contents", got, err)
+	}
+}
+
+func TestPluginFilesystemAPI_SymlinkReplacementAfterResolution(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "root")
+	inside := filepath.Join(root, "inside")
+	outside := filepath.Join(base, "outside")
+	for _, dir := range []string{inside, outside} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for path, content := range map[string]string{
+		filepath.Join(inside, "value.txt"):         "inside",
+		filepath.Join(inside, "inside-only.txt"):   "",
+		filepath.Join(outside, "value.txt"):        "outside",
+		filepath.Join(outside, "outside-only.txt"): "",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	link := filepath.Join(root, "switch")
+	if err := os.Symlink("inside", link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	expectedInfo, err := os.Stat(filepath.Join(inside, "value.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := trackPluginFilesystemAPI(t, NewPluginFilesystemAPI(root))
+	path := filepath.Join(link, "value.txt")
+	readPath, err := api.read.openRoot(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writePath, err := api.write.openRoot(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directoryPath, err := api.read.openRoot(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../outside", link); err != nil {
+		t.Fatal(err)
+	}
+	if target, err := filepath.EvalSymlinks(path); err != nil || target != filepath.Join(outside, "value.txt") {
+		t.Fatalf("replacement target = %q, %v; want outside sentinel", target, err)
+	}
+
+	data, err := readPath.root.ReadFile(readPath.relative)
+	if err != nil || string(data) != "inside" {
+		t.Fatalf("read after symlink replacement = %q, %v; want %q", data, err, "inside")
+	}
+	info, err := readPath.root.Stat(readPath.relative)
+	if err != nil || !os.SameFile(info, expectedInfo) {
+		t.Errorf("stat after symlink replacement = %v, %v; want original in-root file", info, err)
+	}
+	directory, err := directoryPath.root.Open(directoryPath.relative)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := directory.ReadDir(-1)
+	closeErr := directory.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	listed := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		listed[entry.Name()] = true
+	}
+	if !listed["inside-only.txt"] || listed["outside-only.txt"] {
+		t.Errorf("listing after symlink replacement = %v; want only in-root entries", listed)
+	}
+	if err := writePath.root.WriteFile(writePath.relative, []byte("updated"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(inside, "value.txt")); err != nil || string(got) != "updated" {
+		t.Errorf("write after symlink replacement = %q, %v; want in-root update", got, err)
+	}
+	if got, err := os.ReadFile(filepath.Join(outside, "value.txt")); err != nil || string(got) != "outside" {
+		t.Errorf("outside sentinel after replacement = %q, %v; want unchanged", got, err)
 	}
 }

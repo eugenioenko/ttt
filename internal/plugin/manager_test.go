@@ -56,6 +56,27 @@ func TestReloadPreservesRepositorySubdirectory(t *testing.T) {
 	}
 }
 
+func TestInitPluginClosesFilesystemAPIOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	entry := filepath.Join(dir, "main.ttt.lua")
+	if err := os.WriteFile(entry, []byte("this is not valid Lua!"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	api := &closeTrackingFilesystemAPI{mockFilesystemAPI: &mockFilesystemAPI{}}
+	p := &Plugin{Dir: dir, Manifest: Manifest{Entry: filepath.Base(entry)}}
+	p.SetFilesystemAPI(api)
+
+	if err := (&Manager{}).initPlugin(p); err == nil {
+		t.Fatal("invalid plugin source initialized successfully")
+	}
+	if api.closeCount != 1 {
+		t.Errorf("filesystem API close count = %d, want 1", api.closeCount)
+	}
+	if p.Filesystem != nil {
+		t.Error("failed plugin retained filesystem API")
+	}
+}
+
 // TestDenyPluginDeletesFreshInstall: a plugin ttt cloned into its own
 // pluginsDir with no registry entry must be removed on deny (#358).
 func TestDenyPluginDeletesFreshInstall(t *testing.T) {
