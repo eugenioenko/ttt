@@ -31,6 +31,7 @@ func (a *App) ShowAutocomplete(items []ui.CompletionItem, lspItems []lsp.Complet
 	if len(filtered) == 0 {
 		return
 	}
+	a.completion.pathPopup = nil
 	ac := ui.NewAutocompleteWidget(filtered, 0, 0)
 	ac.Icons = a.Settings.Appearance.Icons
 	ac.OnSelect = func(item ui.CompletionItem) {
@@ -42,6 +43,12 @@ func (a *App) ShowAutocomplete(items []ui.CompletionItem, lspItems []lsp.Complet
 }
 
 func (a *App) RefreshAutocomplete() {
+	if target := a.completion.pathPopup; target != nil {
+		if a.currentPathCompletionTarget() != *target {
+			a.DismissAutocomplete()
+		}
+		return
+	}
 	if a.EditorGroup.Autocomplete == nil || len(a.CompletionItems) == 0 {
 		return
 	}
@@ -110,6 +117,7 @@ func (a *App) currentPrefix() string {
 }
 
 func (a *App) DismissAutocomplete() {
+	a.completion.pathPopup = nil
 	a.EditorGroup.Autocomplete = nil
 	a.CompletionItems = nil
 	a.LspCompletionItems = nil

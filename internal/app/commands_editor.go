@@ -56,10 +56,15 @@ func (a *App) TriggerAutocomplete() {
 		return
 	}
 	if a.IsAutocompleteActive() {
-		a.DismissAutocomplete()
+		a.CloseAutocomplete()
 		return
 	}
 	path, lang := a.editorPathLang()
+	if a.currentPathCompletionTarget().buf != nil {
+		line, col := a.EditorGroup.ActiveCursor()
+		a.RequestCompletions(path, lang, line, col, "")
+		return
+	}
 	if lang == "" {
 		a.StatusWarn(i18n.Text("status.noLanguageDetectedForThisFile"))
 	} else if _, _, ok := a.lspResolve(path, lang); !ok {

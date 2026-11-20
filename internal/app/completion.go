@@ -12,6 +12,8 @@ import (
 )
 
 type completionState struct {
+	pathRead  *asynctask.Task[[]ui.CompletionItem]
+	pathPopup *pathCompletionTarget
 	lines     []string
 	col       int
 	debounce  *asynctask.Task[struct{}]
@@ -55,10 +57,12 @@ func (a *App) ScheduleAutocomplete() {
 		a.completion.delay = delay
 	}
 	target := a.currentCompletionTarget()
+	pathTarget := a.currentPathCompletionTarget()
 	a.completion.debounce.Schedule(func(context.Context) (struct{}, error) {
 		return struct{}{}, nil
 	}, func(_ struct{}, err error) {
-		if err == nil && a.currentCompletionTarget() == target {
+		if err == nil && a.currentCompletionTarget() == target &&
+			(pathTarget.buf == nil || a.currentPathCompletionTarget() == pathTarget) {
 			a.HandleAutocompleteTrigger()
 		}
 	})
@@ -74,7 +78,7 @@ func (a *App) HandleAutocompleteTrigger() {
 	if a.IsAutocompleteActive() {
 		return
 	}
-	if prefix := a.currentPrefix(); len(prefix) >= 1 || isTrigger {
+	if prefix := a.currentPrefix(); len(prefix) >= 1 || isTrigger || a.currentPathCompletionTarget().buf != nil {
 		path, lang := a.editorPathLang()
 		line, col := a.EditorGroup.ActiveCursor()
 		a.RequestCompletions(path, lang, line, col, triggerChar)
@@ -84,8 +88,10 @@ func (a *App) HandleAutocompleteTrigger() {
 // RequestCompletions asks the server for completions at line and col,
 // cancelling any request still in flight.
 func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar string) {
+	pathTarget := a.currentPathCompletionTarget()
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok || a.EditorGroup.ActiveBuffer() == nil {
+		a.requestPathCompletions(pathTarget)
 		return
 	}
 	target := a.currentCompletionTarget()
@@ -131,6 +137,9 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 		if err == nil {
 			a.applyCompletionReply(target, reply)
 		}
+		if !a.IsAutocompleteActive() {
+			a.requestPathCompletions(pathTarget)
+		}
 	})
 }
 
@@ -151,6 +160,9 @@ func (a *App) applyCompletionReply(target completionTarget, reply completionRepl
 // again instead of breaking the line, and Escape did not stick.
 func (a *App) CloseAutocomplete() {
 	a.DismissAutocomplete()
+	if a.completion.pathRead != nil {
+		a.completion.pathRead.Stop()
+	}
 	if a.completion.debounce != nil {
 		a.completion.debounce.Stop()
 	}

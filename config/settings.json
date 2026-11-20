@@ -96,6 +96,7 @@
   "autocomplete": {
     "enabled": true,
     "autoSuggest": true,
+    "pathCompletion": true,
     "debounce": 150,
     "signatureHelp": true
   },

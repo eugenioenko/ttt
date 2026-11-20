@@ -365,6 +365,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 |-----|------|---------|-------------|
 | `autocomplete.enabled` | bool | `true` | Enable LSP-powered autocompletion |
 | `autocomplete.autoSuggest` | bool | `true` | Show completions automatically as you type |
+| `autocomplete.pathCompletion` | bool | `true` | Suggest explicit workspace-relative and absolute filesystem paths when LSP has no suggestions |
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |
 
@@ -569,6 +570,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
   "autocomplete": {
     "enabled": true,
     "autoSuggest": true,
+    "pathCompletion": true,
     "debounce": 150,
     "signatureHelp": true
   },
