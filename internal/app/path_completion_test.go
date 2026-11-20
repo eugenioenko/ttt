@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -240,6 +241,39 @@ func TestReadPathCompletionsKeepsDirectoriesAndStopsOnCancel(t *testing.T) {
 		dir: dir + string(filepath.Separator), separator: filepath.Separator,
 	}); err == nil {
 		t.Fatal("a cancelled lookup returned results")
+	}
+}
+
+// cancelAfterEntries reports no error for its first budget Err calls, then reports
+// context.Canceled. It pins cancellation to a point mid-enumeration without timing.
+type cancelAfterEntries struct {
+	context.Context
+	budget int
+	calls  int
+}
+
+func (c *cancelAfterEntries) Err() error {
+	c.calls++
+	if c.budget > 0 {
+		c.budget--
+		return nil
+	}
+	return context.Canceled
+}
+
+func TestReadPathCompletionsStopsWhenCancelledMidEnumeration(t *testing.T) {
+	dir := t.TempDir()
+	writePathCompletionFiles(t, dir, numberedNames("file", 3*pathCompletionBatch))
+
+	ctx := &cancelAfterEntries{Context: context.Background(), budget: pathCompletionBatch}
+	_, err := readPathCompletions(ctx, pathCompletionTarget{
+		dir: dir + string(filepath.Separator), prefix: "file", separator: filepath.Separator,
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if ctx.calls > 2*pathCompletionBatch {
+		t.Fatalf("lookup checked ctx %d times, want cancellation after the first batch", ctx.calls)
 	}
 }
 
