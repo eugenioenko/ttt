@@ -482,6 +482,7 @@ func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles [
 	editorGroup.SetFileIconMode(s.Appearance.Icons)
 	editorGroup.InsertSpaces = s.Editor.InsertSpaces
 	editorGroup.SetIndentGuides(s.Editor.IndentGuides)
+	editorGroup.SetFullLineSelection(s.Editor.FullLineSelection)
 	editorGroup.InsertFinalNewline = s.Editor.InsertFinalNewline
 	editorGroup.PreviewTabs = s.Editor.PreviewTabsEnabled()
 	editorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()

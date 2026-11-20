@@ -122,6 +122,7 @@ type EditorGroupWidget struct {
 	InsertSpaces      bool
 	LineNumbers       bool
 	IndentGuides      bool
+	FullLineSelection bool
 	GutterStyle       string
 	WordWrap          bool
 	PreviewTabs       bool
@@ -883,6 +884,9 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	if guides, ok := surface.(indentGuideSurface); ok {
 		guides.SetIndentGuides(g.IndentGuides)
 	}
+	if sel, ok := surface.(fullLineSelectionSurface); ok {
+		sel.SetFullLineSelection(g.FullLineSelection)
+	}
 	if d, ok := surface.(diffSignsSurface); ok {
 		d.SetDiffSigns(g.DiffSigns)
 		d.SetDiffSignsColor(g.DiffSignsColor)
@@ -911,6 +915,22 @@ func (g *EditorGroupWidget) SetIndentGuides(enabled bool) {
 
 type indentGuideSurface interface {
 	SetIndentGuides(bool)
+}
+
+func (g *EditorGroupWidget) SetFullLineSelection(enabled bool) {
+	g.FullLineSelection = enabled
+	if g.Editor != nil {
+		g.Editor.FullLineSelection = enabled
+	}
+	for _, surface := range g.diffSurfaces() {
+		if sel, ok := surface.(fullLineSelectionSurface); ok {
+			sel.SetFullLineSelection(enabled)
+		}
+	}
+}
+
+type fullLineSelectionSurface interface {
+	SetFullLineSelection(bool)
 }
 
 func (g *EditorGroupWidget) SetFileIconMode(mode string) {

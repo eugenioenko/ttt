@@ -179,6 +179,7 @@ type EditorSettings struct {
 	GutterStyle             string             `json:"gutterStyle,omitempty"`
 	BorderStyle             string             `json:"borderStyle,omitempty"`
 	BracketPairColorization bool               `json:"bracketPairColorization"`
+	FullLineSelection       bool               `json:"fullLineSelection"`
 	ShowTrailingNewline     *bool              `json:"showTrailingNewline,omitempty"`
 	MenuBar                 *bool              `json:"menuBar,omitempty"`
 	UndoDeleteCursorStart   bool               `json:"undoDeleteCursorStart,omitempty"`
