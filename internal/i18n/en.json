@@ -418,6 +418,8 @@
   "files.cannotOpenSpecialFile": "Cannot open {path}: not a regular file",
   "files.delete": "Permanently delete {name}? This cannot be undone.",
   "files.deletedPermanently": "Permanently deleted {name}",
+  "files.duplicateCleanupFailed": "Could not remove partial copy {path}: {error}",
+  "files.duplicateRestoreFailed": "Could not restore permissions in {path}: {error}",
   "files.duplicated": "Duplicated {name}",
   "files.filePath": "File path",
   "files.folderPath": "Folder path",

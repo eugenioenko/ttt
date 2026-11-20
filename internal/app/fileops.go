@@ -155,10 +155,16 @@ func copyTree(src, dst string) (err error) {
 			return
 		}
 		if cleanupErr := restoreDirWriteAccess(dst); cleanupErr != nil {
-			err = errors.Join(err, fmt.Errorf("restore permissions in %s: %w", dst, cleanupErr))
+			err = errors.Join(err, errors.New(i18n.Format("files.duplicateRestoreFailed", i18n.Args{
+				"path":  dst,
+				"error": cleanupErr.Error(),
+			})))
 		}
 		if cleanupErr := os.RemoveAll(dst); cleanupErr != nil {
-			err = errors.Join(err, fmt.Errorf("remove partial copy %s: %w", dst, cleanupErr))
+			err = errors.Join(err, errors.New(i18n.Format("files.duplicateCleanupFailed", i18n.Args{
+				"path":  dst,
+				"error": cleanupErr.Error(),
+			})))
 		}
 	}()
 	entries, err := os.ReadDir(src)
