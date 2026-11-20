@@ -395,6 +395,12 @@ func TestDefaultAutocompleteSettings(t *testing.T) {
 	if !ac.AutoSuggest {
 		t.Error("expected AutoSuggest true")
 	}
+	if !ac.PathCompletion {
+		t.Error("expected PathCompletion true")
+	}
+	if ac.AbsolutePathCompletion {
+		t.Error("expected AbsolutePathCompletion false")
+	}
 	if ac.Debounce != 150 {
 		t.Errorf("expected Debounce 150, got %d", ac.Debounce)
 	}

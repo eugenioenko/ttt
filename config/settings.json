@@ -97,6 +97,7 @@
     "enabled": true,
     "autoSuggest": true,
     "pathCompletion": true,
+    "absolutePathCompletion": false,
     "debounce": 150,
     "signatureHelp": true
   },

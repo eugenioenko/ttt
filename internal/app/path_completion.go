@@ -45,7 +45,11 @@ func (a *App) currentPathCompletionTarget() pathCompletionTarget {
 	if separator == 0 {
 		return pathCompletionTarget{}
 	}
-	if !filepath.IsAbs(dir) {
+	if filepath.IsAbs(dir) {
+		if !settings.AbsolutePathCompletion {
+			return pathCompletionTarget{}
+		}
+	} else {
 		root := a.Workspace.Primary()
 		if folder := a.Workspace.FolderForFile(a.EditorGroup.ActiveFilePath()); folder != nil {
 			root = folder.Path

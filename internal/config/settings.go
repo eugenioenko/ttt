@@ -83,20 +83,22 @@ func DefaultTerminalSettings() TerminalSettings {
 }
 
 type AutocompleteSettings struct {
-	Enabled        bool `json:"enabled"`
-	AutoSuggest    bool `json:"autoSuggest"`
-	PathCompletion bool `json:"pathCompletion"`
-	Debounce       int  `json:"debounce"`
-	SignatureHelp  bool `json:"signatureHelp"`
+	Enabled                bool `json:"enabled"`
+	AutoSuggest            bool `json:"autoSuggest"`
+	PathCompletion         bool `json:"pathCompletion"`
+	AbsolutePathCompletion bool `json:"absolutePathCompletion"`
+	Debounce               int  `json:"debounce"`
+	SignatureHelp          bool `json:"signatureHelp"`
 }
 
 func DefaultAutocompleteSettings() AutocompleteSettings {
 	return AutocompleteSettings{
-		Enabled:        true,
-		AutoSuggest:    true,
-		PathCompletion: true,
-		Debounce:       150,
-		SignatureHelp:  true,
+		Enabled:                true,
+		AutoSuggest:            true,
+		PathCompletion:         true,
+		AbsolutePathCompletion: false,
+		Debounce:               150,
+		SignatureHelp:          true,
 	}
 }
 
