@@ -974,6 +974,7 @@
   "settings.showSaveAllQuitButton": "Show Save All & Quit button",
   "settings.showTrailingNewline": "Show trailing newline",
   "settings.sidebar": "Sidebar",
+  "settings.absolutePathCompletion": "Absolute path completion",
   "settings.pathCompletion": "File path completion",
   "settings.signatureHelp": "Signature help",
   "settings.skipGeneratedClosers": "Skip generated closers",

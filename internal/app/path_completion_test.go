@@ -96,3 +96,58 @@ func TestSplitQuotedPathCompletion(t *testing.T) {
 		t.Fatal("URL triggered filesystem completion")
 	}
 }
+
+func TestAbsolutePathCompletionRequiresOptIn(t *testing.T) {
+	root := t.TempDir()
+	absoluteRoot := filepath.VolumeName(root) + string(filepath.Separator)
+	for _, tc := range []struct {
+		name, text string
+		absolute   bool
+	}{
+		{"root", absoluteRoot, true},
+		{"absolute", filepath.Join(root, "ima"), true},
+		{"quoted absolute", `"` + filepath.Join(root, "ima"), true},
+		{"division", "1 " + absoluteRoot, true},
+		{"relative", "./ima", false},
+		{"parent", "../ima", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, trigger := range []struct {
+				name string
+				run  func(*App)
+			}{
+				{"automatic", (*App).HandleAutocompleteTrigger},
+				{"manual", (*App).TriggerAutocomplete},
+			} {
+				t.Run(trigger.name, func(t *testing.T) {
+					a := completionTestApp(t, "notes.txt", tc.text)
+					a.Workspace = workspace.New([]string{root})
+					moveCursor(a, 0, len([]rune(tc.text)))
+					scheduled := false
+					a.completion.pathRead = asynctask.New[[]ui.CompletionItem](asynctask.TaskOptions{
+						Run: func(func()) { scheduled = true },
+					}, func(fn func()) error { fn(); return nil })
+
+					trigger.run(a)
+					if scheduled != !tc.absolute {
+						t.Fatalf("default settings scheduled lookup = %v, want %v", scheduled, !tc.absolute)
+					}
+					a.CloseAutocomplete()
+					scheduled = false
+					a.Settings.Autocomplete.AbsolutePathCompletion = true
+					trigger.run(a)
+					if !scheduled {
+						t.Fatal("opted-in path lookup was not scheduled")
+					}
+					a.CloseAutocomplete()
+					scheduled = false
+					a.Settings.Autocomplete.PathCompletion = false
+					trigger.run(a)
+					if scheduled {
+						t.Fatal("master path-completion toggle was ignored")
+					}
+				})
+			}
+		})
+	}
+}
