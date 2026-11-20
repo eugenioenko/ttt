@@ -150,6 +150,15 @@ func (g *EditorGroupWidget) renderDropPreview(surface Surface) {
 		}
 	}
 
+	if hasReader {
+		for y := pr.Y; y < pr.Y+pr.H; y++ {
+			clearWideGlyphUnder(surface, reader, pr.X, y)
+			if pr.W > 1 {
+				clearWideGlyphUnder(surface, reader, pr.X+pr.W-1, y)
+			}
+		}
+	}
+
 	b := term.SingleBorderSet()
 	if g.Borders != nil {
 		b = *g.Borders
@@ -181,4 +190,19 @@ func (g *EditorGroupWidget) renderDropPreview(surface Surface) {
 	surface.SetCell(pr.X+pr.W-1, pr.Y, borderCell(b.TopRight))
 	surface.SetCell(pr.X, pr.Y+pr.H-1, borderCell(b.BottomLeft))
 	surface.SetCell(pr.X+pr.W-1, pr.Y+pr.H-1, borderCell(b.BottomRight))
+}
+
+// clearWideGlyphUnder blanks both columns of a fullwidth glyph that covers
+// column bx, so the border drawn there does not overlap half of it.
+func clearWideGlyphUnder(surface Surface, reader widgets.CellReader, bx, y int) {
+	for _, gx := range []int{bx - 1, bx} {
+		cell, ok := reader.CellAt(gx, y)
+		if !ok || cell.Ch == 0 || textwidth.Rune(cell.Ch) < 2 {
+			continue
+		}
+		cell.Ch = ' '
+		cell.Text = ""
+		surface.SetCell(gx, y, cell)
+		surface.SetCell(gx+1, y, cell)
+	}
 }
