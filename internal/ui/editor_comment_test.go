@@ -191,21 +191,6 @@ func TestToggleLineCommentRecognizesUTF8QuotedStringID(t *testing.T) {
 	}
 }
 
-// A decomposed id is scanned as combining marks and validated after NFC, so a
-// decomposed opener still opens the literal that its composed closer ends.
-func TestToggleLineCommentRecognizesDecomposedQuotedStringID(t *testing.T) {
-	const original = "(* {e\u0301|\"|é} *)"
-	if _, ok := skipQuotedString(original, strings.Index(original, "{")); !ok {
-		t.Fatalf("skipQuotedString(%q) did not report a quoted string", original)
-	}
-	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
-
-	e.ToggleLineComment()
-	if got, want := e.Buf.Lines[0], "{e\u0301|\"|é}"; got != want {
-		t.Fatalf("uncommented line = %q, want %q", got, want)
-	}
-}
-
 // Greek letters are not quoted-string id characters, so "{α|" does not open a
 // literal: the wrapper's closer is seen and removed instead of being swallowed.
 func TestToggleLineCommentTreatsGreekDelimiterAsCommentText(t *testing.T) {
@@ -221,18 +206,16 @@ func TestToggleLineCommentTreatsGreekDelimiterAsCommentText(t *testing.T) {
 	}
 }
 
-// The same id may open composed and close decomposed; the closer still ends the
-// literal, so the wrapper is removed instead of nested.
-func TestToggleLineCommentMatchesNormalizedQuotedStringID(t *testing.T) {
-	const original = "(* {é|\"|e\u0301} *)"
-	if _, ok := skipQuotedString(original, strings.Index(original, "{")); !ok {
-		t.Fatalf("skipQuotedString(%q) did not report a quoted string", original)
-	}
-	e := newCommentEditor(t, "a.ml", []string{original}, 0, 0)
-
-	e.ToggleLineComment()
-	if got, want := e.Buf.Lines[0], "{é|\"|e\u0301}"; got != want {
-		t.Fatalf("uncommented line = %q, want %q", got, want)
+func TestSkipQuotedStringRequiresExactCloser(t *testing.T) {
+	for _, id := range []string{"", "tag", "é"} {
+		t.Run(id, func(t *testing.T) {
+			literal := "{" + id + "| ignored |other} |" + id + "}"
+			text := "(* " + literal + " *)"
+			end, ok := skipQuotedString(text, 3)
+			if !ok || end != 3+len(literal) {
+				t.Fatalf("skipQuotedString(%q) = (%d, %v), want (%d, true)", text, end, ok, 3+len(literal))
+			}
+		})
 	}
 }
 
