@@ -153,7 +153,7 @@ func (o *OSCReader) Read(dst []byte) (int, error) {
 			go func() {
 				buf := make([]byte, 4096)
 				n, err := o.tty.Read(buf)
-				result <- oscReadResult{data: buf[:n], err: err}
+				result <- oscReadResult{data: fixWin32CtrlSlash(buf[:n]), err: err}
 			}()
 		}
 		var timer *time.Timer
