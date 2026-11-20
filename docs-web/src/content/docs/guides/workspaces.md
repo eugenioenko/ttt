@@ -10,7 +10,8 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 - Directories are sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
 - Press **/** in the explorer or choose **Search in Folders** from its More menu (`explorer.find`) to focus a filter input. It searches loaded file and folder names across all roots and keeps parent folders visible for context. **Up/Down** navigate matches, **Enter** opens the selection, and **Esc** or **✕** clears the filter and hides the input; use quick open to search the whole workspace
-- Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- Right-click context menu: **New File**, **New Folder**, **Rename**, **Duplicate**, **Delete**
+- **Duplicate** works on files and folders. It does not open the copy; names follow Zed's scheme — `file copy.txt`, `file copy 2.txt`, or `folder copy`. Folder duplication is recursive and recreates symlinks as symlinks rather than following them.
 - **Open in Terminal** (`explorer.openInTerminal`, right-click menu or palette) opens a new integrated terminal in that folder, or in the file's folder
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** (`explorer.revealActiveFile`) expands the folders above the active file, selects it, and scrolls it into view without moving focus from the editor. Set `explorer.autoReveal` to `true` to do this every time the active file changes
