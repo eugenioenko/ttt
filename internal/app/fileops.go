@@ -119,12 +119,23 @@ func (a *App) FileOpDuplicate(path string, reload func()) {
 		err = copyRegularFile(path, newPath, info.Mode())
 	}
 	if err != nil {
+		var unsupported unsupportedFileTypeError
+		if errors.As(err, &unsupported) {
+			a.StatusError(i18n.Format("files.unsupportedType", i18n.Args{"path": unsupported.path}))
+			return
+		}
 		a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 		return
 	}
 	a.invalidateRepositoryPath(newPath, RepositoryWorktree)
 	reload()
 	a.StatusNotify(i18n.Format("files.duplicated", i18n.Args{"name": filepath.Base(newPath)}))
+}
+
+type unsupportedFileTypeError struct{ path string }
+
+func (e unsupportedFileTypeError) Error() string {
+	return "unsupported file type: " + e.path
 }
 
 // copyTree duplicates a directory recursively. Symlinks are recreated as
@@ -140,8 +151,14 @@ func copyTree(src, dst string) (err error) {
 		return err
 	}
 	defer func() {
-		if err != nil {
-			os.RemoveAll(dst)
+		if err == nil {
+			return
+		}
+		if cleanupErr := restoreDirWriteAccess(dst); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("restore permissions in %s: %w", dst, cleanupErr))
+		}
+		if cleanupErr := os.RemoveAll(dst); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("remove partial copy %s: %w", dst, cleanupErr))
 		}
 	}()
 	entries, err := os.ReadDir(src)
@@ -173,11 +190,36 @@ func copyTree(src, dst string) (err error) {
 				return err
 			}
 		default:
-			return fmt.Errorf("unsupported file type: %s", srcPath)
+			return unsupportedFileTypeError{path: srcPath}
 		}
 	}
 	if err := os.Chmod(dst, info.Mode().Perm()); err != nil {
 		return err
+	}
+	return nil
+}
+
+func restoreDirWriteAccess(root string) error {
+	info, err := os.Lstat(root)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.Chmod(root, info.Mode().Perm()|0o700); err != nil {
+			return err
+		}
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if err := restoreDirWriteAccess(filepath.Join(root, entry.Name())); err != nil {
+			return err
+		}
 	}
 	return nil
 }
