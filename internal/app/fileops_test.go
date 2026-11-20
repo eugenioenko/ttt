@@ -254,11 +254,86 @@ func TestCopyTreeRecursive(t *testing.T) {
 			t.Errorf("copy %s = %q (%v), want %q", rel, data, err, want)
 		}
 	}
-	if info, err := os.Lstat(filepath.Join(dst, "nested", "child.txt")); err != nil || info.Mode().Perm() != 0o600 {
-		t.Errorf("nested file mode = %v (%v), want 0600", info, err)
+	srcInfo, err := os.Stat(filepath.Join(src, "nested", "child.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(filepath.Join(dst, "nested", "child.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := info.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
+		t.Errorf("nested file mode = %v, want %v (source mode)", got, want)
 	}
 	if got, err := os.Readlink(filepath.Join(dst, "link.txt")); err != nil || got != target {
 		t.Errorf("symlink target = %q (%v), want %q", got, err, target)
+	}
+}
+
+func TestCopyRegularFilePreservesMode(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "source.txt")
+	dst := filepath.Join(dir, "copy.txt")
+	if err := os.WriteFile(src, []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(src, 0o664); err != nil {
+		t.Fatal(err)
+	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyRegularFile(src, dst, srcInfo.Mode()); err != nil {
+		t.Fatal(err)
+	}
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := dstInfo.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
+		t.Errorf("copied mode = %v, want %v (source mode)", got, want)
+	}
+}
+
+func TestCopyTreeReadOnlySourceDirectory(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "locked")
+	if err := os.Mkdir(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "child.txt"), []byte("child"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(src, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if srcInfo.Mode().Perm()&0o200 != 0 {
+		t.Fatalf("source directory is writable: %v", srcInfo.Mode().Perm())
+	}
+	dst := filepath.Join(dir, "locked copy")
+	t.Cleanup(func() {
+		_ = os.Chmod(src, 0o700)
+		_ = os.Chmod(dst, 0o700)
+	})
+
+	if err := copyTree(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "child.txt")); err != nil || string(data) != "child" {
+		t.Fatalf("copy = %q (%v), want %q", data, err, "child")
+	}
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := dstInfo.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
+		t.Errorf("directory mode = %v, want %v (source mode)", got, want)
 	}
 }
 

@@ -135,7 +135,8 @@ func copyTree(src, dst string) (err error) {
 	if err != nil {
 		return err
 	}
-	if err := os.Mkdir(dst, info.Mode().Perm()); err != nil {
+	// A read-only source would otherwise produce a destination its children cannot be copied into.
+	if err := os.Mkdir(dst, info.Mode().Perm()|0o700); err != nil {
 		return err
 	}
 	defer func() {
@@ -171,7 +172,12 @@ func copyTree(src, dst string) (err error) {
 			if err := copyRegularFile(srcPath, dstPath, info.Mode()); err != nil {
 				return err
 			}
+		default:
+			return fmt.Errorf("unsupported file type: %s", srcPath)
 		}
+	}
+	if err := os.Chmod(dst, info.Mode().Perm()); err != nil {
+		return err
 	}
 	return nil
 }
@@ -221,6 +227,10 @@ func copyRegularFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	if err := out.Close(); err != nil {
+		os.Remove(dst)
+		return err
+	}
+	if err := os.Chmod(dst, mode.Perm()); err != nil {
 		os.Remove(dst)
 		return err
 	}
