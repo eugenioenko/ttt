@@ -193,6 +193,7 @@ All editor settings are nested under the `editor` key.
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
+| `editor.fullLineSelection` | bool | `false` | Extend the selection highlight to the editor's right edge on every selected line break. When off, only the selected text and one cell per selected line break are highlighted |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
 | `editor.grammars` | array | `[]` | External TextMate grammars (see [Grammars](#grammars)) |
 
@@ -526,7 +527,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "gutterStyle": "compact",
     "borderStyle": "default",
     "selectionStyle": "background",
-    "bracketPairColorization": false
+    "bracketPairColorization": false,
+    "fullLineSelection": false
   },
   "quickOpen": {
     "showHidden": false,

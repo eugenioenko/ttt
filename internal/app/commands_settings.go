@@ -283,6 +283,7 @@ func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settin
 	group.InsertSpaces = s.Editor.InsertSpaces
 	group.LineNumbers = s.Editor.LineNumbers
 	group.SetIndentGuides(s.Editor.IndentGuides)
+	group.SetFullLineSelection(s.Editor.FullLineSelection)
 	group.GutterStyle = s.Editor.GutterStyle
 	group.InsertFinalNewline = s.Editor.InsertFinalNewline
 	group.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()

@@ -120,6 +120,8 @@ They have no default shortcut. Bind them in `keybindings.json`, for example:
 - **Ctrl+A** to select all
 - **Ctrl+C / Ctrl+X / Ctrl+V** for copy, cut, paste with system clipboard support
 
+The selection highlight covers the selected text plus one cell for each selected line break, so empty lines in a selection stay visible. Set `editor.fullLineSelection` to `true` (or turn on **Settings > Appearance > Code > Full line selection**) to extend the highlight to the editor's right edge on every selected line break instead.
+
 ## Undo and Redo
 
 - **Ctrl+Z** to undo, **Ctrl+Y** to redo

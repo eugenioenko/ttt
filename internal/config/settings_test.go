@@ -687,3 +687,34 @@ func TestSystemPluginDirectorySetting(t *testing.T) {
 		t.Fatalf("systemDir = %q, want %q", got, s.Plugins.SystemDir)
 	}
 }
+
+func TestFullLineSelectionSetting(t *testing.T) {
+	dir := withTempConfigDir(t)
+	if DefaultSettings().Editor.FullLineSelection {
+		t.Fatal("expected FullLineSelection false by default")
+	}
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{"editor":{}}`, false},
+		{`{"editor":{"fullLineSelection":false}}`, false},
+		{`{"editor":{"fullLineSelection":true}}`, true},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := LoadSettings().Editor.FullLineSelection; got != tc.want {
+			t.Errorf("%s: FullLineSelection = %v, want %v", tc.json, got, tc.want)
+		}
+	}
+
+	s := DefaultSettings()
+	s.Editor.FullLineSelection = true
+	if err := SaveSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if !LoadSettings().Editor.FullLineSelection {
+		t.Fatal("FullLineSelection did not survive save and load")
+	}
+}

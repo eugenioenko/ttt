@@ -917,6 +917,7 @@
   "settings.focusEditorOnOpen": "Focus editor on open",
   "settings.formatOnSave": "Format on save",
   "settings.forwardTerminalShortcuts": "Forward shortcuts to terminal",
+  "settings.fullLineSelection": "Full line selection",
   "settings.general": "General",
   "settings.gitGutter": "Git gutter",
   "settings.gitIgnoredFiles": "Git-ignored files",
