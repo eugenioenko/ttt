@@ -83,6 +83,9 @@ func (e *EditorPaneWidget) addCursorVertical(delta int) {
 }
 
 func (e *EditorPaneWidget) multiExecRune(r rune) {
+	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
+	e.syncToMulti()
 	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -139,12 +142,16 @@ func (e *EditorPaneWidget) multiExecRune(r rune) {
 		}
 		e.bufferDirty = true
 	}
+	e.remapBookmarks(version)
 	e.syncFromMulti()
 }
 
 // multiExecTab inserts one indent unit at every cursor, mirroring how a typed
 // character is applied across cursors.
 func (e *EditorPaneWidget) multiExecTab() {
+	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
+	e.syncToMulti()
 	e.normalizeMultiCursors()
 	indent := e.indentUnit()
 	n := len([]rune(indent))
@@ -175,10 +182,14 @@ func (e *EditorPaneWidget) multiExecTab() {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
 	e.bufferDirty = true
+	e.remapBookmarks(version)
 	e.syncFromMulti()
 }
 
 func (e *EditorPaneWidget) multiExecBackspace() {
+	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
+	e.syncToMulti()
 	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -226,11 +237,15 @@ func (e *EditorPaneWidget) multiExecBackspace() {
 		}
 		e.bufferDirty = true
 	}
+	e.remapBookmarks(version)
 	e.Multi.Deduplicate()
 	e.syncFromMulti()
 }
 
 func (e *EditorPaneWidget) multiExecDelete() {
+	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
+	e.syncToMulti()
 	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -269,11 +284,15 @@ func (e *EditorPaneWidget) multiExecDelete() {
 		}
 		e.bufferDirty = true
 	}
+	e.remapBookmarks(version)
 	e.Multi.Deduplicate()
 	e.syncFromMulti()
 }
 
 func (e *EditorPaneWidget) multiExecEnter() {
+	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
+	e.syncToMulti()
 	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
@@ -313,6 +332,7 @@ func (e *EditorPaneWidget) multiExecEnter() {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
 	e.bufferDirty = true
+	e.remapBookmarks(version)
 	e.syncFromMulti()
 }
 
@@ -573,6 +593,7 @@ func pastePieces(text string, n int) []string {
 // multiPasteText inserts clipboard text at each cursor in one undo step.
 func (e *EditorPaneWidget) multiPasteText(text string) {
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
@@ -670,6 +691,7 @@ func (e *EditorPaneWidget) multiPasteText(text string) {
 	}
 
 	e.bufferDirty = true
+	e.remapBookmarks(version)
 	e.syncFromMulti()
 	e.remapFolds(version)
 	e.refreshFolds()
@@ -697,6 +719,7 @@ func (e *EditorPaneWidget) multiCut() {
 		return
 	}
 	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 
 	e.normalizeMultiCursors()
 	// Avoid deleting the same original line more than once.
@@ -787,6 +810,7 @@ func (e *EditorPaneWidget) multiCut() {
 	}
 
 	e.bufferDirty = true
+	e.remapBookmarks(version)
 	e.remapFolds(version)
 	e.refreshFolds()
 	e.Multi.Deduplicate()

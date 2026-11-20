@@ -2398,6 +2398,7 @@ func (g *EditorGroupWidget) undoRedoPostProcess(version uint64, reveal bool) {
 		g.Editor.refreshFolds()
 		g.Editor.ExpandFoldContaining(g.Editor.Cursor.Line)
 	}
+	g.Editor.remapBookmarks(version)
 	g.Editor.bufferDirty = true
 	if reveal {
 		g.Editor.scrollViewport()
@@ -2417,6 +2418,7 @@ func (g *EditorGroupWidget) Undo() {
 	}
 	if t.Undo != nil {
 		version := t.Buf.Version()
+		defer t.Buf.PinChanges(version).Release()
 		pos := t.Undo.Undo(t.Buf)
 		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line
@@ -2439,6 +2441,7 @@ func (g *EditorGroupWidget) Redo() {
 	}
 	if t.Undo != nil {
 		version := t.Buf.Version()
+		defer t.Buf.PinChanges(version).Release()
 		pos := t.Undo.Redo(t.Buf)
 		if pos != nil {
 			g.Editor.Cursor.Line = pos.Line
@@ -2904,6 +2907,19 @@ func (g *EditorGroupWidget) TrimTrailingWhitespaceLines() {
 	if e := g.editableKeyEditor(); e != nil {
 		e.TrimTrailingWhitespaceLines()
 	}
+}
+
+func (g *EditorGroupWidget) ToggleBookmark() {
+	if e := g.editableKeyEditor(); e != nil {
+		e.ToggleBookmark()
+	}
+}
+
+func (g *EditorGroupWidget) JumpBookmark(delta int) bool {
+	if e := g.keyEditor(); e != nil {
+		return e.JumpBookmark(delta)
+	}
+	return false
 }
 
 func (g *EditorGroupWidget) MoveToFileEdge(end, shift bool) {

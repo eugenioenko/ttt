@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -198,6 +199,25 @@ func TestEditableCursorJumpIntoGapExpandsIt(t *testing.T) {
 	screen := strings.Join(f.render(), "\n")
 	if !strings.Contains(screen, "line 05") {
 		t.Fatalf("jumping the cursor into a gap did not reveal it:\n%s", screen)
+	}
+}
+
+func TestEditableJumpBookmarkRevealsTargetInsideHiddenGap(t *testing.T) {
+	old, cur := gapFile()
+	f := newLiveDiffFixture(t, old, cur, DiffModeUnified, 100, 40)
+	f.render()
+	f.e.SetBookmark(20, '*', term.StyleDefault)
+	f.e.Cursor.Line = 11
+
+	if !f.e.JumpBookmark(1) {
+		t.Fatal("jump found no bookmark")
+	}
+	if f.e.Cursor.Line != 20 {
+		t.Fatalf("cursor line = %d, want the bookmarked line 20", f.e.Cursor.Line)
+	}
+	screen := strings.Join(f.render(), "\n")
+	if !strings.Contains(screen, "line 21") {
+		t.Fatalf("jump did not reveal the hidden bookmarked line:\n%s", screen)
 	}
 }
 

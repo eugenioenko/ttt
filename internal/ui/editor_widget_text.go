@@ -249,6 +249,8 @@ func (e *EditorPaneWidget) transformSelection(fn func(string) string) {
 }
 
 func (e *EditorPaneWidget) multiTransformSelections(fn func(string) string) {
+	version := e.Buf.Version()
+	defer e.Buf.PinChanges(version).Release()
 	e.normalizeMultiCursors()
 	prevLines := len(e.Buf.Lines)
 	var cmds []undo.EditCommand
@@ -293,6 +295,7 @@ func (e *EditorPaneWidget) multiTransformSelections(fn func(string) string) {
 			e.refreshFolds()
 		}
 	}
+	e.remapBookmarks(version)
 	e.syncFromMulti()
 	e.scrollViewport()
 }
