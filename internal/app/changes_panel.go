@@ -329,6 +329,19 @@ func filePaths(files []scm.Change) []string {
 	return paths
 }
 
+// unstagePaths includes a rename's old path: resetting only the new path
+// leaves the old path's deletion staged.
+func unstagePaths(files ...scm.Change) []string {
+	var paths []string
+	for _, f := range files {
+		if f.Kind == scm.Renamed && f.OldPath != "" {
+			paths = append(paths, f.OldPath)
+		}
+		paths = append(paths, f.Path)
+	}
+	return paths
+}
+
 func (cp *ChangesPanel) Refresh() {
 	cp.cancelHistoryReads()
 	dirs := append([]string(nil), cp.Dirs...)
@@ -942,7 +955,7 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 		}
 	case "unstage":
 		if ok && staged {
-			cp.applied(cp.stagePaths(dir, true, status.Path))
+			cp.applied(cp.stagePaths(dir, true, unstagePaths(status)...))
 		}
 	case "stageFolder":
 		cp.stageFolder(node)
@@ -1175,7 +1188,7 @@ func (cp *ChangesPanel) unstageFolder(node *widgets.TreeNode) {
 		return
 	}
 	if files := cp.folderFiles(node); len(files) > 0 {
-		cp.applied(cp.stagePaths(ref.Dir, true, filePaths(files)...))
+		cp.applied(cp.stagePaths(ref.Dir, true, unstagePaths(files...)...))
 	}
 }
 
@@ -1225,7 +1238,7 @@ func (cp *ChangesPanel) unstageAll() {
 		if !cp.supportsStaging(g.Dir) {
 			continue
 		}
-		if e := cp.stagePaths(g.Dir, true, filePaths(g.filesIn(scm.Staged))...); e != nil && err == nil {
+		if e := cp.stagePaths(g.Dir, true, unstagePaths(g.filesIn(scm.Staged)...)...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1245,7 +1258,7 @@ func (cp *ChangesPanel) unstageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(cp.stagePaths(g.Dir, true, filePaths(g.filesIn(scm.Staged))...))
+	cp.applied(cp.stagePaths(g.Dir, true, unstagePaths(g.filesIn(scm.Staged)...)...))
 }
 
 func (cp *ChangesPanel) confirmDiscard(dir string, f scm.Change) {
@@ -1412,7 +1425,7 @@ func (cp *ChangesPanel) ToggleStageSelected() {
 		return
 	}
 	if staged {
-		cp.applied(cp.stagePaths(dir, true, status.Path))
+		cp.applied(cp.stagePaths(dir, true, unstagePaths(status)...))
 	} else {
 		cp.applied(cp.stagePaths(dir, false, status.Path))
 	}

@@ -491,6 +491,8 @@ func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles [
 	editorGroup.WordWrapColumn = s.Editor.WordWrapColumn
 	editorGroup.WordWrapBreak = s.Editor.WordWrapBreak
 	editorGroup.LanguageOverrides = s.Editor.LanguageOverrides
+	editorGroup.AutoSurround = s.Editor.AutoSurround
+	editorGroup.ApplyFileAutoSurround()
 	editorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
 	editorGroup.DiffMode = configuredDiffMode(s.Editor.DiffMode)
 	editorGroup.DiffContext = configuredDiffContext(s.Editor.DiffContext)

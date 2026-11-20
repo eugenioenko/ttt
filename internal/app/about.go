@@ -36,7 +36,7 @@ func creditNames() []string {
 }
 
 func (a *App) ShowAbout() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	info := widgets.NewKeyValueListWidget([]widgets.KeyValueEntry{

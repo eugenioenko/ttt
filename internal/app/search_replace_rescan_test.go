@@ -62,3 +62,29 @@ func TestSearchReplaceRescanPreservesUpstreamBehavior(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchReplaceRecordLimitDoesNotApplyFallbackMatches(t *testing.T) {
+	for _, all := range []bool{false, true} {
+		h := newReplaceTestHarness(t)
+		original, err := os.ReadFile(h.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.a.searchReplace.scan = func(context.Context, search.Options, []string) (map[string][]search.Match, error) {
+			return nil, search.ErrRecordTooLarge
+		}
+		h.a.Search.OnReplaceRequest = func(req ui.SearchReplaceRequest) {
+			req.AllFiles = all
+			h.a.startSearchReplace(req)
+		}
+		h.a.Search.ReplaceAllFiles()
+		h.finish(t)()
+		if h.a.Root.HasOverlay() || h.a.Status.Notification != "16 MiB record limit reached" {
+			t.Fatalf("expected limit notification without replacement dialog, got %q", h.a.Status.Notification)
+		}
+		data, err := os.ReadFile(h.path)
+		if err != nil || string(data) != string(original) {
+			t.Fatalf("file changed after incomplete scan: %q, %v", data, err)
+		}
+	}
+}

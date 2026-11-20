@@ -64,13 +64,36 @@ func (e *EditorLayoutWidget) leaf(group *EditorGroupWidget) *EditorLayoutWidget 
 }
 
 func (e *EditorLayoutWidget) SplitGroup(group, next *EditorGroupWidget, position SplitPosition) bool {
+	return e.splitGroup(group, next, position, false)
+}
+
+func (e *EditorLayoutWidget) SplitGroupAt(group, next *EditorGroupWidget, zone EditorDropZone) bool {
+	switch zone {
+	case EditorDropLeft:
+		return e.splitGroup(group, next, SplitRight, true)
+	case EditorDropRight:
+		return e.splitGroup(group, next, SplitRight, false)
+	case EditorDropTop:
+		return e.splitGroup(group, next, SplitBottom, true)
+	case EditorDropBottom:
+		return e.splitGroup(group, next, SplitBottom, false)
+	default:
+		return false
+	}
+}
+
+func (e *EditorLayoutWidget) splitGroup(group, next *EditorGroupWidget, position SplitPosition, before bool) bool {
 	leaf := e.leaf(group)
 	if leaf == nil || len(e.Groups()) >= MaxEditorGroups {
 		return false
 	}
 	e.InvalidatePointerInteraction()
-	leaf.First = NewEditorLayoutWidget(group, e.Borders)
-	leaf.Second = NewEditorLayoutWidget(next, e.Borders)
+	first, second := group, next
+	if before {
+		first, second = next, group
+	}
+	leaf.First = NewEditorLayoutWidget(first, e.Borders)
+	leaf.Second = NewEditorLayoutWidget(second, e.Borders)
 	leaf.Group = nil
 	s := NewContentSplitWidget()
 	s.Position, s.FullHeightRight, s.ShowBottom = position, true, true
@@ -178,7 +201,7 @@ func (e *EditorLayoutWidget) InvalidatePointerInteraction() bool {
 func (e *EditorLayoutWidget) SetPointerCaptureInvalidated(fn func()) {
 	e.invalidated = fn
 	if e.Split != nil {
-		e.Split.DividerVisible = e.dividerVisibleAt
+		e.Split.DividerHitTest = e.dividerVisibleAt
 	}
 	widgets.SetPointerCaptureInvalidated(e.child(), fn)
 }
@@ -265,6 +288,9 @@ func (e *EditorLayoutWidget) renderDividerGaps(surface Surface) {
 			continue
 		}
 		tabs := group.TabBar.GetRect()
+		if tabs.Y != r.Y {
+			continue
+		}
 		for y := max(tabs.Y, r.Y); y < min(tabs.Y+tabs.H, r.Y+r.H); y++ {
 			tabSides[y-r.Y] |= side
 		}
@@ -290,6 +316,17 @@ func (e *EditorLayoutWidget) dividerSide(group *EditorGroupWidget) uint8 {
 
 func (e *EditorLayoutWidget) dividerVisibleAt(x, y int) bool {
 	if !e.GetRect().Contains(x, y) {
+		return false
+	}
+	if e.Split != nil && e.Split.Position == SplitBottom {
+		for _, group := range e.Second.Groups() {
+			if group.GetRect().Y == e.Second.GetRect().Y && group.GetRect().Contains(x, y) && group.TabBar.baselineHit(x, y) {
+				return true
+			}
+		}
+		return false
+	}
+	if e.Split == nil || x != e.Split.DividerScreenX() {
 		return false
 	}
 	for _, gap := range e.dividerGaps {

@@ -48,11 +48,22 @@ func TestEditorWorkspaceSessionRejectsInvalidLayouts(t *testing.T) {
 	branch := func(a, b *EditorLayoutState) *EditorLayoutState {
 		return &EditorLayoutState{Direction: "right", First: a, Second: b}
 	}
+	deep := leaf()
+	for range MaxEditorGroups {
+		deep = branch(leaf(), deep)
+	}
+	var balanced func(int) *EditorLayoutState
+	balanced = func(groups int) *EditorLayoutState {
+		if groups == 1 {
+			return leaf()
+		}
+		return branch(balanced(groups/2), balanced(groups-groups/2))
+	}
 	for name, layout := range map[string]*EditorLayoutState{
 		"direction":     {Direction: "invalid", First: leaf(), Second: leaf()},
 		"missing child": {Direction: "right", First: leaf()},
-		"depth":         branch(leaf(), branch(leaf(), branch(leaf(), branch(leaf(), leaf())))),
-		"groups":        branch(branch(leaf(), leaf()), branch(branch(leaf(), leaf()), leaf())),
+		"depth":         deep,
+		"groups":        balanced(MaxEditorGroups + 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if boundedEditorLayout(layout) != nil {

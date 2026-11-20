@@ -83,18 +83,20 @@ func DefaultTerminalSettings() TerminalSettings {
 }
 
 type AutocompleteSettings struct {
-	Enabled       bool `json:"enabled"`
-	AutoSuggest   bool `json:"autoSuggest"`
-	Debounce      int  `json:"debounce"`
-	SignatureHelp bool `json:"signatureHelp"`
+	Enabled        bool `json:"enabled"`
+	AutoSuggest    bool `json:"autoSuggest"`
+	PathCompletion bool `json:"pathCompletion"`
+	Debounce       int  `json:"debounce"`
+	SignatureHelp  bool `json:"signatureHelp"`
 }
 
 func DefaultAutocompleteSettings() AutocompleteSettings {
 	return AutocompleteSettings{
-		Enabled:       true,
-		AutoSuggest:   true,
-		Debounce:      150,
-		SignatureHelp: true,
+		Enabled:        true,
+		AutoSuggest:    true,
+		PathCompletion: true,
+		Debounce:       150,
+		SignatureHelp:  true,
 	}
 }
 
@@ -133,8 +135,9 @@ func DefaultLSPSettings() LSPSettings {
 }
 
 type EditorSettings struct {
-	AutoClosing AutoClosingSettings `json:"autoClosing"`
-	PreviewTabs *bool               `json:"previewTabs,omitempty"`
+	AutoClosing  AutoClosingSettings  `json:"autoClosing"`
+	AutoSurround AutoSurroundSettings `json:"autoSurround"`
+	PreviewTabs  *bool                `json:"previewTabs,omitempty"`
 
 	TabSize           int                               `json:"tabSize"`
 	InsertSpaces      bool                              `json:"insertSpaces"`
@@ -200,9 +203,10 @@ func DefaultAutoClosingSettings() AutoClosingSettings {
 }
 
 type EditorLanguageOverride struct {
-	WordWrap       *bool  `json:"wordWrap,omitempty"`
-	WordWrapColumn *int   `json:"wordWrapColumn,omitempty"`
-	WordWrapBreak  string `json:"wordWrapBreak,omitempty"`
+	AutoSurround   *AutoSurroundSettings `json:"autoSurround,omitempty"`
+	WordWrap       *bool                 `json:"wordWrap,omitempty"`
+	WordWrapColumn *int                  `json:"wordWrapColumn,omitempty"`
+	WordWrapBreak  string                `json:"wordWrapBreak,omitempty"`
 }
 
 func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
@@ -313,6 +317,7 @@ func (e EditorSettings) PreviewTabsEnabled() bool {
 func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
 		AutoClosing:             DefaultAutoClosingSettings(),
+		AutoSurround:            AutoSurroundSettings{Enabled: boolPtr(true)},
 		TabSize:                 4,
 		InsertSpaces:            true,
 		WordWrapBreak:           WordWrapBreakWord,
@@ -328,6 +333,9 @@ func DefaultEditorSettings() EditorSettings {
 		GutterStyle:             "compact",
 		BorderStyle:             "default",
 		BracketPairColorization: false,
+		LanguageOverrides: map[string]EditorLanguageOverride{
+			"markdown": {WordWrap: boolPtr(true)},
+		},
 	}
 }
 

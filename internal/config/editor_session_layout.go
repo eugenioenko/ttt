@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 )
 
-const MaxEditorGroups = 4
+const MaxEditorGroups = 16
 
 type EditorLayoutState struct {
 	Direction string             `json:"direction,omitempty"`

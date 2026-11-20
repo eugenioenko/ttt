@@ -54,6 +54,7 @@ type EditorPaneWidget struct {
 	WrapWords               bool
 	AutoDedent              bool
 	AutoClosing             config.AutoClosingSettings
+	AutoSurround            config.AutoSurroundSettings
 	autoClosing             *autoClosingState
 	autoClosingPath         string
 	plainText               bool

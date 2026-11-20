@@ -9,12 +9,11 @@ import (
 //
 // Calling it while a command line is already open replaces it rather than
 // stacking a second one, so the saved focus never gets lost behind two layers.
-// If some other overlay (dialog, palette, menu) is up, the call is a no-op —
-// the usual HasOverlay guard.
+// If another modal overlay (dialog, palette, menu) is up, the call is a no-op.
 func (a *App) ShowCommandLine(prefix string, onChange, onSubmit func(string), onCancel func()) *ui.CommandLineWidget {
 	if a.commandLine != nil {
 		a.HideCommandLine()
-	} else if a.Root.HasOverlay() {
+	} else if a.Root.HasModalOverlay() {
 		return nil
 	}
 

@@ -15,7 +15,7 @@ import (
 
 const (
 	settingsTabID       = "settings"
-	settingsLabelCols   = 30
+	settingsLabelCols   = 34
 	settingsControlCols = 34
 )
 
@@ -135,6 +135,9 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.previewTabs"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.PreviewTabsEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.PreviewTabs = boolPtr(v) }},
+			{Label: i18n.Text("settings.autoSurround"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.AutoSurround.IsEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.AutoSurround.Enabled = boolPtr(v) }},
 			section(i18n.Text("settings.autoClosing")),
 			{Label: i18n.Text("settings.autoCloseBrackets"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.AutoClosing.Brackets },
@@ -180,10 +183,10 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.formatOnSave"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.FormatOnSave },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.FormatOnSave = v }},
-			{Label: i18n.Text("settings.insertFinalNewline"), Kind: settingBool,
+			{Label: i18n.Text("settings.insertFinalNewline"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.InsertFinalNewline },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.InsertFinalNewline = v }},
-			{Label: i18n.Text("settings.trimTrailingWhitespace"), Kind: settingBool,
+			{Label: i18n.Text("settings.trimTrailingWhitespace"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.TrimTrailingWhitespace },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.TrimTrailingWhitespace = v }},
 			section(i18n.Text("settings.onQuit")),
@@ -200,6 +203,9 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.suggestAsYouType"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Autocomplete.AutoSuggest },
 				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.AutoSuggest = v }},
+			{Label: i18n.Text("settings.pathCompletion"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Autocomplete.PathCompletion },
+				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.PathCompletion = v }},
 			{Label: i18n.Text("settings.signatureHelp"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Autocomplete.SignatureHelp },
 				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.SignatureHelp = v }},

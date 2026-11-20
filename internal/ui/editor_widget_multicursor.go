@@ -84,9 +84,21 @@ func (e *EditorPaneWidget) addCursorVertical(delta int) {
 
 func (e *EditorPaneWidget) multiExecRune(r rune) {
 	e.syncToMulti()
+	if e.AutoSurround.Closer(r) != 0 {
+		e.Multi.MergeSelections()
+	}
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
+		if cmd := e.surroundSelection(r, &cs.Sel, &cs.Line, &cs.Col); cmd != nil {
+			e.applyAutoClosingEdit(cmd)
+			cmds = append(cmds, cmd)
+			for _, child := range cmd.Commands {
+				insert := child.(*undo.InsertRuneCommand)
+				e.shiftLaterCursors(i, insert.Line, insert.Col, 1)
+			}
+			continue
+		}
 		hadSelection := cs.Sel.Active
 		if cs.Sel.Active {
 			start, end := cs.Sel.Range(cs.Line, cs.Col)
@@ -308,19 +320,19 @@ func (e *EditorPaneWidget) multiExecEnter() {
 }
 
 func (e *EditorPaneWidget) adjustLaterCursors(editedIdx int, start, end selection.Position) {
+	adjust := func(line, col *int) {
+		if *line == end.Line && *col >= end.Col {
+			*col = start.Col + (*col - end.Col)
+			*line = start.Line
+		} else if *line > end.Line {
+			*line -= end.Line - start.Line
+		}
+	}
 	for j := editedIdx + 1; j < len(e.Multi.Cursors); j++ {
 		cs := &e.Multi.Cursors[j]
-		if start.Line == end.Line {
-			if cs.Line == start.Line && cs.Col >= end.Col {
-				cs.Col -= end.Col - start.Col
-			}
-		} else {
-			if cs.Line == end.Line {
-				cs.Col = start.Col + (cs.Col - end.Col)
-				cs.Line = start.Line
-			} else if cs.Line > end.Line {
-				cs.Line -= end.Line - start.Line
-			}
+		adjust(&cs.Line, &cs.Col)
+		if cs.Sel.Active {
+			adjust(&cs.Sel.Anchor.Line, &cs.Sel.Anchor.Col)
 		}
 	}
 }
@@ -329,10 +341,10 @@ func (e *EditorPaneWidget) shiftLaterCursors(editedIdx, line, col, delta int) {
 	for j := editedIdx + 1; j < len(e.Multi.Cursors); j++ {
 		cs := &e.Multi.Cursors[j]
 		if cs.Line == line && cs.Col >= col {
-			cs.Col += delta
-			if cs.Col < 0 {
-				cs.Col = 0
-			}
+			cs.Col = max(0, cs.Col+delta)
+		}
+		if cs.Sel.Active && cs.Sel.Anchor.Line == line && cs.Sel.Anchor.Col >= col {
+			cs.Sel.Anchor.Col = max(0, cs.Sel.Anchor.Col+delta)
 		}
 	}
 }

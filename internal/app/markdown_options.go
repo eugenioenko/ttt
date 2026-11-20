@@ -54,11 +54,8 @@ func setMarkdownOverride(s *config.Settings, override config.EditorLanguageOverr
 	if overrides == nil {
 		overrides = make(map[string]config.EditorLanguageOverride)
 	}
-	if override == (config.EditorLanguageOverride{}) {
-		delete(overrides, "markdown")
-	} else {
-		overrides["markdown"] = override
-	}
+	// An empty entry preserves explicit inheritance when loading built-in overrides.
+	overrides["markdown"] = override
 	s.Editor.LanguageOverrides = overrides
 }
 
@@ -102,7 +99,7 @@ func markdownCustomColumn(s *config.Settings) string {
 }
 
 func (a *App) ShowMarkdownWordWrapPicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	a.showSelectDialog(i18n.Text("markdown.wordWrapTitle"), markdownWordWrapItems(), markdownWordWrap(a.Settings), func(id string) {
@@ -112,7 +109,7 @@ func (a *App) ShowMarkdownWordWrapPicker() {
 }
 
 func (a *App) ShowMarkdownWrapWidthPicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	selected := markdownWrapWidth(a.Settings)

@@ -32,10 +32,12 @@ type ContentSplitWidget struct {
 	Borders                   *term.BorderSet
 	OnResize                  func(height int)
 	OnResizeEnd               func()
-	DividerVisible            func(x, y int) bool
+	DividerHitTest            func(x, y int) bool
 	OnBottomClick             func()
 	OnTopClick                func()
 	dragging                  bool
+	dragOffset                int
+	bottomDividerOffset       int
 	wasPressed                bool
 	capturedChild             Widget
 	pointerCaptureInvalidated func()
@@ -224,6 +226,12 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 		cs.Bottom.SetRect(bottomRect)
 		bottomSurface := surface.Sub(Rect{X: 0, Y: divY + 1, W: w, H: bottomContentH})
 		cs.Bottom.Render(bottomSurface)
+		cs.bottomDividerOffset = 0
+		if cs.HideBottomDivider {
+			if provider, ok := cs.Bottom.(topBorderProvider); ok {
+				cs.bottomDividerOffset, _ = provider.TopBorder()
+			}
+		}
 	} else {
 		widgets.InvalidatePointerInteraction(cs.Bottom)
 		if cs.capturedChild == cs.Bottom {
@@ -296,11 +304,11 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 			if cs.Position == SplitRight {
 				size = cs.constrainedRightWidth(r.W, r.X+r.W-mx-1)
 			} else {
-				offset := 1
+				offset := -1
 				if cs.HideBottomDivider {
-					offset = 0
+					offset = cs.dragOffset
 				}
-				size = cs.constrainedBottomHeight(r.H, r.Y+r.H-my-offset)
+				size = cs.constrainedBottomHeight(r.H, r.Y+r.H-my+offset)
 			}
 			cs.BottomRatio = 0
 			if cs.OnResize != nil {
@@ -352,10 +360,15 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 	} else if cs.ShowBottom {
 		divY := cs.BottomRect().Y - 1
+		if freshClick && cs.HideBottomDivider && cs.OverDivider(mx, my) {
+			cs.dragging = true
+			cs.dragOffset = my - cs.BottomRect().Y
+			return EventCaptured
+		}
 
 		// r.W-1: exclude last column to avoid colliding with editor scrollbar
 		// For divY+1 (tab bar row), let the bottom panel handle clicks first
-		if freshClick && my == divY+1 && mx < r.X+r.W-1 && cs.Bottom != nil {
+		if freshClick && my == divY+1 && mx < r.X+r.W-1 && cs.Bottom != nil && !cs.HideBottomDivider {
 			result := cs.Bottom.HandleEvent(ev)
 			if result == EventCaptured {
 				cs.capturedChild = cs.Bottom
@@ -424,8 +437,11 @@ func (cs *ContentSplitWidget) HandleEvent(ev tcell.Event) EventResult {
 // OverDivider reports whether the pointer is on the panel's divider: a row
 // when the panel is docked at the bottom, a column when it is docked right.
 func (cs *ContentSplitWidget) OverDivider(mx, my int) bool {
-	if cs.DividerVisible != nil && !cs.DividerVisible(mx, my) {
+	if !cs.ShowBottom || cs.Bottom == nil {
 		return false
+	}
+	if cs.DividerHitTest != nil {
+		return cs.DividerHitTest(mx, my)
 	}
 	r := cs.GetRect()
 	if cs.Position == SplitRight {
@@ -434,7 +450,10 @@ func (cs *ContentSplitWidget) OverDivider(mx, my int) bool {
 		}
 		return mx == cs.DividerScreenX()
 	}
-	return my == cs.DividerScreenY() && mx >= r.X && mx < r.X+r.W-1
+	if mx < r.X || mx >= r.X+r.W-1 {
+		return false
+	}
+	return my == cs.DividerScreenY()
 }
 
 // ResizeShape is the pointer shape for dragging the divider.
@@ -452,7 +471,7 @@ func (cs *ContentSplitWidget) DividerScreenY() int {
 		return -1
 	}
 	if cs.HideBottomDivider {
-		return cs.BottomRect().Y
+		return cs.BottomRect().Y + cs.bottomDividerOffset
 	}
 	return cs.BottomRect().Y - 1
 }
