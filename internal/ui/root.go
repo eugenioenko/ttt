@@ -24,6 +24,7 @@ type GlobalKeyBinding struct {
 	Handler         func()
 	TerminalOnly    bool
 	WhileForwarding bool
+	WhileModal      bool
 }
 
 type ChordKeyBinding struct {
@@ -117,6 +118,10 @@ func (r *Root) AddGlobalKey(key tcell.Key, mod tcell.ModMask, rn rune, handler f
 
 func (r *Root) AddForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
 	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler})
+}
+
+func (r *Root) AddModalForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
+	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler, WhileModal: true})
 }
 
 func (r *Root) AddTerminalForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
@@ -362,17 +367,16 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 			return EventConsumed
 		}
 	}
-	// ForceKeys punch through two things that would otherwise swallow them: a
-	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
-	// unsaved-changes dialog). With neither present nothing is swallowing keys,
-	// so they are left to handleGlobalKeys below like any other binding --
-	// which is what lets a key interceptor claim them while editing.
-	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
+	// Background shortcuts must not change layout beneath a modal. Quit opts
+	// in so a second Ctrl+Q can still bypass the unsaved-changes dialog.
+	hasOverlay := r.HasOverlay()
+	if isKey && (r.rawKeysFocused() || hasOverlay) {
+		hasModal := r.HasModalOverlay()
 		for _, gk := range r.ForceKeys {
-			if gk.TerminalOnly && r.HasOverlay() {
+			if (gk.TerminalOnly && hasOverlay) || (hasModal && !gk.WhileModal) {
 				continue
 			}
-			if r.ForwardShortcuts && !r.HasOverlay() && !gk.WhileForwarding {
+			if r.ForwardShortcuts && !hasOverlay && !gk.WhileForwarding {
 				continue
 			}
 			if key := term.ControlKeyEvent(kev, &r.ControlModifiers); key != nil && matchKey(key, gk) {

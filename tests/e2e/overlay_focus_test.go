@@ -82,6 +82,34 @@ func TestDismissedOverlayReturnsFocusToTerminal(t *testing.T) {
 	}
 }
 
+func TestModalOverlayBlocksTerminalToggle(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	openAlphaWithTerminal(t, h)
+
+	h.pressCtrl(tcell.KeyCtrlP)
+	if !h.app.Root.HasModalOverlay() {
+		t.Fatal("expected the command palette over the terminal")
+	}
+	h.pressCtrl(tcell.KeyCtrlT)
+	if !h.app.ContentSplit.ShowBottom {
+		t.Error("Ctrl+T hid the terminal through the command palette")
+	}
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	h.typeText("XY")
+	if got := h.app.EditorGroup.Editor.Buf.Lines[0]; got != "a" {
+		t.Errorf("editor buffer changed to %q, want %q", got, "a")
+	}
+	if h.app.Root.Focused != h.app.TerminalPanel {
+		t.Fatalf("expected focus back on the terminal, got %T", h.app.Root.Focused)
+	}
+
+	h.pressCtrl(tcell.KeyCtrlT)
+	if h.app.ContentSplit.ShowBottom {
+		t.Error("Ctrl+T did not hide the focused terminal after dismissing the palette")
+	}
+}
+
 func TestDismissedOverlayReturnsFocusToSidebar(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
