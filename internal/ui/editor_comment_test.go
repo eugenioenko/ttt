@@ -322,3 +322,65 @@ func TestToggleLineCommentMatchesWordPrefixCaseInsensitively(t *testing.T) {
 		})
 	}
 }
+
+// A block is commented at its shallowest indentation, as VS Code does, so the
+// markers line up and each line keeps its indentation inside the comment.
+func TestToggleLineCommentAlignsMarkersAtTheShallowestIndent(t *testing.T) {
+	original := []string{
+		"function showOutdated() {",
+		"    sync(vendorOptions, {",
+		"        shouldUpdate: true,",
+		"",
+		"    });",
+		"}",
+	}
+	e := newCommentEditor(t, "a.js", append([]string(nil), original...), 5, 1)
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{
+		"// function showOutdated() {",
+		"//     sync(vendorOptions, {",
+		"//         shouldUpdate: true,",
+		"",
+		"//     });",
+		"// }",
+	}
+	for i := range want {
+		if e.Buf.Lines[i] != want[i] {
+			t.Fatalf("commented line %d = %q, want %q", i, e.Buf.Lines[i], want[i])
+		}
+	}
+
+	e.ToggleLineComment()
+	for i := range original {
+		if e.Buf.Lines[i] != original[i] {
+			t.Fatalf("uncommented line %d = %q, want %q", i, e.Buf.Lines[i], original[i])
+		}
+	}
+}
+
+// An indented block is commented at its own shallowest indentation, not at
+// column zero.
+func TestToggleLineCommentKeepsTheBlockIndentation(t *testing.T) {
+	original := []string{"    if ok {", "        run()", "    }"}
+	e := newCommentEditor(t, "a.go", append([]string(nil), original...), 2, 5)
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 4)
+
+	e.ToggleLineComment()
+	want := []string{"    // if ok {", "    //     run()", "    // }"}
+	for i := range want {
+		if e.Buf.Lines[i] != want[i] {
+			t.Fatalf("commented line %d = %q, want %q", i, e.Buf.Lines[i], want[i])
+		}
+	}
+
+	e.ToggleLineComment()
+	for i := range original {
+		if e.Buf.Lines[i] != original[i] {
+			t.Fatalf("uncommented line %d = %q, want %q", i, e.Buf.Lines[i], original[i])
+		}
+	}
+}

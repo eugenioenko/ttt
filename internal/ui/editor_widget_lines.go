@@ -633,6 +633,23 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		}
 	}
 
+	// Comment every line at the block's shallowest indentation, as VS Code
+	// does, so the markers line up and the code keeps its indentation inside
+	// the comment.
+	commentCol := -1
+	if !allCommented {
+		for l := startLine; l <= endLine; l++ {
+			runes := []rune(e.Buf.Lines[l])
+			trimmed := strings.TrimLeft(string(runes), " \t")
+			if trimmed == "" {
+				continue
+			}
+			if indent := len(runes) - len([]rune(trimmed)); commentCol < 0 || indent < commentCol {
+				commentCol = indent
+			}
+		}
+	}
+
 	var cmds []undo.EditCommand
 	cursorDelta := 0
 
@@ -716,7 +733,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 					cmds = append(cmds, replace)
 				}
 			}
-			cmd := &undo.InsertStringCommand{Line: l, Col: indent, Text: prefix + " "}
+			cmd := &undo.InsertStringCommand{Line: l, Col: commentCol, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
 			if l == e.Cursor.Line {
