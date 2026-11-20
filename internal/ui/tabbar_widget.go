@@ -691,6 +691,9 @@ func (t *TabBarWidget) dropIndicatorX() int {
 	if !t.drag.Dragging() || t.drag.From() == t.drag.Target() {
 		return -1
 	}
+	if t.OnTabDrag != nil && !t.GetRect().Contains(t.dragPointerX, t.dragPointerY) {
+		return -1
+	}
 	target := t.drag.Target()
 	if target < 0 || target >= len(t.tabSpans) {
 		return -1

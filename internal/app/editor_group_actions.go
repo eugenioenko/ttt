@@ -77,26 +77,55 @@ func (a *App) moveEditorTab(source, target *ui.EditorGroupWidget) {
 	a.Root.SetFocus(target)
 }
 
+func (a *App) editorDropTargetAt(source *ui.EditorGroupWidget, x, y int) (*ui.EditorGroupWidget, ui.EditorDropZone) {
+	groups := a.editorGroups()
+	for _, target := range groups {
+		if !target.GetRect().Contains(x, y) {
+			continue
+		}
+		sameGroup := target == source
+		canSplit := len(groups) < ui.MaxEditorGroups && !(sameGroup && source.TabCount() <= 1)
+		return target, target.DropZoneAt(x, y, sameGroup, canSplit)
+	}
+	return nil, ui.EditorDropNone
+}
+
 func (a *App) wireEditorTabDrag(group *ui.EditorGroupWidget) {
 	group.TabBar.OnTabDrag = func(_ int, x, y int) {
+		target, zone := a.editorDropTargetAt(group, x, y)
 		for _, other := range a.editorGroups() {
-			other.DropTarget = other != group && other.GetRect().Contains(x, y)
+			if other == target {
+				other.SetDropZone(zone)
+			} else {
+				other.SetDropZone(ui.EditorDropNone)
+			}
 		}
 	}
 	group.TabBar.OnTabDragCancel = a.clearEditorDropTargets
 	group.TabBar.OnTabDrop = func(index, x, y int) bool {
 		a.clearEditorDropTargets()
-		for _, other := range a.editorGroups() {
-			if other != group && other.GetRect().Contains(x, y) {
-				dropIndex := other.TabBar.DropIndexAt(x, y)
-				before := other.TabCount()
+		target, zone := a.editorDropTargetAt(group, x, y)
+		if target != nil && zone != ui.EditorDropNone {
+			if zone.IsSplit() {
+				if len(a.editorGroups()) < ui.MaxEditorGroups {
+					next := a.newEditorGroupLike(target)
+					if a.EditorSplit.SplitGroupAt(target, next, zone) {
+						group.SwitchTab(index)
+						a.moveEditorTab(group, next)
+					}
+				}
+				return true
+			}
+			if target != group {
+				dropIndex := target.TabBar.DropIndexAt(x, y)
+				before := target.TabCount()
 				group.SwitchTab(index)
-				a.moveEditorTab(group, other)
+				a.moveEditorTab(group, target)
 				if dropIndex >= 0 {
-					if other.TabCount() == before && other.ActiveTabIndex() < dropIndex {
+					if target.TabCount() == before && target.ActiveTabIndex() < dropIndex {
 						dropIndex--
 					}
-					other.MoveTab(other.ActiveTabIndex(), min(dropIndex, other.TabCount()-1))
+					target.MoveTab(target.ActiveTabIndex(), min(dropIndex, target.TabCount()-1))
 				}
 				return true
 			}
@@ -108,7 +137,7 @@ func (a *App) wireEditorTabDrag(group *ui.EditorGroupWidget) {
 
 func (a *App) clearEditorDropTargets() {
 	for _, g := range a.editorGroups() {
-		g.DropTarget = false
+		g.SetDropZone(ui.EditorDropNone)
 	}
 }
 

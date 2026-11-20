@@ -52,14 +52,11 @@ func TestEditorSplitDragAcrossGroups(t *testing.T) {
 			r := left.TabBar.GetRect()
 			x, y := r.X+4, r.Y+1
 			dest := right.Editor.GetRect()
-			dx, dy := dest.X+4, dest.Y+2
-			if command == "editor.splitDown" {
-				dx = x
-			}
+			dx, dy := dest.X+dest.W/2, dest.Y+dest.H/2
 			h.app.Root.HandleEvent(tcell.NewEventMouse(x, y, tcell.Button1, 0))
 			h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.Button1, 0))
 			h.redraw()
-			if !right.DropTarget {
+			if !right.DropTarget || right.DropZone != ui.EditorDropCenter {
 				t.Fatal("drag did not mark the destination group")
 			}
 			h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.ButtonNone, 0))
@@ -241,5 +238,100 @@ func TestRawKeyTabDragEscapeCancelsWithoutForwarding(t *testing.T) {
 				t.Fatal("normal Escape was swallowed after cancellation")
 			}
 		})
+	}
+}
+
+func TestEditorTabDragToSplit(t *testing.T) {
+	tests := []struct {
+		name  string
+		zone  ui.EditorDropZone
+		point func(r ui.Rect) (int, int)
+		check func(orig, added ui.Rect) bool
+	}{
+		{"left", ui.EditorDropLeft, func(r ui.Rect) (int, int) { return r.X + 2, r.Y + r.H/2 }, func(orig, added ui.Rect) bool { return added.X < orig.X }},
+		{"bottom", ui.EditorDropBottom, func(r ui.Rect) (int, int) { return r.X + r.W/2, r.Y + r.H - 2 }, func(orig, added ui.Rect) bool { return added.Y > orig.Y }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHarness(t, 160, 44)
+			defer h.stop()
+			orig := h.app.EditorGroup
+			alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
+			orig.OpenFile(alpha)
+			orig.CommitActiveTab()
+			orig.OpenFile(beta)
+			orig.SwitchToTabByPath(alpha)
+			h.redraw()
+
+			tabs := orig.TabBar.GetRect()
+			dx, dy := tc.point(orig.ContentRect())
+			h.app.Root.HandleEvent(tcell.NewEventMouse(tabs.X+4, tabs.Y+1, tcell.Button1, 0))
+			h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.Button1, 0))
+			h.redraw()
+			if orig.DropZone != tc.zone {
+				t.Fatalf("drag zone = %v, want %v", orig.DropZone, tc.zone)
+			}
+			h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.ButtonNone, 0))
+			h.flushOnChange()
+			h.redraw()
+
+			added := h.app.EditorGroup
+			if len(h.app.EditorSplit.Groups()) != 2 || added == orig || added.ActiveFilePath() != alpha || orig.ActiveFilePath() != beta || orig.DropTarget {
+				t.Fatalf("drop did not split and move tab cleanly")
+			}
+			if !tc.check(orig.GetRect(), added.GetRect()) {
+				t.Fatalf("unexpected split placement: added=%+v orig=%+v", added.GetRect(), orig.GetRect())
+			}
+		})
+	}
+
+	t.Run("single tab ignores self split", func(t *testing.T) {
+		h := newTestHarness(t, 140, 32)
+		defer h.stop()
+		group := h.app.EditorGroup
+		h.redraw()
+		tabs, content := group.TabBar.GetRect(), group.ContentRect()
+		dx, dy := content.X+content.W-3, content.Y+content.H/2
+		h.app.Root.HandleEvent(tcell.NewEventMouse(tabs.X+4, tabs.Y+1, tcell.Button1, 0))
+		h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.Button1, 0))
+		h.redraw()
+		if group.DropZone != ui.EditorDropNone {
+			t.Fatalf("single-tab group advertised split zone %v", group.DropZone)
+		}
+		h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.ButtonNone, 0))
+		if len(h.app.EditorSplit.Groups()) != 1 {
+			t.Fatalf("group count = %d, want 1", len(h.app.EditorSplit.Groups()))
+		}
+	})
+}
+
+func TestEditorTabDragAcrossGroupsToSplit(t *testing.T) {
+	h := newTestHarness(t, 160, 44)
+	defer h.stop()
+	left := h.app.EditorGroup
+	alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
+	left.OpenFile(alpha)
+	h.exec("editor.split")
+	right := h.app.EditorGroup
+	right.OpenFile(beta)
+	h.app.Root.SetFocus(left)
+	h.redraw()
+
+	tabs, dest := left.TabBar.GetRect(), right.ContentRect()
+	dx, dy := dest.X+dest.W/2, dest.Y+dest.H-2
+	h.app.Root.HandleEvent(tcell.NewEventMouse(tabs.X+4, tabs.Y+1, tcell.Button1, 0))
+	h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.Button1, 0))
+	h.redraw()
+	if right.DropZone != ui.EditorDropBottom {
+		t.Fatalf("right drop zone = %v, want EditorDropBottom", right.DropZone)
+	}
+	h.app.Root.HandleEvent(tcell.NewEventMouse(dx, dy, tcell.ButtonNone, 0))
+	h.flushOnChange()
+	h.redraw()
+
+	bottom := h.app.EditorGroup
+	if len(h.app.EditorSplit.Groups()) != 2 || bottom == right || bottom.ActiveFilePath() != alpha || right.ActiveFilePath() != beta || bottom.GetRect().Y <= right.GetRect().Y {
+		t.Fatalf("cross-group edge drop did not split and remove empty source group")
 	}
 }
