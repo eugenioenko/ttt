@@ -6,6 +6,33 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func TestInputSelectionAfterEditingEmptySelection(t *testing.T) {
+	for _, wrap := range []bool{false, true} {
+		inp := NewInputWidget(InputConfig{Wrap: wrap})
+		inp.SetFocused(true)
+		inp.SetText("a界c")
+		pressWidgetKey(inp, tcell.KeyRight, tcell.ModShift)
+		pressWidgetKey(inp, tcell.KeyBackspace2, tcell.ModNone)
+		pressWidgetKey(inp, tcell.KeyLeft, tcell.ModShift)
+		if lo, hi := inp.selRange(); lo != 1 || hi != 2 {
+			t.Fatalf("wrap=%v: selection = %d:%d, want 1:2", wrap, lo, hi)
+		}
+		pressWidgetKey(inp, tcell.KeyRight, tcell.ModNone)
+		typeWidgetInputRunes(inp, "|")
+		if inp.Text() != "a界|" {
+			t.Fatalf("wrap=%v: text = %q", wrap, inp.Text())
+		}
+		inp.Undo()
+		if inp.Text() != "a界" {
+			t.Fatalf("undo = %q", inp.Text())
+		}
+		inp.Redo()
+		if inp.Text() != "a界|" {
+			t.Fatalf("redo = %q", inp.Text())
+		}
+	}
+}
+
 func TestInputUndoRedoTyping(t *testing.T) {
 	inp := NewInputWidget(InputConfig{})
 	inp.SetFocused(true)

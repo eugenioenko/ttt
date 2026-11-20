@@ -754,7 +754,7 @@ func (inp *InputWidget) clearSel() {
 }
 
 func (inp *InputWidget) startSel() {
-	if inp.selStart < 0 {
+	if !inp.hasSelection() {
 		inp.selStart = inp.cursorPos
 		inp.selEnd = inp.cursorPos
 	}

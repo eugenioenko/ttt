@@ -249,7 +249,7 @@ func (e *EditorPaneWidget) transformSelection(fn func(string) string) {
 }
 
 func (e *EditorPaneWidget) multiTransformSelections(fn func(string) string) {
-	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	prevLines := len(e.Buf.Lines)
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {

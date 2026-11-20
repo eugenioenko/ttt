@@ -83,10 +83,7 @@ func (e *EditorPaneWidget) addCursorVertical(delta int) {
 }
 
 func (e *EditorPaneWidget) multiExecRune(r rune) {
-	e.syncToMulti()
-	if e.AutoSurround.Closer(r) != 0 {
-		e.Multi.MergeSelections()
-	}
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
@@ -148,7 +145,7 @@ func (e *EditorPaneWidget) multiExecRune(r rune) {
 // multiExecTab inserts one indent unit at every cursor, mirroring how a typed
 // character is applied across cursors.
 func (e *EditorPaneWidget) multiExecTab() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	indent := e.indentUnit()
 	n := len([]rune(indent))
 	var cmds []undo.EditCommand
@@ -182,7 +179,7 @@ func (e *EditorPaneWidget) multiExecTab() {
 }
 
 func (e *EditorPaneWidget) multiExecBackspace() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
@@ -234,7 +231,7 @@ func (e *EditorPaneWidget) multiExecBackspace() {
 }
 
 func (e *EditorPaneWidget) multiExecDelete() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
@@ -277,7 +274,7 @@ func (e *EditorPaneWidget) multiExecDelete() {
 }
 
 func (e *EditorPaneWidget) multiExecEnter() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
@@ -520,7 +517,8 @@ func (e *EditorPaneWidget) SplitSelectionToLines() {
 	e.scrollViewport()
 }
 
-func (e *EditorPaneWidget) normalizeClipboardCursors() {
+// Merge before editing so replacing a selection cannot strand a cursor inside it.
+func (e *EditorPaneWidget) normalizeMultiCursors() {
 	e.syncToMulti()
 	e.Multi.MergeSelections()
 	e.syncFromMulti()
@@ -532,7 +530,7 @@ func (e *EditorPaneWidget) multiCopyPieces() []string {
 		return nil
 	}
 
-	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	pieces := make([]string, 0, len(e.Multi.Cursors))
 
 	for _, cs := range e.Multi.Cursors {
@@ -579,7 +577,7 @@ func (e *EditorPaneWidget) multiPasteText(text string) {
 		return
 	}
 
-	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	pieces := pastePieces(text, len(e.Multi.Cursors))
 	var commands []undo.EditCommand
 
@@ -700,7 +698,7 @@ func (e *EditorPaneWidget) multiCut() {
 	}
 	version := e.Buf.Version()
 
-	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	// Avoid deleting the same original line more than once.
 	seenLines := make(map[int]bool)
 	unique := make([]multicursor.CursorState, 0, len(e.Multi.Cursors))
