@@ -31,6 +31,7 @@ func (a *App) ShowAutocomplete(items []ui.CompletionItem, lspItems []lsp.Complet
 	if len(filtered) == 0 {
 		return
 	}
+	a.completion.pathPopup = nil
 	ac := ui.NewAutocompleteWidget(filtered, 0, 0)
 	ac.Icons = a.Settings.Appearance.Icons
 	ac.OnSelect = func(item ui.CompletionItem) {
@@ -42,6 +43,12 @@ func (a *App) ShowAutocomplete(items []ui.CompletionItem, lspItems []lsp.Complet
 }
 
 func (a *App) RefreshAutocomplete() {
+	if target := a.completion.pathPopup; target != nil {
+		if a.currentPathCompletionTarget() != *target {
+			a.DismissAutocomplete()
+		}
+		return
+	}
 	if a.EditorGroup.Autocomplete == nil || len(a.CompletionItems) == 0 {
 		return
 	}
@@ -110,6 +117,7 @@ func (a *App) currentPrefix() string {
 }
 
 func (a *App) DismissAutocomplete() {
+	a.completion.pathPopup = nil
 	a.EditorGroup.Autocomplete = nil
 	a.CompletionItems = nil
 	a.LspCompletionItems = nil
@@ -640,7 +648,7 @@ func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdi
 	for _, batch := range batches {
 		batchPath := URIToPath(batch.URI)
 		captured, wasOpen := openBuffers[batchPath]
-		current := a.EditorGroup.BufferForPath(batchPath)
+		current := a.editorBufferForPath(batchPath)
 		if (!wasOpen && current != nil) ||
 			(wasOpen && (current != captured.Buffer || current == nil || current.Version() != captured.Version)) {
 			return false, false
@@ -652,9 +660,11 @@ func (a *App) applyInteractiveCodeActionEdit(path string, edit *lsp.WorkspaceEdi
 
 func (a *App) snapshotCodeActionBuffers() map[string]codeActionBufferSnapshot {
 	snapshots := make(map[string]codeActionBufferSnapshot)
-	for _, path := range a.EditorGroup.OpenFilePaths() {
-		if buf := a.EditorGroup.BufferForPath(path); buf != nil {
-			snapshots[path] = codeActionBufferSnapshot{Buffer: buf, Version: buf.Version()}
+	for _, group := range a.editorGroups() {
+		for _, path := range group.OpenFilePaths() {
+			if buf := a.editorBufferForPath(path); buf != nil {
+				snapshots[path] = codeActionBufferSnapshot{Buffer: buf, Version: buf.Version()}
+			}
 		}
 	}
 	return snapshots

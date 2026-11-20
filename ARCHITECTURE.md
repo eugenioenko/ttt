@@ -64,9 +64,23 @@ undo, folds, multicursors, and diff algorithms. Domain code must not start
 processes, access terminal state, render widgets, or coordinate application
 lifecycle.
 
+`internal/filewrite` is a shared filesystem primitive used by buffer and config.
+It owns temporary-file staging, sync, close, replacement, and cleanup, and imports
+only the standard library. Callers own serialization and streaming, symlink
+resolution, metadata, retries, and recovery policy; buffer does not depend on config.
+Settings retain replacement-only saves, including Windows DACL preservation,
+replacement-friendly reads, and bounded sharing-error retries. Their Windows
+replacement keeps the existing extended-path `MoveFileEx` wrapper: a native
+concurrent-reader run exhausted retries with `os.Rename`, so equivalence has not
+been established. Document saves
+retain Unix owner/group preservation and their in-place recovery fallback.
+On Windows, document saves still use ordinary reads and a single replacement
+attempt, without settings' DACL preservation or sharing guarantees. Consolidation
+does not add those guarantees or prevent concurrent read/modify/write lost updates.
+
 ### Services
 
-Packages: `internal/scm`, `internal/git`, `internal/github`, `internal/jsonrpc`,
+Packages: `internal/scm`, `internal/git`, `internal/jj`, `internal/github`, `internal/jsonrpc`,
 `internal/lsp`, `internal/terminal`, `internal/watcher`,
 `internal/workspace`, `internal/trash`, and `internal/update`.
 
@@ -107,18 +121,27 @@ rename/copy, and missing endpoints in its adapter. Historical content stays lazy
 request ownership, cancellation, incarnation guards, and per-file retry remain
 in the application. Revision IDs are opaque, including in history tree identity.
 
-Remaining integration work before exposing another provider:
+`internal/jj` is the second built-in adapter. `scm.Providers` discovers with
+jj before Git, so a colocated workspace is presented through jj, while a nearer
+`.git` or a missing `jj` binary leaves the directory to Git. Optional
+`scm.Committer` and `scm.Discarder` contracts carry the commit box and discard
+actions for providers without staging; Git keeps its own paths. jj queries pass
+`--ignore-working-copy` except those that must see current files: the change
+list, the single-change patch, and the ignored-file check snapshot the working
+copy as any jj command does.
 
-- Keep Git mutation commands Git-specific and gate them by the selected provider.
-  Providers will contribute their own actions through the future host action API.
+Remaining integration work:
+
+- Git mutation commands (pull, push, sync, new branch) run the git CLI directly
+  and skip jj workspaces through `RepoOp.GitOnly`. Providers will contribute
+  their own actions through the future host action API.
 - Git-derived enumeration, blame, GitHub PRs/permalinks, and Git worktree tools
-  remain Git-specific. Gate these outside Git; introduce a shared contract only
-  when a second provider needs one. Preserve ordinary file browsing outside Git.
+  remain Git-specific. Introduce a shared contract only when a provider needs one.
 - Provider presentation retains its compatible staged/unstaged projection and
   command identifiers. Provider-defined groups, labels, and actions are follow-ups.
-- Provider selection, workspace discovery integration, and Lua registration,
-  permissions, cancellation/unload, invalidation, and colocated-repository policy
-  remain host integration work. Public plugin APIs and Jujutsu come afterward.
+- Lua registration, permissions, cancellation/unload, and invalidation for
+  plugin-supplied providers remain host integration work before public plugin
+  APIs.
 
 ### Presentation kernel
 

@@ -52,6 +52,7 @@ type Root struct {
 	ControlModifiers tcell.ModMask
 	ForwardShortcuts bool
 	nextTerminalKey  *TerminalWidget
+	OnMouseMove      func(mx, my int) bool
 	OnRightClick     func(mx, my int)
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
@@ -266,6 +267,12 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		r.focusClaimed = false
 	}
 	r.button1Held = held
+	if mev.Buttons() == tcell.ButtonNone && !released && !linkPress && !r.HasOverlay() && !r.PointerCaptureActive() && r.OnMouseMove != nil {
+		x, y := mev.Position()
+		if r.OnMouseMove(x, y) {
+			return EventConsumed
+		}
+	}
 	if linkPress {
 		if released {
 			r.pressTarget = nil
@@ -280,6 +287,10 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	}
 	if released {
 		r.releasePressTarget(ev, receiver, modal)
+		if r.OnMouseMove != nil && !r.HasOverlay() && !r.PointerCaptureActive() {
+			x, y := mev.Position()
+			r.OnMouseMove(x, y)
+		}
 	}
 	return result
 }
@@ -386,6 +397,11 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	if !isKey {
 		r.mouseReceiver = r.Main
 		return r.handleMouse(ev)
+	}
+
+	if kev.Key() == tcell.KeyEscape && r.PointerCaptureActive() {
+		r.CancelPointerCapture()
+		return EventConsumed
 	}
 
 	if r.rawKeysFocused() {

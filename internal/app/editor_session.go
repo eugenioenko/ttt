@@ -67,13 +67,17 @@ func (a *App) persistEditorSession() {
 	if !a.Settings.Editor.RestoreTabs || a.sessionSavingPaused || a.sessionWorkspaceKey == "" {
 		return
 	}
-	var tabs []config.EditorTabState
-	for _, tab := range a.editorSessionTabs() {
-		if info, err := os.Stat(tab.Path); err == nil && info.Mode().IsRegular() {
-			tabs = append(tabs, tab)
+	session := config.EditorSessionState{}
+	if a.EditorSplit != nil && a.ContentSplit.Top == a.EditorSplit {
+		session.Layout = a.snapshotEditorSessionLayout(a.EditorSplit)
+	} else {
+		for _, tab := range a.editorSessionTabs() {
+			if info, err := os.Stat(tab.Path); err == nil && info.Mode().IsRegular() {
+				session.Tabs = append(session.Tabs, tab)
+			}
 		}
 	}
-	if err := config.SaveEditorSession(a.sessionWorkspaceKey, tabs); err != nil {
+	if err := config.SaveEditorWorkspaceSession(a.sessionWorkspaceKey, session); err != nil {
 		a.StatusError(i18n.Format("session.saveFailed", i18n.Args{"error": err.Error()}))
 	}
 }
@@ -94,41 +98,17 @@ func (a *App) restoreEditorSession() {
 	if !a.restoreSessionOnStartup {
 		return
 	}
-	tabs, err := config.LoadEditorSession(a.sessionWorkspaceKey)
+	session, err := config.LoadEditorWorkspaceSession(a.sessionWorkspaceKey)
 	if err != nil {
 		a.StatusError(i18n.Format("session.restoreFailed", i18n.Args{"error": err.Error()}))
 		return
 	}
-	active, seen := "", map[string]bool{}
-	for _, tab := range tabs {
-		if !filepath.IsAbs(tab.Path) || seen[tab.Path] {
-			continue
-		}
-		seen[tab.Path] = true
-		if info, err := os.Stat(tab.Path); err != nil || !info.Mode().IsRegular() {
-			continue
-		}
-		g := a.EditorGroup
-		if err := g.OpenFile(tab.Path); err != nil {
-			continue
-		}
-		g.CommitActiveTab()
-		g.GoToLineCol(max(tab.Line, 0)+1, max(tab.Col, 0)+1)
-		if buf := g.ActiveBuffer(); buf != nil {
-			g.Editor.Viewport.TopLine = max(0, min(tab.TopLine, len(buf.Lines)-1))
-			g.Editor.Viewport.LeftCol = max(tab.LeftCol, 0)
-		}
-		if tab.Pinned {
-			g.TogglePinTab()
-		}
-		if tab.Active {
-			active = tab.Path
-		}
+	if session.Layout != nil {
+		a.restoreEditorSessionLayout(session.Layout)
+	} else {
+		a.restoreEditorGroupTabs(a.EditorGroup, session.Tabs)
 	}
-	if active != "" {
-		a.EditorGroup.SwitchToTabByPath(active)
-	}
-	if len(seen) > 0 {
+	if session.Layout != nil || len(session.Tabs) > 0 {
 		a.FocusEditor()
 		a.persistEditorSession()
 	}

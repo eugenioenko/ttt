@@ -15,7 +15,7 @@ import (
 
 const (
 	settingsTabID       = "settings"
-	settingsLabelCols   = 30
+	settingsLabelCols   = 34
 	settingsControlCols = 34
 )
 
@@ -26,6 +26,7 @@ const (
 	settingInt
 	settingString
 	settingEnum
+	settingMarkdownWrapWidth
 	// settingSection is a heading row that groups the fields below it.
 	settingSection
 	settingShortcut
@@ -103,6 +104,9 @@ func settingsCategories() []settingsCategory {
 				SetBool: func(s *config.Settings, v bool) { s.Terminal.ForwardShortcuts = v }},
 			{Label: i18n.Text("settings.sendNextTerminalKey"), Kind: settingShortcut, Command: "terminal.sendNextKey"},
 			section(i18n.Text("settings.plugins")),
+			{Label: i18n.Text("settings.systemPluginDirectory"), Kind: settingString, Restart: true,
+				GetString: func(s *config.Settings) string { return s.Plugins.SystemDir },
+				SetString: func(s *config.Settings, v string) { s.Plugins.SystemDir = v }},
 			{Label: i18n.Text("settings.enablePlugins"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Plugins.IsEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Plugins.Enabled = boolPtr(v) }},
@@ -131,6 +135,9 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.previewTabs"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.PreviewTabsEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.PreviewTabs = boolPtr(v) }},
+			{Label: i18n.Text("settings.autoSurround"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.AutoSurround.IsEnabled() },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.AutoSurround.Enabled = boolPtr(v) }},
 			section(i18n.Text("settings.autoClosing")),
 			{Label: i18n.Text("settings.autoCloseBrackets"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.AutoClosing.Brackets },
@@ -176,10 +183,10 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.formatOnSave"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.FormatOnSave },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.FormatOnSave = v }},
-			{Label: i18n.Text("settings.insertFinalNewline"), Kind: settingBool,
+			{Label: i18n.Text("settings.insertFinalNewline"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.InsertFinalNewline },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.InsertFinalNewline = v }},
-			{Label: i18n.Text("settings.trimTrailingWhitespace"), Kind: settingBool,
+			{Label: i18n.Text("settings.trimTrailingWhitespace"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.TrimTrailingWhitespace },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.TrimTrailingWhitespace = v }},
 			section(i18n.Text("settings.onQuit")),
@@ -196,6 +203,12 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.suggestAsYouType"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Autocomplete.AutoSuggest },
 				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.AutoSuggest = v }},
+			{Label: i18n.Text("settings.pathCompletion"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Autocomplete.PathCompletion },
+				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.PathCompletion = v }},
+			{Label: i18n.Text("settings.absolutePathCompletion"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Autocomplete.AbsolutePathCompletion },
+				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.AbsolutePathCompletion = v }},
 			{Label: i18n.Text("settings.signatureHelp"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Autocomplete.SignatureHelp },
 				SetBool: func(s *config.Settings, v bool) { s.Autocomplete.SignatureHelp = v }},
@@ -206,6 +219,12 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.focusEditorOnOpen"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.FocusOnOpen },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.FocusOnOpen = v }},
+		}},
+		{Title: i18n.Text("settings.markdown"), Fields: []settingField{
+			{Label: i18n.Text("settings.wordWrap"), Kind: settingEnum, Options: fixedOptions(markdownWordWrapItems),
+				GetString: markdownWordWrap, SetString: setMarkdownWordWrap},
+			{Label: i18n.Text("settings.wrapWidth"), Kind: settingMarkdownWrapWidth,
+				GetString: markdownWrapWidth, SetString: setMarkdownWrapWidth},
 		}},
 		{Title: i18n.Text("settings.appearance"), Fields: []settingField{
 			section(i18n.Text("settings.theme")),
@@ -225,6 +244,12 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.borderStyle"), Kind: settingEnum, Options: fixedOptions(borderStyleItems),
 				GetString: func(s *config.Settings) string { return s.Editor.BorderStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.BorderStyle = v }},
+			{Label: i18n.Text("settings.tabBarStyle"), Kind: settingEnum, Options: fixedOptions(tabBarStyleItems),
+				GetString: func(s *config.Settings) string { return s.Editor.TabBarStyle },
+				SetString: func(s *config.Settings, v string) { s.Editor.TabBarStyle = v }},
+			{Label: i18n.Text("settings.highlightActiveGroupBorder"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Appearance.HighlightActiveGroupBorder },
+				SetBool: func(s *config.Settings, v bool) { s.Appearance.HighlightActiveGroupBorder = v }},
 			section(i18n.Text("settings.code")),
 			{Label: i18n.Text("settings.syntaxHighlight"), Kind: settingBool, Restart: true,
 				GetBool: func(s *config.Settings) bool { return s.Editor.IsSyntaxHighlightEnabled() },
@@ -575,6 +600,8 @@ func (v *settingsView) buildRow(category string, f settingField) *widgets.HStack
 		control = v.boolControl(f)
 	case settingEnum:
 		control = v.enumControl(f)
+	case settingMarkdownWrapWidth:
+		control = v.markdownWrapWidthControl(category, f)
 	case settingShortcut:
 		button := widgets.NewButtonWidget(widgets.ButtonConfig{
 			OnClick: func() { v.app.showKeybindings(f.Command) },

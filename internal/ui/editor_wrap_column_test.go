@@ -57,7 +57,7 @@ func TestWordWrapColumnPointerAndMovement(t *testing.T) {
 	e := newRowsEditor([]string{"abcdefghij"}, 40, 6)
 	e.WordWrap, e.WordWrapColumn = true, 4
 	renderRows(e)
-	e.moveCursorWrapped(1)
+	e.moveCursorRows(1)
 	if e.Cursor.Col != 4 {
 		t.Fatalf("Down moved to %d", e.Cursor.Col)
 	}

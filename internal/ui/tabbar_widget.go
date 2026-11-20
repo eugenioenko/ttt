@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -50,11 +51,21 @@ type Tab struct {
 }
 
 type TabDragAutoScrollTick struct {
+	Target     *TabBarWidget
 	Generation uint64
 }
 
 type TabBarWidget struct {
 	BaseWidget
+	Style                     string
+	autoHideExpanded          bool
+	autoHideWantExpanded      bool
+	AutoShowTask              *asynctask.Task[bool]
+	AutoHideTask              *asynctask.Task[bool]
+	AutoHideBlocked           func() bool
+	OnAutoHideChange          func()
+	ShowGroupFocus            bool
+	GroupActive               bool
 	Icons                     string
 	Tabs                      []Tab
 	Borders                   *term.BorderSet
@@ -64,6 +75,9 @@ type TabBarWidget struct {
 	OnTabClose                func(index int)
 	OnTabUnpin                func(index int)
 	OnTabReorder              func(from, to int)
+	OnTabDrag                 func(index, x, y int)
+	OnTabDrop                 func(index, x, y int) bool
+	OnTabDragCancel           func()
 	NormalizeDropTarget       func(from, to int) int
 	PostDragAutoScrollTick    func(generation uint64)
 	PointerInteractionValid   func() bool
@@ -84,6 +98,7 @@ type TabBarWidget struct {
 	lastClickTime             int64
 	drag                      widgets.TabDragState
 	dragPointerX              int
+	dragPointerY              int
 	autoScrollTimer           *time.Timer
 	autoScrollGeneration      uint64
 	autoScrollDirection       int
@@ -194,7 +209,7 @@ func drawTabLabel(surface Surface, x, innerLeft, innerRight int, label tabLabelL
 func (t *TabBarWidget) Render(surface Surface) {
 	t.validateGestureSource()
 	w, h := surface.Size()
-	if w <= 0 || h < 3 {
+	if w <= 0 || h < t.Height() {
 		t.ClearRenderedGeometry()
 		return
 	}
@@ -204,6 +219,17 @@ func (t *TabBarWidget) Render(surface Surface) {
 		b = *t.Borders
 	}
 	bs := term.StyleBorder
+	if t.ShowGroupFocus && t.GroupActive {
+		bs = term.StyleBorderActive
+	}
+
+	if !t.hasTabs() {
+		t.ClearRenderedGeometry()
+		for x := 0; x < w; x++ {
+			surface.SetCell(x, 0, term.Cell{Ch: b.Horizontal, Style: bs})
+		}
+		return
+	}
 
 	// Compute spans: active tab needs 2 extra cols for │ │ side borders
 	spans := make([]tabSpan, len(t.Tabs))
@@ -347,13 +373,16 @@ func (t *TabBarWidget) Render(surface Surface) {
 	}
 
 	if x := t.dropIndicatorX(); x >= innerLeft && x < innerRight {
-		for y := 0; y < 3; y++ {
+		for y := 0; y < t.Height(); y++ {
 			surface.SetCell(x, y, term.Cell{Ch: '│', Style: term.StyleBorderActive})
 		}
 	}
 }
 
 func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
+	if !t.hasTabs() {
+		return EventIgnored
+	}
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
 		return EventIgnored
@@ -374,6 +403,12 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 			return EventIgnored
 		}
 		from, to, dragged := t.drag.End()
+		if dragged && t.OnTabDrop != nil && t.OnTabDrop(from, mx, my) {
+			return EventConsumed
+		}
+		if t.OnTabDragCancel != nil {
+			t.OnTabDragCancel()
+		}
 		if dragged && from != to && t.OnTabReorder != nil {
 			t.OnTabReorder(from, to)
 		}
@@ -383,10 +418,13 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 		if !t.validateGestureSource() {
 			return EventIgnored
 		}
-		if t.drag.Update(mx, t.effectiveDropTarget(t.dropTargetAt(mx))) {
-			t.dragPointerX = mx
+		if t.drag.UpdateAt(mx, my, t.effectiveDropTarget(t.dropTargetAt(mx))) {
+			t.dragPointerX, t.dragPointerY = mx, my
+			if t.OnTabDrag != nil {
+				t.OnTabDrag(t.drag.From(), mx, my)
+			}
 			t.scrollDragOnce(mx)
-			t.drag.Update(mx, t.effectiveDropTarget(t.dropTargetAt(mx)))
+			t.drag.UpdateAt(mx, my, t.effectiveDropTarget(t.dropTargetAt(mx)))
 			t.updateAutoScrollZone(mx)
 			t.closeDownX = -1
 			return EventCaptured
@@ -510,7 +548,7 @@ func (t *TabBarWidget) HandleEvent(ev tcell.Event) EventResult {
 				t.OnTabClick(i)
 			}
 			if t.OnTabReorder != nil {
-				t.drag.Begin(i, tabIdentity(t.Tabs[i]), mx)
+				t.drag.BeginAt(i, tabIdentity(t.Tabs[i]), mx, my)
 				return EventCaptured
 			}
 			return EventConsumed
@@ -565,6 +603,9 @@ func (t *TabBarWidget) CancelPointerCapture() bool {
 	t.cancelAutoScroll()
 	active := t.drag.Active()
 	if active {
+		if t.OnTabDragCancel != nil {
+			t.OnTabDragCancel()
+		}
 		t.drag.Cancel()
 	}
 	t.wasPressed = false
@@ -595,10 +636,14 @@ func (t *TabBarWidget) ClearRenderedGeometry() {
 	t.hasOverflowLeft = false
 	t.hasOverflowRight = false
 	t.totalTabWidth = 0
+	if t.MoreButton != nil {
+		t.MoreButton.SetRect(Rect{})
+	}
 	t.CancelPointerCapture()
 }
 
 func (t *TabBarWidget) InvalidatePointerInteraction() bool {
+	t.cancelAutoHide()
 	active := t.drag.Active()
 	t.ClearRenderedGeometry()
 	return active
@@ -644,6 +689,9 @@ func (t *TabBarWidget) dropTargetAt(screenX int) int {
 
 func (t *TabBarWidget) dropIndicatorX() int {
 	if !t.drag.Dragging() || t.drag.From() == t.drag.Target() {
+		return -1
+	}
+	if t.OnTabDrag != nil && !t.GetRect().Contains(t.dragPointerX, t.dragPointerY) {
 		return -1
 	}
 	target := t.drag.Target()
@@ -750,11 +798,51 @@ func (t *TabBarWidget) HandleDragAutoScrollTick(generation uint64) bool {
 		t.cancelAutoScroll()
 		return false
 	}
-	t.drag.Update(t.dragPointerX, t.effectiveDropTarget(t.dropTargetAt(t.dragPointerX)))
+	t.drag.UpdateAt(t.dragPointerX, t.dragPointerY, t.effectiveDropTarget(t.dropTargetAt(t.dragPointerX)))
 	if t.dragScrollDirection(t.dragPointerX) != t.autoScrollDirection {
 		t.updateAutoScrollZone(t.dragPointerX)
 	} else {
 		t.armAutoScrollTick(generation)
+	}
+	return true
+}
+
+func (t *TabBarWidget) DropIndexAt(x, y int) int {
+	if !t.GetRect().Contains(x, y) {
+		return -1
+	}
+	localX := x - t.GetRect().X - t.renderArrowW + t.ScrollOffset
+	for i, span := range t.tabSpans {
+		if localX < span.start+(span.end-span.start)/2 {
+			return i
+		}
+	}
+	return len(t.Tabs)
+}
+
+func (t *TabBarWidget) baselineY() (int, bool) {
+	r := t.GetRect()
+	return r.Y + r.H - 1, r.H > 0
+}
+
+func (t *TabBarWidget) baselineHit(x, y int) bool {
+	r := t.GetRect()
+	baseline, ok := t.baselineY()
+	if !ok || y != baseline || !r.Contains(x, y) {
+		return false
+	}
+	if t.hasTabs() {
+		localX := x - r.X
+		for _, span := range t.tabSpans {
+			if !span.active {
+				continue
+			}
+			start := span.start - t.ScrollOffset + t.renderArrowW
+			end := span.end - t.ScrollOffset + t.renderArrowW
+			if localX >= max(start, t.renderArrowW) && localX < min(end, t.renderInnerRight) {
+				return false
+			}
+		}
 	}
 	return true
 }

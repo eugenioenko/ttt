@@ -11,6 +11,7 @@ type BorderSet struct {
 	BottomTee   rune
 	LeftTee     rune
 	RightTee    rune
+	Cross       rune
 }
 
 func DoubleBorderSet() BorderSet {
@@ -25,6 +26,7 @@ func DoubleBorderSet() BorderSet {
 		BottomTee:   '╩',
 		LeftTee:     '╠',
 		RightTee:    '╣',
+		Cross:       '╬',
 	}
 }
 
@@ -40,6 +42,7 @@ func SingleBorderSet() BorderSet {
 		BottomTee:   '┴',
 		LeftTee:     '├',
 		RightTee:    '┤',
+		Cross:       '┼',
 	}
 }
 
@@ -55,6 +58,7 @@ func RoundedBorderSet() BorderSet {
 		BottomTee:   '┴',
 		LeftTee:     '├',
 		RightTee:    '┤',
+		Cross:       '┼',
 	}
 }
 
@@ -70,6 +74,7 @@ func BoldBorderSet() BorderSet {
 		BottomTee:   '┻',
 		LeftTee:     '┣',
 		RightTee:    '┫',
+		Cross:       '╋',
 	}
 }
 
@@ -85,6 +90,7 @@ func AsciiBorderSet() BorderSet {
 		BottomTee:   '+',
 		LeftTee:     '+',
 		RightTee:    '+',
+		Cross:       '+',
 	}
 }
 
@@ -100,6 +106,7 @@ func NoneBorderSet() BorderSet {
 		BottomTee:   ' ',
 		LeftTee:     ' ',
 		RightTee:    ' ',
+		Cross:       ' ',
 	}
 }
 

@@ -395,6 +395,12 @@ func TestDefaultAutocompleteSettings(t *testing.T) {
 	if !ac.AutoSuggest {
 		t.Error("expected AutoSuggest true")
 	}
+	if !ac.PathCompletion {
+		t.Error("expected PathCompletion true")
+	}
+	if ac.AbsolutePathCompletion {
+		t.Error("expected AbsolutePathCompletion false")
+	}
 	if ac.Debounce != 150 {
 		t.Errorf("expected Debounce 150, got %d", ac.Debounce)
 	}
@@ -664,5 +670,20 @@ func TestSettingsReuseWindowRoundTrip(t *testing.T) {
 	}
 	if _, ok := restored.Extra["reuseWindow"]; ok {
 		t.Fatal("reuseWindow was treated as an unknown setting")
+	}
+}
+
+func TestSystemPluginDirectorySetting(t *testing.T) {
+	withTempConfigDir(t)
+	s := DefaultSettings()
+	if s.Plugins.SystemDir != "" {
+		t.Fatal("system plugins must be opt-in")
+	}
+	s.Plugins.SystemDir = filepath.Join(t.TempDir(), "shared-plugins")
+	if err := SaveSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadSettings().Plugins.SystemDir; got != s.Plugins.SystemDir {
+		t.Fatalf("systemDir = %q, want %q", got, s.Plugins.SystemDir)
 	}
 }

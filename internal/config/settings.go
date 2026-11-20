@@ -6,10 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+
+	"github.com/eugenioenko/ttt/internal/filewrite"
 )
 
 // Validated by normalizeSettings and used to populate the settings UI pickers.
 var (
+	TabBarStyles        = []string{"extended", "hidden", "auto-hide"}
 	GutterStyles        = []string{"minimal", "compact", "extended"}
 	BorderStyles        = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
 	DiffModes           = []string{"split", "unified"}
@@ -80,18 +83,22 @@ func DefaultTerminalSettings() TerminalSettings {
 }
 
 type AutocompleteSettings struct {
-	Enabled       bool `json:"enabled"`
-	AutoSuggest   bool `json:"autoSuggest"`
-	Debounce      int  `json:"debounce"`
-	SignatureHelp bool `json:"signatureHelp"`
+	Enabled                bool `json:"enabled"`
+	AutoSuggest            bool `json:"autoSuggest"`
+	PathCompletion         bool `json:"pathCompletion"`
+	AbsolutePathCompletion bool `json:"absolutePathCompletion"`
+	Debounce               int  `json:"debounce"`
+	SignatureHelp          bool `json:"signatureHelp"`
 }
 
 func DefaultAutocompleteSettings() AutocompleteSettings {
 	return AutocompleteSettings{
-		Enabled:       true,
-		AutoSuggest:   true,
-		Debounce:      150,
-		SignatureHelp: true,
+		Enabled:                true,
+		AutoSuggest:            true,
+		PathCompletion:         true,
+		AbsolutePathCompletion: false,
+		Debounce:               150,
+		SignatureHelp:          true,
 	}
 }
 
@@ -130,8 +137,9 @@ func DefaultLSPSettings() LSPSettings {
 }
 
 type EditorSettings struct {
-	AutoClosing AutoClosingSettings `json:"autoClosing"`
-	PreviewTabs *bool               `json:"previewTabs,omitempty"`
+	AutoClosing  AutoClosingSettings  `json:"autoClosing"`
+	AutoSurround AutoSurroundSettings `json:"autoSurround"`
+	PreviewTabs  *bool                `json:"previewTabs,omitempty"`
 
 	TabSize           int                               `json:"tabSize"`
 	InsertSpaces      bool                              `json:"insertSpaces"`
@@ -167,6 +175,7 @@ type EditorSettings struct {
 	ScrollbarGitMarks       *bool              `json:"scrollbarGitMarks,omitempty"`
 	AutoDedent              *bool              `json:"autoDedent,omitempty"`
 	AutoIndent              *bool              `json:"autoIndent,omitempty"`
+	TabBarStyle             string             `json:"tabBarStyle,omitempty"`
 	GutterStyle             string             `json:"gutterStyle,omitempty"`
 	BorderStyle             string             `json:"borderStyle,omitempty"`
 	BracketPairColorization bool               `json:"bracketPairColorization"`
@@ -196,9 +205,10 @@ func DefaultAutoClosingSettings() AutoClosingSettings {
 }
 
 type EditorLanguageOverride struct {
-	WordWrap       *bool  `json:"wordWrap,omitempty"`
-	WordWrapColumn *int   `json:"wordWrapColumn,omitempty"`
-	WordWrapBreak  string `json:"wordWrapBreak,omitempty"`
+	AutoSurround   *AutoSurroundSettings `json:"autoSurround,omitempty"`
+	WordWrap       *bool                 `json:"wordWrap,omitempty"`
+	WordWrapColumn *int                  `json:"wordWrapColumn,omitempty"`
+	WordWrapBreak  string                `json:"wordWrapBreak,omitempty"`
 }
 
 func (e EditorSettings) ResolveWordWrap(languageID string) (bool, int) {
@@ -309,6 +319,7 @@ func (e EditorSettings) PreviewTabsEnabled() bool {
 func DefaultEditorSettings() EditorSettings {
 	return EditorSettings{
 		AutoClosing:             DefaultAutoClosingSettings(),
+		AutoSurround:            AutoSurroundSettings{Enabled: boolPtr(true)},
 		TabSize:                 4,
 		InsertSpaces:            true,
 		WordWrapBreak:           WordWrapBreakWord,
@@ -320,9 +331,13 @@ func DefaultEditorSettings() EditorSettings {
 		LineNumbers:             true,
 		SelectionStyle:          SelectionStyleBackground,
 		InsertFinalNewline:      true,
+		TabBarStyle:             "extended",
 		GutterStyle:             "compact",
 		BorderStyle:             "default",
 		BracketPairColorization: false,
+		LanguageOverrides: map[string]EditorLanguageOverride{
+			"markdown": {WordWrap: boolPtr(true)},
+		},
 	}
 }
 
@@ -359,18 +374,20 @@ type LegacyChevrons struct {
 }
 
 type AppearanceSettings struct {
-	Icons           string            `json:"icons"`
-	Overrides       map[string]string `json:"overrides,omitempty"`
-	Chevrons        *LegacyChevrons   `json:"chevrons,omitempty"`
-	ScrollbarGlyphs string            `json:"scrollbarGlyphs"`
-	PointerShapes   *bool             `json:"pointerShapes,omitempty"`
+	Icons                      string            `json:"icons"`
+	Overrides                  map[string]string `json:"overrides,omitempty"`
+	Chevrons                   *LegacyChevrons   `json:"chevrons,omitempty"`
+	ScrollbarGlyphs            string            `json:"scrollbarGlyphs"`
+	PointerShapes              *bool             `json:"pointerShapes,omitempty"`
+	HighlightActiveGroupBorder bool              `json:"highlightActiveGroupBorder"`
 }
 
 func DefaultAppearanceSettings() AppearanceSettings {
 	return AppearanceSettings{
-		Icons:           IconsNone,
-		ScrollbarGlyphs: ScrollbarGlyphsBlocks,
-		PointerShapes:   boolPtr(true),
+		Icons:                      IconsNone,
+		ScrollbarGlyphs:            ScrollbarGlyphsBlocks,
+		PointerShapes:              boolPtr(true),
+		HighlightActiveGroupBorder: true,
 	}
 }
 
@@ -434,6 +451,7 @@ func DefaultExplorerSettings() ExplorerSettings {
 }
 
 type PluginSettings struct {
+	SystemDir      string `json:"systemDir,omitempty"`
 	Enabled        *bool  `json:"enabled,omitempty"`
 	SelectionStyle string `json:"selectionStyle,omitempty"`
 }
@@ -626,6 +644,9 @@ func normalizeSettings(s *Settings) {
 		}
 		s.Editor.LanguageOverrides[language] = o
 	}
+	if !slices.Contains(TabBarStyles, s.Editor.TabBarStyle) {
+		s.Editor.TabBarStyle = "extended"
+	}
 	if !slices.Contains(GutterStyles, s.Editor.GutterStyle) {
 		s.Editor.GutterStyle = "compact"
 	}
@@ -701,7 +722,7 @@ func ReadSettings() (Settings, error) {
 
 func ReadSettingsFile(path string) (Settings, error) {
 	s := DefaultSettings()
-	data, err := os.ReadFile(path)
+	data, err := readSettingsFileBytes(path)
 	if err == nil {
 		if err = json.Unmarshal(data, &s); err != nil {
 			err = fmt.Errorf("%s: %w", path, err)
@@ -725,7 +746,76 @@ func SaveSettingsFile(path string, s Settings) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0644)
+	return writeFileAtomically(path, data, 0o644)
+}
+
+func writeFileAtomically(path string, data []byte, mode os.FileMode) (err error) {
+	return writeFileAtomicallyWithRename(path, data, mode, renameSettingsFile)
+}
+
+func writeFileAtomicallyWithRename(path string, data []byte, mode os.FileMode, rename func(string, string) error) (err error) {
+	path, err = resolveSettingsWritePath(path)
+	if err != nil {
+		return err
+	}
+
+	preserveMode := false
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+		preserveMode = true
+	} else if !os.IsNotExist(statErr) {
+		return statErr
+	}
+
+	staged, err := filewrite.Stage(path, mode, func(tmp *os.File) error {
+		if preserveMode {
+			if err := tmp.Chmod(mode); err != nil {
+				return err
+			}
+			if err := preserveSettingsFileAccess(path, tmp.Name()); err != nil {
+				return err
+			}
+		}
+		_, err := tmp.Write(data)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	defer staged.Discard()
+	return staged.Commit(func(from, to string) error {
+		return replaceSettingsFile(from, to, rename)
+	})
+}
+
+func resolveSettingsWritePath(path string) (string, error) {
+	for range 255 {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return resolved, nil
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return path, nil
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = filepath.Clean(target)
+	}
+	return "", fmt.Errorf("too many symlinks resolving settings path")
 }
 
 func boolPtr(b bool) *bool { return &b }

@@ -150,7 +150,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 		}
 	case WidgetButton:
 		if bw, ok := w.(*widgets.ButtonWidget); ok {
-			if bw.Config.Label != desc.Label {
+			if bw.Config.Label != desc.Label || !buttonSpansEqual(bw.Config.Spans, desc.Spans) {
 				r, focused := bw.GetRect(), bw.IsFocused()
 				*bw = *createButtonWidget(desc, p)
 				bw.SetRect(r)
@@ -590,6 +590,7 @@ func wireTreeCallbacks(tw *widgets.TreeWidget, desc WidgetDesc, p *Plugin) {
 func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 	bw := widgets.NewButtonWidget(widgets.ButtonConfig{
 		Label: desc.Label,
+		Spans: desc.Spans,
 	})
 	wireButtonCallback(bw, desc, p)
 	applyBoxModel(&bw.Box, desc)
@@ -597,6 +598,18 @@ func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 		bw.Box.PaddingLeft, bw.Box.PaddingRight = 1, 1
 	}
 	return bw
+}
+
+func buttonSpansEqual(a, b []widgets.ButtonSpan) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func wireButtonCallback(bw *widgets.ButtonWidget, desc WidgetDesc, _ *Plugin) {

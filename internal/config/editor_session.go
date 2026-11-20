@@ -34,7 +34,7 @@ func editorSessionPath(key string) string {
 	return filepath.Join(ConfigFilePath("sessions"), hex.EncodeToString(hash[:])+".json")
 }
 
-func LoadEditorSession(key string) ([]EditorTabState, error) {
+func readEditorSession(key string) ([]byte, error) {
 	path := editorSessionPath(key)
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -58,11 +58,7 @@ func LoadEditorSession(key string) ([]EditorTabState, error) {
 	if len(data) > maxEditorSessionBytes {
 		return nil, nil
 	}
-	var tabs []EditorTabState
-	if err := json.Unmarshal(data, &tabs); err != nil {
-		return nil, err
-	}
-	return boundedSessionTabs(tabs), nil
+	return data, nil
 }
 
 func boundedSessionTabs(tabs []EditorTabState) []EditorTabState {
@@ -77,16 +73,23 @@ func boundedSessionTabs(tabs []EditorTabState) []EditorTabState {
 }
 
 func SaveEditorSession(key string, tabs []EditorTabState) error {
-	path := editorSessionPath(key)
 	if len(tabs) == 0 {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		return PruneEditorSessions(time.Now())
+		return writeEditorSession(key, nil)
 	}
 	data, err := json.Marshal(boundedSessionTabs(tabs))
 	if err != nil {
 		return err
+	}
+	return writeEditorSession(key, data)
+}
+
+func writeEditorSession(key string, data []byte) error {
+	path := editorSessionPath(key)
+	if len(data) == 0 {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return PruneEditorSessions(time.Now())
 	}
 	if len(data) > maxEditorSessionBytes {
 		return fmt.Errorf("editor session exceeds %d bytes", maxEditorSessionBytes)

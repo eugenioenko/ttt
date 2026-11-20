@@ -35,7 +35,7 @@ func (a *App) AddOpenWithApp() {
 }
 
 func (a *App) showAddApp(openWith bool) {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	name := widgets.NewInputWidget(widgets.InputConfig{})

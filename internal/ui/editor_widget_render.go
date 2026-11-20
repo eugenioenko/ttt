@@ -146,7 +146,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	editorW = e.wrapTextWidth(max(editorW, 1))
 
 	if e.Viewport.Width != editorW {
-		e.wrapGoal = wrapGoal{}
 		if e.WordWrap && !e.Embedded && e.WordWrapColumn > 0 && e.Viewport.Width > 0 {
 			previous := e.layout()
 			row, _ := previous.rowOf(e.Cursor.Line, e.Cursor.Col)

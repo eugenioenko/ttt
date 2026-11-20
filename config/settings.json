@@ -4,7 +4,8 @@
   "appearance": {
     "icons": "none",
     "scrollbarGlyphs": "blocks",
-    "pointerShapes": true
+    "pointerShapes": true,
+    "highlightActiveGroupBorder": true
   },
   "editor": {
     "autoClosing": {
@@ -15,6 +16,9 @@
       "inStrings": false,
       "plainText": false
     },
+    "autoSurround": {
+      "enabled": true
+    },
     "tabSize": 4,
     "insertSpaces": true,
     "wordWrap": false,
@@ -22,6 +26,11 @@
     "wordWrapBreak": "word",
     "indentGuides": false,
     "scrollLines": 0,
+    "languageOverrides": {
+      "markdown": {
+        "wordWrap": true
+      }
+    },
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,
@@ -38,6 +47,7 @@
     "insertFinalNewline": true,
     "trimTrailingWhitespace": false,
     "focusOnOpen": false,
+    "tabBarStyle": "extended",
     "gutterStyle": "compact",
     "borderStyle": "default",
     "bracketPairColorization": false,
@@ -86,6 +96,8 @@
   "autocomplete": {
     "enabled": true,
     "autoSuggest": true,
+    "pathCompletion": true,
+    "absolutePathCompletion": false,
     "debounce": 150,
     "signatureHelp": true
   },

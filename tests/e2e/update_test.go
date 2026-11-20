@@ -122,6 +122,7 @@ func TestUpdateDialogApplyAndRestart(t *testing.T) {
 				},
 			}
 			h.exec("update.check")
+			h.pressKey(tcell.KeyRight, 0)
 			h.pressKey(tcell.KeyEnter, 0)
 			if failure {
 				h.assertContains("Update failed.")
@@ -149,6 +150,7 @@ func TestUpdateRestartUnsavedConfirmation(t *testing.T) {
 				apply:  func(context.Context, update.Release, update.Method) error { return nil },
 			}
 			h.exec("update.check")
+			h.pressKey(tcell.KeyRight, 0)
 			h.pressKey(tcell.KeyEnter, 0)
 			h.pressKey(tcell.KeyEnter, 0)
 			h.assertContains("Unsaved changes")
@@ -205,6 +207,7 @@ func TestUpdateRestartSaveAll(t *testing.T) {
 				apply:  func(context.Context, update.Release, update.Method) error { return nil },
 			}
 			h.exec("update.check")
+			h.pressKey(tcell.KeyRight, 0)
 			h.pressKey(tcell.KeyEnter, 0)
 			h.pressKey(tcell.KeyEnter, 0)
 			h.pressRune('s')

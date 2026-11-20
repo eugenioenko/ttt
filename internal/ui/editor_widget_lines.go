@@ -4,10 +4,13 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/highlight"
 )
 
 func (e *EditorPaneWidget) MoveLineUp() {
@@ -338,25 +341,268 @@ func (e *EditorPaneWidget) InsertLineAbove() {
 	e.scrollViewport()
 }
 
-func (e *EditorPaneWidget) commentPrefix() string {
-	prefix := "//"
+// commentSyntax returns the delimiters used to comment a single line. A
+// non-empty postfix marks a language whose comments need both delimiters on
+// the same line, such as HTML's <!-- ... -->; otherwise the comment runs to the
+// end of the line and postfix is empty.
+func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
+	prefix = "//"
 	if e.Highlighter != nil {
-		lang := strings.ToLower(e.Highlighter.Language())
-		switch lang {
-		case "python", "ruby", "bash", "shell", "yaml", "toml":
+		switch e.commentLanguage() {
+		case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
+			"elixir", "fish", "gdscript", "gherkin", "graphql", "julia", "make",
+			"mojo", "nix", "nushell", "perl", "powershell", "puppet", "python",
+			"r", "ruby", "shellscript", "systemd", "toml", "yaml":
 			prefix = "#"
-		case "lua", "sql":
+		case "elm", "haskell", "lean", "lua", "plsql", "sql", "vhdl":
 			prefix = "--"
-		case "html", "xml":
-			prefix = "<!--"
+		case "angular-html", "html", "html-derivative", "xml":
+			return "<!--", "-->"
+		case "css", "less", "scss":
+			return "/*", "*/"
+		case "coq", "ocaml":
+			return "(*", "*)"
+		case "jinja":
+			return "{#", "#}"
+		case "smalltalk":
+			return "\"", "\""
+		case "ahk", "clojure", "common-lisp", "fennel", "hy", "reg", "scheme":
+			prefix = ";"
+		case "bat":
+			prefix = "REM"
+		case "erlang", "tex":
+			prefix = "%"
+		case "vb":
+			prefix = "'"
 		}
 	}
-	return prefix
+	return prefix, ""
+}
+
+// commentLanguage returns the canonical language ID that refines comment
+// classification, or "" without a highlighter.
+func (e *EditorPaneWidget) commentLanguage() string {
+	if e.Highlighter == nil {
+		return ""
+	}
+	return highlight.CanonicalLanguageID(e.Highlighter.LanguageID())
+}
+
+// escapeXMLCommentText spells every character that may not appear inside an
+// XML comment as an entity, so wrapping the result in <!-- ... --> can neither
+// close early nor form an invalid "--" run. Comments cannot nest and have no
+// backslash escape, so entities are the only spelling. "&" is encoded too, so
+// pre-existing entity text such as &amp;lt;!-- is not decoded by the unwrap
+// pass: unescapeXMLCommentText reverses exactly what this encoded.
+//
+// Every hyphen of a run of two or more is encoded, which covers the "<!--"
+// and "-->" delimiters, the "--" run XML forbids, and guarantees no two
+// literal hyphens stay adjacent in the output.
+func escapeXMLCommentText(text string) string {
+	return escapeXMLCommentTextPrefix(text, len(text))
+}
+
+// escapeXMLCommentTextPrefix encodes text as escapeXMLCommentText does but
+// stops after the first end bytes, using the whole line as context: a hyphen
+// run straddling end is still a run, so a cursor inside it moves past every
+// encoded hyphen before it instead of landing inside an entity.
+func escapeXMLCommentTextPrefix(text string, end int) string {
+	var b strings.Builder
+	b.Grow(end + 8)
+	for i := 0; i < len(text) && i < end; {
+		switch {
+		case text[i] == '&':
+			b.WriteString("&amp;")
+			i++
+		case text[i] == '-':
+			j := i
+			for j < len(text) && text[j] == '-' {
+				j++
+			}
+			if j-i < 2 {
+				b.WriteByte('-')
+				i++
+				continue
+			}
+			for ; i < j && i < end; i++ {
+				b.WriteString("&#45;")
+			}
+		default:
+			b.WriteByte(text[i])
+			i++
+		}
+	}
+	return b.String()
+}
+
+func unescapeXMLCommentText(text string) string {
+	text = strings.ReplaceAll(text, "&#45;", "-")
+	return strings.ReplaceAll(text, "&amp;", "&")
+}
+
+// isWordCommentPrefix reports whether prefix is a keyword rather than a
+// punctuation delimiter, such as Batch's REM. Word prefixes are matched
+// case-insensitively and only as a whole word, so REMOVE_ME=1 is code.
+func isWordCommentPrefix(prefix string) bool {
+	if prefix == "" {
+		return false
+	}
+	for _, r := range prefix {
+		if !unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// commentSyntaxNests reports whether an opener inside a comment starts a
+// nested comment, as OCaml's (* ... *) does. Other paired syntaxes end at the
+// first closer, so text after a separate pair is not commented.
+func commentSyntaxNests(prefix, postfix string) bool {
+	return prefix == "(*" && postfix == "*)"
+}
+
+// isWholeLineComment reports whether text is one comment wrapping the whole
+// line. Nesting syntax balances to depth zero only at the end of the line, so an
+// outer wrapper with inner closers still counts, but delimiters quoted in a
+// string, character, or quoted-string literal do not nest; non-nesting syntax
+// requires the first closer to end the line. Quoted strings are OCaml-only: Coq
+// shares the delimiters but has no {| |} literal, so there the brace is comment
+// text and (* {| *) is a complete comment.
+func isWholeLineComment(text, prefix, postfix, lang string) bool {
+	if !commentSyntaxNests(prefix, postfix) {
+		rest := text[len(prefix):]
+		closer := strings.Index(rest, postfix)
+		return closer >= 0 && closer+len(postfix) == len(rest)
+	}
+	depth := 0
+	for i := 0; i < len(text); {
+		switch {
+		case strings.HasPrefix(text[i:], prefix):
+			depth++
+			i += len(prefix)
+		case strings.HasPrefix(text[i:], postfix):
+			depth--
+			if depth == 0 {
+				return i+len(postfix) == len(text)
+			}
+			i += len(postfix)
+		case text[i] == '"':
+			i = skipStringLiteral(text, i)
+		case text[i] == '\'':
+			if next, ok := skipCharLiteral(text, i); ok {
+				i = next
+			} else {
+				i++
+			}
+		case text[i] == '{' && lang == "ocaml":
+			if next, ok := skipQuotedString(text, i); ok {
+				i = next
+			} else {
+				i++
+			}
+		default:
+			i++
+		}
+	}
+	return false
+}
+
+// skipStringLiteral returns the index just past the string literal that opens
+// at i. Comment delimiters inside a literal are text, not nesting, so the scan
+// must jump over it; an unterminated literal runs to the end of the line.
+func skipStringLiteral(text string, i int) int {
+	for i++; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '"':
+			return i + 1
+		}
+	}
+	return len(text)
+}
+
+// skipCharLiteral returns the index just past the character literal opening at
+// i, and false when text[i] does not open one. A quote character such as '"'
+// must be skipped first, or it would be mistaken for a string opener. OCaml
+// also spells type variables with a bare quote, so the closing quote is
+// required before this counts as a literal.
+func skipCharLiteral(text string, i int) (int, bool) {
+	j := i + 1
+	if j >= len(text) {
+		return i, false
+	}
+	if text[j] == '\\' {
+		j++
+		if j >= len(text) {
+			return i, false
+		}
+	}
+	_, size := utf8.DecodeRuneInString(text[j:])
+	j += size
+	if j < len(text) && text[j] == '\'' {
+		return j + 1, true
+	}
+	return i, false
+}
+
+// Match quoted-string delimiters byte-for-byte; Unicode normalization is
+// intentionally unsupported to avoid linking its tables for this OCaml case.
+func skipQuotedString(text string, i int) (int, bool) {
+	j := i + 1
+	for j < len(text) {
+		r, size := utf8.DecodeRuneInString(text[j:])
+		if !isQuotedStringIDRune(r) {
+			break
+		}
+		j += size
+	}
+	if j >= len(text) || text[j] != '|' {
+		return i, false
+	}
+	closer := "|" + text[i+1:j] + "}"
+	end := strings.Index(text[j+1:], closer)
+	if end < 0 {
+		return len(text), true
+	}
+	return j + 1 + end + len(closer), true
+}
+
+// isQuotedStringIDRune accepts OCaml's quoted-string id characters: lowercase
+// ASCII, the lowercase letters of Latin-9, and underscore. Other scripts are not
+// id characters, so {α| is not a literal opener and its later "*)' stays visible
+// to the comment scan.
+func isQuotedStringIDRune(r rune) bool {
+	if r == '_' || r >= 'a' && r <= 'z' {
+		return true
+	}
+	if r >= 0xDF && r <= 0xFF && r != 0xF7 {
+		return true
+	}
+	switch r {
+	case 'œ', 'š', 'ž':
+		return true
+	}
+	return false
+}
+
+func hasCommentPrefix(trimmed, prefix string) bool {
+	if !isWordCommentPrefix(prefix) {
+		return strings.HasPrefix(trimmed, prefix)
+	}
+	if len(trimmed) < len(prefix) || !strings.EqualFold(trimmed[:len(prefix)], prefix) {
+		return false
+	}
+	rest := trimmed[len(prefix):]
+	return rest == "" || rest[0] == ' ' || rest[0] == '\t'
 }
 
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
-	prefix := e.commentPrefix()
+	prefix, postfix := e.commentSyntax()
+	prefixLen := len([]rune(prefix))
+	postfixLen := len([]rune(postfix))
 
 	startLine, endLine := e.Cursor.Line, e.Cursor.Line
 	if e.Selection != nil && e.Selection.Active {
@@ -372,11 +618,16 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 
 	allCommented := true
 	for l := startLine; l <= endLine; l++ {
-		trimmed := strings.TrimLeft(e.Buf.Lines[l], " \t")
+		trimmed := strings.TrimRight(strings.TrimLeft(e.Buf.Lines[l], " \t"), " \t")
 		if trimmed == "" {
 			continue
 		}
-		if !strings.HasPrefix(trimmed, prefix) {
+		commented := hasCommentPrefix(trimmed, prefix)
+		if commented && postfix != "" {
+			// Uncomment only when a single wrapper covers the whole line.
+			commented = isWholeLineComment(trimmed, prefix, postfix, e.commentLanguage())
+		}
+		if !commented {
 			allCommented = false
 			break
 		}
@@ -394,7 +645,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		indent := len(runes) - len([]rune(trimmed))
 
 		if allCommented {
-			removeLen := len([]rune(prefix))
+			removeLen := prefixLen
 			if indent+removeLen < len(runes) && runes[indent+removeLen] == ' ' {
 				removeLen++
 			}
@@ -407,12 +658,75 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			if l == e.Cursor.Line {
 				cursorDelta = -removeLen
 			}
+			if postfix != "" {
+				tail := []rune(strings.TrimRight(e.Buf.Lines[l], " \t"))
+				postStart := len(tail) - postfixLen
+				postRemoveLen := postfixLen
+				if postStart > 0 && tail[postStart-1] == ' ' {
+					postStart--
+					postRemoveLen++
+				}
+				if postStart >= 0 {
+					del := &undo.DeleteSelectionCommand{
+						StartLine: l, StartCol: postStart,
+						EndLine: l, EndCol: postStart + postRemoveLen,
+					}
+					del.Apply(e.Buf)
+					cmds = append(cmds, del)
+					if l == e.Cursor.Line {
+						// Compare in post-prefix coordinates; a cursor inside the
+						// removed suffix collapses to its start.
+						transformed := e.Cursor.Col + cursorDelta
+						switch {
+						case transformed >= postStart+postRemoveLen:
+							cursorDelta -= postRemoveLen
+						case transformed >= postStart:
+							cursorDelta = postStart - e.Cursor.Col
+						}
+					}
+				}
+				if prefix == "<!--" {
+					if unescaped := unescapeXMLCommentText(e.Buf.Lines[l]); unescaped != e.Buf.Lines[l] {
+						if l == e.Cursor.Line {
+							line := []rune(e.Buf.Lines[l])
+							c := max(0, min(e.Cursor.Col+cursorDelta, len(line)))
+							cursorDelta += len([]rune(unescapeXMLCommentText(string(line[:c])))) - c
+						}
+						replace := &undo.ReplaceLinesCommand{
+							Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{unescaped},
+						}
+						replace.Apply(e.Buf)
+						cmds = append(cmds, replace)
+					}
+				}
+			}
 		} else {
+			if prefix == "<!--" {
+				if escaped := escapeXMLCommentText(e.Buf.Lines[l]); escaped != e.Buf.Lines[l] {
+					if l == e.Cursor.Line {
+						c := min(e.Cursor.Col, len(runes))
+						line := string(runes)
+						end := len(string(runes[:c]))
+						cursorDelta += len([]rune(escapeXMLCommentTextPrefix(line, end))) - c
+					}
+					replace := &undo.ReplaceLinesCommand{
+						Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{escaped},
+					}
+					replace.Apply(e.Buf)
+					cmds = append(cmds, replace)
+				}
+			}
 			cmd := &undo.InsertStringCommand{Line: l, Col: indent, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
 			if l == e.Cursor.Line {
-				cursorDelta = len([]rune(prefix)) + 1
+				cursorDelta += prefixLen + 1
+			}
+			if postfix != "" {
+				endCol := len([]rune(strings.TrimRight(e.Buf.Lines[l], " \t")))
+				add := &undo.InsertStringCommand{Line: l, Col: endCol, Text: " " + postfix}
+				add.Apply(e.Buf)
+				cmds = append(cmds, add)
 			}
 		}
 	}

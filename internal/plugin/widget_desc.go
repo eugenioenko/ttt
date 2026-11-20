@@ -112,6 +112,7 @@ type WidgetDesc struct {
 	ActiveID   string
 
 	Label        string
+	Spans        []widgets.ButtonSpan
 	OnClick      func()
 	Disabled     bool
 	Variant      widgets.ButtonVariant

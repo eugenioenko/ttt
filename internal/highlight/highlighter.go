@@ -41,10 +41,11 @@ func SetTimeLimit(d time.Duration) {
 }
 
 type Highlighter struct {
-	grammar  *textmate.Grammar
-	language string
-	doc      lineDoc
-	dirty    bool
+	grammar    *textmate.Grammar
+	language   string
+	languageID string
+	doc        lineDoc
+	dirty      bool
 	// buf, version and lines identify what SyncBuffer last handed the document.
 	buf      *buffer.Buffer
 	version  uint64
@@ -104,17 +105,22 @@ func (c *grammarCatalog) newHighlighter(ref grammarRef) *Highlighter {
 		return nil
 	}
 	return &Highlighter{
-		grammar:   g,
-		language:  ref.language,
-		doc:       textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
-		isolated:  &singleLineCache{},
-		dirty:     true,
-		syncLines: DefaultSyncLines,
+		grammar:    g,
+		languageID: ref.languageID,
+		language:   ref.language,
+		doc:        textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
+		isolated:   &singleLineCache{},
+		dirty:      true,
+		syncLines:  DefaultSyncLines,
 	}
 }
 
 func (h *Highlighter) Language() string {
 	return h.language
+}
+
+func (h *Highlighter) LanguageID() string {
+	return h.languageID
 }
 
 type singleLineCache struct{ m map[string][]Span }

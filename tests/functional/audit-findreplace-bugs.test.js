@@ -312,7 +312,7 @@ describe("BUG-048: find-next uses active tab matches", () => {
 });
 
 describe("BUG-014: replace bar swallows global keybindings", () => {
-  it.fails("tab-switch works while the replace bar is open", () => {
+  it("tab-switch works while the replace bar is open", () => {
     dir = createTempDir();
     const fileE = createTempFile(dir, "tabE.txt", "a\n");
     const fileF = createTempFile(dir, "tabF.txt", "b\n");
@@ -333,6 +333,7 @@ describe("BUG-014: replace bar swallows global keybindings", () => {
     // Buggy behavior: ReplaceBarWidget.handleKey unconditionally returns
     // EventConsumed, so alt+. is eaten and the marker lands in tabE.
     expect(readFile(fileF)).toBe("Zb\n");
+    expect(readFile(fileE)).toBe("a\n");
   });
 });
 

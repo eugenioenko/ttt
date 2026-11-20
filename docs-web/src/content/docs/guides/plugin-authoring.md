@@ -178,8 +178,8 @@ A grammar whose file types match a built-in language replaces it, and other gram
 
 ### Loading
 
-1. On startup, ttt scans `~/.config/ttt/plugins/` and `<workspace-root>/plugins/` for directories containing `plugin.ttt.json`.
-2. For each plugin, the manifest is parsed and permissions are compared against the user's stored approvals in `~/.config/ttt/plugins.ttt.json`.
+1. On startup, ttt scans `~/.config/ttt/plugins/`, `<workspace-root>/plugins/`, and the optional `plugins.systemDir`, in that order, for directories containing `plugin.ttt.json`.
+2. For each plugin, the manifest is parsed and permissions are compared against the user's stored approvals in `~/.config/ttt/plugins.ttt.json`. System plugins can also inherit administrator approvals from `<plugins.systemDir>/plugins.ttt.json`; see [system-wide installation and approval](/guides/plugins/#system-wide-installation-and-approval). Disabling remains per user.
 3. If the plugin has been approved and its permissions haven't changed, it loads immediately: a sandboxed Lua VM is created, the entry file is executed, and `ttt.register()` wires up the panels.
 4. If the plugin is new or its permissions have changed since approval, an approval dialog appears showing the requested permissions. The user can Allow or Cancel.
 
@@ -544,7 +544,7 @@ While the command line is open it consumes **all** keys. In particular, a plugin
 
 #### `ttt.command_line.show(config)`
 
-Open the command line and move focus to it. If one is already open, it is replaced rather than stacked. The call is a no-op while another overlay (a dialog, the command palette, a menu) is up.
+Open the command line and move focus to it. If one is already open, it is replaced rather than stacked. The call is a no-op while another modal overlay (a dialog, the command palette, a menu) is up. Non-modal Find and Replace bars remain open underneath the command line.
 
 | Field       | Type     | Description                                                        |
 |-------------|----------|--------------------------------------------------------------------|
@@ -815,7 +815,7 @@ Open a modal dialog built with the same widgets as plugin panels. No special per
 | `on_event` | function | none | Fallback event handler. |
 | `on_close` | function | none | Called after Escape or `close_dialog`, with focus restored. Not called during plugin teardown. |
 
-Returns `true` when opened, or `false` if another overlay is already open or the host is not wired. Escape closes the dialog. `close_dialog` closes only the calling plugin's dialog. Disabling, reloading, or uninstalling the plugin also closes it. An input with `autofocus = true` receives keyboard focus on opening; Tab and Shift+Tab navigate its widgets.
+Returns `true` when opened, or `false` if another modal overlay is already open or the host is not wired. Non-modal Find and Replace bars do not block opening the dialog and remain open when it closes. Escape closes the dialog. `close_dialog` closes only the calling plugin's dialog. Disabling, reloading, or uninstalling the plugin also closes it. An input with `autofocus = true` receives keyboard focus on opening; Tab and Shift+Tab navigate its widgets.
 
 ```lua
 local message = ""
@@ -1397,10 +1397,24 @@ panel:button({
 
 | Field      | Type     | Required | Description                                    |
 |------------|----------|----------|------------------------------------------------|
-| `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
+| `label`    | string   | see below | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
+| `spans`    | table    | see below | Styled runs: `{ {text = "12", style = "success"}, {text = " 3", style = "danger"} }`. Replaces `label` when non-empty. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
 | `disabled` | boolean  | no       | Draws the button muted and ignores presses, for example while a request is in flight. |
 | `style`    | string   | no       | How the button looks when it is not focused. Default: `"filled"`. |
+
+Either `label` or `spans` must be given. A `spans` entry's `style` is a [named style](#styles); an unknown name keeps the button's own style for that run, and `text` entries are skipped when empty. While the button is focused or disabled it keeps its own focus/disabled colors, so span colors apply only to an unfocused, enabled button. `"bracket"` draws the spans inside `[...]`. Span updates on reconcile keep the button instance, so focus and callbacks survive; accelerators (`&`) apply to `label` only.
+
+```lua
+panel:button({
+  spans = {
+    { text = "12", style = "success" },
+    { text = " 1", style = "warning" },
+    { text = " 3", style = "danger" },
+  },
+  on_click = function() end,
+})
+```
 
 **Button styles.** Every style draws in the focused button colors while it has focus, and muted while disabled.
 

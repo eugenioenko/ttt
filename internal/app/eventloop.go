@@ -291,9 +291,17 @@ func RunEventLoop(
 					closeTerminal(v)
 				}
 			case *ui.TabDragAutoScrollTick:
-				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
+				target := v.Target
+				if target == nil {
+					target = app.EditorGroup.TabBar
+				}
+				target.HandleDragAutoScrollTick(v.Generation)
 			case *ui.EditorDragAutoScrollTick:
-				app.EditorGroup.Editor.HandleDragAutoScrollTick(v.Generation)
+				target := v.Target
+				if target == nil {
+					target = app.EditorGroup.Editor
+				}
+				target.HandleDragAutoScrollTick(v.Generation)
 			case *execInputRequest:
 				if v.Lifecycle.claim() {
 					switch event := v.Event.(type) {
@@ -381,7 +389,9 @@ func RunEventLoop(
 				if len(v.Diagnostics) > 0 {
 					lines = app.lspLines(v.Path)
 				}
-				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
+				for _, group := range app.editorGroups() {
+					group.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
+				}
 			case *LSPDiagnosticRefresh:
 				app.handleDiagnosticRefresh(v.Server)
 			case *LSPServerStopped:
@@ -427,18 +437,7 @@ func RunEventLoop(
 			case *ui.SearchBatch:
 				app.Search.ApplyBatch(v)
 			case *DiffContentResult:
-				if v.Err != nil {
-					app.StatusError(i18n.Format("status.failedToFetchFileContent", i18n.Args{"error": v.Err.Error()}))
-					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
-						dv.FailLoading()
-					}
-				} else {
-					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
-						dv.SetOldLines(v.OldLines)
-						dv.SetNewLines(v.NewLines)
-						dv.FinishLoading()
-					}
-				}
+				app.applyDiffContent(v)
 			case *plugin.PluginAsyncResult:
 				if v.Callback != nil {
 					v.Callback()

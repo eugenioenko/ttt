@@ -210,9 +210,11 @@ func TestAutoClosingMovementAndMultiline(t *testing.T) {
 	assertAutoClosing(t, e, "", 0, 0)
 }
 
-func TestAutoClosingSelectionsAreReplaced(t *testing.T) {
+func TestAutoClosingSelectionsAreReplacedWithSurroundDisabled(t *testing.T) {
 	for _, text := range []string{"hello", "one\ntwo"} {
 		e := autoClosingEditor(t, text, "a.go", 0)
+		enabled := false
+		e.AutoSurround.Enabled = &enabled
 		e.Selection.Start(0, 0)
 		e.Cursor.Line = len(e.Buf.Lines) - 1
 		e.Cursor.Col = len([]rune(e.Buf.Lines[e.Cursor.Line]))

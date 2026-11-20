@@ -35,7 +35,15 @@ curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | I
 
 Set `INSTALL_DIR` on `sh` so the installer receives it.
 
-### [Arch Linux (AUR)](https://aur.archlinux.org/packages/ttt)
+### Arch Linux (AUR)
+
+[`ttt-bin`](https://aur.archlinux.org/packages/ttt-bin) installs the prebuilt release binary:
+
+```sh
+yay -S ttt-bin
+```
+
+Or build from source with [`ttt`](https://aur.archlinux.org/packages/ttt):
 
 ```sh
 yay -S ttt
@@ -310,6 +318,10 @@ See [Settings reference](docs-web/src/content/docs/reference/settings.md) for ev
 All keybindings are customizable via [`keybindings.json`](config/keybindings.json). Chord sequences (e.g. `ctrl+k e`) are supported. Open your keybindings file with **Ctrl+K Y**, or press **Ctrl+P** and type `?` to browse shortcuts in-app.
 
 Set [`keyboard.modifierKey`](docs-web/src/content/docs/reference/settings.md#keyboard) to `"control+super"` to also accept Super/Cmd for Ctrl shortcuts, or `"super"` to use Super/Cmd instead. The default is `"control"`. Binding definitions stay unchanged, and the terminal must forward the shortcuts.
+
+Use the editor tab bar’s **More** menu to split right or down (up to 16 groups), or close a split. Each new group starts with an independent, numbered untitled document; opening a file replaces the untouched placeholder. The command palette groups split actions under **Split:**, including **Split: Equalize Sizes**. Views of the same document share text and undo history, with independent cursors and scrolling. **Ctrl+K Left/Right/Up/Down** focuses the group in that direction; **F6** and **Shift+F6** cycle groups, the sidebar, and the panel. Drag tabs between groups, or use **Open to the Side** in a text-tab or Explorer context menu. **Split: Move to Other Group** is available in the command palette. Closing the last tab removes its group; **Close Split** merges its remaining tabs into a neighbor.
+
+Choose **Extended**, **Hidden**, or **Auto-hide** tab bars in **Settings > Appearance > Window** or **Options > Appearance > Tab Bar Style**. Hidden keeps a one-row divider; tab commands remain available. Auto-hide reveals the strip when the pointer reaches the editor’s top edge.
 
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 

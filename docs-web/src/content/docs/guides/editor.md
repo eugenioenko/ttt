@@ -5,11 +5,35 @@ description: Core editing features in TTT.
 
 ## Workspace tabs
 
-To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). Saving happens on exit and before changing workspaces. Explicit file arguments take precedence over restoration. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
+To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). This also restores the split arrangement, divider sizes, focused group, and each group’s tabs and view positions. Saving happens on exit and before changing workspaces. Explicit file arguments take precedence over restoration. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
 
 On exit, the current text-file tab list replaces the remembered list for that workspace, including when you started with explicit file arguments. Closing all text-file tabs clears that workspace's saved list, so closed tabs do not return on the next launch.
 
 Sessions are kept outside the project under the config directory's `sessions/` folder, with at most 128 tabs per session and 32 sessions. Sessions unused for 30 days are removed, and missing or non-regular files are skipped during restoration. **Session: Clear Saved Tabs** removes saved sessions without closing open files and pauses session saving until the next launch.
+
+## Split Editors
+
+Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to 16 editor groups, including a grid. Each new group starts with an independent untitled document, numbered across the workspace. Opening a file replaces that untouched placeholder; once edited, the untitled document stays in its own tab.
+
+Views of the same document share text, undo history, and save state, with independent cursors, selections, and scrolling. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
+
+Drag a tab into another group to move it, dropping between tab titles to choose its position or over the editor to append it. Pins, unsaved edits, undo history, and the view position move with the tab. Moving a document already open in the destination keeps one view; moving the last tab removes the empty group. Press **Escape** to cancel a drag. **Split: Move to Other Group** is also available in the command palette.
+
+Use **Open to the Side** in a text-tab or Explorer context menu to open another view, creating a right split when only one group exists. Text views share the document and undo history while keeping independent cursors and scrolling. The command palette also provides **Split: Open to the Side** and **Split: Open Explorer File to the Side**. **Split Right** and **Split Down** continue to create independent untitled documents.
+
+Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group’s border is highlighted by default; turn off **Highlight active split** in **Settings > Appearance > Window** to disable it. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
+
+Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Split: Equalize Sizes** in the command palette balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
+
+## Tab bar styles
+
+Choose **Tab Bar Style** under **Settings > Appearance > Window** or **Options > Appearance**. The setting applies immediately to every editor group, with or without splits:
+
+- **Extended** (default): the three-row tab strip.
+- **Hidden**: a one-row divider that gives the editor two extra rows. Tabs still exist, and keyboard and command-palette tab actions keep working.
+- **Auto-hide**: the divider expands to Extended when the pointer stays on its top edge for 50 ms. It hides 100 ms after the pointer leaves the strip and its one-cell grace area. Menus and drags keep the header open.
+
+The setting is stored as `editor.tabBarStyle`. Hidden headers have no tab or More-button mouse targets.
 
 ## Syntax Highlighting
 
@@ -21,7 +45,7 @@ The selection belongs to the current tab and stays after Save As, rename, and gr
 
 ## Soft Wrapping
 
-Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.
+When no Markdown language override exists, Markdown source files wrap by default, inheriting the global wrap width and break mode. Existing Markdown override entries are preserved, including empty entries and width-only overrides. Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.
 
 `editor.wordWrapBreak` chooses where a row ends. The default, `"word"`, ends a row after a space or after `.`, `,`, `;`, `/`, `|`, `&`, `?` and closing brackets, before an opening bracket, or next to a wide character, so words and identifiers stay whole. A space at the edge stays on its row instead of starting the next one, and a token wider than the row breaks at the character that overflows. `"character"` fills every row and breaks wherever the width runs out.
 
@@ -43,7 +67,7 @@ Use language IDs to set different limits for code and prose:
 
 Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping, `0` for the column, and `"word"` for the break). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
 
-The **Options > Editor > Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
+The **Options > Editor > Word Wrap** toggle changes the global default; explicit language overrides retain precedence. **Options > Markdown** opens picker dialogs for **Word Wrap** (Use Editor Default, On, Off) and **Wrap Width** (Use Editor Default, Pane Width, Custom). Custom prompts for a positive column limit. The same controls are in **Settings > Markdown**, where Custom reveals a column input; changes take effect on Apply. These controls edit `editor.languageOverrides.markdown` and leave other language overrides intact. Choose Use Editor Default to remove that field’s override. When all Markdown fields inherit, an empty `"markdown": {}` entry preserves that choice across restarts. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
 
 The `editor.largeFiles.wordWrapMaxMB` safeguard still applies, including when a language enables wrapping. Diff views retain their separate wrap policy. `markdown.wrapWidth` controls rendered Markdown, such as hover popups and plugin widgets; raw Markdown editing uses these editor settings.
 
@@ -86,8 +110,8 @@ They have no default shortcut. Bind them in `keybindings.json`, for example:
 
 ```json
 [
-  { "key": "ctrl+k up", "command": "view.scrollUp" },
-  { "key": "ctrl+k down", "command": "view.scrollDown" }
+  { "key": "ctrl+k pgup", "command": "view.scrollUp" },
+  { "key": "ctrl+k pgdn", "command": "view.scrollDown" }
 ]
 ```
 

@@ -80,6 +80,7 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 		return matches
 	}
 	findBar.OnNavigate = func(match ui.FindMatch) {
+		a.EditorGroup.Editor.ResetCursorGoal()
 		a.EditorGroup.SetSearchActive(findBar.Current)
 		a.EditorGroup.Editor.Selection.Clear()
 		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
@@ -132,11 +133,30 @@ type findBar interface {
 	Query() string
 	Refresh()
 	CurrentMatch() int
+	NavigateMatch(delta int)
 }
 
 func (a *App) findBar() findBar {
 	bar, _ := a.Root.TopOverlayWidget().(findBar)
 	return bar
+}
+
+func (a *App) FindNext() {
+	a.refreshFind()
+	if bar := a.findBar(); bar != nil {
+		bar.NavigateMatch(1)
+		return
+	}
+	a.EditorGroup.FindNext()
+}
+
+func (a *App) FindPrev() {
+	a.refreshFind()
+	if bar := a.findBar(); bar != nil {
+		bar.NavigateMatch(-1)
+		return
+	}
+	a.EditorGroup.FindPrev()
 }
 
 func (a *App) prefillReplaceInput(input *widgets.InputWidget) {
@@ -181,6 +201,7 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 		return matches
 	}
 	bar.OnNavigate = func(match ui.FindMatch) {
+		a.EditorGroup.Editor.ResetCursorGoal()
 		a.EditorGroup.SetSearchActive(bar.Current)
 		a.EditorGroup.Editor.Selection.Clear()
 		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
@@ -247,13 +268,13 @@ func registerSearchCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "search.findNext", Title: i18n.Text("command.findNext"),
 		Keywords: []string{"search", "find"},
-		Handler:  func() { app.refreshFind(); app.EditorGroup.FindNext() },
+		Handler:  app.FindNext,
 	})
 
 	reg.Register(command.Command{
 		ID: "search.findPrev", Title: i18n.Text("command.findPrevious"),
 		Keywords: []string{"search", "find"},
-		Handler:  func() { app.refreshFind(); app.EditorGroup.FindPrev() },
+		Handler:  app.FindPrev,
 	})
 
 	reg.Register(command.Command{

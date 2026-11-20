@@ -152,6 +152,24 @@ func namesOtherEmbedded(name, scopeName string) bool {
 	return ok && info.ScopeName != scopeName
 }
 
+// CanonicalLanguageID resolves a language ID, alias, display name or scope
+// name to the embedded grammar's canonical ID. External grammars can carry an
+// alias or scope as their language ID, so callers that switch on the ID need
+// this before comparing. Unknown names are returned lowercased and trimmed.
+func CanonicalLanguageID(lang string) string {
+	key := strings.ToLower(strings.TrimSpace(lang))
+	if info, ok := grammars.InfoForID(key); ok {
+		return info.ID
+	}
+	if info, ok := grammars.InfoForAlias(key); ok {
+		return info.ID
+	}
+	if info, ok := grammars.InfoForScope(key); ok {
+		return info.ID
+	}
+	return key
+}
+
 func addRef(m map[string]grammarRef, key string, ref grammarRef) {
 	key = strings.ToLower(strings.TrimSpace(key))
 	if key == "" {

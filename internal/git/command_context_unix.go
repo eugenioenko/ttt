@@ -12,7 +12,8 @@ import (
 )
 
 func gitCommandContext(ctx context.Context, args ...string) *exec.Cmd {
-	return gitCommandWithSignal(ctx, syscall.SIGKILL, args...)
+	// SIGKILL can't let git remove a lock, so read commands must not take optional ones.
+	return gitCommandWithSignal(ctx, syscall.SIGKILL, readOnlyArgs(args)...)
 }
 
 func gitMutationCommandContext(ctx context.Context, args ...string) *exec.Cmd {

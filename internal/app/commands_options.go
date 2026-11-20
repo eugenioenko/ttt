@@ -246,6 +246,8 @@ func initStyleText() {
 		"bold":       i18n.Text("options.bold"),
 		"ascii":      i18n.Text("options.aSCII"),
 		"none":       i18n.Text("options.none"),
+		"hidden":     i18n.Text("options.hidden"),
+		"auto-hide":  i18n.Text("options.autoHide"),
 		"background": i18n.Text("options.background"),
 		"invert":     i18n.Text("options.invert"),
 	}
@@ -254,6 +256,14 @@ func initStyleText() {
 func selectionStyleItems() []widgets.SelectItem {
 	items := make([]widgets.SelectItem, 0, len(config.SelectionStyles))
 	for _, id := range config.SelectionStyles {
+		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
+	}
+	return items
+}
+
+func tabBarStyleItems() []widgets.SelectItem {
+	items := make([]widgets.SelectItem, 0, len(config.TabBarStyles))
+	for _, id := range config.TabBarStyles {
 		items = append(items, widgets.SelectItem{ID: id, Label: styleLabels[id]})
 	}
 	return items
@@ -305,6 +315,18 @@ func (a *App) ShowGutterStylePicker() {
 	a.ShowSelectDialog(i18n.Text("options.gutterStyle"), gutterStyleItems(), func(id string) {
 		a.SetGutterStyle(id)
 	}, nil)
+}
+
+func (a *App) ShowTabBarStylePicker() {
+	if a.Root.HasModalOverlay() {
+		return
+	}
+	a.ShowSelectDialog(i18n.Text("settings.tabBarStyle"), tabBarStyleItems(), a.SetTabBarStyle, nil)
+}
+
+func (a *App) SetTabBarStyle(style string) {
+	a.Settings.Editor.TabBarStyle = style
+	a.SaveAndApplySettings()
 }
 
 func (a *App) SetBorderStyle(style string) {
@@ -362,7 +384,7 @@ func (a *App) SetTerminalSelectionStyle(style string) {
 }
 
 func (a *App) ShowEditorSelectionStylePicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	a.ShowSelectDialog(i18n.Text("options.editorSelectionStyle"), selectionStyleItems(), func(id string) {
@@ -371,7 +393,7 @@ func (a *App) ShowEditorSelectionStylePicker() {
 }
 
 func (a *App) ShowTerminalSelectionStylePicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	a.ShowSelectDialog(i18n.Text("options.terminalSelectionStyle"), selectionStyleItems(), func(id string) {
@@ -455,6 +477,15 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 	fontIconsChecked := menuChecked(a.Settings.Appearance.Icons == config.IconsNerdFont)
 
 	items := []ui.ContextMenuItem{
+		{Label: i18n.Text("menu.appearance"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
+			{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
+			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
+			{Label: i18n.Text("menu.tabBarStyle"), Command: "options.tabBarStyle"},
+			{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
+		}},
 		{Label: i18n.Text("menu.editor"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.wordWrap"), Command: "options.toggleWordWrap", Checked: wordWrapChecked},
 			{Label: i18n.Text("menu.lineNumbers"), Command: "options.toggleLineNumbers", Checked: lineNumbersChecked},
@@ -474,19 +505,15 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
 			{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
 		}},
-		{Label: i18n.Text("menu.appearance"), Submenu: []ui.ContextMenuItem{
-			{Label: i18n.Text("menu.fontIcons"), Command: "options.toggleFontIcons", Checked: fontIconsChecked},
-			{Label: i18n.Text("menu.menuBar"), Command: menuBarToggleCommand, Checked: menuBarChecked},
-			{Label: i18n.Text("menu.transparentBG"), Command: "options.toggleTransparentBackground", Checked: transparentBgChecked},
-			ui.MenuSep(),
-			{Label: i18n.Text("menu.gutterStyle"), Command: "options.gutterStyle"},
-			{Label: i18n.Text("menu.borderStyle"), Command: "options.borderStyle"},
-		}},
 		{Label: i18n.Text("menu.diffViews"), Submenu: a.BuildDiffViewOptions()},
 		{Label: i18n.Text("menu.gitFiles"), Submenu: a.BuildGitFileOptions()},
+		{Label: i18n.Text("settings.markdown"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("markdown.wordWrapMenu"), Command: "options.markdownWordWrap"},
+			{Label: i18n.Text("markdown.wrapWidthMenu"), Command: "options.markdownWrapWidth"},
+		}},
 		ui.MenuSep(),
-		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
+		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
 	}
 	return items
 }
@@ -538,6 +565,16 @@ func (a *App) buildGitFileOptions(expandCommand, collapseCommand string) []ui.Co
 
 func registerOptionsCommands(app *App) {
 	reg := app.Reg
+	reg.Register(command.Command{
+		ID: "options.markdownWordWrap", Title: i18n.Text("markdown.wordWrapTitle"),
+		Keywords: []string{"preferences", "settings", "editor", "override"},
+		Handler:  app.ShowMarkdownWordWrapPicker,
+	})
+	reg.Register(command.Command{
+		ID: "options.markdownWrapWidth", Title: i18n.Text("markdown.wrapWidthTitle"),
+		Keywords: []string{"preferences", "settings", "editor", "override", "column"},
+		Handler:  app.ShowMarkdownWrapWidthPicker,
+	})
 
 	reg.Register(command.Command{
 		ID: "options.toggleSyntaxHighlight", Title: i18n.Text("command.toggleSyntaxHighlight"),
@@ -722,6 +759,12 @@ func registerOptionsCommands(app *App) {
 		ID: "options.gutterStyle", Title: i18n.Text("command.changeGutterStyle"),
 		Keywords: []string{"preferences", "settings", "editor", "view"},
 		Handler:  app.ShowGutterStylePicker,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.tabBarStyle", Title: i18n.Text("command.changeTabBarStyle"),
+		Keywords: []string{"preferences", "settings", "editor", "view", "tabs", "appearance"},
+		Handler:  app.ShowTabBarStylePicker,
 	})
 
 	reg.Register(command.Command{

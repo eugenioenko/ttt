@@ -44,62 +44,30 @@ func (a *App) focusedRegion() string {
 	return "editor"
 }
 
-func (a *App) focusNextGroup() {
+func (a *App) focusNextGroup() { a.cycleFocusGroup(1) }
+func (a *App) focusPrevGroup() { a.cycleFocusGroup(-1) }
+
+func (a *App) cycleFocusGroup(direction int) {
 	if a.Root.HasModalOverlay() {
 		return
 	}
-	regions := []string{"editor"}
+	var groups []ui.Widget
+	for _, group := range a.editorGroups() {
+		groups = append(groups, group)
+	}
 	if a.Sidebar.Visible {
-		regions = append(regions, "sidebar")
+		groups = append(groups, a.Sidebar.ActiveWidget())
 	}
 	if a.ContentSplit.ShowBottom {
-		regions = append(regions, "bottom")
+		groups = append(groups, a.BottomPanel.ActiveWidget())
 	}
-	current := a.focusedRegion()
-	for i, r := range regions {
-		if r == current {
-			next := regions[(i+1)%len(regions)]
-			a.focusRegion(next)
+	for i, group := range groups {
+		if group == a.Root.Focused || (a.focusedRegion() == "sidebar" && group == a.Sidebar.ActiveWidget()) || (a.focusedRegion() == "bottom" && group == a.BottomPanel.ActiveWidget()) {
+			a.Root.SetFocus(groups[(i+direction+len(groups))%len(groups)])
 			return
 		}
 	}
 	a.FocusEditor()
-}
-
-func (a *App) focusPrevGroup() {
-	if a.Root.HasModalOverlay() {
-		return
-	}
-	regions := []string{"editor"}
-	if a.Sidebar.Visible {
-		regions = append(regions, "sidebar")
-	}
-	if a.ContentSplit.ShowBottom {
-		regions = append(regions, "bottom")
-	}
-	current := a.focusedRegion()
-	for i, r := range regions {
-		if r == current {
-			prev := i - 1
-			if prev < 0 {
-				prev = len(regions) - 1
-			}
-			a.focusRegion(regions[prev])
-			return
-		}
-	}
-	a.FocusEditor()
-}
-
-func (a *App) focusRegion(region string) {
-	switch region {
-	case "editor":
-		a.FocusEditor()
-	case "sidebar":
-		a.FocusSidebar()
-	case "bottom":
-		a.FocusPanel()
-	}
 }
 
 func (a *App) ScrollUp()       { a.scrollEditor(-1) }
@@ -295,6 +263,14 @@ func (a *App) ToggleSearchReplace() {
 }
 
 func registerViewCommands(app *App) {
+	app.Reg.Register(command.Command{ID: "editor.split", Title: i18n.Text("command.splitEditor"), Handler: app.SplitEditor})
+	app.Reg.Register(command.Command{ID: "editor.splitDown", Title: i18n.Text("command.splitEditorDown"), Handler: app.SplitEditorDown})
+	app.Reg.Register(command.Command{ID: "editor.closeSplit", Title: i18n.Text("command.closeSplit"), Handler: app.CloseEditorSplit})
+	app.Reg.Register(command.Command{ID: "editor.equalizeGroups", Title: i18n.Text("command.equalizeGroups"), Handler: app.EqualizeEditorGroups})
+	app.Reg.Register(command.Command{ID: "focus.editorLeft", Title: i18n.Text("command.focusEditorLeft"), Handler: app.FocusEditorLeft})
+	app.Reg.Register(command.Command{ID: "focus.editorRight", Title: i18n.Text("command.focusEditorRight"), Handler: app.FocusEditorRight})
+	app.Reg.Register(command.Command{ID: "focus.editorUp", Title: i18n.Text("command.focusEditorUp"), Handler: app.FocusEditorUp})
+	app.Reg.Register(command.Command{ID: "focus.editorDown", Title: i18n.Text("command.focusEditorDown"), Handler: app.FocusEditorDown})
 	reg := app.Reg
 
 	reg.Register(command.Command{

@@ -329,6 +329,14 @@ func (t *Terminal) Close() {
 	t.mu.Unlock()
 	t.cbMu.Unlock()
 
+	shellRunning := t.cmd != nil && t.cmd.Process != nil
+	if started {
+		select {
+		case <-t.waited:
+			shellRunning = false
+		default:
+		}
+	}
 	t.signalShell(sigHangup, started)
 	// Closing the pty while bash handles SIGHUP can make it exit without
 	// hanging up its jobs, so the pty stays open until the shell is gone.
@@ -352,6 +360,10 @@ func (t *Terminal) Close() {
 	t.signalShell(sigKill, started)
 	if started {
 		<-t.waited
+		// Jobs of a shell that exited on its own are not ours to hang up.
+		if shellRunning {
+			hangupSessionJobs(t.cmd.Process.Pid)
+		}
 		select {
 		case <-t.done:
 		case <-time.After(readLoopGrace):

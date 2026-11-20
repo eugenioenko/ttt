@@ -1,6 +1,8 @@
 package buffer
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -584,5 +586,28 @@ func TestBufferDiskSize(t *testing.T) {
 	}
 	if got := b.DiskSize(); got != info.Size() {
 		t.Errorf("saved DiskSize() = %d, want %d", got, info.Size())
+	}
+}
+
+func TestSaveErrorsKeepTheirDetails(t *testing.T) {
+	cause := os.ErrPermission
+	var err error = &RecoveryError{Path: "/tmp/.f.ttt-recovery-1", Err: cause}
+	if !errors.Is(err, os.ErrPermission) {
+		t.Errorf("RecoveryError does not unwrap to its cause: %v", err)
+	}
+	var recovery *RecoveryError
+	if !errors.As(fmt.Errorf("save: %w", err), &recovery) || recovery.Path != "/tmp/.f.ttt-recovery-1" {
+		t.Errorf("RecoveryError path lost when wrapped: %+v", recovery)
+	}
+	if got := err.Error(); got != "permission denied (the previous contents are saved in /tmp/.f.ttt-recovery-1)" {
+		t.Errorf("RecoveryError text = %q", got)
+	}
+
+	var replaced *ReplacedError
+	if !errors.As(fmt.Errorf("save: %w", &ReplacedError{Path: "f.txt"}), &replaced) || replaced.Path != "f.txt" {
+		t.Errorf("ReplacedError path lost when wrapped: %+v", replaced)
+	}
+	if got := replaced.Error(); got != "f.txt was replaced while saving" {
+		t.Errorf("ReplacedError text = %q", got)
 	}
 }

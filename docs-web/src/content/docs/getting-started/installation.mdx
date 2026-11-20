@@ -52,7 +52,13 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
     The installer selects `ttt-android-arm64` and installs it to `$PREFIX/bin`. Set `INSTALL_DIR` on `sh` to choose another directory.
   </TabItem>
   <TabItem label="Arch Linux (AUR)">
-    Available on the [AUR](https://aur.archlinux.org/packages/ttt):
+    [`ttt-bin`](https://aur.archlinux.org/packages/ttt-bin) installs the prebuilt release binary:
+
+    ```sh
+    yay -S ttt-bin
+    ```
+
+    Or build from source with [`ttt`](https://aur.archlinux.org/packages/ttt):
 
     ```sh
     yay -S ttt

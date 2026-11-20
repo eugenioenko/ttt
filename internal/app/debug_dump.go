@@ -407,10 +407,19 @@ func walkWidget(w widgets.Widget) *DebugWidgetNode {
 		if v.Right != nil {
 			node.Children = append(node.Children, walkWidget(v.Right))
 		}
+	case *ui.EditorLayoutWidget:
+		node.Props = map[string]any{"groups": len(v.Groups())}
+		for _, child := range v.WidgetChildren() {
+			node.Children = append(node.Children, walkWidget(child))
+		}
 	case *ui.ContentSplitWidget:
 		node.Props = map[string]any{
 			"show_bottom": v.ShowBottom,
 			"bottom_h":    v.BottomH,
+			"position":    v.Position,
+			"ratio":       v.BottomRatio,
+			"divider_x":   v.DividerScreenX(),
+			"divider_y":   v.DividerScreenY(),
 		}
 		if v.Top != nil {
 			node.Children = append(node.Children, walkWidget(v.Top))
@@ -442,14 +451,19 @@ func walkWidget(w widgets.Widget) *DebugWidgetNode {
 			paths[i], _ = v.TabInfo(i)
 		}
 		node.Props = map[string]any{
-			"active_tab": v.ActiveTabIndex(),
-			"tabs":       paths,
-			"path":       v.ActiveFilePath(),
+			"active_tab":   v.ActiveTabIndex(),
+			"active_group": v.TabBar.GroupActive,
+			"tabs":         paths,
+			"path":         v.ActiveFilePath(),
 		}
 		if v.Editor != nil {
 			line, col := v.ActiveCursor()
 			node.Props["cursor_line"] = line
 			node.Props["cursor_col"] = col
+			if v.Editor.Viewport != nil {
+				node.Props["scroll_top"] = v.Editor.Viewport.TopLine
+				node.Props["scroll_left"] = v.Editor.Viewport.LeftCol
+			}
 		}
 	case *ui.StatusBarWidget:
 		node.Props = map[string]any{}

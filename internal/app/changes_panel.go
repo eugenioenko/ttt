@@ -174,7 +174,7 @@ func (a *App) persistCommitHistoryHeight() {
 }
 
 func NewChangesPanel(dirs ...string) *ChangesPanel {
-	return NewChangesPanelWithProvider(git.Provider{}, dirs...)
+	return NewChangesPanelWithProvider(defaultSCMProvider(), dirs...)
 }
 
 func NewChangesPanelWithProvider(provider scm.Provider, dirs ...string) *ChangesPanel {
@@ -325,6 +325,19 @@ func filePaths(files []scm.Change) []string {
 	paths := make([]string, len(files))
 	for i, f := range files {
 		paths[i] = f.Path
+	}
+	return paths
+}
+
+// unstagePaths includes a rename's old path: resetting only the new path
+// leaves the old path's deletion staged.
+func unstagePaths(files ...scm.Change) []string {
+	var paths []string
+	for _, f := range files {
+		if f.Kind == scm.Renamed && f.OldPath != "" {
+			paths = append(paths, f.OldPath)
+		}
+		paths = append(paths, f.Path)
 	}
 	return paths
 }
@@ -942,7 +955,7 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 		}
 	case "unstage":
 		if ok && staged {
-			cp.applied(cp.stagePaths(dir, true, status.Path))
+			cp.applied(cp.stagePaths(dir, true, unstagePaths(status)...))
 		}
 	case "stageFolder":
 		cp.stageFolder(node)
@@ -1175,7 +1188,7 @@ func (cp *ChangesPanel) unstageFolder(node *widgets.TreeNode) {
 		return
 	}
 	if files := cp.folderFiles(node); len(files) > 0 {
-		cp.applied(cp.stagePaths(ref.Dir, true, filePaths(files)...))
+		cp.applied(cp.stagePaths(ref.Dir, true, unstagePaths(files...)...))
 	}
 }
 
@@ -1190,12 +1203,7 @@ func (cp *ChangesPanel) confirmDiscardFolder(node *widgets.TreeNode) {
 	}
 	msg := i18n.Format("changes.discardFolderChangesThisIsIrreversible", i18n.Args{"changeCount": len(files), "folder": ref.Path})
 	cp.OnConfirmDiscard(msg, func() {
-		untracked, tracked := discardPaths(files)
-		err := git.DiscardUntracked(ref.Dir, untracked...)
-		if e := git.Discard(ref.Dir, tracked...); e != nil && err == nil {
-			err = e
-		}
-		cp.applied(err)
+		cp.applied(cp.discardChanges(ref.Dir, files))
 	})
 }
 
@@ -1230,7 +1238,7 @@ func (cp *ChangesPanel) unstageAll() {
 		if !cp.supportsStaging(g.Dir) {
 			continue
 		}
-		if e := cp.stagePaths(g.Dir, true, filePaths(g.filesIn(scm.Staged))...); e != nil && err == nil {
+		if e := cp.stagePaths(g.Dir, true, unstagePaths(g.filesIn(scm.Staged)...)...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1250,7 +1258,7 @@ func (cp *ChangesPanel) unstageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(cp.stagePaths(g.Dir, true, filePaths(g.filesIn(scm.Staged))...))
+	cp.applied(cp.stagePaths(g.Dir, true, unstagePaths(g.filesIn(scm.Staged)...)...))
 }
 
 func (cp *ChangesPanel) confirmDiscard(dir string, f scm.Change) {
@@ -1262,11 +1270,7 @@ func (cp *ChangesPanel) confirmDiscard(dir string, f scm.Change) {
 		msg = i18n.Format("changes.deleteUntrackedFileThisIsIrreversible", i18n.Args{"path": f.Path})
 	}
 	cp.OnConfirmDiscard(msg, func() {
-		if f.Kind == scm.Untracked {
-			cp.applied(git.DiscardUntracked(dir, f.Path))
-		} else {
-			cp.applied(git.Discard(dir, f.Path))
-		}
+		cp.applied(cp.discardChanges(dir, []scm.Change{f}))
 	})
 }
 
@@ -1277,12 +1281,7 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 	g := cp.groups[gi]
 	msg := i18n.Format("changes.discardAllChangesThisIsIrreversible", i18n.Args{"unstagedCount": len(g.filesIn(scm.WorkingTree))})
 	cp.OnConfirmDiscard(msg, func() {
-		untracked, tracked := discardPaths(g.filesIn(scm.WorkingTree))
-		err := git.DiscardUntracked(g.Dir, untracked...)
-		if e := git.Discard(g.Dir, tracked...); e != nil && err == nil {
-			err = e
-		}
-		cp.applied(err)
+		cp.applied(cp.discardChanges(g.Dir, g.filesIn(scm.WorkingTree)))
 	})
 }
 
@@ -1426,7 +1425,7 @@ func (cp *ChangesPanel) ToggleStageSelected() {
 		return
 	}
 	if staged {
-		cp.applied(cp.stagePaths(dir, true, status.Path))
+		cp.applied(cp.stagePaths(dir, true, unstagePaths(status)...))
 	} else {
 		cp.applied(cp.stagePaths(dir, false, status.Path))
 	}

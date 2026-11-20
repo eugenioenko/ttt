@@ -196,12 +196,18 @@ func (a *App) pluginUninstall() {
 
 // ClearPluginSources removes the diagnostics, decorations and status items plugin name set.
 func (a *App) ClearPluginSources(name string) {
-	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
-	a.EditorGroup.ClearDecorationsSource("plugin:" + name)
+	for _, group := range a.editorGroups() {
+		group.ClearDiagnosticsSource("plugin:" + name)
+		group.ClearDecorationsSource("plugin:" + name)
+	}
 	a.Status.RemoveSegmentsByOwner("plugin:" + name)
 }
 
 func (a *App) doPluginUninstall(name string) {
+	if a.PluginManager.IsSystemPlugin(name) {
+		a.StatusWarn(i18n.Text("plugins.systemManaged"))
+		return
+	}
 	if err := a.PluginManager.RunUninstallHook(name); err != nil {
 		a.ShowConfirmDialogEx(i18n.Text("plugins.uninstallFailed"), i18n.Format("plugins.cleanupFailed", i18n.Args{"name": name, "error": err.Error()}), []string{i18n.Text("general.cancel"), i18n.Text("plugins.removeAnyway")}, []func(){
 			func() { a.DismissDialog() },
@@ -583,14 +589,20 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				Source:    it.Source,
 			})
 		}
-		a.EditorGroup.SetDiagnosticsSource(pluginSource, path, diags)
+		for _, group := range a.editorGroups() {
+			group.SetDiagnosticsSource(pluginSource, path, diags)
+		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ClearDiagnostics = func(path string) {
 		if path == "" {
-			a.EditorGroup.ClearDiagnosticsSource(pluginSource)
+			for _, group := range a.editorGroups() {
+				group.ClearDiagnosticsSource(pluginSource)
+			}
 		} else {
-			a.EditorGroup.SetDiagnosticsSource(pluginSource, path, nil)
+			for _, group := range a.editorGroups() {
+				group.SetDiagnosticsSource(pluginSource, path, nil)
+			}
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
@@ -607,14 +619,20 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				Style:     it.Style,
 			}
 		}
-		a.EditorGroup.SetDecorations(pluginSource, path, decos)
+		for _, group := range a.editorGroups() {
+			group.SetDecorations(pluginSource, path, decos)
+		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ClearDecorations = func(path string) {
 		if path == "" {
-			a.EditorGroup.ClearDecorationsSource(pluginSource)
+			for _, group := range a.editorGroups() {
+				group.ClearDecorationsSource(pluginSource)
+			}
 		} else {
-			a.EditorGroup.SetDecorations(pluginSource, path, nil)
+			for _, group := range a.editorGroups() {
+				group.SetDecorations(pluginSource, path, nil)
+			}
 		}
 		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
@@ -777,7 +795,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	a.registerPluginCommandsAndKeys(p)
 	p.FlushPendingDrawer()
 	if len(p.FileHandlers) > 0 {
-		a.EditorGroup.RetryFileHandlers()
+		for _, group := range a.editorGroups() {
+			group.RetryFileHandlers()
+		}
 	}
 }
 
@@ -1221,34 +1241,37 @@ func (a *App) ShowPluginPanel(name, area string, focus bool) (bool, error) {
 	return true, nil
 }
 
-func (a *App) pluginTab(name, key string) (int, *plugin.PluginPanelWidget) {
-	for i := range a.EditorGroup.TabCount() {
-		panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget)
-		if ok && panel.PluginName() == name && a.EditorGroup.PluginTabKey(i) == key {
-			return i, panel
+func (a *App) pluginTab(name, key string) (*ui.EditorGroupWidget, int, *plugin.PluginPanelWidget) {
+	for _, group := range a.editorGroups() {
+		for i := range group.TabCount() {
+			panel, ok := group.TabContent(i).(*plugin.PluginPanelWidget)
+			if ok && panel.PluginName() == name && group.PluginTabKey(i) == key {
+				return group, i, panel
+			}
 		}
 	}
-	return -1, nil
+	return nil, -1, nil
 }
 
 func (a *App) switchToPluginTab(name, key string, focus bool) bool {
-	i, panel := a.pluginTab(name, key)
+	group, i, panel := a.pluginTab(name, key)
 	if i < 0 {
 		return false
 	}
-	a.EditorGroup.SwitchTab(i)
+	group.SwitchTab(i)
 	if focus && !a.Root.HasModalOverlay() {
-		a.Root.ClaimFocus(a.EditorGroup)
+		a.Root.ClaimFocus(group)
 		panel.FocusAutofocusInput()
 	}
 	return true
 }
 
 func (a *App) closePluginTab(name, key string) bool {
-	if i, _ := a.pluginTab(name, key); i < 0 {
+	group, i, _ := a.pluginTab(name, key)
+	if i < 0 {
 		return false
 	}
-	return a.EditorGroup.ClosePluginTab(key)
+	return group.ClosePluginTab(key)
 }
 
 // Panel images live in the terminal until released, so a plugin panel is closed whenever it leaves the UI.
@@ -1267,17 +1290,19 @@ func (a *App) closePluginDrawerAndTabs(name string) {
 		a.ClosePluginDrawer()
 	}
 	// File-handler tabs are left to SyncFileHandlerTabs, which falls back to the binary card.
-	var keys []string
-	for i := range a.EditorGroup.TabCount() {
-		path, _ := a.EditorGroup.TabInfo(i)
-		if panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget); ok && panel.PluginName() == name {
-			if _, handled := a.fileHandlerTabs[path]; !handled {
-				keys = append(keys, a.EditorGroup.PluginTabKey(i))
+	for _, group := range a.editorGroups() {
+		var keys []string
+		for i := range group.TabCount() {
+			path, _ := group.TabInfo(i)
+			if panel, ok := group.TabContent(i).(*plugin.PluginPanelWidget); ok && panel.PluginName() == name {
+				if _, handled := a.fileHandlerTabs[path]; !handled {
+					keys = append(keys, group.PluginTabKey(i))
+				}
 			}
 		}
-	}
-	for _, key := range keys {
-		a.EditorGroup.ClosePluginTab(key)
+		for _, key := range keys {
+			group.ClosePluginTab(key)
+		}
 	}
 }
 

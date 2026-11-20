@@ -62,6 +62,7 @@ func (e *EditorPaneWidget) MoveToFileEdge(end, shift bool) {
 		return
 	}
 	e.collapseMulti()
+	e.ResetCursorGoal()
 	e.startOrExtendSelection(shift)
 	if end {
 		e.Cursor.Line = len(e.Buf.Lines) - 1
@@ -81,6 +82,7 @@ func (e *EditorPaneWidget) MoveToLineEdge(end, shift bool) {
 	if e.Buf == nil || len(e.Buf.Lines) == 0 {
 		return
 	}
+	e.ResetCursorGoal()
 	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line)
 	if e.isMultiActive() {
 		e.multiMoveAll(func(cs *multicursor.CursorState) {
@@ -112,6 +114,7 @@ func (e *EditorPaneWidget) MoveToLineEdge(end, shift bool) {
 }
 
 func (e *EditorPaneWidget) MoveWordLeft(shift bool) {
+	e.ResetCursorGoal()
 	if e.isMultiActive() && !shift {
 		e.multiMoveAll(func(cs *multicursor.CursorState) {
 			if cs.Col == 0 {
@@ -143,6 +146,7 @@ func (e *EditorPaneWidget) MoveWordLeft(shift bool) {
 }
 
 func (e *EditorPaneWidget) MoveWordRight(shift bool) {
+	e.ResetCursorGoal()
 	if e.isMultiActive() && !shift {
 		e.multiMoveAll(func(cs *multicursor.CursorState) {
 			runes := []rune(e.Buf.Lines[cs.Line])
@@ -248,6 +252,7 @@ func (e *EditorPaneWidget) multiTransformSelections(fn func(string) string) {
 	version := e.Buf.Version()
 	defer e.Buf.PinChanges(version).Release()
 	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	prevLines := len(e.Buf.Lines)
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {

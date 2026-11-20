@@ -66,7 +66,8 @@ type TerminalSpec struct {
 type App struct {
 	language        languageState
 	Root            *ui.Root
-	EditorGroup     *ui.EditorGroupWidget
+	EditorGroup     *ui.EditorGroupWidget // Follows activation so commands target the group receiving keys.
+	EditorSplit     *ui.EditorLayoutWidget
 	Sidebar         *ui.SidebarWidget
 	SplitPanel      *ui.SplitPanelWidget
 	ContentSplit    *ui.ContentSplitWidget
@@ -777,12 +778,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		screen.PostEvent(tcell.NewEventInterrupt(nil))
 	})
 	a.RefreshImageCellSize()
-	a.EditorGroup.TabBar.PostDragAutoScrollTick = func(generation uint64) {
-		screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Generation: generation}))
-	}
-	a.EditorGroup.Editor.PostDragAutoScrollTick = func(generation uint64) {
-		screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Generation: generation}))
-	}
+	a.wireEditorAutoScroll(a.EditorGroup)
 	highlight.SetStepScheduler(func() {
 		screen.PostEvent(tcell.NewEventInterrupt(&highlightStep{}))
 	})
@@ -946,6 +942,7 @@ func openURLCommand(rawURL, platform string) *exec.Cmd {
 }
 
 func (a *App) FlushEditorOnChange() {
+	a.EditorGroup.SyncDocumentViews()
 	if a.EditorGroup.Editor != nil {
 		a.EditorGroup.Editor.FlushOnChange()
 	}
@@ -1273,6 +1270,10 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 }
 
 func (a *App) ShowSelectDialog(title string, items []widgets.SelectItem, onSelect func(id string), onChange func(id string)) {
+	a.showSelectDialog(title, items, "", onSelect, onChange)
+}
+
+func (a *App) showSelectDialog(title string, items []widgets.SelectItem, selected string, onSelect func(id string), onChange func(id string)) {
 	sel := widgets.NewSelectWidget(widgets.SelectConfig{
 		Items:       items,
 		ShowDivider: true,
@@ -1283,6 +1284,9 @@ func (a *App) ShowSelectDialog(title string, items []widgets.SelectItem, onSelec
 		OnChange:  onChange,
 		OnDismiss: func() { a.DismissDialog() },
 	})
+	if selected != "" {
+		sel.SetSelectedID(selected)
+	}
 
 	dialog := widgets.NewDialogWidget(50)
 	dialog.Title = title

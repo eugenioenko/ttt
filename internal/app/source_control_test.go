@@ -85,7 +85,7 @@ func TestRepositoryStateUsesInjectedSourceControl(t *testing.T) {
 	discoveries := len(provider.calls)
 	cp.stageAllInGroup(0)
 	cp.unstageAllInGroup(0)
-	if !reflect.DeepEqual(repo.staged, [][]string{{"新規/[literal].txt"}}) || !reflect.DeepEqual(repo.unstaged, [][]string{{"renamed.txt"}}) {
+	if !reflect.DeepEqual(repo.staged, [][]string{{"新規/[literal].txt"}}) || !reflect.DeepEqual(repo.unstaged, [][]string{{"old.txt", "renamed.txt"}}) {
 		t.Fatalf("staging calls: %v / %v", repo.staged, repo.unstaged)
 	}
 	if len(provider.calls) != discoveries {

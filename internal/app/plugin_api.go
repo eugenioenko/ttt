@@ -239,6 +239,7 @@ func (e *PluginEditorAPI) SetCursor(line, col int) {
 	if ed == nil || ed.Cursor == nil {
 		return
 	}
+	ed.ResetCursorGoal()
 	ed.Cursor.Line = line
 	ed.Cursor.Col = col
 	ed.EnsureCursorVisible()
@@ -249,6 +250,7 @@ func (e *PluginEditorAPI) SetSelection(startLine, startCol, endLine, endCol int)
 	if ed == nil || ed.Selection == nil || ed.Cursor == nil {
 		return
 	}
+	ed.ResetCursorGoal()
 	ed.Selection.Start(startLine, startCol)
 	ed.Cursor.Line = endLine
 	ed.Cursor.Col = endCol

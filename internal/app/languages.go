@@ -100,7 +100,7 @@ func languageItems(s *config.Settings) []widgets.SelectItem {
 }
 
 func (a *App) ShowDisplayLanguagePicker() {
-	if a.Root.HasOverlay() {
+	if a.Root.HasModalOverlay() {
 		return
 	}
 	a.ShowSelectDialog(i18n.Text("settings.displayLanguage"), languageItemsFor(a.Settings.Language), a.SetDisplayLanguage, nil)

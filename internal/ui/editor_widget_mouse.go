@@ -76,6 +76,7 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	}
 
 	if btn&tcell.Button1 != 0 {
+		e.ResetCursorGoal()
 		if e.Undo != nil {
 			e.Undo.BreakGroup()
 		}

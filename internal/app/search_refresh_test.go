@@ -50,6 +50,32 @@ func (h *searchRefreshHarness) exec(id string) {
 	h.flushOnChange()
 }
 
+func TestFindNavigationRefreshesMatchesAfterEdit(t *testing.T) {
+	for _, command := range []string{"search.find", "search.replace"} {
+		t.Run(command, func(t *testing.T) {
+			h := newSearchRefreshHarness(t)
+			h.exec(command)
+			for _, r := range "foo" {
+				h.pressRune(r)
+			}
+			h.exec("search.findNext")
+			editor := h.app.EditorGroup.Editor
+			if editor.Cursor.Line != 1 {
+				t.Fatalf("cursor line = %d, want second match on line 1", editor.Cursor.Line)
+			}
+			if bar := h.app.findBar(); bar.CurrentMatch() != 1 || editor.SearchActive != 1 {
+				t.Fatalf("bar current=%d active=%d, want 1 after findNext", bar.CurrentMatch(), editor.SearchActive)
+			}
+			editor.ExecCommand(&undo.DeleteSelectionCommand{StartLine: 0, StartCol: 0, EndLine: 0, EndCol: 3})
+			h.flushOnChange()
+			h.exec("search.findNext")
+			if bar := h.app.findBar(); bar.CurrentMatch() != 0 || editor.SearchActive != 0 || len(editor.SearchMatches) != 1 || editor.Cursor.Line != 1 || editor.Cursor.Col != 0 {
+				t.Fatalf("bar current=%d active=%d matches=%+v cursor=%d:%d, want the only remaining match at 1:0", bar.CurrentMatch(), editor.SearchActive, editor.SearchMatches, editor.Cursor.Line, editor.Cursor.Col)
+			}
+		})
+	}
+}
+
 func TestSearchHighlightsFollowEdits(t *testing.T) {
 	h := newSearchRefreshHarness(t)
 

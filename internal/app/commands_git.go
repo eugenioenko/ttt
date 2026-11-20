@@ -37,11 +37,7 @@ func (a *App) DiscardSelected() {
 			},
 			func() {
 				a.DismissDialog()
-				if status.Kind == scm.Untracked {
-					a.Changes.applied(git.DiscardUntracked(dir, status.Path))
-				} else {
-					a.Changes.applied(git.Discard(dir, status.Path))
-				}
+				a.Changes.applied(a.Changes.discardChanges(dir, []scm.Change{status}))
 			},
 		},
 	)
@@ -251,7 +247,7 @@ func (a *App) NewBranchDialog() {
 	dirs := make([]string, 0, len(groups))
 	seen := make(map[string]bool)
 	for _, group := range groups {
-		if group.IsPR {
+		if group.IsPR || a.isJJDir(group.Dir) {
 			continue
 		}
 		dir := git.RepoRoot(group.Dir)
@@ -381,7 +377,7 @@ func registerGitCommands(app *App) {
 		Handler: func() {
 			dir, status, ok := app.Changes.SelectedFile()
 			if ok && status.Group == scm.Staged {
-				app.Changes.applied(app.Changes.stagePaths(dir, true, status.Path))
+				app.Changes.applied(app.Changes.stagePaths(dir, true, unstagePaths(status)...))
 			}
 		},
 	})

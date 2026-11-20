@@ -99,6 +99,13 @@ func TestFindBarSearchesBothSidesOfADiffTab(t *testing.T) {
 		t.Fatalf("find matches left %v right %v, want one per side", dv.SearchMatchesLeft, dv.SearchMatchesRight)
 	}
 	h.assertContains("1/2")
+	h.pressKey(tcell.KeyF3, tcell.ModNone)
+	h.assertContains("2/2")
+	if current := findBarWidget(t, h).Current; current != 1 {
+		t.Fatalf("diff find current = %d, want 1", current)
+	}
+	h.pressKey(tcell.KeyF3, tcell.ModShift)
+	h.assertContains("1/2")
 }
 
 func TestDiffFindBarIsNotRefreshedByEditorTabChanges(t *testing.T) {
