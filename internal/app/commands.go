@@ -58,11 +58,14 @@ func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBind
 			handler := func() { reg.Execute(cmdID) }
 			root.AddGlobalKey(key, mod, rn, handler)
 			if config.ForceKeyCommands[cmdID] {
-				if cmdID == "terminal.toggleShortcutForwarding" {
+				switch cmdID {
+				case "editor.quit":
+					root.AddModalForceKey(key, mod, rn, handler)
+				case "terminal.toggleShortcutForwarding":
 					root.AddTerminalToggleKey(key, mod, rn, handler)
-				} else if cmdID == "terminal.sendNextKey" {
+				case "terminal.sendNextKey":
 					root.AddTerminalForceKey(key, mod, rn, handler)
-				} else {
+				default:
 					root.AddForceKey(key, mod, rn, handler)
 				}
 			}
