@@ -226,6 +226,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		segStartCol := row.startCol
 		isWrapContinuation := segStartCol > 0
 
+		if row.conflict {
+			e.renderConflictRow(surface, y, gutterW, editorW, row.bufLine)
+			continue
+		}
 		if row.isPhantom() {
 			e.renderPhantomRow(surface, y, gutterW, editorW, row, layout)
 			continue
