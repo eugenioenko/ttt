@@ -35,6 +35,7 @@ type DecorationItem struct {
 	EndCol    int
 	Text      bool
 	Note      string
+	GhostText string
 	Style     term.Style
 }
 

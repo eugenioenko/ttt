@@ -388,3 +388,38 @@ func TestAnnotationHideYieldsToSelectionAndSearch(t *testing.T) {
 		t.Fatal("unselected text outside the search match was revealed")
 	}
 }
+
+func TestGhostTextMovesWithItsLineAndExpiresOnEdit(t *testing.T) {
+	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "above\na\n"})
+	path := filepath.Join(dir, "x.txt")
+	openCommitted(g, path)
+	e := g.Editor
+	e.SetRect(Rect{W: 24, H: 6})
+	e.Viewport.Width, e.Viewport.Height = 24, 6
+	version := e.Buf.Version()
+	g.SetDecorations("plugin:test", path, []Decoration{{StartLine: 1, EndLine: 1, GhostText: "界z"}})
+	grid := renderGrid(e)
+	x := e.GutterWidth() + 1
+	if c := grid[1][x]; c.Ch != '界' || c.Style != term.StyleMuted || grid[1][x+2].Ch != 'z' {
+		t.Fatalf("unexpected preview cells: %+v", grid[1][x:x+3])
+	}
+	if e.Buf.Version() != version || e.Buf.Lines[1] != "a" {
+		t.Fatal("showing ghost text modified the buffer")
+	}
+	e.Buf.InsertLine(0, "new")
+	if grid := renderGrid(e); grid[2][x].Ch != '界' {
+		t.Fatal("preview lost its anchor after insertion above")
+	}
+	e.Buf.Splice(2, 1, "b")
+	if got := renderRows(e)[2]; got != "b" {
+		t.Fatalf("edited row still has a preview: %q", got)
+	}
+}
+
+func TestGhostTextClipsWideRuneAtPaneEdge(t *testing.T) {
+	e := newRowsEditor([]string{"a"}, 2, 1)
+	cells := e.renderLineSegmentToScreen("a", nil, false, "界", 0, 4, 0, 2)
+	if cells[1].ch != ' ' {
+		t.Fatalf("clipped preview cell = %q", cells[1].ch)
+	}
+}

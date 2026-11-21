@@ -19,6 +19,7 @@ type Decoration struct {
 	EndLine, EndCol     int
 	Text                bool
 	Note                string
+	GhostText           string
 	Style               term.Style
 }
 
@@ -98,6 +99,10 @@ func decorationOverlay(decos []Decoration, lines []string, tabSize int) *DiffOve
 			continue
 		}
 		endLine := min(d.EndLine, n-1)
+		if d.GhostText != "" {
+			o.GhostText[d.StartLine] = d.GhostText
+			continue
+		}
 		if d.Note != "" {
 			o.NoteTexts[d.StartLine] = append(o.NoteTexts[d.StartLine], NoteText{
 				Text:     d.Note,
@@ -182,6 +187,9 @@ func (g *EditorGroupWidget) mergedDecorations(path string, buf *buffer.Buffer, t
 		}
 		for line, spans := range part.Spans {
 			merged.Spans[line] = append(merged.Spans[line], spans...)
+		}
+		for line, text := range part.GhostText {
+			merged.GhostText[line] = text
 		}
 		for line, notes := range part.NoteTexts {
 			merged.NoteTexts[line] = append(merged.NoteTexts[line], notes...)

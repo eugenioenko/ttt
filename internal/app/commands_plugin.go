@@ -616,6 +616,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				EndCol:    it.EndCol,
 				Text:      it.Text,
 				Note:      it.Note,
+				GhostText: it.GhostText,
 				Style:     it.Style,
 			}
 		}

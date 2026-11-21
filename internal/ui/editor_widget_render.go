@@ -332,9 +332,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			}
 
 			isCollapsedLine := e.Folds != nil && e.Folds.IsCollapsed(lineIdx)
-			var annRunes []rune
+			suffix := ""
 			if isCollapsedLine && !isWrapContinuation {
-				annRunes = []rune(" ⋯")
+				suffix = " ⋯"
+			} else if !isCollapsedLine && row.nextCol == 0 && e.DiffOverlay != nil && !e.DiffOverlay.stale {
+				suffix = e.DiffOverlay.GhostText[lineIdx]
 			}
 
 			startCol, leftCol := 0, e.Viewport.LeftCol
@@ -346,7 +348,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, suffix, startCol, tabW, leftCol, editorW)
 			indentWidth, indentRunes, blankLine := 0, 0, false
 			if e.IndentGuides {
 				indentWidth, indentRunes, blankLine = indentGuideIndent(e.Buf.Lines[lineIdx], tabW)
@@ -621,7 +623,7 @@ func rowText(line string, startByte int, r editorRow) string {
 	return text
 }
 
-func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
+func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, suffix string, startCol, tabW, leftCol, width int) []screenCell {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)
 	}
@@ -676,13 +678,22 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 			break
 		}
 	}
-	if collapsed && len(ann) > 0 {
-		for i, ch := range ann {
-			sx := visCol + i - leftCol
-			if sx >= 0 && sx < width {
-				cells[sx] = screenCell{ch: ch, style: term.StyleLineNumber, bufCol: bufCol + i}
-			}
+	for _, ch := range suffix {
+		x := visCol - leftCol
+		cw := textwidth.Rune(ch)
+		if x+cw > width {
+			break
 		}
+		if x >= 0 {
+			col, style := -1, term.StyleMuted
+			if collapsed {
+				style = term.StyleLineNumber
+				col = bufCol // Fold markers retain their virtual columns.
+			}
+			cells[x] = screenCell{ch: ch, style: style, bufCol: col, width: cw}
+		}
+		visCol += cw
+		bufCol++
 	}
 	return cells
 }

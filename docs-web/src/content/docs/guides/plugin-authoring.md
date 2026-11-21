@@ -2358,6 +2358,7 @@ local deco = require("ttt.decorations")
 deco.set("/abs/path/to/main.go", {
   { line = 10, end_line = 14 },                                 -- tint lines 10 to 14
   { line = 12, col = 9, end_col = 17 },                         -- highlight text on line 12
+  { line = 15, ghost_text = " + 1" },                           -- preview a suffix on line 15
   { line = 14, note = "Flags are parsed once, here." },         -- a note under line 14
   { line = 20, col = 5, end_line = 22, end_col = 2, style = "highlight" },
   { line = 30, end_line = 35, style = "hide" },                 -- conceal text without changing layout
@@ -2379,6 +2380,7 @@ item with `note` draws the note under `line`.
 | `end_line` | number | no       | 1-based end line. Defaults to `line`; `math.huge` reaches the end of the file. |
 | `col`      | number | no       | 1-based start **rune column** of a text highlight.                   |
 | `end_col`  | number | with `col` | 1-based end column on `end_line`, exclusive.                       |
+| `ghost_text` | string | no | A muted preview after the last character of `line`. Supply only `line` and `ghost_text`. Use a nonempty string without control characters. The preview clips at the pane edge and disappears when the line is edited. |
 | `note`     | string | no       | Text drawn on rows under `line`, wrapped to the pane (at most 80 columns) and indented like the line. Blank lines separate paragraphs. A note item takes only `line` and `style`, and its style can't be `reverse` or `hide`. |
 | `style`    | string | no       | A named style whose background is used; for a note, its colors. Defaults to `highlight` for lines, `highlight_strong` for text and `note` for notes. `reverse` swaps the text and background colors instead, on text only. `hide` conceals text using its background color, keeping the characters' space and the buffer unchanged. |
 
