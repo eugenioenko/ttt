@@ -216,6 +216,12 @@ func (e *EditorPaneWidget) PointerShapeAt(mx, my int) string {
 	if overScrollbar || overHScrollbar || mx < r.X+e.GutterWidth() {
 		return term.PointerDefault
 	}
+	if row := e.rowAt(my - r.Y); row.conflict {
+		if e.conflictActionAt(row, mx-r.X-e.GutterWidth()) >= 0 {
+			return term.PointerHand
+		}
+		return term.PointerDefault
+	}
 	if e.rowAt(my - r.Y).isPhantom() {
 		return term.PointerDefault
 	}

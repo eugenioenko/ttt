@@ -62,6 +62,8 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	if btn == tcell.ButtonNone && !e.mouseDown {
 		prevHover := e.gutterHover
 		prevLine := e.gutterHoverLine
+		prevConflict := e.conflictHover
+		e.conflictHover = [2]int{-1, -1}
 		if inGutter {
 			screenY := my - r.Y
 			bufLine := e.screenToBufferLine(screenY)
@@ -69,13 +71,26 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 			e.gutterHoverLine = bufLine
 		} else {
 			e.gutterHover = false
+			if row := e.rowAt(my - r.Y); row.conflict {
+				if action := e.conflictActionAt(row, mx-r.X-gutterW); action >= 0 {
+					e.conflictHover = [2]int{row.bufLine, action}
+				}
+			}
 		}
-		if e.gutterHover != prevHover || e.gutterHoverLine != prevLine {
+		if e.gutterHover != prevHover || e.gutterHoverLine != prevLine || e.conflictHover != prevConflict {
 			return EventConsumed
 		}
 	}
 
 	if btn&tcell.Button1 != 0 {
+		if !e.mouseDown {
+			if row := e.rowAt(my - r.Y); row.conflict {
+				if action := e.conflictActionAt(row, mx-r.X-gutterW); action >= 0 {
+					e.resolveConflict(row.bufLine, action)
+				}
+				return EventConsumed
+			}
+		}
 		e.ResetCursorGoal()
 		if e.Undo != nil {
 			e.Undo.BreakGroup()
