@@ -49,14 +49,32 @@ func conflictHeader(line string) bool {
 	return false
 }
 
-func scanConflicts(lines []string) map[int]mergeConflict {
+// conflictMarker reports whether line is any of the conflict marker lines.
+func conflictMarker(line string) bool {
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case ' ', '\t':
+			continue
+		}
+		rest := line[i:]
+		return strings.HasPrefix(rest, "<<<<<<<") || strings.HasPrefix(rest, "|||||||") ||
+			strings.HasPrefix(rest, "=======") || strings.HasPrefix(rest, ">>>>>>>")
+	}
+	return false
+}
+
+// scanConflicts returns the complete conflict blocks by header line, and
+// whether any header line lacked a complete block.
+func scanConflicts(lines []string) (map[int]mergeConflict, bool) {
 	var conflicts map[int]mergeConflict
+	incomplete := false
 	for i := 0; i < len(lines); i++ {
 		if !conflictHeader(lines[i]) {
 			continue
 		}
 		c, ok := conflictAt(lines, i)
 		if !ok {
+			incomplete = true
 			continue
 		}
 		if conflicts == nil {
@@ -65,7 +83,7 @@ func scanConflicts(lines []string) map[int]mergeConflict {
 		conflicts[i] = c
 		i = c.end
 	}
-	return conflicts
+	return conflicts, incomplete
 }
 
 // conflictBlocks returns the buffer's conflicts by header line. A buffer with
@@ -84,7 +102,7 @@ func (e *EditorPaneWidget) conflictBlocks() map[int]mergeConflict {
 	// A grown or replaced line slice says nothing when the version moved on:
 	// the recorded changes already cover every edited line.
 	if !e.conflictValid || (e.conflictVer == ver && e.conflictData != data) || len(e.conflicts) > 0 || e.conflictInsertedSince() {
-		e.conflicts = scanConflicts(lines)
+		e.conflicts, e.conflictIncomplete = scanConflicts(lines)
 		e.conflictGen++
 	}
 	e.conflictValid, e.conflictVer, e.conflictData = true, ver, data
@@ -92,8 +110,11 @@ func (e *EditorPaneWidget) conflictBlocks() map[int]mergeConflict {
 }
 
 // conflictInsertedSince reports whether an edit since the last scan added a
-// line that can be a conflict header. Changes are replayed into final line
-// numbers, so only the inserted lines are examined.
+// line that can be a conflict marker. Each change records positions from the
+// buffer state just before it was applied, so an inserted range is moved
+// through every later splice before its lines are examined. Once a scan found
+// an incomplete header, any marker can complete it, so every marker line
+// counts; otherwise only a new header can introduce a conflict.
 func (e *EditorPaneWidget) conflictInsertedSince() bool {
 	if !e.conflictValid {
 		return true
@@ -103,18 +124,56 @@ func (e *EditorPaneWidget) conflictInsertedSince() bool {
 		return true
 	}
 	lines := e.Buf.Lines
-	after := 0
-	for i := len(changes) - 1; i >= 0; i-- {
-		c := changes[i]
-		start := c.Start + after
-		for line := max(start, 0); line < min(start+c.Added, len(lines)); line++ {
-			if conflictHeader(lines[line]) {
+	for i, c := range changes {
+		if c.Added <= 0 {
+			continue
+		}
+		start, end, ok := mapInsertedRange(changes[i+1:], c.Start, c.Start+c.Added)
+		if !ok {
+			return true
+		}
+		for line := max(start, 0); line < min(end, len(lines)); line++ {
+			if conflictHeader(lines[line]) || (e.conflictIncomplete && conflictMarker(lines[line])) {
 				return true
 			}
 		}
-		after += c.Added - c.Removed
 	}
 	return false
+}
+
+// mapInsertedRange moves an inserted line range through later changes, which
+// hold positions from the buffer state just before they were applied. It
+// returns ok false when a later change only partly overlaps the range: the
+// surviving lines cannot be mapped without a scan.
+func mapInsertedRange(later []buffer.Change, start, end int) (int, int, bool) {
+	for _, c := range later {
+		if c.Removed == 0 {
+			switch {
+			case c.Start <= start:
+				start += c.Added
+				end += c.Added
+			case c.Start < end:
+				end += c.Added
+			}
+			continue
+		}
+		removedEnd := c.Start + c.Removed
+		switch {
+		case removedEnd <= start:
+			delta := c.Added - c.Removed
+			start += delta
+			end += delta
+		case c.Start >= end:
+			// The change lands after the range; it does not move it.
+		case c.Start <= start && removedEnd >= end:
+			// The whole range was replaced; its lines are gone, and the
+			// replacement's own inserted lines carry the check.
+			return 0, 0, true
+		default:
+			return 0, 0, false
+		}
+	}
+	return start, end, true
 }
 
 func (e *EditorPaneWidget) resolveConflict(line, choice int) bool {
@@ -137,7 +196,7 @@ func (e *EditorPaneWidget) resolveConflict(line, choice int) bool {
 		replacement = append(replacement, e.Buf.Lines[c.separator+1:c.end]...)
 	}
 	// A buffer always holds one line, even when the chosen side is empty.
-	if len(replacement) == 0 && c.end == len(e.Buf.Lines)-1 {
+	if len(replacement) == 0 && c.start == 0 && c.end == len(e.Buf.Lines)-1 {
 		replacement = []string{""}
 	}
 	e.collapseMulti()
@@ -166,28 +225,70 @@ type conflictActionSpan struct {
 	text       string
 }
 
-func conflictActionSpans() [3]conflictActionSpan {
-	labels := [3]string{
-		i18n.Text("conflict.acceptCurrent"),
-		i18n.Text("conflict.acceptIncoming"),
-		i18n.Text("conflict.acceptBoth"),
-	}
+// conflictActionLayout is one candidate arrangement of the action buttons.
+type conflictActionLayout struct {
+	labels  [3]string
+	gap     int
+	bracket bool
+}
+
+func (l conflictActionLayout) spans() [3]conflictActionSpan {
 	var spans [3]conflictActionSpan
 	x := 0
-	for i, label := range labels {
+	for i, label := range l.labels {
 		if i > 0 {
-			x += 2
+			x += l.gap
 		}
-		text := "[" + label + "]"
+		text := label
+		if l.bracket {
+			text = "[" + label + "]"
+		}
 		spans[i] = conflictActionSpan{start: x, end: x + textwidth.String(text), action: i, text: text}
 		x = spans[i].end
 	}
 	return spans
 }
 
+func firstRune(s string) string {
+	for _, r := range s {
+		return string(r)
+	}
+	return "?"
+}
+
+// conflictActionSpans lays out the three buttons in width terminal columns.
+// The full labels are kept whenever they fit; a narrower pane falls back to
+// shorter labels and then to bare initials, so every action stays on screen
+// and none needs horizontal scrolling to be clicked.
+func conflictActionSpans(width int) [3]conflictActionSpan {
+	short := [3]string{
+		i18n.Text("conflict.current"),
+		i18n.Text("conflict.incoming"),
+		i18n.Text("conflict.both"),
+	}
+	initials := [3]string{firstRune(short[0]), firstRune(short[1]), firstRune(short[2])}
+	layouts := [4]conflictActionLayout{
+		{labels: [3]string{
+			i18n.Text("conflict.acceptCurrent"),
+			i18n.Text("conflict.acceptIncoming"),
+			i18n.Text("conflict.acceptBoth"),
+		}, gap: 2, bracket: true},
+		{labels: short, gap: 2, bracket: true},
+		{labels: initials, gap: 1, bracket: true},
+		{labels: initials},
+	}
+	for _, layout := range layouts {
+		spans := layout.spans()
+		if spans[2].end <= width {
+			return spans
+		}
+	}
+	return layouts[len(layouts)-1].spans()
+}
+
 // conflictActionAt returns the button at column, counted from the editor text.
-func conflictActionAt(column int) int {
-	for _, span := range conflictActionSpans() {
+func conflictActionAt(width, column int) int {
+	for _, span := range conflictActionSpans(width) {
 		if column >= span.start && column < span.end {
 			return span.action
 		}
@@ -199,7 +300,7 @@ func (e *EditorPaneWidget) conflictActionAt(row editorRow, x int) int {
 	if !row.conflict {
 		return -1
 	}
-	return conflictActionAt(x)
+	return conflictActionAt(e.Viewport.Width, x)
 }
 
 func (e *EditorPaneWidget) renderConflictRow(surface Surface, y, gutterW, editorW, line int) {
@@ -210,7 +311,7 @@ func (e *EditorPaneWidget) renderConflictRow(surface Surface, y, gutterW, editor
 	for x := gutterW; x < end; x++ {
 		surface.SetCell(x, y, term.Cell{Ch: ' '})
 	}
-	for i, span := range conflictActionSpans() {
+	for i, span := range conflictActionSpans(editorW) {
 		x := gutterW + span.start
 		if x >= end {
 			break

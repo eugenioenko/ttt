@@ -115,6 +115,7 @@ type EditorPaneWidget struct {
 	phantomGen              uint64
 	conflicts               map[int]mergeConflict
 	conflictValid           bool
+	conflictIncomplete      bool
 	conflictVer             uint64
 	conflictData            *string
 	conflictGen             uint64

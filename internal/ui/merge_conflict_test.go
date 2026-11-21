@@ -22,7 +22,7 @@ var conflictedLines = []string{
 }
 
 func actionX(e *EditorPaneWidget, action int) int {
-	span := conflictActionSpans()[action]
+	span := conflictActionSpans(e.Viewport.Width)[action]
 	return e.GetRect().X + e.GutterWidth() + span.start + 1
 }
 
@@ -38,6 +38,35 @@ func TestMergeConflictActionRowAboveHeader(t *testing.T) {
 	}
 	if row := e.rowAt(2); row.isPhantom() || row.bufLine != 1 {
 		t.Fatalf("row 2 = %+v, want the header line", row)
+	}
+}
+
+func TestConflictActionSpansFitWidth(t *testing.T) {
+	if full := conflictActionSpans(80); full[0].text != "[Accept Current]" {
+		t.Fatalf("wide layout = %q, want the full labels", full[0].text)
+	}
+	for _, width := range []int{50, 29, 28, 11, 3} {
+		spans := conflictActionSpans(width)
+		if spans[2].end > width {
+			t.Errorf("width %d: last button ends at %d", width, spans[2].end)
+		}
+		for i := 1; i < len(spans); i++ {
+			if spans[i].start < spans[i-1].end {
+				t.Errorf("width %d: buttons %d and %d overlap", width, i-1, i)
+			}
+		}
+	}
+}
+
+func TestMergeConflictActionsFitNarrowPane(t *testing.T) {
+	e := newRowsEditor(append([]string(nil), conflictedLines...), 20, 10)
+	rows := renderRows(e)
+	if rows[1] != "[C] [I] [B]" {
+		t.Fatalf("narrow action row = %q", rows[1])
+	}
+	clickAt(e, actionX(e, 2), e.GetRect().Y+1)
+	if got := strings.Join(e.Buf.Lines, "\n"); got != "line1\ncurrent\nincoming\nline3" {
+		t.Fatalf("lines = %q", got)
 	}
 }
 
@@ -131,6 +160,44 @@ func TestMergeConflictRowsFollowEdits(t *testing.T) {
 	rows = renderRows(e)
 	if strings.Contains(strings.Join(rows, "\n"), "Accept") || rows[1] != "line2" {
 		t.Fatalf("rows after removing the conflict = %q", rows)
+	}
+}
+
+func TestMergeConflictCompletesAfterMarkerInsert(t *testing.T) {
+	e := newRowsEditor([]string{"line1", "<<<<<<< HEAD", "current"}, 70, 10)
+	if rows := renderRows(e); strings.Contains(strings.Join(rows, "\n"), "Accept") {
+		t.Fatalf("incomplete conflict rendered: %q", rows)
+	}
+
+	e.Buf.Splice(3, 0, "=======", "incoming", ">>>>>>> other")
+	rows := renderRows(e)
+	if !strings.HasPrefix(rows[1], "[Accept Current]") || rows[2] != "<<<<<<< HEAD" {
+		t.Fatalf("rows after completing the conflict = %q", rows[:3])
+	}
+}
+
+func TestConflictDiscoveryMapsInsertThroughLaterEdits(t *testing.T) {
+	e := newRowsEditor([]string{"line1", "line2"}, 70, 10)
+	renderRows(e)
+
+	e.Buf.Splice(1, 0, "<<<<<<< HEAD", "current", "=======", "incoming", ">>>>>>> other")
+	e.Buf.Splice(6, 0, "line3")
+	e.Buf.Splice(0, 0, "line0")
+	rows := renderRows(e)
+	if !strings.HasPrefix(rows[2], "[Accept Current]") || rows[3] != "<<<<<<< HEAD" {
+		t.Fatalf("rows after edits around the conflict = %q", rows[:4])
+	}
+}
+
+func TestConflictDiscoverySkipsOrdinaryEdits(t *testing.T) {
+	e := newRowsEditor([]string{"<<<<<<< HEAD", "current"}, 70, 10)
+	renderRows(e)
+	gen := e.conflictGen
+
+	e.Buf.Splice(1, 1, "changed text")
+	renderRows(e)
+	if e.conflictGen != gen {
+		t.Fatalf("ordinary edit rescanned conflicts (gen %d -> %d)", gen, e.conflictGen)
 	}
 }
 
