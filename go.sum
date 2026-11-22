@@ -10,8 +10,8 @@ github.com/eugenioenko/regexp2/v2 v2.8.3 h1:rOd8fihGZOOkKWOy/Sl7uCowdNELQKFcJA0d
 github.com/eugenioenko/regexp2/v2 v2.8.3/go.mod h1:59/YhHVxgrxxHgjTuG4YFRRxynIz4E0bI+rqNBzwOrs=
 github.com/eugenioenko/textmate-go v0.4.1 h1:8cAEI/j5bws2aGHxWJx2GuWp8q7gaSvGXXPTuxyTrYA=
 github.com/eugenioenko/textmate-go v0.4.1/go.mod h1:ND3yzVj2aMRvc3vlQrVkflz51fkIEenEtGzXDohCxEM=
-github.com/eugenioenko/xterm-go v0.1.1 h1:m2OfYYVxIAQQQe0gxR9H08ZpW3vnlFUky9Np+6b+yGE=
-github.com/eugenioenko/xterm-go v0.1.1/go.mod h1:jV/Gx0AOXyYiiD5gMy3xtk8zxFl7bVv+kB5E5NPaM/o=
+github.com/eugenioenko/xterm-go v0.1.2 h1:QLQ4UunVqIf/S6OZ0uKITdiopwlleb/yNVBOzb3y6yA=
+github.com/eugenioenko/xterm-go v0.1.2/go.mod h1:jV/Gx0AOXyYiiD5gMy3xtk8zxFl7bVv+kB5E5NPaM/o=
 github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=
 github.com/fsnotify/fsnotify v1.10.1/go.mod h1:TLheqan6HD6GBK6PrDWyDPBaEV8LspOxvPSjC+bVfgo=
 github.com/gdamore/encoding v1.0.1 h1:YzKZckdBL6jVt2Gc+5p82qhrGiqMdG/eNs6Wy0u3Uhw=
