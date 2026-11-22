@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -360,5 +362,30 @@ func TestFileOpDuplicateDoesNotOpenTab(t *testing.T) {
 	dup := filepath.Join(dir, "note copy.txt")
 	if data, err := os.ReadFile(dup); err != nil || string(data) != "original" {
 		t.Fatalf("duplicate = %q (%v), want %q", data, err, "original")
+	}
+}
+
+func TestFileOpDuplicateMessageReportsJoinedCleanupError(t *testing.T) {
+	src := filepath.Join("folder", "pipe")
+	dst := filepath.Join("tmp", "folder copy")
+	unsupported := unsupportedFileTypeError{path: src}
+	cleanup := errors.New(i18n.Format("files.duplicateCleanupFailed", i18n.Args{
+		"path":  dst,
+		"error": "permission denied",
+	}))
+
+	got := fileOpDuplicateMessage(unsupported)
+	wantUnsupported := i18n.Format("files.unsupportedType", i18n.Args{"path": src})
+	if got != wantUnsupported {
+		t.Errorf("unsupported only: got %q, want %q", got, wantUnsupported)
+	}
+
+	got = fileOpDuplicateMessage(errors.Join(unsupported, cleanup))
+	if want := wantUnsupported + "\n" + cleanup.Error(); got != want {
+		t.Errorf("joined: got %q, want %q", got, want)
+	}
+	var as unsupportedFileTypeError
+	if !errors.As(errors.Join(unsupported, cleanup), &as) {
+		t.Fatal("joined error should still match unsupportedFileTypeError")
 	}
 }

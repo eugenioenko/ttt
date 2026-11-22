@@ -119,12 +119,7 @@ func (a *App) FileOpDuplicate(path string, reload func()) {
 		err = copyRegularFile(path, newPath, info.Mode())
 	}
 	if err != nil {
-		var unsupported unsupportedFileTypeError
-		if errors.As(err, &unsupported) {
-			a.StatusError(i18n.Format("files.unsupportedType", i18n.Args{"path": unsupported.path}))
-			return
-		}
-		a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
+		a.StatusError(fileOpDuplicateMessage(err))
 		return
 	}
 	a.invalidateRepositoryPath(newPath, RepositoryWorktree)
@@ -136,6 +131,35 @@ type unsupportedFileTypeError struct{ path string }
 
 func (e unsupportedFileTypeError) Error() string {
 	return "unsupported file type: " + e.path
+}
+
+func fileOpDuplicateMessage(err error) string {
+	var unsupported unsupportedFileTypeError
+	if !errors.As(err, &unsupported) {
+		return i18n.Format("status.error", i18n.Args{"error": err.Error()})
+	}
+	msg := i18n.Format("files.unsupportedType", i18n.Args{"path": unsupported.path})
+	for _, part := range flattenJoinedErrors(err) {
+		if _, ok := part.(unsupportedFileTypeError); ok {
+			continue
+		}
+		msg += "\n" + part.Error()
+	}
+	return msg
+}
+
+func flattenJoinedErrors(err error) []error {
+	if err == nil {
+		return nil
+	}
+	if joiner, ok := err.(interface{ Unwrap() []error }); ok {
+		var out []error
+		for _, e := range joiner.Unwrap() {
+			out = append(out, flattenJoinedErrors(e)...)
+		}
+		return out
+	}
+	return []error{err}
 }
 
 // copyTree duplicates a directory recursively. Symlinks are recreated as
