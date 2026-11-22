@@ -6,8 +6,10 @@ import (
 	"strings"
 	"sync/atomic"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/xterm-go"
 )
 
@@ -41,9 +43,15 @@ func terminalLinkURI(raw string) *url.URL {
 	return nil
 }
 
-func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine, col int, cell *term.Cell, links map[int]term.Hyperlink) {
+func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine, col int, cell *term.Cell, links map[int]term.Hyperlink, urls []terminalURLSpan) {
 	id := terminalLinkID(line, col)
 	if id == 0 {
+		for _, span := range urls {
+			if col >= span.StartCol && col < span.EndCol {
+				cell.Link = span.Link
+				break
+			}
+		}
 		return
 	}
 	data, ok := links[id]
@@ -58,4 +66,85 @@ func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine
 		links[id] = data
 	}
 	cell.Link = data
+}
+
+type terminalURLSpan struct {
+	StartCol, EndCol int
+	Link             term.Hyperlink
+}
+
+func (tw *TerminalWidget) urlLinksForText(text []byte) []terminalURLSpan {
+	if spans, ok := tw.urlMemo[string(text)]; ok {
+		return spans
+	}
+	if tw.urlMemo == nil || len(tw.urlMemo) >= linkMemoMax {
+		tw.urlMemo = make(map[string][]terminalURLSpan)
+	}
+	var spans []terminalURLSpan
+	lineText := string(text)
+	for _, candidate := range detectURLCandidates(lineText) {
+		if terminalLinkURI(candidate.URL) == nil {
+			continue
+		}
+		runes := []rune(lineText)
+		start := textwidth.Runes(runes[:candidate.StartCol])
+		spans = append(spans, terminalURLSpan{
+			StartCol: start, EndCol: start + textwidth.String(candidate.URL),
+			Link: term.NewHyperlink(candidate.URL, ""),
+		})
+	}
+	tw.urlMemo[lineText] = spans
+	return spans
+}
+
+func (tw *TerminalWidget) urlLinksForLine(buf *xterm.Buffer, row int, cache map[int][]terminalURLSpan) []terminalURLSpan {
+	if spans, ok := cache[row]; ok {
+		return spans
+	}
+	if row < 0 || row >= buf.Lines.Length() {
+		return nil
+	}
+	start := row
+	for start > 0 {
+		line := buf.Lines.Get(start)
+		if line == nil || !line.IsWrapped {
+			break
+		}
+		start--
+	}
+	end := start
+	tw.urlText = tw.urlText[:0]
+	for end < buf.Lines.Length() {
+		line := buf.Lines.Get(end)
+		if line == nil || (end > start && !line.IsWrapped) {
+			break
+		}
+		for x := 0; x < line.Len; x += max(1, line.GetWidth(x)) {
+			if line.IsCombined(x) != 0 {
+				tw.urlText = append(tw.urlText, line.GetString(x)...)
+			} else {
+				ch := rune(line.GetCodePoint(x))
+				if ch == 0 {
+					ch = ' '
+				}
+				tw.urlText = utf8.AppendRune(tw.urlText, ch)
+			}
+		}
+		end++
+	}
+	spans := tw.urlLinksForText(tw.urlText)
+	offset := 0
+	for y := start; y < end; y++ {
+		width := buf.Lines.Get(y).Len
+		cache[y] = nil
+		for _, span := range spans {
+			if span.StartCol < offset+width && span.EndCol > offset {
+				cache[y] = append(cache[y], terminalURLSpan{
+					StartCol: max(0, span.StartCol-offset), EndCol: min(width, span.EndCol-offset), Link: span.Link,
+				})
+			}
+		}
+		offset += width
+	}
+	return cache[row]
 }

@@ -256,7 +256,7 @@ Built-in terminal emulator. Press Ctrl+T to toggle the terminal panel, or Alt+T 
 - **Terminal: Send Next Key** is bound to **Ctrl+K** and can be rebound in **Settings → General → Keyboard**, beside the modifier preference. Plain or Shift-only continuations complete TTT chords; a Ctrl/Alt/Super combination goes directly to the terminal, bypassing TTT shortcuts and local clipboard handling. Clicking, changing focus, or closing the terminal cancels forwarding.
 - Enable **Forward shortcuts to terminal** in that same Keyboard section (`terminal.forwardShortcuts`, default `false`) to pass reserved shortcuts and chord prefixes directly to terminal programs. Terminal-local copy/paste behavior keeps its existing settings.
 - **Ctrl+F6** (**Terminal: Toggle Shortcut Forwarding**) changes the mode for the current TTT session without saving a new default and shows a short status notification. It is also available from the command palette.
-- OSC 8 hyperlinks support labels such as **Click here** and are forwarded to the outer terminal, which handles hover and opening links locally (including over SSH).
+- Web URLs and OSC 8 hyperlinks (including labels such as **Click here**) are forwarded to the outer terminal, which handles hover and opening links locally, including over SSH.
 - Terminal shell and scrollback are configurable in `settings.json`; ANSI colors are theme-configurable via the `terminal` field in `theme.json`
 
 See [Integrated Terminal](docs-web/src/content/docs/guides/terminal.md).

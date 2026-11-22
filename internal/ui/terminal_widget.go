@@ -76,7 +76,6 @@ type TerminalWidget struct {
 	selAnchor  termSelPos
 	selCurrent termSelPos
 
-	OnOpenURL        func(url string)
 	OnOpenFile       func(path string, line, col int)
 	WorkDir          string
 	SelectionStyle   string
@@ -87,6 +86,9 @@ type TerminalWidget struct {
 	linkModifierHeld bool
 	linkCache        map[int][]linkSpan
 	linkMemo         map[string][]linkSpan
+	urlMemo          map[string][]terminalURLSpan
+	urlLines         map[int][]terminalURLSpan
+	urlText          []byte
 
 	// SGR button code of a held press being forwarded, or -1 when none.
 	mouseButtonHeld int
@@ -186,7 +188,7 @@ func detectLinks(text string, workDir string) []linkSpan {
 	return resolved
 }
 
-func detectLinkCandidates(text string) []linkSpan {
+func detectURLCandidates(text string) []linkSpan {
 	var spans []linkSpan
 
 	for _, loc := range urlRe.FindAllStringIndex(text, -1) {
@@ -208,6 +210,11 @@ func detectLinkCandidates(text string) []linkSpan {
 		})
 	}
 
+	return spans
+}
+
+func detectLinkCandidates(text string) []linkSpan {
+	spans := detectURLCandidates(text)
 	for _, match := range fileLineRe.FindAllStringSubmatchIndex(text, -1) {
 		filePath := text[match[2]:match[3]]
 		lineStr := text[match[4]:match[5]]
@@ -320,7 +327,7 @@ func (tw *TerminalWidget) cachedLinkAt(unifiedLine, col int) *linkSpan {
 		return nil
 	}
 	for i := range spans {
-		if col >= spans[i].StartCol && col < spans[i].EndCol {
+		if spans[i].IsFile && col >= spans[i].StartCol && col < spans[i].EndCol {
 			return &spans[i]
 		}
 	}
@@ -362,7 +369,7 @@ func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
 		}
 		text := extractLineText(buf, unifiedLine, w)
 		for _, span := range tw.linksForLine(text) {
-			if col >= span.StartCol && col < span.EndCol {
+			if span.IsFile && col >= span.StartCol && col < span.EndCol {
 				found = &span
 				return
 			}
@@ -411,10 +418,16 @@ func (tw *TerminalWidget) Render(surface Surface) {
 
 		cellData := xterm.NewCellData()
 		links := make(map[int]term.Hyperlink)
+		if tw.urlLines == nil {
+			tw.urlLines = make(map[int][]terminalURLSpan)
+		} else {
+			clear(tw.urlLines)
+		}
 
 		if tw.scrollOffset == 0 {
 			for y := 0; y < h && y < rows; y++ {
 				unifiedLine := sbLen + y
+				urls := tw.urlLinksForLine(buf, unifiedLine, tw.urlLines)
 				if tw.linkModifierHeld {
 					lineText := extractLineText(buf, unifiedLine, w)
 					tw.linkCache[unifiedLine] = tw.linksForLine(lineText)
@@ -429,7 +442,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
-						tw.setCellLink(xt, bl, x, &c, links)
+						tw.setCellLink(xt, bl, x, &c, links, urls)
 					} else {
 						var bg term.DirectColor
 						if tw.Palette != nil {
@@ -454,6 +467,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 
 			for screenY := 0; screenY < h; screenY++ {
 				srcLine := startLine + screenY
+				urls := tw.urlLinksForLine(buf, srcLine, tw.urlLines)
 				if tw.linkModifierHeld {
 					lineText := extractLineText(buf, srcLine, w)
 					tw.linkCache[srcLine] = tw.linksForLine(lineText)
@@ -468,7 +482,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
-						tw.setCellLink(xt, bl, x, &c, links)
+						tw.setCellLink(xt, bl, x, &c, links, urls)
 					} else {
 						var bg term.DirectColor
 						if tw.Palette != nil {
@@ -696,8 +710,6 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 			if link := tw.linkAt(pos.Line, pos.Col); link != nil {
 				if link.IsFile && tw.OnOpenFile != nil {
 					tw.OnOpenFile(link.FilePath, link.Line, link.Col)
-				} else if !link.IsFile && tw.OnOpenURL != nil {
-					tw.OnOpenURL(link.URL)
 				}
 				return EventConsumed
 			}

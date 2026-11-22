@@ -43,7 +43,6 @@ func TestTerminalHyperlinkUsesOuterTerminal(t *testing.T) {
 			t.Run(target+end, func(t *testing.T) {
 				tw, write, render := hyperlinkWidget(t, 40, 3)
 				write("界 " + osc8(target, "https://label.example", end) + " plain")
-				tw.OnOpenURL = func(string) { t.Error("ttt opened an OSC 8 URL") }
 				tw.OnOpenFile = func(string, int, int) { t.Error("ttt opened an OSC 8 file") }
 				tw.SuperShortcuts = true
 				want := target
@@ -102,17 +101,18 @@ func TestTerminalHyperlinkUsesCurrentTarget(t *testing.T) {
 	}
 	write("\r" + label)
 	cells := render()
-	if cells[0][0].Link.URL() != "" {
-		t.Fatal("overwrite retained hyperlink")
+	if cells[0][0].Link.URL() != label {
+		t.Fatal("overwrite did not replace explicit target with detected URL")
 	}
-	if cells[0][0].Attrs&term.CellAttrUnderline == 0 {
-		t.Fatal("plain URL lost hover underline")
+	if cells[0][0].Attrs&term.CellAttrUnderline != 0 {
+		t.Fatal("ttt added a plain URL hover underline")
 	}
-	opened := ""
-	tw.OnOpenURL = func(uri string) { opened = uri }
-	tw.HandleEvent(tcell.NewEventMouse(5, 2, tcell.Button1, tcell.ModCtrl))
-	if opened != label {
-		t.Fatalf("plain URL opened %q", opened)
+	if tw.linkAt(0, 2) != nil {
+		t.Fatal("plain URL became an editor link")
+	}
+	write("\r\x1b[2Kplain")
+	if render()[0][0].Link.URL() != "" {
+		t.Fatal("erased URL retained hyperlink")
 	}
 }
 
@@ -148,11 +148,8 @@ func TestTerminalHyperlinkScrollbackAndWideCells(t *testing.T) {
 	if cells[0][0].Link.URL() != "https://example.com" {
 		t.Fatal("scrollback lost hyperlink")
 	}
-	opened := ""
-	tw.OnOpenURL = func(uri string) { opened = uri }
-	tw.HandleEvent(tcell.NewEventMouse(4, 2, tcell.Button1, tcell.ModCtrl))
-	if opened != "" {
-		t.Fatalf("scrollback click opened %q", opened)
+	if tw.HandleEvent(tcell.NewEventMouse(4, 2, tcell.Button1, tcell.ModCtrl)) != EventCaptured {
+		t.Fatal("scrollback link click intercepted by ttt")
 	}
 	tw.scrollOffset = 0
 	write("\x1b[?1049h\x1b[H" + osc8("https://alternate.example", "Alt", "\a"))
@@ -222,18 +219,74 @@ func TestTerminalHyperlinkClippedCellCannotOpen(t *testing.T) {
 	if cells[0][3].Ch != ' ' || cells[0][3].Link.URL() != "" {
 		t.Fatalf("clipped cell = %+v", cells[0][3])
 	}
-	opened := ""
-	tw.OnOpenURL = func(uri string) { opened = uri }
 	tw.HandleEvent(tcell.NewEventMouse(6, 2, tcell.Button1, tcell.ModCtrl))
-	if opened != "" || tw.PointerShapeAt(6, 2) == term.PointerHand {
+	if tw.PointerShapeAt(6, 2) == term.PointerHand {
 		t.Fatal("clipped blank still acts as a link")
 	}
 	for _, x := range []int{3, 4} {
 		tw.ClearSelection()
-		tw.HandleEvent(tcell.NewEventMouse(x, 3, tcell.Button1, tcell.ModCtrl))
-		if opened != "" {
-			t.Fatalf("interior wide cell at %d opened %q", x, opened)
+		if tw.HandleEvent(tcell.NewEventMouse(x, 3, tcell.Button1, tcell.ModCtrl)) != EventCaptured {
+			t.Fatalf("interior wide cell at %d intercepted by ttt", x)
 		}
-		opened = ""
+	}
+}
+
+func TestTerminalPlainURLsForwarded(t *testing.T) {
+	tw, write, render := hyperlinkWidget(t, 80, 3)
+	write("界 https://example.com/界, http://other.example/path. plain")
+	for _, mod := range []tcell.ModMask{tcell.ModNone, tcell.ModCtrl, tcell.ModMeta} {
+		tw.SuperShortcuts = true
+		tw.HandleEvent(tcell.NewEventMouse(6, 2, tcell.ButtonNone, mod))
+		cells := render()
+		for _, pos := range []int{3, 23, 24} {
+			if got := cells[0][pos].Link.URL(); got != "https://example.com/界" {
+				t.Fatalf("URL at %d=%q", pos, got)
+			}
+		}
+		if cells[0][2].Link.URL() != "" || cells[0][25].Link.URL() != "" {
+			t.Fatal("hyperlink included prefix or punctuation")
+		}
+		if got := cells[0][27].Link.URL(); got != "http://other.example/path" {
+			t.Fatalf("second URL=%q", got)
+		}
+		if cells[0][3].Attrs&term.CellAttrUnderline != 0 || tw.PointerShapeAt(6, 2) == term.PointerHand {
+			t.Fatal("ttt supplied web link hover")
+		}
+		if got := tw.HandleEvent(tcell.NewEventMouse(6, 2, tcell.Button1, mod)); got != EventCaptured {
+			t.Fatalf("URL click handled locally: %v", got)
+		}
+		tw.HandleEvent(tcell.NewEventMouse(6, 2, tcell.ButtonNone, mod))
+		tw.ClearSelection()
+	}
+}
+
+func TestTerminalPlainURLWrapAndScrollback(t *testing.T) {
+	tw, write, render := hyperlinkWidget(t, 16, 3)
+	url := "https://example.com/a-long-path"
+	write("prefix " + url + " suffix")
+	cells := render()
+	for _, pos := range [][2]int{{0, 7}, {0, 15}, {1, 0}, {1, 15}, {2, 0}} {
+		if got := cells[pos[0]][pos[1]].Link.URL(); got != url {
+			t.Fatalf("wrapped URL at %v=%q", pos, got)
+		}
+	}
+	write("\r\nnext\r\nlast")
+	tw.scrollOffset = 2
+	if got := render()[0][7].Link.URL(); got != url {
+		t.Fatalf("scrollback URL=%q", got)
+	}
+	tw.scrollOffset = 0
+	write("\x1b[?1049h\x1b[Hhttps://alt.example")
+	if got := render()[0][0].Link.URL(); got != "https://alt.example" {
+		t.Fatalf("alternate URL=%q", got)
+	}
+}
+
+func TestTerminalPlainURLHardNewline(t *testing.T) {
+	_, write, render := hyperlinkWidget(t, 40, 3)
+	write("https://example.com\r\n/not-part-of-the-url")
+	cells := render()
+	if cells[0][0].Link.URL() != "https://example.com" || cells[1][0].Link.URL() != "" {
+		t.Fatal("URL detection crossed hard newline")
 	}
 }
