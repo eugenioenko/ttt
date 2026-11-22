@@ -389,15 +389,12 @@ func TestTcellScreenHyperlinkStyle(t *testing.T) {
 		sim.SetSize(4, 1)
 		screen := NewTcellScreenFrom(sim)
 		for _, uri := range []string{"https://example.com/one", "https://example.com/two", ""} {
-			cell := Cell{Ch: 'x', Direct: direct, URL: uri}
-			if uri != "" {
-				cell.URLID = "link"
-			}
+			cell := Cell{Ch: 'x', Direct: direct, Link: NewHyperlink(uri, "link")}
 			screen.SetCell(0, 0, cell)
 			_, style, _ := sim.Get(0, 0)
 			id, got := style.GetUrl()
-			if got != uri || id != cell.URLID {
-				t.Fatalf("direct=%t: link=(%q,%q), want=(%q,%q)", direct, id, got, cell.URLID, uri)
+			if got != uri || id != cell.Link.ID() {
+				t.Fatalf("direct=%t: link=(%q,%q), want=(%q,%q)", direct, id, got, cell.Link.ID(), uri)
 			}
 		}
 	}
@@ -411,7 +408,7 @@ func TestTcellScreenEmitsOSC8(t *testing.T) {
 	}
 	defer screen.Fini()
 	tty.buf.Reset()
-	screen.SetCell(0, 0, Cell{Ch: 'L', Direct: true, URL: "https://example.com", URLID: "test"})
+	screen.SetCell(0, 0, Cell{Ch: 'L', Direct: true, Link: NewHyperlink("https://example.com", "test")})
 	screen.SetCell(1, 0, Cell{Ch: 'x'})
 	screen.Show()
 	output := tty.buf.String()

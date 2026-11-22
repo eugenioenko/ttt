@@ -397,7 +397,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		}
 
 		cellData := xterm.NewCellData()
-		links := make(map[int]xterm.OscLinkData)
+		links := make(map[int]term.Hyperlink)
 
 		if tw.scrollOffset == 0 {
 			for y := 0; y < h && y < rows; y++ {
@@ -426,7 +426,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(unifiedLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkModifierHeld && (c.URL != "" || tw.cachedLinkAt(unifiedLine, x) != nil) {
+					} else if tw.linkModifierHeld && (c.Link != (term.Hyperlink{}) || tw.cachedLinkAt(unifiedLine, x) != nil) {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)
@@ -465,7 +465,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(srcLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkModifierHeld && (c.URL != "" || tw.cachedLinkAt(srcLine, x) != nil) {
+					} else if tw.linkModifierHeld && (c.Link != (term.Hyperlink{}) || tw.cachedLinkAt(srcLine, x) != nil) {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)
@@ -495,7 +495,7 @@ func (tw *TerminalWidget) renderScrollbar(surface Surface) {
 func (tw *TerminalWidget) clipWideRune(c *term.Cell, x, contentW int) {
 	if x == contentW-1 && textwidth.Rune(c.Ch) == 2 {
 		c.Ch = ' '
-		c.URL, c.URLID = "", ""
+		c.Link = term.Hyperlink{}
 	}
 }
 

@@ -44,11 +44,11 @@ func TestTerminalHyperlinkRenderAndClick(t *testing.T) {
 			write("界 " + osc8("https://example.com/target", "Click here", end) + " plain")
 			cells := render()
 			for x := 3; x < 13; x++ {
-				if cells[0][x].URL != "https://example.com/target" || cells[0][x].URLID == "" {
+				if cells[0][x].Link.URL() != "https://example.com/target" || cells[0][x].Link.ID() == "" {
 					t.Fatalf("linked cell %d: %+v", x, cells[0][x])
 				}
 			}
-			if cells[0][13].URL != "" {
+			if cells[0][13].Link.URL() != "" {
 				t.Fatal("link leaked into plain text")
 			}
 			opened := ""
@@ -90,16 +90,16 @@ func TestTerminalHyperlinkUsesCurrentTarget(t *testing.T) {
 	assertTarget("https://first.example")
 	write("\r" + osc8("https://second.example", label, "\a"))
 	assertTarget("https://second.example")
-	if got := render()[0][0].URL; got != "https://second.example" {
+	if got := render()[0][0].Link.URL(); got != "https://second.example" {
 		t.Fatalf("rendered URL=%q", got)
 	}
 	write("\r" + label)
 	assertTarget(label)
-	if render()[0][0].URL != "" {
+	if render()[0][0].Link.URL() != "" {
 		t.Fatal("overwrite retained hyperlink")
 	}
 	write("\r" + osc8("javascript:alert(1)", label, "\a"))
-	if tw.linkAt(0, 2) != nil || render()[0][0].URL != "" {
+	if tw.linkAt(0, 2) != nil || render()[0][0].Link.URL() != "" {
 		t.Fatal("unsupported explicit target fell back to its label")
 	}
 }
@@ -108,13 +108,13 @@ func TestTerminalHyperlinkScrollbackAndWideCells(t *testing.T) {
 	tw, write, render := hyperlinkWidget(t, 8, 2)
 	write(osc8("https://example.com", "界abcdefghi", "\a"))
 	cells := render()
-	if cells[0][0].URL == "" || cells[0][1].URL == "" || cells[1][0].URL == "" {
+	if cells[0][0].Link.URL() == "" || cells[0][1].Link.URL() == "" || cells[1][0].Link.URL() == "" {
 		t.Fatal("wide or wrapped cells lost hyperlink")
 	}
 	write("\r\nnext\r\nlast")
 	tw.scrollOffset = 2
 	cells = render()
-	if cells[0][0].URL != "https://example.com" {
+	if cells[0][0].Link.URL() != "https://example.com" {
 		t.Fatal("scrollback lost hyperlink")
 	}
 	opened := ""
@@ -125,11 +125,11 @@ func TestTerminalHyperlinkScrollbackAndWideCells(t *testing.T) {
 	}
 	tw.scrollOffset = 0
 	write("\x1b[?1049h\x1b[H" + osc8("https://alternate.example", "Alt", "\a"))
-	if render()[0][0].URL != "https://alternate.example" {
+	if render()[0][0].Link.URL() != "https://alternate.example" {
 		t.Fatal("alternate screen lost hyperlink")
 	}
 	write("\x1b[?1049l")
-	if strings.Contains(render()[0][0].URL, "alternate") {
+	if strings.Contains(render()[0][0].Link.URL(), "alternate") {
 		t.Fatal("alternate hyperlink leaked into normal buffer")
 	}
 }
@@ -158,12 +158,12 @@ func TestTerminalHyperlinkClippingAndPaneIDs(t *testing.T) {
 	text := osc8("https://example.com", "abc", "\a")
 	write(text)
 	otherWrite(text)
-	if render()[0][0].URLID == otherRender()[0][0].URLID {
+	if render()[0][0].Link.ID() == otherRender()[0][0].Link.ID() {
 		t.Fatal("different panes share hyperlink ID")
 	}
-	c := term.Cell{Ch: '界', URL: "https://example.com", URLID: "id"}
+	c := term.Cell{Ch: '界', Link: term.NewHyperlink("https://example.com", "id")}
 	tw.clipWideRune(&c, 3, 4)
-	if c.Ch != ' ' || c.URL != "" || c.URLID != "" {
+	if c.Ch != ' ' || c.Link.URL() != "" || c.Link.ID() != "" {
 		t.Fatalf("clipped cell retained link: %+v", c)
 	}
 }

@@ -61,7 +61,7 @@ func terminalLinkTarget(raw string) *linkSpan {
 	return &linkSpan{IsFile: true, FilePath: filepath.FromSlash(path)}
 }
 
-func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine, col int, cell *term.Cell, links map[int]xterm.OscLinkData) {
+func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine, col int, cell *term.Cell, links map[int]term.Hyperlink) {
 	id := terminalLinkID(line, col)
 	if id == 0 {
 		return
@@ -69,14 +69,13 @@ func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine
 	data, ok := links[id]
 	if !ok {
 		if link := xt.GetLinkData(id); link != nil && terminalLinkURI(link.URI) != nil {
-			data.URI = link.URI
 			// Link IDs belong to one emulator; isolate them across terminal panes.
 			if tw.linkNamespace == 0 {
 				tw.linkNamespace = terminalLinkNamespace.Add(1)
 			}
-			data.ID = fmt.Sprintf("ttt-%d-%d", tw.linkNamespace, id)
+			data = term.NewHyperlink(link.URI, fmt.Sprintf("ttt-%d-%d", tw.linkNamespace, id))
 		}
 		links[id] = data
 	}
-	cell.URL, cell.URLID = data.URI, data.ID
+	cell.Link = data
 }
