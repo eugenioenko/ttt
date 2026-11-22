@@ -84,9 +84,9 @@ Terminal settings in `settings.json`:
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
 | `terminal.padding_x` | int | `1` | Blank columns on each side of the terminal; `0` removes both margins |
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V; set to `false` to pass `^V` through to the terminal program |
-| `terminal.forwardShortcuts` | bool | `false` | Forward reserved TTT shortcuts and chord prefixes to the terminal. Available under General → Keyboard; applies immediately |
+| `terminal.forwardShortcuts` | bool | `false` | Forward reserved TTT shortcuts and chord prefixes to the terminal. Available under General → Keyboard and **Options > Terminal > Forward Shortcuts**; applies immediately |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
-| `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"` |
+| `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"`. Also under **Options > Terminal > Selection Style** |
 | `terminal.shellIntegration` | bool | `true` | Start bash with ttt's prompt marks so resizing redraws the prompt cleanly |
 
 Set `terminal.ctrlVPastes` to `false` for shell quoted insert or Vim visual-block mode. Ctrl+Shift+V still pastes when the outer terminal reports it distinctly. Some terminals handle Ctrl+Shift+V themselves and send a bracketed paste, which also works. Terminals that encode both shortcuts as `^V` cannot distinguish them. The setting applies immediately to open terminal tabs and is available under **Settings → Terminal → Ctrl+V pastes**.

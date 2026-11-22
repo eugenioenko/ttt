@@ -311,3 +311,37 @@ func TestOptionsMenuToggleLSPHover(t *testing.T) {
 		t.Error("hover should be re-enabled after second toggle")
 	}
 }
+
+func TestOptionsMenuForwardShortcutsFollowsSessionToggle(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.exec("terminal.toggleShortcutForwarding")
+	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleTerminalForwardShortcuts"); item.Checked != ui.MenuChecked {
+		t.Fatalf("menu should show the session override as checked, got %+v", item)
+	}
+
+	h.exec("options.toggleTerminalForwardShortcuts")
+	if h.app.Root.ForwardShortcuts || h.app.Settings.Terminal.ForwardShortcuts {
+		t.Fatal("toggling a forwarded session should turn forwarding off and save false")
+	}
+
+	h.exec("options.toggleTerminalForwardShortcuts")
+	if !h.app.Root.ForwardShortcuts {
+		t.Fatal("toggling again should turn forwarding on")
+	}
+	data, err := os.ReadFile(filepath.Join(h.dir, "config", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved config.Settings
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if !saved.Terminal.ForwardShortcuts {
+		t.Fatal("forward shortcuts should be saved as true")
+	}
+	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleTerminalForwardShortcuts"); item.Checked != ui.MenuChecked {
+		t.Fatalf("menu should be checked after enabling, got %+v", item)
+	}
+}

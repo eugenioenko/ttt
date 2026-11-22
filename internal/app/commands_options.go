@@ -226,6 +226,14 @@ func (a *App) ToggleScrollbarGitMarks() {
 	a.SaveAndApplySettings()
 }
 
+func (a *App) ToggleTerminalForwardShortcuts() {
+	enabled := !a.Root.ForwardShortcuts
+	a.Settings.Terminal.ForwardShortcuts = enabled
+	a.SaveAndApplySettings()
+	// Ctrl+F6 can leave a session override that matches neither the old nor the new saved value.
+	a.Root.SetForwardShortcuts(enabled)
+}
+
 func (a *App) SetGutterStyle(style string) {
 	a.Settings.Editor.GutterStyle = style
 	a.SaveAndApplySettings()
@@ -511,6 +519,10 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("markdown.wordWrapMenu"), Command: "options.markdownWordWrap"},
 			{Label: i18n.Text("markdown.wrapWidthMenu"), Command: "options.markdownWrapWidth"},
 		}},
+		{Label: i18n.Text("settings.terminal"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.forwardShortcuts"), Command: "options.toggleTerminalForwardShortcuts", Checked: menuChecked(a.Root.ForwardShortcuts)},
+			{Label: i18n.Text("menu.selectionStyle"), Command: "options.terminalSelectionStyle"},
+		}},
 		ui.MenuSep(),
 		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
@@ -753,6 +765,11 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleScrollbarGitMarks", Title: i18n.Text("command.toggleScrollbarGitMarks"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "git", "scrollbar", "marks", "changes"},
 		Handler:  app.ToggleScrollbarGitMarks,
+	})
+	reg.Register(command.Command{
+		ID: "options.toggleTerminalForwardShortcuts", Title: i18n.Text("command.toggleTerminalForwardShortcuts"),
+		Keywords: []string{"preferences", "settings", "terminal", "shortcuts", "forward", "keys"},
+		Handler:  app.ToggleTerminalForwardShortcuts,
 	})
 
 	reg.Register(command.Command{
