@@ -3,8 +3,6 @@ package ui
 import (
 	"fmt"
 	"net/url"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"unicode"
@@ -41,24 +39,6 @@ func terminalLinkURI(raw string) *url.URL {
 		}
 	}
 	return nil
-}
-
-func terminalLinkTarget(raw string) *linkSpan {
-	u := terminalLinkURI(raw)
-	if u == nil {
-		return nil
-	}
-	if u.Scheme != "file" {
-		return &linkSpan{URL: raw}
-	}
-	if (u.Host != "" && !strings.EqualFold(u.Host, "localhost")) || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil
-	}
-	path := u.Path
-	if runtime.GOOS == "windows" && len(path) >= 3 && path[2] == ':' {
-		path = path[1:]
-	}
-	return &linkSpan{IsFile: true, FilePath: filepath.FromSlash(path)}
 }
 
 func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine, col int, cell *term.Cell, links map[int]term.Hyperlink) {

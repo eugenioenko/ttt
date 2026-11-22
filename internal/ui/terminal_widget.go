@@ -356,11 +356,8 @@ func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
 				return
 			}
 		}
-		if id := terminalLinkID(bl, col); id != 0 {
-			// Explicit targets take precedence over URL-looking labels, even when unsupported.
-			if data := xt.GetLinkData(id); data != nil {
-				found = terminalLinkTarget(data.URI)
-			}
+		if terminalLinkID(bl, col) != 0 {
+			// The outer terminal owns OSC 8 links, including URL-looking labels.
 			return
 		}
 		text := extractLineText(buf, unifiedLine, w)
@@ -442,7 +439,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(unifiedLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkModifierHeld && (c.Link != (term.Hyperlink{}) || tw.cachedLinkAt(unifiedLine, x) != nil) {
+					} else if tw.linkModifierHeld && terminalLinkID(bl, x) == 0 && tw.cachedLinkAt(unifiedLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)
@@ -481,7 +478,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(srcLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.linkModifierHeld && (c.Link != (term.Hyperlink{}) || tw.cachedLinkAt(srcLine, x) != nil) {
+					} else if tw.linkModifierHeld && terminalLinkID(bl, x) == 0 && tw.cachedLinkAt(srcLine, x) != nil {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)
@@ -542,7 +539,8 @@ func (tw *TerminalWidget) lineCell(bl *xterm.BufferLine, x int, cd *xterm.CellDa
 	if cd.IsBold() != 0 {
 		cell.Attrs |= term.CellAttrBold
 	}
-	if cd.IsUnderline() != 0 {
+	// IsUnderline also includes xterm's implicit OSC 8 decoration; preserve only SGR underline.
+	if cd.Fg&xterm.FgFlagUnderline != 0 {
 		cell.Attrs |= term.CellAttrUnderline
 	}
 	if cd.IsItalic() != 0 {
