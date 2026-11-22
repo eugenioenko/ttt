@@ -816,6 +816,7 @@ func registerWidgetCallbacks(app *App) {
 			{Label: i18n.Text("menu.openInTerminal"), Command: "explorer.openInTerminal"},
 			ui.MenuSep(),
 			{Label: i18n.Text("general.rename"), Command: "explorer.rename"},
+			{Label: i18n.Text("general.duplicate"), Command: "explorer.duplicate"},
 			{Label: i18n.Text("general.delete"), Command: "explorer.delete"},
 			ui.MenuSep(),
 			{Label: i18n.Text("general.expandAll"), Command: "explorer.expandAll"},

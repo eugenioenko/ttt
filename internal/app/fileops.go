@@ -2,10 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
@@ -89,6 +93,196 @@ func (a *App) FileOpRename(path string, reload func()) {
 		}
 		reload()
 	})
+}
+
+func (a *App) FileOpDuplicate(path string, reload func()) {
+	if path == "" {
+		return
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
+		return
+	}
+	if !info.IsDir() && !info.Mode().IsRegular() {
+		a.StatusWarn(i18n.Text("status.cannotDuplicateItem"))
+		return
+	}
+	newPath, err := nextDuplicatePath(path)
+	if err != nil {
+		a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
+		return
+	}
+	if info.IsDir() {
+		err = copyTree(path, newPath)
+	} else {
+		err = copyRegularFile(path, newPath, info.Mode())
+	}
+	if err != nil {
+		var unsupported unsupportedFileTypeError
+		if errors.As(err, &unsupported) {
+			a.StatusError(i18n.Format("files.unsupportedType", i18n.Args{"path": unsupported.path}))
+			return
+		}
+		a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
+		return
+	}
+	a.invalidateRepositoryPath(newPath, RepositoryWorktree)
+	reload()
+	a.StatusNotify(i18n.Format("files.duplicated", i18n.Args{"name": filepath.Base(newPath)}))
+}
+
+type unsupportedFileTypeError struct{ path string }
+
+func (e unsupportedFileTypeError) Error() string {
+	return "unsupported file type: " + e.path
+}
+
+// copyTree duplicates a directory recursively. Symlinks are recreated as
+// symlinks rather than followed, so a link cannot pull files from outside the
+// source tree into the duplicate.
+func copyTree(src, dst string) (err error) {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	// A read-only source would otherwise produce a destination its children cannot be copied into.
+	if err := os.Mkdir(dst, info.Mode().Perm()|0o700); err != nil {
+		return err
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		if cleanupErr := restoreDirWriteAccess(dst); cleanupErr != nil {
+			err = errors.Join(err, errors.New(i18n.Format("files.duplicateRestoreFailed", i18n.Args{
+				"path":  dst,
+				"error": cleanupErr.Error(),
+			})))
+		}
+		if cleanupErr := os.RemoveAll(dst); cleanupErr != nil {
+			err = errors.Join(err, errors.New(i18n.Format("files.duplicateCleanupFailed", i18n.Args{
+				"path":  dst,
+				"error": cleanupErr.Error(),
+			})))
+		}
+	}()
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		switch {
+		case entry.Type()&os.ModeSymlink != 0:
+			target, err := os.Readlink(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.Symlink(target, dstPath); err != nil {
+				return err
+			}
+		case entry.IsDir():
+			if err := copyTree(srcPath, dstPath); err != nil {
+				return err
+			}
+		case entry.Type().IsRegular():
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			if err := copyRegularFile(srcPath, dstPath, info.Mode()); err != nil {
+				return err
+			}
+		default:
+			return unsupportedFileTypeError{path: srcPath}
+		}
+	}
+	if err := os.Chmod(dst, info.Mode().Perm()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func restoreDirWriteAccess(root string) error {
+	info, err := os.Lstat(root)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.Chmod(root, info.Mode().Perm()|0o700); err != nil {
+			return err
+		}
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if err := restoreDirWriteAccess(filepath.Join(root, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// nextDuplicatePath mirrors the editor's "file copy.txt", "file copy 2.txt"
+// naming, including dotfiles where filepath.Ext returns the whole basename.
+func nextDuplicatePath(path string) (string, error) {
+	dir := filepath.Dir(path)
+	name := filepath.Base(path)
+	ext := filepath.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	if stem == "" {
+		stem, ext = name, ""
+	}
+	for n := 1; ; n++ {
+		suffix := " copy"
+		if n > 1 {
+			suffix = fmt.Sprintf(" copy %d", n)
+		}
+		candidate := filepath.Join(dir, stem+suffix+ext)
+		_, err := os.Lstat(candidate)
+		if errors.Is(err, os.ErrNotExist) {
+			return candidate, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if n == 1000 {
+			return "", fmt.Errorf("no free duplicate name for %q", name)
+		}
+	}
+}
+
+func copyRegularFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(dst)
+		return err
+	}
+	if err := os.Chmod(dst, mode.Perm()); err != nil {
+		os.Remove(dst)
+		return err
+	}
+	return nil
 }
 
 func (a *App) FileOpDelete(path string, reload func()) {
