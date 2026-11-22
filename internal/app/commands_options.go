@@ -521,6 +521,7 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		}},
 		{Label: i18n.Text("settings.terminal"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.forwardShortcuts"), Command: "options.toggleTerminalForwardShortcuts", Checked: menuChecked(a.Root.ForwardShortcuts)},
+			ui.MenuSep(),
 			{Label: i18n.Text("menu.selectionStyle"), Command: "options.terminalSelectionStyle"},
 		}},
 		ui.MenuSep(),

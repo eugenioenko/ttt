@@ -92,7 +92,7 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 		2: {"options.toggleLSP", "options.toggleLSPHover"},
 		1: {"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
 		5: {"options.markdownWordWrap", "options.markdownWrapWidth"},
-		6: {"options.toggleTerminalForwardShortcuts", "options.terminalSelectionStyle"},
+		6: {"options.toggleTerminalForwardShortcuts", "", "options.terminalSelectionStyle"},
 	}
 	for i, want := range wantCommands {
 		var commands []string
