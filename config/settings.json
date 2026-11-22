@@ -51,6 +51,7 @@
     "gutterStyle": "compact",
     "borderStyle": "default",
     "bracketPairColorization": false,
+    "fullLineSelection": false,
     "transparentBackground": false,
     "saveAllOnQuit": false,
     "saveAllOnQuitExceptUnnamed": false,

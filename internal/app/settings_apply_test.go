@@ -442,3 +442,42 @@ func TestApplySettingsPointerShapes(t *testing.T) {
 		t.Fatal("pointer shapes should be enabled after ApplySettings")
 	}
 }
+
+func TestFullLineSelectionAppliesLiveToEditorsAndDiffs(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-old\n+new\n")
+	a.EditorGroup.OpenDiffTab("diff", "Diff", "test.go", fd, nil, nil, false)
+	d := a.EditorGroup.ActiveDiffWidget()
+	if d == nil {
+		t.Fatal("diff tab was not active")
+	}
+	if a.EditorGroup.Editor.FullLineSelection || d.KeyPane().FullLineSelection {
+		t.Fatal("full line selection was on by default")
+	}
+
+	for _, want := range []bool{true, false} {
+		s := *a.Settings
+		s.Editor.FullLineSelection = want
+		a.ApplySettings(s)
+		if got := a.EditorGroup.Editor.FullLineSelection; got != want {
+			t.Fatalf("editor FullLineSelection = %v, want %v", got, want)
+		}
+		if got := d.KeyPane().FullLineSelection; got != want {
+			t.Fatalf("diff pane FullLineSelection = %v, want %v", got, want)
+		}
+	}
+
+	s := *a.Settings
+	s.Editor.FullLineSelection = true
+	a.ApplySettings(s)
+	a.SplitEditor()
+	for _, group := range a.editorGroups() {
+		if !group.Editor.FullLineSelection {
+			t.Fatal("full line selection did not reach a new split")
+		}
+	}
+}

@@ -44,6 +44,7 @@ type EditorPaneWidget struct {
 	UseTabs                 bool
 	LineNumbers             bool
 	IndentGuides            bool
+	FullLineSelection       bool
 	GutterStyle             string
 	LegacyScrollbarGlyphs   bool
 	ScrollbarGitMarks       bool

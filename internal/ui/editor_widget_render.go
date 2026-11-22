@@ -346,7 +346,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			screenCells, contentEnd := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, annRunes, startCol, tabW, leftCol, editorW)
+			newlineX := -1
+			if row.nextCol == 0 {
+				newlineX = contentEnd
+			}
 			indentWidth, indentRunes, blankLine := 0, 0, false
 			if e.IndentGuides {
 				indentWidth, indentRunes, blankLine = indentGuideIndent(e.Buf.Lines[lineIdx], tabW)
@@ -394,15 +398,22 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				isSearchHighlight := style == term.StyleSearchActive || style == term.StyleSearchMatch
 				bgStyle := term.Style(0)
 				inAnySel := false
-				if multiActive {
+				selCol, selectable := colIdx, true
+				if !e.FullLineSelection {
+					// Padding past the text is never selected, except the one
+					// cell standing for the line's newline (Contains with -1).
+					selCol = screenCells[x].runeCol
+					selectable = selCol >= 0 || x == newlineX
+				}
+				if selectable && multiActive {
 					for _, mc := range allCursors {
-						if mc.Sel.Active && mc.Sel.Contains(lineIdx, colIdx, mc.Line, mc.Col) {
+						if mc.Sel.Active && mc.Sel.Contains(lineIdx, selCol, mc.Line, mc.Col) {
 							bgStyle = term.StyleSelection
 							inAnySel = true
 							break
 						}
 					}
-				} else if hasSel && sel.Contains(lineIdx, colIdx, e.Cursor.Line, e.Cursor.Col) {
+				} else if selectable && hasSel && sel.Contains(lineIdx, selCol, e.Cursor.Line, e.Cursor.Col) {
 					bgStyle = term.StyleSelection
 					inAnySel = true
 				}
@@ -605,9 +616,12 @@ func (e *EditorPaneWidget) diagStyleAt(line, col int) term.Style {
 }
 
 type screenCell struct {
-	ch               rune
-	style            term.Style
-	bufCol           int
+	ch     rune
+	style  term.Style
+	bufCol int
+	// runeCol is the buffer column of the rune covering the cell, including
+	// a fullwidth rune's second column, or -1 past the text.
+	runeCol          int
 	byteCol, byteLen int
 	width            int
 }
@@ -621,17 +635,20 @@ func rowText(line string, startByte int, r editorRow) string {
 	return text
 }
 
-func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) []screenCell {
+// renderLineSegmentToScreen also returns the screen column right after the
+// drawn content, or -1 when the content runs past the visible width.
+func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, ann []rune, startCol, tabW, leftCol, width int) ([]screenCell, int) {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)
 	}
 	cells := e.lineScratch[:width]
 	for i := range cells {
-		cells[i] = screenCell{ch: ' ', style: term.StyleDefault, bufCol: -1}
+		cells[i] = screenCell{ch: ' ', style: term.StyleDefault, bufCol: -1, runeCol: -1}
 	}
 	visCol := 0
 	bufCol := startCol
-	for byteCol := 0; byteCol < len(text); {
+	byteCol := 0
+	for byteCol < len(text) {
 		ch, byteLen := utf8.DecodeRuneInString(text[byteCol:])
 		style := term.StyleDefault
 		for _, sp := range spans {
@@ -640,7 +657,7 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 				break
 			}
 		}
-		c := screenCell{ch: ch, style: style, bufCol: bufCol, byteCol: byteCol, byteLen: byteLen, width: 1}
+		c := screenCell{ch: ch, style: style, bufCol: bufCol, runeCol: bufCol, byteCol: byteCol, byteLen: byteLen, width: 1}
 		if ch == '\t' {
 			c.ch = ' '
 			nextStop := ((visCol / tabW) + 1) * tabW
@@ -668,6 +685,11 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 			// A fullwidth rune's second column keeps the blank the cell array
 			// was initialised with. The terminal never draws that cell — the
 			// rune itself covers it — so it needs no content of its own.
+			for dx := 1; dx < cw; dx++ {
+				if sx+dx >= 0 && sx+dx < width {
+					cells[sx+dx].runeCol = bufCol
+				}
+			}
 			visCol += cw
 		}
 		byteCol += byteLen
@@ -680,11 +702,18 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 		for i, ch := range ann {
 			sx := visCol + i - leftCol
 			if sx >= 0 && sx < width {
-				cells[sx] = screenCell{ch: ch, style: term.StyleLineNumber, bufCol: bufCol + i}
+				cells[sx] = screenCell{ch: ch, style: term.StyleLineNumber, bufCol: bufCol + i, runeCol: bufCol + i}
 			}
 		}
 	}
-	return cells
+	if byteCol < len(text) {
+		return cells, -1
+	}
+	end := visCol - leftCol
+	if collapsed {
+		end += len(ann)
+	}
+	return cells, end
 }
 
 // drawGutterNumber writes the gutter's number column for num (0 leaves it
