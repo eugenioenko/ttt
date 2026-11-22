@@ -103,6 +103,9 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 		if c.Attrs&CellAttrBlink != 0 {
 			s = s.Blink(true)
 		}
+		if c.Link != (Hyperlink{}) {
+			s = s.Url(c.Link.URL()).UrlId(c.Link.ID())
+		}
 		t.scr.Put(x, y, c.text(), s)
 		return
 	}
@@ -160,6 +163,9 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 			}
 			return
 		}
+	}
+	if c.Link != (Hyperlink{}) {
+		s = s.Url(c.Link.URL()).UrlId(c.Link.ID())
 	}
 	t.scr.Put(x, y, c.text(), s)
 }

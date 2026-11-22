@@ -382,3 +382,37 @@ func TestTerminfoScreenFiniWithWindowsDrainedTty(t *testing.T) {
 		t.Fatal("screen.Fini hung when Tty.Drain yields 0-byte reads (Windows console shutdown)")
 	}
 }
+
+func TestTcellScreenHyperlinkStyle(t *testing.T) {
+	for _, direct := range []bool{false, true} {
+		sim := NewSimScreen()
+		sim.SetSize(4, 1)
+		screen := NewTcellScreenFrom(sim)
+		for _, uri := range []string{"https://example.com/one", "https://example.com/two", ""} {
+			cell := Cell{Ch: 'x', Direct: direct, Link: NewHyperlink(uri, "link")}
+			screen.SetCell(0, 0, cell)
+			_, style, _ := sim.Get(0, 0)
+			id, got := style.GetUrl()
+			if got != uri || id != cell.Link.ID() {
+				t.Fatalf("direct=%t: link=(%q,%q), want=(%q,%q)", direct, id, got, cell.Link.ID(), uri)
+			}
+		}
+	}
+}
+
+func TestTcellScreenEmitsOSC8(t *testing.T) {
+	tty := &winMockTty{stopQ: make(chan struct{})}
+	screen, _, err := NewTerminfoScreenFromTty(tty, tcell.OptTerm("xterm-256color"), tcell.OptNegotiation(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer screen.Fini()
+	tty.buf.Reset()
+	screen.SetCell(0, 0, Cell{Ch: 'L', Direct: true, Link: NewHyperlink("https://example.com", "test")})
+	screen.SetCell(1, 0, Cell{Ch: 'x'})
+	screen.Show()
+	output := tty.buf.String()
+	if !bytes.Contains([]byte(output), []byte("\x1b]8;id=test;https://example.com\x1b\\")) || !bytes.Contains([]byte(output), []byte("\x1b]8;;\x1b\\")) {
+		t.Fatalf("missing OSC 8 open/close in terminal output: %q", output)
+	}
+}

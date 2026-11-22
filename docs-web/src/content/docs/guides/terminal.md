@@ -36,6 +36,10 @@ With [`keyboard.modifierKey`](/reference/settings/#keyboard) set to `"control+su
 
 Ctrl+click opens URLs and file links in terminal output. When Super shortcuts are enabled, Super+click also opens links, shows the link cursor and underline, and permits local text selection when the terminal program captures the mouse. The outer terminal must report the modifier. These settings apply live to both panel terminals and editor terminal tabs; other shell key and mouse encodings keep their original modifiers.
 
+OSC 8 hyperlinks also work when the displayed label is something like **Click here**. TTT uses the explicit target before scanning the label for a URL. Ctrl+click opens HTTP(S) targets with the system browser and local `file://` targets in the editor. Plain URLs and file paths keep their existing detection.
+
+TTT also preserves HTTP(S) and file hyperlinks in the rendered output. A supporting outer terminal can use its own link-opening gesture to open web links on your local machine, including when TTT runs remotely over SSH. TTT's own Ctrl+click handler runs on the machine hosting TTT; use the outer terminal's native hyperlink gesture for local browser opening over SSH. The gesture and support through multiplexers depend on the outer terminal and multiplexer. Remote `file://host/path` links are passed through to the outer terminal but are not treated as local editor paths.
+
 ## Shortcut forwarding
 
 **Settings → General → Keyboard** contains both **Forward shortcuts to terminal** and the editable **Send next key to terminal** shortcut, beside **Shortcut modifier**. The shortcut is stored in `keybindings.json` as `terminal.sendNextKey`, with **Ctrl+K** as its default. It follows the selected Ctrl/Mod/Super preference.

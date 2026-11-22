@@ -95,3 +95,24 @@ func TestRenderer_Clear(t *testing.T) {
 		t.Error("expected buffers to be nil after Clear")
 	}
 }
+
+func TestRendererHyperlinkChangesWithoutTextChanges(t *testing.T) {
+	r := &Renderer{}
+	screen := term.NewMockScreen(1, 1)
+	for _, link := range []struct{ url, id string }{{"https://a.example", "one"}, {"https://b.example", "one"}, {"https://b.example", "two"}, {"", ""}} {
+		frame := nextFrame(r, "x")
+		frame[0][0].Link = term.NewHyperlink(link.url, link.id)
+		r.Render(screen)
+		got, written := screen.Cells[[2]int{0, 0}]
+		if !written || got.Link.URL() != link.url || got.Link.ID() != link.id {
+			t.Fatalf("rendered cell = %+v, want %+v", got, link)
+		}
+		clear(screen.Cells)
+		frame = nextFrame(r, "x")
+		frame[0][0].Link = term.NewHyperlink(link.url, link.id)
+		r.Render(screen)
+		if len(screen.Cells) != 0 {
+			t.Fatal("recreating the same hyperlink repainted an unchanged cell")
+		}
+	}
+}

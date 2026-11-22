@@ -61,6 +61,7 @@ type TerminalWidget struct {
 	// Nil inherits the terminal panel's padding.
 	PaddingX     *int
 	focused      bool
+	contentWidth int
 	scrollOffset int
 	scrollbar    Scrollbar
 	selecting    bool
@@ -82,6 +83,7 @@ type TerminalWidget struct {
 	CtrlVPastes      bool
 	SuperShortcuts   bool
 	sendNextKey      bool
+	linkNamespace    uint64
 	linkModifierHeld bool
 	linkCache        map[int][]linkSpan
 	linkMemo         map[string][]linkSpan
@@ -326,30 +328,50 @@ func (tw *TerminalWidget) cachedLinkAt(unifiedLine, col int) *linkSpan {
 }
 
 func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
-	if span := tw.cachedLinkAt(unifiedLine, col); span != nil {
-		return span
-	}
 	if tw.Term == nil {
-		return nil
+		return tw.cachedLinkAt(unifiedLine, col)
 	}
-	var spans []linkSpan
+	var found *linkSpan
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
-		if unifiedLine >= 0 && unifiedLine < buf.Lines.Length() {
-			w := tw.GetRect().W
+		if unifiedLine < 0 || unifiedLine >= buf.Lines.Length() {
+			return
+		}
+		bl := buf.Lines.Get(unifiedLine)
+		w := tw.contentWidth
+		if w <= 0 {
+			w = tw.GetRect().W
 			if w <= 0 {
 				w = xt.Cols()
 			}
-			lineText := extractLineText(buf, unifiedLine, w)
-			spans = tw.linksForLine(lineText)
+		}
+		if bl == nil || col < 0 || col >= w || col >= bl.Len {
+			return
+		}
+		if col == w-1 {
+			cell := tw.lineCell(bl, col, xterm.NewCellData())
+			ch := cell.Ch
+			tw.clipWideRune(&cell, col, w)
+			if cell.Ch != ch {
+				return
+			}
+		}
+		if id := terminalLinkID(bl, col); id != 0 {
+			// Explicit targets take precedence over URL-looking labels, even when unsupported.
+			if data := xt.GetLinkData(id); data != nil {
+				found = terminalLinkTarget(data.URI)
+			}
+			return
+		}
+		text := extractLineText(buf, unifiedLine, w)
+		for _, span := range tw.linksForLine(text) {
+			if col >= span.StartCol && col < span.EndCol {
+				found = &span
+				return
+			}
 		}
 	})
-	for i := range spans {
-		if col >= spans[i].StartCol && col < spans[i].EndCol {
-			return &spans[i]
-		}
-	}
-	return nil
+	return found
 }
 
 func (tw *TerminalWidget) ScrollToBottom() {
@@ -369,6 +391,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		return
 	}
 	w, h := surface.Size()
+	tw.contentWidth = w
 
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
@@ -390,6 +413,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		}
 
 		cellData := xterm.NewCellData()
+		links := make(map[int]term.Hyperlink)
 
 		if tw.scrollOffset == 0 {
 			for y := 0; y < h && y < rows; y++ {
@@ -408,6 +432,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
+						tw.setCellLink(xt, bl, x, &c, links)
 					} else {
 						var bg term.DirectColor
 						if tw.Palette != nil {
@@ -417,7 +442,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(unifiedLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.cachedLinkAt(unifiedLine, x) != nil {
+					} else if tw.linkModifierHeld && (c.Link != (term.Hyperlink{}) || tw.cachedLinkAt(unifiedLine, x) != nil) {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)
@@ -446,6 +471,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					var c term.Cell
 					if bl != nil && x < bl.Len {
 						c = tw.lineCell(bl, x, cellData)
+						tw.setCellLink(xt, bl, x, &c, links)
 					} else {
 						var bg term.DirectColor
 						if tw.Palette != nil {
@@ -455,7 +481,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 					}
 					if tw.isCellSelected(srcLine, x) {
 						tw.highlightSelected(&c)
-					} else if tw.cachedLinkAt(srcLine, x) != nil {
+					} else if tw.linkModifierHeld && (c.Link != (term.Hyperlink{}) || tw.cachedLinkAt(srcLine, x) != nil) {
 						c.Attrs |= term.CellAttrUnderline
 					}
 					tw.clipWideRune(&c, x, w)
@@ -485,6 +511,7 @@ func (tw *TerminalWidget) renderScrollbar(surface Surface) {
 func (tw *TerminalWidget) clipWideRune(c *term.Cell, x, contentW int) {
 	if x == contentW-1 && textwidth.Rune(c.Ch) == 2 {
 		c.Ch = ' '
+		c.Link = term.Hyperlink{}
 	}
 }
 
