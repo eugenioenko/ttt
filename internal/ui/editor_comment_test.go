@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 )
 
@@ -416,6 +417,15 @@ func TestToggleLineCommentTracksSelectionEndpoints(t *testing.T) {
 				if start != tc.wantStart || end != tc.wantEnd {
 					t.Fatalf("selection = %v..%v, want %v..%v", start, end, tc.wantStart, tc.wantEnd)
 				}
+				if tc.name == "whole block" {
+					e.SetRect(Rect{W: 80, H: 10})
+					grid := renderGrid(e)
+					for x := e.GutterWidth(); x < e.GutterWidth()+2; x++ {
+						if cell := grid[0][x]; cell.Ch != '/' || cell.BgStyle != term.StyleSelection {
+							t.Fatalf("first comment marker lost selection highlighting: %+v", cell)
+						}
+					}
+				}
 				e.ToggleLineComment()
 				if !slices.Equal(e.Buf.Lines, tc.lines) || e.Selection.Anchor != anchor || e.Cursor.Line != cur.Line || e.Cursor.Col != cur.Col {
 					t.Fatalf("round trip: lines=%q anchor=%v cursor=%d:%d", e.Buf.Lines, e.Selection.Anchor, e.Cursor.Line, e.Cursor.Col)
@@ -452,6 +462,14 @@ func TestToggleLineCommentAlignsMixedIndentation(t *testing.T) {
 			if !slices.Equal(e.Buf.Lines, tc.want) {
 				t.Fatalf("redo = %q, want %q", e.Buf.Lines, tc.want)
 			}
+			e.ToggleLineComment()
+			uncommented := tc.lines
+			if tc.name == "inside tab" {
+				uncommented = []string{"  foo()", "    bar()"}
+			}
+			if !slices.Equal(e.Buf.Lines, uncommented) {
+				t.Fatalf("uncomment = %q, want %q", e.Buf.Lines, uncommented)
+			}
 		})
 	}
 }
@@ -465,5 +483,32 @@ func TestToggleLineCommentLeavesCursorBeforeIndent(t *testing.T) {
 	e.ToggleLineComment()
 	if e.Cursor.Col != 1 {
 		t.Fatalf("cursor moved to %d", e.Cursor.Col)
+	}
+}
+
+func TestToggleLineCommentMapsSelectionsInsideXMLEntities(t *testing.T) {
+	for _, entity := range []string{"&amp;", "&#45;"} {
+		for offset := 1; offset < len(entity); offset++ {
+			for _, backward := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%d/backward=%v", entity, offset, backward), func(t *testing.T) {
+					line := "<!-- " + entity + " -->"
+					anchor, cur := 5+offset, len(line)
+					if backward {
+						anchor, cur = cur, anchor
+					}
+					e := newCommentEditor(t, "a.xml", []string{line}, 0, cur)
+					e.Selection = &selection.Selection{}
+					e.Selection.Start(0, anchor)
+					e.ToggleLineComment()
+					start, end := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
+					if start.Col != 0 || end.Col != 1 {
+						t.Fatalf("decoded selection = %v..%v, want 0..1", start, end)
+					}
+					if got := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col); got != unescapeXMLCommentText(entity) {
+						t.Fatalf("selected text = %q", got)
+					}
+				})
+			}
+		}
 	}
 }

@@ -440,6 +440,24 @@ func unescapeXMLCommentText(text string) string {
 	return strings.ReplaceAll(text, "&amp;", "&")
 }
 
+// An endpoint inside an entity selects the decoded character instead of
+// retaining an offset into text that disappears during decoding.
+func unescapeXMLCommentColumn(text string, col int, isStart bool) int {
+	end := runeByteOffset(text, col)
+	if start := strings.LastIndex(text[:end], "&"); start >= 0 {
+		for _, entity := range []string{"&amp;", "&#45;"} {
+			if strings.HasPrefix(text[start:], entity) && end < start+len(entity) {
+				end = start
+				if !isStart {
+					end += len(entity)
+				}
+				break
+			}
+		}
+	}
+	return len([]rune(unescapeXMLCommentText(text[:end])))
+}
+
 // isWordCommentPrefix reports whether prefix is a keyword rather than a
 // punctuation delimiter, such as Batch's REM. Word prefixes are matched
 // case-insensitively and only as a whole word, so REMOVE_ME=1 is code.
@@ -714,10 +732,9 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 				}
 				if prefix == "<!--" {
 					if unescaped := unescapeXMLCommentText(e.Buf.Lines[l]); unescaped != e.Buf.Lines[l] {
-						line := []rune(e.Buf.Lines[l])
-						mapColumns(l, func(c int, _ bool) int {
-							c = max(0, min(c, len(line)))
-							return len([]rune(unescapeXMLCommentText(string(line[:c]))))
+						line := e.Buf.Lines[l]
+						mapColumns(l, func(c int, isStart bool) int {
+							return unescapeXMLCommentColumn(line, c, isStart)
 						})
 						replace := &undo.ReplaceLinesCommand{
 							Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{unescaped},
