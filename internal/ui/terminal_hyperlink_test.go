@@ -290,3 +290,37 @@ func TestTerminalPlainURLHardNewline(t *testing.T) {
 		t.Fatal("URL detection crossed hard newline")
 	}
 }
+
+func TestTerminalPlainURLWideWrapPadding(t *testing.T) {
+	_, write, render := hyperlinkWidget(t, 21, 3)
+	url := "https://example.com/界/last"
+	write(url)
+	cells := render()
+	if got := cells[0][0].Link.URL(); got != url {
+		t.Fatalf("first row target=%q, want %q", got, url)
+	}
+	if got := cells[1][0].Link.URL(); got != url {
+		t.Fatalf("wrapped row target=%q, want %q", got, url)
+	}
+	if cells[0][20].Link.URL() != "" {
+		t.Fatal("wide-wrap padding is clickable")
+	}
+}
+
+func TestTerminalPlainURLCombiningCharacters(t *testing.T) {
+	_, write, render := hyperlinkWidget(t, 60, 2)
+	url := "https://example.com/e\u0301"
+	write("e\u0301 " + url + " plain")
+	cells := render()
+	if cells[0][1].Link.URL() != "" {
+		t.Fatal("prefix space became a hyperlink")
+	}
+	for _, col := range []int{2, 22} {
+		if got := cells[0][col].Link.URL(); got != url {
+			t.Fatalf("URL at %d=%q", col, got)
+		}
+	}
+	if cells[0][23].Link.URL() != "" {
+		t.Fatal("hyperlink leaked past combining character")
+	}
+}

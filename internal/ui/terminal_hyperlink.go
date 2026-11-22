@@ -87,9 +87,9 @@ func (tw *TerminalWidget) urlLinksForText(text []byte) []terminalURLSpan {
 			continue
 		}
 		runes := []rune(lineText)
-		start := textwidth.Runes(runes[:candidate.StartCol])
+		start := textwidth.GraphemeWidth(string(runes[:candidate.StartCol]))
 		spans = append(spans, terminalURLSpan{
-			StartCol: start, EndCol: start + textwidth.String(candidate.URL),
+			StartCol: start, EndCol: start + textwidth.GraphemeWidth(candidate.URL),
 			Link: term.NewHyperlink(candidate.URL, ""),
 		})
 	}
@@ -119,7 +119,8 @@ func (tw *TerminalWidget) urlLinksForLine(buf *xterm.Buffer, row int, cache map[
 		if line == nil || (end > start && !line.IsWrapped) {
 			break
 		}
-		for x := 0; x < line.Len; x += max(1, line.GetWidth(x)) {
+		width := terminalURLLineWidth(buf, end)
+		for x := 0; x < width; x += max(1, line.GetWidth(x)) {
 			if line.IsCombined(x) != 0 {
 				tw.urlText = append(tw.urlText, line.GetString(x)...)
 			} else {
@@ -135,7 +136,7 @@ func (tw *TerminalWidget) urlLinksForLine(buf *xterm.Buffer, row int, cache map[
 	spans := tw.urlLinksForText(tw.urlText)
 	offset := 0
 	for y := start; y < end; y++ {
-		width := buf.Lines.Get(y).Len
+		width := terminalURLLineWidth(buf, y)
 		cache[y] = nil
 		for _, span := range spans {
 			if span.StartCol < offset+width && span.EndCol > offset {
@@ -147,4 +148,17 @@ func (tw *TerminalWidget) urlLinksForLine(buf *xterm.Buffer, row int, cache map[
 		offset += width
 	}
 	return cache[row]
+}
+
+func terminalURLLineWidth(buf *xterm.Buffer, row int) int {
+	line := buf.Lines.Get(row)
+	width := line.Len
+	if width > 0 && line.HasContent(width-1) == 0 && line.GetWidth(width-1) == 1 && row+1 < buf.Lines.Length() {
+		next := buf.Lines.Get(row + 1)
+		if next != nil && next.IsWrapped && next.Len > 0 && next.GetWidth(0) == 2 {
+			// A wide glyph's wrap padding is not part of the logical line text.
+			width--
+		}
+	}
+	return width
 }
