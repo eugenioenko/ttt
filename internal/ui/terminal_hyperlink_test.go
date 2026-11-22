@@ -167,3 +167,27 @@ func TestTerminalHyperlinkClippingAndPaneIDs(t *testing.T) {
 		t.Fatalf("clipped cell retained link: %+v", c)
 	}
 }
+
+func TestTerminalHyperlinkClippedCellCannotOpen(t *testing.T) {
+	tw, write, _ := hyperlinkWidget(t, 5, 2)
+	write("abc" + osc8("https://clipped.example", "界", "\a") + "\r\n" + osc8("https://interior.example", "界", "\a"))
+	cells := [][]term.Cell{make([]term.Cell, 4), make([]term.Cell, 4)}
+	tw.Render(NewRenderSurface(cells, Rect{W: 4, H: 2}))
+	if cells[0][3].Ch != ' ' || cells[0][3].Link.URL() != "" {
+		t.Fatalf("clipped cell = %+v", cells[0][3])
+	}
+	opened := ""
+	tw.OnOpenURL = func(uri string) { opened = uri }
+	tw.HandleEvent(tcell.NewEventMouse(6, 2, tcell.Button1, tcell.ModCtrl))
+	if opened != "" || tw.PointerShapeAt(6, 2) == term.PointerHand {
+		t.Fatal("clipped blank still acts as a link")
+	}
+	for _, x := range []int{3, 4} {
+		tw.ClearSelection()
+		tw.HandleEvent(tcell.NewEventMouse(x, 3, tcell.Button1, tcell.ModCtrl))
+		if opened != "https://interior.example" {
+			t.Fatalf("interior wide cell at %d opened %q", x, opened)
+		}
+		opened = ""
+	}
+}

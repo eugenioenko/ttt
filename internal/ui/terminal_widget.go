@@ -61,6 +61,7 @@ type TerminalWidget struct {
 	// Nil inherits the terminal panel's padding.
 	PaddingX     *int
 	focused      bool
+	contentWidth int
 	scrollOffset int
 	scrollbar    Scrollbar
 	selecting    bool
@@ -337,16 +338,30 @@ func (tw *TerminalWidget) linkAt(unifiedLine, col int) *linkSpan {
 			return
 		}
 		bl := buf.Lines.Get(unifiedLine)
+		w := tw.contentWidth
+		if w <= 0 {
+			w = tw.GetRect().W
+			if w <= 0 {
+				w = xt.Cols()
+			}
+		}
+		if bl == nil || col < 0 || col >= w || col >= bl.Len {
+			return
+		}
+		if col == w-1 {
+			cell := tw.lineCell(bl, col, xterm.NewCellData())
+			ch := cell.Ch
+			tw.clipWideRune(&cell, col, w)
+			if cell.Ch != ch {
+				return
+			}
+		}
 		if id := terminalLinkID(bl, col); id != 0 {
 			// Explicit targets take precedence over URL-looking labels, even when unsupported.
 			if data := xt.GetLinkData(id); data != nil {
 				found = terminalLinkTarget(data.URI)
 			}
 			return
-		}
-		w := tw.GetRect().W
-		if w <= 0 {
-			w = xt.Cols()
 		}
 		text := extractLineText(buf, unifiedLine, w)
 		for _, span := range tw.linksForLine(text) {
@@ -376,6 +391,7 @@ func (tw *TerminalWidget) Render(surface Surface) {
 		return
 	}
 	w, h := surface.Size()
+	tw.contentWidth = w
 
 	tw.Term.Snapshot(func(xt *xterm.Terminal) {
 		buf := xt.Buffer()
