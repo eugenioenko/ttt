@@ -103,8 +103,8 @@ func TestRendererHyperlinkChangesWithoutTextChanges(t *testing.T) {
 		frame := nextFrame(r, "x")
 		frame[0][0].Link = term.NewHyperlink(link.url, link.id)
 		r.Render(screen)
-		got := screen.Cells[[2]int{0, 0}]
-		if got.Link.URL() != link.url || got.Link.ID() != link.id {
+		got, written := screen.Cells[[2]int{0, 0}]
+		if !written || got.Link.URL() != link.url || got.Link.ID() != link.id {
 			t.Fatalf("rendered cell = %+v, want %+v", got, link)
 		}
 		clear(screen.Cells)
