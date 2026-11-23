@@ -346,7 +346,13 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, suffix, startCol, tabW, leftCol, editorW, e.ghostTextAt(row))
+			segment := rowText(e.Buf.Lines[lineIdx], segmentByte, row)
+			ghost := e.ghostTextAt(row)
+			screenCells := e.renderLineSegmentToScreen(segment, syntaxSpans, isCollapsedLine, suffix, startCol, tabW, leftCol, editorW, ghost)
+			ghostStart, ghostEnd := 0, 0
+			if e.IndentGuides && ghost.text != "" {
+				ghostStart, ghostEnd = ghost.screenRange(segment, startCol, tabW, leftCol)
+			}
 			indentWidth, indentRunes, blankLine := 0, 0, false
 			if e.IndentGuides {
 				indentWidth, indentRunes, blankLine = indentGuideIndent(e.Buf.Lines[lineIdx], tabW)
@@ -465,7 +471,10 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					if e.WordWrap {
 						visualCol = segmentVisualCol + x
 					}
-					if visualCol < indentWidth && visualCol%tabW == 0 {
+					if x >= ghostEnd {
+						visualCol -= ghostEnd - ghostStart
+					}
+					if (x < ghostStart || x >= ghostEnd) && visualCol < indentWidth && visualCol%tabW == 0 {
 						cell.Ch = '│'
 						cell.Style = term.StyleIndentGuide
 					}
@@ -630,6 +639,11 @@ type ghostText struct {
 
 func (g ghostText) width(tabW int) int {
 	return bufColToVisualCol(g.text, len(g.text), tabW)
+}
+
+func (g ghostText) screenRange(segment string, startCol, tabW, leftCol int) (int, int) {
+	start := bufColToVisualCol(segment, g.col-startCol, tabW) - leftCol
+	return start, start + g.width(tabW)
 }
 
 func (e *EditorPaneWidget) ghostTextAt(row editorRow) ghostText {

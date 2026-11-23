@@ -255,6 +255,7 @@ func (o *DiffOverlay) syncParts() {
 		clear(o.LineBg)
 		clear(o.Spans)
 		clear(o.NoteTexts)
+		clear(o.GhostText)
 		o.notesMoved = len(o.Notes) > 0
 	}
 	for _, part := range o.parts {

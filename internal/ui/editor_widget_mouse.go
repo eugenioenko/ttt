@@ -269,14 +269,14 @@ func (e *EditorPaneWidget) textXAt(row editorRow, x int) (int, bool) {
 	}
 	tabW := e.resolveTabSize()
 	line := e.Buf.Lines[row.bufLine]
-	start := bufColToVisualCol(line[runeByteOffset(line, row.startCol):], ghost.col-row.startCol, tabW)
+	leftCol := 0
 	if !e.WordWrap {
-		start -= e.Viewport.LeftCol
+		leftCol = e.Viewport.LeftCol
 	}
+	start, end := ghost.screenRange(line[runeByteOffset(line, row.startCol):], row.startCol, tabW, leftCol)
 	if x < start {
 		return x, false
 	}
-	end := start + ghost.width(tabW)
 	if x < end {
 		return start, true
 	}

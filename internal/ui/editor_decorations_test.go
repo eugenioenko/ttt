@@ -229,7 +229,11 @@ func TestDecorationsDropWhenTooManyEditsGoUnseen(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n"})
 	a := filepath.Join(dir, "a.txt")
 	openCommitted(g, a)
-	g.SetDecorations("p", a, []Decoration{tint(1, term.StyleDiffAdded)})
+	g.SetDecorations("p", a, []Decoration{
+		tint(1, term.StyleDiffAdded),
+		{StartLine: 1, EndLine: 1, GhostText: "expired"},
+	})
+	overlay := g.decoSources["p"][a].overlay
 	for range 65 {
 		g.Editor.Buf.InsertLine(0, "new")
 	}
@@ -237,6 +241,9 @@ func TestDecorationsDropWhenTooManyEditsGoUnseen(t *testing.T) {
 	grid := renderGrid(g.Editor)
 	if got := grid[1][g.Editor.GutterWidth()].BgStyle; got == term.StyleDiffAdded {
 		t.Fatal("tint drawn on a line it never belonged to")
+	}
+	if len(overlay.GhostText) != 0 {
+		t.Fatal("stale overlay still holds ghost text")
 	}
 	g.SetDecorations("q", a, []Decoration{tint(0, term.StyleDiffDeleted)})
 	if got := g.Editor.DiffOverlay.LineBg; !reflect.DeepEqual(got, map[int]term.Style{0: term.StyleDiffDeleted}) {
@@ -452,5 +459,25 @@ func TestGhostTextAtRuneColumn(t *testing.T) {
 	renderGrid(e)
 	if e.CursorX != x+2 {
 		t.Fatalf("cursor after preview at x = %d, want %d", e.CursorX, x+2)
+	}
+}
+
+func TestGhostTextPreservesIndentGuides(t *testing.T) {
+	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "        a\n\n        b"})
+	path := filepath.Join(dir, "x.txt")
+	openCommitted(g, path)
+	e := g.Editor
+	e.SetRect(Rect{W: 24, H: 6})
+	e.Viewport.Width, e.Viewport.Height = 24, 6
+	e.TabSize = 4
+	e.IndentGuides = true
+	g.SetDecorations("plugin:test", path, []Decoration{{StartLine: 1, EndLine: 1, GhostText: "界"}})
+
+	row := renderGrid(e)[1][e.GutterWidth():]
+	if row[0].Ch != '界' || row[0].Style != term.StyleMuted || row[1].Ch != ' ' {
+		t.Fatalf("indent guide overlaps ghost text: %+v", row[:2])
+	}
+	if x := 2 + e.resolveTabSize(); row[x].Style != term.StyleIndentGuide {
+		t.Fatalf("expected indent guide at column %d after ghost text: %+v", x, row[x])
 	}
 }
