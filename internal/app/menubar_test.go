@@ -88,7 +88,7 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 		t.Fatal("Settings and Theme should follow the final separator")
 	}
 	wantCommands := map[int][]string{
-		2: {"options.toggleExplorerShowHiddenFiles", "options.toggleExplorerShowGitIgnoredFiles", "options.toggleExplorerCompactFolders", "options.toggleExplorerAutoReveal", "", "options.toggleExplorerGitStatusColors", "options.toggleExplorerDimStagedGitColors", "", "explorer.expandAll", "explorer.collapseAll"},
+		2: {"options.toggleExplorerShowHiddenFiles", "options.toggleExplorerShowGitIgnoredFiles", "options.toggleExplorerCompactFolders", "options.toggleExplorerAutoReveal", "", "options.toggleExplorerGitStatusColors", "options.toggleExplorerDimStagedGitColors"},
 		0: {"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.tabBarStyle", "options.borderStyle"},
 		3: {"options.toggleLSP", "options.toggleLSPHover"},
 		1: {"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},

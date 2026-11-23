@@ -547,9 +547,6 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.gitStatusColors"), Command: "options.toggleExplorerGitStatusColors", Checked: menuChecked(a.Settings.Explorer.GitStatusColors)},
 			{Label: i18n.Text("menu.dimStagedGitColors"), Command: "options.toggleExplorerDimStagedGitColors", Checked: menuChecked(a.Settings.Explorer.DimStagedGitColors)},
-			ui.MenuSep(),
-			{Label: i18n.Text("general.expandAll"), Command: "explorer.expandAll"},
-			{Label: i18n.Text("general.collapseAll"), Command: "explorer.collapseAll"},
 		}},
 		{Label: i18n.Text("menu.codeAssist"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
