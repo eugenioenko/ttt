@@ -512,6 +512,10 @@ type KeyboardSettings struct {
 	ModifierKey string `json:"modifierKey"`
 }
 
+type LinkSettings struct {
+	Native bool `json:"native"`
+}
+
 type Settings struct {
 	Version     int              `json:"version"`
 	Theme       string           `json:"theme"`
@@ -521,6 +525,7 @@ type Settings struct {
 	// These sections must NOT use omitzero: their defaults are non-zero, so an
 	// all-false/all-zero section would be omitted on save and silently revert to
 	// the defaults on the next load.
+	Links        LinkSettings         `json:"links"`
 	Appearance   AppearanceSettings   `json:"appearance"`
 	Editor       EditorSettings       `json:"editor"`
 	Keyboard     KeyboardSettings     `json:"keyboard"`
@@ -551,7 +556,7 @@ type Settings struct {
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
-	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
+	"links": true, "version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "applications": true, "keyboard": true,
 }
@@ -602,6 +607,7 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 
 func DefaultSettings() Settings {
 	return Settings{
+		Links:        LinkSettings{Native: false},
 		Version:      1,
 		Theme:        "default-dark",
 		Appearance:   DefaultAppearanceSettings(),

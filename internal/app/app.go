@@ -506,8 +506,9 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw.Term = t
 	tw.WorkDir = spec.Cwd
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
-	tw.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
+	tw.NativeLinks = a.Settings.Links.Native
 	tw.OnOpenURL = OpenURL
+	tw.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 	tw.OnOpenFile = a.openFileLink
 
 	panelID := fmt.Sprintf("terminal-%d", a.TerminalSeq)

@@ -175,6 +175,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.FileHandler = left.FileHandler
 	right.OnFileHandled = left.OnFileHandled
 	right.LinkWorkDir = left.LinkWorkDir
+	right.NativeLinks = left.NativeLinks
 	right.OnOpenURL = left.OnOpenURL
 	right.OnOpenFileLink = left.OnOpenFileLink
 	right.OnLinkHover = left.OnLinkHover

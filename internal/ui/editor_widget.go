@@ -105,6 +105,7 @@ type EditorPaneWidget struct {
 	links                   editorLinks
 	LinkWorkDir             string
 	ControlModifiers        *tcell.ModMask
+	NativeLinks             bool
 	OnOpenURL               func(string)
 	OnOpenFile              func(string, int, int)
 	OnLinkHover             func(*EditorPaneWidget)

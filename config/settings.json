@@ -1,6 +1,9 @@
 {
   "version": 1,
   "theme": "default-dark",
+  "links": {
+    "native": false
+  },
   "appearance": {
     "icons": "none",
     "scrollbarGlyphs": "blocks",

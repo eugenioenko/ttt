@@ -201,6 +201,7 @@ type EditorGroupWidget struct {
 	OnGutterClick     func(path string, line int) bool
 	LinkWorkDir       func() string
 	ControlModifiers  *tcell.ModMask
+	NativeLinks       bool
 	OnOpenURL         func(string)
 	OnOpenFileLink    func(string, int, int)
 	OnLinkHover       func(*EditorPaneWidget)
