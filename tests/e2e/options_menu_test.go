@@ -279,6 +279,7 @@ func TestOptionsMenuToggleLSPHover(t *testing.T) {
 	h.exec("menu.options")
 	h.pressKey(tcell.KeyDown, tcell.ModNone)
 	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
 	h.pressKey(tcell.KeyRight, tcell.ModNone)
 	h.assertContains("Enable Code Assist")
 	h.pressKey(tcell.KeyDown, tcell.ModNone)
@@ -344,4 +345,79 @@ func TestOptionsMenuForwardShortcutsFollowsSessionToggle(t *testing.T) {
 	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleTerminalForwardShortcuts"); item.Checked != ui.MenuChecked {
 		t.Fatalf("menu should be checked after enabling, got %+v", item)
 	}
+}
+
+func TestOptionsExplorerTogglesApplyAndPersist(t *testing.T) {
+	h := newTestHarness(t, 100, 26)
+	defer h.stop()
+
+	cases := []struct {
+		command string
+		get     func(config.ExplorerSettings) bool
+	}{
+		{"options.toggleExplorerShowHiddenFiles", func(s config.ExplorerSettings) bool { return s.ShowHidden }},
+		{"options.toggleExplorerShowGitIgnoredFiles", func(s config.ExplorerSettings) bool { return s.ShowGitIgnored }},
+		{"options.toggleExplorerCompactFolders", func(s config.ExplorerSettings) bool { return s.CompactFolders }},
+		{"options.toggleExplorerAutoReveal", func(s config.ExplorerSettings) bool { return s.AutoReveal }},
+		{"options.toggleExplorerGitStatusColors", func(s config.ExplorerSettings) bool { return s.GitStatusColors }},
+		{"options.toggleExplorerDimStagedGitColors", func(s config.ExplorerSettings) bool { return s.DimStagedGitColors }},
+	}
+	if h.app.Settings.Explorer.AutoReveal {
+		t.Fatal("auto-reveal must remain off by default")
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			initial := tc.get(h.app.Settings.Explorer)
+			for _, want := range []bool{!initial, initial} {
+				h.exec(tc.command)
+				if got := tc.get(h.app.Settings.Explorer); got != want {
+					t.Fatalf("setting = %v, want %v", got, want)
+				}
+				if got := tc.get(h.app.Explorer.Settings); got != want {
+					t.Fatalf("live explorer setting = %v, want %v", got, want)
+				}
+				item, ok := findMenuCommand(h.app.BuildOptionsMenu(), tc.command)
+				checked := ui.MenuUnchecked
+				if want {
+					checked = ui.MenuChecked
+				}
+				if !ok || item.Checked != checked {
+					t.Fatalf("menu item = %+v, found = %v, want checked = %d", item, ok, checked)
+				}
+				data, err := os.ReadFile(filepath.Join(h.dir, "config", "settings.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var saved config.Settings
+				if err := json.Unmarshal(data, &saved); err != nil {
+					t.Fatal(err)
+				}
+				if got := tc.get(saved.Explorer); got != want {
+					t.Fatalf("saved setting = %v, want %v", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestOptionsExplorerHiddenFilesMenuAction(t *testing.T) {
+	h := newTestHarness(t, 100, 26)
+	defer h.stop()
+	if err := os.WriteFile(filepath.Join(h.dir, ".hidden.txt"), []byte("hidden"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.exec("explorer.refresh")
+	h.assertContains(".hidden.txt")
+
+	h.exec("menu.options")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.assertContains("Show Hidden Files")
+	h.assertContains("Auto-Reveal Active File")
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	h.assertNotContains(".hidden.txt")
+
+	h.exec("options.toggleExplorerShowHiddenFiles")
+	h.assertContains(".hidden.txt")
 }

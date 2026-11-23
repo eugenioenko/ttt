@@ -18,6 +18,8 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 - A folder whose only entry is another folder is shown as one row, such as `src/main/java`, once you expand it, and that one expansion opens the whole chain. Right-click a segment of the row to act on that folder; keyboard actions on the row apply to its deepest folder. Set `explorer.compactFolders` to `false` to show each folder on its own row
 - File-type icons, which need a [Nerd Font](https://www.nerdfonts.com) in your terminal. They default off, since without one they'd render as boxes: turn them on with `"appearance": { "icons": "nerd-font" }`, **Options → Appearance → Font Icons**, or **Icons** in the settings editor
 
+**Options > Explorer** exposes **Show Hidden Files**, **Show Git-Ignored Files**, **Compact Folders**, **Auto-Reveal Active File**, **Git Status Colors**, and **Dim Staged Git Colors** as checked toggles. Changes apply immediately and are saved. Auto-reveal is off by default. The submenu also offers **Expand All** and **Collapse All**.
+
 When multiple folders are open, each root is shown as a collapsible group.
 
 **Delete** moves files and folders to the system Trash by default, where you can recover them using your file manager. macOS uses Foundation's native Trash API; Windows uses the Recycle Bin. Linux and FreeBSD require the `gio` command from GLib. Android has no supported system Trash for arbitrary files. If Trash is unavailable or the operation fails, ttt reports an error without falling back to permanent deletion.
