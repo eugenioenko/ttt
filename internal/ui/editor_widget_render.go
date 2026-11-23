@@ -363,6 +363,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				lineBrackets = bracketColors[lineIdx]
 			}
 			nativeLinks := e.nativeLinksForRow(lineIdx, segmentByte, screenCells)
+			var nativeLink term.Hyperlink
 			linkFirst := len(e.links.cells)
 			linkWindow := editorLinkWindow{line: lineIdx}
 			for x := 0; x < editorW; x++ {
@@ -482,14 +483,19 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						cell.Style = term.StyleIndentGuide
 					}
 				}
-				if !hide && (screenCells[x].width > 0 || screenCells[x].bufCol < 0) {
-					for _, link := range nativeLinks {
-						if !link.IsFile && screenCells[x].runeCol >= link.StartCol && screenCells[x].runeCol < link.EndCol {
-							cell.Link = link.Link
-							break
+				// Wide continuations inherit the leader's link, including its hidden state.
+				if screenCells[x].bufCol >= 0 || screenCells[x].runeCol < 0 {
+					nativeLink = term.Hyperlink{}
+					if !hide && screenCells[x].width > 0 {
+						for _, link := range nativeLinks {
+							if !link.IsFile && colIdx >= link.StartCol && colIdx < link.EndCol {
+								nativeLink = link.Link
+								break
+							}
 						}
 					}
 				}
+				cell.Link = nativeLink
 				surface.SetCell(gutterW+x, y, cell)
 				if decorateLinks && inText && !hide && screenCells[x].width > 0 {
 					if len(e.links.cells) == linkFirst {

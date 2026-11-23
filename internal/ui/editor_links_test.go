@@ -565,3 +565,32 @@ func TestEditorNativeLinksRefreshAfterEdit(t *testing.T) {
 		}
 	}
 }
+
+func TestEditorNativeLinksFollowWideCharacterVisibility(t *testing.T) {
+	const prefix = "https://example.com/"
+	url := prefix + "界/path"
+	e := newRowsEditor([]string{url}, 50, 3)
+	o := NewAnnotationOverlay()
+	o.Spans[0] = []ColSpan{{Start: len(prefix), End: len(prefix) + 1, Style: term.StyleHide}}
+	e.SetDiffOverlay(o)
+	x := e.GutterWidth() + len(prefix)
+	for _, reveal := range []bool{false, true} {
+		if reveal {
+			e.SearchMatches = []FindMatch{{Line: 0, Col: len(prefix), Len: 1}}
+			e.buildSearchIndex()
+		}
+		grid := renderGrid(e)
+		for _, col := range []int{x, x + 1} {
+			want := ""
+			if reveal {
+				want = url
+			}
+			if got := grid[0][col].Link.URL(); got != want {
+				t.Fatalf("reveal=%v column=%d: URL=%q want=%q", reveal, col, got, want)
+			}
+		}
+		if grid[0][x+2].Link.URL() != url {
+			t.Fatal("wide character visibility affected the next rune's link")
+		}
+	}
+}
