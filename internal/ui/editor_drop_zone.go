@@ -120,6 +120,28 @@ func (g *EditorGroupWidget) renderDropPreview(surface Surface) {
 	}
 
 	reader, hasReader := surface.(widgets.CellReader)
+	if hasReader {
+		// A fullwidth glyph straddling a vertical border column paints over the
+		// border cell, so clear the glyph's head cell when its continuation
+		// lands on the border, and clear a continuation cell orphaned inside or
+		// outside the preview when the head itself sits on the border column.
+		right := pr.X + pr.W - 1
+		for y := pr.Y; y < pr.Y+pr.H; y++ {
+			for _, x := range []int{pr.X, right} {
+				if head, ok := reader.CellAt(x-1, y); ok && head.Ch != 0 && textwidth.Rune(head.Ch) > 1 {
+					head.Ch = ' '
+					head.Text = ""
+					surface.SetCell(x-1, y, head)
+				}
+				if head, ok := reader.CellAt(x, y); ok && head.Ch != 0 && textwidth.Rune(head.Ch) > 1 {
+					if cont, ok := reader.CellAt(x+1, y); ok && cont.Ch == 0 && cont.Text == "" {
+						cont.Ch = ' '
+						surface.SetCell(x+1, y, cont)
+					}
+				}
+			}
+		}
+	}
 	for y := pr.Y; y < pr.Y+pr.H; y++ {
 		for x := pr.X; x < pr.X+pr.W; x++ {
 			cell := term.Cell{Ch: ' ', Style: term.StyleDefault}
