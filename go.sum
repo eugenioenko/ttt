@@ -1,11 +1,11 @@
-github.com/aymanbagabas/go-pty v0.2.3 h1:hsqcTIUV8I4iTSh3HQl61CR2wh0YPS6gHOYLhAfWu/E=
-github.com/aymanbagabas/go-pty v0.2.3/go.mod h1:GLkgQovzqN5A1xMB79yHWiG1rhcquZCjkwKQGKFPdPg=
 github.com/clipperhouse/displaywidth v0.11.0 h1:lBc6kY44VFw+TDx4I8opi/EtL9m20WSEFgwIwO+UVM8=
 github.com/clipperhouse/displaywidth v0.11.0/go.mod h1:bkrFNkf81G8HyVqmKGxsPufD3JhNl3dSqnGhOoSD/o0=
 github.com/clipperhouse/uax29/v2 v2.7.0 h1:+gs4oBZ2gPfVrKPthwbMzWZDaAFPGYK72F0NJv2v7Vk=
 github.com/clipperhouse/uax29/v2 v2.7.0/go.mod h1:EFJ2TJMRUaplDxHKj1qAEhCtQPW2tJSwu5BF98AuoVM=
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
+github.com/eugenioenko/go-pty v0.2.4-0.20261123001431-f0e5d6b20888 h1:jnKEY1CTp3kMPn99qauMuq31+vhIen92cwEPYVev5GQ=
+github.com/eugenioenko/go-pty v0.2.4-0.20261123001431-f0e5d6b20888/go.mod h1:GLkgQovzqN5A1xMB79yHWiG1rhcquZCjkwKQGKFPdPg=
 github.com/eugenioenko/regexp2/v2 v2.8.3 h1:rOd8fihGZOOkKWOy/Sl7uCowdNELQKFcJA0dO8fZKvg=
 github.com/eugenioenko/regexp2/v2 v2.8.3/go.mod h1:59/YhHVxgrxxHgjTuG4YFRRxynIz4E0bI+rqNBzwOrs=
 github.com/eugenioenko/textmate-go v0.4.1 h1:8cAEI/j5bws2aGHxWJx2GuWp8q7gaSvGXXPTuxyTrYA=
