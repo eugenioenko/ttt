@@ -29,14 +29,15 @@ type DiagnosticItem struct {
 // EndCol (exclusive) on EndLine. With Note it draws the note under
 // StartLine.
 type DecorationItem struct {
-	StartLine int
-	StartCol  int
-	EndLine   int
-	EndCol    int
-	Text      bool
-	Note      string
-	GhostText string
-	Style     term.Style
+	StartLine  int
+	StartCol   int
+	EndLine    int
+	EndCol     int
+	Text       bool
+	Note       string
+	GhostText  string
+	GhostAtCol bool
+	Style      term.Style
 }
 
 // BookmarkItem is one entry of a bulk bookmarks.set_all() call.

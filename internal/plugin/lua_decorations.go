@@ -85,12 +85,17 @@ func luaTableToDecorationItem(L *lua.LState, tbl *lua.LTable, i int) DecorationI
 		if !ok || len(s) == 0 || strings.IndexFunc(string(s), unicode.IsControl) >= 0 {
 			L.ArgError(2, fmt.Sprintf("item %d: ghost_text must be nonempty single-line text without control characters", i))
 		}
-		for _, name := range []string{"col", "end_col", "end_line", "note", "style"} {
+		for _, name := range []string{"end_col", "end_line", "note", "style"} {
 			if L.GetField(tbl, name) != lua.LNil {
 				L.ArgError(2, fmt.Sprintf("item %d: ghost_text cannot be combined with %s", i, name))
 			}
 		}
-		return DecorationItem{StartLine: line - 1, EndLine: line - 1, GhostText: string(s)}
+		col, hasCol := field("col")
+		item := DecorationItem{StartLine: line - 1, EndLine: line - 1, GhostText: string(s), GhostAtCol: hasCol}
+		if hasCol {
+			item.StartCol = col - 1
+		}
+		return item
 	}
 	if v := L.GetField(tbl, "note"); v != lua.LNil {
 		item := DecorationItem{StartLine: line - 1, EndLine: line - 1, Note: v.String(), Style: term.StyleNote}

@@ -205,9 +205,12 @@ func (e *EditorPaneWidget) TextPosAt(mx, my int) (line, col int, ok bool) {
 	if row.isPhantom() || row.bufLine < 0 || row.bufLine >= len(e.Buf.Lines) {
 		return 0, 0, false
 	}
+	x, onGhost := e.textXAt(row, mx-r.X-e.GutterWidth())
+	if onGhost {
+		return row.bufLine, e.ghostTextAt(row).col, false
+	}
 	line, col = e.mouseToPos(r, mx, my)
 	if e.WordWrap {
-		x := mx - r.X - e.GutterWidth()
 		runes := []rune(e.Buf.Lines[line])
 		if x >= e.Viewport.Width || col >= len(runes) {
 			return line, col, false
@@ -232,8 +235,12 @@ func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
 		line = len(e.Buf.Lines) - 1
 	}
 	tabW := e.resolveTabSize()
+	x, onGhost := e.textXAt(row, mx-r.X-gutterW)
+	if onGhost {
+		return line, e.ghostTextAt(row).col
+	}
 	if e.WordWrap {
-		segVisCol := mx - r.X - gutterW
+		segVisCol := x
 		if segVisCol < 0 {
 			segVisCol = 0
 		}
@@ -242,7 +249,7 @@ func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
 		}
 		col = visualColToBufCol(e.Buf.Lines[line], segVisCol, tabW)
 	} else {
-		visCol := mx - r.X - gutterW + e.Viewport.LeftCol
+		visCol := x + e.Viewport.LeftCol
 		if visCol < 0 {
 			visCol = 0
 		}
@@ -253,4 +260,25 @@ func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
 		col = lineLen
 	}
 	return
+}
+
+func (e *EditorPaneWidget) textXAt(row editorRow, x int) (int, bool) {
+	ghost := e.ghostTextAt(row)
+	if ghost.text == "" {
+		return x, false
+	}
+	tabW := e.resolveTabSize()
+	line := e.Buf.Lines[row.bufLine]
+	start := bufColToVisualCol(line[runeByteOffset(line, row.startCol):], ghost.col-row.startCol, tabW)
+	if !e.WordWrap {
+		start -= e.Viewport.LeftCol
+	}
+	if x < start {
+		return x, false
+	}
+	end := start + ghost.width(tabW)
+	if x < end {
+		return start, true
+	}
+	return x - (end - start), false
 }

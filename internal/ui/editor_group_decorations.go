@@ -3,6 +3,7 @@ package ui
 import (
 	"math"
 	"slices"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -20,6 +21,7 @@ type Decoration struct {
 	Text                bool
 	Note                string
 	GhostText           string
+	GhostAtCol          bool
 	Style               term.Style
 }
 
@@ -100,7 +102,14 @@ func decorationOverlay(decos []Decoration, lines []string, tabSize int) *DiffOve
 		}
 		endLine := min(d.EndLine, n-1)
 		if d.GhostText != "" {
-			o.GhostText[d.StartLine] = d.GhostText
+			col := utf8.RuneCountInString(lines[d.StartLine])
+			if d.GhostAtCol {
+				if d.StartCol < 0 || d.StartCol > col {
+					continue
+				}
+				col = d.StartCol
+			}
+			o.GhostText[d.StartLine] = ghostText{col: col, text: d.GhostText}
 			continue
 		}
 		if d.Note != "" {

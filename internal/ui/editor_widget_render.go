@@ -335,8 +335,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			suffix := ""
 			if isCollapsedLine && !isWrapContinuation {
 				suffix = " ⋯"
-			} else if !isCollapsedLine && row.nextCol == 0 && e.DiffOverlay != nil && !e.DiffOverlay.stale {
-				suffix = e.DiffOverlay.GhostText[lineIdx]
 			}
 
 			startCol, leftCol := 0, e.Viewport.LeftCol
@@ -348,7 +346,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if e.DiffOverlay != nil {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
-			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, suffix, startCol, tabW, leftCol, editorW)
+			screenCells := e.renderLineSegmentToScreen(rowText(e.Buf.Lines[lineIdx], segmentByte, row), syntaxSpans, isCollapsedLine, suffix, startCol, tabW, leftCol, editorW, e.ghostTextAt(row))
 			indentWidth, indentRunes, blankLine := 0, 0, false
 			if e.IndentGuides {
 				indentWidth, indentRunes, blankLine = indentGuideIndent(e.Buf.Lines[lineIdx], tabW)
@@ -535,12 +533,14 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line)
 	}
 	curRow, curScreenCol := layout.rowOf(e.Cursor.Line, e.Cursor.Col)
-	if e.WordWrap {
-		e.CursorX = curScreenCol + gutterW + r.X
-	} else {
-		cursorVisCol := bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, tabW)
-		e.CursorX = cursorVisCol - e.Viewport.LeftCol + gutterW + r.X
+	if !e.WordWrap {
+		curScreenCol = bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, tabW) - e.Viewport.LeftCol
 	}
+	ghost := e.ghostTextAt(layout.rowInBlock(layout.rowToTop(curRow)))
+	if e.Cursor.Col > ghost.col {
+		curScreenCol += ghost.width(tabW)
+	}
+	e.CursorX = curScreenCol + gutterW + r.X
 	e.CursorY = curRow - topRow + r.Y
 }
 
@@ -623,7 +623,28 @@ func rowText(line string, startByte int, r editorRow) string {
 	return text
 }
 
-func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, suffix string, startCol, tabW, leftCol, width int) []screenCell {
+type ghostText struct {
+	col  int
+	text string
+}
+
+func (g ghostText) width(tabW int) int {
+	return bufColToVisualCol(g.text, len(g.text), tabW)
+}
+
+func (e *EditorPaneWidget) ghostTextAt(row editorRow) ghostText {
+	if e.DiffOverlay == nil || e.DiffOverlay.stale || row.isPhantom() ||
+		(e.Folds != nil && e.Folds.IsCollapsed(row.bufLine)) {
+		return ghostText{}
+	}
+	ghost := e.DiffOverlay.GhostText[row.bufLine]
+	if ghost.col < row.startCol || (row.nextCol > 0 && ghost.col >= row.nextCol) {
+		return ghostText{}
+	}
+	return ghost
+}
+
+func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highlight.Span, collapsed bool, suffix string, startCol, tabW, leftCol, width int, ghost ghostText) []screenCell {
 	if cap(e.lineScratch) < width {
 		e.lineScratch = make([]screenCell, width)
 	}
@@ -633,7 +654,24 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 	}
 	visCol := 0
 	bufCol := startCol
-	for byteCol := 0; byteCol < len(text); {
+	shift := 0
+	for byteCol := 0; ; {
+		if bufCol == ghost.col {
+			for _, ch := range ghost.text {
+				x := visCol + shift - leftCol
+				cw := textwidth.Rune(ch)
+				if x >= width || x+cw > width {
+					return cells
+				}
+				if x >= 0 {
+					cells[x] = screenCell{ch: ch, style: term.StyleMuted, bufCol: -1, width: cw}
+				}
+				shift += cw
+			}
+		}
+		if byteCol == len(text) || visCol+shift-leftCol >= width {
+			break
+		}
 		ch, byteLen := utf8.DecodeRuneInString(text[byteCol:])
 		style := term.StyleDefault
 		for _, sp := range spans {
@@ -647,7 +685,7 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 			c.ch = ' '
 			nextStop := ((visCol / tabW) + 1) * tabW
 			for visCol < nextStop {
-				sx := visCol - leftCol
+				sx := visCol + shift - leftCol
 				if sx >= 0 && sx < width {
 					cells[sx] = c
 				}
@@ -656,7 +694,7 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 		} else {
 			cw := textwidth.Rune(ch)
 			c.width = cw
-			sx := visCol - leftCol
+			sx := visCol + shift - leftCol
 			if sx >= 0 && sx < width {
 				if cw > 1 && sx == width-1 {
 					// The rune's second column falls outside the pane; drawing
@@ -674,9 +712,6 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 		}
 		byteCol += byteLen
 		bufCol++
-		if visCol-leftCol >= width {
-			break
-		}
 	}
 	for _, ch := range suffix {
 		x := visCol - leftCol

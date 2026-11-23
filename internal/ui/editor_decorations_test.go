@@ -418,8 +418,39 @@ func TestGhostTextMovesWithItsLineAndExpiresOnEdit(t *testing.T) {
 
 func TestGhostTextClipsWideRuneAtPaneEdge(t *testing.T) {
 	e := newRowsEditor([]string{"a"}, 2, 1)
-	cells := e.renderLineSegmentToScreen("a", nil, false, "界", 0, 4, 0, 2)
+	cells := e.renderLineSegmentToScreen("a", nil, false, "", 0, 4, 0, 2, ghostText{col: 1, text: "界"})
 	if cells[1].ch != ' ' {
 		t.Fatalf("clipped preview cell = %q", cells[1].ch)
+	}
+}
+
+func TestGhostTextAtRuneColumn(t *testing.T) {
+	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "界ab"})
+	path := filepath.Join(dir, "x.txt")
+	openCommitted(g, path)
+	e := g.Editor
+	e.SetRect(Rect{W: 24, H: 6})
+	e.Viewport.Width, e.Viewport.Height = 24, 6
+	e.Cursor.Col = 1
+	g.SetDecorations("plugin:test", path, []Decoration{{StartCol: 1, GhostAtCol: true, GhostText: "X"}})
+
+	grid := renderGrid(e)
+	x := e.GutterWidth() + 2
+	if grid[0][x].Ch != 'X' || grid[0][x].Style != term.StyleMuted || grid[0][x+1].Ch != 'a' {
+		t.Fatalf("unexpected cells at the insertion: %+v", grid[0][x:x+2])
+	}
+	if e.CursorX != x || e.Buf.Lines[0] != "界ab" {
+		t.Fatalf("cursor x = %d, buffer = %q", e.CursorX, e.Buf.Lines[0])
+	}
+	if _, col, ok := e.TextPosAt(x, 0); ok || col != 1 {
+		t.Fatalf("ghost cell mapped to col %d, text = %v", col, ok)
+	}
+	if _, col, ok := e.TextPosAt(x+1, 0); !ok || col != 1 {
+		t.Fatalf("shifted text mapped to col %d, text = %v", col, ok)
+	}
+	e.Cursor.Col = 2
+	renderGrid(e)
+	if e.CursorX != x+2 {
+		t.Fatalf("cursor after preview at x = %d, want %d", e.CursorX, x+2)
 	}
 }

@@ -31,6 +31,7 @@ func TestDecorationsSet(t *testing.T) {
 			{ line = 12, col = 2, end_col = 5, style = "hide" },
 			{ line = 13, note = "Parsed once." },
 			{ line = 14, ghost_text = " + 1" },
+			{ line = 15, col = 3, ghost_text = " + 2" },
 		})
 	`)
 	if err != nil {
@@ -49,6 +50,7 @@ func TestDecorationsSet(t *testing.T) {
 		{StartLine: 11, StartCol: 1, EndLine: 11, EndCol: 4, Text: true, Style: term.StyleHide},
 		{StartLine: 12, EndLine: 12, Note: "Parsed once.", Style: term.StyleNote},
 		{StartLine: 13, EndLine: 13, GhostText: " + 1"},
+		{StartLine: 14, EndLine: 14, StartCol: 2, GhostAtCol: true, GhostText: " + 2"},
 	}
 	if !reflect.DeepEqual(gotItems, want) {
 		t.Errorf("items =\n%+v\nwant\n%+v", gotItems, want)

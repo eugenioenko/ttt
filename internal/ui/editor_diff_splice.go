@@ -112,7 +112,7 @@ func (o *DiffOverlay) splice(c buffer.Change) {
 	shiftKeys(o.Fillers, c, sumInts)
 	shiftKeys(o.Gaps, c, keepLast[int])
 	shiftKeys(o.Labels, c, keepLast[string])
-	shiftKeys(o.GhostText, c, keepLast[string])
+	shiftKeys(o.GhostText, c, keepLast[ghostText])
 	shiftKeys(o.LineBg, c, keepLast[term.Style])
 	shiftKeys(o.Spans, c, func(a, b []ColSpan) []ColSpan { return append(slices.Clip(a), b...) })
 	shiftKeys(o.NoteTexts, c, func(a, b []NoteText) []NoteText { return append(slices.Clip(a), b...) })
