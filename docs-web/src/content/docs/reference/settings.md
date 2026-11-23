@@ -35,6 +35,14 @@ When `--config` selects a custom file, **Settings: Open settings.json**, **Reloa
 | `debugMode` | bool | `false` | Enable debug logging |
 | `reuseWindow` | bool | `false` | Open command-line files and add explicit folder arguments to a running editor using the same config directory, preserving existing tabs and ignoring duplicate folder paths. Bare `ttt` and `--workspace` still start a new editor. Folder forwarding requires a compatible running editor; after upgrading, restart it with the updated binary or use `--new-window`. Requires a restart. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, use the newest reachable editor. If none is reachable, start normally. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Once connected, errors exit with status 1 without trying another editor; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
+## Links
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `links.native` | bool | `true` | Let the outer terminal handle web links in editors and integrated terminals using OSC 8. Set to `false` for ttt's Ctrl+click handling, which opens the browser on the machine running ttt. Applies live. |
+
+The same setting is available under **General → Links → Open web links in outer terminal**. Native links use your terminal's hover appearance and opening gesture, including over SSH. File references such as `src/main.go:12:3` continue to open inside ttt in either mode. Explicit OSC 8 file links from terminal programs go to the outer terminal in native mode; in fallback mode, local file targets open in ttt.
+
 ## Keyboard
 
 For terminal setup, see [Command Key on macOS](/guides/macos-command-key/).

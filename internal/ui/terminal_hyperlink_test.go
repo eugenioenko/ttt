@@ -80,7 +80,7 @@ func TestTerminalHyperlinkUsesOuterTerminal(t *testing.T) {
 
 func TestTerminalHyperlinkRejectsInvalidTargets(t *testing.T) {
 	for _, raw := range []string{"file:///tmp/a%00b", "https:///missing-host", "https://example.com/\x1b", "javascript:alert(1)", "/relative"} {
-		if got := terminalLinkURI(raw); got != nil {
+		if got := linkURI(raw); got != nil {
 			t.Errorf("URI(%q)=%+v", raw, got)
 		}
 	}
@@ -322,5 +322,105 @@ func TestTerminalPlainURLCombiningCharacters(t *testing.T) {
 	}
 	if cells[0][23].Link.URL() != "" {
 		t.Fatal("hyperlink leaked past combining character")
+	}
+}
+
+func TestTerminalLinkFallback(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		tw, write, render := hyperlinkWidget(t, 40, 3)
+		url := "https://example.com"
+		text := url
+		if explicit {
+			text = osc8(url, "Click here", "\a")
+		}
+		write(text)
+		opened := ""
+		tw.OnOpenURL = func(url string) { opened = url }
+		for _, native := range []bool{false, true, false} {
+			tw.NativeLinks = native
+			tw.HandleEvent(tcell.NewEventMouse(4, 2, 0, tcell.ModCtrl))
+			cell := render()[0][1]
+			if native {
+				if cell.Link.URL() != url || cell.Attrs&term.CellAttrUnderline != 0 || tw.linkAt(0, 1) != nil {
+					t.Fatal("native link retained fallback handling")
+				}
+			} else {
+				if cell.Link != (term.Hyperlink{}) || cell.Attrs&term.CellAttrUnderline == 0 {
+					t.Fatal("fallback link missing hover feedback or retained OSC 8 metadata")
+				}
+				tw.HandleEvent(tcell.NewEventMouse(4, 2, tcell.Button1, tcell.ModCtrl))
+				tw.HandleEvent(tcell.NewEventMouse(4, 2, 0, tcell.ModCtrl))
+				if opened != url {
+					t.Fatalf("opened=%q", opened)
+				}
+				opened = ""
+			}
+		}
+	}
+}
+
+func TestTerminalWrappedURLDoesNotOpenFile(t *testing.T) {
+	tw, write, render := hyperlinkWidget(t, 20, 3)
+	tw.WorkDir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(tw.WorkDir, "source.go"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	url := "https://example.com/source.go:12:3"
+	write(url)
+	tw.linkModifierHeld = true
+	if cell := render()[1][1]; cell.Link.URL() != url || cell.Attrs&term.CellAttrUnderline != 0 {
+		t.Fatal("wrapped URL was styled as a local file")
+	}
+	if tw.linkAt(1, 1) != nil {
+		t.Fatal("wrapped URL became a local file click target")
+	}
+	tw.NativeLinks = false
+	if link := tw.linkAt(1, 1); link == nil || link.IsFile || link.URL != url {
+		t.Fatalf("fallback lost the complete URL: %+v", link)
+	}
+}
+
+func TestTerminalURLUsesEmulatorColumns(t *testing.T) {
+	_, write, render := hyperlinkWidget(t, 60, 2)
+	url := "https://example.com"
+	write("👩‍💻 " + url + " plain")
+	cells := render()[0]
+	for x, cell := range cells {
+		want := ""
+		if x >= 5 && x < 5+len(url) {
+			want = url
+		}
+		if cell.Link.URL() != want {
+			t.Fatalf("column %d: URL=%q want=%q", x, cell.Link.URL(), want)
+		}
+	}
+}
+
+func BenchmarkTerminalWrappedURLs(b *testing.B) {
+	xt := xterm.New(xterm.WithCols(80), xterm.WithRows(24), xterm.WithScrollback(2000))
+	xt.WriteString(strings.Repeat("https://example.com ", 6000))
+	tw := NewTerminalWidget(nil, nil)
+	cache := make(map[int][]terminalURLSpan)
+	b.ReportAllocs()
+	for b.Loop() {
+		clear(cache)
+		tw.urlLinksForLine(xt.Buffer(), xt.Buffer().YBase, cache)
+	}
+}
+
+func TestTerminalFallbackFileTargets(t *testing.T) {
+	for _, target := range []string{"file:///tmp/source.go", "file://remote/tmp/source.go", "javascript:alert(1)"} {
+		tw, write, render := hyperlinkWidget(t, 40, 2)
+		tw.NativeLinks = false
+		tw.linkModifierHeld = true
+		write(osc8(target, "source.go:12", "\a"))
+		link := tw.linkAt(0, 0)
+		want := target == "file:///tmp/source.go"
+		if (link != nil) != want || (render()[0][0].Attrs&term.CellAttrUnderline != 0) != want {
+			t.Fatalf("target %q: click and hover disagree with local file policy: %+v", target, link)
+		}
+		if link != nil && (!link.IsFile || link.FilePath != filepath.FromSlash("/tmp/source.go")) {
+			t.Fatalf("unexpected local target: %+v", link)
+		}
 	}
 }

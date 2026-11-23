@@ -512,3 +512,30 @@ func TestAppPaddingIsPerTerminalAndSurvivesGlobalChanges(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeLinksApplyToEditorsAndTerminals(t *testing.T) {
+	a := spawnTestApp(t)
+	a.Renderer = &render.Renderer{}
+	s := *a.Settings
+	for _, native := range []bool{false, true, false} {
+		s.Links.Native = native
+		a.ApplySettings(s)
+		id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer a.CloseTerminal(id)
+		for _, tab := range a.Terminals {
+			if tab.Widget.NativeLinks != native || tab.Widget.OnOpenURL == nil {
+				t.Fatal("existing or new terminal ignored link settings")
+			}
+		}
+		if a.EditorGroup.NativeLinks != native || a.EditorGroup.Editor.NativeLinks != native {
+			t.Fatal("editor ignored link settings")
+		}
+		other := a.newEditorGroupLike(a.EditorGroup)
+		if other.NativeLinks != native {
+			t.Fatal("split editor ignored link settings")
+		}
+	}
+}

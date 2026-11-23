@@ -36,9 +36,11 @@ With [`keyboard.modifierKey`](/reference/settings/#keyboard) set to `"control+su
 
 Ctrl+click opens plain file paths in terminal output in TTT, including line and column references. When Super shortcuts are enabled, Super+click also opens these links, shows the link cursor and underline, and permits local text selection when the terminal program captures the mouse. The outer terminal must report the modifier. These settings apply live to both panel terminals and editor terminal tabs; other shell key and mouse encodings keep their original modifiers.
 
-TTT detects plain HTTP(S) URLs, including URLs wrapped across terminal rows, and adds OSC 8 hyperlink metadata when rendering them. It also preserves explicit HTTP(S) and file hyperlinks with labels such as **Click here**. The outer terminal handles hover appearance and the link-opening gesture. Explicit underline formatting from the terminal program is preserved. Explicit OSC 8 targets take precedence over URL-looking labels. TTT does not launch a browser for terminal links or treat explicit hyperlink labels as editor file paths.
+TTT detects plain HTTP(S) URLs, including URLs wrapped across terminal rows, and adds OSC 8 hyperlink metadata when rendering them. It also preserves explicit HTTP(S) and file hyperlinks with labels such as **Click here**. The outer terminal handles hover appearance and the link-opening gesture. Explicit underline formatting from the terminal program is preserved. Explicit OSC 8 targets take precedence over URL-looking labels. In native mode, TTT does not launch a browser for terminal links or treat explicit hyperlink labels as editor file paths.
 
 A supporting outer terminal opens OSC 8 web links on your local machine, including when TTT runs remotely over SSH. The gesture, file-link behavior, and support through multiplexers depend on the outer terminal and multiplexer. TTT's Ctrl+click handling for plain file paths runs on the machine hosting TTT.
+
+For terminals without OSC 8 support, set `"links": { "native": false }` in `settings.json`, or disable **General → Links → Open web links in outer terminal**. This shared setting applies to editor links and terminal links immediately. TTT then underlines links on Ctrl-hover and opens them on Ctrl+click (also Super+click when enabled). Web links open the browser on the machine running TTT; explicit local file links open in TTT. Native OSC 8 metadata is disabled in this mode.
 
 ## Shortcut forwarding
 

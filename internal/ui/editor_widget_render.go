@@ -362,6 +362,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			if bracketColors != nil && lineIdx < len(bracketColors) {
 				lineBrackets = bracketColors[lineIdx]
 			}
+			nativeLinks := e.nativeLinksForRow(lineIdx, segmentByte, screenCells)
 			linkFirst := len(e.links.cells)
 			linkWindow := editorLinkWindow{line: lineIdx}
 			for x := 0; x < editorW; x++ {
@@ -479,6 +480,14 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					if visualCol < indentWidth && visualCol%tabW == 0 {
 						cell.Ch = '│'
 						cell.Style = term.StyleIndentGuide
+					}
+				}
+				if !hide && (screenCells[x].width > 0 || screenCells[x].bufCol < 0) {
+					for _, link := range nativeLinks {
+						if !link.IsFile && screenCells[x].runeCol >= link.StartCol && screenCells[x].runeCol < link.EndCol {
+							cell.Link = link.Link
+							break
+						}
 					}
 				}
 				surface.SetCell(gutterW+x, y, cell)

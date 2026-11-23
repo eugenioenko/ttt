@@ -73,7 +73,9 @@ The `editor.largeFiles.wordWrapMaxMB` safeguard still applies, including when a 
 
 ## Opening Links
 
-Hold **Ctrl** while moving the mouse over the editor to underline visible HTTP/HTTPS links and existing file references such as `src/main.go:12:3`. **Ctrl+click** an underlined link to open it. File references open in ttt at the specified line and column; relative paths use the current file's directory, or the workspace folder for untitled buffers and remote PR diffs.
+HTTP/HTTPS links in editor text are passed to your outer terminal as OSC 8 hyperlinks. Your terminal controls their hover appearance and opening gesture, and opens them locally even when ttt runs over SSH. Set `"links": { "native": false }` for ttt to underline web links on Ctrl-hover and open them on Ctrl+click instead; this fallback opens the browser on the machine running ttt. The shared setting also applies to integrated terminals and is available under **General → Links**.
+
+In either mode, hold **Ctrl** over existing file references such as `src/main.go:12:3` to underline them, then **Ctrl+click** to open them. File references open in ttt at the specified line and column; relative paths use the current file's directory, or the workspace folder for untitled buffers and remote PR diffs.
 
 Move outside the pane or move the mouse without Ctrl to clear the underlines. Link navigation also works when pointer shapes are disabled, and is available in diff tabs, Commit Details, and Current Changes.
 

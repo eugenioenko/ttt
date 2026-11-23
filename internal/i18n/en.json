@@ -927,6 +927,8 @@
   "settings.formatOnSave": "Format on save",
   "settings.forwardTerminalShortcuts": "Forward shortcuts to terminal",
   "settings.fullLineSelection": "Full line selection",
+  "settings.links": "Links",
+  "settings.nativeLinks": "Open web links in outer terminal",
   "settings.general": "General",
   "settings.gitGutter": "Git gutter",
   "settings.gitIgnoredFiles": "Git-ignored files",

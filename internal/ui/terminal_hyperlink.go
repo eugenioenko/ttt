@@ -2,14 +2,10 @@ package ui
 
 import (
 	"fmt"
-	"net/url"
-	"strings"
 	"sync/atomic"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/term"
-	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/xterm-go"
 )
 
@@ -22,41 +18,15 @@ func terminalLinkID(line *xterm.BufferLine, col int) int {
 	return line.GetExtended(col).URLID()
 }
 
-func terminalLinkURI(raw string) *url.URL {
-	if strings.ContainsFunc(raw, unicode.IsControl) {
-		return nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Opaque != "" {
-		return nil
-	}
-	switch u.Scheme {
-	case "http", "https":
-		if u.Hostname() != "" {
-			return u
-		}
-	case "file":
-		if strings.HasPrefix(u.Path, "/") && !strings.ContainsFunc(u.Path, unicode.IsControl) {
-			return u
-		}
-	}
-	return nil
-}
-
 func (tw *TerminalWidget) setCellLink(xt *xterm.Terminal, line *xterm.BufferLine, col int, cell *term.Cell, links map[int]term.Hyperlink, urls []terminalURLSpan) {
 	id := terminalLinkID(line, col)
 	if id == 0 {
-		for _, span := range urls {
-			if col >= span.StartCol && col < span.EndCol {
-				cell.Link = span.Link
-				break
-			}
-		}
+		cell.Link = urlLinkAt(urls, col)
 		return
 	}
 	data, ok := links[id]
 	if !ok {
-		if link := xt.GetLinkData(id); link != nil && terminalLinkURI(link.URI) != nil {
+		if link := xt.GetLinkData(id); link != nil && linkURI(link.URI) != nil && (tw.NativeLinks || linkTarget(link.URI) != nil) {
 			// Link IDs belong to one emulator; isolate them across terminal panes.
 			if tw.linkNamespace == 0 {
 				tw.linkNamespace = terminalLinkNamespace.Add(1)
@@ -73,26 +43,27 @@ type terminalURLSpan struct {
 	Link             term.Hyperlink
 }
 
-func (tw *TerminalWidget) urlLinksForText(text []byte) []terminalURLSpan {
+func urlLinkAt(spans []terminalURLSpan, col int) term.Hyperlink {
+	for _, span := range spans {
+		if col < span.StartCol {
+			break
+		}
+		if col < span.EndCol {
+			return span.Link
+		}
+	}
+	return term.Hyperlink{}
+}
+
+func (tw *TerminalWidget) urlLinksForText(text []byte) []webLink {
 	if spans, ok := tw.urlMemo[string(text)]; ok {
 		return spans
 	}
 	if tw.urlMemo == nil || len(tw.urlMemo) >= linkMemoMax {
-		tw.urlMemo = make(map[string][]terminalURLSpan)
+		tw.urlMemo = make(map[string][]webLink)
 	}
-	var spans []terminalURLSpan
 	lineText := string(text)
-	for _, candidate := range detectURLCandidates(lineText) {
-		if terminalLinkURI(candidate.URL) == nil {
-			continue
-		}
-		runes := []rune(lineText)
-		start := textwidth.GraphemeWidth(string(runes[:candidate.StartCol]))
-		spans = append(spans, terminalURLSpan{
-			StartCol: start, EndCol: start + textwidth.GraphemeWidth(candidate.URL),
-			Link: term.NewHyperlink(candidate.URL, ""),
-		})
-	}
+	spans := webLinks(lineText)
 	tw.urlMemo[lineText] = spans
 	return spans
 }
@@ -114,6 +85,8 @@ func (tw *TerminalWidget) urlLinksForLine(buf *xterm.Buffer, row int, cache map[
 	}
 	end := start
 	tw.urlText = tw.urlText[:0]
+	tw.urlCols = tw.urlCols[:0]
+	offset := 0
 	for end < buf.Lines.Length() {
 		line := buf.Lines.Get(end)
 		if line == nil || (end > start && !line.IsWrapped) {
@@ -130,20 +103,31 @@ func (tw *TerminalWidget) urlLinksForLine(buf *xterm.Buffer, row int, cache map[
 				}
 				tw.urlText = utf8.AppendRune(tw.urlText, ch)
 			}
+			for len(tw.urlCols) <= len(tw.urlText) {
+				tw.urlCols = append(tw.urlCols, offset+x)
+			}
+			tw.urlCols[len(tw.urlText)] = offset + x + max(1, line.GetWidth(x))
 		}
+		offset += width
 		end++
 	}
 	spans := tw.urlLinksForText(tw.urlText)
-	offset := 0
+	offset, first := 0, 0
 	for y := start; y < end; y++ {
 		width := terminalURLLineWidth(buf, y)
 		cache[y] = nil
-		for _, span := range spans {
-			if span.StartCol < offset+width && span.EndCol > offset {
-				cache[y] = append(cache[y], terminalURLSpan{
-					StartCol: max(0, span.StartCol-offset), EndCol: min(width, span.EndCol-offset), Link: span.Link,
-				})
+		for first < len(spans) && tw.urlCols[spans[first].End] <= offset {
+			first++
+		}
+		for i := first; i < len(spans); i++ {
+			span := spans[i]
+			startCol, endCol := tw.urlCols[span.Start], tw.urlCols[span.End]
+			if startCol >= offset+width {
+				break
 			}
+			cache[y] = append(cache[y], terminalURLSpan{
+				StartCol: max(0, startCol-offset), EndCol: min(width, endCol-offset), Link: span.Link,
+			})
 		}
 		offset += width
 	}

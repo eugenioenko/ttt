@@ -201,6 +201,7 @@ type EditorGroupWidget struct {
 	OnGutterClick     func(path string, line int) bool
 	LinkWorkDir       func() string
 	ControlModifiers  *tcell.ModMask
+	NativeLinks       bool
 	OnOpenURL         func(string)
 	OnOpenFileLink    func(string, int, int)
 	OnLinkHover       func(*EditorPaneWidget)
@@ -236,6 +237,7 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	tabBar.MoreButton = NewMoreButtonWidget()
 
 	g := &EditorGroupWidget{
+		NativeLinks: true,
 		TabBar:      tabBar,
 		Editor:      editor,
 		TabSize:     tabSize,

@@ -17,6 +17,7 @@ import (
 
 func linkEditor(lines []string, w, h int) *EditorPaneWidget {
 	e := newRowsEditor(lines, w, h)
+	e.NativeLinks = false
 	e.OnOpenURL = func(string) {}
 	e.Undo = &undo.UndoStack{}
 	return e
@@ -194,6 +195,7 @@ func TestEditorLinkReleaseClearsDiffOwners(t *testing.T) {
 			r := NewRoot(widget)
 			opened := 0
 			configure := func(e *EditorPaneWidget, _ string) {
+				e.NativeLinks = false
 				e.OnOpenURL = func(string) { opened++ }
 				e.OnLinkHover = r.TrackEditorLinkHover
 			}
@@ -501,5 +503,65 @@ func TestEditorFileLinkResolutionStaysWithinViewport(t *testing.T) {
 	}
 	if requests != 150 {
 		t.Fatalf("unchanged frames repeated resolution: %d requests", requests)
+	}
+}
+
+func TestEditorNativeLinksGeometryAndFallback(t *testing.T) {
+	for _, wrap := range []bool{false, true} {
+		for _, left := range []int{0, 12} {
+			e := linkEditor([]string{"界\t https://example.com/世界. plain"}, 23, 8)
+			e.WordWrap, e.Viewport.LeftCol = wrap, left
+			fallback := hoverEditorLinks(e)
+			want := make(map[linkPoint]string)
+			for point, span := range e.links.hits {
+				want[point] = span.URL
+			}
+			if len(want) == 0 {
+				t.Fatal("no visible link cells")
+			}
+			e.NativeLinks = true
+			e.clearLinkHover()
+			e.OnOpenURL = func(string) { t.Error("native link opened by ttt") }
+			e.ResolveFileLinks = func([]string, string, func(map[string]string)) { t.Error("native rendering resolved files") }
+			grid := renderGrid(e)
+			for y, row := range grid {
+				for x, cell := range row {
+					if got := cell.Link.URL(); got != want[linkPoint{x, y}] {
+						t.Fatalf("wrap=%v left=%d cell=%d,%d: URL=%q want=%q", wrap, left, x, y, got, want[linkPoint{x, y}])
+					}
+					if cell.Underline {
+						t.Fatal("native rendering added an underline")
+					}
+				}
+			}
+			for point := range want {
+				e.HandleEvent(tcell.NewEventMouse(point.x, point.y, 0, tcell.ModCtrl))
+				renderGrid(e)
+				if _, ok := e.editorLinkAt(point.x, point.y); ok {
+					t.Fatal("native web link retained a ttt click target")
+				}
+			}
+			e.NativeLinks = false
+			grid = hoverEditorLinks(e)
+			for point := range want {
+				cell := grid[point.y][point.x]
+				if cell.Link != (term.Hyperlink{}) || cell.Underline != fallback[point.y][point.x].Underline {
+					t.Fatal("fallback did not replace native metadata")
+				}
+			}
+		}
+	}
+}
+
+func TestEditorNativeLinksRefreshAfterEdit(t *testing.T) {
+	e := newRowsEditor([]string{"https://old.test"}, 40, 3)
+	if got := renderGrid(e)[0][e.GutterWidth()].Link.URL(); got != "https://old.test" {
+		t.Fatalf("initial URL=%q", got)
+	}
+	e.Buf = &buffer.Buffer{Lines: []string{"plain"}}
+	for _, cell := range renderGrid(e)[0] {
+		if cell.Link != (term.Hyperlink{}) {
+			t.Fatal("stale hyperlink after buffer replacement")
+		}
 	}
 }
