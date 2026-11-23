@@ -580,8 +580,8 @@ func TestNativeLinkSettings(t *testing.T) {
 		json string
 		want bool
 	}{
-		{`{}`, true},
-		{`{"links":{}}`, true},
+		{`{}`, false},
+		{`{"links":{}}`, false},
 		{`{"links":{"native":true}}`, true},
 		{`{"links":{"native":false}}`, false},
 	} {

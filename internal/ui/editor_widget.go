@@ -138,7 +138,6 @@ type EditorPaneWidget struct {
 
 func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewport) *EditorPaneWidget {
 	return &EditorPaneWidget{
-		NativeLinks:       true,
 		Buf:               buf,
 		Cursor:            cur,
 		Viewport:          vp,

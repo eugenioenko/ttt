@@ -78,7 +78,6 @@ func NewTerminalWidget(t *terminal.Terminal, palette *TerminalColorPalette) *Ter
 		Term:            t,
 		Palette:         palette,
 		CtrlVPastes:     true,
-		NativeLinks:     true,
 		mouseButtonHeld: -1,
 	}
 }

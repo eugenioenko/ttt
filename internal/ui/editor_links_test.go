@@ -17,7 +17,6 @@ import (
 
 func linkEditor(lines []string, w, h int) *EditorPaneWidget {
 	e := newRowsEditor(lines, w, h)
-	e.NativeLinks = false
 	e.OnOpenURL = func(string) {}
 	e.Undo = &undo.UndoStack{}
 	return e
@@ -555,6 +554,7 @@ func TestEditorNativeLinksGeometryAndFallback(t *testing.T) {
 
 func TestEditorNativeLinksRefreshAfterEdit(t *testing.T) {
 	e := newRowsEditor([]string{"https://old.test"}, 40, 3)
+	e.NativeLinks = true
 	if got := renderGrid(e)[0][e.GutterWidth()].Link.URL(); got != "https://old.test" {
 		t.Fatalf("initial URL=%q", got)
 	}
@@ -570,6 +570,7 @@ func TestEditorNativeLinksFollowWideCharacterVisibility(t *testing.T) {
 	const prefix = "https://example.com/"
 	url := prefix + "界/path"
 	e := newRowsEditor([]string{url}, 50, 3)
+	e.NativeLinks = true
 	o := NewAnnotationOverlay()
 	o.Spans[0] = []ColSpan{{Start: len(prefix), End: len(prefix) + 1, Style: term.StyleHide}}
 	e.SetDiffOverlay(o)

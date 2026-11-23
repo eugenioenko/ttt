@@ -20,6 +20,7 @@ func hyperlinkWidget(t *testing.T, cols, rows int) (*TerminalWidget, func(string
 	}
 	t.Cleanup(func() { dev.Close() })
 	tw := NewTerminalWidget(dev, nil)
+	tw.NativeLinks = true
 	tw.SetRect(Rect{X: 3, Y: 2, W: cols, H: rows})
 	write := func(text string) { dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString(text) }) }
 	render := func() [][]term.Cell {

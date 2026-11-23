@@ -39,7 +39,7 @@ When `--config` selects a custom file, **Settings: Open settings.json**, **Reloa
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `links.native` | bool | `true` | Let the outer terminal handle web links in editors and integrated terminals using OSC 8. Set to `false` for ttt's Ctrl+click handling, which opens the browser on the machine running ttt. Applies live. |
+| `links.native` | bool | `false` | Use ttt's Ctrl+click handling by default, opening the browser on the machine running ttt. Set to `true` to let the outer terminal handle web links in editors and integrated terminals using OSC 8. Applies live. |
 
 The same setting is available under **General → Links → Open web links in outer terminal**. Native links use your terminal's hover appearance and opening gesture, including over SSH. File references such as `src/main.go:12:3` continue to open inside ttt in either mode. Explicit OSC 8 file links from terminal programs go to the outer terminal in native mode; in fallback mode, local file targets open in ttt.
 

@@ -607,7 +607,7 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 
 func DefaultSettings() Settings {
 	return Settings{
-		Links:        LinkSettings{Native: true},
+		Links:        LinkSettings{Native: false},
 		Version:      1,
 		Theme:        "default-dark",
 		Appearance:   DefaultAppearanceSettings(),

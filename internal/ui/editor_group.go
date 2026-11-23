@@ -237,7 +237,6 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 	tabBar.MoreButton = NewMoreButtonWidget()
 
 	g := &EditorGroupWidget{
-		NativeLinks: true,
 		TabBar:      tabBar,
 		Editor:      editor,
 		TabSize:     tabSize,
