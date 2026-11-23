@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,6 +28,7 @@ type NavigationPanel struct {
 	gitStyles     map[string]term.Style
 	compactStarts map[string]string
 	restoring     map[string]bool
+	prefetched    map[string][]ui.DirEntry
 
 	OnOpenFile   func(path string)
 	OnAction     func(commandID string)
@@ -287,6 +289,25 @@ func (n *NavigationPanel) compactChain(id string) []string {
 }
 
 func (n *NavigationPanel) ExpandAll() {
+	entries, _ := ui.WalkDirEntries(context.Background(), n.ExpandRoots(), n.Settings)
+	n.ApplyExpandAll(entries)
+}
+
+func (n *NavigationPanel) ExpandRoots() []string {
+	var roots []string
+	for _, root := range n.Tree.Config.Items {
+		if root.Expandable {
+			roots = append(roots, root.ID)
+		}
+	}
+	return roots
+}
+
+// ApplyExpandAll expands the whole tree from entries read by WalkDirEntries;
+// a directory missing from entries is read synchronously.
+func (n *NavigationPanel) ApplyExpandAll(entries map[string][]ui.DirEntry) {
+	n.prefetched = entries
+	defer func() { n.prefetched = nil }()
 	selectedID := ""
 	if selected := n.Tree.Selected(); selected != nil {
 		selectedID = selected.ID
@@ -493,7 +514,10 @@ func isSymlink(path string) bool {
 }
 
 func (n *NavigationPanel) loadEntries(node *widgets.TreeNode) {
-	entries := ui.LoadDirEntries(node.ID, n.Settings)
+	entries, ok := n.prefetched[node.ID]
+	if !ok {
+		entries = ui.LoadDirEntries(node.ID, n.Settings)
+	}
 	node.Children = nil
 	for _, de := range entries {
 		child := &widgets.TreeNode{

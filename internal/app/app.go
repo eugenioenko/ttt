@@ -193,6 +193,7 @@ type App struct {
 	tasks                 taskOwner
 	quickOpen             *quickOpenState
 	fileLinks             *asynctask.Task[map[string]string]
+	explorerExpand        *asynctask.Task[map[string][]ui.DirEntry]
 	resolveFileLink       func(string, string) string
 	searchReplace         searchReplaceState
 

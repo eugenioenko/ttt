@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/ui"
 )
 
 func (a *App) explorerReload() {
@@ -212,13 +215,13 @@ func registerExplorerCommands(app *App) {
 	reg.Register(command.Command{
 		ID: "explorer.expandAll", Title: i18n.Text("command.explorerExpandAll"),
 		Keywords: []string{"view", "file", "tree", "folder", "expand"},
-		Handler:  app.Explorer.ExpandAll,
+		Handler:  app.ExplorerExpandAll,
 	})
 
 	reg.Register(command.Command{
 		ID: "explorer.collapseAll", Title: i18n.Text("command.explorerCollapseAll"),
 		Keywords: []string{"view", "file", "tree", "folder", "collapse"},
-		Handler:  app.Explorer.CollapseAll,
+		Handler:  app.ExplorerCollapseAll,
 	})
 
 	reg.Register(command.Command{
@@ -310,4 +313,27 @@ func registerExplorerCommands(app *App) {
 		Keywords: []string{"explorer", "workspace", "folder", "remove"},
 		Handler:  app.ExplorerRemoveRoot,
 	})
+}
+
+func (a *App) ExplorerExpandAll() {
+	if a.explorerExpand == nil {
+		a.explorerExpand = NewTask[map[string][]ui.DirEntry](a, asynctask.TaskOptions{})
+	}
+	explorer := a.Explorer
+	roots, settings := explorer.ExpandRoots(), explorer.Settings
+	a.explorerExpand.Schedule(func(ctx context.Context) (map[string][]ui.DirEntry, error) {
+		return ui.WalkDirEntries(ctx, roots, settings)
+	}, func(entries map[string][]ui.DirEntry, err error) {
+		if err != nil || !slices.Equal(explorer.ExpandRoots(), roots) {
+			return
+		}
+		explorer.ApplyExpandAll(entries)
+	})
+}
+
+func (a *App) ExplorerCollapseAll() {
+	if a.explorerExpand != nil {
+		a.explorerExpand.Stop()
+	}
+	a.Explorer.CollapseAll()
 }
