@@ -16,7 +16,7 @@ func openReadOnlyFile(t *testing.T, h *testHarness) string {
 	if err := os.WriteFile(path, []byte("original\n"), 0444); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 	return path
 }
@@ -43,7 +43,7 @@ func TestReadOnlyFileShowsIndicator(t *testing.T) {
 	h.assertContains(lock + " " + fileIcon + " locked.txt")
 	h.assertNotContains("(readonly)")
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.redraw()
 	h.assertNotContains("alpha.txt (readonly)")
 	h.assertNotContains(lock + " alpha.txt")

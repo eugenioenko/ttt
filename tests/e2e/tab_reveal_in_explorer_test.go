@@ -12,7 +12,7 @@ func TestTabMenuRevealInExplorerShowsSidebarAndSelectsFile(t *testing.T) {
 	h.exec("sidebar.search")
 	h.app.HideSidebar()
 	nested := filepath.Join(h.dir, "subdir", "nested.txt")
-	h.app.EditorGroup.OpenFile(nested)
+	h.openFile(nested)
 	h.redraw()
 
 	tabRect := h.app.EditorGroup.TabBar.GetRect()

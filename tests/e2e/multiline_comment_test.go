@@ -59,7 +59,7 @@ const after = 2;
 	if err := os.WriteFile(fp, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(fp)
+	h.openFile(fp)
 	h.redraw()
 
 	h.assertContains("MIDDLEWORD")
@@ -128,7 +128,7 @@ const TAILWORD = 2;
 	if err := os.WriteFile(fp, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(fp)
+	h.openFile(fp)
 	h.redraw()
 
 	openRow := findRow(h, "/* opener")

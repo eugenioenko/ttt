@@ -11,7 +11,7 @@ import (
 
 func openAlphaWithTerminal(t *testing.T, h *testHarness) {
 	t.Helper()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.Settings.Terminal.Shell = ""
 	h.exec("terminal.toggle")
 	if len(h.app.Terminals) != 1 {
@@ -85,7 +85,7 @@ func TestDismissedOverlayReturnsFocusToTerminal(t *testing.T) {
 func TestDismissedOverlayReturnsFocusToSidebar(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.FocusSidebar()
 	explorer := h.app.Root.Focused
 

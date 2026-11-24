@@ -32,7 +32,7 @@ func TestEditorAcceptsInputAfterDismissingMenu(t *testing.T) {
 	h := newTestHarness(t, 100, 24)
 	defer h.stop()
 
-	h.app.EditorGroup.OpenFile(h.dir + "/alpha.txt")
+	h.openFile(h.dir + "/alpha.txt")
 	h.app.Root.SetFocus(h.app.EditorGroup)
 
 	h.exec("menu.edit")
@@ -109,7 +109,7 @@ func TestEditorContextMenuRestoresFocusOnDismiss(t *testing.T) {
 	h := newTestHarness(t, 100, 24)
 	defer h.stop()
 
-	h.app.EditorGroup.OpenFile(h.dir + "/alpha.txt")
+	h.openFile(h.dir + "/alpha.txt")
 	h.app.Root.SetFocus(h.app.EditorGroup)
 	h.redraw()
 

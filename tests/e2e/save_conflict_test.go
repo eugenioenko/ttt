@@ -31,7 +31,7 @@ func TestSaveConflictPromptsBeforeOverwrite(t *testing.T) {
 	if err := os.WriteFile(path, []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	// Saving with no external change must not prompt.
@@ -57,7 +57,7 @@ func TestSaveConflictOverwrite(t *testing.T) {
 	if err := os.WriteFile(path, []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	modifyOnDisk(t, path, "changed by another tool\n")
@@ -89,7 +89,7 @@ func TestSaveConflictCancelKeepsDiskVersion(t *testing.T) {
 	if err := os.WriteFile(path, []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	modifyOnDisk(t, path, "changed by another tool\n")
