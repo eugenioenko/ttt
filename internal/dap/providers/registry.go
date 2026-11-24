@@ -10,19 +10,14 @@ import (
 	"github.com/eugenioenko/ttt/internal/dap/providers/jsdebug"
 )
 
-type MissingAdapter struct{ Type, Plugin string }
+type MissingAdapter struct{ Type string }
 
 func (e MissingAdapter) Error() string { return fmt.Sprintf("unconfigured debug adapter %q", e.Type) }
-
-var registryPlugins = map[string]string{
-	"go": "dap-go", "node": "dap-js-debug", "pwa-node": "dap-js-debug",
-	"debugpy": "dap-debugpy", "lldb": "dap-codelldb", "gdb": "dap-gdb",
-}
 
 func For(t dap.Target, adapters map[string]debugadapter.Config) (dap.Provider, error) {
 	settings, ok := adapters[t.Type]
 	if !ok {
-		return nil, MissingAdapter{Type: t.Type, Plugin: registryPlugins[t.Type]}
+		return nil, MissingAdapter{Type: t.Type}
 	}
 	a := dap.Adapter(settings)
 	switch a.Provider {

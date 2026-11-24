@@ -141,13 +141,10 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 	provider, err := providers.For(t, a.Settings.Debug.Adapters)
 	if err != nil {
 		var missing providers.MissingAdapter
-		switch {
-		case !errors.As(err, &missing):
-			a.StatusError(err.Error())
-		case missing.Plugin != "":
-			a.StatusError(i18n.Format("debug.missingAdapterPlugin", i18n.Args{"type": missing.Type, "plugin": missing.Plugin}))
-		default:
+		if errors.As(err, &missing) {
 			a.StatusError(i18n.Format("debug.missingAdapter", i18n.Args{"type": missing.Type}))
+		} else {
+			a.StatusError(err.Error())
 		}
 		return
 	}

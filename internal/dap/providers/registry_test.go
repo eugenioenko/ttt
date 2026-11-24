@@ -81,7 +81,7 @@ func TestRejectUnsupportedTargetBeforeStartup(t *testing.T) {
 func TestConfiguredAdapterUsesExplicitProvider(t *testing.T) {
 	target := dap.Target{Type: "go", Request: "launch", Folder: "/project", Arguments: map[string]any{"custom": []any{"${workspaceFolder}/src", "${adapterVariable}"}}}
 	var missing MissingAdapter
-	if _, err := For(target, nil); !errors.As(err, &missing) || missing.Plugin != "dap-go" || missing.Type != "go" {
+	if _, err := For(target, nil); !errors.As(err, &missing) || missing.Type != "go" {
 		t.Fatalf("missing adapter: %v", err)
 	}
 	provider, err := For(target, map[string]debugadapter.Config{"go": {Command: []string{"custom"}}})
