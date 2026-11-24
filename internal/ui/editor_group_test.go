@@ -176,7 +176,7 @@ func TestEditorGroupShebangHighlighting(t *testing.T) {
 			case "buffer":
 				g.OpenBufferReadOnly("deploy", path, []string{"#!/usr/bin/env python3", `print("deploy")`})
 			default:
-				g.OpenFile(path)
+				requireNoError(t, g.OpenFile(path))
 			}
 			switch mode {
 			case "save-as":
@@ -421,7 +421,7 @@ func TestEditorGroupOpenFileNotFound(t *testing.T) {
 	g.OnError = func(msg string) { errMsg = msg }
 
 	path := "/nonexistent/path/file.txt"
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	if errMsg != "" {
 		t.Fatalf("unexpected error for new file: %s", errMsg)
@@ -437,13 +437,13 @@ func TestEditorGroupOpenFileNotFound(t *testing.T) {
 func TestEditorGroupOpenFileSuccess(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "test.txt")
-	os.WriteFile(path, []byte("hello\nworld"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("hello\nworld"), 0644))
 
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	var errMsg string
 	g.OnError = func(msg string) { errMsg = msg }
 
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	if errMsg != "" {
 		t.Fatalf("unexpected error: %s", errMsg)
@@ -459,13 +459,13 @@ func TestEditorGroupOpenFileSuccess(t *testing.T) {
 func TestEditorGroupOpenFileKeepsTouchedUntitled(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "test.txt")
-	os.WriteFile(path, []byte("hello"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("hello"), 0644))
 
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	g.tabs[0].Buf.Lines = []string{"typed text"}
 	g.tabs[0].Buf.Dirty = true
 
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	if len(g.tabs) != 2 {
 		t.Fatalf("expected 2 tabs when untitled is dirty, got %d", len(g.tabs))
@@ -478,14 +478,14 @@ func TestEditorGroupOpenFileKeepsTouchedUntitled(t *testing.T) {
 func TestEditorGroupOpenFileKeepsNewFileTab(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "test.txt")
-	os.WriteFile(path, []byte("hello"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("hello"), 0644))
 
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	g.NewFile()
 	g.SwitchTab(0)
 	g.CloseTab()
 
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	if len(g.tabs) != 2 {
 		t.Fatalf("expected 2 tabs when user created new file, got %d", len(g.tabs))
@@ -498,12 +498,12 @@ func TestEditorGroupOpenFileKeepsNewFileTab(t *testing.T) {
 func TestEditorGroupOpenFileKeepsPinnedPlaceholder(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "test.txt")
-	os.WriteFile(path, []byte("hello"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("hello"), 0644))
 
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	g.TogglePinTab()
 
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	if len(g.tabs) != 2 {
 		t.Fatalf("expected 2 tabs when placeholder is pinned, got %d", len(g.tabs))
@@ -652,7 +652,7 @@ func TestEditorGroupWordWrapMaxBytes(t *testing.T) {
 	g.WordWrapMaxBytes = 10
 
 	// 1. A file larger than the limit opens with g.Editor.WordWrap == false.
-	g.OpenFile(largePath)
+	requireNoError(t, g.OpenFile(largePath))
 	g.CommitActiveTab()
 	if g.Editor.WordWrap {
 		t.Errorf("large file opened with WordWrap = true, want false")
@@ -662,7 +662,7 @@ func TestEditorGroupWordWrapMaxBytes(t *testing.T) {
 	}
 
 	// 2. A file at or under the limit opens with g.Editor.WordWrap == true.
-	g.OpenFile(smallPath)
+	requireNoError(t, g.OpenFile(smallPath))
 	g.CommitActiveTab()
 	if !g.Editor.WordWrap {
 		t.Errorf("small file opened with WordWrap = false, want true")

@@ -2,7 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +32,10 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	if mode := os.Getenv(fakePullServerEnv); mode != "" {
-		runFakePullServer(mode == "interfile")
+		if err := runFakePullServer(mode == "interfile"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 	gittest.DisableAutoMaintenance()
@@ -40,23 +45,26 @@ func TestMain(m *testing.M) {
 
 // runFakePullServer answers each pull with one diagnostic naming the file and
 // how many times it has been pulled, e.g. "b.go#2".
-func runFakePullServer(interFile bool) {
+func runFakePullServer(interFile bool) error {
 	codec := jsonrpc.NewCodec(os.Stdin, os.Stdout)
 	pulls := map[string]int{}
 	retrigger := os.Getenv(fakePullRetriggerEnv)
-	reply := func(id json.RawMessage, result any) {
-		codec.Send(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
+	reply := func(id json.RawMessage, result any) error {
+		return codec.Send(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 	}
 	for {
 		msg, err := codec.Receive()
 		if err != nil {
-			return
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
 		}
 		if path := os.Getenv(fakePullSyncLogEnv); path != "" && strings.HasPrefix(msg.Method, "textDocument/did") {
 			f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "fake pull sync log: open %s: %v\n", path, err)
-				return
+				return err
 			}
 			err = json.NewEncoder(f).Encode(msg)
 			if closeErr := f.Close(); err == nil {
@@ -64,33 +72,43 @@ func runFakePullServer(interFile bool) {
 			}
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "fake pull sync log: write %s: %v\n", path, err)
-				return
+				return err
 			}
 		}
 		switch msg.Method {
 		case "initialize":
-			reply(msg.ID, map[string]any{"capabilities": map[string]any{
+			if err := reply(msg.ID, map[string]any{"capabilities": map[string]any{
 				"diagnosticProvider": map[string]any{"interFileDependencies": interFile},
-			}})
+			}}); err != nil {
+				return err
+			}
 		case "textDocument/diagnostic":
 			var params lsp.DocumentDiagnosticParams
-			json.Unmarshal(msg.Params, &params)
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				return err
+			}
 			name := filepath.Base(params.TextDocument.URI)
 			pulls[name]++
 			if name == retrigger && pulls[name] == 1 {
-				codec.Send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "error": map[string]any{
+				if err := codec.Send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "error": map[string]any{
 					"code": -32802, "message": "loading", "data": map[string]any{"retriggerRequest": true},
-				}})
+				}}); err != nil {
+					return err
+				}
 				continue
 			}
-			reply(msg.ID, map[string]any{"kind": "full", "items": []map[string]any{{
+			if err := reply(msg.ID, map[string]any{"kind": "full", "items": []map[string]any{{
 				"range":   map[string]any{"start": map[string]int{}, "end": map[string]int{}},
 				"message": fmt.Sprintf("%s#%d", name, pulls[name]),
-			}}})
+			}}}); err != nil {
+				return err
+			}
 		case "shutdown":
-			reply(msg.ID, nil)
+			if err := reply(msg.ID, nil); err != nil {
+				return err
+			}
 		case "exit":
-			return
+			return nil
 		}
 	}
 }
@@ -124,8 +142,8 @@ func fakePullServersApp(t *testing.T, interFile bool, names ...string) (*App, []
 			t.Fatal(err)
 		}
 		// The second open keeps the tab instead of leaving it as a preview.
-		a.EditorGroup.OpenFile(p)
-		a.EditorGroup.OpenFile(p)
+		requireNoError(t, a.EditorGroup.OpenFile(p))
+		requireNoError(t, a.EditorGroup.OpenFile(p))
 		a.NotifyLSPOpen(p, "", []string{"package a", ""})
 		paths = append(paths, p)
 	}

@@ -19,7 +19,7 @@ func openTabWithFile(t *testing.T, content string) (*EditorGroupWidget, string) 
 		t.Fatalf("write temp: %v", err)
 	}
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	if g.tabs[g.active].FilePath != path {
 		t.Fatalf("expected active tab %s, got %s", path, g.tabs[g.active].FilePath)
 	}
@@ -145,7 +145,7 @@ func TestInlineDiffDropsDeferredHighlightingWhenItEnds(t *testing.T) {
 		}
 		g := NewEditorGroupWidget(nil, 4, true, "compact")
 		g.SyntaxHighlight = true
-		g.OpenFile(path)
+		requireNoError(t, g.OpenFile(path))
 		if !g.EnableInlineDiff(path, base) {
 			t.Fatalf("%s: diff mode did not turn on", end)
 		}
@@ -187,7 +187,7 @@ func TestEditableSplitSharesSingleLineHighlighting(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, true, "extended")
 	g.SyntaxHighlight = true
 	g.DiffMode = DiffModeSplit
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	if !g.EnableInlineDiff(path, []string{"package main", "", "func b() {}"}) {
 		t.Fatal("diff mode did not turn on")
 	}

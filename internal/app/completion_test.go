@@ -22,7 +22,7 @@ func completionTestApp(t *testing.T, name, content string) *App {
 		t.Fatal(err)
 	}
 	a := buildTestApp(t, config.DefaultSettings())
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	t.Cleanup(func() {
 		a.CloseTasks()
 		a.EditorGroup.CloseAllTabs()
@@ -87,7 +87,7 @@ func TestAutoSuggestNeedsCursorInTypedWord(t *testing.T) {
 		{"cursor stays in the word", func(a *App) { moveCursor(a, 1, 7) }, true},
 		{"cursor moves to the line above", func(a *App) { moveCursor(a, 0, 6) }, false},
 		{"active buffer changes", func(a *App) {
-			a.EditorGroup.OpenFile(other)
+			requireNoError(t, a.EditorGroup.OpenFile(other))
 			moveCursor(a, 1, 7)
 		}, false},
 	}
@@ -141,7 +141,7 @@ func TestLocationResultDismissesSignatureHelpAndCancelsInFlightRequest(t *testin
 	}
 
 	a := prepareListenTestApp(t)
-	a.EditorGroup.OpenFile(first)
+	requireNoError(t, a.EditorGroup.OpenFile(first))
 	moveCursor(a, 1, 6)
 	startListenTestEventLoop(t, a)
 
@@ -165,7 +165,7 @@ func TestLocationResultDismissesSignatureHelpAndCancelsInFlightRequest(t *testin
 		t.Fatal(err)
 	}
 
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{
 		Locations: []lsp.Location{{
 			URI:   FileURI(second),
 			Range: lsp.Range{Start: lsp.Position{Line: 1, Character: 0}},
@@ -184,7 +184,9 @@ func TestLocationResultDismissesSignatureHelpAndCancelsInFlightRequest(t *testin
 		}
 		// Even if the user returns to the first file before a late worker finishes,
 		// the cancelled request cannot reopen the popup.
-		a.EditorGroup.OpenFile(first)
+		if err := a.EditorGroup.OpenFile(first); err != nil {
+			return err
+		}
 		moveCursor(a, 1, 6)
 		if lateRun != nil {
 			lateRun()

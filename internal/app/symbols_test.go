@@ -44,9 +44,9 @@ func TestSymbolsStaleReplyAfterSwitchingAwayAndBack(t *testing.T) {
 	a, deliveries := symbolsTestApp(t, "a.md", "# fallback\n")
 	pathA := a.EditorGroup.ActiveFilePath()
 	queueSymbolsReply(a, pathA, symbolReply("old A"))
-	a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(pathA), "b.txt"))
+	requireNoError(t, a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(pathA), "b.txt")))
 	queueSymbolsReply(a, a.EditorGroup.ActiveFilePath(), symbolReply("B"))
-	a.EditorGroup.OpenFile(pathA)
+	requireNoError(t, a.EditorGroup.OpenFile(pathA))
 	queueSymbolsReply(a, pathA, symbolReply("new A"))
 	if len(*deliveries) != 3 {
 		t.Fatalf("queued replies = %d, want 3", len(*deliveries))
@@ -120,7 +120,7 @@ func TestSymbolsReplyInvalidation(t *testing.T) {
 			queueSymbolsReply(a, path, symbolReply("stale"))
 			switch action {
 			case "other file":
-				a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(path), "b.txt"))
+				requireNoError(t, a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(path), "b.txt")))
 			case "hidden panel":
 				a.Sidebar.ActivePanel = "explorer"
 				a.RefreshSymbols()
