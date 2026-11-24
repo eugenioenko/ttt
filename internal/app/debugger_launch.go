@@ -217,12 +217,13 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 		}
 		deliver(func() {
 			if err != nil && ctx.Err() == nil {
+				run.failed = true
 				a.StatusError(t.Name + ": " + err.Error())
 			}
 			a.flushDebugOutput(run, t.Name)
 			cancel()
 			a.debugger.run = nil
-			if err == nil && !run.failed {
+			if !run.failed {
 				a.StatusNotify(i18n.Text("debug.finished"))
 			}
 			for _, lines := range a.debugger.points {
