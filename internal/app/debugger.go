@@ -13,11 +13,12 @@ import (
 )
 
 type debuggerState struct {
-	panel       debugSidebar
-	run         *debugRun
-	points      map[string]map[int]bool
-	stoppedFile string
-	stoppedLine int
+	lastFolder, lastTarget string
+	panel                  debugSidebar
+	run                    *debugRun
+	points                 map[string]map[int]bool
+	stoppedFile            string
+	stoppedLine            int
 }
 
 func (a *App) initDebuggerGutter() {
@@ -110,4 +111,15 @@ func (a *App) syncDebugBreakpoints(path string) {
 			}
 		})
 	}()
+}
+
+func (a *App) ToggleDebugBreakpoint() {
+	g := a.EditorGroup
+	if g.ActiveBuffer() == nil || g.IsActiveVirtual() || !filepath.IsAbs(g.ActiveFilePath()) {
+		return
+	}
+	for _, group := range a.editorGroups() {
+		a.wireDebuggerGutter(group)
+	}
+	a.toggleBreakpoint(g.ActiveFilePath(), g.Editor.Cursor.Line+1)
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
@@ -46,6 +47,10 @@ func (a *App) ensureDebugPanel() {
 		if cmd != "activate" {
 			return
 		}
+		if n != nil && strings.HasPrefix(n.ID, "debug.") {
+			a.Reg.Execute(n.ID)
+			return
+		}
 		if f, ok := p.frameNodes[n]; ok {
 			a.inspectDebugFrame(f)
 		}
@@ -78,7 +83,29 @@ func (a *App) refreshDebugPanel() {
 		}
 	}
 	vars := &widgets.TreeNode{ID: "vars", Label: i18n.Text("debug.variables"), Expanded: true, Children: p.scopes}
-	p.tree.SetItems([]*widgets.TreeNode{vars, stack, points})
+	nodes := []*widgets.TreeNode{vars, stack, points}
+	ids := []string{"debug.start"}
+	if r := a.debugger.run; r != nil {
+		ids = nil
+		if r.ready {
+			if r.thread == nil {
+				ids = append(ids, "debug.pause")
+			} else {
+				ids = append(ids, "debug.continue", "debug.stepOver", "debug.stepIn", "debug.stepOut")
+			}
+		}
+		if r.attached {
+			ids = append(ids, "debug.detach")
+		} else {
+			ids = append(ids, "debug.stop")
+		}
+	}
+	for _, id := range ids {
+		if cmd, ok := a.Reg.Get(id); ok {
+			nodes = append(nodes, &widgets.TreeNode{ID: id, Label: cmd.Title})
+		}
+	}
+	p.tree.SetItems(nodes)
 }
 func (a *App) clearDebugInspection() {
 	p := &a.debugger.panel

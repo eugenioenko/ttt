@@ -17,19 +17,22 @@ import (
 )
 
 type debugRun struct {
-	attached bool
-	ctx      context.Context
-	cancel   context.CancelFunc
-	session  *dap.Session
-	thread   *int
-	closed   chan struct{}
-	ready    bool
-	sending  map[string]bool
-	revision map[string]int
+	attached   bool
+	ctx        context.Context
+	cancel     context.CancelFunc
+	session    *dap.Session
+	thread     *int
+	lastThread int
+	closed     chan struct{}
+	ready      bool
+	sending    map[string]bool
+	revision   map[string]int
 }
 
 func registerDebuggerCommands(a *App) {
 	for _, cmd := range []command.Command{
+		{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause},
+		{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint},
 		{ID: "debug.start", Title: i18n.Text("debug.start"), Handler: a.StartDebugging},
 		{ID: "debug.detach", Title: i18n.Text("debug.detach"), Handler: a.DetachDebugger},
 		{ID: "debug.stop", Title: i18n.Text("debug.stop"), Handler: a.StopDebugging},
@@ -60,11 +63,15 @@ func (a *App) StartDebugging() {
 	case 1:
 		a.prepareDebugTarget(targets[0])
 	default:
+		selected := ""
 		items := make([]widgets.SelectItem, 0, len(targets))
 		for i, t := range targets {
+			if t.Folder == a.debugger.lastFolder && t.Name == a.debugger.lastTarget {
+				selected = strconv.Itoa(i)
+			}
 			items = append(items, widgets.SelectItem{ID: strconv.Itoa(i), Label: t.Name + " (" + t.Folder + ")"})
 		}
-		a.ShowSelectDialog(i18n.Text("debug.start"), items, func(id string) {
+		a.showSelectDialog(i18n.Text("debug.start"), items, selected, func(id string) {
 			i, err := strconv.Atoi(id)
 			if err == nil && i >= 0 && i < len(targets) {
 				a.prepareDebugTarget(targets[i])
@@ -120,8 +127,10 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &debugRun{attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
+	a.debugger.lastFolder, a.debugger.lastTarget = t.Folder, t.Name
 	a.debugger.run = run
 	a.ensureDebugPanel()
+	a.refreshDebugPanel()
 	a.Sidebar.SetActivePanel("debug")
 	a.ShowSidebar()
 	for _, g := range a.editorGroups() {
@@ -183,6 +192,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 			if err == nil {
 				deliver(func() {
 					run.ready = true
+					a.refreshDebugPanel()
 					for path := range run.revision {
 						a.syncDebugBreakpoints(path)
 					}
@@ -235,6 +245,9 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 		var b struct{ ThreadID *int }
 		if json.Unmarshal(event.Body, &b) == nil {
 			run.thread = b.ThreadID
+			if run.thread != nil {
+				run.lastThread = *run.thread
+			}
 			a.debugStopped(run)
 		}
 	case "continued":
@@ -261,16 +274,20 @@ func (a *App) DetachDebugger() {
 		r.cancel()
 	}
 }
+func (a *App) DebugPause()    { a.debugControl("pause") }
 func (a *App) DebugContinue() { a.debugControl("continue") }
 func (a *App) DebugStepOver() { a.debugControl("next") }
 func (a *App) DebugStepIn()   { a.debugControl("stepIn") }
 func (a *App) DebugStepOut()  { a.debugControl("stepOut") }
 func (a *App) debugControl(cmd string) {
 	r := a.debugger.run
-	if r == nil || r.session == nil || r.thread == nil {
+	if r == nil || r.session == nil || !r.ready || (cmd == "pause") != (r.thread == nil) {
 		return
 	}
-	tid := *r.thread
+	tid := r.lastThread
+	if r.thread != nil {
+		tid = *r.thread
+	}
 	post := a.tasks.post
 	go func() {
 		ctx, cancel := context.WithTimeout(r.ctx, 10*time.Second)

@@ -1,4 +1,6 @@
 {
+  "debug.pause": "Debug: Pause",
+  "debug.toggleBreakpoint": "Toggle Breakpoint",
   "debug.pickProcess": "Select a Process to Debug",
   "debug.detach": "Detach Debugger",
   "debug.finished": "Debug session ended",
