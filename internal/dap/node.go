@@ -24,6 +24,15 @@ func (t Target) nodeArguments() (map[string]any, error) {
 		switch key {
 		case "type", "name", "request", "presentation":
 			continue
+		case "processId":
+			if t.Request != "attach" {
+				return nil, fmt.Errorf("%s: processId requires attach", t.Name)
+			}
+			pid, err := pidValue(val)
+			if err != nil {
+				return nil, err
+			}
+			out[key] = pid
 		case "debugServer":
 			if _, err := nodeServerAddress(t); err != nil {
 				return nil, err
@@ -60,7 +69,7 @@ func nodeServerAddress(t Target) (string, error) {
 	}
 	return fmt.Sprintf("127.0.0.1:%d", int(port)), nil
 }
-func openNodeAdapter(ctx context.Context, t Target, onEvent func(Event)) (*Session, error) {
+func openNodeAdapter(ctx context.Context, t Target, args map[string]any, onEvent func(Event)) (*Session, error) {
 	var s *Session
 	if _, external := t.Arguments["debugServer"]; external {
 		addr, err := nodeServerAddress(t)
@@ -82,6 +91,28 @@ func openNodeAdapter(ctx context.Context, t Target, onEvent func(Event)) (*Sessi
 		if err != nil {
 			return nil, err
 		}
+	}
+	if pid, ok := args["processId"].(int); ok {
+		port := 9229
+		if p, ok := args["port"]; ok {
+			var err error
+			port, err = pidValue(p)
+			if err != nil || port > 65535 {
+				s.Close(false)
+				return nil, fmt.Errorf("%s: invalid inspector port", t.Name)
+			}
+		}
+		if addr, ok := args["address"]; ok && addr != "127.0.0.1" && addr != "localhost" {
+			s.Close(false)
+			return nil, fmt.Errorf("%s: PID attach requires a local inspector", t.Name)
+		}
+		if err := enableNodeInspector(ctx, pid, port); err != nil {
+			s.Close(false)
+			return nil, err
+		}
+		delete(args, "processId")
+		args["address"] = "127.0.0.1"
+		args["port"] = port
 	}
 	s.mu.Lock()
 	s.jsAddr = s.conn.(net.Conn).RemoteAddr().String()

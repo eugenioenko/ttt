@@ -16,20 +16,25 @@ async function checkPID(type, picker) {
   let child;
   try {
     const go = type === "go";
-    const file = join(dir, go ? "main.go" : "example.py");
+    const node = type === "node";
+    const file = join(dir, go ? "main.go" : node ? "app.js" : "example.py");
     // These fixtures authorize their own parent test runner and its debugger descendants under Linux Yama.
     const lines = go ? [
       'package main', 'import ("os"; "syscall"; "time"; "strconv")', 'func main() {',
       ' if _,_,err:=syscall.Syscall6(syscall.SYS_PRCTL,0x59616d61,uintptr(os.Getppid()),0,0,0,0);err!=0{panic(err)}',
       ' for i:=0;;i++ {', '  value := 40+2', '  os.WriteFile("heartbeat", []byte(strconv.Itoa(i+value)), 0600)',
       '  time.Sleep(25*time.Millisecond)', ' }', '}',
+    ] : node ? [
+      'const fs = require("node:fs");', 'let i = 0;', 'setInterval(() => {',
+      '  const value = 40 + 2;', '  fs.writeFileSync("heartbeat", String(i + value));',
+      '  i++;', '}, 25);',
     ] : [
       'import ctypes, os, pathlib, time', 'assert ctypes.CDLL(None).prctl(0x59616d61, os.getppid(), 0, 0, 0) == 0',
       'i = 0', 'while True:', '    value = 40 + 2', '    pathlib.Path("heartbeat").write_text(str(i + value))',
       '    i += 1', '    time.sleep(0.025)',
     ];
     writeFileSync(file, lines.join("\n"));
-    const exe = go ? join(dir, "go-pid-fixture") : python;
+    const exe = go ? join(dir, "go-pid-fixture") : node ? process.execPath : python;
     if (go) execFileSync("go", ["build", "-gcflags=all=-N -l", "-o", exe, file]);
     child = spawn(exe, go ? [] : [file], { cwd: dir });
     const pulse = () => { try {return Number(readFileSync(join(dir,"heartbeat"),"utf8"));} catch {return 0;} };
@@ -37,9 +42,9 @@ async function checkPID(type, picker) {
     expect(pulse()).toBeGreaterThan(0);
     mkdirSync(join(dir, ".ttt"));
     writeFileSync(join(dir, ".ttt/launch.json"), JSON.stringify({
-      configurations: [{ name: "Attach", type, request: "attach", processId: picker ? "${command:pickProcess}" : child.pid, ...(go ? {} : {python}) }],
+      configurations: [{ name: "Attach", type, request: "attach", processId: picker ? "${command:pickProcess}" : child.pid, ...(type === "debugpy" ? {python} : {}) }],
     }));
-    const line = go ? 7 : 6;
+    const line = go ? 7 : node ? 5 : 6;
     tui.start(dir, file);
     tui.click(37, 3 + line);
     tui.exec("Start Debugging");
@@ -50,7 +55,7 @@ async function checkPID(type, picker) {
     }
     tui.waitFor("value = 42");
     tui.exec("Debug: Step Over");
-    tui.waitFor((go ? "main.go:" : "example.py:") + (line + 1));
+    tui.waitFor((go ? "main.go:" : node ? "app.js:" : "example.py:") + (line + 1));
     tui.exec("Detach Debugger");
     tui.waitFor("Debug session ended");
     tui.run(60000);
@@ -63,6 +68,7 @@ async function checkPID(type, picker) {
   }
 }
 for (const picker of [true,false]) {
+  it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("attaches to Node by "+(picker ? "picker" : "configured PID"), () => checkPID("node",picker), 70000);
   const via = picker ? "picker" : "configured PID";
   it.skipIf(!linux || !hasDelve)("debugs a Go process via "+via, () => checkPID("go",picker), 70000);
   it.skipIf(!linux || !python)("debugs a Python process via "+via, () => checkPID("debugpy",picker), 70000);
