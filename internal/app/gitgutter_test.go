@@ -59,7 +59,7 @@ func newGitGutterTestHarness(t *testing.T) *gitGutterTestHarness {
 	runTreeGit(t, dir, "add", ".")
 	runTreeGit(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-qm", "initial")
 	a := buildTestApp(t, config.DefaultSettings())
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	a.SyncRepositoryBranch()
 	h := &gitGutterTestHarness{a: a, clock: gitGutterTestClock{now: time.Unix(0, 0)}}
 	a.tasks.post = func(fn func()) error {
@@ -194,7 +194,7 @@ func TestGitGutterStopsWhenTargetCannotUseGutter(t *testing.T) {
 				if err := os.WriteFile(path, []byte("plain\n"), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				a.EditorGroup.OpenFile(path)
+				requireNoError(t, a.EditorGroup.OpenFile(path))
 			case "disabled":
 				enabled := false
 				a.Settings.Editor.GitGutter = &enabled

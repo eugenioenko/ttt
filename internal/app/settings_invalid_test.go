@@ -101,7 +101,7 @@ func TestFavoritesPreserveSettingsAfterReadError(t *testing.T) {
 	if err := os.Mkdir(adjacent, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(adjacent) })
+	t.Cleanup(func() { _ = os.RemoveAll(adjacent) })
 	if err := os.Symlink("settings.json", filepath.Join(adjacent, "settings.json")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}

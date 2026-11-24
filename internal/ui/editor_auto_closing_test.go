@@ -376,10 +376,10 @@ func TestAutoClosingTabSwitchAndSyntaxDisabled(t *testing.T) {
 	}
 	g := NewEditorGroupWidget(nil, 4, true, "compact")
 	g.Editor.AutoClosing.Brackets = true
-	g.OpenFile(a)
+	requireNoError(t, g.OpenFile(a))
 	g.CommitActiveTab()
 	typeAutoClosing(g.Editor, "(")
-	g.OpenFile(b)
+	requireNoError(t, g.OpenFile(b))
 	g.CommitActiveTab()
 	typeAutoClosing(g.Editor, "[")
 	g.SwitchToTabByPath(a)

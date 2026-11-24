@@ -132,12 +132,12 @@ func TestGetPathNestedValue(t *testing.T) {
 func TestPluginFilesystemAPI_PathRestriction(t *testing.T) {
 	tmpDir := t.TempDir()
 	allowed := filepath.Join(tmpDir, "workspace")
-	os.MkdirAll(allowed, 0755)
-	os.WriteFile(filepath.Join(allowed, "test.txt"), []byte("hello"), 0644)
+	requireNoError(t, os.MkdirAll(allowed, 0755))
+	requireNoError(t, os.WriteFile(filepath.Join(allowed, "test.txt"), []byte("hello"), 0644))
 
 	forbidden := filepath.Join(tmpDir, "secrets")
-	os.MkdirAll(forbidden, 0755)
-	os.WriteFile(filepath.Join(forbidden, "key.pem"), []byte("secret"), 0644)
+	requireNoError(t, os.MkdirAll(forbidden, 0755))
+	requireNoError(t, os.WriteFile(filepath.Join(forbidden, "key.pem"), []byte("secret"), 0644))
 
 	api := NewPluginFilesystemAPI(allowed)
 
@@ -223,8 +223,8 @@ func TestPluginFilesystemAPI_MultipleRoots(t *testing.T) {
 	outside := filepath.Join(tmpDir, "outside")
 
 	for _, d := range []string{root1, root2, outside} {
-		os.MkdirAll(d, 0755)
-		os.WriteFile(filepath.Join(d, "file.txt"), []byte("data"), 0644)
+		requireNoError(t, os.MkdirAll(d, 0755))
+		requireNoError(t, os.WriteFile(filepath.Join(d, "file.txt"), []byte("data"), 0644))
 	}
 
 	api := NewPluginFilesystemAPI(root1, root2)
@@ -244,9 +244,9 @@ func TestPluginFilesystemAPI_SymlinkEscape(t *testing.T) {
 	tmpDir := t.TempDir()
 	allowed := filepath.Join(tmpDir, "workspace")
 	secrets := filepath.Join(tmpDir, "secrets")
-	os.MkdirAll(allowed, 0755)
-	os.MkdirAll(secrets, 0755)
-	os.WriteFile(filepath.Join(secrets, "key.pem"), []byte("secret"), 0644)
+	requireNoError(t, os.MkdirAll(allowed, 0755))
+	requireNoError(t, os.MkdirAll(secrets, 0755))
+	requireNoError(t, os.WriteFile(filepath.Join(secrets, "key.pem"), []byte("secret"), 0644))
 
 	symlink := filepath.Join(allowed, "escape")
 	if err := os.Symlink(secrets, symlink); err != nil {
@@ -265,11 +265,11 @@ func TestPluginFilesystemAPI_FinalSymlinkEscape(t *testing.T) {
 	tmpDir := t.TempDir()
 	allowed := filepath.Join(tmpDir, "workspace")
 	secrets := filepath.Join(tmpDir, "secrets")
-	os.MkdirAll(allowed, 0755)
-	os.MkdirAll(secrets, 0755)
+	requireNoError(t, os.MkdirAll(allowed, 0755))
+	requireNoError(t, os.MkdirAll(secrets, 0755))
 	secret := filepath.Join(secrets, "key.pem")
-	os.WriteFile(secret, []byte("secret"), 0644)
-	os.WriteFile(filepath.Join(allowed, "notes.txt"), []byte("notes"), 0644)
+	requireNoError(t, os.WriteFile(secret, []byte("secret"), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(allowed, "notes.txt"), []byte("notes"), 0644))
 
 	link := filepath.Join(allowed, "key.pem")
 	if err := os.Symlink(secret, link); err != nil {
@@ -576,8 +576,8 @@ func TestPluginFilesystemAPIFor_ScopedPaths(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	os.WriteFile(filepath.Join(palette, "colors.toml"), []byte(`background = "#000000"`), 0o644)
-	os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main"), 0o644)
+	requireNoError(t, os.WriteFile(filepath.Join(palette, "colors.toml"), []byte(`background = "#000000"`), 0o644))
+	requireNoError(t, os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main"), 0o644))
 	t.Setenv("HOME", home)
 	config.OverrideConfigDir = cfg
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
@@ -616,8 +616,8 @@ func TestPluginFilesystemAPIFor_AnyPathAndWorkspace(t *testing.T) {
 	workspace := filepath.Join(base, "ws")
 	outside := filepath.Join(base, "outside")
 	for _, d := range []string{workspace, outside} {
-		os.MkdirAll(d, 0o755)
-		os.WriteFile(filepath.Join(d, "f.txt"), []byte("x"), 0o644)
+		requireNoError(t, os.MkdirAll(d, 0o755))
+		requireNoError(t, os.WriteFile(filepath.Join(d, "f.txt"), []byte("x"), 0o644))
 	}
 
 	p := &plugin.Plugin{Granted: plugin.PermissionSet{
@@ -660,7 +660,9 @@ func localRedirect(t *testing.T) (local, public *httptest.Server, reached *bool)
 	reached = new(bool)
 	local = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		*reached = true
-		w.Write([]byte("local"))
+		if _, err := w.Write([]byte("local")); err != nil {
+			t.Error(err)
+		}
 	}))
 	t.Cleanup(local.Close)
 	public = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -715,7 +717,9 @@ func TestPluginNetworkAPI_RedirectsStayOnTheAllowedHosts(t *testing.T) {
 		case "/moved":
 			http.Redirect(w, r, "http://mirror.example/new", http.StatusFound)
 		default:
-			w.Write([]byte("ok"))
+			if _, err := w.Write([]byte("ok")); err != nil {
+				t.Error(err)
+			}
 		}
 	}))
 	defer public.Close()

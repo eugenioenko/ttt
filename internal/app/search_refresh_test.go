@@ -26,7 +26,7 @@ func newSearchRefreshHarness(t *testing.T) *searchRefreshHarness {
 	if err := os.WriteFile(path, []byte("foo bar\nfoo baz\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	a.EditorGroup.Editor.OnChange = a.scheduleFindRefresh
 	return &searchRefreshHarness{app: a}
 }
@@ -340,7 +340,7 @@ func testSearchRefreshAcrossTabChange(t *testing.T, source string) {
 	if err := os.WriteFile(secondPath, []byte("other\nxx foo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.EditorGroup.OpenFile(secondPath)
+	requireNoError(t, a.EditorGroup.OpenFile(secondPath))
 	a.EditorGroup.CommitActiveTab()
 	a.EditorGroup.SwitchToTabByPath(firstPath)
 	if source == "sidebar" {

@@ -287,7 +287,7 @@ func TestActiveInlineDiffFindsAnInlineDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := NewEditorGroupWidget(nil, 4, false, "compact")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	if !g.EnableInlineDiff(path, []string{"a", "B", "c", "d"}) {
 		t.Fatal("inline diff did not turn on")
 	}

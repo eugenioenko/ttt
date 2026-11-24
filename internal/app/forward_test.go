@@ -25,7 +25,7 @@ func setupForwardTest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	t.Setenv("TMPDIR", dir)
 	t.Setenv(forwardSocketEnv, "")
 	saved := config.OverrideConfigDir
@@ -43,7 +43,7 @@ func fakeForwardReceiver(t *testing.T, start time.Time, result any, reply error)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { ln.Close() })
+	t.Cleanup(func() { _ = ln.Close() })
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -51,7 +51,7 @@ func fakeForwardReceiver(t *testing.T, start time.Time, result any, reply error)
 				return
 			}
 			jsonrpc.NewConn(conn, conn, jsonrpc.Options{
-				OnClose:   func(error) { conn.Close() },
+				OnClose:   func(error) { _ = conn.Close() },
 				OnRequest: func(string, json.RawMessage) (any, error) { return result, reply },
 			})
 		}
@@ -173,7 +173,7 @@ func TestForwardTargetsSilentReceiver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { ln.Close() })
+	t.Cleanup(func() { _ = ln.Close() })
 	fakeForwardReceiver(t, time.Now().Add(time.Second), nil, errors.New("newer editor must not receive these files"))
 	t.Setenv(forwardSocketEnv, ln.Addr().String())
 	accepted := make(chan net.Conn, 1)
@@ -194,7 +194,7 @@ func TestForwardTargetsSilentReceiver(t *testing.T) {
 	}()
 	select {
 	case conn := <-accepted:
-		t.Cleanup(func() { conn.Close() })
+		t.Cleanup(func() { _ = conn.Close() })
 	case <-time.After(5 * time.Second):
 		t.Fatal("receiver did not accept the connection")
 	}
@@ -279,7 +279,7 @@ func TestForwardTargetsReceiverChoice(t *testing.T) {
 					t.Fatal(err)
 				}
 				ln.SetUnlinkOnClose(false)
-				ln.Close()
+				requireNoError(t, ln.Close())
 				paths["stale"] = path
 			case "unsafe":
 				if err := os.Chmod(filepath.Dir(parent), 0777); err != nil {
@@ -337,7 +337,7 @@ func TestForwardTargetsLeftoverSockets(t *testing.T) {
 			t.Fatal(err)
 		}
 		ln.SetUnlinkOnClose(false)
-		ln.Close()
+		requireNoError(t, ln.Close())
 		paths = append(paths, path)
 	}
 	t.Setenv(forwardSocketEnv, paths[0])

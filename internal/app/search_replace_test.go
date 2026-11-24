@@ -228,7 +228,7 @@ func TestSearchReplacePreflightPreservesWriteChecks(t *testing.T) {
 			h.finish(t)()
 			switch kind {
 			case "dirty":
-				h.a.EditorGroup.OpenFile(h.path)
+				requireNoError(t, h.a.EditorGroup.OpenFile(h.path))
 				h.a.EditorGroup.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "x", tcell.ModNone))
 			case "changed":
 				if err := os.WriteFile(h.path, []byte("xxfoo\n"), 0600); err != nil {

@@ -16,7 +16,7 @@ func openFooLines(t *testing.T) *EditorGroupWidget {
 		t.Fatal(err)
 	}
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	matches, err := FindInLines(g.Editor.Buf.Lines, "foo", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)

@@ -284,7 +284,7 @@ func TestUnchangedFormatterDoesNotEmitAnotherEdit(t *testing.T) {
 				if err := os.WriteFile(path, []byte("# README\n\nUnchanged paragraph."+ending), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				a.EditorGroup.OpenFile(path)
+				requireNoError(t, a.EditorGroup.OpenFile(path))
 				buf := a.EditorGroup.ActiveBuffer()
 				version := buf.Version()
 				changes := 0
@@ -316,7 +316,7 @@ func TestFormatterPreservesRealFinalNewlineChanges(t *testing.T) {
 			if err := os.WriteFile(path, []byte("foo"), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			a.EditorGroup.OpenFile(path)
+			requireNoError(t, a.EditorGroup.OpenFile(path))
 			formatter, want := "printf foo", "foo"
 			if add {
 				formatter, want = "printf foo\\n", "foo\n"
@@ -354,7 +354,7 @@ func TestFormatterAppendedNewlineHonorsSavePolicy(t *testing.T) {
 				if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				a.EditorGroup.OpenFile(path)
+				requireNoError(t, a.EditorGroup.OpenFile(path))
 				buf := a.EditorGroup.ActiveBuffer()
 				lines, version := slices.Clone(buf.Lines), buf.Version()
 				changes := 0
@@ -402,7 +402,7 @@ func TestFormatterPreservesAdditionalFinalNewlines(t *testing.T) {
 				if err := os.WriteFile(path, []byte("foo"+ending), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				a.EditorGroup.OpenFile(path)
+				requireNoError(t, a.EditorGroup.OpenFile(path))
 				formatter := "printf bar" + strings.Repeat(strings.ReplaceAll(strings.ReplaceAll(ending, "\r", "\\r"), "\n", "\\n"), newlines)
 				if err := a.applyExternalFormatter(formatter, path); err != nil {
 					t.Fatal(err)
