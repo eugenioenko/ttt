@@ -38,7 +38,9 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	}
 	palette.OnOpenFile = func(absPath string) {
 		a.DismissDialog()
-		a.EditorGroup.OpenFile(absPath)
+		if err := a.EditorGroup.OpenFile(absPath); err != nil {
+			return
+		}
 		a.FocusEditor()
 	}
 	palette.OnGoToLine = func(line int) {

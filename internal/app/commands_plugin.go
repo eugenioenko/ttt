@@ -487,9 +487,13 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			}
 		}
 		if readonly {
-			a.EditorGroup.OpenFileReadOnly(absPath, "")
+			if err := a.EditorGroup.OpenFileReadOnly(absPath, ""); err != nil {
+				return
+			}
 		} else {
-			a.EditorGroup.OpenFile(absPath)
+			if err := a.EditorGroup.OpenFile(absPath); err != nil {
+				return
+			}
 		}
 		if line > 0 {
 			a.EditorGroup.GoToLine(line)

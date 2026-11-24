@@ -42,7 +42,9 @@ func (a *App) FileOpNewFile(path string, reload func()) {
 		}
 		a.invalidateRepositoryPath(newPath, RepositoryWorktree)
 		reload()
-		a.EditorGroup.OpenFile(newPath)
+		if err := a.EditorGroup.OpenFile(newPath); err != nil {
+			return
+		}
 		a.FocusEditor()
 	})
 }

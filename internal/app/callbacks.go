@@ -206,6 +206,14 @@ func (a *App) DiffSearchSources() []ui.DiffSearchSource {
 	return sources
 }
 
+func (a *App) navigateToLocation(file string, line, _ int) {
+	if err := a.EditorGroup.OpenFile(file); err != nil {
+		return
+	}
+	a.EditorGroup.GoToLine(line + 1)
+	a.Root.SetFocus(a.EditorGroup)
+}
+
 func (a *App) NavigateToSearchMatch(path string, line, col int) {
 	if strings.HasSuffix(path, " (diff)") {
 		if !a.switchToDiffTab(path) {
@@ -227,7 +235,9 @@ func (a *App) NavigateToSearchMatch(path string, line, col int) {
 		a.Root.SetFocus(a.EditorGroup)
 		return
 	}
-	a.EditorGroup.OpenFile(path)
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		return
+	}
 	a.EditorGroup.GoToLine(line)
 	if a.EditorGroup.IsEditorActive() {
 		text := a.EditorGroup.Editor.Buf.Lines[a.EditorGroup.Editor.Cursor.Line]
@@ -391,7 +401,9 @@ func (a *App) OpenChangeDiff(dir string, change scm.Change, extended bool) {
 	fullPath := filepath.Join(dir, change.Path)
 	working := change.Group == "" || change.Group == scm.WorkingTree
 	if working && change.Kind == scm.Untracked {
-		a.EditorGroup.OpenFile(fullPath)
+		if err := a.EditorGroup.OpenFile(fullPath); err != nil {
+			return
+		}
 		a.FocusEditorIfEnabled()
 		return
 	}
@@ -400,7 +412,6 @@ func (a *App) OpenChangeDiff(dir string, change scm.Change, extended bool) {
 			opened, conflict, err := a.openInlineDiff(fullPath, dir, change.Path)
 			if err != nil && !errors.Is(err, errors.ErrUnsupported) {
 				a.StatusError(err.Error())
-				a.FocusEditorIfEnabled()
 				return
 			}
 			if conflict {
@@ -459,7 +470,9 @@ func readChangeDiff(ctx context.Context, source repositorySource, change scm.Cha
 }
 
 func (a *App) openConflictedFile(fullPath, relPath string) {
-	a.EditorGroup.OpenFile(fullPath)
+	if err := a.EditorGroup.OpenFile(fullPath); err != nil {
+		return
+	}
 	a.StatusNotify(i18n.Format("status.hasMergeConflictsOpenedWithoutADiff", i18n.Args{"relPath": relPath}))
 	a.FocusEditorIfEnabled()
 }
@@ -796,7 +809,9 @@ func registerWidgetCallbacks(app *App) {
 
 	app.Explorer.OnAction = func(id string) { reg.Execute(id) }
 	app.Explorer.OnOpenFile = func(path string) {
-		app.EditorGroup.OpenFile(path)
+		if err := app.EditorGroup.OpenFile(path); err != nil {
+			return
+		}
 		app.FocusEditorIfEnabled()
 	}
 	app.Explorer.OnRightClick = func(node *widgets.TreeNode, sx, sy int) {
@@ -862,7 +877,9 @@ func registerWidgetCallbacks(app *App) {
 	app.Changes.OnPanelMenu = app.ShowChangesContextMenu
 
 	app.Changes.OnOpenFile = func(path string) {
-		app.EditorGroup.OpenFile(path)
+		if err := app.EditorGroup.OpenFile(path); err != nil {
+			return
+		}
 		app.EditorGroup.DisableInlineDiff(path)
 		app.FocusEditorIfEnabled()
 	}

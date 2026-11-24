@@ -170,7 +170,9 @@ func TestEditorGroupShebangHighlighting(t *testing.T) {
 			g.SyntaxHighlight = mode != "disabled"
 			switch mode {
 			case "readonly":
-				g.OpenFileReadOnly(path, "deploy")
+				if err := g.OpenFileReadOnly(path, "deploy"); err != nil {
+					t.Fatal(err)
+				}
 			case "buffer":
 				g.OpenBufferReadOnly("deploy", path, []string{"#!/usr/bin/env python3", `print("deploy")`})
 			default:

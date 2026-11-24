@@ -825,16 +825,8 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		}
 	}
-	a.Problems.OnNavigate = func(file string, line, col int) {
-		a.EditorGroup.OpenFile(file)
-		a.EditorGroup.GoToLine(line + 1)
-		a.Root.SetFocus(a.EditorGroup)
-	}
-	a.References.OnNavigate = func(file string, line, col int) {
-		a.EditorGroup.OpenFile(file)
-		a.EditorGroup.GoToLine(line + 1)
-		a.Root.SetFocus(a.EditorGroup)
-	}
+	a.Problems.OnNavigate = a.navigateToLocation
+	a.References.OnNavigate = a.navigateToLocation
 	a.EditorGroup.Editor.OnChange = func() {
 		path, lang := a.editorPathLang()
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
