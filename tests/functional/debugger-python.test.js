@@ -17,7 +17,7 @@ it.skipIf(!python)("debugs a module with a dependency from its workspace virtual
     writeFileSync(join(site, "ttt_private_fixture.py"), "VALUE = 41\n");
     const file = join(dir, "appmod.py");
     writeFileSync(file, ['from ttt_private_fixture import VALUE', 'def report(arg):', '    local = arg + 1',
-      '    print("PY_RESULT", local)', '    print("PY_DONE", local + 1)', 'report(VALUE)', ''].join("\n"));
+      '    emit(local)', '    print("PY_DONE", local + 1)', 'def emit(value):', '    print("PY_RESULT", value)', 'report(VALUE)', ''].join("\n"));
     mkdirSync(join(dir, ".ttt"));
     writeFileSync(join(dir, ".ttt", "launch.json"), JSON.stringify({
       configurations: [{ name: "Example", type: "debugpy", request: "launch", module: "appmod" }],
@@ -27,6 +27,12 @@ it.skipIf(!python)("debugs a module with a dependency from its workspace virtual
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();
+    tui.exec("Debug: Step In");
+    tui.waitFor("emit  appmod.py:7");
+    tui.waitFor("value = 42");
+    tui.exec("Debug: Step Out");
+    tui.waitFor("local = 42");
+    const returned = tui.snapshot();
     tui.exec("Debug: Step Over");
     tui.waitFor("report  appmod.py:5");
     tui.exec("Debug: Continue");
@@ -35,6 +41,7 @@ it.skipIf(!python)("debugs a module with a dependency from its workspace virtual
     const output = tui.snapshot();
     const { snapshots } = tui.run(60000);
     expect(snapshots[stopped]).toContain("report  appmod.py:4");
+    expect(snapshots[returned]).toContain("report  appmod.py:4");
     expect(snapshots[output]).toContain("[debug:Example] PY_DONE 43");
   } finally {
     rmSync(dir, { recursive: true, force: true });
