@@ -8,11 +8,11 @@ import (
 func TestPinTab(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "beta.txt"))
+	h.openFile(filepath.Join(h.dir, "beta.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "gamma.txt"))
+	h.openFile(filepath.Join(h.dir, "gamma.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
@@ -31,11 +31,11 @@ func TestPinTab(t *testing.T) {
 func TestPinTabMovesToFront(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "beta.txt"))
+	h.openFile(filepath.Join(h.dir, "beta.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "gamma.txt"))
+	h.openFile(filepath.Join(h.dir, "gamma.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
@@ -55,7 +55,7 @@ func TestPinTabMovesToFront(t *testing.T) {
 func TestUnpinTab(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
@@ -74,11 +74,11 @@ func TestUnpinTab(t *testing.T) {
 func TestPinMultipleTabs(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "beta.txt"))
+	h.openFile(filepath.Join(h.dir, "beta.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "gamma.txt"))
+	h.openFile(filepath.Join(h.dir, "gamma.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
@@ -112,9 +112,9 @@ func contains(s, sub string) bool {
 func TestCloseTabDecrementsPin(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "beta.txt"))
+	h.openFile(filepath.Join(h.dir, "beta.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
@@ -130,11 +130,11 @@ func TestCloseTabDecrementsPin(t *testing.T) {
 func TestCloseOtherTabsKeepsPinned(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "beta.txt"))
+	h.openFile(filepath.Join(h.dir, "beta.txt"))
 	h.app.EditorGroup.CommitActiveTab()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "gamma.txt"))
+	h.openFile(filepath.Join(h.dir, "gamma.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 

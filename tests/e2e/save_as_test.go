@@ -80,7 +80,7 @@ func TestSaveAsSameFileDoesNotAsk(t *testing.T) {
 	if err := os.WriteFile(path, []byte("own\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 	h.exec("file.saveAs")
 	h.redraw()
@@ -186,7 +186,7 @@ func TestSaveAsHardLinkToCurrentFileAsks(t *testing.T) {
 	if err := os.Link(path, alias); err != nil {
 		t.Skipf("hard links unavailable: %v", err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 	h.exec("file.saveAs")
 	h.redraw()

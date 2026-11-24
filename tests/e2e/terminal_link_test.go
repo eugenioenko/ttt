@@ -18,7 +18,7 @@ func TestTerminalCtrlClickFileLink(t *testing.T) {
 	defer h.stop()
 
 	target := filepath.Join(h.dir, "target.txt")
-	os.WriteFile(target, []byte("one\ntwo\nthree four five\nsix\n"), 0644)
+	requireNoError(t, os.WriteFile(target, []byte("one\ntwo\nthree four five\nsix\n"), 0644))
 
 	// cat echoes whatever is written to the PTY, giving deterministic output.
 	h.app.Settings.Terminal.Shell = "/bin/cat"

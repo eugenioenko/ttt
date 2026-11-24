@@ -13,8 +13,8 @@ func TestOnChangeRuneInsert(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange.txt")
-	os.WriteFile(f, []byte("ab"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("ab"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -50,8 +50,8 @@ func TestOnChangeBackspace(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_bs.txt")
-	os.WriteFile(f, []byte("abc"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("abc"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -87,8 +87,8 @@ func TestOnChangeDelete(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_del.txt")
-	os.WriteFile(f, []byte("abc"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("abc"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -124,8 +124,8 @@ func TestOnChangeUndo(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_undo.txt")
-	os.WriteFile(f, []byte("hello"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Col = 5
@@ -159,8 +159,8 @@ func TestOnChangeToggleComment(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_comment.js")
-	os.WriteFile(f, []byte("hello"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -193,8 +193,8 @@ func TestOnChangeMultipleRunes(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_multi.txt")
-	os.WriteFile(f, []byte("ab"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("ab"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Col = 2
@@ -234,8 +234,8 @@ func TestOnChangeTab(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_tab.txt")
-	os.WriteFile(f, []byte("hello"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Col = 0
@@ -271,8 +271,8 @@ func TestOnChangeBackspaceJoinLine(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_bsjoin.txt")
-	os.WriteFile(f, []byte("ab\ncd"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("ab\ncd"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 1
@@ -316,8 +316,8 @@ func TestOnChangeSelectionReplace(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_selreplace.txt")
-	os.WriteFile(f, []byte("hello"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// Select "ell" (col 1 to col 4)
@@ -356,8 +356,8 @@ func TestOnChangeEnter(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "onchange_enter.txt")
-	os.WriteFile(f, []byte("hello world"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello world"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Col = 5

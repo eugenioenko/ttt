@@ -155,7 +155,7 @@ func TestOpenFileReadOnly(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "readonly.txt")
-	os.WriteFile(f, []byte("original content\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("original content\n"), 0644))
 
 	if err := h.app.EditorGroup.OpenFileReadOnly(f, "readonly.txt (v1)"); err != nil {
 		t.Fatal(err)

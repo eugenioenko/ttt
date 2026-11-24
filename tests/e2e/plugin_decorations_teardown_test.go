@@ -24,7 +24,7 @@ func openTintProbe(h *testHarness) string {
 	if err := os.WriteFile(file, []byte("first probe\nsecond probe\nthird probe\n"), 0644); err != nil {
 		h.t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(file)
+	h.openFile(file)
 	h.redraw()
 	return file
 }
@@ -127,7 +127,7 @@ func TestPluginUpdateClearsTheOldVersionsDecorations(t *testing.T) {
 
 			h.awaitPluginUpdate("pdfview", pdf)
 			h.app.DismissDialog()
-			h.app.EditorGroup.OpenFile(file)
+			h.openFile(file)
 			h.redraw()
 
 			if secondProbeLineTinted(h) {
