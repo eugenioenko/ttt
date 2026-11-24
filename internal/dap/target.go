@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/tidwall/jsonc"
@@ -48,53 +49,7 @@ func LoadTargets(folder string) ([]Target, error) {
 	return nil, nil
 }
 
-func (t Target) LaunchArguments() (map[string]any, error) {
-	if t.Type == "node" || t.Type == "pwa-node" {
-		return t.nodeArguments()
-	}
-	if t.Request == "attach" && (t.Type == "go" || t.Type == "debugpy") {
-		if _, has := t.Arguments["processId"]; has {
-			return t.pidArguments()
-		}
-		return t.addressAttachArguments()
-	}
-	if t.Type == "debugpy" && t.Request == "launch" {
-		return t.pythonArguments()
-	}
-	if t.Type != "go" || t.Request != "launch" {
-		return nil, fmt.Errorf("%s: unsupported %s %s configuration", t.Name, t.Type, t.Request)
-	}
-	out := map[string]any{"mode": "debug", "outputMode": "remote", "cwd": t.Folder}
-	for key, value := range t.Arguments {
-		switch key {
-		case "name", "request", "type", "presentation":
-			continue
-		case "program", "cwd", "mode", "args", "env", "buildFlags", "stopOnEntry":
-			expanded, err := expand(value, t.Folder)
-			if err != nil {
-				return nil, fmt.Errorf("%s: %s: %w", t.Name, key, err)
-			}
-			out[key] = expanded
-		default:
-			return nil, fmt.Errorf("%s: unsupported configuration field %q", t.Name, key)
-		}
-	}
-	program, _ := out["program"].(string)
-	if program == "" {
-		return nil, fmt.Errorf("%s: missing program", t.Name)
-	}
-	for _, key := range []string{"program", "cwd"} {
-		path, ok := out[key].(string)
-		if !ok {
-			return nil, fmt.Errorf("%s: invalid %s", t.Name, key)
-		}
-		if !filepath.IsAbs(path) {
-			out[key] = filepath.Join(t.Folder, path)
-		}
-	}
-	return out, nil
-}
-func expand(value any, folder string) (any, error) {
+func Expand(value any, folder string) (any, error) {
 	switch v := value.(type) {
 	case string:
 		s := strings.ReplaceAll(v, "${workspaceFolder}", folder)
@@ -105,7 +60,7 @@ func expand(value any, folder string) (any, error) {
 	case []any:
 		dst := make([]any, len(v))
 		for i, item := range v {
-			x, err := expand(item, folder)
+			x, err := Expand(item, folder)
 			if err != nil {
 				return nil, err
 			}
@@ -115,7 +70,7 @@ func expand(value any, folder string) (any, error) {
 	case map[string]any:
 		dst := make(map[string]any, len(v))
 		for k, item := range v {
-			x, err := expand(item, folder)
+			x, err := Expand(item, folder)
 			if err != nil {
 				return nil, err
 			}
@@ -125,4 +80,20 @@ func expand(value any, folder string) (any, error) {
 	default:
 		return value, nil
 	}
+}
+func (t Target) Fields(defaults map[string]any, allowed ...string) (map[string]any, error) {
+	for key, v := range t.Arguments {
+		if key == "request" || key == "name" || key == "type" || key == "presentation" {
+			continue
+		}
+		if !slices.Contains(allowed, key) {
+			return nil, fmt.Errorf("%s: unsupported %s %s field %q", t.Name, t.Type, t.Request, key)
+		}
+		x, err := Expand(v, t.Folder)
+		if err != nil {
+			return nil, err
+		}
+		defaults[key] = x
+	}
+	return defaults, nil
 }

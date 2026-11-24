@@ -48,7 +48,8 @@ func (output adapterStderr) Write(data []byte) (int, error) {
 }
 
 type Session struct {
-	jsAddr          string
+	options         SessionOptions
+	peerAddress     string
 	child           *Session
 	desired         map[string][]int
 	closing         bool
@@ -62,15 +63,11 @@ type Session struct {
 	onEvent         func(Event)
 	terminate       func()
 	closeOnce       sync.Once
-	remoteDelve     bool
 	stoppedThread   int
 	breakpointFiles map[string]bool
 }
 
-func StartDelve(ctx context.Context, binary, folder string, onEvent func(Event)) (*Session, error) {
-	return startListeningAdapter(ctx, binary, []string{"dap", "--listen=127.0.0.1:0"}, folder, "DAP server listening at: ", onEvent)
-}
-func startListeningAdapter(ctx context.Context, binary string, args []string, folder, prefix string, onEvent func(Event)) (*Session, error) {
+func ListenProcess(ctx context.Context, binary string, args []string, folder, prefix string, onEvent func(Event), options SessionOptions) (*Session, error) {
 	procCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(procCtx, binary, args...)
 	cmd.Dir = folder
@@ -116,11 +113,14 @@ func startListeningAdapter(ctx context.Context, binary string, args []string, fo
 		kill()
 		return nil, err
 	}
-	return newSession(conn, conn, conn, kill, onEvent), nil
+	return newSocketSession(conn, kill, onEvent, options), nil
 }
 
 func newSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event)) *Session {
-	s := &Session{conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
+	return makeSession(r, w, conn, kill, onEvent, "", SessionOptions{})
+}
+func makeSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event), addr string, options SessionOptions) *Session {
+	s := &Session{options: options, peerAddress: addr, conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
 	return s
@@ -167,7 +167,7 @@ func (s *Session) read() {
 				s.onEvent(Event{p.Event, p.Body})
 			}
 		case "request":
-			if p.Command == "startDebugging" {
+			if p.Command == "startDebugging" && s.options.ChildTarget != nil {
 				go s.startChild(p)
 				continue
 			}
@@ -269,7 +269,7 @@ func (s *Session) Start(ctx context.Context, adapter, request string, args map[s
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var caps struct{ SupportsConfigurationDoneRequest bool }
-	if err := s.Call(ctx, "initialize", map[string]any{"supportsStartDebuggingRequest": adapter == "pwa-node" || adapter == "node", "adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
+	if err := s.Call(ctx, "initialize", map[string]any{"supportsStartDebuggingRequest": s.options.ChildTarget != nil, "adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
 	launched := make(chan error, 1)
@@ -320,7 +320,7 @@ func (s *Session) Close(terminateDebuggee bool) {
 			if child != nil {
 				child.Close(terminateDebuggee)
 			}
-			if s.remoteDelve && !terminateDebuggee {
+			if s.options.ResumeBeforeDetach && !terminateDebuggee {
 				s.mu.Lock()
 				files := slices.Collect(maps.Keys(s.breakpointFiles))
 				s.mu.Unlock()
@@ -344,4 +344,69 @@ func (s *Session) Close(terminateDebuggee bool) {
 		_ = s.conn.Close()
 		s.terminate()
 	})
+}
+
+type SessionOptions struct {
+	ChildTarget        func(json.RawMessage) (Target, error)
+	ResumeBeforeDetach bool
+}
+
+func newSocketSession(conn net.Conn, cleanup func(), onEvent func(Event), options SessionOptions) *Session {
+	return makeSession(conn, conn, conn, cleanup, onEvent, conn.RemoteAddr().String(), options)
+}
+
+func Connect(ctx context.Context, addr string, onEvent func(Event), options SessionOptions) (*Session, error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return newSocketSession(conn, func() {}, onEvent, options), nil
+}
+func (s *Session) startChild(p packet) {
+	err := s.attachChild(p.Arguments)
+	response := map[string]any{"type": "response", "seq": s.nextSeq(), "command": p.Command, "request_seq": p.Seq, "success": err == nil}
+	if err != nil {
+		response["message"] = err.Error()
+	}
+	_ = s.codec.Send(response)
+}
+func (s *Session) attachChild(raw json.RawMessage) error {
+	target, err := s.options.ChildTarget(raw)
+	if err != nil {
+		return err
+	}
+	addr := s.peerAddress
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return err
+	}
+	child := newSession(conn, conn, conn, func() {}, s.onEvent)
+	s.mu.Lock()
+	if s.child != nil || s.closing {
+		s.mu.Unlock()
+		_ = conn.Close()
+		return fmt.Errorf("debug target already active or closing")
+	}
+	points := maps.Clone(s.desired)
+	s.child = child
+	s.mu.Unlock()
+	err = child.Start(ctx, target.Type, target.Request, target.Arguments, func() error {
+		for path, lines := range points {
+			if _, err := child.SetBreakpoints(ctx, path, lines); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		_ = conn.Close()
+		s.mu.Lock()
+		if s.child == child {
+			s.child = nil
+		}
+		s.mu.Unlock()
+	}
+	return err
 }

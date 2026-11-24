@@ -12,6 +12,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/dap"
+	"github.com/eugenioenko/ttt/internal/dap/providers"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -105,11 +106,16 @@ func (a *App) pickDebugProcess(t dap.Target) {
 	}, nil)
 }
 func (a *App) prepareDebugTarget(t dap.Target) {
-	if t.Request == "attach" && (t.Type == "go" || t.Type == "debugpy" || t.Type == "node" || t.Type == "pwa-node") && t.Arguments["processId"] == dap.PickProcess {
+	provider, err := providers.For(t)
+	if err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	if t.Request == "attach" && t.Arguments["processId"] == dap.PickProcess {
 		a.pickDebugProcess(t)
 		return
 	}
-	args, err := t.LaunchArguments()
+	args, err := provider.Arguments(t)
 	if err != nil {
 		a.StatusError(err.Error())
 		return
@@ -128,9 +134,9 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 	if a.debugger.run != nil {
 		return
 	}
-	a.startDebugRun(t, args)
+	a.startDebugRun(provider, t, args)
 }
-func (a *App) startDebugRun(t dap.Target, args map[string]any) {
+func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &debugRun{edited: make(map[string]bool), folder: t.Folder, attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
 	a.debugger.lastFolder, a.debugger.lastTarget = t.Folder, t.Name
@@ -176,7 +182,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 		defer close(run.closed)
 		startup, endStartup := context.WithTimeout(ctx, 90*time.Second)
 		defer endStartup()
-		s, err := dap.OpenAdapter(startup, t, args, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) })
+		s, err := provider.Open(startup, t, args, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) })
 		if err == nil {
 			deliver(func() { run.session = s })
 			err = s.Start(startup, t.Type, t.Request, args, func() error {

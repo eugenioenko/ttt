@@ -1,4 +1,4 @@
-package dap
+package delve
 
 import (
 	"context"
@@ -9,10 +9,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/eugenioenko/ttt/internal/dap"
 )
 
 func TestDelveLaunch(t *testing.T) {
-	binary, err := exec.LookPath("dlv")
+	_, err := exec.LookPath("dlv")
 	if err != nil {
 		t.Skip("dlv unavailable")
 	}
@@ -25,14 +27,14 @@ func TestDelveLaunch(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	events := make(chan Event, 256)
-	session, err := StartDelve(ctx, binary, folder, func(e Event) { events <- e })
+	events := make(chan dap.Event, 256)
+	target := dap.Target{Type: "go", Request: "launch", Folder: folder, Arguments: map[string]any{"program": "."}}
+	session, err := (Provider{}).Open(ctx, target, nil, func(e dap.Event) { events <- e })
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer session.Close(true)
-	target := Target{Type: "go", Request: "launch", Folder: folder, Arguments: map[string]any{"program": "."}}
-	args, err := target.LaunchArguments()
+	args, err := (Provider{}).Arguments(target)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package dap
+package jsdebug
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/eugenioenko/ttt/internal/dap"
 )
 
 // Standalone js-debug accepts an inspector port. VS Code resolves a processId
@@ -25,7 +27,7 @@ func enableNodeInspector(ctx context.Context, pid, port int) error {
 		}
 		name = filepath.Base(path)
 	} else {
-		list, err := Processes(ctx)
+		list, err := dap.Processes(ctx)
 		if err != nil {
 			return err
 		}

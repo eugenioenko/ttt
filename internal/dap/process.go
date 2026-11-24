@@ -54,7 +54,7 @@ func Processes(ctx context.Context) ([]Process, error) {
 
 const PickProcess = "${command:pickProcess}"
 
-func pidValue(value any) (int, error) {
+func ProcessID(value any) (int, error) {
 	var n int
 	switch v := value.(type) {
 	case string:
@@ -71,53 +71,4 @@ func pidValue(value any) (int, error) {
 		return 0, fmt.Errorf("invalid processId %v", value)
 	}
 	return n, nil
-}
-
-func (t Target) pidArguments() (map[string]any, error) {
-	pid, err := pidValue(t.Arguments["processId"])
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]any{"processId": pid}
-	for key, v := range t.Arguments {
-		switch key {
-		case "request", "name", "type", "processId", "presentation":
-			continue
-		case "mode":
-			if t.Type == "go" && v == "local" {
-				continue
-			}
-		case "python", "justMyCode", "pathMappings":
-			if t.Type == "debugpy" {
-				x, err := expand(v, t.Folder)
-				if err != nil {
-					return nil, err
-				}
-				out[key] = x
-				continue
-			}
-		case "substitutePath":
-			if t.Type == "go" {
-				x, err := expand(v, t.Folder)
-				if err != nil {
-					return nil, err
-				}
-				out[key] = x
-				continue
-			}
-		}
-		return nil, fmt.Errorf("%s: unsupported PID attach field %q", t.Name, key)
-	}
-	if t.Type == "go" {
-		out["mode"] = "local"
-	} else {
-		if _, ok := out["python"]; !ok {
-			out["python"] = t.defaultPython()
-		}
-		interpreter, ok := out["python"].(string)
-		if !ok || interpreter == "" {
-			return nil, fmt.Errorf("%s: invalid Python interpreter", t.Name)
-		}
-	}
-	return out, nil
 }
