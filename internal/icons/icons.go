@@ -12,6 +12,8 @@ import (
 type Name string
 
 const (
+	PluginInstall     Name = "plugin-install"
+	PluginSource      Name = "plugin-source"
 	DebugStart        Name = "debug-start"
 	DebugContinue     Name = "debug-continue"
 	DebugPause        Name = "debug-pause"
@@ -82,6 +84,8 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
+	PluginInstall:     {Plain: "⤓", Nerd: "\uf019"},
+	PluginSource:      {Plain: "⤴", Nerd: "\uf08e"},
 	DebugStart:        {Plain: "⏵", Nerd: "\uf04b"},
 	DebugContinue:     {Plain: "⏵", Nerd: "\ueacf"},
 	DebugPause:        {Plain: "⏸", Nerd: "\uf04c"},
