@@ -42,7 +42,7 @@ func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
 	g.Editor.BookmarkOverlay = func(line int) (ui.Bookmark, bool) {
 		path := g.ActiveFilePath()
 		if path == a.debugger.stoppedFile && line+1 == a.debugger.stoppedLine {
-			return ui.Bookmark{Icon: icons.Rune(icons.ArrowRight), Style: term.StyleActiveLine}, true
+			return ui.Bookmark{Icon: icons.Rune(icons.ChevronRight), Style: term.StyleActiveLine}, true
 		}
 		if point, ok := a.debugger.points[path][line+1]; ok {
 			if point.binding.Verified {

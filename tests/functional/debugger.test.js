@@ -35,6 +35,7 @@ it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with
     const caller = tui.snapshot();
     tui.exec("Debug: Step Over");
     tui.waitFor("main.report  main.go:7");
+    const stepped = tui.snapshot();
     tui.exec("Debug: Continue");
     tui.panel("output");
     tui.waitFor("Debug session ended");
@@ -47,6 +48,10 @@ it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with
     expect(readFileSync(file, "utf8")).toMatch(/^\/\/ saved by launch\n/);
     expect(snapshots[stopped]).toContain("main.report  main.go:6");
     expect(snapshots[caller]).toContain("Ln 12, Col 1");
+    expect(snapshots[stopped]).toMatch(/› +6 +fmt\.Println/);
+    expect(snapshots[caller]).toMatch(/› +6 +fmt\.Println/);
+    expect(snapshots[stepped]).toMatch(/\* +6 +fmt\.Println/);
+    expect(snapshots[stepped]).toMatch(/› +7 +local\+\+/);
     expect(snapshots[output]).toContain("[debug:Example] done 43");
   } finally {
     rmSync(dir, { recursive: true, force: true });

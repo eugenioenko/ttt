@@ -103,7 +103,7 @@ Keep transport reads off the UI goroutine. Post results to the main event loop, 
 
 ## Breakpoints and source identity
 
-Store requested breakpoints per workspace and source path. Give each an identity independent of its requested line. Keep adapter IDs, resolved locations, verification and explanatory messages per session. A hollow marker means pending or unverified, a filled marker means verified, and a distinct execution arrow remains recognizable when both occupy the same row. Surface the adapter's reason when a breakpoint cannot bind.
+Store requested breakpoints per workspace and source path. Give each an identity independent of its requested line. Keep adapter IDs, resolved locations, verification and explanatory messages per session. A hollow marker means pending or unverified, a filled marker means verified, and a right-pointing execution chevron remains recognizable when both occupy the same row. Surface the adapter's reason when a breakpoint cannot bind.
 
 Send the complete desired set for a source on change, including an empty set when removing its last breakpoint. Serialize or coalesce updates per source so a late reply cannot restore a removed marker. Keep a requested breakpoint when the adapter relocates it. Drop only the session's binding when debugging ends.
 
@@ -121,7 +121,7 @@ The Debug sidebar offers the configuration picker, Start or Attach, and session 
 
 Reveal the sidebar on start and keep editor keyboard focus on a breakpoint hit. Keep Stop or Detach available during startup. Program output belongs in the bottom Output panel when supplied by the adapter. For an attached program whose output belongs to another terminal, indicate where to look when known.
 
-The Debug view uses the existing bookmark column to toggle breakpoints. An execution marker takes visual precedence over a breakpoint, and a breakpoint takes precedence over a bookmark. Removing a breakpoint reveals the underlying bookmark. Outside the Debug view, gutter clicks retain plugin and fold handling. **Toggle Breakpoint** works from any view.
+The Debug view uses the existing bookmark column to toggle breakpoints. The current execution line shows a chevron (›). It takes visual precedence over a breakpoint, and a breakpoint takes precedence over a bookmark. Removing a breakpoint reveals the underlying bookmark. Outside the Debug view, gutter clicks retain plugin and fold handling. **Toggle Breakpoint** works from any view.
 
 Expose start, continue, pause, stop, stepping and toggle-breakpoint commands through the normal command registry. F10 already opens the File menu. Prototype stepping through the palette and choose defaults after checking terminal focus, existing bindings, and discoverability. Existing debug.* developer tools already use distinct command IDs. Product debugger commands must be available in ordinary builds.
 
