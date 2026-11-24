@@ -36,6 +36,8 @@ func TestStartupUpdateCheckFrequency(t *testing.T) {
 		{name: "daily is due after 24 hours", settings: UpdateSettings{StartupCheck: true, StartupCheckInterval: UpdateCheckDaily}, last: justOverDay, want: true},
 		{name: "empty interval is daily", settings: UpdateSettings{StartupCheck: true}, last: hourAgo, want: false},
 		{name: "every launch is due even when recent", settings: UpdateSettings{StartupCheck: true, StartupCheckInterval: UpdateCheckEveryLaunch}, last: hourAgo, want: true},
+		{name: "daily is due when last check is in the future", settings: UpdateSettings{StartupCheck: true, StartupCheckInterval: UpdateCheckDaily}, last: now.Add(24 * time.Hour), want: true},
+		{name: "disabled stays off when last check is in the future", settings: UpdateSettings{StartupCheck: false, StartupCheckInterval: UpdateCheckDaily}, last: now.Add(24 * time.Hour), want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

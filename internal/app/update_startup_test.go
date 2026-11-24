@@ -240,8 +240,8 @@ func TestCheckForUpdatesOnStartupLeavesManualDialogAlone(t *testing.T) {
 	}
 	a.CheckForUpdates()
 	close(u.release)
-	// Manual lookup is the second call and is not blocked; its delivery should
-	// land first, and the startup callback must leave that dialog alone.
+	// The two deliveries may finish in either order. The startup callback must
+	// leave the manual dialog alone once Check for Updates has opened it.
 	var first, second func()
 	select {
 	case first = <-posted:

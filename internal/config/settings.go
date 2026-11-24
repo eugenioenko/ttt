@@ -527,7 +527,7 @@ func (u UpdateSettings) StartupCheckDue(last, now time.Time) bool {
 	if !u.StartupCheck {
 		return false
 	}
-	if last.IsZero() {
+	if last.IsZero() || last.After(now) {
 		return true
 	}
 	if u.Interval() == UpdateCheckEveryLaunch {
