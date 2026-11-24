@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"os/exec"
@@ -246,6 +247,7 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 	var prev *RegistryEntry
 	if entry := m.registry.Find(p.Manifest.Name); entry != nil {
 		saved := *entry
+		saved.InstalledDefaults = maps.Clone(entry.InstalledDefaults)
 		prev = &saved
 	}
 	m.registry.AddOrUpdate(
@@ -272,7 +274,7 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 		return err
 	}
 
-	if err := p.CallOnInstall(); err != nil {
+	if err := m.callInstallHook(p); err != nil {
 		p.Destroy()
 		return errors.Join(fmt.Errorf("on_install: %w", err), m.revertApproval(p, prev))
 	}
@@ -584,10 +586,15 @@ func (m *Manager) RunUninstallHook(name string) error {
 		return systemManagedError()
 	}
 	p := m.FindPlugin(name)
-	if p == nil {
-		return nil
+	if p != nil {
+		if err := hookError(p.CallLuaFunc(p.UninstallFunc)); err != nil {
+			return err
+		}
 	}
-	return hookError(p.CallLuaFunc(p.UninstallFunc))
+	if entry := m.registry.Find(name); entry != nil {
+		return m.removeDefaults(entry.InstalledDefaults)
+	}
+	return nil
 }
 
 func (m *Manager) Uninstall(name string) error {

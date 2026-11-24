@@ -136,11 +136,12 @@ type Plugin struct {
 
 	EditorContextProvider *lua.LFunction
 
-	Editor     EditorAPI
-	Filesystem FilesystemAPI
-	System     SystemAPI
-	Network    NetworkAPI
-	Settings   SettingsAPI
+	Editor         EditorAPI
+	Filesystem     FilesystemAPI
+	System         SystemAPI
+	Network        NetworkAPI
+	installDefault func(string, any) error
+	Settings       SettingsAPI
 
 	EventListeners map[string][]*lua.LFunction
 

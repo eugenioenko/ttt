@@ -3213,6 +3213,19 @@ local formatter = settings.get("formatters.go")  -- "gofmt" or nil
 local debounce = settings.get("autocomplete.debounce")  -- 150
 ```
 
+#### `settings.set_default(key, value)`
+
+Call this during `ttt.on_install` to supply an absent user setting. It uses the same scoped settings permission as `settings.set`. Existing entries are preserved. On uninstall, the host removes each default it wrote only if the current value still matches the installed value. Cleanup also works for disabled plugins and after restarting ttt.
+
+```lua
+ttt.on_install(function()
+  settings.set_default("debug.adapters.gdb", {
+    command = {"gdb", "-q", "-nx", "-i", "dap"},
+    languages = {"c", "cpp"},
+  })
+end)
+```
+
 #### `settings.set(key, value)`
 
 Write a setting value. Persists to `settings.json` immediately. Any JSON-serializable value is accepted (string, number, boolean, table). Setting a key to `nil` deletes it.

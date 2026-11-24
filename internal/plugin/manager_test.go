@@ -1483,3 +1483,46 @@ func TestFailedOnInstallRestoresThePreviousApproval(t *testing.T) {
 		t.Errorf("pending on next startup = %d, want 1", len(again))
 	}
 }
+
+func TestDisabledPluginUninstallKeepsOnlyUserSettings(t *testing.T) {
+	m, dir := newTestManager(t)
+	settings := &mockSettingsAPI{store: map[string]any{"test.existing": "mine"}}
+	m.SetSettingsAPI(settings)
+	location := writePluginDir(t, dir, "defaults")
+	manifest := `{"name":"defaults","version":"1","entry":"main.ttt.lua","permissions":{"settings":true,"settings_keys":["test.*"]}}`
+	code := `local ttt=require("ttt")
+ local settings=require("ttt.settings")
+ ttt.on_install(function()
+   for _,key in ipairs({"test.clean","test.modified","test.existing"}) do settings.set_default(key, "initial") end
+ end)`
+	for name, contents := range map[string]string{"plugin.ttt.json": manifest, "main.ttt.lua": code} {
+		if err := os.WriteFile(filepath.Join(location, name), []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatal(pending)
+	}
+	if err := m.ApproveAndLoad(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	if settings.store["test.clean"] != "initial" || settings.store["test.existing"] != "mine" {
+		t.Fatal(settings.store)
+	}
+	settings.store["test.modified"] = "edited"
+	if _, err := m.SetEnabled("defaults", false); err != nil {
+		t.Fatal(err)
+	}
+	m.Shutdown()
+	restarted := NewManager(dir, m.registryPath)
+	restarted.SetSettingsAPI(settings)
+	restarted.LoadAll()
+	defer restarted.Shutdown()
+	if err := restarted.RunUninstallHook("defaults"); err != nil {
+		t.Fatal(err)
+	}
+	if len(settings.store) != 2 || settings.store["test.modified"] != "edited" || settings.store["test.existing"] != "mine" {
+		t.Fatal(settings.store)
+	}
+}
