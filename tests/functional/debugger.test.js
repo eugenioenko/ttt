@@ -1,0 +1,53 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, it } from "vitest";
+import * as tui from "./tui.js";
+
+const hasDelve = spawnSync("dlv", ["version"], { stdio: "ignore" }).status === 0;
+
+it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with Delve", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ttt-dap-"));
+  try {
+    const file = join(dir, "main.go");
+    writeFileSync(file, [
+      "package main", 'import "fmt"', "func report(arg int) {",
+      " local := arg + 1", ' fmt.Println("result", local)', " local++",
+      ' fmt.Println("done", local)', "}", "func main() {", " caller := 41",
+      " report(caller)", "}", "",
+    ].join("\n"));
+    writeFileSync(join(dir, "go.mod"), "module example\ngo 1.25\n");
+    mkdirSync(join(dir, ".ttt"));
+    writeFileSync(join(dir, ".ttt/launch.json"), JSON.stringify({
+      configurations: [{ name: "Example", type: "go", request: "launch", program: "." }],
+    }));
+    tui.start(dir, file);
+    tui.type("// saved by launch");
+    tui.press("enter");
+    tui.click(37, 9);
+    tui.exec("Start Debugging");
+    tui.waitFor("local = 42");
+    const stopped = tui.snapshot();
+    tui.click(9, 10);
+    tui.waitFor("caller = 41");
+    const caller = tui.snapshot();
+    tui.exec("Debug: Step Over");
+    tui.waitFor("main.report  main.go:7");
+    tui.exec("Debug: Continue");
+    tui.panel("output");
+    tui.waitFor("Debug session ended");
+    const output = tui.snapshot();
+    tui.exec("Start Debugging");
+    tui.waitFor("local = 42");
+    tui.exec("Stop Debugging");
+    tui.waitFor("Debug session ended");
+    const { snapshots } = tui.run(60000);
+    expect(readFileSync(file, "utf8")).toMatch(/^\/\/ saved by launch\n/);
+    expect(snapshots[stopped]).toContain("main.report  main.go:6");
+    expect(snapshots[caller]).toContain("Ln 12, Col 1");
+    expect(snapshots[output]).toContain("[debug:Example] done 43");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 70000);
