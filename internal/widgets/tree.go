@@ -12,6 +12,7 @@ type TreeNode struct {
 	Label             string      `json:"label"`
 	Icon              string      `json:"icon,omitempty"`
 	IconStyle         term.Style  `json:"-"`
+	IconName          icons.Name  `json:"-"`
 	SelectedIconStyle term.Style  `json:"-"`
 	LabelIcon         string      `json:"-"`
 	LabelIconStyle    term.Style  `json:"-"`
@@ -521,7 +522,11 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		x++
 	}
 
-	if icon := node.Icon; icon != "" {
+	icon := node.Icon
+	if node.IconName != "" {
+		icon = string(icons.Rune(node.IconName))
+	}
+	if icon != "" {
 		iconStyle := node.IconStyle
 		if idx == t.selected {
 			iconStyle = node.SelectedIconStyle

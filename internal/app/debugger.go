@@ -47,17 +47,17 @@ func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
 			return ui.Bookmark{Icon: icons.Rune(icons.DebugExecution), Style: term.StyleDebugExecution}, true
 		}
 		if point, ok := a.debugger.points[path][line+1]; ok {
-			return ui.Bookmark{Icon: a.breakpointGlyph(point), Style: term.StyleDebugBreakpoint}, true
+			return ui.Bookmark{Icon: icons.Rune(a.breakpointIcon(point)), Style: term.StyleDebugBreakpoint}, true
 		}
 		return ui.Bookmark{}, false
 	}
 }
 
-func (a *App) breakpointGlyph(point *debugBreakpoint) rune {
+func (a *App) breakpointIcon(point *debugBreakpoint) icons.Name {
 	if !point.confirm && (a.debugger.run == nil || point.binding.Verified) {
-		return icons.Rune(icons.Breakpoint)
+		return icons.Breakpoint
 	}
-	return icons.Rune(icons.PendingBreakpoint)
+	return icons.PendingBreakpoint
 }
 
 func (a *App) toggleBreakpoint(path string, line int) {

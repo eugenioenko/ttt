@@ -22,13 +22,13 @@ type DropdownWidget struct {
 }
 
 func NewDropdownWidget(config DropdownConfig) *DropdownWidget {
-	if config.Label == "" {
-		config.Label = string(icons.Rune(icons.More))
-	}
 	btn := NewButtonWidget(ButtonConfig{
 		Label: config.Label,
 		Style: config.Style,
 	})
+	if config.Label == "" {
+		btn.Config.Icon = icons.More
+	}
 	if config.Box != nil {
 		btn.Box = *config.Box
 	}
@@ -36,13 +36,13 @@ func NewDropdownWidget(config DropdownConfig) *DropdownWidget {
 }
 
 func (d *DropdownWidget) UpdateConfig(config DropdownConfig) {
-	if config.Label == "" {
-		config.Label = string(icons.Rune(icons.More))
-	}
 	d.Config = config
 	d.button.Config.Label = config.Label
 	d.button.Config.Style = config.Style
 	d.button.SetLabel(config.Label)
+	if config.Label == "" {
+		d.button.Config.Icon = icons.More
+	}
 	if config.Box != nil {
 		d.button.Box = *config.Box
 	}

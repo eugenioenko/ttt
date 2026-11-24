@@ -186,7 +186,7 @@ func (a *App) refreshDebugPanel() {
 			} else if b.Message != "" {
 				label += "  " + b.Message
 			}
-			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Icon: string(a.breakpointGlyph(point)), IconStyle: term.StyleDebugBreakpoint, SelectedIconStyle: term.StyleDebugBreakpoint, Label: label}
+			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), IconName: a.breakpointIcon(point), IconStyle: term.StyleDebugBreakpoint, SelectedIconStyle: term.StyleDebugBreakpoint, Label: label}
 			points.Children = append(points.Children, n)
 			p.breakNodes[n] = debugLocation{path, line}
 		}
