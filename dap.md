@@ -113,7 +113,7 @@ Save modified source before launch or attach. Proposed scope is file-backed buff
 
 ## Controls and layout
 
-The Debug sidebar offers the configuration picker, Start or Attach, and session controls. The top two rows are reserved for the session buttons. Drag the horizontal dividers between Variables, Call Stack, and Breakpoints to resize those sections for the current editor instance. Each section scrolls independently.
+The Debug sidebar offers the configuration picker, Start or Attach, and session controls. The top two rows hold icon buttons. The first row has Start or Pause/Continue and Stop/Detach. The second has Step Over, Step In and Step Out. Drag the horizontal dividers between Variables, Call Stack, and Breakpoints to resize those sections for the current editor instance. Each section scrolls independently.
 
 - **Variables** shows scopes and expandable values for the selected frame. Clear stopped-state values on resume.
 - **Call Stack** groups frames by thread. Selecting a frame reveals its source and refreshes Variables.

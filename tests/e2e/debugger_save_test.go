@@ -70,7 +70,7 @@ func TestDebugPanelAvailableBeforeConfiguration(t *testing.T) {
 		t.Fatal("Debug missing from sidebar on startup")
 	}
 	h.exec("sidebar.debug")
-	h.assertContains("Start Debugging")
+	h.assertContains("[⏵]")
 	h.assertContains("Breakpoints")
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 	if lines := h.app.Output.Lines; len(lines) == 0 || !strings.Contains(lines[len(lines)-1].Message, ".ttt/launch.json") {
@@ -93,7 +93,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 		t.Fatalf("missing %s", label)
 		return -1
 	}
-	controls, variables := row("Start Debugging"), row("Variables")
+	controls, variables := row("[⏵]"), row("Variables")
 	for _, label := range []string{"Call Stack", "Breakpoints"} {
 		from := row(label) - 1
 		for _, event := range []struct {
@@ -104,7 +104,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 			h.redraw()
 		}
 		h.exec("debug.toggleBreakpoint")
-		if row(label) != from-1 || row("Start Debugging") != controls || row("Variables") != variables {
+		if row(label) != from-1 || row("[⏵]") != controls || row("Variables") != variables {
 			t.Fatalf("dragging divider above %s moved toolbar or failed to resize section", label)
 		}
 	}

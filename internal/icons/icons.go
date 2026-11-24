@@ -12,6 +12,14 @@ import (
 type Name string
 
 const (
+	DebugStart        Name = "debug-start"
+	DebugContinue     Name = "debug-continue"
+	DebugPause        Name = "debug-pause"
+	DebugStop         Name = "debug-stop"
+	DebugDetach       Name = "debug-detach"
+	DebugStepOver     Name = "debug-step-over"
+	DebugStepIn       Name = "debug-step-in"
+	DebugStepOut      Name = "debug-step-out"
 	DebugExecution    Name = "debug-execution"
 	Breakpoint        Name = "breakpoint"
 	PendingBreakpoint Name = "breakpoint-pending"
@@ -74,6 +82,14 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
+	DebugStart:        {Plain: "⏵", Nerd: "\uf04b"},
+	DebugContinue:     {Plain: "⏵", Nerd: "\ueacf"},
+	DebugPause:        {Plain: "⏸", Nerd: "\uf04c"},
+	DebugStop:         {Plain: "⏹", Nerd: "\uf04d"},
+	DebugDetach:       {Plain: "⏏", Nerd: "\uf052"},
+	DebugStepOver:     {Plain: "↷", Nerd: "\uead6"},
+	DebugStepIn:       {Plain: "⤓", Nerd: "\uead4"},
+	DebugStepOut:      {Plain: "⤒", Nerd: "\uead5"},
 	DebugExecution:    {Plain: "⏵", Nerd: "\uf04b"},
 	Breakpoint:        {Plain: "⬤", Nerd: "\uf111"},
 	PendingBreakpoint: {Plain: "◦", Nerd: "\uf1db"},
