@@ -149,7 +149,11 @@ type debugBreakpoint struct {
 
 func (a *App) debugOwnsSource(r *debugRun, path string) bool {
 	folder := a.Workspace.FolderForFile(path)
-	return folder != nil && folder.Path == r.folder && slices.Contains(r.languages, a.debugLanguage(path))
+	root := filepath.Dir(path)
+	if folder != nil {
+		root = folder.Path
+	}
+	return root == r.folder && slices.Contains(r.languages, a.debugLanguage(path))
 }
 
 func (a *App) applyDebugBindings(path string, lines []int, bindings []dap.Breakpoint) {

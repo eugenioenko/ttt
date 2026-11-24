@@ -10,6 +10,10 @@ import (
 
 type Provider struct{ dap.Adapter }
 
+func (Provider) FileLaunchArguments(path string) map[string]any {
+	return map[string]any{"program": path}
+}
+
 func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request != "launch" && t.Request != "attach" {
 		return nil, fmt.Errorf("%s: unsupported request %s", t.Name, t.Request)

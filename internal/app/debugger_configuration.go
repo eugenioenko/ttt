@@ -2,21 +2,23 @@ package app
 
 import (
 	"maps"
+	"path/filepath"
 	"slices"
 
 	"github.com/eugenioenko/ttt/internal/dap"
+	"github.com/eugenioenko/ttt/internal/dap/providers"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
-type debugIdleAction struct{ label, button, command, file string }
+type debugIdleAction struct{ button, command, file string }
 
 func (a *App) refreshDebugConfiguration() {
 	p := &a.debugger.panel
 	if p.toolbar == nil {
 		return
 	}
-	action := debugIdleAction{label: i18n.Text("debug.setup"), button: i18n.Text("debug.createConfiguration"), command: "debug.configure"}
+	action := debugIdleAction{button: i18n.Text("debug.createConfiguration"), command: "debug.configure"}
 	var targets []dap.Target
 	for _, folder := range a.Workspace.Folders {
 		path, list, err := dap.ReadLaunchFile(folder.Path)
@@ -31,15 +33,66 @@ func (a *App) refreshDebugConfiguration() {
 		targets = append(targets, list...)
 	}
 	if len(targets) > 0 {
-		action = debugIdleAction{command: "debug.start", button: i18n.Text("debug.runAndDebug"), label: i18n.Text("debug.chooseTarget")}
-		if len(targets) == 1 {
-			action.label = targets[0].Name
-		}
-	} else if action.file != "" {
-		action.button = i18n.Text("debug.editConfiguration")
+		action.command = "debug.start"
+		action.button = i18n.Text("debug.runAndDebug")
 	}
 	p.idle = action
 	a.refreshDebugControls()
+}
+
+func (a *App) currentFileDebugTarget() (dap.Target, bool) {
+	g := a.EditorGroup
+	if g == nil || g.ActiveBuffer() == nil || g.IsActiveVirtual() || g.ActiveDiffWidget() != nil {
+		return dap.Target{}, false
+	}
+	path := g.ActiveFilePath()
+	if !filepath.IsAbs(path) {
+		return dap.Target{}, false
+	}
+	language := a.debugLanguage(path)
+	folder := filepath.Dir(path)
+	if owner := a.Workspace.FolderForFile(path); owner != nil {
+		folder = owner.Path
+	}
+	for _, name := range slices.Sorted(maps.Keys(a.Settings.Debug.Adapters)) {
+		entry := a.Settings.Debug.Adapters[name]
+		if !slices.Contains(entry.Languages, language) {
+			continue
+		}
+		target := dap.Target{Type: name, Request: "launch", Folder: folder, Name: filepath.Base(path)}
+		provider, err := providers.For(target, a.Settings.Debug.Adapters)
+		if err != nil {
+			continue
+		}
+		launcher, ok := provider.(interface{ FileLaunchArguments(string) map[string]any })
+		if !ok {
+			continue
+		}
+		target.Arguments = launcher.FileLaunchArguments(path)
+		return target, true
+	}
+	return dap.Target{}, false
+}
+
+func (a *App) debugFile() {
+	if a.debugger.run != nil || a.Root.HasModalOverlay() {
+		return
+	}
+	target, ok := a.currentFileDebugTarget()
+	if !ok {
+		a.StatusWarn(i18n.Text("debug.fileUnavailable"))
+		return
+	}
+	if a.debugger.picker != nil {
+		a.debugger.picker.Stop()
+	}
+	if a.EditorGroup.IsDirtyPath(a.EditorGroup.ActiveFilePath()) {
+		a.ShowConfirmDialog(i18n.Format("debug.saveFile", i18n.Args{"filename": target.Name}),
+			[]string{i18n.Text("general.cancel"), i18n.Text("general.save")},
+			[]func(){a.DismissDialog, func() { a.DismissDialog(); a.saveFile(func() { a.prepareDebugTarget(target) }) }})
+		return
+	}
+	a.prepareDebugTarget(target)
 }
 
 func (a *App) configureDebugger() {

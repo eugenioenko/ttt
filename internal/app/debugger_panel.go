@@ -106,15 +106,20 @@ func debugSectionSplit(top, bottom ui.Widget, ratio float64, minTop int) *ui.Con
 }
 
 type debugControlState struct {
-	active, paused, ready, attached bool
-	idle                            debugIdleAction
+	active, paused, ready, attached, fileReady bool
+	idle                                       debugIdleAction
 }
 
 func (a *App) refreshDebugControls() {
 	p := &a.debugger.panel
+	if p.toolbar == nil {
+		return
+	}
 	state := debugControlState{idle: p.idle}
 	if r := a.debugger.run; r != nil {
 		state = debugControlState{active: true, paused: r.thread != nil, ready: r.ready, attached: r.attached}
+	} else {
+		_, state.fileReady = a.currentFileDebugTarget()
 	}
 	if p.controls == state && len(p.toolbar.Children) > 0 {
 		return
@@ -127,8 +132,9 @@ func (a *App) refreshDebugControls() {
 		p.toolbar.Children = append(p.toolbar.Children, b)
 	}
 	if !state.active {
-		p.toolbar.Children = append(p.toolbar.Children, widgets.NewLabelWidget(widgets.LabelConfig{Text: p.idle.label, Style: term.StyleMuted}))
 		button(p.idle.command, p.idle.button, "", true)
+		p.toolbar.Children = append(p.toolbar.Children, widgets.NewBoxWidget(widgets.BoxModel{}))
+		button("debug.file", i18n.Text("debug.file"), "", state.fileReady)
 	} else {
 		button("debug.stepOver", i18n.Text("debug.stepOverButton"), icons.DebugStepOver, state.ready && state.paused)
 		button("debug.stepIn", i18n.Text("debug.stepInButton"), icons.DebugStepIn, state.ready && state.paused)

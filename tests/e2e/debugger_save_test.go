@@ -10,6 +10,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -78,12 +79,13 @@ func TestDebugPanelAvailableBeforeConfiguration(t *testing.T) {
 		t.Fatal("Debug missing from sidebar on startup")
 	}
 	h.exec("sidebar.debug")
-	h.assertContains("Create configuration")
+	h.assertContains("Configure")
+	h.assertContains("Debug File")
 	h.assertContains("Breakpoints")
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 	path := filepath.Join(h.dir, ".ttt", "launch.json")
 	if h.app.EditorGroup.ActiveFilePath() != path || h.app.Root.Focused != h.app.EditorGroup {
-		t.Fatal("Create configuration did not open launch.json for editing")
+		t.Fatal("Configure did not open launch.json for editing")
 	}
 }
 
@@ -95,7 +97,8 @@ func TestDebugSetupOpensExistingVSCodeConfiguration(t *testing.T) {
 	path := filepath.Join(dir, "launch.json")
 	requireNoError(t, os.WriteFile(path, []byte("{"), 0644))
 	h.exec("sidebar.debug")
-	h.assertContains("Edit configuration")
+	h.assertContains("Configure")
+	h.assertContains("Debug File")
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 	if h.app.EditorGroup.ActiveFilePath() != path {
 		t.Fatal("did not open existing launch file")
@@ -142,7 +145,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 		t.Fatalf("missing %s", label)
 		return -1
 	}
-	controls, variables := row("Create configuration"), row("Variables")
+	controls, variables := row("Configure"), row("Variables")
 	for _, label := range []string{"Call Stack", "Breakpoints"} {
 		from := row(label) - 1
 		for _, event := range []struct {
@@ -153,7 +156,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 			h.redraw()
 		}
 		h.exec("debug.toggleBreakpoint")
-		if row(label) != from-1 || row("Create configuration") != controls || row("Variables") != variables {
+		if row(label) != from-1 || row("Configure") != controls || row("Variables") != variables {
 			t.Fatalf("dragging divider above %s moved toolbar or failed to resize section", label)
 		}
 	}
@@ -170,7 +173,8 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 	h.exec("sidebar.debug")
 	h.exec("debug.toggleBreakpoint")
 	for _, dot := range []rune{'⦁', '\uf111'} {
-		h.assertContains("Create configuration")
+		h.assertContains("Configure")
+		h.assertContains("Debug File")
 		mark, ok := h.app.EditorGroup.Editor.VisibleBookmark(0)
 		if !ok || mark.Icon != dot || mark.Style != term.StyleDebugBreakpoint || strings.Count(h.screenText(), string(dot)) < 2 {
 			t.Fatalf("expected a red %c in the gutter and the matching breakpoint list icon", dot)
@@ -200,4 +204,28 @@ func TestDebugGutterRequiresConfiguredLanguage(t *testing.T) {
 	if _, ok := g.Editor.VisibleBookmark(0); !ok {
 		t.Fatal("C breakpoint missing")
 	}
+}
+
+func TestDebugFileButtonPromptsBeforeLaunchingDirtySource(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+	path := filepath.Join(h.dir, "test.js")
+	requireNoError(t, os.WriteFile(path, []byte("console.log(1)"), 0600))
+	h.app.Settings.Debug.Adapters["node"] = debugadapter.Config{Provider: "jsdebug", Languages: []string{"javascript"}}
+	h.openFile(path)
+	h.pressRune(' ')
+	h.exec("sidebar.debug")
+	for y := range 40 {
+		row := h.screenRow(y)
+		if x := strings.Index(row, "Debug File"); x >= 0 {
+			h.click(textwidth.String(row[:x])+2, y)
+			h.assertContains("Save test.js before debugging?")
+			h.pressKey(tcell.KeyEsc, tcell.ModNone)
+			if !h.app.EditorGroup.IsDirtyPath(path) {
+				t.Fatal("cancel discarded pending edits")
+			}
+			return
+		}
+	}
+	t.Fatal("Debug File button missing")
 }

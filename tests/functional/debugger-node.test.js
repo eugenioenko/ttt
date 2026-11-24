@@ -68,3 +68,29 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     expect(snapshots[output]).toContain("[debug:TS] TS_DONE 43");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 70000);
+
+it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("Debug File runs the active JavaScript file with or without a saved Go target", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ttt-debug-file-"));
+  try {
+    const file = join(dir, "test.js");
+    writeFileSync(file, 'console.log("JS_FILE_RAN");\n');
+    for (const hasTarget of [false, true]) {
+      if (hasTarget) {
+        mkdirSync(join(dir, ".ttt"));
+        writeFileSync(join(dir, ".ttt", "launch.json"), JSON.stringify({
+          configurations: [{ name: "Launch Go", type: "go", request: "launch", program: "." }],
+        }));
+      }
+      tui.start(dir, file);
+      configureDebugAdapters(dir);
+      tui.exec("Show Debug");
+      const idle = tui.snapshot();
+      tui.exec("Debug File");
+      tui.panel("output");
+      tui.waitFor("[debug:test.js] JS_FILE_RAN");
+      const { snapshots } = tui.run(30000);
+      const row = snapshots[idle].split("\n").find(line => line.includes("Debug File"));
+      expect(row).toContain(hasTarget ? "Run & Debug" : "Configure");
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 70000);

@@ -380,6 +380,10 @@ The default `provider` is `generic`, including for familiar type names. Set it e
 
 Adapters connected over stdio or a session-owned private socket can request an integrated terminal. TCP connections and adapter-selected socket paths cannot start local terminal commands. Socket adapters can request a child session of the same adapter type. The Debug sidebar inspects one active target at a time.
 
+**Debug File** launches the saved active file using a configured js-debug, debugpy or Delve provider. It works with or without a launch configuration. Delve launches the containing package and uses test mode for `_test.go` files. Node runs the selected file using the installed runtime. TypeScript projects that require a build or loader can specify those launch arguments in a saved target.
+
+The other toolbar button is **Configure** when there are no saved targets. It opens or creates the launch file. With saved targets it becomes **Run & Debug**, which starts the only target or lets you pick among several.
+
 ## LSP
 
 | Key | Type | Default | Description |
