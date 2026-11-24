@@ -646,6 +646,12 @@ func TestPluginFilesystemAPI_ParentCreationThroughSymlinks(t *testing.T) {
 
 	escape := filepath.Join(themes, "escape")
 	requireNoError(t, os.Symlink(outside, escape))
+	canonical, err := filepath.EvalSymlinks(configDir)
+	requireNoError(t, err)
+	if root, err := openPluginWriteAnchor(filepath.Join(canonical, "themes", "escape")); err == nil {
+		root.Close()
+		t.Fatal("opening a canonical anchor followed a substituted symlink")
+	}
 	if err := api.WriteFile(filepath.Join(escape, "missing", "theme.json"), "{}"); err == nil {
 		t.Fatal("write through a symlink created directories outside the grant")
 	}

@@ -523,7 +523,18 @@ func (r fsRoots) writeWithParents(path string, data []byte, writeErr error) erro
 		return fmt.Errorf("access denied: missing parents of %q are outside allowed directories", path)
 	}
 
-	root, err := os.OpenRoot(real)
+	anchor := real
+	if !r.all {
+		for _, grant := range r.dirs {
+			rel, err := filepath.Rel(grant, real)
+			if err == nil && filepath.IsLocal(rel) {
+				anchor = grant
+				missing = filepath.Join(rel, missing)
+				break
+			}
+		}
+	}
+	root, err := openPluginWriteAnchor(anchor)
 	if err != nil {
 		return err
 	}
@@ -533,22 +544,11 @@ func (r fsRoots) writeWithParents(path string, data []byte, writeErr error) erro
 		if err := root.Mkdir(first, 0755); err != nil {
 			return err
 		}
-		created, err := root.Lstat(first)
-		if err != nil {
-			return err
-		}
-		granted, err := root.OpenRoot(first)
+		granted, err := openPluginWriteDir(root, first)
 		if err != nil {
 			return err
 		}
 		defer granted.Close()
-		opened, err := granted.Stat(".")
-		if err != nil {
-			return err
-		}
-		if !created.IsDir() || !os.SameFile(created, opened) {
-			return fmt.Errorf("access denied: write root for %q changed", path)
-		}
 		root, missing = granted, rest
 	}
 	if missing != "" {
@@ -557,6 +557,57 @@ func (r fsRoots) writeWithParents(path string, data []byte, writeErr error) erro
 		}
 	}
 	return root.WriteFile(filepath.Join(missing, name), data, 0644)
+}
+
+func openPluginWriteAnchor(path string) (*os.Root, error) {
+	volume := filepath.VolumeName(path) + string(filepath.Separator)
+	root, err := os.OpenRoot(volume)
+	if err != nil {
+		return nil, err
+	}
+	rel, err := filepath.Rel(volume, path)
+	if err != nil {
+		root.Close()
+		return nil, err
+	}
+	if rel == "." {
+		return root, nil
+	}
+	// The anchor is already canonical. Reject any component that has become
+	// a symlink instead of following it from a broader directory handle.
+	for _, name := range strings.Split(rel, string(filepath.Separator)) {
+		next, err := openPluginWriteDir(root, name)
+		root.Close()
+		if err != nil {
+			return nil, err
+		}
+		root = next
+	}
+	return root, nil
+}
+
+func openPluginWriteDir(root *os.Root, name string) (*os.Root, error) {
+	before, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !before.IsDir() {
+		return nil, fmt.Errorf("access denied: %q is not a regular directory", name)
+	}
+	dir, err := root.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+	after, err := dir.Stat(".")
+	if err != nil {
+		dir.Close()
+		return nil, err
+	}
+	if !os.SameFile(before, after) {
+		dir.Close()
+		return nil, fmt.Errorf("access denied: directory %q changed", name)
+	}
+	return dir, nil
 }
 
 func (f *PluginFilesystemAPI) FileExists(path string) bool {
