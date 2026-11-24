@@ -1,11 +1,15 @@
 package app
 
 import (
+	"os"
+	"runtime"
+
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 )
 
 func (a *App) ToggleTerminal() {
@@ -163,6 +167,14 @@ func (a *App) showKeybindings(commandID string) {
 	}
 	w.GetDefault = func(cmdID string) string {
 		return defaults[cmdID]
+	}
+	if runtime.GOOS == "darwin" && os.Getenv("TERM_PROGRAM") == "Apple_Terminal" && os.Getenv("TMUX") == "" {
+		w.GetShortcutAlias = func(cmdID, shortcut string) string {
+			if cmdID == "editor.toggleComment" && shortcut == defaults[cmdID] && a.Root.ControlModifiers&tcell.ModCtrl != 0 {
+				return "Ctrl+Shift+-"
+			}
+			return ""
+		}
 	}
 	w.OnEdit = func(cmdID string, newKey string) {
 		filtered := make([]config.KeyBinding, 0, len(a.Keybindings))

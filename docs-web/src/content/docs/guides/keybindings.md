@@ -44,7 +44,7 @@ TTT can accept Cmd in place of Ctrl, or accept either modifier. Your terminal mu
 | Ctrl+G | Go to line |
 | Ctrl+Up | Scroll line up (viewport only) |
 | Ctrl+Down | Scroll line down (viewport only) |
-| Ctrl+/ | Toggle comment |
+| Ctrl+/ | [Toggle comment](/guides/editor/#toggle-comment) |
 | Ctrl+K J | Join lines |
 | Ctrl+K K | Delete line |
 | Ctrl+K O | Sort lines ascending |

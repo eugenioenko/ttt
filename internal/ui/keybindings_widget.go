@@ -19,6 +19,7 @@ type KeybindingsWidget struct {
 	OnDismiss        func()
 	GetShortcut      func(cmdID string) string
 	GetDefault       func(cmdID string) string
+	GetShortcutAlias func(cmdID, shortcut string) string
 	OnEdit           func(cmdID string, newKey string)
 	OnReset          func(cmdID string)
 	OnClear          func(cmdID string)
@@ -200,7 +201,6 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 	for x := boxX + 1; x < boxX+boxW-1; x++ {
 		surface.SetCell(x, dividerY, term.Cell{Ch: b.Horizontal, Style: term.StyleBorder})
 	}
-
 	footerY := boxY + boxH - 2
 	surface.ClearRect(boxX+1, footerY, boxW-2, 1, term.StyleDefault)
 	ox, oy := surface.Origin()
@@ -228,18 +228,29 @@ func (w *KeybindingsWidget) renderShortcut(surface Surface, y, contentRight int,
 	}
 
 	display := shortcut
+	if alias := w.shortcutAlias(item.CmdID, shortcut); alias != "" {
+		display = alias
+	}
 	if modified {
-		display = "* " + shortcut
+		display = "* " + display
 	}
 
 	sx := contentRight - 1 - textwidth.String(display)
 	if sx > w.boxX+1 {
+		surface.SetCell(sx-1, y, term.Cell{Ch: ' ', Style: style})
 		detailStyle := term.StyleMuted
 		if style == term.StylePaletteSelected {
 			detailStyle = style
 		}
 		surface.DrawText(sx, y, display, contentRight-1, detailStyle)
 	}
+}
+
+func (w *KeybindingsWidget) shortcutAlias(cmdID, shortcut string) string {
+	if w.GetShortcutAlias == nil || shortcut == "" {
+		return ""
+	}
+	return w.GetShortcutAlias(cmdID, shortcut)
 }
 
 func (w *KeybindingsWidget) renderFooterActions(surface Surface, y, ox, oy int) {
@@ -565,8 +576,8 @@ func (w *KeybindingsWidget) filter() {
 			if w.GetShortcut != nil {
 				shortcut = w.GetShortcut(item.CmdID)
 			}
-			if shortcut != "" {
-				if ok, score := fuzzyMatch(query, shortcut); ok {
+			for _, binding := range []string{shortcut, w.shortcutAlias(item.CmdID, shortcut)} {
+				if ok, score := fuzzyMatch(query, binding); ok {
 					if !bestOk || score > bestScore {
 						bestOk = true
 						bestScore = score
