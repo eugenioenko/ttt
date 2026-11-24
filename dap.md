@@ -6,7 +6,7 @@ ttt supports one active launch or attach session for Go, Node.js/TypeScript, or 
 
 Open **View → Debug** to see the sidebar before starting a session. Choose **Start Debugging** there to run a configured target.
 
-With the Debug sidebar selected, click the bookmark gutter or run **Toggle Breakpoint**. Run **Start Debugging** and choose a target if several are configured. ttt saves modified file-backed tabs in the selected folder before starting the adapter. At a stop, use the Debug sidebar to expand variables, select a stack frame, and step or continue. Output appears under `debug:<target name>`. Use **Stop Debugging** for a launched program and **Detach Debugger** for an independently started program.
+Click the bookmark gutter to toggle a breakpoint. If a plugin handles gutter clicks, select the Debug sidebar first or use **Toggle Breakpoint**. Run **Start Debugging** and choose a target if several are configured. ttt saves modified file-backed tabs in the selected folder before starting the adapter. At a stop, use the Debug sidebar to expand variables, select a stack frame, and step or continue. Output appears under `debug:<target name>`. Use **Stop Debugging** for a launched program and **Detach Debugger** for an independently started program.
 
 | Provider | Setup | Launch | Attach by address |
 | --- | --- | --- | --- |
@@ -121,7 +121,7 @@ The Debug sidebar offers the configuration picker, Start or Attach, and session 
 
 Reveal the sidebar on start and keep editor keyboard focus on a breakpoint hit. Keep Stop or Detach available during startup. Program output belongs in the bottom Output panel when supplied by the adapter. For an attached program whose output belongs to another terminal, indicate where to look when known.
 
-The Debug view uses the existing bookmark column to toggle breakpoints. The current execution line shows a chevron (›). It takes visual precedence over a breakpoint, and a breakpoint takes precedence over a bookmark. Removing a breakpoint reveals the underlying bookmark. Outside the Debug view, gutter clicks retain plugin and fold handling. **Toggle Breakpoint** works from any view.
+The Debug view uses the existing bookmark column to toggle breakpoints. The current execution line shows a chevron (›). It takes visual precedence over a breakpoint, and a breakpoint takes precedence over a bookmark. Removing a breakpoint reveals the underlying bookmark. Outside the Debug view, plugins listening for gutter clicks take priority. With no listener, clicking the bookmark column in a source file toggles a breakpoint. **Toggle Breakpoint** works from any view.
 
 Expose start, continue, pause, stop, stepping and toggle-breakpoint commands through the normal command registry. F10 already opens the File menu. Prototype stepping through the palette and choose defaults after checking terminal focus, existing bindings, and discoverability. Existing debug.* developer tools already use distinct command IDs. Product debugger commands must be available in ordinary builds.
 

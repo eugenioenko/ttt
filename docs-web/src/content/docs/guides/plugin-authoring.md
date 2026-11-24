@@ -2526,7 +2526,7 @@ over the bookmark. Plugins can still read and update the underlying bookmark,
 and removing the breakpoint reveals its current icon.
 
 Outside that interaction, a click goes to plugins listening for `gutter.click`.
-With no listener the editor handles the click, including toggling a fold.
+With no listener, clicking the bookmark column in a source file toggles a breakpoint even when the Debug sidebar is hidden.
 
 ## Editor Context Menu
 
