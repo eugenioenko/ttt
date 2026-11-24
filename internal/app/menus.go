@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/i18n"
@@ -475,4 +476,23 @@ func openEditorContextMenu(app *App, mx, my int) {
 	}
 	app.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
 	app.Root.SetFocus(menu)
+}
+
+func (a *App) showWidgetMenu(entries []widgets.MenuEntry, x, y int, onCommand func(string)) {
+	items := contextMenuItemsFromWidgetEntries(entries)
+	a.captureMenuFocus()
+	menu := ui.NewContextMenuWidget(items, x, y)
+	menu.Borders = a.Borders
+	menu.Icons = a.Settings.Appearance.Icons
+	menu.OnExec = func(cmd string) {
+		a.Root.PopOverlay()
+		a.restoreMenuFocus()
+		onCommand(cmd)
+	}
+	menu.OnDismiss = func() {
+		a.Root.PopOverlay()
+		a.restoreMenuFocus()
+	}
+	a.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
+	a.Root.SetFocus(menu)
 }

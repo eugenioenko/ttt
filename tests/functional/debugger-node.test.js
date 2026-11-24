@@ -29,6 +29,17 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     tui.click(6, 10);
     tui.waitFor("answer = 42");
     const expanded = tui.snapshot();
+    for (const [action, expected] of [["Copy Key", "answer"], ["Copy Value", "42"]]) {
+      tui.rclick(9, 11);
+      tui.waitFor(action);
+      if (action === "Copy Value") tui.press("down");
+      tui.press("enter");
+      tui.press("ctrl+p");
+      tui.type("copied-");
+      tui.press("ctrl+v");
+      tui.waitFor("copied-" + expected);
+      tui.press("esc");
+    }
     tui.exec("Debug: Step Over");
     tui.waitFor("app.ts:4");
     const stepped = tui.snapshot();

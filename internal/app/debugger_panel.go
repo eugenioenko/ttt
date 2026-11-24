@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -38,7 +39,7 @@ type debugSidebar struct {
 	controls                 debugControlState
 	frames                   []debugFrame
 	scopes                   []*widgets.TreeNode
-	references               map[*widgets.TreeNode]int
+	values                   map[*widgets.TreeNode]debugVariable
 	frameNodes               map[*widgets.TreeNode]debugFrame
 	breakNodes               map[*widgets.TreeNode]debugLocation
 	epoch                    uint64
@@ -70,6 +71,7 @@ func (a *App) ensureDebugPanel() {
 		return tree
 	}
 	p.variables = section("vars", i18n.Text("debug.variables"))
+	p.variables.Config.OnMenu = a.showDebugVariableMenu
 	p.stack = section("stack", i18n.Text("debug.stack"))
 	p.points = section("points", i18n.Text("debug.breakpoints"))
 	p.toolbar = widgets.NewHStackWidget()
@@ -203,7 +205,7 @@ func (a *App) clearDebugInspection() {
 	p.threads = nil
 	p.frames = nil
 	p.scopes = nil
-	p.references = nil
+	p.values = nil
 	a.debugger.stoppedFile = ""
 	a.refreshDebugPanel()
 }
@@ -253,7 +255,7 @@ func (a *App) loadDebugStack(r *debugRun, tid int, executing bool) {
 	r.lastThread = tid
 	p.frames = nil
 	p.scopes = nil
-	p.references = nil
+	p.values = nil
 	a.refreshDebugPanel()
 	debugQuery(a, r, "stackTrace", map[string]int{"threadId": *r.thread, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
 		p := &a.debugger.panel
@@ -277,7 +279,7 @@ func (a *App) inspectDebugFrame(f debugFrame) {
 	p := &a.debugger.panel
 	p.epoch++
 	p.scopes = nil
-	p.references = make(map[*widgets.TreeNode]int)
+	p.values = make(map[*widgets.TreeNode]debugVariable)
 	if f.Source.Path != "" && f.Line > 0 {
 		a.revealDebugLocation(f.Source.Path, f.Line)
 	}
@@ -292,7 +294,7 @@ func (a *App) inspectDebugFrame(f debugFrame) {
 		for _, scope := range result.Scopes {
 			n := &widgets.TreeNode{ID: fmt.Sprintf("scope:%d", scope.VariablesReference), Label: scope.Name, Expandable: scope.VariablesReference != 0, Expanded: !scope.Expensive}
 			p.scopes = append(p.scopes, n)
-			p.references[n] = scope.VariablesReference
+			p.values[n] = debugVariable{VariablesReference: scope.VariablesReference}
 			if n.Expanded {
 				a.expandDebugNode(n)
 			}
@@ -308,7 +310,7 @@ func (a *App) expandDebugNode(n *widgets.TreeNode) {
 		}
 		return
 	}
-	ref := p.references[n]
+	ref := p.values[n].VariablesReference
 	if ref == 0 || len(n.Children) > 0 || a.debugger.run == nil {
 		return
 	}
@@ -317,7 +319,7 @@ func (a *App) expandDebugNode(n *widgets.TreeNode) {
 		for i, v := range result.Variables {
 			child := &widgets.TreeNode{ID: fmt.Sprintf("%s/%d", n.ID, i), Label: v.Name + " = " + v.Value, Expandable: v.VariablesReference != 0}
 			n.Children = append(n.Children, child)
-			p.references[child] = v.VariablesReference
+			p.values[child] = v
 		}
 		p.variables.SetItems(p.variables.Config.Items)
 	})
@@ -339,4 +341,23 @@ func (a *App) revealDebugLocation(path string, line int) {
 	}
 	a.EditorGroup.GoToLine(line)
 	a.Root.SetFocus(a.EditorGroup)
+}
+
+func (a *App) showDebugVariableMenu(_ []widgets.MenuEntry, n *widgets.TreeNode, x, y int) {
+	p := &a.debugger.panel
+	v, ok := p.values[n]
+	if !ok || slices.Contains(p.scopes, n) {
+		return
+	}
+	a.showWidgetMenu([]widgets.MenuEntry{
+		{Label: i18n.Text("debug.copyKey"), Command: "copyKey"},
+		{Label: i18n.Text("debug.copyValue"), Command: "copyValue"},
+	}, x, y, func(command string) {
+		switch command {
+		case "copyKey":
+			clipboard.Set(v.Name)
+		case "copyValue":
+			clipboard.Set(v.Value)
+		}
+	})
 }
