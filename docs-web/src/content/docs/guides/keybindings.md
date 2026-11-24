@@ -156,11 +156,19 @@ Panel taller and Panel shorter remain available in the command palette and can b
 | R | Refresh |
 | Enter | Open diff / activate |
 
+### Debugging
+
+| Shortcut | Action |
+|----------|--------|
+| F10 | Step Over |
+| F11 | Step Into |
+| Shift+F11 | Step Out |
+
 ### Menu Bar
 
 | Shortcut | Action |
 |----------|--------|
-| F10 / Alt+F | File menu |
+| Alt+F | File menu |
 | Alt+E | Edit menu |
 | Alt+S | Selection menu |
 | Alt+V | View menu |

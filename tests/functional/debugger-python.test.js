@@ -28,13 +28,13 @@ it.skipIf(!python)("debugs a module with a dependency from its workspace virtual
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();
-    tui.exec("Debug: Step In");
+    tui.press("f11");
     tui.waitFor("emit  appmod.py:7");
     tui.waitFor("value = 42");
-    tui.exec("Debug: Step Out");
+    tui.press("shift+f11");
     tui.waitFor("local = 42");
     const returned = tui.snapshot();
-    tui.exec("Debug: Step Over");
+    tui.press("f10");
     tui.waitFor("report  appmod.py:5");
     tui.exec("Debug: Continue");
     tui.panel("output");
