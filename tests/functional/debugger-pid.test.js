@@ -30,8 +30,8 @@ async function checkPID(type, picker) {
       '  i++;', '}, 25);',
     ] : [
       'import ctypes, os, pathlib, time', 'assert ctypes.CDLL(None).prctl(0x59616d61, os.getppid(), 0, 0, 0) == 0',
-      'i = 0', 'while True:', '    value = 40 + 2', '    pathlib.Path("heartbeat").write_text(str(i + value))',
-      '    i += 1', '    time.sleep(0.025)',
+      'def run():', '  i = 0', '  while True:', '    value = 40 + 2', '    pathlib.Path("heartbeat").write_text(str(i + value))',
+      '    i += 1', '    time.sleep(0.025)', 'run()',
     ];
     writeFileSync(file, lines.join("\n"));
     const exe = go ? join(dir, "go-pid-fixture") : node ? process.execPath : python;
@@ -44,7 +44,7 @@ async function checkPID(type, picker) {
     writeFileSync(join(dir, ".ttt/launch.json"), JSON.stringify({
       configurations: [{ name: "Attach", type, request: "attach", processId: picker ? "${command:pickProcess}" : child.pid, ...(type === "debugpy" ? {python} : {}) }],
     }));
-    const line = go ? 7 : node ? 5 : 6;
+    const line = go ? 7 : node ? 5 : 7;
     tui.start(dir, file);
     tui.exec("Show Debug");
     tui.click(32, 3 + line);

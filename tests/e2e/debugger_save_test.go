@@ -77,3 +77,35 @@ func TestDebugPanelAvailableBeforeConfiguration(t *testing.T) {
 		t.Fatal("Start action did not explain where to define a target")
 	}
 }
+
+func TestDebugSidebarSectionDividers(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
+	h.exec("sidebar.debug")
+	row := func(label string) int {
+		t.Helper()
+		for y := 0; y < 40; y++ {
+			if strings.Contains(h.screenRow(y), label) {
+				return y
+			}
+		}
+		t.Fatalf("missing %s", label)
+		return -1
+	}
+	controls, variables := row("Start Debugging"), row("Variables")
+	for _, label := range []string{"Call Stack", "Breakpoints"} {
+		from := row(label) - 1
+		for _, event := range []struct {
+			y      int
+			button tcell.ButtonMask
+		}{{from, tcell.Button1}, {from - 2, tcell.Button1}, {from - 2, tcell.ButtonNone}} {
+			h.app.Root.HandleEvent(tcell.NewEventMouse(8, event.y, event.button, tcell.ModNone))
+			h.redraw()
+		}
+		h.exec("debug.toggleBreakpoint")
+		if row(label) != from-1 || row("Start Debugging") != controls || row("Variables") != variables {
+			t.Fatalf("dragging divider above %s moved toolbar or failed to resize section", label)
+		}
+	}
+}

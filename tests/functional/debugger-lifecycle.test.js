@@ -34,7 +34,7 @@ for (const fixture of fixtures) {
         tui.panel("output");
         tui.waitFor("[debug:Lifecycle] TARGET_READY");
         tui.exec("Debug: Pause");
-        tui.waitFor("Debug: Step Over");
+        tui.waitFor("[Continue]");
         if (action === "stop") {
           tui.exec("Stop Debugging");
           tui.waitFor("Debug session ended");

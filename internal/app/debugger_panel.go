@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -30,15 +30,18 @@ type debugThread struct {
 	Name string
 }
 type debugSidebar struct {
-	threads     []debugThread
-	threadNodes map[*widgets.TreeNode]int
-	tree        *widgets.TreeWidget
-	frames      []debugFrame
-	scopes      []*widgets.TreeNode
-	references  map[*widgets.TreeNode]int
-	frameNodes  map[*widgets.TreeNode]debugFrame
-	breakNodes  map[*widgets.TreeNode]debugLocation
-	epoch       uint64
+	threads                  []debugThread
+	threadNodes              map[*widgets.TreeNode]int
+	variables, stack, points *widgets.TreeWidget
+	primary, secondary       *widgets.HStackWidget
+	adapter                  *ui.WidgetAdapter
+	controls                 debugControlState
+	frames                   []debugFrame
+	scopes                   []*widgets.TreeNode
+	references               map[*widgets.TreeNode]int
+	frameNodes               map[*widgets.TreeNode]debugFrame
+	breakNodes               map[*widgets.TreeNode]debugLocation
+	epoch                    uint64
 }
 type debugLocation struct {
 	path string
@@ -47,15 +50,11 @@ type debugLocation struct {
 
 func (a *App) ensureDebugPanel() {
 	p := &a.debugger.panel
-	if p.tree != nil {
+	if p.adapter != nil {
 		return
 	}
-	p.tree = widgets.NewTreeWidget(widgets.TreeConfig{Indent: 2, OnExpand: a.expandDebugNode, OnCommand: func(cmd string, n *widgets.TreeNode) {
+	config := widgets.TreeConfig{Indent: 2, OnExpand: a.expandDebugNode, OnCommand: func(cmd string, n *widgets.TreeNode) {
 		if cmd != "activate" {
-			return
-		}
-		if n != nil && strings.HasPrefix(n.ID, "debug.") {
-			a.Reg.Execute(n.ID)
 			return
 		}
 		if f, ok := p.frameNodes[n]; ok {
@@ -64,16 +63,88 @@ func (a *App) ensureDebugPanel() {
 		if b, ok := p.breakNodes[n]; ok {
 			a.revealDebugLocation(b.path, b.line)
 		}
-	}})
-	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), ui.NewWidgetAdapter(p.tree))
+	}}
+	section := func(id, label string) *widgets.TreeWidget {
+		tree := widgets.NewTreeWidget(config)
+		tree.SetItems([]*widgets.TreeNode{{ID: id, Label: label, Expanded: true, LabelStyle: term.StyleHoverBold}})
+		return tree
+	}
+	p.variables = section("vars", i18n.Text("debug.variables"))
+	p.stack = section("stack", i18n.Text("debug.stack"))
+	p.points = section("points", i18n.Text("debug.breakpoints"))
+	p.primary = widgets.NewHStackWidget()
+	p.secondary = widgets.NewHStackWidget()
+	for _, row := range []*widgets.HStackWidget{p.primary, p.secondary} {
+		row.FixedHeight = 1
+		row.Gap = 1
+	}
+	inspection := debugSectionSplit(p.variables, p.stack, 0.5, 2)
+	sections := debugSectionSplit(inspection, p.points, 0.25, 5)
+	a.refreshDebugControls()
+	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.primary, p.secondary, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
+	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), p.adapter)
 	a.refreshDebugPanel()
 }
-func (a *App) refreshDebugPanel() {
+
+func debugSectionSplit(top, bottom ui.Widget, ratio float64, minTop int) *ui.ContentSplitWidget {
+	split := ui.NewContentSplitWidget()
+	split.Top, split.Bottom = top, bottom
+	split.ShowBottom = true
+	split.BottomH, split.BottomRatio = 0, ratio
+	split.MinTopH, split.MinBottomH = minTop, 2
+	split.OnResize = func(h int) { split.BottomH = h }
+	return split
+}
+
+type debugControlState struct{ active, paused, ready, attached bool }
+
+func (a *App) refreshDebugControls() {
 	p := &a.debugger.panel
-	if p.tree == nil {
+	state := debugControlState{}
+	if r := a.debugger.run; r != nil {
+		state = debugControlState{active: true, paused: r.thread != nil, ready: r.ready, attached: r.attached}
+	}
+	if p.controls == state && len(p.primary.Children) > 0 {
 		return
 	}
-	stack := &widgets.TreeNode{ID: "stack", Label: i18n.Text("debug.stack"), Expanded: true}
+	p.controls = state
+	p.primary.Children = nil
+	p.secondary.Children = nil
+	button := func(row *widgets.HStackWidget, id, label string, enabled bool) {
+		b := widgets.NewButtonWidget(widgets.ButtonConfig{Label: label, Command: id, Variant: widgets.ButtonBracket, Box: &widgets.BoxModel{}, OnCommand: func(cmd string) { a.Reg.Execute(cmd) }})
+		b.Disabled = !enabled
+		row.Children = append(row.Children, b)
+	}
+	if !state.active {
+		button(p.primary, "debug.start", i18n.Text("debug.start"), true)
+	} else {
+		if state.paused {
+			button(p.primary, "debug.continue", i18n.Text("debug.continueButton"), state.ready)
+		} else {
+			button(p.primary, "debug.pause", i18n.Text("debug.pauseButton"), state.ready)
+		}
+		if state.attached {
+			button(p.primary, "debug.detach", i18n.Text("debug.detachButton"), true)
+		} else {
+			button(p.primary, "debug.stop", i18n.Text("debug.stopButton"), true)
+		}
+		button(p.primary, "debug.stepOver", i18n.Text("debug.stepOverButton"), state.ready && state.paused)
+		button(p.secondary, "debug.stepIn", i18n.Text("debug.stepInButton"), state.ready && state.paused)
+		button(p.secondary, "debug.stepOut", i18n.Text("debug.stepOutButton"), state.ready && state.paused)
+	}
+	if p.adapter != nil {
+		p.adapter.RebuildFocus()
+	}
+}
+
+func (a *App) refreshDebugPanel() {
+	p := &a.debugger.panel
+	if p.adapter == nil {
+		return
+	}
+	a.refreshDebugControls()
+	stack := p.stack.Config.Items[0]
+	stack.Children = nil
 	p.frameNodes = make(map[*widgets.TreeNode]debugFrame)
 	p.threadNodes = make(map[*widgets.TreeNode]int)
 	frameParent := stack
@@ -95,7 +166,8 @@ func (a *App) refreshDebugPanel() {
 		frameParent.Children = append(frameParent.Children, node)
 		p.frameNodes[node] = f
 	}
-	points := &widgets.TreeNode{ID: "points", Label: i18n.Text("debug.breakpoints"), Expanded: true}
+	points := p.points.Config.Items[0]
+	points.Children = nil
 	p.breakNodes = make(map[*widgets.TreeNode]debugLocation)
 	for _, path := range slices.Sorted(maps.Keys(a.debugger.points)) {
 		for _, line := range slices.Sorted(maps.Keys(a.debugger.points[path])) {
@@ -124,36 +196,12 @@ func (a *App) refreshDebugPanel() {
 			p.breakNodes[n] = debugLocation{path, line}
 		}
 	}
-	vars := &widgets.TreeNode{ID: "vars", Label: i18n.Text("debug.variables"), Expanded: true, Children: p.scopes}
-	nodes := []*widgets.TreeNode{vars, stack, points}
-	ids := []string{"debug.start"}
-	if r := a.debugger.run; r != nil {
-		ids = nil
-		if r.ready {
-			if r.thread == nil {
-				ids = append(ids, "debug.pause")
-			} else {
-				ids = append(ids, "debug.continue", "debug.stepOver", "debug.stepIn", "debug.stepOut")
-			}
-		}
-		if r.attached {
-			ids = append(ids, "debug.detach")
-		} else {
-			ids = append(ids, "debug.stop")
-		}
+	p.variables.Config.Items[0].Children = p.scopes
+	for _, tree := range []*widgets.TreeWidget{p.variables, p.stack, p.points} {
+		tree.SetItems(tree.Config.Items)
 	}
-	for _, id := range ids {
-		if cmd, ok := a.Reg.Get(id); ok {
-			action := &widgets.TreeNode{ID: id, Label: cmd.Title}
-			if id == "debug.start" {
-				nodes = slices.Insert(nodes, 0, action)
-			} else {
-				nodes = append(nodes, action)
-			}
-		}
-	}
-	p.tree.SetItems(nodes)
 }
+
 func (a *App) clearDebugInspection() {
 	p := &a.debugger.panel
 	p.epoch++
@@ -276,7 +324,7 @@ func (a *App) expandDebugNode(n *widgets.TreeNode) {
 			n.Children = append(n.Children, child)
 			p.references[child] = v.VariablesReference
 		}
-		p.tree.SetItems(p.tree.Config.Items)
+		p.variables.SetItems(p.variables.Config.Items)
 	})
 }
 

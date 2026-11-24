@@ -26,14 +26,14 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();
-    tui.click(6, 8);
+    tui.click(6, 11);
     tui.waitFor("answer = 42");
     const expanded = tui.snapshot();
     tui.exec("Debug: Step Over");
     tui.waitFor("app.ts:4");
     const stepped = tui.snapshot();
     tui.waitFor("this = undefined");
-    tui.click(9, 14);
+    tui.click(9, 22);
     tui.waitFor("Ln 6, Col 1");
     const caller = tui.snapshot();
     tui.exec("Debug: Continue");
