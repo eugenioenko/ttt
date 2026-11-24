@@ -225,7 +225,9 @@ func SaveKeybindings(bindings []KeyBinding) error {
 
 	if len(out) == 0 {
 		path := ConfigFilePath("keybindings.json")
-		os.Remove(path)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 		return nil
 	}
 
@@ -236,7 +238,7 @@ func SaveKeybindings(bindings []KeyBinding) error {
 	}
 	data = append(data, '\n')
 	path := ConfigFilePath("keybindings.json")
-	return os.WriteFile(path, data, 0644)
+	return writeFileAtomically(path, data, 0644)
 }
 
 func stringSliceEqual(a, b []string) bool {
