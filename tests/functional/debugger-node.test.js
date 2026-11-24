@@ -10,7 +10,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
   try {
     const file = join(dir, "app.ts");
     writeFileSync(file, [
-      "function report(arg: number) {", "  const local = arg + 1;",
+      "function report(arg: number) {", "  const local = arg + 1; const payload = {answer: local};",
       '  console.log("TS_RESULT", local);', '  console.log("TS_DONE", local + 1);',
       "}", "report(41);", "",
     ].join("\n"));
@@ -25,11 +25,14 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();
+    tui.click(6, 8);
+    tui.waitFor("answer = 42");
+    const expanded = tui.snapshot();
     tui.exec("Debug: Step Over");
     tui.waitFor("app.ts:4");
     const stepped = tui.snapshot();
     tui.waitFor("this = undefined");
-    tui.click(9, 13);
+    tui.click(9, 14);
     tui.waitFor("Ln 6, Col 1");
     const caller = tui.snapshot();
     tui.exec("Debug: Continue");
@@ -38,6 +41,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     const output = tui.snapshot();
     const { snapshots } = tui.run(60000);
     expect(snapshots[stopped]).toContain("app.ts:3");
+    expect(snapshots[expanded]).toContain("answer = 42");
     expect(snapshots[stepped]).toContain("Ln 4, Col 1");
     expect(snapshots[caller]).toContain("app.ts");
     expect(snapshots[output]).toContain("[debug:TS] TS_DONE 43");
