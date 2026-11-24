@@ -9,7 +9,7 @@ import (
 	"runtime"
 )
 
-func (t Target) pythonArguments() (map[string]any, error) {
+func (t Target) defaultPython() string {
 	python := "python3"
 	envPath := filepath.Join(t.Folder, ".venv", "bin", "python")
 	if runtime.GOOS == "windows" {
@@ -19,7 +19,10 @@ func (t Target) pythonArguments() (map[string]any, error) {
 	if _, err := os.Stat(envPath); err == nil {
 		python = envPath
 	}
-	out := map[string]any{"cwd": t.Folder, "python": python, "console": "internalConsole", "redirectOutput": true, "subProcess": false}
+	return python
+}
+func (t Target) pythonArguments() (map[string]any, error) {
+	out := map[string]any{"cwd": t.Folder, "python": t.defaultPython(), "console": "internalConsole", "redirectOutput": true, "subProcess": false}
 	for key, val := range t.Arguments {
 		switch key {
 		case "name", "request", "type", "presentation":
@@ -72,7 +75,7 @@ func OpenAdapter(ctx context.Context, t Target, args map[string]any, onEvent fun
 	if t.Type == "node" || t.Type == "pwa-node" {
 		return openNodeAdapter(ctx, t, onEvent)
 	}
-	if t.Request == "attach" {
+	if _, pid := args["processId"]; t.Request == "attach" && !pid {
 		return connectAdapter(ctx, t, onEvent)
 	}
 	if t.Type == "go" {

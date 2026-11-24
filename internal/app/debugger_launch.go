@@ -72,7 +72,30 @@ func (a *App) StartDebugging() {
 		}, nil)
 	}
 }
+func (a *App) pickDebugProcess(t dap.Target) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	processes, err := dap.Processes(ctx)
+	if err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	items := make([]widgets.SelectItem, 0, len(processes))
+	for _, p := range processes {
+		id := strconv.Itoa(p.PID)
+		items = append(items, widgets.SelectItem{ID: id, Label: id + "  " + p.Name})
+	}
+	a.ShowSelectDialog(i18n.Text("debug.pickProcess"), items, func(id string) {
+		t.Arguments = maps.Clone(t.Arguments)
+		t.Arguments["processId"] = id
+		a.prepareDebugTarget(t)
+	}, nil)
+}
 func (a *App) prepareDebugTarget(t dap.Target) {
+	if t.Request == "attach" && (t.Type == "go" || t.Type == "debugpy" || t.Type == "node" || t.Type == "pwa-node") && t.Arguments["processId"] == dap.PickProcess {
+		a.pickDebugProcess(t)
+		return
+	}
 	args, err := t.LaunchArguments()
 	if err != nil {
 		a.StatusError(err.Error())

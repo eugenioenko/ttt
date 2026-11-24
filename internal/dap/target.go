@@ -53,6 +53,9 @@ func (t Target) LaunchArguments() (map[string]any, error) {
 		return t.nodeArguments()
 	}
 	if t.Request == "attach" && (t.Type == "go" || t.Type == "debugpy") {
+		if _, has := t.Arguments["processId"]; has {
+			return t.pidArguments()
+		}
 		return t.addressAttachArguments()
 	}
 	if t.Type == "debugpy" && t.Request == "launch" {

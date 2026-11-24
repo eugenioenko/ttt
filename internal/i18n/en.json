@@ -1,4 +1,5 @@
 {
+  "debug.pickProcess": "Select a Process to Debug",
   "debug.detach": "Detach Debugger",
   "debug.finished": "Debug session ended",
   "debug.panel": "Debug",
