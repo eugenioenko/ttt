@@ -1,6 +1,9 @@
 package app
 
 import (
+	"maps"
+	"slices"
+
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -73,7 +76,15 @@ func (a *App) createDebugConfiguration(folder string) {
 	if owner := a.Workspace.FolderForFile(source); owner == nil || owner.Path != folder || a.EditorGroup.ActiveBuffer() == nil || a.EditorGroup.IsActiveVirtual() {
 		source = ""
 	}
-	path, err := dap.CreateLaunchFile(folder, source)
+	adapter := ""
+	language := a.debugLanguage(source)
+	for _, name := range slices.Sorted(maps.Keys(a.Settings.Debug.Adapters)) {
+		if slices.Contains(a.Settings.Debug.Adapters[name].Languages, language) {
+			adapter = name
+			break
+		}
+	}
+	path, err := dap.CreateLaunchFile(folder, source, adapter, a.Settings.Debug.Adapters[adapter].Provider)
 	if err != nil {
 		a.StatusError(err.Error())
 		return

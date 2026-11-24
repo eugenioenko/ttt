@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import * as tui from "./tui.js";
+import { configureDebugAdapters } from "./debug-adapters.js";
 
 const hasDelve = spawnSync("dlv", ["version"], { stdio: "ignore" }).status === 0;
 
@@ -23,6 +24,7 @@ it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with
       configurations: [{ name: "Example", type: "go", request: "launch", program: "." }],
     }));
     tui.start(dir, file);
+    configureDebugAdapters(dir);
     tui.type("// saved by launch");
     tui.press("enter");
     tui.click(32, 9);

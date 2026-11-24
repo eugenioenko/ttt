@@ -1,17 +1,13 @@
 package dap
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"net"
-	"os/exec"
-	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -50,7 +46,6 @@ func (output adapterStderr) Write(data []byte) (int, error) {
 
 type Session struct {
 	options           SessionOptions
-	peerAddress       net.Addr
 	child             *Session
 	desired           map[string][]int
 	closing           bool
@@ -70,67 +65,11 @@ type Session struct {
 	breakpointFiles   map[string]bool
 }
 
-func ListenProcess(ctx context.Context, binary string, args []string, folder, prefix string, onEvent func(Event), options SessionOptions) (*Session, error) {
-	cmd := exec.Command(binary, args...)
-	isolateAdapter(cmd)
-	cmd.Dir = folder
-	cmd.Stderr = adapterStderr(onEvent)
-	cmd.WaitDelay = time.Second
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err = cmd.Start(); err != nil {
-		return nil, err
-	}
-	address := make(chan string, 1)
-	exited := make(chan struct{})
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			if addr, ok := strings.CutPrefix(scanner.Text(), prefix); ok {
-				select {
-				case address <- addr:
-				default:
-				}
-			}
-		}
-		_ = cmd.Wait()
-		close(exited)
-	}()
-	kill := func() { killAdapter(cmd); _ = stdout.Close(); <-exited }
-	var addr string
-	select {
-	case addr = <-address:
-	case <-ctx.Done():
-		kill()
-		return nil, ctx.Err()
-	case <-exited:
-		return nil, fmt.Errorf("%s exited before listening: %v", binary, cmd.ProcessState)
-	}
-	network := "tcp"
-	if filepath.IsAbs(addr) {
-		network = "unix"
-	}
-	conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
-	if err != nil {
-		kill()
-		return nil, err
-	}
-	return SocketSession(conn, func() {
-		select {
-		case <-exited:
-		case <-time.After(time.Second):
-			kill()
-		}
-	}, onEvent, options), nil
-}
-
 func newSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event)) *Session {
-	return makeSession(r, w, conn, kill, onEvent, nil, SessionOptions{})
+	return makeSession(r, w, conn, kill, onEvent, SessionOptions{})
 }
-func makeSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event), addr net.Addr, options SessionOptions) *Session {
-	s := &Session{options: options, peerAddress: addr, conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
+func makeSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event), options SessionOptions) *Session {
+	s := &Session{options: options, conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
 	return s
@@ -179,7 +118,11 @@ func (s *Session) read() {
 				s.onEvent(Event{p.Event, p.Body})
 			}
 		case "request":
-			if p.Command == "startDebugging" && s.options.ChildTarget != nil {
+			if p.Command == "runInTerminal" && s.options.RunInTerminal != nil {
+				go s.runTerminal(p)
+				continue
+			}
+			if p.Command == "startDebugging" && s.options.openChild != nil {
 				go s.startChild(p)
 				continue
 			}
@@ -204,6 +147,9 @@ func (s *Session) Call(ctx context.Context, command string, args any, out any) e
 	return s.call(ctx, command, args, out)
 }
 func (s *Session) call(ctx context.Context, command string, args, out any) error {
+	return s.sendCall(ctx, command, args, out, nil)
+}
+func (s *Session) sendCall(ctx context.Context, command string, args, out any, sent chan struct{}) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -223,7 +169,9 @@ func (s *Session) call(ctx context.Context, command string, args, out any) error
 	if err != nil {
 		return err
 	}
-
+	if sent != nil {
+		close(sent)
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -291,14 +239,26 @@ func (s *Session) Start(ctx context.Context, adapter, request string, args map[s
 			Default bool
 		}
 	}
-	if err := s.Call(ctx, "initialize", map[string]any{"supportsStartDebuggingRequest": s.options.ChildTarget != nil, "adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
+	if err := s.Call(ctx, "initialize", map[string]any{"supportsRunInTerminalRequest": s.options.RunInTerminal != nil, "supportsStartDebuggingRequest": s.options.openChild != nil, "adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	s.supportsTerminate = caps.SupportsTerminateRequest
 	s.mu.Unlock()
 	launched := make(chan error, 1)
-	go func() { launched <- s.Call(ctx, request, args, nil) }()
+	sent := make(chan struct{})
+	go func() { launched <- s.sendCall(ctx, request, args, nil, sent) }()
+	select {
+	case <-sent:
+	case err := <-launched:
+		if err != nil {
+			return err
+		}
+		launched = nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -395,12 +355,24 @@ func (s *Session) Close(terminateDebuggee bool) {
 }
 
 type SessionOptions struct {
-	ChildTarget        func(json.RawMessage) (Target, error)
+	AdapterType        string
+	openChild          func(context.Context) (*Session, error)
+	RunInTerminal      func(TerminalRequest) (int, error)
 	ResumeBeforeDetach bool
 }
 
 func SocketSession(conn net.Conn, cleanup func(), onEvent func(Event), options SessionOptions) *Session {
-	return makeSession(conn, conn, conn, cleanup, onEvent, conn.RemoteAddr(), options)
+	addr := conn.RemoteAddr()
+	if addr.Network() == "tcp" || (addr.Network() == "unix" && addr.String() != "" && addr.String() != "@") {
+		options.openChild = func(ctx context.Context) (*Session, error) {
+			c, err := (&net.Dialer{}).DialContext(ctx, addr.Network(), addr.String())
+			if err != nil {
+				return nil, err
+			}
+			return SocketSession(c, func() {}, onEvent, options), nil
+		}
+	}
+	return makeSession(conn, conn, conn, cleanup, onEvent, options)
 }
 
 func Connect(ctx context.Context, addr string, onEvent func(Event), options SessionOptions) (*Session, error) {
@@ -419,22 +391,27 @@ func (s *Session) startChild(p packet) {
 	_ = s.codec.Send(response)
 }
 func (s *Session) attachChild(raw json.RawMessage) error {
-	target, err := s.options.ChildTarget(raw)
-	if err != nil {
+	var request struct {
+		Request       string
+		Configuration map[string]any
+	}
+	if err := json.Unmarshal(raw, &request); err != nil {
 		return err
 	}
-	addr := s.peerAddress
+	if request.Request != "launch" && request.Request != "attach" || request.Configuration == nil {
+		return fmt.Errorf("invalid startDebugging request")
+	}
+	target := Target{Type: s.options.AdapterType, Request: request.Request, Arguments: request.Configuration}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(ctx, addr.Network(), addr.String())
+	child, err := s.options.openChild(ctx)
 	if err != nil {
 		return err
 	}
-	child := newSession(conn, conn, conn, func() {}, s.onEvent)
 	s.mu.Lock()
 	if s.child != nil || s.closing {
 		s.mu.Unlock()
-		_ = conn.Close()
+		child.Close(false)
 		return fmt.Errorf("debug target already active or closing")
 	}
 	points := maps.Clone(s.desired)
@@ -450,10 +427,11 @@ func (s *Session) attachChild(raw json.RawMessage) error {
 		return nil
 	})
 	if err != nil {
-		_ = conn.Close()
+		child.Close(false)
 	}
 	go func() {
 		<-child.Done()
+		child.Close(false)
 		s.mu.Lock()
 		active := s.child == child && !s.closing
 		if s.child == child {
@@ -471,4 +449,31 @@ func (s *Session) attachChild(raw json.RawMessage) error {
 func (s *Session) OnCleanup(clean func()) {
 	prev := s.terminate
 	s.terminate = func() { prev(); clean() }
+}
+
+type TerminalRequest struct {
+	Kind, Title, Cwd            string
+	Args                        []string
+	Env                         map[string]*string
+	ArgsCanBeInterpretedByShell bool
+}
+
+func (s *Session) runTerminal(p packet) {
+	var req TerminalRequest
+	err := json.Unmarshal(p.Arguments, &req)
+	var pid int
+	if err == nil {
+		if req.Kind == "external" || req.ArgsCanBeInterpretedByShell || len(req.Args) == 0 || req.Args[0] == "" {
+			err = fmt.Errorf("expected an integrated terminal and literal argv")
+		} else {
+			pid, err = s.options.RunInTerminal(req)
+		}
+	}
+	reply := map[string]any{"seq": s.nextSeq(), "type": "response", "command": p.Command, "request_seq": p.Seq, "success": err == nil}
+	if err != nil {
+		reply["message"] = err.Error()
+	} else {
+		reply["body"] = map[string]int{"processId": pid}
+	}
+	_ = s.codec.Send(reply)
 }

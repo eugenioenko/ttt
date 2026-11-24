@@ -6,6 +6,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
 import * as tui from "./tui.js";
+import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
 const linux = process.platform === "linux";
@@ -46,6 +47,7 @@ async function checkPID(type, picker) {
     }));
     const line = go ? 7 : node ? 5 : 7;
     tui.start(dir, file);
+    configureDebugAdapters(dir);
     tui.exec("Show Debug");
     tui.click(32, 3 + line);
     tui.exec("Start Debugging");

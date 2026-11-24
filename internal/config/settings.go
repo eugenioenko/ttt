@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/filewrite"
 )
 
@@ -516,7 +517,12 @@ type LinkSettings struct {
 	Native bool `json:"native"`
 }
 
+type DebugSettings struct {
+	Adapters map[string]dap.Adapter `json:"adapters"`
+}
+
 type Settings struct {
+	Debug       DebugSettings    `json:"debug"`
 	Version     int              `json:"version"`
 	Theme       string           `json:"theme"`
 	DebugMode   bool             `json:"debugMode,omitempty"`
@@ -556,7 +562,7 @@ type Settings struct {
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
-	"links": true, "version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
+	"debug": true, "links": true, "version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
 	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "applications": true, "keyboard": true,
 }
@@ -619,6 +625,7 @@ func DefaultSettings() Settings {
 		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
 		LSP:          DefaultLSPSettings(),
+		Debug:        DebugSettings{Adapters: map[string]dap.Adapter{}},
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),
 		Image:        DefaultImageSettings(),

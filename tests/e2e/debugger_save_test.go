@@ -17,6 +17,7 @@ func TestDebugSaveFailurePreventsSession(t *testing.T) {
 		t.Run(request, func(t *testing.T) {
 			h := newTestHarness(t, 120, 40)
 			defer h.stop()
+			h.app.Settings.Debug.Adapters["go"] = dap.Adapter{Provider: "delve", Languages: []string{"go"}}
 			h.app.EditorGroup.OnError = h.app.StatusError
 			path := filepath.Join(h.dir, "alpha.txt")
 			h.openFile(path)
@@ -47,7 +48,9 @@ func TestDebugSaveFailurePreventsSession(t *testing.T) {
 func TestDebugBreakpointSharedAcrossSplits(t *testing.T) {
 	h := newTestHarness(t, 140, 32)
 	defer h.stop()
-	path := filepath.Join(h.dir, "alpha.txt")
+	path := filepath.Join(h.dir, "sample.go")
+	requireNoError(t, os.WriteFile(path, []byte("package main"), 0600))
+	h.app.Settings.Debug.Adapters["go"] = dap.Adapter{Languages: []string{"go"}}
 	h.openFile(path)
 	left := h.app.EditorGroup
 	h.exec("debug.toggleBreakpoint")
@@ -109,6 +112,7 @@ func TestDebugSetupOpensExistingVSCodeConfiguration(t *testing.T) {
 func TestDebugConfigurationFromPythonFile(t *testing.T) {
 	h := newTestHarness(t, 120, 40)
 	defer h.stop()
+	h.app.Settings.Debug.Adapters["debugpy"] = dap.Adapter{Provider: "debugpy", Languages: []string{"python"}}
 	source := filepath.Join(h.dir, "app.py")
 	requireNoError(t, os.WriteFile(source, []byte("print(42)"), 0644))
 	h.openFile(source)
@@ -158,7 +162,10 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 	h := newTestHarness(t, 120, 40)
 	defer h.stop()
 	defer icons.Configure("", nil)
-	h.openFile(filepath.Join(h.dir, "alpha.txt"))
+	path := filepath.Join(h.dir, "sample.go")
+	requireNoError(t, os.WriteFile(path, []byte("package main"), 0600))
+	h.app.Settings.Debug.Adapters["go"] = dap.Adapter{Languages: []string{"go"}}
+	h.openFile(path)
 	h.exec("sidebar.debug")
 	h.exec("debug.toggleBreakpoint")
 	for _, dot := range []rune{'⦁', '\uf111'} {
@@ -168,5 +175,28 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 			t.Fatalf("expected a red %c in the gutter and the matching breakpoint list icon", dot)
 		}
 		h.exec("options.toggleFontIcons")
+	}
+}
+
+func TestDebugGutterRequiresConfiguredLanguage(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+	path := filepath.Join(h.dir, "example.c")
+	requireNoError(t, os.WriteFile(path, []byte("int main(void) {}"), 0600))
+	h.openFile(path)
+	g := h.app.EditorGroup
+	if g.OnGutterClick(path, 0) {
+		t.Fatal("empty registry claimed the gutter")
+	}
+	h.app.Settings.Debug.Adapters["python"] = dap.Adapter{Languages: []string{"python"}}
+	if g.OnGutterClick(path, 0) {
+		t.Fatal("Python adapter claimed a C source")
+	}
+	h.app.Settings.Debug.Adapters["native"] = dap.Adapter{Languages: []string{"c"}}
+	if !g.OnGutterClick(path, 0) {
+		t.Fatal("C breakpoint click unhandled")
+	}
+	if _, ok := g.Editor.VisibleBookmark(0); !ok {
+		t.Fatal("C breakpoint missing")
 	}
 }

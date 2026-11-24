@@ -33,7 +33,7 @@ func TestDelveLaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := (Provider{}).Open(ctx, target, args, func(e dap.Event) { events <- e })
+	session, err := (Provider{Adapter: dap.Adapter{Transport: "listen", AddressPattern: "^DAP server listening at: (.+)$", Command: []string{"dlv", "dap", "--listen=unix:${socket}"}}}).Open(ctx, target, args, func(e dap.Event) { events <- e }, dap.SessionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,13 +6,11 @@ import (
 	"time"
 )
 
-func StdioProcess(ctx context.Context, binary string, args []string, folder string, onEvent func(Event)) (*Session, error) {
+func stdioProcess(ctx context.Context, cmd *exec.Cmd, onEvent func(Event), options SessionOptions) (*Session, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(binary, args...)
 	isolateAdapter(cmd)
-	cmd.Dir = folder
 	cmd.Stderr = adapterStderr(onEvent)
 	cmd.WaitDelay = time.Second
 	stdout, err := cmd.StdoutPipe()
@@ -40,5 +38,11 @@ func StdioProcess(ctx context.Context, binary string, args []string, folder stri
 		}
 		_ = stdout.Close()
 	}
-	return newSession(stdout, stdin, stdin, cleanup, onEvent), nil
+	options.openChild = func(ctx context.Context) (*Session, error) {
+		child := exec.Command(cmd.Path, cmd.Args[1:]...)
+		child.Dir = cmd.Dir
+		child.Env = cmd.Env
+		return stdioProcess(ctx, child, onEvent, options)
+	}
+	return makeSession(stdout, stdin, stdin, cleanup, onEvent, options), nil
 }

@@ -349,6 +349,37 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 | `terminal.shellIntegration` | bool | `true` | Start bash with an rcfile that loads `~/.bashrc` and adds OSC 133 prompt marks, so resizing redraws the prompt without leaving copies. Needs bash 4.4+; skipped when `terminal.args` is set. Applies to new terminal tabs |
 
+## Debug adapters
+
+`debug.adapters` is an empty object on a fresh install. Install a debugger configuration plugin in the Plugins panel, or add an entry to user settings. Install the debugger executable separately. Each key matches the `type` field of a target in the workspace’s `.ttt/launch.json` or fallback `.vscode/launch.json`.
+
+```json
+{
+  "debug": {
+    "adapters": {
+      "gdb": {
+        "command": ["gdb", "-q", "-nx", "-i", "dap"],
+        "transport": "stdio",
+        "languages": ["c", "cpp"]
+      }
+    }
+  }
+}
+```
+
+| Transport | Adapter connection |
+| --- | --- |
+| `stdio` (default) | Run the command and exchange DAP packets on stdin and stdout. |
+| `server` | Select a loopback port, substitute `${port}` in the command, and connect once the server starts. |
+| `listen` | Read the address from stdout. Supply an `addressPattern` regular expression with one capture group. The command can use `${socket}` for a socket path in a session-owned directory. |
+| `tcp` | Connect to the existing `address` (host:port). This transport needs no command. |
+
+`command` is an executable followed by literal arguments. Optional `cwd` and `env` configure the adapter process. Both those settings and command arguments support `${workspaceFolder}`. Adapter `languages` are editor language IDs. Gutter clicks accept breakpoints for configured languages, and a session receives breakpoints for its own languages.
+
+The default `provider` is `generic`, including for familiar type names. Set it explicitly to `delve`, `jsdebug`, or `debugpy` for their language-specific launch and attach handling. The debugpy command can use `${python}` for the resolved interpreter. A generic adapter receives project launch arguments after recursive `${workspaceFolder}` expansion. ttt rejects `preLaunchTask` and `${input:...}`. Extra top-level launch-file keys can coexist with standalone configurations.
+
+Adapters can request an integrated terminal or a child session of the same adapter type. The Debug sidebar inspects one active target at a time.
+
 ## LSP
 
 | Key | Type | Default | Description |

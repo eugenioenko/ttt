@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
 import * as tui from "./tui.js";
+import { configureDebugAdapters } from "./debug-adapters.js";
 
 it("cancels a waiting attach, releases the connection and reports an unreachable endpoint on retry", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-attach-cancel-"));
@@ -31,6 +32,7 @@ it("cancels a waiting attach, releases the connection and reports an unreachable
       { name: "Waiting", type: "debugpy", request: "attach", connect: { port } },
     ] }));
     tui.start(dir);
+    configureDebugAdapters(dir);
     tui.exec("Start Debugging");
     tui.panel("output");
     tui.waitFor("[debug:Waiting] WAITING_FOR_ATTACH");
@@ -56,6 +58,7 @@ it.skipIf(!process.env.TTT_TEST_DEBUGPY)("keeps an independent Python process al
       { name: "Failed", type: "debugpy", request: "attach", processId: child.pid, python: join(dir,"missing-interpreter") },
     ] }));
     tui.start(dir);
+    configureDebugAdapters(dir);
     tui.exec("Start Debugging");
     tui.panel("output");
     tui.waitFor("Failed: fork/exec");

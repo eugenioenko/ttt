@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
 import * as tui from "./tui.js";
+import { configureDebugAdapters } from "./debug-adapters.js";
 
 it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript source in a js-debug child session", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-ts-debug-"));
@@ -21,6 +22,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
         program: "${workspaceFolder}/dist/app.js", outFiles: ["${workspaceFolder}/dist/**/*.js"] }],
     }));
     tui.start(dir, file);
+    configureDebugAdapters(dir);
     tui.exec("Show Debug");
     tui.click(32, 6);
     tui.click(32, 10);

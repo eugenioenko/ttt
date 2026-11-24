@@ -6,11 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/eugenioenko/ttt/internal/dap"
 )
 
-type Provider struct{}
+type Provider struct{ dap.Adapter }
 
 func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request == "attach" {
@@ -74,13 +75,14 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	return out, nil
 }
 
-func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onEvent func(dap.Event)) (*dap.Session, error) {
+func (p Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onEvent func(dap.Event), options dap.SessionOptions) (*dap.Session, error) {
 	if t.Request == "attach" && args["processId"] == nil {
 		addr, err := dap.Endpoint(t, t.Arguments)
 		if err != nil {
 			return nil, err
 		}
-		return dap.Connect(ctx, addr, onEvent, dap.SessionOptions{ResumeBeforeDetach: true})
+		options.ResumeBeforeDetach = true
+		return dap.Connect(ctx, addr, onEvent, options)
 	}
 	dir, err := os.MkdirTemp("", "ttt-delve-")
 	if err != nil {
@@ -89,16 +91,31 @@ func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onE
 	if t.Request == "launch" && args["output"] == nil && (args["mode"] == "debug" || args["mode"] == "test") {
 		args["output"] = filepath.Join(dir, "debuggee")
 	}
-	session, err := dap.ReverseProcess(ctx, filepath.Join(dir, "adapter.sock"), t.Folder, func(address string) (*exec.Cmd, bool, error) {
-		dlv, err := exec.LookPath("dlv")
-		if err != nil {
-			return nil, false, err
-		}
-		if t.Arguments["console"] == "externalTerminal" {
-			return externalCommand(t.Folder, dlv, address)
-		}
-		return exec.Command(dlv, "dap", "--client-addr", address), false, nil
-	}, onEvent)
+	var session *dap.Session
+	if t.Arguments["console"] != "externalTerminal" {
+		session, err = p.Adapter.Open(ctx, t, args, onEvent, options)
+	} else {
+		session, err = dap.ReverseProcess(ctx, filepath.Join(dir, "adapter.sock"), t.Folder, func(address string) (*exec.Cmd, bool, error) {
+			cmd, err := p.Process(t.Folder)
+			if err != nil {
+				return nil, false, err
+			}
+			args := cmd.Args[:1]
+			for i := 1; i < len(cmd.Args); i++ {
+				arg := cmd.Args[i]
+				switch {
+				case strings.HasPrefix(arg, "--listen="):
+					continue
+				case arg == "--listen":
+					i++
+					continue
+				}
+				args = append(args, arg)
+			}
+			cmd.Args = append(args, "--client-addr", address)
+			return externalCommand(cmd)
+		}, onEvent, options)
+	}
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		return nil, err

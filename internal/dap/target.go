@@ -39,12 +39,6 @@ func ReadLaunchFile(folder string) (string, []Target, error) {
 		if err = json.Unmarshal(jsonc.ToJSON(data), &file); err != nil {
 			return path, nil, fmt.Errorf("%s: %w", path, err)
 		}
-		for key := range file {
-			if dir == ".vscode" || key == "version" || key == "$schema" || key == "configurations" {
-				continue
-			}
-			return path, nil, fmt.Errorf("%s: unsupported launch file field %q", path, key)
-		}
 		var configurations []map[string]any
 		if err = json.Unmarshal(file["configurations"], &configurations); err != nil || configurations == nil {
 			return path, nil, fmt.Errorf("%s: expected a configurations array", path)
@@ -64,18 +58,11 @@ func ReadLaunchFile(folder string) (string, []Target, error) {
 	return "", nil, nil
 }
 
-func CreateLaunchFile(folder, source string) (string, error) {
+func CreateLaunchFile(folder, source, adapter, provider string) (string, error) {
 	path := filepath.Join(folder, ".ttt", "launch.json")
 	configs := []map[string]string{}
 	if program, err := filepath.Rel(folder, source); source != "" && err == nil && filepath.IsLocal(program) {
-		adapter := ""
-		switch strings.ToLower(filepath.Ext(source)) {
-		case ".py":
-			adapter = "debugpy"
-		case ".js", ".mjs", ".cjs", ".ts", ".cts", ".mts":
-			adapter = "node"
-		case ".go":
-			adapter = "go"
+		if provider == "delve" {
 			program = filepath.Dir(program)
 		}
 		if adapter != "" {
@@ -104,17 +91,20 @@ func CreateLaunchFile(folder, source string) (string, error) {
 }
 
 func Expand(value any, folder string) (any, error) {
+	return expand(value, folder, false)
+}
+func expand(value any, folder string, pass bool) (any, error) {
 	switch v := value.(type) {
 	case string:
 		s := strings.ReplaceAll(v, "${workspaceFolder}", folder)
-		if strings.Contains(s, "${") {
+		if strings.Contains(s, "${input:") || (!pass && strings.Contains(s, "${")) {
 			return nil, fmt.Errorf("unsupported substitution in %q", v)
 		}
 		return s, nil
 	case []any:
 		dst := make([]any, len(v))
 		for i, item := range v {
-			x, err := Expand(item, folder)
+			x, err := expand(item, folder, pass)
 			if err != nil {
 				return nil, err
 			}
@@ -124,7 +114,7 @@ func Expand(value any, folder string) (any, error) {
 	case map[string]any:
 		dst := make(map[string]any, len(v))
 		for k, item := range v {
-			x, err := Expand(item, folder)
+			x, err := expand(item, folder, pass)
 			if err != nil {
 				return nil, err
 			}
@@ -150,4 +140,18 @@ func (t Target) Fields(defaults map[string]any, allowed ...string) (map[string]a
 		defaults[key] = x
 	}
 	return defaults, nil
+}
+
+func (a Adapter) Arguments(t Target) (map[string]any, error) {
+	if t.Request != "launch" && t.Request != "attach" {
+		return nil, fmt.Errorf("unsupported request %q", t.Request)
+	}
+	if _, ok := t.Arguments["preLaunchTask"]; ok {
+		return nil, fmt.Errorf("preLaunchTask is unsupported")
+	}
+	out, err := expand(t.Arguments, t.Folder, true)
+	if err != nil {
+		return nil, err
+	}
+	return out.(map[string]any), nil
 }

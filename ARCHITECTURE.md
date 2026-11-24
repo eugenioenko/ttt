@@ -89,9 +89,9 @@ operations and results without owning product widgets. Long-running work must
 have explicit cancellation, identity, shutdown, and stale-result behavior.
 
 `internal/dap` owns protocol sessions, transports, and the provider interface.
-The built-in registry in `internal/dap/providers` connects launch configuration
-types to the delve, jsdebug, and debugpy packages. Each provider validates target
-arguments and opens its adapter through the host transport operations. The app
+User settings map launch configuration types to adapter commands, transports and
+languages. The generic provider passes through launch arguments. Explicit provider
+names in `internal/dap/providers` select Delve, js-debug, or debugpy hooks. The app
 owns workspace saves, breakpoint intent, session selection, and debugger UI state.
 
 `internal/scm` owns the internal provider, repository, optional staging, and

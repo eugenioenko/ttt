@@ -34,6 +34,8 @@
   "debug.stepOver": "Debug: Step Over",
   "debug.stepIn": "Debug: Step In",
   "debug.stepOut": "Debug: Step Out",
+  "debug.missingAdapter": "Configure debug.adapters to use the missing adapter '{type}'.",
+  "debug.missingAdapterPlugin": "Debug adapter '{type}' is missing. Install {plugin} or configure debug.adapters.",
   "debug.noTargets": "Define a debug configuration in .ttt/launch.json.",
   "command.changeTabBarStyle": "Change Tab Bar Style",
   "markdown.columnHint": "Column limit (1 or greater)",

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
 import * as tui from "./tui.js";
+import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
 it.skipIf(!python)("debugs a module with a dependency from its workspace virtual environment", () => {
@@ -23,6 +24,7 @@ it.skipIf(!python)("debugs a module with a dependency from its workspace virtual
       configurations: [{ name: "Example", type: "debugpy", request: "launch", module: "appmod" }],
     }));
     tui.start(dir, file);
+    configureDebugAdapters(dir);
     tui.exec("Show Debug");
     tui.click(32, 7);
     tui.exec("Start Debugging");

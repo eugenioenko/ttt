@@ -2,16 +2,13 @@ package jsdebug
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/eugenioenko/ttt/internal/dap"
 )
 
-type Provider struct{}
+type Provider struct{ dap.Adapter }
 
 func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request != "launch" && t.Request != "attach" {
@@ -83,8 +80,8 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if !filepath.IsAbs(cwd) {
 		out["cwd"] = filepath.Join(t.Folder, cwd)
 	}
-	if c, ok := out["console"]; ok && c != "internalConsole" {
-		return nil, fmt.Errorf("%s: only internalConsole is supported", t.Name)
+	if c, ok := out["console"]; ok && c != "internalConsole" && c != "integratedTerminal" {
+		return nil, fmt.Errorf("%s: expected internalConsole or integratedTerminal", t.Name)
 	}
 	if t.Request == "launch" {
 		p, ok := out["program"].(string)
@@ -104,8 +101,7 @@ func nodeServerAddress(t dap.Target) (string, error) {
 	}
 	return fmt.Sprintf("127.0.0.1:%d", int(port)), nil
 }
-func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onEvent func(dap.Event)) (*dap.Session, error) {
-	options := dap.SessionOptions{ChildTarget: childTarget}
+func (p Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onEvent func(dap.Event), options dap.SessionOptions) (*dap.Session, error) {
 	var s *dap.Session
 	if _, external := t.Arguments["debugServer"]; external {
 		addr, err := nodeServerAddress(t)
@@ -117,31 +113,13 @@ func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onE
 			return nil, err
 		}
 	} else {
-		entry := os.Getenv("TTT_JS_DEBUG_SERVER")
-		if entry == "" {
-			return nil, fmt.Errorf("set TTT_JS_DEBUG_SERVER to the standalone dapDebugServer.js path")
-		}
-		addr := "0"
-		var dir string
 		var err error
-		if runtime.GOOS != "windows" {
-			dir, err = os.MkdirTemp("", "ttt-jsdebug-")
-			if err != nil {
-				return nil, err
-			}
-			addr = filepath.Join(dir, "debug.sock")
-		}
-		s, err = dap.ListenProcess(ctx, "node", []string{entry, addr, "127.0.0.1"}, t.Folder, "Debug server listening at ", onEvent, options)
+		s, err = p.Adapter.Open(ctx, t, args, onEvent, options)
 		if err != nil {
-			if dir != "" {
-				_ = os.RemoveAll(dir)
-			}
 			return nil, err
 		}
-		if dir != "" {
-			s.OnCleanup(func() { _ = os.RemoveAll(dir) })
-		}
 	}
+
 	if pid, ok := args["processId"].(int); ok {
 		port := 9229
 		if p, ok := args["port"].(int); ok {
@@ -156,18 +134,4 @@ func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onE
 		args["websocketAddress"] = ws
 	}
 	return s, nil
-}
-func childTarget(raw json.RawMessage) (dap.Target, error) {
-	var req struct {
-		Request       string
-		Configuration map[string]any
-	}
-	if err := json.Unmarshal(raw, &req); err != nil {
-		return dap.Target{}, err
-	}
-	id, _ := req.Configuration["__pendingTargetId"].(string)
-	if id == "" || (req.Request != "launch" && req.Request != "attach") {
-		return dap.Target{}, fmt.Errorf("unsupported child debug request")
-	}
-	return dap.Target{Type: "pwa-node", Request: req.Request, Arguments: req.Configuration}, nil
 }

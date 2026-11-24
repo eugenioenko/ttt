@@ -6,6 +6,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
 import * as tui from "./tui.js";
+import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
 const hasDelve = spawnSync("dlv", ["version"], { stdio: "ignore" }).status === 0;
@@ -76,6 +77,7 @@ async function checkAddressAttach(type, externalAdapter = false) {
       configurations: [{ name: "Attach", type, request: "attach", ...endpoint }],
     }));
     tui.start(dir, file);
+    configureDebugAdapters(dir);
     tui.exec("Show Debug");
     tui.click(32, 3 + line);
     tui.exec("Start Debugging");

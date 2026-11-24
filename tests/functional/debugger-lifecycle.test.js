@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
 import * as tui from "./tui.js";
+import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
 const fixtures = [
@@ -30,6 +31,7 @@ for (const fixture of fixtures) {
           ...(fixture.type === "debugpy" && { python }),
         }] }));
         tui.start(dir, join(dir, fixture.file));
+        configureDebugAdapters(dir);
         tui.exec("Start Debugging");
         tui.panel("output");
         tui.waitFor("[debug:Lifecycle] TARGET_READY");

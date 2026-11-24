@@ -23,7 +23,7 @@ func defaultPython(t dap.Target) string {
 	return python
 }
 
-type Provider struct{}
+type Provider struct{ dap.Adapter }
 
 func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request == "attach" {
@@ -55,8 +55,8 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if out["console"] != "internalConsole" {
-		return nil, fmt.Errorf("%s: debugpy requires internalConsole", t.Name)
+	if out["console"] != "internalConsole" && out["console"] != "integratedTerminal" {
+		return nil, fmt.Errorf("%s: expected internalConsole or integratedTerminal", t.Name)
 	}
 	interpreter, ok := out["python"].(string)
 	if !ok || interpreter == "" {
@@ -101,13 +101,13 @@ func endpoint(t dap.Target) (string, error) {
 	}
 	return dap.Endpoint(t, fields)
 }
-func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onEvent func(dap.Event)) (*dap.Session, error) {
+func (p Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onEvent func(dap.Event), options dap.SessionOptions) (*dap.Session, error) {
 	if t.Request == "attach" && args["processId"] == nil {
 		addr, err := endpoint(t)
 		if err != nil {
 			return nil, err
 		}
-		return dap.Connect(ctx, addr, onEvent, dap.SessionOptions{})
+		return dap.Connect(ctx, addr, onEvent, options)
 	}
-	return dap.StdioProcess(ctx, args["python"].(string), []string{"-m", "debugpy.adapter"}, t.Folder, onEvent)
+	return p.Adapter.Open(ctx, t, args, onEvent, options)
 }

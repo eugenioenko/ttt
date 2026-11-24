@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"path/filepath"
 	"strconv"
@@ -19,6 +20,8 @@ import (
 )
 
 type debugRun struct {
+	terminalIDs       []string
+	languages         []string
 	failed            bool
 	stopGeneration    uint64
 	allThreadsStopped bool
@@ -135,12 +138,20 @@ func (a *App) pickDebugProcess(t dap.Target) {
 	})
 }
 func (a *App) prepareDebugTarget(t dap.Target) {
-	provider, err := providers.For(t)
+	provider, err := providers.For(t, a.Settings.Debug.Adapters)
 	if err != nil {
-		a.StatusError(err.Error())
+		var missing providers.MissingAdapter
+		switch {
+		case !errors.As(err, &missing):
+			a.StatusError(err.Error())
+		case missing.Plugin != "":
+			a.StatusError(i18n.Format("debug.missingAdapterPlugin", i18n.Args{"type": missing.Type, "plugin": missing.Plugin}))
+		default:
+			a.StatusError(i18n.Format("debug.missingAdapter", i18n.Args{"type": missing.Type}))
+		}
 		return
 	}
-	if t.Request == "attach" && t.Arguments["processId"] == dap.PickProcess {
+	if hook := a.Settings.Debug.Adapters[t.Type].Provider; hook != "" && hook != "generic" && t.Request == "attach" && t.Arguments["processId"] == dap.PickProcess {
 		a.pickDebugProcess(t)
 		return
 	}
@@ -167,7 +178,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 }
 func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
-	run := &debugRun{edited: make(map[string]bool), folder: t.Folder, attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
+	run := &debugRun{languages: a.Settings.Debug.Adapters[t.Type].Languages, edited: make(map[string]bool), folder: t.Folder, attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
 	a.debugger.lastFolder, a.debugger.lastTarget = t.Folder, t.Name
 	for path := range a.debugger.points {
 		if a.debugOwnsSource(run, path) {
@@ -211,11 +222,51 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 		}
 	}
 
+	options := dap.SessionOptions{AdapterType: t.Type}
+	options.RunInTerminal = func(req dap.TerminalRequest) (int, error) {
+		type result struct {
+			pid int
+			err error
+		}
+		done := make(chan result, 1)
+		deliver(func() {
+			if ctx.Err() != nil {
+				return
+			}
+			var env []string
+			for k, v := range req.Env {
+				if v == nil {
+					env = append(env, k)
+				} else {
+					env = append(env, k+"="+*v)
+				}
+			}
+			cwd := req.Cwd
+			if cwd == "" {
+				cwd = t.Folder
+			}
+			id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: req.Args[0], Args: req.Args[1:], Cwd: cwd, Env: env, Label: req.Title})
+			var pid int
+			if err == nil {
+				pid = a.terminalByID(id).Term.PID()
+				if !run.attached {
+					run.terminalIDs = append(run.terminalIDs, id)
+				}
+			}
+			done <- result{pid, err}
+		})
+		select {
+		case r := <-done:
+			return r.pid, r.err
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	}
 	go func() {
 		defer close(run.closed)
 		startup, endStartup := context.WithTimeout(ctx, 90*time.Second)
 		defer endStartup()
-		s, err := provider.Open(startup, t, args, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) })
+		s, err := provider.Open(startup, t, args, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) }, options)
 		if err == nil {
 			deliver(func() { run.session = s })
 			err = s.Start(startup, t.Type, t.Request, args, func() error {
@@ -266,6 +317,11 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 				a.StatusError(t.Name + ": " + err.Error())
 			}
 			a.flushDebugOutput(run, t.Name)
+			for _, id := range run.terminalIDs {
+				if tt := a.terminalByID(id); tt != nil && !tt.Term.Exited() {
+					a.CloseTerminal(id)
+				}
+			}
 			cancel()
 			a.debugger.run = nil
 			if !run.failed {

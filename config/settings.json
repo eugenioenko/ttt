@@ -1,4 +1,7 @@
 {
+  "debug": {
+    "adapters": {}
+  },
   "version": 1,
   "theme": "default-dark",
   "links": {

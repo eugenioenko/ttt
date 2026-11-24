@@ -12,6 +12,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/dap"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -33,7 +34,7 @@ func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
 	g.OnGutterClick = func(path string, line int) bool {
 		pluginHandlesClick := a.PluginManager != nil && a.PluginManager.HasEventListeners("gutter.click")
 		debugView := a.Sidebar.Visible && a.Sidebar.ActivePanel == "debug"
-		if (debugView || !pluginHandlesClick) && g.ActiveBuffer() != nil && !g.IsActiveVirtual() && g.ActiveDiffWidget() == nil && filepath.IsAbs(path) {
+		if (debugView || !pluginHandlesClick) && a.hasDebugAdapter(path) && g.ActiveBuffer() != nil && !g.IsActiveVirtual() && g.ActiveDiffWidget() == nil && filepath.IsAbs(path) {
 			a.toggleEditorBreakpoint(g, line+1)
 			return true
 		}
@@ -134,7 +135,7 @@ func (a *App) syncDebugBreakpoints(path string) {
 
 func (a *App) ToggleDebugBreakpoint() {
 	g := a.EditorGroup
-	if g.ActiveBuffer() == nil || g.IsActiveVirtual() || !filepath.IsAbs(g.ActiveFilePath()) {
+	if !a.hasDebugAdapter(g.ActiveFilePath()) || g.ActiveBuffer() == nil || g.IsActiveVirtual() || !filepath.IsAbs(g.ActiveFilePath()) {
 		return
 	}
 	a.toggleEditorBreakpoint(g, g.Editor.Cursor.Line+1)
@@ -148,7 +149,7 @@ type debugBreakpoint struct {
 
 func (a *App) debugOwnsSource(r *debugRun, path string) bool {
 	folder := a.Workspace.FolderForFile(path)
-	return folder != nil && folder.Path == r.folder
+	return folder != nil && folder.Path == r.folder && slices.Contains(r.languages, a.debugLanguage(path))
 }
 
 func (a *App) applyDebugBindings(path string, lines []int, bindings []dap.Breakpoint) {
@@ -361,4 +362,24 @@ func (a *App) debugSourcePath(path string) string {
 		}
 	}
 	return path
+}
+
+func (a *App) debugLanguage(path string) string {
+	for _, g := range a.editorGroups() {
+		if g != nil {
+			if b := g.BufferForPath(path); b != nil {
+				return highlight.DetectLanguageID(path, b.Lines)
+			}
+		}
+	}
+	return highlight.DetectLanguageID(path, nil)
+}
+func (a *App) hasDebugAdapter(path string) bool {
+	lang := a.debugLanguage(path)
+	for _, adapter := range a.Settings.Debug.Adapters {
+		if slices.Contains(adapter.Languages, lang) {
+			return true
+		}
+	}
+	return false
 }

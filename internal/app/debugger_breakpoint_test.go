@@ -11,9 +11,12 @@ import (
 
 func TestDebugBindingUsesRequestedIdentityAndWorkspace(t *testing.T) {
 	a := &App{Workspace: workspace.New([]string{"/project", "/project/nested"})}
-	r := &debugRun{folder: "/project"}
+	r := &debugRun{languages: []string{"go"}, folder: "/project"}
 	path := "/project/a.go"
 	other := "/project/nested/a.go"
+	if a.debugOwnsSource(r, "/project/module.py") {
+		t.Fatal("Go session accepted Python breakpoints")
+	}
 	a.toggleBreakpoint(path, 3)
 	a.toggleBreakpoint(other, 3)
 	id := 0
@@ -70,7 +73,7 @@ func TestClearBreakpointsAcrossFoldersDuringStartup(t *testing.T) {
 		a.toggleBreakpoint(path, 1)
 	}
 	a.debugger.points[other][1].confirm = true
-	r := &debugRun{folder: "/project", revision: make(map[string]int)}
+	r := &debugRun{languages: []string{"go"}, folder: "/project", revision: make(map[string]int)}
 	a.debugger.run = r
 	a.ClearDebugBreakpoints()
 	if len(a.debugger.points) != 0 || len(r.revision) != 2 || r.revision[first] != 1 || r.revision[second] != 1 {
@@ -86,7 +89,7 @@ func TestDebugEditPreservesRuntimeLocationAndClampsDeletedLastLine(t *testing.T)
 	a.toggleBreakpoint(path, 1)
 	a.toggleBreakpoint(path, 3)
 	a.debugger.sources = map[string]debugSourceVersion{path: {weak.Make(b), b.Version()}}
-	r := &debugRun{folder: "/project", edited: map[string]bool{}, revision: map[string]int{}}
+	r := &debugRun{languages: []string{"go"}, folder: "/project", edited: map[string]bool{}, revision: map[string]int{}}
 	a.debugger.run = r
 	for n, p := range a.debugger.points[path] {
 		p.runtimeLine = n

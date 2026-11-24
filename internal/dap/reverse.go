@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func ReverseProcess(ctx context.Context, socket, folder string, command func(string) (*exec.Cmd, bool, error), onEvent func(Event)) (*Session, error) {
+func ReverseProcess(ctx context.Context, socket, folder string, command func(string) (*exec.Cmd, bool, error), onEvent func(Event), options SessionOptions) (*Session, error) {
 	l, err := net.Listen("unix", socket)
 	if err != nil {
 		return nil, err
@@ -18,7 +18,9 @@ func ReverseProcess(ctx context.Context, socket, folder string, command func(str
 	if err != nil {
 		return nil, err
 	}
-	cmd.Dir = folder
+	if cmd.Dir == "" {
+		cmd.Dir = folder
+	}
 	isolateAdapter(cmd)
 	if err = cmd.Start(); err != nil {
 		return nil, err
@@ -58,5 +60,5 @@ func ReverseProcess(ctx context.Context, socket, folder string, command func(str
 			killAdapter(cmd)
 			<-exited
 		}
-	}, onEvent, SessionOptions{}), nil
+	}, onEvent, options), nil
 }
