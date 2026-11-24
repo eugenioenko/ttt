@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
@@ -73,12 +74,52 @@ func TestDebugPanelAvailableBeforeConfiguration(t *testing.T) {
 		t.Fatal("Debug missing from sidebar on startup")
 	}
 	h.exec("sidebar.debug")
-	h.assertContains("│Launch or attach  Run & Debug │")
+	h.assertContains("Create configuration")
 	h.assertContains("Breakpoints")
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
-	if lines := h.app.Output.Lines; len(lines) == 0 || !strings.Contains(lines[len(lines)-1].Message, ".ttt/launch.json") {
-		t.Fatal("Start action did not explain where to define a target")
+	path := filepath.Join(h.dir, ".ttt", "launch.json")
+	if h.app.EditorGroup.ActiveFilePath() != path || h.app.Root.Focused != h.app.EditorGroup {
+		t.Fatal("Create configuration did not open launch.json for editing")
 	}
+}
+
+func TestDebugSetupOpensExistingVSCodeConfiguration(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+	dir := filepath.Join(h.dir, ".vscode")
+	requireNoError(t, os.MkdirAll(dir, 0755))
+	path := filepath.Join(dir, "launch.json")
+	requireNoError(t, os.WriteFile(path, []byte("{"), 0644))
+	h.exec("sidebar.debug")
+	h.assertContains("Edit configuration")
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	if h.app.EditorGroup.ActiveFilePath() != path {
+		t.Fatal("did not open existing launch file")
+	}
+	data, err := os.ReadFile(path)
+	requireNoError(t, err)
+	if string(data) != "{" {
+		t.Fatal("replaced invalid launch file")
+	}
+	if _, err := os.Stat(filepath.Join(h.dir, ".ttt", "launch.json")); !os.IsNotExist(err) {
+		t.Fatal("unexpected .ttt configuration")
+	}
+}
+
+func TestDebugConfigurationFromPythonFile(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+	source := filepath.Join(h.dir, "app.py")
+	requireNoError(t, os.WriteFile(source, []byte("print(42)"), 0644))
+	h.openFile(source)
+	h.exec("sidebar.debug")
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	targets, err := dap.LoadTargets(h.dir)
+	requireNoError(t, err)
+	if len(targets) != 1 || targets[0].Type != "debugpy" || targets[0].Arguments["program"] != "app.py" {
+		t.Fatalf("targets = %+v", targets)
+	}
+	h.assertContains(" Run & Debug ")
 }
 
 func TestDebugSidebarSectionDividers(t *testing.T) {
@@ -96,7 +137,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 		t.Fatalf("missing %s", label)
 		return -1
 	}
-	controls, variables := row(" Run & Debug "), row("Variables")
+	controls, variables := row("Create configuration"), row("Variables")
 	for _, label := range []string{"Call Stack", "Breakpoints"} {
 		from := row(label) - 1
 		for _, event := range []struct {
@@ -107,7 +148,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 			h.redraw()
 		}
 		h.exec("debug.toggleBreakpoint")
-		if row(label) != from-1 || row(" Run & Debug ") != controls || row("Variables") != variables {
+		if row(label) != from-1 || row("Create configuration") != controls || row("Variables") != variables {
 			t.Fatalf("dragging divider above %s moved toolbar or failed to resize section", label)
 		}
 	}
@@ -121,7 +162,7 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 	h.exec("sidebar.debug")
 	h.exec("debug.toggleBreakpoint")
 	for _, dot := range []rune{'∙', '\uf111'} {
-		h.assertContains(" Run & Debug ")
+		h.assertContains("Create configuration")
 		mark, ok := h.app.EditorGroup.Editor.VisibleBookmark(0)
 		if !ok || mark.Icon != dot || mark.Style != term.StyleDebugBreakpoint || strings.Count(h.screenText(), string(dot)) < 2 {
 			t.Fatalf("expected a red %c in the gutter and the matching breakpoint list icon", dot)

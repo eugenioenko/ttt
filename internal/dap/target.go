@@ -21,6 +21,11 @@ type Target struct {
 }
 
 func LoadTargets(folder string) ([]Target, error) {
+	_, targets, err := ReadLaunchFile(folder)
+	return targets, err
+}
+
+func ReadLaunchFile(folder string) (string, []Target, error) {
 	for _, dir := range []string{".ttt", ".vscode"} {
 		path := filepath.Join(folder, dir, "launch.json")
 		data, err := os.ReadFile(path)
@@ -28,20 +33,20 @@ func LoadTargets(folder string) ([]Target, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return path, nil, err
 		}
 		var file map[string]json.RawMessage
 		if err = json.Unmarshal(jsonc.ToJSON(data), &file); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			return path, nil, fmt.Errorf("%s: %w", path, err)
 		}
 		for key := range file {
 			if key != "version" && key != "$schema" && key != "configurations" {
-				return nil, fmt.Errorf("%s: unsupported launch file field %q", path, key)
+				return path, nil, fmt.Errorf("%s: unsupported launch file field %q", path, key)
 			}
 		}
 		var configurations []map[string]any
 		if err = json.Unmarshal(file["configurations"], &configurations); err != nil || configurations == nil {
-			return nil, fmt.Errorf("%s: expected a configurations array", path)
+			return path, nil, fmt.Errorf("%s: expected a configurations array", path)
 		}
 		var targets []Target
 		for i, args := range configurations {
@@ -49,13 +54,49 @@ func LoadTargets(folder string) ([]Target, error) {
 			adapter, _ := args["type"].(string)
 			request, _ := args["request"].(string)
 			if name == "" || adapter == "" || request == "" {
-				return nil, fmt.Errorf("%s: configuration %d requires name, type and request", path, i+1)
+				return path, nil, fmt.Errorf("%s: configuration %d requires name, type and request", path, i+1)
 			}
 			targets = append(targets, Target{name, adapter, request, folder, args})
 		}
-		return targets, nil
+		return path, targets, nil
 	}
-	return nil, nil
+	return "", nil, nil
+}
+
+func CreateLaunchFile(folder, source string) (string, error) {
+	path := filepath.Join(folder, ".ttt", "launch.json")
+	configs := []map[string]string{}
+	if program, err := filepath.Rel(folder, source); source != "" && err == nil && filepath.IsLocal(program) {
+		adapter := ""
+		switch strings.ToLower(filepath.Ext(source)) {
+		case ".py":
+			adapter = "debugpy"
+		case ".js", ".mjs", ".cjs", ".ts", ".cts", ".mts":
+			adapter = "node"
+		case ".go":
+			adapter = "go"
+			program = filepath.Dir(program)
+		}
+		if adapter != "" {
+			configs = append(configs, map[string]string{"name": filepath.Base(source), "type": adapter, "request": "launch", "program": filepath.ToSlash(program)})
+		}
+	}
+	data, err := json.MarshalIndent(map[string]any{"version": "0.2.0", "configurations": configs}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return "", err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if errors.Is(err, os.ErrExist) {
+		return path, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	_, err = f.Write(append(data, '\n'))
+	return path, errors.Join(err, f.Close())
 }
 
 func Expand(value any, folder string) (any, error) {

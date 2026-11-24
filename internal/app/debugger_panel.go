@@ -36,6 +36,7 @@ type debugSidebar struct {
 	variables, stack, points *widgets.TreeWidget
 	toolbar                  *widgets.HStackWidget
 	adapter                  *ui.WidgetAdapter
+	idle                     debugIdleAction
 	controls                 debugControlState
 	frames                   []debugFrame
 	scopes                   []*widgets.TreeNode
@@ -88,7 +89,7 @@ func (a *App) ensureDebugPanel() {
 	p.toolbar.Gap = 1
 	inspection := debugSectionSplit(p.variables, p.stack, 0.5, 2)
 	sections := debugSectionSplit(inspection, widgets.NewVStackWidget(header, p.points), 0.25, 5)
-	a.refreshDebugControls()
+	a.refreshDebugConfiguration()
 	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.toolbar, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
 	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), p.adapter)
 	a.refreshDebugPanel()
@@ -104,11 +105,14 @@ func debugSectionSplit(top, bottom ui.Widget, ratio float64, minTop int) *ui.Con
 	return split
 }
 
-type debugControlState struct{ active, paused, ready, attached bool }
+type debugControlState struct {
+	active, paused, ready, attached bool
+	idle                            debugIdleAction
+}
 
 func (a *App) refreshDebugControls() {
 	p := &a.debugger.panel
-	state := debugControlState{}
+	state := debugControlState{idle: p.idle}
 	if r := a.debugger.run; r != nil {
 		state = debugControlState{active: true, paused: r.thread != nil, ready: r.ready, attached: r.attached}
 	}
@@ -123,8 +127,8 @@ func (a *App) refreshDebugControls() {
 		p.toolbar.Children = append(p.toolbar.Children, b)
 	}
 	if !state.active {
-		p.toolbar.Children = append(p.toolbar.Children, widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("debug.launchOrAttach"), Style: term.StyleMuted}))
-		button("debug.start", i18n.Text("debug.runAndDebug"), "", true)
+		p.toolbar.Children = append(p.toolbar.Children, widgets.NewLabelWidget(widgets.LabelConfig{Text: p.idle.label, Style: term.StyleMuted}))
+		button(p.idle.command, p.idle.button, "", true)
 	} else {
 		button("debug.stepOver", i18n.Text("debug.stepOverButton"), icons.DebugStepOver, state.ready && state.paused)
 		button("debug.stepIn", i18n.Text("debug.stepInButton"), icons.DebugStepIn, state.ready && state.paused)

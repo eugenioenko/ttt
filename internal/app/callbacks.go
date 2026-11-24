@@ -722,6 +722,9 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.Sidebar.OnPanelChange = func(id string) {
+		if id == "debug" {
+			app.refreshDebugConfiguration()
+		}
 		if id == "search" {
 			app.applySearchHighlights()
 		} else {

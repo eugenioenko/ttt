@@ -41,6 +41,7 @@ func registerDebuggerCommands(a *App) {
 		{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause},
 		{ID: "debug.clearBreakpoints", Title: i18n.Text("debug.clearBreakpoints"), Handler: a.ClearDebugBreakpoints},
 		{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint},
+		{ID: "debug.configure", Title: i18n.Text("debug.createConfiguration"), Handler: a.configureDebugger},
 		{ID: "debug.start", Title: i18n.Text("debug.start"), Handler: a.StartDebugging},
 		{ID: "debug.detach", Title: i18n.Text("debug.detach"), Handler: a.DetachDebugger},
 		{ID: "debug.stop", Title: i18n.Text("debug.stop"), Handler: a.StopDebugging},

@@ -56,6 +56,14 @@ func (a *App) SyncWatched() {
 	for _, group := range a.editorGroups() {
 		paths = append(paths, group.OpenFilePaths()...)
 	}
+	if a.Sidebar != nil && a.Sidebar.ActivePanel == "debug" && a.Workspace != nil {
+		for _, folder := range a.Workspace.Folders {
+			for _, name := range []string{".ttt", ".vscode"} {
+				dir := filepath.Join(folder.Path, name)
+				paths = append(paths, dir, filepath.Join(dir, "launch.json"))
+			}
+		}
+	}
 	a.Watcher.Sync(paths)
 	if a.Explorer != nil {
 		a.Watcher.SyncDirs(a.Explorer.WatchedDirs())
@@ -73,6 +81,10 @@ func (a *App) HandleFileChanged(path string) {
 }
 
 func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
+	switch filepath.Base(path) {
+	case ".ttt", ".vscode", "launch.json":
+		a.refreshDebugConfiguration()
+	}
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
 	var buf *buffer.Buffer
 	for _, group := range a.editorGroups() {
