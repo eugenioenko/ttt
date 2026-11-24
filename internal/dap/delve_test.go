@@ -36,7 +36,7 @@ func TestDelveLaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = session.Launch(ctx, args, func() error {
+	err = session.Start(ctx, "go", "launch", args, func() error {
 		points, err := session.SetBreakpoints(ctx, path, []int{5})
 		if err == nil && (len(points) != 1 || !points[0].Verified) {
 			t.Errorf("breakpoint: %+v", points)

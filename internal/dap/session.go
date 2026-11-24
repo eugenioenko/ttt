@@ -32,7 +32,7 @@ type Event struct {
 }
 
 type Session struct {
-	conn        net.Conn
+	conn        io.Closer
 	codec       *jsonrpc.Codec
 	mu          sync.Mutex
 	seq         int
@@ -88,10 +88,14 @@ func StartDelve(ctx context.Context, binary, folder string, onEvent func(Event))
 		kill()
 		return nil, err
 	}
-	s := &Session{conn: conn, codec: jsonrpc.NewCodec(conn, conn), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
+	return newSession(conn, conn, conn, kill, onEvent), nil
+}
+
+func newSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event)) *Session {
+	s := &Session{conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
-	return s, nil
+	return s
 }
 
 func (s *Session) read() {
@@ -174,15 +178,15 @@ func (s *Session) SetBreakpoints(ctx context.Context, path string, lines []int) 
 	err := s.Call(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": points}, &out)
 	return out.Breakpoints, err
 }
-func (s *Session) Launch(ctx context.Context, args map[string]any, configure func() error) error {
+func (s *Session) Start(ctx context.Context, adapter, request string, args map[string]any, configure func() error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var caps struct{ SupportsConfigurationDoneRequest bool }
-	if err := s.Call(ctx, "initialize", map[string]any{"adapterID": "go", "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
+	if err := s.Call(ctx, "initialize", map[string]any{"adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
 	launched := make(chan error, 1)
-	go func() { launched <- s.Call(ctx, "launch", args, nil) }()
+	go func() { launched <- s.Call(ctx, request, args, nil) }()
 	for {
 		select {
 		case <-ctx.Done():

@@ -137,7 +137,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 		s, err := dap.StartDelve(startup, "dlv", t.Folder, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) })
 		if err == nil {
 			deliver(func() { run.session = s })
-			err = s.Launch(startup, args, func() error {
+			err = s.Start(startup, t.Type, t.Request, args, func() error {
 				for path, lines := range points {
 					bps, err := s.SetBreakpoints(startup, path, lines)
 					if err != nil {
